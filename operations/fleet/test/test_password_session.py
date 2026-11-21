@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import hmac
 import io
 import json
+import secrets
 import sqlite3
 import sys
 import threading
@@ -16,6 +19,8 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
+from rosy_account import account_ledger as account_ledger_module
+from rosy_account import password_session_helpers as password_session_helpers_module
 from rosy_account import site_users as site_users_module
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -35,6 +40,44 @@ HASH = hash_password(TYPED)
 BAD = "scrypt$1$8$1$AAAA$AAAA"
 RAW = "plaintext"
 TOKEN = "viewer-token-for-bearer"
+
+_REAL_SCRYPT_TESTS = frozenset({
+    "test_hash_format_round_trips_with_the_adr_parameters",
+    "test_hash_password_cli_reads_stdin",
+    "test_loader_accepts_token_only_login_only_and_both",
+    "test_loader_rejects_service_login_duplicate_login_bad_hash_and_missing_credential",
+    "test_login_sets_a_strict_http_only_cookie_and_session_reports_it",
+    "test_password_change_replaces_cookie_revokes_other_sessions_and_survives_restart",
+})
+
+
+def _fast_hash(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hmac.new(salt, password.encode("utf-8"), "sha256").digest()
+    return "$".join(("scrypt", "32768", "8", "1",
+                     base64.b64encode(salt).decode("ascii"),
+                     base64.b64encode(digest).decode("ascii")))
+
+
+def _fast_verify(password: str, encoded: str) -> bool:
+    _, _, _, salt, digest = site_users_module._parse_password_hash(encoded)
+    return hmac.compare_digest(hmac.new(salt, password.encode("utf-8"), "sha256").digest(), digest)
+
+
+@pytest.fixture(autouse=True)
+def _fast_scrypt(request, monkeypatch):
+    name = getattr(request.node, "originalname", request.node.name)
+    if name in _REAL_SCRYPT_TESTS:
+        return
+    this = sys.modules[__name__]
+    for mod in (this, site_users_module, password_session_module,
+                password_session_helpers_module, account_ledger_module):
+        if hasattr(mod, "hash_password"):
+            monkeypatch.setattr(mod, "hash_password", _fast_hash)
+        if mod is not password_session_helpers_module and hasattr(mod, "verify_password"):
+            monkeypatch.setattr(mod, "verify_password", _fast_verify)
+    monkeypatch.setattr(this, "HASH", _fast_hash(TYPED))
+    monkeypatch.setattr(this, "BOOTSTRAP_PASSWORD_HASH", _fast_hash("alice"))
 
 
 class Clock:

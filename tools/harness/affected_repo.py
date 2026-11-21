@@ -213,6 +213,14 @@ class Repo:
 
     def test_import_names(self, path: str) -> dict[str, str]:
         """Include sibling helper imports that also populate pytest's module cache."""
+        if vars(self).get("_test_file_len") != len(self.test_files):
+            self._test_file_set = frozenset(self.test_files)
+            self._test_file_len = len(self.test_files)
+            self._test_import_names_cache = {}
+        cache = vars(self).setdefault("_test_import_names_cache", {})
+        if path in cache:
+            return dict(cache[path])
+        test_set = self._test_file_set
         pending = list(self.test_files_under(path))
         visited: set[str] = set()
         names: dict[str, str] = {}
@@ -221,12 +229,16 @@ class Repo:
             if test in visited:
                 continue
             visited.add(test)
-            names[PurePosixPath(test).name] = test
+            parent, sep, basename = test.rpartition("/")
+            names[basename] = test
+            prefix = f"{parent}/" if sep else ""
             for name in self.imports(test):
-                sibling = str(PurePosixPath(test).parent / (name.split('.')[0] + '.py'))
-                if sibling in self.test_files and sibling not in visited:
+                sibling = f"{prefix}{name.partition('.')[0]}.py"
+                if sibling in test_set and sibling not in visited:
                     pending.append(sibling)
-        return {name: source for name, source in names.items() if name not in IGNORED_BASENAMES}
+        result = {name: source for name, source in names.items() if name not in IGNORED_BASENAMES}
+        cache[path] = result
+        return dict(result)
 
 
     def local_importers(self, path: str, depth: int | None = None) -> set[str]:
@@ -341,10 +353,11 @@ class Repo:
                 continue
             text = self.text(test)
             if (any(n in text for n in needles) or (helpers & self.imports(test))
-                    or (parts and (all(token in self.tokens(test) for token in parts)
-                                   if simple_parts
-                                   else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
-                                            for token in parts)))):
+                    or (parts and all(token in text for token in parts)
+                        and (all(token in self.tokens(test) for token in parts)
+                             if simple_parts
+                             else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
+                                      for token in parts)))):
                 found.append(test)
         if not found and helper and not closure:  # the 2-hop chain: 2026-11-01 unknown -> full guard
             return self.referencing_tests(path, True)
