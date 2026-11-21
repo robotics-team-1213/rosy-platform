@@ -237,6 +237,8 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
                for inv in sel.invocations for p in inv):
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
+    import affected_browser
+    entries += affected_browser.entries(repo, sel)  # pull_request runs only (D-1066); [] elsewhere
     if not docs_only(sel) and buildable(repo, sel):
         entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:

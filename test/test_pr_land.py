@@ -198,15 +198,15 @@ def test_what_this_prs_own_ci_run_executes_is_not_lab_evidence(monkeypatch):
                         if "affected" in cmd else "")
     assert pr_land.required_lab_invocations(Path("."), "b", "h") == [media], "a FULL selection is not run per invocation"
 
-    browser, alone = "ROSY_RUN_BROWSER_TESTS=1", "ROSY_BROWSER_ALONE=1"
-    fleet, other = "operations/fleet/test/test_fleet_header_browser.py", "shared/web/test/test_x_browser.py"
-    assert pr_land.lab_browser_chunk([browser, fleet, other], ["operations/fleet/test"]) == [browser, other]
-    assert pr_land.lab_browser_chunk([browser, fleet], [fleet]) == []
-    assert pr_land.lab_browser_chunk([browser, fleet], ["operations/world/test"]) == [browser, fleet], "not in this PR's CI run"
-    site_map = "operations/fleet/test/test_site_map_browser.py"
-    assert pr_land.lab_browser_chunk([browser, alone, site_map], ["operations/fleet/test"]) == [browser, alone, site_map]
-    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert 'p.startswith(("%s", "%s"))' % pr_land.CI_BROWSER_ROOTS in workflow, "ci.yml opts these roots in to Chromium itself"
+    # D-1066: browser files ride the pull_request run; the lab keeps only what affected_browser.lab_path() claims
+    import browser_scope
+    changed = ["shared/web/static/app.js", "middleware/robot_ui/app.js"]
+    required = _required(monkeypatch, [], changed)
+    files = [w for inv in required for w in inv if w.endswith(".py")]
+    assert files == [f for f in files if pr_land.affected_browser.lab_path(f)]
+    lab_only = next(iter(pr_land.work_queue.LAB_ONLY))
+    monkeypatch.setattr(browser_scope, "targets", lambda ch: [lab_only, "shared/web/test/test_x_browser.py"])
+    assert [w for inv in _required(monkeypatch, [], changed) for w in inv if w.endswith(".py")] == [lab_only]
 
 
 def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypatch):
