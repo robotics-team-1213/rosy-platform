@@ -37,6 +37,9 @@ install(FILES
   form-controls.js
   collection-controls.js
   interaction-controls.js
+  skill-state.js
+  sample-data.js
+  localization-state.js
   workflow-controls.js
   component-controls.css
   component-gallery.css
