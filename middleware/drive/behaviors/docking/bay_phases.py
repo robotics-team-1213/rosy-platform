@@ -195,6 +195,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
 
     def _stop(self) -> None:
         self._omega = 0.0
+        self._progress = None     # A commanded wait is not time spent pushing against the stop.
         if self._h.executor is not None:
             self._h.executor.stop()
 
@@ -455,20 +456,20 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
 
     def _contact(self, travelled: float, now: float) -> bool:
         """접촉 3중 판정: 진행 멈춤 · 슬립 발산 · 거리 상한."""
-        h, cfg = self._h, self._h._cfg
+        cfg = self._h._cfg
+        moving = self._lidar_moving(now)
         if self._slip is not None and self._slip[0] == "contact":
-            if self._lidar_moving(now):
+            if moving:
                 self._slip = None                  # the line's shape stood still but the LiDAR sees the body going back
             else:
                 self._begin_settling()
                 return True
-        last, since = self._progress or (travelled, now)
-        if travelled - last >= cfg.contact_progress_m:
+        if self._progress is None or travelled - self._progress[0] >= cfg.contact_progress_m or moving:
             self._progress = (travelled, now)
-        elif now - since >= cfg.contact_stall_s:
+        elif now - self._progress[1] >= cfg.contact_stall_s:
             self._begin_settling()
             return True
-        if self._travel_cap_m is not None and travelled >= self._travel_cap_m and not self._lidar_moving(now):
+        if self._travel_cap_m is not None and travelled >= self._travel_cap_m and not moving:
             self._begin_settling()
             return True
         return False
