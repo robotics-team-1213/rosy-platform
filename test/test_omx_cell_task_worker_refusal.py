@@ -498,3 +498,226 @@ def test_a_measured_at_expiry_answer_keeps_the_result_and_the_next_stale_poll_me
     kept["owner_evidence"]["measured_at"] -= STALE_S  # time passes
     outbox.put("t-1", kept)
     assert resend_pending(outbox, _posting(_running(), sent), fresh)[0]["action"] == "resent" and fresh.calls == ["t-1"]
+
+
+def test_keepalive_https_request_reuses_reconnects_fails_ssl_and_raises_401(monkeypatch) -> None:
+    import http.client
+    import ssl
+    import cell_task_exec as cte
+    import cell_task_transport as ctt
+
+    assert cte.make_keepalive_https_request is ctt.make_keepalive_https_request
+    created = []
+    outcomes = [
+        (200, b'{"ok": 1}'),
+        (200, b'{"ok": 2}'),
+        http.client.RemoteDisconnected("stale"),
+        (200, b'{"ok": 3}'),
+        ssl.SSLError("bad cert"),
+        (401, b'{"error": "unauthorized"}'),
+    ]
+
+    class FakeConn:
+        def __init__(self, host, port, timeout=None, context=None):
+            created.append(self)
+            self.calls = 0
+
+        def request(self, method, path, body=None, headers=None):
+            self.calls += 1
+
+        def getresponse(self):
+            nxt = outcomes.pop(0)
+            if isinstance(nxt, BaseException):
+                raise nxt
+            status, payload = nxt
+            return type("Resp", (), {"status": status, "reason": "ERR" if status >= 400 else "OK", "headers": {}, "will_close": False, "read": lambda s: payload})()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(http.client, "HTTPSConnection", FakeConn)
+    req = cte.make_keepalive_https_request("https://fleet.invalid", "tok", ssl.create_default_context())
+    assert req("GET", "/a") == {"ok": 1}
+    assert req("GET", "/b") == {"ok": 2}
+    assert len(created) == 1 and created[0].calls == 2
+    assert req("POST", "/c", {"k": 1}) == {"ok": 3}  # reused conn disconnected -> reconnects once
+    assert len(created) == 2
+    with pytest.raises(ssl.SSLError):
+        req("GET", "/ssl")
+    assert len(created) == 2  # SSLError is never retried
+    with pytest.raises(HTTPError) as exc_info:
+        req("GET", "/unauth")
+    assert exc_info.value.code == 401
+
+
+def test_keepalive_https_request_never_retries_timeouts_or_read_errors(monkeypatch) -> None:
+    import http.client
+    import ssl
+    import cell_task_exec as cte
+
+    created = []
+    outcomes = [
+        ((200, b'{"ok": 0}'), None),
+        (TimeoutError("post header timeout"), None),
+        ((200, b'{"ok": 0}'), None),
+        (TimeoutError("get header timeout"), None),
+        ((200, b'{"ok": 0}'), None),
+        ((200, None), http.client.IncompleteRead(b"partial")),
+        ((200, None), ConnectionResetError("mid-body drop")),
+    ]
+
+    class FakeConn:
+        def __init__(self, host, port, timeout=None, context=None):
+            created.append(self)
+            self.calls = 0
+
+        def request(self, method, path, body=None, headers=None):
+            self.calls += 1
+
+        def getresponse(self):
+            resp_out, read_out = outcomes.pop(0)
+            if isinstance(resp_out, BaseException):
+                raise resp_out
+            status, payload = resp_out
+
+            def _read():
+                if isinstance(read_out, BaseException):
+                    raise read_out
+                return payload
+
+            return type("Resp", (), {"status": status, "reason": "OK", "headers": {}, "will_close": False, "read": lambda s: _read()})()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(http.client, "HTTPSConnection", FakeConn)
+    req = cte.make_keepalive_https_request("https://fleet.invalid", "tok", ssl.create_default_context())
+    assert req("GET", "/prime") == {"ok": 0}
+    with pytest.raises(TimeoutError):
+        req("POST", "/claim", {"task_id": "t-1"})
+    assert len(created) == 1 and created[0].calls == 2  # reused POST never retries TimeoutError
+    assert req("GET", "/prime2") == {"ok": 0}
+    with pytest.raises(TimeoutError):
+        req("GET", "/poll")
+    assert len(created) == 2 and created[1].calls == 2  # GET never retries TimeoutError
+    assert req("GET", "/prime3") == {"ok": 0}
+    with pytest.raises(http.client.IncompleteRead):
+        req("POST", "/claim", {"task_id": "t-2"})
+    assert len(created) == 3 and created[2].calls == 2  # no retry after response headers
+    with pytest.raises(ConnectionResetError):
+        req("POST", "/claim", {"task_id": "t-3"})
+    assert len(created) == 4 and created[3].calls == 1 and not outcomes
+
+
+def test_worker_skips_cell_ab_claim_when_peer_ab_session_locked(tmp_path: Path, monkeypatch) -> None:
+    calls: list[str] = []
+    seen_prep: list[Path | None] = []
+
+    def _req(method: str, path: str, body):
+        calls.append(f"{method}:{path}")
+        return {"tasks": [{"task_id": "t-locked", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 1}],
+                "human_safety": {"active_estop": False, "human_detected": {}},
+                "cells": {"cell_ab": {"phase": "ARM_IN_BED_ZONE", "active_task_id": "t-locked"}}}
+
+    monkeypatch.setattr(ctw, "peer_ab_session_locked", lambda arm, *, prep_dir=None: seen_prep.append(prep_dir) or (arm == "arm_b"))
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: {"ok": True}, prep_dir=tmp_path)
+    assert calls == ["GET:/api/fleet/pipeline/cell-tasks?status=QUEUED"] and seen_prep == [tmp_path]
+
+
+def test_execute_guarded_cell_task_sets_worker_lease_owner_env(tmp_path: Path, monkeypatch) -> None:
+    import os
+    import subprocess
+    import cell_task_exec as cte
+
+    (tmp_path / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1]}), encoding="utf-8")
+    (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json")}), encoding="utf-8")
+    monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+    monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": True, "state": None, "fresh": True})
+    monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0, "site": "pinky"})
+    seen_envs: list[dict[str, str]] = []
+
+    def fake_run(*a, **k):
+        seen_envs.append(k["env"])
+        return subprocess.CompletedProcess(
+            a,
+            0,
+            stdout=json.dumps({
+                "result": "placed",
+                "attempts": [{
+                    "verify": {"found": True, "inside": True, "verified": True, "basis": "map"},
+                    "transfer": {"result": "placed", "steps": [{"command": "park", "ok": True, "settled": True, "state": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1], "t": 12.5}]},
+                    "zone_verification": {"verified": True, "basis": "map", "z_gate": {"verdict": "PASS"}, "target": {"site": "belt", "area": "belt"}},
+                }],
+            }),
+            stderr="",
+        )
+
+    monkeypatch.setattr(cte.subprocess, "run", fake_run)
+    cte.execute_guarded_cell_task(
+        {"task_id": "t-env", "cell_id": "cell_s", "arm_id": "arm_s", "tier": 1, "handoff_lease_id": "lease-1",
+         "src_site": "pinky", "dst_site": "belt"},
+        prep_dir=tmp_path,
+    )
+    assert len(seen_envs) == 1
+    assert seen_envs[0]["ROSY_ARM_LEASE_OWNER"] == f"cell-task-worker:{os.getpid()}"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX fcntl.flock required")
+def test_peer_ab_session_locked_posix_flock_and_worker_warm_reuse(tmp_path: Path, monkeypatch) -> None:
+    import fcntl
+    import os
+    import time
+    import cell_arm_lease
+    import cell_task_exec as cte
+
+    omx_home = tmp_path / "omx-home"
+    lease_dir = tmp_path / "leases"
+    prep_dir = tmp_path / "prep"
+    (prep_dir / "chunk-io-b").mkdir(parents=True)
+    omx_home.mkdir()
+    monkeypatch.setenv("ROSY_OMX_HOME", str(omx_home))
+    monkeypatch.setenv("ROSY_ARM_LEASES", str(lease_dir))
+
+    whole_lock = omx_home / "session.lock"
+    arm_b_lock = omx_home / "session-arm_b.lock"
+    fh_whole = open(whole_lock, "a+")
+    fh_b = None
+    try:
+        fcntl.flock(fh_whole.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        assert cte.peer_ab_session_locked("arm_a", prep_dir=prep_dir) is False  # honors ROSY_OMX_HOME & allows LOCK_SH
+        fcntl.flock(fh_whole.fileno(), fcntl.LOCK_EX)
+        assert cte.peer_ab_session_locked("arm_a", prep_dir=prep_dir) is True  # whole-cell LOCK_EX blocks
+        fcntl.flock(fh_whole.fileno(), fcntl.LOCK_UN)
+
+        fh_b = open(arm_b_lock, "a+")
+        fcntl.flock(fh_b.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True  # no lease -> blocked
+        assert cte.peer_ab_session_locked("arm_a", prep_dir=prep_dir) is True  # peer lock blocks arm_a too
+        assert cte.peer_ab_session_locked("arm_s", prep_dir=prep_dir) is False  # cell_s ignores cell_ab locks
+
+        owner = f"cell-task-worker:{os.getpid()}"
+        cell_arm_lease.claim("arm_b", owner, "record_session", pid=os.getpid(), root=lease_dir)
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True  # missing live.json -> fail-closed
+
+        live_path = prep_dir / "chunk-io-b" / "live.json"
+        clean_live = {"t": time.time(), "chunk": None, "human_hold_latched": False, "fault": None}
+        live_path.write_text(json.dumps(clean_live), encoding="utf-8")
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is False
+        assert cte.peer_ab_session_locked("arm_a", prep_dir=prep_dir) is False
+
+        live_path.write_text(json.dumps({**clean_live, "human_hold_latched": True}), encoding="utf-8")
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True
+        live_path.write_text(json.dumps({**clean_live, "t": time.time() - 60.0}), encoding="utf-8")
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True
+        live_path.write_text(json.dumps({**clean_live, "chunk": "grasp_pick"}), encoding="utf-8")
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True
+
+        live_path.write_text(json.dumps(clean_live), encoding="utf-8")
+        assert cell_arm_lease.hold("arm_b", "runner HOLD", pid=os.getpid(), owner=owner, root=lease_dir)
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True
+    finally:
+        if fh_b is not None:
+            fh_b.close()
+        fh_whole.close()

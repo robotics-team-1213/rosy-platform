@@ -16,6 +16,7 @@ from urllib.request import urlopen
 
 from cell_presence import presence_ok, review_required, zone_acceptance
 from cell_remeasure import write_context
+from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
 
 
 def make_ca_urlopen(ca_file: str | Path | None = None):
@@ -261,7 +262,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
         cmd += ["--layers-below", str(hint)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                          env={**os.environ, "TOOLS_ROOT": str(tools_root())})  # the wrapper's tools-env reads it
+                          env={**os.environ, "TOOLS_ROOT": str(tools_root()),
+                               "ROSY_ARM_LEASE_OWNER": f"{WORKER_LEASE_PREFIX}{os.getpid()}"})  # the wrapper's tools-env reads it
     parsed = last_json_object(proc.stdout)
     # The wall clock at the end of the run bounds when the readbacks below existed (the runner's own clock is monotonic).
     measured_at = time.time()

@@ -116,8 +116,14 @@ def propose_next(
     if facts is not None:
         proposal["facts"] = facts
         arm_dry = facts["dry_pick"].get(proposal["arm"]) or {}
-        if proposal["action"] == "auto_pick" and arm_dry.get("observed") == 0:
-            proposal.update(action="idle", site="", reason=f"vetoed auto_pick: measured 0 objects on {proposal['arm']}")
+        if proposal["action"] == "auto_pick" and (
+            arm_dry.get("observed") == 0
+            or arm_dry.get("error")
+            or arm_dry.get("exit") not in (None, 0)
+            or ("chosen" in arm_dry and arm_dry.get("chosen") is None)
+        ):
+            detail = arm_dry.get("error") or arm_dry.get("result") or "measured 0 usable objects"
+            proposal.update(action="idle", site="", reason=f"vetoed auto_pick on {proposal['arm']}: {detail}")
     return proposal
 
 

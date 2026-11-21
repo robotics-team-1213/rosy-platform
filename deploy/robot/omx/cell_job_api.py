@@ -84,10 +84,20 @@ def _tools_tree(workdir: Path) -> str | None:
     if not env_file.is_file():
         return None
     for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
-        if "omx-tools-" in line:
-            m = re.search(r"omx-tools-[a-f0-9]+", line)
-            if m:
-                return m.group(0)
+        code = line.split("#", 1)[0]
+        if "omx-tools-" not in code:
+            continue
+        m = re.search(r"([^\s\"':;=]*omx-tools-[A-Za-z0-9_-]+)", code)
+        if m:
+            p = Path(os.path.expandvars(m.group(1))).expanduser()
+            if not p.is_absolute():
+                p = workdir / p
+            if p.is_symlink() or p.exists():
+                try:
+                    return p.resolve().name
+                except (OSError, RuntimeError):
+                    return p.name
+            return p.name
     return None
 
 
@@ -132,7 +142,7 @@ class Runner:
                 "arm": run["arm"],
                 "exit": code,
                 "log": str(run["log"]),
-                "omx_tools_tree": _tools_tree(self.workdir),
+                "omx_tools_tree": run.get("omx_tools_tree"),
             },
         }
         with open(self.out / "audit.jsonl", "a", encoding="utf-8") as fh:
@@ -216,6 +226,7 @@ class Runner:
                 "holder": params.get("operator") or arm or name,
                 "start": now,
                 "expires_at": now + JOB_TTL_S,
+                "omx_tools_tree": _tools_tree(self.workdir),
                 "audited": False,
             }
             self.runs[jid] = run

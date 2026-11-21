@@ -64,8 +64,8 @@ def _safe_path(v):
 def _goal_site(v):
     try:
         resolve_goal_site(v)
-    except OSError as exc:
-        raise ValueError(f"cannot read Cell site map: {exc.strerror}") from exc
+    except (OSError, ImportError) as exc:
+        raise ValueError(f"cannot read Cell site map: {getattr(exc, 'strerror', None) or exc}") from exc
     return v
 
 
