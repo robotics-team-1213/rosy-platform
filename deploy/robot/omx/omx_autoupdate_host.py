@@ -31,6 +31,10 @@ DEFAULT_PATHS = (
     "operations/overhead/rosy_vision",  # omx_incident's Fleet link (D-971)
     "integrations/robots/omx",
     "learning/curation/omx",
+    "tools/sim/cell_site_map.py",
+    "shared/web/cell-site-map.json",
+    "learning/envs/isaac/palletizing_gripper.py",
+    "learning/envs/isaac/assets/omx_f_palletizing_description",
     "test/test_omx_joint_tune.py",
     "test/test_omx_record_session.py",
 )

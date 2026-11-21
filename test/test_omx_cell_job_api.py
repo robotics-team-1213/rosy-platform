@@ -414,3 +414,71 @@ def test_runner_daemon_reaper_writes_audit_without_get_poll(tmp_path, monkeypatc
         pytest.fail("audit.jsonl was not written automatically by daemon reaper")
     row = json.loads(audit_file.read_text(encoding="utf-8").splitlines()[0])
     assert row["id"] == res["id"] and row["exit"] == 0 and isinstance(subprocess.Popen, type)
+
+
+def test_tools_tree_resolves_symlink_skips_comments_and_snapshots_start(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    real_a = tmp_path / "omx-tools-3fff92e55d"
+    real_b = tmp_path / "omx-tools-deadbeef00"
+    real_a.mkdir()
+    real_b.mkdir()
+    link = tmp_path / "omx-tools-current"
+    link.symlink_to(real_a)
+    (wd / "tools-env-current.sh").write_text(
+        f"# omx-tools-stale999\nFOO=1 # omx-tools-inline999\nexport OMX={link}/deploy/robot/omx\n",
+        encoding="utf-8",
+    )
+    assert api._tools_tree(wd) == "omx-tools-3fff92e55d"
+
+    loop_a = tmp_path / "omx-tools-loop"
+    loop_b = tmp_path / "omx-tools-loop-b"
+    loop_a.symlink_to(loop_b)
+    loop_b.symlink_to(loop_a)
+    eloop_wd = tmp_path / "eloop-wd"
+    eloop_wd.mkdir()
+    (eloop_wd / "tools-env-current.sh").write_text(f"export OMX={loop_a}/deploy/robot/omx\n", encoding="utf-8")
+    assert api._tools_tree(eloop_wd) == "omx-tools-loop"
+
+    procs = []
+
+    class P:
+        _code = None
+
+        def poll(self):
+            return self._code
+
+    monkeypatch.setattr(api.subprocess, "Popen", lambda argv, **kw: (procs.append(P()) or procs[-1]))
+    runner = api.Runner(wd, jobs={"noop": {"script": "noop.py", "argv": [], "params": {}}}, lock_dir=wd)
+    monkeypatch.setattr(api, "build_argv", lambda job, params, workdir: ["true"])
+    started = runner.start("noop", {})
+    assert started["code"] == 202
+
+    # Switch symlink BEFORE exit: audit record keeps the start-time snapshot.
+    link.unlink()
+    link.symlink_to(real_b)
+    procs[0]._code = 0
+    runner.get(started["id"])
+    row = json.loads((wd / "cell-job-api" / "audit.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert row["state_changes"]["omx_tools_tree"] == "omx-tools-3fff92e55d"
+
+
+def test_goal_site_import_error_returns_http_400(tmp_path, monkeypatch):
+    import cell_job_spec as spec
+
+    wd = _make_workdir(tmp_path)
+    monkeypatch.setattr(spec, "resolve_goal_site", lambda _v: (_ for _ in ()).throw(ModuleNotFoundError("cell_site_map")))
+    res = api.Runner(wd, lock_dir=wd).start(
+        "cell_policy_drive",
+        {
+            "arm": "arm_a",
+            "config": "cell-a.json",
+            "library": "chunks-s.json",
+            "max_chunks": 1,
+            "mode": "taught",
+            "goal_site": "yard:r3-s2-t1",
+            "operator": "human_op",
+            "proposer": "vlm",
+            "person_at_switch": True,
+        },
+    )
+    assert res["code"] == 400 and "cannot read Cell site map" in res["error"]

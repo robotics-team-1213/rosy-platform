@@ -490,3 +490,35 @@ def test_multiline_last_json_parser_and_unsent_outbox_hold(tmp_path, monkeypatch
         server.server_close()
         viewer.shutdown()
         viewer.server_close()
+
+
+def test_propose_next_vetoes_auto_pick_on_nonzero_dry_pick_with_observed_boxes(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    _install_fake_popen(
+        monkeypatch,
+        dry_pick={
+            "cell-a.json": (1, {"result": "stopped: no usable object (neighbour clearance)", "attempts": [{"observed": 8, "chosen": None, "refused": [{"id": "b1"}]}]}),
+            "cell-b.json": (0, {"result": "planned", "attempts": [{"observed": 1, "chosen": {"object": "box"}, "refused": []}]}),
+        },
+    )
+    runner = api.Runner(wd, lock_dir=wd)
+    viewer = _start_fake_viewer()
+    token = "t" * 32
+    server = api.make_server("127.0.0.1", 0, token, runner, viewer=f"http://127.0.0.1:{viewer.server_port}")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        client = CellJobClient(f"http://127.0.0.1:{server.server_port}", token=token)
+        proposal = orch.propose_next(
+            client,
+            lambda *a: {"action": "auto_pick", "arm": "arm_a", "site": "pallet", "reason": "pick box"},
+            arm_configs=_arm_configs(),
+            collect_facts=True,
+            poll_s=0.01,
+        )
+        assert proposal["action"] == "idle"
+        assert "neighbour clearance" in proposal["reason"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        viewer.shutdown()
+        viewer.server_close()
