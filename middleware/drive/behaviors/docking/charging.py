@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections import deque
 from typing import Callable, Optional
 
 from core_features.docking.agent import DockStatus
@@ -119,3 +120,58 @@ class ChargingConfirmation:
     def peak_v(self) -> Optional[float]:
         """확정 구간의 최고 전압 — 만춫 판정에 쓴다."""
         return self._peak_v
+
+
+class PackChargeConfirmation(ChargingConfirmation):
+    """Advance the docking clock window only when a new, fresh ADC reading arrives."""
+
+    def __init__(self, *, clock, window_s):
+        super().__init__(clock=clock, window_s=window_s, instrumented=False)
+        self.reset()
+
+    def reset(self) -> None:
+        super().reset()
+        self._sample_at = None
+        self._minima = deque()
+        self._rise_seen = False
+        self._last_elapsed = None
+
+    @staticmethod
+    def _read(battery):
+        read = getattr(battery, "fresh_voltage_sample", None)
+        return read() if callable(read) else None
+
+    def begin_settling(self, battery) -> None:
+        self.reset()
+        sample = self._read(battery)
+        if sample is not None:
+            self._sample_at = sample.captured_at   # a capture already present at contact is not a settling sample
+
+    def observe(self, battery, *, now, since_settled, rise_v, baseline_delay_s=0.0) -> bool:
+        previous_elapsed = self._last_elapsed
+        sample = self._read(battery)
+        if sample is None:
+            self.reset()
+            self._last_elapsed = since_settled
+            return False
+        if self._sample_at is not None:
+            gap = sample.captured_at - self._sample_at
+            if not 0.0 <= gap <= sample.max_gap_s:
+                self.reset()
+        if sample.captured_at != self._sample_at:
+            self.update(None, sample.voltage, now=now)
+            self._sample_at = sample.captured_at
+            # ROS simulation time can run faster or slower than the ADC's clock.
+            # A new reading after an eligible poll is known to be beyond the baseline delay.
+            if (not self._rise_seen and since_settled >= baseline_delay_s
+                    and (sample.age_s == 0.0 or (previous_elapsed is not None
+                         and previous_elapsed >= baseline_delay_s))):
+                # Compare fresh pack readings inside one docking-time window, even long after seating.
+                while self._minima and self._minima[0][0] < now - self._window_s:
+                    self._minima.popleft()
+                while self._minima and self._minima[-1][1] >= sample.voltage:
+                    self._minima.pop()
+                self._minima.append((now, sample.voltage))
+                self._rise_seen = sample.voltage - self._minima[0][1] >= rise_v
+        self._last_elapsed = since_settled
+        return self.confirmed and self._rise_seen

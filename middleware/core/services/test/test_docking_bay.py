@@ -164,6 +164,11 @@ class Battery:
         self.since = self.clock() if self.since is None else self.since
         return 7.60 + 0.008 * (self.clock() - self.since)
 
+    def fresh_voltage_sample(self):
+        from core_features.power.battery import PackVoltageSample
+        voltage = self.voltage
+        return None if voltage is None else PackVoltageSample(voltage, self.clock(), 0.0, 5.0)
+
     def set_charging(self, flag):
         self.charging_flags.append(flag)
 
