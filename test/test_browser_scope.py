@@ -7,7 +7,7 @@ import browser_scope
 
 def test_monitoring_backend_and_app_share_the_real_browser_contract():
     expected = ['test/test_monitoring_browser.py']
-    assert browser_scope.targets(['applications/monitoring/README.md']) == expected
+    assert browser_scope.targets(['applications/monitoring/web/monitoring.js']) == expected
     assert browser_scope.targets(['operations/monitoring/src/rosy/monitoring/service.py']) == expected
 
 
@@ -42,7 +42,10 @@ def test_sample_engine_and_shared_fixture_select_all_sample_consumers_only():
 
 def test_development_markdown_does_not_select_browser_tests():
     for path in ('applications/fleet/dev/logs.md', 'applications/fleet/dev/index.md',
-                 'applications/fleet/dev/progress.md', 'applications/fleet/dev/AGENTS.md'):
+                 'applications/fleet/dev/progress.md', 'applications/fleet/dev/AGENTS.md',
+                 'shared/web/index.md', 'shared/web/logs.md', 'shared/web/logs/2026/11/21-x.md',
+                 'operations/fleet/logs.md', 'applications/fleet/web/AGENTS.md',
+                 'applications/monitoring/README.md'):
         assert browser_scope.targets([path]) == [], path
 
 

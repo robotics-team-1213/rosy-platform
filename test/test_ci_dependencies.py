@@ -571,6 +571,19 @@ def test_merge_group_and_push_run_scoped_affected_against_their_base():
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
 
 
+def test_draft_pull_requests_skip_ci_and_review_gate():
+    import yaml
+
+    ci_doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    ci_triggers = ci_doc.get("on", ci_doc.get(True))
+    assert "ready_for_review" in ci_triggers["pull_request"]["types"]
+    assert "!github.event.pull_request.draft" in ci_doc["jobs"]["scope"]["if"]
+    ci_res_if = ci_doc["jobs"]["ci-result"]["if"]
+    assert "always()" in ci_res_if and "!github.event.pull_request.draft" in ci_res_if
+    rg_doc = yaml.safe_load((ROOT / ".github" / "workflows" / "review-gate.yml").read_text(encoding="utf-8"))
+    assert "!github.event.pull_request.draft" in rg_doc["jobs"]["review-gate"]["if"]
+
+
 @pytest.mark.parametrize("paths,output,expected", [
     (["test/test_req.py::test_must_run"], "test/test_req.py::test_must_run SKIPPED\n1 skipped in 0.12s\n", 1),
     (["test/test_req.py::test_must_run"], "test/test_req.py::test_must_run PASSED\n1 passed in 0.12s\n", 0),

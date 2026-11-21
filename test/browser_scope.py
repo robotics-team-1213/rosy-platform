@@ -191,7 +191,7 @@ def targets(paths: list[str]) -> list[str]:
     selected: set[str] = set()
     for raw in paths:
         path = raw.replace("\\", "/").removeprefix("./")
-        if path.startswith("applications/fleet/dev/") and path.endswith(".md"):
+        if path.endswith(".md"):
             continue
         # These shared sample-engine/fixture modules reach all sample browsers, not production fixtures.
         if path in ("applications/fleet/test/test_sample_server.py", "applications/fleet/test/test_sample_browser.py"):
