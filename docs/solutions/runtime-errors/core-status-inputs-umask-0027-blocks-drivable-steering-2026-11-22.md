@@ -33,9 +33,14 @@ Added POSIX regression test `test_write_status_inputs_keeps_0644_under_umask_002
 
 ## Verification
 
-- Verified `su -s /bin/sh rosy-camera` read failure (`Permission denied`, `stat 0o100640 uid=960`) on both `geg6` (`2026.11.20-208`) and `b8xy` (`2026.11.21-219`) prior to the fix.
-- Remote pytest (`test_host_status_summary.py` and `test_core_steering_law_input.py`) on Linux lab host under real POSIX `os.umask(0o027)` semantics.
-- Live robot readback and front-camera `learned_drivable` overlay verification after deploying the signed `payload-v2` release.
+- Confirmed pre-fix failure on both real Pinky robots before this change:
+  - `geg6` (`rosy_42`, release `2026.11.20-208`): `/run/rosy/status-inputs.json` was `0o100640 uid=960` (`rosy-core:rosy-core`); `su -s /bin/sh rosy-camera -c 'head -c 80 /run/rosy/status-inputs.json'` exited `1` with `Permission denied`; front overlay displayed `STOPPED BY: STEERING - core_steering_law_unavailable`.
+  - `b8xy` (`rosy_46`, release `2026.11.21-219`): `/run/rosy/status-inputs.json` was `0o100640 uid=960`; `su -s /bin/sh rosy-camera -c 'head -c 80 /run/rosy/status-inputs.json'` exited `1` with `Permission denied`.
+- Remote pytest on Linux lab host `ai` (first commit `df552b7d47`, before updating `test_module_criteria.py`): `test_host_status_summary.py`, `test_core_steering_law_input.py`, and `test_lamp_status_patterns.py` — `92 passed, 0 failed` (includes POSIX `os.umask(0o027)` check in `test_write_status_inputs_keeps_0644_under_umask_0027`).
+
+## Not yet verified
+
+- Live robot readback (`stat 0o644` and `su rosy-camera` read) and front-camera `learned_drivable` steering overlay after merging and rolling out the signed `payload-v2` release to a real Pinky.
 
 ## Prevention
 
