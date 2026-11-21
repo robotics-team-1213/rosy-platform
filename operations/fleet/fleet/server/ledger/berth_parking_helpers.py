@@ -157,7 +157,9 @@ async def _execute_physical_berth_park(
         return None
 
     async def _req(method: str, path: str, body: Optional[dict[str, Any]] = None) -> dict[str, Any]:
-        resp = await http.request(method, path, json=body, headers=dict(headers_fn()))
+        request_core = getattr(client, "_request", None)
+        resp = await (request_core(method, path, body) if request_core is not None else
+                      http.request(method, path, json=body, headers=dict(headers_fn())))
         if resp.status_code >= 400:
             raise RuntimeError(f"HTTP {resp.status_code} {path}: {resp.text[:160]}")
         return resp.json() if resp.content else {}

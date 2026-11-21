@@ -93,7 +93,7 @@ async def goal_lease_renew_loop(console, logger) -> None:
     """D-550 10: every ttl/3 renew the console's leased goals whose source still holds (named
     operator present, attempt open, still yielding: ``goal_lease.GoalLeases``). Trip goals are
     renewed by the trip loop. Fleet stopping stops renewal: CORE then cancels."""
-    period_s = console.goal_leases.ttl_s / 3
+    period_s = (console.goal_leases.ttl_s or 3.0) / 3
     while True:
         try:
             await console.goal_leases.renew("console")

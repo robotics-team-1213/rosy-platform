@@ -27,6 +27,7 @@ from fleet.routing.snap import PlanError
 from fleet.routing.trip import ARRIVED_M, PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.trips.named_stop_map_pose import commissioned_stop, read_precision_pose
 from fleet.server.trip_admission import start_check
 from fleet.server.trip_runner import LOCALIZED, PLAN_TTL_S, TripError
 from fleet.stop_front import body_front_m
@@ -151,7 +152,17 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # The trip loop's own map pose first (D-494 3, D-593 1): a motor-mode robot reports no
         # localization, so its Rosy Cam MapPose is its only map pose. A robot-reported LOCALIZED
         # map pose stays accepted (D-488 3); the start still requires MapPose LOCALIZED (D-494 5).
-        map_pose = await runner.map_pose(robot_id)
+        precision = commissioned_stop(active[2], body.to)
+        binding_id = None
+        if precision is not None:
+            bound = await read_precision_pose(runner, robot_id, active[0])
+            if bound is None:
+                detail = {"reason": "APPROVED_SLAM_POSE_REQUIRED"}
+                record({"error": "TRIP_POSE_UNTRUSTED", "detail": detail})
+                raise _refuse("TRIP_POSE_UNTRUSTED", detail, 409)
+            map_pose, binding_id = bound
+        else:
+            map_pose = await runner.map_pose(robot_id)
         pose_state = map_pose.state if map_pose is not None else None
         if pose_state == LOCALIZED and map_pose.yaw is not None:
             pose = (map_pose.x, map_pose.y, map_pose.yaw)
@@ -197,6 +208,11 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
         body = plan_body(plan)
+        if binding_id is not None:
+            if not runner._precision_terminal_matches(active[2], body["segments"], precision):
+                record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
+                raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
+            body["precision_binding_id"] = binding_id
         if any(active[2].arcs[arc_id(seg)].drive_mode == "lane" for seg in body["segments"]):
             try:  # D-601 B: no lane trip for a robot whose line camera is not live
                 await runner.camera_check(robot_id, caps)
@@ -205,7 +221,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse(exc.code, exc.detail) from exc
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
         body["start_check"] = start_check(active[2], body["segments"], *pose, runner.config.start_heading_tol_deg)
-        if (runner.config.auto_align and body["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
+        if (precision is None and runner.config.auto_align and body["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
                 and body["start_check"]["heading_err_deg"] is not None):
             body["start_check"]["auto_align"] = True  # D-603: the start turns the robot first
         # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.

@@ -8,6 +8,15 @@ import math as _math
 from fastapi import HTTPException, Request
 
 
+def standalone_named_stop_allowed(active, traffic) -> bool:
+    """A single Nav2 pose cannot authorize traversing a controlled road."""
+    if active is None or traffic is None:
+        return False
+    site = active[1]
+    return bool(site.edges) and not site.turn_bans and not site.crosswalks and not traffic.has_configured_controls() and all(
+        edge.drive_mode == "free" and edge.direction == "two_way" for edge in site.edges)
+
+
 def _auto_locate_reason(request: Request, robot_id: str) -> str | None:
     """Why D-989 has no fit for this robot, with the robot's own lamp refusal (e.g. CAUTION_ACTIVE on low battery)."""
     service = getattr(request.app.state, "auto_locate", None)
@@ -22,7 +31,8 @@ def _auto_locate_reason(request: Request, robot_id: str) -> str | None:
 
 
 async def compute_road_plan(console, request: Request, robot_id: str, target_x: float, target_y: float,
-                            target_yaw: float | None, place_id: str | None, label: str) -> dict:
+                            target_yaw: float | None, place_id: str | None, label: str, *,
+                            expected_site_map_version: int | None = None) -> dict:
     _trip_mod = _il.import_module(".".join(("fleet", "routing", "trip")))
     _exec_mod = _il.import_module(".".join(("fleet", "routing", "execute")))
     PlanRequest, plan_trip = _trip_mod.PlanRequest, _trip_mod.plan_trip
@@ -31,12 +41,30 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
     site_maps = getattr(request.app.state, "site_maps", None)
     runner = getattr(request.app.state, "trip_runner", None)
     active = site_maps.active() if site_maps is not None else None
+    if expected_site_map_version is not None and (active is None or active[0] != expected_site_map_version):
+        raise HTTPException(409, detail={"code": "SITE_MAP_VERSION_CHANGED"})
+
+    explicit_stop = None
+    if place_id:
+        if active is None:
+            raise HTTPException(409, detail={"code": "SITE_MAP_NOT_ACTIVE"})
+        explicit_stop = active[2].places.get(place_id)
+        if explicit_stop is None:
+            raise HTTPException(409, detail={"code": "UNKNOWN_STOP_PLACE", "place_id": place_id})
+        if explicit_stop.kind != "stop":
+            explicit_stop = None
+        else:
+            target_x, target_y = active[2].place_xy(place_id)
+            target_yaw = explicit_stop.yaw
+            if not all(isinstance(v, (float, int)) and _math.isfinite(v)
+                       for v in (target_x, target_y, target_yaw)):
+                raise HTTPException(409, detail={"code": "INVALID_STOP_POSE", "place_id": place_id})
 
     # The site pose is Fleet's own measured estimate (sighting, pin, or D-989 fit) and never the robot's
     # SLAM pose or a constant: either of those made the site->Nav2 delta an identity, so a site goal was sent
     # into a SLAM frame whose origin is wherever the robot booted (2026-11-13, rosy_46 drove elsewhere).
     site_pose = None
-    if runner is not None:
+    if explicit_stop is None and runner is not None:
         try:
             mp = await runner.map_pose(robot_id)
             if (mp is not None and getattr(mp, "state", None) == "LOCALIZED"
@@ -44,7 +72,7 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
                 site_pose = (float(mp.x), float(mp.y), float(mp.yaw))
         except Exception:
             pass
-    if site_pose is None:
+    if explicit_stop is None and site_pose is None:
         why = _auto_locate_reason(request, robot_id)
         raise HTTPException(status_code=409, detail={
             "code": "SITE_POSE_UNKNOWN", "auto_locate": why,
@@ -52,17 +80,19 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
                        + (f"; auto-locate: {why}" if why else "")})
 
     explicit_yaw = target_yaw
-    if target_yaw is None:
+    if explicit_stop is None and target_yaw is None:
         target_yaw = _math.atan2(target_y - site_pose[1], target_x - site_pose[0])
 
+    state = {}
     local_pose = None
     try:
         snap = await console.snapshot()
         for r in (snap.get("robots") or []):
             if r.get("robot_id") == robot_id and isinstance(r.get("state"), dict):
-                p, loc = r["state"].get("pose"), r["state"].get("localization") or {}
+                state = r["state"]
+                p, loc = state.get("pose"), state.get("localization") or {}
                 if (isinstance(p, dict) and loc.get("state") == "LOCALIZED" and loc.get("pose_frame") == "map"
-                        and all(isinstance(p.get(k), (int, float)) for k in ("x", "y", "yaw"))):
+                        and all(isinstance(p.get(k), (int, float)) and _math.isfinite(p[k]) for k in ("x", "y", "yaw"))):
                     local_pose = (float(p["x"]), float(p["y"]), float(p["yaw"]))
                     break
     except Exception:
@@ -72,10 +102,19 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
             "code": "ROBOT_POSE_UNTRUSTED",
             "message": f"{robot_id}: the robot's own map pose is not LOCALIZED in its map frame"})
 
+    stop_binding = None
+    if explicit_stop is not None:
+        frames = getattr(request.app.state, "named_stop_frame", None)
+        if frames is None:
+            raise HTTPException(409, detail={"code": "NAMED_STOP_FRAME_UNAVAILABLE"})
+        site_pose, stop_binding, fit = frames.bind(site_maps, robot_id, state, active, local_pose)
+
     d_yaw = _math.atan2(_math.sin(local_pose[2] - site_pose[2]), _math.cos(local_pose[2] - site_pose[2]))
     cos_d, sin_d = _math.cos(d_yaw), _math.sin(d_yaw)
 
     def _site_to_nav2(sx: float, sy: float, syaw: float) -> tuple[float, float, float]:
+        if stop_binding is not None:
+            return frames.to_nav2((sx, sy, syaw), state, stop_binding, fit)
         dx, dy = sx - site_pose[0], sy - site_pose[1]
         nx = local_pose[0] + cos_d * dx - sin_d * dy
         ny = local_pose[1] + sin_d * dx + cos_d * dy
@@ -111,6 +150,8 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
                     else plan_road_path(smap, site_pose, goal_spec, step_m=0.05, arrive_yaw=explicit_yaw)
                 )
             except Exception:
+                if explicit_stop is not None:
+                    raise
                 best_arc_pt = None
                 best_arc_dist = 999.0
                 for arc in smap.arcs.values():
@@ -135,7 +176,9 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
             ]
             length_m = float(road_plan.length_m)
             eta_s = float(road_plan.eta_s)
-        except Exception:
+        except Exception as exc:
+            if explicit_stop is not None:
+                raise HTTPException(409, detail={"code": "STOP_ROUTE_UNAVAILABLE", "place_id": place_id}) from exc
             try:
                 req = PlanRequest(map_version=active[0], start_pose=site_pose, goal=goal_spec, arrive_yaw=target_yaw)
                 planned = plan_trip(smap, req)
@@ -147,7 +190,13 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
             except Exception:
                 pass
 
-    if len(waypoints_site) < 2:
+    if explicit_stop is not None:
+        stop = waypoints_site[-1] if waypoints_site else {}
+        if (stop.get("kind") != "stop"
+                or _math.hypot(stop["x"] - target_x, stop["y"] - target_y) > 0.0001
+                or abs(_math.remainder(stop["yaw"] - target_yaw, 2 * _math.pi)) > 0.0001):
+            raise HTTPException(409, detail={"code": "STOP_ROUTE_ENDPOINT_MISMATCH", "place_id": place_id})
+    elif len(waypoints_site) < 2:
         waypoints_site.append({"x": round(target_x, 4), "y": round(target_y, 4), "yaw": round(target_yaw, 4), "place": place_id or label or "GOAL"})
     else:
         last_wp = waypoints_site[-1]
@@ -174,6 +223,9 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
         "local_nav2_pose": {"x": round(local_pose[0], 4), "y": round(local_pose[1], 4), "yaw": round(local_pose[2], 4)},
         "target_site": {"x": round(target_x, 4), "y": round(target_y, 4), "yaw": round(target_yaw, 4), "place_id": place_id, "label": label},
         "target_nav2": waypoints_nav2[-1],
+        **({"stop_binding": stop_binding, "named_stop_precision_required": explicit_stop.precision_stop is not None,
+            "named_stop_nav2_allowed": standalone_named_stop_allowed(active, getattr(runner, "traffic", None))}
+           if stop_binding is not None else {}),
         "places": places_out,
         "edges": edges_out,
         "segments": segments_out,

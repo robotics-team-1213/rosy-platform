@@ -1413,6 +1413,8 @@ safety_modules:
   - operations/fleet/fleet/server/console/traffic_arbitration_helpers.py  # D-766 traffic_arbitration.py split: state remember, snapshot traffic release, localization holds
   - operations/fleet/fleet/server/console/formation_control.py  # D-766 console.py split 2026-11-01: formation session, follower set, leader hand-off (FleetConsole mixin)
   - operations/fleet/fleet/server/goal_lease.py
+  - operations/fleet/fleet/server/named_stop_motion.py  # D-1051 named-stop custody claim and repark alignment
+  - operations/fleet/fleet/swarm/motion_ingress.py  # D-1051 which robot calls start or sustain motion
   - operations/fleet/fleet/server/tether_watch.py
 
 # D-430 §5 Safety-Review trailer only (2026-11-20, after #292 landed untrailered): files that move an OMX arm or
@@ -1681,6 +1683,9 @@ safety_anchors:
   - {symbol: fleet.server.berth_parking_helpers._pin_robot_on_fleet, public: true}
   - {symbol: fleet.server.task_dispatch_helpers.compute_road_plan}  # refuses without measured site and robot poses
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)
+  - {symbol: fleet.server.goal_lease.NavigationStopped, public: true}  # D-1051 the stop a correction route reports
+  - {symbol: fleet.server.named_stop_motion.NamedStopMotion, public: true}  # D-1051 named-stop custody claim
+  - {symbol: fleet.swarm.motion_ingress.starts_or_sustains_motion}  # D-1051 motion-ingress gate
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}

@@ -218,6 +218,8 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
                           require_named_operator=require_named_operator,
                           auth_configured=bool(principals or console_token) or app.state.password_sessions is not None)
     if stuck_resolver_clients is not None:
+        for client in stuck_resolver_clients.values():
+            console.bind_robot_motion(client)
         resolver_core = StuckResolver(ResolverConfig(), realign=realign_config,
                                       painted=lambda: (site_maps.active() or (None,) * 4)[3])
         resolver_core.autonomous_robots = frozenset(autonomous_robots)
@@ -295,6 +297,20 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state),
         align_gate=station_align_gate(app.state))
     install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
+
+    async def read_trip_navigation(robot_id, run_id):
+        return await console.clients()[robot_id]._get(f"/api/v1/navigation/state?run_id={run_id}")
+
+    trip_runner.navigation_readback = read_trip_navigation
+    trip_runner.named_stop_state = lambda robot_id: console.clients()[robot_id].state()
+    trip_runner.confirm_named_precision = console.goal_leases.confirm_named_precision
+
+    from fleet.server.trips.handoff_recovery import stopped_handoff
+
+    async def reconcile_trip_handoff(robot_id, scope, accepted_operation):
+        return await stopped_handoff(console.clients()[robot_id], scope, accepted_operation)
+
+    trip_runner.halts.reconcile_handoff = reconcile_trip_handoff
     trip_runner.autonomous_robots = frozenset(autonomous_robots)
     trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)
     if hub is not None:
@@ -312,6 +328,14 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     install_nudge_step_route(app, console=console, trip_busy=trip_runner.robot_busy,
                              require_named_operator=require_named_operator,
                              record_event=site_maps.record_event)
+    if getattr(site_maps, "path", None) is not None:
+        from fleet.server.ledger.named_stop_store import NamedStopStore
+        console.goal_leases.restore_named_stop(NamedStopStore(site_maps.path))
+    from fleet.server.named_stop_custody_routes import install_named_stop_custody_route
+    install_named_stop_custody_route(app, console=console, require_named_operator=require_named_operator,
+                                     record_event=site_maps.record_event)
+    console._named_stop_site_maps = site_maps
+    console._named_stop_traffic = trip_runner.traffic
     if task_service is not None:
         console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
         console.goal_leases.admit_attempt = task_service.admit_attempt
@@ -341,6 +365,17 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         read_guard=read_guard, require_named_operator=require_named_operator)
     install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,
                           require_named_operator=require_named_operator)
+    from fleet.server.trips.correction_corridor import check_correction_path
+    from fleet.server.trips.precision_correction_routes import install_precision_correction_routes
+
+    def cable_inhibited(robot):
+        return getattr(app.state, "cable_tangled", None) is not False or robot in app.state.tethers
+
+    trip_runner.check_named_correction = partial(check_correction_path, console, cable_inhibited=cable_inhibited)
+    from fleet.server.trips.auto_repark import AutoNamedCorrection
+    trip_runner.auto_named_correction = AutoNamedCorrection(console, trip_runner, cable_inhibited)
+    install_precision_correction_routes(app, console=console, runner=trip_runner,
+        require_named_operator=require_named_operator, cable_inhibited=cable_inhibited)
     app.state.paths = PathRecorder(
         PathStore(task_service.store.path if task_service is not None else None),
         roster=lambda: console.robot_ids, gather=gather_state, map_pose=map_pose,
