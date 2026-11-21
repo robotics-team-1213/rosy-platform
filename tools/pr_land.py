@@ -196,12 +196,17 @@ def preflight(cwd: Path, base: str, body: str = "") -> None:
     minute run to a missing trailer). CI's scope job runs the same two checks. The step-back check stops a PR that
     drops lines another PR merged into main within 7 days unless the PR body names it (shared-checkout.md)."""
     skip_sb = os.environ.get("ROSY_STEP_BACK") == "off"
+
+    def _run_step_back():
+        over = step_back.size_violations(cwd, base, "HEAD")
+        if over and not step_back.size_excepted(body):
+            return over, []
+        return over, step_back.report(cwd, base, "HEAD")
+
     with ThreadPoolExecutor(max_workers=2 if skip_sb else 3) as pool:
         checks = [pool.submit(_run, [sys.executable, f"tools/harness/{c}", base, "HEAD"], cwd)
                   for c in ("safety_review.py", "size_range.py")]
-        sb = None if skip_sb else pool.submit(
-            lambda: (step_back.size_violations(cwd, base, "HEAD"), step_back.report(cwd, base, "HEAD"))
-        )
+        sb = None if skip_sb else pool.submit(_run_step_back)
         for fut in checks:
             fut.result()
         if skip_sb:

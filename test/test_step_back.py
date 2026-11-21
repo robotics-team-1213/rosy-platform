@@ -223,7 +223,8 @@ def test_pr_of_commits_maps_multiple_prs_with_direct_main_and_merge_commits(tmp_
     g(repo, "checkout", "-q", "main")
     g(repo, "merge", "--no-ff", "-q", "-m", "Merge pull request #10 from team/old", "oldbranch")
     m10 = g(repo, "rev-parse", "HEAD")
-    c_pr1 = g(repo, "rev-parse", "main~2^2")
+    c_pr1 = g(repo, "rev-parse", "main~3^2")
+    c_pr2 = g(repo, "rev-parse", "main~2^2")
     c_base = g(repo, "rev-list", "--max-parents=0", "HEAD")
-    got = step_back.pr_of_commits(repo, "main", {c_pr1, c_old, m10, c_base}, time.time() - 3600)
-    assert got[c_pr1][0] == 1 and got[c_old][0] == 10 and got[m10][0] == 10 and c_base not in got
+    got = step_back.pr_of_commits(repo, "main", {c_pr1, c_pr2, c_old, m10, c_base}, time.time() - 3600)
+    assert got[c_pr1][0] == 1 and got[c_pr2][0] == 2 and got[c_old][0] == 10 and got[m10][0] == 10 and c_base not in got
