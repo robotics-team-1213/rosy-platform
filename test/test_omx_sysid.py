@@ -10,6 +10,7 @@ SIM = Path(__file__).parents[1] / "tools/sim"
 sys.path.insert(0, str(SIM))
 import omx_physics as physics  # noqa: E402
 import omx_sysid as sysid  # noqa: E402
+from omx_sysid_helpers import task_gate  # noqa: E402
 
 DESIGN = {"kp": 40.0, "kv": 6.3, "damping": 0.3, "armature": 0.01, "frictionloss": 0.0, "force": 2.0}
 
@@ -65,7 +66,8 @@ def fit(base_hold, new_hold):
             "episodes": {"fit": ["e1", "e2"], "hold": ["e3", "e4"]},
             "rms_deg": {"base": {"fit": base_hold, "hold": base_hold}, "fitted": {"fit": new_hold, "hold": new_hold}},
             "fitted": {j: {"kp": 25.0, "damping": 0.2} for j in physics.JOINTS[:5]},
-            "sd": {j: {"kp": 2.0, "damping": 0.05} for j in physics.JOINTS[:5]}}
+            "sd": {j: {"kp": 2.0, "damping": 0.05} for j in physics.JOINTS[:5]},
+            "task": {"base": "design", "candidate": "servo-test", "stack": {"base": [9, 9], "candidate": [9, 9]}, "grasp": {"held": 9, "total": 9}}}
 
 
 def test_verdict_needs_a_better_hold_out_and_no_joint_worse():
@@ -87,6 +89,58 @@ def test_verdict_needs_a_better_hold_out_and_no_joint_worse():
     assert not sysid.verdict(floor)[0]
 
 
+def test_rms_alone_cannot_promote_without_the_task_result():
+    good = fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5])
+    ok, why = sysid.verdict(dict(good, task=None))
+    assert not ok and "task" in why
+    grasp0 = dict(good, task={"stack": {"base": [9, 9], "candidate": [9, 9]}, "grasp": {"held": 0, "total": 9}})  # servo-friction-20261109, G-23
+    assert "grasp held 0/9" in sysid.verdict(grasp0)[1] and not sysid.verdict(grasp0)[0]
+    fewer = dict(good, task={"stack": {"base": [9, 9], "candidate": [7, 9]}, "grasp": {"held": 9, "total": 9}})
+    assert "stack pass 9/9 -> 7/9" in sysid.verdict(fewer)[1]
+
+
+def stack_files(tmp_path, base_physics="design", cand_physics="servo-test", base_seed=3, cand_seed=3, rows=None):
+    (tmp_path / "b.json").write_text(json.dumps({"steps_pass": 9, "steps": 9, "seed": base_seed, "choices": {"physics": base_physics}}))
+    (tmp_path / "c.json").write_text(json.dumps({"steps_pass": 8, "steps": 9, "seed": cand_seed, "choices": {"physics": cand_physics}}))
+    rows = rows or [{"result": "pass", "physics": "servo-test"}] * 8 + [{"result": "fail", "physics": "servo-test"}]
+    (tmp_path / "g.jsonl").write_text(("\n").join(json.dumps(r) for r in rows) + "\nnoise\n")
+    return tmp_path / "b.json", tmp_path / "c.json", tmp_path / "g.jsonl"
+
+
+def test_task_from_files_reads_stack_results_and_grasp_rows(tmp_path):
+    t = sysid.task_from_files(*stack_files(tmp_path), "design", "servo-test")
+    assert t == {"base": "design", "candidate": "servo-test", "seed": 3, "stack": {"base": [9, 9], "candidate": [8, 9]}, "grasp": {"held": 8, "total": 9}}
+
+
+def test_task_evidence_must_belong_to_the_fit_and_the_candidate(tmp_path):
+    b, c, g = stack_files(tmp_path)
+    with pytest.raises(SystemExit, match="one file"):
+        sysid.task_from_files(b, b, g, "design", "servo-test")
+    with pytest.raises(SystemExit, match="candidate stack ran physics"):
+        sysid.task_from_files(b, c, g, "design", "other")
+    with pytest.raises(SystemExit, match="base stack ran physics"):
+        sysid.task_from_files(*stack_files(tmp_path, base_physics="servo-test"), "design", "servo-test")
+    with pytest.raises(SystemExit, match="seeds"):
+        sysid.task_from_files(*stack_files(tmp_path, cand_seed=4), "design", "servo-test")
+    with pytest.raises(SystemExit, match="grasp rows ran physics"):
+        sysid.task_from_files(*stack_files(tmp_path, rows=[{"result": "pass", "physics": "design"}]), "design", "servo-test")
+
+
+def test_a_short_grasp_probe_cannot_promote():
+    good = fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5])
+    one = dict(good, task=dict(good["task"], grasp={"held": 1, "total": 1}))
+    assert not sysid.verdict(one)[0] and "at least 9" in sysid.verdict(one)[1]
+    zero = dict(good, task=dict(good["task"], stack={"base": [0, 9], "candidate": [0, 9]}))
+    assert not sysid.verdict(zero)[0]
+
+
+def test_promote_refuses_task_evidence_run_for_another_candidate(tmp_path):
+    path = tmp_path / "cell_physics.yaml"
+    shutil.copy(physics.FILE, path)
+    with pytest.raises(SystemExit, match="task result was run for"):
+        sysid.promote(fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5]), "servo-other", None, path)
+
+
 def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
     path = tmp_path / "cell_physics.yaml"
     shutil.copy(physics.FILE, path)
@@ -104,7 +158,7 @@ def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
     with pytest.raises(SystemExit, match="not promoted"):
         sysid.promote(fit([1, 1, 1, 1, 1], [2, 2, 2, 2, 2]), "servo-worse", None, path)
     written = path.read_text(encoding="utf-8")
-    orphan = dict(fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5]), base="no-such-base")
+    orphan = dict(fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5]), base="no-such-base", task=dict(fit([1] * 5, [.5] * 5)["task"], base="no-such-base", candidate="servo-orphan"))
     with pytest.raises(ValueError, match="no physics candidate"):
         sysid.promote(orphan, "servo-orphan", None, path)
     assert path.read_text(encoding="utf-8") == written  # checked before anything is written
@@ -195,6 +249,9 @@ def test_a_friction_fit_promotes_to_a_container_candidate_with_priority(tmp_path
     path = tmp_path / "cell_physics.yaml"
     shutil.copy(physics.FILE, path)
     r = sysid.friction([(sweep_rows(7.0), 0.016, 0.2)])
+    with pytest.raises(SystemExit, match="no task result"):  # friction decides the grasp too: the task gate applies (G-23)
+        sysid.promote(r, "push-test", None, path)
+    r["task"] = dict(fit([1] * 5, [.5] * 5)["task"], candidate="push-test")
     sysid.promote(r, "push-test", "docs/validation/x/friction.json", path)
     doc = physics.load(path)
     held = physics.Physics("push-test", doc).container()
@@ -252,3 +309,87 @@ def test_gravity_hold_travels_with_the_candidate():
     assert physics.Physics("design").gravity_hold() == "all"
     assert physics.Physics("registers-20261109").gravity_hold() == ["joint3", "joint4"]
     assert physics.Physics("servo-friction-20261109").gravity_hold() == "all"  # as it was fitted
+
+
+def test_cli_dispatch_reaches_each_command(tmp_path, capsys):
+    caps = tmp_path / "caps.json"
+    caps.write_text(json.dumps({"11": {"pwm": 300}, "12": {"pwm": 600}, "13": {"pwm": 600}, "14": {"pwm": 300}, "15": {"pwm": 300}}))
+    assert sysid.main(["registers", "--caps", str(caps), "--volts", "11=11.7,12=11.7,13=11.7,14=11.7,15=11.7"]) == 0
+    assert "joints:" in capsys.readouterr().out  # 2026-11-14: a lost elif made `registers` run the friction code
+    trace = tmp_path / "t.jsonl"
+    trace.write_text("{}\n")
+    with pytest.raises(Exception) as err:  # no real friction trace here: the friction branch must be the one that fails, on its own input
+        sysid.main(["friction", "--run", f"{trace}:16:{tmp_path / 'missing.json'}", "--out", str(tmp_path / "o")])
+    assert "missing.json" in str(err.value)
+    b, c, g = stack_files(tmp_path)
+    fit_path = tmp_path / "fit.json"
+    fit_path.write_text(json.dumps(dict(fit([1] * 5, [.5] * 5), task=None)))
+    sysid.main(["task", str(fit_path), "--base-stack", str(b), "--stack", str(c), "--grasp", str(g), "--candidate", "servo-test"])
+    assert json.loads(fit_path.read_text())["task"]["grasp"] == {"held": 8, "total": 9}
+    with pytest.raises(SystemExit, match="not promoted"):
+        sysid.main(["promote", str(fit_path), "--name", "servo-test"])  # 8/9 held: the gate refuses before any write
+
+
+def sweep_dir(tmp_path, base_p, cand_p, cells=(("good", 2),), n=10):
+    """trials.jsonl: per (candidate, tier) cell n sim trials per physics at the given success rates; and real rows get no physics tag."""
+    rows = [dict(cand=c, tier=t, physics=name, ok=i < round(p * n)) for c, t in cells for name, p in (("design", base_p), ("servo-test", cand_p)) for i in range(n)]
+    (tmp_path / "trials.jsonl").write_text("\n".join(map(json.dumps, rows)))
+    return tmp_path
+
+
+def real_file(tmp_path, ok, fail, unknown=0, shadowed=0, cand="good", tier=2):
+    """real_outcomes.jsonl as omx_carry_sweep ingest writes it: no physics key at all."""
+    rows = [dict(candidate=cand, tier=tier, outcome=o) for o in ["ok"] * ok + ["fail"] * fail + ["unknown"] * unknown + ["shadowed"] * shadowed]
+    (tmp_path / "r.jsonl").write_text("\n".join(map(json.dumps, rows)))
+    return tmp_path / "r.jsonl"
+
+
+SIM_OK = {"stack": {"base": [9, 9], "candidate": [9, 9]}, "grasp": {"held": 9, "total": 9}}
+
+
+def real_task(tmp_path, base_p, cand_p, ok, fail, **kw):
+    sweep = sweep_dir(tmp_path, base_p, cand_p)
+    return sysid.task_from_files(*stack_files(tmp_path), "design", "servo-test", real=real_file(tmp_path, ok, fail, **kw), sweep=sweep)["real"]
+
+
+def test_a_candidate_that_predicts_the_real_outcomes_worse_is_refused_even_with_good_sim_and_rms(tmp_path):
+    real = real_task(tmp_path, .8, .2, 8, 2)  # real succeeded 8/10: base sim said .8, the candidate's sim said .2
+    assert real["status"] == "checked" and real["n"] == 10 and real["candidate_ll"] < real["base_ll"]
+    ok, why = task_gate(dict(SIM_OK, real=real))
+    assert not ok and "real outcomes worse" in why
+    good = fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5])
+    assert not sysid.verdict(dict(good, task=dict(good["task"], real=real)))[0]  # RMS and sim task good, real worse
+    assert sysid.verdict(good)[0]  # the same fit without the real rows
+
+
+def test_a_candidate_that_predicts_no_worse_is_not_refused_and_real_never_lifts_a_sim_shortfall(tmp_path):
+    real = real_task(tmp_path, .5, .8, 8, 2)
+    assert real["candidate_ll"] > real["base_ll"] and task_gate(dict(SIM_OK, real=real))[0]
+    assert task_gate(dict(SIM_OK, real=real_task(tmp_path, .8, .8, 8, 2)))[0]  # equal scores: not worse
+    short = dict(SIM_OK, stack={"base": [9, 9], "candidate": [7, 9]}, real=real)
+    assert not task_gate(short)[0] and "stack pass 9/9 -> 7/9" in task_gate(short)[1]
+    assert not task_gate(dict(SIM_OK, grasp={"held": 0, "total": 9}, real=real))[0]
+
+
+def test_too_few_real_rows_are_neutral_and_never_say_passed(tmp_path):
+    real = real_task(tmp_path, .8, .2, 4, 1)  # the same bad prediction, but n=5 < MIN_REAL_N
+    assert real["status"] == "insufficient" and "candidate_ll" not in real
+    ok, why = task_gate(dict(SIM_OK, real=real))
+    assert ok and "insufficient real evidence" in why and "passed" not in why.lower()
+    assert not task_gate(dict(SIM_OK, stack={"base": [9, 9], "candidate": [7, 9]}, real=real))[0]  # neutral on the real side only
+
+
+def test_unknown_and_shadowed_rows_are_excluded_and_reported_apart(tmp_path):
+    real = real_task(tmp_path, .8, .2, 4, 1, unknown=30, shadowed=30)
+    assert real["n"] == 5 and real["unknown"] == 30 and real["shadowed"] == 30 and real["status"] == "insufficient"
+    assert real_task(tmp_path, .8, .2, 8, 2, unknown=3, shadowed=2)["n"] == 10  # they never reach the count
+
+
+def test_real_rows_need_no_physics_tag_and_a_cell_one_physics_never_ran_is_skipped(tmp_path):
+    f = real_file(tmp_path, 8, 2)
+    assert not any("physics" in json.loads(x) for x in f.read_text().splitlines())
+    only_base = sweep_dir(tmp_path, .8, .2, cells=(("other", 2),))  # trials exist for another candidate only
+    t = sysid.task_from_files(*stack_files(tmp_path), "design", "servo-test", real=f, sweep=only_base)
+    assert t["real"]["n"] == 0 and t["real"]["status"] == "insufficient"
+    with pytest.raises(SystemExit, match="needs --sweep"):
+        sysid.task_from_files(*stack_files(tmp_path), "design", "servo-test", real=f)

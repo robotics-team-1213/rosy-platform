@@ -60,6 +60,7 @@ from omx_sysid_helpers import (  # noqa: E402
     promote,
     survey,
     sweeps,
+    task_from_files,
     verdict,
     windows,
 )
@@ -308,6 +309,15 @@ def main(argv=None):
     pr.add_argument("--name", required=True)
     pr.add_argument("--evidence")
     pr.add_argument("--base", default="design", help="for a friction fit: the candidate it sits on")
+    tk = sub.add_parser("task", help="attach the task result to a servo or friction fit.json (promote refuses a fit without it)")
+    tk.add_argument("fit")
+    tk.add_argument("--candidate", required=True, help="the physics candidate name the stack and grasp runs used")
+    tk.add_argument("--base", help="the physics the base stack ran (default: the servo fit's base, else design)")
+    tk.add_argument("--base-stack", required=True, help="teacher `run stack` result json under the base physics")
+    tk.add_argument("--stack", required=True, help="the same under the candidate (--choice physics=<it>)")
+    tk.add_argument("--grasp", required=True, help="omx_two_arm_skill.py --skill grasp --servo-lag rows under the candidate, one json per line")
+    tk.add_argument("--real", help="real_outcomes.jsonl from omx_carry_sweep ingest (needs --sweep): scores each physics against the real rows, can only refuse, never promote")
+    tk.add_argument("--sweep", help="the sweep dir with trials.jsonl, the sim success per physics that --real is scored against")
     sc = sub.add_parser("score")
     sc.add_argument("episodes", nargs="+")
     sc.add_argument("--cell", required=True)
@@ -340,6 +350,7 @@ def main(argv=None):
             caps = {k: {{"pwm_limit": "pwm", "p_gain": "p", "i_gain": "i"}.get(n, n): v for n, v in row.items()} for k, row in caps["caps"].items()}
         joints, integral = from_registers(caps, {int(k): float(v) for k, v in (x.split("=") for x in a.volts.split(","))})
         print(yaml.safe_dump({"joints": joints, "integral_gain": integral}, sort_keys=False))
+    elif a.cmd == "friction":
         runs = []
         for item in a.run:
             trace, grams, result = item.rsplit(":", 2)
@@ -351,6 +362,12 @@ def main(argv=None):
         (Path(a.out) / "friction.json").write_text(json.dumps(r, indent=1), encoding="utf-8")
         print(json.dumps({k: r.get(k) for k in ("mu", "sd", "ok", "why")}, indent=1))
         return 0 if r["ok"] else 1
+    elif a.cmd == "task":
+        fit_path = Path(a.fit)
+        fit_json = json.loads(fit_path.read_text(encoding="utf-8"))
+        r = dict(fit_json, task=task_from_files(a.base_stack, a.stack, a.grasp, a.base or fit_json.get("base", "design"), a.candidate, a.real, a.sweep))
+        fit_path.write_text(json.dumps(r, indent=1), encoding="utf-8")
+        print(json.dumps(dict(task=r["task"], verdict=verdict(r))))
     elif a.cmd == "promote":
         print(promote(json.loads(Path(a.fit).read_text(encoding="utf-8")), a.name, a.evidence, base=a.base))
     else:
@@ -409,6 +426,7 @@ __all__ = [
     "survey",
     "sweeps",
     "unpack",
+    "task_from_files",
     "verdict",
     "windows",
 ]
