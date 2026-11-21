@@ -30,9 +30,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
-from fleet.localization import trust
 from fleet.localization.motion_match import MotionMatcher
 from fleet.server.identity_triggers import AutoTriggers, caution
+from rosy.world.state.projections.map_pose_samples import odom_from_snapshot
 
 logger = logging.getLogger("fleet.identity")
 
@@ -140,6 +140,7 @@ class IdentityService:
         self._last: dict[str, dict] = {}       # robot_id -> last outcome (readback)
         self._asked_at: dict[str, float] = {}
         self._motion: dict[str, MotionMatcher] = {}  # source_id -> motion baseline
+        self._motion_epochs: dict[str, dict] = {}    # source_id -> odometry epoch of each robot at the last frame
         self.triggers = AutoTriggers(config)
         #: robot_id -> Fleet MapPose (MapPoseService.arbitrated_pose); app.py sets it. Only the
         #: expected place for asking and for checking a verdict, never written back (addendum 3).
@@ -383,10 +384,17 @@ class IdentityService:
         if not self.config.motion_match or source is None or payload.status != "OK":
             self._motion.pop(source_id, None)
             return
-        robots = {}
+        robots, epochs = {}, {}
         for robot_id in source.robot_ids:
-            # Only a LOCALIZED map-frame pose counts: a navigation restart to (0, 0, 0) is not a move.
-            robots[robot_id] = trust.trusted_xy(self.tracking.robot_state(robot_id))
+            # Wheel odometry: distance moved needs no frame, and a real Pinky reports no localization status
+            # (site 2026-11-21: every robot read UNKNOWN, so nothing was ever named). Stale odometry is no pose.
+            odom = odom_from_snapshot(self.tracking.robot_state(robot_id))
+            fresh = odom is not None and abs(payload.captured_at - odom.stamp) <= self.config.motion_window_s
+            robots[robot_id] = (odom.x, odom.y) if fresh else None
+            epochs[robot_id] = odom.epoch if fresh else None
+        if self._motion_epochs.get(source_id, epochs) != epochs:
+            self._motion.pop(source_id, None)   # odometry restarted (CORE restart) or came or went: not a move
+        self._motion_epochs[source_id] = epochs
         points = [(d.x, d.y) for d in payload.detections if d.marker_id is None]
         matcher = self._motion.setdefault(source_id, MotionMatcher(
             self.config.track_step_m, min_move_m=self.config.motion_min_move_m, tol_m=self.config.motion_tol_m,
