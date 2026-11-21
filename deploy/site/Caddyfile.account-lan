@@ -1,0 +1,43 @@
+# D-1068: LAN browser alias for Account login (opt-in, compose.account-lan.yaml).
+# The issuer stays the tailnet name; this host only serves the browser login on the existing
+# site port, so no new port and no site-firewall.py change. Everything not listed here is 404:
+# administration, token/introspect/userinfo/apps/revoke/keys and access requests stay tailnet-only.
+(rosy_account_lan_upstream) {
+	reverse_proxy https://account:8098 {
+		header_up -X-Rosy-Lan-Camera
+		transport http {
+			tls_trust_pool file /run/secrets/site_ca
+			tls_server_name fleet
+		}
+	}
+}
+
+https://{$ROSY_ACCOUNT_LAN_HOST}:{$ROSY_SITE_HTTPS_PORT} {
+	tls /run/rosy-account-lan-tls/account-lan.crt /run/rosy-account-lan-tls/account-lan.key
+	# login.html and the modules it imports (login-page.js -> password-login.js -> account-permissions.js),
+	# then the reads the standalone login form makes and the authorize redirect it returns to.
+	@login_read {
+		method GET
+		path /console/login
+		path /console/assets/fleet-document.css /console/assets/password-login.css
+		path /console/assets/login-page.js /console/assets/password-login.js
+		path /console/assets/login-return.js /console/assets/account-permissions.js
+		# Account serves only shared-assets.json entries here; all are public static files.
+		path /common/*
+		path /api/fleet/auth/connection /api/fleet/auth/session /api/fleet/auth/authorize
+	}
+	# Password login, and the forced first-login password change the same form shows.
+	@login_write {
+		method POST
+		path /api/fleet/auth/login /api/fleet/auth/change-password
+	}
+	handle @login_read {
+		import rosy_account_lan_upstream
+	}
+	handle @login_write {
+		import rosy_account_lan_upstream
+	}
+	handle {
+		respond 404
+	}
+}
