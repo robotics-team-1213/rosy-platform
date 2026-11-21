@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import types
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -451,7 +452,7 @@ def test_concurrent_creations_cannot_admit_the_same_slot(main, monkeypatch):
         return real_git(cwd, *args, **kwargs)
 
     monkeypatch.setattr(worktrees, "git", pause_first)
-    with worktrees.concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(worktrees.main, ["new", "first", "fix/first", "--no-prune"])
         try:
             assert reached_add.wait(10)

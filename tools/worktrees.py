@@ -1,13 +1,6 @@
 """Keep ``.worktrees/`` from piling up: one gateway to create, one sweep to remove (D-761, D-790).
 
-Usage (from the main checkout or any worktree of the repository)::
-
-    python tools/worktrees.py status [--idle-hours N]
-    python tools/worktrees.py prune [--apply] [--snapshot] [--all] [--remote] [--idle-hours N]
-    python tools/worktrees.py new <short-name> <type>/<topic> [--from REF] [--owner TEXT]
-                                  [--prune | --no-prune] [--force-over-cap "<reason>"]
-    python tools/worktrees.py adopt <short-name> <type>/<topic> [--owner TEXT] [--prune | --no-prune]
-                                  [--force-over-cap "<reason>"]
+Run from any worktree. Use --help for commands and docs/reference/shared-checkout.md for policy.
 
 ``prune`` is a dry run unless ``--apply``. Lossless prune removes clean, unblocked worktrees:
 already in ``main`` (D-790, 0 wait when its branch reflog shows an own commit) or any clean
@@ -37,6 +30,7 @@ import time
 from pathlib import Path
 
 import worktree_rules as rules
+from land_async import Busy, locked
 
 CAP = 14  # everything under .worktrees/, orphan directories included; with main, the 15-slot budget (D-886)
 IDLE_HOURS = 72.0
@@ -440,7 +434,7 @@ def _form_problem(root: Path, name: str, branch: str, reason: str | None, owner:
 
 
 def _has_branch(root: Path, branch: str) -> bool:
-    return git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0 or rules.restore_archived(root, branch)
+    return git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0
 
 
 def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, mode: str = "report",
@@ -449,7 +443,8 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
     base = base or ("origin/main" if git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/main").returncode == 0 else "main")  # D-1055, no fetch
     known = git(root, "rev-parse", "-q", "--verify", f"{base}^{{commit}}").returncode == 0
     problem = (_form_problem(root, name, branch, reason, owner)
-               or (f"branch {branch} already exists (re-attach it: adopt)" if _has_branch(root, branch) else None)
+               or (f"branch {branch} already exists (re-attach it: adopt)"
+                   if _has_branch(root, branch) or rules.archived_tip(root, branch) else None)
                or (f"--from {base}: not a commit" if not known else None))
     stale = None if problem or base in ("main", "origin/main") else rules.stale_history(root, base) or rules.unlanded(root, base)
     if stale:  # D-790: a worktree on the pre-rewrite line would carry it into main
@@ -461,9 +456,10 @@ def cmd_adopt(cwd: Path, name: str, branch: str, reason: str | None, now: float,
               owner: str | None = None) -> int:
     """D-1070: put an existing local branch (one a clean prune left) back at ``.worktrees/<name>``."""
     root, _ = scan(cwd)
-    problem = (_form_problem(root, name, branch, reason, owner)
-               or (f"branch {branch} does not exist" if not _has_branch(root, branch) else None))
-    stale = None if problem else rules.stale_history(root, branch)
+    problem = _form_problem(root, name, branch, reason, owner)
+    tip = None if problem else branch if _has_branch(root, branch) else rules.archived_tip(root, branch)
+    stale = rules.stale_history(root, tip) if tip else None
+    problem = problem or (f"branch {branch} does not exist" if not tip else None)
     if stale:  # D-790: the pre-rewrite line is archived by a person, never re-attached
         problem = f"refused: {branch} is {stale}; rebuild on a new branch from main (D-172)"
     return _attach(cwd, root, name, branch, [branch], problem, reason, now, mode, owner)
@@ -480,7 +476,20 @@ def _attach(cwd: Path, root: Path, name: str, branch: str, target: list[str], pr
             sweep(cwd, apply=mode == "apply", now=now)  # lossless only; never --snapshot from here
         except (RuntimeError, OSError) as exc:
             print(f"[worktrees] warning: prune failed, continuing: {exc}", file=sys.stderr)
+    common = root / _must(git(root, "rev-parse", "--git-common-dir"), "git rev-parse")
+    try:
+        with locked(common / "worktrees-admission.lock"):
+            return _admit(cwd, root, name, branch, target, reason, now, owner)
+    except Busy:
+        raise RuntimeError("another worktree creation is running; retry after it finishes") from None
+
+
+def _admit(cwd: Path, root: Path, name: str, branch: str, target: list[str], reason: str | None,
+           now: float, owner: str | None) -> int:
     rows = scan(cwd)[1]
+    if len(rows) > CAP:
+        print(f"refused: {len(rows)} worktrees; the cap is {CAP} plus one approved incident slot. {SWEEP}", file=sys.stderr)
+        return 1
     if len(rows) >= CAP and reason is None:
         here, me = _here(cwd), _identity(root)
         for row in rows:
@@ -499,6 +508,8 @@ def _attach(cwd: Path, root: Path, name: str, branch: str, target: list[str], pr
                   f" dispatcher: also --all): {row['name']} ({row['verdict']})", file=sys.stderr)
         print(f'{HINT}\nor, during an incident: add --force-over-cap "<reason>"', file=sys.stderr)
         return 1
+    if target == [branch] and not _has_branch(root, branch) and not rules.restore_archived(root, branch):
+        raise RuntimeError(f"branch {branch} could not be restored")
     add = ["worktree", "add", "--relative-paths", f".worktrees/{name}", *target]
     result = git(root, *add)
     if result.returncode != 0 and "relative-paths" in result.stderr:  # git older than 2.48
@@ -556,7 +567,7 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
     for command in (new, adopt):
         command.add_argument("name", metavar="short-name")
         command.add_argument("branch", metavar="type/topic")
-        command.add_argument("--force-over-cap", metavar="REASON", help=f"create although {CAP} or more worktrees exist")
+        command.add_argument("--force-over-cap", metavar="REASON", help=f"use one incident slot above the cap of {CAP}")
         command.add_argument("--owner", help="owner note instead of the git identity and session")
         sweeping = command.add_mutually_exclusive_group()
         sweeping.add_argument("--prune", dest="mode", action="store_const", const="apply", default="report",

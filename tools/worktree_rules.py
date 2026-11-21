@@ -344,6 +344,16 @@ def _own_commit_times(root: Path, base: str, sha: str) -> list[int]:
         return []
 
 
+def _idle_unattached(root: Path, base: str, now: float) -> list[str]:
+    result = _git(root, "for-each-ref", "--no-merged", base,
+                  "--format=%(refname:short)\t%(worktreepath)\t%(committerdate:unix)", "refs/heads")
+    if result.returncode:
+        return []
+    return [branch for branch, checkout, tip in (line.split("\t") for line in result.stdout.splitlines())
+            if tip and not checkout and not branch.startswith(RESERVED_PREFIXES) and branch != "main"
+            and now - int(tip) >= NO_PR_HOURS * 3600]
+
+
 def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
     """Shared-checkout warnings plus P1 branch-size and 24h no-PR summary lines."""
     lines = shared_warnings(root)
@@ -364,12 +374,18 @@ def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
         parts = ([f"split-needed (>={SPLIT_NEEDED}): {', '.join(needed)}"] if needed else []
                  ) + ([f"split-soon (>={SPLIT_SOON}): {', '.join(soon)}"] if soon else [])
         lines.append(f"WARN    branch size: {'; '.join(parts)} — split finished work from origin/main (D-1067)")
-    if stale_no_pr:
+    unattached = _idle_unattached(root, base, now)
+    if stale_no_pr or unattached:
         open_prs = open_pr_heads(root)
         if open_prs is not None:
             missing = [name for name, br in stale_no_pr if br not in open_prs]
             if missing:
                 lines.append(f"WARN    no-pr (>{NO_PR_HOURS:.0f}h since first own commit, no open PR): {len(missing)} worktree(s): {', '.join(missing)}")
+            missing_count = sum(branch not in open_prs for branch in unattached)
+            if missing_count:
+                lines.append(f"WARN    no-pr: {missing_count} branch(es) without a worktree or open PR; tip older than {NO_PR_HOURS:.0f}h")
+        elif unattached:
+            lines.append(f"WARN    {len(unattached)} branch(es) without a worktree; open PR status unavailable")
     return lines
 
 
@@ -423,10 +439,15 @@ def sweep_branches(root: Path, now: float, apply: bool, say=print, quiet: bool =
     return done
 
 
-def restore_archived(root: Path, branch: str) -> bool:
-    """Put back the newest ``refs/archive/<branch>@<sha10>`` as the branch (create-only); False when there is none."""
+def archived_tip(root: Path, branch: str) -> str | None:
     refs = _git(root, "for-each-ref", "--sort=-creatordate", "--format=%(objectname)", f"refs/archive/{branch}@*").stdout.split()
-    return bool(refs) and _git(root, "update-ref", f"refs/heads/{branch}", refs[0], "").returncode == 0
+    return refs[0] if refs else None
+
+
+def restore_archived(root: Path, branch: str) -> bool:
+    """Put back the newest archived tip as a branch, only if the branch still does not exist."""
+    tip = archived_tip(root, branch)
+    return bool(tip) and _git(root, "update-ref", f"refs/heads/{branch}", tip, "").returncode == 0
 
 
 def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: bool = False, keep=frozenset()) -> int:
