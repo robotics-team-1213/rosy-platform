@@ -118,10 +118,15 @@ def test_review_gate_recheck_contract_and_bash_syntax(tmp_path):
     import yaml
 
     doc = yaml.safe_load(RECHECK_WF.read_text(encoding="utf-8"))
-    assert doc["concurrency"] == {"group": "review-gate-recheck", "cancel-in-progress": True}
+    triggers = doc.get("on", doc.get(True))
+    assert "ready_for_review" in triggers["pull_request"]["types"]
+    assert doc["concurrency"] == {
+        "group": "review-gate-recheck-${{ github.event.pull_request.number || 'push' }}",
+        "cancel-in-progress": True,
+    }
     step = doc["jobs"]["recheck"]["steps"][0]
     script = step["run"]
-    assert "comm -12" in script and "conclusion" in script and "PR_DRAFT" in step["env"]
+    assert "export LC_ALL=C" in script and "comm -12" in script and "conclusion" in script and "PR_DRAFT" in step["env"]
     if shutil.which("bash") is not None and sys.platform != "win32":
         p = tmp_path / "recheck.sh"
         p.write_text(script, encoding="utf-8")

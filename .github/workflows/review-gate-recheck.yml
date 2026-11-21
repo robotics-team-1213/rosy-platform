@@ -6,10 +6,10 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
-  group: review-gate-recheck
+  group: review-gate-recheck-${{ github.event.pull_request.number || 'push' }}
   cancel-in-progress: true
 
 permissions:
@@ -31,6 +31,7 @@ jobs:
           PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
           IGNORE_USERS: ${{ vars.REVIEW_GATE_IGNORE || 'codex' }}
         run: |
+          export LC_ALL=C
           is_ignored() {
             local u="$1" t="$2"
             [ -n "$u" ] || return 0
@@ -47,7 +48,7 @@ jobs:
             trig_files=$(mktemp)
             other_files=$(mktemp)
             trap 'rm -f "$trig_files" "$other_files"' EXIT
-            gh api --paginate "repos/$REPO/pulls/$CURRENT/files?per_page=100" --jq '.[].filename' | LC_ALL=C sort -u > "$trig_files"
+            gh api --paginate "repos/$REPO/pulls/$CURRENT/files?per_page=100" --jq '.[].filename' | sort -u > "$trig_files"
             if [ ! -s "$trig_files" ]; then
               echo "PR #$CURRENT changes no files; skip recheck"
               exit 0
@@ -57,7 +58,10 @@ jobs:
               if [ "$pr" = "$CURRENT" ] || [ "$draft" = "true" ] || [ "$author" = "$PR_AUTHOR" ] || is_ignored "$author" "$author_type"; then
                 continue
               fi
-              gh api --paginate "repos/$REPO/pulls/$pr/files?per_page=100" --jq '.[].filename' | LC_ALL=C sort -u > "$other_files"
+              if ! gh api --paginate "repos/$REPO/pulls/$pr/files?per_page=100" --jq '.[].filename' | sort -u > "$other_files"; then
+                echo "#$pr: failed to fetch files; skip"
+                continue
+              fi
               if [ -z "$(comm -12 "$trig_files" "$other_files")" ]; then
                 echo "#$pr: no file overlap with #$CURRENT"
                 continue
