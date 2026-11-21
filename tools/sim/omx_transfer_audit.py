@@ -3,6 +3,7 @@ from hashlib import sha256
 import json
 import math
 from pathlib import Path
+import re
 
 from PIL import Image
 from omx_ladder import read_ppo_snapshot, judge_isaac_stage
@@ -166,7 +167,52 @@ def check_reset_evidence(start_path, joint_receipt, mujoco, isaac, capture, timi
                 scope="simulation joint readbacks at reset; spatial and first-pick agreement still unverified")
 
 
-def audit(render, capture, handoff, isaac_snapshot=None, *, paired_reset=None):
+def check_wrist_evidence(evidence, layout_sha):
+    """Compare paired reprojections from held-out real captures for both wrist cameras."""
+    raw = evidence.read_bytes()
+    report = json.loads(raw)
+    if report.get("schema") != "rosy.omx-wrist-holdout/1" or report.get("layout_sha256") != layout_sha:
+        raise ValueError("wrist evidence must match the audited CAD194 layout")
+    cameras = report.get("cameras", {})
+    if set(cameras) != {"a_wrist", "b_wrist"}:
+        raise ValueError("wrist evidence requires both cameras")
+    results = {}
+    for camera, row in cameras.items():
+        fit = row["fit_capture_sha256"]
+        frames = row["holdouts"]
+        source_hashes = [fit, row["calibration_sha256"], *(frame["capture_sha256"] for frame in frames)]
+        if (any(not re.fullmatch("[0-9a-f]{64}", str(value)) for value in source_hashes)
+                or len(set(source_hashes)) != len(source_hashes) or len(frames) < 2):
+            raise ValueError(f"{camera}: expected two independent holdouts and a calibration fingerprint")
+        residuals = []
+        for frame in frames:
+            errors = {}
+            for feature in ("jaw", "fixture"):
+                points = frame[feature]
+                if len(points) < 2:
+                    raise ValueError(f"{camera}: expected two {feature} landmarks")
+                distances = [[], []]
+                observed_points = set()
+                for point in points:
+                    measured, baseline, candidate = (point[key] for key in ("observed", "baseline", "candidate"))
+                    for xy in (measured, baseline, candidate):
+                        if (len(xy) != 2 or any(type(v) not in (int, float) or not math.isfinite(v) for v in xy)
+                                or not (0 <= xy[0] < 640 and 0 <= xy[1] < 480)):
+                            raise ValueError(f"{camera}: invalid 640x480 pixel observation")
+                    observed_points.add(tuple(measured))
+                    for samples, estimate in zip(distances, (baseline, candidate), strict=True):
+                        samples.append(math.dist(measured, estimate) ** 2)
+                if len(observed_points) != len(points):
+                    raise ValueError(f"{camera}: duplicate {feature} landmarks")
+                errors[feature] = [math.sqrt(sum(values) / len(values)) for values in distances]
+            residuals.append(dict(capture_sha256=frame["capture_sha256"], rms_before_after_px=errors))
+        results[camera] = dict(calibration_sha256=row["calibration_sha256"], holdouts=residuals)
+    improved = all(after < before for camera in results.values() for frame in camera["holdouts"]
+                   for before, after in frame["rms_before_after_px"].values())
+    return dict(status="improved" if improved else "rejected", evidence_sha256=sha256(raw).hexdigest(), cameras=results)
+
+
+def audit(render, capture, handoff, isaac_snapshot=None, *, paired_reset=None, wrist_evidence=None):
     cfg, geometry, timing = check_render(render, capture, load(handoff))
     ppo = (check_ppo(isaac_snapshot, cfg, geometry["source_sha"])
            if isaac_snapshot else {"status": "not_run"})
@@ -175,6 +221,10 @@ def audit(render, capture, handoff, isaac_snapshot=None, *, paired_reset=None):
         required.append("exposure-bound A/B joint evidence")
     if paired_reset:
         timing["paired_reset"] = check_reset_evidence(*paired_reset, capture, timing, geometry)
+    timing["wrist_alignment"] = (check_wrist_evidence(wrist_evidence, cfg["layout_sha256"]) if wrist_evidence
+                                 else {"status": "awaiting_holdouts"})
+    if timing["wrist_alignment"]["status"] != "improved":
+        required.append("independent A/B wrist jaw and fixture reprojections")
     return {
         "schema": "rosy.omx-cad194-transfer-audit/1",
         "source_sha": geometry["source_sha"],

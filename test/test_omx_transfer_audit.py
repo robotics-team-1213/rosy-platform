@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/sim"))
-from omx_transfer_audit import CAMERAS, RENDERS, audit, digest
+from omx_transfer_audit import CAMERAS, RENDERS, audit, check_wrist_evidence, digest
 
 
 def write_json(path, value):
@@ -47,6 +47,7 @@ def test_transfer_audit_matches_cameras_and_handoff_without_site_acceptance(tmp_
     result = audit(tmp_path, capture, handoff)
     assert result["r2s"]["host_source_stamp_span_ms"] == 30
     assert result["r2s"]["pose_alignment"] == "unverified"
+    assert result["r2s"]["wrist_alignment"] == {"status": "awaiting_holdouts"}
     assert result["s2r"]["physical_acceptance"] == "pending"
     assert result["isaac_physx"]["status"] == "not_run"
 
@@ -91,3 +92,24 @@ def test_transfer_audit_matches_cameras_and_handoff_without_site_acceptance(tmp_
     (tmp_path / "isaac-side.png").write_text("tampered")
     with pytest.raises(ValueError, match="isaac-side.png"):
         audit(tmp_path, capture, handoff)
+
+
+def test_wrist_requires_separate_holdouts_and_improvement_in_both_feature_types(tmp_path):
+    point = dict(observed=[40, 100], baseline=[47, 100], candidate=[42, 100])
+    other = dict(observed=[80, 110], baseline=[87, 110], candidate=[82, 110])
+    row = dict(fit_capture_sha256="a" * 64, calibration_sha256="b" * 64,
+               holdouts=[dict(capture_sha256=key * 64, jaw=[point, other], fixture=[point, other])
+                         for key in "cd"])
+    data = dict(schema="rosy.omx-wrist-holdout/1", layout_sha256="1" * 64,
+                cameras={"a_wrist": row, "b_wrist": row})
+    path = write_json(tmp_path / "wrist.json", data)
+    assert check_wrist_evidence(path, data["layout_sha256"])["status"] == "improved"
+
+    row["holdouts"][1]["fixture"] = [dict(point, candidate=[57, 100]), other]
+    write_json(path, data)
+    assert check_wrist_evidence(path, data["layout_sha256"])["status"] == "rejected"
+
+    row["holdouts"][1]["capture_sha256"] = row["fit_capture_sha256"]
+    write_json(path, data)
+    with pytest.raises(ValueError, match="independent holdouts"):
+        check_wrist_evidence(path, data["layout_sha256"])
