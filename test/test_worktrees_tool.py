@@ -1028,3 +1028,30 @@ def test_new_starts_from_origin_main_untracked_and_status_warns_on_wrong_head(ma
     assert worktrees.main(["status"]) == 0
     out = capsys.readouterr().out
     assert "WARN    wrong-head:" in out and "is on fix/oops, not main" in out and "worktrees.py adopt" in out
+
+
+def test_status_warns_on_a_worktree_outside_worktrees_and_never_removes_or_counts_it(main, tmp_path, capsys):
+    """11-21: opencode kept its own worktrees outside .worktrees/; no tool saw them. The land trees are the tools'."""
+    outside = tmp_path / "outside"
+    git(main, "worktree", "add", "-q", str(outside), "-b", "feat/outside", "main")
+    common = Path(git(main, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    hidden = common / "rosy-land-wt" / "feat-x"
+    git(main, "worktree", "add", "-q", str(hidden), "-b", "land/feat/x-20261122000000", "main")
+    assert [Path(p).resolve() for p in worktrees.rules.foreign_worktrees(main)] == [outside.resolve()]
+    assert worktrees.main(["status"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert "WARN    worktree outside .worktrees/:" in out and "worktrees.py adopt" in out and "rosy-land-wt" not in out
+    assert "[worktrees] 0 under" in out  # not counted against the cap
+    assert worktrees.prune(main, apply=True, now=LATER) == 0 and outside.is_dir() and hidden.is_dir()
+
+
+def test_archive_abandoned_takes_idle_land_branches_but_not_a_checked_out_one(main):
+    """11-22: land/ leftovers of the retired land_async (D-1055) piled up; a hidden tree's branch stays."""
+    left = git(main, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "left")
+    git(main, "branch", "land/feat/left-20261101000001", left)
+    hidden = Path(git(main, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "rosy-land-wt" / "feat-live"
+    git(main, "worktree", "add", "-q", str(hidden), "-b", "land/feat/live-20261101000002", left)
+    later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
+    assert worktrees.rules.archive_abandoned(main, later, apply=True) == 1
+    assert git(main, "rev-parse", f"refs/archive/land/feat/left-20261101000001@{left[:10]}") == left
+    assert refs(main, "refs/heads/land") == ["refs/heads/land/feat/live-20261101000002"]

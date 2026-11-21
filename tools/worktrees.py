@@ -435,8 +435,8 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
         if row["verdict"] == "stale-history":
             print(f"WARN    {row['name']}: {row['branch']} {row['note']} (owner {who}). Do not merge or land it;"
                   " rebuild what is needed on a new branch from main (D-172), then archive this one.")
-    if head := rules.wrong_head(root):
-        print(f"WARN    wrong-head: the shared main checkout {root} is on {head}, not main; {rules.WRONG_HEAD_FIX}")
+    for line in rules.shared_warnings(root):
+        print(line)
     print(f"[worktrees] {len(rows)} under {root / '.worktrees'} (cap {CAP})")
     return 0
 

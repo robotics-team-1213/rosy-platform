@@ -77,8 +77,8 @@
 | 새 브랜치는 `main`에 들어간 지점에서만 시작한다. 미착지 브랜치 위에 쌓지 않는다. 이어지는 일은 앞 브랜치를 착지한 뒤 시작한다 | `worktrees.py new --from`이 `main`에 없는 ref를 거절한다(`worktree_rules.unlanded`) |
 | 한 PR은 센 바뀐 파일 30개, 자체 비병합 커밋 20개, 병합 기준 7일 이내다(D-1067 개정). 넘으면 끝난 앞부분을 `origin/main`에서 새 브랜치로 먼저 낸다. `main`을 병합한 커밋은 세지 않는다 | `pr_land.py`가 제출 전에 거절한다. 나눌 수 없는 이유가 있으면 PR 본문에 `Size-Exception: <이유>` |
 | `origin/main` 병합은 PR이 `DIRTY`(충돌)일 때만 한다(「같이 하는 깃」 6번). `BEHIND`는 Merge Queue가 최신 main 위에서 다시 시험하므로 합치지 않는다. 병합이 단순히 가져온 `main`의 크기 문제는 브랜치 탓이 아니다 | `size_range.py`가 병합 커밋을 모든 부모와 다른 경로만으로 본다 |
-| 워크트리가 없고 4일 동안 커밋이 없는 미착지 브랜치는 보관한다(D-1070 후속, 2026-11-21 로컬 브랜치 840개). `worktrees.py adopt`는 보관된 브랜치를 자동으로 되살린다. 지우지 않고 `refs/archive/<브랜치>@<sha10>`에 둔다. 되살리기: `git branch <브랜치> refs/archive/<브랜치>@<sha10>` | `worktrees.py prune --apply`가 정확한 sha로만 옮긴다(`archive_abandoned`) |
-| 폐기(D-1055): 착지 묶음(`land_prepare`·`land_rollup`), 10분 주기 `RosyLandTick`·`land_tick`·`land_gc`, MAIN-RED 재시험 | 묶음은 GitHub Merge Queue(`HEADGREEN`, 최대 4)가 한다 |
+| 워크트리가 없고 4일 동안 커밋이 없는 미착지 브랜치는 보관한다(D-1070 후속, 2026-11-21 로컬 브랜치 840개). `worktrees.py adopt`는 보관된 브랜치를 자동으로 되살린다. 지우지 않고 `refs/archive/<브랜치>@<sha10>`에 둔다. 되살리기: `git branch <브랜치> refs/archive/<브랜치>@<sha10>`. `land/` 잔재 브랜치도 같은 규칙으로 보관한다(D-1055 폐기, 체크아웃된 것은 제외) | `worktrees.py prune --apply`가 정확한 sha로만 옮긴다(`archive_abandoned`) |
+| 폐기(D-1055): 착지 묶음(`land_prepare`·`land_rollup`), 10분 주기 `RosyLandTick`·`land_tick`, MAIN-RED 재시험. `land_gc`는 숨은 착지 트리 정리 전용으로 남김 | 묶음은 GitHub Merge Queue(`HEADGREEN`, 최대 4)가 한다 |
 
 ## 같이 하는 깃
 
@@ -117,6 +117,7 @@ flowchart TD
    - **사람이 볼 두 상태.** `status`의 `landed-dirty`는 이미 `main`에 들어간 브랜치의 워크트리에 미커밋 파일이 있다는 뜻이다. 그 워크트리에서 계속 일하지 말고 새 워크트리를 만들어 옮긴다. `stale-history`는 이력 재작성 이전 줄기의 브랜치다(`main`에 없는 커밋이 2,000개 넘음, 또는 `ad86fca808` 이전에서 갈라짐). 병합·착지하지 않고 필요한 것만 `main`에서 새 브랜치로 다시 만든다(D-172). `new --from <ref>`는 그런 ref에서 만들지 않는다.
    - **스냅샷.** `prune --snapshot`은 커밋 안 된 내용을 `refs/wip/<날짜>/<이름>`에 남기고 더럽거나 `main`에 안 들어간 워크트리까지 지우므로 사람이나 디스패처만 돌린다. 세션이 알아서 돌리지 않는다. `--snapshot`은 호출한 쪽이 `new`로 만든 워크트리만 다루고, 다른 세션 것과 소유자 기록이 없는 것은 `--all`을 줘야 다룬다.
    - **위치.** 오래 둘 워크트리는 `git worktree lock`으로 잠근다. worktree는 이 저장소의 `.worktrees/`에만 둔다. `.worktrees/`는 gitignore다. 공유 `main` 체크아웃에서는 브랜치를 바꾸거나(`checkout`, `switch`) 커밋하지 않는다. 그 HEAD는 늘 `main`이고, 커밋되지 않은 변경을 남기지 않는다. 스크래치, 로그, pytest 출력은 저장소 밖 `$ROSY_SCRATCH`에 둔다(없으면 시스템 임시 폴더. 실험실 PC는 `ROSY_SCRATCH=X:\DevTemp`).
+   - **밖의 워크트리.** `.worktrees/` 밖에는 워크트리를 만들지 않는다. 도구 자체의 워크트리 기능(opencode 등)도 쓰지 않고 `worktrees.py new`로 시작한다. `status`·`doctor`가 밖의 워크트리를 WARN으로 알리면, 쓰던 세션이 끝난 뒤 주인이 `worktrees.py adopt`로 `.worktrees/`에 다시 붙이고 밖의 것은 `git worktree remove`로 지운다. 도구는 밖의 것을 지우지 않고 한도에 세지 않는다. `.git/rosy-land-wt`·`rosy-publish`·`rosy-land-spec`은 도구 소유라 경고하지 않는다.
    - **동료.** `ListAgents`가 있으면 동료와 그 소유 경로를 본다. 백그라운드 실행기는 단계마다 자기 브랜치에 커밋한다. 그 브랜치에 40분 동안 새 커밋이 없으면 디스패처가 실행기를 확인한다.
 2. **자기 경로만 스테이징한다.** `git status --short`에서 이번 작업으로 만들거나 고친 경로만 `git add <path> ...`에 적는다. `git add -A`, `git add .`, 디렉터리 단위 add는 쓰지 않는다. 인덱스 하나가 모든 세션의 것이라 넓은 add 한 번이 다른 세션의 파일을 커밋에 넣는다. 잘못된 경로 하나가 `git add` 전체를 실패시키므로, 커밋 전에 exit code를 본다. 경로 없는 커밋 전에는 `git diff --cached --name-only`가 자신의 목록과 같아야 한다.
    - 공유 인덱스에 동료가 이미 올려 둔 경로가 있으면, 파일이 전부 자신 것일 때만 `git commit --only <자신의 경로>`를 쓴다. `--only`는 작업 트리 내용을 기록하기 때문이다. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash`는 쓰지 않는다. 그 사이 HEAD가 동료의 커밋이 될 수 있다. `git commit -- <공유 파일>`도 쓰지 않는다. 작업 트리 전체를 가져가 동료의 행이 들어간다.
