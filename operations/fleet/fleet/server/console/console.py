@@ -287,6 +287,10 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
             if mission.get("task_id") in task_ids:
                 self._queued.pop(robot_id, None)
 
+    def discard_queued_goal(self, robot_id: str) -> None:
+        """Drop the robot's Fleet-queued mission without sending it: its caller re-checks its own conditions."""
+        self._queued.pop(robot_id, None)
+
     def prune_task_queue_entries(self, active_task_ids: set[str]) -> None:
         for robot_id, mission in list(self._queued.items()):
             task_id = mission.get("task_id")

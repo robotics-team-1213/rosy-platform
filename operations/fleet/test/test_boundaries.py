@@ -184,7 +184,8 @@ def test_traffic_bays_missions_and_localization_never_read_overhead_tracking():
     assert offenders == []
 
 
-#: D-472 addendum 3: a LED-confirmed track feeds D-511 lane compliance and the console only.
+#: D-472 addendum 3: a LED-confirmed track feeds D-511 lane compliance and the console only; auto_locate_service.py is the one
+#: pose reader (the opt-in track anchor, fleet.map_pose.track_anchor_robots; nothing else may read the track as a pose).
 #: Map pose arbitration, trips, initialpose, routes, bays, formations and commands never read it,
 #: neither by import nor through the wiring attributes ``tracking.identity`` / ``app.state.identity``.
 IDENTITY_READERS = {"server/app.py", "server/console/console_routes.py", "server/recognition/identity.py",

@@ -58,7 +58,7 @@ def test_a_dock_with_no_epoch_is_not_refused():
 
 def test_a_nav2_start_the_lidar_contradicts_is_refused_with_the_numbers():
     p, row = a_row(start=None, others=())
-    with_reference(p)
+    with_reference(p, verified=True)             # even accepted site_pose_evidence does not override a LiDAR that contradicts the map pose
     stale_map(p, dx=-0.40, dyaw=0.0)
     p.manager.dock()
     run_row(p, row, until=answer_kinds(zone=good(x=1.0)))

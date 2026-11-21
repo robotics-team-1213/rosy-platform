@@ -8,7 +8,9 @@ the last turn, `DELETE` stops a running one and, like every stop, is open to any
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
@@ -113,6 +115,65 @@ def repark(body: ReparkRequest, auth: AuthContext = Depends(operator),
         "forward_m": body.forward_m, "left_m": body.left_m, "lease_owner": owner,
         "operator_name": body.operator_name.strip() or None, "by": auth.label or auth.role})
     return JSONResponse(status_code=202, content=started)
+
+
+class ScopedReparkRequest(ReparkRequest):
+    correlation_id: str = Field(min_length=1, max_length=128, strict=True)
+    expected_boot_id: UUID
+    expected_owner_generation: int = Field(ge=0, strict=True)
+    expected_idle_epoch: int = Field(ge=0, strict=True)
+    expected_map_grid_id: str = Field(min_length=1, max_length=128, strict=True)
+    expected_nav_run_id: UUID
+    expected_nav_generation: int = Field(ge=0, strict=True)
+    expected_nav_correlation_id: str = Field(min_length=1, max_length=128, strict=True)
+
+
+@motion_router.post("/repark/run", status_code=202)
+def scoped_repark(body: ScopedReparkRequest, auth: AuthContext = Depends(operator),
+                  svc: CoreServicesLike = Depends(get_services)):
+    runner = _mission(svc).repark
+    identity = (str(body.expected_boot_id), str(body.expected_nav_run_id), body.expected_nav_generation,
+                body.expected_nav_correlation_id, body.expected_map_grid_id)
+    first = True
+
+    @contextmanager
+    def admission():
+        nonlocal first
+        with svc.state.map_grid_gate:
+            if svc.state.map_grid_id != body.expected_map_grid_id:
+                raise MissionRefused("REPARK_MAP_GRID_CHANGED", "loaded grid changed before correction")
+            try:
+                _admit(svc, auth, "repark", body.operator_name)
+            except ApiError as exc:
+                raise MissionRefused(exc.code, str(exc)) from exc
+            if first and not svc.nav.matches_precision_handover(identity, body.expected_idle_epoch):
+                raise MissionRefused("REPARK_HANDOVER_CHANGED", "exact grid-bound handover is unavailable")
+            first = False
+            yield
+
+    previous = {"boot_id": body.expected_boot_id, "run_id": body.expected_nav_run_id,
+                "owner_generation": body.expected_nav_generation, "correlation_id": body.expected_nav_correlation_id}
+    try:
+        started = runner.start_scoped(body.forward_m, body.left_m, correlation_id=body.correlation_id,
+                                      expected_boot_id=body.expected_boot_id,
+                                      expected_owner_generation=body.expected_owner_generation,
+                                      expected_idle_epoch=body.expected_idle_epoch,
+                                      expected_navigation=previous, admission=admission)
+    except ValueError as exc:
+        raise ApiError("VALIDATION_ERROR", 400, str(exc)) from exc
+    except MissionRefused as exc:
+        raise ApiError(exc.code, 409, str(exc), detail=exc.detail) from exc
+    svc.events.publish("motion.repark", source=f"api:{auth.role}", data=started["operation"])
+    return JSONResponse(status_code=202, content=started)
+
+
+@motion_router.get("/repark/run")
+def scoped_repark_status(run_id: UUID | None = None,
+                         correlation_id: str | None = None, _: AuthContext = Depends(viewer),
+                         svc: CoreServicesLike = Depends(get_services)):
+    if run_id is not None and correlation_id is not None:
+        raise ApiError("VALIDATION_ERROR", 400, "supply only one repark lookup key")
+    return _mission(svc).repark.scoped_status(run_id, correlation_id=correlation_id)
 
 
 @motion_router.get("/repark")

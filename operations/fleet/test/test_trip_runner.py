@@ -407,6 +407,19 @@ def test_d593_a_still_operator_pin_starts_up_to_its_anchor_age_limit():
     assert run(runner.start("p1", "bob"))["state"] == "started"
 
 
+def test_a_track_anchor_satisfies_the_pose_check_like_a_sighting_and_ages_like_one():
+    """2026-11-21: a fresh camera-track anchor starts a trip; an old one is no still pin, so it is refused."""
+    runner, store, ports = _setup()
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+    ports.core.mode = "CAMERA_LINE"
+    ring_s = _arc(store, "ring_s:fwd")
+    x, y, yaw = ring_s.point_at(0.1)
+    ports.pose = MapPose(x, y, yaw, "LOCALIZED", "track", 0.0, 0.1, 8.0, anchor_source="track")
+    assert _code(runner.start("p1", "bob")) == "TRIP_POSE_UNTRUSTED"
+    ports.pose = MapPose(x, y, yaw, "LOCALIZED", "track", 0.0, 0.1, 1.9, anchor_source="track")
+    assert run(runner.start("p1", "bob"))["state"] == "started"
+
+
 def test_d593_pin_still_thresholds_are_bounded():
     with pytest.raises(ValueError):
         TripConfig(pin_start_still_m=0.2)
