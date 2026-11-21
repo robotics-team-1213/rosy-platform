@@ -504,7 +504,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 | C6 | 위험 표시 | `ui-tag status=crit` / `--flag-danger-*` 채움. 빨간 글자 금지(D-202) |
 | C7 | 되돌릴 수 없는 동작 | `confirmIrreversible` + 목록의 POST는 확인 없이 못 보낸다 |
 | C8 | 탭 | `createTabs` 하나. `role="tab"` 직접 작성 금지. 옵션: `onChange`·`select`(조용함)·`label`, `beforeChange(next, current)`(동기·비동기 거부권, 대기 중 `aria-busy`), 탭별 `disabled`+`reason`(탭 줄 아래 원인 한 줄, 화살표가 건너뜀), `icon`·`iconOnly`(label이 접근성 이름), `activation: "manual"`(기본)·`"automatic"`(화살표가 곧 활성화) |
-| C9 | 정지 | `createStopControl`(`stop-control.js`). 권한·busy·reload·계정 상태와 무관하게 항상 보이고 눌리며 누를 때마다 보낸다. 앱이 역할·세션으로 정지를 끄지 않고 서버 403은 글로 보인다. Fleet 머리 `#estop`도 보기 전용을 포함해 로그인한 모든 역할이 누른다(2026-11-18 사용자 결정, 서버 `/api/fleet/estop`은 읽기 권한). 꺼지는 경우는 로그인이 없을 때(401)뿐이다. 거절은 글로 말하고 `보냄`은 `멈춤`이 아니다. `accept(response)`로 더 엄격한 증거(예: 본문 `estop === true`)를 요구할 수 있고 못 받으면 실패 글이다 |
+| C9 | 정지 | `createStopControl`(`stop-control.js`). 권한·busy·reload·계정 상태와 무관하게 항상 보이고 눌리며 누를 때마다 보낸다. 앱이 역할·세션으로 정지를 끄지 않고 서버 403은 글로 보인다. Fleet 머리 `#estop`이 보기 전용 역할에서 꺼지는 것은 아직 이 규칙 밖이다(보기 전용 정지는 별도 PR로 이 규칙에 맞춘다). 거절은 글로 말하고 `보냄`은 `멈춤`이 아니다. `accept(response)`로 더 엄격한 증거(예: 본문 `estop === true`)를 요구할 수 있고 못 받으면 실패 글이다 |
 | C10 | 연결 배너 | `createConnectionNotice`(`connection-notice.js`). 끊김은 주의(`ui-tag status=warn` + `wifi` 아이콘 + 글). 호출자가 실제 운용 위험을 알 때만 `set(state, text, {danger: true})`로 위험 채움. 인증 대기·모름은 차분한 글(2026-11-14, 예전 D2 대체) |
 | C11 | 독립 대상·조작 상자 | `.ui-panel[data-surface=flat\|raised][data-density=standard\|compact]`(`component-controls.css`). 테 하나, 읽는 순서 제목·`ui-tag`·핵심 값(tnum)·근거 줄·행동(주 하나+보조 하나). `compact`는 64rem 이상 마우스 면만(D-976). 반복 행·수치는 상자가 아니라 행·띠. 카드 속 카드·카드 전체 위험 채움 금지 |
 | C12 | 상태 표 | `statusTag(state, text?)`(`status-tag.js`). 정상은 아이콘 없이 조용, 지연 `history`·끊김 `wifi`(warn), 모름 `minus`+점선 테, 주의 `warn`, 위험 `safety`/`estop`(tag만 crit 채움), 잠김 `lock`. 모르는 값 문구는 `EVIDENCE_LABEL.unavailable`(정보 없음) 하나 |
@@ -524,7 +524,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 패턴이 만들어졌는지(`planned`·`built`)는 [`shared/web/patterns.yaml`](shared/web/patterns.yaml)만 말한다. 이 표의 C행에는 상태 낱말을 적지 않고, `test_patterns_registry.py`가 지킨다.
 
-동적 값(D1): 스크립트의 `el.style`·`style` 속성은 금지이고 예외는 [`geometry.js`](shared/web/geometry.js)의 `setGeometry(el, {…})` 하나다. `--g-*` 사용자 속성만 쓰며 이름 허용 목록과 값(유한 숫자+단위·`var(--토큰)`·`color`의 `#hex`)을 검사하고, CSS는 `var(--g-…, 기본값)`으로 읽는다. 그림은 SVG 속성·canvas, 이산 값은 `data-*` 선택자다. typed `attr()`와 `<table width>` 우회는 이행하면서 지운다(`test_no_element_style.py`가 목록으로 추적). 이행 부채: 진단 화면 `diagnostic-core.js`·`diagnostic-map.js`는 classic 스크립트라 아직 `.style`을 쓰며 `patterns.yaml` C5 `debt`에 이유와 함께 적혀 있다.
+동적 값(D1): 스크립트의 `el.style`·`style` 속성은 금지이고 예외는 `shared/web/geometry.js`의 `setGeometry(el, {…})` 하나가 될 것이다(아직 없다: 들어오기 전까지 typed `attr()`가 현행 규칙이고 `test_no_element_style.py`의 목록이 남은 쓰기를 센다). `--g-*` 사용자 속성만 쓰며 이름 허용 목록과 값(유한 숫자+단위·`var(--토큰)`·`color`의 `#hex`)을 검사하고, CSS는 `var(--g-…, 기본값)`으로 읽는다. 그림은 SVG 속성·canvas, 이산 값은 `data-*` 선택자다. typed `attr()`와 `<table width>` 우회는 이행하면서 지운다(`test_no_element_style.py`가 목록으로 추적). 이행 부채: 진단 화면 `diagnostic-core.js`·`diagnostic-map.js`는 classic 스크립트라 아직 `.style`을 쓰며 `patterns.yaml` C5 `debt`에 이유와 함께 적혀 있다.
 
 
 ## 작업 화면의 기본 원칙 (D-461)

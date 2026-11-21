@@ -14,15 +14,16 @@ import yaml
 REPO = Path(__file__).resolve().parents[3]
 SURFACES = yaml.safe_load((REPO / "shared" / "web" / "surfaces.yaml").read_text(encoding="utf-8"))["surfaces"]
 ROOTS = tuple(sorted({REPO / s["path"] for s in SURFACES if s.get("medium") == "web"}))
-#: Known hits awaiting migration: file -> reason. A stale entry (no hit left) fails the test.
+#: Known hits awaiting migration: file -> (write count, reason). The count may only go down: a higher count fails,
+#: a lower one fails until the entry is lowered, and a file with no hit left must be removed.
 EXCEPTIONS = {
-    "middleware/perception/web/diagnostic-core.js": "classic script (no import): battery fill width",
-    "middleware/perception/web/diagnostic-map.js": "classic script (no import): gauge fill width",
-    "integrations/simulation/gazebo/scripts/lane_live_view.html": "local Gazebo debug page with an inline script, not a product surface",
-    "learning/curation/perception/review_app_web/app.js": "review app writes element style; moves to the shared geometry helper with its UI slice",
-    "learning/curation/perception/review_app_web/pixels.js": "review app writes element style; moves to the shared geometry helper with its UI slice",
-    "learning/curation/perception/review_app_web/sim.js": "review app writes element style; moves to the shared geometry helper with its UI slice",
-    "learning/curation/perception/review_app_web/viewport.js": "review app writes element style; moves to the shared geometry helper with its UI slice",
+    "middleware/perception/web/diagnostic-core.js": (1, "classic script (no import): battery fill width"),
+    "middleware/perception/web/diagnostic-map.js": (1, "classic script (no import): gauge fill width"),
+    "integrations/simulation/gazebo/scripts/lane_live_view.html": (11, "local Gazebo debug page with an inline script, not a product surface"),
+    "learning/curation/perception/review_app_web/app.js": (3, "review app writes element style; moves to the shared geometry helper with its UI slice"),
+    "learning/curation/perception/review_app_web/pixels.js": (6, "review app writes element style; moves to the shared geometry helper with its UI slice"),
+    "learning/curation/perception/review_app_web/sim.js": (2, "review app writes element style; moves to the shared geometry helper with its UI slice"),
+    "learning/curation/perception/review_app_web/viewport.js": (2, "review app writes element style; moves to the shared geometry helper with its UI slice"),
 }
 WRITE = re.compile(r"\.style\b|setAttribute\(\s*[\"']style[\"']")
 
@@ -35,7 +36,8 @@ def _scripts():
 
 
 def _hits():
-    return {p.relative_to(REPO).as_posix() for p in _scripts() if WRITE.search(p.read_text(encoding="utf-8", errors="ignore"))}
+    counts = {p.relative_to(REPO).as_posix(): len(WRITE.findall(p.read_text(encoding="utf-8", errors="ignore"))) for p in _scripts()}
+    return {rel: n for rel, n in counts.items() if n}
 
 
 def test_registered_surfaces_are_scanned():
@@ -46,8 +48,10 @@ def test_registered_surfaces_are_scanned():
 
 def test_product_scripts_do_not_write_element_style():
     hits = _hits()
-    assert sorted(hits - set(EXCEPTIONS)) == []
-    assert sorted(set(EXCEPTIONS) - hits) == [], "stale exception: remove it"
+    grew = {rel: n for rel, n in hits.items() if n > EXCEPTIONS.get(rel, (0, ""))[0]}
+    assert grew == {}, f"new element style writes: {grew}"
+    stale = {rel: n for rel, (n, _) in EXCEPTIONS.items() if hits.get(rel, 0) < n}
+    assert stale == {}, f"lower or remove the exception: {stale}"
 
 
 def test_measured_geometry_is_declared_with_typed_attr():
