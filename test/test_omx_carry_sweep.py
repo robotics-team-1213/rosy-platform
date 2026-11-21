@@ -171,10 +171,12 @@ def test_ingest_reads_tier_proof_rows_counts_unknown_apart_and_tolerates_missing
     assert [r["outcome"] for r in out] == ["ok", "ok", "fail", "unknown", "unknown", "fail"] and all("physics" not in r for r in out)  # real rows carry no sim physics tag
 
 
-def test_no_tier_proof_keeps_placed_as_ok_and_a_mapping_file_still_reads(tmp_path):
+def test_no_tier_proof_keeps_placed_unknown_and_a_mapping_file_still_reads(tmp_path):
     _fake_sweep(tmp_path)
     att = _attempts(tmp_path, [dict(attempt_id="a1", outcome="placed"), dict(attempt_id="a2", outcome="placed")])
-    assert sw.real_table(att)[("good", 2)] == {"ok": 2}
+    unknown = sw.Counter()
+    assert not sw.real_table(att, unknown=unknown)
+    assert unknown == {("good", 2): 2}
     old = tmp_path / "old.json"
     old.write_text(json.dumps({"a1": True, "a2": "UNKNOWN"}))
     unknown = sw.Counter()
@@ -187,7 +189,7 @@ def test_shadowed_offer_is_counted_apart_and_never_credited(tmp_path):
                                dict(attempt_id="a2", outcome="placed", tried=dict(carry_shadowed=dict(offer="carry.tier2", candidate="good", keys=["grasp_depth_m"]))),
                                dict(attempt_id="a3", outcome="failed", tried=dict(carry_shadowed=dict(offer="carry.tier2", candidate="good", keys=["place_dz"])))])
     shadowed = sw.Counter()
-    assert sw.real_table(att, None, None, shadowed)[("good", 2)] == {"ok": 1} and shadowed == {("good", 2): 2}
+    assert not sw.real_table(att, None, None, shadowed) and shadowed == {("good", 2): 2}
     rep = sw.ingest(tmp_path, att)
-    assert rep["shadowed"] == {"good@t2": 2} and rep["real"]["good@t2"] == {"ok": 1}
-    assert [r["outcome"] for r in map(json.loads, (tmp_path / "real_outcomes.jsonl").read_text().splitlines())] == ["ok", "shadowed", "shadowed"]
+    assert rep["shadowed"] == {"good@t2": 2} and rep["real_unknown"] == {"good@t2": 1}
+    assert [r["outcome"] for r in map(json.loads, (tmp_path / "real_outcomes.jsonl").read_text().splitlines())] == ["unknown", "shadowed", "shadowed"]

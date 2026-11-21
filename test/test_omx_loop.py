@@ -83,6 +83,25 @@ def test_preset_and_choices_reach_sim_and_sweep_run(fake):
     assert run[2] == "run" and "preset=p9" in run and "frame=x" in run
 
 
+def test_all_binds_ranking_and_offers_to_the_snapshot_it_just_measured(fake):
+    loop.main(args(fake, "all", "--run", "--run-sweep"), runner=fake["runner"])
+    measure, evaluate, rank, offer = fake["calls"]
+    snapshot = str(Path(measure[3]) / "snapshot.json")
+    for command, action in ((evaluate, "run"), (rank, "rank"), (offer, "offers")):
+        assert command[2] == action
+        assert command[command.index("--snapshot") + 1] == snapshot
+
+
+def test_local_twin_stops_before_feedback_when_no_episodes_join(fake):
+    def runner(argv):
+        fake["calls"].append([str(t) for t in argv])
+        return 0, '{"joined": []}'
+
+    with pytest.raises(SystemExit, match="no verified episodes"):
+        loop.main(args(fake, "twin", "--run", "--local-twin", "--attempts", str(fake["att"])), runner=runner)
+    assert [Path(c[1]).name for c in fake["calls"]] == ["cell_attempt_episodes.py"]
+
+
 def test_manifest_has_inputs_digests_commands_outputs_and_sha(fake):
     loop.main(args(fake, "r2s", "--run", "--prev", "old.json"), runner=fake["runner"])
     m = json.loads((fake["tmp"] / "run/01-r2s/manifest.json").read_text())

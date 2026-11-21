@@ -201,7 +201,7 @@ def load_trials(out: Path) -> list:
     return [json.loads(x) for x in (out / "trials.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
 
 
-def rank(out: Path, search_ids: set, tiers, top: int = 3, slip_deg: float = SLIP_DEG, sha: str = "", preset=None, dr=None):
+def rank(out: Path, search_ids: set, tiers, top: int = 3, slip_deg: float = SLIP_DEG, sha: str = "", preset=None, dr=None, snapshot_sha256=None):
     """Per tier: candidates scored on the held-out scenarios (all non-search ones), tie-break search score, then worst physics."""
     rows = load_trials(out)
     cands = json.loads((out / "candidates.json").read_text(encoding="utf-8"))
@@ -230,7 +230,7 @@ def rank(out: Path, search_ids: set, tiers, top: int = 3, slip_deg: float = SLIP
                          baselines={b: next((x for x in table if x["cand"] == b), None) for b in BASELINES})
     ids = sorted({r["scen"] for r in rows if r["scen"] not in search_ids})
     meta = dict(sha=sha, slip_deg=slip_deg, heldout_scenarios=len(ids), heldout_seeds=sorted({r["seed"] for r in rows if r["scen"] in ids})[:60],
-                at=time.strftime("%Y-%m-%dT%H:%M:%S"), preset=preset,
+                at=time.strftime("%Y-%m-%dT%H:%M:%S"), preset=preset, snapshot_sha256=snapshot_sha256,
                 dr_digest=hashlib.sha256(json.dumps(dr, sort_keys=True).encode()).hexdigest()[:12] if dr else None)
     (out / "ranked.json").write_text(json.dumps(dict(meta=meta, tiers=result), indent=1), encoding="utf-8")
     write_offers(out, result, meta)
@@ -255,15 +255,18 @@ def write_offers(out: Path, result: dict, meta: dict):
             ch.offer(REG.format(t), value, f"sim:omx_carry_sweep@{meta['sha'][:10]}")
             c = ch._find(REG.format(t), value)
             c["evidence"] = dict(sim_k=x["k"], sim_n=x["n"], ci=x["ci"], seeds=meta["heldout_seeds"], failures=x["failures"], geometry_only="D-947", preset=meta.get("preset"), dr_digest=meta.get("dr_digest"))
-    ch.data["preset"], ch.data["dr_digest"] = meta.get("preset"), meta.get("dr_digest")
+    ch.data.update(preset=meta.get("preset"), dr_digest=meta.get("dr_digest"),
+                   snapshot_sha256=meta.get("snapshot_sha256"))
     ch.save()
 
 
-def merge_offers(out: Path, store: Path, preset=None) -> dict:
+def merge_offers(out: Path, store: Path, preset=None, snapshot_sha256=None) -> dict:
     """offers.json -> the site choices store `store` (rosy.omx-cell-choices.v1), values under the real key names. Idempotent: a candidate
     already there is kept as is (its outcomes are never touched); the sim evidence is refreshed only while it has no real try."""
     import cell_choices
     src, ch = cell_choices.Choices(out / "offers.json"), cell_choices.Choices(store)
+    if snapshot_sha256 is not None and src.data.get("snapshot_sha256") != snapshot_sha256:
+        raise ValueError("offers do not match the measured snapshot; rerun the sweep for this snapshot")
     if preset is None:
         from omx_loop import PRESET as preset
     entries_all = [(n, e) for n, es in src.data["values"].items() if n.startswith("carry.tier") for e in es]
@@ -283,6 +286,8 @@ def merge_offers(out: Path, store: Path, preset=None) -> dict:
                 kept += 1
             if c["tries"] == 0 and "evidence" in e:
                 c["evidence"] = e["evidence"]
+                if snapshot_sha256 is not None:
+                    c["evidence"]["snapshot_sha256"] = snapshot_sha256
     ch.save()
     return dict(added=added, kept=kept, store=str(store))
 
@@ -334,10 +339,10 @@ def load_verdicts(path: Path) -> dict:
 
 
 def real_rows(attempts: Path, stack_check: Path | None = None) -> list:
-    """One row per real carry attempt: outcome "ok" | "fail" | "unknown". With a tier proof in hand a placed attempt is "ok" only on a
+    """One row per real carry attempt: outcome "ok" | "fail" | "unknown". A placed attempt is "ok" only on a
     True verdict (found by attempt_id, else by the row's optional episode id), False is a "verify" failure, and a missing or UNKNOWN
     verdict is "unknown": counted apart, never a success. A failed attempt stays failed whatever the proof says."""
-    verdict = load_verdicts(stack_check) if stack_check else None
+    verdict = load_verdicts(stack_check) if stack_check else {}
     out = []
     for line in attempts.read_text(encoding="utf-8").splitlines():
         if not line.strip():
@@ -355,8 +360,8 @@ def real_rows(attempts: Path, stack_check: Path | None = None) -> list:
                     out.append(dict(row, outcome="fail", phase=r.get("fail_stage") or "verify"))
                     continue
                 ep = (r.get("episode") or {}).get("id")  # optional: rows before the episode field have none
-                got = None if verdict is None else verdict.get(r.get("attempt_id"), verdict.get(ep))
-                out.append(dict(row, outcome="ok" if verdict is None or got else "unknown" if got is None else "fail", phase="verify"))
+                got = verdict.get(r.get("attempt_id"), verdict.get(ep))
+                out.append(dict(row, outcome="ok" if got else "unknown" if got is None else "fail", phase="verify"))
     return out
 
 
@@ -435,6 +440,31 @@ def ingest(out: Path, attempts: Path, stack_check=None, episodes=None, cell=None
 
 
 # -- cli -------------------------------------------------------------------------------------------------------------------------
+def measured_choices(snapshot, choices):
+    import omx_map_gate
+    import omx_two_arm_sites as sites
+    from omx_real2sim import SCHEMA, SNAP_CHOICES
+    from omx_real2sim_refit import GATE_MM
+
+    path = Path(snapshot).resolve()
+    value = sites.load_snapshot(path)
+    if value.get("schema") != SCHEMA or not value.get("frame"):
+        raise SystemExit("sweep requires a cell snapshot with an identified measurement frame")
+    if value.get("preset") != choices.get("preset"):
+        raise SystemExit("measurement and sweep must use the same preset")
+    pads = (value.get("items", {}).get("temp_plates", {}).get("camera_check") or {}).get("worst_mm")
+    if not pads or any(type(mm) not in (int, float) or not 0 <= mm <= GATE_MM for mm in pads):
+        raise SystemExit("sweep requires an accepted camera pad check")
+    choice = dict(choices, **sites.parse_choices(SNAP_CHOICES(path)[1::2]))
+    try:
+        verdict = omx_map_gate.gate(sites.Layout(**choice))
+    except (KeyError, TypeError, ValueError) as error:
+        raise SystemExit(f"measurement is incomplete: {error}") from error
+    if verdict["verdict"] == "refuse":
+        raise SystemExit("measurement map refused: " + ", ".join(verdict["why"]))
+    return choice
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -451,13 +481,17 @@ def main(argv=None):
         sp = sub.add_parser(name)
         for flag, kw in opts:
             sp.add_argument(flag, **kw)
+        if name in ("run", "rank", "offers"):
+            sp.add_argument("--snapshot", type=Path, help="bind the sweep to this measured cell snapshot")
     a = p.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     sha = os.environ.get("ROSY_SWEEP_SHA", "")
+    snapshot = getattr(a, "snapshot", None)
+    snapshot_sha256 = hashlib.sha256(snapshot.read_bytes()).hexdigest() if snapshot else None
     if a.cmd == "offers":
         try:
-            print(json.dumps(merge_offers(out, Path(a.merge), a.preset)))
+            print(json.dumps(merge_offers(out, Path(a.merge), a.preset, snapshot_sha256)))
         except ValueError as e:
             raise SystemExit(f"refused: {e}")
         return 0
@@ -472,10 +506,17 @@ def main(argv=None):
         cands = sample_candidates(a.cands, a.seed)
         from omx_two_arm_teacher_stages import parse_choices
         extra = parse_choices(a.choice)
+        if snapshot:
+            extra = measured_choices(snapshot, extra)
         search = [dict(s, extra=extra) for s in draw_scenarios(a.search, a.seed, dr)]
         held = [dict(s, extra=extra) for s in draw_scenarios(a.heldout, a.seed + 1, dr, first_id=1000)]
+        trial_config = dict(seed=a.seed, cands=a.cands, top=a.top, search=a.search, heldout=a.heldout, keep=a.keep)
+        requested = dict(tiers=tiers, search_ids=[s["id"] for s in search], dr=dr, sha=sha, choices=extra,
+                         snapshot_sha256=snapshot_sha256, trial_config=trial_config)
+        if (out / "trials.jsonl").exists() and requested != meta:
+            raise SystemExit("existing trials use different inputs; use a new --out directory")
+        meta = requested
         (out / "candidates.json").write_text(json.dumps(cands, indent=1), encoding="utf-8")
-        meta = dict(tiers=tiers, search_ids=[s["id"] for s in search], dr=dr, sha=sha, choices=extra)
         (out / "meta.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
         evaluate(out, tiers, cands, search, a.workers)
         rows = load_trials(out)
@@ -487,8 +528,11 @@ def main(argv=None):
             keep = {c: cands[c] for c, _ in sc.most_common(a.top)} | dict(BASELINES) | {c: cands[c] for c in a.keep.split(",") if c in cands}
             evaluate(out, [t], keep, held, a.workers)
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    if snapshot and meta.get("snapshot_sha256") != snapshot_sha256:
+        raise SystemExit("trials do not match the measured snapshot; rerun the sweep for this snapshot")
     res = rank(out, set(meta["search_ids"]), meta["tiers"], sha=meta.get("sha") or sha,
-               preset=(meta.get("choices") or {}).get("preset"), dr=meta.get("dr"))
+               preset=(meta.get("choices") or {}).get("preset"), dr=meta.get("dr"),
+               snapshot_sha256=meta.get("snapshot_sha256"))
     print((out / "summary.md").read_text(encoding="utf-8"))
     return 0 if res else 1
 

@@ -153,26 +153,31 @@ class Loop:
         return self.stage("r2s", [a.capture, *([prev] if prev else []), *[x for x in (twin, dr_next) if x]], steps, [snap, d0 / "diff.json"],
                           copy=[(a.capture, cap)]), snap
 
-    def rank(self):
+    def rank(self, measured_snapshot=None):
         a = self.a
         d0 = self.run_dir / f"{self.n + 1:02d}-rank"
         choices = [f"preset={a.preset}", *a.choice]
         flags = [x for c in choices for x in ("--choice", c)]
+        snapshot = measured_snapshot or a.snapshot
+        bound = ["--snapshot", snapshot] if snapshot else []
         steps = []
-        if a.snapshot:
+        if a.snapshot and measured_snapshot is None:
             steps.append((self.tool(R2S, "sim", a.snapshot, "--sha", self.sha or code_sha(), "--out", d0 / "sim", "--preset", a.preset,
                                     *[x for c in a.choice for x in ("--choice", c)]), d0 / "sim.json"))
         if a.run_sweep:
-            steps.append((self.tool(SWEEP, "run", "--out", a.sweep, *flags, *(["--dr", a.dr_next] if a.dr_next else [])), d0 / "sweep.txt"))
-        steps.append((self.tool(SWEEP, "rank", a.sweep), d0 / "rank.md"))
-        return self.stage("rank", [x for x in (a.snapshot, a.dr_next) if x] + ([] if a.run_sweep else [a.sweep]), steps, [a.sweep])
+            steps.append((self.tool(SWEEP, "run", "--out", a.sweep, *flags, *bound, *(["--dr", a.dr_next] if a.dr_next else [])), d0 / "sweep.txt"))
+        steps.append((self.tool(SWEEP, "rank", a.sweep, *bound), d0 / "rank.md"))
+        return self.stage("rank", [x for x in (snapshot, a.dr_next) if x] + ([] if a.run_sweep else [a.sweep]), steps, [a.sweep])
 
-    def offer(self):
+    def offer(self, measured_snapshot=None):
         a = self.a
         store = Path(a.store)
         if is_live_store(store) and not a.site_store:
             raise Refused(f"refused: {store} is the live site choices store; pass --site-store to write an offer there on purpose")
-        return self.stage("offer", [a.sweep], [(self.tool(SWEEP, "offers", a.sweep, "--merge", store), None)], [store])
+        snapshot = measured_snapshot or a.snapshot
+        bound = ["--snapshot", snapshot] if snapshot else []
+        step = self.tool(SWEEP, "offers", a.sweep, "--preset", a.preset, *bound, "--merge", store)
+        return self.stage("offer", [a.sweep, *([snapshot] if snapshot else [])], [(step, None)], [store])
 
     def ingest(self, join_only=False):
         """join_only (the twin stage): make joined.json and stop; the sweep is not needed and not touched."""
@@ -216,7 +221,10 @@ class Loop:
         eps = lambda: [e["episode"] for e in json.loads(Path(joined).read_text(encoding="utf-8")).get("joined", []) if e["status"] == "ok"]  # noqa: E731
         if a.local_twin:
             def replays():
-                return [(self.tool(TWIN, "replay", e["path"], "--cell", a.cell, "--out", d0 / e["id"]), None) for e in eps()]
+                selected = eps()
+                if not selected:
+                    raise Refused("no verified episodes joined; replay and calibration feedback cannot run")
+                return [(self.tool(TWIN, "replay", e["path"], "--cell", a.cell, "--out", d0 / e["id"]), None) for e in selected]
             if not a.run:
                 replays = lambda: [(self.tool(TWIN, "replay", "<each ok episode of joined.json>", "--cell", a.cell, "--out", d0 / "<id>"), None)]  # noqa: E731
             return self.stage("twin", [joined], [replays, (self.tool(TWIN, "report", d0), d0 / "report.md")], [d0]), d0
@@ -293,9 +301,11 @@ def main(argv=None, runner=None):
             raise SystemExit("twin replays the joined episodes: pass --attempts (and --episodes) so the join is made first")
         loop.twin(loop.ingest(join_only=True)[1])
     else:
+        if a.camera_moved_ok:
+            raise Refused("all requires an accepted calibration; use r2s for camera diagnostics")
         _, snap = loop.r2s(a.twin, a.dr_next)
-        loop.rank()
-        loop.offer()
+        loop.rank(snap)
+        loop.offer(snap)
         if a.attempts:
             if not a.cell:
                 raise SystemExit("--attempts needs --cell for the twin stage")
