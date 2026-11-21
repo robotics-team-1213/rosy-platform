@@ -64,8 +64,9 @@ def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEA
         a["xy"], a["yaw"] = pick
     z_up = carry_z(layout, here, step["from"], step["to"])
     za, zb = layout.hold_z(step["from"]), layout.hold_z(step["to"]) + (0 if b["kind"] == "belt" else drop_upper if b.get("layer", 0) > 0 else drop)  # released this far above its seat: 5 mm on studs and temp lanes, less on a lower container (a drop onto a container spins it)
+    z_app = za + layout.box[2] + CARRY_CLEAR if a["kind"] == "belt" else z_up  # belt pick approach depends only on belt height, not the ship carry tier
     ya, yb = a["yaw"], a["yaw"] + wrap_pi(b["yaw"] - a["yaw"])
-    return [("approach", a["xy"], z_up, ya, "open"), ("grasp", a["xy"], za, ya, "open"), ("close", a["xy"], za, ya, "hold"),
+    return [("approach", a["xy"], z_app, ya, "open"), ("grasp", a["xy"], za, ya, "open"), ("close", a["xy"], za, ya, "hold"),
             ("lift", a["xy"], z_up, ya, "hold"), ("carry", b["xy"], z_up, yb, "hold"), ("lower", b["xy"], zb, yb, "hold"),
             ("release", b["xy"], zb, yb, "open"), ("retreat", b["xy"], z_up, yb, "open")]
 

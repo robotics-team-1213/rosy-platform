@@ -416,3 +416,53 @@ def test_carry_height_clears_containers_standing_on_temp_plates():
     here = {c: s for c, s in task["start"].items() if c != step["container"]}
     top = max(lay.sites[s]["z"] for s in here.values() if lay.sites[s]["kind"] == "temp")
     assert tasks.carry_z(lay, here, step["from"], step["to"]) >= top + lay.box[2] + tasks.CARRY_CLEAR + lay.hold_below
+
+
+def test_belt_pick_approach_height_is_independent_of_target_tier(data):
+    """Belt pick approach stays at belt pick clearance regardless of the target ship tier; non-belt picks keep carry_z."""
+    lay = sites.Layout(preset="v24-20261114")
+    here, by_arm = {}, {"arm_a": [], "arm_b": []}
+    expected_z = lay.hold_z("belt") + lay.box[2] + tasks.CARRY_CLEAR
+    for step in tasks.get_task(lay, "stack", data)["steps"]:
+        wps = tasks.waypoints(lay, step, here)
+        assert wps[0][0] == "approach" and wps[0][2] == pytest.approx(expected_z)
+        assert wps[3][0] == "lift" and wps[3][2] == pytest.approx(tasks.carry_z(lay, here, step["from"], step["to"]))
+        if int(step["id"][1:]) > 3:
+            assert wps[3][2] > expected_z
+        arm = lay.sim_arms[step["arm"]]
+        ok, q_app, _, note = tasks.solve_chain(arm, wps, arm.home, roll_floor=lay.roll_floor)
+        assert ok, note
+        by_arm[step["arm"]].append(tuple(np.round(q_app[:5], 4)))
+        here[step["container"]] = step["to"]
+    assert len(by_arm["arm_a"]) == 3 and len(set(by_arm["arm_a"])) == 1
+    assert len(by_arm["arm_b"]) == 6 and len(set(by_arm["arm_b"])) == 1
+
+    rehandle = tasks.get_task(lay, "rehandle", data)
+    r_here, found_non_belt = dict(rehandle["start"]), False
+    for step in rehandle["steps"]:
+        step_here = {c: s for c, s in r_here.items() if c != step["container"]}
+        if step["from"] == "ship-h1r2-l0":
+            wps = tasks.waypoints(lay, step, step_here)
+            assert wps[0][2] == pytest.approx(tasks.carry_z(lay, step_here, step["from"], step["to"]))
+            found_non_belt = True
+            break
+        r_here[step["container"]] = step["to"]
+    assert found_non_belt
+
+
+def test_waiting_arms_hold_wait_pose_without_link1_link3_self_contact():
+    """Folded wait pose must hold without link1-link3 self-contact stalling park settle."""
+    pytest.importorskip("mujoco")
+    import omx_two_arm_world as tw
+
+    w = tw.World(sites.Layout(preset="v24-20261114"))
+    t = teacher.Teacher(w, seed=0)
+    data = t.fresh({})
+    waits = {arm: w.layout.sim_arms[arm].wait.copy() for arm in sites.ARMS}
+    for _ in range(30):
+        t.frame(data, waits, "park")
+    for arm, wait in waits.items():
+        assert np.max(np.abs(wait[:5] - data.qpos[w.q[arm][:5]])) < 0.001
+        assert np.max(np.abs(t.servo_comp.trim[arm])) < 0.005
+        assert len(list(t.settle_g(data, arm, wait, wait[5]))) < 10
+
