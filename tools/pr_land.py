@@ -54,8 +54,22 @@ def ci_entry(inv: list[str]) -> dict | None:
     return None
 
 
-def ci_runnable(inv: list[str]) -> bool:
-    """Same CI-runnable filter as land_ci.runnable(), plus OMX adapter hardware suites."""
+# The roots ci.yml's Test step opts in to Chromium on its own (test_pr_land pins this against the workflow text).
+CI_BROWSER_ROOTS = ("operations/fleet/test", "applications/fleet/test")
+
+
+def _non_gating(paths: list[str]) -> bool:
+    roots = [w for e in affected_ci.CI_FULL_MATRIX if not e.get("gating", True)
+             for i in e["invocations"] for w in i if not w.startswith("-")]
+    return any(p == r or p.startswith(r + "/") or r.startswith(p + "/") for p in paths for r in roots)
+
+
+def ci_runnable(inv: list[str], selected: bool = False) -> bool:
+    """Same CI-runnable filter as land_ci.runnable(), plus OMX adapter hardware suites.
+
+    ``selected``: the invocation comes from the affected selection, which CI runs one gating runner per
+    invocation whether or not a full-matrix entry names it (2026-11-21: 29 to 56 such module suites ran again as
+    lab evidence on one PR). A root of a non-gating full-matrix entry stays lab evidence."""
     paths = [w.replace("\\", "/") for w in inv if not w.startswith("-")]
     return bool(paths) and not (
         any(work_queue.ENV_WORD.match(w) for w in inv)
@@ -63,7 +77,23 @@ def ci_runnable(inv: list[str]) -> bool:
         or work_queue.host_alone(inv)
         or affected_exclusive.dedicated(inv)
         or any(p.startswith(EXCLUDED_PREFIXES) for p in paths)
-    ) and ci_entry(inv) is not None
+    ) and (ci_entry(inv) is not None or (selected and not _non_gating(paths)))
+
+
+def lab_browser_chunk(chunk: list[str], selected_paths: list[str]) -> list[str]:
+    """A browser chunk without the Fleet files this PR's own CI run executes with Chromium; [] when none is left.
+
+    ci.yml turns the browser opt-in on for CI_BROWSER_ROOTS, so a Fleet browser file inside the affected selection
+    runs in the pull_request run and gates the merge. As lab evidence the same files ran a second time
+    (2026-11-21, one UI PR: 42 to 44 chunks, 44 to 51 minutes, again after every merge of main). A load-sensitive
+    ALONE chunk and every file outside the selection or outside those roots stay lab evidence."""
+    env = [w for w in chunk if work_queue.ENV_WORD.match(w)]
+    if work_queue.ALONE_ENV in env:
+        return chunk
+    covered = [p.replace("\\", "/").split("::")[0].rstrip("/") for p in selected_paths]
+    keep = [w for w in chunk if w not in env and not (
+        w.startswith(tuple(r + "/" for r in CI_BROWSER_ROOTS)) and any(w == p or w.startswith(p + "/") for p in covered))]
+    return [*env, *keep] if keep else []
 
 
 def split_by_ci_entry(inv: list[str]) -> list[list[str]]:
@@ -151,20 +181,33 @@ def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> s
 def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]:
     """Return non-CI-runnable invocations touched by base..head (OMX adapter, browser, host_alone, LAB_ONLY, sim)."""
     sel = json.loads(_run([sys.executable, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", head, "--json"], cwd))
-    invs = list(sel.get("local_invocations" if sel.get("mode") == "full" else "invocations") or [])
+    affected = sel.get("mode") != "full"  # CI runs an affected selection one runner per invocation; a FULL one by matrix
+    invs = list(sel.get("invocations" if affected else "local_invocations") or [])
+    selected_paths = [w for inv in invs for w in inv if not w.startswith("-") and not work_queue.ENV_WORD.match(w)] if affected else []
+    lab = [part for inv in invs for part in split_by_ci_entry(inv) if not ci_runnable(part, selected=affected)]
+    extra: list[list[str]] = []
     changed = _run(["git", "diff", "--name-only", f"{base}...{head}"], cwd, check=False).splitlines()
     if any(p.startswith("middleware/devices/omx/adapter/") for p in changed):
         omx_suite = ["middleware/devices/omx/adapter/test"]
         if omx_suite not in invs:
-            invs.append(omx_suite)
+            extra.append(omx_suite)
     if changed and (cwd / "test/browser_scope.py").is_file() and (cwd / "tools/land_browser.py").is_file():
         import browser_scope
         import land_browser
         import land_selection
         b_paths = browser_scope.targets(changed)
         for group in land_selection.pack(cwd, b_paths):
-            invs.extend(land_browser.chunks(cwd, group))
-    return [part for inv in invs for part in split_by_ci_entry(inv) if not ci_runnable(part)]
+            extra.extend(chunk for chunk in (lab_browser_chunk(c, selected_paths) for c in land_browser.chunks(cwd, group)) if chunk)
+    return lab + [part for inv in extra for part in split_by_ci_entry(inv) if not ci_runnable(part)]
+
+
+def preflight(cwd: Path, base: str) -> None:
+    """The Safety-Review trailer and size rule of base..HEAD, before any lab run.
+
+    Both stopped a submission only at the push, after the evidence had run (2026-11-21: a session lost a 20
+    minute run to a missing trailer). CI's scope job runs the same two checks."""
+    for check in ("safety_review.py", "size_range.py"):
+        _run([sys.executable, f"tools/harness/{check}", base, "HEAD"], cwd)
 
 
 def lab_missing(cwd: Path, head: str, required: list[list[str]]) -> list[list[str]]:
@@ -254,6 +297,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     if refused and not args.dry_run:
         raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
+    preflight(cwd, base)
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
         import pr_evidence  # lazy: pr_evidence imports pr_land
