@@ -169,6 +169,7 @@ def test_map_pose_endpoint_reads_accepted_sightings_and_robot_odom(tmp_path):
         assert client.get("/api/fleet/robots/nope/map-pose", headers=viewer).status_code == 404
         unknown = client.get("/api/fleet/robots/r1/map-pose", headers=viewer).json()
         assert unknown["state"] == UNKNOWN and unknown["x"] is None
+        assert unknown["camera_residual_m"] is None and unknown["camera_residual_deg"] is None
 
         for _ in range(3):
             now = time.time()
@@ -179,6 +180,7 @@ def test_map_pose_endpoint_reads_accepted_sightings_and_robot_odom(tmp_path):
         pose = client.get("/api/fleet/robots/r1/map-pose", headers=viewer).json()
         assert pose["robot_id"] == "r1" and pose["state"] == LOCALIZED
         assert abs(pose["x"] - 1.0) < 1e-6
+        assert pose["camera_residual_m"] < 1e-6 and abs(pose["camera_residual_deg"]) < 1e-6   # camera = odometry here
 
         # A refused sighting (wrong token) never reaches the map pose.
         now = time.time()

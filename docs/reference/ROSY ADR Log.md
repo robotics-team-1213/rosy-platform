@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1062 | 식별된 천장 추적이 지도 자세의 기준이 될 수 있다(기체별 선택, 식별 방식은 설정). 방향은 바퀴 기록이 잇고, 카메라와 바퀴 기록의 차이를 지도 자세에 싣는다. [전문](../adr/D-1062-ceiling-track-anchors-map-pose.md) | Accepted (2026-11-21, 사용자 지시) |
 | D-1061 | 기록은 번호 없는 조각으로 내고, API 번호·머리 줄·CONTRACT·Log 행은 기록 봇이 쓴다(Merge Queue 충돌 제거, D-1054 4·5항·D-510 API 부분 개정). [전문](../adr/D-1061-records-fragments-merge-queue.md) | Accepted (2026-11-21, 사용자 방향 승인) |
 | D-1059 | Merge Queue는 PR의 녹색 실행과 트리가 같으면 guard 묶음만 다시 돈다(D-762 큐 재시험 범위 개정, 변수 `ROSY_QUEUE_DELTA`, 기본 꺼짐). [전문](../adr/D-1059-merge-queue-retests-what-changed-since-the-pr-run.md) | Accepted (2026-11-21, 사용자 결정) |
 | D-1058 | CORE 실행기 기본값을 events로 바꾼다(D-953 후속 3 개정). 되돌리기는 `ROSY_CORE_EXECUTOR=threaded` drop-in. [전문](../adr/D-1058-core-events-executor-default.md) | Accepted (2026-11-20, 사용자 결정; 정지 상태 실측·Gazebo 확인, 주행 확인 남음) |

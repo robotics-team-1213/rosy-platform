@@ -22,7 +22,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
-from rosy.world.state.projections.map_pose import (LOCALIZED, MapPose, MapPoseConfig, MapPoseTracker,
+from rosy.world.state.projections.map_pose import (LOCALIZED, TRACK, MapPose, MapPoseConfig, MapPoseTracker,
                                          odom_from_snapshot, sighting_from_row)
 from fleet.swarm.transport import RobotApiError
 
@@ -133,6 +133,21 @@ class MapPoseService:
             tracker.drop_auto_locate()
             return reason
         return tracker.add_auto_locate(sample[:3], sample[3], self._wall(), sample[4], self.active_map_id(), sample[5])
+
+    def observe_track(self, robot_id: str, x: float, y: float, heading: Optional[float], age_s: float,
+                      map_id: Optional[str], mode: str) -> Optional[str]:
+        """A confirmed ceiling-camera track point seen `age_s` ago, for a robot in `track_anchor_robots` and an identity
+        mode in `track_modes`. Returns why it was not taken. The caller reads the track; no identity is read here."""
+        tracker = self._tracker(robot_id) if robot_id in self.config.track_anchor_robots else None
+        if tracker is None:
+            return "DISABLED"
+        now = self._wall()
+        return tracker.add_track((x, y), heading, now - age_s, now, map_id, self.active_map_id(), mode)
+
+    def drop_track(self, robot_id: str) -> None:
+        """The identity behind this robot's track anchor is gone: the anchor ends now."""
+        if robot_id in self.config.track_anchor_robots:
+            self._tracker(robot_id).drop_auto_locate(TRACK)
 
     def auto_locate_blocked(self, robot_id: str) -> bool:
         tracker = self._tracker(robot_id) if self.auto_locate_enabled(robot_id) else None
