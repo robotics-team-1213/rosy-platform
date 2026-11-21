@@ -90,6 +90,7 @@ def build_docking_and_swarm(*, simulation_docking, data_path: Path, events, stat
         agent_factory=lambda dock: DockAgent(dock.agent_url),
         capability_provider=lambda: capability.supports("docking.supported"),
         map_id_provider=lambda: state.map_id,
+        map_generation_provider=lambda: state.map_generation.value,       # DockAnchor.map_generation: a direct attribute (C6 seam), not a getattr reach
         odom_pose_provider=state.odom_pose_record,
         battery=battery,
         pose_provider=map_pose,
