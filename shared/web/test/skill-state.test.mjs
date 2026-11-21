@@ -46,6 +46,7 @@ test("the sample contract accepts a valid case and rejects fakes, coordinates, j
   assert.match(bad({sample: false}), /sample must be true/);
   assert.match(bad({lifecycle: "done"}), /lifecycle/);
   assert.match(bad({lifecycle: "measured_success"}), /measurement/);
+  assert.match(bad({lifecycle: "measured_success", measured: "model"}), /measurement/);  // a model value is not a measurement
   assert.match(bad({executor: "gpt"}), /executor/);
   assert.match(bad({evidence: [{label: "x", value: "1", source: "vibes"}]}), /evidence\[0\]\.source/);
   assert.match(bad({candidates: [{id: "a", label: "A", reason: "r", pose: {x: 1}}]}), /coordinates, joints/);

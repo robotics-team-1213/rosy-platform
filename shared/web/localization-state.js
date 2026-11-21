@@ -56,7 +56,8 @@ export const REASON_TEXT = Object.freeze({
   timeout: "시간 초과",
   checking: "로봇이 확인 중입니다",
 });
-const reasonText = code => REASON_TEXT[code] ?? REASON_TEXT[String(code).toLowerCase()] ?? `알 수 없는 사유 (${code})`;
+const own = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined);  // "constructor" and "__proto__" are not codes
+const reasonText = code => own(REASON_TEXT, code) ?? own(REASON_TEXT, String(code).toLowerCase()) ?? `알 수 없는 사유 (${code})`;
 
 // last_operator_request.revoked.reason: "estop" or "mission_<CORE reason>". One press gives one motion; a new press is the only way back.
 const REVOKE_TEXT = Object.freeze({
@@ -81,7 +82,7 @@ const nonEmptyText = value => (typeof value === "string" && value.trim() ? value
 export function refusalText(code) {
   const key = nonEmptyText(code);
   if (!key) return "알 수 없는 사유 (없음)";
-  return REFUSAL_TEXT[key] ?? `알 수 없는 사유 (${key})`;
+  return own(REFUSAL_TEXT, key) ?? `알 수 없는 사유 (${key})`;
 }
 
 export function queueText(left_s) {

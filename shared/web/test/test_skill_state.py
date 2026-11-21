@@ -7,10 +7,11 @@ import subprocess
 import pytest
 
 
-def test_skill_state_and_sample_contract(tmp_path):
+@pytest.mark.parametrize("name", ["skill-state.test.mjs", "localization-state.test.mjs"])
+def test_skill_state_and_sample_contract(tmp_path, name):
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node.js is unavailable")
-    result = subprocess.run([node, "--test", "--test-reporter=spec", str(Path(__file__).resolve().parent / "skill-state.test.mjs")],
+    result = subprocess.run([node, "--test", "--test-reporter=spec", str(Path(__file__).resolve().parent / name)],
                             cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr

@@ -106,6 +106,7 @@ test("refusalText returns Korean text for every refusal code and never silent fo
     assert.equal(refusalText(code), REFUSAL_TEXT[code]);
   }
   assert.equal(refusalText("NEW_SERVER_CODE"), "알 수 없는 사유 (NEW_SERVER_CODE)");
+  for (const code of ["constructor", "__proto__", "toString"]) assert.equal(refusalText(code), `알 수 없는 사유 (${code})`);  // never an inherited member
   assert.equal(refusalText(""), "알 수 없는 사유 (없음)");
 });
 

@@ -48,7 +48,7 @@ export function armAiCaseProblems(item) {
   for (const key of ["id", "title", "requested_by"]) if (typeof item[key] !== "string" || !item[key]) out.push(`${key} must be a non-empty string`);
   if (!SKILL_LIFECYCLES.includes(item.lifecycle)) out.push(`lifecycle ${item.lifecycle} is not one of ${SKILL_LIFECYCLES.join(", ")}`);
   if (item.executor !== undefined && !Object.hasOwn(EXECUTOR_LABEL, item.executor)) out.push(`executor ${item.executor} is unknown`);
-  if (item.lifecycle === "measured_success" && !item.measured) out.push("measured_success needs the measurement source");
+  if (item.lifecycle === "measured_success" && (!item.measured || item.measured === "model")) out.push("measured_success needs the measurement source");
   if (!Array.isArray(item.evidence)) out.push("evidence must be a list");
   else item.evidence.forEach((entry, i) => { if (!SOURCES.includes(entry?.source)) out.push(`evidence[${i}].source must be ${SOURCES.join("|")}`); });
   if (!Array.isArray(item.candidates)) out.push("candidates must be a list");
