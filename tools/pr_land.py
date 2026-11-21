@@ -128,6 +128,12 @@ def activated(cwd: Path) -> bool:
     return False
 
 
+def shared_checkout(cwd: Path) -> bool:
+    """git-dir == common-dir: the main working tree (the shared main checkout), not a ``.worktrees/`` worktree."""
+    dirs = _run(["git", "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], cwd).splitlines()
+    return len(dirs) == 2 and Path(dirs[0]).resolve() == Path(dirs[1]).resolve()
+
+
 def cutover_refusal(cwd: Path) -> str | None:
     """Refuse submission while the cutover phase is drain; open and normal pass (activation is checked separately)."""
     state = land_freeze.load(cwd)
@@ -285,6 +291,9 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         print("[pr-land] CI log covers lab baseline passed IDs")
         return 0
 
+    if shared_checkout(cwd):  # the shared main checkout must stay on main; branches live in worktrees
+        raise SystemExit("[pr-land] this is the shared main checkout (git-dir == common-dir); run from your worktree:"
+                         " python tools/worktrees.py new|adopt <short-name> <type>/<topic>")
     branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
     if branch in ("main", "HEAD"):
         raise SystemExit(f"[pr-land] checkout a topic branch first (got {branch})")

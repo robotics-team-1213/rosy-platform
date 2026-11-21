@@ -197,3 +197,13 @@ def test_hosts_warns_on_a_stopped_maintenance_timer_and_a_stale_tool_copy(repo, 
     assert "host pc-a: last" not in text and "host pc-a: host_storage" not in text
     assert "WARN host pc-b: last storage maintenance 10 h ago" in text
     assert "WARN host pc-c: host_storage.py older copy is not rosy-ops origin/main abc123abc123" in text
+
+
+def test_wrong_head_warns_and_drops_the_fast_forward_advice(repo):
+    upstream = git(repo, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "b")
+    git(repo, "update-ref", "refs/remotes/origin/main", upstream)
+    git(repo, "switch", "-q", "-c", "fix/oops")
+    code, text = lines(repo)
+    assert code == 0, text
+    assert "WARN wrong-head: the shared main checkout is on fix/oops, not main" in text and "adopt" in text
+    assert "1 behind origin/main" in text and "merge --ff-only" not in text

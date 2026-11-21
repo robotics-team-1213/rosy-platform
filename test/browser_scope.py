@@ -43,6 +43,7 @@ FLEET = FLEET_SAMPLE + [
     "test/test_peer_picker_browser.py",
     "test/test_console_robot_video_browser.py",
     "test/test_fleet_ui_review_browser.py",
+    "test/test_unit_scope_browser.py",
     "operations/fleet/test/*_browser.py",
 ]
 ROBOT = [

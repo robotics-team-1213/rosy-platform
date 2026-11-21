@@ -30,6 +30,7 @@ from fleet.server.arm_transfer_job_routes import install_arm_transfer_job_routes
 from fleet.server.arm_transfer_preflight_routes import install_arm_transfer_preflight_routes
 from fleet.server.cancel_all import DriveCancelFence
 from fleet.server.console import FleetConsole
+from fleet.server.control_unit_config import unit_scope
 from fleet.server.control_unit_runtime import install_control_unit
 from fleet.server.credential_isolation import assert_credentials_isolated
 from fleet.server.execution_profile_routes import install_execution_profile_routes
@@ -253,6 +254,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         cell_goal_evidence_service, deployment_profile)
     app.state.proposal_store = proposal_store
     app.state.omx_instances, app.state.omx_stop_transport = configured_omx, stop_transport
+    console.control_unit = {"scope": unit_scope()}  # install_control_unit replaces it for a control unit
     app.state.localization_service = localization_service
     if task_service is not None:
         async def release_traffic_task(mission: dict) -> None:
