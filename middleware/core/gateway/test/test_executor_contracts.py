@@ -36,7 +36,7 @@ PACKAGE = Path(__file__).resolve().parents[1] / "core"
 #: DockingExecutor moved out of `ros_bridge.py` into the ROS-free
 #: `bridge/docking_executor.py` (D-168 P6 file budget); RosBridge wires it.
 CONTRACTS = [
-    ("navigation/manager.py", "NavExecutor", ("bridge/ros_bridge.py", "RosBridge")),
+    ("navigation/goal_contract.py", "NavExecutor", ("bridge/ros_bridge.py", "RosBridge")),
     ("docking/model.py", "DockingExecutor",
      ("bridge/docking_executor.py", "BridgeDockingExecutor")),
 ]

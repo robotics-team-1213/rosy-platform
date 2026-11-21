@@ -14,6 +14,7 @@ import time
 import threading
 from itertools import count
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
@@ -85,6 +86,8 @@ class CommandManager:
         self._docking_input: Optional[_AutonomousInput] = None
         self._policy_ids = count(1)
         self._input_epoch = 0
+        self._idle_zero_request: tuple[UUID, int] | None = None
+        self._idle_zero_observed: str | None = None
         #: D-400: one safety.policy_off per entry into an autonomous mode while the policy is off.
         self._unguarded_noted = False
         self._pending_unguarded: Optional[str] = None
@@ -216,8 +219,8 @@ class CommandManager:
         return self._manual_twist is not None and not self.watchdog.expired()
 
     def set_nav_twist(self, twist: Optional[Twist], now: Optional[float] = None,
-                      *, preserve_curvature: bool = False) -> None:
-        epoch = self._modes.epoch
+                      *, preserve_curvature: bool = False, expected_mode_epoch: int | None = None) -> None:
+        epoch = self._modes.epoch if expected_mode_epoch is None else expected_mode_epoch
         if self._safety.estop or self._modes.is_emergency:
             twist = None
         if twist is not None and not finite_velocity(twist.linear, twist.angular):
@@ -228,7 +231,7 @@ class CommandManager:
         def commit() -> None:
             self._nav_input = candidate
             self._input_epoch += 1
-        if twist is None:
+        if twist is None and expected_mode_epoch is None:
             self._modes.commit_clear(commit)
         else:
             self._modes.commit_input(Mode.NAVIGATION, commit, epoch=epoch)
@@ -475,6 +478,32 @@ class CommandManager:
 
     def _autonomous_input(self, source: str):
         return self._nav_input if source == 'navigation' else self._docking_input
+
+    def arm_idle_zero_write(self, run_id: UUID, epoch: int) -> None:
+        def arm():
+            self._idle_zero_observed = None
+            self._idle_zero_request = (run_id, epoch)
+        self._modes.commit_input(Mode.IDLE, arm, epoch=epoch)
+
+    def pending_idle_zero_write(self) -> tuple[UUID, int] | None:
+        return self._idle_zero_request if self._idle_zero_observed is None else None
+
+    def note_idle_zero_write(self, request: tuple[UUID, int], out: Twist) -> None:
+        if out.linear != 0.0 or out.angular != 0.0:
+            return
+        def observe():
+            if self._idle_zero_request == request and self._idle_zero_observed is None:
+                self._idle_zero_observed = datetime.now(timezone.utc).isoformat()
+        self._modes.commit_input(Mode.IDLE, observe, epoch=request[1])
+
+    def idle_zero_write(self, run_id: UUID, epoch: int) -> str | None:
+        observed_at = None
+        def capture():
+            nonlocal observed_at
+            if self._idle_zero_request == (run_id, epoch):
+                observed_at = self._idle_zero_observed
+        self._modes.commit_input(Mode.IDLE, capture, epoch=epoch)
+        return observed_at
 
     def select_output(self, now: Optional[float] = None) -> Twist:
         if self._execution_fence is not None:

@@ -11,7 +11,7 @@ def native_readback(self, run_id: UUID | None = None) -> dict:
         after = snapshot() if snapshot is not None else None
         stable = before is not None and before == after
         return self.native.readback(
-            run_id, admitting=self._admitting is not None,
+            run_id, admitting=self._admitting is not None or self.precision_reserved(),
             pending_submission=before[1] if before else True,
             actuating_callback=before[2] if before else True,
             lease_active=self._lease is not None,
@@ -31,6 +31,7 @@ def with_terminal_navigation(self, expected_boot_id: str, handover, *, expected_
         body = native_readback(self)
         operation, owner, proof = body.get('operation'), body['owner'], body.get('quiescence')
         if (self._nav_state is not NavigationState.ARRIVED or self._admitting is not None
+                or self.precision_reserved()
                 or self._moving_session is not None or self.mapping_active or self._lease is not None
                 or self._active_correlation_id is not None
                 or operation is None or operation['phase'] != 'TERMINAL' or operation['result'] != 'SUCCEEDED'
@@ -46,3 +47,26 @@ def with_terminal_navigation(self, expected_boot_id: str, handover, *, expected_
                 or type(proof['transport_generation']) is not int or proof['transport_generation'] < 0):
             return False
         return handover() is True
+
+
+def handoff_output_blocked(self) -> bool:
+    if self._handoff_stopping_run is None:
+        return False
+    if not self._lock.acquire(blocking=False):
+        return True
+    try:
+        run_id = self._handoff_stopping_run
+        if run_id is not None and (self.native_readback(run_id).get("quiescence") or {}).get("quiescent") is True:
+            self._handoff_stopping_run = None
+        return self._handoff_stopping_run is not None
+    finally:
+        self._lock.release()
+
+def observe_twist(self, commit) -> bool:
+    """Serialize Nav2 input acceptance with a handoff cancellation."""
+    if not self._lock.acquire(blocking=False):
+        return False
+    try:
+        return not self.handoff_output_blocked() and commit()
+    finally:
+        self._lock.release()
