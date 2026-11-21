@@ -238,5 +238,5 @@ def test_record_self_trims_safely_across_concurrent_threads(tmp_path, monkeypatc
         list(pool.map(worker, range(4)))
 
     rows = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines()]
-    assert 1 <= len(rows) <= 5
+    assert 5 <= len(rows) <= 10
     assert not list(tmp_path.glob("*.tmp"))
