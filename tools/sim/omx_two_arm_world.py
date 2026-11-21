@@ -326,6 +326,7 @@ class World:
             for mesh_name, _ in stl_layers:
                 spec.add_mesh(name=mesh_name, file=self._asset(mesh_name), scale=[.001] * 3)
         proxy_rgba = [0, 0, 0, 0] if use_stl else COLOURS["plate"]
+        pad_rgba = COLOURS["plate_charcoal"] if src == "scad-v12" else COLOURS["pad"]
         for tag, plate in L.plates.items():
             spec.add_mesh(name=f"deck_{tag}", uservert=prism(plate["outline"], deck_z - S["deck_t"], deck_z))
             spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=proxy_rgba)
@@ -342,7 +343,7 @@ class World:
             for i, (xy, long, side, yaw) in enumerate(frames, 1):
                 quat = [math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
                 spec.worldbody.add_geom(name=f"lane{tag}{i}", type=mujoco.mjtGeom.mjGEOM_BOX, pos=[*xy, deck_z + .0003],
-                                        size=[S["cont_l"] / 2, S["cont_w"] / 2, .0003], quat=quat, contype=0, conaffinity=0, rgba=COLOURS["pad"])
+                                        size=[S["cont_l"] / 2, S["cont_w"] / 2, .0003], quat=quat, contype=0, conaffinity=0, rgba=pad_rgba)
                 def lim(u, sg, xy=xy, long=long, side=side, i=i):
                     return min([max_out] + [.5 * float(np.linalg.norm((xy + u * long - ox) - ((xy + u * long - ox) @ ol) * ol))
                                             for j, (ox, ol, _, _) in enumerate(frames, 1) if j != i and float((ox - xy) @ (sg * side)) > 0])
