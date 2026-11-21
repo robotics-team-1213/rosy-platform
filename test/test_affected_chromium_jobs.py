@@ -59,6 +59,13 @@ def test_calibration_browser_file_is_lab_only_until_its_runner_failure_is_found(
     assert ab.split([SHARED, cal]) == ([SHARED], [cal])
 
 
+def test_pixel_measuring_browser_files_are_lab_only_until_the_ci_fonts_match():
+    px = ["middleware/robot_ui/pilot/test/test_pilot_browser.py",
+          "test/learning/perception/test_pixel_workspace_browser.py",
+          "test/learning/perception/test_review_flow_browser.py"]
+    assert ab.split([SHARED, *px]) == ([SHARED], sorted(px))
+
+
 def test_one_rule_for_both_sides():
     assert ab.LAB_PREFIXES == pr_land.EXCLUDED_PREFIXES == ci_runnable.EXCLUDED_PREFIXES
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")

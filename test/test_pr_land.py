@@ -16,6 +16,7 @@ SPEC = importlib.util.spec_from_file_location("pr_land", ROOT / "tools" / "pr_la
 pr_land = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = pr_land
 SPEC.loader.exec_module(pr_land)
+SHARED_CHECKOUT = pr_land.shared_checkout  # the autouse fixture stubs it; its own test below
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +24,23 @@ def _normal_cutover(monkeypatch):
     monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
     monkeypatch.setattr(pr_land.land_freeze, "path", lambda cwd: Path("rosy-cutover.json"))
     monkeypatch.setattr(pr_land, "preflight", lambda cwd, base, body="": None)  # its own test below
+    monkeypatch.setattr(pr_land, "shared_checkout", lambda cwd: False)
+
+
+def test_shared_main_checkout_is_refused_and_a_worktree_is_not(monkeypatch, tmp_path):
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path / "main"), *args], check=True, capture_output=True)
+
+    (tmp_path / "main").mkdir()
+    git("init", "-q", "-b", "main")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
+    git("worktree", "add", "-q", "-b", "feat/x", str(tmp_path / "main" / ".worktrees" / "x"))
+    assert SHARED_CHECKOUT(tmp_path / "main") is True
+    assert SHARED_CHECKOUT(tmp_path / "main" / ".worktrees" / "x") is False
+    monkeypatch.setattr(pr_land, "shared_checkout", SHARED_CHECKOUT)
+    git("switch", "-q", "-c", "fix/oops")  # the 11-21 incident: a topic branch in the shared checkout
+    with pytest.raises(SystemExit, match="shared main checkout.*run from your worktree"):
+        pr_land.main(["--dry-run"], repo=tmp_path / "main")
 
 
 @pytest.mark.parametrize("phase,refused", [("drain", True), ("open", False), ("normal", False)])
@@ -230,14 +248,21 @@ def test_preflight_runs_the_step_back_check_and_the_switch_skips_it(monkeypatch,
     hit = {"level": "block", "why": "w", "pr": 311, "merged_at": "2026-11-20 13:13", "path": "a.js", "lines": 3}
     info = {"level": "info", "why": "w", "pr": 5, "merged_at": "2026-11-20 13:13", "path": "b.js", "lines": 1}
     monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [hit, info])
-    monkeypatch.setattr(pr_land.step_back, "size_warnings", lambda *a, **k: ["31 changed files (limit 30)"])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: [])
     monkeypatch.delenv("ROSY_STEP_BACK", raising=False)
     with pytest.raises(SystemExit) as stop:
         pr_land.preflight(Path("."), "origin/main", "summary")
     assert "Replaces: #311 (" in str(stop.value)
     out = capsys.readouterr().out
-    assert "warning" in out and "31 changed files" in out and "step-back info" in out
+    assert "step-back info" in out
     pr_land.preflight(Path("."), "origin/main", "Replaces: #311 (restructured)")  # named in the body: passes
+    monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: ["31 changed files (limit 30)"])
+    with pytest.raises(SystemExit, match="31 changed files"):
+        pr_land.preflight(Path("."), "origin/main", "summary")
+    pr_land.preflight(Path("."), "origin/main", "summary\nSize-Exception: one mechanical rename")
+    monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [hit, info])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: [])
     def broken(*a, **k):
         raise pr_land.step_back.ScanError("git merge-base failed")
     monkeypatch.setattr(pr_land.step_back, "report", broken)
@@ -313,6 +338,8 @@ def _push_fake(monkeypatch, tmp_path, *, publish_only, active, lab=()):
 
     def fake_run(cmd, cwd, env=None, check=True):
         calls.append((cmd, env))
+        if cmd[0] == sys.executable:  # preflight's trailer and size_range scripts
+            return ""
         if cmd[:2] == ["git", "rev-parse"]:
             return "fix/topic" if "--abbrev-ref" in cmd else head
         if cmd[:3] == ["git", "config", "--bool"]:
@@ -321,7 +348,7 @@ def _push_fake(monkeypatch, tmp_path, *, publish_only, active, lab=()):
             return ""
         if cmd[:3] == ["gh", "pr", "list"]:
             return '[{"number": 7}]'
-        if cmd[:3] == ["gh", "pr", "merge"]:
+        if cmd[:3] in (["gh", "pr", "merge"], ["gh", "pr", "edit"]):
             return ""
         raise AssertionError(cmd)
 
@@ -386,3 +413,20 @@ def test_local_main_only_behind_origin_is_not_a_backlog(tmp_path):
     git("checkout", "-q", "-b", "topic2")
     with pytest.raises(SystemExit):
         pr_land.check_coexistence(tmp_path, git("rev-parse", "HEAD"))
+
+
+def test_body_reaches_an_existing_pr_so_a_size_exception_counts(monkeypatch, tmp_path):
+    calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False)
+    assert pr_land.main(["--body", "Size-Exception: one rename sweep"], repo=tmp_path) == 0
+    assert any(cmd[:3] == ["gh", "pr", "edit"] and any("Size-Exception: one rename sweep" in part for part in cmd) for cmd, _ in calls)
+
+
+def test_oversized_dry_run_stops_before_push_and_names_the_line_to_add(monkeypatch, tmp_path):
+    monkeypatch.undo()  # the autouse fixture stubs preflight; this test needs the real one
+    monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
+    calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False)
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: ["31 changed files (limit 30)"])
+    monkeypatch.delenv("ROSY_STEP_BACK", raising=False)
+    with pytest.raises(SystemExit, match=r"(?s)--body.*Size-Exception: <reason>"):
+        pr_land.main(["--dry-run"], repo=tmp_path)
+    assert not any(cmd[:2] in (["git", "push"], ["gh", "pr"]) for cmd, _ in calls)
