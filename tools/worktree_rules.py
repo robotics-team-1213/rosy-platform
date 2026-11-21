@@ -344,8 +344,8 @@ def _own_commit_times(root: Path, base: str, sha: str) -> list[int]:
         return []
 
 
-def _idle_unattached(root: Path, base: str, now: float) -> list[str]:
-    result = _git(root, "for-each-ref", "--no-merged", base,
+def _idle_unattached(root: Path, now: float) -> list[str]:
+    result = _git(root, "for-each-ref", *(f"--no-merged={ref}" for ref in merge_targets(root)),
                   "--format=%(refname:short)\t%(worktreepath)\t%(committerdate:unix)", "refs/heads")
     if result.returncode:
         return []
@@ -374,7 +374,7 @@ def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
         parts = ([f"split-needed (>={SPLIT_NEEDED}): {', '.join(needed)}"] if needed else []
                  ) + ([f"split-soon (>={SPLIT_SOON}): {', '.join(soon)}"] if soon else [])
         lines.append(f"WARN    branch size: {'; '.join(parts)} — split finished work from origin/main (D-1067)")
-    unattached = _idle_unattached(root, base, now)
+    unattached = _idle_unattached(root, now)
     if stale_no_pr or unattached:
         open_prs = open_pr_heads(root)
         if open_prs is not None:
@@ -444,10 +444,10 @@ def archived_tip(root: Path, branch: str) -> str | None:
     return refs[0] if refs else None
 
 
-def restore_archived(root: Path, branch: str) -> bool:
-    """Put back the newest archived tip as a branch, only if the branch still does not exist."""
+def restore_archived(root: Path, branch: str) -> str | None:
+    """Create the branch at its newest archived tip and return the SHA for compare-and-delete."""
     tip = archived_tip(root, branch)
-    return bool(tip) and _git(root, "update-ref", f"refs/heads/{branch}", tip, "").returncode == 0
+    return tip if tip and _git(root, "update-ref", f"refs/heads/{branch}", tip, "").returncode == 0 else None
 
 
 def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: bool = False, keep=frozenset()) -> int:

@@ -2,19 +2,9 @@
 
 Run from any worktree. Use --help for commands and docs/reference/shared-checkout.md for policy.
 
-``prune`` is a dry run unless ``--apply``. Lossless prune removes clean, unblocked worktrees:
-already in ``main`` (D-790, 0 wait when its branch reflog shows an own commit) or any clean
-adoptable branch after ``CLEAN_IDLE_HOURS`` (6 h, D-1070: unmerged branch stays for ``adopt``),
-deleting landed unused branches by exact sha (D-886). ``--snapshot`` (person/dispatcher only)
-also takes dirty/unmerged worktrees owned by the caller (``--all`` for peers/unknown) into
-``refs/wip/<date>/<name>`` (restore with ``git worktree add`` or ``git checkout``). Never
-removed: main, cwd, locked, on ``main``, non-cache ignored files, ``stale-history`` (D-790).
-
-``status`` flags ``landed-dirty``, ``stale-history``, ``orphan`` (archived to zip after 1 h),
-``split-soon``/``split-needed``, ``no-pr``, and worktrees outside ``.worktrees/``. Idle is the
-newest of: tip commit, ``.git`` file, ``logs/HEAD`` entry, and non-cache file mtimes (not index).
-An owner note guards clean adoptable worktrees 24 h (else ``--idle-hours`` 72 h). ``--remote``
-reports (with ``--apply``, archives+deletes own-only) stale unopened origin branches. Standard library only.
+``prune`` is a dry run unless ``--apply``. Lossless removal preserves unmerged branch tips for
+``adopt``. The person/dispatcher-only ``--snapshot`` preserves changes in ``refs/wip/``.
+``status`` reports slot usage and branch backlog. ``--remote`` checks stale unopened origin branches.
 """
 
 from __future__ import annotations
@@ -508,13 +498,22 @@ def _admit(cwd: Path, root: Path, name: str, branch: str, target: list[str], rea
                   f" dispatcher: also --all): {row['name']} ({row['verdict']})", file=sys.stderr)
         print(f'{HINT}\nor, during an incident: add --force-over-cap "<reason>"', file=sys.stderr)
         return 1
-    if target == [branch] and not _has_branch(root, branch) and not rules.restore_archived(root, branch):
-        raise RuntimeError(f"branch {branch} could not be restored")
+    if (root / ".worktrees" / name).exists():
+        raise RuntimeError(f"worktree {name} appeared during admission")
+    restored = None
+    if target == [branch] and not _has_branch(root, branch):
+        restored = rules.restore_archived(root, branch)
+        if not restored:
+            raise RuntimeError(f"branch {branch} could not be restored")
     add = ["worktree", "add", "--relative-paths", f".worktrees/{name}", *target]
     result = git(root, *add)
     if result.returncode != 0 and "relative-paths" in result.stderr:  # git older than 2.48
         add.remove("--relative-paths")
         result = git(root, *add)
+    if result.returncode != 0 and restored:
+        checkout = git(root, "for-each-ref", "--format=%(worktreepath)", f"refs/heads/{branch}")
+        if checkout.returncode == 0 and not checkout.stdout.strip():
+            git(root, "update-ref", "-d", f"refs/heads/{branch}", restored)
     _must(result, "git worktree add")
     # Who made it: `prune --snapshot` takes only the caller's own; people read it in `status` (D-790: --owner).
     note = f"owner: {owner.strip() if owner else _identity(root)}; at {int(now)}"

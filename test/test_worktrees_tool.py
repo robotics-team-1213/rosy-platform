@@ -463,6 +463,23 @@ def test_concurrent_creations_cannot_admit_the_same_slot(main, monkeypatch):
     assert refs(main, "refs/heads/fix/") == ["refs/heads/fix/first"]
 
 
+def test_adopt_add_failure_leaves_the_archived_branch_parked(main, monkeypatch):
+    archive = "refs/archive/fix/parked@test"
+    git(main, "update-ref", archive, "HEAD")
+    real_git = worktrees.git
+
+    def fail_add(cwd, *args, **kwargs):
+        if args[:2] == ("worktree", "add"):
+            assert refs(main, "refs/heads/fix/parked")
+            return subprocess.CompletedProcess(args, 1, "", "simulated checkout failure")
+        return real_git(cwd, *args, **kwargs)
+
+    monkeypatch.setattr(worktrees, "git", fail_add)
+    assert worktrees.main(["adopt", "parked", "fix/parked", "--no-prune"]) == 1
+    assert not refs(main, "refs/heads/fix/parked")
+    assert refs(main, archive) == [archive]
+
+
 def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, monkeypatch, capsys):
     monkeypatch.setattr(worktrees, "CAP", 2)
     done = add(main, "done", commit=True, merge=True)
@@ -1168,11 +1185,12 @@ def test_status_warns_on_no_pr_after_24h_and_skips_when_gh_fails(main, tmp_path,
 def test_status_distinguishes_parked_branches_and_unavailable_pr_lookup(main, tmp_path, monkeypatch, capsys):
     _bare_origin(main, tmp_path)
     now = time.time()
-    for name, age in (("parked", 25), ("active-pr", 25), ("recent", 2), ("attached", 25)):
+    for name, age in (("parked", 25), ("active-pr", 25), ("recent", 2), ("attached", 25), ("local-merge", 25)):
         wt = add(main, name)
         _commit_n(wt, 1, date=f"{int(now - age * HOUR)} +0000")
         if name != "attached":
             git(main, "worktree", "remove", str(wt))
+    git(main, "merge", "-q", "--ff-only", "feat/local-merge")
     monkeypatch.setattr(worktrees.rules, "open_pr_heads", lambda _: {"feat/active-pr"})
     assert worktrees.main(["status"], now=now) == 0
     assert "1 branch(es) without a worktree or open PR" in capsys.readouterr().out
