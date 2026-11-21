@@ -37,6 +37,8 @@ one run at a time) numbers the fragments in (date, slug) order from the current 
 the fragments. A breaking section starts with `**Breaking.** 사유: <reason>`. Body text in the reference
 (endpoint tables, §8 events) is still edited in the PR itself.
 
+ADR: a PR adds `docs/adr/D-N-*.md` but no `ROSY ADR Log.md` row. `test_adr_index_lists_every_decision_section` only warns (listing the ids) for a missing row, on PRs and on main; with `ROSY_RECORDS_STRICT=1` (records bot, scheduled run) it fails. Duplicates, malformed rows and rows without a file stay errors.
+
 ## When the records bot cannot open PRs (no `RECORDS_BOT_TOKEN`)
 
 The workflow opens PRs only with the repository secret `RECORDS_BOT_TOKEN` (GitHub App installation token or
