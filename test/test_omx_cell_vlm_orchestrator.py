@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import io
 import json
 from pathlib import Path
 import sys
@@ -22,16 +23,17 @@ def _make_workdir(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _start_fake_viewer(available_views=("/frame/top.jpg", "/frame/side.jpg", "/frame/arm_a_wrist.jpg")):
+def _start_fake_viewer(available_views=("/frame/top.jpg", "/frame/side.jpg", "/frame/arm_a_wrist.jpg"), empty_views=()):
     allowed = set(available_views)
+    empty = set(empty_views)
 
     class ViewerHandler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
             pass
 
         def do_GET(self):
-            if self.path in allowed:
-                raw = b"JPEG:" + self.path.encode("ascii")
+            if self.path in allowed or self.path in empty:
+                raw = b"" if self.path in empty else b"JPEG:" + self.path.encode("ascii")
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
                 self.send_header("Content-Length", str(len(raw)))
@@ -76,17 +78,27 @@ def _arm_configs():
     }
 
 
-def test_select_vision_backend_rejects_text_only_cli():
-    with pytest.raises(ValueError, match="text-only CLI"):
-        orch.select_vision_backend({"provider": "opencode", "model": "zai-coding-plan/glm-5.3-flash"})
-    with pytest.raises(ValueError, match="vision=False"):
-        orch.select_vision_backend({"provider": "zai", "model": "glm-5.3", "vision": False})
+def test_select_vision_backend_rejects_text_only_and_non_vision_specs():
+    for bad in (
+        {"provider": "opencode", "model": "zai-coding-plan/glm-5.3-flash"},
+        {"provider": "zai", "model": "glm-5.3", "vision": False},
+        {"provider": "zai", "model": "glm-5.3"},
+        "opencode:zai-coding-plan/glm-5.3-flash",
+        "codex:gpt-5-codex",
+        ["ollama:qwen3-vl:8b-instruct", "opencode:glm-5.3-flash"],
+        {"models": ["ollama:qwen3-vl:8b-instruct"], "arbiter": "claude:sonnet"},
+        None,
+    ):
+        with pytest.raises(ValueError):
+            orch.select_vision_backend(bad)
+    ok = orch.select_vision_backend({"provider": "ollama", "model": "qwen3-vl:8b-instruct"})
+    assert callable(ok)
 
 
-def test_orchestrator_fails_closed_when_zero_frames_available(tmp_path):
+def test_orchestrator_fails_closed_on_zero_or_empty_frames_and_unreachable_viewer(tmp_path):
     wd = _make_workdir(tmp_path)
     runner = api.Runner(wd, lock_dir=wd)
-    viewer = _start_fake_viewer(available_views=())
+    viewer = _start_fake_viewer(available_views=(), empty_views=("/frame/top.jpg",))
     token = "t" * 32
     server = api.make_server("127.0.0.1", 0, token, runner, viewer=f"http://127.0.0.1:{viewer.server_port}")
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -99,7 +111,10 @@ def test_orchestrator_fails_closed_when_zero_frames_available(tmp_path):
             called = True
             return {}
 
-        res = orch.run_once(client, fail_if_called, _arm_configs(), operator="human_op", execute=True, person_at_switch=True)
+        res = orch.run_once(
+            client, fail_if_called, _arm_configs(),
+            operator="human_op", execute=True, person_at_switch=True, approve=lambda _: True,
+        )
         assert res["status"] == "idle"
         assert res["proposal"]["reason"] == "no camera frames available"
         assert called is False
@@ -108,6 +123,18 @@ def test_orchestrator_fails_closed_when_zero_frames_available(tmp_path):
         server.server_close()
         viewer.shutdown()
         viewer.server_close()
+
+    # After viewer is shut down, /frame/* returns 502 and propose_next fails closed by raising CellJobError
+    bad_server = api.make_server("127.0.0.1", 0, token, runner, viewer=f"http://127.0.0.1:{viewer.server_port}")
+    threading.Thread(target=bad_server.serve_forever, daemon=True).start()
+    try:
+        bad_client = CellJobClient(f"http://127.0.0.1:{bad_server.server_port}", token=token)
+        with pytest.raises(CellJobError) as exc_info:
+            orch.propose_next(bad_client, lambda *a: {})
+        assert exc_info.value.status_code == 502
+    finally:
+        bad_server.shutdown()
+        bad_server.server_close()
 
 
 def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
@@ -151,7 +178,7 @@ def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
         assert seen_images == [3]
         assert procs == []
 
-        # 2. Dry-run cell_policy_drive works without person_at_switch and passes h1 goal_site + hybrid mode
+        # 2. Dry-run cell_policy_drive works without person_at_switch or approve callback
         dry_policy = orch.run_once(
             client, fake_vlm, _arm_configs(),
             operator="human_op", execute=True, dry_run=True, wait=False,
@@ -165,7 +192,7 @@ def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
         assert "--model-calibration" not in dry_argv
         procs[-1]._code = 0
 
-        # 3. Dry-run auto_pick routes to auto_pick_dry_run without person_at_switch; dry-run home skips safely
+        # 3. Dry-run auto_pick routes to auto_pick_dry_run; dry-run home skips safely
         next_proposal = {"action": "auto_pick", "arm": "arm_a", "site": "belt", "reason": "pick test"}
         dry_pick = orch.run_once(
             client, fake_vlm, _arm_configs(),
@@ -183,18 +210,49 @@ def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
         assert dry_home["status"] == "dry_run_skipped"
         assert len(procs) == 2
 
-        # 4. Live execute refuses missing person_at_switch and refuses proposer == operator
+        # 4. Live execute refuses missing person_at_switch, missing approve callback, rejection, and proposer == operator
         next_proposal = {"action": "cell_policy_drive", "arm": "arm_b", "site": "yard:r3-s2-t1", "reason": "live run"}
         with pytest.raises(ValueError, match="person_at_switch"):
-            orch.run_once(client, fake_vlm, _arm_configs(), operator="human_op", execute=True, person_at_switch=False)
+            orch.run_once(
+                client, fake_vlm, _arm_configs(),
+                operator="human_op", execute=True, person_at_switch=False, approve=lambda _: True,
+            )
+        with pytest.raises(ValueError, match="approve callback"):
+            orch.run_once(client, fake_vlm, _arm_configs(), operator="human_op", execute=True, person_at_switch=True)
+
+        rejected = orch.run_once(
+            client, fake_vlm, _arm_configs(),
+            operator="human_op", execute=True, person_at_switch=True, approve=lambda _: False,
+        )
+        assert rejected["status"] == "rejected"
+        assert len(procs) == 2
+
         with pytest.raises(ValueError, match="proposer"):
             orch.run_once(
                 client, fake_vlm, _arm_configs(),
                 operator="vlm_orchestrator", proposer="vlm_orchestrator",
-                execute=True, person_at_switch=True,
+                execute=True, person_at_switch=True, approve=lambda _: True,
             )
 
-        # 5. Live execute with approval submits arm_b policy drive through its session wrapper
+        # 5. Live home and live auto_pick wrap through SESSION[arm]
+        next_proposal = {"action": "home", "arm": "arm_a", "site": "", "reason": "fold home"}
+        live_home = orch.run_once(
+            client, fake_vlm, _arm_configs(),
+            operator="human_op", execute=True, person_at_switch=True, wait=False, approve=lambda _: True,
+        )
+        assert live_home["job"] == "home" and procs[-1].argv[0] == "./with-session-arm-a-par.sh"
+        procs[-1]._code = 0
+
+        next_proposal = {"action": "auto_pick", "arm": "arm_a", "site": "belt", "reason": "pick box"}
+        live_pick = orch.run_once(
+            client, fake_vlm, _arm_configs(),
+            operator="human_op", execute=True, person_at_switch=True, wait=False, approve=lambda _: True,
+        )
+        assert live_pick["job"] == "auto_pick" and procs[-1].argv[0] == "./with-session-arm-a-par.sh"
+        procs[-1]._code = 0
+
+        # 6. Live execute with approval submits arm_b policy drive through its session wrapper
+        next_proposal = {"action": "cell_policy_drive", "arm": "arm_b", "site": "yard:r3-s2-t1", "reason": "live run"}
         submitted = orch.run_once(
             client, fake_vlm, _arm_configs(),
             operator="human_op", execute=True, person_at_switch=True, wait=False,
@@ -202,15 +260,17 @@ def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
         )
         assert submitted["status"] == "submitted"
         assert submitted["job"] == "cell_policy_drive"
-        assert len(procs) == 3
         live_argv = procs[-1].argv
         assert live_argv[0] == "./with-session-arm-b-par.sh"
         assert "--person-at-switch" in live_argv
         assert live_argv[live_argv.index("--goal-site") + 1] == "yard:r3-s2-t1"
 
-        # 6. While arm_b holds A/B space, propose_next short-circuits to idle without calling VLM
+        # 7. While arm_b holds A/B space, propose_next short-circuits to idle without calling VLM
         calls_before_busy = len(seen_images)
-        busy = orch.run_once(client, fake_vlm, _arm_configs(), operator="human_op", execute=True, person_at_switch=True)
+        busy = orch.run_once(
+            client, fake_vlm, _arm_configs(),
+            operator="human_op", execute=True, person_at_switch=True, approve=lambda _: True,
+        )
         assert busy["status"] == "idle"
         assert "queue busy" in busy["proposal"]["reason"]
         assert len(seen_images) == calls_before_busy
@@ -218,6 +278,41 @@ def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
         procs[-1]._code = 0
         done = client.wait(submitted["id"], poll_s=0.01, timeout_s=2.0)
         assert done["running"] is False and done["exit"] == 0
+    finally:
+        server.shutdown()
+        server.server_close()
+        viewer.shutdown()
+        viewer.server_close()
+
+
+def test_orchestrator_cli_requires_interactive_confirmation_for_live_exec(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    cfg_path = wd / "arm-configs.json"
+    cfg_path.write_text(json.dumps(_arm_configs()), encoding="utf-8")
+    runner = api.Runner(wd, lock_dir=wd)
+    viewer = _start_fake_viewer()
+    token = "t" * 32
+    server = api.make_server("127.0.0.1", 0, token, runner, viewer=f"http://127.0.0.1:{viewer.server_port}")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    popen = Mock()
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    monkeypatch.setenv("ROSY_CELL_JOB_TOKEN", token)
+    monkeypatch.setattr(
+        orch.judge_seat,
+        "from_config",
+        lambda spec: (lambda *a: {"action": "home", "arm": "arm_a", "site": "", "reason": "cli check"}),
+    )
+    try:
+        monkeypatch.setattr(sys, "stdin", io.StringIO("n\n"))
+        rc = orch.main([
+            "--url", f"http://127.0.0.1:{server.server_port}",
+            "--arm-configs", str(cfg_path),
+            "--operator", "human_op",
+            "--execute",
+            "--person-at-switch",
+        ])
+        assert rc == 1
+        popen.assert_not_called()
     finally:
         server.shutdown()
         server.server_close()

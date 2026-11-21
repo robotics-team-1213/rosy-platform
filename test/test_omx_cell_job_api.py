@@ -30,6 +30,10 @@ def _make_workdir(tmp_path: Path) -> Path:
         ("auto_pick", {"source": "belt", "dest": "pinky"}, 400),
         ("auto_pick_dry_run", {"source": "pinky"}, 202),
         ("pivot_near", {"site": "bed-1"}, 400),
+        ("cell_policy_drive", {"goal_site": "tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "vehicle_tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "not_places:vehicle_tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "tray", "dry_run": True}, 202),
     ],
 )
 def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, job, site_params, status):
@@ -38,6 +42,15 @@ def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, j
         params.update(arm="arm_s", person_at_switch=True)
     if job == "pivot_near":
         params.update(x=0.0, y=0.0)
+    elif job == "cell_policy_drive":
+        params.update(
+            library="chunks-s.json",
+            max_chunks=1,
+            operator="human_op",
+            policy_root="~/rosy-models/pinky_v1",
+            policy_revision="a" * 64,
+            cell_calibration="cell.json",
+        )
     else:
         params.update(catalog="catalog-live.json", roi=[0, 0, 10, 10], dest="outbound")
     params.update(site_params)

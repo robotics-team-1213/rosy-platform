@@ -212,9 +212,10 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             if "goal_site" not in opt_checked and "model_calibration" not in opt_checked:
                 raise ValueError("missing param model_calibration")
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
-    if job.get("moving") and any(
-        checked.get(name, opt_checked.get(name, "")).startswith(("pinky", "bed"))
-        for name in ("source", "dest", "site")  # loading onto a bed moves over it too
+    if moves_arm(job, params) and any(
+        (v := checked.get(name, opt_checked.get(name, ""))).startswith(("pinky", "bed"))
+        or v in ("tray", "vehicle_tray", "not_places:vehicle_tray")
+        for name in ("source", "dest", "site", "goal_site")  # loading onto a bed moves over it too
     ):
         raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     args = []
