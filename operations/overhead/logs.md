@@ -624,3 +624,9 @@
 - 변경: Fleet `fleet/server/sitemap/observer_vision.py`(cv2로 JPEG 해석)를 `rosy_vision/stack_tiers.py`로 옮김(D-136 3, Fleet는 영상을 해석하지 않음). Fleet `pipeline_observer`의 기본 판정기 삭제: 판정기가 없으면 돌기 전에 SKIPPED `NO_JUDGE`. Vision 엔드포인트 연결은 아직 없음.
 - 증거: 원격 `test_no_video_relay.py`·`test_observer.py`·`test_stack_tiers.py` (결과는 커밋 보고에).
 - gate 변화: 없음.
+
+## 2026-11-22 · uncommitted · fix(vision) 렌즈 모델 캐시 격리
+
+- 변경: 영상 출처, 프레임 크기, 보정 리비전이 일치하는 렌즈 모델을 사용한다. 일치하는 모델을 얻지 못하면 승인 호모그래피로 평면을 만든다.
+- 검증: `operations/overhead/test/test_map_plane.py`에서 같은 크기의 다른 출처와 이전 보정 리비전이 섞이지 않는지 확인한다.
+- gate 변화: 없음.
