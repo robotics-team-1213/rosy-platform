@@ -8,6 +8,14 @@ from __future__ import annotations
 
 import math
 
+#: CORE fine re-park caps (D-1051): the one place CORE (drive/behaviors/localization/repark.py) and Fleet read them from.
+REPARK_MAX_FORWARD_M = 0.10
+REPARK_MAX_LEFT_M = 0.06
+
+
+def repark_within_limits(forward_m: float, left_m: float = 0.0) -> bool:
+    return abs(forward_m) <= REPARK_MAX_FORWARD_M and abs(left_m) <= REPARK_MAX_LEFT_M
+
 
 def offset_in_frame(origin, point) -> tuple[float, float]:
     """(forward, left) of point (x, y) seen from origin (x, y, yaw)."""

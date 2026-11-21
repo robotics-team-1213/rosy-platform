@@ -19,12 +19,12 @@ from typing import Optional
 from uuid import UUID
 
 from core_common.protocol.native.receipts import NativeReceipts
-from core_common.stop_pose import offset_in_frame
+from core_common.stop_pose import REPARK_MAX_FORWARD_M, REPARK_MAX_LEFT_M, offset_in_frame
 
 from core_features.localization.mission import NUDGE, NUDGE_BACK, ROTATE_TO, MissionRefused
 
-MAX_FORWARD_M = 0.10        # nudge_max_m
-MAX_LEFT_M = 0.06
+MAX_FORWARD_M = REPARK_MAX_FORWARD_M   # nudge_max_m; defined in core_common.stop_pose
+MAX_LEFT_M = REPARK_MAX_LEFT_M
 MAX_SPEED_MPS = 0.023
 MAX_RATE_RPS = 0.09
 MIN_THETA_RAD = math.radians(30.0)   # measured on b8xy 2026-11-19: 30 deg, 7 cm gave 38 mm sideways, 2 mm fore-aft
