@@ -1,4 +1,6 @@
 """Fleet's HTTP client and task service take CORE's passive navigation handover (CORE + Fleet integration)."""
+import pytest
+
 from core_api_web.api.deps import Mode
 from test_navigation_handover import request
 from test_station_docking_api import station_api  # noqa: F401
@@ -6,7 +8,8 @@ from test_station_return_handover import terminal_navigation
 from test_station_camera_pipeline import pipeline_sources  # noqa: F401
 
 
-def test_fleet_http_client_yields_the_exact_completed_native_operation(station_api, pipeline_sources):
+@pytest.mark.parametrize("bind_grid", [False, True])
+def test_fleet_http_client_yields_the_exact_completed_native_operation(station_api, pipeline_sources, bind_grid):
     import asyncio
     import httpx
     from fleet.swarm.transport import HttpRobotClient
@@ -15,12 +18,18 @@ def test_fleet_http_client_yields_the_exact_completed_native_operation(station_a
         core, svc, _, auth, _, _ = station_api
         backend = terminal_navigation(svc)
         body = request(svc)
+        if bind_grid:
+            svc.state.set_map_id("robot-grid", "occupancy:0123456789ab")
+            body["expected_map_grid_id"] = svc.state.map_grid_id
         token = auth['fleet-a']['Authorization'].split(' ', 1)[1]
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=core.app), base_url='http://core') as http:
             client = HttpRobotClient(RobotEndpoint(svc.state.snapshot().robot_id, 'http://core', token), http=http)
             result = await client.navigation_handover(**body)
             assert result['accepted'] is True and svc.modes.mode is Mode.IDLE
             assert result['run_id'] == body['run_id'] and backend.canceled == 0
+            if bind_grid:
+                assert result["map_grid_id"] == svc.state.map_grid_id
+                assert result["idle_mode_epoch"] == svc.modes.epoch
     asyncio.run(run())
 
 

@@ -36,7 +36,6 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ### v1.412 통신 끊김 사건의 기계 해제와 하루 세 번 (D-1047)
 
 `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear`의 assessor 해제 조건이 넓어진다(경로·본문 그대로). 표시 행이 모두 러너의 통신 끊김 문구(`LINK_END` 전체 일치)이고 잘리지 않았으며(`flagged_total`·`fault_records_total`), 고장 기록이 모두 `(5, 'Input/output error')`(정지 사유 없음, `fault_record_kinds`)인 사건은, 보고된 `last_state`·`last_target`·`last_command`·`home`과 `torque_after`로 다시 계산한 쉬는 팔(토크 0, 이동 명령 아님, 목표와 3단위 안, home과 8단위 안)이면 `folded` 없이도 기계 해제할 수 있다. `AI_CLEAR_REPEAT_LIMIT`는 같은 팔의 기계 해제가 24시간 안에 세 번 있었을 때다(이전 한 번).
-
 ### v1.417 로봇 미세 재정차 `/api/v1/motion/repark` (D-1051)
 
 로봇 `POST`/`GET`/`DELETE /api/v1/motion/repark`를 더한다(additive, Safety-Review 대상). 셀 팔 도달 보정용으로 정차한 로봇을 로봇 몸체 기준 옆 ≤ 0.06 m·앞뒤 ≤ 0.10 m 옮긴다. 능력 플래그는 따로 없다(`motion.rotate_to`와 같은 `loc_mission`).
@@ -1241,7 +1240,10 @@ Same principal/request ID and same original body returns the existing result wit
 동일한 현재 terminal proof의 IDLE 재호출만 멱등이다. 불명·불일치·대체 실행은 409이며
 accepted/IDLE는 물리 정지·도착 오차·충전 자원 해제의 증거가 아니다. 새 station binding은
 별도로 원본 motion의 새 정지 dwell을 요구한다. 응답은 accepted, mode, run_id, boot_id,
-owner_generation이다. 기존 cancel/긴급 정지 계약은 유지한다.
+owner_generation이다. 요청에 `expected_map_grid_id`가 있으면 CORE는 지도 격자 잠금을
+유지한 채 같은 성공 실행을 확인하고 IDLE로 인계한다. 격자가 다르면 409를 반환한다.
+범위가 일치하면 응답에 `map_grid_id`와 `idle_mode_epoch`를 추가한다. 이 값은 이후
+보정 요청이 당시 제어 모드 세대를 다시 확인하는 데 사용한다. 기존 cancel/긴급 정지 계약은 유지한다.
 
 Fleet의 충전 조립은 이 인계의 성공 뒤에도 동일한 완료 Task/attempt·원본 정책·dispatch
 세대와 claim 부재를 다시 확인한다. Console의 이전 goal/route/goal-lease projection만
@@ -2203,6 +2205,9 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | Method | Path | Role | 요구사항 |
 |---|---|---|---|
 | POST | `/api/v1/navigation/goal` | Operator | NAV-001 (`{x,y,yaw}` 또는 `{waypoint}`; 선택적 `correlation_id`는 Fleet dispatch 시도 ID와 실행 이벤트를 잇는 추적 메타데이터). 기능 보류 시 모드 전이 전에 409 `CAPABILITY_WITHHELD`. D-395 로봇이 `LOCALIZED` 가 아니면 409 `NOT_LOCALIZED` (v1.72) |
+| POST | `/api/v1/navigation/bound-plan` | Operator | `x`, `y`, `yaw` 또는 waypoint와 `expected_map_grid_id`, `correlation_id`를 받는다. 차선 인계는 `line_stop`에 임대·정차 식별자를 함께 보낸다. 구동 없이 현재 지도 좌표계의 `plan_id`, `map_grid_id`, `frame`, `points`를 반환한다. 계획 ID는 발급한 CORE에서 5초간 유효하다 (v1.next). |
+| POST | `/api/v1/navigation/bound-goal` | Operator | 기존 목표와 동일한 권한·모드·위치 추정 검사와 실행 영수증을 사용한다. 필수 `expected_map_grid_id`가 최신 CORE 격자 ID와 다르거나 없어졌으면 모드 전이 전에 409 `NAVIGATION_MAP_GRID_CHANGED` (v1.next). 필수 `plan_id`는 한 번만 사용할 수 있고, 지도 로드·모드 세대·현재 출발 위치·호출 주체·목표·연관 ID를 재확인한 뒤 보관한 경로를 실행한다 (v1.next). |
+| POST | `/api/v1/navigation/line-handoff-goal` | Operator, 현재 trip lease 소유자 | 격자 결속 목표에 `lease_id`, `trip_id`, `junction_seq`, `stop_place_id` 및 해당 시 `job_id`를 더한다. `correlation_id`, `expected_boot_id`, `expected_owner_generation`도 필수다. 지정한 차선 STOP이 유지 중일 때만 기존 차선 입력을 놓고 Nav2 목표를 수락한다. 정차나 임대가 다르면 409. 성공 응답에는 동일한 Nav2 실행 영수증을 반환한다 (v1.next). |
 | POST | `/api/v1/navigation/goal/lease` | Operator | D-550 10 (v1.160, Safety-Review). Fleet 목표 임대 갱신 `{correlation_id (1–128자), ttl_s (0 < s ≤ 5, 유한)}` → `{renewed: true, correlation_id, ttl_s}`. `POST /navigation/goal` 선택 필드 `lease_ttl_s`(0 < s ≤ 5, 유한, `correlation_id` 필요; 어기면 모드 전이 전에 400 `VALIDATION_ERROR`)로 연 임대를 늘린다. 활성이 아니거나(취소·도착·실패·만료·교체된) 임대 없이 연 `correlation_id`는 409 `GOAL_LEASE_NOT_ACTIVE`이고 목표를 되살리지 않는다. 그 목표(`POST /navigation/goal`·`/navigation/home`)를 보낸 토큰이 아닌 토큰의 갱신은 403 `FORBIDDEN`이다(D-760 9항): 임대와 목표는 그대로이고 목표는 제 만료 시각에 끝난다. 활성 여부를 먼저 보므로 끝난 목표는 어느 토큰이든 409다. 비교는 토큰 id다: 공유 개발 토큰(D-548 `rosy-dev-operator`)은 쓰는 모두가 한 id라 서로의 임대를 갱신할 수 있다. 계정 세션이 갱신 중에 새 토큰으로 바뀌면 그 뒤의 갱신은 403이고 로봇은 임대 만료에 선다(Fleet은 403에서 그 임대를 놓는다). 만료하면 5 Hz 전원 타이머가 SAF-003 STOP과 같은 취소 경로로 목표를 취소한다(`nav.canceled` source `goal_lease`). 만료는 `fleet_loss_policy`와 관계없이 STOP이다: 임대가 먼저 끝나면 SAF-003은 지킬 목표가 없어 `safety.fleet_lost`를 내지 않는다(D-550 10). `ttl_s`는 CORE 단조 시계. 능력 `controls` `base_velocity.goal_lease: true`(목표 주행이 있을 때)일 때만 Fleet이 쓴다. `lease_ttl_s`가 없는 목표는 지금과 같다 |
 | POST | `/api/v1/navigation/route` | Operator | D-1009 (v1.382, Safety-Review). 순서 있는 점 목록을 한 요청으로 주행한다. `{points: [{x, y, yaw?, kind: "pass"\|"stop"(기본 stop)}] (1–64개, 마지막은 stop), correlation_id?, lease_ttl_s?, expected_boot_id?, expected_owner_generation?}` → `{accepted, mode, route, operation}`(`operation.kind`는 `navigate`). 관문·소유권·`NAVIGATION_ACTIVE`·`LINE_FOLLOW_ACTIVE`·`GOAL_LEASE_NOT_ACTIVE`는 `/navigation/goal`과 같고, 경로 하나가 native run 하나·`correlation_id` 하나·목표 임대 하나다(`/navigation/goal/lease`로 한 번 갱신하면 경로 전체가 산다). `pass` 점은 서지 않고 지나가며 `stop` 점에서만 멈춘다. 경로는 stop 점마다 잘려 구간마다 Nav2 액션이 하나다: pass 점이 있으면 `NavigateThroughPoses`, 없으면 `NavigateToPose`. 구간이 끝나면 CORE가 같은 run 안에서 다음 구간을 보내므로 구간 사이에 409가 없고 상태는 `NAVIGATING`을 유지한다. 건너뛰기: 구간을 보내기 전에 전역 코스트맵에서 막힘(≥253)이거나 맵 밖인 `pass` 점은 건너뛴다. 구간이 실패했는데 앞에 `pass` 점이 남았으면 그 첫 점을 건너뛰고 같은 구간을 다시 보낸다. `stop` 점은 건너뛰지 않는다. pass 점이 없는 구간이 실패하거나 NAV-006(진척 없음)이 끊으면 `FAILED`다. `yaw` 없는 stop은 직전 점에서 오는 방향을 쓴다. 취소·E-Stop·임대 만료는 `/navigation/cancel`과 같은 경로로 경로 전체를 끝낸다. 속도 한도와 최종 `cmd_vel`은 CORE(D-2)가 그대로 쥔다. 능력 `controls` 변경 없음. Fleet 연동은 다음 단계이고, 이 경로를 모르는 기체는 404를 돌려준다 |
 | POST | `/api/v1/navigation/cancel` | Operator | NAV-002 |

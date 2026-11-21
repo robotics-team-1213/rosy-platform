@@ -10,7 +10,7 @@ class NativeOperation(BaseModel):
 
     run_id: UUID
     boot_id: UUID
-    kind: Literal["navigate", "home", "dock", "undock", "follow", "teleop"]
+    kind: Literal["navigate", "home", "dock", "undock", "follow", "teleop", "repark"]
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
     phase: Literal["SUBMITTED", "RUNNING", "TERMINAL"]
     result: Literal["SUCCEEDED", "FAILED", "CANCELED", "PREEMPTED", "EXPIRED"] | None = None
