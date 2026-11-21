@@ -400,7 +400,7 @@ def test_local_main_only_behind_origin_is_not_a_backlog(tmp_path):
 def test_body_reaches_an_existing_pr_so_a_size_exception_counts(monkeypatch, tmp_path):
     calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False)
     assert pr_land.main(["--body", "Size-Exception: one rename sweep"], repo=tmp_path) == 0
-    assert any(cmd[:3] == ["gh", "pr", "edit"] and "Size-Exception: one rename sweep" in cmd for cmd, _ in calls)
+    assert any(cmd[:3] == ["gh", "pr", "edit"] and any("Size-Exception: one rename sweep" in part for part in cmd) for cmd, _ in calls)
 
 
 def test_oversized_dry_run_stops_before_push_and_names_the_line_to_add(monkeypatch, tmp_path):
