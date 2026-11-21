@@ -1,4 +1,5 @@
 // Fleet binds the current review and existing Task creation in one transaction.
+import { setOff } from "/common/cause-line.js";
 import {enumLabel} from "/common/core_ui_logic.js";
 import {owns, relays} from "/console/assets/unit-scope.js";
 import {workStatus} from "/console/assets/work-view.js";
@@ -29,14 +30,9 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     state.textContent = `${reviewStates[review.state] || "검토 상태 확인 필요"}${review.work_status ? " · " + workStatus(review.work_status) : ""} · ${review.reason || "검토 사유를 입력하세요."} · ${reason}`;
     if (modelState) state.textContent += ` · ${modelState}`;
     for (const name of ["ready", "hold", "reject"])
-      setOff(el(`channel-review-${name}`), busy || review.state === "LINKED", reason);
+      setOff(el(`channel-review-${name}`), busy || review.state === "LINKED", reason, "channel-review-state");
     el("channel-review-submit-holder").hidden = review.state !== "READY";
-    setOff(el("channel-review-submit"), busy || !canSubmit(review.candidate?.robot_id), reason);
-  }
-  function setOff(control, off, reason) {
-    control.disabled = off;
-    if (off) control.setAttribute("reason", reason); else control.removeAttribute("reason");
-    control.setAttribute("aria-describedby", "channel-review-state");
+    setOff(el("channel-review-submit"), busy || !canSubmit(review.candidate?.robot_id), reason, "channel-review-state");
   }
   async function select(row) {
     const current = ++version, life = scope.capture(); panel.hidden = true;

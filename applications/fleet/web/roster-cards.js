@@ -1,3 +1,5 @@
+import { setOffBy } from "/common/cause-line.js";
+import { node } from "/common/control-dom.js";
 import { createRobotVideo, bindVisibility } from "/console/assets/robot-video.js";
 
 /** D-651: all four safety exceptions remain visible in the compact list, ahead of nominal robots. */
@@ -46,7 +48,7 @@ export const OMX_CELL_DEFS = [
 ];
 
 // Pinky stations name no robot: the occupant comes from the server (charge-bays), never from this table.
-export const STATION_INSPECT_LINKS = Object.freeze({
+const STATION_INSPECT_LINKS = Object.freeze({
   S2: { targetId: "arm_a", camId: "arm_a_wrist", label: "S2 상차 · arm_a" },
   S3: { targetId: "arm_s", camId: "arm_s_wrist", label: "S3 하역 셔틀 · arm_s" },
   S5: { targetId: "arm_b", camId: "arm_b_wrist", label: "S5 적재·반출 · arm_b" },
@@ -56,7 +58,7 @@ export const STATION_INSPECT_LINKS = Object.freeze({
   C3: { targetId: null, camId: "pinky", label: "C3 충전칸" },
 });
 
-export function createSvgGauge(pct, tone = "good") {
+function createSvgGauge(pct, tone = "good") {
   const clamped = Math.max(0, Math.min(100, Math.round(Number.isFinite(pct) ? pct : 0)));
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -73,23 +75,23 @@ export function createSvgGauge(pct, tone = "good") {
   return svg;
 }
 
-export function createGaugeCard(nodeWithText, { key, title, value, subtext, pct, tone = "good", pills = [] }) {
-  const box = nodeWithText("div", "gauge-card");
+function createGaugeCard({ key, title, value, subtext, pct, tone = "good", pills = [] }) {
+  const box = node("div", "", "gauge-card");
   box.dataset.gaugeKey = key;
-  const top = nodeWithText("div", "gauge-card-top");
-  const titleEl = nodeWithText("span", "gauge-card-title", title);
-  const valEl = nodeWithText("strong", "gauge-card-val", value);
+  const top = node("div", "", "gauge-card-top");
+  const titleEl = node("span", title, "gauge-card-title");
+  const valEl = node("strong", value, "gauge-card-val");
   valEl.title = `${title}: ${value}`;
   top.append(titleEl, valEl);
   box.append(top, createSvgGauge(pct, tone));
   if (subtext) {
-    const subEl = nodeWithText("small", "gauge-card-sub", subtext);
+    const subEl = node("small", subtext, "gauge-card-sub");
     subEl.title = subtext;
     box.appendChild(subEl);
   }
   if (pills.length) {
-    const pillRow = nodeWithText("div", "sensor-pill-row");
-    for (const [pLabel, pOk] of pills) pillRow.appendChild(nodeWithText("span", `sensor-pill ${pOk ? "ok" : "warn"}`, pLabel));
+    const pillRow = node("div", "", "sensor-pill-row");
+    for (const [pLabel, pOk] of pills) pillRow.appendChild(node("span", pLabel, `sensor-pill ${pOk ? "ok" : "warn"}`));
     box.appendChild(pillRow);
   }
   return box;
@@ -226,7 +228,7 @@ const DEFAULT_PLACES = [
 
 export function buildQuickControlPanel({
   robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-  roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames = null, frontCamera = null,
+  roiObjectUrls, refreshRoiPreview, tag, cellFrames = null, frontCamera = null,
 }) {
   const quickPanel = document.createElement("section");
   quickPanel.className = "quick-control-panel";
@@ -269,23 +271,23 @@ export function buildQuickControlPanel({
   const routeValStr = selGoal ? `🎯 ${selGoal.placeId || "좌표"} · ${totalLen.toFixed(2)}m` : "목표 미선택";
   const routeSubStr = selGoal ? `${selGoal.label} · ${selGoal.statusText || "고정됨"}` : "지도 위 좌표/장소를 클릭하면 🎯 핀과 경로가 고정됩니다";
 
-  const telemetryGrid = nodeWithText("div", "telemetry-gauge-grid");
+  const telemetryGrid = node("div", "", "telemetry-gauge-grid");
   telemetryGrid.append(
-    createGaugeCard(nodeWithText, { key: "battery", title: "🔋 배터리 · 전압", value: `${batPct}% · ${batVoltStr}`,
+    createGaugeCard({ key: "battery", title: "🔋 배터리 · 전압", value: `${batPct}% · ${batVoltStr}`,
       subtext: `2S Li-ion · 상태 ${state.battery_status?.level === "ok" ? "정상" : (power.charging || "대기")}`, pct: batPct, tone: batTone }),
-    createGaugeCard(nodeWithText, { key: "sensors", title: "📡 온보드 센서 상태", value: `${okSensors}/${sensorPills.length} 정상 (${sensorPct}%)`,
+    createGaugeCard({ key: "sensors", title: "📡 온보드 센서 상태", value: `${okSensors}/${sensorPills.length} 정상 (${sensorPct}%)`,
       subtext: `수신 주기 ${sampleHz.toFixed(1)}Hz · 구동계 ${state.power?.motion_ready !== false ? "READY" : "HOLD"}`, pct: sensorPct, tone: sensorPct >= 80 ? "good" : "warn", pills: sensorPills }),
-    createGaugeCard(nodeWithText, { key: "alignment", title: "🛰️ 위치 · 차로 정렬도", value: `${alignPct}% (${laneEdgeStr})`,
+    createGaugeCard({ key: "alignment", title: "🛰️ 위치 · 차로 정렬도", value: `${alignPct}% (${laneEdgeStr})`,
       subtext: `${poseCoordStr} · ±${((gPose?.u_m ?? 0.02) * 100).toFixed(0)}cm`, pct: alignPct, tone: alignPct >= 75 ? "info" : "warn" }),
-    createGaugeCard(nodeWithText, { key: "route", title: "🎯 선택 목표 · 도로 경로", value: routeValStr,
+    createGaugeCard({ key: "route", title: "🎯 선택 목표 · 도로 경로", value: routeValStr,
       subtext: routeSubStr, pct: selGoal ? Math.max(25, routePct) : 0, tone: selGoal ? "good" : "info" }),
   );
   quickPanel.appendChild(telemetryGrid);
 
-  const headerLine = nodeWithText("div", "quick-header-line");
-  headerLine.appendChild(nodeWithText("strong", "quick-title", `📍 ${displayName} 1-Click 목적지 핀 고정 & 도로 주행`));
+  const headerLine = node("div", "", "quick-header-line");
+  headerLine.appendChild(node("strong", `📍 ${displayName} 1-Click 목적지 핀 고정 & 도로 주행`, "quick-title"));
   if (selGoal) {
-    const clearGoalBtn = nodeWithText("ui-button", "", "🎯 목표 핀 해제");
+    const clearGoalBtn = node("ui-button", "🎯 목표 핀 해제");
     clearGoalBtn.setAttribute("kind", "quiet"); clearGoalBtn.type = "button";
     clearGoalBtn.addEventListener("click", scope.guard(() => { view.selectedGoal = null; view.activeRoadPlan = null; render(); }));
     headerLine.appendChild(clearGoalBtn);
@@ -293,10 +295,10 @@ export function buildQuickControlPanel({
   quickPanel.appendChild(headerLine);
 
   const mapPlaces = view.activeSiteMap?.map?.places?.length ? view.activeSiteMap.map.places : DEFAULT_PLACES;
-  const chipRow = nodeWithText("div", "quick-chip-row");
+  const chipRow = node("div", "", "quick-chip-row");
   for (const pl of mapPlaces) {
     const isPinnedPlace = selGoal?.placeId === String(pl.id);
-    const btn = nodeWithText("ui-button", "", `${isPinnedPlace ? "🎯" : "→"} ${pl.id}`);
+    const btn = node("ui-button", `${isPinnedPlace ? "🎯" : "→"} ${pl.id}`);
     btn.setAttribute("kind", isPinnedPlace ? "toggle" : "quiet");
     if (isPinnedPlace) btn.setAttribute("aria-pressed", "true");
     btn.type = "button";
@@ -322,37 +324,36 @@ export function buildQuickControlPanel({
   // The bay the robot stands in by its map pose; with no pose or no bay nearby there is no re-berth button.
   const currentBay = gPose ? mapPlaces.find(p => /^C\d/.test(String(p.id))
     && Math.hypot(p.x - gPose.x, p.y - gPose.y) <= 0.15)?.id ?? null : null;
-  const berthRow = nodeWithText("div", "quick-chip-row berth-control-row");
+  const berthRow = node("div", "", "quick-chip-row berth-control-row");
   for (const [bId, bMode, bLabel, bTitle] of [
     ...(currentBay ? [[currentBay, "forward_and_berth_park", `⬆️→⚓ ${currentBay} 출차 후 접안 파킹`, `${currentBay}에서 +0.20m 전진 출차 후 레일 내부 무조향(ω=0) 직진 후진 접안 파킹`]] : []),
     ["C1", "berth_park", "⚓ C1 접안", "충전 베이 C1 (bay_c1) 역방향 접안 모드 파킹"],
     ["C2", "berth_park", "⚓ C2 접안", "충전 베이 C2 (bay_c2) 역방향 접안 모드 파킹"],
     ["C3", "berth_park", "⚓ C3 접안", "충전 베이 C3 (bay_c3) 역방향 접안 모드 파킹"],
   ]) {
-    const bBtn = nodeWithText("ui-button", "", bLabel);
+    const bBtn = node("ui-button", bLabel);
     bBtn.setAttribute("kind", selGoal?.placeId === bId && selGoal?.status === "BERTHING" ? "toggle" : "quiet");
     bBtn.type = "button"; bBtn.title = `${bTitle} · D-1013 구현·안전 검증 대기`;
     bBtn.dataset.berthBay = bId; bBtn.dataset.berthMode = bMode;
-    bBtn.disabled = true;
-    bBtn.setAttribute("reason", "D-1013 분홍 유도선 폐루프 구현·안전 검증 대기");
+    setOffBy(bBtn, "D-1013 분홍 유도선 폐루프 구현·안전 검증 대기");
     berthRow.appendChild(bBtn);
   }
   quickPanel.appendChild(berthRow);
 
-  const omxSection = nodeWithText("div", "omx-fleet-section");
+  const omxSection = node("div", "", "omx-fleet-section");
   const visibleOmx = OMX_CELL_DEFS.filter(def => (view.anchors || []).some(a => a.target_id === def.target_id));
-  const omxHead = nodeWithText("div", "quick-header-line");
+  const omxHead = node("div", "", "quick-header-line");
   omxHead.append(
-    nodeWithText("strong", "quick-title", "🦾 OMX-AI 셀 현황 · Fleet 연계 배차 (CELL-A ↔ Fleet R)"),
-    nodeWithText("small", "hint omx-cell-summary", `관측된 셀 ${visibleOmx.length}/3대`),
+    node("strong", "🦾 OMX-AI 셀 현황 · Fleet 연계 배차 (CELL-A ↔ Fleet R)", "quick-title"),
+    node("small", `관측된 셀 ${visibleOmx.length}/3대`, "hint omx-cell-summary"),
   );
   omxSection.appendChild(omxHead);
 
-  const omxGrid = nodeWithText("div", "omx-fleet-grid");
+  const omxGrid = node("div", "", "omx-fleet-grid");
   for (const def of visibleOmx) {
     const liveAnc = view.anchors.find((a) => a.target_id === def.target_id);
     const isFocusedArm = view.focusAnchorId === def.target_id;
-    const armCard = nodeWithText("div", `omx-cell-card${isFocusedArm ? " selected" : ""}`);
+    const armCard = node("div", "", `omx-cell-card${isFocusedArm ? " selected" : ""}`);
     armCard.dataset.omxId = def.target_id;
     armCard.tabIndex = 0;
     const selectThisArm = () => {
@@ -373,8 +374,8 @@ export function buildQuickControlPanel({
         selectThisArm();
       }
     }));
-    const armTop = nodeWithText("div", "omx-cell-top");
-    armTop.append(nodeWithText("strong", "omx-cell-title", `🦾 ${def.shortLabel}`), tag(liveAnc.cell_status || "상태 미확인", liveAnc.cell_status ? "ok" : "warn"));
+    const armTop = node("div", "", "omx-cell-top");
+    armTop.append(node("strong", `🦾 ${def.shortLabel}`, "omx-cell-title"), tag(liveAnc.cell_status || "상태 미확인", liveAnc.cell_status ? "ok" : "warn"));
     armCard.appendChild(armTop);
 
     const extM = typeof liveAnc.extension_m === "number" ? liveAnc.extension_m : null;
@@ -383,25 +384,25 @@ export function buildQuickControlPanel({
     const confPct = typeof liveAnc.confidence === "number" ? Math.max(0, Math.min(100, Math.round(liveAnc.confidence * 100))) : 0;
     const headDeg = typeof liveAnc.head_yaw === "number" ? `${Math.round((liveAnc.head_yaw * 180) / Math.PI)}°` : "확인 불가";
 
-    const barsWrap = nodeWithText("div", "omx-bars-wrap");
+    const barsWrap = node("div", "", "omx-bars-wrap");
     const barSpecs = [
       ["뻗음·작업반경", extM !== null && reachM > 0 ? `${extM.toFixed(2)}/${reachM.toFixed(2)}m (${reachPct}%)` : "확인 불가", reachPct, "info"],
       ["서보·전원버스", liveAnc.motor_summary || "확인 불가", liveAnc.motor_summary ? 100 : 0, "good"],
       ["4x 비전·방위", liveAnc.confidence === undefined ? "확인 불가" : `신뢰도 ${confPct}% · HEAD ${headDeg}`, confPct, "good"],
     ];
     for (const [bLabel, bVal, bPct, bTone] of barSpecs) {
-      const bRow = nodeWithText("div", "gauge-row-compact"), bMeta = nodeWithText("div", "gauge-meta-line");
-      bMeta.append(nodeWithText("span", "", bLabel), nodeWithText("strong", "", bVal));
+      const bRow = node("div", "", "gauge-row-compact"), bMeta = node("div", "", "gauge-meta-line");
+      bMeta.append(node("span", bLabel), node("strong", bVal));
       bRow.append(bMeta, createSvgGauge(bPct, bTone));
       barsWrap.appendChild(bRow);
     }
     armCard.appendChild(barsWrap);
-    const jointLine = nodeWithText("small", "gauge-card-sub", `${liveAnc.joints_summary || "관절 확인 불가"} · 연계 정류장 ${def.stationId}`);
+    const jointLine = node("small", `${liveAnc.joints_summary || "관절 확인 불가"} · 연계 정류장 ${def.stationId}`, "gauge-card-sub");
     jointLine.title = jointLine.textContent;
     armCard.appendChild(jointLine);
 
-    const armActions = nodeWithText("div", "omx-cell-actions");
-    const callRobotBtn = nodeWithText("ui-button", "", `🤖 ${robot.robot_id} → ${def.stationId} 배차`);
+    const armActions = node("div", "", "omx-cell-actions");
+    const callRobotBtn = node("ui-button", `🤖 ${robot.robot_id} → ${def.stationId} 배차`);
     callRobotBtn.setAttribute("kind", selGoal?.placeId === def.stationId ? "toggle" : "quiet");
     if (selGoal?.placeId === def.stationId) callRobotBtn.setAttribute("aria-pressed", "true");
     callRobotBtn.type = "button";
@@ -414,7 +415,7 @@ export function buildQuickControlPanel({
       el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
       view.dispatchGoalToPoint?.({ x: def.stationX, y: def.stationY }, `${def.shortLabel} 연계 ${def.stationName}`, def.stationId);
     }));
-    const focusCamBtn = nodeWithText("ui-button", "", "🔍 카메라·제어 연동");
+    const focusCamBtn = node("ui-button", "🔍 카메라·제어 연동");
     focusCamBtn.setAttribute("kind", "toggle"); focusCamBtn.setAttribute("aria-pressed", isFocusedArm ? "true" : "false"); focusCamBtn.type = "button";
     focusCamBtn.addEventListener("click", scope.guard(() => { selectThisArm(); }));
     armActions.append(callRobotBtn, focusCamBtn);
@@ -434,10 +435,10 @@ export function buildQuickControlPanel({
   const activeAnchorId = view.focusAnchorId || robot.robot_id;
   const activeAnchor = anchorList.find((a) => a.target_id === activeAnchorId) || anchorList[0];
 
-  const trackerBox = nodeWithText("div", "tracker-box"), trackerHead = nodeWithText("div", "tracker-head"), targetTabs = nodeWithText("div", "tracker-tabs");
+  const trackerBox = node("div", "", "tracker-box"), trackerHead = node("div", "", "tracker-head"), targetTabs = node("div", "", "tracker-tabs");
   for (const anc of anchorList) {
     const isCurrent = anc.target_id === activeAnchor.target_id;
-    const tab = nodeWithText("ui-button", "", anc.kind === "omx_ai" ? `🦾 ${anc.target_id} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
+    const tab = node("ui-button", anc.kind === "omx_ai" ? `🦾 ${anc.target_id} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
     tab.setAttribute("kind", "toggle"); tab.type = "button"; tab.setAttribute("aria-pressed", isCurrent ? "true" : "false");
     tab.addEventListener("click", scope.guard(() => {
       view.focusAnchorId = anc.target_id;
@@ -482,7 +483,7 @@ export function buildQuickControlPanel({
 
   const frontOn = activeAnchor.kind === "pinky" && frontCamera?.robotId() === robot.robot_id;
   if (!frontOn && frontCamera?.robotId() === robot.robot_id) frontCamera.stop();
-  const roiRow = nodeWithText("div", "roi-row"), roiImg = document.createElement("img");
+  const roiRow = node("div", "", "roi-row"), roiImg = document.createElement("img");
   roiImg.id = "anchor-roi-img"; roiImg.className = "anchor-roi-img"; roiImg.alt = `${activeAnchor.target_id} 확대 헤드 추적 영상`;
   const existingUrl = roiObjectUrls.get(activeAnchor.target_id);
   if (existingUrl) roiImg.src = existingUrl;
@@ -494,16 +495,16 @@ export function buildQuickControlPanel({
   liveCellImg.loading = "lazy";
   // No Vision lease until the person picks a camera for this target (selecting a robot only inspects).
   if (view.trackerCamByTarget[activeAnchor.target_id]) cellFrames?.bind(liveCellImg, chosenCam);
-  const roiMeta = nodeWithText("div", "roi-meta"), statusText = nodeWithText("p", "hint roi-status-text");
+  const roiMeta = node("div", "", "roi-meta"), statusText = node("p", "", "hint roi-status-text");
   statusText.id = "anchor-roi-status";
   const deg = typeof activeAnchor.head_yaw === "number" ? `${Math.round((activeAnchor.head_yaw * 180) / Math.PI)}°` : "—";
   statusText.textContent = `${activeAnchor.target_id} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
-  const descText = nodeWithText("small", "hint roi-sub-text", activeAnchor.kind === "omx_ai"
+  const descText = node("small", activeAnchor.kind === "omx_ai"
     ? `CELL-A 관절(${activeAnchor.joints_summary || "6축 정상"}) + 실시간 ${chosenCam.label} 카메라 연동`
-    : `천장 카메라 3x 추적 + 실시간 ${chosenCam.label} 카메라 연동`);
-  const lensRow = nodeWithText("div", "tracker-tabs");
+    : `천장 카메라 3x 추적 + 실시간 ${chosenCam.label} 카메라 연동`, "hint roi-sub-text");
+  const lensRow = node("div", "", "tracker-tabs");
   for (const cv of camViewsForAnchor) {
-    const lBtn = nodeWithText("ui-button", "", `📷 ${cv.label}`);
+    const lBtn = node("ui-button", `📷 ${cv.label}`);
     lBtn.setAttribute("kind", cv.id === chosenCam.id ? "primary" : "quiet");
     lBtn.setAttribute("data-work-read", "");
     lBtn.type = "button";
@@ -518,14 +519,14 @@ export function buildQuickControlPanel({
     lensRow.appendChild(lBtn);
   }
   if (frontCamera && activeAnchor.kind === "pinky") {
-    const frontBtn = nodeWithText("ui-button", "", "📷 전면 카메라");
+    const frontBtn = node("ui-button", "📷 전면 카메라");
     frontBtn.setAttribute("kind", "toggle"); frontBtn.setAttribute("aria-pressed", frontOn ? "true" : "false");
     frontBtn.setAttribute("data-work-read", ""); frontBtn.type = "button";
-    if (!robot.online && !frontOn) { frontBtn.disabled = true; frontBtn.setAttribute("reason", "연결 끊김"); }
+    if (!robot.online && !frontOn) setOffBy(frontBtn, "연결 끊김");
     frontBtn.addEventListener("click", scope.guard(() => { frontCamera.toggle(robot.robot_id); render(); }));
     lensRow.appendChild(frontBtn);
   }
-  const openFullInspectorBtn = nodeWithText("ui-button", "", "🔍 우측 인스펙터 열기");
+  const openFullInspectorBtn = node("ui-button", "🔍 우측 인스펙터 열기");
   openFullInspectorBtn.setAttribute("kind", "quiet");
   openFullInspectorBtn.setAttribute("data-work-read", "");
   openFullInspectorBtn.type = "button";

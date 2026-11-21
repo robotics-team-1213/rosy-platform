@@ -1,6 +1,7 @@
 // D-540 5 · D-539: "배경 다시 학습"은 설치·보정 `카메라 설치·보정` 작업의 일이다(관제 문서에는 없다).
 // Vision 은 이 학습만 저장해 재시작 뒤에도 쓴다(D-539 1). D-600: 로봇은 그대로 둔다 — Fleet 이 아는
 // 로봇 자리는 배우지 않고, 로봇이 비킨 뒤 채운다. 위치를 모르는 로봇은 응답의 unlocated 로 알린다.
+import { isOperator } from "/console/assets/authorization.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
 const WARNING = "배경을 다시 학습합니다(약 10초). 로봇은 매트 위에 그대로 두어도 됩니다 — Fleet이 위치를 아는 "
@@ -34,10 +35,10 @@ export function createTrackingRelearn({ scope, el, call, auth, confirm }) {
   }
 
   scope.listen(button, "click", async () => {
-    if (busy || auth.locked || auth.role !== "operator" || !sources.length) return;
+    if (busy || auth.locked || !isOperator(auth.role) || !sources.length) return;
     const life = scope.capture(), selected = [...sources];
     if (!await confirm({ message: WARNING, action: "다시 학습", opener: button, signal: life.signal })
-      || !life.current() || auth.locked || auth.role !== "operator") return;
+      || !life.current() || auth.locked || !isOperator(auth.role)) return;
     busy = true;
     try {
       const unlocated = new Set();

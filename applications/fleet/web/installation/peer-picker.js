@@ -1,6 +1,7 @@
 // D-452: catalogue metadata selects a known owner, never an advertised URL.
+import { setOffBy } from "/common/cause-line.js";
 import {createPollGate} from '/console/assets/poll-gate.js';
-export const PEER_ROLES = {robot: '로봇', fleet: '사이트 관제', 'overhead-camera': '관제 카메라',
+const PEER_ROLES = {robot: '로봇', fleet: '사이트 관제', 'overhead-camera': '관제 카메라',
   dock: '도킹 장치', signal: '신호기', 'model-host': '모델 호스트', pilot: 'Pilot 앱', cam: 'Cam 앱'};
 
 export function peerOwnerAction(peer, {robots = [], sources = []} = {}) {
@@ -82,16 +83,14 @@ export function createPeerPicker({scope, el, call, isLocked, isActive, sources, 
     snapshot = null; robots = []; pending = null;
     gate.reset();
     message('접속 후 장비 목록을 확인하세요.', 'neutral', '접속 필요');
-    retry.removeAttribute('disabled');
-    retry.removeAttribute('reason');
+    setOffBy(retry, '');
   }
 
   async function refresh() {
     const life = scope.capture(); life.check();
     if (isLocked() || !isActive() || pending || !gate.due()) return;
     const work = {}; pending = work;
-    retry.setAttribute('reason', '장비 목록을 확인하는 동안 기다려 주세요.');
-    retry.setAttribute('disabled', '');
+    setOffBy(retry, '장비 목록을 확인하는 동안 기다려 주세요.');
     if (!snapshot) message('장비 목록을 확인하고 있습니다.', 'neutral', '불러오는 중');
     try {
       const [catalogue, ownerState] = await Promise.allSettled([
@@ -114,7 +113,7 @@ export function createPeerPicker({scope, el, call, isLocked, isActive, sources, 
         error.status === 401 || isLocked() ? '접속 필요' : absent ? '검색 미설정' : '목록 확인 실패');
     } finally {
       if (life.current() && pending === work) {
-        pending = null; retry.removeAttribute('disabled'); retry.removeAttribute('reason');
+        pending = null; setOffBy(retry, '');
       }
     }
   }

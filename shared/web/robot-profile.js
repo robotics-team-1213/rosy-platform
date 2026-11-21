@@ -23,7 +23,7 @@
  * A value is never a constant: a missing one is EVIDENCE_LABEL.unavailable (valueText), a stale one carries its age.
  */
 import {valueText} from "./value-text.js";
-import {EVIDENCE_LABEL} from "./core_ui_logic.js";
+import {EVIDENCE_LABEL, evidenceAgeText} from "./core_ui_logic.js";
 
 export const ROBOT_KIND_LABEL = Object.freeze({arm: "로봇암", mobile: "이동로봇"});
 const EVIDENCE_STATES = ["fresh", "delayed", "disconnected", "unavailable"];
@@ -38,7 +38,7 @@ function linkOf(source, staleAfterS) {
     else if (source.online === true) state = "fresh";
     else state = "unavailable";
   }
-  const text = state === "delayed" && age !== undefined ? `${EVIDENCE_LABEL.delayed} · ${Math.round(age)}초 전` : EVIDENCE_LABEL[state];
+  const text = state === "delayed" && age !== undefined ? `${EVIDENCE_LABEL.delayed}${evidenceAgeText(Math.round(age))}` : EVIDENCE_LABEL[state];
   return {state, text, ageS: age};
 }
 
@@ -66,7 +66,7 @@ function powerOf(source, kind, link) {
   const heat = readValue(finite(servo.temperatureC) ? servo.temperatureC : null, bare, {unit: " °C", digits: 0});
   const known = [current, heat].filter(part => part.state !== "unavailable");
   // torque is a plain fact, not a verdict: off is calm text, the arm just is not holding
-  const text = known.length ? [torqueText, ...(current.state === "unavailable" ? [] : [`전류 ${current.text}`]), ...(heat.state === "unavailable" ? [] : [`온도 ${heat.text}`])].join(" · ") + (link.state === "delayed" && link.ageS !== undefined ? ` · ${Math.round(link.ageS)}초 전` : "") : torqueText;
+  const text = known.length ? [torqueText, ...(current.state === "unavailable" ? [] : [`전류 ${current.text}`]), ...(heat.state === "unavailable" ? [] : [`온도 ${heat.text}`])].join(" · ") + (link.state === "delayed" && link.ageS !== undefined ? evidenceAgeText(Math.round(link.ageS)) : "") : torqueText;
   return {text, state: known.some(part => part.state === "delayed") ? "delayed" : known.length ? "fresh" : "unavailable", charging: null, torque};
 }
 

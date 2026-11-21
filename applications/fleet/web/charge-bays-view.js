@@ -1,4 +1,5 @@
 // D-941 5/7: the charge-bay plan remains display-only; task buttons use pipeline APIs.
+import { setOffBy } from "/common/cause-line.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
@@ -7,13 +8,12 @@ export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from 
 
 /** Choices that act on a robot need the server's occupant; the console never substitutes one. */
 // The human-safety gate is cell-wide and must never be disabled for want of a robot.
-export const needsRobot = (choice) => Boolean(choice.visionCheckCell || choice.cableGuardToggle
+const needsRobot = (choice) => Boolean(choice.visionCheckCell || choice.cableGuardToggle
   || choice.zoneId || choice.pinkyAction);
 
 function markNoRobot(button, choice, card) {
   if (!needsRobot(choice) || card.robot_id) return;
-  button.setAttribute("disabled", "");
-  button.setAttribute("reason", "대상 로봇 없음");
+  setOffBy(button, "대상 로봇 없음");
 }
 
 export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null }) {
@@ -71,8 +71,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         eligible: () => !auth.locked, request: () => executeChoice(choice, card, button, true)});
     }
     const origLabel = button.textContent;
-    button.setAttribute("reason", "요청 처리 중");
-    button.setAttribute("disabled", "");
+    setOffBy(button, "요청 처리 중");
     button.textContent = `${origLabel} (처리 중…)`;
     try {
       if (choice.cancelTaskId) {
@@ -129,8 +128,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       hint.hidden = false;
     } finally {
       button.textContent = origLabel;
-      button.removeAttribute("disabled");
-      button.removeAttribute("reason");
+      setOffBy(button, "");
     }
   }
 
@@ -279,8 +277,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     runCustomBtn.textContent = `▶ ${targetArm} 맞춤 실행`;
     runCustomBtn.addEventListener("click", async () => {
       if (auth.locked || runCustomBtn.hasAttribute("disabled")) return;
-      runCustomBtn.setAttribute("reason", "요청 처리 중");
-      runCustomBtn.setAttribute("disabled", "");
+      setOffBy(runCustomBtn, "요청 처리 중");
       const orig = runCustomBtn.textContent;
       runCustomBtn.textContent = "등록 중…";
       try {
@@ -301,8 +298,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         hint.hidden = false;
       } finally {
         runCustomBtn.textContent = orig;
-        runCustomBtn.removeAttribute("disabled");
-        runCustomBtn.removeAttribute("reason");
+        setOffBy(runCustomBtn, "");
       }
     });
     quickDispatchBar.append(tierSel, dispSel, runCustomBtn);

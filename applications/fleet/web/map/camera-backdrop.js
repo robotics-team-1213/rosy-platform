@@ -1,6 +1,8 @@
 // D-513 7 / D-515 카메라 그림 경로 (map-view.js 에서 분리). 실영상에 맞는 보정 고르기, 위에서 본
 // 그림 펴기, 크게 보기·썸네일 회전, Vision 프레임 연결. 지도 그리기는 map-view.js 가 가지고
 // draw hook 과 toPx 투영을 넘긴다.
+import { setOffBy } from "/common/cause-line.js";
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 
 import { siteBounds, fitTransform, project } from "./site-layer.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
@@ -24,7 +26,7 @@ export function staleStamp(capturedAtMs, nowMs, stale = false) {
   const time = [clock.getHours(), clock.getMinutes(), clock.getSeconds()]
     .map((part) => String(part).padStart(2, "0")).join(":");
   const ageS = Number.isFinite(nowMs) ? Math.max(0, Math.round((nowMs - capturedAtMs) / 1000)) : 0;
-  return `카메라 ${time}${stale ? ` · ${ageS}초 전` : ""}`;
+  return `카메라 ${time}${stale ? evidenceAgeText(ageS) : ""}`;
 }
 
 export function cameraMapCalibration(frame, calibrations, siteMap) {
@@ -176,8 +178,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     const setLive = (url) => {
       birdseye.hidden = !url;
       if (url) birdseye.src = url;
-      toggle.disabled = !url;
-      if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
+      setOffBy(toggle, url ? "" : "영상 대기");
     };
     const showFrame = () => setLive(lastFrame?.url);
     const setMode = (value) => {
