@@ -225,6 +225,23 @@ jobs:
           fc-list | grep -qi 'noto.*cjk'
           python3 -c 'from playwright.sync_api import sync_playwright as p; pw = p().start(); pw.chromium.launch().close(); pw.stop()'
 
+      - name: Font diagnostic (temporary)
+        if: contains(toJSON(matrix.invocations), 'ROSY_RUN_BROWSER_TESTS=1')
+        run: |
+          grep PRETTY /etc/os-release; fc-match sans-serif; fc-match 'Noto Sans KR'; fc-match system-ui; fc-list | wc -l
+          fc-list : family | sed 's/,.*//' | sort -u | wc -l; fc-list : family | sed 's/,.*//' | sort -u | grep -iE 'liberation|noto sans( cjk|$)|dejavu|unifont|emoji|open sans|lato|ubuntu' | tr '\n' ';'; echo
+          python3 - <<'PY'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              b = p.chromium.launch(); print("chromium", b.version)
+              pg = b.new_page()
+              pg.set_content("<body style='font-family:sans-serif;font-size:14px'><button id=b>Stop \uc815\uc9c0</button></body>")
+              c = pg.context.new_cdp_session(pg); c.send("DOM.enable"); c.send("CSS.enable")
+              n = c.send("DOM.querySelector", {"nodeId": c.send("DOM.getDocument")["root"]["nodeId"], "selector": "#b"})["nodeId"]
+              print("platformfonts", [(f["familyName"], f["glyphCount"]) for f in c.send("CSS.getPlatformFontsForNode", {"nodeId": n})["fonts"]])
+              print("buttonwidth", pg.eval_on_selector("#b", "e=>e.getBoundingClientRect().width")); b.close()
+          PY
+
       - name: Install Pinky raw verification tools
         if: contains(toJSON(matrix.invocations), 'learning/curation/pinky') || contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
