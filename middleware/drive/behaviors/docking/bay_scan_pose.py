@@ -48,6 +48,19 @@ def _points(points: Sequence[tuple[float, float]]):
     return arr
 
 
+class _Brute:
+    """Same lookup as _Field without the grid: for the consecutive-scan matches of a turn (the reference changes every time, a grid
+    build would cost 0.7 s of the 3 s watch)."""
+
+    def __init__(self, ref):
+        self.ref = ref
+
+    def lookup(self, moved):
+        d2 = ((moved[:, None, :] - self.ref[None, :, :]) ** 2).sum(-1)
+        j = d2.argmin(1)
+        return j, d2[np.arange(len(moved)), j]
+
+
 class _Field:
     """The reference as a 1 cm grid of nearest-reference-point indices: one lookup per live point per iteration instead of
     a points x points distance matrix (the Pi's CORE main thread is busy; this keeps the match to a few hundred ms)."""
@@ -96,6 +109,75 @@ def _icp(cur, field, x, y, th, iters=25):
     moved = cur @ np.array([[c, s], [-s, c]]) + [x, y]
     dist = np.sqrt(field.lookup(moved)[1])
     return x, y, math.atan2(math.sin(th), math.cos(th)), float(np.mean(dist < INLIER_M)), float(np.median(dist))
+
+
+def locate_near(reference, live, guess) -> Optional[BayScanPose]:
+    """The bay pose of `live` with ICP seeded at `guess` = (x, y, heading), the previous good pose: a handful of runs (the guess and the
+    alias seeds one bay pitch / 0.2 m / 0.5 rad away, for the margin) instead of 36. The CORE main thread can be 85 % busy (load 13): the
+    full search took long enough that no pose stayed fresh (y8xs C3 round)."""
+    if np is None:
+        return None
+    try:
+        ref, cur = _points(reference), _points(live)
+    except (ValueError, TypeError):
+        return None
+    if len(ref) < 40 or len(cur) < 40:
+        return None
+    key = ref.tobytes()
+    if _FIELD[0] != key:
+        _FIELD[:] = [key, _Field(ref)]
+    field = _FIELD[1]
+    gx, gy, gh = guess
+    seeds = [(gx, gy, gh), (gx, gy + 0.21, gh), (gx, gy - 0.21, gh), (gx + 0.2, gy, gh), (gx - 0.2, gy, gh), (gx, gy, gh + 0.5), (gx, gy, gh - 0.5)]
+    runs = [r for r in (_icp(cur, field, *seed) for seed in seeds) if r is not None]
+    if not runs:
+        return None
+    best = max(runs, key=lambda r: r[3])
+    others = [r[3] for r in runs
+              if math.hypot(r[0] - best[0], r[1] - best[1]) > _SAME_POSE_M
+              or abs(math.atan2(math.sin(r[2] - best[2]), math.cos(r[2] - best[2]))) > _SAME_POSE_RAD]
+    return BayScanPose(x=best[0], y=best[1], heading=best[2], inliers=best[3],
+                       margin=best[3] - (max(others) if others else 0.0), median_m=best[4])
+
+
+def locate_track(reference, live, guess) -> Optional[BayScanPose]:
+    """TRACKED pose inside the row (panel B R26): local ICP from ONE seed, the previous accepted pose carried by odometry; no alias seeds.
+    The margin (global ambiguity between self-similar bays) means nothing for a tracked pose, so it is the sentinel 1.0; the callers gate
+    on inliers, the jump from the previous pose, the lane and the rear gap instead."""
+    if np is None:
+        return None
+    try:
+        ref, cur = _points(reference), _points(live)
+    except (ValueError, TypeError):
+        return None
+    if len(ref) < 40 or len(cur) < 40:
+        return None
+    key = ref.tobytes()
+    if _FIELD[0] != key:
+        _FIELD[:] = [key, _Field(ref)]
+    run = _icp(cur, _FIELD[1], *guess)
+    if run is None:
+        return None
+    return BayScanPose(x=run[0], y=run[1], heading=run[2], inliers=run[3], margin=1.0, median_m=run[4])
+
+
+def locate_step(reference, live, guess_heading: float = 0.0) -> Optional[BayScanPose]:
+    """Pose of `live` in the frame of the previous scan `reference` (a turn step): seeds around the odometry increment, no grid; the
+    margin is not meaningful here (1.0)."""
+    if np is None:
+        return None
+    try:
+        ref, cur = _points(reference), _points(live)
+    except (ValueError, TypeError):
+        return None
+    if len(ref) < 40 or len(cur) < 40:
+        return None
+    field = _Brute(ref)
+    runs = [r for r in (_icp(cur, field, 0.0, 0.0, g, iters=20) for g in (guess_heading, 0.0, guess_heading / 2.0)) if r is not None]
+    if not runs:
+        return None
+    best = max(runs, key=lambda r: r[3])
+    return BayScanPose(x=best[0], y=best[1], heading=best[2], inliers=best[3], margin=1.0, median_m=best[4])
 
 
 def locate(reference: Sequence[tuple[float, float]], live: Sequence[tuple[float, float]]) -> Optional[BayScanPose]:

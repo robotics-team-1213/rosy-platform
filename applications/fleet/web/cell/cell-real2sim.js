@@ -13,13 +13,15 @@ import {
   runRows,
   cellTaskSummaryPairs,
   cellTaskRows,
+  dstSiteOptions,
 } from './cell-real2sim-specs.js';
 import {createCellActions} from './cell-real2sim-actions.js';
 import {createCellViews} from './cell-real2sim-views.js';
 
 export * from './cell-real2sim-specs.js';
 
-export function createReal2SimPipeline({request, $, isOperator = () => false, cellFrames = null}) {
+// namedReason: '' when a named operator is signed in, else why moving controls stay off (shared authorization texts).
+export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => '운영자 권한이 필요합니다', cellFrames = null}) {
   const status = $('real2sim-status');
   let generation = 0;
   const state = {
@@ -36,6 +38,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, ce
     $,
     state,
     cellFrames,
+    namedReason,
     bump: () => ++generation,
     gen: () => generation,
     selectInspectorTarget: (...args) => selectInspectorTarget(...args),
@@ -245,8 +248,17 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, ce
   }
 
 
+  function renderDstOptions() {
+    const cellId = $('cell-task-cell')?.value || 'cell_s';
+    const sites = dstSiteOptions(lastCellTasksBody, cellId, $('cell-task-tier')?.value || 1);
+    const current = $('cell-task-dst')?.value || '';
+    renderSelect($('cell-task-dst'), [{value: '', label: '자동 (셀·층 기본값)'}, ...sites.map(s => ({value: s, label: s}))],
+      sites.includes(current) ? current : '', item => item.label);
+  }
+
   function renderCellTasks(body) {
     lastCellTasksBody = body;
+    renderDstOptions();
     renderVisualCards(body);
     renderCameraMatrix();
     renderRightInspector(body);
@@ -354,6 +366,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, ce
   $('cell-task-refresh')?.addEventListener('click', () => { void refreshCellTasks(++generation); });
   $('cell-task-preset-run')?.addEventListener('click', () => { void runPresetTask(); });
   $('cell-task-create')?.addEventListener('click', () => { void createCustomTask(); });
+  for (const id of ['cell-task-cell', 'cell-task-tier']) $(id)?.addEventListener('change', renderDstOptions);
   $('cell-vision-auto-check')?.addEventListener('click', () => { void runVisionAutoCheck($('cell-task-cell')?.value || 'cell_s'); });
   $('cell-cable-guard-toggle')?.addEventListener('click', () => { void toggleCableGuard(); });
   $('cell-live-stream-toggle')?.addEventListener('click', () => { toggleLiveStream(); });

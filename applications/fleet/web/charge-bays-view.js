@@ -136,7 +136,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
   function renderInspector(rows) {
     if (!inspector) return;
-    if (!rows?.cards?.length || !activeInspectorId) {
+    // No choice yet still shows the first cell's tabs (frames stay off until a click, framesOn).
+    if (!rows?.cards?.length) {
       inspector.replaceChildren();
       return;
     }

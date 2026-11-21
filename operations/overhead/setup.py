@@ -12,6 +12,7 @@ setup(
     ],
     install_requires=[
         "setuptools",
+        "core_common",
         "websockets>=14",
         "httpx>=0.27,<1",
         "numpy>=1.26,<3",

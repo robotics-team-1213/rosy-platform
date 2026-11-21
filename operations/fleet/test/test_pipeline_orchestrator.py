@@ -424,7 +424,8 @@ def test_three_tier_pipeline_waits_for_predecessor_completion():
     }).json()["claimed"] is True
 
 
-def test_cell_ab_tier_input_and_owner_place_tier_require_exact_integer():
+def test_cell_ab_tier_input_and_owner_place_tier_require_exact_integer(monkeypatch):
+    monkeypatch.setenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "1")  # D-1057: cell A/B claims are off unless enabled
     from tools.sim.bay_departure_sim import build_world_261026_site_map
 
     site, graph, _ = build_world_261026_site_map()

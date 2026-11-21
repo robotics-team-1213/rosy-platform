@@ -5,6 +5,12 @@
 # Usage: tools/remote/hold_gpu.sh <cores> <GB> <command...>
 set -eu
 [[ $1 =~ ^[0-9]+$ && $2 =~ ^[0-9]+$ ]] || { echo "usage: hold_gpu.sh <cores> <GB> <command...>" >&2; exit 2; }
+# 2026-11-21: the GPU has two doors that did not know each other (D-958): ~/rosy-jobs (test admission, host_probe) and
+# ~/.cache/rosy-learning/gpu.lock (learning center, gpu_tenants). A job under only one shared the GPU with the other side,
+# so take the flock first (fd 9 is inherited through exec and drops with the job), and only then show the job to tests.
+# ROSY_GPU_LOCK_WAIT seconds to wait (default 0: refuse at once, as the learning center does).
+mkdir -p ~/.cache/rosy-learning && exec 9>>~/.cache/rosy-learning/gpu.lock
+flock -w "${ROSY_GPU_LOCK_WAIT:-0}" 9 || { echo "hold_gpu: GPU busy (~/.cache/rosy-learning/gpu.lock held)" >&2; exit 3; }
 mkdir -p ~/rosy-jobs && echo "$$ gpu $1 $2" > ~/rosy-jobs/train-$$.lock
 # 2026-11-17: an early-stop probe ran CPU inference at 14 cores under an 8-core lock and pushed every test to serial;
 # children inherit the lock's core budget as their thread pool size unless the caller set one.

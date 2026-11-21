@@ -245,7 +245,8 @@ class CoreServices:
         if isinstance(evidence_cfg, dict):
             stale_after.update({str(k): float(v) for k, v in evidence_cfg.items()})
         state = StateManager(robot_id, stale_after_s=stale_after,
-                             sources_configured=runtime_mode != "core")
+                             sources_configured=runtime_mode != "core",
+                             map_generation_path=Path(waypoints_path).parent / "map_generation")
         calibration = CalibrationSessionManager(events)
         state.set_activity_provider(calibration.activity)
         registry = SourceRegistry(config.get("command_sources"))
@@ -323,6 +324,13 @@ class CoreServices:
         localization, loc_mission = wire_assist(events, lambda: identity.robot_id, nav=nav, line_follow=line_follow,
             command=command, state=state, modes=modes, swarm=swarm, docking=docking, safety=safety, traffic_policy=traffic_policy,
             mission_config=mission_config(config.get("localization_mission")))
+        if loc_mission is not None:
+            lease_halt = trip_lease.halt
+
+            def halt_with_repark(reason: str) -> None:
+                loc_mission.repark.cancel()  # D-1051: expiry or takeover also ends a re-park in flight
+                lease_halt(reason)
+            trip_lease.halt = halt_with_repark
         if str(navigation_backend or "").strip().lower() == "slam":
             from core.slam_localization import slam_localization_provider
             state.set_localization_provider(slam_localization_provider(state, state._localization_provider))

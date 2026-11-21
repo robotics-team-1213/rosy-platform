@@ -35,7 +35,7 @@ import os
 import time
 from urllib.parse import urlsplit
 
-from control.control.navigation_session import validate_options
+from core_common.navigation_options import validate_options
 from control.web_state import (
     CAM_JPG, K_ESTOP, K_GSTATE, K_PATH, K_WANDER, LOCK, MAP_PNG, RUNTIME_ID, STATE, state_json)
 

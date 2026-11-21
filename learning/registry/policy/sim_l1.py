@@ -1,6 +1,10 @@
 """D-1024 1: simulated L1 evaluation record. Sim evidence replaces only the held-out part of L1, never L2/L3 (D-911 4)."""
-import hashlib
 import math
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'contracts/learning/src'))
+from rosy.contracts.learning.digest import checkpoint_sha256  # noqa: E402
 
 TASKS = ('stack-t1', 'stack-t2', 'stack-t3')
 MIN_EPISODES = 10  # shortcut: G4-sized sample per arm; raise when the first real shadow data shows the spread
@@ -20,10 +24,7 @@ def _sha256(value):
 
 def registered_checkpoint_sha256(root, policy):
     """The runner's checkpoint digest (relative path + bytes, sorted) over the registered policy files."""
-    digest = hashlib.sha256()
-    for ref in sorted(policy['files'], key=lambda r: r['path']):
-        digest.update(ref['path'].encode() + b'\0' + (root / ref['path']).read_bytes())
-    return digest.hexdigest()
+    return checkpoint_sha256(root, [ref['path'] for ref in policy['files']])
 
 
 def _name(value, key):

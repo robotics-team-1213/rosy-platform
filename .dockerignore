@@ -2,6 +2,14 @@
 !deploy/
 !deploy/robot/pinky_pro/
 !deploy/robot/pinky_pro/**
+!deploy/robot/omx/
+!deploy/robot/omx/requirements-cell.lock
+!deploy/site/
+!deploy/site/requirements-vision.txt
+!learning/
+!learning/curation/
+!learning/curation/pinky/
+!learning/curation/pinky/requirements-raw.txt
 !src/
 !src/contracts/
 !contracts/ros_idl/

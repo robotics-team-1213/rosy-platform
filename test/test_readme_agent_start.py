@@ -46,7 +46,8 @@ def test_readme_publishes_the_shared_checkout_start_before_the_product_contract(
     assert "python test/known_failures.py" in section
     assert "$ROSY_SCRATCH\\<이름>\\run-1.txt" in section
     assert "pytest는 이 노트북에서 돌리지 않는다" in section
-    assert "git merge --ff-only <브랜치>" in section
+    assert "python tools/pr_land.py --evidence" in section and "Merge Queue" in section
+    assert "git merge --ff-only <브랜치>" not in section  # D-1055: no local-main landing
     assert "force-push는 하지 않는다" in section
     assert "rosy-land-on-main/SKILL.md" in section
     assert "AGENTS.md" in section
@@ -60,13 +61,13 @@ def test_shared_checkout_records_the_full_commands():
     assert "14개(main 포함 15개) 이상이면 만들지 않고" in section and "누가 만들었든 깨끗하고" in section
     assert "소유자 기록이 없는 것은 `--all`을 줘야 다룬다" in section
     assert "기다리지 않고 바로 지운다" in section and "명령 하나 `python tools/worktrees.py prune --apply`" in section
-    # D-790: landed worktrees wait 1 h, the two states that need a person, and the load-flaky rerun.
+    # D-790: landed worktrees wait 1 h, and the two states that need a person.
     assert "1시간" in section and "`landed-dirty`" in section and "`stale-history`" in section
-    assert "`LOAD-FLAKY`" in section and "`test/flaky_quarantine.txt`로 옮긴다" in section
     assert "git worktree remove .worktrees" not in section  # one command, not two
     assert "`prune --snapshot`" in section and "사람이나 디스패처만 돌린다" in section
     assert "--snapshot --" not in section  # no ready-to-paste snapshot command for every session
     assert "git worktree lock" in section
+    assert "브랜치를 바꾸거나(`checkout`, `switch`) 커밋하지 않는다" in section
     assert "git diff --cached --name-only" in section
     assert "git commit --only" in section
     assert "git apply --cached --unidiff-zero" in section
@@ -78,7 +79,12 @@ def test_shared_checkout_records_the_full_commands():
     assert "$ROSY_SCRATCH/<name>/run-1.txt" in section
     assert "tools/remote/remote_pytest.py" in section
     assert "python tools/harness/rosy_harness.py generate" in section
-    assert "python tools/land_async.py --tests auto" in section
+    # D-1055 PR path: queue, dequeue, merge origin/main only when DIRTY, evidence reruns, D-1067/D-1070.
+    assert "python tools/merge_queue.py dequeue <PR>" in section and "`HEADGREEN`" in section
+    assert "`DIRTY`" in section and "`BEHIND`는 손대지 않는다" in section and "증거가 다시 돈다" in section
+    assert "resolve-merge-conflicts" in section and "D-1067" in section and "D-1070" in section
+    assert "python tools/worktrees.py adopt" in section and "**폐기(D-1055).**" in section
+    assert "python tools/land_async.py --tests auto" not in section
 
 
 def test_agents_md_keeps_the_shared_checkout_safety_summary():
@@ -95,8 +101,9 @@ def test_agents_md_keeps_the_shared_checkout_safety_summary():
     assert "python tools/harness/adr_reserve.py next" in section
     assert "pytest는 이 노트북에서 돌리지 않는다" in section and "tools/remote/remote_pytest.py" in section
     assert "python test/known_failures.py" in section and "확인 못 함" in section
-    assert "착지와 푸시는 사용자가 말한 뒤에만 한다" in section
-    assert "`--ff-only`만" in section and "D-868" in section
+    assert "제출과 push는 사용자가 말한 뒤에만 한다" in section
+    assert "python tools/pr_land.py --evidence" in section and "D-1055" in section
+    assert "`BEHIND`는 그대로 둔다" in section and "`--ff-only`만" not in section
     assert "force-push는 하지 않는다" in section
     assert "D-372" in section
     assert "멈추는 신호" in section

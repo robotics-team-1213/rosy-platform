@@ -24,7 +24,10 @@ if _HERE not in sys.path:
 
 import cell_arm_lease  # noqa: E402
 from joint_tune import SerialBus as _DefaultSerialBus, no_interrupts, protect_signals, session_lock  # noqa: E402
-from record_session_helpers import compose, interrupt_on_parent_death, load_task_card, static_episodes  # noqa: E402
+from record_session_helpers import (  # noqa: E402
+    LEFT_KEYS, RUNNER_HOLD_EXIT, RUNNER_KILLED_EXIT, RUNNER_UNCONFIRMED_EXIT, RunnerHeld, RunnerUnconfirmed,
+    RunnerUnresponsive, compose, interrupt_on_parent_death,
+    load_task_card, static_episodes, wait_for_runner)
 from session_caps import load_caps, model_tuning, robot_tuning  # noqa: E402
 
 
@@ -138,10 +141,13 @@ def main(argv=None, *, _globals: dict | None = None):
         sub = attr("subprocess", _std_subprocess)
         iopd = attr("interrupt_on_parent_death", interrupt_on_parent_death)
         ni = attr("no_interrupts", no_interrupts)
+        io = Path(chunks["io"]) if chunks else None
         child = sub.Popen(
             command,
             start_new_session=True,
             preexec_fn=iopd,
+            # the runner shares the session lock: a runner left holding keeps the arm locked after this process ends
+            pass_fds=tuple(h.fileno() for h in getattr(lock, "handles", ())) if io else (),
             env={
                 **os.environ,
                 "ROSY_OMX_MONITOR_LOG": str(monitor_path),
@@ -151,15 +157,40 @@ def main(argv=None, *, _globals: dict | None = None):
             },
         )
         try:
-            return child.wait()
+            code = child.wait()
+            if io is not None and code < 0:  # the runner alone was killed by a signal (-9): no fold confirmed it
+                raise RunnerUnconfirmed({"reason": f"runner ended by signal {-code}", "exit": code,
+                                         "runner_pid": child.pid, "runner_alive": False})
+            return code
         except KeyboardInterrupt:
             with ni():
-                child.send_signal(signal.SIGINT)
+                if io is None:  # lerobot-record: no fold of its own, as before
+                    child.send_signal(signal.SIGINT)
+                    try:
+                        child.wait(timeout=10)
+                    except sub.TimeoutExpired:
+                        child.kill()
+                        child.wait()
+                    raise
                 try:
-                    child.wait(timeout=10)
-                except sub.TimeoutExpired:
+                    child.send_signal(signal.SIGINT)  # chunk_runner folds and reads it back, or holds torque ON
+                    status = io / "chunk-status.jsonl"
+                    offset = status.stat().st_size if status.exists() else 0
+                    outcome, row = attr("wait_for_runner", wait_for_runner)(child, io, offset)
+                except Exception as error:  # noqa: BLE001  no fold confirmation: never fall through to finish()
+                    alive = child.poll() is None
+                    raise RunnerUnconfirmed({"reason": f"interrupt check failed: {type(error).__name__}: {error}"[:300],
+                                             "runner_pid": child.pid, "runner_alive": alive})
+                if outcome == "hold":
+                    raise RunnerHeld({**row, "runner_pid": child.pid})
+                if outcome == "silent":  # alive, no state change, no HOLD mark: the only kill left; torque is not cut
                     child.kill()
                     child.wait()
+                    raise RunnerUnresponsive({"killed_pid": child.pid, "reason": "no chunk-status.jsonl, live.json or "
+                                              "hold.json change for RUNNER_SILENT_S after SIGINT"})
+                if row is not None and row < 0:  # killed by a signal (-9: SIGKILL) mid-fold: nothing confirmed it
+                    raise RunnerUnconfirmed({"reason": f"runner ended by signal {-row}", "exit": row,
+                                             "runner_pid": child.pid, "runner_alive": False})
             raise
 
     attr("protect_signals", protect_signals)()
@@ -232,14 +263,38 @@ def main(argv=None, *, _globals: dict | None = None):
                     motor_health_session=monitor_session,
                 )
                 Path("session.json").write_text(json.dumps(record, indent=2, default=str))
+                if record.get("runner_held"):
+                    raise SystemExit(RUNNER_HOLD_EXIT)  # the bus and arm stay the holding runner's: no incident read
+                # no confirmed fold: report the incident without a device, so no reboot (it would drop torque)
+                left = any(record.get(k) for k in LEFT_KEYS)
+                device = None if left else ports.get("follower") or ports.get(args.arm)
                 try:
-                    print(json.dumps(omx_incident.after_session(args.arm, ports.get("follower") or ports.get(args.arm)), default=str)[:2000])
+                    print(json.dumps(omx_incident.after_session(args.arm, device), default=str)[:2000])
                 except Exception as exc:
                     print(f"incident pipeline failed: {exc}")
         finally:
-            if lease_created:
+            key = next((k for k in LEFT_KEYS if record.get(k)), None)
+            if args.arm and key:  # every owner stays refused until a person runs release-hold (README)
+                cell_arm_lease.hold(args.arm, {"runner_held": "runner HOLD", "runner_killed": "runner killed",
+                                               "runner_unconfirmed": "runner fold unconfirmed"}[key],
+                                    pid=record[key].get("runner_pid") if record[key].get("runner_alive", key == "runner_held")
+                                    else None)
+            elif lease_created:
                 cell_arm_lease.release(args.arm)
             lock.close()
+            if record.get("runner_held"):
+                print("RUNNER HOLD: chunk_runner holds the arm with torque ON (interrupt fold failed); lease and lock "
+                      "stay with it. A person supports the arm, then kill -USR2 the runner; the session caps stay "
+                      "written until restored. "
+                      f"Report: {json.dumps(record['runner_held'], default=str)[:1000]}", file=sys.stderr, flush=True)
+            elif key:
+                print(f"{key.upper()}: the fold is unconfirmed and torque was NOT cut (readback "
+                      f"{record.get('torque_readback')}; {record[key].get('reason')}). A person supports the arm before "
+                      "any torque OFF; the lease stays held.", file=sys.stderr, flush=True)
+    if record.get("runner_killed"):
+        raise SystemExit(RUNNER_KILLED_EXIT)
+    if record.get("runner_unconfirmed"):
+        raise SystemExit(RUNNER_UNCONFIRMED_EXIT)
     if not record.get("safe_end"):
         raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")
     raise SystemExit(record.get("exit_code") or 0)

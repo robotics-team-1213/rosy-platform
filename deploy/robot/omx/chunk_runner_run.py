@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 """The chunk Runner (`chunk_runner_run.py`, split of `chunk_runner.py`, D-766 2).
 
-Single Responsibility:
-  - Real-time 30 Hz control loop (`Runner.tick`, `Runner.run`): adaptive pacing,
-    `TemporalChunkEnsembler` jitter damping, and contact/overload/push guards.
-  - Judge command parsing (`chunk_runner_commands.py`) and chunk settlement / idle auto-park
-    (`chunk_runner_settle.py`) are delegated to dedicated modules.
+30 Hz control, adaptive pacing, jitter damping and contact/overload/push guards.
 """
 from __future__ import annotations
 
@@ -34,6 +30,8 @@ from chunk_runner_guards import (  # noqa: E402, F401
     human_hold_overload, read_motor_health,
 )
 from chunk_runner_trace import trace_receipt  # noqa: E402
+from chunk_policy_playback import finish_tick, tick_ready  # noqa: E402
+from chunk_runner_loop import run  # noqa: E402
 from chunk_runner_settle import (  # noqa: E402, F401
     IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S,
     check_chunk_settled, check_runner_idle, tick_or_report, wait_aligned_before_start,
@@ -49,7 +47,6 @@ HEALTH_PERIOD_S = 1.0
 CONTACT_CHUNKS = runner_speed.CONTACT_CHUNKS
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
 _BODY_NAMES = tuple(NAMES[:5])
-
 _CR_DICT_LIST: list[dict] = []
 
 
@@ -74,6 +71,7 @@ class Runner:
         self.target, self.queue, self.chunk, self.settle_since = None, [], None, None
         self.far_since, self.last_grip, self.last_body, self.pending = None, None, None, []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
+        self.policy_playback = None
         self.human_hold_latched = self.torque_hold_commanded = self._human_hold_ack_pending = False
         self.played, self.retreat_frames, self.jog_path, self.contact_ticks, self.contact_start = [], [], [], 0, None
         self.lag, self.paced, self.paced_ticks, self.pace_floor, self.pace_last = 0.0, 0, 0, 0.0, None
@@ -155,6 +153,8 @@ class Runner:
         return [*self.target[:3], self.target[3] + self.pitch_hold, *self.target[4:]] if self.pitch_hold else self.target
 
     def tick(self) -> None:
+        play = self.policy_playback if self.chunk == "policy" else None
+        ready = bool(self.queue) and (play is None or tick_ready(self, play))
         pace_lag, pace_rise = (
             prm.get(self.params, "runner.pace_lag", _cr_attr("PACE_LAG", PACE_LAG)),
             prm.get(self.params, "runner.pace_rise", _cr_attr("PACE_RISE", PACE_RISE)),
@@ -163,24 +163,25 @@ class Runner:
             self.pace_floor = 0.0
         shrinking = self.pace_last is None or self.lag < self.pace_last - 0.01
         if (
-            self.queue
+            ready
             and self.lag > max(pace_lag, self.pace_floor + pace_rise)
             and shrinking
             and self.paced < prm.get(self.params, "runner.pace_max_s", PACE_MAX_S) * self.fps
         ):
             self.paced, self.paced_ticks, self.pace_last = self.paced + 1, self.paced_ticks + 1, self.lag
-        elif self.queue:
+        elif ready:
             if self.pace_last is not None:
                 self.pace_floor = max(self.pace_floor, self.lag)
+            queued = len(self.queue)
             raw_target = runner_speed.take(self)
-            if self.jitter.get("shaking") or (self.pace_last is not None and self.queue):
+            if play is None and (self.jitter.get("shaking") or (self.pace_last is not None and self.queue)):
                 if self.jitter.get("shaking") and self.queue:
                     self._damp_cooldown = 3
                 self.target = joint_jitter.damp_step(
                     self.ensembler, self.target or raw_target, raw_target, self.queue[:4],
                 )
                 self.damped_ticks += 1
-            elif self._damp_cooldown > 0 and self.queue:
+            elif play is None and self._damp_cooldown > 0 and self.queue:
                 self._damp_cooldown -= 1
                 self.target = joint_jitter.blend_to_raw(
                     self.ensembler, self.target, raw_target, self._damp_cooldown,
@@ -193,6 +194,8 @@ class Runner:
             self.paced, self.pace_last = 0, None
             if self.chunk is not None:
                 self.played.append(list(self.target))
+            if play:
+                play.sent(self.clock(), consumed=len(self.queue) < queued)
         self.trend = [] if self.chunk is None and not self.jog_path else self.trend
         vertical = self.chunk is not None and self.chunk.startswith(joint_jitter.SWAY_CHUNKS) and len(self.target) == 6
         sent = self.robot.send_action(dict(zip(NAMES, self._pitch_held(vertical and self.chunk.startswith("descend") and "lift" not in self.chunk))))
@@ -338,54 +341,15 @@ class Runner:
                 raise RuntimeError(f"following error {loaded:.1f} for {FOLLOW_STOP_S} s: blocked or colliding")
         else:
             self.far_since = None
-        check_chunk_settled(self, present, error, now, _cr_attr)
+        if play and self.chunk == "policy":
+            if play.times:
+                finish_tick(self, play, present, error, SETTLE_TOL)
+        else:
+            check_chunk_settled(self, present, error, now, _cr_attr)
         human_hold_ack(self, present)
 
     def idle(self) -> bool:
         """Fold home, then end the session (True), when no command has come for a while."""
-        return not self.human_hold_latched and check_runner_idle(self, _cr_attr)
+        return not self.human_hold_latched and not getattr(self, "signals", None) and check_runner_idle(self, _cr_attr)
 
-    def run(self, lines) -> None:
-        """`lines()` returns the commands that arrived since the last call."""
-        self.target = self.present()
-        period = 1.0 / self.fps
-        if not wait_aligned_before_start(self, lines, period):
-            return
-        self.last_input = self.clock()
-        while True:
-            started = self.clock()
-            arrived = lines()
-            if arrived:
-                self.last_input, self.idle_parks = started, 0
-            self.pending += arrived
-            if "human-hold" in self.pending:
-                self.pending.clear()  # preempt even a queued stop or park
-                self.command("human-hold")
-            while (
-                len(self.pending) > 1
-                and self.pending[0].strip().split()[:1] in (["state"], ["episode"])
-                and self.pending[1].strip().split()[:1] != ["state"]
-            ):
-                if not self.command(self.pending.pop(0)):
-                    return
-            if self.pending and not getattr(self, "_stop_after_park", None) and not self.command(self.pending.pop(0)):
-                return
-            tick_or_report(self, f"run {self.chunk}" if self.chunk else "tick")
-            if getattr(self, "_stopped", False) or self.idle():
-                return
-            if self.live and self.ticks % max(1, self.fps // 10) == 0:
-                self.live(
-                    {
-                        "t": round(time.time(), 3),
-                        "state": [round(v, 2) for v in (getattr(self, "last_present", None) or self.present())],
-                        "target": [round(v, 2) for v in self.target],
-                        "chunk": self.chunk,
-                        "lag": round(self.lag, 2),
-                        "fault": self.fault,
-                        "human_hold_latched": self.human_hold_latched,
-                        "torque_hold_commanded": self.torque_hold_commanded,
-                        "health": self.health,
-                        **({"jitter": self.jitter} if self.jitter["shaking"] else {}),
-                    }
-                )
-            self.sleep(max(0.0, period - (self.clock() - started)))
+    run = run

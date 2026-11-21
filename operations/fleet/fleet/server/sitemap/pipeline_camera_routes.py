@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
+import os
 import time
 from fastapi import HTTPException, Request
 from fleet.charge_bays import ChargeBays, bays_from_map
@@ -54,6 +56,14 @@ def _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis):
                     pass
 
 
+# Refusals the console explains as missing evidence or a held cell; malformed requests leave the ledger as it was.
+RECORDED_REFUSALS = frozenset({
+    "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "OMX_OWNER_EVIDENCE_UNAVAILABLE", "OMX_OWNER_EVIDENCE_MISMATCH",
+    "UNVERIFIED_CELL_COMPLETION", "OWNER_PRINCIPAL_NOT_REGISTERED", "HUMAN_HOLD_ACTIVE",
+    "CELL_BUSY_OR_HELD", "PREVIOUS_TIER_NOT_VERIFIED", "CELL_AB_EVIDENCE_NOT_ENABLED", "BED_CONFIRMATION_INVALID",
+})
+
+
 def install_cameras_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
     operator_guard = ctx.operator_guard
@@ -65,6 +75,32 @@ def install_cameras_routes(app, ctx) -> None:
     _ready_amr = ctx._ready_amr
     omx_evidence_fn = ctx.omx_evidence_fn
     active_map = ctx.active_map
+
+    # Last claim/complete refusal per task, for the console (GET /cell-tasks merges it into the row). Kept beside the
+    # ledger, not in it: a refused claim must leave the ledger file as it was.
+    refusals = app.state.cell_task_refusals = getattr(app.state, "cell_task_refusals", None) or {}
+
+    def _records_refusal(op):
+        """Remember the route's last evidence refusal for its task; the answer or error passes through as it is."""
+        def wrap(endpoint):
+            @functools.wraps(endpoint)
+            async def route(**kwargs):
+                try:
+                    result = await endpoint(**kwargs)
+                except HTTPException as exc:
+                    code = exc.detail.get("code") if isinstance(exc.detail, dict) else None
+                    if code in RECORDED_REFUSALS and kwargs.get("task_id") in app.state.omx_cell_tasks:
+                        refusals[kwargs["task_id"]] = {**exc.detail, "op": op, "at": round(time.time(), 3)}
+                    raise
+                task_id = (result.get("task") or {}).get("task_id") if op == "claim" else kwargs.get("task_id")
+                if op == "claim" and result.get("claimed") is False and result.get("reason") in RECORDED_REFUSALS:
+                    refusals[task_id] = {"code": result["reason"], "op": op, "at": round(time.time(), 3)}
+                elif op == "complete" or result.get("claimed") is True:
+                    refusals.pop(task_id, None)
+                return result
+            return route
+        return wrap
+
     # D-136: 이 모듈은 카메라 프레임을 서빙하지 않는다. 셀 카메라 미리보기는
     # POST /api/fleet/vision/lease -> Vision frame_path로만 얻는다(test_no_video_relay).
 
@@ -155,6 +191,7 @@ def install_cameras_routes(app, ctx) -> None:
         return {"ok": True, "cleared_arms": arms, "note": note, "arm_holds": app.state.arm_holds}
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=proposer_guard)
+    @_records_refusal("claim")
     async def claim_cell_task(request: Request):
         if app.state._pipeline_ledger_fault:
             raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
@@ -171,6 +208,13 @@ def install_cameras_routes(app, ctx) -> None:
         if not candidates:
             return {"claimed": False, "task": None}
         task = candidates[0]
+        # D-1057: the claiming principal must be a registered owner of this cell, or a result could never be accepted and the
+        # task would stay RUNNING. Refused before the ledger changes. Bare apps without authentication (no principal) skip it.
+        from fleet.server.sitemap.pipeline_evidence import cell_owner_principals, owner_principal_refusal
+
+        if ((getattr(request.state, "site_principal", None) is not None or cell_owner_principals(cell_id))
+                and owner_principal_refusal(request, task) is not None):
+            return {"claimed": False, "task": task, "reason": "OWNER_PRINCIPAL_NOT_REGISTERED"}
         if type(task.get("tier")) is not int or task["tier"] not in (1, 2, 3):
             return {"claimed": False, "task": task, "reason": "INVALID_CELL_TIER"}
         predecessor = task.get("depends_on")
@@ -181,6 +225,9 @@ def install_cameras_routes(app, ctx) -> None:
         cell_state = app.state.omx_cell_states.get(cell_id) or {}
         if active_task is not None or cell_state.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD") or cell_state.get("amr_motion_inhibited"):
             return {"claimed": False, "task": task, "reason": "CELL_BUSY_OR_HELD"}
+        # D-1057: cell A/B release stays off until the depth acceptance; refused here, before anything in the ledger changes.
+        if cell_id == "cell_ab" and os.environ.get("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
+            return {"claimed": False, "task": task, "reason": "CELL_AB_EVIDENCE_NOT_ENABLED"}
         amr = _ready_amr(task)
         if amr is None:
             return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
@@ -200,7 +247,14 @@ def install_cameras_routes(app, ctx) -> None:
                                         map_version=getattr(active[2], "version", None))
         if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
             return {"claimed": False, "task": task, "gate": res["gate"]}
+        from fleet.server.sitemap.pipeline_evidence import bind_bed, take_presence
+
+        # D-1057: binding the bed confirmation to the lease and going RUNNING are one step; if it lapsed meanwhile, nothing changes
+        if not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
+            return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+
+        task["presence"] = take_presence(app, task)  # D-1057/D-911: set only for a task a named operator confirmed in time
         task["status"] = "RUNNING"
         task["amr_claim_evidence"] = dict(amr)
         task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
@@ -216,10 +270,12 @@ def install_cameras_routes(app, ctx) -> None:
             "src_site": task["src_site"],
             "dst_site": task["dst_site"],
             "displaced_to": task.get("displaced_to"),
+            "presence": task["presence"],
         }
         return {"claimed": True, "task": task, "handoff": handoff, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/complete", dependencies=proposer_guard)
+    @_records_refusal("complete")
     async def complete_cell_task(task_id: str, request: Request):
         if app.state._pipeline_ledger_fault:
             raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
@@ -242,9 +298,17 @@ def install_cameras_routes(app, ctx) -> None:
         if phase == "RELEASED" and (_is_human_detected(cell_id)
                                     or (app.state.omx_cell_states.get(cell_id) or {}).get("phase") == "HUMAN_HOLD"):
             raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
+        if phase == "RELEASED":  # D-1057: only the principal that registered the owner evidence may release on it
+            stored = (getattr(app.state, "cell_owner_evidence", None) or {}).get(task_id)
+            if stored is not None and stored["principal_id"] != getattr(
+                    getattr(request.state, "site_principal", None), "principal_id", None):
+                raise HTTPException(403, detail={"code": "OWNER_PRINCIPAL_NOT_REGISTERED"})
         amr = _ready_amr(task) if phase == "RELEASED" else task.get("amr_claim_evidence")
         if phase == "RELEASED" and amr is None:
-            raise HTTPException(422, detail={"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
+            from fleet.server.sitemap.pipeline_evidence import bed_confirmation_lost
+
+            raise HTTPException(422, detail={"code": "BED_CONFIRMATION_INVALID" if bed_confirmation_lost(app, task)
+                                             else "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
         if phase == "RELEASED":
             trusted = omx_evidence_fn(task) if callable(omx_evidence_fn) else None
             if not isinstance(trusted, dict):
@@ -271,7 +335,9 @@ def install_cameras_routes(app, ctx) -> None:
                         and stage_result.get("arm_id") == task.get("arm_id")
                         and stage_result.get("task_verified") is True
                         and verification.get("verified") is True
-                        and verification.get("basis") == "predefined_side_and_top_target_zones"
+                        # D-1057 (user decision 2026-11-20): cell S has no side camera, so its top-camera zone check counts
+                        and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
+                                                          if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
                         and stop_event.get("ok") is True and stop_event.get("folded") is True)
             if cell_id == "cell_ab":
                 place = stage_result.get("place") or {}

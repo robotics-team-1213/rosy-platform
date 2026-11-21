@@ -455,6 +455,7 @@ recreation and keeps Fleet on its existing backend network.
 
 The firewall reconciles both listeners together: the existing site port keeps
 its configured LAN interfaces, while443 admits only loopback and `tailscale0`.
+The opt-in Account LAN login alias (D-1068) is a host block on the site port, not a 443 change.
 The wildcard is IPv4 only; no literal host address or public ingress is needed.
 Discovery continues advertising the primary site port. Before activation,
 install the matching reviewed verifier/updater, verify the signed assets,
@@ -546,6 +547,26 @@ and counters only; it never echoes exception messages.
    표시 이름 저장 후 새로고침해 값을 다시 읽는다. 비밀번호 변경과 기존
    세션 무효화 검사는 격리된 시험 계정으로 수행하고, 팀원의 새 비밀번호를
    시험자가 임의로 정하지 않는다. 실제 계정 검사와 격리 검사를 따로 기록한다.
+
+### LAN browser login alias (D-1068)
+
+Tailscale이 없는 같은 LAN PC에서 콘솔 로그인을 쓰려면 Account 로그인 화면만 LAN 별칭으로 연다([D-1068](../../docs/adr/D-1068-account-lan-browser-alias.md)). issuer는 tailnet 이름 하나로 그대로 두고, 토큰 `iss`·`aud` 검증도 바뀌지 않는다.
+
+- `compose.account-lan.yaml`(옵트인)은 proxy에 `Caddyfile.account-lan` 호스트 블록과 그 인증서 디렉터리만 더한다. 같은 `ROSY_SITE_HTTPS_PORT` 리스너를 쓰므로 새 포트가 없고 `site-firewall.py` 계획도 같다. LAN 443은 계속 막힌다.
+- 별칭 호스트는 로그인 화면(`/console/login`과 그 자산, `/common/*`), `connection`·`session`·`authorize` 읽기, 비밀번호 로그인과 첫 로그인 비밀번호 변경 POST만 Account로 넘긴다. 나머지는 404다. 관리 화면, `token`·`introspect`·`userinfo`·`apps`·`revoke`·`keys`, 접근 요청, 프로필, 로그아웃은 tailnet 전용이다.
+- 인증서는 site CA로 별칭 전용 leaf를 따로 발급한다. 기존 `site.crt`는 다시 발급하지 않는다(기존 leaf·CA 핀 유지).
+
+켜는 순서(R, D-1021 변경 기록을 남긴다):
+
+1. Fleet receiver의 LAN 별칭 지원(S1)과 이 overlay가 든 서명 후보를 먼저 설치한다. overlay를 켜기 전에는 동작이 같다.
+2. 인증서: `sudo sh /opt/rosy/candidate/deploy/site/account-lan-cert.sh <alias>.local`. `/etc/rosy/account-lan-tls/account-lan.{crt,key}`(디렉터리 0700, 파일 0400, UID 10001)를 쓰고 `openssl verify -x509_strict`로 검사한다. CA 키는 `/etc/rosy/site-secrets` 밖으로 나가지 않는다. 397일 안에 같은 명령으로 다시 발급하고 proxy를 재시작한다.
+3. mDNS 별칭: `sudo install -m 0644 /opt/rosy/candidate/deploy/site/rosy-mdns-alias@.service /etc/systemd/system/`, `sudo systemctl daemon-reload`, `sudo systemctl enable --now rosy-mdns-alias@<alias>.local.service`. 주소는 `ROSY_SITE_LAN_IFACE`의 첫 인터페이스에서 읽는다(`tailscale*`·`lo`면 시작하지 않는다). 손으로 설치한 옛 `rosy-mdns-alias.service`는 `disable --now` 하고 같은 템플릿의 `rosy-mdns-alias@<옛 이름>.local.service`로 바꾼다. LAN PC에서 이름이 풀리는지 확인한다.
+4. Account 관리자(tailnet `/console/accounts`)가 `rosy-fleet-site-console` 복귀 주소에 `https://<site>.local:8443/api/fleet/auth/callback`을 정확히 하나 더한다. 운영 등록부는 DB가 정본이다.
+5. `client.json`(Fleet receiver)은 **receiver 변경(S1)이 배포된 뒤에만** 고친다. 옛 receiver는 모르는 키를 거부하고 Fleet이 뜨지 않는다. 고치기 전에 백업한다.
+6. `site.env`에 `ROSY_ACCOUNT_LAN_HOST=<alias>.local`을 넣고, `ROSY_SITE_PAIRING_COMPOSE`의 `compose.account.yaml` **뒤**에 `-f /opt/rosy/candidate/deploy/site/compose.account-lan.yaml`을 붙인다(자동 갱신은 다른 순서를 거부한다). `sudo systemctl restart rosy-site-stack`.
+7. 확인(tailscale을 끈 LAN PC, site CA 신뢰): `/console/login` 200, `/api/fleet/auth/token`·`/console/accounts` 404, LAN 443 연결 실패. 실제 계정 로그인 → 콘솔 복귀 → 로그아웃은 사람이 수용한다. 30분 로그인 점검(`account_login_check.py`)은 issuer 주소로 시작하므로 LAN 경로의 증거가 아니다.
+
+끄기: `ROSY_SITE_PAIRING_COMPOSE`에서 overlay를 빼고 스택을 재시작한 뒤 `rosy-mdns-alias@<alias>.local.service`를 `disable --now` 한다. LAN PC가 site CA를 신뢰하게 하는 일은 그 PC 소유자의 몫이다.
 
 ## LAN access
 
@@ -2447,7 +2468,11 @@ python3 -I -B /root/rosy-conversation-reviewed/<release>/install_conversation_br
 그 snapshot의 validator로 평가 proof를 검사한다. `rosy-deliberation` UID의 `/api/ps`
 조회로 고정 모델 digest와 context 8192만 확인한다. inference나 GLM 호출은 하지 않는다.
 
-새 config의 만료는 평가 시각부터 최대 7일이다. 기존 상태 broker·GLM credential·billing
+새 config의 만료는 평가 시각부터 최대 7일이다. 같은 source SHA를 새로 평가해 갱신할 때는
+새 proof·receipt를 각각 proof SHA가 붙은 파일로 기존 snapshot에 추가하고, 검토한 이전
+config·broker SHA를 지정해 설치한다. 이전 증거는 보존하며 새 평가가 실패하면 기존 승인
+시각은 늘어나지 않는다. Fleet의 private 설정도 AI PC readback 뒤 같은 새 proof SHA와
+만료 시각으로 별도 갱신해야 한다. 기존 상태 broker·GLM credential·billing
 증거·최초 smoke spent marker는 보존한다. 등록되지 않은 기존 ingress 계정, 계정/그룹
 충돌, 외부 파일, 다른 공개키, source 변조는 거절한다. SSH ingress는 정확한
 `rosy-status-v1`·`rosy-conversation-v1`만 받아 각각 zero-argument UID wrapper로 전달한다.

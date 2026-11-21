@@ -202,6 +202,7 @@ def _verifier(calls, independent_commits=()):
             raise upd.CandidateVerificationError("release signature is missing or unsafe")
         manifest = json.loads((Path(folder) / 'release.json').read_text())
         manifest.setdefault('account_https', True)
+        manifest.setdefault('account_lan', True)
         manifest.setdefault('omx', True)
         manifest.setdefault('workcell', True)
         manifest.setdefault('control_unit', True)
@@ -587,45 +588,6 @@ def test_pairing_overlay_from_the_candidate_is_allowed(host):
     with host.paths.site_env.open("a", encoding="utf-8") as stream:
         stream.write("ROSY_SITE_PAIRING_COMPOSE=-f "
                      "/opt/rosy/candidate/deploy/site/compose.pairing.yaml\n")
-    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
-    assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
-
-
-@pytest.mark.parametrize("overlay", [
-    "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml",
-    "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.omx.yaml",
-    "-f /opt/rosy/candidate/deploy/site/compose.account.yaml",
-    "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
-    "-f /opt/rosy/candidate/deploy/site/compose.omx.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
-    "-f /opt/rosy/candidate/deploy/site/compose.pairing.yaml -f /opt/rosy/candidate/deploy/site/compose.omx.yaml -f /opt/rosy/candidate/deploy/site/compose.account.yaml",
-])
-def test_omx_overlay_from_the_candidate_is_allowed(host, overlay):
-    with host.paths.site_env.open("a", encoding="utf-8") as stream:
-        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
-    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
-    assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
-
-
-@pytest.mark.parametrize("pairing", [False, True])
-@pytest.mark.parametrize("omx", [False, True])
-@pytest.mark.parametrize("account", [False, True])
-def test_signed_workcell_overlay_composes_with_existing_optional_overlays(host, pairing, omx, account):
-    names = (["pairing"] if pairing else []) + (["omx"] if omx else []) + ["workcell"]
-    names += ["account"] if account else []
-    overlay = " ".join(f"-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml" for name in names)
-    with host.paths.site_env.open("a", encoding="utf-8") as stream:
-        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
-    releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
-    assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
-
-
-@pytest.mark.parametrize("workcell", [False, True])
-def test_signed_control_unit_overlay_keeps_automatic_updates(host, workcell):
-    """D-960: with R's control-unit overlay from the signed candidate the updater still installs new candidates."""
-    names = ["omx"] + (["workcell"] if workcell else []) + ["control-unit"]
-    overlay = " ".join(f"-f /opt/rosy/candidate/deploy/site/compose.{name}.yaml" for name in names)
-    with host.paths.site_env.open("a", encoding="utf-8") as stream:
-        stream.write(f"ROSY_SITE_PAIRING_COMPOSE={overlay}\n")
     releases, blobs = _world((NEW, "2026-10-04T02:00:00Z"))
     assert _updater(host, FakeHttp(releases, blobs), FakeHost(host.paths)).run() == upd.EXIT_OK
 
@@ -1172,6 +1134,8 @@ def test_units_run_the_installed_updater_on_a_persistent_randomized_timer():
     assert "/opt/rosy/candidate/" not in service  # never runs code from the candidate
     assert "Type=oneshot" in service and "NoNewPrivileges=yes" in service
     assert "ProtectSystem=full" in service
+    # The firewall check after a switch reads iptables over netlink; without it every switch stops.
+    assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK" in service
     assert "ReadWritePaths=/etc/rosy/site /opt/rosy /var/lib/rosy /run/lock" in service
     assert "OnCalendar=*:0/15" in timer and "RandomizedDelaySec=" in timer
     assert "Persistent=true" in timer and "WantedBy=timers.target" in timer

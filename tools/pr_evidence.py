@@ -14,6 +14,7 @@ After a failed attempt under load, rerun with ``--solo``: the missing invocation
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 import time
 from pathlib import Path
@@ -27,6 +28,20 @@ import land_browser  # noqa: E402
 import land_cache  # noqa: E402
 import land_checks  # noqa: E402
 import pr_land  # noqa: E402
+
+
+class _Tee:
+    """A stream that also appends what is written to a file."""
+
+    def __init__(self, stream, out):
+        self._stream, self._out = stream, out
+
+    def write(self, text):
+        self._out.write(text)
+        return self._stream.write(text)
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
 
 
 def main(argv: list[str] | None = None, repo: Path | None = None, run=None) -> int:
@@ -60,6 +75,13 @@ def main(argv: list[str] | None = None, repo: Path | None = None, run=None) -> i
     if run is None:
         import remote_pytest
         run = remote_pytest.run
+    run_lab = run
+
+    def run(*a, **k):  # the lab logs do not say why a host was skipped; placement.txt keeps remote_pytest's host and placement lines
+        with (logdir / "placement.txt").open("a", encoding="utf-8", buffering=1) as out, \
+                contextlib.redirect_stdout(_Tee(sys.stdout, out)), contextlib.redirect_stderr(_Tee(sys.stderr, out)):
+            return run_lab(*a, **k)
+
     # -rA prints the PASSED lines pr_land.passed_ids needs; the row keeps the plain argv pr_land compares (xdist_plan.tail honours -rA)
     if args.solo:  # ROSY_JOB_ALONE=1 takes the whole host (work_queue.host_alone); the recorded row keeps the plain argv
         (logdir / "solo.txt").write_text("".join(" ".join(inv) + "\n" for inv in todo), encoding="utf-8")

@@ -164,7 +164,16 @@ def test_full_registry_keeps_browser_files_after_splitting_them():
     unit_only = {"test/test_land_browser.py"}
     expected = {path for path in tracked if PurePosixPath(path).name.startswith("test_")
                 and path.endswith("_browser.py") and path not in unit_only}
-    assert not (expected - set(browser_scope.all_targets())), sorted(expected - set(browser_scope.all_targets()))
+    everything = browser_scope.all_targets()
+    assert not (expected - set(everything)), sorted(expected - set(everything))
+    # D-1066: the CI share plus the lab share is the registry, and the lab share survives pr_land's splitting.
+    import affected_browser
+    import pr_land
+    ci, lab = affected_browser.split(everything)
+    assert sorted(ci + lab) == everything
+    kept = [w for part in pr_land.split_by_ci_entry(["ROSY_RUN_BROWSER_TESTS=1", *lab])
+            for w in part if w.endswith(".py")]
+    assert sorted(set(kept)) == lab
 
 
 def test_recovery_page_and_shared_styles_select_the_offline_browser_flow():

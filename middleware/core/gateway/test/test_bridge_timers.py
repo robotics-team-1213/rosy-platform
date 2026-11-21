@@ -159,6 +159,64 @@ class RecordingNode:
                                               to_msg=lambda: None))
 
 
+@pytest.mark.parametrize("result_kind", ["valid", "wrong_frame", "bad_pose", "planner_error", "rejected"])
+def test_navigation_plan_never_opens_a_motion_generation(registered, monkeypatch, result_kind):
+    from concurrent.futures import Future
+
+    from core_features.navigation.manager import NavGoalSpec, NavigationError
+
+    def resolved(value):
+        future = Future()
+        future.set_result(value)
+        return future
+
+    bridge = registered.bridge
+    ros_bridge = sys.modules[type(bridge).__module__]
+    pose = types.SimpleNamespace(header=types.SimpleNamespace(frame_id="map"), pose=types.SimpleNamespace(
+        position=types.SimpleNamespace(x=0.5, y=0.2, z=0.0),
+        orientation=types.SimpleNamespace(x=0.0, y=0.0, z=0.0, w=1.0)))
+    path = types.SimpleNamespace(header=types.SimpleNamespace(frame_id="map"), poses=[pose])
+    if result_kind == "wrong_frame":
+        path.header.frame_id = "odom"
+    if result_kind == "bad_pose":
+        pose.pose.position.x = float("nan")
+    reply = types.SimpleNamespace(status=4, result=types.SimpleNamespace(
+        error_code=int(result_kind == "planner_error"), path=path))
+    accepted = types.SimpleNamespace(accepted=result_kind != "rejected", get_result_async=lambda: resolved(reply))
+    submitted = []
+    bridge.plan_client = types.SimpleNamespace(wait_for_server=lambda **_: True,
+        send_goal_async=lambda goal: submitted.append(goal) or resolved(accepted))
+    monkeypatch.setattr(ros_bridge.nav_goal, "pose_stamped", lambda spec, stamp: pose)
+    before = bridge.native_transport_snapshot()
+
+    if result_kind == "valid":
+        assert bridge.compute_navigation_path(NavGoalSpec(0.5, 0.2, 0.0), timeout_s=1.0) is path
+    else:
+        with pytest.raises(NavigationError) as error:
+            bridge.compute_navigation_path(NavGoalSpec(0.5, 0.2, 0.0), timeout_s=1.0)
+        assert error.value.code == "NAVIGATION_PLANNER_UNAVAILABLE"
+    assert len(submitted) == 1
+    assert submitted[0].use_start is False
+    assert bridge.native_transport_snapshot() == before
+
+
+def test_follow_path_uses_only_the_approved_path_and_native_run(registered, monkeypatch):
+    from uuid import uuid4
+
+    bridge = registered.bridge
+    controller = types.SimpleNamespace(wait_for_server=lambda **_: True)
+    bridge.path_client = controller
+    calls = []
+    monkeypatch.setattr(bridge, "_send_tracked_navigation", lambda *args: calls.append(args))
+    path, run_id = object(), uuid4()
+    bridge.send_native_path(path, run_id, correlation_id="s3-attempt")
+
+    [(client, goal, sent_run_id, correlation_id)] = calls
+    assert client is controller
+    assert goal.path is path
+    assert (sent_run_id, correlation_id) == (run_id, "s3-attempt")
+
+
 @pytest.fixture
 def registered(tmp_path, monkeypatch):
     """Build a `RosBridge` against stubbed ROS. Returns node, bridge and services."""
@@ -238,6 +296,7 @@ EXPECTED_SUBSCRIPTIONS = [
     ("robot/degraded_modules", "_on_degraded_modules", 10),
     ("scan", "_on_scan", "SENSOR"),
     ("imu_raw", "_on_imu", "SENSOR"),
+    ("joint_states", "_on_joint_states", "SENSOR"),
     ("us_sensor/range", "_on_us_range", "SENSOR"),
     ("batt_state", "_on_batt_state", 10),
     ("map", "_on_map", "LATCHED"),

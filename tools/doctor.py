@@ -85,16 +85,19 @@ def check_worktrees(repo: Path) -> list[tuple]:
 
 def check_main(repo: Path, now: float) -> list[tuple]:
     state = update_status.ref_state(repo, now, 12)
+    root = Path(_git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()).parent
+    head = worktrees.rules.wrong_head(root)  # the ff advice below is for a checkout on main only
+    found = [("WARN", f"wrong-head: the shared main checkout is on {head}, not main", worktrees.rules.WRONG_HEAD_FIX)] if head else []
     counts = _git(repo, "rev-list", "--left-right", "--count", "main...origin/main")
     if counts.returncode:
-        return [("WARN", "main: cannot compare main with origin/main", "git fetch origin")]
+        return found + [("WARN", "main: cannot compare main with origin/main", "git fetch origin")]
     ahead, behind = counts.stdout.split()
     text = f"main: {ahead} ahead, {behind} behind origin/main; last fetch {state['fetched_h']}h ago"
     if state["verdict"] != "ok":
-        return [("WARN", f"{text} ({state['problem']})", "git fetch origin")]
+        return found + [("WARN", f"{text} ({state['problem']})", "git fetch origin")]
     if behind != "0":
-        return [("WARN", text, "in the main checkout: git merge --ff-only origin/main (D-868)")]
-    return [("OK", text, None)]
+        return found + [("WARN", text, None if head else "in the main checkout: git merge --ff-only origin/main")]
+    return found + [("OK", text, None)]
 
 
 def check_queue(repo: Path, now: float) -> list[tuple]:

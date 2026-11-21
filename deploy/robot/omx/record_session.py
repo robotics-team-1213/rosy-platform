@@ -31,6 +31,8 @@ from record_session_helpers import (  # noqa: F401
     finish_pair_sessions,
     interrupt_on_parent_death,
     load_task_card,
+    LEFT_KEYS, RUNNER_HOLD_EXIT, RUNNER_KILLED_EXIT, RUNNER_SILENT_S, RUNNER_UNCONFIRMED_EXIT, RunnerHeld, RunnerLeftArm,
+    RunnerUnconfirmed, RunnerUnresponsive, runner_left_arm, wait_for_runner,
     release as _release_for,
     static_episodes,
 )
@@ -266,7 +268,7 @@ class Session:
         pairs = self.pair_sessions(config)
         for session in pairs.values():
             session._with_follower(session.check_idle)
-        if pairs.get("single") is self and not self.chunks:
+        if pairs.get("single") is self and not self.chunks and self.replay is None:
             record["leader_rebooted"] = self._with_leader(self.clear_leader_alerts)
         stopped = []
         try:
@@ -309,9 +311,13 @@ class Session:
                 record["exit_code"] = self.run_command(command)
             except KeyboardInterrupt:
                 record["interrupted"] = True
+            except RunnerLeftArm as left:  # a holding or killed runner: cut no torque, restore nothing (no fold confirmed)
+                record.update({"interrupted": True, "safe_end": False, left.key: left.args[0]})
         finally:
             with no_interrupts():
-                if pairs.get("single") is self:
+                if any(record.get(k) for k in LEFT_KEYS):
+                    runner_left_arm(self, record, FOLLOWER)
+                elif pairs.get("single") is self:
                     self.finish(record, stopped)
                 else:
                     self.finish_pairs(record, stopped, pairs)
@@ -337,13 +343,14 @@ class Session:
 
     def finish(self, record: dict, stopped: list) -> None:
         torque_ok, record["torque_after"] = self.torque_off_until_confirmed()
+        leader_unused = self.chunks is not None or self.replay is not None
         try:
             leader = self.open_bus("leader")
             try:
                 leader.motor = LEADER_GRIPPER
                 leader.cleanup_write("torque", 0)
-                if not self.chunks:
-                    # --chunks runs scripted chunk_runner.py on follower only; keep torque OFF on leader,
+                if not leader_unused:
+                    # --chunks/--replay run on follower only; keep torque OFF on leader,
                     # but don't fail safe_end or reboot over an unused sagging 3.4V leader supply.
                     self.note_fault(leader, leader=True)
                     try:
@@ -355,15 +362,15 @@ class Session:
             finally:
                 leader.close()
         except (Exception, SystemExit) as exc:
-            if isinstance(exc, SystemExit) and self.chunks is None:
+            if isinstance(exc, SystemExit) and not leader_unused:
                 raise
-            record["leader_gripper_torque_after"] = f"unused: {exc}" if self.chunks is not None else f"error: {exc}"
+            record["leader_gripper_torque_after"] = f"unused: {exc}" if leader_unused else f"error: {exc}"
         log_registers(self, "stop", FOLLOWER)
         failures = self.restore_caps()
         record["caps_restored"] = not failures or failures
         record["torque_off_confirmed"], record["hardware_faults"] = torque_ok, self.hardware_faults
         leader_ok = (record["leader_gripper_torque_after"] == 0 or
-                     (self.chunks is not None and str(record["leader_gripper_torque_after"]).startswith("unused:")))
+                     (leader_unused and str(record["leader_gripper_torque_after"]).startswith("unused:")))
         record["manual_attention_required"] = bool(self.hardware_faults) or not torque_ok or bool(failures) or not leader_ok
         for unit in reversed(stopped):
             try:

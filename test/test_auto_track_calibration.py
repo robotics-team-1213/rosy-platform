@@ -6,6 +6,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "deploy/site/rosy-auto-track-calibration"
 
@@ -422,3 +424,83 @@ def test_a_map_sync_refused_three_times_in_a_row_fails_the_run(tmp_path, monkeyp
     capsys.readouterr()
     assert codes == [0, 0, 0, 0, 0, 0, 1]  # 4 holds fill the series, then refusals 1, 2, 3
     assert json.loads(state_file.read_text(encoding="utf-8"))["map_sync_refused_runs"] == 3
+
+
+def test_pinned_places_and_edges_survive_the_traced_map():
+    # 2026-11-20 R: auto calibration put hand-moved S3 (0.745, -0.207) back on the paint (0.699, -0.251).
+    mod = _load_module()
+    current_places = [
+        {"id": "S3", "name": "S3", "x": 0.745, "y": -0.207, "kind": "stop", "pinned": True},
+        {"id": "J1", "name": "J1", "x": 0.0, "y": 0.0, "kind": "junction"},
+        {"id": "hand", "name": "hand", "x": -0.5, "y": 0.3, "kind": "park"},
+    ]
+    traced_places = [
+        {"id": "S3", "name": "S3", "x": 0.699, "y": -0.251, "kind": "stop"},
+        {"id": "J1", "name": "J1", "x": 0.01, "y": 0.0, "kind": "junction"},
+    ]
+    places = mod.merge_pinned(current_places, traced_places)
+    assert places[0] == current_places[0]
+    assert places[1] == traced_places[1]
+    assert places[2] == current_places[2]
+
+    current_edges = [{"id": "loop_right", "from": "J1", "to": "S3", "pinned": True,
+                      "polyline": [[0.0, 0.0], [0.9, -0.1], [0.745, -0.207]]}]
+    traced_edges = [
+        {"id": "loop_right", "from": "J1", "to": "S3", "polyline": [[0.01, 0.0], [0.9, -0.25], [0.699, -0.251]]},
+        {"id": "upper_east", "from": "S3", "to": "J1", "polyline": [[0.699, -0.251], [0.3, 0.2], [0.01, 0.0]]},
+    ]
+    edges = mod.snap_edge_ends(mod.merge_pinned(current_edges, traced_edges), places)
+    pinned_edge, traced_edge = edges
+    assert pinned_edge["pinned"] is True and pinned_edge["polyline"][1:] == [[0.9, -0.1], [0.745, -0.207]]
+    assert pinned_edge["polyline"][0] == [0.01, 0.0]  # its unpinned end follows the traced J1
+    assert traced_edge["polyline"] == [[0.745, -0.207], [0.3, 0.2], [0.01, 0.0]]
+
+    assert mod.unpinned_place_diff_m(current_places, traced_places) == pytest.approx(0.01)
+    assert mod.unpinned_place_diff_m(current_places[:1], traced_places) == 0.0
+
+
+def test_pinned_drift_is_reported_for_pinned_places_with_a_traced_counterpart():
+    mod = _load_module()
+    current = [
+        {"id": "S3", "x": 0.745, "y": -0.207, "pinned": True},
+        {"id": "C1", "x": 1.0, "y": 1.0, "pinned": True},  # no traced counterpart
+        {"id": "J1", "x": 0.0, "y": 0.0},  # unpinned
+    ]
+    traced = [{"id": "S3", "x": 0.699, "y": -0.251}, {"id": "J1", "x": 0.5, "y": 0.0}]
+    assert mod.pinned_drift_m(current, traced) == {"S3": pytest.approx(0.0637, abs=1e-4)}
+    assert mod.pinned_drift_m([], traced) == {}
+
+
+def test_a_pinned_stop_keeps_its_stop_zone_and_approach_through_the_merge():
+    # 2026-11-21 robot-7b named stop: a drawn zone and approach distance are a person's, like the point.
+    mod = _load_module()
+    stop = {"id": "S3", "name": "S3", "x": 0.745, "y": -0.207, "yaw": 0.0, "kind": "stop", "pinned": True,
+            "stop_zone": [[0.7, -0.25], [0.8, -0.25], [0.8, -0.15], [0.7, -0.15]], "approach_m": 0.3}
+    traced = [{"id": "S3", "name": "S3", "x": 0.699, "y": -0.251, "kind": "stop"}]
+    assert mod.merge_pinned([dict(stop)], traced) == [stop]
+
+
+def test_the_fleet_update_carries_the_pinned_merge_into_the_container(monkeypatch):
+    mod = _load_module()
+    sent = {}
+    monkeypatch.setattr(mod, "sh_json", lambda _c, _u, code: sent.setdefault("code", code) and {})
+    mod.apply_fleet_update("t", {"places": [], "edges": []}, needs_cal=False, needs_map=True)
+    compile(sent["code"], "apply", "exec")
+    assert "def merge_pinned(" in sent["code"] and "def snap_edge_ends(" in sent["code"]
+    assert 'merge_pinned(map_doc.get("places", []), solved["places"])' in sent["code"]
+
+
+def test_unpinned_place_keeps_its_yaw_and_name_only_xy_follow_the_trace():
+    mod = _load_module()
+    current = [{"id": "S1", "name": "S1 stop", "kind": "stop", "x": -0.6735, "y": -0.1411, "yaw": -1.570796}]
+    traced = [{"id": "S1", "name": "S1", "kind": "stop", "x": -0.679, "y": -0.140, "yaw": None}]
+    assert mod.merge_pinned(current, traced) == [
+        {"id": "S1", "name": "S1 stop", "kind": "stop", "x": -0.679, "y": -0.140, "yaw": -1.570796}]
+
+
+def test_unpinned_edge_keeps_its_settings_only_the_polyline_follows_the_trace():
+    mod = _load_module()
+    current = [{"id": "e", "from": "A", "to": "B", "polyline": [[0, 0], [1, 0]], "speed_cap_mps": 0.08, "width_m": 0.15}]
+    traced = [{"id": "e", "from": "A", "to": "B", "polyline": [[0, 0.01], [1, 0.01]], "speed_cap_mps": 0.15, "width_m": 0.2}]
+    assert mod.merge_pinned(current, traced) == [
+        {"id": "e", "from": "A", "to": "B", "polyline": [[0, 0.01], [1, 0.01]], "speed_cap_mps": 0.08, "width_m": 0.15}]

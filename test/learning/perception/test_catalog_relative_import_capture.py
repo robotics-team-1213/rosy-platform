@@ -51,9 +51,11 @@ def bounded_fifo_import(store, folder):
     try:
         process.start()
         sender.close()
-        process.join(timeout=5)
+        # Likely cause (unconfirmed): the forked child runs gc.collect() ~4x over the whole pytest heap, slow on a
+        # loaded runner (CI run 44819257389, PR #394 job). A truly blocked importer never exits, so 60 s still catches it.
+        process.join(timeout=60)
         if process.is_alive():
-            result = ('blocked', 'FIFO import did not refuse within 5 seconds', None)
+            result = ('blocked', 'FIFO import did not refuse within 60 seconds', None)
         elif receiver.poll():
             result = receiver.recv()
         else:

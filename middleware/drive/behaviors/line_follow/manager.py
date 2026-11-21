@@ -179,6 +179,18 @@ class LineFollowManager(
         """reason: why an open D-407 stuck closes (e.g. "estop" from the safety listener)."""
         return self.set_mode(LineFollowMode.OFF, reason=reason)
 
+    def stop_held_junction(self, *, seq: int, place_id: str, admitted) -> LineFollowStatus | None:
+        """Consume exactly the held STOP under the junction writer's lock."""
+        with self._lock:
+            pending = self._junction or {}
+            if (self._mode is LineFollowMode.OFF or self._junction_seq != seq
+                    or pending.get("place_id") != place_id or pending.get("action") != "stop"
+                    or pending.get("state") != "executing" or pending.get("held") is not True
+                    or self._status.state != "HOLD" or self._status.reason != "junction_stop"
+                    or admitted() is not True):
+                return None
+            return self.stop(reason="trip_nav2_handoff")
+
     def observe(self, observation: LineObservation, received_at: Optional[float] = None,
                 source_now: Optional[float] = None) -> bool:
         now = self._clock() if received_at is None else received_at

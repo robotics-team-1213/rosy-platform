@@ -95,6 +95,10 @@ app_subtrees:
   learning/envs/isaac/cell_model_inventory.yaml: omx-cell
   learning/envs/isaac/cell_physics.yaml: omx-cell
   tools/incident_*: site-fleet  # import rosy.decision (Fleet judgment)
+  tools/web_visible_roles.py: pinky  # boots only the Pinky CORE roots (middleware/core) over core contracts
+  tools/capture_surface_round.py: pinky  # same CORE-only boot; imports web_visible_roles
+  tools/drivable_branch_replay.py: vision  # only middleware/perception + integrations/perception (and core foundation)
+  tools/development_link.py: site-fleet  # sys.path = operations/fleet + core foundation; issues Fleet pairing and TLS material
   tools/sim/omx_*: omx-cell
   test/test_omx_*: omx-cell
   tools/land*.py: tooling
@@ -1361,6 +1365,7 @@ safety_modules:
   - middleware/drive/behaviors/line_follow/authority.py  # D-517/D-760 movement authority under the trip lease
   - middleware/core/gateway/core/trip_lease.py  # D-541/D-760 trip lease ends Fleet-started motion
   - middleware/drive/behaviors/localization/rotate_to.py  # D-603 bounded in-place turn
+  - middleware/drive/behaviors/localization/repark.py  # D-1051 bounded fine re-park from rotate_to/nudge missions
   - middleware/drive/behaviors/localization/assist.py  # D-395 effective map-frame autonomy loss
   - middleware/core/api/core_api_web/api/v1/safety.py
   - contracts/foundation/core_common/robot_body.py
@@ -1409,6 +1414,64 @@ safety_modules:
   - operations/fleet/fleet/server/console/formation_control.py  # D-766 console.py split 2026-11-01: formation session, follower set, leader hand-off (FleetConsole mixin)
   - operations/fleet/fleet/server/goal_lease.py
   - operations/fleet/fleet/server/tether_watch.py
+
+# D-430 §5 Safety-Review trailer only (2026-11-20, after #292 landed untrailered): files that move an OMX arm or
+# filter that decision. No anchor or import invariant applies (chunk_runner imports lerobot); see safety_review.py.
+safety_review_paths:
+  - deploy/robot/omx/chunk_runner.py
+  - deploy/robot/omx/chunk_runner_commands.py
+  - deploy/robot/omx/chunk_runner_guards.py
+  - deploy/robot/omx/chunk_runner_run.py
+  - deploy/robot/omx/chunk_runner_loop.py
+  - deploy/robot/omx/chunk_policy_playback.py
+  - deploy/robot/omx/chunk_runner_settle.py
+  - deploy/robot/omx/guarded_device.py
+  - deploy/robot/omx/guarded_native.py
+  - deploy/robot/omx/guarded_native_effort.py
+  - deploy/robot/omx/joint_push.py
+  - deploy/robot/omx/session_caps.py
+  - deploy/robot/omx/commissioning_limits.py
+  - deploy/robot/omx/record_session.py
+  - deploy/robot/omx/record_session_helpers.py
+  - deploy/robot/omx/cell_auto_safety.py
+  - deploy/robot/omx/cell_transfer.py
+  - deploy/robot/omx/cell_envelope.py
+  - deploy/robot/omx/cell_zones.py
+  - deploy/robot/omx/cell_space.py
+  - deploy/robot/omx/cell_corridor.py
+  - deploy/robot/omx/cell_unwedge.py
+  - deploy/robot/omx/cell_auto_fold.py
+  - deploy/robot/omx/cell_remap_jaws.py
+  - deploy/robot/omx/cell_task_worker.py
+  - deploy/robot/omx/cell_task_exec.py
+  - deploy/robot/omx/cell_task_live_executor.py
+  - deploy/robot/omx/omx_incident.py
+  - deploy/robot/omx/omx_incident_auto.py
+  - deploy/robot/omx/cell_auto_pick.py
+  - deploy/robot/omx/cell_return_held.py
+  - deploy/robot/omx/cell_cycle.py
+  - deploy/robot/omx/cell_two_arm.py
+  - deploy/robot/omx/cell_pipeline.py
+  - deploy/robot/omx/cell_pipeline_stages.py
+  - deploy/robot/omx/cell_pipeline_io.py
+  - deploy/robot/omx/hardware_owner_goals.py
+  - deploy/robot/omx/cell_policy_drive.py
+  - deploy/robot/omx/cell_policy_shape.py
+  - deploy/robot/omx/cell_policy_timing.py
+  - deploy/robot/omx/cell_policy_handoff.py
+  - deploy/robot/omx/cell_stack_guard.py
+  - deploy/robot/omx/cell_arm_lease.py
+  - deploy/robot/omx/commissioning_stop.py
+  - deploy/robot/omx/cell_push.py
+  - deploy/robot/omx/cell_pivot.py
+  - deploy/robot/omx/cell_step.py
+  - deploy/robot/omx/cell_z_shuttle.py
+  - deploy/robot/omx/cell_auto_carry.py
+  - deploy/robot/omx/cell_auto_pick_plan.py
+  - deploy/robot/omx/cell_executor.py
+  - middleware/devices/omx/adapter/omx_adapter/chunk_library.py  # park_path, transit_path
+  - tools/harness/safety_review.py  # the check itself
+  - tools/harness/safety_review_exempt.json
 
 # D-430 §1 drift anchors and §3 public entry points. `symbol` is the dotted module
 # path plus the (possibly nested) definition; each must resolve to a safety file.
@@ -1562,6 +1625,7 @@ safety_anchors:
   - {symbol: core.trip_lease.TripLeaseManager.expire_due}  # D-541/D-760 lease expiry ends Fleet-started motion
   - {symbol: core_features.localization.rotate_to.rotate_goal}
   - {symbol: core_features.localization.rotate_to.turn_rate}
+  - {symbol: core_features.localization.repark.plan_repark}
   - {symbol: core_features.localization.assist.LocalizationAssist}
   - {symbol: core_api_web.api.v1.safety.safety_release}
   - {symbol: core_api_web.api.v1.safety.safety_limits}
