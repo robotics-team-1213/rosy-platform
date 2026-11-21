@@ -3,50 +3,25 @@
 Usage (from the main checkout or any worktree of the repository)::
 
     python tools/worktrees.py status [--idle-hours N]
-    python tools/worktrees.py prune [--apply] [--snapshot] [--all] [--idle-hours N]
+    python tools/worktrees.py prune [--apply] [--snapshot] [--all] [--remote] [--idle-hours N]
     python tools/worktrees.py new <short-name> <type>/<topic> [--from REF] [--owner TEXT]
                                   [--prune | --no-prune] [--force-over-cap "<reason>"]
     python tools/worktrees.py adopt <short-name> <type>/<topic> [--owner TEXT] [--prune | --no-prune]
                                   [--force-over-cap "<reason>"]
 
-``prune`` is a dry run unless ``--apply``. Without ``--snapshot`` it removes only
-what is lossless: a worktree that is clean (nothing modified, staged or
-untracked), whose HEAD is an ancestor of ``main``, that is not locked, has no
-rebase/merge/bisect/cherry-pick in progress, holds no ignored file outside the
-cache directories, and has been idle long enough. No wait at all when its branch landed (a
-commit of its own in the branch reflog, D-790) and the worktree is clean, whoever made it;
-``--idle-hours`` (default 72) for the rest, a just-created empty worktree or a dirty landed one
-included. D-1070: a clean worktree (nothing modified, staged, untracked or ignored outside caches)
-on a branch waits only ``CLEAN_IDLE_HOURS`` (6 h, or ``--idle-hours`` when smaller), merged or not, whoever made
-it: its branch holds everything, an unmerged branch is kept and ``adopt`` re-attaches it. Its branch is
-deleted by exact sha (``git update-ref -d <ref> <sha>``) once that sha is an
-ancestor of main, as are landed branches no worktree uses (D-886). ``--snapshot``, for a person or dispatcher,
-also takes idle worktrees that are dirty or unmerged: the working files (modified,
-staged, untracked) go into a commit on top of the worktree's HEAD, built in a
-temporary index and kept as ``refs/wip/<date>/<name>`` (not a tag: ``git push
---tags`` must not publish it); only a snapshot that matches the worktree lets it
-be removed. An unmerged branch is always kept. ``--snapshot`` takes a dirty or unmerged one
-only if the caller made it (the owner note ``new`` writes); ``--all`` also takes peers' and
-unknown ones. Never removed: the main checkout, the worktree the tool runs in, a locked one,
-one on ``main``, one holding ignored non-cache files, a ``stale-history`` one (D-790: its
-branch is on the pre-rewrite line; a person archives it). Snapshots: ``git for-each-ref
-refs/wip``; restore with ``git worktree add <path> <ref>`` or ``git checkout <ref> -- .``.
+``prune`` is a dry run unless ``--apply``. Lossless prune removes clean, unblocked worktrees:
+already in ``main`` (D-790, 0 wait when its branch reflog shows an own commit) or any clean
+adoptable branch after ``CLEAN_IDLE_HOURS`` (6 h, D-1070: unmerged branch stays for ``adopt``),
+deleting landed unused branches by exact sha (D-886). ``--snapshot`` (person/dispatcher only)
+also takes dirty/unmerged worktrees owned by the caller (``--all`` for peers/unknown) into
+``refs/wip/<date>/<name>`` (restore with ``git worktree add`` or ``git checkout``). Never
+removed: main, cwd, locked, on ``main``, non-cache ignored files, ``stale-history`` (D-790).
 
-``status`` also flags ``landed-dirty`` (branch in main, uncommitted files: move the work to a
-new worktree) and ``orphan`` directories git no longer lists, with what they hold; the lossless
-prune removes an orphan idle 1 h, archiving files other than caches and ``.omc/state`` first
-(``tools/worktree_rules.py``).
-
-Idle is the time since the newest of: the tip commit, the worktree's ``.git``
-file, the newest ``logs/HEAD`` entry, the index file and every non-cache file, changed or not (11-20: used
-worktrees were removed). No ``logs/HEAD`` reads as active. An owner note (``new`` stamps "; at <epoch>") younger
-than ``--idle-hours`` keeps the worktree unless it is clean and landed a commit of its own. Only a person runs
-``--snapshot``; ``land_tick`` and ``land_bottlenecks`` run the lossless prune only.
-
-``new`` and ``tools/land.py`` only report what the lossless prune would remove
-(``--prune`` applies it, ``--no-prune`` is silent); ``new`` refuses at ``CAP``
-worktrees and names each one removable now and by whom. ``rosy_harness.py lint`` warns through
-``lint_note``. A bare ``git worktree add`` is not stopped by any of this. Standard library only.
+``status`` flags ``landed-dirty``, ``stale-history``, ``orphan`` (archived to zip after 1 h),
+``split-soon``/``split-needed``, ``no-pr``, and worktrees outside ``.worktrees/``. Idle is the
+newest of: tip commit, ``.git`` file, ``logs/HEAD`` entry, and non-cache file mtimes (not index).
+An owner note guards clean adoptable worktrees 24 h (else ``--idle-hours`` 72 h). ``--remote``
+reports (with ``--apply``, archives+deletes own-only) stale unopened origin branches. Standard library only.
 """
 
 from __future__ import annotations
@@ -434,7 +409,7 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
         if row["verdict"] == "stale-history":
             print(f"WARN    {row['name']}: {row['branch']} {row['note']} (owner {who}). Do not merge or land it;"
                   " rebuild what is needed on a new branch from main (D-172), then archive this one.")
-    for line in rules.shared_warnings(root):
+    for line in rules.status_notes(root, rows, now):
         print(line)
     print(f"[worktrees] {len(rows)} under {root / '.worktrees'} (cap {CAP})")
     return 0
@@ -562,6 +537,8 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
                         help="with --snapshot: also worktrees other sessions made, and unowned ones")
     pruner.add_argument("--snapshot", action="store_true",
                         help="also take dirty or unmerged worktrees, after keeping uncommitted work under refs/wip")
+    pruner.add_argument("--remote", action="store_true",
+                        help="report (or with --apply, archive+delete own-only) stale origin branches with no open PR")
     for command in (status, pruner):
         command.add_argument("--idle-hours", type=float, default=IDLE_HOURS)
     new = sub.add_parser("new", help="create .worktrees/<short-name> on a new branch from origin/main")
@@ -586,6 +563,9 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
                            args.owner)
         if args.command == "adopt":
             return cmd_adopt(Path.cwd(), args.name, args.branch, args.force_over_cap, now, args.mode, args.owner)
+        if args.remote:
+            rules.prune_remote(scan(Path.cwd())[0], now=now, apply=args.apply)
+            return 0
         prune(Path.cwd(), idle_hours=args.idle_hours, snapshot=args.snapshot, apply=args.apply,
               everyone=args.everyone, now=now)
         return 0

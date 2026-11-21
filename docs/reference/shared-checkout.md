@@ -3,7 +3,7 @@
 - **대상:** 실험실 PC에서 `main` 체크아웃 하나를 여러 AI 세션과 같이 쓰는 사람·에이전트
 - **팀원 개인 클론이라면** 이 문서 대신 [git으로 일하는 법](git-workflow.md)과 [팀 가이드](team-guide.md)를 따른다. 두 길의 비교도 [git으로 일하는 법](git-workflow.md) §1에 있다.
 - **GitHub 게시·병합:** 주제 PR 하나가 Merge Queue로 들어간다(D-1055, 아래 「같이 하는 깃」 6번). 검토·CI 조건은 [PR 파이프라인](pr-pipeline.md)이다.
-- **갱신:** 2026-11-21 — 제출·병합을 D-1055 PR 경로로(「같이 하는 깃」 6번), land.py·D-868 게시 절 폐기. 2026-10-30(늦음) — 착지 대기 동시 4개 원칙(2026-10-30 협업 방안). 2026-10-30 — 명령 전문을 이 문서로 모으고 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」은 안전 요약과 포인터로 줄임. 2026-10-26 — 도구 차단값을 15개 예산과 일치(D-886), 「브랜치 이름과 수명」 추가, 착지한 브랜치 자동 정리. 2026-10-21 — 사용자 지시로 main 포함 운영 상한을 10개에서 15개로 변경. 2026-10-18 착지 단위로 나누기, `MAIN-RED`. 2026-10-14 워크트리 관문 도구(D-761).
+- **갱신:** 2026-11-22 — P1 규칙(`split-soon`/`split-needed`, `no-pr`, 로컬 `main` ff 따라가기, 원격 브랜치 4분류·`prune --remote`, 예약 접두어 표, 한도 14 1주 측정, U1~U5 반영). 2026-11-21 — 제출·병합을 D-1055 PR 경로로(「같이 하는 깃」 6번), land.py·D-868 게시 절 폐기. 2026-10-30(늦음) — 착지 대기 동시 4개 원칙(2026-10-30 협업 방안). 2026-10-30 — 명령 전문을 이 문서로 모으고 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」은 안전 요약과 포인터로 줄임. 2026-10-26 — 도구 차단값을 15개 예산과 일치(D-886), 「브랜치 이름과 수명」 추가, 착지한 브랜치 자동 정리. 2026-10-21 — 사용자 지시로 main 포함 운영 상한을 10개에서 15개로 변경. 2026-10-18 착지 단위로 나누기, `MAIN-RED`. 2026-10-14 워크트리 관문 도구(D-761).
 
 ## 워크트리 한도와 슬롯 운영
 
@@ -14,6 +14,7 @@
 
 1. **만들기 전에 센다.** main에서 `git worktree list`와 `python tools/worktrees.py status`를 확인한다.
    main 1개와 작업 디렉터리 최대 14개를 합산한다. 잠금·머지 대기·검토 대기·장기 보류·고아 디렉터리도 슬롯을 차지한다.
+   한도(14)는 `worktrees.py status`의 removable을 먼저 치운 뒤에 센다. 한도 변경은 1주 측정(`harness_metrics`의 비제거 가능 워크트리 수 p95)을 근거로 사용자가 정한다.
    평소에는 main 포함 13개 이하로 유지하고 나머지 두 자리는 착지·정리·장애 수습에 남긴다.
    시험을 통과해 착지 대기·검토 대기인 브랜치는 동시에 4개 이하로 유지한다(2026-10-30 협업 방안). 대기열·시험 PC·검토가 흡수할 수 있는 양이 실제 상한이다. 착지 대기가 4개를 넘으면 새로 만들지 않고 먼저 착지한다.
    같은 작업의 독립 검토자는 기존 워크트리를 읽기 전용으로 검토하며, 검토자 수만큼 워크트리를 만들지 않는다.
@@ -62,11 +63,31 @@
 | 보관 | `archive/<...>` | 사람(`stale-history` 정리 등) | 사람이 지운다. 도구는 건드리지 않는다 |
 | 미커밋 보존 | `refs/wip/<날짜>/<이름>`(브랜치 아님) | `prune --snapshot`, D-372 보존 | 복구 뒤 사람이 지운다 |
 
-- 위 표에 없는 종류(`wip/`, `tmp/`, `test/`, `land/`, `backup/`, `codex/*`, 날짜만 있는 이름)는 만들지 않는다. 맨손 `git branch`·`git worktree add`도 쓰지 않는다.
+- 위 표에 없는 종류(`wip/`, `tmp/`, `test/`, `land/`, `pr/`, `backup/`, `loop/`, `codex/*`, 날짜만 있는 이름)는 만들지 않는다. 맨손 `git branch`·`git worktree add`도 쓰지 않는다.
 - 한 브랜치는 한 주제다. 이어지는 작업은 착지한 뒤 새 브랜치로 시작한다. 착지한 브랜치에 계속 커밋하지 않는다(`landed-dirty`).
 - `prune`(드라이런 포함)은 `main`에 들어갔고, 어느 워크트리에도 체크아웃되지 않았고, reflog가 1시간 넘게 그대로인 로컬 브랜치를 정확한 sha로만 지운다.
-  `main`과 `archive/*`는 지우지 않는다. 내용은 모두 `main`에 있어 잃는 것이 없다(D-372 결정 2, D-886).
-  `main`에 없는 브랜치는 지우지 않는다. 원격(`origin`) 브랜치는 이 도구가 다루지 않는다.
+  `main`과 아래 예약 접두어 브랜치는 지우지 않는다. 내용은 모두 `main`에 있어 잃는 것이 없다(D-372 결정 2, D-886).
+  `main`에 없는 로컬 브랜치는 지우지 않는다.
+- **원격(`origin`) 브랜치 4분류(2026-11-22):**
+  1. PR 브랜치: 병합되면 GitHub가 자동 삭제한다(`delete_branch_on_merge`).
+  2. 도구 전용: `publish/main-*`, `bot/*`, `gh-readonly-queue/*`는 만든 도구가 정리한다(`publish/main-*`은 팀원 PR일 수 있어 자동 삭제하지 않는다).
+  3. 보존: `release/*`(핫픽스 줄기, `pl3` 2건은 보존 후 문의), `build/*`, `payload-reserved-*`(생성 주체 미확인)는 지우지 않는다.
+  4. 그 밖의 PR 없는 원격 브랜치: 마지막 커밋 14일 뒤 `python tools/worktrees.py prune --remote`(기본 드라이런)로 본다. `--apply`는 `origin/main..branch`(병합됐으면 팁)의 모든 커밋 작성자가 공용 클론 신원과 같을 때만 `refs/archive/origin/<브랜치>@<sha10>`에 보관하고 `--force-with-lease`로 삭제한다. 팀원이나 다른 작성자 커밋이 섞인 브랜치는 보고만 한다.
+- 병합 전 WIP는 public 저장소의 `refs/backup/*`에 올리지 않는다(장치·좌표 노출 위험, U3).
+
+### 예약 접두어 (도구·보존 전용)
+
+사람·에이전트 작업 브랜치는 `feat|fix|refactor|docs|uiux/<topic>`뿐이다(`cell/`→`feat/`, `bench/`→`feat/` 또는 `fix/`, `perf/`→`refactor/`, `ci/`→`fix/`). 아래 접두어는 도구·서비스·보존 전용이며 사람이 새로 만들지 않는다(`tools/worktree_rules.py`의 `RESERVED_PREFIXES`가 이 표와 일치해야 한다).
+
+| 접두어 | 주체·용도 | 처리 |
+|---|---|---|
+| `publish/main-*` | 게시 도구·일부 팀원 PR | 만든 도구·PR 절차로 정리(`prune --remote` 자동 삭제 제외) |
+| `bot/*` | 자동화 봇(`refresh-generated-docs` PR 등) | 봇이 갱신·유지 |
+| `gh-readonly-queue/*` | GitHub Merge Queue 임시 ref | 큐가 생성·삭제 |
+| `archive/*` | 사람이 보관한 브랜치(`stale-history` 등) | 사람이 지운다. 도구는 건드리지 않는다 |
+| `release/*` | 핫픽스·릴리스 줄기(`pl3` 2건 보존 후 문의) | 보존(자동 삭제·보관 제외) |
+| `build/*` | 페이로드 빌드 줄기(생성 주체 미확인) | 보존(자동 삭제·보관 제외) |
+| `payload-reserved-*` | 페이로드 예약 줄기(생성 주체 미확인) | 보존(자동 삭제·보관 제외) |
 
 ### 커밋·병합이 끝없이 늘지 않게 하는 규칙 (2026-11-14)
 
@@ -74,10 +95,11 @@
 
 | 규칙 | 도구가 하는 일 |
 |------|---------------|
-| 새 브랜치는 `main`에 들어간 지점에서만 시작한다. 미착지 브랜치 위에 쌓지 않는다. 이어지는 일은 앞 브랜치를 착지한 뒤 시작한다 | `worktrees.py new --from`이 `main`에 없는 ref를 거절한다(`worktree_rules.unlanded`) |
-| 한 PR은 센 바뀐 파일 30개, 자체 비병합 커밋 20개, 병합 기준 7일 이내다(D-1067 개정). 넘으면 끝난 앞부분을 `origin/main`에서 새 브랜치로 먼저 낸다. `main`을 병합한 커밋은 세지 않는다 | `pr_land.py`가 제출 전에 거절한다. 나눌 수 없는 이유가 있으면 PR 본문에 `Size-Exception: <이유>` |
+| 새 브랜치는 `main`에 들어간 지점에서만 시작한다. 미착지 브랜치 위에 쌓지 않는다. 이어지는 일은 앞 PR이 `origin/main`에 병합된 뒤 `origin/main`에서 새로 시작하고, 기다릴 수 없으면 필요한 커밋만 `origin/main`에서 새 브랜치로 `cherry-pick`해 독립 PR로 낸다 | `worktrees.py new --from`이 `main`에 없는 ref를 거절한다(`worktree_rules.unlanded`) |
+| 한 PR은 센 바뀐 파일 30개, 자체 비병합 커밋 20개, 병합 기준 7일 이내다(D-1067 개정). 자체 비병합 커밋이 10개면 `status`가 `split-soon`, 20개면 `split-needed`를 경고한다(막지 않음). 끝난 앞부분을 `origin/main`에서 새 브랜치로 먼저 낸다. `main`을 병합한 커밋은 세지 않는다 | `pr_land.py`가 제출 전에 거절한다. 나눌 수 없는 이유가 있으면 PR 본문에 `Size-Exception: <이유>` |
+| `.worktrees/`의 미착지 브랜치가 첫 자체 커밋 뒤 24시간이 지나도 열린 PR이 없으면 `status` 끝에 `no-pr` 한 줄로 알린다(막지 않음, `gh` 실패 시 생략) | `worktree_rules.status_notes`가 확인한다 |
 | `origin/main` 병합은 PR이 `DIRTY`(충돌)일 때만 한다(「같이 하는 깃」 6번). `BEHIND`는 Merge Queue가 최신 main 위에서 다시 시험하므로 합치지 않는다. 병합이 단순히 가져온 `main`의 크기 문제는 브랜치 탓이 아니다 | `size_range.py`가 병합 커밋을 모든 부모와 다른 경로만으로 본다 |
-| 워크트리가 없고 4일 동안 커밋이 없는 미착지 브랜치는 보관한다(D-1070 후속, 2026-11-21 로컬 브랜치 840개). `worktrees.py adopt`는 보관된 브랜치를 자동으로 되살린다. 지우지 않고 `refs/archive/<브랜치>@<sha10>`에 둔다. 되살리기: `git branch <브랜치> refs/archive/<브랜치>@<sha10>`. `land/` 잔재 브랜치도 같은 규칙으로 보관한다(D-1055 폐기, 체크아웃된 것은 제외) | `worktrees.py prune --apply`가 정확한 sha로만 옮긴다(`archive_abandoned`) |
+| 워크트리가 없고 4일 동안 커밋이 없는 미착지 브랜치는 보관한다(D-1070 후속, 2026-11-21 로컬 브랜치 840개). `worktrees.py adopt`는 보관된 브랜치를 자동으로 되살린다. 지우지 않고 `refs/archive/<브랜치>@<sha10>`에 `--create-reflog`로 보관 시각을 남긴다(보관 시각 90일 뒤 번들 검증·삭제와 `adopt` 번들 힌트는 P2, U2). 되살리기: `git branch <브랜치> refs/archive/<브랜치>@<sha10>`. `land/` 잔재 브랜치도 같은 규칙으로 보관한다(D-1055 폐기, 체크아웃된 것은 제외) | `worktrees.py prune --apply`가 정확한 sha로만 옮긴다(`archive_abandoned`) |
 | 폐기(D-1055): 착지 묶음(`land_prepare`·`land_rollup`), 10분 주기 `RosyLandTick`·`land_tick`, MAIN-RED 재시험. `land_gc`는 숨은 착지 트리 정리 전용으로 남김 | 묶음은 GitHub Merge Queue(`HEADGREEN`, 최대 4)가 한다 |
 
 ## 같이 하는 깃
@@ -116,7 +138,7 @@ flowchart TD
    - **상한과 소유자.** `.worktrees/` 아래가 14개(main 포함 15개) 이상이면 만들지 않고, 지금 누구나 치울 수 있는 워크트리와 소유자만 치울 수 있는 워크트리를 이름과 소유자로 보여 준다. 그때 볼 것은 `python tools/worktrees.py status`다. 이 표는 행마다 소유자와 자신이 지울 수 있는지를 보여 준다. `new`는 소유자로 git 신원과 세션 id를 적고, `--owner "<누구>"`가 있으면 그것을 적는다. 소유자 기록이 없는 워크트리는 `status`에 `unknown`으로 나온다. 사고 대응 중이거나 사용자가 허락한 경우에만 `--force-over-cap "<이유>"`로 상한을 넘겨 만든다.
    - **사람이 볼 두 상태.** `status`의 `landed-dirty`는 이미 `main`에 들어간 브랜치의 워크트리에 미커밋 파일이 있다는 뜻이다. 그 워크트리에서 계속 일하지 말고 새 워크트리를 만들어 옮긴다. `stale-history`는 이력 재작성 이전 줄기의 브랜치다(`main`에 없는 커밋이 2,000개 넘음, 또는 `ad86fca808` 이전에서 갈라짐). 병합·착지하지 않고 필요한 것만 `main`에서 새 브랜치로 다시 만든다(D-172). `new --from <ref>`는 그런 ref에서 만들지 않는다.
    - **스냅샷.** `prune --snapshot`은 커밋 안 된 내용을 `refs/wip/<날짜>/<이름>`에 남기고 더럽거나 `main`에 안 들어간 워크트리까지 지우므로 사람이나 디스패처만 돌린다. 세션이 알아서 돌리지 않는다. `--snapshot`은 호출한 쪽이 `new`로 만든 워크트리만 다루고, 다른 세션 것과 소유자 기록이 없는 것은 `--all`을 줘야 다룬다.
-   - **위치.** 오래 둘 워크트리는 `git worktree lock`으로 잠근다. worktree는 이 저장소의 `.worktrees/`에만 둔다. `.worktrees/`는 gitignore다. 공유 `main` 체크아웃에서는 브랜치를 바꾸거나(`checkout`, `switch`) 커밋하지 않는다. 그 HEAD는 늘 `main`이고, 커밋되지 않은 변경을 남기지 않는다. 스크래치, 로그, pytest 출력은 저장소 밖 `$ROSY_SCRATCH`에 둔다(없으면 시스템 임시 폴더. 실험실 PC는 `ROSY_SCRATCH=X:\DevTemp`).
+   - **위치.** 오래 둘 워크트리는 `git worktree lock`으로 잠근다. worktree는 이 저장소의 `.worktrees/`에만 둔다. `.worktrees/`는 gitignore다. 공유 `main` 체크아웃에서는 브랜치를 바꾸거나(`checkout`, `switch`) 커밋하지 않는다. 그 HEAD는 늘 `main`이고, 커밋되지 않은 변경을 남기지 않는다. 로컬 `main`은 읽기용 거울이므로 작업은 `origin/main`에서 시작하고, 공유 `main` 체크아웃의 HEAD가 `main`일 때만 `git fetch origin main && git merge --ff-only origin/main`으로 따라간다(아무 세션이나 할 수 있고, 남의 미커밋 충돌로 거절되면 병합·리셋·pull로 맞추지 말고 그대로 두고 알린다. HEAD가 `main`이 아니면(`wrong-head`) 맞추지 않고 소유자가 먼저 되돌린다). 스크래치, 로그, pytest 출력은 저장소 밖 `$ROSY_SCRATCH`에 둔다(없으면 시스템 임시 폴더. 실험실 PC는 `ROSY_SCRATCH=X:\DevTemp`).
    - **밖의 워크트리.** `.worktrees/` 밖에는 워크트리를 만들지 않는다. 도구 자체의 워크트리 기능(opencode 등)도 쓰지 않고 `worktrees.py new`로 시작한다. `status`·`doctor`가 밖의 워크트리를 WARN으로 알리면, 쓰던 세션이 끝난 뒤 주인이 `worktrees.py adopt`로 `.worktrees/`에 다시 붙이고 밖의 것은 `git worktree remove`로 지운다. 도구는 밖의 것을 지우지 않고 한도에 세지 않는다. `.git/rosy-land-wt`·`rosy-publish`·`rosy-land-spec`은 도구 소유라 경고하지 않는다.
    - **동료.** `ListAgents`가 있으면 동료와 그 소유 경로를 본다. 백그라운드 실행기는 단계마다 자기 브랜치에 커밋한다. 그 브랜치에 40분 동안 새 커밋이 없으면 디스패처가 실행기를 확인한다.
 2. **자기 경로만 스테이징한다.** `git status --short`에서 이번 작업으로 만들거나 고친 경로만 `git add <path> ...`에 적는다. `git add -A`, `git add .`, 디렉터리 단위 add는 쓰지 않는다. 인덱스 하나가 모든 세션의 것이라 넓은 add 한 번이 다른 세션의 파일을 커밋에 넣는다. 잘못된 경로 하나가 `git add` 전체를 실패시키므로, 커밋 전에 exit code를 본다. 경로 없는 커밋 전에는 `git diff --cached --name-only`가 자신의 목록과 같아야 한다.
