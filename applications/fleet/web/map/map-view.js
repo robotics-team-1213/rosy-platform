@@ -23,14 +23,15 @@ import { drawMapDatum } from "./map-datum.js";
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
+  if (!view.displayMode) view.displayMode = "coordinates";
   const camera = createCameraBackdrop({ scope, el, view, draw });
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
   const font = (role, displayScale = 1) => window.RosyPalette.canvasFont(role, "mono", displayScale);
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
-  // D-360 레이어 토글. 기본은 모두 켜고, 상단 #map-overlay-toggles 버튼으로 전체 또는 개별 층을 즉시 켜고 끈다.
+  // D-360 레이어 토글. 첫 화면은 정돈된 가상 지도(로봇·도로·교통·라벨)만 켜고, 천장 카메라 관측/추적 고리는 필요 시 켠다.
   if (!view.layers) {
-    view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: true, tracking: true };
+    view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
   }
   const layerOn = (key) => view.layers?.[key] !== false;
   const toggleBar = el("map-overlay-toggles");
@@ -176,7 +177,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.save();
     ctx.lineWidth = 1;
     ctx.strokeStyle = css("--line-quiet");
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = cameraOn ? 0.18 : 0.5;
     for (const gx of layerOn("grid") ? gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M) : []) {
       const a = toPx(gx, bounds.min_y);
       const b = toPx(gx, bounds.max_y);
@@ -315,14 +316,17 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (view.siteMap) {
         drawSiteView();
         const b = siteBounds(view.siteMap, 0);
+        const virtualOnly = view.displayMode === "coordinates" && !layerOn("sightings");
         el("map-tag").textContent =
           `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
-          + (camera.calibration()
+          + (camera.calibration() && view.displayMode === "overlay"
             ? ` · ${camera.usesPlane() ? "Rosy Cam 평면 영상" : "브라우저 보정(대체)"} · ${camera.calibration().calibration_revision}`
               + (view.trackingDrift ? " · 카메라 교정 어긋남 — 맵 고정 다시 필요" : "") : "")
           + callLabel;
         el("map-canvas").setAttribute("aria-label",
-          `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`
+          (virtualOnly
+            ? `가상 좌표 사이트 지도${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`
+            : `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`)
           + (view.trackingDrift ? " 카메라 교정이 어긋난 것 같습니다. 그림은 수락된 보정 그대로이며 맵 고정을 다시 하세요." : ""));
       }
       return;

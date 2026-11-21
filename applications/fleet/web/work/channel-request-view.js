@@ -1,6 +1,8 @@
 // Fleet binds the current review and existing Task creation in one transaction.
 import {enumLabel} from "/common/core_ui_logic.js";
+import {owns, relays} from "/console/assets/unit-scope.js";
 import {workStatus} from "/console/assets/work-view.js";
+const approvedElsewhere = () => !owns("arms") || relays();
 const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절됨", LINKED: "작업 연결"};
 const deliberationState = {PENDING: "대기", RUNNING: "진행 중", ANSWERED: "응답", HOLD: "보류", UNKNOWN: "확인 불가", SUPERSEDED: "대체됨"};
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
@@ -20,9 +22,9 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     if (incident) el("channel-review-incident-link").href = `/console?inbox=1&robot=${encodeURIComponent(incident.robot_id)}&incident=${encodeURIComponent(incident.stuck_id)}`;
     setOff(el("channel-review-mission"), busy || review.state === "LINKED" || !canManage(), reason);
     setOff(el("channel-review-mission-prepare"), busy || review.state === "LINKED" || !canManage(), reason);
-    el("channel-review-mission-admit-holder").hidden = !(review.state === "LINKED" && review.work_kind === "mission" && review.work_status === "PROPOSED");
+    el("channel-review-mission-admit-holder").hidden = approvedElsewhere() || !(review.state === "LINKED" && review.work_kind === "mission" && review.work_status === "PROPOSED");
     setOff(el("channel-review-mission-admit"), busy || !canManage(), reason);
-    el("channel-review-cell-holder").hidden = review.state === "LINKED" && review.work_kind !== "cell_job";
+    el("channel-review-cell-holder").hidden = !owns("arms") || (review.state === "LINKED" && review.work_kind !== "cell_job");
     el("channel-review-cell").href = `/console/cell?channel_request=${encodeURIComponent(receipt.request_id)}`;
     state.textContent = `${reviewStates[review.state] || "검토 상태 확인 필요"}${review.work_status ? " · " + workStatus(review.work_status) : ""} · ${review.reason || "검토 사유를 입력하세요."} · ${reason}`;
     if (modelState) state.textContent += ` · ${modelState}`;
@@ -138,7 +140,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     } finally { busy = false; if (current === version && review) { paint(); if (failure) state.textContent = failure; } }
   }
   async function admitMission() {
-    if (!receipt || !review || busy || review.work_kind !== "mission" || review.work_status !== "PROPOSED" || !canManage()) return;
+    if (approvedElsewhere() || !receipt || !review || busy || review.work_kind !== "mission" || review.work_status !== "PROPOSED" || !canManage()) return;
     const current = version, snapshot = review, base = path(), life = scope.capture();
     try {
       const control = await call("/api/fleet/dispatch-control"); life.check();

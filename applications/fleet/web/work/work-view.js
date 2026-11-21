@@ -1,5 +1,6 @@
 // Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
 import {tripWaitText} from "/console/assets/trip-display.js";
+import {owns, relays} from "/console/assets/unit-scope.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
 import { createArmTransferView } from "/console/assets/arm-transfer-view.js";
 import { createTripProposalView } from "/console/assets/trip-proposal-view.js";
@@ -16,6 +17,7 @@ export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
 export const workKind = row => ({task: "주행", trip: "운행", cell_job: "팔레트 적재"})[row.source] || "팔 작업";
 const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
+export const canAdmitWorkHere = (row, scope) => approvable(row) && owns("arms", scope) && !relays(scope);
 export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
 // D-865 P3 — 승인 범위 판정과 문구는 순수 함수다(node 시험 대상). 화면은 범위 사실을 읽어
 // 표시만 하고 승인 자체는 서버의 정책 principal이 한다: 사람 승인과 같은 검사를 전부 통과한
@@ -175,7 +177,9 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     field("사유", row.reason || "기록된 사유 없음");
     field("작업 식별자", row.source_id);
     // D-741 7 — 막힌 단추에 그 이유를 적는다. 권한은 세션에서, 그 밖의 거절은 서버가 답한 말 그대로다.
-    admit.hidden = !approvable(row);
+    const canAdmitHere = canAdmitWorkHere(row);
+    if (approvable(row) && !canAdmitHere) field("승인 위치", "이 팔을 맡은 셀 관제 화면에서 승인");
+    admit.hidden = !canAdmitHere;
     const reason = busy ? "요청 처리 중입니다" : approveReason() || refusal;
     if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
     admit.disabled = Boolean(reason);
@@ -232,7 +236,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   // 승인은 Cell·대화 검토와 같은 원장 경로다: 현재 정지 세대를 읽어 그대로 보내고, 판단은 서버가 한다.
   async function approve() {
     const row = rows.find(row => workKey(row) === selected), life = scope.capture();
-    if (!row || busy || refusal || approveReason() || !approvable(row)) return;
+    if (!row || busy || refusal || approveReason() || !canAdmitWorkHere(row)) return;
     busy = true; refusal = ""; showDetail(row);
     try {
       const control = await call("/api/fleet/dispatch-control"); life.check();

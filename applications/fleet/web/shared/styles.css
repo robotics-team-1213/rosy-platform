@@ -361,12 +361,11 @@ main {
 .charge-bay-rows { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
 .signal {
   border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--series-primary);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   padding: var(--space-3) var(--space-3);
 }
-.signal.broken { border-left-color: var(--status-crit); }
+.signal.broken { border-color: var(--status-crit); }
 
 .lamps { display: flex; gap: var(--space-2); align-items: center; }
 .lamp {
@@ -546,10 +545,10 @@ main {
   border: 1px solid var(--border-subtle);
 }
 .warning-queue {
-  border-left: 4px solid var(--status-warn);
+  border-color: var(--status-warn);
 }
 .critical-queue {
-  border-left: 4px solid var(--status-crit);
+  border-color: var(--status-crit);
 }
 .queue ui-triage {
   margin: 0 0 var(--space-1) 0;
@@ -575,12 +574,11 @@ main {
 .queue-row:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .queue-decision { padding: 0 var(--space-2) var(--space-2); }
-.queue-decision > .stuck-item { border-left-width: 1px; }
 
 /* D-407 판단 요청 — 큐 행의 펼침. 원인은 crit 태그, 답 다섯은 한 줄에서 접힌다. */
 .stuck-item { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); padding: var(--space-3); background: var(--surface-raised);
-  border: 1px solid var(--border-subtle); border-left: 4px solid var(--status-crit); border-radius: var(--radius-control); }
-.stuck-item.offline { border-left-color: var(--status-warn); }
+  border: 1px solid var(--status-crit); border-radius: var(--radius-control); }
+.stuck-item.offline { border-color: var(--status-warn); }
 .stuck-item ui-tag { max-width: 100%; white-space: normal; line-height: var(--leading-copy); }
 .stuck-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .stuck-facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; }
