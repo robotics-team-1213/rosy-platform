@@ -234,7 +234,7 @@ def main(argv: list[str]) -> int:
     files = build()
     if "--check" in argv:
         stale = sorted(n for n, data in files.items() if not (OUT / n).is_file() or (OUT / n).read_bytes() != data)
-        stale += sorted(p.name for p in OUT.glob("*") if p.name not in files and p.is_file())
+        stale += sorted(p.name for p in OUT.glob("*") if p.name not in files and p.name != "SOURCE.json" and p.is_file())
         print("stale: " + ", ".join(stale) if stale else "robot meshes are current")
         return 1 if stale else 0
     OUT.mkdir(parents=True, exist_ok=True)

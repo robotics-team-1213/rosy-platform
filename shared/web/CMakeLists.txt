@@ -64,6 +64,7 @@ install(FILES
 install(FILES
   vendor/three.module.min.js
   vendor/three.core.min.js
+  vendor/three.LICENSE
   DESTINATION share/${PROJECT_NAME}/vendor
 )
 
