@@ -40,4 +40,6 @@ RUN grep -E '^(numpy|opencv-python-headless)==' /opt/rosy-ci/src/requirements-ce
  && pip3 install --target /opt/rosy-ci/omx-cell-vision -r /tmp/cell-vision.txt && rm /tmp/cell-vision.txt
 RUN pip3 install --target /opt/rosy-ci/site-vision-tools -r /opt/rosy-ci/src/requirements-vision.txt \
  && pip3 install -c /opt/rosy-ci/runtime-constraints.txt --target /opt/rosy-ci/pinky-raw-tools -r /opt/rosy-ci/src/requirements-raw.txt
-RUN python3 -m playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
+# Lab PCs render Hangul fallback with Noto Sans CJK; playwright's deps also pull fonts-wqy-zenhei, which Chromium then
+# prefers (stop button 85.89 px on runners vs 82 +- 1 on lab PCs, 11-21), so it is removed to render like the lab.
+RUN python3 -m playwright install --with-deps chromium && apt-get purge -y -qq fonts-wqy-zenhei fonts-wqy-microhei && fc-cache -f && rm -rf /var/lib/apt/lists/*
