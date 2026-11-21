@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+from cell_policy_goals import resolve_goal_site
+
 SESSION = {
     "arm_a": "./with-session-arm-a-par.sh",
     "arm_b": "./with-session-arm-b-par.sh",
@@ -56,6 +58,14 @@ def _match(rx):
 def _safe_path(v):
     if not isinstance(v, str) or not SAFE_PATH.fullmatch(v) or ".." in Path(v).parts:
         raise ValueError("must be a safe path without '..'")
+    return v
+
+
+def _goal_site(v):
+    try:
+        resolve_goal_site(v)
+    except OSError as exc:
+        raise ValueError(f"cannot read Cell site map: {exc.strerror}") from exc
     return v
 
 
@@ -115,7 +125,6 @@ JOBS = {
             "--library", "{library}",
             "--policy-root", "{policy_root}",
             "--policy-revision", "{policy_revision}",
-            "--model-calibration", "{model_calibration}",
             "--cell-calibration", "{cell_calibration}",
             "--max-chunks", "{max_chunks}",
             "--operator", "{operator}",
@@ -126,7 +135,6 @@ JOBS = {
             "library": _match(FILE),
             "policy_root": _safe_path,
             "policy_revision": _match(SHA256),
-            "model_calibration": _safe_path,
             "cell_calibration": _safe_path,
             "max_chunks": _int_range(1, 6),
             "operator": _match(NAME),
@@ -134,6 +142,8 @@ JOBS = {
         "optional": {
             "dry_run": _bool,
             "proposer": _match(NAME),
+            "goal_site": _goal_site,
+            "model_calibration": _safe_path,
             "catalog": _match(FILE),
             "roi": _roi,
             "site": _match(NAME),
@@ -168,6 +178,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
                 raise ValueError(f"{name}: no such file in the workdir")
     if "proposer" in opt_checked and opt_checked["proposer"] == checked.get("operator"):
         raise ValueError("operator must differ from proposer (D-1024)")
+    if job["script"] == "cell_policy_drive.py" and "goal_site" not in opt_checked and "model_calibration" not in opt_checked:
+        raise ValueError("missing param model_calibration")
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
     if job.get("moving") and any(
         checked.get(name, opt_checked.get(name, "")).startswith(("pinky", "bed"))
@@ -189,6 +201,10 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         args += ["--roi", *opt_checked["roi"]]
     if "site" in opt_checked:
         args += ["--site", opt_checked["site"]]
+    if "goal_site" in opt_checked:
+        args += ["--goal-site", opt_checked["goal_site"]]
+    if "model_calibration" in opt_checked:
+        args += ["--model-calibration", opt_checked["model_calibration"]]
     if job.get("moving"):
         if params.get("person_at_switch") is not True:
             raise ValueError("a moving job needs person_at_switch: true")
