@@ -1,6 +1,8 @@
 """Allowlisted experiment conditions, independent of transport and SDK imports."""
 import copy
 
+from r08_rl_fixture import CASE as R08_RL_CASE
+
 
 _CATALOG = [
     {'id': 'omx-f-import', 'name': 'OMX-F 모델 연결 검사', 'implemented': True,
@@ -78,6 +80,10 @@ def normalize(scenario_id: str, config: dict) -> dict:
         raise ValueError('scenario is unavailable' if entry is None else entry['reason'])
     keys = ({'seed', 'layers', 'case'} if scenario_id in ('omx-map-container-stack', 'omx-map-container-stacking-rl') else
             {'seed', 'case'} if scenario_id == 'arm-s-cell-case' else {'seed'})
+    r08 = (scenario_id == 'omx-map-container-stacking-rl' and isinstance(config, dict)
+           and config.get('case') == R08_RL_CASE)
+    if r08:
+        keys = keys | {'layout_sha256'}
     if (not isinstance(config, dict) or set(config) != keys
             or type(config['seed']) is not int or not 0 <= config['seed'] <= 2147483647):
         raise ValueError('settings require an integer seed in 0..2147483647'
@@ -90,6 +96,10 @@ def normalize(scenario_id: str, config: dict) -> dict:
         fixture = container_fixture(layers=config['layers'], case=config['case'])
         value = dict(model='omx_f', headless=True, seed=config['seed'], layers=config['layers'],
                      case=config['case'], fixture=fixture['revision'])
+        if r08:
+            if config['layout_sha256'] != fixture['layout_sha256']:
+                raise ValueError('MuJoCo handoff layout SHA-256 differs from the Isaac r08 fixture')
+            value['layout_sha256'] = fixture['layout_sha256']
         if scenario_id == 'omx-map-container-stacking-rl':
             return dict(value, iterations=32, num_envs=1)
         return dict(value, trials=1)

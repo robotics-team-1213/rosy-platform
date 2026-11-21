@@ -1,25 +1,6 @@
-"""Rules ``tools/worktrees.py`` and ``tools/land.py`` share (D-790, amends D-761).
+"""Worktree and branch lifecycle rules (D-790, D-886, D-1070).
 
-- A landed worktree (merged into main, a commit of its own in its branch reflog) that is clean
-  has no wait (``wait_h = 0.0``) in ``tools/worktrees.py``, whoever made it; ``LANDED_IDLE_HOURS``
-  (1 h) still applies to orphan directories and unused merged branches (``sweep_branches``).
-- ``stale_history``: a branch on the pre-rewrite line (more than ``STALE_COMMITS`` commits not in
-  main, or forked from main at or before ``REWRITE_BASE``) would re-import the old history; ``new``
-  does not base on it and ``land.py`` does not land it.
-- Orphan directories (under ``.worktrees/``, not registered with git): ``orphan_content`` sums them
-  up; ``clear_orphan`` removes empty ones and ones holding only caches or ``.omc/state``, and
-  archives the rest to ``$ROSY_SCRATCH/worktree-orphans/<name>-<date>.zip`` (Python ``zipfile``,
-  re-opened and counted) before the directory goes.
-- A removed worktree's folder that cannot be deleted (Windows: a process holds it as its cwd) is
-  ``rmdir``-ed when empty, else gets a tombstone ``.git`` file (``leave_tombstone``) pointing at a
-  gitdir that cannot exist, so git inside it fails instead of walking up to the main checkout's
-  ``.git`` and acting on main. The tombstone counts as a cache: the next prune deletes the folder.
-- D-886: ``new`` takes a topic of lowercase words joined by ``-`` (``topic_ok``), and every prune ends
-  with ``sweep_branches``: local branches already in main that no worktree has checked out go, by exact
-  sha, once their reflog is ``LANDED_IDLE_HOURS`` old; ``main`` and ``archive/*`` (a person's, D-790) stay.
-  Lossless: the commits are on main (D-372 decision 2).
-
-Standard library only.
+See docs/reference/shared-checkout.md for admission, preservation and cleanup policy.
 """
 
 from __future__ import annotations
@@ -357,6 +338,16 @@ def _own_commit_times(root: Path, base: str, sha: str) -> list[int]:
         return []
 
 
+def _idle_unattached(root: Path, now: float) -> list[str]:
+    result = _git(root, "for-each-ref", *(f"--no-merged={ref}" for ref in merge_targets(root)),
+                  "--format=%(refname:short)\t%(worktreepath)\t%(committerdate:unix)", "refs/heads")
+    if result.returncode:
+        return []
+    return [branch for branch, checkout, tip in (line.split("\t") for line in result.stdout.splitlines())
+            if tip and not checkout and not branch.startswith(RESERVED_PREFIXES) and branch != "main"
+            and now - int(tip) >= NO_PR_HOURS * 3600]
+
+
 def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
     """Shared-checkout warnings plus P1 branch-size and 24h no-PR summary lines."""
     base = ("refs/remotes/origin/main" if _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/main").returncode == 0
@@ -376,7 +367,11 @@ def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, len(cands) + 2)) as pool:
         warn_fut = pool.submit(shared_warnings, root)
+        unattached_fut = pool.submit(_idle_unattached, root, now)
         results = [fut.result() for fut in [pool.submit(check_row, pool, r) for r in cands]]
+        unattached = unattached_fut.result()
+        if unattached and not pr_fut:
+            pr_fut.append(pool.submit(open_pr_heads, root))
         open_prs, lines = pr_fut[0].result() if pr_fut else None, warn_fut.result()
     needed, soon, stale_no_pr = [], [], []
     for row, times in results:
@@ -394,6 +389,11 @@ def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
         missing = [name for name, br in stale_no_pr if br not in open_prs]
         if missing:
             lines.append(f"WARN    no-pr (>{NO_PR_HOURS:.0f}h since first own commit, no open PR): {len(missing)} worktree(s): {', '.join(missing)}")
+    if unattached:
+        if open_prs is None:
+            lines.append(f"WARN    {len(unattached)} branch(es) without a worktree; open PR status unavailable")
+        elif missing_count := sum(branch not in open_prs for branch in unattached):
+            lines.append(f"WARN    no-pr: {missing_count} branch(es) without a worktree or open PR; tip older than {NO_PR_HOURS:.0f}h")
     return lines
 
 
@@ -448,10 +448,15 @@ def sweep_branches(root: Path, now: float, apply: bool, say=print, quiet: bool =
     return done
 
 
-def restore_archived(root: Path, branch: str) -> bool:
-    """Put back the newest ``refs/archive/<branch>@<sha10>`` as the branch (create-only); False when there is none."""
+def archived_tip(root: Path, branch: str) -> str | None:
     refs = _git(root, "for-each-ref", "--sort=-creatordate", "--format=%(objectname)", f"refs/archive/{branch}@*").stdout.split()
-    return bool(refs) and _git(root, "update-ref", f"refs/heads/{branch}", refs[0], "").returncode == 0
+    return refs[0] if refs else None
+
+
+def restore_archived(root: Path, branch: str) -> str | None:
+    """Create the branch at its newest archived tip and return the SHA for compare-and-delete."""
+    tip = archived_tip(root, branch)
+    return tip if tip and _git(root, "update-ref", f"refs/heads/{branch}", tip, "").returncode == 0 else None
 
 
 def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: bool = False, keep=frozenset()) -> int:
