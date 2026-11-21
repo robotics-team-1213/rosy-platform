@@ -281,6 +281,27 @@ def wrong_head(root: Path) -> str | None:
     return None if head == "main" else head
 
 
+TOOL_TREES = ("rosy-land-wt", "rosy-publish", "rosy-land-spec")  # <git-common-dir>/<holder>/: their tools own them
+FOREIGN_FIX = ("not removed or counted here; after its session ends its owner re-attaches the branch"
+               " (python tools/worktrees.py adopt) and runs git worktree remove on this one")
+
+
+def foreign_worktrees(root: Path) -> list[str]:
+    """Worktrees outside <root>/.worktrees/ and the tools' hidden holders (opencode's, a bare git worktree add)."""
+    listed = _git(root, "worktree", "list", "--porcelain").stdout.splitlines()
+    common = Path(_git(root, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()).resolve()
+    inside = [(root / ".worktrees").resolve(), *(common / holder for holder in TOOL_TREES)]
+    paths = [Path(line[len("worktree "):]) for line in listed if line.startswith("worktree ")][1:]  # [0] is main
+    return [str(p) for p in paths if not any(p.resolve().is_relative_to(d) for d in inside)]
+
+
+def shared_warnings(root: Path) -> list[str]:
+    """status lines about the shared checkout itself: wrong-head, then each worktree outside .worktrees/."""
+    head = wrong_head(root)
+    return ([f"WARN    wrong-head: the shared main checkout {root} is on {head}, not main; {WRONG_HEAD_FIX}"] if head else []
+            ) + [f"WARN    worktree outside .worktrees/: {path}; {FOREIGN_FIX}" for path in foreign_worktrees(root)]
+
+
 def topic_ok(topic: str) -> bool:
     return len(topic) <= TOPIC_MAX and TOPIC.fullmatch(topic) is not None
 
@@ -354,7 +375,8 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
             continue
         # the reflog too: a branch just restored from refs/archive has an old tip but was touched now
         touched = max(int(when or now), reflog_time(common / "logs" / "refs" / "heads" / branch))
-        if (checked_out or branch in keep or branch.startswith(("archive/", "land/"))
+        # land/ leftovers too (11-22): D-1055 retired their resume path; a hidden tree's branch is checked out
+        if (checked_out or branch in keep or branch.startswith("archive/")
                 or now - touched < ABANDON_DAYS * 86400):
             continue
         if apply:

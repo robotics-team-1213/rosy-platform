@@ -75,12 +75,14 @@ def check_publish_only(repo: Path) -> list[tuple]:
 
 
 def check_worktrees(repo: Path) -> list[tuple]:
-    rows = worktrees.scan(repo)[1]
+    root, rows = worktrees.scan(repo)
     removable = worktrees.prune(repo, quiet=True, say=lambda *_: None)  # dry run: lists, removes nothing
     text = f"worktrees: {len(rows) + 1} of {SLOTS} slots (main included), {removable} removable"
+    foreign = [("WARN", f"worktree outside .worktrees/: {path}", worktrees.rules.FOREIGN_FIX)
+               for path in worktrees.rules.foreign_worktrees(root)]  # never counted in the slots
     if len(rows) + 1 <= SLOTS:
-        return [("OK", text, None)]
-    return [("WARN", text, worktrees.SWEEP if removable else "python tools/worktrees.py status")]
+        return [("OK", text, None), *foreign]
+    return [("WARN", text, worktrees.SWEEP if removable else "python tools/worktrees.py status"), *foreign]
 
 
 def check_main(repo: Path, now: float) -> list[tuple]:
