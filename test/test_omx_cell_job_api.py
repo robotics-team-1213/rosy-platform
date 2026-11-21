@@ -290,3 +290,127 @@ def test_frame_proxy_returns_clean_json_on_viewer_http_error(tmp_path):
         server.server_close()
         viewer.shutdown()
         viewer.server_close()
+
+
+def test_resolve_goal_site_supports_standalone_cell_api_layout(tmp_path):
+    import shutil
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parents[1]
+    stage = tmp_path / "cell-job-api"
+    (stage / "tools" / "sim").mkdir(parents=True)
+    (stage / "shared" / "web").mkdir(parents=True)
+    shutil.copy2(repo_root / "deploy" / "robot" / "omx" / "cell_policy_goals.py", stage / "cell_policy_goals.py")
+    shutil.copy2(repo_root / "tools" / "sim" / "cell_site_map.py", stage / "tools" / "sim" / "cell_site_map.py")
+    shutil.copy2(repo_root / "shared" / "web" / "cell-site-map.json", stage / "shared" / "web" / "cell-site-map.json")
+    out = subprocess.check_output(
+        [sys.executable, "-c", "import cell_policy_goals as g; print(g.resolve_goal_site('yard:r3-s2-t1'))"],
+        cwd=stage,
+        text=True,
+    )
+    assert "ship-h1r0-l0" in out
+
+
+def test_runner_whole_cell_ab_cross_lock_and_warm_reuse(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    lease_dir = tmp_path / "leases"
+    lease_dir.mkdir()
+    (wd / "chunk-io-b").mkdir()
+    procs = []
+
+    def fake_popen(argv, **kwargs):
+        p = Mock()
+        p.argv = argv
+        p.env = kwargs.get("env") or {}
+        p._code = None
+        p.poll.side_effect = lambda: p._code
+        procs.append(p)
+        return p
+
+    monkeypatch.setattr(api.subprocess, "Popen", fake_popen)
+    runner = api.Runner(wd, lock_dir=wd, lease_dir=lease_dir)
+
+    # 1. Whole-cell session.lock blocks moving jobs
+    monkeypatch.setattr(api, "_whole_cell_lock_held", lambda _ld=None: True)
+    res_whole = runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})
+    assert res_whole["code"] == 409 and "whole-cell session.lock" in res_whole["error"]
+
+    # 2. External arm_b lock blocks arm_a moving job (A/B cross-arm lock check)
+    monkeypatch.setattr(api, "_whole_cell_lock_held", lambda _ld=None: False)
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, _ld=None: arm == "arm_b")
+    res_cross = runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})
+    assert res_cross["code"] == 409 and "session lock for arm_b" in res_cross["error"]
+
+    # 3. Run arm_b cleanly, then warm-reuse arm_b when lease + exit 0 + clean live.json all hold
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, _ld=None: False)
+    first = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert first["code"] == 202
+    assert procs[0].env["ROSY_ARM_LEASE_OWNER"] == runner._lease_owner
+    procs[0]._code = 0
+
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, _ld=None: arm == "arm_b")
+    (lease_dir / "arm_b.json").write_text(json.dumps({"owner": runner._lease_owner}), encoding="utf-8")
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False}),
+        encoding="utf-8",
+    )
+    reused = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert reused["code"] == 202
+    procs[1]._code = 0
+
+    # 4. Warm reuse is refused if human_hold_latched, lease hold, or foreign owner
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": True, "fault": False}),
+        encoding="utf-8",
+    )
+    refused_hold = runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})
+    assert refused_hold["code"] == 409
+
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False}),
+        encoding="utf-8",
+    )
+    (lease_dir / "arm_b.json").write_text(json.dumps({"owner": "other:99"}), encoding="utf-8")
+    refused_owner = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert refused_owner["code"] == 409
+
+    # 5. Stale live.json timestamp or dead pid refuses warm reuse
+    import time
+
+    (lease_dir / "arm_b.json").write_text(json.dumps({"owner": runner._lease_owner, "pid": 12345}), encoding="utf-8")
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False, "t": time.time() - 60.0}),
+        encoding="utf-8",
+    )
+    refused_stale = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert refused_stale["code"] == 409
+
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False, "t": time.time()}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "_pid_alive", lambda _pid: False)
+    refused_dead = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert refused_dead["code"] == 409
+
+
+def test_runner_daemon_reaper_writes_audit_without_get_poll(tmp_path, monkeypatch):
+    import subprocess
+    import time
+
+    wd = _make_workdir(tmp_path)
+    runner = api.Runner(wd, jobs={"noop": {"script": "noop.py", "argv": [], "params": {}}}, lock_dir=wd)
+    monkeypatch.setattr(api, "build_argv", lambda job, params, workdir: [sys.executable, "-c", "pass"])
+    res = runner.start("noop", {})
+    assert res["code"] == 202
+
+    audit_file = wd / "cell-job-api" / "audit.jsonl"
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        if audit_file.is_file() and audit_file.read_text(encoding="utf-8").strip():
+            break
+        time.sleep(0.02)
+    else:
+        pytest.fail("audit.jsonl was not written automatically by daemon reaper")
+    row = json.loads(audit_file.read_text(encoding="utf-8").splitlines()[0])
+    assert row["id"] == res["id"] and row["exit"] == 0 and isinstance(subprocess.Popen, type)
