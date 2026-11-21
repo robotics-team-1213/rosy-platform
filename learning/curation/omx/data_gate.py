@@ -49,7 +49,7 @@ def camera_map(features: dict, legacy: dict[str, str]) -> dict[str, str]:
         if not key.startswith("observation.images.") or key.endswith("_depth"):
             continue
         name = key.removeprefix("observation.images.")
-        role = name if name in ROLES else legacy.get(name)
+        role = legacy.get(name, name if name in ROLES else None)  # a declared map wins: Purple-SY "top" is the side camera
         if role is None:
             raise ValueError(f"camera {name} is not a role name (D-1065) and has no declared mapping")
         if role in out.values():
