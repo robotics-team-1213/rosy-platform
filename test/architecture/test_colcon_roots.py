@@ -76,6 +76,8 @@ EXEMPT = {
     # Tests pin consumer text; none runs colcon or rosdep.
     "test/architecture/test_colcon_roots.py": "this test",
     "test/test_affected_build_smoke_scope.py": "docstring naming the smoke job's steps; runs nothing",
+    "tools/harness/affected_ci.py": "sets the colcon flag of a guard-only matrix entry; runs nothing",
+    "tools/harness/affected_ros.py": "compares the colcon flag when merging runners; runs nothing",
     "test/test_affected_consolidate.py": "asserts the colcon flag of matrix entries; runs nothing",
     "test/test_ci_dependencies.py": "asserts on ci.yml",
     "test/test_image_customization_contract.py": "asserts on image scripts",
