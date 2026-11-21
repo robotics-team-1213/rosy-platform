@@ -90,6 +90,7 @@ def build_docking_and_swarm(*, simulation_docking, data_path: Path, events, stat
         agent_factory=lambda dock: DockAgent(dock.agent_url),
         capability_provider=lambda: capability.supports("docking.supported"),
         map_id_provider=lambda: state.map_id,
+        odom_pose_provider=state.odom_pose_record,
         battery=battery,
         pose_provider=map_pose,
         line_follow_active_provider=lambda: line_follow.active,
