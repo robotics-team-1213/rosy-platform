@@ -91,6 +91,30 @@ Id = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
 Finite = Field(allow_inf_nan=False)
 
 
+Polygon = Annotated[list[tuple[float, float]], Field(min_length=3, max_length=32)]
+
+
+def _polygon_problem(points) -> Optional[str]:
+    if any(not math.isfinite(v) for point in points for v in point):
+        return "must be finite"
+    area = abs(sum(ax * by - bx * ay for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1]))) / 2
+    if area < CROSSWALK_MIN_AREA_M2:
+        return f"is smaller than {CROSSWALK_MIN_AREA_M2} m^2"
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    if math.hypot(max(xs) - min(xs), max(ys) - min(ys)) > CROSSWALK_MAX_SPAN_M:
+        return f"spans more than {CROSSWALK_MAX_SPAN_M} m"
+    return None
+
+
+def _inside(point, polygon) -> bool:
+    x, y = point
+    hit = False
+    for (ax, ay), (bx, by) in zip(polygon, polygon[1:] + polygon[:1]):
+        if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
+            hit = not hit
+    return hit
+
+
 class SitePlace(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -104,6 +128,28 @@ class SitePlace(BaseModel):
     radius_m: Optional[float] = Field(default=None, gt=0.0, le=0.5, allow_inf_nan=False)
     #: A person placed it on purpose; automatic calibration must not move it.
     pinned: bool = False
+    #: 2026-11-21 (robot-7b named stop): a stop only. ``stop_zone`` is the site-frame polygon the robot
+    #: footprint must end inside (a person draws it, so it needs ``pinned``); ``approach_m`` is how far back
+    #: along ``yaw`` the robot lines up first (see ``approach_pose``).
+    stop_zone: Optional[Polygon] = None
+    approach_m: Optional[float] = Field(default=None, ge=0.05, le=0.6, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _stop_zone(self) -> "SitePlace":
+        if self.kind != "stop" and (self.stop_zone is not None or self.approach_m is not None):
+            raise ValueError(f"place {self.id}: stop_zone and approach_m belong to a stop")
+        if self.stop_zone is not None:
+            zone = list(self.stop_zone)
+            problem = _polygon_problem(zone)
+            if problem:
+                raise ValueError(f"stop {self.id} stop_zone {problem}")
+            if not _inside((self.x, self.y), zone):
+                raise ValueError(f"stop {self.id} lies outside its stop_zone")
+            if not self.pinned:
+                raise ValueError(f"stop {self.id}: a stop_zone needs pinned (calibration must not move a drawn zone)")
+        if self.approach_m is not None and self.yaw is None:
+            raise ValueError(f"stop {self.id}: approach_m needs a yaw")
+        return self
 
     @model_validator(mode="after")
     def _start_heading(self) -> "SitePlace":
@@ -119,6 +165,14 @@ class SitePlace(BaseModel):
         if not BEND_MIN_DEG <= turn <= BEND_MAX_DEG:
             raise ValueError(f"bend place {self.id} turns {turn:.1f} deg, not {BEND_MIN_DEG}-{BEND_MAX_DEG}")
         return self
+
+
+def approach_pose(place: SitePlace) -> Optional[tuple[float, float, float]]:
+    """The pose ``approach_m`` behind a stop along its yaw, facing the stop; None without ``approach_m``."""
+    if place.approach_m is None or place.yaw is None:
+        return None
+    d = place.approach_m
+    return place.x - d * math.cos(place.yaw), place.y - d * math.sin(place.yaw), place.yaw
 
 
 class SiteEdge(BaseModel):
@@ -146,30 +200,6 @@ class SiteEdge(BaseModel):
         if sum(math.dist(a, b) for a, b in zip(self.polyline, self.polyline[1:])) <= 0.0:
             raise ValueError(f"edge {self.id} polyline has zero length")
         return self
-
-
-Polygon = Annotated[list[tuple[float, float]], Field(min_length=3, max_length=32)]
-
-
-def _polygon_problem(points) -> Optional[str]:
-    if any(not math.isfinite(v) for point in points for v in point):
-        return "must be finite"
-    area = abs(sum(ax * by - bx * ay for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1]))) / 2
-    if area < CROSSWALK_MIN_AREA_M2:
-        return f"is smaller than {CROSSWALK_MIN_AREA_M2} m^2"
-    xs, ys = [p[0] for p in points], [p[1] for p in points]
-    if math.hypot(max(xs) - min(xs), max(ys) - min(ys)) > CROSSWALK_MAX_SPAN_M:
-        return f"spans more than {CROSSWALK_MAX_SPAN_M} m"
-    return None
-
-
-def _inside(point, polygon) -> bool:
-    x, y = point
-    hit = False
-    for (ax, ay), (bx, by) in zip(polygon, polygon[1:] + polygon[:1]):
-        if (ay > y) != (by > y) and x < ax + (y - ay) * (bx - ax) / (by - ay):
-            hit = not hit
-    return hit
 
 
 def _point_segment(p, a, b) -> float:
@@ -353,6 +383,9 @@ class SiteMap(BaseModel):
                     del place[key]
             if not place["pinned"]:  # unpinned places stay byte-equal in stored maps
                 del place["pinned"]
+            for key in ("stop_zone", "approach_m"):  # stop-only fields: other stored maps stay byte-equal
+                if place[key] is None:
+                    del place[key]
         if body["view_turn_deg"] == 0:  # keep stored maps readable by a Fleet without the field
             del body["view_turn_deg"]
         if not body["crosswalks"]:  # D-573: a map without crosswalks stays byte-equal

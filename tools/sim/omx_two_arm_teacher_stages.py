@@ -279,27 +279,47 @@ def isaac_handoff(result, layout, seed=0):
     )
 
 
-def open_video_writer(world, out: Path, task_name: str, video_skip: int = 1):
-    """Open an H.264 4-camera grid video writer (`(writer_hook, close_fn)`)."""
-    video_path = str(out / f"{task_name}{'-short' if video_skip > 1 else ''}.mp4")
-    from PIL import Image, ImageDraw
+def open_rgb_video(path: Path, width: int, height: int):
+    """Return an RGB frame writer and finalizer for an H.264 MP4 at the control rate."""
+    video_path = str(path)
     try:
         import av
         container = av.open(video_path, "w")
         stream = container.add_stream("h264", rate=FPS)
-        stream.width, stream.height, stream.pix_fmt = 1280, 960, "yuv420p"
+        stream.width, stream.height, stream.pix_fmt = width, height, "yuv420p"
         encode_rgb = lambda arr: container.mux(stream.encode(av.VideoFrame.from_ndarray(arr, format="rgb24")))  # noqa: E731
-        close_video = lambda: (container.mux(stream.encode(None)), container.close())  # noqa: E731
+
+        def close_video():
+            try:
+                container.mux(stream.encode(None))
+            finally:
+                container.close()
+
     except ImportError:
         import subprocess
         ff = subprocess.Popen(
-            ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "1280x960",
+            ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}",
              "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", video_path],
             stdin=subprocess.PIPE,
         )
         encode_rgb = lambda arr: ff.stdin.write(arr.tobytes())  # noqa: E731
-        close_video = lambda: (ff.stdin.close(), ff.wait())  # noqa: E731
 
+        def close_video():
+            try:
+                ff.stdin.close()
+            finally:
+                status = ff.wait()
+            if status:
+                raise subprocess.CalledProcessError(status, ff.args)
+
+    return encode_rgb, close_video
+
+
+def open_video_writer(world, out: Path, task_name: str, video_skip: int = 1):
+    """Open an H.264 4-camera grid video writer (`(writer_hook, close_fn)`)."""
+    from PIL import Image, ImageDraw
+    path = out / f"{task_name}{'-short' if video_skip > 1 else ''}.mp4"
+    encode_rgb, close_video = open_rgb_video(path, 1280, 960)
     count = [0]
 
     def writer(data, label):

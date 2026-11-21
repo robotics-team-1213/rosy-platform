@@ -198,7 +198,9 @@ def choose(
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
-    require_clearance = prm.get(p, "auto.neighbour_clear_mm") > 0
+    site_fp = {k: v for k, v in (config["sites"][site].get("finger_params") or {}).items() if k in prm.DEFAULTS}
+    fp = {**(p or {}), **site_fp} if site_fp else p
+    require_clearance = prm.get(fp, "auto.neighbour_clear_mm") > 0
     plan_fn = _parent_attr("plan_pick", plan_pick)
     for o in sorted(objects, key=lambda o: ("split_from" in o, math.dist(o["raw_m"], config["sites"][site]["start"]))):
         why = fix = None
@@ -219,13 +221,13 @@ def choose(
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
-            room = finger_room(mask, roi, pixel_fn, o, ends, p, opening_width_mm=across(entry))
+            room = finger_room(mask, roi, pixel_fn, o, ends, fp, opening_width_mm=across(entry))
             if room["margin_mm"] is None:
                 o, room = next(
                     (
                         (e, r)
-                        for e in reachable_ends(o, entries[o["object"]], p)
-                        if (r := finger_room(mask, roi, pixel_fn, e, None, p, opening_width_mm=across(entry)))["margin_mm"] is not None
+                        for e in reachable_ends(o, entries[o["object"]], fp)
+                        if (r := finger_room(mask, roi, pixel_fn, e, None, fp, opening_width_mm=across(entry)))["margin_mm"] is not None
                     ),
                     (o, room),
                 )

@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from typing import Optional
 from core.bridge.translate import yaw_from_quat
+from core_common.protocol.evidence import STALE_VELOCITY_S
 
 Point = Optional[tuple[float, float]]
 
@@ -169,6 +170,28 @@ def _original_twist(msg, sample):
             or sample['linear_x'] != linear.x or sample['angular_z'] != angular.z):
         raise ValueError('invalid original planar body velocity')
     return linear.x, angular.z
+
+
+def velocity_sample_time(bridge, msg, sample, received_ns: int) -> float | None:
+    """Trust only increasing, recent wall-clock stamps on original base odometry."""
+    if bridge._node.get_parameter("use_sim_time").value:
+        return None
+    stamp, frame, child = msg.header.stamp, msg.header.frame_id, msg.child_frame_id
+    if (type(stamp.sec) is not int or stamp.sec <= 0
+            or type(stamp.nanosec) is not int or not 0 <= stamp.nanosec < 1_000_000_000
+            or frame.removeprefix(bridge._frame_prefix) != "odom"
+            or child.removeprefix(bridge._frame_prefix) not in ("base_link", "base_footprint")):
+        return None
+    source_ns = stamp.sec * 1_000_000_000 + stamp.nanosec
+    if (not 0 <= received_ns - source_ns <= STALE_VELOCITY_S * 1_000_000_000
+            or source_ns <= bridge._velocity_source_ns):
+        return None
+    bridge._velocity_source_ns = source_ns
+    try:
+        _original_twist(msg, sample)
+    except ValueError:
+        return None
+    return source_ns / 1_000_000_000
 
 
 def _observe_source(bridge, msg, sample, read, receipt):

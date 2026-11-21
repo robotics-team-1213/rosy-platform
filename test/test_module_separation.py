@@ -263,12 +263,15 @@ def test_control_imports_no_core_code():
     every near/stop check shares with CORE and the calibration tools, D-424).
     D-667/D-670 also permit the exact ``core_common.observation`` module:
     immutable evidence references and pure validity checks.
+    Task L (assembly round 5) adds the pure shapes `core_common.startup_profile` and
+    `core_common.navigation_options`, moved here so vision's launch/web import no drive module.
     Runtime packages stay banned outright.
     """
     runtime_tops = {"core", "core_features", "core_api_web", "core_events"}
     # core_common.perception_model: the stateless learned-model manifest contract (9e22eb73be moved it here).
     allowed_contracts = ("core_common.protocol", "core_common.calibration_store",
-                         "core_common.robot_body", "core_common.perception_model")
+                         "core_common.robot_body", "core_common.perception_model",
+                         "core_common.startup_profile", "core_common.navigation_options")
     violations = []
     for path in (file for tree in CONTROL_TREES for file in _prod_py_files(tree)):
         try:

@@ -9,9 +9,13 @@ import ssl
 import subprocess
 import sys
 import threading
+import time
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import urlopen
+
+from cell_presence import presence_ok, review_required, zone_acceptance
+from cell_remeasure import write_context
 
 
 def make_ca_urlopen(ca_file: str | Path | None = None):
@@ -82,6 +86,72 @@ def classify_poll_error(exc: Exception, token_file: str | Path) -> dict[str, Any
     return {"event": "poll_error", "error": repr(exc), "backoff_s": None}
 
 
+# D-1057. Same tolerance as chunk_runner_guards.SETTLE_TOL, which the transfer gate uses to accept a park as home.
+FOLD_TOLERANCE = 3.0
+ZONE_BASIS = "predefined_side_and_top_target_zones"
+TOP_ONLY_BASIS = "top_camera_only_target_zone"  # cell S only (D-1057, user decision 2026-11-20): it has no side camera
+
+
+def last_json_object(text: str) -> dict[str, Any]:
+    """The JSON object that ends the output. cell_auto_pick prints it indented over many lines after free-form log lines,
+    so take the earliest `{` from which one object parses through to the end of the text."""
+    decoder, start = json.JSONDecoder(), text.find("{")
+    while start != -1:
+        try:
+            value, end = decoder.raw_decode(text, start)
+        except ValueError:
+            value = None
+        else:
+            if isinstance(value, dict) and not text[end:].strip():
+                return value
+        start = text.find("{", start + 1)
+    return {}
+
+
+def _last_attempt(parsed: dict[str, Any]) -> dict[str, Any]:
+    attempts = parsed.get("attempts")
+    last = attempts[-1] if isinstance(attempts, list) and attempts else None
+    return last if isinstance(last, dict) else {}
+
+
+def fold_readback(attempt: dict[str, Any], home: Any) -> dict[str, Any]:
+    """Measured fold: the final transfer step is a settled park whose joint readback is within FOLD_TOLERANCE of home.
+
+    The readback comes from the owner's park step (`state`, `settled`, `ok`), never from the placement result.
+    `t` is the runner's monotonic clock, so it is carried as-is and not used as a wall time.
+    """
+    steps = (attempt.get("transfer") or {}).get("steps") if isinstance(attempt.get("transfer"), dict) else None
+    park = steps[-1] if isinstance(steps, list) and steps and isinstance(steps[-1], dict) else {}
+    state = park.get("state")
+    # Body joints only (the first five), as cell_recovery.at_home does; the jaw is the sixth and does not count.
+    numbers = (isinstance(state, list) and isinstance(home, list) and len(state) >= 5 and len(home) >= 5
+               and all(type(v) in (int, float) and math.isfinite(v) for v in state[:5] + home[:5]))
+    folded = bool(park.get("command") == "park" and park.get("ok") is True and park.get("settled") is True
+                  and not park.get("fault") and numbers
+                  and all(abs(p - h) <= FOLD_TOLERANCE for p, h in zip(state[:5], home[:5])))
+    return {"folded": folded, "command": park.get("command"), "state": state if numbers else None,
+            "home": home if numbers else None, "tolerance": FOLD_TOLERANCE, "runner_t": park.get("t")}
+
+
+def plan_home(cfg_data: dict[str, Any]) -> Any:
+    """The fold-home pose the runtime uses: `home` of the grasp plan file named by the config's `plan_path`.
+
+    `cell_auto_setup.load_config` loads that file into `config["plan"]`; the config JSON itself never carries it.
+    None when the file is unreadable or has no `home` (then nothing counts as folded).
+    """
+    try:
+        plan = json.loads(Path(str(cfg_data.get("plan_path") or "")).expanduser().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return plan.get("home") if isinstance(plan, dict) else None
+
+
+def tools_root() -> Path:
+    """The release the worker runs from (its unit sets TOOLS_ROOT): the arm session wrappers and their tools come from it,
+    not from the prep folder or the hand-switched omx-tools-current link (2026-11-21: one release for worker and arm)."""
+    return Path(os.environ.get("TOOLS_ROOT") or Path(__file__).resolve().parents[3])
+
+
 def _arm_run_spec(arm_id: str, prep_dir: Path) -> tuple[Path, Path, Path, tuple[int, int, int, int], str]:
     specs = {
         "arm_b": ("with-session-arm-b-par.sh", "cell-arm-b-stack.json", "object-catalog-orange.json", (10, 340, 230, 478), "temp_plate_b"),
@@ -91,7 +161,8 @@ def _arm_run_spec(arm_id: str, prep_dir: Path) -> tuple[Path, Path, Path, tuple[
     if arm_id not in specs:
         raise ValueError(f"unsupported arm_id for guarded pick: {arm_id!r}")
     wrapper, cfg, cat, roi, default_src = specs[arm_id]
-    return prep_dir / wrapper, prep_dir / cfg, prep_dir / cat, roi, default_src
+    wrappers = tools_root() / "deploy/robot/omx/session-wrappers"  # the cell configs and catalogs stay prep-folder data
+    return wrappers / wrapper, prep_dir / cfg, prep_dir / cat, roi, default_src
 
 
 FOLD_FRESH_S = 60.0  # the measured fold must come from this session's last park, not an old status line
@@ -162,6 +233,7 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     dst = str(handoff.get("dst_site") or ("pallet-l0" if arm_id != "arm_s" else "belt"))
     src_site = src.rsplit("-l", 1)[0]
     roi = (cfg_data.get("sites") or {}).get(src_site, {}).get("auto_roi") or default_roi
+    src_roi = roi
     omx_dir = Path(__file__).resolve().parent
     target = (cfg_data.get("sites") or {}).get(src_site, {}).get("dock_target_arm_xy_m")
     if target is not None:  # camera only, before any arm command: off the dock target -> the vehicle re-parks
@@ -181,40 +253,47 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         "--roi", *(str(int(v)) for v in roi),
         "--from", src,
         "--dest", dst,
-        "--commissioning",
-        "--person-at-switch",
+        *(["--commissioning", "--person-at-switch"] if presence_ok(handoff) else []),  # never declared by the worker itself
         "--task-id", str(handoff.get("task_id") or ""),
         "--handoff-lease-id", str(handoff.get("handoff_lease_id") or ""),
     ]
     hint = (handoff.get("tier_hint") or {}).get("layers_below")
     if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
         cmd += ["--layers-below", str(hint)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    parsed: dict[str, Any] = {}
-    for line in reversed(proc.stdout.splitlines()):
-        s = line.strip()
-        if s.startswith("{") and s.endswith("}"):
-            try:
-                parsed = json.loads(s)
-                break
-            except ValueError:
-                pass
-    placed = proc.returncode == 0 and parsed.get("result") == "placed"
-    fold = measured_fold(arm_id, prep_dir)
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                          env={**os.environ, "TOOLS_ROOT": str(tools_root())})  # the wrapper's tools-env reads it
+    parsed = last_json_object(proc.stdout)
+    # The wall clock at the end of the run bounds when the readbacks below existed (the runner's own clock is monotonic).
+    measured_at = time.time()
+    attempt = _last_attempt(parsed)
+    placement = attempt.get("verify") if isinstance(attempt.get("verify"), dict) else {}
+    placed = (proc.returncode == 0 and parsed.get("result") == "placed"
+              and placement.get("verified") is True and placement.get("inside") is True)
+    fold = fold_readback(attempt, plan_home(cfg_data))
+    # main's telemetry reader: the arm's last runner state must also say folded and be fresh (2026-11-19 panel)
+    live_fold = measured_fold(arm_id, prep_dir)
     clearance = source_clearance(cfg, cat if cat.is_file() else omx_dir / "object-catalog.example.json", roi, src_site) if placed else None
+    # D-1057: cell_auto_pick records only the top-frame placement check (`verify`, basis "map"). The side/top zone
+    # measurement (cell_area_zones.verify_stack_outcome*) is used only if the attempt carries it as `zone_verification`;
+    # nothing in cell_auto_pick emits that today, so without it the fields below stay unverified and Fleet refuses.
+    zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None
+    if placed:
+        write_context(cfg, cfg_data, handoff, arm_id, prep_dir, dst, src_site, src_roi, zone)  # for a later re-measurement
+    zone_ok = zone_acceptance(zone, handoff, dst)  # the measured slot and tier must be the task's own
     tier = handoff.get("tier")
     dst_area = dst.rsplit("-l", 1)[0]
+    verification = ({**zone, "placement": placement} if zone is not None else
+                    {"verified": False, "basis": placement.get("basis") or "unverified: no placement record",
+                     "placement": placement,
+                     "z_gate": {"verdict": "UNKNOWN", "reason": "no zone measurement from cell_auto_pick"}})
+    folded = bool(placed and fold["folded"] and live_fold["folded"])
     stage_result = {
         "handoff_lease_id": handoff.get("handoff_lease_id"),
         "directive_id": handoff.get("task_id"),
         "arm_id": arm_id,
-        "task_verified": placed,
+        "task_verified": placed and zone_ok,
         "place": {"area": dst_area, **({"tier": tier} if isinstance(tier, int) else {})},
-        "verification": {
-            "verified": placed,
-            "basis": "predefined_side_and_top_target_zones",
-            "z_gate": {"verdict": "PASS" if placed else "FAIL"},
-        },
+        "verification": verification,
         "raw": parsed,
         **({"reach_fix": parsed["reach_fix"]} if parsed.get("reach_fix") else {}),
         **({"source_clearance": clearance} if clearance is not None else {}),
@@ -222,8 +301,12 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     return {
         "arm": arm_id,
         "events_count": len(parsed.get("attempts") or []),
+        "measured_at": measured_at,
         "stage_result": stage_result,
-        "stop_event": {"command": "stop", "ok": placed, "folded": placed and fold["folded"],
-                       **({"state": fold["state"]} if fold.get("state") else {})},
-        **({} if placed else {"error": parsed.get("result") or f"exit_{proc.returncode}"}),
+        "stop_event": {"command": "stop", "ok": folded, "folded": folded, "readback": fold, "live": live_fold,
+                       **({"state": fold["state"]} if fold["state"] else {})},  # Fleet reads stop_event.state as joints
+        "commissioning": presence_ok(handoff),
+        **({"review_required": True} if review_required(parsed) else {}),
+        **({"error": parsed.get("result") or f"exit_{proc.returncode}"} if not placed else
+           {} if folded else {"error": "FOLD_READBACK_MISSING"}),
     }

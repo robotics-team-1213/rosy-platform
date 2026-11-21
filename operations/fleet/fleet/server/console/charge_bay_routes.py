@@ -14,6 +14,7 @@ from fleet.pipeline import resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import CONTRACT_VERSION
 from fleet.pipeline.station_zones import load_station_zones
 from fleet.server.pipeline_routes import install_pipeline_routes, _storage_dir
+from fleet.server.pipeline_evidence import amr_evidence, omx_owner_evidence
 
 # A saved cell claim follows a robot only while that robot is actually at the station.
 CELL_CLAIM_RADIUS_M = 0.18
@@ -141,5 +142,7 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
         app, console=console, site_maps=getattr(app.state, "site_maps", None), read_guard=read_guard,
         operator_guard=getattr(app.state, "operator_guard", None),
         proposer_guard=getattr(app.state, "proposer_guard", None),
+        amr_evidence_fn=lambda task: amr_evidence(app, task),
+        omx_evidence_fn=lambda task: omx_owner_evidence(app, task),
     )
     return bay_inputs

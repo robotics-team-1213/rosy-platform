@@ -163,13 +163,16 @@ class ModeMachine:
         with self._lock:
             return update()
 
-    def transition(self, new: Mode, expect: Optional[Mode] = None) -> tuple[bool, str]:
+    def transition(self, new: Mode, expect: Optional[Mode] = None, *,
+                   expect_epoch: int | None = None) -> tuple[bool, str]:
         """Change the mode. With `expect`, only from that mode — a caller that
         checked the mode, then did something else, must not commit over a mode
         another thread set meanwhile."""
         with self._lock:
             if self._motion_reserved and new not in (Mode.IDLE, Mode.EMERGENCY):
                 return False, "lane perception configuration is being applied"
+            if expect_epoch is not None and self._epoch != expect_epoch:
+                return False, "mode epoch changed"
             if expect is not None and self.mode is not expect:
                 return False, (f"mode changed ({self.mode.value}, "
                                f"expected {expect.value})")

@@ -1,0 +1,127 @@
+{
+ "note": "zone_rois proposed from real frames of the cell (2026-11-20, read-only capture): top lanes c1-c3 x rows r1 (empty) and r2 (three containers: black, red, black); side columns and tier bands; floor = pallet header strip and free bottom cell; floor_depth_mm = median depth of each floor patch in the two frames (recorded at calibration); floor_depth_mm = median depth of each floor patch in the two frames (recorded at calibration). The floor depth of a patch differs by up to 9 mm between two captures a few seconds apart, so the +-4 mm check needs the depth recorded for the pose in use; the by-frame table stands in for a calibration taken at each pose",
+ "zone_rois": {
+  "top": {
+   "c1r1": [
+    295,
+    199,
+    337,
+    296
+   ],
+   "c1r2": [
+    295,
+    300,
+    337,
+    400
+   ],
+   "c2r1": [
+    338,
+    199,
+    377,
+    296
+   ],
+   "c2r2": [
+    338,
+    300,
+    377,
+    400
+   ],
+   "c3r1": [
+    378,
+    199,
+    416,
+    296
+   ],
+   "c3r2": [
+    378,
+    300,
+    416,
+    400
+   ]
+  },
+  "side": {
+   "c1t1": [
+    148,
+    375,
+    228,
+    460
+   ],
+   "c2t1": [
+    240,
+    375,
+    314,
+    460
+   ],
+   "c3t1": [
+    318,
+    375,
+    398,
+    460
+   ],
+   "c1t2": [
+    148,
+    283,
+    228,
+    375
+   ],
+   "c2t2": [
+    240,
+    283,
+    314,
+    375
+   ],
+   "c3t2": [
+    318,
+    283,
+    398,
+    375
+   ],
+   "c1t3": [
+    148,
+    191,
+    228,
+    290
+   ],
+   "c2t3": [
+    240,
+    191,
+    314,
+    290
+   ],
+   "c3t3": [
+    318,
+    191,
+    398,
+    290
+   ]
+  },
+  "floor": [
+   [
+    298,
+    155,
+    410,
+    196
+   ],
+   [
+    318,
+    410,
+    400,
+    455
+   ]
+  ],
+  "floor_depth_mm": [
+   634.0,
+   565.0
+  ]
+ },
+ "floor_depth_mm_by_frame": {
+  "0": [
+   634.0,
+   565.0
+  ],
+  "2": [
+   625.0,
+   568.0
+  ]
+ }
+}

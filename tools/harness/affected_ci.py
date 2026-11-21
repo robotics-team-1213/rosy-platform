@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -42,9 +43,10 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 5, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
-# Fleet file weights from pytest result-line timestamps in CI 44563719449 and 44568270495.
-# Retain prior weights where timings are incomplete or inconsistent. Unlisted files weigh 1.
+SUITE_SHARDS = {"fleet": 8, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
+# Fleet file weights: setup + call + teardown seconds per file from one serial lab run of the whole suite with
+# the browser tests on (`--durations=0`, 2026-11-21, 3612 s over 571 files). Files under 2 s are unlisted and weigh 1.
+# CI log timestamps are no source for this: pytest's piped output arrives in blocks, so they lump files together.
 # The weights only choose runners; every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
@@ -57,13 +59,12 @@ _STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_schedulin
 
 
 def consolidated(include: list[dict]) -> list[dict]:
-    """Measured seconds spread a PR's small jobs over runners; a selection that would pass MAX_CI_JOBS keeps a coarser packing.
+    """Measured seconds spread a PR's small jobs over runners; a selection that would pass MAX_CI_JOBS keeps the coarser packing.
 
-    #341 (2026-11-21): two guard jobs ran 117 and 122 s of pytest at JOB_WEIGHT, so the finest packing halves that."""
-    packings = ((CI_TEST_SECONDS, affected_ros.FINE_JOB_WEIGHT), (CI_TEST_SECONDS, affected_ros.JOB_WEIGHT),
-                (FLEET_TEST_SECONDS, affected_ros.JOB_WEIGHT))
-    tried = [affected_ros.consolidate(include, seconds, cap) for seconds, cap in packings]
-    return next((jobs for jobs in tried if len(jobs) <= MAX_CI_JOBS), tried[-1])
+    A 60 s share per job was tried on 2026-11-21 (#343) and dropped: runs used 55% more runner seconds (984 to 1546)
+    and, with several runs sharing the 20 concurrent jobs, the median job waited 177 s for a runner (45 s before)."""
+    fine = affected_ros.consolidate(include, CI_TEST_SECONDS)
+    return fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
 
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
@@ -216,6 +217,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if modules:
             entries.append({"name": "modules", "invocations": modules, "ros": "overlay"})
     else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
+        if os.environ.get("ROSY_QUEUE_TESTED"):  # ci.yml sets it on merge_group only (D-1059)
+            import affected_queue
+            sel = affected_queue.narrowed(repo, sel)
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
         whole["test"] = {"name": "root-test", "invocations": [["test"]]}
         for inv in sel.invocations:
@@ -233,6 +237,8 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
                for inv in sel.invocations for p in inv):
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
+    import affected_browser
+    entries += affected_browser.entries(repo, sel)  # pull_request runs only (D-1066); [] elsewhere
     if not docs_only(sel) and buildable(repo, sel):
         entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:

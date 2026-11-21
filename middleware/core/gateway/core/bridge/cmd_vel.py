@@ -145,6 +145,15 @@ def cmd_vel_cycle(command: _Command, power: _Power, send: Callable[[Any], None],
             return
         command._cycle_started = True
     try:
+        request = command.pending_idle_zero_write() if actual else None
+        if request is not None:
+            downstream = notify_written
+
+            def notify_written(out):
+                command.note_idle_zero_write(request, out)
+                if downstream is not None:
+                    downstream(out)
+
         _cmd_vel_cycle(command, power, send, readiness, warn, trial_guard=trial_guard,
                        now=now, motion_ready=motion_ready, notify_written=notify_written,
                        execution_fence=command._execution_fence if actual else None)

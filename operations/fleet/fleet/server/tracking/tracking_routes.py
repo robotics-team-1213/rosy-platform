@@ -83,6 +83,7 @@ class IdentityVerdict(BaseModel):
     reason: Optional[Literal["none", "multiple", "frames_missing", "stale", "calibration_changed"]] = None
     x: Optional[float] = Field(default=None, allow_inf_nan=False)
     y: Optional[float] = Field(default=None, allow_inf_nan=False)
+    yaw: Optional[float] = Field(default=None, allow_inf_nan=False)  # map-frame rad; Vision's led_identity.decide sends it
     captured_at: Optional[float] = Field(default=None, allow_inf_nan=False)
     calibration_revision: Optional[str] = Field(default=None, max_length=160)
     evidence: dict = Field(default_factory=dict)

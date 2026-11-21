@@ -41,6 +41,7 @@ from core_common.protocol.line_authority import AuthorityRefused
 from core_features.localization import MissionRefused
 from core_features.maps import valid_costmap_scope
 from core_features.navigation.manager import GOAL_LEASE_MAX_S, NavigationError
+from core_features.navigation.planned_path import PlannedPathScope
 from core_features.navigation.route import MAX_POINTS, RoutePoint
 from core_features.swarm import SwarmError
 from core_features.waypoints.manager import Waypoint
@@ -59,6 +60,7 @@ __all__ = [
     "SpeedLimits",
     "TrialRefused",
     "NavigationError",
+    "PlannedPathScope",
     "GOAL_LEASE_MAX_S",
     "MAX_POINTS",
     "RoutePoint",

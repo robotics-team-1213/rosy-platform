@@ -23,7 +23,13 @@ newest odom sample (fresh within `max_odom_age_s`), reads LOCALIZED at once and 
 under the same limits as a sighting anchor (`max_dead_reckon_m`, `max_bridge_turn_deg`,
 `max_anchor_age_s`). The next sighting is checked against it like any anchor: a disagreement
 beyond `max_jump_m` / `max_jump_deg` reads DEGRADED. Sightings captured before the pin are dropped.
-`anchor_source` names the anchor kind (`sighting` | `operator_pin` | `auto_locate` | `peer`).
+`anchor_source` names the anchor kind (`sighting` | `operator_pin` | `auto_locate` | `peer` | `track`).
+
+Track (opt-in per robot, `track_anchor_robots`, identity modes in `track_modes`): `add_track` takes the confirmed ceiling-camera
+track position; yaw is the odometry-bridged one, or the track's motion heading when the caller has one. Sighting rules apply.
+`camera_residual_m` / `_deg`: newest camera fix minus the odometry-bridged prediction from a reference anchor that a track fix
+replaces only once stretched (dead-reckon, turn or age limit), so a camera that keeps correcting the pose cannot hide odometry
+drift. None without a fix newer than `max_odom_age_s` (deg: also without a camera heading).
 
 Auto locate (D-989, opt-in per robot, `MapPoseConfig.auto_locate_robots`): the caller feeds a robot's
 own map pose through a camera-fitted transform like a sighting. It never replaces a fresh sighting or
@@ -50,7 +56,7 @@ from dataclasses import dataclass, fields
 from typing import Mapping, Optional
 
 from rosy.world.state.projections.map_pose_samples import (  # noqa: F401
-    SIGHTING, Pose, OdomSample, Sighting, _finite, _wrap, wrap_angle, relative, compose, parse_utc,
+    SIGHTING, Pose, OdomSample, body_heading, camera_residual, residual_fields, Sighting, _finite, _wrap, wrap_angle, relative, compose, parse_utc,
     odom_from_snapshot, sighting_from_row)
 
 LOCALIZED, DEGRADED, UNKNOWN = "LOCALIZED", "DEGRADED", "UNKNOWN"
@@ -59,6 +65,7 @@ BRIDGED = "bridged"
 OPERATOR_PIN = "operator_pin"
 #: D-989: the robot's map pose through the transform fitted to the camera's LED-confirmed track.
 AUTO_LOCATE = "auto_locate"
+TRACK = "track"             # the confirmed ceiling-camera track (no marker); yaw from odom or motion heading
 PEER = "peer"               # D-1017: another robot's relayed self-pose claim (non-independent)
 #: D-989: an auto-locate feed older than this (its tick stalled or died) reads DEGRADED at read time.
 AUTO_FEED_MAX_S = 3.0
@@ -113,18 +120,27 @@ class MapPoseConfig:
     peer_lease_s: float = 6.0
     #: D-1017: a peer claim this close behind the newest camera sighting is skipped.
     peer_after_camera_s: float = 10.0
+    #: Robots whose confirmed camera track may anchor the pose (add_track); none by default, so main is unchanged.
+    track_anchor_robots: tuple = ()
+    #: Identity binding modes ("led" lamp verdict | "motion" motion match) allowed to anchor.
+    track_modes: tuple = ("led",)
+    #: A track moved less than this between two feeds gives no motion heading (camera noise is about 5 cm).
+    track_heading_min_m: float = 0.15
 
     def __post_init__(self) -> None:
         upper = {"max_dead_reckon_m": 20.0, "max_jump_m": 2.0, "max_jump_deg": 180.0,
                  "max_odom_age_s": 30.0, "max_pair_s": 1.0, "max_interp_gap_s": 5.0,
                  "sighting_lease_s": 5.0, "max_odom_future_s": 5.0, "max_speed_mps": 10.0,
                  "max_bridge_turn_deg": 3600.0, "max_turn_rate_dps": 3600.0, "max_anchor_age_s": 600.0, "max_stale_draw_s": 600.0,
-                 "peer_lease_s": 30.0, "peer_after_camera_s": 600.0}
-        if (not isinstance(self.auto_locate_robots, tuple)
-                or not all(isinstance(r, str) and r for r in self.auto_locate_robots)):
-            raise ValueError("fleet.map_pose.auto_locate_robots must be a list of robot ids")
+                 "peer_lease_s": 30.0, "peer_after_camera_s": 600.0, "track_heading_min_m": 5.0}
+        for name in ("auto_locate_robots", "track_anchor_robots", "track_modes"):
+            if (not isinstance(getattr(self, name), tuple)
+                    or not all(isinstance(r, str) and r for r in getattr(self, name))):
+                raise ValueError(f"fleet.map_pose.{name} must be a list of names")
+        if not set(self.track_modes) <= {"led", "motion"}:
+            raise ValueError("fleet.map_pose.track_modes may hold led and motion only")
         for item in fields(self):
-            if item.name == "auto_locate_robots":
+            if item.name in ("auto_locate_robots", "track_anchor_robots", "track_modes"):
                 continue
             value = getattr(self, item.name)
             if not _finite(value):
@@ -144,8 +160,9 @@ class MapPoseConfig:
         unknown = set(raw) - {item.name for item in fields(cls)}
         if unknown:
             raise ValueError(f"fleet.map_pose has unknown keys: {sorted(unknown)}")
-        if isinstance(raw.get("auto_locate_robots"), list):
-            raw["auto_locate_robots"] = tuple(raw["auto_locate_robots"])
+        for name in ("auto_locate_robots", "track_anchor_robots", "track_modes"):
+            if isinstance(raw.get(name), list):
+                raw[name] = tuple(raw[name])
         return cls(**raw)
 
 
@@ -175,6 +192,13 @@ class MapPose:
     bridge_turn_deg: float = 0.0
     #: D-1017: age of the newest camera sighting (None: none ever), shown on the operator card.
     last_sighting_age_s: Optional[float] = None
+    #: Newest camera fix (sighting or track) minus the odometry-bridged prediction: metres apart, and heading camera minus
+    #: prediction in degrees. None without a fix newer than `max_odom_age_s` (deg: also without a camera heading).
+    camera_residual_m: Optional[float] = None
+    camera_residual_deg: Optional[float] = None
+    camera_x: Optional[float] = None      # where the camera saw the robot when the residual was taken (yaw None: no heading)
+    camera_y: Optional[float] = None
+    camera_yaw: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -202,6 +226,9 @@ class MapPoseTracker:
         self.config = config
         self._odom: deque[_Odom] = deque(maxlen=ODOM_BUFFER)
         self._anchor: Optional[_Anchor] = None
+        self._ref: Optional[_Anchor] = None   # the anchor camera fixes are compared with (see the module docstring)
+        self._resid: Optional[tuple[float, Optional[float], float]] = None   # (metres, degrees, captured_at)
+        self._newest_track: Optional[float] = None
         self._pending: deque[Sighting] = deque(maxlen=PENDING_SIGHTINGS)
         self._filtered_map_id = 0
         self._newest_sighting: Optional[float] = None
@@ -334,8 +361,8 @@ class MapPoseTracker:
             return "ODOM_STALE"
         while self._pending and self._pending[0].captured_at < now:
             self._pending.popleft()
-        self._anchor = _Anchor((float(pose[0]), float(pose[1]), _wrap(float(pose[2]))), latest, now,
-                               map_id, OPERATOR_PIN)
+        self._anchor = self._ref = _Anchor((float(pose[0]), float(pose[1]), _wrap(float(pose[2]))), latest, now,
+                                           map_id, OPERATOR_PIN)
         self._degraded, self._consistent = False, RECOVER_AFTER
         return None
 
@@ -378,12 +405,12 @@ class MapPoseTracker:
     def auto_blocked(self) -> bool:
         return self._auto_blocked
 
-    def drop_auto_locate(self) -> None:
-        """D-989: the transform is gone. An auto-locate anchor ends now, not when its age runs out."""
-        self._pending = deque((s for s in self._pending if s.kind != AUTO_LOCATE), maxlen=PENDING_SIGHTINGS)
+    def drop_auto_locate(self, kind: str = AUTO_LOCATE) -> None:
+        """D-989: the transform is gone. An auto-locate anchor ends now, not when its age runs out (TRACK: its identity)."""
+        self._pending = deque((s for s in self._pending if s.kind != kind), maxlen=PENDING_SIGHTINGS)
         self._auto_camera_at, self._auto_camera_odom = None, None
-        if self._anchor is not None and self._anchor.kind == AUTO_LOCATE:
-            self._anchor = None
+        if self._anchor is not None and self._anchor.kind == kind:
+            self._anchor = self._ref = self._resid = None
             self._degraded, self._consistent = False, 0
 
     def allow_auto_locate(self) -> None:
@@ -408,6 +435,26 @@ class MapPoseTracker:
         self._newest_peer = at
         self._pending.append(Sighting(self.robot_id, pose[0], pose[1], _wrap(pose[2]), at, None,
                                       map_id, PEER))
+        self._resolve(now)
+        return None
+
+    def add_track(self, xy: tuple[float, float], heading: Optional[float], at: float, now: float, map_id: Optional[str],
+                  active_map_id: Optional[str], mode: str) -> Optional[str]:
+        """The confirmed ceiling-camera track at `at` as an anchor; `heading` is its motion heading (None: keep the
+        odometry-bridged yaw). None when taken, else why not (a sighting's lease and order rules)."""
+        if self.robot_id not in self.config.track_anchor_robots or mode not in self.config.track_modes:
+            return "DISABLED"
+        if not _finite(*xy, at, now) or (heading is not None and not _finite(heading)):
+            return "POSE_INVALID"
+        if map_id is None or map_id != active_map_id:
+            return "MAP_NOT_ACTIVE"
+        if not -MAX_SIGHTING_FUTURE_S <= now - at <= self.config.sighting_lease_s:
+            return "STALE_SAMPLE"
+        if self._newest_track is not None and at <= self._newest_track:
+            return "NOT_NEWER"
+        yaw = body_heading(heading, self._odom, self._newest_track, at)   # travel direction -> body yaw (backing up)
+        self._newest_track = at   # apart from _newest_sighting: a track never makes a marker sighting look old
+        self._pending.append(Sighting(self.robot_id, xy[0], xy[1], yaw, at, None, map_id, TRACK))
         self._resolve(now)
         return None
 
@@ -446,13 +493,13 @@ class MapPoseTracker:
                     or (anchor.kind != AUTO_LOCATE and anchor_age > cfg.max_anchor_age_s))
         return MapPose(x, y, yaw, DEGRADED if degraded else LOCALIZED, source, bridged, age,
                        anchor_age, anchor.map_id, odom_stamp=latest.stamp, anchor_source=anchor.kind,
-                       bridge_turn_deg=math.degrees(turned), **diag)
+                       bridge_turn_deg=math.degrees(turned), **diag, **residual_fields(self._resid, now, cfg.max_odom_age_s))
 
     def _reset(self, since: float) -> None:
         self._auto_camera_odom = None   # the odom frame ended; its path no longer compares
         self._epoch += 1
         self._odom.clear()
-        self._anchor = None
+        self._anchor = self._ref = self._resid = None
         while self._pending and self._pending[0].captured_at < since:
             self._pending.popleft()        # seen in the odom frame that just ended
         self._degraded, self._consistent = False, 0
@@ -480,14 +527,25 @@ class MapPoseTracker:
 
     def _apply(self, sighting: Sighting, odom: _Odom) -> None:
         cfg = self.config
-        seen = (sighting.x, sighting.y, sighting.yaw)
         anchor = self._anchor
-        if anchor is not None and anchor.kind != AUTO_LOCATE and sighting.captured_at < anchor.captured_at:
+        if anchor is not None and anchor.kind not in (AUTO_LOCATE, TRACK) and sighting.captured_at < anchor.captured_at:
             return                            # D-593: seen before the operator pin it would undo
         if anchor is not None and anchor.kind != AUTO_LOCATE and sighting.captured_at - anchor.captured_at > cfg.max_stale_draw_s:
             anchor = None                     # expired anchor reads UNKNOWN; a new sighting starts over
         if anchor is not None and anchor.map_id != sighting.map_id:
             anchor = None                     # another map frame: start over from this sighting
+        yaw, track = sighting.yaw, sighting.kind == TRACK
+        if anchor is not None and (track or yaw is None):
+            yaw = compose(anchor.map_pose, relative(anchor.odom.pose, odom.pose))[2]   # a travel heading never turns an anchor
+        if yaw is None:
+            return                            # no anchor and no travel heading: nothing to take a yaw from
+        seen = (sighting.x, sighting.y, yaw)
+        ref = self._ref if anchor is not None else None
+        if ref is not None and sighting.kind in (SIGHTING, TRACK):
+            m, deg = camera_residual(ref.map_pose, ref.odom.pose, (*seen[:2], sighting.yaw or 0.0), odom.pose, sighting.yaw is not None)
+            self._resid = (m, deg, sighting.captured_at, sighting.x, sighting.y, sighting.yaw)
+        if track and anchor is not None and anchor.kind in (SIGHTING, OPERATOR_PIN) and sighting.captured_at - anchor.captured_at <= cfg.max_anchor_age_s:
+            return                            # a fresh marker or pin stays the anchor; the track only measured against it
         if anchor is None:
             self._degraded, self._consistent = True, 0       # a first anchor is not yet confirmed
         else:
@@ -519,6 +577,14 @@ class MapPoseTracker:
                 if self._consistent >= RECOVER_AFTER:
                     self._degraded = False
         self._anchor = _Anchor(seen, odom, sighting.captured_at, sighting.map_id, sighting.kind)
+        if sighting.kind == SIGHTING or (track and (ref is None or self._stretched(ref, sighting.captured_at, odom))):
+            self._ref = self._anchor          # camera fixes only; a track keeps the older reference until it is stretched
+
+    def _stretched(self, ref: _Anchor, at: float, odom: _Odom) -> bool:
+        cfg = self.config
+        return (odom.path_m - ref.odom.path_m > cfg.max_dead_reckon_m
+                or odom.turn_rad - ref.odom.turn_rad > math.radians(cfg.max_bridge_turn_deg)
+                or at - ref.captured_at > cfg.max_anchor_age_s)
 
 
 def _interpolate(before: _Odom, after: _Odom, t: float) -> _Odom:

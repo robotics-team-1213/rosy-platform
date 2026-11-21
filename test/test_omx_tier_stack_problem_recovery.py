@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import time
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -344,6 +345,8 @@ def test_cell_task_worker_event_driven_hw_and_parallel_handoff(tmp_path: Path, m
                     "v_cmd_mps": 0.0,
                 },
             }
+        if path.endswith("/owner-evidence"):  # D-1057: the owner's measured evidence is recorded before /complete
+            return {"ok": True, "recorded": True}
         return {"gate": {"amr_motion_inhibited": False}, "task": {"status": "COMPLETED" if body["phase"] == "RELEASED" else "ABORTED", "hardware_telemetry": body["hardware_telemetry"]}}
 
     assert ctw.poll_and_execute_once(pipe, request_fn=_req, prep_dir=tmp_path) == []
@@ -353,7 +356,11 @@ def test_cell_task_worker_event_driven_hw_and_parallel_handoff(tmp_path: Path, m
     assert runs[0]["omx_result"]["receipt"]["goal_evidence_digest"] is None
     assert runs[0]["omx_result"]["receipt"]["physical_completion"] is False
     assert runs[0]["task"]["status"] == "ABORTED"
-    measured = {**hw_out, "stage_result": {"directive_id": "t-par-1", "arm_id": "arm_s",
+    # D-1057: a measured result carries when it was measured and the folded readback of the park command
+    measured = {**hw_out, "measured_at": time.time(),
+                "stop_event": {"command": "park", "ok": True, "folded": True, "settled": True, "fault": None,
+                               "state": [0.5, -57.0, 49.0, 51.0, -4.0, 58.0]},
+                "stage_result": {"directive_id": "t-par-1", "arm_id": "arm_s",
                                               "handoff_lease_id": "lease-par-1", "task_verified": True,
                                              "verification": {"verified": True, "basis": "predefined_side_and_top_target_zones"}}}
     runs = ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: measured, prep_dir=tmp_path)

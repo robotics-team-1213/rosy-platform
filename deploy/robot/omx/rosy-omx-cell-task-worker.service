@@ -5,9 +5,9 @@ After=network-online.target rosy-omx-observation-bridge.service
 [Service]
 Type=simple
 EnvironmentFile=-%h/.config/rosy/omx-observation-bridge.env
-Environment=TOOLS_ROOT=%h/rosy-test/omx-tools-current
-Environment=PYTHONPATH=%h/rosy-test/omx-tools-current:%h/rosy-test/omx-tools-current/deploy/robot/omx:%h/rosy-test/omx-tools-current/middleware/devices/omx/adapter:%h/rosy-test/omx-tools-current/operations/overhead:%h/rosy-test/omx-tools-current/contracts/foundation
-ExecStart=%h/rosy-omx/current-env/bin/python %h/rosy-test/omx-tools-current/deploy/robot/omx/cell_task_worker.py --fleet-r-url https://192.168.1.93:8443 --token-file %h/.config/rosy-fleet-r-token --ca-file %h/.config/rosy/control-peers-ca.pem --execute-mode guarded-pick --interval-s 1.5
+Environment=TOOLS_ROOT=%h/.local/share/rosy/omx-devices/current
+Environment=PYTHONPATH=%h/.local/share/rosy/omx-devices/current:%h/.local/share/rosy/omx-devices/current/deploy/robot/omx:%h/.local/share/rosy/omx-devices/current/middleware/devices/omx/adapter:%h/.local/share/rosy/omx-devices/current/operations/overhead:%h/.local/share/rosy/omx-devices/current/contracts/foundation
+ExecStart=%h/rosy-omx/current-env/bin/python %h/.local/share/rosy/omx-devices/current/deploy/robot/omx/cell_task_worker.py --fleet-r-url https://rosy-fleet-r.local:8443 --token-file %h/.config/rosy-fleet-r-token --ca-file %h/.config/rosy/r-site-ca.pem --execute-mode guarded-pick --interval-s 1.5
 Restart=always
 RestartSec=5
 

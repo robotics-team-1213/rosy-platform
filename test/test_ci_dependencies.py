@@ -295,6 +295,56 @@ def test_ci_fails_a_session_that_collected_nothing(monkeypatch, capsys, paths, e
     assert calls[0][-2:] == ['-pno:launch_testing', '-pno:launch_ros']
 
 
+@pytest.mark.parametrize('words, output, expected, env_seen', [
+    (['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1', 'test/test_a.py'], ['== 4 skipped in 0.1s ==\n'], 1, True),
+    (['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1', 'test/test_a.py'], ['== 3 passed in 0.1s ==\n'], 0, True),
+    (['ROSY_RUN_BROWSER_TESTS=1', 'test/test_a.py'], ['== 4 skipped in 0.1s ==\n'], 0, False),  # not STRICT: unchanged
+])
+def test_ci_strict_browser_run_must_pass_something_and_skip_nothing(monkeypatch, capsys, words, output, expected, env_seen):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([words]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter(output), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == expected
+    assert ('browser evidence did not run for real' in capsys.readouterr().out) == (expected == 1)
+    assert calls[0][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+    assert (calls[0][1].get('ROSY_BROWSER_STRICT') == '1') == env_seen
+    assert '-n' not in calls[0][0]  # browser runs never use xdist
+
+
+def test_ci_strict_browser_run_judges_the_quarantine_rerun(monkeypatch, capsys, tmp_path):
+    import json
+    import yaml
+    from types import SimpleNamespace
+    import known_failures
+
+    node = 'test/test_a.py::test_x'
+    quarantine = tmp_path / 'q.txt'
+    quarantine.write_text(node + '  # flaky\n', encoding='utf8')
+    monkeypatch.setattr(known_failures, 'QUARANTINE', quarantine)
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    first = ['FAILED ' + node + ' - boom\n', '== 1 failed in 0.1s ==\n']
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1', 'test/test_a.py']]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs: SimpleNamespace(stdout=iter(first), wait=lambda: 1))
+    monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(
+        returncode=0, stdout='PASSED ' + node + '\n== 1 passed in 0.1s ==\n'))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == 0
+    assert 'browser evidence did not run for real' not in capsys.readouterr().out
+
+
 def test_no_test_module_defines_a_nose_style_setup_function():
     # CI's apt pytest 7.4 calls a module-level plain setup()/teardown() once with the module as
     # its argument (nose compatibility), so a helper by that name gets the module as tmp_path.

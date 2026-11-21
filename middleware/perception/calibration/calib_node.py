@@ -30,7 +30,7 @@ from std_msgs.msg import String, UInt16MultiArray
 
 from control.sensing.body import URDF_RADIUS, use_radius
 from control.sensing.lidar import NOSE_YAW, is_robot_scan, sector_range
-from control.safety_node import parse_us_range, roll_pitch
+from control.sensing.range_tilt import parse_us_range, roll_pitch
 from control.calibration_storage import merge_calibration, single_calibration_path, calibration_revision
 from control.calibration_record import validate_context, runtime_calibration_path
 from control.calibration_sequence import (

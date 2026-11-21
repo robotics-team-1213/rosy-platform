@@ -9,7 +9,6 @@ from __future__ import annotations
 
 
 JOB_WEIGHT = 120
-FINE_JOB_WEIGHT = 60  # a runner's fixed setup is about 100 s, so a 60 s pytest share still pays for its runner
 DIR_WEIGHT = 8
 
 
@@ -42,7 +41,7 @@ def entries(invocations, matrix) -> list[dict]:
     return [{"name": f"affected-{i + 1}", "invocations": [inv], "ros": ros} for i, (ros, inv) in enumerate(by_ros)]
 
 
-def consolidate(entries: list[dict], seconds: dict[str, int], cap: int = JOB_WEIGHT) -> list[dict]:
+def consolidate(entries: list[dict], seconds: dict[str, int]) -> list[dict]:
     """Merge same-environment ``affected-*`` runners until a job's weight passes JOB_WEIGHT (2026-11-20, ralph).
 
     A job runs its invocations in order, so the packer's collision-free groups stay separate invocations
@@ -52,6 +51,10 @@ def consolidate(entries: list[dict], seconds: dict[str, int], cap: int = JOB_WEI
         paths = [p for inv in entry["invocations"] for p in inv if not p.startswith("-")]
         return sum(seconds.get(p.rsplit("/", 1)[-1], 1) if p.endswith(".py") else DIR_WEIGHT for p in paths)
 
+    # A run is as long as its slowest job, so smaller jobs may fill up to that size at no cost in time and save
+    # their own setup (about 100 s a job). 2026-11-21: 754 jobs in 65 runs, 29% of the runner time was job setup,
+    # and with 20 concurrent jobs for the organisation the median run waited a minute for a runner.
+    cap = max([JOB_WEIGHT, *(weight(e) for e in entries if e["name"].startswith("affected-") and e.get("kind") == "pytest")])
     out: list[tuple[dict, int]] = []
     for entry in entries:
         w = weight(entry)

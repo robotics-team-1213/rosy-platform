@@ -48,6 +48,8 @@ _HTTP_BY_CODE = {
     "EMERGENCY_ACTIVE": 409,
     "NAVIGATION_ACTIVE": 409,
     "OWNER_GENERATION_CHANGED": 409,
+    "NAVIGATION_PLAN_CHANGED": 409,
+    "NAVIGATION_PLANNER_UNAVAILABLE": 503,
     # D-550 10: a lease renewal for a goal that is no longer the active leased goal.
     "GOAL_LEASE_NOT_ACTIVE": 409,
     "WAYPOINT_EXISTS": 409,
@@ -102,6 +104,10 @@ _HTTP_BY_CODE = {
 }
 
 
+def navigation_error_status(code: str) -> int:
+    return _HTTP_BY_CODE.get(code, 400)
+
+
 def register_exception_handlers(app) -> None:
     @app.exception_handler(ApiError)
     async def _api_error(_: Request, exc: ApiError):
@@ -116,7 +122,7 @@ def register_exception_handlers(app) -> None:
 
     @app.exception_handler(NavigationError)
     async def _nav_error(_: Request, exc: NavigationError):
-        status = _HTTP_BY_CODE.get(exc.code, 400)
+        status = navigation_error_status(exc.code)
         return JSONResponse(status_code=status, content=error_body(exc.code, str(exc)))
 
     @app.exception_handler(WaypointError)
