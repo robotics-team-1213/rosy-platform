@@ -21,7 +21,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     const canvas = el("map-canvas");
     const armed = !hadGrid && Boolean(view.selected || view.pinning);
     canvas.removeAttribute("aria-hidden");
-    canvas.setAttribute("role", armed || view.focusRobot ? "button" : "img");
+    if (!armed && !view.focusRobot) canvas.setAttribute("role", "img");
     canvas.tabIndex = armed ? 0 : -1;
     if (armed) canvas.classList.remove("idle");
     else canvas.classList.add("idle");
