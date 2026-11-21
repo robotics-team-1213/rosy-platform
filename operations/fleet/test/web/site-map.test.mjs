@@ -125,6 +125,35 @@ test('edits copy the map and refuse bad values', () => {
   assert.equal(editPlace(faced, 'A', {kind: 'start'}).places[0].kind, 'start');
 });
 
+test('a pin set in the inspector survives a hand move and clears without leaving a false flag', () => {
+  const pinned = editEdge(editPlace(MAP, 'B', {pinned: true}), 'ab', {pinned: true});
+  assert.equal(pinned.places[1].pinned, true);
+  assert.equal(pinned.edges[0].pinned, true);
+  assert.equal('pinned' in editPlace(pinned, 'B', {pinned: false}).places[1], false);
+  let map = createSurveyDraft('new', {revision: 'r1', origin: [0, 0], heading_rad: 0,
+    scale_source: 'odometry', description: 'Start'});
+  map = appendSurveyElement(map, {id: 'a', kind: 'junction', name: 'A', geometry: [[0, 0]]});
+  map = editPlace(map, 'a', {pinned: true});
+  assert.equal(editSurveyElement(map, {id: 'a', kind: 'junction', name: 'A', geometry: [[0, .1]]}).places[0].pinned, true);
+});
+
+test('a stop takes a drawn zone that pins it and an approach distance that needs its heading', () => {
+  const stop = {...MAP, places: MAP.places.map(p => p.id === 'B' ? {...p, kind: 'stop', yaw: 0} : p)};
+  const zoned = editPlace(stop, 'B', {stop_zone: [[0.91234, -0.1], [1.1, -0.1], [1.1, 0.1]]});
+  const b = zoned.places.find(p => p.id === 'B');
+  assert.deepEqual(b.stop_zone[0], [0.912, -0.1]);
+  assert.equal(b.pinned, true);
+  assert.throws(() => editPlace(zoned, 'B', {pinned: false}), /고정을 풀 수 없습니다/);
+  assert.equal('stop_zone' in editPlace(zoned, 'B', {stop_zone: null}).places.find(p => p.id === 'B'), false);
+  assert.equal(editPlace(stop, 'B', {approach_m: '0.3'}).places.find(p => p.id === 'B').approach_m, 0.3);
+  assert.equal('approach_m' in editPlace(editPlace(stop, 'B', {approach_m: 0.3}), 'B', {approach_m: ''}).places.find(p => p.id === 'B'), false);
+  assert.throws(() => editPlace(stop, 'B', {approach_m: 0.7}), /0.05–0.6/);
+  const unfaced = {...MAP, places: MAP.places.map(p => p.id === 'B' ? {...p, kind: 'stop', yaw: undefined} : p)};
+  assert.throws(() => editPlace(unfaced, 'B', {approach_m: 0.3}), /방향이 필요/);
+  const moved = editPlace(editPlace(zoned, 'B', {approach_m: 0.3}), 'B', {kind: 'park'}).places.find(p => p.id === 'B');
+  assert.equal('stop_zone' in moved || 'approach_m' in moved, false);
+});
+
 test('trip errors read in Korean with the leg and the unblock hint', () => {
   assert.match(tripErrorText('TRIP_NO_ROUTE', {segment: 1, unblock_would_help: true}), /2번째 구간.*막은 차로/);
   assert.match(tripErrorText('NEW_CODE'), /NEW_CODE/);

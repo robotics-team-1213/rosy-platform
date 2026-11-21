@@ -53,7 +53,7 @@ def test_ci_activates_standalone_app_browsers(monkeypatch, target, rest):
     monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
     monkeypatch.delenv('ROSY_BROWSER_TESTS', raising=False)
     monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
-                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter(()), wait=lambda: 0))
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter([f'PASSED {target}\n', '== 3 passed in 0.1s ==\n']), wait=lambda: 0))  # a real pass: STRICT and node-id rules need it
     with pytest.raises(SystemExit) as ended:
         exec(compile(python, str(WORKFLOW), 'exec'), {})
     assert ended.value.code == 0
@@ -63,6 +63,7 @@ def test_ci_activates_standalone_app_browsers(monkeypatch, target, rest):
         assert 'ROSY_RUN_BROWSER_TESTS' not in calls[0][1]
     assert calls[-1][0][3:5] == [target, exclude]
     assert calls[-1][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+    assert ('ROSY_BROWSER_STRICT' in calls[-1][1]) == target.endswith('_browser.py')  # whole file only
 
 
 @pytest.mark.parametrize("selection", [
@@ -247,7 +248,7 @@ def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkey
     from types import SimpleNamespace
     from tools.harness.affected_tests import CI_FULL_MATRIX
 
-    browser_node = 'middleware/core/gateway/test/test_account_pipeline.py'
+    browser_node = 'test/integration/core_fleet/test_account_pipeline.py'
     core = next(entry for entry in CI_FULL_MATRIX if entry['name'] == 'core-domain')
     assert [browser_node] in core['invocations'], 'SSO browser journey must not remain opt-in-only'
     steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
@@ -293,6 +294,60 @@ def test_ci_fails_a_session_that_collected_nothing(monkeypatch, capsys, paths, e
     assert ('collected 0 items' in capsys.readouterr().out.split('::endgroup::')[-1]) == bool(expected)
     # The launch_testing hook is what turns one importorskip into a skipped session.
     assert calls[0][-2:] == ['-pno:launch_testing', '-pno:launch_ros']
+
+
+@pytest.mark.parametrize('words, output, expected, env_seen', [
+    (['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1', 'test/test_a.py'], ['== 4 skipped in 0.1s ==\n'], 1, True),
+    (['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1', 'test/test_a.py'], ['== 3 passed in 0.1s ==\n'], 0, True),
+    (['ROSY_RUN_BROWSER_TESTS=1', 'test/test_a.py'], ['== 4 skipped in 0.1s ==\n'], 0, False),  # not STRICT: unchanged
+    # The step marks its own browser run STRICT only when every target is a *_browser.py file.
+    (['operations/fleet/test/test_x_browser.py'], ['== 4 skipped in 0.1s ==\n'], 1, True),
+    (['operations/fleet/test/test_x_browser.py'], ['== 3 passed in 0.1s ==\n'], 0, True),
+    (['operations/fleet/test'], ['== 10 passed, 2 skipped in 1.0s ==\n'], 0, False),
+])
+def test_ci_strict_browser_run_must_pass_something_and_skip_nothing(monkeypatch, capsys, words, output, expected, env_seen):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    calls = []
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([words]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        calls.append((args, kwargs['env'])) or SimpleNamespace(stdout=iter(output), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == expected
+    assert ('browser evidence did not run for real' in capsys.readouterr().out) == (expected == 1)
+    assert calls[0][1]['ROSY_RUN_BROWSER_TESTS'] == '1'
+    assert (calls[0][1].get('ROSY_BROWSER_STRICT') == '1') == env_seen
+    assert '-n' not in calls[0][0]  # browser runs never use xdist
+
+
+def test_ci_strict_browser_run_judges_the_quarantine_rerun(monkeypatch, capsys, tmp_path):
+    import json
+    import yaml
+    from types import SimpleNamespace
+    import known_failures
+
+    node = 'test/test_a.py::test_x'
+    quarantine = tmp_path / 'q.txt'
+    quarantine.write_text(node + '  # flaky\n', encoding='utf8')
+    monkeypatch.setattr(known_failures, 'QUARANTINE', quarantine)
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    first = ['FAILED ' + node + ' - boom\n', '== 1 failed in 0.1s ==\n']
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1', 'test/test_a.py']]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs: SimpleNamespace(stdout=iter(first), wait=lambda: 1))
+    monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs: SimpleNamespace(
+        returncode=0, stdout='PASSED ' + node + '\n== 1 passed in 0.1s ==\n'))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == 0
+    assert 'browser evidence did not run for real' not in capsys.readouterr().out
 
 
 def test_no_test_module_defines_a_nose_style_setup_function():

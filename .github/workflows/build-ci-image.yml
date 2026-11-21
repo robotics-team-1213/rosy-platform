@@ -11,10 +11,13 @@ on:
   push:
     branches: [main]
     paths:
+      - .dockerignore
       - .github/ci-image/**
       - deploy/robot/pinky_pro/image/device-python-requirements.txt
       - deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
       - deploy/robot/omx/requirements-cell.lock
+      - deploy/site/requirements-vision.txt
+      - learning/curation/pinky/requirements-raw.txt
       - .github/workflows/build-ci-image.yml
 
 permissions:

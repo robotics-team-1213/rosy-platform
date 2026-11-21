@@ -119,6 +119,16 @@
         <div id="place-form" class="form" hidden>
           <label>주소 이름<input class="ui-field" id="place-name" maxlength="64"></label>
           <label>장소 종류<select class="ui-field" id="place-kind"></select></label>
+          <label class="ui-check"><input class="ui-field" id="place-pinned" type="checkbox">고정(자동 보정이 옮기지 않음)</label>
+          <div id="place-stop" class="form" hidden>
+            <label>접근 거리 (m)<input class="ui-field" id="place-approach" type="number" min="0.05" max="0.6" step="0.01" placeholder="없음"></label>
+            <div class="actions">
+              <ui-button id="zone-draw" kind="quiet">정지 구역 그리기</ui-button>
+              <ui-button id="zone-finish" kind="quiet" disabled>구역 닫기</ui-button>
+              <ui-button id="zone-clear" kind="quiet" disabled>구역 지우기</ui-button>
+            </div>
+            <ui-text>정지 구역은 로봇 몸체가 끝나야 할 영역입니다. 장소 점을 감싸게 그리고, 그리면 고정됩니다. 접근 거리는 장소 방향 뒤쪽으로 줄을 맞추는 거리입니다.</ui-text>
+          </div>
         </div>
         <div id="edge-form" class="form" hidden>
           <label>통행 방향<select class="ui-field" id="edge-direction">
@@ -126,6 +136,7 @@
           <label>주행 방식<select class="ui-field" id="edge-mode">
             <option value="lane">차선 따라가기</option><option value="free">지도 좌표 추종</option></select></label>
           <label>속도 상한 (m/s)<input class="ui-field" id="edge-speed" type="number" min="0.01" max="5" step="0.01"></label>
+          <label class="ui-check"><input class="ui-field" id="edge-pinned" type="checkbox">고정(자동 보정이 옮기지 않음)</label>
         </div>
         <div id="crosswalk-form" class="form" hidden>
           <ui-text id="crosswalk-lanes"></ui-text>

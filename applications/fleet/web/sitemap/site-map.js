@@ -18,7 +18,7 @@ import {createSurveyPanel} from '/console/assets/site-map-survey.js';
 import {createCameraMapPanel} from '/console/assets/site-map-camera.js';
 import {createRealityPanel} from '/console/assets/site-map-reality.js';
 import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
-import {installBandEditing} from '/console/assets/site-map-bands.js';
+import {installBandEditing, installZoneEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
 import {drawFacilities, svgElement as el} from '/console/assets/map-editor.js';
 
@@ -88,6 +88,7 @@ function render() {
     el('title', {}, zone).textContent = `횡단보도 ${crosswalk.id} · 차로 ${(crosswalk.lanes || []).join(', ') || '저장 때 계산'}`;
     for (const band of crosswalk.approach || []) el('polygon', {class: 'crosswalk-approach', points: line(band)}, svg);
   }
+  for (const place of map.places) if (place.stop_zone) el('polygon', {class: 'stop-zone', points: line(place.stop_zone)}, svg);
   if (state.band?.length) el('polyline', {class: 'band-draft', points: line(state.band)}, svg);
   for (const edge of map.edges) {
     const path = el('polyline', {points: line(edge.polyline), 'data-edge': edge.id,
@@ -192,12 +193,15 @@ function select(selection) {
   $('place-form').hidden = !place || Boolean(reason);
   $('edge-form').hidden = !edge || Boolean(reason);
   $('crosswalk-form').hidden = !crosswalk || Boolean(reason);
-  if (!crosswalk) state.band = null;
+  if (!crosswalk && place?.kind !== 'stop') state.band = null;
   gate('apply-edit', reason || (place || edge ? '' : '초안 보기에서 장소나 차로를 고르세요'));
   if (place) {
     $('selection').textContent = `장소 ${place.id}`;
     $('place-name').value = place.name;
     $('place-kind').value = place.kind;
+    $('place-pinned').checked = Boolean(place.pinned);
+    $('place-stop').hidden = place.kind !== 'stop';
+    $('place-approach').value = place.approach_m ?? '';
   } else if (crosswalk) {
     $('selection').textContent = `횡단보도 ${crosswalk.id} · 대기 띠 ${(crosswalk.approach || []).length}개`;
     $('crosswalk-lanes').textContent = `덮는 차로 ${(crosswalk.lanes || []).join(', ') || '저장할 때 계산합니다'} · 출처 ${crosswalk.revision}`;
@@ -208,6 +212,7 @@ function select(selection) {
     $('edge-direction').value = edge.direction;
     $('edge-mode').value = edge.drive_mode;
     $('edge-speed').value = edge.speed_cap_mps;
+    $('edge-pinned').checked = Boolean(edge.pinned);
   } else {
     $('selection').textContent = selection ? '초안에 없는 항목입니다 · 초안 보기에서 고르세요' : '선택 없음';
   }
@@ -230,6 +235,10 @@ function syncButtons() {
   gate('band-draw', reason || (!crosswalk ? '횡단보도를 고르세요' : state.band !== null ? '띠를 그리는 중입니다' : bands.length >= 4 ? '대기 띠는 4개까지입니다' : ''));
   gate('band-finish', reason || (state.band === null ? '대기 띠 그리기를 먼저 누르세요' : state.band.length < 3 ? '지도에서 점을 세 개 이상 찍으세요' : ''));
   gate('band-delete', reason || (!bands.length ? '지울 대기 띠가 없습니다' : ''));
+  const stop = (state.working?.places || []).find(item => item.id === state.selected?.place && item.kind === 'stop');
+  gate('zone-draw', reason || (!stop ? '정지 장소를 고르세요' : state.band !== null ? '구역을 그리는 중입니다' : ''));
+  gate('zone-finish', reason || (!stop || state.band === null ? '정지 구역 그리기를 먼저 누르세요' : state.band.length < 3 ? '지도에서 점을 세 개 이상 찍으세요' : ''));
+  gate('zone-clear', reason || (!stop?.stop_zone ? '지울 정지 구역이 없습니다' : ''));
   gate('import-crosswalks', reason || (!state.working ? '고칠 지도가 없습니다' : ''));
   gate('activate', reason || (!state.draft?.revision ? '저장된 초안이 없습니다' : (state.dirty ? '고친 내용을 먼저 저장하세요' : '')));
   status('draft-status', state.loadState === 'pending' ? '초안 조회 중'
@@ -463,6 +472,7 @@ $('site-map-svg').addEventListener('click', event => {
 });
 
 installBandEditing({request, guarded, state, select, render, syncButtons, notice});
+installZoneEditing({guarded, state, select, render, syncButtons, notice});
 
 $('trip-pick').addEventListener('change', () => {
   $('site-map-svg').classList.toggle('picking', $('trip-pick').checked);
@@ -485,9 +495,10 @@ $('map-view-turn').addEventListener('change', () => guarded(async () => {
 $('apply-edit').addEventListener('click', () => guarded(async () => {
   const sel = state.selected;
   state.working = sel?.place
-    ? editPlace(state.working, sel.place, {name: $('place-name').value, kind: $('place-kind').value})
+    ? editPlace(state.working, sel.place, {name: $('place-name').value, kind: $('place-kind').value,
+      pinned: $('place-pinned').checked, approach_m: $('place-approach').value})
     : editEdge(state.working, sel.edge, {direction: $('edge-direction').value,
-      drive_mode: $('edge-mode').value, speed_cap_mps: $('edge-speed').value});
+      drive_mode: $('edge-mode').value, speed_cap_mps: $('edge-speed').value, pinned: $('edge-pinned').checked});
   state.dirty = true;
   $('map-source').value = 'draft';
   select(sel);

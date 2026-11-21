@@ -54,8 +54,9 @@ import logging
 import math
 import threading
 import time
-from dataclasses import dataclass, fields
-from typing import Any, Callable, Mapping, Optional
+from contextlib import nullcontext
+from dataclasses import dataclass
+from typing import Any, Callable, Optional
 
 from core_common.protocol.localization import CHECKING, LocState
 from core_common.protocol.schemas import RobotMode
@@ -65,6 +66,8 @@ from core_features.command.manager import Twist
 from core_features.line_follow.clearance import front_sector
 from core_features.line_follow.model import LineFollowMode
 from core_features.localization.rotate_to import RotateGoal, rotate_goal, turn_rate
+
+from .mission_settings import MissionConfig as MissionConfig, mission_config as mission_config
 
 ROTATE, NUDGE, NUDGE_BACK, LANE, SQUARE = ("rotate_in_place", "nudge_forward", "nudge_backward",
                                            "lane_to_stopline", "to_square")
@@ -84,63 +87,6 @@ class MissionRefused(Exception):
         self.detail = detail
 
 
-@dataclass(frozen=True)
-class MissionConfig:
-    rotate_angular: float = 0.3          # rad/s; one turn takes about 21 s
-    rotate_max_rad: float = 2.0 * math.pi
-    nudge_linear: float = 0.03           # m/s
-    nudge_max_m: float = 0.10
-    lane_linear: float = 0.04            # m/s, half the line-follow cruise
-    # Without the URDF body (line_follow.body_* unset) the LiDAR-origin rules below apply.
-    min_front_clearance_m: float = 0.25
-    front_half_angle_deg: float = 20.0
-    min_front_beams: int = 5              # valid beams the nudge sector needs
-    max_blind_share: float = 0.3          # inf/NaN/below-range share that blocks a nudge
-    rotate_clearance_m: float = 0.20      # nothing this close anywhere before a turn
-    # D-424 with the body: rotation radius + this (the D-422 body margin); shortest nudge.
-    # D-424 review H1, until device evidence: start a turn with rho + 0.03, end it at rho + 0.01.
-    rotate_margin_m: float = 0.03
-    rotate_stop_margin_m: float = 0.01
-    # D-424 follow-up: a running turn ends on an evidence gap only after this many consecutive
-    # 20 Hz ticks = 4 scans at 10 Hz (a near return still ends it at once). 43,625 real C1
-    # scans (8kcn, 9dfk): longest gap run 3 scans; 4 scans -> 0 false ends observed (3 -> ~0.5 %
-    # of 21 s turns). See the D-424 ADR.
-    rotate_coverage_debounce_ticks: int = 8
-    nudge_min_m: float = 0.02
-    # D-603 rotate_to: rad/s per rad of error, the wheels' deadband floor, and how far past the asked
-    # turn (odom, summed both ways) the turn may go before it aborts ("overturn").
-    rotate_to_gain: float = 1.5
-    rotate_to_min_angular: float = 0.15
-    rotate_to_overturn_deg: float = 30.0
-    stop_line_m: float = 0.12            # the traffic policy's stop distance
-    max_time_s: float = 120.0
-    max_distance_m: float = 1.0
-    sensor_stale_s: float = 0.5
-
-
-def mission_config(raw: Optional[Mapping[str, Any]]) -> MissionConfig:
-    """`localization_mission:` from the CORE config; absent or empty = the defaults (D-424).
-    Unknown keys are an error, not silently ignored."""
-    if not raw:
-        return MissionConfig()
-    if not isinstance(raw, Mapping):
-        raise ValueError("localization_mission must be a mapping")
-    known = {f.name: f.type for f in fields(MissionConfig)}
-    unknown = sorted(set(raw) - set(known))
-    if unknown:
-        raise ValueError(f"unknown localization_mission keys: {unknown}")
-    values = {k: (int(v) if known[k] in (int, "int") else float(v)) for k, v in raw.items()}
-    config = MissionConfig(**values)
-    if not all(math.isfinite(float(getattr(config, f.name))) for f in fields(config)):
-        raise ValueError("localization_mission values must be finite")
-    if (min(config.rotate_margin_m, config.rotate_stop_margin_m, config.nudge_min_m) < 0.0
-            or config.rotate_stop_margin_m > config.rotate_margin_m or config.nudge_linear <= 0.0
-            or config.rotate_coverage_debounce_ticks < 1
-            or min(config.rotate_to_gain, config.rotate_to_min_angular, config.rotate_to_overturn_deg) <= 0.0):
-        raise ValueError("localization_mission margins must be >= 0, nudge_linear and rotate_to_* > 0")
-    return config
-
-
 @dataclass
 class _Run:
     kind: str
@@ -154,6 +100,10 @@ class _Run:
     goal: Optional[RotateGoal] = None   # D-603 rotate_to
     signed_rad: float = 0.0             # D-603: signed odom turn since the start
     search: bool = True                  # a pose-search mission ends on LOCALIZED; a step does not
+    speed: Optional[float] = None        # a nudge may crawl slower than cfg.nudge_linear, never faster
+    n: int = 0                           # run number: a caller tells its own run from a foreign one
+    mode_epoch: int | None = None
+    precision_token: object | None = None
 
 
 def _wrap(angle: float) -> float:
@@ -169,24 +119,28 @@ class LocalizationMission:
     def __init__(self, events, *, command, modes, state, safety, line_follow, traffic_policy,
                  localization, busy: Callable[[], Optional[str]],
                  config: Optional[MissionConfig] = None,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, navigation=None) -> None:
         self._events = events
         self._command, self._modes, self._state = command, modes, state
         self._safety, self._line_follow, self._traffic = safety, line_follow, traffic_policy
         self._loc = localization
         self._busy = busy
+        self._navigation = navigation
         self.config = config or MissionConfig()
         self._clock = clock
         #: Bound by the bridge to the `localization/mission` publisher.
         self.publish: Optional[Callable[[dict], None]] = None
         self._lock = threading.RLock()
         self._run: Optional[_Run] = None
+        self._runs = 0
         self._last: dict[str, Any] = {"kind": None, "state": "idle", "reason": None}
         self._odom: Optional[tuple[float, float, float]] = None
         self._odom_at: Optional[float] = None
         self._scan: Optional[tuple[Any, float]] = None
         self._front: tuple[Any, Any] = (None, None)
         modes.change_listeners.append(self._on_mode_change)
+        from core_features.localization.repark import ReparkRunner  # repark imports this module
+        self.repark = ReparkRunner(self)
 
     def bind_clock(self, clock: Callable[[], float]) -> None:
         """The bridge's line clock: the ROS (sim) clock under `use_sim_time`, else monotonic."""
@@ -210,6 +164,17 @@ class LocalizationMission:
             self._scan = (sample, self._clock())
 
     @property
+    def runs_started(self) -> int:
+        """How many runs have started: a caller's own latest run is the one numbered this."""
+        return self._runs
+
+    def odom_pose(self) -> Optional[tuple[float, float, float]]:
+        """The latest odom pose if fresh, else None (repark closes its loop on it)."""
+        with self._lock:
+            fresh = self._odom is not None and self._clock() - self._odom_at <= self.config.sensor_stale_s
+            return self._odom if fresh else None
+
+    @property
     def owns_wheels(self) -> bool:
         """A rotate or nudge writes the nav slot itself; Nav2 output is dropped meanwhile."""
         with self._lock:
@@ -218,10 +183,13 @@ class LocalizationMission:
     # --- start / status -------------------------------------------------------
 
     def start(self, kind: str, max_distance_m: float, max_time_s: float,
-              target: Optional[dict] = None) -> dict:
+              target: Optional[dict] = None, speed: Optional[float] = None, *, expected_idle_epoch: int | None = None,
+              expected_navigation: dict | None = None) -> dict:
         """Start a mission or raise `MissionRefused` (409) / `ValueError` (400)."""
         if kind not in KINDS:
             raise ValueError(f"unknown mission kind {kind!r}")
+        if expected_idle_epoch is not None and kind not in (NUDGE, NUDGE_BACK):
+            raise ValueError("an IDLE epoch applies only to bounded nudge and heading correction")
         cfg = self.config
         if not (math.isfinite(max_time_s) and 0.0 < max_time_s <= cfg.max_time_s):
             raise ValueError(f"max_time_s must be in (0, {cfg.max_time_s}]")
@@ -232,6 +200,8 @@ class LocalizationMission:
             raise ValueError(f"{kind} needs max_distance_m > 0")
         if kind in UNSUPPORTED:
             raise MissionRefused("unsupported", UNSUPPORTED[kind])
+        if speed is not None and not (math.isfinite(speed) and 0.0 < speed <= cfg.nudge_linear):
+            raise ValueError(f"speed must be in (0, {cfg.nudge_linear}]")
         # The leave-LOCALIZED halt and the LOCALIZED end take the same gate, so the
         # state cannot change between the check below and the dispatch.
         with self._loc.gate, self._lock:
@@ -266,13 +236,9 @@ class LocalizationMission:
                     distance = room
             if blocked is not None:
                 raise MissionRefused("path_not_clear", blocked)
-            self._command.clear_navigation()
-            ok, why = self._modes.transition(Mode.NAVIGATION, expect=Mode.IDLE)
-            if not ok:
-                raise MissionRefused("busy", why)
-            self._state.set_mode(RobotMode.NAVIGATION)
-            run = _Run(kind, distance, float(max_time_s), target, now, search=search)
-            self._run = run
+            run = _Run(kind, distance, float(max_time_s), target, now, search=search, speed=speed, n=self._runs + 1)
+            self._take_motion_mode(run, expected_idle_epoch, "busy", expected_navigation)
+            self._runs += 1
             if kind == LANE:
                 self._safety.set_session_speed(cfg.lane_linear)
                 self._state.set_line_follow(self._line_follow.set_mode(LineFollowMode.CAMERA_LINE))
@@ -292,10 +258,12 @@ class LocalizationMission:
                 body["err_deg"] = _err_deg(run)
             return body
 
-    def start_rotate_to(self, **request: Any) -> dict:
+    def start_rotate_to(self, *, expected_idle_epoch: int | None = None,
+                        expected_navigation: dict | None = None, **request: Any) -> dict:
         """D-603: start a bounded turn to an odom heading (`rotate_to.rotate_goal` keywords), or raise
         `ValueError` (400) / `MissionRefused` (409, upper-case codes). The caller checked who asks."""
-        with self._lock:
+        gate = self._loc.gate if expected_idle_epoch is not None else nullcontext()
+        with gate, self._lock:
             now = self._clock()
             if self._safety.estop or self._modes.is_emergency:
                 raise MissionRefused("EMERGENCY_ACTIVE", "release the emergency stop first")
@@ -311,16 +279,41 @@ class LocalizationMission:
             blocked, _room = self._judge(ROTATE, now)
             if blocked is not None:
                 raise MissionRefused("ROTATE_CLEARANCE", blocked, self._clearance(now))
-            self._command.clear_navigation()
-            ok, why = self._modes.transition(Mode.NAVIGATION, expect=Mode.IDLE)
-            if not ok:
-                raise MissionRefused("MOTION_BUSY", why)
-            self._state.set_mode(RobotMode.NAVIGATION)
-            run = _Run(ROTATE_TO, 0.0, goal.timeout_s, None, now, goal=goal)
-            self._run = run
+            run = _Run(ROTATE_TO, 0.0, goal.timeout_s, None, now, goal=goal, n=self._runs + 1)
+            self._take_motion_mode(run, expected_idle_epoch, "MOTION_BUSY", expected_navigation)
+            self._runs += 1
             self._last = {"kind": ROTATE_TO, "state": "running", "reason": None}
             self._announce("started", run, None, now)
             return self.status()
+
+    def _take_motion_mode(self, run: _Run, expected_idle_epoch: int | None, busy_code: str,
+                          expected_navigation: dict | None = None) -> None:
+        if expected_idle_epoch is None:
+            if expected_navigation is not None:
+                raise ValueError("a navigation predecessor requires an IDLE epoch")
+            self._command.clear_navigation()
+            ok, why = self._modes.transition(Mode.NAVIGATION, expect=Mode.IDLE)
+            if not ok:
+                raise MissionRefused(busy_code, why)
+            self._state.set_mode(RobotMode.NAVIGATION)
+            self._run = run
+            return
+        nav = self._navigation
+        token = nav.claim_precision(expected_navigation) if nav is not None else None
+        if token is None:
+            raise MissionRefused("MOTION_BUSY", "Nav2 admission or another correction holds ownership")
+        try:
+            # The scoped transition must not clear a newer owner's input on refusal.
+            ok, why = self._modes.transition(Mode.NAVIGATION, expect=Mode.IDLE, expect_epoch=expected_idle_epoch)
+            if not ok:
+                raise MissionRefused("IDLE_MODE_EPOCH_CHANGED", why)
+            run.mode_epoch, run.precision_token = expected_idle_epoch + 1, token
+            if not self._modes.commit_input(Mode.NAVIGATION, lambda: setattr(self, "_run", run),
+                                           epoch=run.mode_epoch):
+                raise MissionRefused("IDLE_MODE_EPOCH_CHANGED", "motion mode changed during admission")
+        finally:
+            if self._run is not run:
+                nav.release_precision(token)
 
     def localized(self) -> None:
         """LOCALIZED ends a search mission (it found the pose); a D-603 turn goes on."""
@@ -332,6 +325,10 @@ class LocalizationMission:
 
     def tick(self) -> None:
         """Bridge timer (20 Hz): check the end conditions, then command the next twist."""
+        self._tick()
+        self.repark.tick()  # outside the lock: it starts the next segment through start() (gate, then lock)
+
+    def _tick(self) -> None:
         with self._lock:
             run = self._run
             if run is None:
@@ -343,18 +340,24 @@ class LocalizationMission:
                 reason = "error"
             if reason is None:
                 if run.kind == ROTATE:
-                    self._command.set_nav_twist(Twist(0.0, self.config.rotate_angular))
+                    self._set_run_twist(run, Twist(0.0, self.config.rotate_angular))
                 elif run.kind == ROTATE_TO:
                     cfg = self.config
                     rate = turn_rate(run.goal, run.signed_rad, gain=cfg.rotate_to_gain,
                                      min_rate=cfg.rotate_to_min_angular)
                     if rate is not None:  # None was "done" in _end_reason this very tick
-                        self._command.set_nav_twist(Twist(0.0, rate))
+                        self._set_run_twist(run, Twist(0.0, rate))
                 elif run.kind in (NUDGE, NUDGE_BACK):
                     sign = -1.0 if run.kind == NUDGE_BACK else 1.0
-                    self._command.set_nav_twist(Twist(sign * self.config.nudge_linear, 0.0))
+                    self._set_run_twist(run, Twist(sign * (run.speed or self.config.nudge_linear), 0.0))
                 return
             self.end(reason)
+
+    def _set_run_twist(self, run: _Run, twist: Twist) -> None:
+        if run.mode_epoch is None:
+            self._command.set_nav_twist(twist)
+        else:
+            self._command.set_nav_twist(twist, expected_mode_epoch=run.mode_epoch)
 
     def _end_reason(self, run: _Run, now: float) -> Optional[str]:
         cfg = self.config
@@ -364,7 +367,8 @@ class LocalizationMission:
         if run.kind != ROTATE_TO and run.search and status is not None \
                 and status.state is LocState.LOCALIZED:
             return "localized"
-        if self._modes.mode is not Mode.NAVIGATION:
+        if (self._modes.mode is not Mode.NAVIGATION
+                or (run.mode_epoch is not None and self._modes.epoch != run.mode_epoch)):
             return "cancelled"
         if now - run.started_at > run.max_time_s:
             return "timeout"
@@ -415,9 +419,16 @@ class LocalizationMission:
                 if self._line_follow.active:
                     self._state.set_line_follow(self._line_follow.stop())
                 self._safety.set_session_speed(None)
-            if self._modes.transition(Mode.IDLE, expect=Mode.NAVIGATION)[0]:
-                self._state.set_mode(RobotMode.IDLE)
-            self._command.clear_navigation()
+            if run.mode_epoch is None:
+                if self._modes.transition(Mode.IDLE, expect=Mode.NAVIGATION)[0]:
+                    self._state.set_mode(RobotMode.IDLE)
+                self._command.clear_navigation()
+            else:
+                try:
+                    if not self._modes.transition(Mode.IDLE, expect=Mode.NAVIGATION, expect_epoch=run.mode_epoch)[0]:
+                        reason = "cancelled"
+                finally:
+                    self._navigation.release_precision(run.precision_token)
             state = "done" if reason in DONE_REASONS else "aborted"
             self._last = {"kind": run.kind, "state": state, "reason": reason}
             if run.goal is not None:

@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-21 · uncommitted · depart_tick: a queued exit goal is withdrawn, not SENT
+- 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
 - 2026-11-20 · uncommitted · fix(fleet): CORE cancel result nav.failed CANCELED gets its own FAILED reason
+- 2026-11-20 · uncommitted · fix(site-map): 자동 트랙 보정이 고정 장소·차로를 지킴
 - 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기
-- 2026-11-18 · uncommitted · fix(map-pose): D-989 허용 목록에 콘솔 site goal 추가
-- 2026-11-17 · uncommitted · fix(fleet): D-1039 독립 검토 반영
-- 2026-11-17 · uncommitted · feat(fleet): AI assessor 서비스 자격의 안전한 팔 사건 해제 (D-1039)

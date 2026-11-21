@@ -14,7 +14,10 @@ ignored with a warning (a typo such as D-5100 would otherwise move everyone).
 It then creates ``refs/adr/D-nnn`` with ``git update-ref <ref> <sha> 0{40}``,
 which fails if the ref already exists. All worktrees share one ref store, so
 two sessions cannot both create the same ref; the loser tries the next number.
-The refs are local: they are not pushed and CI does not see them.
+``next`` first fetches origin/main, so numbers already landed there are refused, then
+tries ``git push origin refs/adr/D-n`` create-only (D-1061): a number another clone pushed
+first is skipped; a remote that refuses refs/adr (rules, permissions, offline) only warns,
+and the reservation stays local as before.
 ``api_reserve.py`` reuses these helpers for API reference versions (``refs/api``).
 Standard library only.
 """
@@ -76,13 +79,29 @@ def _from_history(numbers: dict[int, str], pattern: re.Pattern, *args: str) -> N
 
 
 def main_highest() -> int | None:
-    if git("rev-parse", "--verify", "-q", "refs/heads/main", check=False).returncode != 0:
+    tips = [ref for ref in ("refs/heads/main", "refs/remotes/origin/main")
+            if git("rev-parse", "--verify", "-q", ref, check=False).returncode == 0]
+    if not tips:
         return None
-    names = git("ls-tree", "--name-only", "main", "docs/adr/").stdout
-    log = git("show", f"main:{LOG}", check=False).stdout
-    found = [int(m.group(1)) for line in names.splitlines() if (m := ADR_FILE.search(line))]
-    found += [int(n) for n in NUMBERED_LINE.findall(log)]
+    found: list[int] = []
+    for tip in tips:
+        names = git("ls-tree", "--name-only", tip, "docs/adr/").stdout
+        found += [int(m.group(1)) for line in names.splitlines() if (m := ADR_FILE.search(line))]
+        found += [int(n) for n in NUMBERED_LINE.findall(git("show", f"{tip}:{LOG}", check=False).stdout)]
     return max(found, default=0)
+
+
+def push_claim(ref: str) -> str:
+    """'ok', 'taken' (origin already has the ref) or 'refused' (rules, permissions, offline)."""
+    result = git("push", "--quiet", f"--force-with-lease={ref}:", "origin", f"{ref}:{ref}", check=False)
+    if result.returncode == 0:
+        return "ok"
+    text = result.stderr.lower()
+    if "stale info" in text or "already exists" in text:
+        return "taken"
+    print(f"warning: origin refused {ref} ({result.stderr.strip()[:200]}); the reservation is local only",
+          file=sys.stderr)
+    return "refused"
 
 
 def used_numbers() -> dict[int, str]:
@@ -114,7 +133,7 @@ def used_numbers() -> dict[int, str]:
 
 
 def claim(numbers: dict[int, str], ceiling: int | None, reason: str,
-          ns: str = "refs/adr", label=lambda n: f"D-{n}") -> int:
+          ns: str = "refs/adr", label=lambda n: f"D-{n}", push: bool = False) -> int:
     """Create ``<ns>/<label(n)>`` for the first free n above every number in ``numbers``."""
     head = git("rev-parse", "HEAD").stdout.strip()
     if ceiling is not None:
@@ -129,6 +148,10 @@ def claim(numbers: dict[int, str], ceiling: int | None, reason: str,
         ref = f"{ns}/{label(number)}"
         result = git("update-ref", "--create-reflog", "-m", reason, ref, head, ZERO, check=False)
         if result.returncode == 0:
+            if push and push_claim(ref) == "taken":
+                print(f"{label(number)} is already reserved on origin; trying the next number", file=sys.stderr)
+                number += 1
+                continue
             print(label(number))
             return 0
         if git("rev-parse", "--verify", "-q", ref, check=False).returncode != 0:
@@ -140,7 +163,11 @@ def claim(numbers: dict[int, str], ceiling: int | None, reason: str,
 
 
 def cmd_next(reason: str) -> int:
-    return claim(used_numbers(), main_highest(), reason)
+    fetched = git("fetch", "--quiet", "origin", "main", check=False)
+    if fetched.returncode != 0:
+        print(f"warning: git fetch origin main failed ({fetched.stderr.strip()[:200]}); "
+              "numbers landed since the last fetch are not seen", file=sys.stderr)
+    return claim(used_numbers(), main_highest(), reason, push=True)
 
 
 def cmd_list(ns: str = "refs/adr") -> int:

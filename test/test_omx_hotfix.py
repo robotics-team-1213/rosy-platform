@@ -137,6 +137,17 @@ def test_deploy_ships_archive_then_switches(fake, tmp_path):
     assert "mv -T" in fake.ssh_scripts()[-1]
 
 
+def test_deploy_switches_only_the_named_link_and_rejects_other_names(fake, tmp_path):
+    oh.deploy("HEAD", "user@host", passing_log(tmp_path), "omx-bench-current")
+    last = fake.ssh_scripts()[-1]
+    assert "mv -T .omx-bench-current.tmp omx-bench-current" in last and "omx-tools-current" not in last
+    oh.deploy("HEAD", "user@host", passing_log(tmp_path))
+    assert "mv -T .omx-tools-current.tmp omx-tools-current" in fake.ssh_scripts()[-1]  # default stays the cell link
+    for bad in ("../x", "omx-tools-current/..", "other-current", "omx-bench"):
+        with pytest.raises(SystemExit, match="link name"):
+            oh.deploy("HEAD", "user@host", passing_log(tmp_path), bad)
+
+
 def test_deploy_is_idempotent_when_revision_matches(fake, tmp_path):
     fake.rules.update({"REVISION": SHORT, "readlink": f"omx-tools-{SHORT}"})
     oh.deploy("HEAD", "user@host", passing_log(tmp_path))
@@ -167,6 +178,20 @@ def test_status_lists_link_and_recent_folders(fake):
     assert oh.status("u@h") == "current: omx-tools-aaaaaaaaaa"
     script = fake.ssh_scripts()[0]
     assert "readlink omx-tools-current" in script and "omx-tools-??????????" in script and "head -5" in script
+
+
+def test_bad_link_name_makes_no_ssh_call_for_status_or_deploy(fake, tmp_path):
+    for bad in ("../x; reboot", "other-current", "omx-tools-current/.."):
+        with pytest.raises(SystemExit, match="link name"):
+            oh.status("u@h", bad)
+        with pytest.raises(SystemExit, match="link name"):
+            oh.deploy("HEAD", "user@host", passing_log(tmp_path), bad)
+    assert not fake.ssh_scripts()
+
+
+def test_bench_link_deploy_leaves_the_cell_autoupdate_floor_alone(fake, tmp_path):
+    oh.deploy("HEAD", "user@host", passing_log(tmp_path), "omx-bench-current")
+    assert not any(s.startswith("python3 - ") for s in fake.ssh_scripts())
 
 
 def test_deploy_records_the_main_floor_before_switching(fake, tmp_path):

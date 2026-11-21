@@ -17,6 +17,19 @@ class Clock:
         return self.t
 
 
+def test_velocity_acquisition_stamp_expires_independently_of_receipt():
+    clock = Clock()
+    state = StateManager("rosy_01", clock=clock)
+    state.set_velocity(0.0, 0.0, sampled_at=clock.t - 0.4)
+    evidence = state.snapshot().evidence["velocity"]
+    assert evidence.sampled_at < evidence.received_at
+    clock.t += 0.2
+    evidence = state.snapshot().evidence["velocity"]
+    assert evidence.evidence is EvidenceState.FRESH and evidence.sampled_at is None
+    state.set_velocity(0.0, 0.0)
+    assert state.snapshot().evidence["velocity"].sampled_at is None
+
+
 def test_state_manager_reads_overlay_thresholds():
     clock = Clock(1_000.0)
     state = StateManager("rosy_01", clock=clock, stale_after_s={"pose": 0.1})

@@ -63,6 +63,8 @@ def _pid_alive(pid) -> bool:
 def live(record: dict, now: float | None = None) -> bool:
     """A lease with a pid lives exactly as long as that process (a 35 min session must stay covered, review
     2026-11-17); a lease without one (claimed ahead of a job) lives until it expires."""
+    if record.get("hold"):
+        return True  # a runner left the arm held or unconfirmed: live until its owner releases it (record_session)
     if record.get("pid") is not None:
         if record.get("boot_id") and record["boot_id"] != _boot_id():
             return False  # rebooted since: that pid is gone, whatever now has its number (review 2026-11-17)
@@ -94,9 +96,12 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
     now = time.time() if now is None else now
     with _locked(arm, root):
         old = _read(arm, root)
+        if old and old.get("hold"):  # not even its owner: only release_hold (a person, after checking the arm) clears it
+            raise LeaseHeld(f"arm {arm} lease held by {old['owner']}: {old['hold']} (cell_arm_lease.py release-hold)")
         if old and old.get("owner") != owner and live(old, now):
             until = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(float(old["expires"])))
-            raise LeaseHeld(f"arm {arm} held by {old['owner']} for {old.get('purpose') or '-'} until {until}")
+            raise LeaseHeld(f"arm {arm} held by {old['owner']} for {old.get('purpose') or '-'} until {until}"
+                            + (f" ({old['hold']}: a person releases it)" if old.get("hold") else ""))
         same_live = bool(old and old.get("owner") == owner and live(old, now))
         holder = old.get("pid") if same_live and old.get("pid") is not None else pid  # never drop a live holder's pid
         record = {"schema": SCHEMA, "arm": arm, "owner": owner, "purpose": purpose,
@@ -109,16 +114,36 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
     return record
 
 
-def release(arm, owner=None, root=None) -> bool:
-    """Remove the lease only when it is this owner's."""
+def hold(arm, reason: str, pid=None, owner=None, root=None) -> bool:
+    """Mark this owner's lease held (live past its pid and expiry) for a runner record_session left on the arm."""
     owner = owner or default_owner()
     root = lease_root(root)
     with _locked(arm, root):
         old = _read(arm, root)
         if not old or old.get("owner") != owner:
             return False
+        record = {**old, "pid": pid, "hold": reason, "held_at": time.time()}
+        tmp = root / f"{arm}.json.tmp"
+        tmp.write_text(json.dumps(record, indent=2), encoding="utf-8")
+        os.replace(tmp, root / f"{arm}.json")
+    return True
+
+
+def release(arm, owner=None, root=None, *, hold=False) -> bool:
+    """Remove the lease only when it is this owner's; a held lease only with hold=True (`release_hold`)."""
+    owner = owner or default_owner()
+    root = lease_root(root)
+    with _locked(arm, root):
+        old = _read(arm, root)
+        if not old or old.get("owner") != owner or bool(old.get("hold")) != hold:
+            return False
         (root / f"{arm}.json").unlink(missing_ok=True)
         return True
+
+
+def release_hold(arm, owner=None, root=None) -> bool:
+    """A person has supported and checked the arm: remove this owner's held lease."""
+    return release(arm, owner, root, hold=True)
 
 
 def status(arm=None, root=None) -> dict:
@@ -145,12 +170,17 @@ def main(argv=None) -> int:
     rl = sub.add_parser("release")
     rl.add_argument("--arm", required=True)
     rl.add_argument("--owner")
+    rh = sub.add_parser("release-hold", help="after a person checked an arm a runner left held or unconfirmed")
+    rh.add_argument("--arm", required=True)
+    rh.add_argument("--owner")
     args = parser.parse_args(argv)
     try:
         if args.cmd == "status":
             result = status(args.arm)
         elif args.cmd == "claim":
             result = claim(args.arm, args.owner, args.purpose, args.ttl_s)
+        elif args.cmd == "release-hold":
+            result = {"released": release_hold(args.arm, args.owner)}
         else:
             result = {"released": release(args.arm, args.owner)}
     except LeaseHeld as exc:

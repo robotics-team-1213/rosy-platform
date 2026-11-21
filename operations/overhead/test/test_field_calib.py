@@ -3,7 +3,7 @@
 import math
 
 import pytest
-from games.field.homography import fit
+from core_common.homography import fit
 
 from rosy_vision.field_calib import FieldCalibrator
 

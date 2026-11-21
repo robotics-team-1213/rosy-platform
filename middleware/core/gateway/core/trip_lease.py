@@ -25,11 +25,13 @@ import logging
 import math
 import re
 import threading
+from contextlib import contextmanager
 from collections import OrderedDict
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
+from uuid import UUID
 
 from core_common.protocol.trip_lease import MAX_TTL_S, MIN_TTL_S, PURPOSES, TripLeaseError
 from core_features.command.arbitration import Mode
@@ -66,6 +68,10 @@ class _Lease:
     warned: set = field(default_factory=set)
     job_id: Optional[str] = None
     purpose: Optional[str] = None
+    handoff_pending: bool = False
+    handoff_revoked: bool = False
+    handoff_reservation: UUID | None = None
+    handoff_run_id: UUID | None = None
 
 
 def _iso(epoch: float) -> str:
@@ -86,6 +92,7 @@ class TripLeaseManager:
         self._ended_ids: OrderedDict[str, dict] = OrderedDict()
         #: ``halt(reason)``: stop line-follow / navigation and go IDLE. Wired by CORE.
         self.halt: Callable[[str], None] = lambda reason: None
+        self.halt_handoff: Callable[[UUID], None] = lambda run_id: None
         #: D-1029: battery_policy deferred its critical action while a charge return drives.
         self.critical_deferred = False
         self.critical_inactive_since: Optional[float] = None  # D-1029: monotonic start of "return over"
@@ -205,6 +212,8 @@ class TripLeaseManager:
             current = self._lease
             if current is None or (lease_id is not None and current.lease_id != lease_id):
                 return None
+            if reason == "released" and current.handoff_pending:
+                raise TripLeaseError("CONFLICT", "Nav2 handoff is committing; cancel or retry release")
             self._lease = None
             now = self._monotonic()
             ended = {"lease_id": current.lease_id, "reason": reason, "by": by}
@@ -219,11 +228,14 @@ class TripLeaseManager:
             self._events.publish("trip_lease.ended", severity="info", source="trip_lease", data=data)
         else:
             self._events.publish("trip_lease.ended", severity="warning", source="trip_lease", data=data)
-        if halt if halt is not None else reason in HALTING_REASONS:
+        handoff_halt = reason == "mode_left" and current.handoff_pending
+        if handoff_halt or (halt if halt is not None else reason in HALTING_REASONS):
             try:
                 self.halt(reason)
             except Exception:  # the lease is already gone; the 5 Hz timer must keep running
                 log.exception("trip lease halt failed (%s)", reason)
+        elif reason in ("released", "mode_left") and current.handoff_run_id is not None:
+            self.halt_handoff(current.handoff_run_id)
         return ended
 
     def expire_due(self) -> None:
@@ -268,6 +280,48 @@ class TripLeaseManager:
             return {'remaining_s': current.ttl_s-elapsed} if matched else False
         finally:
             self._lock.release()
+
+    @contextmanager
+    def pin_nav_handoff(self, *, lease_id, trip_id, job_id, owner_id, reservation):
+        """Owner release cannot race the admission. Takeover/expiry may still revoke and halt."""
+        with self._lock:
+            current = self._lease
+            if (current is None or current.handoff_pending or current.lease_id != lease_id
+                    or current.trip_id != trip_id or current.job_id != job_id or current.owner_id != owner_id
+                    or not 0 <= self._monotonic() - current.renewed_mono < current.ttl_s):
+                raise TripLeaseError("CONFLICT", "the expected handoff lease is not available")
+            current.handoff_pending = True
+            current.handoff_revoked = False
+            current.handoff_reservation = reservation
+        try:
+            yield current
+        finally:
+            with self._lock:
+                current.handoff_pending = False
+                current.handoff_reservation = None
+
+    def commit_nav_handoff(self, *, lease_id, trip_id, job_id, owner_id) -> bool:
+        """Linearize admission just before native goal ownership changes."""
+        if not self._lock.acquire(blocking=False):
+            return False
+        try:
+            current = self._lease
+            if (current is None or not current.handoff_pending or current.handoff_revoked or current.lease_id != lease_id
+                    or current.trip_id != trip_id or current.job_id != job_id or current.owner_id != owner_id
+                    or not 0 <= self._monotonic() - current.renewed_mono < current.ttl_s):
+                return False
+            return True
+        finally:
+            self._lock.release()
+
+    def revoke_job_handoff(self):
+        """IDLE can preserve a job lease while stopping its current handoff."""
+        with self._lock:
+            current = self._lease
+            if current is None or current.job_id is None:
+                return None
+            current.handoff_revoked = True
+            return current
 
     def ended(self) -> Optional[dict]:
         """``trip_lease_ended`` for the snapshot, for ENDED_VISIBLE_S after the end."""
@@ -336,6 +390,13 @@ def build_trip_lease(events, state, modes, safety, line_follow, command, nav,
         # D-541 5: the owner's lane <-> free stays in NAVIGATION; every other mode ends the trip.
         # D-763 6: but IDLE keeps a job's lease (between its steps); the D-760 2 latch is per line session.
         if new is Mode.IDLE and (trip_lease.current() or {}).get("job_id"):
+            interrupted = trip_lease.revoke_job_handoff()
+            if interrupted is not None:
+                token = interrupted.handoff_reservation
+                if token is not None:
+                    nav.release_goal_reservation(token)
+                if interrupted.handoff_run_id is not None:
+                    trip_lease.halt_handoff(interrupted.handoff_run_id)
             return
         if new is not Mode.NAVIGATION:
             trip_lease.end("estop" if new is Mode.EMERGENCY else "mode_left", by=f"mode:{new.value}")
@@ -358,6 +419,22 @@ def build_trip_lease(events, state, modes, safety, line_follow, command, nav,
             events.publish("mode.changed", source="trip_lease",
                            data={"from": Mode.NAVIGATION.value, "to": Mode.IDLE.value, "by": "trip_lease"})
     trip_lease.halt = halt
+
+    def halt_handoff(run_id: UUID) -> None:
+        with nav._lock:
+            operation = nav.native.current
+            if operation is None or operation.run_id != run_id or operation.phase == "TERMINAL":
+                return
+            try:
+                nav.cancel(source="trip_lease:handoff_released", run_id=run_id, close_session=False)
+            except Exception:
+                log.exception("scoped handoff cancellation failed")
+            finally:
+                modes.transition(Mode.IDLE, expect=Mode.NAVIGATION)
+                command.clear_navigation()
+
+    trip_lease.halt_handoff = halt_handoff
+    nav.clear_handoff_input = command.clear_navigation
     # D-1029: low-power return driving; the lease alone decides (the cap holds before navigation starts).
     # A bad configured value (0, negative, NaN) never removes the cap: it falls back to the default.
     if not (math.isfinite(charge_return_linear) and charge_return_linear > 0):

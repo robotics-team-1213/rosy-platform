@@ -14,6 +14,7 @@ from core_api_web.api.deps import AuthContext, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.deps import DockError, DockInstance, DockType
 from core_common.domain.tasks import TaskKind
+from core_common.protocol.docking import SitePoseEvidence
 
 
 docking_router = APIRouter(prefix="/api/v1/docking", tags=["docking"])
@@ -24,6 +25,7 @@ _DOCK_HTTP = {
     "DOCK_EXISTS": 409,
     "UNKNOWN_DOCK_TYPE": 400,
     "MAP_MISMATCH": 409,
+    "MAP_FRAME_CHANGED": 409,
     "EMERGENCY_ACTIVE": 409,
     "DOCKING_ACTIVE": 409,
     "STATION_BINDING_REQUIRED": 409,
@@ -80,6 +82,7 @@ class DockCommand(BaseModel):
     correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
     expected_boot_id: UUID | None = None
     expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
+    site_pose_evidence: SitePoseEvidence | None = None      # additive: Fleet's evidence of a verified site pose; CORE judges it (status.site_pose_verified / site_pose_refusal)
 
 
 class UndockCommand(BaseModel):
@@ -173,6 +176,7 @@ def docking_dock(body: DockCommand, auth: AuthContext = Depends(operator),
             svc.docking.dock(body.dock, correlation_id=body.correlation_id,
                              expected_boot_id=body.expected_boot_id,
                              expected_owner_generation=body.expected_owner_generation,
+                             site_pose_evidence=body.site_pose_evidence,
                              receipt_sink=receipt.append)
     except DockError as exc:
         raise _dock_error(exc)

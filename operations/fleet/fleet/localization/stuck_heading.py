@@ -8,7 +8,7 @@ from core_common.calibration_store import _real as _finite
 def reassess(pose, view, *, now, map_id, map_version):
     """Compare the allowed lane direction with the exact trusted pose used by the monitor."""
     if (pose is None or pose.state != "LOCALIZED" or not map_id or pose.map_id != map_id
-            or getattr(pose, "anchor_source", None) == "auto_locate"   # D-989: the robot's own pose, re-set each tick
+            or getattr(pose, "anchor_source", None) in ("auto_locate", "track")   # D-989: the robot's own pose, re-set each tick; a track's yaw is odometry's
             or not _finite(pose.age_s) or not 0 <= pose.age_s <= 2.0
             or not _finite(pose.anchor_age_s) or not 0 <= pose.anchor_age_s <= 1.5
             or not _finite(pose.yaw) or not _finite(pose.odom_stamp)):

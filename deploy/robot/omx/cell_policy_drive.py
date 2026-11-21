@@ -4,9 +4,8 @@
 The policy's proposed chunk becomes a chunk named `policy` in a copy of the arm's reviewed library, so the runner applies
 the same `load` plan_check, start-gap check, speed/strain/jitter guards and holds as for an IK chunk; the IK chunks
 (`home`, transfer chunks) stay in the same library, which is how a policy segment and IK segments mix. On top:
-- every policy frame must lie inside the per-joint range the reviewed library's chunks cover, widened to the q01..q99
-  range a person demonstrated on this arm in the training actions (+ margin): 11-18 the IK library never rolls the
-  wrist (-17..-2) while the demonstrations roll it to align with the box;
+- every policy frame must lie inside the per-joint range the reviewed library's chunks cover (+ margin).
+  Normalized-unit checkpoints may widen this with q01..q99 from the real demonstrations;
 - no step may be faster than the library's fastest step: a faster chunk is stretched in time, never sent as is;
 - the model's LeRobot calibration and the cell's may differ by a homing offset (11-18: wrist_roll 957 ticks = 46.7
   units); `calibration_offset` maps cell state into model units and the action back.
@@ -26,11 +25,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_lerobot_shadow as lrs  # noqa: E402
+from cell_policy_goals import GOALS, resolve_goal_site  # noqa: E402
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S  # noqa: E402
 
 MARGIN = 3.0  # units outside the reviewed per-joint range still allowed (sensor and settle noise)
 JOINTS = len(lrs.JOINT_NAMES)
 SCALE = {name: 200.0 for name in lrs.JOINT_NAMES[:-1]} | {"gripper": 100.0}  # LeRobot omx: body M100_100, gripper 0_100
+SIM_POLICY_FPS = 15  # mix-1121 ACT dataset
 
 
 def calibration_offset(model_cal: dict, cell_cal: dict) -> list[float]:
@@ -87,6 +88,33 @@ def open_before_close(chunk, open_g: float, closed: float):
     return arr
 
 
+def converted_closed(closed: float, rule: dict) -> float:
+    from cell_act_inputs import real_grippers, sim_gripper
+
+    return float(real_grippers([sim_gripper(closed, rule)], rule)[0])
+
+
+def resample_chunk(chunk, start, library_fps: float) -> np.ndarray:
+    """Sample the measured start (t=0) to each predicted row (t=1/15, 2/15, ...)."""
+    path = np.vstack([start, chunk])
+    ticks = np.arange(1, math.ceil(len(chunk) * library_fps / SIM_POLICY_FPS) + 1)
+    times = ticks * SIM_POLICY_FPS / library_fps
+    return np.column_stack([np.interp(times, np.arange(len(path)), joint) for joint in path.T])
+
+
+def wrist_roll_warning(chunk, home_roll: float) -> str | None:
+    from arm_status_bridge import TICKS
+
+    # The two trained orientations are a half-turn apart. Accept within 45 degrees of either.
+    half_turn = SCALE["wrist_roll"] * TICKS / (TICKS - 1) / 2
+    distance = np.abs((chunk[:, 4] - home_roll + half_turn / 2) % half_turn - half_turn / 2)
+    between = np.flatnonzero(distance > half_turn / 4)
+    if len(between):
+        i = between[0]
+        return f"arm_b frame {i} wrist_roll={chunk[i, 4]:.2f} lies between trained branches (home={home_roll:.2f})"
+    return None
+
+
 def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
     """Cell-unit frames the runner may get: refused outside the envelope, stretched so no body step beats `fastest`."""
     arr = np.asarray(chunk, dtype=float)
@@ -106,36 +134,68 @@ def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
 
 
 def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chunks: int, dry_run: bool, log,
-                demonstrated=None) -> dict:
+                demonstrated=None, goal_slot: int | None = None) -> dict:
     library = json.loads(library_path.read_text(encoding="utf-8"))
     low, high, fastest = envelope(library)
-    fastest = min(fastest, GUARD_UNITS_PER_S / float(library.get("fps", 30)))  # the runner refuses any frame step past this
-    if demonstrated is not None:
+    fps = float(library.get("fps", 30))
+    fastest = min(fastest, GUARD_UNITS_PER_S / fps)  # the runner refuses any frame step past this
+    sim_units = getattr(shadow, "sim_rule", None) is not None
+    if demonstrated is not None and not sim_units:
         low, high = widen(low, high, *demonstrated)
     closed = float(library.get("jaw_empty_stop", library["gripper_closed"]))
+    model_closed = converted_closed(closed, shadow.sim_rule) if sim_units else closed
+    home_roll = None
+    if sim_units:
+        steps = shadow.n_action_steps
+        if type(steps) is not int or steps < 1:
+            raise ValueError("sim-unit checkpoint requires a positive integer n_action_steps")
+        if shadow.arm_id == "arm_b":
+            home = library["chunks"].get("home")
+            if not home or len(home[-1]) != JOINTS:
+                raise ValueError("arm_b reviewed library requires a six-joint home frame")
+            home_roll = float(home[-1][4])
+            if not math.isfinite(home_roll):
+                raise ValueError("arm_b reviewed library requires a finite home wrist roll")
     open_g = max(f[5] for chunk in library["chunks"].values() for f in chunk if len(f) == JOINTS)
     off = np.asarray(offset, dtype=float)
+    goal = {} if goal_slot is None else {"goal": goal_slot}
     held, released = False, False
     for n in range(max_chunks):
         status = cell.act("state")
         state = np.asarray(status["state"], dtype=float)
         frames = {view: cell.frame(view) for view in shadow.image_views}
-        obs, meta = shadow.inputs((state + off).tolist(), frames)
-        proposed = np.asarray(shadow.infer(obs).chunk, dtype=float) - off
+        obs, meta = shadow.inputs(state.tolist() if sim_units else (state + off).tolist(), frames, **goal)
+        if sim_units:
+            converted = np.asarray(shadow.infer(obs, state=state).chunk, dtype=float)
+        else:
+            converted = np.asarray(shadow.infer(obs).chunk, dtype=float) - off
+        proposed = converted[:steps] if sim_units else converted
         if not held:
-            proposed = open_before_close(proposed, open_g, closed)
+            proposed = open_before_close(proposed, open_g, model_closed)
         row = {"chunk": n, "state": state.tolist(), "meta": meta, "proposed_first": proposed[0].tolist(),
                "proposed_last": proposed[-1].tolist()}
+        if sim_units:
+            row.update(model_fps=SIM_POLICY_FPS, library_fps=fps, action_steps=len(proposed))
+        if dry_run:
+            row.update(dry_run=True, converted_chunk=converted.tolist())
         try:
+            if home_roll is not None and (warning := wrist_roll_warning(converted, home_roll)):
+                row["wrist_roll_warning"] = warning
+                if not dry_run:
+                    raise ValueError(warning)
+            if sim_units:
+                proposed = resample_chunk(proposed, state, fps)
             frames_cell = shape_chunk(proposed, state, low, high, fastest)
         except ValueError as error:
+            if dry_run:
+                row["envelope"] = {"ok": False, "reason": str(error)}
             log({**row, "refused": str(error)})
             if not dry_run:
                 log({"command": "park", **_status(cell.act("park"))})
             return {"result": "refused", "at": n, "reason": str(error)}
         row["frames"] = len(frames_cell)
         if dry_run:
-            log({**row, "dry_run": True})
+            log({**row, "envelope": {"ok": True}})
             continue
         lib = {**library, "chunks": {**library["chunks"], "policy": frames_cell}}
         path = work / f"policy-lib-{int(time.time())}-{n}.json"
@@ -196,8 +256,10 @@ def main(argv=None) -> int:
     parser.add_argument("--library", required=True, type=Path, help="the arm's reviewed chunk library")
     parser.add_argument("--policy-root", required=True, type=Path)
     parser.add_argument("--policy-revision", required=True, help="sha256 of model.safetensors")
-    parser.add_argument("--model-calibration", required=True, type=Path, help="LeRobot calibration the model was recorded with")
+    parser.add_argument("--model-calibration", type=Path, help="LeRobot calibration for a normalized-unit checkpoint")
     parser.add_argument("--cell-calibration", required=True, type=Path, help="LeRobot calibration the cell runner uses")
+    parser.add_argument("--goal-site", help="Cell job destination site ID, e.g. yard:r3-s2-t1 or tray")
+    parser.add_argument("--goal-slot", type=int, help="explicit override for the zero-based checkpoint goal slot")
     parser.add_argument("--max-chunks", type=int, default=3)
     parser.add_argument("--operator", required=True, help="named person who approved this run")
     parser.add_argument("--person-at-switch", action="store_true", help="D-911: a person stands at the power switch")
@@ -210,13 +272,43 @@ def main(argv=None) -> int:
         parser.error("moving the arm needs --person-at-switch (D-911)")
     if not 1 <= args.max_chunks <= 6:
         parser.error("--max-chunks 1..6")
+    config = json.loads(args.config.read_text(encoding="utf-8"))
+    if not config.get("work_dir"):
+        config["work_dir"] = str(args.config.parent)
+    shadow = lrs.LeRobotShadow(args.policy_root, args.policy_revision, cell_config=config)
+    destination = mapped_slot = None
+    goal_slot = args.goal_slot
+    if args.goal_site is not None:
+        if shadow.goal_size is None:
+            parser.error("checkpoint has no goal input")
+        if shadow.goal_size != len(GOALS):
+            parser.error(f"--goal-site requires the {len(GOALS)}-slot h1 goal input")
+        try:
+            destination, mapped_slot = resolve_goal_site(args.goal_site)
+        except (ValueError, OSError) as error:
+            parser.error(str(error))
+        if goal_slot is None:
+            goal_slot = mapped_slot
+    if shadow.goal_size is not None:
+        if goal_slot is None or not 0 <= goal_slot < shadow.goal_size:
+            parser.error(f"checkpoint requires --goal-site or --goal-slot 0..{shadow.goal_size - 1}")
+    elif goal_slot is not None:
+        parser.error("checkpoint has no goal input")
+    cell_cal = json.loads(args.cell_calibration.read_text(encoding="utf-8"))
+    if shadow.sim_rule is None:
+        if args.model_calibration is None:
+            parser.error("normalized-unit checkpoint requires --model-calibration")
+        offset = calibration_offset(json.loads(args.model_calibration.read_text(encoding="utf-8")), cell_cal)
+    else:
+        for name in lrs.JOINT_NAMES[:-1]:
+            if (cell_cal[name]["range_min"], cell_cal[name]["range_max"]) != (0, 4095):
+                parser.error(f"{name}: sim-unit checkpoint requires the trained 0..4095 body tick range")
+        offset = [0.0] * JOINTS
+
     import cell_pipeline as cp
 
-    config = json.loads(args.config.read_text(encoding="utf-8"))
     work = Path(config.get("work_dir") or args.config.parent).expanduser()
     work.mkdir(parents=True, exist_ok=True)
-    offset = calibration_offset(json.loads(args.model_calibration.read_text()), json.loads(args.cell_calibration.read_text()))
-    shadow = lrs.LeRobotShadow(args.policy_root, args.policy_revision)
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     log_path = work / "policy-drive.jsonl"
     run_id = f"{int(time.time())}"
@@ -226,7 +318,9 @@ def main(argv=None) -> int:
             stream.write(json.dumps({"run": run_id, "t": time.time(), "operator": args.operator,
                                      "policy_revision": args.policy_revision, "offset": offset, **row}, default=str) + "\n")
 
-    log({"start": True, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch, "max_chunks": args.max_chunks})
+    log({"start": True, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch, "max_chunks": args.max_chunks,
+         "goal_slot": goal_slot, "goal_site": args.goal_site, "goal_destination": destination,
+         "goal_site_slot": mapped_slot, "units_sha256": shadow.files.get(lrs.UNITS)})
     look = None
     if args.catalog and args.roi and args.site:
         import cell_auto_pick_plan
@@ -248,8 +342,9 @@ def main(argv=None) -> int:
         log({"end": True, **result})
         print(json.dumps(result))
         return 1
+    demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
     result = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks,
-                         dry_run=args.dry_run, log=log, demonstrated=demonstrated_range(args.policy_root, offset))
+                         dry_run=args.dry_run, log=log, demonstrated=demonstrated, goal_slot=goal_slot)
     if look:
         after = look()
         result["source"] = {"before": before.get("objects"), "after": after.get("objects")}

@@ -32,19 +32,128 @@ class BayAlignMixin:
     def _init_align(self) -> None:
         self._align: Optional[tuple[float, float, float]] = None   # (시작, 시작 odom yaw, 마지막 신선 관측)
         self._align_n = 0                                          # 한 도킹의 회전 맞춤 횟수(첫 시도에서만 비운다)
+        self._align_lp = None                                      # reference-scan dock: (heading, lateral, at) of the newest LiDAR pose during the align
+        self._ap_ask_at = -1e9
         self._find_on = False
         self._find_seen_m: Optional[float] = None                  # 선이 처음 보인 때의 후진 거리
+        self._reset_find()
+
+    def _reset_find(self) -> None:
+        # creep-start heading gate (LiDAR scan pose): asked once, the heading read once, an in-place turn outside the row
+        self._find_since, self._find_asked, self._find_match = None, False, None
+        self._fh_done, self._fh_turn, self._fh_verify = False, None, False
+
+    def _find_heading_gate(self, now: float):
+        """Before the find creep starts, with a reference scan: the LiDAR heading beyond bay_find_heading_max_rad is turned out in place
+        when the robot is outside the row (x >= staging), else the creep does not start (the row is no place to turn). None = start
+        the creep; True = handled this tick (waiting for the pose, turning, or failed)."""
+        h, cfg = self._h, self._h._cfg
+        if self._fh_turn is not None:
+            return self._tick_find_turn(now)
+        if self._fh_verify:
+            return self._verify_find_turn(now)
+        if self._fh_done or not isinstance(getattr(h._dock, "metadata", {}).get("reference_scan"), dict):
+            return None
+        self._find_since = now if self._find_since is None else self._find_since
+        if self._find_match is None:
+            if now - self._find_since < cfg.bay_scan_pose_wait_s:
+                self._stop()
+                return True
+            self._fh_done = True
+            return None                                   # no scan pose in time: as before
+        self._fh_done = True
+        m, pose = self._find_match[0], self._odometry()
+        # scan_geometry refuses a pose at or beyond staging (outside the row); only the heading is wanted here, with its fit gates
+        if (m is None or pose is None or m.inliers < cfg.bay_scan_inlier_min or m.margin < cfg.bay_scan_margin_min
+                or abs(m.heading) > cfg.bay_scan_heading_max_rad or abs(m.heading) <= cfg.bay_find_heading_max_rad):
+            return None
+        if m.x < h._type().staging_offset_m:
+            self._stop()
+            h._fail("bay find creep: heading %.0f deg inside the row (x %.2f m): not creeping, centre the robot first"
+                    % (math.degrees(m.heading), m.x))
+            return True
+        self._stop()
+        self._fh_turn = (now, pose[2] - m.heading, pose[2], abs(m.heading))        # start, target yaw, start yaw, |heading| to turn out
+        self._tw_start(pose[2], now)
+        return True
+
+    def _tick_find_turn(self, now: float):
+        h, cfg = self._h, self._h._cfg
+        start, target, yaw0, turn = self._fh_turn
+        pose = self._odometry()
+        body = self._body_fresh(now)
+        if body is not None and body[3] < start:
+            body = None
+        if pose is None or now - start > cfg.bay_heading_align_timeout_s:
+            self._fh_turn = None
+            self._stop()
+            h._fail("bay find heading align timed out")
+            return True
+        if body is None or body[0] is not None:             # the sweep must be clear every tick, as for the staging turn
+            self._stop()
+            if body is not None or now - start > cfg.bay_scan_wait_s:
+                self._fh_turn = None
+                h._fail("bay find heading align not clear: %s" % (body[0] if body else "no fresh body scan"))
+            return True
+        if abs(math.remainder(pose[2] - yaw0, math.tau)) > turn + 0.1:           # total rotation cap: never more than the heading + 0.1 rad
+            self._fh_turn = None
+            self._stop()
+            h._fail("bay find heading align turned beyond its cap (%.0f deg for %.0f deg): stopped" % (
+                math.degrees(abs(math.remainder(pose[2] - yaw0, math.tau))), math.degrees(turn)))
+            return True
+        self._tw_odo(pose[2], now)
+        why = self._tw_verdict(now)
+        if why:                                                  # the body does not follow the wheels (LiDAR yaw vs odometry)
+            self._fh_turn, self._tw = None, None
+            self._stop()
+            h._fail(why)
+            return True
+        error = math.remainder(target - pose[2], math.tau)
+        if abs(error) <= cfg.bay_heading_align_tol_rad:
+            self._tw = None
+            # turned: stand still, ask the scan pose again and require the heading to be out (below)
+            self._fh_turn, self._fh_verify = None, True
+            self._find_since, self._find_asked, self._find_match = now, False, None
+            self._stop()
+            return True
+        self._drive(0.0, turn_twist(error, _ALIGN_GAINS)[0])
+        return True
+
+    def _verify_find_turn(self, now: float):
+        h, cfg = self._h, self._h._cfg
+        if self._find_match is None:
+            if now - self._find_since < cfg.bay_scan_pose_wait_s + cfg.bay_seat_check_delay_s:
+                self._stop()
+                return True
+            self._fh_verify = False
+            h._fail("bay find heading align: no scan pose to verify the turn: not creeping")
+            return True
+        m = self._find_match[0]
+        self._fh_verify = False
+        if (m is None or m.inliers < cfg.bay_scan_inlier_min or m.margin < cfg.bay_scan_margin_min
+                or abs(m.heading) > cfg.bay_find_heading_verify_rad):
+            h._fail("bay find heading align did not bring the heading out (%s): not creeping" % (
+                "no good scan pose" if m is None else "%.1f deg" % math.degrees(m.heading)))
+            return True
+        return None
 
     def _try_heading_align(self, now: float, lateral: float, heading: float) -> bool:
         """진입창 방위 위반 때: 맞출 수 있으면 멈추고 맞춤을 시작한다. True = 맡았다."""
-        if not heading_alignable(self._h._cfg, lateral, heading, self._align_n):
+        if self._in_row or not heading_alignable(self._h._cfg, lateral, heading, self._align_n):
             return False
+        if self._pitin:
+            # pit-in: an in-place turn only at the turn point (x >= bay_turn_x_min_m) on a LiDAR x; unknown x = no turn
+            em = self._entry_match[0] if self._entry_match is not None else None
+            x = em.x if em is not None else (self._row_pose[0] if self._row_pose is not None else None)
+            if x is None or x < self._h._cfg.bay_turn_x_min_m:
+                return False             # the tray corner's turning circle (0.29 m) exceeds the lane (0.21 m): no in-place turn inside the row, ever
         pose = self._odometry()
         if pose is None:
             return False
         self._stop()
         self._align_n += 1
         self._align = (now, pose[2], now)
+        self._align_lp, self._ap_ask_at = None, -1e9
         return True
 
     def _tick_heading_align(self, now: float) -> None:
@@ -72,13 +181,24 @@ class BayAlignMixin:
                 self._align = None
                 h._fail("bay heading align not clear: %s" % (body[0] if body else "no fresh body scan"))
             return
-        _, lateral, heading = self._line_errors()
-        if heading is None or self._obs_age > cfg.bay_obs_max_age_s:
-            self._stop()
-            if now - seen > cfg.detector_lost_grace_s:
-                self._align = None
-                h._retry("bay line lost during heading align")
-            return
+        if self._has_reference():
+            # R4: closed on the LiDAR pose, never on the camera heading (wrong by ~20 deg at this site)
+            lp = self._align_lp
+            if lp is None or now - lp[2] > cfg.bay_scan_fresh_s + cfg.bay_lidar_ask_s:
+                self._stop()
+                if now - seen > cfg.detector_lost_grace_s:
+                    self._align = None
+                    h._fail("bay heading align: no fresh LiDAR pose (the camera heading is not used): stopped")
+                return
+            heading, lateral = lp[0], lp[1]
+        else:
+            _, lateral, heading = self._line_errors()
+            if heading is None or self._obs_age > cfg.bay_obs_max_age_s:
+                self._stop()
+                if now - seen > cfg.detector_lost_grace_s:
+                    self._align = None
+                    h._retry("bay line lost during heading align")
+                return
         self._align = (start, yaw0, now)
         if abs(lateral) > cfg.bay_entry_lat_m:
             self._stop()
@@ -88,6 +208,7 @@ class BayAlignMixin:
             self._stop()
             self._align = None
             self._match = (lateral, heading)
+            self._entry_since, self._entry_asked, self._entry_match = None, False, None     # the entry window measures the LiDAR pose again
             return
         self._drive(0.0, turn_twist(-heading, _ALIGN_GAINS)[0])
 
@@ -98,6 +219,9 @@ class BayAlignMixin:
         if not self._find_on:
             if seen or h.executor is None or now - h._phase_since < cfg.bay_find_wait_s:
                 return False
+            gate = self._find_heading_gate(now)
+            if gate is not None:
+                return gate
             h.executor.reset_odometry_mark()
             self._find_on, self._find_seen_m = True, None
         travelled = abs(h.executor.travelled_m())
@@ -119,7 +243,16 @@ class BayAlignMixin:
             self._find_end()
             self._guard_fail("find-rear", "LiDAR sees something close behind while looking for the line", h._retry)
             return True
-        if self._find_seen_m is None and travelled >= cfg.bay_find_creep_max_m:
+        seat = self._seat_gap if self._seat_gap is not None and self._seat_gap[0] == h._dock.id else None
+        creep_max = cfg.bay_find_creep_max_m
+        if seat is not None and body[2] is not None:
+            # the stored seated gap makes the LiDAR rear gap a position: creep to where the line shows, bounded by the rails
+            creep_max = cfg.bay_find_lidar_creep_max_m
+            if self._find_seen_m is None and body[2] - seat[1] <= cfg.bay_find_min_x_m:
+                self._find_end()
+                self._guard_fail("find", "guide line not found before the rails (LiDAR x %.2f m)" % (body[2] - seat[1]), h._retry)
+                return True
+        if self._find_seen_m is None and travelled >= creep_max:
             self._find_end()
             self._guard_fail("find", "guide line not found within the find creep", h._retry)
             return True

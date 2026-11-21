@@ -61,3 +61,21 @@ models:
   - D-576 1-4
   status: candidate
   note: lane+map union; lane val IoU 0.987 raw/0.989 post, beyond-line FP 0.011 raw/0.0037 post; map val post IoU 0.149 (near rows); intake PASS
+- version: v14.0.00
+  revision: v14-drivable-20261114-b68c0084
+  onnx_sha256: b68c0084adfd0fffe32da6edf6ddcde0df236376b954abf08110bb0465294e01
+  dataset: geg6-final_all
+  dataset_sha256: 652f375a13d4e4142a2be7348522005fd91f7209211e42e5ed6335de06b54415
+  rules:
+  - D-558 2
+  status: retired
+  note: 'LRASPP_r (drivable as a direct class, 128x320 crop rows 112-239), seed 42, val mIoU 0.924; superseded by v14.0.01 (fails under brightness change: x0.5 mIoU 0.567)'
+- version: v14.0.01
+  revision: v14-drivable-20261116-16bb1c85
+  onnx_sha256: 16bb1c85229fce4798c0e92bbd9075529efdbfc588d9da5b2670f38be0fbb5e0
+  dataset: geg6-final_all
+  dataset_sha256: 652f375a13d4e4142a2be7348522005fd91f7209211e42e5ed6335de06b54415
+  rules:
+  - D-558 2
+  status: candidate
+  note: 'LRASPP_r v2: + brightness/saturation x0.6-1.4 aug, seed 1, 75 ep, val mIoU 0.928 (x0.5 brightness 0.921); int8 a77bce58; intake PASS 2026-11-21'

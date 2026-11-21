@@ -55,6 +55,8 @@ def swarm_follow(body: SwarmFollowParams, auth: AuthContext = Depends(operator),
                        f"cannot follow from {svc.modes.mode.value}")
 
     with localized_start(svc):  # D-395 §2: autonomy only from LOCALIZED
+        if svc.nav.precision_reserved():
+            raise ApiError("MOTION_BUSY", 409, "a precision correction owns navigation mode")
         token = svc.swarm.reserve_follow(body)
         receipt = []
         try:
