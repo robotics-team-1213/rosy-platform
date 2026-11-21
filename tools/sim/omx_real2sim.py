@@ -8,8 +8,8 @@ that read the changed items (D-947: geometry evidence; measured values are named
   omx_real2sim.py report DIR                                    Markdown of what ran and passed
   omx_real2sim.py request belt RUN [--store DIR]               a ruler reading for a person (deploy/robot/omx/cell_requests.py)
 
-The snapshot a sim stage reads must be committed at SHA (remote_sim ships commits only): keep the cell's snapshots in
-deploy/robot/omx/sim/cell_snapshots/<stamp>.json. Today one item is measured automatically:
+The snapshot a sim stage reads must be in the commit remote_sim ships: `sim` stages a fresh one on a refs/rosy-wip commit
+(code SHA + that one path, omx_real2sim_stage.py); the permanent copy goes in deploy/robot/omx/sim/cell_snapshots/<stamp>.json. Today one item is measured automatically:
   temp_plates  each 3-lane plate's lane centres and yaws: dark lane pads and seated containers in the top frame,
                back-projected through the surveyed top camera onto the deck (containers onto their top); each plate is
                one printed fan (step, radius) placed where most of its visible lanes agree, so a covered lane comes from
@@ -37,6 +37,9 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/sim"))
 import omx_cell_anchor as anchor  # noqa: E402
+import omx_map_gate as map_gate  # noqa: E402
+import omx_real2sim_findings as findings_mod  # noqa: E402
+import omx_real2sim_stage as stage_mod  # noqa: E402
 from omx_real2sim_helpers import (  # noqa: E402, F401
     BELT_MIN_PX,
     LANE,
@@ -72,7 +75,7 @@ STAGGER_S = 45
 GAPS = {"temp_plates": "G-17", "ship": "G-18", "ship_fixation": "G-18", "camera": "G-19", "arm_bases": "G-21", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
 SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot",  # noqa: E731
-                             "--choice", "belt_pose=snapshot"]
+                             "--choice", "belt_pose=snapshot", "--choice", "top_camera=snapshot"]
 SHIP_CHANGED_DEG = 1.        # the hull is 316 mm long: 1 deg moves its ends 2.8 mm
 BELT_TOLERANCE_MM = 20.      # a tape between two points on a 55 mm step: the candidates differ by about 60 mm (2026-11-09)
 STAGES = {
@@ -126,12 +129,23 @@ def belt_request(run, layout=None):
         source=dict(snapshot_taken_at=snap.get("taken_at"), frames=snap.get("frames"))), image
 
 
-def measure(run, prev_path=None, camera_moved_ok=False):
+def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, dr_next=None):
     import cv2
 
     run = Path(run)
     prev = json.loads(Path(prev_path).read_text(encoding="utf-8")) if prev_path else None
-    layout = sites.Layout()  # camera, deck and arms; where the plates were comes from prev
+    lane_choices = {}
+    if prev_path:  # the refit reads the pad ends against the lanes the plates were last measured at, not the stale default lanes
+        try:
+            sites.snapshot_lanes(prev_path, "a"), sites.snapshot_lanes(prev_path, "b")
+            lane_choices = dict(temp_lanes="snapshot", cell_snapshot=str(prev_path))
+        except (ValueError, KeyError, TypeError):
+            pass
+    if preset:  # the chosen preset and its frame ride every item; the map gate refuses a prev snapshot read in another frame
+        lane_choices["preset"] = preset
+    layout = sites.Layout(**lane_choices)  # camera, deck and arms; where the plates were comes from prev
+    if preset and (verdict := map_gate.gate(layout))["verdict"] == "refuse":
+        raise SystemExit("preset %s with this --prev is not one map (omx_map_gate): %s" % (preset, "; ".join(verdict["why"])))
     frames = {c: run / "frames" / f"{c}.jpg" for c in CAMERAS if (run / "frames" / f"{c}.jpg").exists()}
     top = cv2.imread(str(frames["top"])) if "top" in frames else None
     if top is None:
@@ -144,18 +158,18 @@ def measure(run, prev_path=None, camera_moved_ok=False):
     elif ref:
         m = anchor.motion(cv2.imread(str(ref)), top)
         camera_motion = dict(checked=True, moved=anchor.moved(m), **m) if m else dict(checked=False, reason="too few far-band matches")
-        if camera_motion.get("moved") and not camera_moved_ok:
-            raise SystemExit(f"top camera moved since the previous snapshot ({m}): re-survey it (G-19, calibration step 3) "
-                             "before measuring; --camera-moved-ok measures anyway")
-    tp_first = measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"])
+    prev_tp = prev and prev["items"]["temp_plates"]
+    tp_first = measure_temp_plates(top, layout, prev_tp)
     worst_first = (tp_first.get("camera_check") or {}).get("worst_mm") or [99.0]
-    if max(worst_first) > 3.0:
-        alt_layout = sites.Layout(top_camera="2026-11-12")
-        tp_alt = measure_temp_plates(top, alt_layout, prev and prev["items"]["temp_plates"])
+    if max(worst_first) > 3.0 and not preset:  # a preset names its camera: no silent switch to the 11-12 model (its frame differs)
+        alt_layout = sites.Layout(top_camera="2026-11-12", **lane_choices)
+        tp_alt = measure_temp_plates(top, alt_layout, prev_tp)
         worst_alt = (tp_alt.get("camera_check") or {}).get("worst_mm") or [99.0]
         if max(worst_alt) <= 3.0 or max(worst_alt) < max(worst_first):
-            layout = alt_layout
-            tp_first = tp_alt
+            layout, tp_first, worst_first = alt_layout, tp_alt, worst_alt
+    import omx_real2sim_refit as refit  # PnP on the pad ends from every known pose, factory K; refused or unproven = stop (apply_refit)
+    starts = {n: dict(getattr(sites, f"TOP_CAMERA_{n}")) for n in ("20261110", "20261112", "20261114")}
+    tp_first, camera_fit = refit.apply_refit(top, layout, tp_first, prev_tp, camera_motion, camera_moved_ok, starts)
     items = {"ship": lambda: measure_ship(top, layout), "belt": lambda: measure_belt(top, layout)}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
@@ -164,10 +178,12 @@ def measure(run, prev_path=None, camera_moved_ok=False):
     tp = results["temp_plates"]
     ab = dict(fk={n: dict(xy=[round(v, 4) for v in a.base[:2]], yaw_deg=round(math.degrees(a.yaw), 1)) for n, a in layout.arms.items()},
               plate_centre={n: dict(xy=list(xy), yaw_deg=yaw) for n, (xy, yaw) in sites.ARM_BASES_MEASURED_194.items()})
+    rows = findings_mod.gap_rows(twin, dr_next)
     cap_file = run / "capture.json"
-    snap = dict(schema=SCHEMA, taken_at=json.loads(cap_file.read_text(encoding="utf-8"))["taken_at"] if cap_file.exists() else None,
+    frame = (prev or {}).get("frame") or map_gate.provenance(layout.choices)["top_camera"]["frame"]  # a refit keeps the previous lanes' frame
+    snap = dict(schema=SCHEMA, frame=frame, preset=preset, gap_rows=rows, taken_at=json.loads(cap_file.read_text(encoding="utf-8"))["taken_at"] if cap_file.exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
-                camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_motion=camera_motion,
+                camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_motion=camera_motion, camera_fit=camera_fit,
                 items=dict(temp_plates=dict(plates={t: p["lanes"] for t, p in tp["plates"].items() if "lanes" in p},
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},
@@ -217,6 +233,15 @@ def diff(old, new):
     return changed, rerun
 
 
+def diff_report(old, new, preset=None, twin=None, dr_next=None):
+    """What `diff` prints: diff()'s items and stages, the arm bases and TCP against their evidence, and gap rows from the twin's outputs."""
+    changed, rerun = diff(old, new)
+    f = findings_mod.findings(new, preset, twin, dr_next)
+    rows = list({json.dumps(r, sort_keys=True): r for r in f["gap_rows"] + list(new.get("gap_rows") or [])}.values())  # --twin feeds measure and diff: one row each
+    gaps = sorted({GAPS[i] for i in changed} | {r["id"] for r in rows})
+    return dict(changed=changed, rerun=rerun, gaps=gaps, arm_bases=f["arm_bases"], tcp=f["tcp"], gap_rows=rows)
+
+
 def capture(site, out):
     out = Path(out) / "frames"
     out.mkdir(parents=True, exist_ok=True)
@@ -243,12 +268,16 @@ def stage_body(name, rel, extra=()):
 
 
 def sim(snapshot, sha, out, stages, extra=()):
-    """Each stage one remote_sim run, all started at once; remote_sim places them by headroom and caps (D-568)."""
-    if not Path(snapshot).resolve().is_relative_to(ROOT):
-        raise SystemExit(f"{snapshot} is outside the repo: copy it to deploy/robot/omx/sim/cell_snapshots/ and commit it")
-    rel = Path(snapshot).resolve().relative_to(ROOT).as_posix()
-    if subprocess.run(["git", "cat-file", "-e", f"{sha}:{rel}"], cwd=ROOT).returncode:
-        raise SystemExit(f"{rel} is not in {sha}: commit the snapshot first (remote_sim ships commits only)")
+    """Each stage one remote_sim run, all started at once; remote_sim places them by headroom and caps (D-568).
+    A snapshot that is not in `sha` is staged on a WIP commit (omx_real2sim_stage) and that commit is shipped instead."""
+    snapshot = Path(snapshot).resolve()
+    rel = snapshot.relative_to(ROOT).as_posix() if snapshot.is_relative_to(ROOT) else None
+    rel = rel if rel and rel.startswith(f"{stage_mod.SNAP_DIR}/") else None  # only the snapshot dir rides a WIP commit
+    code_sha = sha
+    if rel is None or not stage_mod.committed(ROOT, sha, rel, snapshot):  # stage() refuses a rel that holds other bytes
+        staged = stage_mod.stage(ROOT, sha, snapshot, rel)
+        code_sha, sha, rel = staged["code_sha"], staged["sha"], staged["rel"]
+    prov = dict(code_sha=code_sha, snapshot_sha256=stage_mod.sha256(snapshot))
     out = Path(out)
     procs = {}
     for i, name in enumerate(stages):
@@ -262,7 +291,7 @@ def sim(snapshot, sha, out, stages, extra=()):
                                         "--minutes", str(minutes), "--log-dir", str(log / "remote"), "cmd", "--", body],
                                        cwd=ROOT, stdout=(log / "stdout.txt").open("w"), stderr=subprocess.STDOUT)
     rcs = {n: p.wait() for n, p in procs.items()}
-    (out / "sim.json").write_text(json.dumps(dict(snapshot=rel, sha=sha, choices=list(extra), rc=rcs, at=time.strftime("%Y-%m-%dT%H:%M:%S")), indent=1),
+    (out / "sim.json").write_text(json.dumps(dict(snapshot=rel, sha=sha, **prov, choices=list(extra), rc=rcs, at=time.strftime("%Y-%m-%dT%H:%M:%S")), indent=1),
                                   encoding="utf-8")
     return rcs
 
@@ -279,7 +308,7 @@ def run_pipeline(run, prev_path=None, camera_moved_ok=False, extra_choices=()):
     """End-to-end Real-to-Sim -> Stage 1 (MuJoCo) -> Stage 2 (Isaac Sim handoff) pipeline evaluation."""
     target = Path(run)
     if target.is_dir():
-        snap = measure(target, prev_path, camera_moved_ok=camera_moved_ok)
+        snap = measure(target, prev_path, camera_moved_ok=camera_moved_ok, preset=sites.parse_choices(extra_choices).get("preset"))
         snap_path = target / "snapshot.json"
     else:
         snap = json.loads(target.read_text(encoding="utf-8"))
@@ -320,7 +349,7 @@ def run_pipeline(run, prev_path=None, camera_moved_ok=False, extra_choices=()):
         previous=str(prev_path) if prev_path else None,
         changed=changed,
         rerun=rerun or ["stack"],
-        gaps=sorted({GAPS[i] for i in changed if i in GAPS}),
+        gaps=sorted({GAPS[i] for i in changed if i in GAPS} | {r["id"] for r in snap.get("gap_rows") or []}),
         stages=[
             dict(
                 stage="mujoco",
@@ -357,17 +386,34 @@ def main(argv=None):
     sub = p.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("capture"); c.add_argument("--site", help="ssh target of the PC serving the cell cameras, default the first omx_hosts entry in private/lab-hosts.json"); c.add_argument("--out", required=True)
     m = sub.add_parser("measure"); m.add_argument("run"); m.add_argument("--prev")
+    m.add_argument("--preset", help="named bundle of layout choices (omx_two_arm_sites.PRESETS), e.g. v24-20261114-cad190")
+    m.add_argument("--twin", help="a twin.json or a folder of them: its findings become gap rows in the snapshot")
+    m.add_argument("--dr-next", help="a dr_next.json from omx_carry_sweep ingest: its TCP set becomes gap rows")
     m.add_argument("--camera-moved-ok", action="store_true", help="measure although the top camera moved since --prev")
     d = sub.add_parser("diff"); d.add_argument("old"); d.add_argument("new")
+    d.add_argument("--preset", help="layout preset the arm bases are compared in (default: the sim's default layout)")
+    d.add_argument("--twin", help="a twin.json or a folder of them"); d.add_argument("--dr-next", help="a dr_next.json from omx_carry_sweep ingest")
     s = sub.add_parser("sim"); s.add_argument("snapshot"); s.add_argument("--sha", required=True); s.add_argument("--out", required=True)
+    s.add_argument("--preset", help="named bundle of layout choices; the snapshot's own choices still win, the map gate checks the frames")
     s.add_argument("--stages", help="comma list, default every stage")
     s.add_argument("--choice", action="append", default=[], help="key=value after the snapshot's choices, e.g. physics=<candidate>")
+    s.add_argument("--unverified-ok", action="store_true", help="run although omx_map_gate refuses the map (two frames, or a CAD length broken)")
     r = sub.add_parser("report"); r.add_argument("out")
     q = sub.add_parser("request"); q.add_argument("item", choices=["belt"]); q.add_argument("run")
     q.add_argument("--store", help="request store, default cell_requests.store() (ROSY_CELL_REQUESTS)")
     pl = sub.add_parser("pipeline"); pl.add_argument("run"); pl.add_argument("--prev")
     pl.add_argument("--camera-moved-ok", action="store_true")
     pl.add_argument("--choice", action="append", default=[])
+    pl.add_argument("--preset")
+    transfer = sub.add_parser("transfer-audit", help="bind CAD194 camera, MuJoCo and Isaac evidence")
+    transfer.add_argument("--render", required=True, type=Path)
+    transfer.add_argument("--capture", required=True, type=Path)
+    transfer.add_argument("--handoff", required=True, type=Path)
+    transfer.add_argument("--isaac-snapshot", type=Path)
+    transfer.add_argument("--wrist-evidence", type=Path, help="A/B held-out jaw and fixture reprojections")
+    transfer.add_argument("--paired-reset", nargs=4, type=Path,
+                          metavar=("START", "JOINT_CALIBRATION", "MUJOCO_RESET", "ISAAC_RESET"))
+    transfer.add_argument("--out", required=True, type=Path)
     a = p.parse_args(argv)
     if a.cmd == "capture":
         if not a.site:
@@ -376,13 +422,17 @@ def main(argv=None):
             a.site = next(iter(lab_hosts.omx_hosts(lab_hosts.load())), "") or p.error("--site, or omx_hosts in private/lab-hosts.json")
         print(json.dumps(capture(a.site, a.out)))
     elif a.cmd == "measure":
-        snap = measure(a.run, a.prev, a.camera_moved_ok)
+        snap = measure(a.run, a.prev, a.camera_moved_ok, a.preset, a.twin, a.dr_next)
         print(json.dumps(snap["items"], indent=1))
     elif a.cmd == "diff":
         load = lambda f: json.loads(Path(f).read_text(encoding="utf-8"))  # noqa: E731
-        changed, rerun = diff(load(a.old), load(a.new))
-        print(json.dumps(dict(changed=changed, rerun=rerun, gaps=sorted({GAPS[i] for i in changed})), indent=1))
+        print(json.dumps(diff_report(load(a.old), load(a.new), a.preset, a.twin, a.dr_next), indent=1))
     elif a.cmd == "sim":
+        a.choice = a.choice + ([f"preset={a.preset}"] if a.preset and not any(c.startswith("preset=") for c in a.choice) else [])
+        verdict = map_gate.gate(sites.Layout(**sites.parse_choices([c for c in SNAP_CHOICES(a.snapshot) if c != "--choice"] + a.choice)))
+        print(json.dumps(dict(map_gate=verdict["verdict"], why=verdict["why"], unconfirmed=verdict["unconfirmed"]), indent=1), file=sys.stderr)
+        if verdict["verdict"] == "refuse" and not a.unverified_ok:
+            raise SystemExit("the map contradicts itself (omx_map_gate): fix the named item, e.g. --choice arm_bases=docks-photo (the bases follow the measured ship), or pass --unverified-ok")
         rcs = sim(a.snapshot, a.sha, a.out, a.stages.split(",") if a.stages else sorted(STAGES), a.choice)
         print(json.dumps(rcs))
         return int(any(rcs.values()))
@@ -393,7 +443,18 @@ def main(argv=None):
         made = cell_requests.open_request(req, image, Path(a.store) if a.store else None)
         print(json.dumps(dict(id=made["id"], candidates=made["candidates"], unit=made["unit"]), ensure_ascii=False))
     elif a.cmd == "pipeline":
-        print(json.dumps(run_pipeline(a.run, a.prev, a.camera_moved_ok, a.choice), indent=1))
+        choices = a.choice + ([f"preset={a.preset}"] if a.preset else [])
+        print(json.dumps(run_pipeline(a.run, a.prev, a.camera_moved_ok, choices), indent=1))
+    elif a.cmd == "transfer-audit":
+        from omx_transfer_audit import audit
+        value = audit(a.render, a.capture, a.handoff, a.isaac_snapshot, paired_reset=a.paired_reset,
+                      wrist_evidence=a.wrist_evidence)
+        a.out.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(value, ensure_ascii=False))
+        if a.paired_reset and not value["r2s"]["paired_reset"]["matched"]:
+            return 1
+        if a.wrist_evidence and value["r2s"]["wrist_alignment"]["status"] == "rejected":
+            return 1
     else:
         print(report(a.out))
     return 0

@@ -704,3 +704,60 @@ def test_ci_result_cutover_drain_gate_checks_merge_group_pr_head(monkeypatch, he
             exec(compile(python, str(WORKFLOW), "exec"), {})
         assert ended.value.code == expected
     assert seen == [f"https://api.github.com/repos/robotics-team-1213/rosy-platform/pulls/{head_ref.split('pr-')[1].split('-')[0]}"]
+
+
+def test_ci_splits_fleet_non_browser_and_parallelizes_safe_multi_file_browsers(monkeypatch):
+    import importlib.util
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    script = next(step["run"] for step in steps if step["name"] == "Test (matrix suite, D-436)")
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    real_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec",
+                        lambda name: object() if name == "xdist" else real_find_spec(name))
+
+    def _run(inv):
+        calls = []
+        monkeypatch.setenv("ROSY_INVOCATIONS", json.dumps([inv]))
+        monkeypatch.setattr(subprocess, "Popen", lambda args, **kwargs:
+                            calls.append((args, kwargs["env"])) or SimpleNamespace(
+                                stdout=iter(["== 2 passed in 0.1s ==\n"]), wait=lambda: 0))
+        with pytest.raises(SystemExit) as ended:
+            exec(compile(python, str(WORKFLOW), "exec"), {})
+        assert ended.value.code == 0
+        return calls
+
+    calls = _run([
+        "operations/fleet/test/test_blocks.py",
+        "operations/fleet/test/test_work_overview_browser.py",
+        "operations/fleet/test/test_cell_app_browser.py",
+    ])
+    assert len(calls) == 2
+    assert "ROSY_RUN_BROWSER_TESTS" not in calls[0][1]
+    assert ["-n", "auto"] == calls[0][0][4:6]
+    assert calls[1][1]["ROSY_RUN_BROWSER_TESTS"] == "1"
+    assert calls[1][1]["ROSY_BROWSER_STRICT"] == "1"
+    assert ["-n", "2", "--dist", "loadfile"] == calls[1][0][5:9]
+
+    alone_calls = _run([
+        "ROSY_BROWSER_ALONE=1",
+        "operations/fleet/test/test_site_map_browser.py",
+        "operations/fleet/test/test_cell_app_browser.py",
+    ])
+    assert "-n" not in alone_calls[0][0]
+    assert "-n" not in _run([
+        "operations/fleet/test/test_site_map_browser.py",
+        "operations/fleet/test/test_cell_app_browser.py",
+    ])[0][0]
+
+    app_calls = _run([
+        "applications/fleet/test/test_unit_scope.py",
+        "applications/fleet/test/test_browser_adapters.py",
+    ])
+    assert len(app_calls) == 2
+    assert "ROSY_RUN_BROWSER_TESTS" not in app_calls[0][1] and "-n" in app_calls[0][0]
+    assert app_calls[1][1]["ROSY_RUN_BROWSER_TESTS"] == "1"
+    assert "ROSY_BROWSER_STRICT" not in app_calls[1][1]

@@ -43,9 +43,9 @@ def test_heavy_jobs_are_not_merged_past_the_weight_cap():
 
 
 def test_measured_seconds_keep_the_slow_selector_suite_off_the_shared_guard_runner():
-    """12 CI runs (2026-11-20): six guard invocations ran in turn on one runner, 5-7 min; this file alone took 170 s."""
+    """Slow measured suites (>= JOB_WEIGHT) must not share a runner past cap with unrelated small invocations."""
     import affected_ci
-    slow = "middleware/core/gateway/test/test_navigation_handover.py"
+    slow = "operations/fleet/test/test_site_map_browser.py"
     assert affected_ci.CI_TEST_SECONDS[PurePosixPath(slow).name] >= affected_ros.JOB_WEIGHT
     assert affected_ci.CI_TEST_SECONDS["test_site_map_browser.py"] == affected_ci.FLEET_TEST_SECONDS["test_site_map_browser.py"]
     jobs = [_e("affected-1", "overlay", ["test/test_a.py", "test/test_b.py"]), _e("affected-2", "overlay", [slow, "test/test_c.py"]),
@@ -116,6 +116,35 @@ def test_guard_only_runners_skip_colcon_while_non_guard_overlay_keeps_it():
     guard_entry = next(e for e in affected_ci.ci_matrix(repo, guard_sel)["include"] if e["kind"] == "pytest")
     assert guard_entry.get("colcon") is False
 
-    mixed_sel = at.Selection("affected", ["test/test_robot_cd.py"], invocations=[["test/test_robot_cd.py"]])
+    mixed_sel = at.Selection("affected", ["integrations/simulation/gazebo/test/test_launch.py"],
+                             invocations=[["integrations/simulation/gazebo/test/test_launch.py"]])
     mixed_entry = next(e for e in affected_ci.ci_matrix(repo, mixed_sel)["include"] if e["kind"] == "pytest")
     assert mixed_entry.get("colcon", True) is True
+
+    root_sel = at.Selection("affected", ["test/test_robot_cd.py"], invocations=[["test/test_robot_cd.py"]])
+    root_entry = next(e for e in affected_ci.ci_matrix(repo, root_sel)["include"] if e["kind"] == "pytest")
+    assert root_entry["ros"] == "overlay" and root_entry.get("colcon") is False
+
+
+def test_guard_set_consolidates_onto_one_non_colcon_runner():
+    import affected_ci
+    import affected_tests as at
+
+    repo = at.Repo.load(Path(__file__).resolve().parents[1])
+    include = affected_ci.ci_matrix(repo, at.select(repo, []))["include"]
+    out = [e for e in affected_ci.consolidated(include) if e["kind"] == "pytest"]
+    assert len(out) == 1
+    assert out[0].get("colcon") is False
+    assert len(out[0]["invocations"]) <= 2
+
+
+def test_browser_overlay_entries_skip_colcon(monkeypatch):
+    import affected_browser
+    import affected_ci
+    import affected_tests as at
+
+    monkeypatch.setenv(affected_browser.ENV, "1")
+    repo = at.Repo.load(Path(__file__).resolve().parents[1])
+    include = affected_ci.ci_matrix(repo, at.select(repo, ["shared/web/surface_shell.js"]))["include"]
+    overlay_browsers = [e for e in include if e["name"].startswith("browser-") and e["ros"] == "overlay"]
+    assert overlay_browsers and all(e.get("colcon") is False for e in overlay_browsers)

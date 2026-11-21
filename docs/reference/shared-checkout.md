@@ -48,7 +48,7 @@
 스냅샷은 복구 수단이며 정식 커밋·원격 검증·머지 완료로 계산하지 않는다.
 개수만 줄이기 위한 `reset`, `clean`, 무조건적인 `--force` 삭제는 사용하지 않는다.
 한도 초과는 사람의 명시적 사고 대응·일회성 전환 승인에 한하며 사유·담당·회수 조건을 기록한다.
-`--force-over-cap`은 도구의 15개 장벽을 우회하는 사고 대응·사용자 승인 옵션이지 일상 작업의 예외가 아니다.
+`new`와 `adopt`는 같은 잠금 아래 슬롯을 세고 등록한다. 승인된 사고 대응의 `--force-over-cap`은 작업 슬롯 14개가 찼을 때 예외 한 자리만 허용한다. 그 자리가 찼거나 이미 상한을 더 넘겼으면 회수 뒤 다시 신청한다.
 
 ## 브랜치 이름과 수명
 
@@ -98,6 +98,7 @@
 | 새 브랜치는 `main`에 들어간 지점에서만 시작한다. 미착지 브랜치 위에 쌓지 않는다. 이어지는 일은 앞 PR이 `origin/main`에 병합된 뒤 `origin/main`에서 새로 시작하고, 기다릴 수 없으면 필요한 커밋만 `origin/main`에서 새 브랜치로 `cherry-pick`해 독립 PR로 낸다 | `worktrees.py new --from`이 `main`에 없는 ref를 거절한다(`worktree_rules.unlanded`) |
 | 한 PR은 센 바뀐 파일 30개, 자체 비병합 커밋 20개, 병합 기준 7일 이내다(D-1067 개정). 자체 비병합 커밋이 10개면 `status`가 `split-soon`, 20개면 `split-needed`를 경고한다(막지 않음). 끝난 앞부분을 `origin/main`에서 새 브랜치로 먼저 낸다. `main`을 병합한 커밋은 세지 않는다 | `pr_land.py`가 제출 전에 거절한다. 나눌 수 없는 이유가 있으면 PR 본문에 `Size-Exception: <이유>` |
 | `.worktrees/`의 미착지 브랜치가 첫 자체 커밋 뒤 24시간이 지나도 열린 PR이 없으면 `status` 끝에 `no-pr` 한 줄로 알린다(막지 않음, `gh` 실패 시 생략) | `worktree_rules.status_notes`가 확인한다 |
+| 워크트리 없이 팁 커밋이 24시간 넘은 미착지 브랜치도 `no-pr`에 별도 집계한다. 열린 PR과 예약 브랜치는 제외한다. PR을 조회할 수 없으면 미확인 수를 표시한다 | `worktree_rules.status_notes`가 확인한다 |
 | `origin/main` 병합은 PR이 `DIRTY`(충돌)일 때만 한다(「같이 하는 깃」 6번). `BEHIND`는 Merge Queue가 최신 main 위에서 다시 시험하므로 합치지 않는다. 병합이 단순히 가져온 `main`의 크기 문제는 브랜치 탓이 아니다 | `size_range.py`가 병합 커밋을 모든 부모와 다른 경로만으로 본다 |
 | 워크트리가 없고 4일 동안 커밋이 없는 미착지 브랜치는 보관한다(D-1070 후속, 2026-11-21 로컬 브랜치 840개). `worktrees.py adopt`는 보관된 브랜치를 자동으로 되살린다. 지우지 않고 `refs/archive/<브랜치>@<sha10>`에 `--create-reflog`로 보관 시각을 남긴다(보관 시각 90일 뒤 번들 검증·삭제와 `adopt` 번들 힌트는 P2, U2). 되살리기: `git branch <브랜치> refs/archive/<브랜치>@<sha10>`. `land/` 잔재 브랜치도 같은 규칙으로 보관한다(D-1055 폐기, 체크아웃된 것은 제외) | `worktrees.py prune --apply`가 정확한 sha로만 옮긴다(`archive_abandoned`) |
 | 폐기(D-1055): 착지 묶음(`land_prepare`·`land_rollup`), 10분 주기 `RosyLandTick`·`land_tick`, MAIN-RED 재시험. `land_gc`는 숨은 착지 트리 정리 전용으로 남김 | 묶음은 GitHub Merge Queue(`HEADGREEN`, 최대 4)가 한다 |

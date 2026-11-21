@@ -442,7 +442,9 @@ export function inspectorSpecs(body = {}) {
     if (live && Array.isArray(live.joints_deg) && live.joints_deg.length) {
       const stateArr = live.joints_deg.slice(0, 6).map(v => Number(v).toFixed(1)).join(', ');
       const ageTxt = live.age_s != null ? evidenceAgeText(Math.round(Number(live.age_s))).slice(3) : '';
-      const modeBadge = live.fresh !== false ? `LIVE${ageTxt ? ` · ${ageTxt}` : ''}` : `스냅샷${ageTxt ? ` · ${ageTxt}` : ''}`;
+      // Missing freshness is unknown, never a live badge: the server must state it.
+      const freshnessTxt = live.fresh === true ? 'LIVE' : live.fresh === false ? '지연 스냅샷' : '신선도 미확인';
+      const modeBadge = ageTxt ? `${freshnessTxt} · ${ageTxt}` : freshnessTxt;
       const tempTxt = live.temp_c != null ? `${live.temp_c}°C` : '';
       const curTxt = live.current_ma != null ? `${live.current_ma}mA` : '';
       return [
@@ -460,7 +462,7 @@ export function inspectorSpecs(body = {}) {
     if (stateArr) {
       return `${t.task_id} · folded=${Boolean(stopEv.folded)} · [${stateArr}] (완료 스냅샷)`;
     }
-    return fallbackText || 'folded: true · 홈 대기 (완료 스냅샷)';
+    return fallbackText || '관측 없음 · 상태 미확인';
   };
   const armHolds = body?.arm_holds || {};
   const holdText = armId => armHolds[armId]?.held

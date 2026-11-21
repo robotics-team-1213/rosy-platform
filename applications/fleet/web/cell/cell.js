@@ -55,7 +55,7 @@ const real2sim = createReal2SimPipeline({request, $, isOperator: () => isOperato
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});
-window.addEventListener('pagehide', event => { catalog.clear(); real2sim.clear(); event.persisted ? observations.clear() : observations.dispose(); });
+window.addEventListener('pagehide', event => { catalog.clear(); real2sim.clear(); clearUnitLinks(); event.persisted ? observations.clear() : observations.dispose(); });
 window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
 bindEstop(request); bindTopbarToggle(); tickClock(); setInterval(tickClock, 1000); watchFleet(request);
 $('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
@@ -80,6 +80,7 @@ function invalidate() {
 }
 function clearSession() {
   observations.clear(); catalog.clear(); real2sim.clear(); channelReceipt = channelReview = null;
+  clearUnitLinks();
   $('cell-channel-original').textContent = ''; $('cell-channel-request').hidden = true;
   role = null; principal = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate(); revisions.clear();
   for (const kind of ['recipe', 'cell']) { $(kind + '-revision').setAttribute('state', 'empty'); $(kind + '-revision').textContent = '저장 전'; }
@@ -87,6 +88,32 @@ function clearSession() {
   $('saved-status').setAttribute('state', 'unavailable'); $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
 }
 const scopeFilled = () => $('workcell').value.trim() && $('instance').value.trim();
+// D-977 — 하위 셀 이동 링크는 검증된 https origin만 쓰고 토큰을 실어 보내지 않는다(각 origin이 Account 로그인 검증).
+const CELL_LINK_ORIGIN = /^https:\/\/[\w.:\[\]-]+$/;
+function clearUnitLinks() { $('cell-unit-links').replaceChildren(); }
+function paintUnitLinks(summary) {
+  const origins = summary?.child_origins && typeof summary.child_origins === 'object' ? summary.child_origins : {};
+  const arms = Array.isArray(summary?.child_arm_units) ? summary.child_arm_units : [];
+  const links = arms.flatMap(child => {
+    const origin = origins[child];
+    if (typeof origin !== 'string' || !CELL_LINK_ORIGIN.test(origin)) return [];
+    const link = document.createElement('a');
+    link.className = 'ui-action-link';
+    link.dataset.kind = 'quiet';
+    link.rel = 'noreferrer';
+    link.href = `${origin}/console/cell`;
+    link.textContent = `${child} 셀 관제 화면 열기`;
+    return [link];
+  });
+  $('cell-unit-links').replaceChildren(...links);
+}
+async function refreshUnitLinks() {
+  const epoch = editEpoch;
+  try {
+    const summary = await api('/api/fleet/control-unit');
+    if (epoch === editEpoch && role) paintUnitLinks(summary); else clearUnitLinks();
+  } catch { clearUnitLinks(); }
+}
 for (const id of ['workcell', 'instance']) $(id).addEventListener('input', () => refreshControls());
 function refreshControls() {
   for (const field of document.querySelectorAll('input, textarea, select')) {
@@ -314,6 +341,7 @@ function connect(credentialChange = false) {
   const session = await api('/api/fleet/session'); role = session.role; principal = session.principal_id;
   showSession(session, {credentialChange, focusOrigin});
   observations.clear(); void observations.refresh(); void catalog.refresh(); void real2sim.refresh();
+  void refreshUnitLinks();
   loginForm.refresh(false);
   await list();
   if (channelRequested) {
