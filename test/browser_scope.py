@@ -158,7 +158,7 @@ SCOPE: dict[str, list[str]] = {
     "learning/curation/perception/review_app_web/commands.js": LEARNING,
     "learning/curation/perception/review_app_web/account-session.js": LEARNING,
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STORAGE for name in
-       ("omx.html", "omx.js", "omx-journey.js", "omx-profiles.js", "omx-review.js", "omx-export.js")},
+       ("omx.html", "omx.js", "omx-journey.js", "omx-profiles.js", "omx-review.js", "omx-export.js", "omx-collect.js")},
     # Their rail and sub-menu are walked by the OMX owner-status and stage browser tests.
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STAGES for name in
        ("catalog.html", "camera.html")},

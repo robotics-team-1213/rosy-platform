@@ -7,6 +7,7 @@ import '/omx-native-train.js';
 import {profileDocumentKey} from '/omx-profiles.js';
 import {renderExportRuns} from '/omx-export.js';
 import {initHub,updateHubRuns} from '/omx-hub.js';
+import {initCollect,updateCollectRuns} from '/omx-collect.js';
 import {initJourney,refreshJourneyContext,applyJourneyContext,selectJourneyProfile,clearJourneyProfile,updateJourneyEvidence,renderJourneyComparison,journeyContext} from '/omx-journey.js';
 const $=id=>document.getElementById(id);
 const workflowContext=new URLSearchParams(location.search),workflowTask=workflowContext.get('task');
@@ -449,7 +450,7 @@ async function refreshCenter(){
     $('dataset').disabled=!snapshot.datasets.length;
     await refreshJourneyContext(request);applyJourneyContext(snapshot);
     $('empty-datasets').hidden=!!snapshot.datasets.length;
-    renderRuns();selection();updateHubRuns(snapshot.runs);
+    renderRuns();selection();updateHubRuns(snapshot.runs);updateCollectRuns(snapshot.runs);
     $('center-read-error').hidden=true;$('center-read-error').textContent='';
     $('center-status').setAttribute('state','ready');$('center-status').textContent=`데이터 ${snapshot.datasets.length}개 · 작업 ${snapshot.runs.length}개 · ${new Date().toLocaleTimeString('ko-KR')} 확인`;
   }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state','error');$('center-status').textContent='실행기 연결을 확인하세요. 아래 목록은 이전 확인 결과일 수 있습니다.';$('start').disabled=true;$('center-read-error').hidden=false;$('center-read-error').textContent=exc.message;}
@@ -461,6 +462,7 @@ function uuid(){
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 initHub({request,uuid});
+initCollect({request});
 $('prepared-set').onchange=()=>{pendingExport=null;exportSelection();};
 $('export-saved-review').onchange=()=>{pendingExport=null;exportSelection();};
 document.addEventListener('omx-review-loaded',event=>{if(loadedReview?.prepared_id!==event.detail.prepared_id)$('export-saved-review').checked=false;loadedReview=event.detail;pendingExport=null;exportSelection();});

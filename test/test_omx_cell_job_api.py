@@ -107,11 +107,27 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     argv = api.build_argv(job, with_goal, wd)
     assert argv[argv.index("--goal-site") + 1] == "yard:r3-s2-t1"
     assert "--model-calibration" not in argv
-    hybrid = api.build_argv(job, {**with_goal, "mode": "hybrid", "n_action": 8, "max_obs_age_s": 0.6}, wd)
+    hybrid = api.build_argv(job, {**with_goal, "mode": "hybrid", "n_action": 8, "max_obs_age_s": 0.6, "source_kind": "policy"}, wd)
     assert hybrid[hybrid.index("--mode") + 1] == "hybrid"
     assert hybrid[hybrid.index("--n-action") + 1] == "8"
     assert hybrid[hybrid.index("--max-obs-age-s") + 1] == "0.6"
+    assert hybrid[hybrid.index("--source-kind") + 1] == "policy"
+    mixed_actor = api.build_argv(job, {**with_goal, "proposer": "Alice.Kim", "operator": "Bob.Lee"}, wd)
+    assert mixed_actor[mixed_actor.index("--operator") + 1] == "Bob.Lee"
+    with pytest.raises(ValueError, match="D-1024"):
+        api.build_argv(job, {**with_goal, "proposer": "Alice.Kim", "operator": "alice.kim"}, wd)
+    with pytest.raises(ValueError, match="source_kind"):
+        api.build_argv(job, {**with_goal, "source_kind": "bogus"}, wd)
+    for bad_sk in ("scripted_teacher", "sim_optimized"):
+        with pytest.raises(ValueError, match="policy"):
+            api.build_argv(job, {**with_goal, "mode": "act", "source_kind": bad_sk}, wd)
+        with pytest.raises(ValueError, match="policy"):
+            api.build_argv(job, {**with_goal, "mode": "hybrid", "source_kind": bad_sk}, wd)
     taught = {k: v for k, v in with_goal.items() if k not in {"policy_root", "policy_revision", "cell_calibration"}}
+    with pytest.raises(ValueError, match="taught"):
+        api.build_argv(job, {**taught, "mode": "taught", "source_kind": "policy"}, wd)
+    sim_taught = api.build_argv(job, {**taught, "mode": "taught", "source_kind": "sim_optimized"}, wd)
+    assert sim_taught[sim_taught.index("--source-kind") + 1] == "sim_optimized"
     fallback = api.build_argv(job, {**taught, "mode": "taught"}, wd)
     assert fallback[fallback.index("--mode") + 1] == "taught" and "--policy-root" not in fallback
     with pytest.raises(ValueError, match="goal_site"):

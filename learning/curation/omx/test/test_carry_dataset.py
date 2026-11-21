@@ -172,3 +172,15 @@ def test_mixed_tasks_or_cameras_are_refused(tmp_path):
     with pytest.raises(ValueError, match='task'):
         build(carry_dataset, tmp_path, rows, {'run-train': 'train', 'run-eval': 'eval'}, labels)
     assert not (tmp_path / 'out').exists()
+
+
+def test_source_kind_in_task_json_is_preserved_in_receipt_lineage(tmp_path):
+    rows, labels = scenario(tmp_path)
+    task_file = tmp_path / 'episodes' / 'a-pinky-to-belt' / 'task.json'
+    task_doc = json.loads(task_file.read_text(encoding='utf-8'))
+    task_doc['source_kind'] = 'sim_optimized'
+    task_file.write_text(json.dumps(task_doc), encoding='utf-8')
+    receipt = build(carry_dataset, tmp_path, rows, {'run-train': 'train', 'run-eval': 'eval'}, labels, name='out_kind')
+    by_id = {ep['id']: ep for ep in receipt['episodes']}
+    assert by_id['run-train-001']['source_kind'] == 'sim_optimized'
+    assert 'source_kind' not in by_id['run-eval-001']
