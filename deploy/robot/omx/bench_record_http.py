@@ -107,6 +107,8 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.hf_upload_start(body))
                 if self.path == "/api/hf/config":
                     return self.reply(200, bench.hf_upload_config(body))
+                if self.path == "/api/dataset/delete":
+                    return self.reply(200, bench.dataset_delete(body))
                 m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose)", self.path)
                 if m_arm:
                     arm_id, act = m_arm.group(1), m_arm.group(2)

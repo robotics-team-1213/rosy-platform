@@ -90,8 +90,16 @@ class BenchInspectMixin:
         for d in sorted((p for p in ds_root.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
             parquets = len(list(d.glob("data/**/*.parquet")))
             videos = len(list(d.glob("videos/**/*.mp4")))
+            size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
             rc_p = self.prep / ".hf-receipts" / f"{d.name}.json"
-            item = {"name": d.name, "episodes": parquets, "videos": videos, "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file()}
+            item = {
+                "name": d.name,
+                "episodes": parquets,
+                "videos": videos,
+                "size_bytes": size_bytes,
+                "empty": parquets == 0,
+                "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file(),
+            }
             if rc_p.is_file():
                 rc = json.loads(rc_p.read_text(encoding="utf-8"))
                 item.update(hf_uploaded=bool(rc.get("repo_id")), hf_repo_id=rc.get("repo_id", ""), hf_repo_url=rc.get("url", ""))

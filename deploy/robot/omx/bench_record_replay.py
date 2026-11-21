@@ -247,7 +247,10 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
             [*place_p[1][:5], g_open],
             [*home[:5], g_open],
         ]
-        motion_a = _interp_waypoints(a_wps, max_step=0.15)
+        # Keep arm_s wrist_roll above -5.0 norm (~1990 ticks) to avoid wrist camera cable stall at ~1946 ticks.
+        for wp in a_wps[1:]:
+            wp[4] = max(-5.0, wp[4])
+        motion_a = _interp_waypoints(a_wps, max_step=0.08)
         seg_a = [list(motion_a[0])] * 90 + motion_a
         reset_n = 60
         seg_b = [list(motion_a[-1])] * 90 + list(reversed(motion_a))

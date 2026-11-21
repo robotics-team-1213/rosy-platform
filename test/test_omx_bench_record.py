@@ -644,7 +644,7 @@ def test_leader_home_safety_and_lerobot_scenarios(tmp_path, monkeypatch):
     st = bench.status()
     assert st['hf_logged_in'] is True
     assert 'hf_secret_do_not_leak' not in json.dumps(st)
-    assert st['lerobot_datasets'][0] == {'name': 'h1-01-r1-test', 'episodes': 1, 'videos': 1, 'do_not_train': True}
+    assert st['lerobot_datasets'][0] == {'name': 'h1-01-r1-test', 'episodes': 1, 'videos': 1, 'size_bytes': 13, 'empty': False, 'do_not_train': True}
     assert st['scenario_counts'] == {}  # DO_NOT_TRAIN excluded from scenario_counts
 
     (ds / 'DO_NOT_TRAIN.txt').unlink()
@@ -1205,3 +1205,23 @@ def test_active_handover_units_includes_cameras_bind_timer_first():
     assert units[0] == "rosy-omx-cameras-bind.timer"
     assert "rosy-omx-camera@arm_s_top.service" in units
     assert "rosy-omx-bench-record.service" not in units
+
+
+def test_dataset_size_and_delete_empty_only(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    ds_root = tmp_path / "home" / "rosy-data" / "omx-leader"
+    empty_ds = ds_root / "empty-ds-1"
+    (empty_ds / "meta").mkdir(parents=True)
+    (empty_ds / "meta" / "info.json").write_text("{}", encoding="utf-8")
+    full_ds = ds_root / "full-ds-1"
+    (full_ds / "data" / "chunk-000").mkdir(parents=True)
+    (full_ds / "data" / "chunk-000" / "episode_000000.parquet").write_bytes(b"PAR1")
+
+    rows = {r["name"]: r for r in bench.lerobot_datasets()}
+    assert rows["empty-ds-1"]["empty"] is True and rows["empty-ds-1"]["size_bytes"] == 2
+    assert rows["full-ds-1"]["empty"] is False and rows["full-ds-1"]["size_bytes"] == 4
+
+    with pytest.raises(ValueError, match="삭제할 수 없습니다"):
+        bench.dataset_delete({"dataset": "full-ds-1"})
+    res = bench.dataset_delete({"dataset": "empty-ds-1"})
+    assert res["ok"] is True and not empty_ds.exists() and full_ds.exists()

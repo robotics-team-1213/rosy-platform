@@ -2,7 +2,7 @@
 """Closed-loop Sim/Model -> Real Record -> Augment -> RL/IL pipeline mixin for bench_record.py."""
 from __future__ import annotations
 
-import json, re, subprocess, threading, time
+import json, re, shutil, subprocess, threading, time
 from pathlib import Path
 
 from bench_record_replay import build_ik_replay, transform_replay, validate_replay_payload
@@ -257,3 +257,20 @@ class BenchPipelineMixin:
             self._hf_state.update(state="encoding", dataset=ds_name, progress_pct=25, message="인코딩 파일 검증 중", repo_id="", repo_url="", error="")
         threading.Thread(target=self._run_hf_upload_worker, args=(ds_name, ds_folder, sess_dir), daemon=True).start()
         return {"hf_upload": self.hf_upload_status()}
+
+    def dataset_delete(self, body):
+        if not isinstance(body, dict):
+            raise ValueError("JSON object required")
+        ds_name = Path(str(body.get("dataset") or body.get("name") or "").strip()).name
+        if not ds_name or not _SAFE_NAME.fullmatch(ds_name):
+            raise ValueError("올바른 데이터셋 이름이 필요합니다")
+        with self.lock:
+            if self.state.get("status") in ("handing_over", "homing", "recording", "restoring", "sealing"):
+                raise ValueError("녹화/봉인 중에는 데이터셋을 삭제할 수 없습니다")
+        ds_folder = Path.home() / "rosy-data" / "omx-leader" / ds_name
+        if not ds_folder.is_dir():
+            raise ValueError(f"데이터셋을 찾을 수 없습니다: {ds_name}")
+        if list(ds_folder.glob("data/**/*.parquet")):
+            raise ValueError("에피소드(parquet)가 있는 데이터셋은 삭제할 수 없습니다")
+        shutil.rmtree(ds_folder)
+        return {"ok": True, "deleted": ds_name, "lerobot_datasets": self.lerobot_datasets()}

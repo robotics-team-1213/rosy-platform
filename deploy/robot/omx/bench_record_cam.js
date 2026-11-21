@@ -340,12 +340,25 @@ function renderLeRobotPanel(st){
     if(r.hf_uploaded){const tag=document.createElement('span');tag.className='ui-tag';tag.dataset.tone='good';tag.textContent='업로드 완료';act.append(tag);}
     const btn=document.createElement('button');btn.type='button';btn.className='btn-tool btn-xs';
     btn.textContent=(busyAll&&up.dataset===r.name)?sTxt:'HF(LeRobot) 업로드';
-    btn.disabled=Boolean(!hfOk||busyAll||r.do_not_train);
+    btn.disabled=Boolean(!hfOk||busyAll||r.do_not_train||(r.episodes||0)<1);
+    if((r.episodes||0)<1)btn.title='parquet 에피소드가 없어 업로드할 수 없습니다';
     btn.addEventListener('click',()=>triggerHfUpload(r.name||''));
-    act.append(btn);top.append(left,act);
+    act.append(btn);
+    if((r.episodes||0)===0){
+      const del=document.createElement('button');del.type='button';del.className='btn-tool btn-xs';
+      del.textContent='삭제';del.title='빈 데이터셋 폴더 삭제';
+      del.addEventListener('click',async()=>{
+        del.disabled=true;
+        try{const out=await api('/api/dataset/delete',{dataset:r.name||''});if(out&&out.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=out.lerobot_datasets;renderLeRobotPanel(lastStatus);}}
+        catch(e){alert(e.message||String(e));del.disabled=false;}
+      });
+      act.append(del);
+    }
+    top.append(left,act);
     const meta=document.createElement('div');meta.className='hf-ds-meta quiet';
     const info=document.createElement('span');
-    info.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'');
+    const sz=typeof r.size_bytes==='number'?(r.size_bytes>=1048576?(r.size_bytes/1048576).toFixed(1)+' MB':Math.max(1,Math.round(r.size_bytes/1024))+' KB'):'';
+    info.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(sz?' · '+sz:'')+(r.episodes===0?' · 빈 데이터셋':'')+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'');
     meta.append(info);
     if(r.hf_repo_url){const a=document.createElement('a');a.href=r.hf_repo_url;a.target='_blank';a.rel='noopener';a.className='mono';a.textContent=r.hf_repo_id||'Repo';meta.append(a);}
     li.append(top,meta);ul.append(li);
