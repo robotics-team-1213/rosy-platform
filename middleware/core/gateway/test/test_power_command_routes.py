@@ -27,6 +27,8 @@ COMMANDS = [
     ("POST", "/api/v1/teleop", "teleop"),
     ("POST", "/api/v1/mode", "mode"),
     ("POST", "/api/v1/navigation/goal", "navigation"),
+    ("POST", "/api/v1/navigation/bound-goal", "navigation"),
+    ("POST", "/api/v1/navigation/line-handoff-goal", "navigation"),
     ("POST", "/api/v1/navigation/home", "navigation"),
     ("POST", "/api/v1/navigation/cancel", "navigation"),
     ("POST", "/api/v1/motion/rotate_to", "navigation"),

@@ -24,7 +24,7 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
-from nav2_msgs.action import NavigateThroughPoses, NavigateToPose
+from nav2_msgs.action import ComputePathToPose, FollowPath, NavigateThroughPoses, NavigateToPose
 from nav2_msgs.msg import Costmap
 from lifecycle_msgs.msg import TransitionEvent
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
@@ -41,6 +41,7 @@ from core.bridge import (  # noqa: F401 — re-exported
     map_observation,
     map_pose,
     nav_goal,
+    nav_plan,
     observation,
     odometry,
     pilot_recorder_client,
@@ -96,6 +97,7 @@ class RosBridge(RosBridgeHelpersMixin):
         self._readiness = getattr(services, "readiness", None)
         cfg = services.config
         self._frame_prefix = str(cfg.get("robot", {}).get("frame_prefix", ""))
+        self._velocity_source_ns = 0  # last trusted odometry stamp (bridge.odometry.velocity_sample_time)
         self._base_frame = f"{self._frame_prefix}base_footprint"
         self._map_frame = "map"
         self._state_hz = float(cfg.get("state", {}).get("rate_hz", 10.0))
@@ -105,6 +107,8 @@ class RosBridge(RosBridgeHelpersMixin):
 
         self.nav_client = ActionClient(node, NavigateToPose, "navigate_to_pose")
         self.route_client = ActionClient(node, NavigateThroughPoses, "navigate_through_poses")
+        self.plan_client = ActionClient(node, ComputePathToPose, "compute_path_to_pose")
+        self.path_client = ActionClient(node, FollowPath, "follow_path")
         self.tf_buffer = Buffer(cache_time=Duration(seconds=10.0))
         self.tf_listener = TransformListener(self.tf_buffer, node)
 
@@ -223,11 +227,13 @@ class RosBridge(RosBridgeHelpersMixin):
         self._node.get_logger().info("ros_bridge ready (cmd_vel sole publisher @50Hz)")
 
     def _on_odom(self, msg: Odometry) -> None:
+        received_ns = time.time_ns()
         self._last_odom_ts = time.monotonic()
         sample = odometry.receive_odom(self, msg, station=self._svc.station_docking)
         if odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()):
             self._svc.state.set_pose(sample["x"], sample["y"], sample["yaw"], frame="odom")
-        self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"])
+        self._svc.state.set_velocity(sample["linear_x"], sample["angular_z"],
+                                     sampled_at=odometry.velocity_sample_time(self, msg, sample, received_ns))
         self._last_odom_pose = (sample["x"], sample["y"], sample["yaw"])
         self._svc.nav.on_pose_progress(sample["x"], sample["y"])
         self._svc.loc_mission.observe_odom(sample["x"], sample["y"], sample["yaw"])
@@ -371,6 +377,26 @@ class RosBridge(RosBridgeHelpersMixin):
         client = self.route_client if through else self.nav_client
         if not client.wait_for_server(timeout_sec=0.0):
             self._node.get_logger().warn("navigation action server not ready; goal queued anyway")
+        self._send_tracked_navigation(client, goal, native_run_id, correlation_id)
+
+    def compute_navigation_path(self, spec: NavGoalSpec, *, timeout_s: float):
+        goal = ComputePathToPose.Goal()
+        goal.goal = nav_goal.pose_stamped(spec, self._node.get_clock().now().to_msg())
+        goal.use_start = False
+        try:
+            return nav_plan.compute_path(self.plan_client, goal, timeout_s=timeout_s)
+        except nav_plan.PathPlanningError as exc:
+            raise NavigationError("NAVIGATION_PLANNER_UNAVAILABLE", str(exc)) from exc
+
+    def path_controller_ready(self) -> bool:
+        return self.path_client.wait_for_server(timeout_sec=0.0)
+
+    def send_native_path(self, path, native_run_id, *, correlation_id: str) -> None:
+        goal = FollowPath.Goal()
+        goal.path = path
+        self._send_tracked_navigation(self.path_client, goal, native_run_id, correlation_id)
+
+    def _send_tracked_navigation(self, client, goal, native_run_id, correlation_id) -> None:
         generation = self._goals.opening(correlation_id, native_run_id)
         future = client.send_goal_async(goal)
         future.add_done_callback(lambda done, gen=generation: self._goal_response_cb(done, gen))

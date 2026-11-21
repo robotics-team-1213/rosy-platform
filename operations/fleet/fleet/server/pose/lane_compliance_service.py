@@ -42,6 +42,7 @@ from fastapi import HTTPException
 from fleet.localization.lane_compliance import (OFF_MAP, ON_LANE, UNKNOWN, UNSEEN, LaneComplianceConfig,
                                                 LaneComplianceTracker, ReturnTracker, map_bounds)
 from fleet.localization.lap_context import build_lap, context as lap_context
+from fleet.localization.track_heading import TrackHeading
 from rosy.world.state.projections.map_pose import DEGRADED, LOCALIZED, MAX_SIGHTING_FUTURE_S, MapPose
 
 #: D-511 2: the monitor reads poses at 2 Hz or faster, like the trip loop (D-494 appendix).
@@ -82,8 +83,7 @@ class LaneComplianceMonitor:
         self._site_maps = site_maps      # SiteMapStore: active() -> (version, map, graph, painted)
         self._identity = identity        # D-472 IdentityService: confirmed_track_pose only
         self._wall = wall
-        self._track_from: dict[str, tuple[float, float]] = {}   # last track point beyond the deadband
-        self._track_yaw: dict[str, float] = {}                   # last motion heading of the track
+        self._track_heading: dict[str, TrackHeading] = {}        # motion heading of each robot's blob track
         self._input: dict[str, tuple[str, str]] = {}            # (pose_source, heading_source), for logs
         self._trackers: dict[str, LaneComplianceTracker] = {}
         self._latest: dict[str, dict] = {}
@@ -98,8 +98,7 @@ class LaneComplianceMonitor:
             self._trackers.pop(gone, None)
             self._latest.pop(gone, None)
             self._heading_samples.pop(gone, None)
-            self._track_from.pop(gone, None)
-            self._track_yaw.pop(gone, None)
+            self._track_heading.pop(gone, None)
             self._input.pop(gone, None)
             self._returns.pop(gone, None)
         cfg = self.config
@@ -250,20 +249,14 @@ class LaneComplianceMonitor:
         if (track is None or track.get("state") != "CONFIRMED" or age is None
                 or not -MAX_SIGHTING_FUTURE_S <= age <= self._poses.config.sighting_lease_s
                 or self._poses.active_map_id() not in (None, track.get("map_id"))):
-            self._track_from.pop(robot_id, None)
-            self._track_yaw.pop(robot_id, None)
+            self._track_heading.pop(robot_id, None)
             return arbitrated, "map_pose", "pose"
         x, y, yaw, heading = track["x"], track["y"], track.get("yaw"), "pose"
         if yaw is None:
             # The blob tracker has no heading. Odom says moving and the blob moved beyond the
             # camera-noise deadband: that direction is the heading, kept while the track is fresh
             # (a skipped frame repeats the position). Before the first one: no heading gate.
-            last = self._track_from.get(robot_id)
-            if last is None or math.hypot(x - last[0], y - last[1]) > self.config.track_heading_min_m:
-                self._track_from[robot_id] = (x, y)
-                if last is not None and moving:
-                    self._track_yaw[robot_id] = math.atan2(y - last[1], x - last[0])
-            yaw = self._track_yaw.get(robot_id)
+            yaw = self._track_heading.setdefault(robot_id, TrackHeading(self.config.track_heading_min_m)).update(x, y, moving)
             heading = "none" if yaw is None else "track_motion"
         return (MapPose(x, y, yaw, LOCALIZED, "led_track", 0.0, track["age_s"], map_id=track.get("map_id")),
                 "led_track", heading)

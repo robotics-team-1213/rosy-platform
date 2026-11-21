@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import math
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -11,6 +13,8 @@ from core_features.docking.model import DockPhase
 if TYPE_CHECKING:
     from core_features.docking.charging import ChargingConfirmation
 
+
+_LOG = logging.getLogger(__name__)
 
 class DockingPhasesMixin:
     """Phase execution, retry/reseat backoff, and charge settlement for DockingManager."""
@@ -386,7 +390,20 @@ class DockingPhasesMixin:
 
     # --- 공통 -----------------------------------------------------------------
 
+    def _record_dock_anchor(self) -> None:
+        """DOCKED in a bay (line dock): the seated pair (odom pose, bay) for Fleet, ONLY when the stopped seat scan matched the reference scan and the robot stood still from that
+        scan to now. A charge contact with a failed or absent seat scan publishes nothing (it could name the wrong bay). An anchor failure never blocks DOCKED."""
+        try:
+            if self._dock is None or not self._bay_phases.active():
+                return
+            seat = self._bay_phases.seat_anchor_evidence()
+            if seat is not None:
+                self._anchor.record(self._dock.id, "docked", seat)
+        except Exception as exc:  # noqa: BLE001 - never block DOCKED
+            _LOG.warning("dock anchor not recorded: %s", exc)
+
     def _mark_docked(self) -> None:
+        self._record_dock_anchor()                       # before the run state is cleared below
         self._state = DockState.DOCKED
         self._seated_dock_id = self._dock.id if self._dock is not None else None      # prior for a later first acquisition at this dock
         operation = self.native.current

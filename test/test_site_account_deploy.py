@@ -63,3 +63,11 @@ def test_account_issuer_routes_to_independent_signed_process():
     dockerfile = (ROOT/'deploy/site/Dockerfile.account').read_text()
     assert 'COPY operations/account/rosy_account/ /opt/rosy/src/operations/account/rosy_account/' in dockerfile
     assert '!operations/account/rosy_account/**' in (ROOT/'deploy/site/Dockerfile.fleet.dockerignore').read_text()
+
+
+def test_site_fleet_passes_cell_pipeline_env_through():
+    env = yaml.safe_load((ROOT/'deploy/site/compose.yaml').read_text())['services']['fleet']['environment']
+    example = (ROOT/'deploy/site/.env.example').read_text()
+    for key in ('ROSY_FLEET_CELL_OWNERS', 'ROSY_FLEET_CELL_AB_RELEASE_ENABLED'):
+        assert env[key] == '${%s:-}' % key
+        assert '\n%s=\n' % key in example

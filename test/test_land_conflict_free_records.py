@@ -85,6 +85,7 @@ def test_ci_runnable_separates_gha_from_h5_lab_invocations():
     assert ci_runnable.ci_runnable(["operations/fleet/test"]) is True
     assert ci_runnable.ci_runnable(["test/test_harness_contracts.py"]) is True
     assert ci_runnable.ci_runnable(["test/learning/perception/test_learning_workflow_pipeline_browser.py"]) is False
+    assert ci_runnable.ci_runnable(["test"]) is True and ci_runnable.ci_runnable(["test/learning"]) is True
     assert ci_runnable.ci_runnable(["middleware/devices/omx/adapter/test"]) is False
     assert ci_runnable.ci_runnable(["integrations/simulation/gazebo/test"]) is False
     assert ci_runnable.ci_runnable(["ROSY_RUN_BROWSER_TESTS=1", "test/test_x.py"]) is False

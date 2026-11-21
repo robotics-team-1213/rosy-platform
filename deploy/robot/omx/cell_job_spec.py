@@ -168,6 +168,12 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
                 raise ValueError(f"{name}: no such file in the workdir")
     if "proposer" in opt_checked and opt_checked["proposer"] == checked.get("operator"):
         raise ValueError("operator must differ from proposer (D-1024)")
+    # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
+    if job.get("moving") and any(
+        checked.get(name, opt_checked.get(name, "")).startswith(("pinky", "bed"))
+        for name in ("source", "dest", "site")  # loading onto a bed moves over it too
+    ):
+        raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     args = []
     for item in job["argv"]:
         whole = FIELD.fullmatch(item)

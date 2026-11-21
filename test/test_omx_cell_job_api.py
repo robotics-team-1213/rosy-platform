@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import threading
 import urllib.request
+from unittest.mock import Mock
 
 import pytest
 
@@ -17,6 +18,41 @@ def _make_workdir(tmp_path: Path) -> Path:
         (tmp_path / name).write_text("{}", encoding="utf-8")
     (tmp_path / "tools-env-current.sh").write_text("export OMX=~/rosy-test/omx-tools-abc1234/deploy/robot/omx\n", encoding="utf-8")
     return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("job", "site_params", "status"),
+    [
+        ("auto_pick", {"source": "pinky"}, 400),
+        ("auto_pick", {"source": "pinky_42"}, 400),
+        ("auto_pick", {"source": "bed-1"}, 400),
+        ("auto_pick", {"source": "inbound"}, 202),
+        ("auto_pick", {"source": "belt", "dest": "pinky"}, 400),
+        ("auto_pick_dry_run", {"source": "pinky"}, 202),
+        ("pivot_near", {"site": "bed-1"}, 400),
+    ],
+)
+def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, job, site_params, status):
+    params = {"config": "cell-s.json", **site_params}
+    if job != "auto_pick_dry_run":
+        params.update(arm="arm_s", person_at_switch=True)
+    if job == "pivot_near":
+        params.update(x=0.0, y=0.0)
+    else:
+        params.update(catalog="catalog-live.json", roi=[0, 0, 10, 10], dest="outbound")
+    params.update(site_params)
+
+    wd = _make_workdir(tmp_path)
+    popen = Mock()
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    result = api.Runner(wd, lock_dir=wd).start(job, params)
+
+    assert result["code"] == status
+    if status == 400:
+        assert "R cell-task -> cell_task_worker -> Gate" in result["error"]
+        popen.assert_not_called()
+    else:
+        popen.assert_called_once()
 
 
 def test_remap_and_policy_drive_argv_validation(tmp_path):

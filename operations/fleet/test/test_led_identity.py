@@ -224,6 +224,36 @@ def test_verdict_and_readback_routes():
     assert row["state"] == "CONFIRMED" and readback["use"] == "observation-only"
 
 
+def _vision_verdict_bodies():
+    """Literal identity bodies as Vision's TrackWorker._report_identity sends them (D-1036: no vision import)."""
+    base = {"source_id": "ceiling_north", "map_id": "map_v2_fleet", "request_id": "req-1",
+            "processor_revision": "led-identity/1", "captured_at": 1005.0, "calibration_revision": "cal-1"}
+    return {"matched": {**base, "state": "matched", "x": 1.0, "y": 1.0, "yaw": 0.5, "evidence": {"yaw_px": 0.5}},
+            "ambiguous": {**base, "state": "ambiguous", "x": None, "y": None, "yaw": None, "evidence": {}}}
+
+
+def test_vision_identity_body_with_yaw_is_accepted_and_extra_key_still_refused():
+    bodies = _vision_verdict_bodies()
+    assert bodies["matched"]["state"] == "matched" and "yaw" in bodies["matched"]
+    clock, tracking, identity, _ = _setup()
+    app = FastAPI()
+    install_tracking_routes(app, tracking=tracking, require_operator=lambda: None,
+                            read_guard=[], operator_guard=[])
+    client = TestClient(app)
+    _moving(tracking, clock, "rosy_60")
+    started = asyncio.run(identity.request("rosy_60"))
+    clock.now += 6.2
+    _detections(tracking, clock, (1.05, 1.0))
+    headers = {"Authorization": AUTH}
+    for name in ("ambiguous", "matched"):
+        body = {**bodies[name], "request_id": started["request_id"], "captured_at": bodies[name]["captured_at"] and 1005.0,
+                "calibration_revision": bodies[name]["calibration_revision"] and "cal-1"}
+        answer = client.post("/api/fleet/detections/identity", json=body, headers=headers)
+        assert answer.status_code != 422, answer.text
+    assert client.post("/api/fleet/detections/identity", json={**bodies["matched"], "jpeg": "x"},
+                       headers=headers).status_code == 422
+
+
 def test_two_bindings_that_meet_on_one_blob_both_return_to_unknown():
     # Review 2026-10-08: A's blob hidden, B's within track_step_m of A -> A must not take B's blob.
     clock, tracking, identity, _ = _setup()

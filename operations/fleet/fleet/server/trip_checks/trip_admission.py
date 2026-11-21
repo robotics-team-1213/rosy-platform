@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from core_common.protocol.line_authority import MAX_TTL_S as AUTHORITY_MAX_TTL_S
 from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
-from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN
+from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN, TRACK
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
 from fleet.server.trip_start_checks import (
@@ -346,8 +346,9 @@ class TripAdmission:
         for _ in range(math.ceil(ALIGN_SIGHTING_S / self.config.period_s)):
             pose = await self.map_pose(robot_id)
             age = getattr(pose, "anchor_age_s", None)
-            # D-989: the robot's own pose is not the independent sighting this wait is for
-            if (age is not None and getattr(pose, "anchor_source", None) != AUTO_LOCATE
+            # D-989: the robot's own pose is not the independent sighting this wait is for, nor is a track
+            # anchor (its yaw is the odometry's or a motion heading, not a marker's)
+            if (age is not None and getattr(pose, "anchor_source", None) not in (AUTO_LOCATE, TRACK)
                     and self._clock() - age > done_at):
                 return {"delta_deg": delta_deg, "final_err_deg": status.get("final_err_deg"),
                         **({"pose": pose} if keep_pose else {})}

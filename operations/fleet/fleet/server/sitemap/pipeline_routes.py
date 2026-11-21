@@ -377,6 +377,7 @@ def install_pipeline_routes(
     from fleet.server.sitemap.pipeline_cell_task_routes import install_cell_tasks_routes
     from fleet.server.sitemap.pipeline_gate_routes import install_gates_routes
     from fleet.server.sitemap.pipeline_camera_routes import install_cameras_routes
+    from fleet.server.sitemap.pipeline_evidence import install_evidence_routes
 
     ctx = SimpleNamespace(
         STATION_CAMERA_LINKS=STATION_CAMERA_LINKS, _arm_live_catalog=_arm_live_catalog,
@@ -389,3 +390,4 @@ def install_pipeline_routes(
     install_cell_tasks_routes(app, ctx)
     install_gates_routes(app, ctx)
     install_cameras_routes(app, ctx)
+    install_evidence_routes(app, ctx)
