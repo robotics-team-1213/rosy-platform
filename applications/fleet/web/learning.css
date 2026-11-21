@@ -9,8 +9,7 @@
 
 /* 보조 글: 공용 부품 이름을 선택자에 두지 않는 표면 소유 클래스만 칠한다(D-624) */
 .learning-hub-note,
-.learning-focus-note,
-.learning-prep-note {
+.learning-focus-note {
   color: var(--text-secondary);
 }
 
@@ -30,8 +29,7 @@
 
 .learning-main[data-host-focus="model"] .learning-host[data-host="ai"],
 .learning-main[data-host-focus="ai"] .learning-host[data-host="model"],
-.learning-main:not([data-host-focus=""]) .learning-steps,
-.learning-main:not([data-host-focus=""]) .learning-prep {
+.learning-main:not([data-host-focus=""]) .learning-steps {
   display: none;
 }
 
@@ -55,60 +53,8 @@
   gap: var(--space-3);
 }
 
-.learning-host-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
 .learning-host > p {
   color: var(--text-secondary);
-}
-
-.learning-host-readout {
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface-flat);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-control);
-}
-
-.learning-host-hint {
-  display: none;
-}
-
-.learning-host[data-host-state="neutral"] .learning-host-hint {
-  display: block;
-}
-
-.learning-steps-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: var(--space-2);
-  counter-reset: learning-step;
-}
-
-.learning-steps-list li {
-  counter-increment: learning-step;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  column-gap: var(--space-3);
-  color: var(--text-secondary);
-}
-
-.learning-steps-list li::before {
-  content: counter(learning-step);
-  font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
-  color: var(--text-primary);
-}
-
-.learning-steps-list b {
-  color: var(--text-primary);
-  font-weight: var(--weight-medium);
 }
 
 @media (width < 30rem) {

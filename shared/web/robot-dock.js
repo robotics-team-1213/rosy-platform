@@ -10,7 +10,7 @@
  *     setOpen(id|null) repaints aria-pressed (at most one true) and data-selected from selection.get()
  *     dispose()        unsubscribes from selection
  */
-import {actionIcon} from "./ui.js";
+import {actionIcon, iconSvg} from "./ui.js";
 import {dockEntries} from "./robot-dock-model.js";
 
 const GROUPS = [
@@ -25,12 +25,6 @@ const MARK_ICON = Object.freeze({
   caution: "warn",
   danger: "estop",
 });
-
-function iconSvg(name) {
-  const holder = document.createElement("span");
-  actionIcon(holder, name);
-  return holder.firstElementChild;
-}
 
 function makeMark(mark) {
   const span = document.createElement("span");

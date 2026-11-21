@@ -1075,8 +1075,21 @@ def test_adopt_refuses_a_stale_history_branch(main, monkeypatch, capsys):
 
 def test_newest_file_ignores_oserror(tmp_path, monkeypatch):
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
-    monkeypatch.setattr(worktrees.rules.os.path, "getmtime", lambda _p: (_ for _ in ()).throw(OSError("gone")))
+    broken = type("E", (), {"stat": staticmethod(lambda: (_ for _ in ()).throw(OSError("gone")))})()
+    assert worktrees.rules._entry_mtime(broken) == 0.0
+    monkeypatch.setattr(worktrees.rules, "_entry_mtime", lambda _e: 0.0)
     assert worktrees.rules.newest_file(tmp_path, lambda _r: False) == 0.0
+
+
+def test_status_notes_skips_gh_when_no_branch_over_24h(main, tmp_path, monkeypatch):
+    _bare_origin(main, tmp_path)
+    now = time.time()
+    _commit_n(add(main, "young"), 1, date=f"{int(now - 2 * HOUR)} +0000")
+    calls = []
+    monkeypatch.setattr(worktrees.rules, "open_pr_heads", lambda _r: calls.append(1) or set())
+    _, rows = worktrees.scan(main)
+    worktrees.rules.status_notes(main, rows, now)
+    assert calls == []
 
 
 def test_new_starts_from_origin_main_untracked_and_status_warns_on_wrong_head(main, capsys):
@@ -1191,9 +1204,16 @@ def test_status_distinguishes_parked_branches_and_unavailable_pr_lookup(main, tm
         if name != "attached":
             git(main, "worktree", "remove", str(wt))
     git(main, "merge", "-q", "--ff-only", "feat/local-merge")
-    monkeypatch.setattr(worktrees.rules, "open_pr_heads", lambda _: {"feat/active-pr"})
+    pr_lookups = []
+
+    def open_pr_heads(root):
+        pr_lookups.append(root)
+        return {"feat/active-pr"}
+
+    monkeypatch.setattr(worktrees.rules, "open_pr_heads", open_pr_heads)
     assert worktrees.main(["status"], now=now) == 0
     assert "1 branch(es) without a worktree or open PR" in capsys.readouterr().out
+    assert len(pr_lookups) == 1
     monkeypatch.setattr(worktrees.rules, "open_pr_heads", lambda _: None)
     assert worktrees.main(["status"], now=now) == 0
     out = capsys.readouterr().out

@@ -23,7 +23,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 if __name__ == "__main__":
     sys.path.insert(0, str(ROOT / "tools" / "harness"))
-from affected_repo import app_of  # noqa: E402
+from _ast_imports import iter_import_nodes  # noqa: E402
+from affected_repo import app_classifier  # noqa: E402
 
 MANIFEST = yaml.safe_load((ROOT / "tools" / "harness" / "platform_parts.yaml").read_text(encoding="utf-8"))
 KNOWN = Path(__file__).with_name("known_app_imports.txt")
@@ -34,6 +35,12 @@ ALLOWED_EDGES = {("pinky", "vision"), ("omx-cell", "vision"), ("learning", "visi
 # structured_output next, omx-cell 2 wait for a core client. Files calling Ollama's HTTP API directly besides rosy.decision.structured_output.
 OLLAMA_BASELINE = 14
 PREFIXES = [(prefix, root["app"]) for root in MANIFEST["roots"] for prefix in root.get("import_prefix") or []]
+_PREFIXES_BY_TOP: dict[str, list[tuple[int, int, str, str]]] = {}
+for _idx, (_prefix, _app) in enumerate(PREFIXES):
+    _PREFIXES_BY_TOP.setdefault(_prefix.split(".", 1)[0], []).append((len(_prefix), -_idx, _prefix, _app))
+for _bucket in _PREFIXES_BY_TOP.values():
+    _bucket.sort(key=lambda item: (item[0], item[1]), reverse=True)
+_CLASSIFY = app_classifier(MANIFEST)
 HEADER = """# App import boundary allowlist (test_app_imports.py, D-1036 addendum 3, 2026-11-19).
 # <path> -> <owner_app>: a file that imports another app's module. Only removals; a new pair fails.
 # Rule: an app imports only itself and core; core imports no app. Regenerate (shrink only):
@@ -42,8 +49,10 @@ HEADER = """# App import boundary allowlist (test_app_imports.py, D-1036 addendu
 
 
 def owner(name: str) -> str | None:
-    hits = [(prefix, app) for prefix, app in PREFIXES if name == prefix or name.startswith(prefix + ".")]
-    return max(hits, key=lambda hit: len(hit[0]))[1] if hits else None
+    for _, _, prefix, app in _PREFIXES_BY_TOP.get(name.split(".", 1)[0], ()):
+        if name == prefix or name.startswith(prefix + "."):
+            return app
+    return None
 
 
 def _git(*args: str) -> list[str]:
@@ -54,10 +63,10 @@ def _git(*args: str) -> list[str]:
 
 def _imports(tree: ast.AST) -> set[str]:
     names = set()
-    for node in ast.walk(tree):
+    for node in iter_import_nodes(tree):
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+        elif node.level == 0 and node.module:
             names.add(node.module)
     return names
 
@@ -67,13 +76,16 @@ def scan() -> tuple[set[str], list[str]]:
     """(`path -> owner_app` pairs that cross an app boundary, files that did not parse)."""
     found, broken = set(), []
     for path in _git("ls-files", "--cached", "*.py"):
-        app = app_of(path, MANIFEST)
+        app = _CLASSIFY(path)
         if app == "repo" or not (ROOT / path).is_file():
             continue
         try:
-            tree = ast.parse((ROOT / path).read_text(encoding="utf-8"), filename=path)
+            text = (ROOT / path).read_text(encoding="utf-8")
+            tree = ast.parse(text, filename=path)
         except (SyntaxError, UnicodeDecodeError, ValueError):
             broken.append(path)
+            continue
+        if "import" not in text:
             continue
         for name in _imports(tree):
             other = owner(name)

@@ -1,3 +1,5 @@
+import {node} from "/common/control-dom.js";
+import {setOffBy} from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // Read projections and explicit stop requests share the Work area's existing authentication and lifetime.
 import {fitView} from "/console/assets/site-map-model.js";
@@ -10,17 +12,12 @@ const stopStates = {PENDING: "전달 대기", SENDING: "전달 중", ACKNOWLEDGE
   NOT_REACHED: "미전달", SUPERSEDED_BY_OPERATOR_RECOMMISSIONING: "운영자 재시운전 확인 기록"};
 const omxStates = {NOT_CONFIGURED: "미설정", REQUESTED: "요청됨", LOCAL_LATCHED: "국소 래치 응답",
   UNKNOWN: "미확인", PARTIAL: "일부 응답"};
-const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
 const button = (text, readOnly = false) => {
   const result = node("ui-button", text);
   // The shared role lock treats unmarked dynamic buttons as operator actions.
   if (readOnly) result.dataset.workRead = "";
   result.setAttribute("kind", "quiet"); result.setAttribute("type", "button"); return result;
 };
-function guard(control, reason) {
-  control.disabled = Boolean(reason);
-  if (reason) control.setAttribute("reason", reason); else control.removeAttribute("reason");
-}
 const age = (row, elapsed) => Number.isFinite(row.age_s) && row.age_s >= 0 ? row.age_s + elapsed : null;
 const fresh = (row, elapsed) => row.availability === "AVAILABLE" && age(row, elapsed) !== null && age(row, elapsed) <= 5;
 
@@ -122,15 +119,15 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     const fences = overview && target ? stopControls(overview, target, elapsed()) : {};
     const targetRow = overview?.units.find(row => row.unit_id === target);
     stop.textContent = target ? target + " 하위 관제에 정지 요청" : "선택한 하위 관제에 정지 요청";
-    guard(stop, reason || (pending ? "같은 정지 기록을 먼저 확인하세요" :
+    setOffBy(stop, reason || (pending ? "같은 정지 기록을 먼저 확인하세요" :
       !targetRow || !fresh(targetRow, elapsed()) || !Object.hasOwn(fences, target) ? "선택 관제의 최신 정지 세대를 확인하세요" : ""));
-    guard(newStop, reason || (pending && !snapshot ? "미확인 요청의 원장을 먼저 확인하세요" : ""));
-    guard(readStop, busy ? "요청 결과를 확인하고 있습니다" : !pending ? "정지 요청 기록을 선택하세요" : "");
-    guard(mapRead, !mapRef ? "선택 관제의 활성 지도 정보를 확인하세요" : "");
+    setOffBy(newStop, reason || (pending && !snapshot ? "미확인 요청의 원장을 먼저 확인하세요" : ""));
+    setOffBy(readStop, busy ? "요청 결과를 확인하고 있습니다" : !pending ? "정지 요청 기록을 선택하세요" : "");
+    setOffBy(mapRead, !mapRef ? "선택 관제의 활성 지도 정보를 확인하세요" : "");
     const localResult = snapshot?.results.find(row => row.unit_id === overview?.unit_id);
     reconcileFold.hidden = !(reference?.local_reconciliation_required
       && ["UNKNOWN", "PARTIAL"].includes(localResult?.state));
-    guard(reconcile, reason || (!localFence() ? "이 관제의 최신 정지 세대를 확인하세요" : ""));
+    setOffBy(reconcile, reason || (!localFence() ? "이 관제의 최신 정지 세대를 확인하세요" : ""));
   }
   function reset() {
     epoch++; selection++; overview = null; target = null; mapRef = null; pending = null; snapshot = null; reference = null;
@@ -307,7 +304,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
           pending = {origin: row.origin_id, body: {stop_id: row.stop_id, target_unit: row.target_unit, config_revision: row.config_revision}};
           reference = row; snapshot = null; form.reset(); results.replaceChildren(); controls(); readRecord();
         });
-        guard(choose, busy ? "요청 결과를 확인하고 있습니다" : "");
+        setOffBy(choose, busy ? "요청 결과를 확인하고 있습니다" : "");
         item.append(choose); history.append(item);
         if (focused === choose.dataset.integratedStop) choose.focus({preventScroll: true});
         if (pending && pending.origin === row.origin_id && pending.body.stop_id === row.stop_id) reference = row;

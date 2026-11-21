@@ -490,6 +490,19 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 ### 테마 선택
 - `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널이다. Fleet은 이 묶음 대신 헤더의 순환 버튼 하나를 쓴다(D-668).
+
+### 컴포넌트화·승격 기준
+새 도우미나 UI 부품을 어디에 두고 언제 승격할지는 아래 세 층과 네 원칙으로 정한다.
+
+1. **L1 파일 내부 (비공개, `export` 금지)**: 한 파일에서만 쓰는 상수·도우미는 `export`하지 않는다(`test_shared_dedupe.py`의 `exports`가 외부 사용 0인 공개 이름을 막는다).
+2. **L2 앱 공용 (`applications/fleet/web/shared/` 등)**: 같은 앱 안 두 파일 이상이 쓰는 도메인 규칙·어댑터(`authorization.js`의 `isOperator`·`operatorReason`·`OPERATOR_REASON`·`NAMED_OPERATOR_REASON`, `site-map-model.js`의 `copyMap`, `field-view.js`의 `storageGet`·`storageSet`)다. 특정 앱 규칙과 묶여 있으면 `shared/web/`로 올리지 않는다.
+3. **L3 플랫폼 공용 (`shared/web/`, `/common/*`)**: 두 표면 이상이 쓰거나 C1–C25 시각·접근성·안전 계약을 닫는 부품·순수 도우미(`control-dom.js`의 `node`·`setStatus`, `cause-line.js`의 `setOff`·`setOffBy`, `core_ui_logic.js`의 `evidenceAgeText`, `ui.js`의 `iconSvg`)다.
+
+- **단일 정본**: 공용 패턴은 `shared/web/patterns.yaml` `patterns`, 작은 DOM·조작 도우미는 `helpers`, 금지 직접 쓰기는 `direct`에 정본과 상한을 둔다.
+- **최소 공개 표면과 `planned` 경계**: 외부 소비자가 부르는 함수만 `export`한다. `shared/web/` 안 `planned` 기초 모듈끼리의 내부 조합은 허용하며, `shared/web/` 밖 제품 파일이 `planned` 패턴의 공개 `export`를 import하면 같은 변경에서 `status: built`와 `adopters`·`product_test`·`product_hook`을 채운다.
+- **즉시 치환과 래칫 하향**: 공용 도우미를 더하거나 넓히면 같은 변경에서 기존 복제본을 교체하고 `patterns.yaml`·`test_shared_dedupe.py` 상한을 내린다.
+- **순수/DOM 경계**: 순수 계산 모듈(`core_ui_logic.js`, `localization-state.js`, `skill-state.js`, `robot-profile.js`, `*-model.js`)은 DOM·`ui.js`에 기대지 않아 Node 단독 시험으로 검증할 수 있어야 한다.
+
 ### 공용 패턴 C1–C25와 동적 값 (D1)
 
 정본 목록은 [`shared/web/patterns.yaml`](shared/web/patterns.yaml)(패턴 → 부품 → 게이트)이고 게이트 시험이 읽는다. 같은 필요가 두 화면에 나오면 화면별 해결 대신 이 부품을 쓴다.

@@ -4,8 +4,8 @@
 // "영상 원본 미등록" state instead of a placeholder stream.
 import {frameBadge} from './vision-view.js';
 
-export const CEILING_SOURCE = 'ceiling_north';
-export const UNREGISTERED_TEXT = '영상 원본 미등록';
+const CEILING_SOURCE = 'ceiling_north';
+const UNREGISTERED_TEXT = '영상 원본 미등록';
 const LIST_REFRESH_MS = 30000;
 const LEASE_MARGIN_MS = 8000;
 

@@ -1,6 +1,7 @@
 // Why a robot moves or who holds it, from facts that prove it. DOM-free.
 // Fleet and CORE do not say who sent an accepted teleop (a console and a robot's own dashboard look the same
 // to CORE), so a manual mode or a motion with no proving fact is shown as 확인 불가, never as a guess.
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 import { staleAgeS } from "./state-age.js";
 
 const MOVING_LINEAR_MS = 0.01, MOVING_ANGULAR_RS = 0.02;
@@ -23,7 +24,7 @@ export function motionSource(robot, view, nowMs = Date.now()) {
     return make("unknown", LAB.unknown, "warn", "Fleet이 로봇 상태를 읽지 못했습니다");
   const state = robot.state;
   const stale = staleAgeS(robot, view.receivedAtMs, nowMs);
-  if (stale !== null) return make("unknown", `${LAB.unknown} · 상태 ${stale}초 전 값`, "warn", "오래된 상태라 지금 움직이는지 알 수 없습니다");
+  if (stale !== null) return make("unknown", `${LAB.unknown} · 상태 ${evidenceAgeText(stale).slice(3)} 값`, "warn", "오래된 상태라 지금 움직이는지 알 수 없습니다");
   const moving = movingNow(state, stale);
   const lease = state.trip_lease;
   const trip = (view.trafficTrips || []).some(row => row.robot_id === robot.robot_id);

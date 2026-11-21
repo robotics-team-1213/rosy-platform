@@ -1,4 +1,5 @@
 // 천장 카메라 사이트 층 (D-257). DOM 없는 순수 계산만 둔다 — map-view.js 가 그린다.
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 import { invert3, project as projectHomography } from "/console/assets/map-fit.js";
 
 // 대형 릴레이 증거(streamEvidence)도 같은 순수 계산이라 여기 있다(D-359 US-009).
@@ -101,7 +102,7 @@ export function streamEvidence(formation, robotId) {
   if (evidence.state === "disconnected") return { text: "릴레이 끊김", cls: "crit", evidence: "disconnected" };
   if (evidence.state === "delayed") {
     const age = finite(evidence.age_s)
-      ? ` · ${(Math.round(Math.max(0, evidence.age_s) * 10) / 10)}초 전` : "";
+      ? evidenceAgeText(Math.round(Math.max(0, evidence.age_s) * 10) / 10) : "";
     const reason = evidence.reason === "rate_below_floor" ? " · 송신 빈도 낮음" : "";
     return { text: `릴레이 지연${age}${reason}`, cls: "warn", evidence: "delayed" };
   }

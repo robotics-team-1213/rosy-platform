@@ -2,6 +2,8 @@
 // Fleet approves an actionable request by itself (approved_by "fleet:auto"); an operator may approve first.
 // Approval is only recorded. S1 sends no motion, and this file says so on the row.
 // No import from queues.js: queues.js imports the text helper below.
+import { setOffBy } from "/common/cause-line.js";
+import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
 const REASON = Object.freeze({
@@ -33,14 +35,14 @@ export function recoveryHeadline(request) {
 }
 
 /** Pure: who approved, in words. */
-export function approvedText(by) {
+function approvedText(by) {
   return !by ? "승인 대기" : by === "fleet:auto" ? "자동 승인됨" : `${by} 승인`;
 }
 
 /** Pure: what the opened row shows. The approve button exists only when the answer allows it. */
 export function recoveryView(request, { operator, named = "", busy = false }) {
   const allowed = request.request === true && !request.reason && Boolean(request.bay) && !request.approved_by;
-  const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : named;
+  const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : named;
   return { lines: [recoveryHeadline(request).replace(/^:\s*/, ""), NO_MOTION], approve: allowed, approveReason: lock };
 }
 
@@ -110,8 +112,7 @@ export function createStationRecovery({ scope, view, call, log, isOperator, name
         button.type = "button";
         button.textContent = "복구 승인 (기록만)";
         button.dataset.recovery = "approve";
-        button.disabled = Boolean(spec.approveReason);
-        if (spec.approveReason) button.setAttribute("reason", spec.approveReason);
+        setOffBy(button, spec.approveReason);
         button.addEventListener("click", scope.guard(() => approve(request.robot_id)));
         const actions = document.createElement("div");
         actions.className = "stuck-actions ui-action-bar";

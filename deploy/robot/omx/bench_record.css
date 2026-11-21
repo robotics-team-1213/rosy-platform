@@ -12,7 +12,7 @@
 ::-webkit-scrollbar-thumb{background:rgba(238,238,239,.2);border-radius:999px}
 html,body{margin:0;padding:0;background:var(--ground);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Noto Sans KR",sans-serif;font-size:15px;line-height:1.45;overflow-x:hidden;font-variant-numeric:tabular-nums}
 
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.bench-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 /* Shared controls and cards */
 .card{background:var(--ground-raise);border:1px solid var(--bd);border-radius:12px;padding:14px;min-width:0}
 .status-bar{background:var(--ground-card);display:grid;gap:6px}

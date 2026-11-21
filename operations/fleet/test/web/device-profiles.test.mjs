@@ -4,7 +4,11 @@ import {readFile} from 'node:fs/promises';
 
 const source = new URL('../../../../applications/fleet/web/devices/device-profiles.js', import.meta.url);
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
-const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href);
+const causeLine = new URL('../../../../shared/web/cause-line.js', import.meta.url);
+const auth = new URL('../../../../applications/fleet/web/shared/authorization.js', import.meta.url);
+const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href)
+  .replaceAll('/common/cause-line.js', causeLine.href)
+  .replaceAll('/console/assets/authorization.js', auth.href);
 const {profilePayload, createDeviceProfiles} = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 test('profiles preserve declared model and composition independently of USB identities', () => {

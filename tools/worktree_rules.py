@@ -1,29 +1,11 @@
-"""Rules ``tools/worktrees.py`` and ``tools/land.py`` share (D-790, amends D-761).
+"""Worktree and branch lifecycle rules (D-790, D-886, D-1070).
 
-- A landed worktree (merged into main, a commit of its own in its branch reflog) that is clean
-  has no wait (``wait_h = 0.0``) in ``tools/worktrees.py``, whoever made it; ``LANDED_IDLE_HOURS``
-  (1 h) still applies to orphan directories and unused merged branches (``sweep_branches``).
-- ``stale_history``: a branch on the pre-rewrite line (more than ``STALE_COMMITS`` commits not in
-  main, or forked from main at or before ``REWRITE_BASE``) would re-import the old history; ``new``
-  does not base on it and ``land.py`` does not land it.
-- Orphan directories (under ``.worktrees/``, not registered with git): ``orphan_content`` sums them
-  up; ``clear_orphan`` removes empty ones and ones holding only caches or ``.omc/state``, and
-  archives the rest to ``$ROSY_SCRATCH/worktree-orphans/<name>-<date>.zip`` (Python ``zipfile``,
-  re-opened and counted) before the directory goes.
-- A removed worktree's folder that cannot be deleted (Windows: a process holds it as its cwd) is
-  ``rmdir``-ed when empty, else gets a tombstone ``.git`` file (``leave_tombstone``) pointing at a
-  gitdir that cannot exist, so git inside it fails instead of walking up to the main checkout's
-  ``.git`` and acting on main. The tombstone counts as a cache: the next prune deletes the folder.
-- D-886: ``new`` takes a topic of lowercase words joined by ``-`` (``topic_ok``), and every prune ends
-  with ``sweep_branches``: local branches already in main that no worktree has checked out go, by exact
-  sha, once their reflog is ``LANDED_IDLE_HOURS`` old; ``main`` and ``archive/*`` (a person's, D-790) stay.
-  Lossless: the commits are on main (D-372 decision 2).
-
-Standard library only.
+See docs/reference/shared-checkout.md for admission, preservation and cleanup policy.
 """
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import re
@@ -31,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import threading
 import time
 import zipfile
 from pathlib import Path
@@ -65,7 +48,7 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
                           text=True, encoding="utf-8", errors="replace")
 
 
-def stale_history(cwd: Path, tip: str, base: str = "main") -> str | None:
+def stale_history(cwd: Path, tip: str, base: str = "main", ct_cache: dict[str, int] | None = None) -> str | None:
     """Why ``tip`` is on the pre-rewrite history relative to ``base``, or None (also for unknown refs)."""
     count = _git(cwd, "rev-list", "--count", f"--max-count={STALE_COMMITS + 1}", f"{base}..{tip}")
     if count.returncode != 0:
@@ -76,7 +59,11 @@ def stale_history(cwd: Path, tip: str, base: str = "main") -> str | None:
     if fork.returncode != 0 or not fork.stdout.strip():
         return f"no common history with {base}" if fork.returncode == 1 else None
     sha = fork.stdout.strip()
-    when = int(_git(cwd, "show", "-s", "--format=%ct", sha).stdout.strip() or 0)
+    when = ct_cache.get(sha) if ct_cache is not None else None
+    if when is None:
+        when = int(_git(cwd, "show", "-s", "--format=%ct", sha).stdout.strip() or 0)
+        if ct_cache is not None:
+            ct_cache[sha] = when
     if when <= REWRITE_TIME:
         day = time.strftime("%Y-%m-%d", time.localtime(when))
         return f"forks from {base} at {sha[:10]} ({day}), before the history rewrite after {REWRITE_BASE}"
@@ -278,6 +265,13 @@ def reflog_time(path: Path) -> float:
         return 0.0
 
 
+def reflog_has_commit(path: Path) -> bool:
+    try:
+        return any(ln.partition("\t")[2].startswith("commit") for ln in path.read_text(encoding="utf-8", errors="replace").splitlines())
+    except OSError:
+        return False
+
+
 WRONG_HEAD_FIX = ("do not merge or fast-forward there; its owner moves that work to a worktree"
                   " (python tools/worktrees.py adopt) and switches the checkout back to main")
 
@@ -356,14 +350,31 @@ def _idle_unattached(root: Path, now: float) -> list[str]:
 
 def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
     """Shared-checkout warnings plus P1 branch-size and 24h no-PR summary lines."""
-    lines = shared_warnings(root)
     base = ("refs/remotes/origin/main" if _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/main").returncode == 0
             else "refs/heads/main")
-    needed, soon, stale_no_pr = [], [], []
-    for row in sorted(rows, key=lambda r: r["name"]):
-        if row.get("orphan") or row.get("merged") or not row.get("sha") or row.get("branch") == "main" or row.get("verdict") == "stale-history":
-            continue
+    cands = [r for r in sorted(rows, key=lambda r: r["name"])
+             if not (r.get("orphan") or r.get("merged") or not r.get("sha")
+                     or r.get("branch") == "main" or r.get("verdict") == "stale-history")]
+    pr_lock, pr_fut = threading.Lock(), []
+
+    def check_row(pool, row):
         times = _own_commit_times(root, base, row["sha"])
+        if row.get("branch") and times and now - min(times) >= NO_PR_HOURS * 3600:
+            with pr_lock:
+                if not pr_fut:
+                    pr_fut.append(pool.submit(open_pr_heads, root))
+        return row, times
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, len(cands) + 2)) as pool:
+        warn_fut = pool.submit(shared_warnings, root)
+        unattached_fut = pool.submit(_idle_unattached, root, now)
+        results = [fut.result() for fut in [pool.submit(check_row, pool, r) for r in cands]]
+        unattached = unattached_fut.result()
+        if unattached and not pr_fut:
+            pr_fut.append(pool.submit(open_pr_heads, root))
+        open_prs, lines = pr_fut[0].result() if pr_fut else None, warn_fut.result()
+    needed, soon, stale_no_pr = [], [], []
+    for row, times in results:
         if len(times) >= SPLIT_NEEDED:
             needed.append(f"{row['name']}({len(times)})")
         elif len(times) >= SPLIT_SOON:
@@ -374,18 +385,15 @@ def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
         parts = ([f"split-needed (>={SPLIT_NEEDED}): {', '.join(needed)}"] if needed else []
                  ) + ([f"split-soon (>={SPLIT_SOON}): {', '.join(soon)}"] if soon else [])
         lines.append(f"WARN    branch size: {'; '.join(parts)} — split finished work from origin/main (D-1067)")
-    unattached = _idle_unattached(root, now)
-    if stale_no_pr or unattached:
-        open_prs = open_pr_heads(root)
-        if open_prs is not None:
-            missing = [name for name, br in stale_no_pr if br not in open_prs]
-            if missing:
-                lines.append(f"WARN    no-pr (>{NO_PR_HOURS:.0f}h since first own commit, no open PR): {len(missing)} worktree(s): {', '.join(missing)}")
-            missing_count = sum(branch not in open_prs for branch in unattached)
-            if missing_count:
-                lines.append(f"WARN    no-pr: {missing_count} branch(es) without a worktree or open PR; tip older than {NO_PR_HOURS:.0f}h")
-        elif unattached:
+    if stale_no_pr and open_prs is not None:
+        missing = [name for name, br in stale_no_pr if br not in open_prs]
+        if missing:
+            lines.append(f"WARN    no-pr (>{NO_PR_HOURS:.0f}h since first own commit, no open PR): {len(missing)} worktree(s): {', '.join(missing)}")
+    if unattached:
+        if open_prs is None:
             lines.append(f"WARN    {len(unattached)} branch(es) without a worktree; open PR status unavailable")
+        elif missing_count := sum(branch not in open_prs for branch in unattached):
+            lines.append(f"WARN    no-pr: {missing_count} branch(es) without a worktree or open PR; tip older than {NO_PR_HOURS:.0f}h")
     return lines
 
 
@@ -400,8 +408,9 @@ def merge_targets(root: Path) -> list[str]:
     return targets or ["refs/heads/main"]
 
 
-def is_merged(root: Path, sha: str) -> bool:
-    return any(_git(root, "merge-base", "--is-ancestor", sha, t).returncode == 0 for t in merge_targets(root))
+def is_merged(root: Path, sha: str, targets: list[str] | None = None) -> bool:
+    targets = merge_targets(root) if targets is None else targets
+    return any(_git(root, "merge-base", "--is-ancestor", sha, t).returncode == 0 for t in targets)
 
 
 def _merged_rows(root: Path, fmt: str) -> list[str]:
@@ -541,21 +550,33 @@ def prune_remote(root: Path, now: float, apply: bool = False, days: float = REMO
     return done
 
 
-def _safe_mtime(path: str) -> float:
+def _entry_mtime(entry: os.DirEntry) -> float:
     try:
-        return os.path.getmtime(path)
+        return entry.stat().st_mtime
     except OSError:
         return 0.0
 
 
 def newest_file(path: Path, is_cache) -> float:
     """Newest mtime of any file outside ``.git`` and the caches: a used worktree that git sees as unchanged is active.
-    shortcut: a full walk per judged worktree, run only when the cheap facts did not decide."""
-    newest = 0.0
-    for folder, dirs, files in os.walk(path):
-        inside = Path(folder).relative_to(path).as_posix()
-        dirs[:] = [d for d in dirs if d != ".git" and not is_cache(f"{'' if inside == '.' else inside + '/'}{d}/")]
-        newest = max([newest, *(_safe_mtime(os.path.join(folder, n)) for n in files if n != ".git")])
+    shortcut: a full scandir per judged worktree, run only when the cheap facts did not decide."""
+    newest, stack = 0.0, [(path, "")]
+    while stack:
+        folder, prefix = stack.pop()
+        try:
+            with os.scandir(folder) as it:
+                for entry in it:
+                    name = entry.name
+                    if name == ".git":
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        if not is_cache(f"{prefix}{name}/"):
+                            stack.append((entry.path, f"{prefix}{name}/"))
+                    elif not (entry.is_symlink() and entry.is_dir()):
+                        if (mt := _entry_mtime(entry)) > newest:
+                            newest = mt
+        except OSError:
+            continue
     return newest
 
 

@@ -1,8 +1,9 @@
+import { node } from '/common/control-dom.js';
 // Fleet device discovery, approved app directory and address guidance; no registration writes.
 import { addressMap, movableRobots, renumberBanner } from "/console/assets/address-drift.js";
 
 // Navigation uses the authenticated peer directory, never a discovered URL or a guessed port.
-export function robotAppLinks(robotId, peers = []) {
+function robotAppLinks(robotId, peers = []) {
   if (!Array.isArray(peers) || peers.some(peer => !peer || typeof peer !== "object")) return [];
   const candidates = peers.filter(peer => peer.role === "robot" && peer.peer_id === robotId);
   if (!candidates.length || candidates.some(peer => peer.approval !== "approved"
@@ -29,22 +30,22 @@ export function robotAppLinks(robotId, peers = []) {
   ];
 }
 
-export function createRobotAppActions(robotId, peers, nodeWithText) {
-  const context = nodeWithText('div', 'robot-actions');
+export function createRobotAppActions(robotId, peers) {
+  const context = node('div', "", 'robot-actions');
   const appLinks = robotAppLinks(robotId, peers);
   for (const app of appLinks) {
-    const link = nodeWithText('a', '', app.label);
+    const link = node('a', app.label);
     link.href = app.href;
     link.dataset.robotApp = app.app;
     link.rel = "noreferrer";
     context.append(link);
   }
   if (!appLinks.length) {
-    const guidance = nodeWithText('span', 'hint', '앱을 열려면 설치에서 승인된 로봇 주소를 확인하세요.');
+    const guidance = node('span', '앱을 열려면 설치에서 승인된 로봇 주소를 확인하세요.', 'hint');
     guidance.dataset.robotAppGuidance = '';
     context.append(guidance);
   }
-  const recording = nodeWithText('a', '', '지도 기록');
+  const recording = node('a', '지도 기록');
   recording.href = `/console/site-map?robot=${encodeURIComponent(robotId)}#teach-heading`;
   recording.dataset.mapRecording = '';
   recording.className = 'ui-action-link';

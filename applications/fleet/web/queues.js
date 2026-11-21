@@ -1,6 +1,8 @@
+import { node } from "/common/control-dom.js";
+import { setOffBy } from "/common/cause-line.js";
 // 예외 큐 (Fleet 분해 3에서 roster.js로부터 옮김, D-540 단계 (d) 크기 재판정). 주의/개입 큐의
 // 규칙(attentionItems, D-493 한 규칙)과 행 채우기, 큐 펼침의 버튼 헬퍼를 가진다. 카드는 roster.js다.
-import { BATTERY_LEVEL_LABEL, DOCK_STATE_LABEL, EVIDENCE_LABEL, enumLabel } from "/common/core_ui_logic.js";
+import { BATTERY_LEVEL_LABEL, DOCK_STATE_LABEL, EVIDENCE_LABEL, enumLabel, evidenceAgeText} from "/common/core_ui_logic.js";
 import { ruleMTag } from "./link-tag.js";
 import { localizationUrgent } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
@@ -12,13 +14,6 @@ import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
 import { recoveryHeadline } from "./station-recovery.js";
 import { personHeadline, requestsFor } from "./person-request.js";
-
-function nodeWithText(tagName, className = "", text) {
-  const node = document.createElement(tagName);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
 
 /** A row's text after its robot name. Rows read "<b>rosy_41</b>: …"; a later row of the same robot hides the
  * name, so it drops the leading ": " (field check 2026-10-10: ": Rosy Cam이 …" with no name). */
@@ -82,12 +77,6 @@ export function primaryButton(text) {
   return node;
 }
 
-export function setReason(node, reason) {
-  node.disabled = Boolean(reason);
-  if (reason) node.setAttribute("reason", reason);
-  else node.removeAttribute("reason");
-}
-
 /** The robot's open trip as the console last read it, or null. */
 export function openTrip(view, robotId) {
   return (view.trafficTrips || []).find((trip) => trip.robot_id === robotId) || null;
@@ -117,7 +106,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // D-407 / D-540 3: a stuck robot waits for an answer; the row opens into its decision. An offline
     // robot keeps the row (last value, answers locked) so the question does not vanish with the link.
     const staleS = staleAgeS(robot, view.receivedAtMs, Date.now());
-    const staleNote = staleS === null ? "" : ` (상태 ${staleS}초 전 값)`;
+    const staleNote = staleS === null ? "" : ` (상태 ${evidenceAgeText(staleS).slice(3)} 값)`;
     const overdue = stuckOverdue(robot.line_stuck);
     const stuck = robot.line_stuck
       ? [{ severity: "crit", decision: "stuck", overdue,
@@ -198,7 +187,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       items.push({ severity: "warn", decision: "person", key: `${robot.robot_id}|person-${ask.id}`, text: personHeadline(ask) });
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
-    if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
+    if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${evidenceAgeText(staleS).slice(3)} 값` });
     return items;
   }
   // Clock-like digits ("3초 전") are not a new exception.
@@ -231,13 +220,13 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
           render();
         })) : li;
         if (row.decision) {
-          const body = nodeWithText("div", "queue-decision");
+          const body = node("div", "", "queue-decision");
           body.id = `decision-${row.key.replace(/[^A-Za-z0-9_-]/g, "_")}`;
           body.dataset.decisionSlot = row.key;
           line.setAttribute("aria-controls", body.id);
           li.append(line, body);
         }
-        line.append(document.createElement("b"), nodeWithText("span", "queue-text"));
+        line.append(document.createElement("b"), node("span", "", "queue-text"));
       }
       const line = row.decision ? li.firstElementChild : li;
       const name = line.querySelector("b");
@@ -267,7 +256,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       details.className = "queue-group";
       const summary = document.createElement("summary");
       summary.className = "ui-disclosure-row";
-      details.append(summary, nodeWithText("p", "hint", ""));
+      details.append(summary, node("p", "", "hint"));
       li.append(details);
     }
     const summary = li.querySelector("summary"), all = li.querySelector("p");

@@ -1,3 +1,4 @@
+import { setOffBy } from "/common/cause-line.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {canManageAccounts, canViewAccountSetup, CAPABILITIES, roleGrants} from '/console/assets/account-permissions.js';
@@ -53,7 +54,7 @@ async function perform(fn) {
   if (busy) return;
   busy = true;
   for (const button of document.querySelectorAll('ui-button, button')) {
-    button.disabled = true; button.setAttribute('reason', '처리 결과 확인 중');
+    setOffBy(button, '처리 결과 확인 중');
   }
   try { await identity(); await fn(); } catch (error) { fail(error); }
   finally {
@@ -93,8 +94,8 @@ function grantRow(grant = null) {
 function edit(row = null) {
   selected = row; pending = null; clearSecrets();
   $('account-save').textContent = '계정 저장'; $('request-decision').hidden = true;
-  $('account-save').disabled = false; $('account-save').removeAttribute('reason');
-  $('account-role').disabled = false; $('account-role').removeAttribute('reason');
+  setOffBy($('account-save'), '');
+  setOffBy($('account-role'), '');
   $('account-heading').textContent = row ? `${row.login} 계정 수정` : '새 계정';
   for (const [id, key] of [['account-name', 'login'], ['account-principal', 'principal_id']]) {
     $(id).value = row?.[key] || ''; $(id).readOnly = !!row;
@@ -272,8 +273,8 @@ function decide(row) {
   pending = row; $('account-save').textContent = '승인하고 저장';
   $('request-decision').hidden = false; $('request-reason').value = '';
   $('request-decision-text').textContent = `${row.requester_name} (${row.username}) 님의 ${row.kind === 'grant' ? '권한' : '가입'} 요청${row.resource ? ' · ' + row.resource : ''}`;
-  if (row.login_taken) { $('account-save').disabled = true; $('account-save').setAttribute('reason', '이미 있는 로그인 ID라 승인할 수 없습니다. 거절하세요'); }
-  if (account) { $('account-role').disabled = true; $('account-role').setAttribute('reason', '권한 요청 승인은 계정의 역할을 바꾸지 않고 자원별 권한만 저장합니다'); }
+  if (row.login_taken) setOffBy($('account-save'), '이미 있는 로그인 ID라 승인할 수 없습니다. 거절하세요');
+  if (account) setOffBy($('account-role'), '권한 요청 승인은 계정의 역할을 바꾸지 않고 자원별 권한만 저장합니다');
   if (row.login_taken) status('이미 있는 로그인 ID입니다. 승인할 수 없으니 거절하고 다른 ID를 안내하세요.', 'warning');
   $('account-form').scrollIntoView?.({block: 'nearest'});
 }
