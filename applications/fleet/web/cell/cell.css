@@ -1,5 +1,12 @@
 /* D-741 2 — 본문은 칸이다. D-926 3: 하위 탐색이 단계 화면을 하나씩 보여 주므로 레시피와 셀 문서도 한 칸씩 선다. */
 .cell-intro { display: grid; gap: var(--space-1); }
+/* B-3 — 팔 예외 줄: 어느 단계 화면에서도 본문 머리에 보이고 좁은 화면에서는 줄바꿈으로 접힌다. */
+.cell-exception-strip:not([hidden]) { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.cell-exception-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); border: 1px solid var(--status-warn-a45); background: var(--surface-raised); }
+.cell-exception-item > strong { color: var(--ink); border-inline-start: 3px solid var(--status-warn); padding-inline-start: var(--space-2); }
+.cell-exception-item > span { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; color: var(--ink-quiet); }
+.cell-exception-item[data-severity="danger"] { border-color: var(--status-crit-a45); background: var(--status-crit-a07); }
+.cell-exception-item[data-severity="danger"] > strong { border-inline-start-color: var(--status-crit); color: var(--ink); }
 .cell-intro h1 { margin: 0; }
 /* Keep five data columns legible; the shared wrapper scrolls inside narrow screens. */
 #catalog-table { table-layout: fixed; min-width: 40rem; }

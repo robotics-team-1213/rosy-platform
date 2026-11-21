@@ -58,7 +58,7 @@ export const incidentLines = incident => {
   ].filter(Boolean);
 };
 
-export function createCellObservation({request, root, credential = () => ''}) {
+export function createCellObservation({request, root, credential = () => '', onSummary = null}) {
   const empty = element('ui-empty', '접속하면 작업 셀의 실제 관측을 확인할 수 있습니다.');
   let life = null, pending = false, layout = '', disposed = false;
   let profiles = null;
@@ -67,12 +67,53 @@ export function createCellObservation({request, root, credential = () => ''}) {
   const faultFrames = new Map();
   const incidentFrames = new Map();  // D-971: blob URL of each incident frame, fetched once
   let seenFaults = null;
+  // B-3 — 단계 화면 어디서든 볼 팔 예외 요약. 같은 내용을 다시 넘기지 않아 500 ms 폴링이 DOM을 흔들지 않는다.
+  let lastSummaryKey = '', lastWorkcells = [], observedDisconnected = false;
   root.replaceChildren(empty);
   function paintHealth(entry) {
     const health = entry.health.read();
     renderMotorHealthSummary(entry.healthSummary, health);
     if (entry.healthDetails.open) renderMotorHealth(entry.healthView, health);
     entry.healthPaintedAt = performance.now();
+  }
+
+  const emitSummary = items => {
+    const key = JSON.stringify(items.map(item => [item.key, item.severity, item.detail, item.sourceId]));
+    if (key === lastSummaryKey) return;
+    lastSummaryKey = key;
+    onSummary?.(items);
+  };
+  // 우선순위: 보류 사건 > 원인 기록 대기 > 모터 건강 > 엔코더 만료. 팔마다 해당 항목을 모두 낸다.
+  function summarize(workcells, disconnected = false) {
+    if (!onSummary) return;
+    if (disconnected) {
+      emitSummary([{key: 'obs:disconnected', severity: 'warn', label: '셀 관측',
+        detail: '관측 연결 확인 중 · 오래된 값은 표시하지 않습니다', sourceId: ''}]);
+      return;
+    }
+    const items = [];
+    for (const cell of workcells) for (const arm of cell.arms) {
+      const open = (arm.incidents || []).filter(i => i.state !== 'cleared');
+      const held = open.filter(i => i.decision?.hold !== false);
+      if (held.length) items.push({key: `inc:${arm.source_id}`, severity: 'danger', label: arm.label || arm.source_id,
+        detail: `보류 사건 ${held.length}건 · 확인 후 해제 필요`, sourceId: arm.source_id});
+      const naming = open.length - held.length;
+      if (naming > 0) items.push({key: `name:${arm.source_id}`, severity: 'warn', label: arm.label || arm.source_id,
+        detail: `원인 기록 대기 ${naming}건`, sourceId: arm.source_id});
+      const entry = arms.get(arm.source_id);
+      if (entry) {
+        const health = entry.health.read();
+        if (health.severity === 'crit' || health.severity === 'warn') {
+          const reason = (health.stopReasons || []).find(text => typeof text === 'string' && text);
+          items.push({key: `health:${arm.source_id}:${health.severity}`,
+            severity: health.severity === 'crit' ? 'danger' : 'warn', label: arm.label || arm.source_id,
+            detail: reason ? `${health.label} · ${reason}` : health.label, sourceId: arm.source_id});
+        }
+        if (!arm.positions || performance.now() >= entry.expires) items.push({key: `stale:${arm.source_id}`,
+          severity: 'warn', label: arm.label || arm.source_id, detail: '엔코더 피드백 만료 · 최신 값 없음', sourceId: arm.source_id});
+      }
+    }
+    emitSummary(items);
   }
 
   function reset() {
@@ -82,6 +123,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
     for (const url of incidentFrames.values()) URL.revokeObjectURL(url);
     incidentFrames.clear();
     arms.clear(); cameras.clear(); layout = '';
+    lastWorkcells = []; observedDisconnected = false; emitSummary([]);
     empty.hidden = false; root.replaceChildren(empty);
   }
   function clear() {
@@ -285,6 +327,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
     // a guard stop the recovery handled comes with decision.hold false: it waits for a person's cause, the arm stays free
     const open = incidents.filter(i => i.state !== 'cleared'), held = open.filter(i => i.decision?.hold !== false);
     const naming = open.length - held.length;
+    entry.openIncidents = open.length;
     entry.incidentsSummary.textContent = incidents.length
       ? `팔 사건 ${incidents.length}건 · ${held.length ? `보류 중 ${held.length}건 (세션 시작 불가)` : naming ? '보류 없음' : '모두 해제됨'}`
         + (naming ? ` · 원인 기록 대기 ${naming}건` : '') : '팔 사건 없음';
@@ -353,6 +396,8 @@ export function createCellObservation({request, root, credential = () => ''}) {
           if (performance.now() - entry.healthPaintedAt >= 200) paintHealth(entry);
         }
         for (const entry of cameras.values()) if (performance.now() >= entry.expires) staleCamera(entry);
+        // 연결이 끊긴 동안 만료 판정이 옛 팔 목록으로 요약을 되살리지 않는다(번쩍임 없음).
+        if (!observedDisconnected) summarize(lastWorkcells);
       }, 100);
       // a background tab stops pulling observations and JPEGs; showing it again refreshes at once
       const wake = () => { if (!document.hidden) void refresh(); };
@@ -394,6 +439,8 @@ export function createCellObservation({request, root, credential = () => ''}) {
         entry.status.textContent = `실제 피드백 · #${arm.sequence}`;
       }
       for (const [source, entry] of cameras) void picture(source, entry, scope);
+      lastWorkcells = state.workcells; observedDisconnected = false;
+      summarize(state.workcells);
     } catch (error) {
       if (life !== scope || scope.signal.aborted) return;
       if (error.status === 401 || error.status === 403) clear();
@@ -401,8 +448,22 @@ export function createCellObservation({request, root, credential = () => ''}) {
         for (const entry of arms.values()) { entry.health.disconnect(); paintHealth(entry); }
         empty.hidden = false;
         empty.textContent = error.status === 503 ? '관측 구성을 확인할 수 없습니다.' : '관측 연결 확인 중 · 오래된 값은 표시하지 않습니다.';
+        observedDisconnected = true;
+        summarize(lastWorkcells, true);
       }
     } finally { if (life === scope) pending = false; }
   }
-  return {refresh, clear, dispose() { clear(); disposed = true; }};
+  // B-3 — 요약 줄의 "관측으로 이동": 그 팔 카드로 화면을 옮기고 말고 집는다.
+  function focusArm(sourceId) {
+    if (!sourceId) return false;
+    const card = root.querySelector(`[data-arm-source="${CSS.escape(sourceId)}"]`);
+    if (!card) return false;
+    const entry = arms.get(sourceId);
+    if (entry?.openIncidents) entry.incidents.open = true;  // 사람이 확인할 팔 사건은 펼쳐 둔다
+    card.tabIndex = -1;
+    card.scrollIntoView?.({block: 'nearest'});
+    card.focus?.({preventScroll: true});
+    return true;
+  }
+  return {refresh, clear, focusArm, dispose() { clear(); disposed = true; }};
 }
