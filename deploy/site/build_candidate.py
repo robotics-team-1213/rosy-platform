@@ -30,6 +30,7 @@ DEPLOY_FILES = (
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
+    "compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service", "account-lan-cert.sh",  # D-1064 LAN login alias
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
     "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
@@ -346,6 +347,7 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
     for name, config, label in (
             ("compose.yaml", "Caddyfile", "org.rosy.site-caddy-sha256"),
             ("compose.account.yaml", "Caddyfile.account", "org.rosy.site-account-caddy-sha256"),
+            ("compose.account-lan.yaml", "Caddyfile.account-lan", "org.rosy.site-account-lan-caddy-sha256"),
             ("compose.monitoring.yaml", "Caddyfile.monitoring", "org.rosy.site-monitoring-caddy-sha256")):
         path = deploy_dir / name
         text = path.read_text(encoding="utf-8")

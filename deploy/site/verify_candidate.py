@@ -36,6 +36,7 @@ REQUIRED_DEPLOYMENT_FILES = (
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
+    "compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service", "account-lan-cert.sh",  # D-1064 LAN login alias
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
     "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
@@ -46,6 +47,8 @@ REQUIRED_DEPLOYMENT_FILES = (
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
+ACCOUNT_LAN_FILES = ("compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service",
+                     "account-lan-cert.sh")  # D-1064
 ACCOUNT_TLS_FILES = ("account_tls_renew.py", "account-tls.env.example",
                      "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer")
 LOGIN_CHECK_FILES = ("account_login_check.py", "rosy-site-account-login-check.service",
@@ -146,6 +149,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         required.difference_update(ACCOUNT_BACKUP_FILES)
     if not set(hashes) & set(ACCOUNT_TLS_FILES):
         required.difference_update(ACCOUNT_TLS_FILES)  # earlier signed candidates; a half group stays required
+    if not set(hashes) & set(ACCOUNT_LAN_FILES):
+        required.difference_update(ACCOUNT_LAN_FILES)  # earlier signed candidates; a half group stays required
     if not set(hashes) & set(LOGIN_CHECK_FILES):
         required.difference_update(LOGIN_CHECK_FILES)  # earlier signed candidates; a half group stays required
     # PostgreSQL maintenance needs no new image: the mirrored postgres image is
@@ -249,6 +254,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "archive_services": [s for s in services if s not in reused],
         "deployment_files": len(hashes),
         "account_https": set(ACCOUNT_DEPLOYMENT_FILES) <= set(hashes),
+        "account_lan": set(ACCOUNT_LAN_FILES) <= set(hashes),
         "omx": "compose.omx.yaml" in hashes,
         "workcell": "compose.workcell.yaml" in hashes,
         "control_unit": "compose.control-unit.yaml" in hashes,

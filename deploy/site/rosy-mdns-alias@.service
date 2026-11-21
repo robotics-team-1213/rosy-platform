@@ -1,0 +1,21 @@
+[Unit]
+# D-1064: publish the instance name (for example rosy-mdns-alias@<alias>.local.service) as an
+# extra mDNS address of this host's LAN interface: the first ROSY_SITE_LAN_IFACE entry.
+Description=Publish %i as an extra mDNS address of this site host
+Requires=avahi-daemon.service
+After=avahi-daemon.service network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/rosy/site/site.env
+# shortcut: the address is read once at start; an address change needs a restart of this unit.
+ExecStart=/bin/sh -c 'iface=$$(echo "$$1" | cut -d, -f1); case "$$iface" in ""|lo|tailscale*) exit 1;; esac; addr=$$(ip -4 -o addr show dev "$$iface" | tr -s " " | cut -d" " -f4 | cut -d/ -f1 | head -n1); [ -n "$$addr" ] || exit 1; exec /usr/bin/avahi-publish -a -R "$$2" "$$addr"' rosy-mdns-alias ${ROSY_SITE_LAN_IFACE} %i
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+# D-1064: opt-in LAN browser alias for Account login. Append after compose.account.yaml.
+# The proxy gains one more host block on the existing ROSY_SITE_HTTPS_PORT listener and its
+# own site-CA leaf; no port is published, so site-firewall.py and LAN port443 stay unchanged.
+services:
+  proxy:
+    labels:
+      org.rosy.site-account-lan-caddy-sha256: unbuilt
+    environment:
+      ROSY_ACCOUNT_LAN_HOST: "${ROSY_ACCOUNT_LAN_HOST:?set ROSY_ACCOUNT_LAN_HOST}"
+    volumes:
+      - type: bind
+        source: ./Caddyfile.account-lan
+        target: /etc/caddy/account/lan.caddy
+        read_only: true
+        bind:
+          create_host_path: false
+      # Directory bind keeps atomic certificate replacement visible inside the running proxy.
+      - type: bind
+        source: /etc/rosy/account-lan-tls
+        target: /run/rosy-account-lan-tls
+        read_only: true
+        bind:
+          create_host_path: false
