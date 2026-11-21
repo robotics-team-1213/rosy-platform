@@ -1453,6 +1453,52 @@ arm B의 예측 손목 롤이 검토된 라이브러리 홈과 반 바퀴 건너
 `observer.env.example`을 팔마다 다른 by-id 장치와 commissioning 토픽에 결속한다.
 이 관절값은 원시 엔코더 변환이며, 보정된 제어 좌표나 실물 구동 수용 증거가 아니다.
 
+**세션 중 포트 인계 (H4).** 팔 세션이 팔로워 포트를 쓰는 동안에는 그 팔의 관측기를 멈추고,
+runner가 같은 SnapshotChannel에 관절(라디안)을 쓴다. 세션 wrapper는 세션 명령을
+`observer_handoff.py run` 한 줄로 감싼다(arm_b는 이름만 바꾼다). run의 옵션은 `--` 앞에, 세션 명령은
+`--` 뒤에 둔다. Fleet(`cell_task_exec`)이 호출하는 wrapper 파일에서는 `exec`로 부른다. 그래야
+Fleet의 시간 초과 SIGKILL이 run에 직접 닿고, 아래 부모 사망 처리가 동작한다:
+
+```bash
+exec python3 ~/.local/share/rosy/omx-devices/current/deploy/robot/omx/observer_handoff.py run arm_a -- <세션 명령>
+```
+
+run은 관측기를 건드리기 전에 다음을 확인하고, 하나라도 어긋나면 69로 끝난다(아무것도 바꾸지 않음).
+- `omx-observer-arm_a.env`의 by-id 장치 링크가 해석된다.
+- 토픽이 bridge manifest의 그 팔 `joint_topic`과 같다(`omx-observation-bridge.env`의
+  `ROSY_WORKCELL_OBSERVATIONS`·`ROSY_OBSERVATION_WORKCELL`). `--joint-topic`을 주면 그 값도 같아야 한다.
+- 스냅샷 폴더가 bridge 유닛의 `ROSY_OBSERVATION_DIR`(`systemctl --user show -p Environment`)와 같다.
+  `ROSY_OBSERVATION_DIR`을 내보내지 않으면 bridge의 값을 쓴다.
+
+그다음 joint_tune_lock 규칙의 셀·팔 잠금과 팔 lease를 잡는다. lease를 새로 만들었는지는 lease 잠금 안에서
+`cell_arm_lease.claim(report_created=True)`이 정하고, 같은 소유자의 살아 있는 lease는 갱신만 하고 끝나도 남긴다
+(D-1035). `rosy-omx-observer@arm_a`를 정지한 뒤 `fuser`가 점유자 없음을 정상으로 답하고 `/proc/*/fd`에도
+점유자가 없을 때까지(5초) 기다린다. 링크가 끊겼거나 `fuser`가 오류를 내면 비점유로 보지 않는다.
+`fuser`와 `/proc` 검사는 같은 사용자(또는 root)의 프로세스만 보므로, 포트를 쓰는 관측기·bridge·세션은
+모두 같은 계정의 사용자 서비스여야 한다.
+
+세션은 같은 잠금을 쥔 채 새 프로세스 그룹으로 시작된다(열린 잠금 파일을 `ROSY_OMX_HELD_LOCKS`로 넘기고,
+세션의 `session_lock`이 그것을 다시 쓴다). Linux에서 그룹의 리더는 `observer_handoff.py _lead`이며
+`PR_SET_PDEATHSIG=SIGTERM`을 건다. run이 SIGKILL로 죽으면(Fleet 300초 시간 초과 포함) 리더가 SIGTERM을
+받아 그룹 전체에 전달하므로 세션이 감독 없이 남지 않는다. 이때 세션은 기존 중단 경로로 끝난다:
+`record_session`은 runner에 SIGINT를 보내고, `chunk_runner`는 `close_device`로 그 자리에서 토크를 끈다
+(접기 없음). SIGINT·SIGTERM·SIGHUP은 받을 때마다 리더를 거쳐 그룹 전체에 한 번씩 전달하고, 두 번째 신호에도
+정리로 건너뛰지 않는다. run은 그룹의 모든 프로세스가 끝날 때까지 기다리며 SIGKILL은 보내지 않는다. 그 뒤
+포트 반환을 다시 확인하고 잠금과 (run이 만든) lease를 놓은 뒤, 유닛이 enabled일 때만 관측기를 시작한다.
+관측기 MainPID가 `fuser`에 보여야 재개로 본다.
+
+stdout에는 세션의 출력만 그대로 나간다(`cell_task_exec`가 마지막 JSON 줄을 결과로 읽는다). 인계 기록은
+모두 stderr JSON이다. 관측기 복구 결과는 세션 결과를 바꾸지 않는다. 결과는 stderr와 상태 파일
+`~/.local/state/rosy/observer-handoff/<arm>.json`(`rosy.omx-observer-handoff.v1`: `session_code`,
+`observer` = resumed·left_disabled·failed·stayed_down, `error`)에만 남고, 파이프라인 게이트가 이 파일을 읽는다.
+종료 코드: 세션의 종료 코드(신호로 끝나면 128+신호). 취소 신호를 받았으면 세션이 무엇을 돌려주든 128+신호
+(SIGINT 130, SIGTERM 143, SIGHUP 129). 69는 인계 실패로 세션을 시작하지 않았다는 뜻이다. 71은 세션의
+프로세스가 `--group-timeout-s`(120초) 뒤에도 남아 관측기를 다시 띄우지 않았다는 뜻이다. run 자체가
+SIGKILL로 죽었으면 관측기는 멈춘 채 남는다. `observer_handoff.py release arm_a [--env-dir <폴더>]`가 포트
+비점유를 확인한 뒤 다시 띄운다(못 띄우면 70). 세션 중 스냅샷은 run이 내보낸 `ROSY_CHUNK_JOINT_TOPIC`으로
+chunk_runner가 쓰고(직접 부를 때는 `chunk_runner --joint-topic`, 기본 꺼짐), bridge는 세션 전체에서 발신자
+하나로 남는다.
+
 `workcell_observation_bridge.py`는 같은 호스트의 선택된 native snapshot만 읽는다.
 manifest의 topic 문자열은 로컬 키이며 ROS 발행·구독이나 DDS discovery를 시작하지 않는다(D-901).
 원본 capture 시간과 source별 최신값을 Fleet HTTPS와 기존 Vision WSS에 보낸다.

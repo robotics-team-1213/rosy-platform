@@ -138,6 +138,28 @@ class Guarded:
         return self.robot.get_observation()
 
 
+def snapshot_live(live, topic, calibration):
+    """Session-side half of the observer handoff (decision H4): while the stopped observer's port is
+    ours, the runner also writes this arm's radians to the same SnapshotChannel, so the bridge's one
+    sender keeps a fresh source. A failed write is observation loss, not a motion fault: Fleet shows
+    the gap and the session keeps moving."""
+    from core_common.observation_snapshot import SnapshotChannel
+    from arm_status_bridge import to_radians
+
+    channel = SnapshotChannel(topic)
+    ticks = {name: {"range_min": cal.range_min, "range_max": cal.range_max} for name, cal in calibration.items()}
+
+    def write(row):
+        live(row)
+        try:
+            channel.write("joints", json.dumps(to_radians(row["state"], ticks), allow_nan=False).encode(),
+                          captured_at=row["t"])
+        except (ValueError, OSError):
+            pass
+
+    return write
+
+
 def fifo_lines(path: Path):
     if not path.exists():
         os.mkfifo(path, 0o600)
@@ -182,7 +204,14 @@ def main(argv=None):
     parser.add_argument("--operating-profile", type=Path, help="per-device operating profile; unbound sessions cannot auto-pick")
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
     parser.add_argument("--load-model", type=Path, help="load-model.json (load_model.py): refuse a library whose holds are predicted risky")
+    parser.add_argument("--joint-topic", default=os.environ.get("ROSY_CHUNK_JOINT_TOPIC") or None,
+                        help="observer handoff: also write radians to this commissioning topic (the manifest's "
+                             "joint_topic) while the session owns the port; the session wrapper exports "
+                             "ROSY_CHUNK_JOINT_TOPIC instead of editing record_session. Default off")
     args = parser.parse_args(argv)
+    handed = os.environ.get("ROSY_CHUNK_JOINT_TOPIC") or None
+    if handed and args.joint_topic != handed:  # observer_handoff checked that topic: never another one (fail closed)
+        parser.error(f"--joint-topic {args.joint_topic!r} is not the handoff's checked topic {handed!r}")
     signals: list = []  # recorded, not raised: an interrupt folds or holds (chunk_runner_interrupt), never drops the arm
     __import__("chunk_runner_interrupt").install(signals)
     library = load_library(args.library)
@@ -241,6 +270,14 @@ def main(argv=None):
             except OSError:
                 if not signals:
                     raise
+
+        if args.joint_topic:  # default off: the flag is the session wrapper's handoff decision
+            foundation = str(Path(__file__).resolve().parents[3] / "contracts/foundation")
+            if foundation not in sys.path:
+                sys.path.append(foundation)
+            from hardware_observer import joint_topic
+
+            live = snapshot_live(live, joint_topic(args.joint_topic), robot.calibration)
 
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
                                   operating_profile=profile, params=params)
