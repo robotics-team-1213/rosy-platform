@@ -241,7 +241,7 @@ jobs:
 
       - name: Cache Pinky CPU torch wheel
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 (pinned commit)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
         with:
           path: /tmp/pip-cache-pinky
           key: ${{ runner.os }}-pinky-torch-2.7.1
@@ -254,7 +254,7 @@ jobs:
 
       - name: Cache OMX ACT CPU verification tools
         if: matrix.name == 'omx-act-cpu'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 (pinned commit)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
         with:
           path: /tmp/rosy-omx-act-cpu
           key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
