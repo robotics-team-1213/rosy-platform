@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import os
@@ -55,6 +56,14 @@ def _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis):
                     pass
 
 
+# Refusals the console explains as missing evidence or a held cell; malformed requests leave the ledger as it was.
+RECORDED_REFUSALS = frozenset({
+    "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "OMX_OWNER_EVIDENCE_UNAVAILABLE", "OMX_OWNER_EVIDENCE_MISMATCH",
+    "UNVERIFIED_CELL_COMPLETION", "OWNER_PRINCIPAL_NOT_REGISTERED", "HUMAN_HOLD_ACTIVE",
+    "CELL_BUSY_OR_HELD", "PREVIOUS_TIER_NOT_VERIFIED", "CELL_AB_EVIDENCE_NOT_ENABLED", "BED_CONFIRMATION_INVALID",
+})
+
+
 def install_cameras_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
     operator_guard = ctx.operator_guard
@@ -66,6 +75,32 @@ def install_cameras_routes(app, ctx) -> None:
     _ready_amr = ctx._ready_amr
     omx_evidence_fn = ctx.omx_evidence_fn
     active_map = ctx.active_map
+
+    # Last claim/complete refusal per task, for the console (GET /cell-tasks merges it into the row). Kept beside the
+    # ledger, not in it: a refused claim must leave the ledger file as it was.
+    refusals = app.state.cell_task_refusals = getattr(app.state, "cell_task_refusals", None) or {}
+
+    def _records_refusal(op):
+        """Remember the route's last evidence refusal for its task; the answer or error passes through as it is."""
+        def wrap(endpoint):
+            @functools.wraps(endpoint)
+            async def route(**kwargs):
+                try:
+                    result = await endpoint(**kwargs)
+                except HTTPException as exc:
+                    code = exc.detail.get("code") if isinstance(exc.detail, dict) else None
+                    if code in RECORDED_REFUSALS and kwargs.get("task_id") in app.state.omx_cell_tasks:
+                        refusals[kwargs["task_id"]] = {**exc.detail, "op": op, "at": round(time.time(), 3)}
+                    raise
+                task_id = (result.get("task") or {}).get("task_id") if op == "claim" else kwargs.get("task_id")
+                if op == "claim" and result.get("claimed") is False and result.get("reason") in RECORDED_REFUSALS:
+                    refusals[task_id] = {"code": result["reason"], "op": op, "at": round(time.time(), 3)}
+                elif op == "complete" or result.get("claimed") is True:
+                    refusals.pop(task_id, None)
+                return result
+            return route
+        return wrap
+
     # D-136: 이 모듈은 카메라 프레임을 서빙하지 않는다. 셀 카메라 미리보기는
     # POST /api/fleet/vision/lease -> Vision frame_path로만 얻는다(test_no_video_relay).
 
@@ -156,6 +191,7 @@ def install_cameras_routes(app, ctx) -> None:
         return {"ok": True, "cleared_arms": arms, "note": note, "arm_holds": app.state.arm_holds}
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=proposer_guard)
+    @_records_refusal("claim")
     async def claim_cell_task(request: Request):
         if app.state._pipeline_ledger_fault:
             raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
@@ -239,6 +275,7 @@ def install_cameras_routes(app, ctx) -> None:
         return {"claimed": True, "task": task, "handoff": handoff, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/complete", dependencies=proposer_guard)
+    @_records_refusal("complete")
     async def complete_cell_task(task_id: str, request: Request):
         if app.state._pipeline_ledger_fault:
             raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})

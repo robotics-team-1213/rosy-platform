@@ -25,7 +25,7 @@ COMMAND_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("POST", r"/api/v1/arm/(actions|stop)", "arm"),
     ("POST", r"/api/v1/teleop", "teleop"),
     ("POST", r"/api/v1/mode", "mode"),
-    ("POST", r"/api/v1/navigation/(goal|home|cancel)", "navigation"),
+    ("POST", r"/api/v1/navigation/(goal|bound-goal|line-handoff-goal|home|cancel)", "navigation"),
     ("POST", r"/api/v1/localization/initialpose", "navigation"),
     ("POST", r"/api/v1/motion/rotate_to", "navigation"),
     ("POST", r"/api/v1/localization/(mission|decision|suspect)", "mission"),

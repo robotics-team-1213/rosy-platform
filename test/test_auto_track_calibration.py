@@ -459,6 +459,18 @@ def test_pinned_places_and_edges_survive_the_traced_map():
     assert mod.unpinned_place_diff_m(current_places[:1], traced_places) == 0.0
 
 
+def test_pinned_drift_is_reported_for_pinned_places_with_a_traced_counterpart():
+    mod = _load_module()
+    current = [
+        {"id": "S3", "x": 0.745, "y": -0.207, "pinned": True},
+        {"id": "C1", "x": 1.0, "y": 1.0, "pinned": True},  # no traced counterpart
+        {"id": "J1", "x": 0.0, "y": 0.0},  # unpinned
+    ]
+    traced = [{"id": "S3", "x": 0.699, "y": -0.251}, {"id": "J1", "x": 0.5, "y": 0.0}]
+    assert mod.pinned_drift_m(current, traced) == {"S3": pytest.approx(0.0637, abs=1e-4)}
+    assert mod.pinned_drift_m([], traced) == {}
+
+
 def test_a_pinned_stop_keeps_its_stop_zone_and_approach_through_the_merge():
     # 2026-11-21 robot-7b named stop: a drawn zone and approach distance are a person's, like the point.
     mod = _load_module()
