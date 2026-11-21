@@ -154,8 +154,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   function paintUnitLinks() {
     const links = unitSummary ? childLinks(unitSummary, target) : [];
     unitLinks.replaceChildren(...links.map(link => {
-      const anchor = node("a", "", link.label);
-      anchor.className = "ui-action-link";
+      const anchor = node("a", link.label, "ui-action-link");
       anchor.dataset.kind = "quiet";
       anchor.rel = "noreferrer";
       anchor.href = link.href;
