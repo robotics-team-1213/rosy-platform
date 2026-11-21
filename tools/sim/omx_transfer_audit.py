@@ -168,7 +168,7 @@ def check_reset_evidence(start_path, joint_receipt, mujoco, isaac, capture, timi
 
 
 def check_wrist_evidence(evidence, layout_sha):
-    """Compare paired reprojections from held-out real captures for both wrist cameras."""
+    """Score supplied reprojections. Capture and fit provenance are reviewed separately."""
     raw = evidence.read_bytes()
     report = json.loads(raw)
     if report.get("schema") != "rosy.omx-wrist-holdout/1" or report.get("layout_sha256") != layout_sha:
@@ -209,7 +209,8 @@ def check_wrist_evidence(evidence, layout_sha):
         results[camera] = dict(calibration_sha256=row["calibration_sha256"], holdouts=residuals)
     improved = all(after < before for camera in results.values() for frame in camera["holdouts"]
                    for before, after in frame["rms_before_after_px"].values())
-    return dict(status="improved" if improved else "rejected", evidence_sha256=sha256(raw).hexdigest(), cameras=results)
+    return dict(status="reported_improvement" if improved else "rejected",
+                provenance="not_verified", evidence_sha256=sha256(raw).hexdigest(), cameras=results)
 
 
 def audit(render, capture, handoff, isaac_snapshot=None, *, paired_reset=None, wrist_evidence=None):
@@ -223,8 +224,7 @@ def audit(render, capture, handoff, isaac_snapshot=None, *, paired_reset=None, w
         timing["paired_reset"] = check_reset_evidence(*paired_reset, capture, timing, geometry)
     timing["wrist_alignment"] = (check_wrist_evidence(wrist_evidence, cfg["layout_sha256"]) if wrist_evidence
                                  else {"status": "awaiting_holdouts"})
-    if timing["wrist_alignment"]["status"] != "improved":
-        required.append("independent A/B wrist jaw and fixture reprojections")
+    required.append("independently verified A/B wrist jaw and fixture reprojections")
     return {
         "schema": "rosy.omx-cad194-transfer-audit/1",
         "source_sha": geometry["source_sha"],

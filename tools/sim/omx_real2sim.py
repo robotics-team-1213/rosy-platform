@@ -453,7 +453,7 @@ def main(argv=None):
         print(json.dumps(value, ensure_ascii=False))
         if a.paired_reset and not value["r2s"]["paired_reset"]["matched"]:
             return 1
-        if a.wrist_evidence and value["r2s"]["wrist_alignment"]["status"] != "improved":
+        if a.wrist_evidence and value["r2s"]["wrist_alignment"]["status"] == "rejected":
             return 1
     else:
         print(report(a.out))

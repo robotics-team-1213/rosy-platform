@@ -103,7 +103,8 @@ def test_wrist_requires_separate_holdouts_and_improvement_in_both_feature_types(
     data = dict(schema="rosy.omx-wrist-holdout/1", layout_sha256="1" * 64,
                 cameras={"a_wrist": row, "b_wrist": row})
     path = write_json(tmp_path / "wrist.json", data)
-    assert check_wrist_evidence(path, data["layout_sha256"])["status"] == "improved"
+    evidence = check_wrist_evidence(path, data["layout_sha256"])
+    assert (evidence["status"], evidence["provenance"]) == ("reported_improvement", "not_verified")
 
     row["holdouts"][1]["fixture"] = [dict(point, candidate=[57, 100]), other]
     write_json(path, data)
