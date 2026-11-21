@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import BODY_FIT, browser_tests_enabled, goto_with_network_change_retry, open_token_access, safe_listener
+from browser_harness import (
+    BODY_FIT, browser_tests_enabled, goto_with_network_change_retry, open_token_access, safe_listener, shared_browser,
+)
 
 from test_site_map_trip import _app, _on_ring_s
 
@@ -442,8 +444,6 @@ def test_import_camera_map_draft_never_activates(page_site):
 
 @pytest.fixture
 def page_site(tmp_path, request):
-    from playwright.sync_api import sync_playwright
-
     client, tasks, store, robot = _app(tmp_path, imported=getattr(request, 'param', True))
     if store.active() is not None:
         robot._state = _on_ring_s(store)
@@ -458,15 +458,13 @@ def page_site(tmp_path, request):
         while not server.started and worker.is_alive() and time.monotonic() < deadline:
             time.sleep(0.02)
         assert server.started
-        with sync_playwright() as toolkit:
-            browser = toolkit.chromium.launch(headless=True,
-                                              args=[f"--explicitly-allowed-ports={listener.getsockname()[1]}"])
-            try:
-                page = browser.new_page(viewport={"width": 1440, "height": 1000})
-                goto_with_network_change_retry(page, origin + "/console/site-map")
-                yield page, store, robot
-            finally:
-                browser.close()
+        context = shared_browser().new_context(viewport={"width": 1440, "height": 1000})
+        try:
+            page = context.new_page()
+            goto_with_network_change_retry(page, origin + "/console/site-map")
+            yield page, store, robot
+        finally:
+            context.close()
     finally:
         server.should_exit = True
         worker.join(timeout=20)
