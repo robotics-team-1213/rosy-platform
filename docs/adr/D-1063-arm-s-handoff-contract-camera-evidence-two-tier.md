@@ -2,7 +2,7 @@
 
 **Status:** Proposed (2026-11-21, 사용자 요청 「보충 ADR로 다시 써서 올려」). 승인: 인계 계약 담당 장원종, OMX 김승용·서정민. 구현·실물 수용은 별도다.
 
-**보충하는 것:** `operations/fleet/fleet/pipeline/cell_fleet_contract.py`의 `rosy.fleet-r-cell-contract.v1`(2026-11-12 `01988565d4`·`ae7a2ed52c`, 이 계약을 정한 ADR은 없다)과 그 셀 쪽 실행 `deploy/robot/omx/cell_fleet_handoff.py`의 `run_contract_handoff_stage`. **관련:** D-797 §4(Proposed, 인계 장벽), D-328 §2·§4(근거 두 가지), D-792(카메라 설정 기준), D-933(공급암 S 카메라 좌표), D-977 Decision 4·5. **대체:** 게시되지 않은 로컬 초안 두 개(2026-11-09 「D-998 판정 성공 뒤 Pinky 자동 출발」, 2026-11-16 「D-1011 컨베이어 끝 인계 관측」, 둘 다 번호가 origin에서 다른 ADR로 쓰여 버렸다). 이 ADR이 그 둘을 대신한다.
+**보충하는 것:** `operations/fleet/fleet/pipeline/cell_fleet_contract.py`의 `rosy.fleet-r-cell-contract.v1`(2026-11 장원종, 이 계약을 정한 ADR은 없다)과 그 셀 쪽 실행 `deploy/robot/omx/cell_fleet_handoff.py`의 `run_contract_handoff_stage`. **관련:** D-797 §4(Proposed, 인계 장벽), D-328 §2·§4(근거 두 가지), D-792(카메라 설정 기준), D-933(공급암 S 카메라 좌표), D-977 Decision 4·5. **대체:** 게시되지 않은 로컬 초안 두 개(2026-11-09 「D-998 판정 성공 뒤 Pinky 자동 출발」, 2026-11-16 「D-1011 컨베이어 끝 인계 관측」, 둘 다 번호가 origin에서 다른 ADR로 쓰여 버렸다). 이 ADR이 그 둘을 대신한다.
 
 ### Context
 
@@ -15,11 +15,11 @@
 
 ### Decision
 
-1. **`TRANSFER_DONE`은 실물 관측 두 가지가 다 있을 때만 낸다(D-328 §2).** 공급암 S가 컨테이너 하나를 옮긴 뒤:
+1. **`TRANSFER_DONE`은 실물 관측 두 가지가 다 있을 때만 낸다(D-328 §2·§4).** 공급암 S가 컨테이너 하나를 옮긴 뒤:
    - (i) 셀의 권위 있는 결과: 그 시도의 잡기 판정(`cell_grasp_judges.telemetry_judge` 또는 같은 의미의 집게 쥠)이 성공이다.
    - (ii) `top` 카메라 관측: 시도 전·후 프레임에서 `pinky_tray` 구역의 그 컨테이너 자리가 바뀌었고, 컨베이어 놓기 구역에 새 컨테이너가 보인다.
    - 둘 중 하나가 없거나 판정이 「알 수 없음」이면 `TRANSFER_DONE`을 내지 않고 `HUMAN_HOLD`로 둔다(motion inhibit 유지). 운영자 확인은 (i)·(ii)를 대신하지 않는다(D-328 §4, D-977 Decision 5).
-2. **`RELEASED`는 짐칸이 빈 것을 카메라로 본 뒤에만 낸다.** `TRANSFER_DONE` 뒤 `top` 카메라가 `pinky_tray` 구역에 컨테이너가 남지 않았음을 보면 `RELEASED`다. 남아 있으면(2단의 아래 컨테이너) 단계는 `CLAIMED`로 돌아가 다음 컨테이너를 옮긴다. `RELEASED` 전에는 `amr_can_depart`가 거짓이다(`evaluate_handoff_gate`는 바꾸지 않는다).
+2. **`RELEASED`는 짐칸이 빈 것을 카메라로 본 뒤에만 낸다.** `TRANSFER_DONE` 뒤 `top` 카메라가 `pinky_tray` 구역에 컨테이너가 남지 않았음을 보면 `RELEASED`다. 남아 있으면(2단의 아래 컨테이너) 단계는 `CLAIMED`로 돌아가 다음 컨테이너를 옮긴다. `RELEASED` 전에는 `amr_can_depart`가 거짓이다(`evaluate_handoff_gate`는 바꾸지 않는다). `TRANSFER_DONE`은 `INHIBIT_MOTION_PHASES`에 없으므로, 짐칸에 컨테이너가 남아 있는 동안 셀은 영수증의 `amr_motion_inhibited`를 참으로 낸다(그 값만 읽는 소비자가 짐칸을 빈 것으로 보지 않게 한다. 필드는 이미 있다).
 3. **영수증에 관측을 묶는다.** `goal_evidence_digest`는 시도 전·후 `top` 프레임의 해시, 판정 결과·사유, 카메라 설정 기준 revision(D-792)을 함께 담는다. `physical_completion`은 1(i)·(ii)를 다 본 실물 단계에서만 참이고, 계산만 한 단계(`model_only`)는 지금처럼 거짓으로 남는다. 계약 이름·필드는 바꾸지 않는다(`rosy.fleet-r-cell-contract.v1` 그대로). 다른 셀(A·B)은 이 ADR의 범위가 아니다.
 4. **겹치는 부분은 Rosy 것을 쓰고, 판정 규칙만 옮긴다.** 구역은 `cell_spec_recovery_fsm`의 ROI를, 집게 쥠은 `cell_grasp_judges`를 그대로 쓴다. Rosy 조각이 실물 프레임에서 맞지 않으면 그 조각을 고친다(새 사본을 만들지 않는다). 새로 옮기는 것은 시도 전·후 비교, 컨베이어 놓임 검출, 짐칸 빈 판정(2단), 세 색 컨테이너 검출이다. 위치는 `deploy/robot/omx/`의 공급암 S 셀 코드 옆이다(D-427·D-429, 새 최상위 폴더 없음).
 5. **Pinky 출발과 다음 하역은 Fleet이 정한다.** 판정 코드나 정책 실행기는 Pinky goal이나 팔 Action을 직접 내지 않는다. 판정은 영수증 단계와 다이제스트로만 나간다(로컬 초안 D-998의 「판정 성공 뒤 자동 출발」은 고르지 않는다).
@@ -28,7 +28,7 @@
 
 - 계약 버전 올리기·새 Fleet API. 지금 필드로 충분하다.
 - 다른 셀(A·B) 팔레트 적재의 완료 근거.
-- 실물 OMX goal 수용 경로 열기(D-977 Decision 4).
+- 실물 수용(D-797 §8 S5) 절차를 대신하는 것. 이 ADR은 완료 근거만 정한다.
 
 ### 열린 항목
 
