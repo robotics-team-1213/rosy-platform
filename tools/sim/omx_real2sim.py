@@ -368,6 +368,12 @@ def main(argv=None):
     pl = sub.add_parser("pipeline"); pl.add_argument("run"); pl.add_argument("--prev")
     pl.add_argument("--camera-moved-ok", action="store_true")
     pl.add_argument("--choice", action="append", default=[])
+    transfer = sub.add_parser("transfer-audit", help="bind CAD194 camera, MuJoCo and Isaac evidence")
+    transfer.add_argument("--render", required=True, type=Path)
+    transfer.add_argument("--capture", required=True, type=Path)
+    transfer.add_argument("--handoff", required=True, type=Path)
+    transfer.add_argument("--isaac-snapshot", type=Path)
+    transfer.add_argument("--out", required=True, type=Path)
     a = p.parse_args(argv)
     if a.cmd == "capture":
         if not a.site:
@@ -394,6 +400,11 @@ def main(argv=None):
         print(json.dumps(dict(id=made["id"], candidates=made["candidates"], unit=made["unit"]), ensure_ascii=False))
     elif a.cmd == "pipeline":
         print(json.dumps(run_pipeline(a.run, a.prev, a.camera_moved_ok, a.choice), indent=1))
+    elif a.cmd == "transfer-audit":
+        from omx_transfer_audit import audit
+        value = audit(a.render, a.capture, a.handoff, a.isaac_snapshot)
+        a.out.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps(value, ensure_ascii=False))
     else:
         print(report(a.out))
     return 0
