@@ -171,7 +171,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
     if job.get("moving") and any(
         checked.get(name, opt_checked.get(name, "")).startswith(("pinky", "bed"))
-        for name in ("source", "site")
+        for name in ("source", "dest", "site")  # loading onto a bed moves over it too
     ):
         raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     args = []

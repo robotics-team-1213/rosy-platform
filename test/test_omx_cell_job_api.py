@@ -27,6 +27,7 @@ def _make_workdir(tmp_path: Path) -> Path:
         ("auto_pick", {"source": "pinky_42"}, 400),
         ("auto_pick", {"source": "bed-1"}, 400),
         ("auto_pick", {"source": "inbound"}, 202),
+        ("auto_pick", {"source": "belt", "dest": "pinky"}, 400),
         ("auto_pick_dry_run", {"source": "pinky"}, 202),
         ("pivot_near", {"site": "bed-1"}, 400),
     ],
@@ -39,6 +40,7 @@ def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, j
         params.update(x=0.0, y=0.0)
     else:
         params.update(catalog="catalog-live.json", roi=[0, 0, 10, 10], dest="outbound")
+    params.update(site_params)
 
     wd = _make_workdir(tmp_path)
     popen = Mock()
