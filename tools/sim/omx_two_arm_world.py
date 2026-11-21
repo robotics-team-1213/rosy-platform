@@ -196,6 +196,7 @@ class World:
                 physics.add_actuator(spec, p + name, phys.joint(arm, name))
             for parent, child in self.pairs[arm]:
                 spec.add_exclude(bodyname1=parent, bodyname2=child)
+            spec.add_exclude(bodyname1=p + "link1", bodyname2=p + "link3")  # folded wait pose (j2=-1.95, j3=+1.67) overlaps convex hulls by 0.3 mm, stalling park settle for 90 f
             spec.add_exclude(bodyname1=p + "link6", bodyname2=p + "link7")
             spec.add_equality(type=mujoco.mjtEq.mjEQ_JOINT, name1=p + "gripper_joint_2", name2=p + "gripper_joint_1", data=([0, -1, 0, 0, 0] + [0] * 7)[:mujoco.mjNEQDATA])
             if self.wrist != "none":

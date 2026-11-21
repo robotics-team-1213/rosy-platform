@@ -6,7 +6,8 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const { createRoster, mustExpand } = await import("../../../../applications/fleet/web/roster.js");
-const { groupRows, groupText, openDecisionKey, queueRowText } = await import("../../../../applications/fleet/web/queues.js");
+const { groupRows, groupText, openDecisionKey, queueRowText, createQueues } = await import("../../../../applications/fleet/web/queues.js");
+const { createInboxPanel } = await import("../../../../applications/fleet/web/inbox.js");
 const { deadlockView, replanView } = await import("../../../../applications/fleet/web/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
@@ -118,4 +119,119 @@ test("one warn cause on many robots is one row; decisions and single causes stay
   assert.equal(groupText(battery, out[0].group),
     "배터리 값 멈춤 — 센서 연결 확인 · 5대 (rosy_001 · rosy_003 · rosy_004 외 2대)");
   assert.equal(groupText(": 연결 끊김", ["a", "b"]), "연결 끊김 · 2대 (a · b)");
+});
+
+// B-1 — a bare-bones element good enough for fillQueues/syncRows and the inbox reader: tags, .class
+// selectors, datasets and text nodes. Real-browser behaviour (open <details>, focus) has Chromium coverage.
+class El {
+  constructor(tag) {
+    this.tagName = tag.toUpperCase(); this.id = ""; this.className = ""; this.text = ""; this.parentElement = null;
+    this.children = []; this.dataset = {}; this.hidden = false; this.attributes = new Map(); this.listeners = {};
+  }
+  append(...nodes) { for (const one of nodes) { if (typeof one !== "string") one.parentElement = this; this.children.push(one); } }
+  replaceChildren(...nodes) { for (const one of nodes) if (typeof one !== "string") one.parentElement = this; this.children = [...nodes]; }
+  get childElementCount() { return this.children.length; }
+  get firstElementChild() { return this.children.find((child) => child.nodeType !== 3) ?? null; }
+  get textContent() { return this.text + this.children.map((child) => child.textContent).join(""); }
+  set textContent(value) { this.children = []; this.text = String(value); }
+  getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null; }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  removeAttribute(name) { this.attributes.delete(name); }
+  addEventListener(type, handler) { this.listeners[type] = handler; }
+  focus() {}
+  matches(selector) {
+    return selector.startsWith("#") ? this.id === selector.slice(1)
+      : selector.startsWith(".") ? this.className.split(/\s+/).includes(selector.slice(1))
+      : this.tagName === selector.toUpperCase();
+  }
+  querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
+  querySelectorAll(selector) {
+    const found = [];
+    for (const child of this.children) {
+      if (child.nodeType === 3) continue;
+      if (child.matches(selector)) found.push(child);
+      found.push(...child.querySelectorAll(selector));
+    }
+    return found;
+  }
+}
+
+function fakeConsole(t) {
+  const nodes = new Map();
+  const make = (tag, id) => { const el = new El(tag); el.id = id; nodes.set(id, el); return el; };
+  const panel = new El("div"); panel.className = "queues-panel";
+  for (const list of ["warning-list", "critical-list"]) {
+    const box = new El("div"); box.append(make("ul", list)); panel.append(box);
+  }
+  for (const head of ["warning-head", "critical-head"]) make("div", head).append(new El("b"), new El("small"));
+  const document = {
+    createElement: (tag) => new El(tag),
+    createTextNode: (text) => ({nodeType: 3, textContent: text}),
+    getElementById: (id) => nodes.get(id) ?? make("div", id),
+    querySelector: (selector) => [panel, ...nodes.values()].find((node) => node.matches(selector)) ?? null,
+    querySelectorAll(selector) {  // exactly the inbox read: '#critical-list > li, #warning-list > li'
+      const rows = [];
+      for (const part of selector.split(",")) {
+        const hit = part.trim().match(/^#([\w-]+) > (\w+)$/);
+        if (hit) rows.push(...(nodes.get(hit[1])?.children ?? []).filter((child) => child.matches?.(hit[2])));
+      }
+      return rows;
+    },
+  };
+  const before = {document: globalThis.document, location: globalThis.location};
+  globalThis.document = document;
+  globalThis.location = {search: ""};
+  t.after(() => { globalThis.document = before.document; globalThis.location = before.location; });
+  return {el: (id) => document.getElementById(id)};
+}
+
+const STALE_ROBOT = (age) => ({ robot_id: "a", online: true, state_age_s: age, state: { safety: { estop: false },
+  battery_status: { level: "warning" }, docking: { state: "DOCK_FAILED" },
+  capabilities_degraded: ["cam"], navigation: "FAILED" } });
+const STALE_VIEW = () => ({ robots: [], formation: null, stateUnavailable: false,
+  receivedAtMs: Date.now() - 1000, trafficTrips: [], endedTrips: [] });
+
+test("B-1: a stale robot renders one folded rollup row; an open <details> survives the next fillQueues", (t) => {
+  const {el} = fakeConsole(t);
+  const view = STALE_VIEW();
+  const { fillQueues } = createQueues({ scope: {}, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [STALE_ROBOT(6)];
+  fillQueues();
+  const list = el("warning-list");
+  assert.equal(list.children.length, 1);  // not four separate battery/dock/degraded/goal rows
+  const li = list.children[0], details = li.querySelector("details"), summary = li.querySelector("summary");
+  assert.equal(li.dataset.folded, "1");
+  assert.equal(li.dataset.foldedKind, "배터리 부족|도킹 실패|성능 저하 [cam]|목표 실패");
+  assert.match(summary.textContent, /^a: 상태 오래됨 — \d+초 전 값 · 지연 경고 4건$/);
+  assert.equal(li.querySelector(".hint").textContent,
+    "이전 스냅샷 경고: 배터리 부족 · 도킹 실패 · 성능 저하 [cam] · 목표 실패");
+  details.open = true;  // the operator reads the causes
+  view.robots = [STALE_ROBOT(8)];  // 1 Hz later the same robot is only older
+  fillQueues();
+  assert.equal(list.children[0], li);  // the same li, summary and open state survive the repaint
+  assert.equal(li.querySelector("summary"), summary);
+  assert.equal(li.querySelector("details").open, true);
+  assert.match(summary.textContent, /지연 경고 4건$/);
+});
+
+test("B-1: the inbox reads the folded summary line; an age tick stays read, a changed cause set is unread", (t) => {
+  const {el} = fakeConsole(t);
+  const view = STALE_VIEW();
+  const { fillQueues } = createQueues({ scope: {}, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [STALE_ROBOT(6)];
+  fillQueues();
+  const inbox = createInboxPanel({ scope: { listen() {} }, el, readView: () => view });
+  inbox.refresh();
+  inbox.select("inbox");  // the operator reads it
+  assert.equal(el("header-unread").textContent, "");
+  inbox.select("status");  // back to the status tab, where a new exception can be unread again
+  view.robots = [STALE_ROBOT(9)];  // only the age moved
+  fillQueues();
+  inbox.refresh();
+  assert.equal(el("header-unread").textContent, "");
+  view.robots = [{ ...STALE_ROBOT(9), state: { ...STALE_ROBOT(9).state, battery_status: { level: "ok" } } }];
+  fillQueues();
+  inbox.refresh();  // the folded cause set changed: a genuinely new exception
+  assert.equal(el("header-unread").textContent, "1");
+  assert.match(el("inbox-current").textContent, /지연 경고 3건/);
 });

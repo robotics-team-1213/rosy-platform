@@ -5,9 +5,10 @@ import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill } from "./localization-badge.js";
 import { roadPolylineBetween } from "/console/assets/guide-layer.js";
 import { planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
+import { gridCellOf } from "./map-datum.js";
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
-  toWorld, refreshGuide, queuedReason, drawMap = () => {}, onSelectRobot = () => {} }) {
+  toWorld, refreshGuide, queuedReason, drawMap = () => {}, scheduleDraw = drawMap, onSelectRobot = () => {} }) {
   function disarmGoal(reason) {
     view.selected = null; view.cursor = null; view.hoverWorld = null;
     const canvas = el("map-canvas");
@@ -306,7 +307,8 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       title = `🤖 ${host} (${r.robot_id})`;
       badge = r.online !== false ? "온라인 · 실측 10.4cm" : "오프라인";
       badgeTone = r.online !== false ? "good" : "warn";
-      lines.push(["정밀 좌표 · 방위", `(${(p.x ?? 0).toFixed(3)}, ${(p.y ?? 0).toFixed(3)}) m · HEAD ${deg} (±${(p.u_m ?? 0.02).toFixed(2)}m)`]);
+      const cell = Number.isFinite(p.x) && Number.isFinite(p.y) ? ` · 칸 ${gridCellOf(p.x, p.y).label}` : "";
+      lines.push(["정밀 좌표 · 방위", `(${(p.x ?? 0).toFixed(3)}, ${(p.y ?? 0).toFixed(3)}) m · HEAD ${deg} (±${(p.u_m ?? 0.02).toFixed(2)}m)${cell}`]);
       lines.push(["차로 · 센서", `${lane ? lane.edge_id : "자유구역"} · LiDAR/Cam/IMU/Odom ${readyCount}/${totalSensors} 정상`]);
       bars.push(["🔋 배터리", `${pctNum}% · ${volt}`, pctNum, pctNum >= 50 ? "good" : pctNum >= 25 ? "warn" : "crit"]);
       bars.push(["🛰️ 차로 정렬", `${alignPct}% (오차 ${(latM * 100).toFixed(1)}cm)`, alignPct, alignPct >= 75 ? "info" : "warn"]);
@@ -338,7 +340,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       const isCharger = String(pl.id).startsWith("C");
       title = `📍 ${pl.id} · ${pl.name || pl.id}`;
       badge = isCharger ? "충전 스테이션" : (String(pl.id).startsWith("P") ? "대기·분기점" : "작업 정류장");
-      lines.push(["지도 좌표 · 도로", `X ${pl.x.toFixed(3)} m, Y ${pl.y.toFixed(3)} m · ${edgeDesc}`]);
+      lines.push(["지도 좌표 · 도로", `X ${pl.x.toFixed(3)} m, Y ${pl.y.toFixed(3)} m · 칸 ${gridCellOf(pl.x, pl.y).label} · ${edgeDesc}`]);
       if (road) {
         const via = road.places?.length ? road.places.join(" → ") : pl.id;
         lines.push([`${activeId} 도로 경로`, `거리 ${road.length_m.toFixed(2)} m · 경유: ${via}`]);
@@ -378,14 +380,27 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     card.hidden = false;
   }
 
+  function clearMapHover() {
+    if (view.pointerWorld || view.hoverWorld || view.hoverEntity) {
+      view.pointerWorld = null; view.hoverWorld = null; view.hoverEntity = null;
+      const readout = el("map-cursor-readout");
+      if (readout) { readout.hidden = true; readout.textContent = ""; }
+      renderHoverCard(null);
+      scheduleDraw();
+    }
+  }
+
   pageScope.listen(el("map-canvas"), "pointermove", (event) => {
-    if (!view.map && !view.siteMap) return;
-    const world = canvasWorld(event);
-    if (!world) {
-      if (view.hoverWorld || view.hoverEntity) {
-        view.hoverWorld = null; view.hoverEntity = null; renderHoverCard(null); drawMap();
-      }
-      return;
+    const world = (view.map || view.siteMap) && canvasWorld(event);
+    if (!world) { clearMapHover(); return; }
+    const {x, y} = world;
+    view.pointerWorld = {x, y};
+    const readout = el("map-cursor-readout");
+    if (readout) {
+      const signed = (value) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
+      const next = `X ${signed(x)} m · Y ${signed(y)} m · 칸 ${gridCellOf(x, y).label}`;
+      if (readout.textContent !== next) readout.textContent = next;
+      readout.hidden = false;
     }
     const places = view.activeSiteMap?.map?.places || [];
     let bestPlace = null, bestDist = 0.13;
@@ -415,13 +430,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     view.hoverEntity = hoverEntity;
     view.hoverWorld = { x: bestPlace ? bestPlace.x : world.x, y: bestPlace ? bestPlace.y : world.y, place: bestPlace };
     renderHoverCard(hoverEntity);
-    drawMap();
+    scheduleDraw();
   });
-  pageScope.listen(el("map-canvas"), "pointerleave", () => {
-    if (view.hoverWorld || view.hoverEntity) {
-      view.hoverWorld = null; view.hoverEntity = null; renderHoverCard(null); drawMap();
-    }
-  });
+  pageScope.listen(el("map-canvas"), "pointerleave", clearMapHover);
   pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
     if (!view.pinning || (!view.map && !view.siteMap)) return;
     pinStart = canvasWorld(event);

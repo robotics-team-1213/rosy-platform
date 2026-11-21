@@ -143,6 +143,21 @@ test("the plane feed drops a frame at 3000 ms age and backs off after errors and
   assert.equal(h.fetches(), 4);
 });
 
+test("the plane feed retains the capture time and skips the displayed sequence, including zero", async (t) => {
+  const oldImage = globalThis.Image;
+  globalThis.Image = class { constructor() { this.naturalWidth = 200; this.naturalHeight = 100; } decode() { return Promise.resolve(); } };
+  t.after(() => { globalThis.Image = oldImage; });
+  const h = feedHarness([live({seq: 0}), live({seq: 1})]);
+  await h.feed.refresh(true, 0);
+  const first = h.feed.current();
+  assert.equal(first.seq, 0);
+  h.advance(150);
+  await h.feed.refresh(true, "0");
+  assert.equal(h.fetches(), 1);
+  await h.feed.refresh(true, 1);
+  assert.equal(h.feed.current().capturedAtMs - first.capturedAtMs, 150);
+});
+
 test("the plane feed rejects a picture that does not match its rectangle", async (t) => {
   const OldImage = globalThis.Image;
   globalThis.Image = class { constructor() { this.naturalWidth = 300; this.naturalHeight = 100; } decode() { return Promise.resolve(); } };

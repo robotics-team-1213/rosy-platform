@@ -2,8 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMapView } from '../../../../applications/fleet/web/map/map-view.js';
 
-test('an active camera map keeps its coordinate view when a robot starts serving a grid', async () => {
-  const ctx = new Proxy({}, { get: (_, key) => key === 'measureText' ? () => ({ width: 10 }) : () => {} });
+async function verifyMapView(useCache) {
+  let staticPaints = 0, clears = 0;
+  const makeContext = (methods) => new Proxy(methods, {
+    get: (target, key) => target[key] ?? (key === 'measureText' ? () => ({width: 10}) : () => {}),
+  });
+  const ctx = makeContext({clearRect: () => { clears += 1; }});
+  const off = makeContext({stroke: () => { staticPaints += 1; }});
   const elements = new Map();
   const el = (id) => {
     if (!elements.has(id)) elements.set(id, {
@@ -17,8 +22,13 @@ test('an active camera map keeps its coordinate view when a robot starts serving
   };
   const previous = globalThis.window;
   const previousDocument = globalThis.document;
-  globalThis.document = {createElement: () => ({}), getElementById: () => null};
-  globalThis.window = { devicePixelRatio: 1, RosyPalette: {
+  globalThis.document = {
+    createElement: () => useCache ? {getContext: () => off} : {},
+    getElementById: () => null, documentElement: {dataset: {theme: 'dark'}},
+  };
+  const frames = [];
+  globalThis.window = {devicePixelRatio: 1,
+    requestAnimationFrame(fn) { frames.push(fn); return frames.length; }, RosyPalette: {
     cssColor: () => '#000', canvasFont: () => '12px sans-serif',
   } };
   try {
@@ -45,9 +55,28 @@ test('an active camera map keeps its coordinate view when a robot starts serving
     assert.equal(el('map-stage').dataset.mapState, 'site');
     assert.equal(view.map, null);
     assert.ok(!calls.includes('/api/fleet/map'));
+    while (frames.length) frames.shift()();
+    const before = {staticPaints, clears};
+    view.pointerWorld = {x: 0.2, y: 0.2};
+    map.scheduleDraw();
+    map.scheduleDraw();
+    assert.equal(frames.length, 1);
+    assert.equal(clears, before.clears);
+    frames.shift()();
+    assert.equal(clears, before.clears + 1);
+    assert.equal(staticPaints, before.staticPaints);
+    if (useCache) {
+      assert.ok(staticPaints > 0);
+      document.documentElement.dataset.theme = 'light';
+      map.draw();
+      assert.ok(staticPaints > before.staticPaints);
+    }
     el('map-traffic-status').rows = [{textContent: 'green'}];
     view.siteMap = null;
     map.draw();
     assert.equal(el('map-traffic-status').rows[0].textContent, '교통 상태 대기');
   } finally { globalThis.window = previous; globalThis.document = previousDocument; }
-});
+}
+
+test('an active camera map keeps its coordinate view with a stub canvas', () => verifyMapView(false));
+test('the site map reuses its static layer and batches paints', () => verifyMapView(true));

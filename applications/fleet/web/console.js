@@ -288,6 +288,7 @@ const { disarmGoal, focusGoalButton, commitWorldGoal, clearPinStart } = createCo
   refreshGuide: () => mapView.refreshGuide?.(),
   queuedReason: (result) => roster.queuedReason(result),
   drawMap: () => mapView.draw(),
+  scheduleDraw: () => mapView.scheduleDraw(),
   onSelectRobot: (robotId) => roster.openCard(robotId),
 });
 view.dispatchGoalToPoint = (point, placeLabel = "", placeId = "") => commitWorldGoal(point, placeLabel, placeId);

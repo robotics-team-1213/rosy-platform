@@ -29,8 +29,10 @@ export function createInboxPanel({scope, el, readView}) {
       const key = row.dataset.key;
       if (!key) continue;
       keys.add(key);
-      const text = (row.querySelector('.queue-row') || row).textContent.trim();
-      const signature = text.replace(/\d+/g, "#");
+      // B-1: a folded rollup is read from its summary line; the folded causes live in dataset.foldedKind,
+      // so an age tick keeps the signature (no unread bump) but a changed cause set flips it.
+      const text = (row.querySelector('.queue-row') || row.querySelector('summary') || row).textContent.trim();
+      const signature = `${text.replace(/\d+/g, "#")}${row.dataset.foldedKind ? `|${row.dataset.foldedKind}` : ""}`;
       const old = inboxAttention.get(key);
       if (!old || old.signature !== signature) inboxAttention.set(key, {signature, unread: true});
       const item = document.createElement("li"), link = document.createElement("a");
