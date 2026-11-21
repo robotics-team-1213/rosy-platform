@@ -410,6 +410,8 @@ def main(argv=None):
     transfer.add_argument("--capture", required=True, type=Path)
     transfer.add_argument("--handoff", required=True, type=Path)
     transfer.add_argument("--isaac-snapshot", type=Path)
+    transfer.add_argument("--paired-reset", nargs=4, type=Path,
+                          metavar=("START", "JOINT_CALIBRATION", "MUJOCO_RESET", "ISAAC_RESET"))
     transfer.add_argument("--out", required=True, type=Path)
     a = p.parse_args(argv)
     if a.cmd == "capture":
@@ -444,9 +446,11 @@ def main(argv=None):
         print(json.dumps(run_pipeline(a.run, a.prev, a.camera_moved_ok, choices), indent=1))
     elif a.cmd == "transfer-audit":
         from omx_transfer_audit import audit
-        value = audit(a.render, a.capture, a.handoff, a.isaac_snapshot)
+        value = audit(a.render, a.capture, a.handoff, a.isaac_snapshot, paired_reset=a.paired_reset)
         a.out.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(value, ensure_ascii=False))
+        if a.paired_reset and not value["r2s"]["paired_reset"]["matched"]:
+            return 1
     else:
         print(report(a.out))
     return 0

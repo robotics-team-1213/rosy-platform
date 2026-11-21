@@ -380,10 +380,10 @@ class World:
         self.body_name = [m.body(i).name for i in range(m.nbody)]
         self.geom_name = [m.geom(i).name for i in range(m.ngeom)]
 
-    def reset(self):
+    def reset(self, initial_joints=None):
         data = mujoco.MjData(self.model)
         for arm in PREFIX:
-            home = self.layout.arms[arm].wait
+            home = self.layout.arms[arm].wait if initial_joints is None else initial_joints[arm]
             data.qpos[self.q[arm]] = home
             data.qpos[self.mimic[arm]] = -home[5]
             data.ctrl[self.act[arm]] = home

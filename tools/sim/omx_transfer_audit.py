@@ -2,6 +2,7 @@
 from hashlib import sha256
 import json
 import math
+from pathlib import Path
 
 from PIL import Image
 from omx_ladder import read_ppo_snapshot, judge_isaac_stage
@@ -148,13 +149,32 @@ def check_ppo(snapshot, cfg, source_sha):
                 checkpoint_sha256=checkpoint["sha256"], **result["result"])
 
 
-def audit(render, capture, handoff, isaac_snapshot=None):
+def check_reset_evidence(start_path, joint_receipt, mujoco, isaac, capture, timing, geometry):
+    from omx_paired_reset import check_readbacks, prepare_start, read_start
+    import yaml
+
+    profile = Path(__file__).resolve().parents[2] / "deploy/robot/omx/sim/cell_profile.yaml"
+    limits = yaml.safe_load(profile.read_text(encoding="utf-8"))
+    accepted = prepare_start(capture, joint_receipt, timing, geometry, geometry["layout_sha256"], limits)
+    state = read_start(start_path, geometry["layout_sha256"], limits)
+    if any(state[key] != value for key, value in accepted.items()):
+        raise ValueError("paired reset source does not match the camera or joint calibration receipt")
+    sdk_readback = load(isaac)
+    if sdk_readback.get("sdk_version") != "6.2.0.0":
+        raise ValueError("paired reset requires Isaac Sim 6.2 runtime readback")
+    return dict(check_readbacks(state, load(mujoco), sdk_readback), input_sha256=state["input_sha256"],
+                scope="simulation joint readbacks at reset; spatial and first-pick agreement still unverified")
+
+
+def audit(render, capture, handoff, isaac_snapshot=None, *, paired_reset=None):
     cfg, geometry, timing = check_render(render, capture, load(handoff))
     ppo = (check_ppo(isaac_snapshot, cfg, geometry["source_sha"])
            if isaac_snapshot else {"status": "not_run"})
     required = ["approved camera calibration", "calibrated A/B pose alignment"]
     if "joint_observation" not in timing:
         required.append("exposure-bound A/B joint evidence")
+    if paired_reset:
+        timing["paired_reset"] = check_reset_evidence(*paired_reset, capture, timing, geometry)
     return {
         "schema": "rosy.omx-cad194-transfer-audit/1",
         "source_sha": geometry["source_sha"],

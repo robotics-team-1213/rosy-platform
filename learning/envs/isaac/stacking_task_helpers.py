@@ -80,11 +80,20 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
         from mapped_stack_fixture import free_lift, stable_box
         from mapped_stack_task import apply_servo
     replay = getattr(args, "first_pick_replay", None)
+    paired = None
+    if getattr(args, "paired_start", None):
+        from omx_paired_reset import ARMS, read_start, readback
+
+        paired = read_start(args.paired_start, fixture["layout_sha256"], profile)
     if replay:
         samples, replay_sha = load_first_pick_replay(replay, fixture, profile, plan[0])
 
     def goal(item):
         return item['target'] if mapped else target(item)
+
+    def joint_readback():
+        return {arm: np.asarray(robot.get_joint_positions())[[*joint_indices[i], fingers[i][0]]].tolist()
+                for i, (arm, robot) in enumerate(zip(ARMS, robots, strict=True))}
 
     def accepted(index, sample):
         if not mapped:
@@ -124,11 +133,17 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
                 state = np.zeros(robot.num_dof)
                 state[joint_indices[i]] = initial['homes'][i] if mapped else [0., -.4, .7, 1.27, 0.]
                 state[fingers[i]] = [1., -1.]
+                if paired:
+                    q = paired["joints_rad"][ARMS[i]]
+                    state[joint_indices[i]] = q[:5]
+                    state[fingers[i]] = [q[5], -q[5]]
                 robot.set_joint_positions(state)
                 robot.set_joint_velocities(np.zeros(robot.num_dof))
                 robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=state))
                 self.targets.append(state.copy())
                 self.target_velocities.append(np.zeros(robot.num_dof))
+            if paired:
+                self.paired_initial = joint_readback()
             self.activate()
             for _ in range(12):
                 if mapped:
@@ -273,6 +288,8 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             return self.get_observations(), torch.tensor([reward], device=self.device), torch.tensor([done], device=self.device), info
 
     env = StackingEnv()
+    if paired:
+        return readback(paired, "isaac", env.paired_initial, joint_readback())
     if replay:
         from mapped_stack_fixture_helpers import half_extent, unsupported_hold
 
