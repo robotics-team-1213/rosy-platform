@@ -6,7 +6,6 @@ a measurement both exist the choice is a named entry of CHOICES (D-947 2: candid
 """
 import copy
 import functools
-from hashlib import sha256
 import json
 import math
 from pathlib import Path
@@ -18,32 +17,8 @@ ISAAC = Path(__file__).resolve().parents[2] / "learning/envs/isaac"
 sys.path.insert(0, str(ISAAC))
 import mapped_stack_fixture as fx  # noqa: E402
 import omx_two_arm_kin as kin  # noqa: E402
+from omx_two_arm_sites_digest import layout_digest, round_coordinates  # noqa: E402,F401  (re-exported)
 import ship_plate  # noqa: E402
-
-
-def round_coordinates(value):
-    """Remove platform-dependent last bits before comparing layout receipts."""
-    if isinstance(value, dict):
-        return {key: round_coordinates(item) for key, item in value.items()}
-    if isinstance(value, (tuple, list)):
-        return [round_coordinates(item) for item in value]
-    return round(value, 9) if isinstance(value, float) else value
-
-
-def layout_digest(layout):
-    frame = layout.fixture
-    data = dict(choices=layout.choices, box=layout.box, table_z=layout.table_z,
-                cameras=frame["real_cameras"], temp_plates=layout.plates,
-                table=[frame["workplate_center_m"], frame["workplate_size_m"]],
-                belt=[layout.belt_stop_x, layout.belt_y, layout.belt_top],
-                arms={name: [arm.base.tolist(), arm.yaw, arm.wait.tolist()]
-                      for name, arm in layout.arms.items()},
-                plan=layout.plan_order(), sites=layout.sites)
-    identity = sha256(json.dumps(round_coordinates(data), sort_keys=True, separators=(",", ":")).encode())
-    for path in sorted(SHIP_ASSETS.iterdir(), key=lambda item: item.name):
-        if path.suffix in {".stl", ".json"}:
-            identity.update(path.name.encode() + b"\0" + sha256(path.read_bytes()).digest())
-    return identity.hexdigest()
 
 CHOICES = dict(
     fixture_case="nominal-palletizing-v21-ship-surveyed",  # measured arm bases (arm_b FK, arm_a plate centre); "nominal-palletizing-v21-ship" = CAD bases
