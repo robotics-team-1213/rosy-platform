@@ -158,3 +158,15 @@ def test_a_git_object_id_of_this_repository_is_not_a_secret_without_the_word_com
     findings = secret_scan.scan_files([note], root=tmp_path)
     assert [f.line_number for f in findings] == [2] and findings[0].kind == "high-entropy-token"
     assert secret_scan.scan_text("note.md", f"landed at {real}") != []  # without a repository the shape still reports
+
+
+def test_secret_scan_prefilter_keeps_cr_unicode_casefold_and_multi_assignments():
+    sample_psk = "p" + "sk" + "=real_secret_" + "value_1"
+    cr_sample = "foo\r" + sample_psk
+    assert [f.kind for f in secret_scan.scan_text("wpa.conf", cr_sample)] == ["wifi-psk"]
+    # Unicode long-s under re.IGNORECASE/casefold still hits secret needles.
+    uni_sample = "pa\u017f" + "word = 'not-a-fixture-" + "secret-value'"
+    assert [f.kind for f in secret_scan.scan_text("cfg.py", uni_sample)] == ["credential"]
+    multi = "prefix_text " + "api_" + "key='live" + "9182aeb27c4d' " + "sec" + "ret='another_" + "real_secret'"
+    assert len(secret_scan.scan_text("cfg.py", multi)) == 2
+
