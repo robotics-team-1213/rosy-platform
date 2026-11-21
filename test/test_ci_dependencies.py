@@ -299,6 +299,10 @@ def test_ci_fails_a_session_that_collected_nothing(monkeypatch, capsys, paths, e
     (['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1', 'test/test_a.py'], ['== 4 skipped in 0.1s ==\n'], 1, True),
     (['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1', 'test/test_a.py'], ['== 3 passed in 0.1s ==\n'], 0, True),
     (['ROSY_RUN_BROWSER_TESTS=1', 'test/test_a.py'], ['== 4 skipped in 0.1s ==\n'], 0, False),  # not STRICT: unchanged
+    # The step marks its own browser run STRICT only when every target is a *_browser.py file.
+    (['operations/fleet/test/test_x_browser.py'], ['== 4 skipped in 0.1s ==\n'], 1, True),
+    (['operations/fleet/test/test_x_browser.py'], ['== 3 passed in 0.1s ==\n'], 0, True),
+    (['operations/fleet/test'], ['== 10 passed, 2 skipped in 1.0s ==\n'], 0, False),
 ])
 def test_ci_strict_browser_run_must_pass_something_and_skip_nothing(monkeypatch, capsys, words, output, expected, env_seen):
     import json
