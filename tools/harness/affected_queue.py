@@ -80,11 +80,15 @@ def tested_commit(api: str, repository: str, head: str, token: str, get=None) ->
     return ""
 
 
-def queue_passed(api: str, repository: str, sha: str, token: str, get=None) -> bool:
-    """True when a merge queue run of ci.yml passed on exactly `sha` (D-1064)."""
+def queue_passed(api: str, repository: str, sha: str, parent: str, token: str, get=None) -> bool:
+    """True when a merge queue run of ci.yml passed on exactly `sha`, built on `parent` (D-1064).
+
+    The queue names its ref ``gh-readonly-queue/<branch>/pr-N-<base sha>``; the run selected its tests against
+    that base, so it must be the push's own previous tip for the two selections to be the same."""
     get = get or _reader(token)
     runs = get(f"{api}/repos/{repository}/actions/runs?head_sha={sha}&event=merge_group&per_page=50")["workflow_runs"]
     return any(run.get("head_sha") == sha and run.get("conclusion") == "success"
+               and str(run.get("head_branch") or "").endswith("-" + parent)
                and str(run.get("path") or "").split("@")[0].endswith(".github/workflows/ci.yml") for run in runs)
 
 
@@ -109,9 +113,8 @@ def main(argv: list[str] | None = None) -> int:
                               os.environ.get("GITHUB_REPOSITORY", ""), os.environ.get("GH_TOKEN", ""))
     try:
         if argv[:1] == ["--pushed"]:
-            sha = _git(root, "rev-parse", "HEAD").strip()
-            pushed(_git(root, "rev-parse", "HEAD^1").strip(), argv[1] if len(argv) > 1 else "",
-                   lambda: queue_passed(api, repository, sha, token))
+            sha, parent = _git(root, "rev-parse", "HEAD").strip(), _git(root, "rev-parse", "HEAD^1").strip()
+            pushed(parent, argv[1] if len(argv) > 1 else "", lambda: queue_passed(api, repository, sha, parent, token))
         else:
             head = _git(root, "rev-parse", "HEAD^2").strip()  # the queue merges the PR head into its base
             sha = tested_commit(api, repository, head, token)
@@ -120,7 +123,10 @@ def main(argv: list[str] | None = None) -> int:
             _git(root, "fetch", "--quiet", "origin", sha)
             if _git(root, "rev-parse", f"{sha}^2").strip() != head:
                 raise SelectionError(f"{sha} is not a merge of {head}")
-            _git(root, "merge-base", "--is-ancestor", f"{sha}^1", "HEAD^1")  # the base it was tested on is in the queue's base
+            # The same base, not only the same tree: the tests were selected against it. With a base that moved
+            # and came back to an equal tree, the two runs would select different tests (review, 2026-11-21).
+            if _git(root, "rev-parse", f"{sha}^1").strip() != _git(root, "rev-parse", "HEAD^1").strip():
+                raise SelectionError(f"{sha} was tested on another base than this queue entry")
     except Exception as exc:  # noqa: BLE001 - any doubt keeps the whole selection, never fails the run
         print(f"[queue] whole selection: {exc}", file=sys.stderr)
         return 0
