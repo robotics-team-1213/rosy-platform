@@ -210,6 +210,16 @@ def install_cell_tasks_routes(app, ctx) -> None:
             tasks = [t for t in tasks if t["cell_id"] == cell_id]
         if status is not None:
             tasks = [t for t in tasks if t["status"] == status]
+        # D-1057 named-operator confirmations not yet used up by a claim, if installed.
+        # bed_confirm_status, not bed_confirmation: D-1057 claim writes its own bed_confirmation onto the row.
+        stores = {field: getattr(app.state, attr, None) or {} for field, attr in (
+            ("bed_confirm_status", "cell_bed_confirmations"), ("presence_confirmation", "cell_presence"))}
+        refusals = getattr(app.state, "cell_task_refusals", None) or {}  # last claim/complete refusal (camera routes)
+        tasks = [{**t, **{field: {"principal_id": rec.get("principal_id"), "invalid": bool(rec.get("invalid")),
+                                  "age_s": round(time.time() - rec["confirmed_at"], 1),
+                                  "bound": bool(rec.get("lease")) and rec.get("lease") == t.get("handoff_lease_id")}
+                          for field, store in stores.items() if (rec := store.get(t["task_id"]))},
+                  **({"last_refusal": refusals[t["task_id"]]} if t["task_id"] in refusals else {})} for t in tasks]
         stations = resolve_omx_cells(active[1], active[2])
         cells_info = {}
         for cid, st in stations.items():
