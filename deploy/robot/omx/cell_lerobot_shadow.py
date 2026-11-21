@@ -25,6 +25,8 @@ WARP = "cam_warp.json"
 # chunk_runner NAMES order (LeRobot omx_follower motors); the checkpoint's 6-wide state/action follow it.
 JOINT_NAMES = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 IMAGE_PREFIX = "observation.images."
+# The cell's camera roles; a checkpoint must name its inputs by them (docs/solutions/logic-errors/omx-policy-camera-names-differ-from-cell-roles-2026-11-21.md).
+CAMERA_ROLES = ("top", "side", "wrist")
 
 
 def checkpoint_digest(root: Path) -> dict[str, str]:
@@ -54,6 +56,9 @@ def read_features(config: dict) -> tuple[dict[str, tuple[int, int]], int]:
             if channels != 3:
                 raise ValueError(f"{key} is not RGB")
             views[key[len(IMAGE_PREFIX):]] = (int(height), int(width))
+    unknown = sorted(set(views) - set(CAMERA_ROLES))
+    if unknown:
+        raise ValueError(f"camera inputs {unknown} are not cell roles {CAMERA_ROLES}: rename the checkpoint inputs after checking a frame of each")
     if not views:
         raise ValueError("checkpoint has no camera input")
     return views, len(JOINT_NAMES)
