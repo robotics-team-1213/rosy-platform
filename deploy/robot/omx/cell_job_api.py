@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_job_spec import AB_ARMS, JOBS, SESSION, build_argv  # noqa: E402,F401
+from cell_job_spec import AB_ARMS, JOBS, SESSION, build_argv, moves_arm  # noqa: E402,F401
 
 try:
     import fcntl
@@ -84,8 +84,9 @@ class Runner:
         except ValueError as exc:
             return {"code": 400, "error": str(exc)}
         arm = params.get("arm")
+        moving = moves_arm(job, params)
         with self.lock:
-            if job.get("moving"):
+            if moving:
                 for r in self.runs.values():
                     if not r["moving"] or r["proc"].poll() is not None:
                         continue
@@ -115,7 +116,7 @@ class Runner:
                 "argv": argv,
                 "proc": proc,
                 "log": log,
-                "moving": bool(job.get("moving")),
+                "moving": moving,
                 "camera": bool(job.get("camera")),
                 "arm": arm,
                 "purpose": params.get("purpose") or name,
