@@ -5601,6 +5601,21 @@
 - 증거: `test_task_service.py`·`test_cancel_all.py` 사례 추가(nav.failed 먼저, nav.canceled 먼저 둘 다). 원격 affected 8774 passed. 실패 1건 `test_host_control.py::test_no_reboot_path_cuts_an_arm_session`은 origin/main 단독 실행에서 통과해 무관함을 확인 중. 독립 검토 2회.
 - gate 변화: SOURCE. 실물 미실시.
 
+## 2026-11-21 · uncommitted · feat(fleet): Pinky 작업을 Fleet trip으로 한 번 배차 (D-1059, 패널 5 조각 3)
+- 변경: `sitemap/pipeline_pinky_dispatch.py` 새 소비자. 파이프라인 1초 루프에서 QUEUED pinky 작업을 `trip_plan` → `TripRunner.start`로 한 번 보낸다(SENDING·plan_id를 먼저 장부에 씀, 재기동 때 다시 보내지 않음). 거절은 REFUSED와 사유(지도 버전, 오프라인·E-stop, dispatch 래치, cancel-all, 사람·셀 보류, 셀 사용 중, 기체 주행 중, 120 s 경과). ARRIVED·FAILED·CANCELLED는 trip 상태에서만. `POST .../pinky-tasks/{id}/cancel`은 trip 취소. 등록 행에 `place_id`·`map_version`·`requested_by`. `ROSY_FLEET_PINKY_TASK_DISPATCH=1`일 때만(기본 꺼짐). API v1.435.
+- 증거: `test_pinky_task_dispatch.py` 32개(플래그 꺼짐, 한 번만·두 번 tick, 재기동 2종, 거절 18종, cancel-all, 취소 3종, 경로 행)와 `test_unload_release`·`test_auto_events`·`test_pipeline_orchestrator` 로컬 통과. 실물 미실시.
+- gate 변화: SOURCE. 안전 경로, Safety-Review 대기(robot-08 조정자).
+
+## 2026-11-21 · uncommitted · fix(fleet): Pinky 작업 배차는 이름 있는 운영자 요청만 (D-1059 검토)
+- 변경: 조정자 검토 차단 항목. trip 경로는 `require_named_operator`인데 pinky-tasks 등록은 `operator_guard`라 이름 없는 요청이 주행으로 이어질 수 있었다. 등록 때 `requester_named`를 `site_auth.build_role_guards`의 같은 가드(app.py `app.state.trip_requester_guards`)로 기록하고, `true`가 아니면 REFUSED `REQUESTER_NOT_NAMED`(옛 행 포함). cancel-all 시각 비교 형식 주석. ADR 가드 목록·API v1.435 본문에 반영.
+- 증거: `test_pinky_task_dispatch.py` 37개(이름 있는 운영자 배차, 이름 없는 운영자·service 거절, 필드 없는 행 거절 추가)와 `test_unload_release`·`test_pipeline_orchestrator` 로컬 68 passed. 실물 미실시.
+- gate 변화: SOURCE. 안전 경로, robot-08 조정자 검토 반영.
+
+## 2026-11-21 · uncommitted · docs(adr): Pinky 작업 배차 ADR 번호를 D-1060으로 옮김
+- 변경: 위 두 항목의 D-1059는 D-1060이다. main의 D-1059(merge queue 재시험)와 겹쳐 adr_reserve로 새 번호를 받았다(docs/adr/D-1060-pinky-task-dispatch.md).
+- 증거: adr_reserve next → D-1060, git grep으로 이 브랜치의 Pinky 배차 참조를 모두 바꿈.
+- gate 변화: 없음.
+
 ## 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
 - 변경: 에  전용 선택 필드 (횡단보도 다각형 검사  공용, 장소 점 포함,  필수)과 (0.05–0.6 m,  필수), 순수 함수 . 없으면 저장 본문에서 빠짐. 지도 편집 장소 검사 칸에 접근 거리와 정지 구역 그리기·지우기(대기 띠 그리기와 같은 점 목록, 그리면 고정), 지도에 구역 표시. API v1.434.
 - 증거: ··의 고정 정지 장소 병합 시험, site-map·map-editor node 시험 37개 로컬 통과. 원격·실물 미실시.

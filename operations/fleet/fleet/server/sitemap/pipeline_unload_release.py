@@ -242,6 +242,10 @@ def install_unload_release_routes(app, ctx) -> None:
                 await app.state.depart_tick()
             except Exception:  # one bad pass must not end automatic departure
                 log.exception("unload departure tick failed")
+            try:  # D-1060: QUEUED AMR tasks go out as Fleet trips (env gate in the dispatch module)
+                await app.state.task_dispatch_tick()
+            except Exception:
+                log.exception("AMR task dispatch tick failed")
             await asyncio.sleep(1.0)
 
     from contextlib import asynccontextmanager
