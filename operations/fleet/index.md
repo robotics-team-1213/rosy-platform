@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-21 · uncommitted · Refuse double-encoded text at the site map write boundary
+- 2026-11-21 · uncommitted · records bot folds a late-merged log shard at its dated position, not at the end
+- 2026-11-21 · uncommitted · Control-unit scope: R, cell and standalone Fleet each show their own screens (slice 13 of #378)
 - 2026-11-21 · uncommitted · depart_tick: a queued exit goal is withdrawn, not SENT
 - 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
-- 2026-11-20 · uncommitted · fix(fleet): CORE cancel result nav.failed CANCELED gets its own FAILED reason
-- 2026-11-20 · uncommitted · fix(site-map): 자동 트랙 보정이 고정 장소·차로를 지킴
-- 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기

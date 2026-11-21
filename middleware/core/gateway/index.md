@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-11-21 · uncommitted · Run test_measured_calibration_browser.py as lab evidence again
 - 2026-11-21 · uncommitted · fix(core): 도킹 진단 표본의 신선도
 - 2026-11-20 · uncommitted · docs(core): events 실행기 주행 확인 기록 (D-1058)
 - 2026-11-20 · uncommitted · feat(core): CORE 실행기 기본값 events (D-1058)
 - 2026-11-14 · uncommitted · 충전 복귀 lease와 10 % 미룸 (D-1029)
-- 2026-11-14 · uncommitted · nudge_backward 시험
