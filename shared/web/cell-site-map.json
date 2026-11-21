@@ -503,7 +503,7 @@
       {
        "tier": 1,
        "id": "stand:r1-s1-t1",
-       "item": null
+       "item": "stand"
       }
      ],
      "status": "planned_unverified"
@@ -590,6 +590,7 @@
    "tmp-b-3": "temp_b:r3-s1-t1",
    "tmp-b-3-l1": "temp_b:r3-s1-t2",
    "tmp-b-3-l2": "temp_b:r3-s1-t3",
+   "stand": "stand:r1-s1-t1",
    "belt": "not_places:belt",
    "ship-stern-l0": "not_places:ship_stern"
   },

@@ -276,3 +276,14 @@ def test_disjoint_zones_with_crossing_sweeps_are_not_scheduled_or_started_togeth
     _, timing, stop_reason, _ = stages.run_concurrent_steps(FakeTeacher(layout), None, task, dict(here))
     assert stop_reason is None
     assert timing["m7"]["start_s"] >= timing["m5"]["end_s"]
+
+
+def test_harbor_moves_routes_stand_destination_via_arm_a(layout, reach):
+    table = {s: reach(s, s, {}) for s in plan.planning_sites(layout)}
+    table["stand"] = {"arm_a"}
+    reach_with_stand = plan.table_can(table)
+    state = {c: s for c, s, _ in layout.plan_order()}
+    moves, why = plan.harbor_moves(layout, state, {"cargo_id": "bar-3", "destination": "stand"}, reach_with_stand)
+    assert why is None
+    out = [m for m in moves if m["phase_label"] == "반출"]
+    assert len(out) == 1 and out[0]["destination"] == "stand" and out[0]["arms"] == ["arm_a"]

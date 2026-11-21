@@ -1008,3 +1008,12 @@ def test_the_leader_aligns_and_the_caps_come_back_before_the_observers_are_resto
     assert 'start' in [c[0] for c in calls]  # a failed alignment still brings the units back
 
 
+def test_bench_ui_shows_outbound_stand_and_filters_arm_b():
+    root = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    ui = (root / 'bench_record_ui.js').read_text(encoding='utf-8')
+    app = (root / 'bench_record_app.js').read_text(encoding='utf-8')
+    for marker in ('data-spot="stand"', '반출대', 'describeSpot', "'stand:r1-s1'", "'stand:r1-s1-t1'"):
+        assert marker in ui, marker
+    assert r'\bstand\b' in app and 'arm_b:' in app
+
+

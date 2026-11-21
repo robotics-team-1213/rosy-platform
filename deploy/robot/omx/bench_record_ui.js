@@ -267,6 +267,7 @@ function describeSpot(code){
   const s=String(code);
   if(s==='belt')return '벨트 인출단 (Arm A/B 집는 곳 · belt)';
   if(s==='belt-in'||s==='belt-s')return '벨트 공급단 (Arm S 놓는 곳 · belt-in)';
+  if(s==='stand'||s==='stand:r1-s1'||s==='stand:r1-s1-t1')return '반출대 (Arm A 전용 · 컨베이어 우측 · stand)';
   if(s==='pinky'||s.startsWith('pinky-'))return '핑키 로봇 ('+s+')';
   let m=s.match(/^ship-h(\d)r(\d)-l(\d)$/);
   if(m){
@@ -394,7 +395,7 @@ function renderCamGuide(){
   }
   let html='<div class="cam-guide-inner">';
   html+='<div id="cam-map-note" class="cam-map-note quiet" hidden></div>';
-  html+='<svg class="cam-guide-svg" viewBox="0 0 360 138" preserveAspectRatio="xMidYMid meet" aria-label="작업대 구역 배치도">';
+  html+='<svg class="cam-guide-svg" viewBox="0 0 360 178" preserveAspectRatio="xMidYMid meet" aria-label="작업대 구역 배치도">';
   html+='<g class="map-spot" data-spot="tmp-a" role="button" tabindex="0"><rect x="8" y="8" width="84" height="70" rx="6" fill="'+zoneBg('tmp-a')+'" stroke="'+zoneCol('tmp-a')+'" stroke-width="2"/><text x="50" y="40" fill="#eeeeef" font-size="12" text-anchor="middle">임시대 A (좌)</text><text x="50" y="56" fill="#b0b4ba" font-size="9.5" text-anchor="middle">tmp-a</text></g>';
   html+='<g class="map-spot" data-spot="tmp-b" role="button" tabindex="0"><rect x="268" y="8" width="84" height="70" rx="6" fill="'+zoneBg('tmp-b')+'" stroke="'+zoneCol('tmp-b')+'" stroke-width="2"/><text x="310" y="40" fill="#eeeeef" font-size="12" text-anchor="middle">임시대 B (우)</text><text x="310" y="56" fill="#b0b4ba" font-size="9.5" text-anchor="middle">tmp-b</text></g>';
   for(const [k,y] of [[2,8],[1,46]]){
@@ -407,6 +408,7 @@ function renderCamGuide(){
   html+='<text x="232" y="96" fill="#b0b4ba" font-size="12" text-anchor="middle">&rarr;</text>';
   html+='<g class="map-spot" data-spot="belt" role="button" tabindex="0"><rect x="240" y="72" width="112" height="40" rx="6" fill="'+zoneBg('belt')+'" stroke="'+zoneCol('belt')+'" stroke-width="2"/><text x="296" y="89" fill="#eeeeef" font-size="11" text-anchor="middle">벨트 인출단 (A/B)</text><text x="296" y="103" fill="#b0b4ba" font-size="9" text-anchor="middle">belt (집는 곳)</text></g>';
   html+='</g>';
+  html+='<g class="map-spot" data-spot="stand" role="button" tabindex="0"><rect x="8" y="134" width="344" height="36" rx="6" fill="'+zoneBg('stand')+'" stroke="'+zoneCol('stand')+'" stroke-width="2"/><text x="180" y="149" fill="#eeeeef" font-size="11" text-anchor="middle">반출대 (Arm A · 컨베이어 우측 상단)</text><text x="180" y="163" fill="#b0b4ba" font-size="9" text-anchor="middle">stand:r1-s1 (top.jpg ROI 410..570 × 30..125)</text></g>';
   html+='</svg>';
   if(hold){
     const sm=tStr.match(/^ship-h(\d)r(\d)-l(\d)$/);

@@ -27,7 +27,7 @@ from cell_area_vision_align import (  # noqa: E402,F401
 )
 from cell_area_recovery import recover_hover, release_early_touchdown  # noqa: E402
 from cell_area_zones import (  # noqa: E402,F401  (re-exported: existing importers are unchanged)
-    SIDE_COL_CENTER_U, SIDE_M_PER_PX, SIDE_ROI_BY_COL_TIER, TEMP_PLATE_TOP_ROI_BY_LANE, TOP_ROI_BY_COL_ROW,
+    SIDE_COL_CENTER_U, SIDE_M_PER_PX, SIDE_ROI_BY_COL_TIER, STAND_TOP_ROI, TEMP_PLATE_TOP_ROI_BY_LANE, TOP_ROI_BY_COL_ROW,
     classify_container_orientation, diagnose_and_recover_pick, evaluate_zone,
     measure_side_gripper_zone_offset, normalize_pick_yaw_deg, verify_stack_outcome,
     verify_stack_outcome_z_mm, warm_container_ratio,

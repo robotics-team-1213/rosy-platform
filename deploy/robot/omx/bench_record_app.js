@@ -273,7 +273,7 @@ function taskMatchesFilter(v,c){
   if(taskFilter==='all')return true;
   const hay=(v+' '+(c.origin||'')+' '+(c.target_slot||'')+' '+(c.single_task||'')+' '+(c.raw||'')).toLowerCase();
   if(taskFilter==='pinky')return /pinky|belt|conveyor|supply/.test(hay);
-  const arm=f.arm.value, blk={arm_a:/arm[_ -]?[bs]\b|tmp-b|belt-in|conveyor|supply/,arm_b:/arm[_ -]?[as]\b|tmp-a|belt-in|conveyor|supply/,arm_ab:/arm[_ -]?s\b|belt-in|conveyor|supply/};
+  const arm=f.arm.value, blk={arm_a:/arm[_ -]?[bs]\b|tmp-b|belt-in|conveyor|supply/,arm_b:/arm[_ -]?[as]\b|tmp-a|belt-in|conveyor|supply|\bstand\b/,arm_ab:/arm[_ -]?s\b|belt-in|conveyor|supply/};
   if(arm==='arm_s')return /arm[_ -]?s\b|belt-in|conveyor|supply|pinky/.test(hay);
   return blk[arm]?!blk[arm].test(hay):true;
 }

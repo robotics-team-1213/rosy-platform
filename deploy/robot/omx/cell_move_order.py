@@ -12,6 +12,8 @@ def zone(layout, site):
     s = layout.sites[site]
     if s["kind"] == "temp":
         return s["plate"]
+    if s["kind"] == "stand":
+        return "a"
     if s["kind"] == "ship":
         return "a" if s["row"] == 0 else "b" if s["row"] == 2 else "mid"
     return "mid"  # conveyor end
@@ -62,8 +64,11 @@ def harbor_moves(layout, state, request, can, avoid=()):
         above it reversed): only the bottom needs the far arm, the rest stays with the near arm on its own side, so the two rows overlap."""
         if reorder:
             return put(cur, moves, [(c, seat(i), "복귀") for i, c in enumerate(blockers[-1:] + blockers[:-1])])
-        lanes = sorted(s for s in plan_sites if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
-                       and s not in cur.values() and s not in avoid)
+        if request.get("destination") in ("stand", "stand:r1-s1", "stand:r1-s1-t1"):
+            lanes = ["stand"] if ("stand" in plan_sites and "stand" not in cur.values() and "stand" not in avoid) else []
+        else:
+            lanes = sorted(s for s in plan_sites if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
+                           and s not in cur.values() and s not in avoid)
         if not lanes:
             failures.append("NO_FREE_OUTBOUND_LANE")
         return next((done for stand in lanes if (done := put(cur, moves, [(target, stand, "반출")] + [

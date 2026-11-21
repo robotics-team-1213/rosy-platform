@@ -28,9 +28,9 @@ def test_tier_places_are_37_in_18_9_9_1():
     assert len(csm.tier_places(DOC)) == 37
 
 
-def test_arm_rules_and_stand_has_no_sim_place():
+def test_arm_rules_and_stand_maps_to_sim_site():
     assert {zid: z["arms"] for zid, z in ZONES.items()} == {"yard": ["arm_a", "arm_b"], "temp_a": ["arm_a"], "temp_b": ["arm_b"], "stand": ["arm_a"]}
-    assert ZONES["stand"]["slots"][0]["tiers"] == [{"tier": 1, "id": "stand:r1-s1-t1", "item": None}]
+    assert ZONES["stand"]["slots"][0]["tiers"] == [{"tier": 1, "id": "stand:r1-s1-t1", "item": "stand"}]
 
 
 def test_ids_match_regex_and_nest():
@@ -43,7 +43,7 @@ def test_ids_match_regex_and_nest():
 
 def test_every_item_is_a_sim_site():
     items = [i for i in csm.tier_places(DOC).values() if i]
-    assert len(items) == 36 and len(set(items)) == 36
+    assert len(items) == 37 and len(set(items)) == 37
     assert set(items) <= set(sites.Layout().sites)
 
 
@@ -63,7 +63,7 @@ def test_aliases_resolve():
     a = DOC["aliases"]
     assert a["legacy_layout"]["yard-r1-c1"] == "yard:r1-s1"
     assert a["legacy_layout"]["yard-r1-c4"] == "yard:r1-s2" and a["legacy_layout"]["temp_a-2"] == "temp_a:r2-s1" and a["legacy_layout"]["stand-1"] == "stand:r1-s1"
-    assert a["legacy_sim"]["ship-h2r2-l0"] == "yard:r1-s1-t1" and a["legacy_sim"]["ship-stern-l0"] == "not_places:ship_stern"
+    assert a["legacy_sim"]["ship-h2r2-l0"] == "yard:r1-s1-t1" and a["legacy_sim"]["ship-stern-l0"] == "not_places:ship_stern" and a["legacy_sim"]["stand"] == "stand:r1-s1-t1"
     assert a["legacy_station_zones"]["EXP_S1"] == "stand:r1-s1" and a["legacy_station_zones"]["STG_C2"] is None
     assert {n["id"] for n in DOC["not_places"]} == {"belt", "supply_s", "ship_stern", "ship_bow", "vehicle_tray"}
 
