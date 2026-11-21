@@ -1071,3 +1071,143 @@ def test_archive_abandoned_takes_idle_land_branches_but_not_a_checked_out_one(ma
     assert worktrees.rules.archive_abandoned(main, later, apply=True) == 1
     assert git(main, "rev-parse", f"refs/archive/land/feat/left-20261101000001@{left[:10]}") == left
     assert refs(main, "refs/heads/land") == ["refs/heads/land/feat/live-20261101000002"]
+
+
+def _commit_n(wt: Path, n: int, date: str | None = None) -> None:
+    env = {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else {}
+    for i in range(n):
+        (wt / f"f_{i}_{time.time_ns()}.txt").write_text("x", encoding="utf-8")
+        git(wt, "add", ".")
+        git(wt, "commit", "-q", "-m", f"c{i}", **env)
+
+
+def _bare_origin(main: Path, tmp_path: Path) -> Path:
+    bare = tmp_path / "origin.git"
+    git(main, "init", "--bare", "-q", str(bare))
+    git(main, "remote", "add", "origin", str(bare))
+    git(main, "push", "-q", "origin", "main")
+    git(main, "fetch", "-q", "origin")
+    return bare
+
+
+def test_status_warns_on_branch_size_excluding_merges(main, capsys):
+    nine = add(main, "nine")
+    _commit_n(nine, 9)
+    for m in range(2):
+        (main / f"m{m}.txt").write_text("m", encoding="utf-8")
+        git(main, "add", f"m{m}.txt")
+        git(main, "commit", "-q", "-m", f"main-{m}")
+        git(nine, "merge", "-q", "--no-ff", "main", "-m", f"merge main {m}")
+    done = add(main, "done")
+    _commit_n(done, 11)
+    git(main, "merge", "-q", "--ff-only", "feat/done")
+    assert worktrees.main(["status"]) == 0
+    assert "split-soon" not in capsys.readouterr().out
+    ten = add(main, "ten")
+    _commit_n(ten, 10)
+    big = add(main, "big")
+    _commit_n(big, 21)
+    capsys.readouterr()
+    assert worktrees.main(["status"]) == 0
+    out = capsys.readouterr().out
+    assert "split-needed (>=20): big(21)" in out and "split-soon (>=10): ten(10)" in out and "nine(" not in out and "done(" not in out
+
+
+def test_status_warns_on_no_pr_after_24h_and_skips_when_gh_fails(main, tmp_path, monkeypatch, capsys):
+    _bare_origin(main, tmp_path)
+    now = time.time()
+    old_ts = str(int(now - 25 * HOUR))
+    new_ts = str(int(now - 2 * HOUR))
+    for name, ts in (("oldnopr", old_ts), ("oldhaspr", old_ts), ("fresh", new_ts), ("merged", old_ts)):
+        _commit_n(add(main, name), 1, date=f"{ts} +0000")
+    git(main, "merge", "-q", "--ff-only", "feat/merged")
+    monkeypatch.setattr(worktrees.rules, "_gh", lambda _r, *a: '[{"headRefName": "feat/oldhaspr"}]')
+    assert worktrees.main(["status"], now=now) == 0
+    out = capsys.readouterr().out
+    assert "WARN    no-pr (>24h since first own commit, no open PR): 1 worktree(s): oldnopr" in out
+    monkeypatch.setattr(worktrees.rules, "_gh", lambda _r, *a: None)
+    assert worktrees.main(["status"], now=now) == 0
+    assert "no-pr" not in capsys.readouterr().out
+
+
+def test_reserved_prefixes_match_shared_checkout_doc_and_stay_unarchived(main):
+    doc = (ROOT / "docs/reference/shared-checkout.md").read_text(encoding="utf-8")
+    sec = doc.split("### 예약 접두어", 1)[1].split("### ", 1)[0]
+    import re as _re
+    table_prefixes = {m.rstrip("*") for m in _re.findall(r"(?m)^\|\s*`([^`]+)`\s*\|", sec)}
+    assert table_prefixes == set(worktrees.rules.RESERVED_PREFIXES)
+    for branch in ("release/keep", "build/keep", "payload-reserved-1", "archive/keep", "feat/old"):
+        sha = git(main, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", branch)
+        git(main, "branch", branch, sha)
+    later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
+    assert worktrees.rules.archive_abandoned(main, later, apply=True) == 1
+    assert set(refs(main, "refs/heads")) == {
+        "refs/heads/archive/keep", "refs/heads/build/keep", "refs/heads/main",
+        "refs/heads/payload-reserved-1", "refs/heads/release/keep"}
+    arch = refs(main, "refs/archive/feat/old@*")
+    assert len(arch) == 1
+    assert worktrees.rules.reflog_time(main / ".git/logs" / arch[0]) > 0
+
+
+def test_prune_remote_archives_and_deletes_only_stale_own_unopened_branches(main, tmp_path, monkeypatch, capsys):
+    bare = _bare_origin(main, tmp_path)
+    now = time.time()
+    old_d, new_d = f"{int(now - 20 * 86400)} +0000", f"{int(now - 5 * 86400)} +0000"
+
+    def push_branch(branch: str, commits: list[tuple[str, str, str]]) -> str:
+        git(main, "checkout", "-q", "-b", branch, "origin/main")
+        for idx, (an, ae, dt) in enumerate(commits):
+            (main / f"p_{branch.replace('/', '_')}_{idx}.txt").write_text(branch, encoding="utf-8")
+            git(main, "add", ".")
+            git(main, "commit", "-q", "-m", f"{branch}-{idx}",
+                GIT_AUTHOR_NAME=an, GIT_AUTHOR_EMAIL=ae, GIT_COMMITTER_NAME=an, GIT_COMMITTER_EMAIL=ae,
+                GIT_AUTHOR_DATE=dt, GIT_COMMITTER_DATE=dt)
+        sha = git(main, "rev-parse", "HEAD")
+        git(main, "push", "-q", "origin", branch)
+        git(main, "checkout", "-q", "main")
+        return sha
+
+    stale_own = push_branch("feat/stale-own", [("t", "t@t", old_d)])
+    stale_moved = push_branch("feat/stale-moved", [("t", "t@t", old_d)])
+    push_branch("feat/stale-open-pr", [("t", "t@t", old_d)])
+    push_branch("feat/recent-own", [("t", "t@t", new_d)])
+    push_branch("release/keep", [("t", "t@t", old_d)])
+    push_branch("build/keep", [("t", "t@t", old_d)])
+    push_branch("feat/stale-teammate", [("peer", "peer@team", old_d)])
+    push_branch("feat/stale-mixed", [("peer", "peer@team", old_d), ("t", "t@t", old_d)])
+    git(main, "fetch", "-q", "origin")
+
+    monkeypatch.setattr(worktrees.rules, "_gh", lambda _r, *a: None)
+    assert worktrees.main(["prune", "--remote", "--apply"], now=now) == 0
+    assert "remote prune skipped" in capsys.readouterr().out
+    monkeypatch.setattr(worktrees.rules, "_gh", lambda _r, *a: '[{"headRefName": "feat/stale-open-pr"}]')
+    assert worktrees.main(["prune", "--remote"], now=now) == 0
+    dry = capsys.readouterr().out
+    assert "PLAN    origin/feat/stale-own" in dry and "PLAN    origin/feat/stale-moved" in dry
+    assert "REPORT  origin/feat/stale-teammate" in dry and "REPORT  origin/feat/stale-mixed" in dry
+    assert "feat/stale-open-pr" not in dry and "release/keep" not in dry and "build/keep" not in dry and "recent-own" not in dry
+    assert "refs/heads/feat/stale-own" in refs(bare, "refs/heads")
+
+    # Concurrent move on bare origin + archive ref conflict must both keep remote branches untouched
+    adv = git(bare, "commit-tree", f"{stale_moved}^{{tree}}", "-p", stale_moved, "-m", "race",
+              GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+    git(bare, "update-ref", "refs/heads/feat/stale-moved", adv)
+    conflict_ref = f"refs/archive/origin/feat/stale-own@{stale_own[:10]}"
+    git(main, "update-ref", conflict_ref, git(main, "rev-parse", "main"))
+    assert worktrees.main(["prune", "--remote", "--apply"], now=now) == 0
+    fail_out = capsys.readouterr().out
+    assert "FAIL    origin/feat/stale-own: could not write" in fail_out
+    assert "FAIL    origin/feat/stale-moved" in fail_out
+    assert "refs/heads/feat/stale-own" in refs(bare, "refs/heads")
+    git(main, "update-ref", "-d", conflict_ref)
+
+    assert worktrees.main(["prune", "--remote", "--apply"], now=now) == 0
+    out = capsys.readouterr().out
+    assert "DELETED origin/feat/stale-own" in out and "FAIL    origin/feat/stale-moved" in out
+    assert git(main, "rev-parse", conflict_ref) == stale_own
+    assert worktrees.rules.reflog_time(main / f".git/logs/{conflict_ref}") > 0
+    remote_heads = set(refs(bare, "refs/heads"))
+    assert "refs/heads/feat/stale-own" not in remote_heads
+    assert {"refs/heads/feat/stale-moved", "refs/heads/feat/stale-open-pr", "refs/heads/feat/recent-own",
+            "refs/heads/release/keep", "refs/heads/build/keep", "refs/heads/feat/stale-teammate",
+            "refs/heads/feat/stale-mixed"} <= remote_heads

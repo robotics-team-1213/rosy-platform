@@ -24,6 +24,7 @@ Standard library only.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -37,6 +38,12 @@ from pathlib import Path
 LANDED_IDLE_HOURS = 1.0
 CLEAN_IDLE_HOURS = 6.0  # D-1070: a clean worktree on a branch, merged or not, whoever made it
 NOTE_IDLE_HOURS = 24.0  # D-1070 revision 11-22: owner-note guard for a clean adoptable worktree (72 h for other names)
+SPLIT_SOON = 10  # D-1067 warning at half the 20 own-commit PR cap
+SPLIT_NEEDED = 20  # matches step_back.size_violations own-commit cap
+NO_PR_HOURS = 24.0  # hours since first own non-merge commit without an open PR
+REMOTE_PRUNE_DAYS = 14  # days since last commit on an unopened non-reserved origin branch
+RESERVED_PREFIXES = ("publish/main-", "bot/", "gh-readonly-queue/", "archive/",
+                     "release/", "build/", "payload-reserved-")
 STALE_COMMITS = 2_000
 ABANDON_DAYS = 4  # an unlanded branch with no worktree and no commit this long is archived (archive_abandoned); 14 until 11-21 (840 local branches)
 # main was rewritten after this commit (2026-09-22 09:55:14 +0900); branches cut before the rewrite share
@@ -302,6 +309,70 @@ def shared_warnings(root: Path) -> list[str]:
             ) + [f"WARN    worktree outside .worktrees/: {path}; {FOREIGN_FIX}" for path in foreign_worktrees(root)]
 
 
+def _gh(root: Path, *args: str) -> str | None:
+    try:
+        res = subprocess.run(["gh", *args], cwd=root, capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", timeout=15)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return res.stdout if res.returncode == 0 else None
+
+
+def open_pr_heads(root: Path) -> set[str] | None:
+    """Open PR head branch names, or None when origin is absent or gh fails/truncates."""
+    if _git(root, "remote", "get-url", "origin").returncode != 0:
+        return None
+    out = _gh(root, "pr", "list", "--state", "open", "--limit", "500", "--json", "headRefName")
+    if out is None:
+        return None
+    try:
+        items = json.loads(out)
+    except ValueError:
+        return None
+    if not isinstance(items, list) or len(items) >= 500:
+        return None
+    return {item["headRefName"] for item in items if isinstance(item, dict) and item.get("headRefName")}
+
+
+def _own_commit_times(root: Path, base: str, sha: str) -> list[int]:
+    res = _git(root, "log", "--no-merges", "--format=%ct", f"{base}..{sha}")
+    if res.returncode != 0:
+        return []
+    try:
+        return [int(tok) for tok in res.stdout.split()]
+    except ValueError:
+        return []
+
+
+def status_notes(root: Path, rows: list[dict], now: float) -> list[str]:
+    """Shared-checkout warnings plus P1 branch-size and 24h no-PR summary lines."""
+    lines = shared_warnings(root)
+    base = ("refs/remotes/origin/main" if _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/main").returncode == 0
+            else "refs/heads/main")
+    needed, soon, stale_no_pr = [], [], []
+    for row in sorted(rows, key=lambda r: r["name"]):
+        if row.get("orphan") or row.get("merged") or not row.get("sha") or row.get("branch") == "main" or row.get("verdict") == "stale-history":
+            continue
+        times = _own_commit_times(root, base, row["sha"])
+        if len(times) >= SPLIT_NEEDED:
+            needed.append(f"{row['name']}({len(times)})")
+        elif len(times) >= SPLIT_SOON:
+            soon.append(f"{row['name']}({len(times)})")
+        if row.get("branch") and times and now - min(times) >= NO_PR_HOURS * 3600:
+            stale_no_pr.append((row["name"], row["branch"]))
+    if needed or soon:
+        parts = ([f"split-needed (>={SPLIT_NEEDED}): {', '.join(needed)}"] if needed else []
+                 ) + ([f"split-soon (>={SPLIT_SOON}): {', '.join(soon)}"] if soon else [])
+        lines.append(f"WARN    branch size: {'; '.join(parts)} — split finished work from origin/main (D-1067)")
+    if stale_no_pr:
+        open_prs = open_pr_heads(root)
+        if open_prs is not None:
+            missing = [name for name, br in stale_no_pr if br not in open_prs]
+            if missing:
+                lines.append(f"WARN    no-pr (>{NO_PR_HOURS:.0f}h since first own commit, no open PR): {len(missing)} worktree(s): {', '.join(missing)}")
+    return lines
+
+
 def topic_ok(topic: str) -> bool:
     return len(topic) <= TOPIC_MAX and TOPIC.fullmatch(topic) is not None
 
@@ -338,7 +409,7 @@ def sweep_branches(root: Path, now: float, apply: bool, say=print, quiet: bool =
         branch, sha, checked_out = line.split("\t")
         # A reflog entry within the landed wait: just made, maybe about to be checked out. No reflog: not new.
         fresh = now - reflog_time(common / "logs" / "refs" / "heads" / branch) < LANDED_IDLE_HOURS * 3600
-        if checked_out or fresh or branch in keep or branch == "main" or branch.startswith("archive/"):
+        if checked_out or fresh or branch in keep or branch == "main" or branch.startswith(RESERVED_PREFIXES):
             continue
         if apply and _git(root, "update-ref", "-d", f"refs/heads/{branch}", sha).returncode != 0:
             say(f"FAIL    branch {branch} moved; kept")  # exact sha: a commit not on main is never dropped
@@ -376,13 +447,13 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
         # the reflog too: a branch just restored from refs/archive has an old tip but was touched now
         touched = max(int(when or now), reflog_time(common / "logs" / "refs" / "heads" / branch))
         # land/ leftovers too (11-22): D-1055 retired their resume path; a hidden tree's branch is checked out
-        if (checked_out or branch in keep or branch.startswith("archive/")
+        if (checked_out or branch in keep or branch.startswith(RESERVED_PREFIXES)
                 or now - touched < ABANDON_DAYS * 86400):
             continue
         if apply:
             ref = f"refs/archive/{branch}@{sha[:10]}"
-            # create-only, then drop the branch only at that exact sha: a moved branch is kept as it is
-            if (_git(root, "update-ref", ref, sha, "").returncode != 0
+            # create-only with reflog (records archival timestamp), then drop the branch only at that exact sha
+            if (_git(root, "update-ref", "--create-reflog", ref, sha, "").returncode != 0
                     and _git(root, "rev-parse", "--verify", "-q", ref).stdout.strip() != sha):
                 say(f"FAIL    branch {branch}: could not write {ref}; kept")
                 continue
@@ -393,6 +464,59 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
     if done or not quiet:
         say(f"[worktrees] {'archived' if apply else 'would archive'} {done} unlanded branch(es) idle over"
             f" {ABANDON_DAYS} days with no worktree (refs/archive/<branch>@<sha>)")
+    return done
+
+
+def prune_remote(root: Path, now: float, apply: bool = False, days: float = REMOTE_PRUNE_DAYS, say=print) -> int:
+    """Report (or with ``apply``, archive+delete own-only) stale unopened origin branches older than ``days``."""
+    if _git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/main").returncode != 0:
+        raise RuntimeError("refs/remotes/origin/main is missing; run 'git fetch origin' first")
+    open_prs = open_pr_heads(root)
+    if open_prs is None:
+        say("[worktrees] remote prune skipped: could not read open PRs via gh (nothing deleted)")
+        return 0
+    me_email = _git(root, "config", "user.email").stdout.strip().lower()
+    listed = _git(root, "for-each-ref", "refs/remotes/origin", "--format=%(refname:short)\t%(objectname)\t%(committerdate:unix)")
+    if listed.returncode != 0:
+        raise RuntimeError(f"git for-each-ref failed: {listed.stderr.strip()}")
+    done, reported = 0, 0
+    for line in listed.stdout.splitlines():
+        short, sha, when = line.split("\t")
+        if short == "origin" or not short.startswith("origin/"):
+            continue
+        branch = short.removeprefix("origin/")
+        age_d = (now - int(when or now)) / 86400
+        if branch in ("HEAD", "main") or branch in open_prs or branch.startswith(RESERVED_PREFIXES) or age_d < days:
+            continue
+        raw = _git(root, "log", "--format=%an\t%ae", f"refs/remotes/origin/main..refs/remotes/origin/{branch}").stdout.splitlines()
+        if not raw:
+            raw = _git(root, "log", "-1", "--format=%an\t%ae", f"refs/remotes/origin/{branch}").stdout.splitlines()
+        pairs = [(n.strip(), e.strip()) for n, e in (r.split("\t", 1) for r in raw if "\t" in r)]
+        authors = sorted({f"{n} <{e}>" for n, e in pairs}) or ["unknown"]
+        if not (me_email and pairs and all(e.lower() == me_email for _, e in pairs)):
+            reported += 1
+            say(f"REPORT  origin/{branch} ({age_d:.0f}d, authors={', '.join(authors)}): teammate/other commits; report only")
+            continue
+        ref = f"refs/archive/origin/{branch}@{sha[:10]}"
+        if not apply:
+            say(f"PLAN    origin/{branch} ({age_d:.0f}d, sha={sha[:10]}, authors={', '.join(authors)}) -> {ref}")
+            done += 1
+            continue
+        if (_git(root, "update-ref", "--create-reflog", ref, sha, "").returncode != 0
+                and _git(root, "rev-parse", "--verify", "-q", ref).stdout.strip() != sha):
+            say(f"FAIL    origin/{branch}: could not write {ref}; kept")
+            continue
+        res = subprocess.run(["git", "-c", "core.quotepath=off", "-C", str(root), "push", "origin",
+                              f"--force-with-lease=refs/heads/{branch}:{sha}", f":refs/heads/{branch}"],
+                             env={**os.environ, "ROSY_STATIC_PRE_PUSH": "1"}, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace")
+        if res.returncode != 0:
+            say(f"FAIL    origin/{branch}: delete failed (archive ref stays): {(res.stderr or res.stdout).strip()}")
+            continue
+        say(f"DELETED origin/{branch} ({age_d:.0f}d, archived {ref})")
+        done += 1
+    say(f"[worktrees] {'deleted' if apply else 'would delete'} {done} remote branch(es) idle over {days:.0f} days"
+        f" with no open PR (own commits only; {reported} teammate/other reported)")
     return done
 
 
