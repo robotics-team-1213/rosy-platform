@@ -141,7 +141,7 @@ def test_the_session_exit_code_is_returned_and_the_observer_still_returns(cell):
 
 
 @pytest.mark.parametrize("case", ["relative folder", "other folder", "other arm's topic", "bad topic", "no device",
-                                  "unreadable bridge"])
+                                  "unreadable bridge", "stale unit topic"])
 def test_bad_settings_refuse_before_the_observer_is_touched(cell, case):
     environ, kwargs = dict(cell.environ), {}
     if case == "relative folder":
@@ -153,6 +153,10 @@ def test_bad_settings_refuse_before_the_observer_is_touched(cell, case):
         kwargs["topic"] = "/omx_commissioning/arm_b/joint_states"
     elif case == "bad topic":
         kwargs["topic"] = "/elsewhere"
+    elif case == "stale unit topic":  # the unit would restart on a topic the bridge does not read
+        (cell.env_dir / "omx-observer-arm_a.env").write_text(
+            "ROSY_OBSERVER_DEVICE=/dev/serial/by-id/x\nROSY_OBSERVER_TOPIC=/omx_commissioning/arm_b/joint_states\n",
+            encoding="utf-8")
     elif case == "no device":
         (cell.env_dir / "omx-observer-arm_a.env").write_text(f"ROSY_OBSERVER_TOPIC={TOPIC}\n", encoding="utf-8")
     else:
@@ -322,7 +326,7 @@ def last_json(stdout):
 
 
 def test_cell_task_exec_still_reads_the_sessions_last_json_line_through_run(cell, capfd):
-    assert "for line in reversed(proc.stdout.splitlines()):" in (OMX / "cell_task_exec.py").read_text(encoding="utf-8")
+    assert "parsed = last_json_object(proc.stdout)" in (OMX / "cell_task_exec.py").read_text(encoding="utf-8")
     child = ("import json\nfor row in ({'stage': 'grasp'}, {'stage': 'place'}, {'result': 'placed', 'task': 'T1'}):"
              "\n    print(json.dumps(row))")
     environ = {**os.environ, **cell.environ}
@@ -402,6 +406,49 @@ def test_a_session_that_will_not_end_is_reported_and_never_killed(cell):
     time.sleep(2)  # the leftover ends on its own
 
 
+def test_keep_live_leaves_an_existing_pidless_reservation_as_it_is(tmp_path):
+    sys.path.insert(0, str(OMX))
+    try:
+        import cell_arm_lease
+    finally:
+        sys.path.remove(str(OMX))
+    reserved = cell_arm_lease.claim("arm_a", "u@x", "job", root=tmp_path, now=100, ttl_s=3600)
+    record, created = cell_arm_lease.claim("arm_a", "u@x", "observer_handoff", pid=os.getpid(), root=tmp_path,
+                                           now=200, report_created=True, keep_live=True)
+    assert not created and record["pid"] is None and record["expires"] == reserved["expires"] == 3700
+    assert cell_arm_lease.live(cell_arm_lease._read("arm_a", tmp_path), now=3000)  # still valid, no handoff pid
+    fresh, created = cell_arm_lease.claim("arm_b", "u@x", "observer_handoff", pid=os.getpid(), root=tmp_path,
+                                          now=200, report_created=True, keep_live=True)
+    assert created and fresh["pid"] == os.getpid()  # nothing to keep: the handoff's own lease covers the session
+
+
+def test_group_members_ignores_zombies_and_other_groups(tmp_path):
+    for pid, state, pgrp in ((10, "S", 7), (11, "Z", 7), (12, "S", 8), (13, "R", 7)):
+        (tmp_path / str(pid)).mkdir()
+        (tmp_path / str(pid) / "stat").write_text(f"{pid} (a b) {state} 1 {pgrp} {pgrp} 0", encoding="utf-8")
+    assert m.group_members(7, tmp_path) == {10, 13}
+    assert m.group_members(7, tmp_path / "missing") is None
+
+
+@linux
+def test_the_leader_keeps_watching_while_a_background_session_outlives_its_child(tmp_path):
+    """The leader's direct child returns at once; SIGTERM to the leader must still reach the background sleep."""
+    import subprocess
+
+    pids = tmp_path / "pids"
+    leader = subprocess.Popen([sys.executable, str(OMX / "observer_handoff.py"), "_lead", "--", "sh", "-c",
+                               f"sleep 60 & echo $! > {pids}; exit 0"], start_new_session=True)
+    deadline = time.monotonic() + 5
+    while not pids.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    sleeper = int(pids.read_text())
+    time.sleep(0.5)
+    assert leader.poll() is None  # not gone with its direct child
+    os.kill(leader.pid, signal.SIGTERM)
+    assert leader.wait(timeout=10) == 0
+    assert not m.group_members(leader.pid) and sleeper not in (m.group_members(leader.pid) or ())
+
+
 def test_claim_reports_whether_this_call_created_the_lease(tmp_path):
     sys.path.insert(0, str(OMX))
     try:
@@ -450,12 +497,11 @@ def test_fleets_timeout_kill_of_run_still_ends_the_whole_session(cell, tmp_path)
     session = [int(pid) for pid in pids.read_text().split()]
     assert len(session) == 2
 
-    def alive(pid):
+    def alive(pid):  # a zombie nobody reaps (container PID 1) is not a running session
         try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
+            return Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[0] not in ("Z", "X")
+        except OSError:
             return False
-        return True
 
     deadline = time.monotonic() + 10
     while any(alive(pid) for pid in session) and time.monotonic() < deadline:

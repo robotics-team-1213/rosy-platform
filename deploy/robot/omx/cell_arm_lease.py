@@ -90,9 +90,11 @@ def _read(arm: str, root: Path) -> dict | None:
 
 
 def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root=None, now=None,
-          report_created=False):
+          report_created=False, keep_live=False):
     """Take or refresh the arm's lease; LeaseHeld when another owner's lease is live. With report_created,
-    (record, created): created is False when this owner already held a live lease, decided under the lease lock."""
+    (record, created): created is False when this owner already held a live lease, decided under the lease lock.
+    With keep_live, that live lease is returned as it is (pid and expiry unchanged): a caller that only needs
+    cover must not shorten or re-pid a reservation someone else's job relies on."""
     owner = owner or default_owner()
     root = lease_root(root)
     now = time.time() if now is None else now
@@ -105,6 +107,8 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
             raise LeaseHeld(f"arm {arm} held by {old['owner']} for {old.get('purpose') or '-'} until {until}"
                             + (f" ({old['hold']}: a person releases it)" if old.get("hold") else ""))
         same_live = bool(old and old.get("owner") == owner and live(old, now))
+        if same_live and keep_live:
+            return (old, False) if report_created else old
         holder = old.get("pid") if same_live and old.get("pid") is not None else pid  # never drop a live holder's pid
         record = {"schema": SCHEMA, "arm": arm, "owner": owner, "purpose": purpose,
                   "host": socket.gethostname(), "pid": holder, "boot_id": _boot_id(), "revision": revision,

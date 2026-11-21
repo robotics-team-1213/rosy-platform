@@ -55,13 +55,14 @@ if _FOUNDATION not in sys.path:
 import cell_arm_lease  # noqa: E402
 from joint_tune_lock import HELD_ENV, session_lock  # noqa: E402
 from observer_handoff_io import (  # noqa: E402,F401 - bridge_binding and HandoffError stay importable from here
-    HandoffError, bridge_binding, fuser, port_holders, proc_holders, record_state, report, session_env, systemctl,
+    HandoffError, bridge_binding, fuser, group_members, port_holders, proc_holders, record_state, report, session_env, systemctl,
     unit_env,
 )
 
 ARM = re.compile(r"[A-Za-z0-9_-]{1,32}")  # session_lock's own rule
 BY_ID = Path("/dev/serial/by-id")
 HANDOFF_FAILED, RECOVERY_FAILED, SESSION_LINGERS = 69, 70, 71
+GROUP_WAIT_ENV = "ROSY_HANDOFF_GROUP_TIMEOUT_S"
 SIGNALS = tuple(s for s in (getattr(signal, n, None) for n in ("SIGINT", "SIGTERM", "SIGHUP")) if s is not None)
 
 
@@ -89,6 +90,9 @@ def wait_port(device, *, want, users, scan, timeout_s, sleep, clock):
 
 
 def group_alive(pgid):
+    members = group_members(pgid)
+    if members is not None:
+        return bool(members)
     try:
         os.killpg(pgid, 0)
     except ProcessLookupError:
@@ -148,6 +152,12 @@ def lead(command):
     if pending:  # arrived before the session existed
         os.kill(child.pid, pending[0])
     code = child.wait()
+    # Stay (and keep forwarding) until nothing but this leader is left in the group: a shell wrapper may return
+    # while its background session runs, and run's death must still reach that session. Bounded, so run's own
+    # --group-timeout-s report (exit 71) still comes.
+    deadline = time.monotonic() + float(os.environ.get(GROUP_WAIT_ENV) or 120)
+    while time.monotonic() < deadline and (group_members(os.getpgrp()) or set()) - {os.getpid()}:
+        time.sleep(0.2)
     return 128 - code if code < 0 else code
 
 
@@ -188,7 +198,12 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
         values = unit_env(arm, env_dir)
         device = values["ROSY_OBSERVER_DEVICE"]
         resolve_device(device)
-        env = session_env(arm, topic, environ, bridge(arm, env_dir=env_dir, run=run))
+        binding = bridge(arm, env_dir=env_dir, run=run)
+        if values.get("ROSY_OBSERVER_TOPIC") != binding[0]:  # the unit restarts on this value: a stale one blinds Fleet
+            raise HandoffError(f"{unit} env ROSY_OBSERVER_TOPIC {values.get('ROSY_OBSERVER_TOPIC')!r} is not the "
+                               f"bridge manifest's {binding[0]}; fix the unit env before a handoff")
+        env = session_env(arm, topic, environ, binding)
+        env[GROUP_WAIT_ENV] = f"{group_timeout_s:g}"
         locks = lock(arm)
     except (HandoffError, SystemExit) as exc:
         report(error=str(exc), stage="check", arm=arm)
@@ -207,7 +222,8 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
     observer, problem = "untouched", None
     try:
         try:
-            created = lease.claim(arm, owner, "observer_handoff", pid=os.getpid(), report_created=True)[1]
+            created = lease.claim(arm, owner, "observer_handoff", pid=os.getpid(), report_created=True,
+                                  keep_live=True)[1]
             stopped = True  # from here a failed stop may still have stopped it: recovery decides
             result = run("stop", unit)
             if result.returncode != 0:

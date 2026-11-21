@@ -36,6 +36,22 @@ def proc_holders(resolved, proc=Path("/proc")):
     return pids
 
 
+def group_members(pgid, proc=Path("/proc")):
+    """Live (not zombie) PIDs of a process group, or None without /proc. A zombie is not a running session: in a
+    container whose PID 1 does not reap, orphans stay zombies for ever and kill(-pgid, 0) would call them alive."""
+    if not proc.is_dir():
+        return None
+    members = set()
+    for stat in proc.glob("[0-9]*/stat"):
+        try:
+            fields = stat.read_text().rpartition(")")[2].split()  # comm may hold spaces; state ppid pgrp follow it
+            if int(fields[2]) == pgid and fields[0] not in ("Z", "X"):
+                members.add(int(stat.parent.name))
+        except (OSError, ValueError, IndexError):
+            continue  # ended while we looked
+    return members
+
+
 def report(**fields):
     print(json.dumps(fields), file=sys.stderr, flush=True)  # stdout belongs to the session
 
