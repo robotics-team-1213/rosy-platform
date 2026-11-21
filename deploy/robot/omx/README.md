@@ -1382,6 +1382,54 @@ pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다
 자동 파지에 사용할 수 없다. 카메라/좌표 보정·높이·물체·경로는 task 조건으로 계속 검사하며,
 이 소프트웨어 연계가 각 실물의 설치·최대 도달범위·인양 능력을 측정한 것은 아니다.
 
+## h1-goal ACT 섀도 확인
+
+체크포인트의 `config.json` 옆에 `UNITS.json`을 둔다. 아래는 arm B 예시다.
+arm A 체크포인트는 `arm_a`를 쓴다. 파일이 없으면 기존 LeRobot 정규화 단위를 쓴다.
+
+```json
+{"state": "sim_rad", "gripper": "sim_jaw", "arm": "arm_b"}
+```
+
+`arm`은 셀 설정의 `arm_id`와 같아야 한다. 해당 팔의 `arm-cal-<arm_id>.json`에서
+`held_30mm`와 `gap_mm_per_unit`을 읽는다. 셀 설정의 `arm_calibration_path`로 경로를 지정할 수 있다.
+기존 jaw 형상을 사용하므로 실행 소스 트리에 `learning/envs/isaac/palletizing_gripper.py`와
+그 파일이 읽는 `assets/omx_f_palletizing_description`이 필요하다.
+몸체의 첫 5축은 ±100 단위를 라디안으로 바꾼다. arm B의 손목 롤도 학습 때와 같이 그대로 변환한다.
+학습 변환은 턱 간격을 12~60 mm로 제한한다. 모델이 제한된 입력값을 그대로 내면 해당 프레임의
+실측 턱 위치로 복원한다. 다른 출력값은 턱 형상에서 간격을 구한 뒤 해당 팔의 보정값으로 역변환한다.
+
+`cell_policy_drive.py`에서 `--dry-run --goal-site yard:r3-s2-t1`로 확인한다. Cell Job API의
+`cell_policy_drive` 작업에는 목적지 `goal_site`를 준다. 사이트 맵에서 학습 목표에 대응하는 층 ID와
+`tray` 또는 `vehicle_tray`를 받는다. `--goal-slot N`은 CLI에서 매핑 결과를 수동으로 덮어쓴다.
+`policy-drive.jsonl`의 시작 행에 사이트 ID, 매핑한 학습 목표와 슬롯, 실제 사용한 슬롯을 기록한다.
+`--cell-calibration`에는
+러너의 LeRobot 보정 파일을 준다. 몸체 축의 tick 범위는 0~4095다. `--model-calibration`은
+기존 정규화 단위 체크포인트에 필요하다. sim 체크포인트의 학습 통계에는 시뮬레이션 값이 포함되므로
+envelope는 검토된 라이브러리 범위를 사용한다. `policy-drive.jsonl`에 변환 직후의 `converted_chunk`와
+기존 턱 보정 적용 뒤의 `envelope.ok` 및 거절 이유를 기록한다.
+
+sim 단위 체크포인트는 한 번 추론할 때 `config.json`의 `n_action_steps`만 재생한다.
+측정 자세에서 시작해 15 fps의 출력을 라이브러리 fps로 선형 보간한 뒤 속도 제한을 적용한다.
+30 fps에서 4스텝은 속도 제한 적용 전 8프레임이다.
+arm B의 예측 손목 롤이 검토된 라이브러리 홈과 반 바퀴 건너편의 두 방향 모두에서 45°를 벗어나면
+`wrist_roll_warning`을 기록한다. 실물 실행은 해당 청크를 거절한다.
+
+`--goal-slot`은 학습의 `prepare10.py`가 사용한 0부터 시작하는 배열 인덱스다.
+
+| `N` | 학습 목표 |
+|---:|---|
+| 0 | `ship-h1r0-l0` |
+| 1 | `ship-h1r0-l1` |
+| 2 | `ship-h1r0-l2` |
+| 3 | `ship-h1r1-l0` |
+| 4 | `ship-h1r1-l1` |
+| 5 | `ship-h1r1-l2` |
+| 6 | `ship-h1r2-l0` |
+| 7 | `ship-h1r2-l1` |
+| 8 | `ship-h1r2-l2` |
+| 9 | `tray` |
+
 ## Fleet PC의 상시 관측과 기존 Cell 화면
 
 두 팔의 관절 읽기와 세 카메라의 ROS 구독은 Fleet PC에서 실행한다.

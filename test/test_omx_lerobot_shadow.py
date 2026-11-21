@@ -45,6 +45,46 @@ def bgr(value=(10, 20, 30)):
     return np.tile(np.asarray(value, dtype=np.uint8), (8, 12, 1))
 
 
+def test_goal_feature_requires_a_valid_slot_or_one_hot(tmp_path):
+    config = {**CONFIG, "input_features": {**CONFIG["input_features"], lrs.GOAL: {"shape": [10]}}}
+    root, sha = checkpoint(tmp_path, config=config)
+    shadow = lrs.LeRobotShadow(root, sha, loader=Recorder())
+    frames = {view: bgr() for view in shadow.image_views}
+    assert lrs.read_features(config)[2] == 10
+    for goal in (None, -1, 10, 2.0, [1] * 10, [1] * 9):
+        with pytest.raises(ValueError, match="goal"):
+            shadow.inputs([0] * 6, frames, goal=goal)
+    for goal in (9, [0] * 9 + [1]):
+        obs, meta = shadow.inputs([0] * 6, frames, goal=goal)
+        np.testing.assert_array_equal(obs[lrs.GOAL], [0] * 9 + [1])
+        assert obs[lrs.GOAL].dtype == np.float32 and meta["goal_slot"] == 9
+
+
+@pytest.mark.parametrize("arm,roll,gripper,held", [
+    ("arm_a", 44.66, 49.18, 53.83),
+    ("arm_b", 44.62, 48.86, 53.38),
+])
+def test_sim_checkpoint_home_round_trip(tmp_path, arm, roll, gripper, held):
+    from cell_act_inputs import sim_gripper
+
+    root, sha = checkpoint(tmp_path)
+    (root / "UNITS.json").write_text(json.dumps({"state": "sim_rad", "gripper": "sim_jaw", "arm": arm}))
+    rule = {"held_30mm": held, "gap_mm_per_unit": 5.0}
+    (tmp_path / f"arm-cal-{arm}.json").write_text(json.dumps({"arm_id": arm, **rule}))
+    config = {"arm_id": arm, "work_dir": str(tmp_path)}
+    with pytest.raises(ValueError, match="arm"):
+        lrs.LeRobotShadow(root, sha, loader=Recorder(), cell_config={**config, "arm_id": "arm_s"})
+    shadow = lrs.LeRobotShadow(root, sha, loader=Recorder(), cell_config=config)
+    home = [0.76, -62.25, 53.06, 51.65, roll, gripper]
+    frames = {view: bgr() for view in shadow.image_views}
+    obs, _ = shadow.inputs(home, frames)
+    assert obs["observation.state"][4] == pytest.approx(1.402, abs=0.01)
+    assert obs["observation.state"][5] == pytest.approx(sim_gripper(gripper, rule))
+    for actual in (home, [*home[:5], held]):
+        obs, _ = shadow.inputs(actual, frames)
+        assert shadow.infer(obs, state=actual).chunk[0] == pytest.approx(actual, abs=0.5)
+
+
 def test_pin_is_the_weights_sha256(tmp_path):
     root, sha = checkpoint(tmp_path)
     with pytest.raises(ValueError, match="differs from the pinned revision"):
