@@ -237,8 +237,9 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
             await self._observe()
             self.goal_leases.check_stop(robot_id, stop)
             intended = self._intended_route(robot_id, route, x, y)
+            site_route = self._site_route(robot_id, intended)
             untrusted = next((rid for rid in self._order
-                              if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
+                              if rid != robot_id and self._untrusted_blocks(rid, intended, site_route=site_route)), None)
             if untrusted is not None:
                 # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
                 stop = (stop[0], stop[1] + 1)
@@ -255,7 +256,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 return admission.response_of(decision)
             grid = bays.Grid.from_payload(await self.map())
             self.goal_leases.check_stop(robot_id, stop)
-            standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
+            standing = self._standing_in_the_way(robot_id, intended, grid, (x, y), site_route=site_route)
             if standing:
                 return await self._make_room(
                     robot_id, x, y, yaw, intended, standing,
