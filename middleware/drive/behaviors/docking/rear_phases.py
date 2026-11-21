@@ -22,7 +22,7 @@ from __future__ import annotations
 import math
 from typing import Any, Optional
 
-from core_features.docking.charging import ChargingConfirmation
+from core_features.docking.charging import PackChargeConfirmation
 from core_features.docking.database import Pose2D
 from core_features.docking.model import DockPhase
 from core_features.docking.parking import wrap as _wrap
@@ -41,12 +41,8 @@ class RearPhases:
     def __init__(self, host: Any) -> None:
         self._h = host
         self._progress: Optional[tuple] = None     # (travelled_m, at)
-        self._baseline_v: Optional[float] = None
-        # 전압 1소스(D-350 Phase 1) — D-27 억제 입력이 아니다. 매니저 시계로 만들고
-        # 호출은 늘 `update(now=…)`로 온다(시계 갈아끼우기 후에도 섞이지 않게).
-        self._charging = ChargingConfirmation(clock=host._clock,
-                                              window_s=host._cfg.charge_confirm_s,
-                                              instrumented=False)
+        # D-350 Phase 1 counts the pack's ADC timestamps. D-27 still needs two sources.
+        self._charging = PackChargeConfirmation(clock=host._clock, window_s=host._cfg.charge_confirm_s)
 
     # --- 매니저가 부르는 자리 ---------------------------------------------------
 
@@ -63,7 +59,7 @@ class RearPhases:
         if status is not None:
             return self._h._charging.update(status, voltage, now=now), self._h._charging
         if self.active():
-            return self._charging.update(None, voltage, now=now), self._charging
+            return self._charging.observe(self._h._battery, now=now), self._charging
         return False, self._h._charging
 
     def staging_pose(self, dock, offset_m: float) -> Pose2D:
@@ -169,8 +165,7 @@ class RearPhases:
         elif now - since >= cfg.contact_stall_s:
             self._stop()
             h.executor.set_collision_exemption(False)
-            self._charging.reset()
-            self._baseline_v = None
+            self._charging.begin_settling(h._battery)
             h._enter(DockPhase.SETTLING)
             return
         if now - h._phase_since > 2.0 * h._type().rail_entry_m / cfg.rear_speed \
@@ -183,15 +178,8 @@ class RearPhases:
     def _tick_settling(self, now: float) -> None:
         """전압 1소스 + 멈춘 뒤 기준에서의 상승. 도크 에이전트가 없다."""
         h, cfg = self._h, self._h._cfg
-        voltage = getattr(h._battery, "voltage", None) if h._battery is not None else None
-        valid = voltage is not None and math.isfinite(float(voltage))
-        if self._baseline_v is None and valid and now - h._phase_since >= cfg.settle_still_s:
-            # 멈춘 직후 부하가 빠져 오르는 전압을 충전으로 읽지 않도록 잠시 뒤 기준을 잡는다.
-            self._baseline_v = float(voltage)
-        confirmed = self._charging.update(None, voltage, now=now)
-        peak = self._charging.peak_v
-        if (confirmed and self._baseline_v is not None and peak is not None
-                and peak - self._baseline_v >= cfg.rear_charge_rise_v):
+        if self._charging.observe(h._battery, now=now, since_settled=now - h._phase_since,
+                                  baseline_delay_s=cfg.settle_still_s, rise_v=cfg.rear_charge_rise_v):
             h._mark_docked()
             return
         if now - h._phase_since > cfg.settle_timeout_s:

@@ -34,7 +34,7 @@ from core_features.docking.bay_reseat import BayReseatMixin
 from core_features.docking.bay_turn_watch import BayTurnMixin
 from core_features.docking.bay_zone_checks import BayZoneChecksMixin
 from core_features.docking.bay_zone_phases import BayZoneMixin
-from core_features.docking.charging import ChargingConfirmation
+from core_features.docking.charging import PackChargeConfirmation
 from core_features.docking.model import DockPhase
 from core_features.docking.parking import ParkingGains
 from core_features.docking.rear_phases import rear_errors
@@ -49,9 +49,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
     def __init__(self, host: Any) -> None:
         self._h = host
         # 전압 1소스(D-941 숫자: 20 s 창) — D-27 억제 입력이 아니다.
-        self._charging = ChargingConfirmation(clock=host._clock,
-                                              window_s=host._cfg.bay_charge_confirm_s,
-                                              instrumented=False)
+        self._charging = PackChargeConfirmation(clock=host._clock, window_s=host._cfg.bay_charge_confirm_s)
         self._est: Optional[tuple[float, float]] = None   # (횡, 방위) 추정 — 예측이 메운다
         self._no_obs_s = 0.0
         self._scan_s: Optional[float] = None
@@ -69,7 +67,6 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         self._slip: Optional[tuple[float, float]] = None   # (travelled, along) 창 시작
         self._backoff = False
         self._last_tick: Optional[float] = None
-        self._baseline_v: Optional[float] = None
         self._fleet_cue: Optional[tuple[float, dict]] = None
         # 칸 줄 안 시작(bay_zone.py): None | "check"(선 관측 기다려 판정) | "exit"(곧은 전진)
         self._zone: Optional[str] = None
@@ -106,7 +103,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         if status is not None:
             return self._h._charging.update(status, voltage, now=now), self._h._charging
         if self.active():
-            return self._charging.update(None, voltage, now=now), self._charging
+            return self._charging.observe(self._h._battery, now=now), self._charging
         return self._h._rear_phases.docked_confirm(status, voltage, now)
 
     def note_body_scan(self, rotation_block: Optional[str], front_gap_m: Optional[float],
@@ -478,8 +475,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         self._stop()
         if h.executor is not None:
             h.executor.set_collision_exemption(False)
-        self._charging.reset()
-        self._baseline_v = None
+        self._charging.begin_settling(h._battery)
         self._req_open = None
         self._seat_asked, self._seat_match, self._seat_tries = False, None, 0
         h._enter(DockPhase.SETTLING)
@@ -493,14 +489,8 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
             return
         if self._seat_blocked(now):
             return
-        voltage = getattr(h._battery, "voltage", None) if h._battery is not None else None
-        valid = voltage is not None and math.isfinite(float(voltage))
-        if self._baseline_v is None and valid and now - h._phase_since >= cfg.bay_settle_baseline_s:
-            self._baseline_v = float(voltage)
-        confirmed = self._charging.update(None, voltage, now=now)
-        peak = self._charging.peak_v
-        if (confirmed and self._baseline_v is not None and peak is not None
-                and peak - self._baseline_v >= cfg.bay_charge_rise_v):
+        if self._charging.observe(h._battery, now=now, since_settled=now - h._phase_since,
+                                  baseline_delay_s=cfg.bay_settle_baseline_s, rise_v=cfg.bay_charge_rise_v):
             h._mark_docked()
             return
         if now - h._phase_since > cfg.settle_timeout_s + cfg.bay_charge_confirm_s:
