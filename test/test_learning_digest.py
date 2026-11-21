@@ -43,9 +43,9 @@ def test_checkpoint_digest_golden_vector(tmp_path):
     # Fixed bytes -> fixed hex: the OMX policy runner and the policy registry pin this algorithm (D-854 2).
     from rosy.contracts.learning.digest import checkpoint_sha256
     root = _checkpoint(tmp_path)
-    golden = 'f505742c0e0556a3c08d63640fbaaae6a6761d00857d5e0c73f932c00929c8ab'
-    assert checkpoint_sha256(root) == golden
-    assert checkpoint_sha256(root, ['sub/b.bin', 'a.bin']) == golden  # explicit list, sorted by path
+    golden_sha256 = 'f505742c0e0556a3c08d63640fbaaae6a6761d00857d5e0c73f932c00929c8ab'
+    assert checkpoint_sha256(root) == golden_sha256
+    assert checkpoint_sha256(root, ['sub/b.bin', 'a.bin']) == golden_sha256  # explicit list, sorted by path
 
 
 def test_checkpoint_digest_skips_cache_and_checks_links(tmp_path):
