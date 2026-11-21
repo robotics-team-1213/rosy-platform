@@ -101,3 +101,70 @@ def test_session_name_prefers_rosy_then_claude(monkeypatch):
     assert merge_queue.session_name() == "b"
     monkeypatch.delenv("CLAUDE_SESSION_NAME")
     assert merge_queue.session_name() == "unknown"
+
+
+def test_list_adds_a_queued_pr_the_entries_list_missed(monkeypatch, capsys):
+    """11-21 21:05 KST: PR #432 had isInMergeQueue=true at position 2 while list printed "empty"."""
+    fake_run_gh(monkeypatch, lambda args: {"repository": {
+        "mergeQueue": {"entries": {"nodes": []}},
+        "pullRequests": {"nodes": [
+            {"number": 432, "title": "fix: slots", "body": "Session: w-slotfix\n", "isInMergeQueue": True,
+             "mergeQueueEntry": {"position": 2, "state": "AWAITING_CHECKS", "enqueuedAt": "2026-11-21T12:05:15Z"}},
+            {"number": 431, "title": "not queued", "body": "", "isInMergeQueue": False, "mergeQueueEntry": None},
+        ]},
+    }})
+    assert merge_queue.main(["list"], repo=ROOT) == 0
+    out = capsys.readouterr().out
+    assert "2 AWAITING_CHECKS PR #432 fix: slots" in out and "session=w-slotfix (PR state only)" in out
+    assert "empty" not in out and "#431" not in out
+
+
+def test_list_says_when_no_queue_is_visible(monkeypatch, capsys):
+    fake_run_gh(monkeypatch, lambda args: {"repository": {"mergeQueue": None, "pullRequests": {"nodes": []}}})
+    assert merge_queue.main(["list"], repo=ROOT) == 0
+    assert "robotics-team-1213/rosy-platform main: no merge queue visible" in capsys.readouterr().out
+
+
+def test_default_repository_is_this_checkout_not_the_working_directory(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(merge_queue, "repo_slug", lambda repo: seen.append(repo) or ("o", "n"))
+    monkeypatch.setattr(merge_queue, "graphql", lambda repo, query, **f: {"repository": {"mergeQueue": None}})
+    monkeypatch.chdir(tmp_path)
+    assert merge_queue.main(["list"]) == 0
+    assert seen == [ROOT.resolve()]
+
+
+def pr_state(**fields):
+    failed = fields.pop("failed", [])
+    nodes = [{"__typename": "CheckRun", "name": "ci-result", "conclusion": "SUCCESS"}]
+    nodes += [{"__typename": "CheckRun", "name": n, "conclusion": "FAILURE"} for n in failed]
+    return {"number": 7, "state": "OPEN", "mergeStateStatus": "CLEAN", "mergeable": "MERGEABLE",
+            "isInMergeQueue": False, "mergeQueueEntry": None,
+            "commits": {"nodes": [{"commit": {"statusCheckRollup": {"contexts": {"nodes": nodes}}}}]}, **fields}
+
+
+@pytest.mark.parametrize("fields,expect", [
+    ({"mergeStateStatus": "DIRTY"}, ["git merge origin/main", "resolve-merge-conflicts", "--evidence again"]),
+    ({"mergeable": "CONFLICTING", "mergeStateStatus": "BLOCKED"}, ["git merge origin/main"]),
+    ({"mergeStateStatus": "BEHIND"}, ["BEHIND: do not touch it"]),
+    ({"isInMergeQueue": True, "mergeQueueEntry": {"position": 3, "state": "QUEUED"}}, ["position 3, QUEUED): wait"]),
+    ({"mergeStateStatus": "BLOCKED", "failed": ["modules", "ci-result-x"]}, ["failing checks ci-result-x, modules"]),
+    ({"mergeStateStatus": "BLOCKED"}, ["BLOCKED: checks still running"]),
+    ({"state": "MERGED"}, ["merged: nothing to do"]),
+])
+def test_status_prints_the_state_and_one_next_step(monkeypatch, capsys, fields, expect):
+    calls = fake_run_gh(monkeypatch, lambda args: {"repository": {"pullRequest": pr_state(**fields)}})
+    assert merge_queue.main(["status", "7"], repo=ROOT) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("PR #7 ") and len(out) == 2 and out[1].startswith("next: ")
+    for piece in expect:
+        assert piece in out[1]
+    if "BEHIND" in expect[0]:
+        assert "git merge" not in out[1]
+    assert "number=7" in calls[-1] and "-F" in calls[-1]
+
+
+def test_status_refuses_an_unknown_pr(monkeypatch):
+    fake_run_gh(monkeypatch, lambda args: {"repository": {"pullRequest": None}})
+    with pytest.raises(SystemExit, match="not found"):
+        merge_queue.main(["status", "9"], repo=ROOT)
