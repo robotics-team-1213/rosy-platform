@@ -83,24 +83,49 @@ def open_episode_video(world, path, views, overview):
     return record, close
 
 
-def rollout_act(teacher, here, step, actor, views, seconds, device, record=None):
+def act_joint_mapping(arm):
+    """Convert between follower units and arm-local MuJoCo joints using the cell calibration."""
     import numpy as np
-    import torch
-    from omx_two_arm_teacher import FPS
     from palletizing_gripper import angle_for_gap_clipped, gap_m
 
     cell_tools = str(Path(__file__).resolve().parents[2] / "deploy/robot/omx")
     if cell_tools not in sys.path:
         sys.path.insert(0, cell_tools)
+    from arm_status_bridge import JOINTS, to_radians
     from cell_arm_cal import default_profile
-    from cell_control_core import norm_to_rad, rad_to_norm
+    from cell_control_core import rad_to_norm
+
+    profile = default_profile(arm)
+    held, slope = profile["held_30mm"], profile["gap_mm_per_unit"]
+
+    def jaw_angle(units):
+        gap_mm = 30 + (np.clip(units, 0, 100) - held) * slope
+        # The mirror's 12 mm gap floor loses the nearly closed A/B home readings.
+        return angle_for_gap_clipped(max(0.0, gap_mm) / 1000)
+
+    def to_sim(units):
+        body = to_radians(np.clip(units[:5], -100, 100))
+        return np.array([*(body[joint] for joint in JOINTS[:5]), jaw_angle(units[5])])
+
+    def to_policy(q):
+        grip = held + (1000 * gap_m(q[5]) - 30) / slope
+        return [*(rad_to_norm(value) for value in q[:5]), float(np.clip(grip, 0, 100))]
+
+    return to_sim, to_policy, jaw_angle(profile["grip_closed"])
+
+
+def rollout_act(teacher, here, step, actor, views, seconds, device, record=None):
+    import numpy as np
+    import torch
+    from omx_two_arm_teacher import FPS
 
     policy, pre, post = actor
     world, arm, container = teacher.world, step["arm"], step["container"]
-    # Use the nominal A/B jaw calibration until matching measured profiles are available.
-    jaw_cal = default_profile(arm)
-    held, slope = jaw_cal["held_30mm"], jaw_cal["gap_mm_per_unit"]
-    data = teacher.fresh(here)
+    to_sim, to_policy, closed_jaw = act_joint_mapping(arm)
+    # The teacher's side wait pose pans a quarter turn away from the real cell's folded home.
+    home = world.layout.sim_arms[arm].home.copy()
+    home[5] = closed_jaw
+    data = teacher.fresh(here, initial_joints={arm: home})
     before = {name: world.pose(data, name) for name in here if name != container}
     start_z = world.pose(data, container)[0][2]
     peak = 0.0
@@ -111,9 +136,7 @@ def rollout_act(teacher, here, step, actor, views, seconds, device, record=None)
     trajectory = []
     with torch.inference_mode():
         for frame in range(round(seconds * FPS)):
-            q = teacher.q_now(data, arm)
-            grip = np.clip(held + (1000 * gap_m(q[5]) - 30) / slope, 0, 100)
-            state = [*(rad_to_norm(value) for value in q[:5]), grip]
+            state = to_policy(teacher.q_now(data, arm))
             batch = {"observation.state": torch.tensor([state], dtype=torch.float32, device=device)}
             frames = []
             for key, (camera, size) in views.items():
@@ -125,12 +148,10 @@ def rollout_act(teacher, here, step, actor, views, seconds, device, record=None)
             if action.shape != (6,) or not np.isfinite(action).all():
                 raise ValueError("ACT must emit six finite normalized joints")
             if frame % 5 == 0:
-                trajectory.append(dict(frame=frame, state=np.asarray(state).tolist(), action=action.tolist()))
+                trajectory.append(dict(frame=frame, state=state, action=action.tolist()))
             if record is not None:
                 record(data, frames)
-            joints = [norm_to_rad(value) for value in np.clip(action[:5], -100, 100)]
-            gap = (30 + (np.clip(action[5], 0, 100) - held) * slope) / 1000
-            teacher.frame(data, {arm: np.array([*joints, angle_for_gap_clipped(gap)]), **idle}, "act")
+            teacher.frame(data, {arm: to_sim(action), **idle}, "act")
             peak = max(peak, world.pose(data, container)[0][2] - start_z)
     row = dict(step=step["id"], arm=arm, container=container,
                source=step["from"], target=step["to"], lifted=bool(peak > .015), joint_trajectory=trajectory)

@@ -14,6 +14,12 @@ import numpy as np
 from tools.sim.omx_sim_policy_views import main, resolve_views, rollout_act
 
 
+REAL_HOME = {
+    "arm_a": [0.76, -62.25, 53.06, 51.65, 44.66, 49.18],
+    "arm_b": [0.76, -62.25, 53.06, 51.65, 44.62, 48.86],
+}
+
+
 def features(*names):
     return {
         "observation.state": {"shape": [6]},
@@ -105,6 +111,7 @@ class ViewMapTests(unittest.TestCase):
     def test_act_row_records_pre_step_state_and_action_every_fifth_frame(self):
         teacher = Mock()
         teacher.world.layout.arms = ("arm_a",)
+        teacher.world.layout.sim_arms = {"arm_a": SimpleNamespace(home=np.zeros(6))}
         teacher.world.pose.return_value = ([0, 0, 0], 0, 0)
         teacher.q_now.side_effect = ([frame] * 5 + [0] for frame in range(11))
         teacher.verdict.side_effect = lambda data, step, row, before: dict(row, result="fail")
@@ -120,8 +127,11 @@ class ViewMapTests(unittest.TestCase):
             "torch": torch,
             "omx_two_arm_teacher": SimpleNamespace(FPS=11),
             "palletizing_gripper": SimpleNamespace(gap_m=lambda _: .03, angle_for_gap_clipped=lambda gap: gap),
-            "cell_arm_cal": SimpleNamespace(default_profile=lambda _: {"held_30mm": 50, "gap_mm_per_unit": 1}),
-            "cell_control_core": SimpleNamespace(rad_to_norm=float, norm_to_rad=float),
+            "cell_arm_cal": SimpleNamespace(default_profile=lambda _: {
+                "grip_closed": 50, "held_30mm": 50, "gap_mm_per_unit": 1,
+            }),
+            "cell_control_core": SimpleNamespace(rad_to_norm=float),
+            "arm_status_bridge": SimpleNamespace(JOINTS=list(range(6)), to_radians=lambda state: dict(enumerate(state))),
         }
         step = {"id": "a1", "arm": "arm_a", "container": "box", "from": "ship", "to": "temp"}
         with patch.dict(sys.modules, modules), patch.object(sys, "path", sys.path.copy()):
@@ -132,3 +142,34 @@ class ViewMapTests(unittest.TestCase):
             {"frame": frame, "state": [frame] * 5 + [50], "action": [9, 8, 7, 6, 5, 4]}
             for frame in (0, 5, 10)
         ])
+
+    def test_act_uses_folded_home_and_round_trips_real_home_for_each_arm(self):
+        sim_tools = Path(__file__).resolve().parents[1] / "tools/sim"
+        with patch.object(sys, "path", [str(sim_tools), *sys.path]):
+            from omx_two_arm_sites import Layout
+
+            layout = Layout()
+            for arm, real_home in REAL_HOME.items():
+                with self.subTest(arm=arm):
+                    teacher = Mock()
+                    teacher.world.layout = layout
+                    teacher.world.pose.return_value = ([0, 0, 0], 0, 0)
+                    teacher.fresh.side_effect = lambda _, **kw: kw.get("initial_joints", {})
+                    teacher.q_now.side_effect = lambda data, arm: data.get(arm, layout.sim_arms[arm].wait)
+                    teacher.frame.side_effect = lambda data, targets, _: data.update(targets)
+                    teacher.verdict.side_effect = lambda data, step, row, before: row
+                    action = Mock()
+                    action.cpu.return_value.numpy.return_value = np.asarray([real_home])
+                    torch = MagicMock()
+                    torch.inference_mode.side_effect = nullcontext
+                    torch.tensor.side_effect = lambda state, **_: np.asarray(state)
+                    pre = Mock(side_effect=lambda batch: batch)
+                    step = {"id": arm, "arm": arm, "container": "box", "from": "ship", "to": "temp"}
+                    with patch.dict(sys.modules, {"torch": torch, "omx_two_arm_teacher": SimpleNamespace(FPS=2)}):
+                        rollout_act(teacher, {}, step, (Mock(), pre, Mock(return_value=action)), {}, 1, "cpu")
+
+                    first, second = [call.args[0]["observation.state"][0] for call in pre.call_args_list]
+                    np.testing.assert_allclose(first, real_home, rtol=0, atol=2)
+                    np.testing.assert_allclose(second, real_home, rtol=0, atol=.5)
+                    np.testing.assert_allclose(teacher.frame.call_args.args[1][arm][:5],
+                                               layout.sim_arms[arm].home[:5], rtol=0, atol=.02)
