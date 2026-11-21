@@ -193,7 +193,8 @@ def build_authorize(console_token: Optional[str],
         if (principal.role == "service" and principal.principal_id == "auto-track-calibration"
                 and request.url.path != "/api/fleet/calibrations"
                 and not request.url.path.startswith("/api/fleet/site-map/")):
-            raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "calibration scope required"})
+            raise HTTPException(status_code=403, detail={"code": "CALIBRATION_SCOPE_REQUIRED",
+                                                         "message": "calibration scope required"})
         if is_arm_assessor(principal) and not (request.method == "POST" and ARM_CLEAR.match(request.url.path)):
             raise HTTPException(status_code=403, detail={"code": "ARM_ASSESSOR_SCOPE_REQUIRED",
                                                          "message": "an arm assessor may only clear arm incidents"})
@@ -236,6 +237,19 @@ def build_authorize(console_token: Optional[str],
         return principal
 
     return authorize
+
+
+def may_press_estop(request: Request, principal: SitePrincipal) -> bool:
+    """D-1043: an operator, or a human in an interactive session (cookie, or an Account identity), presses the site E-stop.
+
+    A bearer token without a named human (Monitoring, token-only viewer, policy-admin token, service, machine,
+    ai_observer) never does. Pressing only stops; rearm, release, clear and resume stay operator-only.
+    """
+    if principal.role in ("service", "ai_observer"):
+        return False
+    operates = principal.permits_site("fleet.operate", {"operator"})  # as the old operator-only guard admitted it
+    human = getattr(request.state, "site_auth_via", None) == "cookie" or bool(principal.account_id)
+    return operates or (human and principal.permits_site("fleet.read"))
 
 
 def build_role_guards(authorize, principals: Mapping[str, SitePrincipal], *, named_logins: bool = False):

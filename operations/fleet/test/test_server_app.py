@@ -497,12 +497,20 @@ def test_viewer_can_read_fleet_state_but_cannot_issue_robot_commands(tmp_path):
     assert denied.json()["detail"]["code"] == "FORBIDDEN"
     assert client.post("/api/fleet/estop", headers=policy_admin).status_code == 403
     assert client.post("/api/fleet/estop", headers=operator).status_code == 200
+    assert client.get("/api/fleet/session", headers=operator).json()["estop"] is True
     assert not any(call[0] == "navigation_goal" for call in robot.calls)
     audits = [row for row in task_service.store.api_audit() if row["event_type"] == "RESULT"]
     assert [(row["principal_id"], row["status_code"]) for row in audits[:2]] == [
         ("bob", 200), ("carol", 403),
     ]
     assert audits[2]["principal_id"] == "alice" and audits[2]["status_code"] == 403
+    # D-1043: a token-only viewer (Monitoring style) and a policy-admin token cannot press; a viewer also still cannot
+    # rearm, release, clear or resume (the cookie-session viewer press is in test_development_session).
+    for path, body in (("/api/fleet/dispatch/rearm", {"expected_generation": 0}),
+                       ("/api/fleet/cancel-all", {}),
+                       ("/api/fleet/pipeline/human-safety-gate", {"human_detected": False}),
+                       ("/api/fleet/pipeline/arm-holds/clear", {})):
+        assert client.post(path, json=body, headers=viewer).status_code == 403, path
 
 
 def test_site_session_returns_only_the_authenticated_principal_and_role(tmp_path):
@@ -522,7 +530,7 @@ def test_site_session_returns_only_the_authenticated_principal_and_role(tmp_path
                           headers={"Authorization": "Bearer viewer-token"})
 
     assert response.status_code == 200
-    assert response.json() == {"principal_id": "alice", "role": "viewer"}
+    assert response.json() == {"principal_id": "alice", "role": "viewer", "estop": False}  # D-1043: a bearer token may not press
 
 
 def test_per_user_authorization_requires_persistent_audit_storage():
