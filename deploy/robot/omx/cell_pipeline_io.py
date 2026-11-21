@@ -216,7 +216,7 @@ class FifoCell:
             return cv2.imdecode(np.frombuffer(reply.read(), np.uint8), cv2.IMREAD_COLOR)
 
     def frame_receipt(self, camera: str, *, previous: dict | None = None,
-                      max_age_s: float = 2.0) -> dict:
+                      max_age_s: float = 2.0, timeout_s: float = 10.0) -> dict:
         """Read one source frame; reject stale or non-advancing evidence rather than reusing a cached image."""
         import cv2
 
@@ -231,7 +231,7 @@ class FifoCell:
             headers["If-None-Match"] = previous["etag"]
         request = urllib.request.Request(url, headers=headers)
         try:
-            with urllib.request.urlopen(request, timeout=10) as reply:
+            with urllib.request.urlopen(request, timeout=timeout_s) as reply:
                 if reply.status != 200:
                     raise ValueError(f"camera frame HTTP {reply.status}; no fresh JPEG")
                 sequence_text = reply.headers.get("X-Frame-Seq")

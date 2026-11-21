@@ -1494,3 +1494,72 @@ sudo udevadm control --reload-rules
 적용하고 `udevadm settle --timeout=10` 뒤 운영자 계정의 실제 읽기·쓰기 권한을 확인한다.
 이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
 시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
+
+## 셀 목표 슬롯 설정 (D-1057)
+
+셀 A/B의 배치 판정(`cell_zone_verification`)은 목적지 사이트의 슬롯을 설정에서 읽는다. 설정에 없으면 측정하지 않고
+`unverified`로 남는다. 기본 슬롯은 없다.
+
+기록 위치와 형식은 셀 설정 JSON의 `sites.<이름>`이다.
+
+| 키 | 뜻 | 범위 |
+|---|---|---|
+| `col` | 팔레트 열 (`cell_area_zones` 슬롯 표의 열) | 정수 1–3 |
+| `row` | 팔레트 행 | 정수 1–2 |
+| `layer` | 층(0이 1단). 기본 사이트 `pallet`에는 쓰지 않는다 | 정수 0–2 |
+
+`pallet`처럼 `surface_z`가 있는 기본 사이트에는 `col`·`row`만 적는다. 실행 때 `cell_place_fit.with_tiers`가
+`pallet-l0`, `pallet-l1`, `pallet-l2`를 만들면서 `col`·`row`를 그대로 복사하고 `layer`(와 `tier = layer + 1`)를
+붙인다. 작업의 `dst_site`(예 `pallet-l1`)와 handoff tier가 이 값과 다르면 완료 증거를 받지 않는다.
+
+```json
+"sites": {
+  "pallet": {"surface_z": -0.01, "place": [0.153, -0.128], "auto_roi": [246, 148, 400, 405], "col": 1, "row": 2}
+}
+```
+
+값은 그림을 보고 정한다. 읽기 전용 도구가 슬롯 ROI 표와 각 사이트의 place 점을 상단 프레임 한 장에 겹쳐 PNG로 만든다.
+
+```bash
+python3 deploy/robot/omx/cell_slot_overlay.py --config cell-arm-b-stack.json --frame top.jpg \
+  --out overlay.png --calibration <config의 calibration_path 파일>
+```
+
+place 점은 셀 보정(`cell_observe.predicted_pixel`)이 있어야 그려진다. `--calibration`이 없거나 변환이 안 되는
+사이트는 그림 아래 문구와 표준 출력의 `place_points_omitted`에 이름이 남는다. 설정 파일은 읽기만 한다.
+
+셀 S는 상단 카메라 판정만 쓰므로(ADR D-1057 2-1절) `col`·`row`가 필요 없고 사이트의 `auto_roi`가 지정 구역이다.
+
+### 판정 구역 표 덮어쓰기와 제안 도구 (D-1057)
+
+`cell_area_zones`의 구역 표(`TOP_ROI_BY_COL_ROW`, `SIDE_ROI_BY_COL_TIER`)는 카메라 위치에 묶여 있다. 셀 설정에 `zone_rois`가
+있으면 배치 판정(`cell_zone_verification`)만 그 표를 쓰고, 없으면 공용 상수를 쓴다. 다른 실행기 경로와 공용 상수는 그대로다.
+키는 상단 `c<열>r<행>`(열 1–3, 행 1–2), 측면 `c<열>t<층>`(층 1–3)이고 값은 640x480 영상의 `[x1, y1, x2, y2]` 정수다.
+이름 없는 칸은 공용 표를 쓴다. 형식이 틀리면 공용 표로 되돌아가지 않고 `unverified`가 된다.
+
+```json
+"zone_rois": {"top": {"c1r1": [285, 149, 330, 199]}, "side": {"c1t1": [177, 252, 260, 315]}}
+```
+
+`cell_zone_propose.py`는 상단·측면 프레임에서 트레이 칸 경계를 찾아 `zone_rois` 형식의 제안 JSON과 겹침 PNG(공용 표는 빨강,
+제안은 초록)를 만든다. 경계가 뚜렷하지 않은 칸은 `null`과 이유다. 이 도구는 셀 설정을 읽지도 쓰지도 않는다.
+
+`zone_rois`에는 `"floor": [[x1, y1, x2, y2], ...]`(색 영상 좌표의 팔레트 바닥 ROI, 비어 있는 머리 띠나 빈 칸)를 더할 수 있다. `floor`가 있으면 목표
+칸의 점유와 층을 깊이 상대 높이(`cell_depth_slots`, ADR D-1057 2-2절)로 판정하고 색·측면은 보조다. `floor`가 없으면 기존 판정이다.
+
+셀 설정의 `depth_frames`(정수 1–9, 기본 5)는 배치 뒤 깊이를 몇 장 연속 캡처해 픽셀별 중앙값으로 쓸지 정한다(3 s 마감, 근거는 ADR D-1057).
+
+### Fleet 작업의 감독 시험과 검토 기록 (D-911, D-1057 2-5)
+
+Fleet worker는 사람이 있다고 스스로 선언하지 않는다. 감독 시험(`--commissioning --person-at-switch`)은 이름 있는 운영자가 그 작업에
+`POST /api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm`을 한 뒤(120 s 안에 claim) 실행되는 작업에만 쓴다. 표시가 없는 작업은
+검토된 운전 범위로만 실행하며, 검토 기록이 없으면 팔은 움직이지 않고 worker가 `ABORTED`, 사유 `REVIEW_REQUIRED`로 보고한다.
+
+시험이 쌓이면 검토자가 다음 두 단계로 기록한다. 숫자와 이름은 사람이 정하고 소프트웨어는 채우지 않는다.
+
+```bash
+python3 deploy/robot/omx/cell_envelope_review.py list <work-dir>/attempts.jsonl
+python3 deploy/robot/omx/cell_envelope_review.py add --attempts <work-dir>/attempts.jsonl --envelope <operating_envelope_path> \
+  --task-sha256 <list의 key> --reviewed-by <이름> --evidence-ref <확인한 근거> \
+  --min-attempts <N> --min-success-rate <R> --home-tolerance <U> --confirm-physical-review
+```
