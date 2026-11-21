@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { workKey, workLine, workStatus, autoAdmitScope, policyScopeText, autoAdmitDetail } = await import("../../../../applications/fleet/web/work/work-view.js");
+const { workKey, workLine, workStatus, autoAdmitScope, policyScopeText, autoAdmitDetail, canAdmitWorkHere } = await import("../../../../applications/fleet/web/work/work-view.js");
 
 test("two ledgers can reuse the same ID without sharing selection", () => {
   assert.notEqual(workKey({source: "task", source_id: "same"}), workKey({source: "mission", source_id: "same"}));
@@ -61,4 +61,12 @@ test("D-865 P3: the detail line separates in-scope from human approval", () => {
   assert.equal(autoAdmitDetail({...waiting, device_id: "rosy_02"}, scopePolicy), "범위 밖 · 사람 승인");
   assert.equal(autoAdmitDetail(waiting, {...scopePolicy, scope: {...scopePolicy.scope, enabled: false}}), "꺼짐 · 사람 승인");
   assert.equal(autoAdmitDetail({...waiting, status: "RUNNING"}, scopePolicy), null);  // only waiting rows carry the line
+});
+
+test("D-960: FleetR relays arm jobs without admitting them locally; owning cell admits", () => {
+  assert.equal(canAdmitWorkHere(waiting, null), true);
+  assert.equal(canAdmitWorkHere(waiting, { role: "cell", arms: true, children: false }), true);
+  assert.equal(canAdmitWorkHere(waiting, { role: "root", drive: true, arms: true, children: true }), false);
+  assert.equal(canAdmitWorkHere(waiting, { role: "cell", drive: true, arms: false, children: false }), false);
+  assert.equal(canAdmitWorkHere({ ...waiting, status: "RUNNING" }, null), false);
 });

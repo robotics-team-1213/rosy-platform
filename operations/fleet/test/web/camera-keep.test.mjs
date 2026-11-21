@@ -70,7 +70,7 @@ test("feed drop keeps the last frame marked stale; the next live frame clears th
   assert.match(stamp.textContent, / · \d+초 전$/);
 });
 
-test("coordinates mode keeps birdseye hidden when a live ceiling frame arrives", () => {
+test("coordinates mode skips plane warp requests while letting watch-ceiling toggle receive live frames", () => {
   const stage = { dataset: {} }, stamp = { hidden: true, textContent: "" }, birdseye = { hidden: true, src: "" };
   const mode = { value: "coordinates" };
   const elements = {
@@ -79,17 +79,26 @@ test("coordinates mode keeps birdseye hidden when a live ceiling frame arrives",
     "map-display-mode": mode, "camera-comparison": { open: false },
   };
   let handler = null;
+  let planeCalls = 0;
   const scope = {
     listen: () => {}, guard: (fn) => fn, interval: () => {},
     timeout: () => () => {},
     subscribe: (start) => start(), onDispose: () => {},
   };
-  const visionView = { onFrame: (cb) => { handler = cb; }, fetchPlane: async () => ({ state: "plane-unavailable" }) };
-  const view = { siteMap: { maps: [] } };
+  const visionView = {
+    onFrame: (cb) => { handler = cb; },
+    fetchPlane: async () => { planeCalls += 1; return { state: "plane-unavailable" }; },
+  };
+  const view = { siteMap: { maps: [{ map_id: "track", sources: ["ceiling_north"] }] } };
   const backdrop = createCameraBackdrop({ scope, el: (id) => elements[id] || null, view, draw: () => {} });
+  backdrop.setCalibrations([{
+    map_id: "track", source_id: "ceiling_north", approved_by: "op",
+    plane_ready: true, calibration_revision: "rev-1",
+  }]);
   backdrop.bindCamera(visionView);
 
   handler(frame);
   assert.equal(view.displayMode, "coordinates");
-  assert.equal(birdseye.hidden, true);
+  assert.equal(planeCalls, 0);
+  assert.equal(birdseye.hidden, false);
 });

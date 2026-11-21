@@ -226,11 +226,11 @@
           </div>
         </fieldset>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
-        <p id="fleet-scope-note" class="hint">선택한 로봇의 이동 목표와 저속 조종을 보냅니다. 비상 정지는 관제 연결과 무관하게 유지됩니다.</p>
+        <p id="fleet-scope-note" class="hint">Rosy Fleet 사이트 관제입니다. 개별 로봇의 전방 카메라와 수동 조작은 Rosy Robot 화면에서 사용하며, 여기서는 목표·취소·정지 같은 원자 액션과 저속 조종을 보냅니다. 바퀴 속도는 로봇 안에서만 만들어지며 비상 정지는 관제 연결과 무관하게 유지됩니다.</p>
         </div>
       </details>
       <div class="map-board">
-      <div class="map-stage" id="map-stage" data-map-state="loading" data-watch="pip">
+      <div class="map-stage" id="map-stage" data-map-state="loading" data-watch="off">
         <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
@@ -245,7 +245,7 @@
           <img id="watch-front-image" alt="">
         </figure>
         <div id="device-watch" class="device-watch">
-          <ui-button kind="segment" id="watch-ceiling" type="button" aria-pressed="true" aria-controls="map-birdseye">천장</ui-button>
+          <ui-button kind="segment" id="watch-ceiling" type="button" aria-pressed="false" aria-controls="map-birdseye">천장</ui-button>
         </div>
         <!-- 2026-11-14 — 영상이 끊겨도 마지막 프레임을 두고, 그 찍은 시각을 왼쪽 아래에 작게 남긴다. -->
         <p id="map-camera-stamp" class="map-camera-stamp" hidden></p>
@@ -558,12 +558,9 @@
     <select id="assistant-locale" class="ui-field" data-work-read=""><option value="ko-KR">한국어</option><option value="en-US">English</option></select>
     <textarea id="assistant-input" class="ui-field" rows="3" maxlength="2000" placeholder="현재 로봇 상태 알려줘" disabled></textarea>
     <div class="map-head"><ui-button id="assistant-send" data-work-read="" kind="quiet" type="button" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">전송</ui-button><ui-button id="assistant-retry" data-work-read="" kind="quiet" type="button" hidden>같은 요청 확인</ui-button></div>
-    <details class="assistant-voice-tools">
-      <summary class="ui-disclosure-row">음성 도구</summary>
-      <div class="map-head"><ui-button id="assistant-dictate" data-work-read="" kind="quiet" type="button">말하기</ui-button><ui-button id="assistant-dictate-stop" data-work-read="" kind="quiet" type="button">인식 마치기</ui-button><ui-button id="assistant-voice-prepare" data-work-read="" kind="quiet" type="button">음성 입력 준비</ui-button></div>
-      <p id="assistant-voice-state" class="hint" role="status">음성 입력은 지원되는 브라우저의 한국어 음성이 필요합니다.</p>
-      <div class="map-head"><ui-button id="assistant-read" data-work-read="" kind="quiet" type="button">답변 읽기</ui-button><ui-button id="assistant-read-stop" data-work-read="" kind="quiet" type="button">읽기 중단</ui-button></div>
-    </details>
+    <div class="map-head"><ui-button id="assistant-dictate" data-work-read="" kind="quiet" type="button">말하기</ui-button><ui-button id="assistant-dictate-stop" data-work-read="" kind="quiet" type="button">인식 마치기</ui-button><ui-button id="assistant-voice-prepare" data-work-read="" kind="quiet" type="button">음성 입력 준비</ui-button></div>
+    <p id="assistant-voice-state" class="hint" role="status">음성 입력은 지원되는 브라우저의 한국어 음성이 필요합니다.</p>
+    <div class="map-head"><ui-button id="assistant-read" data-work-read="" kind="quiet" type="button">답변 읽기</ui-button><ui-button id="assistant-read-stop" data-work-read="" kind="quiet" type="button">읽기 중단</ui-button></div>
   </aside>
   </div>
 

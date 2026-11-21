@@ -318,7 +318,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         const b = siteBounds(view.siteMap, 0);
         const virtualOnly = view.displayMode === "coordinates" && !layerOn("sightings");
         el("map-tag").textContent =
-          `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${virtualOnly ? "가상 좌표" : describeSightings()}`
+          `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
           + (camera.calibration() && view.displayMode === "overlay"
             ? ` · ${camera.usesPlane() ? "Rosy Cam 평면 영상" : "브라우저 보정(대체)"} · ${camera.calibration().calibration_revision}`
               + (view.trackingDrift ? " · 카메라 교정 어긋남 — 맵 고정 다시 필요" : "") : "")

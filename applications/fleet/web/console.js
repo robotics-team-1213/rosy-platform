@@ -405,7 +405,7 @@ const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 const trackingView = {
   ...rawTrackingView,
-  refresh: () => (owns("drive") && view.layers?.tracking ? rawTrackingView.refresh() : undefined),
+  refresh: () => (owns("drive") ? rawTrackingView.refresh() : undefined),
 };
 
 // 잠금·세션 확인·토큰 입력·비밀번호 로그인·개발 접속은 console-auth.js 팩토리가 가진다(D-798 3.2).
@@ -455,7 +455,7 @@ pollDrive(() => mapView.refresh(), MAP_MS);
 pollDrive(() => chargeBays.refresh(), MAP_MS);
 pollDrive(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
 pollDrive(() => platoon.refresh(), MAP_MS);
-pollDrive(() => { if (view.layers?.sightings) mapView.refreshSightings(); }, STATE_MS);
+pollDrive(() => mapView.refreshSightings(), STATE_MS);
 pollDrive(() => mapView.refreshTraffic(), STATE_MS);
 pollDrive(() => mapView.refreshGuide(), STATE_MS);  // D-536
 poll(() => trackingView.refresh(), TRACKING_MS);

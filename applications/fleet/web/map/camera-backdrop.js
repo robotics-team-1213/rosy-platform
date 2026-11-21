@@ -174,8 +174,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     view.displayMode = mode.value || "coordinates";
     let lastFrame = null;
     const setLive = (url) => {
-      const show = Boolean(url) && (view.displayMode === "camera" || view.displayMode === "overlay");
-      birdseye.hidden = !show;
+      birdseye.hidden = !url;
       if (url) birdseye.src = url;
       toggle.disabled = !url;
       if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
