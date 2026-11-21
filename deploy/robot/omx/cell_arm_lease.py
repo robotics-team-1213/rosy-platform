@@ -120,6 +120,23 @@ def claim(arm, owner=None, purpose="", ttl_s=1800, pid=None, revision=None, root
     return (record, not same_live) if report_created else record
 
 
+def restore(arm, previous: dict, owner=None, root=None) -> bool:
+    """Put back a pid-less reservation this owner's claim re-pid'd for one session (record_session): the same
+    reservation, expiry and all, stays valid after the session. Only when the lease is still this owner's and not held."""
+    owner = owner or default_owner()
+    root = lease_root(root)
+    if previous.get("owner") != owner or previous.get("pid") is not None or previous.get("hold"):
+        return False
+    with _locked(arm, root):
+        current = _read(arm, root)
+        if not current or current.get("owner") != owner or current.get("hold"):
+            return False
+        tmp = root / f"{arm}.json.tmp"
+        tmp.write_text(json.dumps(previous, indent=2), encoding="utf-8")
+        os.replace(tmp, root / f"{arm}.json")
+    return True
+
+
 def hold(arm, reason: str, pid=None, owner=None, root=None) -> bool:
     """Mark this owner's lease held (live past its pid and expiry) for a runner record_session left on the arm."""
     owner = owner or default_owner()

@@ -209,6 +209,9 @@ def main(argv=None):
                              "joint_topic) while the session owns the port; the session wrapper exports "
                              "ROSY_CHUNK_JOINT_TOPIC instead of editing record_session. Default off")
     args = parser.parse_args(argv)
+    handed = os.environ.get("ROSY_CHUNK_JOINT_TOPIC") or None
+    if handed and args.joint_topic != handed:  # observer_handoff checked that topic: never another one (fail closed)
+        parser.error(f"--joint-topic {args.joint_topic!r} is not the handoff's checked topic {handed!r}")
     signals: list = []  # recorded, not raised: an interrupt folds or holds (chunk_runner_interrupt), never drops the arm
     __import__("chunk_runner_interrupt").install(signals)
     library = load_library(args.library)

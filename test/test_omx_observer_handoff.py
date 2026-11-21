@@ -36,10 +36,10 @@ class Host:
     """Fake systemctl, fuser, locks and lease; one ordered event log. After 'start' the observer holds the port."""
 
     def __init__(self, ports=(), enabled="enabled", stop_ok=True, session_code=0, lease_before=None,
-                 observer_takes_port=True, show="4242"):
+                 observer_takes_port=True, show="4242", active="inactive"):
         self.log, self.ports, self.enabled, self.stop_ok = [], list(ports), enabled, stop_ok
         self.session_code, self.spawned, self.show = session_code, None, show
-        self.observer_takes_port = observer_takes_port
+        self.observer_takes_port, self.active = observer_takes_port, active
         self.lease = SimpleNamespace(
             default_owner=lambda: "me", LeaseHeld=type("LeaseHeld", (RuntimeError,), {}),
             claim=lambda *a, **k: (self.log.append("lease"),
@@ -50,6 +50,8 @@ class Host:
         self.log.append(args[0])
         if args[0] == "stop":
             return SimpleNamespace(returncode=0 if self.stop_ok else 1, stdout="", stderr="refused")
+        if args[0] == "is-active":
+            return SimpleNamespace(returncode=0, stdout=self.active + "\n", stderr="")
         if args[0] == "is-enabled":
             if isinstance(self.enabled, Exception):
                 raise self.enabled
@@ -600,3 +602,80 @@ def test_snapshot_write_failure_does_not_break_the_session(session, monkeypatch)
     live = session.runner.snapshot_live(rows.append, session.topic, session.calibration)
     live({"t": time.time(), "state": [0.0] * 6})  # returns normally
     assert rows
+
+
+# --- Codex review of 447739d962 / 9f26324955 (PR #374): five findings, each at its cause ---
+
+
+def test_record_session_puts_a_pidless_reservation_back_so_it_outlives_the_session(tmp_path, monkeypatch):
+    sys.path.insert(0, str(OMX))
+    try:
+        import cell_arm_lease
+        import record_session_cli as cli
+    finally:
+        sys.path.remove(str(OMX))
+    monkeypatch.setenv("ROSY_ARM_LEASES", str(tmp_path))
+    monkeypatch.setenv("ROSY_ARM_LEASE_OWNER", "me@here")
+    reserved = cell_arm_lease.claim("arm_a", "me@here", "job", root=tmp_path, now=time.time(), ttl_s=3600)
+    record, created, before = cli.claim_arm_lease("arm_a")
+    assert not created and record["pid"] == os.getpid() and before["pid"] is None  # covered during the session
+    assert cell_arm_lease.restore("arm_a", before, root=tmp_path)
+    after = cell_arm_lease._read("arm_a", tmp_path)
+    assert after["pid"] is None and after["expires"] == reserved["expires"]
+    assert cell_arm_lease.live(after, now=time.time() + 3000)  # still the same valid reservation, no dead pid
+    # never over a hold or another owner's lease
+    assert not cell_arm_lease.restore("arm_a", {**before, "owner": "other@x"}, root=tmp_path)
+    cell_arm_lease.hold("arm_a", "runner HOLD", owner="me@here", root=tmp_path)
+    assert not cell_arm_lease.restore("arm_a", before, root=tmp_path)
+    assert cell_arm_lease._read("arm_a", tmp_path)["hold"] == "runner HOLD"
+
+
+def test_run_does_not_wait_a_second_time_after_the_leader_did(cell):
+    sleeps = []
+    host = Host()
+    code = handoff(cell, host, alive=lambda pgid: True, group_timeout_s=100, leader_waited=True,
+                   sleep=sleeps.append)
+    assert code == m.SESSION_LINGERS and sleeps == []  # no window without a leader to pass run's death on
+    assert "start" not in host.log
+
+
+@pytest.mark.parametrize("command", [["s", "--joint-topic", "/omx_commissioning/arm_b/joint_states"],
+                                     ["s", "--joint-topic=/omx_commissioning/arm_b/joint_states"],
+                                     ["s", "--joint-topic"]])
+def test_a_topic_on_the_session_command_that_differs_refuses_before_the_observer_is_touched(cell, command):
+    host = Host()
+    kwargs = dict(env_dir=cell.env_dir, environ=cell.environ, run=host.run, users=host.users, lock=host.lock,
+                  lease=host.lease, spawn=host.spawn, bridge=cell.bridge, state_dir=cell.state, signals=())
+    assert m.handoff("arm_a", command, **kwargs) == m.HANDOFF_FAILED
+    assert host.log == []
+    assert m.handoff("arm_a", ["s", "--joint-topic", TOPIC], **{**kwargs, "sleep": lambda s: None,
+                     "clock": ticking(), "alive": lambda p: False, "scan": lambda r: set()}) == 0
+
+
+def test_the_runner_refuses_a_joint_topic_other_than_the_handoffs_checked_one(session, monkeypatch, tmp_path):
+    monkeypatch.setenv("ROSY_CHUNK_JOINT_TOPIC", session.topic)
+    base = ["--config", str(tmp_path / "c"), "--library", str(tmp_path / "l"), "--io", str(tmp_path / "io")]
+    with pytest.raises(SystemExit) as exc:
+        session.runner.main([*base, "--joint-topic", "/omx_commissioning/arm_b/joint_states"])
+    assert exc.value.code == 2  # argparse refusal, before the arm is opened
+
+
+@pytest.mark.parametrize("active, stopped_expected", [("active", False), ("inactive", True)])
+def test_a_failed_stop_is_reported_as_the_stop_and_only_a_down_unit_is_restarted(cell, active, stopped_expected,
+                                                                                capfd):
+    host = Host(stop_ok=False, active=active)
+    assert handoff(cell, host) == m.HANDOFF_FAILED
+    assert "session" not in host.log and ("start" in host.log) == stopped_expected
+    err = capfd.readouterr().err
+    assert "recovery" not in err or stopped_expected  # a still-running observer: no recovery failure line
+    saved = state_of(cell)
+    assert "could not stop" in saved["error"]
+    assert saved["observer"] == ("resumed" if stopped_expected else "stop_failed")  # never counted stopped
+
+
+@posix
+def test_sigterm_before_the_session_launches_exits_143(cell):
+    host = Host(ports=[HELD] * 3)  # the port stays held while the signal arrives
+    signal_me(0.05)
+    code = handoff(cell, host, signals=m.SIGNALS, sleep=lambda s: time.sleep(0.1), group_timeout_s=1)
+    assert code == 143 and "session" not in host.log

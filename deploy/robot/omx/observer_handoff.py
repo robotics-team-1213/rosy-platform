@@ -155,6 +155,7 @@ def lead(command):
     # Stay (and keep forwarding) until nothing but this leader is left in the group: a shell wrapper may return
     # while its background session runs, and run's death must still reach that session. Bounded, so run's own
     # --group-timeout-s report (exit 71) still comes.
+    # Run does not wait a second time after this leader (a second window with no leader to pass run's death on).
     deadline = time.monotonic() + float(os.environ.get(GROUP_WAIT_ENV) or 120)
     while time.monotonic() < deadline and (group_members(os.getpgrp()) or set()) - {os.getpid()}:
         time.sleep(0.2)
@@ -191,7 +192,8 @@ def restart(arm, *, run, users, scan, device, sleep, clock, timeout_s, resume_s)
 def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5.0, resume_s=10.0,
             group_timeout_s=120.0, run=systemctl, users=fuser, scan=proc_holders, lock=session_lock,
             lease=cell_arm_lease, spawn=spawn_session, sleep=time.sleep, clock=time.monotonic,
-            alive=group_alive, kill=signal_session, signals=SIGNALS, bridge=bridge_binding, state_dir=None):
+            alive=group_alive, kill=signal_session, signals=SIGNALS, bridge=bridge_binding, state_dir=None,
+            leader_waited=None):
     unit = f"rosy-omx-observer@{arm}.service"
     environ = dict(os.environ if environ is None else environ)
     try:
@@ -203,12 +205,23 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
             raise HandoffError(f"{unit} env ROSY_OBSERVER_TOPIC {values.get('ROSY_OBSERVER_TOPIC')!r} is not the "
                                f"bridge manifest's {binding[0]}; fix the unit env before a handoff")
         env = session_env(arm, topic, environ, binding)
+        for i, word in enumerate(command):  # a topic named on the session command is a second, unchecked one
+            if word == "--joint-topic":
+                given = command[i + 1] if i + 1 < len(command) else ""
+            elif word.startswith("--joint-topic="):
+                given = word.partition("=")[2]
+            else:
+                continue
+            if given != binding[0]:
+                raise HandoffError(f"session command names joint topic {given!r}, not the bridge manifest's {binding[0]}")
         env[GROUP_WAIT_ENV] = f"{group_timeout_s:g}"
         locks = lock(arm)
     except (HandoffError, SystemExit) as exc:
         report(error=str(exc), stage="check", arm=arm)
         return HANDOFF_FAILED
 
+    if leader_waited is None:  # the leader already waited --group-timeout-s for the group: no second wait here
+        leader_waited = spawn is spawn_session and sys.platform.startswith("linux")
     state = {"signal": None, "child": None}
 
     def forward(signum, frame):  # every signal, every time: to the session's group; run itself keeps waiting
@@ -227,7 +240,12 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
             stopped = True  # from here a failed stop may still have stopped it: recovery decides
             result = run("stop", unit)
             if result.returncode != 0:
-                raise HandoffError(f"could not stop {unit}: {result.stderr.strip()}")
+                # only a unit that is really down gets the restart; a still-running observer was never stopped, so
+                # its stop failure is the report, not a recovery failure
+                active = run("is-active", unit).stdout.strip()
+                stopped = active in ("inactive", "failed")
+                observer = "untouched" if stopped else "stop_failed"
+                raise HandoffError(f"could not stop {unit}: {result.stderr.strip()} (is-active: {active or 'no answer'})")
             wait_port(device, want=lambda h: not h, users=users, scan=scan, timeout_s=timeout_s, sleep=sleep,
                       clock=clock)
             if state["signal"]:
@@ -235,6 +253,8 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
         except (HandoffError, lease.LeaseHeld, OSError, subprocess.SubprocessError) as exc:
             report(error=f"{exc}; session not started", stage="handoff", arm=arm)
             problem = str(exc)
+            if state["signal"]:  # cancelled before any session: 128+signal, not a refusal
+                code = 128 + state["signal"]
         else:
             fds = [h.fileno() for h in getattr(locks, "handles", ())]
             env[HELD_ENV] = ":".join([arm, *map(str, fds)]) if len(fds) == 2 else ""
@@ -250,7 +270,7 @@ def handoff(arm, command, *, topic=None, env_dir=None, environ=None, timeout_s=5
                     kill(child, state["signal"])
                 code = child.wait()
                 code = 128 - code if code < 0 else code
-                deadline = clock() + group_timeout_s
+                deadline = clock() + (0 if leader_waited else group_timeout_s)
                 while alive(child.pid):  # a shell wrapper's own children may outlive it
                     if clock() >= deadline:
                         problem = f"session processes of group {child.pid} still alive after {group_timeout_s:g} s"
