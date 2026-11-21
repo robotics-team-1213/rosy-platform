@@ -9,11 +9,13 @@ BAY, LANE = (-0.37, 0.48), (0.85, -0.48)
 ON = IdentityConfig(motion_match=True)   # off by default: the site opts in
 
 
-def _poses(tracking, clock, loc="LOCALIZED", **xy):
+def _poses(tracking, clock, epoch=0, age_s=0.0, **xy):
+    """What a real Pinky reports: wheel odometry and no localization status."""
     tracking.observe_states([{"robot_id": rid, "online": True,
-                              "state": {"pose": {"x": x, "y": y, "yaw": 0.0}, "velocity": {"linear": 0.0, "angular": 0.0},
-                                        "localization": {"state": loc, "pose_frame": "map", "unmapped_objects": [],
-                                                         "objects_stamp": None}}}
+                              "state": {"pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "pose_frame": None, "localization": None,
+                                        "velocity": {"linear": 0.0, "angular": 0.0},
+                                        "odom_pose": {"x": x, "y": y, "yaw": 0.0, "stamp": clock.now - age_s,
+                                                      "epoch": epoch}}}
                              for rid, (x, y) in xy.items()], now=clock.now)
 
 
@@ -60,13 +62,23 @@ def test_the_site_sets_the_motion_thresholds():
     assert identity.confirmed_track_pose("rosy_60")["state"] == "UNKNOWN"
 
 
-def test_a_pose_that_is_not_localized_never_counts_as_a_move():
-    """A navigation restart reports (0, 0, 0) as CANDIDATES, not a drive of 0.2 m."""
+def test_an_odometry_restart_never_counts_as_a_move():
+    """A CORE restart puts odometry back at (0, 0) under a new epoch: a jump of 0.2 m that nobody drove."""
     clock, tracking, identity, _robots = _setup(ON)
-    _poses(tracking, clock, loc="CANDIDATES", rosy_60=(0.0, 0.0))
+    _poses(tracking, clock, epoch=3, rosy_60=(0.2, 0.0))
     _detections(tracking, clock, BAY, LANE)
     clock.now += 1.0
-    _poses(tracking, clock, loc="CANDIDATES", rosy_60=(0.2, 0.0))
+    _poses(tracking, clock, epoch=4, rosy_60=(0.0, 0.0))
+    _detections(tracking, clock, (-0.37, 0.28), LANE)
+    assert identity.confirmed_track_pose("rosy_60")["state"] == "UNKNOWN"
+
+
+def test_stale_odometry_is_no_pose():
+    clock, tracking, identity, _robots = _setup(ON)
+    _poses(tracking, clock, age_s=60.0, rosy_60=(0.0, 0.0))
+    _detections(tracking, clock, BAY, LANE)
+    clock.now += 1.0
+    _poses(tracking, clock, age_s=60.0, rosy_60=(0.2, 0.0))
     _detections(tracking, clock, (-0.37, 0.28), LANE)
     assert identity.confirmed_track_pose("rosy_60")["state"] == "UNKNOWN"
 
