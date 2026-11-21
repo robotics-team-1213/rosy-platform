@@ -357,6 +357,18 @@ def final_gate(runner, signals: list, hold_file=None, sleep=time.sleep) -> None:
 BLOCKED_DURING_CLOSE = tuple(getattr(signal, n) for n in ("SIGINT", "SIGTERM", "SIGHUP") if hasattr(signal, n))
 
 
+def _record_release(holder) -> None:
+    """After close() returned (it raises unless torque OFF was read back): an operator release leaves the proof the bench needs
+    to clear this runner's lease hold."""
+    reason, path = getattr(holder, "_off_approved", None) or "", getattr(holder, "hold_file", None)
+    if path is not None and reason.startswith("operator release"):
+        try:
+            Path(path).with_name("released.json").write_text(json.dumps(
+                {"pid": os.getpid(), "t": time.time(), "reason": reason, "torque_off_confirmed": True}))
+        except OSError:
+            pass
+
+
 def gated_close(runner, signals: list, hold_file, close, sleep=time.sleep) -> None:
     """chunk_runner.main's single place for torque OFF. SIGINT/SIGTERM/SIGHUP are blocked (Linux) from just before the
     gate reads the recorded signals until close() has returned, so no interrupt can land between an allowing verdict
@@ -371,6 +383,7 @@ def gated_close(runner, signals: list, hold_file, close, sleep=time.sleep) -> No
             # bytecodes of this thread when a thread outside the routing (main_thread_signals) took the signal
             if gate_allows(holder, signals) and gate_allows(holder, signals):
                 close()
+                _record_release(holder)
                 return
         finally:
             if mask:

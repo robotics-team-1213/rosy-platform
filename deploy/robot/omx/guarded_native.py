@@ -2,7 +2,7 @@
 """Native LeRobot Real-Time Joint Motion, Alignment, Following-Error & Effort Guard (`guarded_native.py`).
 
 Single Responsibility:
-  - `NativeJointMotion`: Alignment & tracking slew bounds (1 deg/s alignment, 10 deg/s tracking, 10 deg/s^2 accel),
+  - `NativeJointMotion`: Alignment & tracking slew bounds (1 deg/s alignment; tracking 10 deg/s body-only/teacher, 30 deg/s full arm; 10 deg/s^2 accel),
     5-degree following-error cutoff, and prepare/commit transaction pipeline.
   - Hardware-error, body PWM effort sampling, overload-hold watch, and seed verification live in
     `guarded_native_effort.py`.
@@ -21,6 +21,13 @@ if _HERE not in sys.path:
 
 from guarded_device import (  # noqa: E402,F401  (re-exported: existing importers unchanged)
     BODY,
+    ACCEL_DEG_S2,
+    BRAKE_DEG_S2,
+    BOUNDARY_MAX_S,
+    BoundaryExpired,
+    boundary_over,
+    FULL_TRACK_DEG_S,
+    LEAD_DEG,
     HOLD_S,
     HOLD_TEMP_RISE_C,
     MAX_GAP_S,
@@ -32,6 +39,7 @@ from guarded_device import (  # noqa: E402,F401  (re-exported: existing importer
     PWM_ADMIT_MAX,
     READ_RETRY,
     SEED_TOLERANCE_TICKS,
+    TRACK_DEG_S,
     TICKS_PER_DEGREE,
     TURN,
     close_device,
@@ -41,16 +49,24 @@ from guarded_device import (  # noqa: E402,F401  (re-exported: existing importer
     torque_off,
 )
 from guarded_native_cli import main, run_native  # noqa: E402,F401  (re-exported)
+from guarded_native_track import body_command  # noqa: E402
+from teleop_speed import STAGES, valid as valid_stage  # noqa: E402
+from guarded_native_mount import GRIP_ENDS, check_floor, check_grip_map, check_mount  # noqa: E402,F401  (GRIP_ENDS, check_mount re-exported)
 from guarded_native_effort import (  # noqa: E402
     check_effort,
     check_hardware_errors,
     read_body_pwm,
+    alignment_deadline,
+    restart_after_pause,
+    stall_watch,
     seed_follower_pose,
     watch_hold,
 )
 
 
 class NativeJointMotion:
+    stage = None
+
     def __init__(
         self,
         follower,
@@ -63,14 +79,29 @@ class NativeJointMotion:
         offsets=None,
         teacher=False,
         shed_load=False,
+        mount=None,
+        grip_map=None,
+        follower_floor=None,
+        stage=None,
     ):
         if teacher != (leader is None) or (teacher and body_only):
             raise ValueError("teacher mode streams all six joints and has no leader")
         self.follower, self.leader, self.clock = follower, leader, clock
         self.body_only, self.teacher = body_only, teacher
+        self.stage = valid_stage(stage)  # teleop_speed stage of a full-arm Leader session, else None
         self.active = BODY if body_only else NAMES
         self.label = label
         self.offsets = offsets
+        # A Leader whose joint is assembled half a turn from the Follower's (arm_s pan, 2026-11-21) states it as a
+        # commissioned constant; the 100 degree guard below then compares against that mapping, not a guess.
+        self.mount = {} if mount is None else mount
+        check_mount(self.mount)
+        # The Leader trigger travels a few degrees; without a commissioned pair of ends its raw value lands past the
+        # Follower's closed jaws (arm_s: trigger 1906..1983 mapped to 1938..2015, closed-empty is 2005).
+        self.grip_map = check_grip_map(grip_map, leader, follower)
+        # A Leader resting on its stand can sit below where the Follower can travel (arm_s lift: Leader 670..704, Follower
+        # stops near 713): the declared floor keeps the target on the reachable side, so the motor is never pushed on its stop.
+        self.floor = check_floor(follower_floor, follower)
         self.velocity = dict.fromkeys(self.active, 0.0)
         self.v_ff_ema = dict.fromkeys(BODY, 0.0)
         self.tracking = False
@@ -84,18 +115,56 @@ class NativeJointMotion:
         self.effort_pwm = {}
         self.effort_since = dict.fromkeys(BODY)
         self.held, self.held_once, self.shed_load = {}, set(), shed_load
+        self.squeeze = {}  # the gripper's own saturation clock while it squeezes a box (never a freeze, never a cut)
+        self.grip_way = None  # after a relaxed squeeze: +1/-1 = the squeeze side of the jaws (no lead applied) until the trigger re-arms it
         self.last_effort_time = None
         self.last_present = None
         self.prev_target = None
         self.alignment_deadline = None
         self.monitor = monitor
         self.monitor_admitted = False
+        self.boundary = self.resuming = self.grip_ready = False
+        self.stall = {}
+
+    def has_stall_hold(self):
+        return any(hold.get("stall") for hold in self.held.values())
+
+    def freeze_prepared(self, prepared):
+        """The same tick, command unchanged (a bimanual peer holds): what a held arm would have sent."""
+        if "command" not in prepared:
+            return prepared
+        state = prepared.get("body_state")
+        return {**prepared, "command": dict(self.command),
+                **({"body_state": (dict.fromkeys(self.active, 0.0), state[1], state[2])} if state else {})}
+
+    @property
+    def full_arm(self):
+        return not (self.teacher or self.body_only)
+
+    @property
+    def track_deg_s(self):
+        if self.teacher or self.body_only:
+            return TRACK_DEG_S
+        return STAGES[self.stage]["track_deg_s"] if self.stage else FULL_TRACK_DEG_S
+
+    @property
+    def brake_deg_s2(self):
+        """Braking limit (slowing or reversing): scaled with the stage so a reversal overruns under 3 degrees at every speed (teleop_speed)."""
+        return STAGES[self.stage]["brake_deg_s2"] if self.stage and self.full_arm else BRAKE_DEG_S2
+
+    @property
+    def accel_deg_s2(self):
+        """Command acceleration limit: the full-arm stage's value (teleop_speed), else ACCEL_DEG_S2."""
+        return STAGES[self.stage]["accel_deg_s2"] if self.stage and self.full_arm else ACCEL_DEG_S2
 
     def send(self, action):
         try:
             if self.failed:
                 raise ValueError("guard stopped; restart the session")
             return self.commit(self.prepare(action))
+        except BoundaryExpired:
+            self.failed = True  # no new motion; torque stays ON
+            raise
         except BaseException as exc:
             self.failed = True
             try:
@@ -118,6 +187,12 @@ class NativeJointMotion:
             raise ValueError("guard stopped; restart the session")
         finite_values(action, [n + ".pos" for n in NAMES])
         started = self.clock()
+        if self.boundary:  # set by run_native at a record loop start, used by that loop's first command only
+            self.boundary = False
+            if not self.teacher and self.last_time is not None and started - self.last_time > MAX_GAP_S:
+                if boundary_over(self.last_time, started):  # never the stale cut after a declared boundary: failed, torque kept, session ends
+                    raise BoundaryExpired("record loop pause longer than the bound: ending the session")
+                restart_after_pause(self, started)
         if self.last_time is not None and not 0 <= started - self.last_time <= MAX_GAP_S:
             raise ValueError("stale control loop (>0.5 seconds)")
         if self.teacher:
@@ -130,28 +205,33 @@ class NativeJointMotion:
         finite_values(leader, NAMES)
         finite_values(current, NAMES)
         self.last_present = normalized(self.follower, current)
-        if self.body_only and self.follower.read("Torque_Enable", "gripper"):
+        if self.body_only and self.follower.read("Torque_Enable", "gripper", num_retry=READ_RETRY):
             raise ValueError("passive gripper torque must remain OFF")
         if self.command is not None:
             for name in BODY if self.teacher else self.active:
-                sent = int(self.command[name])
+                sent = self.sent[name] if self.sent is not None and name in self.sent else int(self.command[name])  # what was written
                 if abs(current[name] - sent) > 5 * TICKS_PER_DEGREE + 1e-9:
                     raise ValueError(f"{name}: following error >5 motor degrees; command={sent}, current={current[name]}")
         if self.offsets is None:
             self.offsets = (
                 dict.fromkeys(BODY, 0)
                 if self.teacher
-                else {n: TURN * round((current[n] - leader[n]) / TURN) for n in BODY}
+                else {n: self.mount.get(n, 0) + TURN * round((current[n] - leader[n] - self.mount.get(n, 0)) / TURN)
+                      for n in BODY}
             )
-        target = {n: leader[n] + self.offsets[n] for n in BODY}
-        for name in BODY:
-            if abs(target[name] - current[name]) >= 100 * TICKS_PER_DEGREE - 1e-9:
+        mapped = {n: leader[n] + self.offsets[n] for n in BODY}
+        # One place: every check and the commands below see the clipped target. Only toward what the Follower can reach,
+        # so no check is loosened except that a Leader parked below the floor is judged (100 degrees) at the floor.
+        target = {n: max(v, self.floor.get(n, v)) for n, v in mapped.items()}
+        for name in () if self.has_stall_hold() else BODY:  # a stall hold is not following the Leader: the command is frozen, torque stays, the arm
+            # holds; the comparison would only cut it. Release needs the Leader back within STALL_RELEASE_DEG, and the 100 degree test then applies again
+            if max(abs(mapped[name] - current[name]), abs(target[name] - current[name])) >= 100 * TICKS_PER_DEGREE - 1e-9:  # raw and floored
                 raise ValueError(
                     f"{name}: difference >=100 degrees; leader={leader[name]}, "
                     f"target={target[name]}, current={current[name]}, offset={self.offsets[name]}, "
                     f"previous_command={self.command}; align manually with torque OFF"
                 )
-        for bus, values in (() if self.teacher else ((self.leader, {**target, "gripper": leader["gripper"]}),)) + (
+        for bus, values in (() if self.teacher else ((self.leader, {**mapped, "gripper": leader["gripper"]}),)) + (
             (self.follower, current),
         ):
             for name, value in values.items():
@@ -161,9 +241,15 @@ class NativeJointMotion:
         if self.teacher:
             target["gripper"] = leader["gripper"]
         elif not self.body_only:
-            grip = normalized(self.leader, {"gripper": leader["gripper"]})["gripper.pos"]
-            grip_id = self.follower.motors["gripper"].id
-            target["gripper"] = self.follower._unnormalize({grip_id: grip})[grip_id]
+            if self.grip_map:  # trigger fraction (clamped to its commissioned ends) onto the Follower's jaw ends
+                ends = self.grip_map
+                part = (leader["gripper"] - ends["leader_closed"]) / (ends["leader_open"] - ends["leader_closed"])
+                target["gripper"] = round(ends["follower_closed"]
+                                          + max(0.0, min(1.0, part)) * (ends["follower_open"] - ends["follower_closed"]))
+            else:
+                grip = normalized(self.leader, {"gripper": leader["gripper"]})["gripper.pos"]
+                grip_id = self.follower.motors["gripper"].id
+                target["gripper"] = self.follower._unnormalize({grip_id: grip})[grip_id]
         for name, value in target.items():
             calibration = self.follower.calibration[name]
             if not calibration.range_min <= value <= calibration.range_max:
@@ -185,9 +271,9 @@ class NativeJointMotion:
             )
             limits = {}
             for name in BODY:
-                if torques[name] if torques is not None else self.follower.read("Torque_Enable", name):
+                if torques[name] if torques is not None else self.follower.read("Torque_Enable", name, num_retry=READ_RETRY):
                     raise ValueError(f"{name}: PWM_Limit admission requires torque OFF")
-                limit = raw_limits[name] if raw_limits is not None else self.follower.read("PWM_Limit", name)
+                limit = raw_limits[name] if raw_limits is not None else self.follower.read("PWM_Limit", name, num_retry=READ_RETRY)
                 if not isinstance(limit, (int, float)) or not math.isfinite(limit) or not 0 < limit <= PWM_ADMIT_MAX[name]:
                     raise ValueError(f"{name}: invalid PWM_Limit {limit}")
                 limits[name] = limit
@@ -202,25 +288,17 @@ class NativeJointMotion:
             raise ValueError("stale joint sample (>0.5 seconds)")
         if self.last_time is not None and not 0 <= now - self.last_time <= MAX_GAP_S:
             raise ValueError("stale control loop including sampling (>0.5 seconds)")
+        if self.full_arm and self.command is not None:
+            stall_watch(self, target, current, now, mapped)
+        if self.resuming:  # after a declared pause: approach again from the held command
+            self.resuming, self.alignment_deadline = False, alignment_deadline(started, target, current)
         if self.command is None:
-            deadline = started + min(
-                105, max(5, max(abs(target[n] - current[n]) for n in BODY) / TICKS_PER_DEGREE + 5)
-            )
-            current = self._seed({n: current[n] for n in self.active}, target, started)
+            deadline = alignment_deadline(started, target, current)
+            current = self._seed({n: current[n] for n in self.active}, target, started, mapped)
             return {"started": started, "seed": current, "alignment_deadline": deadline, "target": dict(target)}
         elapsed = min(now - self.last_time, MAX_STEP_S)
-        if self.body_only or self.teacher:
-            command, state = self._body_command(target, current, elapsed, now)
-            return {"started": started, "command": command, "time": now, "body_state": state, "target": dict(target)}
-        step = elapsed * TICKS_PER_DEGREE
-        frozen = self.frozen()
-        command = {
-            n: self.command[n]
-            if n in frozen
-            else self.command[n] + max(-step, min(step, target[n] - self.command[n]))
-            for n in self.active
-        }
-        return {"started": started, "command": command, "time": now}
+        command, state = self._body_command(target, current, elapsed, now)  # every mode: align at 1 deg/s, then track
+        return {"started": started, "command": command, "time": now, "body_state": state, "target": dict(target)}
 
     def _check_hardware_errors(self):
         check_hardware_errors(self)
@@ -231,8 +309,8 @@ class NativeJointMotion:
     def _check_effort(self, current, started):
         check_effort(self, current, started)
 
-    def _watch_hold(self, name, saturated, pwm, now):
-        watch_hold(self, name, saturated, pwm, now)
+    def _watch_hold(self, name, saturated, pwm, now, hold=None):
+        watch_hold(self, name, saturated, pwm, now, hold)
 
     def frozen(self):
         """Joints whose command stays put this tick: all of them while anything is held, unless the runner sheds load."""
@@ -245,73 +323,14 @@ class NativeJointMotion:
         for name, hold in self.held.items():
             print(f"{self.label}: overload-hold released on {name} after {self.clock() - hold['since']:.2f}s", flush=True)
         self.held.clear()
+        if self.full_arm:  # the stalled joint stood still while the target moved on: align again before tracking
+            self.tracking, self.aligned_since, self.resuming = False, None, True
 
     def _body_command(self, target, current, elapsed, now):
-        tracking, since = self.tracking, self.aligned_since
-        if not tracking and now >= self.alignment_deadline:
-            raise ValueError(
-                f"{self.label}: alignment deadline exceeded; current={current}, "
-                f"target={target}, command={self.command}"
-            )
-        if not tracking and (self.last_alignment_report is None or now - self.last_alignment_report >= 1):
-            actual_joint = max(self.active, key=lambda n: abs(current[n] - target[n]))
-            command_joint = max(self.active, key=lambda n: abs(self.command[n] - target[n]))
-            present_pwm = self.effort_pwm.get(actual_joint)
-            pwm_limit = self.pwm_limits.get(actual_joint)
-            print(
-                f"{self.label}: phase=aligning; actual_joint={actual_joint} actual={current[actual_joint]} "
-                f"target={target[actual_joint]} error_deg={abs(current[actual_joint] - target[actual_joint]) / TICKS_PER_DEGREE:.2f} "
-                f"Present_PWM={present_pwm} PWM_Limit={pwm_limit}; "
-                f"command_joint={command_joint} command={self.command[command_joint]} target={target[command_joint]} "
-                f"error_deg={abs(self.command[command_joint] - target[command_joint]) / TICKS_PER_DEGREE:.2f}",
-                flush=True,
-            )
-            self.last_alignment_report = now
-        if not tracking:
-            aligned = all(
-                abs(target[n] - current[n]) <= 2.5 * TICKS_PER_DEGREE
-                and abs(target[n] - self.command[n]) <= 0.5 * TICKS_PER_DEGREE
-                for n in self.active
-            )
-            since = (now if since is None else since) if aligned else None
-            tracking = since is not None and now - since >= 0.5 - 1e-9
-        acceleration = 10 * TICKS_PER_DEGREE
-        limit = (10 if tracking else 1) * TICKS_PER_DEGREE
-        command, velocity = {}, {}
-        frozen = self.frozen()
-        for name in self.active:
-            if name in frozen:
-                command[name], velocity[name] = self.command[name], 0.0
-                continue
-            error = target[name] - self.command[name]
-            brake = math.sqrt((acceleration * elapsed) ** 2 + 2 * acceleration * abs(error)) - acceleration * elapsed
-            v_ff_raw = ((target[name] - self.prev_target[name]) / elapsed
-                        if self.prev_target is not None and elapsed > 0 else 0.0)
-            if self.teacher and name in BODY and abs(v_ff_raw) <= 1e-6 and abs(self.v_ff_ema[name]) > 1.0 and abs(error) > 1.0 and error * self.v_ff_ema[name] > 0:
-                v_ff = 0.55 * self.v_ff_ema[name]
-            else:
-                v_ff = v_ff_raw
-            v_ff = max(-limit, min(limit, v_ff))
-            if self.teacher and name in BODY:
-                self.v_ff_ema[name] = v_ff
-            if self.teacher and tracking and self.prev_target is not None and elapsed > 0:
-                if error * v_ff > 0:
-                    reach = min(
-                        abs(error) / elapsed,
-                        math.sqrt(min(limit, abs(v_ff)) ** 2 + 2 * acceleration * abs(error)),
-                    )
-                    brake = max(brake, reach)
-            desired = math.copysign(min(limit, brake), error)
-            change = max(-acceleration * elapsed, min(acceleration * elapsed, desired - self.velocity[name]))
-            velocity[name] = self.velocity[name] + change
-            command[name] = self.command[name] + velocity[name] * elapsed
-            calibration = self.follower.calibration[name]
-            if not calibration.range_min <= command[name] <= calibration.range_max:
-                raise ValueError(f"{name}: streamed command outside calibrated range")
-        return command, (velocity, tracking, since)
+        return body_command(self, target, current, elapsed, now)
 
     def commit(self, prepared):
-        if self.body_only and self.follower.read("Torque_Enable", "gripper"):
+        if self.body_only and self.follower.read("Torque_Enable", "gripper", num_retry=READ_RETRY):
             raise ValueError("passive gripper torque must remain OFF before body command")
         now = self.clock()
         if (
@@ -321,7 +340,7 @@ class NativeJointMotion:
         ):
             raise ValueError("stale or stopped prepared action")
         deadline = prepared.get("alignment_deadline", self.alignment_deadline)
-        if self.body_only and not self.tracking and now >= deadline:
+        if not self.teacher and not self.tracking and deadline is not None and now >= deadline:
             raise ValueError(f"{self.label}: alignment deadline exceeded before command commit")
         if "seed" in prepared:
             if self.body_only:
@@ -353,11 +372,11 @@ class NativeJointMotion:
             was_tracking = self.tracking
             self.velocity, self.tracking, self.aligned_since = prepared["body_state"]
             if self.tracking and not was_tracking:
-                print(f"{self.label}: aligned; body tracking limit 10 deg/s, acceleration 10 deg/s^2", flush=True)
+                print(f"{self.label}: aligned; {'full-arm tracking (body and gripper)' if self.full_arm else 'body tracking'} limit {self.track_deg_s:g} deg/s, acceleration {self.accel_deg_s2:g} deg/s^2", flush=True)
         return normalized(self.follower, goals)
 
-    def _seed(self, current, target, started):
-        return seed_follower_pose(self, current, target, started)
+    def _seed(self, current, target, started, raw=None):
+        return seed_follower_pose(self, current, target, started, raw)
 
 
 if __name__ == "__main__":

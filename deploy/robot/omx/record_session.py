@@ -36,7 +36,7 @@ from record_session_helpers import (  # noqa: F401
     release as _release_for,
     static_episodes,
 )
-from session_caps import load_caps as load_caps, log_registers, model_tuning, register_dump, robot_tuning  # noqa: F401
+from session_caps import load_caps as load_caps, log_registers, model_tuning, raised_profile, register_dump, robot_tuning  # noqa: F401
 
 SERVICES = (
     "rosy-omx-camera@top.service",
@@ -110,7 +110,9 @@ class Session:
                     f"follower {motor} not idle: model/mode {(model, mode)}, torque {torque}, error {error}"
                 )
             caps = {name: bus.read(name) for name in self._cap_registers(motor)}
-            if any(caps[name] != BASELINE[name] for name in caps):
+            raised = raised_profile(bus)  # a killed session's raised servo profile is not the baseline either (commissioning_limits --baseline)
+            if raised or any(caps[name] != BASELINE[name] for name in caps):
+                caps = {**caps, **raised}
                 raise SystemExit(
                     f"follower {motor} caps {caps} are not the baseline: an earlier session did not restore "
                     "them - commissioning_limits.py --baseline (torque OFF) before recording"
@@ -159,6 +161,7 @@ class Session:
                 if name in SESSION_ONLY:
                     self.found_gains = getattr(self, "found_gains", {})
                     self.found_gains.setdefault(motor, {})[name] = bus.read(name)
+                self.log(step="cap_attempt", motor=motor, name=name, value=value)  # before the EEPROM write: the bench reads it
                 bus.write(name, value)
                 after = bus.read(name)
                 self.log(step="cap", motor=motor, name=name, value=value, after=after)

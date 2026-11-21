@@ -13,6 +13,8 @@ import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profil
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
     HANDOVER, active_handover_units, check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, systemctl, write_restore_list, write_snapshot)
 from bench_record_replay import recording_progress  # noqa: E402
+from bench_record_step import starting_step  # noqa: E402
+from bench_record_safety import end_verdict  # noqa: E402
 
 # Observer instance per arm (units rosy-omx-observer@<arm>.service, the --arm record_session takes) and the
 # letter the prep folder binds files with (caps-arm-<letter>-*, arm-<letter>-robot-profile.json).
@@ -173,8 +175,6 @@ class BenchInspectMixin:
             return []
 
     def release_lock(self, body):
-        if body.get("at_bench") is not True:
-            raise ValueError("작업대 현장 확인(at_bench) 체크 후에만 점유 세션 종료를 요청할 수 있습니다")
         target_pid = body.get("pid")
         if not isinstance(target_pid, int) or isinstance(target_pid, bool) or target_pid <= 1:
             raise ValueError("종료할 대상 PID를 명시해야 합니다 (다른 팔 보호)")
@@ -287,6 +287,8 @@ class BenchInspectMixin:
             self._retry_at = self.clock() + 10  # a skipped or failed startup recovery is retried, not every poll
             self.restore_leftovers()
         with self.lock:
+            if self.state.get("status") == "unsafe_or_failed" and self.state.get("exit_code") is not None:
+                self.state.update(end_verdict(self.state))  # re-judged on every poll: an older verdict resolves without a restart
             out = dict(self.state)
         out["recent_sessions"] = self.recent_sessions()
         out["lerobot_datasets"] = self.lerobot_datasets()
@@ -295,6 +297,8 @@ class BenchInspectMixin:
         out["active_locks"] = self.active_lock_holders()
         out["hf_upload"] = self.hf_upload_status() if hasattr(self, "hf_upload_status") else {}
         out.update(recording_progress(out, self.clock))
+        out.update(starting_step(out, self.__dict__.setdefault("_step_memory", {})))
+        out.update(self.issue_fields(out), **self.speed_fields())
         if out.get("folder") and out.get("status") in ("unsafe_or_failed", "failed", "seal_failed"):
             log_p = Path(out["folder"]) / "bench.log"
             if log_p.is_file():

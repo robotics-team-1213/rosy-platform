@@ -7,204 +7,479 @@
 <link rel="stylesheet" href="/bench_record.css">
 </head>
 <body>
-<div class="app-shell">
-  <div class="app-sticky-head">
-  <header class="app-topbar" role="banner">
-    <div class="topbar-brand">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 108 108" width="20" height="20">
-          <path d="M26 20H66A22 22 0 0 1 66 64H54L86 96H64L31 63A8 8 0 0 1 38 49H66A7 7 0 0 0 66 35H26A7.5 7.5 0 0 1 26 20Z" fill="currentColor"/>
-        </svg>
-      </span>
-      <h1>ROSY · OMX 작업대 녹화</h1>
-      <span class="ui-tag mono" id="hdr-arm-pill">미선택 · 대기</span>
-      <span class="ui-tag mono" id="hdr-host">rosy-arm-cell</span>
-      <span class="ui-tag" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
+<div class="app-shell" data-phase="setup">
+  <header class="app-topbar">
+    <div id="hdr-row-menu" class="topbar-row topbar-context">
+      <div class="identity">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 108 108" width="20" height="20">
+            <path d="M26 20H66A22 22 0 0 1 66 64H54L86 96H64L31 63A8 8 0 0 1 38 49H66A7 7 0 0 0 66 35H26A7.5 7.5 0 0 1 26 20Z" fill="currentColor"/>
+          </svg>
+        </span>
+        <h1>ROSY · OMX 작업대 녹화</h1>
+        <div id="rail-arm-pills" class="arm-pills" role="group" aria-label="팔 선택"></div>
+        <button type="button" id="hdr-task-summary" class="btn-tool btn-xs context-btn mono" data-drawer-btn="setup" aria-controls="drawer-setup" aria-expanded="false">과제 미선택</button>
+        <button type="button" id="goal-name-btn" class="btn-tool btn-xs context-btn mono" data-drawer-btn="bindings" aria-controls="drawer-bindings" aria-expanded="false">수집명 미정</button>
+      </div>
+      <nav class="header-tools" aria-label="작업대 도구">
+        <span id="ftr-server" class="ui-tag mono">서버 확인 중</span>
+        <span class="ui-tag" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
+        <button type="button" id="hdr-help-btn" class="btn-tool btn-xs" title="단축키 도움말 [?]" aria-label="단축키" aria-controls="sec-shortcuts">?</button>
+        <div class="drawer-menu-wrap" id="drawer-menu-wrap">
+          <button type="button" id="btn-drawer-menu" class="btn-tool btn-xs" aria-expanded="false" aria-controls="drawer-menu-pop">메뉴 ▾</button>
+          <div id="drawer-menu-pop" class="drawer-menu-pop">
+            <button type="button" id="btn-drawer-setup" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="setup" aria-controls="drawer-setup" aria-expanded="false">과제 목록 <kbd class="kbd-hint">1</kbd></button>
+            <button type="button" id="btn-drawer-bindings" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="bindings" aria-controls="drawer-bindings" aria-expanded="false">수집·연결 <kbd class="kbd-hint">2</kbd></button>
+            <button type="button" id="btn-drawer-start" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="start" aria-controls="drawer-start" aria-expanded="false">포즈·기준 <kbd class="kbd-hint">3</kbd></button>
+            <button type="button" id="btn-drawer-records" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="records" aria-controls="drawer-records" aria-expanded="false">기록 <kbd class="kbd-hint">4</kbd></button>
+          </div>
+        </div>
+        <button type="button" id="hdr-refresh-btn" class="btn-tool btn-xs" title="상태와 목록 새로고침 [Shift+R]">새로고침<kbd class="kbd-hint">⇧R</kbd></button>
+      </nav>
     </div>
-    <div class="topbar-actions" role="toolbar" aria-label="전역 로봇 제어">
-      <button type="button" id="hdr-refresh-btn" class="btn-tool" title="상태와 목록 새로고침">새로고침</button>
-      <button type="button" id="hdr-home-btn" class="btn-tool" disabled title="선택한 팔 홈 이동">홈 이동</button>
-      <button type="button" id="hdr-record-btn" class="btn-primary" style="min-height:40px;padding:0 16px" disabled>녹화 시작</button>
-      <button type="button" id="hdr-estop-btn" class="btn-estop" data-always-live title="즉시 정지 요청 (Esc / Alt+X) · 물리 차단은 follower 전원 스위치">비상정지 (E-Stop)</button>
+    <section id="hdr-row-ops" class="topbar-row topbar-ops" aria-label="녹화 및 로봇 조작">
+      <nav id="phase-tabs" aria-label="녹화 진행 단계">
+        <ol class="phase-steps">
+          <li><button type="button" class="phase-step" id="tab-setup" data-phase-tab="setup" aria-current="step">녹화 전</button></li>
+          <li><button type="button" class="phase-step" id="tab-live" data-phase-tab="live">녹화 중</button></li>
+          <li><button type="button" class="phase-step" id="tab-result" data-phase-tab="result">녹화 후</button></li>
+        </ol>
+      </nav>
+      <div class="primary-ops">
+        <button type="button" id="hdr-record-btn" class="btn-rec topbar-rec-btn" aria-describedby="hdr-start-reasons" disabled><span class="btn-lbl">● 녹화 시작</span><kbd class="kbd-hint">Space</kbd></button>
+        <div id="home-include-leader-group" class="home-group" data-tabs="setup">
+          <button type="button" id="hdr-home-btn" class="btn-tool" disabled title="선택한 팔 홈 이동 [H]"><span class="btn-lbl">홈 이동</span><kbd class="kbd-hint">H</kbd></button>
+          <label class="check-row topbar-check" id="home-include-leader-wrap"><input type="checkbox" id="home-include-leader"><span>리더도 함께</span></label>
+        </div>
+        <div id="hdr-live-metrics" class="live-ops" data-tabs="live" hidden>
+          <button type="button" id="hdr-next-ep-btn" class="btn-tool topbar-op-btn" disabled title="다음 에피소드 (녹화 중에만 활성) [→ / N]">다음 에피소드<kbd class="kbd-hint">→</kbd></button>
+          <button type="button" id="hdr-rerecord-btn" class="btn-tool topbar-op-btn" disabled title="다시 녹화 (녹화 중에만 활성) [← / R]">다시 녹화<kbd class="kbd-hint">←</kbd></button>
+          <span class="live-count">회차 <strong id="sp-quota" class="mono">— / —</strong></span>
+          <span class="live-elapsed">경과 <strong id="sp-timer" class="mono live-timer">00:00.0s</strong></span>
+        </div>
+        <div id="hdr-result-actions" class="result-ops" data-tabs="result" hidden>
+          <span id="goal-result-line" class="goal-result-line mono" hidden></span>
+          <button type="button" id="back-to-setup-btn" class="btn-primary">다음 녹화 준비</button>
+        </div>
+      </div>
+      <div class="stop-group">
+        <button type="button" id="hdr-estop-btn" class="btn-estop" data-always-live title="즉시 정지 요청 · 물리 차단은 follower 전원 스위치">비상정지 (E-Stop)</button>
+      </div>
+    </section>
+    <div id="start-reason-bar" class="reason-strip" role="status" aria-live="polite" hidden>
+      <span id="hdr-start-reasons" class="reason-text quiet"></span>
+      <button type="button" id="reason-more-btn" class="btn-tool btn-xs" hidden></button>
+      <button type="button" id="reason-expand-btn" class="btn-tool btn-xs" aria-expanded="false" hidden>자세히</button>
+      <button type="button" id="reason-close-btn" class="btn-tool btn-xs" aria-label="알림 닫기" hidden>닫기<kbd class="kbd-hint">X</kbd></button>
     </div>
   </header>
 
-  <div class="slim-prog" id="slim-prog" aria-live="polite">
-    <div class="slim-prog-row">
-      <span class="slim-item">회차 <strong id="sp-quota" class="mono">— / —</strong> <small id="sp-rem" class="quiet"></small></span>
-      <span class="slim-sep" aria-hidden="true"></span>
-      <span class="slim-item">진행 <strong id="sp-timer" class="mono">00:00.0s</strong></span>
-      <span class="slim-sep" aria-hidden="true"></span>
-      <span class="slim-item">직전 <strong id="sp-last" class="mono">—</strong></span>
-      <span class="slim-sep" aria-hidden="true"></span>
-      <span class="slim-item"><span id="sp-mode" class="ui-tag mono">정방향</span></span>
-      <span style="flex:1 1 auto"></span>
-      <span id="sp-status-text" class="quiet mono">대기 중</span>
-    </div>
-    <div class="slim-track"><div class="slim-fill" id="sp-fill" style="width:0%"></div></div>
-  </div>
-  </div>
-
-  <div class="app-body">
-    <aside class="app-sidebar" id="app-sidebar" aria-label="빠른 탐색 레일">
-      <button type="button" id="rail-toggle-btn" class="btn-tool sb-toggle" title="사이드바 펼치기/접기" aria-expanded="false">⇄</button>
-      <section class="sb-block">
-        <h2 class="sb-head sb-label">팔</h2>
-        <div id="rail-arm-pills" class="arm-pills"></div>
-      </section>
-      <nav class="sb-block" aria-label="섹션 바로가기">
-        <h2 class="sb-head sb-label">바로가기</h2>
-        <a class="sb-link" href="#sec-setup" title="1 · 촬영 설정"><b>1</b><span class="sb-label">촬영 설정</span></a>
-        <a class="sb-link" href="#sec-bindings" title="2 · 연결 확인"><b>2</b><span class="sb-label">연결·한계</span></a>
-        <a class="sb-link" href="#sec-pipeline" title="3 · 시뮬·증강·RL 루프"><b>3</b><span class="sb-label">시뮬·RL</span></a>
-        <a class="sb-link" href="#sec-cameras" title="카메라 미리보기"><b>카</b><span class="sb-label">카메라</span></a>
-        <a class="sb-link" href="#sec-telemetry" title="동기화·반응속도"><b>동</b><span class="sb-label">동기화</span></a>
-        <a class="sb-link" href="#sec-recent" title="회차 증거·HF 업로드"><b>HF</b><span class="sb-label">증거·HF</span></a>
-      </nav>
-      <section class="sb-block sb-label">
-        <h2 class="sb-head">카메라 · 동기화</h2>
-        <div id="rail-cam-health" class="quiet mono" style="font-size:.76rem">확인 중...</div>
-        <div class="sb-tel">
-          <span>지연</span><strong id="rail-tel-lat" class="mono">-- ms</strong>
-          <span>추적</span><strong id="rail-tel-track" class="mono">대기</strong>
+  <main class="app-main">
+    <div class="layout">
+      <section class="card cam-panel" id="sec-cameras" data-tabs="setup live" aria-labelledby="h-cams">
+        <h2 id="h-cams" class="sr-only">실시간 카메라</h2>
+        <p id="cam-note" class="sr-only">작업대 카메라(8767)를 확인하는 중입니다.</p>
+        <div class="cam-stage">
+          <div id="cam-grid" class="cam-grid"></div>
         </div>
       </section>
-    </aside>
 
-    <div class="app-main">
-      <div class="layout">
-        <main class="col-main">
-          <form id="bench-form" novalidate>
-            <section class="card" id="sec-setup" data-tabs="setup" aria-labelledby="h-setup">
-              <h2 id="h-setup">1 · 촬영 설정</h2>
-              <div class="grid-2">
-                <div class="field" style="grid-column:1/-1">팔 선택 (복수 선택 시 양팔 동시 · 체크박스)
-                  <div id="arm-checks" style="display:flex;flex-wrap:wrap;gap:8px" role="group" aria-label="팔 선택"></div>
-                  <select name="arm" id="arm" hidden></select>
-                </div>
-                <div class="field" style="grid-column:1/-1">
-                  <div class="task-head-row">
-                    <span>작업 카드 검색 · 선택 (지도에서 목표점 클릭 시 역선택 가능)</span>
-                    <button type="button" id="task-toggle-btn" class="btn-tool btn-xs" aria-expanded="true">목록 접기</button>
-                  </div>
-                  <div class="task-ctrl-row">
-                    <input type="text" id="task-search" placeholder="예: h1-01, belt, tmp-a, pinky 검색... [/]" autocomplete="off">
-                    <div class="task-nav-btns">
-                      <button type="button" id="task-prev-btn" class="btn-tool btn-xs" title="이전 작업 카드">◀ 이전</button>
-                      <button type="button" id="task-next-btn" class="btn-tool btn-xs" title="다음 작업 카드">▶ 다음</button>
-                    </div>
-                    <div id="task-filters" class="task-filters" role="group" aria-label="작업 카드 필터">
-                      <button type="button" class="pill-btn active" data-tfilter="all" aria-pressed="true">전체</button>
-                      <button type="button" class="pill-btn" data-tfilter="arm" aria-pressed="false">내 팔만</button>
-                      <button type="button" class="pill-btn" data-tfilter="pinky" aria-pressed="false">Pinky/벨트</button>
-                    </div>
-                  </div>
-                  <div id="task-listbox" class="task-listbox" role="listbox" aria-label="작업 카드 목록"></div>
-                  <select name="task" id="task" hidden><option value="">없음 (미지정)</option></select>
-                </div>
-                <label class="field">수집명 (소문자·숫자·-)
-                  <input type="text" name="name" id="name" required pattern="[a-z0-9][a-z0-9-]{2,63}" placeholder="예: h1-belt-ship-01" autocomplete="off">
-                </label>
-                <label class="field">작업대 배치 리비전
-                  <input type="text" name="rig_revision" id="rig_revision" required pattern="[a-z0-9][a-z0-9-]{2,63}" value="bench-r1" placeholder="예: bench-r1" autocomplete="off">
-                </label>
-              </div>
-              <p id="arm-note" class="quiet" style="margin-top:10px"></p>
-              <div class="alert" id="task-summary">
-                <h3>선택한 작업 카드 정보</h3>
-                <dl class="kv">
-                  <dt>작업 지시</dt><dd id="tc-single">미확인</dd>
-                  <dt>출발점</dt><dd id="tc-origin">미확인</dd>
-                  <dt>목표 칸·층</dt><dd id="tc-target">미확인</dd>
-                  <dt>반복 수</dt><dd id="tc-episodes">미확인</dd>
-                  <dt>회차 시간</dt><dd id="tc-time">미확인</dd>
-                  <dt>상단 사진·카메라</dt><dd id="tc-photo">미확인</dd>
-                </dl>
-                <details style="margin-top:8px"><summary class="quiet" style="cursor:pointer">작업 카드 전체 내용 보기</summary>
-                  <pre id="tc-raw" class="mono quiet" style="white-space:pre-wrap;margin:8px 0 0;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;max-height:220px;overflow:auto">카드를 선택하세요.</pre>
-                </details>
-              </div>
-              <div id="task-error" class="alert crit" role="alert" hidden></div>
-            </section>
+      <section class="card" id="sec-evidence" data-tabs="result" aria-labelledby="h-ev" hidden>
+        <div class="goal-head">
+          <h2 id="h-ev" style="margin:0">녹화 결과 · 회차 증거</h2>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span class="ui-tag" id="hdr-auto-home">자동 홈: 대기</span>
+            <span id="rail-ev" class="rail-step">대기</span>
+          </div>
+        </div>
+        <dl class="kv" style="margin-top:10px">
+          <dt>진행 상태</dt><dd id="ev-status" aria-live="polite">확인 중</dd>
+          <dt>팔</dt><dd id="ev-arm" class="mono">미확인</dd>
+          <dt>세션 폴더</dt><dd id="ev-folder" class="mono">미확인</dd>
+          <dt>에피소드 · 크기</dt><dd id="ev-dataset" class="mono">미확인</dd>
+          <dt>안전 종료 · 원인</dt><dd id="ev-safe-end">미확인</dd>
+          <dt>자동 홈 복귀</dt><dd id="ev-auto-home">대기</dd>
+          <dt>포즈·전송</dt><dd id="ev-extra" class="quiet">미확인</dd>
+        </dl>
+        <div id="ev-restore" class="alert crit" role="alert" hidden></div>
+        <div id="ev-manual" class="alert warn" role="alert" hidden></div>
+        <div id="ev-seal" class="alert good" role="status" hidden></div>
+        <pre id="ev-log-tail" class="mono quiet" style="white-space:pre-wrap;margin-top:8px;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;max-height:180px;overflow:auto" hidden></pre>
+        <div id="post-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px" hidden>
+          <button type="button" id="next-ep-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">다음 회차 준비 (수집명 +1)</button>
+          <button type="button" id="copy-transfer-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">모델 PC 반입 명령 복사</button>
+        </div>
+      </section>
 
-            <details class="card acc-card" id="sec-bindings" open aria-labelledby="h-bind">
-              <summary class="acc-sum"><h2 id="h-bind" style="margin:0">2 · 연결 확인 · 역방향 리플레이</h2><span id="rail-2" class="rail-step">선택</span></summary>
+      <aside id="bench-sidebar" class="bench-sidebar" aria-label="작업대 정보 사이드바">
+        <section class="card sb-sec goal-panel" id="sec-goal" aria-labelledby="h-goal">
+          <div class="goal-head">
+            <h2 id="h-goal" class="goal-kicker">목표</h2>
+            <button type="button" id="swap-zones-btn" class="btn-tool btn-xs" title="집을 곳과 놓을 곳을 서로 바꿉니다 [Alt+W]" aria-pressed="false" hidden>⇄ 집기↔놓기 스왑<kbd class="kbd-hint">Alt+W</kbd></button>
+          </div>
+          <div id="goal-empty" class="goal-empty">
+            <div class="goal-line goal-pick">
+              <span class="goal-tag">집을 곳</span>
+              <strong class="goal-name">—</strong>
+            </div>
+            <div class="goal-line goal-place">
+              <span class="goal-tag">놓을 곳</span>
+              <strong class="goal-name">—</strong>
+            </div>
+            <p class="goal-empty-msg quiet">과제를 고르면 목표 구역과 회차가 표시됩니다</p>
+            <button type="button" id="goal-pick-btn" class="btn-primary">과제 고르기</button>
+          </div>
+          <div id="goal-active" class="goal-active" hidden>
+            <div class="goal-line goal-pick">
+              <span class="goal-tag">집을 곳</span>
+              <strong id="goal-origin-name" class="goal-name">—</strong>
+              <span id="goal-origin-sub" class="goal-sub mono" hidden></span>
+            </div>
+            <div class="goal-line goal-place">
+              <span class="goal-tag">놓을 곳</span>
+              <strong id="goal-target-name" class="goal-name">—</strong>
+              <span id="goal-target-sub" class="goal-sub mono" hidden></span>
+            </div>
+            <p id="goal-instruction" class="goal-instruction"></p>
+            <div class="goal-progress-wrap" data-tabs="setup result">
+              <span id="goal-rep-count" class="mono">0 / 0 회</span>
+              <div class="prog-track goal-prog-track"><div class="prog-fill" id="goal-prog-fill" style="width:0%"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <div id="bench-sidebar-scroll" class="bench-sidebar-scroll">
+        <details class="card acc-card sb-sec" id="sec-progress" open aria-labelledby="h-progress">
+          <summary class="acc-sum sb-sum">
+            <h2 id="h-progress" class="goal-kicker">진행</h2>
+          </summary>
+          <div class="acc-body sb-body">
+            <div id="starting-step-box" class="step-banner mono" hidden></div>
+            <div class="slim-prog" id="slim-prog" data-tabs="live" aria-live="polite" aria-label="녹화 진행 상황">
+              <div class="live-metric-sub">
+                <span id="sp-rem" class="quiet"></span>
+                <span class="slim-item">직전 <strong id="sp-last" class="mono">—</strong></span>
+                <span id="sp-mode" class="ui-tag mono">정방향</span>
+              </div>
+              <div class="slim-track"><div class="slim-fill" id="sp-fill" style="width:0%"></div></div>
+            </div>
+            <div id="sb-prog-idle" class="quiet mono" style="font-size:.82rem">대기 중 · 녹화를 시작하면 진행 단계와 경과가 표시됩니다.</div>
+          </div>
+        </details>
+
+        <details class="card acc-card sb-sec" id="sec-status" open aria-labelledby="h-status">
+          <summary class="acc-sum sb-sum">
+            <div class="acc-head"><h2 id="h-status" class="goal-kicker">상태</h2><span class="badge" id="top-badge" data-tone="warn">확인 중</span></div>
+          </summary>
+          <div class="acc-body sb-body">
+            <div class="sb-health-row">
+              <span id="ftr-lock" class="ui-tag mono">락 없음</span>
+              <span class="ui-tag mono" id="hdr-host">rosy-arm-cell</span>
+            </div>
+            <div id="sb-verdict-row" class="sb-verdict-row mono" hidden></div>
+            <dl id="sb-motor-summary" class="kv sb-params-kv mono">
+              <dt>팔로워</dt><dd id="sb-st-follower">—</dd>
+              <dt>리더</dt><dd id="sb-st-leader">—</dd>
+              <dt>토크</dt><dd id="sb-st-torque">—</dd>
+              <dt>보류/사고</dt><dd id="sb-st-hold">—</dd>
+            </dl>
+            <div class="status-bar" id="status-bar" data-tabs="live result" aria-label="녹화 상태" aria-live="polite">
+              <span id="top-checked" class="quiet">마지막 확인: 미확인</span>
+              <p id="stop-note" class="quiet" hidden>정상 종료 요청(SIGTERM)입니다. 물리 비상 정지는 follower 전원 스위치를 사용하세요.</p>
+            </div>
+            <details class="card acc-card sb-sub-acc" id="sec-telemetry" data-tabs="live" open aria-labelledby="h-tel">
+              <summary class="acc-sum"><h3 id="h-tel" style="margin:0">관절 동기화 · 모터 부하</h3><div style="display:flex;gap:6px;align-items:center"><span id="tel-track" class="badge" data-tone="warn">대기</span><span id="tel-lat" class="badge mono">-- ms</span></div></summary>
               <div class="acc-body">
-              <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-                <button type="button" id="apply-rec-btn" class="btn-tool">추천 설정 자동 세팅</button>
-                <button type="button" id="save-preset-btn" class="btn-tool">현재 설정 저장</button>
-              </div>
-              <fieldset class="group">
-                <legend>녹화 설정 · LeRobot 파라미터 · 역방향 리플레이</legend>
-                <label class="field">설정 파일
-                  <select name="config" id="config"></select>
-                </label>
-                <label class="field" style="margin-top:8px">티칭·시뮬 궤적 리플레이 (--teacher, 선택)
-                  <select id="replay" name="replay" form="bench-form">
-                    <option value="">수동 리더-팔로워 (기본)</option>
-                  </select>
-                </label>
-                <div class="mode-toggle-row">
-                  <button type="button" id="toggle-reverse-btn" class="pill-btn" aria-pressed="false" title="역방향 재생/수집 전환 [Alt+R]">⇄ 역방향 (Reverse)</button>
-                  <select id="reverse-mode" style="min-height:34px;width:auto;font-size:.84rem" title="역방향 변환 방식">
-                    <option value="swap_ab">A↔B 구간 교차 (안전)</option>
-                    <option value="reverse_motion">프레임 역재생 (reverse_motion)</option>
-                  </select>
-                  <label style="display:inline-flex;align-items:center;gap:5px;font-size:.82rem;cursor:pointer">
-                    <input type="checkbox" id="invert-gripper"> 그리퍼 반전
-                  </label>
-                  <span id="reverse-note" class="quiet" style="font-size:.8rem">정방향</span>
-                </div>
-                <p id="config-meta-note" class="quiet" style="margin:8px 0"></p>
-                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px">
-                  <label class="field" style="font-size:.84rem">에피소드 수
-                    <input type="number" id="lp-episodes" min="1" max="500" step="1" placeholder="기본" style="min-height:40px">
-                  </label>
-                  <label class="field" style="font-size:.84rem">회차 시간(초)
-                    <input type="number" id="lp-ep-time" min="1" max="3600" step="1" placeholder="기본" style="min-height:40px">
-                  </label>
-                  <label class="field" style="font-size:.84rem">초기화 대기(초)
-                    <input type="number" id="lp-reset-time" min="0.5" max="600" step="0.5" placeholder="기본" style="min-height:40px">
-                  </label>
-                </div>
-                <p class="quiet" style="font-size:.78rem;margin:6px 0 0">잠금 항목(fps·단위·스텝·카메라)은 로봇 프로필 해시(D-911)로 보호됩니다.</p>
-              </fieldset>
-              <fieldset class="group">
-                <legend>안전 한계 (caps) · 그래프 클릭/드래그 조정</legend>
-                <label class="field">한계 파일
-                  <select name="caps" id="caps"></select>
-                </label>
-                <div id="caps-editor" class="alert" style="margin-top:10px" hidden>
-                  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-                    <span class="quiet">막대 그래프를 클릭하거나 좌우로 끌어당겨 조절한 뒤 저장하세요 (0~2000)</span>
-                    <button type="button" id="save-caps-btn" class="btn-primary" style="min-height:38px;padding:0 12px;font-size:.88rem">수정값으로 새 caps 저장·선택</button>
-                  </div>
-                  <div id="caps-summary-chart" style="margin-bottom:10px"></div>
-                  <div id="caps-fields" style="display:flex;flex-direction:column;gap:8px"></div>
-                </div>
-              </fieldset>
-              <details class="group" id="cal-details">
-                <summary style="cursor:pointer;font-weight:700;font-size:.92rem;color:var(--ink-q)">보정 파일 (자동 선택됨 · <span id="cal-summary-count">0개</span>)</summary>
-                <div style="margin-top:10px">
-                  <fieldset class="group">
-                    <legend>팔로워 보정 (robots/)</legend>
-                    <div id="cal-robot-list" class="cal-list"></div>
-                  </fieldset>
-                  <fieldset class="group" style="margin-bottom:0">
-                    <legend>리더 보정 (teleoperators/)</legend>
-                    <div id="cal-leader-list" class="cal-list"></div>
-                  </fieldset>
-                </div>
-              </details>
-              <div id="cal-list" hidden></div>
-              <div id="binding-issues" class="alert warn" role="status" hidden></div>
+                <div id="tel-note" class="quiet" style="font-size:.82rem;margin-bottom:6px">녹화/구동 중 0.4초 주기로 관절 동기화(Δ°)와 루프 지연을 표시합니다.</div>
+                <div id="tel-grid" class="tel-grid mono" hidden></div>
               </div>
             </details>
-          </form>
+            <div class="sb-links-row">
+              <div class="footer-links">
+                <a href="/status.json" target="_blank" rel="noopener">status</a>
+                <a href="/choices.json" target="_blank" rel="noopener">choices</a>
+                <a href="/cameras.json" target="_blank" rel="noopener">cameras</a>
+              </div>
+              <span class="quiet" style="font-size:.74rem">rosy-omx-bench-record.service</span>
+            </div>
+          </div>
+        </details>
 
-          <details class="card acc-card" id="sec-pipeline" aria-labelledby="h-pipeline">
-            <summary class="acc-sum"><h2 id="h-pipeline" style="margin:0">3 · 시뮬 · 모델 실행 &rarr; 증강 · RL 루프</h2><span id="pipe-job-badge" class="badge" data-tone="warn">대기</span></summary>
-            <div class="acc-body">
+        <details class="card acc-card sb-sec" id="sec-params" open aria-labelledby="h-params">
+          <summary class="acc-sum sb-sum">
+            <div class="acc-head"><h2 id="h-params" class="goal-kicker">파라미터</h2></div>
+          </summary>
+          <div class="acc-body sb-body">
+            <dl id="sb-params-kv" class="kv sb-params-kv mono">
+              <dt>설정</dt><dd id="sb-param-config">미선택</dd>
+              <dt>한계(caps)</dt><dd id="sb-param-caps">미선택</dd>
+              <dt>에피소드</dt><dd id="sb-param-episodes">기본회</dd>
+              <dt>회차/대기</dt><dd id="sb-param-timing">회차 길이 기본 · 사이 대기 기본</dd>
+              <dt>추종 단계</dt><dd id="sb-st-phase">—</dd>
+            </dl>
+          </div>
+        </details>
+
+        <details class="card acc-card sb-sec" id="sec-guide" data-tabs="setup" open aria-labelledby="h-guide">
+          <summary class="acc-sum sb-sum">
+            <div class="acc-head"><h2 id="h-guide" class="goal-kicker">배치도</h2><span id="sb-guide-sum" class="sum-line quiet mono">작업대 구역</span></div>
+          </summary>
+          <div class="acc-body guide-panel">
+            <div id="cam-guide" class="cam-guide-box" hidden></div>
+          </div>
+        </details>
+
+        <details class="card acc-card sb-sec" id="sec-notice-history" aria-labelledby="h-notice-hist">
+          <summary class="acc-sum sb-sum">
+            <div class="acc-head"><h2 id="h-notice-hist" class="goal-kicker">알림 기록</h2><span id="sb-notice-sum" class="sum-line quiet mono">0건</span></div>
+          </summary>
+          <div class="acc-body sb-body" id="notice-history">
+            <ul id="notice-history-list" class="notice-hist-list"></ul>
+            <p id="notice-history-empty" class="quiet" style="margin:0;font-size:.82rem">기록된 알림이 없습니다.</p>
+          </div>
+        </details>
+
+        <details class="card acc-card sb-sec" id="sec-shortcuts" aria-labelledby="h-shortcuts">
+          <summary class="acc-sum sb-sum">
+            <div class="acc-head"><h2 id="h-shortcuts" class="goal-kicker">단축키</h2><span class="sum-line quiet mono">? 열기</span></div>
+          </summary>
+          <div class="acc-body sb-body">
+            <dl id="shortcut-help-list" class="kv sb-params-kv mono">
+              <dt><kbd>Space</kbd> / <kbd>Ctrl+Enter</kbd></dt><dd>녹화 시작 · 중지</dd>
+              <dt><kbd>→</kbd> / <kbd>N</kbd></dt><dd>다음 에피소드 (녹화 중)</dd>
+              <dt><kbd>←</kbd> / <kbd>R</kbd></dt><dd>다시 녹화 (녹화 중)</dd>
+              <dt><kbd>H</kbd></dt><dd>선택 팔 홈 이동</dd>
+              <dt><kbd>Esc</kbd></dt><dd>녹화 중지 / 서랍 닫기</dd>
+              <dt><kbd>C</kbd></dt><dd>주/보조 카메라 전환</dd>
+              <dt><kbd>Shift+R</kbd></dt><dd>상태 · 카메라 새로고침</dd>
+              <dt><kbd>1</kbd>~<kbd>4</kbd></dt><dd>서랍 1~4 열기/닫기</dd>
+              <dt><kbd>/</kbd></dt><dd>작업 카드 검색</dd>
+              <dt><kbd>X</kbd></dt><dd>상단 알림 닫기</dd>
+              <dt><kbd>Alt+R</kbd></dt><dd>역방향 재생 전환</dd>
+              <dt><kbd>Alt+W</kbd></dt><dd>집기↔놓기 스왑</dd>
+              <dt><kbd>?</kbd></dt><dd>단축키 도움말</dd>
+            </dl>
+          </div>
+        </details>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <aside id="side-drawer-host" class="side-drawer-host" hidden role="dialog" aria-modal="false" aria-labelledby="drawer-panel-title">
+    <div id="drawer-backdrop" class="drawer-backdrop"></div>
+    <div class="side-drawer-panel">
+      <div class="drawer-panel-head">
+        <h2 id="drawer-panel-title" style="margin:0">설정 서랍</h2>
+        <button type="button" id="drawer-close-btn" class="btn-tool btn-xs" aria-label="서랍 닫기">닫기 (Esc)</button>
+      </div>
+
+      <form id="bench-form" class="drawer-stack" novalidate>
+        <fieldset id="setup-fieldset" class="drawer-fieldset">
+          <div id="drawer-setup" class="drawer-pane" data-drawer-pane="setup" hidden>
+            <details class="card acc-card" id="sec-setup" open aria-labelledby="h-setup">
+              <summary class="acc-sum">
+                <div class="acc-head"><h3 id="h-setup" style="margin:0">A · 작업 카드 검색 · 목록</h3></div>
+                <span id="rail-1" class="rail-step">입력</span>
+              </summary>
+              <div class="acc-body">
+                <div class="grid-2">
+                  <div class="field" style="grid-column:1/-1">팔 선택 (복수 선택 시 양팔 동시 · 체크박스)
+                    <div id="arm-checks" style="display:flex;flex-wrap:wrap;gap:8px" role="group" aria-label="팔 선택"></div>
+                    <select name="arm" id="arm" hidden></select>
+                  </div>
+                  <div class="field" style="grid-column:1/-1">
+                    <div class="task-head-row">
+                      <span>작업 카드 검색 · 선택 (지도에서 목표점 클릭 시 역선택 가능)</span>
+                      <button type="button" id="task-toggle-btn" class="btn-tool btn-xs" aria-expanded="true">목록 접기</button>
+                    </div>
+                    <div class="task-ctrl-row">
+                      <input type="text" id="task-search" placeholder="예: h1-01, belt, tmp-a, pinky 검색... [/]" autocomplete="off">
+                      <div class="task-nav-btns">
+                        <button type="button" id="task-prev-btn" class="btn-tool btn-xs" title="이전 작업 카드">◀ 이전</button>
+                        <button type="button" id="task-next-btn" class="btn-tool btn-xs" title="다음 작업 카드">▶ 다음</button>
+                      </div>
+                      <div id="task-filters" class="task-filters" role="group" aria-label="작업 카드 필터">
+                        <button type="button" class="pill-btn active" data-tfilter="all" aria-pressed="true">전체</button>
+                        <button type="button" class="pill-btn" data-tfilter="arm" aria-pressed="false">내 팔만</button>
+                        <button type="button" class="pill-btn" data-tfilter="pinky" aria-pressed="false">Pinky/벨트</button>
+                      </div>
+                    </div>
+                    <div id="task-listbox" class="task-listbox" role="listbox" aria-label="작업 카드 목록"></div>
+                    <select name="task" id="task" hidden><option value="">없음 (미지정)</option></select>
+                  </div>
+                </div>
+                <p id="arm-note" class="quiet" style="margin-top:10px"></p>
+                <div class="alert" id="task-summary">
+                  <h3>선택한 작업 카드 정보</h3>
+                  <dl class="kv">
+                    <dt>작업 지시</dt><dd id="tc-single">미확인</dd>
+                    <dt>출발점</dt><dd id="tc-origin">미확인</dd>
+                    <dt>목표 칸·층</dt><dd id="tc-target">미확인</dd>
+                    <dt>반복 수</dt><dd id="tc-episodes">미확인</dd>
+                    <dt>회차 시간</dt><dd id="tc-time">미확인</dd>
+                    <dt>상단 사진·카메라</dt><dd id="tc-photo">미확인</dd>
+                  </dl>
+                  <details style="margin-top:8px"><summary class="quiet" style="cursor:pointer">작업 카드 전체 내용 보기</summary>
+                    <pre id="tc-raw" class="mono quiet" style="white-space:pre-wrap;margin:8px 0 0;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;max-height:220px;overflow:auto">카드를 선택하세요.</pre>
+                  </details>
+                </div>
+                <div id="task-error" class="alert crit" role="alert" hidden></div>
+              </div>
+            </details>
+          </div>
+
+          <div id="drawer-bindings" class="drawer-pane" data-drawer-pane="bindings" hidden>
+            <details class="card acc-card" id="sec-bindings" open aria-labelledby="h-bind">
+              <summary class="acc-sum">
+                <div class="acc-head"><h3 id="h-bind" style="margin:0">B · 수집 · 연결 설정</h3><span id="sum-bind-drawer" class="sum-line quiet mono">미선택 · 미선택 · 보정 0개</span></div>
+                <span id="rail-2" class="rail-step">선택</span>
+              </summary>
+              <div class="acc-body">
+                <div class="grid-2" style="margin-bottom:12px">
+                  <label class="field">수집명 (소문자·숫자·-)
+                    <input type="text" name="name" id="name" required pattern="[a-z0-9][a-z0-9-]{2,63}" placeholder="예: h1-belt-ship-01" autocomplete="off">
+                  </label>
+                  <label class="field">작업대 배치 리비전
+                    <input type="text" name="rig_revision" id="rig_revision" required pattern="[a-z0-9][a-z0-9-]{2,63}" value="bench-r1" placeholder="예: bench-r1" autocomplete="off">
+                  </label>
+                </div>
+                <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+                  <button type="button" id="apply-rec-btn" class="btn-tool">추천 설정 자동 세팅</button>
+                  <button type="button" id="save-preset-btn" class="btn-tool">현재 설정 저장</button>
+                </div>
+                <fieldset class="group">
+                  <legend>녹화 설정 · LeRobot 파라미터 · 역방향 리플레이</legend>
+                  <label class="field">설정 파일
+                    <select name="config" id="config"></select>
+                  </label>
+                  <label class="field" style="margin-top:8px">티칭·시뮬 궤적 리플레이 (--teacher, 선택)
+                    <select id="replay" name="replay" form="bench-form">
+                      <option value="">수동 리더-팔로워 (기본)</option>
+                    </select>
+                  </label>
+                  <div class="mode-toggle-row">
+                    <button type="button" id="toggle-reverse-btn" class="pill-btn" aria-pressed="false" title="역방향 재생/수집 전환 [Alt+R]">⇄ 역방향 (Reverse)<kbd class="kbd-hint">Alt+R</kbd></button>
+                    <select id="reverse-mode" style="min-height:34px;width:auto;font-size:.84rem" title="역방향 변환 방식">
+                      <option value="swap_ab">A↔B 구간 교차 (안전)</option>
+                      <option value="reverse_motion">프레임 역재생 (reverse_motion)</option>
+                    </select>
+                    <label style="display:inline-flex;align-items:center;gap:5px;font-size:.82rem;cursor:pointer">
+                      <input type="checkbox" id="invert-gripper"> 그리퍼 반전
+                    </label>
+                    <span id="reverse-note" class="quiet" style="font-size:.8rem">정방향</span>
+                  </div>
+                  <p id="config-meta-note" class="quiet" style="margin:8px 0"></p>
+                  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px">
+                    <label class="field" style="font-size:.84rem">에피소드 수
+                      <input type="number" id="lp-episodes" min="1" max="500" step="1" placeholder="기본" style="min-height:40px">
+                    </label>
+                    <label class="field" style="font-size:.84rem">회차 시간(초)
+                      <input type="number" id="lp-ep-time" min="1" max="3600" step="1" placeholder="기본" style="min-height:40px">
+                    </label>
+                    <label class="field" style="font-size:.84rem">초기화 대기(초)
+                      <input type="number" id="lp-reset-time" min="0.5" max="600" step="0.5" placeholder="기본" style="min-height:40px">
+                    </label>
+                  </div>
+                  <p class="quiet" style="font-size:.78rem;margin:6px 0 0">잠금 항목(fps·단위·스텝·카메라)은 로봇 프로필 해시(D-911)로 보호됩니다.</p>
+                </fieldset>
+                <fieldset class="group">
+                  <legend>안전 한계 (caps) · 그래프 클릭/드래그 조정</legend>
+                  <label class="field">한계 파일
+                    <select name="caps" id="caps"></select>
+                  </label>
+                  <div id="caps-editor" class="alert" style="margin-top:10px" hidden>
+                    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                      <span class="quiet">막대 그래프를 클릭하거나 좌우로 끌어당겨 조절한 뒤 저장하세요 (0~2000)</span>
+                      <button type="button" id="save-caps-btn" class="btn-primary" style="min-height:38px;padding:0 12px;font-size:.88rem">수정값으로 새 caps 저장·선택</button>
+                    </div>
+                    <div id="caps-summary-chart" style="margin-bottom:10px"></div>
+                    <div id="caps-fields" style="display:flex;flex-direction:column;gap:8px"></div>
+                  </div>
+                </fieldset>
+                <details class="group" id="cal-details">
+                  <summary style="cursor:pointer;font-weight:700;font-size:.92rem;color:var(--ink-q)">보정 파일 (자동 선택됨 · <span id="cal-summary-count">0개</span>)</summary>
+                  <div style="margin-top:10px">
+                    <fieldset class="group">
+                      <legend>팔로워 보정 (robots/)</legend>
+                      <div id="cal-robot-list" class="cal-list"></div>
+                    </fieldset>
+                    <fieldset class="group" style="margin-bottom:0">
+                      <legend>리더 보정 (teleoperators/)</legend>
+                      <div id="cal-leader-list" class="cal-list"></div>
+                    </fieldset>
+                  </div>
+                </details>
+                <div id="binding-issues" class="alert warn" role="status" hidden></div>
+              </div>
+            </details>
+          </div>
+
+          <div id="drawer-start" class="drawer-pane" data-drawer-pane="start" hidden>
+            <details class="card acc-card" id="sec-start" open aria-labelledby="h-start">
+              <summary class="acc-sum">
+                <div class="acc-head"><h3 id="h-start" style="margin:0">C · 포즈 저장 · 리더 정렬 · 카메라 기준</h3><span id="sum-pose-drawer" class="sum-line quiet mono">팔로워 미확인 · 리더 미확인</span></div>
+                <span id="rail-3" class="rail-step">대기</span>
+              </summary>
+              <div class="acc-body">
+                <div class="start-bar">
+                  <label class="check-row">
+                    <input type="checkbox" id="align-leader" form="bench-form">
+                    <span>시작 전 리더를 팔로워 자세로 맞춤</span>
+                  </label>
+                  <button type="button" id="save-init-pose-btn" class="btn-tool" style="min-height:44px" disabled title="현재 로봇 팔 자세를 이니셜(홈) 포즈로 저장합니다">팔로워 포즈 저장</button>
+                  <button type="button" id="save-leader-pose-btn" class="btn-tool" style="min-height:44px" disabled title="현재 리더 팔 자세를 리더 홈 포즈로 저장합니다">리더 포즈 저장</button>
+                  <button type="button" id="save-cam-base-btn" class="btn-tool" style="min-height:44px">기준 카메라 저장</button>
+                </div>
+                <p id="start-guard-note" class="quiet" style="margin-top:8px;margin-bottom:0"></p>
+                <div id="lock-conflict-box" class="alert warn" style="margin-top:10px" hidden>
+                  <div id="lock-conflict-text" style="margin-bottom:8px"></div>
+                  <div id="lock-conflict-list" style="display:flex;flex-direction:column;gap:6px"></div>
+                </div>
+              </div>
+            </details>
+          </div>
+        </fieldset>
+      </form>
+
+      <div id="drawer-records" class="drawer-pane" data-drawer-pane="records" hidden>
+        <fieldset id="records-fieldset" class="drawer-fieldset">
+        <details class="card acc-card" id="sec-recent" open aria-labelledby="h-recent">
+          <summary class="acc-sum">
+            <div class="acc-head"><h3 id="h-recent" style="margin:0">최근 수집 · LeRobot 인코딩 · HF 현황</h3><span id="sum-recent-drawer" class="sum-line quiet mono">최근 0건 · LeRobot 0개</span></div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <span id="hf-sync-badge" class="badge" data-tone="warn">대기</span>
+              <span id="hf-login-badge" class="badge" data-tone="warn">HF 확인 중</span>
+            </div>
+          </summary>
+          <div class="acc-body">
+            <ul id="recent-list" class="sess-list"></ul>
+            <p id="recent-empty" class="quiet">아직 기록된 세션이 없습니다.</p>
+            <h3 style="margin-top:12px">저장된 LeRobot 데이터셋 (parquet · MP4 인코딩)</h3>
+            <div class="hf-ctrl-bar">
+              <label style="display:inline-flex;align-items:center;gap:6px;font-size:.84rem;cursor:pointer">
+                <input type="checkbox" id="hf-auto-upload"> 봉인 후 자동 업로드
+              </label>
+              <a id="hf-repo-link" class="quiet mono" href="#" target="_blank" rel="noopener" hidden></a>
+            </div>
+            <div id="hf-upload-live" class="alert" style="margin:0 0 8px" hidden>
+              <div class="hf-prog-row">
+                <span id="hf-upload-text" class="mono">대기</span>
+                <span id="hf-upload-pct" class="mono">0%</span>
+              </div>
+              <div class="prog-track" style="margin-top:6px"><div class="prog-fill" id="hf-upload-fill" style="width:0%"></div></div>
+            </div>
+            <ul id="lerobot-list" class="sess-list"></ul>
+            <p id="lerobot-empty" class="quiet">저장된 LeRobot 데이터셋이 없습니다.</p>
+          </div>
+        </details>
+
+        <details class="card acc-card" id="sec-pipeline" open aria-labelledby="h-pipeline" style="margin-top:12px">
+          <summary class="acc-sum">
+            <div class="acc-head"><h3 id="h-pipeline" style="margin:0">D · 시뮬 · 모델 실행 &rarr; 증강 · RL 루프</h3><span id="sum-pipe-drawer" class="sum-line quiet mono">대기 · 루프 0회</span></div>
+            <span id="pipe-job-badge" class="badge" data-tone="warn">대기</span>
+          </summary>
+          <div class="acc-body">
             <ol id="pipe-stepper" class="pipe-stepper" aria-label="4단계 폐쇄 루프">
               <li class="pipe-step" data-stage="sim" data-state="idle"><span class="pipe-idx">1</span><span>시뮬 / 모델 실행</span></li>
               <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
@@ -247,131 +522,19 @@
               <span id="pipe-loop-meta" class="quiet mono" style="font-size:.8rem">데이터셋 · 증강 · RL 체크포인트 피드백 대기 중</span>
             </div>
             <pre id="pipe-log" class="pipe-log mono quiet" hidden></pre>
-            </div>
-          </details>
-        </main>
-
-        <aside class="col-side">
-          <section class="card status-bar" id="status-bar" data-tabs="live" aria-label="상단 상태와 중지" aria-live="polite">
-            <div class="status-meta">
-              <span class="badge" id="top-badge" data-tone="warn">확인 중</span>
-              <span id="top-summary" class="mono">상태를 불러오는 중입니다</span>
-              <span id="top-checked" class="quiet">마지막 확인: 미확인</span>
-            </div>
-            <p id="stop-note" class="quiet" style="width:100%;margin:0" hidden>정상 종료 요청(SIGTERM)입니다. 물리 비상 정지는 follower 전원 스위치를 사용하세요.</p>
-          </section>
-
-          <section class="card" id="sec-start" data-tabs="setup live" aria-labelledby="h-start">
-            <h2 id="h-start">현장 확인 · 포즈 저장</h2>
-            <div class="start-bar">
-              <label class="check-row">
-                <input type="checkbox" name="at_bench" id="at_bench" form="bench-form">
-                <span>작업대에서 리더 팔을 잡고 follower 전원 스위치를 확인했습니다 [Alt+C]</span>
-              </label>
-              <button type="button" id="save-init-pose-btn" class="btn-tool" style="min-height:44px" disabled title="현재 로봇 팔 자세를 이니셜(홈) 포즈로 저장합니다">팔로워 포즈 저장</button>
-              <button type="button" id="save-leader-pose-btn" class="btn-tool" style="min-height:44px" disabled title="현재 리더 팔 자세를 리더 홈 포즈로 저장합니다">리더 포즈 저장</button>
-            </div>
-            <p id="start-guard-note" class="quiet" style="margin-top:8px;margin-bottom:0"></p>
-            <div id="lock-conflict-box" class="alert warn" style="margin-top:10px" hidden>
-              <div id="lock-conflict-text" style="margin-bottom:8px"></div>
-              <div id="lock-conflict-list" style="display:flex;flex-direction:column;gap:6px"></div>
-            </div>
-          </section>
-
-          <details class="card acc-card" id="sec-evidence" open aria-labelledby="h-ev">
-            <summary class="acc-sum"><h2 id="h-ev" style="margin:0">회차 증거</h2><span id="rail-ev" class="rail-step">대기</span></summary>
-            <div class="acc-body">
-            <dl class="kv">
-              <dt>진행 상태</dt><dd id="ev-status" aria-live="polite">확인 중</dd>
-              <dt>회차 이름</dt><dd id="ev-name" class="mono">미확인</dd>
-              <dt>팔</dt><dd id="ev-arm" class="mono">미확인</dd>
-              <dt>과제</dt><dd id="ev-task" class="mono">미확인</dd>
-              <dt>세션 폴더</dt><dd id="ev-folder" class="mono">미확인</dd>
-              <dt>포즈·전송</dt><dd id="ev-extra" class="quiet">미확인</dd>
-            </dl>
-            <div id="ev-restore" class="alert crit" role="alert" hidden></div>
-            <div id="ev-manual" class="alert warn" role="alert" hidden></div>
-            <div id="ev-seal" class="alert good" role="status" hidden></div>
-            <pre id="ev-log-tail" class="mono quiet" style="white-space:pre-wrap;margin-top:8px;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;max-height:180px;overflow:auto" hidden></pre>
-            <div id="post-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px" hidden>
-              <button type="button" id="next-ep-btn" class="btn-primary" style="min-height:40px;font-size:.9rem">다음 회차 준비 (수집명 +1)</button>
-              <button type="button" id="copy-transfer-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">모델 PC 반입 명령 복사</button>
-            </div>
-            <div id="request-error" class="alert crit" role="alert" hidden></div>
-            <div id="conn-error" class="alert warn" role="status" hidden></div>
-            </div>
-          </details>
-
-          <details class="card acc-card" id="sec-telemetry" open aria-labelledby="h-tel">
-            <summary class="acc-sum"><h2 id="h-tel" style="margin:0">리더·팔로워 동기화 · 반응속도</h2><div style="display:flex;gap:6px;align-items:center"><span id="tel-track" class="badge" data-tone="warn">대기</span><span id="tel-lat" class="badge mono">-- ms</span></div></summary>
-            <div class="acc-body">
-            <div id="tel-note" class="quiet" style="font-size:.82rem;margin-bottom:6px">녹화/구동 중 0.4초 주기로 관절 동기화(Δ°)와 루프 지연을 표시합니다.</div>
-            <div id="tel-grid" class="tel-grid mono" hidden></div>
-            </div>
-          </details>
-
-          <section class="card" id="sec-cameras" aria-labelledby="h-cams">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-              <h2 id="h-cams" style="margin:0">실시간 카메라 미리보기 · 집기·안착 가이드</h2>
-              <button type="button" id="save-cam-base-btn" class="btn-tool">기준 카메라 저장</button>
-            </div>
-            <div id="cam-drift-note" class="alert" style="margin:0 0 8px" hidden></div>
-            <div id="cam-guide" class="alert" style="margin:0 0 10px" hidden></div>
-            <p id="cam-note" class="quiet">작업대 카메라(8767)를 확인하는 중입니다.</p>
-            <div id="cam-grid" class="cam-grid"></div>
-          </section>
-
-          <section class="card" id="sec-recent" data-tabs="records" aria-labelledby="h-recent">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-              <h2 id="h-recent" style="margin:0">최근 수집 · LeRobot 인코딩 · HF 현황</h2>
-              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                <span id="hf-sync-badge" class="badge" data-tone="warn">대기</span>
-                <span id="hf-login-badge" class="badge" data-tone="warn">HF 확인 중</span>
-              </div>
-            </div>
-            <ul id="recent-list" class="sess-list"></ul>
-            <p id="recent-empty" class="quiet">아직 기록된 세션이 없습니다.</p>
-            <h3 style="margin-top:12px">저장된 LeRobot 데이터셋 (parquet · MP4 인코딩)</h3>
-            <div class="hf-ctrl-bar">
-              <label style="display:inline-flex;align-items:center;gap:6px;font-size:.84rem;cursor:pointer">
-                <input type="checkbox" id="hf-auto-upload"> 봉인 후 자동 업로드
-              </label>
-              <a id="hf-repo-link" class="quiet mono" href="#" target="_blank" rel="noopener" hidden></a>
-            </div>
-            <div id="hf-upload-live" class="alert" style="margin:0 0 8px" hidden>
-              <div class="hf-prog-row">
-                <span id="hf-upload-text" class="mono">대기</span>
-                <span id="hf-upload-pct" class="mono">0%</span>
-              </div>
-              <div class="prog-track" style="margin-top:6px"><div class="prog-fill" id="hf-upload-fill" style="width:0%"></div></div>
-            </div>
-            <ul id="lerobot-list" class="sess-list"></ul>
-            <p id="lerobot-empty" class="quiet">저장된 LeRobot 데이터셋이 없습니다.</p>
-          </section>
-        </aside>
+          </div>
+        </details>
+        </fieldset>
       </div>
     </div>
-  </div>
+  </aside>
 
-  <footer class="app-footer">
-    <div class="ftr-health">
-      <span id="ftr-server" class="ui-tag mono">서버 확인 중</span>
-      <span id="ftr-lock" class="ui-tag mono">락 없음</span>
-      <span class="mono">rosy-omx-bench-record.service</span>
-    </div>
-    <div class="quiet">
-      <code>/</code> 검색 · <code>Alt+C</code> 현장확인 · <code>Ctrl+Enter</code> 시작 · <code>Esc</code> 중지 · <code>Alt+R</code> 역방향 · <code>Alt+W</code> 스왑
-    </div>
-    <div class="footer-links">
-      <a href="/status.json" target="_blank" rel="noopener">status</a>
-      <a href="/choices.json" target="_blank" rel="noopener">choices</a>
-      <a href="/cameras.json" target="_blank" rel="noopener">cameras</a>
-    </div>
-  </footer>
 </div>
 
 <script src="/bench_record_ui.js"></script>
+<script src="/bench_record_status.js"></script>
 <script src="/bench_record_app.js"></script>
+<script src="/bench_record_drawers.js"></script>
 <script src="/bench_record_cam.js"></script>
 <script src="/bench_record_pipeline.js"></script>
 </body>
