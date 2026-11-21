@@ -334,7 +334,10 @@ def test_browser_sso_return_uses_real_cookies_and_authority_ui(pipeline, tmp_pat
             else:
                 page.get_by_text('로그아웃', exact=True).click()
             expect(page.locator('[data-account-profile]')).to_be_hidden()
-            assert not page.evaluate("fetch('/api/account/session').then(r=>r.json())")['authenticated']
+            # Ask the robot through the cookie jar, not the page: after logout the page reloads and is sent to the
+            # Fleet login on another origin, where a relative fetch gets Fleet's 404 body with no 'authenticated'
+            # (KeyError on main, CI run 44801004517, 2026-11-20).
+            assert not context.request.get(robot + '/api/account/session').json()['authenticated']
             assert not failures, failures
         finally:
             browser.close()
