@@ -5,9 +5,15 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.436
+**Version:** v1.438
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.438 이름 정차용 Nav2 실행 영수증·격자 결속 목표·차선 인계 (CORE)
+
+### v1.437 Fleet LED 확인 판정의 선택 yaw (Fleet)
+
+`POST /api/fleet/detections/identity` 본문에 선택 `yaw`(지도 기준 rad, 유한값만, 없으면 null)를 받아 확인 트랙에 증거로 저장한다. Vision `led_identity.decide`는 이미 `yaw`를 보내므로, 이전 Fleet은 판정을 전부 422로 거절했다.
 
 ### v1.436 도킹 명령의 현장 위치 증거 `site_pose_evidence` (additive)
 
@@ -3634,7 +3640,7 @@ Vision `vision --track`은 모서리 마커 보정 우선, 없으면 승인 사�
 |---|---|---|---|
 | POST | `/api/fleet/detections` | source Bearer | `OverheadDetectionsPayload` 제출. source/map/revision·1 s lease 검사. v1.186(D-600): 선택 `unknown_floor` `[{x, y, radius_m}]`(최대 16, `OK`일 때만, 비면 생략) — 배경이 아직 못 본 바닥 v1.189(D-589): 선택 필드 `tuning` `{state, score, ev, locked}`(없으면 JSON에서 빠짐, 추가 키 거부). 이 Fleet 이전 판은 `tuning`이 실린 payload를 422로 거부한다. Vision은 그 422를 받으면 같은 payload를 `tuning` 없이 한 번 다시 보내고, 그 프로세스에서는 다시 싣지 않는다 |
 | GET | `/api/fleet/detections/config` | source Bearer | 해당 source의 승인 calibration 또는 null, relearn_seq. v1.130(D-472): `identity_challenge` `{request_id, color, not_before, not_after}`(Fleet 벽시계, 창 ≤ 6 s) 또는 null — 이 source가 보는 로봇에 열린 LED 확인 요청. v1.175(D-580): `robot_markers` `{robot_id: marker_id}` — 이 source의 현재 로봇 마커(`robot_ids: enrolled` source는 살아 있는 명단, 마커 = YAML 예외 또는 로봇 번호 40–49). Vision은 이 값을 YAML보다 먼저 쓴다. v1.185(D-596): `identity_challenges` — 이 source의 열린 LED 확인 요청 전부(색마다 하나, 최대 2, 같은 모양). `identity_challenge`는 그중 가장 오래된 것(이전 Vision 호환). Vision은 열린 창이 끝날 때까지 배경 학습·장면 변경 재학습·유령 치유를 멈춘다. v1.186(D-600): `occupied` `[{robot_id\|null, x, y, radius_m, basis:"marker"\|"sighting"\|"operator_pin"\|"map_pose"\|"own_pose"\|"blob"}]` — Vision 배경 학습이 배우지 않을 로봇 자리(지도 m). 로봇마다 마커 > D-494 지도 자세(반경 + odom 다리, 최대 0.3 m) > LOCALIZED 자기 자세, 그리고 배정 없는 마커와 마지막 OK 프레임(60 s 이내)의 익명 blob |
-| POST | `/api/fleet/detections/identity` | source Bearer | D-472 (v1.130). 한 `identity_challenge`에 대한 Vision 판정: `{source_id, map_id, request_id, processor_revision, state:"matched"\|"ambiguous", reason?:"none"\|"multiple"\|"frames_missing"\|"stale"\|"calibration_changed", x?, y?, captured_at?, calibration_revision?, evidence}`. 숫자만, 영상 바이트 없음(D-136). 다른 키 422. `matched`는 창 안 `captured_at`, source의 현재 map·보정 revision, 최신 탐지에서 0.25 m 안의 이어지는 익명 blob이 있고 0.30 m 안에 다른 blob이 없을 때만 확인 트랙이 된다. 열린 요청이 아니면 409 `IDENTIFY_NOT_PENDING`, 묻지 않은 source 409 `IDENTIFY_SOURCE_MISMATCH`. 응답 `{robot_id, state:"CONFIRMED"\|"UNKNOWN", reason?}` |
+| POST | `/api/fleet/detections/identity` | source Bearer | D-472 (v1.130). 한 `identity_challenge`에 대한 Vision 판정: `{source_id, map_id, request_id, processor_revision, state:"matched"\|"ambiguous", reason?:"none"\|"multiple"\|"frames_missing"\|"stale"\|"calibration_changed", x?, y?, yaw?, captured_at?, calibration_revision?, evidence}`. `yaw`(지도 기준 rad, 유한값만, 없으면 null)는 Vision `led_identity.decide`가 보내며 확인 트랙에 증거로 저장된다. 숫자만, 영상 바이트 없음(D-136). 다른 키 422. `matched`는 창 안 `captured_at`, source의 현재 map·보정 revision, 최신 탐지에서 0.25 m 안의 이어지는 익명 blob이 있고 0.30 m 안에 다른 blob이 없을 때만 확인 트랙이 된다. 열린 요청이 아니면 409 `IDENTIFY_NOT_PENDING`, 묻지 않은 source 409 `IDENTIFY_SOURCE_MISMATCH`. 응답 `{robot_id, state:"CONFIRMED"\|"UNKNOWN", reason?}` |
 | GET | `/api/fleet/tracking` | viewer 이상 | sources 상태·fps(출처마다 `calibration_drift` — 승인 교정과 새 맞춤 제안의 비교 판정, 없으면 null), robots 대조, unknown 위치. v1.186(D-600): source 행 `unknown_floor` `[{x, y, radius_m}]`(신선한 페이로드, 아니면 `[]`) v1.189(D-589): `sources[].tuning` `{state, score, ev, locked}` 또는 null — Vision이 마지막으로 보낸 그 카메라의 인식 맞춤 상태(lease 안에서만). `state` `off`(폰 스위치 꺼짐)·`waiting`·`tuning`(맞추는 동안 그 source의 검출은 `LEARNING`)·`locked`·`paused`(폰 열)·`unsupported`(연결 15 s 동안 `camera_state`가 없는 옛 앱), `score` 0–1 인식 점수(표시용 측정값, 맞춤 판단에 쓰지 않음) 또는 null(미측정), `ev` 적용된 노출 보정(실제 EV, 소수) 또는 null, `locked` AE 잠금. 사이트 `auto_tune: false`인 source는 `tuning`을 보내지 않아 null. 표시 전용 |
 | GET | `/api/fleet/tracking/identity` | viewer 이상 | D-472 (v1.130), 읽기 전용. v1.185(D-596): `pendings[]`(열린 요청 전부, 각 `trigger`), `pending`은 가장 오래된 것, `last.trigger`, `config.auto_min_interval_s`. `{ts, use:"observation-only", pending:{robot_id, request_id, color, sources, not_before, not_after}\|null, robots:[{robot_id, state:"CONFIRMED"\|"UNKNOWN", reason, x, y, yaw:null, age_s, source_id, map_id, calibration_revision, confirmed_at, use, last}], config:{window_s, identity_ttl_s, overlap_m, auto_request}}`. 확인 트랙은 트랙 손실(`track_lost_s` 1 s)·0.30 m 겹침·map/보정 revision 변경·`identity_ttl_s` 경과 중 하나로 UNKNOWN이 된다(addendum 4). D-511 차로 준수 입력과 콘솔 표시 전용이며 `map-pose` 중재·trip·initialpose·경로·명령에 쓰지 않는다(addendum 3) |
 | POST | `/api/fleet/tracking/relearn` | operator | `{source_id}`의 배경 재학습 번호 증가. v1.186(D-600): 응답 `{source_id, relearn_seq, occupied, unlocated:[robot_id]}` — 로봇은 그대로 두고, `occupied` 자리는 배우지 않으며, `unlocated` 로봇은 배경이 될 수 있다 |
@@ -4885,6 +4891,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.438 | 2026-11-21 | [CORE] Additive: CORE `POST /api/v1/navigation/bound-goal`은 승인된 격자 ID로 목표 수락을 제한한다. Fleet `road-nav2`는 이름 기반 정차에서 `expected_site_map_version`과 승인 정합을 확인한다. `dry_run: true`는 요청을 큐에 넣지 않는다. 단독 Nav2 정차는 양방향 자유 구간만 있고 차선 제어·회전 제한·횡단보도가 없는 지도에서 허용한다. 충전 관리 기체는 이 경로에 들어가지 않는다. Additive: CORE `POST /api/v1/navigation/line-handoff-goal`은 현재 주행 임대, 유지 중인 차선 STOP, 격자·부팅·소유권 세대를 동일 요청으로 확인한다. 기존 Nav2 실행 영수증을 반환한다. Additive: `POST /api/v1/navigation/handover`의 선택적 `expected_map_grid_id`를 같은 인계에서 확인한다. 일치하면 `map_grid_id`와 `idle_mode_epoch`를 반환한다. `POST /api/v1/navigation/bound-plan`으로 구동 없이 경로를 요청한다. `bound-goal`과 `line-handoff-goal`은 같은 계획 ID를 요구하고 해당 경로의 실행 조건을 재검사한다. CORE에서 실행 소유권을 발급하기 전에 요청을 거절하면 `error.detail`에 요청의 `plan_id`와 `native_admitted: false`를 반환한다. 소유권을 발급한 뒤에는 이 근거를 반환하지 않는다. `evidence.velocity.sampled_at`에 검증된 속도 측정 구간의 끝 시각을 UTC로 제공한다. `received_at`은 CORE 수신 시각이다. 시간 기준을 확인할 수 없거나 측정이 만료되면 `sampled_at`은 null이다. Fleet은 Nav2 종료 증거보다 뒤의 서로 다른 0속도 표본 두 개로 점유 해제를 검증한다. |
+| v1.437 | 2026-11-21 | [Fleet] `POST /api/fleet/detections/identity` 본문에 선택 `yaw` 추가(Vision이 이미 보냄; 이전에는 422로 전부 거절) |
 | v1.436 | 2026-11-21 | Additive: `POST /docking/dock` 의 선택 `site_pose_evidence`(CORE 가 판정), `GET /docking/status`·dock 응답의 `site_pose_verified`·`site_pose_refusal` (본문 v1.436) |
 | v1.434 | 2026-11-21 | Additive: site map `stop` 장소 선택 필드 `stop_zone`(로봇 몸체가 끝나야 할 다각형, 3–32점·횡단보도 다각형과 같은 검사, 장소 점 포함, `pinned` 필수)과 `approach_m`(0.05–0.6 m, `yaw` 필수, 접근 자세는 yaw 뒤쪽으로 계산). 없으면 저장 본문에서 빠져 기존 지도는 바이트 동일. 관제 지도 편집 장소 검사 칸에 접근 거리 입력과 정지 구역 그리기·지우기. |
 | v1.433 | 2026-11-21 | Additive: `GET /docking/status` 의 `last_event`·`charge_unconfirmed`, `POST /docking/docks` 의 선택 `metadata`(`reference_scan`), 이벤트 `docking.person_call`·`docking.uncharged_voltage_drop` (본문 v1.433) |
