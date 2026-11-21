@@ -25,14 +25,28 @@ jobs:
     env:
       # D-1061: a GitHub App installation token or fine-grained token (contents, pull requests: write).
       # PRs opened with it run every pull_request workflow (ci-result, review-gate). GITHUB_TOKEN PRs
-      # start none, so without this secret the bot only reports what is pending and pushes nothing.
+      # start none, so without a token the bot only reports what is pending and pushes nothing.
+      # The rosy-records-bot App (variable RECORDS_BOT_CLIENT_ID, secret RECORDS_BOT_PRIVATE_KEY) mints a
+      # one-hour token for this repository only; a static RECORDS_BOT_TOKEN secret still works as a fallback.
       RECORDS_BOT_TOKEN: ${{ secrets.RECORDS_BOT_TOKEN }}
     steps:
+      - name: Mint records bot App token
+        id: app
+        if: vars.RECORDS_BOT_CLIENT_ID != ''
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0 (pinned commit)
+        with:
+          client-id: ${{ vars.RECORDS_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RECORDS_BOT_PRIVATE_KEY }}
+
+      - name: Use the App token
+        if: steps.app.outputs.token != ''
+        run: echo "RECORDS_BOT_TOKEN=${{ steps.app.outputs.token }}" >> "$GITHUB_ENV"
+
       - name: Checkout main
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
           fetch-depth: 0
-          token: ${{ secrets.RECORDS_BOT_TOKEN || github.token }}
+          token: ${{ env.RECORDS_BOT_TOKEN || github.token }}
 
       - name: Consolidate shard logs and regenerate index/STATUS
         run: |
@@ -54,7 +68,7 @@ jobs:
       - name: Open or update consolidation PR
         if: env.RECORDS_BOT_TOKEN != ''
         env:
-          GH_TOKEN: ${{ secrets.RECORDS_BOT_TOKEN }}
+          GH_TOKEN: ${{ env.RECORDS_BOT_TOKEN }}
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "No shard consolidation or generated record changes."

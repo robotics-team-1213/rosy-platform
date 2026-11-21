@@ -5,19 +5,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.434
+**Version:** v1.436
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
-### v1.428 Fleet 셀 작업 증거 두 경로 (D-1057)
+### v1.436 도킹 명령의 현장 위치 증거 `site_pose_evidence` (additive)
 
-표면: Fleet. 둘 다 additive이고 `claim`·`complete`의 요청·응답 모양과 거부 코드는 바뀌지 않는다.
+`POST /api/v1/docking/dock` 본문에 선택 객체 `site_pose_evidence`를 더한다: `{anchor_source: "sighting"|"track"|"operator_pin"|"auto_locate"|"peer", identity_mode: "led"|"motion"|null, anchor_age_s: number, camera_residual_m: number|null, camera_residual_deg: number|null, map_id: string, at: number}`. Fleet 이 보내는 "지도 위치가 검증된 현장 위치다"라는 증거이고, CORE 가 판정한다(`docking.site_pose.judge_site_pose`, 문턱은 도킹 설정 `site_pose_anchor_sources`·`site_pose_max_anchor_age_s`·`site_pose_max_camera_residual_m`). 받아들이는 조건: `anchor_source` 가 `sighting` 또는 `track`, `anchor_age_s` 가 한도 안, `camera_residual_m` 가 있고 한도 안, `map_id` 가 로봇의 지도와 같음. `auto_locate`·`peer`·`operator_pin` 과 빠진 값은 받지 않는다. `at` 은 기록일 뿐이고(호스트 시계가 다르다) 나이는 `anchor_age_s` 로만 잰다. 위치만 검증한다: 방위와 칸 진입은 LiDAR 기준 스캔이 맡는다. 기준 스캔이 있는 베이 도크는 받아들인 증거가 없으면(또는 지도 자세와 맞는 좋은 LiDAR 적합이 없으면) 지도로 스테이징(Nav2)하지 않고 `DOCK_FAILED`(`bay zone: not staging by the map: …`)와 `docking.person_call` 로 멈춘다. `POST /docking/dock` 응답과 `GET /docking/status` 에 선택 필드 `site_pose_verified`(bool|null, CORE 의 판정)·`site_pose_refusal`(받지 않은 이유, 받았거나 명령이 없으면 `null`)를 더한다. 증거를 주지 않은 기존 호출은 그대로 시작되고 `site_pose_verified: false` 로 보인다.
 
-| Method and path | Contract |
-|---|---|
-| `POST /api/fleet/pipeline/cell-tasks/{task_id}/bed-confirm` | 이름 있는 운영자만(공용 `site-console`·`development-*`은 403 `NAMED_OPERATOR_REQUIRED`). 본문 64 KB 이하(413 `EVIDENCE_BODY_TOO_LARGE`). 같은 요청을 다시 보내면 `renewed:false`로 기존 확인을 그대로 돌려준다. 본문 `{robot_id}`가 작업의 로봇과 같아야 한다(아니면 422 `BED_CONFIRM_ROBOT_MISMATCH`). QUEUED 작업, 또는 확인이 무효가 된 RUNNING 작업(같은 lease에 다시 확인, 로봇이 그 순간 정지 상태가 아니면 409 `BED_CONFIRM_ROBOT_NOT_STOPPED`; 그 밖은 409 `CELL_TASK_NOT_QUEUED`). 그 순간 로봇 지도 자세가 LOCALIZED(odom 이음 아님)·2 s 이하·셀 정차 구역 안이어야 한다(아니면 409 `BED_CONFIRM_POSE_UNAVAILABLE`). 200 `{ok, confirmation{task_id, robot_id, principal_id, confirmed_at, pose}, expires_in_s}`. 확인은 지도 ID와 함께 저장되고 claim까지 120 s 유효하며(`claim`이 소비해 작업 행 `bed_confirmation{operator, confirmed_at, pose, map_id, map_version}`과 lease에 묶고, 묶인 뒤 `RELEASED`는 120 s를 다시 보지 않는다), 자세가 2 cm 넘게 움직이거나 지도(ID 또는 활성 버전)가 바뀌면 상태 갱신마다 검사해 영구 무효로 하고 메모리에만 있다. |
-| `POST /api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm` | 이름 있는 운영자만(공용 `site-console`·`development-*`은 403 `NAMED_OPERATOR_REQUIRED`, `bed-confirm`과 같은 규칙·저장 방식). QUEUED 작업만(409 `CELL_TASK_NOT_QUEUED`). 본문은 비어도 되고 64 KB 이하. 200 `{ok, renewed, presence{operator, at}, expires_in_s}`. 유효 120 s이고 같은 요청을 다시 보내도 만료를 갱신하지 않는다. 그 작업의 `claim`이 유효한 확인을 한 번 소비해 `claim` 응답의 `handoff.presence`와 작업 행 `presence`(`{operator, at}`, 없으면 null)에 싣는다. worker는 `presence`가 있는 작업만 감독 시험(`--commissioning --person-at-switch`)으로 실행한다(D-911). |
-| `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence` | 그 셀의 owner로 등록된 service 주체만(설정 `ROSY_FLEET_CELL_OWNERS`, 없으면 403 `OWNER_PRINCIPAL_NOT_REGISTERED`). 본문 64 KB 이하(413). 본문 `{handoff_lease_id, measured_at, receipt, stage_result, hardware_telemetry}`. RUNNING 작업(409 `CELL_TASK_NOT_RUNNING`), `handoff_lease_id`와 `receipt.handoff_lease_id`가 원장 lease와 같고 `receipt.stage_id`가 task_id(422 `OWNER_EVIDENCE_LEASE_MISMATCH`), `measured_at`이 claim 이후·60 s 이내·미래 2 s 이내이고 `hardware_telemetry.measured_at`과 2 s 안에서 같아야 한다(422 `OWNER_EVIDENCE_MEASURED_AT_INVALID`), 세 객체가 유한 JSON 딕셔너리(422 `INVALID_OWNER_EVIDENCE`). 200 `{ok, recorded}`. 같은 lease의 같은 증거는 `recorded:false`, 다른 증거는 409 `OWNER_EVIDENCE_ALREADY_RECORDED`. `complete`의 `RELEASED`는 이 저장 기록과 본문이 같을 때만 통과하고, 측정 시각 `measured_at` 기준 60 s 뒤에는 `OMX_OWNER_EVIDENCE_UNAVAILABLE`이다(저장 시각 기준이 아니다). |
 ### v1.433 도킹 상태 진단 필드와 도크 metadata (additive)
 
 `GET /api/v1/docking/status` 에 선택 필드 `last_event`(마지막 재시도·재안착·실패와 사유, 없으면 `null`; 재시도는 오류가 아니다)와 `charge_unconfirmed`(bool, 기본 `false`; DOCKED 안착은 LiDAR 로 확인했으나 충전 증거가 없다. CHARGING 이 아니며 Fleet 은 따로 보인다)를 더한다. `POST /api/v1/docking/docks` 본문에 선택 `metadata`(object, 기본 `{}`)를 더하고 `metadata.reference_scan` 이 베이 LiDAR 재안착 기준이다. 이벤트 `docking.person_call`·`docking.uncharged_voltage_drop` 은 §8 표에 있다. 기존 필드·동작은 그대로다.
@@ -2314,7 +2309,7 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | GET | `/metrics` | 내부/모니터링 | OBS-101 (Prometheus 형식, 토큰 면제는 배포 정책). `rosy_audit_write_failures_consecutive` 가 0 이 아니면 LOG-001 감사 기록이 남지 않고 있다 |
 | GET | `/api/v1/ros/nodes\|topics\|services` | Admin | **미구현** — ROS-102. 그래프 스냅샷은 `/api/v1/system/runtime` 이 제공한다 |
 | POST | `/api/v1/ros/publish` | Admin + 설정 ON | **미구현** — ROS-102. D-2(단일 퍼블리셔)와 충돌하므로 구현 시 별도 ADR 필요 |
-| POST | `/api/v1/docking/dock` | Operator | DNC-003 (미지원 시 501). body: `{"dock": "dock_1"}` — 도크가 1개면 생략 가능. 409: `DOCKING_ACTIVE`(이미 진행 중), `LINE_FOLLOW_ACTIVE`, `MODE_CONFLICT`(DOCKING 모드를 쥘 수 없음 — MANUAL 등), `EMERGENCY_ACTIVE` |
+| POST | `/api/v1/docking/dock` | Operator | DNC-003 (미지원 시 501). body: `{"dock": "dock_1", "site_pose_evidence": {...}}` — 도크가 1개면 `dock` 생략 가능, `site_pose_evidence` 는 선택(v1.436). 409: `DOCKING_ACTIVE`(이미 진행 중), `LINE_FOLLOW_ACTIVE`, `MODE_CONFLICT`(DOCKING 모드를 쥘 수 없음 — MANUAL 등), `EMERGENCY_ACTIVE` |
 | POST | `/api/v1/docking/undock` | Operator | DNC-003. 409: `NOT_DOCKED`, `LINE_FOLLOW_ACTIVE`, `NO_ODOMETRY`, `MODE_CONFLICT`, `EMERGENCY_ACTIVE` |
 | POST | `/api/v1/docking/cancel` | Operator | DNC-003 |
 | GET | `/api/v1/docking/status` | Viewer | DNC-003 — **capability 무관 항상 200**, `supported` 포함 |
@@ -4884,7 +4879,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
-| v1.428 | 2026-11-20 | Additive (D-1057, Safety-Review 대상): Fleet `POST /api/fleet/pipeline/cell-tasks/{task_id}/bed-confirm`(이름 있는 운영자, 지도 ID·버전과 함께 저장, 120 s·2 cm, 영구 무효), `POST /api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm`(이름 있는 운영자, 120 s, claim이 소비해 `handoff.presence`로 전달)와 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(그 셀의 owner로 등록된 service 주체, 64 KB, 측정 시각 60 s)를 더한다. `claim`·`complete`의 모양은 그대로이며 `complete`는 저장된 owner 증거와 같은 주체만 허용한다. 추가: `complete`는 적재함 확인이 무효가 되면 422 `BED_CONFIRMATION_INVALID`(그 밖의 미측정은 기존 `AMR_BRAKE_BED_VELOCITY_UNMEASURED`)로 거부하고, 작업 행에 `bed_confirmation`이 생긴다. |
+| v1.436 | 2026-11-21 | Additive: `POST /docking/dock` 의 선택 `site_pose_evidence`(CORE 가 판정), `GET /docking/status`·dock 응답의 `site_pose_verified`·`site_pose_refusal` (본문 v1.436) |
 | v1.434 | 2026-11-21 | Additive: site map `stop` 장소 선택 필드 `stop_zone`(로봇 몸체가 끝나야 할 다각형, 3–32점·횡단보도 다각형과 같은 검사, 장소 점 포함, `pinned` 필수)과 `approach_m`(0.05–0.6 m, `yaw` 필수, 접근 자세는 yaw 뒤쪽으로 계산). 없으면 저장 본문에서 빠져 기존 지도는 바이트 동일. 관제 지도 편집 장소 검사 칸에 접근 거리 입력과 정지 구역 그리기·지우기. |
 | v1.433 | 2026-11-21 | Additive: `GET /docking/status` 의 `last_event`·`charge_unconfirmed`, `POST /docking/docks` 의 선택 `metadata`(`reference_scan`), 이벤트 `docking.person_call`·`docking.uncharged_voltage_drop` (본문 v1.433) |
 | v1.432 | 2026-11-20 | Additive: `GET /api/v1/sensors/{type}` 에 `odometry`·`wheels`·`dock_observation` 을 더하고 `imu`·`motor` 필드를 넓힌다. 이 다섯 type 은 표본이 없으면 404 대신 200 `evidence: missing`. ROS 콜백은 원본만 보관하고 변환은 GET 때 한다 (본문 v1.429) |
