@@ -128,6 +128,12 @@ def activated(cwd: Path) -> bool:
     return False
 
 
+def shared_checkout(cwd: Path) -> bool:
+    """git-dir == common-dir: the main working tree (the shared main checkout), not a ``.worktrees/`` worktree."""
+    dirs = _run(["git", "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], cwd).splitlines()
+    return len(dirs) == 2 and Path(dirs[0]).resolve() == Path(dirs[1]).resolve()
+
+
 def cutover_refusal(cwd: Path) -> str | None:
     """Refuse submission while the cutover phase is drain; open and normal pass (activation is checked separately)."""
     state = land_freeze.load(cwd)
@@ -190,11 +196,12 @@ def preflight(cwd: Path, base: str, body: str = "") -> None:
     drops lines another PR merged into main within 7 days unless the PR body names it (shared-checkout.md)."""
     for check in ("safety_review.py", "size_range.py"):
         _run([sys.executable, f"tools/harness/{check}", base, "HEAD"], cwd)
-    for warning in step_back.size_warnings(cwd, base, "HEAD"):
-        print(f"[pr-land] warning: split this branch before submission, {warning}")
     if os.environ.get("ROSY_STEP_BACK") == "off":
         print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
         return
+    if (over := step_back.size_violations(cwd, base, "HEAD")) and not step_back.size_excepted(body):
+        raise SystemExit("[pr-land] branch too big, split it before submission: " + "; ".join(over)
+                         + "\n[pr-land] or rerun with --body containing a line 'Size-Exception: <reason>', or set ROSY_STEP_BACK=off")
     try:
         hits = step_back.report(cwd, base, "HEAD")
     except step_back.ScanError as e:  # a git failure must not read as a pass
@@ -284,6 +291,9 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         print("[pr-land] CI log covers lab baseline passed IDs")
         return 0
 
+    if shared_checkout(cwd):  # the shared main checkout must stay on main; branches live in worktrees
+        raise SystemExit("[pr-land] this is the shared main checkout (git-dir == common-dir); run from your worktree:"
+                         " python tools/worktrees.py new|adopt <short-name> <type>/<topic>")
     branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
     if branch in ("main", "HEAD"):
         raise SystemExit(f"[pr-land] checkout a topic branch first (got {branch})")
@@ -295,6 +305,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     if refused and not args.dry_run:
         raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
+    if os.environ.get("ROSY_STEP_BACK") != "off" and not _run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/main"], cwd, check=False):
+        raise SystemExit("[pr-land] refs/remotes/origin/main is missing; run 'git fetch origin main' (the size check needs its merge base)")
     preflight(cwd, base, build_body(args.body, args.self_review))
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
@@ -325,7 +337,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     existing = json.loads(_run(["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number"], cwd) or "[]")
     if existing:
         pr = str(existing[0]["number"])
-        if args.self_review:
+        if args.self_review or args.body:  # the Size-Exception / Replaces lines checked above must reach the PR
             _run(["gh", "pr", "edit", pr, "--body", body], cwd)
     else:
         url = _run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body], cwd)
