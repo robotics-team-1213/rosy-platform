@@ -83,6 +83,8 @@
 ## 최근 기록
 
 - 2026-11-20 · uncommitted · refactor(omx): observer_handoff.py 400줄 상한에 맞춰 호스트 읽기를 나눈다
+- 2026-11-21 · uncommitted · 자동 궤적 보정 저널에 pinned_drift_m 추가
+- 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
 - 2026-11-20 · uncommitted · fix(omx): Gate open 보류를 시도 원장에 남긴다
 - 2026-11-20 · uncommitted · fix(omx): 홈 복귀 전에 검토와 의도를 확인한다
 - 2026-11-20 · 76383cd40c · feat(omx): 팔 A/B 관측기 포트를 세션에 넘기고 돌려받는다 (H4)

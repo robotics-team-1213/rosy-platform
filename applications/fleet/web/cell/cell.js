@@ -1,5 +1,5 @@
 import {randomUUID} from "/console/assets/uuid.js";
-import {OPERATOR_REASON} from "/console/assets/authorization.js";
+import {NAMED_OPERATOR_REASON, OPERATOR_REASON, namedOperatorReason} from "/console/assets/authorization.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
@@ -48,6 +48,8 @@ const request = createFleetClient({credential: () => $('console-token').value, o
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
 const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy,
+  namedReason: () => role !== 'operator' || busy ? OPERATOR_REASON
+    : principal?.startsWith('development-') ? NAMED_OPERATOR_REASON : namedOperatorReason(role, principal),
   cellFrames: createCellFrameFeed({call: request})});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
@@ -63,7 +65,7 @@ async function api(path, options) {
   return result;
 }
 const revisions = new Map();
-let previewRefs = null, role = null, busy = false, cellServiceUnavailable = false, job = null, jobGeneration = null, layoutData = null;
+let previewRefs = null, role = null, principal = null, busy = false, cellServiceUnavailable = false, job = null, jobGeneration = null, layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
 const jobActionLabels = {admit: '실행 승인', reconcile: '실제 상태를 대조', resume: '재승인', cancel: '취소'};
 function clearJobSnapshot(summary = '작업 ID로 상태를 확인하세요.') {
@@ -78,7 +80,7 @@ function invalidate() {
 function clearSession() {
   observations.clear(); catalog.clear(); real2sim.clear(); channelReceipt = channelReview = null;
   $('cell-channel-original').textContent = ''; $('cell-channel-request').hidden = true;
-  role = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate(); revisions.clear();
+  role = null; principal = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate(); revisions.clear();
   for (const kind of ['recipe', 'cell']) { $(kind + '-revision').setAttribute('state', 'empty'); $(kind + '-revision').textContent = '저장 전'; }
   $('proposal').textContent = ''; $('saved').hidden = true; $('saved-status').hidden = false;
   $('saved-status').setAttribute('state', 'unavailable'); $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
@@ -310,7 +312,7 @@ $('console-token').addEventListener('input', () => {
 function connect(credentialChange = false) {
   const focusOrigin = document.activeElement;
   return action(async () => {
-  const session = await api('/api/fleet/session'); role = session.role;
+  const session = await api('/api/fleet/session'); role = session.role; principal = session.principal_id;
   showSession(session, {credentialChange, focusOrigin});
   observations.clear(); void observations.refresh(); void catalog.refresh(); void real2sim.refresh();
   loginForm.refresh(false);

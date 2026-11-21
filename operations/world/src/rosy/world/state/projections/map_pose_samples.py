@@ -38,7 +38,7 @@ class Sighting:
     robot_id: str
     x: float
     y: float
-    yaw: float
+    yaw: Optional[float]   # None only for a TRACK without a motion heading: it keeps the odometry-bridged yaw
     captured_at: float
     quality: Optional[float] = None
     map_id: Optional[str] = None
@@ -62,6 +62,33 @@ def relative(a: Pose, b: Pose) -> Pose:
 def compose(a: Pose, d: Pose) -> Pose:
     c, s = math.cos(a[2]), math.sin(a[2])
     return a[0] + c * d[0] - s * d[1], a[1] + s * d[0] + c * d[1], _wrap(a[2] + d[2])
+
+
+def camera_residual(ref_map: Pose, ref_odom: Pose, seen: Pose, odom: Pose, heading: bool) -> tuple[float, Optional[float]]:
+    """(metres, degrees) the camera fix `seen` lies from the prediction ref_map + (odom since ref_odom); None deg without a camera heading."""
+    predicted = compose(ref_map, relative(ref_odom, odom))
+    return math.dist(predicted[:2], seen[:2]), math.degrees(_wrap(seen[2] - predicted[2])) if heading else None
+
+
+RESIDUAL_FIELDS = ("camera_residual_m", "camera_residual_deg", None, "camera_x", "camera_y", "camera_yaw")
+
+
+def residual_fields(resid: Optional[tuple], now: float, max_age_s: float) -> dict:
+    """MapPose's camera fields from the newest residual (metres, degrees, taken at, camera x, y, yaw); all None when stale."""
+    fresh = resid is not None and 0.0 <= now - resid[2] <= max_age_s
+    return {name: resid[i] if fresh else None for i, name in enumerate(RESIDUAL_FIELDS) if name}
+
+
+def body_heading(travel: Optional[float], odom, since: Optional[float], at: float) -> Optional[float]:
+    """The body yaw for a travel direction the camera saw: the opposite one when odometry says the robot backed up."""
+    if travel is None:
+        return None
+    span = [s for s in odom if (since is None or s.stamp >= since) and s.stamp <= at]
+    if len(span) >= 2:
+        (ax, ay, ayaw), (bx, by, _) = span[0].pose, span[-1].pose
+        if (bx - ax) * math.cos(ayaw) + (by - ay) * math.sin(ayaw) < 0.0:
+            travel += math.pi
+    return _wrap(travel)
 
 
 def parse_utc(text) -> Optional[float]:

@@ -1,0 +1,100 @@
+"""An in-bay re-dock THROUGH THE BRIDGE with the seat-anchor probe wired (the integration level the unit tests lacked, 2026-11-21 regression report).
+
+A synthetic LiDAR scan is ray-cast from the stored empty-bay reference points at the sim robot's pose and fed to observation.bay_body_scan; the body scan (front/rear gap,
+rotation check), the seat gap and every scan request of the dock path then reach the manager through the bridge exactly as on the robot. The matching thread runs inline and
+answers with the true pose (the matcher itself is covered elsewhere). The same run is made with the probe idle, with a start-up anchor present and with the probe armed.
+"""
+
+from __future__ import annotations
+
+import math
+from types import SimpleNamespace
+
+import pytest
+
+from core.bridge import observation
+from core_common.protocol.localization import OdomPose
+from core_common.protocol.schemas import DockState
+from core_common.robot_body import PINKY_PRO as BODY
+from core_features.docking import bay_scan_pose
+from core_features.docking.bay_scan_pose import BayScanPose
+from test_docking_bay import DT, done
+from test_docking_bay_scan_pose import SCANS, true_bay_pose, with_reference
+from test_docking_bay_zone import a_row
+
+CFG = SimpleNamespace(body_front_x_m=BODY.front_x_m, body_rear_x_m=BODY.rear_x_m, body_half_width_m=BODY.half_width_m, body_rotation_radius_m=BODY.rotation_radius_m,
+                      body_lidar_x_m=BODY.lidar_x_m, lidar_forward_deg=180.0, obstacle_body_margin_m=0.02, lidar_self_mask=())
+COUNT = 720
+
+
+def _reference_points():
+    view = BODY.scan_view(SCANS["seated"], forward_deg=180.0)
+    return list(view.points)
+
+
+def lidar_scan(points, pose):
+    """The scan an empty bay gives at the bay-frame robot pose (x out of the stop face, y, heading): ray-cast from the reference points (nearest per beam)."""
+    c, s = math.cos(-pose.heading), math.sin(-pose.heading)
+    step = 2.0 * math.pi / COUNT
+    ranges = [math.inf] * COUNT
+    for px, py in points:
+        dx, dy = px - pose.x, py - pose.y
+        bx, by = dx * c - dy * s, dx * s + dy * c                       # base_link frame
+        sx, sy = bx - BODY.lidar_x_m, by
+        angle = math.atan2(sy, sx) + math.pi                            # the scan's angle 0 is the robot's back (forward_deg 180)
+        angle = math.atan2(math.sin(angle), math.cos(angle))
+        index = int(round((angle + math.pi) / step)) % COUNT
+        rng = math.hypot(sx, sy)
+        if rng < ranges[index]:
+            ranges[index] = rng
+    return {"ranges": ranges, "angle_min": -math.pi, "angle_increment": step, "range_min": 0.05, "range_max": 10.0}
+
+
+class _Inline:
+    """threading.Thread that runs its target at once: the bridge's matching thread, made deterministic."""
+
+    def __init__(self, target=None, name=None, daemon=None):
+        self._target = target
+
+    def start(self):
+        self._target()
+
+
+def _wire(monkeypatch, p):
+    monkeypatch.setattr(observation.threading, "Thread", _Inline)
+    true = lambda *a, **k: true_bay_pose(p.world)                        # noqa: E731 - every matcher answers with the sim's true pose
+    for name in ("locate", "locate_near", "locate_track", "locate_step"):
+        monkeypatch.setattr(bay_scan_pose, name, true)
+    p.manager._anchor._odom = lambda: OdomPose(x=0.0, y=0.0, yaw=0.0, stamp=1000.0, epoch=0, mono_s=1.0)
+    p.manager._anchor._wall = lambda: 1000.0
+
+
+@pytest.mark.parametrize("mode", ["probe_idle", "startup_anchor_present", "probe_armed"])
+def test_an_in_bay_redock_through_the_bridge_docks_with_the_probe_wired(monkeypatch, mode):
+    p, row = a_row(start=(-0.157, 0.0, math.pi), others=(), charges=False)    # 10.7 cm out of the stop face, straight in its lane
+    with_reference(p)
+    p.battery.percent = 100.0
+    _wire(monkeypatch, p)
+    if mode == "startup_anchor_present":
+        p.manager._anchor.record("bay1", "startup_probe", {"along_m": 0.0, "lateral_m": 0.0, "heading_deg": 0.0, "inliers": 0.9, "margin": 0.6})
+    mono = {"now": 0.0}
+    p.manager._anchor._mono = lambda: mono["now"]
+    services = SimpleNamespace(docking=p.manager, line_follow=SimpleNamespace(config=CFG))
+    points = _reference_points()
+    p.manager.dock()
+    last_event = []
+    for k in range(6000):
+        mono["now"] = k * DT
+        if k % 2 == 0:
+            p.detector.capture()
+            observation.bay_body_scan(services, lidar_scan(points, true_bay_pose(p.world)), received_at=p.clock.now)
+        p.manager.tick()
+        event = p.manager.status().last_event
+        if event and event not in last_event:
+            last_event.append(event)
+        if done(p.manager):
+            break
+        p.world.step()
+        p.clock.now += DT
+    assert p.manager.state is DockState.DOCKED, (mode, p.manager._error, last_event)
+    assert not any("something" in (e or "") for e in last_event), last_event

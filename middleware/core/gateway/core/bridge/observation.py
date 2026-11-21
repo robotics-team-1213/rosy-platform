@@ -201,20 +201,15 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
     """D-1013 칸 접근 중: 짐칸 포함 몸으로 제자리 회전 판정(D-424 rotation_check)과 앞뒤 곧은 여유를
     도킹에 넣는다 — 칸 회전·칸 줄 전진은 이것이 비어 있다고 할 때만 움직인다(2026-11-18 옆 칸 접촉).
     판정을 못 하면 넣지 않는다: 도킹은 낡은 판정을 '없음'으로 읽어 멈춘다."""
+    anchor_probe(services, sample)                  # BEFORE the early return below: an idle robot has no active dock (dock_anchor.py)
     try:
         docking = services.docking
         overhang = docking.body_scan_rear_overhang()
         if overhang is None:
             return
         config = services.line_follow.config
-        body = RobotBody(front_x_m=config.body_front_x_m, rear_x_m=config.body_rear_x_m,
-                         half_width_m=config.body_half_width_m,
-                         rotation_radius_m=config.body_rotation_radius_m,
-                         lidar_x_m=config.body_lidar_x_m, lidar_forward_deg=config.lidar_forward_deg,
-                         margin_m=config.obstacle_body_margin_m)
-        rear = min(body.rear_x_m, -overhang)
-        body = replace(body, rear_x_m=rear, rotation_radius_m=max(
-            body.rotation_radius_m, math.hypot(rear, body.half_width_m), body.front_x_m))
+        body = _tray_body(config, overhang)
+        rear = body.rear_x_m
         view = body.scan_view(sample, forward_deg=config.lidar_forward_deg,
                               self_mask=config.lidar_self_mask)
         kind, _ = body.rotation_check(view)
@@ -229,7 +224,7 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
         if seat is not None:
             # the stored seated scan through the same body filter and the same strip: its rear gap is the stop-face reference
             ref_view = body.scan_view(seat[1], forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
-            docking.note_bay_seat_gap(seat[0], rear_band_gap(ref_view.points, rear))
+            docking.note_bay_seat_gap(seat[0], rear_band_gap(ref_view.points, rear), ref_view.points)
         request = docking.bay_scan_request()
         if request is not None:
             _match_bay_scan(docking, body, config, view.points, request[1], request[0],
@@ -240,7 +235,35 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
         return
 
 
-def _match_bay_scan(docking, body, config, live_points, reference, request_id, step=None, near=None, track=False) -> None:
+def _tray_body(config, overhang) -> RobotBody:
+    """The robot body with the bay tray behind (the body the bay scans are filtered and matched with)."""
+    body = RobotBody(front_x_m=config.body_front_x_m, rear_x_m=config.body_rear_x_m,
+                     half_width_m=config.body_half_width_m,
+                     rotation_radius_m=config.body_rotation_radius_m,
+                     lidar_x_m=config.body_lidar_x_m, lidar_forward_deg=config.lidar_forward_deg,
+                     margin_m=config.obstacle_body_margin_m)
+    rear = min(body.rear_x_m, -overhang)
+    return replace(body, rear_x_m=rear, rotation_radius_m=max(
+        body.rotation_radius_m, math.hypot(rear, body.half_width_m), body.front_x_m))
+
+
+def anchor_probe(services, sample) -> None:
+    """After a CORE (re)start: is the stationary idle robot seated in a reference-scan bay? (dock_anchor.py). It runs on EVERY scan ahead of the front-clearance path, so it
+    must never raise: any failure is swallowed and the scan path goes on."""
+    try:
+        docking = services.docking
+        probe = docking.anchor_probe_request()
+        if probe is None:
+            return
+        config = services.line_follow.config
+        body = _tray_body(config, docking.bay_body_overhang_m())
+        view = body.scan_view(sample, forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
+        _match_bay_scan(docking, body, config, view.points, probe[2], probe[0], answer=docking.note_anchor_probe_match)
+    except Exception:  # noqa: BLE001 - never break the scan path
+        return
+
+
+def _match_bay_scan(docking, body, config, live_points, reference, request_id, step=None, near=None, track=False, answer=None) -> None:
     """The robot's pose in the bay frame by LiDAR, once per zone check, off the scan thread (a few hundred ms of numpy).
 
     The reference scan goes through the same body filter as the live one. Any failure answers None: the zone
@@ -259,7 +282,7 @@ def _match_bay_scan(docking, body, config, live_points, reference, request_id, s
                 match = bay_scan_pose.locate(ref_view.points, live_points)
         except Exception as exc:                           # noqa: BLE001 - the map path is the answer to anything
             match, error = None, "%s: %s" % (type(exc).__name__, exc)
-        docking.note_bay_scan_match(match, error=error, request_id=request_id)
+        (answer or docking.note_bay_scan_match)(match, error=error, request_id=request_id)
     threading.Thread(target=run, name="bay-scan-pose", daemon=True).start()
 
 

@@ -43,9 +43,10 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 5, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
-# Fleet file weights from pytest result-line timestamps in CI 44563719449 and 44568270495.
-# Retain prior weights where timings are incomplete or inconsistent. Unlisted files weigh 1.
+SUITE_SHARDS = {"fleet": 8, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
+# Fleet file weights: setup + call + teardown seconds per file from one serial lab run of the whole suite with
+# the browser tests on (`--durations=0`, 2026-11-21, 3612 s over 571 files). Files under 2 s are unlisted and weigh 1.
+# CI log timestamps are no source for this: pytest's piped output arrives in blocks, so they lump files together.
 # The weights only choose runners; every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
@@ -236,10 +237,15 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
                for inv in sel.invocations for p in inv):
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
+    import affected_browser
+    entries += affected_browser.entries(repo, sel)  # pull_request runs only (D-1066); [] elsewhere
     if not docs_only(sel) and buildable(repo, sel):
         entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)
         entry.setdefault("ros", "overlay")
+        if (entry["kind"] == "pytest" and entry["ros"] == "overlay" and entry.get("invocations")
+                and all(p in at.GUARD_SET for inv in entry["invocations"] for p in inv if not p.startswith("-"))):
+            entry["colcon"] = False
     return {"include": affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)}

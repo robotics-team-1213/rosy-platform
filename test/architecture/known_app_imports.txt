@@ -9,15 +9,11 @@ deploy/robot/omx/g2_task.py -> site-fleet
 integrations/simulation/gazebo/launch/gz_multi.launch.py -> pinky
 integrations/simulation/gazebo/scripts/swarm_bench.py -> site-fleet
 integrations/simulation/gazebo/test/test_sim_battery.py -> pinky
-learning/curation/omx/test/sim_object_truth_fixture.py -> omx-cell
-learning/curation/omx/test/test_lerobot_export.py -> omx-cell
 learning/envs/isaac/test/test_actual_map_fixture.py -> omx-cell
 learning/envs/isaac/test/test_camera_lane.py -> pinky
 learning/evaluation/perception/test/test_road_fitness.py -> site-fleet
 learning/registry/policy/test/test_reasoning_registry.py -> site-fleet
-learning/registry/policy/test/test_sim_l1.py -> omx-cell
 learning/training/omx/test/act_cpu_fixture.py -> omx-cell
-learning/training/omx/test/test_act_multi_eval_native.py -> omx-cell
 learning/training/omx/test/test_act_owner_capture.py -> omx-cell
 learning/training/omx/test/test_act_parent_chain.py -> omx-cell
 learning/training/omx/test/test_act_parent_chain.py -> site-fleet
@@ -25,11 +21,7 @@ middleware/core/api/test/test_arm_lease_api.py -> omx-cell
 middleware/core/api/test/test_arm_policy_api.py -> omx-cell
 middleware/devices/omx/adapter/test/test_action_receipt_snapshot.py -> site-fleet
 middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py -> site-fleet
-middleware/perception/calibration/calib_node.py -> pinky
-middleware/perception/launch/robot.launch.py -> pinky
-middleware/perception/robot_web/web_http.py -> pinky
 middleware/perception/test/test_loc_e2e.py -> site-fleet
-middleware/perception/tools/device/hotpath_measure.py -> pinky
 middleware/robot_execution/local/test/policy_chain_fixtures.py -> site-fleet
 middleware/robot_execution/local/test/policy_chain_gazebo.py -> pinky
 middleware/robot_execution/local/test/policy_chain_vla_gazebo.py -> pinky

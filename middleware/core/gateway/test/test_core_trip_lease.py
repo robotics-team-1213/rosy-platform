@@ -106,6 +106,166 @@ def test_release_does_not_stop_the_robot(robot):
     assert services.line_follow.active and services.modes.mode.value == "NAVIGATION"
 
 
+@pytest.mark.parametrize("case", ["approaching", "stale_seq", "wrong_lease", "expired",
+                                 "unready", "mapping", "release_race", "idle_race", "job_owner_idle",
+                                 "later_run", "cancel_error", "scoped_cancel", "success", "missing_plan"])
+def test_scoped_nav2_handoff_only_consumes_the_matching_live_stop(robot, case, monkeypatch):
+    from types import SimpleNamespace
+    from core_api_web.api.deps import Mode, NavigationError, TripLeaseError
+    from core_api_web.api.v1.common import apply_mode
+    from test_map_snapshots import GRID
+
+    client, services, clock = robot
+    job = {"job_id": "job-s3"} if case == "job_owner_idle" else {}
+    assert _open(client, **job).status_code == 200
+    assert client.put("/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=FLEET).status_code == 200
+    line = services.line_follow
+    # The CORE lane controller owns these fields. An accepted stop may still be approaching.
+    line._junction_seq = 12
+    line._junction = {"seq": 12, "place_id": "S3_entry", "action": "stop",
+                      "state": "executing", "held": True}
+    line._status = line._status.model_copy(update={
+        "state": "HOLD",
+        "reason": "junction_stop", "linear": 0.0, "angular": 0.0,
+    })
+    services.state.set_map_id("robot-map", "occupancy:handoff")
+    services.state.set_pose(0.0, 0.0, 0.0)
+    services.maps.set_map(GRID, map_id="robot-map")
+    executor = services.nav.executor
+    pose = SimpleNamespace(pose=SimpleNamespace(position=SimpleNamespace(x=0.0, y=0.0)))
+    executor.compute_navigation_path = lambda *a, **kw: SimpleNamespace(poses=[pose])
+    controller_active = [False]
+
+    def send_path(route, _run, **_options):
+        executor.goals.append(route)
+        controller_active[0] = True
+
+    executor.send_native_path = send_path
+    executor.path_controller_ready = lambda: True
+    executor.native_transport_snapshot = lambda: (0, False, controller_active[0])
+    target = {"x": .745, "y": -.207, "yaw": 3.141592, "correlation_id": "s3-test",
+              "expected_map_grid_id": "occupancy:handoff"}
+    active_stop = {"lease_id": "lease-1", "trip_id": "trip-7", "junction_seq": 12, "stop_place_id": "S3_entry", **job}
+    planned = client.post("/api/v1/navigation/bound-plan", headers=FLEET,
+                          json={**target, "line_stop": active_stop})
+    assert planned.status_code == 200, planned.text
+    if case == "approaching":
+        line._junction["held"] = False
+        line._status = line._status.model_copy(update={"state": "TRACKING"})
+    owner = client.get("/api/v1/navigation/state", headers=VIEWER).json()["owner"]
+    lease_owner = services.trip_lease._lease.owner_id
+    if case == "expired":
+        clock.now += 6
+    if case == "mapping":
+        services.nav.mapping_active = True
+    if case == "unready":
+        def fail_ready():
+            raise NavigationError("HARDWARE_NOT_READY", "test readiness HOLD")
+        monkeypatch.setattr(services.nav, "require_ready", fail_ready)
+    if case in ("release_race", "idle_race", "job_owner_idle"):
+        goal = services.nav.goal
+
+        def interleave(*args, **kwargs):
+            if case == "release_race":
+                with pytest.raises(TripLeaseError) as conflict:
+                    services.trip_lease.release("lease-1", lease_owner)
+                assert conflict.value.code == "CONFLICT"
+            elif case == "idle_race":
+                services.trip_lease.end("mode_left", halt=False)
+            else:
+                apply_mode(services, SimpleNamespace(token_id=lease_owner, label="fleet", role="operator"), Mode.IDLE)
+            return goal(*args, **kwargs)
+
+        monkeypatch.setattr(services.nav, "goal", interleave)
+    reply = client.post("/api/v1/navigation/line-handoff-goal", headers=FLEET, json={
+        **target, **({} if case == "missing_plan" else {"plan_id": planned.json()["plan_id"]}),
+        "expected_boot_id": owner["boot_id"], "expected_owner_generation": owner["owner_generation"],
+        "lease_id": "lease-other" if case == "wrong_lease" else "lease-1",
+        "trip_id": "trip-7", "junction_seq": 11 if case == "stale_seq" else 12,
+        "stop_place_id": "S3_entry", **job,
+    })
+    if case in ("release_race", "later_run", "cancel_error", "scoped_cancel", "success"):
+        assert reply.status_code == 200, reply.text
+        assert reply.json()["operation"]["correlation_id"] == "s3-test"
+        assert not line.active and len(services.nav.executor.goals) == 1
+        if case == "scoped_cancel":
+            from threading import Thread
+            from core.bridge.docking_mode import route_nav_cmd_vel
+            from core_common.protocol.schemas import DockState
+            from core_features.command.manager import Twist
+            from core_features.docking.manager import DockPhase
+
+            with services.nav._lock:
+                thread = Thread(target=route_nav_cmd_vel, args=(services, Twist(.1, .1)))
+                thread.start()
+                thread.join(timeout=1)
+                assert not thread.is_alive()
+            assert services.command._nav_input is None
+            assert route_nav_cmd_vel(services, Twist(.1, .1))
+            assert services.command._nav_input is not None
+            operation = reply.json()["operation"]
+            stopped = client.post("/api/v1/navigation/cancel-scoped", headers=FLEET, json={
+                "expected_boot_id": operation["boot_id"], "run_id": operation["run_id"],
+                "correlation_id": "s3-test",
+            })
+            assert stopped.status_code == 200, stopped.text
+            assert services.command._nav_input is None
+            assert not route_nav_cmd_vel(services, Twist(.1, .1))
+            assert services.command._nav_input is None
+
+            services.modes.transition(Mode.IDLE)
+            services.modes.transition(Mode.DOCKING)
+            assert services.modes.mode is Mode.DOCKING
+            monkeypatch.setattr(type(services.docking), "state", property(lambda self: DockState.DOCKING))
+            monkeypatch.setattr(type(services.docking), "phase", property(lambda self: DockPhase.STAGING))
+            assert not route_nav_cmd_vel(services, Twist(.1, .1))
+            assert services.command.select_output().linear == services.command.select_output().angular == 0.0
+            return
+        if case == "later_run":
+            from uuid import UUID
+
+            run_id = UUID(reply.json()["operation"]["run_id"])
+            services.nav.on_goal_accepted(native_run_id=run_id)
+            services.nav.on_result(True, correlation_id="s3-test", native_run_id=run_id)
+            controller_active[0] = False
+            next_goal = _goal(client)
+            assert next_goal.status_code == 200, next_goal.text
+        if case == "cancel_error":
+            def broken_cancel():
+                raise OSError("backend unavailable")
+            monkeypatch.setattr(services.nav.executor, "cancel_goal", broken_cancel)
+        before_cancel = services.nav.executor.cancels
+        assert client.delete(f"{URL}/lease-1", headers=FLEET).status_code == 200
+        assert services.nav.executor.cancels == before_cancel + (case not in ("later_run", "cancel_error"))
+        if case == "later_run":
+            assert services.modes.mode.value == "NAVIGATION"
+        else:
+            assert services.modes.mode.value == "IDLE"
+            assert services.command.select_output().linear == services.command.select_output().angular == 0.0
+            from core.bridge.docking_mode import route_nav_cmd_vel
+            from core_features.command.manager import Twist
+            services.modes.transition(Mode.NAVIGATION)
+            assert not route_nav_cmd_vel(services, Twist(.1, .1))
+            assert services.command.select_output().linear == services.command.select_output().angular == 0.0
+    elif case in ("idle_race", "job_owner_idle"):
+        assert reply.status_code == 409, reply.text
+        assert services.nav.executor.goals == [] and services.modes.mode.value == "IDLE"
+        if case == "job_owner_idle":
+            assert services.trip_lease.current()["job_id"] == "job-s3"
+    elif case == "unready":
+        assert reply.status_code == 503, reply.text
+        assert line.active and line._junction["held"] and services.nav.executor.goals == []
+    elif case == "mapping":
+        assert reply.status_code == 409 and reply.json()["error"]["code"] == "MAPPING_ACTIVE"
+        assert line.active and line._junction["held"] and services.nav.executor.goals == []
+    else:
+        assert reply.status_code == 409, reply.text
+        expected = {"wrong_lease": "NAVIGATION_HANDOFF_LEASE_CHANGED", "expired": "NAVIGATION_HANDOFF_LEASE_CHANGED",
+                    "missing_plan": "NAVIGATION_PLAN_REQUIRED"}.get(case, "NAVIGATION_HANDOFF_STOP_CHANGED")
+        assert reply.json()["error"]["code"] == expected
+        assert line.active and services.nav.executor.goals == []
+
+
 def test_only_the_owner_releases(robot):
     client, services, _ = robot
     _open(client)
@@ -191,6 +351,8 @@ FENCED = [
     ("post", "/api/v1/mode", {"mode": "NAVIGATION"}),
     ("post", "/api/v1/teleop", {"linear": 0.1, "angular": 0.0}),
     ("post", "/api/v1/navigation/goal", {"x": 1.0, "y": 0.0}),
+    ("post", "/api/v1/navigation/bound-plan", {"x": 1.0, "y": 0.0, "expected_map_grid_id": "occupancy:lease",
+                                               "correlation_id": "s3-plan"}),
     ("post", "/api/v1/navigation/route", {"points": [{"x": 1.0, "y": 0.0}]}),  # D-1009
     ('post', '/api/v1/navigation/handover', dict(expected_boot_id='00000000-0000-0000-0000-000000000001',
         run_id='00000000-0000-0000-0000-000000000001', expected_owner_generation=0, correlation_id='work-attempt')),
@@ -1026,6 +1188,7 @@ def test_a_bad_charge_return_speed_never_removes_the_cap(bad):
     from core.trip_lease import build_trip_lease
     safety = NS(estop_listeners=[])
     lease = build_trip_lease(NS(publish=lambda *a, **k: None), NS(set_trip_lease_provider=lambda f: None),
-                             NS(change_listeners=[]), safety, NS(), NS(), NS(), charge_return_linear=bad)
+                             NS(change_listeners=[]), safety, NS(), NS(clear_navigation=lambda: None),
+                             NS(), charge_return_linear=bad)
     lease.charge_return_active = lambda: True
     assert safety.charge_return_linear_provider() == pytest.approx(0.10)

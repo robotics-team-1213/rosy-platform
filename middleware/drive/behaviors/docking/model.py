@@ -258,6 +258,43 @@ class DockingConfig:
     bay_first_margin_prior: float = 0.10         # seated at this dock earlier: a weaker global margin is accepted
     bay_first_margin_noprior: float = 0.12       # no prior: identity recorded "unconfirmed"
     bay_first_margin_wrong: float = 0.05         # below this the best fit is another bay
+    bay_junction_inlier_min: float = 0.60        # pit-in (case II arrival at the junction, facing the bay): weaker than 0.70 because the scan is taken from the other side
+    bay_junction_margin_min: float = 0.12        # best fit vs the next different pose (neighbour bay, 180 flip); the camera lateral removes the neighbours
+    bay_junction_lateral_agree_m: float = 0.03   # LiDAR lateral vs the measured camera line lateral (camera lateral is good to cm, its heading is not)
+    bay_junction_lateral_m: float = 0.03         # accepted lateral at the junction; OFF until 3 bench runs (reviewer B, 2026-11-21): 0.03 = bay_first_lateral_m, so a 3-6 cm off-axis arrival is refused + person_call, no motion. 0.06 with bay_centre_tries > 0 enables the self-centring shuttle (bay_centre.py)
+    bay_centre_min_x_m: float = 0.31             # self-centring creeps toward the bay only to here (outside the bay line, so the lane footprint guard is not involved)
+    bay_centre_max_travel_m: float = 0.10
+    bay_centre_tries: int = 0             # OFF until 3 bench runs (reviewer B, 2026-11-21): the centring shuttle has only run in the sim; 4 enables it (each shuttle takes about 1.5 cm out of the lateral, sim, caps 0.35 rad / 0.15 rad/s)
+    bay_centre_gain: float = 5.0                 # target heading offset per metre of lateral (rad/m), capped at 0.35 rad (20 deg)
+    bay_pitin_overedge_min_x_m: float = 0.18     # the over-edge reseat allowance: pit-in only and only from here out (the tray corner must be clear of the neighbour tip)
+    bay_backout_rear_gap_m: float = 0.08         # backing out of the lane nose-in: stop when the tray end has this much clearance behind (toward the corridor; its white line is at x 0.62-0.67)
+    bay_backout_extra_m: float = 0.10            # backing out travels at most (junction x - start x) + this
+    # WHERE an in-place turn is allowed is an ABSOLUTE rule of the bay geometry, not relative to the dock type's staging_offset_m (bay_line_c: 0.32, rail_entry 0.45):
+    # the turn centre must be past the bay line (0.30) and the pink crossbar's outer edge (0.4255) is the junction; the tray circle (radius 0.144) must stay short of the
+    # white corridor line (x 0.62-0.67): floor 0.38 (user: turn at the pink end, base x ~0.40), ceiling 0.45. Below the floor a nose-in robot backs out to the target.
+    bay_turn_x_min_m: float = 0.38
+    bay_turn_x_max_m: float = 0.45
+    bay_turn_x_target_m: float = 0.40
+    bay_junction_heading_rad: float = 0.5236     # 30 deg: facing the bay within this of 180 deg
+    bay_pitin_entry_heading_rad: float = 0.0873  # after a pit-in turn the entry window needs the LiDAR heading within this (5 deg), not the 15 deg of a staged arrival
+    bay_empty_front_extra_m: float = 0.09        # FALLBACK when the reference depth model is unavailable: front gap = x + this (measured 0.070-0.112 by heading)
+    bay_empty_front_long_tol_m: float = 0.08     # a gap LONGER than the model by this = the pose or the depth is wrong (benign side, wider: a stray reference point can shorten the model)
+    bay_empty_front_tol_m: float = 0.04
+    bay_reseat_over_edge_m: float = 0.0          # OFF until 3 bench runs (reviewer B, 2026-11-21): 0.04 lets a pit-in reseat that REDUCES the footprint start that far over the lane edge (the tray corner is still 3.9 cm from a parked neighbour)
+    bay_reseat_min_arc_m: float = 0.08           # a reseat from past the out-target still pulls forward this far (a 12 deg heading needs ~6 cm of arc)
+    # CORE judges the dock command's site_pose_evidence (POSITION only; the LiDAR reference scan keeps heading and bay entry). Provisional values.
+    # Seat anchor (dock_anchor.py): provisional values; the measured seat error today is within 2 mm / 1 deg (15 runs).
+    anchor_odom_max_age_s: float = 1.0           # the odom sample paired with the seat must be this fresh
+    anchor_probe_window_s: float = 120.0         # after a CORE (re)start: look for "seated in a reference-scan bay" this long
+    anchor_probe_still_s: float = 2.0            # the robot must stand still (odom) this long before a probe scan counts
+    anchor_probe_interval_s: float = 3.0
+    anchor_probe_tries: int = 2                  # probe scans per bay
+    anchor_seat_along_m: float = 0.015           # a probe fit is a seat only within these of the seated reference pose (row gates 0.70 / 0.40 apply too)
+    anchor_seat_lateral_m: float = 0.015
+    anchor_seat_heading_rad: float = 0.05
+    site_pose_anchor_sources: tuple = ("sighting", "track")   # auto_locate, peer, operator_pin are rejected for now
+    site_pose_max_anchor_age_s: float = 15.0
+    site_pose_max_camera_residual_m: float = 0.08
     bay_row_pose_fresh_s: float = 1.0            # a forward move in the row needs a LiDAR bay pose no older than this (reference-scan dock)
     bay_lane_keep_m: float = 0.045
     bay_line_x_m: float = 0.30                   # base_link: the nose (0.042) + 0.02 behind the crossbar edge at bay-frame x 0.4255 (+-0.03); confirm by tape

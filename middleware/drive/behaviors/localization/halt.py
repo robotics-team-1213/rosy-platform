@@ -71,5 +71,5 @@ def wire_assist(events, robot_id: Callable[[], str], *, nav, line_follow, comman
 
     mission = LocalizationMission(events, command=command, modes=modes, state=state, safety=safety,
                                   line_follow=line_follow, traffic_policy=traffic_policy,
-                                  localization=assist, busy=busy, config=mission_config)
+                                  localization=assist, busy=busy, config=mission_config, navigation=nav)
     return assist, mission

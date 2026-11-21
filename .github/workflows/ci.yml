@@ -92,6 +92,10 @@ jobs:
         id: scope
         shell: bash
         env:
+          QUEUE_DELTA: ${{ vars.ROSY_QUEUE_DELTA }}  # D-1059 switch: unset keeps the whole queue selection
+          ROSY_BROWSER_CI: ${{ github.event_name == 'pull_request' && '1' || '' }}  # D-1066: browser evidence rides the pull_request run only
+          PUSH_SAME: ${{ vars.ROSY_PUSH_SAME }}  # D-1064 switch: unset keeps the whole push selection
+          GH_TOKEN: ${{ github.token }}
           SCOPE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event_name == 'push' && github.event.before || '' }}
         run: |
           set -eo pipefail
@@ -101,6 +105,10 @@ jobs:
                 echo "::error::missing or unreachable SCOPE_BASE ($SCOPE_BASE) for ${{ github.event_name }}; refusing silent narrowing"
                 exit 1
               fi
+              if [ "${{ github.event_name }}" = merge_group ] && [ "$QUEUE_DELTA" = 1 ]; then
+                # D-1059: the guard set alone when this tree is the one the pull request's green run passed.
+                ROSY_QUEUE_TESTED="$(python3 tools/harness/affected_queue.py)" && export ROSY_QUEUE_TESTED
+              fi
               out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               ;;
             push)
@@ -108,6 +116,10 @@ jobs:
                 echo "::warning::missing or unreachable push base ($SCOPE_BASE); escalating to --full"
                 out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
               else
+                if [ "$PUSH_SAME" = 1 ]; then
+                  # D-1064: the guard set alone when the merge queue run passed this very commit for this very range.
+                  ROSY_QUEUE_TESTED="$(python3 tools/harness/affected_queue.py --pushed "$SCOPE_BASE")" && export ROSY_QUEUE_TESTED
+                fi
                 out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               fi
               ;;
@@ -206,7 +218,7 @@ jobs:
           fi
 
       - name: Fleet browser readiness (Chromium and CJK fonts from the image)
-        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py')
+        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py') || contains(toJSON(matrix.invocations), 'ROSY_RUN_BROWSER_TESTS=1')
         run: |
           # The console is Korean: without fonts-noto-cjk, headless Chromium renders Hangul through
           # Playwright's wide Unifont fallback and 320px layout-fit assertions see overflow.
@@ -227,11 +239,25 @@ jobs:
             echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
           fi
 
+      - name: Cache Pinky CPU torch wheel
+        if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 (pinned commit)
+        with:
+          path: /tmp/pip-cache-pinky
+          key: ${{ runner.os }}-pinky-torch-2.7.1
+
       - name: Install Pinky CPU model comparison tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
-          pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          pip3 install --cache-dir /tmp/pip-cache-pinky --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
           python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
+
+      - name: Cache OMX ACT CPU verification tools
+        if: matrix.name == 'omx-act-cpu'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4 (pinned commit)
+        with:
+          path: /tmp/rosy-omx-act-cpu
+          key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
 
       - name: Install OMX ACT CPU verification tools
         if: matrix.name == 'omx-act-cpu'
@@ -240,9 +266,11 @@ jobs:
           TRANSFORMERS_OFFLINE: '1'
         run: |
           # Separate matrix runner/tool path: the Pinky comparison keeps its own torch pin.
-          pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu \
-            --extra-index-url https://download.pytorch.org/whl/cpu \
-            -r deploy/robot/omx/requirements-lerobot-export.txt
+          if [ ! -d /tmp/rosy-omx-act-cpu/torch ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu \
+              --extra-index-url https://download.pytorch.org/whl/cpu \
+              -r deploy/robot/omx/requirements-lerobot-export.txt
+          fi
           PYTHONPATH="/tmp/rosy-omx-act-cpu${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
           import json
           from importlib.metadata import version
@@ -284,10 +312,10 @@ jobs:
           fi
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.16 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
+            core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.17 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
 
       - name: Build (colcon)
-        if: matrix.kind == 'smoke' || matrix.ros == 'overlay'
+        if: matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')
         run: |
           # 러너 셸은 컨테이너 엔트리포인트를 우회하므로 ROS 환경을 직접 얹는다 —
           # 아니면 CMake가 ament_cmake를 찾지 못해 빌드 자체가 시작되지 않는다.
@@ -323,12 +351,14 @@ jobs:
           # module harness: logs.md 는 이 base 이후로 앞부분이 보존되어야 한다 (비면 origin/main merge-base).
           HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           ROSY_ROS: ${{ matrix.ros }}
+          # The Build (colcon) step's own condition: a missing matrix.colcon means build; only an explicit false skips.
+          ROSY_BUILT: ${{ matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false') }}
           ROSY_INVOCATIONS: ${{ toJSON(matrix.invocations) }}
         run: |
           # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
           set -eo pipefail
           case "$ROSY_ROS" in
-            overlay) . /opt/ros/jazzy/setup.sh; . install/setup.sh ;;
+            overlay) . /opt/ros/jazzy/setup.sh; [ "$ROSY_BUILT" = true ] && . install/setup.sh || true ;;
             base) . /opt/ros/jazzy/setup.sh ;;
           esac
           python3 - <<'PY'
@@ -370,7 +400,10 @@ jobs:
               if rest:
                   runs.append(([*rest, *flags], job_environment))
               if browser:
-                  runs.append(([*browser, *flags], {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1"}))
+                  # STRICT (vacuous-run check) judges the whole run, so only for whole browser FILES; a directory,
+                  # mixed list or "::" node id selects part of a file or holds legitimate skips.
+                  strict = {"ROSY_BROWSER_STRICT": "1"} if all("::" not in p and p.endswith("_browser.py") for p in browser) else {}
+                  runs.append(([*browser, *flags], {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1", **strict}))
               for target in isolated:
                   runs.append(([target], {
                       "ROSY_OMX_NATIVE_REQUIRED": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
@@ -415,6 +448,7 @@ jobs:
               code = proc.wait()
               failed = known_failures.failed_ids("".join(out))
               ids = [] if dedicated(paths) else known_failures.rerun_ids("".join(out), quarantine)
+              rerun_out = ""
               if known_failures.should_rerun(code, failed, ids):
                   print(f"rerunning quarantined failures once: {' '.join(ids)}", flush=True)
                   rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider",
@@ -425,6 +459,7 @@ jobs:
                   if known_failures.rerun_passed(code, failed, ids, rerun.returncode, rerun.stdout):
                       print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
                       code = 0
+                      rerun_out = rerun.stdout
               print("::endgroup::", flush=True)
               full_out = "".join(out)
               first_out = full_out.split(known_failures.RERUN_MARKER, 1)[0]
@@ -456,6 +491,13 @@ jobs:
                   kind = "ACT CPU" if act_cpu_required else "ROS"
                   print(f"::error::native {kind} fixture must execute without skips: {' '.join(paths)}", flush=True)
                   status = 1
+              # D-1066: a STRICT browser run is no evidence unless something passed and nothing skipped.
+              if extra.get("ROSY_BROWSER_STRICT") == "1":
+                  from affected_browser import vacuous
+                  reason = vacuous(first_out + rerun_out)  # a rerun that passed is part of the verdict
+                  if reason:
+                      print(f"::error::browser evidence did not run for real: {' '.join(paths)}: {reason}", flush=True)
+                      status = 1
               # 경로가 여럿인데 0건 수집이면 세션 전체가 건너뛰어진 것이다(10-11부터 루트 test/ 가 그랬다).
               if known_failures.collected_nothing(full_out, paths):
                   print(f"::error::pytest {' '.join(paths)} collected 0 items", flush=True)
@@ -570,6 +612,13 @@ jobs:
               sys.exit(1)
           print(f"cutover drain gate OK: {candidate} allowed")
           PY
+      # D-1059: the merge commit this green pull_request run tested. A merge queue run reads it back
+      # (tools/harness/affected_queue.py) and repeats the guard set alone when its tree is the same.
+      # It stands before the verdict (tests pin that as the last step), so its own condition keeps a red run silent.
+      - name: Tested commit notice (D-1059)
+        if: github.event_name == 'pull_request' && needs.scope.result == 'success' && needs.test.result == 'success'
+        run: echo "::notice title=rosy-tested-commit::${{ github.sha }}"
+
       - name: All gating jobs passed
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}

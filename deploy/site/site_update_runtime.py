@@ -149,7 +149,7 @@ class SiteRuntimeIO:
             if manifest.get('manifest_version') == 2:
                 self._incremental_commits.add(commit)
             overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
-            for name, field in (('account', 'account_https'), ('omx', 'omx'), ('workcell', 'workcell'),
+            for name, field in (('account', 'account_https'), ('account-lan', 'account_lan'), ('omx', 'omx'), ('workcell', 'workcell'),
                                 ('control-unit', 'control_unit'), ('control-unit-remote', 'control_unit_remote'),
                                 ('monitoring', 'monitoring')):
                 if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):

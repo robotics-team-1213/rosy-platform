@@ -4992,3 +4992,18 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `observer_handoff.py`(431줄)의 systemctl·fuser 호출, 포트 점유 확인, unit env 읽기, bridge 바인딩·세션 env 검사, 상태 파일 기록을 새 `observer_handoff_io.py`로 옮겼다. `observer_handoff.py`는 같은 이름을 다시 내보내고(`HandoffError`, `bridge_binding` 등), 시험이 바꿔 끼우는 `resolve_device`·`BY_ID`·`wait_port`·`restart`·`handoff`·`lead`·CLI는 그대로 둔다. 동작 변경 없음.
 - 증거: 로컬 `python -m pytest test/test_omx_observer_handoff.py` 34 passed, 7 skipped(POSIX·Linux 전용). `python tools/harness/rosy_harness.py lint` 0 error.
 - gate 변화: 없음. 두 파일 모두 safety_review 대상 경로가 아니다.
+## 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
+
+- 변경: merge_pinned가 고정 안 된 장소는 x·y만, 차로는 polyline만 추적값으로 바꾸고 yaw·name·kind·속도·폭은 지금 지도 값을 지킨다. R v270에서 S1 yaw가 null로 바뀐 것을 보고 고쳤다.
+- 증거: test_auto_track_calibration 새 시험 2개, R 설치 뒤 v271 자세 유지 확인
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · 자동 궤적 보정 저널에 pinned_drift_m 추가
+
+- 변경: rosy-auto-track-calibration이 매 실행 JSON 줄에 고정 장소와 궤적 점 사이 거리(pinned_drift_m)를 출력한다. 지도·동기화는 바꾸지 않는다
+- 증거: test_auto_track_calibration.py 신규 시험 통과(기존 service_principal 시험 1건은 ModuleNotFoundError로 변경 전부터 실패)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

@@ -163,7 +163,7 @@ export function removeSurveyElement(map, id, key) {
 
 function setPinned(row, pinned) { if (pinned) row.pinned = true; else delete row.pinned; }
 
-export function editPlace(map, id, {name, kind, pinned}) {
+export function editPlace(map, id, {name, kind, pinned, approach_m: approach, stop_zone: zone}) {
   const next = copy(map);
   const place = next.places.find(item => item.id === id);
   if (!place) throw new Error(`없는 장소 ${id}`);
@@ -178,6 +178,27 @@ export function editPlace(map, id, {name, kind, pinned}) {
     place.kind = kind;
   }
   if (pinned !== undefined) setPinned(place, pinned);
+  // 2026-11-21 robot-7b named stop: approach distance and drawn stop zone belong to a stop only.
+  if (place.kind !== 'stop') { delete place.approach_m; delete place.stop_zone; }
+  if (place.kind === 'stop' && approach !== undefined) {
+    if (approach === '' || approach === null) delete place.approach_m;
+    else {
+      const d = Number(approach);
+      if (!(d >= 0.05 && d <= 0.6)) throw new Error('접근 거리는 0.05–0.6 m입니다');
+      if (typeof place.yaw !== 'number') throw new Error('접근 거리는 장소 방향이 필요합니다 · 로봇을 그 자리에 놓고 기록 모드에서 방향을 남기세요');
+      place.approach_m = d;
+    }
+  }
+  if (place.kind === 'stop' && zone !== undefined) {
+    if (zone === null) delete place.stop_zone;
+    else {
+      if (zone.length < 3) throw new Error('정지 구역은 점이 세 개 이상이어야 합니다');
+      const mm = value => Math.round(value * 1000) / 1000;
+      place.stop_zone = zone.map(([x, y]) => [mm(x), mm(y)]);
+      place.pinned = true;  // a person drew it: automatic calibration must not move it
+    }
+  }
+  if (place.stop_zone && !place.pinned) throw new Error('정지 구역이 있는 장소는 고정을 풀 수 없습니다 · 구역을 먼저 지우세요');
   if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
   return next;
 }

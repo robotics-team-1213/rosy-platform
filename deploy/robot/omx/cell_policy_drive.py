@@ -4,15 +4,13 @@
 The policy's proposed chunk becomes a chunk named `policy` in a copy of the arm's reviewed library, so the runner applies
 the same `load` plan_check, start-gap check, speed/strain/jitter guards and holds as for an IK chunk; the IK chunks
 (`home`, transfer chunks) stay in the same library, which is how a policy segment and IK segments mix. On top:
-- every policy frame must lie inside the per-joint range the reviewed library's chunks cover, widened to the q01..q99
-  range a person demonstrated on this arm in the training actions (+ margin): 11-18 the IK library never rolls the
-  wrist (-17..-2) while the demonstrations roll it to align with the box;
+- every policy frame must lie inside the per-joint range the reviewed library's chunks cover (+ margin).
+  Normalized-unit checkpoints may widen this with q01..q99 from the real demonstrations;
 - no step may be faster than the library's fastest step: a faster chunk is stretched in time, never sent as is;
 - the model's LeRobot calibration and the cell's may differ by a homing offset (11-18: wrist_roll 957 ticks = 46.7
   units); `calibration_offset` maps cell state into model units and the action back.
-Each chunk is inferred from fresh frames and state, run, then the next one; contact -> retreat + park, a fault or a
-refusal -> park, the episode ends parked. Needs --person-at-switch (D-911) and a named operator; every chunk and
-status goes to policy-drive.jsonl. --dry-run infers and checks without loading or running anything."""
+Timed ACT uses a single read-only inference worker and hands off to a taught carry in hybrid mode.
+Needs --person-at-switch (D-911) and a named operator. --dry-run replays timing without submitting motion."""
 from __future__ import annotations
 
 import argparse
@@ -26,116 +24,89 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_lerobot_shadow as lrs  # noqa: E402
+from cell_policy_goals import GOALS, resolve_goal_site  # noqa: E402
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S  # noqa: E402
 
-MARGIN = 3.0  # units outside the reviewed per-joint range still allowed (sensor and settle noise)
-JOINTS = len(lrs.JOINT_NAMES)
-SCALE = {name: 200.0 for name in lrs.JOINT_NAMES[:-1]} | {"gripper": 100.0}  # LeRobot omx: body M100_100, gripper 0_100
-
-
-def calibration_offset(model_cal: dict, cell_cal: dict) -> list[float]:
-    """Model units minus cell units per joint: Present_Position carries the homing offset, so a different homing shifts
-    every reading by (model_homing - cell_homing) ticks."""
-    offset = []
-    for name in lrs.JOINT_NAMES:
-        m, c = model_cal[name], cell_cal[name]
-        if (m["range_min"], m["range_max"], m["drive_mode"]) != (c["range_min"], c["range_max"], c["drive_mode"]):
-            raise ValueError(f"{name}: range or drive mode differ, not a pure homing shift")
-        span = float(m["range_max"] - m["range_min"])
-        offset.append((float(m["homing_offset"]) - float(c["homing_offset"])) * SCALE[name] / span)
-    return offset
-
-
-def envelope(library: dict) -> tuple[list[float], list[float], float]:
-    """(per-joint min, max, fastest step) over every frame of the reviewed library's chunks."""
-    frames = [f for chunk in library["chunks"].values() for f in chunk if len(f) == JOINTS]
-    if not frames:
-        raise ValueError("reviewed library has no 6-joint frames")
-    arr = np.asarray(frames, dtype=float)
-    steps = [np.abs(np.diff(np.asarray(c, dtype=float)[:, :5], axis=0)).max()
-             for c in library["chunks"].values() if len(c) > 1]
-    return arr.min(axis=0).tolist(), arr.max(axis=0).tolist(), float(max(steps))
-
-
-def demonstrated_range(policy_root: Path, offset) -> tuple[list[float], list[float]]:
-    """Per-joint q01..q99 of the actions the model was trained on (recorded by a person on this arm), in cell units."""
-    from safetensors.numpy import load_file
-
-    files = sorted(Path(policy_root).glob("policy_preprocessor_step_*_normalizer_processor.safetensors"))
-    if not files:
-        raise ValueError("checkpoint has no normalizer statistics")
-    stats = load_file(str(files[0]))
-    off = np.asarray(offset, dtype=float)
-    return (np.asarray(stats["action.q01"], dtype=float) - off).tolist(), (np.asarray(stats["action.q99"], dtype=float) - off).tolist()
-
-
-def widen(low, high, demo_low, demo_high) -> tuple[list[float], list[float]]:
-    """Union of the reviewed IK range and the range a person demonstrated on this arm, per joint."""
-    return np.minimum(low, demo_low).tolist(), np.maximum(high, demo_high).tolist()
-
-
-def open_before_close(chunk, open_g: float, closed: float):
-    """IK help for the jaws (11-19: in a new scene the model opened only to 52 = a 30 mm gap, then closed on nothing):
-    before the model's close (jaws back at closed after having been open) the jaws are at least the reviewed library's
-    widest opening, then the model closes as it chose. A chunk without such a close is left as the model gave it."""
-    arr = np.array(chunk, dtype=float)
-    g = arr[:, 5]
-    was_open = np.maximum.accumulate(g) > closed + 2.0
-    closing = np.flatnonzero((g <= closed + 1.0) & was_open)
-    if len(closing):
-        arr[:closing[0], 5] = np.maximum(g[:closing[0]], open_g)
-    return arr
-
-
-def shape_chunk(chunk, start, low, high, fastest: float) -> list[list[float]]:
-    """Cell-unit frames the runner may get: refused outside the envelope, stretched so no body step beats `fastest`."""
-    arr = np.asarray(chunk, dtype=float)
-    if arr.ndim != 2 or arr.shape[1] != JOINTS or not np.isfinite(arr).all():
-        raise ValueError("policy chunk is not finite (n, 6)")
-    lo, hi = np.asarray(low) - MARGIN, np.asarray(high) + MARGIN
-    outside = np.argwhere((arr < lo) | (arr > hi))
-    if len(outside):
-        i, j = outside[0]
-        raise ValueError(f"frame {i} {lrs.JOINT_NAMES[j]}={arr[i, j]:.1f} outside reviewed {lo[j]:.1f}..{hi[j]:.1f}")
-    path = np.vstack([np.asarray(start, dtype=float)[None, :], arr])
-    out = []
-    for a, b in zip(path[:-1], path[1:]):
-        n = max(1, math.ceil(float(np.abs(b - a).max()) / fastest - 1e-9))  # all six joints, as the runner checks
-        out.extend((a + (b - a) * k / n).tolist() for k in range(1, n + 1))
-    return out
+from cell_policy_shape import (  # noqa: E402,F401
+    JOINTS, SIM_POLICY_FPS, calibration_offset, converted_closed, demonstrated_range,
+    envelope, open_before_close, resample_chunk, shape_chunk, widen, wrist_roll_warning,
+)
+from cell_policy_timing import MAX_OBSERVATION_AGE_S, run_timed  # noqa: E402
 
 
 def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chunks: int, dry_run: bool, log,
-                demonstrated=None) -> dict:
+                demonstrated=None, goal_slot: int | None = None, n_action=None,
+                max_obs_age_s=MAX_OBSERVATION_AGE_S, handoff=None, authorize=None) -> dict:
     library = json.loads(library_path.read_text(encoding="utf-8"))
     low, high, fastest = envelope(library)
-    fastest = min(fastest, GUARD_UNITS_PER_S / float(library.get("fps", 30)))  # the runner refuses any frame step past this
-    if demonstrated is not None:
+    fps = float(library.get("fps", 30))
+    fastest = min(fastest, GUARD_UNITS_PER_S / fps)  # the runner refuses any frame step past this
+    sim_units = getattr(shadow, "sim_rule", None) is not None
+    if demonstrated is not None and not sim_units:
         low, high = widen(low, high, *demonstrated)
     closed = float(library.get("jaw_empty_stop", library["gripper_closed"]))
+    model_closed = converted_closed(closed, shadow.sim_rule) if sim_units else closed
+    home_roll = None
+    if sim_units and shadow.arm_id == "arm_b":
+        home = library["chunks"].get("home")
+        if not home or len(home[-1]) != JOINTS:
+            raise ValueError("arm_b reviewed library requires a six-joint home frame")
+        home_roll = float(home[-1][4])
+        if not math.isfinite(home_roll):
+            raise ValueError("arm_b reviewed library requires a finite home wrist roll")
     open_g = max(f[5] for chunk in library["chunks"].values() for f in chunk if len(f) == JOINTS)
     off = np.asarray(offset, dtype=float)
+    goal = {} if goal_slot is None else {"goal": goal_slot}
+
+    if getattr(shadow, "chunk_size", None) is not None or sim_units or n_action is not None or handoff is not None:
+        def infer(state, frames):
+            model_state = np.asarray(state) if sim_units else np.asarray(state) + off
+            obs, meta = shadow.inputs(model_state.tolist(), frames, **goal)
+            args = {"state": state} if sim_units else {}
+            chunk = np.asarray(shadow.infer(obs, **args).chunk, dtype=float)
+            return (chunk if sim_units else chunk - off), meta
+
+        def shape(actions, target, model_fps, runner_fps, held, row, converted):
+            if home_roll is not None and (warning := wrist_roll_warning(converted, home_roll)):
+                row["wrist_roll_warning"] = warning
+                if not dry_run:
+                    raise ValueError(warning)
+            if not held:
+                actions = open_before_close(actions, open_g, model_closed)
+            if model_fps != runner_fps:
+                actions = resample_chunk(actions, target, runner_fps)
+            return shape_chunk(actions, target, low, high, fastest)
+
+        return run_timed(cell, shadow, library, work, infer=infer, shape=shape, max_step=fastest,
+                         n_action=n_action, max_obs_age_s=max_obs_age_s, max_chunks=max_chunks,
+                         dry_run=dry_run, log=log, handoff=handoff, authorize=authorize)
+
     held, released = False, False
     for n in range(max_chunks):
         status = cell.act("state")
         state = np.asarray(status["state"], dtype=float)
         frames = {view: cell.frame(view) for view in shadow.image_views}
-        obs, meta = shadow.inputs((state + off).tolist(), frames)
-        proposed = np.asarray(shadow.infer(obs).chunk, dtype=float) - off
+        obs, meta = shadow.inputs(state.tolist() if sim_units else (state + off).tolist(), frames, **goal)
+        converted = np.asarray(shadow.infer(obs).chunk, dtype=float) - off
+        proposed = converted
         if not held:
-            proposed = open_before_close(proposed, open_g, closed)
+            proposed = open_before_close(proposed, open_g, model_closed)
         row = {"chunk": n, "state": state.tolist(), "meta": meta, "proposed_first": proposed[0].tolist(),
                "proposed_last": proposed[-1].tolist()}
+        if dry_run:
+            row.update(dry_run=True, converted_chunk=converted.tolist())
         try:
             frames_cell = shape_chunk(proposed, state, low, high, fastest)
         except ValueError as error:
+            if dry_run:
+                row["envelope"] = {"ok": False, "reason": str(error)}
             log({**row, "refused": str(error)})
             if not dry_run:
                 log({"command": "park", **_status(cell.act("park"))})
             return {"result": "refused", "at": n, "reason": str(error)}
         row["frames"] = len(frames_cell)
         if dry_run:
-            log({**row, "dry_run": True})
+            log({**row, "envelope": {"ok": True}})
             continue
         lib = {**library, "chunks": {**library["chunks"], "policy": frames_cell}}
         path = work / f"policy-lib-{int(time.time())}-{n}.json"
@@ -194,11 +165,16 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", required=True, type=Path, help="the arm's cell-auto config (io, cameras, work_dir)")
     parser.add_argument("--library", required=True, type=Path, help="the arm's reviewed chunk library")
-    parser.add_argument("--policy-root", required=True, type=Path)
-    parser.add_argument("--policy-revision", required=True, help="sha256 of model.safetensors")
-    parser.add_argument("--model-calibration", required=True, type=Path, help="LeRobot calibration the model was recorded with")
-    parser.add_argument("--cell-calibration", required=True, type=Path, help="LeRobot calibration the cell runner uses")
+    parser.add_argument("--mode", choices=("act", "hybrid", "taught"), default="act")
+    parser.add_argument("--policy-root", type=Path)
+    parser.add_argument("--policy-revision", help="sha256 of model.safetensors")
+    parser.add_argument("--model-calibration", type=Path, help="LeRobot calibration for a normalized-unit checkpoint")
+    parser.add_argument("--cell-calibration", type=Path, help="LeRobot calibration the cell runner uses")
+    parser.add_argument("--goal-site", help="Cell job destination site ID, e.g. yard:r3-s2-t1 or tray")
+    parser.add_argument("--goal-slot", type=int, help="explicit override for the zero-based checkpoint goal slot")
     parser.add_argument("--max-chunks", type=int, default=3)
+    parser.add_argument("--n-action", type=int, help="model steps per inference (sim-unit default: 8)")
+    parser.add_argument("--max-obs-age-s", type=float, default=MAX_OBSERVATION_AGE_S)
     parser.add_argument("--operator", required=True, help="named person who approved this run")
     parser.add_argument("--person-at-switch", action="store_true", help="D-911: a person stands at the power switch")
     parser.add_argument("--dry-run", action="store_true")
@@ -210,13 +186,53 @@ def main(argv=None) -> int:
         parser.error("moving the arm needs --person-at-switch (D-911)")
     if not 1 <= args.max_chunks <= 6:
         parser.error("--max-chunks 1..6")
+    if args.n_action is not None and args.n_action < 1:
+        parser.error("--n-action must be positive")
+    if not 0 < args.max_obs_age_s <= 5:
+        parser.error("--max-obs-age-s must be in (0, 5]")
+    if args.mode != "taught" and not all((args.policy_root, args.policy_revision, args.cell_calibration)):
+        parser.error("ACT needs --policy-root, --policy-revision and --cell-calibration")
+    if args.mode != "act" and not args.goal_site:
+        parser.error("hybrid and taught modes need --goal-site")
+    config = json.loads(args.config.read_text(encoding="utf-8"))
+    if not config.get("work_dir"):
+        config["work_dir"] = str(args.config.parent)
+    shadow = None if args.mode == "taught" else lrs.LeRobotShadow(args.policy_root, args.policy_revision, cell_config=config)
+    destination = mapped_slot = None
+    goal_slot = args.goal_slot
+    if args.goal_site is not None:
+        if shadow is not None and shadow.goal_size is None and args.mode == "act":
+            parser.error("checkpoint has no goal input")
+        if shadow is not None and shadow.goal_size is not None and shadow.goal_size != len(GOALS):
+            parser.error(f"--goal-site requires the {len(GOALS)}-slot h1 goal input")
+        try:
+            destination, mapped_slot = resolve_goal_site(args.goal_site)
+        except (ValueError, OSError) as error:
+            parser.error(str(error))
+        if goal_slot is None and shadow is not None and shadow.goal_size is not None:
+            goal_slot = mapped_slot
+        if args.mode == "hybrid" and goal_slot is not None and goal_slot != mapped_slot:
+            parser.error("hybrid ACT goal must match the taught destination")
+    if shadow is not None and shadow.goal_size is not None:
+        if goal_slot is None or not 0 <= goal_slot < shadow.goal_size:
+            parser.error(f"checkpoint requires --goal-site or --goal-slot 0..{shadow.goal_size - 1}")
+    elif goal_slot is not None:
+        parser.error("checkpoint has no goal input")
+    cell_cal = json.loads(args.cell_calibration.read_text(encoding="utf-8")) if shadow else {}
+    if shadow is not None and shadow.sim_rule is None:
+        if args.model_calibration is None:
+            parser.error("normalized-unit checkpoint requires --model-calibration")
+        offset = calibration_offset(json.loads(args.model_calibration.read_text(encoding="utf-8")), cell_cal)
+    else:
+        for name in lrs.JOINT_NAMES[:-1] if shadow else ():
+            if (cell_cal[name]["range_min"], cell_cal[name]["range_max"]) != (0, 4095):
+                parser.error(f"{name}: sim-unit checkpoint requires the trained 0..4095 body tick range")
+        offset = [0.0] * JOINTS
+
     import cell_pipeline as cp
 
-    config = json.loads(args.config.read_text(encoding="utf-8"))
     work = Path(config.get("work_dir") or args.config.parent).expanduser()
     work.mkdir(parents=True, exist_ok=True)
-    offset = calibration_offset(json.loads(args.model_calibration.read_text()), json.loads(args.cell_calibration.read_text()))
-    shadow = lrs.LeRobotShadow(args.policy_root, args.policy_revision)
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     log_path = work / "policy-drive.jsonl"
     run_id = f"{int(time.time())}"
@@ -226,7 +242,33 @@ def main(argv=None) -> int:
             stream.write(json.dumps({"run": run_id, "t": time.time(), "operator": args.operator,
                                      "policy_revision": args.policy_revision, "offset": offset, **row}, default=str) + "\n")
 
-    log({"start": True, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch, "max_chunks": args.max_chunks})
+    log({"start": True, "mode": args.mode, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch,
+         "max_chunks": args.max_chunks, "n_action": args.n_action, "max_obs_age_s": args.max_obs_age_s,
+         "goal_slot": goal_slot, "goal_site": args.goal_site, "goal_destination": destination,
+         "goal_site_slot": mapped_slot, "units_sha256": shadow.files.get(lrs.UNITS) if shadow else None})
+    from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
+    import cell_params as prm
+
+    authorize = handoff = None
+    try:
+        config["params"] = prm.load(config.get("params_path"))["values"]
+        config.pop("_commissioning", None)
+        if not args.dry_run:
+            config["_commissioning"] = {"person_at_switch": args.person_at_switch}
+            authorize = Authorization(config)
+        if args.mode != "act":
+            library = json.loads(args.library.read_text(encoding="utf-8"))
+            source = args.site or "belt"
+            validate_taught_goal(config, source, args.goal_site, destination, library)
+            if args.mode == "hybrid":
+                if "plan" not in config:
+                    config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text(encoding="utf-8"))
+                closed = library.get("jaw_empty_stop", library["gripper_closed"])
+                if shadow.sim_rule is not None:
+                    closed = converted_closed(closed, shadow.sim_rule)
+                handoff = CellHandoff(config, source, args.library, library, closed + 1, work)
+    except (OSError, ValueError, KeyError, SystemExit) as error:
+        parser.error(str(error))
     look = None
     if args.catalog and args.roi and args.site:
         import cell_auto_pick_plan
@@ -248,8 +290,16 @@ def main(argv=None) -> int:
         log({"end": True, **result})
         print(json.dumps(result))
         return 1
-    result = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks,
-                         dry_run=args.dry_run, log=log, demonstrated=demonstrated_range(args.policy_root, offset))
+    if args.mode == "taught":
+        try:
+            result = run_taught(cell, args.library, dry_run=args.dry_run, authorize=authorize, log=log)
+        except (OSError, ValueError, KeyError) as error:
+            result = {"result": "refused", "reason": str(error)}
+    else:
+        demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
+        result = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks,
+                             dry_run=args.dry_run, log=log, demonstrated=demonstrated, goal_slot=goal_slot,
+                             n_action=args.n_action, max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize)
     if look:
         after = look()
         result["source"] = {"before": before.get("objects"), "after": after.get("objects")}
@@ -257,7 +307,7 @@ def main(argv=None) -> int:
             result["took_one"] = result["source"]["after"] < result["source"]["before"]
     log({"end": True, **result})
     print(json.dumps(result))
-    return 0 if result["result"] in ("released", "chunks_done", "dry_run") else 1
+    return 0 if result["result"] in ("released", "chunks_done", "dry_run", "placed") else 1
 
 
 if __name__ == "__main__":

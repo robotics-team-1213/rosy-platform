@@ -14919,3 +14919,40 @@ osy-d395-s1d\`.
 - 변경: ADR D-1059, ADR Log 행, `tools/harness/affected_queue.py`(시험한 커밋과 큐 커밋의 두 트리 비교, 증명 못 하면 전체 선택), `affected_ci.ci_matrix` 호출 한 줄, `test/test_affected_queue.py`.
 - 증거: PR 실행의 병합 커밋을 SHA로 받아 로컬 `git merge-tree` 트리와 6건 일치 확인. media 변경 선택 110경로가 무관한 변경 뒤 40경로(guard)로 줄어드는 것을 선택기로 확인.
 - gate 변화: 없음. `ROSY_QUEUE_TESTED`가 없으면 선택은 그대로다. ci.yml 배선과 변수 켜기는 다음 PR.
+
+## 2026-11-21 · uncommitted · D-1059 ci.yml 배선
+- 변경: `.github/workflows/ci.yml`. 녹색 pull_request 실행의 `ci-result`가 시험한 병합 커밋을 notice로 남긴다. merge_group의 scope가 `ROSY_QUEUE_DELTA=1`일 때 `affected_queue.py`로 그 커밋을 읽는다. `test/test_affected_queue.py`에 배선 시험.
+- 증거: PR 실행의 병합 커밋 6건을 SHA로 받아 로컬 `git merge-tree` 트리와 일치 확인. check-run annotation을 토큰으로 읽을 수 있음을 PR #350에서 확인. scope 작업에서 CI 이미지를 빼는 안(실행당 30~40초)은 접었다. 작업이 다시 PyPI에 의존하게 되어 `test_ci_image.py`가 고정한 "설치는 이미지에" 결정과 어긋난다.
+- gate 변화: 저장소 변수를 켜기 전에는 큐 선택이 그대로다. 필수 검사 이름과 작업 이미지는 그대로다.
+
+## 2026-11-21 · uncommitted · ci(records): 기록 봇이 rosy-records-bot App 토큰으로 PR을 연다
+
+- 변경: refresh-generated-docs.yml이 actions/create-github-app-token(고정 커밋)으로 이 저장소 한정 1시간 토큰을 만들어 PR을 열고 큐에 넣는다. 변수 RECORDS_BOT_CLIENT_ID, 비밀값 RECORDS_BOT_PRIVATE_KEY(2026-11-21 등록). 정적 RECORDS_BOT_TOKEN도 대체로 남김.
+- 증거: test_land_conflict_free_records 4 passed
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · records fragments cutover (D-1061)
+
+- 변경: new_record.py api --surface/--slug unnumbered fragments, consolidate numbers them; lint cutover rule, ADR number guard, strict/lenient records checks; adr_reserve fetch+remote ref push; records bot on main push
+- 증거: pytest test/test_records_fragments.py test/test_land_conflict_free_records.py; rosy_harness.py lint
+- gate 변화: 없음
+- 결정: D-1061
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · ADR 색인 시험이 봇 전 PR/main에서 Log 행 누락을 경고로 처리
+
+- 변경: test_adr_index_lists_every_decision_section: missing ADR Log row is a warning unless ROSY_RECORDS_STRICT=1
+- 증거: D-1061
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · D-1063 Proposed: 공급암 S 인계 계약 보충(카메라 근거·2단 적재)
+
+- 변경: docs/adr/D-1063-arm-s-handoff-contract-camera-evidence-two-tier.md 신규(Proposed). rosy.fleet-r-cell-contract.v1의 공급암 S TRANSFER_DONE·RELEASED를 top 카메라 관측과 짐칸 빈 판정으로 정한다. 게시되지 않은 로컬 초안 D-1011(판정기 관측)·D-998(자동 출발)을 대신한다(두 번호는 origin에서 다른 ADR로 쓰였다)
+- 증거: 인용 코드 위치를 origin/main(2026-11-21)에서 확인: cell_fleet_contract.py:62 evaluate_handoff_gate, cell_fleet_handoff.py:143-215 run_contract_handoff_stage(model_only, physical_completion False, 단계 하나 뒤 RELEASED), cell_spec_recovery_fsm.py:22-23, cell_grasp_judges.py:70
+- gate 변화: 없음
+- 결정: D-1063 Proposed
+- 교훈: 로컬 main이 origin보다 크게 뒤처진 채 ADR 번호를 잡으면 게시 전에 번호가 다른 ADR로 쓰인다: 게시 PR이 닫히면 번호부터 다시 확인

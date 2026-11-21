@@ -159,6 +159,32 @@ def test_d26_exists_and_replaces_d19(adr):
         assert heading in d26, f"D-26 is missing {heading}"
 
 
+def _require_log_rows(missing: list[str]) -> None:
+    """D-1061: a PR must not write Log rows, the records bot adds them after merge.
+
+    Missing rows are a warning (PR and main pushes) and an error only when
+    ROSY_RECORDS_STRICT=1 (the bot/scheduled run).
+    """
+    import os
+    import warnings
+
+    if not missing:
+        return
+    msg = f"ADR sections absent from the index table: {missing}"
+    assert os.environ.get("ROSY_RECORDS_STRICT") != "1", msg
+    warnings.warn(f"{msg} (the records bot adds the rows)", stacklevel=2)
+
+
+def test_missing_log_rows_warn_unless_strict(monkeypatch):
+    monkeypatch.delenv("ROSY_RECORDS_STRICT", raising=False)
+    with pytest.warns(UserWarning, match=r"D-1062"):
+        _require_log_rows(["D-1062"])
+    monkeypatch.setenv("ROSY_RECORDS_STRICT", "1")
+    with pytest.raises(AssertionError, match=r"D-1062"):
+        _require_log_rows(["D-1062"])
+    _require_log_rows([])
+
+
 def test_adr_index_lists_every_decision_section(adr):
     """The index table went stale at D-22 while D-23..D-25 existed in the body."""
     import re
@@ -166,7 +192,7 @@ def test_adr_index_lists_every_decision_section(adr):
     body_ids = set(re.findall(r"^## (D-\d+) ", adr, flags=re.MULTILINE))
     index_ids = set(re.findall(r"^\| (D-\d+) \|", adr, flags=re.MULTILINE))
     missing = sorted(body_ids - index_ids, key=lambda s: int(s.split("-")[1]))
-    assert not missing, f"ADR sections absent from the index table: {missing}"
+    _require_log_rows(missing)
 
 
 # --- the decision itself --------------------------------------------------

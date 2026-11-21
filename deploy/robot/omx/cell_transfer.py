@@ -219,6 +219,7 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
 
 def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check=None) -> dict:
     steps = []
+    release_completed = False
     if closed is None:  # 2026-11-13 arm_s: judged against the 46.5 command, empty jaws at 50.0 counted as holding
         try:
             _lib = json.loads(Path(library).read_text())
@@ -307,7 +308,10 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
             for after in ("run lift_pick", "park"):
                 run(after)
             return {"result": "empty", "at": command, "steps": steps}
-        if command in ("run lift_pick", "park", "goto above_place", "run descend_place") and status.get("holding") is False:
+        if command == "run release_place":
+            release_completed = True
+        if (not release_completed and command in ("run lift_pick", "park", "goto above_place", "run descend_place")
+                and status.get("holding") is False):
             if command != "park":
                 run("park")
             return {"result": "empty", "at": command, "steps": steps}

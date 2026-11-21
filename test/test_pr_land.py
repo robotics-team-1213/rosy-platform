@@ -22,6 +22,7 @@ SPEC.loader.exec_module(pr_land)
 def _normal_cutover(monkeypatch):
     monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
     monkeypatch.setattr(pr_land.land_freeze, "path", lambda cwd: Path("rosy-cutover.json"))
+    monkeypatch.setattr(pr_land, "preflight", lambda cwd, base, body="": None)  # its own test below
 
 
 @pytest.mark.parametrize("phase,refused", [("drain", True), ("open", False), ("normal", False)])
@@ -164,6 +165,12 @@ def test_ci_runnable_excludes_lab_only_omx_browser_alone_and_sim():
     assert not pr_land.ci_runnable(["ROSY_JOB_ALONE=1", "test/test_platform_g1_timing.py"])
     assert not pr_land.ci_runnable(["integrations/simulation/gazebo/test"])
     assert not pr_land.ci_runnable(["test/learning/perception/test_learning_workflow_pipeline_browser.py"])
+    # 2026-11-21: a folder above the lab-only file is CI's root-test. Counted as lab evidence, the whole root suite
+    # (18,847 tests, 37 min) ran on a lab PC for every selection that fell back to `test`. Placement still refuses it.
+    for folder in ("test", "test/learning", "test/learning/perception"):
+        assert pr_land.ci_runnable([folder]) and pr_land.ci_runnable(["--ignore=test/test_platform_g1_timing.py", folder])
+        assert pr_land.work_queue.lab_only([folder]) and not pr_land.work_queue.lab_only([folder], above=False)
+        assert not pr_land.ci_runnable(["ROSY_RUN_BROWSER_TESTS=1", folder])
 
 
 def _required(monkeypatch, invs, changed=()):
@@ -179,6 +186,73 @@ def test_mixed_ci_entries_need_no_lab_but_omx_and_browser_parts_stay(monkeypatch
     brow = "test/learning/perception/test_learning_workflow_pipeline_browser.py"
     assert _required(monkeypatch, [mixed + [brow]]) == [[brow]]
     assert _required(monkeypatch, [["ROSY_RUN_BROWSER_TESTS=1"] + mixed]) != []
+
+
+def test_what_this_prs_own_ci_run_executes_is_not_lab_evidence(monkeypatch):
+    """2026-11-21: one UI PR spent 2 to 2.5 h per lab run, mostly on tests its pull_request run executes anyway."""
+    media = ["middleware/media/test"]  # a selector suite no full-matrix entry names
+    assert pr_land.ci_entry(media) is None and not pr_land.ci_runnable(media) and pr_land.ci_runnable(media, selected=True)
+    assert _required(monkeypatch, [media]) == []
+    assert not pr_land.ci_runnable(["middleware/perception/test"], selected=True), "a non-gating root stays lab evidence"
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: json.dumps({"mode": "full", "local_invocations": [media]})
+                        if "affected" in cmd else "")
+    assert pr_land.required_lab_invocations(Path("."), "b", "h") == [media], "a FULL selection is not run per invocation"
+
+    # D-1066: browser files ride the pull_request run; the lab keeps only what affected_browser.lab_path() claims
+    import browser_scope
+    changed = ["shared/web/static/app.js", "middleware/robot_ui/app.js"]
+    required = _required(monkeypatch, [], changed)
+    files = [w for inv in required for w in inv if w.endswith(".py")]
+    assert files == [f for f in files if pr_land.affected_browser.lab_path(f)]
+    lab_only = next(iter(pr_land.work_queue.LAB_ONLY))
+    monkeypatch.setattr(browser_scope, "targets", lambda ch: [lab_only, "shared/web/test/test_x_browser.py"])
+    assert [w for inv in _required(monkeypatch, [], changed) for w in inv if w.endswith(".py")] == [lab_only]
+
+
+def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypatch):
+    seen = []
+    monkeypatch.undo()  # the autouse fixture stubs preflight for the other tests
+    monkeypatch.setenv("ROSY_STEP_BACK", "off")  # the step-back check has its own test below
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: seen.append(cmd[1:]))
+    pr_land.preflight(Path("."), "origin/main")
+    assert seen == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
+
+    def refuse(cmd, cwd, **k):
+        raise SystemExit("no Safety-Review trailer")
+    monkeypatch.setattr(pr_land, "_run", refuse)
+    with pytest.raises(SystemExit):
+        pr_land.preflight(Path("."), "origin/main")
+
+
+def test_preflight_runs_the_step_back_check_and_the_switch_skips_it(monkeypatch, capsys):
+    monkeypatch.undo()
+    monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: "")
+    hit = {"level": "block", "why": "w", "pr": 311, "merged_at": "2026-11-20 13:13", "path": "a.js", "lines": 3}
+    info = {"level": "info", "why": "w", "pr": 5, "merged_at": "2026-11-20 13:13", "path": "b.js", "lines": 1}
+    monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [hit, info])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: [])
+    monkeypatch.delenv("ROSY_STEP_BACK", raising=False)
+    with pytest.raises(SystemExit) as stop:
+        pr_land.preflight(Path("."), "origin/main", "summary")
+    assert "Replaces: #311 (" in str(stop.value)
+    out = capsys.readouterr().out
+    assert "step-back info" in out
+    pr_land.preflight(Path("."), "origin/main", "Replaces: #311 (restructured)")  # named in the body: passes
+    monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: ["31 changed files (limit 30)"])
+    with pytest.raises(SystemExit, match="31 changed files"):
+        pr_land.preflight(Path("."), "origin/main", "summary")
+    pr_land.preflight(Path("."), "origin/main", "summary\nSize-Exception: one mechanical rename")
+    monkeypatch.setattr(pr_land.step_back, "report", lambda *a, **k: [hit, info])
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: [])
+    def broken(*a, **k):
+        raise pr_land.step_back.ScanError("git merge-base failed")
+    monkeypatch.setattr(pr_land.step_back, "report", broken)
+    with pytest.raises(SystemExit, match="scan incomplete"):
+        pr_land.preflight(Path("."), "origin/main", "Step-Back: none (x)")
+    monkeypatch.setenv("ROSY_STEP_BACK", "off")
+    pr_land.preflight(Path("."), "origin/main", "")
+    assert "step-back check skipped" in capsys.readouterr().out
 
 
 def test_lab_only_requires_intact_lab_cache_and_ci_covers_lab_ids(tmp_path, monkeypatch):
@@ -246,6 +320,8 @@ def _push_fake(monkeypatch, tmp_path, *, publish_only, active, lab=()):
 
     def fake_run(cmd, cwd, env=None, check=True):
         calls.append((cmd, env))
+        if cmd[0] == sys.executable:  # preflight's trailer and size_range scripts
+            return ""
         if cmd[:2] == ["git", "rev-parse"]:
             return "fix/topic" if "--abbrev-ref" in cmd else head
         if cmd[:3] == ["git", "config", "--bool"]:
@@ -254,7 +330,7 @@ def _push_fake(monkeypatch, tmp_path, *, publish_only, active, lab=()):
             return ""
         if cmd[:3] == ["gh", "pr", "list"]:
             return '[{"number": 7}]'
-        if cmd[:3] == ["gh", "pr", "merge"]:
+        if cmd[:3] in (["gh", "pr", "merge"], ["gh", "pr", "edit"]):
             return ""
         raise AssertionError(cmd)
 
@@ -280,12 +356,16 @@ def test_push_env_carries_reason_only_when_publish_only_and_activated(monkeypatc
 def test_evidence_flag_runs_pr_evidence_before_verify(monkeypatch, tmp_path):
     inv = ["middleware/devices/omx/adapter/test"]
     calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False, lab=[inv])
+    monkeypatch.setattr(pr_land, "preflight", lambda cwd, base, body="": calls.append((["preflight", base], None)))
     fake = type(sys)("pr_evidence")
     fake.main = lambda argv, repo=None: calls.append((["evidence", *argv], None)) or 0
     monkeypatch.setitem(sys.modules, "pr_evidence", fake)
     assert pr_land.main(["--evidence", "--dry-run"], repo=tmp_path) == 0
     order = [c[0][0] for c in calls if c[0][0] in ("evidence", "verify")]
     assert order == ["evidence", "verify"]
+    # 2026-11-21: the trailer and size checks stop a doomed push before the lab run, not after it
+    names = [c[0][0] for c in calls]
+    assert names.index("preflight") < names.index("evidence")
     calls.clear()
     assert pr_land.main(["--dry-run"], repo=tmp_path) == 0
     assert [c[0][0] for c in calls if c[0][0] == "evidence"] == []
@@ -315,3 +395,20 @@ def test_local_main_only_behind_origin_is_not_a_backlog(tmp_path):
     git("checkout", "-q", "-b", "topic2")
     with pytest.raises(SystemExit):
         pr_land.check_coexistence(tmp_path, git("rev-parse", "HEAD"))
+
+
+def test_body_reaches_an_existing_pr_so_a_size_exception_counts(monkeypatch, tmp_path):
+    calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False)
+    assert pr_land.main(["--body", "Size-Exception: one rename sweep"], repo=tmp_path) == 0
+    assert any(cmd[:3] == ["gh", "pr", "edit"] and any("Size-Exception: one rename sweep" in part for part in cmd) for cmd, _ in calls)
+
+
+def test_oversized_dry_run_stops_before_push_and_names_the_line_to_add(monkeypatch, tmp_path):
+    monkeypatch.undo()  # the autouse fixture stubs preflight; this test needs the real one
+    monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
+    calls = _push_fake(monkeypatch, tmp_path, publish_only=False, active=False)
+    monkeypatch.setattr(pr_land.step_back, "size_violations", lambda *a, **k: ["31 changed files (limit 30)"])
+    monkeypatch.delenv("ROSY_STEP_BACK", raising=False)
+    with pytest.raises(SystemExit, match=r"(?s)--body.*Size-Exception: <reason>"):
+        pr_land.main(["--dry-run"], repo=tmp_path)
+    assert not any(cmd[:2] in (["git", "push"], ["gh", "pr"]) for cmd, _ in calls)

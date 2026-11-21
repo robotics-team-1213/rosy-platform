@@ -134,6 +134,7 @@ class LeaderActuator:
     def seed(self, current: dict[str, int]) -> dict[str, int]:
         """Start the ramp from the present position so the first goal is continuous."""
         self.command = {name: float(current[name]) for name in BODY}
+        self.start = {name: int(current[name]) for name in BODY}
         self.velocity = dict.fromkeys(BODY, 0.0)
         self.loaded_since = dict.fromkeys(BODY)
         return dict(self.command)
@@ -171,7 +172,10 @@ class LeaderActuator:
         for name, value in command.items():
             goal = int(value) + self.gravity.get(name, 0)
             calibration = self.bus.calibration[name]
-            if not calibration.range_min <= goal <= calibration.range_max:
+            # A multi-turn joint found outside its range (a hand turned it past a turn) may only come
+            # back: goals between where it started and the range are allowed, nothing further out.
+            start = getattr(self, "start", {}).get(name, calibration.range_min)
+            if not min(calibration.range_min, start) <= goal <= max(calibration.range_max, start):
                 raise ValueError(f"{self.label} {name}: goal {goal} outside the calibrated range")
             goals[name] = goal
         self.bus.sync_write("Goal_Position", goals, normalize=False)

@@ -34,7 +34,9 @@ def _code_digest() -> str:
         "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
         "cell_auto_pick.py", "cell_transfer.py", "cell_unwedge.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
         "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",
-        "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
+        "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py",
+        "chunk_runner_commands.py", "chunk_runner_run.py", "chunk_runner_loop.py", "chunk_policy_playback.py",
+        "cell_policy_drive.py", "cell_policy_timing.py", "cell_policy_shape.py", "cell_policy_handoff.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, coordination, motion_profile)})
     cache_key = (
         tuple((name, path.stat().st_mtime_ns, path.stat().st_size) for name, path in sorted(files.items())),
@@ -181,7 +183,7 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
         out["payload"], over = payload_check(config, conditions)
         if over:  # supervised trials too: a person at the switch does not make an unknown or heavy load safe
             return {**out, "reason": over}
-        if "_commissioning" in config:
+        if "_commissioning" in config and not _reviewed(config, out["task_sha256"]):  # a reviewed task takes the review path
             trial = config["_commissioning"]
             if (not isinstance(trial, dict) or set(trial) != {"person_at_switch"}
                     or trial["person_at_switch"] is not True):
@@ -256,6 +258,15 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
         return {**out, "allowed": True, "status": "verified", "reason": "reviewed_exact_task"}
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError):
         return {**out, "reason": "evidence_unavailable"}
+
+
+def _reviewed(config: dict, task_sha256: str) -> bool:
+    """True when the operating envelope file holds a review of exactly this task (any read problem: no)."""
+    try:
+        document = json.loads(Path(config["operating_envelope_path"]).expanduser().read_text(encoding="utf-8"))
+        return any(isinstance(r, dict) and r.get("task_sha256") == task_sha256 for r in document["reviews"])
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+        return False
 
 
 def same_session(state: dict, assessment: dict, *, now=None, recovering: bool = False) -> bool:

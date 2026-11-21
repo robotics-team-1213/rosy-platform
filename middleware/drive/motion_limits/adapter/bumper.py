@@ -15,24 +15,7 @@ from ..sensing.lidar import find_frontiers, is_robot_scan, opening_max, sector_r
 from ..control.route import line_route
 from ..control.lidar_guard import MAX_LINEAR_MPS, directional_lidar_limits
 from ..sensing.lidar_mount import nose_from_quaternion
-
-
-def parse_us_range(msg, scale: float = 1.0):
-    """Convert a Range msg to metres, or None to hold the last value.
-
-    Vendor formula is (adc/4096) - 0.03, so no-echo is <= 0 and the
-    2 cm blind zone is 0 < r <= min_range. A single close ping must
-    count; invalid/no-echo must not wipe it.
-    """
-    r = float(msg.range) * float(scale)
-    lo = float(msg.min_range) if msg.min_range > 0.0 else 0.02
-    hi = float(msg.max_range) if msg.max_range > lo else 3.0
-    if not math.isfinite(r) or r <= 0.0 or r >= hi:
-        return None
-    # Blind zone / no-echo both sit at or below min_range — do not call that a wall.
-    if r <= lo + 1e-4:
-        return None
-    return r
+from ..sensing.range_tilt import parse_us_range  # noqa: F401  (re-exported by safety_node)
 
 
 class Bumper:

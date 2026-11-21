@@ -150,8 +150,19 @@ def test_a_dock_carries_a_bounded_reference_scan_and_keeps_it_through_a_teach():
             DockInstance(id="d", type="t", metadata={"reference_scan": bad})
 
 
-def with_reference(p):
+def site_evidence(**over):
+    """Valid site_pose_evidence as Fleet sends it (sighting anchor, small camera residual, the robot's map id)."""
+    return {"anchor_source": "sighting", "identity_mode": "led", "anchor_age_s": 2.0, "camera_residual_m": 0.02, "camera_residual_deg": 1.0, "map_id": "map-1", "at": 0.0, **over}
+
+
+def with_reference(p, verified=False):
+    """The dock gets its reference scan. By default NOT verified: a reference-scan dock then never stages on the map (b8xy nosein-4). verified=True: the dock command carries
+    accepted site_pose_evidence, as a real Nav2 staging start needs (tests of the Nav2 path opt in)."""
     p.manager._db.get("bay1").metadata["reference_scan"] = SCANS["seated"]
+    if verified:
+        p.manager._map_id_provider = lambda: "map-1"
+        orig = p.manager.dock
+        p.manager.dock = lambda *a, **k: orig(*a, **{"site_pose_evidence": site_evidence(), **k})
     return p
 
 
@@ -344,7 +355,7 @@ def test_without_a_reference_scan_the_stale_map_path_is_unchanged():
 @pytest.mark.parametrize("weak", [good(inliers=0.5), good(margin=0.1), None])
 def test_a_weak_or_missing_match_keeps_the_map_path(weak):
     p, row = a_row(start=(-0.15, 0.0, math.pi), others=())
-    with_reference(p)
+    with_reference(p, verified=True)             # accepted site_pose_evidence: the map path (Nav2) is allowed
     stale_map(p)
     p.manager.dock()
     run_row(p, row, until=answer(weak))
@@ -353,7 +364,7 @@ def test_a_weak_or_missing_match_keeps_the_map_path(weak):
 
 def test_a_refusal_says_why_the_scan_pose_was_not_used():
     # y8xs 2026-11-20: the map path refused and nothing said whether the scan pose was asked for, late, or too weak
-    for match, words in ((good(inliers=0.5), "rejected: inliers 0.50 (min 0.70)"), (None, "no fit")):
+    for match, words in ((good(inliers=0.5), "not used: inliers 0.50 < 0.70 (inliers 0.50 min 0.70"), (None, "no fit")):
         p, row = a_row(start=(-0.15, 0.0, math.pi), others=())
         with_reference(p)
         p.detector.glitch_frames = 10_000
@@ -374,14 +385,15 @@ def test_a_refusal_says_why_the_scan_pose_was_not_used():
     assert "never requested" in q.manager._error
 
 
-def test_no_answer_in_time_keeps_the_map_path_and_waits_no_longer_than_the_limit():
+def test_no_answer_in_time_refuses_with_a_person_call_and_never_stages_on_the_map_and_waits_no_longer_than_the_limit():
     p, row = a_row(start=(-0.15, 0.0, math.pi), others=())
     with_reference(p)
     t0 = p.clock.now
     p.manager.dock()
     run_row(p, row)                                   # nobody answers
-    # the zone check took the map path after the wait; inside the rails ALIGNING then has no LiDAR pose to steer on and stops (no camera fallback)
-    assert p.manager.state is DockState.DOCK_FAILED and ("no fresh LiDAR pose" in p.manager._error or "no fresh LiDAR bay pose" in p.manager._error), p.manager._error
+    # a reference-scan dock never decides on the map alone (b8xy nosein-4: Nav2 staging with the map pose unverified): no verdict, no Nav2 goal, a person is called
+    assert p.manager.state is DockState.DOCK_FAILED and "no LiDAR bay pose answer" in p.manager._error and "map pose is unverified" in p.manager._error, p.manager._error
+    assert p.world.goals == [] and any(k == "docking.person_call" for k, d in p.events)
     assert p.clock.now - t0 >= CFG.bay_scan_pose_wait_s
 
 

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
-from control.control.startup_profile import FEATURES, startup_profile
+from core_common.startup_profile import FEATURES, startup_profile
 
 
 class StartupProfileTests(unittest.TestCase):
