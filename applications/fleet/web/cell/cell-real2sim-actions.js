@@ -9,7 +9,18 @@ import {
   CABLE_GUARD_PATH,
   VISION_CHECK_PATH,
   ARM_HOLDS_CLEAR_PATH,
+  BED_CONFIRM_TTL_S,
+  bedConfirmPath,
+  presenceConfirmPath,
 } from './cell-real2sim-specs.js';
+
+const BED_CONFIRM_ERROR = {
+  NAMED_OPERATOR_REQUIRED: '이름 있는 운영자 로그인이 필요합니다',
+  CELL_TASK_NOT_QUEUED: '대기 중인 작업이나 적재함 확인이 무효가 된 실행 중 작업만 확인할 수 있습니다',
+  BED_CONFIRM_ROBOT_NOT_STOPPED: '핑키가 멈춰 있지 않습니다. 핑키가 정차 위치에 멈춘 뒤 다시 확인하세요',
+  BED_CONFIRM_ROBOT_MISMATCH: '작업에 지정된 핑키가 아닙니다',
+  BED_CONFIRM_POSE_UNAVAILABLE: '지도에서 핑키 위치를 확인하지 못했습니다. 정차 위치를 확인하세요',
+};
 
 export function createCellActions(ctx) {
   const {request, $} = ctx;
@@ -41,6 +52,13 @@ export function createCellActions(ctx) {
     } else if (b.pinkyAction) {
       btn.dataset.pinkyQuickAction = b.pinkyAction;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runPinkyQuickAction(targetRobotId, b.pinkyAction); });
+    } else if (b.bedConfirmTaskId || b.presenceConfirmTaskId) {
+      const reason = ctx.namedReason();  // D-1057: the server refuses a shared or development identity too
+      btn.disabled = Boolean(reason);
+      if (reason) btn.setAttribute('reason', reason);
+      const [kind, taskId] = b.bedConfirmTaskId ? ['bed', b.bedConfirmTaskId] : ['presence', b.presenceConfirmTaskId];
+      btn.dataset[`${kind}ConfirmTaskId`] = taskId;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void confirmOperator(kind, taskId, targetRobotId); });
     } else if (b.cancelTaskId) {
       btn.addEventListener('click', ev => { ev.stopPropagation(); void cancelOrRetryTask(b.cancelTaskId, 'cancel'); });
     } else if (b.retryTaskId) {
@@ -213,6 +231,38 @@ export function createCellActions(ctx) {
     }
   }
 
+  // Named-operator confirmations of a QUEUED task (D-1057): same request shape, validity and messages.
+  const CONFIRM_KINDS = {
+    bed: {name: '적재함 확인', obj: '적재함 확인을', subj: '적재함 확인이', path: bedConfirmPath},
+    presence: {name: '입회 표시', obj: '입회 표시를', subj: '입회 표시가', path: presenceConfirmPath},
+  };
+  async function confirmOperator(kind, taskId, robotId) {
+    const {name, obj, subj, path} = CONFIRM_KINDS[kind];
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `태스크(${taskId}) ${obj} 보내는 중입니다.`;
+    try {
+      const res = await request(path(taskId), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({robot_id: robotId}),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = res.renewed === false
+          ? `태스크(${taskId}) ${subj} 아직 유효합니다. 유효 시간은 늘지 않습니다.`
+          : `태스크(${taskId}) ${name} 완료 · ${res.expires_in_s ?? BED_CONFIRM_TTL_S}초 동안 유효`;
+      }
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      const text = error.status === 404 && !error.code ? `서버에 ${name} 기능이 아직 없습니다 (D-1057)`
+        : BED_CONFIRM_ERROR[error.code] || error.message;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${name} 실패: ${text}`;
+    }
+  }
+  const confirmBed = (taskId, robotId) => confirmOperator('bed', taskId, robotId);
+  const confirmPresence = (taskId, robotId) => confirmOperator('presence', taskId, robotId);
+
   async function cancelOrRetryTask(taskId, op) {
     const current = ctx.bump();
     const verb = op === 'cancel' ? '취소' : '재실행';
@@ -298,12 +348,13 @@ export function createCellActions(ctx) {
     const armId = $('cell-task-arm')?.value || (cellId === 'cell_s' ? 'arm_s' : 'arm_a');
     const tier = Number($('cell-task-tier')?.value || 1);
     const displacedTo = $('cell-task-displaced')?.value || null;
+    const dstSite = $('cell-task-dst')?.value || undefined;  // empty: the server's cell and tier default
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `맞춤 태스크(${cellId}/${armId})를 큐에 등록하는 중입니다.`;
     try {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({cell_id: cellId, arm_id: armId, tier, displaced_to: displacedTo}),
+        body: JSON.stringify({cell_id: cellId, arm_id: armId, tier, displaced_to: displacedTo, dst_site: dstSite}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -316,5 +367,5 @@ export function createCellActions(ctx) {
     }
   }
 
-  return {bindActionButton, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
+  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
 }
