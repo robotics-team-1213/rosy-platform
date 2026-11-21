@@ -902,21 +902,35 @@ def test_prune_never_takes_a_used_worktree(main):
     """11-20: in-use worktrees were removed: no commit yet, clean in git, or an owner note only."""
     used = add(main, "used")  # tip == main, no commit of its own: not "landed"
     os.utime(used / "a.txt", (LATER - HOUR, LATER - HOUR))  # a tracked file touched an hour ago, content the same
+    # 11-22 (D-1070 revision): the index is no use signal; with core.fsmonitor every `git status` rewrites it
     indexed = add(main, "indexed")
     index = Path(git(indexed, "rev-parse", "--absolute-git-dir")) / "index"
-    os.utime(index, (LATER - HOUR, LATER - HOUR))  # git add/status an hour ago
+    os.utime(index, (LATER - HOUR, LATER - HOUR))  # a status an hour ago, nothing else: idle, removed
     noted = add(main, "noted", owner=f"{ME}; at {int(LATER - HOUR)}")  # `new` stamped its note an hour ago
     idle = add(main, "idle", owner=f"{ME}; at {int(LATER - 80 * HOUR)}")  # every file is 75 h old at LATER
     dirty = add(main, "dirty", commit=True, merge=True)
     (dirty / "wip.txt").write_text("wip", encoding="utf-8")
     os.utime(dirty / "wip.txt", (LATER - 100 * HOUR, LATER - 100 * HOUR))  # long untouched, still not lossless
-    assert worktrees.prune(main, apply=True, now=LATER) == 1  # lossless: only the idle one
-    assert not idle.exists()
-    for kept in (used, indexed, noted, dirty):
+    assert worktrees.prune(main, apply=True, now=LATER) == 2  # lossless: the idle one and the index-only one
+    assert not idle.exists() and not indexed.exists()
+    for kept in (used, noted, dirty):
         assert kept.is_dir(), kept.name
     # the same for the old unattended call (--snapshot --all): the used ones still stay
     assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 1
-    assert not dirty.exists() and all(p.is_dir() for p in (used, indexed, noted))
+    assert not dirty.exists() and all(p.is_dir() for p in (used, noted))
+
+
+def test_status_table_does_not_write_a_worktree_index(main):
+    """11-22: the tool's own status refreshed other sessions' index (and could hold their index.lock)."""
+    wt = add(main, "probed")
+    index = Path(git(wt, "rev-parse", "--absolute-git-dir")) / "index"
+    os.utime(wt / "a.txt", (LATER - 80 * HOUR, LATER - 80 * HOUR))  # stat differs from the index: a refresh would write
+    os.utime(index, (LATER - 90 * HOUR, LATER - 90 * HOUR))
+    before = index.stat().st_mtime
+    assert worktrees.main(["status"]) == 0
+    assert index.stat().st_mtime == before
+    git(wt, "status", "--porcelain")  # a plain status does write it: the check above is not vacuous
+    assert index.stat().st_mtime != before
 
 
 def test_a_note_younger_than_the_idle_hours_keeps_a_worktree_for_the_idle_hours_given(main):
@@ -948,8 +962,10 @@ def test_clean_worktree_goes_after_six_hours_dirty_locked_and_noted_ones_stay(ma
     assert worktrees.prune(main, apply=True, now=now + 7 * HOUR) == 1
     assert not clean.exists() and "refs/heads/feat/clean" in refs(main, "refs/heads")
     assert all(p.is_dir() for p in (dirty, held, noted))
-    assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0  # dirty waits 72 h, the note 72 h
-    assert all(p.is_dir() for p in (dirty, held, noted))
+    assert worktrees.prune(main, apply=True, now=now + 25 * HOUR) == 1  # the note guards a clean one 24 h
+    assert not noted.exists() and all(p.is_dir() for p in (dirty, held))
+    assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0  # dirty waits 72 h
+    assert all(p.is_dir() for p in (dirty, held))
 
 
 def test_adopt_reattaches_a_pruned_branch_and_checks_like_new(main, monkeypatch, capsys):

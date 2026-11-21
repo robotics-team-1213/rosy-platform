@@ -165,7 +165,7 @@ def _identity(root: Path) -> str:
 
 def _status(path: Path) -> tuple[list[str], list[str]] | None:
     """(changed or untracked paths, ignored paths outside the caches), or None when git status fails."""
-    result = git(path, "status", "--porcelain", "-z", "--ignored")
+    result = git(path, "--no-optional-locks", "status", "--porcelain", "-z", "--ignored")  # never writes their index
     if result.returncode != 0:
         return None
     changed, ignored = [], []
@@ -218,7 +218,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
     if stale:
         row["note"] = stale
     # A young owner note (11-20: its session may be about to use it); a landed clean worktree has nothing to lose.
-    noted = not landed and now - row["noted"] < idle_hours * 3600
+    noted = not landed and now - row["noted"] < (min(idle_hours, rules.NOTE_IDLE_HOURS) if adoptable else idle_hours) * 3600
     cheap = ("locked" if row["locked"]
              else "current" if row["path"].resolve() == here
              else "on main" if row["branch"] == "main"
@@ -228,7 +228,6 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
              else "in-progress operation" if any((row["git_dir"] / name).exists() for name in BUSY)
              else "needs snapshot" if lossless and not row["merged"] and not adoptable else None)
     if cheap is None or full:
-        index_t = _mtime(row["git_dir"] / "index")  # before status, which may refresh the index
         status = _status(row["path"])
         if status is None:
             cheap = cheap or "unreadable"
@@ -238,7 +237,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
                 row["fast"], row["wait_h"] = False, idle_hours
             row["last"] = max([row["last"], *(_newest(row["path"] / rel) for rel in row["changed"])])
             if row["wait_h"]:
-                row["last"] = max(row["last"], index_t, rules.newest_file(row["path"], lambda r: _is_cache(row["path"], r)))
+                row["last"] = max(row["last"], rules.newest_file(row["path"], lambda r: _is_cache(row["path"], r)))
     row["idle_h"] = max(0.0, (now - row["last"]) / 3600)
     row["landed_dirty"] = landed and bool(row["changed"])  # D-790: work continued after the branch landed
     row["verdict"] = ("landed-dirty" if row["landed_dirty"] and cheap in (None, "active")
