@@ -388,8 +388,9 @@ function refreshDiagnostics() {
 }
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
-const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
+const rawSignals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
   isOperator: () => auth.role === "operator" && !auth.locked, namedReason });
+const signals = { ...rawSignals, presence: () => (owns("drive") ? rawSignals.presence() : undefined) };
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
 const visionView = createVisionView({
   scope: pageScope, el, call, rawOnly: true,
@@ -401,7 +402,11 @@ mapView.bindCamera(visionView);
 
 const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
-const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
+const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
+const trackingView = {
+  ...rawTrackingView,
+  refresh: () => (owns("drive") && view.layers?.tracking ? rawTrackingView.refresh() : undefined),
+};
 
 // 잠금·세션 확인·토큰 입력·비밀번호 로그인·개발 접속은 console-auth.js 팩토리가 가진다(D-798 3.2).
 const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = createConsoleAuth({ pageScope, el, view, auth, assistant,
@@ -437,12 +442,12 @@ if (owns("drive")) {
 // A hidden tab polls nothing but presence (it must still say visible:false); coming back reads at once.
 const poll = (fn, ms) => pageScope.interval(() => { if (!document.hidden) fn(); }, ms);
 const pollDrive = (fn, ms) => poll(() => { if (owns("drive")) fn(); }, ms);
-pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); if (owns("drive")) trackingView.refresh(); } });
+pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); trackingView.refresh(); } });
 pollDrive(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 poll(refreshState, STATE_MS);
 poll(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
 poll(refreshHealthz, MAP_MS);
-pageScope.interval(() => { if (owns("drive")) signals.presence(); }, STATE_MS);
+pageScope.interval(() => signals.presence(), STATE_MS);
 poll(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
 poll(refreshDiscovery, MAP_MS);
 poll(refreshRobotApps, MAP_MS);
@@ -453,7 +458,7 @@ pollDrive(() => platoon.refresh(), MAP_MS);
 pollDrive(() => { if (view.layers?.sightings) mapView.refreshSightings(); }, STATE_MS);
 pollDrive(() => mapView.refreshTraffic(), STATE_MS);
 pollDrive(() => mapView.refreshGuide(), STATE_MS);  // D-536
-pollDrive(() => { if (view.layers?.tracking) trackingView.refresh(); }, TRACKING_MS);
+poll(() => trackingView.refresh(), TRACKING_MS);
 pollDrive(() => visionView.refreshFrame(), 1500);
 
 
@@ -462,7 +467,7 @@ pageScope.onResume(() => {
   trackingView.reset();
   refreshAuthorization();  // refreshes the map once the session answers
   if (owns("drive")) {
-    if (view.layers?.tracking) trackingView.refresh();
+    trackingView.refresh();
     visionView.refreshSources();
   }
 });
