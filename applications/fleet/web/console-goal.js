@@ -4,13 +4,34 @@ import {randomUUID} from "/console/assets/uuid.js";
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill } from "./localization-badge.js";
 import { roadPolylineBetween } from "/console/assets/guide-layer.js";
-import { planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
+import { planPolylines, planSummaryText, planTrip, startTrip, tripPoseReason, tripRefusalText, tripStartReason } from "/console/assets/site-map-model.js";
 import { gridCellOf } from "./map-datum.js";
+
+function flattenPlanPoints(map, plan) {
+  if (!map?.edges || !Array.isArray(plan?.segments)) return null;
+  const out = [];
+  for (const poly of planPolylines(map, plan)) {
+    for (const pt of poly) {
+      const last = out[out.length - 1];
+      if (!last || Math.hypot(pt[0] - last[0], pt[1] - last[1]) >= 1e-6) out.push(pt);
+    }
+  }
+  return out.length >= 2 ? out : null;
+}
+
+const planMetrics = (plan) => ({
+  ...(Array.isArray(plan.places) ? { places: plan.places } : {}),
+  ...(Number.isFinite(plan.length_m) ? { length_m: plan.length_m } : {}),
+  ...(Number.isFinite(plan.eta_s) ? { eta_s: plan.eta_s } : {}),
+});
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
   toWorld, refreshGuide, queuedReason, drawMap = () => {}, scheduleDraw = drawMap, onSelectRobot = () => {} }) {
+  let goalPlanSeq = 0;
+
+  const setGoal = (patch) => { view.selectedGoal = { ...view.selectedGoal, ...patch, at: Date.now() }; drawMap(); render(); };
   function disarmGoal(reason) {
-    view.selected = null; view.cursor = null; view.hoverWorld = null;
+    goalPlanSeq += 1; view.selected = null; view.cursor = null; view.hoverWorld = null;
     const canvas = el("map-canvas");
     canvas.classList.add("idle"); canvas.tabIndex = -1;
     if (reason) log(reason, "bad");
@@ -19,15 +40,12 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   // D-224 — 예외 문법의 키보드 어휘(§7.3 "keyboard-first" 의 실현).
   pageScope.listen(document, "keydown", (event) => {
     if (event.defaultPrevented || event.target.closest("input, select, textarea, button, ui-button, a, canvas, summary")) return;
-    const cards = [...document.querySelectorAll("#roster article")];
+    const cards = [...document.querySelectorAll("#roster article")], active = document.activeElement;
     if (!cards.length) return;
-    const active = document.activeElement;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault(); inbox.select("status");
-      const idx = cards.indexOf(active);
-      const next = idx < 0 ? cards[event.key === "ArrowDown" ? 0 : cards.length - 1]
-        : cards[(idx + (event.key === "ArrowDown" ? 1 : -1) + cards.length) % cards.length];
-      next.focus();
+      const idx = cards.indexOf(active), step = event.key === "ArrowDown" ? 1 : -1;
+      cards[idx < 0 ? (event.key === "ArrowDown" ? 0 : cards.length - 1) : (idx + step + cards.length) % cards.length].focus();
     } else if (event.key === "Enter" && cards.includes(active)) {
       const choose = active.querySelector("ui-button[data-select-robot-id]");
       if (choose && !choose.disabled) { event.preventDefault(); choose.click(); }
@@ -50,30 +68,24 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
     const robotId = view.selected;
     if (!robotId) return;
-    const selectedRobot = view.robots.find((robot) => robot.robot_id === robotId);
-    const guideRow = (view.guide?.robots || []).find((r) => r.robot_id === robotId);
-    const curPose = guideRow?.pose || selectedRobot?.state?.pose || null;
+    const seq = ++goalPlanSeq, selectedRobot = view.robots.find((robot) => robot.robot_id === robotId);
+    const guideRow = (view.guide?.robots || []).find((r) => r.robot_id === robotId), curPose = guideRow?.pose || selectedRobot?.state?.pose || null;
     const yaw = curPose && Number.isFinite(curPose.x) && Number.isFinite(curPose.y) ? Math.atan2(point.y - curPose.y, point.x - curPose.x) : 0;
     const where = placeLabel ? `${placeLabel} (${point.x.toFixed(2)}, ${point.y.toFixed(2)})` : `(${point.x.toFixed(2)}, ${point.y.toFixed(2)})`;
     const siteMapObj = view.activeSiteMap?.map, localRoad = curPose ? roadPolylineBetween(siteMapObj, curPose, point) : null;
     const initialPts = localRoad?.points?.length >= 2 ? localRoad.points : (curPose ? [[curPose.x, curPose.y], [point.x, point.y]] : [[point.x, point.y]]);
     const initialLen = typeof localRoad?.length_m === "number" ? localRoad.length_m : (curPose ? Math.hypot(point.x - curPose.x, point.y - curPose.y) : 0);
     view.selectedGoal = {
-      robotId, x: point.x, y: point.y, yaw, placeId: placeId || null,
+      robotId, x: point.x, y: point.y, yaw, placeId: placeId || null, where, points: initialPts,
       label: placeLabel || `좌표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`,
-      where, points: initialPts, places: localRoad?.places || (placeId ? [placeId] : []),
-      length_m: initialLen, eta_s: initialLen / 0.15, status: "SELECTED",
-      statusText: "목표 핀 고정 · 도로 경로 확정", at: Date.now(),
+      places: localRoad?.places || (placeId ? [placeId] : []), length_m: initialLen, eta_s: initialLen / 0.15,
+      status: "SELECTED", statusText: "목표 핀 고정 · 도로 경로 확정", at: Date.now(),
     };
     view.lastDispatchedGoal = { robotId, x: point.x, y: point.y, yaw, label: where, at: Date.now() };
     const stationInspectMap = {
-      S2: { targetId: "arm_a", camId: "arm_a_wrist" },
-      S3: { targetId: "arm_s", camId: "arm_s_wrist" },
-      S5: { targetId: "arm_b", camId: "arm_b_wrist" },
-      S1: { targetId: robotId, camId: "side" },
-      C1: { targetId: robotId, camId: "pinky" },
-      C2: { targetId: robotId, camId: "pinky" },
-      C3: { targetId: robotId, camId: "pinky" },
+      S2: { targetId: "arm_a", camId: "arm_a_wrist" }, S3: { targetId: "arm_s", camId: "arm_s_wrist" },
+      S5: { targetId: "arm_b", camId: "arm_b_wrist" }, S1: { targetId: robotId, camId: "side" },
+      C1: { targetId: robotId, camId: "pinky" }, C2: { targetId: robotId, camId: "pinky" }, C3: { targetId: robotId, camId: "pinky" },
     };
     const linkedInspect = placeId ? stationInspectMap[String(placeId).toUpperCase()] : null;
     if (linkedInspect && typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
@@ -100,59 +112,76 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         const planRes = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/road-nav2/plan?${qs}`, { signals: [life.signal] });
         life.check();
         if (planRes?.waypoints_site?.length >= 2) {
-          view.selectedGoal = {
-            ...view.selectedGoal, points: planRes.waypoints_site.map((w) => [w.x, w.y]),
-            places: planRes.places || view.selectedGoal.places, length_m: planRes.length_m ?? view.selectedGoal.length_m,
-            eta_s: planRes.eta_s ?? view.selectedGoal.eta_s, status: "PREVIEW",
-            statusText: !isOperator(auth.role) ? "목표 핀 고정 (운영자 로그인 시 출발)" : "목표 핀 고정 (안전 확인 대기)", at: Date.now(),
-          };
           view.activeRoadPlan = { robotId, ...planRes, at: Date.now() };
-          drawMap(); render();
+          setGoal({
+            points: planRes.waypoints_site.map((w) => [w.x, w.y]), ...planMetrics(planRes), status: "PREVIEW",
+            statusText: !isOperator(auth.role) ? "목표 핀 고정 (운영자 로그인 시 출발)" : "목표 핀 고정 (안전 확인 대기)",
+          });
         }
       } catch (_planErr) { /* Keep local road pin visible */ }
       log(`${robotId} → ${where} 목표 핀 및 도로 경로(${view.selectedGoal.length_m.toFixed(2)}m)가 지도에 고정되었습니다.`, "good");
       return;
     }
 
+    let prePlanned = null;
     if (viaTrip) {
       const blocked = !siteMapId ? "현장 지도 활성화 필요: 활성 지도가 없어 보내지 않습니다"
         : !placeId ? "차로 위 아님: 지도의 장소를 찍으세요"
         : !view.guide ? "위치 확인 중: 잠시 뒤 다시 찍으세요"
         : tripPoseReason(view.guide, robotId, view.activeSiteMap);
-      if (blocked) {
-        view.selectedGoal = { ...view.selectedGoal, status: "BLOCKED", statusText: blocked, at: Date.now() };
-        drawMap(); render();
-        log(`${robotId} 출발 보류 · ${blocked}`, "bad");
+      if (blocked) { setGoal({ status: "BLOCKED", statusText: blocked }); log(`${robotId} 출발 보류 · ${blocked}`, "bad"); return; }
+      setGoal({ status: "PLANNING", statusText: "서버 경로 계산 중…" });
+      try { prePlanned = await planTrip(call, robotId, { to: placeId }); life.check(); } catch (err) {
+        if (err?.name === "AbortError" || seq !== goalPlanSeq) return;
+        const refusal = tripRefusalText(err);
+        setGoal({ status: "BLOCKED", statusText: refusal });
+        log(`${robotId} 차로 주행 거절 — ${refusal}`, "bad");
         return;
       }
+      if (seq !== goalPlanSeq || view.selected !== robotId || !onFrame()) return;
+      const serverPoints = flattenPlanPoints(siteMapObj, prePlanned) || view.selectedGoal.points;
+      const running = (view.trafficTrips || []).some((row) => row.robot_id === robotId);
+      const startBlocked = tripStartReason({ role: isOperator(auth.role) ? "operator" : "viewer", plan: prePlanned, active: view.activeSiteMap, running });
+      if (startBlocked) {
+        setGoal({ points: serverPoints, ...planMetrics(prePlanned), status: "BLOCKED", statusText: startBlocked });
+        log(`${robotId} 출발 보류 · ${startBlocked}`, "bad");
+        return;
+      }
+      const hasSummary = Array.isArray(prePlanned.segments) && Number.isFinite(prePlanned.length_m);
+      setGoal({ points: serverPoints, ...planMetrics(prePlanned), planId: prePlanned.plan_id, status: "PREVIEW",
+        statusText: hasSummary ? `${planSummaryText(prePlanned)} · 확인 대기` : "서버 경로 미리보기 · 확인 대기" });
     }
 
+    let started = false;
+    const planSummarySuffix = prePlanned && Array.isArray(prePlanned.segments) && Number.isFinite(prePlanned.length_m)
+      ? ` (${planSummaryText(prePlanned)})` : "";
     const mapSnapshot = JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]);
     const siteFrame = !view.map; // the site map view: Fleet converts into the robot's own map frame (D-1003)
     await confirmedAction.run({
-      message: viaTrip ? `${robotId}를 ${where}까지 차로로 보낼까요?` : `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`,
+      message: viaTrip ? `${robotId}를 ${where}까지 차로로 보낼까요?${planSummarySuffix}`
+        : `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`,
       opener: el("map-canvas"),
       eligible: () => !view.stateUnavailable && view.selected === robotId && !namedReason()
         && (viaTrip || !capabilityReason(view.robots.find(robot => robot.robot_id === robotId)?.capabilities, 'navigation.goal_navigation'))
         && !motionCommandReason(view, robotId, viaTrip ? "trip" : "goal")
         && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
         && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin])
-        && (Boolean(view.map) || onFrame()),   // site view: the robot did not change map under the open confirm
+        && (Boolean(view.map) || onFrame())   // site view: the robot did not change map under the open confirm
+        && (!viaTrip || (seq === goalPlanSeq
+          && (!prePlanned.expires_at || Date.now() / 1000 <= prePlanned.expires_at)
+          && (prePlanned.map_version == null || view.activeSiteMap?.version === prePlanned.map_version))),
       request: async owner => {
-    view.selected = null;
-    view.cursor = null;
+    view.selected = null; view.cursor = null;
     const canvas = el("map-canvas");
-    canvas.classList.add("idle");
-    canvas.tabIndex = -1;
-    render();
-    focusGoalButton(robotId);
+    canvas.classList.add("idle"); canvas.tabIndex = -1;
+    render(); focusGoalButton(robotId);
     try {
       if (viaTrip) {
-        const plan = await planTrip(call, robotId, { to: placeId });
+        started = true;
+        await startTrip(call, prePlanned.plan_id);
         owner.check();
-        await startTrip(call, plan.plan_id);
-        owner.check();
-        log(`${robotId} → ${where} 차로 주행 시작 (Trip ${String(plan.plan_id).slice(0, 8)})`, "good");
+        setGoal({ status: "DISPATCHED", statusText: "차로 주행 시작" });
+        log(`${robotId} → ${where} 차로 주행 시작 (Trip ${String(prePlanned.plan_id).slice(0, 8)})`, "good");
         refreshGuide();
         return;
       }
@@ -187,6 +216,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     }
       }, onError: err => log(`${robotId} ${viaTrip ? "차로 주행" : "목표 이동"} 거절 — ${viaTrip ? tripRefusalText(err) : err.message}`, "bad"),
     });
+    if (viaTrip && !started && seq === goalPlanSeq && view.selectedGoal?.planId === prePlanned?.plan_id) {
+      setGoal({ statusText: "서버 경로 미리보기 (출발 취소)" });
+    }
   }
 
   view.dispatchBerthPark = async (targetRobotId, bayId = "", mode = "berth_park") => {
@@ -350,20 +382,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       footer = `클릭 시 🎯 ${pl.id} 핀 고정 및 ${activeId || "선택한 로봇"} 도로(lane_graph) 즉시 주행`;
     }
 
-    const headRow = document.createElement("div");
-    headRow.className = "hover-card-head";
+    const headRow = document.createElement("div"); headRow.className = "hover-card-head";
     const strong = document.createElement("strong"); strong.textContent = title;
     const tag = document.createElement("ui-tag");
     tag.setAttribute("status", badgeTone); tag.setAttribute("variant", "inline"); tag.textContent = badge;
     headRow.append(strong, tag);
-
     const dl = document.createElement("dl"); dl.className = "hover-card-grid";
-    for (const [k, v] of lines) {
-      const dt = document.createElement("dt"); dt.textContent = k;
-      const dd = document.createElement("dd"); dd.textContent = v;
-      dl.append(dt, dd);
-    }
-
+    for (const [k, v] of lines) { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); }
     const barBox = document.createElement("div"); barBox.className = "hover-bars";
     for (const [label, valText, pct, tone] of bars) {
       const row = document.createElement("div"); row.className = "gauge-row-compact";
