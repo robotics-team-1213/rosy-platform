@@ -69,7 +69,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
     admit.hidden = !job || cellApproves;
     const reason = busy ? "요청 처리 중입니다" : !job ? "작업을 먼저 조회하세요" : attempted ? "승인 요청 후 원본을 다시 조회하세요" :
       armAdmissionReason(job, control, principal(), approveReason());
-    setOffBy(admit, reason); read.disabled = busy; input.readOnly = busy;
+    setOffBy(admit, reason); setOffBy(read, busy ? "요청 처리 중입니다" : ""); input.readOnly = busy;
     const recoveryWait = busy ? "요청 처리 중입니다" : recovery?.child_mission_id ? "복구 횟수를 이미 사용했습니다" :
       recoveryAttempted ? "요청 후 작업을 다시 조회하세요" : "";
     const requestReason = recoveryWait || (!recovery?.can_request || !["AVAILABLE", "EXPIRED"].includes(recovery.status) ?

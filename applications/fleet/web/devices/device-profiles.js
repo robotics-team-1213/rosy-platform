@@ -25,12 +25,12 @@ export function createDeviceProfiles({root, scope, call, identity, care = null})
   function updateAuthorization() {
     care?.authorization();
     const allowed = canEdit();
+    const saveReason = allowed && !busy ? '' : busy ? '저장 확인 중' : '이름 있는 운영자 계정이 필요합니다';
     for (const key of FIELDS) el(key).disabled = busy || !allowed || (key === 'device_id' && Boolean(selected));
-    el('save').disabled = busy || !allowed;
-    el('new').disabled = busy || !allowed;
     el('list').disabled = busy;
     el('permission').hidden = allowed;
-    setOffBy(el('save'), allowed && !busy ? '' : busy ? '저장 확인 중' : '이름 있는 운영자 계정이 필요합니다');
+    setOffBy(el('save'), saveReason);
+    setOffBy(el('new'), saveReason);
   }
   function fill(row = {}) {
     selected = row.device_id || '';

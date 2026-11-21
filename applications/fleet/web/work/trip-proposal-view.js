@@ -30,7 +30,7 @@ export function createTripProposalView({scope, call, anchor, active, approveReas
     admit.hidden = !proposal;
     const reason = busy ? "요청 처리 중입니다" : !proposal ? "제안을 먼저 조회하세요" :
       attempted ? "승인 요청 후 원본을 다시 조회하세요" : reasonNow();
-    setOffBy(admit, reason); read.disabled = busy; input.readOnly = busy;
+    setOffBy(admit, reason); setOffBy(read, busy ? "요청 처리 중입니다" : ""); input.readOnly = busy;
   }
   function field(title, value) { detail.append(node("dt", title), node("dd", String(value ?? "미확인"))); }
   function show() {

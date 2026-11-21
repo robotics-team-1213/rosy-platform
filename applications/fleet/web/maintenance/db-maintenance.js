@@ -100,7 +100,8 @@ export function createDbMaintenance({root, call}) {
     for (const [key, label, min, max, fallback] of SETTING_FIELDS) {
       const wrap = node("label", "", "field-row");
       wrap.append(node("span", label));
-      const input = node("input", "", "ui-field");
+      const input = node("input");
+      input.className = "ui-field";
       input.type = "number";
       input.name = key;
       input.min = String(min);

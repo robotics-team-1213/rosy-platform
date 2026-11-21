@@ -299,8 +299,8 @@ export function buildQuickControlPanel({
   for (const pl of mapPlaces) {
     const isPinnedPlace = selGoal?.placeId === String(pl.id);
     const btn = node("ui-button", `${isPinnedPlace ? "🎯" : "→"} ${pl.id}`);
-    btn.setAttribute("kind", isPinnedPlace ? "toggle" : "quiet");
-    if (isPinnedPlace) btn.setAttribute("aria-pressed", "true");
+    btn.setAttribute("kind", "quiet");
+    if (isPinnedPlace) { btn.setAttribute("kind", "toggle"); btn.setAttribute("aria-pressed", "true"); }
     btn.type = "button";
     btn.title = `${pl.name || pl.id} (${pl.x.toFixed(2)}, ${pl.y.toFixed(2)}) m 목표 핀 고정 및 이동`;
     btn.addEventListener("click", scope.guard(() => {
@@ -332,7 +332,8 @@ export function buildQuickControlPanel({
     ["C3", "berth_park", "⚓ C3 접안", "충전 베이 C3 (bay_c3) 역방향 접안 모드 파킹"],
   ]) {
     const bBtn = node("ui-button", bLabel);
-    bBtn.setAttribute("kind", selGoal?.placeId === bId && selGoal?.status === "BERTHING" ? "toggle" : "quiet");
+    bBtn.setAttribute("kind", "quiet");
+    if (selGoal?.placeId === bId && selGoal?.status === "BERTHING") bBtn.setAttribute("kind", "toggle");
     bBtn.type = "button"; bBtn.title = `${bTitle} · D-1013 구현·안전 검증 대기`;
     bBtn.dataset.berthBay = bId; bBtn.dataset.berthMode = bMode;
     setOffBy(bBtn, "D-1013 분홍 유도선 폐루프 구현·안전 검증 대기");
@@ -403,8 +404,8 @@ export function buildQuickControlPanel({
 
     const armActions = node("div", "", "omx-cell-actions");
     const callRobotBtn = node("ui-button", `🤖 ${robot.robot_id} → ${def.stationId} 배차`);
-    callRobotBtn.setAttribute("kind", selGoal?.placeId === def.stationId ? "toggle" : "quiet");
-    if (selGoal?.placeId === def.stationId) callRobotBtn.setAttribute("aria-pressed", "true");
+    callRobotBtn.setAttribute("kind", "quiet");
+    if (selGoal?.placeId === def.stationId) { callRobotBtn.setAttribute("kind", "toggle"); callRobotBtn.setAttribute("aria-pressed", "true"); }
     callRobotBtn.type = "button";
     callRobotBtn.title = `${def.shortLabel} 연계 정류장 ${def.stationName}(${def.stationId})으로 ${robot.robot_id} 즉시 호출·배차`;
     callRobotBtn.addEventListener("click", scope.guard(() => {
@@ -505,7 +506,8 @@ export function buildQuickControlPanel({
   const lensRow = node("div", "", "tracker-tabs");
   for (const cv of camViewsForAnchor) {
     const lBtn = node("ui-button", `📷 ${cv.label}`);
-    lBtn.setAttribute("kind", cv.id === chosenCam.id ? "primary" : "quiet");
+    lBtn.setAttribute("kind", "quiet");
+    if (cv.id === chosenCam.id) lBtn.setAttribute("kind", "primary");
     lBtn.setAttribute("data-work-read", "");
     lBtn.type = "button";
     lBtn.addEventListener("click", scope.guard(() => {
