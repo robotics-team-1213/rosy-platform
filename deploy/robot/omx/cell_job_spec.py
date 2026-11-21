@@ -108,12 +108,30 @@ JOBS = {
         "argv": ["--config", "{config}", "auto", "--only", "remap", "regions"],
         "params": {"arm": _match(ARM), "config": _match(FILE)},
     },
+    "home": {
+        "script": "cell_pipeline.py",
+        "moving": True,
+        "argv": [
+            "--config", "{config}",
+            "--stage", "home",
+            "--library", "{library}",
+            "--operating-profile", "{operating_profile}",
+        ],
+        "params": {
+            "arm": _match(ARM),
+            "config": _match(FILE),
+            "library": _match(FILE),
+            "operating_profile": _safe_path,
+        },
+        "optional": {"operator": _match(NAME), "proposer": _match(NAME)},
+    },
     "auto_pick": {
         "script": "cell_auto_pick.py",
         "moving": True,
         "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--roi", "{roi}", "--from", "{source}", "--dest", "{dest}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "roi": _roi, "source": _match(NAME), "dest": _match(NAME)},
+        "optional": {"operator": _match(NAME), "proposer": _match(NAME)},
     },
     "cell_policy_drive": {
         "script": "cell_policy_drive.py",
@@ -180,7 +198,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
                 raise ValueError(f"{name}: {exc}") from None
             if name == "catalog" and not (workdir / opt_checked[name]).is_file():
                 raise ValueError(f"{name}: no such file in the workdir")
-    if "proposer" in opt_checked and opt_checked["proposer"] == checked.get("operator"):
+    operator = checked.get("operator") or opt_checked.get("operator")
+    if "proposer" in opt_checked and (not operator or opt_checked["proposer"] == operator):
         raise ValueError("operator must differ from proposer (D-1024)")
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")

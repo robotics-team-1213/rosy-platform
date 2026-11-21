@@ -13,6 +13,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -200,8 +201,13 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
             if not self._authed():
                 return
             if m := re.fullmatch(r"/frame/(top|side|arm_s_top|arm_s_wrist|arm_a_wrist|arm_b_wrist)\.jpg", self.path):
-                with urllib.request.urlopen(f"{viewer}/frame/{m.group(1)}.jpg", timeout=5) as resp:
-                    return self._send(200, resp.read(), "image/jpeg")
+                try:
+                    with urllib.request.urlopen(f"{viewer}/frame/{m.group(1)}.jpg", timeout=5) as resp:
+                        return self._send(200, resp.read(), "image/jpeg")
+                except urllib.error.HTTPError as exc:
+                    return self._send(exc.code, {"error": f"viewer returned HTTP {exc.code}"})
+                except OSError as exc:
+                    return self._send(502, {"error": f"viewer unreachable: {exc}"})
             if self.path == "/queue":
                 return self._send(200, runner.queue())
             if self.path == "/jobs":
