@@ -20,7 +20,7 @@ class TripErr(Exception):
 
 class Runner:
     def __init__(self, refuse=None):
-        self.trips, self.starts, self.cancels, self.refuse = {}, [], [], refuse
+        self.trips, self.starts, self.cancels, self.refuse, self.epoch, self.cancel_fails = {}, [], [], refuse, 0, 0
         self.lease = SimpleNamespace(required=True)
 
     def view(self, trip_id):
@@ -29,15 +29,23 @@ class Runner:
     def robot_busy(self, robot_id):
         return any(t["robot_id"] == robot_id and t["state"] in pd.TRIP_OPEN for t in self.trips.values())
 
-    async def start(self, plan_id, principal_id):
+    def _start_token(self, robot_id):
+        return (self.epoch, 0)
+
+    async def start(self, plan_id, principal_id, start_token=None):
         if self.refuse:
             raise TripErr(self.refuse)
+        if start_token is not None and start_token != self._start_token("rosy_46"):
+            raise TripErr("TRIP_START_CANCELED")
         self.starts.append((plan_id, principal_id))
         self.trips[plan_id] = {"trip_id": plan_id, "robot_id": "rosy_46", "state": "started", "lease": {"lease_id": "L"}}
         return self.trips[plan_id]
 
     async def cancel(self, trip_id, principal_id, reason=None):
         self.cancels.append((trip_id, reason))
+        if self.cancel_fails:
+            self.cancel_fails -= 1
+            raise TripErr("LINK_LOST")
         self.trips[trip_id].update(state="canceled", reason=reason)
         return self.trips[trip_id]
 
@@ -248,8 +256,8 @@ def test_cancel_during_the_start_cancels_the_trip_it_opened():
     world = World(_state(_task()))
     start = world.runner.start
 
-    async def start_then_cancel(plan_id, principal_id):
-        trip = await start(plan_id, principal_id)
+    async def start_then_cancel(plan_id, principal_id, start_token=None):
+        trip = await start(plan_id, principal_id, start_token=start_token)
         await pd.cancel_task(world.state, world.state.pinky_tasks["p1"], runner=world.runner, principal_id="op",
                              now=time.time())
         return trip
@@ -257,6 +265,64 @@ def test_cancel_during_the_start_cancels_the_trip_it_opened():
     world.tick()
     assert world.runner.trips["plan-1"]["state"] == "canceled"
     assert world.state.pinky_tasks["p1"]["status"] == "CANCELLED"
+
+
+def test_cancel_landing_while_the_tick_awaits_the_snapshot_never_starts_the_trip():
+    world = World(_state(_task()))
+    snapshot = world.console.snapshot
+
+    async def snapshot_then_cancel():
+        result = await snapshot()
+        await pd.cancel_task(world.state, world.state.pinky_tasks["p1"], runner=world.runner, principal_id="op",
+                             now=time.time())
+        return result
+    world.console.snapshot = snapshot_then_cancel
+    world.tick()
+    assert world.runner.starts == [] and world.plans == []
+    assert world.state.pinky_tasks["p1"]["status"] == "CANCELLED"
+    assert world.state.pinky_tasks["p1"]["reason"] == "OPERATOR_CANCEL"
+
+
+def test_a_cancel_the_trip_did_not_confirm_keeps_the_row_in_flight_until_the_trip_ends():
+    world = World(_state(_task()))
+    world.tick()
+    task = world.state.pinky_tasks["p1"]
+    world.runner.cancel_fails = 2
+    asyncio.run(pd.cancel_task(world.state, task, runner=world.runner, principal_id="op", now=time.time()))
+    assert task["status"] == "SENT" and task["cancel_requested"] and task["cancel_receipt"] == {"error": "LINK_LOST"}
+    assert world.runner.trips["plan-1"]["state"] == "started"
+    world.tick()  # the tick asks again; this one fails too, the row stays
+    assert task["status"] == "SENT" and len(world.runner.cancels) == 2
+    world.tick()  # the third ask lands: the trip is canceled and the row settles from it
+    assert world.runner.trips["plan-1"]["state"] == "canceled"
+    assert task["status"] == "CANCELLED" and len(world.runner.starts) == 1
+
+
+def test_a_cancel_when_the_trip_already_arrived_does_not_claim_it_was_cancelled():
+    world = World(_state(_task()))
+    world.tick()
+    task = world.state.pinky_tasks["p1"]
+    world.runner.trips["plan-1"]["state"] = "arrived"
+
+    async def gone(trip_id, principal_id, reason=None):
+        raise TripErr("TRIP_NOT_RUNNING")
+    world.runner.cancel = gone
+    asyncio.run(pd.cancel_task(world.state, task, runner=world.runner, principal_id="op", now=time.time()))
+    assert task["status"] == "ARRIVED"
+
+
+def test_a_cancel_all_while_planning_refuses_the_start():
+    world = World(_state(_task()))
+    plan = world.plan
+
+    async def plan_then_cancel_all(*args):
+        result = await plan(*args)
+        world.runner.epoch += 1  # a cancel-all or E-stop moved the stop epoch during the plan
+        return result
+    world.plan = plan_then_cancel_all
+    world.tick()
+    task = world.state.pinky_tasks["p1"]
+    assert world.runner.starts == [] and task["status"] == "FAILED" and task["reason"] == "TRIP_START_CANCELED"
 
 
 def test_route_rows_carry_place_map_and_cancel(tmp_path, monkeypatch):
