@@ -93,3 +93,18 @@ def test_ppo_judgement_requires_matching_final_snapshot(tmp_path):
     assert judge_isaac_stage(read_ppo_snapshot(tmp_path, config, sha))["status"] == "passed"
     with pytest.raises(ValueError, match="MuJoCo handoff"):
         read_ppo_snapshot(tmp_path, dict(config, seed=43), sha)
+
+
+def test_evaluation_progress_tracks_opposing_contact_and_lift_per_cargo():
+    from stacking_task_helpers import record_evaluation_step
+
+    progress = {}
+    step = dict(id="bar-1", arm=1, tcp_distance_m=.08, rise_m=.01, finger_forces_n=[.8, 0.],
+                lifted=False, seated=False, position_m=[.1, 0., .03], goal_distance_m=.1, terminal=None)
+    record_evaluation_step(progress, step)
+    assert progress["bar-1"]["max_opposing_contact_n"] == 0.
+    record_evaluation_step(progress, dict(step, rise_m=.04, tcp_distance_m=.01,
+                                          finger_forces_n=[.2, .3], lifted=True, terminal="timeout"))
+    assert progress["bar-1"] == dict(arm=1, samples=2, min_tcp_distance_m=.01, max_rise_m=.04,
+                                     max_opposing_contact_n=.2, lifted=True, seated=False,
+                                     last_position_m=[.1, 0., .03], last_goal_distance_m=.1, terminal="timeout")

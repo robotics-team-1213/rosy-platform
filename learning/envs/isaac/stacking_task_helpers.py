@@ -6,6 +6,22 @@ import math
 from stacking_fixture import BELT_TOP, DT, UNIT, advance_joint, placed, target
 
 
+def record_evaluation_step(rows, step):
+    """Summarize sequential cargo progress without retaining the entire rollout."""
+    item = rows.setdefault(step["id"], dict(arm=step["arm"], samples=0,
+                           min_tcp_distance_m=step["tcp_distance_m"], max_rise_m=0.,
+                           max_opposing_contact_n=0., lifted=False, seated=False))
+    item["samples"] += 1
+    item["min_tcp_distance_m"] = min(item["min_tcp_distance_m"], step["tcp_distance_m"])
+    item["max_rise_m"] = max(item["max_rise_m"], step["rise_m"])
+    item["max_opposing_contact_n"] = max(item["max_opposing_contact_n"], min(step["finger_forces_n"]))
+    item["lifted"] |= step["lifted"]
+    item["seated"] |= step["seated"]
+    item["last_position_m"] = step["position_m"]
+    item["last_goal_distance_m"] = step["goal_distance_m"]
+    item["terminal"] = step["terminal"]
+
+
 def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, cargo, contacts,
                      plan, profile, capture, tcp_position, initial, *, mapped, fixture):
     """Run the StackingEnv RSL-RL PPO training and deterministic evaluation episode."""
@@ -166,6 +182,7 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
                     stage.GetPrimAtPath(links[active]['end_effector_link'])).ExtractTranslation())
             reach = float(np.linalg.norm(tcp-p))
             distance = float(np.linalg.norm(p-np.array(goal(plan[self.index]))))
+            rise = float(p[2]-self.source_z)
             reward = math.exp(-20*reach)+float(self.lifted)*(2+2*math.exp(-25*distance))-.01*float(np.square(action).sum())
             done = bool(p[2] < -.01 or np.linalg.norm(p[:2]) > .6)
             for i in range(self.index):
@@ -179,6 +196,7 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
                     done |= not accepted(i, previous)
             self.settle = self.settle+1 if good else 0
             settle_steps = fixture['settle_steps']//fixture['control_decimation'] if mapped else fixture['settle_steps']
+            item = plan[self.index]
             success = not done and self.settle >= settle_steps
             full_stack = success and self.index == len(plan)-1
             if success:
@@ -192,6 +210,12 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             timeout = bool(self.episode_length_buf[0] >= self.max_episode_length)
             info = dict(time_outs=torch.tensor([timeout and not done], device=self.device),
                         log={'Stack/placed': float(self.completed)}, stack_success=full_stack)
+            if fixture.get('r08_scene') and not self.auto_reset:
+                info['evaluation_step'] = dict(
+                    id=item['id'], arm=int(active), tcp_distance_m=reach, rise_m=rise,
+                    finger_forces_n=force[2*active:2*active+2].tolist(), lifted=sample['lifted'],
+                    seated=bool(success), position_m=sample['position'], goal_distance_m=distance,
+                    terminal=('stack_complete' if full_stack else 'invalid_cargo_pose' if done else 'timeout' if timeout else None))
             done |= timeout
             if done:
                 self.episodes += 1
@@ -235,16 +259,19 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
     env.auto_reset = False
     obs = env.reset(seed=args.seed+fixture['evaluation_seed_offset'])
     evaluation_successes = 0
+    evaluation_progress = {}
     for _ in range(env.max_episode_length):
         with torch.inference_mode():
             action = policy(obs)
         obs, _, done, info = env.step(action)
         evaluation_successes += int(info['stack_success'])
+        if 'evaluation_step' in info:
+            record_evaluation_step(evaluation_progress, info['evaluation_step'])
         if bool(done[0]):
             break
     capture('stacking-evaluation.png')
     stage.GetRootLayer().Export(str(args.report.parent/'stacking-scene.usda'))
-    return dict(schema='rosy.omx-stacking-rl/1', fixture=fixture, seed=args.seed,
+    report = dict(schema='rosy.omx-stacking-rl/1', fixture=fixture, seed=args.seed,
         updates=32, transitions=trained_transitions, parameter_delta=delta,
         training_verified=bool(math.isfinite(delta) and delta > 0), task_success=evaluation_successes > 0,
         evaluation_seed=args.seed+fixture['evaluation_seed_offset'], evaluation_episodes=1,
@@ -254,3 +281,6 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
         checkpoint=dict(name=checkpoint.name, bytes=checkpoint.stat().st_size,
                         sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest()),
         images=['stacking-initial.png', 'stacking-evaluation.png'])
+    if fixture.get('r08_scene'):
+        report['evaluation_progress'] = evaluation_progress
+    return report
