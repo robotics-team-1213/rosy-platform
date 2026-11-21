@@ -78,7 +78,7 @@ def code_sha() -> str:
 def is_live_store(path: Path) -> bool:
     live = os.environ.get("ROSY_SITE_STORE")
     resolved = path.resolve()
-    return resolved.name == "choices.json" or bool(live and resolved == Path(live).resolve())
+    return "choices.json" in (path.name, resolved.name) or bool(live and resolved == Path(live).resolve())
 
 
 class Loop:

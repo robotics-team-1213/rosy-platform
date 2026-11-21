@@ -224,3 +224,16 @@ def test_merge_refuses_configured_live_store_before_reading_inputs(tmp_path, mon
     with pytest.raises(ValueError, match="live site choices"):
         sw.merge_offers(tmp_path, store)
     assert store.read_text(encoding="utf-8") == "unchanged"
+
+
+def test_merge_refuses_site_store_symlink(tmp_path):
+    import pytest
+
+    store = tmp_path / "owner-v2.json"
+    store.write_text("unchanged", encoding="utf-8")
+    link = tmp_path / "choices.json"
+    link.symlink_to(store)
+    with pytest.raises(ValueError, match="live site choices"):
+        sw.merge_offers(tmp_path, link)
+    assert link.is_symlink()
+    assert store.read_text(encoding="utf-8") == "unchanged"
