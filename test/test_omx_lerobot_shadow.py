@@ -197,3 +197,14 @@ def test_shadow_offset_maps_cell_state_to_model_units_and_back(tmp_path):
     row = shadow.capture(Cell(), {"cameras": {}}, 0, bgr())
     assert rec.seen[0]["observation.state"][4] == pytest.approx(68.0 + 46.7)
     assert row["proposed"][0][4] == pytest.approx(68.0)  # back in cell units
+
+
+def test_checkpoint_camera_names_must_be_cell_roles():
+    # 2026-11-21: Purple-SY named the side camera "top" and the overhead D435 "rs"
+    config = {"type": "act", "input_features": {"observation.state": {"shape": [6]}, "observation.images.rs": {"shape": [3, 480, 640]}},
+              "output_features": {"action": {"shape": [6]}}}
+    with pytest.raises(ValueError, match="not cell roles"):
+        lrs.read_features(config)
+    config["input_features"] = {"observation.state": {"shape": [6]}, "observation.images.side": {"shape": [3, 480, 640]},
+                                "observation.images.wrist": {"shape": [3, 480, 640]}}
+    assert lrs.read_features(config)[0] == {"side": (480, 640), "wrist": (480, 640)}

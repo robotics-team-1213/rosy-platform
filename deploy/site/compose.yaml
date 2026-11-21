@@ -110,6 +110,9 @@ services:
       # D-801: e.g. /run/rosy-fleet-media/fleet-media.json; empty keeps site robot media grants off.
       ROSY_FLEET_MEDIA_CONFIG: "${ROSY_FLEET_MEDIA_CONFIG:-}"
       ROSY_LEARNING_APPS_CONFIG: "${ROSY_LEARNING_APPS_CONFIG:-}"
+      # D-1057 cell pipeline: owner principals and the cell_ab release switch; empty keeps both off.
+      ROSY_FLEET_CELL_OWNERS: "${ROSY_FLEET_CELL_OWNERS:-}"
+      ROSY_FLEET_CELL_AB_RELEASE_ENABLED: "${ROSY_FLEET_CELL_AB_RELEASE_ENABLED:-}"
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
       - sighting_data:/var/lib/rosy
