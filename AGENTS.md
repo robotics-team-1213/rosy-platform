@@ -65,7 +65,7 @@ Each folder's own `AGENTS.md` carries its files and rules. Root files: `README.m
 5. **시험:** pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`로만 돌리고(D-584), 결과는 `python test/known_failures.py`로 비교한다. 시험 PC가 닿지 않으면 그 시험은 "확인 못 함"이고 착지와 푸시는 하지 않는다. 호스트 pytest 통과는 장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
 6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 기본은 워크트리에서 `python tools/land_async.py --tests auto`다. 착지는 `--ff-only`만 하고, 거절되면 남의 파일을 치우지 않고 알린다. 모든 변경은 로컬 `main`에 먼저 착지하고 공개 `main`은 merge commit PR로만 올린다(D-868). squash·rebase 병합과 force-push는 하지 않는다.
 
-다른 PR이 최근 7일 안에 main에 넣은 줄을 지우거나 고치면 PR 본문에 `Replaces: #N (이유)`를 적는다. `pr_land`가 검사한다([규칙](docs/reference/shared-checkout.md#다른-pr의-최근-작업을-되돌리지-않는다)).
+다른 PR이 최근 7일 안에 main에 넣은 줄을 지우거나 고치면 PR 본문에 `Replaces: #N (이유)`를 적는다(모두 덮는 `Step-Back: none (이유)`도 있다). `pr_land`가 검사하지만 squash·리베이스·옛 파일 복사는 정보로만 나온다([규칙과 못 잡는 것](docs/reference/shared-checkout.md#다른-pr의-최근-작업을-되돌리지-않는다)).
 
 멈추는 신호는 다음이다. `git add -A`로 다른 파일까지 넣으려 할 때, `test/known_failures.py` 없이 실패를 기존 실패로 부를 때, 조금 전에 비어 보였던 ADR 번호를 다시 보지 않고 쓸 때, 동료의 변경을 stash 했다가 머지 뒤에 되돌리려 할 때, amend가 새 커밋보다 빠르다고 여길 때.
 

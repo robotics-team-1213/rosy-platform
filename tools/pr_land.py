@@ -195,9 +195,14 @@ def preflight(cwd: Path, base: str, body: str = "") -> None:
     if os.environ.get("ROSY_STEP_BACK") == "off":
         print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
         return
-    hits = step_back.report(cwd, base, "HEAD")
+    try:
+        hits = step_back.report(cwd, base, "HEAD")
+    except step_back.ScanError as e:  # a git failure must not read as a pass
+        raise SystemExit(f"[pr-land] step-back scan incomplete: {e}\n[pr-land] fix the git problem (shallow clone: fetch full history) or set ROSY_STEP_BACK=off")
     for h in (h for h in hits if h["level"] == "info"):
         print(f"[pr-land] step-back info (never blocks):{step_back.fmt(h)}")
+    for h in (h for h in hits if h["level"] == "warn"):
+        print(f"[pr-land] step-back warning, scan incomplete for one file: {h['path']}")
     if bad := step_back.blocking(hits, body):
         raise SystemExit("[pr-land] step-back check: this branch removes recent work of other PRs\n" + step_back.explain(bad)
                          + "\n[pr-land] pass the line with --body, or set ROSY_STEP_BACK=off to skip the check")

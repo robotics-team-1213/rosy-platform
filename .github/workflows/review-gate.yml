@@ -41,6 +41,7 @@ jobs:
       # Same base-branch-script rule as the gate; the body reaches the script through a file, never through the shell text.
       - if: github.event_name == 'pull_request'
         continue-on-error: true
+        timeout-minutes: 5   # the required job allows 15; a report must never hold it
         run: |
           script="tools/harness/step_back.py"
           if git cat-file -e "origin/$BASE:$script" 2> /dev/null; then git show "origin/$BASE:$script" > "$RUNNER_TEMP/step_back.py"
@@ -49,7 +50,7 @@ jobs:
           {
             echo '### step-back check (report only)'
             echo '~~~'
-            python3 "$RUNNER_TEMP/step_back.py" --repo "$GITHUB_WORKSPACE" --base "origin/$BASE" --head "$HEAD_SHA" --body-file "$RUNNER_TEMP/pr-body.txt" || true
+            python3 "$RUNNER_TEMP/step_back.py" --repo "$GITHUB_WORKSPACE" --base "origin/$BASE" --head "$HEAD_SHA" --body-file "$RUNNER_TEMP/pr-body.txt" 2>&1 || true
             echo '~~~'
           } >> "$GITHUB_STEP_SUMMARY"
         env:

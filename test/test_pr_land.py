@@ -238,6 +238,11 @@ def test_preflight_runs_the_step_back_check_and_the_switch_skips_it(monkeypatch,
     out = capsys.readouterr().out
     assert "warning" in out and "31 changed files" in out and "step-back info" in out
     pr_land.preflight(Path("."), "origin/main", "Replaces: #311 (restructured)")  # named in the body: passes
+    def broken(*a, **k):
+        raise pr_land.step_back.ScanError("git merge-base failed")
+    monkeypatch.setattr(pr_land.step_back, "report", broken)
+    with pytest.raises(SystemExit, match="scan incomplete"):
+        pr_land.preflight(Path("."), "origin/main", "Step-Back: none (x)")
     monkeypatch.setenv("ROSY_STEP_BACK", "off")
     pr_land.preflight(Path("."), "origin/main", "")
     assert "step-back check skipped" in capsys.readouterr().out

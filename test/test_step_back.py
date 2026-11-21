@@ -111,5 +111,64 @@ def test_too_big_is_a_block_hit_naming_the_size(tmp_path):
     branch(repo)
     commit(repo, {"a.py": "x = 1\n"}, "gut the file")
     hits = step_back.report(repo, "main", "feat", max_lines=3)
-    assert hits[0]["level"] == "block" and "too big to check: 11 deleted lines in 1 files" in hits[0]["path"]
+    assert hits[0]["level"] == "block" and "too big to check: 11 deleted lines, 1 changed files" in hits[0]["path"]
     assert step_back.blocking(hits, "Step-Back: none (generated)") == []
+
+
+def merge_main_keeping_branch_side(repo: Path, path: str) -> None:
+    subprocess.run(["git", "-C", str(repo), "merge", "-q", "-m", "merge main", "main"], capture_output=True)
+    g(repo, "checkout", "--ours", path)
+    g(repo, "add", path)
+    g(repo, "commit", "-q", "-m", "merge main, keep mine")
+
+
+def test_a_merge_that_dropped_lines_the_branch_later_put_back_does_not_block(tmp_path):
+    repo = make_repo(tmp_path)
+    branch(repo)
+    commit(repo, {"b.py": "second_feature = the_branch_version(1)\n"}, "own edit")
+    g(repo, "checkout", "-q", "main")
+    pr(repo, 3, {"b.py": "second_feature = the_main_version_of_pr_three(3)\n"})
+    g(repo, "checkout", "-q", "feat")
+    merge_main_keeping_branch_side(repo, "b.py")
+    commit(repo, {"b.py": "second_feature = the_main_version_of_pr_three(3)\n"}, "repair: bring main's line back")
+    assert [h for h in step_back.report(repo, "main", "feat") if h["level"] == "block"] == []
+
+
+def test_a_clean_merge_of_main_in_the_same_file_does_not_block(tmp_path):
+    repo = make_repo(tmp_path)
+    branch(repo)
+    commit(repo, {"a.py": "first_line_of_the_branch = 1\n" + A_PY + "feature_one = compute_the_first_thing(10)\n"}, "own edit at the top")
+    g(repo, "checkout", "-q", "main")
+    pr(repo, 3, {"a.py": A_PY + "feature_one = compute_the_first_thing(10)\nappended_by_pr_three = 3\n"})
+    g(repo, "checkout", "-q", "feat")
+    g(repo, "merge", "-q", "-m", "merge main", "main")
+    assert step_back.report(repo, "main", "feat") == []
+
+
+def test_a_git_failure_is_loud_not_a_pass(tmp_path, capsys):
+    repo = make_repo(tmp_path)
+    assert step_back.main(["--repo", str(repo), "--base", "main", "--head", "no-such-ref"]) == 2
+    assert "scan incomplete" in capsys.readouterr().err
+    g(repo, "checkout", "-q", "--orphan", "island")
+    commit(repo, {"z.py": "unrelated_history = 1\n"}, "island")
+    assert step_back.main(["--repo", str(repo), "--base", "main", "--head", "island"]) == 2
+
+
+def test_a_blame_failure_warns_and_keeps_the_confirmed_blocks(tmp_path, monkeypatch):
+    repo = make_repo(tmp_path)
+    branch(repo)
+    commit(repo, {"c.py": "own_work_of_the_branch = True\n"}, "own work")
+    g(repo, "checkout", "-q", "main")
+    pr(repo, 4, {"b.py": "second_feature = compute_the_second_thing(20)\nanother_line_of_pr_four = 4000\n", "a.py": A_PY + "feature_one = compute_the_first_thing(10)\nlast_line_of_pr_four = 4\n"})
+    g(repo, "checkout", "-q", "feat")
+    g(repo, "merge", "-q", "-s", "ours", "-m", "merge main, take nothing", "main")
+    real = step_back.blame_commits
+
+    def flaky(repo_, rev, path, nums):
+        if path == "a.py":
+            raise step_back.ScanError("git blame failed (128): boom")
+        return real(repo_, rev, path, nums)
+    monkeypatch.setattr(step_back, "blame_commits", flaky)
+    hits = step_back.report(repo, "main", "feat")
+    assert [(h["pr"], h["path"]) for h in hits if h["level"] == "block"] == [(4, "b.py")]
+    assert any(h["level"] == "warn" and "a.py" in h["path"] for h in hits)
