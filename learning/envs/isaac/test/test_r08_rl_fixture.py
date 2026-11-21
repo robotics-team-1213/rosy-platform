@@ -108,3 +108,27 @@ def test_evaluation_progress_tracks_opposing_contact_and_lift_per_cargo():
     assert progress["bar-1"] == dict(arm=1, samples=2, min_tcp_distance_m=.01, max_rise_m=.04,
                                      max_opposing_contact_n=.2, lifted=True, seated=False,
                                      last_position_m=[.1, 0., .03], last_goal_distance_m=.1, terminal="timeout")
+
+
+def test_first_pick_replay_rejects_a_jump(tmp_path):
+    import hashlib
+    import yaml
+    from stacking_fixture import PROFILE
+    from stacking_task_helpers import load_first_pick_replay
+
+    scene = fixture(layers=1, case=CASE)
+    profile = yaml.safe_load(PROFILE.read_text())
+    home = [*scene["home_joints_rad"][1], 1.]
+    trace = dict(schema="omx.sim-replay-targets/1", scenario=CASE, arm="arm_b",
+                 target="ship-h1r1-l0", control_hz=30,
+                 joints=[f"joint{i}" for i in range(1, 6)] + ["gripper_joint_1"],
+                 target_rad=[home, home.copy()])
+    path = tmp_path / "trace.json"
+    path.write_text(json.dumps(trace), encoding="utf-8")
+    samples, identity = load_first_pick_replay(path, scene, profile, scene["stack_plan"][0])
+    assert samples.tolist() == trace["target_rad"]
+    assert identity == hashlib.sha256(path.read_bytes()).hexdigest()
+    trace["target_rad"][1][0] += .1
+    path.write_text(json.dumps(trace), encoding="utf-8")
+    with pytest.raises(ValueError, match="simulation profile limits"):
+        load_first_pick_replay(path, scene, profile, scene["stack_plan"][0])

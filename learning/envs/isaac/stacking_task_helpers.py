@@ -22,6 +22,38 @@ def record_evaluation_step(rows, step):
     item["terminal"] = step["terminal"]
 
 
+def load_first_pick_replay(path, fixture, profile, item):
+    """Check a bounded teacher trace before using it in the simulation scene."""
+    import numpy as np
+
+    with path.open("rb") as stream:
+        raw = stream.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
+        raise ValueError("Replay input exceeds 1 MiB")
+    value = json.loads(raw)
+    joints = [f"joint{i}" for i in range(1, 6)] + ["gripper_joint_1"]
+    dt = DT * fixture["control_decimation"]
+    if (value.get("schema") != "omx.sim-replay-targets/1" or value.get("scenario") != fixture["case"]
+            or item["arm"] != 1 or value.get("arm") != "arm_b"
+            or value.get("target") != "ship-h1r1-l0" or value.get("joints") != joints
+            or value.get("control_hz") != round(1 / dt)):
+        raise ValueError("Replay does not match the CAD194 first pick")
+    samples = np.asarray(value["target_rad"], dtype=float)
+    if (samples.ndim != 2 or samples.shape[1] != 6 or not 2 <= len(samples) <= 6000
+            or not np.isfinite(samples).all()
+            or not np.allclose(samples[0], [*fixture["home_joints_rad"][1], 1.], rtol=0., atol=1e-6)):
+        raise ValueError("Invalid replay samples or first pose")
+    limits = [profile["joints"][name] for name in joints[:5]] + [profile["gripper"]]
+    pos = np.array([limit["position"] for limit in limits])
+    velocity = np.diff(samples, axis=0) / dt
+    acceleration = np.diff(np.vstack([np.zeros(6), velocity, np.zeros(6)]), axis=0) / dt
+    if (np.any(samples < pos[:, 0]) or np.any(samples > pos[:, 1])
+            or np.any(np.max(np.abs(velocity), axis=0) > np.array([x["velocity"] for x in limits]) + 1e-9)
+            or np.any(np.max(np.abs(acceleration), axis=0) > np.array([x["acceleration"] for x in limits]) + 1e-9)):
+        raise ValueError("Replay samples exceed simulation profile limits")
+    return samples, hashlib.sha256(raw).hexdigest()
+
+
 def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, cargo, contacts,
                      plan, profile, capture, tcp_position, initial, *, mapped, fixture):
     """Run the StackingEnv RSL-RL PPO training and deterministic evaluation episode."""
@@ -35,6 +67,9 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
     if mapped:
         from mapped_stack_fixture import free_lift, stable_box
         from mapped_stack_task import apply_servo
+    replay = getattr(args, "first_pick_replay", None)
+    if replay:
+        samples, replay_sha = load_first_pick_replay(replay, fixture, profile, plan[0])
 
     def goal(item):
         return item['target'] if mapped else target(item)
@@ -96,6 +131,8 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             jitter = self.rng.uniform(-1., 1., 2)*jitter_xy
             yaw = self.rng.uniform(-fixture.get('infeed_yaw_jitter_rad', .03),
                                    fixture.get('infeed_yaw_jitter_rad', .03))
+            if replay:
+                jitter, yaw = (0., 0.), 0.
             source = fixture.get('pickup_center_m', [(.16 if mapped else .20), -.09, BELT_TOP+.016])
             pose = [source[0]+jitter[0], source[1]+jitter[1], source[2]]
             self.source_z = pose[2]
@@ -224,6 +261,33 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             return self.get_observations(), torch.tensor([reward], device=self.device), torch.tensor([done], device=self.device), info
 
     env = StackingEnv()
+    if replay:
+        active, summaries = plan[0]["arm"], {}
+        current = env.targets[active]
+        settle_steps = fixture["settle_steps"] // fixture["control_decimation"]
+        for index, command in enumerate(samples):
+            current[joint_indices[active]] = command[:5]
+            current[fingers[active]] = [command[5], -command[5]]
+            for _ in range(fixture["control_decimation"]):
+                for arm, robot in enumerate(robots):
+                    apply_servo(robot, env.targets[arm], joint_indices[arm], fingers[arm])
+                for _ in range(fixture["physics_substeps"]):
+                    world.step(render=False, update_fabric=True)
+            position, row, forces = env.measured(0)
+            env.lifted |= free_lift(row["body"], active, env.source_z)
+            row["lifted"] = env.lifted
+            env.settle = env.settle + 1 if accepted(0, row) else 0
+            record_evaluation_step(summaries, dict(
+                id=plan[0]["id"], arm=active, tcp_distance_m=float(np.linalg.norm(tcp_position(active)-position)),
+                rise_m=float(position[2]-env.source_z), finger_forces_n=forces[2*active:2*active+2].tolist(),
+                lifted=env.lifted, seated=env.settle >= settle_steps, position_m=row["position"],
+                goal_distance_m=float(np.linalg.norm(position-np.array(goal(plan[0])))),
+                terminal="replay_finished" if index == len(samples)-1 else None))
+        capture("first-pick-final.png")
+        return dict(schema="rosy.omx-first-pick-replay/1", seed=args.seed, fixture=fixture,
+                    target_sha256=replay_sha, samples=len(samples), attachment_aid=False,
+                    settled_on_target=env.settle >= settle_steps, progress=summaries,
+                    image="first-pick-final.png")
 
     # Observe uncommanded cargo transport on the belt before any policy is applied.
     if 'belt_probe_start_m' in fixture:

@@ -349,6 +349,7 @@ def main():
     modes.add_argument('--mapped-container-rl', action='store_true')
     modes.add_argument('--mapped-rl', action='store_true')
     parser.add_argument('--layers', type=int, choices=(1, 2, 3), default=3)
+    parser.add_argument('--first-pick-replay', type=Path, help='simulation-only CAD194 first-pick trace')
     parser.add_argument('--container-case', choices=(R08_RL_CASE, 'nominal', 'offset', 'reverse', 'column', 'nominal-estimate', 'nominal-bc-v0',
                                  'nominal-bc-v0-rl0', 'release-episodes-rl0', 'release-episodes-rl1',
                                  'release-episodes-rl2', 'release-episodes-rl3', 'nominal-bc-v0-rl3',
@@ -359,6 +360,8 @@ def main():
     args = parser.parse_args()
     if args.container_case == R08_RL_CASE and not args.mapped_container_rl:
         parser.error("r08-v24-cad194 requires --mapped-container-rl")
+    if args.first_pick_replay and (args.container_case != R08_RL_CASE or args.layers != 1):
+        parser.error("--first-pick-replay requires the one-layer CAD194 scene")
     check_vendor_manifest()
     if args.mapped_long_stack or args.mapped_rl or args.mapped_cube_stack or args.mapped_container_stack or args.mapped_container_rl:
         from mapped_stack_fixture import physical_model
