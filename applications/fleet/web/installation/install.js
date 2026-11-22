@@ -4,6 +4,7 @@
 import { evidenceAgeText } from "/common/core_ui_logic.js";
 
 import { applyRoleToControls } from "/console/assets/authorization.js";
+import { appendLogEntry } from "/console/assets/activity-log.js";
 import { developmentToken } from "/console/assets/development-auth.js";
 import { DISCOVERY_LABELS, createEnrollmentPanel } from "./enrollment.js";
 import { createCameraPairingPanel } from "./camera-pairing.js";
@@ -92,16 +93,7 @@ function markUnlocked() {
   el("console-token").removeAttribute("aria-invalid");
 }
 
-function log(text, kind) {
-  const line = document.createElement("div");
-  if (kind) line.className = kind;
-  const now = new Date().toTimeString().slice(0, 8);
-  line.textContent = `${now}  ${text}`;
-  const box = el("log");
-  box.querySelector("ui-empty")?.remove();
-  box.prepend(line);
-  while (box.childElementCount > LOG_MAX) box.lastElementChild.remove();
-}
+const log = (text, kind) => appendLogEntry(el("log"), text, kind, LOG_MAX);
 
 const fleetClient = createFleetClient({ credential: () => auth.token });
 

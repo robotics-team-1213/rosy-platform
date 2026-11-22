@@ -418,8 +418,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     };
     drawMetreGrid(ctx, toGridPoint, gridBounds, false);
     drawPointerCell(ctx, toGridPoint, gridBounds);
-    if (layerOn("grid")) drawMapDatum(ctx, toGridPoint, gridBounds, {css});
     if (view.stateUnavailable) {
+      if (layerOn("grid")) drawMapDatum(ctx, toGridPoint, gridBounds, {css});
       el("map-tag").textContent = `로봇 위치 확인 불가${callLabel}`;
       canvas.setAttribute("aria-label", `로봇 위치 확인 불가${callLabel} — Fleet 상태 연결을 확인하세요`);
       return;
@@ -490,6 +490,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
+    if (layerOn("grid")) drawMapDatum(ctx, toGridPoint, gridBounds, {css});
     flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
