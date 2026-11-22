@@ -175,7 +175,7 @@ jobs:
     name: test (${{ matrix.name }})
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:59245c63b56db2a87722baf0b6696853f55d3f9c85dfc4688a53a946032a0685
+      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:8d4c773c166b46ccdaad27a891cdf2aed429b6b42644b8b33696ca36da9b25af
       credentials:
         username: ${{ github.actor }}
         password: ${{ github.token }}
@@ -264,7 +264,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
         with:
           path: /tmp/rosy-pinky-torch
-          key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-pinky-torch-2.7.1
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-pinky-torch-2.7.1
 
       - name: Install Pinky CPU model comparison tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
@@ -280,7 +280,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
         with:
           path: /tmp/rosy-omx-act-cpu
-          key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
 
       - name: Install OMX ACT CPU verification tools
         if: matrix.name == 'omx-act-cpu'
@@ -345,7 +345,7 @@ jobs:
           path: |
             build/interfaces
             install/interfaces
-          key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-rosidl-${{ hashFiles('contracts/ros_idl/**') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-rosidl-${{ hashFiles('contracts/ros_idl/**') }}
 
       - name: Build (colcon)
         if: matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')
