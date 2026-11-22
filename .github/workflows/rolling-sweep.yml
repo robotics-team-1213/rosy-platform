@@ -14,6 +14,7 @@ on:
 permissions:
   contents: read
   actions: read
+  packages: read
 
 concurrency:
   group: rosy-rolling-sweep
@@ -58,6 +59,29 @@ jobs:
           echo "has_work=$has_work" >> "$GITHUB_OUTPUT"
           echo "matrix=$matrix_json" >> "$GITHUB_OUTPUT"
 
+      - name: Build ROS-free platform API wheels once
+        if: steps.plan.outputs.has_work == 'true'
+        run: |
+          set -euo pipefail
+          python3 -c 'import setuptools, wheel' 2>/dev/null || pip3 install --break-system-packages --quiet setuptools wheel
+          wheelhouse=/tmp/rosy-platform-wheelhouse
+          mkdir -p "$wheelhouse"
+          printf '%s\n' \
+            contracts/foundation contracts/skill contracts/motion contracts/learning \
+            operations/account operations/world operations/monitoring operations/notifications \
+            middleware/skills/api middleware/skills/manipulation operations/site_execution \
+            middleware/robot_execution/local operations/processes/palletizing \
+            integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway \
+            | xargs -P 4 -I{} pip3 wheel --no-deps --no-build-isolation --wheel-dir "$wheelhouse" {}
+
+      - name: Upload ROS-free platform API wheels
+        if: steps.plan.outputs.has_work == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
+        with:
+          name: rosy-rolling-wheelhouse
+          path: /tmp/rosy-platform-wheelhouse/*.whl
+          retention-days: 1
+
       - name: Upload prior state
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
         with:
@@ -70,7 +94,11 @@ jobs:
     needs: plan-sweep
     if: needs.plan-sweep.outputs.has_work == 'true'
     runs-on: ubuntu-26.04
-    container: ros:jazzy-ros-base
+    container:
+      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:8d4c773c166b46ccdaad27a891cdf2aed429b6b42644b8b33696ca36da9b25af
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
     timeout-minutes: 25
     continue-on-error: ${{ !matrix.gating }}
     strategy:
@@ -84,55 +112,123 @@ jobs:
           fetch-depth: 50
 
       - name: Fix git safe directory (container)
-        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-
-      - name: Install runtime and test dependencies
         run: |
-          apt-get update -qq
-          apt-get install -y -qq nodejs python3-colcon-common-extensions python3-pip python3-wheel openssl openssh-client zstd python3-opencv python3-pil rauc=1.11.3-2 squashfs-tools ros-jazzy-xacro ros-jazzy-realtime-tools ros-jazzy-rmw-cyclonedds-cpp ros-jazzy-nav2-msgs ros-jazzy-control-msgs ros-jazzy-controller-manager-msgs
-          pip3 install --no-cache-dir --break-system-packages --ignore-installed --require-hashes --no-deps --only-binary=:all: -r deploy/robot/pinky_pro/image/device-python-requirements.txt
-          grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
-          pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt flake8 httpx==0.28.1 pyyaml jsonschema ext4 playwright==1.64.1
-          pip3 install --no-cache-dir --break-system-packages --no-deps oauthlib==4.0.0 joserfc==1.7.5
-          pip3 install --no-cache-dir --break-system-packages --require-hashes --no-deps --only-binary=:all: --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 --target /tmp/rosy-receiver-crypto -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
-          pip3 install --no-cache-dir --break-system-packages --no-deps --target /tmp/rosy-receiver-crypto joserfc==1.7.5
-          echo "PYTHONPATH=/tmp/rosy-receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          git config --system --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+
+      - name: CI image readiness
+        shell: bash
+        run: |
+          set -eo pipefail
+          command -v colcon openssl rauc zstd >/dev/null
+          test "$(dpkg-query -W -f='${Version}' rauc)" = 1.11.3-2
+          test -f "$ROSY_TEST_RAUC_DEB"
+          dpkg -s nodejs python3-opencv python3-pil ros-jazzy-xacro ros-jazzy-nav2-msgs >/dev/null
+          python3 -c 'import flake8, httpx, yaml, jsonschema, ext4, playwright, oauthlib, joserfc; assert httpx.__version__ == "0.28.1"'
+          python3 -c 'from importlib.metadata import version as v; assert v("playwright") == "1.64.1", v("playwright"); assert v("oauthlib") == "4.0.0" and v("joserfc") == "1.7.5"'
+          python3 -c 'import pydantic; assert pydantic.VERSION.startswith("2."), pydantic.VERSION'
+          python3 -c 'import cryptography; from cryptography.x509.verification import PolicyBuilder, Store; assert cryptography.__version__ == "50.0.0"'
+          test -f /opt/rosy-ci/runtime-constraints.txt
 
       - name: Install optional suite tools
         env:
           INVS_JSON: ${{ toJSON(matrix.invocations) }}
           SHARD_NAME: ${{ matrix.name }}
         run: |
-          if echo "$INVS_JSON" | grep -q 'operations/overhead/test'; then
-            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-site-vision-tools -r deploy/site/requirements-vision.txt
-            echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          if echo "$INVS_JSON" | grep -q 'test/test_omx_cell'; then
+            grep -E '^(numpy|opencv-python-headless)==' deploy/robot/omx/requirements-cell.lock > /tmp/rosy-omx-cell-vision.txt
+            PYTHONPATH=/opt/rosy-ci/omx-cell-vision python3 -c 'from importlib.metadata import version as v; [v(n) == ver or (_ for _ in ()).throw(AssertionError((n, v(n), ver))) for n, ver in (l.split()[0].split("==") for l in open("/tmp/rosy-omx-cell-vision.txt"))]'
+            echo "PYTHONPATH=/opt/rosy-ci/omx-cell-vision${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
           fi
-          if echo "$INVS_JSON" | grep -Eq 'operations/fleet/test|applications/fleet/test|test_account_pipeline.py|test_monitoring_browser.py'; then
-            apt-get update -qq && apt-get install -y -qq fonts-noto-cjk
-            python3 -m playwright install --with-deps chromium
+          if echo "$INVS_JSON" | grep -q 'operations/overhead/test'; then
+            if [ -d /opt/rosy-ci/site-vision-tools ]; then
+              echo "PYTHONPATH=/opt/rosy-ci/site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+            else
+              pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-site-vision-tools -r deploy/site/requirements-vision.txt
+              echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+            fi
+          fi
+          if echo "$INVS_JSON" | grep -Eq 'operations/fleet/test|applications/fleet/test|test_account_pipeline.py|test_monitoring_browser.py|ROSY_RUN_BROWSER_TESTS=1'; then
+            if dpkg -s fonts-wqy-zenhei >/dev/null 2>&1 || dpkg -s fonts-wqy-microhei >/dev/null 2>&1; then
+              echo "::error::WenQuanYi CJK fonts must not be installed in rosy-ci" >&2
+              exit 1
+            fi
+            fc-list | grep -i 'noto.*cjk' >/dev/null
+            python3 -c 'from playwright.sync_api import sync_playwright as p; pw = p().start(); pw.chromium.launch().close(); pw.stop()'
           fi
           if echo "$INVS_JSON" | grep -Eq 'learning/curation/pinky|learning/training/pinky'; then
-            pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt --target /tmp/rosy-pinky-raw-tools -r learning/curation/pinky/requirements-raw.txt
-            echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
-          fi
-          if echo "$INVS_JSON" | grep -q 'learning/training/pinky'; then
-            pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
-          fi
-          if [ "$SHARD_NAME" = "omx-act-cpu" ]; then
-            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu --extra-index-url https://download.pytorch.org/whl/cpu -r deploy/robot/omx/requirements-lerobot-export.txt
-            echo "PYTHONPATH=/tmp/rosy-omx-act-cpu${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
-            echo "ROSY_ACT_CPU_REQUIRED=1" >> "$GITHUB_ENV"
-            echo "HF_HUB_OFFLINE=1" >> "$GITHUB_ENV"
-            echo "TRANSFORMERS_OFFLINE=1" >> "$GITHUB_ENV"
+            if [ -d /opt/rosy-ci/pinky-raw-tools ]; then
+              echo "PYTHONPATH=/opt/rosy-ci/pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+            else
+              pip3 install --no-cache-dir --break-system-packages -c /opt/rosy-ci/runtime-constraints.txt --target /tmp/rosy-pinky-raw-tools -r learning/curation/pinky/requirements-raw.txt
+              echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+            fi
           fi
 
+      - name: Cache Pinky CPU torch tools
+        if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: /tmp/rosy-pinky-torch
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-pinky-torch-2.7.1
+
+      - name: Install Pinky CPU model comparison tools
+        if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
+        run: |
+          if [ ! -d /tmp/rosy-pinky-torch/torch ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-pinky-torch --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          fi
+          PYTHONPATH="/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" python3 -c "import numpy as np, torch, cv2; assert torch.__version__.startswith('2.7.1')"
+          echo "PYTHONPATH=/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
+      - name: Cache OMX ACT CPU verification tools
+        if: matrix.name == 'omx-act-cpu'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: /tmp/rosy-omx-act-cpu
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
+
+      - name: Install OMX ACT CPU verification tools
+        if: matrix.name == 'omx-act-cpu'
+        env:
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+        run: |
+          if [ ! -d /tmp/rosy-omx-act-cpu/torch ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu --extra-index-url https://download.pytorch.org/whl/cpu -r deploy/robot/omx/requirements-lerobot-export.txt
+          fi
+          echo "PYTHONPATH=/tmp/rosy-omx-act-cpu${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          echo "ROSY_ACT_CPU_REQUIRED=1" >> "$GITHUB_ENV"
+          echo "HF_HUB_OFFLINE=1" >> "$GITHUB_ENV"
+          echo "TRANSFORMERS_OFFLINE=1" >> "$GITHUB_ENV"
+
+      - name: Download ROS-free platform API wheels
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0 (pinned commit)
+        with:
+          name: rosy-rolling-wheelhouse
+          path: /tmp/rosy-platform-wheelhouse
+
+      - name: Cache ROS interfaces overlay
+        if: matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false'
+        id: rosidl-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: |
+            build/interfaces
+            install/interfaces
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-rosidl-${{ hashFiles('contracts/ros_idl/**') }}
+
       - name: Build platform wheels and overlay
+        env:
+          ROSIDL_CACHE_HIT: ${{ steps.rosidl-cache.outputs.cache-hit }}
         run: |
           wheelhouse=/tmp/rosy-platform-wheelhouse
           mkdir -p "$wheelhouse"
-          pip3 wheel --no-deps --no-build-isolation --wheel-dir "$wheelhouse" contracts/foundation contracts/skill contracts/motion contracts/learning operations/account operations/world operations/monitoring operations/notifications middleware/skills/api middleware/skills/manipulation operations/site_execution middleware/robot_execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway
+          if ! ls "$wheelhouse"/*.whl >/dev/null 2>&1; then
+            pip3 wheel --no-deps --no-build-isolation --wheel-dir "$wheelhouse" contracts/foundation contracts/skill contracts/motion contracts/learning operations/account operations/world operations/monitoring operations/notifications middleware/skills/api middleware/skills/manipulation operations/site_execution middleware/robot_execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway
+          fi
           pip3 install --break-system-packages --no-cache-dir --no-index --find-links "$wheelhouse" core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.17 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
-          if [ "${{ matrix.ros }}" = "overlay" ]; then
+          if [ "${{ matrix.ros }}" = "overlay" ] && [ "${{ toJSON(matrix.colcon) }}" != "false" ]; then
             . /opt/ros/jazzy/setup.sh
             GZ_IGNORE=integrations/simulation/gazebo/COLCON_IGNORE
             if [ ! -e "$GZ_IGNORE" ]; then
@@ -140,18 +236,26 @@ jobs:
               touch "$GZ_IGNORE"
             fi
             COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
-            colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install --event-handlers console_direct+
+            SKIP_ARGS=""
+            if [ "${ROSIDL_CACHE_HIT:-}" = "true" ] && [ -f install/interfaces/share/interfaces/package.sh ] && grep -qF "$(pwd)/install/interfaces" install/interfaces/share/interfaces/package.sh; then
+              . install/interfaces/share/interfaces/package.sh
+              SKIP_ARGS="--packages-skip interfaces"
+            elif [ "${ROSIDL_CACHE_HIT:-}" = "true" ]; then
+              rm -rf build/interfaces install/interfaces
+            fi
+            colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install $SKIP_ARGS --event-handlers console_direct+
           fi
 
       - name: Run shard with single-nodeid retry
         shell: bash
         env:
           ROSY_ROS: ${{ matrix.ros }}
+          ROSY_BUILT: ${{ matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false' }}
           ROSY_ENTRY_JSON: ${{ toJSON(matrix) }}
         run: |
           set -eo pipefail
           case "$ROSY_ROS" in
-            overlay) . /opt/ros/jazzy/setup.sh; . install/setup.sh ;;
+            overlay) . /opt/ros/jazzy/setup.sh; [ "$ROSY_BUILT" = true ] && . install/setup.sh || true ;;
             base) . /opt/ros/jazzy/setup.sh ;;
           esac
           python3 tools/rolling_regression.py gha-run-entry --entry-json "$ROSY_ENTRY_JSON" --out-dir /tmp/rolling-out

@@ -1,4 +1,6 @@
 // Incident evidence display, human review and export; transport/session stay in console.js.
+import { setOffBy } from "/common/cause-line.js";
+import { isOperator } from "/console/assets/authorization.js";
 import { CAUSE_LABEL, DECISION_LABEL } from "./line-stuck.js";
 
 const INCIDENT_CAUSES = {
@@ -90,8 +92,7 @@ function incidentReviewForm(report, path) {
   form.append(select, note, save);
   form.addEventListener("submit", scope.guard(async event => {
     event.preventDefault();
-    save.disabled = true;
-    save.setAttribute("reason", "검토 기록을 저장하고 있습니다");
+    setOffBy(save, "검토 기록을 저장하고 있습니다");
     try {
       await call(path, {method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({root_cause: select.value, note: note.value})});
@@ -99,8 +100,7 @@ function incidentReviewForm(report, path) {
       await refreshIncidents();
     } catch (error) {
       log(`사건 검토 기록 실패: ${error.message}`, "bad");
-      save.disabled = false;
-      save.removeAttribute("reason");
+      setOffBy(save, "");
     }
   }));
   return form;
@@ -122,9 +122,7 @@ async function refreshIncidents() {
     onReports(fetched);
     const incidentTrafficReports = payload.traffic_reports || [];
     status.textContent = `최근 라인 정지 ${records && fetched.length >= 100 ? "100건 중 " : ""}${incidentReports.length}건 · AI 상황 사실 ${incidentTrafficReports.length}건`;
-    el("incident-export").disabled = !incidentReports.length && !incidentTrafficReports.length;
-    if (el("incident-export").disabled) el("incident-export").setAttribute("reason", "내보낼 사건이 없습니다");
-    else el("incident-export").removeAttribute("reason");
+    setOffBy(el("incident-export"), !incidentReports.length && !incidentTrafficReports.length ? "내보낼 사건이 없습니다" : "");
     const list = el("incident-list");
     const openReports = new Set([...document.querySelectorAll('.incident-panel details[data-report-key][open]')].map(node => node.dataset.reportKey));
     const focusedReport = document.activeElement?.closest('[data-report-key]')?.dataset.reportKey;
@@ -173,14 +171,13 @@ async function refreshIncidents() {
       incidentLine(side, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);
-      if (auth.role === "operator") {
+      if (isOperator(auth.role)) {
         if (!report.closed_at && !report.handoff && report.judgment_revision) {
           const claim = document.createElement('ui-button');
           claim.setAttribute('kind', 'quiet');
           claim.textContent = '이 사건 맡기';
           claim.addEventListener('click', scope.guard(async () => {
-            claim.setAttribute('reason', '담당 인수를 기록하고 있습니다');
-            claim.disabled = true;
+            setOffBy(claim, '담당 인수를 기록하고 있습니다');
             try {
               await call(`/api/fleet/robots/${encodeURIComponent(report.robot_ids[0])}/line-stuck/claim`, {
                 method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -225,7 +222,7 @@ async function refreshIncidents() {
       incidentLine(side, latest ? `사람 검토: ${INCIDENT_CAUSES[latest.root_cause] || "원인 미확인"} · ${latest.note || "메모 없음"}`
         : "사람 검토: 아직 없음");
       if (latest) incidentLine(raw, `검토자 ${latest.principal_id} · 원인 ${latest.root_cause}`);
-      if (auth.role === "operator") side.append(incidentReviewForm(report,
+      if (isOperator(auth.role)) side.append(incidentReviewForm(report,
         `/api/fleet/incidents/facts/${ai.fact_row}/review`));
       detail.append(raw);
       trafficList.append(item);
@@ -266,8 +263,7 @@ function reset() {
   el("incident-list").replaceChildren();
   el("incident-traffic-list").replaceChildren();
   el("incident-judgment").replaceChildren();
-  el("incident-export").disabled = true;
-  el("incident-export").setAttribute("reason", "관제 접속 후 내보낼 수 있습니다");
+  setOffBy(el("incident-export"), "관제 접속 후 내보낼 수 있습니다");
   el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
 }
 return {refresh: refreshIncidents, reset};

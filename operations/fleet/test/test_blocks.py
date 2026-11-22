@@ -88,15 +88,17 @@ def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0
     true position (odom-anchored, D-517 4); UNKNOWN robots coast to their last authority."""
     rng = random.Random(seed)
     robots, true_d, last_auth, prev = [], {}, {}, {}
+    lap_m = sum(length for _, length in cycle)
+    laps = math.ceil((ticks * 0.1 + 2.0) / lap_m) + 2
     if packed:  # queued nose to tail across one boundary, the review's startup case
-        spans = _spans(cycle, 0, laps=ticks // 5 + 3)
+        spans = _spans(cycle, 0, laps=laps)
         for i in range(n):
             robot = Robot(f"r{i:02d}", spans, None, 0.3, u, body)
             robots.append(robot)
             true_d[robot.id] = spans[0].d1 + 0.11 - i * (body + 0.02)
     else:
         for i, start in enumerate(round(i * len(cycle) / n) for i in range(n)):
-            spans = _spans(cycle, start, laps=ticks // 5 + 3)
+            spans = _spans(cycle, start, laps=laps)
             robot = Robot(f"r{i:02d}", spans, None, 0.3, u, body)
             robots.append(robot)
             true_d[robot.id] = spans[0].d1 - 0.02
@@ -105,6 +107,7 @@ def _run(layout, cycle, n, *, ticks, seed, unknown_rate=0.0, stall_rate=0.0, u=0
     shared_at_start = None  # packed starts share blocks physically; only clearing them is allowed
     for tick in range(ticks):
         for r in robots:
+            assert true_d[r.id] + u + 0.6 < r.spans[-1].d1
             r.lookahead_m = rng.choice((0.1, 0.3, 0.6))
             # a trip starts LOCALIZED (D-494): no unknown pose on the first tick
             r.d = None if tick and rng.random() < unknown_rate else true_d[r.id] + rng.uniform(-u, u)

@@ -1,0 +1,51 @@
+# 공용 UI 패턴 목록 (D3, 계획 2026-11-13-ui-shared-patterns.md). 한 줄 = 한 패턴.
+# 같은 필요가 두 화면에 나오면 화면별 해결 대신 여기 부품을 쓴다. DESIGN.md 「공용 패턴 C1–C25」(C13 아이콘·툴팁은 부품이 아니라 규칙이라 행 없음)이 규칙의 정본,
+# 이 파일은 패턴 -> 부품 -> 게이트를 잇는다. 읽는 시험: shared/web/test/test_patterns_registry.py.
+# status: built = module이 name을 export하고 gate 시험 파일이 있다(시험이 확인). planned = 아직 없다.
+# product_hook: 그 제품 시험 본문과 adopter 화면 폴더(가장 가까운 html 있는 상위 폴더 아래 js·html) 양쪽에 나오는 선택자·id. 관계없는 시험이 product_test를 채우지 못하게 묶는다.
+# built 행은 product_test(제품 화면에서 그 부품의 동작을 거는 시험, 갤러리 아님)와 adopters(그 부품을 import하고 호출하는 제품 파일, 갤러리 제외)가 있어야 한다. 예전: adopters(그 부품을 import하는 제품 파일, 갤러리 제외)가 비어 있으면 안 된다. debt는 아직 옮기지 못한 파일과 이유(이행 부채)다.
+# 알려진 한계: 이 정적 게이트는 죽은 코드(`if (false)` 호출)와 사소한 제품 시험으로 속일 수 있다. 진짜 해법은 변이 시험(부품 export를 빈 것으로
+# 바꿨을 때 product_test가 실패해야 한다)이며 아직 없다. 백로그.
+# forbid: 그 module과 adopters 소스(주석 제외)에 나오면 안 되는 문자열. 안전 경계(감독 경로 우회 호출 금지)를 채택 화면까지 막는다.
+# 부품을 만든 슬라이스가 자기 행을 built로 바꾸고 product_test·product_hook·adopters를 채운다. planned 행의 gate는 만들 시험의 설명이다.
+# 지금 모든 행은 planned다: 부품은 아직 이 저장소에 없고 뒤따르는 슬라이스가 들여온다. ceiling은 이 저장소의 현재 수를 센 것이고, 슬라이스가 owners·helpers 행을 더하거나 수를 바꾸면 같은 변경에서 맞춘다.
+patterns:
+  - {id: C1, need: 비활성 사유, module: cause-line.js, export: createCauseLine, rule: DESIGN.md C1, gate: shared/web/test/test_busy_cause_browser.py, status: planned}
+  - {id: C2, need: busy 잠금, module: busy-scope.js, export: createBusyScope, rule: DESIGN.md C2, gate: shared/web/test/test_busy_cause_browser.py, status: planned}
+  - {id: C3, need: 계정 세션, module: account-gate.js, export: createAccountGate, rule: DESIGN.md C3, gate: test/test_games_board_browser.py, status: planned}
+  - {id: C4, need: 모르는·빈·오래된 값, module: value-text.js, export: valueText, rule: DESIGN.md C4, gate: shared/web/test/test_value_text.py, status: planned}
+  - {id: C5, need: 동적 기하·색, module: geometry.js, export: setGeometry, rule: DESIGN.md C5, gate: shared/web/test/test_geometry.py, status: planned, debt: {middleware/perception/web/diagnostic-core.js: classic script cannot import an ES module; battery fill width, middleware/perception/web/diagnostic-map.js: classic script cannot import an ES module; gauge fill width}}
+  - {id: C6, need: 위험 표시, module: ui.js, export: ui-tag, rule: DESIGN.md C6, gate: 기존 D-202 토큰 검사(test_ui_token_contracts.py), status: planned}
+  - {id: C7, need: 되돌릴 수 없는 동작, module: ui.js, export: confirmIrreversible, rule: DESIGN.md C7, gate: irreversible-routes.yaml 목록의 POST는 확인 없이 못 보낸다, status: planned}
+  - {id: C8, need: 탭, module: interaction-controls.js, export: createTabs, rule: DESIGN.md C8, gate: shared/web/test/test_choice_controls.py, status: planned}
+  - {id: C9, need: 정지, module: stop-control.js, export: createStopControl, rule: DESIGN.md C9, gate: shared/web/test/test_stop_always_live.py, status: planned}
+  - {id: C10, need: 연결 배너, module: connection-notice.js, export: createConnectionNotice, rule: DESIGN.md C10, gate: test/test_games_board_browser.py, status: planned}
+  - {id: C11, need: 독립 대상·조작 상자, module: component-controls.css, export: .ui-panel, rule: DESIGN.md C11, gate: shared/web/test/test_content_vocabulary.py, status: planned}
+  - {id: C12, need: 상태 표(아이콘+톤), module: status-tag.js, export: statusTag, rule: DESIGN.md C12, gate: shared/web/test/test_component_kit_browser.py, status: planned}
+  - {id: C14, need: 반복 로봇(로봇암·이동로봇) 한 행 양식, module: robot-row.js, export: createRobotRow, rule: DESIGN.md C14, gate: shared/web/test/test_component_kit_browser.py, status: planned}
+  - {id: C15, need: 로봇 3D 보기(로봇암·이동로봇) 한 방식, module: robot-3d.js, export: createRobotView, rule: DESIGN.md C15, gate: shared/web/test/test_robot_3d_browser.py, status: planned}
+  - {id: C16, need: 단일 선택 목록(행 안 동작 없음), module: choice-list.js, export: createChoiceList, rule: DESIGN.md C16, gate: shared/web/test/test_choice_list_browser.py, status: planned}
+  - {id: C17, need: 선택 묶음(단일·켜기끄기·폼 값), module: choice-group.js, export: createChoiceGroup, rule: DESIGN.md C17, gate: shared/web/test/test_choice_group_browser.py, status: planned}
+  - {id: C18, need: 공유 선택 저장소와 선택 표지, module: selection.js, export: createSelection, rule: DESIGN.md C18, gate: shared/web/test/test_selection.py, status: planned}
+  - {id: C19, need: 위치 상태 하나(Fleet 행·거절 줄·상세·지도), module: localization-state.js, export: localizationState, rule: DESIGN.md C19, gate: shared/web/test/localization-state.test.mjs, status: planned}
+  - {id: C20, need: 팔 스킬 수명주기 글자·태그, module: skill-state.js, export: skillState, rule: DESIGN.md C20, gate: shared/web/test/test_skill_state.py, status: planned}
+  - {id: C21, need: 근거 줄(측정·원장·모델 출처 분리), module: evidence-line.js, export: createEvidenceLine, rule: DESIGN.md C21, gate: shared/web/test/test_ai_skill_browser.py, status: planned}
+  - {id: C22, need: 샘플 데이터 표시와 계약, module: sample-data.js, export: sampleTag, rule: DESIGN.md C22, gate: shared/web/test/test_ai_skill_browser.py, status: planned}
+  - {id: C23, need: '로봇 도크(우측 띠, 로봇별 아이콘·신선도·경보)', module: robot-dock.js, export: createRobotDock, rule: DESIGN.md C23, gate: shared/web/test/test_robot_dock_browser.py, status: planned, forbid: [pipeline/decision-gate, human-safety-gate, vision-auto-check, station-zones/dispatch, arm-holds/clear, pipeline/cell-tasks/*/resume, human-safety-gate/clear, decision-gate/execute]}
+  - {id: C24, need: '로봇 패널(좌측 옆 패널·390 시트, 상태·카메라·명령·설정)', module: robot-panel.js, export: createRobotPanel, rule: DESIGN.md C24, gate: shared/web/test/test_robot_panel_browser.py, status: planned, forbid: [pipeline/decision-gate, human-safety-gate, vision-auto-check, station-zones/dispatch, arm-holds/clear, pipeline/cell-tasks/*/resume, human-safety-gate/clear, decision-gate/execute]}
+  - {id: C25, need: 알림 한 표면(목록·드문 토스트·벨 개수·방송 한 곳), module: alert-center.js, export: createAlertCenter, rule: DESIGN.md C25, gate: shared/web/test/alert-center.test.mjs, status: planned}
+# 11-18 UI 패널 게이트 ③(test_patterns_registry.py test_helpers_are_defined_once_and_direct_writes_only_go_down).
+# helpers: 정본 하나를 둔 작은 도우미. module 밖에서 name·aliases를 function·const·let으로 다시 정의한 곳의 수 상한.
+# direct: 정본(owners) 밖 Fleet·shared/web 제품 JS가 직접 쓴 줄 수 상한(주석 제외, 문자열 포함).
+# duplicate_bodies: 본문(문자열 비움·공백 제거) 35자 이상이 두 파일 이상에 같은 함수 묶음 수 상한.
+# 모든 ceiling은 수가 늘면 실패, 줄면 같은 변경에서 내린다.
+helpers:
+  - {name: node, module: shared/web/control-dom.js, aliases: [nodeWithText], ceiling: 1}
+  - {name: setOff, module: shared/web/cause-line.js, aliases: [setOffBy, guard, gate, blockWith, setReason], ceiling: 0}
+  - {name: iconSvg, module: shared/web/ui.js, aliases: [iconNode], ceiling: 0}
+direct:
+  - {what: reason 속성 직접 쓰기, pattern: '(?:set|remove)Attribute\(\s*["'']reason["'']', owners: [shared/web/ui.js, shared/web/cause-line.js], ceiling: 6}
+  - {what: 운영자 역할 직접 비교, pattern: 'role\s*[!=]==?\s*["'']operator["'']', owners: [applications/fleet/web/shared/authorization.js], ceiling: 0}
+  - {what: 권한 문구 직접 쓰기, pattern: '운영자 권한이 필요합니다', owners: [applications/fleet/web/shared/authorization.js], ceiling: 0}
+  - {what: "'초 전' 손 포맷", pattern: '초 전', owners: [shared/web/core_ui_logic.js, shared/web/component-gallery.js], ceiling: 0}
+duplicate_bodies: {ceiling: 0}

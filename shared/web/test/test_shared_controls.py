@@ -789,6 +789,14 @@ DISABLED_WITHOUT_REASON = {
     ("applications/fleet/web/shared/vision-view.js", "select.disabled = true;"): NATIVE + " (vision-state 태그)",
     ("applications/fleet/web/cell/cell-observation.js", "button.disabled = true;"): TRANSIENT + " (팔 사건 해제 제출 중)",
     ("applications/fleet/web/cell/cell-observation.js", "button.disabled = false;"): TRANSIENT + " (실패 시 다시 시도 허용)",
+    ("applications/fleet/web/devices/device-care.js",
+     "else { input.disabled = Boolean(reason); input.setAttribute('aria-describedby', 'device-care-permission'); }"):
+        NOTE + " (device-care-permission — 네이티브 입력/선택 묶음 안내)",
+    ("applications/fleet/web/devices/device-profiles.js",
+     "for (const key of FIELDS) el(key).disabled = busy || !allowed || (key === 'device_id' && Boolean(selected));"):
+        NOTE + " (permission 안내 + 선택된 장치 ID 불변)",
+    ("applications/fleet/web/devices/device-profiles.js", "el('list').disabled = busy;"):
+        NATIVE + " (저장·조회 중 장치 선택 잠금)",
 }
 #: Keys that cover more than one site on purpose. Every other key covers exactly one,
 #: so an identical line added elsewhere in the same file is a new unexplained site.

@@ -6,7 +6,8 @@ const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
 const { createRoster, mustExpand } = await import("../../../../applications/fleet/web/roster.js");
-const { groupRows, groupText, openDecisionKey, queueRowText } = await import("../../../../applications/fleet/web/queues.js");
+const { groupRows, groupText, openDecisionKey, queueRowText, createQueues } = await import("../../../../applications/fleet/web/queues.js");
+const { createInboxPanel } = await import("../../../../applications/fleet/web/inbox.js");
 const { deadlockView, replanView } = await import("../../../../applications/fleet/web/trip-replan.js");
 
 const nominal = (extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop: false } }, ...extra });
@@ -118,4 +119,192 @@ test("one warn cause on many robots is one row; decisions and single causes stay
   assert.equal(groupText(battery, out[0].group),
     "배터리 값 멈춤 — 센서 연결 확인 · 5대 (rosy_001 · rosy_003 · rosy_004 외 2대)");
   assert.equal(groupText(": 연결 끊김", ["a", "b"]), "연결 끊김 · 2대 (a · b)");
+});
+
+// B-1 — a bare-bones element good enough for fillQueues/syncRows and the inbox reader: tags, .class
+// selectors, datasets and text nodes. Real-browser behaviour (open <details>, focus) has Chromium coverage.
+class El {
+  constructor(tag) {
+    this.tagName = tag.toUpperCase(); this.id = ""; this.className = ""; this.text = ""; this.parentElement = null;
+    this.children = []; this.dataset = {}; this.hidden = false; this.attributes = new Map(); this.listeners = {};
+  }
+  append(...nodes) { for (const one of nodes) { if (typeof one !== "string") one.parentElement = this; this.children.push(one); } }
+  replaceChildren(...nodes) { for (const one of nodes) if (typeof one !== "string") one.parentElement = this; this.children = [...nodes]; }
+  get childElementCount() { return this.children.length; }
+  get firstElementChild() { return this.children.find((child) => child.nodeType !== 3) ?? null; }
+  get lastElementChild() { return [...this.children].reverse().find((child) => child.nodeType !== 3) ?? null; }
+  get textContent() { return this.text + this.children.map((child) => child.textContent).join(""); }
+  set textContent(value) { this.children = []; this.text = String(value); }
+  getAttribute(name) { return this.attributes.has(name) ? this.attributes.get(name) : null; }
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  removeAttribute(name) { this.attributes.delete(name); }
+  addEventListener(type, handler) { this.listeners[type] = handler; }
+  focus() { this.focused = true; }
+  scrollIntoView() {}
+  click() {  // a DOM-enough click: handlers get a preventable event
+    const event = {prevented: false, preventDefault() { this.prevented = true; }};
+    this.listeners.click?.(event);
+    return event;
+  }
+  matches(selector) {
+    const data = selector.match(/^\[data-([\w-]+)\]$/);  // e.g. [data-message-summary] (camelCase dataset)
+    if (data) return this.dataset[data[1].replace(/-(\w)/g, (_, c) => c.toUpperCase())] !== undefined;
+    return selector.startsWith("#") ? this.id === selector.slice(1)
+      : selector.startsWith(".") ? this.className.split(/\s+/).includes(selector.slice(1))
+      : this.tagName === selector.toUpperCase();
+  }
+  querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
+  querySelectorAll(selector) {
+    const found = [];
+    for (const child of this.children) {
+      if (child.nodeType === 3) continue;
+      if (child.matches(selector)) found.push(child);
+      found.push(...child.querySelectorAll(selector));
+    }
+    return found;
+  }
+}
+
+function fakeConsole(t) {
+  const nodes = new Map();
+  const make = (tag, id) => { const el = new El(tag); el.id = id; nodes.set(id, el); return el; };
+  const panel = make("section", "queues-panel"); panel.className = "queues-panel"; panel.dataset.open = "false";
+  const container = new El("div"); container.className = "queues-container";
+  for (const list of ["warning-list", "critical-list"]) {
+    const box = new El("div"); box.append(make("ul", list)); container.append(box);
+  }
+  panel.append(container, make("p", "queues-empty"), make("button", "queues-close"));
+  for (const head of ["warning-head", "critical-head"]) make("div", head).append(new El("b"), new El("small"));
+  const bell = make("ui-button", "fleet-inbox"); bell.append(make("span", "header-unread"));
+  const listeners = {};
+  const document = {
+    body: new El("body"),
+    activeElement: null,
+    listeners,
+    createElement: (tag) => new El(tag),
+    createTextNode: (text) => ({nodeType: 3, textContent: text}),
+    getElementById: (id) => nodes.get(id) ?? make("div", id),
+    addEventListener(type, fn) { listeners[type] = fn; },
+    querySelector: (selector) => [panel, container, ...nodes.values()].find((node) => node.matches(selector)) ?? null,
+    querySelectorAll(selector) {  // supports '#critical-list > li, #warning-list > li'
+      const rows = [];
+      for (const part of selector.split(",")) {
+        const hit = part.trim().match(/^#([\w-]+) > (\w+)$/);
+        if (hit) rows.push(...(nodes.get(hit[1])?.children ?? []).filter((child) => child.matches?.(hit[2])));
+      }
+      return rows;
+    },
+  };
+  document.activeElement = document.body;
+  const before = {document: globalThis.document, location: globalThis.location};
+  globalThis.document = document;
+  globalThis.location = {search: ""};
+  t.after(() => { globalThis.document = before.document; globalThis.location = before.location; });
+  return {el: (id) => document.getElementById(id), document};
+}
+
+const STALE_ROBOT = (age) => ({ robot_id: "a", online: true, state_age_s: age, state: { safety: { estop: false },
+  battery_status: { level: "warning" }, docking: { state: "DOCK_FAILED" },
+  capabilities_degraded: ["cam"], navigation: "FAILED" } });
+const STALE_VIEW = () => ({ robots: [], formation: null, stateUnavailable: false, stateLoaded: true,
+  receivedAtMs: Date.now() - 1000, trafficTrips: [], endedTrips: [] });
+
+test("B-1: a stale robot renders one folded rollup row; an open <details> survives the next fillQueues", (t) => {
+  const {el} = fakeConsole(t);
+  const view = STALE_VIEW();
+  const { fillQueues } = createQueues({ scope: {}, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [STALE_ROBOT(6)];
+  fillQueues();
+  const list = el("warning-list");
+  assert.equal(list.children.length, 1);  // not four separate battery/dock/degraded/goal rows
+  const li = list.children[0], details = li.querySelector("details"), summary = li.querySelector("summary");
+  assert.equal(li.dataset.folded, "1");
+  assert.equal(li.dataset.foldedKind, "배터리 부족|도킹 실패|성능 저하 [cam]|목표 실패");
+  assert.match(summary.textContent, /^a: 상태 오래됨 — \d+초 전 값 · 지연 경고 4건$/);
+  assert.equal(li.querySelector(".hint").textContent,
+    "이전 스냅샷 경고: 배터리 부족 · 도킹 실패 · 성능 저하 [cam] · 목표 실패");
+  details.open = true;  // the operator reads the causes
+  view.robots = [STALE_ROBOT(8)];  // 1 Hz later the same robot is only older
+  fillQueues();
+  assert.equal(list.children[0], li);  // the same li, summary and open state survive the repaint
+  assert.equal(li.querySelector("summary"), summary);
+  assert.equal(li.querySelector("details").open, true);
+  assert.match(summary.textContent, /지연 경고 4건$/);
+});
+
+test("C25: the bell badge counts active alerts while open and clears on lock", (t) => {
+  const {el, document} = fakeConsole(t);
+  const view = STALE_VIEW();
+  let locked = false;
+  const { fillQueues } = createQueues({ scope: { guard: (fn) => fn }, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [STALE_ROBOT(6)];
+  fillQueues();
+  const inbox = createInboxPanel({
+    scope: { listen(target, type, fn) { target?.addEventListener?.(type, fn); } },
+    el, readView: () => view, isLocked: () => locked,
+  });
+  inbox.refresh();
+  assert.equal(el("header-unread").textContent, "1");
+  assert.equal(el("header-unread").hidden, false);
+  assert.equal(el("fleet-inbox").dataset.crit, undefined);
+  assert.match(el("fleet-inbox").getAttribute("aria-label"), /^알림 창 · 활성 알림 1건$/);
+
+  document.listeners["rosy:inbox"]({ preventDefault() {} });
+  assert.equal(el("queues-panel").dataset.open, "true");
+  assert.equal(el("header-unread").textContent, "1");  // opening stays live until resolved
+  document.listeners.keydown({ key: "Escape", defaultPrevented: false, preventDefault() {} });
+  assert.equal(el("queues-panel").dataset.open, "false");
+
+  view.robots = [{ robot_id: "a", online: false, state: null, line_stuck: { stuck_id: "s" } }];
+  fillQueues();
+  inbox.refresh();
+  assert.equal(el("header-unread").textContent, "2");
+  assert.equal(el("fleet-inbox").dataset.crit, "true");
+  assert.match(el("fleet-inbox").getAttribute("aria-label"), /최우선 1건/);
+
+  locked = true;
+  inbox.clear();
+  assert.equal(el("queues-panel").dataset.open, "false");
+  assert.equal(el("header-unread").textContent, "");
+  assert.equal(el("header-unread").hidden, true);
+});
+
+test("B-2: jumpToQueueRow opens the drawer and exact folded row and focuses its summary", (t) => {
+  const {el} = fakeConsole(t);
+  const view = STALE_VIEW();
+  const { fillQueues } = createQueues({ scope: {}, el, view, render: () => {}, streamEvidence: () => null });
+  view.robots = [STALE_ROBOT(6)];
+  fillQueues();
+  const inbox = createInboxPanel({ scope: { listen() {} }, el, readView: () => view });
+  inbox.refresh();
+  const li = el("warning-list").children[0];
+  assert.equal(inbox.jumpToQueueRow("a|stale-snapshot"), true);
+  assert.equal(el("queues-panel").dataset.open, "true");
+  assert.equal(li.querySelector("details").open, true);
+  assert.equal(li.querySelector("summary").focused, true);
+});
+
+test("B-2: jumpToQueueRow opens a closed decision row once and never re-closes an open one", (t) => {
+  const {el} = fakeConsole(t);
+  const view = STALE_VIEW();
+  let renders = 0;
+  const { fillQueues } = createQueues({ scope: { guard: (fn) => fn }, el, view, render: () => renders++, streamEvidence: () => null });
+  view.robots = [{ robot_id: "a", online: false, state: null, line_stuck: { stuck_id: "s" } }];
+  view.queueChoice = { key: "a|stuck", open: false };  // the operator had it closed
+  fillQueues();
+  const inbox = createInboxPanel({ scope: { listen() {} }, el, readView: () => view });
+  inbox.refresh();
+  const toggle = el("critical-list").children.find((child) => child.dataset.decision === "stuck").querySelector(".queue-row");
+  assert.equal(toggle.getAttribute("aria-expanded"), "false");
+  assert.equal(inbox.jumpToQueueRow("a|stuck"), true);
+  assert.equal(el("queues-panel").dataset.open, "true");
+  assert.equal(view.queueChoice.open, true);  // the queues.js disclosure handler ran
+  assert.equal(renders, 1);
+  assert.equal(toggle.focused, true);
+  fillQueues();  // the poll applies the choice: aria-expanded flips to true
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  inbox.jumpToQueueRow("a|stuck");  // a second jump must not toggle it closed
+  assert.equal(view.queueChoice.open, true);
+  assert.equal(renders, 1);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
 });

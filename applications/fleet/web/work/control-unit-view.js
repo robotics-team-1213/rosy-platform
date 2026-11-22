@@ -1,3 +1,5 @@
+import {node} from "/common/control-dom.js";
+import {setOffBy} from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // Control-unit candidates remain separate from local Task execution and physical stop evidence.
 const labels = {PENDING: "현장 승인 대기", APPROVING: "승인 접수 · 작업 결속 확인 중", REQUESTED: "요청 접수",
@@ -6,8 +8,6 @@ const labels = {PENDING: "현장 승인 대기", APPROVING: "승인 접수 · �
 const terminal = new Set(["COMPLETED", "FAILED", "CANCELED", "EXPIRED"]);
 const unadmitted = new Set(["UNKNOWN_CONTROL_UNIT", "CONTROL_UNIT_OUTSIDE_SCOPE",
   "CONTROL_UNIT_RESOURCE_OUTSIDE_SCOPE", "CONTROL_UNIT_ACTIVE_CAPACITY"]);
-const node = (tag, text, className) => Object.assign(document.createElement(tag),
-  {textContent: text || "", ...(className ? {className} : {})});
 
 export function createControlUnitView({scope, call, anchor, active, approveReason, principal}) {
   const panel = node("section"), heading = node("h2", "관제 간 작업"), context = node("p"),
@@ -31,10 +31,6 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
     if (kind === "primary") control.setAttribute("kind", "primary");
     else control.setAttribute("kind", "quiet");
     control.setAttribute("type", "button"); return control;
-  }
-  function guard(control, reason) {
-    control.disabled = Boolean(reason);
-    if (reason) control.setAttribute("reason", reason); else control.removeAttribute("reason");
   }
   const send = button("대상 관제에 요청", "primary"), fresh = button("새 요청 작성"),
     actions = node("div", "", "ui-actions"), disclosure = node("details", "", "ui-disclosure");
@@ -77,9 +73,9 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
     draft = null; draftKey = null; draftControls();
   }
   function controls() {
-    guard(send, busy ? "요청 결과를 확인하고 있습니다" : !available ? "관제 연결을 확인하세요" :
+    setOffBy(send, busy ? "요청 결과를 확인하고 있습니다" : !available ? "관제 연결을 확인하세요" :
       draft?.rejected ? "접수 전 거절된 요청입니다. 새 요청을 작성하세요" : approveReason());
-    guard(fresh, busy ? "요청 결과를 확인하고 있습니다" : draft && !draft.confirmed ? "미확인 요청의 원장을 먼저 확인하세요" : "");
+    setOffBy(fresh, busy ? "요청 결과를 확인하고 있습니다" : draft && !draft.confirmed ? "미확인 요청의 원장을 먼저 확인하세요" : "");
   }
   async function change(path, body, message) {
     if (busy || !available || approveReason()) return;
@@ -144,7 +140,7 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
       if (!transfer && row.request.target_unit === unit.unit_id && !row.local_task_id && !terminal.has(row.status)) {
         const approve = button("이 관제에서 승인", "primary");
         approve.dataset.delegationAction = JSON.stringify([row.origin_id, row.delegation_id, "approve"]);
-        guard(approve, reply.stale ? "소유 관제 연결을 확인하세요" : row.cancel_requested ? "취소 요청된 작업입니다" :
+        setOffBy(approve, reply.stale ? "소유 관제 연결을 확인하세요" : row.cancel_requested ? "취소 요청된 작업입니다" :
           busy ? "요청 결과를 확인하고 있습니다" : approveReason());
         approve.addEventListener("click", () => change(path + "/approve", {expected_revision: row.revision},
           "승인을 접수했습니다. 작업 원장에서 실행 결과를 확인하세요."));
@@ -153,7 +149,7 @@ export function createControlUnitView({scope, call, anchor, active, approveReaso
       if (!terminal.has(row.status)) {
         const cancel = button("취소 요청");
         cancel.dataset.delegationAction = JSON.stringify([row.origin_id, row.delegation_id, "cancel"]);
-        guard(cancel, reply.stale ? "소유 관제 연결을 확인하세요" : row.cancel_requested ? "소유 관제의 결과를 기다립니다" :
+        setOffBy(cancel, reply.stale ? "소유 관제 연결을 확인하세요" : row.cancel_requested ? "소유 관제의 결과를 기다립니다" :
           busy ? "요청 결과를 확인하고 있습니다" : approveReason());
         cancel.addEventListener("click", () => change(path + "/cancel", {}, "취소를 요청했습니다. 소유 관제의 결과를 기다립니다."));
         actions.append(cancel);

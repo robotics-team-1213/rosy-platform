@@ -1,4 +1,6 @@
 // D-775: preview approval and current-session confirmation; no tracking/motion writes.
+import { setOff } from "/common/cause-line.js";
+import { isOperator, NAMED_OPERATOR_REASON } from "/console/assets/authorization.js";
 export function isMeasuredFrame(headers, revision, session) {
   return headers.get('Content-Type')?.split(';')[0] === 'image/jpeg'
     && headers.get('X-Frame-Rectified') === 'measured-map'
@@ -21,7 +23,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   let busy = false, reading = false, imageURL = null, cancelImageExpiry = null;
   let sourceLifetime = new AbortController();
   const identity = () => `${auth.token}\n${auth.role}\n${auth.principal}`;
-  const operator = () => auth.role === 'operator' && !!auth.principal && !auth.locked;
+  const operator = () => isOperator(auth.role) && !!auth.principal && !auth.locked;
   const visible = () => !root.closest('#camera-calibration').hidden;
 
   function clearImage() {
@@ -58,10 +60,10 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
   // Write only what changed: the 2 s refresh must not touch a control whose state did not change.
   function setEnabled(control, enabled, reason) {
     const value = enabled ? '' : reason;
-    if (control.disabled === enabled) control.disabled = !enabled;
-    if (control.getAttribute('reason') !== value) control.setAttribute('reason',value);
+    const targetReason = enabled ? null : reason;
+    if (control.disabled === enabled || control.getAttribute('reason') !== targetReason) setOff(control, !enabled, value);
     if (control.hasAttribute('data-reading-reason') !== (value === READING_REASON)) control.toggleAttribute('data-reading-reason');
-    for (const name of ['title','aria-description']) if (control.getAttribute(name) !== value) control.setAttribute(name,value);
+    for (const name of ['title','aria-description']) if (control.getAttribute(name) !== value) control.setAttribute(name, value);
   }
   function render() {
     // A read's reason is title/aria only (measured-calibration.css hides its line): a visible line would resize the
@@ -69,7 +71,7 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const busyReason = '요청을 처리 중입니다.', readingReason = READING_REASON;
     const editable = operator() && !busy;
     const operable = editable && !reading;
-    const editReason = busy ? busyReason : '이름 있는 운영자 권한이 필요합니다.';
+    const editReason = busy ? busyReason : `${NAMED_OPERATOR_REASON}.`;
     const gate = (control, ok, why) => setEnabled(control, operable && ok, !editable ? editReason : ok ? (reading ? readingReason : '') : why);
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
     setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');

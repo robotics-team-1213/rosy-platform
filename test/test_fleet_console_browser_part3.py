@@ -5,6 +5,7 @@ from test_fleet_console_browser import (
     MAP_GRID, _robot, SNAPSHOT, FORMATION, API, _open_cards, _open_token_access,
     _open_console, CAMERA_FINGERPRINT, _camera_api, _camera_shot,
 )
+from test_fleet_console_browser_part2 import _enrollment_api
 
 
 WARM_TEXT_CONTRAST = """() => {
@@ -332,10 +333,10 @@ def test_roster_mode_tag_speaks_korean_and_keeps_the_enum_in_title(console_url):
 
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_single_column_tier_puts_exceptions_and_robot_context_before_the_map(console_url, width, height):
-    """D-892: intervention/context/map order and mounted owners survive resizing."""
+    """D-892: context/map order and mounted owners survive resizing."""
     from playwright.sync_api import sync_playwright
 
-    panels = ['.queues-panel', '.console-context', '[aria-labelledby="map-heading"]']
+    panels = ['.console-context', '[aria-labelledby="map-heading"]']
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
         page.set_viewport_size({"width": width, "height": height})
@@ -350,15 +351,15 @@ def test_single_column_tier_puts_exceptions_and_robot_context_before_the_map(con
             parents: nodes.map(node => node.parentElement.id)};
         }""", panels)
         assert layout['top'] == sorted(layout['top']), layout
-        assert layout['domOrder'] and layout['parents'] == ['fleet-main'] * 3, layout
+        assert layout['domOrder'] and layout['parents'] == ['fleet-main'] * 2, layout
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         page.evaluate("""selectors => {
           window.retainedPanels = selectors.map(sel => document.querySelector(sel));
-          window.retainedOwners = ['#roster', '#context-status', '#context-tools', '#context-evidence', '#context-inbox'].map(sel => document.querySelector(sel));
+          window.retainedOwners = ['#roster', '#context-status', '#context-tools', '#context-evidence', '#queues-panel'].map(sel => document.querySelector(sel));
         }""", panels)
-        page.locator('[data-context-tab="inbox"]').click()
-        assert page.locator('#context-inbox').is_visible()
-        assert page.locator('.queues-panel').is_visible() and page.locator('#map-stage').is_visible()
+        page.locator('#fleet-inbox').click()
+        assert page.locator('#queues-panel').is_visible() and page.locator('#map-stage').is_visible()
+        page.locator('#queues-close').click()
         page.locator('[data-context-tab="tools"]').click()
         page.locator('.formation-form-wrap > summary').click()
         page.locator('#formation-spacing').fill('1.7')
@@ -376,7 +377,7 @@ def test_single_column_tier_puts_exceptions_and_robot_context_before_the_map(con
           const nodes = selectors.map(sel => document.querySelector(sel));
           return nodes.every((node, i) => node === window.retainedPanels[i])
             && nodes.slice(1).every((node, i) => Boolean(nodes[i].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING))
-            && ['#roster', '#context-status', '#context-tools', '#context-evidence', '#context-inbox'].every((sel, i) => document.querySelector(sel) === window.retainedOwners[i]);
+            && ['#roster', '#context-status', '#context-tools', '#context-evidence', '#queues-panel'].every((sel, i) => document.querySelector(sel) === window.retainedOwners[i]);
         }""", panels)
         assert page.locator('#formation-spacing').input_value() == '1.7'
         assert page.locator('#formation-spacing').evaluate('(node) => node === document.activeElement')
@@ -970,6 +971,7 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
         page.route("**/api/fleet/robots/rosy_01/line-stuck/claim", claim)
         page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
         page.goto(console_url, wait_until="networkidle")
+        page.locator("#fleet-inbox").click()
         panel = page.locator("#critical-list")  # D-540 3: the answers open in the queue row
         panel.wait_for(state="visible")
         item = panel.locator('.stuck-item[data-robot-id="rosy_01"]')
@@ -980,12 +982,13 @@ def test_line_stuck_panel_confirms_resume_and_shows_cores_refusal_verbatim(conso
         assert back.get_attribute("aria-disabled") == "true"
         assert "로컬 복구가 꺼져" in back.get_attribute("reason")
 
-        # Escape cancels the confirm step without a request.
+        # Escape cancels the confirm step without a request or closing the bell drawer.
         item.locator('ui-button[data-decision="RESUME"]').click()
         confirm = item.locator(".stuck-confirm")
         confirm.wait_for(state="visible")
         page.keyboard.press("Escape")
         confirm.wait_for(state="detached")
+        assert page.locator("#queues-panel").is_visible()
         assert bodies == []
         assert order == ["claim"]   # D-438: the click claims; cancelling sends no decision
 
@@ -1033,6 +1036,7 @@ def test_line_stuck_answer_in_flight_blocks_a_second_submit_then_shows_success(c
 
         page.route("**/api/fleet/robots/rosy_01/line-stuck/decision", decision)
         page.goto(console_url, wait_until="networkidle")
+        page.locator("#fleet-inbox").click()
         item = page.locator('#critical-list .stuck-item[data-robot-id="rosy_01"]')
         wait = item.locator('ui-button[data-decision="WAIT"]')
         wait.click()
@@ -1066,6 +1070,7 @@ def test_line_stuck_confirm_follows_the_live_stuck_and_an_offline_robot(console_
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api, posts=posts)
         page.goto(console_url, wait_until="networkidle")
+        page.locator("#fleet-inbox").click()
         item = page.locator('#critical-list .stuck-item[data-robot-id="rosy_01"]')
         resume = item.locator('ui-button[data-decision="RESUME"]')
         resume.click()

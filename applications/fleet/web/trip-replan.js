@@ -2,8 +2,10 @@
 // `바뀐 경로로 계속` (confirm-replan, a move: named operator, D-540 9) or `운행 취소` (a stop: quiet, no confirm).
 // D-577 (d): the wait-cycle row opens on Fleet's resolver decision, the AI facts (shadow) and the same two
 // trip routes plus the robot card. No new motion route.
+import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import {AI_FACT_LABEL, RESOLVER_DECISION_LABEL, tripErrorText} from "/console/assets/trip-display.js";
-import { primaryButton, quietButton, setReason } from "./queues.js";
+import { setOffBy } from "/common/cause-line.js";
+import { primaryButton, quietButton } from "./queues.js";
 
 /** What the slot shows for one held trip: the changed route, or why there is none. */
 export function replanView(trip, { operator, named = "", busy = false }) {
@@ -14,7 +16,7 @@ export function replanView(trip, { operator, named = "", busy = false }) {
       Number.isFinite(hold.eta_s) ? `약 ${Math.round(hold.eta_s)}초` : "",
       `장소 ${(plan.places || []).length}곳`].filter(Boolean).join(" · ")
     : `다시 계산한 경로가 없습니다${hold.code ? ` (${hold.code})` : ""} · 운행을 취소하세요`;
-  const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : "";
+  const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : "";
   return { facts, confirmReason: lock || named || (plan ? "" : "다시 계산한 경로가 없습니다"), cancelReason: lock };
 }
 
@@ -34,7 +36,7 @@ export function deadlockView(traffic, trip, aiFacts, robotId, { operator, named 
   lines.push(...(facts.length ? facts.map((fact) => `AI 참고 · ${AI_FACT_LABEL[fact.kind] || fact.kind}`
     + `${fact.kind === "wait_cycle_confirmed" && fact.value?.fleet_agrees === false ? " (Fleet 순환과 불일치)" : ""}`
     + ` · ${fact.robot_ids.join(", ")} · 신뢰도 ${Math.round(fact.confidence * 100)}%`) : ["AI 사실 없음"]));
-  const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : "";
+  const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : "";
   const held = trip?.hold?.reason === "replan" && trip.hold.plan;
   return { lines, confirmReason: lock || named || (!trip ? "열린 운행이 없습니다" : held ? "" : "확인할 바뀐 경로가 없습니다"),
     cancelReason: lock || (trip ? "" : "열린 운행이 없습니다") };
@@ -82,7 +84,7 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
     actions.setAttribute("aria-label", `${robotId} ${label}`);
     for (const [node, key, reason, click] of buttons) {
       node.dataset.replan = key;
-      setReason(node, reason);
+      setOffBy(node, reason);
       node.addEventListener("click", scope.guard(click));
       actions.append(node);
     }

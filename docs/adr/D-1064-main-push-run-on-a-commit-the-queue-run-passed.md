@@ -28,3 +28,7 @@
 - 되돌리기: 저장소 변수 `ROSY_PUSH_SAME`을 지우면 즉시 이전 동작이다.
 - 남은 확인: 변수를 켠 뒤 push 실행 로그의 `[queue]` 줄로 적용 비율을, 작업 단위 대기 시간으로 효과를 본다.
 - 확인한 사실: 2026-11-21 큐 실행 24건 모두 `merge_group.base_sha`가 큐 커밋의 `HEAD^1`이었고 큐 ref 이름의 base도 같았다. 코드는 이 성질에 기대지 않고 ref 이름으로 직접 확인한다.
+
+### 개정 2026-11-22: 동일 트리·기준의 중복 build-smoke 생략
+
+`ROSY_QUEUE_TESTED`로 동일 트리·기준의 직전 녹색 실행이 증명되어 `affected_queue.narrowed`가 guard 묶음으로 좁혀졌으면 `push` 실행에서도 중복 `build-smoke`를 생략한다(그 이전 단계에서 이미 같은 트리의 `build-smoke`가 통과했다). 묶음 병합·직접 push·기록 누락 때는 그대로 실행한다.

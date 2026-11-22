@@ -1,5 +1,6 @@
+import { setOff, setOffBy } from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
-import {NAMED_OPERATOR_REASON, OPERATOR_REASON, namedOperatorReason} from "/console/assets/authorization.js";
+import {NAMED_OPERATOR_REASON, OPERATOR_REASON, namedOperatorReason, isOperator} from "/console/assets/authorization.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
@@ -21,6 +22,11 @@ bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading
   groups: {'saved-heading': ['observation-heading', 'print-heading', 'catalog-heading', 'real2sim-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
+// B-3 — 읽기 전용 ?focus= 딥링크. 알려진 단계 머리글이나 팔 카드만 허용하고 토큰·자격증은 URL에서 읽지 않는다(D-977).
+const SUBNAV_HEADINGS = ['saved-heading', 'recipe-heading', 'cell-heading', 'preview-heading', 'proposal-heading', 'mission-heading', 'observation-heading'];
+const focusParam = channelQuery.get('focus') || '';
+const armFocusMatch = /^arm:([A-Za-z0-9._:-]{1,64})$/.exec(focusParam);
+let pendingFocusHandled = false;
 let channelReceipt = null, channelReview = null;
 const JOB_STATUS_LABEL = {
   PROPOSED: '제안됨 · 승인 대기', READY: '실행 대기', RUNNING: '실행 중',
@@ -45,16 +51,58 @@ function jobReasonLabel(reason) {
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value, onSummary: renderExceptions});
+// B-3 — 관측 화면은 저장된 문서 단계에 속한다(D-926 groups). 화면이 바뀐 뒤에 카드로 옮겨야 초점이 살아 있다.
+function jumpToObservations(land) {
+  if (location.hash === '#saved-heading') land();
+  else { location.hash = '#saved-heading'; addEventListener('hashchange', land, {once: true}); }
+}
+if (SUBNAV_HEADINGS.includes(focusParam)) {
+  if (focusParam === 'observation-heading') jumpToObservations(() => $('observation-heading')?.scrollIntoView({block: 'nearest'}));
+  else if (location.hash !== '#' + focusParam) location.hash = '#' + focusParam;
+}
+function focusArmFromLink() {
+  if (!armFocusMatch || pendingFocusHandled) return;
+  if (location.hash && location.hash !== '#saved-heading') return;
+  jumpToObservations(() => { pendingFocusHandled = observations.focusArm(armFocusMatch[1]); });
+}
+// 요약이 바뀔 때만 다시 그린다(관측 모듈이 서명으로 지켜 준다). 접속 끊김·해제는 빈 목록으로 줄을 지운다.
+function renderExceptions(items) {
+  const strip = $('cell-exception-strip');
+  if (!strip) return;
+  const nextKey = JSON.stringify(items.map(item => [item.key, item.severity, item.detail, item.sourceId]));
+  if (strip.dataset.summaryKey === nextKey) return;
+  strip.dataset.summaryKey = nextKey;
+  strip.hidden = items.length === 0;
+  strip.replaceChildren(...items.map(item => {
+    const row = document.createElement('div');
+    row.className = 'cell-exception-item';
+    row.dataset.severity = item.severity;
+    const tag = document.createElement('ui-tag');
+    tag.setAttribute('status', item.severity === 'danger' ? 'crit' : 'warn');
+    tag.textContent = item.severity === 'danger' ? '정지·보류' : '주의';
+    const label = document.createElement('strong'); label.textContent = item.label;
+    const detail = document.createElement('span'); detail.textContent = item.detail;
+    const move = document.createElement('ui-button');
+    move.setAttribute('kind', 'quiet'); move.setAttribute('type', 'button');
+    move.textContent = '관측으로 이동';
+    move.addEventListener('click', () => jumpToObservations(() => {
+      if (item.sourceId) observations.focusArm(item.sourceId);
+      else $('observation-heading')?.scrollIntoView({block: 'nearest'});
+    }));
+    row.append(tag, label, detail, move);
+    return row;
+  }));
+}
 const catalog = createObjectCatalog({request, $});
-const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy,
-  namedReason: () => role !== 'operator' || busy ? OPERATOR_REASON
+const real2sim = createReal2SimPipeline({request, $, isOperator: () => isOperator(role) && !busy,
+  namedReason: () => !isOperator(role) || busy ? OPERATOR_REASON
     : principal?.startsWith('development-') ? NAMED_OPERATOR_REASON : namedOperatorReason(role, principal),
   cellFrames: createCellFrameFeed({call: request})});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});
-window.addEventListener('pagehide', event => { catalog.clear(); real2sim.clear(); event.persisted ? observations.clear() : observations.dispose(); });
+window.addEventListener('pagehide', event => { catalog.clear(); real2sim.clear(); clearUnitLinks(); event.persisted ? observations.clear() : observations.dispose(); });
 window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
 bindEstop(request); bindTopbarToggle(); tickClock(); setInterval(tickClock, 1000); watchFleet(request);
 $('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
@@ -79,6 +127,7 @@ function invalidate() {
 }
 function clearSession() {
   observations.clear(); catalog.clear(); real2sim.clear(); channelReceipt = channelReview = null;
+  clearUnitLinks();
   $('cell-channel-original').textContent = ''; $('cell-channel-request').hidden = true;
   role = null; principal = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate(); revisions.clear();
   for (const kind of ['recipe', 'cell']) { $(kind + '-revision').setAttribute('state', 'empty'); $(kind + '-revision').textContent = '저장 전'; }
@@ -86,36 +135,61 @@ function clearSession() {
   $('saved-status').setAttribute('state', 'unavailable'); $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
 }
 const scopeFilled = () => $('workcell').value.trim() && $('instance').value.trim();
+// D-977 — 하위 셀 이동 링크는 검증된 https origin만 쓰고 토큰을 실어 보내지 않는다(각 origin이 Account 로그인 검증).
+const CELL_LINK_ORIGIN = /^https:\/\/[\w.:\[\]-]+$/;
+function clearUnitLinks() { $('cell-unit-links').replaceChildren(); }
+function paintUnitLinks(summary) {
+  const origins = summary?.child_origins && typeof summary.child_origins === 'object' ? summary.child_origins : {};
+  const arms = Array.isArray(summary?.child_arm_units) ? summary.child_arm_units : [];
+  const links = arms.flatMap(child => {
+    const origin = origins[child];
+    if (typeof origin !== 'string' || !CELL_LINK_ORIGIN.test(origin)) return [];
+    const link = document.createElement('a');
+    link.className = 'ui-action-link';
+    link.dataset.kind = 'quiet';
+    link.rel = 'noreferrer';
+    link.href = `${origin}/console/cell`;
+    link.textContent = `${child} 셀 관제 화면 열기`;
+    return [link];
+  });
+  $('cell-unit-links').replaceChildren(...links);
+}
+async function refreshUnitLinks() {
+  const epoch = editEpoch;
+  try {
+    const summary = await api('/api/fleet/control-unit');
+    if (epoch === editEpoch && role) paintUnitLinks(summary); else clearUnitLinks();
+  } catch { clearUnitLinks(); }
+}
 for (const id of ['workcell', 'instance']) $(id).addEventListener('input', () => refreshControls());
 function refreshControls() {
   for (const field of document.querySelectorAll('input, textarea, select')) {
-    field.disabled = busy; field.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : ''); field.setAttribute('aria-describedby', 'notice');
+    setOffBy(field, busy ? '요청 처리 중 · 입력 잠시 잠금' : ''); field.setAttribute('aria-describedby', 'notice');
   }
-  for (const control of document.querySelectorAll('[data-document-edit]')) { control.disabled = busy; control.setAttribute('reason', busy ? '요청 처리 중' : ''); }
+  for (const control of document.querySelectorAll('[data-document-edit]')) { setOffBy(control, busy ? '요청 처리 중' : ''); }
   for (const id of ['token-save', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     const unavailable = cellServiceUnavailable && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const sessionPending = !role && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const channelBlocked = id === 'new-proposal' && channelRequested;
-    $(id).disabled = busy || unavailable || sessionPending || channelBlocked;
-    $(id).setAttribute('reason', busy ? '요청 처리 중' : unavailable ? '팔레트 적재 서비스 구성 확인 필요' : sessionPending ? '접속 상태 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
+    setOff($(id), busy || unavailable || sessionPending || channelBlocked, busy ? '요청 처리 중' : unavailable ? '팔레트 적재 서비스 구성 확인 필요' : sessionPending ? '접속 상태 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
   }
   for (const id of commands) {
-    if (cellServiceUnavailable) { $(id).disabled = true; $(id).setAttribute('reason', '팔레트 적재 서비스 구성 확인 필요'); continue; }
+    if (cellServiceUnavailable) { setOffBy($(id), '팔레트 적재 서비스 구성 확인 필요'); continue; }
     const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
     const needsJob = id in jobActionLabels;
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
-    const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked &&
+    const allowed = isOperator(role) && !busy && jobAllowed && !sheetBlocked &&
       (id !== 'propose' || (scopeFilled() && previewRefs !== null && (!channelRequested || (channelReceipt && channelReview?.state !== 'LINKED'))));
     let reason = '';
     if (!allowed) {
       reason = id === 'propose' && !scopeFilled() ? '작업 셀 ID와 실행 인스턴스 ID를 입력하세요' : '저장 후 미리보기 필요';
       if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
       if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
-      if (role !== 'operator') reason = OPERATOR_REASON;
+      if (!isOperator(role)) reason = OPERATOR_REASON;
       if (busy) reason = '요청 처리 중';
     }
-    $(id).disabled = !allowed; $(id).setAttribute('reason', reason);
+    setOff($(id), !allowed, reason);
   }
 }
 async function action(fn) {
@@ -195,7 +269,7 @@ function cellFields(cell) {
     const label = document.createElement('label'); label.textContent = title;
     const input = document.createElement('input'); input.className = 'ui-field';
     input.type = typeof value === 'number' ? 'number' : 'text'; input.step = 'any'; input.value = value;
-    input.disabled = busy; input.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
+    setOffBy(input, busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
     input.setAttribute('aria-describedby', 'notice');
     input.addEventListener('input', () => {
       editEpoch++; invalidate();
@@ -220,8 +294,7 @@ function recipeFields(recipe) {
     if (value === undefined) continue;
     const label = document.createElement('label'); label.textContent = `${title} (${unit})`;
     const input = document.createElement('input'); input.className = 'ui-field';
-    input.disabled = busy;
-    input.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
+    setOffBy(input, busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
     input.setAttribute('aria-describedby', 'notice');
     input.type = 'number'; input.step = 'any'; input.value = value;
     input.addEventListener('input', () => {
@@ -314,7 +387,8 @@ function connect(credentialChange = false) {
   return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role; principal = session.principal_id;
   showSession(session, {credentialChange, focusOrigin});
-  observations.clear(); void observations.refresh(); void catalog.refresh(); void real2sim.refresh();
+  observations.clear(); void observations.refresh().then(focusArmFromLink); void catalog.refresh(); void real2sim.refresh();
+  void refreshUnitLinks();
   loginForm.refresh(false);
   await list();
   if (channelRequested) {
@@ -462,14 +536,14 @@ $('new-proposal').addEventListener('click', () => {
 for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
   $(command).addEventListener('click', async () => {
     if (command === 'cancel' || (command === 'admit' && channelRequested)) {
-      if (busy || role !== 'operator' || !job || job.mission_id !== $('mission-id').value) return;
+      if (busy || !isOperator(role) || !job || job.mission_id !== $('mission-id').value) return;
       const id = job.mission_id, epoch = editEpoch;
       const allowed = await confirmIrreversible({
         message: command === 'admit' ? `대화 요청에 연결된 팔레트 적재 작업 "${id}"의 실행을 승인할까요?` :
           `작업 "${id}"을 취소할까요? 작업 취소는 실행 중인 장치를 정지하지 않습니다. 실제 장치 상태를 확인하세요.`,
         action: command === 'admit' ? '실행 승인' : '작업 취소', opener: $(command),
       });
-      if (!allowed || busy || epoch !== editEpoch || role !== 'operator' || job?.mission_id !== id) return;
+      if (!allowed || busy || epoch !== editEpoch || !isOperator(role) || job?.mission_id !== id) return;
     }
     await action(async () => {
       if (!job || job.mission_id !== $('mission-id').value) throw new Error('작업 상태를 먼저 확인하세요.');

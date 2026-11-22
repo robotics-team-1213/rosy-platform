@@ -6,7 +6,11 @@ import json, math, os, re, signal, subprocess, time, urllib.request
 from pathlib import Path
 
 from bench_record_inspect import ARMS, BI_ARM, HERE, active_handover_units
-from bench_record_guard import hold_other_arm_locks, release
+from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, release
+from bench_record_step import at_home
+
+
+HOME_UNFOLDED = "home requires an empty, folded arm"  # cell_unwedge.return_home's refusal, written to the receipt
 
 
 class BenchOpsMixin:
@@ -44,50 +48,113 @@ class BenchOpsMixin:
         return {"saved": fname, "choices": self.choices()}
 
 
+    def _home_files(self, a):
+        """(stack, library, record config, robot profile, caps) one arm's home runs on. The stack is the one
+        cell_task_exec names for the arm; arm_s's other files carry the -live names of the cell that runs it."""
+        from cell_task_exec import _arm_run_spec
+
+        letter, live = ARMS[a], a == "arm_s"
+        stack = _arm_run_spec(a, self.prep)[1]
+        libs = sorted(self.prep.glob(f"chunks-arm-{letter}-inplace-live.json" if live else f"chunks-topdown-guard-arm{letter}*.json"))
+        rcfg = self.prep / f"record-config-arm-{letter}{'-live' if live else ''}.json"
+        rprof = self.prep / f"arm-{letter}-robot-profile{'-live' if live else ''}.json"
+        caps = [p for p in sorted(self.prep.glob(f"caps-arm-{letter}-*.json")) if "-custom-" not in p.name]
+        if not stack.is_file() or not libs:
+            raise ValueError(f"{a}의 홈 복귀 설정({stack.name} / chunks-*)을 찾을 수 없습니다")
+        if not (rcfg.is_file() and rprof.is_file() and caps):
+            raise ValueError(f"{a}의 홈 실행용 설정/프로필/caps 파일이 부족합니다")
+        return stack, libs[-1], rcfg, rprof, caps[-1]
+
+    def _pipeline_stage(self, a, cmd, stage, env, *extra):
+        try:
+            return subprocess.run([*cmd, "--stage", stage, *extra], cwd=self.prep, env=env, capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:  # subprocess.run killed the stage: the arm may be mid-motion, nothing confirms it
+            self._mark_manual(f"{a} {stage} 시간 초과 (60s): 단계를 강제 종료했습니다 — 팔 상태를 확인하세요")
+            raise ValueError(f"{a} {stage} 시간 초과 (60s)") from None
+
+    def _check_abort(self, label):
+        if self.abort:
+            raise ValueError(f"정지 요청이 있어 {label}을 시작하지 않습니다")
+
+    def _home_failure(self, a, res):
+        """cell_pipeline prints {"receipt","result"} on stdout; the refusal text is only in the receipt file."""
+        try:
+            out = json.loads((res.stdout or "").strip().splitlines()[-1])
+            result = out["result"]
+        except (ValueError, IndexError, KeyError, TypeError):
+            return f"{a} 홈 이동 실패: {(res.stderr or res.stdout or '').strip()[-240:]}"
+        try:
+            error = json.loads(Path(out["receipt"]).read_text(encoding="utf-8")).get("error") or ""
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            error = ""
+        hint = (" — 감독 복구(cell_pipeline --stage recover 또는 cell_auto_fold)로 팔을 먼저 접으세요"
+                if HOME_UNFOLDED in str(error) else "")
+        return f"{a} 홈 이동 실패 (result={result}) {str(error)[-200:]}{hint}"
+
+    def _home_ok(self, res):
+        try:
+            return res.returncode == 0 and json.loads((res.stdout or "").strip().splitlines()[-1])["result"] == "home"
+        except (ValueError, IndexError, KeyError, TypeError):
+            return False
+
     def go_home(self, body):
-        if body.get("at_bench") is not True:
-            raise ValueError("작업대 현장 확인(at_bench) 체크 후에만 홈 이동을 실행할 수 있습니다")
+        self.last_issue, self._home_recovered = None, False
+        try:
+            return self._go_home(body)
+        except ValueError as exc:  # the page tells a refusal, an automatic recovery and a person-needed stop apart (error_kind)
+            kind = "needs_person" if self.manual.exists() else "recovered" if self._home_recovered else "refused"
+            self.last_issue = {"kind": kind, "message": str(exc)[:300], "arm": (body or {}).get("arm") if isinstance(body, dict) else None}
+            raise
+
+    def _go_home(self, body):
         arm = body.get("arm")
         if arm not in (*ARMS, BI_ARM):
             raise ValueError("유효한 팔(arm_a, arm_b, arm_s, arm_ab)을 선택하세요")
+        self._check_manual()
         if self.pending.exists():
             raise ValueError("이전 녹화에서 멈춘 유닛이 아직 복원되지 않았습니다. 먼저 복원하세요")
         target_arms = ["arm_a", "arm_b"] if arm == BI_ARM else [arm]
+        for a in target_arms:
+            self._check_lease(a)  # a held or foreign live lease refuses before any unit stops or bus opens
         inc_leader = body.get("include_leader") is True
-        if inc_leader and body.get("hands_off_leader") is not True:
-            raise ValueError("리더 동시 홈 이동에는 '리더 팔에서 손을 떼었습니다(hands_off_leader)' 확인이 필요합니다")
         arm_plans = []
         for a in target_arms:
             letter = ARMS[a]
-            stack = self.prep / f"cell-arm-{letter}-stack.json"
-            libs = sorted(self.prep.glob(f"chunks-topdown-guard-arm{letter}*.json"))
-            if not stack.is_file() or not libs:
-                raise ValueError(f"{a}의 홈 복귀 설정(cell-arm-{letter}-stack.json / chunks-*)을 찾을 수 없습니다")
-            rcfg = self.prep / f"record-config-arm-{letter}.json"
-            rprof = self.prep / f"arm-{letter}-robot-profile.json"
-            caps_cands = [p for p in sorted(self.prep.glob(f"caps-arm-{letter}-*.json")) if "-custom-" not in p.name]
-            if not (rcfg.is_file() and rprof.is_file() and caps_cands):
-                raise ValueError(f"{a}의 홈 실행용 설정/프로필/caps 파일이 부족합니다")
-            self._check_robot(a, rcfg.name, rcfg.read_bytes())
-            lpose = self.prep / f"leader-home-{a}.json"
-            if inc_leader and not lpose.is_file():
-                raise ValueError(f"{a}의 저장된 리더 홈 포즈(leader-home-{a}.json)가 없습니다")
-            arm_plans.append((a, letter, stack, libs[-1], rcfg, rprof, caps_cands[-1], lpose))
+            stack, lib, rcfg, rprof, caps = self._home_files(a)
+            self._check_robot(a, rcfg.name, rcfg.read_bytes(), rprof)
+            port = (json.loads(rcfg.read_text(encoding="utf-8-sig")).get("robot") or {}).get("port")
+            if port and str(port).startswith("/dev/serial/by-id/") and not Path(port).exists():  # refuse before any unit stops: nothing was touched, no hold
+                raise ValueError(f"{a} 팔로워 보드가 이 PC에 연결되어 있지 않습니다 ({Path(port).name}) — 홈 이동을 시작하지 않았습니다")
+            arm_plans.append((a, letter, stack, lib, rcfg, rprof, caps))
         with self.lock:
-            if self.state["status"] in ("handing_over", "homing", "recording", "restoring", "sealing"):
-                raise ValueError("세션이 진행 중일 때는 홈 이동을 실행할 수 없습니다")
-            self.state = {"status": "homing", "name": f"home-{arm}"}
-        results = []
+            if self.state["status"] in ("handing_over", "homing", "recording", "restoring", "sealing", "leader_manual_check"):
+                raise ValueError("세션이 진행 중이거나 리더 수동 확인이 필요할 때는 홈 이동을 실행할 수 없습니다")
+            claim = self._auto_claim()  # an auto home: only its OWN record, and no request may have taken the bench since its session ended
+            if claim is not None:
+                record = self._auto_homes.get(claim)
+                if record is None or record["cancelled"]:
+                    raise ValueError("자동 홈 취소됨 (정지 요청)")
+                if getattr(self, "_claims", 0) != claim:
+                    raise ValueError("다른 요청이 벤치를 가져갔습니다 — 지난 세션의 자동 홈을 취소합니다")
+                record["reserved"] = True  # from here stop() aborts it instead of cancelling it
+            self.state, self.abort = {"status": "homing", "name": f"home-{arm}", "step": "follower_home"}, False
+            self._person_needed = self._arm_lock = self._home_child = None
+            self._claim_bench()
+        results, blocked = [], None
         env = dict(os.environ)
         adapter_dir = str(HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter")
         py_paths = [adapter_dir, str(HERE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])
         env["PYTHONPATH"] = os.pathsep.join(py_paths)
         try:
-            for a, letter, stack, lib_p, rcfg, rprof, caps_p, lpose in arm_plans:
+            for a, letter, stack, lib_p, rcfg, rprof, caps_p in arm_plans:
+                self._check_abort(f"{a} 홈 이동")  # a /stop since the last arm: no new arm starts
+                self._set(step="follower_home", step_arm=a)
                 io_dir = self.prep / f"chunk-io-{letter}"
                 handles = []
                 rec_proc = None
-                stopped_units = []
+                clean = True
+                stopped_units, fresh, home_ok = [], False, False
+                rec_log_p, rec_log = self.prep / ".bench-runs" / f"home-{a}.log", None
                 try:
                     handles, busy = hold_other_arm_locks(a, ARMS, self.procs, self.mounts)
                     if busy:
@@ -107,79 +174,109 @@ class BenchOpsMixin:
                                "--arm", a, "--chunks", str(lib_p),
                                "--io", str(io_dir), "--operating-profile", str(rprof)]
                     live_p = io_dir / "live.json"
-                    t0 = time.time()
-                    rec_proc = self.popen(rec_cmd, cwd=self.prep, env=env)
-                    deadline_r = t0 + 20.0
-                    ready = False
-                    while time.time() < deadline_r:
-                        rc = rec_proc.poll()
-                        if rc is not None:
-                            if rc != 0:
-                                raise ValueError(f"{a} 홈용 record_session이 조기 종료되었습니다 (code={rc})")
-                            ready = True
+                    for attempt in (0, 1):  # a baseline refusal is restored in place, under this reservation, and retried once
+                        t0 = time.time()
+                        with self.lock:  # the lock /stop takes: a stop is either seen here or finds the child running
+                            self._check_abort(f"{a} 홈 이동")
+                            rec_log = rec_log_p.open("wb")  # only now: it truncates the earlier child's log, which the classifier still reads on a stop
+                            if getattr(self, "_arm_lock", None) is not None:  # the recovery's lock goes just before the retried recorder's own
+                                release([self._arm_lock])
+                                self._arm_lock = None
+                            rec_proc = self._home_child = self.popen(rec_cmd, cwd=self.prep, env=env, stdout=rec_log, stderr=subprocess.STDOUT)
+                        deadline_r = t0 + 20.0
+                        ready, refused = False, None
+                        while time.time() < deadline_r:
+                            rc = rec_proc.poll()
+                            if rc is not None:
+                                refused, ready = (rc, False) if rc != 0 else (None, True)
+                                break
+                            if live_p.is_file() and live_p.stat().st_mtime > t0:
+                                ready = fresh = True  # written by the recorder this request started
+                                break
+                            time.sleep(0.3)
+                        if refused is None:
                             break
-                        if live_p.is_file() and live_p.stat().st_mtime > t0:
-                            ready = True
-                            break
-                        time.sleep(0.3)
+                        rec_log.close()
+                        if attempt == 0 and self._baseline_in_place(a, rcfg, refused, rec_log_p):
+                            continue
+                        raise ValueError(f"{a} 홈용 record_session이 조기 종료되었습니다 (code={refused}){self._child_reason(rec_log_p)}")
                     if not ready:
                         raise ValueError(f"{a} 홈용 record_session 준비 시간 초과 (20s)")
                     time.sleep(1.0)
-                    cmd = [self.python, str(HERE / "cell_pipeline.py"), "--config", str(stack),
-                           "--stage", "home", "--library", str(lib_p), "--operating-profile", str(rprof), "--person-at-switch"]
-                    try:
-                        res = subprocess.run(cmd, cwd=self.prep, env=env, capture_output=True, text=True, timeout=60)
-                    except subprocess.TimeoutExpired:
-                        raise ValueError(f"{a} 홈 이동 시간 초과 (60s)") from None
-                    if res.returncode != 0:
-                        raise ValueError(f"{a} 홈 이동 실패: {(res.stderr or res.stdout or '').strip()[-240:]}")
-                    if inc_leader:
-                        lcmd = [self.python, str(HERE / "leader_home.py"), "--config", str(rcfg),
-                                "--arm", a, "--pose", str(lpose), "--timeout-s", "35",
-                                "--attest", f"hands-off:bench:{int(time.time())}"]
-                        try:
-                            # leader_home stretches its own deadline to the distance at 1 degree/s; a full turn fits in 420 s
-                            lres = subprocess.run(lcmd, cwd=self.prep, env=env, capture_output=True, text=True, timeout=420)
-                        except subprocess.TimeoutExpired:
-                            raise ValueError(f"{a} 리더 홈 이동 시간 초과 (420s)") from None
-                        if lres.returncode != 0:
-                            raise ValueError(f"{a} 리더 홈 이동 실패: {(lres.stderr or lres.stdout or '').strip()[-240:]}")
-                    results.append(a)
+                    with self.lock:  # /stop also ends the recorder, so a stage started after this check finds no runner (limit: not atomic)
+                        self._check_abort(f"{a} 홈 이동")
+                    if not (fresh and rec_proc.poll() is None and at_home(live_p, lib_p, t0)):  # its own live pose: no extra bus process
+                        cmd = [self.python, str(HERE / "cell_pipeline.py"), "--config", str(stack), "--operating-profile", str(rprof),
+                               "--person-at-switch"]
+                        res = self._pipeline_stage(a, cmd, "home", env, "--library", str(lib_p))
+                        if not self._home_ok(res):  # no automatic recover: it cannot tell an empty arm from one holding a box
+                            raise ValueError(self._home_failure(a, res))
+                    home_ok = True
                 finally:
                     if rec_proc is not None:
                         try:
                             rec_proc.send_signal(signal.SIGTERM)
-                            rec_proc.wait(timeout=15)
+                            rec_proc.wait(timeout=30)  # longer than the runner's own 15 s no-answer judgement
+                            clean = rec_proc.returncode == 0  # 75 = HOLD (torque kept ON), anything else is unconfirmed
+                            if not clean and self._never_powered(rec_proc.returncode, rec_log_p):  # it ended before any runner: nothing to check
+                                clean = self._home_recovered = True
+                            if getattr(self, "_person_needed", None):  # a baseline tool that ran without a verified result
+                                clean = False
                         except subprocess.TimeoutExpired:
+                            clean = False
                             rec_proc.kill()
                             try:
                                 rec_proc.wait(timeout=5)
                             except Exception:
                                 pass
                         except Exception:
-                            pass
-                    if handles:
-                        release(handles)
-                    if stopped_units:
-                        errs, _ = self._start_units(reversed(stopped_units))
-                        self._remember(errs)
+                            clean = False
+                    self._home_child = None
+                    if rec_log is not None:
+                        rec_log.close()
+                    if clean:
+                        if getattr(self, "_arm_lock", None) is not None:  # a recovery that ended without handing its lock on
+                            release([self._arm_lock])
+                            self._arm_lock = None
+                        if handles:
+                            release(handles)
+                        try:  # the Leader reads the Follower here: the observers and previews come back only after that
+                            if inc_leader and home_ok:
+                                self._set(step="leader_align", step_arm=a)
+                                self._check_abort(f"{a} 리더 정렬")
+                                self._match_leader(a, rcfg, "리더 홈 이동")
+                        finally:
+                            if stopped_units:
+                                errs, _ = self._start_units(reversed(stopped_units))
+                                self._remember(errs)
+                    else:  # keep the arm locks, the stopped units listed and the bench busy until a person checks the arm
+                        blocked = getattr(self, "_person_needed", None) or (
+                            f"{a} 홈용 record_session이 정상 종료되지 않았습니다 — 사람이 팔 상태를 확인하세요 (유닛 복원·idle 보류)")
+                        self._mark_manual(blocked)  # survives a service restart
+                        raise ValueError(blocked)
+                results.append(a)
         finally:
             with self.lock:
-                self.state = {"status": "idle"}
+                if blocked:  # record_session did not end cleanly: stay busy until a person checks the arm
+                    self.state = {"status": "homing", "name": f"home-{arm}", "error": blocked}
+                else:
+                    self._idle()
         st = self.status()
         st["home_moved"] = results
         return st
 
     def save_initial_pose(self, body):
-        if body.get("at_bench") is not True:
-            raise ValueError("작업대 현장 확인(at_bench) 체크 후에만 이니셜 포즈를 저장할 수 있습니다")
+        mine = self._reserve_bench(f"pose-{(body or {}).get('arm')}")
+        try:
+            return self._save_initial_pose(body)
+        finally:
+            self._release_bench(mine)
+
+    def _save_initial_pose(self, body):
         arm = body.get("arm")
         if arm not in (*ARMS, BI_ARM):
             raise ValueError("유효한 팔(arm_a, arm_b, arm_s, arm_ab)을 선택하세요")
         target_arms = ["arm_a", "arm_b"] if arm == BI_ARM else [arm]
-        with self.lock:
-            if self.state["status"] != "idle":
-                raise ValueError(f"작업대 상태가 idle이 아닙니다 ({self.state['status']})")
         poses = {}
         env = dict(os.environ)
         adapter_dir = str(HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter")
@@ -196,11 +293,16 @@ class BenchOpsMixin:
                 rcfg = self.prep / f"record-config-arm-{letter}.json"
                 if not rcfg.is_file():
                     raise ValueError(f"{a}의 실시간 관절 파일(chunk-io-{letter}/live.json) 또는 설정 파일(record-config-arm-{letter}.json)을 찾을 수 없습니다")
+                self._check_lease(a)  # the read opens the Follower's bus: lease and incident hold first
                 try:
                     res = subprocess.run([self.python, str(HERE / "leader_home.py"), "--config", str(rcfg), "--arm", a, "--read-follower-pose"],
                                          cwd=self.prep, env=env, capture_output=True, text=True, timeout=15)
-                except subprocess.TimeoutExpired:
+                except subprocess.TimeoutExpired:  # killed with the Follower torque-OFF write possibly half done
+                    self._mark_manual(f"{a} 팔로워 위치 읽기를 강제 종료했습니다 — 팔로워 토크 상태를 확인하세요")
                     raise ValueError(f"{a} 팔로워 현재 위치 읽기 시간 초과 (15s)") from None
+                if res.returncode != 0 and follower_torque_on(res.stdout):  # it wrote nothing; a person supports the arm first
+                    self._mark_manual(f"{a} {FOLLOWER_TORQUE_ON}")
+                    raise ValueError(FOLLOWER_TORQUE_ON)
                 if res.returncode != 0:
                     raise ValueError(f"{a} 팔로워 현재 위치 읽기 실패: {(res.stderr or res.stdout or '').strip()[-200:]}")
                 data = json.loads(res.stdout)
@@ -225,14 +327,16 @@ class BenchOpsMixin:
         return st
 
     def save_leader_pose(self, body):
-        if body.get("at_bench") is not True:
-            raise ValueError("작업대 현장 확인(at_bench) 체크 후에만 리더 포즈를 저장할 수 있습니다")
+        mine = self._reserve_bench(f"leader-pose-{(body or {}).get('arm')}")
+        try:
+            return self._save_leader_pose(body)
+        finally:
+            self._release_bench(mine)
+
+    def _save_leader_pose(self, body):
         arm = body.get("arm")
         if arm not in (*ARMS, BI_ARM):
             raise ValueError("유효한 팔(arm_a, arm_b, arm_s, arm_ab)을 선택하세요")
-        with self.lock:
-            if self.state["status"] != "idle":
-                raise ValueError(f"작업대 상태가 idle이 아닙니다 ({self.state['status']})")
         target_arms = ["arm_a", "arm_b"] if arm == BI_ARM else [arm]
         cfgs = {}
         for a in target_arms:
@@ -247,10 +351,12 @@ class BenchOpsMixin:
         env["PYTHONPATH"] = os.pathsep.join(py_paths)
         read_ticks = {}
         for a, rcfg in cfgs.items():
+            self._check_lease(a)  # the read opens the Leader's bus: lease and incident hold first
             try:
                 res = subprocess.run([self.python, str(HERE / "leader_home.py"), "--config", str(rcfg), "--arm", a, "--read-pose"],
                                      cwd=self.prep, env=env, capture_output=True, text=True, timeout=15)
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired:  # killed on the Leader bus: nothing confirms its state
+                self._mark_manual(f"{a} 리더 위치 읽기를 강제 종료했습니다 — 리더 토크 상태를 확인하세요")
                 raise ValueError(f"{a} 리더 현재 위치 읽기 시간 초과 (15s)") from None
             if res.returncode != 0:
                 raise ValueError(f"{a} 리더 현재 위치 읽기 실패: {(res.stderr or res.stdout or '').strip()[-200:]}")
@@ -272,8 +378,6 @@ class BenchOpsMixin:
         return st
 
     def save_camera_baseline(self, body):
-        if body.get("at_bench") is not True:
-            raise ValueError("작업대 현장 확인(at_bench) 체크 후에만 기준 카메라를 저장할 수 있습니다")
         raw_arm = body.get("arm") or "default"
         if raw_arm not in (*ARMS, BI_ARM, "default"):
             raise ValueError("유효한 팔(arm_a, arm_b, arm_s, arm_ab)을 선택하세요")

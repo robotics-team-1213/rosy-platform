@@ -1,3 +1,4 @@
+import { setOffBy } from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // Candidate review only; accepting changes a local draft after server geometry validation.
 import {appendSurveyElement} from '/console/assets/site-map-edit.js';
@@ -122,8 +123,8 @@ export function createExtractionPanel(host) {
     for (const [id, blocked] of [['extract-run', reason || (busy ? '추출 또는 검증 중입니다' : '')],
       ['extract-preview', reason || (!selected ? '후보를 고르세요' : busy ? '처리 중입니다' : '')],
       ['extract-accept', reason || (!selected ? '후보를 고르세요' : busy ? '처리 중입니다' : '')]]) {
-      $(id).disabled = Boolean(blocked); $(id).title = blocked;
-      if (blocked) $(id).setAttribute('reason', blocked); else $(id).removeAttribute('reason');
+      $(id).title = blocked;
+      setOffBy($(id), blocked);
     }
     if (projection?.projection_sha256 !== lastProjection) {
       lastProjection = projection?.projection_sha256;

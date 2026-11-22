@@ -1,3 +1,4 @@
+import { setOffBy } from "/common/cause-line.js";
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {loginReturn} from '/console/assets/login-return.js';
 
@@ -84,7 +85,7 @@ if (account) {
     if (!form.reportValidity()) return;
     const body = {note: $('access-request-note').value, resource};
     if (!signedIn) Object.assign(body, {name: $('access-request-name').value, username: $('access-request-username').value});
-    send.disabled = true; send.setAttribute('reason', '요청을 보내는 중');
+    setOffBy(send, '요청을 보내는 중');
     try {
       const response = await fetch('/api/fleet/auth/access-requests', {method: 'POST', credentials: 'same-origin',
         headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
@@ -95,7 +96,7 @@ if (account) {
         ? '요청이 많아 지금은 받을 수 없습니다. 나중에 다시 보내거나 관리자에게 직접 문의하세요.'
         : '요청을 보내지 못했습니다. 잠시 후 다시 시도하세요.', 'warning');
     } catch { say('요청을 보내지 못했습니다. 연결을 확인하세요.', 'warning'); }
-    finally { send.disabled = false; send.removeAttribute('reason'); }
+    finally { setOffBy(send, ''); }
   });
   $('access-request-form').addEventListener('submit', event => { event.preventDefault(); $('access-request-send').click(); });
 }

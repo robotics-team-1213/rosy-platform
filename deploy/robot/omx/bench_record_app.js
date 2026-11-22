@@ -1,39 +1,146 @@
 function updateCameraRecordingMaskHook(){if(typeof updateCameraRecordingMask==='function')updateCameraRecordingMask();}
 let camLabels=[];
 let lastCamState=null;
+let primaryCam='';
+let lastCamArm='';
+let cameraRestartInFlight=false;
+
+function canRestartCameras(){
+  const st=lastStatus;
+  return statusLoaded&&Boolean(f.arm.value)&&!benchSessionActive()&&!poseInFlight&&
+    !startInFlight&&!stopInFlight&&!cameraRestartInFlight&&
+    !st.active_locks?.length&&(st.status==='idle'||ENDED.has(st.status)||st.phase==='result');
+}
+
+$('hdr-camera-restart-btn').addEventListener('click',async()=>{
+  if(!canRestartCameras())return;
+  cameraRestartInFlight=true;
+  validateStart();
+  setReqError('');
+  try{
+    const result=await api('/api/cameras/restart',{arm:f.arm.value});
+    const failed=Object.entries(result.units||{}).filter(([,unit])=>!unit.restarted||!unit.active).map(([unit])=>unit);
+    setNotice('camera-restart',result.ok?'good':'warn',
+      result.ok?'카메라 재시작 완료':'카메라 재시작 실패'+(failed.length?': '+failed.join(', '):''));
+  }catch(err){setReqError('카메라 재시작: '+err.message);}
+  finally{
+    cameraRestartInFlight=false;
+    await pollStatus();
+    validateStart();
+    pollCameras();
+  }
+});
+
+function previewCamsForArm(allLabels,arm){
+  const allowed=(typeof ARM_PREVIEW_CAMS!=='undefined'&&arm)?ARM_PREVIEW_CAMS[arm]:null;
+  if(!allowed)return allLabels;
+  const filtered=allLabels.filter(l=>allowed.has(l));
+  return filtered.length?filtered:allLabels;
+}
+function defaultPrimaryCam(labels,arm){
+  const want=arm==='arm_s'?'arm_s_top':'top';
+  return labels.includes(want)?want:(labels[0]||'');
+}
+function applyCameraLayout(){
+  const grid=$('cam-grid');
+  if(!grid||!camLabels.length)return;
+  if(!primaryCam||!camLabels.includes(primaryCam)){
+    primaryCam=defaultPrimaryCam(camLabels,f&&f.arm?f.arm.value:'');
+  }
+  const boxes=new Map();
+  for(const b of grid.querySelectorAll('.cam-box[data-cam-box]'))boxes.set(b.dataset.camBox,b);
+  let stack=grid.querySelector('.cam-pip-stack');
+  const pBox=boxes.get(primaryCam);
+  if(pBox){
+    pBox.classList.remove('cam-pip');
+    pBox.classList.add('cam-primary');
+    pBox.removeAttribute('tabindex');
+    pBox.removeAttribute('role');
+    pBox.removeAttribute('aria-label');
+    grid.insertBefore(pBox,stack||null);
+  }
+  const secs=camLabels.filter(l=>l!==primaryCam);
+  if(secs.length){
+    if(!stack){stack=document.createElement('div');stack.className='cam-pip-stack';grid.append(stack);}
+    for(const l of secs){
+      const b=boxes.get(l);
+      if(!b)continue;
+      b.classList.remove('cam-primary');
+      b.classList.add('cam-pip');
+      b.tabIndex=0;
+      b.setAttribute('role','button');
+      b.setAttribute('aria-label',l+' 주 화면으로 전환');
+      stack.append(b);
+    }
+  }else if(stack){
+    stack.remove();
+  }
+}
+function switchPrimaryCam(lbl){
+  if(!lbl||!camLabels.includes(lbl)||lbl===primaryCam)return;
+  primaryCam=lbl;
+  applyCameraLayout();
+}
+function cyclePrimaryCam(){
+  if(camLabels.length<2)return;
+  const idx=camLabels.indexOf(primaryCam);
+  switchPrimaryCam(camLabels[(idx+1)%camLabels.length]);
+}
+function syncPrimaryCamForArm(arm){
+  const nextArm=arm||'';
+  if(nextArm===lastCamArm)return;
+  lastCamArm=nextArm;
+  if(camLabels.length){
+    primaryCam=defaultPrimaryCam(camLabels,lastCamArm);
+    applyCameraLayout();
+  }
+}
+window.defaultPrimaryCam=defaultPrimaryCam;
+window.switchPrimaryCam=switchPrimaryCam;
+window.syncPrimaryCamForArm=syncPrimaryCamForArm;
+
 async function pollCameras(){
   const grid=$('cam-grid'), note=$('cam-note');
-  if(lastStatus&&(lastStatus.status==='handing_over'||lastStatus.status==='recording')){
-    note.textContent='녹화 중에는 녹화기가 카메라를 직접 점유하므로 미리보기가 일시 중지됩니다.';
-    grid.innerHTML='';camLabels=[];
-    return;
-  }
   try{
     const st=await api('/cameras.json');
     lastCamState=st||{};
-    const labels=Object.keys(lastCamState);
+    const curArm=f&&f.arm?f.arm.value:'';
+    const labels=previewCamsForArm(Object.keys(lastCamState),curArm);
     const hdrCam=$('hdr-cam-health');
     if(!labels.length){
-      note.textContent='카메라 뷰어(8767)가 대기 중이거나 연결된 카메라가 없습니다.';
-      if(hdrCam){hdrCam.textContent='카메라 0대';hdrCam.dataset.tone='warn';}
+      note.textContent=benchSessionActive()
+        ? '녹화 카메라 프레임 대기 중'
+        : '카메라 뷰어(8767)가 대기 중이거나 연결된 카메라가 없습니다.';
+      if(hdrCam){hdrCam.textContent='카메라 0대';hdrCam.dataset.tone='warn';hdrCam.removeAttribute('title');}
       grid.innerHTML='';camLabels=[];
       return;
     }
     const freshCnt=labels.filter(l=>lastCamState[l]?.fresh!==false).length;
     if(hdrCam){hdrCam.textContent='카메라 '+freshCnt+'/'+labels.length+'대';hdrCam.dataset.tone=freshCnt===labels.length?'good':'warn';}
+    if(hdrCam)hdrCam.title=labels.join(', ');
     note.textContent='실시간 미리보기 ('+labels.join(', ')+')';
     if(labels.join(',')!==camLabels.join(',')){
       camLabels=labels;
       grid.innerHTML='';
       for(const lbl of labels){
         const box=document.createElement('div');box.className='cam-box';box.dataset.camBox=lbl;
-        const title=document.createElement('div');title.className='mono quiet';title.textContent=lbl+' ('+(st[lbl]?.quality?.condition||'확인 중')+')';
+        const title=document.createElement('span');title.className='cam-title-pill';title.textContent=lbl+' ('+(st[lbl]?.quality?.condition||'확인 중')+')';
         const rec=document.createElement('span');rec.className='cam-rec-badge on';rec.textContent='● 녹화';
         const tag=document.createElement('span');tag.className='cam-tag';tag.hidden=true;
         const img=document.createElement('img');img.alt=lbl+' 카메라 (프레임 대기 중)';img.dataset.cam=lbl;
         img.onerror=()=>{img.style.display='none';};img.onload=()=>{img.style.display='block';};
-        box.append(title,rec,tag,img);grid.append(box);
+        box.append(title,rec,tag,img);
+        box.addEventListener('click',()=>{if(box.classList.contains('cam-pip'))switchPrimaryCam(lbl);});
+        box.addEventListener('keydown',e=>{if(box.classList.contains('cam-pip')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();switchPrimaryCam(lbl);}});
+        grid.append(box);
       }
+      if(!primaryCam||!labels.includes(primaryCam)||curArm!==lastCamArm){
+        lastCamArm=curArm;
+        primaryCam=defaultPrimaryCam(labels,curArm);
+      }
+      applyCameraLayout();
+    }else if(curArm!==lastCamArm){
+      syncPrimaryCamForArm(curArm);
     }
     updateCameraRecordingMask();
     const ts=Date.now();
@@ -55,18 +162,14 @@ async function pollStatus(){
   try{
     const st=await api('/status.json');
     if(seq!==latestStatusSeq)return;
-    $('conn-error').hidden=true;
+    clearNotice('conn-error');
     renderStatus(st);
   }catch(err){
     if(seq!==latestStatusSeq)return;
-    const ce=$('conn-error');
-    const inActive=Boolean(lastStatus&&(lastStatus.status==='handing_over'||lastStatus.status==='recording'));
-    ce.textContent='상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':'');
-    ce.hidden=false;
+    const inActive=benchSessionActive();
+    setNotice('conn-error',inActive?'warn':'crit','상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':''),{persistent:!inActive});
     if(!inActive){
       statusLoaded=false;
-      $('top-badge').textContent='연결 끊김';
-      $('top-badge').dataset.tone='crit';
     }
     validateStart();
   }
@@ -85,6 +188,24 @@ function saveArmPreset(){
   try{localStorage.setItem('omx_bench_preset_'+arm,JSON.stringify(data));}catch(_){}
 }
 
+let nameManuallyEdited=false;
+function autoCollectionName(){
+  if(nameManuallyEdited&&f.name.value.trim())return;
+  const arm=f.arm.value;
+  if(!arm)return;
+  const t=f.task.value;
+  const c=choices&&choices.task_cards&&t?choices.task_cards[t]:null;
+  const tid=(c&&c.valid&&c.task_id)?String(c.task_id):'teleop';
+  const d=new Date();
+  const mm=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+  const hh=String(d.getHours()).padStart(2,'0'), mi=String(d.getMinutes()).padStart(2,'0');
+  let raw=(tid+'-'+arm+'-'+mm+dd+'-'+hh+mi).toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/-{2,}/g,'-').replace(/^-+|-+$/g,'');
+  raw=raw.slice(0,64).replace(/-+$/,'');
+  if(raw.length<3)raw=(raw+'-01').slice(0,64);
+  f.name.value=raw;
+  nameManuallyEdited=false;
+}
+
 function applyPresetOrRecommended(preferRec){
   const arm=f.arm.value;
   if(!arm||!choices)return;
@@ -94,17 +215,26 @@ function applyPresetOrRecommended(preferRec){
   }
   const rec=choices.recommended?choices.recommended[arm]:null;
   const src=preset||rec;
-  if(!src)return;
-  if(src.task&&[...f.task.options].some(o=>o.value===src.task&&!o.disabled)){f.task.value=src.task;renderTaskListbox();updateTaskSummary();}
-  if(src.rig_revision)f.rig_revision.value=src.rig_revision;
-  if(src.config&&[...f.config.options].some(o=>o.value===src.config&&!o.disabled))f.config.value=src.config;
-  if(src.caps&&[...f.caps.options].some(o=>o.value===src.caps&&!o.disabled))f.caps.value=src.caps;
-  if(Array.isArray(src.calibrations)){
-    const want=new Set(src.calibrations);
-    for(const cb of document.querySelectorAll('#cal-robot-list input:not(:disabled), #cal-leader-list input:not(:disabled)')){
-      cb.checked=want.has(cb.value);
+  if(!src&&!rec)return;
+  if(src&&src.task&&[...f.task.options].some(o=>o.value===src.task&&!o.disabled)){f.task.value=src.task;renderTaskListbox();updateTaskSummary();}
+  if(src&&src.rig_revision&&!f.rig_revision.value.trim())f.rig_revision.value=src.rig_revision;
+  const pickOpt=(sel,val)=>Boolean(val&&[...sel.options].some(o=>o.value===val&&!o.disabled));
+  if(pickOpt(f.config,src?.config))f.config.value=src.config;
+  else if(pickOpt(f.config,rec?.config))f.config.value=rec.config;
+  if(pickOpt(f.caps,src?.caps))f.caps.value=src.caps;
+  else if(pickOpt(f.caps,rec?.caps))f.caps.value=rec.caps;
+  const calList=(Array.isArray(src?.calibrations)&&src.calibrations.length)?src.calibrations:(rec?.calibrations||[]);
+  if(Array.isArray(calList)&&calList.length){
+    const want=new Set(calList);
+    const cbs=[...document.querySelectorAll('#cal-robot-list input:not(:disabled), #cal-leader-list input:not(:disabled)')];
+    if(cbs.some(cb=>want.has(cb.value))){
+      for(const cb of cbs)cb.checked=want.has(cb.value);
+    }else if(rec&&Array.isArray(rec.calibrations)){
+      const rWant=new Set(rec.calibrations);
+      for(const cb of cbs)cb.checked=rWant.has(cb.value);
     }
   }
+  autoCollectionName();
   renderCapsEditor();
   renderConfigMeta();
   updateCameraRecordingMask();
@@ -128,15 +258,25 @@ function syncArmSelection(){
   else if(picked.length>1)mapped='__unsupported__';
   if(mapped&&mapped!=='__unsupported__'&&[...f.arm.options].some(o=>o.value===mapped))f.arm.value=mapped;
   else f.arm.value='';
+  window.mapZone=null;
+  window.shipHold=null;
+  window.standDir='to-ship';
+  window.zoneSwapped=false;
+  if(typeof window.clearMapNote==='function')window.clearMapNote();
   syncArmPillsUI();
   if(mapped==='__unsupported__'){
     $('arm-note').textContent='다중 선택은 현재 arm_a + arm_b(양팔 동시)만 지원합니다. arm_s는 단독으로 선택하세요.';
   }
   for(const cb of document.querySelectorAll('#cal-robot-list input, #cal-leader-list input'))cb.checked=false;
-  f.at_bench.checked=false;
   applyArmRules(true);
   applyPresetOrRecommended(false);
-  if(taskFilter==='arm')renderTaskListbox();
+  if(f.task.value&&choices?.task_cards&&typeof window.taskFitsArm==='function'&&!window.taskFitsArm(f.task.value,choices.task_cards[f.task.value],f.arm.value)){
+    f.task.value='';
+    autoCollectionName();
+  }
+  renderTaskListbox();
+  updateTaskSummary();
+  pollCameras();
   validateStart();
 }
 
@@ -149,18 +289,22 @@ function selectArm(arm){
   syncArmSelection();
 }
 
-function selectTask(val){
+function selectTask(val,opts){
   window.zoneSwapped=false;
+  if(!(opts&&opts.keepMapZone)){
+    window.shipHold=null;
+    window.mapZone=null;
+  }
+  if(typeof window.clearMapNote==='function')window.clearMapNote();
   f.task.value=val||'';
   renderTaskListbox();
   updateTaskSummary();
   renderConfigMeta();
-  const c=choices&&choices.task_cards?choices.task_cards[f.task.value]:null;
-  const curName=f.name.value.trim();
-  if(c&&c.valid&&c.task_id&&(!curName||/-01$/.test(curName))){
-    f.name.value=String(c.task_id).toLowerCase().replace(/[^a-z0-9-]+/g,'-')+'-01';
-  }
+  autoCollectionName();
   validateStart();
+  const sbScroll=$('bench-sidebar-scroll');
+  if(sbScroll)sbScroll.scrollTop=0;
+  if(typeof window.closeDrawer==='function')window.closeDrawer(true);
 }
 
 let taskFilter='all';
@@ -168,9 +312,7 @@ function taskMatchesFilter(v,c){
   if(taskFilter==='all')return true;
   const hay=(v+' '+(c.origin||'')+' '+(c.target_slot||'')+' '+(c.single_task||'')+' '+(c.raw||'')).toLowerCase();
   if(taskFilter==='pinky')return /pinky|belt|conveyor|supply/.test(hay);
-  const arm=f.arm.value, blk={arm_a:/arm[_ -]?[bs]\b|tmp-b|belt-in|conveyor|supply/,arm_b:/arm[_ -]?[as]\b|tmp-a|belt-in|conveyor|supply/,arm_ab:/arm[_ -]?s\b|belt-in|conveyor|supply/};
-  if(arm==='arm_s')return /arm[_ -]?s\b|belt-in|conveyor|supply|pinky/.test(hay);
-  return blk[arm]?!blk[arm].test(hay):true;
+  return typeof window.taskFitsArm==='function'?window.taskFitsArm(v,c,f.arm.value):true;
 }
 function stepTask(delta){
   const opts=[...($('task-listbox')?.querySelectorAll('.task-opt:not(:disabled)')||[])];
@@ -418,177 +560,3 @@ let poseInFlight=false;
 let poseFeedbackMsg='';
 let poseFeedbackUntil=0;
 let lastArmsStatus=null;
-async function pollArms(){
-  try{const res=await api('/api/arms');if(res&&res.arms){lastArmsStatus=res.arms;validateStart();}}catch(_){}
-}
-if($('hdr-home-btn')){
-  $('hdr-home-btn').addEventListener('click',async()=>{
-    const btn=$('hdr-home-btn');
-    const incL=Boolean(lastArmsStatus&&f.arm.value&&lastArmsStatus[f.arm.value]?.has_leader_pose);
-    poseInFlight=true;btn.disabled=true;btn.textContent='홈 이동 중...';validateStart();
-    try{
-      setReqError('');
-      const st=await api('/home',{arm:f.arm.value,at_bench:f.at_bench.checked,include_leader:incL,hands_off_leader:incL});
-      renderStatus(st);
-      poseFeedbackMsg='홈(이니셜) 위치 이동 완료: '+((st.home_moved||[]).join(', ')||f.arm.value)+(incL?' (리더 토크 OFF 복구됨)':'');
-      poseFeedbackUntil=Date.now()+6000;
-    }catch(err){setReqError(err.message);}
-    finally{poseInFlight=false;btn.textContent='홈 이동';validateStart();}
-  });
-}
-if($('save-leader-pose-btn')){
-  $('save-leader-pose-btn').addEventListener('click',async()=>{
-    const btn=$('save-leader-pose-btn');
-    poseInFlight=true;btn.disabled=true;btn.textContent='읽는 중...';validateStart();
-    try{
-      setReqError('');
-      const st=await api('/save_leader_pose',{arm:f.arm.value,at_bench:f.at_bench.checked});
-      renderStatus(st);
-      poseFeedbackMsg='리더 홈 포즈 저장 완료 ('+Object.keys(st.leader_pose_saved||{}).join(', ')+')';
-      poseFeedbackUntil=Date.now()+6000;
-      pollArms();
-    }catch(err){setReqError(err.message);}
-    finally{poseInFlight=false;btn.textContent='리더 포즈 저장';validateStart();}
-  });
-}
-if($('save-init-pose-btn')){
-  $('save-init-pose-btn').addEventListener('click',async()=>{
-    const btn=$('save-init-pose-btn');
-    poseInFlight=true;btn.disabled=true;btn.textContent='저장 중...';validateStart();
-    try{
-      setReqError('');
-      const st=await api('/save_initial_pose',{arm:f.arm.value,at_bench:f.at_bench.checked});
-      renderStatus(st);
-      const sv=st.initial_pose_saved||{};
-      const txt=Object.entries(sv).map(([k,v])=>k+': ['+v.join(', ')+']').join(' / ');
-      poseFeedbackMsg='이니셜 포즈 저장 완료: '+txt;
-      poseFeedbackUntil=Date.now()+6000;
-      pollArms();
-    }catch(err){setReqError(err.message);}
-    finally{poseInFlight=false;btn.textContent='팔로워 포즈 저장';validateStart();}
-  });
-}
-if($('task-search')){
-  $('task-search').addEventListener('input',()=>{setTaskListOpen(true);renderTaskListbox();});
-  $('task-search').addEventListener('keydown',e=>{
-    if(e.key==='ArrowDown'){e.preventDefault();stepTask(1);}
-    else if(e.key==='ArrowUp'){e.preventDefault();stepTask(-1);}
-  });
-}
-if($('task-prev-btn'))$('task-prev-btn').addEventListener('click',()=>stepTask(-1));
-if($('task-next-btn'))$('task-next-btn').addEventListener('click',()=>stepTask(1));
-if($('task-toggle-btn'))$('task-toggle-btn').addEventListener('click',()=>setTaskListOpen($('task-listbox').hidden));
-if($('task-filters'))$('task-filters').addEventListener('click',e=>{
-  const btn=e.target.closest('button[data-tfilter]');if(!btn)return;
-  taskFilter=btn.dataset.tfilter||'all';
-  for(const b of $('task-filters').querySelectorAll('button[data-tfilter]')){b.classList.toggle('active',b===btn);b.setAttribute('aria-pressed',String(b===btn));}
-  setTaskListOpen(true);renderTaskListbox();
-});
-if($('hdr-refresh-btn'))$('hdr-refresh-btn').addEventListener('click',()=>{pollStatus();pollCameras();});
-f.arm.addEventListener('change',()=>{
-  for(const cb of document.querySelectorAll('#cal-robot-list input, #cal-leader-list input'))cb.checked=false;
-  f.at_bench.checked=false;
-  applyArmRules(true);
-  updateCameraRecordingMask();
-  validateStart();
-});
-f.caps.addEventListener('change',()=>{renderCapsEditor();validateStart();});
-f.task.addEventListener('change',()=>{
-  window.zoneSwapped=false;
-  renderTaskListbox();
-  updateTaskSummary();
-  renderConfigMeta();
-  const c=choices&&choices.task_cards?choices.task_cards[f.task.value]:null;
-  if(c&&c.valid&&c.task_id&&!f.name.value.trim()){
-    f.name.value=String(c.task_id).toLowerCase().replace(/[^a-z0-9-]+/g,'-')+'-01';
-  }
-  validateStart();
-});
-for(const el of [f.name,f.rig_revision,f.at_bench]){
-  el.addEventListener('input',validateStart);
-  el.addEventListener('change',validateStart);
-}
-f.config.addEventListener('change',()=>{renderConfigMeta();updateCameraRecordingMask();validateStart();});
-$('cal-robot-list').addEventListener('change',validateStart);
-$('cal-leader-list').addEventListener('change',validateStart);
-
-document.addEventListener('keydown',e=>{
-  if(e.repeat)return;
-  if(e.key==='/'&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName||'')){
-    const ts=$('task-search');if(ts){e.preventDefault();ts.focus();ts.select();}
-  }else if((e.ctrlKey&&e.key==='Enter')||(e.altKey&&e.key.toLowerCase()==='s')){
-    if(window.benchStartReady&&!BUSY.has(lastStatus?.status)){e.preventDefault();f.requestSubmit();}
-  }else if(e.key==='Escape'||(e.altKey&&e.key.toLowerCase()==='x')){
-    if((lastStatus?.status==='recording'||lastStatus?.status==='handing_over')&&!$('hdr-record-btn')?.disabled){e.preventDefault();$('hdr-record-btn').click();}
-  }else if(e.altKey&&e.key.toLowerCase()==='c'){
-    e.preventDefault();f.at_bench.checked=!f.at_bench.checked;validateStart();
-  }else if(e.altKey&&e.key.toLowerCase()==='r'){
-    const rb=$('toggle-reverse-btn');if(rb&&!rb.disabled){e.preventDefault();rb.click();}
-  }else if(e.altKey&&e.key.toLowerCase()==='w'){
-    const sb=$('swap-zones-btn');if(sb&&!sb.disabled){e.preventDefault();sb.click();}
-  }
-});
-
-$('next-ep-btn').addEventListener('click',()=>{
-  const cur=f.name.value.trim();
-  const m=cur.match(/^(.*?)(\d+)$/);
-  if(m)f.name.value=m[1]+String(Number(m[2])+1).padStart(m[2].length,'0');
-  else if(cur)f.name.value=cur+'-02';
-  f.at_bench.checked=false;
-  validateStart();
-});
-
-$('copy-transfer-btn').addEventListener('click',async()=>{
-  const folder=(lastStatus&&lastStatus.folder)?lastStatus.folder.split('/').pop():'<session-folder>';
-  const cmd='python tools/remote/omx_collection_transfer.py --session '+folder;
-  try{await navigator.clipboard.writeText(cmd);$('copy-transfer-btn').textContent='복사됨: '+folder;}
-  catch(_){setReqError('수동 실행 명령: '+cmd);}
-});
-
-f.addEventListener('keydown',e=>{
-  if(e.key==='Enter'&&!e.ctrlKey&&e.target.tagName==='INPUT'&&e.target.type==='text')e.preventDefault();
-  if(e.repeat&&(e.key==='Enter'||e.key===' '))e.preventDefault();
-});
-
-f.addEventListener('submit',async e=>{
-  e.preventDefault();
-  if(startInFlight||!validateStart())return;
-  startInFlight=true;
-  setReqError('');
-  validateStart();
-  const lp={};
-  const sEp=$('lp-episodes')?.value?.trim()||'', sEt=$('lp-ep-time')?.value?.trim()||'', sRt=$('lp-reset-time')?.value?.trim()||'';
-  if(sEp){const v=Number(sEp);if(!Number.isInteger(v)||v<1||v>500){setReqError('에피소드 수(num_episodes)는 1~500 정수여야 합니다.');startInFlight=false;validateStart();return;}lp.num_episodes=v;}
-  if(sEt){const v=Number(sEt);if(!Number.isFinite(v)||v<1||v>3600){setReqError('에피소드 시간(episode_time_s)은 1~3600초여야 합니다.');startInFlight=false;validateStart();return;}lp.episode_time_s=v;}
-  if(sRt){const v=Number(sRt);if(!Number.isFinite(v)||v<0.5||v>600){setReqError('리셋 시간(reset_time_s)은 0.5~600초여야 합니다.');startInFlight=false;validateStart();return;}lp.reset_time_s=v;}
-  const revOn=$('toggle-reverse-btn')?.getAttribute('aria-pressed')==='true';
-  const body={
-    arm:f.arm.value,
-    name:f.name.value.trim(),
-    rig_revision:f.rig_revision.value.trim(),
-    config:f.config.value,
-    caps:f.caps.value,
-    task:f.task.value,
-    replay:$('replay')?.value||'',
-    replay_mode:revOn?($('reverse-mode')?.value||'swap_ab'):'none',
-    invert_gripper:Boolean($('invert-gripper')?.checked),
-    task_override:window.zoneSwapped?{swap_pick_place:true}:null,
-    at_bench:f.at_bench.checked,
-    lerobot_params:lp,
-    calibrations:[...document.querySelectorAll('#cal-robot-list input:checked:not(:disabled), #cal-leader-list input:checked:not(:disabled)')].map(i=>i.value)
-  };
-  const seq=++latestStatusSeq;
-  try{
-    const st=await api('/start',body);
-    if(seq!==latestStatusSeq)return;
-    saveArmPreset();
-    lastStartMeta={key:sessionKey(st),name:body.name,arm:body.arm,task:body.task};
-    renderStatus(st);
-  }catch(err){
-    f.at_bench.checked=false;
-    setReqError(err.message);
-  }finally{
-    startInFlight=false;
-    validateStart();
-  }
-});

@@ -63,7 +63,11 @@ def test_ci_matrix_reads_the_queue_environment(monkeypatch):
     whole = affected.ci_matrix(_repo(), _pr())["include"]
     files = lambda matrix: {p for e in matrix for inv in e["invocations"] for p in inv if not p.startswith("-")}  # noqa: E731
     assert files(queue) < files(whole) and not any("middleware/media/test" in p for p in files(queue))
-    assert [e["name"] for e in queue if e["kind"] == "smoke"] == [e["name"] for e in whole if e["kind"] == "smoke"]
+    assert [e["name"] for e in queue if e["kind"] == "smoke"] == []
+    assert [e["name"] for e in whole if e["kind"] == "smoke"] == ["build-smoke"]
+    monkeypatch.setenv(affected_queue.ENV, "0" * 40)
+    unknown = affected.ci_matrix(_repo(), _pr())["include"]
+    assert [e["name"] for e in unknown if e["kind"] == "smoke"] == ["build-smoke"]
 
 
 def test_tested_commit_comes_from_a_green_ci_result_notice_only():

@@ -14,20 +14,23 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     for (const item of el("map-legend").querySelectorAll("[data-legend=grid]")) {
       item.hidden = mode !== "grid";
     }
-    el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
+    el("legend-sighting").hidden = !layerOn("sightings") || (!view.siteMap && !view.sightings.length);
   }
 
-  function showSiteMap() {
+  function showSiteMap({ hadGrid = false } = {}) {
     const canvas = el("map-canvas");
+    const armed = !hadGrid && Boolean(view.selected || view.pinning);
     canvas.removeAttribute("aria-hidden");
-    canvas.setAttribute("role", "img");
-    canvas.tabIndex = -1;
-    canvas.classList.add("idle");
+    if (!armed && !view.focusRobot) canvas.setAttribute("role", "img");
+    canvas.tabIndex = armed ? 0 : -1;
+    if (armed) canvas.classList.remove("idle");
+    else canvas.classList.add("idle");
     el("map-stage").dataset.mapState = "site";
     el("map-empty").hidden = true;
     syncLegend("site");
     draw();
-    onMapUnavailable();
+    if (hadGrid) onMapUnavailable();
+    else onMapChanged();
   }
 
   async function refreshCalibrations(life) {
@@ -167,8 +170,9 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     life.check();
     // The activated site frame stays the coordinate basis when robots start or stop serving SLAM grids.
     if (!auth.locked && view.siteMap?.maps?.some(map => map.map_id === view.activeSiteMap?.map?.map_id)) {
+      const hadGrid = Boolean(view.map);
       view.map = null;
-      showSiteMap();
+      showSiteMap({ hadGrid });
       return;
     }
     // Fleet unreachable: say so now, not after a slow NO_MAP retry.
@@ -192,12 +196,13 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       onMapChanged();
     } catch (err) {
       if (err.name === "AbortError") return;
+      const hadGrid = Boolean(view.map);
       view.map = null;
       if (auth.locked) return;
       if (!auth.locked) mapFailure = mapGate.fail(err.status, err.code);
       if (view.siteMap && !auth.locked) {
         // 점유 격자 없이 카메라 사각형만 있다 — 관측 전용 뷰. 목표 지정은 계속 막힌다.
-        showSiteMap();
+        showSiteMap({ hadGrid });
         return;
       }
       const canvas = el("map-canvas");
@@ -251,7 +256,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
     const unchanged = JSON.stringify(next) === JSON.stringify(view.sightings);
     view.sightings = next;
     if (unchanged && !next.length) return; // 빈 채로 그대로면 격자를 다시 칠하지 않는다
-    el("legend-sighting").hidden = !view.siteMap && !view.sightings.length;
+    el("legend-sighting").hidden = !layerOn("sightings") || (!view.siteMap && !view.sightings.length);
     draw();
   }
 

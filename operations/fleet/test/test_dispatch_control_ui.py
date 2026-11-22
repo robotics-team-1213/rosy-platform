@@ -13,5 +13,5 @@ def test_dispatch_control_status_and_operator_rearm_are_wired():
     assert '"/api/fleet/dispatch-control"' in source
     assert '"/api/fleet/dispatch/rearm"' in source
     assert 'expected_generation: state.generation' in source
-    assert 'auth.role === "operator"' in source
+    assert 'isOperator(auth.role)' in source
     assert 'state.rearm_available' in source

@@ -1,10 +1,13 @@
 // D456 receiver-screen approval. A remembered camera is not a running stream or lease.
+import { setOffBy } from "/common/cause-line.js";
+import { isOperator } from "/console/assets/authorization.js";
+import {node} from '/common/control-dom.js';
 import {createRequest} from '/common/request.js';
 const BASE = '/api/fleet/pairing/v2';
 
 export function approvalBody(row, source, remember, who) {
   if (row?.state !== 'pending' || !Number.isInteger(row.revision) || row.revision < 0
-      || who?.role !== 'operator' || !who.principal_id
+      || !isOperator(who?.role) || !who.principal_id
       || !/^[A-Za-z0-9_-]{1,32}$/.test(source) || typeof remember !== 'boolean') return null;
   return {action:'approve',revision:row.revision,source_id:source,persist_requested:remember};
 }
@@ -42,11 +45,10 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
       signal:life.signal, ...(body ? {body:JSON.stringify(body)} : {})});
     life.check(); return value;
   }
-  const text = (tag,value) => {const node = document.createElement(tag); node.textContent=value; return node;};
   function button(label,action) {
-    const node = document.createElement('ui-button'); node.textContent=label;
-    node.setAttribute('type','button'); node.setAttribute('kind','quiet');
-    node.addEventListener('click',scope.guard(action)); return node;
+    const btn = node('ui-button',label);
+    btn.setAttribute('type','button'); btn.setAttribute('kind','quiet');
+    btn.addEventListener('click',scope.guard(action)); return btn;
   }
   function notice(message) {el('camera-peer-status').textContent=message;}
   async function decide(row,source,remember) {
@@ -83,26 +85,26 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
     pending=requests;
     const waiting=el('camera-peer-requests'); waiting.replaceChildren();
     for (const row of requests) {
-      const item=document.createElement('li'); item.append(text('strong',`${row.label} · ${row.display_code}`));
+      const item=document.createElement('li'); item.append(node('strong', `${row.label} · ${row.display_code}`));
       const select=document.createElement('select'); select.className='ui-field'; select.setAttribute('aria-label',`${row.label}의 카메라 자리`);
-      for (const source of sources) {const option=text('option',source); option.value=source; select.append(option);}
+      for (const source of sources) {const option=node('option', source); option.value=source; select.append(option);}
       const label=document.createElement('label'), remember=document.createElement('input');
       label.className='ui-check'; remember.className='ui-field';
       remember.type='checkbox'; remember.checked=true; label.append(remember,document.createTextNode(' 이 연결 기억'));
       const approve=button('연결 승인',()=>decide(row,select.value,remember.checked));
       approve.setAttribute('kind','primary');
-      if (!sources.length) {approve.disabled=true; approve.setAttribute('reason','빈 카메라 자리가 없습니다. 기존 자격 자리는 위 기기 연결의 카메라 승인에서 교체하거나, 기억한 연결을 해제하세요.');}
+      if (!sources.length) setOffBy(approve,'빈 카메라 자리가 없습니다. 기존 자격 자리는 위 기기 연결의 카메라 승인에서 교체하거나, 기억한 연결을 해제하세요.');
       const actions=document.createElement('div'); actions.className='camera-actions'; actions.append(select,label,approve);
       item.append(actions); waiting.append(item);
     }
-    if (!requests.length) waiting.append(text('li','대기 중인 요청이 없습니다. 같은 LAN의 카메라 앱에서 이 장비를 선택하세요.'));
+    if (!requests.length) waiting.append(node('li', '대기 중인 요청이 없습니다. 같은 LAN의 카메라 앱에서 이 장비를 선택하세요.'));
     const remembered=el('camera-peer-relationships'); remembered.replaceChildren();
     for (const row of relationships) {
-      const item=document.createElement('li'); item.append(text('strong',`${row.label} · ${row.source_id}`),text('p',relationshipText(row)));
+      const item=document.createElement('li'); item.append(node('strong', `${row.label} · ${row.source_id}`),node('p', relationshipText(row)));
       if (row.state!=='revoked') item.append(button('연결 해제',()=>revoke(row)));
       remembered.append(item);
     }
-    if (!relationships.length) remembered.append(text('li','처음 승인한 카메라 연결이 이곳에 남습니다.'));
+    if (!relationships.length) remembered.append(node('li', '처음 승인한 카메라 연결이 이곳에 남습니다.'));
   }
   function clear() {
     pending=[]; sources=[];
@@ -111,7 +113,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
     for (const id of ['camera-peer-requests','camera-peer-relationships']) el(id)?.replaceChildren();
   }
   async function refresh() {
-    if (locked() || identity()?.role!=='operator') {clear(); return;}
+    if (locked() || !isOperator(identity()?.role)) {clear(); return;}
     if (!/^Bearer\s+\S+$/.test(headers().Authorization || headers().authorization || '')) {
       clear(); el('camera-peer-panel').hidden=false;
       notice('카메라 연결 승인은 기명 운영자의 고급 접속 토큰으로 연결한 뒤 사용할 수 있습니다. 현재 로그인은 유지됩니다.');
@@ -119,7 +121,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
     }
     if (deniedOwner && deniedOwner===ownerKey()) return;
     if (inFlight || !inView || document.visibilityState==='hidden' || locked()
-        || identity()?.role!=='operator' || !el('camera-peer-panel')) return;
+        || !isOperator(identity()?.role) || !el('camera-peer-panel')) return;
     inFlight=true; const life=scope.capture(), owner=ownerKey();
     try {
       const [requests,relationships,anchor]=await Promise.all([

@@ -229,3 +229,14 @@ def test_the_floor_script_changes_only_floor_sha_in_the_updater_state(tmp_path):
     run(FLOOR, str(tmp_path / "no-config.json"), str(fresh), oh.STATE_FILE, oh.UPDATE_LOCK)
     assert json.loads((fresh / oh.STATE_FILE).read_text()) == {
         "current": None, "previous": None, "history": [], "floor_sha": FLOOR}
+
+
+def test_hotfix_paths_include_policy_site_map_and_gripper_assets():
+    for required in (
+        "contracts/learning/src",
+        "tools/sim/cell_site_map.py",
+        "shared/web/cell-site-map.json",
+        "learning/envs/isaac/palletizing_gripper.py",
+        "learning/envs/isaac/assets/omx_f_palletizing_description",
+    ):
+        assert required in oh.PATHS

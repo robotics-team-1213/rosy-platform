@@ -1,7 +1,5 @@
 // D-655 draft edits and survey teach context; no DOM, robot command or activation.
-import {PLACE_KINDS} from './site-map-model.js';
-
-function copy(map) { return JSON.parse(JSON.stringify(map)); }
+import {PLACE_KINDS, copyMap} from './site-map-model.js';
 function category(kind) { return PLACE_KINDS.includes(kind) ? 'places' : kind === 'road' ? 'edges' : 'facilities'; }
 
 export function createSurveyDraft(mapId, reference) {
@@ -18,7 +16,7 @@ export function createSurveyDraft(mapId, reference) {
   if (!reference.description?.trim() || reference.description.length > 1000)
     throw new Error('시작점·방향·축척 근거를 적으세요');
   return {schema: 'rosy.site_map/1', map_id: mapId, places: [], edges: [],
-    survey: {...copy(reference), reviewed: false, review_note: ''}};
+    survey: {...copyMap(reference), reviewed: false, review_note: ''}};
 }
 
 export function appendSurveyElement(map, item) {
@@ -31,7 +29,7 @@ export function appendSurveyElement(map, item) {
       || !geometry.every(p => Array.isArray(p) && p.length === 2
         && p.every(v => Number.isFinite(v) && Math.abs(v) <= 1000)))
     throw new Error('지도에서 위치를 찍거나 유한한 좌표를 입력하세요');
-  const next = copy(map);
+  const next = copyMap(map);
   next.survey = {...next.survey, reviewed: false, review_note: ''};
   if ((next[category(kind)] || []).some(row => row.id === id))
     throw new Error('이미 쓰는 요소 ID입니다');
@@ -84,8 +82,8 @@ export function appendSurveyElement(map, item) {
     if (approaches.some(a => !next.edges.some(e => e.id === a.edge_id))) throw new Error('연결할 도로가 없습니다');
     if (kind === 'traffic_signal' && (!item.signal_id || !['physical', 'virtual'].includes(item.signal_kind) || !approaches.length))
       throw new Error('신호등 ID·종류와 제어 진입 차로를 지정하세요');
-    next.facilities = [...(next.facilities || []), {id, name: name.trim(), kind, geometry: copy(geometry), approaches: copy(approaches),
-      ...(item.evidence ? {evidence: copy(item.evidence)} : {}),
+    next.facilities = [...(next.facilities || []), {id, name: name.trim(), kind, geometry: copyMap(geometry), approaches: copyMap(approaches),
+      ...(item.evidence ? {evidence: copyMap(item.evidence)} : {}),
       ...(kind === 'traffic_signal' ? {signal_id: item.signal_id, signal_kind: item.signal_kind} : {})}];
   } else throw new Error('알 수 없는 지도 요소입니다');
   return next;
@@ -93,7 +91,7 @@ export function appendSurveyElement(map, item) {
 
 export function reviewSurveyDraft(map, note) {
   if ((!map?.survey && !map?.edges?.some(e => e.evidence)) || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
-  const next = copy(map);
+  const next = copyMap(map);
   if (next.survey) next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
   for (const edge of [...next.edges, ...(next.facilities || [])]) {
     if (next.facilities?.includes(edge) && !edge.evidence) continue;
@@ -114,7 +112,7 @@ export function editSurveyElement(map, item) {
   if ((group === map.places && !PLACE_KINDS.includes(item.kind))
       || (group === map.edges && item.kind !== 'road')
       || (group === map.facilities && item.kind !== old.kind)) throw new Error('기존 요소의 분류를 유지하세요');
-  const base = copy(map);
+  const base = copyMap(map);
   base[key] = base[key].filter(row => row.id !== item.id);
   const next = appendSurveyElement(base, item);
   if (group === map.edges) {
@@ -122,12 +120,12 @@ export function editSurveyElement(map, item) {
     edge.evidence.note = old.evidence?.note || '';
     edge.drive_mode = old.drive_mode;
     edge.speed_cap_mps = old.speed_cap_mps;
-    if (old.robot_kinds !== undefined) edge.robot_kinds = copy(old.robot_kinds);
+    if (old.robot_kinds !== undefined) edge.robot_kinds = copyMap(old.robot_kinds);
   }
   // a hand-moved element keeps its pin: automatic calibration must still leave it alone
   if (old.pinned) next[key].find(row => row.id === item.id).pinned = true;
   if (group === map.facilities && old.evidence)
-    next.facilities.find(row => row.id === item.id).evidence = {...copy(old.evidence), status: 'observed'};
+    next.facilities.find(row => row.id === item.id).evidence = {...copyMap(old.evidence), status: 'observed'};
   if (group === map.places && item.yaw === undefined && old.yaw !== undefined)
     next.places.find(row => row.id === item.id).yaw = old.yaw;
   if (group === map.places) {
@@ -155,7 +153,7 @@ export function removeSurveyElement(map, id, key) {
       || (key === 'edges' && ((map.facilities || []).some(f => f.approaches?.some(a => a.edge_id === id))
       || (map.turn_bans || []).some(b => b.from_edge === id || b.to_edge === id))))
     throw new Error('연결된 차로·시설·통행 규칙을 먼저 수정하거나 삭제하세요');
-  const next = copy(map);
+  const next = copyMap(map);
   next[key] = next[key].filter(row => row.id !== id);
   if (next.survey) next.survey = {...next.survey, reviewed: false, review_note: ''};
   return next;
@@ -164,7 +162,7 @@ export function removeSurveyElement(map, id, key) {
 function setPinned(row, pinned) { if (pinned) row.pinned = true; else delete row.pinned; }
 
 export function editPlace(map, id, {name, kind, pinned, approach_m: approach, stop_zone: zone}) {
-  const next = copy(map);
+  const next = copyMap(map);
   const place = next.places.find(item => item.id === id);
   if (!place) throw new Error(`없는 장소 ${id}`);
   if (name !== undefined) {
@@ -204,7 +202,7 @@ export function editPlace(map, id, {name, kind, pinned, approach_m: approach, st
 }
 
 export function editEdge(map, id, {name, direction, drive_mode: driveMode, speed_cap_mps: speed, pinned}) {
-  const next = copy(map);
+  const next = copyMap(map);
   const edge = next.edges.find(item => item.id === id);
   if (!edge) throw new Error(`없는 차로 ${id}`);
   if (name !== undefined) {
@@ -282,7 +280,7 @@ export function cameraConnectionCandidates(base, observation) {
 
 export function mergeCameraMap(base, observation, connections = {}) {
   validateCameraMap(base, observation);
-  observation = copy(observation);
+  observation = copyMap(observation);
   const joins = new Map(Object.entries(connections));
   for (const [id, target] of joins) {
     const point = observation.places.find(p => p.id === id), old = base.places.find(p => p.id === target);
@@ -298,7 +296,7 @@ export function mergeCameraMap(base, observation, connections = {}) {
       if (edge.evidence.note.length > 1000) throw new Error('관측과 연결 근거는 1000자 이내여야 합니다');
     }
   }
-  const next = copy(base), ids = new Map();
+  const next = copyMap(base), ids = new Map();
   let addedEvidence = false;
   const fresh = observation.edges.filter(e => {
     const old = next.edges.find(row => cameraSignature(row) === cameraSignature(e)
@@ -321,11 +319,11 @@ export function mergeCameraMap(base, observation, connections = {}) {
     if (next.places.some(p => Math.hypot(p.x - place.x, p.y - place.y) <= .05))
       throw new Error('기존 장소와 가까운 관측은 연결이 모호합니다 · 장소와 차로를 직접 검토하세요');
     const mapped = free(next.places);
-    ids.set(id, mapped); next.places.push({...copy(place), id: mapped});
+    ids.set(id, mapped); next.places.push({...copyMap(place), id: mapped});
   }
   for (const edge of fresh) {
     if (ids.get(edge.from) === ids.get(edge.to)) throw new Error('도로의 두 끝을 같은 장소에 연결할 수 없습니다');
-    next.edges.push({...copy(edge), id: free(next.edges), from: ids.get(edge.from), to: ids.get(edge.to)});
+    next.edges.push({...copyMap(edge), id: free(next.edges), from: ids.get(edge.from), to: ids.get(edge.to)});
   }
   if (fresh.length || addedEvidence) next.survey = {...next.survey, reviewed: false, review_note: ''};
   return next;

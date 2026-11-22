@@ -16,6 +16,7 @@ SPEC = importlib.util.spec_from_file_location("pr_land", ROOT / "tools" / "pr_la
 pr_land = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = pr_land
 SPEC.loader.exec_module(pr_land)
+SHARED_CHECKOUT = pr_land.shared_checkout  # the autouse fixture stubs it; its own test below
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +24,23 @@ def _normal_cutover(monkeypatch):
     monkeypatch.setattr(pr_land.land_freeze, "load", lambda cwd: {"phase": "normal", "allow": []})
     monkeypatch.setattr(pr_land.land_freeze, "path", lambda cwd: Path("rosy-cutover.json"))
     monkeypatch.setattr(pr_land, "preflight", lambda cwd, base, body="": None)  # its own test below
+    monkeypatch.setattr(pr_land, "shared_checkout", lambda cwd: False)
+
+
+def test_shared_main_checkout_is_refused_and_a_worktree_is_not(monkeypatch, tmp_path):
+    def git(*args):
+        subprocess.run(["git", "-C", str(tmp_path / "main"), *args], check=True, capture_output=True)
+
+    (tmp_path / "main").mkdir()
+    git("init", "-q", "-b", "main")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init")
+    git("worktree", "add", "-q", "-b", "feat/x", str(tmp_path / "main" / ".worktrees" / "x"))
+    assert SHARED_CHECKOUT(tmp_path / "main") is True
+    assert SHARED_CHECKOUT(tmp_path / "main" / ".worktrees" / "x") is False
+    monkeypatch.setattr(pr_land, "shared_checkout", SHARED_CHECKOUT)
+    git("switch", "-q", "-c", "fix/oops")  # the 11-21 incident: a topic branch in the shared checkout
+    with pytest.raises(SystemExit, match="shared main checkout.*run from your worktree"):
+        pr_land.main(["--dry-run"], repo=tmp_path / "main")
 
 
 @pytest.mark.parametrize("phase,refused", [("drain", True), ("open", False), ("normal", False)])
@@ -209,13 +227,33 @@ def test_what_this_prs_own_ci_run_executes_is_not_lab_evidence(monkeypatch):
     assert [w for inv in _required(monkeypatch, [], changed) for w in inv if w.endswith(".py")] == [lab_only]
 
 
+def test_required_lab_invocations_deduplicates_browser_files_already_in_lab(monkeypatch):
+    import browser_scope
+
+    bare = next(iter(pr_land.work_queue.LAB_ONLY))
+    chunked = "test/test_measured_calibration_browser.py"
+    extra_only = "integrations/simulation/gazebo/test/test_extra_browser.py"
+    monkeypatch.setattr(browser_scope, "targets", lambda ch: [bare, chunked, extra_only])
+
+    result = _required(
+        monkeypatch,
+        [[bare], ["ROSY_RUN_BROWSER_TESTS=1", chunked]],
+        changed=["shared/web/ui.js"],
+    )
+    assert result[:2] == [[bare], ["ROSY_RUN_BROWSER_TESTS=1", chunked]]
+    assert sorted(result[2:]) == sorted([
+        ["ROSY_RUN_BROWSER_TESTS=1", bare],
+        ["ROSY_RUN_BROWSER_TESTS=1", extra_only],
+    ])
+
+
 def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypatch):
     seen = []
     monkeypatch.undo()  # the autouse fixture stubs preflight for the other tests
     monkeypatch.setenv("ROSY_STEP_BACK", "off")  # the step-back check has its own test below
     monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: seen.append(cmd[1:]))
     pr_land.preflight(Path("."), "origin/main")
-    assert seen == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
+    assert sorted(seen) == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
 
     def refuse(cmd, cwd, **k):
         raise SystemExit("no Safety-Review trailer")

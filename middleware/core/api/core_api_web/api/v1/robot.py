@@ -67,7 +67,10 @@ def _json_safe(value):
 
 @sensors_router.get("")
 def list_sensors(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    return {"sensors": _json_safe(svc.state.get_sensors())}
+    samples = dict(svc.state.get_sensors())
+    for sensor in samples.keys() & _TOPIC_SENSORS:
+        samples[sensor] = {key: value for key, value in samples[sensor].items() if key != "sample_age_s"}
+    return {"sensors": _json_safe(samples)}
 
 
 @sensors_router.get("/{sensor_type}")
@@ -83,7 +86,10 @@ def sensor_detail(sensor_type: str, _: AuthContext = Depends(viewer),
     if sensor_type in _TOPIC_SENSORS:
         # A silent topic is an answer with evidence, not a 404 (v1.429).
         at = (data or {}).get("received_at")
-        age = None if at is None else max(0.0, time.time() - at)
+        age = (data or {}).get("sample_age_s")
+        if age is None and at is not None:
+            elapsed = time.time() - at
+            age = elapsed if elapsed >= 0.0 else math.inf
         data = {"received_at": None, **(data or {}), "sample_age_s": age, "stale_after_s": 5.0,
                 "evidence": "missing" if age is None else "fresh" if age <= 5.0 else "stale"}
     if data is None:

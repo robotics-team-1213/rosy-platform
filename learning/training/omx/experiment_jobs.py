@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import threading
 import time
 import re
 
@@ -112,12 +113,15 @@ def launch(center, db, request_id, request, row, stamp):
     if row['execution_mode'] in ('lerobot_inspect', 'lerobot_train'):
         from experiment_lerobot_worker import offline_environment
         env = offline_environment(root/'output')
+    elif row['execution_mode'] == 'omx_cuda_train':
+        env.update(HF_DATASETS_OFFLINE='1', HF_HUB_DISABLE_TELEMETRY='1', PYTHONUNBUFFERED='1')
     child = None
     try:
         with (root / 'worker.log').open('wb') as log:
             worker = {'online_experience': 'experiment_online.py',
                       'lerobot_inspect': 'experiment_lerobot_worker.py',
                       'lerobot_train': 'experiment_lerobot_worker.py',
+                      'omx_cuda_train': 'experiment_cuda_train.py',
                       'native_export': 'experiment_export.py',
                       'native_train': 'experiment_native_train.py'}.get(row['execution_mode'], 'experiment_train.py')
             child = subprocess.Popen([center.python[row['method']], str(Path(__file__).with_name(worker)),
@@ -136,6 +140,19 @@ def launch(center, db, request_id, request, row, stamp):
                    (json.dumps(row), json.dumps(receipt), rid))
         db.commit()
         center.children[rid] = child
+        if callable(getattr(child, 'wait', None)):
+            def _reap(proc=child):
+                try:
+                    proc.wait()
+                    db_path = getattr(center, 'db', None)
+                    if not db_path or not db_path.exists():
+                        return
+                    with center.lock, center.connect() as conn:
+                        conn.execute('BEGIN IMMEDIATE')
+                        center._refresh(conn)
+                except Exception:
+                    pass
+            threading.Thread(target=_reap, name=f'omx-reap-{rid[:8]}', daemon=True).start()
     except Exception:
         if child and child.poll() is None:
             child.terminate()

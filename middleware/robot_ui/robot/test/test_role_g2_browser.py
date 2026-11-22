@@ -1415,6 +1415,8 @@ def test_console_navigation_stage_local_captures(tmp_path):
             mapping_session["readable"] = False
             page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 확인 불가')")
             page.screenshot(path=str(capture_dir / f"operator-console-mapping-unknown-{viewport[0]}x{viewport[1]}.png"), full_page=True)
+            mapping_session["readable"] = True
+            page.wait_for_function("document.querySelector('.surface-map-stage')?.textContent.includes('SLAM · 세션 없음')")
             if viewport[0] == 1366:
                 location["state"] = "SUSPECT"
                 page.wait_for_function("""() => document.querySelector('.surface-map-stage')?.textContent.includes('주행 · 주행 중 보고 · 위치 확인 필요')

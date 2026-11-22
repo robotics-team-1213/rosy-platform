@@ -8,6 +8,7 @@ Single Responsibility:
 """
 from __future__ import annotations
 
+import math
 from pathlib import Path
 import sys
 import uuid
@@ -23,6 +24,7 @@ from omx_adapter.chunk_library import GUARD_UNITS_PER_S, NAMES, load_library, pa
 from omx_adapter.motion_profile import retime  # noqa: E402
 from cell_envelope import digest  # noqa: E402
 import cell_params as prm  # noqa: E402
+from chunk_policy_playback import active_jaw_gate, check_runner_jaw_gate, halt_policy_gate, read_present_or_hold  # noqa: E402
 from chunk_runner_guards import (  # noqa: E402
     JOG_MAX,
     REL_MAX,
@@ -30,9 +32,51 @@ from chunk_runner_guards import (  # noqa: E402
     build_chain_segments,
     build_jog_target,
     build_splice_frames,
+    library_gripper_closed,
+    library_transit_speed,
+    parse_transit,
+    policy_requires_jaw_gate,
+    safe_stderr,
 )
 
 EMPTY_MARGIN = 2.0
+
+
+def _clear_trailing_gate(runner, *, stop_motion: bool = True) -> None:
+    if getattr(runner, "_trailing_jaw_gate", None) is None:
+        return
+    if stop_motion:
+        stop = getattr(getattr(getattr(runner, "robot", None), "motion", None), "stop_streaming", None)
+        if callable(stop):
+            stop()
+    runner._trailing_jaw_gate = None
+
+
+def _begin_release(runner, target_grip: float | None, present=None) -> None:
+    from chunk_runner_settle import begin_grip_release
+
+    begin_grip_release(runner, target_grip, EMPTY_MARGIN, present)
+
+
+def _arm_release(runner, frames, *, force: bool = False) -> bool:
+    from chunk_runner_settle import arm_queue_release
+
+    return arm_queue_release(runner, frames, force=force, empty_margin=EMPTY_MARGIN)
+
+
+def _latch_status_write_error(runner, present, command: str, reason: str | None, error: OSError) -> None:
+    if not runner.human_hold_latched:
+        pose = present if present is not None else getattr(runner, "last_present", None)
+        if pose is None and getattr(runner, "target", None) is not None:
+            pose = list(runner.target)
+        msg = f"status write failed ({reason})" if reason else "status write failed"
+        if pose is not None:
+            runner.hold(pose, msg, human=True)
+        else:
+            runner.human_hold_latched = True
+            runner.fault = msg
+    safe_stderr({"command": command, **({"error": reason} if reason else {}),
+                 "status_write_failed": str(error)[:300]})
 
 
 def dispatch_runner_command(runner, line: str) -> bool:
@@ -45,7 +89,9 @@ def dispatch_runner_command(runner, line: str) -> bool:
     if verb not in ("state", "stop", "park"):
         runner.home_since = None
     try:
-        if runner.human_hold_latched and verb not in ("state", "human-hold"):
+        ep_words = words[3:] if verb == "checked" and len(words) >= 4 else words
+        is_episode_close = ep_words[:1] == ["episode"] and ep_words[1:2] in (["fail"], ["drop"])
+        if runner.human_hold_latched and verb not in ("state", "human-hold") and not is_episode_close:
             raise ValueError("human hold latched: only state or human-hold")
         if verb == "human-hold":
             if len(words) != 1:
@@ -81,36 +127,71 @@ def dispatch_runner_command(runner, line: str) -> bool:
             home = runner.library.get("chunks", {}).get("home") if fold_on_stop else None
             held = getattr(getattr(runner.robot, "motion", None), "held", None)
             hard_fault = bool(runner.fault and not runner.fault.startswith("contact"))
-            if (
-                home
-                and runner.target is not None
-                and not held
-                and not hard_fault
-                and not getattr(runner, "_stop_after_park", None)
-            ):
-                present = getattr(runner, "last_present", None) or runner.present()
-                gap = max(
-                    max(abs(a - b) for a, b in zip(runner.target[:5], home[-1][:5])),
-                    max(abs(a - b) for a, b in zip(present[:5], home[-1][:5])),
-                )
-                if gap > SETTLE_TOL:
-                    transit = {NAMES.index(k): float(v) for k, v in runner.library.get("transit", {}).items()} or None
-                    grip_park = runner.target[5] if not runner.holding else float(runner.library["gripper_closed"])
-                    runner.queue = park_path(
-                        list(present[:5]) + [runner.target[5]],
-                        home[-1],
-                        grip_park,
-                        runner.fps,
-                        transit,
-                        runner.library.get("transit_speed", 0.85),
-                    )
-                    runner.chunk, runner.settle_since, runner.played = "park", None, []
-                    runner.trend, runner.pace_floor, runner._stop_after_park = [], 0.0, line
+            present, at_home = None, False
+            if fold_on_stop or getattr(runner, "_release_until", None) is not None:
+                if getattr(runner, "_stop_after_park", None):
                     return True
-            runner.report(command=line, ok=True)
-            return False
+                try:
+                    present = runner.present()
+                except Exception:  # noqa: BLE001
+                    present = None
+                at_home = (
+                    bool(home)
+                    and runner.target is not None
+                    and present is not None
+                    and max(
+                        max(abs(a - b) for a, b in zip(runner.target[:5], home[-1][:5])),
+                        max(abs(a - b) for a, b in zip(present[:5], home[-1][:5])),
+                    ) <= SETTLE_TOL
+                    and not getattr(runner, "jitter", {}).get("shaking")
+                    and getattr(runner, "_release_until", None) is None
+                )
+                if not at_home:
+                    if home and runner.target is not None and present is not None and not held and not hard_fault and getattr(runner, "_release_until", None) is None:
+                        transit = parse_transit(runner.library)
+                        grip_park = runner.target[5] if not runner.holding else library_gripper_closed(runner.library)
+                        frames = park_path(list(present[:5]) + [runner.target[5]], home[-1], grip_park, runner.fps, transit,
+                                           library_transit_speed(runner.library))
+                        halt_policy_gate(runner)
+                        runner.queue = frames
+                        runner.chunk, runner.settle_since, runner.played = "park", None, []
+                        runner.trend, runner.pace_floor, runner._stop_after_park = [], 0.0, line
+                        return True
+                    why = (
+                        "unconfirmed grip release" if getattr(runner, "_release_until", None) is not None
+                        else "no home chunk" if not home
+                        else "no target pose" if runner.target is None
+                        else "pose unreadable" if present is None
+                        else f"guard hold {held}" if held
+                        else f"fault {runner.fault}" if hard_fault
+                        else "arm shaking at home"
+                    )
+                    hold_pose = present if present is not None else getattr(runner, "last_present", None) or getattr(runner, "target", None)
+                    if hold_pose is not None:
+                        if hasattr(runner, "hold"):
+                            runner.hold(hold_pose, why, human=True)
+                        else:
+                            runner.human_hold_latched, runner.fault = True, why
+                        try:
+                            runner.report(
+                                command=line, ok=False, folded=False, hold=True,
+                                person_needed=True, error=f"{why}; torque stays ON", present=hold_pose,
+                            )
+                        except OSError as write_error:
+                            _latch_status_write_error(runner, hold_pose, line, why, write_error)
+                    else:
+                        runner.human_hold_latched, runner.fault = True, why
+                        safe_stderr({"command": line, "ok": False, "folded": False, "hold": True,
+                                     "person_needed": True, "error": f"{why}; torque stays ON"})
+                    return True
+            try:
+                runner.report(command=line, ok=True, **({"present": present} if fold_on_stop else {}))
+            except OSError as write_error:
+                _latch_status_write_error(runner, present if fold_on_stop else None, line, None, write_error)
+            return bool(runner.human_hold_latched)
         if verb == "episode":
-            runner.report(command=line, ok=True, **runner.recorder.command(words[1:]))
+            from episode_recorder import dispatch_episode_command
+            dispatch_episode_command(runner, words, line, _latch_status_write_error)
             return True
         if runner.chunk is not None and verb != "splice":
             raise ValueError(f"chunk {runner.chunk} is still running")
@@ -125,11 +206,15 @@ def dispatch_runner_command(runner, line: str) -> bool:
         if verb in ("run", "goto", "park", "chain", "splice", "retreat"):
             runner._damp_cooldown = 0
         if verb == "splice" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
-            runner.queue = build_splice_frames(
-                runner.library, words[1], words[2:] == ["rel"], runner.queue, runner.target, runner.fps
-            )
-            if words[1].startswith("release"):
-                runner.holding = False
+            if (runner.policy_playback is not None or getattr(runner, "jaw_gate", None) is not None
+                    or (words[1] == "policy" and ("policy_playback" in runner.library or "jaw_gate" in runner.library
+                                                  or policy_requires_jaw_gate(runner)))):
+                raise ValueError("cannot splice a timed or jaw-gated policy chunk")
+            spliced = build_splice_frames(runner.library, words[1], words[2:] == ["rel"], runner.queue, runner.target, runner.fps)
+            if not _arm_release(runner, spliced, force=words[1].startswith("release")):
+                return True
+            halt_policy_gate(runner)
+            runner.queue = spliced
             runner.chunk = words[1] if runner.chunk is None else f"{runner.chunk} -> {words[1]}"
             runner.settle_since, runner.contact_ticks, runner.contact_start = None, 0, None
             return True
@@ -146,35 +231,66 @@ def dispatch_runner_command(runner, line: str) -> bool:
             gap = max(abs(a + o - b) for a, o, b in zip(start[:5], offset, runner.target[:5]))
             if gap > JOG_MAX * 2:
                 raise ValueError(f"chunk {words[1]} starts {gap:.1f} away from the held target")
+            new_play, new_gate = None, None
             if words[1] == "policy" and "policy_playback" in runner.library:
                 from chunk_policy_playback import start
 
                 if len(words) != 2:
                     raise ValueError("timed policy frames cannot be shifted")
-                runner.policy_playback = start(runner)
-            runner.queue = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
-            if words[1].startswith("release"):
-                runner.holding = False
+                new_play = start(runner)
+                new_gate = new_play.jaw_gate
+            elif words[1] == "policy" and "jaw_gate" in runner.library:
+                from chunk_policy_playback import start_jaw_gate
+
+                if len(words) != 2:
+                    raise ValueError("jaw-gated policy frames cannot be shifted")
+                new_gate = start_jaw_gate(runner, runner.library["jaw_gate"])
+            if words[1] == "policy" and new_gate is None and policy_requires_jaw_gate(runner):
+                raise ValueError("policy chunk requires jaw_gate when grasp_pick or rim height is configured")
+            queued = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
+            if not _arm_release(runner, queued, force=words[1].startswith("release")):
+                return True
+            if words[1] == "policy":
+                same_gate = new_gate is not None and new_gate.same_as(getattr(runner, "_trailing_jaw_gate", None))
+                _clear_trailing_gate(runner, stop_motion=not same_gate)
+            else:
+                halt_policy_gate(runner)
+            runner.policy_playback = new_play
+            runner.jaw_gate = None if new_play is not None else new_gate
+            runner.queue = queued
             runner.chunk, runner.settle_since, runner.played, runner.contact_ticks = words[1], None, [], 0
             runner.contact_start, runner.trend, runner.pace_floor = None, [], 0.0
             return True
         if verb == "jog" and len(words) >= 3 and len(words) % 2 == 1:
-            present = runner.present()
+            present, ok = read_present_or_hold(runner, "encoder read failed")
+            if not ok:
+                return True
             moved = build_jog_target(words, present, runner.target)
+            play = runner.policy_playback if runner.chunk == "policy" else None
+            gate = None if runner.human_hold_latched else active_jaw_gate(runner, play)
+            if gate is not None and not check_runner_jaw_gate(runner, gate, moved, play.receipt() if play else None):
+                return True
+            halt_policy_gate(runner)
+            if getattr(runner, "_committed_grip", None) is None and moved[5] != runner.target[5]:
+                runner._committed_grip = (runner.target[5], runner.holding)
+            if moved[5] > runner.target[5]:
+                _begin_release(runner, moved[5], present)
             runner.jog_path, runner.target = (runner.jog_path or [list(runner.target)]) + [list(moved)], moved
         elif verb == "goto" and len(words) == 2:
+            if words[1] == "policy" and ("policy_playback" in runner.library or "jaw_gate" in runner.library
+                                          or policy_requires_jaw_gate(runner)):
+                raise ValueError("cannot goto a timed or jaw-gated policy chunk")
             frames = runner.library["chunks"].get(words[1])
             if frames is None:
                 raise ValueError(f"unknown chunk {words[1]}")
-            transit = {NAMES.index(k): float(v) for k, v in runner.library.get("transit", {}).items()} or None
-            runner.queue = transit_path(
-                runner.target,
-                frames[0],
-                runner.library["gripper_closed"],
-                runner.fps,
-                transit,
-                runner.library.get("transit_speed", 0.85),
+            path = transit_path(
+                runner.target, frames[0], library_gripper_closed(runner.library),
+                runner.fps, parse_transit(runner.library), library_transit_speed(runner.library),
             )
+            if not _arm_release(runner, path):
+                return True
+            halt_policy_gate(runner)
+            runner.queue = path
             runner.chunk, runner.settle_since, runner.played = f"goto {words[1]}", None, []
             runner.trend, runner.pace_floor = [], 0.0
             return True
@@ -182,36 +298,55 @@ def dispatch_runner_command(runner, line: str) -> bool:
             home = runner.library["chunks"].get("home")
             if not home:
                 raise ValueError("park needs a home chunk in the library")
-            transit = {NAMES.index(k): float(v) for k, v in runner.library.get("transit", {}).items()} or None
-            runner.queue = park_path(
-                runner.target,
-                home[-1],
-                runner.library["gripper_closed"],
-                runner.fps,
-                transit,
-                runner.library.get("transit_speed", 0.85),
+            path = park_path(
+                runner.target, home[-1], library_gripper_closed(runner.library),
+                runner.fps, parse_transit(runner.library), library_transit_speed(runner.library),
             )
+            if not _arm_release(runner, path):
+                return True
+            halt_policy_gate(runner)
+            runner.queue = path
             runner.chunk, runner.settle_since, runner.played = "park", None, []
             runner.trend, runner.pace_floor = [], 0.0
             return True
         elif verb == "chain" and len(words) >= 2:
-            runner.queue, runner.chunk, release = build_chain_segments(runner.library, words, runner.target, runner.fps)
-            if release:
-                runner.holding = False
+            path, label, release = build_chain_segments(
+                runner.library, words, runner.target, runner.fps, require_policy_gate=policy_requires_jaw_gate(runner)
+            )
+            if not _arm_release(runner, path, force=release is not None):
+                return True
+            halt_policy_gate(runner)
+            runner.queue, runner.chunk = path, label
             runner.settle_since, runner.played, runner.contact_ticks, runner.contact_start = None, [], 0, None
             runner.trend, runner.pace_floor = [], 0.0
             return True
         elif verb == "grip" and len(words) == 2:
-            to = max(float(runner.library["gripper_closed"]), min(100.0, float(words[1])))
+            raw_grip = float(words[1])
+            if not math.isfinite(raw_grip):
+                raise ValueError("grip target must be finite")
+            to = max(library_gripper_closed(runner.library), min(100.0, raw_grip))
+            play = runner.policy_playback if runner.chunk == "policy" else None
+            gate = None if runner.human_hold_latched else active_jaw_gate(runner, play)
+            if to != runner.target[5] or gate is not None or runner.holding or getattr(runner, "_release_until", None) is not None:
+                present, ok = read_present_or_hold(runner, "encoder read failed")
+                if not ok:
+                    return True
+            else:
+                present = None
+            if gate is not None and not check_runner_jaw_gate(
+                runner, gate, [*runner.target[:5], to], play.receipt() if play else None
+            ):
+                return True
+            if getattr(runner, "_committed_grip", None) is None and to != runner.target[5]:
+                runner._committed_grip = (runner.target[5], runner.holding)
             if to > runner.target[5]:
-                runner.holding = False
-            present = runner.present() if to < runner.target[5] else None
+                _begin_release(runner, to, present)
             free = present is not None and abs(present[5] - runner.target[5]) <= EMPTY_MARGIN
             runner.grip_from, runner.target[5] = (runner.target[5] if free else None), to
         elif verb == "retreat" and len(words) == 1:
             if not runner.retreat_frames:
                 raise ValueError("nothing to retreat along")
-            keep_open = runner.target[5] > float(runner.library["gripper_closed"]) + EMPTY_MARGIN
+            keep_open = runner.target[5] > library_gripper_closed(runner.library) + EMPTY_MARGIN
             raw = [f[:5] + [runner.target[5]] for f in runner.retreat_frames] if keep_open else list(runner.retreat_frames)
             if runner.target is not None and raw:
                 if len(raw) > 2:
@@ -222,6 +357,9 @@ def dispatch_runner_command(runner, line: str) -> bool:
                     raw = raw[best_i:]
                 hold = [list(runner.target)] * 4
                 raw = hold + retime(raw, runner.fps, 0.25 * GUARD_UNITS_PER_S, start=runner.target)
+            if not _arm_release(runner, raw):
+                return True
+            halt_policy_gate(runner)
             runner.queue = raw
             runner.retreat_frames = []
             runner.chunk, runner.settle_since, runner.played = "retreat", None, []
@@ -230,7 +368,7 @@ def dispatch_runner_command(runner, line: str) -> bool:
         elif verb == "load" and len(words) == 2:
             try:
                 library = load_library(Path(words[1]))
-            except (SystemExit, OSError) as exc:
+            except (SystemExit, OSError, OverflowError, TypeError) as exc:
                 raise ValueError(str(exc)) from None
             if library["fps"] != runner.fps:
                 raise ValueError(f"library fps {library['fps']} differs from the runner fps {runner.fps}")
@@ -246,7 +384,13 @@ def dispatch_runner_command(runner, line: str) -> bool:
             raise ValueError(
                 "commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | human-hold | state | stop"
             )
-        runner.report(command=line, ok=True, present=locals().get("present"))
+        try:
+            runner.report(command=line, ok=True, present=locals().get("present"))
+        except OSError as write_error:
+            _latch_status_write_error(runner, locals().get("present"), line, None, write_error)
     except ValueError as error:
-        runner.report(command=line, ok=False, error=str(error), present=locals().get("present"))
+        try:
+            runner.report(command=line, ok=False, error=str(error), present=locals().get("present"))
+        except OSError as write_error:
+            _latch_status_write_error(runner, locals().get("present"), line, str(error), write_error)
     return True

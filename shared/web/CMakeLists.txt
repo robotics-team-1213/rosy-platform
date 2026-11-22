@@ -37,8 +37,36 @@ install(FILES
   form-controls.js
   collection-controls.js
   interaction-controls.js
+  skill-state.js
+  sample-data.js
+  localization-state.js
   workflow-controls.js
+  robot-row.js
+  robot-3d.js
+  choice-logic.js
+  robot-profile.js
+  robot-dock.js
+  robot-panel.js
+  robot-3d-assets.js
+  robot-3d-model.js
+  evidence-line.js
+  stop-control.js
+  alert-center.js
+  account-gate.js
+  announcer.js
+  busy-scope.js
+  cause-line.js
+  connection-notice.js
+  choice-group.js
+  choice-list.js
+  selection.js
+  status-tag.js
+  value-text.js
+  robot-dock-gallery.js
+  robot-dock-model.js
   component-controls.css
+  choice-controls.css
+  robot-dock.css
   component-gallery.css
   component-gallery.html
   component-gallery.js
@@ -58,6 +86,30 @@ install(FILES
   brand/mark.svg
   brand/platform.svg
   DESTINATION share/${PROJECT_NAME}/brand
+)
+
+# C15 3D view: vendored three.js (MIT) and the generated web meshes (tools/robot_meshes.py), listed one by one.
+install(FILES
+  vendor/three.module.min.js
+  vendor/three.core.min.js
+  vendor/three.LICENSE
+  DESTINATION share/${PROJECT_NAME}/vendor
+)
+
+install(FILES
+  meshes/omx-f.urdf
+  meshes/omx-link0.stl
+  meshes/omx-link1.stl
+  meshes/omx-link2.stl
+  meshes/omx-link3.stl
+  meshes/omx-link4.stl
+  meshes/omx-link5.stl
+  meshes/omx-link6.stl
+  meshes/omx-link7.stl
+  meshes/pinky-body.stl
+  meshes/pinky-pro.urdf
+  meshes/pinky-wheel.stl
+  DESTINATION share/${PROJECT_NAME}/meshes
 )
 
 ament_package()

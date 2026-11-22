@@ -173,7 +173,9 @@ def test_map_interaction_controls_explain_and_enforce_the_operator_boundary():
     assert 'button.setAttribute("aria-describedby", clickReason.id)' in script
     assert "위치·주행 목표 설정에는 운용자 권한이 필요합니다." in script
     assert 'canGoal: canMapAction' in script
-    assert 'mode !== "goal" || (!safeStopped() && goalPoseReady())' in script
+    assert 'mode !== "goal" || !goalBlockReason()' in script
+    assert 'if (safeStopped())' in script and 'if (!goalPoseReady())' in script
+    assert 'if (navigationReady !== true)' in script
     assert 'el("ui-actions", "surface-actions map-layer-actions")' in script
     assert 'el("ui-actions", "surface-actions map-click-actions")' in script
     panel_styles = (ROOT / "panels" / "surface-panels.css").read_text(encoding="utf-8")

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import select
 import stat
@@ -130,6 +131,11 @@ class Guarded:
     def send_action(self, action):
         return self.motion.send(action)
 
+    def send_action_checked(self, action, goal_check, *, hold_on_read_error=False, allow_stale_hold=False):
+        return self.motion.send(
+            action, goal_check=goal_check, hold_on_read_error=hold_on_read_error, allow_stale_hold=allow_stale_hold,
+        )
+
     def get_observation(self):
         present = getattr(self.motion, "last_present", None)
         if present is not None:
@@ -174,6 +180,103 @@ def bind_trace_source(runner, trace_path: Path, trace_file, io: Path) -> bool:
     return True
 
 
+def _finite_rim(raw, label: str) -> float:
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ValueError(f"{label} must be a finite number in [-0.05, 0.5], got {raw!r}")
+    try:
+        val = float(raw)
+    except OverflowError:
+        raise ValueError(f"{label} must be a finite number in [-0.05, 0.5], got {raw!r}") from None
+    if not math.isfinite(val) or not -0.05 <= val <= 0.5:
+        raise ValueError(f"{label} must be a finite number in [-0.05, 0.5], got {raw!r}")
+    return val
+
+
+def resolve_runner_rim_z(library: dict | None, *, params=None, rim_z_m: float | None = None) -> float | None:
+    """Collect runner-owned source rim height (m) from CLI arg, params, and startup library."""
+    vals = []
+    if rim_z_m is not None:
+        vals.append(_finite_rim(rim_z_m, "rim_z_m"))
+    if params and "policy.source_rim_z_m" in params:
+        p_rim = _finite_rim(params["policy.source_rim_z_m"], "policy.source_rim_z_m")
+        if p_rim > 0.0:
+            vals.append(p_rim)
+    if isinstance(library, dict):
+        src = library.get("source")
+        if src is not None and not isinstance(src, dict):
+            raise ValueError("startup library source must be a dict")
+        pick = src.get("pick") if isinstance(src, dict) else None
+        if pick is not None and not isinstance(pick, dict):
+            raise ValueError("startup library source.pick must be a dict")
+        for name, mapping in (("source", src), ("source.pick", pick)):
+            if isinstance(mapping, dict):
+                for key in ("rim_z_m", "rim_z"):
+                    if mapping.get(key) is not None:
+                        vals.append(_finite_rim(mapping[key], f"startup {name}.{key}"))
+        pb = library.get("policy_playback")
+        if pb is not None and not isinstance(pb, dict):
+            raise ValueError("startup policy_playback must be a dict")
+        for name, gate in (("jaw_gate", library.get("jaw_gate")),
+                           ("policy_playback.jaw_gate", pb.get("jaw_gate") if isinstance(pb, dict) else None)):
+            if isinstance(gate, dict) and "rim_z_m" in gate:
+                vals.append(_finite_rim(gate["rim_z_m"], f"startup {name}.rim_z_m"))
+    return max(vals) if vals else None
+
+
+def startup_grasp_ref(library: dict | None, *, tcp_x_m: float | None = None) -> dict | None:
+    """Snapshot trusted startup grasp_pick geometry so later `load` cannot drop or shift it."""
+    if not isinstance(library, dict) or "grasp_pick" not in (library.get("chunks") or {}):
+        return None
+    ref = {"chunks": {"grasp_pick": [list(library["chunks"]["grasp_pick"][-1])]}}
+    if isinstance(library.get("source"), dict):
+        ref["source"] = dict(library["source"])
+    eff_tcp = library["tcp_x_m"] if library.get("tcp_x_m") is not None else tcp_x_m
+    if eff_tcp is not None:
+        ref["tcp_x_m"] = eff_tcp
+    return ref
+
+
+def startup_tcp_x_m(library: dict | None) -> float:
+    from omx_tcp import ENV, RANGE_M
+
+    lib_raw = library.get("tcp_x_m") if isinstance(library, dict) else None
+    raw = lib_raw if lib_raw is not None else (os.environ.get(ENV) or None)
+    if raw is None:
+        from grasp_planner import load_kinematics
+
+        val = float(load_kinematics(None)[0].tcp_offset[0])
+        if not (math.isfinite(val) and RANGE_M[0] <= val <= RANGE_M[1]):
+            raise ValueError(f"invalid stock tcp_x_m: {val!r}")
+        return val
+    label = "startup tcp_x_m" if lib_raw is not None else ENV
+    if isinstance(raw, bool) or (lib_raw is not None and not isinstance(raw, (int, float))):
+        raise ValueError(f"invalid {label}: {raw!r}")
+    try:
+        val = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError(f"invalid {label}: {raw!r}") from None
+    if not (math.isfinite(val) and RANGE_M[0] <= val <= RANGE_M[1]):
+        raise ValueError(f"invalid {label}: {raw!r}")
+    return val
+
+
+def write_status_row(status_path: Path, row: dict, *, protect: bool = False) -> None:
+    """Append `row` to `status_path` (the FIFO commit point); stdout echo is best-effort diagnostics."""
+    from chunk_runner_guards import safe_stderr
+
+    try:
+        with status_path.open("a") as f:
+            f.write(json.dumps(row) + "\n")
+    except OSError as error:  # interrupted: a full disk is reported, the fold or hold goes on (no torque OFF)
+        if not protect:
+            raise
+        safe_stderr({"status_write_failed": str(error)[:300], "row": row})
+    try:
+        print(json.dumps(row), flush=True)
+    except (OSError, ValueError) as error:
+        safe_stderr({"stdout_write_failed": str(error)[:300]})
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", required=True, type=Path, help="record config (robot section is used)")
@@ -182,35 +285,37 @@ def main(argv=None):
     parser.add_argument("--operating-profile", type=Path, help="per-device operating profile; unbound sessions cannot auto-pick")
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
     parser.add_argument("--load-model", type=Path, help="load-model.json (load_model.py): refuse a library whose holds are predicted risky")
+    parser.add_argument("--rim-z-m", type=float, help="configured source rim height (m) enforced on policy jaw_gate")
     args = parser.parse_args(argv)
     signals: list = []  # recorded, not raised: an interrupt folds or holds (chunk_runner_interrupt), never drops the arm
     __import__("chunk_runner_interrupt").install(signals)
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     params = prm.load(args.params)["values"]
+    try:
+        rim_z_m = resolve_runner_rim_z(library, params=params, rim_z_m=args.rim_z_m)
+        trusted_tcp = startup_tcp_x_m(library)
+    except ValueError as error:
+        raise SystemExit(str(error)) from None
+    trusted_grasp = startup_grasp_ref(library, tcp_x_m=trusted_tcp)
     from cell_robot_profile import load as load_operating_profile
 
     profile = load_operating_profile(args.operating_profile, robot_config=config["robot"]) if args.operating_profile else None
     if library.get("fps") != config["dataset"]["fps"]:  # one frame per tick: another fps replays at another speed
         raise SystemExit(f"chunk library fps {library.get('fps')} differs from the recorder fps {config['dataset']['fps']}")
     from lerobot.robots.omx_follower import OmxFollower, OmxFollowerConfig
-
     robot_cfg = {k: v for k, v in config["robot"].items() if k not in ("type", "cameras")}
     # LeRobot's ensure_safe_goal_position accepts only float/dict; draccus converts it for lerobot-record, JSON keeps 5 an int
     robot_cfg["max_relative_target"] = float(robot_cfg["max_relative_target"])
     robot = OmxFollower(OmxFollowerConfig(**robot_cfg, cameras={}))  # the camera services keep the cameras
     args.io.mkdir(parents=True, exist_ok=True)
     status_path = args.io / "chunk-status.jsonl"
+    from chunk_runner_guards import safe_stderr
 
     def status(row):
-        try:
-            with status_path.open("a") as f:
-                f.write(json.dumps(row) + "\n")
-        except OSError as error:  # interrupted: a full disk is reported, the fold or hold goes on (no torque OFF)
-            if not signals:
-                raise
-            print(json.dumps({"status_write_failed": str(error)[:300], "row": row}), file=sys.stderr, flush=True)
-        print(json.dumps(row), flush=True)
+        protect = bool(signals or getattr(runner, "human_hold_latched", False)
+                       or getattr(runner, "_stop_after_park", None))
+        write_status_row(status_path, row, protect=protect)
 
     from guarded_native import NativeJointMotion, close_device, connect_passive
     from motor_health import MotorHealth
@@ -239,20 +344,20 @@ def main(argv=None):
                 tmp.write_text(json.dumps(row))
                 os.replace(tmp, live_path)
             except OSError:
-                if not signals:
+                if not signals and not getattr(runner, "human_hold_latched", False):
                     raise
 
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
-                        operating_context=context, params=params, plan_check=check)
+                        operating_context=context, params=params, plan_check=check, rim_z_m=rim_z_m)
+        runner.trusted_grasp, runner.trusted_tcp = trusted_grasp, trusted_tcp
         runner.signals, runner.hold_file = signals, args.io / "hold.json"  # hold.json: record_session reads it
         # heavy imports (lerobot, numpy, torch), the robot and the bus are up: only now may the main thread take signals
         # (one sent during start-up was pending and is recorded now, the handlers being installed above)
         runner.signal_routing = __import__("main_thread_signals").unblock_main()
         if runner.signal_routing:  # another thread can take them: gated_close's re-check right before close_device
-            print(json.dumps({"signal_routing": "threads accept SIGTERM", "tids": runner.signal_routing}),
-                  file=sys.stderr, flush=True)
+            safe_stderr({"signal_routing": "threads accept SIGTERM", "tids": runner.signal_routing})
         trace_path = Path(path).expanduser().resolve() if (path := os.environ.get("ROSY_CHUNK_TRACE")) else None
         trace_file = trace_path.open("a") if trace_path else None  # buffered: no write call per tick
         if trace_file:
@@ -261,12 +366,18 @@ def main(argv=None):
         try:
             runner.run(lines)
         except Exception as error:
-            if not signals:
-                raise  # no interrupt: the existing stop, torque OFF in the finally below
+            if (not signals and not getattr(runner, "human_hold_latched", False)
+                    and not getattr(runner, "_stop_after_park", None)
+                    and getattr(runner, "_release_until", None) is None
+                    and not getattr(motion, "failed", False)):
+                raise  # no interrupt, no latched HOLD, no pending fold, no unconfirmed release, and no failed guard: torque OFF in finally
             __import__("chunk_runner_interrupt").last_resort_hold(runner, signals, error)  # returns on SIGUSR2 only
         finally:
             if trace_file:
-                trace_file.close()
+                try:
+                    trace_file.close()
+                except OSError:
+                    pass
     finally:
         lines.close()
         try:

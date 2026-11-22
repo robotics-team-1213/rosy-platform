@@ -113,7 +113,12 @@ def test_the_sweeps_real_table_would_see_the_attempt_row(tmp_path):
             import omx_carry_sweep as sw
         finally:
             sys.path.remove(str(sweep))
-        assert dict(sw.real_table(path)) == {("c01", 2): {"ok": 1}}
+        unknown = sw.Counter()
+        assert not sw.real_table(path, unknown=unknown)
+        assert unknown == {("c01", 2): 1}
+        proof = tmp_path / "tier-proof.json"
+        proof.write_text(json.dumps({"r-001": {"z_gate": {"verdict": "PASS", "verified": True}}}), encoding="utf-8")
+        assert dict(sw.real_table(path, proof)) == {("c01", 2): {"ok": 1}}
         assert carry.BOUNDS["auto.grasp_depth_m"] == sw.BOUNDS["auto.grasp_depth_m"] and carry.BOUNDS["place_dz"] == sw.BOUNDS["site.place_dz_m"]
     v = json.loads(path.read_text())["context"]["choices_used"]["carry.tier2"]  # documented row format: a dict with "candidate" under carry.tier*
     assert v["candidate"] == "c01" and carry.tier_name(DEST) == "carry.tier2"

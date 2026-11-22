@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 
 from guarded_native import NativeJointMotion, NAMES, close_device, connect_passive, finite_values, torque_off
+from guarded_native_cli import _GUARD_NOTED, note_clean_end, note_end
 from motor_health import MotorHealth
 
 ARMS = ("arm_a", "arm_b")
@@ -38,6 +39,9 @@ class BimanualMotion:
                     prepared[arm] = self.motions[arm].prepare(values)
                 except ValueError as exc:
                     raise ValueError(f"{arm}: {exc}") from exc
+            if any(m.has_stall_hold() for m in self.motions.values()):  # one arm holds: the other stands still in the same tick
+                prepared = {arm: p if self.motions[arm].has_stall_hold() else self.motions[arm].freeze_prepared(p)
+                            for arm, p in prepared.items()}
             sent = {}
             for arm in ARMS:
                 sent.update(prefixed(arm, self.motions[arm].commit(prepared[arm])))
@@ -226,11 +230,14 @@ def register_types():
 
 
 def run_native(module, follower_type, leader_type, invoke=None):
+    from bench_live_frames import offer_preview, preview_reset_loop, start_live_frames
+
     if getattr(follower_type, "body_only", False) and hasattr(module, "record"):
         raise ValueError("body-only mode is manual teleoperation only")
     devices = {}
     original_robot, original_leader = module.make_robot_from_config, module.make_teleoperator_from_config
     original_frame = getattr(module, "build_dataset_frame", None)
+    preview = start_live_frames() if original_frame is not None else None
     sent = {}
 
     def make_robot(config):
@@ -252,8 +259,16 @@ def run_native(module, follower_type, leader_type, invoke=None):
         def frame(features, values, prefix):
             if prefix == module.ACTION:
                 values = sent["action"]
+            elif preview is not None and prefix == module.OBS_STR:
+                offer_preview(preview, values)
             return original_frame(features, values, prefix=prefix)
         module.build_dataset_frame = frame
+    original_loop = getattr(module, "record_loop", None)
+    if original_loop is not None and preview is not None:  # only the live preview's reset per loop: no boundary watch, no declared pause (origin/main behaviour)
+        def loop(*args, **kwargs):
+            preview_reset_loop(preview, kwargs)
+            return original_loop(*args, **kwargs)
+        module.record_loop = loop
     original_send = follower_type.send_action
     def send_action(self, action):
         if self.monitor is None:
@@ -262,11 +277,15 @@ def run_native(module, follower_type, leader_type, invoke=None):
         sent["action"] = actual
         return actual
     follower_type.send_action = send_action
+
+    _GUARD_NOTED[0] = False
     fault = None
     try:
         return (invoke or module.main)()
     except BaseException as exc:
         fault = exc
+        if not (isinstance(exc, KeyboardInterrupt) and not exc.args):
+            note_end(f"exception: {type(exc).__name__}: {exc}")
         raise
     finally:
         errors = []
@@ -279,6 +298,8 @@ def run_native(module, follower_type, leader_type, invoke=None):
         follower_type.send_action = original_send
         if original_frame is not None:
             module.build_dataset_frame = original_frame
+        if original_loop is not None:
+            module.record_loop = original_loop
         motion = getattr(devices.get("robot"), "motion", None)
         if fault is not None and motion is not None:
             for arm in motion.motions.values():
@@ -290,8 +311,13 @@ def run_native(module, follower_type, leader_type, invoke=None):
                 monitor.end()
             except BaseException:
                 pass  # The parent finalizes the bound snapshot after its independent OFF cleanup.
+        if preview is not None:
+            preview.close()
         if errors:
+            note_end(f"cleanup_error: {errors}")
             raise RuntimeError(f"bimanual native cleanup failed: {errors}")
+        if (fault is None or (isinstance(fault, KeyboardInterrupt) and not fault.args)) and not (motion is not None and any(m.failed for m in motion.motions.values())):
+            note_clean_end()
 
 
 def main():

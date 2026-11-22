@@ -11,7 +11,7 @@ export function canViewAccountSetup(session) {
 
 // D-955 team default: operate the site, every robot and every project; no account, policy,
 // camera, robot-admin or learning approval/publish/manage rights.
-export function teamGrants(siteResource) {
+function teamGrants(siteResource) {
   return [
     {resource: siteResource, capabilities: ['fleet.read', 'fleet.operate', 'games.operate', 'monitoring.read',
       'harbor.view', 'harbor.operate', 'harbor.field']},

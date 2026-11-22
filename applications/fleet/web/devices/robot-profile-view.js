@@ -1,6 +1,5 @@
-const node = (tag, text = '') => {
-  const value = document.createElement(tag); value.textContent = text; return value;
-};
+import { node } from '/common/control-dom.js';
+import { evidenceAgeText } from '/common/core_ui_logic.js';
 
 export function analysisText(analysis, elapsedS = 0) {
   if (!analysis) return '최근 하중 분석 없음';
@@ -9,7 +8,7 @@ export function analysisText(analysis, elapsedS = 0) {
   const fresh = !bindingUnknown && analysis.fresh && analysis.evidence_age_s + elapsedS <= analysis.max_age_s;
   const state = analysis.status === 'hold_for_owner_review' ? '담당자 점검 필요' : '관측 중';
   const unknown = bindingUnknown ? '관측원 연결 미확인 · 현재 상태 미확인' : '근거 만료·누락 · 현재 상태 미확인';
-  return `${fresh ? state : unknown} · ${Math.floor(age)}초 전 분석`
+  return `${fresh ? state : unknown}${evidenceAgeText(Math.floor(age))} 분석`
     + (analysis.reasons.length ? ` · ${analysis.reasons.join(', ')}` : '');
 }
 
