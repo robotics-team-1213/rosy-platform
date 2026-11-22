@@ -96,13 +96,18 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     head.append(robotName);
     if (displayName !== robot.robot_id) head.append(node("small", `Fleet ID ${robot.robot_id}`, "hint"));
     head.append(spacer);
+    const inlineIfCalm = (tagNode, cls) => {
+      if (!cls || cls === "nav" || cls === "ok") tagNode.setAttribute("variant", "inline");
+      return tagNode;
+    };
     const lane = state.line_follow || {};
     const laneOn = lane.mode === "CAMERA_LINE" || lane.mode === "IR_LINE";
-    const modeTag = tag(
+    const modeCls = view.stateUnavailable || !robot.online ? "crit" : laneOn && lane.state === "LOST" ? "warn" : "";
+    const modeTag = inlineIfCalm(tag(
       view.stateUnavailable ? "상태 확인 불가" : !robot.online ? "오프라인"
         : laneOn ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}`
           : operatorModeLabel(state.mode),
-      view.stateUnavailable || !robot.online ? "crit" : laneOn && lane.state === "LOST" ? "warn" : "");
+      modeCls), modeCls);
     if (!view.stateUnavailable && robot.online && state.mode) {
       modeTag.title = laneOn ? `${state.mode} · ${lane.mode} ${lane.state || ""}`.trim() : state.mode;
     } else if (!view.stateUnavailable && !robot.online) modeTag.title = "OFFLINE";
@@ -112,19 +117,20 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       const powerMode = state.power?.mode;
       if (powerMode) {
         const waking = state.power.motion_ready === false && powerMode === "ACTIVE";
-        const powerTag = tag(enumLabel(POWER_MODE_LABEL, powerMode) + (waking ? " · 준비 중" : ""), "");
+        const powerTag = inlineIfCalm(tag(enumLabel(POWER_MODE_LABEL, powerMode) + (waking ? " · 준비 중" : ""), ""), "");
         powerTag.title = String(powerMode);
         powerTag.dataset.power = String(powerMode);
         head.appendChild(powerTag);
       }
       const dock = state.docking?.state;
       if (dock) {
-        const dockTag = tag(enumLabel(DOCK_STATE_LABEL, dock), dock === "DOCK_FAILED" ? "crit" : "");
+        const dockCls = dock === "DOCK_FAILED" ? "crit" : "";
+        const dockTag = inlineIfCalm(tag(enumLabel(DOCK_STATE_LABEL, dock), dockCls), dockCls);
         dockTag.title = String(dock);
         dockTag.dataset.dock = String(dock);
         head.appendChild(dockTag);
       }
-      const chargeTag = tag(power.charging === "확인 불가" ? "충전 확인 불가" : power.charging, "");
+      const chargeTag = inlineIfCalm(tag(power.charging === "확인 불가" ? "충전 확인 불가" : power.charging, ""), "");
       chargeTag.dataset.charging = power.charging;
       const chargeState = robot.power_health?.battery?.charging_state;
       if (typeof chargeState === "string") chargeTag.title = chargeState;
@@ -133,7 +139,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const link = view.stateUnavailable ? null : linkTag(robot.link);
     const reason = view.stateUnavailable ? null : robot.link_reason;
     if (link || reason) {
-      const linkNode = tag(link ? link.word : reason.message, link ? link.kind : "warn");
+      const linkCls = link ? link.kind : "warn";
+      const linkNode = inlineIfCalm(tag(link ? link.word : reason.message, linkCls), linkCls);
       if (link) linkNode.dataset.link = robot.link;
       if (reason) {
         linkNode.dataset.reason = reason.code;
@@ -143,32 +150,33 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     }
     const unbounded = view.stateUnavailable ? null : ruleMTag(robot.rule_m);
     if (unbounded) {
-      const boundNode = tag(unbounded.word, unbounded.kind);
+      const boundNode = inlineIfCalm(tag(unbounded.word, unbounded.kind), unbounded.kind);
       boundNode.title = unbounded.text;
       head.appendChild(boundNode);
     }
     const blocked = !view.stateUnavailable && robot.queued && robot.queued.reason === "NO_YIELD_SPACE";
-    head.appendChild(tag(
+    const navCls = blocked ? "crit" : robot.queued ? "warn" : nav.cls;
+    head.appendChild(inlineIfCalm(tag(
       view.stateUnavailable ? "—" : robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : nav.text,
-      blocked ? "crit" : robot.queued ? "warn" : nav.cls));
+      navCls), navCls));
     const formation = view.stateUnavailable ? null : view.formation;
     const role = formation?.active ? (formation.leader === robot.robot_id ? "대형 리더"
       : Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "") : "";
     if (role) {
-      const roleTag = tag(role, "nav");
+      const roleTag = inlineIfCalm(tag(role, "nav"), "nav");
       roleTag.dataset.formationRole = role === "대형 리더" ? "leader" : "follower";
       head.appendChild(roleTag);
     }
     const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);
     if (evidence) {
-      const relay = tag(evidence.text, evidence.cls);
+      const relay = inlineIfCalm(tag(evidence.text, evidence.cls), evidence.cls);
       relay.dataset.evidence = evidence.evidence;
       head.appendChild(relay);
     }
     const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
     if (loc) {
-      const locTag = tag(loc.text, loc.cls);
+      const locTag = inlineIfCalm(tag(loc.text, loc.cls), loc.cls);
       locTag.title = loc.title;
       locTag.dataset.localization = "";
       head.appendChild(locTag);

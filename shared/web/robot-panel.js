@@ -83,7 +83,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
   let footerNoteEl = null;
   const fallbackStopBtn = document.createElement("ui-button");
   fallbackStopBtn.className = "robot-panel-stop";
-  fallbackStopBtn.setAttribute("kind", "primary");
+  fallbackStopBtn.setAttribute("kind", "quiet");
   fallbackStopBtn.setAttribute("type", "button");
   fallbackStopBtn.setAttribute("data-always-live", "");
   const boundButtons = new WeakSet();

@@ -88,11 +88,13 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}/brand
 )
 
-# C15 3D view: vendored three.js (MIT) and the generated web meshes (tools/robot_meshes.py), listed one by one.
+# C15 3D view & telemetry charts: vendored three.js and uPlot (MIT) + web meshes, listed one by one.
 install(FILES
   vendor/three.module.min.js
   vendor/three.core.min.js
   vendor/three.LICENSE
+  vendor/uPlot.esm.min.js
+  vendor/uPlot.LICENSE
   DESTINATION share/${PROJECT_NAME}/vendor
 )
 

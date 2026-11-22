@@ -668,7 +668,8 @@
       ],
       "consumers": [
         "applications/fleet/web/work/control-unit-view.js",
-        "applications/fleet/web/cell/cell.js"
+        "applications/fleet/web/cell/cell.js",
+        "applications/fleet/web/shared/cell-cockpit-stage.js"
       ],
       "availability": "Configured control unit; named local human approval. The current sample has a synthetic R/A/A1/B hierarchy with directly owned sample resources at R; device acceptance remains unverified.",
       "calls": [
@@ -682,6 +683,14 @@
         },
         {
           "consumer": "applications/fleet/web/cell/cell.js",
+          "expression": "/api/fleet/control-unit",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/control-unit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-cockpit-stage.js",
           "expression": "/api/fleet/control-unit",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -7378,6 +7387,7 @@
         "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/cell/cell-observation.js",
         "applications/fleet/web/shared/cell-frames.js",
+        "applications/fleet/web/shared/cell-cockpit-stage.js",
         "applications/fleet/web/roster-cards.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
@@ -7486,6 +7496,22 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-cockpit-stage.js",
+          "expression": "/api/fleet/vision/sources",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-cockpit-stage.js",
+          "expression": "/api/fleet/workcell-observations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/workcell-observations"
           ]
         },
         {
