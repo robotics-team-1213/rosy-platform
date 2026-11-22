@@ -792,9 +792,11 @@ def test_viewer_cannot_be_offered_operator_actions(page_site, width, height):
     expect(page.locator("#map-viewport")).to_be_visible()
     page.locator('#site-map-svg [data-place="NW"]').click()
     show_screen(page, "edit-heading")
-    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan", "#estop"):
+    for selector in ("#apply-edit", "#save-draft", "#activate", "#trip-plan"):
         expect(page.locator(selector)).to_be_disabled()
         expect(page.locator(selector)).to_have_attribute("reason", "운영자 권한이 필요합니다")
+    expect(page.locator("#estop")).to_be_disabled()
+    expect(page.locator("#estop")).to_have_attribute("reason", "정지는 운영자 또는 로그인한 사용자만 누를 수 있습니다")
     expect(page.locator("#place-form")).to_be_hidden()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth && document.querySelector('#estop').getBoundingClientRect().right <= innerWidth")
     if output := os.environ.get("ROSY_SHOT_DIR"):
@@ -1041,6 +1043,19 @@ def test_robot_state_auth_failure_removes_operator_controls(page_site, status):
     expect(page.locator("#estop")).to_be_disabled()
     show_screen(page, "trip-heading")
     expect(page.locator("#trip-plan")).to_be_disabled()
+
+
+def test_robot_state_role_refusal_keeps_the_estop_live(page_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    page.route("**/api/fleet/state", lambda route: route.fulfill(
+        status=403, content_type="application/json", body='{"detail":{"code":"FORBIDDEN","message":"role"}}'))
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-token")  # the session answer says estop true; only the state read is refused
+    page.locator("#token-save").click()
+    expect(page.locator("#map-status")).to_contain_text("지도 조회 실패")
+    expect(page.locator("#estop")).to_be_enabled()  # D-1043: only a lost session (401) locks it
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])

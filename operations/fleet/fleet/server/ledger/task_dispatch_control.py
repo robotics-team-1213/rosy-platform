@@ -114,7 +114,7 @@ class TaskDispatchControl:
                                               advance_authority_epoch=True)
 
     def trip_stop_latch(self, *, actor_id: str, reason: str = "SITE_STOP") -> dict:
-        if not actor_id or len(actor_id) > 96 or not reason or len(reason) > 64:
+        if not actor_id or len(actor_id) > 128 or not reason or len(reason) > 64:  # an Account subject may be 128 (D-1043)
             raise ValueError("invalid stop latch attribution")
         return self._advance_dispatch_control(enabled=False, actor_id=actor_id,
                                               reason=reason, release_pre_dispatch=True)

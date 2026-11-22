@@ -505,12 +505,16 @@ def test_focus_revalidates_changed_role_for_the_same_principal(account_page):
     _credentials(page)
     page.locator('[data-login=submit]').click()
     expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    cancel = page.locator('#cancel-all')  # an operator-only control; the E-stop stays live for viewers (11-18)
+    expect(cancel).not_to_have_attribute('reason', '운영자 권한이 필요합니다')
     identity = {'principal_id': 'alice', 'role': 'viewer', 'via': 'cookie'}
     for path in ['/api/fleet/auth/session', '/api/fleet/session']:
         page.route('**' + path, lambda route: route.fulfill(content_type='application/json', body=json.dumps(identity)))
     page.evaluate("window.dispatchEvent(new Event('focus'))")
     expect(page.locator('#user-role')).to_have_attribute('title', 'alice · viewer')
-    expect(page.locator('#estop')).to_be_disabled()
+    expect(cancel).to_be_disabled()
+    expect(cancel).to_have_attribute('reason', '운영자 권한이 필요합니다')
+    expect(page.locator('#estop')).to_be_enabled()
 
 
 def test_empty_cell_token_uses_cookie_despite_stale_storage(account_page):
