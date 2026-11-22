@@ -37,8 +37,6 @@ from storage_web import StorageWeb
 from learning_control import Control, ControlConflict
 
 
-
-
 def detail_preview(store, index):
     frame = store.get(index)
     photo = cv2.imdecode(np.frombuffer(store.image(index).read_bytes(), np.uint8), cv2.IMREAD_COLOR)
@@ -355,16 +353,15 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 except (ValueError, OSError):
                     pass
                 return self.send({'error': 'local workspace authorization required'}, 403)
-            login_request = collaboration and path == '/api/accounts/logout'
+            peer_intake = omx_center_web.peer_intake_ok(self, path, omx_center)
+            login_request = peer_intake or (collaboration and path == '/api/accounts/logout')
             expected_token = collaboration.csrf(self, token) if collaboration else token
-            if not self.allowed_host() or (not login_request and self.headers.get('X-Pinky-Token') != expected_token):
+            if (not peer_intake and not self.allowed_host()) or (not login_request and self.headers.get('X-Pinky-Token') != expected_token):
                 return deny()
             origin = self.headers.get('Origin')
             port = self.server.server_port
-            origins = [f'http://127.0.0.1:{port}', f'http://localhost:{port}', f'http://{host}:{port}']
-            if collaboration and collaboration.origin:
-                origins = [collaboration.origin]
-            if (collaboration and not origin) or (origin and origin not in origins):
+            origins = [collaboration.origin] if collaboration and collaboration.origin else [f'http://127.0.0.1:{port}', f'http://localhost:{port}', f'http://{host}:{port}']
+            if not peer_intake and ((collaboration and not origin) or (origin and origin not in origins)):
                 return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
@@ -380,6 +377,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                         raise ValueError('AI request fields do not match its action')
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
+                if peer_intake:
+                    omx_center_web.post(self, path, body, omx_center, learning, None)
+                    return
                 if collaboration and collaboration.post(self, path, body, token):
                     return
                 if storage_web.post(self, path, body): return

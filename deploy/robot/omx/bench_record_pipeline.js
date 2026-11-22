@@ -1,8 +1,7 @@
 (function(){
-const JOB_MAP={idle:['대기','warn'],running:['실행 중','live'],done:['완료','good'],failed:['실패','crit']};
-const AUTO_KEY='omx_pipe_auto_loop';
+const JOB_MAP={idle:['대기','warn'],running:['실행 중','live'],blocked:['설정 필요','warn'],transferred:['전송 완료','good'],done:['전달 완료','good'],failed:['실패','crit']};
 let lastPreviewReplay='';
-let lastAutoSealKey='';
+let lastPipeState=null;
 let pipeInFlight=false;
 
 function setBadge(el,state,label){
@@ -14,37 +13,41 @@ function setBadge(el,state,label){
 
 function renderPipeline(p){
   if(!p||typeof p!=='object')return;
+  lastPipeState=p;
   const jobState=p.state||'idle';
   setBadge($('pipe-job-badge'),jobState);
-  const rp=$('rail-pipe');
-  if(rp){
-    const [txt]=JOB_MAP[jobState]||['대기'];
-    rp.textContent=txt;
-    rp.className='rail-step'+(jobState==='done'?' ok':'');
-  }
   const sp=$('sum-pipe-drawer');
   if(sp){
     const [txt]=JOB_MAP[jobState]||['대기'];
-    sp.textContent=txt+' · 루프 '+(p.loop_count||0)+'회'+(p.last_dataset?' · '+p.last_dataset:'');
+    const qLen=Array.isArray(p.pending_queue)?p.pending_queue.filter(r=>r.status!=='done').length:0;
+    sp.textContent=txt+' · 전달 '+(p.loop_count||0)+'회'+(p.last_dataset?' · '+p.last_dataset:'')+(qLen?' (대기 '+qLen+')':'');
   }
   const stCode=typeof lastStatus!=='undefined'&&lastStatus?lastStatus.status:'idle';
   const collectState=(stCode==='recording'||stCode==='handing_over')?'running':(stCode==='sealed'?'done':(stCode==='failed'||stCode==='unsafe_or_failed'?'failed':'idle'));
   const stages=p.stages||{};
   for(const li of document.querySelectorAll('#pipe-stepper .pipe-step')){
     const k=li.dataset.stage;
-    li.dataset.state=(k==='collect'&&(!stages.collect||stages.collect==='idle'))?collectState:(stages[k]||'idle');
+    const raw=(k==='collect'&&(!stages.collect||stages.collect==='idle'))?collectState:(stages[k]||'idle');
+    li.dataset.state=(raw==='unconfigured')?'warn':raw;
+  }
+  const toggle=$('pipe-auto-toggle');
+  if(toggle&&document.activeElement!==toggle){
+    toggle.checked=Boolean(p.auto_loop);
   }
   const loopEl=$('pipe-loop-badge'), metaEl=$('pipe-loop-meta');
   if(loopEl){
-    loopEl.textContent='루프 '+(p.loop_count||0)+'회';
-    loopEl.dataset.tone=p.next_checkpoint?'good':'';
+    loopEl.textContent='전달 '+(p.loop_count||0)+'회';
+    loopEl.dataset.tone=(jobState==='done')?'good':(jobState==='failed'?'crit':'');
   }
   if(metaEl){
     const parts=[];
-    if(p.last_dataset)parts.push('데이터셋: '+p.last_dataset);
-    if(p.augmented_dataset)parts.push('증강: '+p.augmented_dataset);
-    if(p.next_checkpoint)parts.push('다음 RL 체크포인트: '+p.next_checkpoint);
-    metaEl.textContent=parts.length?parts.join(' → '):'데이터셋 · 증강 · RL 체크포인트 피드백 대기 중';
+    if(p.last_dataset)parts.push('컬렉션: '+p.last_dataset);
+    if(p.manifest_sha256)parts.push('sha256='+String(p.manifest_sha256).slice(0,10));
+    if(p.remote_path)parts.push('모델PC: '+p.remote_path);
+    if(!p.model_target&&!p.error)parts.push('모델PC 미설정');
+    if(p.intake_job_id)parts.push('job='+p.intake_job_id.slice(0,8));
+    if(p.error)parts.push('상태: '+p.error);
+    metaEl.textContent=parts.length?parts.join(' · '):'모델 PC 전달 및 Canonical 인입 대기 중';
   }
   const logEl=$('pipe-log');
   if(logEl){
@@ -66,10 +69,12 @@ async function triggerPipelineRun(reason){
   pipeInFlight=true;
   setReqError('');
   try{
+    const q=Array.isArray(lastPipeState?.pending_queue)?lastPipeState.pending_queue.filter(r=>r.status!=='done'):[];
+    const ds=lastStatus?.name||lastStatus?.folder||lastPipeState?.last_dataset||(q.length?q[q.length-1].collection:'');
     const st=await api('/api/pipeline/run',{
       source_type:$('pipe-source-type')?.value||'isaac_sim',
       source_ref:$('pipe-source-ref')?.value?.trim()||'',
-      dataset_folder:lastStatus?.name||lastStatus?.folder||'',
+      dataset_folder:ds,
       task:f?.task?.value||'',
       arm:f?.arm?.value||'',
       trigger:reason||'manual'
@@ -80,13 +85,9 @@ async function triggerPipelineRun(reason){
 }
 
 if($('pipe-auto-toggle')){
-  const saved=localStorage.getItem(AUTO_KEY)==='1';
-  $('pipe-auto-toggle').checked=saved;
-  if(saved){api('/api/pipeline/config',{auto_loop:true}).catch(()=>{});}
   $('pipe-auto-toggle').addEventListener('change',async()=>{
     const on=$('pipe-auto-toggle').checked;
-    try{localStorage.setItem(AUTO_KEY,on?'1':'0');}catch(_){}
-    try{await api('/api/pipeline/config',{auto_loop:on});}catch(_){}
+    try{renderPipeline(await api('/api/pipeline/config',{auto_loop:on}));}catch(err){setReqError('자동 전달 설정 오류: '+err.message);}
   });
 }
 
@@ -134,15 +135,6 @@ if($('pipe-apply-replay-btn')){
 if($('pipe-run-btn')){
   $('pipe-run-btn').addEventListener('click',()=>triggerPipelineRun('manual'));
 }
-
-setInterval(()=>{
-  const cur=typeof lastStatus!=='undefined'&&lastStatus?lastStatus.status:'';
-  const sk=typeof sessionKey==='function'&&lastStatus?sessionKey(lastStatus):'';
-  if(cur==='sealed'&&sk&&sk!==lastAutoSealKey&&$('pipe-auto-toggle')?.checked){
-    lastAutoSealKey=sk;
-    triggerPipelineRun('auto_after_seal');
-  }
-},1000);
 
 pollPipeline();
 setInterval(pollPipeline,2500);

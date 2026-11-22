@@ -88,7 +88,7 @@ if($('task-filters'))$('task-filters').addEventListener('click',e=>{
   for(const b of $('task-filters').querySelectorAll('button[data-tfilter]')){b.classList.toggle('active',b===btn);b.setAttribute('aria-pressed',String(b===btn));}
   setTaskListOpen(true);renderTaskListbox();
 });
-const DRAWER_TITLES={setup:'과제 목록',bindings:'수집·연결 설정',start:'포즈 저장 · 기준',records:'기록 · 시뮬·RL 루프'};
+const DRAWER_TITLES={setup:'과제 목록',bindings:'수집·연결 설정',start:'포즈 저장 · 기준',records:'기록 · 시뮬·전달 루프'};
 let activeDrawer=null, lastDrawerOpener=null;
 function closeDrawer(restoreFocus){
   const host=$('side-drawer-host');
@@ -304,7 +304,7 @@ window.bumpCollectionName=bumpCollectionName;
 $('next-ep-btn').addEventListener('click',()=>bumpCollectionName());
 
 $('copy-transfer-btn').addEventListener('click',async()=>{
-  const folder=(lastStatus&&lastStatus.folder)?lastStatus.folder.split('/').pop():'<session-folder>';
+  const folder=(lastStatus&&lastStatus.name)?lastStatus.name:((lastStatus&&lastStatus.folder)?lastStatus.folder.split('/').pop():'<session-name>');
   const cmd='python tools/remote/omx_collection_transfer.py --session '+folder;
   try{await navigator.clipboard.writeText(cmd);$('copy-transfer-btn').textContent='복사됨: '+folder;}
   catch(_){setReqError('수동 실행 명령: '+cmd);}

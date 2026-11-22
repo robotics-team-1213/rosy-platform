@@ -19,6 +19,7 @@ _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts" / "learning" 
 if str(_CONTRACTS_SRC) not in sys.path:
     sys.path.insert(0, str(_CONTRACTS_SRC))
 
+from canonical_intake import handle_intake_request, scan_transferred_collections  # noqa: E402
 from canonical_telemetry import HostTelemetry, external_gpu_locks, load_peer_token  # noqa: E402
 from canonical_watch import (  # noqa: E402
     BusyConflict,
@@ -113,10 +114,11 @@ class CanonicalService:
         self.peers = PeerClient({})
         self.jobs_dir = Path.home() / "rosy-jobs"
         self.peer_token_file: Path | None = None
+        self.collections_dir: Path | None = None
         self.telemetry = HostTelemetry(self._disk_probe_path)
         if config is None:
             return
-        allowed = {"schema", "spec_path", "python", "named_sources", "watch_roots", "peers", "jobs_dir", "peer_token_file"}
+        allowed = {"schema", "spec_path", "python", "named_sources", "watch_roots", "peers", "jobs_dir", "peer_token_file", "collections_dir"}
         if not isinstance(config, dict) or config.get("schema") != CONFIG_SCHEMA or set(config) - allowed:
             raise ValueError(f"invalid canonical config (requires {CONFIG_SCHEMA})")
         if root is None:
@@ -163,6 +165,8 @@ class CanonicalService:
             self.jobs_dir = _abs_path(config["jobs_dir"], "jobs_dir")
         if config.get("peer_token_file") is not None:
             self.peer_token_file = _abs_path(config["peer_token_file"], "peer_token_file")
+        if config.get("collections_dir") is not None:
+            self.collections_dir = _abs_path(config["collections_dir"], "collections_dir")
 
         self.db = self.root / "canonical.sqlite"
         with self.connect() as db:
@@ -277,11 +281,12 @@ class CanonicalService:
             gpu_rows = [json.loads(r[0]) for r in db.execute("SELECT document FROM runs WHERE gpu_required=1")]
         holders = [r["id"] for r in gpu_rows if r["status"] in ("launching", "running", "stopping")]
         holders.extend(external_gpu_locks(self.jobs_dir))
+        merged_sources = {**scan_transferred_collections(self.collections_dir), **self.named_sources}
         return {
             "configured": True, "writable": self.writable, "host_id": self.host_id,
             "spec_sha256": self.spec_sha256, "spec": self.spec, "spec_source": self.spec_source,
             "named_sources": {k: {"id": v["id"], "kind": v["kind"], "arm_id": v["arm_id"], "label": v["label"]}
-                              for k, v in self.named_sources.items()},
+                              for k, v in merged_sources.items()},
             "gpu_lock": {"busy": bool(holders), "holders": holders}, "runs": rows,
             "watched": {wid: scan_watch_dir(m["path"], m) for wid, m in self.watch_roots.items()},
             "peers": self.peers.snapshot() if include_peers else {},
@@ -324,12 +329,18 @@ class CanonicalService:
             raise KeyError("canonical service not configured")
         return self.peers.refresh(peer_id)
 
+    def intake_collection(self, body: dict) -> dict:
+        if not self.configured:
+            raise ValueError("canonical service not configured")
+        return handle_intake_request(self, body)
+
     def _resolve_ref(self, db, ref: str, *, expected_kinds: set[str], arm_id: str) -> dict:
         if not isinstance(ref, str) or not ref:
             raise ValueError("reference ID required")
-        if ref in self.named_sources:
-            src = self.named_sources[ref]
-            if src["kind"] not in expected_kinds or (src["arm_id"] and src["arm_id"] != arm_id):
+        sources = {**scan_transferred_collections(self.collections_dir), **self.named_sources}
+        if ref in sources:
+            src = sources[ref]
+            if src["kind"] not in expected_kinds or (src["arm_id"] and src["arm_id"] not in (arm_id, "arm_ab")):
                 raise ValueError(f"source {ref} incompatible with kind/arm")
             return {"ref_type": "named_source", "path": str(src["path"])}
         rid = identifier(ref)

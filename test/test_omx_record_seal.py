@@ -138,4 +138,21 @@ def test_a_teacher_recording_without_its_exact_trajectory_is_refused(seal, tmp_p
         run, _ = recording(tmp_path, source_mode=mode)
     with pytest.raises(ValueError, match='replay|differs|leader_native'):
         sealed(seal, run, 'refused', tmp_path/'collections')
+
+
+def test_seal_refuses_zero_episodes_and_do_not_train_and_stamps_arm_id(seal, tmp_path):
+    run, dataset = recording(tmp_path)
+    (dataset / 'DO_NOT_TRAIN.txt').write_text('paused\n')
+    with pytest.raises(ValueError, match='DO_NOT_TRAIN'):
+        sealed(seal, run, 'dnt-001', tmp_path / 'collections')
+    (dataset / 'DO_NOT_TRAIN.txt').unlink()
+
+    (dataset / 'meta' / 'info.json').write_text(json.dumps(dict(codebase_version='v3.0', robot_type='omx_follower', total_episodes=0)))
+    with pytest.raises(ValueError, match='at least 1 episode'):
+        sealed(seal, run, 'zero-001', tmp_path / 'collections')
+
+    (dataset / 'meta' / 'info.json').write_text(json.dumps(dict(codebase_version='v3.0', robot_type='bi_omx_follower', total_episodes=2)))
+    out = sealed(seal, run, 'bi-ok-001', tmp_path / 'collections')
+    manifest = json.loads((Path(out['collection']) / 'manifest.json').read_text())
+    assert manifest['arm_id'] == 'arm_ab' and manifest['total_episodes'] == 2
     assert not (tmp_path/'collections'/'refused').exists()

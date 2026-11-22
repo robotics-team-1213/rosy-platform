@@ -24,6 +24,7 @@ for _p in (str(_CONTRACTS_SRC), str(_OMX_CURATION)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from canonical_intake import detect_source_units, normalize_bench_task, prepare_episode_arrays, select_arm_features  # noqa: E402
 from canonical_sim_eval import eval_sim_profile  # noqa: E402
 from canonical_watch import scrub_text  # noqa: E402
 from experiment_io import read_json, write_json  # noqa: E402
@@ -101,7 +102,10 @@ def run_align_real(req: dict, out: Path) -> dict:
     _progress(out, "aligning", arm=arm)
 
     info = json.loads((src / "meta" / "info.json").read_text(encoding="utf-8"))
-    fps = int(info["fps"])
+    src_fps = int(info["fps"])
+    fps = 15 if src_fps in (15, 30) else src_fps
+    robot_type = str(info.get("robot_type") or "")
+    src_units = str(params.get("unit_mode") or "") or detect_source_units(src, arm, info)
     tasks_df = pd.read_parquet(src / "meta" / "tasks.parquet")
     task_text = {int(row.task_index): text for text, row in tasks_df.iterrows()}
     ep_df = pd.concat([pd.read_parquet(f) for f in sorted((src / "meta" / "episodes").rglob("*.parquet"))]).sort_values("episode_index")
@@ -110,8 +114,10 @@ def run_align_real(req: dict, out: Path) -> dict:
     axes = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
     vec = dict(dtype="float32", shape=(6,), names=axes)
     img = dict(dtype="video", shape=(480, 640, 3), names=["height", "width", "channels"])
-    src_cams = {role: key for key, role in data_gate.camera_map(
-        info["features"], dict(data_gate.LEGACY_TABLE, **(params.get("legacy_map") or {}))).items()}
+    filtered_feats, arm_legacy = select_arm_features(
+        info["features"], arm, dict(data_gate.LEGACY_TABLE, **(params.get("legacy_map") or {}))
+    )
+    src_cams = {role: key for key, role in data_gate.camera_map(filtered_feats, arm_legacy).items()}
     out_cams = {"top": "observation.images.rs", "side": "observation.images.side", "wrist": "observation.images.wrist"}
     features = {"observation.state": vec, "action": vec, **{v: img for v in out_cams.values()}}
 
@@ -127,9 +133,11 @@ def run_align_real(req: dict, out: Path) -> dict:
         for _, ep in ep_df.iterrows():
             ep_idx = int(ep.episode_index)
             rows = data_df[data_df.episode_index == ep_idx].sort_values("frame_index")
-            n, task = len(rows), task_text[int(rows.task_index.iloc[0])].strip()
+            n_raw, task = len(rows), normalize_bench_task(task_text[int(rows.task_index.iloc[0])])
             st = np.stack(rows["observation.state"].to_numpy()).astype(np.float64)
             ac = np.stack(rows["action"].to_numpy()).astype(np.float64)
+            st, ac, stride, _ = prepare_episode_arrays(st, ac, spec=spec, arm_id=arm, robot_type=robot_type, src_fps=src_fps, target_fps=fps, units=src_units)
+            n = len(st)
             if flip:
                 st[:, 4], ac[:, 4] = _wrap_pi(st[:, 4]), _wrap_pi(ac[:, 4])
             imgs = {}
@@ -137,9 +145,10 @@ def run_align_real(req: dict, out: Path) -> dict:
                 prefix = f"videos/{key}/"
                 vpath = src / info["video_path"].format(
                     video_key=key, chunk_index=int(ep[prefix + "chunk_index"]), file_index=int(ep[prefix + "file_index"]))
-                imgs[role] = _decode_span(av, vpath, float(ep[prefix + "from_timestamp"]), float(ep[prefix + "to_timestamp"]), fps)
-                if len(imgs[role]) != n:
-                    raise ValueError(f"ep {ep_idx} {role} decoded {len(imgs[role])} != {n}")
+                decoded = _decode_span(av, vpath, float(ep[prefix + "from_timestamp"]), float(ep[prefix + "to_timestamp"]), src_fps)
+                if len(decoded) != n_raw:
+                    raise ValueError(f"ep {ep_idx} {role} decoded {len(decoded)} != {n_raw}")
+                imgs[role] = decoded[::stride][:n]
             if flip:
                 imgs["wrist"] = [fr[::-1, ::-1].copy() for fr in imgs["wrist"]]
             t_start = 0
@@ -171,6 +180,8 @@ def run_align_real(req: dict, out: Path) -> dict:
                                  "angles_deg": None, "wrist_rotated_180": flip, "episodes": view_episodes})
     receipt = data_gate.gate(dst, arm=arm, source={"kind": "real", "layout": "random", "camera_views": view_file}, canonical_spec=spec)
     admitted = data_gate.check_receipt(dst)
+    if not admitted:
+        raise ValueError(f"data_gate admitted 0 episodes (reject={receipt['counts'].get('reject')}, review={receipt['counts'].get('review')})")
     return {"kind": "align_real", "arm_id": arm, "episodes": len(admitted), "frames_total": int(sum(kept_counts)),
             "t_start_median": float(statistics.median(t_starts)) if t_starts else 0.0, "gate_counts": receipt["counts"],
             "spec_sha256": req["spec_sha256"], **AUTHORITY_STAMP}

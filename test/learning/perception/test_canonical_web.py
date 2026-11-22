@@ -194,3 +194,61 @@ def test_peer_summary_bearer_is_fail_closed_and_enforces_token(tmp_path, monkeyp
             doc = json.loads(resp.read().decode("utf-8"))
         assert resp.status == 200 and doc["real_evidence"] is False
         assert "host_telemetry" in doc and "watched" in doc and str(tmp_path) not in json.dumps(doc)
+
+
+def test_canonical_intake_bearer_and_accounts_enforced_fail_closed(tmp_path, monkeypatch):
+    import hashlib
+    import os
+
+    tok_file = tmp_path / "intake_peer.token"
+    tok_file.write_text("fedcba9876543210fedcba9876543210\n", encoding="utf-8")
+    if os.name == "posix":
+        tok_file.chmod(0o600)
+    cols = tmp_path / "cols"
+    cdir = cols / "cell-ab-01"
+    (cdir / "dataset" / "meta").mkdir(parents=True)
+    (cdir / "dataset" / "data" / "chunk-000").mkdir(parents=True)
+    p_info = cdir / "dataset" / "meta" / "info.json"
+    p_pq = cdir / "dataset" / "data" / "chunk-000" / "file-000.parquet"
+    p_info.write_text(json.dumps({"codebase_version": "v3.0", "robot_type": "omx_follower", "total_episodes": 1}))
+    p_pq.write_bytes(b"PAR1")
+    mf_raw = json.dumps({
+        "schema": "rosy.omx-collection-session.v1", "state": "CLOSED", "mode": "hardware",
+        "source_mode": "leader_native", "robot_type": "omx_follower", "arm_id": "arm_b", "total_episodes": 1,
+        "files": {
+            "dataset/meta/info.json": hashlib.sha256(p_info.read_bytes()).hexdigest(),
+            "dataset/data/chunk-000/file-000.parquet": hashlib.sha256(p_pq.read_bytes()).hexdigest(),
+        },
+    }).encode("utf-8")
+    (cdir / "manifest.json").write_bytes(mf_raw)
+    mf_sha = hashlib.sha256(mf_raw).hexdigest()
+
+    accounts = Accounts()
+    with _serve(tmp_path, with_canonical=True, accounts=accounts, monkeypatch=monkeypatch) as (base, center):
+        center.canonical.peer_token_file = tok_file
+        center.canonical.collections_dir = cols
+        # 1. No auth / wrong Bearer fails closed (403)
+        assert raw_req(base, PREFIX + "/intake", {"collection": "cell-ab-01"})[0] == 403
+        req_bad = urllib.request.Request(
+            base + PREFIX + "/intake", data=json.dumps({"collection": "cell-ab-01"}).encode(), method="POST",
+            headers={"Content-Type": "application/json", "Authorization": "Bearer wrong-tok"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            urllib.request.urlopen(req_bad, timeout=5)
+        assert exc.value.code == 403
+        # 2. Editor with CSRF cannot bypass manage role without valid Bearer
+        token = collab_req(base, "/api/accounts/session", "editor")[1]["token"]
+        assert collab_req(base, PREFIX + "/intake", "editor", {"collection": "cell-ab-01"}, token)[0] == 403
+        # 3. Valid Bearer from remote Host without X-Pinky-Token / Origin succeeds
+        seen = []
+        monkeypatch.setattr(center.canonical, "start_job", lambda b: (seen.append(b), {"id": "job-ab-1", "arm_id": b["arm_id"]})[1])
+        req_ok = urllib.request.Request(
+            base + PREFIX + "/intake",
+            data=json.dumps({"collection": "cell-ab-01", "manifest_sha256": mf_sha}).encode(),
+            method="POST",
+            headers={"Content-Type": "application/json", "Host": "rosy-omen:8765", "Authorization": "Bearer fedcba9876543210fedcba9876543210"},
+        )
+        with urllib.request.urlopen(req_ok, timeout=5) as resp:
+            doc = json.loads(resp.read().decode("utf-8"))
+        assert resp.status == 200 and doc["ok"] is True and doc["job_id"] == "job-ab-1"
+        assert seen[0]["arm_id"] == "arm_b" and seen[0]["params"]["source_id"] == "cell-ab-01"

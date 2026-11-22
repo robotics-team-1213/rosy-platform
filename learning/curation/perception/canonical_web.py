@@ -68,6 +68,13 @@ def _service(center):
     return getattr(center, 'canonical', None) if center is not None else None
 
 
+def peer_intake_ok(handler, path: str, center) -> bool:
+    if path != PREFIX + '/intake':
+        return False
+    service = _service(center)
+    return bool(service is not None and service.configured and service.verify_peer_bearer(handler.headers.get('Authorization')))
+
+
 def get(handler, path: str, center, accounts=None) -> bool:
     if path in PAGES:
         name, mime = PAGES[path]
@@ -122,14 +129,18 @@ def get(handler, path: str, center, accounts=None) -> bool:
 def post(handler, path: str, body: dict, center, accounts=None) -> bool:
     if not path.startswith(PREFIX + '/'):
         return False
-    if accounts is not None:
-        accounts.require(handler.learning_principal, 'manage')
     service = _service(center)
+    peer_ok = path == PREFIX + '/intake' and service is not None and service.configured and service.verify_peer_bearer(handler.headers.get('Authorization'))
+    if accounts is not None and not peer_ok:
+        accounts.require(handler.learning_principal, 'manage')
     if service is None or not service.configured:
         handler.send({'error': '표준 시작 자세 파이프라인이 설정되지 않았습니다.'}, 503)
         return True
 
     try:
+        if path == PREFIX + '/intake':
+            handler.send(service.intake_collection(body))
+            return True
         if path == PREFIX + '/jobs':
             handler.send(service.start_job(body))
             return True

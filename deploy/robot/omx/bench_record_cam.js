@@ -427,9 +427,8 @@ function syncReplayUI(){
 setInterval(syncReplayUI,1000);
 setTimeout(syncReplayUI,600);
 
-const HF_AUTO_KEY='omx_hf_auto_upload';
-const HF_STATE_MAP={idle:['대기','warn'],encoding:['인코딩 중','live'],uploading:['업로드 중','live'],done:['업로드 완료','good'],failed:['업로드 실패','crit']};
-let hfUploadInFlight=false, lastHfAutoSealKey='';
+const HF_STATE_MAP={idle:['대기','warn'],encoding:['검증 중','live'],uploading:['팀 업로드 중','live'],done:['업로드 완료','good'],failed:['업로드 실패','crit']};
+let hfUploadInFlight=false;
 
 async function triggerHfUpload(datasetName){
   if(hfUploadInFlight)return;
@@ -446,6 +445,7 @@ function renderLeRobotPanel(st){
   const hb=$('hf-login-badge');
   if(hb){hb.textContent=hfOk?'HF 로그인됨':'HF 미로그인';hb.dataset.tone=hfOk?'good':'warn';}
   const up=(st&&st.hf_upload)||{};
+  if($('hf-auto-upload')&&document.activeElement!==$('hf-auto-upload')){$('hf-auto-upload').checked=Boolean(up.auto_upload);}
   let state=String(up.state||'idle').toLowerCase();
   if(state==='idle'&&st&&st.status==='sealing')state='encoding';
   const [sTxt,sTone]=HF_STATE_MAP[state]||[state,'warn'];
@@ -546,24 +546,15 @@ function renderLeRobotPanel(st){
 }
 window.renderLeRobotPanel=renderLeRobotPanel;
 
-if($('hf-auto-upload')){
-  const saved=localStorage.getItem(HF_AUTO_KEY)==='1';
-  $('hf-auto-upload').checked=saved;
-  if(saved){api('/api/hf/config',{auto_upload:true}).catch(()=>{});}
+if($('hf-auto-upload')&&!$('hf-auto-upload').dataset.bound){
+  $('hf-auto-upload').dataset.bound='1';
   $('hf-auto-upload').addEventListener('change',async()=>{
-    const on=$('hf-auto-upload').checked;
-    try{localStorage.setItem(HF_AUTO_KEY,on?'1':'0');}catch(_){}
-    try{await api('/api/hf/config',{auto_upload:on});}catch(_){}
+    try{
+      const out=await api('/api/hf/config',{auto_upload:$('hf-auto-upload').checked});
+      if(out&&lastStatus){lastStatus.hf_upload=out;renderLeRobotPanel(lastStatus);}
+    }catch(err){setReqError('HF 설정 오류: '+err.message);}
   });
 }
-setInterval(()=>{
-  const cur=typeof lastStatus!=='undefined'&&lastStatus?lastStatus.status:'';
-  const sk=typeof sessionKey==='function'&&lastStatus?sessionKey(lastStatus):'';
-  if(cur==='sealed'&&sk&&sk!==lastHfAutoSealKey&&$('hf-auto-upload')?.checked){
-    lastHfAutoSealKey=sk;
-    triggerHfUpload(lastStatus.name||lastStatus.folder||'');
-  }
-},1000);
 init();
 if(typeof applyBenchPhase==='function')applyBenchPhase('setup');
 setInterval(pollArms,10000);
