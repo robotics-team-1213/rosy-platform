@@ -37,52 +37,88 @@ def tier_site(site: str, tier: int, sites: dict) -> str:
     return name if name in sites else site
 
 
-def carries(task: dict, sites: dict) -> list:
-    """[(from, to)] for a task, or ValueError naming what is wrong (unknown site, same site, missing field)."""
+def plan_steps(task: dict, sites: dict) -> list[dict]:
+    """Expanded step dicts for a task, or ValueError naming what is wrong (unknown site, same site, missing field)."""
     if task.get("schema") != SCHEMA or not task.get("task_id"):
         raise ValueError(f"not a {SCHEMA} task")
     if "scenario_id" in task and (not isinstance(task["scenario_id"], str) or not task["scenario_id"]):
         raise ValueError("scenario_id must be a nonempty string")
     sites = cell_place_fit.with_tiers({"sites": sites})[0]["sites"]
-    if task["kind"] == "move":
+    kind = task["kind"]
+    if kind == "move":
         src = tier_site(task["from"], task["from_tier"], sites) if "from_tier" in task else task["from"]
         dst = tier_site(task["to"], task["to_tier"], sites) if "to_tier" in task else task["to"]
-        plan = [(src, dst)]
-    elif task["kind"] == "swap":
+        steps = [{"from": src, "to": dst, "redirectable": True}]
+    elif kind == "swap":
         a, b, buf = task["a"], task["b"], task["buffer"]
         if len({a, b, buf}) < 3:
             raise ValueError("swap needs two sites and a distinct free buffer site")
-        plan = [(a, buf), (b, a), (buf, b)]
-    elif task["kind"] == "shuttle":
+        steps = [{"from": a, "to": buf, "redirectable": False}, {"from": b, "to": a, "redirectable": False},
+                 {"from": buf, "to": b, "redirectable": False}]
+    elif kind == "shuttle":
         a, b = task["a"], task["b"]
         if a == b:
             raise ValueError("shuttle needs two distinct sites")
         cycles = int(task.get("cycles") or 1)
         if cycles < 1:
             raise ValueError("shuttle cycles must be >= 1")
-        plan = [pair for _ in range(cycles) for pair in ((a, b), (b, a))]
+        pairs = [pair for _ in range(cycles) for pair in ((a, b), (b, a))]
         if task.get("legs") is not None:
-            plan = plan[: max(1, int(task["legs"]))]
-    elif task["kind"] in ("stack", "unstack"):
+            pairs = pairs[: max(1, int(task["legs"]))]
+        steps = [{"from": s, "to": d, "redirectable": True} for s, d in pairs]
+    elif kind in ("stack", "unstack"):
         tiers = [task["tier"]] if "tier" in task else list(task.get("tiers") or cell_place_fit.TIERS)
         if not tiers or any(t not in cell_place_fit.TIERS for t in tiers):
             raise ValueError(f"tiers must be in {cell_place_fit.TIERS}")
-        cols = list(task.get("columns") or [task["to" if task["kind"] == "stack" else "from"]])
-        if task["kind"] == "stack":
+        cols = list(task.get("columns") or [task["to" if kind == "stack" else "from"]])
+        if kind == "stack":
             srcs = list(task.get("sources") or [task["from"]] * (len(tiers) * len(cols)))
             targets = [f"{c}-l{t - 1}" for t in tiers for c in cols]
             if len(srcs) < len(targets):
                 raise ValueError("not enough sources for stack targets")
-            plan = list(zip(srcs[:len(targets)], targets))
+            pairs = list(zip(srcs[:len(targets)], targets))
         else:
             sources = [f"{c}-l{t - 1}" for t in reversed(tiers) for c in cols]
             dsts = list(task.get("destinations") or [task["to"]] * len(sources))
             if len(dsts) < len(sources):
                 raise ValueError("not enough destinations for unstack sources")
-            plan = list(zip(sources, dsts[:len(sources)]))
+            pairs = list(zip(sources, dsts[:len(sources)]))
+        steps = [{"from": s, "to": d, "redirectable": True} for s, d in pairs]
+    elif kind == "sequence":
+        raw_steps = task.get("steps")
+        if not isinstance(raw_steps, list) or not raw_steps:
+            raise ValueError("sequence task needs a nonempty steps list")
+        steps = []
+        for s in raw_steps:
+            src = tier_site(s["from"], s["from_tier"], sites) if "from_tier" in s else s["from"]
+            dst = tier_site(s["to"], s["to_tier"], sites) if "to_tier" in s else s["to"]
+            extra = {k: s[k] for k in ("object", "colour", "layers_below", "arm") if s.get(k) is not None}
+            steps.append({"from": src, "to": dst, "redirectable": bool(s.get("redirectable", False)), **extra})
+    elif kind in ("goal_stack", "outbound", "rehandle"):
+        import cell_stack_plan
+
+        mode = "goal" if kind == "goal_stack" else kind
+        meta = task.get("layout") or {n: {"kind": v.get("kind", "ship" if "layer" in v else "temp"),
+                                          "stack": v.get("stack", v.get("tier_of", n)), "layer": v.get("layer", 0),
+                                          **({"arm": v["arm"]} if "arm" in v else {}),
+                                          **({"arms": v["arms"]} if "arms" in v else {})} for n, v in sites.items()}
+        planned = cell_stack_plan.plan_from_spec({**task, "mode": mode, "sites": meta})
+        if not planned["ok"]:
+            raise ValueError(planned["why"] or f"{kind} planning failed")
+        smap = task.get("site_map") or {}
+        steps = []
+        for m in planned["moves"] or ():
+            src, dst = smap.get(m["source"], m["source"]), smap.get(m["destination"], m["destination"])
+            steps.append({
+                "from": src, "to": dst, "cargo_id": m.get("cargo_id"), "arms": m.get("arms"),
+                "phase_label": m.get("phase_label"), "redirectable": m.get("phase_label") == "재취급",
+                **({"object": m["cargo_id"]} if task.get("match_cargo_object") else {}),
+                **({"layers_below": sites[src]["layer"]} if src in sites and sites[src].get("layer", 0) > 0 else {}),
+            })
     else:
-        raise ValueError(f"unknown kind {task['kind']!r}")
-    for src, dst in plan:
+        raise ValueError(f"unknown kind {kind!r}")
+    for step in steps:
+        src, dst = step["from"], step["to"]
         for site in (src, dst):
             if site not in sites:
                 raise ValueError(f"unknown site {site!r}")
@@ -90,15 +126,29 @@ def carries(task: dict, sites: dict) -> list:
             raise ValueError(f"from and to are both {src!r}")
         if not sites[src].get("auto_roi"):
             raise ValueError(f"site {src!r} has no auto_roi to look in")
-    return plan
+    return steps
+
+
+def carries(task: dict, sites: dict) -> list:
+    """[(from, to)] for a task, or ValueError naming what is wrong (unknown site, same site, missing field)."""
+    return [(s["from"], s["to"]) for s in plan_steps(task, sites)]
 
 
 def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str, log_dir: Path, run=subprocess.run,
-              scenario_id: str | None = None) -> dict:
+              scenario_id: str | None = None, *, want_object: str | None = None, want_colour: str | None = None,
+              layers_below: int | None = None, dry_run: bool = False) -> dict:
     roi = [str(v) for v in sites[src]["auto_roi"]]
     out = log_dir / f"{int(time.time())}-{src}-to-{dst}.json"
     command = [sys.executable, str(HERE / "cell_auto_pick.py"), "--config", str(config_path), "--catalog", str(catalog),
                "--roi", *roi, "--from", src, "--dest", dst]
+    if want_object is not None:
+        command += ["--object", str(want_object)]
+    if want_colour is not None:
+        command += ["--colour", str(want_colour)]
+    if layers_below is not None:
+        command += ["--layers-below", str(int(layers_below))]
+    if dry_run:
+        command.append("--dry-run")
     if scenario_id is not None:
         command += ["--scenario-id", scenario_id]
     proc = run(command, capture_output=True, text=True)
@@ -130,35 +180,43 @@ def alternates(sites: dict, src: str, dst: str) -> list:
     return [a for a in (sites.get(dst) or {}).get("alternates") or [] if a in sites and a not in (src, dst)]
 
 
-def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, preflight=None, carry=run_carry) -> dict:
+def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, preflight=None, carry=run_carry,
+             *, dry_run: bool = False) -> dict:
     config = cell_place_fit.with_tiers(json.loads(config_path.read_text(encoding="utf-8")))[0]
     out = {"task_id": task.get("task_id"), "kind": task.get("kind"), "source": task.get("source"), "started": time.time(), "steps": []}
     try:
-        plan = carries(task, config["sites"])
+        plan = plan_steps(task, config["sites"])
     except (ValueError, KeyError) as exc:
         return {**out, "status": "rejected", "why": str(exc)}
     if preflight is not None:
         failed = [f"{name}: {why}" for name, ok, why in preflight(config) if not ok]
         if failed:
             return {**out, "status": "refused", "why": failed}
-    carry_kwargs = {"scenario_id": task["scenario_id"]} if task.get("scenario_id") is not None else {}
-    for i, (src, dst) in enumerate(plan):
-        step = carry(config_path, catalog, config["sites"], src, dst, log_dir, **carry_kwargs)
+    base_kw = {k: v for k, v in (
+        ("scenario_id", task.get("scenario_id")), ("dry_run", True if dry_run else None),
+    ) if v is not None}
+    ok_results = ("planned",) if dry_run else ("placed",)
+    for i, item in enumerate(plan):
+        src, dst = item["from"], item["to"]
+        step_kw = {**base_kw, **{ak: item[sk] for sk, ak in (
+            ("object", "want_object"), ("colour", "want_colour"), ("layers_below", "layers_below")
+        ) if item.get(sk) is not None}}
+        step = carry(config_path, catalog, config["sites"], src, dst, log_dir, **step_kw)
         out["steps"].append(step)
         # No room at the destination and nothing moved: its declared alternates, each observed afresh (D-1019).
-        # A swap is about which object ends where, so it never redirects.
-        for alt in alternates(config["sites"], src, dst) if step.get("dest_full") and task["kind"] != "swap" else ():
-            step = {**carry(config_path, catalog, config["sites"], src, alt, log_dir, **carry_kwargs), "redirected_from": dst}
+        # Swaps and non-redirectable goal slots never redirect.
+        for alt in alternates(config["sites"], src, dst) if step.get("dest_full") and item.get("redirectable", True) else ():
+            step = {**carry(config_path, catalog, config["sites"], src, alt, log_dir, **step_kw), "redirected_from": dst}
             out["steps"].append(step)
             if not step.get("dest_full"):
                 break
-        if step["result"] != "placed":  # a stop mid-swap leaves the objects where the last carry put them: a person looks
+        if step["result"] not in ok_results:  # a stop leaves the objects where the last carry put them: a person looks
             return {**out, "status": "stopped", "why": f"{src} -> {step['to']}: {step['result']}", "ended": time.time()}
         # The next carry that expected this object at dst takes it from where it went; later ones are other objects.
-        nxt = next((j for j in range(i + 1, len(plan)) if plan[j][0] == dst), None) if step.get("redirected_from") else None
+        nxt = next((j for j in range(i + 1, len(plan)) if plan[j]["from"] == dst), None) if step.get("redirected_from") else None
         if nxt is not None:
-            plan[nxt] = (step["to"], plan[nxt][1])
-    return {**out, "status": "done", "ended": time.time()}
+            plan[nxt] = {**plan[nxt], "from": step["to"]}
+    return {**out, "status": "planned" if dry_run else "done", "ended": time.time()}
 
 
 from cell_fleet_pipeline import FleetModelPipeline  # noqa: E402,F401  (re-exported)
@@ -168,11 +226,24 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--config", required=True, type=Path)
     ap.add_argument("--catalog", required=True, type=Path)
-    ap.add_argument("--queue", required=True, type=Path)
+    grp = ap.add_mutually_exclusive_group(required=True)
+    grp.add_argument("--queue", type=Path)
+    grp.add_argument("--task", type=Path, help="run one task JSON file once and exit")
     ap.add_argument("--once", action="store_true", help="run what is in the inbox now, then exit")
+    ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     import cell_preflight
 
+    preflight = lambda c: cell_preflight.checks(c, "http://127.0.0.1:8767", 6.0)
+    run_kw = {"dry_run": args.dry_run}
+    if args.task is not None:
+        task = json.loads(args.task.read_text(encoding="utf-8"))
+        work_dir = json.loads(args.config.read_text(encoding="utf-8")).get("work_dir")
+        out_dir = (Path(work_dir).expanduser() / "task-logs") if work_dir else (args.task.parent / "task-logs")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        result = run_task(task, args.config, args.catalog, out_dir, preflight, **run_kw)
+        print(json.dumps(result, indent=1))
+        return 0 if result["status"] in ("done", "planned") else 1
     for name in ("inbox", "running", "done"):
         (args.queue / name).mkdir(parents=True, exist_ok=True)
     while True:
@@ -180,8 +251,7 @@ def main(argv=None):
             running = args.queue / "running" / path.name
             path.replace(running)  # claimed: a second runner will not pick it up
             task = json.loads(running.read_text(encoding="utf-8"))
-            result = run_task(task, args.config, args.catalog, args.queue / "done",
-                              lambda c: cell_preflight.checks(c, "http://127.0.0.1:8767", 6.0))
+            result = run_task(task, args.config, args.catalog, args.queue / "done", preflight, **run_kw)
             (args.queue / "done" / f"{task.get('task_id', path.stem)}.result.json").write_text(json.dumps(result, indent=1))
             running.unlink()
             print(json.dumps({k: result.get(k) for k in ("task_id", "status", "why")}), flush=True)

@@ -27,6 +27,15 @@ STILL_ANGULAR_RADPS = 1e-3
 STILL_MIN_S = 1.0
 STILL_MAX_GAP_S = 2.5
 BED_CONFIRM_TTL_S = 120.0
+# D-1057 2-9: cell S top-camera bed judgement. Its record waits at most 10 s for the claim (the worker claims right after it).
+BED_CAMERA_TTL_S = 10.0
+BED_CAMERA_VERDICT_S = 10.0  # a measured NOT_READY blocks the operator fallback this long
+BED_CAMERA_SOURCE = "cell_top_camera"
+OBS_MIN_FRAMES = 3
+OBS_MIN_SPAN_S = STILL_MIN_S
+OBS_FRAME_MAX_AGE_S = 2.0
+OBS_FUTURE_S = 0.5
+OBS_CLOCK_MARGIN_S = 0.5  # cell host vs Fleet clock
 PRESENCE_TTL_S = 120.0   # a named operator's "I am at the power switch" for one task's supervised first run (D-911)
 BED_MOVE_LIMIT_M = 0.02
 OWNER_EVIDENCE_MAX_AGE_S = 60.0
@@ -170,7 +179,7 @@ def zone_pose(app, task: dict):
 def _bed_valid(rec: dict, now: float | None = None) -> bool:
     """Not voided, and either bound to a claimed task's lease (the 120 s only bounds the wait for the claim) or inside the TTL."""
     now = time.time() if now is None else now
-    return not rec.get("invalid") and (bool(rec.get("lease")) or 0 <= now - rec["confirmed_at"] <= BED_CONFIRM_TTL_S)
+    return not rec.get("invalid") and (bool(rec.get("lease")) or 0 <= now - rec["confirmed_at"] <= rec.get("ttl_s", BED_CONFIRM_TTL_S))
 
 
 def bind_bed(app, task: dict, lease_id, now: float | None = None) -> bool:
@@ -183,8 +192,11 @@ def bind_bed(app, task: dict, lease_id, now: float | None = None) -> bool:
     if not _bed_valid(rec, time.time() if now is None else now):
         return False
     rec["lease"] = lease_id
-    task["bed_confirmation"] = {"operator": rec["principal_id"], "confirmed_at": rec["confirmed_at"], "pose": dict(rec["pose"]),
-                                "map_id": rec["map_id"], "map_version": rec["map_version"]}
+    camera = rec.get("source") == BED_CAMERA_SOURCE
+    task["bed_confirmation"] = {"operator": None if camera else rec["principal_id"], "confirmed_at": rec["confirmed_at"],
+                                "pose": dict(rec["pose"]), "map_id": rec["map_id"], "map_version": rec["map_version"],
+                                **({"source": BED_CAMERA_SOURCE, "principal": rec["principal_id"], "camera": copy.deepcopy(rec["camera"])}
+                                   if camera else {})}
     return True
 
 
@@ -266,6 +278,7 @@ def prune_evidence(app) -> None:
     for store, dead in ((getattr(app.state, "cell_bed_confirmations", None) or {},
                          lambda r: not _bed_valid(r)),
                         (getattr(app.state, "cell_presence", None) or {}, lambda r: not _presence_valid(r)),
+                        (getattr(app.state, "cell_bed_camera", None) or {}, lambda r: now - r["at"] > BED_CAMERA_VERDICT_S),
                         (getattr(app.state, "cell_owner_evidence", None) or {},
                          lambda r: now - r["measured_at"] > OWNER_EVIDENCE_MAX_AGE_S)):
         for task_id in [k for k, r in store.items()
@@ -280,6 +293,37 @@ def cell_owner_principals(cell_id: str) -> frozenset:
         if cell.strip() == cell_id:
             return frozenset(i.strip() for i in ids.split(",") if i.strip())
     return frozenset()
+
+
+def bed_camera_enabled() -> bool:
+    """Kill switch of the cell S camera bed judgement, read at each call: ROSY_FLEET_CELL_S_BED_CAMERA=off (default on)."""
+    return os.environ.get("ROSY_FLEET_CELL_S_BED_CAMERA", "").strip().lower() not in ("0", "off", "false", "no")
+
+
+def _camera_not_ready(app, task: dict) -> bool:
+    """A cell S task whose top camera measured NOT_READY within BED_CAMERA_VERDICT_S: no person may overrule it."""
+    last = (getattr(app.state, "cell_bed_camera", None) or {}).get(task["task_id"])
+    return (task["cell_id"] == "cell_s" and bed_camera_enabled() and last is not None
+            and last["verdict"] == "NOT_READY" and 0 <= time.time() - last["at"] <= BED_CAMERA_VERDICT_S)
+
+
+def _observation_frames(body: dict, now: float) -> list | None:
+    """The frame summaries of a bed observation, or None when they do not prove 3 advancing, fresh frames over 1 s."""
+    frames = body.get("frames")
+    if not isinstance(frames, list) or len(frames) < OBS_MIN_FRAMES:
+        return None
+    out = []
+    for f in frames:
+        if (not isinstance(f, dict) or type(f.get("source_seq")) is not int or not _finite(f.get("source_stamp"))
+                or not isinstance(f.get("jpeg_sha256"), str)):
+            return None
+        out.append({k: f[k] for k in ("source_seq", "source_stamp", "jpeg_sha256")})
+    if any(b["source_seq"] <= a["source_seq"] or b["source_stamp"] <= a["source_stamp"] for a, b in zip(out, out[1:])):
+        return None
+    age = now - out[-1]["source_stamp"]
+    if out[-1]["source_stamp"] - out[0]["source_stamp"] < OBS_MIN_SPAN_S or not -OBS_FUTURE_S <= age <= OBS_FRAME_MAX_AGE_S:
+        return None
+    return out
 
 
 def owner_principal_refusal(request, task: dict) -> HTTPException | None:
@@ -346,6 +390,7 @@ def install_evidence_routes(app, ctx) -> None:
     app.state.cell_bed_confirmations = getattr(app.state, "cell_bed_confirmations", None) or {}
     app.state.cell_owner_evidence = getattr(app.state, "cell_owner_evidence", None) or {}
     app.state.cell_presence = getattr(app.state, "cell_presence", None) or {}
+    app.state.cell_bed_camera = getattr(app.state, "cell_bed_camera", None) or {}
 
     async def read_body(request: Request):
         raw = await request.body()
@@ -379,6 +424,8 @@ def install_evidence_routes(app, ctx) -> None:
             raise _error(409, "CELL_TASK_NOT_QUEUED")
         if old is not None and _bed_valid(old):  # a repeated request never renews the expiry or the pose
             return {"ok": True, "renewed": False, "confirmation": old}
+        if _camera_not_ready(app, task):  # D-1057 2-9: the person is the fallback for UNKNOWN only
+            raise _error(409, "BED_CAMERA_NOT_READY")
         located = zone_pose(app, task)
         if located is None:
             raise _error(409, "BED_CONFIRM_POSE_UNAVAILABLE")
@@ -395,6 +442,56 @@ def install_evidence_routes(app, ctx) -> None:
             task["bed_confirmation"] = {"operator": principal_id, "confirmed_at": rec["confirmed_at"], "pose": dict(rec["pose"]),
                                         "map_id": rec["map_id"], "map_version": rec["map_version"], "renewed": True}
         return {"ok": True, "renewed": True, "confirmation": rec, "expires_in_s": BED_CONFIRM_TTL_S}
+
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/bed-observation", dependencies=proposer_guard)
+    async def record_bed_observation(task_id: str, request: Request):
+        """D-1057 2-9: cell S's top-camera bed judgement. Only READY, re-bound to Fleet's own pose and stillness, makes the
+        same record a named operator's bed-confirm makes (source cell_top_camera, 10 s to the claim); UNKNOWN never does."""
+        task = task_of(task_id)
+        if task["cell_id"] != "cell_s":
+            raise _error(409, "BED_CAMERA_CELL_NOT_SUPPORTED")
+        if not bed_camera_enabled():
+            raise _error(409, "BED_CAMERA_DISABLED")
+        refusal = owner_principal_refusal(request, task)
+        if refusal is not None:
+            raise refusal
+        if task.get("status") != "QUEUED":  # a RUNNING task is confirmed again by a named operator only
+            raise _error(409, "CELL_TASK_NOT_QUEUED")
+        body = await read_body(request)
+        if not isinstance(body, dict) or body.get("robot_id") != task["robot_id"]:
+            raise _error(422, "BED_CONFIRM_ROBOT_MISMATCH")
+        now = time.time()
+        try:
+            json.dumps(body, allow_nan=False)
+        except (TypeError, ValueError):
+            raise _error(422, "BED_OBSERVATION_INVALID") from None
+        frames, verdict, reasons = _observation_frames(body, now), body.get("verdict"), body.get("reasons", [])
+        if (frames is None or verdict not in ("READY", "NOT_READY", "UNKNOWN")
+                or not isinstance(reasons, list) or not all(isinstance(r, str) for r in reasons)):
+            raise _error(422, "BED_OBSERVATION_INVALID")
+        app.state.cell_bed_camera[task_id] = {"verdict": verdict, "reasons": list(reasons), "at": now}
+        if verdict != "READY":
+            return {"ok": True, "recorded": False, "verdict": verdict}
+        located = zone_pose(app, task)
+        if located is None:
+            raise _error(409, "BED_CONFIRM_POSE_UNAVAILABLE")
+        amr = amr_evidence(app, task)
+        still_s = _tracker(app).still_for_s(task["robot_id"])
+        if (amr is None or not amr["wheel_brake_locked"] or abs(amr["v_cmd_mps"]) > STILL_LINEAR_MPS or still_s is None
+                or now - still_s > frames[0]["source_stamp"] - OBS_CLOCK_MARGIN_S):  # Fleet's still run covers the camera window
+            raise _error(409, "BED_OBSERVATION_ROBOT_NOT_STILL")
+        old = app.state.cell_bed_confirmations.get(task_id)
+        if old is not None and _bed_valid(old):  # never renews or replaces a valid confirmation (operator or camera)
+            return {"ok": True, "recorded": False, "verdict": verdict}
+        principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
+        rec = {"task_id": task_id, "robot_id": task["robot_id"], "principal_id": principal_id, "source": BED_CAMERA_SOURCE,
+               "ttl_s": BED_CAMERA_TTL_S, "confirmed_at": time.time(), "pose": located[0],
+               "map_id": _map_state(app)[0], "map_version": _map_state(app)[1],
+               "camera": copy.deepcopy({"frames": frames, "bed": body.get("bed"), "objects": body.get("objects"),
+                                        "config_sha256": body.get("config_sha256")})}
+        watch_pose_updates(app)
+        app.state.cell_bed_confirmations[task_id] = rec
+        return {"ok": True, "recorded": True, "verdict": verdict, "expires_in_s": BED_CAMERA_TTL_S}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm", dependencies=operator_guard)
     async def confirm_presence(task_id: str, request: Request):

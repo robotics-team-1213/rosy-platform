@@ -215,23 +215,51 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
       mainImg.alt = `${active.title} 실시간 메인 카메라`;
       mainImg.loading = "lazy";
-      mainImg.tabIndex = 0;
-      mainImg.addEventListener("click", () => mainImg.classList.toggle("focused"));
+      const stageBar = document.createElement("div");
+      stageBar.className = "omx-inspector-stage-bar";
       const mainCap = document.createElement("small");
       mainCap.className = "omx-inspector-cam-badge";
       mainCap.textContent = `🎥 [${activeCam.label}]`;
+      const zoomBtn = document.createElement("ui-button");
+      zoomBtn.className = "omx-inspector-zoom";
+      zoomBtn.setAttribute("kind", "quiet");
+      zoomBtn.setAttribute("type", "button");
+      zoomBtn.setAttribute("data-work-read", "");
+      zoomBtn.setAttribute("aria-expanded", "false");
+      zoomBtn.textContent = "크게 보기";
+      zoomBtn.setAttribute("aria-label", `${activeCam.label} 크게 보기`);
+      const applyZoom = (zoomed) => {
+        mainImg.classList.toggle("focused", zoomed);
+        zoomBtn.setAttribute("aria-expanded", String(zoomed));
+        zoomBtn.textContent = zoomed ? "원래 크기" : "크게 보기";
+        zoomBtn.setAttribute("aria-label", `${activeCam.label} ${zoomed ? "원래 크기" : "크게 보기"}`);
+      };
+      zoomBtn.addEventListener("click", () => applyZoom(!mainImg.classList.contains("focused")));
+      mainImg.addEventListener("click", () => applyZoom(!mainImg.classList.contains("focused")));
+      camStageNode.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape" && mainImg.classList.contains("focused")) {
+          ev.stopPropagation();
+          applyZoom(false);
+        }
+      });
+      stageBar.append(mainCap, zoomBtn);
       cameraBindings.push([mainImg, activeCam, mainCap, `🎥 [${activeCam.label}]`]);
-      camStageNode.append(mainImg, mainCap);
+      camStageNode.append(mainImg, stageBar);
     }
 
     const pipGrid = document.createElement("div");
     pipGrid.className = "omx-inspector-pip-grid";
     for (const v of camViews) {
-      const pip = document.createElement("div");
+      const pip = document.createElement("button");
+      pip.type = "button";
+      pip.setAttribute("data-work-read", "");
       pip.className = `omx-inspector-pip${v.id === activeCam.id ? " active" : ""}`;
+      pip.setAttribute("aria-pressed", String(v.id === activeCam.id));
+      pip.setAttribute("aria-label", `${v.label} 카메라 선택`);
       const pImg = document.createElement("img");
       pImg.className = "omx-inspector-cam";
-      pImg.alt = v.label;
+      pImg.alt = "";
+      pImg.setAttribute("aria-hidden", "true");
       pImg.loading = "lazy";
       cameraBindings.push([pImg, v]);
       const pLbl = document.createElement("small");
@@ -251,15 +279,24 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
     const quickDispatchBar = document.createElement("div");
     quickDispatchBar.className = "omx-inspector-quick-dispatch";
+    const tierField = document.createElement("label");
+    tierField.className = "omx-inspector-field";
+    const tierText = document.createElement("span");
+    tierText.textContent = "적재 층";
     const tierSel = document.createElement("select"); tierSel.className = "ui-field";
     tierSel.setAttribute("data-work-read", "");
-    for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]]) {
+    for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]] ) {
       const opt = document.createElement("option");
       opt.value = val;
       opt.textContent = lbl;
       if (active.id === "arm_b" && val === "2") opt.selected = true;
       tierSel.append(opt);
     }
+    tierField.append(tierText, tierSel);
+    const dispField = document.createElement("label");
+    dispField.className = "omx-inspector-field";
+    const dispText = document.createElement("span");
+    dispText.textContent = "복구 위치";
     const dispSel = document.createElement("select"); dispSel.className = "ui-field";
     dispSel.setAttribute("data-work-read", "");
     for (const [val, lbl] of [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]]) {
@@ -268,6 +305,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       opt.textContent = lbl;
       dispSel.append(opt);
     }
+    dispField.append(dispText, dispSel);
     const runCustomBtn = document.createElement("ui-button");
     runCustomBtn.setAttribute("kind", "primary");
     runCustomBtn.setAttribute("type", "button");
@@ -301,7 +339,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         setOffBy(runCustomBtn, "");
       }
     });
-    quickDispatchBar.append(tierSel, dispSel, runCustomBtn);
+    quickDispatchBar.append(tierField, dispField, runCustomBtn);
 
     const actions = document.createElement("div");
     actions.className = "omx-card-actions";

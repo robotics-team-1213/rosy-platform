@@ -285,18 +285,30 @@ def resolve_bundle_dir(run_root, row):
 def bundle_manifest(run_root, rid, row, *, prefix=PREFIX):
     identifier(rid)
     bundle_dir, policy_sha256 = resolve_bundle_dir(run_root, row)
-    files = []
-    for path in sorted(bundle_dir.rglob('*')):
+    entries = []
+    for path in bundle_dir.rglob('*'):
         if path.is_symlink():
             raise ValueError(f'symlink forbidden in bundle: {path.name}')
-        if not path.is_file() or '__pycache__' in path.parts:
+        rel_parts = path.relative_to(bundle_dir).parts
+        if not path.is_file() or '__pycache__' in rel_parts or '.cache' in rel_parts:
             continue
-        rel = path.relative_to(bundle_dir).as_posix()
+        rel = '/'.join(rel_parts)
         _valid_relpath(rel)
+        entries.append((rel, path))
+    files, bundle_digest = [], hashlib.sha256()
+    for rel, path in sorted(entries, key=lambda item: item[0]):
         size = path.stat().st_size
         digest = _file_sha256(path)
+        bundle_digest.update(rel.encode() + b'\0')
+        with path.open('rb') as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b''):
+                bundle_digest.update(block)
         files.append({'path': rel, 'size': size, 'sha256': digest, 'url': f'{prefix}/run/{rid}/file/{rel}'})
-    manifest = {'schema': MANIFEST_SCHEMA, 'run_id': rid, 'policy_revision': policy_sha256, 'files': files}
+    manifest = {
+        'schema': MANIFEST_SCHEMA, 'run_id': rid,
+        'policy_revision': policy_sha256, 'checkpoint_sha256': bundle_digest.hexdigest(),
+        'files': files,
+    }
     if len(json.dumps(manifest, ensure_ascii=False, allow_nan=False).encode('utf-8')) > MANIFEST_LIMIT:
         raise ValueError('bundle manifest exceeds 64 KiB')
     return manifest

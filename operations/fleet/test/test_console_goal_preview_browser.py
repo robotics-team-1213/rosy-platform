@@ -8,7 +8,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_console_queue_inline_browser import API, _open, _robot, _shot, site  # noqa: E402,F401
-from browser_harness import browser_tests_enabled
+from browser_harness import browser_tests_enabled  # noqa: E402
+from fleet_cockpit_browser import select_robot  # noqa: E402
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
 
@@ -83,8 +84,7 @@ def test_site_goal_previews_server_plan_before_confirm_and_cancels_without_start
         browser, page, errors = _open(playwright, site, api, posts, answers)
         expect(page.locator("#map-stage")).to_have_attribute("data-map-state", "site", timeout=10000)
         page.clock.run_for(1500)
-        page.locator('[data-context-tab="status"]').click()
-        page.locator("#robot-choice").select_option("rosy_01")
+        select_robot(page, "rosy_01")
         goal_btn = page.locator('ui-button[data-goal-robot-id="rosy_01"]')
         expect(goal_btn).to_be_enabled(timeout=10000)
 

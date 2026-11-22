@@ -12,6 +12,7 @@ import time
 import pytest
 
 from test_console_queue_inline_browser import OFFLINE, SCROLLERS, _open, _robot, _shot, site  # noqa: F401
+from fleet_cockpit_browser import open_robot_workspace
 from browser_harness import browser_tests_enabled
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in real Chromium scenario")
@@ -50,9 +51,7 @@ PLAN = {"segments": [{"edge_id": "e1"}], "places": [], "actions": [], "length_m"
 
 
 def _card(page, robot_id):
-    page.locator('[data-context-tab="status"]').click()
-    page.locator("#robot-choice").select_option(robot_id)
-    return page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]')
+    return open_robot_workspace(page, robot_id)
 
 
 def test_running_trip_shows_and_clears_ai_route_warning_without_deadlock(site):

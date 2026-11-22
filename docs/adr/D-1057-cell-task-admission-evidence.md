@@ -26,7 +26,7 @@
 | `pose` | `MapPoseService.arbitrated_pose`. 활성 지도 ID가 있어야 하고, 그 지도·그래프에 셀 정차 지점이 실제로 있어야 한다(`resolve_omx_cells`의 기본 좌표로 만든 셀은 쓰지 않는다). LOCALIZED이고 앵커 출처가 sighting·pin·peer(odom으로 이은 `bridged` 제외)이며 `age_s` 2 s 이하, 활성 지도와 같은 `map_id`, 셀 정차 구역(사이트 지도 station 좌표에서 0.18 m 이내, `CELL_CLAIM_RADIUS_M`와 같은 값) 안일 때만 | None |
 | `wheel_brake_locked` | CORE가 heartbeat로 보고하는 **정지 유지**: 모드 IDLE, navigation이 IDLE·ARRIVED·CANCELED·FAILED뿐(주행 진행 없음), 이 로봇의 Fleet 목표 없음, E-stop 아님, odom 선속·각속도가 임계(1e-4 m/s, 1e-3 rad/s) 이하. 표본마다 속도 채널 `received_at`이 heartbeat 도착 시각과 2 s 이내여야 하고, 이런 표본이 표본 간격 2.5 s 이하로 1 s 이상 이어져야 한다. **기계식 브레이크가 아니다.** 브레이크 센서는 없다 | heartbeat가 없거나 2 s보다 오래되면 None. 표본이 부족하면 False |
 | `v_cmd_mps` | **명령 속도 원천 없음.** CORE는 명령 속도를 Fleet에 내놓지 않는다. 그래서 odom 선속(`StateSnapshot.velocity.linear`)과 CORE 모드로 대체한다. 값은 odom 0(정지)이며 명령값이 아니다. 명령은 냈지만 바퀴가 아직 움직이지 않은 순간은 속도로 가려낼 수 없으므로, 모드 IDLE이고 주행 진행(navigation)과 Fleet 목표가 없는 표본만 인정해 배제한다. 사용자 결정 (가)의 "정지 상태(속도 0)" 범위이며, 조정 세션이 이 대체를 확인했다 | 채널이 fresh가 아니면 None |
-| `bed_ready` | 이름 있는 운영자가 작업마다 남기는 확인(`POST .../bed-confirm`). 유효 120 s, 확인 뒤 자세가 2 cm 넘게 움직이면 무효. bed 센서는 없다 | 확인 없음·만료·이동은 False |
+| `bed_ready` | 셀 S: 상단 카메라 판정(2-9절), UNKNOWN이면 이름 있는 운영자 확인. 셀 A/B: 이름 있는 운영자 확인. 운영자 확인(`POST .../bed-confirm`)은 유효 120 s, 확인 뒤 자세가 2 cm 넘게 움직이면 무효. bed 센서는 없다 | 확인 없음·만료·이동은 False |
 | `observed_at` | 쓴 실시간 관측 중 가장 오래된 시각(heartbeat 도착, 속도 채널 수신, 지도 자세 관측). 운영자 확인은 자기 만료가 있어 실시간 관측에 넣지 않는다 | 하나라도 없으면 None |
 
 판정 문턱 숫자(1 s, 2.5 s, 1e-3 rad/s, 120 s, 2 cm)는 이 ADR이 정한 값이다. 정지 표본은 0.5 s마다 heartbeat를 읽는 스레드가 쌓는다. 요청 때만 읽으면 claim과 완료 사이의 움직임을 놓친다.
@@ -109,9 +109,22 @@ worker가 보관한 결과(2-4절)의 `owner-evidence`가 `measured_at` 기준 6
 - 재전송 응답 정리(보관 결과는 `pending-results.json`): 증거 나이가 60 s 이상 65 s 미만이면 아무것도 보내지 않고 보관(Fleet이 거부할 것이므로), 65 s 이상이면 팔 없는 재측정 뒤 전송. 422 `OWNER_EVIDENCE_MEASURED_AT_INVALID`·`OMX_OWNER_EVIDENCE_UNAVAILABLE`(만료 계열)은 삭제하지 않고 `last_refusal`과 함께 보관해 다음 재측정 시점에 다시 한다. 422 `BED_CONFIRMATION_INVALID`는 사람 대기(보관). 연결 끊김·403·5xx·원래 증거 409 `OWNER_EVIDENCE_ALREADY_RECORDED`는 보관·계속. 그 밖의 409·422(본문 불일치, 작업이 RUNNING 아님 등)와 lease가 바뀐 작업만 삭제한다.
 - `claim`은 적재함 확인의 lease 결속(`bind_bed`, 한 번 잡은 `now`로 120 s 판정)을 원장 변경(셀 상태·`RUNNING`·lease) 앞에서 하고, 확인이 그사이 만료되었으면 `claimed:false`, `AMR_BRAKE_BED_VELOCITY_UNMEASURED`로 거부한다(작업은 QUEUED). 119.9 s는 통과, 120.1 s는 거부.
 
+#### 2-9. 셀 S의 적재함 준비는 상단 카메라가 판정한다 (사용자 결정, 2026-11-21)
+
+셀 S 완전 자동화(D-1047·D-1048)에 따라 셀 S의 `bed_ready`는 운반마다 운영자가 확인하지 않고 셀 S 상단 카메라가 판정한다. 가드(`_ready_amr`, `complete_cell_task`)와 lease 결속·무효화 규칙(2-7절 4, 3절)은 바꾸지 않는다. 카메라 판정은 운영자 확인과 같은 기록을 만들고, 다른 점은 출처(`source: cell_top_camera`)와 claim까지의 유효 시간(10 s)이다.
+
+- **판정(셀 호스트 worker, claim 직전):** 상단 프레임 3장(`source_seq` 증가, 1.0 s 이상 간격, 각 2 s 이내), 카메라 보정 미이동, 팔 접힘(60 s 이내), 등록한 도킹 기준 프레임과 적재함 테두리 일치(상관 문턱 이상, 이동 2 cm 이하), 3장 사이 정지, 하역 작업이면 목록 일치 물체 1개 이상이 모두 적재함 다각형 안. 모두 참이면 READY, 측정한 부정은 NOT_READY, 측정 못하면 UNKNOWN이다. ROI는 셀 설정의 `sites.pinky`만 쓰고 코드 기본값은 쓰지 않는다. 기준 프레임이 없으면 늘 UNKNOWN이다.
+- **기록(Fleet):** `POST .../bed-observation`은 셀 S owner 서비스 주체만, QUEUED 작업에만 받는다. READY일 때 Fleet은 자기 측정으로 다시 묶는다: 지도 자세가 정차 구역 안이고(1절 `pose`), 정지 유지(1절 `wheel_brake_locked`)가 카메라 첫 프레임보다 앞서 시작했어야 한다(두 호스트 시계 여유 0.5 s). 확인자·시각·자세·지도 ID·버전을 저장하고 claim이 lease에 묶는다.
+- **UNKNOWN은 통과가 아니다.** UNKNOWN이면 기록을 만들지 않으며 claim은 `AMR_BRAKE_BED_VELOCITY_UNMEASURED`로 거부된다. 이때 이름 있는 운영자의 `bed-confirm`이 대체 경로다. 카메라가 10 s 이내에 NOT_READY라고 한 작업에는 운영자 확인을 받지 않는다(409 `BED_CAMERA_NOT_READY`).
+- **RUNNING 재확인은 운영자만** 한다(집은 뒤에는 적재함 내용이 달라 카메라 조건이 성립하지 않는다).
+- **셀 A/B**는 바뀌지 않는다: 카메라 기록을 받지 않고(409 `BED_CAMERA_CELL_NOT_SUPPORTED`) 운영자 확인만 쓴다.
+- **끄는 법:** 사이트 설정 `ROSY_FLEET_CELL_S_BED_CAMERA=off`(Fleet, 호출 때 읽음) 또는 셀 설정에서 `sites.pinky.bed_reference` 제거. 둘 다 운영자 확인 경로로 돌아간다.
+
+**한계:** 카메라 판정은 bed 센서가 아니다. 적재함 고정 상태(걸쇠)와 화물 무게는 보지 못한다. 기준 프레임과 문턱은 현장 도킹 3회 실측으로 정하며, 실물·현장 수용은 별도다.
+
 #### 3. 신뢰 경계
 
-owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.
+owner-evidence는 셀의 owner로 등록된 서비스 주체만 보낼 수 있다. 다만 Fleet은 그 주체의 토큰이 정말 팔 owner 프로세스의 것인지 서명으로 확인하지 못한다. 막는 것은 lease 결속, claim 이후 시각, 완료 본문과의 일치, 재전송 불변이다. owner 서명은 후속 결정이다. 운영자 확인은 이름 있는 운영자만 낼 수 있고(공용 `site-console`·`development-*` 거부) 지도 ID와 함께 저장하며, 2 cm 넘는 이동이나 지도 변경(ID 또는 활성 버전)이 한 번이라도 있으면 영구 무효이고, 확인은 조회 때만이 아니라 콘솔이 받는 상태 갱신마다 검사한다. 같은 요청의 재전송은 만료·자세를 갱신하지 않고, 새 확인은 이전 것이 무효가 된 뒤에만 받는다. 카메라 판정 기록은 셀 S owner 서비스 주체만 낼 수 있고, Fleet은 그 판정을 자기 자세·정지 측정으로 다시 묶는다. 서비스 토큰이 정말 카메라 판정 프로세스의 것인지는 서명으로 확인하지 못한다(owner 증거와 같은 후속 과제). 저장소는 메모리다. 재시작하면 확인·owner 증거가 사라져 거부로 돌아간다.
 
 #### 4. 되돌리는 법
 

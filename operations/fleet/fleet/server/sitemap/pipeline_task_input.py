@@ -35,7 +35,9 @@ def checked_finite_float(value) -> float:
 def checked_task_pose(spec: dict, station) -> tuple[int, dict[str, float]]:
     try:
         json.dumps(spec, allow_nan=False)
-        if spec.get("cell_id") == "cell_ab" and "tier" not in spec:
+        dst = str(spec.get("dst_site") or "").strip()
+        dst_base = "belt" if dst == "belt_center" else dst.split(":", 1)[0].rsplit("-l", 1)[0]
+        if spec.get("cell_id") == "cell_ab" and (not dst or dst_base == "pallet") and "tier" not in spec:
             raise ValueError("missing cell_ab tier")
         tier = spec.get("tier", 1)
         if type(tier) is not int or tier not in (1, 2, 3):
