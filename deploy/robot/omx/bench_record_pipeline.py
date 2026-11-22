@@ -369,9 +369,17 @@ class BenchPipelineMixin:
             if self.state.get("status") in ("handing_over", "homing", "recording", "restoring", "sealing"):
                 raise ValueError("녹화/봉인 중에는 데이터셋을 삭제할 수 없습니다")
         ds_folder = Path.home() / "rosy-data" / "omx-leader" / ds_name
-        if not ds_folder.is_dir():
+        if not ds_folder.is_dir() or ds_folder.is_symlink():
             raise ValueError(f"데이터셋을 찾을 수 없습니다: {ds_name}")
-        if list(ds_folder.glob("data/**/*.parquet")):
+        has_parquet = bool(list(ds_folder.glob("data/**/*.parquet")))
+        if has_parquet and body.get("confirm_nonempty") is not True:
             raise ValueError("에피소드(parquet)가 있는 데이터셋은 삭제할 수 없습니다")
-        shutil.rmtree(ds_folder)
-        return {"ok": True, "deleted": ds_name, "lerobot_datasets": self.lerobot_datasets()}
+        if has_parquet and hasattr(self, "trash_dataset_dir"):
+            self.trash_dataset_dir(ds_folder, "discard")
+        else:
+            shutil.rmtree(ds_folder)
+        if hasattr(self, "_review_path"):
+            self._review_path(ds_name).unlink(missing_ok=True)
+        if hasattr(self, "_log_event"):
+            self._log_event("review", "warn" if has_parquet else "info", f"데이터셋 {'폐기(.trash)' if has_parquet else '삭제'}: {ds_name}")
+        return {"ok": True, "deleted": ds_name, "trashed": has_parquet, "lerobot_datasets": self.lerobot_datasets()}

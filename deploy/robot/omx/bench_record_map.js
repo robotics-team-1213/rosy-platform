@@ -378,10 +378,13 @@ function renderGoalPanelState(arm,c,okCard,isCustom,oStr,tStr){
   }
   if(provEl){
     const rev=window.cellMapData?.revision?('v'+window.cellMapData.revision):'';
-    const lim=(!isCustom&&Array.isArray(c?.known_limits)&&c.known_limits[0])?String(c.known_limits[0]):'';
+    const tp=(!isCustom&&t&&window.cellMapData?.task_provenance)?window.cellMapData.task_provenance[t]:null;
+    const lim=(!isCustom&&Array.isArray(tp?.known_limits)&&tp.known_limits[0])?String(tp.known_limits[0]):'';
+    const srcFile=tp?.source_file||(t||'yaml');
+    const rootPfx=tp?.root_prefix||'';
     const lines=[];
     if(isCustom)lines.push('출처: 직접(기타) → effective-task-card.yaml · 맵: shared/web/cell-site-map.json '+rev);
-    else if(okCard)lines.push('카드: '+(c.source_file||c.task_id||'yaml')+(c.root_prefix?' · 저장: '+c.root_prefix:''));
+    else if(okCard)lines.push('카드: '+srcFile+(rootPfx?' · 저장: '+rootPfx:''));
     else lines.push('표준 맵: shared/web/cell-site-map.json '+rev+' (층고 '+(window.cellMapData?.tier_height_mm||32.4)+'mm)');
     if(lim)lines.push('제약: '+lim);
     provEl.textContent=lines.join('\n');
@@ -492,7 +495,7 @@ function renderCamGuide(){
     }
     html+='</div>';
   }
-  if(hold)html+=renderShipGridHtml(hold,armZoneCount('ship-h'+hold),tStr,isStandTask,arm,validAll,cards);
+  if(hold){html+=renderShipGridHtml(hold,armZoneCount('ship-h'+hold),tStr,isStandTask,arm,validAll,cards);}
   else if(activeZone==='tmp-a'||activeZone==='tmp-b')html+=renderStandGridHtml(activeZone.slice(-1),validArm,cards,t);
   else html+=renderArmSTableHtml(validArm,cards,t);
 

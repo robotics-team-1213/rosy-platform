@@ -17,25 +17,33 @@
           </svg>
         </span>
         <h1>ROSY · OMX 작업대 녹화</h1>
-        <button type="button" id="hdr-task-summary" class="btn-tool btn-xs context-btn mono" data-drawer-btn="setup" aria-controls="drawer-setup" aria-expanded="false">과제 미선택</button>
-        <button type="button" id="goal-name-btn" class="btn-tool btn-xs context-btn mono" data-drawer-btn="bindings" aria-controls="drawer-bindings" aria-expanded="false">수집명 미정</button>
+        <div class="ctx-cluster" role="group" aria-label="현재 과제와 수집명">
+          <button type="button" id="hdr-task-summary" class="btn-tool btn-xs context-btn mono" data-drawer-btn="setup" aria-controls="drawer-setup" aria-expanded="false" title="클릭해 과제 변경 [1]">과제 미선택</button>
+          <button type="button" id="goal-name-btn" class="btn-tool btn-xs context-btn mono" data-drawer-btn="bindings" aria-controls="drawer-bindings" aria-expanded="false" title="클릭해 수집명·설정 변경 [2]">수집명 미정</button>
+        </div>
       </div>
       <nav class="header-tools" aria-label="작업대 도구">
-        <span id="ftr-server" class="ui-tag mono">서버 확인 중</span>
-        <span class="ui-tag" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
-        <button type="button" id="hdr-sound-btn" class="btn-tool btn-xs" aria-pressed="true" title="신호음 켜기/끄기 [M]">신호음 ON</button>
-        <button type="button" id="hdr-help-btn" class="btn-tool btn-xs" title="단축키 도움말 [?]" aria-label="단축키" aria-controls="sec-shortcuts">?</button>
-        <div class="drawer-menu-wrap" id="drawer-menu-wrap">
-          <button type="button" id="btn-drawer-menu" class="btn-tool btn-xs" aria-expanded="false" aria-controls="drawer-menu-pop">메뉴 ▾</button>
-          <div id="drawer-menu-pop" class="drawer-menu-pop">
-            <button type="button" id="btn-drawer-setup" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="setup" aria-controls="drawer-setup" aria-expanded="false">과제 목록 <kbd class="kbd-hint">1</kbd></button>
-            <button type="button" id="btn-drawer-bindings" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="bindings" aria-controls="drawer-bindings" aria-expanded="false">수집·연결 <kbd class="kbd-hint">2</kbd></button>
-            <button type="button" id="btn-drawer-start" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="start" aria-controls="drawer-start" aria-expanded="false">포즈·기준 <kbd class="kbd-hint">3</kbd></button>
-            <button type="button" id="btn-drawer-records" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="records" aria-controls="drawer-records" aria-expanded="false">기록 <kbd class="kbd-hint">4</kbd></button>
+        <div class="tool-cluster" data-group="device" role="group" aria-label="장치와 카메라">
+          <span id="ftr-server" class="ui-tag mono">서버 확인 중</span>
+          <span class="ui-tag" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
+          <button type="button" id="hdr-camera-restart-btn" class="btn-tool btn-xs" title="선택한 팔의 카메라 재시작 [Shift+C]" disabled>카메라 재시작<kbd class="kbd-hint">⇧C</kbd></button>
+          <button type="button" id="hdr-refresh-btn" class="btn-tool btn-xs" title="상태와 목록 새로고침 [Shift+R]">새로고침<kbd class="kbd-hint">⇧R</kbd></button>
+        </div>
+        <div class="tool-cluster" data-group="nav" role="group" aria-label="설정과 기록 메뉴">
+          <div class="drawer-menu-wrap" id="drawer-menu-wrap">
+            <button type="button" id="btn-drawer-menu" class="btn-tool btn-xs" aria-expanded="false" aria-controls="drawer-menu-pop">메뉴 ▾</button>
+            <div id="drawer-menu-pop" class="drawer-menu-pop">
+              <button type="button" id="btn-drawer-setup" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="setup" aria-controls="drawer-setup" aria-expanded="false">과제 목록 <kbd class="kbd-hint">1</kbd></button>
+              <button type="button" id="btn-drawer-bindings" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="bindings" aria-controls="drawer-bindings" aria-expanded="false">수집·연결 <kbd class="kbd-hint">2</kbd></button>
+              <button type="button" id="btn-drawer-start" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="start" aria-controls="drawer-start" aria-expanded="false">포즈·기준 <kbd class="kbd-hint">3</kbd></button>
+              <button type="button" id="btn-drawer-records" class="btn-tool btn-xs drawer-open-btn" data-drawer-btn="records" aria-controls="drawer-records" aria-expanded="false">기록·검수 <kbd class="kbd-hint">4</kbd></button>
+            </div>
           </div>
         </div>
-        <button type="button" id="hdr-refresh-btn" class="btn-tool btn-xs" title="상태와 목록 새로고침 [Shift+R]">새로고침<kbd class="kbd-hint">⇧R</kbd></button>
-        <button type="button" id="hdr-camera-restart-btn" class="btn-tool btn-xs" title="선택한 팔의 카메라 재시작 [Shift+C]" disabled>카메라 재시작<kbd class="kbd-hint">⇧C</kbd></button>
+        <div class="tool-cluster" data-group="prefs" role="group" aria-label="신호음과 도움말">
+          <button type="button" id="hdr-sound-btn" class="btn-tool btn-xs" aria-pressed="true" title="신호음 켜기/끄기 [M]">신호음 ON</button>
+          <button type="button" id="hdr-help-btn" class="btn-tool btn-xs" title="단축키 도움말 [?]" aria-label="단축키" aria-controls="sec-shortcuts">?</button>
+        </div>
       </nav>
     </div>
     <section id="hdr-row-ops" class="topbar-row topbar-ops" aria-label="녹화 및 로봇 조작">
@@ -56,24 +64,32 @@
         </ol>
       </div>
       <div class="primary-ops">
-        <button type="button" id="hdr-prepare-btn" class="btn-primary topbar-rec-btn" data-tabs="setup" aria-describedby="hdr-start-reasons" disabled>준비 시작<kbd class="kbd-hint">Space</kbd></button>
-        <button type="button" id="hdr-start-now-btn" class="btn-tool btn-xs" data-tabs="setup" disabled>한 번에 시작</button>
-        <button type="button" id="hdr-record-btn" class="btn-rec topbar-rec-btn" disabled hidden><span class="btn-lbl">● 녹화</span><kbd class="kbd-hint">Space</kbd></button>
-        <button type="button" id="hdr-finish-btn" class="btn-tool topbar-op-btn" disabled hidden>연동 끝</button>
+        <div class="ops-cluster ops-start" role="group" aria-label="녹화 시작">
+          <button type="button" id="hdr-prepare-btn" class="btn-primary topbar-rec-btn" data-tabs="setup" aria-describedby="hdr-start-reasons" disabled>준비 시작<kbd class="kbd-hint">Space</kbd></button>
+          <button type="button" id="hdr-start-now-btn" class="btn-tool btn-xs" data-tabs="setup" disabled title="준비 없이 바로 녹화 시작 [Ctrl+Enter]">바로 녹화</button>
+        </div>
         <div id="home-include-leader-group" class="home-group" data-tabs="setup">
           <button type="button" id="hdr-home-btn" class="btn-tool" disabled title="선택한 팔 홈 이동 [H]"><span class="btn-lbl">홈 이동</span><kbd class="kbd-hint">H</kbd></button>
           <label class="check-row topbar-check" id="home-include-leader-wrap"><input type="checkbox" id="home-include-leader" checked><span>리더도 함께</span></label>
         </div>
-        <div id="hdr-live-metrics" class="live-ops" data-tabs="recording" hidden>
+        <div class="ops-cluster ops-session" role="group" aria-label="세션 제어">
+          <button type="button" id="hdr-record-btn" class="btn-rec topbar-rec-btn" disabled hidden><span class="btn-lbl">● 녹화</span><kbd class="kbd-hint">Space</kbd></button>
+          <button type="button" id="hdr-finish-btn" class="btn-tool topbar-op-btn" disabled hidden>연동 끝</button>
+        </div>
+        <div id="hdr-live-metrics" class="ops-cluster live-ops" data-tabs="recording" hidden role="group" aria-label="에피소드 조작">
           <button type="button" id="hdr-next-ep-btn" class="btn-tool topbar-op-btn" disabled title="다음 에피소드 (녹화 중에만 활성) [→ / N]">다음 에피소드<kbd class="kbd-hint">→</kbd></button>
           <button type="button" id="hdr-rerecord-btn" class="btn-tool topbar-op-btn" disabled title="다시 녹화 (녹화 중에만 활성) [← / R]">다시 녹화<kbd class="kbd-hint">←</kbd></button>
         </div>
         <div id="hdr-result-actions" class="result-ops" data-tabs="result" hidden>
           <span id="goal-result-line" class="goal-result-line mono" hidden></span>
-          <button type="button" id="hdr-result-home-btn" class="btn-tool" title="팔로워 홈 포즈 복귀 (펼쳐진 팔 안전 접기 포함) [H]"><span class="btn-lbl">지금 홈 포즈</span><kbd class="kbd-hint">H</kbd></button>
-          <button type="button" id="hdr-quick-restart-btn" class="btn-primary" title="홈 복귀 확인 후 수집명 +1로 바로 다음 연동 준비 시작">홈 → 바로 다음 시작</button>
-          <button type="button" id="hdr-reset-retry-btn" class="btn-tool" title="임시 설정·스왑 초기화 후 홈 복귀하여 다시 시작">초기화 후 다시 하기</button>
-          <button type="button" id="back-to-setup-btn" class="btn-tool">다음 녹화 준비</button>
+          <div class="ops-cluster ops-next" role="group" aria-label="다음 회차 진행">
+            <button type="button" id="hdr-quick-restart-btn" class="btn-primary" title="홈 복귀 확인 후 수집명 +1로 바로 다음 연동 준비 시작">홈 → 바로 다음</button>
+            <button type="button" id="hdr-reset-retry-btn" class="btn-tool" title="임시 설정·스왑 초기화 후 홈 복귀하여 다시 시작">초기화 후 재시도</button>
+            <button type="button" id="back-to-setup-btn" class="btn-tool">설정으로</button>
+          </div>
+          <div class="ops-cluster ops-pose" role="group" aria-label="안전 복귀">
+            <button type="button" id="hdr-result-home-btn" class="btn-tool" title="팔로워 홈 포즈 복귀 (펼쳐진 팔 안전 접기 포함) [H]"><span class="btn-lbl">지금 홈 포즈</span><kbd class="kbd-hint">H</kbd></button>
+          </div>
         </div>
       </div>
       <div class="stop-group">
@@ -85,6 +101,34 @@
   <main class="app-main">
     <div class="layout">
       <div class="bench-stage-col">
+        <section class="card manual-hold-card" id="manual-hold-card" aria-labelledby="h-manual-hold" role="alert" hidden>
+          <div class="mh-head">
+            <div>
+              <h2 id="h-manual-hold" style="margin:0">수동 확인 보류 · 안전 복구 안내</h2>
+              <p id="mh-reason" class="mh-reason"></p>
+            </div>
+            <span id="mh-torque-badge" class="badge mono" data-tone="crit">토크 상태 확인 중</span>
+          </div>
+          <div id="mh-facts" class="mh-facts mono"></div>
+          <p id="mh-cause-hint" class="mh-hint" hidden></p>
+          <pre id="mh-log-tail" class="mh-log-tail mono quiet" hidden></pre>
+          <div class="mh-actions">
+            <div id="mh-release-box" class="mh-step" hidden>
+              <label class="check-row"><input type="checkbox" id="mh-support-check"><span>사람이 팔을 손으로 물리적으로 받쳤습니다 (토크 OFF 안전 확인)</span></label>
+              <button type="button" id="mh-release-btn" class="btn-tool" data-tone="warn" disabled>토크 해제(SIGUSR2) 요청</button>
+            </div>
+            <div id="mh-clear-box" class="mh-step">
+              <button type="button" id="mh-clear-btn" class="btn-primary">팔 확인 완료 · 보류 해제</button>
+              <div id="mh-clear-confirm" class="reset-confirm-bar" hidden>
+                <span class="quiet">보류 표식(.bench-manual-check)을 지우고 멈춘 유닛을 복원할까요?</span>
+                <button type="button" id="mh-clear-yes" class="btn-primary btn-xs">복원 확인</button>
+                <button type="button" id="mh-clear-no" class="btn-tool btn-xs">취소</button>
+              </div>
+              <button type="button" id="mh-log-btn" class="btn-tool btn-xs">실시간 로그 보기</button>
+            </div>
+          </div>
+        </section>
+
         <section class="card cam-panel" id="sec-cameras" data-tabs="setup prepare recording" aria-labelledby="h-cams">
           <h2 id="h-cams" class="bench-sr-only">실시간 카메라</h2>
           <p id="cam-note" class="bench-sr-only">작업대 카메라(8767)를 확인하는 중입니다.</p>
@@ -114,10 +158,20 @@
           <div id="ev-manual" class="alert warn" role="alert" hidden></div>
           <div id="ev-seal" class="alert good" role="status" hidden></div>
           <pre id="ev-log-tail" class="mono quiet" style="white-space:pre-wrap;margin-top:8px;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;max-height:180px;overflow:auto" hidden></pre>
-          <div id="post-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px" hidden>
-            <button type="button" id="next-ep-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">다음 회차 준비 (수집명 +1)</button>
-            <button type="button" id="copy-transfer-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">모델 PC 반입 명령 복사</button>
-            <button type="button" id="ev-delete-empty-btn" class="btn-tool" data-tone="warn" style="min-height:40px;font-size:.9rem" hidden>빈 데이터셋 삭제 (0회)</button>
+          <div id="ev-episode-review" hidden></div>
+          <div id="post-actions" class="post-actions-grouped" hidden>
+            <div class="post-action-group" role="group" aria-label="다음 회차">
+              <span class="post-group-lbl">회차</span>
+              <button type="button" id="next-ep-btn" class="btn-tool">다음 회차 준비 (+1)</button>
+            </div>
+            <div class="post-action-group" role="group" aria-label="전달과 검수">
+              <span class="post-group-lbl">전달·검수</span>
+              <button type="button" id="copy-transfer-btn" class="btn-tool">모델 PC 반입 명령 복사</button>
+              <button type="button" id="ev-open-records-btn" class="btn-tool">기록·검수 서랍</button>
+            </div>
+            <div class="post-action-group" role="group" aria-label="정리">
+              <button type="button" id="ev-delete-empty-btn" class="btn-tool" data-tone="warn" hidden>빈 데이터셋 삭제 (0회)</button>
+            </div>
           </div>
         </section>
 
@@ -269,6 +323,7 @@
               <dt>회차/대기</dt><dd id="sb-param-timing">회차 길이 기본 · 사이 대기 기본</dd>
             </dl>
             <div id="sb-reset-bar" class="sb-reset-bar">
+              <span class="quiet" style="margin-right:auto;font-size:.75rem">기본값</span>
               <button type="button" id="sb-apply-rec-defaults-btn" class="btn-tool btn-xs" title="추천 속도 60°/s 및 기본 config/caps 적용">권장값(60°/s)</button>
               <button type="button" id="sb-factory-reset-btn" class="btn-tool btn-xs" data-tone="warn" title="속도·집게·임시 설정을 공장 초기값으로 되돌립니다">공장 초기화</button>
             </div>
@@ -671,6 +726,7 @@
 <script src="/bench_record_drawers.js"></script>
 <script src="/bench_record_pipeline.js"></script>
 <script src="/bench_record_log_reset.js"></script>
+<script src="/bench_record_review.js"></script>
 <script src="/bench_record_cam.js"></script>
 </body>
 </html>

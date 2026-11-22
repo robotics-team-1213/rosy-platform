@@ -1,4 +1,4 @@
-"""Tests for canonical cell_map provenance, live redacted logs, custom goals, defaults reset, and topbar dedupe."""
+"""Tests for canonical cell_map provenance, live redacted logs, custom goals, defaults reset, homing hold recovery, episode review/delete, and UI grouping."""
 import json
 from pathlib import Path
 import re
@@ -7,11 +7,17 @@ import urllib.request
 
 import pytest
 
-from test_omx_bench_record import ROOT, bench_record, finished, _setup
+from test_omx_bench_record import ROOT, SimpleNamespace, bench_record, finished, _arm_s_live_files, _home_with_stages, _setup
 
 
 def test_cell_map_endpoint_reads_canonical_yaml_and_site_map(tmp_path, monkeypatch):
     bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    (bench.prep / "tasks" / "teach.yaml").write_text(
+        "schema: rosy.omx-task-card.v1\ntask_id: teach-one\nrevision: 1\nsingle_task: Teach\n"
+        "record:\n  repo_id: local/teach\n  root_prefix: /tmp/omx\n  episode_time_s: 30\n  reset_time_s: 10\n  num_episodes: 5\n"
+        "known_limits:\n  - Keep wrist under 56 deg\n",
+        encoding="utf-8",
+    )
     (bench.prep / "cell-arm-a-stack.json").write_text(json.dumps({
         "cameras": {"top": {"height_m": 0.596, "warp_to_reference": {"measured": "2026-11-19T02:40:50"}}},
         "sites": {"belt": {"place": [0.1, 0.2]}, "ship-h1r0-l0": {"place": [0.2, 0.3]}},
@@ -24,6 +30,8 @@ def test_cell_map_endpoint_reads_canonical_yaml_and_site_map(tmp_path, monkeypat
     assert codes["ship-h1r0-l1"]["height_mm"] == 32.4
     assert codes["stand"]["site_id"] == "stand:r1-s1-t1"
     assert "stack" in cm["sim_tasks"] and cm["calibrated_sites"]["arm_a"]["top_height_m"] == 0.596
+    assert cm["task_provenance"]["tasks/teach.yaml"]["repo_id"] == "local/teach"
+    assert "Keep wrist under 56 deg" in cm["task_provenance"]["tasks/teach.yaml"]["known_limits"]
     assert any(s["path"] == "shared/web/cell-site-map.json" and s["exists"] for s in cm["sources"])
 
     srv = bench_record.make_server(bench, 0)
@@ -79,7 +87,7 @@ def test_custom_goal_synthesizes_effective_task_card_while_refusing_plain_swap_w
 
 
 def test_factory_defaults_snapshot_and_safe_reset(tmp_path, monkeypatch):
-    bench, body, _, _ = _setup(tmp_path, monkeypatch)
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
     teleop_dir = tmp_path / "home/.cache/huggingface/lerobot/calibration/teleoperators/omx_leader"
     mount_p = teleop_dir / "arm_a_leader.mount.json"
     mount_p.write_text(json.dumps({
@@ -88,15 +96,13 @@ def test_factory_defaults_snapshot_and_safe_reset(tmp_path, monkeypatch):
         "gripper": {"leader_closed": 1900, "leader_open": 2900, "follower_closed": 2000, "follower_open": 2800},
     }), encoding="utf-8")
 
-    # Edit grip map & speed & custom caps, plus leave a safety manual marker that MUST NOT be deleted
     bench.save_grip_map({"arm": "arm_a", "leader_closed": 1800, "leader_open": 2600, "follower_closed": 2100, "follower_open": 2500})
     bench.set_teleop_speed({"arm": "arm_a", "stage": 90})
-    assert "gripper_factory" not in json.loads(mount_p.read_text(encoding="utf-8"))  # never pollute .mount.json!
+    assert "gripper_factory" not in json.loads(mount_p.read_text(encoding="utf-8"))
 
     manual = bench.manual
     manual.write_text('{"reason": "keep-safety-marker"}', encoding="utf-8")
 
-    # Reset to factory preset -> speed cleared (25 deg/s), original grip restored while mount/follower_floor preserved, manual marker kept
     out = bench.reset_defaults({"preset": "factory", "scope": "all", "arm": "arm_a"})
     assert out["ok"] is True
     assert not (bench.prep / "teleop-speed-arm_a.json").exists()
@@ -107,25 +113,119 @@ def test_factory_defaults_snapshot_and_safe_reset(tmp_path, monkeypatch):
     assert manual.exists()
     manual.unlink()
 
-    # Busy refusal while recording
     bench.state = {"status": "recording", "arm": "arm_a"}
     with pytest.raises(ValueError, match="진행 중"):
         bench.reset_defaults({"preset": "recommended", "scope": "all", "arm": "arm_a"})
 
 
-def test_ui_workspace_no_duplicate_pills_live_log_and_reset_controls():
+def test_go_home_stops_worker_and_diagnoses_clear_manual_hold(tmp_path, monkeypatch):
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    orig_run = bench.run
+
+    def run_with_worker(*args):
+        res = orig_run(*args)
+        if args[0] == "list-units":
+            res.stdout = res.stdout + "\nrosy-omx-cell-task-worker.service loaded active running worker"
+        return res
+
+    bench.run = run_with_worker
+    _home_with_stages(bench, monkeypatch, tmp_path, [("home", None)])
+    bench.go_home({"arm": "arm_s", "at_bench": True})
+    assert ("stop", "rosy-omx-cell-task-worker.service") in calls
+    assert ("start", "rosy-omx-cell-task-worker.service") in calls
+
+    calls.clear()
+    _home_with_stages(bench, monkeypatch, tmp_path, [("home", None)])
+    io_s = bench.prep / "chunk-io-s"
+    io_s.mkdir(exist_ok=True)
+    (io_s / "hold.json").write_text(json.dumps({"pid": 999999, "hold": True, "error": "HOLD: human hold already latched"}), encoding="utf-8")
+    (bench.prep / ".bench-runs").mkdir(exist_ok=True)
+
+    def held_popen(command, cwd, **kw):
+        (bench.prep / ".bench-runs" / "home-arm_s.log").write_text(
+            'motor-health follower: skip\n{"command": "human-hold", "ok": true}\n{"step": "RUNNER_HELD", "report": {"pid": 999999, "error": "HOLD: human hold already latched"}}\n',
+            encoding="utf-8",
+        )
+        return SimpleNamespace(poll=lambda: 0, wait=lambda timeout=None: 75, returncode=75, send_signal=lambda s: None, kill=lambda: None)
+
+    bench.popen = held_popen
+    with pytest.raises(ValueError, match="사람이 팔 상태를 확인"):
+        bench.go_home({"arm": "arm_s", "at_bench": True})
+    st = bench.status()
+    mh = st["manual_hold"]
+    assert mh["active"] is True and mh["arm"] == "arm_s" and mh["runner_pid"] == 999999
+    assert mh["worker_human_hold"] is True and mh["log_tail"] == ['{"command": "human-hold", "ok": true}', '{"step": "RUNNER_HELD", "report": {"pid": 999999, "error": "HOLD: human hold already latched"}}']
+
+    with pytest.raises(ValueError, match="arm_supported_confirmed"):
+        bench.release_held_runner({"arm": "arm_s", "pid": 999999})
+    with pytest.raises(ValueError, match="confirmed=true"):
+        bench.clear_manual_hold({})
+    bench.procs = lambda: ["python record_session.py"]
+    with pytest.raises(ValueError, match="아직 실행 중"):
+        bench.clear_manual_hold({"confirmed": True})
+    bench.procs = lambda: []
+    cleared = bench.clear_manual_hold({"confirmed": True})
+    assert cleared["status"] == "idle" and cleared["manual_hold"] is None and not bench.manual.exists()
+
+
+def test_episode_review_do_not_train_and_delete(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    ds = tmp_path / "home" / "rosy-data" / "omx-leader" / "demo-ds-1"
+    (ds / "meta").mkdir(parents=True)
+    (ds / "data" / "chunk-000").mkdir(parents=True)
+    (ds / "videos" / "observation.images.top" / "chunk-000").mkdir(parents=True)
+    (ds / "videos" / "observation.images.top" / "chunk-000" / "file-000.mp4").write_bytes(b"MP4DATA")
+    (ds / "data" / "chunk-000" / "file-000.parquet").write_bytes(b"PAR1")
+    (ds / "meta" / "info.json").write_text(json.dumps({"total_episodes": 3, "total_frames": 300, "fps": 30}), encoding="utf-8")
+
+    info = bench.dataset_episodes("demo-ds-1")
+    assert info["total_episodes"] == 3 and info["cameras"] == ["top"]
+    assert bench.resolve_dataset_video("demo-ds-1", "top", 0, 0).read_bytes() == b"MP4DATA"
+
+    rated = bench.rate_episode({"dataset": "demo-ds-1", "episode": 1, "rating": "bad", "note": "dropped box"})
+    assert rated["episodes"][1]["rating"] == "bad" and rated["summary"]["bad"] == 1
+    assert bench.lerobot_datasets()[0]["review_summary"]["bad"] == 1
+
+    dnt = bench.set_dataset_do_not_train({"dataset": "demo-ds-1", "do_not_train": True, "reason": "bad_take"})
+    assert dnt["do_not_train"] is True and (ds / "DO_NOT_TRAIN.txt").is_file()
+    (ds / "DO_NOT_TRAIN.txt").write_text("guard abort\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="하드웨어 가드"):
+        bench.set_dataset_do_not_train({"dataset": "demo-ds-1", "do_not_train": False})
+
+    def fake_prune(ds_folder, indices, staging, repo_id):
+        (staging / "meta").mkdir(parents=True)
+        (staging / "data" / "chunk-000").mkdir(parents=True)
+        (staging / "data" / "chunk-000" / "file-000.parquet").write_bytes(b"PAR1")
+        (staging / "meta" / "info.json").write_text(json.dumps({"total_episodes": 2, "total_frames": 200, "fps": 30}), encoding="utf-8")
+
+    bench.rate_episode({"dataset": "demo-ds-1", "episode": 2, "rating": "good", "note": "clean"})
+    bench._prune_lerobot_episodes = fake_prune
+    pruned = bench.delete_dataset_episodes({"dataset": "demo-ds-1", "episodes": [1], "confirm": True})
+    assert pruned["remaining_episodes"] == 2
+    assert pruned["episodes_info"]["episodes"][1]["rating"] == "good"  # ep#2 shifted to ep#1
+    assert len(list((ds.parent / ".trash").glob("demo-ds-1-before-del-1ep*"))) == 1
+
+    all_del = bench.delete_dataset_episodes({"dataset": "demo-ds-1", "episodes": [0, 1], "confirm": True})
+    assert all_del["deleted_all"] is True and not ds.exists()
+
+
+def test_ui_workspace_no_duplicate_pills_live_log_reset_review_and_clusters():
     omx_dir = ROOT / "deploy/robot/omx"
     html = (omx_dir / "bench_record.html").read_text(encoding="utf-8")
     css = (omx_dir / "bench_record.css").read_text(encoding="utf-8")
     js = "\n".join((omx_dir / f).read_text(encoding="utf-8") for f in (
-        "bench_record_ui.js", "bench_record_map.js", "bench_record_log_reset.js", "bench_record_app.js",
+        "bench_record_ui.js", "bench_record_map.js", "bench_record_log_reset.js", "bench_record_review.js", "bench_record_app.js",
     ))
 
     assert 'id="rail-arm-pills"' not in html
     for marker in ('id="sec-live-log"', 'id="live-log-body"', 'id="goal-provenance"',
                    'id="goal-custom-panel"', 'id="sb-factory-reset-btn"', 'id="factory-reset-btn"',
-                   'id="hdr-reset-retry-btn"', '/bench_record_log_reset.js'):
+                   'id="hdr-reset-retry-btn"', '/bench_record_log_reset.js',
+                   'id="manual-hold-card"', 'id="ev-episode-review"', '/bench_record_review.js',
+                   'class="tool-cluster"', 'class="ops-cluster'):
         assert marker in html, marker
     assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
     assert '.identity{flex:1 1 auto;overflow:hidden}' in css
     assert 'loadCellMap' in js and '/api/defaults/reset' in js and 'getCustomTaskOverride' in js
+    assert '/api/dataset/episode/rate' in js and '/api/manual_hold/clear' in js

@@ -179,17 +179,9 @@ def _build_spot_catalog(site_doc: dict) -> list[dict]:
                 else:
                     lbl = f"{z.get('label', zid)} · {code}"
                 spots.append({
-                    "code": code,
-                    "label": lbl,
-                    "site_id": str(t.get("id") or ""),
-                    "zone": zid,
-                    "arms": arms,
-                    "hold": sl.get("hold"),
-                    "row": sl.get("row"),
-                    "slot": sl.get("slot"),
-                    "tier": tier_num,
-                    "height_mm": h_mm,
-                    "source": "shared/web/cell-site-map.json",
+                    "code": code, "label": lbl, "site_id": str(t.get("id") or ""), "zone": zid, "arms": arms,
+                    "hold": sl.get("hold"), "row": sl.get("row"), "slot": sl.get("slot"), "tier": tier_num,
+                    "height_mm": h_mm, "source": "shared/web/cell-site-map.json",
                 })
     return spots
 
@@ -230,10 +222,26 @@ def build_cell_map_payload(prep: Path, repo_root: Path | None = None) -> dict:
     sources.append({"kind": "cell_profile", "label": "Arm S 실측 셀 프로필", "path": "~/.config/rosy/omx-cell-s.json", "exists": cs_p.is_file(), "schema": cs_doc.get("schema") if isinstance(cs_doc, dict) else None, "revision": None, "status": "loaded" if cs_p.is_file() else "missing"})
     if isinstance(cs_doc, dict) and cs_doc:
         calibrated_sites["arm_s"] = {"file": "~/.config/rosy/omx-cell-s.json", "sites": sorted((cs_doc.get("sites") or {}).keys()) if isinstance(cs_doc.get("sites"), dict) else [], "tolerance": cs_doc.get("tolerance")}
+    task_prov = {}
+    if (prep / "tasks").is_dir():
+        from record_session_helpers import load_task_card
+        for tp in sorted((prep / "tasks").glob("*.yaml")):
+            try:
+                tdoc = load_task_card(tp)
+                rec_d = tdoc.get("record") or {}
+                task_prov[f"tasks/{tp.name}"] = {
+                    "source_file": f"tasks/{tp.name}", "repo_id": str(rec_d.get("repo_id") or ""),
+                    "root_prefix": str(rec_d.get("root_prefix") or ""),
+                    "known_limits": [str(x) for x in (tdoc.get("known_limits") or [])[:4]] if isinstance(tdoc.get("known_limits"), list) else [],
+                    "success_end_state": str((tdoc.get("success") or {}).get("end_state") or "") if isinstance(tdoc.get("success"), dict) else "",
+                }
+            except Exception:
+                continue
     return {
         "schema": sd.get("schema"), "revision": sd.get("revision"), "tier_height_mm": sd.get("tier_height_mm", 32.4),
         "zones": sd.get("zones", []), "not_places": sd.get("not_places", []), "aliases": sd.get("aliases", {}),
-        "spot_catalog": _build_spot_catalog(sd), "sim_tasks": sim_tasks, "calibrated_sites": calibrated_sites, "sources": sources,
+        "spot_catalog": _build_spot_catalog(sd), "sim_tasks": sim_tasks, "calibrated_sites": calibrated_sites,
+        "task_provenance": task_prov, "sources": sources,
     }
 
 

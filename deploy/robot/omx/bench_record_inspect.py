@@ -39,12 +39,7 @@ def _read_task_card(path):
     card = {"valid": True, "task_id": data["task_id"], "revision": data["revision"],
             "single_task": data["single_task"], "episode_time_s": rec["episode_time_s"],
             "reset_time_s": rec["reset_time_s"], "num_episodes": rec["num_episodes"],
-            "source_file": f"tasks/{path.name}", "repo_id": str(rec.get("repo_id") or ""),
-            "root_prefix": str(rec.get("root_prefix") or ""), "raw": path.read_text(encoding="utf-8-sig")}
-    if isinstance(data.get("known_limits"), list):
-        card["known_limits"] = [str(x) for x in data["known_limits"][:4]]
-    if isinstance(data.get("success"), dict) and isinstance(data["success"].get("end_state"), str):
-        card["success_end_state"] = data["success"]["end_state"]
+            "raw": path.read_text(encoding="utf-8-sig")}
     fallbacks = {"origin": shot.get("source"), "target_slot": shot.get("target"), "shot_arm": shot.get("arm")}
     for key in ("origin", "target_slot", "target_layer", "shot_arm", "home_pose"):
         val = layout.get(key) if layout.get(key) not in (None, "") else (data.get(key) if data.get(key) not in (None, "") else fallbacks.get(key))
@@ -80,19 +75,24 @@ class BenchInspectMixin:
         if not ds_root.is_dir():
             return []
         rows = []
-        for d in sorted((p for p in ds_root.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
+        dirs = [p for p in ds_root.iterdir() if p.is_dir() and not p.name.startswith(".")]
+        for d in sorted(dirs, key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
             parquets = len(list(d.glob("data/**/*.parquet")))
             videos = len(list(d.glob("videos/**/*.mp4")))
+            ep_cnt = parquets
+            info_p = d / "meta" / "info.json"
+            if parquets > 0 and info_p.is_file():
+                try:
+                    te = json.loads(info_p.read_text(encoding="utf-8")).get("total_episodes")
+                    if type(te) is int and te > 0:
+                        ep_cnt = te
+                except (OSError, ValueError):
+                    pass
             size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
             rc_p = self.prep / ".hf-receipts" / f"{d.name}.json"
-            item = {
-                "name": d.name,
-                "episodes": parquets,
-                "videos": videos,
-                "size_bytes": size_bytes,
-                "empty": parquets == 0,
-                "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file(),
-            }
+            rev = self.dataset_review_summary(d.name) if hasattr(self, "dataset_review_summary") else {}
+            item = {"name": d.name, "episodes": ep_cnt, "videos": videos, "size_bytes": size_bytes,
+                    "empty": ep_cnt == 0, "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file(), "review_summary": rev}
             if rc_p.is_file():
                 rc = json.loads(rc_p.read_text(encoding="utf-8"))
                 item.update(hf_uploaded=bool(rc.get("repo_id")), hf_repo_id=rc.get("repo_id", ""), hf_repo_url=rc.get("url", ""))
@@ -105,11 +105,18 @@ class BenchInspectMixin:
             return {}
         counts = {}
         for d in ds_root.iterdir():
-            if not d.is_dir() or (d / "DO_NOT_TRAIN.txt").is_file():
+            if not d.is_dir() or d.name.startswith(".") or (d / "DO_NOT_TRAIN.txt").is_file():
                 continue
             m = re.match(r"^(.+?)-r\d+-\d{8}-\d{6}$", d.name)
             tid = m.group(1) if m else d.name
             ep = len(list(d.glob("data/**/*.parquet")))
+            if ep > 0 and (d / "meta" / "info.json").is_file():
+                try:
+                    te = json.loads((d / "meta" / "info.json").read_text(encoding="utf-8")).get("total_episodes")
+                    if type(te) is int and te > 0:
+                        ep = te
+                except (OSError, ValueError):
+                    pass
             vid = len(list(d.glob("videos/**/*.mp4")))
             cur = counts.setdefault(tid, {"episodes": 0, "videos": 0, "datasets": 0})
             cur["episodes"] += ep
@@ -233,15 +240,12 @@ class BenchInspectMixin:
             if live_p.is_file() and (self.clock() - live_p.stat().st_mtime) <= 10.0:
                 cand = live_p
         if cand is None:
-            out = {"active": False, "status": state_snap.get("status")}
-            out.update(recording_progress(state_snap, self.clock))
+            out = {"active": False, "status": state_snap.get("status"), **recording_progress(state_snap, self.clock)}
             return out
         try:
             data = json.loads(cand.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            out = {"active": False, "status": state_snap.get("status")}
-            out.update(recording_progress(state_snap, self.clock))
-            return out
+            return {"active": False, "status": state_snap.get("status"), **recording_progress(state_snap, self.clock)}
         if isinstance(data, dict):
             data.setdefault("active", True)
             data.update(recording_progress(state_snap, self.clock))
@@ -304,14 +308,15 @@ class BenchInspectMixin:
         out.update(recording_progress(out, self.clock))
         out.update(starting_step(out, self.__dict__.setdefault("_step_memory", {})))
         out.update(self.issue_fields(out), **self.speed_fields(), **self.link_fields(out))
+        mh = self.manual_hold_info() if hasattr(self, "manual_hold_info") else None
+        out["manual_hold"] = mh if (mh and mh.get("active")) else None
         if out.get("folder") and out.get("status") in ("unsafe_or_failed", "failed", "seal_failed"):
             log_p = Path(out["folder"]) / "bench.log"
-            if log_p.is_file():
-                try:
-                    lines = log_p.read_text(encoding="utf-8", errors="replace").splitlines()
-                    out["log_tail"] = "\n".join(lines[-12:])
-                except OSError:
-                    pass
+            try:
+                if log_p.is_file():
+                    out["log_tail"] = "\n".join(log_p.read_text(encoding="utf-8", errors="replace").splitlines()[-12:])
+            except OSError:
+                pass
         return out
 
     def choices(self):
@@ -342,12 +347,10 @@ class BenchInspectMixin:
                 ds = cfg_j.get("dataset") if isinstance(cfg_j.get("dataset"), dict) else {}
                 cfg_arm = BI_ARM if r.get("type") == "bi_omx_follower" else inv_inst.get(r["id"], "arm_s" if "arm-s" in name else "")
                 cams, rebinds, cam_issues, _ = inspect_config_cameras(cfg_j, cfg_arm, reg, reg_err=reg_err)
-                config_meta[name] = {"fps": ds.get("fps"), "use_degrees": r.get("use_degrees"),
-                                     "max_relative_target": r.get("max_relative_target"), "cameras": cams,
-                                     "camera_rebinds": rebinds, "camera_issues": cam_issues,
-                                     "episode_time_s": ds.get("episode_time_s"),
-                                     "reset_time_s": ds.get("reset_time_s"),
-                                     "num_episodes": ds.get("num_episodes")}
+                config_meta[name] = {
+                    "fps": ds.get("fps"), "use_degrees": r.get("use_degrees"), "max_relative_target": r.get("max_relative_target"),
+                    "cameras": cams, "camera_rebinds": rebinds, "camera_issues": cam_issues,
+                    "episode_time_s": ds.get("episode_time_s"), "reset_time_s": ds.get("reset_time_s"), "num_episodes": ds.get("num_episodes")}
             except (OSError, ValueError, KeyError, TypeError):
                 pass
         caps = pick("caps*.json")
