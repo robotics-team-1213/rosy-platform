@@ -37,34 +37,19 @@ install(FILES
   form-controls.js
   collection-controls.js
   interaction-controls.js
-  skill-state.js
-  sample-data.js
-  localization-state.js
   workflow-controls.js
-  robot-row.js
   robot-3d.js
-  choice-logic.js
   robot-profile.js
   robot-dock.js
   robot-panel.js
   robot-3d-assets.js
   robot-3d-model.js
-  evidence-line.js
-  alert-center.js
-  account-gate.js
-  announcer.js
-  busy-scope.js
   cause-line.js
-  connection-notice.js
-  choice-group.js
-  choice-list.js
   selection.js
   status-tag.js
   value-text.js
-  robot-dock-gallery.js
   robot-dock-model.js
   component-controls.css
-  choice-controls.css
   robot-dock.css
   component-gallery.css
   component-gallery.html

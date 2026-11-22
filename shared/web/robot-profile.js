@@ -104,8 +104,3 @@ export function robotProfile(source, {staleAfterS = 5, lowBatteryPct = 20} = {})
     detail: typeof source.detail === "string" && source.detail.trim() ? source.detail.trim() : null,
   };
 }
-
-/** Group profiles for the roster: arms first, then mobile robots; each group keeps the given order. */
-export function groupRobots(profiles) {
-  return ["arm", "mobile"].map(kind => ({kind, label: ROBOT_KIND_LABEL[kind], rows: profiles.filter(profile => profile.kind === kind)}));
-}

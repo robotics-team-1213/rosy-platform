@@ -41,7 +41,7 @@ PRODUCT_ROOTS = (REPO / "applications" / "fleet" / "web", WEB)
 CONSUMERS = {".js", ".mjs", ".html", ".inc", ".py", ".ts"}
 #: 시험만 쓰는 export 중 시험 이음매(지우면 시험이 제품을 못 건드림). 이유 필수, 늘리지 않는다.
 TEST_SEAMS: dict[str, str] = {}
-UNUSED_CEILING = {"exports": 35, "test_only_exports": 5, "css_classes": 1, "html_ids": 0}
+UNUSED_CEILING = {"exports": 18, "test_only_exports": 5, "css_classes": 1, "html_ids": 0}
 _IDENT = re.compile(r"[A-Za-z_$][\w$]*")
 _HYPHEN_WORD = re.compile(r"[A-Za-z_][\w-]*")
 _EXPORT = re.compile(r"^export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)", re.M)
@@ -132,7 +132,7 @@ HELPERS = (
     {"name": "iconSvg", "module": "shared/web/ui.js", "aliases": ["iconNode"], "ceiling": 0},
 )
 DIRECT = (
-    {"what": "reason 속성 직접 쓰기", "pattern": r"""(?:set|remove)Attribute\(\s*["']reason["']""", "owners": ["shared/web/ui.js", "shared/web/cause-line.js"], "ceiling": 6},
+    {"what": "reason 속성 직접 쓰기", "pattern": r"""(?:set|remove)Attribute\(\s*["']reason["']""", "owners": ["shared/web/ui.js", "shared/web/cause-line.js"], "ceiling": 5},
     {"what": "운영자 역할 직접 비교", "pattern": r"""role\s*[!=]==?\s*["']operator["']""", "owners": ["applications/fleet/web/shared/authorization.js"], "ceiling": 0},
     {"what": "권한 문구 직접 쓰기", "pattern": "운영자 권한이 필요합니다", "owners": ["applications/fleet/web/shared/authorization.js"], "ceiling": 0},
     {"what": "'초 전' 손 포맷", "pattern": "초 전", "owners": ["shared/web/core_ui_logic.js", "shared/web/component-gallery.js"], "ceiling": 0},
