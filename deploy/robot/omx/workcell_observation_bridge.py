@@ -270,9 +270,9 @@ def main(argv=None):
     parser.add_argument(
         "--mirror-vision",
         action="append",
-        metavar="wss://URL,/absolute/ca.crt",
+        metavar="wss://URL,/absolute/ca.crt[,SOURCE_ID,...]",
         default=os.environ.get("ROSY_OBSERVATION_MIRROR_VISION", "").split(),
-        help="another site's Vision that also receives every camera (cameras only, own TLS trust)",
+        help="another site's Vision; optional registered camera source IDs, with its own TLS trust",
     )
     parser.add_argument(
         "--mirror-fleet",
@@ -304,12 +304,18 @@ def main(argv=None):
         secure_url(args.fleet_url, "https")
         secure_url(args.vision_url, "wss")
         context = ssl.create_default_context(cafile=args.ca_file)
+        camera_ids = {camera.source_id for camera in cell.cameras}
         mirrors = []
         for binding in args.mirror_vision:
-            url, separator, ca_file = binding.partition(",")
+            url, separator, settings = binding.partition(",")
+            ca_file, selected, source_list = settings.partition(",")
             if not separator or not Path(ca_file).is_absolute():
                 raise ValueError("mirror Vision must be wss://URL,/absolute/ca.crt")
-            mirrors.append((secure_url(url, "wss"), ssl.create_default_context(cafile=ca_file)))
+            sources = source_list.split(",") if selected else camera_ids
+            source_ids = set(sources)
+            if len(source_ids) != len(sources) or not source_ids <= camera_ids:
+                raise ValueError("mirror Vision sources must be unique registered cameras of this workcell")
+            mirrors.append((secure_url(url, "wss"), ssl.create_default_context(cafile=ca_file), source_ids))
         fleet_mirrors = []
         for binding in args.mirror_fleet:
             url, separator, ca_file = binding.partition(",")
@@ -355,7 +361,9 @@ def main(argv=None):
                 CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context),
             )
             # Own buffer and worker per mirror: a slow or absent site never delays the local Vision.
-            for index, (url, mirror_context) in enumerate(mirrors, 1):
+            for index, (url, mirror_context, source_ids) in enumerate(mirrors, 1):
+                if camera.source_id not in source_ids:
+                    continue
                 deliver(
                     camera,
                     NativeSource(camera.image_topic),
