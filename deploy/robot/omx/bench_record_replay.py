@@ -203,22 +203,43 @@ def _interp_waypoints(waypoints: list[list[float]], max_step: float = 0.15) -> l
     return out
 
 
-def _read_live_norm_pose(prep: Path, arm: str, python_exe: str | None) -> list[float] | None:
-    """Read follower current ticks via leader_home.py (torque OFF) and convert to LeRobot norm units."""
-    if not python_exe:
+def _read_live_norm_pose(prep: Path, arm: str, python_exe: str | None, hold=None) -> list[float] | None:
+    """Read follower current ticks via leader_home.py (torque OFF) and convert to LeRobot norm units.
+    hold() -> (lock handles, why not): the read writes torque OFF, so it runs only while this arm's session lock is held."""
+    if not python_exe or hold is None:
         return None
+    import bench_record_guard
+    manual = Path(prep) / ".bench-manual-check.json"
+    if bench_record_guard.arm_free(arm, manual):  # held lease, incident hold or person-check marker: no read that torque-OFFs the Follower
+        return None
+    handles, busy = hold()
+    if busy:
+        return None
+    try:
+        if bench_record_guard.arm_free(arm, manual):  # again with the lock held: a hold recorded by the session that just released it
+            return None
+        return _read_live_norm_pose_held(prep, arm, python_exe)
+    finally:
+        for handle in handles:
+            handle.close()
+
+
+def _read_live_norm_pose_held(prep: Path, arm: str, python_exe: str) -> list[float] | None:
     letter = arm.split("_")[-1] if "_" in arm else arm
     cfgs = sorted(prep.glob(f"record-config-arm-{letter}*.json"))
     lh = Path(__file__).resolve().parent / "leader_home.py"
     if not cfgs or not lh.is_file():
         return None
+    import subprocess
+    import bench_record_guard
     try:
-        import subprocess
         out = subprocess.run(
             [python_exe, str(lh), "--config", str(cfgs[0]), "--arm", arm, "--read-follower-pose"],
             capture_output=True, text=True, timeout=8,
         )
         if out.returncode != 0:
+            if bench_record_guard.follower_torque_on(out.stdout):  # it wrote nothing: a person supports the arm first, also after a restart
+                (prep / ".bench-manual-check.json").write_text(json.dumps({"reason": bench_record_guard.FOLLOWER_TORQUE_ON}), encoding="utf-8")
             return None
         ticks = json.loads(out.stdout.strip().splitlines()[-1]).get("state")
         if not isinstance(ticks, list) or len(ticks) != 6:
@@ -235,11 +256,14 @@ def _read_live_norm_pose(prep: Path, arm: str, python_exe: str | None) -> list[f
             v = ((float(ticks[i]) - lo) / span * 100.0) if i == 5 else ((float(ticks[i]) - lo) / span * 200.0 - 100.0)
             norm.append(round(max(-100.0, min(100.0, v)), 3))
         return norm
+    except subprocess.TimeoutExpired:  # killed with the Follower torque-OFF write possibly half done: a person checks, also after a restart
+        (prep / ".bench-manual-check.json").write_text(json.dumps({"reason": f"{arm} 팔로워 위치 읽기를 강제 종료했습니다 — 팔로워 토크 상태를 확인하세요"}), encoding="utf-8")
+        return None
     except Exception:
         return None
 
 
-def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: str = "pinky", python_exe: str | None = None) -> dict:
+def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: str = "pinky", python_exe: str | None = None, hold=None) -> dict:
     """Build a speed-bounded rosy.omx-replay-trajectory.v1 from calibrated IK surfaces/chunks."""
     if origin and target_slot and origin == target_slot:
         raise ValueError("IK 집을 곳(origin)과 놓을 곳(target_slot)은 같을 수 없습니다")
@@ -266,7 +290,7 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
 
     belt_p, pinky_p = _surface_poses("belt"), _surface_poses("pinky")
     if belt_p and pinky_p:
-        live_home = _read_live_norm_pose(prep, arm, python_exe)
+        live_home = _read_live_norm_pose(prep, arm, python_exe, hold)
         home = live_home or belt_p[0] or pinky_p[0] or [0.85, -62.3, 53.0, 51.5, 45.0, 48.9]
         pick_p = pinky_p if "pinky" in origin.lower() else belt_p
         place_p = belt_p if "pinky" in origin.lower() else pinky_p

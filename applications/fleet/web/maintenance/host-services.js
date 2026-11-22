@@ -1,15 +1,9 @@
+import {node, setStatus} from "/common/control-dom.js";
 // D-524 / D-530 / D-991 — PC 정비.
 // 가드가 이미 읽은 메모리 여유·부하를 보여주고, 닫힌 서비스 제어만 보낸다.
 // 프로세스 종료와 로봇 재부팅은 이 화면의 동작이 아니다.
 
 import {HOST_LABEL, stateLabel, resourceText, driftText, gib, hostHealth, updateLines} from "/console/assets/host-health.js";
-
-function node(tag, className, text) {
-  const el = document.createElement(tag);
-  if (className) el.className = className;
-  if (text !== undefined) el.textContent = text;
-  return el;
-}
 
 // D-871: every PC the guard reports (one control PC per OMX cell is allowed), the three known ones first.
 // A PC row carries `updates` (null when unreported); robot rows never do and are not PCs.
@@ -32,34 +26,34 @@ function reportRows(body) {
     row ||= {};
     const recovery = row.recovery;
     const {current, verified, label, healthy} = hostHealth(row);
-    const card = node("section", "install-step");
+    const card = node("section", "", "install-step");
     card.dataset.host = name;
     card.dataset.state = healthy ? "ok" : "unverified";
-    const head = node("div", "robot-head");
-    const tag = node("ui-tag", "", label);
+    const head = node("div", "", "robot-head");
+    const tag = node("ui-tag", label);
     tag.setAttribute("status", healthy ? "ok" : "warn");
-    head.append(node("h3", "", hostLabel(name)), tag);
+    head.append(node("h3", hostLabel(name)), tag);
     card.append(head);
     const received = Number.isFinite(row.time) ? new Date(row.time * 1000).toLocaleString() : "없음";
-    card.append(node("p", "hint", `마지막 호스트 점검 ${received}`));
+    card.append(node("p", `마지막 호스트 점검 ${received}`, "hint"));
     if (current && !["unreachable", "quiet", "error"].includes(row.state)) {
-      card.append(node("p", "hint", resourceText(row.resources)));
+      card.append(node("p", resourceText(row.resources), "hint"));
     }
     if (verified && !["unreachable", "quiet", "error"].includes(row.state)) {
       const watchdog = recovery.watchdog || {};
       const kernel = recovery.kernel || {};
-      card.append(node("p", "hint", `워치독 · ${stateLabel(watchdog.state)} · ${watchdog.timeout_s ?? "미확인"}초`));
-      card.append(node("p", "hint", `커널 복구 · ${stateLabel(kernel.state)} · 재부팅 ${kernel.panic_s ?? "미확인"}초`));
-      card.append(node("p", "hint", `SSH 복구 · ${stateLabel(recovery.ssh?.state)}`));
+      card.append(node("p", `워치독 · ${stateLabel(watchdog.state)} · ${watchdog.timeout_s ?? "미확인"}초`, "hint"));
+      card.append(node("p", `커널 복구 · ${stateLabel(kernel.state)} · 재부팅 ${kernel.panic_s ?? "미확인"}초`, "hint"));
+      card.append(node("p", `SSH 복구 · ${stateLabel(recovery.ssh?.state)}`, "hint"));
       const swap = recovery.swap || {};
-      card.append(node("p", "hint", `swap · ${stateLabel(swap.state)} · ${gib(swap.used_bytes)} / ${gib(swap.total_bytes)}`));
-      card.append(node("p", "hint", `복구 설정 점검 ${new Date(recovery.time * 1000).toLocaleString()}`));
+      card.append(node("p", `swap · ${stateLabel(swap.state)} · ${gib(swap.used_bytes)} / ${gib(swap.total_bytes)}`, "hint"));
+      card.append(node("p", `복구 설정 점검 ${new Date(recovery.time * 1000).toLocaleString()}`, "hint"));
     } else {
-      card.append(node("p", "hint", "최신 복구 설정을 확인할 수 없습니다."));
+      card.append(node("p", "최신 복구 설정을 확인할 수 없습니다.", "hint"));
     }
-    for (const line of updateLines(row.updates, {reasons: true})) card.append(node("p", "hint", line));
+    for (const line of updateLines(row.updates, {reasons: true})) card.append(node("p", line, "hint"));
     for (const event of body.history?.[name] || []) {
-      card.append(node("p", "hint", `${new Date(event.created_at * 1000).toLocaleString()} · ${event.actor} · ${event.text}`));
+      card.append(node("p", `${new Date(event.created_at * 1000).toLocaleString()} · ${event.actor} · ${event.text}`, "hint"));
     }
     return card;
   });
@@ -72,16 +66,10 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
   const note = root.querySelector("#host-services-note");
   let commandKey = "";
 
-  function say(text, state) {
-    note.textContent = text;
-    note.hidden = !text;
-    if (state) note.setAttribute("state", state);
-  }
-
   function paint(body) {
     const rows = reportRows(body);
-    report.replaceChildren(node("p", "hint", driftText(body.drift)),
-      node("p", "hint", `현장 관제 아래 PC ${rows.length}대`), ...rows);
+    report.replaceChildren(node("p", driftText(body.drift), "hint"),
+      node("p", `현장 관제 아래 PC ${rows.length}대`, "hint"), ...rows);
     const hosts = body.hosts || [];
     const key = JSON.stringify(hosts);
     if (key !== commandKey) {
@@ -97,20 +85,20 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
   function paintCommands(hosts) {
     commands.replaceChildren();
     for (const host of hosts) {
-      const block = node("section", "install-step");
-      block.append(node("h3", "", HOST_LABEL[host.host] || host.host));
+      const block = node("section", "", "install-step");
+      block.append(node("h3", HOST_LABEL[host.host] || host.host));
       const actions = node("ui-actions");
-      const reboot = node("ui-button", "", "10분 뒤 재부팅");
+      const reboot = node("ui-button", "10분 뒤 재부팅");
       reboot.setAttribute("kind", "quiet");
       reboot.type = "button";
       reboot.addEventListener("click", () => send(host.host, "reboot", null, `${HOST_LABEL[host.host] || host.host}를 10분 뒤에 재부팅합니다. 그 전에 취소할 수 있습니다.`));
-      const cancel = node("ui-button", "", "재부팅 취소");
+      const cancel = node("ui-button", "재부팅 취소");
       cancel.setAttribute("kind", "quiet");
       cancel.type = "button";
       cancel.addEventListener("click", () => send(host.host, "cancel-reboot", null, `${HOST_LABEL[host.host] || host.host}에 예약된 이 재부팅만 취소합니다.`));
       actions.append(reboot, cancel);
       if ((host.actions || []).includes("clean-storage")) {
-        const clean = node("ui-button", "", "시험 저장소 정리");
+        const clean = node("ui-button", "시험 저장소 정리");
         clean.setAttribute("kind", "quiet");
         clean.type = "button";
         clean.addEventListener("click", () => send(host.host, "clean-storage", null, `${HOST_LABEL[host.host] || host.host}의 시험 저장소 정리 서비스를 한 번 실행합니다. 모델·데이터·사용 중 환경은 지우지 않으며, 결과는 다음 점검(최대 10분)의 디스크 여유로 확인합니다.`));
@@ -119,7 +107,7 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
       block.append(actions);
       for (const unit of host.units || []) {
         const row = node("ui-actions");
-        const restart = node("ui-button", "", `${unit} 다시 시작`);
+        const restart = node("ui-button", `${unit} 다시 시작`);
         restart.setAttribute("kind", "quiet");
         restart.type = "button";
         restart.addEventListener("click", () => send(host.host, "restart-unit", unit, `${unit}을 다시 시작합니다.`));
@@ -133,25 +121,25 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
   async function send(host, action, unit, message) {
     const confirmed = await confirmIrreversible({message, action: "실행"});
     if (!confirmed) return "declined";
-    say("");
+    setStatus(note, "");
     try {
       const answer = await call("/api/fleet/hosts/" + encodeURIComponent(host) + "/control", {
         method: "POST",
         body: {action, unit, operator_confirmed: true},
       });
-      say(`${HOST_LABEL[host] || host} ${action} 접수 (${answer.code || "ACCEPTED"})`, "ok");
+      setStatus(note, `${HOST_LABEL[host] || host} ${action} 접수 (${answer.code || "ACCEPTED"})`, "ok");
     } catch (error) {
       const code = error.detail?.code || error.code || "";
       if (code === "HOST_JOBS_ACTIVE") {
         const answer = await send(host, "reboot-over-jobs", null, `${HOST_LABEL[host] || host}에서 학습이나 시험이 돌고 있습니다. 재부팅하면 그 작업이 끊깁니다. 그래도 10분 뒤에 재부팅합니까?`);
-        if (answer === "declined") say(`${HOST_LABEL[host] || host}에서 작업이 돌고 있어 재부팅하지 않았습니다.`, "error");
+        if (answer === "declined") setStatus(note, `${HOST_LABEL[host] || host}에서 작업이 돌고 있어 재부팅하지 않았습니다.`, "error");
         return;
       }
       if (code === "ARM_SESSION_ACTIVE") {
-        say(`${HOST_LABEL[host] || host}에서 팔 세션이 돌고 있어 ${unit ? `${unit}을 다시 시작` : "재부팅"}하지 않았습니다. 세션이 끝난 뒤 다시 요청하세요.`, "error");
+        setStatus(note, `${HOST_LABEL[host] || host}에서 팔 세션이 돌고 있어 ${unit ? `${unit}을 다시 시작` : "재부팅"}하지 않았습니다. 세션이 끝난 뒤 다시 요청하세요.`, "error");
         return;
       }
-      say(code === "OPERATOR_IDENTITY_REQUIRED"
+      setStatus(note, code === "OPERATOR_IDENTITY_REQUIRED"
         ? "이름 있는 운영자만 호스트를 제어할 수 있습니다."
         : `제어가 거절되었습니다. ${code}`.trim(), "error");
     }
@@ -160,18 +148,18 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
   // A viewer may not read /api/fleet/hosts; it still sees each PC's update state and release (D-871).
   function paintSummary(body) {
     const cards = (body.hosts || []).map((host) => {
-      const card = node("section", "install-step");
+      const card = node("section", "", "install-step");
       card.dataset.host = host.host;
       card.dataset.state = host.state;
-      const head = node("div", "robot-head");
-      const tag = node("ui-tag", "", host.state === "ok" ? "업데이트 정상" : host.state === "frozen" ? "업데이트 동결" : "확인 필요");
+      const head = node("div", "", "robot-head");
+      const tag = node("ui-tag", host.state === "ok" ? "업데이트 정상" : host.state === "frozen" ? "업데이트 동결" : "확인 필요");
       tag.setAttribute("status", host.state === "ok" ? "ok" : "warn");
-      head.append(node("h3", "", hostLabel(host.host)), tag);
+      head.append(node("h3", hostLabel(host.host)), tag);
       card.append(head);
-      for (const line of updateLines(host)) card.append(node("p", "hint", line));
+      for (const line of updateLines(host)) card.append(node("p", line, "hint"));
       return card;
     });
-    report.replaceChildren(node("p", "hint", `현장 관제 아래 PC ${cards.length}대 · 업데이트 요약`), ...cards);
+    report.replaceChildren(node("p", `현장 관제 아래 PC ${cards.length}대 · 업데이트 요약`, "hint"), ...cards);
     const allOk = cards.every((card) => card.dataset.state === "ok");
     status.textContent = allOk ? `업데이트 PC ${cards.length}대 정상` : "PC별 업데이트 상태를 확인하세요";
     status.setAttribute("status", allOk ? "ok" : "warn");
@@ -191,7 +179,7 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
       }
       status.textContent = "호스트 점검 결과를 읽지 못했습니다";
       status.setAttribute("status", "warn");
-      report.replaceChildren(node("p", "hint", "연결 실패 · 최신 PC 상태를 확인할 수 없습니다."));
+      report.replaceChildren(node("p", "연결 실패 · 최신 PC 상태를 확인할 수 없습니다.", "hint"));
       throw error;
     }
   }

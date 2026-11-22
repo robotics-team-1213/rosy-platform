@@ -2,6 +2,7 @@
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -64,8 +65,9 @@ class Policy:
 
 
 class Cell:
-    def __init__(self, replies=None):
+    def __init__(self, replies=None, expected_chunks=None):
         self.commands, self.replies = [], dict(replies or {})
+        self.expected_chunks = set(expected_chunks or {"home", "reach", "policy"})
         self.state = [0, -58, 51, 50, -5, 49]
 
     def frame(self, view):
@@ -75,7 +77,7 @@ class Cell:
         self.commands.append(command)
         if command.startswith("load "):
             lib = json.loads(Path(command[5:]).read_text())
-            assert set(lib["chunks"]) == {"home", "reach", "policy"}  # IK chunks stay beside the policy chunk
+            assert set(lib["chunks"]) == self.expected_chunks  # IK chunks stay beside the policy chunk
         reply = self.replies.get(command.split()[0] if command.startswith("load ") else command, {"ok": True})
         return {"state": self.state, **reply}
 
@@ -174,15 +176,15 @@ def test_sim_goal_cli_converts_and_logs_envelope_without_motion(tmp_path, monkey
 
     monkeypatch.setattr(drive, "demonstrated_range", wrong_units)
     with pytest.raises(SystemExit):
-        drive.main([*args, "--goal-site", "yard:r3-s1-t1"])
-    site_args = [*args, "--goal-site", "yard:r3-s2-t1"]
+        drive.main([*args, "--goal-site", "yard:r1-s1-t1"])
+    site_args = [*args, "--goal-site", "yard:r1-s2-t1"]
     assert drive.main(site_args) == int(outside)
     assert drive.main([*site_args, "--goal-slot", "9"]) == int(outside)
     assert cell.commands == ["state", "state"]
     np.testing.assert_array_equal(seen[0][drive.lrs.GOAL], [1] + [0] * 9)
     np.testing.assert_array_equal(seen[1][drive.lrs.GOAL], [0] * 9 + [1])
     start, row, _, override, *_ = map(json.loads, (tmp_path / "policy-drive.jsonl").read_text().splitlines())
-    assert start["goal_site"] == "yard:r3-s2-t1" and start["goal_destination"] == "ship-h1r0-l0"
+    assert start["goal_site"] == "yard:r1-s2-t1" and start["goal_destination"] == "ship-h1r0-l0"
     assert start["goal_site_slot"] == start["goal_slot"] == override["goal_site_slot"] == 0
     assert override["goal_slot"] == 9
     assert row["envelope"]["ok"] is not outside
@@ -202,7 +204,7 @@ class SimPolicy(Policy):
 def test_goal_sites_use_the_h1_training_order():
     for column in range(3):
         for tier in range(3):
-            assert drive.resolve_goal_site(f"yard:r{3 - column}-s2-t{tier + 1}") == (
+            assert drive.resolve_goal_site(f"yard:r{column + 1}-s2-t{tier + 1}") == (
                 f"ship-h1r{column}-l{tier}", 3 * column + tier,
             )
     for site in ("tray", "vehicle_tray", "not_places:vehicle_tray"):
@@ -304,3 +306,429 @@ def test_demonstrated_range_widens_only_where_a_person_went(tmp_path):
     result = drive.run_episode(Cell(), Policy([[[0, -58, 51, 50, 40, 49]]]), write_lib(tmp_path), tmp_path, offset=[0] * 6,
                                max_chunks=1, dry_run=True, log=rows.append, demonstrated=([0] * 4 + [-5, 46], [0] * 4 + [48, 60]))
     assert result["result"] == "dry_run" and "refused" not in rows[0]
+
+
+LIB_GRASP = {
+    **LIB,
+    "chunks": {
+        **LIB["chunks"],
+        "grasp_pick": [[38.8, -10.0, 2.0, 55.0, -14.0, 49.0]] * 2,
+    },
+}
+
+
+class FakeKin:
+    def fk(self, joints):
+        from types import SimpleNamespace
+        from grasp_planner import norm_to_rad
+
+        pan = joints[0]
+        yaw = pan - joints[4]
+        near_pick = abs(pan - norm_to_rad(38.8)) < 0.35
+        low_z = joints[1] > norm_to_rad(-30.0)
+        tilt = 0.8 if joints[3] > norm_to_rad(80.0) else 0.05
+        return SimpleNamespace(
+            x=0.18 if near_pick else 0.02,
+            y=0.14 if near_pick else 0.0,
+            z=0.04 if low_z else 0.16,
+            yaw=yaw,
+            tool_down_error_rad=tilt,
+        )
+
+
+def _grasp_policy(roll, *, lift=-10.0, wrist_flex=55.0, timed=True):
+    frame = [39.0, lift, 2.0, wrist_flex, roll, 49.0]
+    if not timed:
+        return Policy([[frame]])
+
+    class TimedPolicy(Policy):
+        n_action_steps = 4
+        chunk_size = 16
+
+    return TimedPolicy([[frame] * 16])
+
+
+def _grasp_cell(state, *, replies=None):
+    cell = Cell(replies=replies, expected_chunks={"home", "reach", "grasp_pick", "policy"})
+    cell.state = list(state)
+    return cell
+
+
+@pytest.mark.parametrize("roll, lift, refused", [
+    (43.93, -10.0, True),   # ~76 deg off inside grasp cylinder -> refused
+    (86.0, -10.0, False),   # 180-deg twin inside grasp cylinder -> admitted
+    (43.93, -55.0, False),  # high transit z -> admitted
+])
+def test_jaw_gate_refuses_quarter_turn_admits_twin_and_transit(tmp_path, roll, lift, refused):
+    cell, rows = _grasp_cell([38.9, lift, 2.0, 55.0, roll, 49.0]), []
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]}}
+    result = drive.run_episode(
+        cell, _grasp_policy(roll, lift=lift), write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, kin=FakeKin(),
+    )
+    if refused:
+        assert result["result"] == "refused" and "jaw_warning" in rows[0]
+        assert "load" not in " ".join(cell.commands) and "run policy" not in cell.commands
+    else:
+        assert result["result"] == "chunks_done" and "jaw_warning" not in rows[0] and "run policy" in cell.commands
+
+
+def test_jaw_gate_refuses_excessive_tilt_in_grasp_zone(tmp_path):
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 84.9, -14.0, 49.0]), []
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 90, 90, 60]]}}
+    result = drive.run_episode(
+        cell, _grasp_policy(-14.0, wrist_flex=85.0), write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, kin=FakeKin(),
+    )
+    assert result["result"] == "refused" and "jaw tilt" in rows[0]["jaw_warning"]
+    assert "run policy" not in cell.commands
+
+
+@pytest.mark.parametrize("demo_range, refused", [
+    (([0] * 4 + [2.59, 46.0], [0] * 4 + [48.68, 60.0]), True),   # pinky_v1 q01..q99 - 46.74 misses -14 & +86
+    (([0] * 4 + [80.0, 46.0], [0] * 4 + [92.0, 60.0]), False),  # 180-deg twin interval admits -14 (+100 = 86)
+])
+def test_startup_preflight_refuses_pinky_v1_trained_grasp_and_admits_twin(tmp_path, demo_range, refused):
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 55.0, 86.0, 49.0]), []
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]}}
+    result = drive.run_episode(
+        cell, _grasp_policy(86.0), write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, demonstrated=demo_range, kin=FakeKin(),
+    )
+    if refused:
+        assert result["result"] == "refused" and result["at"] == 0 and cell.commands == []
+        assert rows[0]["preflight"] == "jaw_roll"
+    else:
+        assert result["result"] == "chunks_done" and "run policy" in cell.commands
+
+
+def test_legacy_loop_enforces_jaw_gate(tmp_path):
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 55.0, 43.93, 49.0]), []
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]}}
+    result = drive.run_episode(
+        cell, _grasp_policy(43.93, timed=False), write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, kin=FakeKin(),
+    )
+    assert result["result"] == "refused" and cell.commands == ["state", "human-hold"]
+    assert "jaw yaw" in rows[0]["jaw_warning"]
+
+
+def test_dry_run_logs_jaw_warning_without_motion(tmp_path):
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 55.0, 43.93, 49.0]), []
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]}}
+    result = drive.run_episode(
+        cell, _grasp_policy(43.93), write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=True, log=rows.append, kin=FakeKin(),
+    )
+    assert result["result"] == "dry_run" and "jaw_warning" in rows[0] and cell.commands == ["state"]
+
+
+@pytest.mark.parametrize("square, refused", [(False, True), (True, False)])
+def test_square_object_metadata_admits_quarter_turn(tmp_path, square, refused):
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 55.0, 36.0, 49.0]), []
+    lib = {
+        **LIB_GRASP,
+        "source": {"pick": {"square": square}},
+        "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]},
+    }
+    result = drive.run_episode(
+        cell, _grasp_policy(36.0), write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, kin=FakeKin(),
+    )
+    if refused:
+        assert result["result"] == "refused" and "jaw yaw" in rows[0]["jaw_warning"]
+    else:
+        assert result["result"] == "chunks_done" and "run policy" in cell.commands
+
+
+@pytest.mark.parametrize("bad_square", ["false", "true", 1, 0])
+def test_malformed_square_metadata_refuses(tmp_path, bad_square):
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 55.0, 36.0, 49.0]), []
+    lib = {
+        **LIB_GRASP,
+        "source": {"pick": {"square": bad_square}},
+        "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]},
+    }
+    with pytest.raises(ValueError, match="square"):
+        drive.run_episode(
+            cell, _grasp_policy(36.0), write_lib(tmp_path, lib), tmp_path,
+            offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, kin=FakeKin(),
+        )
+    assert cell.commands == []
+
+
+def test_library_tcp_resolved_conflicts_refused_and_boundary_enforced(tmp_path, monkeypatch):
+    monkeypatch.delenv("ROSY_OMX_TCP_X_M", raising=False)
+    cand = [25.0, -16.0, 14.0, 58.0, 36.0, 49.0]
+    start = [24.9, -16.0, 14.0, 58.0, 36.0, 49.0]
+    base_lib = {
+        **LIB_GRASP,
+        "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 60, 90, 60]]},
+    }
+
+    class TimedPolicy(Policy):
+        n_action_steps = 4
+        chunk_size = 16
+
+    cell_stock, rows_stock = _grasp_cell(start), []
+    res_stock = drive.run_episode(
+        cell_stock, TimedPolicy([[cand] * 16]), write_lib(tmp_path, base_lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows_stock.append,
+    )
+    assert res_stock["result"] == "chunks_done" and "run policy" in cell_stock.commands
+
+    jaw_lib = {**base_lib, "tcp_x_m": 0.0741}
+    cell_jaw, rows_jaw = _grasp_cell(start), []
+    res_jaw = drive.run_episode(
+        cell_jaw, TimedPolicy([[cand] * 16]), write_lib(tmp_path, jaw_lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows_jaw.append,
+    )
+    assert res_jaw["result"] == "refused" and "jaw yaw" in rows_jaw[0]["jaw_warning"]
+    assert "load" not in " ".join(cell_jaw.commands) and "run policy" not in cell_jaw.commands
+
+    cell_conflict = _grasp_cell(start)
+    with pytest.raises(ValueError, match="conflicts"):
+        drive.run_episode(
+            cell_conflict, TimedPolicy([[cand] * 16]), write_lib(tmp_path, jaw_lib), tmp_path,
+            offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append, tcp_x_m=0.091,
+        )
+    assert cell_conflict.commands == []
+
+    for bad_tcp in ("bad", True, 0.01):
+        cell_bad = _grasp_cell(start)
+        with pytest.raises(ValueError):
+            drive.run_episode(
+                cell_bad, TimedPolicy([[cand] * 16]), write_lib(tmp_path, {**base_lib, "tcp_x_m": bad_tcp}), tmp_path,
+                offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append,
+            )
+        assert cell_bad.commands == []
+
+
+def test_timed_gate_refuses_unsafe_measured_state_even_when_target_outside(tmp_path, monkeypatch):
+    monkeypatch.delenv("ROSY_OMX_TCP_X_M", raising=False)
+    measured = [25.0, -16.0, 14.0, 58.0, 36.0, 49.0]
+    target = [24.72, -16.0, 14.0, 58.0, 36.0, 49.0]
+    base_lib = {
+        **LIB_GRASP,
+        "tcp_x_m": 0.0741,
+        "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 60, 90, 60]]},
+    }
+
+    class TimedPolicy(Policy):
+        n_action_steps = 4
+        chunk_size = 16
+
+    class MeasuredCell(Cell):
+        def act(self, cmd):
+            reply = super().act(cmd)
+            if cmd == "state":
+                return {**reply, "target": list(target)}
+            return reply
+
+    cell = MeasuredCell(expected_chunks={"home", "reach", "grasp_pick", "policy"})
+    cell.state = list(measured)
+    rows = []
+    result = drive.run_episode(
+        cell, TimedPolicy([[target] * 16]), write_lib(tmp_path, base_lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append,
+    )
+    assert result["result"] == "refused" and "jaw yaw" in rows[0]["jaw_warning"]
+    assert "human-hold" in cell.commands
+    assert "load" not in " ".join(cell.commands) and "run policy" not in cell.commands
+
+    for bad_lib in (
+        {**base_lib, "chunks": {**base_lib["chunks"], "grasp_pick": []}},
+        {**base_lib, "chunks": {**base_lib["chunks"], "grasp_pick": None}},
+        {**base_lib, "source": {"pick": {"yaw_deg": "bad"}}},
+    ):
+        cell_bad = _grasp_cell(measured)
+        with pytest.raises(ValueError):
+            drive.run_episode(
+                cell_bad, TimedPolicy([[target] * 16]), write_lib(tmp_path, bad_lib), tmp_path,
+                offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append,
+            )
+        assert cell_bad.commands == []
+    with pytest.raises(ValueError):
+        drive.jaw_gate_spec({**base_lib, "chunks": {**base_lib["chunks"], "grasp_pick": None}}, FakeKin())
+
+
+def test_legacy_out_of_envelope_from_unsafe_posture_holds_without_park(tmp_path):
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 55.0, 43.93, 49.0]), []
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]}}
+    policy = Policy([[[99.0, -10.0, 2.0, 55.0, 43.93, 49.0]]])
+    result = drive.run_episode(
+        cell, policy, write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, kin=FakeKin(),
+    )
+    assert result["result"] == "refused" and cell.commands == ["state", "human-hold"]
+    assert "park" not in cell.commands and "jaw yaw" in rows[0]["jaw_warning"]
+
+
+def test_jaw_gate_stays_active_after_prior_hold_in_zone_and_admits_lift_above_zone(tmp_path):
+    lib = {
+        **LIB_GRASP,
+        "gripper_closed": 49.0,
+        "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]},
+    }
+    lib_path = write_lib(tmp_path, lib)
+    c0 = [38.9, -10.0, 2.0, 55.0, -14.0, 49.0]
+    c1_open = [38.9, -10.0, 2.0, 55.0, 43.93, 49.15]
+    c1_closed = [38.9, -10.0, 2.0, 55.0, 43.93, 49.0]
+    c1_transit = [38.9, -55.0, 2.0, 55.0, 43.93, 49.0]
+
+    class TwoChunkCell(Cell):
+        def __init__(self, c1_holding: bool, c1_measured_grip: float, *, lift: float = -10.0):
+            super().__init__(expected_chunks={"home", "reach", "grasp_pick", "policy"})
+            self.state = list(c0)
+            self.target = list(c0)
+            self.c1_holding = c1_holding
+            self.c1_measured_grip = c1_measured_grip
+            self.lift = lift
+            self.runs = 0
+            self.live_holding = False
+
+        def act(self, cmd):
+            reply = super().act(cmd)
+            if cmd == "state":
+                return {**reply, "target": list(self.target), "holding": self.live_holding}
+            if cmd.endswith("run policy"):
+                self.runs += 1
+                self.live_holding = self.c1_holding
+                self.state = [38.9, self.lift, 2.0, 55.0, 43.93, self.c1_measured_grip]
+                self.target = [38.9, self.lift, 2.0, 55.0, 43.93, 49.0]
+                return {**reply, "holding": True}
+            return reply
+
+    class TwoChunkTimedPolicy(Policy):
+        n_action_steps = 4
+        chunk_size = 16
+
+        def __init__(self, second):
+            super().__init__([[c0] * 16])
+            self.second = second
+            self.calls = 0
+
+        def infer(self, obs):
+            self.calls += 1
+            return SimpleNamespace(chunk=[c0] * 16 if self.calls == 1 else [self.second] * 16)
+
+    pos_cell, pos_rows = TwoChunkCell(True, 53.0, lift=-55.0), []
+    pos_res = drive.run_episode(
+        pos_cell, TwoChunkTimedPolicy(c1_transit), lib_path, tmp_path,
+        offset=[0] * 6, max_chunks=2, dry_run=False, log=pos_rows.append, kin=FakeKin(),
+    )
+    assert pos_res["result"] == "chunks_done" and pos_cell.runs == 2
+
+    for c1_holding, meas_grip, c1_frame in (
+        (True, 53.0, c1_open),
+        (True, 53.0, c1_closed),
+        (True, 49.0, c1_closed),
+        (False, 53.0, c1_closed),
+    ):
+        cell, rows = TwoChunkCell(c1_holding, meas_grip), []
+        res = drive.run_episode(
+            cell, TwoChunkTimedPolicy(c1_frame), lib_path, tmp_path,
+            offset=[0] * 6, max_chunks=2, dry_run=False, log=rows.append, kin=FakeKin(),
+        )
+        assert res["result"] == "refused" and res["at"] == 1 and cell.runs == 1
+        assert cell.commands[-1] == "human-hold" and "jaw yaw" in rows[-2]["jaw_warning"]
+        assert sum(" load " in f" {cmd}" for cmd in cell.commands) == 1
+
+    class TwoChunkLegacyPolicy(Policy):
+        def __init__(self, second):
+            super().__init__([[c0]])
+            self.second = second
+            self.calls = 0
+
+        def infer(self, obs):
+            self.calls += 1
+            return SimpleNamespace(chunk=[c0] if self.calls == 1 else [self.second])
+
+    for c1_holding, meas_grip, c1_frame in (
+        (True, 53.0, c1_open),
+        (True, 53.0, c1_closed),
+        (True, 49.0, c1_closed),
+    ):
+        legacy_cell, legacy_rows = TwoChunkCell(c1_holding, meas_grip), []
+        legacy_res = drive.run_episode(
+            legacy_cell, TwoChunkLegacyPolicy(c1_frame), lib_path, tmp_path,
+            offset=[0] * 6, max_chunks=2, dry_run=False, log=legacy_rows.append, kin=FakeKin(),
+        )
+        assert legacy_res["result"] == "refused" and legacy_res["at"] == 1 and legacy_cell.runs == 1
+        assert legacy_cell.commands[-1] == "human-hold" and "jaw yaw" in legacy_rows[-2]["jaw_warning"]
+        assert sum(" load " in f" {cmd}" for cmd in legacy_cell.commands) == 1
+
+
+def test_null_jaw_empty_stop_falls_back_to_gripper_closed(tmp_path):
+    from cell_policy_handoff import CellHandoff
+    from cell_policy_shape import closed_gripper
+
+    lib = {
+        **LIB_GRASP,
+        "gripper_closed": 46.6,
+        "jaw_empty_stop": None,
+        "source": {"pick": {"x": 0.18, "y": 0.14, "z": 0.04, "yaw_deg": 95.0}},
+        "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 46], [40, -10, 51, 55, 90, 60]]},
+    }
+    assert closed_gripper(lib) == 46.6
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 55.0, 86.0, 49.0]), []
+    res = drive.run_episode(
+        cell, _grasp_policy(86.0), write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, kin=FakeKin(),
+    )
+    assert res["result"] == "chunks_done" and "run policy" in cell.commands
+    cfg = {"sites": {"belt": {"surface_z": 0.0}}}
+    handoff = CellHandoff(cfg, "belt", write_lib(tmp_path, lib), lib, 47.6, tmp_path)
+    assert handoff.spec["empty_stop"] == 46.6
+
+
+def test_configured_rim_z_raises_gate_ceiling(tmp_path):
+    from cell_policy_shape import source_rim_z
+
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]}}
+    lib_path = write_lib(tmp_path, lib)
+    assert source_rim_z({"sites": {"belt": {"surface_z": 0.0, "rim_z": 0.15}}}, "belt", lib) == 0.15
+    with pytest.raises(ValueError, match="rim_z"):
+        source_rim_z({"sites": {"belt": {"surface_z": 0.1, "rim_z": 0.05}}}, "belt", lib)
+
+    cell_low, rows_low = _grasp_cell([38.9, -55.0, 2.0, 55.0, 43.93, 49.0]), []
+    res_low = drive.run_episode(
+        cell_low, _grasp_policy(43.93, lift=-55.0), lib_path, tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows_low.append, kin=FakeKin(),
+    )
+    assert res_low["result"] == "chunks_done" and "run policy" in cell_low.commands
+
+    cell_rim, rows_rim = _grasp_cell([38.9, -55.0, 2.0, 55.0, 43.93, 49.0]), []
+    res_rim = drive.run_episode(
+        cell_rim, _grasp_policy(43.93, lift=-55.0), lib_path, tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows_rim.append, kin=FakeKin(), rim_z_m=0.15,
+    )
+    assert res_rim["result"] == "refused" and "jaw yaw" in rows_rim[0]["jaw_warning"]
+    assert "load" not in " ".join(cell_rim.commands) and "run policy" not in cell_rim.commands
+
+
+def test_legacy_single_chunk_lift_then_rotate_refused_without_measured_clearance(tmp_path):
+    cell, rows = _grasp_cell([38.9, -10.0, 2.0, 55.0, -14.0, 49.0]), []
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]}}
+    chunk = [[38.9, -55.0, 2.0, 55.0, -14.0, 49.0], [38.9, -55.0, 2.0, 55.0, 43.93, 49.0]]
+    res = drive.run_episode(
+        cell, Policy([chunk]), write_lib(tmp_path, lib), tmp_path,
+        offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, kin=FakeKin(),
+    )
+    assert res["result"] == "refused" and cell.commands == ["state", "human-hold"]
+    assert "jaw yaw" in rows[0]["jaw_warning"]
+
+
+def test_legacy_jaw_refusal_sends_human_hold_before_log_failure(tmp_path):
+    cell = _grasp_cell([38.9, -10.0, 2.0, 55.0, 43.93, 49.0])
+    lib = {**LIB_GRASP, "chunks": {**LIB_GRASP["chunks"], "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]}}
+
+    def fail_log(_row):
+        raise OSError("disk full")
+
+    with pytest.raises(OSError, match="disk full"):
+        drive.run_episode(
+            cell, _grasp_policy(43.93, timed=False), write_lib(tmp_path, lib), tmp_path,
+            offset=[0] * 6, max_chunks=1, dry_run=False, log=fail_log, kin=FakeKin(),
+        )
+    assert cell.commands == ["state", "human-hold"]

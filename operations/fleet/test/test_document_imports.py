@@ -19,6 +19,7 @@ _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 _ASSET = "/console/assets/"
 
 SHARED = {
+    "activity-log.js",  # Timestamped event log helper shared by Console and Installation.
     "robot-profile-view.js",  # Read-only profiles shared by Console, Cell and Installation.
     "app-runtime.js",
     "address-drift.js",

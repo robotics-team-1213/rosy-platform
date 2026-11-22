@@ -10,7 +10,7 @@ from urllib.parse import urljoin, urlsplit
 from .static import ASSETS, PAGES
 
 COMMON = ('tokens.css', 'app-shell.css', 'components.css', 'component-controls.css', 'theme.js', 'ui.js', 'ui-wiring.js',
-          'confirmation.js', 'live-dialog-geometry.js', 'fleet-client.js', 'request.js',
+          'confirmation.js', 'live-dialog-geometry.js', 'cause-line.js', 'fleet-client.js', 'request.js',
           'account-profile.js', 'icons/console.svg', 'brand/mark.svg')
 
 

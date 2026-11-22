@@ -155,6 +155,15 @@ def test_collaboration_center_writes_still_require_live_manage_permission(tmp_pa
         assert request(base, PREFIX + '/stop', {'id': 'run'}, token=learning['token'], session='reviewer')[0] == 403
         assert request(base, PREFIX, session='reviewer')[0] == 401
         assert center.calls == [('start', body)]
+
+
+def test_collaboration_blocks_cuda_run_arbitrary_server_paths(tmp_path):
+    accounts = Accounts()
+    with running(tmp_path, accounts=accounts) as (base, center):
+        _, learning = request(base, '/api/learning', session='reviewer')
+        code, body = request(base, PREFIX + '/cuda-run', {'dataset_root': '/tmp/x'},
+                             token=learning['token'], session='reviewer')
+        assert code == 403 and not center.calls
 def test_service_initialization_exits_without_binding_a_server(tmp_path, monkeypatch):
     import sys
     import review_app

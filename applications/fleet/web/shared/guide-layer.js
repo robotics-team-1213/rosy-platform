@@ -4,7 +4,7 @@
 const SEVERITY_TOKEN = { crit: "--status-crit", warn: "--status-warn", info: "--ink-quiet" };
 
 /** Findings a robot has, worst first (crit, warn, info). */
-export function guideFindings(guide, robotId) {
+function guideFindings(guide, robotId) {
   const row = (guide?.robots || []).find((r) => r.robot_id === robotId);
   const order = { crit: 0, warn: 1, info: 2 };
   return [...(row?.findings || [])].sort((a, b) => order[a.severity] - order[b.severity]);

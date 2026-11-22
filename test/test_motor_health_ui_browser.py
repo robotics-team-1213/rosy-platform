@@ -2,8 +2,9 @@
 from pathlib import Path
 
 import pytest
+from fleet_cockpit_browser import select_robot  # noqa: E402
 from browser_harness import browser_tests_enabled, save_temp_screenshot
-from test_fleet_console_browser import ROOT, console_url, _open_console, _open_cards, _robot, MAP_GRID  # noqa: F401
+from test_fleet_console_browser import ROOT, console_url, _open_console, _robot, MAP_GRID  # noqa: F401
 from test_fleet_workcell_observation_browser import cell_url  # noqa: F401
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='set ROSY_RUN_BROWSER_TESTS=1')
@@ -52,7 +53,7 @@ def test_fleet_summary_and_selected_robot_share_motor_detail(console_url, width)
         local_label(page)
         page.locator('#local-evidence').evaluate("label => label.id = 'local-summary-evidence'")
         save_temp_screenshot(page,f'motor_health_fleet_LOCAL_summary_{width}.png',full_page=True)
-        page.locator('[data-select-robot-id="omx_local"]').click()
+        select_robot(page, 'omx_local')
         panel=page.locator('#robot-workspace .motor-health')
         panel.wait_for()
         assert panel.locator('tbody tr').count()==10
@@ -268,7 +269,7 @@ def test_kept_fleet_card_reads_current_fault_and_offline_row(console_url,focus):
     with sync_playwright() as playwright:
         browser,page,errors = _open_console(playwright,api)
         page.goto(console_url,wait_until='networkidle')
-        page.locator('[data-select-robot-id="omx_local"]').click()
+        select_robot(page, 'omx_local')
         panel = page.locator('#robot-workspace .motor-health')
         panel.wait_for()
         if focus == 'select':
@@ -396,7 +397,7 @@ def test_power_health_card_keeps_stale_evidence_unknown_and_safety_latched(conso
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        _open_cards(page)
+        select_robot(page)
         card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
         summary = page.locator('#roster article[data-robot-id="rosy_01"]')
         heat = summary.get_by_text(label, exact=True)

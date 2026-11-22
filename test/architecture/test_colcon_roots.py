@@ -126,8 +126,13 @@ def test_reader_cli_prints_the_roots_space_separated():
 
 
 def _invocation_lines() -> dict[str, list[tuple[int, str]]]:
-    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True,
-                             check=True).stdout.decode("utf-8").split("\0")
+    completed = subprocess.run(
+        ["git", "grep", "--no-textconv", "-a", "-l", "-z", "-F", "-e", "colcon", "-e", "rosdep"],
+        cwd=ROOT, capture_output=True,
+    )
+    if completed.returncode not in (0, 1):
+        raise subprocess.CalledProcessError(completed.returncode, completed.args, completed.stdout, completed.stderr)
+    tracked = completed.stdout.decode("utf-8").split("\0")
     hits: dict[str, list[tuple[int, str]]] = {}
     for name in filter(None, tracked):
         path = ROOT / name

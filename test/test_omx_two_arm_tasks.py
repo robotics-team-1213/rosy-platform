@@ -264,12 +264,19 @@ def test_the_r08_ship_sites_come_from_its_berth_slot_map(layout):
                 assert s["z"] - layout.box[2] / 2 - layout.table_z == pytest.approx(bottom)
 
 
-def test_the_far_hold_is_out_of_reach_where_the_ship_lies(layout):
-    """Hold 2 lies behind both arms with the stern at the table edge: refused, so the tasks use hold 1 only."""
-    for row in range(3):
-        for arm in sites.ARMS:
-            task = dict(supply=["bar-1"], start={}, name="t", steps=[dict(id="x", container="bar-1", **{"from": "belt"}, to=f"ship-h2r{row}-l0", arm=arm)])
-            assert "cannot reach" in refused(layout, task)
+def test_the_far_hold_h2_is_reachable_by_both_arms(layout):
+    """Hold 2 (Harbor s1, cols 1~3) is reachable for both arms from belt via the 180-deg symmetric carry turn even with hold 1 full."""
+    full_h1 = {f"h1-{r}-{l}": f"ship-h1r{r}-l{l}" for r in range(3) for l in range(3)}
+    for l in range(3):
+        for row in range(3):
+            here = dict(full_h1)
+            for low in range(l):
+                here[f"h2-low-{low}"] = f"ship-h2r{row}-l{low}"
+            for arm in sites.ARMS:
+                task = dict(supply=["bar-1"], start=here, name="t", steps=[dict(id="x", container="bar-1", **{"from": "belt"}, to=f"ship-h2r{row}-l{l}", arm=arm)])
+                records = tasks.validate(layout, task)
+                assert len(records) == 1 and records[0]["joints_ok"], (row, l, arm)
+    assert len(tasks.validate(layout, tasks.get_task(layout, "stack-h2"))) == 9
 
 
 def test_an_arm_waits_out_of_the_middle_band(layout):
@@ -416,3 +423,95 @@ def test_carry_height_clears_containers_standing_on_temp_plates():
     here = {c: s for c, s in task["start"].items() if c != step["container"]}
     top = max(lay.sites[s]["z"] for s in here.values() if lay.sites[s]["kind"] == "temp")
     assert tasks.carry_z(lay, here, step["from"], step["to"]) >= top + lay.box[2] + tasks.CARRY_CLEAR + lay.hold_below
+
+
+def test_belt_pick_approach_height_is_independent_of_target_tier(data):
+    """Belt pick approach stays at belt pick clearance regardless of the target ship tier; non-belt and wait_pose='home' keep carry_z."""
+    lay = sites.Layout(preset="v24-20261114")
+    here, by_arm = {}, {"arm_a": [], "arm_b": []}
+    expected_z = lay.hold_z("belt") + lay.box[2] + tasks.CARRY_CLEAR
+    for step in tasks.get_task(lay, "stack", data)["steps"]:
+        wps = tasks.waypoints(lay, step, here)
+        assert wps[0][0] == "approach" and wps[0][2] == pytest.approx(expected_z)
+        assert wps[3][0] == "lift" and wps[3][2] == pytest.approx(tasks.carry_z(lay, here, step["from"], step["to"]))
+        assert wps[3][2] > expected_z
+        arm = lay.sim_arms[step["arm"]]
+        ok, q_app, _, note = tasks.solve_chain(arm, wps, arm.home, roll_floor=lay.roll_floor)
+        assert ok, note
+        by_arm[step["arm"]].append(tuple(np.round(q_app[:5], 4)))
+        here[step["container"]] = step["to"]
+    assert len(by_arm["arm_a"]) == 3 and len(set(by_arm["arm_a"])) == 1
+    assert len(by_arm["arm_b"]) == 6 and len(set(by_arm["arm_b"])) == 1
+
+    home_lay = sites.Layout(preset="v24-20261114", wait_pose="home")
+    home_here = {"bar-8": "ship-h1r0-l2"}
+    home_step = {"id": "s9", "container": "bar-9", "to": "ship-h1r2-l2", "arm": "arm_a", **{"from": "belt"}}
+    home_wps = tasks.waypoints(home_lay, home_step, home_here)
+    assert home_wps[0][2] == pytest.approx(tasks.carry_z(home_lay, home_here, home_step["from"], home_step["to"]))
+
+    rehandle = tasks.get_task(lay, "rehandle", data)
+    r_here, found_non_belt = dict(rehandle["start"]), False
+    for step in rehandle["steps"]:
+        step_here = {c: s for c, s in r_here.items() if c != step["container"]}
+        if step["from"] == "ship-h1r2-l0":
+            wps = tasks.waypoints(lay, step, step_here)
+            assert wps[0][2] == pytest.approx(tasks.carry_z(lay, step_here, step["from"], step["to"]))
+            found_non_belt = True
+            break
+        r_here[step["container"]] = step["to"]
+    assert found_non_belt
+
+
+def test_waiting_arms_hold_wait_pose_without_link1_link3_self_contact():
+    """Folded wait pose must hold without link1-link3 self-contact stalling park settle."""
+    pytest.importorskip("mujoco")
+    import omx_two_arm_world as tw
+
+    w = tw.World(sites.Layout(preset="v24-20261114"))
+    t = teacher.Teacher(w, seed=0)
+    data = t.fresh({})
+    waits = {arm: w.layout.sim_arms[arm].wait.copy() for arm in sites.ARMS}
+    for _ in range(30):
+        t.frame(data, waits, "park")
+    body_pairs = {
+        tuple(sorted((w.body_name[w.model.geom_bodyid[c.geom1]], w.body_name[w.model.geom_bodyid[c.geom2]])))
+        for c in data.contact[:data.ncon]
+    }
+    for p in tw.PREFIX.values():
+        assert tuple(sorted((p + "link1", p + "link3"))) not in body_pairs
+    for arm, wait in waits.items():
+        assert np.max(np.abs(wait[:5] - data.qpos[w.q[arm][:5]])) < 0.001
+        assert np.max(np.abs(t.servo_comp.trim[arm])) < 0.005
+        n_settle = 0
+        for cmd in t.settle_g(data, arm, wait, wait[5]):
+            t.frame(data, {**waits, arm: cmd}, "park")
+            n_settle += 1
+        assert n_settle == 0
+
+
+def test_outbound_stand_on_conveyor_right_is_arm_a_reachable_only(layout):
+    stand = layout.sites["stand"]
+    arm_a, arm_b = layout.arms["arm_a"], layout.arms["arm_b"]
+    assert stand["kind"] == "stand" and stand["arm"] == "arm_a"
+    target = np.array([*stand["xy"], stand["z"] + layout.hold_below])
+    ok_a, _, err_a = arm_a.reach(arm_a.wait, target, stand["yaw"])
+    ok_b, _, _ = arm_b.reach(arm_b.wait, target, stand["yaw"])
+    assert ok_a and err_a < 1e-3 and not ok_b
+    for src in ("ship-h1r0-l0", "ship-h2r0-l0", "ship-h2r1-l0", "ship-h2r2-l0", "belt"):
+        wps = tasks.waypoints(layout, {"from": src, "to": "stand", "arm": "arm_a"}, {"bar-1": src})
+        ok, _, path, note = tasks.solve_chain(arm_a, wps, arm_a.home, roll_floor=layout.roll_floor)
+        assert ok and path, f"{src} -> stand failed: {note}"
+    full_ship = {f"s-{h}-{r}-{l}": f"ship-h{h}r{r}-l{l}" for h in (1, 2) for r in range(3) for l in range(3)}
+    for lane in range(1, 4):
+        for suffix in ("", "-l1", "-l2"):
+            src = f"tmp-a-{lane}{suffix}"
+            here = {**full_ship, "bar-1": src}
+            wps = tasks.waypoints(layout, {"from": src, "to": "stand", "arm": "arm_a"}, here)
+            assert len(wps) == 9, src
+            ok, _, path, note = tasks.solve_chain(arm_a, wps, arm_a.home, roll_floor=layout.roll_floor)
+            assert ok and path, f"{src} -> stand failed: {note}"
+            min_r = min(float(np.linalg.norm(arm_a.frames(q)[1][:2] - arm_a.base[:2])) for q in path[36:61])
+            assert min_r >= tasks.BASE_SINGULARITY_R, (src, min_r)
+            assert tasks.link_clearance(layout, arm_a, path, full_ship) >= tasks.LINK_MARGIN
+    minus_r2 = {k: v for k, v in full_ship.items() if not v.startswith("ship-h2r2-")}
+    assert tasks.check_reach(layout, {"id": "h2r2-stand", "container": "b", "from": "ship-h2r2-l0", "to": "stand", "arm": "arm_a"}, minus_r2, arm_a)[0] == []

@@ -539,6 +539,7 @@ def test_body_only_never_commands_or_enables_passive_gripper(guard):
 # Re-export the existing cases so this focused pytest target still runs all guard checks.
 from omx_guarded_native_phase_cases import *
 from omx_guarded_native_late_cases import *
+from omx_guarded_native_watch_cases import *
 
 
 def test_teacher_standstill_sub_tick_hysteresis_suppresses_single_tick_dither(guard, monkeypatch):

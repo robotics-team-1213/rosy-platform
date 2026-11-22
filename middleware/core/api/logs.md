@@ -1399,3 +1399,8 @@
 - 변경: 계약 핀 v1.402 (Fleet `/api/fleet/robots/{id}/step`과 CORE 미션 종류 `nudge_backward`, nudge 의 LOCALIZED 완화).
 - 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고.
 - gate 변화: 없음.
+
+## 2026-11-21 · uncommitted · fix(core-api): 센서 신선도 판정에 단조 시계 사용
+- 변경: 기존 센서 상세 응답의 sample_age_s를 단조 시계로 계산한다. 토픽 표본이 있는 센서 목록과 시간 필드의 형식을 보존한다.
+- 증거: 센서 목록·상세·시간 역행 회귀 시험을 CORE API로 확인한다.
+- gate 변화: SOURCE 수정.

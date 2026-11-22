@@ -90,6 +90,9 @@ operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_routes.py
 operations/fleet/fleet/server/tracking/tracking_anchors.py
+shared/web/patterns.yaml
 operations/overhead/rosy_vision/track/anchor_feed.py
+shared/web/shared-assets.json
+shared/web/meshes/pinky-pro.urdf
 # (b) provenance only: SOURCE.json names the upstream repo pinklab-art/pinky_pro (3D asset boundary, 2026-11-19); the upstream name is the record, not a robot configuration value.
 middleware/devices/pinky/description/SOURCE.json

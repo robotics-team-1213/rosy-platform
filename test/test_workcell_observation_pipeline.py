@@ -29,6 +29,7 @@ for relative in ("operations/overhead", "middleware/core/services", "operations/
     if path not in sys.path:
         sys.path.insert(0, path)
 from rosy_vision.ingest import IngestServer
+from rosy_vision.stream_demand import STREAM_HOLD_S, StreamDemand
 
 
 def _load(name, relative):
@@ -174,3 +175,159 @@ async def _pipeline(tmp_path):
             await ws_server.wait_closed()
             await asyncio.to_thread(fleet.stop)
         assert worker is None or not worker.is_alive(), "camera worker did not stop"
+
+
+def test_mirror_idles_until_authorized_read_and_resumes_after_reconnect(tmp_path):
+    asyncio.run(_mirror_demand(tmp_path))
+
+
+async def _mirror_demand(tmp_path):
+    from PIL import Image
+
+    pki = tls._write_pki(tmp_path)
+    context = ssl.create_default_context(cafile=pki["ca"])
+    server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_tls.load_cert_chain(pki["chain"], pki["key"])
+    signer = VisionLeaseSigner("x" * 48)
+    ingest = IngestServer({"top": "top-secret"}, preview_signer=signer)
+    clock = [0.0]
+    ingest._demand = StreamDemand(clock=lambda: clock[0])
+    server = await ingest.start("127.0.0.1", 0, ssl_context=server_tls)
+    port = server.sockets[0].getsockname()[1]
+    sender = bridge.CameraSender(
+        f"wss://127.0.0.1:{port}", "top", "top-secret", context=context, follow_receiver=True,
+    )
+    encoded = BytesIO()
+    Image.new("RGB", (640, 480), "green").save(encoded, format="JPEG")
+    jpeg = encoded.getvalue()
+    source = bridge.LatestSource()
+    stop = threading.Event()
+    worker = threading.Thread(target=bridge.SourceWorker(source, sender.send).run, args=(stop,), daemon=True)
+
+    async def produce():
+        while not stop.is_set():
+            source.put(time.time(), (jpeg, 640, 480))
+            await asyncio.sleep(0.04)
+
+    token = signer.issue(principal_id="test-viewer", source_id="top")
+
+    def read(bearer):
+        request = Request(f"https://127.0.0.1:{port}/api/vision/sources/top/frame",
+                          headers={"Authorization": f"Bearer {bearer}"})
+        try:
+            with urlopen(request, context=context, timeout=2) as reply:
+                return reply.status, reply.read()
+        except HTTPError as error:
+            return error.code, b""
+
+    def current():
+        return ingest._sources.get("top")
+
+    def last_sequence():
+        frame = ingest.latest_frame("top")
+        return frame.header.seq if frame is not None else 0
+
+    async def assert_quiet():
+        await tls._wait_for(lambda: current() is not None and current().demand_sent is False,
+                            8, "idle demand after bounded TLS retries")
+        await asyncio.sleep(0.15)
+        matched = source.latest().sequence
+        previous = last_sequence()
+        await tls._wait_for(lambda: source.latest().sequence >= matched + 12, 2, "advancing producer")
+        assert last_sequence() == previous
+
+    async def wake():
+        previous = last_sequence()
+        status, _ = await asyncio.to_thread(read, token)
+        assert status in (200, 404)
+        await tls._wait_for(lambda: last_sequence() > previous, 3, "authorized demand wakes mirror")
+        await asyncio.sleep(0.22)  # authorized preview rate limit is 200 ms
+        assert await asyncio.to_thread(read, token) == (200, jpeg)
+
+    worker.start()
+    producer = asyncio.create_task(produce())
+    try:
+        assert await asyncio.to_thread(read, "invalid") == (401, b"")
+        await assert_quiet()
+        await wake()
+        clock[0] += STREAM_HOLD_S
+        await assert_quiet()
+        before = current()
+        await before.connection.close()
+        await tls._wait_for(lambda: current() is not None and current() is not before,
+                            8, "mirror reconnected after bounded TLS retries")
+        await assert_quiet()
+        await wake()
+    finally:
+        stop.set()
+        producer.cancel()
+        await asyncio.gather(producer, return_exceptions=True)
+        await asyncio.to_thread(worker.join, 3)
+        await asyncio.to_thread(sender.close)
+        server.close()
+        await server.wait_closed()
+        assert not worker.is_alive()
+
+
+def test_six_arm_cell_cameras_reach_primary_and_r_with_source_scoped_leases(tmp_path):
+    asyncio.run(_six_cameras(tmp_path))
+
+
+async def _six_cameras(tmp_path):
+    from PIL import Image
+
+    source_ids = (
+        "omx_overhead", "omx_side", "omx_wrist_a", "omx_wrist_b",
+        "omx_arm_s_top", "omx_arm_s_wrist",
+    )
+    tokens = {source: f"camera-{source}" for source in source_ids}
+    pki = tls._write_pki(tmp_path)
+    context = ssl.create_default_context(cafile=pki["ca"])
+    server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_tls.load_cert_chain(pki["chain"], pki["key"])
+    servers, senders = [], []
+
+    def preview(port, source, token):
+        request = Request(f"https://127.0.0.1:{port}/api/vision/sources/{source}/frame",
+                          headers={"Authorization": f"Bearer {token}"})
+        with urlopen(request, context=context, timeout=2) as reply:
+            return int(reply.headers["X-Frame-Seq"]), reply.read()
+
+    async def check_source(source, index, destinations):
+        encoded = BytesIO()
+        Image.new("RGB", (640, 480), (index * 38, 80, 90)).save(encoded, format="JPEG")
+        jpeg = encoded.getvalue()
+        for port, ingest, signer, mirror in destinations:
+            token = signer.issue(principal_id="test-viewer", source_id=source)
+            if mirror:
+                with pytest.raises(HTTPError) as missing:
+                    await asyncio.to_thread(preview, port, source, token)
+                assert missing.value.code == 404
+            sender = bridge.CameraSender(f"wss://127.0.0.1:{port}", source, tokens[source],
+                                         context=context, follow_receiver=mirror)
+            senders.append(sender)
+            capture = bridge.LatestSource()
+            capture.put(time.time(), (jpeg, 640, 480))
+            await asyncio.to_thread(sender.send, capture.latest())
+            await tls._wait_for(lambda: ingest.latest_frame(source), 3, f"JPEG from {source}")
+            if mirror:
+                await asyncio.sleep(0.22)
+            assert await asyncio.to_thread(preview, port, source, token) == (1, jpeg)
+            with pytest.raises(HTTPError) as wrong_source:
+                await asyncio.to_thread(preview, port, source_ids[(index + 1) % len(source_ids)], token)
+            assert wrong_source.value.code == 401
+
+    try:
+        destinations = []
+        for mirror in (False, True):
+            signer = VisionLeaseSigner(("r" if mirror else "s") * 48)
+            ingest = IngestServer(tokens, preview_signer=signer)
+            server = await ingest.start("127.0.0.1", 0, ssl_context=server_tls)
+            servers.append(server)
+            destinations.append((server.sockets[0].getsockname()[1], ingest, signer, mirror))
+        await asyncio.gather(*(check_source(source, i, destinations) for i, source in enumerate(source_ids)))
+    finally:
+        await asyncio.gather(*(asyncio.to_thread(sender.close) for sender in senders))
+        for server in servers:
+            server.close()
+        await asyncio.gather(*(server.wait_closed() for server in servers))

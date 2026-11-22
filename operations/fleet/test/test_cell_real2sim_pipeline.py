@@ -1,4 +1,5 @@
 """Cell Real-to-Sim / Sim-to-Real closed-loop pipeline API tests (D-947, D-1012)."""
+import json
 from pathlib import Path
 import shutil
 from types import SimpleNamespace
@@ -59,8 +60,11 @@ def test_real2sim_pipeline_reads_snapshots_cad_inventory_sysid_and_stages(tmp_pa
     assert cad["mesh_count"] >= 14
     sysid = body["sysid_summary"]
     assert sysid["twin_camera_outline_px"] <= 3.0
-    assert sysid["best_fit_id"] == "fit-servo-run3"
-    assert sysid["best_holdout_rms_deg"] == 0.41
+    assert sysid["best_fit_id"] is None
+    assert sysid["best_holdout_rms_deg"] is None
+    run3 = next(f for f in sysid["fits"] if f["id"] == "fit-servo-run3")
+    assert run3["fitted_hold_mean_deg"] == 0.41
+    assert run3["ok"] is False and "no task result" in run3["verdict"]
     assert len(sysid["fits"]) >= 2
     assert len(sysid["next_experiments"]) >= 5
     stages = {s["stage"]: s for s in body["stages"]}
@@ -110,11 +114,39 @@ def test_real2sim_pipeline_promote_physics_candidate(tmp_path, monkeypatch):
     temp_phys = tmp_path / "cell_physics.yaml"
     shutil.copyfile(ROOT / "learning/envs/isaac/cell_physics.yaml", temp_phys)
     monkeypatch.setenv(ENV_PHYSICS, str(temp_phys))
+    sysid_dir = tmp_path / "sysid"
+    sysid_dir.mkdir()
+    shutil.copyfile(ROOT / "docs/validation/omx-sysid-2026-11-09/fit-servo-run1.json", sysid_dir / "fit-servo-run1.json")
+    shutil.copyfile(ROOT / "docs/validation/omx-sysid-2026-11-09/fit-servo-run3.json", sysid_dir / "fit-servo-run3.json")
+    monkeypatch.setenv("ROSY_CELL_SYSID_DIR", str(sysid_dir))
+
+    # G-23: an RMS-only fit without task evidence cannot promote.
+    refused = client.post(
+        "/api/fleet/cell-app/real2sim-pipeline/promote-physics",
+        headers=OPERATOR,
+        json={"fit_id": "fit-servo-run3", "candidate_name": "rms-only-refused"},
+    )
+    assert refused.status_code == 422
+    assert "no task result" in refused.text
+
+    fit_with_task = json.loads((sysid_dir / "fit-servo-run3.json").read_text(encoding="utf-8"))
+    fit_with_task["task"] = {
+        "base": fit_with_task["base"],
+        "candidate": "servo-friction-promoted-test",
+        "seed": 1,
+        "stack": {"base": [5, 5], "candidate": [5, 5]},
+        "grasp": {"held": 9, "total": 9},
+    }
+    (sysid_dir / "fit-servo-with-task.json").write_text(json.dumps(fit_with_task), encoding="utf-8")
+
+    summary = client.get("/api/fleet/cell-app/real2sim-pipeline", headers=VIEWER).json()["sysid_summary"]
+    assert summary["best_fit_id"] == "fit-servo-with-task"
+    assert summary["best_holdout_rms_deg"] == 0.41
 
     res = client.post(
         "/api/fleet/cell-app/real2sim-pipeline/promote-physics",
         headers=OPERATOR,
-        json={"fit_id": "fit-servo-run3", "candidate_name": "servo-friction-promoted-test"},
+        json={"fit_id": "fit-servo-with-task", "candidate_name": "servo-friction-promoted-test"},
     )
     assert res.status_code == 200, res.text
     data = res.json()

@@ -1,3 +1,4 @@
+import { node } from "/common/control-dom.js";
 // Robot list presentation and the labels shared with its selected workspace.
 import { NAVIGATION_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { linkTag } from "./link-tag.js";
@@ -14,7 +15,7 @@ const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
 // console_view._error_of 는 닿지 못한 예외를 클래스 이름(code)으로 싣는다. 운영자 말은
 // 한국어 평문이다 — 아는 코드만 옮기고 모르는 값은 받은 그대로 보인다(2026-10-02 회차).
-export const REACH_LABEL = Object.freeze({
+const REACH_LABEL = Object.freeze({
   ConnectError: "접속 실패",
   ConnectTimeout: "접속 시간 초과",
   TimeoutException: "응답 시간 초과",
@@ -55,24 +56,11 @@ export function heatChip(state) {
   return HEAT[state?.safety?.thermal] || null;
 }
 
-export function nodeWithText(tagName, className = "", text) {
-  const node = document.createElement(tagName);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
 export function tag(text, cls) {
   const node = document.createElement("ui-tag");
   node.setAttribute("status", TAG_STATUS[cls] || "neutral");
   node.textContent = text;
   return node;
-}
-
-export function blockWith(button, reason) {
-  button.disabled = Boolean(reason);
-  if (reason) button.setAttribute("reason", reason);
-  else button.removeAttribute("reason");
 }
 
 const planningSince = new Map();
@@ -116,15 +104,15 @@ export function queuedReason(queued) {
 
 export function createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth}) {
   return function summary(robot, index) {
-    const node = nodeWithText("article", `robot-summary s${index % view.colors.length}`);
-    node.dataset.robotId = robot.robot_id;
-    node.tabIndex = -1;
-    if (view.focusRobot === robot.robot_id) node.classList.add("selected");
+    const article = node("article", "", `robot-summary s${index % view.colors.length}`);
+    article.dataset.robotId = robot.robot_id;
+    article.tabIndex = -1;
+    if (view.focusRobot === robot.robot_id) article.classList.add("selected");
     const name = view.robotNames?.[robot.robot_id] || robot.robot_id;
-    const line = nodeWithText("div", "robot-line");
-    line.append(nodeWithText("b", "ui-disclosure-name", name));
+    const line = node("div", "", "robot-line");
+    line.append(node("b", name, "ui-disclosure-name"));
     if (name !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
-    const choose = nodeWithText("ui-button", "", view.focusRobot === robot.robot_id ? "선택됨" : "선택");
+    const choose = node("ui-button", view.focusRobot === robot.robot_id ? "선택됨" : "선택");
     choose.type = "button";
     choose.setAttribute("kind", "toggle");
     choose.setAttribute("aria-pressed", String(view.focusRobot === robot.robot_id));
@@ -132,7 +120,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     choose.dataset.selectRobotId = robot.robot_id;
     choose.addEventListener("click", scope.guard(() => { openCard(robot.robot_id); render(); }));
     line.append(choose);
-    node.append(line);
+    article.append(line);
     const state = view.stateUnavailable ? {} : robot.state || {};
     const link = linkTag(robot.link);
     const status = view.stateUnavailable ? "Fleet 상태 확인 불가" : !robot.online ? (link?.word || "오프라인")
@@ -142,7 +130,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
       && staleAgeS(robot, view.receivedAtMs, Date.now()) === null;
     const safety = !stateCurrent ? "안전 확인 불가"
       : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
-    const facts = nodeWithText("div", "robot-summary-status");
+    const facts = node("div", "", "robot-summary-status");
     facts.append(tag(status, view.stateUnavailable || !robot.online ? "warn" : ""),
       tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
     // D-926: every fact on the card is the one chip shape; an unread battery is not an attention item.
@@ -167,13 +155,13 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     sourceTag.dataset.motionSource = source.key;
     sourceTag.title = source.title;
     facts.append(sourceTag);
-    node.append(facts);
+    article.append(facts);
     const lane = state.line_follow;
     const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
       ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state, robot.robot_id).text;
     const trip = view.stateUnavailable ? "운행 확인 불가"
       : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode);
-    if (trip !== "—") node.append(nodeWithText("p", "trip-line", trip)); // no navigation state: no placeholder line
+    if (trip !== "—") article.append(node("p", trip, "trip-line")); // no navigation state: no placeholder line
     const evidence = [];
     if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
     else {
@@ -182,13 +170,13 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
       if (robot.calibration) evidence.push(`보정 진행 중 · ${robot.calibration.label || "보정"}${robot.calibration.holder ? ` · ${robot.calibration.holder}` : ""}`);
       const address = !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
       if (address) {
-        const why = nodeWithText("p", "robot-summary-evidence", address.text);
+        const why = node("p", address.text, "robot-summary-evidence");
         why.dataset.addressReason = view.addresses[robot.robot_id].status;
-        node.append(why);
+        article.append(why);
       }
       evidence.push(...attentionItems(robot).map(item => item.text.replace(/^:\s*/, "")));
     }
-    if (evidence.length) node.append(nodeWithText("p", "robot-summary-evidence", [...new Set(evidence)].join(" · ")));
-    return node;
+    if (evidence.length) article.append(node("p", [...new Set(evidence)].join(" · "), "robot-summary-evidence"));
+    return article;
   };
 }

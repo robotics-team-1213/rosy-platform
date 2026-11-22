@@ -1,5 +1,6 @@
 """D-1001: common services run as their own hardened containers; Fleet keeps machine credentials."""
 import ast
+import os
 from pathlib import Path
 
 import yaml
@@ -33,9 +34,15 @@ def _sources(spec):
     return [item if isinstance(item, str) else str(item.get('source', '')) for item in spec.get('volumes', [])]
 
 
-def _imports(path):
+_SKIP_DIRS = frozenset({'__pycache__', 'build', 'install', 'log'})
+
+
+def _imports(path, needles=None):
+    text = path.read_text(encoding='utf-8-sig')
+    if needles is not None and not any(needle in text for needle in needles):
+        return set()
     names = set()
-    for node in ast.walk(ast.parse(path.read_text(encoding='utf-8-sig'))):
+    for node in ast.walk(ast.parse(text)):
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
@@ -45,9 +52,13 @@ def _imports(path):
 
 
 def _py(folder):
-    return [path for path in folder.rglob('*.py')
-            if not any(part.startswith('.') or part in ('__pycache__', 'build', 'install', 'log')
-                       for part in path.relative_to(folder).parts)]
+    found = []
+    for dirpath, dirnames, filenames in os.walk(folder):
+        dirnames[:] = [d for d in dirnames if not d.startswith('.') and d not in _SKIP_DIRS]
+        for name in filenames:
+            if name.endswith('.py') and not name.startswith('.'):
+                found.append(Path(dirpath) / name)
+    return found
 
 
 def test_common_services_are_hardened_and_isolated_from_fleet_state():
@@ -89,16 +100,16 @@ def test_fleet_account_files_are_reexport_shells():
     all_shells = (*FLEET_ACCOUNT_SHELLS, *DELETED_ACCOUNT_SHELLS)
     forbidden = {f'fleet.server.{name}' for name in all_shells} | {f'fleet.server.auth.{name}' for name in all_shells}
     for path in _py(ROOT / 'operations/fleet/fleet'):
-        assert not (_imports(path) & forbidden), path
+        assert not (_imports(path, all_shells) & forbidden), path
     deleted = {f'fleet.server.{name}' for name in DELETED_ACCOUNT_SHELLS} | {
         f'fleet.server.auth.{name}' for name in DELETED_ACCOUNT_SHELLS}
     for path in _py(ROOT):
-        assert not (_imports(path) & deleted), path
+        assert not (_imports(path, DELETED_ACCOUNT_SHELLS) & deleted), path
 
 
 def test_machine_credential_code_never_imports_the_human_account_service():
     for path in sorted(FLEET_AUTH.glob('pairing*.py')) + sorted(FLEET_AUTH.glob('enrollment*.py')):
-        assert not any(m.split('.')[0] == 'rosy_account' for m in _imports(path)), path.name
+        assert not any(m.split('.')[0] == 'rosy_account' for m in _imports(path, ('rosy_account',))), path.name
 
 
 def test_common_service_sources_do_not_import_fleet():
@@ -109,4 +120,4 @@ def test_common_service_sources_do_not_import_fleet():
         ROOT / 'operations/notifications/src',
     ):
         for path in _py(folder):
-            assert not any(m == 'fleet' or m.startswith('fleet.') for m in _imports(path)), path
+            assert not any(m == 'fleet' or m.startswith('fleet.') for m in _imports(path, ('fleet',))), path

@@ -13,6 +13,34 @@ TURN = 4096
 TICKS_PER_DEGREE = TURN / 360
 MAX_GAP_S = 0.5
 MAX_STEP_S = 0.1
+# A declared pause between lerobot record loops (episode save, video encoding) may last this long before the next command: the arm holds its last
+# command with torque ON and aligns again at 1 deg/s. Observed: 29 s of encoding after a 30 s episode (about 1:1), so 120 s covers episodes up to a
+# minute with margin; a longer gap is stale and stops as before (a task card with longer episodes needs a larger value on purpose).
+BOUNDARY_MAX_S = 120.0
+
+
+class BoundaryExpired(KeyboardInterrupt):
+    """A declared record-loop pause ran past BOUNDARY_MAX_S: ends the session like a user stop; the guard is failed, torque stays ON."""
+
+
+def boundary_over(last_time, now):
+    """THE bound test, for the watcher and for the first command after a boundary: one start (the last committed command time), one function."""
+    return last_time is not None and now - last_time > BOUNDARY_MAX_S
+# Streaming limits (deg/s, deg/s^2): alignment is always 1 deg/s; tracking is TRACK_DEG_S for the manual body-only mode
+# and the teacher, FULL_TRACK_DEG_S for the full-arm Leader teleop and recording (body and gripper).
+TRACK_DEG_S, ACCEL_DEG_S2 = 10, 10
+# User decision 2026-11-21: 30 deg/s. 25 until the servo profile speed is known to the guard: the session caps' profile_vel 20 is
+# 27.5 deg/s, and a command faster than the servo ends the session on the 5 degree following error (independent review).
+FULL_TRACK_DEG_S = 25
+# Full-arm teleop only, braking only (slowing down or reversing, never speeding up): a Leader that reverses at 25 deg/s must not carry the
+# command on at the 10 deg/s^2 acceleration rate (review: 10.4 degrees over). Stopping from 25 deg/s at 200 deg/s^2 takes 25^2/(2*200) = 1.6
+# degrees, plus under one 30 Hz tick (0.8) of the speed still held: under 3 degrees.
+BRAKE_DEG_S2 = 200
+# Full-arm teleop: the command never leads the arm by more than LEAD_DEG, so a blocked joint is pushed with Kp*LEAD_DEG instead of Kp*5
+# (panel 2026-11-21; on the 19:54 session a normal tracking lag of 5.1 degrees ended the whole arm on the 5 degree following error).
+# A joint held at that lead without advancing STALL_PROGRESS_DEG for STALL_S is held (command frozen at present, torque ON) until the
+# target returns within STALL_RELEASE_DEG of the arm.
+LEAD_DEG, STALL_S, STALL_PROGRESS_DEG, STALL_RELEASE_DEG = 3, 3.0, 0.5, 2.5
 # one corrupt status packet on the shared hub ended three arm S sessions on 2026-10-27, once with the arm low;
 # a read is safe to repeat, and a bus that is really gone still fails after the retries
 READ_RETRY = 2
@@ -125,22 +153,22 @@ def connect_passive(device, *, follower):
                 raise ValueError(f"{name}: invalid calibrated range")
             if name in BODY and (calibration.drive_mode != 0 or calibration.homing_offset != 0):
                 raise ValueError(f"{name}: unsupported body calibration")
-            mode = modes[name] if modes is not None else bus.read("Operating_Mode", name)
+            mode = modes[name] if modes is not None else bus.read("Operating_Mode", name, num_retry=READ_RETRY)
             if mode != (5 if name == "gripper" else 4):
                 raise ValueError(f"{name}: expected commissioned mode 4 body / 5 gripper")
-            err = hw_errs[name] if hw_errs is not None else bus.read("Hardware_Error_Status", name)
-            tq = torques[name] if torques is not None else bus.read("Torque_Enable", name)
+            err = hw_errs[name] if hw_errs is not None else bus.read("Hardware_Error_Status", name, num_retry=READ_RETRY)
+            tq = torques[name] if torques is not None else bus.read("Torque_Enable", name, num_retry=READ_RETRY)
             if err or tq:
                 raise ValueError(f"{name}: error or torque is ON")
             if follower:
                 prof_ok = all(
-                    low <= (prof_reads[r][name] if prof_reads is not None else bus.read(r, name)) <= high
+                    low <= (prof_reads[r][name] if prof_reads is not None else bus.read(r, name, num_retry=READ_RETRY)) <= high
                     for r, (low, high) in PROFILE.items()
                 )
-                if not (prof_ok and not (drive_modes[name] if drive_modes is not None else bus.read("Drive_Mode", name)) & 4):  # bit 2: time-based, other units
+                if not (prof_ok and not (drive_modes[name] if drive_modes is not None else bus.read("Drive_Mode", name, num_retry=READ_RETRY)) & 4):  # bit 2: time-based, other units
                     for register in PROFILE:
                         bus.write(register, name, 0)
-                        if bus.read(register, name) != 0:
+                        if bus.read(register, name, num_retry=READ_RETRY) != 0:
                             raise ValueError(f"{name}: {register} readback mismatch")
         for camera in getattr(device, "cameras", {}).values():
             camera.connect()

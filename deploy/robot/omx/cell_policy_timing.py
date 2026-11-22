@@ -23,6 +23,25 @@ class Prediction:
     state: list
 
 
+def park_ack_ok(reply) -> bool:
+    """True only on a settled, fault-free park ack, never on a preempting human-hold or timeout row."""
+    if not isinstance(reply, dict) or reply.get("ok") is not True:
+        return False
+    if reply.get("fault") or reply.get("hold") or reply.get("human_hold_latched"):
+        return False
+    if reply.get("settled") is False:
+        return False
+    if "command" in reply:
+        cmd = str(reply["command"])
+        if cmd.startswith("checked "):
+            cmd = cmd.split(" ", 3)[-1]
+        if cmd not in ("park", "run park"):
+            return False
+        if cmd == "run park" and reply.get("settled") is not True:
+            return False
+    return True
+
+
 def action_window(chunk, observed, start, fps, steps, max_age):
     if start - observed > max_age:
         raise ValueError("stale policy observation")
@@ -92,7 +111,8 @@ def step_count(shadow, n_action):
 
 
 def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, max_obs_age_s,
-              max_chunks, dry_run, log, handoff=None, authorize=None, clock=time.monotonic, sleep=time.sleep):
+              max_chunks, dry_run, log, handoff=None, authorize=None, clock=time.monotonic, sleep=time.sleep,
+              jaw_gate: dict | None = None):
     fps = library.get("fps", 30)
     model_fps = SIM_FPS if getattr(shadow, "sim_rule", None) is not None else fps
     steps = step_count(shadow, n_action)
@@ -144,13 +164,15 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
                 actions, dropped = action_window(prediction.frames, prediction.observed, dispatch_at, model_fps, steps, max_obs_age_s)
                 row.update(action_steps=len(actions), dropped_actions=dropped,
                            proposed_first=actions[0].tolist(), proposed_last=actions[-1].tolist())
-                frames = shape(actions, target, model_fps, fps, held, row, prediction.frames)
+                frames = shape(actions, target, model_fps, fps, held, row, prediction.frames, state["state"])
                 if len(frames) > math.ceil(len(actions) * fps / model_fps):
                     raise ValueError("policy window cannot play at the reviewed step rate")
                 start = prediction.observed + dropped / model_fps
                 spec = dict(start=start, observed=prediction.observed, max_age=max_obs_age_s, max_step=max_step)
                 if handoff is not None:
                     spec["handoff"] = handoff.spec
+                if jaw_gate is not None:
+                    spec["jaw_gate"] = jaw_gate
                 previous_end = start + len(frames) / fps
                 if not dry_run:
                     generated = {**library, "policy_playback": spec, "chunks": {**library["chunks"], "policy": frames}}
@@ -195,11 +217,11 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
             held = held or bool(ran.get("holding"))
             if not dry_run and handoff is None and held and frames[-1][5] > library["gripper_closed"] + 10:
                 parked = cell.act(prefix + "park")
-                return {"result": "released", "held": held, "parked": bool(parked.get("ok"))}
+                return {"result": "released", "held": held, "parked": park_ack_ok(parked)}
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
     if dry_run:
         return {"result": "dry_run", "chunks": max_chunks}
     if handoff is not None:
         return stopped(max_chunks, "ACT ended before a verified handoff", {"chunk": max_chunks})
-    return {"result": "chunks_done", "held": held, "parked": bool(cell.act(prefix + "park").get("ok"))}
+    return {"result": "chunks_done", "held": held, "parked": park_ack_ok(cell.act(prefix + "park"))}

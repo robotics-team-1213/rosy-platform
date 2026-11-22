@@ -17,6 +17,7 @@ ISAAC = Path(__file__).resolve().parents[2] / "learning/envs/isaac"
 sys.path.insert(0, str(ISAAC))
 import mapped_stack_fixture as fx  # noqa: E402
 import omx_two_arm_kin as kin  # noqa: E402
+from omx_two_arm_sites_digest import layout_digest, round_coordinates  # noqa: E402,F401  (re-exported)
 import ship_plate  # noqa: E402
 
 CHOICES = dict(
@@ -28,6 +29,7 @@ CHOICES = dict(
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
     temp_source="scad-v12",  # two-color plate v12 CAD STLs ("navy"+"sky"); "scad-v11" keeps monochrome v11 STL; "procedural" shows collision walls
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
+    ship_house=True,
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=0.0,     # r08: hull centreline y centred symmetrically between the 194 mm base plates (modular berth locks port/starboard)   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
                              # edges). Its x reading (holds 25 mm toward the belt) would put the stern over the belt end: x stays
@@ -52,6 +54,7 @@ CHOICES = dict(
     preset=None,             # a named bundle of choices, PRESETS (explicit choices win)
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
+OUTBOUND_STAND_SPEC = dict(board_edge_x_m=0.155, intake_past_edge_m=0.059, rail_z_m=0.0809, yaw_deg=90.0, top_roi_px=(410, 30, 570, 125))
 BERTH_V16_SPEC = dict(
     berth_kit="v24-docks",   # "v24-docks": printed black v20 cradle + v24 docks on PR33_C02_BASE + v24 belt stopper; "v18-modular-adjustable"/"v16-modular"/"v17-modular-tight": orange v16 berth; "v15-quay": legacy quay block
     confluence_pages=("23592971", "23234388", "23233175"),
@@ -88,7 +91,7 @@ PRESETS = {"v24-20261114": dict(berth_kit="v24-docks", top_camera="2026-11-14", 
                                 ship_pose="photo-20261114", arm_bases="docks-photo", belt_pose="photo-20261114")}
 # preset "v24-20261114-cad194" (11-14 evening): the same frame and parts, base plates set from the planned 194 mm between the two OMX-AI base plates (user, later that night: the real cell differs, see docks-photo)
 # (inner edge to inner edge: the 130 mm hull with its ~32 mm side docks fits only so; as a centre distance the plates would overlap the ship).
-PRESETS["v24-20261114-cad194"] = dict(PRESETS["v24-20261114"], arm_bases="cad-194")
+PRESETS["v24-20261114-cad194"] = dict(PRESETS["v24-20261114"], arm_bases="cad-194", ship_house=False)
 # preset "v24-20261114-cad190" (DL-52, 11-14 night): the same, inner gap fixed at 190 mm (the low end of the docks' 190-200 range); cad-190 stays a named preset, not the omx_loop default (the physical cell is 194 mm until the v25 docks are printed).
 PRESETS["v24-20261114-cad190"] = dict(PRESETS["v24-20261114"], arm_bases="cad-190")
 ARM_BASES_PLATE_CENTRE = dict(arm_a=((.116, -.164), 90.), arm_b=((.107, .164), -90.))  # G-21: top-frame base plate centres vs arm_b FK (.104, .153)
@@ -143,8 +146,8 @@ STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 
                     (12., 50., 63., 65., 14.)))
 
 
-# Only hold 1 (next to the stern) is in reach with the stern at the table edge: hold 2 lies behind both arms, where no tool-down pose holds a
-# container along x (validator, stern x .155 to .215). So the stack is hold 1, 3 rows x 3 tiers, middle row first, in the stud plan's arm order.
+# Hold 1 (next to the stern) solves directly; hold 2 (Harbor hold 1, x -0.042 m) also solves in reach via the 180-deg symmetric carry turn
+# (omx_two_arm_tasks.solve_chain, stern x .155 to .215). Default stack tasks use 9 containers (R08_STACK); stack-h2 targets hold 2.
 # REPRODUCTION ONLY (single-photo fit, the CAD "v21-b" is the rated mount for both arms, user 11-18): arm_b's wrist camera as the real frame shows it (2026-11-08 22:30, arm at rest, the jaw silhouette traced and matched in MuJoCo with the
 # jaw opening fitted too, IoU 0.15 -> 0.68): 16 mm higher and 8 mm to the side of the D r06 CAD, the axis meeting the jaw axis 25 mm further
 # out, about the same 34 deg down. One frame at one pose: lens height and aim trade off; refit on frames at other poses.
@@ -436,6 +439,9 @@ class Layout:
                 for layer in range(TEMP_TIERS):
                     self.sites[f"tmp-{tag}-{i}" + (f"-l{layer}" if layer else "")] = dict(
                         kind="temp", xy=xy, z=self.deck_z + self.box[2] * (layer + .5), yaw=yaw, plate=tag, lane=i, layer=layer, stack=f"tmp-{tag}-{i}")
+        stand_xy = (round(OUTBOUND_STAND_SPEC["board_edge_x_m"] + OUTBOUND_STAND_SPEC["intake_past_edge_m"], 4), round(float(self.arms["arm_a"].base[1]), 5))
+        stand_z = round(OUTBOUND_STAND_SPEC["rail_z_m"] + self.box[2] / 2.0, 4)
+        self.sites["stand"] = dict(kind="stand", xy=stand_xy, z=stand_z, yaw=math.radians(OUTBOUND_STAND_SPEC["yaw_deg"]), arm="arm_a", layer=0, stack="stand")
         self.ship_xy = {n: s["xy"] for n, s in self.sites.items() if s["kind"] == "ship"}
         self.stack_at = {(s["stack"], s["layer"]): n for n, s in self.sites.items() if "stack" in s}  # what stands on what, ship and plates
         if c["ship_source"] == "r08-berth":

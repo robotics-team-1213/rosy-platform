@@ -6,9 +6,13 @@ const source = new URL('../../../../applications/fleet/web/charge-bays-view.js',
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
 const model = new URL('../../../../applications/fleet/web/charge-bays-model.js', import.meta.url);
 const frames = new URL('../../../../applications/fleet/web/shared/cell-frames.js', import.meta.url);
+const causeLine = new URL('../../../../shared/web/cause-line.js', import.meta.url);
 const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href)
   .replaceAll('/console/assets/charge-bays-model.js', model.href)
-  .replaceAll('/console/assets/cell-frames.js', frames.href);
+  .replaceAll('/console/assets/cell-frames.js', frames.href)
+  .replaceAll('/common/cause-line.js', causeLine.href);
+const { register } = await import('node:module');
+register('./resolve-console-assets.mjs', import.meta.url);
 const { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {

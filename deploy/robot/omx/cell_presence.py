@@ -40,5 +40,9 @@ def zone_acceptance(zone: dict | None, handoff: dict[str, Any], dst: str) -> boo
     roi = target.get("roi")
     slot_ok = (isinstance(roi, list) and len(roi) == 4 and all(type(v) in (int, float) for v in roi)) if top_only else (
         type(target.get("col")) is int and type(target.get("row")) is int)
-    bound = target.get("site") == dst and type(htier) is int and target.get("tier") == htier and slot_ok
+    slot = handoff.get("dst_slot")
+    slot_match = not isinstance(slot, dict) or (target.get("col") == slot.get("col") and target.get("row") == slot.get("row"))
+    site_id_ok = (target.get("site_id") == handoff["dst_site_id"]) if handoff.get("dst_site_id") else True
+    area_ok = not handoff.get("dst_area") or target.get("area") == handoff["dst_area"]
+    bound = target.get("site") == dst and type(htier) is int and target.get("tier") == htier and slot_ok and slot_match and site_id_ok and area_ok
     return bool(zone and zone.get("verified") is True and (zone.get("basis") == ZONE_BASIS or top_only) and bound)

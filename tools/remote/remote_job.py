@@ -25,6 +25,7 @@ import remote_test_tools
 from host_probe import REBOOT_CHECK
 
 POLL_S = 10.0
+POLL_STEPS = (1.5, 2.0, 3.0, 5.0)
 LAST_POLL = 0.0  # monotonic time of the latest poll in this process (land_watchdog reads it)
 BACKOFF = (5, 10, 20, 30)
 RECONNECT_S = float(os.environ.get("ROSY_TEST_RECONNECT", "600"))
@@ -406,7 +407,7 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
         if started.returncode != 0:
             log.write_bytes(started.stdout + started.stderr)
             return started.returncode
-        deadline, tail, waiting = clock() + timeout_s + 120, b"", False  # the job's own timeout fires first
+        deadline, tail, waiting, polls = clock() + timeout_s + 120, b"", False, 0  # the job's own timeout fires first
         start_at, admitted, wait_from = time.time(), clock(), clock()
         with log.open("ab") as out:
             while True:
@@ -448,7 +449,8 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                     call(ssh, host, KILL, name, str(k))
                     out.write(f"\n[remote-pytest] cancelled after a failure elsewhere: {where}\n".encode())
                     return CANCELLED
-                sleep(POLL_S)
+                sleep(min(POLL_S, POLL_STEPS[polls] if polls < len(POLL_STEPS) else POLL_S))
+                polls += 1
     except KeyboardInterrupt:
         call(ssh, host, KILL, name, str(k))  # as before: the caller's cleanup then removes the run
         raise

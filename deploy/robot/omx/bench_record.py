@@ -22,9 +22,8 @@ UI template: bench_record.html (same directory, served at /).
 """
 from __future__ import annotations
 
-import argparse, json, math, os, re, signal, socket, subprocess, sys, threading, time, urllib.request
+import json, math, os, signal, subprocess, sys, threading, time
 from pathlib import Path
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
@@ -34,23 +33,31 @@ if not (HERE / "omx_adapter").is_dir():
     if _rel:
         os.environ["PYTHONPATH"] = f"{_rel[0].parent}:{os.environ['PYTHONPATH']}" if os.environ.get("PYTHONPATH") else str(_rel[0].parent)
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
+from teleop_speed import read_stage, summary as speed_summary  # noqa: E402
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
     check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, write_restore_list, write_snapshot)
 
 from bench_record_inspect import (  # noqa: E402,F401
     ARMS, BI_ARM, HANDOVER, NAME, BenchInspectMixin, _read_task_card, active_handover_units, systemctl)
 from bench_record_ops import BenchOpsMixin  # noqa: E402
+from bench_live_preview import open_preview, recorder_env  # noqa: E402
+from bench_record_leader import BenchLeaderMixin  # noqa: E402
+from bench_record_manual import BenchManualMixin  # noqa: E402
+from bench_record_link import BenchLinkMixin  # noqa: E402
 from bench_record_http import PAGE, make_server  # noqa: E402,F401
 from bench_record_replay import apply_task_override, transform_replay  # noqa: E402
 from bench_record_pipeline import BenchPipelineMixin  # noqa: E402
+from bench_record_safety import end_verdict  # noqa: E402
 
 
-class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
+class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin, BenchLinkMixin, BenchPipelineMixin):
     def __init__(self, config, *, run=systemctl, popen=subprocess.Popen, clock=time.time, procs=proc_cmdlines,
                  mounts=proc_mounts):
         self.python, self.prep = config["python"], Path(config["prep_root"]).expanduser()
         self.run, self.popen, self.clock, self.procs, self.mounts = run, popen, clock, procs, mounts
         self.lock, self.child, self.abort, self.state = threading.Lock(), None, False, {"status": "idle"}
+        self._auto_homes, self._pre_cancel = {}, set()  # per-session ownership: auto-home records and stop intents, keyed by the session's claim
+        self.live_preview = None
         self.pending, self._retry_at = self.prep / ".bench-stopped-units.json", 0
 
     def _caps_ok(self, arm, cap_name):
@@ -93,11 +100,11 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
         except (OSError, ValueError) as exc:
             raise ValueError(f"{arm}의 로봇 프로필({path.name})을 읽을 수 없습니다: {exc}") from None
 
-    def _check_single_robot(self, arm, name, robot):
+    def _check_single_robot(self, arm, name, robot, profile=None):
         if not isinstance(robot, dict) or robot.get("type") != "omx_follower":
             raise ValueError("단일 팔(omx_follower) 설정이 아닙니다")
         try:
-            binding = cell_robot_profile.load(self.prep / f"arm-{ARMS[arm]}-robot-profile.json",
+            binding = cell_robot_profile.load(profile or self.prep / f"arm-{ARMS[arm]}-robot-profile.json",
                                               robot_config=robot)["binding"]
         except (OSError, ValueError) as exc:
             raise ValueError(f"선택한 녹화 설정은 {arm}의 로봇 프로필과 맞지 않습니다: {exc}") from None
@@ -105,7 +112,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
             raise ValueError(f"{arm}의 로봇 프로필 device_id({binding['device_id']})가 팔과 다릅니다")
         return robot["id"]
 
-    def _check_robot(self, arm, name, data):
+    def _check_robot(self, arm, name, data, profile=None):
         try:
             cfg = json.loads(data.decode("utf-8-sig"))
             robot = cfg["robot"]
@@ -116,20 +123,31 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
         if arm == BI_ARM:
             if not isinstance(robot, dict) or robot.get("type") != "bi_omx_follower":
                 raise ValueError("arm_ab는 양팔(bi_omx_follower) 설정만 녹화합니다")
-            return f"{self._check_single_robot('arm_a', name, robot.get('arm_a'))}+{self._check_single_robot('arm_b', name, robot.get('arm_b'))}"
-        return self._check_single_robot(arm, name, robot)
+            return f"{self._check_single_robot('arm_a', name, robot.get('arm_a'), profile)}+{self._check_single_robot('arm_b', name, robot.get('arm_b'), profile)}"
+        return self._check_single_robot(arm, name, robot, profile)
 
     def start(self, body):
+        claimed = []  # set once align_leader returned: this request then holds the bench (homing) until it hands over
+        try:
+            return self._start(body, claimed)
+        except BaseException:
+            if claimed:
+                with self.lock:
+                    if self.state.get("status") == "homing":  # still the alignment claim, not handing_over or failed
+                        self._idle()
+            raise
+
+    def _start(self, body, claimed):
         if not isinstance(body, dict) or any(not isinstance(body.get(k, ""), str)
                                              for k in ("name", "rig_revision", "arm", "config", "caps", "task")):
             raise ValueError("JSON object with text fields required")
-        if body.get("at_bench") is not True:
-            raise ValueError("confirm that a person is at the bench with a hand on the follower power switch")
         choices = self.choices()
         if not NAME.fullmatch(body.get("name", "")) or not NAME.fullmatch(body.get("rig_revision", "")):
             raise ValueError("collection name and rig revision: lowercase letters, digits and dashes")
         if body.get("arm") not in (*ARMS, BI_ARM):
             raise ValueError("팔을 선택하세요 (arm_a, arm_b, arm_s, arm_ab)")
+        if body.get("link_only") is True and (body["arm"] == BI_ARM or body.get("replay")):
+            raise ValueError("연동 준비(/prepare)는 단일 팔 리더 세션만 지원합니다")
         calibrations = body.get("calibrations")
         if not isinstance(calibrations, list) or not calibrations or any(not isinstance(c, str) or c not in choices["calibrations"] for c in calibrations):
             raise ValueError("choose the calibration files used by these arms")
@@ -149,6 +167,9 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
         robots = [stem for c, stem in zip(calibrations, stems) if Path(c).parent.parent.name == "robots"]
         if not set(req_instances).issubset(set(robots)) or any(stem not in req_instances for stem in robots):
             raise ValueError(f"{', '.join(req_instances)} 보정 파일을 선택하세요 (다른 팔의 보정은 선택할 수 없습니다)")
+        self._check_manual()
+        for held_arm in (("arm_a", "arm_b") if body["arm"] == BI_ARM else (body["arm"],)):
+            self._check_lease(held_arm)  # before the Leader alignment child or any torque write: record_session would refuse it too late
         if self.pending.exists():
             raise ValueError("이전 녹화에서 멈춘 유닛이 아직 복원되지 않았습니다. 먼저 복원하세요 (작업대 서비스 재시작 또는 상태 확인)")
         replay_raw = body.get("replay")
@@ -173,33 +194,25 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
             locked = set(lp.keys()) & {"robot", "max_relative_target", "use_degrees", "fps", "cameras", "teleop"}
             if locked:
                 raise ValueError(f"안전 잠금(cell_robot_profile/D-911) 파라미터는 변경할 수 없습니다: {', '.join(sorted(locked))}")
-            if "episode_time_s" in lp and lp["episode_time_s"] is not None:
-                raw_v = lp["episode_time_s"]
-                if isinstance(raw_v, bool):
-                    raise ValueError("episode_time_s는 1~3600초여야 합니다")
-                try:
-                    v = float(raw_v)
-                except (TypeError, ValueError):
-                    raise ValueError("episode_time_s는 1~3600초여야 합니다") from None
-                if not math.isfinite(v) or not (1.0 <= v <= 3600.0):
-                    raise ValueError("episode_time_s는 1~3600초여야 합니다")
-                overrides["episode_time_s"] = v
-            if "reset_time_s" in lp and lp["reset_time_s"] is not None:
-                raw_v = lp["reset_time_s"]
-                if isinstance(raw_v, bool):
-                    raise ValueError("reset_time_s는 0.5~600초여야 합니다")
-                try:
-                    v = float(raw_v)
-                except (TypeError, ValueError):
-                    raise ValueError("reset_time_s는 0.5~600초여야 합니다") from None
-                if not math.isfinite(v) or not (0.5 <= v <= 600.0):
-                    raise ValueError("reset_time_s는 0.5~600초여야 합니다")
-                overrides["reset_time_s"] = v
+            for key, lo, hi, bounds in (("episode_time_s", 1.0, 3600.0, "1~3600초"), ("reset_time_s", 0.5, 600.0, "0.5~600초")):
+                if key in lp and lp[key] is not None:
+                    raw_v = lp[key]
+                    if isinstance(raw_v, bool):
+                        raise ValueError(f"{key}는 {bounds}여야 합니다")
+                    try:
+                        v = float(raw_v)
+                    except (TypeError, ValueError):
+                        raise ValueError(f"{key}는 {bounds}여야 합니다") from None
+                    if not math.isfinite(v) or not (lo <= v <= hi):
+                        raise ValueError(f"{key}는 {bounds}여야 합니다")
+                    overrides[key] = v
             if "num_episodes" in lp and lp["num_episodes"] is not None:
                 v = lp["num_episodes"]
                 if isinstance(v, bool) or not isinstance(v, int) or not (1 <= v <= 500):
                     raise ValueError("num_episodes는 1~500 정수여야 합니다")
                 overrides["num_episodes"] = v
+        if body.get("link_only") is True:
+            overrides["num_episodes"] = 500  # a linked session ends at finish, not by count
         replay_mode = body.get("replay_mode") or "none"
         invert_gripper = bool(body.get("invert_gripper", False))
         task_override = body.get("task_override")
@@ -208,9 +221,20 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
                 raise ValueError("task_override는 JSON 객체여야 합니다")
             if task_override and not task:
                 raise ValueError("집기/놓기 스왑 또는 목표 변경은 작업 카드 선택이 필요합니다")
+        if body.get("align_leader") is True:
+            if replay_path:
+                raise ValueError("리더 정렬(align_leader)은 replay 없는 텔레옵에서만 쓸 수 있습니다")
+            snap0 = self.prep / ".bench-runs" / f"align-{time.time_ns()}-{body['name']}"  # the bytes validated above
+            write_snapshot(snap0, (("record-config.json", config_bytes),))
+            self.align_leader(body, str(snap0 / "record-config.json"), keep=True)
+            claimed.append(True)
+        elif body.get("align_leader") not in (None, False):
+            raise ValueError("align_leader는 true 또는 false여야 합니다")
         with self.lock:
-            if self.state["status"] in ("handing_over", "recording", "restoring", "sealing"):
-                raise ValueError("a bench session is already running")
+            if not claimed and self.state["status"] in ("handing_over", "homing", "recording", "restoring", "sealing", "leader_manual_check"):
+                raise ValueError("a bench session is already running or the Leader needs a manual check")
+            if claimed and self.abort:  # a /stop since the alignment began
+                raise ValueError("정지 요청이 있어 녹화를 시작하지 않습니다")
             handles, busy = hold_other_arm_locks(body["arm"], ARMS, self.procs, self.mounts)
             if busy:
                 if "session-" in busy and f"session-{body['arm']}.lock" not in busy:
@@ -265,20 +289,25 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
                     command += ["--task-card", effective_task]
                 if replay_path:
                     command += ["--replay", str(snap / "replay.json")]
+                stage = None if replay_path or body["arm"] == BI_ARM else read_stage(self.prep / f"teleop-speed-{body['arm']}.json")
+                command += ["--teleop-stage", str(stage)] if stage else []  # W14: the declared speed stage of a full-arm Leader session
                 folder = self.prep / "sessions" / stamp
                 folder.mkdir(parents=True)
             except BaseException:
                 release(handles)
                 raise
-            self.state = {"status": "handing_over", "name": body["name"], "folder": str(folder), "started": self.clock(),
+            self.state = {"status": "handing_over", "name": body["name"], "arm": body["arm"], "folder": str(folder), "started": self.clock(),
                           "config": body["config"], "caps": body["caps"], "snapshot": str(snap),
                           "target_episodes": eff_target_eps, "task_id": eff_task_id,
-                          "dataset_root_prefix": eff_root_prefix, "replay_mode": replay_mode}
+                          "dataset_root_prefix": eff_root_prefix, "replay_mode": replay_mode, "teleop_speed": speed_summary(stage),
+                          "link": body.get("link_only") is True}
             self.child, self.abort = None, False
+            self.state["claim"] = self._claim_bench()  # the session's own claim: its stop intent and its auto-home record are keyed by it
         seal = [self.python, str(HERE / "record_seal.py"), "--session-dir", str(folder), "--name", body["name"],
                 "--rig-revision", body["rig_revision"], *[a for c in calibrations for a in ("--calibration", c)]]
         try:
-            threading.Thread(target=self._session, args=(command, seal, folder, handles), daemon=True).start()
+            threading.Thread(target=self._session, args=(command, seal, folder, handles, cfg_data["robot"]),
+                             daemon=True).start()
         except BaseException as exc:
             release(handles)
             self._set(status="failed", error=f"{type(exc).__name__}: {exc}")
@@ -289,38 +318,9 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
         with self.lock:
             self.state.update(values)
 
-    def _remember(self, stopped):
-        # A bench restart mid-session must still restore what it stopped (see restore_leftovers).
-        write_restore_list(self.pending, stopped)
-
-    def _start_units(self, units):
-        """Start units in the given order; returns (failed units, first error text)."""
-        failed, detail = [], ""
-        for unit in units:
-            try:
-                done = self.run("start", unit)
-                if done.returncode != 0:
-                    failed.append(unit)
-                    detail = detail or f"{unit}: {(done.stderr or '').strip() or 'exit ' + str(done.returncode)}"
-            except Exception as exc:
-                failed.append(unit)
-                detail = detail or f"{unit}: {type(exc).__name__}: {exc}"
-        return failed, detail
-
-    def restore_leftovers(self):
-        if self.pending.is_file():
-            try:
-                check_proc_visible(self.mounts)
-            except Exception as exc:  # hidepid or unreadable mounts: a recorder could be invisible, so no restore
-                return self._set(error=f"복원 보류: {exc}")
-            if recorder_running(self.procs):  # a live recorder owns the bus; retried on the next status poll or restart
-                return self._set(error="복원 보류: record_session 또는 chunk_runner가 실행 중이거나 확인할 수 없습니다")
-            failed, detail = self._start_units(reversed(json.loads(self.pending.read_text())))
-            self._remember(failed)  # failed units stay listed for the next recovery
-            self._set(restore_errors=failed, **({"error": f"복원 실패: {detail}"} if failed else {}))
-
-    def _session(self, command, seal, folder, handles=()):
+    def _session(self, command, seal, folder, handles=(), robot=None):
         stopped, code = [], None
+        preview = open_preview(folder, robot) if robot is not None else None
         try:
             for unit in active_handover_units(self.run):
                 stopped.append(unit)  # before the call: a timed-out stop still gets restored
@@ -330,6 +330,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
                 if self.abort:
                     raise RuntimeError("stopped before recording started")
                 self.state.update(status="recording", stopped=stopped, recording_started=self.clock())
+                self.live_preview = preview
                 if "--arm" not in command:
                     for h in list(handles):
                         if getattr(h, "name", "").endswith("session.lock"):
@@ -339,13 +340,16 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
                                 pass
                 with (folder / "bench.log").open("ab") as log:
                     self.child = self.popen(command, cwd=folder, stdout=log, stderr=subprocess.STDOUT,
-                                            start_new_session=True)
+                                            start_new_session=True, env=recorder_env(preview, folder / "link" if self.state.get("link") else None))
             code = self.child.wait()
         except Exception as exc:
             self._set(error=f"{type(exc).__name__}: {exc}")
         finally:
             release(handles)  # recording is over; observer@ ExecStartPre needs that arm's lock free to restart
             self._set(status="restoring", recording_ended=self.clock())
+            if preview is not None:
+                self.live_preview = None
+                preview.close()
             errors, detail = self._start_units(reversed(stopped))
             try:
                 self._remember(errors)
@@ -361,26 +365,20 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchPipelineMixin):
             if record.get("interrupted"):  # record_seal refuses interrupted sessions; keep the raw recording
                 return self._set(status="stopped_not_sealed")
             if not (code == 0 and record.get("safe_end") is True):
-                return self._set(status="unsafe_or_failed" if code is not None else "failed")
+                if code is None:
+                    return self._set(status="failed")
+                # unsafe_or_failed unless session.json proves the safe end (bench_record_safety); the status that was published decides the auto home
+                if self._publish_end(verdict=end_verdict) == "stopped_safe":
+                    self._auto_home_after_session()
+                return
             self._set(status="sealing")
             with (folder / "bench.log").open("ab") as log:
                 sealed = self.popen(seal, cwd=folder, stdout=log, stderr=subprocess.STDOUT).wait()
-            self._set(status="sealed" if sealed == 0 else "seal_failed", seal_exit=sealed)
+            self._publish_end(status="sealed" if sealed == 0 else "seal_failed", seal_exit=sealed)
+            if sealed == 0:
+                self._auto_home_after_session()
         except Exception as exc:
             self._set(status="failed", error=f"{type(exc).__name__}: {exc}")
-
-    def stop(self):
-        with self.lock:
-            if self.state["status"] == "handing_over":
-                self.abort = True
-                return dict(self.state)
-            child = self.child
-            if child is None or child.poll() is not None:
-                raise ValueError("no recording is running")
-        # SIGTERM: record_session maps it to the same clean ending, and it is not ignored under nohup.
-        child.send_signal(signal.SIGTERM)
-        return self.status()
-
 
 
 def main(argv=None):

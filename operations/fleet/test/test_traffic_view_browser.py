@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 import pytest
 import uvicorn
+from fleet_cockpit_browser import robot_picker
 from browser_harness import browser_tests_enabled, launch_options, open_token_access, safe_listener
 
 from fakes import FakeRobot
@@ -169,7 +170,7 @@ def _shots(page, name, fits=False):
             assert stop and stop["x"] >= 0 and stop["y"] >= 0
             assert stop["x"] + stop["width"] <= width and stop["y"] + stop["height"] <= height
             if width == 390 and urlparse(page.url).path == '/console':
-                choice = page.locator('#robot-choice').bounding_box()
+                choice = robot_picker(page).bounding_box()
                 assert 0 <= choice["y"] and choice["y"] + choice["height"] <= height
                 map_panel = page.locator('[aria-labelledby="map-heading"]')
                 assert choice["y"] < map_panel.bounding_box()["y"]

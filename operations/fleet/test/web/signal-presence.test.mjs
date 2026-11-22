@@ -32,6 +32,7 @@ test("actual stale signal cards render translated intent without sending command
     appendChild(child) { this.children.push(child); }
     replaceChildren(...children) { this.children = children; }
     setAttribute() {}
+    removeAttribute() {}
     addEventListener() {}
   }
   const previousDocument = globalThis.document;
@@ -62,6 +63,7 @@ test("a virtual signal in demand mode shows the AI request tag and the AI 요청
     appendChild(child) { this.children.push(child); }
     replaceChildren(...children) { this.children = children; }
     setAttribute(key, value) { this.attrs[key] = value; }
+    removeAttribute(key) { delete this.attrs[key]; }
     addEventListener(kind, handler) { this.onclick = handler; }
   }
   const previousDocument = globalThis.document;
@@ -96,6 +98,7 @@ test("a virtual signal in occupancy mode says the zone state in words and has th
     appendChild(child) { this.children.push(child); }
     replaceChildren(...children) { this.children = children; }
     setAttribute(key, value) { this.attrs[key] = value; }
+    removeAttribute(key) { delete this.attrs[key]; }
     addEventListener(kind, handler) { this.onclick = handler; }
   }
   const previousDocument = globalThis.document;

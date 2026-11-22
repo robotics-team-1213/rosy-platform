@@ -4,6 +4,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
+from fleet_cockpit_browser import open_robot_workspace
 from browser_harness import browser_tests_enabled, launch_options
 from test_console_queue_inline_browser import API, _open, _robot, site  # noqa: F401
 
@@ -38,9 +39,8 @@ def test_robot_information_precedes_actions_and_failed_refresh_is_visible(site, 
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts, size=(width, 1000))
         try:
-            page.locator('#roster [data-select-robot-id="rosy_01"]').click()
+            card = open_robot_workspace(page, "rosy_01")
             page.clock.run_for(1500)
-            card = page.locator('#robot-workspace article')
             info = card.locator('[data-robot-profile]')
             expect(info).to_contain_text('2·3번 관절 하중 주의')
             expect(info).to_contain_text('최근 하중 분석 없음')

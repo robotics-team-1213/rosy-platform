@@ -1,4 +1,5 @@
 // Page composition: input adapter, local history and Fleet geometry adapter.
+import { setOffBy } from "/common/cause-line.js";
 import {createEditHistory} from '/console/assets/edit-history.js';
 import {createDrawingImport, rasterMapPoint} from '/console/assets/drawing-import.js';
 import {createMapEditor, svgElement} from '/console/assets/map-editor.js';
@@ -31,9 +32,7 @@ export function createMapAuthoring(host) {
     if (result) {
       const raster = ['png', 'jpeg'].includes(result.format);
       for (const id of ['drawing-plane', 'drawing-unit']) {
-        $(id).disabled = raster;
-        if (raster) $(id).setAttribute('reason', '이미지 도면은 정규화 픽셀 좌표를 사용합니다');
-        else $(id).removeAttribute('reason');
+        setOffBy($(id), raster ? '이미지 도면은 정규화 픽셀 좌표를 사용합니다' : '');
       }
       message(raster ? `원본 확인 · ${result.width_px} × ${result.height_px} px · 기준점은 정규화 이미지 픽셀입니다`
         : `원본 확인 · ${result.triangle_count}개 삼각형 · 좌표 범위 ${JSON.stringify(result.bounds_3d)}`);
@@ -164,14 +163,11 @@ export function createMapAuthoring(host) {
       ['drawing-file', host.reason()],
       ...($('drawing-from-camera') ? [['drawing-from-camera', host.reason()]] : []),
     ]) {
-      $(id).disabled = Boolean(reason);
-      if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason');
+      setOffBy($(id), reason);
       $(id).title = reason;
     }
     const registrationReason = host.reason() || (!importer.ready() ? '도면 원본을 먼저 확인하세요' : '');
-    $('drawing-register').disabled = Boolean(registrationReason);
-    if (registrationReason) $('drawing-register').setAttribute('reason', registrationReason);
-    else $('drawing-register').removeAttribute('reason');
+    setOffBy($('drawing-register'), registrationReason);
     const hash = host.map()?.drawing?.projection_sha256;
     if (hash !== loadingHash) {
       cacheController?.abort(); projection = null; loadingHash = hash;

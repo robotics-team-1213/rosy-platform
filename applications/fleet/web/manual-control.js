@@ -1,5 +1,6 @@
+import { setOffBy } from "/common/cause-line.js";
 import { createHoldTicker } from "/common/hold-ticker.js";
-import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { EVIDENCE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
 import { robotPoseText, sitePoseText } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 
@@ -14,7 +15,7 @@ const STEP = {linear: 0.01, angular: 0.05};
 const MIN_SET = {linear: 0.01, angular: 0.05};
 const num = value => Number(Number(value).toFixed(3));
 
-export function manualSpeeds(state) {
+function manualSpeeds(state) {
   const limits = state?.speed_limits, usable = value => Number.isFinite(value) && value >= 0;
   const known = usable(limits?.manual_linear) && usable(limits?.manual_angular);
   const linear = known ? limits.manual_linear : FALLBACK.manual_linear;
@@ -27,7 +28,7 @@ export function manualSpeeds(state) {
   return {linear, angular, set, max, sealed};
 }
 
-export function speedText({linear, angular, set, sealed}) {
+function speedText({linear, angular, set, sealed}) {
   const bound = set && sealed && (linear < set.linear || angular < set.angular)
     ? ` (설정 ${num(set.linear)}·${num(set.angular)}, 측정 봉인 ${num(sealed.linear)}·${num(sealed.angular)}로 제한)` : "";
   return `전후진 ${num(linear)}m/s · 회전 ${num(angular)}rad/s${bound}`;
@@ -227,26 +228,21 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     heading.textContent = `${view.robotNames?.[view.focusRobot] || view.focusRobot || "로봇"} 수동 조종`;
     mode.hidden = view.robots.find(row => row.robot_id === view.focusRobot)?.state?.mode === "MANUAL";
     const modeWhy = blocked(false);
-    mode.disabled = Boolean(modeWhy);
     // One cause, said once in the status line above (DESIGN: 한 원인은 한 번 말한다).
-    if (modeWhy) mode.setAttribute("reason", "위 사유");
-    else mode.removeAttribute("reason");
+    setOffBy(mode, modeWhy ? "위 사유" : "");
     const why = blocked();
     const focused = view.robots.find(row => row.robot_id === view.focusRobot);
     const shown = manualSpeeds(focused?.state);
     for (const {button} of adjust) {
-      button.disabled = Boolean(modeWhy) || speedPending || !shown.set || !shown.max;
-      if (button.disabled) button.setAttribute("reason", "위 사유"); else button.removeAttribute("reason");
+      setOffBy(button, Boolean(modeWhy) || speedPending || !shown.set || !shown.max ? "위 사유" : "");
     }
     for (const {button} of buttons) {
-      button.disabled = Boolean(why);
-      if (why) button.setAttribute("reason", "위 사유");
-      else button.removeAttribute("reason");
+      setOffBy(button, why ? "위 사유" : "");
     }
     const robot = view.robots.find(row => row.robot_id === view.focusRobot);
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === view.focusRobot);
     const age = robot && Number.isFinite(robot.state_age_s)
-      ? `상태 ${Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)}초 전` : "상태 시각 없음";
+      ? `상태 ${evidenceAgeText(Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)).slice(3)}` : "상태 시각 없음";
     pose.textContent = robot ? [sitePoseText(guideRow) || `위치 ${robotPoseText(robot.state, robot.localization)}`, `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ") : "";
     if (!active && !stopping) reason.textContent = [failure, why].filter(Boolean).join(" · ") || notice || `누르는 동안만 이동 · 최대 2초 · ${speedText(shown)}`;
   }

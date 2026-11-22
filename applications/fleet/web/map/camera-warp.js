@@ -15,7 +15,7 @@ export function warpMesh(mapToImage, bounds, nx = 24, ny = 12) {
   const h = mapToImage;
   const wc = h[6] * (x0 + x1) / 2 + h[7] * (y0 + y1) / 2 + h[8];
   if (wc < 0) mapToImage = h.map((v) => -v);
-  const node = (i, j) => {
+  const vertex = (i, j) => {
     const x = x0 + ((x1 - x0) * i) / nx, y = y0 + ((y1 - y0) * j) / ny;
     const p = project(mapToImage, x, y);
     return { map: [x, y], image: p };
@@ -23,7 +23,7 @@ export function warpMesh(mapToImage, bounds, nx = 24, ny = 12) {
   const grid = [];
   for (let j = 0; j <= ny; j++) {
     const row = [];
-    for (let i = 0; i <= nx; i++) row.push(node(i, j));
+    for (let i = 0; i <= nx; i++) row.push(vertex(i, j));
     grid.push(row);
   }
   const triangles = [];

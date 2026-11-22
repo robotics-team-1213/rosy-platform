@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-11-21 · uncommitted · fix(robot-ui): 지도 목표에 CORE 내비게이션 준비 상태 적용
 - 2026-11-13 · uncommitted · fix(ui): HW_TEST_WAIT_MS declared on its own line again (main red)
 - 2026-11-08 · uncommitted · feat(robot-ui): 사람 부탁 카드의 답 버튼
 - 2026-11-07 · uncommitted · uiux(robot): 로그인이 누른 화면으로 돌아오고 뒤로 가기가 갇히지 않는다
 - 2026-11-07 · 11b42b5933 · feat(dashboard): 사람 부탁 카드
-- 2026-11-06 · uncommitted · uiux(robot): 운용자 글에서 CORE 대신 로봇

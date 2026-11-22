@@ -2191,3 +2191,8 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 변경: `docs/validation/core-events-motion-2026-11-20/result.md`.
 - 증거: geg6 teleop 0.06 m/s. 주행 중 cmd_vel p99는 events 24.6~25.8 ms, threaded 34.7~39.3 ms. E-Stop·명령 끊김 정지는 두 모드가 같다. CORE SIGSTOP 때 deadman이 683 ms에 정지했다.
 - gate 변화: 없음. 장시간 운전과 실기 save_map은 남음.
+
+## 2026-11-21 · uncommitted · fix(core): 도킹 진단 표본의 신선도
+- 변경: 도킹 feed가 거부한 관측과 태그 유실을 진단 표본에도 즉시 반영한다. 센서 나이는 단조 시계로 계산하고 수신 시각은 벽시계로 표시한다.
+- 증거: 가짜 ROS 입력과 실제 CORE 센서 조회 경계를 쓰는 회귀 시험.
+- gate 변화: SOURCE 수정. 실물 도킹은 현장 결과로 확인한다.

@@ -30,6 +30,10 @@ def _make_workdir(tmp_path: Path) -> Path:
         ("auto_pick", {"source": "belt", "dest": "pinky"}, 400),
         ("auto_pick_dry_run", {"source": "pinky"}, 202),
         ("pivot_near", {"site": "bed-1"}, 400),
+        ("cell_policy_drive", {"goal_site": "tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "vehicle_tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "not_places:vehicle_tray"}, 400),
+        ("cell_policy_drive", {"goal_site": "tray", "dry_run": True}, 202),
     ],
 )
 def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, job, site_params, status):
@@ -38,6 +42,15 @@ def test_runner_requires_r_cell_task_for_amr_bed_motion(tmp_path, monkeypatch, j
         params.update(arm="arm_s", person_at_switch=True)
     if job == "pivot_near":
         params.update(x=0.0, y=0.0)
+    elif job == "cell_policy_drive":
+        params.update(
+            library="chunks-s.json",
+            max_chunks=1,
+            operator="human_op",
+            policy_root="~/rosy-models/pinky_v1",
+            policy_revision="a" * 64,
+            cell_calibration="cell.json",
+        )
     else:
         params.update(catalog="catalog-live.json", roi=[0, 0, 10, 10], dest="outbound")
     params.update(site_params)
@@ -94,11 +107,27 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     argv = api.build_argv(job, with_goal, wd)
     assert argv[argv.index("--goal-site") + 1] == "yard:r3-s2-t1"
     assert "--model-calibration" not in argv
-    hybrid = api.build_argv(job, {**with_goal, "mode": "hybrid", "n_action": 8, "max_obs_age_s": 0.6}, wd)
+    hybrid = api.build_argv(job, {**with_goal, "mode": "hybrid", "n_action": 8, "max_obs_age_s": 0.6, "source_kind": "policy"}, wd)
     assert hybrid[hybrid.index("--mode") + 1] == "hybrid"
     assert hybrid[hybrid.index("--n-action") + 1] == "8"
     assert hybrid[hybrid.index("--max-obs-age-s") + 1] == "0.6"
+    assert hybrid[hybrid.index("--source-kind") + 1] == "policy"
+    mixed_actor = api.build_argv(job, {**with_goal, "proposer": "Alice.Kim", "operator": "Bob.Lee"}, wd)
+    assert mixed_actor[mixed_actor.index("--operator") + 1] == "Bob.Lee"
+    with pytest.raises(ValueError, match="D-1024"):
+        api.build_argv(job, {**with_goal, "proposer": "Alice.Kim", "operator": "alice.kim"}, wd)
+    with pytest.raises(ValueError, match="source_kind"):
+        api.build_argv(job, {**with_goal, "source_kind": "bogus"}, wd)
+    for bad_sk in ("scripted_teacher", "sim_optimized"):
+        with pytest.raises(ValueError, match="policy"):
+            api.build_argv(job, {**with_goal, "mode": "act", "source_kind": bad_sk}, wd)
+        with pytest.raises(ValueError, match="policy"):
+            api.build_argv(job, {**with_goal, "mode": "hybrid", "source_kind": bad_sk}, wd)
     taught = {k: v for k, v in with_goal.items() if k not in {"policy_root", "policy_revision", "cell_calibration"}}
+    with pytest.raises(ValueError, match="taught"):
+        api.build_argv(job, {**taught, "mode": "taught", "source_kind": "policy"}, wd)
+    sim_taught = api.build_argv(job, {**taught, "mode": "taught", "source_kind": "sim_optimized"}, wd)
+    assert sim_taught[sim_taught.index("--source-kind") + 1] == "sim_optimized"
     fallback = api.build_argv(job, {**taught, "mode": "taught"}, wd)
     assert fallback[fallback.index("--mode") + 1] == "taught" and "--policy-root" not in fallback
     with pytest.raises(ValueError, match="goal_site"):
@@ -168,3 +197,304 @@ def test_runner_serializes_arms_ab_space_camera_locks_and_http_queue(tmp_path, m
     audit = json.loads((wd / "cell-job-api" / "audit.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert audit["state_changes"]["arm"] == "arm_a"
     assert audit["state_changes"]["omx_tools_tree"] == "omx-tools-abc1234"
+
+
+def test_home_job_argv_requires_person_and_session(tmp_path):
+    wd = _make_workdir(tmp_path)
+    (wd / "chunks-a.json").write_text("{}", encoding="utf-8")
+    argv = api.build_argv(
+        api.JOBS["home"],
+        {
+            "arm": "arm_a",
+            "config": "cell-a.json",
+            "library": "chunks-a.json",
+            "operating_profile": "profile-a.json",
+            "operator": "human_op",
+            "proposer": "vlm_orchestrator",
+            "person_at_switch": True,
+        },
+        wd,
+    )
+    assert argv[0] == "./with-session-arm-a-par.sh"
+    assert "cell_pipeline.py" in argv
+    assert "--stage" in argv and "home" in argv
+    assert "--commissioning" in argv and "--person-at-switch" in argv
+    assert "--operator" not in argv and "--proposer" not in argv
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(
+            api.JOBS["home"],
+            {"arm": "arm_b", "config": "cell-b.json", "library": "chunks-a.json", "operating_profile": "profile-b.json"},
+            wd,
+        )
+    with pytest.raises(ValueError, match="D-1024"):
+        api.build_argv(
+            api.JOBS["home"],
+            {
+                "arm": "arm_a",
+                "config": "cell-a.json",
+                "library": "chunks-a.json",
+                "operating_profile": "profile-a.json",
+                "operator": "same_id",
+                "proposer": "same_id",
+                "person_at_switch": True,
+            },
+            wd,
+        )
+    with pytest.raises(ValueError, match="D-1024"):
+        api.build_argv(
+            api.JOBS["auto_pick"],
+            {
+                "arm": "arm_b",
+                "config": "cell-b.json",
+                "catalog": "catalog-live.json",
+                "roi": [0, 0, 10, 10],
+                "source": "belt",
+                "dest": "pallet",
+                "proposer": "vlm_orchestrator",
+                "person_at_switch": True,
+            },
+            wd,
+        )
+    pick_argv = api.build_argv(
+        api.JOBS["auto_pick"],
+        {
+            "arm": "arm_b",
+            "config": "cell-b.json",
+            "catalog": "catalog-live.json",
+            "roi": [0, 0, 10, 10],
+            "source": "belt",
+            "dest": "pallet",
+            "operator": "human_op",
+            "proposer": "vlm_orchestrator",
+            "person_at_switch": True,
+        },
+        wd,
+    )
+    assert "--operator" not in pick_argv and "--proposer" not in pick_argv
+
+
+def test_frame_proxy_returns_clean_json_on_viewer_http_error(tmp_path):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    import urllib.error
+
+    class FailingViewer(BaseHTTPRequestHandler):
+        def log_message(self, fmt, *args):
+            pass
+
+        def do_GET(self):
+            self.send_response(404)
+            self.end_headers()
+
+    viewer = ThreadingHTTPServer(("127.0.0.1", 0), FailingViewer)
+    threading.Thread(target=viewer.serve_forever, daemon=True).start()
+    wd = _make_workdir(tmp_path)
+    token = "t" * 32
+    server = api.make_server("127.0.0.1", 0, token, api.Runner(wd, lock_dir=wd), viewer=f"http://127.0.0.1:{viewer.server_port}")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{server.server_port}/frame/arm_b_wrist.jpg",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            urllib.request.urlopen(req, timeout=5)
+        assert exc.value.code == 404
+        body = json.loads(exc.value.read().decode("utf-8"))
+        assert "404" in body["error"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        viewer.shutdown()
+        viewer.server_close()
+
+
+def test_resolve_goal_site_supports_standalone_cell_api_layout(tmp_path):
+    import shutil
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parents[1]
+    stage = tmp_path / "cell-job-api"
+    (stage / "tools" / "sim").mkdir(parents=True)
+    (stage / "shared" / "web").mkdir(parents=True)
+    shutil.copy2(repo_root / "deploy" / "robot" / "omx" / "cell_policy_goals.py", stage / "cell_policy_goals.py")
+    shutil.copy2(repo_root / "tools" / "sim" / "cell_site_map.py", stage / "tools" / "sim" / "cell_site_map.py")
+    shutil.copy2(repo_root / "shared" / "web" / "cell-site-map.json", stage / "shared" / "web" / "cell-site-map.json")
+    out = subprocess.check_output(
+        [sys.executable, "-c", "import cell_policy_goals as g; print(g.resolve_goal_site('yard:r1-s2-t1'))"],
+        cwd=stage,
+        text=True,
+    )
+    assert "ship-h1r0-l0" in out
+
+
+def test_runner_whole_cell_ab_cross_lock_and_warm_reuse(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    lease_dir = tmp_path / "leases"
+    lease_dir.mkdir()
+    (wd / "chunk-io-b").mkdir()
+    procs = []
+
+    def fake_popen(argv, **kwargs):
+        p = Mock()
+        p.argv = argv
+        p.env = kwargs.get("env") or {}
+        p._code = None
+        p.poll.side_effect = lambda: p._code
+        procs.append(p)
+        return p
+
+    monkeypatch.setattr(api.subprocess, "Popen", fake_popen)
+    runner = api.Runner(wd, lock_dir=wd, lease_dir=lease_dir)
+
+    # 1. Whole-cell session.lock blocks moving jobs
+    monkeypatch.setattr(api, "_whole_cell_lock_held", lambda _ld=None: True)
+    res_whole = runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})
+    assert res_whole["code"] == 409 and "whole-cell session.lock" in res_whole["error"]
+
+    # 2. External arm_b lock blocks arm_a moving job (A/B cross-arm lock check)
+    monkeypatch.setattr(api, "_whole_cell_lock_held", lambda _ld=None: False)
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, _ld=None: arm == "arm_b")
+    res_cross = runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})
+    assert res_cross["code"] == 409 and "session lock for arm_b" in res_cross["error"]
+
+    # 3. Run arm_b cleanly, then warm-reuse arm_b when lease + exit 0 + clean live.json all hold
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, _ld=None: False)
+    first = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert first["code"] == 202
+    assert procs[0].env["ROSY_ARM_LEASE_OWNER"] == runner._lease_owner
+    procs[0]._code = 0
+
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, _ld=None: arm == "arm_b")
+    (lease_dir / "arm_b.json").write_text(json.dumps({"owner": runner._lease_owner}), encoding="utf-8")
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False}),
+        encoding="utf-8",
+    )
+    reused = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert reused["code"] == 202
+    procs[1]._code = 0
+
+    # 4. Warm reuse is refused if human_hold_latched, lease hold, or foreign owner
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": True, "fault": False}),
+        encoding="utf-8",
+    )
+    refused_hold = runner.start("remap", {"arm": "arm_a", "config": "cell-a.json", "person_at_switch": True})
+    assert refused_hold["code"] == 409
+
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False}),
+        encoding="utf-8",
+    )
+    (lease_dir / "arm_b.json").write_text(json.dumps({"owner": "other:99"}), encoding="utf-8")
+    refused_owner = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert refused_owner["code"] == 409
+
+    # 5. Stale live.json timestamp or dead pid refuses warm reuse
+    import time
+
+    (lease_dir / "arm_b.json").write_text(json.dumps({"owner": runner._lease_owner, "pid": 12345}), encoding="utf-8")
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False, "t": time.time() - 60.0}),
+        encoding="utf-8",
+    )
+    refused_stale = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert refused_stale["code"] == 409
+
+    (wd / "chunk-io-b" / "live.json").write_text(
+        json.dumps({"chunk": None, "human_hold_latched": False, "fault": False, "t": time.time()}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(api, "_pid_alive", lambda _pid: False)
+    refused_dead = runner.start("remap", {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True})
+    assert refused_dead["code"] == 409
+
+
+def test_runner_daemon_reaper_writes_audit_without_get_poll(tmp_path, monkeypatch):
+    import subprocess
+    import time
+
+    wd = _make_workdir(tmp_path)
+    runner = api.Runner(wd, jobs={"noop": {"script": "noop.py", "argv": [], "params": {}}}, lock_dir=wd)
+    monkeypatch.setattr(api, "build_argv", lambda job, params, workdir: [sys.executable, "-c", "pass"])
+    res = runner.start("noop", {})
+    assert res["code"] == 202
+
+    audit_file = wd / "cell-job-api" / "audit.jsonl"
+    deadline = time.monotonic() + 3.0
+    while time.monotonic() < deadline:
+        if audit_file.is_file() and audit_file.read_text(encoding="utf-8").strip():
+            break
+        time.sleep(0.02)
+    else:
+        pytest.fail("audit.jsonl was not written automatically by daemon reaper")
+    row = json.loads(audit_file.read_text(encoding="utf-8").splitlines()[0])
+    assert row["id"] == res["id"] and row["exit"] == 0 and isinstance(subprocess.Popen, type)
+
+
+def test_tools_tree_resolves_symlink_skips_comments_and_snapshots_start(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    real_a = tmp_path / "omx-tools-3fff92e55d"
+    real_b = tmp_path / "omx-tools-deadbeef00"
+    real_a.mkdir()
+    real_b.mkdir()
+    link = tmp_path / "omx-tools-current"
+    link.symlink_to(real_a)
+    (wd / "tools-env-current.sh").write_text(
+        f"# omx-tools-stale999\nFOO=1 # omx-tools-inline999\nexport OMX={link}/deploy/robot/omx\n",
+        encoding="utf-8",
+    )
+    assert api._tools_tree(wd) == "omx-tools-3fff92e55d"
+
+    loop_a = tmp_path / "omx-tools-loop"
+    loop_b = tmp_path / "omx-tools-loop-b"
+    loop_a.symlink_to(loop_b)
+    loop_b.symlink_to(loop_a)
+    eloop_wd = tmp_path / "eloop-wd"
+    eloop_wd.mkdir()
+    (eloop_wd / "tools-env-current.sh").write_text(f"export OMX={loop_a}/deploy/robot/omx\n", encoding="utf-8")
+    assert api._tools_tree(eloop_wd) == "omx-tools-loop"
+
+    procs = []
+
+    class P:
+        _code = None
+
+        def poll(self):
+            return self._code
+
+    monkeypatch.setattr(api.subprocess, "Popen", lambda argv, **kw: (procs.append(P()) or procs[-1]))
+    runner = api.Runner(wd, jobs={"noop": {"script": "noop.py", "argv": [], "params": {}}}, lock_dir=wd)
+    monkeypatch.setattr(api, "build_argv", lambda job, params, workdir: ["true"])
+    started = runner.start("noop", {})
+    assert started["code"] == 202
+
+    # Switch symlink BEFORE exit: audit record keeps the start-time snapshot.
+    link.unlink()
+    link.symlink_to(real_b)
+    procs[0]._code = 0
+    runner.get(started["id"])
+    row = json.loads((wd / "cell-job-api" / "audit.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert row["state_changes"]["omx_tools_tree"] == "omx-tools-3fff92e55d"
+
+
+def test_goal_site_import_error_returns_http_400(tmp_path, monkeypatch):
+    import cell_job_spec as spec
+
+    wd = _make_workdir(tmp_path)
+    monkeypatch.setattr(spec, "resolve_goal_site", lambda _v: (_ for _ in ()).throw(ModuleNotFoundError("cell_site_map")))
+    res = api.Runner(wd, lock_dir=wd).start(
+        "cell_policy_drive",
+        {
+            "arm": "arm_a",
+            "config": "cell-a.json",
+            "library": "chunks-s.json",
+            "max_chunks": 1,
+            "mode": "taught",
+            "goal_site": "yard:r3-s2-t1",
+            "operator": "human_op",
+            "proposer": "vlm",
+            "person_at_switch": True,
+        },
+    )
+    assert res["code"] == 400 and "cannot read Cell site map" in res["error"]

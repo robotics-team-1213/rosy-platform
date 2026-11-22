@@ -21,7 +21,7 @@ import { createChargeBaysView } from "./charge-bays-view.js";
 import { createPlatoonView } from "./platoon-view.js";
 import { createTrackingView } from "./tracking-view.js";
 import { createVisionView } from "/console/assets/vision-view.js";
-import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON } from "/console/assets/authorization.js";
+import { applyRoleToControls, namedOperatorReason, OPERATOR_REASON, isOperator as hasOperatorRole} from "/console/assets/authorization.js";
 // D-410 — 기기 등록·카메라 연결 승인·경기장/맵 보정은 설치 화면(install.js)이 가진다.
 import { createDeviceDiscovery } from "/console/assets/device-discovery.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
@@ -31,6 +31,7 @@ import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js";
+import { owns } from "/console/assets/unit-scope.js";
 // D-798 3.2 — 접속·잠금, 목표 지정, 읽기 갱신은 각자의 팩토리 파일이 가진다.
 import { createConsoleAuth } from "./console-auth.js";
 import { createConsoleGoal } from "./console-goal.js";
@@ -44,26 +45,35 @@ const pageScope = createPageScope();
 
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
-// Current intervention stays outside context tabs; hidden panels keep their owners mounted.
-const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('.console-context'),
+// Alert queue lives in top-right bell drawer; context tabs & map panel split between wide columns.
+const layoutPanels = [document.querySelector('.console-context'),
   document.querySelector('[aria-labelledby="map-heading"]')];
-const MAP_PANEL = 2;
+const MAP_PANEL = 1;
+// 관제 토큰 — 서버가 루프백 밖으로 열리면 모든 /api/fleet/* 이 401 로 막힌다
+// (cli.run_console 강제, app.authorize). 토큰은 세션 스토리지에만 둔다 —
+// localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
+const auth = {
+  token: sessionStorage.getItem("rosy-console-token") || "",
+  role: null,
+  // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
+  locked: false,
+};
 const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
   robots: () => view.robots,
-  canManage: () => !auth.locked && auth.role === "operator" && !namedReason(),
-  canSubmit: robotId => !auth.locked && auth.role === "operator" && !namedReason() && !view.stateUnavailable
+  canManage: () => !auth.locked && hasOperatorRole(auth.role) && !namedReason(),
+  canSubmit: robotId => !auth.locked && hasOperatorRole(auth.role) && !namedReason() && !view.stateUnavailable
     && !motionCommandReason(view, robotId, "goal")
     && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false),
   confirm: options => confirmedAction.run(options)});
 const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
   confirm: options => confirmedAction.run(options),
   principal: () => auth.principal,
-  approveReason: () => auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
+  approveReason: () => !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
 // D-741 8 — 기록 영역은 사건 패널(또는 관제 기록)을 본문으로 올린다. 작업 영역의 작업 목록과 같은 자리다.
 const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? "work-new" : "work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
 layoutPanels.push(raised);
 if (areaNav) raised.dataset.raised = "";
-const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
+const inbox = createInboxPanel({scope: pageScope, el, readView: () => view, isLocked: () => auth.locked});
 pageScope.listen(el("focus-robot-choice"), "click", () => {
   inbox.select("status");
   el("robot-choice").scrollIntoView({block: "center"});
@@ -72,7 +82,7 @@ pageScope.listen(el("focus-robot-choice"), "click", () => {
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
   el("incident-side").hidden = false;
-  if (inbox.choice !== "inbox") inbox.select("evidence");
+  inbox.select("evidence");
 }
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
@@ -106,15 +116,6 @@ const MAP_MS = 5000;
 const dispatchGate = createPollGate();
 const discoveryGate = createPollGate();
 
-// 관제 토큰 — 서버가 루프백 밖으로 열리면 모든 /api/fleet/* 이 401 로 막힌다
-// (cli.run_console 강제, app.authorize). 토큰은 세션 스토리지에만 둔다 —
-// localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
-const auth = {
-  token: sessionStorage.getItem("rosy-console-token") || "",
-  role: null,
-  // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
-  locked: false,
-};
 // D-540 9: 움직이는 조작의 잠금 사유. 멈춤(비상 정지·취소·대형 해제·막힘 대기/중단)에는 쓰지 않는다.
 const namedReason = () => namedOperatorReason(auth.role, auth.principal);
 const confirmedAction = createConfirmedAction({scope: pageScope, identity: () => ({...auth}), confirm: confirmIrreversible});
@@ -127,7 +128,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling), 지도 오버레이 토글([data-layer-toggle])은 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not([data-layer-toggle]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#robot-choice):not(#map-display-mode):not([data-work-read])");
+    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not([data-layer-toggle]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#queues-close):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#robot-choice):not(#map-display-mode):not([data-work-read])");
 }
 
 const view = {
@@ -287,6 +288,7 @@ const { disarmGoal, focusGoalButton, commitWorldGoal, clearPinStart } = createCo
   refreshGuide: () => mapView.refreshGuide?.(),
   queuedReason: (result) => roster.queuedReason(result),
   drawMap: () => mapView.draw(),
+  scheduleDraw: () => mapView.scheduleDraw(),
   onSelectRobot: (robotId) => roster.openCard(robotId),
 });
 view.dispatchGoalToPoint = (point, placeLabel = "", placeId = "") => commitWorldGoal(point, placeLabel, placeId);
@@ -319,11 +321,11 @@ const mapView = createMapView({ scope: pageScope,
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
 const roster = createRoster({ scope: pageScope, el, view, log, call, render,
-  streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction,
+  streamEvidence: mapView.streamEvidence, isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction,
   onSelectionChanged: () => { clearPinStart(); } });
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
-  namedReason: () => auth.locked ? "관제에 다시 접속하세요." : auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
+  namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
 // Wide tier: above the assignment card, so drive stays on the first screen. Phones reorder it below the card (roster.css).
 document.querySelector(".workspace-heading").before(manualControl.root);
 if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
@@ -359,14 +361,14 @@ pageScope.listen(el("work-new-move"), "click", ({currentTarget: button}) => {
 pageScope.listen(el("work-move-robot"), "change", () => render());
 // D-407 / D-540 3 — 막힘 판단과 바뀐 경로 확인은 예외 큐 행이 펼친 자리에 산다.
 const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
-  isOperator: () => auth.role === "operator", namedReason });
+  isOperator: () => hasOperatorRole(auth.role), namedReason });
 const deviceWatch = createDeviceWatch({ scope: pageScope, el, view });
 const stationRecovery = createStationRecovery({ scope: pageScope, view, call, log,
-  isOperator: () => auth.role === "operator", namedReason });
+  isOperator: () => hasOperatorRole(auth.role), namedReason });
 const personRequests = createPersonRequests({ scope: pageScope, view, call, log,
-  isOperator: () => auth.role === "operator", namedReason });
+  isOperator: () => hasOperatorRole(auth.role), namedReason });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
-  isOperator: () => auth.role === "operator", namedReason,
+  isOperator: () => hasOperatorRole(auth.role), namedReason,
   openCard: (robotId) => { roster.openCard(robotId); render(); } });
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
@@ -387,12 +389,13 @@ function refreshDiagnostics() {
 }
 
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
-const signals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
-  isOperator: () => auth.role === "operator" && !auth.locked, namedReason });
+const rawSignals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
+  isOperator: () => hasOperatorRole(auth.role) && !auth.locked, namedReason });
+const signals = { ...rawSignals, presence: () => (owns("drive") ? rawSignals.presence() : undefined) };
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
 const visionView = createVisionView({
   scope: pageScope, el, call, rawOnly: true,
-  onSources: (sample) => { pathSample.vision = sample; paintSitePath(); },
+  onSources: (sample) => { if (auth.locked || !auth.role) return; pathSample.vision = sample; paintSitePath(); },
 });
 mapView.bindCamera(visionView);
 
@@ -400,13 +403,19 @@ mapView.bindCamera(visionView);
 
 const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
-const trackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
+const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
+const trackingView = {
+  ...rawTrackingView,
+  refresh: () => (owns("drive") ? rawTrackingView.refresh() : undefined),
+};
 
 // 잠금·세션 확인·토큰 입력·비밀번호 로그인·개발 접속은 console-auth.js 팩토리가 가진다(D-798 3.2).
 const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = createConsoleAuth({ pageScope, el, view, auth, assistant,
   call, fleetClient, render, operatorControls, confirmedAction, connectionView, workView, incidents, visionView,
   trackingView, mapView, formation, dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
-  refreshRobotApps, refreshDispatchControl, refreshDiscovery });
+  refreshRobotApps, refreshDispatchControl, refreshDiscovery, inbox,
+  refreshVision: () => (owns("drive") ? visionView.refreshSources() : undefined),
+  clearVisionSample: () => { pathSample.vision = null; paintSitePath(); } });
 
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
 // 바뀌면 다시 풀고 지도를 새로 고침 없이 다시 그린다(캐시는 ui.js가 먼저 비운다).
@@ -424,39 +433,42 @@ paintSitePath();
 connectionMode();
 refreshState();
 refreshAuthorization();
-visionView.refreshSources();
-mapView.refresh();
-trackingView.refresh();
-chargeBays.refresh();
-platoon.refresh();
-stationRecovery.refresh();
-personRequests.refresh();
+if (owns("drive")) {
+  mapView.refresh();
+  trackingView.refresh();
+  chargeBays.refresh();
+  platoon.refresh();
+  stationRecovery.refresh();
+  personRequests.refresh();
+}
 // A hidden tab polls nothing but presence (it must still say visible:false); coming back reads at once.
-const poll = (fn, ms) => pageScope.interval(() => { if (!document.hidden) fn(); }, ms);
+const poll = (fn, ms) => pageScope.interval(() => (!document.hidden ? fn() : undefined), ms);
+const pollDrive = (fn, ms) => poll(() => (owns("drive") ? fn() : undefined), ms);
 pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); trackingView.refresh(); } });
-poll(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
+pollDrive(() => { if (!auth.locked) return formation.refreshFormation(); }, MAP_MS);
 poll(refreshState, STATE_MS);
-poll(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
-poll(refreshHealthz, STATE_MS);
+poll(() => { if (!auth.locked) return workView.refresh(); }, MAP_MS);
+poll(refreshHealthz, MAP_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
-poll(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
+poll(() => { if (!auth.locked) return refreshDispatchControl(); }, STATE_MS);
 poll(refreshDiscovery, MAP_MS);
 poll(refreshRobotApps, MAP_MS);
-poll(() => mapView.refresh(), MAP_MS);
-poll(() => chargeBays.refresh(), MAP_MS);
-poll(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
-poll(() => platoon.refresh(), MAP_MS);
-poll(() => mapView.refreshSightings(), STATE_MS);
-poll(() => mapView.refreshTraffic(), STATE_MS);
-poll(() => mapView.refreshGuide(), STATE_MS);  // D-536
+pollDrive(() => mapView.refresh(), MAP_MS);
+pollDrive(() => chargeBays.refresh(), MAP_MS);
+pollDrive(() => { if (!auth.locked) return Promise.all([stationRecovery.refresh(), personRequests.refresh()]); }, STATE_MS);
+pollDrive(() => platoon.refresh(), MAP_MS);
+pollDrive(() => mapView.refreshSightings(), STATE_MS);
+pollDrive(() => mapView.refreshTraffic(), STATE_MS);
+pollDrive(() => mapView.refreshGuide(), STATE_MS);  // D-536
 poll(() => trackingView.refresh(), TRACKING_MS);
-poll(() => visionView.refreshFrame(), 1500);
+pollDrive(() => { if (!auth.locked && auth.role) return visionView.refreshFrame(); }, 1500);
 
 
 pageScope.onResume(() => {
   visionView.reset();
   trackingView.reset();
-  trackingView.refresh();
   refreshAuthorization();  // refreshes the map once the session answers
-  visionView.refreshSources();
+  if (owns("drive")) {
+    trackingView.refresh();
+  }
 });

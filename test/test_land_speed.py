@@ -174,3 +174,15 @@ def test_quick_contract_stops_only_on_a_confirmed_new_failure(tmp_path, codes, v
 def test_every_quick_contract_file_exists():
     # run() skips a missing file silently, so a rename would quietly drop the check
     assert [p for p in land_quick.QUICK if not (ROOT / p).is_file()] == []
+
+
+def test_events_tail_reader_skips_partial_head_line(tmp_path):
+    import json
+
+    work_queue._history.cache_clear()
+    ev = tmp_path / "events.jsonl"
+    old = json.dumps({"event": "tests", "argv": ["test/old.py"], "run_s": 999.0}) + "\n"
+    new = json.dumps({"event": "tests", "argv": ["test/new.py"], "run_s": 12.0}) + "\n"
+    ev.write_text(old * 10 + new, encoding="utf-8", newline="\n")
+    lines = list(work_queue._tail_lines(str(ev), limit=len(new) + 5))
+    assert lines == [new]
