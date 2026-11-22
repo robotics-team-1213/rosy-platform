@@ -85,6 +85,7 @@ def test_zero_config_serves_readonly_builtin_spec_and_blocks_writes(tmp_path):
         _, learning = raw_req(base, "/api/learning")
         code3, err = raw_req(base, PREFIX + "/jobs", {"kind": "collect_dart"}, token=learning["token"])
         assert code3 == 503 and "설정되지 않았습니다" in err["error"]
+        assert raw_req(base, PREFIX + "/peer-summary")[0] == 403
 
 
 def test_collaboration_enforces_view_manage_csrf_no_paths_and_busy_conflict(tmp_path, monkeypatch):
@@ -145,6 +146,8 @@ def test_collaboration_enforces_view_manage_csrf_no_paths_and_busy_conflict(tmp_
 
 
 def test_peer_summary_bearer_is_fail_closed_and_enforces_token(tmp_path, monkeypatch):
+    import os
+
     with _serve(tmp_path, with_canonical=True, accounts=None, monkeypatch=monkeypatch) as (base, center):
         # Without configured peer_token_file, bearer access must fail closed with 403.
         assert raw_req(base, PREFIX + "/peer-summary")[0] == 403
@@ -153,11 +156,35 @@ def test_peer_summary_bearer_is_fail_closed_and_enforces_token(tmp_path, monkeyp
         tok_file.write_text("0123456789abcdef0123456789abcdef\n", encoding="utf-8")
         center.canonical.peer_token_file = tok_file
 
+        if os.name == "posix":
+            tok_file.chmod(0o644)
+            req_open = urllib.request.Request(
+                base + PREFIX + "/peer-summary",
+                headers={"Authorization": "Bearer 0123456789abcdef0123456789abcdef"},
+            )
+            with pytest.raises(urllib.error.HTTPError) as exc_open:
+                urllib.request.urlopen(req_open, timeout=5)
+            assert exc_open.value.code == 403
+        tok_file.chmod(0o600)
+
         assert raw_req(base, PREFIX + "/peer-summary")[0] == 403
         req_bad = urllib.request.Request(base + PREFIX + "/peer-summary", headers={"Authorization": "Bearer wrong"})
         with pytest.raises(urllib.error.HTTPError) as exc:
             urllib.request.urlopen(req_bad, timeout=5)
         assert exc.value.code == 403
+
+        bad_utf8 = tmp_path / "bad_utf8.token"
+        bad_utf8.write_bytes(b"\xff\xfe" * 16)
+        bad_utf8.chmod(0o600)
+        center.canonical.peer_token_file = bad_utf8
+        req_bad_tok = urllib.request.Request(
+            base + PREFIX + "/peer-summary",
+            headers={"Authorization": "Bearer 0123456789abcdef0123456789abcdef"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_bad_utf8:
+            urllib.request.urlopen(req_bad_tok, timeout=5)
+        assert exc_bad_utf8.value.code == 403
+        center.canonical.peer_token_file = tok_file
 
         req_ok = urllib.request.Request(
             base + PREFIX + "/peer-summary",

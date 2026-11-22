@@ -19,7 +19,7 @@ _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts" / "learning" 
 if str(_CONTRACTS_SRC) not in sys.path:
     sys.path.insert(0, str(_CONTRACTS_SRC))
 
-from canonical_telemetry import HostTelemetry, external_gpu_locks  # noqa: E402
+from canonical_telemetry import HostTelemetry, external_gpu_locks, load_peer_token  # noqa: E402
 from canonical_watch import (  # noqa: E402
     BusyConflict,
     PeerClient,
@@ -188,17 +188,13 @@ class CanonicalService:
                 "source": self.spec_source, "spec": self.spec, **AUTHORITY_STAMP}
 
     def verify_peer_bearer(self, header_value: str | None) -> bool:
-        if self.peer_token_file is None:
-            return False
-        if not isinstance(header_value, str) or not header_value.startswith("Bearer "):
-            return False
-        if self.peer_token_file.is_symlink() or not self.peer_token_file.is_file():
+        if self.peer_token_file is None or not isinstance(header_value, str) or not header_value.startswith("Bearer "):
             return False
         try:
-            expected = self.peer_token_file.read_text(encoding="utf-8").strip()
-        except OSError:
+            expected = load_peer_token(self.peer_token_file)
+        except (OSError, ValueError, UnicodeError):
             return False
-        return len(expected) >= 16 and hmac.compare_digest(header_value[7:].strip(), expected)
+        return hmac.compare_digest(header_value[7:].strip(), expected)
 
     def _public_run(self, row: dict, *, include_log: bool = False) -> dict:
         out = {

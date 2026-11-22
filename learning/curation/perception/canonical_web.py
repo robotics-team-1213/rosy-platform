@@ -86,10 +86,10 @@ def get(handler, path: str, center, accounts=None) -> bool:
     if path == PREFIX + '/peer-summary':
         if accounts is not None:
             accounts.require(handler.learning_principal, 'view')
-        elif (getattr(handler, 'learning_principal', None) is None and service is not None
-              and not service.verify_peer_bearer(handler.headers.get('Authorization'))):
-            handler.send({'error': '피어 인증 토큰을 확인하세요.'}, 403)
-            return True
+        elif getattr(handler, 'learning_principal', None) is None:
+            if service is None or not service.verify_peer_bearer(handler.headers.get('Authorization')):
+                handler.send({'error': '피어 인증 토큰을 확인하세요.'}, 403)
+                return True
         handler.send(_default_snapshot() if service is None else service.peer_summary())
         return True
 

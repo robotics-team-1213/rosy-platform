@@ -237,7 +237,7 @@ def run_collect_dart(req: dict, out: Path) -> dict:
                     layout.sim_arms[a].wait = q.copy()
                 if params["color_random"]:
                     _recolor_world(world, layout, rng)
-                teacher = teaching.Teacher(world, seed=ep_seed)
+                teacher = teaching.Teacher(world, seed=ep_seed if params.get("pose_random", True) else 0)
                 plan = tasks.get_task(layout, "stack")
                 here = dict(plan["start"])
                 for step in plan["steps"]:
@@ -369,6 +369,8 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str
         layout.sim_arms[a].wait = (canon_q[a] if a == arm else idle_q[a]).copy()
     plan = tasks.get_task(layout, _SIM_TASK_MAP[task_name])
     world = sim.World(layout)
+    in_feats = getattr(getattr(policy, "config", None), "input_features", None) or {}
+    top_key = "top" if "observation.images.top" in in_feats else "rs"
     successes, teacher_ok, neighbour_hits, contact_hits = 0, 0, 0, 0
     layer_stats = {}
     try:
@@ -383,10 +385,12 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str
             if t_res.get("result") == "pass":
                 teacher_ok += 1
 
+            teacher = teaching.Teacher(world, seed=seed)
             data = teacher.fresh(here)
             idle = {other: idle_q[other].copy()}
             if step["from"] == "belt":
                 teacher.belt_in(data, step, idle)
+            teacher.contacts = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set())
             teacher.carried = step["container"]
             before = {k: world.pose(data, k) for k in here if k != step["container"]}
             start_z = world.pose(data, step["container"])[0][2]
@@ -398,7 +402,7 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str
                     obs = {
                         "observation.state": torch.from_numpy(data.qpos[world.q[arm]].astype(np.float32))[None],
                     }
-                    for key, cam in (("rs", "top"), ("side", "side"), ("wrist", arm_view)):
+                    for key, cam in ((top_key, "top"), ("side", "side"), ("wrist", arm_view)):
                         obs[f"observation.images.{key}"] = torch.from_numpy(world.render(data, cam)).permute(2, 0, 1)[None].float() / 255.0
                     hist.append(obs)
                     used = hist[-1 - delay_frames] if len(hist) > delay_frames else hist[0]
@@ -416,7 +420,7 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str
             if verdict.get("result") == "pass":
                 successes += 1
                 row_l["successes"] += 1
-            neighbour_hits += len(teacher.contacts.get("pad_neighbour", ()))
+            neighbour_hits += len(set(teacher.contacts.get("pad_neighbour", ())) | set(verdict.get("neighbours_disturbed", ())))
             contact_hits += len(teacher.contacts.get("arm_arm", ())) + len(teacher.contacts.get("arm_other", ()))
     finally:
         for r in world.renderers.values():

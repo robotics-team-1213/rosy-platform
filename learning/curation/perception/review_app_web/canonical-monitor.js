@@ -227,10 +227,14 @@ function renderHostCard({title, hostId, entry, telemetry, peerId, peerStatus, fe
     const ckRow = renderCheckpoints(entry.checkpoints);
     if (ckRow) card.append(ckRow);
     const gates = el('div', undefined, 'canon-gates');
-    const rejCount = (entry.gate_receipts || []).reduce((s, r) => s + (r.counts?.reject ?? 0) + (r.dataset_reject?.length ?? 0), 0);
+    const receipts = entry.gate_receipts || [];
+    const rejCount = receipts.reduce((s, r) => s + (r.counts?.reject ?? 0) + (r.dataset_reject?.length ?? 0), 0);
+    const revCount = receipts.reduce((s, r) => s + (r.counts?.review ?? 0), 0);
+    const gateTone = !receipts.length ? 'delayed' : (rejCount > 0 || revCount > 0) ? 'caution' : 'fresh';
+    const gateText = !receipts.length ? 'data_gate 대기' : rejCount > 0 ? `data_gate 거부 ${rejCount}` : revCount > 0 ? `data_gate 검토 ${revCount}` : 'data_gate 통과';
     gates.append(
       statusTag(entry.align_done === 'RC=0' ? 'fresh' : 'delayed', `align.done: ${entry.align_done ?? '대기'}`),
-      statusTag(rejCount > 0 ? 'caution' : 'fresh', rejCount > 0 ? `data_gate 거부 ${rejCount}` : 'data_gate 통과'),
+      statusTag(gateTone, gateText),
     );
     const seeds = entry.collect_seeds || {};
     gates.append(el('span', `DART 시드: arm_a ${seeds.arm_a ?? 0} · arm_b ${seeds.arm_b ?? 0}`, 'canon-mono quiet'));

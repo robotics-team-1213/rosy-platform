@@ -354,15 +354,17 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
         def __init__(self, world, seed=0, **extra):
             if "pose_random" in extra:
                 calls["pose_random_passed"] = True
+            calls.setdefault("teacher_seeds", []).append(seed)
             self.world = world
             self.hook = lambda d, lbl: None
-            self.contacts = {}
+            self.contacts = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set())
             self.carried = None
         def fresh(self, here):
             import numpy as np
             z = np.zeros(6, dtype=np.float32)
             return SimpleNamespace(qpos=z, ctrl=z)
         def run_single(self, here, step):
+            self.contacts["arm_arm"].add("leaked_from_teacher")
             d = self.fresh(here)
             self.hook(d, "settle")
             for _ in range(62):
@@ -373,7 +375,7 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
         def frame(self, d, tgt, sid):
             pass
         def verdict(self, d, step, row, before):
-            return {"result": "pass"}
+            return {"result": "pass", "neighbours_disturbed": ["b2"]}
 
     sites_m = types.ModuleType("omx_two_arm_sites"); sites_m.Layout = _FakeLayout
     world_m = types.ModuleType("omx_two_arm_world"); world_m.World = _FakeWorld; world_m.FPS = 30
@@ -424,3 +426,67 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     cmd_str = " ".join(calls["cmds"][0])
     assert "--dataset.episodes=[0, 2]" in cmd_str and f"--output_dir={out_t / 'train'}" in cmd_str
     assert f"--policy.pretrained_path={ckpt}" in cmd_str and "--resume=true" not in cmd_str
+
+    import contextlib
+    import numpy as np
+    class _FakeTensor:
+        def __init__(self, arr):
+            self.arr = arr
+        def __getitem__(self, idx):
+            return self
+        def permute(self, *a):
+            return self
+        def float(self):
+            return self
+        def __truediv__(self, other):
+            return self
+    torch_m = types.ModuleType("torch")
+    torch_m.from_numpy = lambda arr: _FakeTensor(arr)
+    torch_m.inference_mode = lambda: contextlib.nullcontext()
+    monkeypatch.setitem(sys.modules, "torch", torch_m)
+    seen_obs_keys = []
+    fake_policy = SimpleNamespace(
+        config=SimpleNamespace(n_action_steps=4, input_features={"observation.images.top": {}}),
+        reset=lambda: None,
+        select_action=lambda b: (seen_obs_keys.append(set(b)), SimpleNamespace(cpu=lambda: SimpleNamespace(numpy=lambda: [np.zeros(6, dtype=np.float32)])))[1],
+    )
+    prof, _ = cw._eval_sim_profile(fake_policy, lambda b: b, lambda x: x, spec, "arm_a", task_name="ship-h1", episodes=1, delay_frames=0, seed_base=700)
+    assert prof["arm_link_contacts"] == 0 and prof["neighbour_disturbed"] == 1
+    assert prof["policy_successes"] == 1 and calls["teacher_seeds"] == [5201, 700, 700]
+    assert "observation.images.top" in seen_obs_keys[0]
+
+
+def test_canonical_watch_and_token_hardening(tmp_path):
+    import canonical_telemetry as ct
+    import canonical_watch as cw
+
+    nan_json = tmp_path / "nan.json"
+    nan_json.write_text('{"v": NaN}', encoding="utf-8")
+    assert cw.read_bounded_json(nan_json, root=tmp_path) is None
+
+    eval_dir = tmp_path / "eval_watch"
+    (eval_dir / "arm_b_ladder").mkdir(parents=True)
+    real_log = eval_dir / "arm_b_ladder" / "dev-002500.log"
+    real_log.write_text("EVAL 3102 arm_b ship-h1r2-l0 pass 139.35 True\n", encoding="utf-8")
+    outside = tmp_path / "secret.log"
+    outside.write_text("EVAL 1 arm_b x pass 1.0 True\n", encoding="utf-8")
+    link_log = eval_dir / "arm_b_ladder" / "dev-001000.log"
+    try:
+        link_log.symlink_to(outside)
+    except OSError:
+        pass
+    logs = cw._scan_eval_logs(eval_dir)
+    assert [row["file"] for row in logs] == ["dev-002500.log"]
+
+    big_tok = tmp_path / "big.token"
+    big_tok.write_text("a" * 5000, encoding="utf-8")
+    if os.name == "posix":
+        big_tok.chmod(0o600)
+    with pytest.raises(ValueError, match="bounded|4096"):
+        ct.load_peer_token(big_tok)
+    if os.name == "posix":
+        mode_tok = tmp_path / "open.token"
+        mode_tok.write_text("0123456789abcdef0123456789abcdef\n", encoding="utf-8")
+        mode_tok.chmod(0o644)
+        with pytest.raises(ValueError, match="permissions"):
+            ct.load_peer_token(mode_tok)

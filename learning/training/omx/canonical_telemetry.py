@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -300,11 +301,15 @@ class HostTelemetry:
 
 
 def external_gpu_locks(jobs_dir: Path | None) -> list[str]:
-    """Return active external ~/rosy-jobs/train-<pid>.lock names without host paths."""
+    """Return active external ~/rosy-jobs/train-<pid>.lock and gpu*.lock names without host paths."""
     if jobs_dir is None or jobs_dir.is_symlink() or not jobs_dir.is_dir():
         return []
-    holders = []
-    for lp in sorted(jobs_dir.glob("train-*.lock"))[:16]:
+    holders, paths = [], []
+    for pat in ("train-*.lock", "gpu*.lock"):
+        for lp in sorted(jobs_dir.glob(pat)):
+            if lp not in paths:
+                paths.append(lp)
+    for lp in paths[:16]:
         if lp.is_symlink() or not lp.is_file():
             continue
         try:
@@ -314,10 +319,20 @@ def external_gpu_locks(jobs_dir: Path | None) -> list[str]:
         if pid <= 0:
             continue
         if Path("/proc").is_dir():
-            alive = Path(f"/proc/{pid}").is_dir()
+            pdir = Path(f"/proc/{pid}")
+            alive = pdir.is_dir()
+            if alive:
+                try:
+                    stat_txt = (pdir / "stat").read_text(encoding="ascii", errors="ignore")
+                    if stat_txt.rsplit(")", 1)[1].lstrip().startswith("Z"):
+                        alive = False
+                except OSError:
+                    alive = False
         else:
             try:
                 os.kill(pid, 0)
+                alive = True
+            except PermissionError:
                 alive = True
             except OSError:
                 alive = False
@@ -326,19 +341,34 @@ def external_gpu_locks(jobs_dir: Path | None) -> list[str]:
     return holders
 
 
-def _load_peer_token(token_file: Path) -> str:
-    if token_file.is_symlink() or not token_file.is_file():
-        raise ValueError("peer token file must be a regular non-symlink file")
-    if os.name == "posix":
-        st = token_file.stat()
-        if (st.st_mode & 0o077) != 0:
-            raise ValueError("peer token file must not allow group/world permissions")
-        if hasattr(os, "getuid") and st.st_uid != os.getuid():
-            raise ValueError("peer token file must be owned by service user")
-    tok = token_file.read_text(encoding="utf-8").strip()
+def load_peer_token(token_file: Path) -> str:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(token_file, flags)
+    except OSError as exc:
+        raise ValueError("peer token file must be a readable regular non-symlink file") from exc
+    with os.fdopen(fd, "rb") as stream:
+        st = os.fstat(stream.fileno())
+        if not stat.S_ISREG(st.st_mode) or st.st_size > 4096:
+            raise ValueError("peer token file must be a bounded regular file")
+        if os.name == "posix":
+            if (st.st_mode & 0o077) != 0:
+                raise ValueError("peer token file must not allow group/world permissions")
+            if hasattr(os, "getuid") and st.st_uid != os.getuid():
+                raise ValueError("peer token file must be owned by service user")
+        raw = stream.read(4097)
+    if len(raw) > 4096:
+        raise ValueError("peer token file exceeds 4096 bytes")
+    try:
+        tok = raw.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise ValueError("peer token file must be valid UTF-8") from exc
     if len(tok) < 16 or any(ord(c) < 32 for c in tok):
         raise ValueError("peer token must be at least 16 printable chars")
     return tok
+
+
+_load_peer_token = load_peer_token
 
 
 def _validate_bind_host(raw: str) -> str:
@@ -473,10 +503,12 @@ def main(argv=None) -> int:
     sp.add_argument("--watch", action="append", default=[])
     args = parser.parse_args(argv)
     watches = dict(_parse_watch_arg(item, args.host_id) for item in args.watch)
-    jobs_dir = args.jobs_dir.resolve() if args.jobs_dir and not args.jobs_dir.is_symlink() else None
+    if args.jobs_dir and args.jobs_dir.is_symlink():
+        raise ValueError("jobs_dir must not be a symlink")
+    jobs_dir = args.jobs_dir.resolve() if args.jobs_dir else None
     cfg = PeerServerConfig(
         host=_validate_bind_host(args.host), port=args.port, host_id=args.host_id,
-        token=_load_peer_token(args.token_file), jobs_dir=jobs_dir, watch_roots=watches,
+        token=load_peer_token(args.token_file), jobs_dir=jobs_dir, watch_roots=watches,
     )
     srv = create_peer_server(cfg)
     try:

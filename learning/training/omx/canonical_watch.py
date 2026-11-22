@@ -50,7 +50,7 @@ _BEARER_RE = re.compile(r"(?i)\bBearer\s+\S+")
 _HF_TOKEN_RE = re.compile(r"\bhf_[A-Za-z0-9]{6,}\b")
 _TQDM_RE = re.compile(
     r"(?P<pct>\d{1,3})%\|[^|]{1,40}\|\s*(?P<step>\d{1,9})/(?P<total>\d{1,9})\s*"
-    r"\[(?P<elapsed>[0-9:]{3,16})<(?P<eta>[0-9:day,\s?]{1,24}),\s*"
+    r"\[(?P<elapsed>[0-9:]{3,16})<(?P<eta>[0-9:days,\s?]{1,24}),\s*"
     r"(?P<rate>[0-9]{1,8}(?:\.[0-9]{1,4})?)(?P<unit>(?:step|it)/s|s/(?:step|it))\]"
 )
 _STEP_RE = re.compile(r"\bstep:(?P<num>\d+(?:\.\d+)?)(?P<suf>[KMkm]?)\b")
@@ -143,6 +143,10 @@ def _open_regular_bytes(path: Path, max_bytes: int, *, tail: bool = False) -> tu
         return None
 
 
+def _reject_non_finite(token: str):
+    raise ValueError(f"non-finite JSON constant: {token}")
+
+
 def read_bounded_json(path: Path, max_bytes: int = MAX_WATCH_FILE_BYTES, *, root: Path | None = None) -> dict | None:
     try:
         if root is not None:
@@ -156,7 +160,7 @@ def read_bounded_json(path: Path, max_bytes: int = MAX_WATCH_FILE_BYTES, *, root
         if loaded is None:
             return None
         raw, _ = loaded
-        doc = json.loads(raw.decode("utf-8"))
+        doc = json.loads(raw.decode("utf-8"), parse_constant=_reject_non_finite)
         return doc if isinstance(doc, dict) else None
     except (OSError, ValueError):
         return None
@@ -293,7 +297,7 @@ class PeerClient:
             raise KeyError("unknown peer")
         now = time.monotonic()
         with self._lock:
-            last = self._last_manual.get(peer_id, 0.0)
+            last = self._last_manual.get(peer_id, -math.inf)
             if now - last < PEER_REFRESH_MIN_INTERVAL_S:
                 raise BusyConflict("peer refresh rate-limited (5s minimum interval)")
             self._last_manual[peer_id] = now
@@ -402,8 +406,10 @@ def _scan_eval_logs(root: Path) -> list[dict]:
     seen = set()
     for pat in ("arm_b_ladder/dev-*.log", "arm_a_ladder/dev-*.log", "ladder/dev-*.log", "ladder_a/dev-*.log", "eval_l1/dev-*.log"):
         for ep in sorted(root.glob(pat))[:8]:
-            if len(out) >= 8 or not _safe_under_root(root, ep):
+            if len(out) >= 8:
                 break
+            if not _safe_under_root(root, ep):
+                continue
             rel = ep.relative_to(root).as_posix()
             if rel in seen:
                 continue
