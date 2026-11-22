@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -30,9 +32,10 @@ DEFAULT_TTL_S = 30.0
 MAX_FAILURE_BUNDLES = 200
 MAX_CONTROL_BUNDLES = 50
 MAX_TOTAL_BYTES = 512 * 1024 * 1024
+FAILURE_ASSET_MAX_BYTES = 16 * 1024 * 1024
 
-_BUNDLE_ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
-_SAFE_FILE_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
+_BUNDLE_ID_RE = re.compile(r"^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_SAFE_FILE_RE = re.compile(r"^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _MIME_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".mp4": "video/mp4", ".jsonl": "application/x-ndjson"}
 _LONG_B64_RE = re.compile(r"^[A-Za-z0-9+/=\r\n]{2048,}$")
 
@@ -42,9 +45,19 @@ def default_bundle_root(state_dir: Path | None = None) -> Path:
     return base / "failure-bundles"
 
 
+def _norm_for_hash(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _norm_for_hash(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_norm_for_hash(x) for x in value]
+    if isinstance(value, float) and not isinstance(value, bool):
+        return int(value) if math.isfinite(value) and value.is_integer() else value
+    return value
+
+
 def canonical_sha256(payload: dict[str, Any], *, omit_keys: tuple[str, ...] = ("context_sha256", "freshness")) -> str:
     filtered = {k: v for k, v in payload.items() if k not in omit_keys} if omit_keys else payload
-    raw = json.dumps(filtered, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode("utf-8")
+    raw = json.dumps(_norm_for_hash(filtered), sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -139,10 +152,10 @@ def build_bundle(
         "freshness": None,
     }
     _check_depth_and_no_b64(bundle)
+    bundle["context_sha256"] = canonical_sha256(bundle)
     encoded = json.dumps(bundle, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode("utf-8")
     if len(encoded) > MAX_BYTES:
         raise ValueError(f"bundle exceeds {MAX_BYTES} bytes ({len(encoded)})")
-    bundle["context_sha256"] = canonical_sha256(bundle)
     return bundle
 
 
@@ -204,11 +217,10 @@ def write_bundle(
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     bid = str(bundle["bundle_id"])
-    if not _BUNDLE_ID_RE.fullmatch(bid):
+    dest = root / bid
+    if not _BUNDLE_ID_RE.fullmatch(bid) or dest.resolve().parent != root.resolve():
         raise ValueError(f"invalid bundle_id {bid!r}")
-    tmp = root / f".tmp-{bid}-{os.getpid()}"
-    if tmp.exists():
-        shutil.rmtree(tmp)
+    tmp = root / f".tmp-{bid}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
     tmp.mkdir(parents=True)
     to_write = json.loads(json.dumps(bundle, allow_nan=False))
     try:
@@ -216,6 +228,8 @@ def write_bundle(
         for name, data in (assets or {}).items():
             if not _SAFE_FILE_RE.fullmatch(name) or Path(name).suffix.lower() not in _MIME_TYPES:
                 raise ValueError(f"unsupported asset filename {name!r}")
+            if not (1 <= len(data) <= FAILURE_ASSET_MAX_BYTES):
+                raise ValueError(f"asset {name!r} byte size out of range")
             (tmp / name).write_bytes(data)
             asset_meta[name] = (len(data), hashlib.sha256(data).hexdigest())
         for frame in to_write["visual"]["frames"]:
@@ -230,7 +244,6 @@ def write_bundle(
         if len(encoded) > MAX_BYTES:
             raise ValueError(f"bundle exceeds {MAX_BYTES} bytes")
         (tmp / "bundle.json").write_bytes(encoded)
-        dest = root / bid
         if dest.exists():
             shutil.rmtree(dest)
         os.replace(tmp, dest)
@@ -258,7 +271,9 @@ def _bundle_dir(root: Path, bundle_id: str) -> Path:
         raise ValueError("invalid bundle_id")
     base = Path(root).resolve()
     target = Path(root) / bundle_id
-    if target.is_symlink() or not target.is_dir() or not target.resolve().is_relative_to(base):
+    if target.resolve().parent != base:
+        raise ValueError("unsafe bundle_id")
+    if target.is_symlink() or not target.is_dir():
         raise FileNotFoundError(bundle_id)
     return target
 
@@ -287,14 +302,16 @@ def list_bundles(root: Path, *, arm: str | None = None, kind: str | None = None,
     return items
 
 
-def load_bundle(
-    root: Path,
-    bundle_id: str,
-    *,
-    current_cell_state_gen: int | None = None,
-    now_s: float | None = None,
-    active_holds: tuple[str, ...] = (),
-) -> dict[str, Any]:
+def _finite_num(value: Any) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)) else None
+
+
+def _bundle_gen(bundle: dict[str, Any]) -> int | None:
+    gen = (bundle.get("generation") or {}).get("cell_state_gen") if isinstance(bundle.get("generation"), dict) else None
+    return gen if isinstance(gen, int) and not isinstance(gen, bool) and gen >= 0 else None
+
+
+def load_bundle(root: Path, bundle_id: str, *, current_cell_state_gen: int | None = None, now_s: float | None = None, active_holds: tuple[str, ...] = ()) -> dict[str, Any]:
     bdir = _bundle_dir(root, bundle_id)
     bfile = bdir / "bundle.json"
     if bfile.is_symlink() or not bfile.is_file():
@@ -302,24 +319,21 @@ def load_bundle(
     data = json.loads(bfile.read_text(encoding="utf-8"))
     if data.get("context_sha256") != canonical_sha256(data):
         raise ValueError("bundle context_sha256 integrity mismatch")
-    now = time.time() if now_s is None else float(now_s)
-    age_s = max(0.0, now - float(data["created_at_s"]))
-    bgen = int((data.get("generation") or {}).get("cell_state_gen", 0))
-    cgen = bgen if current_cell_state_gen is None else int(current_cell_state_gen)
+    bgen = _bundle_gen(data)
+    if bgen is None:
+        raise ValueError("missing integer cell_state_gen")
+    now, created, ttl = (time.time() if now_s is None else _finite_num(now_s)), _finite_num(data.get("created_at_s")), _finite_num(data.get("ttl_s", DEFAULT_TTL_S))
+    if now is None or created is None or ttl is None or not (0.0 < ttl <= DEFAULT_TTL_S):
+        raise ValueError("invalid bundle timing")
+    age_s, cgen = max(0.0, now - created), (bgen if current_cell_state_gen is None else int(current_cell_state_gen))
     reasons: list[str] = []
     if cgen != bgen:
         reasons.append(f"cell_state_gen advanced {bgen}->{cgen}")
-    if age_s > float(data.get("ttl_s", DEFAULT_TTL_S)):
-        reasons.append(f"bundle expired ({age_s:.1f}s > {data.get('ttl_s', DEFAULT_TTL_S)}s)")
+    if now - created < -2.0 or age_s > ttl:
+        reasons.append(f"bundle expired or skewed ({now - created:.1f}s, ttl={ttl}s)")
     if data.get("arm_id") in active_holds:
         reasons.append(f"active hold on {data.get('arm_id')}")
-    data["freshness"] = {
-        "age_s": round(age_s, 3),
-        "current_cell_state_gen": cgen,
-        "gen_matches": cgen == bgen,
-        "still_valid_for_action": len(reasons) == 0,
-        "invalidated_reasons": reasons,
-    }
+    data["freshness"] = {"age_s": round(age_s, 3), "current_cell_state_gen": cgen, "gen_matches": cgen == bgen, "still_valid_for_action": not reasons, "invalidated_reasons": reasons}
     return data
 
 
@@ -349,27 +363,24 @@ def resolve_asset(root: Path, bundle_id: str, filename: str) -> tuple[Path, str,
 
 
 def check_fence(
-    bundle: dict[str, Any],
-    *,
-    expected_context_sha256: str,
-    expected_cell_state_gen: int,
-    current_cell_state_gen: int,
-    now_s: float | None = None,
-    active_holds: tuple[str, ...] = (),
-    max_age_s: float | None = None,
+    bundle: dict[str, Any], *, expected_context_sha256: str, expected_cell_state_gen: int,
+    current_cell_state_gen: int, now_s: float | None = None, active_holds: tuple[str, ...] = (), max_age_s: float | None = None,
 ) -> tuple[bool, str | None, list[str]]:
     """Enforce TOCTOU freshness & digest checks; return (True, None, []) or (False, 'STALE_FAILURE_CONTEXT', reasons)."""
     reasons: list[str] = []
-    if bundle.get("context_sha256") != expected_context_sha256:
+    if bundle.get("context_sha256") != expected_context_sha256 or canonical_sha256(bundle) != expected_context_sha256:
         reasons.append("context_sha256 mismatch")
-    bgen = int((bundle.get("generation") or {}).get("cell_state_gen", 0))
-    if bgen != int(expected_cell_state_gen) or int(current_cell_state_gen) != bgen:
+    bgen = _bundle_gen(bundle)
+    if bgen is None or bgen != int(expected_cell_state_gen) or int(current_cell_state_gen) != bgen:
         reasons.append(f"cell_state_gen drift (bundle={bgen}, expected={expected_cell_state_gen}, current={current_cell_state_gen})")
-    now = time.time() if now_s is None else float(now_s)
-    age_s = max(0.0, now - float(bundle["created_at_s"]))
-    limit = float(bundle.get("ttl_s", DEFAULT_TTL_S)) if max_age_s is None else min(float(max_age_s), float(bundle.get("ttl_s", DEFAULT_TTL_S)))
-    if age_s > limit:
-        reasons.append(f"stale age {age_s:.1f}s > {limit:.1f}s")
+    now, created, ttl = (time.time() if now_s is None else _finite_num(now_s)), _finite_num(bundle.get("created_at_s")), _finite_num(bundle.get("ttl_s", DEFAULT_TTL_S))
+    lim = _finite_num(max_age_s) if max_age_s is not None else ttl
+    if now is None or created is None or ttl is None or not (0.0 < ttl <= DEFAULT_TTL_S) or lim is None or lim <= 0.0:
+        reasons.append("invalid bundle or fence timing")
+    elif now - created < -2.0:
+        reasons.append(f"bundle timestamp skewed into future ({created - now:.1f}s)")
+    elif (now - created) > min(lim, ttl):
+        reasons.append(f"stale age {now - created:.1f}s > {min(lim, ttl):.1f}s")
     if bundle.get("arm_id") in active_holds:
         reasons.append(f"active hold on {bundle.get('arm_id')}")
     return (True, None, []) if not reasons else (False, "STALE_FAILURE_CONTEXT", reasons)

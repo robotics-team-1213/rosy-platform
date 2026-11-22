@@ -38,14 +38,14 @@ MEASURED_VETO_CODES = (
     "NO_MEASURED_OBJECTS",
 )
 
-_SECRET_KEY_RE = re.compile(r"(?:token|secret|authorization|api_key|password|cookie|private_key)", re.I)
+_SECRET_KEY_RE = re.compile(r"(?:token|secret|authorization|api[-_]?key|password|cookie|private[-_]?key)", re.I)
 _PRIVATE_IP_RE = re.compile(
     r"(?<![\d.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}"
     r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3})(?![\d.])"
 )
 _HOME_UNIX_RE = re.compile(r"/home/[A-Za-z0-9_.-]+")
 _HOME_WIN_RE = re.compile(r"[A-Za-z]:\\Users\\[^\\/:*?\"<>|\s]+")
-_BEARER_RE = re.compile(r"\bBearer\s+[A-Za-z0-9_.-]+")
+_BEARER_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._\-+/=]{8,}", re.I)
 _HARD_BLOCKERS = {
     "LATCHED_HW_ERROR", "WINDUP_HIT", "CAPS_UNRESTORED", "FLEET_SAFETY_STOP_OR_ABORTED",
     "REPEAT_UNKNOWN_ESCALATION", "PENDING_INTENT_PRESENT", "PEER_ARM_LOCKED_OR_HELD",
@@ -85,8 +85,11 @@ def compute_measured_vetoes(
         vetoes.append(_veto("OUT_OF_HOME_POSE", "hard", f"max_home_err_units={kin['max_home_err_units']}", "measurement.kinematics_and_health.max_home_err_units"))
     cal = spatial.get("calibration") or {}
     shift = cal.get("top_shift_px") or {}
-    if shift.get("moved") is True or (isinstance(shift.get("max_px"), (int, float)) and isinstance(shift.get("limit_px"), (int, float)) and shift["max_px"] > shift["limit_px"]):
-        vetoes.append(_veto("TOP_CAMERA_SHIFTED", "hard", f"top shift max_px={shift.get('max_px')} limit={shift.get('limit_px')}", "spatial.calibration.top_shift_px"))
+    raw_lim = shift.get("limit_px")
+    lim_px = raw_lim if isinstance(raw_lim, (int, float)) and not isinstance(raw_lim, bool) else 6.0
+    max_px = shift.get("max_px")
+    if shift.get("moved") is True or (isinstance(max_px, (int, float)) and not isinstance(max_px, bool) and max_px > lim_px):
+        vetoes.append(_veto("TOP_CAMERA_SHIFTED", "hard", f"top shift max_px={max_px} limit={lim_px}", "spatial.calibration.top_shift_px"))
     if cal.get("missing_map"):
         vetoes.append(_veto("MISSING_SITE_MAP", "hard", f"missing_map={cal['missing_map']}", "spatial.calibration.missing_map"))
     inc = measurement.get("incident") or {}
@@ -100,10 +103,11 @@ def compute_measured_vetoes(
         vetoes.append(_veto("CAPS_UNRESTORED", "hard", "servo caps not restored", "measurement.incident.caps_restored"))
     hf = measurement.get("holding_and_fold") or {}
     live_fold = hf.get("live_fold") or {}
-    if live_fold.get("folded") is False and live_fold.get("at_rest_tol_8") is False:
+    fold_rb = hf.get("fold_readback")
+    if live_fold.get("folded") is False or live_fold.get("at_rest_tol_8") is False or (isinstance(fold_rb, dict) and fold_rb.get("folded") is False):
         vetoes.append(_veto("EXTENDED_TORQUE_DROP_FORBIDDEN", "hard", "arm extended; keep torque ON (D-1048)", "measurement.holding_and_fold.live_fold"))
     still = hf.get("still_holding") or {}
-    if still.get("measured") is True and still.get("tcp_low_for_release") is False:
+    if still.get("measured") is True and still.get("tcp_low_for_release") is not True:
         vetoes.append(_veto("HOLDING_HIGH_NO_RELEASE", "hard", "holding object high; release forbidden", "measurement.holding_and_fold.still_holding"))
     if repeat_unknown_tripped or measurement.get("repeat_unknown_tripped") is True:
         vetoes.append(_veto("REPEAT_UNKNOWN_ESCALATION", "hard", "unknown cause repeated twice", "history_and_constraints.repeat_unknown_tripped"))
@@ -120,7 +124,7 @@ def compute_measured_vetoes(
     occ = spatial.get("workspace_occupancy") or {}
     arms_occ = occ.get("arms") or {}
     peer_blocked = occ.get("peer_ab_session_locked") is True or occ.get("whole_cell_lock_held") is True or any(
-        isinstance(a, dict) and (a.get("held") is True or (a.get("session_lock_held") is True and a.get("folded") is False))
+        isinstance(a, dict) and (a.get("held") is True or (a.get("session_lock_held") is True and a.get("folded") is not True))
         for a in arms_occ.values()
     )
     if peer_blocked:
@@ -169,7 +173,7 @@ def build_allowed_fallback_menu(
     menu = [_menu_item("escalate_human", 0, "human_only", "human_request", False, False, codes, set())]
 
     if executor_mode in ("act_paced", "act_timed", "hybrid"):
-        menu.append(_menu_item("propose_ik_fallback_for_policy", 1, "tier1_propose", "fleet_pipeline", True, False, codes, motion_block | {"AMR_BED_REQUIRES_FLEET_R"}))
+        menu.append(_menu_item("propose_ik_fallback_for_policy", 1, "tier1_propose", "fleet_pipeline", True, False, codes, motion_block))
     if dest_full_pre_motion and has_declared_alternates:
         menu.append(_menu_item("redirect_alt_dest", 2, "tier2_auto", "fleet_pipeline", False, False, codes, motion_block - {"EXTENDED_TORQUE_DROP_FORBIDDEN", "HOLDING_HIGH_NO_RELEASE"}))
     if auto_fold_armed:
@@ -179,9 +183,9 @@ def build_allowed_fallback_menu(
 
     if executor_mode in ("ik_auto_pick", "recovery"):
         if attempt_cause in ("lift_stall", "no_progress"):
-            menu.append(_menu_item("retry_ik_slower", 1, "tier1_propose", "cell_job_api", True, True, codes, motion_block | {"NO_MEASURED_OBJECTS"}))
+            menu.append(_menu_item("retry_ik_slower", 1, "tier1_propose", "cell_job_api", True, True, codes, motion_block | {"AMR_BED_REQUIRES_FLEET_R", "NO_MEASURED_OBJECTS"}))
         if attempt_cause in ("no_room", "pile", "s3_packed_no_clearance", "s6_unseated_cone", "lift_stall", "misaligned", "unstable_grasp", "no_progress"):
-            menu.append(_menu_item("align_push", 1, "tier1_propose", "cell_job_api", True, True, codes, motion_block))
+            menu.append(_menu_item("align_push", 1, "tier1_propose", "cell_job_api", True, True, codes, motion_block | {"AMR_BED_REQUIRES_FLEET_R"}))
         if attempt_cause in ("empty", "unstable_grasp", "misaligned", "no_progress"):
-            menu.append(_menu_item("retry_ik_alt_axis", 1, "tier1_propose", "cell_job_api", True, True, codes, motion_block | {"NO_MEASURED_OBJECTS"}))
+            menu.append(_menu_item("retry_ik_alt_axis", 1, "tier1_propose", "cell_job_api", True, True, codes, motion_block | {"AMR_BED_REQUIRES_FLEET_R", "NO_MEASURED_OBJECTS"}))
     return menu

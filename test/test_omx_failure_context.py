@@ -226,7 +226,8 @@ def test_redact_context_strips_private_ips_home_paths_and_secrets():
         "lan": "192.168.50.10",
         "unix": "/home/alice/.config/rosy/cell-job-api.token",
         "win": r"C:\Users\bob\AppData\Local\Rosy\token",
-        "headers": {"Authorization": "Bearer secret-abc-123"},
+        "headers": {"Authorization": "Bearer secret-abc-123", "X-API-Key": "sk-live-999"},
+        "msg": "bearer abc+def/ghi== and Bearer xyz123456=7",
         "api_key": "sk-test",
         "safe_float": "version 10.2.3.4-rc1",
     }
@@ -236,4 +237,58 @@ def test_redact_context_strips_private_ips_home_paths_and_secrets():
     assert red["unix"].startswith("/home/[USER]/")
     assert red["win"].startswith("[USER_HOME]\\")
     assert red["headers"]["Authorization"] == "[REDACTED]"
+    assert red["headers"]["X-API-Key"] == "[REDACTED]"
     assert red["api_key"] == "[REDACTED]"
+    assert "abc+def/ghi==" not in red["msg"] and "xyz123456=7" not in red["msg"]
+
+
+def test_pr1_hardening_traversal_roundtrip_amr_bed_and_fail_closed_fence(tmp_path):
+    corr, gen, meas, spat, vis = _sample_inputs()
+    for bad_id in (".", "..", ".hidden", "a..b"):
+        with pytest.raises(ValueError, match="bundle_id"):
+            cfc.build_bundle(
+                bundle_id=bad_id, kind="stop", arm_id="arm_b", cell_id="cell_ab", executor_mode="ik_auto_pick",
+                correlation=corr, generation=gen, measurement=meas, spatial=spat, visual=vis,
+            )
+    b = cfc.build_bundle(
+        bundle_id="roundtrip-1", kind="stop", arm_id="arm_b", cell_id="cell_ab", executor_mode="ik_auto_pick",
+        correlation=corr, generation=gen, measurement=meas, spatial=spat, visual=vis, created_at_s=100, monotonic_s=10,
+    )
+    with pytest.raises(ValueError, match="bundle_id"):
+        cfc.write_bundle(tmp_path, {**b, "bundle_id": ".."})
+    with pytest.raises(ValueError, match="bundle_id"):
+        cfc.load_bundle(tmp_path, "..")
+
+    model = CellFailureContext.model_validate(b)
+    dumped = model.model_dump(mode="json", by_alias=True)
+    assert CellFailureContext.model_validate(dumped).bundle_id == "roundtrip-1"
+
+    # Tampered in-memory body must fail check_fence even when context_sha256 field is unchanged.
+    tampered = json.loads(json.dumps(b))
+    tampered["arm_id"] = "arm_a"
+    ok, code, _ = cfc.check_fence(tampered, expected_context_sha256=b["context_sha256"], expected_cell_state_gen=10, current_cell_state_gen=10, now_s=105.0)
+    assert not ok and code == "STALE_FAILURE_CONTEXT"
+
+    # Missing cell_state_gen, NaN max_age_s, ttl_s > 30, and future created_at_s fail closed.
+    bad_gen = json.loads(json.dumps(b))
+    del bad_gen["generation"]["cell_state_gen"]
+    assert not cfc.check_fence(bad_gen, expected_context_sha256=b["context_sha256"], expected_cell_state_gen=0, current_cell_state_gen=0, now_s=105.0)[0]
+    assert not cfc.check_fence(b, expected_context_sha256=b["context_sha256"], expected_cell_state_gen=10, current_cell_state_gen=10, now_s=105.0, max_age_s=float("nan"))[0]
+    assert not cfc.check_fence({**b, "ttl_s": 99.0}, expected_context_sha256=b["context_sha256"], expected_cell_state_gen=10, current_cell_state_gen=10, now_s=105.0)[0]
+    assert not cfc.check_fence(b, expected_context_sha256=b["context_sha256"], expected_cell_state_gen=10, current_cell_state_gen=10, now_s=90.0)[0]
+
+    # Direct cell_job_api motion verbs must be blocked by AMR_BED_REQUIRES_FLEET_R.
+    spat_bed = json.loads(json.dumps(spat))
+    spat_bed["sites"]["is_amr_bed"] = True
+    vetoes_bed = cfc.compute_measured_vetoes(meas, spat_bed, vis)
+    menu_bed = {m["verb"]: m for m in cfc.build_allowed_fallback_menu("ik_auto_pick", "lift_stall", vetoes_bed)}
+    for verb in ("retry_ik_slower", "align_push"):
+        assert not menu_bed[verb]["preconditions_met"] and "AMR_BED_REQUIRES_FLEET_R" in menu_bed[verb]["blocked_by"]
+
+    # None / omitted safety fields fail closed.
+    meas_none = json.loads(json.dumps(meas))
+    meas_none["holding_and_fold"] = {"live_fold": {"folded": False}, "still_holding": {"measured": True}}
+    spat_none = json.loads(json.dumps(spat))
+    spat_none["workspace_occupancy"] = {"arms": {"arm_a": {"session_lock_held": True}}}
+    codes = {v["code"] for v in cfc.compute_measured_vetoes(meas_none, spat_none, vis)}
+    assert {"EXTENDED_TORQUE_DROP_FORBIDDEN", "HOLDING_HIGH_NO_RELEASE", "PEER_ARM_LOCKED_OR_HELD"} <= codes

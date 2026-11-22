@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from typing import Annotated, Any, Literal
 
@@ -48,15 +49,26 @@ MEASURED_VETO_CODES = (
 )
 
 Sha256Hex = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-BundleId = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,128}$")]
-SafeAssetName = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.-]{1,128}$")]
+BundleId = Annotated[str, Field(pattern=r"^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")]
+SafeAssetName = Annotated[str, Field(pattern=r"^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")]
 _LONG_B64_RE = re.compile(r"^[A-Za-z0-9+/=\r\n]{2048,}$")
+
+
+def _norm_for_hash(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _norm_for_hash(v) for k, v in value.items() if v is not None}
+    if isinstance(value, list):
+        return [_norm_for_hash(x) for x in value]
+    if isinstance(value, float) and not isinstance(value, bool):
+        return int(value) if math.isfinite(value) and value.is_integer() else value
+    return value
 
 
 def canonical_sha256(payload: dict[str, Any], *, omit_keys: tuple[str, ...] = ()) -> str:
     """Return canonical sorted-JSON SHA-256 hex digest with selected top-level keys omitted."""
     filtered = {k: v for k, v in payload.items() if k not in omit_keys} if omit_keys else payload
-    raw = json.dumps(filtered, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode("utf-8")
+    normed = _norm_for_hash(filtered)
+    raw = json.dumps(normed, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -194,7 +206,7 @@ class CellFailureContext(_Strict):
 
     @model_validator(mode="after")
     def _validate_integrity(self) -> "CellFailureContext":
-        core = self.model_dump(mode="json", by_alias=True, exclude={"context_sha256", "freshness"}, exclude_unset=True)
+        core = _norm_for_hash(self.model_dump(mode="json", by_alias=True, exclude={"context_sha256", "freshness"}, exclude_none=True))
         _check_depth(core)
         _check_no_inline_images(core)
         encoded = json.dumps(core, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode("utf-8")
@@ -221,7 +233,7 @@ class CellReadiness(_Strict):
 
     @model_validator(mode="after")
     def _validate_digest(self) -> "CellReadiness":
-        core = self.model_dump(mode="json", by_alias=True, exclude={"readiness_digest"}, exclude_unset=True)
+        core = self.model_dump(mode="json", by_alias=True, exclude={"readiness_digest"}, exclude_none=True)
         _check_depth(core)
         _check_no_inline_images(core)
         if canonical_sha256(core) != self.readiness_digest:
