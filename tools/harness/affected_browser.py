@@ -25,13 +25,11 @@ STRICT = "ROSY_BROWSER_STRICT=1"
 CI_BROWSER_ROOTS = ("operations/fleet/test", "applications/fleet/test")
 # Simulators and OMX adapter hardware suites: GitHub runners cannot run them (same tuple as pr_land.EXCLUDED_PREFIXES).
 LAB_PREFIXES = ("integrations/simulation/", "learning/envs/isaac/", "middleware/devices/omx/adapter/")
-# fails on GitHub runners only; back to lab until the cause is found, 2026-11-21
-LAB_FILES = ("test/test_measured_calibration_browser.py",)
 FILES_PER_JOB, MAX_JOBS = 16, 4
 
 
 def lab_path(path: str) -> bool:
-    return path.startswith(LAB_PREFIXES) or path in LAB_FILES or work_queue.lab_only([path], above=False)
+    return path.startswith(LAB_PREFIXES) or work_queue.lab_only([path], above=False)
 
 
 def split(paths) -> tuple[list[str], list[str]]:
