@@ -108,7 +108,7 @@ async function refresh(){
   catch(exc){if(generation===resourceGeneration){connected=false;error(`${exc.message} 다시 확인을 눌러 연결을 확인하세요.`);availability();}}
   finally{polling=false;$('imitate-refresh').disabled=false;if(refreshQueued||generation!==resourceGeneration){refreshQueued=false;void refresh();}}
 }
-const paths=[/^meta\/(info|stats)\.json$/,/^meta\/tasks\.parquet$/,/^meta\/episodes\/chunk-\d{3}\/file-\d{3}\.parquet$/,/^data\/chunk-\d{3}\/file-\d{3}\.parquet$/,/^videos\/observation\.images\.[A-Za-z0-9_-]+\/chunk-\d{3}\/file-\d{3}\.mp4$/,/^(README\.md|LICEN[CS]E|LICENSE\.txt|LICENSE\.md|UPSTREAM_README\.md|source-provenance\.json)$/];
+const paths=[/^meta\/(info|stats)\.json$/,/^meta\/tasks\.parquet$/,/^meta\/episodes\/chunk-\d{3}\/file-\d{3}\.parquet$/,/^data\/chunk-\d{3}\/file-\d{3}\.parquet$/,/^videos\/observation\.images\.[A-Za-z0-9_-]+\/chunk-\d{3}\/file-\d{3}\.mp4$/,/^(README\.md|LICEN[CS]E|LICENSE\.txt|LICENSE\.md|UPSTREAM_README\.md|source-provenance\.json|rosy_provenance\.json)$/];
 function sameManifest(a,b){return a.length===b.length&&a.every((f,i)=>f.name===b[i].name&&f.size===b[i].size&&f.sha256===b[i].sha256);}
 $('source-folder').onchange=async()=>{
   const generation=++selectionGeneration;matched=false;manifest=[];selected=[];error('');$('upload-excluded').replaceChildren();availability();

@@ -2,6 +2,7 @@
 // 그린다. 램프 도트는 장치가 보고한 구동값(lamps)이다. failsafe 는 "고장 표시"이고
 // all_red 는 "명령된 정지"다 — 둘을 같은 색으로 뭉뜽그리면 운영자는 장비 고장을
 // 정지 성공으로 읽어 버린다.
+import { setOffBy } from "/common/cause-line.js";
 
 const SIGNAL_INTENT_LABEL = Object.freeze({
   failsafe: "감독 중단", manual: "수동", cycle: "자동 순환",
@@ -138,8 +139,7 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
       // D-540 9: 점멸·전체정지는 멈춤이라 열려 있다. 나머지 명령은 이름 있는 운영자만.
       const why = !row.online ? "오프라인"
         : body_.mode === "flash_red" || body_.mode === "all_red" ? "" : namedReason();
-      button.disabled = Boolean(why);
-      if (why) button.setAttribute("reason", why);
+      setOffBy(button, why);
       if (kind) button.classList.add(kind);
       button.addEventListener("click", scope.guard(() => command(row.signal_id, body_, label)));
       return button;
@@ -231,8 +231,7 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
       button.setAttribute("kind", "quiet");
       button.type = "button";
       button.textContent = label;
-      button.disabled = !isOperator();
-      if (!isOperator()) button.setAttribute("reason", "운영자만");
+      setOffBy(button, isOperator() ? "" : "운영자만");
       if (cls) button.classList.add(cls);
       button.addEventListener("click", scope.guard(() => virtualCommand(row.signal_id, verb, label, approach)));
       actions.appendChild(button);

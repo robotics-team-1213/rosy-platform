@@ -15,10 +15,10 @@ import httpx
 from pydantic import ValidationError
 
 from core_common.protocol.native_operation import NativeOperation
+
 from fleet.hub.hub import HubError
 from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, exit_segment, lane_action, turn_target
-from fleet.server.channel.execution.outcomes.evidence import safe_proof
 from fleet.server.trip_admission import LOCALIZED
 from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_fields, junction_fields,
@@ -26,10 +26,10 @@ from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_field
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
+from fleet.server.trip_nav2_route import step_nav2_route
 from fleet.server.trip_ports import pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
-from fleet.server.trips.auto_repark import evaluate_named_stop
-from fleet.server.trips.named_stop_decision import confirm_precision_arrival
+from fleet.server.named_stop_confirm import GoalRefused, confirm_free_stop, confirm_lane_stop
 from fleet.swarm.transport import RobotApiError
 from fleet.traffic.route_guide import route_guided
 
@@ -47,8 +47,7 @@ DISMISS_MARGIN_M = 0.3
 MAX_STOP_AFTER_M = 2.0
 
 
-class _GoalRefused(RuntimeError):
-    """The console did not send the trip's goal (queued behind traffic, yielding, untrusted)."""
+_GoalRefused = GoalRefused
 
 
 class _JunctionAborted(RuntimeError):
@@ -88,7 +87,7 @@ class TripSteps:
                                                self._named_stop_handoff(live, live.view["segment_index"])))
             return
         try:
-            if live.arc(live.view["segment_index"]).drive_mode == "lane":
+            if live.segment_is_lane(live.view["segment_index"]):
                 live.junction = await self._call(self._junction.junction_state(robot_id, **self._after(self._junction, robot_id))) or {}  # D-760 8: fenced
                 # D-520 2: CORE's arc record; a CORE restart resets arc_seq (as the junction seq)
                 sent, arc = live.sent, live.junction.get("arc")
@@ -117,7 +116,7 @@ class TripSteps:
             index, s, off = self._locate(live, pose)
             live.at, live.at_stamp = (index, s), getattr(pose, "odom_stamp", None)  # one pose, one assignment
             remaining = live.segments[index]["s_to"] - s
-            lane = live.arc(index).drive_mode == "lane"
+            lane = live.segment_is_lane(index)
             if lane and self.traffic.holds(live, index):  # CORE waits at the junction for the block
                 live.waiting_since = None
             failed = live.junction_end(self._clock(), remaining if lane else None, self.config)
@@ -177,6 +176,8 @@ class TripSteps:
                         and self._confirm_lane_stop(live, index)
                         and not self.traffic.holds(live, index + 1)):
                     await self._step_free(live, index + 1, pose, staging=index)
+            elif live.nav2:
+                await step_nav2_route(self, live, index, s, pose)
             else:
                 await self._step_free(live, index, pose)
             if last and live.open and live.view["hold"] is None and self._arrived(live, index, remaining, lane, pose):
@@ -194,7 +195,7 @@ class TripSteps:
             await self._stop(live, "failed", "TRIP_GOAL_REFUSED", {"goal_reason": str(exc) or None})
             return
         except RobotApiError as exc:
-            lane = live.arc(live.view["segment_index"]).drive_mode == "lane"
+            lane = live.segment_is_lane(live.view["segment_index"])
             code = "TRIP_ROBOT_JUNCTION_UNSUPPORTED" if lane and exc.status == 404 else exc.code
             await self._stop(live, "failed", code, {"status": exc.status})
             return
@@ -209,8 +210,10 @@ class TripSteps:
             del live.view["wait"]  # a whole step without a link fault: the link_wait ``since`` may start over
         # after the step, so the last place's stop has gone out before "arrived"
         if arrival_confirmed and live.view["hold"] is None:
-            if lane and not await self._arrival_aligned(live, pose):  # lane trips only: Nav2 holds its own yaw goal
-                return self._save(live) if live.open else None
+            if lane and not live.nav2 and not await self._arrival_aligned(live, pose):  # lane trips only: Nav2 holds its own yaw goal
+                if live.open:
+                    self._save(live)
+                return  # waiting for a fresh sighting, or ended STATION_ALIGN_*
             live.view["detail"].pop("named_stop_handoff_pending", None)
             live.view["state"] = "arrived"
             if lane and (live.sent or {}).get("action") == STOP:
@@ -263,9 +266,9 @@ class TripSteps:
         arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
         if action != STOP and (live.view["caps"] or {}).get("lane_arc") and (expect or {}).get("map_id"):
             # D-744 2: the map anchor only to a lane_arc_map_anchor robot, from this step's pose and its odom stamp
-            # D-989: never from auto locate; the robot's own pose sent back as its arc anchor would confirm itself
+            # D-989: never from auto locate (or a track anchor, whose yaw is odometry's); the robot's own pose sent back as its arc anchor would confirm itself
             stamp = (getattr(pose, "odom_stamp", None) if live.view["caps"].get("lane_arc_map_anchor")
-                     and getattr(pose, "anchor_source", None) != "auto_locate" else None)
+                     and getattr(pose, "anchor_source", None) not in ("auto_locate", "track") else None)
             arc = exit_segment(live.graph, live.segments, index, fit_tol_m=self.config.arc_fit_tol_m,
                                outer_line_offset_m=self.config.arc_outer_line_offset_m,
                                map_pose=None if stamp is None else (pose.x, pose.y, pose.yaw, stamp))
@@ -275,7 +278,7 @@ class TripSteps:
         advance = advance_m(live.graph, live.segments, index) if turn is not None and arc is None else None
         if (turn is not None and expect and live.view["caps"].get("lane_turn_map_entry")
                 and getattr(pose, "odom_stamp", None) is not None
-                and getattr(pose, "anchor_source", None) != "auto_locate"):   # D-989: see the arc anchor above
+                and getattr(pose, "anchor_source", None) not in ("auto_locate", "track")):   # D-989: see the arc anchor above (a track's yaw is odometry's)
             expect = {**expect, "map_entry": {"yaw_rad": round(live.arc(index + 1).start_tangent, 4), "pose_yaw_rad": pose.yaw, "odom_stamp_s": pose.odom_stamp}}  # D-759 rev 1: the exit lane's map heading
         if not live.open:
             return
@@ -530,70 +533,7 @@ class TripSteps:
             live.view["detail"]["named_stop_operation"] = operation.model_dump(mode="json")
 
     def _confirm_lane_stop(self, live: LiveTrip, index: int) -> bool:
-        sent, junction = live.sent or {}, live.junction
-        lease = live.view.get("lease") or {}
-        if (sent.get("index") != index or sent.get("action") != STOP
-                or type(sent.get("seq")) is not int or sent["seq"] != junction.get("seq")
-                or not sent.get("place") or sent["place"] != junction.get("place_id")
-                or junction.get("state") != "executing" or junction.get("pending_action") != STOP
-                or junction.get("line_stop_held") is not True or lease.get("state") != "held"
-                or not lease.get("lease_id") or lease["lease_id"] != junction.get("active_trip_lease_id")
-                or self.traffic.holds(live, index)):
-            return False
-        live.view["detail"]["named_stop_lane_hold"] = {
-            "seq": sent["seq"], "place_id": sent["place"], "lease_id": lease["lease_id"]}
-        return True
+        return confirm_lane_stop(self, live, index)
 
     async def _confirm_free_stop(self, live: LiveTrip) -> bool:
-        expected = live.view["detail"].get("named_stop_operation")
-        if expected is None or self.navigation_readback is None:
-            return False
-        view = await self._call(self.navigation_readback(live.view["robot_id"], expected["run_id"]))
-        if not isinstance(view, dict) or view.get("lookup") != "FOUND":
-            return False
-        operation = view.get("operation") or {}
-        owner, proof = view.get("owner") or {}, view.get("quiescence") or {}
-        if not all(isinstance(value, dict) for value in (operation, owner, proof)):
-            return False
-        identity = ("kind", "boot_id", "run_id", "correlation_id")
-        if not all(operation.get(k) == expected[k] for k in identity) or operation.get("phase") != "TERMINAL":
-            return False
-        if operation.get("result") != "SUCCEEDED":
-            raise _GoalRefused("NAMED_STOP_NAV2_FAILED")
-        if not safe_proof(view, operation):
-            return False
-        evidence = live.view["detail"].get("named_stop_dispatch")
-        if not evidence or evidence["attempt_id"] != operation["correlation_id"]:
-            raise _GoalRefused("NAMED_STOP_DISPATCH_EVIDENCE_MISSING")
-        robot_id = live.view["robot_id"]
-        read_state = self.named_stop_state or self._robot_state
-        state = await self._call(read_state(robot_id)) if read_state is not None else None
-        if not live.open:
-            return False
-        state = state or {}
-        velocity = state.get("velocity") or {}
-        if (state.get("navigation") != "ARRIVED" or state.get("mode") not in ("NAVIGATION", "IDLE")
-                or (state.get("line_follow") or {}).get("mode") != "OFF"
-                or velocity.get("linear") != 0.0 or velocity.get("angular") != 0.0):
-            return False
-        active = self._store.active_view()
-        bindings = self._store.map_bindings
-        binding = bindings.active(robot_id) or {}
-        fit, _ = bindings.matching_fit(robot_id, state, (evidence["map_id"], evidence["map_version"]))
-        if (active is None or (active["version"], active["sha256"]) !=
-                (evidence["map_version"], evidence["map_sha256"])
-                or fit is None or state.get("map_grid_id") != evidence["map_grid_id"]
-                or binding.get("binding_id") != evidence["binding_id"]):
-            raise _GoalRefused("NAMED_STOP_DISPATCH_FRAME_CHANGED")
-        place = next((place for place in active["map"]["places"] if place["id"] == evidence["place"]), None)
-        if place is not None and place.get("precision_stop") is not None:
-            decision = await evaluate_named_stop(self, live, evidence, place, fit, state)
-            live.view["detail"]["named_stop_precision"] = decision
-            if decision["decision"] != "IN_TOLERANCE":
-                return False
-            if not await confirm_precision_arrival(self, live, operation, evidence, place):
-                return False
-        live.view["detail"]["named_stop_completion"] = {
-            "dispatch": evidence, "operation": operation, "owner": owner, "quiescence": proof,
-        }
-        return True
+        return await confirm_free_stop(self, live)

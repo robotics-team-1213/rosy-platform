@@ -7,8 +7,8 @@ import pytest
 from fastapi import HTTPException
 
 from core_common.stop_pose import REPARK_MAX_FORWARD_M, REPARK_MAX_LEFT_M
-from fleet.server.trips.auto_repark import ACTOR, AutoNamedCorrection, auto_repark, evaluate_named_stop
-from fleet.server.trips.trip_ports import TripConfig
+from fleet.server.auto_repark import ACTOR, AutoNamedCorrection, auto_repark, evaluate_named_stop
+from fleet.server.trip_ports import TripConfig
 from fleet.site_map import SitePlace
 from fleet.traffic.trip_lease import HELD
 
@@ -135,7 +135,7 @@ def test_the_robot_side_hook_dispatches_as_the_auto_actor(monkeypatch):
     async def fake(console, runner, trip_id, clearance, *, cable_inhibited, actor):
         seen.update(trip_id=trip_id, actor=actor)
 
-    monkeypatch.setattr("fleet.server.trips.auto_repark.dispatch_correction", fake)
+    monkeypatch.setattr("fleet.server.auto_repark.dispatch_correction", fake)
     hook = AutoNamedCorrection(NS(), NS(), lambda robot: False)
     asyncio.run(hook.send("trip", None))
     assert seen == {"trip_id": "trip", "actor": ACTOR}

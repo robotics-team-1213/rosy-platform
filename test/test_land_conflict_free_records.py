@@ -132,6 +132,9 @@ def test_refresh_generated_docs_workflow_contract():
     assert 'gh pr merge "$pr" --auto --merge --match-head-commit "$head"' in script  # pr_land.py's queue call
     assert script.count("gh pr create") == 1 and "gh pr list --head bot/records-refresh --state open" in script
     assert "gh workflow run" not in script and "github.token" not in str(pr_step)
+    assert pr_step["env"]["EVENT_NAME"] == "${{ github.event_name }}"
+    assert "gh api graphql" in script and "isInMergeQueue" in script and "ci.yml/runs" in script
+    assert script.index("isInMergeQueue") < script.index("git push -f")
     report = steps["Report pending records (no RECORDS_BOT_TOKEN)"]
     assert report["if"] == "env.RECORDS_BOT_TOKEN == ''"
     assert "GITHUB_STEP_SUMMARY" in report["run"] and "git push" not in report["run"]

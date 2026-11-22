@@ -367,6 +367,13 @@ BATTERY_LEVELS = frozenset({"ok", "warning", "critical", "deep"})
 LEVEL_WORD = {"warning": "Low", "critical": "Critical", "deep": "Deep"}
 #: Same shape as core_common.identity.ROBOT_ID_PATTERN. Kept here so this module stays stdlib-only.
 _ROBOT_ID = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+STAGING_STEPS = frozenset({"download", "unpack", "verify"})
+
+
+def _update_card(answer: dict, update: Mapping[str, Any]) -> dict:
+    pct = update.get("percent")
+    return {**answer, "kind": UPDATE, "row": "update", "release": update.get("release"),
+            "step": update.get("step"), "percent": pct if type(pct) is int and 0 <= pct <= 100 else None}
 
 
 def _battery_voltage(value: Any) -> Optional[float]:
@@ -475,8 +482,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         return {**answer, "kind": SHUTDOWN, "row": "shutdown"}
     if state == robot_state.FAILED or kind == "FAILED":
         return status("failed")
-    if update is not None:
-        return {**answer, "kind": UPDATE, "row": "update", "release": update.get("release")}
+    if update is not None and update.get("step") not in STAGING_STEPS:
+        return _update_card(answer, update)
     if core is not None and (core.get("estop") or core.get("robot_mode") == "EMERGENCY"):
         return {**answer, "kind": STOPPED, "row": "stopped", "cause": _stopped_cause(core),
                 "release": f"Release code {release_code}" if release_code else STOP_RELEASE}
@@ -552,6 +559,8 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
             and mode in ("IDLE", "MANUAL") and not core.get("battery_charging")
             and (percent is None or percent >= LOW_BATTERY_PERCENT)):
         return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
+    if update is not None and strip is None and wake is None and mode in (None, "IDLE"):
+        return _update_card(answer, update)
     # Row 18: standby sleeps unless a wake card, a caution, a call, or a fleet question must be seen.
     if power == "standby" and wake is None and tone != "caution" and call_line is None and ask_line is None and identify_color is None:
         return {**answer, "kind": SLEEP, "row": "standby", "backlight": BACKLIGHT["standby"], "awake": False}

@@ -62,22 +62,27 @@ def tail(graph, segments: list):
     return next((seg for seg in reversed(segments) if ends_at_place(graph, seg)), None)
 
 
+def _can_hold(traffic, seg: dict, *, nav2: bool = False) -> bool:
+    back = hold_back_m(traffic, seg)
+    return back == 0.0 if nav2 else back is not None
+
+
 def lap_end_out_of_zones(active, plan: dict, request: dict, caps: dict, blocked, routing, max_turn_deg,
                          traffic) -> tuple[dict, dict, list] | None:
     """D-517 3 (2026-10-09 signal SIM): a lap holds at its last place, so that place must be one a robot
-    can stand at outside every zone (``hold_back_m(traffic, segment)`` is not None). Else the lap end moves on along
+    can stand at outside every zone (``hold_back_m(traffic, segment)`` is not None, or ``== 0.0`` for Nav2). Else the lap end moves on along
     the next lap to the first place that is; an old end place becomes the cycle's last via (a coordinate end
     lies on the lap's own lanes and is dropped). ``(plan, request, lap route)``, unchanged when nothing moves;
     None when no place of the next lap will do."""
-    graph = active[2]
+    graph, nav2 = active[2], request.get("drive_mode") == "nav2"
     last = tail(graph, plan["segments"])
-    if last is None or hold_back_m(traffic, last) is not None:
+    if last is None or _can_hold(traffic, last, nav2=nav2):
         return plan, request, route_key(plan["segments"])
     to, via = request["to"], list(request.get("via", ()))
     end = graph.arcs[arc_id(plan["segments"][-1])].point_at(plan["segments"][-1]["s_to"])
     lap, _hold = plan_again(active, end, request, caps, blocked, set(), routing, max_turn_deg)
     k = next((k for k, seg in enumerate((lap or {}).get("segments", ()))
-              if ends_at_place(graph, seg) and hold_back_m(traffic, seg) is not None), None)
+              if ends_at_place(graph, seg) and _can_hold(traffic, seg, nav2=nav2)), None)
     if k is None:
         return None
     joined = _joined(plan["segments"], [seg for seg in lap["segments"][:k + 1] if seg["s_to"] - seg["s_from"] > 1e-6])
@@ -99,12 +104,13 @@ def _extended(graph, plan: dict, segments: list, routing) -> dict:
     return {**plan, **{key: body[key] for key in ("segments", "places", "actions")}}
 
 
-def _onward(graph, segments: list, caps: dict, blocked, routing, ok) -> tuple[str, ...] | None:
+def _onward(graph, segments: list, caps: dict, blocked, routing, ok, *, nav2: bool = False) -> tuple[str, ...] | None:
     """Whole arcs on from the end of ``segments`` (shortest first, only arcs the robot may drive) to the nearest
     one ``ok`` accepts; None when there is none."""
     succ = graph.successors(routing, lambda arc, nxt, kind: transition_cost(
         turn_deg(arc.end_tangent, nxt.start_tangent), kind, routing))
-    modes = frozenset(caps.get("modes") or ("lane", "free"))
+    raw_modes = caps.get("modes") or ("lane", "free")
+    modes = (frozenset(("lane", "free")) if "free" in raw_modes else frozenset()) if nav2 else frozenset(raw_modes)
     heap, seen = [(0.0, arc_id(segments[-1]), ())], set()
     while heap:
         dist, here, path = heapq.heappop(heap)
@@ -136,14 +142,20 @@ def stop_points(active, plan: dict, request: dict, caps: dict, blocked, routing,
         if moved is None:
             raise refused
         plan, request, lap_route = moved
-        arcs = lap_arcs(active, plan["segments"], request, caps, blocked, routing, max_turn_deg)
+        end = graph.arcs[arc_id(plan["segments"][-1])].point_at(plan["segments"][-1]["s_to"])
+        cycle_body, _hold = plan_again(active, end, request, caps, blocked, set(), routing, max_turn_deg)
+        arcs = tuple(arc_id(seg) for seg in (cycle_body or plan)["segments"])
+        if request.get("drive_mode") == "nav2" and cycle_body is not None:
+            lap_route = route_key(cycle_body["segments"])
     else:
+        nav2 = request.get("drive_mode") == "nav2"
+
         def ok(seg: dict) -> bool:  # stands at the place, or (lane) holds short of it clear of every zone
             back = hold_back_m(traffic, seg)
-            return back == 0.0 or (back is not None and graph.arcs[arc_id(seg)].drive_mode == "lane")
+            return back == 0.0 or (not nav2 and back is not None and graph.arcs[arc_id(seg)].drive_mode == "lane")
 
         if plan["segments"] and not ok(plan["segments"][-1]):
-            more = _onward(graph, plan["segments"], caps, blocked, routing, ok)
+            more = _onward(graph, plan["segments"], caps, blocked, routing, ok, nav2=nav2)
             if more is None:
                 raise refused
             arcs = [graph.arcs[a] for a in more]
@@ -151,7 +163,8 @@ def stop_points(active, plan: dict, request: dict, caps: dict, blocked, routing,
             end = {**plan["segments"][-1], "s_to": graph.arcs[arc_id(plan["segments"][-1])].length_m}  # on to its place
             plan = _extended(graph, plan, [*plan["segments"][:-1], end, *more], routing)
             if unsupported(graph, plan["segments"], kind=caps.get("kind"), modes=frozenset(caps.get("modes") or ()),
-                           junction_turn=bool(caps.get("junction_turn")), config=routing, max_turn_deg=max_turn_deg):
+                           junction_turn=bool(caps.get("junction_turn")), config=routing, max_turn_deg=max_turn_deg,
+                           nav2=nav2):
                 raise refused
             via = list(request.get("via", ()))  # a replan still passes the old destination
             request = {**request, "to": arcs[-1].end_place, "via": [*via, to] if isinstance(to, str) else via}
@@ -164,9 +177,10 @@ def next_lap(active, end, request: dict, caps: dict, blocked, routing, max_turn_
              traffic) -> tuple[dict | None, dict | None]:
     """D-517 2 ``plan_again`` for the next lap; D-517 3: one whose last place cannot be held outside every
     zone is a failed lap check (``TRIP_STOP_IN_ZONE``), held at this lap's end."""
+    nav2 = request.get("drive_mode") == "nav2"
     body, hold = plan_again(active, end, request, caps, blocked, set(), routing, max_turn_deg)
     last = tail(active[2], body["segments"]) if body is not None else None
-    if last is None or hold_back_m(traffic, last) is not None:
+    if last is None or _can_hold(traffic, last, nav2=nav2):
         return body, hold
     return None, {"reason": "replan", "plan": None, "code": "TRIP_STOP_IN_ZONE",
                   "detail": {"place": ends_at_place(active[2], last)}}
@@ -221,6 +235,8 @@ def _dropped(live: LiveTrip, dropped: list) -> None:
     live.at = None if live.at is None else (live.at[0] - cut, live.at[1])
     if live.sent is not None:
         live.sent = {**live.sent, "index": live.sent["index"] - cut}
+    if getattr(live, "active_route", None) is not None:
+        live.active_route["end_index"] -= cut
     live.best_progress -= sum(seg["s_to"] - seg["s_from"] for seg in dropped)
     live.trim_m += sum(live.graph.arcs[arc_id(seg)].length_m for seg in dropped)  # route metres (blocks)
 

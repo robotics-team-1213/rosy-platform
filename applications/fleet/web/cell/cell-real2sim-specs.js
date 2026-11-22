@@ -1,4 +1,5 @@
 // Real-to-Sim pipeline paths, table row builders and card/inspector specs (split from cell-real2sim.js).
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 
 export const REAL2SIM_PATH = '/api/fleet/cell-app/real2sim-pipeline';
 export const EVALUATE_PATH = '/api/fleet/cell-app/real2sim-pipeline/evaluate';
@@ -31,6 +32,7 @@ const REFUSAL_TEXT = {
   PREVIOUS_TIER_NOT_VERIFIED: '아래층 적재가 아직 확인되지 않았습니다',
   CELL_AB_EVIDENCE_NOT_ENABLED: '셀 A/B 완료 확인(깊이 측정)이 아직 켜지지 않았습니다',
   BED_CONFIRMATION_INVALID: '적재함 확인이 무효가 되었습니다 (핑키 이동 또는 지도 변경). 핑키가 멈춘 상태에서 적재함을 다시 확인하세요',
+  PRESENCE_CONFIRMATION_REQUIRED: 'ACT 정책 구동은 이름 있는 운영자의 입회 표시가 필요합니다 (D-911)',
 };
 
 // Why a task ended ABORTED, when the cell worker's receipt says so (D-1057 T18: no reviewed envelope, the arm did not move).
@@ -91,8 +93,8 @@ export function dstSiteOptions(body, cellId, tier) {
 
 // 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
 // Pinky 도킹은 천장 Cam(ceiling_north) ROI 확대로 위에서 본다.
-export const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
-export const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
+const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
+const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
 export const S3_VIEWS = [
   {id: 'arm_s_top', label: 'S3 상단(arm_s_top)', source: 'arm_s_top'},
   {id: 'arm_s_wrist', label: 'arm_s 손목', source: 'arm_s_wrist'},
@@ -219,13 +221,14 @@ export function cellTaskRows(body) {
       ? `[${stopEv.state.join(', ')}]`
       : '—';
     const disp = t.displaced_to ? ` (복구: ${t.displaced_to})` : '';
+    const modeTag = t.execution_mode === 'act_policy' ? ' · ACT 정책' : '';
     const queued = t.status === 'QUEUED';
     const evidence = [queued || t.status === 'RUNNING' ? bedConfirmState(t).text : '', queued ? presenceConfirmState(t).text : '',
       presenceUsedText(t), refusalText(t.last_refusal), abortText(t)].filter(Boolean).join(' · ');
     return [
       t.task_id,
       `${t.cell_id} / ${t.arm_id}`,
-      `${t.src_site} -> ${t.dst_site} (T${t.tier ?? 1})${disp}`,
+      `${t.src_site} -> ${t.dst_site} (T${t.tier ?? 1})${disp}${modeTag}`,
       t.status || 'QUEUED',
       foldedTxt,
       evidence || '—',
@@ -341,6 +344,7 @@ export function visualCardSpecs(body = {}) {
         {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_s'},
         {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_s'},
+        {label: 'S3 ACT 정책 구동 (arm_s)', preset: 's3_act_policy'},
         {label: '자동 감지·복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
         {label: 'Floor-Front 바닥 복구', preset: 's3_recover_floor_front'},
@@ -440,8 +444,10 @@ export function inspectorSpecs(body = {}) {
     const live = armLiveStates[armId];
     if (live && Array.isArray(live.joints_deg) && live.joints_deg.length) {
       const stateArr = live.joints_deg.slice(0, 6).map(v => Number(v).toFixed(1)).join(', ');
-      const ageTxt = live.age_s != null ? `${Number(live.age_s).toFixed(0)}초 전` : '';
-      const modeBadge = live.fresh !== false ? `LIVE${ageTxt ? ` · ${ageTxt}` : ''}` : `스냅샷${ageTxt ? ` · ${ageTxt}` : ''}`;
+      const ageTxt = live.age_s != null ? evidenceAgeText(Math.round(Number(live.age_s))).slice(3) : '';
+      // Missing freshness is unknown, never a live badge: the server must state it.
+      const freshnessTxt = live.fresh === true ? 'LIVE' : live.fresh === false ? '지연 스냅샷' : '신선도 미확인';
+      const modeBadge = ageTxt ? `${freshnessTxt} · ${ageTxt}` : freshnessTxt;
       const tempTxt = live.temp_c != null ? `${live.temp_c}°C` : '';
       const curTxt = live.current_ma != null ? `${live.current_ma}mA` : '';
       return [
@@ -459,7 +465,7 @@ export function inspectorSpecs(body = {}) {
     if (stateArr) {
       return `${t.task_id} · folded=${Boolean(stopEv.folded)} · [${stateArr}] (완료 스냅샷)`;
     }
-    return fallbackText || 'folded: true · 홈 대기 (완료 스냅샷)';
+    return fallbackText || '관측 없음 · 상태 미확인';
   };
   const armHolds = body?.arm_holds || {};
   const holdText = armId => armHolds[armId]?.held

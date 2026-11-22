@@ -319,7 +319,7 @@ class Teacher:
         R = arm.frames(qs)[2]
         return -(R @ off) - np.array([0, 0, self.layout.hold_below])
 
-    def fresh(self, here):
+    def fresh(self, here, *, initial_joints=None):
         """A world at rest with the containers of `here` on their sites and every other container parked."""
         w, L = self.world, self.layout
         m = w.model
@@ -332,7 +332,8 @@ class Teacher:
             m.actuator_gainprm[ids[:5], 0], m.actuator_biasprm[ids[:5], 1], m.actuator_biasprm[ids[:5], 2] = v["kp"], -v["kp"], -v["kv"]
             m.actuator_forcerange[ids[:5]] = np.stack([-v["force"], v["force"]], 1)
             m.dof_damping[dofs], m.dof_frictionloss[dofs] = v["damping"], v["frictionloss"]
-        data = w.reset()
+        initial_joints = initial_joints or {}
+        data = w.reset(initial_joints=initial_joints) if initial_joints else w.reset()
         if self.servo_comp is not None:
             self.servo_comp = r2s_comp.ServoCompensator(w, FPS)
             if self.compensate_zero:
@@ -344,8 +345,9 @@ class Teacher:
         for cid, site in here.items():
             j = (0., 0., 0.) if self.seed == 0 or site == "belt" else (*self.rng.uniform(-1, 1, 2) * .0003, float(self.rng.uniform(-1, 1)) * math.radians(.5))
             w.put(data, cid, site, jitter=j)
+        settle = {a: initial_joints.get(a, L.sim_arms[a].wait) for a in L.arms}
         for _ in range(FPS):
-            self.frame(data, {a: L.sim_arms[a].wait for a in L.arms}, "settle")
+            self.frame(data, settle, "settle")
         return data
 
     def off_stand(self, data, step, here):
@@ -399,8 +401,9 @@ class Teacher:
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("command", choices=["run", "validate"])
-    p.add_argument("task", choices=["stack", "cell-stack", "rehandle", "outbound", "plan",
-                                    "stack-t1", "stack-t2", "stack-t3", "cell-stack-t1", "cell-stack-t2", "cell-stack-t3"])
+    p.add_argument("task", choices=["stack", "stack-h2", "cell-stack", "rehandle", "outbound", "outbound-stand", "plan",
+                                    "stack-t1", "stack-t2", "stack-t3", "stack-h2-t1", "stack-h2-t2", "stack-h2-t3",
+                                    "cell-stack-t1", "cell-stack-t2", "cell-stack-t3"])
     p.add_argument("--tier", type=int, choices=list(tasks.TIERS), help="run or validate only tier 1 (1단/l0), 2 (2단/l1), or 3 (3단/l2)")
     p.add_argument("--plan", help="with task 'plan': a JSON task (name, supply, start, steps), e.g. omx_two_arm_plan.py replay output")
     p.add_argument("--out", default=".")

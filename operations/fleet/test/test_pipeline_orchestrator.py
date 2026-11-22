@@ -424,7 +424,8 @@ def test_three_tier_pipeline_waits_for_predecessor_completion():
     }).json()["claimed"] is True
 
 
-def test_cell_ab_tier_input_and_owner_place_tier_require_exact_integer():
+def test_cell_ab_tier_input_and_owner_place_tier_require_exact_integer(monkeypatch):
+    monkeypatch.setenv("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "1")  # D-1057: cell A/B claims are off unless enabled
     from tools.sim.bay_departure_sim import build_world_261026_site_map
 
     site, graph, _ = build_world_261026_site_map()
@@ -918,3 +919,41 @@ staging_bays:
     invalid = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "- not-a-mapping"})
     assert invalid.status_code == 422 and invalid.json()["detail"]["code"] == "INVALID_STATION_ZONES_YAML"
     assert [z["id"] for z in client.get("/api/fleet/pipeline/station-zones").json()["staging_bays"]] == ["STG_TEST"]
+
+
+def test_s3_act_policy_preset_validation_presence_gate_and_retry():
+    site_map = _map()
+    graph = build_graph(site_map)
+    maps = SimpleNamespace(active=lambda: (1, site_map, graph, None),
+                           rules=SimpleNamespace(active_rules=lambda: None))
+    app = FastAPI()
+    app.state.site_maps = maps
+    install_pipeline_routes(app, site_maps=maps, amr_evidence_fn=_measured_amr)
+    client = TestClient(app)
+
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s", "execution_mode": "invalid"}).json()["detail"]["code"] == "INVALID_EXECUTION_MODE"
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l0", "execution_mode": "act_policy"}).json()["detail"]["code"] == "ACT_POLICY_UNSUPPORTED_ARM"
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s", "execution_mode": "act_policy", "max_chunks": 7}).json()["detail"]["code"] == "INVALID_MAX_CHUNKS"
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s", "execution_mode": "act_policy", "max_chunks": True}).json()["detail"]["code"] == "INVALID_MAX_CHUNKS"
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s", "max_chunks": 2}).json()["detail"]["code"] == "INVALID_MAX_CHUNKS"
+
+    app.state.detected_displaced_site = "belt_far"
+    created = client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_act_policy", "task_id": "act-01"}).json()
+    assert created["ok"] is True
+    assert created["task"]["execution_mode"] == "act_policy" and created["task"]["max_chunks"] == 4
+    assert created["task"]["displaced_to"] is None and app.state.detected_displaced_site == "belt_far"
+    app.state.detected_displaced_site = None
+
+    no_pres = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s", "task_id": "act-01"}).json()
+    assert no_pres["claimed"] is False and no_pres["reason"] == "PRESENCE_CONFIRMATION_REQUIRED"
+
+    app.state.cell_presence["act-01"] = {"task_id": "act-01", "principal_id": "livsbittt", "confirmed_at": time.time()}
+    claimed = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s", "task_id": "act-01"}).json()
+    assert claimed["claimed"] is True
+    assert claimed["handoff"]["execution_mode"] == "act_policy" and claimed["handoff"]["max_chunks"] == 4
+    assert claimed["handoff"]["presence"]["operator"] == "livsbittt"
+
+    retried = client.post("/api/fleet/pipeline/cell-tasks/act-01/retry").json()
+    assert retried["ok"] is True
+    assert retried["task"]["execution_mode"] == "act_policy" and retried["task"]["max_chunks"] == 4
+    assert retried["task"]["preset"] == "s3_act_policy"

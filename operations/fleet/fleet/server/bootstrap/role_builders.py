@@ -29,6 +29,7 @@ from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_
 from fleet.server.lane_route_routes import install_lane_route_routes
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.map_pose_service import MapPoseService, install_map_pin_route, install_map_pose_routes
+from fleet.server.offline_pin import mover_site_pose, obstacle_site_pose
 from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
 from fleet.server.nudge_routes import install_nudge_step_route
 from fleet.server.mission_dispatcher import MissionDispatcher
@@ -161,6 +162,10 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
             lambda: ((active := site_maps.active())[1].map_id, active[0]) if site_maps.active() is not None else (None, None))
     app.state.execution_map_pose = execution_pose
     console.set_state_sink(map_pose.observe_state)
+    console.set_site_pose_providers(
+        mover=partial(mover_site_pose, map_pose),
+        obstacle=partial(obstacle_site_pose, map_pose),
+    )
     console.read_state = map_pose.state
     identity.map_pose = map_pose.arbitrated_pose
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
@@ -289,6 +294,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         caps=trip_caps_port or _trip_caps, poses=map_pose_port or map_pose,
         junction=lane_junction or HttpLaneJunction(console.clients, map_pose.state, map_pose.read_number),
         goal=lambda *args, **kwargs: console.goal(*args, trip=True, **kwargs),
+        route=lambda *args, **kwargs: console.route(*args, trip=True, **kwargs),
         cancel_goal=console.cancel, config=trip_config or TripConfig(),
         engaged=partial(engaged, console), release_queue=partial(release_queue, console),
         roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority,
@@ -305,7 +311,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     trip_runner.named_stop_state = lambda robot_id: console.clients()[robot_id].state()
     trip_runner.confirm_named_precision = console.goal_leases.confirm_named_precision
 
-    from fleet.server.trips.handoff_recovery import stopped_handoff
+    from fleet.server.handoff_recovery import stopped_handoff
 
     async def reconcile_trip_handoff(robot_id, scope, accepted_operation):
         return await stopped_handoff(console.clients()[robot_id], scope, accepted_operation)
@@ -329,7 +335,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
                              require_named_operator=require_named_operator,
                              record_event=site_maps.record_event)
     if getattr(site_maps, "path", None) is not None:
-        from fleet.server.ledger.named_stop_store import NamedStopStore
+        from fleet.server.named_stop_store import NamedStopStore
         console.goal_leases.restore_named_stop(NamedStopStore(site_maps.path))
     from fleet.server.named_stop_custody_routes import install_named_stop_custody_route
     install_named_stop_custody_route(app, console=console, require_named_operator=require_named_operator,
@@ -365,14 +371,14 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
         read_guard=read_guard, require_named_operator=require_named_operator)
     install_tether_routes(app, console=console, trip_runner=trip_runner, read_guard=read_guard,
                           require_named_operator=require_named_operator)
-    from fleet.server.trips.correction_corridor import check_correction_path
-    from fleet.server.trips.precision_correction_routes import install_precision_correction_routes
+    from fleet.server.correction_corridor import check_correction_path
+    from fleet.server.precision_correction_routes import install_precision_correction_routes
 
     def cable_inhibited(robot):
         return getattr(app.state, "cable_tangled", None) is not False or robot in app.state.tethers
 
     trip_runner.check_named_correction = partial(check_correction_path, console, cable_inhibited=cable_inhibited)
-    from fleet.server.trips.auto_repark import AutoNamedCorrection
+    from fleet.server.auto_repark import AutoNamedCorrection
     trip_runner.auto_named_correction = AutoNamedCorrection(console, trip_runner, cable_inhibited)
     install_precision_correction_routes(app, console=console, runner=trip_runner,
         require_named_operator=require_named_operator, cable_inhibited=cable_inhibited)

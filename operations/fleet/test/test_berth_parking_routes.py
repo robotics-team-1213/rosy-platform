@@ -8,13 +8,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from fleet.server.ledger.berth_parking_routes import (
+from fleet.server.berth_parking_routes import (
     BAY_DOCK_SPECS,
     centerline_axial_gaps,
     infer_bay_id,
     install_berth_parking_routes,
 )
-from fleet.server.ledger.berth_parking_scenario import dispatch_nav_target
+from fleet.server.berth_parking_scenario import dispatch_nav_target
 from fleet.server.site_auth import SitePrincipal
 
 
@@ -146,7 +146,7 @@ def test_road_nav2_refuses_a_robot_on_a_running_trip():
 
 def test_road_nav2_route_needs_a_named_operator():
     import inspect
-    from fleet.server.ledger import berth_parking_routes
+    from fleet.server import berth_parking_routes
     assert "Depends(require_named_operator)" in inspect.getsource(berth_parking_routes.install_berth_parking_routes)
 
 
@@ -166,7 +166,7 @@ def test_berth_park_failure_is_an_error_never_a_reported_dispatch():
     (True, "precision", False), (True, "precision", True),
 ])
 def test_queued_road_nav2_is_reported_queued_not_dispatched(named_stop, restricted, dry_run):
-    from fleet.server.ledger import berth_parking_routes as routes
+    from fleet.server import berth_parking_routes as routes
     app = FastAPI()
     if restricted == "charge":
         app.state.charge_runtime = SimpleNamespace(robot_id="rosy_46")
@@ -218,7 +218,7 @@ def test_queued_road_nav2_is_reported_queued_not_dispatched(named_stop, restrict
 
 
 def test_only_a_measured_stop_face_counts_as_a_berth_park():
-    from fleet.server.ledger.berth_parking_helpers import BERTH_SUCCESS_REASONS
+    from fleet.server.berth_parking_helpers import BERTH_SUCCESS_REASONS
     assert "dock_stop_face_reached" in BERTH_SUCCESS_REASONS
     assert not {"completed", "reverse_timeout", "emergency_latched", "emergency_during_forward"} & BERTH_SUCCESS_REASONS
 

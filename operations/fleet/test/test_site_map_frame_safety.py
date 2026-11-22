@@ -9,7 +9,7 @@ import json
 import pytest
 
 from rosy.world.state.projections.map_pose import MapPose
-from fleet.server.sitemap.site_map_store import SiteMapError, SiteMapStore
+from fleet.server.site_map_store import SiteMapError, SiteMapStore
 from fleet.server.trip_geometry import SiteFrameMismatch, pose_view, robot_frame_goal
 from test_trip_runner import BOTH, _arc, _free_map, _plan, _setup, _ticks, run
 from test_trip_robot_frame_goal import _in_robot_map, _state
@@ -335,7 +335,7 @@ def test_commissioned_trip_plans_from_the_bound_slam_pose(condition):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from fleet.server.site_auth import SitePrincipal
-    from fleet.server.trips.trip_routes import install_trip_routes
+    from fleet.server.trip_routes import install_trip_routes
     from fleet.site_map import SiteMap
     from fleet.swarm.dispatch_guard import check_dispatch
 
@@ -636,7 +636,7 @@ def test_mixed_named_stop_waits_for_the_live_hold_and_sends_only_the_scoped_goal
 def test_failed_handoff_remains_fenced_after_restart_until_the_exact_stop_is_proved(tmp_path):
     from datetime import datetime, timezone
     from uuid import uuid4
-    from fleet.server.trips.handoff_recovery import stopped_handoff
+    from fleet.server.handoff_recovery import stopped_handoff
 
     path = tmp_path / "site.db"
     _, first, _ = _setup(_free_map(), path=path)

@@ -14,6 +14,7 @@ from typing import Optional
 from core_features.docking.bay_zone import (DISAGREE, NO_LINE, ZoneVerdict, backout_geometry, classify as classify_zone, junction_geometry,
                                             junction_candidate, scan_diagnosis, lane_edge, lane_extent, pose_gate, scan_fit_pose, scan_geometry)
 from core_features.docking.model import DockPhase
+from core_features.docking.parking import wrap as _wrap
 from core_features.docking.rear_phases import rear_errors
 
 _LOG = logging.getLogger(__name__)
@@ -175,6 +176,17 @@ class BayZoneMixin:
             return True
         return False
 
+    def seat_anchor_evidence(self):
+        """The seat error {along, lateral, heading, inliers, margin} when the stopped LiDAR seat scan matched the dock's reference scan AND the robot stood still from that scan to
+        now (wheel odometry within 3 mm / 0.01 rad of where it was when the scan was matched); else None: no anchor."""
+        geo, seat = self._seat_geo(), (self._seat_match[0] if self._seat_match is not None else None)
+        if geo is None or seat is None:
+            return None
+        then, now = getattr(self, "_seat_odom", None), self._odometry()
+        if then is None or now is None or math.hypot(now[0] - then[0], now[1] - then[1]) > 0.003 or abs(_wrap(now[2] - then[2])) > 0.01:
+            return None
+        return {"along_m": geo[0], "lateral_m": geo[1], "heading_deg": math.degrees(geo[2]), "inliers": seat.inliers, "margin": seat.margin}
+
     def _seat_geo(self):
         """(x out of the stop face, lateral, heading) from the stopped robot's LiDAR seat check, or None (no reference / no good fit)."""
         seat = self._seat_match[0] if self._seat_match is not None else None
@@ -270,8 +282,9 @@ class BayZoneMixin:
             self._ap_ask_at = h.now()
             return self._open_request(getattr(h._dock, "metadata", {}).get("reference_scan"), "alignpose",
                                       self._near(self._row_pose))
-        if (((h.phase is DockPhase.ACQUIRING and not self._crept) or h.phase is DockPhase.BACKOFF) and self._in_row and self._has_reference()
-                and self._req_open is None
+        if (((h.phase is DockPhase.ACQUIRING and not self._crept and self._in_row)
+             or (h.phase is DockPhase.BACKOFF and (self._in_row or self._reseat_active)))
+                and self._has_reference() and self._req_open is None
                 and (self._row_pose is None or h.now() - self._row_pose[3] > h._cfg.bay_row_pose_fresh_s / 2)
                 and h.now() - self._ap_ask_at >= h._cfg.bay_lidar_ask_s):
             self._ap_ask_at = h.now()                        # a fresh bay pose before the creep (the answer feeds _row_pose)
@@ -368,6 +381,7 @@ class BayZoneMixin:
         kind, self._req_open = self._req_kind, None
         if kind == "seat":
             self._seat_match = (match, float(at))
+            self._seat_odom = self._odometry()               # where the wheels were at the seat scan: the anchor needs the robot still from here to DOCKED
             why = pose_gate(match, self._h._cfg, self._h._type().staging_offset_m)
             if why is not None:
                 self._h._last_event = "seat LiDAR pose dropped: %s (try %d)" % (why, self._seat_tries)

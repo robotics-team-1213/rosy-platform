@@ -618,3 +618,262 @@ def test_example_configs_ship_the_updater_host_module(example):
     paths = json.loads((Path(__file__).parents[1] / example).read_text())["paths"]
     assert "deploy/robot/omx/omx_autoupdate.py" in paths
     assert "deploy/robot/omx/omx_autoupdate_host.py" in paths
+
+
+def test_omx_manifests_bundle_site_map_and_sim_gripper_assets():
+    import json
+    from omx_autoupdate_host import DEFAULT_PATHS
+
+    example_paths = json.loads((Path(__file__).parents[1] / "deploy/robot/omx/omx-devices-autoupdate.json.example").read_text())["paths"]
+    for required in (
+        "contracts/learning/src",
+        "tools/sim/cell_site_map.py",
+        "shared/web/cell-site-map.json",
+        "learning/envs/isaac/palletizing_gripper.py",
+        "learning/envs/isaac/assets/omx_f_palletizing_description",
+    ):
+        assert required in DEFAULT_PATHS
+        assert required in example_paths
+
+
+def test_omx_config_paths_upgrade_and_host_smoke_checks_cell_collect_plan(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    cfg_path = tmp_path / "omx-autoupdate.json"
+    cfg_path.write_text(json.dumps({
+        "repo_url": "u", "github_repo": "o/r", "base_python": "/usr/bin/python3",
+        "devices": ["/dev/a"], "follower_device": "/dev/a",
+        "paths": ["deploy/robot/omx", "contracts/foundation"], "keep": 2,
+    }))
+    loaded = m.load_config(cfg_path)
+    assert "contracts/learning/src" in loaded["paths"]
+
+    host = FakeHost()
+    seen = []
+    orig_archive = host.archive
+    host.archive = lambda sha, paths, target: seen.append(list(paths)) or orig_archive(sha, paths, target)
+    u = m.Updater({"root": str(tmp_path / "root"), "required_checks": ["ci-result"],
+                   "paths": ["deploy/robot/omx", "contracts/foundation"], "keep": 2,
+                   "follower_device": "/dev/a", "devices": ["/dev/a"]}, host)
+    assert u.run() == "switched" and "contracts/learning/src" in seen[0]
+
+    example = json.loads((Path(__file__).parents[1] / "deploy/robot/omx/omx-devices-autoupdate.json.example").read_text())
+    assert "cell_collect_plan" not in example["smoke"] and "omx_collect_plan" not in example["smoke"]
+    rel = tmp_path / "release"
+    (rel / "deploy/robot/omx").mkdir(parents=True)
+    (rel / "deploy/robot/omx/cell_collect_plan.py").write_text("# stub")
+    calls = []
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: calls.append(args[2]) or subprocess.CompletedProcess(
+        args, 1 if "import cell_collect_plan" in args[2] else 0, "smoke ok\n", ""))
+    assert m.Host({"paths": ["deploy/robot/omx"], "smoke": "print('smoke ok')"}).smoke(rel, Path("py")) is False
+    assert len(calls) == 2 and "import cell_collect_plan" in calls[1]
+    assert m.Host({}).smoke(rel, Path("py")) is False  # DEFAULT_PATHS still runs conditional cell_collect_plan smoke
+    old_rel = tmp_path / "old-release"
+    (old_rel / "deploy/robot/omx").mkdir(parents=True)
+    assert "cell_collect_plan" not in m.SMOKE
+    assert m.Host({}).smoke(old_rel, Path("py")) is True  # legitimate pre-auto-collect release passes without it
+    assert m.Host(example).smoke(old_rel, Path("py")) is True  # shipped example also allows pre-auto-collect rollback
+    assert m.Host(example).smoke(rel, Path("py")) is False  # but rejects incomplete auto-collect releases
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: (_ for _ in ()).throw(
+        subprocess.TimeoutExpired(args, 120) if "import cell_collect_plan" in args[2] else OSError("no python")))
+    assert m.Host(example).smoke(old_rel, Path("py")) is False
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: (_ for _ in ()).throw(
+        subprocess.TimeoutExpired(args, 120)) if "import cell_collect_plan" in args[2]
+        else subprocess.CompletedProcess(args, 0, "smoke ok\n", ""))
+    assert m.Host(example).smoke(rel, Path("py")) is False
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: subprocess.CompletedProcess(args, 0, "smoke ok\n", ""))
+    assert m.Host({"paths": ["deploy/robot/omx"], "smoke": "print('smoke ok')"}).smoke(rel, Path("py")) is True
+
+    # Simulate first upgrade where old updater unpacked release a*12 without contracts/learning/src.
+    up_root = tmp_path / "upgrade"
+    inc_host = FakeHost()
+    inc_seen = []
+
+    def archive_with_contract(sha, paths, target):
+        inc_seen.append(list(paths))
+        FakeHost.archive(inc_host, sha, paths, target)
+        cpath = target / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py"
+        cpath.parent.mkdir(parents=True, exist_ok=True)
+        cpath.write_text("# contract\n")
+
+    inc_host.archive = archive_with_contract
+    inc_rel = up_root / "releases" / ("a" * 12)
+    (inc_rel / "deploy/robot/omx").mkdir(parents=True)
+    (inc_rel / "deploy/robot/omx/cell_collect_plan.py").write_text("# translator\n")
+    (inc_rel / m.LOCK).write_text("lerobot==0.4.4\n")
+    (up_root / "envs" / "e0" / "bin").mkdir(parents=True)
+    (up_root / "envs" / "e0" / "bin" / "python").write_text("")
+    (up_root / "current").symlink_to(Path("releases") / ("a" * 12))
+    (up_root / "current-env").symlink_to(Path("envs") / "e0")
+    u2 = m.Updater({"root": str(up_root), "required_checks": ["ci-result"],
+                    "paths": ["deploy/robot/omx", "contracts/foundation"], "keep": 2,
+                    "follower_device": "/dev/a", "devices": ["/dev/a"]}, inc_host)
+    u2.save({"current": "a" * 12, "previous": None, "env": "e0", "current_sha": "a" * 40, "history": []})
+    assert u2.run() == "switched" and "contracts/learning/src" in inc_seen[0]
+    assert current(up_root) == str(Path("releases") / f"{'a' * 12}-r1")
+    assert u2.run() == "up_to_date"
+
+    # Simulate previous-updater switch from legacy config (without contracts/learning/src), followed by same-SHA repair
+    # and by a subsequent head advance that replaces the incomplete release cleanly.
+    roll_root = tmp_path / "rollout"
+    roll_host = FakeHost()
+    roll_seen = []
+
+    def roll_archive(sha, paths, target):
+        roll_seen.append(list(paths))
+        FakeHost.archive(roll_host, sha, paths, target)
+        if "contracts/learning/src" in paths:
+            cpath = target / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py"
+            cpath.parent.mkdir(parents=True, exist_ok=True)
+            cpath.write_text("# contract\n")
+
+    roll_host.archive = roll_archive
+    legacy_paths = ["deploy/robot/omx", "contracts/foundation"]
+    old_rel = roll_root / "releases" / ("a" * 12)
+    roll_host.archive("a" * 40, legacy_paths, old_rel)
+    (old_rel / "deploy/robot/omx/cell_collect_plan.py").write_text("# translator\n")
+    (roll_root / "envs" / "e0" / "bin").mkdir(parents=True)
+    (roll_root / "envs" / "e0" / "bin" / "python").write_text("")
+    (roll_root / "current").symlink_to(Path("releases") / ("a" * 12))
+    (roll_root / "current-env").symlink_to(Path("envs") / "e0")
+    assert not (old_rel / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").exists()
+
+    u_same = m.Updater({"root": str(roll_root), "required_checks": ["ci-result"],
+                        "paths": list(legacy_paths), "keep": 2,
+                        "follower_device": "/dev/a", "devices": ["/dev/a"]}, roll_host)
+    u_same.save({"current": "a" * 12, "previous": None, "env": "e0", "current_sha": "a" * 40, "history": []})
+    assert u_same.run() == "switched"
+    assert (roll_root / "current/contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").exists()
+
+    # If the head advances before the second tick, the incomplete a*12 transitions directly to complete b*12.
+    (roll_root / "current").unlink()
+    (roll_root / "current").symlink_to(Path("releases") / ("a" * 12))
+    roll_host.head = "b" * 40
+    u_same.save({"current": "a" * 12, "previous": None, "env": "e0", "current_sha": "a" * 40, "history": []})
+    assert u_same.run() == "switched"
+    assert current(roll_root) == str(Path("releases") / ("b" * 12))
+    assert (roll_root / "current/contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").exists()
+
+
+def test_manual_rollback_never_reactivates_incomplete_or_unsmoked_release(tmp_path, capsys, monkeypatch):
+    import json
+    import subprocess
+
+    def archive_complete(host):
+        def _arch(sha, paths, target):
+            FakeHost.archive(host, sha, paths, target)
+            if "deploy/robot/omx" in paths:
+                t = target / "deploy/robot/omx/cell_collect_plan.py"
+                t.parent.mkdir(parents=True, exist_ok=True)
+                t.write_text("# translator\n")
+            if "contracts/learning/src" in paths:
+                c = target / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py"
+                c.parent.mkdir(parents=True, exist_ok=True)
+                c.write_text("# contract\n")
+
+        return _arch
+
+    # (a) Same-SHA repair a*12 -> a*12-r1 with no prior complete release leaves previous=None; rollback returns no_previous.
+    r_none = tmp_path / "repair_no_prev"
+    h_none = FakeHost()
+    h_none.archive = archive_complete(h_none)
+    inc_a = r_none / "releases" / ("a" * 12)
+    (inc_a / "deploy/robot/omx").mkdir(parents=True)
+    (inc_a / "deploy/robot/omx/cell_collect_plan.py").write_text("# translator\n")
+    (inc_a / m.LOCK).write_text("lerobot==0.4.4\n")
+    (r_none / "envs" / "e0" / "bin").mkdir(parents=True)
+    (r_none / "envs" / "e0" / "bin" / "python").write_text("")
+    (r_none / "current").symlink_to(Path("releases") / ("a" * 12))
+    (r_none / "current-env").symlink_to(Path("envs") / "e0")
+    u_none = m.Updater({"root": str(r_none), "required_checks": ["ci-result"],
+                        "paths": ["deploy/robot/omx", "contracts/foundation"], "keep": 3,
+                        "follower_device": "/dev/a", "devices": ["/dev/a"], "units": ["obs.service"]}, h_none)
+    u_none.save({"current": "a" * 12, "previous": None, "env": "e0", "current_sha": "a" * 40, "history": []})
+    assert u_none.run() == "switched"
+    assert u_none.state()["previous"] is None and u_none.state()["previous_env"] is None
+    restarts_before = list(h_none.restarts)
+    assert u_none.rollback() == "no_previous"
+    assert current(r_none) == str(Path("releases") / f"{'a' * 12}-r1")
+    assert h_none.restarts == restarts_before
+
+    # (b) Same-SHA repair with prior complete pre-auto-collect release p*12 preserves p*12 and skips incomplete a*12.
+    r_prev = tmp_path / "repair_with_prev"
+    h_prev = FakeHost()
+    h_prev.archive = archive_complete(h_prev)
+    rel_p = r_prev / "releases" / ("p" * 12)
+    (rel_p / "deploy/robot/omx").mkdir(parents=True)
+    (rel_p / m.LOCK).write_text("lerobot==0.4.3\n")
+    (r_prev / "envs" / "e_prev" / "bin").mkdir(parents=True)
+    (r_prev / "envs" / "e_prev" / "bin" / "python").write_text("")
+    rel_inc = r_prev / "releases" / ("a" * 12)
+    (rel_inc / "deploy/robot/omx").mkdir(parents=True)
+    (rel_inc / "deploy/robot/omx/cell_collect_plan.py").write_text("# translator\n")
+    (rel_inc / m.LOCK).write_text("lerobot==0.4.4\n")
+    (r_prev / "envs" / "e0" / "bin").mkdir(parents=True)
+    (r_prev / "envs" / "e0" / "bin" / "python").write_text("")
+    (r_prev / "current").symlink_to(Path("releases") / ("a" * 12))
+    (r_prev / "current-env").symlink_to(Path("envs") / "e0")
+    u_prev = m.Updater({"root": str(r_prev), "required_checks": ["ci-result"],
+                        "paths": ["deploy/robot/omx", "contracts/foundation"], "keep": 3,
+                        "follower_device": "/dev/a", "devices": ["/dev/a"], "units": ["obs.service"]}, h_prev)
+    u_prev.save({"current": "a" * 12, "previous": "p" * 12, "env": "e0", "previous_env": "e_prev",
+                 "current_sha": "a" * 40, "history": []})
+    assert u_prev.run() == "switched"
+    st = u_prev.state()
+    assert st["current"] == f"{'a' * 12}-r1" and st["previous"] == "p" * 12 and st["previous_env"] == "e_prev"
+    assert u_prev.rollback() == "rolled_back"
+    assert current(r_prev) == str(Path("releases") / ("p" * 12))
+    assert current(r_prev, "current-env") == str(Path("envs") / "e_prev")
+    assert u_prev.state()["previous"] == f"{'a' * 12}-r1"
+    assert u_prev.rollback() == "rolled_back"
+    assert current(r_prev) == str(Path("releases") / f"{'a' * 12}-r1")
+
+    # (c) If state.json manually points previous at an incomplete release on disk, rollback refuses before relink/restart.
+    r_bad = tmp_path / "incomplete_prev_state"
+    h_bad = FakeHost()
+    h_bad.archive = archive_complete(h_bad)
+    u_bad = m.Updater({"root": str(r_bad), "required_checks": ["ci-result"],
+                       "paths": ["deploy/robot/omx", "contracts/foundation"], "keep": 3,
+                       "follower_device": "/dev/a", "devices": ["/dev/a"], "units": ["obs.service"]}, h_bad)
+    assert u_bad.run() == "switched"
+    h_bad.head = "b" * 40
+    assert u_bad.run() == "switched"
+    (r_bad / "releases" / ("a" * 12) / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").unlink()
+    restarts_bad = list(h_bad.restarts)
+    assert u_bad.rollback() == "incomplete_previous"
+    assert current(r_bad) == str(Path("releases") / ("b" * 12)) and h_bad.restarts == restarts_bad
+    cfg_bad = tmp_path / "cfg_bad.json"
+    cfg_bad.write_text(json.dumps({
+        "repo_url": "u", "github_repo": "o/r", "base_python": "py", "devices": ["/dev/a"],
+        "follower_device": "/dev/a", "root": str(r_bad), "paths": ["deploy/robot/omx", "contracts/foundation"], "keep": 3,
+    }))
+    monkeypatch.setenv("ROSY_OMX_HOME", str(r_bad))
+    monkeypatch.setattr(m, "Host", lambda _cfg: h_bad)
+    with pytest.raises(SystemExit) as cli_exc:
+        m.main(["--config", str(cfg_bad), "rollback"])
+    assert cli_exc.value.code == 1
+
+    # (d) If host.smoke fails or raises TimeoutExpired/OSError for state["previous"], rollback refuses without relink/restart.
+    r_smk = tmp_path / "unsmoked_prev"
+    h_smk = FakeHost()
+    h_smk.archive = archive_complete(h_smk)
+    u_smk = m.Updater({"root": str(r_smk), "required_checks": ["ci-result"],
+                       "paths": ["deploy/robot/omx", "contracts/foundation"], "keep": 3,
+                       "follower_device": "/dev/a", "devices": ["/dev/a"], "units": ["obs.service"]}, h_smk)
+    assert u_smk.run() == "switched"
+    h_smk.head = "b" * 40
+    assert u_smk.run() == "switched"
+    h_smk.smoke_ok["a" * 12] = False
+    restarts_smk = list(h_smk.restarts)
+    capsys.readouterr()
+    assert u_smk.rollback() == "smoke_failed"
+    assert '"rollback_refused"' in capsys.readouterr().out
+    assert current(r_smk) == str(Path("releases") / ("b" * 12)) and h_smk.restarts == restarts_smk
+    for exc in (subprocess.TimeoutExpired(["py"], 120), OSError("bad interpreter")):
+        h_smk.smoke = lambda *_a, _e=exc: (_ for _ in ()).throw(_e)
+        capsys.readouterr()
+        assert u_smk.rollback() == "smoke_failed"
+        out = capsys.readouterr().out
+        assert '"rollback_refused"' in out and '"smoke_failed"' in out
+        assert current(r_smk) == str(Path("releases") / ("b" * 12)) and h_smk.restarts == restarts_smk

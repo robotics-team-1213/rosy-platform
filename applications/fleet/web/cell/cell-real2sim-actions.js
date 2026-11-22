@@ -1,4 +1,5 @@
 // Cell task action handlers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
+import { setOffBy } from "/common/cause-line.js";
 import {
   CELL_TASKS_PATH,
   PINKY_TASKS_PATH,
@@ -20,6 +21,10 @@ const BED_CONFIRM_ERROR = {
   BED_CONFIRM_ROBOT_NOT_STOPPED: '핑키가 멈춰 있지 않습니다. 핑키가 정차 위치에 멈춘 뒤 다시 확인하세요',
   BED_CONFIRM_ROBOT_MISMATCH: '작업에 지정된 핑키가 아닙니다',
   BED_CONFIRM_POSE_UNAVAILABLE: '지도에서 핑키 위치를 확인하지 못했습니다. 정차 위치를 확인하세요',
+};
+const PRESENCE_CONFIRM_ERROR = {
+  ...BED_CONFIRM_ERROR,
+  CELL_TASK_NOT_QUEUED: '대기(QUEUED) 상태의 작업에만 입회 표시할 수 있습니다',
 };
 
 export function createCellActions(ctx) {
@@ -54,8 +59,7 @@ export function createCellActions(ctx) {
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runPinkyQuickAction(targetRobotId, b.pinkyAction); });
     } else if (b.bedConfirmTaskId || b.presenceConfirmTaskId) {
       const reason = ctx.namedReason();  // D-1057: the server refuses a shared or development identity too
-      btn.disabled = Boolean(reason);
-      if (reason) btn.setAttribute('reason', reason);
+      setOffBy(btn, reason);
       const [kind, taskId] = b.bedConfirmTaskId ? ['bed', b.bedConfirmTaskId] : ['presence', b.presenceConfirmTaskId];
       btn.dataset[`${kind}ConfirmTaskId`] = taskId;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void confirmOperator(kind, taskId, targetRobotId); });
@@ -255,8 +259,9 @@ export function createCellActions(ctx) {
       }
     } catch (error) {
       if (current !== ctx.gen()) return;
+      const errTable = kind === 'presence' ? PRESENCE_CONFIRM_ERROR : BED_CONFIRM_ERROR;
       const text = error.status === 404 && !error.code ? `서버에 ${name} 기능이 아직 없습니다 (D-1057)`
-        : BED_CONFIRM_ERROR[error.code] || error.message;
+        : errTable[error.code] || error.message;
       if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${name} 실패: ${text}`;
     }
   }

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 
 import pytest
+from fleet_cockpit_browser import clear_robot_selection, select_robot
 from browser_harness import browser_tests_enabled
 from fleet.server.development_session import DevelopmentSessions
 from test_fleet_header_browser import _api, _fleet, _signed_in_page
@@ -134,21 +135,23 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
             expect(page.locator("#user-role")).to_have_text("운영자", timeout=15000)
             page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
             if path == "/console":
-                page.locator("#robot-choice").select_option("rosy_03")
+                select_robot(page, "rosy_03")
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (path, width)
                 _assert_control(page.locator("#topbar-more"))
                 if path == "/console":
+                    page.locator("#fleet-inbox").click()
                     _assert_control(page.locator(".queue-row").first)
-                    # Current roster opens one selected robot's controls in its workspace.
-                    page.locator('[data-select-robot-id="rosy_03"]').click()
+                    page.locator("#queues-close").click()
+                    select_robot(page, "rosy_03")
                     _assert_control(page.locator("[data-auth-focus]"))
                     page.locator("[data-auth-focus]").click()
                     expect(page.locator("#console-token")).to_be_focused()
                     if page.locator("#topbar-more").is_visible():
                         page.locator("#topbar-more").click()
-                    page.locator("#context-inbox-tab").click()
+                    clear_robot_selection(page)
+                    page.locator("#context-evidence-tab").click()
                     summary = page.locator("#log-panel > summary")
                     for opened in [False, True]:
                         page.locator("#log-panel").evaluate("(node, open) => node.open = open", opened)

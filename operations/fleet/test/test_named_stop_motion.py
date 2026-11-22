@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from fleet.server.goal_lease import GoalLeases, NavigationStopped
-from fleet.server.ledger.named_stop_store import NamedStopStore
+from fleet.server.named_stop_store import NamedStopStore
 from fleet.swarm.api.ports import RobotApiError
 from fleet.swarm.dispatch_guard import check_dispatch
 from fleet.swarm.robots import RobotEndpoint
@@ -287,7 +287,7 @@ def test_fleet_app_restores_site_journal_before_dispatch(tmp_path):
     from fleet.server.app import create_app
     from fleet.server.console import FleetConsole
     from fleet.server.named_stop_motion import NamedStopMotion
-    from fleet.server.sitemap.site_map_store import SiteMapStore
+    from fleet.server.site_map_store import SiteMapStore
 
     site_maps = SiteMapStore(tmp_path / "site-fleet.db")
     try:

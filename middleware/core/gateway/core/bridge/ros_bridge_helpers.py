@@ -19,6 +19,7 @@ from core.bridge import (
     goal_tracker,
     observation,
     pilot_recorder_client,
+    sensor_mirror,
     thermal_policy,
     translate,
 )
@@ -113,14 +114,12 @@ class RosBridgeHelpersMixin:
         return None if context is None else context.seq
 
     def _on_dock_observation(self, msg) -> None:
-        """Tag evidence only; a malformed payload clears the feed (lost, not guessed)."""
+        """Route dock evidence and report malformed observations."""
         try:
-            payload = json.loads(msg.data)
-            self._svc.dock_feed.ingest(
-                payload, received_at=self._line_clock(),
+            sensor_mirror.ingest_dock_observation(
+                self._svc.dock_feed, self._mirror, msg.data, received_at=self._line_clock(),
                 source_now=self._node.get_clock().now().nanoseconds * 1e-9)
-            self._mirror.dock_observation(payload)
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             self._node.get_logger().warning(
                 f"ignored dock observation: {exc}", throttle_duration_sec=5.0)
 

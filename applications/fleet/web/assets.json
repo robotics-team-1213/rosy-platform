@@ -42,6 +42,10 @@
       "path": "manual-control.js",
       "media_type": "application/javascript"
     },
+    "activity-log.js": {
+      "path": "shared/activity-log.js",
+      "media_type": "application/javascript"
+    },
     "fleet-document.css": {
       "path": "shared/fleet-document.css",
       "media_type": "text/css"
@@ -102,6 +106,10 @@
       "path": "shared/cell-frames.js",
       "media_type": "application/javascript"
     },
+    "cell-cockpit-stage.js": {
+      "path": "shared/cell-cockpit-stage.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"
@@ -140,6 +148,10 @@
     },
     "fleet-header.js": {
       "path": "shared/fleet-header.js",
+      "media_type": "application/javascript"
+    },
+    "unit-scope.js": {
+      "path": "shared/unit-scope.js",
       "media_type": "application/javascript"
     },
     "styles.css": {
@@ -402,6 +414,10 @@
       "path": "roster.js",
       "media_type": "application/javascript"
     },
+    "roster-workspace.js": {
+      "path": "roster-workspace.js",
+      "media_type": "application/javascript"
+    },
     "queues.js": {
       "path": "queues.js",
       "media_type": "application/javascript"
@@ -632,6 +648,10 @@
     },
     "device-care.js": {
       "path": "devices/device-care.js",
+      "media_type": "text/javascript"
+    },
+    "cockpit-telemetry.js": {
+      "path": "shared/cockpit-telemetry.js",
       "media_type": "text/javascript"
     }
   }

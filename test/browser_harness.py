@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+import atexit
 import os
 from pathlib import Path
 import socket
 from http.server import ThreadingHTTPServer
+from typing import Any
 from urllib.parse import urlsplit
 
 # Chromium net/base/port_util.cc kRestrictedPorts: page loads to these fail with
@@ -60,13 +62,13 @@ def goto_with_network_change_retry(page, url):
 
 def open_token_access(page) -> None:
     """Open the paired console's token fallback before using its controls."""
-    try:  # a polling console may never go idle; the wait only covers the auth refresh
-        page.wait_for_load_state("networkidle", timeout=5000)
-    except Exception as error:  # playwright TimeoutError, imported lazily like the rest of the harness
-        if type(error).__name__ != "TimeoutError":
-            raise
-    # Reconnect publishes selections before finishing; open after its controls settle.
-    page.wait_for_function("() => !document.getElementById('token-save')?.disabled")
+    try:  # locator wait avoids polling via rAF, which page.clock.install() freezes
+        page.locator("#user-role:not([status='neutral']), #user-role[title]:not([title=''])").first.wait_for(
+            state="attached", timeout=5_000
+        )
+        page.locator("#token-save:not([disabled])").wait_for(state="attached", timeout=5_000)
+    except Exception:
+        pass
     # D-540 2: below 90rem the token sits in the header fold behind 설정.
     toggle = page.locator("#topbar-more")
     if toggle.is_visible() and toggle.get_attribute("aria-expanded") != "true":
@@ -74,6 +76,9 @@ def open_token_access(page) -> None:
     details = page.locator("#token-access")
     if details.get_attribute("open") is None:
         details.locator("summary").click()
+        if details.get_attribute("open") is None:
+            details.locator("summary").click()
+    page.locator("#console-token").wait_for(state="visible")
 
 
 def safe_listener(host: str = "127.0.0.1") -> socket.socket:
@@ -114,13 +119,7 @@ def launch_options() -> dict:
     return options
 
 
-def open_page(playwright, width: int, height: int, *, url: str | None = None):
-    """Chromium 실행 + 페이지 오류 수집. 호출자이 browser.close() 한다."""
-    options = launch_options()
-    if url and (port := urlsplit(url).port):
-        options["args"] = [f"--explicitly-allowed-ports={port}"]
-    browser = playwright.chromium.launch(**options)
-    page = browser.new_page(viewport={"width": width, "height": height})
+def _wire_page(page) -> list[str]:
     errors: list[str] = []
     page.on("pageerror", lambda exc: errors.append(str(exc)))
     # 기본 대기 예산은 15초다(2026-09-25). 5초는 경합 중인 호스트에서
@@ -128,7 +127,21 @@ def open_page(playwright, width: int, height: int, *, url: str | None = None):
     # 플레이크 사후 처리 3건이 같은 원인이었다. 계약 자체의 타임아웃은
     # 호출처에서 이미 명시적으로 지정한다.
     page.set_default_timeout(15_000)
-    return browser, page, errors
+    return errors
+
+
+def open_page(playwright, width: int | None = None, height: int | None = None, *, url: str | None = None, **context_options):
+    """Chromium 실행 + 페이지 오류 수집. 호출자가 browser.close() 한다."""
+    if playwright is None:
+        return open_shared_page(width, height, url=url, **context_options)
+    options = launch_options()
+    if url and (port := urlsplit(url).port):
+        options["args"] = [f"--explicitly-allowed-ports={port}"]
+    browser = playwright.chromium.launch(**options)
+    if width is not None and height is not None and "viewport" not in context_options:
+        context_options["viewport"] = {"width": width, "height": height}
+    page = browser.new_page(**context_options)
+    return browser, page, _wire_page(page)
 
 
 # D-741 — what a Fleet document's body still offers once the rail and the sub-nav took their seats: sideways overflow,
@@ -206,3 +219,300 @@ def confirm_irreversible(page, accept=True):
     dialog.wait_for(state='visible')
     dialog.locator('ui-button[kind="irreversible"]' if accept else 'ui-button:has-text("취소")').click()
     dialog.wait_for(state='hidden')
+
+
+LAYOUT_GEOMETRY_PROBE = """() => {
+  const seen = (node) => Boolean(
+    node && node.nodeType === 1
+    && node.checkVisibility?.({visibilityProperty: true})
+    && node.getClientRects().length > 0
+  );
+  const violations = [];
+  const labelOf = (node) => {
+    if (!node) return 'null';
+    const id = node.id ? `#${node.id}` : '';
+    const cls = typeof node.className === 'string' && node.className.trim()
+      ? '.' + node.className.trim().split(/\\s+/).slice(0, 2).join('.')
+      : '';
+    return `${node.tagName.toLowerCase()}${id}${cls}`;
+  };
+  const allowed = (node, rule) => {
+    const attr = node?.closest?.(`[data-geometry-allow*="${rule}"]`);
+    return Boolean(attr);
+  };
+
+  // G1: Under-fill in vertical stack containers (e.g. #robot-overview-list trapped in column 1 of .roster-block)
+  for (const stack of document.querySelectorAll('.roster-block, .console-secondary, .context-panel, .robot-overview-list, .robot-overview-group')) {
+    if (!seen(stack)) continue;
+    const sStyle = getComputedStyle(stack);
+    const padX = (parseFloat(sStyle.paddingLeft) || 0) + (parseFloat(sStyle.paddingRight) || 0);
+    const innerW = stack.clientWidth - padX;
+    if (innerW < 120) continue;
+    const kids = [...stack.children].filter((k) => seen(k) && ![' absolute', ' fixed'].includes(' ' + getComputedStyle(k).position));
+    for (const child of kids) {
+      if (allowed(child, 'G1')) continue;
+      if (!child.matches('section, ul, ol, dl, details, .robot-overview-list, .robot-overview-group, .robot-overview-items, .queues-panel, .console-context')) continue;
+      const r = child.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) continue;
+      const hasRowPeer = kids.some((peer) => {
+        if (peer === child) return false;
+        const pr = peer.getBoundingClientRect();
+        return Math.min(r.bottom, pr.bottom) - Math.max(r.top, pr.top) > 2;
+      });
+      if (hasRowPeer) continue;
+      if (r.width < innerW * 0.92 && (innerW - r.width) > 12) {
+        violations.push(`G1 underfill: ${labelOf(child)} width ${Math.round(r.width)}px < 92% of ${labelOf(stack)} innerWidth ${Math.round(innerW)}px`);
+      }
+    }
+  }
+
+  // G2: Sibling overlap & right-edge overflow in header/item rows (roster rows and the app topbar too)
+  for (const row of document.querySelectorAll('.robot-overview-head, .robot-head, .map-head, .omx-cell-top, .robot-row, ui-topbar')) {
+    if (!seen(row) || allowed(row, 'G2')) continue;
+    const rowRect = row.getBoundingClientRect();
+    // Only an explicit horizontal-scroll component (data-scroll-x) skips the right-edge check.
+    const scrollsX = row.hasAttribute('data-scroll-x');
+    const kids = [...row.children].filter((k) => {
+      if (!seen(k) || k.classList.contains('sr-only') || k.classList.contains('spacer')) return false;
+      const ks = getComputedStyle(k);
+      return ks.position !== 'absolute' && ks.position !== 'fixed' && ks.pointerEvents !== 'none';
+    });
+    for (let i = 0; i < kids.length; i += 1) {
+      const a = kids[i], ar = a.getBoundingClientRect();
+      if (!scrollsX && ar.right > rowRect.right + 2) {
+        violations.push(`G2 overflow: ${labelOf(a)} right ${Math.round(ar.right)} > ${labelOf(row)} right ${Math.round(rowRect.right)}`);
+      }
+      for (let j = i + 1; j < kids.length; j += 1) {
+        const b = kids[j], br = b.getBoundingClientRect();
+        const ox = Math.min(ar.right, br.right) - Math.max(ar.left, br.left);
+        const oy = Math.min(ar.bottom, br.bottom) - Math.max(ar.top, br.top);
+        if (ox > 2 && oy > 2 && ox * oy > 4) {
+          violations.push(`G2 overlap: ${labelOf(a)} and ${labelOf(b)} in ${labelOf(row)} overlap by ${Math.round(ox)}x${Math.round(oy)}px`);
+        }
+      }
+    }
+  }
+
+  // G3: Crushed robot names / badges (> 2.2 lines, or nowrap clipping below 10 visible chars)
+  for (const node of document.querySelectorAll('.robot-overview-name > strong, .robot-name > b')) {
+    if (!seen(node) || allowed(node, 'G3')) continue;
+    const r = node.getBoundingClientRect();
+    const s = getComputedStyle(node);
+    const padY = (parseFloat(s.paddingTop) || 0) + (parseFloat(s.paddingBottom) || 0) + (parseFloat(s.borderTopWidth) || 0) + (parseFloat(s.borderBottomWidth) || 0);
+    const lh = parseFloat(s.lineHeight) || ((parseFloat(s.fontSize) || 14) * 1.25);
+    const lines = (r.height - padY) / lh;
+    if (lines > 2.2) {
+      violations.push(`G3 crushed-text: ${labelOf(node)} ("${node.textContent.trim().slice(0, 24)}") wrapped into ${lines.toFixed(1)} lines`);
+    }
+    const text = (node.textContent || '').trim();
+    const shown = text.length * node.clientWidth / node.scrollWidth;
+    if (text && node.scrollWidth > node.clientWidth + 1 && shown < 10) {
+      violations.push(`G3 clipped-text: ${labelOf(node)} ("${text.slice(0, 24)}") clipped to ~${Math.max(0, Math.round(shown))} of ${text.length} chars`);
+    }
+  }
+
+  // G4: Box-in-box nesting depth <= 2 for 4-sided bordered layout containers
+  const isBorderedBox = (node) => {
+    if (!seen(node) || allowed(node, 'G4')) return false;
+    if (node.matches('button, ui-button, input, select, textarea, label, ui-tag, table, th, td, canvas, svg, .map-stage, .vision-frame')) return false;
+    const r = node.getBoundingClientRect();
+    if (r.width < 48 || r.height < 36 || r.width * r.height < 3600) return false;
+    const s = getComputedStyle(node);
+    const sides = [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].map((v) => parseFloat(v) || 0);
+    if (Math.min(...sides) < 1) return false;
+    const colors = [s.borderTopColor, s.borderRightColor, s.borderBottomColor, s.borderLeftColor];
+    return colors.every((c) => c && c !== 'transparent' && !/rgba\\([^)]*,\\s*0(?:\\.0+)?\\)/.test(c));
+  };
+  for (const node of document.querySelectorAll('main div, main section, main article, main aside, main details, main ul, main li')) {
+    if (!isBorderedBox(node)) continue;
+    const chain = [labelOf(node)];
+    let cur = node.parentElement;
+    while (cur && cur !== document.body) {
+      if (isBorderedBox(cur)) chain.unshift(labelOf(cur));
+      cur = cur.parentElement;
+    }
+    if (chain.length > 2) {
+      violations.push(`G4 box-in-box (${chain.length} levels): ${chain.join(' > ')}`);
+    }
+  }
+
+  // G5: Floating launcher (#assistant-toggle) vs #robot-dock-mount / #estop / open robot sheet (#robot-panel-mount) collision.
+  // 모바일 시트가 열리면 CSS가 실행기를 visibility:hidden으로 물러나게 하므로 seen()이 잡고,
+  // 단추가 시트 바닥의 비상 정지·주행 취소 단추를 덮으면 이 검사가 위반으로 돌린다.
+  const openDialog = document.querySelector('dialog[open], [role="dialog"]:not([hidden])');
+  if (!openDialog) {
+    const fab = document.getElementById('assistant-toggle');
+    if (seen(fab) && !allowed(fab, 'G5')) {
+      const fr = fab.getBoundingClientRect();
+      for (const id of ['robot-dock-mount', 'estop', 'robot-panel-mount']) {
+        const target = document.getElementById(id);
+        if (!seen(target)) continue;
+        const tr = target.getBoundingClientRect();
+        const ox = Math.min(fr.right, tr.right) - Math.max(fr.left, tr.left);
+        const oy = Math.min(fr.bottom, tr.bottom) - Math.max(fr.top, tr.top);
+        if (ox > 2 && oy > 2) {
+          violations.push(`G5 floating-dock-collision: #assistant-toggle overlaps #${id} by ${Math.round(ox)}x${Math.round(oy)}px`);
+        }
+      }
+    }
+  }
+
+  // G6-fn-begin
+  // Full phrases (label + age) repeated 2+ times; same number under different labels is fine.
+  const repeatedFreshness = (raw) => {
+    const re = /\\d+(?:\\.\\d+)?\\s*(?:초|분|시간)\\s*전/g;
+    const text = raw.replace(/\\s+/g, ' ');
+    const stamps = text.match(re) || [];
+    const gaps = text.split(re);
+    const counts = new Map();
+    stamps.forEach((stamp, i) => {
+      const label = (gaps[i].match(/(?:[가-힣A-Za-z]+ )?[가-힣A-Za-z]+ ?: ?$|[가-힣A-Za-z]+ ?$|· ?$/) || [''])[0];
+      const phrase = (label + stamp).trim();
+      counts.set(phrase, (counts.get(phrase) || 0) + 1);
+    });
+    return [...counts].filter(([, n]) => n > 1).map(([phrase, count]) => ({ phrase, count }));
+  };
+  // G6-fn-end
+
+  // G6: Duplicate freshness timestamp inside a single robot overview/roster row (visible text only)
+  for (const item of document.querySelectorAll('.robot-overview-item, .robot-row')) {
+    if (!seen(item) || allowed(item, 'G6')) continue;
+    const visible = item.cloneNode(true);
+    visible.querySelectorAll('.sr-only, [aria-hidden="true"]').forEach((hidden) => hidden.remove());
+    const hits = repeatedFreshness(visible.textContent || '');
+    if (hits.length) {
+      violations.push(`G6 duplicate-freshness: ${labelOf(item)} (${item.dataset.robotId || ''}) repeats freshness ${hits.reduce((n, h) => n + h.count, 0)} times: ${hits.map((h) => `${h.phrase} x${h.count}`).join(', ')}`);
+    }
+  }
+
+  // G7: Alert toast region must never overlap right-column, drawer, popover, or stage-head surfaces
+  const region = document.getElementById('alert-popup-region');
+  if (region && region.childElementCount > 0 && !allowed(region, 'G7')) {
+    const rr = region.getBoundingClientRect();
+    if (rr.width > 0 && rr.height > 0) {
+      for (const sel of ['.queues-panel', '#robot-panel-mount', '#topbar-extra[data-open="true"]', '#assistant-panel:not([hidden])', '.map-head']) {
+        for (const node of document.querySelectorAll(sel)) {
+          if (!seen(node)) continue;
+          const tr = node.getBoundingClientRect();
+          const ox = Math.min(rr.right, tr.right) - Math.max(rr.left, tr.left);
+          const oy = Math.min(rr.bottom, tr.bottom) - Math.max(rr.top, tr.top);
+          if (ox > 2 && oy > 2) {
+            violations.push(`G7 alert-overlap: #alert-popup-region overlaps ${labelOf(node)} by ${Math.round(ox)}x${Math.round(oy)}px`);
+          }
+        }
+      }
+    }
+  }
+
+  return violations;
+}"""
+
+
+def assert_layout_geometry(page) -> None:
+    """Assert G1-G7 rendered geometry invariants (underfill, sibling overlap/overflow, crushed text, box-in-box, assistant-toggle collision, duplicate freshness age, alert-region overlap)."""
+    page.evaluate("() => document.fonts ? document.fonts.ready.then(() => null) : null")
+    violations = page.evaluate(LAYOUT_GEOMETRY_PROBE)
+    assert violations == [], "Layout geometry violations:\n  - " + "\n  - ".join(violations)
+
+
+class _ContextLease:
+    """BrowserContext lease whose .close() closes only the context, never the shared Browser."""
+
+    def __init__(self, context: Any) -> None:
+        self._context = context
+        self._closed = False
+
+    def close(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._context.close()
+
+    def __enter__(self) -> _ContextLease:
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.close()
+
+
+_SHARED: tuple[Any, Any] | None = None
+
+
+def close_shared_browser() -> None:
+    """Idempotently close the module-shared Chromium browser and release Playwright's asyncio loop."""
+    global _SHARED
+    pair = _SHARED
+    if pair is None:
+        return
+    _SHARED = None
+    playwright, browser = pair
+    try:
+        try:
+            for context in list(browser.contexts):
+                try:
+                    context.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+    finally:
+        playwright.stop()
+
+
+atexit.register(close_shared_browser)
+
+
+def shared_browser() -> Any:
+    """Return the lazily started module-shared Chromium Browser, relaunching if disconnected."""
+    global _SHARED
+    if _SHARED is not None:
+        if _SHARED[1].is_connected():
+            return _SHARED[1]
+        close_shared_browser()
+    from playwright.sync_api import sync_playwright
+
+    playwright = sync_playwright().start()
+    try:
+        browser = playwright.chromium.launch(**launch_options())
+    except Exception:
+        playwright.stop()
+        raise
+    _SHARED = (playwright, browser)
+    return browser
+
+
+def open_shared_page(width: int | None = None, height: int | None = None, *, url: str | None = None, **context_options):
+    """Open a fresh context page on shared_browser(), falling back to a dedicated launch for restricted ports."""
+    if width is not None and height is not None and "viewport" not in context_options:
+        context_options["viewport"] = {"width": width, "height": height}
+    port = urlsplit(url).port if url else None
+    if port in CHROMIUM_RESTRICTED_PORTS:
+        shared_browser()
+        assert _SHARED is not None
+        options = launch_options()
+        options["args"] = [f"--explicitly-allowed-ports={port}"]
+        dedicated = _SHARED[0].chromium.launch(**options)
+        try:
+            page = dedicated.new_page(**context_options)
+        except Exception:
+            dedicated.close()
+            raise
+        return dedicated, page, _wire_page(page)
+    for attempt in range(2):
+        context = None
+        try:
+            context = shared_browser().new_context(**context_options)
+            page = context.new_page()
+            return _ContextLease(context), page, _wire_page(page)
+        except Exception:
+            if context is not None:
+                try:
+                    context.close()
+                except Exception:
+                    pass
+            if attempt == 1:
+                raise
+            close_shared_browser()

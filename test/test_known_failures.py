@@ -204,6 +204,7 @@ def test_an_xdist_session_that_collected_nothing_is_caught():
     assert known_failures.collected_nothing("6 workers [0 items]\n", paths)
     assert not known_failures.collected_nothing("2 workers [10 items]\n", paths)
     assert not known_failures.collected_nothing("2 workers [0 items]\n", paths[:1])
+    assert not known_failures.collected_nothing("collecting ... collected 0 items / 1 skipped\n", [paths[0], "--ignore=test/test_platform_g1_timing.py"])
     assert known_failures.collected_nothing("====== test session starts ======\ncollected 0 items\n", paths)
     assert known_failures.collected_nothing("collecting ... collected 0 items / 1 skipped\n", paths)
     passed_id = "t/test_h.py::test_log[collected 0 items\\nno tests ran-ddd] PASSED [ 54%]\n"  # a -v id holding the words

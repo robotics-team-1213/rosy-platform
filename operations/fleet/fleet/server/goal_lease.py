@@ -27,7 +27,8 @@ from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from typing import Callable, Optional
 
-from fleet.server.named_stop_motion import NamedStopMotion, current_repark_alignment
+from fleet.server.named_stop_motion import (NamedStopMotion, _is_unreachable, current_repark_alignment,
+                                             verify_release_proof)
 from fleet.swarm.api.ports import RobotApiError
 from fleet.swarm.dispatch_guard import dispatch_guard
 from fleet.swarm.motion_ingress import PREPARED_GOALS, starts_or_sustains_motion
@@ -142,42 +143,89 @@ class GoalLeases(dict):
         self._custody_since, self._custody_missing = self._clock(), "no readback yet"
 
     def way_out(self, robot_id: str) -> str:
-        return ("Wait for CORE to prove the robot stopped, or, after seeing it stand still, release the custody with "
-                f"POST /api/fleet/robots/{robot_id}/named-stop-custody/release (reservation_id, acknowledgement, reason).")
+        return ("Wait for CORE to prove the robot stopped, or release custody with "
+                f"POST /api/fleet/robots/{robot_id}/named-stop-custody/release (reservation_id, reason, "
+                "and optional physical_isolation when isolated/offline).")
+
+    def _bind_discovered_run(self, claim: NamedStopMotion, repark: str | None, known_run: str | None) -> bool:
+        run = claim.repark_run_id if repark is not None else claim.run_id
+        if known_run is not None or run is None or self._named_stop_store is None:
+            return True
+        bind = self._named_stop_store.bind_repark_run if repark is not None else self._named_stop_store.bind_run
+        try:
+            if bind(claim):
+                return True
+        except sqlite3.Error:
+            pass
+        if repark is not None:
+            claim.repark_run_id = None
+        else:
+            claim.run_id = None
+        claim.stopped_epoch = claim.terminal_at = claim.zero_at = None
+        return False
 
     async def release_by_operator(self, robot_id: str, reservation_id: str, actor: str, reason: str, *,
-                                  stop, audit) -> dict:
-        """The operator's way out for a dead, gone or unprovable robot.
-
-        ``stop`` is the console's own cancel (lease entry removed, stop generation bumped, re-park stop and
-        navigation cancel, the robot's trip ended); it runs, best effort, BEFORE the release. ``audit`` is written
-        before the release too: if it raises, nothing is released.
-        """
+                                  stop, audit, physical_isolation=None) -> dict:
+        """Fail-closed operator release: require live CORE stop proof or uncontradicted physical isolation."""
         claim = self._named_stop_motion
         if claim is None or claim.robot_id != robot_id or claim.reservation_id != reservation_id:
             raise CustodyReleaseRefused("NAMED_STOP_CLAIM_CHANGED", "no such claim for this robot and reservation_id")
         if robot_id in self.pending:
             raise CustodyReleaseRefused("ROBOT_REQUEST_IN_FLIGHT", f"Fleet has a request in flight to {robot_id}")
-        self.pending[robot_id] = 1  # holds off every other Fleet send while the stop runs
+        repark = claim.repark_correlation_id
+        known_run = claim.repark_run_id if repark is not None else claim.run_id
+        snapshot = (claim.run_id, repark, claim.repark_run_id)
+        self.pending[robot_id] = 1  # holds off other sends and reconciler for the entire release
+        stop_error, stop_responded = None, False
         try:
+            if robot_id not in self._clients:
+                self._stop_generation[robot_id] = self._stop_generation.get(robot_id, 0) + 1
+                self.pop(robot_id, None)
+                try:
+                    await stop(robot_id)
+                except Exception as exc:
+                    stop_error = exc
+                stops = "absent"
+            else:
+                try:
+                    receipt = await stop(robot_id)
+                    stop_responded = True
+                except Exception as exc:
+                    stop_error = exc
+                    stops = f"failed: {exc!r}"
+                    stop_responded = not _is_unreachable(exc)
+                else:
+                    if (not isinstance(receipt, dict) or receipt.get("canceled") is False
+                            or receipt.get("accepted") is False or receipt.get("navigation") == "NAVIGATING"):
+                        stop_error = RuntimeError(f"navigation cancel unconfirmed: {receipt!r}")
+                        stops = f"unconfirmed: {receipt!r}"
+                    else:
+                        stops = "ok"
+            if self._named_stop_motion is not claim:
+                raise CustodyReleaseRefused("NAMED_STOP_CLAIM_CHANGED", "the claim ended or changed meanwhile")
             try:
-                await stop(robot_id)
-                stops = "ok"
+                proof = await verify_release_proof(
+                    claim, self._clients.get(robot_id), physical_isolation,
+                    cancel_error=stop_error, stop_responded=stop_responded, refuse=CustodyReleaseRefused)
+            finally:
+                bound = self._bind_discovered_run(claim, repark, known_run)
+            if not bound:
+                raise CustodyReleaseRefused("NAMED_STOP_RELEASE_NOT_STORED", "could not persist discovered run_id")
+            if (self._named_stop_motion is not claim or claim.repark_correlation_id != snapshot[1]
+                    or (snapshot[0] is not None and claim.run_id != snapshot[0])
+                    or (snapshot[2] is not None and claim.repark_run_id != snapshot[2])):
+                raise CustodyReleaseRefused("NAMED_STOP_CLAIM_CHANGED", "the claim ended or changed meanwhile")
+            try:
+                audit(stops, proof)
             except Exception as exc:
-                stops = f"failed: {exc!r}"
+                logger.exception("named-stop custody release of %s not audited", robot_id)
+                raise CustodyReleaseRefused("AUDIT_UNAVAILABLE", "the release could not be audited; nothing was released") from exc
+            self._release_named_stop(claim, f"operator {actor} released it ({proof}): {reason}; stop {stops}")
+            if self._named_stop_motion is not None:
+                raise CustodyReleaseRefused("NAMED_STOP_RELEASE_NOT_STORED", "the site journal did not record the release")
+            return {"released": True, "reservation_id": reservation_id, "stop": stops, "proof": proof}
         finally:
             self.pending.pop(robot_id, None)
-        if self._named_stop_motion is not claim:
-            raise CustodyReleaseRefused("NAMED_STOP_CLAIM_CHANGED", "the claim ended or changed meanwhile")
-        try:
-            audit(stops)
-        except Exception as exc:
-            logger.exception("named-stop custody release of %s not audited", robot_id)
-            raise CustodyReleaseRefused("AUDIT_UNAVAILABLE", "the release could not be audited; nothing was released") from exc
-        self._release_named_stop(claim, f"operator {actor} released it without CORE proof: {reason}; stop {stops}")
-        if self._named_stop_motion is not None:
-            raise CustodyReleaseRefused("NAMED_STOP_RELEASE_NOT_STORED", "the site journal did not record the release")
-        return {"released": True, "reservation_id": reservation_id, "stop": stops}
 
     def holds_custody(self, robot_id: str) -> bool:
         claim = self._named_stop_motion
@@ -327,20 +375,8 @@ class GoalLeases(dict):
         if (self._named_stop_motion is not claim or self._clients.get(claim.robot_id) is not client
                 or claim.repark_correlation_id != repark):
             return
-        run = claim.repark_run_id if repark is not None else claim.run_id
-        if known_run is None and run is not None and self._named_stop_store is not None:
-            bind = self._named_stop_store.bind_repark_run if repark is not None else self._named_stop_store.bind_run
-            try:
-                bound = bind(claim)
-            except sqlite3.Error:
-                bound = False
-            if not bound:
-                if repark is not None:
-                    claim.repark_run_id = None
-                else:
-                    claim.run_id = None
-                claim.stopped_epoch = claim.terminal_at = claim.zero_at = None
-                return
+        if not self._bind_discovered_run(claim, repark, known_run):
+            return
         if new_boot:
             self._release_named_stop(claim, "robot runs a new boot_id and CORE shows it standing still with no owner run")
         elif stopped and (repark is not None or not claim.precision_required or not claim.nav_succeeded):
@@ -374,6 +410,25 @@ class GoalLeases(dict):
         """Send one navigation goal; leased with the capability (a lease is renewed by correlation
         id, so a goal without an attempt id gets one), otherwise exactly as before. ``source``
         defaults to ``dispatch`` with an attempt id, else ``operator``."""
+        return await self._dispatch(
+            robot_id, client, caps, lambda options: client.navigation_goal(x, y, yaw, **options),
+            correlation_id, source, task_id, expected_map_grid_id=expected_map_grid_id,
+            line_handoff=line_handoff, owner_epoch=owner_epoch, plan_id=plan_id,
+            precision_required=precision_required)
+
+    async def send_route(self, robot_id: str, client, caps: Optional[dict], points: list[dict],
+                         correlation_id: Optional[str] = None, source: Optional[str] = None,
+                         task_id: Optional[str] = None) -> dict:
+        """Send one D-1009 pass/stop route with the exact same goal lease, stop-fence and cancellation rules."""
+        return await self._dispatch(
+            robot_id, client, caps, lambda options: client.navigation_route(points, **options),
+            correlation_id, source, task_id)
+
+    async def _dispatch(self, robot_id: str, client, caps: Optional[dict], sender: Callable[[dict], object],
+                        correlation_id: Optional[str], source: Optional[str] = None,
+                        task_id: Optional[str] = None, *, expected_map_grid_id: str | None = None,
+                        line_handoff: dict | None = None, owner_epoch: dict | None = None,
+                        plan_id: str | None = None, precision_required: bool = False) -> dict:
         source = source or ("dispatch" if correlation_id is not None else "operator")
         self.check_motion()
         if source not in SOURCES:
@@ -382,9 +437,9 @@ class GoalLeases(dict):
         if plan_id is not None and not supported:
             raise NavigationStopped("NAMED_STOP_GOAL_LEASE_REQUIRED")
         ttl_s = self.ttl_s or (HANDOFF_LEASE_TTL_S if plan_id is not None else 0.0)
-        self._submission_generation[robot_id] = self._submission_generation.get(robot_id, 0)+1
+        gen = self._submission_generation[robot_id] = self._submission_generation.get(robot_id, 0) + 1
         stop = self.stop_token(robot_id)
-        self.pop(robot_id, None)
+        prev = self.pop(robot_id, None)
         options = {}
         if expected_map_grid_id is not None:
             options.update(expected_map_grid_id=expected_map_grid_id, plan_id=plan_id)
@@ -431,7 +486,7 @@ class GoalLeases(dict):
             try:
                 with guard, dispatch_guard(admit_wire, paths={
                         "/api/v1/navigation/goal", "/api/v1/navigation/bound-goal", "/api/v1/navigation/line-handoff-goal"}):
-                    result = await client.navigation_goal(x, y, yaw, **options)
+                    result = await sender(options)
                     if claim is not None and self._named_stop_motion is claim:
                         if not isinstance(result, dict) or result.get("accepted") is not True:
                             raise RuntimeError("missing named-stop admission acknowledgement")
@@ -451,6 +506,9 @@ class GoalLeases(dict):
                         await client.navigation_cancel()
                     except Exception:
                         logger.exception("late goal cancel for %s failed", robot_id)
+                elif (prev is not None and getattr(exc, "code", None) == "NAVIGATION_ACTIVE"
+                      and self._submission_generation.get(robot_id) == gen and robot_id not in self):
+                    self[robot_id] = prev
                 raise
             if (stop != self.stop_token(robot_id)
                     and not (isinstance(result, dict) and result.get("accepted") is False)):
@@ -481,9 +539,17 @@ class GoalLeases(dict):
         self._stop_generation[robot_id] = self._stop_generation.get(robot_id, 0) + 1
         self.pop(robot_id, None)
         claim = self._named_stop_motion
+        repark_exc = None
         if claim is not None and claim.robot_id == robot_id and claim.repark_correlation_id is not None:
-            await self._stop_repark(robot_id, client)
-        return await client.navigation_cancel()
+            try:
+                await client.repark_stop()
+            except Exception as exc:
+                repark_exc = exc
+                logger.exception("repark stop for %s failed", robot_id)
+        result = await client.navigation_cancel()
+        if repark_exc is not None:
+            raise repark_exc
+        return result
 
     async def _stop_repark(self, robot_id: str, client) -> None:
         try:

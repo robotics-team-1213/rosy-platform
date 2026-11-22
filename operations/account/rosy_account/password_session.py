@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import functools
 import secrets
 import sqlite3
 import threading
@@ -52,6 +53,14 @@ from rosy_account.principal import SitePrincipal, legacy_grants
 from rosy_account.site_users import _LOGIN, hash_password, verify_password
 
 
+_HASH_PASSWORD = hash_password
+
+
+@functools.cache
+def _dummy_hash() -> str:
+    return _HASH_PASSWORD(secrets.token_urlsafe(16))
+
+
 def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).isoformat(timespec="seconds")
 
@@ -68,7 +77,7 @@ class PasswordSessions:
         self._limit_audited: dict[str, float] = {}
         self._cache: OrderedDict[str, dict] = OrderedDict()
         self._revoked: dict[str, float] = {}
-        self._dummy_hash = hash_password(secrets.token_urlsafe(16))
+        self._dummy_hash = _dummy_hash()
         from rosy_account.account_ledger import AccountLedger
         self._ledger = AccountLedger(self)
         init_legacy_session_tables(self, accounts_bootstrap, verify_password)

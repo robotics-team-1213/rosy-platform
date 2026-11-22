@@ -271,10 +271,18 @@ class FleetTaskService:
             if exc.status < 500:
                 return self.store.transition(task["task_id"], "FAILED", actor_id=task["actor_id"],
                                              source=task["source"], reason="COMMAND_REJECTED")
+            _LOG.warning(
+                "fleet task dispatch uncertain (robot api %s %s): task=%s robot=%s attempt=%s",
+                exc.status, exc.code, task["task_id"], task["robot_id"], attempt["attempt_id"],
+            )
             return self.store.transition(task["task_id"], "UNKNOWN", actor_id=task["actor_id"],
                                          source=task["source"], reason="COMMAND_RESULT_UNKNOWN")
         except Exception:
             # Once dispatch begins, any unclassified result is ambiguous. Do not retry it.
+            _LOG.exception(
+                "fleet task dispatch uncertain: task=%s robot=%s attempt=%s",
+                task["task_id"], task["robot_id"], attempt["attempt_id"],
+            )
             return self.store.transition(task["task_id"], "UNKNOWN", actor_id=task["actor_id"],
                                          source=task["source"], reason="COMMAND_RESULT_UNKNOWN")
 

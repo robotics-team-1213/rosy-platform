@@ -4,11 +4,13 @@
 // behind a leader's open repeat trip. Every request goes through the site map's own trip path
 // (shared/site-map-model.js) to the unchanged D-494 routes. Moving controls need a named operator (D-540 9).
 // `운행 취소` stays on roster.js: it is a stop, open to every operator.
-import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
+import { OPERATOR_REASON } from "/console/assets/authorization.js";
+import {convoyLeaders, loopCapacityText, oneLapBody, oneLapReason, planSummaryText, planTrip, repeatPlaces, repeatTripBody, repeatTripReason, startTrip, trafficCardLine, tripRefusalText, tripStartReason, tripPoseReason} from "/console/assets/site-map-model.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
 import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
-import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
+import { setOffBy } from "/common/cause-line.js";
+import { endedTripText, openTrip, primaryButton, quietButton } from "./queues.js";
 import { ruleJudgeSection } from "./site-rules-judge.js";
 
 export { endedTripText, openTrip };
@@ -22,7 +24,7 @@ export function cardTripLine(view, robotId) {
 export function tripReason(robot, { view, operator, named }) {
   const estop = robot?.state?.safety?.estop;
   return view.stateUnavailable ? "Fleet 상태 확인 불가"
-    : !operator ? "운영자 권한이 필요합니다"
+    : !operator ? OPERATOR_REASON
       : named || (!robot ? "로봇을 고르세요"
         : !robot.online ? "로봇 오프라인"
           : estop === true ? estopText(robot.state)
@@ -68,8 +70,8 @@ function line(className, text) {
 
 export function createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason = () => "" }) {
   let form = null;  // { robotId, to, start, plan, busy, note }: one form open at a time
-  const gate = (robot) => tripReason(robot, { view, operator: isOperator(), named: namedReason() });
-  const ready = (robot) => gate(robot) || (view.guideUnavailable ? "현장 지도 위치 확인 불가"
+  const tripGate = (robot) => tripReason(robot, { view, operator: isOperator(), named: namedReason() });
+  const ready = (robot) => tripGate(robot) || (view.guideUnavailable ? "현장 지도 위치 확인 불가"
     : tripPoseReason(view.guide, robot?.robot_id, view.activeSiteMap, robotMapPose(robot)));
   const places = () => view.activeSiteMap?.map?.places || [];
   function checkReady(robotId) {
@@ -118,9 +120,9 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     button.dataset.tripOpen = robot.robot_id;
     button.setAttribute("aria-pressed", String(open));
     button.setAttribute("aria-expanded", String(open));
-    setReason(button, open ? "" : gate(robot));
+    setOffBy(button, open ? "" : tripGate(robot));
     button.addEventListener("click", scope.guard(() => {
-      form = open ? null : { robotId: robot.robot_id, kind: "route", to: "", start: "", lapStart: "", via: "", plan: null,
+      form = open ? null : { robotId: robot.robot_id, kind: "route", driveMode: "", to: "", start: "", lapStart: "", via: "", plan: null,
         lapPlan: null, busy: false, note: null };
       render();
     }));
@@ -146,7 +148,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       kind.select.append(option);
     }
     kind.select.value = mine.kind || "route";
-    setReason(kind.select, mine.busy ? "요청 처리 중" : "");
+    setOffBy(kind.select, mine.busy ? "요청 처리 중" : "");
     if (mine.busy) {
       const reason = line("hint", "요청 처리 중 · 완료 후 작업 종류를 바꿀 수 있습니다");
       reason.id = `${id}-trip-kind-reason`;
@@ -154,18 +156,23 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       kind.wrap.append(reason);
     }
 
+    const canNav2 = (robot.capabilities?.controls?.items || []).some(
+      (item) => item?.kind === "base_velocity" && Array.isArray(item.drive_modes) && item.drive_modes.includes("free"));
+    if (!canNav2 && mine.driveMode === "nav2") mine.driveMode = "";
+    const driveModeBody = () => (mine.driveMode === "nav2" ? { drive_mode: "nav2" } : {});
+
     // A card whose picker has focus is kept across polls (roster.place), so a new destination also
     // drops the previewed plan from the buttons on screen now.
     const to = pick("목적지", (value) => {
       mine.to = value;
       mine.plan = null;
-      setReason(go, lock || "먼저 경로를 계산하세요");
+      setOffBy(go, lock || "먼저 경로를 계산하세요");
       summary.textContent = "계산 전 · 실행은 하지 않습니다";
       render();
     });
     mine.to = placeOptions(to.select, places(), mine.to);
     const preview = quietButton("경로 보기");
-    setReason(preview, lock || (running ? "이 로봇은 이미 운행 중입니다" : mine.to ? "" : "목적지를 고르세요"));
+    setOffBy(preview, lock || (running ? "이 로봇은 이미 운행 중입니다" : mine.to ? "" : "목적지를 고르세요"));
     preview.addEventListener("click", scope.guard(async () => {
       const life = scope.capture();
       mine.busy = true;
@@ -175,7 +182,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       try {
         checkReady(id);
         const to = mine.to;
-        const plan = await planTrip(call, id, { to });
+        const plan = await planTrip(call, id, { to, ...driveModeBody() });
         life.check();
         if (form === mine && mine.to === to) mine.plan = plan;
       } catch (err) {
@@ -187,7 +194,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     }));
     const go = primaryButton("운행 시작");
     go.dataset.tripStart = id;
-    setReason(go, lock || tripStartReason({ role: "operator", plan: mine.plan, active, running }));
+    setOffBy(go, lock || tripStartReason({ role: "operator", plan: mine.plan, active, running }));
     go.addEventListener("click", scope.guard(() => {
       const plan = mine.plan;
       if (plan) send(id, mine, () => checkedStart(id, plan), "운행을 시작했습니다");
@@ -198,14 +205,14 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     const summary = line("hint", mine.plan ? `${planSummaryText(mine.plan)} · 실행하지 않음` : "계산 전 · 실행은 하지 않습니다");
     summary.setAttribute("role", "status");
 
-    const starts = places().filter((place) => place.kind === "start");
+    const starts = repeatPlaces(active?.map);
     const start = pick("반복 출발 자리", (value) => { mine.start = value; render(); });
     mine.start = placeOptions(start.select, starts, mine.start);
     const repeat = primaryButton("반복 운행 시작");
     repeat.dataset.tripRepeat = id;
-    setReason(repeat, lock || repeatTripReason({ active, running, start: mine.start }));
+    setOffBy(repeat, lock || repeatTripReason({ active, running, start: mine.start }));
     repeat.addEventListener("click", scope.guard(() => send(id, mine, async () => {
-      const plan = await planTrip(call, id, repeatTripBody(active?.map, mine.start, ""));
+      const plan = await planTrip(call, id, repeatTripBody(active?.map, mine.start, "", mine.driveMode));
       return checkedStart(id, plan);
     }, `반복 운행을 시작했습니다 · ${mine.start}`)));
     const laps = document.createElement("div");
@@ -219,7 +226,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     mine.via = placeOptions(lapVia.select, stops, mine.via);
     const lapReason = lock || oneLapReason({ active, running, start: mine.lapStart, via: mine.via });
     const lapPreview = quietButton("한 바퀴 경로 보기");
-    setReason(lapPreview, lapReason);
+    setOffBy(lapPreview, lapReason);
     lapPreview.addEventListener("click", scope.guard(async () => {
       const life = scope.capture();
       mine.busy = true;
@@ -229,7 +236,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       try {
         checkReady(id);
         const start = mine.lapStart, via = mine.via;
-        const plan = await planTrip(call, id, oneLapBody(active?.map, start, via));
+        const plan = await planTrip(call, id, { ...oneLapBody(active?.map, start, via), ...driveModeBody() });
         life.check();
         if (form === mine && mine.lapStart === start && mine.via === via) mine.lapPlan = plan;
       } catch (err) {
@@ -241,7 +248,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     }));
     const lapGo = primaryButton("한 바퀴 시작");
     lapGo.dataset.tripLapOnce = id;
-    setReason(lapGo, lapReason || tripStartReason({ role: "operator", plan: mine.lapPlan, active, running }));
+    setOffBy(lapGo, lapReason || tripStartReason({ role: "operator", plan: mine.lapPlan, active, running }));
     lapGo.addEventListener("click", scope.guard(() => {
       const plan = mine.lapPlan;
       if (plan) send(id, mine, () => checkedStart(id, plan), "한 바퀴를 시작했습니다");
@@ -254,6 +261,19 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     lapSummary.setAttribute("role", "status");
 
     box.append(kind.wrap);
+    if (canNav2) {
+      const modePick = pick("주행 방식", (value) => {
+        mine.driveMode = value; mine.plan = null; mine.lapPlan = null; render();
+      });
+      modePick.select.dataset.tripDriveMode = id;
+      for (const [value, name] of [["", "기본 (지도 설정)"], ["nav2", "Nav2 (도로 추종)"]]) {
+        const option = document.createElement("option"); option.value = value; option.textContent = name;
+        modePick.select.append(option);
+      }
+      modePick.select.value = mine.driveMode || "";
+      setOffBy(modePick.select, mine.busy ? "요청 처리 중" : "");
+      box.append(modePick.wrap);
+    }
     for (const [mode, children] of [["route", [to.wrap, once, summary]],
       ["lap", [lapStart.wrap, lapVia.wrap, lapActions, lapSummary]], ["repeat", [start.wrap, laps]]]) {
       const panel = document.createElement("div");
@@ -288,7 +308,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     const lead = placeOptions(leader, leaders.map((id) => ({ id })), preferred, (row) => row.id);
     const free = view.robots.map((robot) => robot.robot_id).filter((id) => id !== lead && !openTrip(view, id));
     const chosen = placeOptions(follower, free.map((id) => ({ id })), follower.value, (row) => row.id);
-    const starts = places().filter((place) => place.kind === "start");
+    const starts = repeatPlaces(view.activeSiteMap?.map);
     const start = placeOptions(el("convoy-start"), starts, el("convoy-start").value);
     const robot = view.robots.find((row) => row.robot_id === chosen);
     const reason = (convoy.busy ? "보내는 중" : "")
@@ -296,7 +316,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       || (free.length ? "" : "따라갈 로봇이 없습니다 · 운행 중이 아닌 로봇이 필요합니다")
       || ready(robot)
       || repeatTripReason({ active: view.activeSiteMap, running: openTrip(view, chosen), start });
-    setReason(el("convoy-go"), reason);
+    setOffBy(el("convoy-go"), reason);
     el("convoy-detail").textContent = convoy.note || (reason ? "" : `팔로워 ${chosen} · 리더 ${lead} 뒤에서 반복 운행 · 출발 ${start}`);
   }
 
@@ -321,7 +341,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
 
   function focus(robotId) {
     form = {
-      robotId, kind: "route", to: "", start: "", lapStart: "", via: "", plan: null, lapPlan: null, busy: false, note: null,
+      robotId, kind: "route", driveMode: "", to: "", start: "", lapStart: "", via: "", plan: null, lapPlan: null, busy: false, note: null,
     };
   }
 

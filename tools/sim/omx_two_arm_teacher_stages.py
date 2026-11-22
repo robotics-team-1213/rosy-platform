@@ -18,7 +18,8 @@ from cell_belt_handover import BeltHandover, Hold  # noqa: E402
 
 FPS = 15
 CARRY_SPEED = .05  # m/s; .08 let a 16 g container swing 10 deg in the jaws on the short reach to the near row
-OPEN_GAP = dict(belt=.042, ship=.033, temp=.038, outbound=.038)
+OPEN_GAP = dict(belt=.042, ship=.033, temp=.038, outbound=.038, stand=.038)
+STAND_CHUTE = dict(alpha_deg=24.0, slide_min_mm=18.0, slide_max_mm=44.0, z_tol_mm=3.5, tilt_tol_deg=4.5)
 HOLD_GAP = .030 - jaw.SQUEEZE_M
 SERVO_GAIN = 40.  # omx_physics design kp of every joint: about 0.16 s from command to arrival
 BELT_MISSING_AFTER_S = 20.  # a placed delivery that still shows nothing at the belt end after this much sim time is `missing`
@@ -46,11 +47,23 @@ def servo_values(model, ids):
 
 
 def judge_pose(world, data, cid, site, limits):
-    """Container against its target site: position, yaw (180 deg symmetric), height, tilt."""
+    """Container against its target site: position, yaw (180 deg symmetric), height, tilt (or 24-deg chute seat for `stand`)."""
     s = world.layout.sites[site]
     pos, yaw, tilt = world.pose(data, cid)
-    xy = float(np.linalg.norm(pos[:2] - s["xy"])) * 1000
     dyaw = abs(math.degrees(tasks.wrap_pi(yaw - s["yaw"])))
+    if s["kind"] == "stand":
+        dx_mm = float(pos[0] - s["xy"][0]) * 1000
+        dy_mm = float(abs(pos[1] - s["xy"][1])) * 1000
+        alpha = math.radians(STAND_CHUTE["alpha_deg"])
+        rail_z = sites.OUTBOUND_STAND_SPEC["rail_z_m"] - (float(pos[0]) - s["xy"][0]) * math.tan(alpha)
+        z_exp = rail_z + (world.layout.box[2] / 2.0) / math.cos(alpha)
+        dz = float(pos[2] - z_exp) * 1000
+        dtilt = abs(tilt - STAND_CHUTE["alpha_deg"])
+        ok = (STAND_CHUTE["slide_min_mm"] <= dx_mm <= STAND_CHUTE["slide_max_mm"] and dy_mm <= limits["xy_mm"]
+              and dyaw <= limits["yaw_deg"] and abs(dz) <= STAND_CHUTE["z_tol_mm"] and dtilt <= STAND_CHUTE["tilt_tol_deg"])
+        return dict(ok=bool(ok), xy_mm=round(dy_mm, 1), dx_mm=round(dx_mm, 1), dy_mm=round(dy_mm, 1),
+                    yaw_deg=round(dyaw, 1), z_mm=round(dz, 1), tilt_deg=round(tilt, 1))
+    xy = float(np.linalg.norm(pos[:2] - s["xy"])) * 1000
     dz = float(pos[2] - s["z"]) * 1000
     ok = xy <= limits["xy_mm"] and dyaw <= limits["yaw_deg"] and abs(dz) <= limits["z_mm"] and tilt <= limits["tilt_deg"]
     return dict(ok=bool(ok), xy_mm=round(xy, 1), yaw_deg=round(dyaw, 1), z_mm=round(dz, 1), tilt_deg=round(tilt, 1))
@@ -142,14 +155,15 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
                 continue  # a non-belt step keeps its plan's after_pick
             here_s = {k: v for k, v in here.items() if k != s["container"]}
             phase_idx = {"": 0, "approach": 0, "grasp": 6, "close": 19, "lift": 31, "carry": 43, "lower": 55, "release": 67, "retreat": 79, "park": 91}
-            if running and not all(
-                plan_mod.sweeps_clear(
-                    plan_mod.step_swept_poses(L, arm, s["from"], s["to"], here_s),
-                    (plan_mod.step_swept_poses(L, oa, r[0]["from"], r[0]["to"], r[2].here) or [])[phase_idx.get(r[2].phase, 0):],
-                )
-                for oa, r in running.items()
-            ):
-                continue
+            if running:
+                def pose_slice(oa, r):
+                    poses_oa = plan_mod.step_swept_poses(L, oa, r[0]["from"], r[0]["to"], r[2].here) or []
+                    ph = r[2].phase
+                    extra = max(0, len(poses_oa) - 98) if ph in ("lower", "release", "retreat", "park") else 0
+                    return poses_oa[phase_idx.get(ph, 0) + extra:]
+                if not all(plan_mod.sweeps_clear(plan_mod.step_swept_poses(L, arm, s["from"], s["to"], here_s), pose_slice(oa, r))
+                           for oa, r in running.items()):
+                    continue
             queue[arm].pop(0)
             started[s["id"]] = frames
             if s["from"] == "belt" and not belt_cargo():
@@ -251,6 +265,22 @@ def isaac_handoff(result, layout, seed=0):
             ))
     layers = 3 if result.get("steps", 0) > 3 else 1
     cal_keys = ("top_camera", "wrist_camera", "physics", "arm_bases", "belt_pose", "ship_pose", "temp_lanes", "cell_snapshot")
+    from r08_rl_fixture import PRESET, request_for
+    stack_scenario = "omx-map-container-stack"
+    stack_config = dict(seed=seed, layers=layers, case="nominal-palletizing-v21-ship-surveyed-skew-20261110")
+    layout_error = None
+    if layout.choices.get("preset") == PRESET:
+        stack_scenario = "omx-map-container-stacking-rl"
+        try:
+            count = result.get("steps")
+            planned = [(r.get("container"), r.get("target"), r.get("arm")) for r in rows]
+            if (result.get("task") not in ("stack", "stack-t1") or count not in (3, 6, 9)
+                    or planned != layout.plan_order()[:count]):
+                raise ValueError("The r08 PhysX PPO handoff accepts h1 stacking only")
+            layers = count // 3
+            stack_config = request_for(layout, seed, layers)
+        except ValueError as exc:
+            stack_config, layout_error = None, str(exc)
     return dict(
         schema="rosy.omx-mujoco-isaac-handoff.v1",
         task=result.get("task", "two-arm"),
@@ -270,36 +300,57 @@ def isaac_handoff(result, layout, seed=0):
         ),
         stage_2_isaac=dict(
             role="physx_contact_pad_slip_and_seating_confirmation",
-            ready=bool(result.get("completed") and contacts_clear),
-            two_arm_scenario="omx-map-container-stack",
-            two_arm_config=dict(seed=seed, layers=layers, case="nominal-palletizing-v21-ship-surveyed-skew-20261110"),
+            ready=bool(result.get("completed") and contacts_clear and not layout_error),
+            two_arm_scenario=stack_scenario,
+            two_arm_config=stack_config,
+            **({"layout_error": layout_error} if layout_error else {}),
             single_arm_scenario="arm-s-cell-case",
             single_arm_cases=single_cases,
         ),
     )
 
 
-def open_video_writer(world, out: Path, task_name: str, video_skip: int = 1):
-    """Open an H.264 4-camera grid video writer (`(writer_hook, close_fn)`)."""
-    video_path = str(out / f"{task_name}{'-short' if video_skip > 1 else ''}.mp4")
-    from PIL import Image, ImageDraw
+def open_rgb_video(path: Path, width: int, height: int):
+    """Return an RGB frame writer and finalizer for an H.264 MP4 at the control rate."""
+    video_path = str(path)
     try:
         import av
         container = av.open(video_path, "w")
         stream = container.add_stream("h264", rate=FPS)
-        stream.width, stream.height, stream.pix_fmt = 1280, 960, "yuv420p"
+        stream.width, stream.height, stream.pix_fmt = width, height, "yuv420p"
         encode_rgb = lambda arr: container.mux(stream.encode(av.VideoFrame.from_ndarray(arr, format="rgb24")))  # noqa: E731
-        close_video = lambda: (container.mux(stream.encode(None)), container.close())  # noqa: E731
+
+        def close_video():
+            try:
+                container.mux(stream.encode(None))
+            finally:
+                container.close()
+
     except ImportError:
         import subprocess
         ff = subprocess.Popen(
-            ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "1280x960",
+            ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}",
              "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", video_path],
             stdin=subprocess.PIPE,
         )
         encode_rgb = lambda arr: ff.stdin.write(arr.tobytes())  # noqa: E731
-        close_video = lambda: (ff.stdin.close(), ff.wait())  # noqa: E731
 
+        def close_video():
+            try:
+                ff.stdin.close()
+            finally:
+                status = ff.wait()
+            if status:
+                raise subprocess.CalledProcessError(status, ff.args)
+
+    return encode_rgb, close_video
+
+
+def open_video_writer(world, out: Path, task_name: str, video_skip: int = 1):
+    """Open an H.264 4-camera grid video writer (`(writer_hook, close_fn)`)."""
+    from PIL import Image, ImageDraw
+    path = out / f"{task_name}{'-short' if video_skip > 1 else ''}.mp4"
+    encode_rgb, close_video = open_rgb_video(path, 1280, 960)
     count = [0]
 
     def writer(data, label):

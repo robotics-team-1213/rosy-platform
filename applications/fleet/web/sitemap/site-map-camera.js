@@ -1,4 +1,5 @@
 // D-655 camera import and reviewed endpoint connections; draft writes only.
+import {setOffBy} from '/common/cause-line.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {cameraConnectionCandidates, mergeCameraMap} from '/console/assets/site-map-edit.js';
 
@@ -11,10 +12,6 @@ export function createCameraMapPanel(host) {
     $('camera-connections').replaceChildren();
     $('camera-connect-check').hidden = true; $('camera-connect-confirm').checked = false;
   }
-  function gate(id, reason) {
-    $(id).disabled = Boolean(reason);
-    if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason');
-  }
   function sync() {
     const current = $('camera-map-file').files[0], draft = host.draft();
     if (current !== file || draft?.revision !== revision) { reset(); file = current; revision = draft?.revision; }
@@ -23,9 +20,9 @@ export function createCameraMapPanel(host) {
     const source = host.reason() || (!current ? '카메라 관측 JSON 파일을 고르세요' : '');
     const survey = source || (host.dirty() ? '수정한 초안을 먼저 저장하세요' : '')
       || (!draft?.map?.survey ? '조사 기준이 있는 초안을 먼저 저장하세요' : '');
-    gate('import-camera-map', source);
-    gate('preview-camera-connections', survey);
-    gate('merge-camera-map', survey || (fields().length &&
+    setOffBy($('import-camera-map'), source);
+    setOffBy($('preview-camera-connections'), survey);
+    setOffBy($('merge-camera-map'), survey || (fields().length &&
       (!fields().every(field => field.value) || !$('camera-connect-confirm').checked) ? '연결 장소를 선택하고 실제 연결을 확인하세요' : ''));
   }
   async function read(current) {

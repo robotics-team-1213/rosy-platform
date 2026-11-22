@@ -97,7 +97,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
         def paths():
             return getattr(app.state, "paths", None)
     app.state.site_maps = site_maps
-    from fleet.server.trips import named_stop_frame
+    from fleet.server import named_stop_frame
     app.state.named_stop_frame = named_stop_frame  # D-1051: the safety-tagged dispatch helper reads it here
     from fleet.server.site_map_drawing_routes import install_site_map_drawing_routes
     install_site_map_drawing_routes(app, assets=site_maps.drawing_assets, read_guard=read_guard,
@@ -106,18 +106,26 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
     from fleet.server.site_rules_routes import install_site_rules_routes  # D-982: beside the map it is judged on
     install_site_rules_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
                               require_named_operator=require_named_operator)
+    from fleet.server.site_points_routes import install_site_points_routes
+    install_site_points_routes(app, site_maps=site_maps, read_guard=read_guard)
     try:
         from fleet.server.sitemap.pipeline_routes import install_pipeline_routes
+        from fleet.server.sitemap.pipeline_evidence import amr_evidence, omx_owner_evidence
         install_pipeline_routes(
             app, site_maps=site_maps, read_guard=read_guard,
+            amr_evidence_fn=lambda task: amr_evidence(app, task),
+            omx_evidence_fn=lambda task: omx_owner_evidence(app, task),
             operator_guard=getattr(app.state, "operator_guard", None),
             proposer_guard=getattr(app.state, "proposer_guard", None),
         )
     except ImportError:
         try:
             from fleet.server.pipeline_routes import install_pipeline_routes
+            from fleet.server.sitemap.pipeline_evidence import amr_evidence, omx_owner_evidence
             install_pipeline_routes(
                 app, site_maps=site_maps, read_guard=read_guard,
+                amr_evidence_fn=lambda task: amr_evidence(app, task),
+                omx_evidence_fn=lambda task: omx_owner_evidence(app, task),
                 operator_guard=getattr(app.state, "operator_guard", None),
                 proposer_guard=getattr(app.state, "proposer_guard", None),
             )

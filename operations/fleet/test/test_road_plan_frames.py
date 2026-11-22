@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from fleet.server.ledger.task_dispatch_helpers import compute_road_plan
-from fleet.server.trips import named_stop_frame
+from fleet.server.task_dispatch_helpers import compute_road_plan
+from fleet.server import named_stop_frame
 
 
 def plan(site_pose, robot_state):
@@ -107,7 +107,7 @@ def test_named_stop_with_an_approved_binding_refuses_a_missing_road(monkeypatch)
                                      "direct-overflow", "handoff-legacy-wire-race"])
 def test_named_stop_binding_is_checked_at_dispatch_and_before_the_goal_post(monkeypatch, change):
     from fleet.server import console_helpers
-    from fleet.server.sitemap.map_binding_store import MapBindingStore
+    from fleet.server.map_binding_store import MapBindingStore
     from fleet.routing.graph import Arc
     from fleet.swarm.dispatch_guard import check_dispatch
 

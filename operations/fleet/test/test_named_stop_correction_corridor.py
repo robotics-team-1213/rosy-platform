@@ -6,8 +6,8 @@ import pytest
 
 from fleet.hub.hub import HubError
 from fleet.localization.map_binding import Fit
-from fleet.server.sitemap.site_map_store import SiteMapStore
-from fleet.server.trips.correction_corridor import check_correction_path
+from fleet.server.site_map_store import SiteMapStore
+from fleet.server.correction_corridor import check_correction_path
 from fleet.site_map import PrecisionStopLimits, SiteMap, SiteWall
 from test_trip_runner import _free_map
 

@@ -34,7 +34,7 @@ from core_features.docking.bay_reseat import BayReseatMixin
 from core_features.docking.bay_turn_watch import BayTurnMixin
 from core_features.docking.bay_zone_checks import BayZoneChecksMixin
 from core_features.docking.bay_zone_phases import BayZoneMixin
-from core_features.docking.charging import ChargingConfirmation
+from core_features.docking.charging import PackChargeConfirmation
 from core_features.docking.model import DockPhase
 from core_features.docking.parking import ParkingGains
 from core_features.docking.rear_phases import rear_errors
@@ -49,9 +49,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
     def __init__(self, host: Any) -> None:
         self._h = host
         # 전압 1소스(D-941 숫자: 20 s 창) — D-27 억제 입력이 아니다.
-        self._charging = ChargingConfirmation(clock=host._clock,
-                                              window_s=host._cfg.bay_charge_confirm_s,
-                                              instrumented=False)
+        self._charging = PackChargeConfirmation(clock=host._clock, window_s=host._cfg.bay_charge_confirm_s)
         self._est: Optional[tuple[float, float]] = None   # (횡, 방위) 추정 — 예측이 메운다
         self._no_obs_s = 0.0
         self._scan_s: Optional[float] = None
@@ -69,7 +67,6 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         self._slip: Optional[tuple[float, float]] = None   # (travelled, along) 창 시작
         self._backoff = False
         self._last_tick: Optional[float] = None
-        self._baseline_v: Optional[float] = None
         self._fleet_cue: Optional[tuple[float, dict]] = None
         # 칸 줄 안 시작(bay_zone.py): None | "check"(선 관측 기다려 판정) | "exit"(곧은 전진)
         self._zone: Optional[str] = None
@@ -106,7 +103,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         if status is not None:
             return self._h._charging.update(status, voltage, now=now), self._h._charging
         if self.active():
-            return self._charging.update(None, voltage, now=now), self._charging
+            return self._pack_charging(now), self._charging
         return self._h._rear_phases.docked_confirm(status, voltage, now)
 
     def note_body_scan(self, rotation_block: Optional[str], front_gap_m: Optional[float],
@@ -132,7 +129,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         if body[0] in ("empty", "unknown"):
             return "LiDAR cannot vouch for the way ahead (%s)" % body[0]
         if body[1] is not None and body[1] < self._h._cfg.bay_exit_front_gap_m:
-            return "something ahead within %.2f m" % self._h._cfg.bay_exit_front_gap_m
+            return "something ahead within %.2f m (front gap %.3f m, body scan %.1f s old)" % (self._h._cfg.bay_exit_front_gap_m, body[1], max(0.0, now - body[3]))
         return self._row_forward_reason(step, now, since)
 
     def zone_entry(self) -> bool:
@@ -195,6 +192,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
 
     def _stop(self) -> None:
         self._omega = 0.0
+        self._progress = None     # A commanded wait is not time spent pushing against the stop.
         if self._h.executor is not None:
             self._h.executor.stop()
 
@@ -391,8 +389,10 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         if steer != "use" and self._blind_lateral(dt, speed):
             return
         body = self._body_fresh(now)
-        if body is not None and rear_blocked(cfg, body[2], self._rear_along if steer == "use" else self._along_m):
-            self._guard_fail("rear", "LiDAR sees something in the bay before the stop face", h._retry)
+        rear_along = self._rear_along if steer == "use" else self._along_m
+        if body is not None and rear_blocked(cfg, body[2], rear_along):
+            self._guard_fail("rear", "LiDAR sees something in the bay before the stop face (rear gap %.3f m, expected %.3f m from along %.3f m)" % (
+                body[2], max(0.0, rear_along - cfg.bay_turn_rear_overhang_m), rear_along), h._retry)
             return
         if self._lidar_seated(now):
             self._begin_settling()               # the LiDAR puts the rear at the stored seated gap: the real stop
@@ -453,20 +453,20 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
 
     def _contact(self, travelled: float, now: float) -> bool:
         """접촉 3중 판정: 진행 멈춤 · 슬립 발산 · 거리 상한."""
-        h, cfg = self._h, self._h._cfg
+        cfg = self._h._cfg
+        moving = self._lidar_moving(now)
         if self._slip is not None and self._slip[0] == "contact":
-            if self._lidar_moving(now):
+            if moving:
                 self._slip = None                  # the line's shape stood still but the LiDAR sees the body going back
             else:
                 self._begin_settling()
                 return True
-        last, since = self._progress or (travelled, now)
-        if travelled - last >= cfg.contact_progress_m:
+        if self._progress is None or travelled - self._progress[0] >= cfg.contact_progress_m or moving:
             self._progress = (travelled, now)
-        elif now - since >= cfg.contact_stall_s:
+        elif now - self._progress[1] >= cfg.contact_stall_s:
             self._begin_settling()
             return True
-        if self._travel_cap_m is not None and travelled >= self._travel_cap_m and not self._lidar_moving(now):
+        if self._travel_cap_m is not None and travelled >= self._travel_cap_m and not moving:
             self._begin_settling()
             return True
         return False
@@ -478,11 +478,15 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
         self._stop()
         if h.executor is not None:
             h.executor.set_collision_exemption(False)
-        self._charging.reset()
-        self._baseline_v = None
+        self._charging.begin_settling(h._battery)
         self._req_open = None
         self._seat_asked, self._seat_match, self._seat_tries = False, None, 0
         h._enter(DockPhase.SETTLING)
+
+    def _pack_charging(self, now: float) -> bool:
+        h, cfg = self._h, self._h._cfg
+        return self._charging.observe(h._battery, now=now, since_settled=now - h._phase_since,
+                                      baseline_delay_s=cfg.bay_settle_baseline_s, rise_v=cfg.bay_charge_rise_v)
 
     def _tick_settling(self, now: float) -> None:
         """전압 1소스(D-941): 멈춘 뒤 2 s 기준, 20 s 안 +0.05 V 상승."""
@@ -493,14 +497,7 @@ class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin,
             return
         if self._seat_blocked(now):
             return
-        voltage = getattr(h._battery, "voltage", None) if h._battery is not None else None
-        valid = voltage is not None and math.isfinite(float(voltage))
-        if self._baseline_v is None and valid and now - h._phase_since >= cfg.bay_settle_baseline_s:
-            self._baseline_v = float(voltage)
-        confirmed = self._charging.update(None, voltage, now=now)
-        peak = self._charging.peak_v
-        if (confirmed and self._baseline_v is not None and peak is not None
-                and peak - self._baseline_v >= cfg.bay_charge_rise_v):
+        if self._pack_charging(now):
             h._mark_docked()
             return
         if now - h._phase_since > cfg.settle_timeout_s + cfg.bay_charge_confirm_s:

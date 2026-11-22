@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fleet_cockpit_browser import selected_robot_id
 from test_fleet_console_browser import (
     os, json, console_url, urlparse, pytest, pytestmark, DECLINE_CONFIRM, save_temp_screenshot,
     MAP_GRID, _robot, SNAPSHOT, FORMATION, API, _open_cards, _open_console, EMPTY_SNAPSHOT,
@@ -351,7 +352,10 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
             "() => document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
         )
         page.keyboard.press("Enter")
-        page.wait_for_function("() => document.querySelector('#robot-choice')?.value === 'rosy_01'")
+        page.wait_for_function(
+            "() => document.querySelector('#robot-dock .robot-dock-btn[data-robot-id=\"rosy_01\"]')?.hasAttribute('data-selected')"
+        )
+        assert selected_robot_id(page) == "rosy_01"
         assert page.locator('.robot.selected').count() == 0
         page.locator('#robot-workspace ui-button[data-goal-robot-id]').click()
         page.wait_for_function(
@@ -381,7 +385,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         browser, page, errors = _open_console(playwright, api, posts=posts,
                                                init_script=DECLINE_CONFIRM)
         page.goto(console_url, wait_until="networkidle")
-        page.locator('[data-context-tab="inbox"]').click()
+        page.locator('[data-context-tab="evidence"]').click()
         assert page.locator("#log ui-empty").inner_text() == "최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다."
         page.locator('[data-context-tab="status"]').click()
         _open_cards(page, "rosy_02")
@@ -414,7 +418,7 @@ def test_fleet_map_keyboard_goal_requires_confirmation_and_can_cancel(console_ur
         assert page.locator("#log ui-empty").count() == 0
         assert page.locator(".robot.selected").count() == 0
         assert page.evaluate("document.activeElement?.dataset.goalRobotId") == "rosy_02"
-        page.locator('[data-context-tab="inbox"]').click()
+        page.locator('[data-context-tab="evidence"]').click()
         assert page.locator("#log").is_visible()
         assert not errors
         browser.close()
@@ -448,7 +452,7 @@ def test_queued_navigation_is_successful_and_cancel_targets_task(console_url):
                          canvas_box["y"] + canvas_box["height"] / 2)
         page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
         page.wait_for_function("() => document.querySelector('#log')?.textContent.includes('task-queued-123')")
-        page.locator('[data-context-tab="inbox"]').click()
+        page.locator('[data-context-tab="evidence"]').click()
         assert "QUEUED" in page.inner_text("#log")
         assert "#1" in page.inner_text("#log")
         page.locator('[data-context-tab="status"]').click()
@@ -497,6 +501,8 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         assert "rosy_02" in crit and "개입 필요" in crit
         assert "로봇 화면에서 확인" in crit  # 정직한 경로(D-218, F-20)
         assert "rosy_03" in warn and "lidar" in warn
+        assert page.locator("#header-unread").inner_text().strip() == "2"
+        page.locator("#fleet-inbox").click()
         assert page.locator(".queues-panel").is_visible()
         assert not errors, f"페이지 오류: {errors}"
         save_temp_screenshot(page, "fleet_console_queues.png")
@@ -515,8 +521,13 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         })
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
-        # 정상 로스터에는 큐 패널이 아예 없다 — '이상 없음'을 칠하지 않는다.
+        # 정상 로스터에는 배지와 큐 목록이 비고, 열면 빈 상태 안내가 보인다.
+        assert page.locator("#header-unread").is_hidden()
         assert page.locator(".queues-panel").is_hidden()
+        page.locator("#fleet-inbox").click()
+        assert page.locator(".queues-panel").is_visible()
+        assert page.locator(".queues-container").is_hidden()
+        assert page.locator("#queues-empty").is_visible()
         browser.close()
 
     # D-493: SNAPSHOT is not a normal roster — rosy_03's card carries a red relay tag and a traffic wait.
@@ -531,6 +542,8 @@ def test_queues_render_hitl_and_degraded_then_hide_when_empty(console_url):
         page.wait_for_function(
             "() => (window.__swarmOverlay?.slots || 0) === 2", timeout=8000
         )
+        assert page.locator("#header-unread").is_visible()
+        page.locator("#fleet-inbox").click()
         assert page.locator(".queues-panel").is_visible()
         assert "릴레이 끊김" in page.inner_text("#critical-list")
         # D-540 3: the robot is named once, in its row; the head counts (names stay in its title).
@@ -634,7 +647,10 @@ def test_desktop_exception_states_fit_without_hiding_evidence(console_url, scena
             assert page.locator("#roster").evaluate("e => e.scrollHeight <= e.clientHeight")
         elif scenario == "disconnected":
             assert "닿지 않음" in page.inner_text("#roster")
+            assert page.locator("#header-unread").is_visible()
+            page.locator("#fleet-inbox").click()
             assert page.locator(".queues-panel").is_visible()
+            page.locator("#queues-close").click()
             # D-493: the queue lives in the rail, so the map stays the main view.
             assert fit["mapCanvas"]["height"] >= 0.5 * fit["vh"]
         else:

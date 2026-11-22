@@ -9,6 +9,7 @@ real repository through the CLI so the registry and the selector stay in step.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import json
 import subprocess
@@ -196,8 +197,13 @@ def _real_repo() -> affected.Repo:
     return affected.Repo.load(ROOT)
 
 
+@functools.lru_cache(maxsize=None)
+def _sample_repo(sample: Path) -> affected.Repo:
+    return affected.Repo.load(sample)
+
+
 def _select(sample: Path, *changed: str) -> affected.Selection:
-    return affected.select(affected.Repo.load(sample), list(changed))
+    return affected.select(_sample_repo(sample), list(changed))
 
 
 @pytest.mark.parametrize("consumer", ["package_export", "transitive_runtime", "broad_owner"])
@@ -346,7 +352,7 @@ def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
     assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test/test_battery.py"]
-    repo = affected.Repo.load(sample)
+    repo = _sample_repo(sample)
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
         assert len(names) == len(set(names)), inv
@@ -615,7 +621,7 @@ def test_safety_rule_follows_deepest_root_wins(tmp_path):
 
 
 def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
-    repo = affected.Repo.load(sample)
+    repo = _sample_repo(sample)
     matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
     shards = [e for e in matrix if e["name"].startswith("root-test-")]
     assert len(shards) == affected.ROOT_SHARDS
@@ -627,7 +633,7 @@ def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
 
 
 def test_ci_full_matrix_shards_slow_suites_by_file(sample):
-    repo = affected.Repo.load(sample)
+    repo = _sample_repo(sample)
     matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
     for name, n in affected.SUITE_SHARDS.items():
         entry = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)
@@ -684,7 +690,7 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     # the measured table must keep the slowest shard near a quarter of the suite.
     costs = json.loads((ROOT / "tools/harness/fleet_test_seconds.json").read_text(encoding="utf-8"))
     assert costs["test_fleet_header_browser.py"] >= 100, "a measured slow Fleet file must be weighed"
-    repo = affected.Repo.load(ROOT)
+    repo = dataclasses.replace(_real_repo(), test_files=list(_real_repo().test_files))
     selection = affected.Selection("full", [])
     matrix = affected.ci_matrix(repo, selection)["include"]
     shards = [e for e in matrix if e["name"].startswith("fleet-")]
@@ -828,7 +834,7 @@ def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
-    matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
+    matrix = affected.ci_matrix(_sample_repo(sample), sel)["include"]
     pytest_entries = [e for e in matrix if e["kind"] == "pytest"]
     # Each invocation becomes one runner per ROS environment; every selected path runs exactly once.
     assert sorted(p for e in pytest_entries for p in e["invocations"][0]) == sorted(p for inv in sel.invocations for p in inv)
@@ -873,7 +879,7 @@ def test_escalated_paths_are_still_mapped_for_the_local_run(sample):
 
 
 def test_parts_match_selects_a_shared_basename_by_its_parent(sample):
-    repo = affected.Repo.load(sample)
+    repo = _sample_repo(sample)
     assert "test/test_udev_rules.py" in repo.referencing_tests("deploy/robot/pinky_pro/udev/99-rosy.rules")
     assert "test/test_udev_rules.py" not in repo.referencing_tests("deploy/robot/pinky_pro/compose.yaml")
 
@@ -1014,13 +1020,13 @@ def test_harness_yaml_without_a_base_is_full():
     _assert_harness_full(sel, "no base to compare")
 
 
-def test_harness_yaml_added_suite_without_test_functions_is_full():
+def test_harness_yaml_added_suite_without_test_functions_is_full(monkeypatch):
     """A test_*.py with no `def test_` collects nothing, so it does not show the module is tested."""
-    repo, target = affected.Repo.load(ROOT), "test/test_rosy_games_surface.py"
+    repo, target = _real_repo(), "test/test_rosy_games_surface.py"
     head = _harness_with(f"  - name: zz_added\n    path: operations/zz_added\n    tests: [{target}]\n")
     assert affected.affected_narrow.harness_modules_added(repo, REAL_HARNESS, head)[0]
     text = repo.text
-    repo.text = lambda path: "HELPER = 1\n" if path == target else text(path)
+    monkeypatch.setattr(repo, "text", lambda path: "HELPER = 1\n" if path == target else text(path))
     added, why = affected.affected_narrow.harness_modules_added(repo, REAL_HARNESS, head)
     assert not added and "no test function" in why
 
@@ -1165,9 +1171,17 @@ PLAIN = "test/test_unrelated.py::test_y"
 
 
 def _kf_select(head: str, base: str = KF_HEADER, changed=(KF,), repo=None):
-    repo = repo or affected.Repo.load(ROOT)
+    repo = repo or _real_repo()
+    had = KF in repo._texts
+    old = repo._texts.get(KF)
     repo._texts[KF] = head
-    return affected.select(repo, list(changed), base_text=lambda path: base if path == KF else None)
+    try:
+        return affected.select(repo, list(changed), base_text=lambda path: base if path == KF else None)
+    finally:
+        if had:
+            repo._texts[KF] = old
+        else:
+            repo._texts.pop(KF, None)
 
 
 @pytest.mark.parametrize("base, head", [(f"{KF_HEADER}{PLAIN}  # r\n", KF_HEADER),
@@ -1212,7 +1226,7 @@ def test_full_json_forces_the_actual_lab_plan_on_an_affected_only_change(sample,
     assert harness.main(["affected", "--repo", str(sample), "--base", "HEAD", "--full", "--json"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["mode"] == "full"
-    assert result["full_invocations"] == affected.lab_full_invocations(affected.Repo.load(sample), result["local_invocations"])
+    assert result["full_invocations"] == affected.lab_full_invocations(_sample_repo(sample), result["local_invocations"])
     assert ["test"] in result["full_invocations"]
 
 
@@ -1222,3 +1236,69 @@ def test_ci_matrix_cli_also_prints_the_human_selection_to_stderr_without_changin
     captured = capsys.readouterr()
     assert captured.out.count("\n") == 1 and json.loads(captured.out)["mode"] == "full"
     assert "affected tier (D-436): mode=full" in captured.err
+
+
+def test_pack_drops_strict_child_paths_with_boundary_awareness():
+    class FakeRepo:
+        root = None
+
+        @staticmethod
+        def test_import_names(path):
+            return {path: path}
+
+    groups = affected_pack.pack(FakeRepo(), [
+        "a/b", "a/b/", "a/b/sub/t.py", "a/b2/t.py", "x/y/", "x/y/t.py", "dup/t.py", "dup/t.py",
+    ])
+    flat = [p for g in groups for p in g]
+    assert flat == ["a/b", "a/b2/t.py", "x/y/", "dup/t.py", "dup/t.py"]
+
+
+def test_contract_version_pin_narrows_until_non_pin_code_is_added():
+    import affected_narrow
+
+    assert affected_narrow.is_contract_version_pin_text('"""doc"""\n# comment\nCONTRACT = "ROSY-API-REF-001 v1.440"\n')
+    assert not affected_narrow.is_contract_version_pin_text("")
+    assert not affected_narrow.is_contract_version_pin_text('"""doc only"""\n# comment\n')
+    assert not affected_narrow.is_contract_version_pin_text('CONTRACT = "v1"\x00')
+    assert not affected_narrow.is_contract_version_pin_text("CONTRACT = (")
+    assert not affected_narrow.is_contract_version_pin_text('CONTRACT = "v1"\nCONTRACT = "v2"\n')
+
+    repo = affected.Repo.load(ROOT)
+    cv = affected_narrow.CONTRACT_VERSION_FILE
+    pin_sel = affected.select(repo, [cv])
+    assert pin_sel.mode == "affected"
+    assert set(affected_narrow.CONTRACT_VERSION_READERS) <= set(pin_sel.reasons)
+    assert "middleware/core/gateway/test" not in pin_sel.reasons
+    assert "middleware/core/api/test/test_arm_lease_api.py" not in pin_sel.reasons
+
+    repo._texts[cv] = 'CONTRACT = "ROSY-API-REF-001 v1.1"\n\ndef helper():\n    return 1\n'
+    code_sel = affected.select(repo, [cv])
+    assert "middleware/core/gateway/test" in code_sel.reasons
+    assert "middleware/core/api/test/test_arm_lease_api.py" in code_sel.reasons
+
+
+def test_unreferenced_deploy_example_narrows_to_functional_while_script_keeps_root_suite(sample, monkeypatch):
+    repo = affected.Repo.load(sample)
+    ex = "deploy/robot/omx/sample.env.example"
+    sibling_test = "deploy/robot/omx/test_sample_env.py"
+    repo.tracked.extend([ex, sibling_test])
+    repo.test_files.append(sibling_test)
+    repo._texts[sibling_test] = "def test_ok():\n    pass\n"
+    monkeypatch.setattr(repo, "exists", lambda p: p in {ex, sibling_test} or (sample / p).exists())
+    ex_sel = affected.select(repo, [ex])
+    assert ex_sel.mode == "affected"
+    assert "test" not in ex_sel.reasons
+    assert "test/test_robot_runtime.py" in ex_sel.reasons
+    assert sibling_test in ex_sel.reasons
+
+    sh_sel = affected.select(repo, ["deploy/robot/run.sh"])
+    assert "test" in sh_sel.reasons
+
+
+def test_fleet_and_console_source_select_packaging_and_pattern_guards():
+    repo = affected.Repo.load(ROOT)
+    web_sel = affected.select(repo, ["applications/fleet/web/shared/fleet-header.js"])
+    assert "shared/web/test/test_patterns_registry.py" in web_sel.reasons
+
+    fleet_sel = affected.select(repo, ["operations/fleet/fleet/server/console/charge_bay_routes.py"])
+    assert "test/test_remaining_platform_installed.py" in fleet_sel.reasons

@@ -9,7 +9,7 @@ from core_common.protocol.evidence import STALE_POSE_S
 from core_common.stop_pose import REPARK_MAX_FORWARD_M
 from fleet.hub.hub import HubError
 from fleet.server.handoff_traffic import read_peers, site_corridor
-from fleet.server.trips.named_stop_decision import named_stop_decision
+from fleet.server.named_stop_decision import named_stop_decision
 from fleet.site_map import SitePlace
 
 

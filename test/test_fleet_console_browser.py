@@ -27,8 +27,10 @@ from browser_harness import (  # noqa: E402
     DECLINE_CONFIRM,
     accept_confirm,
     open_page,
+    open_shared_page,
     save_temp_screenshot,
 )
+from fleet_cockpit_browser import clear_robot_selection, select_robot, selected_robot_id  # noqa: E402
 
 MAP_GRID = {
     "map_id": "mock:1", "width": 40, "height": 40, "resolution": 0.05,
@@ -99,15 +101,8 @@ def test_console_fixture_serves_registered_assets(console_url):
 
 
 def test_the_console_renders_what_swarm_control_says(console_url):
-    from playwright.sync_api import sync_playwright
-
-    errors: list[str] = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        # D-153 G2 선언 뷰포트 = 사이트 PC 1920×1080(회차 11부터 LOCAL에서 증거화).
-        page = browser.new_page(viewport={"width": 1920, "height": 1080})
-        page.on("pageerror", lambda exc: errors.append(str(exc)))
-
+    browser, page, errors = open_shared_page(1920, 1080)
+    try:
         def serve_api(route):
             path = urlparse(route.request.url).path
             body = API.get(path)
@@ -138,7 +133,7 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         assert page.locator('#roster article').first.get_attribute('data-robot-id') == 'rosy_03'
         assert page.locator('#roster article').count() == 3
         assert page.locator('#robot-workspace article').count() == 0
-        assert page.locator('#robot-workspace-empty').is_visible()
+        assert page.locator('#robot-panel').is_hidden()
         save_temp_screenshot(page, "fleet_console_exception_first.png")
         _open_cards(page)
         # D-82/§7.3 색 예산 — 색칠은 문제 있는 한 대(rosy_03: 끊김 crit + 대기
@@ -152,11 +147,11 @@ def test_the_console_renders_what_swarm_control_says(console_url):
 
         assert not errors, f"페이지 오류: {errors}"
         save_temp_screenshot(page, "fleet_console_overlay.png")
+    finally:
         browser.close()
 
 
 def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
-    from playwright.sync_api import sync_playwright
 
     robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
     api = {
@@ -165,31 +160,31 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
     }
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url, wait_until="networkidle")
         summary = page.locator('#roster article[data-robot-id="rosy_01"]')
         assert 'rosy_01' in summary.inner_text()
         assert summary.locator('[data-fact="battery"]').count() == 1
-        choose = summary.locator('[data-select-robot-id="rosy_01"]')
+        choose = page.locator('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]')
         choose.focus()
         page.keyboard.press('Enter')
         card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
         assert card.locator('[data-goal-robot-id="rosy_01"]').is_visible()
         assert card.locator('[data-map-recording]').is_visible()
-        assert page.locator('#robot-choice').input_value() == 'rosy_01'
+        assert selected_robot_id(page) == 'rosy_01'
         page.wait_for_timeout(1500)
         assert card.is_visible()
-        page.locator('#robot-choice').select_option('')
+        clear_robot_selection(page)
         assert page.locator('#robot-workspace article').count() == 0
-        assert page.locator('#robot-workspace-empty').is_visible()
+        assert page.locator('#robot-panel').is_hidden()
         assert not errors
+    finally:
         browser.close()
 
 
 @pytest.mark.parametrize("supported", [False, True])
 def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
-    from playwright.sync_api import sync_playwright
 
     caps = {"navigation": {"goal_navigation": supported},
             "swarm": {"lead": supported, "follow": supported},
@@ -200,8 +195,8 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
                                 "robots": robots, "ts": 0.0},
            "/api/fleet/map": MAP_GRID,
            "/api/fleet/formation": {"active": False, "state": "IDLE"}}
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url, wait_until="networkidle")
         for robot_id in ("robot-a", "robot-b"):
             _open_cards(page, robot_id)
@@ -219,18 +214,13 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
         if not supported:
             assert "수동 주행만 지원" in page.inner_text("#formation-why")
         assert not errors
+    finally:
         browser.close()
 
 
 def _open_cards(page, robot_id=None):
     """Select the robot whose task and evidence are inspected in the workspace."""
-    page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
-    if robot_id is None:
-        robot_id = page.locator('#robot-choice option[value]:not([value=""])').evaluate_all(
-            "options => options.some(option => option.value === 'rosy_01') ? 'rosy_01' : options[0].value")
-    page.locator('#robot-choice').select_option(robot_id)
-    page.locator('#robot-workspace article').wait_for(state='visible')
-    page.evaluate("() => document.activeElement?.blur()")
+    return select_robot(page, robot_id)
 
 
 def _open_token_access(page):
@@ -242,8 +232,11 @@ def _open_token_access(page):
     page.locator("#console-token").wait_for(state="visible")
 
 
-def _open_console(playwright, api, posts=None, init_script=""):
+def _open_console(playwright=None, api=None, posts=None, init_script=""):
     """D-153 회차4 — 상태별 Fleet G2 셀. api 값은 (status, body) 또는 body."""
+    if api is None and isinstance(playwright, dict):
+        playwright, api = None, playwright
+    api = {} if api is None else api
     browser, page, errors = open_page(playwright, 1920, 1080)
 
     def serve_api(route):
@@ -267,7 +260,6 @@ def _open_console(playwright, api, posts=None, init_script=""):
 
 def test_fleet_labels_are_rendered_as_text(console_url):
     """Identifiers and device-reported faults must never create markup in the roster."""
-    from playwright.sync_api import sync_playwright
 
     marker = "<img src=x onerror=alert(1)>"
     robot = _robot(marker, {"x": 1.0, "y": 1.0, "yaw": 0.0})
@@ -280,8 +272,8 @@ def test_fleet_labels_are_rendered_as_text(console_url):
     }
     api = {"/api/fleet/state": snapshot, "/api/fleet/map": MAP_GRID,
            "/api/fleet/formation": {"active": False, "state": "IDLE"}}
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelectorAll('#roster article').length === 1")
         assert page.locator("#roster b").first.text_content() == marker
@@ -290,14 +282,14 @@ def test_fleet_labels_are_rendered_as_text(console_url):
         assert page.locator("#signal-cards b").first.text_content() == marker
         assert page.locator("#roster img, #warning-list img, #signal-cards img").count() == 0
         assert not errors
+    finally:
         browser.close()
 
 
 def test_fleet_keyboard_can_skip_to_named_main_content(console_url):
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, API)
+    browser, page, errors = _open_console(None, API)
+    try:
         page.goto(console_url, wait_until="networkidle")
         page.keyboard.press("Tab")
         assert page.locator(":focus").get_attribute("href") == "#fleet-main"
@@ -305,6 +297,7 @@ def test_fleet_keyboard_can_skip_to_named_main_content(console_url):
         assert page.locator(":focus").get_attribute("id") == "fleet-main"
         assert page.get_by_role("heading", level=1).count() == 1
         assert not errors
+    finally:
         browser.close()
 
 
@@ -316,15 +309,14 @@ EMPTY_SNAPSHOT = {
 
 
 def test_empty_fleet_renders_zero_online_and_no_ghosts(console_url):
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": EMPTY_SNAPSHOT,
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
     }
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('online-pill')?.textContent === '0/0'"
@@ -336,19 +328,19 @@ def test_empty_fleet_renders_zero_online_and_no_ghosts(console_url):
         )
         assert not errors
         save_temp_screenshot(page, "fleet_console_empty.png")
+    finally:
         browser.close()
 
 
 def test_gather_failure_names_itself_on_the_pill(console_url):
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": (500, {"detail": "gather failed"}),
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
     }
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('online-pill')?.textContent"
@@ -358,13 +350,13 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
         assert "Fleet 상태를 확인할 수 없습니다" in page.inner_text("#roster")
         assert not errors
         save_temp_screenshot(page, "fleet_console_gather-error.png")
+    finally:
         browser.close()
 
 
 @pytest.mark.parametrize("width", [320, 390])
 @pytest.mark.parametrize("scenario", ["empty", "gather-error"])
 def test_mobile_fleet_empty_and_failure_keep_next_step_visible(console_url, width, scenario):
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": EMPTY_SNAPSHOT if scenario == "empty" else (500, {"detail": "gather failed"}),
@@ -372,8 +364,8 @@ def test_mobile_fleet_empty_and_failure_keep_next_step_visible(console_url, widt
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
     }
     expected = "등록된 로봇이 없습니다" if scenario == "empty" else "Fleet 상태를 확인할 수 없습니다"
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.set_viewport_size({"width": width, "height": 844})
         page.goto(console_url, wait_until="networkidle")
         page.get_by_text(expected).first.wait_for()
@@ -383,13 +375,13 @@ def test_mobile_fleet_empty_and_failure_keep_next_step_visible(console_url, widt
         assert page.evaluate("document.documentElement.scrollWidth - innerWidth") == 0
         assert errors == []
         save_temp_screenshot(page, f"fleet_console_{scenario}_{width}.png")
+    finally:
         browser.close()
 
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
 def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width, height):
     """The loading state keeps one state request in flight until it resolves."""
-    from playwright.sync_api import sync_playwright
 
     delayed_state = """(() => {
       const originalFetch = window.fetch.bind(window);
@@ -413,8 +405,8 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
     }
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api, init_script=delayed_state)
+    browser, page, errors = _open_console(None, api, init_script=delayed_state)
+    try:
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="domcontentloaded")
         page.wait_for_function("() => window.__stateCalls === 1")
@@ -438,13 +430,13 @@ def test_slow_initial_gather_does_not_spawn_overlapping_polls(console_url, width
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             save_temp_screenshot(page, f"fleet_console_slow_{state}_{width}.png")
         assert not errors
+    finally:
         browser.close()
 
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
 def test_gather_loss_removes_last_known_robot_position(console_url, width, height):
     """A failed refresh must not present the last snapshot as a live position."""
-    from playwright.sync_api import sync_playwright
 
     robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
     api = {
@@ -453,8 +445,8 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
     }
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
@@ -486,6 +478,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             save_temp_screenshot(page, f"fleet_console_gather_{state}_{width}.png")
         assert not errors
+    finally:
         browser.close()
 
 
@@ -503,14 +496,14 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url, page_fil
     대화상자가 열리지 않는 것까지 확인한다(window.confirm 스텁이 한 번도
     불리지 않으면 통과).
     """
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
 
     posts: list[str] = []
     api = dict(API)
     api["/api/fleet/estop"] = {"stopped": 3, "total": 3, "robots": []}
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api, posts=posts, init_script=DECLINE_CONFIRM +
-            "sessionStorage.setItem('rosy-console-token','operator-token');")
+    browser, page, errors = _open_console(None, api, posts=posts, init_script=DECLINE_CONFIRM +
+        "sessionStorage.setItem('rosy-console-token','operator-token');")
+    try:
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url.replace("index.html", page_file), wait_until="networkidle")
         page.wait_for_function(
@@ -533,6 +526,7 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url, page_fil
         assert any(path == "/api/fleet/estop" for _method, path in posts), posts
         assert page.evaluate("() => window.__confirms.length") == 0
         assert not errors
+    finally:
         browser.close()
 
 
@@ -544,12 +538,12 @@ def test_fleet_estop_fires_on_one_click_without_any_dialog(console_url, page_fil
     ((503, {"detail": {"code": "SERVER_UNAVAILABLE"}}), "비상 정지 결과 확인 불가"),
 ])
 def test_fleet_estop_partial_and_unknown_are_visible_on_phone(console_url, page_file, response, expected):
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
 
     api = {**API, "/api/fleet/estop": response}
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api, init_script=DECLINE_CONFIRM +
-            "sessionStorage.setItem('rosy-console-token','operator-token');")
+    browser, page, errors = _open_console(None, api, init_script=DECLINE_CONFIRM +
+        "sessionStorage.setItem('rosy-console-token','operator-token');")
+    try:
         page.set_viewport_size({"width": 320, "height": 568})
         page.goto(console_url.replace("index.html", page_file), wait_until="networkidle")
         page.locator("#estop").click()
@@ -563,15 +557,16 @@ def test_fleet_estop_partial_and_unknown_are_visible_on_phone(console_url, page_
         save_temp_screenshot(page, f"fleet_estop_{'partial' if isinstance(response, dict) else 'unknown'}_{page_file[:-5]}_320.png")
         if isinstance(response, dict):
             if page_file == "index.html":
-                page.locator('[data-context-tab="inbox"]').click()
+                page.locator('[data-context-tab="evidence"]').click()
             assert "rosy_02" in page.locator("#log").inner_text()
         assert page.evaluate("() => window.__confirms.length") == 0
         assert not errors
+    finally:
         browser.close()
 
 
 def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(console_url):
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
 
     api = {**API, '/api/fleet/dispatch-control': {'generation': 7, 'dispatch_enabled': False,
            'rearm_available': True, 'queued_tasks': 2, 'unresolved_actions': 0},
@@ -581,9 +576,9 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
     api['/api/fleet/state'] = json.loads(json.dumps(SNAPSHOT))
     robot = api['/api/fleet/state']['robots'][0]
     robot['state']['line_follow'] = {'mode': 'CAMERA_LINE', 'state': 'LOST', 'reason': 'camera_reselection_required'}
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api, calls,
-            init_script="sessionStorage.setItem('rosy-console-token','fixture-token');")
+    browser, page, errors = _open_console(None, api, calls,
+        init_script="sessionStorage.setItem('rosy-console-token','fixture-token');")
+    try:
         page.goto(console_url, wait_until='networkidle')
         page.locator('#dispatch-rearm').click()
         dialog = page.locator('dialog.ui-confirm')
@@ -649,6 +644,7 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
         assert page.locator('#log').inner_html() == snapshot
         assert ('POST', '/api/fleet/dispatch/rearm') not in calls
         assert not errors
+    finally:
         browser.close()
 
 
@@ -656,7 +652,6 @@ def test_fleet_confirmation_keeps_stop_live_and_rechecks_dispatch_generation(con
 def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url, width, height):
     """D-421 / D-540 6 (user decision 2026-10-10) — 전체 주행 취소는 확인 없이 바로 나가고(멈춤), 보낸 대수와
     로봇별 결과, 물리 정지 미확인을 쓴다. 래치(비상 정지)는 걸지 않는다."""
-    from playwright.sync_api import sync_playwright
 
     step_ok = {"ok": True}
     api = {
@@ -692,9 +687,9 @@ def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url,
         },
     }
     posts: list[tuple[str, str]] = []
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(
-            p, api, posts=posts, init_script=DECLINE_CONFIRM)
+    browser, page, errors = _open_console(
+        None, api, posts=posts, init_script=DECLINE_CONFIRM)
+    try:
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         assert page.locator("#cancel-all").get_attribute("kind") == "quiet"
@@ -718,7 +713,7 @@ def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url,
         details = page.locator("#cancel-all-details")
         assert details.is_visible() and details.get_attribute("href") == "#log"
         details.click()
-        assert page.locator("#context-inbox").is_visible()
+        assert page.locator("#context-evidence").is_visible()
         assert page.evaluate("location.hash") == "#log"
         assert page.locator("#log").is_visible()
         page.locator("#log").get_by_text("주행 취소 요청 응답: 1/3 · 물리 정지 미확인").wait_for(state="visible")
@@ -728,6 +723,7 @@ def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url,
         page.locator("#log-clear").click()
         assert details.is_hidden()
         assert not errors, f"페이지 오류: {errors}"
+    finally:
         browser.close()
 
     assert [post for post in posts if post[1] == "/api/fleet/cancel-all"] == [("POST", "/api/fleet/cancel-all")]
@@ -735,11 +731,11 @@ def test_fleet_cancel_all_runs_at_once_and_logs_each_robot_honestly(console_url,
 
 
 def test_fleet_cancel_all_failure_is_visible_beside_action_on_phone(console_url):
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
 
     api = {**API, "/api/fleet/cancel-all": (503, {"detail": {"code": "SERVER_UNAVAILABLE"}})}
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.set_viewport_size({"width": 320, "height": 568})
         page.goto(console_url, wait_until="networkidle")
         page.locator("#cancel-all").click()  # no confirm: a stop goes at once (D-540 6)
@@ -753,6 +749,7 @@ def test_fleet_cancel_all_failure_is_visible_beside_action_on_phone(console_url)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         save_temp_screenshot(page, "fleet_cancel_all_failure_320.png")
         assert not errors
+    finally:
         browser.close()
 
 
@@ -795,15 +792,14 @@ UNREACHABLE_SNAPSHOT = {
 @pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
 def test_delayed_follower_stream_is_named_in_the_roster(console_url, width, height):
     """FOR-003 — 바닥 Hz 아래 팔로워는 '지연'으로, 단절 팔로워는 '끊김'으로 갈린다."""
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": SNAPSHOT,
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": DELAYED_FORMATION,
     }
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
@@ -818,21 +814,21 @@ def test_delayed_follower_stream_is_named_in_the_roster(console_url, width, heig
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert not errors
         save_temp_screenshot(page, "fleet_console_delayed.png" if width == 1920 else f"fleet_console_delayed_{width}.png")
+    finally:
         browser.close()
 
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
 def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
     """concept 16 §5 — 연락 두절은 자기 상태다. '닿지 않음'과 이유가 보여야 한다."""
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": UNREACHABLE_SNAPSHOT,
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
     }
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
@@ -855,6 +851,7 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert not errors
         save_temp_screenshot(page, "fleet_console_unreachable.png" if width == 1920 else f"fleet_console_unreachable_{width}.png")
+    finally:
         browser.close()
 
 
@@ -863,7 +860,6 @@ def test_unreachable_robot_is_never_drawn_healthy(console_url, width, height):
     ({"estop": True}, "비상 정지", "비상정지가 활성화되어"),
 ])
 def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safety, expected, reason):
-    from playwright.sync_api import sync_playwright
 
     robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
     robot["state"]["safety"] = safety
@@ -873,8 +869,8 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
     }
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
         card = page.locator("#robot-workspace article").filter(has_text="rosy_01")
@@ -890,11 +886,11 @@ def test_goal_is_unavailable_when_safety_is_unknown_or_stopped(console_url, safe
         assert not card.locator("ui-button[data-cancel-scope]").evaluate("node => node.disabled")  # 운행 취소 (D-540 (d))
         assert not errors
         save_temp_screenshot(page, "fleet_safety_stopped.png" if safety else "fleet_safety_unknown.png")
+    finally:
         browser.close()
 
 
 def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
-    from playwright.sync_api import sync_playwright
 
     posts: list[tuple[str, str]] = []
     robot = _robot("rosy_01", {"x": 1.0, "y": 1.0, "yaw": 0.0})
@@ -905,9 +901,9 @@ def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
         "/api/fleet/robots/rosy_01/goal": {"accepted": True},
     }
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api, posts=posts,
-                                               init_script=DECLINE_CONFIRM)
+    browser, page, errors = _open_console(None, api, posts=posts,
+                                           init_script=DECLINE_CONFIRM)
+    try:
         page.goto(console_url, wait_until="networkidle")
         _open_cards(page)
         page.locator("ui-button[data-goal-robot-id='rosy_01']").click()
@@ -919,23 +915,23 @@ def test_armed_goal_is_withdrawn_when_safety_becomes_unknown(console_url):
         assert page.locator("#map-canvas").get_attribute("tabindex") == "-1"
         page.keyboard.press("Enter")
         assert not any(method == "POST" and path.endswith("/goal") for method, path in posts)
-        page.locator('[data-context-tab="inbox"]').click()
+        page.locator('[data-context-tab="evidence"]').click()
         assert "목표 지정 취소" in page.inner_text("#log")
         assert not errors
+    finally:
         browser.close()
 
 
 def test_holding_formation_enables_resume_and_warns(console_url):
     """FOR-004 — HOLDING은 warn 태그·재개 버튼으로 말하고 이유는 맵 칩에 그린다."""
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": SNAPSHOT,
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": HOLDING_FORMATION,
     }
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url, wait_until="networkidle")
         page.locator('[data-context-tab="tools"]').click()
         page.wait_for_function(
@@ -950,13 +946,13 @@ def test_holding_formation_enables_resume_and_warns(console_url):
         assert page.locator("#formation-resume").is_enabled()
         assert not errors
         save_temp_screenshot(page, "fleet_console_holding.png")
+    finally:
         browser.close()
 
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
 def test_holding_formation_pending_trigger_blocks_resume_at_declared_widths(console_url, width, height):
     """A pending safety trigger must not offer a resume action that the server rejects."""
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": SNAPSHOT,
@@ -966,8 +962,8 @@ def test_holding_formation_pending_trigger_blocks_resume_at_declared_widths(cons
             "pending_triggers": [["safety.estop", "rosy_02"]],
         },
     }
-    with sync_playwright() as p:
-        browser, page, errors = _open_console(p, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.locator('[data-context-tab="tools"]').click()
@@ -1002,21 +998,21 @@ def test_holding_formation_pending_trigger_blocks_resume_at_declared_widths(cons
             page.locator("#formation-state").scroll_into_view_if_needed()
             save_temp_screenshot(page, f"fleet_formation_hold_{state}_{width}.png")
         assert errors == []
+    finally:
         browser.close()
 
 
 @pytest.mark.parametrize("width,height", [(1920, 1080), (390, 844), (320, 568)])
 def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_url, width, height):
     """A failed poll must not present an old leader or relay rate as current."""
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": SNAPSHOT,
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": FORMATION,
     }
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.set_viewport_size({"width": width, "height": height})
         page.goto(console_url, wait_until="networkidle")
         page.locator('[data-context-tab="tools"]').click()
@@ -1054,12 +1050,12 @@ def test_formation_read_loss_hides_last_running_evidence_and_recovers(console_ur
             page.locator("#formation-state").scroll_into_view_if_needed()
             save_temp_screenshot(page, f"fleet_formation_read_{state}_{width}.png")
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_url):
     """A scanner read failure cannot leave the last discovered address looking current."""
-    from playwright.sync_api import sync_playwright
 
     devices = {"scanner_online": True, "devices": [{
         "name": "rosy-old", "address": "192.0.2.10", "port": 8000,
@@ -1071,8 +1067,8 @@ def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_u
         "/api/fleet/formation": FORMATION,
         "/api/fleet/discovery": devices,
     }
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')")
 
@@ -1101,12 +1097,12 @@ def test_discovery_read_loss_removes_old_device_addresses_and_recovers(console_u
         page.wait_for_function("() => document.querySelector('#discovery-list')?.textContent.includes('192.0.2.10')",
                                timeout=7000)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url):
     """2026-10-01 audit #4: a lost scanner stops move-address; the panel must say so loudly."""
-    from playwright.sync_api import sync_playwright
 
     online = {"scanner_online": True, "scanner_state": "online", "scanner_age_s": 3, "devices": [{
         "name": "rosy-a", "address": "192.0.2.10", "port": 8000,
@@ -1119,8 +1115,8 @@ def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url)
         "/api/fleet/discovery": {"scanner_online": False, "scanner_state": "never_seen",
                                  "scanner_age_s": None, "devices": []},
     }
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url.rsplit("/", 1)[0] + "/install.html", wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#discovery-status')?.textContent === '검색기 연결 대기'")
         assert page.get_attribute("#discovery-status", "status") == "warn"
@@ -1141,20 +1137,20 @@ def test_expired_scanner_lease_raises_an_alarm_and_clears_on_return(console_url)
         assert page.get_attribute("#discovery-status", "status") == "neutral"
         assert "발견 검색기 다시 연결됨" in page.inner_text("#log")
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_map_surface_explains_missing_map_and_recovers_without_stale_canvas(console_url):
     """The map area must explain why it cannot be used instead of showing a blank slab."""
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": SNAPSHOT,
         "/api/fleet/map": (503, {"detail": {"code": "MAP_UNAVAILABLE"}}),
         "/api/fleet/formation": FORMATION,
     }
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(playwright, api)
+    browser, page, errors = _open_console(None, api)
+    try:
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function("() => document.querySelector('#map-tag')?.textContent === '맵 없음'")
         assert page.locator("#map-empty").is_visible()
@@ -1183,11 +1179,11 @@ def test_map_surface_explains_missing_map_and_recovers_without_stale_canvas(cons
         assert page.evaluate("document.querySelector('#map-canvas').getContext('2d').getImageData(0, 0, 1, 1).data[3]") == 0
         assert "지도가 수신되면" in page.inner_text("#hint")
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_url):
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": EMPTY_SNAPSHOT,
@@ -1206,10 +1202,10 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
                                      "frame_path": "/api/vision/sources/ceiling_north/frame", "expires_in_s": 60},
     }
     frame_age = {"ms": "20"}
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(
-            playwright, api,
-            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+    browser, page, errors = _open_console(
+        None, api,
+        init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+    try:
 
         def serve_frame(route):
             route.fulfill(status=200, content_type="image/svg+xml",
@@ -1253,12 +1249,12 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
                             "return [...g.getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data]; }")
         assert dim[0] > dim[1] + 40 and dim[0] > dim[2] + 40, dim
         assert not errors
+    finally:
         browser.close()
 
 
 def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(console_url):
     """D-560 S2: the console asks Vision for the map plane and lays it on toPx without a warp."""
-    from playwright.sync_api import sync_playwright
 
     api = {
         "/api/fleet/state": EMPTY_SNAPSHOT,
@@ -1283,10 +1279,10 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
                '<rect width="1280" height="720" fill="#20bf40"/></svg>')
     leases = []
     plane = {"status": 200}
-    with sync_playwright() as playwright:
-        browser, page, errors = _open_console(
-            playwright, api,
-            init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+    browser, page, errors = _open_console(
+        None, api,
+        init_script="sessionStorage.setItem('rosy-console-token', 'test-token')")
+    try:
 
         def serve_lease(route):
             body = route.request.post_data_json
@@ -1356,6 +1352,7 @@ def test_rosy_cam_map_plane_is_drawn_into_its_rectangle_then_falls_back_on_409(c
         inside = page.evaluate(sample, {"site": [0.25, 0.75]})["site"]
         assert inside[1] > 150 and inside[0] < 100, inside
         assert not errors
+    finally:
         browser.close()
 
 

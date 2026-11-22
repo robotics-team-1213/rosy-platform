@@ -24,6 +24,7 @@ import numpy as np  # noqa: E402
 import omx_physics as physics  # noqa: E402
 import omx_two_arm_kin as kin  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
+import omx_two_arm_stand  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
 import ship_plate  # noqa: E402
 
@@ -37,10 +38,12 @@ FPS = 15
 # Colours are albedo: this renderer's light multiplies a top-facing surface by about 1.3 (measured on the 11-14 v24 render: table 1.2, hull 1.4, container clipped), so each is the
 # colour wanted in the picture / 1.3 (sky: photo 157/207/240 at hull gain 1.4). Wanted: ship and plates sky #A4DBE8, the PLA of team_p2s_navy_sky.3mf (photo 11-14 00:57 hull median 157/207/240); berth docks, cradle,
 # stopper and bridge v7 black (photo: dark pixels of those parts median 36/35/25), vendor base plate near black (13-20); table 180/133/25 and container 222/109/50 are photo medians.
-COLOURS = dict(floor=[.37, .43, .37, 1], table=[.59, .43, .08, 1], belt=[.16, .18, .19, 1], plate=[.45, .60, .67, 1],
-               plate_navy=[.082, .149, .290, 1], plate_sky=[.643, .859, .910, 1], pad=[.08, .09, .1, 1],
-               ship=[.45, .60, .67, 1], container=[.62, .31, .14, 1], wall=[.6, .84, 1., 1],  # wall: the room behind the cell in the side frame (11-09)
-               black=[.11, .11, .09, 1], base=[.06, .065, .06, 1])
+COLOURS = dict(floor=[.41, .44, .46, 1], table=[.59, .43, .08, 1], belt=[.16, .18, .19, 1], plate=[.45, .60, .67, 1],
+               plate_charcoal=[.20, .20, .20, 1], plate_sky=[.643, .859, .910, 1], pad=[.08, .09, .1, 1],
+               ship=[.45, .60, .67, 1], container=[.62, .31, .14, 1], wall=[.76, .78, .78, 1],
+               black=[.11, .11, .09, 1], base=[.06, .065, .06, 1], chute_gray=[.35, .37, .39, 1],
+               chute_gate=[.24, .25, .27, 1], r05_deck=[.38, .40, .42, 1], r05_rim=[.72, .73, .75, 1],
+               dock_white=[.76, .77, .79, 1])
 
 
 @functools.lru_cache(maxsize=1)
@@ -83,13 +86,19 @@ def camera_axes(eye, focus, up):
 
 
 class World:
-    def __init__(self, layout=None, wrist=None, cone="elliptic", **choices):
+    def __init__(self, layout=None, wrist=None, cone="elliptic", *, fixture_only=False, **choices):
         self.layout = layout or sites.Layout(**choices)
         self.physics = physics.Physics(self.layout.choices["physics"])
         self.wrist = wrist or self.layout.choices["wrist_camera"]
         self.cone = cone
         self.meshes = tempfile.TemporaryDirectory()
         self.pairs = {}
+        if fixture_only:
+            spec = mujoco.MjSpec()
+            spec.compiler.meshdir = self.meshes.name
+            self._fixture_geoms(spec)
+            self.model = spec.compile()
+            return
         spec = self._spec()
         self.model = spec.compile()
         self.renderers = {}
@@ -115,16 +124,8 @@ class World:
         head = f'<mujoco><compiler meshdir="{self.meshes.name}" balanceinertia="true" discardvisual="false" fusestatic="false"/></mujoco>'
         return f'<robot name="two_arm">{head}{"".join(out)}</robot>'
 
-    def _spec(self):
+    def _fixture_geoms(self, spec):
         L, c = self.layout, self.layout.choices
-        spec = mujoco.MjSpec.from_string(self._urdf())
-        spec.option.timestep = .0005
-        spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_MULTICCD  # a convex mesh against a box gives ONE contact point otherwise: boxes on the deck rocked and crept
-        spec.option.cone, spec.option.impratio = (mujoco.mjtCone.mjCONE_PYRAMIDAL if self.cone == "pyramidal" else mujoco.mjtCone.mjCONE_ELLIPTIC), 10
-        spec.visual.global_.offwidth, spec.visual.global_.offheight = 1280, 960
-        spec.add_texture(name="room", type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_FLAT,
-                         rgb1=COLOURS["wall"][:3], rgb2=COLOURS["wall"][:3], width=8, height=8)  # past the floor the side camera saw black
-        spec.default.geom.solref, spec.default.geom.solimp = [.002, 1], [.95, .99, .001, .5, 2]
         world, box = spec.worldbody, mujoco.mjtGeom.mjGEOM_BOX
         f = L.fixture
         wc, ws = f["workplate_center_m"], f["workplate_size_m"]
@@ -149,6 +150,21 @@ class World:
                                pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["black"])
         self._ship(spec)
         self._temp(spec)
+        self._stand(spec)
+
+    def _spec(self):
+        L, c = self.layout, self.layout.choices
+        spec = mujoco.MjSpec.from_string(self._urdf())
+        spec.option.timestep = .0005
+        spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_MULTICCD  # a convex mesh against a box gives ONE contact point otherwise: boxes on the deck rocked and crept
+        spec.option.cone, spec.option.impratio = (mujoco.mjtCone.mjCONE_PYRAMIDAL if self.cone == "pyramidal" else mujoco.mjtCone.mjCONE_ELLIPTIC), 10
+        spec.visual.global_.offwidth, spec.visual.global_.offheight = 1280, 960
+        spec.add_texture(name="room", type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_FLAT,
+                         rgb1=COLOURS["wall"][:3], rgb2=COLOURS["wall"][:3], width=8, height=8)  # past the floor the side camera saw black
+        spec.default.geom.solref, spec.default.geom.solimp = [.002, 1], [.95, .99, .001, .5, 2]
+        self._fixture_geoms(spec)
+        world, box = spec.worldbody, mujoco.mjtGeom.mjGEOM_BOX
+        f = L.fixture
         r08 = c["ship_source"] == "r08-berth"
         if r08:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
@@ -184,6 +200,7 @@ class World:
                 physics.add_actuator(spec, p + name, phys.joint(arm, name))
             for parent, child in self.pairs[arm]:
                 spec.add_exclude(bodyname1=parent, bodyname2=child)
+            spec.add_exclude(bodyname1=p + "link1", bodyname2=p + "link3")  # folded wait pose (j2=-1.95, j3=+1.67) overlaps convex hulls by 0.3 mm, stalling park settle for 90 f
             spec.add_exclude(bodyname1=p + "link6", bodyname2=p + "link7")
             spec.add_equality(type=mujoco.mjtEq.mjEQ_JOINT, name1=p + "gripper_joint_2", name2=p + "gripper_joint_1", data=([0, -1, 0, 0, 0] + [0] * 7)[:mujoco.mjNEQDATA])
             if self.wrist != "none":
@@ -248,7 +265,10 @@ class World:
         x0, y0, z0 = sites.ship_cell(L, 0, 0)
         turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
         mesh = mujoco.mjtGeom.mjGEOM_MESH
-        visuals = [("hull", COLOURS["ship"]), ("house", COLOURS["ship"])]
+        house = L.choices["ship_house"]
+        visuals = [("hull", COLOURS["ship"])]
+        if house:
+            visuals.append(("house", COLOURS["ship"]))
         kit = L.choices.get("berth_kit", "v24-docks")
         if kit == "v24-docks":  # 2026-11-14 rated: printed v20 cradles and stopper + the 2 socket-in docking pieces (v24)
             visuals += [
@@ -267,7 +287,7 @@ class World:
         for name, rgba in visuals:
             spec.add_mesh(name=f"ship_{name}", file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=f"ship_{name}", type=mesh, meshname=f"ship_{name}", pos=[x0, y0, z0], quat=turn, contype=0, conaffinity=0, rgba=rgba)
-        for name in ("cx_bow", "cx_house"):
+        for name in ("cx_bow", "cx_house") if house else ("cx_bow",):
             spec.add_mesh(name=name, file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=name, type=mesh, meshname=name, pos=[x0, y0, z0], quat=turn, rgba=[0, 0, 0, 0])
         mm, floor = .001, H["floor"] + 3.  # the hull stands 3 mm up on the berth blocks
@@ -304,13 +324,14 @@ class World:
         hl, hw, deck_z = length / 2, width / 2, L.deck_z
         max_out = hw + flare + catch + rim
         stl_layers = (("temp_slot_plate_v11", COLOURS["plate"]),) if src == "scad-v11" else (
-            ("temp_slot_plate_v12_navy", COLOURS["plate_navy"]),
+            ("temp_slot_plate_v12_navy", COLOURS["plate_charcoal"]),
             ("temp_slot_plate_v12_sky", COLOURS["plate_sky"]),
         )
         if use_stl:
             for mesh_name, _ in stl_layers:
                 spec.add_mesh(name=mesh_name, file=self._asset(mesh_name), scale=[.001] * 3)
         proxy_rgba = [0, 0, 0, 0] if use_stl else COLOURS["plate"]
+        pad_rgba = COLOURS["plate_charcoal"] if src == "scad-v12" else COLOURS["pad"]
         for tag, plate in L.plates.items():
             spec.add_mesh(name=f"deck_{tag}", uservert=prism(plate["outline"], deck_z - S["deck_t"], deck_z))
             spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=proxy_rgba)
@@ -327,7 +348,7 @@ class World:
             for i, (xy, long, side, yaw) in enumerate(frames, 1):
                 quat = [math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
                 spec.worldbody.add_geom(name=f"lane{tag}{i}", type=mujoco.mjtGeom.mjGEOM_BOX, pos=[*xy, deck_z + .0003],
-                                        size=[S["cont_l"] / 2, S["cont_w"] / 2, .0003], quat=quat, contype=0, conaffinity=0, rgba=COLOURS["pad"])
+                                        size=[S["cont_l"] / 2, S["cont_w"] / 2, .0003], quat=quat, contype=0, conaffinity=0, rgba=pad_rgba)
                 def lim(u, sg, xy=xy, long=long, side=side, i=i):
                     return min([max_out] + [.5 * float(np.linalg.norm((xy + u * long - ox) - ((xy + u * long - ox) @ ol) * ol))
                                             for j, (ox, ol, _, _) in enumerate(frames, 1) if j != i and float((ox - xy) @ (sg * side)) > 0])
@@ -348,6 +369,10 @@ class World:
                     spec.add_mesh(name=nm, uservert=[c for v in (v0, v1) for u, z in pts for c in (es * u, v, z)])
                     spec.worldbody.add_geom(name=nm, type=mujoco.mjtGeom.mjGEOM_MESH, meshname=nm, pos=[*xy, deck_z], quat=quat, rgba=proxy_rgba)
 
+    def _stand(self, spec):
+        """Conveyor-right r05 outbound stand: real v6 gray chute + non-gooseneck gate on 2 floor-seated r05 plates + white U-dock."""
+        omx_two_arm_stand.add_stand(spec, self.layout, self._asset, COLOURS)
+
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):
         m = self.model
@@ -365,13 +390,14 @@ class World:
         self.body_name = [m.body(i).name for i in range(m.nbody)]
         self.geom_name = [m.geom(i).name for i in range(m.ngeom)]
 
-    def reset(self):
+    def reset(self, *, initial_joints=None):
         data = mujoco.MjData(self.model)
+        initial_joints = initial_joints or {}
         for arm in PREFIX:
-            home = self.layout.arms[arm].wait
-            data.qpos[self.q[arm]] = home
-            data.qpos[self.mimic[arm]] = -home[5]
-            data.ctrl[self.act[arm]] = home
+            q = initial_joints.get(arm, self.layout.arms[arm].wait)
+            data.qpos[self.q[arm]] = q
+            data.qpos[self.mimic[arm]] = -q[5]
+            data.ctrl[self.act[arm]] = q
         for k, (cid, _) in enumerate(self.layout.containers()):
             self.put(data, cid, None, k)
         mujoco.mj_forward(self.model, data)

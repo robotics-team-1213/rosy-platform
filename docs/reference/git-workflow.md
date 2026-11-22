@@ -1,8 +1,8 @@
 # 우리가 git으로 일하는 법
 
 - **대상:** 이 저장소에 변경을 넣는 모든 사람과 에이전트 세션. 처음이면 이 문서 → [팀 가이드](team-guide.md) §1(첫날 설정) 순서로 읽는다.
-- **갱신:** 2026-10-30 — 제3의 레인(개인 클론 에이전트) 추가, §8 CODEOWNERS 현황 정정(2026-10-30 협업 방안). 이전 2026-10-16
-- **규칙 원본:** 이 문서는 흩어진 git 규칙을 한 장에 모은 안내다. 다르면 ADR이 이긴다 — [D-372](../adr/D-372-topic-branch-names-and-shared-checkout-wip.md)(브랜치 이름, 남의 미커밋), [D-427](../adr/D-427-platform-three-parts-middleware-operations-learning.md) 4항(push 순서), [D-510](../adr/D-510-union-merge-and-adr-number-reservation.md)(ADR 번호), [D-584](../adr/D-584-tests-never-run-on-operator-laptop.md)(시험 위치), [D-761](../adr/D-761-worktree-gateway-and-prune.md)(워크트리, Proposed), [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)(main으로 가는 길).
+- **갱신:** 2026-11-21 — 실험실 세션도 주제 PR과 Merge Queue로(D-1055), 로컬 `main` 착지·게시 절 폐기. 2026-10-30 — 제3의 레인(개인 클론 에이전트) 추가, §8 CODEOWNERS 현황 정정(2026-10-30 협업 방안). 이전 2026-10-16
+- **규칙 원본:** 이 문서는 흩어진 git 규칙을 한 장에 모은 안내다. 다르면 ADR이 이긴다 — [D-372](../adr/D-372-topic-branch-names-and-shared-checkout-wip.md)(브랜치 이름, 남의 미커밋), [D-427](../adr/D-427-platform-three-parts-middleware-operations-learning.md) 4항(push 순서), [D-1055](../adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md)(PR과 Merge Queue만), [D-510](../adr/D-510-union-merge-and-adr-number-reservation.md)(ADR 번호), [D-584](../adr/D-584-tests-never-run-on-operator-laptop.md)(시험 위치), [D-761](../adr/D-761-worktree-gateway-and-prune.md)(워크트리, Proposed), [D-762](../adr/D-762-main-gateway-pull-request-merge-queue.md)(main으로 가는 길).
 
 ## 1. 한 장 요약
 
@@ -10,12 +10,12 @@
 |---|---|---|
 | 작업 위치 | 자기 clone의 주제 브랜치 | 공유 체크아웃의 `.worktrees/<짧은이름>` |
 | 브랜치 이름 | `<type>/<topic>` — `feat` `fix` `refactor` `docs` `uiux` | 같다 |
-| `main`에 넣는 법 | PR → CI 녹색 확인 → **Create a merge commit**(squash 금지, D-868) | `tools/land.py`로 로컬 `main`에 `--ff-only` 착지 |
-| `origin`에 올리는 사람 | 본인(브랜치만. `main`은 PR로만) | 관리자 계정이 로컬 `main`을 push |
+| `main`에 넣는 법 | PR → CI 녹색 확인 → **Create a merge commit**(squash 금지, D-868) | `python tools/pr_land.py --evidence`로 주제 PR → Merge Queue가 merge commit 병합(D-1055) |
+| `origin`에 올리는 사람 | 본인(브랜치만. `main`은 PR로만) | 세션이 `pr_land`로 브랜치만 push(`main`은 PR로만) |
 | 시험 | 자기 PC에서 돌려도 된다(D-584 개정) | 실험실 시험 PC로 보낸다. 노트북에서 pytest 금지 |
 | 절차 전문 | [CONTRIBUTING](../../.github/CONTRIBUTING.md) | [같이 하는 깃](shared-checkout.md) · 루트 [AGENTS.md](../../AGENTS.md) |
 
-두 길은 **이행 기간의 모습**이다. 정해진 끝 상태는 모든 변경이 PR과 merge queue로 들어가고 공유 로컬 `main`이 없어지는 것이다(§7).
+D-1055 뒤 두 길 모두 PR과 merge queue로 들어간다. 다른 점은 작업 위치와 시험 위치다(§7).
 
 **제3의 레인 — 개인 클론에서 각자 에이전트(2026-10-30 협업 방안).** 팀원 길(§3)의 규칙을 그대로 따르고 아래 세 가지만 더 지킨다. ① ADR·API 번호 선점은 클론 간에 공유되지 않으니 선점 즉시 그 이슈의 기록용 코멘트에 알린다(팀 가이드 §3.4). ② 계약·공용 자산(API reference·ADR Log·`shared/web`)을 동시에 바꿀 때는 §3.6의 순서 규칙을 먼저 적용한다. ③ 스킬 카드는 rosy-docs `skills/`에서 복사하며 카드와 정본 문서가 다르면 정본이 이긴다. CODEOWNERS 리뷰 강제·에이전트 신원 표기는 완주(11/21) 후 D-762 단계3과 함께 편입한다.
 
@@ -25,10 +25,10 @@ flowchart LR
         m1["브랜치"] --> m2["작업 · 시험"] --> m3["push 브랜치"]
     end
     subgraph lab["실험실 PC (공유 체크아웃)"]
-        l1[".worktrees/주제"] --> l2["tools/land.py"] --> l3["로컬 main"]
+        l1[".worktrees/주제"] --> l2["tools/pr_land.py"]
     end
     m3 --> pr["PR · CI"] --> om["origin/main"]
-    l3 -->|"관리자 push<br/>fetch · rebase · generate · pre-push"| om
+    l2 --> pr
     om -.->|"git pull / merge"| m1
     om -.-> l1
 ```
@@ -77,26 +77,24 @@ git push -u origin fix/<짧은-주제>
 
 훅을 정적 부분과 시험 부분으로 나누면 이 구분은 없어진다(D-762 단계 4, 아직 안 됨).
 
-**PR.** 템플릿(`.github/pull_request_template.md`) 체크리스트를 채운다. 서버는 아직 CI 통과를 **요구하지 않는다** — 적색 PR도 머지 버튼이 눌린다. 녹색 확인은 머지하는 사람의 일이다. 머지는 **Squash and merge**(저장소 설정이 squash만 허용), 브랜치는 자동 삭제된다.
+**PR.** 템플릿(`.github/pull_request_template.md`) 체크리스트를 채운다. 필수 검사 `ci-result`·`review-gate`가 녹색이어야 merge queue가 merge commit으로 병합한다(squash 금지, D-868·D-1055). 브랜치는 자동 삭제된다.
 
-**main이 앞서 나갔을 때.** 팀원 브랜치는 `git fetch origin && git merge origin/main`으로 따라간다(이미 push한 브랜치를 rebase하면 force-push가 필요해진다). 실험실의 로컬 `main`을 push할 때만 `origin/main` 위로 rebase한다(§5).
+**main이 앞서 나갔을 때.** 팀원 브랜치는 `git fetch origin && git merge origin/main`으로 따라간다(이미 push한 브랜치를 rebase하면 force-push가 필요해진다). PR이 충돌(`DIRTY`)일 때만 합친다. `BEHIND`만이면 merge queue가 최신 main 위에서 시험하므로 그대로 둔다.
 
 ## 4. 실험실 공유 체크아웃의 길 — 요약
 
 실험실 PC 한 대의 체크아웃 하나와 git 인덱스 하나를 여러 세션이 같이 쓴다. 전문은 [같이 하는 깃](shared-checkout.md)과 루트 [AGENTS.md](../../AGENTS.md) 「같이 하는 깃」, 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다. 줄이면:
 
-1. **`main` 체크아웃에서 작업하지 않는다.** `python tools/worktrees.py new <짧은이름> <type>/<topic>`으로 `.worktrees/` 아래에 만든다. 상한은 main 포함 15개(D-886), 착지 뒤 `python tools/worktrees.py prune --apply`가 워크트리와 착지한 브랜치를 지운다. 브랜치 종류는 [「브랜치 이름과 수명」](shared-checkout.md#브랜치-이름과-수명).
+1. **`main` 체크아웃에서 작업하지 않는다.** `python tools/worktrees.py new <짧은이름> <type>/<topic>`으로 `.worktrees/` 아래에 만든다. 상한은 main 포함 15개(D-886), 병합 뒤 `python tools/worktrees.py prune --apply`가 워크트리와 병합된 브랜치를 지운다(깨끗한 워크트리는 6시간 뒤, 브랜치는 남고 `adopt`로 다시 붙임, D-1070). 브랜치 종류는 [「브랜치 이름과 수명」](shared-checkout.md#브랜치-이름과-수명).
 2. **자기 경로만 `git add`.** `git add -A`·`.`·디렉터리 add 금지. 공유 체크아웃에서 `--amend`, `rebase`, `reset --hard`, `stash` 금지. 남의 미커밋은 지우지도 치우지도 않는다.
 3. **ADR·API 버전 번호는 도구로 선점한다** — `python tools/harness/adr_reserve.py next "<주제>"`, `python tools/harness/api_reserve.py next "<주제>"`.
 4. **시험은 기존 실패와 비교한다** — `tools/remote/remote_pytest.py` → `python test/known_failures.py <run.txt>`. `NEW`는 그 브랜치의 실패다.
-5. **착지는 사용자가 말한 뒤** `python tools/land.py --tests auto`. 15파일 초과 또는 FULL이면 먼저 분할 가능성을 검토한다. 세부 절차와 `MAIN-RED` 처리는 최신 [공유 체크아웃 절차](shared-checkout.md)를 따른다.
-6. **push는 사용자가 말한 뒤** §5 순서대로.
+5. **제출은 사용자가 말한 뒤** `python tools/pr_land.py --evidence`(D-1055). 15파일 초과 또는 FULL이면 먼저 분할 가능성을 검토한다. 큐·`DIRTY`·dequeue 처리는 [공유 체크아웃 절차](shared-checkout.md) 「같이 하는 깃」 6번을 따른다.
+6. **공유 `main` 체크아웃에서 브랜치를 바꾸지 않는다.** git 쓰기는 자기 워크트리에서만 한다.
 
 ## 5. push와 `origin` 동기화
 
-**로컬 `main`이 `origin/main`보다 앞서 있으면 그 커밋들에는 CI 증거가 없다.** 새 팀원은 `origin`만 본다. 착지한 일은 미루지 않고 push한다.
-
-로컬 `main`을 올리는 순서는 [D-868](../adr/D-868-local-main-first-merge-commit-publish.md)이다. 로컬 `main`의 끝을 `publish/main-<YYYYMMDD>`로 push해 PR을 열고, `ci-result`가 녹색이면 merge commit으로 병합하고, 워크트리에서 `git merge origin/main`을 `tools/land.py`로 착지한다(역동기화, `--ff-only` 아님). 전문은 `AGENTS.md` 「같이 하는 깃」 6번이다. 공유 에이전트 clone은 `git config rosy.publishOnly true`로 두어 pre-push가 `publish/main-*` 밖의 push를 거절한다(사고 대응만 `ROSY_PUSH_REASON="<이유>"`). 팀원의 clone은 이 설정을 두지 않는다.
+폐기(D-1055): 로컬 `main`을 `publish/main-*`로 게시하고 역동기화하는 D-868 순서. 실험실 세션도 주제 브랜치를 `pr_land.py`로 push한다. 전문은 [같이 하는 깃](shared-checkout.md) 6번이다. 공유 에이전트 clone은 `git config rosy.publishOnly true`로 두어 pre-push가 `publish/main-*` 밖의 push를 거절한다(`pr_land`가 그 push에만 `ROSY_PUSH_REASON`을 준다. 전역으로 두지 않는다). 팀원의 clone은 이 설정을 두지 않는다.
 
 push 뒤 CI 확인:
 
@@ -112,7 +110,7 @@ gh run view <run-id> --log-failed
 |---|---|
 | 한 브랜치 = 한 주제 | 리뷰·되돌리기 단위. D-372 |
 | 메시지는 `type(scope): 요약` — 예: `fix(fleet): …`, `docs(adr): …`, `test(harness): …` | 이력에서 영역별로 찾는다 |
-| `concern: safety` 경로(`tools/harness/platform_parts.yaml`)를 바꾸는 커밋에 `Safety-Review: <리뷰어> <근거>` trailer | `tools/land.py`, pre-push, CI `scope` 잡이 검사. D-430 §5 |
+| `concern: safety` 경로(`tools/harness/platform_parts.yaml`)를 바꾸는 커밋에 `Safety-Review: <리뷰어> <근거>` trailer | `tools/pr_land.py`, pre-push, CI `scope` 잡이 검사. D-430 §5 |
 | force-push 금지 | 다른 사람의 작업이 사라진다 |
 | `STATUS.md`, 모듈 `index.md`는 손으로 고치지 않는다 | 생성물. 모듈 `progress.md`·`logs.md`를 고치고 `generate` |
 | ADR은 append-only. 대체할 때는 `Superseded`로 표시하고 새 번호 | ADR 파일과 ADR Log 행은 한 커밋. Log는 UTF-8 BOM + CRLF |
@@ -129,14 +127,14 @@ gh run view <run-id> --log-failed
 | 2 | `ship.py`가 `main` CI 녹색이 아닌 revision을 거절 | 안 됨 |
 | 3 | merge queue, 필수 검사 `ci-result`, 관리자 우회 축소, CODEOWNERS, 관리자가 아닌 에이전트 신원 | **막힘 — 두 번째 관리자 미지정** |
 | 4 | pre-push를 정적/시험으로 분리, 로그를 항목당 파일로 | 안 됨 |
-| 5 | `land.py`가 "브랜치 push → PR → auto-merge"가 되고 로컬 `main`이 없어짐 | 안 됨 |
+| 5 | 브랜치 push → PR → auto-merge(`pr_land.py`), 로컬 `main` 착지 폐기 | 적용(D-1055, 2026-11-20) |
 
 단계 2 이후는 단계마다, GitHub 설정 변경마다 사용자가 그 자리에서 승인한다. ADR이 Accepted인 것은 그 승인이 아니다.
 
 ## 8. 사용자가 정해야 하는 것
 
 1. **두 번째 관리자(owner·admin)** — 관문 경로(`.github/workflows/**`, `tools/harness/**`, `test/known_failures.txt`, `.github/CODEOWNERS`)를 읽고 거절할 수 있는 팀원. 단계 3을 막는다. `CODEOWNERS`는 Epic 담당표대로 확장돼 있고 `test/architecture/test_capability_owners.py`가 정합을 고정한다(2026-10-27). 리뷰 강제는 단계 3부터다.
-2. **로컬 `main`이 `origin`에서 떨어질 수 있는 상한** — 제안값 50커밋 또는 12시간(D-762 열린 항목 4).
+2. ~~로컬 `main`이 `origin`에서 떨어질 수 있는 상한~~ — D-1055로 필요 없어짐(로컬 `main` 착지 폐기).
 3. **보관 태그·wip 스냅샷의 자리** — 권장은 비공개 미러(열린 항목 2).
 4. **모듈 담당자** — [팀 가이드](team-guide.md) §5.1 표가 비어 있다. 정해지면 `CODEOWNERS`에도 적는다.
 
@@ -149,7 +147,7 @@ gh run view <run-id> --log-failed
 | pre-push가 시험 PC에 닿지 못해 10분 뒤 실패 | Tailscale 로그인·프로필 확인. 실험실 밖이면 §3 표의 둘째 줄 |
 | `generated records are regenerated but uncommitted` | `rosy_harness.py generate`가 바꾼 파일을 커밋 |
 | 내가 안 건드린 시험이 실패 | `python test/known_failures.py`. `NEW`는 main에서 별도로 재현하기 전까지 브랜치 실패로 다룬다. main에서도 재현되면 `MAIN-RED`로 기록하고 별도 수정한다 |
-| `--ff-only` 착지가 동료의 미커밋 파일 때문에 거절 | 그 파일을 그대로 두고 거절 문구를 사용자에게 알린다. stash·삭제로 치우지 않는다 |
+| PR이 `DIRTY`·`CONFLICTING` | 브랜치 워크트리에서 `git merge origin/main`, 충돌은 `resolve-merge-conflicts` 스킬로 덩어리마다(D-1067), 그 뒤 증거를 다시 돌린다 |
 | ADR 번호 충돌 | 손으로 고른 번호. `adr_reserve.py next`로 다시 받고, 버린 번호는 `tools/harness/adr_gaps.txt`에 |
 | `user.email ... is not yours` | `git config user.email`을 내 GitHub 계정 이메일로 |
 

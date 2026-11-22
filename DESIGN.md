@@ -28,7 +28,6 @@ colors:
   raster-uncertain: "#43484e"
   raster-occupied: "#b0b4ba"
   brand-rose: "#e796f3"
-  shadow-base: "#000000"
 typography:
   display:
     fontFamily: "ui-monospace, SF Mono, Cascadia Mono, Consolas, Roboto Mono, DejaVu Sans Mono, Noto Sans Mono, monospace"
@@ -274,7 +273,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 - **바탕 사다리** (`ground-deep` → `ground` → `ground-raise` → `ground-soft` → `ground-card` → `ground-card-2`): `deep`에서 `card-2`로 갈수록 잉크 쪽이다. 상단바는 `ground-deep`, 페이지는 `ground`, 평평한 면은 `ground-soft`, 솟은 면은 `ground-card`, 눌림은 `ground-card-2`다.
 - **잉크** (`ink`, `ink-quiet`): 글자. `ink`는 정상 값·주 명령 채움, `ink-quiet`는 라벨·단위·보조.
 - **지도 래스터** (`raster-*`): 무채색, 밝기가 미지 → 비어 있음 → 불확실 → 점유 순으로 단조다.
-- **그림자 바탕** (`shadow-base`): 팔레트 닫힌 키로 남긴다. 지금 화면에 그림자는 없다(D-926 6: 쓰지 않는 음영 토큰 삭제).
+- 그림자 토큰은 없다(`shadow-base`는 쓰는 곳이 없어 2026-11-18에 지웠다). 그림자가 필요해지면 그때 팔레트 키로 다시 정한다.
 
 ### 세 층 토큰
 
@@ -284,26 +283,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 ### 테마 추가·변경 절차
 
-- 테마는 `tokens.css`의 `[data-theme="이름"]` 팔레트 블록 **하나**다. 기본(어둡게)은 `:root, [data-theme="dark"]`, 밝게는 `[data-theme="light"]`다.
-- 새 블록은 dark와 **같은 키 집합**을 모두 정의하고 자기 `color-scheme`을 가진다. 값만 둔다.
-- 선택지는 [`theme.js`](shared/web/theme.js)의 `CHOICES`에 `{ value, label }` **한 줄**을 `system` 앞에 더한다. 이것이 선택지의 단일 출처다(`RosyTheme.choices`): 로봇 `/device` 화면 패널은 여기서 버튼을 그리고, Fleet 헤더의 순환 버튼 하나도 같은 목록을 돈다(D-668, `test_theme_choices.py`).
-- 그 밖의 파일은 고치지 않는다. 고쳐야 한다면 어딘가 팔레트 이름을 역할 대신 쓰고 있다는 뜻이다.
-- `python -m pytest shared/web/test -q`를 돌린다. 팔레트 게이트(`test_palette_gates.py`)가 테마마다 돈다: 글자 대비 ≥ 4.5:1, 위험 채움 위 `ink-on-crit` 대비, 주의·위험 색약 대비, 장미 대 위험 거리, status 따뜻한 띠·series 차가운 띠, 래스터 단조, 로봇 사다리. 범위 게이트(`test_design_scope_gates.py`, D-398)가 정지(D-220)·장미색 범위(D-277)·역할 우선·`100vh` 금지를 지킨다.
-- 바꾸면 안 되는 것: D-82 의미 집합, D-277 장미색 범위, **주 명령 = ink 채움**, **위험 채움 위 글자 = `ink-on-crit`**(테마와 무관하게 밝다).
-
-**The One Block Rule.** 테마 하나는 팔레트 블록 하나다. 표면 파일에 테마 분기가 생기면 구조가 틀린 것이다.
-
-**The Normal Has No Colour Rule.** 계기의 안전 구간에는 아무것도 칠하지 않는다. 정상은 `--nominal`(= ink)이다.
-
-### 테마 선택
-
-- 기본은 어둡게다(관제실·현장 조명 계약). 밝게는 존재하지만 사람 G3·현장 조명 관측 전까지 운용 권장 테마가 아니다.
-- [`theme.js`](shared/web/theme.js)를 `<head>`에서 `tokens.css` 바로 뒤에 동기로 싣는다(CSP 준수 외부 스크립트). 첫 그림 전에 `<html data-theme>`과 `meta[name=theme-color]`(해당 테마 `--ground`)를 정한다.
-- 선호는 `localStorage` `rosy.theme` = `dark|light|system`. 없거나 읽기 실패면 `dark`. `system`은 `prefers-color-scheme`을 따른다.
-- API: `window.RosyTheme.get()`·`set(pref)`·`resolved()`. 바뀌면 `document`에 `rosy:theme` 이벤트(`{theme, preference}`)가 난다.
-- 선택 UI는 `data-theme-choice` segment 버튼이다(`RosyTheme.choices` — 지금은 어둡게·밝게·시스템 셋). 로봇 `/device` 화면 설정 패널에 있다. Fleet은 헤더의 순환 버튼 하나(`data-theme-cycle`)가 같은 선택지를 돈다(D-668).
-- 고정 표면: `surfaces.yaml`에 `themes: [dark]`인 웹 표면(games 보드, Pilot, `lane_live_view`, `diagnostic.html`)은 `<html data-theme-pin="dark">`이고, 왜 테마를 따르지 않는지 `theme_reason`에 적는다(없으면 레지스트리 시험이 막는다). 네이티브·LCD 사본도 어둡게 고정이다.
-- 캔버스는 CSS 변수를 못 읽는다. `window.RosyPalette`(`readColour`·`readPalette`·`cssColor`·`canvasFont`)로 어떤 CSS 색이든 RGBA로 풀고, `rosy:theme`에서 캐시가 비워진다. 다시 그리는 일은 각 캔버스가 한다.
+상세는 [ui-design-details.md](docs/reference/ui-design-details.md)의 「테마 추가·변경 절차」로 옮겼다.
 
 ## Typography
 
@@ -350,43 +330,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 ### 앱 셸의 자리 (D-741)
 
-D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet 콘솔이 탐색 레일(다섯 영역)과 하위 탐색을, Rosy Robot의 `/console`·`/setup`·`/device`가 탐색 레일(화면 전환)과 하위 탐색(작업 목록) 자리를, 학습 검수의 네 화면이 탐색 레일과 경로 줄을 쓴다. 치수는 `tokens.css`의 자리 토큰이고 배치는 [`app-shell.css`](shared/web/app-shell.css)가 갖는다. 표면 시트는 자리 안의 내용만 배치한다.
-
-| 자리 | 토큰 | 담는 것 |
-|---|---|---|
-| 탐색 레일 | `--rail-track` 72px | 그 앱의 영역. 아이콘 아래에 이름 |
-| 하위 탐색 | `--subnav-track` 232px | 영역 안의 화면이나 작업. 없으면 `data-seats="rail"` |
-| 경로 줄 | `--pathbar-height` 56px | `영역 / 화면`과 만들기 단추 |
-| 본문 | 남는 폭 | 지도, 영상, 목록, 미리보기, 폼 |
-| 오른쪽 칸 | `--context-track` 360px | 위는 지금 상태, 아래는 입력·조작·근거 |
-
-셸 폭 64rem 아래에서 레일과 하위 탐색이 가로 한 줄이 되고, 본문 폭 48rem 아래에서 지금 상태, 본문, 나머지 순서로 쌓인다. 둘 다 칸 질의다.
-
-본문 격자의 배치는 `data-layout`으로 고른다. 배치마다 둘 수 있는 칸이 정해져 있고, 그 밖의 칸을 넣으면 격자가 깨진다.
-
-| `data-layout` | 둘 수 있는 `data-pane` | 쓰는 곳 |
-|---|---|---|
-| 없음 | `stage`, `now`, `more` | 목록·미리보기와 오른쪽 칸 |
-| `watch` | `stage`, `now`, `more` | 지도와 오른쪽 칸이 2:1 (D-629) |
-| `solo` | `stage` | 폼과 결과만 |
-| `sense` | `sense`, `stage`, `cam`, `now` | 한 로봇의 감지·관측·조작. 본문 폭 64rem 아래에서 두 칸이 된다 |
-
-`data-order="stage-first"`는 좁은 폭에서 본문을 지금 상태보다 먼저 둔다. `data-seats="rail"`은 하위 탐색이 없는 화면, `data-seats="none"`은 레일도 없는 화면이다. `ui-shell`이 칸이 되므로 앱 바와 레일 안의 공용 부품(`ui-actions`, `.ui-form`)은 셸 폭에 답한다.
-
-### 자리 순서와 뼈대 — 어느 표면에서나 (D-945)
-
-모든 표면이 같은 순서로 자리를 쓰고, 안 쓰는 자리는 아래(오른쪽 칸 → 하위 탐색 → 레일)부터 비운다. 상용 도구가 같은 뼈대다: IDE의 아이콘 레일(≈48px)·문맥 사이드바 두 층, 관리형 웹의 한 줄 앱 바·220–300px 사이드바, 모바일 체계의 바텀바→레일(80dp)→사이드바 사다리와 840–1040dp 본문 최대폭. Rosy의 72/232/56px 자리 토큰은 이 대역 안에 있다. 숫자는 토큰이 소유하고 선례는 복제 대상이 아니다.
-
-| 규칙 | 내용 | 지킴 |
-|---|---|---|
-| 자리 순서 | 앱 바 → 레일 → 하위 탐색 → 경로 줄 → 본문 → 오른쪽 칸. 비움은 아래부터 | `shared/web/test/test_layout_canon.py` |
-| 제목 하나 | 문서의 h1은 경로 줄의 문서 제목 하나. 현재 화면은 경로 줄 strong + 하위 탐색 표식 | 〃 |
-| 표식 어휘 | `aria-current`는 표준 토큰을 쓴다 — 문서·화면 `page`, 문서 안 단계 `step`, 문서 안 현재 위치 `location`, 현 화면을 담은 상위 단계 `true`(학습 검수). 탭 작업 공간은 `aria-selected` | 〃 |
-| 머리 조작 | 머리 줄의 조작은 공용 아이콘 단추. 테마 단추는 D-668 계정 접힘 안(2026-11-01 재확인) | `test_fleet_header.py` |
-| 흰 채움 하나 | 구획마다 primary 하나(D-926 7). 새 구획은 `ui-section` 네 역할 | D-926 보강 |
-| 붕괴 두 사다리 | 셸 64rem, 본문 48·30rem. 그 밖은 `surfaces.yaml` 허가 | `test_responsive_tiers.py` |
-
-아직 이 뼈대로 안 옮은 웹 표면은 없다(2026-11-02 이행 완료 — 로봇 대시보드는 hero-strip 제목 줄·두 상태 셸 h1 규칙으로 준수, D-945 5항). Android Cam은 네이티브 앱이라 웹 캐논 밖이다.
+상세는 [ui-design-details.md](docs/reference/ui-design-details.md)의 「앱 셸의 자리 (D-741)」로 옮겼다.
 
 ## Elevation & Depth
 
@@ -420,18 +364,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 
 ### 관제의 정보 위계와 배치 이유
 
-알림은 공통 머리의 조회 버튼에서 오른쪽 알림 창으로 들어간다. 현재 개입 요약과 최근 관제 메시지는 이 창구에 모으고, 상세 사건 증거는 `기록·근거`에 둔다. 읽음은 브라우저의 미확인 표시만 바꾸며 개입 해소·승인·정지 해제를 뜻하지 않는다. 반복 폴링은 새 알림이 아니다. 현재 개입과 비상 정지는 알림 창 밖에 유지한다([D-632](docs/adr/D-632-fleet-notification-inbox.md)).
-
-| 영역 | 순서·강조 | 사용자에게 필요한 이유 |
-|---|---|---|
-| 비상 정지 | 머리에 고정, 위험 채움·48px·보이는 동사 | 어느 작업 중에도 즉시 정지할 수 있어야 한다. |
-| 현재 개입 | 대응 레일 첫 항목, 실제 위험에만 상태색 | 지금 해결할 문제와 가능한 답을 먼저 찾는다. |
-| 현장 지도 | 넓은 화면 왼쪽 2/3, 탭 전환과 무관하게 고정 | 로봇·경로·관측의 공간 관계를 계속 확인한다. |
-| 등록 로봇 | 현재 개입 다음 | 개별 연결·상태·명령 대상을 찾는다. |
-| 카메라·운영 도구 | 로봇 상태 다음 | 관측을 확인하거나 작업을 바꿀 때 펼친다. |
-| 기록·근거 탭 | 오른쪽의 보조 탭, 기록은 중립 구분선 | 현재 경보와 과거 증거를 구분한다. 시작 시각은 제목과 분리한다. |
-
-오른쪽 1/3의 현재 개입 큐는 탭 밖에서 항상 보인다. 그 아래 기본 `로봇 상태`, `기록·근거`, `운영 도구` 탭을 두어 확인·검토·설정 목적을 구분한다. 기록의 출처별 증거·검토 저장·내보내기를 없애지 않는다. 탭을 바꾸어도 지도의 크기와 표시가 유지되며, 넓은 화면의 지도/대응 레일과 좁은 화면의 단일 열은 같은 읽기 순서로 DOM과 시각 순서가 일치한다. 새 UI 배치에는 현재 작업, 다음 행동, 보조 증거의 구분과 그 이유를 먼저 기록한다.
+상세는 [ui-design-details.md](docs/reference/ui-design-details.md)의 「관제의 정보 위계와 배치 이유」로 옮겼다.
 
 ## 표면 문법
 
@@ -473,19 +406,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 
 ### 독립 작업의 선택 — `createTaskChooser()`
 
-[D-439](docs/adr/D-439-task-oriented-web-app-design.md): 서로 독립된 작업은 모두 펼치기보다
-작업 이름을 먼저 선택하고 현재 작업 하나에 집중한다. 제목 → 현재 근거 → 입력과 주 행동
-→ 결과/오류 → 다음 행동·복귀의 순서로 읽힌다. 지도·영상·정지를 함께 봐야 하는 운용 화면은
-기존 공간 문법을 유지한다.
-
-[`task-chooser.js`](shared/web/task-chooser.js)와
-[`task-chooser.css`](shared/web/task-chooser.css)는 공용 하위 탐색과 status를 조합한다.
-같은 위계의 화면 링크와 작업 탭은 `.ui-subnav-nav`·`.ui-subnav-item`의 정렬·치수·선택·초점을 공유한다.
-링크는 주소로 이동하고 native button 탭은 mounted 패널을 전환한다. 좁은 배치는 같은 컨테이너 질의가 소유하며 별도 선택기로 바꾸지 않는다.
-현재 위치(`aria-current`)와 선택된 탭(`aria-selected`)은 같은 장미색 위치 표식을 쓴다. 실제 폼의 segment·권한·상태·위험 동작은 바꾸지 않는다.
-모든 허용 작업은 mounted 상태로 입력·결과를 유지한다. 표면이 manifest, 권한, 요청과
-`beforeHide`/polling을 소유하고 공용 선택기는 표현·초점·전환 잠금만 소유한다. 전환·종료
-거절이나 시간 초과 뒤에는 현재 작업을 유지한다. 정지는 작업 선택 영역 밖에서 계속 접근한다.
+상세는 [ui-design-details.md](docs/reference/ui-design-details.md)의 「독립 작업의 선택 — `createTaskChooser()`」로 옮겼다.
 
 ### 버튼 — `<ui-button kind="…">`
 - **종류**: `primary`(ink 채움, 48px), `quiet`(테두리만, 조용한 글자), `irreversible`(위험 채움 + `ink-on-crit`, 48px), `segment`(여러 중 하나), `toggle`(켜지면 계열 파랑 채움). `kind`가 없으면 계약 표지(`data-kind-missing`, 위험색 윤곽)가 그려진다.
@@ -570,24 +491,58 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 ### 테마 선택
 - `role="group"` 안에 `RosyTheme.choices` 하나마다 `ui-button kind="segment" data-theme-choice="값"`(지금은 어둡게·밝게·시스템). `theme.js`가 누름을 받아 `aria-pressed`를 맞춘다. 로봇은 `/device` 화면 설정 패널이다. Fleet은 이 묶음 대신 헤더의 순환 버튼 하나를 쓴다(D-668).
 
+### 컴포넌트화·승격 기준
+새 도우미나 UI 부품을 어디에 두고 언제 승격할지는 아래 세 층과 네 원칙으로 정한다.
+
+1. **L1 파일 내부 (비공개, `export` 금지)**: 한 파일에서만 쓰는 상수·도우미는 `export`하지 않는다(`test_shared_dedupe.py`의 `exports`가 외부 사용 0인 공개 이름을 막는다).
+2. **L2 앱 공용 (`applications/fleet/web/shared/` 등)**: 같은 앱 안 두 파일 이상이 쓰는 도메인 규칙·어댑터(`authorization.js`의 `isOperator`·`operatorReason`·`OPERATOR_REASON`·`NAMED_OPERATOR_REASON`, `site-map-model.js`의 `copyMap`, `field-view.js`의 `storageGet`·`storageSet`)다. 특정 앱 규칙과 묶여 있으면 `shared/web/`로 올리지 않는다.
+3. **L3 플랫폼 공용 (`shared/web/`, `/common/*`)**: 두 표면 이상이 쓰거나 C1–C25 시각·접근성·안전 계약을 닫는 부품·순수 도우미(`control-dom.js`의 `node`·`setStatus`, `cause-line.js`의 `setOff`·`setOffBy`, `core_ui_logic.js`의 `evidenceAgeText`, `ui.js`의 `iconSvg`)다.
+
+- **단일 정본**: 공용 패턴은 `shared/web/patterns.yaml` `patterns`, 작은 DOM·조작 도우미는 `helpers`, 금지 직접 쓰기는 `direct`에 정본과 상한을 둔다.
+- **최소 공개 표면과 `planned` 경계**: 외부 소비자가 부르는 함수만 `export`한다. `shared/web/` 안 `planned` 기초 모듈끼리의 내부 조합은 허용하며, `shared/web/` 밖 제품 파일이 `planned` 패턴의 공개 `export`를 import하면 같은 변경에서 `status: built`와 `adopters`·`product_test`·`product_hook`을 채운다.
+- **즉시 치환과 래칫 하향**: 공용 도우미를 더하거나 넓히면 같은 변경에서 기존 복제본을 교체하고 `patterns.yaml`·`test_shared_dedupe.py` 상한을 내린다.
+- **순수/DOM 경계**: 순수 계산 모듈(`core_ui_logic.js`, `localization-state.js`, `skill-state.js`, `robot-profile.js`, `*-model.js`)은 DOM·`ui.js`에 기대지 않아 Node 단독 시험으로 검증할 수 있어야 한다.
+
+### 공용 패턴 C1–C25와 동적 값 (D1)
+
+정본 목록은 [`shared/web/patterns.yaml`](shared/web/patterns.yaml)(패턴 → 부품 → 게이트)이고 게이트 시험이 읽는다. 같은 필요가 두 화면에 나오면 화면별 해결 대신 이 부품을 쓴다.
+
+| # | 필요 | 규칙 |
+|---|---|---|
+| C1 | 비활성 사유 | 묶음(둘 이상·버튼 아닌 컨트롤)은 `createCauseLine`(`cause-line.js`)이 보이는 원인 줄 하나를 두고 `disabled`가 바뀔 때마다 `aria-describedby`를 맞추며 비면 숨긴다. 단독 버튼은 `<ui-button reason>`, 둘 다 `describeBy`를 쓴다 |
+| C2 | busy 잠금 | 구역 잠금은 `createBusyScope(root)`(`busy-scope.js`)만. 잠그기 전 상태 그대로 복원, 정지·`[data-always-live]` 항상 제외, 배경 조회는 `refresh`로 잠그지 않고 사용자 동작을 삼키지 않는다 |
+| C3 | 계정 세션 | `createAccountGate`(`account-gate.js`, `gateState`). 상태는 operate·signed-in·view·unavailable. 읽기 실패는 `unavailable`이지 권한 없음이 아니다. 세션이 바뀌어도 정지는 산다 |
+| C4 | 모르는·빈·오래된 값 | `valueText`·`renderValue`(`value-text.js`). 없음은 `EVIDENCE_LABEL.unavailable`, 오래되면 시각을 붙인다. 0·100%·정상·undefined로 채우지 않는다. 빈 목록은 `ui-empty` |
+| C5 | 동적 기하·색 | `setGeometry`만(아래). 게이트: 실제 CSP 아래 위반 0건 + 계산된 크기 변화 |
+| C6 | 위험 표시 | `ui-tag status=crit` / `--flag-danger-*` 채움. 빨간 글자 금지(D-202) |
+| C7 | 되돌릴 수 없는 동작 | `confirmIrreversible` + 목록의 POST는 확인 없이 못 보낸다 |
+| C8 | 탭 | `createTabs` 하나. `role="tab"` 직접 작성 금지. 옵션: `onChange`·`select`(조용함)·`label`, `beforeChange(next, current)`(동기·비동기 거부권, 대기 중 `aria-busy`), 탭별 `disabled`+`reason`(탭 줄 아래 원인 한 줄, 화살표가 건너뜀), `icon`·`iconOnly`(label이 접근성 이름), `activation: "manual"`(기본)·`"automatic"`(화살표가 곧 활성화) |
+| C9 | 정지 | `createStopControl`(`stop-control.js`). 권한·busy·reload·계정 상태와 무관하게 항상 보이고 눌리며 누를 때마다 보낸다. 앱이 역할·세션으로 정지를 끄지 않고 서버 403은 글로 보인다. Fleet 머리 `#estop`이 보기 전용 역할에서 꺼지는 것은 아직 이 규칙 밖이다(보기 전용 정지는 별도 PR로 이 규칙에 맞춘다). 거절은 글로 말하고 `보냄`은 `멈춤`이 아니다. `accept(response)`로 더 엄격한 증거(예: 본문 `estop === true`)를 요구할 수 있고 못 받으면 실패 글이다 |
+| C10 | 연결 배너 | `createConnectionNotice`(`connection-notice.js`). 끊김은 주의(`ui-tag status=warn` + `wifi` 아이콘 + 글). 호출자가 실제 운용 위험을 알 때만 `set(state, text, {danger: true})`로 위험 채움. 인증 대기·모름은 차분한 글(2026-11-14, 예전 D2 대체) |
+| C11 | 독립 대상·조작 상자 | `.ui-panel[data-surface=flat\|raised][data-density=standard\|compact]`(`component-controls.css`). 테 하나, 읽는 순서 제목·`ui-tag`·핵심 값(tnum)·근거 줄·행동(주 하나+보조 하나). `compact`는 64rem 이상 마우스 면만(D-976). 반복 행·수치는 상자가 아니라 행·띠. 카드 속 카드·카드 전체 위험 채움 금지 |
+| C12 | 상태 표 | `statusTag(state, text?)`(`status-tag.js`). 정상은 아이콘 없이 조용, 지연 `history`·끊김 `wifi`(warn), 모름 `minus`+점선 테, 주의 `warn`, 위험 `safety`/`estop`(tag만 crit 채움), 잠김 `lock`. 모르는 값 문구는 `EVIDENCE_LABEL.unavailable`(정보 없음) 하나 |
+| C13 | 아이콘·툴팁·토글팁 | 글리프 93종은 `ui.js` `actionIcon` 한 곳, 범주(`ICON_CATALOG`: nav·action·object·status·measure)와 한국어 이름을 곁에 둔다. 글자를 대신하지 않는다. 아이콘만 있는 단추는 접근성 이름+`data-ui-tooltip`(`title` 금지)이 필수이고 내비·정지·삭제·해제는 아이콘만 쓰지 않는다. 툴팁은 이름(1~4음절)이나 용어 정의(두 문장 이하)만, 판단 정보는 늘 보이는 근거 줄에. 터치는 `toggletip`. 규칙 1~18은 [콘셉트 문서](../docs/superpowers/plans/2026-11-14-rosy-ui-concept.md)의 「깊이·아이콘·글자 규칙」, 게이트는 `shared/web/test/test_icon_gates.py`(예외 목록은 줄이기만) |
+| C14 | 반복 로봇 행(로봇암·이동로봇) | `createRobotRow`·`createRobotRoster`(`robot-row.js`)가 `robotProfile`(`robot-profile.js`, 순수)을 그린다. 반복 대상은 행이다(상자·카드 없음). 칸은 이름(종류·ID)·연결·전원(배터리 %·충전 / 토크·서보 전류·온도)·작업·위치·경보·행동으로 두 종류가 같고, 묶음 제목은 `로봇암 (N)`·`이동로봇 (N)`. 연결(신선도: 지연·끊김·정보 없음)과 경보(심각도: 주의·위험)는 다른 칸이고, 정상은 표시가 없다. 모르는 값은 `valueText`(정보 없음)이지 상수가 아니다. 보조 글은 `toggletip`. |
+| C15 | 로봇 3D 보기(로봇암·이동로봇) | `createRobotView`(`robot-3d.js`, 순수부 `robot-3d-model.js`)가 로봇 저장소의 모델(`tools/robot_meshes.py`가 만든 `meshes/`, 예산 400 KB)을 같은 방식으로 그린다. three.js(`vendor/`, r183.2 MIT)는 첫 뷰에서 동적 import한다(없는 화면은 안 받는다). 그림은 상태가 바뀔 때(자세·선택·크기·테마·돌리기)만 그리고 반복 루프·보간이 없다(D-220). 선택 = 바닥 고리 + 윤곽 + 틀을 `--focus-ring` 한 색으로(행의 선택 표시와 같은 색), 선택 안 됨은 강조색 없음. 색은 그릴 때 CSS 토큰에서 읽고 크기는 CSS(`el.style` 금지). 캔버스는 `role=img`이고 같은 사실(종류·이름·선택·관절/자세·지연)을 곁 글로 둔다. 방향키 회전·+/- 확대·Home과 시점 단추가 키보드 대안이다. WebGL이 없으면 글만 남는다. 한 화면 6개 이하, 목록 행마다 두지 않는다. 새 부품은 `tools/robot_meshes.py`를 거치고, 지연·끊김은 바랜 색으로 그린다 |
+| C16 | 단일 선택 목록 | `createChoiceList`(`choice-list.js`): 사진·프레임·AI 후보·승격 후보·클래스 전체처럼 행 안 동작이 없는 선택. `role=listbox`+`option aria-selected`, option 안에 단추·링크·입력 금지(APG), 위·아래·Home·End·글자 찾기, 선택은 Enter·Space(포커스는 선택이 아니다), 갱신 때 포커스·선택 유지, 빈 목록은 `ui-empty`. 항목 `status`는 상태 이름 문자열이거나 `{state, text, icon}`이라 항목이 자기 문구·아이콘을 `statusTag`로 낸다. 행에 동작이 있으면(로봇·작업) listbox가 아니라 행 목록 + `선택` 단추(`aria-pressed`) + `li[data-selected]`(C14). `role="option"`은 이 부품만 쓴다. |
+| C17 | 선택 묶음 | `createChoiceGroup`(`choice-group.js`): `mode=single`은 네이티브 radio(fieldset+legend; 중간 값·모름·허용 안 됨처럼 "값 없음"이 상태면 `allowEmpty`, 사용자는 고르기만 하고 비우기는 화면이 `set(null)`로), 폼 밖 배타 2~5개(속도 단계·표시 방식·도구, 단축키 1~9에 묶인 클래스 칩만 ≤9). `mode=toggle`은 `kind=toggle`+`aria-pressed`, 즉시 효과 ≤8(지도 겹·필터), `master`(전체, `aria-pressed="mixed"`)·`max`+사유 선택. `mode=check`는 `label.ui-check`+checkbox, 폼 값·8개 초과. 글자만 있는 6개 이상 단일은 네이티브 select(사용자가 늘리는 16개 이상이면 `createSearchSelect`). 배타를 `aria-pressed`로 흉내 내지 않는다. 테마 선택(#71)은 문서화된 K1 예외다. `setItems`는 그릴 필드가 같으면 아무것도 다시 짓지 않고(폴링 호출자가 자기 변경 검사를 두지 않는다) 바뀌면 포커스를 지킨다. 라디오는 칩 전체를 덮는 투명 입력이라 시험도 `get_by_role("radio").check()`로 바로 누른다(라벨을 누르는 우회 없음). 30rem 미만에서는 미선택 칩의 체크 자리를 돌려준다(선택 칩은 줄·굵게·체크 유지). 손으로 쓴 칩 줄은 `test_choice_controls.py` 목록으로 줄이기만 한다. |
+| C18 | 공유 선택·선택 표지 | `createSelection()`(`selection.js`, `{get,set(id,{source}),subscribe}`): 한 선택을 읽는 모든 보기(지도 표지·행 목록·상세·검사기·3D 보기 `createRobotView({selection, robotId})`)가 구독하고, window 이벤트·화면별 사본은 두지 않는다. 한 값에 고르개는 한 뷰포트에 하나(좁은 폭은 select, 넓은 폭은 행 목록). 표지는 어디서나 같다: `--selection`(= `--series-secondary`) 굵은 inline-start 줄(`--space-1`) + 체크 아이콘 또는 `선택됨` 글자. 색만으로 알리지 않고 행 전체를 칠하지 않으며 `--focus-ring`과 다르다. 선택 속성은 종류별 하나: listbox `aria-selected`, 행·지도 표지 `li[data-selected]`(모양)+선택 단추 `aria-pressed`(의미), 독립 켜기·끄기 `aria-pressed`, 배타 단일 radio. `choice-controls.css`를 `component-controls.css` 뒤에 링크한다. |
+| C19 | 위치 상태 하나 | `localizationState(view)`(`localization-state.js`, 순수): 8상태(`confirming > rotating > candidates > searching > localized(+suspect) > failed > blocked > unknown`)와 거절 문구(`refusalText`)·대기 큐(`queueStep`)·후보 확정 검증(`confirmRequest`)을 한 곳에서 계산한다. 신선도(`fresh\|delayed\|unknown`, 30초 기준)와 심각도(`neutral\|warn`)를 분리하고 `danger`는 절대 쓰지 않는다. 후보는 확정 전 후보(점선 윤곽 + `후보 · 확정 전` + 신뢰도)로만 그리며 `localized`에서는 비운다. `위치 다시 찾기`(relocalize)와 후보 확정은 기명 운영자만 보고 자동 재시도는 없다. 출발 대기는 위치 거절(`TRIP_POSE_UNTRUSTED`·`SITE_POSE_UNKNOWN`)에서만 기다리고 120초로 제한한다. |
+| C20 | 팔 스킬 상태 | `skillState({lifecycle, executor, policyId, version, step, guard, measured, ageS, leaseS, blocking})`(`skill-state.js`, 순수)가 `{text, tag, readout}`를 낸다. 수명주기 9종: 승인 대기(제안됨·대기 같은 행)·승인됨 · 시작 대기·실행 중 n/N·측정 성공·측정 실패·정지 · HOLD·시간 초과 · HOLD·대체 제안됨 · 승인 필요. 정상 진행에는 태그가 없고 주의(`caution`)는 로봇을 막는 승인 대기·측정 실패·시간 초과·대체 제안, 위험은 정지(E-stop `estop`, owner HOLD `safety`)와 부하 든 채 또는 잠금(lock) 상태의 실패뿐. 원인 줄(C1) 조합은 패널(Fleet) 소유. 대체는 제자리 교체가 아니라 새 제안이며 새 승인이 필요하다. 측정 출처 없는 성공과 모르는 값은 `정보 없음`. 로봇 행 글자와 상세 패널이 같은 표를 쓰고 `fresh`는 신선도지 수명주기가 아니다 |
+| C21 | 근거 줄 | `createEvidenceLine(items)`(`evidence-line.js`): 항목마다 출처를 글자로 나눈다. 원장·측정이 앞, `모델 자체 값 ... (측정 아님)`이 뒤, 출처가 없으면 `출처 정보 없음`이며 모델 값이 측정처럼 보이면 안 된다. 낡음(`staleAfterS` 초과)은 `지연 · N초 전` 태그, 값 없음은 `정보 없음` 태그, 정상은 태그 없음. 신선도와 심각도는 다른 축 |
+| C22 | 샘플 데이터 | 실제가 아닌 행은 `sample: true`를 싣고 화면 영역 머리에 `sampleTag()`(`샘플 데이터`, `sample-data.js`)를 둔다. 후보는 `{id, label, reason}`뿐이고 좌표·관절·실행기 선택 필드를 갖지 않는다(`armAiCaseProblems`가 검사). 제안자는 자기 제안을 승인하지 못한다(AI·Assistant 제안 포함): 거절 견본을 둔다. 3D는 상태 줄 글자(`skill`)만 늘리고 제안됐지만 실행되지 않은 목표는 그리지 않는다 |
+| C23 | 로봇 도크 | `createRobotDock({selection, profiles, onToggle, kinds})`(`robot-dock.js`, 순수부 `robot-dock-model.js`). 로봇 한 대 = 아이콘+짧은 id(42·45 / S·A·B) 단추 하나, 이동로봇 / 구분 / 로봇암 순. 지연(`history`)·끊김(`wifi`)·경보(`warn`·`estop`) 표지는 **정상이 아닐 때만** 모서리에 붙고 정상은 맨 아이콘이다. 단추는 `aria-pressed`(패널이 이 로봇을 연 동안), 선택 표지는 `--selection` 줄(한 `createSelection`, 지도·패널과 같은 값). 64rem 이상 오른쪽 56 px 세로 띠, 미만 지도 머리 아래 가로 한 줄(목표 44 px, 글자 id 유지). 도크는 우측 열의 로봇 행 목록(고르개)을 L1에서 대체하고, 행 목록(C14)은 작업 화면 단위 목록으로 내린다(S2 한 값 한 고르개). 금지: 도크 아이콘만으로 위험 동사 실행, 지도 클릭·행 선택으로 패널 열기(열기는 도크 아이콘만), 도크와 별개로 같은 선택을 가진 두 번째 고르개 |
+| C24 | 로봇 패널 | `createRobotPanel({selection, onClose, onManualCollapse, sections, stop, resolve})`(`robot-panel.js`). 껍데기만 공용이다: 머리(이름·신선도 태그·닫기), 상태, 카메라, 명령(접힌 `'수동 조종'` `<details>` 포함), 설정(읽기 전용, 접힘), 하단 고정 정지 줄. 구획 내용은 화면이 주입한다(어댑터). 같은 ID로 `setRobot`을 다시 부르면 머리·신선도·바닥만 제자리에서 바꾸고 `<details open>`·스크롤·초점·동일 DOM 노드를 보존한다. 64rem 이상 스테이지 그리드 왼쪽에 `minmax(18rem, 22rem)` 열을 더하는 밀기(덮지 않음, 비모달), 미만 **머리 아래** 전체 화면 시트(머리의 전체 비상 정지를 덮지 않는다). 열면 포커스는 제목(`tabindex=-1`), 같은 아이콘·닫기·Esc로 닫고 연 아이콘으로 돌아간다. 패널이 열려 있을 때만 선택을 따라가고 닫힌 채 선택이 바뀌어도 열지 않는다. 한 번에 패널 하나. 정지: 이동로봇은 `주행 취소 · 이 로봇`(상시 활성, `data-always-live`), 팔은 단추 없이 `팔 단독 정지 없음 · 위 머리의 전체 비상 정지를 쓴다` 한 줄. 금지: 패널·도크 모듈과 채택 어댑터의 `/api/fleet/pipeline/` 감독 우회 경로 호출(`pipeline/decision-gate`·`human-safety-gate`·`vision-auto-check`·`station-zones/dispatch`·`arm-holds/clear`; `patterns.yaml`의 `forbid`가 소스를 읽어 막는다), 토크·전원·가드·홀드 해제 단추(T4는 사람), 패널 안 승인(승인은 작업 큐 한 곳) |
+| C25 | 알림 한 표면 | `createAlertCenter({listEl, toastEl, bellEl, announcer, isOnScreen})`(`alert-center.js`, 규칙은 순수부 `createAlertStore`)와 `getAnnouncer()`(`announcer.js`). 같은 key는 한 항목(×N), 일회성 실패는 1500 ms 병합, 목록 상한 12. 토스트는 목록이 화면 밖일 때 새 safety·crit와 목록에 없는 일회성 실패 둘뿐이고 warn·info는 토스트 없음. `resolve(key)`가 항목·토스트·벨 개수를 한 번에 닫고 safety는 `acknowledge` 전에는 안 닫는다. 방송은 페이지당 polite 1·assertive 1(announcer)이 하고 토스트 영역엔 aria-live가 없다. 벨 개수는 그 앱 목록의 미해결 항목 수 하나다(Fleet은 큐의 긴급·주의 행). 읽음·미읽음을 더하지 않고 누르면 목록으로 간다. 「알림」 이름과 아이콘은 목록 하나에만 쓴다. 이행 예외(`patterns.yaml` C25 debt): Fleet 카드는 `createAlertStore`만 쓰고 Robot 대시보드 `#triage`·`#hitl-escalation`은 손으로 그린다. 앱은 알림 배너·토스트·live 영역을 새로 만들지 않는다(정적 게이트 `alert-surface.test.mjs`, 이행 목록 A1-A4) |
+
+패턴이 만들어졌는지(`planned`·`built`)는 [`shared/web/patterns.yaml`](shared/web/patterns.yaml)만 말한다. 이 표의 C행에는 상태 낱말을 적지 않고, `test_patterns_registry.py`가 지킨다.
+
+동적 값(D1): 스크립트의 `el.style`·`style` 속성은 금지이고 예외는 `shared/web/geometry.js`의 `setGeometry(el, {…})` 하나가 될 것이다(아직 없다: 들어오기 전까지 typed `attr()`가 현행 규칙이고 `test_no_element_style.py`의 목록이 남은 쓰기를 센다). `--g-*` 사용자 속성만 쓰며 이름 허용 목록과 값(유한 숫자+단위·`var(--토큰)`·`color`의 `#hex`)을 검사하고, CSS는 `var(--g-…, 기본값)`으로 읽는다. 그림은 SVG 속성·canvas, 이산 값은 `data-*` 선택자다. typed `attr()`와 `<table width>` 우회는 이행하면서 지운다(`test_no_element_style.py`가 목록으로 추적). 이행 부채: 진단 화면 `diagnostic-core.js`·`diagnostic-map.js`는 classic 스크립트라 아직 `.style`을 쓰며 `patterns.yaml` C5 `debt`에 이유와 함께 적혀 있다.
+
+
 ## 작업 화면의 기본 원칙 (D-461)
 
-상태를 읽고 다음 일을 찾아 행동하는 순서를 공용 디자인의 기준으로 삼는다.
-공용 작업 부품은 기존 `ui-*` 조작과 토큰을 합성하며 표면이 선택해 적용한다.
-예제 소비자는 학습 작업 `/learning`과 사진 검수다. 기존 운용 화면이 이번 변경으로
-전환·설치·현장 수용되었다고 계산하지 않는다.
-
-- 상태와 이유를 같은 자리에서 읽는다. 실패·거절·미확인은 한국어 텍스트로 표시하며 색만으로 구분하지 않는다.
-- 반복 작업을 첫 화면에 둔다. 등록 폼은 필요할 때 펼치고, 목록의 검색·종류·확인 필요 필터를 가까이 둔다.
-- 다음 행동에는 대상을 붙인다. 검수 대기 사진 열기·연결 저장·이 작업 연결 해제처럼 실제 결과를 말한다.
-- 사용자의 맥락을 보존한다. 선택한 사진과 검색/필터를 URL로 복원하며 수정 내용을 별도 승인 없이 확정하지 않는다.
-- 증거 상세는 펼쳐 본다. 한국어 상태와 핵심 실패 이유를 먼저, 단계·SHA·경로·기술 JSON을 상세에 둔다.
-- 마우스·키보드·터치에서 같은 작업을 마친다. 포커스·비활성 이유·빈 상태·실패 후 재시도를 기능과 함께 검증한다.
-
-`/common/workspace.js`의 `taskRow()`는 작업 제목·종류·상태·다음 작업을 텍스트 DOM으로
-합성한다. `.ui-task-row`는 선으로 나눈 목록이며 중첩 카드로 쓰지 않는다.
-`.ui-workspace-bar`는 검색/필터/행동을 묶는다. 상태 판단은 소비자가 계약에 맞게
-전달한다. 부품은 보고서 통과를 실행 권한·정책 승격으로 바꾸지 않는다.
+상세는 [ui-design-details.md](docs/reference/ui-design-details.md)의 「작업 화면의 기본 원칙 (D-461)」로 옮겼다.
 
 ## 운용자 말 (Copy)
 
@@ -658,7 +613,5 @@ Native Pilot의 Kotlin 색과 Android 색 리소스는 `tokens.css`의 dark 블�
 화면을 이유 없이 다시 그리지 않으며, 실제 장비 확인과 브라우저 대역 확인은 구별해 기록한다.
 # Fleet 공용 헤더 영역 (D-658)
 
-계정 발견성·로그인 복귀·연결/권한 구분은 [플랫폼 사용 규칙 재정리](docs/plans/2026-10-12-platform-ux-conventions-design.md)와 [D-683](docs/adr/D-683-fleet-account-entry-and-login-return.md)를 따른다. D-683은 아래 D-658의 계정 상세 위치를 대체한다. 우측의 보이는 로그인 링크에서 전용 로그인 문서로 가며, 화면 표시와 토큰 접속은 계정 단추 아래에 있다(D-741이 D-683 2항을 바꿨다). Map/Cell은 초안 보존을 위해 새 탭에서 로그인하고 원래 작업 탭에서 세션을 다시 확인한다. 구현·G1/G2/G3·설치 증거는 별도다.
-
-앱 바는 맥락(R 심볼, `Fleet`, 현장 이름), 연결(연결 글과 시각), 알림·나(알림 단추, 로그인 링크 또는 역할 이름이 붙은 계정 단추), 비상 정지 네 그룹이고 모든 폭에서 한 줄이다(D-741 3·5항). 연결 자리에는 조작이 없다. 계정·화면 표시·토큰 접속은 계정 단추 아래 펼침 칸이며 화면 폭 때문에 저절로 드러나지 않는다. 접속이 필요할 때의 자동 펼침은 유지한다. 탐색은 왼쪽 레일(아이콘 아래에 짧은 이름) 또는 머리 아래 한 줄, 작업·지도는 본문, 현재 영상·개입·알림은 오른쪽 문맥 패널이 맡는다. 푸터는 없다.
+상세는 [ui-design-details.md](docs/reference/ui-design-details.md)의 「Fleet 공용 헤더 영역 (D-658)」로 옮겼다.
 

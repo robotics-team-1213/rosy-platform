@@ -9,7 +9,7 @@ import pytest
 
 from fleet.server.console import FleetConsole
 from fleet.server.goal_lease import NavigationStopped
-from fleet.server.ledger.named_stop_store import NamedStopStore
+from fleet.server.named_stop_store import NamedStopStore
 from fleet.server.named_stop_motion import NamedStopMotion
 from fleet.swarm.api.ports import RobotApiError
 from fleet.swarm.robots import RobotEndpoint
@@ -225,5 +225,32 @@ def test_cancel_stops_an_armed_named_stop_repark(tmp_path):
             await leases.cancel("pinky", named)
         assert ("DELETE", "/api/v1/motion/repark") in calls
         assert calls.index(("DELETE", "/api/v1/motion/repark")) < len(calls) - 1  # before the Nav2 cancel
+
+    asyncio.run(exercise())
+
+
+def test_cancel_propagates_repark_stop_failure_after_canceling_navigation(tmp_path):
+    async def exercise():
+        calls = []
+
+        async def robot(request):
+            calls.append((request.method, request.url.path))
+            if request.url.path == "/api/v1/motion/repark":
+                raise httpx.ConnectError("repark stop timeout", request=request)
+            return httpx.Response(200, json={"canceled": True})
+
+        endpoints = [RobotEndpoint("pinky", "http://pinky", "operator")]
+        async with httpx.AsyncClient(transport=httpx.MockTransport(robot), base_url="http://robot") as http:
+            named = HttpRobotClient(endpoints[0], http=http)
+            leases = FleetConsole(endpoints, [named]).goal_leases
+            journal = NamedStopStore(tmp_path / "fleet.db")
+            claim = NamedStopMotion("pinky", BOOT, "s3", RUN)
+            assert journal.claim(claim) and journal.bind_run(claim)
+            leases.restore_named_stop(NamedStopStore(journal.path))
+            leases._named_stop_motion.repark_correlation_id = f"repark-{claim.reservation_id}"
+            with pytest.raises(httpx.ConnectError):
+                await leases.cancel("pinky", named)
+        assert ("DELETE", "/api/v1/motion/repark") in calls
+        assert ("POST", "/api/v1/navigation/cancel") in calls
 
     asyncio.run(exercise())

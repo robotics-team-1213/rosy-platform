@@ -15,8 +15,8 @@ from types import SimpleNamespace
 from core_common.protocol.line_authority import MAX_TTL_S as AUTHORITY_MAX_TTL_S
 from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
-from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN
-from fleet.server.trips.named_stop_map_pose import precision_map_pose
+from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN, TRACK
+from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
 from fleet.server.trip_start_checks import (
@@ -186,18 +186,19 @@ class TripAdmission:
         if token != self._start_token(robot_id):
             raise TripError(409, "TRIP_START_CANCELED")
 
-    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool, final_place=None, detail=None):
+    async def _caps_checks(self, robot_id: str, graph, segments: list, repeat: bool, final_place=None, detail=None,
+                           *, nav2: bool = False):
         """D-494 start checks on the robot's capabilities; the caps, or ``TripError``. ``detail``: the trip's
         detail dict that takes the D-763 10 (c) ``regulation_caps_unknown`` warning."""
         map_id = self._store.active()[1].map_id
-        lane = any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments)
+        lane = (not nav2) and any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments)
         caps = await self._call(self._caps(robot_id), "TRIP_ROBOT_CAPS_UNKNOWN")
         if caps is None:
             raise TripError(422, "TRIP_ROBOT_CAPS_UNKNOWN")
         refused = unsupported(graph, segments, kind=caps.kind, modes=caps.modes,
                               junction_turn=caps.junction_turn, config=self._routing,
                               max_turn_deg=self.config.max_turn_deg, repeat=repeat,
-                              final_place=final_place)
+                              final_place=final_place, nav2=nav2)
         if refused is not None:
             raise TripError(422, "TRIP_MODE_UNSUPPORTED", refused)
         floor = caps.site_floor_map_id  # D-507 9: absent (older CORE) or null declares no floor
@@ -234,15 +235,16 @@ class TripAdmission:
         active = self._store.active()
         if active is not None and active[0] == hold["map_version"]:
             await self._caps_checks(live.view["robot_id"], active[2], hold["plan"]["segments"], bool(live.repeat),
-                                    detail=live.view["detail"])
+                                    detail=live.view["detail"], nav2=live.nav2)
         self._apply_replan(live, hold, principal_id)
 
-    async def _pose_checks(self, robot_id: str, graph, segments: list, *, start=False, start_at=None, caps=None, precision_scope=None):
+    async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None,
+                           caps=None, nav2: bool = False, precision_scope=None):
         """D-494 start checks on line following and the map pose: ``(pose, enable)`` or ``TripError``.
         D-601 A: at a start (not a lap) a robot with line following OFF passes, ``enable`` True: the
         trip turns the camera line on itself once it is open. D-601 D: a start also checks alignment."""
         enable = False
-        if any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments):
+        if not nav2 and any(graph.arcs[arc_id(seg)].drive_mode == "lane" for seg in segments):
             mode = await self._call(self._junction.line_follow_mode(robot_id), "TRIP_LINE_FOLLOW_NOT_ACTIVE")
             # review HIGH 1: only a trip that starts on a lane; a free first segment keeps the refusal
             enable = start and mode == "OFF" and graph.arcs[arc_id(segments[0])].drive_mode == "lane"
@@ -272,7 +274,7 @@ class TripAdmission:
                 raise TripError(422, "TRIP_START_BODY_OUTSIDE_ROUTE",
                                 {"edge_id": first.edge_id, "body_margin_m": round(margin, 3)})
         if start:
-            check = start_check(graph, segments, pose.x, pose.y, pose.yaw, self.config.start_heading_tol_deg)
+            check = start_check(graph, segments, pose.x, pose.y, pose.yaw, self.config.start_heading_tol_deg, nav2=nav2)
             if check["code"] is not None:
                 raise TripError(422, check["code"], check)
         return pose, enable
@@ -286,7 +288,7 @@ class TripAdmission:
             return False  # Safety-Review minor: no lease renew confirmed since the loss yet; it waits on
         try:
             self._graph_for(live.view["map_version"])
-            if any(live.arc(i).drive_mode == "lane" for i in range(index, len(live.segments))):
+            if any(live.segment_is_lane(i) for i in range(index, len(live.segments))):
                 mode = await self._call(self._junction.line_follow_mode(live.view["robot_id"]))
                 if mode not in LINE_MODES:
                     raise TripError(422, "TRIP_LINE_FOLLOW_NOT_ACTIVE", {"mode": mode})
@@ -300,7 +302,8 @@ class TripAdmission:
         return True
 
     async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *,
-                          start_at=None, caps=None, start_token=None, start_guard=None, precision_scope=None):
+                          start_at=None, caps=None, start_token=None, start_guard=None,
+                          nav2: bool = False, precision_scope=None):
         """``_pose_checks(start=True)`` plus D-603: with ``fleet.trip.auto_align`` a TRIP_START_HEADING_MISMATCH
         (on the lane: off-lane is judged first) asks CORE to turn by the error, then checks again from a
         fresh sighting. ``(pose, enable, turns)``; a refused or aborted turn refuses the start."""
@@ -309,7 +312,8 @@ class TripAdmission:
         for attempt in range(ALIGN_TURNS + 1):
             try:
                 result = await self._pose_checks(robot_id, graph, segments, start=True,
-                                                 start_at=start_at, caps=caps, precision_scope=precision_scope)
+                                                 start_at=start_at, caps=caps, nav2=nav2,
+                                                 precision_scope=precision_scope)
                 await self._guard_start(robot_id, start_token, start_guard)
                 return (*result, turns)
             except TripError as exc:
@@ -349,8 +353,9 @@ class TripAdmission:
         for _ in range(math.ceil(ALIGN_SIGHTING_S / self.config.period_s)):
             pose = await self.map_pose(robot_id)
             age = getattr(pose, "anchor_age_s", None)
-            # D-989: the robot's own pose is not the independent sighting this wait is for
-            if (age is not None and getattr(pose, "anchor_source", None) != AUTO_LOCATE
+            # D-989: the robot's own pose is not the independent sighting this wait is for, nor is a track
+            # anchor (its yaw is the odometry's or a motion heading, not a marker's)
+            if (age is not None and getattr(pose, "anchor_source", None) not in (AUTO_LOCATE, TRACK)
                     and self._clock() - age > done_at):
                 return {"delta_deg": delta_deg, "final_err_deg": status.get("final_err_deg"),
                         **({"pose": pose} if keep_pose else {})}

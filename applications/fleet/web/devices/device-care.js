@@ -1,3 +1,5 @@
+import { setOffBy } from "/common/cause-line.js";
+import { isOperator } from "/console/assets/authorization.js";
 import {paintProfile} from '/console/assets/robot-profile-view.js';
 
 const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item)
@@ -7,7 +9,7 @@ export function createDeviceCare({root, scope, call, identity}) {
   const field = key => root.querySelector(`[data-care="${key}"]`);
   let selected = '', saved = null, document = null, dirty = false, busy = false, epoch = 0;
   let importedText = null;
-  const allowed = () => identity()?.role === 'operator' && Boolean(identity()?.principal_id)
+  const allowed = () => isOperator(identity()?.role) && Boolean(identity()?.principal_id)
     && identity().principal_id !== 'site-console';
   function authorization() {
     const reason = !selected ? '장치 정보를 먼저 선택하세요.' : busy ? '기록을 확인하고 있습니다.'
@@ -15,12 +17,10 @@ export function createDeviceCare({root, scope, call, identity}) {
     field('permission').textContent = reason;
     for (const key of ['source', 'caution', 'file', 'remove', 'kind', 'text', 'save', 'add']) {
       const input = field(key);
-      input.disabled = Boolean(reason);
-      if (input.localName === 'ui-button') input.setAttribute('reason', reason);
-      else input.setAttribute('aria-describedby', 'device-care-permission');
+      if (input.localName === 'ui-button') setOffBy(input, reason);
+      else { input.disabled = Boolean(reason); input.setAttribute('aria-describedby', 'device-care-permission'); }
     }
-    field('export').disabled = !document;
-    field('export').setAttribute('reason', document ? '' : '내보낼 특성 JSON이 없습니다.');
+    setOffBy(field('export'), document ? '' : '내보낼 특성 JSON이 없습니다.');
   }
   function preview() {
     field('document').textContent = document

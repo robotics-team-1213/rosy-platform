@@ -30,7 +30,7 @@ def validate(doc):
             for t in s["tiers"]:
                 need(ID_RE.match(t["id"]) and t["id"] == f"{s['id']}-t{t['tier']}" and t["id"] not in seen, f"tier id {t['id']}")
                 seen.add(t["id"])
-    places = {s["id"] for z in doc["zones"] for s in z["slots"]} | {f"not_places:{n['id']}" for n in doc["not_places"]}
+    places = {z["id"] for z in doc["zones"]} | {s["id"] for z in doc["zones"] for s in z["slots"]} | {f"not_places:{n['id']}" for n in doc["not_places"]}
     for group in doc["aliases"].values():
         for old, new in group.items():
             need(new is None or new in places or new in seen, f"alias {old} -> {new}")

@@ -22,6 +22,16 @@ COMPOSITION_ROOTS = ("operations/fleet/fleet/server/app.py", "operations/fleet/f
                      "operations/fleet/fleet/cli.py")
 
 
+_TRY_NODES = (ast.Try, getattr(ast, "TryStar", ast.Try))
+_ELSE_NODES = (ast.If, ast.For, ast.AsyncFor, ast.While, *_TRY_NODES)
+_MATCH_NODES = getattr(ast, "Match", ())
+_CASE_NODES = getattr(ast, "match_case", ())
+_BODY_NODES = (
+    ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.With, ast.AsyncWith,
+    ast.ExceptHandler, *_ELSE_NODES, *((_CASE_NODES,) if _CASE_NODES else ()),
+)
+
+
 def is_composition(path: str) -> bool:
     return any(path == root or (root.endswith("/") and path.startswith(root)) for root in COMPOSITION_ROOTS)
 
@@ -77,8 +87,9 @@ class Closure:
             self._deps[path] = {"?"}  # unparsable: caller treats as unknown
             return self._deps[path]
         pkg = _dotted(path.replace("/__init__.py", "/x.py") if path.endswith("__init__.py") else path)[0].split(".")[:-1]
-        for node in ast.walk(tree):
-            names: list[str] = []
+        stack = list(tree.body)
+        while stack:
+            node = stack.pop()
             if isinstance(node, ast.Import):
                 names = [a.name for a in node.names]
             elif isinstance(node, ast.ImportFrom):
@@ -88,6 +99,17 @@ class Closure:
                     keep = pkg[:len(pkg) - node.level + 1] if node.level > 1 else pkg
                     base = ".".join([*keep, *([base] if base else [])])
                 names = [base, *(f"{base}.{a.name}" if base else a.name for a in node.names)]
+            else:
+                if isinstance(node, _BODY_NODES):
+                    stack.extend(node.body)
+                    if isinstance(node, _ELSE_NODES):
+                        stack.extend(node.orelse)
+                        if isinstance(node, _TRY_NODES):
+                            stack.extend(node.finalbody)
+                            stack.extend(node.handlers)
+                elif _MATCH_NODES and isinstance(node, _MATCH_NODES):
+                    stack.extend(node.cases)
+                continue
             for name in names:
                 if name:
                     found |= self.index.get(name, set())
@@ -106,8 +128,11 @@ class Closure:
         while todo:
             for dep in self.deps(todo.pop()):
                 if dep not in seen:
-                    seen.add(dep)
-                    todo.append(dep)
+                    if dep in self._reachable:
+                        seen |= self._reachable[dep]
+                    else:
+                        seen.add(dep)
+                        todo.append(dep)
         self._reachable[start] = seen
         return seen
 

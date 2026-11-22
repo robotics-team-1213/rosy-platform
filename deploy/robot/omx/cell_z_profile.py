@@ -167,8 +167,17 @@ def calibrate_z_profile_mm(
 def _current_frame_calibration_checks(
     side_img: np.ndarray | None, top_colour: np.ndarray | None, top_depth: np.ndarray | None,
     heights: np.ndarray | None, z_profile: dict[str, Any] | None, valid_depth_ratio: float,
+    depth_reference: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Bind both live views to physical references; a saved calibration flag alone is insufficient."""
+    """Bind both live views to physical references; a saved calibration flag alone is insufficient.
+
+    D-1057: a usable `depth_reference` (cell_depth_slots: container top minus the pallet floor of the same depth frame, tier
+    within tolerance, valid depth ratio, flat floor, alignment good enough to place the ROIs) replaces the independent side Z
+    reference this check otherwise cannot get. Without one the original path below runs unchanged.
+    """
+    if depth_reference is not None and depth_reference.get("ok") is True:
+        return {"ok": True, "reason": None, "basis": "depth_relative_height", "side_reference_verified": False,
+                "side_reference_replaced_by": "depth_reference", "depth_reference": depth_reference}
     checks: dict[str, Any] = {"ok": False, "reason": "missing current-frame calibration evidence",
                                "side_reference": _fixed_side_reference_diagnostic(side_img, z_profile)}
     prof = z_profile or {}
@@ -208,8 +217,19 @@ def _current_frame_calibration_checks(
 def perceive_slot_z_mm(
     side_img: np.ndarray | None, top_colour: np.ndarray | None = None, top_depth: np.ndarray | None = None, *,
     col: int = 2, row: int = 1, tier: int = 1, z_profile: dict[str, Any] | None = None, spec_id: str = "C3",
+    slot_roi=None, floor_rois=None, floor_depth_mm=None,
 ) -> dict[str, Any]:
-    """(B) Live execution-time Z-axis `mm` perception for a slot `(col, row, tier)` from Side View + optional Top Depth."""
+    """(B) Live execution-time Z-axis `mm` perception for a slot `(col, row, tier)` from Side View + optional Top Depth.
+
+    `slot_roi` and `floor_rois` (colour pixels) enable the depth-relative reference of D-1057; omitted, nothing changes.
+    """
+    if floor_rois and slot_roi is not None and top_depth is not None:
+        import cell_depth_slots
+
+        found = cell_depth_slots.perceive(side_img, top_colour, top_depth, col, row, tier, z_profile, spec_id, slot_roi, floor_rois,
+                                          floor_depth_mm)
+        if found is not None:
+            return found
     side_prof = SideViewZProfile.from_dict((z_profile or {}).get("side_view"))
     expected_tier = int(tier) if int(tier) in (1, 2, 3) else 1
     expected_grasp_z_mm, expected_top_z_mm, expected_mid_z_mm = TIER_GRASP_Z_MM[expected_tier], TIER_TOP_Z_MM[expected_tier], TIER_MID_Z_MM[expected_tier]

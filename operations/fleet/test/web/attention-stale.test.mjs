@@ -123,3 +123,80 @@ test("attentionItems: D-550 8 an unbounded Fleet motion is one warn row; bounded
   assert.deepEqual(attentionItems(rule({ state: "idle", motion: null, reason: null })), []);
   assert.deepEqual(attentionItems(rule(undefined)), []);
 });
+
+// B-1 (IEC 62682 alarm summarization): 오래된 스냅샷 하나가 낸 주의는 로봇마다 한 행으로 묶는다.
+// queues.js is already loaded through roster.js; the same module instance carries createQueues.
+const { createQueues, groupRows } = await import("../../../../applications/fleet/web/queues.js");
+const queues = createQueues({ scope: {onDispose() {}, interval() {}}, view, render: () => {}, streamEvidence: () => null });
+const SNAPSHOT_WARN_STATE = { safety: { estop: false }, battery_status: { level: "warning" },
+  docking: { state: "DOCK_FAILED" }, capabilities_degraded: ["cam"], navigation: "FAILED" };
+
+test("B-1: a stale snapshot folds its four state warns into one per-robot rollup row", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  const items = attentionItems(full({ line_stuck: null, state_age_s: 6, state: SNAPSHOT_WARN_STATE }));
+  assert.equal(items.length, 1);
+  assert.match(items[0].text, /^: 상태 오래됨 — \d+초 전 값 · 지연 경고 4건$/);
+  assert.equal(items[0].key, "a|stale-snapshot");
+  assert.equal(items[0].noGroup, true);
+  assert.deepEqual(items[0].foldedDetails, ["배터리 부족", "도킹 실패", "성능 저하 [cam]", "목표 실패"]);
+});
+
+test("B-1: the same robot fresh keeps the four warns as separate property-clean rows", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  assert.deepEqual(attentionItems(full({ line_stuck: null, state_age_s: 0.4, state: SNAPSHOT_WARN_STATE })), [
+    { severity: "warn", text: ": 배터리 부족" },
+    { severity: "warn", text: ": 도킹 실패" },
+    { severity: "warn", text: ": 성능 저하 [cam]" },
+    { severity: "warn", text: ": 목표 실패" },
+  ]);
+});
+
+test("B-1: critical battery, E-stop, power_health, lane and replan rows never fold", () => {
+  view.receivedAtMs = Date.now() - 1000;
+  const stale = (extra) => full({ line_stuck: null, state_age_s: 6, ...extra });
+  const cases = [
+    [stale({ state: { safety: { estop: false }, battery_status: { level: "critical" } } }), ": 배터리 위험"],
+    [stale({ state: { safety: { estop: true } } }), ": 비상 정지 걸림"],
+    [stale({ state: { safety: {} } }), ": 정지 상태 미확인"],
+    [stale({ power_health_age_s: 0.3, power_health: { battery: { evidence: "fresh", sample_age_s: 0.2,
+      stale_after_s: 5, percent: 30, level: "warning", charging_state: "unknown" } } }),
+      ": 배터리 경고 — 충전·절전 확인"],
+    [stale({ lane_compliance: { level: "WARN", margin_m: 0.012, moving: true } }),
+      ": 차로 가장자리 접근 — 여유 1 cm"],
+  ];
+  for (const [robot, kept] of cases) {
+    const items = attentionItems(robot);
+    assert.ok(!items.some((item) => item.foldedDetails), kept);
+    assert.ok(items.some((item) => item.text.startsWith(kept)), kept);
+    assert.match(items.at(-1).text, /^: 상태 오래됨 — \d+초 전 값$/);  // a plain stale row, not a rollup
+  }
+  view.trafficTrips = [{ trip_id: "t1", robot_id: "a", hold: { reason: "replan", plan: { places: [] } } }];
+  try {
+    const items = attentionItems(stale({}));
+    assert.ok(items.some((item) => item.decision === "replan"));
+    assert.ok(!items.some((item) => item.foldedDetails));
+  } finally { view.trafficTrips = []; }
+});
+
+test("B-1: two stale rollups with the same text stay separate; ordinary warns still group", () => {
+  const rollup = (robotId, causes) => ({ robotId, severity: "warn", key: `${robotId}|stale-snapshot`, noGroup: true,
+    text: `: 상태 오래됨 — 6초 전 값 · 지연 경고 ${causes.length}건`, foldedDetails: causes });
+  const rows = [rollup("a", ["배터리 부족"]), rollup("b", ["목표 실패"]),
+    { robotId: "c", severity: "warn", text: ": 교통 대기", key: "c|0" },
+    { robotId: "d", severity: "warn", text: ": 교통 대기", key: "d|1" }];
+  const out = groupRows(rows);
+  assert.deepEqual(out.map((row) => row.key), ["a|stale-snapshot", "b|stale-snapshot", "group|: 교통 대기"]);
+  assert.deepEqual(out[0].foldedDetails, ["배터리 부족"]);  // a's causes never leak into b's row
+  assert.deepEqual(out[2].group, ["c", "d"]);
+});
+
+test("B-1: attentionKey is blind to age ticks and flips when the folded cause set changes", () => {
+  view.receivedAtMs = Date.now() - 6000;
+  const robot = { robot_id: "a", online: true, line_stuck: null, state_age_s: 6,
+    state: { safety: { estop: false }, battery_status: { level: "warning" } } };
+  const key = queues.attentionKey(robot);
+  robot.state_age_s = 15;                          // the same warnings, only older
+  assert.equal(queues.attentionKey(robot), key);
+  robot.state.docking = { state: "DOCK_FAILED" };  // a new cause joins the fold
+  assert.notEqual(queues.attentionKey(robot), key);
+});

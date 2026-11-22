@@ -16,8 +16,8 @@ from fastapi import HTTPException
 from core_common.stop_pose import repark_within_limits
 from fleet.localization import trust
 from fleet.localization.map_binding import bound_pose
-from fleet.server.trips.named_stop_decision import check_repark_decision, named_stop_decision
-from fleet.server.trips.precision_correction_routes import CorrectionClearance, dispatch_correction
+from fleet.server.named_stop_decision import check_repark_decision, named_stop_decision
+from fleet.server.precision_correction_routes import CorrectionClearance, dispatch_correction
 from fleet.site_map import SitePlace
 from fleet.traffic.trip_lease import HELD
 

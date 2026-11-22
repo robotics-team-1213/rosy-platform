@@ -7,9 +7,9 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException
 
 from fleet.server.console import FleetConsole
-from fleet.server.ledger.named_stop_store import NamedStopStore
+from fleet.server.named_stop_store import NamedStopStore
 from fleet.server.named_stop_motion import NamedStopMotion
-from fleet.server.trips.precision_correction_routes import install_precision_correction_routes
+from fleet.server.precision_correction_routes import install_precision_correction_routes
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import HttpRobotClient
 from test_named_stop_motion import BOOT, RUN

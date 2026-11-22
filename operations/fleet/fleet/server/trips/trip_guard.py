@@ -37,6 +37,7 @@ def install_trip_guard(console, runner, *, clock=time.monotonic, claims=None) ->
     console.trip_busy = runner.robot_busy if lease is None else (
         lambda robot_id: runner.robot_busy(robot_id) or lease.job_of(robot_id) is not None)
     console.trip_goal_sent_at = {}
+    route = getattr(console, "route", None)
     goal, cancel, estop_all = console.goal, console.cancel, console.estop_all
     formation_start, line_follow_mode = console.formation_start, console.line_follow_mode
     formation_reform, formation_resume = console.formation_reform, console.formation_resume
@@ -66,6 +67,15 @@ def install_trip_guard(console, runner, *, clock=time.monotonic, claims=None) ->
         else:  # D-550 10: the trip loop, not the console loop, renews a trip goal's lease
             kwargs["lease_source"] = "trip"
         result = await goal(robot_id, *args, **kwargs)
+        console.trip_goal_sent_at[robot_id] = clock()
+        return result
+
+    async def guarded_route(robot_id, *args, trip: bool = False, **kwargs):
+        if not trip:
+            refuse([robot_id])
+        else:
+            kwargs["lease_source"] = "trip"
+        result = await route(robot_id, *args, **kwargs)
         console.trip_goal_sent_at[robot_id] = clock()
         return result
 
@@ -111,6 +121,8 @@ def install_trip_guard(console, runner, *, clock=time.monotonic, claims=None) ->
                 await end_trip(robot_id, "operator_estop")
 
     console.goal, console.cancel, console.estop_all = guarded_goal, guarded_cancel, guarded_estop_all
+    if route is not None:
+        console.route = guarded_route
     console.formation_start, console.line_follow_mode = guarded_formation_start, guarded_line_follow_mode
     console.formation_reform, console.formation_resume = guarded_formation_reform, guarded_formation_resume
 

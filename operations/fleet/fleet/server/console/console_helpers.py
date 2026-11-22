@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 import logging
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
 from fleet.hub.hub import HubError
 from fleet.localization import trust
-from fleet.server import bays
+from fleet.server import bays, traffic
 from fleet.server.console_view import _error_of, _shown, classify_link, link_reason
 from fleet.swarm.session_arming import require_capability
 from fleet.swarm.transport import RobotApiError
@@ -145,7 +146,7 @@ def _check_stop_binding(self, robot_id, state, expected, *, lane_trip=False) -> 
     if active is None or (active[1].map_id, active[0]) != (
             expected["site_map_id"], expected["site_map_version"]):
         raise HubError("COMMAND_REJECTED", "MAP_BINDING_SITE_CHANGED")
-    from fleet.server.ledger.task_dispatch_helpers import standalone_named_stop_allowed
+    from fleet.server.task_dispatch_helpers import standalone_named_stop_allowed
 
     if not lane_trip and not standalone_named_stop_allowed(active, getattr(self, "_named_stop_traffic", None)):
         raise HubError("COMMAND_REJECTED", "NAMED_STOP_REQUIRES_LANE_TRIP")
@@ -176,10 +177,30 @@ async def goal(self, robot_id: str, x: float, y: float, yaw: float = 0.0, *,
         self._goal_busy.discard(robot_id)
 
 
+async def route(self, robot_id: str, points: Sequence[dict], *,
+                lease_source: str | None = None) -> dict:
+    """Dispatch one D-1009 pass/stop route under the console's goal admission & traffic arbitration."""
+    pts = list(points)
+    if not pts:
+        raise ValueError("ROUTE_POINTS_REQUIRED")
+    end = pts[-1]
+    if robot_id in self._goal_busy:
+        raise HubError("COMMAND_REJECTED", f"{robot_id} has a goal pipeline in flight")
+    self._goal_busy.add(robot_id)
+    try:
+        return await self._goal(robot_id, float(end["x"]), float(end["y"]),
+                                float(0.0 if end.get("yaw") is None else end["yaw"]),
+                                task_id=None, attempt_id=None, attempt_seq=None, lease_source=lease_source,
+                                route_points=pts)
+    finally:
+        self._goal_busy.discard(robot_id)
+
+
 async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 task_id: str | None, attempt_id: str | None,
-                attempt_seq: int | None, lease_source: str | None, stop_binding: dict | None = None,
-                line_handoff=None) -> dict:
+                attempt_seq: int | None, lease_source: str | None,
+                stop_binding: dict | None = None, line_handoff=None,
+                route_points: Sequence[dict] | None = None) -> dict:
     """한 대에 목표 하나. 로봇은 원자 액션만 받는다 (D-12).
 
     내려간 뒤 그 로봇의 계획 경로를 읽어, 이미 달리는 다른 로봇의 경로와 부딪히면
@@ -192,6 +213,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     달리는 로봇이 아니라 **서 있는 로봇**이 길을 막고 있으면 순서로는 풀리지 않는다.
     그때는 `bays` 로 비켜설 자리를 찾아 그 로봇을 먼저 치운다 (`_make_room`).
     """
+    if route_points is not None and (stop_binding is not None or line_handoff is not None):
+        raise HubError("COMMAND_REJECTED", "ROUTE_AND_STOP_BINDING_EXCLUSIVE")
     if line_handoff is not None and (lease_source != "trip" or task_id is not None or stop_binding is None):
         raise HubError("COMMAND_REJECTED", "LINE_HANDOFF_REQUIRES_BOUND_TRIP")
     admission = self._goal_admission
@@ -210,6 +233,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     yielding = self._yielding.get(robot_id)
     decision = admission.yield_hold(yielding)
     if decision is not None:
+        if route_points is not None:
+            return {**admission.response_of(decision), "queued": False}
         if stop_binding is not None:
             return {"accepted": False, "reason": decision.reason}
         # 이 로봇은 남을 지나가게 하려고 비켜서는 중이다. 지금 다른 데로 보내면 방금
@@ -234,6 +259,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
         # D-395: an unlocalized robot gets no goal (CORE would refuse it); it waits for LOCALIZED.
         self._claims.pop(robot_id, None)
         decision = admission.untrusted_self_hold(robot_id)
+        if route_points is not None:
+            return {**admission.response_of(decision), "queued": False}
         if stop_binding is not None:
             return {"accepted": False, "reason": decision.reason}
         self._queued[robot_id] = admission.mission_of(
@@ -247,7 +274,10 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     if stop_binding is not None:
         return await _planned_stop_goal(self, robot_id, client, caps, (x, y, yaw), attempt_id, stop,
                                         stop_binding, line_handoff, lease_source, task_id)
-    result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
+    if route_points is not None:
+        result = await self.goal_leases.send_route(robot_id, client, caps, list(route_points), attempt_id, lease_source, task_id)
+    else:
+        result = await self.goal_leases.send(robot_id, client, caps, x, y, yaw, attempt_id, lease_source, task_id)
     if result["accepted"] is False:
         return result
     # 로봇이 받아들인 뒤에만 기억한다 — 거절된 목표가 화면에 남으면 운영자는 가지도
@@ -257,9 +287,12 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
 
     async with self._traffic_lock:
         try:
-            route = await self._route_of(robot_id)
+            nav_route = await self._route_of(robot_id)
+            if not nav_route and route_points is not None:
+                here = self._pose_of(robot_id)
+                nav_route = traffic.thin(([here] if here is not None else []) + [(float(p["x"]), float(p["y"])) for p in route_points])
             self.goal_leases.check_stop(robot_id, stop)
-            blocker, conflict = self._claim_blocker(robot_id, route)
+            blocker, conflict = self._claim_blocker(robot_id, nav_route)
             if blocker is not None:
                 stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
                 cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
@@ -268,7 +301,9 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                     raise RuntimeError("navigation goal cancellation was not confirmed")
                 self._goals.pop(robot_id, None)
                 self._claims.pop(robot_id, None)
-                decision = (admission.route_conflict_hold if conflict else admission.map_frame_hold)(blocker, route)
+                decision = (admission.route_conflict_hold if conflict else admission.map_frame_hold)(blocker, nav_route)
+                if route_points is not None:
+                    return {**admission.response_of(decision), "queued": False}
                 # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는 이 경로 위의 남은
                 # 거리로 재 단다. 취소하면 로봇이 경로를 잃으므로 미션에 묻어 둔다.
                 self._queued[robot_id] = admission.mission_of(
@@ -278,9 +313,10 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
 
             await self._observe()
             self.goal_leases.check_stop(robot_id, stop)
-            intended = self._intended_route(robot_id, route, x, y)
+            intended = self._intended_route(robot_id, nav_route, x, y)
+            site_route = self._site_route(robot_id, intended)
             untrusted = next((rid for rid in self._order
-                              if rid != robot_id and self._untrusted_blocks(rid, intended)), None)
+                              if rid != robot_id and self._untrusted_blocks(rid, intended, site_route=site_route)), None)
             if untrusted is not None:
                 # D-395 P2-2: an unlocalized robot is a wide obstacle, never sent to a bay.
                 stop = (stop[0], stop[1] + 1)
@@ -291,19 +327,31 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 self._goals.pop(robot_id, None)
                 self._claims.pop(robot_id, None)
                 decision = admission.untrusted_blocker_hold(untrusted, intended)
+                if route_points is not None:
+                    return {**admission.response_of(decision), "queued": False}
                 self._queued[robot_id] = admission.mission_of(
                     decision, x, y, yaw, task_id=task_id, attempt_id=attempt_id,
                     attempt_seq=attempt_seq)
                 return admission.response_of(decision)
             grid = bays.Grid.from_payload(await self.map())
             self.goal_leases.check_stop(robot_id, stop)
-            standing = self._standing_in_the_way(robot_id, intended, grid, (x, y))
+            standing = self._standing_in_the_way(robot_id, intended, grid, (x, y), site_route=site_route)
             if standing:
+                if route_points is not None:
+                    stop = (stop[0], stop[1] + 1)
+                    cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
+                    self.goal_leases.check_stop(robot_id, stop)
+                    if not self._cancel_confirmed(cancel_receipt):
+                        raise RuntimeError("navigation goal cancellation was not confirmed")
+                    self._goals.pop(robot_id, None)
+                    self._claims.pop(robot_id, None)
+                    return {**admission.response_of(
+                        admission.standing_hold(standing[0], standing, "YIELDING", intended)), "queued": False}
                 return await self._make_room(
                     robot_id, x, y, yaw, intended, standing,
                     task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
                 )
-            self._claims[robot_id] = route
+            self._claims[robot_id] = nav_route
             return result
         except (HubError, RobotApiError) as exc:
             raise RuntimeError("traffic refusal after mover dispatch; result remains unknown") from exc

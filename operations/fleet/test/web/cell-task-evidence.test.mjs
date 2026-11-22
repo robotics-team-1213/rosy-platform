@@ -132,7 +132,7 @@ test("destinations come only from the server's presets and export stations for t
 function button() {
   const attrs = {};
   return {dataset: {}, disabled: false, listeners: {}, attrs,
-    setAttribute(k, v) { attrs[k] = v; }, addEventListener(k, fn) { this.listeners[k] = fn; }};
+    setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, addEventListener(k, fn) { this.listeners[k] = fn; }};
 }
 
 test("bed button is off without a named operator and posts the robot when on", async () => {

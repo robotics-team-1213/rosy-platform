@@ -27,16 +27,21 @@ import urllib.request
 DEFAULT_PATHS = (
     "deploy/robot/omx",
     "contracts/foundation",
+    "contracts/learning/src",
     "middleware/devices/omx/adapter",
     "operations/overhead/rosy_vision",  # omx_incident's Fleet link (D-971)
     "integrations/robots/omx",
     "learning/curation/omx",
+    "tools/sim/cell_site_map.py",
+    "shared/web/cell-site-map.json",
+    "learning/envs/isaac/palletizing_gripper.py",
+    "learning/envs/isaac/assets/omx_f_palletizing_description",
     "test/test_omx_joint_tune.py",
     "test/test_omx_record_session.py",
 )
 LOCK = "deploy/robot/omx/requirements-cell.lock"
 SMOKE = (
-    "import sys; sys.path.insert(0, 'deploy/robot/omx'); "
+    "import sys; sys.path[:0] = ['deploy/robot/omx', 'contracts/learning/src']; "
     "import joint_tune, record_session, record_config, omx_autoupdate; print('smoke ok')"
 )
 
@@ -209,14 +214,28 @@ class Host:
             tar.extractall(target, filter="data")
 
     def smoke(self, release: Path, python: Path) -> bool:
-        done = _sp().run(
-            [str(python), "-c", self.cfg.get("smoke", SMOKE)],
-            cwd=release,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        return done.returncode == 0 and "smoke ok" in done.stdout
+        try:
+            done = _sp().run(
+                [str(python), "-c", self.cfg.get("smoke", SMOKE)],
+                cwd=release,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if not (done.returncode == 0 and "smoke ok" in done.stdout):
+                return False
+            if "deploy/robot/omx" in self.cfg.get("paths", DEFAULT_PATHS) and (release / "deploy/robot/omx/cell_collect_plan.py").is_file():
+                extra = _sp().run(
+                    [str(python), "-c", "import sys; sys.path.insert(0, 'deploy/robot/omx'); import cell_collect_plan"],
+                    cwd=release,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                return extra.returncode == 0
+            return True
+        except (OSError, subprocess.SubprocessError):
+            return False
 
     def hold_session(self):
         """Take the cell's session lock (the one joint_tune and record_session hold) and keep it for the

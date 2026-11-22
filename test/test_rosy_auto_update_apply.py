@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from auto_update_fakes import (BOOT, CURRENT, HOST, NATIVE, NEXT, REPO, T0, _retired_display, _z, device,
+from auto_update_fakes import (BOOT, CURRENT, HOST, NATIVE, NEWER, NEXT, REPO, T0, _retired_display, _z, device,
     history, host, hub, idle_inputs, journal, keys, kind_of, kinds, state, status, switched, upd, updater,
     write_json)
 
@@ -680,7 +680,40 @@ def test_the_update_marker_follows_the_apply_and_is_gone_after(device, host, hub
     result = updater(host, hub).run()
 
     assert result["phase"] == "committed", result
-    assert seen and seen[0] == f"image-layer-sync\n{NEXT}\n"
+    assert seen and seen[0] == f"image-layer-sync\n{NEXT}\n74\n"
+    assert not (device / upd.UPDATE_DISPLAY).exists()
+
+
+def test_health_hold_advances_percent_and_rollback_omits_it(device, host, hub, keys):
+    hub.publish(keys, NEXT)
+    health_markers, rollback_markers = [], []
+    orig_failed = host._failed
+
+    def watch_health(_h, argv):
+        marker = device / upd.UPDATE_DISPLAY
+        if host.links["current"] == NEXT and marker.exists():
+            health_markers.append(marker.read_text(encoding="utf-8"))
+        return orig_failed(argv)
+
+    host.overrides["failed"] = watch_health
+    result = updater(host, hub).run()
+    assert result["phase"] == "committed"
+    pcts = [int(m.splitlines()[2]) for m in health_markers if m.startswith("health\n")]
+    assert pcts and pcts[0] == 82 and pcts[-1] > 82 and max(pcts) <= 99
+
+    hub.publish(keys, NEWER)
+    host.overrides["ready"] = lambda h, argv: (subprocess.CompletedProcess([], 1, "", "boom")
+                                              if h.links["current"] == NEWER else None)
+    orig_rb = host._rollback
+
+    def watch_rb(_h, argv):
+        marker = device / upd.UPDATE_DISPLAY
+        rollback_markers.append(marker.read_text(encoding="utf-8") if marker.exists() else None)
+        return orig_rb(argv)
+
+    host.overrides["rollback"] = watch_rb
+    assert updater(host, hub).run()["phase"] == "rolled_back"
+    assert rollback_markers == [f"rollback\n{NEWER}\n"]
     assert not (device / upd.UPDATE_DISPLAY).exists()
 
 

@@ -5605,3 +5605,11 @@
 - 변경: 에  전용 선택 필드 (횡단보도 다각형 검사  공용, 장소 점 포함,  필수)과 (0.05–0.6 m,  필수), 순수 함수 . 없으면 저장 본문에서 빠짐. 지도 편집 장소 검사 칸에 접근 거리와 정지 구역 그리기·지우기(대기 띠 그리기와 같은 점 목록, 그리면 고정), 지도에 구역 표시. API v1.434.
 - 증거: ··의 고정 정지 장소 병합 시험, site-map·map-editor node 시험 37개 로컬 통과. 원격·실물 미실시.
 - gate 변화: 없음.
+
+## 2026-11-21 · uncommitted · depart_tick: a queued exit goal is withdrawn, not SENT
+
+- 변경: depart_tick records SENT only for an accepted goal; a Fleet-queued goal (not LOCALIZED, traffic) is removed with FleetConsole.discard_queued_goal (plus console.cancel when a CORE goal may be live) and the record stays SENDING/GOAL_QUEUED_NOT_ACCEPTED, re-checked every tick; the wait is bounded to DEPART_QUEUE_WAIT_S=120 s from queued_since, then HELD DEPART_WAIT_EXPIRED (operator re-arms)
+- 증거: operations/fleet/test/test_unload_release.py 13 passed (5 new: queued withdrawn not SENT, arm unfold between ticks sends nothing, attempted dispatch cancelled, 119 s waits / 121 s HELD once, accept inside the window clears queued_since)
+- gate 변화: Safety-Review robot-08 coordinator review approved fa9516e9ed with the 120 s wait bound (panel7)
+- 결정: 없음
+- 교훈: 없음

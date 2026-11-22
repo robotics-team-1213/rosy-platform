@@ -55,7 +55,27 @@ FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.jso
 CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json").read_text(encoding="utf-8")),
                    **FLEET_TEST_SECONDS}
 MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
+PR_JOB_CAP = 12  # leaves >=8 of 20 org runners free for Merge Queue, main push, and concurrent PRs
 _STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_scheduling.py"
+_GIT_HISTORY_TESTS = (
+    "test/test_harness_contracts.py",
+    "test/architecture/test_module_structure.py",
+    "test/test_safety_review.py",
+    "test/test_remote_test_tools.py",
+    "test/test_remote_fixture_isolation.py",
+    "test/test_release_boundary_guards.py",
+)
+
+
+def _needs_git_history(entry: dict) -> bool:
+    """True only for matrix runners whose invocations can collect tests that query git history on ROOT."""
+    for inv in entry.get("invocations") or ():
+        paths = [p.split("::", 1)[0] for p in inv
+                 if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
+        skip = {p.split("=", 1)[1] for p in inv if p.startswith("--ignore=")}
+        if any(affected_ros._under(h, p) and h not in skip for h in _GIT_HISTORY_TESTS for p in paths):
+            return True
+    return False
 
 
 def consolidated(include: list[dict]) -> list[dict]:
@@ -64,7 +84,8 @@ def consolidated(include: list[dict]) -> list[dict]:
     A 60 s share per job was tried on 2026-11-21 (#343) and dropped: runs used 55% more runner seconds (984 to 1546)
     and, with several runs sharing the 20 concurrent jobs, the median job waited 177 s for a runner (45 s before)."""
     fine = affected_ros.consolidate(include, CI_TEST_SECONDS)
-    return fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+    out = fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+    return affected_ros.pack_to_limit(out, CI_TEST_SECONDS, PR_JOB_CAP)
 
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
@@ -139,14 +160,19 @@ def docs_only(sel: Selection) -> bool:
 def buildable(repo: Repo, sel: Selection) -> bool:
     """False only when nothing build-smoke reads can have changed: no changed file inside a colcon root
     (documents aside) and none of BUILD_DATA. A missing manifest means unknown, so the job stays."""
+    import affected_narrow
+
     if sel.mode != "affected" or sel.escalations:
         return True
     roots = repo.parts.get("colcon_roots") or ()
     if not roots:
         return True
-    return any(p in BUILD_DATA or p.startswith(BUILD_PREFIXES) or (not p.endswith(DOC_SUFFIXES)
-                                   and any(affected_ros._under(p, r) for r in roots))
-               for p in sel.changed)
+    return any(
+        not affected_narrow.is_contract_version_pin(repo, p)
+        and (p in BUILD_DATA or p.startswith(BUILD_PREFIXES)
+             or (not p.endswith(DOC_SUFFIXES) and any(affected_ros._under(p, r) for r in roots)))
+        for p in sel.changed
+    )
 
 
 # Slow root test files that dominate affected GUARD_SET runners when packed together.
@@ -199,6 +225,7 @@ def _shard_groups(repo: Repo, entry: dict, flags: list[str] | None = None) -> li
 def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     import affected_tests as at  # here, not at the top: affected_tests imports this module
+    same_tree = False
     if sel.mode == "full":
         root_tests = sorted(t for t in repo.test_files if at._under(t, "test") and t != _STATION_SCHEDULING)
         entries = []
@@ -219,7 +246,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
     else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
         if os.environ.get("ROSY_QUEUE_TESTED"):  # ci.yml sets it on merge_group only (D-1059)
             import affected_queue
+            before_queue = sel
             sel = affected_queue.narrowed(repo, sel)
+            same_tree = sel is not before_queue
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
         whole["test"] = {"name": "root-test", "invocations": [["test"]]}
         for inv in sel.invocations:
@@ -227,8 +256,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
                 continue  # ROS environment grouping must not split the job's leading environment.
             split = [p for p in inv if p in whole and _shard_groups(repo, whole[p], inv)]
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
+            guard_only = all(p in at.GUARD_SET for p in rest if not p.startswith("-"))
             if any(not p.startswith("-") for p in rest) or not split:
-                out += _shard_py_invocation(rest) if not split else [rest]
+                out += [rest] if split or guard_only else _shard_py_invocation(rest)
             out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p], inv)]
         entries = affected_ros.entries(out, CI_FULL_MATRIX)
         exclusive_jobs = [inv for inv in sel.invocations if affected_exclusive.dedicated(inv)]
@@ -237,10 +267,26 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
                for inv in sel.invocations for p in inv):
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
-    if not docs_only(sel) and buildable(repo, sel):
+    import affected_browser
+    entries += affected_browser.entries(repo, sel)  # pull_request runs only (D-1066); [] elsewhere
+    if not docs_only(sel) and buildable(repo, sel) and not same_tree:
         entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)
         entry.setdefault("ros", "overlay")
-    return {"include": affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)}
+    include = affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)
+    for entry in include:
+        if entry["kind"] != "pytest" or not entry.get("invocations"):
+            continue
+        if _needs_git_history(entry):
+            entry["git_history"] = True
+        if entry["ros"] != "overlay":
+            continue
+        paths = [p.split("::", 1)[0] for inv in entry["invocations"] for p in inv
+                 if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
+        if entry["name"].startswith("browser-") or (
+            paths and all(p in at.GUARD_SET or affected_ros._under(p, "test") for p in paths)
+        ):
+            entry["colcon"] = False
+    return {"include": include}

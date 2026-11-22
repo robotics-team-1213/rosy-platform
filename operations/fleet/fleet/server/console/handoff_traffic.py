@@ -7,7 +7,7 @@ from uuid import UUID
 
 from core_common.robot_body import nominal_body_for
 from fleet.hub.hub import HubError
-from fleet.server.rightofway import traffic
+from fleet.server import traffic
 from fleet.site_map import MAX_POINTS, _point_segment, _polyline_polygon_gap
 
 

@@ -4982,6 +4982,17 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: owner 보류와 재계획 load 거부 회귀 시험을 추가했다.
 - gate 변화: `cell_attempts.py` 변경으로 `task_sha256`이 바뀐다. 기존 운영 검토는 새 해시에 맞춰 갱신해야 한다.
 
+## 2026-11-20 · uncommitted · Pinky 시연 전 네이티브 주행 서비스 확인
+- 변경: `verify-pi.sh --navigation-status`로 `rosy-navigation.service`의 상태만 조회한다. 조회 실패와 미기동 상태는 종료 코드 1을 반환한다.
+- 증거: systemctl 대역으로 기동·종료·미설치·조회 실패를 검증하는 회귀 시험을 추가했다.
+- gate 변화: 없음.
+- 현장 수용: Nav2와 S3 정차 2회(각 도달거리 200 mm 이하)는 별도 실측한다.
+
+## 2026-11-20 · uncommitted · Pinky 점검 옵션을 인터페이스 이름으로 받지 않는다
+- 변경: `--interface` 뒤에 다른 옵션이 오면 사용 오류로 끝낸다. 잘못된 인자로 기존 네트워크 검사에 들어가지 않는다.
+- 증거: 네트워크 검사 진입 전 실행을 가로채 기존 동작을 재현했다. 잘못된 옵션을 거절하는 회귀 시험을 추가했다.
+- gate 변화: 없음.
+
 ## 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
 
 - 변경: merge_pinned가 고정 안 된 장소는 x·y만, 차로는 polyline만 추적값으로 바꾸고 yaw·name·kind·속도·폭은 지금 지도 값을 지킨다. R v270에서 S1 yaw가 null로 바뀐 것을 보고 고쳤다.

@@ -1,3 +1,4 @@
+import { setOffBy } from "./cause-line.js";
 import {node, action, input, select} from "./control-dom.js";
 
 export function createListToolbar({id, filters = [], sortLabel = "이름 정렬",
@@ -104,8 +105,7 @@ export function createSelectionBar({id, onClear, actions = []}) {
     label.textContent = `${count}개 선택 · ${scope}`;
     clear.hidden = !count;
     commands.forEach(button => {
-      button.disabled = count === 0;
-      if (!count) button.setAttribute("reason", "항목을 먼저 선택하세요"); else button.removeAttribute("reason");
+      setOffBy(button, count === 0 ? "항목을 먼저 선택하세요" : "");
     });
   }};
 }

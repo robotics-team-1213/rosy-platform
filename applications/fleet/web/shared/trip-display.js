@@ -95,11 +95,11 @@ const LEASE_END_LABEL = {
   mode_left: '로봇이 운행 모드를 떠남(멈춤·수동·도킹·막힘 중단)', estop: '비상 정지', released: '점유를 놓음',
   core_restarted: '로봇 CORE가 다시 시작됨', leased: '다른 운행이 로봇을 쥠', renew_timeout: '점유 갱신 응답이 없음',
 };
-export const TRIP_STATE_LABEL = {
+const TRIP_STATE_LABEL = {
   started: '출발 대기', running: '운행 중', arrived: '도착', stopped: '멈춤', failed: '실패', canceled: '취소됨', link_wait: '연결 대기',
 };
 const TRIP_POSE_STATE_LABEL = {LOCALIZED: '위치 확정', DEGRADED: '위치 정확도 저하', UNKNOWN: '위치 확인 불가'};
-export const TRIP_REASON_LABEL = {
+const TRIP_REASON_LABEL = {
   pose: '위치를 믿을 수 없어 멈췄습니다',
   junction: '로봇이 교차로 동작을 마치지 못해 멈췄습니다 · 차선 주행을 껐습니다 · 현장을 확인하세요',
   JUNCTION_ODOM_STALE: '로봇 odom이 낡아 교차로 지시를 다음 주기에 다시 보냅니다',
@@ -113,6 +113,7 @@ export const TRIP_REASON_LABEL = {
   TRIP_ROBOT_JUNCTION_UNSUPPORTED: '로봇 CORE가 교차로 지시를 모릅니다 · 새 이미지가 필요합니다',
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
   TRIP_GOAL_REFUSED: '로봇이 목적지 지시를 거절해 멈췄습니다 · 현장을 확인하세요',
+  navigation: '로봇 Nav2 주행이 취소되거나 실패해 멈췄습니다 · 현장을 확인하세요',
   LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행이 켜져 있지 않습니다',
   lease_lost: '운행 끝 · 다시 몰려면 새 운행을 시작하세요',
   TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',

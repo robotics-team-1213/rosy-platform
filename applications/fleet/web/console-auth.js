@@ -7,11 +7,14 @@ import { showConnection, showSession, showSignedOut, stopNotice } from "/console
 export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient, render, operatorControls, assistant,
   confirmedAction, connectionView, workView, incidents, visionView, trackingView, mapView, formation,
   dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState, refreshRobotApps,
-  refreshDispatchControl, refreshDiscovery }) {
+  refreshDispatchControl, refreshDiscovery, refreshVision = () => {}, clearVisionSample = () => {}, inbox = null,
+  onLock = () => {} }) {
   function markLocked(reason = "auth") {
     assistant?.setIdentity({locked:true});
+    onLock();
     resetRobotApps();
     confirmedAction.cancel();
+    inbox?.clear?.();
     stopNotice();
     cancelAllNotice();
     const firstLock = !auth.locked;
@@ -34,9 +37,11 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     connectionView.show(reason, auth.token);
     if (firstLock) {
       Object.assign(view, {robots: [], robotPeers: [], map: null, siteMap: null, sightings: [], cameraTracking: {robots: [], unknown: []},
-        stateLoaded: false, stateUnavailable: false, focusRobot: null, selected: null, pinning: null, cursor: null, formation: null, signals: {},
+        stateLoaded: false, stateUnavailable: false, focusRobot: null, focusAnchorId: null, selected: null, pinning: null, cursor: null, formation: null, signals: {},
         traffic: null, trafficTrips: [], endedTrips: [], trafficClock: null});
-      visionView.reset(); visionView.refreshSources(); trackingView.reset();
+      visionView.reset(); clearVisionSample(); trackingView.reset();
+    } else if (reason === "auth") {
+      clearVisionSample();
     }
     render();
     // Connection metadata changes the badge, never the authenticated identity.
@@ -90,9 +95,11 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
         refreshDispatchControl(),
         refreshDiscovery(),
         formation.refreshFormation(),
+        refreshVision(),
       ]);
       life.check();
       render();
+      inbox?.openPendingDeepLink?.();
     } catch (_err) {
       if (_err.name === "AbortError") return;
       if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
@@ -121,10 +128,10 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
       sessionStorage.removeItem("rosy-console-token");
     }
     visionView.reset();
+    clearVisionSample();
     trackingView.reset();
     trackingView.refresh();
     refreshAuthorization(credentialChange);
-    visionView.refreshSources();
   }
   pageScope.listen(el("token-save"), "click", saveToken);
   // D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.

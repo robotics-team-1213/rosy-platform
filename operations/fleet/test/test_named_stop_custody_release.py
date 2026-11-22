@@ -7,9 +7,9 @@ import httpx
 import pytest
 
 from fleet.server.console import FleetConsole
-from fleet.server.ledger.named_stop_store import NamedStopStore
+from fleet.server.named_stop_store import NamedStopStore
 from fleet.server.named_stop_motion import NamedStopMotion
-from fleet.server.recognition.roster import RosterConflict, SiteRoster
+from fleet.server.roster import RosterConflict, SiteRoster
 from fleet.swarm.api.ports import RobotApiError
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.transport import HttpRobotClient

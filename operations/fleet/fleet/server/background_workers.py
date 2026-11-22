@@ -8,6 +8,8 @@ import sqlite3
 import time
 from typing import TYPE_CHECKING
 
+from fleet.server.trip_guard import GOAL_FRESH_S
+
 if TYPE_CHECKING:
     from fleet.server.cancel_all import DriveCancelFence
     from fleet.server.console import FleetConsole
@@ -123,6 +125,23 @@ async def event_loop_lag_loop(logger, *, period_s: float = 0.25, warn_s: float =
             logger.warning("fleet event loop lag %.3f s", lag)
 
 
+def _goal_in_flight(console, row: dict, now: float) -> bool:
+    """Console keeps ``_goals`` after arrival; only an active or just-sent goal blocks dispatch."""
+    robot_id = row["robot_id"]
+    if row.get("yielding") is not None:
+        return True
+    if robot_id in getattr(console, "_goal_busy", ()):
+        return True
+    leases = getattr(console, "goal_leases", None)
+    if leases is not None and robot_id in getattr(leases, "pending", ()):
+        return True
+    if row.get("goal") is not None:
+        sent_at = getattr(console, "trip_goal_sent_at", {}).get(robot_id)
+        if sent_at is not None and now - sent_at < GOAL_FRESH_S:
+            return True
+    return False
+
+
 async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskService,
                               drive_cancel: DriveCancelFence, supervisor=None,
                               clock=time.monotonic) -> None:
@@ -144,9 +163,10 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
             console.prune_task_queue_entries(queued_ids)
             # An empty queue skips the per-robot state read; dispatch_next still runs (drain gate).
             snapshot = await console.snapshot() if queued_ids else {"robots": []}
+            now = clock()
             available = {
                 row["robot_id"] for row in snapshot["robots"]
-                if row["online"] and row["queued"] is None and row["goal"] is None
+                if row["online"] and row["queued"] is None and not _goal_in_flight(console, row, now)
                 and row["state"] is not None
                 and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
                 and row["state"].get("mode") in {"IDLE", "NAVIGATION"}

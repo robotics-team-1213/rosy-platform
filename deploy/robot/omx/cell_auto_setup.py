@@ -48,8 +48,12 @@ def open_cell(args, commissioning=False):
                           **({"object": args.want_object} if getattr(args, "want_object", None) else {}),
                           **({"colour": args.want_colour} if getattr(args, "want_colour", None) else {})}
     if getattr(args, "layers_below", None) is not None:
-        site = config["sites"][args.source]  # the planner reads sites[src].layers_below
+        base_src = args.source if args.source in config["sites"] else args.source.rsplit("-l", 1)[0]
+        site = config["sites"][base_src]  # the planner reads sites[src].layers_below
         site["layers_below"] = max(int(site.get("layers_below", 0)), args.layers_below)
+    config["_fleet_task"] = getattr(args, "task_id", None) or False  # D-1057: the placement zone check runs only for a Fleet task
+    if config.pop("_commissioning", None) is not None:  # a stored file cannot attest that a person is at the switch (D-911)
+        print("warning: _commissioning in the config file is ignored; only --commissioning --person-at-switch sets it", file=sys.stderr)
     if commissioning:
         config["_commissioning"] = {"person_at_switch": True}
     work = Path(config["work_dir"]).expanduser()

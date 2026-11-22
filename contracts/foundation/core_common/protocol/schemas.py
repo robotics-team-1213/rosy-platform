@@ -498,6 +498,8 @@ class StateSnapshot(TripLeaseFields):
     #: Content id (`occupancy:<sha12>`) of the occupancy grid this robot actually loaded, even when
     #: `map_id` is a configured name; Fleet binds a robot map to the site frame by it (map binding).
     map_grid_id: Optional[str] = None
+    #: Changes whenever the SLAM map origin MAY have changed (every start of the navigation stack and of CORE); persisted, independent of boot_id (additive).
+    map_generation: Optional[int] = None
     pose: Pose = Field(default_factory=Pose)
     #: Coordinate frame of the pose in this snapshot.
     pose_frame: Optional[str] = None

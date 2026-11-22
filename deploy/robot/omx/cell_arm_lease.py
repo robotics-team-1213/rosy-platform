@@ -146,6 +146,17 @@ def release_hold(arm, owner=None, root=None) -> bool:
     return release(arm, owner, root, hold=True)
 
 
+def release_exact(arm, expected: dict, root=None) -> bool:
+    """Remove a held lease only if it is still exactly the one a caller validated (owner, pid, acquired, held_at), under the lease lock."""
+    root = lease_root(root)
+    with _locked(arm, root):
+        old = _read(arm, root)
+        if not old or not old.get("hold") or any(old.get(k) != expected.get(k) for k in ("owner", "pid", "acquired", "held_at")):
+            return False
+        (root / f"{arm}.json").unlink(missing_ok=True)
+        return True
+
+
 def status(arm=None, root=None) -> dict:
     root = lease_root(root)
     arms = [arm] if arm else sorted(p.stem for p in root.glob("*.json")) if root.is_dir() else []

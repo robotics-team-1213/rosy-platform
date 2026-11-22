@@ -37,8 +37,18 @@ DEFAULT_REPO = "robotics-team-1213/rosy-platform"
 REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 RELEASE_ID = re.compile(r"^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$")
 TAG = re.compile(r"^payload-(?:v2-)?([0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3})$")
-PHASES = ("idle", "staged", "waiting", "held", "ineligible", "applying", "committed",
+PHASES = ("idle", "staging", "staged", "waiting", "held", "ineligible", "applying", "committed",
           "rolled_back", "failed", "disabled", "error", "stuck", "image_required")
+STEP_PROGRESS = {
+    "unpack": 50,
+    "verify": 58,
+    "activate": 62,
+    "core-release-check": 68,
+    "image-layer-sync": 74,
+    "restart": 80,
+    "health": 82,
+    "rollback": None,
+}
 # Re-review N3: the only native_release errors that say "this release can never work here".
 DEFINITIVE = re.compile(
     r"^(NATIVE_MANIFEST_[A-Z_]+|NATIVE_TARGET_MISMATCH|NATIVE_RUNTIME_MISMATCH|NATIVE_PYTHON_RUNTIME"
@@ -322,7 +332,7 @@ class Http:
         return status, found, body
 
     def download(self, url: str, destination: Path, limit: int,
-                 timeout: float = DOWNLOAD_TIMEOUT_S) -> str:
+                 timeout: float = DOWNLOAD_TIMEOUT_S, on_progress=None) -> str:
         """Stream to ``destination``; return the sha256 of what was written."""
         response = self._open(url, {"Accept": "application/octet-stream"}, timeout)
         digest = hashlib.sha256()
@@ -336,6 +346,8 @@ class Http:
                         raise UpdateError(f"DOWNLOAD_TOO_LARGE: {url}")
                     digest.update(chunk)
                     handle.write(chunk)
+                    if on_progress is not None:
+                        on_progress(size)
                 handle.flush()
                 os.fsync(handle.fileno())
         except (OSError, http.client.HTTPException) as exc:

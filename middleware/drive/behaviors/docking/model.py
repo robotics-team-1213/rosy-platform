@@ -283,6 +283,15 @@ class DockingConfig:
     bay_reseat_over_edge_m: float = 0.0          # OFF until 3 bench runs (reviewer B, 2026-11-21): 0.04 lets a pit-in reseat that REDUCES the footprint start that far over the lane edge (the tray corner is still 3.9 cm from a parked neighbour)
     bay_reseat_min_arc_m: float = 0.08           # a reseat from past the out-target still pulls forward this far (a 12 deg heading needs ~6 cm of arc)
     # CORE judges the dock command's site_pose_evidence (POSITION only; the LiDAR reference scan keeps heading and bay entry). Provisional values.
+    # Seat anchor (dock_anchor.py): provisional values; the measured seat error today is within 2 mm / 1 deg (15 runs).
+    anchor_odom_max_age_s: float = 1.0           # the odom sample paired with the seat must be this fresh
+    anchor_probe_window_s: float = 120.0         # after a CORE (re)start: look for "seated in a reference-scan bay" this long
+    anchor_probe_still_s: float = 2.0            # the robot must stand still (odom) this long before a probe scan counts
+    anchor_probe_interval_s: float = 3.0
+    anchor_probe_tries: int = 2                  # probe scans per bay
+    anchor_seat_along_m: float = 0.015           # a probe fit is a seat only within these of the seated reference pose (row gates 0.70 / 0.40 apply too)
+    anchor_seat_lateral_m: float = 0.015
+    anchor_seat_heading_rad: float = 0.05
     site_pose_anchor_sources: tuple = ("sighting", "track")   # auto_locate, peer, operator_pin are rejected for now
     site_pose_max_anchor_age_s: float = 15.0
     site_pose_max_camera_residual_m: float = 0.08

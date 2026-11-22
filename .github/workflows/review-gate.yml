@@ -13,8 +13,13 @@ permissions:
   contents: read
   pull-requests: write   # request review from the people whose files overlap
 
+concurrency:
+  group: review-gate-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   review-gate:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -22,6 +27,8 @@ jobs:
         if: github.event_name != 'merge_group'
         with:
           fetch-depth: 0
+          fetch-tags: false
+          filter: blob:none
       # Run the base branch's gate so a PR cannot loosen its own check; gate edits take effect once merged.
       - if: github.event_name != 'merge_group'
         run: |
@@ -37,3 +44,23 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
           IGNORE: codex
+      # Step-back check (REPORT ONLY, later decision): lines another PR merged within 7 days that this PR drops.
+      # Same base-branch-script rule as the gate; the body reaches the script through a file, never through the shell text.
+      - if: github.event_name == 'pull_request'
+        continue-on-error: true
+        timeout-minutes: 5   # the required job allows 15; a report must never hold it
+        run: |
+          script="tools/harness/step_back.py"
+          if git cat-file -e "origin/$BASE:$script" 2> /dev/null; then git show "origin/$BASE:$script" > "$RUNNER_TEMP/step_back.py"
+          else echo "step-back check: origin/$BASE has no $script yet" >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.txt"
+          {
+            echo '### step-back check (report only)'
+            echo '~~~'
+            python3 "$RUNNER_TEMP/step_back.py" --repo "$GITHUB_WORKSPACE" --base "origin/$BASE" --head "$HEAD_SHA" --body-file "$RUNNER_TEMP/pr-body.txt" 2>&1 || true
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}

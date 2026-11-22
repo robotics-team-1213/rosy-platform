@@ -13,16 +13,25 @@ Either source alone fails one way: the camera alone leaves with a box it missed,
 fell back on the bed. The departure is automatic (user 2026-11-19, replacing 11-14's operator approval for this path):
 depart_tick sends the vehicle to the site rules' return.exit_place once the check holds on two ticks, re-checks with a
 tight fold age, records the release before it sends (persisted with the ledger), and holds after three failed sends.
+Only a goal the robot accepted is SENT. A goal Fleet merely queued (robot not LOCALIZED, traffic) is withdrawn in the
+same tick: the traffic loop would release it later without these checks. The record stays SENDING and the next tick
+checks everything again, for at most DEPART_QUEUE_WAIT_S from the first queue (queued_since); then HELD
+(DEPART_WAIT_EXPIRED) until an operator re-arms.
 A named operator may still send it early with depart_s3; a release is used once per batch."""
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException
+
+_LOG = logging.getLogger(__name__)
 
 FOLD_MAX_AGE_S = 120.0  # an operator's depart may come a minute after the last park; older fold readings are not trusted
 DEPART_FOLD_AGE_S = 15.0  # the automatic send trusts only a fold reading this fresh (cell-quality posts every few s)
 BED_MAX_AGE_S = 300.0  # the bed look belongs to this stop, not to an earlier one
 MAX_CONTAINERS = 6
 MAX_SEND_ATTEMPTS = 3
+DEPART_QUEUE_WAIT_S = 120.0  # D-1060 MAX_QUEUE_AGE_S: a later move is not this moment's intent
 OPEN_STATUSES = ("QUEUED", "RUNNING", "PAUSED_HUMAN")
 
 
@@ -106,9 +115,14 @@ def continue_unload(state, enqueue) -> list[str]:
             continue
         _clearance, objects = _objects(last)
         if type(objects) is int and objects > 0:
-            made.append(enqueue({"robot_id": last["robot_id"], "task_id": f"{batch_id}-{len(rows) + 1}",
-                                 "depends_on": last["task_id"], "unload_batch_id": batch_id,
-                                 "unload_expected": last.get("unload_expected"), "unload_index": len(rows)})["task_id"])
+            spec = {
+                "robot_id": last["robot_id"], "task_id": f"{batch_id}-{len(rows) + 1}",
+                "depends_on": last["task_id"], "unload_batch_id": batch_id,
+                "unload_expected": last.get("unload_expected"), "unload_index": len(rows),
+            }
+            if last.get("emit_release_permit") is True:
+                spec["emit_release_permit"] = True
+            made.append(enqueue(spec)["task_id"])
     return made
 
 
@@ -128,8 +142,15 @@ def exit_target(rules, site) -> tuple[str, float, float, float] | None:
     return place_id, float(place.x), float(place.y), float(getattr(place, "yaw", 0.0) or 0.0)
 
 
-async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None) -> list[dict]:
+async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None,
+                      flush_port_events=None) -> list[dict]:
     """One pass: continue camera-driven unloads, then send each vehicle whose check held on two ticks to the exit."""
+    if flush_port_events is not None and any(t.get("pending_port_events") for t in state.omx_cell_tasks.values()):
+        try:
+            if await flush_port_events():
+                save()
+        except Exception:
+            _LOG.exception("pending port-event flush failed in depart_tick")
     continue_unload(state, enqueue)
     sent = []
     if getattr(state, "depart_ready", None) is None:
@@ -143,6 +164,11 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
         record = state.unload_releases.get(batch) if batch else None
         if record is not None and record.get("state") != "SENDING":
             continue  # sent, held or taken by an operator's depart_s3
+        if record is not None and record.get("queued_since") is not None and now - record["queued_since"] > DEPART_QUEUE_WAIT_S:
+            record.update(state="HELD", reason="DEPART_WAIT_EXPIRED")
+            _event(state, robot_id, batch, "HELD", "DEPART_WAIT_EXPIRED", now)
+            save()
+            continue
         if not release["ready"]:
             seen.pop(batch, None)
             continue
@@ -159,14 +185,30 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
             save()  # the claim is on disk before anything moves
         if target is None:
             continue
-        record["attempts"] += 1
         record["target"] = target[0]
         try:
             result = await console.goal(robot_id, target[1], target[2], target[3])
-            accepted = bool(result.get("accepted")) or bool(result.get("queued"))
         except Exception as exc:  # one failed send is data; the next tick retries up to MAX_SEND_ATTEMPTS
-            accepted, result = False, {"error": f"{type(exc).__name__}: {exc}"[:200]}
+            result = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+        if result.get("queued") is True and not result.get("accepted"):
+            # Queued is not sent: the traffic loop would release it later without the fold, person, hold and bed checks.
+            console.discard_queued_goal(robot_id)
+            if result.get("dispatch_attempted") is True and result.get("cancel_confirmed") is not True:
+                try:  # a CORE goal may be live (cancel_all.py rule): cancel it too
+                    await console.cancel(robot_id)
+                except Exception:
+                    pass  # the Fleet queue entry is already gone; CORE's goal lease expires unrenewed
+            if record.get("reason") != "GOAL_QUEUED_NOT_ACCEPTED":
+                _event(state, robot_id, batch, "WAITING", result.get("reason") or "GOAL_QUEUED", now)
+            record.update(reason="GOAL_QUEUED_NOT_ACCEPTED", queue_reason=result.get("reason"))
+            record.setdefault("queued_since", round(now, 3))
+            save()
+            continue  # still SENDING: the next tick checks every release condition again
+        record["attempts"] += 1
+        accepted = bool(result.get("accepted"))
         if accepted:
+            for key in ("reason", "queue_reason", "queued_since"):  # an earlier tick's queue wait is over
+                record.pop(key, None)
             record.update(state="SENT", sent_at=round(now, 3), receipt={k: result.get(k) for k in ("accepted", "queued")})
             _event(state, robot_id, batch, "SENT", target[0], now)
             if task_log is not None:  # the robot task ledger is the caller's (pipeline_cell_task_routes)
@@ -192,14 +234,31 @@ def install_unload_release_routes(app, ctx) -> None:
         out = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(ctx._is_human_detected()))
         return {**out, "departure": app.state.unload_releases.get(out.get("batch_id"))}
 
-    def tick_args():
-        active = ctx.active_map()
-        return dict(console=ctx.console, rules=ctx.rules(), site=active[1],
-                    enqueue=lambda spec: ctx._enqueue_one_task(active, {**ctx.CELL_TASK_PRESETS["s3_shuttle"], **spec}),
-                    human_detected=bool(ctx._is_human_detected()), save=ctx._save_ledger, now=time.time(),
-                    task_log=getattr(ctx, "record_depart_task", None))
+    async def _depart_tick():
+        if not any(t.get("unload_batch_id") for t in app.state.omx_cell_tasks.values()):
+            return []
+        try:
+            active = ctx.active_map()
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return []
+            raise
+        from fleet.server.pipeline_port_events import flush_pending_port_events_async
 
-    app.state.depart_tick = lambda: depart_tick(app.state, **tick_args())
+        return await depart_tick(
+            app.state,
+            console=ctx.console,
+            rules=ctx.rules(),
+            site=active[1],
+            enqueue=lambda spec: ctx._enqueue_one_task(active, {**ctx.CELL_TASK_PRESETS["s3_shuttle"], **spec}),
+            human_detected=bool(ctx._is_human_detected()),
+            save=ctx._save_ledger,
+            now=time.time(),
+            task_log=getattr(ctx, "record_depart_task", None),
+            flush_port_events=lambda: flush_pending_port_events_async(app),
+        )
+
+    app.state.depart_tick = _depart_tick
     from fleet.server.sitemap.pipeline_repark import install_repark_routes
 
     install_repark_routes(app, ctx)  # a vehicle re-park closes here; DONE re-queues the cell task

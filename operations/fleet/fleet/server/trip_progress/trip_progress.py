@@ -10,7 +10,7 @@ from typing import Optional
 
 from rosy.world.state.projections.map_pose import MapPose
 from fleet.routing.execute import arc_id
-from fleet.server.trips.named_stop_map_pose import precision_map_pose
+from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.routing.cost import STOP
 from fleet.server.trip_laps import hold_back_m
 from fleet.server.trip_live import LiveTrip
@@ -55,14 +55,14 @@ class TripProgress:
             nxt_dist, nxt_s, _t = nxt.project(pose.x, pose.y)
             onto_next = nxt_s > nxt_segment["s_from"] + self.config.advance_eps_m and nxt_dist < dist
             remaining = live.segments[index]["s_to"] - s
-            if arc.drive_mode == "lane":
+            if live.segment_is_lane(index):
                 # lap SIM 2 lap_12: CORE closed a straight while D-407 backed the robot 0.26 m short
                 # of SE; advancing there judged the pose against ring_e (0.276 m) and stopped a robot
                 # 0.07 m off ring_s. A carried-out place moves on only once the robot is on the next lane.
                 done = (self._completed(live, index) and remaining <= self.config.pass_window_m
                         and nxt_dist <= nxt.width_m / 2)
             else:
-                done = remaining <= self.config.advance_free_m
+                done = remaining <= self.config.advance_free_m and (not live.nav2 or nxt_dist <= nxt.width_m / 2)
             if not (done or onto_next):
                 break
             index += 1
@@ -78,7 +78,7 @@ class TripProgress:
         place = live.graph.places.get(target)
         if (place is not None and place.kind == "stop"
                 and (place.precision_stop is not None
-                     or self.config.map_binding_required)):  # the last segment of a trip to this stop
+                     or (not live.nav2 and self.config.map_binding_required))):  # the last segment of a trip to this stop
             return place
         return None
 
@@ -109,10 +109,10 @@ class TripProgress:
         terminal = len(live.segments) - 1
         stop = self._strict_named_stop(live, terminal)
         return (stop is not None and stop.precision_stop is not None
-                and (live.arc(terminal).drive_mode != "free" or live.place(terminal) != stop.id))
+                and (live.nav2 or live.arc(terminal).drive_mode != "free" or live.place(terminal) != stop.id))
 
     def _named_stop_handoff(self, live: LiveTrip, index: int) -> bool:
-        return (index > 0 and live.arc(index - 1).drive_mode == "lane"
+        return (index > 0 and live.segment_is_lane(index - 1)
                 and live.arc(index).drive_mode == "free"
                 and self._strict_named_stop(live, index) is not None)
 

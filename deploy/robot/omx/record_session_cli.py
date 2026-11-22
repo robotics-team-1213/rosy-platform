@@ -29,6 +29,7 @@ from record_session_helpers import (  # noqa: E402
     RunnerUnresponsive, compose, interrupt_on_parent_death,
     load_task_card, static_episodes, wait_for_runner)
 from session_caps import load_caps, model_tuning, robot_tuning  # noqa: E402
+from teleop_speed import ENV as STAGE_ENV, STAGES, apply_to_caps  # noqa: E402
 
 
 _PARENT_GLOBALS_LIST: list[dict] = []
@@ -71,6 +72,28 @@ def _parent_attr(name: str, default=None, _globals: dict | None = None):
     return default
 
 
+def _resolve_session_rim_z(args, startup_lib: dict) -> float | None:
+    import cell_params as prm
+    from cell_policy_shape import source_rim_z
+    from chunk_runner import resolve_runner_rim_z
+
+    params = prm.load(args.params)["values"] if args.params else None
+    rim = resolve_runner_rim_z(startup_lib, params=params, rim_z_m=args.rim_z_m)
+    if args.cell_config is None:
+        return rim
+    cell_cfg = json.loads(args.cell_config.read_text(encoding="utf-8-sig"))
+    sites = cell_cfg.get("sites") if isinstance(cell_cfg, dict) else None
+    if not isinstance(sites, dict) or not sites:
+        raise ValueError("--cell-config must define a non-empty sites mapping")
+    site_name = args.site or (next(iter(sites)) if len(sites) == 1 else None)
+    if site_name is None or site_name not in sites:
+        raise ValueError("--cell-config requires --site naming a configured site")
+    site_rim = source_rim_z(cell_cfg, site_name, startup_lib)
+    if site_rim is None:
+        raise ValueError(f"site {site_name!r} in --cell-config has no surface_z or rim_z")
+    return resolve_runner_rim_z(None, rim_z_m=site_rim if rim is None else max(rim, site_rim))
+
+
 def main(argv=None, *, _globals: dict | None = None):
     attr = lambda name, default=None: _parent_attr(name, default, _globals)
     parser = argparse.ArgumentParser(
@@ -91,22 +114,39 @@ def main(argv=None, *, _globals: dict | None = None):
     parser.add_argument(
         "--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory"
     )
+    parser.add_argument("--teleop-stage", type=int, choices=sorted(STAGES), help="full-arm Leader session only: teleop_speed stage (tracking limit, servo profile)")
     parser.add_argument("--operating-profile", type=Path, help="--chunks/--replay: per-device operating profile")
+    parser.add_argument("--rim-z-m", type=float, help="--chunks: configured source rim height (m) enforced on policy jaw_gate and handoff")
+    parser.add_argument("--cell-config", type=Path, help="--chunks: cell config JSON whose sites.<site> supplies the source rim height")
+    parser.add_argument("--site", help="--chunks --cell-config: source site name whose rim height is bound at startup")
     parser.add_argument(
         "--arm", help="lock only this arm (its observer's instance name), so the other arm can work too"
     )
     args = parser.parse_args(argv)
+    if (args.rim_z_m is not None or args.cell_config is not None or args.site is not None) and not args.chunks:
+        parser.error("--rim-z-m, --cell-config and --site require --chunks")
+    if args.site is not None and args.cell_config is None:
+        parser.error("--site requires --cell-config")
     if args.operating_profile:
         if not (args.chunks or args.replay):
             parser.error("--operating-profile requires --chunks or --replay")
         args.operating_profile = args.operating_profile.expanduser().resolve()
     if args.body_only and not args.teleop_only:
         parser.error("--body-only requires --teleop-only")
+    if args.teleop_stage and (args.chunks or args.replay or args.body_only):
+        parser.error("--teleop-stage is for the one-arm full-arm Leader teleop and recording only")
     lc_fn = attr("load_caps", load_caps)
     mt_fn = attr("model_tuning", model_tuning)
     rt_fn = attr("robot_tuning", robot_tuning)
     caps = lc_fn(args.caps, model=mt_fn(), robot=rt_fn(args.operating_profile))
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
+    if args.teleop_stage:  # only a one-arm session that follows a Leader with the whole arm; every other kind keeps its caps untouched
+        if config["robot"]["type"] == "bi_omx_follower":
+            parser.error("--teleop-stage is for the one-arm full-arm Leader teleop and recording only")
+        caps = apply_to_caps(caps, args.teleop_stage)
+        os.environ[STAGE_ENV] = str(args.teleop_stage)  # the guard process (the session's child) reads it
+    else:
+        os.environ.pop(STAGE_ENV, None)
     if args.task_card is not None:
         card = attr("load_task_card", load_task_card)(args.task_card)
         config = attr("compose", compose)(config, card, stamp=time.strftime("%Y%m%d-%H%M%S"))
@@ -205,13 +245,18 @@ def main(argv=None, *, _globals: dict | None = None):
     if args.chunks is not None:
         from chunk_runner import load_library
 
-        load_library(args.chunks)
+        startup_lib = load_library(args.chunks)
+        try:
+            rim_z_m = _resolve_session_rim_z(args, startup_lib)
+        except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            parser.error(str(exc))
         chunks = {
             "library": str(args.chunks.resolve()),
             "io": str(args.io.resolve()),
             "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest(),
             **({"params": str(args.params.resolve())} if args.params else {}),
             **({"load_model": os.environ["ROSY_LOAD_MODEL"]} if os.environ.get("ROSY_LOAD_MODEL") else {}),
+            **({"rim_z_m": rim_z_m} if rim_z_m is not None else {}),
         }
     import omx_incident
 

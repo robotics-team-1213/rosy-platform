@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from fleet.localization.map_binding import bound_pose
-from fleet.server.trips.trip_geometry import robot_frame_goal
+from fleet.server.trip_geometry import robot_frame_goal
 
 
 def bind(site_maps, robot_id: str, state: dict, active, local_pose: tuple):

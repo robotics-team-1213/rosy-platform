@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from core_common.protocol.schemas import DockState
 from core_features.docking.bay_scan_pose import BayScanPose
 from core_features.docking.manager import DockPhase
 from test_docking_bay import DT, a_bay, done
+from test_docking_bay_pitin import _at_the_junction
 from test_docking_bay_scan_pose import true_bay_pose, with_reference
 
 
@@ -54,6 +57,37 @@ def _skewed(heading_deg, first_n=1):
                 return BayScanPose(x=0.01, y=0.0, heading=math.radians(heading_deg), inliers=0.95, margin=0.6, median_m=0.003)
         return pose
     return answer
+
+
+@pytest.mark.parametrize("answer_pose", [True, False])
+def test_pit_in_reseat_requests_new_lidar_poses_or_stops(answer_pose):
+    p, bay = _at_the_junction(0.562)
+    assert bay._pitin and not bay._in_row
+    # Start from the last good reverse pose. All later poses must come through the scan request.
+    p.world.pose = (-0.25, 0.0, math.pi)
+    p.manager._phase = DockPhase.ALIGNING
+    bay._row_pose = (0.20, 0.0, 0.0, p.clock.now, 0.0)
+    p.manager._retry("rail entrance lateral")
+    started = p.clock.now
+    requested = False
+    while p.manager.phase is DockPhase.BACKOFF and p.clock.now - started < 10.0:
+        rear_gap = true_bay_pose(p.world).x + 0.01
+        p.manager.note_body_scan(None, 0.9, rear_gap, p.clock.now)
+        p.manager.tick()
+        if not answer_pose and p.clock.now - started > p.manager._cfg.bay_row_pose_fresh_s:
+            assert p.world.command == (0.0, 0.0)
+        request = p.manager.bay_scan_request()
+        if request is not None and bay._req_kind == "rowpose":
+            requested = True
+            if answer_pose:
+                p.manager.note_bay_scan_match(true_bay_pose(p.world), at=p.clock.now, request_id=request[0])
+        p.world.step()
+        p.clock.now += DT
+    assert requested
+    if answer_pose:
+        assert p.manager.phase is DockPhase.ACQUIRING, p.manager._error
+    else:
+        assert p.manager.state is DockState.DOCK_FAILED and "no fresh LiDAR pose" in p.manager._error
 
 
 def test_a_skewed_seat_is_corrected_inside_the_lane_on_the_second_try():

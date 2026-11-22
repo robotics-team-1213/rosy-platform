@@ -8,6 +8,12 @@ export function node(tag, text = "", className = "") {
   return result;
 }
 
+export function setStatus(el, text, state) {
+  el.textContent = text;
+  el.hidden = !text;
+  if (state) el.setAttribute("state", state);
+}
+
 export function action(label, onClick, kind = "quiet") {
   const button = node("ui-button", label);
   button.setAttribute("kind", kind);

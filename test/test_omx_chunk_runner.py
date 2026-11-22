@@ -432,13 +432,16 @@ def test_a_measured_hold_current_must_agree_with_the_jaw_position(current, holdi
     assert done["holding"] is holding and done["gripper_current_ma"] == current
 
 
-def test_the_live_state_is_published_about_twice_a_second():
+def test_the_live_state_is_published_at_ten_hz_outside_policy_playback():
     rows, clock, queue = [], [0.0], ["run approach_pinky", "state", "stop"]
-    r = m.Runner(Robot(), library(), fps=10, status=lambda row: None, clock=lambda: clock[0],
-                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 10), live=rows.append)
-    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
-    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health", "lag",
-                                     "human_hold_latched", "torque_hold_commanded"}
+    published = []
+    r = m.Runner(Robot(), library(), fps=30, status=lambda row: None, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + s),
+                 live=lambda row: (published.append(clock[0]), rows.append(row)))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk and (queue[0] != "stop" or clock[0] >= 0.5) else [])
+    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health", "lag", "human_hold_latched", "torque_hold_commanded", "policy_start"}
+    assert len(published) > 1 and [b - a for a, b in zip(published, published[1:])] == pytest.approx([0.1] * (len(published) - 1))
+    assert all(row["policy_start"] is None for row in rows)
     assert rows[-1]["state"][0] == 18.0  # held at the end of the approach chunk
 
 

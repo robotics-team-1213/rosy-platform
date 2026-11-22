@@ -1,9 +1,11 @@
 """Keep a named-stop claim until CORE proves the exact Nav2 run has stopped."""
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from uuid import uuid4
-from datetime import datetime, timedelta, timezone
+
+import httpx
 
 from core_common.protocol.evidence import STALE_POSE_S
 from core_common.protocol.native.operation import NativeOperation
@@ -223,3 +225,78 @@ def _timestamp(value):
     except (TypeError, ValueError, AttributeError):
         return None
     return parsed if parsed.utcoffset() is not None else None
+
+
+def _is_unreachable(exc: Exception) -> bool:
+    return isinstance(exc, (OSError, TimeoutError, httpx.TransportError)) or type(exc).__name__ == "HubError"
+
+
+async def verify_release_proof(claim: NamedStopMotion, client, physical_isolation=None, *,
+                               cancel_error: Exception | None = None, stop_responded: bool = False,
+                               refuse=RuntimeError) -> str:
+    """Fail-closed gate for operator named-stop custody release."""
+    if physical_isolation is None:
+        if cancel_error is not None:
+            raise refuse("NAMED_STOP_CANCEL_FAILED",
+                         f"could not confirm stop cancel before custody release: {cancel_error}")
+        if client is None:
+            raise refuse("NAMED_STOP_PROOF_REQUIRED",
+                         "no live CORE client to prove standstill; provide physical_isolation if isolated")
+        for _ in range(2):
+            try:
+                if await claim.stopped(client):
+                    return "core_stop_proof"
+            except Exception:
+                break
+            if claim.zero_at is None:
+                break
+        for _ in range(2):
+            try:
+                if await claim.new_boot_stopped(client):
+                    return "core_new_boot_stop_proof"
+            except Exception:
+                break
+            if claim.new_boot_sample is None:
+                break
+        raise refuse("NAMED_STOP_PROOF_REQUIRED",
+                     claim.missing or "CORE has not proved the robot stopped; provide physical_isolation if isolated")
+
+    method = physical_isolation.method
+    if method in ("power_off", "removed_from_site"):
+        if stop_responded:
+            raise refuse("PHYSICAL_ISOLATION_CONTRADICTED",
+                         f"{method} contradicted: CORE responded to stop cancel")
+        if client is not None:
+            for _ in range(2):
+                try:
+                    await client.state()
+                except Exception as exc:
+                    if not _is_unreachable(exc):
+                        raise refuse("PHYSICAL_ISOLATION_CONTRADICTED",
+                                     f"{method} contradicted: CORE responded ({exc!r})") from exc
+                else:
+                    raise refuse("PHYSICAL_ISOLATION_CONTRADICTED",
+                                 f"{method} contradicted: CORE answered live state")
+        return f"physical_isolation:{method}"
+
+    if method == "hardware_estop_latched":
+        if client is None:
+            raise refuse("PHYSICAL_ISOLATION_CONTRADICTED",
+                         "hardware_estop_latched requires live CORE client confirming estop")
+        try:
+            state = await client.state()
+        except Exception as exc:
+            raise refuse("PHYSICAL_ISOLATION_CONTRADICTED",
+                         f"hardware_estop_latched requires live CORE state confirming estop ({exc!r})") from exc
+        if not isinstance(state, dict):
+            raise refuse("PHYSICAL_ISOLATION_CONTRADICTED", "hardware_estop_latched contradicted by live CORE state")
+        safety = state.get("safety")
+        line = state.get("line_follow")
+        if (not isinstance(safety, dict) or not isinstance(line, dict)
+                or safety.get("estop") is not True or state.get("mode") != "EMERGENCY"
+                or line.get("mode") != "OFF" or claim._zero_sample(state, ("EMERGENCY",)) is None):
+            raise refuse("PHYSICAL_ISOLATION_CONTRADICTED",
+                         "hardware_estop_latched contradicted by live CORE state")
+        return "physical_isolation:hardware_estop_latched"
+
+    raise refuse("PHYSICAL_ISOLATION_CONTRADICTED", f"unsupported physical isolation method {method!r}")

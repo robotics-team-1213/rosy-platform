@@ -71,23 +71,34 @@ def candidates(state, plan):
         yield f"pan{d:+g}", [f"jog shoulder_pan.pos {d}"], [state, moved, *plan(moved)]
 
 
-def recover(cell, home, closed, *, plan, look, reserve, release, release_and_rise, low, log=lambda row: None, order=None) -> dict:
+def recover(cell, home, closed, *, plan, look, reserve, release, release_and_rise, low, log=lambda row: None, order=None,
+            release_unmoved: bool = False, moved_out: list | None = None) -> dict:
     """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
-    steps, known = [], {"state": None}  # known: the last state seen, None once the arm may have moved unseen
+    steps, known, moved = [], {"state": None}, {"yes": False}  # known: last state seen; moved: any release/jog/park sent
+
+    def mark_moved():
+        moved["yes"] = True
+        if moved_out is not None:
+            moved_out.append(True)
 
     def note(row):
         steps.append(row)
         log(row)
 
-    def hold(reason, **extra):
+    def hold(reason, is_holding: bool = False, **extra):
         # resting at home: end the session in place (torque OFF), nothing hangs out. The pose is read again right before
-        # the stop (review N1: seconds of corridor checks may pass after the last read)
-        if at_rest(known["state"], home) and at_rest(_ok_state(cell.act("state")), home):
+        # the stop (review N1: seconds of corridor checks may pass after the last read). Never drop a held load!
+        if not is_holding and at_rest(known["state"], home) and at_rest(_ok_state(cell.act("state")), home):
             stopped = cell.act("stop now")
             if stopped.get("ok") is True:
                 return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": None,
                         "ended": "stop_now", **extra}
+        if release_unmoved and not moved["yes"] and not is_holding:
+            stopped = cell.act("stop now")
+            if stopped.get("ok") is True:
+                return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": None,
+                        "ended": "stop_now", "unmoved": True, **extra}
         held = cell.act("human-hold")
         return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": held.get("ok"), **extra}
 
@@ -102,13 +113,14 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
                 "corridor": None}
     if holding(state, target, closed):
         if not low(state):
-            return hold("HOLDING_HIGH")
+            return hold("HOLDING_HIGH", is_holding=True)
         risen = [state[0], state[1] - RISE_UNITS, *state[2:]]
         rise_lane = [state, risen]
         if not look(rise_lane).get("clear") or not reserve(rise_lane).get("ok"):
             release()
-            return hold("RISE_BLOCKED")
+            return hold("RISE_BLOCKED", is_holding=True)
         known["state"] = None
+        mark_moved()
         try:
             freed = release_and_rise(cell)
         finally:
@@ -137,11 +149,12 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             note({"step": "reserve", "candidate": name, "refused": booked.get("reason")})
             continue
         known["state"] = None  # from the first command the arm is no longer where it was read
+        mark_moved()
         try:
             for command in before:
-                moved = cell.act(command)
-                if moved.get("ok") is not True:
-                    return hold("DETOUR_REFUSED", candidate=name, error=moved.get("error"))
+                step_ack = cell.act(command)
+                if step_ack.get("ok") is not True:
+                    return hold("DETOUR_REFUSED", candidate=name, error=step_ack.get("error"))
             parked = cell.act("park")
         finally:
             release()
@@ -225,7 +238,10 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
             break
         sleep(5)
     if not out.is_file():
-        return done({"result": "failed", "why": ((proc.stdout or "") + (proc.stderr or ""))[-300:]})
+        output = ((proc.stdout or "") + (proc.stderr or ""))
+        if "session lock is held" in output:
+            marker.unlink(missing_ok=True)
+        return done({"result": "failed", "why": output[-300:]})
     result = json.loads(out.read_text())
     cand = result.get("candidate")
     _learn(result, result.get("result") == "folded")
@@ -234,7 +250,23 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     session = cwd / "session.json"
     for _ in range(36):  # the stop ends the recovery session; record_session writes torque_after when it has
         if session.is_file() and session.stat().st_mtime >= started - 2.0:  # file-time granularity; old sessions are minutes old
-            break
+            try:
+                sess = json.loads(session.read_text())
+            except (OSError, ValueError):
+                sess = None
+            if isinstance(sess, dict):
+                prof = sess.get("operating_profile")
+                chunks_io = (sess.get("chunks") or {}).get("io") if isinstance(sess.get("chunks"), dict) else None
+                io_tag = chunks_io.rstrip("/").rsplit("-", 1)[-1] if isinstance(chunks_io, str) else ""
+                sess_arm = (
+                    (sess.get("arm") if isinstance(sess.get("arm"), str) and sess.get("arm") else None)
+                    or (prof.get("instance_id") if isinstance(prof, dict) and prof.get("instance_id") else None)
+                    or (sess.get("motor_health_owner") if isinstance(sess.get("motor_health_owner"), str) and sess.get("motor_health_owner") else None)
+                    or (f"arm_{io_tag}" if io_tag in ("a", "b", "s") else None)
+                )
+                real_record = any(k in sess for k in ("arm", "operating_profile", "motor_health_owner", "chunks", "config"))
+                if sess_arm == arm or (not real_record and sess_arm is None and "torque_after" in sess):
+                    break
         sleep(5)
     else:
         return done({"result": "not_cleared", "why": "the recovery session did not report its end (no fresh session.json)"}, cand)
@@ -273,6 +305,7 @@ def main(argv=None) -> int:
     import cell_params as prm
     import cell_pipeline as cp
     import cell_pivot
+    import cell_place_fit
     import cell_space
     import cell_unwedge
     from cell_observe import predicted_pixel
@@ -285,60 +318,69 @@ def main(argv=None) -> int:
     ap.add_argument("--site", required=True, help="the surface whose map the corridor is checked on")
     ap.add_argument("--roi", nargs=4, type=int, required=True)
     ap.add_argument("--out", type=Path, required=True, help="result JSON")
+    ap.add_argument("--supervised", action="store_true", help="bench operator recovery (no held incident id)")
     args = ap.parse_args(argv)
-    if not os.environ.get("ROSY_RECOVERY_INCIDENT"):
+    if not args.supervised and not os.environ.get("ROSY_RECOVERY_INCIDENT"):
         ap.error("ROSY_RECOVERY_INCIDENT is required: this tool only folds an arm a held incident names")
-    config = json.loads(args.config.read_text(encoding="utf-8"))
-    params = config["params"] = prm.load(config.get("params_path"))["values"]
-    calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text())
-    library = json.loads(args.library.read_text())
-    home = library["chunks"]["home"][-1]
-    closed = float(library["gripper_closed"])  # what the runner's park closes to (chunk_runner_commands park)
-    transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None  # as the runner keys it
-    site = config["sites"][args.site]
-    cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-    space = cell_space.Space(Path(config.get("space_dir", "~/rosy-omx/space")).expanduser())
-    arm = args.arm
-    to_px = lambda p: predicted_pixel(config, calibration, args.site, p)  # noqa: E731
-    booked = {}
-    choices_path = Path(config.get("work_dir") or ".") / f"auto-fold-choices-{arm}.json"
-    choices = cell_choices.Choices(choices_path)
-    for name in candidate_names():
-        choices.offer(CHOICE, name, "D-1048")
-    choices.save()  # launch records the outcome into this file
-
-    def plan(state):  # the runner's park: park_path(target, home[-1], gripper_closed, fps, transit, transit_speed)
-        return park_path(list(state), home, closed, library["fps"], transit, library.get("transit_speed", 0.85))
-
-    def low(state):
-        return cell_pivot.joints_tcp(state)[2] < prm.get(params, "corridor.clear_z_m", cell_corridor.CLEAR_Z_M)
-
-    def look(frames):
-        img = cell.frame("top")
-        mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"),
-                                       surface_lab=site.get("surface_lab"))
-        return cell_corridor.check([cell_pivot.joints_tcp(f)[:3] for f in frames], mask, args.roi, to_px,
-                                   params=params, surface_px=site.get("surface_px"))
-
-    def reserve(frames):
-        lane = cell_corridor.corridor(cell_corridor.runs([cell_pivot.joints_tcp(f)[:3] for f in frames])[0]
-                                      + cell_corridor.runs([cell_pivot.joints_tcp(f)[:3] for f in frames])[1],
-                                      to_px, (args.roi[3] - args.roi[1], args.roi[2] - args.roi[0]), args.roi,
-                                      prm.get(params, "corridor.half_width_mm", cell_corridor.HALF_WIDTH_MM))
-        booked["mask"] = lane
-        return space.reserve(arm, lane, ttl_s=300.0)  # a transit park with a detour fits well inside
-
+    arm, cell, space, home, choices_path, moved_out = args.arm, None, None, [], None, []
     try:
+        config = cell_place_fit.with_tiers(json.loads(args.config.read_text(encoding="utf-8")))[0]
+        params = config["params"] = prm.load(config.get("params_path"))["values"]
+        calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text())
+        library = json.loads(args.library.read_text())
+        home = library["chunks"]["home"][-1]
+        closed = float(library["gripper_closed"])  # what the runner's park closes to (chunk_runner_commands park)
+        transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None
+        site = config["sites"][args.site]
+        cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
+        space = cell_space.Space(Path(config.get("space_dir", "~/rosy-omx/space")).expanduser())
+        to_px = lambda p: predicted_pixel(config, calibration, args.site, p)  # noqa: E731
+        booked = {}
+        choices_path = Path(config.get("work_dir") or ".") / f"auto-fold-choices-{arm}.json"
+        choices = cell_choices.Choices(choices_path)
+        for name in candidate_names():
+            choices.offer(CHOICE, name, "D-1048")
+        choices.save()
+        plan = lambda s: park_path(list(s), home, closed, library["fps"], transit, library.get("transit_speed", 0.85))  # noqa: E731
+        low = lambda s: cell_pivot.joints_tcp(s)[2] < prm.get(params, "corridor.clear_z_m", cell_corridor.CLEAR_Z_M)  # noqa: E731
+
+        def look(frames):
+            img = cell.frame("top")
+            mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"),
+                                           surface_lab=site.get("surface_lab"))
+            return cell_corridor.check([cell_pivot.joints_tcp(f)[:3] for f in frames], mask, args.roi, to_px,
+                                       params=params, surface_px=site.get("surface_px"))
+
+        def reserve(frames):
+            r = cell_corridor.runs([cell_pivot.joints_tcp(f)[:3] for f in frames])
+            lane = cell_corridor.corridor(r[0] + r[1], to_px, (args.roi[3] - args.roi[1], args.roi[2] - args.roi[0]),
+                                          args.roi, prm.get(params, "corridor.half_width_mm", cell_corridor.HALF_WIDTH_MM))
+            booked["mask"] = lane
+            return space.reserve(arm, lane, ttl_s=300.0)
+
         result = recover(cell, home, closed, plan=plan, look=look, reserve=reserve, release=lambda: space.release(arm),
                          release_and_rise=cell_unwedge.release_and_rise, low=low,
-                         order=lambda names: choices.ranked(CHOICE, names))
-    except Exception as exc:  # whatever broke, the arm stays where it is with torque ON
-        held = cell.act("human-hold")
-        space.release(arm)
-        result = {"schema": SCHEMA, "result": "held", "reason": f"ERROR: {type(exc).__name__}: {str(exc)[:160]}",
-                  "hold_ok": held.get("ok"), "steps": []}
-    result["incident_id"], result["home"] = os.environ["ROSY_RECOVERY_INCIDENT"], list(home)
-    result["choices_path"] = str(choices_path)
+                         order=lambda names: choices.ranked(CHOICE, names),
+                         release_unmoved=args.supervised, moved_out=moved_out)
+    except Exception as exc:  # whatever broke, keep torque ON if moved; else stop now when supervised
+        err = f"ERROR: {type(exc).__name__}: {str(exc)[:160]}"
+        if space is not None:
+            space.release(arm)
+        if cell is None:
+            result = {"schema": SCHEMA, "result": "held", "reason": err, "hold_ok": None,
+                      **({"unmoved": True} if args.supervised else {}), "steps": []}
+        else:
+            stopped = cell.act("stop now") if args.supervised and not moved_out else {}
+            if stopped.get("ok") is True:
+                result = {"schema": SCHEMA, "result": "held", "reason": err, "hold_ok": None, "ended": "stop_now",
+                          "unmoved": True, "steps": []}
+            else:
+                held = cell.act("human-hold")
+                result = {"schema": SCHEMA, "result": "held", "reason": err, "hold_ok": held.get("ok"), "steps": []}
+    result["incident_id"] = None if args.supervised else os.environ["ROSY_RECOVERY_INCIDENT"]
+    result["home"], result["supervised"] = list(home), bool(args.supervised)
+    if choices_path is not None:
+        result["choices_path"] = str(choices_path)
     if result["result"] == "folded":
         result["stop"] = cell.act("stop")  # at home: the runner's stop folds nothing more and turns torque OFF
     args.out.write_text(json.dumps(result, default=str, indent=1))

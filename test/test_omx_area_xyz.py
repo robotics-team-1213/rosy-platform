@@ -188,7 +188,7 @@ def test_target_zone_deviation_triggers_failure_and_recovery_mode():
     assert v2["recovery_mode"] is None
     assert v2["place_slot"]["zone"]["within_zone"] is True
 
-    # Case 3: Top view shows container placed horizontally (ê°€ë¡œ, horizontal_ew) when vertical (ì„¸ë¡œ, yaw=-90) is required
+    # Case 3: Top view shows container placed horizontally (가로, horizontal_ew) when vertical (세로, yaw=-90) is required
     top_horiz = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
     top_horiz[205:227, 372:418] = (30, 120, 240)
     v3 = cell_area_xyz.verify_stack_outcome(

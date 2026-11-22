@@ -1,3 +1,5 @@
+import {node} from "/common/control-dom.js";
+import {setOffBy} from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // Read projections and explicit stop requests share the Work area's existing authentication and lifetime.
 import {fitView} from "/console/assets/site-map-model.js";
@@ -10,17 +12,12 @@ const stopStates = {PENDING: "전달 대기", SENDING: "전달 중", ACKNOWLEDGE
   NOT_REACHED: "미전달", SUPERSEDED_BY_OPERATOR_RECOMMISSIONING: "운영자 재시운전 확인 기록"};
 const omxStates = {NOT_CONFIGURED: "미설정", REQUESTED: "요청됨", LOCAL_LATCHED: "국소 래치 응답",
   UNKNOWN: "미확인", PARTIAL: "일부 응답"};
-const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
 const button = (text, readOnly = false) => {
   const result = node("ui-button", text);
   // The shared role lock treats unmarked dynamic buttons as operator actions.
   if (readOnly) result.dataset.workRead = "";
   result.setAttribute("kind", "quiet"); result.setAttribute("type", "button"); return result;
 };
-function guard(control, reason) {
-  control.disabled = Boolean(reason);
-  if (reason) control.setAttribute("reason", reason); else control.removeAttribute("reason");
-}
 const age = (row, elapsed) => Number.isFinite(row.age_s) && row.age_s >= 0 ? row.age_s + elapsed : null;
 const fresh = (row, elapsed) => row.availability === "AVAILABLE" && age(row, elapsed) !== null && age(row, elapsed) <= 5;
 
@@ -33,6 +30,17 @@ export function stopControls(overview, target, elapsed = 0) {
     && Number.isSafeInteger(row.dispatch?.authority_epoch) && row.dispatch.authority_epoch >= 0
     && Number.isSafeInteger(row.dispatch?.generation) && row.dispatch.generation >= 0)
     .map(row => [row.unit_id, {...row.dispatch}]));
+}
+
+// D-977: only verified https origins from the server summary become links — never a token.
+export function childLinks(summary, target) {
+  const origin = summary?.child_origins?.[target];
+  if (typeof origin !== "string" || !/^https:\/\/[\w.:\[\]-]+$/.test(origin)) return [];
+  const arms = Array.isArray(summary.child_arm_units) && summary.child_arm_units.includes(target);
+  return [
+    {href: `${origin}/console`, label: "관제 화면 열기"},
+    ...(arms ? [{href: `${origin}/console/cell`, label: "셀 화면 열기"}] : []),
+  ];
 }
 
 function drawMap(holder, snapshot) {
@@ -63,6 +71,7 @@ function drawMap(holder, snapshot) {
 export function createIntegratedControlView({scope, call, anchor, active, approveReason, principal, taskStatus}) {
   const panel = node("section"), heading = node("h2", "통합 관제"), status = node("p", "", "hint"),
     list = node("ul", "", "work-list"), selectedName = node("h3"), detail = node("div"),
+    unitLinks = node("p", "", "integrated-unit-links"),
     map = node("div", "", "integrated-map"), mapInfo = node("p", "", "hint"),
     mapRead = button("선택 관제 지도 보기", true), notice = node("p"), stop = button("선택한 하위 관제에 정지 요청"),
     newStop = button("새 정지 요청 준비"), readStop = button("같은 정지 기록 확인", true),
@@ -94,13 +103,18 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   evidence.id = "integrated-reconcile-evidence";
   evidence.required = true; evidence.minLength = 16; evidence.maxLength = 2048; evidenceLabel.htmlFor = evidence.id;
   form.append(evidenceLabel, evidence, reconcile); reconcileFold.append(form);
-  panel.append(heading, node("p", "상단 비상 정지는 이 관제의 직접 장치에 적용됩니다. 아래 하위 관제 정지 요청은 관제별 전달 결과를 확인해야 합니다.", "hint"),
-    status, list, selectedName, detail, mapRead, mapInfo, map,
-    node("h3", "선택한 하위 관제의 정지 요청"), node("p", "최신 정지 세대가 있는 관제만 요청에 포함합니다. 정보 없는 관제는 미전달일 수 있습니다. 물리 정지는 미확인입니다.", "hint"),
-    actions, notice, stopIdentity, results, historyFold, reconcileFold);
+  const intro = node("p", "상단 비상 정지는 이 관제의 직접 장치에 적용됩니다. 아래 하위 관제 정지 요청은 관제별 전달 결과를 확인해야 합니다.", "hint"),
+    stopHeading = node("h3", "선택한 하위 관제의 정지 요청"),
+    stopNote = node("p", "최신 정지 세대가 있는 관제만 요청에 포함합니다. 정보 없는 관제는 미전달일 수 있습니다. 물리 정지는 미확인입니다.", "hint");
+  panel.append(heading, intro, status, list, selectedName, detail, unitLinks, mapRead, mapInfo, map,
+    stopHeading, stopNote, actions, notice, stopIdentity, results, historyFold, reconcileFold);
+  // D-960 §4: a cell keeps only its stop history and the local reconcile (D-862); R reads the tree.
+  for (const part of [intro, list, selectedName, detail, unitLinks, mapRead, mapInfo, map, stopHeading, stopNote, actions, notice,
+    stopIdentity, results]) part.dataset.unitScope = "root";
   anchor.before(panel);
   let epoch = 0, overview = null, sampled = 0, target = null, inFlight = false, busy = false,
-    selection = 0, detailRevision = 0, mapRef = null, pending = null, snapshot = null, reference = null, owner = null;
+    selection = 0, detailRevision = 0, mapRef = null, pending = null, snapshot = null, reference = null, owner = null,
+    unitSummary = null;
   const elapsed = () => Math.max(0, (performance.now() - sampled) / 1000);
   const valid = (life, version) => life.current() && version === epoch;
   const localFence = () => {
@@ -118,24 +132,49 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
     const fences = overview && target ? stopControls(overview, target, elapsed()) : {};
     const targetRow = overview?.units.find(row => row.unit_id === target);
     stop.textContent = target ? target + " 하위 관제에 정지 요청" : "선택한 하위 관제에 정지 요청";
-    guard(stop, reason || (pending ? "같은 정지 기록을 먼저 확인하세요" :
+    setOffBy(stop, reason || (pending ? "같은 정지 기록을 먼저 확인하세요" :
       !targetRow || !fresh(targetRow, elapsed()) || !Object.hasOwn(fences, target) ? "선택 관제의 최신 정지 세대를 확인하세요" : ""));
-    guard(newStop, reason || (pending && !snapshot ? "미확인 요청의 원장을 먼저 확인하세요" : ""));
-    guard(readStop, busy ? "요청 결과를 확인하고 있습니다" : !pending ? "정지 요청 기록을 선택하세요" : "");
-    guard(mapRead, !mapRef ? "선택 관제의 활성 지도 정보를 확인하세요" : "");
+    setOffBy(newStop, reason || (pending && !snapshot ? "미확인 요청의 원장을 먼저 확인하세요" : ""));
+    setOffBy(readStop, busy ? "요청 결과를 확인하고 있습니다" : !pending ? "정지 요청 기록을 선택하세요" : "");
+    setOffBy(mapRead, !mapRef ? "선택 관제의 활성 지도 정보를 확인하세요" : "");
     const localResult = snapshot?.results.find(row => row.unit_id === overview?.unit_id);
     reconcileFold.hidden = !(reference?.local_reconciliation_required
       && ["UNKNOWN", "PARTIAL"].includes(localResult?.state));
-    guard(reconcile, reason || (!localFence() ? "이 관제의 최신 정지 세대를 확인하세요" : ""));
+    setOffBy(reconcile, reason || (!localFence() ? "이 관제의 최신 정지 세대를 확인하세요" : ""));
   }
   function reset() {
     epoch++; selection++; overview = null; target = null; mapRef = null; pending = null; snapshot = null; reference = null;
+    unitSummary = null; unitLinks.replaceChildren(); unitLinks.hidden = true;
     list.replaceChildren(); detail.replaceChildren(); map.replaceChildren(); results.replaceChildren(); history.replaceChildren();
     notice.textContent = ""; stopIdentity.textContent = ""; mapInfo.textContent = ""; panel.hidden = true;
     status.textContent = ""; selectedName.textContent = ""; historyState.textContent = "";
     form.reset(); reconcileFold.open = false; historyFold.open = false; controls();
   }
   scope.onDispose(reset);
+  function paintUnitLinks() {
+    const links = unitSummary ? childLinks(unitSummary, target) : [];
+    unitLinks.replaceChildren(...links.map(link => {
+      const anchor = node("a", link.label, "ui-action-link");
+      anchor.dataset.kind = "quiet";
+      anchor.rel = "noreferrer";
+      anchor.href = link.href;
+      return anchor;
+    }));
+    unitLinks.hidden = !links.length;
+  }
+  async function readUnitLinks(version) {
+    if (unitSummary !== null) return;
+    const life = scope.capture();
+    try {
+      const value = await call(prefix);
+      life.check();
+      if (version !== epoch) return;
+      unitSummary = value && typeof value === "object" ? value : {};
+      paintUnitLinks();
+    } catch {  // 이동 링크는 부가 안내다: 실패해도 관제 화면 동작을 바꾸지 않는다.
+      if (life.current()) unitSummary = {};
+    }
+  }
   function paintUnits() {
     const focused = document.activeElement?.closest("[data-integrated-unit]")?.dataset.integratedUnit;
     list.replaceChildren();
@@ -165,7 +204,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   async function selectUnit(unitId) {
     target = unitId; selection++; mapRef = null; map.replaceChildren(); mapInfo.textContent = "";
     selectedName.textContent = unitId + " 관제 직접 자원"; detail.replaceChildren(node("p", "직접 자원 조회 중"));
-    controls(); if (overview) paintUnits();
+    paintUnitLinks(); controls(); if (overview) paintUnits();
     await readDetail();
   }
   async function readDetail() {
@@ -303,7 +342,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
           pending = {origin: row.origin_id, body: {stop_id: row.stop_id, target_unit: row.target_unit, config_revision: row.config_revision}};
           reference = row; snapshot = null; form.reset(); results.replaceChildren(); controls(); readRecord();
         });
-        guard(choose, busy ? "요청 결과를 확인하고 있습니다" : "");
+        setOffBy(choose, busy ? "요청 결과를 확인하고 있습니다" : "");
         item.append(choose); history.append(item);
         if (focused === choose.dataset.integratedStop) choose.focus({preventScroll: true});
         if (pending && pending.origin === row.origin_id && pending.body.stop_id === row.stop_id) reference = row;
@@ -330,7 +369,7 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
       if (!target || !value.units.some(row => row.unit_id === target)) {
         target = value.unit_id; selection++; selectedName.textContent = target + " 관제 직접 자원";
       }
-      paintUnits(); controls(); await Promise.all([readDetail(), readHistory()]);
+      paintUnits(); controls(); await Promise.all([readDetail(), readHistory(), readUnitLinks(version)]);
     } catch (error) {
       if (valid(life, version)) {
         overview = null; mapRef = null; list.replaceChildren(); detail.replaceChildren(); map.replaceChildren(); controls();

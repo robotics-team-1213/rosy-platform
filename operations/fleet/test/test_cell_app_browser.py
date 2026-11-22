@@ -12,7 +12,7 @@ import time
 
 import pytest
 import uvicorn
-from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener
+from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener, shared_browser
 import yaml
 
 from test_cell_job_api import _setup
@@ -31,7 +31,6 @@ ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture
 def browser_site(tmp_path):
-    from playwright.sync_api import sync_playwright
     from core_common.protocol.channel_requests import DiscordRequestEnvelope
     from fleet.server.channel_requests import ChannelConfig
 
@@ -60,15 +59,18 @@ def browser_site(tmp_path):
         control = tasks.store.dispatch_control()
         if not control["dispatch_enabled"]:
             tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator-1")
-        with sync_playwright() as toolkit:
-            browser = toolkit.chromium.launch(headless=True)
-            try:
-                page = browser.new_page(viewport={"width": 1440, "height": 1000})
-                page.goto(origin + "/console/cell")
-                page.wait_for_load_state("networkidle")
-                yield page, tasks, origin
-            finally:
-                browser.close()
+        context = shared_browser().new_context(viewport={"width": 1440, "height": 1000})
+        try:
+            page = context.new_page()
+            page.goto(origin + "/console/cell")
+            page.locator("#estop").wait_for(state="visible")
+            page.wait_for_function(
+                "() => { const role = document.getElementById('user-role');"
+                " return role && (role.getAttribute('status') !== 'neutral' || Boolean(role.getAttribute('title'))); }"
+            )
+            yield page, tasks, origin
+        finally:
+            context.close()
     finally:
         server.should_exit = True
         worker.join(timeout=20)
@@ -140,6 +142,24 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     expect(page.locator("#omx-right-inspector .omx-inspector-head")).to_contain_text("arm_b")
     expect(page.locator("#omx-right-inspector .omx-inspector-stage")).to_contain_text("arm_b 손목(근접)")
     expect(page.locator("#omx-right-inspector .omx-inspector-main-cam")).to_have_count(1)
+    pips = page.locator("#omx-right-inspector button.omx-inspector-pip")
+    expect(pips).to_have_count(4)
+    expect(pips.nth(0)).to_have_attribute("aria-pressed", "true")
+    pips.nth(1).focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#omx-right-inspector button.omx-inspector-pip").nth(1)).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#omx-right-inspector .omx-inspector-stage")).to_contain_text("S5 상단")
+    zoom = page.locator("#omx-right-inspector .omx-inspector-zoom")
+    expect(zoom).to_have_attribute("aria-expanded", "false")
+    zoom.focus()
+    page.keyboard.press("Enter")
+    expect(zoom).to_have_attribute("aria-expanded", "true")
+    expect(page.locator("#omx-right-inspector .omx-inspector-main-cam.focused")).to_have_count(1)
+    page.keyboard.press("Escape")
+    expect(zoom).to_have_attribute("aria-expanded", "false")
+    expect(page.locator("#omx-right-inspector .omx-inspector-main-cam.focused")).to_have_count(0)
+    expect(page.locator("#omx-right-inspector").get_by_label("적재 층")).to_have_count(1)
+    expect(page.locator("#omx-right-inspector").get_by_label("복구 위치")).to_have_count(1)
     assert not relay_hits, relay_hits
 
 
@@ -197,6 +217,61 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     expect(page.locator(f"#{field}")).to_be_visible()
     expect(page.locator(f'.ui-subnav a[href="#{heading}"]')).to_have_attribute("aria-current", "step")
     expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).to_have_attribute("aria-current", "page")
+
+
+def test_cell_exception_strip_surfaces_held_arm_and_jumps_even_from_other_step(browser_site):
+    """B-3: 보류 팔은 어느 단계 화면에서도 본문 머리에 요약되고, 관측 화면으로 바로 건너뛴다."""
+    from playwright.sync_api import expect
+
+    page, _, origin = browser_site
+    page.set_viewport_size({"width": 390, "height": 844})
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    observations_body = {
+        "workcells": [{
+            "workcell_id": "cell_ab", "label": "S5 셀",
+            "arms": [{
+                "source_id": "arm_a", "arm_id": "omx_a", "label": "S5 팔 arm_a", "binding_sha256": None,
+                "faults": [], "fresh": True, "source_age_s": 0.2, "receipt_age_s": 0.1, "sequence": 4,
+                "positions": {"joints": [0.0, 0.1]}, "motor_health": None,
+                "incidents": [{"incident_id": "a" * 32, "state": "open", "reported_at": time.time(),
+                               "decision": {"hold": True, "reason": "joint torque hold"}, "frames": [], "evidence": []}],
+            }],
+            "cameras": [],
+        }],
+    }
+    page.route("**/api/fleet/workcell-observations", lambda route: route.fulfill(json=observations_body))
+    _prepare(page)
+    writes = []
+    page.on("request", lambda request: writes.append(request.url) if request.method == "POST" else None)
+    show_screen(page, "recipe-heading")
+    strip = page.locator("#cell-exception-strip")
+    expect(strip).to_be_visible()
+    expect(strip).to_contain_text("arm_a")
+    expect(strip).to_contain_text("보류 사건 1건")
+    assert strip.bounding_box()["y"] < page.locator('ui-section[aria-labelledby="recipe-heading"]').bounding_box()["y"]
+    strip.get_by_role("button", name="관측으로 이동").click()
+    expect(page.locator("#workcell-observations")).to_be_visible()
+    card = page.locator('[data-arm-source="arm_a"]')
+    expect(card).to_be_visible()
+    expect(card).to_have_attribute("tabindex", "-1")
+    assert page.evaluate("document.activeElement && document.activeElement.getAttribute('data-arm-source')") == "arm_a"
+    details = card.locator("details", has_text="팔 사건")
+    assert details.evaluate("node => node.open") is True
+    assert writes == [], writes
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+
+    # 읽기 전용 딥링크 ?focus=arm:arm_a — 접속 뒤 관측 화면의 그 팔로 초점을 옮긴다.
+    page.goto(origin + "/console/cell?focus=arm:arm_a")
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-secret")
+    page.locator("#token-save").click()
+    expect(page).to_have_url(re.compile(r"#saved-heading$"))
+    expect(page.locator("#workcell-observations")).to_be_visible()
+    expect(page.locator('[data-arm-source="arm_a"]')).to_be_visible()
+    assert page.evaluate("document.activeElement && document.activeElement.getAttribute('data-arm-source')") == "arm_a"
+    assert page.locator('[data-arm-source="arm_a"] details', has_text="팔 사건").first.evaluate("node => node.open") is True
+    assert not errors, errors
 
 
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])

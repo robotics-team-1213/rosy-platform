@@ -1,9 +1,11 @@
 // D-540 2 / D-741 3 — the one Rosy Fleet app bar. 관제·설치·보정·현장 지도·Cell carry the same <ui-topbar>
 // markup (test_fleet_header.py pins it) and drive it only through this module: link word and clock, alerts
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
+import { setOffBy } from "/common/cause-line.js";
+import { isOperator } from "./authorization.js";
 import "/common/ui.js";  // wires the `[data-theme-cycle]` button
-import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {renderAccountApps, roleLabel} from "/common/account-profile.js";
+import {applyUnitScope, scopeSummary} from "/console/assets/unit-scope.js";
 export {roleLabel};
 
 export const SESSION_REASON = "접속이 필요합니다";
@@ -50,19 +52,19 @@ export function showInboxCount(count) {
 }
 
 // The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,
-// else the /api/fleet/session body. Only a press the server would surely refuse is locked: no session (401)
-// or a role without stop rights (403). Unknown stays live — never harder to reach than a refused press.
+// else the /api/fleet/session body. Only a press the server would surely refuse is locked: no session (401), or a
+// session whose `estop` the server answers false (a bearer token without a named human, D-1043). Unknown stays live.
+export const STOP_HUMAN_REASON = "정지는 운영자 또는 로그인한 사용자만 누를 수 있습니다";
 export function estopReason(session) {
   if (session === null) return SESSION_REASON;
-  if (session && session.role !== "operator") return OPERATOR_REASON;
-  return "";
+  if (!session) return "";
+  // /api/fleet/session answers `estop`; /api/fleet/auth/session (Policy, Maintenance) answers `via` and `account_id` instead.
+  const tokenOnly = session.via === "bearer" && !session.account_id && !isOperator(session.role);
+  return session.estop === false || (session.estop === undefined && tokenOnly) ? STOP_HUMAN_REASON : "";
 }
 
 function gateEstop(session) {
-  const estop = $("estop"), reason = estopReason(session);
-  estop.disabled = Boolean(reason);
-  if (reason) estop.setAttribute("reason", reason);
-  else estop.removeAttribute("reason");
+  setOffBy($("estop"), estopReason(session));
 }
 
 // The fold is on demand only: losing access rewrites the words and the E-stop, never the row's open state.
@@ -130,7 +132,7 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
   }
   tag.textContent = roleLabel(identity.role);
   tag.title = title;
-  tag.setAttribute("status", identity.role === "operator" ? "active" : "neutral");
+  tag.setAttribute("status", isOperator(identity.role) ? "active" : "neutral");
   $("development-badge").hidden = !developmentConnection;
   gateEstop(identity);
 }
@@ -153,6 +155,8 @@ export function showSignedOut({refused = true} = {}) {
 export function showFleet(fleet, robots = null) {
   // D-974: an instance in a control-unit tree is named by its unit (R and ARM-CELL share one host).
   $("fleet-name").textContent = fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트";
+  applyUnitScope(fleet.scope);  // D-960 §4: hide jobs another unit's screen owns
+  $("fleet-name").title = scopeSummary(fleet.scope);
   const pill = $("online-pill");
   if (!pill) return;  // 연결 수는 관제 문서에만 있다(D-741 3)
   delete pill.dataset.locked;

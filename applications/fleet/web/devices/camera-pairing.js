@@ -1,6 +1,8 @@
 // "기기 연결" 패널의 카메라 연결 승인 구역 (D-341 3–5, 11; D-391 4의 3단계).
 // 콘솔은 6자리 코드를 모른다 — 운영자가 폰 화면의 코드를 입력해 Fleet으로만 보낸다.
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createCameraPairingPanel 이 화면 배선이다.
+import { setOffBy } from "/common/cause-line.js";
+import { isOperator } from "/console/assets/authorization.js";
 
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createRequest } from "/common/request.js";
@@ -202,8 +204,7 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     node.textContent = label;
     node.dataset.action = action;
     if (reason) {
-      node.disabled = true;
-      node.setAttribute("reason", reason);
+      setOffBy(node, reason);
     }
     node.addEventListener("click", scope.guard(onClick));
     return node;
@@ -335,7 +336,7 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
 
   function renderIdentity() {
     const who = identity();
-    el("camera-identity-note").hidden = !(who?.role === "operator" && !canApprove(who));
+    el("camera-identity-note").hidden = !(isOperator(who?.role) && !canApprove(who));
   }
 
   function openApprove(row) {
@@ -375,8 +376,7 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     if (error) return lines(el("camera-approve-error"), [error], true);
     state.busy = true;
     const submit = el("camera-approve-submit");
-    submit.disabled = true;
-    submit.setAttribute("reason", "승인 요청 중");
+    setOffBy(submit, "승인 요청 중");
     try {
       const result = await call(`${BASE}/requests/${encodeURIComponent(row.request_id)}/approve`, {
         method: "POST",
@@ -402,8 +402,7 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     } finally {
       if (life.current()) {
         state.busy = false;
-        submit.disabled = false;
-        submit.removeAttribute("reason");
+        setOffBy(submit, "");
       }
     }
     await refresh({ credentials: true });
@@ -549,8 +548,7 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     state.target = null;
     el("camera-approve-dialog")?.close?.();
     el("camera-approve-code").value = "";
-    el("camera-approve-submit").disabled = false;
-    el("camera-approve-submit").removeAttribute("reason");
+    setOffBy(el("camera-approve-submit"), "");
   });
 
   return { refresh, resetPolling: () => gate.reset() };

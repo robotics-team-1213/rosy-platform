@@ -298,12 +298,18 @@ def install_observer_routes(app, ctx) -> None:
         return {"ok": True, "request": request}
 
     async def tick() -> None:
+        open_reqs = [r for r in app.state.observer_requests.values() if r["state"] not in TERMINAL]
+        if not open_reqs:
+            return
+        try:
+            site = ctx.active_map()[1]
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return
+            raise
         capture = getattr(app.state, "observer_capture", None) or make_capture(ctx.console)
         judge = getattr(app.state, "observer_judge", None)
-        site = ctx.active_map()[1]
-        for request in list(app.state.observer_requests.values()):
-            if request["state"] in TERMINAL:
-                continue
+        for request in open_reqs:
             await step(app.state, request, console=ctx.console, capture=capture, judge=judge, now=time.time(),
                        site=site, human=human)
             ctx._save_ledger()

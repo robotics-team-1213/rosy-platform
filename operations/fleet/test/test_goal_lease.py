@@ -121,7 +121,7 @@ def test_stop_cannot_resurrect_queue_claim_or_yield(stage, stop_all, monkeypatch
 
             robot.navigation_cancel = canceled
         else:
-            console._standing_in_the_way = lambda *_args: ["rosy_02"]
+            console._standing_in_the_way = lambda *_args, **_kw: ["rosy_02"]
             console._pose_of = lambda _rid: (0.0, 0.0)
             from fleet.server import console as console_module
             monkeypatch.setattr(console_module.bays, "best_bay", lambda *_args, **_kw: (1.0, 1.0))

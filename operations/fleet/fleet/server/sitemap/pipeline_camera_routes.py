@@ -3,12 +3,19 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import os
 import time
 from fastapi import HTTPException, Request
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
+from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
 from fleet.site_rules import SiteRules
 
+from fleet.server.pipeline_port_events import (
+    build_completion_events,
+    flush_pending_port_events_async,
+    strip_task_for_claim,
+)
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap import pipeline_auto_events as auto_events
 from fleet.server.sitemap import pipeline_repark
@@ -60,6 +67,7 @@ RECORDED_REFUSALS = frozenset({
     "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "OMX_OWNER_EVIDENCE_UNAVAILABLE", "OMX_OWNER_EVIDENCE_MISMATCH",
     "UNVERIFIED_CELL_COMPLETION", "OWNER_PRINCIPAL_NOT_REGISTERED", "HUMAN_HOLD_ACTIVE",
     "CELL_BUSY_OR_HELD", "PREVIOUS_TIER_NOT_VERIFIED", "CELL_AB_EVIDENCE_NOT_ENABLED", "BED_CONFIRMATION_INVALID",
+    "PRESENCE_CONFIRMATION_REQUIRED",
 })
 
 
@@ -207,19 +215,35 @@ def install_cameras_routes(app, ctx) -> None:
         if not candidates:
             return {"claimed": False, "task": None}
         task = candidates[0]
+        # D-1057: the claiming principal must be a registered owner of this cell, or a result could never be accepted and the
+        # task would stay RUNNING. Refused before the ledger changes. Bare apps without authentication (no principal) skip it.
+        from fleet.server.sitemap.pipeline_evidence import cell_owner_principals, owner_principal_refusal
+
+        if ((getattr(request.state, "site_principal", None) is not None or cell_owner_principals(cell_id))
+                and owner_principal_refusal(request, task) is not None):
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "OWNER_PRINCIPAL_NOT_REGISTERED"}
         if type(task.get("tier")) is not int or task["tier"] not in (1, 2, 3):
-            return {"claimed": False, "task": task, "reason": "INVALID_CELL_TIER"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "INVALID_CELL_TIER"}
         predecessor = task.get("depends_on")
         if predecessor and (app.state.omx_cell_tasks.get(predecessor) or {}).get("status") != "COMPLETED":
-            return {"claimed": False, "task": task, "reason": "PREVIOUS_TIER_NOT_VERIFIED"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "PREVIOUS_TIER_NOT_VERIFIED"}
         active_task = next((t for t in app.state.omx_cell_tasks.values()
                             if t["cell_id"] == cell_id and t["status"] == "RUNNING"), None)
         cell_state = app.state.omx_cell_states.get(cell_id) or {}
-        if active_task is not None or cell_state.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD") or cell_state.get("amr_motion_inhibited"):
-            return {"claimed": False, "task": task, "reason": "CELL_BUSY_OR_HELD"}
+        held_for_two_tier = (cell_id == "cell_s" and active_task is None
+                             and bool(task.get("unload_batch_id"))
+                             and cell_state.get("unload_batch_id") == task.get("unload_batch_id")
+                             and cell_state.get("phase") == "CLAIMED"
+                             and cell_state.get("robot_id") == task["robot_id"])
+        if (active_task is not None or cell_state.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD")
+                or (cell_state.get("amr_motion_inhibited") and not held_for_two_tier)):
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "CELL_BUSY_OR_HELD"}
+        # D-1057: cell A/B release stays off until the depth acceptance; refused here, before anything in the ledger changes.
+        if cell_id == "cell_ab" and os.environ.get("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "CELL_AB_EVIDENCE_NOT_ENABLED"}
         amr = _ready_amr(task)
         if amr is None:
-            return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
         if station is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
@@ -235,8 +259,19 @@ def install_cameras_routes(app, ctx) -> None:
         res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
                                         map_version=getattr(active[2], "version", None))
         if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
-            return {"claimed": False, "task": task, "gate": res["gate"]}
+            return {"claimed": False, "task": strip_task_for_claim(task), "gate": res["gate"]}
+        from fleet.server.sitemap.pipeline_evidence import bind_bed, has_valid_presence, take_presence
+
+        claim_now = time.time()
+        if task.get("execution_mode") == "act_policy" and not has_valid_presence(app, task, now=claim_now):
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "PRESENCE_CONFIRMATION_REQUIRED"}
+
+        # D-1057: binding the bed confirmation to the lease and going RUNNING are one step; if it lapsed meanwhile, nothing changes
+        if not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+
+        task["presence"] = take_presence(app, task, now=claim_now)  # D-1057/D-911: set only for a task a named operator confirmed in time
         task["status"] = "RUNNING"
         task["amr_claim_evidence"] = dict(amr)
         task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
@@ -251,9 +286,13 @@ def install_cameras_routes(app, ctx) -> None:
             "directive": task.get("directive"),
             "src_site": task["src_site"],
             "dst_site": task["dst_site"],
+            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "execution_mode", "max_chunks")
+               if task.get(k) is not None},
             "displaced_to": task.get("displaced_to"),
+            "tier_hint": task.get("tier_hint"),
+            "presence": task["presence"],
         }
-        return {"claimed": True, "task": task, "handoff": handoff, "gate": res["gate"]}
+        return {"claimed": True, "task": strip_task_for_claim(task), "handoff": handoff, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/complete", dependencies=proposer_guard)
     @_records_refusal("complete")
@@ -279,9 +318,17 @@ def install_cameras_routes(app, ctx) -> None:
         if phase == "RELEASED" and (_is_human_detected(cell_id)
                                     or (app.state.omx_cell_states.get(cell_id) or {}).get("phase") == "HUMAN_HOLD"):
             raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
+        if phase == "RELEASED":  # D-1057: only the principal that registered the owner evidence may release on it
+            stored = (getattr(app.state, "cell_owner_evidence", None) or {}).get(task_id)
+            if stored is not None and stored["principal_id"] != getattr(
+                    getattr(request.state, "site_principal", None), "principal_id", None):
+                raise HTTPException(403, detail={"code": "OWNER_PRINCIPAL_NOT_REGISTERED"})
         amr = _ready_amr(task) if phase == "RELEASED" else task.get("amr_claim_evidence")
         if phase == "RELEASED" and amr is None:
-            raise HTTPException(422, detail={"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
+            from fleet.server.sitemap.pipeline_evidence import bed_confirmation_lost
+
+            raise HTTPException(422, detail={"code": "BED_CONFIRMATION_INVALID" if bed_confirmation_lost(app, task)
+                                             else "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
         if phase == "RELEASED":
             trusted = omx_evidence_fn(task) if callable(omx_evidence_fn) else None
             if not isinstance(trusted, dict):
@@ -308,18 +355,24 @@ def install_cameras_routes(app, ctx) -> None:
                         and stage_result.get("arm_id") == task.get("arm_id")
                         and stage_result.get("task_verified") is True
                         and verification.get("verified") is True
-                        and verification.get("basis") == "predefined_side_and_top_target_zones"
+                        # D-1057 (user decision 2026-11-20): cell S has no side camera, so its top-camera zone check counts
+                        and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
+                                                          if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
                         and stop_event.get("ok") is True and stop_event.get("folded") is True)
             if cell_id == "cell_ab":
                 place = stage_result.get("place") or {}
                 z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
-                if not isinstance(place, dict):
-                    place = {}
-                verified = (verified and z_gate.get("verdict") == "PASS"
-                            and str(place.get("area") or place.get("area_id") or "").lower() == "pallet"
-                            and type(place.get("tier")) is int and place["tier"] == task["tier"])
+                verified = verified and isinstance(place, dict) and cell_ab_completion_verified(task, place, z_gate, verification)
             if not verified:
                 raise HTTPException(422, detail={"code": "UNVERIFIED_CELL_COMPLETION"})
+        cell_phase = phase
+        if cell_id == "cell_s" and phase == "RELEASED" and task.get("unload_batch_id"):
+            sc = (body.get("stage_result") or {}).get("source_clearance")
+            objects = sc.get("objects") if isinstance(sc, dict) else None
+            if type(objects) is not int or objects < 0:
+                raise HTTPException(422, detail={"code": "UNVERIFIED_CELL_COMPLETION"})
+            if objects > 0:
+                cell_phase = "CLAIMED"
         robot = {
             "robot_id": task["robot_id"],
             "robot_kind": task["robot_kind"],
@@ -329,13 +382,14 @@ def install_cameras_routes(app, ctx) -> None:
             "v_cmd_mps": float((amr or {}).get("v_cmd_mps", 1.0)),
         }
         state = {
-            "phase": phase,
+            "phase": cell_phase,
             "tier": task["tier"],
             "robot_id": task["robot_id"],
             "stage_id": task_id,
+            **({"unload_batch_id": task["unload_batch_id"]} if task.get("unload_batch_id") else {}),
             "goal_evidence_digest": body.get("goal_evidence_digest"),
             "reason": body.get("reason") or ("TRANSFER_CONFIRMED" if phase == "RELEASED" else "TASK_ABORTED"),
-            "amr_motion_inhibited": phase == "ABORTED",
+            "amr_motion_inhibited": cell_phase in ("ABORTED", "CLAIMED"),
         }
         res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
                                         map_version=getattr(active[2], "version", None))
@@ -365,8 +419,23 @@ def install_cameras_routes(app, ctx) -> None:
         _enrich_task_health(task)
         if phase == "ABORTED":
             pipeline_repark.on_abort(app.state, task, body.get("stage_result") or {}, time.time(), rules=rules())
+        elif phase == "RELEASED":
+            pending_events = build_completion_events(
+                app, task, cell_phase=cell_phase, stage_result=body.get("stage_result") or {},
+                human_detected=bool(_is_human_detected(cell_id)),
+            )
+            if pending_events:
+                task["pending_port_events"] = pending_events
         _save_ledger()
-        return {"ok": True, "task": task, "gate": res["gate"]}
+        flushed = 0
+        if task.get("pending_port_events"):
+            try:
+                flushed = await flush_pending_port_events_async(app)
+            except Exception:
+                flushed = 0
+        if flushed:
+            _save_ledger()
+        return {"ok": True, "task": strip_task_for_claim(task), "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/evaluate", dependencies=read_guard)
     async def pipeline_evaluate(request: Request):

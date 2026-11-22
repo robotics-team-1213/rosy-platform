@@ -1,5 +1,6 @@
 """Authenticated observation reads and source-bound ingestion, without commands."""
 from hashlib import sha256
+import logging
 
 from fastapi import Depends, Header, HTTPException, Request, Response
 from pydantic import ValidationError
@@ -73,6 +74,7 @@ def install_workcell_observation_routes(app, service, require_viewer, require_na
             raise HTTPException(422, detail={"code": "INVALID_ARM_OBSERVATION"}) from None
         try:
             intake.ingest(source_id, token, observation)
-        except ValueError:
+        except ValueError as exc:
+            logging.getLogger(__name__).warning("workcell observation conflict source=%s reason=%s", source_id, exc)
             raise HTTPException(409, detail={"code": "WORKCELL_OBSERVATION_CONFLICT"}) from None
         return {"accepted": True}

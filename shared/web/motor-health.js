@@ -1,4 +1,5 @@
 // One read-only presentation for Fleet and the robot console. Receipt time never replaces sample age.
+import { evidenceAgeText } from "./core_ui_logic.js";
 const EVIDENCE = {fresh: "실시간", delayed: "지연", disconnected: "연결 끊김", unavailable: "확인 불가"};
 const JOINT = {shoulder_pan: "어깨 회전", shoulder_lift: "어깨 올림", elbow_flex: "팔꿈치",
   wrist_flex: "손목 굽힘", wrist_roll: "손목 회전", gripper: "그리퍼",
@@ -13,7 +14,7 @@ const hardwareFault = motor => Number.isInteger(motor.hardware_error) && motor.h
 const stopped = motor => motor.fault === true && !hardwareFault(motor);
 const stoppedText = motor => `${GROUP[motor.group] || motor.group || "팔로워"} ${JOINT[motor.joint] || motor.joint || "모터"}(ID ${motor.id ?? "—"}) 정지`;
 const number = (value, digits = 1) => Number.isFinite(value) ? value.toFixed(digits) : "—";
-const ageText = age => validAge(age) ? `${age.toFixed(1)}초 전` : "관측 시각 없음";
+const ageText = age => validAge(age) ? evidenceAgeText(Math.round(age * 10) / 10).slice(3) : "관측 시각 없음";
 
 export function createMotorHealthState() {
   let snapshot = null, receivedAtMs = null, cacheAgeS = 0, disconnected = false, lastFault = "";
