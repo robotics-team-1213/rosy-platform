@@ -33,7 +33,7 @@ async def prepare_send(leases, task_id, attempt_id, robot_id, client, options, s
             if native:leases.bind_native_receipt(task_id,attempt_id,robot_id,None,unsent=True)
             raise
     admit()
-    return dispatch_guard(admit, paths={'/api/v1/navigation/goal'})
+    return dispatch_guard(admit, paths={'/api/v1/navigation/goal', '/api/v1/navigation/bound-goal'})
 
 
 def admit_send(leases, task_id, attempt_id, robot_id, native):

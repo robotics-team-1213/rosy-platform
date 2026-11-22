@@ -166,12 +166,11 @@ def test_closed_loop_pipeline_api_and_guards(tmp_path, monkeypatch):
     import time as _t
     for _ in range(30):
         cur = bench.pipeline_status()
-        if cur['state'] in ('done', 'failed'):
+        if cur['state'] in ('done', 'blocked', 'failed'):
             break
         _t.sleep(0.05)
-    assert cur['state'] == 'done'
-    assert cur['loop_count'] >= 1
-    assert cur['next_checkpoint'].startswith('ckpt://h1-demo-01-aug')
+    assert cur['state'] == 'failed' and cur['stages']['seal'] == 'failed'
+    assert cur['loop_count'] == 0 and 'next_checkpoint' not in cur
 
 
 def test_audit_hardening_replay_validation_and_collection_name(tmp_path, monkeypatch):
@@ -222,7 +221,7 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
     ds_dir = fake_home / 'rosy-data' / 'omx-leader' / 'h1-demo-01'
     (ds_dir / 'meta').mkdir(parents=True)
     (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
+    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0", "total_episodes": 1}', encoding='utf-8')
     (ds_dir / 'data' / 'chunk-000' / 'ep0.parquet').write_bytes(b'pq')
     # 1. Refuses without HF token
     with pytest.raises(ValueError):
@@ -233,14 +232,25 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         bench.hf_upload_start({'dataset': 'h1-demo-01'})
     (ds_dir / 'DO_NOT_TRAIN.txt').unlink()
-    # 3. Mock HfApi and run async upload
+    # 3. Personal HF account without robotteam org membership is refused
     import sys, types, time as _t
     calls = []
-    class FakeHfApi:
-        def whoami(self): return {'name': 'livsb3'}
+    class FakePersonalHfApi:
+        def whoami(self): return {'name': 'livsb3', 'orgs': []}
         def create_repo(self, **kw): calls.append(('create', kw['repo_id']))
-        def upload_folder(self, **kw): calls.append(('upload', kw['repo_id']))
-    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
+        def upload_folder(self, **kw): calls.append(('upload', kw['repo_id'], kw.get('path_in_repo')))
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakePersonalHfApi))
+    bench.hf_upload_start({'dataset': 'h1-demo-01'})
+    for _ in range(40):
+        st = bench.hf_upload_status()
+        if st['state'] in ('done', 'failed'):
+            break
+        _t.sleep(0.05)
+    assert st['state'] == 'failed' and 'robotteam' in st['error'] and not calls
+    # 4. robotteam member uploads privately to robotteam/rosy-omx-data under dataset subpath
+    class FakeTeamHfApi(FakePersonalHfApi):
+        def whoami(self): return {'name': 'livsb3', 'orgs': [{'name': 'robotteam'}]}
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeTeamHfApi))
     res = bench.hf_upload_start({'dataset': 'h1-demo-01'})
     assert res['hf_upload']['state'] in ('encoding', 'uploading', 'done')
     for _ in range(40):
@@ -249,10 +259,10 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
             break
         _t.sleep(0.05)
     assert st['state'] == 'done'
-    assert st['repo_id'] == 'livsb3/h1-demo-01'
-    assert ('upload', 'livsb3/h1-demo-01') in calls
+    assert st['repo_id'] == 'robotteam/rosy-omx-data'
+    assert ('upload', 'robotteam/rosy-omx-data', 'h1-demo-01') in calls
     ds_rows = bench.lerobot_datasets()
-    assert ds_rows[0]['hf_uploaded'] is True and ds_rows[0]['hf_repo_id'] == 'livsb3/h1-demo-01'
+    assert ds_rows[0]['hf_uploaded'] is True and ds_rows[0]['hf_repo_id'] == 'robotteam/rosy-omx-data'
 
 
 def test_ik_planner_belt_in_to_pinky_arm_s(tmp_path, monkeypatch):
@@ -344,10 +354,10 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
     assert pipe['last_dataset'] == 'arm-s-ik-e2e'
     for _ in range(40):
         pipe_cur = bench.pipeline_status()
-        if pipe_cur['state'] in ('done', 'failed'):
+        if pipe_cur['state'] in ('done', 'blocked', 'failed'):
             break
         time.sleep(0.05)
-    assert pipe_cur['state'] == 'done' and pipe_cur['loop_count'] >= 1
+    assert pipe_cur['state'] == 'failed' and 'next_checkpoint' not in pipe_cur
 
     hf_cache = tmp_path / 'home' / '.cache' / 'huggingface'
     hf_cache.mkdir(parents=True, exist_ok=True)
@@ -355,14 +365,14 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
     ds_dir = tmp_path / 'home' / 'rosy-data' / 'omx-leader' / 'arm-s-ik-e2e'
     (ds_dir / 'meta').mkdir(parents=True)
     (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
+    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0", "total_episodes": 1}', encoding='utf-8')
     (ds_dir / 'data' / 'chunk-000' / 'episode_000000.parquet').write_bytes(b'PAR1')
 
     hf_calls = []
     class FakeHfApi:
-        def whoami(self): return {'name': 'tester'}
+        def whoami(self): return {'name': 'tester', 'orgs': [{'name': 'robotteam'}]}
         def create_repo(self, **kw): hf_calls.append(('create', kw['repo_id']))
-        def upload_folder(self, **kw): hf_calls.append(('upload', kw['repo_id']))
+        def upload_folder(self, **kw): hf_calls.append(('upload', kw['repo_id'], kw.get('path_in_repo')))
     monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
     bench.hf_upload_start({'dataset': 'arm-s-ik-e2e'})
     for _ in range(40):
@@ -370,8 +380,8 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
         if hf_st['state'] in ('done', 'failed'):
             break
         time.sleep(0.05)
-    assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'tester/arm-s-ik-e2e'
-    assert ('upload', 'tester/arm-s-ik-e2e') in hf_calls
+    assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'robotteam/rosy-omx-data'
+    assert ('upload', 'robotteam/rosy-omx-data', 'arm-s-ik-e2e') in hf_calls
     assert (Path(state['folder']) / 'hf-upload.json').is_file()
 
 
@@ -666,8 +676,11 @@ def test_home_button_uses_separate_leader_option_and_homing_shows_hands_off_noti
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
     js = ((omx_dir / 'bench_record_app.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8'))
     ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
-    assert "has_leader_pose&&$('home-include-leader')?.checked" in js
-    assert 'id="home-include-leader"' in html and '리더도 함께' in html
+    assert "leader_connected===true||" in js and "leader_connected!==false" in js and "$('home-include-leader')?.checked" in js
+    assert 'id="home-include-leader" checked' in html and '리더도 함께' in html
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+    prm_js = (omx_dir / 'bench_record_params.js').read_text(encoding='utf-8')
+    assert "leader_connected!==false" in st_js and "parseTickInput(" in prm_js
     assert '시작 전 리더를 팔로워 자세로 맞춤' in html
     assert '리더에서 손을 뗐습니다' not in html
     assert 'at_bench' not in html
@@ -1029,5 +1042,154 @@ def test_bench_ui_shows_outbound_stand_and_filters_arm_b():
     for marker in ('data-spot="stand"', '반출대', 'describeSpot', "'stand:r1-s1'", "'stand:r1-s1-t1'", r'\bstand\b', "arm==='arm_b'"):
         assert marker in map_js, marker
     assert 'taskFitsArm' in app
+
+
+def test_bench_ui_activity_log_smooth_camera_polling_and_pre_start_home_contract():
+    import re
+    omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    ui_js = (omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+    app_js = (omx_dir / 'bench_record_app.js').read_text(encoding='utf-8')
+    dr_js = (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+
+    footer = html.split('<footer id="status-bar"', 1)[1].split('</footer>', 1)[0]
+    assert 'id="activity-log-bar"' in footer and 'id="activity-log-text"' in footer
+    assert 'id="activity-log-bar" class="activity-log-bar"' in footer
+    assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
+    assert '.status-bar{position:fixed' in css and '@media(max-width:1366px)' in css and '.activity-log-bar{' in css
+    assert 'function setActivity(' in ui_js and 'noticeHistory.length>20' in ui_js
+    assert 'f.arm.value!==st.arm' in st_js and 'setActivity(' in st_js
+    assert 'setInterval(pollCameras,1500)' in app_js and 'setInterval(tickCameraFrames,150)' in app_js
+    assert 'new Image()' in app_js and 'emptyCamPolls>=3' in app_js
+    assert "img.style.display='none'" not in app_js.split('function pollCameras', 1)[1].split('async function pollStatus', 1)[0].split('applyCameraLayout()', 1)[1]
+    assert "querySelector('.btn-lbl')" in dr_js and 'home_before_start:Boolean(' in dr_js and 'setActivity(' in dr_js
+    assert 'if(typeof benchSessionActive===\'function\'&&benchSessionActive())return;' in cam_js
+    assert "episodeAction('/record_episode')" in cam_js and "episodeAction('/finish','/stop')" in cam_js and "episodeAction('/api/episode/rerecord')" in cam_js
+
+
+def test_ui_connected_arm_cards_zoomed_map_and_inline_params_panel(tmp_path, monkeypatch):
+    import re, threading, urllib.request
+    omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    app_js = (omx_dir / 'bench_record_app.js').read_text(encoding='utf-8')
+    params_js = (omx_dir / 'bench_record_params.js').read_text(encoding='utf-8')
+    map_js = (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
+
+    for marker in ('id="arm-card-bar"', 'id="sb-speed-pills"', 'id="sb-joint-caps-table"',
+                   'id="sb-caps-save-btn"', 'id="map-modal-host"', '/bench_record_params.js',
+                   'id="sb-grip-map"', 'id="sb-grip-save-btn"'):
+        assert marker in html, marker
+    assert html.index('id="arm-card-bar"') < html.index('id="sec-goal"')
+    assert 'max-height:108px' not in css and 'min-height:176px' in css
+    assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
+    for fn in ('function renderArmCards(', 'function renderParamsPanel(', 'function submitCaps(', '/api/teleop_speed',
+               'function loadGripMaps(', 'function submitGripMap(', '/api/grip_map', '180,240'):
+        assert fn in params_js, fn
+    assert 'arm_connectivity' in app_js and 'pollArms()' in app_js and 'loadGripMaps()' in app_js
+    assert 'function renderArmSMapSvg(' in map_js and 'id="map-expand-btn"' in map_js and 'function openMapModal(' in map_js
+    assert 'renderArmSMapSvg(zoneBg,zoneCol,validArm,cards)' in map_js
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    srv = bench_record.make_server(bench, 0)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f'http://127.0.0.1:{srv.server_port}'
+        with urllib.request.urlopen(base + '/bench_record_params.js', timeout=5) as r:
+            assert r.status == 200 and b'renderArmCards' in r.read()
+        req = urllib.request.Request(base + '/api/teleop_speed', data=b'{"arm":"arm_s","stage":90}',
+                                     headers={'Content-Type': 'application/json', 'X-Bench': '1'}, method='POST')
+        with urllib.request.urlopen(req, timeout=5) as r:
+            assert r.status == 200 and json.loads(r.read())['teleop_speed_declared']['arm_s']['stage'] == 90
+        with urllib.request.urlopen(base + '/api/grip_map', timeout=5) as r:
+            assert r.status == 200 and 'arm_s' in json.loads(r.read())['arms']
+        greq = urllib.request.Request(
+            base + '/api/grip_map',
+            data=json.dumps({'arm': 'arm_s', 'leader_closed': 1930, 'leader_open': 2850,
+                             'follower_closed': 2000, 'follower_open': 2800}).encode(),
+            headers={'Content-Type': 'application/json', 'X-Bench': '1'}, method='POST',
+        )
+        with urllib.request.urlopen(greq, timeout=5) as r:
+            assert r.status == 200 and json.loads(r.read())['gripper']['follower_open'] == 2800
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_ui_audio_cues_and_quick_restart_after_result_contract():
+    import re
+    omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    ui_js = (omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+    dr_js = (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8')
+
+    assert 'id="hdr-sound-btn"' in html and 'id="hdr-quick-restart-btn"' in html
+    ops_m = re.search(r'<section id="hdr-row-ops"[^>]*>(.*?)</section>', html, re.S)
+    assert ops_m
+    last_btn = list(re.finditer(r'<button\b[^>]*\bid="([^"]+)"', ops_m.group(1)))
+    assert last_btn and last_btn[-1].group(1) == 'hdr-estop-btn'
+    context = re.search(r'<div id="hdr-row-menu"[^>]*>(.*?)<section id="hdr-row-ops"', html, re.S).group(1)
+    context_order = ('h1', 'rail-arm-pills', 'hdr-task-summary', 'goal-name-btn', 'ftr-server',
+                     'hdr-cam-health', 'hdr-help-btn', 'btn-drawer-menu', 'hdr-refresh-btn')
+    positions = [context.index('<h1>' if m == 'h1' else f'id="{m}"') for m in context_order]
+    assert positions == sorted(positions)
+
+    for marker in ('function benchBeep(', 'omx_bench_sound', 'BEEP_PATTERNS', 'setSoundEnabled'):
+        assert marker in ui_js, marker
+    for cue in ("benchBeep('ready')", "benchBeep('rec_start')", "benchBeep('saved')",
+                "benchBeep('done')", "benchBeep('warn')"):
+        assert cue in st_js, cue
+    for marker in ("benchBeep('countdown')", "benchBeep('rerecord')",
+                   'function quickRestartAfterResult(', 'hdr-quick-restart-btn'):
+        assert marker in cam_js, marker
+    assert 'function bumpCollectionName(' in dr_js and 'skipHome' in dr_js
+    assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
+
+
+def test_result_home_button_auto_home_view_and_arm_connectivity_resilience(tmp_path):
+    import bench_record_guard as guard
+    omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+    dr_js = (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+
+    assert 'id="hdr-result-home-btn"' in html
+    assert html.index('id="hdr-result-home-btn"') < html.index('id="hdr-quick-restart-btn"')
+    assert 'function autoHomeView(' in st_js and 'st.stop_cause' in st_js
+    assert 'function triggerHomePose(' in dr_js and 'fold_unfolded:' in dr_js
+    assert 'hdr-result-home-btn' in cam_js and "rhBlocked" in cam_js
+    (tmp_path / 'record-config-arm-s.json').write_text(json.dumps({'robot': None, 'teleop': 'bad'}))
+    assert guard.arm_connectivity(tmp_path, 'arm_s') == {'connected': None, 'follower_connected': None, 'leader_connected': None}
+
+
+def test_arm_ab_ui_priority_layout_no_wrap_and_camera_health_contract():
+    import re
+    omx_dir = ROOT / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    app_js = (omx_dir / 'bench_record_app.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+
+    assert 'input.jc-inp{' in css and '.jc-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))' in css
+    assert '.app-shell[data-phase="setup"] #sec-params{order:-1}' in css
+    assert '.app-topbar:has(.drawer-menu-wrap.open){padding-bottom:44px}' in css
+    assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
+    assert '<details class="card acc-card sb-sec" id="sec-status"' in html and 'id="sec-status" open' not in html
+    assert '<details id="sb-joint-caps-box"' in html
+    assert 'class="pill-btn active" data-tfilter="arm" aria-pressed="true"' in html
+    assert 'id="cleanup-empty-ds-btn"' in html and 'id="ev-delete-empty-btn"' in html
+    assert "OPTIONAL_CAMS=new Set(['arm_s_top'])" in cam_js and 'function expectedCamsForArm(' in cam_js
+    assert "if(role==='left_wrist')return ['arm_a_wrist'];" in cam_js and "if(role==='right_wrist')return ['arm_b_wrist'];" in cam_js
+    assert 'function syncMissingCamPlaceholders(' in cam_js and "LAST_ARM_KEY='omx_bench_last_arm'" in app_js
+    assert "$('hdr-cam-health').hidden=false;" in st_js
 
 

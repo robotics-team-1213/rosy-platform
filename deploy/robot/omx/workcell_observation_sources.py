@@ -19,7 +19,7 @@ import time
 from core_common.motor_health import read_motor_health_snapshot as _default_read_motor_health_snapshot
 from core_common.observation_snapshot import SnapshotChannel
 from core_common.protocol.motor_health import MotorHealthResponse
-from core_common.protocol.workcell_observations import ArmObservation
+from core_common.protocol.arm_incident.workcell_observations import ArmObservation
 
 
 _CAMERA_SNAPSHOT_POLL_S = 0.020

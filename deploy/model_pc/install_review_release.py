@@ -68,7 +68,6 @@ SPLIT_REQUIRED = (
                   'middleware/perception/robot_web/web_node.py',
                   'middleware/perception/robot_web/web_render.py',
                   'middleware/perception/robot_web/web_state.py',
-
                   'middleware/perception/localization/loc_assist.py',
                   'middleware/perception/localization/loc_assist_node.py',
                   'middleware/perception/localization/localization_node.py',
@@ -267,23 +266,24 @@ def check_learning_idle(config: Path) -> None:
         root = Path(document['root'])
         if not root.is_absolute() or root.is_symlink() or (root.exists() and not root.is_dir()):
             raise ValueError('absolute owned learning center root required')
-        database = root / 'center.sqlite'
-        if not database.exists() and not database.is_symlink():
-            return
-        if database.is_symlink() or not database.is_file():
-            raise ValueError('regular learning center database required')
-        # mode=ro also prevents accidentally creating a database at a wrong path.
-        with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=1)) as db:
-            db.execute('PRAGMA query_only=ON')
-            for raw, in db.execute('SELECT document FROM runs'):
-                if not isinstance(raw, str) or len(raw.encode('utf-8')) > 1024 * 1024:
-                    raise ValueError('bounded learning run state required')
-                run = json.loads(raw)
-                if not isinstance(run, dict) or run.get('status') not in (
-                        'launching', 'running', 'stopping', 'succeeded', 'failed', 'cancelled', 'interrupted'):
-                    raise ValueError('valid learning run state required')
-                if run['status'] in ('launching', 'running', 'stopping'):
-                    raise ValueError('active learning jobs must finish or be stopped before a release switch')
+        for database in (root / 'center.sqlite', root / 'canonical' / 'canonical.sqlite'):
+            if database.parent != root and (database.parent.is_symlink() or (database.parent.exists() and not database.parent.is_dir())):
+                raise ValueError('regular learning center database required')
+            if not database.exists() and not database.is_symlink():
+                continue
+            if database.is_symlink() or not database.is_file():
+                raise ValueError('regular learning center database required')
+            with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=1)) as db:
+                db.execute('PRAGMA query_only=ON')
+                for raw, in db.execute('SELECT document FROM runs'):
+                    if not isinstance(raw, str) or len(raw.encode('utf-8')) > 1024 * 1024:
+                        raise ValueError('bounded learning run state required')
+                    run = json.loads(raw)
+                    if not isinstance(run, dict) or run.get('status') not in (
+                            'launching', 'running', 'stopping', 'succeeded', 'failed', 'cancelled', 'interrupted'):
+                        raise ValueError('valid learning run state required')
+                    if run['status'] in ('launching', 'running', 'stopping'):
+                        raise ValueError('active learning jobs must finish or be stopped before a release switch')
     except (OSError, sqlite3.Error, json.JSONDecodeError, UnicodeError, RecursionError, TypeError) as exc:
         raise ValueError('learning center state could not be verified') from exc
 

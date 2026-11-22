@@ -17,7 +17,7 @@ import re
 
 def sync_manifest(registry: dict, text: str) -> tuple[str, list, list]:
     """(text, changed, unregistered): each camera's device_path set from the registry role with its image_topic."""
-    device = {c["topic"]: c["device"] for c in registry["cameras"]}
+    device = {c["topic"]: c["device"] for c in registry["cameras"] if c.get("enabled") is not False}
     lines, topic, changed, unregistered = text.split("\n"), None, [], []
     for i, line in enumerate(lines):
         key, _, value = line.strip().removeprefix("- ").partition(":")
@@ -48,7 +48,7 @@ def _sync_manifest_file(registry: dict, path: Path) -> list:
 
 def sync_readiness(registry: dict, profile: dict) -> tuple[dict, list]:
     """Keep each readiness camera's device aligned with its preview unit's role in the registry."""
-    by_role = {c["role"]: c["device"] for c in registry["cameras"]}
+    by_role = {c["role"]: c["device"] for c in registry["cameras"] if c.get("enabled") is not False}
     changed, cameras = [], {}
     for role, spec in profile.get("cameras", {}).items():
         unit = spec.get("unit", role)

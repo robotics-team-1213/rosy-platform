@@ -27,6 +27,7 @@ from fleet.routing.snap import PlanError
 from fleet.routing.trip import ARRIVED_M, PlanRequest, plan_trip
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.named_stop_map_pose import commissioned_stop, read_precision_pose
 from fleet.server.trip_admission import start_check
 from fleet.server.trip_runner import LOCALIZED, PLAN_TTL_S, TripError
 from fleet.stop_front import body_front_m
@@ -46,6 +47,22 @@ class TripPoint(BaseModel):
 class TripConvoy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     leader: str = Field(min_length=1, max_length=96)
+
+
+class TripPauseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    reason: Optional[str] = Field(default=None, max_length=120)
+
+
+class TripResumeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    blocked_edges: list[PlaceRef] = Field(default_factory=list, max_length=32)
+
+    @model_validator(mode="after")
+    def _unique_edges(self) -> "TripResumeRequest":
+        if len(set(self.blocked_edges)) != len(self.blocked_edges):
+            raise ValueError("blocked_edges contains a duplicate")
+        return self
 
 
 class SignalCommand(BaseModel):
@@ -155,7 +172,21 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # The trip loop's own map pose first (D-494 3, D-593 1): a motor-mode robot reports no
         # localization, so its Rosy Cam MapPose is its only map pose. A robot-reported LOCALIZED
         # map pose stays accepted (D-488 3); the start still requires MapPose LOCALIZED (D-494 5).
-        map_pose = await runner.map_pose(robot_id)
+        nav2 = body.drive_mode == "nav2"
+        precision = commissioned_stop(active[2], body.to)
+        if nav2 and precision is not None:
+            record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
+            raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
+        binding_id = None
+        if precision is not None:
+            bound = await read_precision_pose(runner, robot_id, active[0])
+            if bound is None:
+                detail = {"reason": "APPROVED_SLAM_POSE_REQUIRED"}
+                record({"error": "TRIP_POSE_UNTRUSTED", "detail": detail})
+                raise _refuse("TRIP_POSE_UNTRUSTED", detail, 409)
+            map_pose, binding_id = bound
+        else:
+            map_pose = await runner.map_pose(robot_id)
         pose_state = map_pose.state if map_pose is not None else None
         if pose_state == LOCALIZED and map_pose.yaw is not None:
             pose = (map_pose.x, map_pose.y, map_pose.yaw)
@@ -182,7 +213,6 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
         caps = await caps_for(robot_id)
-        nav2 = body.drive_mode == "nav2"
         if nav2 and caps is not None and (caps.max_speed <= 0 or "free" not in caps.modes):
             detail = {"drive_mode": "free"}
             record({"error": "TRIP_MODE_UNSUPPORTED", "detail": detail})
@@ -208,6 +238,11 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
         plan_data = plan_body(plan)
+        if binding_id is not None:
+            if nav2 or not runner._precision_terminal_matches(active[2], plan_data["segments"], precision):
+                record({"error": "PRECISION_STOP_REQUIRES_NAV2_TERMINAL"})
+                raise _refuse("PRECISION_STOP_REQUIRES_NAV2_TERMINAL")
+            plan_data["precision_binding_id"] = binding_id
         if not nav2 and any(active[2].arcs[arc_id(seg)].drive_mode == "lane" for seg in plan_data["segments"]):
             try:  # D-601 B: no lane trip for a robot whose line camera is not live
                 await runner.camera_check(robot_id, caps)
@@ -217,7 +252,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
         plan_data["start_check"] = start_check(
             active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2)
-        if (runner.config.auto_align and plan_data["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
+        if (precision is None and runner.config.auto_align
+                and plan_data["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
                 and plan_data["start_check"]["heading_err_deg"] is not None):
             plan_data["start_check"]["auto_align"] = True  # D-603: the start turns the robot first
         # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
@@ -262,6 +298,23 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                                         principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
             return await runner.confirm_replan(trip_id, principal.principal_id)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+
+    @app.post("/api/fleet/trips/{trip_id}/pause", tags=["fleet"])
+    async def fleet_trip_pause(trip_id: str, body: Optional[TripPauseRequest] = None,
+                               principal: SitePrincipal = Depends(require_operator)) -> dict:
+        try:
+            return await runner.pause(trip_id, principal.principal_id, reason=body.reason if body else None)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+
+    @app.post("/api/fleet/trips/{trip_id}/resume", tags=["fleet"])
+    async def fleet_trip_resume(trip_id: str, body: Optional[TripResumeRequest] = None,
+                                principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        try:
+            edges = tuple(body.blocked_edges) if body else ()
+            return await runner.resume(trip_id, principal.principal_id, blocked_edges=edges)
         except TripError as exc:
             raise trip_error(exc) from exc
 

@@ -229,6 +229,7 @@ class MapPoseTracker:
         self._ref: Optional[_Anchor] = None   # the anchor camera fixes are compared with (see the module docstring)
         self._resid: Optional[tuple[float, Optional[float], float]] = None   # (metres, degrees, captured_at)
         self._newest_track: Optional[float] = None
+        self._track_agreed: Optional[_Anchor] = None
         self._pending: deque[Sighting] = deque(maxlen=PENDING_SIGHTINGS)
         self._filtered_map_id = 0
         self._newest_sighting: Optional[float] = None
@@ -237,8 +238,7 @@ class MapPoseTracker:
         self._auto_blocked = False
         self._auto_camera_at: Optional[float] = None   # wall time of the last camera confirmation
         self._auto_camera_odom: Optional[tuple[float, float]] = None   # odom (path, turn) at that time
-        self._degraded = False
-        self._consistent = 0
+        self._degraded, self._consistent = False, 0
         self._refused = 0
         self._stale_source = 0
         self._refused_reason: Optional[str] = None
@@ -363,7 +363,7 @@ class MapPoseTracker:
             self._pending.popleft()
         self._anchor = self._ref = _Anchor((float(pose[0]), float(pose[1]), _wrap(float(pose[2]))), latest, now,
                                            map_id, OPERATOR_PIN)
-        self._degraded, self._consistent = False, RECOVER_AFTER
+        self._degraded, self._consistent, self._track_agreed = False, RECOVER_AFTER, None
         return None
 
     def add_auto_locate(self, pose: Pose, at: float, now: float, map_id: Optional[str],
@@ -408,7 +408,7 @@ class MapPoseTracker:
     def drop_auto_locate(self, kind: str = AUTO_LOCATE) -> None:
         """D-989: the transform is gone. An auto-locate anchor ends now, not when its age runs out (TRACK: its identity)."""
         self._pending = deque((s for s in self._pending if s.kind != kind), maxlen=PENDING_SIGHTINGS)
-        self._auto_camera_at, self._auto_camera_odom = None, None
+        self._auto_camera_at, self._auto_camera_odom, self._track_agreed = None, None, None
         if self._anchor is not None and self._anchor.kind == kind:
             self._anchor = self._ref = self._resid = None
             self._degraded, self._consistent = False, 0
@@ -496,7 +496,7 @@ class MapPoseTracker:
                        bridge_turn_deg=math.degrees(turned), **diag, **residual_fields(self._resid, now, cfg.max_odom_age_s))
 
     def _reset(self, since: float) -> None:
-        self._auto_camera_odom = None   # the odom frame ended; its path no longer compares
+        self._auto_camera_odom = self._track_agreed = None   # the odom frame ended; its path no longer compares
         self._epoch += 1
         self._odom.clear()
         self._anchor = self._ref = self._resid = None
@@ -544,22 +544,23 @@ class MapPoseTracker:
         if ref is not None and sighting.kind in (SIGHTING, TRACK):
             m, deg = camera_residual(ref.map_pose, ref.odom.pose, (*seen[:2], sighting.yaw or 0.0), odom.pose, sighting.yaw is not None)
             self._resid = (m, deg, sighting.captured_at, sighting.x, sighting.y, sighting.yaw)
-        if track and anchor is not None and anchor.kind in (SIGHTING, OPERATOR_PIN) and sighting.captured_at - anchor.captured_at <= cfg.max_anchor_age_s:
-            return                            # a fresh marker or pin stays the anchor; the track only measured against it
         if anchor is None:
-            self._degraded, self._consistent = True, 0       # a first anchor is not yet confirmed
+            self._degraded, self._consistent, self._track_agreed = True, 0, None
         else:
             predicted = compose(anchor.map_pose, relative(anchor.odom.pose, odom.pose))
             jumped = (math.dist(predicted[:2], seen[:2]) > cfg.max_jump_m
                       or abs(_wrap(predicted[2] - seen[2])) > math.radians(cfg.max_jump_deg))
-            path = odom.path_m - anchor.odom.path_m
-            turn = odom.turn_rad - anchor.odom.turn_rad
-            # A robot that stood still since the anchor has no odom drift to bound: two agreeing
-            # sightings any time apart re-localize it (site 2026-10-10: rosy_40 parked, marker read
-            # 1 frame in 8, never LOCALIZED again). Same odom epoch is implied: a reset drops the anchor.
+            if track and sighting.captured_at - anchor.captured_at <= cfg.max_anchor_age_s and (
+                    anchor.kind == SIGHTING or (anchor.kind == OPERATOR_PIN and (jumped or self._degraded))):
+                self._track_agreed = None if jumped or self._degraded else _Anchor(seen, odom, sighting.captured_at, sighting.map_id, TRACK)
+                return                        # fresh marker stays anchor; disagreeing track never clobbers fresh pin
+            path, turn = odom.path_m - anchor.odom.path_m, odom.turn_rad - anchor.odom.turn_rad
+            # Still robot has no odom drift to bound: two agreeing sightings any time apart re-localize it (2026-10-10).
             still = path <= STILL_PATH_M and turn <= STILL_TURN_RAD
-            stretched = (path > cfg.max_dead_reckon_m or turn > math.radians(cfg.max_bridge_turn_deg)
-                         or (sighting.captured_at - anchor.captured_at > cfg.max_anchor_age_s and not still))
+            handoff = (track and anchor.kind == SIGHTING and not self._degraded and self._track_agreed is not None
+                       and not self._stretched(self._track_agreed, sighting.captured_at, odom))
+            stretched = not handoff and (path > cfg.max_dead_reckon_m or turn > math.radians(cfg.max_bridge_turn_deg)
+                                         or (sighting.captured_at - anchor.captured_at > cfg.max_anchor_age_s and not still))
             if (sighting.kind != anchor.kind and AUTO_LOCATE in (sighting.kind, anchor.kind)
                     and PEER not in (sighting.kind, anchor.kind)):
                 self._auto_blocked = self._auto_blocked or jumped   # D-989: independent evidence says no
@@ -568,6 +569,7 @@ class MapPoseTracker:
                         self._degraded, self._consistent = True, 0
                     if jumped or sighting.captured_at - anchor.captured_at <= cfg.max_anchor_age_s:
                         return                # a fresh sighting or pin stays the anchor
+            self._track_agreed = None
             if jumped:
                 self._degraded, self._consistent = True, 0
             else:

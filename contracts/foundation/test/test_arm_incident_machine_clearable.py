@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from core_common.protocol.arm_incidents import machine_clearable
+from core_common.protocol.arm_incident.arm_incidents import machine_clearable
 
 # the shape deploy/robot/omx/omx_incident.facts() and report_for() store, with nothing the cell's own rule holds on
 SAFE = {"safe_end": True, "latched": {}, "torque_after": {"11": 0, "12": 0, "13": 0, "14": 0, "15": 0, "16": 0},

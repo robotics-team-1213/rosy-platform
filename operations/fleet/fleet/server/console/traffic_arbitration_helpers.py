@@ -106,6 +106,7 @@ async def run_snapshot_traffic(console, robots: list) -> None:
         state = row.get("state") or {}
         if state.get("navigation") != "NAVIGATING" and row["robot_id"] not in console._held:
             console._claims.pop(row["robot_id"], None)
+            getattr(console, "_site_claims", {}).pop(row["robot_id"], None)
     for robot_id in sorted(console._yielding):
         waiting_for = console._yielding[robot_id]["for"]
         if waiting_for not in console._claims and waiting_for not in console._queued:
@@ -196,6 +197,7 @@ async def hold_robots_for_localization(console, mover: str, *, trust_mod) -> lis
             raise RuntimeError("navigation goal cancellation was not confirmed")
         console._goals.pop(robot_id, None)
         console._claims.pop(robot_id, None)
+        getattr(console, "_site_claims", {}).pop(robot_id, None)
         console._queued[robot_id] = {**goal, "blocked_by": mover, "waiting_on": [mover],
                                      "reason": "LOCALIZATION_UNTRUSTED"}
         held.append(robot_id)

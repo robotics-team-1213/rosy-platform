@@ -23,7 +23,7 @@
 | 필드 | 실제 원천 | 없거나 오래되면 |
 |---|---|---|
 | `robot_id`, `cell_id` | Fleet 원장의 작업 | 해당 없음 |
-| `pose` | `MapPoseService.arbitrated_pose`. 활성 지도 ID가 있어야 하고, 그 지도·그래프에 셀 정차 지점이 실제로 있어야 한다(`resolve_omx_cells`의 기본 좌표로 만든 셀은 쓰지 않는다). LOCALIZED이고 앵커 출처가 sighting·pin·peer(odom으로 이은 `bridged` 제외)이며 `age_s` 2 s 이하, 활성 지도와 같은 `map_id`, 셀 정차 구역(사이트 지도 station 좌표에서 0.18 m 이내, `CELL_CLAIM_RADIUS_M`와 같은 값) 안일 때만 | None |
+| `pose` | `MapPoseService.arbitrated_pose`. 활성 지도 ID가 있어야 하고, 그 지도·그래프에 셀 정차 지점이 실제로 있어야 한다(`resolve_omx_cells`의 기본 좌표로 만든 셀은 쓰지 않는다). LOCALIZED이고 앵커 출처가 sighting·pin·track·peer(`age_s` 2 s 이하)이며, odom으로 이은 `bridged`는 정지 불감대(`dead_reckon_m` ≤ 2 cm, `bridge_turn_deg` ≤ 2°) 안에서 같은 앵커가 신선할 때(`operator_pin` 10 s 이하, 그 밖 2 s 이하)만 수용하고 이동 중 추측 항법과 `auto_locate`는 거부한다. 활성 지도와 같은 `map_id`, 셀 정차 구역(사이트 지도 station 좌표에서 0.18 m 이내, `CELL_CLAIM_RADIUS_M`와 같은 값) 안일 때만 | None |
 | `wheel_brake_locked` | CORE가 heartbeat로 보고하는 **정지 유지**: 모드 IDLE, navigation이 IDLE·ARRIVED·CANCELED·FAILED뿐(주행 진행 없음), 이 로봇의 Fleet 목표 없음, E-stop 아님, odom 선속·각속도가 임계(1e-4 m/s, 1e-3 rad/s) 이하. 표본마다 속도 채널 `received_at`이 heartbeat 도착 시각과 2 s 이내여야 하고, 이런 표본이 표본 간격 2.5 s 이하로 1 s 이상 이어져야 한다. **기계식 브레이크가 아니다.** 브레이크 센서는 없다 | heartbeat가 없거나 2 s보다 오래되면 None. 표본이 부족하면 False |
 | `v_cmd_mps` | **명령 속도 원천 없음.** CORE는 명령 속도를 Fleet에 내놓지 않는다. 그래서 odom 선속(`StateSnapshot.velocity.linear`)과 CORE 모드로 대체한다. 값은 odom 0(정지)이며 명령값이 아니다. 명령은 냈지만 바퀴가 아직 움직이지 않은 순간은 속도로 가려낼 수 없으므로, 모드 IDLE이고 주행 진행(navigation)과 Fleet 목표가 없는 표본만 인정해 배제한다. 사용자 결정 (가)의 "정지 상태(속도 0)" 범위이며, 조정 세션이 이 대체를 확인했다 | 채널이 fresh가 아니면 None |
 | `bed_ready` | 셀 S: 상단 카메라 판정(2-9절), UNKNOWN이면 이름 있는 운영자 확인. 셀 A/B: 이름 있는 운영자 확인. 운영자 확인(`POST .../bed-confirm`)은 유효 120 s, 확인 뒤 자세가 2 cm 넘게 움직이면 무효. bed 센서는 없다 | 확인 없음·만료·이동은 False |
@@ -89,7 +89,7 @@ Fleet은 `POST /api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence`(proposer
 
 #### 2-5. 감독 시험은 사람이 표시한 작업만, 나머지는 D-911 검토 범위 (사용자 결정, 2026-11-20)
 
-worker는 `--commissioning --person-at-switch`를 더 이상 항상 넘기지 않는다(사람이 전원 스위치 옆에 있다는 선언을 소프트웨어가 대신하지 않는다, D-911 4). 이름 있는 운영자가 `POST .../presence-confirm`으로 작업에 입회 표시를 하고(120 s), 그 작업의 `claim`이 표시를 소비해 `handoff.presence`로 실을 때만 worker가 그 작업을 감독 시험으로 실행한다. 표시가 없거나 만료·익명이면 `cell_envelope`의 검토된 운전 범위(D-911 `reviews`, `task_sha256` 일치)로만 실행한다. 검토 기록이 없으면 러너가 **팔을 움직이기 전에** `held: not_reviewed`로 멈추고, worker는 `phase: ABORTED`, 사유 `REVIEW_REQUIRED`로 보고한다(claim 전에 Fleet이 envelope 검토 여부를 알지 못하므로 claim 후·동작 전에 판정한다; 팔은 움직이지 않고 owner 증거도 보내지 않는다). ABORTED는 기존대로 AMR 이동 억제를 유지하고 사람이 푼다.
+worker는 `--commissioning --person-at-switch`를 더 이상 항상 넘기지 않는다(사람이 전원 스위치 옆에 있다는 선언을 소프트웨어가 대신하지 않는다, D-911 4). 이름 있는 운영자가 `POST .../presence-confirm`으로 작업에 입회 표시를 하고(120 s), 그 작업의 `claim`이 표시를 소비해 `handoff.presence`로 실을 때만 worker가 그 작업을 감독 시험으로 실행한다. 표시가 없거나 만료·익명이면 `cell_envelope`의 검토된 운전 범위(D-911 `reviews`, `task_sha256` 일치)로만 실행한다. 검토 기록이 없으면 러너가 **팔을 움직이기 전에** `held: not_reviewed`로 멈추고, worker는 `phase: ABORTED`, 사유 `REVIEW_REQUIRED`로 보고한다(claim 전에 Fleet이 envelope 검토 여부를 알지 못하므로 claim 후·동작 전에 판정한다; 팔은 움직이지 않고 owner 증거도 보내지 않는다). ABORTED는 기존대로 AMR 이동 억제를 유지하고 사람이 푼다. 이름 있는 운영자가 팔 접힘을 확인한 뒤 `POST /api/fleet/pipeline/arm-holds/clear`를 호출하면 남아 있는 팔 hold·사람 감지·`RUNNING`/`PAUSED_HUMAN` 작업이 없을 때만 해당 셀의 `ABORTED` 인터락을 `IDLE`(`amr_motion_inhibited=False`)로 해제하고 원장을 저장한다.
 
 **시운전 뒤 D-911 검토 기록:** 자동 등록은 D-911 3·7이 허용하지 않는다(성공이 스스로 승격하지 않고 반복 수·성공률·시작 오차 기준은 검토자가 정하며 기본값이 없다). 대신 기존 절차를 한 단계로 만든 `deploy/robot/omx/cell_envelope_review.py`가 있다: 시험 뒤 `list <work-dir>/attempts.jsonl`로 후보(작업 key·시험 수·성공 수)를 보고, 사람이 `add --attempts ... --envelope ... --task-sha256 ... --reviewed-by ... --evidence-ref ... --min-attempts N --min-success-rate R --home-tolerance U --confirm-physical-review`를 실행한다. 작업 key·scope·`attempts_sha256`은 장부에서 복사하고 검토자·근거·세 숫자는 사람이 준다(기본값 없음). 시험이 그 숫자를 못 채우거나 hardware가 아니거나 이미 검토가 있으면 기록하지 않는다. 규칙은 바뀌지 않았다.
 
@@ -108,6 +108,7 @@ worker가 보관한 결과(2-4절)의 `owner-evidence`가 `measured_at` 기준 6
 
 - 재전송 응답 정리(보관 결과는 `pending-results.json`): 증거 나이가 60 s 이상 65 s 미만이면 아무것도 보내지 않고 보관(Fleet이 거부할 것이므로), 65 s 이상이면 팔 없는 재측정 뒤 전송. 422 `OWNER_EVIDENCE_MEASURED_AT_INVALID`·`OMX_OWNER_EVIDENCE_UNAVAILABLE`(만료 계열)은 삭제하지 않고 `last_refusal`과 함께 보관해 다음 재측정 시점에 다시 한다. 422 `BED_CONFIRMATION_INVALID`는 사람 대기(보관). 연결 끊김·403·5xx·원래 증거 409 `OWNER_EVIDENCE_ALREADY_RECORDED`는 보관·계속. 그 밖의 409·422(본문 불일치, 작업이 RUNNING 아님 등)와 lease가 바뀐 작업만 삭제한다.
 - `claim`은 적재함 확인의 lease 결속(`bind_bed`, 한 번 잡은 `now`로 120 s 판정)을 원장 변경(셀 상태·`RUNNING`·lease) 앞에서 하고, 확인이 그사이 만료되었으면 `claimed:false`, `AMR_BRAKE_BED_VELOCITY_UNMEASURED`로 거부한다(작업은 QUEUED). 119.9 s는 통과, 120.1 s는 거부.
+- **정지 자세 `bridged`·outbox 보류:** `MapPoseTracker`가 1 Hz odom 갱신·보간에서 반환하는 정지 `bridged` 자세(`dead_reckon_m` ≤ 2 cm, `bridge_turn_deg` ≤ 2°, `sighting`/`track`/`peer` 2 s 이하 또는 `operator_pin` 10 s 이하)만 `zone_pose()`가 수용한다. 이동 중 dead-reckoning은 계속 거부되며, `cell_result_outbox`는 `/complete`의 `422 AMR_BRAKE_BED_VELOCITY_UNMEASURED`를 버리지 않고 보관해 재측정·재전송한다.
 
 #### 2-9. 셀 S의 적재함 준비는 상단 카메라가 판정한다 (사용자 결정, 2026-11-21)
 

@@ -162,6 +162,7 @@ class Paths:
 
     def __init__(self, root: Path = Path("/")):
         root = Path(root)
+        self.root = root
         self.site_env = root / "etc/rosy/site/site.env"
         self.env_backup = root / "etc/rosy/site/site.env.autoupdate-prev"
         self.config = root / "etc/rosy/site/autoupdate.conf"

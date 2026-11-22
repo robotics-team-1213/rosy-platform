@@ -16,7 +16,7 @@ import uvicorn
 from fastapi.testclient import TestClient
 
 from browser_harness import browser_tests_enabled, launch_options, safe_listener
-from core_common.protocol.workcell_observations import WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import WorkcellObservationManifest
 from deploy.robot.omx.load_report_bridge import publish
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole

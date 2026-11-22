@@ -712,6 +712,14 @@ def test_the_actuator_ramp_never_exceeds_its_rate_and_acceleration():
     command = actuator.step({name: 2028 + 4096 for name in BODY}, 1 / 30)
     moved = command["shoulder_pan"] - 2028
     assert 0 < moved <= actuator_module.RATE_DEG_S * actuator_module.TICKS_PER_DEGREE / 30 + 1e-6
+    fast = actuator_module.LeaderActuator(Bus(leader=True), rate_deg_s=20.0, accel_deg_s2=80.0)
+    fast.seed({name: 2028 for name in BODY})
+    for _ in range(15):
+        cmd = fast.step({name: 2500 for name in BODY}, 1 / 30)
+    assert cmd["shoulder_pan"] - 2028 > 50  # 20 deg/s >> 1 deg/s default
+    for bad in ({"rate_deg_s": 0}, {"rate_deg_s": 31.0}, {"rate_deg_s": True}, {"accel_deg_s2": 121.0}):
+        with pytest.raises(ValueError):
+            actuator_module.LeaderActuator(Bus(leader=True), **bad)
 
 
 def test_the_actuator_stops_a_joint_that_holds_its_load_at_the_cap():

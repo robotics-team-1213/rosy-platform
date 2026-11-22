@@ -24,6 +24,7 @@
       <nav class="header-tools" aria-label="작업대 도구">
         <span id="ftr-server" class="ui-tag mono">서버 확인 중</span>
         <span class="ui-tag" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
+        <button type="button" id="hdr-sound-btn" class="btn-tool btn-xs" aria-pressed="true" title="신호음 켜기/끄기 [M]">신호음 ON</button>
         <button type="button" id="hdr-help-btn" class="btn-tool btn-xs" title="단축키 도움말 [?]" aria-label="단축키" aria-controls="sec-shortcuts">?</button>
         <div class="drawer-menu-wrap" id="drawer-menu-wrap">
           <button type="button" id="btn-drawer-menu" class="btn-tool btn-xs" aria-expanded="false" aria-controls="drawer-menu-pop">메뉴 ▾</button>
@@ -62,7 +63,7 @@
         <button type="button" id="hdr-finish-btn" class="btn-tool topbar-op-btn" disabled hidden>연동 끝</button>
         <div id="home-include-leader-group" class="home-group" data-tabs="setup">
           <button type="button" id="hdr-home-btn" class="btn-tool" disabled title="선택한 팔 홈 이동 [H]"><span class="btn-lbl">홈 이동</span><kbd class="kbd-hint">H</kbd></button>
-          <label class="check-row topbar-check" id="home-include-leader-wrap"><input type="checkbox" id="home-include-leader"><span>리더도 함께</span></label>
+          <label class="check-row topbar-check" id="home-include-leader-wrap"><input type="checkbox" id="home-include-leader" checked><span>리더도 함께</span></label>
         </div>
         <div id="hdr-live-metrics" class="live-ops" data-tabs="recording" hidden>
           <button type="button" id="hdr-next-ep-btn" class="btn-tool topbar-op-btn" disabled title="다음 에피소드 (녹화 중에만 활성) [→ / N]">다음 에피소드<kbd class="kbd-hint">→</kbd></button>
@@ -70,7 +71,9 @@
         </div>
         <div id="hdr-result-actions" class="result-ops" data-tabs="result" hidden>
           <span id="goal-result-line" class="goal-result-line mono" hidden></span>
-          <button type="button" id="back-to-setup-btn" class="btn-primary">다음 녹화 준비</button>
+          <button type="button" id="hdr-result-home-btn" class="btn-tool" title="팔로워 홈 포즈 복귀 (펼쳐진 팔 안전 접기 포함) [H]"><span class="btn-lbl">지금 홈 포즈</span><kbd class="kbd-hint">H</kbd></button>
+          <button type="button" id="hdr-quick-restart-btn" class="btn-primary" title="홈 복귀 확인 후 수집명 +1로 바로 다음 연동 준비 시작">홈 → 바로 다음 시작</button>
+          <button type="button" id="back-to-setup-btn" class="btn-tool">다음 녹화 준비</button>
         </div>
       </div>
       <div class="stop-group">
@@ -113,10 +116,12 @@
         <div id="post-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px" hidden>
           <button type="button" id="next-ep-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">다음 회차 준비 (수집명 +1)</button>
           <button type="button" id="copy-transfer-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">모델 PC 반입 명령 복사</button>
+          <button type="button" id="ev-delete-empty-btn" class="btn-tool" data-tone="warn" style="min-height:40px;font-size:.9rem" hidden>빈 데이터셋 삭제 (0회)</button>
         </div>
       </section>
 
       <aside id="bench-sidebar" class="bench-sidebar" aria-label="작업대 정보 사이드바">
+        <div id="arm-card-bar" class="arm-card-bar" role="group" aria-label="연결된 암 선택"></div>
         <section class="card sb-sec goal-panel" id="sec-goal" aria-labelledby="h-goal">
           <div class="goal-head">
             <h2 id="h-goal" class="goal-kicker">목표</h2>
@@ -163,7 +168,7 @@
           </div>
         </details>
 
-        <details class="card acc-card sb-sec" id="sec-status" open aria-labelledby="h-status">
+        <details class="card acc-card sb-sec" id="sec-status" aria-labelledby="h-status">
           <summary class="acc-sum sb-sum">
             <h2 id="h-status" class="goal-kicker">진단</h2>
           </summary>
@@ -197,7 +202,7 @@
 
         <details class="card acc-card sb-sec" id="sec-params" open aria-labelledby="h-params">
           <summary class="acc-sum sb-sum">
-            <div class="acc-head"><h2 id="h-params" class="goal-kicker">파라미터</h2></div>
+            <div class="acc-head"><h2 id="h-params" class="goal-kicker">관절·동기화 파라미터</h2></div>
           </summary>
           <div class="acc-body sb-body">
             <dl id="sb-params-kv" class="kv sb-params-kv mono">
@@ -206,6 +211,34 @@
               <dt>에피소드</dt><dd id="sb-param-episodes">기본회</dd>
               <dt>회차/대기</dt><dd id="sb-param-timing">회차 길이 기본 · 사이 대기 기본</dd>
             </dl>
+            <div id="sb-speed-box" class="sb-param-block">
+              <div class="sb-param-head"><span>추종 속도 (teleop)</span><span id="sb-speed-detail" class="mono quiet"></span></div>
+              <div id="sb-speed-pills" class="speed-pills" role="group" aria-label="추종 속도 단계"></div>
+            </div>
+            <div id="sb-grip-map" class="sb-param-block">
+              <div class="sb-param-head">
+                <span>집게 폭 매핑 (리더 ↔ 팔로워)</span>
+                <button type="button" id="sb-grip-save-btn" class="btn-primary btn-xs">집게 폭 저장</button>
+              </div>
+              <div class="grip-map-grid mono">
+                <label class="jc-field"><span>리더 닫힘</span><input type="number" id="gm-lc" class="jc-inp" min="0" max="4095" step="1"></label>
+                <label class="jc-field"><span>리더 열림</span><input type="number" id="gm-lo" class="jc-inp" min="0" max="4095" step="1"></label>
+                <label class="jc-field"><span>팔로워 닫힘</span><input type="number" id="gm-fc" class="jc-inp" min="0" max="4095" step="1"></label>
+                <label class="jc-field"><span>팔로워 열림</span><input type="number" id="gm-fo" class="jc-inp" min="0" max="4095" step="1"></label>
+              </div>
+              <div id="sb-grip-span" class="mono quiet" style="font-size:.73rem">확인 중...</div>
+            </div>
+            <details id="sb-joint-caps-box" class="sb-param-block">
+              <summary class="sb-param-head" style="cursor:pointer;list-style:none">
+                <span>관절 한계 · 동기화 (11~16)</span>
+                <span class="quiet">펼치기 ▾</span>
+              </summary>
+              <div class="sb-param-actions" style="margin:4px 0">
+                <button type="button" id="sb-caps-save-btn" class="btn-primary btn-xs">값 저장</button>
+                <button type="button" id="sb-caps-drawer-btn" class="btn-tool btn-xs">막대 편집</button>
+              </div>
+              <div id="sb-joint-caps-table" class="joint-caps-table mono"></div>
+            </details>
           </div>
         </details>
 
@@ -229,7 +262,7 @@
               <dt><kbd>Ctrl+Enter</kbd> / <kbd>Alt+S</kbd></dt><dd>한 번에 시작</dd>
               <dt><kbd>→</kbd> / <kbd>N</kbd></dt><dd>다음 에피소드 (녹화 중)</dd>
               <dt><kbd>←</kbd> / <kbd>R</kbd></dt><dd>다시 녹화 (녹화 중)</dd>
-              <dt><kbd>H</kbd></dt><dd>선택 팔 홈 이동</dd>
+              <dt><kbd>H</kbd></dt><dd>선택 팔 홈 이동 / 지금 홈 포즈</dd>
               <dt><kbd>Esc</kbd></dt><dd>녹화 중지 / 서랍 닫기</dd>
               <dt><kbd>C</kbd></dt><dd>주/보조 카메라 전환</dd>
               <dt><kbd>Shift+C</kbd></dt><dd>카메라 재시작</dd>
@@ -239,6 +272,7 @@
               <dt><kbd>X</kbd></dt><dd>알림 닫기</dd>
               <dt><kbd>Alt+R</kbd></dt><dd>역방향 재생 전환</dd>
               <dt><kbd>Alt+W</kbd></dt><dd>집기↔놓기 스왑</dd>
+              <dt><kbd>M</kbd></dt><dd>신호음 켜기/끄기</dd>
               <dt><kbd>?</kbd></dt><dd>단축키 도움말</dd>
             </dl>
           </div>
@@ -248,20 +282,25 @@
     </div>
   </main>
   <footer id="status-bar" class="status-bar" aria-label="작업대 상태">
-    <dl id="sb-motor-summary" class="status-values">
-      <div><dt>단계</dt><dd id="top-badge">확인 중</dd></div>
-      <div hidden><dt>팔로워</dt><dd><span id="sb-st-follower" hidden></span> <span id="sb-st-torque" hidden></span></dd></div>
-      <div class="status-leader" hidden><dt>리더</dt><dd id="sb-st-leader"></dd></div>
-      <div hidden><dt>추종</dt><dd id="sb-st-phase"><span id="tel-track"></span></dd></div>
-      <div class="status-speed" hidden><dt>속도</dt><dd id="status-speed"></dd></div>
-      <div hidden><dt>카메라</dt><dd><span id="status-cameras"></span> <span id="status-camera-source" hidden></span></dd></div>
-      <div hidden><dt>보류·사고</dt><dd id="sb-st-hold"></dd></div>
-    </dl>
-    <div id="start-reason-bar" class="reason-strip" role="status" hidden>
-      <span class="status-label">알림</span><span id="hdr-start-reasons" class="reason-text quiet"></span>
-      <button type="button" id="reason-more-btn" class="btn-tool btn-xs" hidden></button>
-      <button type="button" id="reason-expand-btn" class="btn-tool btn-xs" aria-expanded="false" hidden>자세히</button>
-      <button type="button" id="reason-close-btn" class="btn-tool btn-xs" aria-label="알림 닫기" hidden>닫기<kbd class="kbd-hint">X</kbd></button>
+    <div class="status-bar-main">
+      <dl id="sb-motor-summary" class="status-values">
+        <div><dt>단계</dt><dd id="top-badge">확인 중</dd></div>
+        <div hidden><dt>팔로워</dt><dd><span id="sb-st-follower" hidden></span> <span id="sb-st-torque" hidden></span></dd></div>
+        <div class="status-leader" hidden><dt>리더</dt><dd id="sb-st-leader"></dd></div>
+        <div hidden><dt>추종</dt><dd id="sb-st-phase"><span id="tel-track"></span></dd></div>
+        <div class="status-speed" hidden><dt>속도</dt><dd id="status-speed"></dd></div>
+        <div hidden><dt>카메라</dt><dd><span id="status-cameras"></span> <span id="status-camera-source" hidden></span></dd></div>
+        <div hidden><dt>보류·사고</dt><dd id="sb-st-hold"></dd></div>
+      </dl>
+      <div id="start-reason-bar" class="reason-strip" role="status" hidden>
+        <span class="status-label">알림</span><span id="hdr-start-reasons" class="reason-text quiet"></span>
+        <button type="button" id="reason-more-btn" class="btn-tool btn-xs" hidden></button>
+        <button type="button" id="reason-expand-btn" class="btn-tool btn-xs" aria-expanded="false" hidden>자세히</button>
+        <button type="button" id="reason-close-btn" class="btn-tool btn-xs" aria-label="알림 닫기" hidden>닫기<kbd class="kbd-hint">X</kbd></button>
+      </div>
+    </div>
+    <div id="activity-log-bar" class="activity-log-bar">
+      <span class="status-label">기록</span><span id="activity-log-text" class="activity-log-text mono" data-tone="muted">대기 중</span>
     </div>
   </footer>
 
@@ -299,8 +338,9 @@
                         <button type="button" id="task-next-btn" class="btn-tool btn-xs" title="다음 작업 카드">▶ 다음</button>
                       </div>
                       <div id="task-filters" class="task-filters" role="group" aria-label="작업 카드 필터">
-                        <button type="button" class="pill-btn active" data-tfilter="all" aria-pressed="true">전체</button>
-                        <button type="button" class="pill-btn" data-tfilter="arm" aria-pressed="false">내 팔만</button>
+                        <button type="button" class="pill-btn" data-tfilter="all" aria-pressed="false">전체</button>
+                        <button type="button" class="pill-btn active" data-tfilter="arm" aria-pressed="true">내 팔만</button>
+                        <button type="button" class="pill-btn" data-tfilter="todo" aria-pressed="false">미완료</button>
                         <button type="button" class="pill-btn" data-tfilter="pinky" aria-pressed="false">Pinky/벨트</button>
                       </div>
                     </div>
@@ -459,6 +499,7 @@
               <label style="display:inline-flex;align-items:center;gap:6px;font-size:.84rem;cursor:pointer">
                 <input type="checkbox" id="hf-auto-upload"> 봉인 후 자동 업로드
               </label>
+              <button type="button" id="cleanup-empty-ds-btn" class="btn-tool btn-xs" data-tone="warn" hidden>빈 데이터셋 정리</button>
               <a id="hf-repo-link" class="quiet mono" href="#" target="_blank" rel="noopener" hidden></a>
             </div>
             <div id="hf-upload-live" class="alert" style="margin:0 0 8px" hidden>
@@ -475,18 +516,20 @@
 
         <details class="card acc-card" id="sec-pipeline" open aria-labelledby="h-pipeline" style="margin-top:12px">
           <summary class="acc-sum">
-            <div class="acc-head"><h3 id="h-pipeline" style="margin:0">D · 시뮬 · 모델 실행 &rarr; 증강 · RL 루프</h3><span id="sum-pipe-drawer" class="sum-line quiet mono">대기 · 루프 0회</span></div>
+            <div class="acc-head"><h3 id="h-pipeline" style="margin:0">D · 시뮬 · 수집 · 봉인 · 모델 PC 전달</h3><span id="sum-pipe-drawer" class="sum-line quiet mono">대기 · 전달 0회</span></div>
             <span id="pipe-job-badge" class="badge" data-tone="warn">대기</span>
           </summary>
           <div class="acc-body">
-            <ol id="pipe-stepper" class="pipe-stepper" aria-label="4단계 폐쇄 루프">
-              <li class="pipe-step" data-stage="sim" data-state="idle"><span class="pipe-idx">1</span><span>시뮬 / 모델 실행</span></li>
+            <ol id="pipe-stepper" class="pipe-stepper" aria-label="5단계 전달 루프">
+              <li class="pipe-step" data-stage="sim" data-state="idle"><span class="pipe-idx">1</span><span>시뮬/궤적</span></li>
               <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
-              <li class="pipe-step" data-stage="collect" data-state="idle"><span class="pipe-idx">2</span><span>실물 영상 수집</span></li>
+              <li class="pipe-step" data-stage="collect" data-state="idle"><span class="pipe-idx">2</span><span>실물 수집</span></li>
               <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
-              <li class="pipe-step" data-stage="augment" data-state="idle"><span class="pipe-idx">3</span><span>데이터 증강</span></li>
+              <li class="pipe-step" data-stage="seal" data-state="idle"><span class="pipe-idx">3</span><span>봉인/검증</span></li>
               <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
-              <li class="pipe-step" data-stage="rl" data-state="idle"><span class="pipe-idx">4</span><span>RL / 학습 연동</span></li>
+              <li class="pipe-step" data-stage="transfer" data-state="idle"><span class="pipe-idx">4</span><span>모델PC 전송</span></li>
+              <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
+              <li class="pipe-step" data-stage="intake" data-state="idle"><span class="pipe-idx">5</span><span>Canonical 인입</span></li>
             </ol>
             <fieldset class="group" style="margin-top:10px">
               <legend>1 · 시뮬 / 정책 소스 및 리플레이 궤적</legend>
@@ -500,7 +543,7 @@
                   </select>
                 </label>
                 <label class="field">소스 경로 / 체크포인트
-                  <input type="text" id="pipe-source-ref" placeholder="예: isaac://h1-belt-r1 또는 ckpt://latest" autocomplete="off">
+                  <input type="text" id="pipe-source-ref" placeholder="예: isaac://h1-belt-r1 또는 replays/..." autocomplete="off">
                 </label>
               </div>
               <div class="pipe-actions">
@@ -512,13 +555,13 @@
             <div class="pipe-ctrl-row">
               <label class="check-row" style="flex:1 1 240px">
                 <input type="checkbox" id="pipe-auto-toggle">
-                <span>수집 후 자동 증강·RL 전송</span>
+                <span>봉인 후 서버 자동 검증 · 모델 PC 전송</span>
               </label>
-              <button type="button" id="pipe-run-btn" class="btn-primary" style="min-height:42px;padding:0 14px;font-size:.9rem">지금 증강/학습 파이프라인 실행</button>
+              <button type="button" id="pipe-run-btn" class="btn-primary" style="min-height:42px;padding:0 14px;font-size:.9rem">지금 검증 · 모델 PC 전송 실행</button>
             </div>
             <div class="pipe-loop-bar">
-              <span class="ui-tag mono" id="pipe-loop-badge">루프 0회</span>
-              <span id="pipe-loop-meta" class="quiet mono" style="font-size:.8rem">데이터셋 · 증강 · RL 체크포인트 피드백 대기 중</span>
+              <span class="ui-tag mono" id="pipe-loop-badge">전달 0회</span>
+              <span id="pipe-loop-meta" class="quiet mono" style="font-size:.8rem">모델 PC 전달 및 Canonical 인입 대기 중</span>
             </div>
             <pre id="pipe-log" class="pipe-log mono quiet" hidden></pre>
           </div>
@@ -528,12 +571,23 @@
     </div>
   </aside>
 
+  <div id="map-modal-host" class="map-modal-host" hidden role="dialog" aria-modal="true" aria-labelledby="map-modal-title">
+    <div id="map-modal-backdrop" class="drawer-backdrop"></div>
+    <div class="map-modal-panel">
+      <div class="drawer-panel-head">
+        <h2 id="map-modal-title" style="margin:0">작업대 배치도 확대 보기</h2>
+        <button type="button" id="map-modal-close-btn" class="btn-tool btn-xs" aria-label="배치도 닫기">닫기 (Esc)</button>
+      </div>
+      <div id="map-modal-body" class="map-modal-body"></div>
+    </div>
+  </div>
 </div>
 
 <script src="/bench_record_ui.js"></script>
 <script src="/bench_record_map.js"></script>
 <script src="/bench_record_status.js"></script>
 <script src="/bench_record_app.js"></script>
+<script src="/bench_record_params.js"></script>
 <script src="/bench_record_drawers.js"></script>
 <script src="/bench_record_cam.js"></script>
 <script src="/bench_record_pipeline.js"></script>

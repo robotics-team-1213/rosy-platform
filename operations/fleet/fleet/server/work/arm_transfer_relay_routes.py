@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from core_common.protocol.arm_transfer import ArmActionId
 from core_common.protocol.arm_transfer_jobs import ArmTransferJobCreate, ArmTransferJobResponse, ArmTransferRequestKey
-from core_common.protocol.arm_transfer_observations import ArmTransferCancelRequest, ArmTransferPhysicalReceiptResponse
+from core_common.protocol.arm_incident.arm_transfer_observations import ArmTransferCancelRequest, ArmTransferPhysicalReceiptResponse
 from core_common.protocol.arm_transfer_recheck import ArmTransferRecheckCreate
 from core_common.protocol.control_units import ControlArmWorkRequest
 from fleet.server.arm_transfer_http import (

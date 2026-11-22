@@ -480,3 +480,59 @@ def test_an_unreadable_or_unknown_source_ref_never_steps_down(device, host, hub,
 
     assert updater(host, hub).run()["phase"] == "idle"
     assert host.current_release() == NEWER
+
+
+def test_staging_progress_writes_download_unpack_verify_and_clears_marker(device, host, hub, keys):
+    payload = b"x" * (140 * 1024)
+    hub.publish(keys, NEXT, tarball=payload)
+    seen = []
+
+    def watch(kind):
+        def hook(h, argv):
+            marker = device / upd.UPDATE_DISPLAY
+            if marker.exists():
+                seen.append((kind, marker.read_text(encoding="utf-8"), status(device).get("progress")))
+            return None
+        return hook
+
+    host.overrides["unpack"] = watch("unpack")
+    host.overrides["verify"] = watch("verify")
+    up = updater(host, hub)
+    orig_write = up._write_progress
+    dl_pcts = []
+
+    def spy_progress(st, phase, step, release_id, pct):
+        if step == "download":
+            dl_pcts.append(pct)
+        return orig_write(st, phase, step, release_id, pct)
+
+    up._write_progress = spy_progress
+    up.hold("tester", "check", 1)
+    assert up.run()["phase"] == "held"
+    assert dl_pcts[0] == 0 and dl_pcts[-1] == 45 and len(dl_pcts) >= 3
+    assert ("unpack", f"unpack\n{NEXT}\n50\n", {"step": "unpack", "percent": 50}) in seen
+    assert ("verify", f"verify\n{NEXT}\n58\n", {"step": "verify", "percent": 58}) in seen
+    assert not (device / upd.UPDATE_DISPLAY).exists()
+
+    hub.publish(keys, NEWER, sha="0" * 64)
+    assert updater(host, hub).run()["phase"] == "error"
+    assert not (device / upd.UPDATE_DISPLAY).exists()
+
+
+@pytest.mark.parametrize("changes", [
+    {"robot_mode": "NAVIGATION"},
+    {"robot_mode": "MANUAL", "manual_quiet_s": 900.0},
+    {"nav_state": "NAVIGATING"},
+    {"trip_lease_active": True},
+    {"calibration_active": True},
+], ids=lambda c: ",".join(f"{k}={v}" for k, v in c.items()))
+def test_busy_or_non_idle_robot_defers_before_staging_download(device, host, hub, keys, changes):
+    hub.publish(keys, NEXT)
+    host.inputs_changes = changes
+    host.write_inputs()
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "ineligible"
+    assert not any(path.endswith(".tar.gz") for path, _ in hub.requests)
+    assert "unpack" not in kinds(host) and "verify" not in kinds(host) and "activate" not in kinds(host)

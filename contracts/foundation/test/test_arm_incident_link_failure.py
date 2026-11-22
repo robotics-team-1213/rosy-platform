@@ -3,7 +3,7 @@ is machine-clearable; the rule recomputes the rest from the reported numbers and
 import json
 from pathlib import Path
 
-from core_common.protocol.arm_incidents import machine_clearable
+from core_common.protocol.arm_incident.arm_incidents import machine_clearable
 
 REAL = json.loads((Path(__file__).parent / "fixtures" / "arm_incidents_link" / "20261118T232302-arm_s.json")
                   .read_text(encoding="utf-8"))["facts"]

@@ -165,6 +165,18 @@ def test_disk_and_gpu_headroom_are_recorded(tmp_path):
     assert row["resources"]["memory_low"] is False
 
 
+@pytest.mark.parametrize(("suffix", "expected"), [
+    ("1795277091 done 0.76", {"started": 1795277091, "state": "done", "free_change_gib": 0.76}),
+    ("1795277091 skipped -", {"started": 1795277091, "state": "skipped", "free_change_gib": None}),
+    ("bad done 0.76", None),
+])
+def test_storage_maintenance_reports_are_optional_and_diagnostic(tmp_path, suffix, expected):
+    assert _guard(tmp_path, f"{DISK_OK} {suffix}") == ["health"]
+    row = _status(tmp_path)["pc1"]
+    assert row["state"] == "ok"
+    assert row["resources"].get("storage_maintenance") == expected
+
+
 def test_low_ram_is_a_report_only_warning_before_the_memory_ladder(tmp_path):
     answer = f"8 10 1.2 24 7200 - {200 * GIB} 40 {100 * GIB} 50 {NO_GPU} {32 * GIB} {int(2.5 * GIB)} - -"
     assert _guard(tmp_path, answer, runs=7) == ["health"] * 7
@@ -333,7 +345,7 @@ def _remote(tmp_path, command, units="pinky-backend.service\n", role=None):
     (tmp_path / "units").write_text(units)
     if role:
         (tmp_path / "role").write_text(role + "\n")
-    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SSH_ORIGINAL_COMMAND": command,
+    env = {**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}", "SSH_ORIGINAL_COMMAND": command,
            "GUARD_UNITS": str(tmp_path / "units"), "GUARD_ROLE_FILE": str(tmp_path / "role"),
            "GUARD_RECOVERY_STATUS": str(tmp_path / "recovery-status.json"), "CALLS": str(tmp_path / "rcalls")}
     result = subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, text=True, timeout=10)
@@ -351,6 +363,18 @@ def test_the_forced_command_reports_down_units_in_health(tmp_path):
     assert 0 < avail <= total and abs(int(fields[0]) - 100 * avail // total) <= 2  # two meminfo reads
     assert 0 <= int(fields[16]) <= 100  # CPU busy over one second of /proc/stat
     assert fields[17] == "-" or -40 <= int(fields[17]) <= 120  # a VM test PC may have no thermal zone
+
+
+def test_the_forced_command_appends_storage_maintenance_summary_when_present(tmp_path):
+    maint = tmp_path / "rosy-test/maintenance"
+    maint.mkdir(parents=True)
+    (maint / "last-report.json").write_text(json.dumps({
+        "mode": "apply", "started": 1700000000, "free_before_GiB": 10.0, "free_after_GiB": 12.5,
+    }))
+    result, _ = _remote(tmp_path, "health")
+    fields = result.stdout.split()
+    assert result.returncode == 0 and len(fields) == 21, result.stdout
+    assert fields[18:] == ["1700000000", "done", "2.50"]
 
 
 def test_the_forced_command_sums_gpu_memory_and_ignores_a_broken_driver(tmp_path):

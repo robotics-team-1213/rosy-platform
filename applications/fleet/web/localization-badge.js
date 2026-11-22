@@ -35,15 +35,21 @@ const FRESH_ANCHOR_S = 1.0;
 // after 30 s, so without this a dead camera is invisible (measured 2026-11-11: 30 days).
 const CAMERA_QUIET_S = 300;
 
+const fmtCoord = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
+
 function poseFrame(state, localization) {
-  return localization?.pose_frame || state.localization?.pose_frame || (state.map_id ? "map" : "odom");
+  if (state?.pose_frame) return state.pose_frame;
+  if (localization?.pose_frame) return localization.pose_frame;
+  if (state?.localization?.pose_frame) return state.localization.pose_frame;
+  if ((localization?.state ?? state?.localization?.state) === "UNKNOWN") return "odom";
+  return state?.map_id ? "map" : "odom";
 }
 
 /** "odom 0.90, 0.05": a row with no reported frame is odom unless the robot reports a map. */
 export function robotPoseText(state, localization) {
   const pose = state?.pose;
   if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) return "—";
-  return `${poseFrame(state, localization)} ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}`;
+  return `${poseFrame(state, localization)} ${fmtCoord(pose.x)}, ${fmtCoord(pose.y)}`;
 }
 
 /** Fleet's site map pose: "지도 0.69, -0.44 · 확정·카메라", "지도 위치 모름", or null without a guide row. */
@@ -67,7 +73,7 @@ export function sitePoseText(guideRow) {
     .filter(Boolean).join("·");
   const quiet = Number.isFinite(pose.last_sighting_age_s) && pose.last_sighting_age_s > CAMERA_QUIET_S
     ? ` · 카메라 ${Math.max(1, Math.round(pose.last_sighting_age_s / 60))}분 침묵` : "";
-  return `지도 ${pose.x.toFixed(2)}, ${pose.y.toFixed(2)}${words ? ` · ${words}` : ""}${quiet}`;
+  return `지도 ${fmtCoord(pose.x)}, ${fmtCoord(pose.y)}${words ? ` · ${words}` : ""}${quiet}`;
 }
 
 /** Fleet's site map pose first, then CORE's explicit state; UNKNOWN warns and needs_human is critical. */

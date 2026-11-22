@@ -1103,3 +1103,184 @@ def test_leader_home_checks_the_attest_before_touching_the_follower(monkeypatch)
         leader_home.main(['--config', 'x.json', '--arm', 'arm_a', '--match-follower'])
 
 
+def test_go_home_keeps_cameras_running_and_handles_opt_in_supervised_fold(tmp_path, monkeypatch):
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    seen_fold = []
+
+    def _run_stages(fold_fn):
+        _home_with_stages(bench, monkeypatch, tmp_path, [('refused', 'home requires an empty, folded arm')])
+        stage_run = bench_record.subprocess.run
+        monkeypatch.setattr(
+            bench_record.subprocess,
+            'run',
+            lambda cmd, **kw: fold_fn(cmd) if len(cmd) > 1 and str(cmd[1]).endswith('cell_auto_fold.py') else stage_run(cmd, **kw),
+        )
+
+    _run_stages(lambda cmd: (
+        seen_fold.append(cmd),
+        Path(cmd[cmd.index('--out') + 1]).write_text(json.dumps({'result': 'folded', 'candidate': 'park'}), encoding='utf-8'),
+        SimpleNamespace(returncode=0, stdout='{"result": "folded"}', stderr=''),
+    )[2])
+    res = bench.go_home({'arm': 'arm_s', 'at_bench': True, 'fold_unfolded': True})
+    assert res['home_moved'] == ['arm_s'] and seen_fold and '--supervised' in seen_fold[0]
+    assert 'pinky' in seen_fold[0]
+    stops = [c[1] for c in calls if c[0] == 'stop']
+    assert stops == ['rosy-omx-observer@arm_a.service']  # camera-view and camera@* stay alive
+
+    # Unmoved block -> returns cleanly to idle with refused error_kind, NO manual-check marker
+    _run_stages(lambda cmd: (
+        Path(cmd[cmd.index('--out') + 1]).write_text(json.dumps({'result': 'held', 'ended': 'stop_now', 'reason': 'ALL_PATHS_BLOCKED'})),
+        SimpleNamespace(returncode=3, stdout='{"result":"held"}', stderr=''),
+    )[1])
+    with pytest.raises(ValueError, match='보류'):
+        bench.go_home({'arm': 'arm_s', 'at_bench': True, 'fold_unfolded': True})
+    assert not bench.manual.exists() and bench.status()['error_kind'] == 'refused' and bench.status()['status'] == 'idle'
+
+    # Moved human-hold -> child returns non-zero -> stays in manual-check fail-closed
+    _run_stages(lambda cmd: (
+        Path(cmd[cmd.index('--out') + 1]).write_text(json.dumps({'result': 'held', 'reason': 'PARK_NOT_HOME'})),
+        SimpleNamespace(returncode=3, stdout='{"result":"held"}', stderr=''),
+    )[1])
+    bench.popen = lambda command, cwd, **kw: SimpleNamespace(poll=lambda: 0, wait=lambda timeout=None: 75, returncode=75, send_signal=lambda s: None, kill=lambda: None)
+    with pytest.raises(ValueError, match='사람이 팔 상태를 확인'):
+        bench.go_home({'arm': 'arm_s', 'at_bench': True, 'fold_unfolded': True})
+    assert bench.manual.exists() and bench.status()['error_kind'] == 'needs_person'
+
+
+def test_stop_home_runner_now_checks_chunk_cmd_fifo(tmp_path, monkeypatch):
+    import bench_record_step
+    import cell_pipeline
+
+    io_dir = tmp_path / 'chunk-io-s'
+    io_dir.mkdir()
+    sent = []
+    monkeypatch.setattr(bench_record_step.Path, 'is_fifo', lambda p: p.name == 'chunk-cmd')
+    monkeypatch.setattr(cell_pipeline, 'FifoCell', lambda d, c: SimpleNamespace(act=lambda cmd: (sent.append((d, cmd)), {'ok': True})[1]))
+    assert bench_record_step.stop_home_runner_now(io_dir) is True
+    assert sent == [(io_dir, 'stop now')]
+    monkeypatch.setattr(bench_record_step.Path, 'is_fifo', lambda p: p.name == 'in')
+    sent.clear()
+    assert bench_record_step.stop_home_runner_now(io_dir) is False and sent == []
+
+
+def test_parallel_leader_home_and_target_follower_ticks(tmp_path, monkeypatch):
+    lh_spec = importlib.util.spec_from_file_location('leader_home', ROOT / 'deploy/robot/omx/leader_home.py')
+    leader_home = importlib.util.module_from_spec(lh_spec)
+    lh_spec.loader.exec_module(leader_home)
+
+    called = {}
+    monkeypatch.setattr(leader_home, 'read_follower_pose', lambda *_a: (_ for _ in ()).throw(AssertionError('must not open follower')))
+    monkeypatch.setattr(leader_home, 'move_leader_home', lambda cfg, arm, pose, attest, **kw: (called.update(arm=arm, **kw), {'ok': True})[1])
+    rc = leader_home.cli(['--config', str(tmp_path / 'cfg.json'), '--arm', 'arm_s',
+                          '--target-follower-ticks', '2048,862,3161,3078,2048', '--rate-deg-s', '20', '--attest', 'hands-off:test:now'])
+    assert rc == 0 and called['follower'] == [2048, 862, 3161, 3078, 2048] and called['rate_deg_s'] == 20.0
+
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    (bench.prep / 'chunks-arm-s-inplace-live.json').write_text(json.dumps({'chunks': {'home': [[0.0, -50.0, 50.0, 25.0, 0.0, 50.0]]}}), encoding='utf-8')
+    _home_with_stages(bench, monkeypatch, tmp_path, [('home', None), ('home', None)])
+    ran = _leader_popen(bench, _LeaderProc(), monkeypatch)
+    orig_popen, rec_cmds = bench.popen, []
+    bench.popen = lambda command, cwd, **kw: (rec_cmds.append(command) if any('record_session.py' in str(x) for x in command) else None, orig_popen(command, cwd, **kw))[1]
+    res = bench.go_home({'arm': 'arm_s', 'at_bench': True, 'include_leader': True})
+    assert res['home_moved'] == ['arm_s'] and ran and rec_cmds
+    cmd = ran[0]
+    assert '--target-follower-ticks' in cmd and '--match-follower' not in cmd and cmd[cmd.index('--rate-deg-s') + 1] == '20'
+    assert '--skip-leader-finish' in rec_cmds[-1]
+    assert calls.index(('start', 'rosy-omx-observer@arm_a.service')) > calls.index(('stop', 'rosy-omx-observer@arm_a.service'))
+    rec_cmds.clear()
+    bench.go_home({'arm': 'arm_s', 'at_bench': True, 'include_leader': False})
+    assert rec_cmds and '--skip-leader-finish' not in rec_cmds[-1]
+
+
+def test_leader_home_rejects_invalid_rate_before_connecting(tmp_path, monkeypatch):
+    lh_spec = importlib.util.spec_from_file_location('leader_home', ROOT / 'deploy/robot/omx/leader_home.py')
+    leader_home = importlib.util.module_from_spec(lh_spec)
+    lh_spec.loader.exec_module(leader_home)
+    monkeypatch.setattr(leader_home, '_connect_leader', lambda *a: (_ for _ in ()).throw(AssertionError('must not connect on invalid rate')))
+    with pytest.raises(ValueError, match='rate_deg_s'):
+        leader_home.move_leader_home(tmp_path / 'cfg.json', 'arm_s', tmp_path / 'p.json', 'hands-off:test:now', rate_deg_s=0)
+
+
+def test_camera_rebind_bimanual_profile_and_fail_closed_start(tmp_path, monkeypatch):
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
+    fake_dev = tmp_path / 'devs'
+    fake_dev.mkdir()
+    reg_dir = tmp_path / 'home' / '.config/rosy'
+    reg_dir.mkdir(parents=True)
+    live_side = str(fake_dev / 'by-path-side')
+    live_a = str(fake_dev / 'by-id-arm-a-wrist')
+    Path(live_side).write_text('')
+    Path(live_a).write_text('')
+    (reg_dir / 'omx-cameras.json').write_text(json.dumps({'cameras': [
+        {'role': 'top', 'device': live_a + '-top'},
+        {'role': 'side', 'device': live_side},
+        {'role': 'arm_a_wrist', 'device': live_a},
+        {'role': 'arm_b_wrist', 'device': '/dev/v4l/by-id/missing-b-wrist'},
+    ]}))
+    Path(live_a + '-top').write_text('')
+
+    # Signed Arm A config still carries stale by-id side path -> choices heals via camera_rebinds, start refuses nothing & writes resolved snap
+    ra = {'type': 'omx_follower', 'id': 'omx_follower_arm', 'port': '/dev/ttyA', 'cameras': {
+        'top': {'type': 'opencv', 'index_or_path': live_a + '-top'},
+        'side': {'type': 'opencv', 'index_or_path': '/dev/v4l/by-id/stale-arm_a_jieli'},
+        'wrist': {'type': 'opencv', 'index_or_path': live_a},
+    }}
+    rb = {'type': 'omx_follower', 'id': 'arm_b_follower', 'port': '/dev/ttyB', 'cameras': {
+        'top': {'type': 'opencv', 'index_or_path': live_a + '-top'},
+        'side': {'type': 'opencv', 'index_or_path': '/dev/v4l/by-id/stale-arm_a_jieli'},
+        'wrist': {'type': 'opencv', 'index_or_path': '/dev/v4l/by-id/missing-b-wrist'},
+    }}
+    (bench.prep / 'record-config-arm-a.json').write_text(json.dumps({'robot': ra}))
+    (bench.prep / 'record-config-arm-b.json').write_text(json.dumps({'robot': rb}))
+    (bench.prep / 'arm-a-robot-profile.json').write_text(json.dumps({
+        'schema': 'rosy.omx-cell-robot-profile.v1', 'device_id': 'arm_a', 'instance_id': 'omx_follower_arm',
+        'robot_config_sha256': digest(ra), 'operating_envelope_path': 'envelope.json', 'work_dir': 'work'}))
+    (bench.prep / 'arm-b-robot-profile.json').write_text(json.dumps({
+        'schema': 'rosy.omx-cell-robot-profile.v1', 'device_id': 'arm_b', 'instance_id': 'arm_b_follower',
+        'robot_config_sha256': digest(rb), 'operating_envelope_path': 'envelope.json', 'work_dir': 'work'}))
+    (bench.prep / 'record-config-bi-ab.json').write_text(json.dumps({
+        'robot': {
+            'type': 'bi_omx_follower', 'id': 'bi_omx_ab',
+            'cameras': {'top': {'type': 'opencv', 'index_or_path': live_a + '-top'}, 'side': {'type': 'opencv', 'index_or_path': live_side},
+                        'arm_a_wrist': {'type': 'opencv', 'index_or_path': live_a}},
+            'arm_a': {**ra, 'cameras': {}},
+            'arm_b': {**rb, 'cameras': {}},
+        }
+    }))
+    (bench.prep / 'record-config-bi-tampered.json').write_text(json.dumps({
+        'robot': {'type': 'bi_omx_follower', 'id': 'bi_omx_ab',
+                  'cameras': {'top': {'type': 'opencv', 'index_or_path': live_a + '-top'}},
+                  'arm_a': {**ra, 'port': '/dev/ttyEVIL', 'cameras': {}}, 'arm_b': {**rb, 'cameras': {}}}
+    }))
+
+    ch = bench.choices()
+    assert ch['config_meta']['record-config-arm-a.json']['camera_issues'] == []
+    assert any('->' in x for x in ch['config_meta']['record-config-arm-a.json']['camera_rebinds'])
+    assert 'record-config-bi-ab.json' in ch['arm_bindings']['arm_ab']['configs']
+    assert 'record-config-bi-tampered.json' not in ch['arm_bindings']['arm_ab']['configs']
+    assert any('arm_b_wrist' in x for x in ch['config_meta']['record-config-arm-b.json']['camera_issues'])
+
+    monkeypatch.setattr('bench_live_preview.SHM', tmp_path / 'missing')
+    bench.start(body)
+    st = finished(bench)
+    assert st['status'] == 'sealed'
+    snap_cfg = json.loads((Path(st['snapshot']) / 'record-config.json').read_text())
+    assert snap_cfg['robot']['cameras']['side']['index_or_path'] == live_side
+
+    # Missing registered camera on Arm B refuses BEFORE stopping units
+    calls.clear()
+    with pytest.raises(ValueError, match='카메라 확인 실패'):
+        bench.start(dict(body, name='fail-b', arm='arm_b', config='record-config-arm-b.json',
+                         caps='caps-arm-b-tune.json',
+                         calibrations=[str(tmp_path / 'home/.cache/huggingface/lerobot/calibration/robots/omx_follower/arm_b_follower.json')]))
+    assert calls == []
+
+    # Corrupt omx-cameras.json fails closed before stopping units
+    (reg_dir / 'omx-cameras.json').write_text('{corrupt')
+    with pytest.raises(ValueError):
+        bench.start(dict(body, name='fail-corrupt'))
+    assert calls == []
+
+

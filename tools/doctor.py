@@ -174,12 +174,30 @@ def check_hosts(now: float) -> list[tuple]:
             report = json.loads(body.strip() or "null") or {}
         except ValueError:
             report = {}
+        if not isinstance(report, dict):
+            report = {}
         free = report.get("free_after_GiB")
         text = (f"host {host}: {'?' if free is None else free} GiB free at last maintenance"
                 f"{'' if report else ' (no last-report.json)'}, disk-low {'present' if low else 'absent'}")
-        found.append(("WARN", text, "docs/solutions/workflow-issues/read-only-test-dirs-fill-lab-disks-2026-10-26.md")
-                     if low else ("OK", text, None))
+        before = report.get("free_before_GiB")
+        skip = report.get("skip")
+        if report.get("mode") == "preview":
+            text += "; cleanup preview"
+        elif skip:
+            text += f"; cleanup skipped ({skip})"
+        elif isinstance(free, (int, float)) and isinstance(before, (int, float)):
+            temp = sum(len(report.get(key, [])) for key in ("pytest_tmp", "runner_tmp", "stale_tmp"))
+            runs = sum(len(report.get(key, [])) for key in ("runs", "orphan_runs"))
+            workspaces = sum(isinstance(name, str) and name.startswith("studies/test-")
+                             for name in report.get("studies", []))
+            text += (f"; free-space change {free - before:+.2f} GiB"
+                     f", removed {temp} temp paths, {runs} runs, {report.get('removed_envs', 0)} venvs"
+                     f", {workspaces} test workspaces")
         started = report.get("started")
+        if isinstance(started, (int, float)) and 0 < started <= now:
+            text += f"; report {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(started))}"
+        found.append(("WARN", text, "docs/solutions/workflow-issues/read-only-test-dirs-fill-lab-disks-2026-10-26.md")
+                     if low or skip or not report else ("OK", text, None))
         if isinstance(started, (int, float)) and now - started > REPORT_STALE_S:
             found.append(("WARN", f"host {host}: last storage maintenance {(now - started) / 3600:.0f} h ago",
                           "ssh <host> systemctl --user status rosy-test-storage.timer rosy-test-storage.service"))
@@ -207,8 +225,10 @@ def check_capacity(hosts: list[str] | None = None, probe=None) -> list[tuple]:
             continue
         site = host in remote_pytest.SITES or p.get("site", False)
         res_c, res_m = remote_pytest.SITE_RESERVE if site else (0, 0)
-        raw = (p["avail_gb"] - res_m >= need_m and p["nproc"] - p["load1"] - res_c >= need_c and not p["busy"]
-               and p.get("disk_use", 0) < host_probe.FULL_USE and p.get("disk_free_gb", 99) >= host_probe.DISK_FLOOR_GB)
+        if host_probe.disk_full(p):
+            found.append(("WARN", f"capacity {host}: {note}", None))
+            continue
+        raw = p["avail_gb"] - res_m >= need_m and p["nproc"] - p["load1"] - res_c >= need_c and not p["busy"]
         if note.endswith(" - ok") or note.endswith("smallest invocations") or not raw:
             found.append(("OK", f"capacity {host}: {note}", None))
         else:

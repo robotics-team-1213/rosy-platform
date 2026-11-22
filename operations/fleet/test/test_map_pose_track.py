@@ -9,8 +9,8 @@ import pytest
 from fleet.localization.track_heading import TrackHeading
 from fleet.server.auto_locate_service import AutoLocateService
 from fleet.server.map_pose_service import MapPoseService
-from rosy.world.state.projections.map_pose import (TRACK, UNKNOWN, MapPoseConfig, MapPoseTracker,
-                                                   OdomSample, Sighting)
+from rosy.world.state.projections.map_pose import (DEGRADED, LOCALIZED, OPERATOR_PIN, TRACK, UNKNOWN,
+                                                   MapPoseConfig, MapPoseTracker, OdomSample, Sighting)
 
 T0 = 1_800_000_000.0
 CFG = MapPoseConfig(track_anchor_robots=("r1",))
@@ -168,3 +168,55 @@ def test_a_name_that_may_have_moved_to_another_robot_ends_the_track_anchor():
     track.update(reason="overlap")
     asyncio.run(service.tick())
     assert poses.arbitrated_pose("r1").state == UNKNOWN and service.track_refused["r1"] == "overlap"
+
+
+def test_agreeing_track_hands_off_from_operator_pin_without_degraded_blip():
+    tr = MapPoseTracker("r1", CFG)
+    assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0), T0)
+    assert tr.add_pin((0.0, 0.0, 0.5), T0, "m") is None
+    states = []
+    # Drive past both max_dead_reckon_m (1.5 m) and max_anchor_age_s (10 s) with agreeing tracks.
+    steps = int(max(CFG.max_dead_reckon_m / 0.05, CFG.max_anchor_age_s / 0.5)) + 6
+    for k in range(1, steps):
+        t = 0.5 * k
+        px = 0.05 * k
+        wx, wy = px * math.cos(0.5), px * math.sin(0.5)
+        assert track(tr, t, wx, wy, odom_x=px) is None
+        pose = tr.pose(T0 + t)
+        states.append((pose.state, pose.anchor_source))
+    assert all(st == LOCALIZED for st, _ in states)
+    assert states[0][1] == TRACK and states[-1][1] == TRACK
+    assert tr.pose(T0 + 0.5 * (steps - 1)).yaw == pytest.approx(0.5)
+
+
+def test_disagreeing_track_still_degrades_after_operator_pin():
+    tr = MapPoseTracker("r1", CFG)
+    assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0), T0)
+    assert tr.add_pin((0.0, 0.0, 0.0), T0, "m") is None
+    assert track(tr, 0.5, 0.5, 0.0, odom_x=0.0) is None   # jumped while pin is fresh: ignored, pin stays
+    fresh = tr.pose(T0 + 0.5)
+    assert (fresh.state, fresh.anchor_source) == (LOCALIZED, OPERATOR_PIN)
+    late = CFG.max_anchor_age_s + 1.0
+    for k in range(1, int(late)):
+        assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + k), T0 + k)
+    assert track(tr, late, 0.5, 0.0, odom_x=0.0) is None
+    assert tr.pose(T0 + late).state == DEGRADED
+
+
+def test_agreeing_track_hands_off_from_fresh_sighting_without_degraded_blip():
+    tr = seeded()
+    assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 0.25), T0 + 0.25)
+    assert tr.add_sighting(Sighting("r1", 0.0, 0.0, 0.0, T0 + 0.25, map_id="m"), T0 + 0.25, "m") is True
+    assert tr.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 0.5), T0 + 0.5)
+    assert tr.add_sighting(Sighting("r1", 0.0, 0.0, 0.0, T0 + 0.5, map_id="m"), T0 + 0.5, "m") is True
+    assert tr.pose(T0 + 0.5).state == LOCALIZED
+    anchors = []
+    steps = int(CFG.max_anchor_age_s / 0.5) + 6
+    for k in range(1, steps):
+        t = 0.5 + 0.5 * k
+        x = 0.04 * k
+        assert track(tr, t, x, 0.0) is None
+        pose = tr.pose(T0 + t)
+        assert pose.state == LOCALIZED
+        anchors.append(pose.anchor_source)
+    assert anchors[0] == "sighting" and anchors[-1] == TRACK

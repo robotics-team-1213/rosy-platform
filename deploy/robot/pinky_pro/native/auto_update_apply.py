@@ -12,8 +12,8 @@ import rosy_claim
 from auto_update_host import (ACTIVATE_TIMEOUT_S, BACKOFF_MAX_S, CLAIM_HOLDER, CLAIM_TTL_S, CORE_DOWN_NOTE,
     Deferred, HEALTH_HOLD_S, HEALTH_POLL_S, HEALTH_UNITS, _last_json, NATIVE_JOURNAL, _outcome,
     PRUNE_MIN_AGE_S, READY_TIMEOUT_S, RELEASE_ID, RELEASE_LOCK, RELEASE_SYNC, RELEASES, RESTART_TIMEOUT_S,
-    ROLLBACK_MAX_RETRIES, SELF_UNIT, STAGE_BACKOFF_BASE_S, SYNC_TIMEOUT_S, SYSTEMCTL_TIMEOUT_S, _tail,
-    TRUSTED_KEY, UNIT_NAME, UpdateError, _z)
+    ROLLBACK_MAX_RETRIES, SELF_UNIT, STAGE_BACKOFF_BASE_S, STEP_PROGRESS, SYNC_TIMEOUT_S, SYSTEMCTL_TIMEOUT_S,
+    _tail, TRUSTED_KEY, UNIT_NAME, UpdateError, _z)
 
 
 class UpdaterApply:
@@ -114,22 +114,33 @@ class UpdaterApply:
                 problems.append(f"failed units: {' '.join(new)}")
         return problems
 
-    def _health(self, release_id: str, baseline: dict) -> None:
+    def _health(self, release_id: str, baseline: dict, state: dict | None = None) -> None:
         self._ready()
-        deadline = self.host.now() + _dt.timedelta(seconds=HEALTH_HOLD_S)
+        started = self.host.now()
+        deadline = started + _dt.timedelta(seconds=HEALTH_HOLD_S)
+        last_pct = STEP_PROGRESS["health"]
         while True:
             problems = self._unit_problems(release_id, baseline)
             if problems:
                 raise UpdateError(f"HEALTH: {'; '.join(problems)}")
-            if self.host.now() >= deadline:
+            now = self.host.now()
+            if now >= deadline:
                 return
+            elapsed = max(0.0, (now - started).total_seconds())
+            pct = STEP_PROGRESS["health"] + min(17, int(elapsed * 17 // HEALTH_HOLD_S))
+            if state is not None and isinstance(state.get("applying"), dict) and pct != last_pct:
+                last_pct = pct
+                state["applying"]["percent"] = pct
+                self._write_progress(state, "applying", "health", release_id, pct)
             self.host.sleep(HEALTH_POLL_S)
 
-    def _journal(self, state: dict, step: str) -> None:
+    def _journal(self, state: dict, step: str, percent: int | None = None) -> None:
         """Record the step before doing it, and keep the claim alive for the next one (review M8)."""
+        pct = STEP_PROGRESS[step] if percent is None and step in STEP_PROGRESS else percent
         state["applying"]["step"] = step
+        state["applying"]["percent"] = pct
         self._save_state(state)
-        self._update_marker(state["applying"])
+        self._write_progress(state, "applying", step, state["applying"]["release_id"], pct)
         try:
             claim = rosy_claim.check(self.root, now=self.host.now())
             if (claim is None or claim.get("holder") != CLAIM_HOLDER
@@ -158,7 +169,7 @@ class UpdaterApply:
             self._recheck_waived(state)
             self._restart(result)
             self._journal(state, "health")
-            self._health(release_id, baseline)
+            self._health(release_id, baseline, state)
         except Deferred as exc:
             return self._finish(state, "ineligible", f"finishing {release_id} deferred: {exc}", release_id)
         except UpdateError as exc:
@@ -344,6 +355,7 @@ class UpdaterApply:
             return self._finish(state, "ineligible", f"claim held by {holder}", release_id)
         try:
             state["applying"] = {"release_id": release_id, "previous": current, "step": "activate",
+                                 "percent": STEP_PROGRESS["activate"],
                                  "started_at": _z(self.host.now()), "boot_id": self.host.boot_id(),
                                  "baseline": self._baseline()}
             # Review M2: one more look right before anything stops. What is left is the

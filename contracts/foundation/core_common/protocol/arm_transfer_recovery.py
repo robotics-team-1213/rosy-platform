@@ -5,7 +5,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_valida
 
 from .arm_transfer import ArmActionId, ArmJournalId, ArmScopeId
 from .arm_transfer_jobs import ArmTransferJobAdmit, ArmTransferRequestKey
-from .arm_transfer_observations import ArmTransferObservation, _sequence, _unique_owners
+from .arm_incident.arm_transfer_observations import ArmTransferObservation, _sequence, _unique_owners
 from .arm_transfer_preflight import ArmDigest, ArmPhysicalRef
 from .device_actions import DeviceActionPhaseReceipt, DeviceActionState
 

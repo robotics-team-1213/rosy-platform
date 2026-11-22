@@ -20,13 +20,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fleet_trips as ft  # noqa: E402
 
 
-def activate_nav2_lane_map(fleet: str, operator: str, log) -> list[dict]:
-    """Activate rotated site map via Fleet HTTP API while keeping edges ``drive_mode='lane'``."""
+def seed_nav2_lane_map(tasks_db: Path) -> list[dict]:
+    """Pre-seed rotated ``lane``-tagged site map as version 1 so native SIM ``map_revision=1`` holds."""
     raw = yaml.safe_load(ft.GRAPH.read_text(encoding="utf-8"))
-    code, active = ft.call(f"{fleet}/site-map/active", operator, log=log)
-    if code != 200 or not isinstance(active.get("map"), dict):
-        raise RuntimeError(f"GET /site-map/active failed: {code} {active}")
-    base = active["map"]
+    base = ft.load_lane_site_map()
     turn = lambda a: None if a is None else ft.to_site((0.0, 0.0, a), True)[2]  # noqa: E731
     places = [
         dict(p, x=ft.to_site((p["x"], p["y"]), True)[0], y=ft.to_site((p["x"], p["y"]), True)[1],
@@ -45,13 +42,7 @@ def activate_nav2_lane_map(fleet: str, operator: str, log) -> list[dict]:
     raw_walls = json.loads((ft.REPO / "deploy/site/site-maps/map_v2_fleet-v5.json").read_text(encoding="utf-8"))["walls"]
     walls = [dict(w, face=[list(ft.to_site(p, True)) for p in w["face"]]) for w in raw_walls]
     rotated = {**base, "places": places, "edges": edges, "crosswalks": [], "walls": walls}
-    code, draft = ft.call(f"{fleet}/site-map/draft", operator, "PUT", {"map": rotated}, log)
-    if code != 200 or not draft.get("revision"):
-        raise RuntimeError(f"PUT /site-map/draft failed: {code} {draft}")
-    code, activated = ft.call(f"{fleet}/site-map/activate", operator, "POST",
-                              {"expected_revision": draft["revision"]}, log)
-    if code != 200:
-        raise RuntimeError(f"POST /site-map/activate failed: {code} {activated}")
+    ft.import_site_map(tasks_db, rotated, source=ft.GRAPH.name)
     return edges
 
 
@@ -92,10 +83,15 @@ def run(args) -> int:
 
     root = Path(tempfile.mkdtemp(prefix="nav2-loop-"))
     operator = ft.write_run(root, run_id, partition, reservations, args.stall_s, nav=True)
-    # Remove traffic zones/signals and speed up stall_s tolerance only if requested; keep site lease required.
+    # Remove traffic zones/signals, enable autonomous Nav2 recovery, and pre-seed version-1 map.
     site = yaml.safe_load((root / "site.yaml").read_text(encoding="utf-8"))
     site["fleet"]["traffic"] = {"authority": False}
+    site.setdefault("fleet", {}).setdefault("stuck_resolver", {})["autonomous_robots"] = list(ft.ROBOTS)
     (root / "site.yaml").write_text(yaml.safe_dump(site), encoding="utf-8")
+    tasks_db = root / "tasks.sqlite"
+    if tasks_db.exists():
+        raise RuntimeError(f"Expected fresh tasks.sqlite, found {tasks_db}")
+    edges = seed_nav2_lane_map(tasks_db)
 
     manifest = yaml.safe_load((root / "robots.yaml").read_text(encoding="utf-8"))["robots"]
     rest = {r["robot_id"]: r["token"] for r in manifest}
@@ -105,6 +101,7 @@ def run(args) -> int:
     spawns, _, _ = ft.layout(raw_graph, True)
     spawns["rosy_01"] = ft.lane_pose(raw_graph, "east", "rev", 2.40)
     spawns["rosy_02"] = (1.288, 0.498, 0.0)  # Verified free floor >=0.11m from walls and 0.51m > YIELD_KEEP_OUT_M from loop.
+    start_xy = ft.to_site(spawns["rosy_01"], True)[:2]
 
     env = dict(
         os.environ, GZ_PARTITION=partition, ROS_DOMAIN_ID=str(reservations.ros_domain_id), GZ_IP="127.0.0.1",
@@ -137,7 +134,9 @@ def run(args) -> int:
                 fleet_ready = ft.until(60, lambda: ft.call(f"{fleet}/site-map/active", operator)[0] == 200, 1.0)
                 if not fleet_ready:
                     raise RuntimeError("Fleet HTTP did not become ready in time")
-                edges = activate_nav2_lane_map(fleet, operator, log)
+                m_code, active_map = ft.call(f"{fleet}/site-map/active", operator, log=log)
+                if m_code != 200 or active_map.get("version") != 1:
+                    raise RuntimeError(f"Expected pre-seeded site map version 1, got {m_code} {active_map}")
                 result["localized"] = ft.until(180, lambda: all(
                     ft.call(f"{fleet}/robots/{ns}/map-pose", operator)[1].get("state") == "LOCALIZED"
                     for ns in ft.ROBOTS), 2.0)
@@ -156,7 +155,7 @@ def run(args) -> int:
                         sc, start_view = ft.call(f"{fleet}/trips/{plan['plan_id']}/start", operator, "POST", {}, log)
                         result["start_status"] = sc
                         if sc == 200:
-                            trace = []
+                            trace, pause_state = [], {"done": False}
                             def done():
                                 _, v = ft.call(f"{fleet}/trips/{plan['plan_id']}", operator)
                                 _, mp = ft.call(f"{fleet}/robots/rosy_01/map-pose", operator)
@@ -173,6 +172,36 @@ def run(args) -> int:
                                     trace.append({"lap": lap, "state": v.get("state"), "hold": v.get("hold") is not None,
                                                   "x": round(mp["x"], 3), "y": round(mp["y"], 3), "off": round(off, 4),
                                                   "nav": ns.get("navigation"), "route_pts": (v.get("detail") or {}).get("nav2_route")})
+                                    if (args.exercise_pause and not pause_state["done"]
+                                            and v.get("state") == "running" and v.get("hold") is None
+                                            and math.hypot(mp["x"] - start_xy[0], mp["y"] - start_xy[1]) >= 0.35):
+                                        pause_state["done"] = True
+                                        p_code, p_view = ft.call(
+                                            f"{fleet}/trips/{plan['plan_id']}/pause", operator, "POST",
+                                            {"reason": "gazebo_pause_test"}, log)
+                                        nav_stopped = ft.until(
+                                            15,
+                                            lambda: ft.call(f"{cores['rosy_01']}/api/v1/navigation/state",
+                                                            rest["rosy_01"])[1].get("navigation") != "NAVIGATING",
+                                            0.5,
+                                        )
+                                        time.sleep(5.0)
+                                        _, v_held = ft.call(f"{fleet}/trips/{plan['plan_id']}", operator, log=log)
+                                        r_code, r_view = ft.call(
+                                            f"{fleet}/trips/{plan['plan_id']}/resume", operator, "POST", {}, log)
+                                        p_hold = (p_view.get("hold") or {}).get("reason")
+                                        h_hold = (v_held.get("hold") or {}).get("reason")
+                                        result["pause_resume"] = {
+                                            "paused_status": p_code, "hold_reason": p_hold,
+                                            "nav_stopped": nav_stopped, "held_state": v_held.get("state"),
+                                            "held_reason": h_hold, "resumed_status": r_code,
+                                            "resumed_hold": r_view.get("hold"),
+                                            "pass": bool(
+                                                p_code == 200 and p_hold == "fleet_hold" and nav_stopped
+                                                and v_held.get("state") == "running" and h_hold == "fleet_hold"
+                                                and r_code == 200 and r_view.get("hold") is None
+                                            ),
+                                        }
                                 return v.get("state") not in ("started", "running", "link_wait") or (
                                     lap >= args.target_laps + 1 and (ns.get("route") or {}).get("active") is True)
                             ft.until(args.budget_s, done, 1.5)
@@ -200,10 +229,13 @@ def run(args) -> int:
         and result.get("canceled_state") == "canceled"
         and result["samples"] >= 10
         and result["max_off_lane_m"] <= 0.15
+        and (not args.exercise_pause or (result.get("pause_resume") or {}).get("pass") is True)
     )
     (out / "result.json").write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
     print("[nav2-repeat-loop]", "PASS" if result["pass"] else "FAIL", json.dumps({
-        k: result.get(k) for k in ("max_lap", "samples", "max_off_lane_m", "last_state", "last_reason", "canceled_state")
+        k: result.get(k) for k in (
+            "max_lap", "samples", "max_off_lane_m", "last_state", "last_reason", "canceled_state", "pause_resume"
+        )
     }), flush=True)
     return 0 if result["pass"] else 1
 
@@ -252,6 +284,7 @@ def main(argv=None):
     p.add_argument("--budget-s", type=float, default=660)
     p.add_argument("--stall-s", type=float, default=60.0)
     p.add_argument("--target-laps", type=int, default=2)
+    p.add_argument("--exercise-pause", action="store_true")
     return run(p.parse_args(argv))
 
 

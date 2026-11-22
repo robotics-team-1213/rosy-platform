@@ -5463,7 +5463,6 @@
 - gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).
 - 결정: 신규 ADR 없음(권한·소유 변경 없음, 초안 저장 경로 재사용). API Reference v1.384.
 
-
 ## 2026-11-10 · uncommitted · refactor: 관제 단위 id CELL-A → ARM-CELL 별칭 수용과 원장 마이그레이션 (D-1011)
 - 변경: `control_unit_config.py` `UNIT_IDENTIFIER_ALIASES`·`canonical_unit_id`, `unit()` 별칭 해석. `load_control_unit` peers key 별칭(이중 정의 거절 유지), 이웃 service principal 별칭. routes의 `peer_id`·stop `parent`·information `reader`/`scope` 정규화. `ControlUnitStops` ingress 정규화. `ControlUnitStore` identity 충돌 전 멱등 재작성 + 감사 행. 시험 기대값 `ARM-CELL`/`arm-cell`로, 신규 `test_control_unit_identifier_rename.py`.
 - 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
@@ -5492,7 +5491,6 @@
 - 근거: 원격 시험 test_draft_map_route.py(6건+이웃 68건), test_site_map_camera_draft.py(5건), test_map_reality.py+test_site_map_reality_api.py(27건), 문서·매트릭스 15건 전부 exit 0. 설계 docs/plans/2026-11-11-camera-draft-map-design.md.
 - gate 변화: 없음(SOURCE만, 장치·현장 수용 별도).
 
-
 ## 2026-11-11 · uncommitted · test(fleet): 카메라 초안 패널 실제 Chromium 종단 시험 + 미리보기 503 처리
 - 변경: `test_site_map_camera_draft_browser.py`(opt-in) — 실제 앱+실제 preview lease 라우트(vision_lease_secret로 구성)에서 Vision draft-map 읽기만 same-origin 스텁: 접속만으로 카메라 목록 충전(C1 회귀), 프레임→Fleet 조립→운영자 PUT 초안→SVG 렌더까지 한 흐름, 카메라 삼각측량 camera_drift→agree 전환(C2 회귀). 카메라 패널은 `/api/fleet/vision/sources`가 503(미구성)이면 재시도하지 않고 '카메라 미리보기가 꺼져 있습니다' 안내(무한 503 루프 수정). 변이 증명 완료(목록 충전 비활성화 → RED → 복원 → GREEN).
 - 이유: 사용자 요청(2026-11-11) — 실제로 잘 동작하는지 보고 개선. 정적 시험이 못 잡는 UI 연결(C1·C2)은 실제 브라우저만 잡는다.
@@ -5519,7 +5517,6 @@
 - 증거: 원격 ai@100.108.76.123, feat/peer-sighting-ingestion tip 184e7d0e11 —대상 시험 `test_map_pose`·`test_map_pose_service`·`test_map_pose_pin`·`test_map_pose_scope`·`operations/world/test` 155 passed. `rosy_harness.py affected --base main` 4개 호출 모두 exit 0, known_failures 0 new(`test_station_camera_pipeline_lifespan[lifespan]`). `test/architecture/test_module_structure.py` 600`줄 규칙 초록. `harness lint` 0 errors. `node --test localization-badge.test.mjs` 10 pass(로컬 node, pytest 아님)
 - gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
 - CE: 미해결 — peer 앵커는 원격 함수 시험까지만 확인했고 실물 5대·카메라 차단 재현 전이라 교훈으로 쓰지 않는다
-
 
 ## 2026-11-11 · uncommitted · fix(world): peer 앵커는 D-989 자동 위치 차단을 풀지도 걸지도 않는다 (D-1017)
 
@@ -5601,6 +5598,38 @@
 - 증거: `test_task_service.py`·`test_cancel_all.py` 사례 추가(nav.failed 먼저, nav.canceled 먼저 둘 다). 원격 affected 8774 passed. 실패 1건 `test_host_control.py::test_no_reboot_path_cuts_an_arm_session`은 origin/main 단독 실행에서 통과해 무관함을 확인 중. 독립 검토 2회.
 - gate 변화: SOURCE. 실물 미실시.
 
+## 2026-11-20 · uncommitted · feat(pipeline): D-1057 셀 작업 허가 증거 공급자와 bed·owner 증거 경로
+
+- 변경: `server/sitemap/pipeline_evidence.py` 신규(`amr_evidence`, `omx_owner_evidence`, `StillTracker`, `POST .../bed-confirm`, `POST .../owner-evidence`). `site_map_routes.py`·`charge_bay_routes.py`가 두 공급자를 `install_pipeline_routes`에 넘긴다. `_ready_amr`와 `complete_cell_task`의 한계값·거부 코드는 그대로다. 시험 `test_pipeline_evidence.py` 신규, `test_pipeline_mutation_guards.py`는 owner-evidence를 service 허용 목록에 추가.
+- 증거: 로컬 `python -m pytest operations/fleet/test/test_pipeline_evidence.py` 외 관련 5개 파일 통과(Windows, 2026-11-20). 원격 시험은 조정 세션.
+- gate 변화: SOURCE. 실물 인터록(브레이크·bed 센서·명령 속도)은 없어 대용 측정이다(D-1057). 공급자가 없는 값은 None이라 기존 거부가 난다.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 7차
+
+- 변경: 설정 파일의 `_commissioning` 무시(이번 실행 인자만), 검토된 작업은 입회 표시가 와도 검토 경로, 재전송은 원래 증거가 유효한 동안 `/complete`만(409 이미 기록됨은 이어서 전송, 재측정은 65 s 뒤), 적재함 확인은 claim에서 lease에 묶고 무효 때 422 `BED_CONFIRMATION_INVALID`·RUNNING 작업 재확인 허용. ADR D-1057 2-7절과 API v1.next 절을 맞춤.
+- 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`·`test_omx_cell_envelope.py`·`test_omx_cell_task_exec_measured.py`와 `rosy_harness.py lint`. 원격 시험은 조정 세션.
+- gate 변화: 없음. 가드 한계는 그대로이고 실물 인터록은 만들지 않았다.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 8차
+
+- 변경: worker 재전송은 60 s 이상 65 s 미만엔 보내지 않고 보관, 만료 계열 422(`OWNER_EVIDENCE_MEASURED_AT_INVALID`)는 보관 후 재측정; claim은 적재함 확인 결속을 원장 변경 앞에서 한 `now`로 판정해 실패면 거부. ADR D-1057 2-8절.
+- 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`와 lint. 원격 시험은 조정 세션.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(pipeline): D-1057 검토 반영 — owner 등록 주체, 실제 정차 지점, bed 영구 무효, 저장소 상한
+
+- 변경: `pipeline_evidence.py`: 정지 표본은 속도 채널이 표본마다 신선하고 navigation·Fleet 목표가 없을 때만, owner-evidence는 `ROSY_FLEET_CELL_OWNERS` 등록 서비스 주체만(/complete는 저장 주체와 같아야 함), 활성 지도 ID와 지도 속 정차 지점이 없으면 None, bed-confirm은 이름 있는 운영자·지도 ID 저장·영구 무효·재전송 무갱신, measured_at 60 s·장치 시각 2 s 대조, 본문 64 KB·종료/만료 기록 제거. `pipeline_camera_routes.py`에 완료 주체 확인 한 블록(가드 검사는 그대로).
+- 증거: 로컬 `operations/fleet/test/test_pipeline_evidence.py` 외 관련 4개 파일.
+- gate 변화: SOURCE.
+- 결정: 없음
+- 교훈: 없음
+
 ## 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
 - 변경: 에  전용 선택 필드 (횡단보도 다각형 검사  공용, 장소 점 포함,  필수)과 (0.05–0.6 m,  필수), 순수 함수 . 없으면 저장 본문에서 빠짐. 지도 편집 장소 검사 칸에 접근 거리와 정지 구역 그리기·지우기(대기 띠 그리기와 같은 점 목록, 그리면 고정), 지도에 구역 표시. API v1.434.
 - 증거: ··의 고정 정지 장소 병합 시험, site-map·map-editor node 시험 37개 로컬 통과. 원격·실물 미실시.
@@ -5613,3 +5642,59 @@
 - gate 변화: Safety-Review robot-08 coordinator review approved fa9516e9ed with the 120 s wait bound (panel7)
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-21 · uncommitted · Control-unit scope: R, cell and standalone Fleet each show their own screens (slice 13 of #378)
+
+- 변경: Fleet state now carries fleet.scope (role, drive, arms, children, enrollment) from the control-unit manifest; unit-scope.js turns it into html flags and fleet-header.css hides blocks tagged data-unit-scope that the unit does not own (Pinky formation and platoon on a cell, the cell work screen on a unit with no arm, child stop requests on a cell without child units). The header E-stop is never tagged. No scope from an older server keeps every block. arm-transfer-view lets the owning cell's operator approve and keeps R read-and-relay. The scope also carries `enrollment`, but the install screen is not tagged here: hiding the enrollment panel would also hide the release-code action for already enrolled robots, so that waits for slice 17 with the tab fix. The rail map link waits for slice 10. A unit with child units only relays their arm jobs (the relay has no admit or recovery route).
+- 증거: node unit-scope test; test_control_unit_credential_scope; lab affected run and browser run test_unit_scope_browser (see PR body)
+- gate 변화: 없음
+- 결정: D-960 4, D-974
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · Fleet E-stop route accepts a human viewer (D-1043)
+
+- 변경: POST /api/fleet/estop uses require_viewer, refuses service and machine tokens (SitePrincipal.machine); site-map keeps the E-stop on a FORBIDDEN 403; release paths tested as viewer 403
+- 증거: lab affected run, browser run, Codex safety review
+- gate 변화: 없음
+- 결정: D-1043
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · Header E-stop stays live for a signed-in viewer (D-1043)
+
+- 변경: estopReason locks only a 401 session; viewer unit and browser expectations follow
+- 증거: node fleet-header.test.mjs 13 pass; lab browser run
+- gate 변화: 없음
+- 결정: D-1043
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · Keep controls steady during the measured-calibration refresh
+
+- 변경: measured-calibration refresh no longer adds disabled-reason lines above the checkbox or rewrites unchanged attributes; the browser file runs in CI again (LAB_FILES removed)
+- 증거: test_measured_calibration_browser asserts the checkbox box is unchanged while a read is held; test_calibration_browser_file_runs_in_ci pins CI routing
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: A 2 s refresh that adds a disabled-reason line moves controls under a held press on a slow device; the click lands on the parent
+
+## 2026-11-21 · uncommitted · records bot folds a late-merged log shard at its dated position, not at the end
+
+- 변경: new_record consolidate inserts each log shard after the last entry dated <= its own, so the log-order check passes for late older-dated shards (bot PR 397)
+- 증거: test_records_fragments log-fold tests; consolidate on bot-branch fragments then log order check clean; lint 0 errors
+- gate 변화: 없음
+- 결정: D-1061
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · Refuse double-encoded text at the site map write boundary
+
+- 변경: core_common.text_encoding + SiteMapStore save_draft/save_profile raise TEXT_DOUBLE_ENCODED; tracked-text test; one mojibake comment fixed
+- 증거: pyflakes, harness lint 0 errors, step_back 0 block, lab affected run
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-22 · uncommitted · feat(fleet): Pinky 작업 Fleet trip 배차 및 start_guard·취소 정합성 (D-1060)
+
+- 변경: `sitemap/pipeline_pinky_dispatch.py`를 추가해 `ROSY_FLEET_PINKY_TASK_DISPATCH=1`(기본 꺼짐)일 때 QUEUED Pinky 작업을 `trip_plan` → `TripRunner.start(..., start_token, start_guard)`로 한 번만 배차하고 이름 있는 운영자 요청(`requester_named`)만 허용한다. `SENDING` 중 취소는 확정 전까지 `confirmed: false`를 유지해 `LINK_LOST` 역행과 경합을 막고, 다건 tick 재확인·`runner is None` 가드·`TRIP_NOT_RUNNING` 정산을 보강했다(D-1060, API v1.435).
+- 증거: `operations/fleet/test/test_pinky_task_dispatch.py` 단위 및 실제 `TripRunner`·`TripAdmission`·FastAPI E2E 시험, 원격 pytest 0 new, `rosy-contract-review` APPROVE. 실물 미실시.
+- gate 변화: SOURCE (D-1061 조각 전환 및 main 병합).
+- 결정: D-1060
+- 교훈: none

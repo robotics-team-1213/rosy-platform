@@ -21,6 +21,10 @@ from fleet.pipeline import resolve_omx_cells
 STOP_ZONE_RADIUS_M = 0.18
 HEARTBEAT_MAX_AGE_S = 2.0
 POSE_MAX_AGE_S = 2.0
+# Stationary odom-bridged poses match MapPoseTracker STILL_PATH_M (0.02 m) / STILL_TURN_RAD (2 deg) and max_anchor_age_s (10 s).
+POSE_ANCHOR_SOURCES = frozenset({"sighting", "operator_pin", "track", "peer"})
+STILL_BRIDGE_TURN_DEG = 2.0
+PIN_ZONE_MAX_AGE_S = 10.0
 # Stillness thresholds on CORE odom twist. The linear one equals the guard's 1e-4 m/s; the angular one is a D-1057 choice.
 STILL_LINEAR_MPS = 1e-4
 STILL_ANGULAR_RADPS = 1e-3
@@ -150,20 +154,31 @@ def _has_place(source, place_id: str) -> bool:
     return any(getattr(p, "id", None) == place_id or (isinstance(p, dict) and p.get("id") == place_id) for p in places or ())
 
 
-def zone_pose(app, task: dict):
-    """(pose dict, observation epoch) from the arbitrated map pose, or None.
+def _zone_pose_stamp(pose, now: float) -> float | None:
+    """Live observation epoch of a trusted LOCALIZED map pose, or None (stationary odom-bridged allowed)."""
+    if (pose is None or pose.state != "LOCALIZED"
+            or not _finite(pose.x, pose.y, pose.yaw, pose.age_s) or not 0 <= pose.age_s <= POSE_MAX_AGE_S):
+        return None
+    if pose.source != "bridged":
+        return now - pose.age_s if pose.source in POSE_ANCHOR_SOURCES else None
+    src, a_age, dr, turn = (getattr(pose, k, None) for k in ("anchor_source", "anchor_age_s", "dead_reckon_m", "bridge_turn_deg"))
+    max_anchor = PIN_ZONE_MAX_AGE_S if src == "operator_pin" else POSE_MAX_AGE_S
+    if (src not in POSE_ANCHOR_SOURCES or not _finite(a_age, dr, turn)
+            or not 0 <= a_age <= max_anchor or not 0 <= dr <= BED_MOVE_LIMIT_M or not 0 <= turn <= STILL_BRIDGE_TURN_DEG):
+        return None
+    return now - (pose.age_s if src == "operator_pin" else max(pose.age_s, a_age))
 
-    Only a LOCALIZED pose set by a sighting, pin or peer anchor (not odom-bridged), at most POSE_MAX_AGE_S old, on the
-    active map and inside the cell's stop zone (station place within STOP_ZONE_RADIUS_M) counts.
-    """
+
+def zone_pose(app, task: dict):
+    """(pose dict, observation epoch) from arbitrated map pose (direct or stationary bridged within 2 cm/2 deg), or None."""
     svc = getattr(app.state, "map_pose", None)
     maps = getattr(app.state, "site_maps", None)
     active = maps.active() if maps is not None else None
     if svc is None or active is None:
         return None
     pose = svc.arbitrated_pose(task["robot_id"])
-    if (pose is None or pose.state != "LOCALIZED" or pose.source in (None, "bridged")
-            or not _finite(pose.x, pose.y, pose.yaw, pose.age_s) or not 0 <= pose.age_s <= POSE_MAX_AGE_S):
+    pose_at = _zone_pose_stamp(pose, time.time())
+    if pose_at is None:
         return None
     active_id = svc.active_map_id()
     if active_id is None or pose.map_id != active_id:
@@ -173,7 +188,7 @@ def zone_pose(app, task: dict):
     if (station is None or not any(_has_place(src, station.station_place) for src in (active[2], active[1]))
             or math.hypot(pose.x - station.station_xy[0], pose.y - station.station_xy[1]) > STOP_ZONE_RADIUS_M):
         return None
-    return {"x": float(pose.x), "y": float(pose.y), "yaw": float(pose.yaw)}, time.time() - pose.age_s
+    return {"x": float(pose.x), "y": float(pose.y), "yaw": float(pose.yaw)}, pose_at
 
 
 def _bed_valid(rec: dict, now: float | None = None) -> bool:

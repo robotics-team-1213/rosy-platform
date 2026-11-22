@@ -41,7 +41,7 @@ export function drawMapDatum(ctx, toPoint, bounds, {css, step = GRID_STEP_M, dpr
     const horizontal = Math.abs(last.x - first.x) > Math.abs(last.y - first.y);
     const along = (m) => position(m)[horizontal ? "x" : "y"] / dpr;
     const edge = horizontal ? Math.min(bottom / dpr, height / dpr - 1) : Math.max(left / dpr, 1);
-    const outside = horizontal ? height - bottom >= 30 * dpr : left >= 30 * dpr;
+    const outside = horizontal ? height - bottom >= 30 * dpr : left >= 40 * dpr;
     const sign = (horizontal === outside) ? 1 : -1;
     const point = (m, offset) => horizontal
       ? {x: along(m), y: edge + sign * offset}
@@ -50,8 +50,12 @@ export function drawMapDatum(ctx, toPoint, bounds, {css, step = GRID_STEP_M, dpr
     const label = (text, m, offset) => {
       const p = point(m, offset);
       labels.push({text, x: p.x, y: p.y});
-      const half = horizontal ? (ctx.measureText?.(text)?.width ?? 0) / 2 : 0;
-      const x = Math.max(half, Math.min(width / dpr - half, p.x));
+      const w = ctx.measureText?.(text)?.width ?? 0;
+      const x = ctx.textAlign === "right"
+        ? Math.max(w + 2, Math.min(width / dpr - 2, p.x))
+        : ctx.textAlign === "left"
+          ? Math.max(2, Math.min(width / dpr - w - 2, p.x))
+          : Math.max(w / 2 + 2, Math.min(width / dpr - w / 2 - 2, p.x));
       const y = Math.max(6, Math.min(height / dpr - 6, p.y));
       pendingLabels.push([text, x, y, ctx.textAlign]);
     };
@@ -62,11 +66,11 @@ export function drawMapDatum(ctx, toPoint, bounds, {css, step = GRID_STEP_M, dpr
     for (const m of gridLines(lo, hi, step)) {
       line(point(m, 0), point(m, Number.isInteger(m) ? 5 : 3));
     }
-    for (const m of gridLines(lo, hi, metreStride)) label(String(m), m, 12);
-    if (pxPerMetre * step >= (horizontal ? 22 : 24)) {
+    for (const m of gridLines(lo, hi, metreStride)) label(String(m), m, 10);
+    if (pxPerMetre * step >= (horizontal ? 22 : 34)) {
       for (let index = Math.floor(lo / step); index < Math.ceil(hi / step); index += 1) {
         const start = Math.max(lo, index * step), end = Math.min(hi, (index + 1) * step);
-        if ((end - start) * pxPerMetre >= 16) label(`${axis}${index}`, (start + end) / 2, horizontal ? 24 : 12);
+        if ((end - start) * pxPerMetre >= 16) label(`${axis}${index}`, (start + end) / 2, horizontal ? 22 : 24);
       }
     }
   }

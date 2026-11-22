@@ -465,13 +465,28 @@ def test_a_lapsed_bed_confirmation_keeps_the_result_with_the_reason_until_a_pers
 def test_other_422_refusals_are_dropped_as_before_except_evidence_that_expired_in_between(tmp_path):
     from cell_result_outbox import Outbox, resend_pending
 
-    for code, action, left in (("OMX_OWNER_EVIDENCE_MISMATCH", "dropped", 0), ("AMR_BRAKE_BED_VELOCITY_UNMEASURED", "dropped", 0),
+    for code, action, left in (("OMX_OWNER_EVIDENCE_MISMATCH", "dropped", 0), ("UNVERIFIED_CELL_COMPLETION", "dropped", 0),
                                ("OMX_OWNER_EVIDENCE_UNAVAILABLE", "kept", 1)):
         outbox = Outbox(tmp_path / f"{code}.json")
         outbox.put("t-1", _stale_entry(20))
         fail = lambda part, code=code: _refused(code) if part == "complete" else None  # noqa: E731
         assert resend_pending(outbox, _posting(_running(), [], fail), _Remeasure())[0]["action"] == action
         assert len(outbox.items()) == left
+
+
+def test_amr_unmeasured_422_keeps_result_and_resends_when_amr_evidence_returns(tmp_path):
+    from cell_result_outbox import Outbox, resend_pending
+
+    outbox, sent, amr_ready = Outbox(tmp_path / "o.json"), [], [False]
+    outbox.put("t-1", _stale_entry(20))
+    fail = lambda part: None if part == "owner-evidence" or amr_ready[0] else _refused("AMR_BRAKE_BED_VELOCITY_UNMEASURED")  # noqa: E731
+    done = resend_pending(outbox, _posting(_running(), sent, fail), _Remeasure())
+    kept = outbox.items()["t-1"]
+    assert done[0]["action"] == "kept" and kept["last_refusal"]["reason"] == "AMR_BRAKE_BED_VELOCITY_UNMEASURED"
+    assert resend_pending(outbox, _posting(_running(), sent, fail), _Remeasure())[0]["action"] == "kept"
+    amr_ready[0] = True
+    assert resend_pending(outbox, _posting(_running(), sent, fail), _Remeasure())[0]["action"] == "resent"
+    assert outbox.items() == {}
 
 
 # --- D-1057 round 8: every answer past Fleet's 60 s evidence limit keeps the result ------------------------------------------

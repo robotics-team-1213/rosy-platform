@@ -315,6 +315,9 @@ class TrafficService(SignalService):
         """Site zones ``{zone: (edges, capacity)}`` (D-536 guide reads them)."""
         return dict(self._zones)
 
+    def has_configured_controls(self) -> bool:
+        return bool(self._zones or self._signals)
+
     def holds(self, live, index: int) -> bool:
         refused = (live.traffic or {}).get("refused_at_m")  # D-517 3: refused before PAST_PLACE_M past the place
         return refused is not None and refused < live.progress(index, live.segments[index]["s_to"]) + PAST_PLACE_M

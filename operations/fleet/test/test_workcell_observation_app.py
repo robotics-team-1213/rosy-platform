@@ -5,7 +5,7 @@ from hashlib import sha256
 from fastapi.testclient import TestClient
 import pytest
 
-from core_common.protocol.workcell_observations import WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import WorkcellObservationManifest
 from core_common.protocol.vision_preview import VisionLeaseSigner
 from fakes import FakeRobot
 from fleet.server.app import create_app

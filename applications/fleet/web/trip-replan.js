@@ -7,17 +7,22 @@ import {AI_FACT_LABEL, RESOLVER_DECISION_LABEL, tripErrorText} from "/console/as
 import { setOffBy } from "/common/cause-line.js";
 import { primaryButton, quietButton } from "./queues.js";
 
-/** What the slot shows for one held trip: the changed route, or why there is none. */
+/** What the slot shows for one held trip: the changed route, pause/failure hold, or why there is none. */
 export function replanView(trip, { operator, named = "", busy = false }) {
   const hold = trip.hold || {};
   const plan = hold.plan;
-  const facts = plan
-    ? [Number.isFinite(hold.length_m) ? `바뀐 경로 ${hold.length_m.toFixed(1)} m` : "바뀐 경로",
-      Number.isFinite(hold.eta_s) ? `약 ${Math.round(hold.eta_s)}초` : "",
-      `장소 ${(plan.places || []).length}곳`].filter(Boolean).join(" · ")
-    : `다시 계산한 경로가 없습니다${hold.code ? ` (${hold.code})` : ""} · 운행을 취소하세요`;
+  const paused = hold.reason === "fleet_hold" || hold.reason === "nav2_problem";
+  const facts = paused
+    ? (hold.reason === "fleet_hold"
+      ? "Fleet 일시 정지 대기 중 · 재개 지시를 기다립니다"
+      : "Nav2 주행 문제로 정지 중 · 확인 후 재개하세요")
+    : plan
+      ? [Number.isFinite(hold.length_m) ? `바뀐 경로 ${hold.length_m.toFixed(1)} m` : "바뀐 경로",
+        Number.isFinite(hold.eta_s) ? `약 ${Math.round(hold.eta_s)}초` : "",
+        `장소 ${(plan.places || []).length}곳`].filter(Boolean).join(" · ")
+      : `다시 계산한 경로가 없습니다${hold.code ? ` (${hold.code})` : ""} · 운행을 취소하세요`;
   const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : "";
-  return { facts, confirmReason: lock || named || (plan ? "" : "다시 계산한 경로가 없습니다"), cancelReason: lock };
+  return { facts, confirmReason: paused ? (lock || named) : (lock || named || (plan ? "" : "다시 계산한 경로가 없습니다")), cancelReason: lock };
 }
 
 /** D-577 (d) wait-cycle row for one robot: Fleet's decision per cycle robot, the AI facts naming it. */
@@ -114,9 +119,13 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
     const operator = isOperator(), named = namedReason();
     for (const trip of view.stateUnavailable ? [] : (view.trafficTrips || []).filter((row) => row.hold)) {
       const spec = replanView(trip, { operator, named, busy: busy.has(trip.trip_id) });
+      const paused = trip.hold?.reason === "fleet_hold" || trip.hold?.reason === "nav2_problem";
+      const confirmLabel = paused ? "운행 재개" : "바뀐 경로로 계속";
+      const verb = paused ? "resume" : "confirm-replan";
+      const confirmDone = paused ? "운행을 재개합니다" : "바뀐 경로로 계속합니다";
       fill(`${trip.robot_id}|replan`, JSON.stringify([trip.trip_id, trip.hold, spec, results.get(trip.trip_id) || null]),
         () => body(trip.robot_id, trip, [spec.facts], "바뀐 경로 확인", [
-          [primaryButton("바뀐 경로로 계속"), "confirm", spec.confirmReason, () => send(trip, "confirm-replan", "바뀐 경로로 계속합니다")],
+          [primaryButton(confirmLabel), "confirm", spec.confirmReason, () => send(trip, verb, confirmDone)],
           [quietButton("운행 취소"), "cancel", spec.cancelReason, () => send(trip, "cancel", "운행을 취소했습니다")]]));
     }
     for (const robotId of view.stateUnavailable ? [] : (view.traffic?.wait_cycle || []).filter((id) => !id.startsWith("signal:"))) {

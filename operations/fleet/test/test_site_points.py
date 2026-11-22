@@ -27,7 +27,8 @@ FORBIDDEN_PORT_KEYS = frozenset({
     "turn_bans", "drive_mode", "junction", "workcell_id", "instance_id", "marker_id",
     "arm_fk", "arms", "physical", "item", "aliases", "legacy_aliases",
     "berth", "nav2_berth_ready", "berth_missing", "repark_cap_m", "align_tol_deg",
-    "intake_cell", "flow",
+    "intake_cell", "flow", "waypoints", "stand_ref", "zone_rules",
+    "coordinate_frames", "conveyor_transfer", "end_to_end_stages", "arm_frame", "belt_end",
 })
 
 
@@ -136,13 +137,63 @@ def test_site_points_full_and_port_views_stage_a_fail_closed(tmp_path):
     assert by_id["S_OUT"]["berth"]["nav2_berth_ready"] is False
     assert handoffs["s3_cell_s_unload"]["intake_cell"]["cell_id"] == "cell_s"
     assert handoffs["s3_cell_s_unload"]["nav2_berth_ready"] is False
+    assert handoffs["s3_cell_s_unload"]["arm_frame"] == "cell_s_arm_base"
+    assert handoffs["s3_cell_s_unload"]["belt_end"] == "belt-in"
+    assert handoffs["s3_cell_s_unload"]["waypoints"] == {"approach": "S3:approach_pose", "stop": "S3", "exit_edge": "upper_east"}
     assert handoffs["outbound_stand_load"]["nav2_berth_ready"] is False
+    assert handoffs["outbound_stand_load"]["arm_frame"] == "cell_ab_fixture"
+    assert handoffs["outbound_stand_load"]["stand_ref"] == "stand:r1-s1-t1"
+    assert handoffs["outbound_stand_load"]["waypoints"]["branch_node"] == "J_stand"
+
+    cf = full["coordinate_frames"]
+    assert cf["vehicle_world"]["unit"] == "m"
+    assert cf["vehicle_world"]["waypoints"]["S1_pickup"]["dual_role_exit_place"] is True
+    assert cf["cell_s_arm_base"]["unit"] == "mm" and cf["cell_s_arm_base"]["belt_in"]["safe_x_min_mm"] == 134.0
+    assert cf["cell_s_arm_base"]["vehicle_tray"]["xyz_mm"] == [53.5, 172.0, 20.0]
+    assert cf["cell_ab_fixture"]["unit"] == "mm" and cf["cell_ab_fixture"]["belt_out"]["stop_x_mm"] == 158.0
+    assert cf["cell_ab_fixture"]["stand"]["xyz_mm"] == [214.0, -168.25, 97.1]
+
+    ct = full["conveyor_transfer"]
+    assert ct["in_point"]["ref"] == "belt-in" and ct["out_point"]["ref"] == "belt"
+    assert ct["transport"]["motor_control"] == "none_manual_power_continuous"
+    assert ct["handover_state_machine"]["wired_to_runtime"] is False
+    assert ct["occupancy_gate"]["wired_to_runtime"] is False
+
+    stages = full["end_to_end_stages"]
+    assert [s["stage"] for s in stages] == [
+        "stage_1_vehicle_pickup", "stage_2_cell_s_unload", "stage_3_conveyor_transit",
+        "stage_4_cell_ab_store", "stage_5_rehandle_and_outbound", "stage_6_vehicle_outbound",
+    ]
+    assert stages[0]["runtime_status"] == "ready_dual_role_exit"
+    assert stages[2]["runtime_status"] == "manual_power_unwired_gates"
+
+    zr = full["zone_rules"]
+    assert zr["layer_counts"] == {"t1": 13, "t2": 12, "t3": 12, "total": 37}
+    assert zr["tier_height_mm"] == 32.4 and zr["tiers_per_stack"] == 3
+    assert [(b["id"], b["columns"], b["count"]) for b in zr["nine_slot_blocks"]] == [
+        ("yard:s1", [1, 3], 9), ("yard:s2", [4, 6], 9), ("temp_a", [1, 3], 9), ("temp_b", [1, 3], 9),
+    ]
+    assert zr["outbound_single"] == {
+        "id": "stand:r1-s1-t1", "zone": "stand", "tier": 1, "count": 1, "role": "outbound", "arms": ["arm_a"],
+    }
+    rehandle = zr["temporary_rehandling"]
+    assert rehandle["zones"] == ["temp_a", "temp_b"]
+    assert rehandle["arm_owner"] == {"temp_a": ["arm_a"], "temp_b": ["arm_b"]}
+    assert rehandle["long_term_storage_allowed"] is False
+    assert rehandle["hold_when_full"] == "NO_LEGAL_TEMPORARY_BAY"
 
     # Updating S3 coordinates in the active map immediately reflects in site-points without editing any static config.
     _activate_map_and_rules(store, _base_v348_map(s3_x=0.761), rules)
     updated = client.get("/api/fleet/site-points?include_junctions=true", headers=VIEWER).json()
     updated_by_id = {p["id"]: p for p in updated["vehicle_stops"]}
     assert updated_by_id["S3"]["pose"]["x"] == 0.761
+    assert updated["coordinate_frames"]["vehicle_world"]["waypoints"]["S3_intake"]["pose"]["x"] == 0.761
+    assert updated["coordinate_frames"]["vehicle_world"]["top_camera_vs_world_deg"] == 180
+    assert updated["coordinate_frames"]["cell_s_arm_base"]["rotation_deg_vs_world"] == 180
+    assert updated["coordinate_frames"]["cell_s_arm_base"]["vehicle_tray_model_x_residual_cm"] == 12.85
+    assert updated["coordinate_frames"]["cell_ab_fixture"]["rotation_deg_vs_world"] == -90
+    assert updated["coordinate_frames"]["cell_ab_fixture"]["hold_mapping"] == {"s1": "ship-h2", "s2": "ship-h1"}
+    assert updated["conveyor_transfer"]["occupancy_gate"]["arm_ab_occlusion_table_wired"] is False
     assert "J_in" in updated_by_id and "J_out" in updated_by_id
     assert updated_by_id["J_in"]["berth"] is None
 
@@ -178,22 +229,24 @@ def test_site_points_stage_b_promotes_s_out_when_activated_with_split_edge_and_r
     client, store = _client_and_store(tmp_path)
     raw_map = _base_v348_map()
     raw_map["places"].extend([
+        {"id": "J_stand", "kind": "junction", "name": "반출 분기", "x": 0.615, "y": -0.207},
         {
             "id": "S_OUT",
             "kind": "stop",
             "name": "S_OUT 반출대",
-            "x": 0.54,
-            "y": -0.478,
-            "yaw": 0.0,
+            "x": 0.614,
+            "y": 0.001,
+            "yaw": 1.570796,
             "pinned": True,
-            "stop_zone": [[0.45, -0.56], [0.63, -0.56], [0.63, -0.40], [0.45, -0.40]],
-            "approach_m": 0.25,
+            "stop_zone": [[0.55, -0.06], [0.68, -0.06], [0.68, 0.06], [0.55, 0.06]],
+            "approach_m": 0.10,
         },
         {"id": "S_EXIT", "kind": "stop", "name": "반출 전용 출구", "x": -0.80, "y": -0.48, "yaw": 0.0, "pinned": True},
     ])
-    raw_map["edges"] = [e for e in raw_map["edges"] if e["id"] != "lower_east"] + [
-        {"id": "lower_east_a", "from": "S4", "to": "S_OUT", "polyline": [[0.16, -0.475], [0.54, -0.478]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
-        {"id": "lower_east_b", "from": "S_OUT", "to": "S5", "polyline": [[0.54, -0.478], [0.91, -0.48]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
+    raw_map["edges"] = [e for e in raw_map["edges"] if e["id"] != "upper_east"] + [
+        {"id": "upper_east_a", "from": "S3", "to": "J_stand", "polyline": [[0.745, -0.207], [0.615, -0.207]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
+        {"id": "upper_east_b", "from": "J_stand", "to": "J_in", "polyline": [[0.615, -0.207], [0.32, -0.25]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
+        {"id": "stand_spur", "from": "J_stand", "to": "S_OUT", "polyline": [[0.615, -0.207], [0.615, -0.103], [0.614, 0.001]], "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.08, "pinned": True},
         {"id": "exit_edge", "from": "S_EXIT", "to": "S4", "polyline": [[-0.80, -0.48], [0.16, -0.475]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
     ]
     raw_rules = {
@@ -211,18 +264,30 @@ def test_site_points_stage_b_promotes_s_out_when_activated_with_split_edge_and_r
     s_out = next(p for p in full["vehicle_stops"] if p["id"] == "S_OUT")
     assert s_out["in_active_map"] is True
     assert s_out["status"] == "verified" and s_out["dispatchable"] is True
-    assert s_out["edges_in"] == ["lower_east_a"] and s_out["edges_out"] == ["lower_east_b"]
-    assert s_out["approach_pose"] == pytest.approx({"x": 0.29, "y": -0.478, "yaw": 0.0})
+    assert s_out["edges_in"] == ["stand_spur"] and s_out["edges_out"] == ["stand_spur"]
+    assert s_out["approach_pose"] == pytest.approx({"x": 0.614, "y": -0.099, "yaw": 1.570796}, abs=1e-4)
     assert s_out["berth"]["mode"] == "nav2_named_stop"
     assert s_out["berth"]["nav2_berth_ready"] is True
     assert s_out["berth"]["missing"] == []
 
+    s3_handoff = next(h for h in full["handoffs"] if h["id"] == "s3_cell_s_unload")
+    assert s3_handoff["waypoints"]["exit_edge"] == "upper_east_a"
     handoff = next(h for h in full["handoffs"] if h["id"] == "outbound_stand_load")
     assert handoff["vehicle_stop_resolved"] is True and handoff["exit_stop_resolved"] is True
     assert handoff["vehicle_exit_stop_id"] == "S_EXIT"
     assert handoff["nav2_berth_ready"] is True and handoff["berth_missing"] == []
+    assert handoff["waypoints"] == {
+        "branch_edge": "upper_east",
+        "branch_node": "J_stand",
+        "approach": "S_OUT:approach_pose",
+        "stop": "S_OUT",
+        "exit_stop": "S_EXIT",
+    }
+    assert full["end_to_end_stages"][0]["runtime_status"] == "ready"
+    assert full["end_to_end_stages"][5]["runtime_status"] == "ready" and full["end_to_end_stages"][5]["to"] == "S_EXIT"
 
     port = client.get("/api/fleet/site-points?view=port", headers=VIEWER).json()
+    assert not ({val for kind, val in _walk_values(port) if kind == "key"} & FORBIDDEN_PORT_KEYS)
     port_places = {p["place_id"]: p for p in port["vehicle_places"]}
     assert port_places["S_OUT"]["status"] == "verified" and port_places["S_OUT"]["dispatchable"] is True
     assert port_places["S_EXIT"]["port_role"] == "outbound_exit"

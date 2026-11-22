@@ -17,12 +17,17 @@ $('hdr-camera-restart-btn').addEventListener('click',async()=>{
   cameraRestartInFlight=true;
   validateStart();
   setReqError('');
+  if(typeof setActivity==='function')setActivity('카메라 재시작 요청 중...','live',f.arm.value);
   try{
     const result=await api('/api/cameras/restart',{arm:f.arm.value});
     const failed=Object.entries(result.units||{}).filter(([,unit])=>!unit.restarted||!unit.active).map(([unit])=>unit);
     setNotice('camera-restart',result.ok?'good':'warn',
       result.ok?'카메라 재시작 완료':'카메라 재시작 실패'+(failed.length?': '+failed.join(', '):''));
-  }catch(err){setReqError('카메라 재시작: '+err.message);}
+    if(typeof setActivity==='function')setActivity(result.ok?'카메라 재시작 완료':'카메라 재시작 실패',result.ok?'good':'warn',failed.length?failed.join(', '):f.arm.value);
+  }catch(err){
+    setReqError('카메라 재시작: '+err.message);
+    if(typeof setActivity==='function')setActivity('카메라 재시작 오류','crit',err.message);
+  }
   finally{
     cameraRestartInFlight=false;
     await pollStatus();
@@ -99,26 +104,72 @@ window.defaultPrimaryCam=defaultPrimaryCam;
 window.switchPrimaryCam=switchPrimaryCam;
 window.syncPrimaryCamForArm=syncPrimaryCamForArm;
 
+let emptyCamPolls=0;
+const camFrameBusy=new Map();
+const camFrameErrs=new Map();
+const LAST_ARM_KEY='omx_bench_last_arm';
+
+function tickCameraFrames(){
+  const grid=$('cam-grid');
+  if(!grid||!camLabels.length)return;
+  const ts=Date.now();
+  for(const img of grid.querySelectorAll('img[data-cam]')){
+    const lbl=img.dataset.cam;
+    if(!lbl||camFrameBusy.get(lbl))continue;
+    camFrameBusy.set(lbl,true);
+    const url='/camera/'+encodeURIComponent(lbl)+'.jpg?t='+ts;
+    const nextImg=new Image();
+    const commit=()=>{
+      camFrameBusy.delete(lbl);
+      camFrameErrs.delete(lbl);
+      if(!img.isConnected)return;
+      nextImg.alt=img.alt;
+      nextImg.dataset.cam=lbl;
+      if(img.className)nextImg.className=img.className;
+      nextImg.style.display='block';
+      img.replaceWith(nextImg);
+    };
+    nextImg.onload=()=>{
+      if(typeof nextImg.decode==='function')nextImg.decode().then(commit,commit);
+      else commit();
+    };
+    nextImg.onerror=()=>{
+      camFrameBusy.delete(lbl);
+      const n=(camFrameErrs.get(lbl)||0)+1;
+      camFrameErrs.set(lbl,n);
+      if(n===3&&lastCamState){
+        const curArm=(typeof benchSessionActive==='function'&&benchSessionActive()&&lastStatus?.arm)?lastStatus.arm:(f&&f.arm?f.arm.value:'');
+        renderCamHealthHeader(lastCamState,camLabels,curArm);
+      }
+    };
+    nextImg.src=url;
+  }
+}
+
 async function pollCameras(){
   const grid=$('cam-grid'), note=$('cam-note');
   try{
     const st=await api('/cameras.json');
     lastCamState=st||{};
-    const curArm=f&&f.arm?f.arm.value:'';
+    const curArm=(typeof benchSessionActive==='function'&&benchSessionActive()&&lastStatus?.arm)?lastStatus.arm:(f&&f.arm?f.arm.value:'');
     const labels=previewCamsForArm(Object.keys(lastCamState),curArm);
-    const hdrCam=$('hdr-cam-health');
     if(!labels.length){
+      emptyCamPolls++;
       note.textContent=benchSessionActive()
         ? '녹화 카메라 프레임 대기 중'
         : '카메라 뷰어(8767)가 대기 중이거나 연결된 카메라가 없습니다.';
-      if(hdrCam){hdrCam.textContent='카메라 0대';hdrCam.dataset.tone='warn';hdrCam.removeAttribute('title');}
-      grid.innerHTML='';camLabels=[];
+      if(!camLabels.length||emptyCamPolls>=3){
+        const {missingReq}=renderCamHealthHeader(lastCamState,[],curArm);
+        grid.innerHTML='';camLabels=[];
+        if(missingReq.length)syncMissingCamPlaceholders(missingReq);
+      }
       return;
     }
-    const freshCnt=labels.filter(l=>lastCamState[l]?.fresh!==false).length;
-    if(hdrCam){hdrCam.textContent='카메라 '+freshCnt+'/'+labels.length+'대';hdrCam.dataset.tone=freshCnt===labels.length?'good':'warn';}
-    if(hdrCam)hdrCam.title=labels.join(', ');
-    note.textContent='실시간 미리보기 ('+labels.join(', ')+')';
+    emptyCamPolls=0;
+    const {liveReq,missingReq}=renderCamHealthHeader(lastCamState,labels,curArm);
+    note.textContent=missingReq.length
+      ? ('미리보기 ('+(liveReq.join(', ')||'없음')+') · 미수신: '+missingReq.join(', '))
+      : ('실시간 미리보기 ('+labels.join(', ')+')');
     if(labels.join(',')!==camLabels.join(',')){
       camLabels=labels;
       grid.innerHTML='';
@@ -128,7 +179,7 @@ async function pollCameras(){
         const rec=document.createElement('span');rec.className='cam-rec-badge on';rec.textContent='● 녹화';
         const tag=document.createElement('span');tag.className='cam-tag';tag.hidden=true;
         const img=document.createElement('img');img.alt=lbl+' 카메라 (프레임 대기 중)';img.dataset.cam=lbl;
-        img.onerror=()=>{img.style.display='none';};img.onload=()=>{img.style.display='block';};
+        img.style.display='none';
         box.append(title,rec,tag,img);
         box.addEventListener('click',()=>{if(box.classList.contains('cam-pip'))switchPrimaryCam(lbl);});
         box.addEventListener('keydown',e=>{if(box.classList.contains('cam-pip')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();switchPrimaryCam(lbl);}});
@@ -139,19 +190,19 @@ async function pollCameras(){
         primaryCam=defaultPrimaryCam(labels,curArm);
       }
       applyCameraLayout();
-    }else if(curArm!==lastCamArm){
-      syncPrimaryCamForArm(curArm);
-    }
-    updateCameraRecordingMask();
-    const ts=Date.now();
-    for(const img of grid.querySelectorAll('img[data-cam]')){
-      const camInfo=lastCamState[img.dataset.cam];
-      if(camInfo&&camInfo.fresh===false){
-        img.style.display='none';
-        continue;
+      tickCameraFrames();
+    }else{
+      for(const box of grid.querySelectorAll('.cam-box[data-cam-box]')){
+        const lbl=box.dataset.camBox;
+        const info=st[lbl];
+        const pill=box.querySelector('.cam-title-pill');
+        if(pill)pill.textContent=lbl+' ('+(info?.fresh===false?'지연':(info?.quality?.condition||'정상'))+')';
       }
-      img.src='/camera/'+encodeURIComponent(img.dataset.cam)+'.jpg?t='+ts;
+      if(curArm!==lastCamArm)syncPrimaryCamForArm(curArm);
     }
+    syncMissingCamPlaceholders(missingReq);
+    updateCameraRecordingMask();
+    if(typeof renderArmCards==='function')renderArmCards();
   }catch(_){
     note.textContent='카메라 미리보기를 불러오지 못했습니다.';
   }
@@ -248,6 +299,7 @@ function syncArmPillsUI(){
     btn.classList.toggle('active',on);
     btn.setAttribute('aria-pressed',on?'true':'false');
   }
+  if(typeof renderArmCards==='function')renderArmCards();
 }
 
 function syncArmSelection(){
@@ -277,11 +329,14 @@ function syncArmSelection(){
   renderTaskListbox();
   updateTaskSummary();
   pollCameras();
+  if(typeof renderArmCards==='function')renderArmCards();
+  if(typeof renderParamsPanel==='function')renderParamsPanel();
   validateStart();
 }
 
 function selectArm(arm){
   if(!arm||![...f.arm.options].some(o=>o.value===arm))return;
+  try{localStorage.setItem(LAST_ARM_KEY,arm);}catch(_){}
   const want=arm==='arm_ab'?new Set(['arm_a','arm_b']):new Set([arm]);
   for(const cb of $('arm-checks').querySelectorAll('input[type="checkbox"]')){
     cb.checked=want.has(cb.value);
@@ -307,13 +362,19 @@ function selectTask(val,opts){
   if(typeof window.closeDrawer==='function')window.closeDrawer(true);
 }
 
-let taskFilter='all';
-function taskMatchesFilter(v,c){
-  if(taskFilter==='all')return true;
+let taskFilter='arm';
+function taskMatchesMode(v,c,mode){
+  if(mode==='all')return true;
   const hay=(v+' '+(c.origin||'')+' '+(c.target_slot||'')+' '+(c.single_task||'')+' '+(c.raw||'')).toLowerCase();
-  if(taskFilter==='pinky')return /pinky|belt|conveyor|supply/.test(hay);
+  if(mode==='pinky')return /pinky|belt|conveyor|supply/.test(hay);
+  if(mode==='todo'){
+    if(typeof window.taskFitsArm==='function'&&!window.taskFitsArm(v,c,f.arm.value))return false;
+    const qInfo=typeof epQuota==='function'?epQuota(c):null;
+    return qInfo?qInfo.rem>0:(c.valid!==false);
+  }
   return typeof window.taskFitsArm==='function'?window.taskFitsArm(v,c,f.arm.value):true;
 }
+function taskMatchesFilter(v,c){return taskMatchesMode(v,c,taskFilter);}
 function stepTask(delta){
   const opts=[...($('task-listbox')?.querySelectorAll('.task-opt:not(:disabled)')||[])];
   if(!opts.length)return;
@@ -333,6 +394,14 @@ function renderTaskListbox(){
   const q=($('task-search')?.value||'').trim().toLowerCase();
   const cards=(choices&&choices.task_cards)?choices.task_cards:{};
   const tasks=choices&&Array.isArray(choices.tasks)?choices.tasks:[];
+  if($('task-filters')){
+    for(const b of $('task-filters').querySelectorAll('button[data-tfilter]')){
+      if(!b.dataset.baseLabel)b.dataset.baseLabel=b.textContent;
+      const mode=b.dataset.tfilter||'all';
+      const cnt=tasks.filter(v=>taskMatchesMode(v,cards[v]||{},mode)).length;
+      b.textContent=b.dataset.baseLabel+' ('+cnt+')';
+    }
+  }
   box.innerHTML='';
   const addOpt=(val,title,sub,disabled)=>{
     const btn=document.createElement('button');
@@ -376,10 +445,22 @@ async function loadChoices(){
     if(armContractValid()){
       for(const a of choices.arms)f.arm.append(new Option(a,a));
       const singles=choices.arms.filter(a=>a!=='arm_ab');
+      const connMap=choices.arm_connectivity||{};
+      const prefOrder=['arm_a','arm_b','arm_s'];
+      const urlArm=new URLSearchParams(location.search).get('arm');
+      let savedArm='';try{savedArm=localStorage.getItem(LAST_ARM_KEY)||'';}catch(_){}
+      const pickPref=a=>choices.arms.includes(a)&&connMap[a]?.connected===true;
+      const defaultArm=(urlArm&&choices.arms.includes(urlArm)?urlArm:null)
+        ||(savedArm&&pickPref(savedArm)?savedArm:null)
+        ||prefOrder.find(a=>singles.includes(a)&&connMap[a]?.connected===true)
+        ||singles.find(a=>connMap[a]?.connected===true)
+        ||prefOrder.find(a=>singles.includes(a))
+        ||singles[0]||'';
       $('arm-checks').innerHTML='';
+      const initWant=defaultArm==='arm_ab'?new Set(['arm_a','arm_b']):new Set([defaultArm]);
       for(const a of singles){
         const lbl=document.createElement('label');lbl.className='check-row';lbl.style.flex='1 1 110px';
-        const cb=document.createElement('input');cb.type='checkbox';cb.value=a;cb.checked=(a===singles[0]);
+        const cb=document.createElement('input');cb.type='checkbox';cb.value=a;cb.checked=initWant.has(a);
         const sp=document.createElement('span');sp.className='mono';sp.textContent=a;
         lbl.append(cb,sp);$('arm-checks').append(lbl);
       }
@@ -390,8 +471,9 @@ async function loadChoices(){
         btn.addEventListener('click',()=>selectArm(a));
         $('rail-arm-pills').append(btn);
       }
-      if(singles.length)f.arm.value=singles[0];
+      if(defaultArm)f.arm.value=defaultArm;
       syncArmPillsUI();
+      if(typeof renderArmCards==='function')renderArmCards();
     }else{
       f.arm.append(new Option('미확인 (서버 계약 없음)',''));
       f.arm.disabled=true;
@@ -425,6 +507,8 @@ async function loadChoices(){
     applyPresetOrRecommended(false);
     renderTaskListbox();
     updateTaskSummary();
+    if(typeof renderArmCards==='function')renderArmCards();
+    if(typeof renderParamsPanel==='function')renderParamsPanel();
     validateStart();
   }catch(err){
     setReqError('선택 목록을 불러오지 못했습니다: '+err.message);
@@ -434,13 +518,13 @@ async function loadChoices(){
 function init(){
   pollStatus();
   setInterval(pollStatus,2000);
+  pollArms();
+  if(typeof loadGripMaps==='function')loadGripMaps();
   pollCameras();
-  setInterval(pollCameras,1000);
+  setInterval(pollCameras,1500);
+  setInterval(tickCameraFrames,150);
   loadChoices();
 }
-
-const JOINT_LABELS={'11':'11 · 어깨 회전(pan)','12':'12 · 어깨 들기(lift)','13':'13 · 팔꿈치(elbow)','14':'14 · 손목 굽힘(flex)','15':'15 · 손목 회전(roll)','16':'16 · 그리퍼(gripper)'};
-const PARAM_LABELS={'pwm':'최대 토크(PWM)','current':'최대 전류(mA)','p':'추적 강성(P)','i':'오차 보정(I)','acc':'가속도(acc)','vel':'속도(vel)'};
 
 function renderConfigMeta(){
   const m=choices&&choices.config_meta?choices.config_meta[f.config.value]:null;
@@ -460,88 +544,6 @@ function renderConfigMeta(){
   if($('lp-ep-time')&&et!=null)$('lp-ep-time').value=String(et);
   if($('lp-reset-time')&&rt!=null)$('lp-reset-time').value=String(rt);
 }
-
-function renderCapsSummary(){
-  const wrap=$('caps-summary-chart');
-  const inputs=[...$('caps-fields').querySelectorAll('input[data-mid][data-key="pwm"]')];
-  if(!inputs.length){wrap.innerHTML='';return;}
-  let html='<div style="display:grid;grid-template-columns:repeat('+inputs.length+',minmax(0,1fr));gap:6px;align-items:end;height:68px;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px">';
-  for(const inp of inputs){
-    const v=Math.max(0,Math.min(2000,Number(inp.value)||0));
-    const h=Math.max(6,Math.round((v/2000)*46));
-    const col=v>=1000?'#ffc53d':'#58a6ff';
-    html+='<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div style="width:100%;max-width:34px;height:'+h+'px;background:'+col+';border-radius:4px 4px 0 0"></div><span class="mono" style="font-size:.7rem;color:var(--ink-q)">M'+inp.dataset.mid+'</span></div>';
-  }
-  wrap.innerHTML=html+'</div>';
-}
-
-function renderCapsEditor(){
-  renderConfigMeta();
-  const name=f.caps.value;
-  const data=choices&&choices.caps_data?choices.caps_data[name]:null;
-  const box=$('caps-editor'), fields=$('caps-fields');
-  if(!name||!data||typeof data!=='object'){box.hidden=true;fields.innerHTML='';$('caps-summary-chart').innerHTML='';return;}
-  box.hidden=false;fields.innerHTML='';
-  for(const [mid,obj] of Object.entries(data)){
-    if(!obj||typeof obj!=='object')continue;
-    const card=document.createElement('div');card.style.cssText='background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;padding:10px';
-    const h=document.createElement('div');h.className='mono';h.style.cssText='font-weight:700;margin-bottom:6px;font-size:.9rem';h.textContent=JOINT_LABELS[mid]||('모터 ID '+mid);card.append(h);
-    for(const [k,val] of Object.entries(obj)){
-      const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:8px;margin-top:6px';
-      const lbl=document.createElement('span');lbl.style.cssText='flex:0 0 118px;font-size:.82rem;color:var(--ink-q)';lbl.textContent=PARAM_LABELS[k]||k;
-      const track=document.createElement('div');track.className='bar-track';
-      const fill=document.createElement('div');fill.className='bar-fill';
-      const vtxt=document.createElement('span');vtxt.className='bar-val';
-      track.append(fill,vtxt);
-      const inp=document.createElement('input');inp.type='number';inp.min='0';inp.max='2000';inp.value=String(val);
-      inp.dataset.mid=mid;inp.dataset.key=k;
-      inp.style.cssText='width:68px;min-height:30px;padding:2px 6px;background:var(--ground-soft);color:var(--ink);border:1px solid var(--bd);border-radius:4px;font-family:ui-monospace,monospace';
-      const sync=(n)=>{
-        const c=Math.max(0,Math.min(2000,Math.round(n)));
-        inp.value=String(c);
-        fill.style.width=(c/2000*100)+'%';
-        fill.className='bar-fill'+(c>=1000?' high':'');
-        vtxt.textContent=String(c);
-        renderCapsSummary();
-      };
-      const onPtr=(e)=>{
-        const r=track.getBoundingClientRect();
-        const ratio=Math.max(0,Math.min(1,(e.clientX-r.left)/Math.max(1,r.width)));
-        sync(Math.round((ratio*2000)/10)*10);
-      };
-      let dragging=false;
-      track.addEventListener('pointerdown',e=>{dragging=true;track.setPointerCapture(e.pointerId);onPtr(e);});
-      track.addEventListener('pointermove',e=>{if(dragging)onPtr(e);});
-      track.addEventListener('pointerup',()=>{dragging=false;});
-      track.addEventListener('pointercancel',()=>{dragging=false;});
-      inp.addEventListener('input',()=>sync(Number(inp.value)||0));
-      row.append(lbl,track,inp);card.append(row);
-      sync(Number(val)||0);
-    }
-    fields.append(card);
-  }
-  renderCapsSummary();
-}
-
-$('save-caps-btn').addEventListener('click',async()=>{
-  const values={};
-  for(const inp of $('caps-fields').querySelectorAll('input[data-mid]')){
-    const m=inp.dataset.mid, k=inp.dataset.key, v=Number(inp.value);
-    if(!Number.isInteger(v)||v<0||v>2000){setReqError('모터 '+m+'.'+k+' 값은 0~2000 정수여야 합니다');return;}
-    (values[m]=values[m]||{})[k]=v;
-  }
-  try{
-    setReqError('');
-    const res=await api('/save_caps',{arm:f.arm.value,values});
-    choices=res.choices;
-    f.caps.innerHTML='';f.caps.append(new Option('선택하세요',''));
-    for(const v of (choices.caps||[]))f.caps.append(new Option(v,v));
-    applyArmRules(false);
-    f.caps.value=res.saved;
-    renderCapsEditor();
-    validateStart();
-  }catch(err){setReqError(err.message);}
-});
 
 $('apply-rec-btn').addEventListener('click',()=>{
   for(const cb of document.querySelectorAll('#cal-robot-list input, #cal-leader-list input'))cb.checked=false;

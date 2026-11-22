@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+ExecCondition=/usr/local/sbin/rosy-host-control nightly-gate
 ExecStart=/usr/local/sbin/rosy-docker-upgrade
 TimeoutStartSec=1800
 Nice=10

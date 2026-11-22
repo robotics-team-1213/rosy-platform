@@ -164,7 +164,7 @@ def test_running_trip_or_teach_blocks_activation_without_changing_either_map(tmp
 def test_site_map_api_reads_edits_and_activates_with_audit(tmp_path):
     client, tasks, store, _robot = _app(tmp_path)
     active = client.get("/api/fleet/site-map/active", headers=VIEWER)
-    assert active.status_code == 200 and active.json()["version"] == 1
+    assert active.status_code == 200 and active.json()["version"] == 1 and active.json()["route_active"] is False
     assert client.put("/api/fleet/site-map/draft", json={"map": _line()}, headers=VIEWER).status_code == 403
     saved = client.put("/api/fleet/site-map/draft", json={"map": _line()}, headers=OPERATOR)
     assert saved.status_code == 200 and saved.json()["saved_by"] == "bob"
@@ -488,3 +488,10 @@ def test_the_site_console_store_keeps_drawing_assets_beside_its_database(tmp_pat
     store.close()
     memory, _ = cli._build_site_map(cli.parse_args(["console"]), None)
     assert memory.drawing_assets is None   # no database, nothing to keep drawings beside
+
+
+def test_active_site_map_reports_route_active_when_a_trip_is_running(tmp_path, monkeypatch):
+    client, _tasks, _store, _robot = _app(tmp_path)
+    assert client.get("/api/fleet/site-map/active", headers=VIEWER).json()["route_active"] is False
+    monkeypatch.setattr(client.app.state.trip_runner, "running", lambda: {"trip_id": "running-trip"})
+    assert client.get("/api/fleet/site-map/active", headers=VIEWER).json()["route_active"] is True

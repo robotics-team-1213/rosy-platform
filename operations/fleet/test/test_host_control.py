@@ -712,7 +712,7 @@ def test_a_wedged_nvidia_smi_is_killed_and_does_not_keep_the_helper(tmp_path):
     assert helper("nightly-gate") == 0
 
 
-@pytest.mark.parametrize("role", ["model_pc", "ai_pc", "site"])
+@pytest.mark.parametrize("role", ["model_pc", "ai_pc", "site", "cell_pc"])
 def test_every_nightly_reboot_asks_the_helper_before_the_warning_and_before_the_reboot(role):
     unit = (SITE.parent / role / "host-state" / "rosy-nightly-reboot.service").read_text(encoding="utf-8")
     gate = "/usr/local/sbin/rosy-host-control nightly-gate"
@@ -888,3 +888,35 @@ def test_every_signed_in_role_reads_the_update_summary(tmp_path, monkeypatch):
     monkeypatch.setattr(routes, "GUARD_STATUS", guard)
     body = _client(UnavailableHostHelper()).get("/api/fleet/updates").json()
     assert body["hosts"][0]["host"] == "ai" and body["hosts"][0]["channels"][0]["unit"] == "rosy-situation-autoupdate.service"
+
+
+@posix
+def test_site_helper_blocks_and_cancels_reboot_when_fleet_is_busy(tmp_path):
+    helper = _helper_copy(tmp_path, "site")
+    site = tmp_path / "site"
+    site.mkdir()
+    (site / "autoupdate.conf").write_text("{}", encoding="utf-8")
+    updater_stub = tmp_path / "site_updater.py"
+    busy_flag = tmp_path / "site_busy"
+    updater_stub.write_text(
+        f"import pathlib, sys\nsys.exit(3 if pathlib.Path({str(busy_flag)!r}).exists() else 0)\n",
+        encoding="utf-8",
+    )
+    copy = tmp_path / "helper"
+    text = copy.read_text(encoding="utf-8")
+    for old, new in (("SITE_CONF=/etc/rosy/site", f"SITE_CONF={site}"),
+                     ("SITE_UPDATER=/usr/local/lib/rosy-site/rosy_site_autoupdate.py",
+                      f"SITE_UPDATER={updater_stub}")):
+        assert old in text
+        text = text.replace(old, new)
+    copy.write_text(text, encoding="utf-8")
+
+    assert helper("nightly-gate") == 0
+    assert helper("reboot-if-free") == 0
+    assert (tmp_path / "scheduled").exists()
+    busy_flag.write_text("navigating", encoding="utf-8")
+    assert helper("nightly-gate") == 7
+    assert helper("recheck-reboot") == 0
+    assert not (tmp_path / "scheduled").exists()
+    assert helper("reboot-if-free") == 7
+    assert helper("cancel-reboot") == 4

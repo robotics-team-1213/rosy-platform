@@ -9,6 +9,8 @@ import math
 from typing import Optional
 
 from rosy.world.state.projections.map_pose import MapPose
+from fleet.routing.execute import arc_id
+from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.routing.cost import STOP
 from fleet.server.trip_laps import hold_back_m
 from fleet.server.trip_live import LiveTrip
@@ -47,6 +49,8 @@ class TripProgress:
             dist, s, _t = arc.project(pose.x, pose.y)
             if index + 1 >= len(live.segments) or live.view["hold"] is not None:
                 break
+            if self._named_stop_handoff(live, index + 1):
+                break  # a projection across the join cannot consume its held STOP
             nxt, nxt_segment = live.arc(index + 1), live.segments[index + 1]
             nxt_dist, nxt_s, _t = nxt.project(pose.x, pose.y)
             onto_next = nxt_s > nxt_segment["s_from"] + self.config.advance_eps_m and nxt_dist < dist
@@ -64,6 +68,53 @@ class TripProgress:
             index += 1
         near = [dist] + ([live.arc(index + 1).project(pose.x, pose.y)[0]] if index + 1 < len(live.segments) else [])
         return index, s, (dist if min(near) > live.arc(index).width_m / 2 else None)
+
+    def _strict_named_stop(self, live: LiveTrip, index: int):
+        if index != len(live.segments) - 1:
+            return None
+        target = live.request.get("to")
+        if not isinstance(target, str):
+            return None
+        place = live.graph.places.get(target)
+        if (place is not None and place.kind == "stop"
+                and (place.precision_stop is not None
+                     or (not live.nav2 and self.config.map_binding_required))):  # the last segment of a trip to this stop
+            return place
+        return None
+
+    async def _progress_pose(self, live: LiveTrip, robot_id: str):
+        binding_id = live.view["detail"].get("precision_binding_id")
+        if binding_id is None:
+            return await self.map_pose(robot_id)
+        pose = await precision_map_pose(self, robot_id, (live.view["map_version"], binding_id))
+        if pose is not None:
+            self._unread.discard(robot_id)
+        return pose
+
+    @staticmethod
+    def _precision_terminal_matches(graph, segments, stop) -> bool:
+        if not segments:
+            return False
+        segment = segments[-1]
+        arc = graph.arcs[arc_id(segment)]
+        xy = arc.point_at(segment["s_to"])[:2]
+        return arc.drive_mode == "free" and math.dist(xy, (stop.x, stop.y)) <= 0.0001
+
+    @staticmethod
+    def _matches_precision_binding(live: LiveTrip, frame: dict) -> bool:
+        actual = frame.get("binding_id")
+        return bool(actual) and live.view["detail"].get("precision_binding_id", actual) == actual
+
+    def _precision_terminal_mismatch(self, live: LiveTrip) -> bool:
+        terminal = len(live.segments) - 1
+        stop = self._strict_named_stop(live, terminal)
+        return (stop is not None and stop.precision_stop is not None
+                and (live.nav2 or live.arc(terminal).drive_mode != "free" or live.place(terminal) != stop.id))
+
+    def _named_stop_handoff(self, live: LiveTrip, index: int) -> bool:
+        return (index > 0 and live.segment_is_lane(index - 1)
+                and live.arc(index).drive_mode == "free"
+                and self._strict_named_stop(live, index) is not None)
 
     def _completed(self, live: LiveTrip, index: int) -> bool:
         """CORE finished our instruction for this place: idle again, or a newer seq."""

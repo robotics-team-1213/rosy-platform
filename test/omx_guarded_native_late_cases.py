@@ -1331,3 +1331,56 @@ def test_a_reversal_overruns_by_less_than_3_degrees_at_every_stage(guard, stage,
     assert overrun < 3 * guard.TICKS_PER_DEGREE and not motion.failed
 
 
+def test_staged_full_arm_tracks_moving_leader_without_excessive_early_braking_lag(guard):
+    follower, leader, clock = Bus(), Bus(leader=True), [10.0]
+    motion = guard.NativeJointMotion(follower, leader, clock=lambda: clock[0], label='arm_s', stage=90)
+    motion.send(action(leader))
+    dt = 0.04  # 25 Hz recorded cadence
+
+    def step():
+        clock[0] += dt
+        motion.send(action(leader))
+        follower.raw.update(follower.goals)
+
+    for _ in range(18):
+        step()
+    assert motion.tracking
+    for _ in range(30):  # 1.2 s moving smoothly at 55 deg/s (full arm extension)
+        leader.raw['shoulder_lift'] += 55 * guard.TICKS_PER_DEGREE * dt
+        step()
+    lag_deg = abs(leader.raw['shoulder_lift'] - motion.command['shoulder_lift']) / guard.TICKS_PER_DEGREE
+    assert lag_deg < 3.5 and not motion.failed
+    reversal = leader.raw['shoulder_lift']
+    overrun = 0.0
+    for _ in range(25):  # hold stationary: settles cleanly without overshoot
+        step()
+        overrun = max(overrun, (motion.command['shoulder_lift'] - reversal) / guard.TICKS_PER_DEGREE)
+    assert overrun < 3.0 and abs(motion.command['shoulder_lift'] - reversal) < 0.5 * guard.TICKS_PER_DEGREE
+
+
+@pytest.mark.parametrize('dt', [0.05, 1 / 15])
+@pytest.mark.parametrize('stage', [30, 45, 60, 90, 120])
+def test_staged_full_arm_stop_hold_has_zero_overshoot_across_all_stages(guard, stage, dt):
+    follower, leader, clock = Bus(), Bus(leader=True), [10.0]
+    motion = guard.NativeJointMotion(follower, leader, clock=lambda: clock[0], label='arm_s', stage=stage)
+    motion.send(action(leader))
+
+    def step():
+        clock[0] += dt
+        motion.send(action(leader))
+        follower.raw.update(follower.goals)
+
+    for _ in range(int(0.8 / dt) + 2):
+        step()
+    assert motion.tracking
+    for _ in range(int(1.0 / dt)):
+        leader.raw['shoulder_pan'] += 0.9 * stage * guard.TICKS_PER_DEGREE * dt
+        step()
+    stop_target = leader.raw['shoulder_pan']
+    max_ov = 0.0
+    for _ in range(int(1.5 / dt)):
+        step()
+        max_ov = max(max_ov, (motion.command['shoulder_pan'] - stop_target) / guard.TICKS_PER_DEGREE)
+    assert max_ov <= 1e-6 and not motion.failed
+
+

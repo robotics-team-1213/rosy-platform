@@ -17,16 +17,15 @@ def active_preview(bench):
 
 
 def camera_state(bench):
+    preview = active_preview(bench)
+    if preview is not None:
+        return preview.fresh_cameras()
     try:
         with urllib.request.urlopen(f"{VIEWER}/state.json", timeout=1.5) as stream:
             raw = json.load(stream)
-        cameras = {k: v for k, v in raw.items() if isinstance(v, dict) and "quality" in v}
+        return {k: v for k, v in raw.items() if isinstance(v, dict) and "quality" in v}
     except Exception:
-        cameras = {}
-    preview = active_preview(bench)
-    if preview is not None:
-        cameras.update(preview.fresh_cameras())
-    return cameras
+        return {}
 
 
 def camera_frame(bench, label):
@@ -43,9 +42,12 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
     class Handler(BaseHTTPRequestHandler):
         def reply(self, code, value, kind="application/json"):
             body = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
-            self.send_response(code); self.send_header("Content-Type", kind)
-            self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Frame-Options", "DENY"); self.end_headers(); self.wfile.write(body)
+            try:
+                self.send_response(code); self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Frame-Options", "DENY"); self.end_headers(); self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError, TimeoutError):
+                self.close_connection = True
 
         def local(self):
             return self.client_address[0] == "127.0.0.1" and self.headers.get("Host") == f"127.0.0.1:{self.server.server_port}"
@@ -67,11 +69,13 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(400, {"error": "invalid camera label"})
                 try:
                     jpg = camera_frame(bench, label)
-                    return self.reply(200, jpg, "image/jpeg")
                 except Exception:
                     return self.reply(503, {"error": "camera frame unavailable"})
+                return self.reply(200, jpg, "image/jpeg")
             if path == "/api/arms":
                 return self.reply(200, bench.arms_status())
+            if path == "/api/grip_map":
+                return self.reply(200, bench.grip_maps())
             if path == "/api/telemetry":
                 return self.reply(200, bench.telemetry())
             if path == "/api/camera_check":
@@ -87,6 +91,7 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                       "/bench_record_map.js": lambda: ((HERE / "bench_record_map.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_status.js": lambda: ((HERE / "bench_record_status.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_app.js": lambda: ((HERE / "bench_record_app.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_params.js": lambda: ((HERE / "bench_record_params.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_drawers.js": lambda: ((HERE / "bench_record_drawers.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_cam.js": lambda: ((HERE / "bench_record_cam.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
@@ -124,6 +129,10 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.stop())
                 if self.path == "/save_caps":
                     return self.reply(200, bench.save_caps(body))
+                if self.path == "/api/teleop_speed":
+                    return self.reply(200, bench.set_teleop_speed(body))
+                if self.path == "/api/grip_map":
+                    return self.reply(200, bench.save_grip_map(body))
                 if self.path == "/release_lock":
                     return self.reply(200, bench.release_lock(body))
                 if self.path == "/home":
@@ -172,7 +181,12 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
         def log_message(self, *args):
             pass
 
-    return ThreadingHTTPServer((bind, port), Handler)
+    class _BenchHTTPServer(ThreadingHTTPServer):
+        daemon_threads = True
+        request_queue_size = 32
+        allow_reuse_address = True
+
+    return _BenchHTTPServer((bind, port), Handler)
 
 
 def main(argv=None, *, bench_cls=None):

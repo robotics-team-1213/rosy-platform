@@ -10,6 +10,7 @@ from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boun
 from fleet.pipeline.cell_site_targets import expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
+from fleet.server.pipeline_pinky_dispatch import dispatch_fields, install_pinky_dispatch
 from fleet.server.pipeline_port_events import (
     IDENTITY_INPUT_FIELDS,
     TASK_IDENTITY_FIELDS,
@@ -23,6 +24,9 @@ from fleet.server.sitemap.pipeline_unload_release import install_unload_release_
 
 
 _LEGACY_VEHICLE_SITE = "pinky"
+#: The place a pinky-task action drives to (move_* take their zone's place_id); others are not place goals.
+PLACE_OF_ACTION = {"dock_s3": "S3", "dock_and_unload_s3": "S3", "dock_s5": "S5", "charge_c1": "C1",
+                   "charge_c2": "C2", "depart_s1": "S1"}
 
 
 def install_cell_tasks_routes(app, ctx) -> None:
@@ -406,6 +410,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         spawned_cell_task = None
         v_cmd = 0.0
         duration_s = 0.0
+        place_id = PLACE_OF_ACTION.get(action)  # None: not a place goal, the dispatcher refuses it
         if action in ("dock_s3", "dock_and_unload_s3"):
             if _aborted("cell_s"):
                 raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
@@ -456,6 +461,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             zid = "STG_C2" if action == "move_staging_c2" else ("STG_S3_WAIT" if action == "move_staging_s3" else "EXP_S1")
             z = zones.get(zid) or {"id": zid, "place_id": "C2" if "c2" in action else ("S3" if "s3" in action else "S1")}
             target_place = f"{z['id']} ({z.get('place_id', 'S1')})"
+            place_id = z.get("place_id")
             v_cmd = min(max_speed_mps, checked_finite_float(z.get("speed_cap_mps", max_speed_mps)))
             max_step_m = min(max_step_m, checked_finite_float(z.get("max_step_m", max_step_m)))
             duration_s = 0.35
@@ -490,6 +496,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
+            **dispatch_fields(active, request, place_id),
         }
         app.state.pinky_tasks[task_id] = ptask
         _save_ledger()
@@ -500,6 +507,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "status": "SENT", "auto": True, "created_at": round(now, 3)}
 
     ctx.record_depart_task = record_depart_task
+    install_pinky_dispatch(app, ctx)
     install_unload_release_routes(app, ctx)
     ctx.CELL_TASK_PRESETS = CELL_TASK_PRESETS
     ctx._enqueue_one_task = _enqueue_one_task

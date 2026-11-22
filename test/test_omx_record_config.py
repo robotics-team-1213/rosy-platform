@@ -142,3 +142,19 @@ def test_explicit_native_video_recording_remains_admissible(module, config, pair
         config = bimanual(config)
     config['dataset']['video'] = True
     assert module.validate_config(config) == config
+
+
+def test_by_path_camera_identity_is_accepted_and_traversal_rejected(module, config):
+    config['robot']['cameras']['side'] = {
+        'type': 'opencv',
+        'index_or_path': '/dev/v4l/by-path/pci-0000:00:14.0-usb-0:4:1.0-video-index0',
+        'fps': 30, 'width': 640, 'height': 480,
+    }
+    assert module.validate_config(config) == config
+    bi = bimanual(config)
+    assert module.validate_config(bi) == bi
+    for bad in ('/dev/v4l/by-path/..', '/dev/v4l/by-id/.', '/dev/video0'):
+        bad_cfg = module.json.loads(module.json.dumps(config)) if hasattr(module, 'json') else json.loads(json.dumps(config))
+        bad_cfg['robot']['cameras']['side']['index_or_path'] = bad
+        with pytest.raises(ValueError, match='camera'):
+            module.validate_config(bad_cfg)

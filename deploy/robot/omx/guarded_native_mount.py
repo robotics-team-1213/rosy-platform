@@ -1,10 +1,8 @@
-"""Checks of a Leader's commissioned declarations (<leader calibration>.mount.json) for guarded_native.py.
-
-All fail closed with ValueError before any torque: half-turn mount offsets, the trigger-to-jaw map, and follower_floor.
-"""
+"""Checks and tracking-time clamping of commissioned Leader/Follower limits for guarded_native.py."""
 from __future__ import annotations
 
-from guarded_device import BODY, TICKS_PER_DEGREE, TURN
+from guarded_device import BODY, NAMES, TICKS_PER_DEGREE, TURN, normalized
+from guarded_native_probe import safe_print
 
 GRIP_ENDS = ("leader_open", "leader_closed", "follower_open", "follower_closed")
 
@@ -39,3 +37,73 @@ def check_floor(floor, follower):
             for name, value in floor.items())):
         raise ValueError("leader follower_floor needs integer ticks inside the Follower's calibrated range, body joints only")
     return dict(floor)
+
+
+def _clamp_notice(motion, name: str, text: str) -> None:
+    clamped = getattr(motion, "clamped", None)
+    if clamped is None or name not in clamped:
+        if clamped is not None:
+            clamped.add(name)
+        safe_print(text)
+
+
+def validate_targets(motion, leader: dict, mapped: dict, target: dict, current: dict) -> None:
+    """Validate follower actual pose strictly and map/validate Leader targets (smoothly clamping only while tracking)."""
+    for name in NAMES:
+        cal = motion.follower.calibration[name]
+        if not cal.range_min <= current[name] <= cal.range_max:
+            raise ValueError(f"{name}: outside calibrated range")
+    can_clamp = bool(motion.full_arm and motion.command is not None and motion.tracking)
+    prev_m = getattr(motion, "prev_mapped", None)
+    clamped = getattr(motion, "clamped", None)
+    if motion.teacher:
+        target["gripper"] = leader["gripper"]
+        for name, value in target.items():
+            cal = motion.follower.calibration[name]
+            if not cal.range_min <= value <= cal.range_max:
+                raise ValueError(f"{name}: target outside follower calibrated range")
+    else:
+        for name in BODY:
+            lcal, fcal = motion.leader.calibration[name], motion.follower.calibration[name]
+            in_l = lcal.range_min <= mapped[name] <= lcal.range_max
+            in_f = fcal.range_min <= target[name] <= fcal.range_max
+            if not can_clamp:
+                if not in_l:
+                    raise ValueError(f"{name}: outside calibrated range")
+                if not in_f:
+                    raise ValueError(f"{name}: target outside follower calibrated range")
+            elif not (in_l and in_f):
+                low = max(fcal.range_min, motion.floor.get(name, fcal.range_min))
+                if (prev_m is not None and name in prev_m and abs(mapped[name] - prev_m[name]) >= 100 * TICKS_PER_DEGREE - 1e-9) or low > fcal.range_max:
+                    raise ValueError(f"{name}: outside calibrated range" if not in_l else f"{name}: target outside follower calibrated range")
+                clamped_v = max(low, min(fcal.range_max, target[name]))
+                target[name] = clamped_v
+                _clamp_notice(motion, name, f"{motion.label}: {name} clamped at follower calibrated end ({clamped_v}); torque stays ON")
+            elif clamped is not None:
+                clamped.discard(name)
+        lg, lcal = leader["gripper"], motion.leader.calibration["gripper"]
+        lg_use, g_clamped = lg, False
+        if not lcal.range_min <= lg <= lcal.range_max:
+            if not can_clamp or (prev_m is not None and "gripper" in prev_m and abs(lg - prev_m["gripper"]) >= 100 * TICKS_PER_DEGREE - 1e-9):
+                raise ValueError("gripper: outside calibrated range")
+            lg_use, g_clamped = max(lcal.range_min, min(lcal.range_max, lg)), True
+            _clamp_notice(motion, "gripper", f"{motion.label}: gripper leader trigger clamped at calibrated end ({lg_use}); torque stays ON")
+        if not motion.body_only:
+            if motion.grip_map:
+                ends = motion.grip_map
+                part = (lg_use - ends["leader_closed"]) / (ends["leader_open"] - ends["leader_closed"])
+                target["gripper"] = round(ends["follower_closed"] + max(0.0, min(1.0, part)) * (ends["follower_open"] - ends["follower_closed"]))
+            else:
+                grip = normalized(motion.leader, {"gripper": lg_use})["gripper.pos"]
+                grip_id = motion.follower.motors["gripper"].id
+                target["gripper"] = motion.follower._unnormalize({grip_id: grip})[grip_id]
+            fcal = motion.follower.calibration["gripper"]
+            if not fcal.range_min <= target["gripper"] <= fcal.range_max:
+                if not can_clamp or (prev_m is not None and "gripper" in prev_m and abs(lg - prev_m["gripper"]) >= 100 * TICKS_PER_DEGREE - 1e-9):
+                    raise ValueError("gripper: target outside follower calibrated range")
+                target["gripper"], g_clamped = max(fcal.range_min, min(fcal.range_max, target["gripper"])), True
+                _clamp_notice(motion, "gripper", f"{motion.label}: gripper clamped at follower calibrated end ({target['gripper']}); torque stays ON")
+        if not g_clamped and clamped is not None:
+            clamped.discard("gripper")
+    if not motion.body_only and abs(target["gripper"] - current["gripper"]) >= 100 * TICKS_PER_DEGREE - 1e-9:
+        raise ValueError("gripper motor travel >=100 degrees; align manually with torque OFF")

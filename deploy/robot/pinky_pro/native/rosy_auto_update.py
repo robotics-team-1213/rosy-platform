@@ -9,7 +9,7 @@ Runs from rosy-auto-update.timer as root. One ``run``:
    its three assets, is not recorded as failed, and whose signed rollout.json
    verifies and is not withdrawn;
 3. stages it (download to .part, sha256 against the rollout, the native unpack
-   script, ``native_release.py verify``) even when the robot is busy; current
+   script, ``native_release.py verify``) only once the robot is idle; current
    is never moved by staging;
 4. applies only when the rollout lets this host (canary, or ``canary_ok`` and
    the wave delay passed) and the robot is eligible: no hold, CORE idle and
@@ -344,6 +344,9 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
             return self._finish(state, "idle", reason)
         release_id = release["release_id"]
         state["candidate"] = release_id
+        busy = self._inputs_problems()
+        if busy:
+            return self._finish(state, "ineligible", "; ".join(busy), release_id)
         self._stage(state, release, rollout)
         waiting = self._gate(rollout)
         if waiting:
@@ -368,6 +371,11 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
 def _print_status(status: dict) -> None:
     for key in ("phase", "reason", "current_release", "candidate", "updated_at"):
         print(f"{key}: {status.get(key)}")
+    progress = status.get("progress")
+    if isinstance(progress, dict) and progress.get("step"):
+        pct = progress.get("percent")
+        pct_text = f"{pct}%" if type(pct) is int and 0 <= pct <= 100 else "--"
+        print(f"progress: {pct_text} ({progress['step']})")
     last = status.get("last_result")
     if last:
         print(f"last_result: {last.get('outcome')} {last.get('release_id')} at {last.get('at')} ({last.get('detail')})")

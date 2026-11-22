@@ -49,7 +49,7 @@ def note_clean_end() -> None:
 
 
 def _gn_attr(name: str, default):
-    for mod_name in ("guarded_native", "omx_guard_test"):
+    for mod_name in ("omx_guard_test", "guarded_native"):
         mod = sys.modules.get(mod_name)
         if mod is not None and hasattr(mod, name):
             return getattr(mod, name)
@@ -249,7 +249,9 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
                 prerolled[0] = True  # the 1 degree/s alignment runs before episode 0 starts, not inside it: same loop, no dataset
                 if link is not None:
                     link.publish("aligning")
-                original_loop(*args, **{**kwargs, "dataset": None, "events": PrerollEvents(kwargs["events"]), "control_time_s": 120})
+                pre_kwargs = {**kwargs, "dataset": None, "events": PrerollEvents(kwargs["events"]), "control_time_s": 120}
+                preview_reset_loop(preview, pre_kwargs)
+                original_loop(*args, **pre_kwargs)
                 if kwargs["events"].get("stop_recording"):  # Esc ends the pre-roll: no episode, the normal stop ending
                     raise KeyboardInterrupt("stop requested before the first episode")
                 if shared.get("motion") is None or not shared["motion"].tracking:
@@ -263,6 +265,9 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
                 kwargs = {**kwargs, "events": LinkEvents(kwargs["events"], link, False, require_frame=original_frame is not None)}
             if not episode and shared.get("motion") is not None:
                 shared["motion"].boundary = True
+            if not episode and kwargs.get("dataset") is None:
+                kwargs = dict(kwargs)
+                preview_reset_loop(preview, kwargs)
             try:
                 return original_loop(*args, **kwargs)
             finally:  # a loop that sent no command leaves no mark for the next one

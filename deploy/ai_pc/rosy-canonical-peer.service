@@ -1,0 +1,20 @@
+[Unit]
+Description=ROSY canonical learning telemetry peer (read-only status for Model PC)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# `current` symlink points to a reviewed source snapshot under ~/.local/share/rosy-learning-center/source/<sha>.
+# ~/.config/rosy/canonical-peer.env (0600) sets CANONICAL_PEER_HOST, CANONICAL_PEER_PORT, CANONICAL_PEER_WATCH.
+EnvironmentFile=%h/.config/rosy/canonical-peer.env
+ExecStart=/usr/bin/python3 %h/.local/share/rosy-learning-center/canonical-peer/current/learning/training/omx/canonical_telemetry.py serve-peer --host ${CANONICAL_PEER_HOST} --port ${CANONICAL_PEER_PORT} --host-id ai --token-file %h/.config/rosy/canonical-peer.token --jobs-dir %h/rosy-jobs --watch "${CANONICAL_PEER_WATCH}"
+Restart=on-failure
+RestartSec=5s
+MemoryMax=512M
+CPUQuota=50%
+Nice=10
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

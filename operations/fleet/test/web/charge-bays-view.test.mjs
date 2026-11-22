@@ -164,4 +164,13 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.ok(targets[0].quickControls.some(c => c.clearArmHold === 'arm_s'));
   assert.ok(targets[1].quickControls.some(c => c.clearArmHold === 'arm_a'));
   assert.ok(targets[2].quickControls.some(c => c.clearArmHold === 'arm_b'));
+
+  const emptyTargets = inspectorTargetsFromRows({ cards: [] });
+  assert.doesNotMatch(emptyTargets[0].jointLiveText, /folded: true|홈 대기/);
+  assert.equal(emptyTargets[0].jointLiveText, '관절 관측 없음 · 홈 여부 미확인');
+  assert.equal(formatArmLiveJointText('arm_s', {}), '관절 관측 없음 · 홈 여부 미확인');
+  assert.match(formatArmLiveJointText('arm_s', { arm_s: { joints_deg: [1, 2, 3, 4, 5, 6], folded: false, age_s: 5 } }), /\[신선도 미확인 · 5초 전\]/);
+  const blankCardTargets = inspectorTargetsFromRows({ cards: [{ id: 'cell_s', healthText: '' }, { id: 'cell_ab', healthText: '' }] });
+  assert.equal(blankCardTargets[3].jointLiveText, '관절 관측 없음 · 홈 여부 미확인');
+  assert.equal(blankCardTargets[4].jointLiveText, '관절 관측 없음 · 홈 여부 미확인');
 });

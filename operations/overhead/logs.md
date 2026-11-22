@@ -135,7 +135,6 @@
 - 결정: D-358 3항.
 - 교훈: 없음.
 
-
 ## 2026-09-30 · uncommitted · docs(adr): D-358 앱 역할 ADR을 D-370으로 재번호
 
 - 변경: 이 모듈의 D-358 앱 역할·이름·아이콘 주석과 시험 문서 문자열을 D-370으로 바꿨다. 동작 변경 없음.
@@ -210,7 +209,6 @@
 - 증거: `test_map_proposal_route.py` 새 시험 1개; 콘솔 헤드리스 시험에서 실제 프레임 4장(rx5·rx6·standard·wide) 모두 수락.
 - gate 변화: 없음.
 
-
 ## 2026-10-01 · uncommitted · fix(vision): D-375 review fixes and worker process
 
 - 변경: 독립 리뷰(APPROVE WITH FIXES)와 실기 시험 결함 반영. 방향 차는 다른 방향(적어도 180°) 후보를 늘 정밀화해서 구하고, 경쟁자가 없으면 1.0이 아니라 미정(거부). recall×precision ≥ 0.75 추가, 거울상은 잘 맞고 방향이 분명할 때만. 픽셀 중심 변환은 실제 축별 배율, 세로 프레임은 긴 변 기준. 정합은 별도 작업 프로세스 하나(`map_worker.py`)에서 돌고 source마다 한 번에 하나, 실패는 다음 계산까지 422, `rejected_fit`에는 homography를 넣지 않는다. hello 대기는 루프가 응답하던 시간만 세고, 시간 초과는 1013(재시도)으로 닫는다(4400은 틀린 hello만).
@@ -273,7 +271,6 @@
 - 증거: `test/architecture/` 75 passed + 남은 1 failed는 main에 이미 있던 `schemas.py` 1092줄 판정. `test/test_release_boundary_guards.py` 72 passed + 남은 1 failed는 main의 `docs/logs.md:4077`·`docs/plans/2026-10-01-gemini-robotics-samples-research.md:5`(이 브랜치 파일 아님). vision 224 passed, foundation 389 passed.
 - gate 변화: 없음.
 
-
 ## 2026-10-01 · uncommitted · fix(pairing): Vision 자격 동기화는 https와 사이트 CA 고정이 필수
 
 - 변경: 보안 리뷰 2번. 평문 `http://`나 CA 없는 동기화 URL은 기동 때 거절한다. 둘 중 하나라도 허용하면 LAN의 위장 서버가 동기화 토큰을 읽고 자기 digest 목록을 내 운용자 승인 없이 카메라 자격을 살릴 수 있었다(D-341 9·12항).
@@ -286,13 +283,11 @@
 - 증거: 공유 벡터·Vision·Fleet·브라우저 전환 조건을 호스트에서 검증. 실제 사이트는 두 등록 로봇과 S21 영상 연결 조회만 확인. 후보 배포·빈 트랙 학습·실물 위치 오차는 미완료.
 - gate 변화: 없음. SOURCE/LOCAL 변경이며 DEVICE/FIELD 완료 주장 없음. 기존 등록·credentials 보존.
 
-
 ## 2026-10-05 · uncommitted · fix(test): signal observer exact-source collection
 
 - 변경: signal observer 테스트는 private exact-file 로더로 자신의 실제 소스를 읽는다. 다른 테스트가 generic observer를 먼저 읽어도 관측 타입을 섞지 않는다. 프로덕션 standalone CLI 및 카메라/명령 경로 변경 없음.
 - 증거: 실제 Gazebo observer가 generic observer를 차지한 fresh-process에서 기존 모듈과 검색 경로 보존, ObserverConfig/make_source 타입 동일성 확인. T2/T5/T3/Vision 양방향 각 105 PASS.
 - gate 변화: 없음. SOURCE/LOCAL 테스트 수선만. 실제 카메라·ROS·기기 수용 주장 없음.
-
 
 ## 2026-10-06 · uncommitted · feat(vision): D-484 필드 경계 자동 캘리브레이션
 
@@ -583,7 +578,6 @@
 - Evidence: worker test only. No field run.
 - Gate: SOURCE.
 
-
 ## 2026-11-11 · uncommitted · feat(vision): draft-map 제안 - 정사 평면에서 차로·구역 후보
 - 변경: `draft-map` 보기 추가(`GET /api/vision/sources/{id}/draft-map`). 승인된 추적 보정 레코드만 있으면 D-375 지도 페인트 설정 없이, 프레임을 map 평면으로 정사(D-560)해 밝은 페인트 스트로크를 차로 중심선(minAreaRect 장축, 곧은 스트로크 가정), 채색 영역을 제외 구역 후보로 읽어 map 좌표로 돌려준다. 제안 전용 — 관측·CameraMap·지도 문서에 안 쓴다. 보는 사람마다 초당 1회.
 - 이유: 카메라→지도 초안 파이프라인(2026-11-11 사용자 요청, 설계 docs/plans/2026-11-11-camera-draft-map-design.md)의 계산 담당. 계산은 Vision, 판정·승인은 Fleet(안 1).
@@ -613,7 +607,6 @@
 - 증거: `test_post_age_guard.py`, `test_overhead_tracking_api.py` (원격 결과는 커밋 메시지 참조).
 - gate 변화: 없음.
 
-
 ## 2026-11-20 · uncommitted · fix(vision): world_261026 왜곡·외삽 안정화 및 rectify 시드 폴백 보강
 
 - 변경: `rosy_vision/world_261026_auto.py` — `_sample_strip_centroids` 평균→중앙값 전환, 9-DOF(8+k1) 최적화기에 Levenberg-Marquardt 비용 감소 수락 검사 추가 및 `k1` 클램프 `[-0.25, 0.25]` 완화, `_fit_pink_leg` 샘플 구간 확장(`[-0.10, -0.002]`), `s5_x` 노란 정지선 마스크 우선, `C1` `x_nom` `-0.414` 통일. `rosy_vision/rectify.py` — `_LATEST_LENS_MODEL` 캐시 미스 시 승인 `calibration.image_to_map`의 역행렬을 `seed_map_to_image`로 전달해 재추정 실패(`warpPerspective` 폴백) 방지.
@@ -624,3 +617,11 @@
 - 변경: Fleet `fleet/server/sitemap/observer_vision.py`(cv2로 JPEG 해석)를 `rosy_vision/stack_tiers.py`로 옮김(D-136 3, Fleet는 영상을 해석하지 않음). Fleet `pipeline_observer`의 기본 판정기 삭제: 판정기가 없으면 돌기 전에 SKIPPED `NO_JUDGE`. Vision 엔드포인트 연결은 아직 없음.
 - 증거: 원격 `test_no_video_relay.py`·`test_observer.py`·`test_stack_tiers.py` (결과는 커밋 보고에).
 - gate 변화: 없음.
+
+## 2026-11-22 · eb47dcbfa6 · 렌즈 모델 캐시 격리
+
+- 변경: 영상 출처, 프레임 크기, 보정 리비전이 일치하는 렌즈 모델을 사용한다. 일치하는 모델이 없으면 승인 호모그래피로 평면을 만든다.
+- 증거: operations/overhead/test/test_map_plane.py에서 같은 크기의 다른 출처와 이전 리비전의 렌즈 모델을 거부하는지 확인한다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

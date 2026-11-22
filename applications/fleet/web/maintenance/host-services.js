@@ -38,6 +38,15 @@ function reportRows(body) {
     card.append(node("p", `마지막 호스트 점검 ${received}`, "hint"));
     if (current && !["unreachable", "quiet", "error"].includes(row.state)) {
       card.append(node("p", resourceText(row.resources), "hint"));
+      const cleanup = row.resources?.storage_maintenance;
+      if (Number.isFinite(cleanup?.started)
+          && (cleanup.state === "skipped" || Number.isFinite(cleanup.free_change_gib))) {
+        const started = new Date(cleanup.started * 1000).toLocaleString();
+        const change = cleanup.free_change_gib;
+        const result = cleanup.state === "skipped" ? "건너뜀"
+          : `여유 공간 변화 ${change > 0 ? "+" : ""}${change.toFixed(2)} GiB`;
+        card.append(node("p", `마지막 시험 저장소 정리 ${started} · ${result}`, "hint"));
+      }
     }
     if (verified && !["unreachable", "quiet", "error"].includes(row.state)) {
       const watchdog = recovery.watchdog || {};

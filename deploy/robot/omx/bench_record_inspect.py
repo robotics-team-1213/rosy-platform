@@ -11,7 +11,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
-    HANDOVER, active_handover_units, check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, systemctl, write_restore_list, write_snapshot)
+    HANDOVER, active_handover_units, arm_connectivity, check_proc_visible, hold_other_arm_locks, inspect_config_cameras, load_registry, proc_cmdlines, proc_mounts, recorder_running, release, systemctl, write_restore_list, write_snapshot)
 from bench_record_replay import recording_progress  # noqa: E402
 from bench_record_step import starting_step  # noqa: E402
 from bench_record_safety import end_verdict  # noqa: E402
@@ -211,7 +211,7 @@ class BenchInspectMixin:
                 "bindings": ch.get("arm_bindings", {}).get(a),
                 "has_initial_pose": all((self.prep / f"initial-pose-{x}.json").is_file() for x in sub),
                 "has_leader_pose": all((self.prep / f"leader-home-{x}.json").is_file() for x in sub),
-                "locked_by": [h for h in locks if h.get("lock") in lock_names],
+                "locked_by": [h for h in locks if h.get("lock") in lock_names], **arm_connectivity(self.prep, a),
             }
         return {"status": st.get("status"), "arms": out}
 
@@ -311,39 +311,6 @@ class BenchInspectMixin:
 
     def choices(self):
         pick = lambda pattern: sorted(p.name for p in self.prep.glob(pattern))
-        configs = pick("record-config*.json")
-        robots = {}  # config file -> its robot.id, so the page can mark which files belong to the chosen arm
-        config_meta = {}
-        for name in configs:
-            try:
-                cfg_j = json.loads((self.prep / name).read_text(encoding="utf-8-sig"))
-                r = cfg_j["robot"]
-                robots[name] = r["id"]
-                ds = cfg_j.get("dataset") if isinstance(cfg_j.get("dataset"), dict) else {}
-                if r.get("type") == "bi_omx_follower":
-                    cam_items = [(f"{side}.{k}", v) for side in ("arm_a", "arm_b")
-                                 for k, v in ((r.get(side) or {}).get("cameras") or {}).items() if isinstance(v, dict)]
-                else:
-                    cam_items = [(k, v) for k, v in (r.get("cameras") or {}).items() if isinstance(v, dict)]
-                cams = [k for k, _ in cam_items]
-                seen_paths = {}
-                cam_issues = []
-                for k, v in cam_items:
-                    idx = str(v.get("index_or_path") or "")
-                    if idx.startswith("/dev/") and not Path(idx).exists():
-                        cam_issues.append(f"{k}: 장치 없음({idx})")
-                    if idx:
-                        if idx in seen_paths:
-                            cam_issues.append(f"{k}: {seen_paths[idx]}와 동일 장치 중복({idx})")
-                        seen_paths[idx] = k
-                config_meta[name] = {"fps": ds.get("fps"), "use_degrees": r.get("use_degrees"),
-                                     "max_relative_target": r.get("max_relative_target"), "cameras": cams,
-                                     "camera_issues": cam_issues,
-                                     "episode_time_s": ds.get("episode_time_s"),
-                                     "reset_time_s": ds.get("reset_time_s"),
-                                     "num_episodes": ds.get("num_episodes")}
-            except (OSError, ValueError, KeyError, TypeError):
-                pass
         instances = {}  # arm -> its robot profile's instance_id (start refuses when this is missing)
         for arm, letter in ARMS.items():
             path = self.prep / f"arm-{letter}-robot-profile.json"
@@ -354,6 +321,30 @@ class BenchInspectMixin:
                     pass
         if "arm_a" in instances and "arm_b" in instances:
             instances[BI_ARM] = f"{instances['arm_a']}+{instances['arm_b']}"
+        inv_inst = {v: k for k, v in instances.items()}
+        try:
+            reg, reg_err = load_registry(), None
+        except ValueError as exc:
+            reg, reg_err = None, str(exc)
+        configs = pick("record-config*.json")
+        robots = {}  # config file -> its robot.id, so the page can mark which files belong to the chosen arm
+        config_meta = {}
+        for name in configs:
+            try:
+                cfg_j = json.loads((self.prep / name).read_text(encoding="utf-8-sig"))
+                r = cfg_j["robot"]
+                robots[name] = r["id"]
+                ds = cfg_j.get("dataset") if isinstance(cfg_j.get("dataset"), dict) else {}
+                cfg_arm = BI_ARM if r.get("type") == "bi_omx_follower" else inv_inst.get(r["id"], "arm_s" if "arm-s" in name else "")
+                cams, rebinds, cam_issues, _ = inspect_config_cameras(cfg_j, cfg_arm, reg, reg_err=reg_err)
+                config_meta[name] = {"fps": ds.get("fps"), "use_degrees": r.get("use_degrees"),
+                                     "max_relative_target": r.get("max_relative_target"), "cameras": cams,
+                                     "camera_rebinds": rebinds, "camera_issues": cam_issues,
+                                     "episode_time_s": ds.get("episode_time_s"),
+                                     "reset_time_s": ds.get("reset_time_s"),
+                                     "num_episodes": ds.get("num_episodes")}
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
         caps = pick("caps*.json")
         caps_data = {}
         for cname in caps:
@@ -381,6 +372,7 @@ class BenchInspectMixin:
         recommended = {arm: self._recommend(arm, arm_bindings[arm]) for arm in (*ARMS, BI_ARM)}
         return {"configs": configs, "config_meta": config_meta, "robots": robots, "caps": caps, "caps_data": caps_data,
                 "arms": [*ARMS, BI_ARM], "instances": instances, "arm_bindings": arm_bindings,
+                "arm_connectivity": {a: arm_connectivity(self.prep, a) for a in (*ARMS, BI_ARM)},
                 "recommended": recommended, "tasks": tasks, "task_cards": task_cards,
                 "replays": replays, "calibrations": calibrations, "cal_meta": cal_meta}
 

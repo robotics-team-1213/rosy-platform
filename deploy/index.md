@@ -82,8 +82,8 @@
 
 ## 최근 기록
 
-- 2026-11-21 · uncommitted · 자동 궤적 보정 저널에 pinned_drift_m 추가
-- 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
-- 2026-11-20 · uncommitted · Pinky 점검 옵션을 인터페이스 이름으로 받지 않는다
-- 2026-11-20 · uncommitted · Pinky 시연 전 네이티브 주행 서비스 확인
-- 2026-11-20 · uncommitted · fix(omx): Gate open 보류를 시도 원장에 남긴다
+- 2026-11-21 · uncommitted · fix(omx): observer handoff keeps the reservation, the group watch and the unit topic check
+- 2026-11-21 · uncommitted · Site Fleet passes D-1057 cell pipeline env
+- 2026-11-21 · uncommitted · omx-devices 릴리스가 cell worker 가져오기 닫힘을 모두 담음
+- 2026-11-21 · uncommitted · OMX hybrid handoff Round 2
+- 2026-11-21 · uncommitted · OMX ACT timing and hybrid handoff

@@ -4077,7 +4077,6 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. 소비자 선행 착지·통합·서명 native/SDK 배포와 실물 수용은 아직 남았다.
 - CE: 해당 없음 — 손상/누락의 구분과 close 감독 경계는 코드·회귀 시험으로 재현된다.
 
-
 ## 2026-10-29 · 05f19a73ea · 팔 credential 및 signed candidate 집중 회귀
 
 - 변경: 관리자 전체 매핑 후보의 원격 집중 회귀 결과를 기록했다. 실행 코드·시험은 05f19a73ea와 같다.
@@ -4443,7 +4442,6 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
 - Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
 
-
 ## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 
 - Change: Signed deployment inventory includes the complete five-file Account maintenance group. New five-image candidates require every file; historical authenticated three/four-image candidates must omit the group. Separate maintenance Compose cannot create the external authority volume and has image-only/no-pull jobs, nonoptional site.env, mandatory tag, protected existing host bind, UID10001, no network/privileges/keys. Reused Account image references stay pinned. No OCI build, restore, service restart or timer activation was performed.
@@ -4568,14 +4566,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - Gate: no scanner rule, environment input, canonical FULL/browser/G1 plan, runtime authority or field gate changes. This is an agent review, not a human sign-off.
 - CE: no new lesson; existing exact-triple review mechanism covers this case.
 
-
 ## 2026-11-03 · b741d370f0 · fix(site): require the configured signed companion before runtime acceptance
 
 - Change: runtime presence follows the current Compose hash keys. Every enabled companion needs exactly one running container; Account/Monitoring health remains strict and the historical peer without a healthcheck is supported. Explicit unhealthy, duplicate and stopped peers are refused.
 - Evidence: commit 8ae0f56199 reproduced four failures/four passes; independently reviewed commit b741d370f0 passed all149 site-updater/publisher tests, zero skips/NEW/known/flaky. The exact historical Git-tree baseline row is agent-reviewed, with no values or broad exceptions.
 - gate 변화: signed image identity, Compose hash, read-only/unprivileged checks and field acceptance boundaries remain enforced. Qualified FULL/public CI are separate pending checks.
 - CE: no additional lesson; explicit presence regressions cover this correction.
-
 
 ## 2026-11-03 · 2aec802f8d · fix(site): preserve release metadata in signer dry run
 
@@ -4584,14 +4580,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: none. No actual GitHub release edits, signing-PC changes, host notification, robot motion or physical acceptance were performed by these fake-runner regressions. Qualified FULL and public CI remain pending.
 - CE: no additional lesson; the cause and prevention are explicit in the two-line guard and the mutation regression.
 
-
 ## 2026-11-03 · 50dc0c7c53 · fix(omx): preserve incident ownership and current-session load limits
 
 - Change: incident commit 7a7887d477 keeps the session lock from HOLD admission through incident persistence and verified recovery; the stable arm home stores HOLD before a model/recovery callback can fail. CLI handle/clear use the same lock. SDK communication, packet errors, required register values, reboot acknowledgement and torque-off/fault-free readback are checked; only the hardware-alert bit is allowed while reading a latch. The port always closes. Load-check commit 50dc0c7c53 binds startup and later load to the current passive-connected session PWM caps, before motion and within existing cleanup. Guard limits and model thresholds are unchanged.
 - Evidence: independent exact-tree safety reviews are retained in both commit trailers. Official incident-boundary RED ae21cfa501 reproduced 6 failures; acknowledgement/readback RED a4318df5b1 reproduced 6 failures and 1 pass; durable HOLD/CLI race RED 040c4dfce4 reproduced 2 failures. The full incident/record_session GREEN at 7a7887d477 passed 86 tests with 2 skipped, NEW/known/flaky 0. Load-cap RED b1f12bf821 reproduced 3 startup/handoff failures and a separate later-load failure; full load_predict/chunk_runner GREEN at 50dc0c7c53 passed 62 tests, zero skips/NEW/known/flaky. Logs are feedback-omx-incident-boundary-green-20261103/run-1.txt and feedback-omx-load-session-cap-green-20261103/run-1.txt in the external temporary log root.
 - gate 변화: none. Mock SDK/session/robot regressions establish source behavior only; no device access, torque/motion, deployment or physical acceptance was performed. Qualified FULL and public CI remain pending. Earlier unwedge and thermal fixes remain intact.
 - CE: no additional solution; these corrections are explicit in the ownership/readback code and boundary regressions. Existing task lessons remain preserved.
-
 
 ## 2026-11-03 · 7047306026 · test(omx): make incident fixture independent of neighboring collection
 
@@ -4882,7 +4876,6 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/sim-passes-with-wrong-layout-until-real-camera-overlay-2026-11-07.md`.
 
-
 ## 2026-11-13 · uncommitted · docs(model-pc): 학습 센터 자동 업데이트 절을 퇴역 안내로 교체
 
 - 변경: `deploy/model_pc/README.md`의 학습 센터 자동 업데이트(D-871) 절에서 살아있는 설치·활성 안내를 지우고 퇴역 안내로 교체했다. 후보 `rosy-learning-center.service`(모델 PC 8769·AI PC 8770)는 2026-10-31 퇴역, 데이터는 합성 자료만으로 보존, 현행 유일 센터는 8768 `rosy-edge-review`(D-857)이며 `rosy-review-release-update`로 갱신한다. 2026-10-23 교훈의 `applies_when`도 역사 기록으로 고쳤다. `install_learning_center.py`·`learning_center_update.py`는 그대로 둔다.
@@ -4899,7 +4892,6 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `rosy-navigation.service`가 `enable_loc_assist:=${ROSY_ENABLE_LOC_ASSIST}`를 넘긴다(유닛 기본 false, `runtime.env`가 이긴다). 템플릿 `rosy-runtime.env`에 `ROSY_ENABLE_LOC_ASSIST=false`. 실물 Pinky는 `loc_assist_node`를 한 번도 띄우지 않아 `localization/state` 발행자가 없었고, 그래서 CORE `state.localization`이 늘 null이었다(rosy_45, 178).
 - 증거: 원격 `test/test_pinky_loc_assist_switch.py`·`test_image_customization_contract.py`·`test_device_surface_contract.py`·`test_bringup_motor_contracts.py` 140 통과.
 - gate 변화: SOURCE. 기본은 꺼짐. 켠 기체의 LOCALIZED는 D-395 결정 흐름이 필요하다(실물 미실시).
-
 
 ## 2026-11-16 · uncommitted · fix(deploy): 천장 카메라 자동 트랙 보정 10분 주기 안정화 파이프라인 연결
 - 변경: `deploy/site/rosy-auto-track-calibration`의 승인 쿨다운(`MIN_APPROVAL_INTERVAL_S`)을 6시간에서 10분(`600s`)으로 조정하고, `deploy/site/host-state/rosy-auto-track-calibration.timer` 주기를 2분(`OnUnitActiveSec=2min`, 5회 일관성 창 = 10분)으로 맞춰 트랙·카메라 변동 시 10분 주기로 자동 조정되도록 연결했다.
@@ -4993,6 +4985,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 네트워크 검사 진입 전 실행을 가로채 기존 동작을 재현했다. 잘못된 옵션을 거절하는 회귀 시험을 추가했다.
 - gate 변화: 없음.
 
+## 2026-11-20 · uncommitted · feat(omx): observer session handoff for H4 (observer_handoff.py)
+
+- 변경: `rosy-omx-observer@<arm>` 실행 중 `session.lock` 미양보 문제(H4) 해결을 위해 `observer_handoff.py`와 `observer_handoff_io.py`를 추가해 잠금·arm lease 획득, observer 정지 및 포트 비점유 확인, `_lead` 리더(`PR_SET_PDEATHSIG=SIGTERM`) 기반 세션 실행 및 종료 후 재시작을 처리하고 `chunk_runner`가 `--joint-topic`/`snapshot_live`로 관측 스냅샷을 유지하도록 했다. `observation-bridge`·`arm-status` 서비스는 `Restart=on-failure`로 전환했으며 WINNAKEN 리뷰 3건(시그널 SIGHUP 정렬·잔여 프로세스 HOLD·사전 `--arm`/`--config` 포트 대조)을 반영했다.
+- 증거: `test/test_omx_observer_handoff.py` 단위 시험 및 원격 pytest, `rosy_harness.py lint` 통과
+- gate 변화: 없음 (`cell_arm_lease.py`, `chunk_runner.py`, `chunk_runner_interrupt.py` 안전 경로 `Safety-Review:` 필요)
+- 결정: H4
+- 교훈: none
+
 ## 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
 
 - 변경: merge_pinned가 고정 안 된 장소는 x·y만, 차로는 polyline만 추적값으로 바꾸고 yaw·name·kind·속도·폭은 지금 지도 값을 지킨다. R v270에서 S1 yaw가 null로 바뀐 것을 보고 고쳤다.
@@ -5008,3 +5008,75 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-21 · uncommitted · Account LAN 로그인 별칭 overlay(D-1068)
+
+- 변경: deploy/site에 옵트인 compose.account-lan.yaml·Caddyfile.account-lan(8443 호스트 블록, 로그인 경로 허용 목록, 나머지 404), rosy-mdns-alias@.service 템플릿, account-lan-cert.sh(site CA leaf)를 더하고 후보 묶음·검증기·자동 갱신 overlay 순서에 등록했다. 방화벽·LAN 443은 그대로다.
+- 증거: test/test_site_account_lan.py 12개 통과(로컬), Caddy 2.10.2 로컬 기동으로 허용 9개 200·차단 23개 404 확인, R에서 별칭 유닛 주소 추출 셸 읽기 전용 확인
+- gate 변화: 원격 시험·R 활성화 전
+- 결정: D-1068
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · cell feeds h1-goal ACT checkpoints
+
+- 변경: cell_policy_drive/cell_lerobot_shadow: goal slot from --goal-site, UNITS.json sim units, 15->30 fps resample, wrist-roll branch refusal; cell-job-api goal_site
+- 증거: remote pytest test_omx_cell_job_api/lerobot_shadow/policy_drive pass; agy review APPROVE
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · cell task worker와 팔 세션 래퍼를 관리 릴리스로 옮김
+
+- 변경: rosy-omx-cell-task-worker.service가 omx-devices/current에서 돌고 R은 rosy-fleet-r.local·r-site-ca.pem; 세 팔 세션 래퍼와 tools-env.sh를 deploy/robot/omx/session-wrappers로 올려 TOOLS_ROOT에서 OMX·PYTHONPATH를 만듦; cell_task_exec가 릴리스 래퍼를 띄우고 TOOLS_ROOT를 넘김; services.yaml 선언을 autoupdate로
+- 증거: 로컬 test_omx_cell_worker_release.py, test_omx_cell_task_exec_measured.py, test_omx_tier_fusion.py, test_host_services_manifest.py
+- gate 변화: 실물 적용은 팔 세션이 없을 때 deploy/robot/omx/README.md 순서로
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · D-1065 OMX camera role names and the recording-config check
+
+- 변경: docs/adr/D-1065, deploy/robot/omx/camera_roles.py (check_record_cameras), test/test_omx_camera_roles.py
+- 증거: remote pytest test_omx_camera_roles; proposed 3-camera arm A/B configs pass the check
+- gate 변화: 없음
+- 결정: D-1065
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · OMX ACT timing and hybrid handoff
+
+- 변경: n_action 8 + async next-chunk, stale/late stop, timing log; --mode act|hybrid|taught; handoff (hold frames, FK z over rim, pose) -> discard ACT -> +z -> folded carry
+- 증거: remote pytest; agy review
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · OMX hybrid handoff Round 2
+
+- 변경: 시뮬레이션 검증 전까지 파지 8프레임, 림 위 25 mm, XY 12 mm, yaw·수직 하향 자세 7°, 상승 10 mm를 기본값으로 사용한다. ACT 예산 소진 시 인계 없이 `human-hold`로 정지하는 회귀 시험을 추가했다.
+- 증거: 가짜 셀과 모델로 CLI envelope 허용·거절, 10 Hz 상태 발행, 기본값, 예산 소진 정지를 확인했다. 원격 pytest는 미커밋 변경을 실행할 수 없다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · omx-devices 릴리스가 cell worker 가져오기 닫힘을 모두 담음
+
+- 변경: omx-devices-autoupdate.json.example paths의 omx_adapter 낱개 파일을 omx_adapter 패키지 전체로; smoke가 kinematics·area_xyz·z_profile·pose_plan을 가져옴; README 적용 순서에 live 설정 갱신·릴리스 확인 단계
+- 증거: 로컬 test_omx_devices_release_covers_worker.py(ast 가져오기 닫힘 261파일 vs paths), test_chunk_library.py, test_structure_installed_packages.py, test_omx_arm_status_bridge.py, test_omx_cameras.py
+- gate 변화: live 설정은 사람이 README 2단계로 고침
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · Site Fleet passes D-1057 cell pipeline env
+
+- 변경: compose fleet service passes ROSY_FLEET_CELL_OWNERS and ROSY_FLEET_CELL_AB_RELEASE_ENABLED (empty default); .env.example documents them
+- 증거: test_site_account_deploy.py::test_site_fleet_passes_cell_pipeline_env_through
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · fix(omx): observer handoff keeps the reservation, the group watch and the unit topic check
+
+- 변경: observer_handoff no longer re-pids or re-times a live PID-less lease of the same owner (cell_arm_lease.claim keep_live); the _lead leader now stays until no live process but itself is in the group (zombies do not count, container PID 1 never reaps); run refuses a unit env whose ROSY_OBSERVER_TOPIC is not the bridge manifest's joint topic before stopping the observer
+- 증거: plain-python checks of claim keep_live and group_members; new tests in test_omx_observer_handoff.py run only on the lab/CI Linux hosts (no pytest on this PC); lint 0 errors
+- gate 변화: none; no safety_review path
+- 결정: none
+- 교훈: none

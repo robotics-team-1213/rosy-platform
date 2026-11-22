@@ -56,6 +56,7 @@ class FleetTaskService:
         source: str, actor_id: str, request_key: str,
         evidence: Mapping | None = None,
         admission=None,
+        stop_binding: Mapping | None = None,
     ) -> dict:
         if source not in {"operator", "policy"}:
             raise ValueError("INVALID_TASK_SOURCE")
@@ -82,7 +83,10 @@ class FleetTaskService:
         created = self.store.create_task(
             task_id=str(uuid4()), robot_id=robot_id, task_type="navigate",
             source=source, actor_id=actor_id, request_key=request_key,
-            request={"goal": {"x": float(x), "y": float(y), "yaw": float(yaw)}},
+            request={
+                "goal": {"x": float(x), "y": float(y), "yaw": float(yaw)},
+                **({"stop_binding": dict(stop_binding)} if stop_binding is not None else {}),
+            },
             evidence=evidence,
             admission=admission,
         )

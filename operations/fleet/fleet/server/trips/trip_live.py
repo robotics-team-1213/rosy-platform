@@ -28,6 +28,11 @@ class LiveTrip:
         self.last_goal: Optional[tuple[float, float]] = None
         #: Active D-1009 Nav2 route span dispatched to CORE (``{"end_index", "points"}``).
         self.active_route: Optional[dict] = None
+        #: Bounded Nav2 failure recovery state (alternate-path replans and cooldown retries).
+        self.nav2_retries: int = 0
+        self.nav2_retry_at: float = -math.inf
+        self.nav2_replans: int = 0
+        self.nav2_blocked: set[str] = set()
         self.replan_pending = False
         self.waiting_since: Optional[float] = None
         self.junction: dict = {}
@@ -119,6 +124,13 @@ class LiveTrip:
         place = ends_at_place(self.graph, self.segments[index])
         return (place if place is not None or self.view["repeat"] or index != len(self.segments) - 1
                 else self.view["plan"]["actions"][-1]["place_id"])
+
+    def reset_nav2_recovery(self) -> None:
+        self.nav2_retries = 0
+        self.nav2_retry_at = -math.inf
+        self.nav2_replans = 0
+        self.nav2_blocked.clear()
+        self.view["detail"].pop("nav2_problem", None)
 
     def progress(self, index: int, s: float) -> float:
         """Metres along the whole plan."""

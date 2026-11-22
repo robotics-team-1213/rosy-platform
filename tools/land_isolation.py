@@ -235,6 +235,26 @@ def _ancestor(wt: Path, a: str, b: str) -> bool:
     return subprocess.run(["git", "-C", str(wt), "merge-base", "--is-ancestor", a, b], capture_output=True).returncode == 0
 
 
+_DEFAULT_ANCESTOR = _ancestor
+_HEX40 = re.compile(r"^[0-9a-fA-F]{40}$")
+
+
+def _ancestry_dag(wt: Path, roots: list[str]) -> tuple[dict[str, int], dict[str, tuple[str, ...]]] | None:
+    if not roots:
+        return {}, {}
+    p = subprocess.run(["git", "-C", str(wt), "rev-list", "--ignore-missing", "--topo-order", "--parents", "--stdin"],
+                       input="\n".join(roots) + "\n", capture_output=True, text=True, encoding="utf-8")
+    if p.returncode != 0:
+        return None
+    topo: dict[str, int] = {}
+    parents: dict[str, tuple[str, ...]] = {}
+    for idx, line in enumerate(p.stdout.splitlines()):
+        if parts := line.split():
+            topo[parts[0]] = idx
+            parents[parts[0]] = tuple(parts[1:])
+    return topo, parents
+
+
 def last(wt: Path, branch: str) -> dict | None:
     """This branch's newest prepare record whose candidate HEAD still contains."""
     for rec in reversed(rows(wt)):
@@ -249,13 +269,75 @@ def open_entries(wt: Path, now: float, age_s: float = OPEN_AFTER_S) -> list[tupl
     A file closes when a later ``prepare`` or ``done`` line on a descendant commit ran it alone to a verdict, so
     closing needs no edit of old lines: the next landing that runs it, or ``close``, appends the evidence."""
     found, all_rows = [], rows(wt)
+    if not any(rec.get("incomplete") and now - rec.get("t", now) >= age_s for rec in all_rows):
+        return []
+    dag = None
+    main_ancestors: set[str] | None = None
+    if _ancestor is _DEFAULT_ANCESTOR:
+        main_sha = _git(wt, "rev-parse", "--verify", "--quiet", "main")
+        roots = list(dict.fromkeys(c.lower() for c in [main_sha, *(r["candidate"] for r in all_rows)]
+                                   if _HEX40.fullmatch(c)))
+        dag = _ancestry_dag(wt, roots)
+        if dag is not None and _HEX40.fullmatch(main_sha) and (m_lo := main_sha.lower()) in dag[0]:
+            parents = dag[1]
+            main_ancestors = set()
+            stack = [m_lo]
+            while stack:
+                cur = stack.pop()
+                if cur not in main_ancestors:
+                    main_ancestors.add(cur)
+                    stack.extend(parents.get(cur, ()))
+    anc_cache: dict[tuple[str, str], bool] = {}
+
+    def is_ancestor(a: str, b: str) -> bool:
+        if b == "main" and main_ancestors is not None and _HEX40.fullmatch(a):
+            return a.lower() in main_ancestors
+        if dag is not None and _HEX40.fullmatch(a) and _HEX40.fullmatch(b):
+            a_lo, b_lo = a.lower(), b.lower()
+            key = (a_lo, b_lo)
+            if key in anc_cache:
+                return anc_cache[key]
+            topo, parents = dag
+            if a_lo == b_lo:
+                res = a_lo in topo
+            else:
+                ta, tb = topo.get(a_lo), topo.get(b_lo)
+                if ta is None or tb is None or tb > ta:
+                    res = False
+                else:
+                    res = False
+                    seen = {b_lo}
+                    stack = [b_lo]
+                    while stack:
+                        cur = stack.pop()
+                        for par in parents.get(cur, ()):
+                            if par == a_lo:
+                                res = True
+                                break
+                            if par not in seen and topo.get(par, ta + 1) < ta:
+                                seen.add(par)
+                                stack.append(par)
+                        if res:
+                            break
+            anc_cache[key] = res
+            return res
+        key = (a, b)
+        if key not in anc_cache:
+            anc_cache[key] = _ancestor(wt, a, b)
+        return anc_cache[key]
+
     for i, rec in enumerate(all_rows):
         left = list(rec.get("incomplete") or [])
-        if not left or now - rec.get("t", now) < age_s or not _ancestor(wt, rec["candidate"], "main"):
+        if not left or now - rec.get("t", now) < age_s or not is_ancestor(rec["candidate"], "main"):
             continue
         for later in all_rows[i + 1:]:
-            if later.get("kind") in ("prepare", "done") and _ancestor(wt, rec["candidate"], later["candidate"]):
-                left = [f for f in left if f not in later.get("alone", []) or f in later.get("incomplete", [])]
+            if later.get("kind") not in ("prepare", "done"):
+                continue
+            covered = set(later.get("alone") or ()) - set(later.get("incomplete") or ())
+            if not any(f in covered for f in left):
+                continue
+            if is_ancestor(rec["candidate"], later["candidate"]):
+                left = [f for f in left if f not in covered]
                 if not left:
                     break
         if left:

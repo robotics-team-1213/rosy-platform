@@ -14,6 +14,7 @@ from core_common.succession import next_leader
 from fleet.formation.geometry import DEFAULT_SPACING, Formation
 from fleet.hub.hub import HubError
 from fleet.server.console_view import _formation_stream_evidence
+from fleet.server.goal_lease import NavigationStopped
 from fleet.swarm.session import FormationSession, FormationSpec, SessionError, SessionState
 
 logger = logging.getLogger("fleet.console")
@@ -126,11 +127,12 @@ class FormationControl:
         session = FormationSession(leader, followers,
                                    self._spec(formation, spacing, max_speed),
                                    member_order=member_order, **kwargs)
-        self._formation = session
-        self._formation_leader = leader_id
         try:
-            await session.start()
-        except SessionError as exc:
+            with self.goal_leases.motion_request():
+                self._formation = session
+                self._formation_leader = leader_id
+                await session.start()
+        except (SessionError, NavigationStopped) as exc:
             # 세션이 자기 안에서 이미 무장을 되돌렸다. 상태는 남겨 화면이 이유를 읽게 한다.
             raise HubError("ARMING_FAILED", str(exc)) from exc
         return self.formation_status()
@@ -171,8 +173,9 @@ class FormationControl:
         if session is None or session.state is SessionState.STOPPED:
             raise HubError("NO_FORMATION", "no formation to reform")
         try:
-            await session.reform(self._spec(formation, spacing, max_speed))
-        except SessionError as exc:
+            with self.goal_leases.motion_request():
+                await session.reform(self._spec(formation, spacing, max_speed))
+        except (SessionError, NavigationStopped) as exc:
             raise HubError("REFORM_REFUSED", str(exc)) from exc
         return self.formation_status()
 
@@ -181,8 +184,9 @@ class FormationControl:
         if session is None:
             raise HubError("NO_FORMATION", "no formation to resume")
         try:
-            await session.resume()
-        except SessionError as exc:
+            with self.goal_leases.motion_request():
+                await session.resume()
+        except (SessionError, NavigationStopped) as exc:
             raise HubError("RESUME_REFUSED", str(exc)) from exc
         return self.formation_status()
 

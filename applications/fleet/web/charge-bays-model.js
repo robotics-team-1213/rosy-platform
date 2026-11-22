@@ -160,43 +160,59 @@ export function chargeBayRows(plan) {
   return { bays, actions, cells, summary, cards, armLiveStates, stationCameraLinks, stationZones, cellOccupants };
 }
 
-export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText = "folded: true (홈 대기)") {
+const UNKNOWN_JOINT_TEXT = "관절 관측 없음 · 홈 여부 미확인";
+
+export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText = UNKNOWN_JOINT_TEXT) {
   const st = armLiveStates?.[armId];
   if (!st || !Array.isArray(st.joints_deg) || !st.joints_deg.length) return fallbackText;
   const jointsStr = st.joints_deg.slice(0, 6).map((v, i) => `J${i + 1}:${Number(v).toFixed(1)}°`).join(" ");
   const ageTxt = st.age_s != null ? evidenceAgeText(Math.round(Number(st.age_s))).slice(3) : "";
-  const liveBadge = st.fresh !== false ? `LIVE${ageTxt ? ` · ${ageTxt}` : ""}` : `스냅샷${ageTxt ? ` · ${ageTxt}` : ""}`;
+  const liveBadge = st.fresh === true
+    ? `LIVE${ageTxt ? ` · ${ageTxt}` : ""}`
+    : st.fresh === false
+      ? `스냅샷${ageTxt ? ` · ${ageTxt}` : ""}`
+      : `신선도 미확인${ageTxt ? ` · ${ageTxt}` : ""}`;
   const tempTxt = st.temp_c != null ? `${st.temp_c}°C` : "";
   const curTxt = st.current_ma != null ? `${st.current_ma}mA` : "";
   return [`[${liveBadge}]`, jointsStr, `folded=${Boolean(st.folded)}`, tempTxt, curTxt, st.substage || ""].filter(Boolean).join(" · ");
 }
 
-export function inspectorTargetsFromRows(rows) {
+function resolveCameraSource(source, obs = null) {
+  const cams = obs?.cameras || [];
+  if (!cams.length || !source) return source;
+  if (cams.some((c) => c.source_id === source)) return source;
+  const aliases = { arm_s_top: "omx_arm_s_top", arm_s_wrist: "omx_arm_s_wrist", top: "omx_overhead", side: "omx_side", arm_a_wrist: "omx_wrist_a", arm_b_wrist: "omx_wrist_b" };
+  const mapped = aliases[source];
+  return mapped && cams.some((c) => c.source_id === mapped) ? mapped : source;
+}
+
+export function inspectorTargetsFromRows(rows, obs = null) {
   const cards = rows?.cards || [];
   const s3 = cards.find((c) => c.id === "cell_s") || {};
   const s5 = cards.find((c) => c.id === "cell_ab") || {};
   const armLive = rows?.armLiveStates || {};
   const cellSOccupant = rows?.cellOccupants?.cell_s || null;
   const cellAbOccupant = rows?.cellOccupants?.cell_ab || null;
+  const mapViews = (views) => views.map((v) => (v.source ? { ...v, source: resolveCameraSource(v.source, obs) } : v));
   return [
     {
       id: "arm_s",
       cell_id: "cell_s",
       station_id: "S3",
-      shortTab: "🦾 arm_s (S3)",
-      title: "🦾 OMX-AI #3 · arm_s (cell_s · S3 하역 셔틀)",
+      shortTab: "ARM_S · S3",
+      title: "OMX-AI #3 · arm_s (cell_s · S3 하역 셔틀)",
       status: s3.status || "neutral",
       text: s3.text || "대기 중",
-      healthText: s3.healthText || "folded: true (홈 대기)",
-      jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || "folded: true (홈 대기)"),
+      healthText: s3.healthText || UNKNOWN_JOINT_TEXT,
+      jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || UNKNOWN_JOINT_TEXT),
       task: s3.task || null,
       robot_id: cellSOccupant,
       dualPair: ["arm_s_top", "arm_s_wrist"],
-      cameraViews: [
+      cameraViews: mapViews([
         {id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist"},
         {id: "arm_s_top", label: "S3 상단", source: "arm_s_top"},
         ...(cellSOccupant ? [{id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: cellSOccupant}] : []),
-      ],
+      ]),
       buttons: s3.buttons || CELL_BUTTONS.cell_s,
       quickControls: (s3.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_s"} : c),
     },
@@ -204,21 +220,21 @@ export function inspectorTargetsFromRows(rows) {
       id: "arm_a",
       cell_id: "cell_ab",
       station_id: "S2",
-      shortTab: "🦾 arm_a (S5)",
-      title: "🦾 OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)",
+      shortTab: "ARM_A · S5",
+      title: "OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)",
       status: s5.status || "neutral",
       text: s5.text || "대기 중",
-      healthText: s5.healthText || "folded: true (홈 대기)",
-      jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || "folded: true (홈 대기)"),
+      healthText: s5.healthText || UNKNOWN_JOINT_TEXT,
+      jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || UNKNOWN_JOINT_TEXT),
       task: s5.task || null,
       robot_id: cellAbOccupant,
       dualPair: ["top", "arm_a_wrist"],
-      cameraViews: [
+      cameraViews: mapViews([
         {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
         {id: "top", label: "S5 상단", source: "top"},
         {id: "side", label: "측면 (A/B)", source: "side"},
         {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
-      ],
+      ]),
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
       quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_a"} : c),
     },
@@ -226,25 +242,25 @@ export function inspectorTargetsFromRows(rows) {
       id: "arm_b",
       cell_id: "cell_ab",
       station_id: "S5",
-      shortTab: "🦾 arm_b (S5)",
-      title: "🦾 OMX-AI #2 · arm_b (cell_ab · S5 2층 적재·반출)",
+      shortTab: "ARM_B · S5",
+      title: "OMX-AI #2 · arm_b (cell_ab · S5 2층 적재·반출)",
       status: s5.status || "neutral",
       text: s5.text || "대기 중",
-      healthText: s5.healthText || "folded: true (홈 대기)",
-      jointLiveText: formatArmLiveJointText("arm_b", armLive, s5.healthText || "folded: true (홈 대기)"),
+      healthText: s5.healthText || UNKNOWN_JOINT_TEXT,
+      jointLiveText: formatArmLiveJointText("arm_b", armLive, s5.healthText || UNKNOWN_JOINT_TEXT),
       task: s5.task || null,
       robot_id: cellAbOccupant,
       dualPair: ["top", "arm_b_wrist"],
-      cameraViews: [
+      cameraViews: mapViews([
         {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
         {id: "top", label: "S5 상단", source: "top"},
         {id: "side", label: "측면 (A/B)", source: "side"},
         {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
-      ],
+      ]),
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
       quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_b"} : c),
     },
-    ...(s3.id ? [{...s3, shortTab: "📦 cell_s", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText)}] : []),
-    ...(s5.id ? [{...s5, shortTab: "📦 cell_ab", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText)}] : []),
+    ...(s3.id ? [{...s3, cameraViews: mapViews(s3.cameraViews || []), shortTab: "CELL_S", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || UNKNOWN_JOINT_TEXT)}] : []),
+    ...(s5.id ? [{...s5, cameraViews: mapViews(s5.cameraViews || []), shortTab: "CELL_AB", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || UNKNOWN_JOINT_TEXT)}] : []),
   ];
 }

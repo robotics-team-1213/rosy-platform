@@ -21,7 +21,7 @@ import {createRealityPanel} from '/console/assets/site-map-reality.js';
 import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
 import {installBandEditing, installZoneEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
-import {drawFacilities, svgElement as el} from '/console/assets/map-editor.js';
+import {drawFacilities, drawSitePointsOverlay, loadSitePointsOverlay, svgElement as el} from '/console/assets/map-editor.js';
 
 const $ = id => document.getElementById(id);
 const W = 800, H = 480;
@@ -30,7 +30,7 @@ const W = 800, H = 480;
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null};
+const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null, sitePoints: null};
 const ROBOT_POLL_MS = 1000;
 let calibrations = [];
 const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
@@ -115,6 +115,7 @@ function render() {
     el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = `${index + 1} ${place.name.length > 8 ? `${place.name.slice(0, 8)}…` : place.name}`;
   }
   drawFacilities(svg, map, view);
+  if ($('map-source').value === 'active') drawSitePointsOverlay(svg, state.sitePoints, view);
   if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
   svg.classList.toggle('picking', survey.picking() || $('trip-pick').checked);
   if (state.point && $('map-source').value === 'active') {
@@ -312,6 +313,7 @@ async function load() {
   state.loadState = 'ready';
   try { calibrations = (await request('/api/fleet/calibrations')).calibrations || []; }
   catch { calibrations = []; }
+  state.sitePoints = await loadSitePointsOverlay(request, active, $('site-points-panel'), $('site-points-body'));
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
@@ -357,7 +359,7 @@ async function connect(credentialChange = false) {
   state.loadState = 'pending';
   state.planEpoch += 1;
   state.robotsError = false;
-  state.active = state.draft = state.working = state.selected = state.plan = state.point = state.guide = state.band = null;
+  state.active = state.draft = state.working = state.selected = state.plan = state.point = state.guide = state.band = state.sitePoints = null;
   state.open = [];
   state.dirty = false;
   $('trip-place').replaceChildren();

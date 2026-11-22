@@ -67,6 +67,7 @@ function applyBenchPhase(phase){
   }
   const camBaseBtn=$('save-cam-base-btn');
   if(camBaseBtn)camBaseBtn.hidden=benchSessionActive();
+  if(p==='prepare'||p==='recording'){const secSt=$('sec-status');if(secSt)secSt.open=true;}
   if(benchSessionActive()&&typeof window.closeDrawer==='function'&&window.activeDrawerName?.()!=='records')window.closeDrawer(false);
   if(p!=='result')renderCamGuide();
   if(typeof updateGoalSummaryRows==='function')updateGoalSummaryRows();
@@ -111,10 +112,11 @@ const STARTING_STEP_MAP={
   connecting_cameras:'카메라 연결 중',
   aligning:'가드 정렬 중',
   saving:'에피소드 저장 중',
+  fold_unfolded:'펼쳐진 팔 안전 접기 중',
   baseline_restore:'기준 상태 복원 중'
 };
 const NOTICE_PRIO={crit:4,warn:3,good:2,muted:1};
-const NOTICE_TONE_LABEL={crit:'오류',warn:'주의',good:'완료',muted:'안내'};
+const NOTICE_TONE_LABEL={crit:'오류',warn:'주의',good:'완료',live:'진행',muted:'안내'};
 const activeNotices=new Map();
 const dismissedNoticeMsg=new Map();
 const noticeHistory=[];
@@ -235,9 +237,31 @@ function dismissTopNotice(){
   renderNoticeBar();
 }
 
+function setActivity(action,tone='muted',detail=''){
+  const ts=nowText();
+  const head=String(action||'').trim();
+  const extra=String(detail||'').trim();
+  const line=extra?(head+' — '+extra):head;
+  if(!line)return;
+  const t=(tone==='good'||tone==='warn'||tone==='crit'||tone==='live')?tone:'muted';
+  const el=$('activity-log-text');
+  if(el){
+    el.textContent='['+ts+'] '+line;
+    el.title=el.textContent;
+    el.dataset.tone=t;
+  }
+  const prev=noticeHistory[0];
+  if(!prev||prev.key!=='activity'||prev.msg!==line||prev.tone!==t){
+    noticeHistory.unshift({ts,key:'activity',tone:t,msg:line});
+    if(noticeHistory.length>20)noticeHistory.length=20;
+    renderNoticeHistory();
+  }
+}
+
 window.setNotice=setNotice;
 window.clearNotice=clearNotice;
 window.dismissTopNotice=dismissTopNotice;
+window.setActivity=setActivity;
 setInterval(()=>{if(activeNotices.size)renderNoticeBar();},1000);
 
 function initSidebarSections(){
@@ -254,6 +278,76 @@ function initSidebarSections(){
   }
 }
 initSidebarSections();
+
+const SOUND_KEY='omx_bench_sound';
+const BEEP_PATTERNS={
+  ready:[[660,0.08,0],[880,0.13,0.09]],
+  rec_start:[[1046.5,0.14,0]],
+  countdown:[[740,0.045,0]],
+  saved:[[784,0.08,0],[1046.5,0.14,0.09]],
+  rerecord:[[622.25,0.08,0],[440,0.12,0.09]],
+  done:[[523.25,0.08,0],[659.25,0.08,0.09],[784,0.16,0.18]],
+  warn:[[330,0.11,0],[277.18,0.16,0.13]]
+};
+let benchAudioCtx=null;
+function ensureAudioCtx(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC)return null;
+    if(!benchAudioCtx)benchAudioCtx=new AC();
+    if(benchAudioCtx.state==='suspended')benchAudioCtx.resume().catch(()=>{});
+    return benchAudioCtx;
+  }catch(_){return null;}
+}
+function soundEnabled(){
+  try{return localStorage.getItem(SOUND_KEY)!=='0';}catch(_){return true;}
+}
+function syncSoundBtn(){
+  const btn=$('hdr-sound-btn');
+  if(!btn)return;
+  const on=soundEnabled();
+  btn.setAttribute('aria-pressed',on?'true':'false');
+  btn.textContent=on?'신호음 ON':'신호음 OFF';
+}
+function benchBeep(kind){
+  if(!soundEnabled())return;
+  const notes=BEEP_PATTERNS[kind];
+  if(!notes)return;
+  const ctx=ensureAudioCtx();
+  if(!ctx)return;
+  try{
+    const base=ctx.currentTime+0.01;
+    const wave=kind==='warn'?'triangle':'sine';
+    for(const [freq,dur,off] of notes){
+      const osc=ctx.createOscillator(), gain=ctx.createGain();
+      osc.type=wave;osc.frequency.setValueAtTime(freq,base+off);
+      gain.gain.setValueAtTime(0.001,base+off);
+      gain.gain.linearRampToValueAtTime(0.14,base+off+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001,base+off+Math.max(0.025,dur));
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(base+off);osc.stop(base+off+Math.max(0.03,dur)+0.015);
+    }
+  }catch(_){}
+}
+function setSoundEnabled(on,announce){
+  const enabled=Boolean(on);
+  try{localStorage.setItem(SOUND_KEY,enabled?'1':'0');}catch(_){}
+  syncSoundBtn();
+  if(announce){
+    if(typeof setActivity==='function')setActivity(enabled?'신호음 켜짐':'신호음 꺼짐',enabled?'good':'muted','Web Audio');
+    if(enabled)benchBeep('ready');
+  }
+}
+if($('hdr-sound-btn')){
+  syncSoundBtn();
+  $('hdr-sound-btn').addEventListener('click',()=>setSoundEnabled(!soundEnabled(),true));
+}
+const unlockBenchAudio=()=>{if(soundEnabled())ensureAudioCtx();};
+document.addEventListener('pointerdown',unlockBenchAudio,{once:true});
+document.addEventListener('keydown',unlockBenchAudio,{once:true});
+window.benchBeep=benchBeep;
+window.soundEnabled=soundEnabled;
+window.setSoundEnabled=setSoundEnabled;
 
 function setReqError(msg){
   if(!msg){clearNotice('req-error');return;}

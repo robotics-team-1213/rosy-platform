@@ -77,6 +77,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_NOT_RUNNING: '진행 중인 운행이 아닙니다',
   TRIP_UNKNOWN: '없는 운행입니다',
   TRIP_NO_REPLAN: '확인할 바뀐 경로가 없습니다',
+  TRIP_NOT_HELD: '정지 대기 중인 운행이 아닙니다',
   TRIP_REPLAN_FAILED: '다시 계산한 경로가 없습니다 · 운행을 취소하세요',
   TRIP_EXECUTION_NOT_AVAILABLE: '출발은 운행 시작 버튼으로 따로 합니다',
   // D-541 7 trip lease: CORE가 운행 중 로봇을 쥐게 한다
@@ -88,6 +89,8 @@ export const TRIP_ERROR_LABEL = {
   CALIBRATION_ACTIVE: '로봇이 보정 중입니다 · 보정이 끝난 뒤 다시 출발하세요',
   TRIP_LEASE_REFUSED: '로봇 CORE가 운행 점유를 거절했습니다(비상 정지·도킹 등) · 로봇 상태를 확인하세요',
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
+  TRIP_CANCELED: '운행이 취소됐습니다',
+  TRIP_PATH_UNAVAILABLE: '운행 경로를 실행할 수 없습니다 · 관제 운행 상태를 확인하세요',
 };
 /** D-541 5/7: why CORE ended the trip lease (``detail.lease_reason``). */
 const LEASE_END_LABEL = {

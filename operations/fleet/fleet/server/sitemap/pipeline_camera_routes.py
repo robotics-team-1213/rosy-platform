@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import functools
 import hashlib
 import json
@@ -19,6 +20,9 @@ from fleet.server.pipeline_port_events import (
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap import pipeline_auto_events as auto_events
 from fleet.server.sitemap import pipeline_repark
+
+
+_CELL_ARMS = (("cell_s", ("arm_s",)), ("cell_ab", ("arm_a", "arm_b")))
 
 
 def _clear_label(body, key):
@@ -186,16 +190,73 @@ def install_cameras_routes(app, ctx) -> None:
             arms = ["arm_a", "arm_b"]
         elif target in ("arm_s", "arm_a", "arm_b"):
             arms = [target]
-        else:
+        elif target == "all":
             arms = ["arm_s", "arm_a", "arm_b"]
+        else:
+            raise HTTPException(422, detail={"code": "UNKNOWN_ARM_OR_CELL"})
         cause, basis = _clear_label(body, "cause"), _clear_label(body, "basis")
         principal = getattr(request.state, "site_principal", None)
-        principal_id = getattr(principal, "principal_id", None) or "operator"
+        raw_principal_id = getattr(principal, "principal_id", None)
+        named_principal_id = raw_principal_id.strip() if isinstance(raw_principal_id, str) else ""
+        aborted_targets = [
+            (cid, c_arms) for cid, c_arms in _CELL_ARMS
+            if any(a in arms for a in c_arms) and (app.state.omx_cell_states.get(cid) or {}).get("phase") == "ABORTED"
+        ]
+        if aborted_targets:
+            if not named_principal_id or named_principal_id == "site-console" or named_principal_id.startswith("development-"):
+                raise HTTPException(403, detail={"code": "NAMED_OPERATOR_REQUIRED"})
+            if getattr(app.state, "_pipeline_ledger_fault", False):
+                raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
+        principal_id = named_principal_id or "operator"
+        _missing = object()
+        prev_holds = {a: copy.deepcopy(app.state.arm_holds.get(a, _missing)) for a in arms}
+        prev_pending = {a: app.state.pending_clear_arms.get(a, _missing) for a in arms}
+        prev_states = {cid: copy.deepcopy(app.state.omx_cell_states[cid])
+                       for cid, _ in aborted_targets if cid in app.state.omx_cell_states}
         for a in arms:
             app.state.arm_holds[a] = {"arm": a, "held": False, "reason": None, "incident_ids": [], "last_cleared_note": note}
             app.state.pending_clear_arms[a] = note
+        cleared_cells = []
+        for cid, c_arms in aborted_targets:
+            if (all(not (app.state.arm_holds.get(a) or {}).get("held") for a in c_arms)
+                    and not _is_human_detected(cid)
+                    and not any(t["cell_id"] == cid and t["status"] in ("RUNNING", "PAUSED_HUMAN")
+                                for t in app.state.omx_cell_tasks.values())):
+                prev = dict(app.state.omx_cell_states[cid])
+                docked = prev.get("docked_robot")
+                cleared_docked = ({**docked, "wheel_brake_locked": False, "bed_ready": False}
+                                  if isinstance(docked, dict) else None)
+                app.state.omx_cell_states[cid] = {
+                    "phase": "IDLE",
+                    "robot_id": prev.get("robot_id"),
+                    "amr_motion_inhibited": False,
+                    "reason": "OPERATOR_ABORT_CLEARED",
+                    "cleared_by": principal_id,
+                    "cleared_note": note,
+                    "cleared_at": round(time.time(), 3),
+                    **({"docked_robot": cleared_docked} if cleared_docked is not None else {}),
+                }
+                cleared_cells.append(cid)
+        if cleared_cells:
+            try:
+                _save_ledger()
+            except Exception:
+                for a, old in prev_holds.items():
+                    if old is _missing:
+                        app.state.arm_holds.pop(a, None)
+                    else:
+                        app.state.arm_holds[a] = old
+                for a, old in prev_pending.items():
+                    if old is _missing:
+                        app.state.pending_clear_arms.pop(a, None)
+                    else:
+                        app.state.pending_clear_arms[a] = old
+                for cid, old in prev_states.items():
+                    app.state.omx_cell_states[cid] = old
+                raise
         _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis)
-        return {"ok": True, "cleared_arms": arms, "note": note, "arm_holds": app.state.arm_holds}
+        return {"ok": True, "cleared_arms": arms, "cleared_cells": cleared_cells, "note": note,
+                "arm_holds": app.state.arm_holds}
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=proposer_guard)
     @_records_refusal("claim")

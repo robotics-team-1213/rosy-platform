@@ -75,9 +75,13 @@ def seal(session_dir, name, collections, *, rig_revision, calibrations):
         config_path = session_dir/config_path
     config = json.loads(config_path.read_text(encoding='utf-8-sig'))
     dataset = Path(config['dataset']['root'])
+    if (session_dir / 'DO_NOT_TRAIN.txt').exists() or (dataset / 'DO_NOT_TRAIN.txt').exists():
+        raise ValueError('DO_NOT_TRAIN recordings cannot be sealed')
     info = json.loads((dataset/'meta'/'info.json').read_text(encoding='utf-8'))
     if info.get('codebase_version') != 'v3.0' or info.get('robot_type') not in ('omx_follower', 'bi_omx_follower'):
         raise ValueError('native OMX LeRobot v3 dataset required')
+    if int(info.get('total_episodes') or 0) < 1:
+        raise ValueError('recording must contain at least 1 episode to seal')
     before = _hashes(dataset)
     collections = Path(collections)
     target = collections/name
@@ -101,11 +105,20 @@ def seal(session_dir, name, collections, *, rig_revision, calibrations):
         files = _hashes(staging)
         if {k.removeprefix('dataset/'): v for k, v in files.items() if k.startswith('dataset/')} != before:
             raise ValueError('copied dataset differs from the recording')
+        robot_cfg = config.get('robot') if isinstance(config.get('robot'), dict) else {}
+        arm_id = session.get('arm') if session.get('arm') in ('arm_a', 'arm_b', 'arm_s', 'arm_ab') else None
+        if not arm_id:
+            if info['robot_type'] == 'bi_omx_follower':
+                arm_id = 'arm_ab'
+            elif str(robot_cfg.get('id') or '').endswith(('_a', '_b', '_s')):
+                arm_id = f"arm_{str(robot_cfg['id'])[-1]}"
         manifest = dict(schema='rosy.omx-collection-session.v1', state='CLOSED', mode='hardware',
                         source_mode=source_mode, robot_type=info['robot_type'],
                         total_episodes=info.get('total_episodes'), sealed_ns=time.time_ns(),
                         session_id=name, rig_revision=rig_revision,
                         calibration_revision=calibration_revision(files), files=files)
+        if arm_id:
+            manifest['arm_id'] = arm_id
         if teacher_path is not None:
             trajectory = json.loads((staging/'teacher'/'trajectory.json').read_text(encoding='utf-8'))
             manifest.update(teacher_sha256=files['teacher/trajectory.json'], teacher=dict(
