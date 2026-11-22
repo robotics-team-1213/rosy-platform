@@ -100,11 +100,13 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
                 assert twin_box["y"] + twin_box["height"] <= 844
         if width >= 1024:
             if width < 1520:
-                expect(page.locator(".console-context")).to_be_hidden()
+                expect(page.locator(".console-context")).to_be_visible()
                 expect(page.locator("#cancel-all")).to_be_visible()
                 expect(page.locator("#estop")).to_be_visible()
                 map_box = page.locator("#map-stage").bounding_box()
+                ctx_box = page.locator(".console-context").bounding_box()
                 assert map_box and map_box["width"] >= 700
+                assert ctx_box and ctx_box["y"] >= map_box["y"] + map_box["height"] - 4
             assert page.evaluate("() => { const s = document.querySelector('#fleet-main > .console-secondary'); return !s || s.scrollWidth <= s.clientWidth + 1; }")
             stamp_ok = page.evaluate("""() => {
               const stamp = document.getElementById('map-camera-stamp');
