@@ -797,3 +797,17 @@ def test_ci_scope_bare_partial_clone_and_test_tiered_checkout_and_caches():
     assert rg["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
     rg_co = next(s["with"] for s in rg["jobs"]["review-gate"]["steps"] if "uses" in s and "actions/checkout" in s["uses"])
     assert rg_co == {"fetch-depth": 0, "fetch-tags": False, "filter": "blob:none"}
+
+
+def test_container_test_jobs_mark_safe_directory_in_system_gitconfig():
+    import yaml
+
+    # conftest.py:isolate_worker overrides HOME per xdist worker (-n auto), hiding --global safe.directory.
+    ci = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]
+    rolling = yaml.safe_load((ROOT / ".github" / "workflows" / "rolling-sweep.yml").read_text(encoding="utf8"))["jobs"]
+    system_cmd = 'git config --system --add safe.directory "${GITHUB_WORKSPACE}"'
+    for job in (ci["test"], rolling["run-shard"]):
+        step = next(s for s in job["steps"] if s.get("name") == "Fix git safe directory (container)")
+        assert system_cmd in step["run"]
+    scope_step = next(s for s in ci["scope"]["steps"] if s.get("name") == "Fix git safe directory (container)")
+    assert "--system" not in scope_step["run"] and 'safe.directory "${GITHUB_WORKSPACE}"' in scope_step["run"]

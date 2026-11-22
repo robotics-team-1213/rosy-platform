@@ -195,7 +195,9 @@ jobs:
           fetch-tags: false
 
       - name: Fix git safe directory (container)
-        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        run: |
+          git config --system --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       # The image (.github/ci-image/Dockerfile, build-ci-image.yml) carries the apt packages, the hash-locked
       # device runtime, test tools, account OAuth, receiver crypto and Chromium. These asserts keep the old
