@@ -16,7 +16,31 @@
  *     focus()         moves focus to .robot-panel-title (tabindex=-1)
  *     dispose()       unsubscribes from selection
  */
-import {statusTag} from "./status-tag.js";
+import {actionIcon} from "/common/ui.js";
+import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
+
+const STATUS_TAGS = Object.freeze({
+  fresh: {status: "neutral", icon: null, text: EVIDENCE_LABEL.fresh},
+  progress: {status: "active", icon: null, text: "진행 중"},
+  delayed: {status: "warn", icon: "history", text: EVIDENCE_LABEL.delayed},
+  disconnected: {status: "warn", icon: "wifi", text: EVIDENCE_LABEL.disconnected},
+  unknown: {status: "neutral", icon: "minus", text: EVIDENCE_LABEL.unavailable},
+  caution: {status: "warn", icon: "warn", text: "주의"},
+  danger: {status: "crit", icon: "safety", text: "위험"},
+  locked: {status: "neutral", icon: "lock", text: "잠김"},
+});
+
+function statusTag(state, text, {icon, danger = false} = {}) {
+  const row = STATUS_TAGS[state];
+  if (!row) throw new RangeError(`Unknown status tag state: ${state}`);
+  const tag = document.createElement("ui-tag");
+  tag.setAttribute("status", state === "disconnected" && danger ? "crit" : row.status);
+  tag.dataset.state = state;
+  tag.textContent = text ?? row.text;
+  const name = icon ?? row.icon;
+  if (name) actionIcon(tag, name);
+  return tag;
+}
 
 let panelSerial = 0;
 

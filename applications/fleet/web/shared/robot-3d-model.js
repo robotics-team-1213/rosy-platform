@@ -8,16 +8,14 @@
  *   parseStl(arrayBuffer) -> Float32Array   binary STL positions, 9 floats per triangle (the web meshes are binary STL in metres)
  *   jointAngles(model, values) -> {angles: {joint: rad}, ignored: [name]}   values {jointName: rad}; unknown or non-finite
  *                       names are ignored (never drawn as 0), revolute values clamp to the limits, a mimic follows its master
- *   jointsFromList(values, names) -> {name: rad}                            positional telemetry to the URDF names
  *   describeRobot({kind, name, selected, joints, pose, link, skill}) -> {summary, detail}   summary is shown, detail is the joint/pose list;
  *                       skill is one finished text (executor and step, e.g. `규칙 운반 · 2/5`) appended to the summary; text only: a proposed but
  *                       not executed target is never drawn, so the picture shows measured joints and the line says what is running
  *   fitView(dir, points, fovDeg, aspect, fill = 0.75) -> {distance, shift}   camera distance (and sideways target shift) that fills the view with the points
- *   fitDistance(...) -> distance only
  *
  * Joint and pose values are never constants: a missing one reads EVIDENCE_LABEL.unavailable (D-280).
  */
-import {EVIDENCE_LABEL} from "./core_ui_logic.js";
+import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 import {ROBOT_KIND_LABEL} from "./robot-profile.js";
 
 const nums = text => (text || "0 0 0").trim().split(/\s+/).map(Number);
@@ -71,13 +69,9 @@ export function jointAngles(model, values = {}) {
   return {angles, ignored};
 }
 
-export function jointsFromList(values, names) {
-  return Object.fromEntries(names.flatMap((name, index) => (finite(values?.[index]) ? [[name, values[index]]] : [])));
-}
-
 const JOINT_LABEL = {joint1: "관절 1", joint2: "관절 2", joint3: "관절 3", joint4: "관절 4", joint5: "관절 5", gripper_joint_1: "그리퍼"};
 const degrees = rad => `${Math.round(rad * 180 / Math.PI)}°`;
-export const headingDeg = yaw => { const d = ((yaw * 180 / Math.PI) % 360 + 540) % 360 - 180; return Math.round(d === -180 ? 180 : d); };
+const headingDeg = yaw => { const d = ((yaw * 180 / Math.PI) % 360 + 540) % 360 - 180; return Math.round(d === -180 ? 180 : d); };
 
 const coord = value => (Math.abs(value) < 0.005 ? 0 : value).toFixed(2);
 
@@ -114,7 +108,6 @@ export function fitView(dir, points, fovDeg, aspect, fill = 0.75) {
   const distance = Math.max(...points.map((p, i) => dot(p, dir) + Math.max(Math.abs(us[i] - oy) / t, Math.abs(rs[i] - ox) / (t * aspect))));
   return {distance, shift: [0, 1, 2].map(k => right[k] * ox + up[k] * oy)};
 }
-export const fitDistance = (dir, points, fovDeg, aspect, fill) => fitView(dir, points, fovDeg, aspect, fill).distance;
 
 // Unit view directions (x forward, y left, z up) and distance multipliers of the bounding radius.
 const PRESETS = {iso: {dir: [0.8, -0.9, 0.55]}, front: {dir: [1, 0, 0.12]}, side: {dir: [0, -1, 0.12]}, top: {dir: [0.001, 0, 1]}};

@@ -38,19 +38,8 @@ install(FILES
   collection-controls.js
   interaction-controls.js
   workflow-controls.js
-  robot-3d.js
-  robot-profile.js
-  robot-dock.js
-  robot-panel.js
-  robot-3d-assets.js
-  robot-3d-model.js
   cause-line.js
-  selection.js
-  status-tag.js
-  value-text.js
-  robot-dock-model.js
   component-controls.css
-  robot-dock.css
   component-gallery.css
   component-gallery.html
   component-gallery.js

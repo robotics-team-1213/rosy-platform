@@ -20,7 +20,9 @@ def test_estop_outranks_a_supplied_caution(tmp_path):
     node = shutil.which("node")
     if node is None:
         pytest.skip("Node.js is unavailable")
-    module = (Path(__file__).resolve().parents[1] / "robot-profile.js").as_uri()
+    repo = Path(__file__).resolve().parents[3]
+    module = (repo / "applications/fleet/web/shared/robot-profile.js").as_uri()
+    register = (repo / "operations/fleet/test/web/register-console-assets.mjs").as_uri()
     (tmp_path / "t.mjs").write_text(SCRIPT % ('"%s"' % module), encoding="utf-8")
-    result = subprocess.run([node, str(tmp_path / "t.mjs")], capture_output=True, text=True, encoding="utf-8", timeout=30)
+    result = subprocess.run([node, "--import", register, str(tmp_path / "t.mjs")], capture_output=True, text=True, encoding="utf-8", timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr

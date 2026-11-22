@@ -5,8 +5,8 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-SELECTION_URL = (ROOT / "selection.js").as_uri()
+ROOT = Path(__file__).resolve().parents[3]
+SELECTION_URL = (ROOT / "applications/fleet/web/shared/selection.js").as_uri()
 
 
 def test_create_selection_store_contract():

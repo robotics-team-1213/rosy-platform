@@ -22,8 +22,20 @@
  *
  * A value is never a constant: a missing one is EVIDENCE_LABEL.unavailable (valueText), a stale one carries its age.
  */
-import {valueText} from "./value-text.js";
-import {EVIDENCE_LABEL, evidenceAgeText} from "./core_ui_logic.js";
+import {EVIDENCE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
+
+const UNKNOWN = Object.freeze({text: EVIDENCE_LABEL.unavailable, state: "unavailable"});
+
+function valueText(raw, {unit = "", digits, age, evidence} = {}) {
+  if (evidence === "unavailable") return UNKNOWN;
+  if (evidence === "disconnected") return {text: EVIDENCE_LABEL.disconnected, state: "disconnected"};
+  if (raw === null || raw === undefined || (typeof raw === "string" && !raw.trim())) return UNKNOWN;
+  if (typeof raw === "number" && !Number.isFinite(raw)) return UNKNOWN;
+  const shown = typeof raw === "number" && Number.isInteger(digits) ? raw.toFixed(digits) : String(raw);
+  const aged = evidenceAgeText(age);
+  const stale = Boolean(aged) || evidence === "delayed";
+  return {text: `${shown}${unit}${aged}`, state: stale ? "delayed" : "fresh"};
+}
 
 export const ROBOT_KIND_LABEL = Object.freeze({arm: "로봇암", mobile: "이동로봇"});
 const EVIDENCE_STATES = ["fresh", "delayed", "disconnected", "unavailable"];

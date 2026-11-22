@@ -43,7 +43,7 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # D-926 C7: file-picker.css is Fleet's own Korean file picker, shared by install, Cell and site map.
         "index.html": [*shared_sheets, "/common/motor-health.css", "/common/app-shell.css", "/console/assets/styles.css",
                        "/console/assets/roster.css",
-                       "/common/component-controls.css", "/common/robot-dock.css", "/console/assets/doc-tabs.css",
+                       "/common/component-controls.css", "/console/assets/doc-tabs.css",
                        "/console/assets/assistant.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
                        "/console/assets/device-watch.css", "/console/assets/work.css"],
@@ -86,8 +86,8 @@ FORBID_SUPERVISED_ROUTES = (
     "arm-holds/clear", "pipeline/cell-tasks/*/resume", "human-safety-gate/clear", "decision-gate/execute",
 )
 COCKPIT_BYPASS_SUBJECTS = (
-    _ROOT / "shared" / "web" / "robot-dock.js",
-    _ROOT / "shared" / "web" / "robot-panel.js",
+    WEB / "shared" / "robot-dock.js",
+    WEB / "shared" / "robot-panel.js",
     WEB / "roster-workspace.js",
 )
 

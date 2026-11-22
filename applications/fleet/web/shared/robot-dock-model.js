@@ -11,7 +11,7 @@
  *     marks      only when abnormal: link ("delayed" | "disconnected" | "unknown"), alarm ("caution" | "danger" | "unknown")
  *     label      accessible name: "${name} ${kindLabel}" + " · ${mark.text}" per mark
  */
-import {EVIDENCE_LABEL} from "./core_ui_logic.js";
+import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 import {ROBOT_KIND_LABEL} from "./robot-profile.js";
 
 const LINK_MARK_STATE = Object.freeze({

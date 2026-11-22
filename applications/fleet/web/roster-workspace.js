@@ -2,11 +2,11 @@
  * Fleet cockpit C23 right robot dock + C24 left push/sheet robot panel adapter.
  * Connects the shared selection store (C18) with mobile robots and observed OMX arms.
  */
-import { createRobotDock } from "/common/robot-dock.js";
-import { createRobotPanel } from "/common/robot-panel.js";
-import { createRobotView } from "/common/robot-3d.js";
+import { createRobotDock } from "/console/assets/robot-dock.js";
+import { createRobotPanel } from "/console/assets/robot-panel.js";
+import { createRobotView } from "/console/assets/robot-3d.js";
 import { createMotorHealthState, renderMotorHealth } from "/common/motor-health.js";
-import { robotProfile } from "/common/robot-profile.js";
+import { robotProfile } from "/console/assets/robot-profile.js";
 import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { setOff } from "/common/cause-line.js";
 import { node } from "/common/control-dom.js";
