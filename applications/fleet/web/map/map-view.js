@@ -188,11 +188,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const rot = view.siteViewTurn || 0;
     const side = rot === 90 || rot === 270;
     const fw = side ? height : width, fh = side ? width : height;
-    const sitePad = rot === 90 ? { top: 32, right: 56, bottom: 46, left: 20 }
-      : rot === 180 ? { top: 56, right: 46, bottom: 32, left: 20 }
-      : rot === 270 ? { top: 46, right: 20, bottom: 32, left: 56 }
-      : { top: 32, right: 20, bottom: 56, left: 46 };
-    const t = fitTransform(bounds, fw, fh, sitePad);
+    const t = fitTransform(bounds, fw, fh, 32);
     const turn = quarterTurn(rot, fw, fh);
     const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
     // D-593 pin on the site view (a motor-mode robot has no grid): canvas CSS px → map m.

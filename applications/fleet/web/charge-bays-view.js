@@ -389,7 +389,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     disclosure.className = "omx-pipeline-disclosure";
     disclosure.open = inspectorOpen;
     const summary = document.createElement("summary");
-    summary.textContent = `셀 파이프라인 제어 · ${active.shortTab} (${active.text || "대기 중"})`;
+    summary.textContent = `셀 파이프라인 제어 · ${active.title || active.id} (${active.text || "대기 중"})`;
     disclosure.addEventListener("toggle", () => {
       inspectorOpen = disclosure.open;
       frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive"));

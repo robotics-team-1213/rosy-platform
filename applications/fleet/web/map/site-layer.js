@@ -68,14 +68,11 @@ export function canvasSizeFor(bounds, base = 1200) {
 
 // map 프레임 m → 캔버스 px. 캔버스 y 는 아래로 자라므로 뒤집는다(격자 뷰와 같은 규칙).
 export function fitTransform(bounds, width, height, pad = 48) {
-  const p = typeof pad === "number" ? { top: pad, right: pad, bottom: pad, left: pad } : pad;
   const bw = Math.max(bounds.max_x - bounds.min_x, 1e-6);
   const bh = Math.max(bounds.max_y - bounds.min_y, 1e-6);
-  const availW = Math.max(1, width - p.left - p.right);
-  const availH = Math.max(1, height - p.top - p.bottom);
-  const scale = Math.min(availW / bw, availH / bh);
-  const ox = p.left + (availW - bw * scale) / 2 - bounds.min_x * scale;
-  const oy = height - p.bottom - (availH - bh * scale) / 2 + bounds.min_y * scale;
+  const scale = Math.min((width - 2 * pad) / bw, (height - 2 * pad) / bh);
+  const ox = pad + ((width - 2 * pad) - bw * scale) / 2 - bounds.min_x * scale;
+  const oy = height - pad - ((height - 2 * pad) - bh * scale) / 2 + bounds.min_y * scale;
   return { scale, ox, oy };
 }
 
