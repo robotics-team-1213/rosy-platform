@@ -3,7 +3,7 @@ Description=Install the signed ROSY PC watchdog update
 Wants=network-online.target
 After=network-online.target
 ConditionPathExists=/etc/rosy/watchdog-update.pub.pem
-ConditionPathIsExecutable=/usr/local/sbin/rosy-ssh-watchdog
+ConditionFileIsExecutable=/usr/local/sbin/rosy-ssh-watchdog
 
 [Service]
 Type=oneshot

@@ -1,7 +1,9 @@
 """Exercise signed watchdog activation using a disposable key and filesystem."""
 
+import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +14,19 @@ from deploy.hosts.common.watchdog_update import build_asset, install_asset
 
 pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux system watchdog executable")
 SCRIPT = b"#!/usr/bin/env bash\nprintf 'healthy\\n'\n"
+
+
+def test_systemd_recognizes_the_baseline_watchdog_condition():
+    analyze = shutil.which("systemd-analyze")
+    if not analyze:
+        pytest.skip("systemd-analyze is not installed")
+    unit = Path(__file__).resolve().parents[1] / "deploy/hosts/common/host-state/rosy-watchdog-update.service"
+    condition, = (line for line in unit.read_text().splitlines() if line.startswith("Condition") and
+                  line.endswith("=/usr/local/sbin/rosy-ssh-watchdog"))
+    directive = condition.split("=", 1)[0]
+    result = subprocess.run([analyze, "condition", f"{directive}={sys.executable}"],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.fixture
