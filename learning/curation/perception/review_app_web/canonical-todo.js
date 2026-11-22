@@ -257,7 +257,7 @@ export function renderRecordingTodo() {
   const sum = todoDoc.summary || {};
   const rev = prov.hf_revision ? prov.hf_revision.slice(0, 8) : (prov.manifest_sha256 ? prov.manifest_sha256.slice(0, 8) : 'local');
   metaEl.replaceChildren(
-    statusTag('fresh', `${prov.hf_repo || 'robotteam/rosy-omx-data'} · ${prov.curated_version || ''}`),
+    el('span', `${prov.hf_repo || 'robotteam/rosy-omx-data'} · ${prov.curated_version || ''}`, 'canon-mono'),
     el('span', `rev ${rev} · h1 통과 ${sum.ship_h1_pass ?? 0}/${sum.ship_h1_target ?? 540} ep · 부족 ${sum.ship_h1_remaining ?? 0} ep · 출처 ${prov.source_state || ''}`, 'canon-mono quiet'),
   );
 
