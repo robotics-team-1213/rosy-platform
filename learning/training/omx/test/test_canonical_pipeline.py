@@ -516,8 +516,8 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
 
 def test_h1_train_worker_refuses_h2_gate_receipt(tmp_path):
     import canonical_workers as workers
+    import data_gate as dg
 
-    dg = workers.data_gate
     (tmp_path / dg.RECEIPT).write_text(json.dumps({
         "schema": dg.SCHEMA, "goal_scope": "h2", "files": dg.dataset_files(tmp_path),
         "dataset_reject": [], "episodes": [{"episode_index": 0, "verdict": "pass"}],
