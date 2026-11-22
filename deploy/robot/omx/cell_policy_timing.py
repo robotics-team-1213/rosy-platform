@@ -29,15 +29,13 @@ def park_ack_ok(reply) -> bool:
         return False
     if reply.get("fault") or reply.get("hold") or reply.get("human_hold_latched"):
         return False
-    if reply.get("settled") is False:
+    if reply.get("settled") is not True:
         return False
     if "command" in reply:
         cmd = str(reply["command"])
         if cmd.startswith("checked "):
             cmd = cmd.split(" ", 3)[-1]
         if cmd not in ("park", "run park"):
-            return False
-        if cmd == "run park" and reply.get("settled") is not True:
             return False
     return True
 
@@ -205,8 +203,11 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
                        handoff=ran.get("handoff"), frames=len(frames), command="run policy", ok=ran.get("ok"),
                        state=prediction.state, end_state=ran.get("state"))
             previous_command = timing.get("last_command_mono")
-            if not ran.get("ok") or ran.get("fault"):
-                return stopped(n, ran.get("policy_stop") or ran.get("error") or ran.get("fault") or "policy playback refused", row, ran)
+            if not ran.get("ok") or ran.get("fault") or ran.get("settled") is False:
+                reason = ran.get("policy_stop") or ran.get("error") or ran.get("fault") or (
+                    "policy chunk did not settle" if ran.get("settled") is False else "policy playback refused"
+                )
+                return stopped(n, reason, row, ran)
             if dry_run:
                 row["envelope"] = {"ok": True}
             log(row)

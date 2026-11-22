@@ -14,7 +14,7 @@ class Scripted:
 
     def act(self, command):
         self.commands.append(command)
-        return {"command": command, "ok": True, **self.answers.get(command, {})}
+        return {"command": command, "ok": True, "settled": True, **self.answers.get(command, {})}
 
 
 def test_a_grasp_check_that_finds_the_jaws_empty_stops_the_carry_before_transit():

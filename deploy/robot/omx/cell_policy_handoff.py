@@ -27,18 +27,20 @@ def _carry(cell, library_path, sequence, authorize, log):
 
 class Authorization:
     """Use the existing supervised envelope and bind runner commands to the checked library."""
+    supports_check_home = True
+
     def __init__(self, config):
         self.config = config
         self.calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text(encoding="utf-8"))
 
-    def __call__(self, library, state, sequence):
+    def __call__(self, library, state, sequence, *, check_home: bool = True):
         from cell_envelope import assess
         from cell_pipeline_io import limit_error
 
         limits = limit_error(dict(self.config, played_chunks=list(library["chunks"])), library)
         if limits:
             raise ValueError(limits)
-        result = assess(self.config, self.calibration, library, state, sequence=sequence)
+        result = assess(self.config, self.calibration, library, state, sequence=sequence, check_home=check_home)
         if not result["allowed"]:
             raise ValueError(f"operating envelope refused: {result['reason']}")
         return result
@@ -162,166 +164,4 @@ def run_taught(cell, library_path, *, dry_run, authorize, log):
     return _carry(cell, library_path, FOLDED, authorize, log)
 
 
-def _moved_snapshot(state, ran: dict, top_before, cell, work: Path, n: int) -> dict:
-    """Did the arm move: joint travel the encoders measured and how much the top view changed (mean |diff|, 0-255)."""
-    import numpy as np
-
-    out = {"joint_travel": float(np.abs(np.asarray(ran.get("state") or state, dtype=float) - state).max())}
-    try:
-        import cv2
-        import time
-
-        top_after = cell.frame("top")
-        out["top_change"] = round(float(np.abs(top_before.astype(np.int16) - top_after.astype(np.int16)).mean()), 2)
-        shots = work / "policy-frames"
-        shots.mkdir(exist_ok=True)
-        cv2.imwrite(str(shots / f"{int(time.time())}-{n}-before.jpg"), top_before)
-        cv2.imwrite(str(shots / f"{int(time.time())}-{n}-after.jpg"), top_after)
-    except Exception as exc:  # camera evidence never stops the episode
-        out["top_change_error"] = str(exc)[:120]
-    return out
-
-
-def _ack_status(status: dict) -> dict:
-    keys = ("ok", "error", "fault", "contact", "holding", "settled", "state")
-    return {**{k: status.get(k) for k in keys}, **({"t": status["t"]} if "t" in status else {})}
-
-
-def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks: int, dry_run: bool, log, goal: dict,
-                     sim_units: bool, open_g: float, model_closed: float, closed: float, low, high, fastest: float,
-                     kin, jaw_spec, resolved_tcp, authorize, max_obs_age_s: float = 0.6) -> dict:
-    """Guarded step-rate-stretched chunk loop for full-chunk ACT checkpoints (e.g. arm_s)."""
-    import time
-    import numpy as np
-    from cell_policy_shape import in_jaw_zone, jaw_zone_error, open_before_close, shape_chunk
-    from cell_policy_timing import park_ack_ok
-
-    def _safe_park_or_hold(cmd_prefix: str = "", *, fault: bool = False) -> tuple[bool, dict | None]:
-        if dry_run:
-            return False, None
-        if fault:
-            log({"command": "human-hold", **_ack_status(cell.act("human-hold"))})
-            return False, None
-        park_reply = cell.act(cmd_prefix + "park")
-        log({"command": "park", **_ack_status(park_reply)})
-        if park_ack_ok(park_reply):
-            return True, park_reply
-        log({"command": "human-hold", **_ack_status(cell.act("human-hold"))})
-        return False, park_reply
-
-    def _fail(res: str, at: int, reason, cmd_prefix: str = "", *, fault: bool = False, extra: dict | None = None) -> dict:
-        parked_ok, park_reply = _safe_park_or_hold(cmd_prefix, fault=fault)
-        return {"result": res, "at": at, "reason": reason, **(extra or {}), "parked": parked_ok,
-                **({"park": _ack_status(park_reply)} if park_reply is not None else {})}
-
-    def _legacy_jaw_hold(row, n: int, jaw_warn: str) -> dict:
-        held_reply = cell.act("human-hold")
-        log({**row, "refused": jaw_warn})
-        log({"command": "human-hold", **_ack_status(held_reply)})
-        return {"result": "refused", "at": n, "reason": jaw_warn, "parked": False}
-
-    held, released, prefix = False, False, ""
-    for n in range(max_chunks):
-        row = {"chunk": n, "dry_run": dry_run}
-        try:
-            status = cell.act("state")
-            if not status.get("ok") or status.get("fault") or not isinstance(status.get("state"), list):
-                reason = status.get("error") or "policy start state unavailable"
-                log({**row, "refused": reason, **_ack_status(status)})
-                return _fail("fault" if status.get("fault") else "refused", n, reason, fault=bool(status.get("fault")))
-            state = np.asarray(status["state"], dtype=float)
-            frames, oldest_stamp = {}, None
-            if hasattr(cell, "frame_receipt"):
-                for view in shadow.image_views:
-                    rec = cell.frame_receipt(view, max_age_s=max_obs_age_s, timeout_s=max_obs_age_s)
-                    frames[view] = rec["image"]
-                    stamp = rec.get("source_stamp")
-                    if isinstance(stamp, (int, float)) and not isinstance(stamp, bool) and math.isfinite(stamp):
-                        oldest_stamp = stamp if oldest_stamp is None else min(oldest_stamp, stamp)
-            else:
-                frames = {view: cell.frame(view) for view in shadow.image_views}
-            obs, meta = shadow.inputs(state.tolist() if sim_units else (state + off).tolist(), frames, **goal)
-            converted = np.asarray(shadow.infer(obs).chunk, dtype=float) - off
-            proposed = converted if held else open_before_close(converted, open_g, model_closed)
-            row = {**row, "state": state.tolist(), "meta": meta, "proposed_first": proposed[0].tolist(),
-                   "proposed_last": proposed[-1].tolist()}
-            if dry_run:
-                row["converted_chunk"] = converted.tolist()
-            live_poses = [state.tolist(), *([status["target"]] if status.get("target") is not None else [])]
-            if jaw_spec is not None and (jaw_warn := jaw_zone_error(live_poses, kin, jaw_spec)):
-                row["jaw_warning"] = jaw_warn
-                if not dry_run:
-                    return _legacy_jaw_hold(row, n, jaw_warn)
-            force_all = jaw_spec is not None and in_jaw_zone(live_poses, kin, jaw_spec)
-            try:
-                frames_cell = shape_chunk(proposed, state, low, high, fastest)
-            except ValueError as error:
-                if dry_run:
-                    row["envelope"] = {"ok": False, "reason": str(error)}
-                log({**row, "refused": str(error)})
-                return _fail("refused", n, str(error))
-            if jaw_spec is not None and (jaw_warn := jaw_zone_error(frames_cell, kin, jaw_spec, force_all=force_all)):
-                row["jaw_warning"] = jaw_warn
-                if not dry_run:
-                    return _legacy_jaw_hold(row, n, jaw_warn)
-            row["frames"] = len(frames_cell)
-            if dry_run:
-                log({**row, "envelope": {"ok": True}})
-                continue
-            lib = {**library, "chunks": {**library["chunks"], "policy": frames_cell},
-                   **({"jaw_gate": {**jaw_spec, "tcp_x_m": resolved_tcp}} if jaw_spec is not None else {})}
-            path = work / f"policy-lib-{time.time_ns()}-{n}.json"
-            path.write_text(json.dumps(lib), encoding="utf-8")
-            prefix = ""
-            if authorize is not None:
-                auth_status = cell.act("state")
-                if not auth_status.get("ok") or auth_status.get("fault") or not isinstance(auth_status.get("state"), list):
-                    reason = auth_status.get("error") or "policy auth state unavailable"
-                    log({**row, "refused": reason, **_ack_status(auth_status)})
-                    return _fail("fault" if auth_status.get("fault") else "refused", n, reason,
-                                 fault=bool(auth_status.get("fault")))
-                auth_poses = [auth_status["state"], *([auth_status["target"]] if auth_status.get("target") is not None else [])]
-                if jaw_spec is not None:
-                    if jaw_warn := jaw_zone_error(auth_poses, kin, jaw_spec):
-                        row["jaw_warning"] = jaw_warn
-                        return _legacy_jaw_hold(row, n, jaw_warn)
-                    if not force_all and in_jaw_zone(auth_poses, kin, jaw_spec):
-                        if jaw_warn := jaw_zone_error(frames_cell, kin, jaw_spec, force_all=True):
-                            row["jaw_warning"] = jaw_warn
-                            return _legacy_jaw_hold(row, n, jaw_warn)
-                try:
-                    assessment = authorize(lib, auth_status, ("run policy", "park"))
-                except ValueError as error:
-                    log({**row, "refused": str(error)})
-                    return _fail("refused", n, str(error))
-                prefix = f"checked {assessment['session_id']} {assessment['library_sha256']} "
-        except Exception as error:  # fail closed on camera, inference, shaping, or file errors after chunk 0
-            msg = str(error)[:200] or type(error).__name__
-            log({**row, "refused": msg})
-            return _fail("refused", n, msg)
-        loaded = cell.act(f"{prefix}load {path}")
-        log({**row, "command": "load", **_ack_status(loaded)})
-        if not loaded.get("ok"):
-            return _fail("refused", n, loaded.get("error"))
-        if oldest_stamp is not None and time.time() - oldest_stamp > max_obs_age_s:
-            log({**row, "refused": "stale policy observation"})
-            return _fail("refused", n, "stale policy observation", prefix)
-        ran = cell.act(prefix + "run policy")
-        log({"command": "run policy", **_ack_status(ran), **_moved_snapshot(state, ran, frames.get("top"), cell, work, n)})
-        if ran.get("contact"):
-            if "overload-hold" not in (ran.get("error") or ""):
-                log({"command": "retreat", **_ack_status(cell.act(prefix + "retreat"))})
-            return _fail("contact", n, ran.get("error"), prefix, extra={"error": ran.get("error")})
-        if not ran.get("ok"):
-            is_fault = bool(ran.get("fault"))
-            return _fail("fault" if is_fault else "refused", n, ran.get("error"), prefix,
-                         fault=is_fault, extra={"error": ran.get("error")})
-        held = held or bool(ran.get("holding"))
-        released = held and [f[5] for f in frames_cell][-1] > closed + 10.0  # held something, then opened (OMX_RUN_STOP_ON_PLACE)
-        if released:
-            break
-    if dry_run:
-        return {"result": "dry_run", "chunks": max_chunks}
-    parked_ok, park_reply = _safe_park_or_hold(prefix)
-    return {"result": "released" if released else "chunks_done", "held": held, "parked": parked_ok,
-            **({"park": _ack_status(park_reply)} if park_reply is not None else {})}
+from cell_policy_paced import run_paced_chunks  # noqa: E402,F401
