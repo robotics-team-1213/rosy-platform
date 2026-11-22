@@ -8,7 +8,8 @@
 Use ``--durable`` for a long command that must survive an observer's SSH loss. The same
 bounded native run detaches and reconnects; ``remote-run.json`` identifies it. On exhausted
 contact or a missing terminal code, keep that run rather than submitting another. Its
-``<run>.sim-job`` journal retains rc/log after successful source/output cleanup. To follow
+``<run>.sim-job`` journal retains rc/log after cleanup. A terminal run with unfetched outputs
+keeps the journal, outputs and source ref, and can release its rebuildable checkout. To follow
 the same actor later, load that metadata and call ``remote_sim_job.follow`` with its host,
 name and a separate local log path; this never places, ships or starts a run.
 
@@ -25,7 +26,7 @@ host, the ``sim`` floor (6 free cores, 8 GB) after ``~/rosy-jobs`` locks and res
 then runs the bench headless under ``systemd-run --user --scope`` (MemoryMax, CPUQuota, nice).
 The remote shell stops that scope and frees the lock when it ends; then the outputs are fetched.
 Logs and bench outputs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-sim/<sha>``, else the system temp directory); the
-run's files are removed after a good fetch and kept on the host when the fetch fails. Never run on the operator laptop (D-584).
+outputs stay on the host when the fetch fails. Never run on the operator laptop (D-584).
 Standard library only.
 """
 
@@ -124,6 +125,45 @@ O=~/rosy-test/runs/"$1"-out; rm -rf "$O/build" "$O/install" "$O/tmp"
 true"""
 
 DROP = r"""rm -rf ~/rosy-test/runs/"$1"-out"""
+
+# Preserve the source ref for reproduction and the outputs for a fetch retry.
+RELEASE_SOURCE = r"""set -euo pipefail
+R=~/rosy-test; N=$1; SHA=$2; S=$R/runs/$N
+[[ $N =~ ^sim-[0-9a-f]{10}-[0-9a-f]{6}$ ]]
+[[ $SHA =~ ^[0-9a-f]{40}$ ]]
+[ ! -L "$S.sim-job" ]
+[ ! -L "$S.sim-job/0.log" ]
+[ -f "$S.sim-job/0.log" ]
+[ ! -L "$S.sim-job/0.rc" ]
+[ ! -L "$S-out" ]
+[ -d "$S-out" ]
+[[ $(cat "$S.sim-job/0.rc") =~ ^[0-9]+$ ]]
+[ -e "$S" ] || exit 0
+[ "$(realpath -- "$S")" = "$S" ]
+export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+[ "$(systemctl --user show -p ActiveState --value "rosy-sim-$N.scope")" = inactive ]
+exec 8>"$R/repo.lock"; flock -w 60 8
+export GIT_OPTIONAL_LOCKS=0
+[ "$SHA" = "$(git -C "$S" rev-parse HEAD)" ]
+[ "$SHA" = "$(git -C "$R/repo" rev-parse --verify "refs/remote-pytest/$N^{commit}")" ]
+changes=$(git -C "$S" status --porcelain --untracked-files=normal); [ -z "$changes" ]
+git -C "$S" ls-files -z --others --ignored --exclude-standard |
+  while IFS= read -r -d '' file; do
+    parent=${file%/*}
+    [[ $file = *.pyc && ${parent##*/} = __pycache__ ]] || exit 1
+    [ -f "$S/$file" ] && [ ! -L "$S/$file" ] || exit 1
+  done
+# Check mount topology after waiting for the shared repo lock and inspecting Git.
+[ "$(realpath -- "$S")" = "$S" ]
+python3 -c '
+import os,re,sys
+root = os.fsencode(sys.argv[1])
+with open("/proc/self/mountinfo", "rb") as info:
+    mounts = (re.sub(rb"\\(040|011|012|134)", lambda m: bytes([int(m[1], 8)]), l.split()[4]) for l in info)
+    sys.exit(any(p == root or p.startswith(root + b"/") for p in mounts))
+' "$S"
+git -C "$R/repo" worktree remove -- "$S"
+"""
 
 BENCHES = {
     # gz_multi writes robots.yaml under TMPDIR (tempfile.mkdtemp); the bench waits for it.
@@ -225,6 +265,14 @@ def run_sim(host: str, role: str, bench_cmd: str, bench_args: list[str], sha: st
     finally:
         if not durable or (terminal and fetched_ok):
             rp.remote(host, rp.CLEANUP, name, capture_output=True, timeout=120)
+        elif terminal:
+            try:
+                released = rp.remote(host, RELEASE_SOURCE, name, sha, capture_output=True, timeout=120)
+            except (OSError, subprocess.SubprocessError):
+                released = None
+            if released is None or released.returncode:
+                print(f"[remote-sim] source release unconfirmed on {host}: ~/rosy-test/runs/{name}",
+                      file=sys.stderr, flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:

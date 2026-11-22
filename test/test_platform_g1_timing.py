@@ -359,9 +359,17 @@ def test_a_failure_in_a_tight_segment_holds_the_partner_with_a_coordinator_stop(
                                        "reason": snapshot.reason})
 
 
+@pytest.fixture
+def g1_socket_root():
+    temp = tempfile.gettempdir()
+    # Keep the runner's private TMPDIR when it leaves room for the instance and control.sock.
+    with tempfile.TemporaryDirectory(prefix="g1uds", dir=temp if len(os.fsencode(temp)) <= 48 else "/tmp") as root:
+        yield Path(root)
+
+
 @pytest.mark.skipif(not hasattr(socket, "SO_PEERCRED"), reason="real owner UDS needs Linux SO_PEERCRED")
-def test_real_uds_round_trip_stays_inside_the_bound(tmp_path):
-    root = Path(tempfile.mkdtemp(prefix="g1uds", dir="/tmp"))  # AF_UNIX paths are short
+def test_real_uds_round_trip_stays_inside_the_bound(tmp_path, g1_socket_root):
+    root = g1_socket_root
     recipe_doc, cell_doc = read_documents(RECIPE_4, G1_CELL)
     submission = compile_submission(recipe_doc, cell_doc)
     spec = cell_doc["arms"][0]

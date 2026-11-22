@@ -24,7 +24,10 @@ gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LO
 Logs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-pytest/<sha>``, or the system temp directory without
 ``ROSY_SCRATCH``), one ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing collected, counts as 0). Leading ``ROSY_*=value`` words of an invocation are its environment
 on the host: ``-- ROSY_RUN_BROWSER_TESTS=1 <paths>`` runs the real-Chromium tests, and the job
-installs Chromium for the venv's playwright first. Standard library only.
+installs Chromium for the venv's playwright first. Use ``-- ROSY_TEST_DISK_PROFILE=1 <paths>``
+to sample apparent file sizes in the invocation's private temp tree and log the sampled peak and
+the bytes before and after runner cleanup. Samples can miss short-lived files and exclude shared
+storage. Keep this off for timing evidence. Standard library only.
 """
 
 from __future__ import annotations
