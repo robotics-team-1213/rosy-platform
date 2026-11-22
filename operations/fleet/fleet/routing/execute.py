@@ -132,20 +132,26 @@ def lane_action(graph: Graph, segments: list, index: int, config: RoutingConfig)
 
 def unsupported(graph: Graph, segments: list, *, kind: Optional[str], modes, junction_turn: bool,
                 config: RoutingConfig, max_turn_deg: float = MAX_TURN_DEG, repeat: bool = False,
-                final_place: Optional[str] = None) -> Optional[dict]:
+                final_place: Optional[str] = None, nav2: bool = False) -> Optional[dict]:
     """None when the robot can drive every segment; otherwise ``TRIP_MODE_UNSUPPORTED`` detail.
 
     Any lane segment needs ``junction_turn`` (CORE's junction gate runs only with live keep-mode
     evidence, D-495): without it the robot neither stops at a junction nor takes a branch.
     A ``repeat`` trip (D-517 2) never stops at its lap end, so that end may be part-way along
-    a lane; it still needs a place in the lap, where a hold stops it.
+    a lane; it still needs a place in the lap, where a hold stops it. With ``nav2=True``, Fleet
+    drives painted lanes via CORE ``navigation/route`` (Nav2) instead of camera line-following.
     """
-    if repeat and any(graph.arcs[arc_id(s)].drive_mode == "lane" for s in segments if arc_id(s) in graph.arcs)             and not any(ends_at_place(graph, s) for s in segments if arc_id(s) in graph.arcs):
+    if not nav2 and repeat and any(graph.arcs[arc_id(s)].drive_mode == "lane" for s in segments if arc_id(s) in graph.arcs) \
+            and not any(ends_at_place(graph, s) for s in segments if arc_id(s) in graph.arcs):
         return {"edge_id": segments[-1]["edge_id"], "reason": "LANE_END_NOT_A_PLACE"}
     for i, segment in enumerate(segments):
         arc = graph.arcs.get(arc_id(segment))
         if arc is None:
             return {"edge_id": segment["edge_id"], "reason": "UNKNOWN_EDGE"}
+        if nav2:
+            if "free" not in modes or (arc.robot_kinds is not None and kind not in arc.robot_kinds):
+                return {"edge_id": segment["edge_id"], "drive_mode": "free"}
+            continue
         if arc.drive_mode not in modes or (arc.robot_kinds is not None and kind not in arc.robot_kinds):
             return {"edge_id": segment["edge_id"], "drive_mode": arc.drive_mode}
         if arc.drive_mode != "lane":
@@ -173,22 +179,26 @@ def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset
     """``(plan body, None)`` from ``start_pose`` on the active map, or ``(None, hold)`` saying why not."""
     to = request["to"]
     goal = to if isinstance(to, str) else (to["x"], to["y"], to.get("yaw"))
+    nav2 = request.get("drive_mode") == "nav2"
+    cap_modes = caps.get("modes") or ("lane", "free")
+    plan_modes = (frozenset(("lane", "free")) if "free" in cap_modes else frozenset()) if nav2 else frozenset(cap_modes)
     try:
         if active is None:
             raise PlanError("TRIP_NO_ACTIVE_MAP")
         plan = plan_trip(active[2], PlanRequest(
             map_version=active[0], start_pose=tuple(start_pose), goal=goal, robot_kind=caps.get("kind"),
-            drive_modes=frozenset(caps.get("modes") or ("lane", "free")), max_speed_mps=caps.get("max_speed"),
+            drive_modes=plan_modes, max_speed_mps=caps.get("max_speed"),
             via=tuple(v for v in request.get("via", ()) if v not in passed), arrive_yaw=request.get("arrive_yaw"),
             speed_cap=request.get("speed_cap"),
             blocked_edges=frozenset(blocked) | frozenset(request.get("blocked_edges") or ()),
-            extra_cost=request.get("extra_cost") or {}, body_front_m=caps.get("body_front_m", FALLBACK_FRONT_M)), config)
+            extra_cost=request.get("extra_cost") or {}, body_front_m=caps.get("body_front_m", FALLBACK_FRONT_M),
+            stop_offset=not (nav2 and bool(request.get("repeat")))), config)
     except PlanError as exc:
         return None, {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
     body = plan_body(plan)
     refused = unsupported(active[2], body["segments"], kind=caps.get("kind"), modes=frozenset(caps.get("modes") or ()),
                           junction_turn=bool(caps.get("junction_turn")), config=config, max_turn_deg=max_turn_deg,
-                          repeat=bool(request.get("repeat")), final_place=body["actions"][-1]["place_id"])
+                          repeat=bool(request.get("repeat")), final_place=body["actions"][-1]["place_id"], nav2=nav2)
     if refused is not None:
         return None, {"reason": "replan", "plan": None, "code": "TRIP_MODE_UNSUPPORTED", "detail": refused}
     return body, None

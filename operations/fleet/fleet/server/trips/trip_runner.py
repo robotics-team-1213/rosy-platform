@@ -60,6 +60,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
     def __init__(self, *, store, routing_config, caps: TripCapsPort, poses: MapPosePort,
                  junction: LaneJunctionPort, goal: Callable[..., Awaitable[dict]],
                  cancel_goal: Callable[[str], Awaitable[dict]],
+                 route: Optional[Callable[..., Awaitable[dict]]] = None,
                  blocked: Callable[[], frozenset] = frozenset, clock: Callable[[], float] = time.time,
                  config: TripConfig = TripConfig(),
                  engaged: Callable[[str], Optional[str]] = lambda _robot_id: None,
@@ -84,7 +85,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         self._battery = battery
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
-        self._goal, self._cancel_goal = goal, cancel_goal
+        self._goal, self._route, self._cancel_goal = goal, route, cancel_goal
         #: D-550 10: renews the robot's leased trip goal each step (console.renew_goal_leases).
         self._renew_lease = renew_lease
         #: Edges an operator or the traffic layer closed; a remaining one means "replan" (D-489 9).
@@ -129,9 +130,11 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             if self._clock() - row["created_at"] > PLAN_TTL_S:
                 raise TripError(422, "TRIP_PLAN_EXPIRED", {"ttl_s": PLAN_TTL_S})
             repeat = bool((row.get("request") or {}).get("repeat"))
+            nav2 = (row.get("request") or {}).get("drive_mode") == "nav2"
             graph = self._graph_for(plan["map_version"])
+            notes = {"drive_mode": "nav2"} if nav2 else {}
             caps = await self._caps_checks(robot_id, graph, plan["segments"], repeat,
-                                           plan["actions"][-1]["place_id"], detail=(notes := {}))
+                                           plan["actions"][-1]["place_id"], detail=notes, nav2=nav2)
             body = nominal_body_for(caps.kind)
             if self.robot_busy(robot_id):
                 raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
@@ -144,7 +147,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             start_at = (row.get("request") or {}).get("start_at")
             pose, enable, turns = await self._start_pose(
                 robot_id, graph, plan["segments"], principal_id, start_at=start_at, caps=caps,
-                start_token=start_token, start_guard=start_guard)
+                start_token=start_token, start_guard=start_guard, nav2=nav2)
             await self._guard_start(robot_id, start_token, start_guard)
             pose_observed_at = self._clock()
             lease = await self.lease.open(robot_id, {"trip_id": plan_id, "started_by": principal_id, "job_id": job_id,
@@ -168,7 +171,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
                 plan_id=plan_id, robot_id=robot_id, principal_id=principal_id, notes=notes,
                 plan=plan, pose=pose, now=self._clock(), body=body,
                 pose_observed_at=pose_observed_at, repeat=repeat, caps_view=caps_view,
-                traffic_authority=self.authority.mode(caps), leader=leader,
+                traffic_authority="hold_back" if nav2 else self.authority.mode(caps), leader=leader,
                 lease=lease, moved=moved, enable=enable, turns=turns)
             if purpose is not None:  # D-1029: renews carry it too (CORE refuses a changed purpose)
                 view["purpose"] = purpose
@@ -351,7 +354,7 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         if live.open:
             live.view.update(state=state, reason=reason)
             live.view["detail"].update(detail or {})
-        if halt_free or live.arc(live.view["segment_index"]).drive_mode == "lane":
+        if halt_free or live.segment_is_lane(live.view["segment_index"]):
             live.view["detail"].update(await self._halt(live))
         self._save(live)
 
@@ -361,11 +364,11 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             live.view.update(state="stopped", reason="lease_lost")
             live.view["detail"].update(detail)
             async with self._lock_for(live.view["robot_id"]):
-                if live.arc(live.view["segment_index"]).drive_mode != "lane":
+                if not live.segment_is_lane(live.view["segment_index"]):
                     live.view["detail"].update(await self._halt(live))
                 self._save(live)
 
     async def _halt(self, live: LiveTrip) -> dict:
         self.held_stops.pop(live.view["robot_id"], None)  # the halt's own stop is never a held arrival
         i = live.view["segment_index"]
-        return await self.halts.halt_robot(live.view["robot_id"], live.arc(i).drive_mode == "lane", live.place(i))
+        return await self.halts.halt_robot(live.view["robot_id"], live.segment_is_lane(i), live.place(i))

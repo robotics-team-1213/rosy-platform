@@ -56,7 +56,10 @@ class TripReplan:
         live.view["detail"]["replan_confirmed_by"] = principal_id
         sent = live.sent
         live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
-        live.sent, live.last_goal, live.replan_pending, live.at, live.at_stamp = None, None, False, None, None
+        if live.active_route is not None:
+            live.active_route = {**live.active_route, "superseded": True}
+        live.sent, live.last_goal, live.replan_pending, live.at, live.at_stamp = (
+            None, None, False, None, None)
         live.lap_start = 0
 
     async def _ai_confirm(self, live: LiveTrip, principal_id: str = "fleet-ai") -> Optional[bool]:
@@ -77,10 +80,11 @@ class TripReplan:
 
         try:
             graph = self._graph_for(hold["map_version"])
-            await self._caps_checks(robot_id, graph, segments, bool(live.repeat), detail=live.view["detail"])
+            kw = {"nav2": True} if live.nav2 else {}
+            await self._caps_checks(robot_id, graph, segments, bool(live.repeat), detail=live.view["detail"], **kw)
             if not current():
                 return
-            await self._pose_checks(robot_id, graph, segments)
+            await self._pose_checks(robot_id, graph, segments, **kw)
             if current():
                 self._apply_replan(live, hold, principal_id)
                 return True
@@ -97,6 +101,8 @@ class TripReplan:
             return False
         sent = live.sent
         live.replaceable = sent["seq"] if sent is not None and sent["action"] == STOP else None
+        if live.active_route is not None:
+            live.active_route = {**live.active_route, "superseded": True}
         live.sent, live.last_goal = None, None
         return True
 
@@ -106,10 +112,12 @@ class TripReplan:
         end = live.arc(len(segments) - 1).point_at(segments[-1]["s_to"])
         try:
             graph = self._graph_for(live.view["map_version"])
-            await self._pose_checks(robot_id, graph, segments[index:])
+            kw = {"nav2": True} if live.nav2 else {}
+            await self._pose_checks(robot_id, graph, segments[index:], **kw)
             body, hold = next_lap(self._store.active(), end, live.request, live.view["caps"] or {}, frozenset(
                 self._blocked()), self._routing, self.config.max_turn_deg, self.traffic)
-            await self._caps_checks(robot_id, graph, body["segments"] if body else segments[index:], True, detail=live.view["detail"])
+            await self._caps_checks(robot_id, graph, body["segments"] if body else segments[index:], True,
+                                    detail=live.view["detail"], **kw)
         except TripError as exc:
             body, hold = None, {"plan": None, "code": exc.code, "detail": exc.detail}
         if not live.open:
@@ -127,7 +135,8 @@ class TripReplan:
         """D-489 9: plan again from just before the next place; a changed route holds there.
         ``closed``: edges Fleet's resolver plans around (D-517 5), on top of ``blocked``."""
         segment = live.segments[index]
-        live.replan_pending = hold_back_m(self.traffic, segment) is None  # D-517 3: no hold in a zone; the next place
+        back = hold_back_m(self.traffic, segment)
+        live.replan_pending = (back != 0.0) if live.nav2 else (back is None)  # D-517 3: no hold in a zone; the next place
         live.view["hold"] = None if live.replan_pending else replan_hold(
             self._store.active(), live.arc(index).point_at(max(segment["s_to"] - 0.01, segment["s_from"])),
             live.segments[index:], live.request, live.view.get("caps") or {}, frozenset(self._blocked()) | closed,
