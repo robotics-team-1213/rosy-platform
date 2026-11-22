@@ -35,7 +35,7 @@ def panel_gallery():
         assert response.status == 200
         expect(page.locator("#kit-ready")).to_have_text("견본 준비 완료")
         page.evaluate("""async () => {
-          for (const href of ['/common/choice-controls.css', '/common/robot-dock.css']) {
+          for (const href of ['/common/robot-dock.css']) {
             if (!document.querySelector(`link[href="${href}"]`)) {
               const link = document.createElement('link');
               link.rel = 'stylesheet';
