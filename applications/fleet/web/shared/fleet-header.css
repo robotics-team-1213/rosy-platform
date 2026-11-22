@@ -59,7 +59,33 @@ ui-topbar {
 #user-role { min-width: 0; max-width: var(--measure-account-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* D-741 3: 알림, 로그인, 나(계정 단추). 30rem 아래에서 계정 단추는 아이콘만 남고 정지는 밀리지 않는다. */
 .fleet-header-actions { grid-area: actions; display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
-#fleet-inbox { flex: none; }
+#fleet-inbox { position: relative; flex: none; }
+#header-unread {
+  position: absolute;
+  inset-block-start: var(--space-1);
+  inset-inline-end: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 1.125rem;
+  block-size: 1.125rem;
+  padding-inline: var(--space-1);
+  border: 1px solid var(--status-warn);
+  border-radius: var(--radius-flag);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-label);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--leading-flat);
+  pointer-events: none;
+}
+#fleet-inbox[data-crit="true"] #header-unread {
+  background: var(--status-crit);
+  border-color: var(--status-crit);
+  color: var(--text-on-danger);
+}
 #fleet-login:not([hidden]) { flex: none; display: inline-flex; align-items: center; gap: var(--space-1); white-space: nowrap; }
 /* D-741 3 — "나" 자리는 하나다. 로그인 전에는 `로그인`이 그 자리의 글자이고, 계정 단추는 메뉴 손잡이로 아이콘만 남는다.
    읽을 알림도 붙일 역할 이름도 없으므로 알림 단추와 역할 표지는 그리지 않는다. */

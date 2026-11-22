@@ -1,3 +1,5 @@
+import { setOff } from "/common/cause-line.js";
+import { isOperator } from "/console/assets/authorization.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // Console owns draft/display only; Fleet owns durable requests and all facts.
 import { createVoice } from './assistant-voice.js';
@@ -54,11 +56,6 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
       paint();
     }});
   function clearTimer() { clearTimeout(timer); timer = null; }
-  function setOff(control, off, reason) {
-    control.disabled = off;
-    if (off) control.setAttribute('reason', reason);
-    else control.removeAttribute('reason');
-  }
   function paint() {
     const reason = !identity ? '기명 운영자로 로그인해 주세요.' : listening ? '음성 인식을 마쳐 주세요.' : '요청 처리 중입니다.';
     setOff(el('assistant-send'), !identity || !available || dialogue.busy || listening,
@@ -178,7 +175,7 @@ export function createAssistantPanel({scope, call, el, readSelection}) {
   });
   return {
     setIdentity(auth) {
-      const next = !auth.locked && auth.role === 'operator' && auth.principal !== 'site-console' &&
+      const next = !auth.locked && isOperator(auth.role) && auth.principal !== 'site-console' &&
         !auth.principal?.startsWith('development-') ? auth.principal || null : null;
       const changed = dialogue.setIdentity(next);
       if (!changed && identity === next) return;

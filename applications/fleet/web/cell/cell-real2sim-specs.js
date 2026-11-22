@@ -1,4 +1,5 @@
 // Real-to-Sim pipeline paths, table row builders and card/inspector specs (split from cell-real2sim.js).
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 
 export const REAL2SIM_PATH = '/api/fleet/cell-app/real2sim-pipeline';
 export const EVALUATE_PATH = '/api/fleet/cell-app/real2sim-pipeline/evaluate';
@@ -91,8 +92,8 @@ export function dstSiteOptions(body, cellId, tier) {
 
 // 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
 // Pinky 도킹은 천장 Cam(ceiling_north) ROI 확대로 위에서 본다.
-export const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
-export const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
+const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
+const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
 export const S3_VIEWS = [
   {id: 'arm_s_top', label: 'S3 상단(arm_s_top)', source: 'arm_s_top'},
   {id: 'arm_s_wrist', label: 'arm_s 손목', source: 'arm_s_wrist'},
@@ -440,8 +441,10 @@ export function inspectorSpecs(body = {}) {
     const live = armLiveStates[armId];
     if (live && Array.isArray(live.joints_deg) && live.joints_deg.length) {
       const stateArr = live.joints_deg.slice(0, 6).map(v => Number(v).toFixed(1)).join(', ');
-      const ageTxt = live.age_s != null ? `${Number(live.age_s).toFixed(0)}초 전` : '';
-      const modeBadge = live.fresh !== false ? `LIVE${ageTxt ? ` · ${ageTxt}` : ''}` : `스냅샷${ageTxt ? ` · ${ageTxt}` : ''}`;
+      const ageTxt = live.age_s != null ? evidenceAgeText(Math.round(Number(live.age_s))).slice(3) : '';
+      // Missing freshness is unknown, never a live badge: the server must state it.
+      const freshnessTxt = live.fresh === true ? 'LIVE' : live.fresh === false ? '지연 스냅샷' : '신선도 미확인';
+      const modeBadge = ageTxt ? `${freshnessTxt} · ${ageTxt}` : freshnessTxt;
       const tempTxt = live.temp_c != null ? `${live.temp_c}°C` : '';
       const curTxt = live.current_ma != null ? `${live.current_ma}mA` : '';
       return [
@@ -459,7 +462,7 @@ export function inspectorSpecs(body = {}) {
     if (stateArr) {
       return `${t.task_id} · folded=${Boolean(stopEv.folded)} · [${stateArr}] (완료 스냅샷)`;
     }
-    return fallbackText || 'folded: true · 홈 대기 (완료 스냅샷)';
+    return fallbackText || '관측 없음 · 상태 미확인';
   };
   const armHolds = body?.arm_holds || {};
   const holdText = armId => armHolds[armId]?.held

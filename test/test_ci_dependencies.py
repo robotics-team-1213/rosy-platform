@@ -351,6 +351,36 @@ def test_ci_strict_browser_run_judges_the_quarantine_rerun(monkeypatch, capsys, 
     assert 'browser evidence did not run for real' not in capsys.readouterr().out
 
 
+@pytest.mark.parametrize('paths, extra_env, output, expected', [
+    (['middleware/robot_ui/robot/test/test_a_browser.py', 'middleware/robot_ui/pilot/test/test_b_browser.py'],
+     {}, ['== 124 skipped in 1.04s ==\n'], 0),
+    (['middleware/robot_ui/pilot/test/test_pilot_app_proxy.py', 'middleware/robot_ui/pilot/test/test_pilot_browser.py'],
+     {}, ['== 75 skipped in 1.17s ==\n'], 0),
+    (['test/test_a.py', 'test/test_b.py'], {}, ['== 4 skipped in 0.1s ==\n'], 1),
+    (['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1',
+      'middleware/robot_ui/robot/test/test_a_browser.py', 'middleware/robot_ui/pilot/test/test_b_browser.py'],
+     {}, ['== 4 skipped in 0.1s ==\n'], 1),
+])
+def test_ci_allows_unopted_browser_skips_in_affected_runners_only(monkeypatch, paths, extra_env, output, expected):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    monkeypatch.chdir(ROOT)
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
+    for k, v in extra_env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([paths]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        SimpleNamespace(stdout=iter(output), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == expected
+
+
 def test_no_test_module_defines_a_nose_style_setup_function():
     # CI's apt pytest 7.4 calls a module-level plain setup()/teardown() once with the module as
     # its argument (nose compatibility), so a helper by that name gets the module as tmp_path.
@@ -471,7 +501,9 @@ def test_ci_result_aggregates_the_matrix_for_branch_protection():
     result = jobs["ci-result"]
     assert result["name"] == "ci-result"
     assert set(result["needs"]) == {"scope", "test"}
-    assert result["if"] == "always()", "must run (and fail) when a needed job fails or is cancelled"
+    assert result["if"] == "always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)", (
+        "must run (and fail) when a needed non-draft job fails or is cancelled"
+    )
     script = result["steps"][-1]["run"]
     assert 'test "$SCOPE_RESULT" = success' in script and 'test "$TEST_RESULT" = success' in script
 
@@ -569,6 +601,19 @@ def test_merge_group_and_push_run_scoped_affected_against_their_base():
     test = {s["name"]: s for s in doc["jobs"]["test"]["steps"]}["Test (matrix suite, D-436)"]
     assert "github.event.merge_group.base_sha" in test["env"]["HARNESS_BASE_REF"]
     assert "known_failures.should_rerun" in test["run"] and "known_failures.rerun_passed" in test["run"]
+
+
+def test_draft_pull_requests_skip_ci_and_review_gate():
+    import yaml
+
+    ci_doc = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    ci_triggers = ci_doc.get("on", ci_doc.get(True))
+    assert "ready_for_review" in ci_triggers["pull_request"]["types"]
+    assert "!github.event.pull_request.draft" in ci_doc["jobs"]["scope"]["if"]
+    ci_res_if = ci_doc["jobs"]["ci-result"]["if"]
+    assert "always()" in ci_res_if and "!github.event.pull_request.draft" in ci_res_if
+    rg_doc = yaml.safe_load((ROOT / ".github" / "workflows" / "review-gate.yml").read_text(encoding="utf-8"))
+    assert "!github.event.pull_request.draft" in rg_doc["jobs"]["review-gate"]["if"]
 
 
 @pytest.mark.parametrize("paths,output,expected", [
@@ -689,3 +734,155 @@ def test_ci_result_cutover_drain_gate_checks_merge_group_pr_head(monkeypatch, he
             exec(compile(python, str(WORKFLOW), "exec"), {})
         assert ended.value.code == expected
     assert seen == [f"https://api.github.com/repos/robotics-team-1213/rosy-platform/pulls/{head_ref.split('pr-')[1].split('-')[0]}"]
+
+
+def test_ci_splits_fleet_non_browser_and_parallelizes_safe_multi_file_browsers(monkeypatch):
+    import importlib.util
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    script = next(step["run"] for step in steps if step["name"] == "Test (matrix suite, D-436)")
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    real_find_spec = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec",
+                        lambda name: object() if name == "xdist" else real_find_spec(name))
+
+    def _run(inv):
+        calls = []
+        monkeypatch.setenv("ROSY_INVOCATIONS", json.dumps([inv]))
+        monkeypatch.setattr(subprocess, "Popen", lambda args, **kwargs:
+                            calls.append((args, kwargs["env"])) or SimpleNamespace(
+                                stdout=iter(["== 2 passed in 0.1s ==\n"]), wait=lambda: 0))
+        with pytest.raises(SystemExit) as ended:
+            exec(compile(python, str(WORKFLOW), "exec"), {})
+        assert ended.value.code == 0
+        return calls
+
+    calls = _run([
+        "operations/fleet/test/test_blocks.py",
+        "operations/fleet/test/test_work_overview_browser.py",
+        "operations/fleet/test/test_cell_app_browser.py",
+    ])
+    assert len(calls) == 2
+    assert "ROSY_RUN_BROWSER_TESTS" not in calls[0][1]
+    assert ["-n", "auto"] == calls[0][0][4:6]
+    assert calls[1][1]["ROSY_RUN_BROWSER_TESTS"] == "1"
+    assert calls[1][1]["ROSY_BROWSER_STRICT"] == "1"
+    assert ["-n", "2", "--dist", "loadfile"] == calls[1][0][5:9]
+
+    alone_calls = _run([
+        "ROSY_BROWSER_ALONE=1",
+        "operations/fleet/test/test_site_map_browser.py",
+        "operations/fleet/test/test_cell_app_browser.py",
+    ])
+    assert "-n" not in alone_calls[0][0]
+    assert "-n" not in _run([
+        "operations/fleet/test/test_site_map_browser.py",
+        "operations/fleet/test/test_cell_app_browser.py",
+    ])[0][0]
+
+    app_calls = _run([
+        "applications/fleet/test/test_unit_scope.py",
+        "applications/fleet/test/test_browser_adapters.py",
+    ])
+    assert len(app_calls) == 2
+    assert "ROSY_RUN_BROWSER_TESTS" not in app_calls[0][1] and "-n" in app_calls[0][0]
+    assert app_calls[1][1]["ROSY_RUN_BROWSER_TESTS"] == "1"
+    assert "ROSY_BROWSER_STRICT" not in app_calls[1][1]
+
+
+def test_ci_scope_bare_partial_clone_and_test_tiered_checkout_and_caches():
+    import yaml
+
+    ci = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    scope_job = ci["jobs"]["scope"]
+    assert "container" not in scope_job
+    scope_steps = {s["name"]: s for s in scope_job["steps"]}
+    assert scope_steps["Checkout"]["with"] == {"fetch-depth": 0, "fetch-tags": False, "filter": "blob:limit=256k"}
+    assert scope_steps["Cache scope Python tools"]["with"]["path"] == "/tmp/rosy-scope-tools"
+
+    test_steps = {s["name"]: s for s in ci["jobs"]["test"]["steps"]}
+    assert test_steps["Checkout"]["with"] == {"fetch-depth": "${{ !matrix.git_history && 1 || 0 }}", "fetch-tags": False}
+
+    digest = re.search(r"rosy-ci@sha256:([0-9a-f]{64})", ci["jobs"]["test"]["container"]["image"]).group(1)
+    rosidl_cache = test_steps["Cache ROS interfaces overlay"]
+    assert f"{digest[:12]}-rosidl-${{{{ hashFiles('contracts/ros_idl/**') }}}}" in rosidl_cache["with"]["key"]
+    assert "build/interfaces" in rosidl_cache["with"]["path"] and "install/interfaces" in rosidl_cache["with"]["path"]
+    assert "--packages-skip interfaces" in test_steps["Build (colcon)"]["run"]
+    assert "rm -rf build/interfaces install/interfaces" in test_steps["Build (colcon)"]["run"]
+    assert test_steps["Cache Pinky CPU torch tools"]["with"]["path"] == "/tmp/rosy-pinky-torch"
+
+    wheel_cmd = re.compile(r"pip3 wheel [^\n]*?((?:contracts|operations|middleware|integrations|applications)/\S+(?:\s+(?:contracts|operations|middleware|integrations|applications)/\S+)+)")
+    scope_pkgs = next(p for s in scope_job["steps"] if "Build ROS-free" in s["name"] for p in [re.findall(r"(?:contracts|operations|middleware|integrations|applications)/[a-z_/]+", s["run"])])
+    test_pkgs = wheel_cmd.search(test_steps["Build and install ROS-free platform API wheels"]["run"].replace("\\\n", " ")).group(1).split()
+    rolling = yaml.safe_load((ROOT / ".github" / "workflows" / "rolling-sweep.yml").read_text(encoding="utf-8"))
+    roll_plan_pkgs = next(re.findall(r"(?:contracts|operations|middleware|integrations|applications)/[a-z_/]+", s["run"]) for s in rolling["jobs"]["plan-sweep"]["steps"] if "Build ROS-free" in s["name"])
+    roll_run_pkgs = wheel_cmd.search(next(s["run"] for s in rolling["jobs"]["run-shard"]["steps"] if "Build platform wheels" in s["name"])).group(1).split()
+    assert scope_pkgs == test_pkgs == roll_plan_pkgs == roll_run_pkgs
+    assert "rm -rf build/interfaces install/interfaces" in next(s["run"] for s in rolling["jobs"]["run-shard"]["steps"] if "Build platform wheels" in s["name"])
+
+    rg = yaml.safe_load((ROOT / ".github" / "workflows" / "review-gate.yml").read_text(encoding="utf-8"))
+    assert rg["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+    rg_co = next(s["with"] for s in rg["jobs"]["review-gate"]["steps"] if "uses" in s and "actions/checkout" in s["uses"])
+    assert rg_co == {"fetch-depth": 0, "fetch-tags": False, "filter": "blob:none"}
+
+
+def test_container_test_jobs_mark_safe_directory_in_system_gitconfig():
+    import yaml
+
+    # conftest.py:isolate_worker overrides HOME per xdist worker (-n auto), hiding --global safe.directory.
+    ci = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]
+    rolling = yaml.safe_load((ROOT / ".github" / "workflows" / "rolling-sweep.yml").read_text(encoding="utf8"))["jobs"]
+    system_cmd = 'git config --system --add safe.directory "${GITHUB_WORKSPACE}"'
+    for job in (ci["test"], rolling["run-shard"]):
+        step = next(s for s in job["steps"] if s.get("name") == "Fix git safe directory (container)")
+        assert system_cmd in step["run"]
+    scope_step = next(s for s in ci["scope"]["steps"] if s.get("name") == "Fix git safe directory (container)")
+    assert "--system" not in scope_step["run"] and 'safe.directory "${GITHUB_WORKSPACE}"' in scope_step["run"]
+
+
+def test_ci_browser_readiness_enforces_noto_cjk_without_wqy(tmp_path):
+    import yaml
+
+    bash = (Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe"
+            if os.name == "nt" else Path(shutil.which("bash") or "/missing-bash"))
+    if not bash.is_file():
+        pytest.skip("Bash is required for the real CI shell-step fixture")
+    ci_steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    fleet_ready = next(
+        s["run"] for s in ci_steps
+        if s.get("name") == "Fleet browser readiness (Chromium and CJK fonts from the image)"
+    )
+    rolling_steps = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "rolling-sweep.yml").read_text(encoding="utf8")
+    )["jobs"]["run-shard"]["steps"]
+    rolling_opt = next(s["run"] for s in rolling_steps if s.get("name") == "Install optional suite tools")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in {
+        "dpkg": 'test "$1" = "-s" && test "$2" = "${STUB_WQY:-}"\n',
+        "fc-list": (
+            'test "${STUB_NOTO:-1}" = 1 && printf "%s\\n" "Noto Sans CJK JP:style=Regular"\n'
+            'awk "BEGIN { for (i = 0; i < 4000; i++) print \\"DejaVu Sans:style=Regular\\" }"\n'
+        ),
+        "python3": "exit 0\n",
+    }.items():
+        stub = bin_dir / name
+        stub.write_text("#!/bin/sh\n" + body, encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
+
+    base_env = {**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+                "INVS_JSON": "ROSY_RUN_BROWSER_TESTS=1", "SHARD_NAME": "test"}
+    cases = [("", "1", True), ("fonts-wqy-zenhei", "1", False),
+             ("fonts-wqy-microhei", "1", False), ("", "0", False)]
+    for label, script in (("ci.yml", fleet_ready), ("rolling-sweep.yml", rolling_opt)):
+        for wqy, noto, expect_ok in cases:
+            res = subprocess.run(
+                [str(bash), "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                cwd=tmp_path, env={**base_env, "STUB_WQY": wqy, "STUB_NOTO": noto},
+                capture_output=True, text=True, timeout=30,
+            )
+            assert (res.returncode == 0) is expect_ok, (label, wqy, noto, res.returncode, res.stderr)

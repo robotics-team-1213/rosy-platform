@@ -69,10 +69,23 @@ jobs:
         if: env.RECORDS_BOT_TOKEN != ''
         env:
           GH_TOKEN: ${{ env.RECORDS_BOT_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "No shard consolidation or generated record changes."
             exit 0
+          fi
+          pr="$(gh pr list --head bot/records-refresh --state open --json number --jq '.[0].number')"
+          if [ "$EVENT_NAME" = "push" ] && [ -n "$pr" ]; then
+            in_queue="$(gh api graphql -f owner="${REPO%%/*}" -f name="${REPO#*/}" -F number="$pr" \
+              -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){isInMergeQueue}}}' \
+              --jq '.data.repository.pullRequest.isInMergeQueue // false' 2>/dev/null || echo false)"
+            active="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?branch=bot/records-refresh&per_page=10" --jq '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "requested" or .status == "pending")] | length' 2>/dev/null || echo 0)"
+            if [ "$in_queue" = "true" ] || [ "${active:-0}" -gt 0 ]; then
+              echo "Skipping push-triggered refresh: PR #$pr is in merge queue ($in_queue) or has $active active CI run(s)."
+              exit 0
+            fi
           fi
           git config user.name "rosy-records-bot"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -82,7 +95,6 @@ jobs:
           git push -f origin bot/records-refresh
           head="$(git rev-parse HEAD)"
           body="Records bot (D-1061): numbered API fragments into the reference header, sections, history and CONTRACT; folded log shards; added ADR Log rows; refreshed index/STATUS."$'\n\n'"Overlap-Review: self (scheduled generated records consolidation)"
-          pr="$(gh pr list --head bot/records-refresh --state open --json number --jq '.[0].number')"
           if [ -n "$pr" ]; then
             gh pr edit "$pr" --body "$body"
           else

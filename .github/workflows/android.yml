@@ -13,6 +13,7 @@ on:
       - "test/fixtures/protocol/**"
       - "shared/web/**"
       - "shared/android/**"
+      - "!**/*.md"
   pull_request:
     paths:
       - "operations/site_ui/cam/**"
@@ -21,6 +22,7 @@ on:
       - "test/fixtures/protocol/**"
       - "shared/web/**"
       - "shared/android/**"
+      - "!**/*.md"
 
 jobs:
   android-unit:

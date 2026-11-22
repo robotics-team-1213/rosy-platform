@@ -225,6 +225,20 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.match(iSpecs[2].telemetryRows[3][1], /홀드 활성/);
 });
 
+test("arm joint snapshot states freshness honestly and never invents a home pose", () => {
+  const joints = {joints_deg: [0.8, -62.5, 53.3, 51.7, 45.0, 50.0], folded: true, age_s: 2};
+  for (const [fresh, badge] of [[true, "LIVE"], [false, "지연 스냅샷"], [undefined, "신선도 미확인"], ["yes", "신선도 미확인"]]) {
+    const specs = inspectorSpecs({arm_live_states: {arm_a: {...joints, fresh}}});
+    assert.match(specs[1].telemetryRows[1][1], new RegExp(`\\[${badge} · 2초 전\\]`));
+  }
+  // 관측도 완료 스냅샷도 없으면 지어낸 '홈 대기 (완료 스냅샷)' 대신 카드 요약 문구를 그대로 쓴다.
+  const empty = inspectorSpecs({});
+  assert.equal(empty[0].telemetryRows[1][1], visualCardSpecs({})[0].folded_state);
+  assert.ok(!empty[0].telemetryRows[1][1].includes("완료 스냅샷"));
+  assert.match(inspectorSpecs({cells: {cell_s: {gate: {phase: "IDLE"}}}})[0].telemetryRows[1][1],
+    /folded: true \(홈 대기\)/);
+});
+
 test("cell task refresh renders across the main/views module split", async () => {
   // Guards against state left behind in one module after a split (ReferenceError in strict ES modules).
   const node = () => ({

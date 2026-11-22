@@ -1,6 +1,8 @@
 // "기기 연결" 패널의 로봇 등록 구역 (D-361 1, 8, 10, 11, 12).
 // 브라우저는 로봇에 닿지 않고 토큰을 보지 않는다. 코드는 Fleet 서버로만 간다.
 // 위쪽은 DOM 없는 순수 함수(node 시험 대상), 아래쪽 createEnrollmentPanel 이 화면 배선이다.
+import { setOffBy } from "/common/cause-line.js";
+import { isOperator, OPERATOR_REASON } from "/console/assets/authorization.js";
 
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createRequest } from "/common/request.js";
@@ -87,7 +89,7 @@ export function moveDoneLines(row) {
 export const MOVE_CHECK = "코드를 넣기 전에 이 주소가 로봇 화면에 보이는 IP와 같은지 확인하세요"
   + "(LCD 정보 화면의 이름 아래 주소 줄). 다르면 옮기지 마세요 — 같은 이름을 다른 기기가 광고하고 있을 수 있습니다.";
 
-export const CONSUMED_REASONS = {
+const CONSUMED_REASONS = {
   role_too_low: "원인: 코드 역할이 operator보다 낮습니다.",
   admin_code_refused: "원인: 관리자 역할 코드는 사이트 등록에 쓰지 않습니다.",
   wrong_robot: "원인: 선택한 행과 다른 로봇이 답했습니다.",
@@ -167,7 +169,7 @@ const ACTION_LABELS = {
 };
 
 export function canManage(identity) {
-  return identity?.role === "operator" && Boolean(identity.principal_id)
+  return isOperator(identity?.role) && Boolean(identity.principal_id)
     && identity.principal_id !== "site-console";
 }
 
@@ -211,9 +213,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     state.target = null;
     el("enroll-dialog")?.close?.();
     el("enroll-code").value = "";
-    el("enroll-submit").disabled = Date.now() < state.blockedUntil;
-    if (el("enroll-submit").disabled) el("enroll-submit").setAttribute("reason", "잠시 뒤 다시 시도");
-    else el("enroll-submit").removeAttribute("reason");
+    setOffBy(el("enroll-submit"), Date.now() < state.blockedUntil ? "잠시 뒤 다시 시도" : "");
   });
 
   // 분류(detail.code/reason)를 잃지 않으려고 셸의 call() 대신 쓴다.
@@ -311,11 +311,9 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
       if (life.current()) {
         state.busy = false;
         const blocked = Date.now() < state.blockedUntil;
-        el("enroll-submit").disabled = blocked;
-        if (blocked) el("enroll-submit").setAttribute("reason", "잠시 뒤 다시 시도");
-        else el("enroll-submit").removeAttribute("reason");
+        setOffBy(el("enroll-submit"), blocked ? "잠시 뒤 다시 시도" : "");
         if (state.blockedUntil) {
-          scope.timeout(() => { el("enroll-submit").disabled = false; el("enroll-submit").removeAttribute("reason"); render(); },
+          scope.timeout(() => { setOffBy(el("enroll-submit"), ""); render(); },
             Math.max(0, state.blockedUntil - Date.now()));
         }
       }
@@ -473,9 +471,7 @@ export function createEnrollmentPanel({ scope, headers, identity, log, dialogs, 
     banner.hidden = alarms.length === 0;
     banner.textContent = alarms.map((a) => `${a.robot_id}: ${ALARM_TEXT[a.code] || ALARM_TEXT.ROBOT_ADDRESS_UNVERIFIED}`).join(" · ");
     const addBlocked = !manage || Date.now() < state.blockedUntil;
-    el("enroll-address-add").disabled = addBlocked;
-    if (addBlocked) el("enroll-address-add").setAttribute("reason", !manage ? "운영자 권한이 필요합니다" : "잠시 뒤 다시 시도");
-    else el("enroll-address-add").removeAttribute("reason");
+    setOffBy(el("enroll-address-add"), addBlocked ? (!manage ? OPERATOR_REASON : "잠시 뒤 다시 시도") : "");
   }
 
   function decorateDiscoveryRow(item, device) {

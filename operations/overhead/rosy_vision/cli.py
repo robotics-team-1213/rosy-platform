@@ -211,13 +211,15 @@ VISION_STATS_INTERVAL_S = 30.0
 
 
 def _vision_stats_lines(ingest, workers) -> list[str]:
-    """Per source: the ingest line (or "no camera connected") and the Fleet POST counters."""
+    """Report ingest for configured sources and Fleet POST counters for tracking workers."""
+    guards = {worker.source_id: worker.guard for worker in workers}
+    preview_sources = sorted(ingest.source_tokens.keys() - guards.keys())
     lines = []
-    for worker in workers:
-        snap = ingest.stats(worker.source_id)
-        lines.append(f"{worker.source_id}: no camera connected" if snap is None
-                     else _format_stats_line(worker.source_id, snap))
-        lines.append(worker.guard.stats_line())
+    for source in (*guards, *preview_sources):
+        snap = ingest.stats(source)
+        lines.append(f"{source}: no camera connected" if snap is None else _format_stats_line(source, snap))
+        if source in guards:
+            lines.append(guards[source].stats_line())
     return lines
 
 

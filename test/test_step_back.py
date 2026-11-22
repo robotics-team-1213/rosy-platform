@@ -211,3 +211,20 @@ def test_size_limits_exempt_nothing_by_name_but_not_records_or_pure_renames(tmp_
         g(repo, "mv", f"mv/f{i}.py", f"mv2/f{i}.py")
     g(repo, "commit", "-q", "-m", "pure renames")
     assert step_back.size_violations(repo, "main", "renames") == []
+
+
+def test_pr_of_commits_maps_multiple_prs_with_direct_main_and_merge_commits(tmp_path):
+    repo = make_repo(tmp_path)
+    g(repo, "checkout", "-q", "main")
+    commit(repo, {"direct.py": "d = 1\n"}, "direct commit on main")
+    g(repo, "checkout", "-q", "-b", "oldbranch", "main~2")
+    commit(repo, {"old.py": "o = 1\n"}, "from old base")
+    c_old = g(repo, "rev-parse", "HEAD")
+    g(repo, "checkout", "-q", "main")
+    g(repo, "merge", "--no-ff", "-q", "-m", "Merge pull request #10 from team/old", "oldbranch")
+    m10 = g(repo, "rev-parse", "HEAD")
+    c_pr1 = g(repo, "rev-parse", "main~3^2")
+    c_pr2 = g(repo, "rev-parse", "main~2^2")
+    c_base = g(repo, "rev-list", "--max-parents=0", "HEAD")
+    got = step_back.pr_of_commits(repo, "main", {c_pr1, c_pr2, c_old, m10, c_base}, time.time() - 3600)
+    assert got[c_pr1][0] == 1 and got[c_pr2][0] == 2 and got[c_old][0] == 10 and got[m10][0] == 10 and c_base not in got

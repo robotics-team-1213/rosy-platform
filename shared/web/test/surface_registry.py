@@ -175,8 +175,8 @@ def _pages(base: Path, path: str, suffix: str = ".html") -> list[Path]:
         return []
     if git_available(base):
         out = _git(base, "ls-files", "-c", "-o", "--exclude-standard", "--", path)
-        return [base / line for line in out.stdout.splitlines() if line.endswith(suffix)]
-    return sorted(target.rglob(f"*{suffix}"))
+        return [base / line for line in out.stdout.splitlines() if line.endswith(suffix) and "/vendor/" not in line]  # vendored third-party code (C15 three.js) is not ours to scan
+    return sorted(p for p in target.rglob(f"*{suffix}") if "vendor" not in p.relative_to(target).parts)
 
 
 def _dark_ground(base: Path) -> str | None:

@@ -5,6 +5,7 @@ Single responsibility: non-MuJoCo system identification helpers (`from_registers
 `one_sweep`, `friction`, `verdict`, `promote`, `survey`) and shared constants for OMX physics fitting.
 """
 import datetime as dt
+import json
 import math
 from pathlib import Path
 import sys
@@ -158,8 +159,111 @@ def friction(runs, motor="XL430-W250", volts=11.7):
 
 
 # -- promote --------------------------------------------------------------------------------------------------------------------
+MIN_GRASP_SEEDS = 9  # the G-23 probe size: a 0/9 grasp was what exposed the best-RMS candidate, so fewer rows cannot clear one
+
+
+MIN_REAL_N = 10  # pooled known real rows: at n=10 a Wilson 95% interval is still about +-0.25 wide, the least that can tell a sim p of .8 from .3
+P_CLIP = (.02, .98)  # a sim cell of 0/n or n/n must not give -inf: one real surprise costs ln(1/.02) = 3.9 nats
+
+
+def _jsonl(path):
+    return [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.startswith("{")]
+
+
+def real_score(trials, real, base, candidate):
+    """How well each physics predicts the real attempts. Real rows carry no physics tag (the real arm runs real physics): per
+    (carry candidate, tier) cell with real rows, the sim success rate p of `trials` under a physics is scored against the real k of n
+    by the binomial log-likelihood k ln p + (n-k) ln(1-p), p clipped to P_CLIP, summed over the cells both physics have trials for.
+    UNKNOWN rows and `shadowed` rows (a site's own value won, the offer never ran) are counted apart, never in n. Under MIN_REAL_N pooled
+    rows the status is "insufficient" and no score is compared."""
+    sim, cells = {}, {}
+    for r in trials:
+        k = sim.setdefault((r["cand"], r["tier"], r["physics"]), [0, 0])
+        k[0] += bool(r["ok"])
+        k[1] += 1
+    out = dict(unknown=0, shadowed=0)
+    for r in real:
+        if r["outcome"] in ("unknown", "shadowed"):
+            out[r["outcome"]] += 1
+        elif r["outcome"] in ("ok", "fail"):
+            c = cells.setdefault((r["candidate"], r["tier"]), [0, 0])
+            c[0] += r["outcome"] == "ok"
+            c[1] += 1
+    cells = {c: v for c, v in cells.items() if (*c, base) in sim and (*c, candidate) in sim}  # a cell one physics never ran says nothing about the pair
+    n = sum(v[1] for v in cells.values())
+    out.update(n=n, min_n=MIN_REAL_N, status="checked" if n >= MIN_REAL_N else "insufficient")
+    if out["status"] == "checked":
+        def ll(name):
+            tot = 0.0
+            for (c, t), (k, m) in cells.items():
+                p = min(max(sim[(c, t, name)][0] / sim[(c, t, name)][1], P_CLIP[0]), P_CLIP[1])
+                tot += k * math.log(p) + (m - k) * math.log(1 - p)
+            return round(tot, 4)
+        out.update(base_ll=ll(base), candidate_ll=ll(candidate), real_k=sum(v[0] for v in cells.values()))
+    return out
+
+
+def task_from_files(base_stack, stack, grasp, base="design", candidate=None, real=None, sweep=None):
+    """The task field of a fit: the teacher `stack` result of the base and of the candidate (their steps_pass/steps) and the
+    skill `--skill grasp --servo-lag` rows of the candidate, one json row per line (judge "held": result pass).
+    The evidence is bound to the names: the base stack ran physics `base`, the candidate stack and every grasp row ran `candidate`,
+    on the same seed, from two different files.
+    `real` + `sweep` (optional): omx_carry_sweep ingest's real_outcomes.jsonl (no physics tag needed) and the sweep dir holding
+    trials.jsonl, scored by real_score. Real rows only add a refusal in task_gate, they cannot stand in for the sim evidence."""
+    if not candidate:
+        raise SystemExit("task: name the candidate physics the stack and grasp runs used (--candidate)")
+    if Path(base_stack).resolve() == Path(stack).resolve():
+        raise SystemExit("task: the base and candidate stack results are one file")
+    load = lambda f: json.loads(Path(f).read_text(encoding="utf-8"))  # noqa: E731
+    rows = _jsonl(grasp)
+    b, c = load(base_stack), load(stack)
+    phys = lambda d: (d.get("choices") or {}).get("physics", "design")  # noqa: E731
+    if phys(b) != base:
+        raise SystemExit(f"task: the base stack ran physics {phys(b)}, not {base}")
+    if phys(c) != candidate:
+        raise SystemExit(f"task: the candidate stack ran physics {phys(c)}, not {candidate}")
+    if b.get("seed") != c.get("seed"):
+        raise SystemExit(f"task: the stack runs used seeds {b.get('seed')} and {c.get('seed')}")
+    other = sorted({str(r.get("physics")) for r in rows if r.get("physics") != candidate})
+    if other:
+        raise SystemExit(f"task: grasp rows ran physics {', '.join(other)}, not {candidate}")
+    pick = lambda d: [d["steps_pass"], d["steps"]]  # noqa: E731
+    out = dict(base=base, candidate=candidate, seed=b.get("seed"), stack=dict(base=pick(b), candidate=pick(c)),
+                grasp=dict(held=sum(r.get("result") == "pass" for r in rows), total=len(rows)))
+    if real:
+        if not sweep:
+            raise SystemExit("task: --real needs --sweep (the sweep dir with trials.jsonl) to score each physics against the real rows")
+        out["real"] = real_score(_jsonl(Path(sweep) / "trials.jsonl"), _jsonl(real), base, candidate)
+    return out
+
+
+def task_gate(task):
+    """(ok, why): the candidate passes the stack steps at least as often as the base (and some), and holds the grasp probe in every
+    seed of at least MIN_GRASP_SEEDS. A small joint RMS alone proved nothing: servo-friction-20261109 had the best RMS and grasped 0/9 (G-23)."""
+    if not task:
+        return False, "no task result: run omx_sysid.py task (stack pass vs base + servo-lag grasp probe); RMS alone cannot promote"
+    (bp, bn), (cp, cn) = task["stack"]["base"], task["stack"]["candidate"]
+    held, total = task["grasp"]["held"], task["grasp"]["total"]
+    if bn != cn or not cn:
+        return False, f"stack runs differ in size (base {bp}/{bn}, candidate {cp}/{cn})"
+    if cp < bp or not cp:
+        return False, f"task worse: stack pass {bp}/{bn} -> {cp}/{cn}"
+    if total < MIN_GRASP_SEEDS or held < total:
+        return False, f"task worse: servo-lag grasp held {held}/{total} (needs every one of at least {MIN_GRASP_SEEDS} seeds)"
+    ok = f"stack pass {bp}/{bn} -> {cp}/{cn}, grasp held {held}/{total}"
+    real = task.get("real")
+    if not real:
+        return True, ok
+    extra = f" (unknown {real.get('unknown', 0)}, shadowed {real.get('shadowed', 0)} not counted)"
+    if real.get("status") != "checked":  # neutral: too few rows to refuse or to confirm
+        return True, f"{ok}; insufficient real evidence (n={real.get('n', 0)} < {real.get('min_n', MIN_REAL_N)}), real check neutral{extra}"
+    if real["candidate_ll"] < real["base_ll"]:  # real outcomes only refuse; a real success never lifts a sim shortfall (checked above)
+        return False, f"real outcomes worse: sim predicts them with log-likelihood {real['candidate_ll']} vs base {real['base_ll']} over n={real['n']}{extra}"
+    return True, f"{ok}; real log-likelihood {real['candidate_ll']} vs base {real['base_ll']} over n={real['n']}, not refused{extra}"
+
+
 def verdict(fit):
-    """(ok, why): no constant on its fit bound (an edge value is not identified: it soaks up what the model lacks; a
+    """(ok, why): the task gate (task_gate), no constant on its fit bound (an edge value is not identified: it soaks up what the model lacks; a
     passive term at its zero floor is fine, it is just not needed), the
     held-out mean lower than the base's and no joint worse by more than WORSE_DEG."""
     bounds = fit.get("bounds") or BOUNDS
@@ -176,16 +280,22 @@ def verdict(fit):
         return False, 'a held-out score needs at least two episodes'
     if mn >= mb:
         return False, f"held-out mean {mb:.3f} -> {mn:.3f} deg: no better than {fit['base']}"
-    return True, f"held-out mean {mb:.3f} -> {mn:.3f} deg over {len(fit['episodes']['hold'])} episodes"
+    ok, why = task_gate(fit.get("task"))
+    if not ok:
+        return False, why
+    return True, f"held-out mean {mb:.3f} -> {mn:.3f} deg over {len(fit['episodes']['hold'])} episodes; {why}"
 
 
 def promote(fit, name, evidence=None, path=physics.FILE, base="design"):
     """Append `fit` as candidate NAME. A servo fit keeps its own base; a friction reading sits on `base`."""
     import yaml
     friction_fit = fit.get("schema") == FRICTION_SCHEMA
-    ok, why = (fit["ok"], fit["why"]) if friction_fit else verdict(fit)
+    ok, why = verdict(fit) if not friction_fit else ((fit["ok"], fit["why"]) if not fit["ok"] else task_gate(fit.get("task")))
     if not ok:
         raise SystemExit(f"not promoted: {why}")
+    bound = fit.get("task") or {}  # the task evidence ran this candidate on this base
+    if bound.get("candidate") != name or bound.get("base") != (base if friction_fit else fit["base"]):
+        raise SystemExit(f"not promoted: the task result was run for {bound.get('base')} -> {bound.get('candidate')}, not {fit.get('base', base)} -> {name}")
     doc = physics.load(path)
     if name in doc["candidates"]:
         raise SystemExit(f"candidate {name} exists; pick a new name (candidates are never overwritten)")
@@ -251,6 +361,7 @@ __all__ = [
     "HOLD",
     "MIN_SAMPLES",
     "MIN_SNR",
+    "MIN_GRASP_SEEDS",
     "MOTORS",
     "NO_LOAD",
     "PAN",

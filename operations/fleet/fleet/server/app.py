@@ -378,12 +378,13 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         autonomous_robots=autonomous_robots, incident_model_config=incident_model_config,
         vision_signer=vision_signer, vision_sources=vision_sources)
 
+    from fleet.server.channel.execution.outcomes.reconcile import task_result as native_task_result
     install_task_dispatch_routes(
         app, console=console, task_service=task_service, configured_omx=configured_omx,
         stop_transport=stop_transport, stop_targets=stop_targets, require_viewer=require_viewer,
         require_operator=require_operator, require_named_operator=require_named_operator,
         read_guard=read_guard, operator_guard=operator_guard, drive_cancel=drive_cancel,
-        convert_site_goal=site_goal_in_robot_frame)
+        convert_site_goal=site_goal_in_robot_frame, native_task_result=native_task_result)
     install_berth_parking_routes(
         app, console=console, task_service=task_service, read_guard=read_guard,
         operator_guard=operator_guard, require_operator=require_operator,

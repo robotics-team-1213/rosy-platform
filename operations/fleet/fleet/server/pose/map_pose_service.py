@@ -22,6 +22,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
+from fleet.server.offline_pin import OfflinePinStore
 from rosy.world.state.projections.map_pose import (LOCALIZED, TRACK, MapPose, MapPoseConfig, MapPoseTracker,
                                          odom_from_snapshot, sighting_from_row)
 from fleet.swarm.transport import RobotApiError
@@ -65,6 +66,7 @@ class MapPoseService:
         self._numbers: dict[tuple[str, bool], int] = {}
         from fleet.server.map_pose_scope import MapPoseScopes
         self._source_scopes = MapPoseScopes(self)
+        self._offline_pins = OfflinePinStore()
         self._update_listeners: list = []
 
     def add_update_listener(self, listener: Callable[[Optional[str]], None]) -> None:
@@ -112,6 +114,7 @@ class MapPoseService:
     def _tracker(self, robot_id: str) -> Optional[MapPoseTracker]:
         roster = set(self._robot_ids())
         self._source_scopes.prune(roster)
+        self._offline_pins.prune(roster)
         for gone in set(self._trackers) - roster:     # a robot that left starts over if it returns
             del self._trackers[gone]
         for key in [key for key in self._kept if key[0] not in roster]:   # and its kept reads
@@ -198,6 +201,8 @@ class MapPoseService:
             return
         if not isinstance(state, Mapping):
             return
+        if state:
+            self._offline_pins.clear(robot_id)
         peers = state.get("peers")
         if isinstance(peers, list):
             self._observe_peers(peers)
@@ -349,6 +354,15 @@ class MapPoseService:
         refused = tracker.add_pin(pose, now, active)
         return refused, tracker.pose(now, active)
 
+    def pin_offline(self, robot_id: str, pose: tuple[float, float, float],
+                    *, robot_online: bool = False) -> tuple[Optional[str], Optional[dict]]:
+        tracker = self._tracker(robot_id)
+        latest = tracker.latest_odom_stamp if tracker is not None else None
+        has_odom = latest is not None and 0.0 <= self._wall() - latest <= self.config.max_odom_age_s
+        return self._offline_pins.pin(
+            robot_id, pose, knows=self.knows(robot_id),
+            active_map_id=self.active_map_id(), robot_online=robot_online or has_odom)
+
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
         """The robot's map pose for trip execution and the D-511 lane-compliance monitor
         (D-511 2 widens D-494 3); None for a robot not on the roster."""
@@ -395,6 +409,7 @@ class MapPinRequest(BaseModel):
     x: float = Field(ge=-1000.0, le=1000.0, allow_inf_nan=False)
     y: float = Field(ge=-1000.0, le=1000.0, allow_inf_nan=False)
     yaw: float = Field(ge=-2 * math.pi, le=2 * math.pi, allow_inf_nan=False)
+    offline_parked: bool = False
 
 
 def install_map_pin_route(app, *, service: MapPoseService, require_named_operator,
@@ -412,6 +427,22 @@ def install_map_pin_route(app, *, service: MapPoseService, require_named_operato
             raise refuse(404, "UNKNOWN_ROBOT", "robot is not on the roster")
         if busy(robot_id):
             raise refuse(409, "MAP_PIN_TRIP_ACTIVE", "the robot is on a trip; stop it before pinning")
+        if body.offline_parked:
+            robot_online = False
+            if service._gather_rest is not None:
+                try:
+                    robot_online = bool(await service.state(robot_id, max_age_s=0.0))
+                except (HubError, RobotApiError, OSError, httpx.HTTPError, asyncio.TimeoutError):
+                    pass
+            refused, row = service.pin_offline(robot_id, (body.x, body.y, body.yaw), robot_online=robot_online)
+            if refused == "UNKNOWN_ROBOT":
+                raise refuse(404, "UNKNOWN_ROBOT", "robot is not on the roster")
+            if refused is not None:
+                raise refuse(409, f"MAP_PIN_{refused}", f"cannot pin offline robot: {refused.lower()}")
+            record_event("map_pin", principal.principal_id, {
+                "robot_id": robot_id, "x": body.x, "y": body.y, "yaw": body.yaw,
+                "map_id": row["map_id"], "offline_parked": True})
+            return row
         before = service.arbitrated_pose(robot_id)
         refused, pose = await service.pin(robot_id, (body.x, body.y, body.yaw))
         if refused == "UNKNOWN_ROBOT":

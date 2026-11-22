@@ -10,6 +10,8 @@ from __future__ import annotations
 
 JOB_WEIGHT = 120
 DIR_WEIGHT = 8
+MAX_PACKED_WEIGHT = 980  # ~2 Fleet shards (~10 min on CI -n auto); prevents pack_to_limit from exceeding the 25 min timeout
+MAX_PACKED_FILES = 500   # stops unmeasured root-test shards (~395 files, 7-14 min each) from merging past the 25 min timeout
 
 
 def _under(path: str, prefix: str) -> bool:
@@ -41,30 +43,63 @@ def entries(invocations, matrix) -> list[dict]:
     return [{"name": f"affected-{i + 1}", "invocations": [inv], "ros": ros} for i, (ros, inv) in enumerate(by_ros)]
 
 
+def _entry_paths(entry: dict) -> list[str]:
+    return [p for inv in entry["invocations"] for p in inv if not p.startswith("-")]
+
+
+def _entry_weight(entry: dict, seconds: dict[str, int]) -> int:
+    return sum(seconds.get(p.rsplit("/", 1)[-1], 1) if p.endswith(".py") else DIR_WEIGHT
+               for p in _entry_paths(entry))
+
+
 def consolidate(entries: list[dict], seconds: dict[str, int]) -> list[dict]:
     """Merge same-environment ``affected-*`` runners until a job's weight passes JOB_WEIGHT (2026-11-20, ralph).
 
     A job runs its invocations in order, so the packer's collision-free groups stay separate invocations
     while a small selection stops paying one runner per group. Weight is the measured Fleet seconds per
     file (1 by default) and DIR_WEIGHT per directory. shortcut: coarse weights; tune on CI seconds."""
-    def weight(entry):
-        paths = [p for inv in entry["invocations"] for p in inv if not p.startswith("-")]
-        return sum(seconds.get(p.rsplit("/", 1)[-1], 1) if p.endswith(".py") else DIR_WEIGHT for p in paths)
-
     # A run is as long as its slowest job, so smaller jobs may fill up to that size at no cost in time and save
     # their own setup (about 100 s a job). 2026-11-21: 754 jobs in 65 runs, 29% of the runner time was job setup,
     # and with 20 concurrent jobs for the organisation the median run waited a minute for a runner.
-    cap = max([JOB_WEIGHT, *(weight(e) for e in entries if e["name"].startswith("affected-") and e.get("kind") == "pytest")])
+    cap = max([JOB_WEIGHT, *(_entry_weight(e, seconds) for e in entries if e["name"].startswith("affected-") and e.get("kind") == "pytest")])
     out: list[tuple[dict, int]] = []
     for entry in entries:
-        w = weight(entry)
+        w = _entry_weight(entry, seconds)
         host = next((o for o in out if entry["name"].startswith("affected-") and o[0]["name"].startswith("affected-")
                      and o[0]["ros"] == entry["ros"] and o[0]["kind"] == entry["kind"] == "pytest"
                      and o[0].get("colcon", True) == entry.get("colcon", True)  # a guard-only runner skips colcon
                      and o[1] + w <= cap), None)
         if host:
             host[0]["invocations"] = [*host[0]["invocations"], *entry["invocations"]]
+            if entry.get("git_history"):
+                host[0]["git_history"] = True
             out[out.index(host)] = (host[0], host[1] + w)
         else:
             out.append((dict(entry), w))
     return [e for e, _ in out]
+
+
+def pack_to_limit(entries: list[dict], seconds: dict[str, int], limit: int,
+                  max_weight: int = MAX_PACKED_WEIGHT, max_files: int = MAX_PACKED_FILES) -> list[dict]:
+    """Merge lightest compatible ``affected-*`` jobs when a selection exceeds ``limit`` without breaching time/file caps."""
+    out = [dict(e) for e in entries]
+    while len(out) > limit:
+        pairs = [
+            (_entry_weight(out[i], seconds) + _entry_weight(out[j], seconds), i, j)
+            for i in range(len(out))
+            if out[i]["name"].startswith("affected-") and out[i].get("kind") == "pytest"
+            for j in range(i + 1, len(out))
+            if out[j]["name"].startswith("affected-") and out[j].get("kind") == "pytest"
+            and out[i]["ros"] == out[j]["ros"]
+            and bool(out[i].get("colcon", True)) == bool(out[j].get("colcon", True))
+            and _entry_weight(out[i], seconds) + _entry_weight(out[j], seconds) <= max_weight
+            and len(_entry_paths(out[i])) + len(_entry_paths(out[j])) <= max_files
+        ]
+        if not pairs:
+            break
+        _, i, j = min(pairs)
+        out[i]["invocations"] = [*out[i]["invocations"], *out[j]["invocations"]]
+        if out[j].get("git_history"):
+            out[i]["git_history"] = True
+        out.pop(j)
+    return out

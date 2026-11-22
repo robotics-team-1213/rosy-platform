@@ -1,5 +1,6 @@
 // 지도 위 보기. 작동하는 것은 천장 영상과, 막힘 큐가 받아 둔 전방 사진뿐이다.
 // 로봇 API 를 부르지 않고, 천장 원본은 camera-backdrop 이 둔 #map-birdseye 한 장이다.
+import { setOffBy } from "/common/cause-line.js";
 
 /** The robot the map is already about: the open card, else the armed goal, else the only robot. */
 export function shownRobot(view) {
@@ -18,9 +19,7 @@ export function createDeviceWatch({ scope, el, view }) {
     const frame = el("map-birdseye");
     const live = Boolean(frame && !frame.hidden);
     ceiling.setAttribute("aria-pressed", String(stage.dataset.watch !== "off"));
-    ceiling.disabled = !live;
-    if (live) ceiling.removeAttribute("reason");
-    else ceiling.setAttribute("reason", "영상 대기");
+    setOffBy(ceiling, live ? "" : "영상 대기");
   }
 
   function paintFront(robot) {

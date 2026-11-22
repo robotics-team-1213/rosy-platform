@@ -1,3 +1,4 @@
+import { setOffBy } from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // Fleet adapter: generic point edits enter the existing draft validators here.
 import {appendSurveyElement, editSurveyElement, removeSurveyElement} from '/console/assets/site-map-edit.js';
@@ -129,8 +130,7 @@ export function createMapEditor({svg, map, view, changed, reason}) {
     const blocked = reason() || (!$('editor-enabled').checked ? '직접 편집을 먼저 켜세요' : '');
     for (const id of ['editor-finish', 'editor-add-point', 'editor-apply', 'editor-delete', 'editor-delete-vertex',
       'editor-split', 'editor-join']) {
-      $(id).disabled = Boolean(blocked);
-      if (blocked) $(id).setAttribute('reason', blocked); else $(id).removeAttribute('reason');
+      setOffBy($(id), blocked);
     }
     svg.setAttribute('tabindex', '0');
     const row = current();

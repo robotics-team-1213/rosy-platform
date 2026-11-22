@@ -227,13 +227,33 @@ def test_what_this_prs_own_ci_run_executes_is_not_lab_evidence(monkeypatch):
     assert [w for inv in _required(monkeypatch, [], changed) for w in inv if w.endswith(".py")] == [lab_only]
 
 
+def test_required_lab_invocations_deduplicates_browser_files_already_in_lab(monkeypatch):
+    import browser_scope
+
+    bare = next(iter(pr_land.work_queue.LAB_ONLY))
+    chunked = "test/test_measured_calibration_browser.py"
+    extra_only = "integrations/simulation/gazebo/test/test_extra_browser.py"
+    monkeypatch.setattr(browser_scope, "targets", lambda ch: [bare, chunked, extra_only])
+
+    result = _required(
+        monkeypatch,
+        [[bare], ["ROSY_RUN_BROWSER_TESTS=1", chunked]],
+        changed=["shared/web/ui.js"],
+    )
+    assert result[:2] == [[bare], ["ROSY_RUN_BROWSER_TESTS=1", chunked]]
+    assert sorted(result[2:]) == sorted([
+        ["ROSY_RUN_BROWSER_TESTS=1", bare],
+        ["ROSY_RUN_BROWSER_TESTS=1", extra_only],
+    ])
+
+
 def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypatch):
     seen = []
     monkeypatch.undo()  # the autouse fixture stubs preflight for the other tests
     monkeypatch.setenv("ROSY_STEP_BACK", "off")  # the step-back check has its own test below
     monkeypatch.setattr(pr_land, "_run", lambda cmd, cwd, **k: seen.append(cmd[1:]))
     pr_land.preflight(Path("."), "origin/main")
-    assert seen == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
+    assert sorted(seen) == [["tools/harness/safety_review.py", "origin/main", "HEAD"], ["tools/harness/size_range.py", "origin/main", "HEAD"]]
 
     def refuse(cmd, cwd, **k):
         raise SystemExit("no Safety-Review trailer")

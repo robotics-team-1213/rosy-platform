@@ -20,6 +20,7 @@ from browser_harness import launch_options, safe_http_server  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = {"/common/webrtc.js": ROOT / "shared/web/webrtc.js",
+         "/common/cause-line.js": ROOT / "shared/web/cause-line.js",
          "/common/fleet-client.js": ROOT / "shared/web/fleet-client.js",
          "/common/request.js": ROOT / "shared/web/request.js",
          "/console/assets/app-runtime.js": ROOT / "applications/fleet/web/runtime.js",

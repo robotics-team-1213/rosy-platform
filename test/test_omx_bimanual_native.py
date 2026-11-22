@@ -461,3 +461,94 @@ def test_known_thermal_violation_persists_only_after_all_buses_off(module, tmp_p
         together.send(action)
     assert len(logged) == 2 and all(row['event'] == 'fault' for row in logged)
     assert logged[0]['motors'][0]['temperature_c'] == 70
+
+
+def test_a_stall_hold_on_one_arm_stops_the_other_in_the_same_tick(module):
+    together, motions, action, clock = pairs(module)
+    arm_a, arm_b = motions['arm_a'], motions['arm_b']
+    tpd = 4096 / 360
+
+    def act():
+        return {name + '.' + key: value for name, m in motions.items() for key, value in fakes.action(m.leader).items()}
+
+    def tick():
+        clock[0] += 0.05
+        together.send(act())
+        arm_b.follower.raw.update(arm_b.follower.goals)  # arm_b follows its goals; arm_a stays blocked
+    together.send(act())
+    for _ in range(14):
+        tick()
+    assert arm_a.tracking and arm_b.tracking
+    arm_a.leader.raw['shoulder_pan'] += 40 * tpd
+    hold_tick = frozen_goals = None
+    for index in range(150):
+        arm_b.leader.raw['shoulder_pan'] += 0.3 * tpd  # arm_b would keep moving
+        before = dict(arm_b.follower.goals)
+        tick()
+        if hold_tick is None and arm_a.has_stall_hold():
+            hold_tick, frozen_goals = index, dict(arm_b.follower.goals)
+            assert frozen_goals == before  # the same tick: arm_b did not advance
+        elif hold_tick is not None:
+            assert arm_b.follower.goals == frozen_goals
+    assert hold_tick is not None
+
+
+def test_the_bimanual_loop_boundary_behaves_as_origin_main_a_gap_over_the_stale_limit_still_ends_the_session(module, monkeypatch):
+    # origin/main: no boundary watch, no declared pause, no resume. A gap over the stale limit is the stale error and the both-arms torque cut.
+    assert not hasattr(module, 'BoundaryWatch') and not hasattr(module.BimanualMotion, 'cut_arm')
+    together, motions, action, clock = pairs(module)
+    together.send(action)
+    clock[0] += 29.0  # an episode save between two record loops
+    with pytest.raises(ValueError, match='stale'):
+        together.send(action)
+    for arm in motions.values():
+        assert arm.failed and not any(arm.follower.torque.values()) and not any(arm.leader.torque.values())
+    for arm in motions.values():
+        assert arm.boundary is False  # nothing marks a boundary any more
+
+
+def test_a_saturated_gripper_squeeze_in_one_arm_relaxes_and_cuts_neither_arm(module):
+    together, motions, action, clock = pairs(module)
+    a, b = motions['arm_a'], motions['arm_b']
+    writes = []
+    for arm in (a, b):
+        for bus in (arm.follower, arm.leader):
+            bus.disable_torque = lambda *args, **kw: writes.append(args)
+
+    def actions():
+        return {f"{name}.{key}": value for name, motion in motions.items() for key, value in fakes.action(motion.leader).items()}
+
+    def step():
+        clock[0] += 0.05
+        together.send(actions())
+        for arm in (a, b):
+            for name in arm.active:
+                if name != 'gripper' or arm is b:
+                    arm.follower.raw[name] += (arm.follower.goals[name] - arm.follower.raw[name]) * 0.15
+    together.send(actions())
+    for _ in range(14):
+        step()
+    a.leader.raw['gripper'] += 600
+    for _ in range(40):
+        step()
+    base = a.follower.read
+    a.follower.read = lambda register, motor, **kw: 330 if (register == 'Present_PWM' and motor == 'gripper') else base(register, motor, **kw)
+    for _ in range(100):  # arm A holds a box: PWM at the cap for 5 s, with arm B extended and healthy
+        step()
+    assert writes == [] and not a.failed and not b.failed and a.grip_way is not None
+    assert all(any(arm.follower.torque.values()) for arm in (a, b))
+
+
+def test_bimanual_guard_exception_writes_guard_end_and_plain_interrupt_does_not(module, tmp_path, monkeypatch):
+    import json
+    robot, leader, _, _, _ = adapters(module)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(module, 'MotorHealth', lambda: None)
+    native = SimpleNamespace(make_robot_from_config=lambda cfg: None, make_teleoperator_from_config=lambda cfg: None)
+    with pytest.raises(KeyboardInterrupt):
+        module.run_native(native, type(robot), type(leader), invoke=lambda: (_ for _ in ()).throw(KeyboardInterrupt()))
+    assert not (tmp_path / 'guard-end.json').exists()
+    with pytest.raises(ValueError, match='following error'):
+        module.run_native(native, type(robot), type(leader), invoke=lambda: (_ for _ in ()).throw(ValueError('following error')))
+    data = json.loads((tmp_path / 'guard-end.json').read_text(encoding='utf-8'))
+    assert 'following error' in data['reason']

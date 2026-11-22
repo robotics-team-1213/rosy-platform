@@ -11,6 +11,7 @@ D-792 camera page in ``review_app_web`` landed red on the shared/web token suite
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 import re
 from pathlib import PurePosixPath
@@ -335,6 +336,49 @@ def registry_readers(repo: at.Repo, path: str) -> list[str]:
         if any(at._under(path, tree) for tree in cache[registry]):
             found += [t for t in repo.test_files if t != path and reader in repo.imports(t) and t not in found]
     return found
+
+
+CONTRACT_VERSION_FILE = "middleware/core/api/core_api_web/api/contract_version.py"
+CONTRACT_VERSION_READERS = (
+    "middleware/core/gateway/test/test_protocol_version_alignment.py",
+    "test/test_records_fragments.py",
+    "test/test_land_queue_flow.py",
+)
+
+
+def is_contract_version_pin_text(text: str) -> bool:
+    """True when source `text` contains only docstrings and a single `CONTRACT = <str>` assignment."""
+    if not text.strip():
+        return False
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return False
+    saw_contract = False
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+            continue
+        if (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Name)
+            and stmt.targets[0].id == "CONTRACT"
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            if saw_contract:
+                return False
+            saw_contract = True
+            continue
+        return False
+    return saw_contract
+
+
+def is_contract_version_pin(repo, path: str) -> bool:
+    """True when `path` is `contract_version.py` holding only docstrings and a single `CONTRACT = <str>` pin."""
+    if path != CONTRACT_VERSION_FILE or not hasattr(repo, "text"):
+        return False
+    return is_contract_version_pin_text(repo.text(path))
 
 
 HARNESS_YAML = "tools/harness/harness.yaml"

@@ -8,7 +8,9 @@ Usage::
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -182,7 +184,18 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
         import browser_scope
         import land_browser
         import land_selection
-        b_paths = affected_browser.split(browser_scope.targets(changed))[1]  # the rest runs in the PR's CI run (D-1066)
+        covered_browsers = {
+            w.replace("\\", "/").removeprefix("./")
+            for inv in lab
+            if work_queue.BROWSER_ENV in itertools.takewhile(work_queue.ENV_WORD.match, inv)
+            and not any(w.startswith(("--ignore", "--deselect", "-k")) for w in inv)
+            for w in inv
+            if not w.startswith("-") and not work_queue.ENV_WORD.match(w) and "::" not in w and w.endswith("_browser.py")
+        }
+        b_paths = [
+            p for p in affected_browser.split(browser_scope.targets(changed))[1]
+            if p not in covered_browsers
+        ]  # the rest runs in the PR's CI run (D-1066)
         for group in land_selection.pack(cwd, b_paths):
             extra.extend(land_browser.chunks(cwd, group))
     return lab + [part for inv in extra for part in split_by_ci_entry(inv) if not ci_runnable(part)]
@@ -194,18 +207,30 @@ def preflight(cwd: Path, base: str, body: str = "") -> None:
     The first two stopped a submission only at the push, after the evidence had run (2026-11-21: a session lost a 20
     minute run to a missing trailer). CI's scope job runs the same two checks. The step-back check stops a PR that
     drops lines another PR merged into main within 7 days unless the PR body names it (shared-checkout.md)."""
-    for check in ("safety_review.py", "size_range.py"):
-        _run([sys.executable, f"tools/harness/{check}", base, "HEAD"], cwd)
-    if os.environ.get("ROSY_STEP_BACK") == "off":
-        print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
-        return
-    if (over := step_back.size_violations(cwd, base, "HEAD")) and not step_back.size_excepted(body):
+    skip_sb = os.environ.get("ROSY_STEP_BACK") == "off"
+
+    def _run_step_back():
+        over = step_back.size_violations(cwd, base, "HEAD")
+        if over and not step_back.size_excepted(body):
+            return over, []
+        return over, step_back.report(cwd, base, "HEAD")
+
+    with ThreadPoolExecutor(max_workers=2 if skip_sb else 3) as pool:
+        checks = [pool.submit(_run, [sys.executable, f"tools/harness/{c}", base, "HEAD"], cwd)
+                  for c in ("safety_review.py", "size_range.py")]
+        sb = None if skip_sb else pool.submit(_run_step_back)
+        for fut in checks:
+            fut.result()
+        if skip_sb:
+            print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
+            return
+        try:
+            over, hits = sb.result()
+        except step_back.ScanError as e:  # a git failure must not read as a pass
+            raise SystemExit(f"[pr-land] step-back scan incomplete: {e}\n[pr-land] fix the git problem (shallow clone: fetch full history) or set ROSY_STEP_BACK=off")
+    if over and not step_back.size_excepted(body):
         raise SystemExit("[pr-land] branch too big, split it before submission: " + "; ".join(over)
                          + "\n[pr-land] or rerun with --body containing a line 'Size-Exception: <reason>', or set ROSY_STEP_BACK=off")
-    try:
-        hits = step_back.report(cwd, base, "HEAD")
-    except step_back.ScanError as e:  # a git failure must not read as a pass
-        raise SystemExit(f"[pr-land] step-back scan incomplete: {e}\n[pr-land] fix the git problem (shallow clone: fetch full history) or set ROSY_STEP_BACK=off")
     for h in (h for h in hits if h["level"] == "info"):
         print(f"[pr-land] step-back info (never blocks):{step_back.fmt(h)}")
     for h in (h for h in hits if h["level"] == "warn"):

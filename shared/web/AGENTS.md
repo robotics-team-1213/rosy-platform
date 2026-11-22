@@ -25,6 +25,7 @@ Library/contract tier (D-168 P2): no process of its own. ROS-SIM/ARTIFACT/DEVICE
 | `components.css` | Shared text, head, grid, button, field, form, readout, readback, status, tag, chip, triage, evidence |
 | `ui.js` | Custom elements for those controls; no build step |
 | `core_ui_logic.js` | Evidence-state adapter; contains no clock math |
+| `skill-state.js`, `sample-data.js`, `localization-state.js` | Pure state parts (no DOM): the arm skill lifecycle table (C20), labelled sample rows, and the localization state a robot row or panel shows. Slice 4 of #378; tests in `test/` |
 | `CMakeLists.txt` | Installs the shared files to share |
 
 ## For AI Agents

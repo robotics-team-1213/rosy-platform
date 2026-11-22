@@ -5,6 +5,8 @@ from __future__ import annotations
 import json, re, shutil, subprocess, threading, time
 from pathlib import Path
 
+from bench_record_guard import hold_other_arm_locks
+from bench_record_inspect import ARMS
 from bench_record_replay import build_ik_replay, transform_replay, validate_replay_payload
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
@@ -62,7 +64,9 @@ class BenchPipelineMixin:
         if src_type == "ik_planner":
             origin = str(body.get("origin") or "belt-in").strip()
             target_slot = str(body.get("target_slot") or "pinky").strip()
-            base_traj = build_ik_replay(self.prep, arm, origin=origin, target_slot=target_slot, python_exe=getattr(self, "python", None))
+            # the live Follower read needs the arm's own session lock; busy or unprovable: no read, the stored home is used
+            hold = lambda: hold_other_arm_locks(arm, ARMS, self.procs, self.mounts, own=True)  # noqa: E731
+            base_traj = build_ik_replay(self.prep, arm, origin=origin, target_slot=target_slot, python_exe=getattr(self, "python", None), hold=hold)
         elif src_ref.startswith("replays/"):
             cand = self.prep / src_ref
             if not cand.is_file():

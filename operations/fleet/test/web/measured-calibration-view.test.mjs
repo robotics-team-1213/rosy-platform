@@ -2,7 +2,11 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const source = readFileSync(new URL('../../../../applications/fleet/web/calibration/measured-calibration-view.js', import.meta.url), 'utf8');
+const causeLine = new URL('../../../../shared/web/cause-line.js', import.meta.url);
+const auth = new URL('../../../../applications/fleet/web/shared/authorization.js', import.meta.url);
+const source = readFileSync(new URL('../../../../applications/fleet/web/calibration/measured-calibration-view.js', import.meta.url), 'utf8')
+  .replaceAll('/common/cause-line.js', causeLine.href)
+  .replaceAll('/console/assets/authorization.js', auth.href);
 const {isMeasuredFrame} = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const valid = {'Content-Type':'image/jpeg', 'X-Frame-Rectified':'measured-map',
   'X-Frame-Calibration':'measured-current', 'X-Frame-Session':'boot:2'};

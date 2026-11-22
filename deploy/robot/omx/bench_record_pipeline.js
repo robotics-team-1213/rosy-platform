@@ -22,6 +22,11 @@ function renderPipeline(p){
     rp.textContent=txt;
     rp.className='rail-step'+(jobState==='done'?' ok':'');
   }
+  const sp=$('sum-pipe-drawer');
+  if(sp){
+    const [txt]=JOB_MAP[jobState]||['대기'];
+    sp.textContent=txt+' · 루프 '+(p.loop_count||0)+'회'+(p.last_dataset?' · '+p.last_dataset:'');
+  }
   const stCode=typeof lastStatus!=='undefined'&&lastStatus?lastStatus.status:'idle';
   const collectState=(stCode==='recording'||stCode==='handing_over')?'running':(stCode==='sealed'?'done':(stCode==='failed'||stCode==='unsafe_or_failed'?'failed':'idle'));
   const stages=p.stages||{};

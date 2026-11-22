@@ -59,11 +59,11 @@ def test_calibration_browser_file_is_lab_only_until_its_runner_failure_is_found(
     assert ab.split([SHARED, cal]) == ([SHARED], [cal])
 
 
-def test_pixel_measuring_browser_files_are_lab_only_until_the_ci_fonts_match():
+def test_pixel_measuring_browser_files_run_in_ci_with_noto_cjk_fonts():
     px = ["middleware/robot_ui/pilot/test/test_pilot_browser.py",
           "test/learning/perception/test_pixel_workspace_browser.py",
           "test/learning/perception/test_review_flow_browser.py"]
-    assert ab.split([SHARED, *px]) == ([SHARED], sorted(px))
+    assert ab.split([SHARED, *px]) == (sorted([SHARED, *px]), [])
 
 
 def test_one_rule_for_both_sides():
@@ -163,3 +163,26 @@ def test_full_selection_without_a_diff_runs_every_ci_browser_file(repo, on, monk
     assert ab.entries(repo, at.Selection("affected", [])) == []
     monkeypatch.delenv(ab.ENV)
     assert ab.entries(repo, at.Selection("full", [])) == []
+
+
+def test_browser_alone_marks_env_and_none_shards_balance(repo, on):
+    include = affected_ci.ci_matrix(repo, at.select(repo, UI))["include"]
+    mine = [e for e in include if e["name"].startswith("browser-")]
+    assert mine
+    alone = next(e for e in mine if e["name"] == "browser-alone")
+    assert land_browser.ALONE_ENV in alone["invocations"][0]
+
+    none_bins = [e for e in mine if e["name"].startswith("browser-none-")]
+    if len(none_bins) >= 2:
+        from pathlib import PurePosixPath
+        weights = [
+            sum(affected_ci.CI_TEST_SECONDS.get(PurePosixPath(p).name, 1)
+                for inv in e["invocations"] for p in inv
+                if not p.startswith("-") and "=" not in p)
+            for e in none_bins
+        ]
+        assert max(weights) <= min(weights) + max(
+            affected_ci.CI_TEST_SECONDS.get(PurePosixPath(p).name, 1)
+            for e in none_bins for inv in e["invocations"] for p in inv
+            if not p.startswith("-") and "=" not in p
+        ), weights

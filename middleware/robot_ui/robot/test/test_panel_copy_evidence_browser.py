@@ -634,3 +634,49 @@ def test_camera_low_light_is_visibility_failure_with_live_raw_frame(panel):
     page.evaluate("window.cameraQuality=undefined")
     page.locator('#vision-quality').wait_for(state='hidden')
     page.evaluate('__unmount()')
+
+
+@pytest.mark.parametrize("width", [1366, 390])
+def test_map_blocks_goals_until_core_reports_navigation_ready(panel, width):
+    page = panel("console/map.js", width=width)
+    page.evaluate("""() => {
+      const callbacks = __callbacks;
+      window.__api = async (path) => path === '/api/v1/map'
+        ? {width:10, height:10, resolution:0.1, origin:{x:0, y:0}, data:Array(100).fill(0)}
+        : {};
+      callbacks['/api/v1/robot/state'].onData({
+        mode: 'IDLE', pose: {x: 0.5, y: 0.5, yaw: 0},
+        localization: {state:'LOCALIZED', pose_frame:'map'}, evidence: {pose:{evidence:'fresh'}},
+      });
+      callbacks['/api/v1/system/capabilities'].onData({
+        navigation: {goal_navigation:true}, runtime: {maps:{occupancy:true, global_costmap:false}},
+      });
+      callbacks['/api/v1/host/commissioning'].onData({runtime_mode:'hardware'});
+      callbacks['/api/v1/navigation/state'].onData({readiness:{required:true, ready:true}});
+    }""")
+    page.clock.install()
+    page.clock.fast_forward(10_500)
+    page.wait_for_function("document.querySelector('#map-status').getAttribute('state') === 'ready'")
+
+    goal = page.locator('[data-map-click="goal"]')
+    pose = page.locator('[data-map-click="pose"]')
+    canvas = page.locator(".surface-map-canvas")
+    nav = "__callbacks['/api/v1/navigation/state']"
+    assert goal.is_enabled() and pose.is_enabled()
+    goal.click()
+    page.evaluate(nav + ".onData({readiness:{required:true,ready:false}})")
+    assert goal.is_disabled()
+    assert pose.is_enabled()
+    assert goal.get_attribute("reason") == "내비게이션 준비 후 가능"
+    canvas.focus()
+    canvas.press("Enter")
+    assert page.locator("dialog[open]").count() == 0
+    assert "/api/v1/navigation/goal" not in page.evaluate("window.__calls")
+
+    page.evaluate(nav + ".onError(new Error('fixture: unavailable'))")
+    assert goal.is_disabled() and pose.is_enabled()
+    assert goal.get_attribute("reason") == "내비게이션 준비 상태 확인 후 가능"
+    page.evaluate(nav + ".onData({})")
+    assert goal.is_disabled()
+    page.evaluate(nav + ".onData({readiness:{required:true,ready:true}})")
+    assert goal.is_enabled()

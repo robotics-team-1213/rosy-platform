@@ -227,6 +227,40 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
             connection.commit()
         return self._task_dict(row)
 
+    def reconcile_unknown_task(self, task_id: str, *, expected_attempt_id: str,
+                               actor_id: str, quiescence: Mapping) -> dict:
+        """CAS-settle an unbound UNKNOWN task after verified live CORE quiescence (D-1071)."""
+        now = _now()
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                         (task_id,)).fetchone()
+            if current is None:
+                raise KeyError(task_id)
+            if current["status"] != "UNKNOWN":
+                raise InvalidTaskTransition("only UNKNOWN tasks can be reconciled")
+            if current["attempt_id"] != expected_attempt_id:
+                raise InvalidTaskTransition("attempt_id does not match current task attempt")
+            old_receipt = json.loads(current["receipt_json"] or "{}")
+            if old_receipt.get("operation") is not None:
+                raise InvalidTaskTransition("bound native operation must reconcile via native readback")
+            new_receipt = _safe_json(old_receipt | {"operator_reconciled": True, "quiescence": dict(quiescence)})
+            reason = "OPERATOR_RECONCILED_QUIESCENT"
+            connection.execute(
+                """UPDATE fleet_tasks SET status='HOLD', reason=?, receipt_json=?, updated_at=?
+                   WHERE task_id=?""",
+                (reason, new_receipt, now, task_id),
+            )
+            self._append_history(connection, task_id, "HOLD", "operator", actor_id, now, reason)
+            connection.execute("DELETE FROM fleet_robot_reservations WHERE task_id=? AND robot_id=?",
+                               (task_id, current["robot_id"]))
+            release_dispatch_claims(connection, owner_kind="task", owner_id=task_id,
+                                    generation=current["dispatch_generation"])
+            row = connection.execute("SELECT * FROM fleet_tasks WHERE task_id=?",
+                                     (task_id,)).fetchone()
+            connection.commit()
+        return self._task_dict(row)
+
     def cancel_queued_for_robot(self, robot_id: str, *, actor_id: str) -> list[str]:
         return self._cancel_queued_tasks(actor_id=actor_id, robot_id=robot_id)
 

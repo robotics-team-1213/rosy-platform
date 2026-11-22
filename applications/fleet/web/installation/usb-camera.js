@@ -1,4 +1,6 @@
 // D-963: approve the role of a USB camera plugged into a control PC. Fleet stores the decision; the PC applies it.
+import { isOperator } from "/console/assets/authorization.js";
+import {node} from '/common/control-dom.js';
 import {createRequest} from '/common/request.js';
 const BASE = '/api/fleet/workcell-observations';
 const ROLE = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
@@ -21,7 +23,7 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
   const bearer = () => headers().Authorization || headers().authorization || '';
   const canDecide = () => {
     const principal = identity();
-    return !locked() && principal?.role === 'operator'
+    return !locked() && isOperator(principal?.role)
       && typeof principal.principal_id === 'string' && Boolean(principal.principal_id.trim());
   };
   async function call(path, {method = 'GET', body} = {}) {
@@ -45,7 +47,6 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
       ...(body ? {body: JSON.stringify(body)} : {})});
     life.check(); return value;
   }
-  const text = (tag, value) => {const node = document.createElement(tag); node.textContent = value; return node;};
   const notice = message => {el('usb-camera-status').textContent = message;};
   async function decide(workcell, candidate, role) {
     const body = decisionBody(role);
@@ -75,9 +76,9 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
         if (row && row.decided !== Boolean(candidate.decision)) {row.item.remove(); rows.delete(key); row = null;}
         if (!row) {
           const item = document.createElement('li');
-          item.append(text('strong', `${workcell.workcell_id} · USB ${candidate.usb_id}`));
+          item.append(node('strong', `${workcell.workcell_id} · USB ${candidate.usb_id}`));
           row = {item, decided: Boolean(candidate.decision), dirty: false};
-          if (candidate.decision) {row.status = text('p', ''); item.append(row.status);}
+          if (candidate.decision) {row.status = node('p', ''); item.append(row.status);}
           else {
             const names = document.createElement('datalist'); names.id = `usb-roles-${++rowSerial}`;
             const input = document.createElement('input'); input.className = 'ui-field'; input.setAttribute('list', names.id);
@@ -89,7 +90,7 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
             approve.addEventListener('click', scope.guard(() => decide(row.workcell, row.candidate, input.value)));
             const actions = document.createElement('div'); actions.className = 'camera-actions';
             actions.append(input, names, approve);
-            row.input = input; row.names = names; row.hint = text('p', '');
+            row.input = input; row.names = names; row.hint = node('p', '');
             item.append(row.hint, actions);
           }
           rows.set(key, row);
@@ -107,7 +108,7 @@ export function createUsbCameraPanel({scope, headers, identity, locked, dialogs,
       }
     }
     for (const [key, row] of rows) if (!current.has(key)) {row.item.remove(); rows.delete(key);}
-    if (!items.length) list.replaceChildren(text('li', '역할이 없는 USB 카메라가 없습니다. 새 카메라를 제어 PC에 꽂으면 20초 안에 이곳에 나타납니다.'));
+    if (!items.length) list.replaceChildren(node('li', '역할이 없는 USB 카메라가 없습니다. 새 카메라를 제어 PC에 꽂으면 20초 안에 이곳에 나타납니다.'));
     else {
       for (let index = 0; index < items.length; index++) if (list.children[index] !== items[index]) list.insertBefore(items[index], list.children[index] || null);
       while (list.children.length > items.length) list.lastChild.remove();

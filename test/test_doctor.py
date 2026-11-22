@@ -207,3 +207,11 @@ def test_wrong_head_warns_and_drops_the_fast_forward_advice(repo):
     assert code == 0, text
     assert "WARN wrong-head: the shared main checkout is on fix/oops, not main" in text and "adopt" in text
     assert "1 behind origin/main" in text and "merge --ff-only" not in text
+
+
+def test_a_worktree_outside_worktrees_warns_and_takes_no_slot(repo, tmp_path):
+    git(repo, "worktree", "add", "-q", str(tmp_path / "outside"), "-b", "feat/outside")
+    code, text = lines(repo)
+    assert code == 0, text
+    assert "WARN worktree outside .worktrees/:" in text and "outside" in text and "adopt" in text
+    assert "worktrees: 1 of 15 slots" in text

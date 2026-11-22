@@ -61,6 +61,7 @@ class FleetModelPipeline:
         "pallet-l0": {"area": "pallet", "col": 2, "row": 1, "tier": 1, "x": 0.1580, "y": -0.0130, "z": 0.0085, "yaw_deg": -90.0},
         "pallet-l1": {"area": "pallet", "col": 2, "row": 1, "tier": 2, "x": 0.1580, "y": -0.0130, "z": 0.0390, "yaw_deg": -90.0},
         "pallet-l2": {"area": "pallet", "col": 2, "row": 1, "tier": 3, "x": 0.1580, "y": -0.0130, "z": 0.0674, "yaw_deg": -90.0},
+        "stand": {"area": "stand", "x": 0.0600, "y": -0.1150, "z": 0.0250, "yaw_deg": 0.0, "tier": 1},
     }
 
     def __init__(self, work_dir: Path, base_plan: dict | None = None) -> None:

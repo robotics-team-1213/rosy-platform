@@ -270,7 +270,7 @@ def _extract_anchors(bgr: np.ndarray, layout: Any, cam_nom: r2s.Camera,
 
     img_h = bgr.shape[0]
     pad_z = layout.deck_z + 0.0006
-    pad_l = 0.096
+    pad_l = 0.090  # the printed pad (89-90 mm, omx_two_arm_sites), not the 96 mm pocket: the anchor is the pad's visible +x end
     box_l, box_w, box_h = layout.box
 
     lane_top_z: dict[tuple[str, int], float] = {}

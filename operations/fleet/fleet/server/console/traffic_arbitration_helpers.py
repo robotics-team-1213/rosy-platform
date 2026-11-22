@@ -139,6 +139,51 @@ async def run_snapshot_traffic(console, robots: list) -> None:
             console._queued[robot_id] = mission
 
 
+def _finite_number(val) -> bool:
+    return isinstance(val, (int, float)) and not isinstance(val, bool) and math.isfinite(val)
+
+
+def site_route_for(console, mover: str, route: Sequence, *, trust_mod) -> Optional[tuple[str, list[tuple[float, float]]]]:
+    """Map `mover`'s CORE-frame `route` onto the active site map when both frames are LOCALIZED."""
+    provider = getattr(console, "_site_mover_pose", None)
+    if provider is None or not route or console._verdict(mover) != trust_mod.TRUSTED:
+        return None
+    mover_site = provider(mover)
+    pose = (console._seen.get(mover) or {}).get("pose")
+    if mover_site is None or not isinstance(pose, dict):
+        return None
+    vals = (pose.get("x"), pose.get("y"), pose.get("yaw"))
+    if not all(_finite_number(v) for v in vals):
+        return None
+    active_map_id, sx, sy, syaw = mover_site
+    lx, ly, lyaw = float(pose["x"]), float(pose["y"]), float(pose["yaw"])
+    dyaw = syaw - lyaw
+    c, s = math.cos(dyaw), math.sin(dyaw)
+    pts_site = []
+    for pt in route:
+        try:
+            px, py = pt[0], pt[1]
+        except (TypeError, IndexError):
+            return None
+        if not (_finite_number(px) and _finite_number(py)):
+            return None
+        dx, dy = float(px) - lx, float(py) - ly
+        pts_site.append((sx + c * dx - s * dy, sy + s * dx + c * dy))
+    return active_map_id, pts_site
+
+
+def site_frame_clear(console, other_id: str, site_route: Optional[tuple[str, list[tuple[float, float]]]],
+                     keep_out_m: float, *, trust_mod) -> Optional[bool]:
+    """Whether `other_id` is measured clear of `site_route` on the same active site map (None = unproven)."""
+    provider = getattr(console, "_site_obstacle_pose", None)
+    if site_route is None or provider is None:
+        return None
+    other = provider(other_id)
+    if other is None or other[0] != site_route[0]:
+        return None
+    return not trust_mod.blocks(site_route[1], (other[1], other[2]), keep_out_m=keep_out_m)
+
+
 async def hold_robots_for_localization(console, mover: str, *, trust_mod) -> list[str]:
     held, last = [], console._trusted.get(mover)
     for robot_id in list(console._order):

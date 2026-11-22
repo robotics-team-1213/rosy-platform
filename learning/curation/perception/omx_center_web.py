@@ -56,11 +56,28 @@ def get(handler, path, center, workspace=None):
             raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
         handler.send({'bundles': center.hub.bundles()})
         return True
+    if path == PREFIX + '/collect-plans':
+        plans = getattr(center, 'collect_plans', None)
+        handler.send({'configured': plans is not None, 'plans': plans.list() if plans else []})
+        return True
     match = re.fullmatch(PREFIX + r'/artifact/([0-9a-f-]{36})', path)
     if match:
         if center is None:
             raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
         handler.send(center.artifact(match[1]), mime='application/zip')
+        return True
+    run_match = re.fullmatch(PREFIX + r'/run/([0-9a-f-]{36})', path)
+    manifest_match = re.fullmatch(PREFIX + r'/run/([0-9a-f-]{36})/bundle-manifest', path)
+    file_match = re.fullmatch(PREFIX + r'/run/([0-9a-f-]{36})/file/(.{1,256})', path)
+    if run_match or manifest_match or file_match:
+        if center is None:
+            raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
+        if run_match:
+            handler.send(center.run(run_match[1]))
+        elif manifest_match:
+            handler.send(center.bundle_manifest(manifest_match[1]))
+        else:
+            handler.send(center.bundle_file(file_match[1], file_match[2]), mime='application/octet-stream')
         return True
     if path != PREFIX:
         return False
@@ -108,6 +125,12 @@ def post(handler, path, body, center, workspace=None, accounts=None):
     if path == PREFIX + '/hub-prepare':
         handler.send(center.hub.prepare(body))
         return True
+    if path == PREFIX + '/collect-plan':
+        plans = getattr(center, 'collect_plans', None)
+        if plans is None:
+            raise ValueError('이 작업대에 OMX 수집 계획 저장소가 연결되지 않았습니다.')
+        handler.send(plans.create(body, getattr(handler, 'learning_principal', None)))
+        return True
     if path == PREFIX + '/hub-upload':
         if set(body) != {'bundle_id', 'connection_id'}:
             raise ValueError('hub upload fields differ from schema')
@@ -121,9 +144,12 @@ def post(handler, path, body, center, workspace=None, accounts=None):
             raise ValueError('HF 업로드는 팀 공유(프로젝트) HF 연결로만 합니다.')
         handler.send(center.hub.upload(body['bundle_id'], credential['token']))
         return True
+    if path == PREFIX + '/cuda-run' and (accounts is not None or getattr(handler, 'learning_principal', None) is not None):
+        raise PermissionError('project users cannot import arbitrary server filesystem paths')
     name = {PREFIX + '/upload': 'upload',
             PREFIX + '/publish': 'publish',
             PREFIX + '/run': 'start',
+            PREFIX + '/cuda-run': 'start_cuda',
             PREFIX + '/online-run': 'start_online',
             PREFIX + '/experience': 'experience',
             PREFIX + '/stop': 'stop'}.get(path)

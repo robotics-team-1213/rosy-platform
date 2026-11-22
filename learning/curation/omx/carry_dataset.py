@@ -223,6 +223,7 @@ def build(episodes, attempts, output, *, splits, labels=None, every=2, size=(64,
         lineage.append(dict(id=carry['attempt_id'], session_id=carry['run_id'], split=splits[carry['run_id']],
                             folder=carry['folder'].name, arm_id=arm, attempt=carry['row'].get('attempt'),
                             **{'from': carry['row'].get('from'), 'to': carry['row'].get('to')},
+                            **({'source_kind': carry['task']['source_kind']} if carry['task'].get('source_kind') else {}),
                             frames=len(state), verify=carry['row'].get('verify'),
                             reviewer=carry['label']['reviewer'], review_reason=carry['label']['reason'],
                             source_sha256={**{name: _sha256(carry['folder'] / name) for name in

@@ -28,11 +28,11 @@ def proc_mounts():
     return Path("/proc/mounts").read_text()
 
 
-def hold_other_arm_locks(arm, arms, procs=proc_cmdlines, mounts=proc_mounts):
+def hold_other_arm_locks(arm, arms, procs=proc_cmdlines, mounts=proc_mounts, own=False):
     """(handles, None) with every OTHER arm of `arms`'s lock held, or ([], why a handover must not start). record_session --arm
     takes session.lock shared and session-<arm>.lock exclusive, so holding the same here (never the chosen arm's own,
     record_session takes that) keeps a second session from starting during handover; the caller keeps the handles
-    until the units are restored. The /proc scan is an extra check, refused when hidepid could hide processes."""
+    until the units are restored. own=True also keeps the chosen arm's own lock (a caller that reads that arm's bus itself). The /proc scan is an extra check, refused when hidepid could hide processes."""
     handles = []
     try:
         import fcntl
@@ -51,11 +51,14 @@ def hold_other_arm_locks(arm, arms, procs=proc_cmdlines, mounts=proc_mounts):
         # refuses a start while something else already holds it, and releases it again right away. Residual window
         # (accepted): another same-arm session may start between this probe and record_session's own lock; its exclusive
         # session-<arm>.lock makes a concurrent same-arm recording fail to start.
-        with (root / f"session-{arm}.lock").open("a") as own:
-            try:
-                fcntl.flock(own, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise _Held(f"다른 OMX 세션이 session-{arm}.lock을 잡고 있습니다") from None
+        mine = (root / f"session-{arm}.lock").open("a")
+        handles.append(mine)
+        try:
+            fcntl.flock(mine, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise _Held(f"다른 OMX 세션이 session-{arm}.lock을 잡고 있습니다") from None
+        if not own:
+            handles.pop().close()
         check_proc_visible(mounts)
         if recorder_running(procs):
             raise _Held("record_session 또는 chunk_runner가 실행 중입니다")
@@ -63,6 +66,24 @@ def hold_other_arm_locks(arm, arms, procs=proc_cmdlines, mounts=proc_mounts):
     except Exception as exc:  # no fcntl, unreadable root or /proc: cannot prove the cell is idle
         release(handles)
         return [], str(exc) if isinstance(exc, _Held) else f"다른 세션이 없는지 확인할 수 없습니다: {type(exc).__name__}"
+
+
+def hold_arm_lock(arm):
+    """(handle, None) holding session-<arm>.lock exclusively for a recovery that touches the port (the configuration tool takes no lock itself),
+    or (None, why). The caller releases it just before the recorder that follows takes the lock on its own."""
+    try:
+        import fcntl
+        root = joint_tune_lock.lock_root()
+        root.mkdir(parents=True, exist_ok=True)
+        handle = (root / f"session-{arm}.lock").open("a")
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            handle.close()
+            return None, f"다른 OMX 세션이 session-{arm}.lock을 잡고 있습니다"
+        return handle, None
+    except Exception as exc:  # no fcntl or an unreadable root: cannot prove the port is ours
+        return None, f"세션 잠금을 잡을 수 없습니다: {type(exc).__name__}"
 
 
 def check_proc_visible(mounts=proc_mounts):
@@ -86,6 +107,36 @@ def recorder_running(procs=proc_cmdlines):
 
 class _Held(Exception):
     pass
+
+
+FOLLOWER_TORQUE_ON = "팔로워 토크가 켜져 있습니다 — 사람이 팔을 받친 뒤 확인"
+
+
+def follower_torque_on(out) -> bool:
+    """leader_home's last stdout line says it refused to read a Follower whose torque is ON (it wrote nothing)."""
+    try:
+        return json.loads((out or "").strip().splitlines()[-1]).get("follower_torque_on") is True
+    except (ValueError, IndexError, AttributeError):
+        return False
+
+
+def arm_free(arm, manual=None):
+    """None when no bus child may be refused for this arm, else why not: a held lease, a live lease of another owner (D-1035) or an incident /
+    local hold - the same omx_incident.refuse_if_held record_session applies, asked BEFORE any child that opens a bus (record_session would
+    refuse too late, after an alignment child or a torque write already ran)."""
+    import cell_arm_lease
+    import omx_incident
+    if manual is not None and Path(manual).exists():  # a person-check marker on disk (it survives a service restart): no bus child until a person clears it
+        return f"사람 확인이 필요합니다 ({manual}) — 팔 상태를 직접 확인한 뒤 그 파일을 삭제하세요. 장치에 손대지 않았습니다"
+    record = cell_arm_lease.status(arm).get(arm)
+    if record and (record.get("hold") or (record.get("live") and record.get("owner") != cell_arm_lease.default_owner())):
+        why = record.get("hold") or f"{record.get('owner')} ({record.get('purpose') or '-'})"
+        return f"{arm} 임대가 사용 중입니다: {why} — 장치에 손대지 않았습니다 (cell_arm_lease.py release-hold는 사람이 팔을 확인한 뒤)"
+    try:
+        omx_incident.refuse_if_held(arm)
+    except SystemExit as exc:
+        return f"{exc} — 장치에 손대지 않았습니다"
+    return None
 
 
 def release(handles):

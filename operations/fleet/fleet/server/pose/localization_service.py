@@ -69,14 +69,15 @@ def default_lane_rules() -> Optional[Path]:
 
 def build_localization_service(console, sightings, *, enabled: bool = True,
                                overhead_cue: bool = False, pose_request_overhead: bool = True,
-                               lane_rules: Optional[Path] = None) -> Optional["LocalizationService"]:
+                               lane_rules: Optional[Path] = None,
+                               spread_sleep: Callable[[float], Awaitable[object]] = asyncio.sleep) -> Optional["LocalizationService"]:
     """CLI wiring: on unless disabled; the overhead cue stays off unless asked for; pose requests may use the overhead pose (D-546)."""
     if not enabled:
         return None
     slots, squares = service_logic.parse_reference_squares(
         load_lane_rules(lane_rules if lane_rules is not None else default_lane_rules()))
     return LocalizationService(console.clients, slots=slots, squares=squares,
-                               read_state=read_spread.spread(lambda rid: console.read_state(rid, POLL_S), POLL_S / 2),  # D-760 8
+                               read_state=read_spread.spread(lambda rid: console.read_state(rid, POLL_S), POLL_S / 2, sleep=spread_sleep),  # D-760 8
                                sightings=sightings, overhead_cue=bool(overhead_cue),
                                pose_request_overhead=bool(pose_request_overhead),
                                traffic_hold=getattr(console, "hold_for_localization", None))
