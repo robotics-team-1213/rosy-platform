@@ -10,6 +10,8 @@ from __future__ import annotations
 
 JOB_WEIGHT = 120
 DIR_WEIGHT = 8
+MAX_PACKED_WEIGHT = 980  # ~2 Fleet shards (~10 min on CI -n auto); prevents pack_to_limit from exceeding the 25 min timeout
+MAX_PACKED_FILES = 500   # stops unmeasured root-test shards (~395 files, 7-14 min each) from merging past the 25 min timeout
 
 
 def _under(path: str, prefix: str) -> bool:
@@ -41,9 +43,13 @@ def entries(invocations, matrix) -> list[dict]:
     return [{"name": f"affected-{i + 1}", "invocations": [inv], "ros": ros} for i, (ros, inv) in enumerate(by_ros)]
 
 
+def _entry_paths(entry: dict) -> list[str]:
+    return [p for inv in entry["invocations"] for p in inv if not p.startswith("-")]
+
+
 def _entry_weight(entry: dict, seconds: dict[str, int]) -> int:
-    paths = [p for inv in entry["invocations"] for p in inv if not p.startswith("-")]
-    return sum(seconds.get(p.rsplit("/", 1)[-1], 1) if p.endswith(".py") else DIR_WEIGHT for p in paths)
+    return sum(seconds.get(p.rsplit("/", 1)[-1], 1) if p.endswith(".py") else DIR_WEIGHT
+               for p in _entry_paths(entry))
 
 
 def consolidate(entries: list[dict], seconds: dict[str, int]) -> list[dict]:
@@ -73,8 +79,9 @@ def consolidate(entries: list[dict], seconds: dict[str, int]) -> list[dict]:
     return [e for e, _ in out]
 
 
-def pack_to_limit(entries: list[dict], seconds: dict[str, int], limit: int) -> list[dict]:
-    """Merge lightest compatible ``affected-*`` jobs when a selection exceeds ``limit``."""
+def pack_to_limit(entries: list[dict], seconds: dict[str, int], limit: int,
+                  max_weight: int = MAX_PACKED_WEIGHT, max_files: int = MAX_PACKED_FILES) -> list[dict]:
+    """Merge lightest compatible ``affected-*`` jobs when a selection exceeds ``limit`` without breaching time/file caps."""
     out = [dict(e) for e in entries]
     while len(out) > limit:
         pairs = [
@@ -85,6 +92,8 @@ def pack_to_limit(entries: list[dict], seconds: dict[str, int], limit: int) -> l
             if out[j]["name"].startswith("affected-") and out[j].get("kind") == "pytest"
             and out[i]["ros"] == out[j]["ros"]
             and bool(out[i].get("colcon", True)) == bool(out[j].get("colcon", True))
+            and _entry_weight(out[i], seconds) + _entry_weight(out[j], seconds) <= max_weight
+            and len(_entry_paths(out[i])) + len(_entry_paths(out[j])) <= max_files
         ]
         if not pairs:
             break
