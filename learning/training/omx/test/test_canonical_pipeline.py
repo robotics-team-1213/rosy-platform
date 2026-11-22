@@ -469,8 +469,8 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
         select_action=lambda b: (seen_obs_keys.append(set(b)), SimpleNamespace(cpu=lambda: SimpleNamespace(numpy=lambda: [np.zeros(6, dtype=np.float32)])))[1],
     )
     camera_cases = []
-    prof, _ = cw._eval_sim_profile(fake_policy, lambda b: b, lambda x: x, spec, "arm_a", task_name="ship-h1", episodes=1,
-                                  delay_frames=0, seed_base=700, camera_cases=camera_cases)
+    prof, _ = cw.eval_sim_profile(fake_policy, lambda b: b, lambda x: x, spec, "arm_a", task_name="ship-h1", episodes=1,
+                                 delay_frames=0, seed_base=700, camera_cases=camera_cases)
     assert prof["arm_link_contacts"] == 0 and prof["neighbour_disturbed"] == 1
     assert prof["policy_successes"] == 1 and calls["teacher_seeds"] == [5201, 700, 700]
     assert "observation.images.top" in seen_obs_keys[0]
