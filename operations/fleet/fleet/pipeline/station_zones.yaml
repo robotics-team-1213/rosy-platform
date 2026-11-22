@@ -31,8 +31,8 @@ export_stations:
     src_site: belt
     dst_site: stand
     tier: 1
-    x: 0.9212
-    y: -0.4776
+    x: -0.6763
+    y: -0.1383
     yaw_deg: -90.0
   - id: EXP_S5_PALLET
     place_id: S5

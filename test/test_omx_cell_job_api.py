@@ -304,7 +304,7 @@ def test_resolve_goal_site_supports_standalone_cell_api_layout(tmp_path):
     shutil.copy2(repo_root / "tools" / "sim" / "cell_site_map.py", stage / "tools" / "sim" / "cell_site_map.py")
     shutil.copy2(repo_root / "shared" / "web" / "cell-site-map.json", stage / "shared" / "web" / "cell-site-map.json")
     out = subprocess.check_output(
-        [sys.executable, "-c", "import cell_policy_goals as g; print(g.resolve_goal_site('yard:r3-s2-t1'))"],
+        [sys.executable, "-c", "import cell_policy_goals as g; print(g.resolve_goal_site('yard:r1-s2-t1'))"],
         cwd=stage,
         text=True,
     )
