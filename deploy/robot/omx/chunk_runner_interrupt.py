@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SIGINT/SIGTERM on chunk_runner: fold home and verify fold readback before torque goes OFF, else hold torque ON.
+"""SIGINT/SIGTERM/SIGHUP on chunk_runner: fold home and verify fold readback before torque goes OFF, else hold torque ON.
 
 Extended arms never lose torque on an interrupt (D-911, D-1048):
   - First signal: human hold already latched -> HOLD; else stop in place, verify VERIFY_TICKS still readings in
@@ -29,11 +29,12 @@ INTERRUPT_PARK_S = 120.0  # a park from full reach at PARK_SPEED with pacing hol
 VERIFY_TICKS, VERIFY_S = 5, 2.0  # "already folded" needs this many still readings in a row, within this time
 STILL_UNITS = 0.08  # body motion per tick that counts as still (chunk_runner_settle's body_still)
 OPERATOR_RELEASE = getattr(signal, "SIGUSR2", None)  # None on Windows test hosts
+BLOCKED_DURING_CLOSE = tuple(getattr(signal, n) for n in ("SIGINT", "SIGTERM", "SIGHUP") if hasattr(signal, n))
 
 
 def install(signals: list) -> None:
-    """Record SIGINT, SIGTERM and the operator release in `signals` instead of raising KeyboardInterrupt."""
-    for number in (signal.SIGINT, signal.SIGTERM, OPERATOR_RELEASE):
+    """Record SIGINT, SIGTERM, SIGHUP and the operator release in `signals` instead of raising KeyboardInterrupt."""
+    for number in (*BLOCKED_DURING_CLOSE, OPERATOR_RELEASE):
         if number is not None:
             signal.signal(number, lambda signum, frame: signals.append(signum))
 
@@ -353,9 +354,6 @@ def final_gate(runner, signals: list, hold_file=None, sleep=time.sleep) -> None:
     holder = runner if runner is not None else type("Unstarted", (), {"hold_file": hold_file})()
     last_resort_hold(holder, signals, RuntimeError("the run ended after an interrupt without a confirmed fold"),
                      sleep=sleep)
-
-
-BLOCKED_DURING_CLOSE = tuple(getattr(signal, n) for n in ("SIGINT", "SIGTERM", "SIGHUP") if hasattr(signal, n))
 
 
 def _record_release(holder) -> None:

@@ -38,14 +38,15 @@ import argparse
 import json
 import math
 import os
+from pathlib import Path
 import select
 import stat
 import sys
 import time
 import uuid
-from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health, cell_params, episode_recorder
+from observer_handoff_io import check_joint_topic, handoff_live, snapshot_live  # noqa: E402, F401
 if __name__ == "__main__":  # before any import that may start threads: interrupts reach the main thread only
     import main_thread_signals
 
@@ -286,7 +287,9 @@ def main(argv=None):
     parser.add_argument("--params", type=Path, help="cell-params.json (rosy.omx-cell-params.v1); default: the built-in values")
     parser.add_argument("--load-model", type=Path, help="load-model.json (load_model.py): refuse a library whose holds are predicted risky")
     parser.add_argument("--rim-z-m", type=float, help="configured source rim height (m) enforced on policy jaw_gate")
+    parser.add_argument("--joint-topic", default=os.environ.get("ROSY_CHUNK_JOINT_TOPIC") or None, help="observer handoff joint topic (default off)")
     args = parser.parse_args(argv)
+    check_joint_topic(parser, args)
     signals: list = []  # recorded, not raised: an interrupt folds or holds (chunk_runner_interrupt), never drops the arm
     __import__("chunk_runner_interrupt").install(signals)
     library = load_library(args.library)
@@ -299,7 +302,6 @@ def main(argv=None):
         raise SystemExit(str(error)) from None
     trusted_grasp = startup_grasp_ref(library, tcp_x_m=trusted_tcp)
     from cell_robot_profile import load as load_operating_profile
-
     profile = load_operating_profile(args.operating_profile, robot_config=config["robot"]) if args.operating_profile else None
     if library.get("fps") != config["dataset"]["fps"]:  # one frame per tick: another fps replays at another speed
         raise SystemExit(f"chunk library fps {library.get('fps')} differs from the recorder fps {config['dataset']['fps']}")
@@ -311,7 +313,6 @@ def main(argv=None):
     args.io.mkdir(parents=True, exist_ok=True)
     status_path = args.io / "chunk-status.jsonl"
     from chunk_runner_guards import safe_stderr
-
     def status(row):
         protect = bool(signals or getattr(runner, "human_hold_latched", False)
                        or getattr(runner, "_stop_after_park", None))
@@ -319,7 +320,6 @@ def main(argv=None):
 
     from guarded_native import NativeJointMotion, close_device, connect_passive
     from motor_health import MotorHealth
-
     lines = fifo_lines(args.io / "chunk-cmd")
     # The guard owns the hardware lifecycle and every goal (D-872): passive connect (no vendor
     # configure), seeded torque ON, 10 deg/s streaming, following-error, effort and fault stops.
@@ -334,7 +334,6 @@ def main(argv=None):
                 else {j: robot.bus.read("PWM_Limit", j) for j in load_predict.BODY[1:]}) if args.load_model else None
         check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, caps) if args.load_model else None
         import bus_watchdog  # the motors stop by themselves if this PC goes silent (off unless the params set it)
-
         print(json.dumps({"bus_watchdog": bus_watchdog.arm(robot.bus, prm.get(params, "safety.bus_watchdog_ms"))}), flush=True)
         live_path = args.io / "live.json"
 
@@ -347,6 +346,8 @@ def main(argv=None):
                 if not signals and not getattr(runner, "human_hold_latched", False):
                     raise
 
+        if args.joint_topic:
+            live = handoff_live(live, args.joint_topic, robot.calibration)
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
