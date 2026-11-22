@@ -38,7 +38,8 @@ NOTHING_COLLECTED = re.compile(r"^(?:(?:collecting \.\.\. )?collected 0 items\b|
 
 def collected_nothing(report: str, paths: list[str]) -> bool:
     """A -v run over several paths that collected no item: the session itself was skipped or emptied."""
-    return len(paths) > 1 and bool(NOTHING_COLLECTED.search(report.split(RERUN_MARKER, 1)[0]))
+    targets = [p for p in paths if not p.startswith("-")]
+    return len(targets) > 1 and bool(NOTHING_COLLECTED.search(report.split(RERUN_MARKER, 1)[0]))
 
 
 def load_known(text: str) -> dict[str, str]:
