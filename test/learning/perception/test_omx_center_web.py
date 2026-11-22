@@ -49,3 +49,33 @@ def test_live_artifact_route_returns_worker_bytes_with_zip_type():
     assert web.get(handler, web.PREFIX + '/artifact/' + run_id, center)
     assert calls == [run_id]
     assert sent == [(b'policy-version-000001', {'mime': 'application/zip'})]
+
+
+def test_cuda_run_status_and_bundle_routes_dispatch_and_reject_unconfigured():
+    run_id = '720ea4ee-6471-4f53-a02a-949946663ec9'
+    calls, sent = [], []
+    center = SimpleNamespace(
+        run=lambda rid: calls.append(('run', rid)) or {'id': rid, 'status': 'running'},
+        bundle_manifest=lambda rid: calls.append(('manifest', rid)) or {'run_id': rid, 'files': []},
+        bundle_file=lambda rid, rel: calls.append(('file', rid, rel)) or b'cfg',
+        start_cuda=lambda body: calls.append(('start_cuda', body)) or {'id': run_id, 'status': 'launching'},
+    )
+    handler = SimpleNamespace(send=lambda payload, **kwargs: sent.append((payload, kwargs)))
+
+    assert web.get(handler, f'{web.PREFIX}/run/{run_id}', center)
+    assert web.get(handler, f'{web.PREFIX}/run/{run_id}/bundle-manifest', center)
+    assert web.get(handler, f'{web.PREFIX}/run/{run_id}/file/config.json', center)
+    assert web.post(handler, f'{web.PREFIX}/cuda-run', {'steps': 10}, center)
+    assert calls == [
+        ('run', run_id),
+        ('manifest', run_id),
+        ('file', run_id, 'config.json'),
+        ('start_cuda', {'steps': 10}),
+    ]
+    assert sent[2] == (b'cfg', {'mime': 'application/octet-stream'})
+    for path in (f'{web.PREFIX}/run/{run_id}', f'{web.PREFIX}/run/{run_id}/bundle-manifest',
+                 f'{web.PREFIX}/run/{run_id}/file/config.json'):
+        with pytest.raises(ValueError, match='연결되지 않았습니다'):
+            web.get(handler, path, None)
+    with pytest.raises(ValueError, match='연결되지 않았습니다'):
+        web.post(handler, f'{web.PREFIX}/cuda-run', {}, None)
