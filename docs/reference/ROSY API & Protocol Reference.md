@@ -5,9 +5,16 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.453
+**Version:** v1.454
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.454 OMX Cell Job API (v1.454) 토큰 분리·안전 게이트·멱등성 (Cell)
+
+- `GET /readiness` 및 실패 컨텍스트 HTTP 경로 전 단계로 `:8781` `cell_job_api.py` 인증 분리 및 실행 전 안전 게이트를 추가합니다 (D-1072 PR-2).
+- 이중 토큰(`--human-token-file` vs `--machine-token-file`): `cell-job-machine`은 `person_at_switch: true`·비검토 이동 작업 시 `403 MACHINE_COMMISSIONING_FORBIDDEN` 반환 및 서버 바인딩 `proposer` 강제(`403 PROPOSER_MISMATCH`), `audit.jsonl`에 `principal_role`·`principal_id` 기록.
+- `Runner.start`·warm 재사용 게이트: `omx_incident.status(arm)`(`409 ARM_INCIDENT_HELD`), 피어 A/B 접힘(`409 PEER_ARM_NOT_FOLDED`), 온라인 Fleet 안전(`409 FLEET_SAFETY_STOP`), `depth-d435.lock`(`409 DEPTH_LOCK_HELD`), 오프라인 이동 시 `cell-state-dirty-<arm>.json` 기록, `Idempotency-Key` 헤더(`409 IDEMPOTENCY_KEY_CONFLICT`).
+- `cell_policy_drive` `act_backend`(`ROSY_ACT_BACKEND`)·`goal_slot`(`--goal-slot`) 및 `auto_pick` `verify_zones`(`--verify-zones`) 옵션 추가.
 
 ### v1.453 Fleet trip pause/resume controls and autonomous Nav2 failure recovery (Fleet)
 
@@ -4968,6 +4975,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.454 | 2026-11-22 | [Cell] cell-job-human/machine 토큰 분리, Idempotency-Key, warm 재사용 안전 게이트, depth-d435.lock, act_backend/goal_slot/verify_zones 추가 |
 | v1.453 | 2026-11-22 | [Fleet] Additive: POST /api/fleet/trips/{trip_id}/pause and /resume, Nav2 traffic holds, and autonomous Nav2 failure reroute/retry/hold recovery |
 | v1.452 | 2026-11-22 | [Fleet] Additive: optional drive_mode nav2 on POST /api/fleet/robots/{robot_id}/trip via CORE D-1009 /api/v1/navigation/route |
 | v1.451 | 2026-11-22 | [Fleet] Additive (D-1071): named-operator POST /api/fleet/tasks/{task_id}/reconcile releasing UNKNOWN task claims only after live CORE cancel and D-732 quiescence proof |
