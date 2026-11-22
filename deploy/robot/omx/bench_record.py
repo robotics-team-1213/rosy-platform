@@ -53,7 +53,7 @@ from bench_record_safety import end_verdict  # noqa: E402
 class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin, BenchLinkMixin, BenchPipelineMixin):
     def __init__(self, config, *, run=systemctl, popen=subprocess.Popen, clock=time.time, procs=proc_cmdlines,
                  mounts=proc_mounts):
-        self.python, self.prep = config["python"], Path(config["prep_root"]).expanduser()
+        self.python, self.prep, self._config = config["python"], Path(config["prep_root"]).expanduser(), dict(config)
         self.run, self.popen, self.clock, self.procs, self.mounts = run, popen, clock, procs, mounts
         self.lock, self.child, self.abort, self.state = threading.Lock(), None, False, {"status": "idle"}
         self._auto_homes, self._pre_cancel = {}, set()  # per-session ownership: auto-home records and stop intents, keyed by the session's claim
@@ -379,6 +379,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 sealed = self.popen(seal, cwd=folder, stdout=log, stderr=subprocess.STDOUT).wait()
             self._publish_end(status="sealed" if sealed == 0 else "seal_failed", seal_exit=sealed)
             if sealed == 0:
+                self._on_session_sealed(folder)
                 self._auto_home_after_session()
         except Exception as exc:
             self._set(status="failed", error=f"{type(exc).__name__}: {exc}")

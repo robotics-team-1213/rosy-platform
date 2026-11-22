@@ -166,12 +166,11 @@ def test_closed_loop_pipeline_api_and_guards(tmp_path, monkeypatch):
     import time as _t
     for _ in range(30):
         cur = bench.pipeline_status()
-        if cur['state'] in ('done', 'failed'):
+        if cur['state'] in ('done', 'blocked', 'failed'):
             break
         _t.sleep(0.05)
-    assert cur['state'] == 'done'
-    assert cur['loop_count'] >= 1
-    assert cur['next_checkpoint'].startswith('ckpt://h1-demo-01-aug')
+    assert cur['state'] == 'failed' and cur['stages']['seal'] == 'failed'
+    assert cur['loop_count'] == 0 and 'next_checkpoint' not in cur
 
 
 def test_audit_hardening_replay_validation_and_collection_name(tmp_path, monkeypatch):
@@ -233,14 +232,25 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         bench.hf_upload_start({'dataset': 'h1-demo-01'})
     (ds_dir / 'DO_NOT_TRAIN.txt').unlink()
-    # 3. Mock HfApi and run async upload
+    # 3. Personal HF account without robotteam org membership is refused
     import sys, types, time as _t
     calls = []
-    class FakeHfApi:
-        def whoami(self): return {'name': 'livsb3'}
+    class FakePersonalHfApi:
+        def whoami(self): return {'name': 'livsb3', 'orgs': []}
         def create_repo(self, **kw): calls.append(('create', kw['repo_id']))
-        def upload_folder(self, **kw): calls.append(('upload', kw['repo_id']))
-    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
+        def upload_folder(self, **kw): calls.append(('upload', kw['repo_id'], kw.get('path_in_repo')))
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakePersonalHfApi))
+    bench.hf_upload_start({'dataset': 'h1-demo-01'})
+    for _ in range(40):
+        st = bench.hf_upload_status()
+        if st['state'] in ('done', 'failed'):
+            break
+        _t.sleep(0.05)
+    assert st['state'] == 'failed' and 'robotteam' in st['error'] and not calls
+    # 4. robotteam member uploads privately to robotteam/rosy-omx-data under dataset subpath
+    class FakeTeamHfApi(FakePersonalHfApi):
+        def whoami(self): return {'name': 'livsb3', 'orgs': [{'name': 'robotteam'}]}
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeTeamHfApi))
     res = bench.hf_upload_start({'dataset': 'h1-demo-01'})
     assert res['hf_upload']['state'] in ('encoding', 'uploading', 'done')
     for _ in range(40):
@@ -249,10 +259,10 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
             break
         _t.sleep(0.05)
     assert st['state'] == 'done'
-    assert st['repo_id'] == 'livsb3/h1-demo-01'
-    assert ('upload', 'livsb3/h1-demo-01') in calls
+    assert st['repo_id'] == 'robotteam/rosy-omx-data'
+    assert ('upload', 'robotteam/rosy-omx-data', 'h1-demo-01') in calls
     ds_rows = bench.lerobot_datasets()
-    assert ds_rows[0]['hf_uploaded'] is True and ds_rows[0]['hf_repo_id'] == 'livsb3/h1-demo-01'
+    assert ds_rows[0]['hf_uploaded'] is True and ds_rows[0]['hf_repo_id'] == 'robotteam/rosy-omx-data'
 
 
 def test_ik_planner_belt_in_to_pinky_arm_s(tmp_path, monkeypatch):
@@ -344,10 +354,10 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
     assert pipe['last_dataset'] == 'arm-s-ik-e2e'
     for _ in range(40):
         pipe_cur = bench.pipeline_status()
-        if pipe_cur['state'] in ('done', 'failed'):
+        if pipe_cur['state'] in ('done', 'blocked', 'failed'):
             break
         time.sleep(0.05)
-    assert pipe_cur['state'] == 'done' and pipe_cur['loop_count'] >= 1
+    assert pipe_cur['state'] == 'failed' and 'next_checkpoint' not in pipe_cur
 
     hf_cache = tmp_path / 'home' / '.cache' / 'huggingface'
     hf_cache.mkdir(parents=True, exist_ok=True)
@@ -360,9 +370,9 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
 
     hf_calls = []
     class FakeHfApi:
-        def whoami(self): return {'name': 'tester'}
+        def whoami(self): return {'name': 'tester', 'orgs': [{'name': 'robotteam'}]}
         def create_repo(self, **kw): hf_calls.append(('create', kw['repo_id']))
-        def upload_folder(self, **kw): hf_calls.append(('upload', kw['repo_id']))
+        def upload_folder(self, **kw): hf_calls.append(('upload', kw['repo_id'], kw.get('path_in_repo')))
     monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
     bench.hf_upload_start({'dataset': 'arm-s-ik-e2e'})
     for _ in range(40):
@@ -370,8 +380,8 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
         if hf_st['state'] in ('done', 'failed'):
             break
         time.sleep(0.05)
-    assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'tester/arm-s-ik-e2e'
-    assert ('upload', 'tester/arm-s-ik-e2e') in hf_calls
+    assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'robotteam/rosy-omx-data'
+    assert ('upload', 'robotteam/rosy-omx-data', 'arm-s-ik-e2e') in hf_calls
     assert (Path(state['folder']) / 'hf-upload.json').is_file()
 
 

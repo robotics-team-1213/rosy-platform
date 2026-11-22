@@ -90,6 +90,10 @@ def get(handler, path, center, workspace=None):
     return True
 
 
+def peer_intake_ok(handler, path, center):
+    return canonical_web.peer_intake_ok(handler, path, center)
+
+
 def post(handler, path, body, center, workspace=None, accounts=None):
     if canonical_web.post(handler, path, body, center, accounts):
         return True

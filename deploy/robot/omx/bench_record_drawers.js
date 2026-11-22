@@ -304,7 +304,7 @@ window.bumpCollectionName=bumpCollectionName;
 $('next-ep-btn').addEventListener('click',()=>bumpCollectionName());
 
 $('copy-transfer-btn').addEventListener('click',async()=>{
-  const folder=(lastStatus&&lastStatus.folder)?lastStatus.folder.split('/').pop():'<session-folder>';
+  const folder=(lastStatus&&lastStatus.name)?lastStatus.name:((lastStatus&&lastStatus.folder)?lastStatus.folder.split('/').pop():'<session-name>');
   const cmd='python tools/remote/omx_collection_transfer.py --session '+folder;
   try{await navigator.clipboard.writeText(cmd);$('copy-transfer-btn').textContent='복사됨: '+folder;}
   catch(_){setReqError('수동 실행 명령: '+cmd);}

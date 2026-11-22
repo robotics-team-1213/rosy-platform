@@ -516,18 +516,20 @@
 
         <details class="card acc-card" id="sec-pipeline" open aria-labelledby="h-pipeline" style="margin-top:12px">
           <summary class="acc-sum">
-            <div class="acc-head"><h3 id="h-pipeline" style="margin:0">D · 시뮬 · 모델 실행 &rarr; 증강 · RL 루프</h3><span id="sum-pipe-drawer" class="sum-line quiet mono">대기 · 루프 0회</span></div>
+            <div class="acc-head"><h3 id="h-pipeline" style="margin:0">D · 시뮬 · 수집 · 봉인 · 모델 PC 전달</h3><span id="sum-pipe-drawer" class="sum-line quiet mono">대기 · 전달 0회</span></div>
             <span id="pipe-job-badge" class="badge" data-tone="warn">대기</span>
           </summary>
           <div class="acc-body">
-            <ol id="pipe-stepper" class="pipe-stepper" aria-label="4단계 폐쇄 루프">
-              <li class="pipe-step" data-stage="sim" data-state="idle"><span class="pipe-idx">1</span><span>시뮬 / 모델 실행</span></li>
+            <ol id="pipe-stepper" class="pipe-stepper" aria-label="5단계 전달 루프">
+              <li class="pipe-step" data-stage="sim" data-state="idle"><span class="pipe-idx">1</span><span>시뮬/궤적</span></li>
               <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
-              <li class="pipe-step" data-stage="collect" data-state="idle"><span class="pipe-idx">2</span><span>실물 영상 수집</span></li>
+              <li class="pipe-step" data-stage="collect" data-state="idle"><span class="pipe-idx">2</span><span>실물 수집</span></li>
               <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
-              <li class="pipe-step" data-stage="augment" data-state="idle"><span class="pipe-idx">3</span><span>데이터 증강</span></li>
+              <li class="pipe-step" data-stage="seal" data-state="idle"><span class="pipe-idx">3</span><span>봉인/검증</span></li>
               <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
-              <li class="pipe-step" data-stage="rl" data-state="idle"><span class="pipe-idx">4</span><span>RL / 학습 연동</span></li>
+              <li class="pipe-step" data-stage="transfer" data-state="idle"><span class="pipe-idx">4</span><span>모델PC 전송</span></li>
+              <li class="pipe-arrow" aria-hidden="true">&rarr;</li>
+              <li class="pipe-step" data-stage="intake" data-state="idle"><span class="pipe-idx">5</span><span>Canonical 인입</span></li>
             </ol>
             <fieldset class="group" style="margin-top:10px">
               <legend>1 · 시뮬 / 정책 소스 및 리플레이 궤적</legend>
@@ -553,13 +555,13 @@
             <div class="pipe-ctrl-row">
               <label class="check-row" style="flex:1 1 240px">
                 <input type="checkbox" id="pipe-auto-toggle">
-                <span>수집 후 자동 증강·RL 전송</span>
+                <span>봉인 후 서버 자동 검증 · 모델 PC 전송</span>
               </label>
-              <button type="button" id="pipe-run-btn" class="btn-primary" style="min-height:42px;padding:0 14px;font-size:.9rem">지금 증강/학습 파이프라인 실행</button>
+              <button type="button" id="pipe-run-btn" class="btn-primary" style="min-height:42px;padding:0 14px;font-size:.9rem">지금 검증 · 모델 PC 전송 실행</button>
             </div>
             <div class="pipe-loop-bar">
-              <span class="ui-tag mono" id="pipe-loop-badge">루프 0회</span>
-              <span id="pipe-loop-meta" class="quiet mono" style="font-size:.8rem">데이터셋 · 증강 · RL 체크포인트 피드백 대기 중</span>
+              <span class="ui-tag mono" id="pipe-loop-badge">전달 0회</span>
+              <span id="pipe-loop-meta" class="quiet mono" style="font-size:.8rem">모델 PC 전달 및 Canonical 인입 대기 중</span>
             </div>
             <pre id="pipe-log" class="pipe-log mono quiet" hidden></pre>
           </div>
