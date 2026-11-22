@@ -1031,3 +1031,116 @@ def test_bench_ui_shows_outbound_stand_and_filters_arm_b():
     assert 'taskFitsArm' in app
 
 
+def test_bench_ui_activity_log_smooth_camera_polling_and_pre_start_home_contract():
+    import re
+    omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    ui_js = (omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+    app_js = (omx_dir / 'bench_record_app.js').read_text(encoding='utf-8')
+    dr_js = (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+
+    footer = html.split('<footer id="status-bar"', 1)[1].split('</footer>', 1)[0]
+    assert 'id="activity-log-bar"' in footer and 'id="activity-log-text"' in footer
+    assert 'id="activity-log-bar" class="activity-log-bar"' in footer
+    assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
+    assert '.status-bar{position:fixed' in css and '@media(max-width:1366px)' in css and '.activity-log-bar{' in css
+    assert 'function setActivity(' in ui_js and 'noticeHistory.length>20' in ui_js
+    assert 'f.arm.value!==st.arm' in st_js and 'setActivity(' in st_js
+    assert 'setInterval(pollCameras,1500)' in app_js and 'setInterval(tickCameraFrames,150)' in app_js
+    assert 'new Image()' in app_js and 'emptyCamPolls>=3' in app_js
+    assert "img.style.display='none'" not in app_js.split('function pollCameras', 1)[1].split('async function pollStatus', 1)[0].split('applyCameraLayout()', 1)[1]
+    assert "querySelector('.btn-lbl')" in dr_js and 'home_before_start:Boolean(' in dr_js and 'setActivity(' in dr_js
+    assert 'if(typeof benchSessionActive===\'function\'&&benchSessionActive())return;' in cam_js
+    assert "episodeAction('/record_episode')" in cam_js and "episodeAction('/finish','/stop')" in cam_js and "episodeAction('/api/episode/rerecord')" in cam_js
+
+
+def test_ui_connected_arm_cards_zoomed_map_and_inline_params_panel(tmp_path, monkeypatch):
+    import re, threading, urllib.request
+    omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    app_js = (omx_dir / 'bench_record_app.js').read_text(encoding='utf-8')
+    params_js = (omx_dir / 'bench_record_params.js').read_text(encoding='utf-8')
+    map_js = (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
+
+    for marker in ('id="arm-card-bar"', 'id="sb-speed-pills"', 'id="sb-joint-caps-table"',
+                   'id="sb-caps-save-btn"', 'id="map-modal-host"', '/bench_record_params.js'):
+        assert marker in html, marker
+    assert html.index('id="arm-card-bar"') < html.index('id="sec-goal"')
+    assert 'max-height:108px' not in css and 'min-height:176px' in css
+    assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
+    for fn in ('function renderArmCards(', 'function renderParamsPanel(', 'function submitCaps(', '/api/teleop_speed'):
+        assert fn in params_js, fn
+    assert 'arm_connectivity' in app_js and 'pollArms()' in app_js
+    assert 'function renderArmSMapSvg(' in map_js and 'id="map-expand-btn"' in map_js and 'function openMapModal(' in map_js
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    srv = bench_record.make_server(bench, 0)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        base = f'http://127.0.0.1:{srv.server_port}'
+        with urllib.request.urlopen(base + '/bench_record_params.js', timeout=5) as r:
+            assert r.status == 200 and b'renderArmCards' in r.read()
+        req = urllib.request.Request(base + '/api/teleop_speed', data=b'{"arm":"arm_s","stage":90}',
+                                     headers={'Content-Type': 'application/json', 'X-Bench': '1'}, method='POST')
+        with urllib.request.urlopen(req, timeout=5) as r:
+            assert r.status == 200 and json.loads(r.read())['teleop_speed_declared']['arm_s']['stage'] == 90
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_ui_audio_cues_and_quick_restart_after_result_contract():
+    import re
+    omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    ui_js = (omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+    dr_js = (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8')
+
+    assert 'id="hdr-sound-btn"' in html and 'id="hdr-quick-restart-btn"' in html
+    ops_m = re.search(r'<section id="hdr-row-ops"[^>]*>(.*?)</section>', html, re.S)
+    assert ops_m
+    last_btn = list(re.finditer(r'<button\b[^>]*\bid="([^"]+)"', ops_m.group(1)))
+    assert last_btn and last_btn[-1].group(1) == 'hdr-estop-btn'
+    context = re.search(r'<div id="hdr-row-menu"[^>]*>(.*?)<section id="hdr-row-ops"', html, re.S).group(1)
+    context_order = ('h1', 'rail-arm-pills', 'hdr-task-summary', 'goal-name-btn', 'ftr-server',
+                     'hdr-cam-health', 'hdr-help-btn', 'btn-drawer-menu', 'hdr-refresh-btn')
+    positions = [context.index('<h1>' if m == 'h1' else f'id="{m}"') for m in context_order]
+    assert positions == sorted(positions)
+
+    for marker in ('function benchBeep(', 'omx_bench_sound', 'BEEP_PATTERNS', 'setSoundEnabled'):
+        assert marker in ui_js, marker
+    for cue in ("benchBeep('ready')", "benchBeep('rec_start')", "benchBeep('saved')",
+                "benchBeep('done')", "benchBeep('warn')"):
+        assert cue in st_js, cue
+    for marker in ("benchBeep('countdown')", "benchBeep('rerecord')",
+                   'function quickRestartAfterResult(', 'hdr-quick-restart-btn'):
+        assert marker in cam_js, marker
+    assert 'function bumpCollectionName(' in dr_js and 'skipHome' in dr_js
+    assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
+
+
+def test_result_home_button_auto_home_view_and_arm_connectivity_resilience(tmp_path):
+    import bench_record_guard as guard
+    omx_dir = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+    dr_js = (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+
+    assert 'id="hdr-result-home-btn"' in html
+    assert html.index('id="hdr-result-home-btn"') < html.index('id="hdr-quick-restart-btn"')
+    assert 'function autoHomeView(' in st_js and 'st.stop_cause' in st_js
+    assert 'function triggerHomePose(' in dr_js and 'fold_unfolded:' in dr_js
+    assert 'hdr-result-home-btn' in cam_js and "rhBlocked" in cam_js
+    (tmp_path / 'record-config-arm-s.json').write_text(json.dumps({'robot': None, 'teleop': 'bad'}))
+    assert guard.arm_connectivity(tmp_path, 'arm_s') == {'connected': None, 'follower_connected': None, 'leader_connected': None}
+
+

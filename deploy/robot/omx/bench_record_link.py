@@ -11,6 +11,8 @@ import json
 import os
 from pathlib import Path
 
+from teleop_speed import valid as valid_teleop_stage
+
 ENDED = ("sealed", "stopped_safe", "stopped_not_sealed", "unsafe_or_failed", "seal_failed", "failed", "leader_manual_check", "restoring", "sealing")
 COMMAND_NEEDS = {"record": "waiting", "next": "recording", "rerecord": "recording", "finish": "waiting"}  # the recorder state each request is valid in
 WHY = {"record": "연동됨(준비 완료) 상태에서만 녹화를 시작할 수 있습니다", "next": "녹화 중에만 에피소드를 끝낼 수 있습니다",
@@ -18,6 +20,43 @@ WHY = {"record": "연동됨(준비 완료) 상태에서만 녹화를 시작할 �
 
 
 class BenchLinkMixin:
+    def _pre_start_home(self, body, replay_path=None):
+        """Move a single follower arm home before leader alignment/start when home_before_start is requested."""
+        flag = body.get("home_before_start")
+        if flag is None or flag is False:
+            return False
+        if flag is not True:
+            raise ValueError("home_before_start는 true 또는 false여야 합니다")
+        if body.get("arm") == "arm_ab" or replay_path:
+            raise ValueError("시작 전 홈 이동(home_before_start)은 replay 없는 단일 팔 리더 세션만 지원합니다")
+        req = {"arm": body["arm"], "include_leader": False}
+        if body.get("fold_unfolded") is True:
+            req["fold_unfolded"] = True
+        self.go_home(req)
+        with self.lock:
+            if self.abort:
+                raise ValueError("정지 요청이 있어 녹화를 시작하지 않습니다")
+        return True
+
+    def set_teleop_speed(self, body):
+        """Declare the teleop speed stage (None or 30/45/60/90/120 deg/s) for a single arm while idle."""
+        if not isinstance(body, dict) or body.get("arm") not in ("arm_a", "arm_b", "arm_s"):
+            raise ValueError("속도 단계는 단일 팔(arm_a, arm_b, arm_s)만 설정할 수 있습니다")
+        arm, raw_stage = body["arm"], body.get("stage")
+        if raw_stage is not None and valid_teleop_stage(raw_stage) is None:
+            raise ValueError("지원하지 않는 추종 속도 단계입니다 (기본 null 또는 30, 45, 60, 90, 120)")
+        with self.lock:
+            if self.state.get("status") in ("handing_over", "homing", "recording", "restoring", "sealing"):
+                raise ValueError("세션이나 홈 이동이 진행 중일 때는 속도 단계를 바꿀 수 없습니다")
+            path = self.prep / f"teleop-speed-{arm}.json"
+            if raw_stage is None:
+                path.unlink(missing_ok=True)
+            else:
+                tmp = path.with_suffix(".json.tmp")
+                tmp.write_text(json.dumps({"stage": raw_stage}) + "\n", encoding="utf-8")
+                os.replace(tmp, path)
+        return self.status()
+
     def prepare(self, body):
         """Start a linked session: everything /start does up to the guard alignment, then wait ready; nothing is recorded."""
         if body.get("arm") == "arm_ab" or body.get("replay"):

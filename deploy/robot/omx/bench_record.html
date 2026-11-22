@@ -24,6 +24,7 @@
       <nav class="header-tools" aria-label="작업대 도구">
         <span id="ftr-server" class="ui-tag mono">서버 확인 중</span>
         <span class="ui-tag" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
+        <button type="button" id="hdr-sound-btn" class="btn-tool btn-xs" aria-pressed="true" title="신호음 켜기/끄기 [M]">신호음 ON</button>
         <button type="button" id="hdr-help-btn" class="btn-tool btn-xs" title="단축키 도움말 [?]" aria-label="단축키" aria-controls="sec-shortcuts">?</button>
         <div class="drawer-menu-wrap" id="drawer-menu-wrap">
           <button type="button" id="btn-drawer-menu" class="btn-tool btn-xs" aria-expanded="false" aria-controls="drawer-menu-pop">메뉴 ▾</button>
@@ -70,7 +71,9 @@
         </div>
         <div id="hdr-result-actions" class="result-ops" data-tabs="result" hidden>
           <span id="goal-result-line" class="goal-result-line mono" hidden></span>
-          <button type="button" id="back-to-setup-btn" class="btn-primary">다음 녹화 준비</button>
+          <button type="button" id="hdr-result-home-btn" class="btn-tool" title="팔로워 홈 포즈 복귀 (펼쳐진 팔 안전 접기 포함) [H]"><span class="btn-lbl">지금 홈 포즈</span><kbd class="kbd-hint">H</kbd></button>
+          <button type="button" id="hdr-quick-restart-btn" class="btn-primary" title="홈 복귀 확인 후 수집명 +1로 바로 다음 연동 준비 시작">홈 → 바로 다음 시작</button>
+          <button type="button" id="back-to-setup-btn" class="btn-tool">다음 녹화 준비</button>
         </div>
       </div>
       <div class="stop-group">
@@ -117,6 +120,7 @@
       </section>
 
       <aside id="bench-sidebar" class="bench-sidebar" aria-label="작업대 정보 사이드바">
+        <div id="arm-card-bar" class="arm-card-bar" role="group" aria-label="연결된 암 선택"></div>
         <section class="card sb-sec goal-panel" id="sec-goal" aria-labelledby="h-goal">
           <div class="goal-head">
             <h2 id="h-goal" class="goal-kicker">목표</h2>
@@ -197,7 +201,7 @@
 
         <details class="card acc-card sb-sec" id="sec-params" open aria-labelledby="h-params">
           <summary class="acc-sum sb-sum">
-            <div class="acc-head"><h2 id="h-params" class="goal-kicker">파라미터</h2></div>
+            <div class="acc-head"><h2 id="h-params" class="goal-kicker">관절·동기화 파라미터</h2></div>
           </summary>
           <div class="acc-body sb-body">
             <dl id="sb-params-kv" class="kv sb-params-kv mono">
@@ -206,6 +210,20 @@
               <dt>에피소드</dt><dd id="sb-param-episodes">기본회</dd>
               <dt>회차/대기</dt><dd id="sb-param-timing">회차 길이 기본 · 사이 대기 기본</dd>
             </dl>
+            <div id="sb-speed-box" class="sb-param-block">
+              <div class="sb-param-head"><span>추종 속도 (teleop)</span><span id="sb-speed-detail" class="mono quiet"></span></div>
+              <div id="sb-speed-pills" class="speed-pills" role="group" aria-label="추종 속도 단계"></div>
+            </div>
+            <div id="sb-joint-caps-box" class="sb-param-block">
+              <div class="sb-param-head">
+                <span>관절 한계 · 동기화 (11~16)</span>
+                <div class="sb-param-actions">
+                  <button type="button" id="sb-caps-save-btn" class="btn-primary btn-xs">값 저장</button>
+                  <button type="button" id="sb-caps-drawer-btn" class="btn-tool btn-xs">막대 편집</button>
+                </div>
+              </div>
+              <div id="sb-joint-caps-table" class="joint-caps-table mono"></div>
+            </div>
           </div>
         </details>
 
@@ -229,7 +247,7 @@
               <dt><kbd>Ctrl+Enter</kbd> / <kbd>Alt+S</kbd></dt><dd>한 번에 시작</dd>
               <dt><kbd>→</kbd> / <kbd>N</kbd></dt><dd>다음 에피소드 (녹화 중)</dd>
               <dt><kbd>←</kbd> / <kbd>R</kbd></dt><dd>다시 녹화 (녹화 중)</dd>
-              <dt><kbd>H</kbd></dt><dd>선택 팔 홈 이동</dd>
+              <dt><kbd>H</kbd></dt><dd>선택 팔 홈 이동 / 지금 홈 포즈</dd>
               <dt><kbd>Esc</kbd></dt><dd>녹화 중지 / 서랍 닫기</dd>
               <dt><kbd>C</kbd></dt><dd>주/보조 카메라 전환</dd>
               <dt><kbd>Shift+C</kbd></dt><dd>카메라 재시작</dd>
@@ -239,6 +257,7 @@
               <dt><kbd>X</kbd></dt><dd>알림 닫기</dd>
               <dt><kbd>Alt+R</kbd></dt><dd>역방향 재생 전환</dd>
               <dt><kbd>Alt+W</kbd></dt><dd>집기↔놓기 스왑</dd>
+              <dt><kbd>M</kbd></dt><dd>신호음 켜기/끄기</dd>
               <dt><kbd>?</kbd></dt><dd>단축키 도움말</dd>
             </dl>
           </div>
@@ -248,20 +267,25 @@
     </div>
   </main>
   <footer id="status-bar" class="status-bar" aria-label="작업대 상태">
-    <dl id="sb-motor-summary" class="status-values">
-      <div><dt>단계</dt><dd id="top-badge">확인 중</dd></div>
-      <div hidden><dt>팔로워</dt><dd><span id="sb-st-follower" hidden></span> <span id="sb-st-torque" hidden></span></dd></div>
-      <div class="status-leader" hidden><dt>리더</dt><dd id="sb-st-leader"></dd></div>
-      <div hidden><dt>추종</dt><dd id="sb-st-phase"><span id="tel-track"></span></dd></div>
-      <div class="status-speed" hidden><dt>속도</dt><dd id="status-speed"></dd></div>
-      <div hidden><dt>카메라</dt><dd><span id="status-cameras"></span> <span id="status-camera-source" hidden></span></dd></div>
-      <div hidden><dt>보류·사고</dt><dd id="sb-st-hold"></dd></div>
-    </dl>
-    <div id="start-reason-bar" class="reason-strip" role="status" hidden>
-      <span class="status-label">알림</span><span id="hdr-start-reasons" class="reason-text quiet"></span>
-      <button type="button" id="reason-more-btn" class="btn-tool btn-xs" hidden></button>
-      <button type="button" id="reason-expand-btn" class="btn-tool btn-xs" aria-expanded="false" hidden>자세히</button>
-      <button type="button" id="reason-close-btn" class="btn-tool btn-xs" aria-label="알림 닫기" hidden>닫기<kbd class="kbd-hint">X</kbd></button>
+    <div class="status-bar-main">
+      <dl id="sb-motor-summary" class="status-values">
+        <div><dt>단계</dt><dd id="top-badge">확인 중</dd></div>
+        <div hidden><dt>팔로워</dt><dd><span id="sb-st-follower" hidden></span> <span id="sb-st-torque" hidden></span></dd></div>
+        <div class="status-leader" hidden><dt>리더</dt><dd id="sb-st-leader"></dd></div>
+        <div hidden><dt>추종</dt><dd id="sb-st-phase"><span id="tel-track"></span></dd></div>
+        <div class="status-speed" hidden><dt>속도</dt><dd id="status-speed"></dd></div>
+        <div hidden><dt>카메라</dt><dd><span id="status-cameras"></span> <span id="status-camera-source" hidden></span></dd></div>
+        <div hidden><dt>보류·사고</dt><dd id="sb-st-hold"></dd></div>
+      </dl>
+      <div id="start-reason-bar" class="reason-strip" role="status" hidden>
+        <span class="status-label">알림</span><span id="hdr-start-reasons" class="reason-text quiet"></span>
+        <button type="button" id="reason-more-btn" class="btn-tool btn-xs" hidden></button>
+        <button type="button" id="reason-expand-btn" class="btn-tool btn-xs" aria-expanded="false" hidden>자세히</button>
+        <button type="button" id="reason-close-btn" class="btn-tool btn-xs" aria-label="알림 닫기" hidden>닫기<kbd class="kbd-hint">X</kbd></button>
+      </div>
+    </div>
+    <div id="activity-log-bar" class="activity-log-bar">
+      <span class="status-label">기록</span><span id="activity-log-text" class="activity-log-text mono" data-tone="muted">대기 중</span>
     </div>
   </footer>
 
@@ -528,12 +552,23 @@
     </div>
   </aside>
 
+  <div id="map-modal-host" class="map-modal-host" hidden role="dialog" aria-modal="true" aria-labelledby="map-modal-title">
+    <div id="map-modal-backdrop" class="drawer-backdrop"></div>
+    <div class="map-modal-panel">
+      <div class="drawer-panel-head">
+        <h2 id="map-modal-title" style="margin:0">작업대 배치도 확대 보기</h2>
+        <button type="button" id="map-modal-close-btn" class="btn-tool btn-xs" aria-label="배치도 닫기">닫기 (Esc)</button>
+      </div>
+      <div id="map-modal-body" class="map-modal-body"></div>
+    </div>
+  </div>
 </div>
 
 <script src="/bench_record_ui.js"></script>
 <script src="/bench_record_map.js"></script>
 <script src="/bench_record_status.js"></script>
 <script src="/bench_record_app.js"></script>
+<script src="/bench_record_params.js"></script>
 <script src="/bench_record_drawers.js"></script>
 <script src="/bench_record_cam.js"></script>
 <script src="/bench_record_pipeline.js"></script>

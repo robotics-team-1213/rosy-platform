@@ -2,12 +2,12 @@
 """Bench hardware operations (caps, home, initial/leader pose) for bench_record.py."""
 from __future__ import annotations
 
-import json, math, os, re, signal, subprocess, time, urllib.request
+import json, math, os, re, subprocess, time, urllib.request
 from pathlib import Path
 
 from bench_record_inspect import ARMS, BI_ARM, HERE, active_handover_units
-from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, release
-from bench_record_step import at_home
+from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, release, resolve_record_config
+from bench_record_step import at_home, finish_home_child, resolve_home_failure
 
 
 HOME_UNFOLDED = "home requires an empty, folded arm"  # cell_unwedge.return_home's refusal, written to the receipt
@@ -116,7 +116,7 @@ class BenchOpsMixin:
         target_arms = ["arm_a", "arm_b"] if arm == BI_ARM else [arm]
         for a in target_arms:
             self._check_lease(a)  # a held or foreign live lease refuses before any unit stops or bus opens
-        inc_leader = body.get("include_leader") is True
+        inc_leader, fold_unfolded = body.get("include_leader") is True, body.get("fold_unfolded") is True
         arm_plans = []
         for a in target_arms:
             letter = ARMS[a]
@@ -153,13 +153,13 @@ class BenchOpsMixin:
                 handles = []
                 rec_proc = None
                 clean = True
-                stopped_units, fresh, home_ok = [], False, False
+                stopped_units, fresh, home_ok, stop_flag = [], False, False, [False]
                 rec_log_p, rec_log = self.prep / ".bench-runs" / f"home-{a}.log", None
                 try:
                     handles, busy = hold_other_arm_locks(a, ARMS, self.procs, self.mounts)
                     if busy:
                         raise ValueError(f"{busy} — 점유 세션 종료 후 홈 이동을 실행하세요")
-                    for unit in active_handover_units(self.run):
+                    for unit in [u for u in active_handover_units(self.run) if u.startswith("rosy-omx-observer@")]:
                         stopped_units.append(unit)
                         self._remember(stopped_units)
                         self.run("stop", unit)
@@ -209,28 +209,11 @@ class BenchOpsMixin:
                         cmd = [self.python, str(HERE / "cell_pipeline.py"), "--config", str(stack), "--operating-profile", str(rprof),
                                "--person-at-switch"]
                         res = self._pipeline_stage(a, cmd, "home", env, "--library", str(lib_p))
-                        if not self._home_ok(res):  # no automatic recover: it cannot tell an empty arm from one holding a box
-                            raise ValueError(self._home_failure(a, res))
+                        if not self._home_ok(res):
+                            resolve_home_failure(self, a, res, stack, lib_p, io_dir, env, fold_unfolded, stop_flag)
                     home_ok = True
                 finally:
-                    if rec_proc is not None:
-                        try:
-                            rec_proc.send_signal(signal.SIGTERM)
-                            rec_proc.wait(timeout=30)  # longer than the runner's own 15 s no-answer judgement
-                            clean = rec_proc.returncode == 0  # 75 = HOLD (torque kept ON), anything else is unconfirmed
-                            if not clean and self._never_powered(rec_proc.returncode, rec_log_p):  # it ended before any runner: nothing to check
-                                clean = self._home_recovered = True
-                            if getattr(self, "_person_needed", None):  # a baseline tool that ran without a verified result
-                                clean = False
-                        except subprocess.TimeoutExpired:
-                            clean = False
-                            rec_proc.kill()
-                            try:
-                                rec_proc.wait(timeout=5)
-                            except Exception:
-                                pass
-                        except Exception:
-                            clean = False
+                    clean = finish_home_child(self, rec_proc, rec_log_p, stop_flag[0])
                     self._home_child = None
                     if rec_log is not None:
                         rec_log.close()
@@ -290,7 +273,7 @@ class BenchOpsMixin:
                 live_d = json.loads(live_p.read_text(encoding="utf-8"))
                 state = live_d.get("state")
             else:
-                rcfg = self.prep / f"record-config-arm-{letter}.json"
+                rcfg = resolve_record_config(self.prep, a)
                 if not rcfg.is_file():
                     raise ValueError(f"{a}의 실시간 관절 파일(chunk-io-{letter}/live.json) 또는 설정 파일(record-config-arm-{letter}.json)을 찾을 수 없습니다")
                 self._check_lease(a)  # the read opens the Follower's bus: lease and incident hold first
@@ -341,7 +324,7 @@ class BenchOpsMixin:
         cfgs = {}
         for a in target_arms:
             letter = ARMS[a]
-            rcfg = self.prep / f"record-config-arm-{letter}.json"
+            rcfg = resolve_record_config(self.prep, a)
             if not rcfg.is_file():
                 raise ValueError(f"{a}의 설정 파일(record-config-arm-{letter}.json)을 찾을 수 없습니다")
             cfgs[a] = rcfg

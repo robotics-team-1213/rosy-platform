@@ -367,3 +367,86 @@ def test_restart_after_pause_clears_stale_lag_speed_so_first_tick_uses_3_deg_lea
     guard.restart_after_pause(motion, clock[0] + 5.0)
     assert motion.lag.speed == {} and motion.lag.delta == {} and motion.lag.blocked_since == {}
     assert motion.lag.lead_ticks('shoulder_pan', guard.LEAD_DEG) == pytest.approx(guard.LEAD_DEG * guard.TICKS_PER_DEGREE)
+
+
+def test_smooth_twist_past_calibrated_end_clamps_while_tracking_without_torque_cut(guard, capsys):
+    motion, follower, leader, clock, step = _lagging(guard, stage=90)
+    follower.calibration['wrist_roll'].range_max = 2120
+    leader.calibration['wrist_roll'].range_max = 2120
+    for _ in range(5):  # 2028 -> 2178 smoothly past 2120 while tracking
+        leader.raw['wrist_roll'] += 30
+        step()
+    assert not motion.failed and any(follower.torque.values())
+    assert motion.prev_target['wrist_roll'] == 2120 and motion.prev_mapped['wrist_roll'] == leader.raw['wrist_roll']
+    assert follower.goals['wrist_roll'] <= 2120
+    assert capsys.readouterr().out.count('wrist_roll clamped at follower calibrated end (2120)') == 1
+    # Smoothly move >100 deg past follower actual end then twist back inside calibrated range
+    for _ in range(25):
+        leader.raw['wrist_roll'] += 60
+        step()
+    assert not motion.failed and 'wrist_roll' in motion.clamped
+    while leader.raw['wrist_roll'] > 2090:
+        leader.raw['wrist_roll'] -= 80
+        step()
+    assert not motion.failed and 'wrist_roll' not in motion.clamped
+    # Restart after pause resets prev_mapped and clamped tracking state
+    leader.raw['wrist_roll'] = 2160
+    step()
+    assert 'wrist_roll' in motion.clamped
+    guard.restart_after_pause(motion, clock[0] + 1.0)
+    assert motion.prev_mapped is None and motion.clamped == set()
+
+
+def test_single_tick_wrap_jump_and_untracking_and_follower_range_exit_still_fail_closed(guard):
+    # 1) Single-tick >=100 deg wrap jump while tracking still fails closed (at 100-deg check and validate_targets)
+    motion, follower, leader, clock, step = _lagging(guard, stage=90)
+    follower.calibration['wrist_roll'].range_max = 2120
+    leader.calibration['wrist_roll'].range_max = 2120
+    leader.raw['wrist_roll'] += int(105 * guard.TICKS_PER_DEGREE)
+    with pytest.raises(ValueError, match=r'difference >=100|outside calibrated range'):
+        step()
+    assert not any(follower.torque.values())
+    with pytest.raises(ValueError, match='outside calibrated range'):
+        guard.validate_targets(
+            SimpleNamespace(follower=follower, leader=leader, full_arm=True, teacher=False, body_only=False,
+                            command={'wrist_roll': 2100}, tracking=True, floor={}, prev_mapped={'wrist_roll': 2090},
+                            clamped=set(), label='arm_s', grip_map=None),
+            dict(leader.raw, wrist_roll=3250), dict(leader.raw, wrist_roll=3250),
+            dict(leader.raw, wrist_roll=3250), follower.raw,
+        )
+
+    # 2) Startup (command is None), alignment (not tracking), body_only, and follower actual current still fail closed
+    f0, l0 = Bus(), Bus(leader=True)
+    f0.raw['wrist_roll'], l0.raw['wrist_roll'] = 3900, 4150
+    with pytest.raises(ValueError, match='outside calibrated range'):
+        guard.NativeJointMotion(f0, l0).prepare(action(l0))
+    f1, l1 = Bus(), Bus(leader=True)
+    f1.raw['wrist_roll'] = l1.raw['wrist_roll'] = 3900
+    m_align = guard.NativeJointMotion(f1, l1, stage=90)
+    m_align.send(action(l1))
+    assert not m_align.tracking
+    l1.raw['wrist_roll'] = 4150
+    with pytest.raises(ValueError, match='outside calibrated range'):
+        m_align.send(action(l1))
+    assert not any(f1.torque.values())
+    f2, l2 = Bus(), Bus(leader=True)
+    f2.raw['wrist_roll'] = l2.raw['wrist_roll'] = 3900
+    m_body = guard.NativeJointMotion(f2, l2, body_only=True)
+    m_body.send(action(l2))
+    m_body.tracking = True
+    l2.raw['wrist_roll'] = 4150
+    with pytest.raises(ValueError, match='outside calibrated range'):
+        m_body.send(action(l2))
+    motion2, follower2, leader2, _, step2 = _lagging(guard, stage=90)
+    follower2.calibration['wrist_roll'].range_max = 2030
+    follower2.raw['wrist_roll'] = 2035  # within 5 deg of command=2028 so check_following passes and validate_targets rejects
+    with pytest.raises(ValueError, match='outside calibrated range'):
+        step2()
+    assert not any(follower2.torque.values())
+
+    # 3) Smooth gripper trigger excursion while tracking clamps safely instead of cutting torque
+    motion3, follower3, leader3, _, step3 = _lagging(guard, stage=90)
+    leader3.calibration['gripper'].range_max = 2060
+    leader3.raw['gripper'] = 2075
+    step3()
+    assert not motion3.failed and 'gripper' in motion3.clamped and any(follower3.torque.values())

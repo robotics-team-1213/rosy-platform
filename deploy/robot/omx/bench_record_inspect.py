@@ -11,7 +11,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
-    HANDOVER, active_handover_units, check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, systemctl, write_restore_list, write_snapshot)
+    HANDOVER, active_handover_units, arm_connectivity, check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, systemctl, write_restore_list, write_snapshot)
 from bench_record_replay import recording_progress  # noqa: E402
 from bench_record_step import starting_step  # noqa: E402
 from bench_record_safety import end_verdict  # noqa: E402
@@ -211,7 +211,7 @@ class BenchInspectMixin:
                 "bindings": ch.get("arm_bindings", {}).get(a),
                 "has_initial_pose": all((self.prep / f"initial-pose-{x}.json").is_file() for x in sub),
                 "has_leader_pose": all((self.prep / f"leader-home-{x}.json").is_file() for x in sub),
-                "locked_by": [h for h in locks if h.get("lock") in lock_names],
+                "locked_by": [h for h in locks if h.get("lock") in lock_names], **arm_connectivity(self.prep, a),
             }
         return {"status": st.get("status"), "arms": out}
 
@@ -381,6 +381,7 @@ class BenchInspectMixin:
         recommended = {arm: self._recommend(arm, arm_bindings[arm]) for arm in (*ARMS, BI_ARM)}
         return {"configs": configs, "config_meta": config_meta, "robots": robots, "caps": caps, "caps_data": caps_data,
                 "arms": [*ARMS, BI_ARM], "instances": instances, "arm_bindings": arm_bindings,
+                "arm_connectivity": {a: arm_connectivity(self.prep, a) for a in (*ARMS, BI_ARM)},
                 "recommended": recommended, "tasks": tasks, "task_cards": task_cards,
                 "replays": replays, "calibrations": calibrations, "cal_meta": cal_meta}
 

@@ -275,6 +275,9 @@ def restart_after_pause(motion, started: float) -> None:
     clocks (effort load timers, held and squeezing joints' saturated-since) start fresh: the pause neither extends nor
     shortens the loop's own HOLD_S rule, which is unchanged while the loop runs; the boundary watch judges the pause alone."""
     motion.last_time, motion.last_effort_time, motion.prev_target = started, None, None
+    motion.prev_mapped = None
+    if hasattr(motion, "clamped"):
+        motion.clamped.clear()
     motion.last_effort_gap_at = None
     motion.effort_since = dict.fromkeys(motion.effort_since)
     for hold in motion.held.values():

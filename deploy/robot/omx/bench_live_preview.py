@@ -44,7 +44,7 @@ def camera_labels(robot):
 
 
 def _fresh(mtime):
-    return 0 <= time.time() - mtime <= 2
+    return 0 <= time.time() - mtime <= 5
 
 
 class SessionPreview:
@@ -73,10 +73,10 @@ class SessionPreview:
         cameras = {}
         for label, key in self.labels.items():
             try:
-                if _fresh((self.folder / f"{key}.jpg").stat().st_mtime):
-                    cameras[label] = {"fresh": True, "quality": {}}
+                fresh = _fresh((self.folder / f"{key}.jpg").stat().st_mtime)
             except OSError:
                 continue
+            cameras[label] = {"fresh": fresh, "quality": {}}
         return cameras
 
 
