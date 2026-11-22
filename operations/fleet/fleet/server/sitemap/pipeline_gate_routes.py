@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request
 from fleet.pipeline import resolve_omx_cells
 from fleet.pipeline.station_zones import load_station_zones, save_station_zones_yaml
 
-from fleet.server.sitemap.pipeline_pinky_dispatch import dispatch_fields
+from fleet.server.pipeline_pinky_dispatch import dispatch_fields
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health, _storage_dir
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float
 
