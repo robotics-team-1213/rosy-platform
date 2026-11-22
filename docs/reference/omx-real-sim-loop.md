@@ -33,6 +33,18 @@ python tools/sim/omx_loop.py all --run --run-sweep --run-dir RUN --capture CAPTU
 
 상단 보정을 통과한 스냅샷이 카메라와 임시판·선박·벨트 배치를 결정한다. 운반 시험과 후보에는 스냅샷 해시가 붙는다. 시험을 재사용하려면 같은 스냅샷의 해시가 필요하다. 층 검증 근거가 없는 안착 시도는 미확인으로 기록한다. 재생에서 얻은 시야·관절 추종 차이는 다음 측정 스냅샷에 보정 후보로 남는다.
 
+## 카메라의 작은 픽셀 변화 확인
+
+- R2S의 반복 측정에는 같은 프리셋으로 만든 직전 스냅샷을 `measure RUN --prev SNAPSHOT` 또는 `pipeline RUN --prev SNAPSHOT`에 지정한다. `frames.top`은 현재 촬영본의 해시다. `camera_reference_top`은 현재 카메라 자세와 짝을 이루는 기준 촬영본의 해시다. 원본 프레임은 `ROSY_REAL2SIM_FRAMES`에 보관한다.
+- 기준 대비 3 px, 0.3°, 배율 0.5% 중 하나를 넘으면 기존 패드 기준점 PnP를 다시 맞춘다. 보정이 통과하면 자세와 기준 프레임을 함께 갱신한다. 기준 프레임이 없거나 비교점이 부족하면 자세를 다시 맞춘다. 해상도가 달라지면 촬영 프로필을 먼저 확인한다.
+- S2R은 학습 프레임과 현재 녹화 프레임에서 동일한 고정점을 원본 픽셀 좌표로 측정한다. 위·측면 카메라별로 적합에 쓸 점 두 개와 검증에 쓸 점 두 개 이상을 고른다. 검증점은 벨트와 상판처럼 위치와 높이가 다른 작업 구역에서 고른다. 두 프레임의 촬영 프로필과 해상도를 확인한다.
+
+```text
+python tools/sim/omx_policy_camera_drift.py TRAIN.jpg LIVE.jpg ANCHORS.json --max-shift-px SHIFT_LIMIT --max-residual-px RESIDUAL_LIMIT
+```
+
+`ANCHORS.json`에 `camera`(`top` 또는 `side`), `training_profile`, `live_profile`, `reference_xy`, `live_xy`를 넣는다. 두 좌표 배열의 순서를 맞춘다. 허용 이동과 잔차는 검증할 정책의 기준에 맞춰 지정한다. 보고서에는 원본 해시, 좌우·상하 편차, 검증점별 보정 전후 오차, 통과한 이동 보정 행렬이 담긴다. 여러 녹화 쌍에서 확인한 뒤 같은 보류 에피소드로 원본과 보정 후보의 정책 결과를 비교한다. 이 명령은 후보 보고서를 출력한다.
+
 ## CAD194 손목 후보 비교
 
 보관 영상에서는 양쪽 집게 끝을 표시한다.

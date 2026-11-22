@@ -92,7 +92,7 @@ def apply_refit(top, layout, tp, prev_plates, motion, moved_ok, starts):
     keep the pose only when it passes. A refused refit stops the measurement (the old pose is already known to fail), unless
     moved_ok, which is recorded. -> (temp-plates result, camera_fit or None); `layout` carries the fitted pose when it was kept."""
     worst = lambda r: max((r.get("camera_check") or {}).get("worst_mm") or [99.0])  # noqa: E731
-    if not (motion.get("moved") or worst(tp) > GATE_MM):
+    if not (motion.get("moved") or motion.get("refit_required") or worst(tp) > GATE_MM):
         return tp, None
     fit = refit_top_camera(top, layout, starts)
     if fit["ok"]:

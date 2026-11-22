@@ -135,7 +135,9 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
     run = Path(run)
     prev = json.loads(Path(prev_path).read_text(encoding="utf-8")) if prev_path else None
     lane_choices = {}
-    if prev_path:  # the refit reads the pad ends against the lanes the plates were last measured at, not the stale default lanes
+    previous_fit = (prev or {}).get("camera_fit")
+    previous_plates_valid = prev is not None and not (previous_fit and not previous_fit.get("ok"))
+    if previous_plates_valid:  # the refit reads the pad ends against the lanes the plates were last measured at
         try:
             sites.snapshot_lanes(prev_path, "a"), sites.snapshot_lanes(prev_path, "b")
             lane_choices = dict(temp_lanes="snapshot", cell_snapshot=str(prev_path))
@@ -144,24 +146,43 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
     if preset:  # the chosen preset and its frame ride every item; the map gate refuses a prev snapshot read in another frame
         lane_choices["preset"] = preset
     layout = sites.Layout(**lane_choices)  # camera, deck and arms; where the plates were comes from prev
-    if preset and (verdict := map_gate.gate(layout))["verdict"] == "refuse":
+    if (preset or lane_choices) and (verdict := map_gate.gate(layout))["verdict"] == "refuse":
         raise SystemExit("preset %s with this --prev is not one map (omx_map_gate): %s" % (preset, "; ".join(verdict["why"])))
     frames = {c: run / "frames" / f"{c}.jpg" for c in CAMERAS if (run / "frames" / f"{c}.jpg").exists()}
     top = cv2.imread(str(frames["top"])) if "top" in frames else None
     if top is None:
         raise SystemExit(f"no readable top frame in {run / 'frames'}")
-    anchor.remember(frames["top"])  # this frame is the next snapshot's reference
+    top_digest = anchor.remember(frames["top"])
+    frame = map_gate.provenance(layout.choices)["top_camera"]["frame"]
+    reference_top = None
     camera_motion = dict(checked=False, reason="no previous snapshot")
-    ref = prev and anchor.reference(prev.get("frames", {}).get("top", ""))
-    if prev and not ref:
-        camera_motion["reason"] = "the previous snapshot's top frame is not in the local frame store"
-    elif ref:
-        m = anchor.motion(cv2.imread(str(ref)), top)
-        camera_motion = dict(checked=True, moved=anchor.moved(m), **m) if m else dict(checked=False, reason="too few far-band matches")
-    prev_tp = prev and prev["items"]["temp_plates"]
+    if prev:
+        if prev.get("preset") == preset and prev.get("frame", frame) == frame:
+            previous_pose = (prev.get("camera") or {}).get("top")
+            reference_top = prev.get("camera_reference_top")
+            legacy_pose_accepted = (previous_fit or {}).get(
+                "ok", previous_fit is None and not (prev.get("camera_motion") or {}).get("moved"),
+            )
+            # Legacy snapshots pair their own capture with the pose only if the measurement accepted it.
+            if "camera_reference_top" not in prev and legacy_pose_accepted:
+                reference_top = (prev.get("frames") or {}).get("top")
+            if reference_top and isinstance(previous_pose, dict):
+                layout.fixture["real_cameras"] = dict(layout.fixture["real_cameras"], top=previous_pose)
+            else:
+                reference_top = None
+            ref = anchor.reference(reference_top) if reference_top else None
+            ref_image = cv2.imread(str(ref)) if ref and anchor.digest(ref) == reference_top else None
+            if ref_image is not None and ref_image.shape[:2] != top.shape[:2]:
+                raise SystemExit("top resolution changed since calibration; verify the camera profile before measuring")
+            m = anchor.motion(ref_image, top)
+            camera_motion = (dict(checked=True, moved=anchor.moved(m), **m) if m else
+                             dict(checked=False, refit_required=True, reason="no comparable calibrated top frame"))
+        else:
+            camera_motion = dict(checked=False, refit_required=True, reason="previous camera reference uses another preset or frame")
+    prev_tp = prev["items"]["temp_plates"] if previous_plates_valid else None
     tp_first = measure_temp_plates(top, layout, prev_tp)
     worst_first = (tp_first.get("camera_check") or {}).get("worst_mm") or [99.0]
-    if max(worst_first) > 3.0 and not preset:  # a preset names its camera: no silent switch to the 11-12 model (its frame differs)
+    if max(worst_first) > 3.0 and not preset and not prev:
         alt_layout = sites.Layout(top_camera="2026-11-12", **lane_choices)
         tp_alt = measure_temp_plates(top, alt_layout, prev_tp)
         worst_alt = (tp_alt.get("camera_check") or {}).get("worst_mm") or [99.0]
@@ -170,6 +191,8 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
     import omx_real2sim_refit as refit  # PnP on the pad ends from every known pose, factory K; refused or unproven = stop (apply_refit)
     starts = {n: dict(getattr(sites, f"TOP_CAMERA_{n}")) for n in ("20261110", "20261112", "20261114")}
     tp_first, camera_fit = refit.apply_refit(top, layout, tp_first, prev_tp, camera_motion, camera_moved_ok, starts)
+    if (camera_fit or {}).get("ok") or (not prev and camera_fit is None):
+        reference_top = top_digest
     items = {"ship": lambda: measure_ship(top, layout), "belt": lambda: measure_belt(top, layout)}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
@@ -180,10 +203,10 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
               plate_centre={n: dict(xy=list(xy), yaw_deg=yaw) for n, (xy, yaw) in sites.ARM_BASES_MEASURED_194.items()})
     rows = findings_mod.gap_rows(twin, dr_next)
     cap_file = run / "capture.json"
-    frame = (prev or {}).get("frame") or map_gate.provenance(layout.choices)["top_camera"]["frame"]  # a refit keeps the previous lanes' frame
     snap = dict(schema=SCHEMA, frame=frame, preset=preset, gap_rows=rows, taken_at=json.loads(cap_file.read_text(encoding="utf-8"))["taken_at"] if cap_file.exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
-                camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_motion=camera_motion, camera_fit=camera_fit,
+                camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_reference_top=reference_top,
+                camera_motion=camera_motion, camera_fit=camera_fit,
                 items=dict(temp_plates=dict(plates={t: p["lanes"] for t, p in tp["plates"].items() if "lanes" in p},
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},

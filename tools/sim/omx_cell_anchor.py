@@ -43,13 +43,19 @@ def remember(path, root: Path | None = None) -> str:
 
 
 def reference(name: str, root: Path | None = None) -> Path | None:
-    hits = sorted((root or store()).glob(name.split(":", 1)[-1] + ".*"))
+    prefix, _, sha = name.partition(":")
+    if prefix != "sha256" or len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
+        return None
+    hits = sorted((root or store()).glob(sha + ".*"))
     return hits[0] if hits else None
 
 
 def motion(old, new) -> dict | None:
     """Similarity transform taking the old frame's far band onto the new one, or None when too little matches."""
     import cv2
+
+    if old is None or new is None or old.shape[:2] != new.shape[:2]:
+        return None
 
     def gray(img):
         return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
