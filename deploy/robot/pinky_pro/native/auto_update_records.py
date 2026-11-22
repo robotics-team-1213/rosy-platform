@@ -149,8 +149,10 @@ class UpdaterRecords:
         status = {
             "schema": 1, "updated_at": _z(self.host.now()), "hostname": self.host.hostname(),
             "current_release": current, "candidate": candidate, "phase": phase, "reason": reason,
-            "last_result": state.get("last_result"), "progress": progress,
+            "last_result": state.get("last_result"),
         }
+        if progress is not None:
+            status["progress"] = progress
         # D-433: only an apply in progress in this run shows "Updating"; a wait clears it.
         self._update_marker(state.get("applying") if phase == "applying" else None)
         signature = [phase, candidate, _reason_class(reason)]

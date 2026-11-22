@@ -13,7 +13,7 @@ import sys
 
 import pytest
 
-from auto_update_fakes import (BOOT, CURRENT, HOST, NATIVE, NEXT, REPO, T0, _retired_display, _z, device,
+from auto_update_fakes import (BOOT, CURRENT, HOST, NATIVE, NEWER, NEXT, REPO, T0, _retired_display, _z, device,
     history, host, hub, idle_inputs, journal, keys, kind_of, kinds, state, status, switched, upd, updater,
     write_json)
 
@@ -689,7 +689,7 @@ def test_health_hold_advances_percent_and_rollback_omits_it(device, host, hub, k
     health_markers, rollback_markers = [], []
     orig_failed = host._failed
 
-    def watch_health(argv):
+    def watch_health(_h, argv):
         marker = device / upd.UPDATE_DISPLAY
         if host.links["current"] == NEXT and marker.exists():
             health_markers.append(marker.read_text(encoding="utf-8"))
@@ -706,7 +706,7 @@ def test_health_hold_advances_percent_and_rollback_omits_it(device, host, hub, k
                                               if h.links["current"] == NEWER else None)
     orig_rb = host._rollback
 
-    def watch_rb(argv):
+    def watch_rb(_h, argv):
         marker = device / upd.UPDATE_DISPLAY
         rollback_markers.append(marker.read_text(encoding="utf-8") if marker.exists() else None)
         return orig_rb(argv)

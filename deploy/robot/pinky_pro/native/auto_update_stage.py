@@ -204,6 +204,11 @@ class UpdaterStage:
             raise Definitive("DELTA_ASSET_MISSING: signed transport asset is absent")
         return delta
 
+    def _report_stage(self, state: dict, step: str, release_id: str, percent: int | None) -> None:
+        writer = getattr(self, "_write_progress", None)
+        if writer is not None:
+            writer(state, "staging", step, release_id, percent)
+
     def _stage_once(self, state: dict, release: dict, rollout: dict) -> None:
         release_id = release["release_id"]
         delta = None
@@ -226,7 +231,7 @@ class UpdaterStage:
                     pct = min(45, max(0, int(downloaded * 45 // total))) if total and total > 0 else None
                     if pct != last_pct:
                         last_pct = pct
-                        self._write_progress(state, "staging", "download", release_id, pct)
+                        self._report_stage(state, "download", release_id, pct)
 
                 report_download(0)
                 try:
@@ -241,7 +246,7 @@ class UpdaterStage:
                     part.unlink(missing_ok=True)
                     raise Definitive(f"TARBALL_SHA256_MISMATCH: {release_id} got {digest}")
                 os.replace(part, tarball)
-                self._write_progress(state, "staging", "unpack", release_id, STEP_PROGRESS["unpack"])
+                self._report_stage(state, "unpack", release_id, STEP_PROGRESS["unpack"])
                 environment = (["env", f"ROSY_DELTA_BASE_ID={delta['base_release_id']}",
                                 f"ROSY_DELTA_BASE_SUMS={delta['base_sums_sha256']}",
                                 f"ROSY_DELTA_TARGET_SUMS={delta['target_sums_sha256']}"] if delta else [])
@@ -251,7 +256,7 @@ class UpdaterStage:
                 if unpacked.returncode != 0:
                     error = f"UNPACK_FAILED: {_tail(unpacked.stderr or unpacked.stdout)}"
                     raise UpdateError(error) if unpacked.returncode in (124, 127) else Definitive(error)
-            self._write_progress(state, "staging", "verify", release_id, STEP_PROGRESS["verify"])
+            self._report_stage(state, "verify", release_id, STEP_PROGRESS["verify"])
             verified = self.host.run(["python3", "-B", self._native("native_release.py"), "--root", str(self.root),
                                       "--public-key", self._dev(TRUSTED_KEY), "verify", "--release-id", release_id],
                                      VERIFY_TIMEOUT_S)
@@ -267,7 +272,9 @@ class UpdaterStage:
                 if hashlib.sha256(sums.read_bytes()).hexdigest() != rollout["delta"]["target_sums_sha256"]:
                     raise Definitive("DELTA_TARGET_MISMATCH: full target checksum identity differs")
         finally:
-            self._update_marker(None)
+            clear = getattr(self, "_update_marker", None)
+            if clear is not None:
+                clear(None)
 
     def _gate(self, rollout: dict) -> str | None:
         if self.host.hostname() in rollout["canary"]:
