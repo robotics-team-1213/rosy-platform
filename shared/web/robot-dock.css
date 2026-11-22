@@ -151,7 +151,7 @@ details.robot-panel-section > summary {
 
 .robot-panel-foot {
   flex: none;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-3);
   border-block-end: 0;
   border-block-start: 1px solid var(--border-default);
   background: var(--surface-chrome);
@@ -182,6 +182,12 @@ details.robot-panel-section > summary {
     background: var(--surface-chrome);
     overflow-x: auto;
     overflow-y: hidden;
+  }
+  .robot-stage:has(> .robot-panel:not([hidden])) > .robot-dock {
+    position: fixed;
+    top: var(--appbar-height);
+    inset-inline: 0;
+    z-index: 5;
   }
   .robot-dock-group { flex-direction: row; flex: 1 1 auto; width: auto; align-items: stretch; }
   .robot-dock-group + .robot-dock-group { padding-block-start: 0; border-block-start: 0; padding-inline-start: var(--space-2); border-inline-start: 1px solid var(--border-default); }

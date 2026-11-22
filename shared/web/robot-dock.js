@@ -119,9 +119,9 @@ export function createRobotDock({selection, profiles = [], onToggle, kinds, ids}
       onToggle?.(null);
       return;
     }
-    btn.focus();
-    selection?.set?.(id, {source: "dock"});
     setOpen(id);
+    selection?.set?.(id, {source: "dock"});
+    btn.focus();
     onToggle?.(id);
   }
 

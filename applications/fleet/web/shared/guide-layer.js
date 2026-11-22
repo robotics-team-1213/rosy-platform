@@ -533,8 +533,9 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     ctx.restore();
 
     if (labelsOn || isHoveredRobot) {
+      const fmtHover = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
       const labelText = isHoveredRobot && row.pose
-        ? `${row.robot_id} (${row.pose.x.toFixed(2)}, ${row.pose.y.toFixed(2)}m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
+        ? `${row.robot_id} (${fmtHover(row.pose.x)}, ${fmtHover(row.pose.y)}m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
         : isFocused ? poseLabel(row) : compactPoseLabel(row);
       drawChip(ctx, null, p.x, p.y - ring - 16, labelText, worst);
     }

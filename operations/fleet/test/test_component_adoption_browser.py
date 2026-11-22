@@ -86,6 +86,12 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
         expect(manual_details).to_have_count(1)
         assert manual_details.evaluate("node => !node.open")
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+        assert page.evaluate("() => { const t = document.getElementById('rosy-shared-tooltip'); return !t || t.hidden || getComputedStyle(t).display === 'none' || !t.textContent.trim(); }")
+        if width < 1024:
+            dock_box = dock.bounding_box()
+            panel_box = panel.bounding_box()
+            assert dock_box and panel_box
+            assert dock_box["y"] + dock_box["height"] <= panel_box["y"] + 1
         if width >= 1024:
             assert page.evaluate("() => { const s = document.querySelector('#fleet-main > .console-secondary'); return !s || s.scrollWidth <= s.clientWidth + 1; }")
             stamp_ok = page.evaluate("""() => {
@@ -253,6 +259,9 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
 
         stage = page.locator("#" + "cell-cockpit-stage")
         expect(stage).to_be_visible()
+        expect(page.locator('section[aria-labelledby="map-heading"]')).to_be_hidden()
+        for arm_id in ("arm_a", "arm_b", "arm_s"):
+            expect(stage.locator(f'.cell-stage-arm[data-arm-id="{arm_id}"]')).to_be_visible()
         hud_text = page.locator("#" + "cockpit-hud").inner_text()
         assert "ARM-CELL" in hud_text
 

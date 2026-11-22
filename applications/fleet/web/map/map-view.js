@@ -395,10 +395,16 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, drawChip, on: layerOn("traffic") });
   // D-536: 로봇 몸체 원·방향·불확실성 고리와 안내 목표. "로봇" 층을 따른다.
   const guide = (ctx, toPoint) => {
-    // Guide chips start with the robot id ("rosy_01 · ±0.05 m"): exceptions and the selected robot always show.
+    // Guide chips start with the robot id ("rosy_01 · ±0.05 m"): keep active robots/live arms visible on
+    // normal sites (<= 6 robots), while offline arm placeholders yield priority unless focused.
     const focusedRobotId = view.focusRobot || view.selected || null;
-    const chip = (c, g, x, y, text, tone) => drawChip(c, g, x, y, text, tone,
-      Boolean(focusedRobotId && String(text).includes(focusedRobotId)) || labelImportant(String(text).split(" · ")[0]));
+    const smallFleet = (view.guide?.robots?.length || 0) <= 6;
+    const chip = (c, g, x, y, text, tone) => {
+      const s = String(text);
+      const isFocused = Boolean(focusedRobotId && s.includes(focusedRobotId));
+      const isOfflineArm = /^arm_[a-z]+\s*·\s*위치 모름/.test(s);
+      return drawChip(c, g, x, y, text, tone, isFocused || (smallFleet && !isOfflineArm) || labelImportant(s.split(" · ")[0]));
+    };
     drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip: chip, on: layerOn("poses"), focusedRobotId, view });
 
     drawSignalLamps(ctx, toPoint, { view, css, on: layerOn("traffic") });  // D-525 rev 3: above the robots

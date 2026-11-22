@@ -152,10 +152,9 @@
   #fleet-main .legend { margin-top: var(--space-1); gap: var(--space-1) var(--space-3); }
   #robot-panel .robot-panel-body { gap: var(--space-2); }
 }
-#robot-panel .robot-workspace-card .robot-head { gap: var(--space-1); }
+#robot-panel .robot-workspace-card .robot-head { gap: var(--space-1) var(--space-3); }
 #robot-panel .robot-workspace-card .robot-head > :is(b, .spacer) { display: none; }
 #robot-panel .robot-workspace-card .robot-head > .hint { flex: 1 0 100%; margin: 0; font-family: var(--mono); font-size: var(--text-micro); line-height: var(--leading-compact); }
-#robot-panel .robot-workspace-card .robot-head ui-tag[variant="inline"]:has(+ ui-tag[variant="inline"])::after { content: "·"; }
 #robot-panel .robot-workspace-card .facts { margin: var(--space-1) 0; }
 #robot-panel section[data-robot-profile] { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
 #robot-panel section[data-robot-profile] :is(h4, p) { margin: 0; font-size: var(--text-micro); line-height: var(--leading-compact); }
@@ -277,10 +276,10 @@
 .robot-panel-status-wrap { display: grid; gap: var(--space-2); min-width: 0; }
 .robot-panel-twin { min-width: 0; }
 .telemetry-chart { display: grid; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-recessed); min-width: 0; }
-.telemetry-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
-.telemetry-chart-title { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); }
-.telemetry-chart-value { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
-.telemetry-chart-meta { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.telemetry-chart-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1) var(--space-2); min-width: 0; }
+.telemetry-chart-title { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); white-space: nowrap; flex: none; }
+.telemetry-chart-value { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; flex: none; }
+.telemetry-chart-meta { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; flex: none; }
 .telemetry-chart-plot { min-width: 0; height: 44px; overflow: hidden; }
 .telemetry-chart-plot:empty { display: none; }
 .telemetry-chart-plot > div { width: 100%; height: 100%; }
@@ -412,14 +411,15 @@
 html[data-unit-scope-ready]:not([data-unit-drive]) :is(#dispatch-control, .charge-bays) { display: none; }
 
 .cell-cockpit-stage { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+#fleet-main > .console-primary > #cell-cockpit-stage { flex: 0 0 auto; }
 .cell-stage-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .cell-stage-head h2 { margin: 0; }
 .cell-stage-meta { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }
 .cell-stage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .cell-stage-cameras { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--space-2); min-width: 0; }
 .cell-stage-cam { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); min-width: 0; }
-.cell-stage-cam-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
-.cell-stage-cam-head strong { font-size: var(--text-label); overflow-wrap: anywhere; }
+.cell-stage-cam-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1) var(--space-2); min-width: 0; }
+.cell-stage-cam-head strong { font-size: var(--text-label); white-space: nowrap; flex: none; }
 .cell-stage-arms { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-2); min-width: 0; }
 .cell-stage-arm { display: grid; gap: var(--space-1); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-inline-start: var(--selection-edge) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); color: var(--text-primary); font-family: inherit; font-size: inherit; text-align: start; cursor: pointer; min-width: 0; }
 .cell-stage-arm.selected { border-color: var(--selection); border-inline-start-color: var(--selection); background: var(--surface-raised); }
