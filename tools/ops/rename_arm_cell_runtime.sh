@@ -31,7 +31,7 @@ SERVICES="fleet vision peer-cell-a"
 BACKUP_ROOT="/var/backups/rosy-rename"
 OPERATOR_HOME="${OPERATOR_HOME:-/home/robttt}"  # host operator user; never ~ (script runs as root)
 SESSION_LOCK="${OPERATOR_HOME}/rosy-omx/session.lock"
-JOBS_GLOB="${OPERATOR_HOME}/rosy-jobs/*.lock"
+JOB_DIR="${OPERATOR_HOME}/rosy-jobs"
 MOTOR_HEALTH_DIR="${OPERATOR_HOME}/.local/state/rosy/motor-health"
 BACKUP_DIR=""
 ORIGINAL_DIR=""
@@ -53,9 +53,12 @@ refuse_if_busy() {
   if ! flock -nx "$SESSION_FD"; then
     die "an arm session holds $SESSION_LOCK"
   fi
-  local locks
-  locks="$(ls $JOBS_GLOB 2>/dev/null || true)"
-  [ -z "$locks" ] || die "active job locks: $locks"
+  [ -d "$JOB_DIR" ] && [ -r "$JOB_DIR" ] && [ -x "$JOB_DIR" ] || die "cannot inspect the job lock directory"
+  local -a locks
+  shopt -s nullglob
+  locks=("$JOB_DIR"/*.lock)
+  shopt -u nullglob
+  [ "${#locks[@]}" -eq 0 ] || die "active job locks"
   # Terminal snapshots can be old and are not current bus measurements.
   python3 - "$MOTOR_HEALTH_DIR" <<'PY'
 import json
@@ -75,7 +78,13 @@ for arm in ("arm_a", "arm_b", "arm_s"):
             and 0 <= now - health["observed_at"] <= 10
             and len(motors) == health["expected_motor_count"] == 6
             and {motor["id"] for motor in motors} == set(range(11, 17))
-            and all(motor["group"] == arm and motor["torque_enabled"] is False for motor in motors)
+            and all(
+                motor["group"] == arm
+                and motor["observed_at"] == health["observed_at"]
+                and motor["fault"] is False
+                and motor["torque_enabled"] is False
+                for motor in motors
+            )
         )
     except (OSError, ValueError, KeyError, TypeError):
         measured = False
@@ -147,7 +156,7 @@ preconditions() {
 }
 
 volume_manifest() { docker run --rm -v "$1:/data:ro" alpine sh -ec \
-                     'set -o pipefail; cd /data; find . -type f -print0 | sort -z | xargs -0 sha256sum'; }
+                     'set -o pipefail; cd /data; find . -type f -print0 | sort -z | xargs -0 -r sha256sum'; }
 
 stack_down_old() {
   # Down BEFORE backup and copy so sqlite/WAL inside the volume are quiescent.

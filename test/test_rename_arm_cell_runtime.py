@@ -84,6 +84,8 @@ printf 'LoadState=loaded\\nActiveState=%s\\nUnitFileState=%s\\n' "$active" "$ins
         ("updater_active", "legacy updater rosy-cell-autoupdate.service is active"),
         ("updater_enabled", "legacy updater rosy-cell-autoupdate.timer is enabled"),
         ("stale_s", "arm_s lacks fresh complete passive torque-OFF evidence"),
+        ("stale_motor", "arm_s lacks fresh complete passive torque-OFF evidence"),
+        ("job_lock", "active job locks"),
         ("down", "rollback verified"),
         ("rollback", "rollback verified"),
         ("success", "rename complete"),
@@ -101,16 +103,25 @@ def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
     sessions = operator / "rosy-omx"
     sessions.mkdir(parents=True)
     (sessions / "session.lock").touch()
+    jobs = operator / "rosy-jobs"
+    jobs.mkdir()
+    if scenario == "job_lock":
+        (jobs / "active.lock").touch()
     health_dir = operator / ".local/state/rosy/motor-health"
     health_dir.mkdir(parents=True)
     for arm in ("arm_a", "arm_b", "arm_s"):
+        observed = time.time() - (30 if arm == "arm_s" and scenario == "stale_s" else 0)
         (health_dir / f"{arm}.json").write_text(json.dumps({
             "schema_version": "rosy.motor-health.v1",
             "owner_id": arm,
             "status": "active",
-            "observed_at": time.time() - (30 if arm == "arm_s" and scenario == "stale_s" else 0),
+            "observed_at": observed,
             "expected_motor_count": 6,
-            "motors": [{"id": number, "group": arm, "torque_enabled": False} for number in range(11, 17)],
+            "motors": [
+                {"id": number, "group": arm, "torque_enabled": False, "fault": False,
+                 "observed_at": observed - (30 if arm == "arm_s" and number == 11 and scenario == "stale_motor" else 0)}
+                for number in range(11, 17)
+            ],
         }))
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -134,7 +145,7 @@ def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
     assert expected_message in result.stdout + result.stderr
     assert (result.returncode == 0) == (scenario == "success")
     actions = (tmp_path / "actions").read_text()
-    if scenario in {"overlay", "peer", "updater_active", "updater_enabled", "stale_s"}:
+    if scenario in {"overlay", "peer", "updater_active", "updater_enabled", "stale_s", "stale_motor", "job_lock"}:
         assert " down" not in actions and " up" not in actions
     if scenario == "down":
         assert "volume create" not in actions
