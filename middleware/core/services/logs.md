@@ -1001,7 +1001,6 @@
 - 결정: D-744 5항·6항 개정(같은 ADR). 횡단보도 사전 검사와 시계 step은 ADR 한계 5·6으로 적었다.
 - 교훈: `RosBridge._on_odom` 자체는 rclpy 없이 부를 수 없다(`test_bridge_timers.py`가 stub 콜백 호출을 금한다). 가장 가까운 이음매는 ROS 없는 `odometry.observe_lane_return`이다.
 
-
 ## 2026-10-13 · uncommitted · fix(test): services 단독 실행에서 core 패키지 경로 누락
 
 - 변경: test/conftest.py 가 gateway 패키지 루트(core)를 sys.path 에 넣는다. test_lane_return_manager 의 core.drive.line_follow import 가 gateway 테스트가 같이 수집될 때만 풀렸다.
@@ -1770,13 +1769,11 @@
 - 증거: fa0279c11c 원격14대상387PASS/NEW0. 기존 reported-invalid mission 흐름·cross-lane·gate 회귀도 포함했다.
 - gate 변화: 없음. 장치/전체 CI 수용을 뜻하지 않는다.
 
-
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original energy source TDD oracles
 
 - 변경: prepare source-owned synthetic measurement/profile tests for original age/read delay, replay watermarks, exact provider/ticket, immutable facts, unsafe/missing health, calibrated remaining Wh and fixed-end whole-device reserve arithmetic. No voltage-to-energy inference.
 - 증거: not executed; source module intentionally absent at this TDD stage. Actual gateway missing-energy behavioral counterexample is separately committed, with approved remote runner still retrying unavailable test hosts. Missing-module failures alone will not count as behavioral RED.
 - gate 변화: none. No energy source/native restriction implementation or hardware acceptance claimed.
-
 
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) new energy log formatting correction
 
@@ -1784,13 +1781,11 @@
 - 증거: Initial lint caught 4 malformed headings; corrected headings then exposed missing labels and the HEAD append-only comparison. This explicit format repair is recorded, with post-commit lint still required.
 - gate 변화: None. No source implementation, test execution or device acceptance is claimed.
 
-
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original energy remote verification not run
 
 - 변경: R2 energy plan and test-only commits are retained for continued execution. No product energy implementation or runtime/device change was made.
 - 증거: remote_pytest on bab06a2c34, test_native_execution_binding.py, approved first two test hosts, completed exit 1 after the default 600 s no-host retry. Tests did NOT run: no collection, behavioral RED, PASS count or run-1.txt; known_failures comparison is unavailable. Latest pure-source and slot-loss tests also remain unexecuted. Local committed-tree lint passed with 0 errors/33 warnings after the explicit journal-format repair; AST/diff checks pass.
 - gate 변화: None. Full station goal remains ACTIVE; this is the first consecutive test-infrastructure interruption after prior source progress. No local test fallback, landing, push or hardware activation.
-
 
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original pack energy restriction implementation
 
@@ -1798,13 +1793,11 @@
 - 증거: Source/test AST and diff checks only. Prewritten source/native oracles and added clock-domain/reversal/cap/pending/publication cases have NOT RUN. Independent static review found and prompted exact Ledger clock binding and original-source-now reversal ordering fixes; final independent scoped static review PASS after both fixes. No meaningful RED or GREEN observed due unavailable approved hosts.
 - gate 변화: None. Verification, native factory/BMS calibration and device/field acceptance remain pending; user excluded simulation.
 
-
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) private energy handover naming
 
 - 변경: Rename EnergyContext.publish to finish at its definition and sole ingress call. Behavior, lock order, immutable cache and STOP ordering are unchanged.
 - 증거: Read existing event catalogue scanner: it treats every non-ROS .publish call as an event emission, which this private fact handover is not. No scanner, allowlist or event contract changed. Static AST only; independent scoped static review PASS, no runtime test result.
 - gate 변화: None. Existing remote source job still requests ba4868ef59; it does not test this subsequent naming change.
-
 
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) non-simulation station source evidence
 
@@ -1917,6 +1910,7 @@
 - gate 변화: 없음
 - 결정: D-1013 Decision 1–6·8의 구현. bay_line_observer_node(카메라→CAMERA_LINE 관측)와 LINE_FOLLOW→DOCKING 이음새·Gazebo 실구동은 다음 브랜치
 - 교훈: 없음
+
 ## 2026-11-11 · uncommitted · fix(swarm): 자취 이탈 한 표본이 편대를 끝내지 않는다 (D-559 trail 복귀)
 
 - 변경: `trail.py` — `trail_twist` 가 `(linear, angular, reason, off)` 4-튜플을 돌려준다. 자취에서 0.30 m 넘게 벗어나도 1.0 m 안쪽이면 `trail_rejoin` 으로 돌아오고(최소 0.10 m/s, 가속 한계 0.5 m/s² 유지), 리더 꼬리 0.25 m 안쪽이면 밀지 않고 그 자리에 선다. `manager.py` — 이탈이 `LOST_HOLD_S`(3.0 s) 이어질 때만 `trail_lost` 로 래치하고, 포기하는 그 틱에 사유를 확정해 정지와 `swarm.hold` 이벤트를 함께 낸다. `reference_stream.py` — 건너뜀 한도를 넘은 리더 표본은 한 번 버리고 `JUMP_HOLD_S`(1.0 s) 동안 계속 거절될 때만 래치, `anchor_withheld` 뒤에는 그 창을 미리 만료(정지 표본 뒤 첫 표본이 곧 판정).
@@ -1936,3 +1930,11 @@
 - 변경: `localization/mission.py`에 `nudge_backward` 종류 — `nudge_forward`의 정확한 거울(같은 `nudge_max_m`·`nudge_min_m`·짧아지기·정지 갭, 속도는 -`nudge_linear`). D-424 몸통 판정은 후방 섹터(`translation_gap(reverse)`·`unknown_blocks(reverse)`, 후방 초음파 없음), 몸통 없을 때는 후방 부채꼴(빔 측정 불가·`min_front_clearance_m`)로 같은 규칙을 적용한다. `LOCALIZED` 아닐 때만 게이트는 검색 의미론이라 nudge 두 종류만 완화했다: LOCALIZED 로봇에서도 nudge 시작이 가능하고 그런 실행(`search=false`)은 `localized` 끝을 무시한다. rotate·lane·square와 `nudge_forward`의 기존 동작은 그대로.
 - 증거: 원격 pytest(시험 PC) — 이 브랜치 검증 기록 참고. 실물 후방 주행은 미실시.
 - gate 변화: 없음. 안전 경로 검토 요청은 결과 파일에 별도로 남긴다(운동 코드 변경).
+
+## 2026-11-21 · uncommitted · Pinky pit-in 재착좌에서 새 LiDAR 자세를 요청한다
+
+- 변경: 처음에 칸 밖에서 진입한 Pinky도 참조 스캔 기반 재착좌 중에는 칸 안 출발 때와 같은 주기로 자세를 요청한다.
+- 증거: C1 시뮬에서 재착좌 마지막 4초 동안 스캔 40개가 도착했지만 자세 요청은 0건이었다. CORE 재생 8조건에서 새 응답으로 진행하고 누락, 오래된 시각, 틀린 요청 번호에서는 오래된 자세로 움직이지 않는 것을 확인했다.
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

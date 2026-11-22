@@ -13547,7 +13547,6 @@ osy-d395-s1d\`.
 - 증거: 부기는 결정 기록이며 실행 코드 변화 없음. `rosy_harness.py lint` 통과로 확인.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · D-945 전 표면 자리 규칙
 
 - 변경: [D-945](adr/D-945-cross-surface-layout-canon.md)로 모든 표면이 같은 뼈대(자리 순서·제목 하나·표식 어휘 셋·붕괴 두 사다리)를 쓰는 규칙을 세우고 DESIGN.md 「자리 순서와 뼈대」 절에 규범 표를 뒀다. 상용 도구(IDE·관리형 웹·모바일 체계)의 레이아웃 대역을 근거로 제시했다.
@@ -13600,7 +13599,6 @@ osy-d395-s1d\`.
 - 변경: `docs/validation/fleet-ui-consistency-2026-11-01/README.md` — 이번 회차의 변경·비평 점수(23→27)·게이트 적발 6건·LOCAL 증거의 경계를 날짜 기록으로 남겼다.
 - 증거: 기록 문서이며 실행 코드 변화 없음.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · fix(land): 서로 닿지 않으면 차례는 가드만 (D-889 추가 22)
 - 변경: `land_selection.select` landed 경로 두 곳. 이 브랜치와 main 변화분의 선택이 겹치지 않고 안전 경로가 없으면 `_guards_only` + 닿는 브라우저 묶음만.
@@ -14137,7 +14135,6 @@ osy-d395-s1d\`.
 - 증거: 기존 상단 측정 보고 1.13 px는 제안된 평균 3 px 기준을 만족한다. 측면 렌더 대 실물 정량 측정은 UNKNOWN이며 육안 비교와 구분한다. 추가 영상 측정·실물 동작은 수행하지 않았다.
 - gate 변화: 측면 정량 검증 대기. 중단된 run의 적재 수용은 주장하지 않는다. CE: 해당 없음 — 기존 증거의 주장 범위 정정.
 
-
 ## 2026-11-03 · uncommitted · test(remote): verify profiles across each planned host worker
 
 - Change: explicitly pin independent host headroom in the dispatch fixture. Unmeasured hosts use one worker each; 4-core/4-GB hosts use two. Exact host/profile assertions cover every planned worker, with no production change.
@@ -14145,14 +14142,12 @@ osy-d395-s1d\`.
 - Gate: no quarantine or weakened evidence. The previous FULL was stopped and its 1855 browser passes plus clean 12-test G1 receipt remain audit evidence only; a new tree requires a fresh canonical FULL before publication. No new public CI or field acceptance claim.
 - CE: no additional lesson; the two resource cases and exact assertions explain the correction. Existing workflow/recovery lessons updated earlier remain applicable.
 
-
 ## 2026-11-03 · bd44ee1305 · fix(isaac): keep unverified reboot state outside run admission
 
 - Change: keep one SSH request and its50-second limit, verify service state before timer absence, map active/activating to zero remaining seconds, and accept None only for an explicit successful timer not-found result. Failed/empty/malformed responses become ConnectionError and the existing bounded readiness loop ends in NotReady before a request/start.
 - Evidence: commit 830bc0db27 reproduced12 failures/6 passes using actual Bash branch stubs and the real reader-to-Pipeline path. Independently reviewed commit bd44ee1305 passed76 remote-Isaac/batch tests, zero skips/NEW/known/flaky. This verifies tooling; it is not a model evaluation or an actual simulator/device run.
 - gate 변화: the90-minute budget, GPU/launcher interfaces and physical motion authority are unchanged. Final combined canonical FULL/public CI remain pending.
 - CE: no additional lesson; explicit negative-path regressions cover this distinction.
-
 
 ## 2026-11-03 · 7047306026 · docs(solutions): record recorder fixture import isolation evidence
 
@@ -14208,7 +14203,6 @@ osy-d395-s1d\`.
 - 증거: `rosy_harness.py lint` 확인 예정(같은 커밋에서 generate 실행)
 - gate 변화: 없음
 - CE: 해당 없음
-
 
 ## 2026-11-04 · uncommitted · fix(land): ADR Log union 병합의 옛 행을 착지가 지운다 (D-889 추가 30)
 - 변경: `land_merge.stale_adr_rows`·`land.merge` — 병합 뒤 행이 둘인 ID에서 merge-base와 같은 행을 지우고 기록을 다시 만든다. D-889에 추가 29(단독 작업 한 PC 고정, 06:02 착지분)·30을 적었다.
@@ -14422,7 +14416,6 @@ osy-d395-s1d\`.
 - 증거: helper RED4실패→75ca741ec4 원격108통과, mapping RED4실패/10통과→3832c3e788 원격122통과, 추가 operator guard exact 회귀 RED1실패→6dd3dcb9f5 원격123통과/skip0·NEW/known/flaky0이다. 실제 GitHub complete trees11946/12861의 변경2211paths는 같은 SHA의 complete local git와 정확히 일치했다. a613→통합6dd의2238paths는 OS15/native1236/none987/review0으로 os-image에 도달했다. 독립 소유 source·문서 검토는 지원되는 중요 문제를 찾지 못했다.
 - gate 변화: source와 읽기 전용 비교 검증이다. 설치 baseline 혼재와 기존004 publisher 소유를 별도 운영 기록에 보존했으며 baseline 진전·개인키 출력·프로세스 중단·새 빌드/게시/장치 활성화는 하지 않았다. 최종 통합 FULL과 실제 예약 설치는 별도다.
 - CE: 해당 없음. 완전 비교·소비자 분류·mixed baseline의 판단은 코드·실행 회귀·정본 운영 문서에 직접 남았다. 운영 설치와 자동 Release 수용은 아직 미해결이며 해결 교훈으로 앞당겨 기록하지 않는다.
-
 
 ## 2026-11-06 · uncommitted · fix(tools): 도움말 요청의 착지 snapshot 생성 차단
 
@@ -14852,7 +14845,6 @@ osy-d395-s1d\`.
 - 증거: `python tools/land.py --tests full --no-cache` 실행 기록으로 남는다.
 - gate 변화: 없음.
 
-
 ## 2026-11-13 · uncommitted · docs(solutions): 학습 센터 자리 업그레이드 교훈을 역사 기록으로 표시
 - 변경: `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`의 `applies_when`을 고쳐 후보 `rosy-learning-center.service`가 2026-10-31 퇴역했고 자리 업그레이드 절차는 역사 기록임을 밝혔다. `install_review_release.py` 절은 살아있는 보호 센터(8768 `rosy-edge-review`)에 그대로 적용된다고 못박았다.
 - 증거: 원격 pytest `test/test_update_ops.py` 예정.
@@ -14915,6 +14907,166 @@ osy-d395-s1d\`.
 - 증거: CORE CPU threaded 76.8% → events 25.4%(navigation 켬). 부하 아래에서도 `cmd_vel` p99는 events 쪽이 같거나 낮았다. 45분 동안 RSS가 평탄했다.
 - gate 변화: 없음. `ROSY_CORE_EXECUTOR` 기본값은 threaded 그대로이고, 주행 시험은 사람이 있을 때로 남겼다.
 
+## 2026-11-20 · uncommitted · docs(adr): D-1057 셀 작업 허가 증거는 실측값으로만 공급
+
+- 변경: ADR D-1057과 ADR Log 행, API Reference에 bed-confirm·owner-evidence 두 경로(버전은 "vX.Y (조정 세션 예약)" 자리표시).
+- 증거: 아래 Fleet·셀 변경 커밋의 로컬 시험과 `rosy_harness.py lint`. 원격 시험은 조정 세션.
+- gate 변화: 없음. 실물 인터록(브레이크·bed 센서·명령 속도)은 만들지 않았다.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · docs(api): v1.next Fleet bed-confirm·owner-evidence 버전 확정 (D-1057)
+
+- 변경: 자리표시를 v1.next로 바꾸고 `api_reserve.py bump v1.next`로 헤더·`contract_version.py` 핀을 옮겼다. 변경 이력 표에 v1.next 행.
+- 증거: 로컬 `test_protocol_version_alignment.py`, `test_api_reserve.py`.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat: D-1057 claim 때 owner 확인과 worker 결과 재전송
+
+- 변경: Fleet `claim`이 등록된 owner가 아닌 주체를 원장 변경 전에 `OWNER_PRINCIPAL_NOT_REGISTERED`로 거부. worker(`cell_result_outbox.py`)가 전송 실패한 결과를 상태 파일에 보관하고 다음 폴링마다 팔 재실행 없이 같은 본문을 RUNNING·같은 lease일 때만 재전송. 안전 폴링·human-hold 분기는 그대로(그 아래 한 호출 추가).
+- 증거: 로컬 `test_omx_cell_task_worker_refusal.py`(403 뒤·연결 끊김 뒤 재전송, lease 변경·종료 시 미재전송, 팔 재실행 없음), `test_pipeline_evidence.py` 외.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat: D-1057 입회 표시가 있는 작업만 감독 시험, 나머지는 D-911 검토 범위
+
+- 변경: worker의 `--commissioning --person-at-switch` 자동 선언 제거. Fleet `POST .../presence-confirm`(이름 있는 운영자, 120 s)과 claim의 `handoff.presence`. 검토 없이 러너가 멈추면 `REVIEW_REQUIRED`로 ABORTED. D-911 검토를 한 단계로 기록하는 `cell_envelope_review.py`(규칙·기본값 불변). API v1.next에 포함.
+- 증거: 로컬 `test_omx_cell_task_exec_measured.py`, `test_omx_cell_task_worker_refusal.py`, `test_omx_cell_envelope_review.py`, `test_pipeline_evidence.py`.
+- gate 변화: 없음. 실물 시운전은 별도.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat(fleet): D-1057 셀 A/B claim 게이트 (깊이 판정 수용 전)
+
+- 변경: `claim`이 `cell_ab` 작업을 `ROSY_FLEET_CELL_AB_RELEASE_ENABLED`(기본 꺼짐)가 켜져 있지 않으면 `CELL_AB_EVIDENCE_NOT_ENABLED`로 `_ready_amr` 앞에서 거부, 원장 불변. 셀 S 무영향. ADR 2-3절. origin/main(#263 홈 복귀 안전) 병합은 별도 커밋.
+- 증거: 로컬 `test_pipeline_evidence.py`(꺼짐 5값·켜짐·셀 S), `test_pipeline_orchestrator.py` 외 관련 Fleet 시험.
+- gate 변화: 셀 A/B 는 켜기 전까지 claim 불가.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat(omx): D-1057 오래된 보관 결과를 팔 없이 다시 측정해 재전송
+
+- 변경: `cell_remeasure.py`와 `cell_result_outbox.resend_pending`의 `remeasure`: owner 증거가 50 s 이상 지났으면 보관한 놓기 전 프레임과 새 프레임, 러너 상태로 다시 측정해 새 본문을 보냄. 실패하면 `last_refusal`을 남기고 RUNNING 유지. 구역 측정이 놓기 전 프레임을 `zone-before`에 저장, 실행기가 재측정 맥락을 prep 폴더에 기록.
+- 증거: 로컬 `test_omx_cell_task_worker_refusal.py`(오래됨·신선함·실패·lease 변경·실제 함수).
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat(omx): D-1057 슬롯 오버레이 도구와 Codex 3차 지적 수정
+
+- 변경: `cell_slot_overlay.py`(읽기 전용)와 README 슬롯 설정 절. 깊이 프레임 연결, `verify_stack_outcome(strict_target=)`, `frame_receipt(timeout_s=)`와 프레임 대기 상한, `MapPoseService.add_update_listener`로 bed 확인을 자세 갱신마다 무효화.
+- 증거: 로컬 `test_omx_cell_zone_verification.py`, `test_omx_cell_slot_overlay.py`, `test_pipeline_evidence.py`, `test_omx_cell_auto_pick.py`.
+- gate 변화: 없음. 팔레트 z_gate는 보정 검사 때문에 UNKNOWN(알려진 공백).
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat(omx): D-1057 D435 깊이 상대 높이를 독립 Z 기준으로 (사용자 결정)
+
+- 변경: `cell_depth_slots.py`(점유·층을 같은 깊이 프레임의 바닥 평면 대비 상대 높이로), `_current_frame_calibration_checks`·`perceive_slot_z_mm`·`verify_stack_outcome(_z_mm)`에 선택 인자(`depth_reference`, `slot_roi`, `floor_rois`, `after_depth`), `zone_rois.floor`. 실제 셀 프레임(test/fixtures/omx_zone_cal_1120)으로 시험. ADR 2-2절.
+- 증거: 로컬 `test_omx_cell_depth_slots.py`, `test_omx_cell_zone_verification.py`, `test_omx_cell_auto_pick.py` 등.
+- gate 변화: 없음. 실물 수용은 별도(zone_rois·floor는 아직 셀 설정에 없음).
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat(omx): D-1057 셀 설정 zone_rois 덮어쓰기와 구역 제안 도구
+
+- 변경: `verify_stack_outcome(_z_mm)`에 선택 인자 `zone_rois`, `cell_zone_verification`이 설정의 `zone_rois`를 검증(형식 오류는 unverified)해 넘김. `cell_zone_propose.py`(읽기 전용)와 README.
+- 증거: 로컬 `test_omx_cell_zone_verification.py`, `test_omx_cell_zone_propose.py`. 실제 셀 프레임 한 쌍으로 제안 실행(결과는 조정 세션 확인 대기, 설정에 쓰지 않음).
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat(omx): D-1057 배치 직후 구역 측정(zone_verification) 생산자
+
+- 변경: `cell_zone_verification.py` 신규(기존 `cell_area_zones` 측정을 새 상부·측면 프레임으로 실행). `cell_auto_pick.py`가 placed 직후 기록하고, 이전에는 attempts 행에 없던 `verify`·`transfer`·`zone_verification`을 행에 싣는다(`cell_task_exec`가 읽는 자리).
+- 증거: 로컬 `test/test_omx_cell_zone_verification.py`, `test_omx_cell_task_exec_measured.py`, `test_omx_cell_auto_pick.py` 등. 실물·카메라 미실시.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat(omx): D-1057 깊이 다중 프레임 중앙값 (측정 개선만)
+
+- 변경: `cell_depth_slots.capture_depth_frames`(한 스트림 N장, 3 s 마감)와 `median_depth`(과반 유효 픽셀), `cell_zone_verification._depth_after`가 `depth_frames`(기본 5)를 씀. 판정 범위·허용 오차 불변. 실제 셀 25프레임으로 표준편차 감소를 측정해 ADR 표에 기록.
+- 증거: 로컬 `test_omx_cell_depth_burst.py`, `test_omx_cell_zone_verification.py`, `test_omx_cell_depth_slots.py`. 읽기 전용 촬영(팔·서비스·설정 무변경).
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · feat(pipeline): D-1057 셀 S는 상단 카메라 판정만으로 RELEASED (사용자 결정)
+
+- 변경: Fleet 완료 검사·worker·`cell_task_exec`가 `cell_s`일 때만 basis `top_camera_only_target_zone` 수용. 셀 S 상단 판정은 before/after 프레임·auto_roi 구역·2 s 신선도 요구. ADR D-1057 2-1절.
+- 증거: 로컬 `test_pipeline_evidence.py`(셀 S 통과·셀 AB 거부), `test_omx_cell_zone_verification.py`, `test_omx_cell_task_exec_measured.py`.
+- gate 변화: 없음. 실물 미실시.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix: D-1057 Codex 2차 검토 반영
+
+- 변경: 실행기가 CLI의 들여쓴 여러 줄 JSON을 `raw_decode`로 읽고 측정 슬롯·tier를 작업(dst_site, handoff tier)에 결속. `cell_zone_verification`은 layer/col/row 범위 검사, 놓기 전 상부·측면 프레임, 배치 뒤 촬영·공통 2 s 신선도, 상부 구역 미측정 거부(`cell_auto_evidence.pre_motion_frame`이 before 측면을 싣는다). Fleet bed 확인은 콘솔 상태 갱신마다 이동·지도 ID·버전 변경을 검사. ADR·API 문장 정정.
+- 증거: 로컬 `test_omx_cell_zone_verification.py`(실제 cell_area_zones 판정 포함), `test_omx_cell_task_exec_measured.py`, `test_pipeline_evidence.py` 외 관련 파일.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(fleet): D-1057 독립 검토 반영
+
+- 변경: ADR·API 문서를 정지 판정(표본별 속도 채널 신선도·모드·목표 부재)·owner 등록 주체·bed 영구 무효·본문 64 KB·measured_at 대조에 맞춤.
+- 증거: 로컬 `test_pipeline_evidence.py` 외 관련 파일. 원격 시험은 조정 세션.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 7차
+
+- 변경: 설정 파일의 `_commissioning` 무시(이번 실행 인자만), 검토된 작업은 입회 표시가 와도 검토 경로, 재전송은 원래 증거가 유효한 동안 `/complete`만(409 이미 기록됨은 이어서 전송, 재측정은 65 s 뒤), 적재함 확인은 claim에서 lease에 묶고 무효 때 422 `BED_CONFIRMATION_INVALID`·RUNNING 작업 재확인 허용. ADR D-1057 2-7절과 API v1.next 절을 맞춤.
+- 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`·`test_omx_cell_envelope.py`·`test_omx_cell_task_exec_measured.py`와 `rosy_harness.py lint`. 원격 시험은 조정 세션.
+- gate 변화: 없음. 가드 한계는 그대로이고 실물 인터록은 만들지 않았다.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(fleet,omx): D-1057 검토 8차
+
+- 변경: worker 재전송은 60 s 이상 65 s 미만엔 보내지 않고 보관, 만료 계열 422(`OWNER_EVIDENCE_MEASURED_AT_INVALID`)는 보관 후 재측정; claim은 적재함 확인 결속을 원장 변경 앞에서 한 `now`로 판정해 실패면 거부. ADR D-1057 2-8절.
+- 증거: 로컬 `test_pipeline_evidence.py`·`test_omx_cell_task_worker_refusal.py`와 lint. 원격 시험은 조정 세션.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(omx): D-1057 Codex 4차 검토 1~5 (깊이 경로)
+
+- 변경: 깊이 경로에서도 놓기 전후 변화·방향을 별도 증거로 요구, 바닥 패치별 검증(`floor_depth_mm`, 가림·덮개 거부, 깊이 좌표 여백), 층 식별 ±7 mm와 기존 안착 대역 분리, 셀별 top ROI 없으면 미검증, 구역 제안의 외삽 제거, 깊이는 Fleet 작업·floor 설정 때만 캡처·임시 디렉터리 정리·읽기마다 3 s 마감.
+- 증거: 로컬 `test_omx_cell_depth_slots.py`(합성 오염·실제 프레임), `test_omx_cell_zone_verification.py` 외.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(omx): D-1057 Codex 5차 검토 (깊이 경로 증거 강화)
+
+- 변경: 배치 변화를 밝기·대비 정규화 상부 차이 + 깊이 상승 필수로, 방향을 깊이 블롭 주축으로. 바닥 패치 기록 깊이 ±4 mm와 공통 평면 대조, 슬롯 ROI 국소 엣지 정렬 검사. 버스트 프레임마다 단일 프레임과 같은 검사·순번 연속·시계 오프셋, 형식 재시도 포함 3 s 마감 하나. 비 Fleet 실행은 동작 전 측면 촬영 생략, RGB 읽기 마감 공유.
+- 증거: 로컬 `test_omx_cell_depth_slots.py`(조명만 변경·동방향 오염·국소 정렬), `test_omx_cell_depth_burst.py`, `test_omx_cell_zone_verification.py`. 실제 셀 버스트가 새 검사를 통과함을 읽기 전용으로 확인.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(omx): D-1057 측면 프레임 원천에 episodes.cameras.side 폴백
+
+- 변경: `cell_zone_verification`이 `cameras.side`가 없으면 같은 설정의 `episodes.cameras.side` 주소를 frame 호출 동안만 빌려 쓴다(둘 다 없으면 top 전용 basis). 목표 슬롯 col/row는 그대로 unverified.
+- 증거: 로컬 `test/test_omx_cell_zone_verification.py`. 실물 미실시.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-20 · uncommitted · fix(omx): D-1057 접힘 기준을 plan 파일 home으로, 구역 판정을 실제 설정 형태에 맞춤
+
+- 변경: `cell_task_exec`가 config의 `plan_path` 파일에서 `home`을 읽고(설정 JSON에는 plan이 없다) 몸 관절 5개만 비교. `cell_zone_verification`은 tier를 확장된 사이트의 `tier`에서 읽고, col/row가 설정에 없으면 이유를 적어 unverified. 실제 설정 모양으로 축약한 시험 추가.
+- 증거: 로컬 `test/test_omx_cell_zone_verification.py`, `test_omx_cell_task_exec_measured.py`. 실물 미실시.
+- gate 변화: 없음.
+- 결정: 없음
+- 교훈: 없음
+
 ## 2026-11-21 · uncommitted · D-1059 Merge Queue 재시험 선별(기본 꺼짐)
 - 변경: ADR D-1059, ADR Log 행, `tools/harness/affected_queue.py`(시험한 커밋과 큐 커밋의 두 트리 비교, 증명 못 하면 전체 선택), `affected_ci.ci_matrix` 호출 한 줄, `test/test_affected_queue.py`.
 - 증거: PR 실행의 병합 커밋을 SHA로 받아 로컬 `git merge-tree` 트리와 6건 일치 확인. media 변경 선택 110경로가 무관한 변경 뒤 40경로(guard)로 줄어드는 것을 선택기로 확인.
@@ -14956,3 +15108,43 @@ osy-d395-s1d\`.
 - gate 변화: 없음
 - 결정: D-1063 Proposed
 - 교훈: 로컬 main이 origin보다 크게 뒤처진 채 ADR 번호를 잡으면 게시 전에 번호가 다른 ADR로 쓰인다: 게시 PR이 닫히면 번호부터 다시 확인
+
+## 2026-11-21 · uncommitted · browser test helpers: layout geometry probe G1-G7 and /console fixture route (slice S25 of #378)
+
+- 변경: test/browser_harness.py, test/console_browser_site.py, test/test_omx_area_xyz.py, test/test_browser_harness_geometry_browser.py, operations/fleet/test/web/g6-phrases.test.mjs
+- 증거: plain python import check; browser_scope rows left to the slices that add their test files; pytest not run on this PC (D-584)
+- gate 변화: 없음 (시험 보조 코드, 새 검사 없음)
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · D-1067 step-back check: a PR that drops other PRs' recent lines names them
+
+- 변경: tools/harness/step_back.py, pr_land preflight, review-gate report-only step, rules in shared-checkout.md, test/test_step_back.py
+- 증거: plain python runs: #378 head blocks naming #311; 135 recent merges, 4 block (3.0%); pytest not run on this PC (D-584)
+- gate 변화: 없음
+- 결정: D-1067
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · fix action pin comment added by #333
+
+- 변경: ci.yml: actions/cache pin comment v4 -> v4.3.0 (same commit 0057852)
+- 증거: lab test_site_candidate_workflow failed on origin/main, passes after
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · pixel-measuring browser files run as lab evidence
+
+- 변경: tools/harness/affected_browser.py LAB_FILES에 test_pilot_browser.py, test_pixel_workspace_browser.py, test_review_flow_browser.py 추가 (GitHub runner에서는 폰트 때문에 렌더 크기가 달라 정지 상자 85.89 px 대 82±1로 실패, lab PC는 통과); 시험 1개 추가
+- 증거: #428 #430 #433 #435 CI 실패 로그 (browser-overlay-1of6/6of6, browser-alone), lab PC에서 origin/main과 #430 head 모두 통과
+- gate 변화: 세 파일은 CI 대신 pr_land --evidence의 lab 실행으로만 확인; CI 폰트가 lab과 맞으면 LAB_FILES에서 줄을 지워 되돌림
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · step-back size limits block unless Size-Exception
+
+- 변경: tools/harness/step_back.py size_violations, pr_land preflight, shared-checkout.md rule 4, D-1067 amendment, tests
+- 증거: plain python runs of the new size tests; 138 PRs merged in 7 days: 5 would block (3.6%); pytest not run on this PC (D-584)
+- gate 변화: 없음
+- 결정: D-1067
+- 교훈: 없음
