@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.452
+**Version:** v1.453
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.453 Fleet trip pause/resume controls and autonomous Nav2 failure recovery (Fleet)
+
+Adds `POST /api/fleet/trips/{trip_id}/pause` (`operator`) and `POST /api/fleet/trips/{trip_id}/resume` (`named operator`, optional `blocked_edges`) to hold an open trip cleanly under its lease and resume or guide it around blocked edges. Also closes Nav2 (`drive_mode: "nav2"`) pipeline links so `step_nav2_route` honors Fleet traffic holds (`refused_at_m`), asks Fleet for alternate detours or bounded retry/hold recovery when `autonomous_robots` encounter Nav2 `FAILED` / transient `ROUTE_CONFLICT`/`YIELDING`, and compares multi-robot SLAM claims in the shared active site frame.
 
 ### v1.452 Fleet trip Nav2 road-following drive_mode (Fleet)
 
@@ -4960,6 +4964,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.453 | 2026-11-22 | [Fleet] Additive: POST /api/fleet/trips/{trip_id}/pause and /resume, Nav2 traffic holds, and autonomous Nav2 failure reroute/retry/hold recovery |
 | v1.452 | 2026-11-22 | [Fleet] Additive: optional drive_mode nav2 on POST /api/fleet/robots/{robot_id}/trip via CORE D-1009 /api/v1/navigation/route |
 | v1.451 | 2026-11-22 | [Fleet] Additive (D-1071): named-operator POST /api/fleet/tasks/{task_id}/reconcile releasing UNKNOWN task claims only after live CORE cancel and D-732 quiescence proof |
 | v1.450 | 2026-11-22 | [Fleet] Draft and profile saves answer 400 TEXT_DOUBLE_ENCODED |
