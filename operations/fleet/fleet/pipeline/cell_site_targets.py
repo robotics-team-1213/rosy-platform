@@ -82,6 +82,22 @@ def list_canonical_sites(web_common: Path | None = None) -> dict[str, Any]:
         "status": doc.get("status", "planned_unverified"),
         "tier_height_mm": doc.get("tier_height_mm"),
         "count": len(idx["sites"]),
+        "zones": [
+            {
+                "id": z["id"],
+                "label": z["label"],
+                "role": z["role"],
+                "grid": {
+                    "rows": int(z["grid"]["rows"]),
+                    "columns": int(z["grid"]["columns"]),
+                    "tiers": int(z["grid"]["tiers"]),
+                },
+                "slot_cells": int(z["slot_cells"]),
+                "arms": list(z.get("arms") or ()),
+                "status": z.get("status", doc.get("status", "planned_unverified")),
+            }
+            for z in doc["zones"]
+        ],
         "sites": [
             {
                 "site_id": s["site_id"], "slot_id": s["slot_id"], "sim_site": s["sim_site"],
