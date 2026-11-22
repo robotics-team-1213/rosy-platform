@@ -187,7 +187,7 @@ details.robot-panel-section > summary {
     position: fixed;
     top: var(--appbar-height);
     inset-inline: 0;
-    z-index: 6;
+    z-index: 5;
   }
   .robot-dock-group { flex-direction: row; flex: 1 1 auto; width: auto; align-items: stretch; }
   .robot-dock-group + .robot-dock-group { padding-block-start: 0; border-block-start: 0; padding-inline-start: var(--space-2); border-inline-start: 1px solid var(--border-default); }
@@ -197,7 +197,7 @@ details.robot-panel-section > summary {
   .robot-panel {
     position: fixed;
     inset: calc(var(--appbar-height) + var(--target-secondary) + var(--space-3)) 0 0 0;
-    z-index: 5;
+    z-index: 4;
     border-inline-end: 0;
     background: var(--surface-canvas);
   }
