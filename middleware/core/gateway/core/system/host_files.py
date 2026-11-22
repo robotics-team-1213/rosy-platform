@@ -291,7 +291,7 @@ class HostFileExchange:
                                    if getattr(svc, "command", None) is not None else None),
                 "calibration_active": (svc.calibration.current() is not None
                                        if getattr(svc, "calibration", None) is not None else None),
-                "trip_lease_active": (getattr(snapshot, "trip_lease", None) is not None
+                "trip_lease_active": (snapshot.trip_lease is not None
                                       if snapshot is not None else None)}
 
     def write_face_inputs(self, svc: Any, content: dict[str, Any]) -> None:

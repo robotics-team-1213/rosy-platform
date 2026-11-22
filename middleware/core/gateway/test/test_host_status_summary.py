@@ -584,7 +584,7 @@ def test_a_malformed_snapshot_field_is_written_as_unknown_not_coerced(tmp_path, 
     snapshot = SimpleNamespace(mode=None, navigation=None, swarm=None,
                                battery=SimpleNamespace(percent=50.0, voltage=None),
                                evidence=_evidence(velocity="fresh", battery="fresh"), **{
-        key: None for key in ("velocity", "battery_status", "docking", "line_follow", "safety", "activity")})
+        key: None for key in ("velocity", "battery_status", "docking", "line_follow", "safety", "activity", "trip_lease")})
     for key, value in bad.items():
         setattr(snapshot, key, value)
 
