@@ -1,15 +1,49 @@
 #canonical-main > section, .canon-subform { min-width: 0; max-width: 100%; width: 100%; }
 .canon-evidence-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
-.canon-mono { font-family: var(--mono); font-size: var(--text-label); overflow-wrap: anywhere; }
+.canon-mono { font-family: var(--mono); font-size: var(--text-label); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .canon-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); margin-block: var(--space-3); }
 .canon-kpi { display: grid; gap: var(--space-1); min-width: 0; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-flat); }
 .canon-kpi-label { font-size: var(--text-micro); color: var(--text-secondary); }
 .canon-kpi-value { font-family: var(--mono); font-size: var(--text-value); font-weight: var(--weight-label); overflow-wrap: anywhere; }
 .canon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: var(--space-3); margin-block: var(--space-3); }
+.canon-monitor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-block: var(--space-3); }
 .canon-card { min-width: 0; display: grid; gap: var(--space-2); align-content: start; padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-flat); }
-.canon-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.canon-host-card[data-availability="unavailable"] { border-style: dashed; }
+.canon-card-head, .canon-host-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.canon-host-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.canon-head-tags { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .canon-card h3, .canon-card p, .canon-detail h3, .canon-detail p { margin: 0; overflow-wrap: anywhere; }
+.canon-train-block { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); }
+.canon-train-item { display: grid; gap: var(--space-1); min-width: 0; }
+.canon-train-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
+.canon-progress { width: 100%; height: var(--space-2); appearance: none; border: 1px solid var(--surface-line); border-radius: var(--radius-flag); background: var(--gauge-track); overflow: hidden; }
+.canon-progress::-webkit-progress-bar { background: var(--gauge-track); }
+.canon-progress::-webkit-progress-value { background: var(--series-primary); }
+.canon-progress[data-state="done"]::-webkit-progress-value,
+.canon-progress[data-state="idle"]::-webkit-progress-value { background: var(--nominal); }
+.canon-progress::-moz-progress-bar { background: var(--series-primary); }
+.canon-train-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.canon-stat { display: grid; gap: var(--space-1); min-width: 0; }
+.canon-ckpts, .canon-gates { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.canon-chip { font-family: var(--mono); font-size: var(--text-micro); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); color: var(--text-secondary); }
+.canon-chip[data-latest="true"] { border-color: var(--border-strong); color: var(--text-primary); }
+.canon-meters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.canon-meter-cell { display: grid; gap: var(--space-1); min-width: 0; padding: var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); }
+.canon-meter-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1); }
+.canon-meter { width: 100%; height: var(--space-2); background: none; border: 0; }
+.canon-meter::-webkit-meter-bar { height: var(--space-2); border: 1px solid var(--surface-line); border-radius: var(--radius-flag); background: var(--gauge-track); }
+.canon-meter::-webkit-meter-optimum-value { background: var(--nominal); border-radius: var(--radius-flag); }
+.canon-meter[data-level="warn"]::-webkit-meter-optimum-value { background: var(--status-warn); }
+.canon-meter[data-level="crit"]::-webkit-meter-optimum-value { background: var(--status-crit); }
+.canon-meter::-moz-meter-bar { background: var(--nominal); border-radius: var(--radius-flag); }
+.canon-meter[data-level="warn"]::-moz-meter-bar { background: var(--status-warn); }
+.canon-meter[data-level="crit"]::-moz-meter-bar { background: var(--status-crit); }
 .canon-alert { display: grid; gap: var(--space-2); padding: var(--space-3); margin-block: var(--space-3); border: 1px solid var(--status-crit); border-radius: var(--radius-control); background: var(--surface-recessed); }
 .canon-detail { display: grid; gap: var(--space-2); padding: var(--space-3); margin-block: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-recessed); }
 .canon-list { margin: 0; padding-inline-start: var(--space-4); display: grid; gap: var(--space-1); }
 #canon-spec-table, #canon-eval-table, #canon-live-table { margin-block: var(--space-2); }
+@media (width < 64rem) { .canon-monitor-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (width < 30rem) {
+  .canon-meters { grid-template-columns: minmax(0, 1fr); }
+  .canon-train-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

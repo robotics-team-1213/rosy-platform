@@ -1,7 +1,8 @@
 import {accountFetch} from '/account-session.js';
-import {setOff} from '/common/cause-line.js';
-import '/common/ui.js';
+import {describeBy, setOff} from '/common/cause-line.js';
+import {actionIcon} from '/common/ui.js';
 import '/commands.js';
+import {hasActiveMonitorWork, renderMonitorHosts, statusTag} from '/canonical-monitor.js';
 
 const $ = (id) => document.getElementById(id);
 const JOINTS = ['shoulder_pan', 'shoulder_lift', 'elbow_flex', 'wrist_flex', 'wrist_roll', 'gripper'];
@@ -14,8 +15,8 @@ const KIND_LABEL = {
   align_real: 'align_real · 실물 정렬', collect_dart: 'collect_dart · DART 수집',
   train_stage: 'train_stage · ACT 학습', eval_ladder: 'eval_ladder · L1 평가', cell_live_check: 'cell_live_check · 셀 검사',
 };
-let token = '', manager = false, busy = false, snap = null, selectedRunId = null, selectedRun = null;
-let selectedEvalKey = null, pollTimer = null;
+let token = '', manager = false, busy = false, pollInFlight = false, snap = null;
+let selectedRunId = null, selectedRun = null, selectedEvalKey = null, pollTimer = null;
 
 const el = (tag, text, cls) => {
   const node = document.createElement(tag);
@@ -27,8 +28,8 @@ const el = (tag, text, cls) => {
 function quietBtn(label, icon, onClick) {
   const button = document.createElement('ui-button');
   button.setAttribute('kind', 'quiet');
-  if (icon) button.setAttribute('data-action-icon', icon);
   button.textContent = label;
+  if (icon) actionIcon(button, icon);
   button.addEventListener('click', onClick);
   return button;
 }
@@ -42,14 +43,6 @@ const showNotice = (state, msg) => {
   $('canon-notice').setAttribute('state', state);
   $('canon-notice').textContent = msg;
 };
-
-const TAG_TONE = {fresh: 'neutral', progress: 'active', delayed: 'warn', disconnected: 'warn', caution: 'warn', danger: 'crit', unknown: 'neutral'};
-function statusTag(state, text) {
-  const tag = document.createElement('ui-tag');
-  tag.setAttribute('status', TAG_TONE[state] || 'neutral');
-  tag.textContent = text;
-  return tag;
-}
 
 async function bootstrapAuth() {
   try {
@@ -150,73 +143,10 @@ function renderSpec() {
   $('canon-bridge-body').replaceChildren(...brNodes);
 }
 
-function summarizeReceipts(receipts) {
-  if (!receipts?.length) return '없음';
-  return receipts.map((r) => {
-    const c = r.counts || {};
-    const rej = r.dataset_reject?.length ? ` reject=${r.dataset_reject.join(',')}` : '';
-    return `${r.name}: pass ${c.pass ?? 0}/rev ${c.review ?? 0}/rej ${c.reject ?? 0}${rej}`;
-  }).join(' · ');
-}
-
-function renderWatchCard(entry, title, peerId) {
-  const card = el('article', undefined, 'canon-card');
-  const head = el('div', undefined, 'canon-card-head');
-  head.append(el('h3', title));
-  if (!entry || entry.available === false) {
-    head.append(statusTag('unknown', entry?.reason || '관찰 경로 없음'));
-    card.append(head);
-    return card;
-  }
-  const done2 = Boolean(entry.markers?.['stage2-done']?.present);
-  const done1 = Boolean(entry.markers?.['stage1-done']?.present);
-  const tag = done2 ? statusTag('fresh', 'stage2-done') : done1 ? statusTag('progress', 'stage1-done') : statusTag('progress', '수집·학습 진행');
-  head.append(tag);
-  card.append(head);
-  card.append(el('p', `align.done: ${entry.align_done ?? '대기'} · data_gate: ${summarizeReceipts(entry.gate_receipts)}`));
-  const seeds = entry.collect_seeds || {};
-  card.append(el('p', `DART 시드: arm_a ${seeds.arm_a ?? 0} · arm_b ${seeds.arm_b ?? 0}`));
-  const cks = Object.entries(entry.checkpoints || {}).map(([arm, st]) => `${arm}(${Object.entries(st).map(([k, v]) => `${k}:${v.length}`).join(',')})`);
-  if (cks.length) card.append(el('p', `체크포인트: ${cks.join(' · ')}`));
-  if (entry.progress) card.append(el('p', `progress: ${JSON.stringify(entry.progress)}`, 'quiet canon-mono'));
-  if (peerId) {
-    const btn = quietBtn('피어 새로고침', 'refresh', () => work(() => api(`/peers/${peerId}/refresh`, {}).then(loadSnapshot)));
-    const pReason = !snap?.configured ? '미설정' : !manager ? '관리 권한 필요' : busy ? '요청 처리 중입니다.' : '';
-    setOff(btn, busy || !manager || !snap?.configured, pReason);
-    card.append(btn);
-  }
-  return card;
-}
-
-function renderHosts() {
-  const cards = [];
-  for (const w of Object.values(snap?.watched || {})) {
-    cards.push(renderWatchCard(w, `${w.label || w.id} (${w.host_id || snap.host_id || 'local'})`));
-  }
-  for (const [pid, p] of Object.entries(snap?.peers || {})) {
-    const watched = Object.values(p.summary?.watched || {});
-    if (watched.length) {
-      for (const w of watched) cards.push(renderWatchCard(w, `${p.label || pid} · ${w.label || w.id}`, pid));
-    } else {
-      const card = el('article', undefined, 'canon-card');
-      const head = el('div', undefined, 'canon-card-head');
-      const state = p.status === 'ok' ? 'fresh' : p.status === 'stale' ? 'delayed' : 'disconnected';
-      head.append(el('h3', `${p.label || pid} (peer)`), statusTag(state, p.error || p.status));
-      const btn = quietBtn('피어 새로고침', 'refresh', () => work(() => api(`/peers/${pid}/refresh`, {}).then(loadSnapshot)));
-      const pReason = !snap?.configured ? '미설정' : !manager ? '관리 권한 필요' : busy ? '요청 처리 중입니다.' : '';
-    setOff(btn, busy || !manager || !snap?.configured, pReason);
-      card.append(head, btn);
-      cards.push(card);
-    }
-  }
-  $('canon-hosts').replaceChildren(...cards);
-  $('canon-hosts-empty').hidden = cards.length > 0;
-}
-
 function collectWatchedAndRuns() {
   const evals = [], lives = [];
   const pushWatch = (src, w) => {
-    for (const ev of w?.eval_ladder || []) evals.push({src, doc: ev, key: `${src}:${ev.file || ev.step || evals.length}`});
+    for (const ev of w?.eval_ladder || []) evals.push({src, doc: ev, key: `${src}:${ev.folder || ''}:${ev.file || ev.step || evals.length}`});
     for (const lc of w?.cell_live_checks || []) lives.push({src, doc: lc});
   };
   for (const w of Object.values(snap?.watched || {})) pushWatch(w.label || w.id, w);
@@ -235,7 +165,20 @@ function collectWatchedAndRuns() {
 
 function fmtEvalProfile(p) {
   if (!p) return '—';
-  return `${p.policy_successes ?? '?'}/${p.episodes ?? '?'} (teacher ${p.teacher_successes ?? '?'})`;
+  const ep = p.policy_episodes ?? p.episodes ?? '?';
+  const tp = p.teacher_episodes ?? p.policy_episodes ?? p.episodes;
+  return `${p.policy_successes ?? '?'}/${ep} (teacher ${p.teacher_successes ?? '?'}${tp != null ? '/' + tp : ''})`;
+}
+
+function liveStateEntries(doc) {
+  const out = [];
+  if (doc?.states && typeof doc.states === 'object') out.push(['', doc.states]);
+  if (doc?.checkpoints && typeof doc.checkpoints === 'object') {
+    for (const [step, cpDoc] of Object.entries(doc.checkpoints)) {
+      if (cpDoc?.states && typeof cpDoc.states === 'object') out.push([`step ${step}`, cpDoc.states]);
+    }
+  }
+  return out;
 }
 
 function renderEvidence() {
@@ -264,22 +207,24 @@ function renderEvidence() {
 
   const warnings = [], lrows = [];
   for (const {src, doc} of lives) {
-    const states = doc.states || {};
-    const rev = `${src}${doc.name ? ' · ' + doc.name : ''} (${doc.arm_id || ''} ${(doc.policy_revision || '').slice(0, 12)})`;
-    for (const [sname, goals] of Object.entries(states)) {
-      const entries = goals && typeof goals === 'object' && 'strict_ok' in goals ? [['default', goals]] : Object.entries(goals || {});
-      for (const [gname, g] of entries) {
-        const oor = [...(g.strict_oor || []).map((o) => `S:${o.name}`), ...(g.margin_oor || []).map((o) => `M:${o.name}`)].join(', ') || '없음';
-        const tr = el('tr');
-        const wTd = el('td');
-        if (g.wrist_roll_warning) {
-          warnings.push(`${rev} · ${sname} · ${gname}: ${g.wrist_roll_warning}`);
-          wTd.append(statusTag('danger', 'wrist_roll_warning'));
-        } else {
-          wTd.append(statusTag('fresh', '경고 없음'));
+    const revBase = `${src}${doc.name ? ' · ' + doc.name : ''} (${doc.arm_id || ''} ${(doc.policy_revision || '').slice(0, 12)})`;
+    for (const [cpTag, states] of liveStateEntries(doc)) {
+      const rev = cpTag ? `${revBase} · ${cpTag}` : revBase;
+      for (const [sname, goals] of Object.entries(states)) {
+        const entries = goals && typeof goals === 'object' && 'strict_ok' in goals ? [['default', goals]] : Object.entries(goals || {});
+        for (const [gname, g] of entries) {
+          const oor = [...(g.strict_oor || []).map((o) => `S:${o.name}`), ...(g.margin_oor || []).map((o) => `M:${o.name}`)].join(', ') || '없음';
+          const tr = el('tr');
+          const wTd = el('td');
+          if (g.wrist_roll_warning) {
+            warnings.push(`${rev} · ${sname} · ${gname}: ${g.wrist_roll_warning}`);
+            wTd.append(statusTag('danger', 'wrist_roll_warning'));
+          } else {
+            wTd.append(statusTag('fresh', '경고 없음'));
+          }
+          tr.append(el('td', rev), el('td', sname), el('td', gname), el('td', g.strict_ok ? 'PASS' : 'OUT'), el('td', g.margin_ok ? 'PASS' : 'OUT'), el('td', oor), wTd);
+          lrows.push(tr);
         }
-        tr.append(el('td', rev), el('td', sname), el('td', gname), el('td', g.strict_ok ? 'PASS' : 'OUT'), el('td', g.margin_ok ? 'PASS' : 'OUT'), el('td', oor), wTd);
-        lrows.push(tr);
       }
     }
   }
@@ -314,10 +259,13 @@ function renderLauncher() {
   const kind = $('canon-kind').value, arm = $('canon-arm').value;
   for (const [k, boxId] of [['align_real', 'canon-fields-align'], ['collect_dart', 'canon-fields-collect'],
       ['train_stage', 'canon-fields-train'], ['eval_ladder', 'canon-fields-eval'], ['cell_live_check', 'canon-fields-live']]) {
-    $(boxId).hidden = kind !== k;
+    const box = $(boxId);
+    const hide = kind !== k;
+    box.hidden = hide;
+    for (const ctrl of box.querySelectorAll('input, select')) ctrl.disabled = hide;
   }
   const flipBox = $('canon-align-flip');
-  if (arm !== 'arm_b') { flipBox.checked = false; flipBox.disabled = true; } else { flipBox.disabled = false; }
+  if (arm !== 'arm_b' || kind !== 'align_real') { flipBox.checked = false; flipBox.disabled = true; } else { flipBox.disabled = false; }
 
   const sources = Object.values(snap?.named_sources || {}).filter((s) => !s.arm_id || s.arm_id === arm);
   const doneRuns = (snap?.runs || []).filter((r) => r.status === 'succeeded' && r.arm_id === arm);
@@ -349,7 +297,9 @@ function renderLauncher() {
   const causeEl = $('canon-job-cause');
   causeEl.textContent = reason;
   causeEl.hidden = !reason;
-  setOff($('canon-job-submit'), busy || Boolean(reason), reason || (busy ? '요청 처리 중입니다.' : ''), reason ? 'canon-job-cause' : '');
+  const submitBtn = $('canon-job-submit');
+  setOff(submitBtn, busy || Boolean(reason), '');
+  describeBy(submitBtn, 'canon-job-cause', Boolean(reason));
 }
 
 function renderRuns() {
@@ -387,30 +337,58 @@ async function openRun(rid) {
   syncCancel();
 }
 
+function scheduleNextPoll() {
+  clearTimeout(pollTimer);
+  const active = snap && hasActiveMonitorWork(snap);
+  const stamp = new Date().toLocaleTimeString('ko-KR', {hour12: false});
+  $('canon-poll-state').textContent = active ? `자동 갱신 10초 · 마지막 갱신 ${stamp}` : `마지막 갱신 ${stamp}`;
+  if (active && !document.hidden) {
+    pollTimer = setTimeout(() => backgroundPoll(), 10000);
+  }
+}
+
 function renderAll() {
-  renderSpec();
-  renderHosts();
+  renderMonitorHosts($('canon-hosts'), $('canon-hosts-empty'), snap, {
+    busy, manager, onRefreshPeer: (pid) => work(() => api(`/peers/${pid}/refresh`, {}).then(() => loadSnapshot())),
+  });
   renderEvidence();
   renderLauncher();
   renderRuns();
+  renderSpec();
   showNotice(snap?.configured ? 'ready' : 'unavailable', snap?.configured
     ? (manager ? `연결됨 (${snap.host_id || 'local'}) · 작업 실행 및 관찰 가능` : `조회 전용 (${snap.host_id || 'local'})`)
     : '표준 시작 자세 실행기가 연결되지 않아 내장 Design 2 규격만 표시합니다.');
 }
 
-async function loadSnapshot() {
-  snap = await api('');
+async function loadSnapshot({background = false} = {}) {
+  const next = await api('');
+  if (background && busy) return;
+  snap = next;
   renderAll();
   if (selectedRunId && snap?.configured) await openRun(selectedRunId);
-  clearTimeout(pollTimer);
-  const hasActive = (snap?.runs || []).some((r) => ['launching', 'running', 'stopping'].includes(r.status));
-  if (hasActive && !document.hidden) pollTimer = setTimeout(() => work(loadSnapshot), 10000);
+  scheduleNextPoll();
+}
+
+async function backgroundPoll() {
+  if (busy || pollInFlight || document.hidden) return;
+  pollInFlight = true;
+  try {
+    await loadSnapshot({background: true});
+  } catch (err) {
+    showErr(err.message);
+    if (snap && hasActiveMonitorWork(snap) && !document.hidden) {
+      clearTimeout(pollTimer);
+      pollTimer = setTimeout(() => backgroundPoll(), 10000);
+    }
+  } finally {
+    pollInFlight = false;
+  }
 }
 
 async function work(fn) {
   if (busy) return;
   busy = true;
-  renderLauncher();
+  if (snap) renderLauncher();
   syncCancel();
   showErr('');
   try {
@@ -419,8 +397,7 @@ async function work(fn) {
     showErr(err.message);
   } finally {
     busy = false;
-    if (snap) renderLauncher();
-    syncCancel();
+    if (snap) renderAll();
   }
 }
 
@@ -451,7 +428,11 @@ function buildJobParams(kind) {
 $('canon-unit').addEventListener('change', renderSpec);
 $('canon-kind').addEventListener('change', renderLauncher);
 $('canon-arm').addEventListener('change', renderLauncher);
-$('canon-refresh').addEventListener('click', () => work(loadSnapshot));
+$('canon-refresh').addEventListener('click', () => work(() => loadSnapshot()));
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && snap && hasActiveMonitorWork(snap)) backgroundPoll();
+  else if (document.hidden) clearTimeout(pollTimer);
+});
 $('canon-job-cancel').addEventListener('click', () => work(async () => {
   if (!selectedRunId) return;
   selectedRun = await api(`/jobs/${selectedRunId}/cancel`, {});

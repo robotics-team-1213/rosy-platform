@@ -24,6 +24,7 @@ for _p in (str(_CONTRACTS_SRC), str(_OMX_CURATION)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from canonical_watch import scrub_text  # noqa: E402
 from experiment_io import read_json, write_json  # noqa: E402
 from experiment_train import gpu_lease  # noqa: E402
 from rosy.contracts.learning.digest import checkpoint_sha256  # noqa: E402
@@ -35,14 +36,23 @@ from rosy.contracts.learning.omx_canonical import (  # noqa: E402
     validate_canonical_spec,
 )
 
+_SIM_TASK_MAP = {"ship-h1": "stack", "stack-t1": "stack-t1", "stack-t2": "stack-t2", "stack-t3": "stack-t3"}
+
 
 @contextmanager
 def _gpu_job_lock(jobs_dir: Path):
     """Coordinate BOTH ~/.cache/rosy-learning/gpu.lock and ~/rosy-jobs/train-<pid>.lock."""
     jobs_dir.mkdir(parents=True, exist_ok=True)
     lock_file = jobs_dir / f"train-{os.getpid()}.lock"
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
     with gpu_lease("cuda"):
-        fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        try:
+            fd = os.open(lock_file, flags, 0o600)
+        except FileExistsError:
+            if lock_file.is_symlink():
+                raise
+            lock_file.unlink(missing_ok=True)
+            fd = os.open(lock_file, flags, 0o600)
         try:
             os.write(fd, f"{os.getpid()}\n".encode("ascii"))
         finally:
@@ -102,8 +112,10 @@ def run_align_real(req: dict, out: Path) -> dict:
     axes = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
     vec = dict(dtype="float32", shape=(6,), names=axes)
     img = dict(dtype="video", shape=(480, 640, 3), names=["height", "width", "channels"])
-    cams = {"rs": "observation.images.rs", "side": "observation.images.side", "wrist": "observation.images.wrist"}
-    features = {"observation.state": vec, "action": vec, **{v: img for v in cams.values()}}
+    src_cams = {role: key for key, role in data_gate.camera_map(
+        info["features"], dict(data_gate.LEGACY_TABLE, **(params.get("legacy_map") or {}))).items()}
+    out_cams = {"top": "observation.images.rs", "side": "observation.images.side", "wrist": "observation.images.wrist"}
+    features = {"observation.state": vec, "action": vec, **{v: img for v in out_cams.values()}}
 
     ds = LeRobotDataset.create(
         f"local/omx-real-{arm}-canon", fps, root=dst, robot_type="omx_sim_arm", features=features,
@@ -123,13 +135,13 @@ def run_align_real(req: dict, out: Path) -> dict:
             if flip:
                 st[:, 4], ac[:, 4] = _wrap_pi(st[:, 4]), _wrap_pi(ac[:, 4])
             imgs = {}
-            for short, key in cams.items():
+            for role, key in src_cams.items():
                 prefix = f"videos/{key}/"
                 vpath = src / info["video_path"].format(
                     video_key=key, chunk_index=int(ep[prefix + "chunk_index"]), file_index=int(ep[prefix + "file_index"]))
-                imgs[short] = _decode_span(av, vpath, float(ep[prefix + "from_timestamp"]), float(ep[prefix + "to_timestamp"]), fps)
-                if len(imgs[short]) != n:
-                    raise ValueError(f"ep {ep_idx} {short} decoded {len(imgs[short])} != {n}")
+                imgs[role] = _decode_span(av, vpath, float(ep[prefix + "from_timestamp"]), float(ep[prefix + "to_timestamp"]), fps)
+                if len(imgs[role]) != n:
+                    raise ValueError(f"ep {ep_idx} {role} decoded {len(imgs[role])} != {n}")
             if flip:
                 imgs["wrist"] = [fr[::-1, ::-1].copy() for fr in imgs["wrist"]]
             t_start = 0
@@ -148,18 +160,17 @@ def run_align_real(req: dict, out: Path) -> dict:
                 raise ValueError(f"ep {ep_idx} too short after trim: {n - t_start}")
             for i in range(t_start, n):
                 ds.add_frame({"task": task, "observation.state": st[i].astype(np.float32), "action": ac[i].astype(np.float32),
-                              **{v: imgs[k][i] for k, v in cams.items()}})
+                              **{out_k: imgs[role][i] for role, out_k in out_cams.items()}})
             ds.save_episode()
             t_starts.append(t_start); kept_counts.append(n - t_start)
     finally:
         ds.finalize()
 
     _progress(out, "gating", arm=arm)
-    receipt = data_gate.gate(dst, arm=arm, source={"kind": "real", "layout": "random"},
-                             legacy=params.get("legacy_map") or None, canonical_spec=spec)
+    receipt = data_gate.gate(dst, arm=arm, source={"kind": "real", "layout": "random"}, canonical_spec=spec)
     admitted = data_gate.check_receipt(dst)
     return {"kind": "align_real", "arm_id": arm, "episodes": len(admitted), "frames_total": int(sum(kept_counts)),
-            "t_start_median": float(statistics.median(t_starts)), "gate_counts": receipt["counts"],
+            "t_start_median": float(statistics.median(t_starts)) if t_starts else 0.0, "gate_counts": receipt["counts"],
             "spec_sha256": req["spec_sha256"], **AUTHORITY_STAMP}
 
 
@@ -226,30 +237,34 @@ def run_collect_dart(req: dict, out: Path) -> dict:
                     layout.sim_arms[a].wait = q.copy()
                 if params["color_random"]:
                     _recolor_world(world, layout, rng)
-                teacher = teaching.Teacher(world, seed=ep_seed, pose_random=bool(params["pose_random"]))
-                plan = tasks.plan_h1(seed=ep_seed)
-                arm_steps = [s for s in plan["steps"] if s["arm"] == arm]
-                for step in arm_steps:
-                    here = teacher.fresh_layout() if hasattr(teacher, "fresh_layout") else dict(plan["initial"])
-                    data = teacher.fresh(here)
-                    step_frames = []
-                    def _rec(d, targets, label=None, ctxs=None):
-                        step_frames.append((
-                            d.qpos[world.q[arm]].astype(np.float32),
-                            np.asarray(targets[arm], dtype=np.float32),
-                            world.render(d, "top"), world.render(d, "side"), world.render(d, arm_view),
-                        ))
-                    teacher.hook = lambda d, lbl: _rec(d, {arm: d.ctrl[world.ctrl[arm]]}, lbl)
-                    res = teacher.run_single(here, step)
-                    if res.get("result") in ("placed", "released") and len(step_frames) >= 60:
-                        for st_q, ac_q, rs_i, sd_i, wr_i in step_frames:
-                            ds.add_frame({
-                                "task": f"Move the designated container from {step['from']} to {step['to']}.",
-                                "observation.state": st_q, "action": ac_q,
-                                "observation.images.rs": rs_i, "observation.images.side": sd_i, "observation.images.wrist": wr_i,
-                            })
-                        ds.save_episode()
-                        saved += 1
+                teacher = teaching.Teacher(world, seed=ep_seed)
+                plan = tasks.get_task(layout, "stack")
+                here = dict(plan["start"])
+                for step in plan["steps"]:
+                    if step["arm"] == arm:
+                        step_frames = []
+                        def _rec(d, targets, lbl=None, _frames=step_frames):
+                            if lbl == "settle":
+                                return
+                            _frames.append((
+                                d.qpos[world.q[arm]].astype(np.float32),
+                                np.asarray(targets[arm], dtype=np.float32),
+                                world.render(d, "top"), world.render(d, "side"), world.render(d, arm_view),
+                            ))
+                        teacher.hook = lambda d, lbl, _fn=_rec: _fn(d, {arm: d.ctrl[world.act[arm]]}, lbl)
+                        res = teacher.run_single(here, step)
+                        if res.get("result") == "pass" and len(step_frames) >= 60:
+                            for st_q, ac_q, rs_i, sd_i, wr_i in step_frames:
+                                ds.add_frame({
+                                    "task": f"Move the designated container from {step['from']} to {step['to']}.",
+                                    "observation.state": st_q, "action": ac_q,
+                                    "observation.images.rs": rs_i, "observation.images.side": sd_i, "observation.images.wrist": wr_i,
+                                })
+                            ds.save_episode()
+                            saved += 1
+                    here[step["container"]] = step["to"]
+                    if step.get("outbound"):
+                        here.pop(step["container"], None)
         finally:
             ds.finalize()
             for r in world.renderers.values():
@@ -277,32 +292,29 @@ def run_train_stage(req: dict, out: Path) -> dict:
 
     train_dir = out / "train"
     resume_dir = Path(params["resume_train_dir"]).resolve() if params.get("resume_train_dir") else None
-    if resume_dir is None and (train_dir.exists() or train_dir.is_symlink()):
+    if train_dir.exists() or train_dir.is_symlink():
         raise ValueError("fresh training output dir already exists")
 
     _progress(out, "training", arm=arm, steps=params["steps"])
+    cmd = [
+        sys.executable, "-m", "lerobot.scripts.lerobot_train",
+        "--dataset.repo_id=local/omx-canon", f"--dataset.root={ds_root}",
+        f"--dataset.episodes={json.dumps(admitted)}",
+        "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false",
+        f"--policy.chunk_size={params['chunk_size']}", f"--policy.n_action_steps={params['n_action_steps']}",
+        f"--policy.use_vae={'true' if params['use_vae'] else 'false'}",
+        f"--policy.kl_weight={params['kl_weight']}",
+        f"--policy.optimizer_lr={params['lr']}", f"--policy.optimizer_lr_backbone={params['lr'] * 0.1}",
+        f"--output_dir={train_dir}", f"--steps={params['steps']}",
+        f"--batch_size={params['batch_size']}", f"--save_freq={params['save_freq']}",
+        f"--seed={params['seed']}",
+    ]
     if resume_dir is not None:
-        cfg = resume_dir / "checkpoints" / "last" / "pretrained_model" / "train_config.json"
-        if not cfg.is_file():
-            cfg = resume_dir / "train_config.json"
-        if not cfg.is_file():
-            raise ValueError("resume_train_dir missing train_config.json")
-        cmd = [sys.executable, "-m", "lerobot.scripts.lerobot_train", f"--config_path={cfg}", "--resume=true"]
-        active_train = resume_dir
-    else:
-        cmd = [
-            sys.executable, "-m", "lerobot.scripts.lerobot_train",
-            "--dataset.repo_id=local/omx-canon", f"--dataset.root={ds_root}",
-            "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false",
-            f"--policy.chunk_size={params['chunk_size']}", f"--policy.n_action_steps={params['n_action_steps']}",
-            f"--policy.use_vae={'true' if params['use_vae'] else 'false'}",
-            f"--policy.kl_weight={params['kl_weight']}",
-            f"--policy.optimizer_lr={params['lr']}", f"--policy.optimizer_lr_backbone={params['lr'] * 0.1}",
-            f"--output_dir={train_dir}", f"--steps={params['steps']}",
-            f"--batch_size={params['batch_size']}", f"--save_freq={params['save_freq']}",
-            f"--seed={params['seed']}",
-        ]
-        active_train = train_dir
+        resume_ckpt = (resume_dir / "checkpoints" / "last" / "pretrained_model").resolve()
+        if not resume_ckpt.is_relative_to(resume_dir) or not (resume_ckpt / "model.safetensors").is_file():
+            raise ValueError("resume_train_dir missing checkpoints/last/pretrained_model")
+        cmd.append(f"--policy.pretrained_path={resume_ckpt}")
+    active_train = train_dir
 
     env = dict(os.environ, HF_HUB_OFFLINE="1", HF_DATASETS_OFFLINE="1", HF_HUB_DISABLE_TELEMETRY="1")
     with _gpu_job_lock(Path(req["jobs_dir"])):
@@ -323,7 +335,18 @@ def run_train_stage(req: dict, out: Path) -> dict:
     }
 
 
-def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, episodes: int, delay_frames: int, seed_base: int):
+def _step_and_here(plan: dict, arm: str, ep_idx: int) -> tuple[dict, dict]:
+    arm_indices = [idx for idx, s in enumerate(plan["steps"]) if s["arm"] == arm]
+    target_idx = arm_indices[ep_idx % len(arm_indices)]
+    here = dict(plan.get("start") or {})
+    for s in plan["steps"][:target_idx]:
+        here[s["container"]] = s["to"]
+        if s.get("outbound"):
+            here.pop(s["container"], None)
+    return plan["steps"][target_idx], here
+
+
+def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str, episodes: int, delay_frames: int, seed_base: int):
     import numpy as np
     import torch
 
@@ -344,27 +367,28 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, episodes: int,
     for a in ("arm_a", "arm_b"):
         layout.arms[a].wait = (canon_q[a] if a == arm else idle_q[a]).copy()
         layout.sim_arms[a].wait = (canon_q[a] if a == arm else idle_q[a]).copy()
+    plan = tasks.get_task(layout, _SIM_TASK_MAP[task_name])
     world = sim.World(layout)
     successes, teacher_ok, neighbour_hits, contact_hits = 0, 0, 0, 0
     layer_stats = {}
     try:
         for i in range(episodes):
             seed = seed_base + i
-            plan = tasks.plan_h1(seed=seed)
-            step = next(s for s in plan["steps"] if s["arm"] == arm)
+            step, here = _step_and_here(plan, arm, i)
             layer_key = step["to"].split("-")[-1] if "-" in step["to"] else "l0"
             row_l = layer_stats.setdefault(layer_key, {"episodes": 0, "lifted": 0, "sustained_lift": 0, "successes": 0})
             row_l["episodes"] += 1
-            teacher = teaching.Teacher(world, seed=seed, pose_random=True)
-            t_res = teacher.run_single(dict(plan["initial"]), step)
-            if t_res.get("result") in ("placed", "released"):
+            teacher = teaching.Teacher(world, seed=seed)
+            t_res = teacher.run_single(here, step)
+            if t_res.get("result") == "pass":
                 teacher_ok += 1
 
-            data = teacher.fresh(dict(plan["initial"]))
+            data = teacher.fresh(here)
             idle = {other: idle_q[other].copy()}
-            teacher.belt_in(data, step, idle)
+            if step["from"] == "belt":
+                teacher.belt_in(data, step, idle)
             teacher.carried = step["container"]
-            before = {k: world.pose(data, k) for k in plan["initial"]}
+            before = {k: world.pose(data, k) for k in here if k != step["container"]}
             start_z = world.pose(data, step["container"])[0][2]
             peak, held, held_max = 0.0, 0, 0
             policy.reset()
@@ -389,7 +413,7 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, episodes: int,
                 row_l["lifted"] += 1
             if held_max >= sim.FPS:
                 row_l["sustained_lift"] += 1
-            if verdict.get("result") in ("placed", "released"):
+            if verdict.get("result") == "pass":
                 successes += 1
                 row_l["successes"] += 1
             neighbour_hits += len(teacher.contacts.get("pad_neighbour", ()))
@@ -424,13 +448,14 @@ def run_eval_ladder(req: dict, out: Path) -> dict:
     with _gpu_job_lock(Path(req["jobs_dir"])):
         _progress(out, "evaluating", arm=arm, task=params["task"])
         policy = ACTPolicy.from_pretrained(ckpt_dir, local_files_only=True).to("cuda").eval()
+        policy.config.n_action_steps = params["n_action_steps"]
         pre, post = make_pre_post_processors(policy.config, pretrained_path=str(ckpt_dir))
         nom, layers_nom = _eval_sim_profile(
-            policy, pre, post, spec, arm,
+            policy, pre, post, spec, arm, task_name=params["task"],
             episodes=params["nominal_episodes"], delay_frames=0, seed_base=params["seed_base"],
         )
         dly, _ = _eval_sim_profile(
-            policy, pre, post, spec, arm,
+            policy, pre, post, spec, arm, task_name=params["task"],
             episodes=params["delayed_episodes"], delay_frames=params["delay_frames"], seed_base=params["seed_base"] + 1000,
         )
 
@@ -545,7 +570,7 @@ def main(argv=None) -> int:
         _progress(args.out, "finished")
         return 0
     except Exception as exc:
-        write_json(args.out / "error.json", {"status": "failed", "error": f"{type(exc).__name__}: {str(exc)[:200]}"})
+        write_json(args.out / "error.json", {"status": "failed", "error": scrub_text(f"{type(exc).__name__}: {exc}", 200)})
         return 1
 
 

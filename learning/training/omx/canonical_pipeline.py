@@ -19,11 +19,13 @@ _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts" / "learning" 
 if str(_CONTRACTS_SRC) not in sys.path:
     sys.path.insert(0, str(_CONTRACTS_SRC))
 
+from canonical_telemetry import HostTelemetry, external_gpu_locks  # noqa: E402
 from canonical_watch import (  # noqa: E402
     BusyConflict,
     PeerClient,
     read_bounded_json,
     scan_watch_dir,
+    scrub_text,
     strip_paths,
     tail_log,
     validate_peer_url,
@@ -111,6 +113,7 @@ class CanonicalService:
         self.peers = PeerClient({})
         self.jobs_dir = Path.home() / "rosy-jobs"
         self.peer_token_file: Path | None = None
+        self.telemetry = HostTelemetry(self._disk_probe_path)
         if config is None:
             return
         allowed = {"schema", "spec_path", "python", "named_sources", "watch_roots", "peers", "jobs_dir", "peer_token_file"}
@@ -170,6 +173,13 @@ class CanonicalService:
             )
         self.configured, self.writable = True, bool(self.python)
 
+    def _disk_probe_path(self) -> Path:
+        for meta in self.watch_roots.values():
+            p = meta.get("path")
+            if isinstance(p, Path) and p.exists():
+                return p
+        return self.root if self.root is not None else Path.home()
+
     def connect(self):
         return sqlite3.connect(self.db, timeout=10)
 
@@ -179,13 +189,16 @@ class CanonicalService:
 
     def verify_peer_bearer(self, header_value: str | None) -> bool:
         if self.peer_token_file is None:
-            return True
+            return False
         if not isinstance(header_value, str) or not header_value.startswith("Bearer "):
             return False
         if self.peer_token_file.is_symlink() or not self.peer_token_file.is_file():
             return False
-        expected = self.peer_token_file.read_text(encoding="utf-8").strip()
-        return bool(expected) and hmac.compare_digest(header_value[7:].strip(), expected)
+        try:
+            expected = self.peer_token_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            return False
+        return len(expected) >= 16 and hmac.compare_digest(header_value[7:].strip(), expected)
 
     def _public_run(self, row: dict, *, include_log: bool = False) -> dict:
         out = {
@@ -195,7 +208,7 @@ class CanonicalService:
             "params": strip_paths(row.get("params") or {}),
             "progress": strip_paths(row.get("progress")) if row.get("progress") else None,
             "result": strip_paths(row.get("result")) if row.get("result") else None,
-            "error": row.get("error"), **AUTHORITY_STAMP,
+            "error": scrub_text(row.get("error"), 240) if row.get("error") else None, **AUTHORITY_STAMP,
         }
         if include_log and self.root is not None:
             out["log_tail"] = tail_log(self.root / "runs" / row["id"])
@@ -228,7 +241,10 @@ class CanonicalService:
             code = child.poll() if child else None
             if proof and proof == receipt:
                 if row["status"] == "stopping" and time.time() - row.get("cancel_at", time.time()) > 10:
-                    os.killpg(receipt["pid"], signal.SIGKILL)
+                    try:
+                        os.killpg(receipt["pid"], signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
             else:
                 res_file, err_file = rdir / "output" / "result.json", rdir / "output" / "error.json"
                 if row["status"] == "stopping":
@@ -249,19 +265,22 @@ class CanonicalService:
                 self.children.pop(rid, None)
             db.execute("UPDATE runs SET document=? WHERE id=?", (json.dumps(row), rid))
 
-    def snapshot(self) -> dict:
+    def snapshot(self, *, include_peers: bool = True) -> dict:
         if not self.configured:
             return {
                 "configured": False, "writable": False, "host_id": self.host_id,
                 "spec_sha256": self.spec_sha256, "spec": self.spec, "spec_source": self.spec_source,
                 "named_sources": {}, "gpu_lock": {"busy": False, "holders": []},
-                "runs": [], "watched": {}, "peers": {}, **AUTHORITY_STAMP,
+                "runs": [], "watched": {}, "peers": self.peers.snapshot() if include_peers else {},
+                "host_telemetry": self.telemetry.snapshot(), **AUTHORITY_STAMP,
             }
         with self.lock, self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             self._refresh(db)
             rows = [self._public_run(json.loads(r[0])) for r in db.execute("SELECT document FROM runs ORDER BY rowid DESC LIMIT 100")]
-        holders = [r["id"] for r in rows if r["gpu_required"] and r["status"] in ("launching", "running", "stopping")]
+            gpu_rows = [json.loads(r[0]) for r in db.execute("SELECT document FROM runs WHERE gpu_required=1")]
+        holders = [r["id"] for r in gpu_rows if r["status"] in ("launching", "running", "stopping")]
+        holders.extend(external_gpu_locks(self.jobs_dir))
         return {
             "configured": True, "writable": self.writable, "host_id": self.host_id,
             "spec_sha256": self.spec_sha256, "spec": self.spec, "spec_source": self.spec_source,
@@ -269,15 +288,17 @@ class CanonicalService:
                               for k, v in self.named_sources.items()},
             "gpu_lock": {"busy": bool(holders), "holders": holders}, "runs": rows,
             "watched": {wid: scan_watch_dir(m["path"], m) for wid, m in self.watch_roots.items()},
-            "peers": self.peers.snapshot(), **AUTHORITY_STAMP,
+            "peers": self.peers.snapshot() if include_peers else {},
+            "host_telemetry": self.telemetry.snapshot(), **AUTHORITY_STAMP,
         }
 
     def peer_summary(self) -> dict:
-        snap = self.snapshot()
+        snap = self.snapshot(include_peers=False)
         return {
             "host_id": self.host_id, "configured": snap["configured"], "writable": snap["writable"],
             "spec_sha256": snap["spec_sha256"], "gpu_lock": snap["gpu_lock"],
-            "runs": snap["runs"][:25], "watched": snap["watched"], **AUTHORITY_STAMP,
+            "runs": snap["runs"][:25], "watched": snap["watched"],
+            "host_telemetry": snap["host_telemetry"], **AUTHORITY_STAMP,
         }
 
     def get_run(self, rid: str) -> dict:
@@ -485,12 +506,27 @@ class CanonicalService:
             if callable(getattr(child, "wait", None)):
                 threading.Thread(target=self._reap, args=(rid, child), name=f"canon-reap-{rid[:8]}", daemon=True).start()
         except Exception:
-            if child and child.poll() is None:
-                child.terminate()
-                child.wait(timeout=10)
-            row.update(status="failed", error="canonical worker launch failed")
-            db.execute("UPDATE runs SET document=? WHERE id=?", (json.dumps(row), rid))
-            db.commit()
+            try:
+                if child and child.poll() is None:
+                    try:
+                        os.killpg(child.pid, signal.SIGTERM)
+                    except (ProcessLookupError, OSError):
+                        child.terminate()
+                    try:
+                        child.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        try:
+                            os.killpg(child.pid, signal.SIGKILL)
+                        except (ProcessLookupError, OSError):
+                            child.kill()
+                        try:
+                            child.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            pass
+            finally:
+                row.update(status="failed", error="canonical worker launch failed")
+                db.execute("UPDATE runs SET document=? WHERE id=?", (json.dumps(row), rid))
+                db.commit()
             raise
         return self._public_run(row)
 
@@ -518,7 +554,10 @@ class CanonicalService:
             if row["status"] in ("running", "stopping"):
                 if process_stamp(receipt.get("pid", -1), self.root / "runs" / rid / "request.json") != receipt:
                     raise ValueError("owned worker identity changed")
-                os.killpg(receipt["pid"], signal.SIGTERM)
+                try:
+                    os.killpg(receipt["pid"], signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
                 row["status"] = "stopping"
                 row.setdefault("cancel_at", time.time())
                 db.execute("UPDATE runs SET document=? WHERE id=?", (json.dumps(row), rid))

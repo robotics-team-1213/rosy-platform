@@ -27,7 +27,7 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                         "storage_hub.py", "storage_web.py", "storage_source.py", "storage_setup.py", "storage_prepare.py", "storage_omx.py",
                         "review_app_web/learning.html", "review_app_web/storage.js", "review_app_web/storage-settings.js",
                         "review_app_web/tasks.html", "review_app_web/tasks.js",
-                        "review_app_web/canonical.html", "review_app_web/canonical.js", "review_app_web/canonical.css",
+                        "review_app_web/canonical.html", "review_app_web/canonical.js", "review_app_web/canonical-monitor.js", "review_app_web/canonical.css",
                         "review_app_web/omx.html", "review_app_web/omx.js",
                         "review_app_web/omx-review.js", "review_app_web/omx-profiles.js", "review_app_web/omx-export.js", "review_app_web/omx-hub.js", "review_app_web/omx-collect.js",
                         "review_app_web/camera.html", "review_app_web/camera.js")),
@@ -36,7 +36,9 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                         "collection_intake.py", "collection_pipeline.py", "camera_reference.py")),
                      "learning/training/omx/native_cycle.py",
                      "learning/training/omx/canonical_watch.py",
+                     "learning/training/omx/canonical_telemetry.py",
                      "learning/training/omx/canonical_pipeline.py",
+                     "learning/training/omx/canonical_workers.py",
                      *HUB_FILES, *FILE_PICKER_FILES,
                      *("learning/training/omx/experiment_" + name + ".py" for name in
                        ("artifact", "catalog", "center", "collect_plans", "dataset", "evaluation", "export", "hub", "inbox", "io",

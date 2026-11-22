@@ -1,4 +1,4 @@
-"""Chromium verification for /learning/canonical: spec, 2-PC watch, eval ladder, cell_live_check & job runner."""
+"""Chromium verification for /learning/canonical: 2-PC live monitor, telemetry meters, eval ladder, cell_live_check, spec & job runner."""
 import json
 from pathlib import Path
 import sys
@@ -27,20 +27,35 @@ def _seed_watched(watch_dir: Path) -> None:
     }), encoding="utf-8")
     (watch_dir / "collect" / "dart-5201" / "arm_b" / "meta").mkdir(parents=True)
     (watch_dir / "collect" / "dart-5201" / "arm_b" / "meta" / "info.json").write_text("{}", encoding="utf-8")
+    (watch_dir / "arm_b" / "train" / "checkpoints" / "002500").mkdir(parents=True)
+    (watch_dir / "arm_b.train.log").write_text(
+        "Training:  17%|##| 1248/7500 [03:10<15:52,  6.56step/s]\r"
+        "INFO step:1K loss:0.099 grdn:2.309 lr:9.7e-05\n",
+        encoding="utf-8",
+    )
+    (watch_dir / "arm_b_ladder").mkdir(parents=True)
+    (watch_dir / "arm_b_ladder" / "dev-002500.log").write_text(
+        "EVAL 3101 arm_b ship-h1r1-l0 fail 0.0 False\nEVAL 3102 arm_b ship-h1r2-l0 pass 139.35 True\n",
+        encoding="utf-8",
+    )
     (watch_dir / "eval_l1").mkdir(parents=True)
     (watch_dir / "eval_l1" / "step-5000.json").write_text(json.dumps({
         "verdict": "pass", "task": "ship-h1", "physics_candidate": "canonical-test",
         "profiles": {
-            "nominal": {"episodes": 50, "teacher_successes": 48, "policy_successes": 48, "neighbour_disturbed": 0, "arm_link_contacts": 0},
-            "delayed": {"episodes": 30, "teacher_successes": 29, "policy_successes": 29, "neighbour_disturbed": 0, "arm_link_contacts": 0},
+            "nominal": {"policy_episodes": 50, "teacher_episodes": 50, "teacher_successes": 48, "policy_successes": 48, "neighbour_disturbed": 0, "arm_link_contacts": 0},
+            "delayed": {"policy_episodes": 30, "teacher_episodes": 30, "teacher_successes": 29, "policy_successes": 29, "neighbour_disturbed": 0, "arm_link_contacts": 0},
         },
         "per_layer": {"L0": {"episodes": 16, "successes": 16}, "L1": {"episodes": 17, "successes": 17}},
     }), encoding="utf-8")
     (watch_dir / "arm_b_cell_live_check.json").write_text(json.dumps({
         "schema": "rosy.omx-cell-live-check.v1", "arm_id": "arm_b", "policy_revision": "canon-rev-5000",
-        "states": {
-            "legacy_home_closed": {"goal_3": {"strict_ok": False, "margin_ok": False, "strict_oor": [{"name": "wrist_roll"}], "margin_oor": [], "wrist_roll_warning": "frame 0 wrist_roll=22.00 lies between trained branches"}},
-            "canonical_start_open": {"goal_3": {"strict_ok": True, "margin_ok": True, "strict_oor": [], "margin_oor": [], "wrist_roll_warning": None}},
+        "checkpoints": {
+            "002500": {
+                "states": {
+                    "legacy_home_closed": {"goal_3": {"strict_ok": False, "margin_ok": False, "strict_oor": [{"name": "wrist_roll"}], "margin_oor": [], "wrist_roll_warning": "frame 0 wrist_roll=22.00 lies between trained branches"}},
+                    "canonical_start_open": {"goal_3": {"strict_ok": True, "margin_ok": True, "strict_oor": [], "margin_oor": [], "wrist_roll_warning": None}},
+                },
+            },
         },
     }), encoding="utf-8")
 
@@ -57,6 +72,7 @@ def _serve_canonical(tmp_path: Path, *, configured: bool = True, monkeypatch=Non
         _seed_watched(tmp_path / "watch_mp")
         import canonical_pipeline as cp
         _real_popen = cp.subprocess.Popen
+
         def _fake_popen(*a, **k):
             cmd = a[0] if a else k.get("args") or ()
             if not any("canonical_workers.py" in str(arg) for arg in cmd):
@@ -65,6 +81,7 @@ def _serve_canonical(tmp_path: Path, *, configured: bool = True, monkeypatch=Non
                 k["stdout"].write(b"[mock] align_real started\n")
                 k["stdout"].flush()
             return type("P", (), {"pid": 51001, "poll": lambda s: None})()
+
         monkeypatch.setattr(cp.subprocess, "Popen", _fake_popen)
         monkeypatch.setattr(cp, "process_stamp", lambda pid, req=None: {"pid": pid, "start": "1", "boot": "b"})
         monkeypatch.setattr(cp.os, "killpg", lambda pid, sig: None)
@@ -72,6 +89,33 @@ def _serve_canonical(tmp_path: Path, *, configured: bool = True, monkeypatch=Non
             "schema": "rosy.omx.center-config/1", "host_id": "model",
             "root": str(tmp_path / "center"), "python": {"act": sys.executable, "hilserl": sys.executable},
             "canonical": cfg,
+        })
+        monkeypatch.setattr(center.canonical.telemetry, "snapshot", lambda: {
+            "gpu": {"available": True, "name": "RTX 5080 Laptop GPU", "util_pct": 97, "vram_used_mib": 3936, "vram_total_mib": 16303, "temp_c": 59, "power_w": 79.6},
+            "cpu": {"cores": 20, "load_1m": 7.3, "load_5m": 6.9}, "memory": {"used_gib": 14.2, "total_gib": 31.1, "pct": 45.7},
+            "disk": {"free_gib": 73.0, "total_gib": 419.0, "use_pct": 82.6, "state": "warn"}, "collected_at": 1795357600.0, "stale": False,
+        })
+        monkeypatch.setattr(center.canonical.peers, "snapshot", lambda: {
+            "ai": {
+                "peer_id": "ai", "label": "AI PC", "status": "ok", "fetched_at": 1795357600.0, "error": None,
+                "summary": {
+                    "host_id": "ai", "configured": True, "writable": False,
+                    "host_telemetry": {
+                        "gpu": {"available": True, "name": "RTX 5080 Laptop GPU", "util_pct": 98, "vram_used_mib": 4925, "vram_total_mib": 16303, "temp_c": 60, "power_w": 79.6},
+                        "cpu": {"cores": 20, "load_1m": 5.3, "load_5m": 4.9}, "memory": {"used_gib": 12.1, "total_gib": 31.1, "pct": 38.9},
+                        "disk": {"free_gib": 25.0, "total_gib": 460.0, "use_pct": 94.6, "state": "crit"}, "collected_at": 1795357600.0, "stale": False,
+                    },
+                    "watched": {"ai_canon": {
+                        "id": "ai_canon", "label": "AI PC mix-1122-canon", "host_id": "ai", "available": True,
+                        "align_done": "RC=0", "gate_receipts": [], "collect_seeds": {"arm_a": 48, "arm_b": 0},
+                        "checkpoints": {"arm_a": {"train": ["005000"]}},
+                        "training": [{"file": "arm_a.train.log", "arm": "arm_a", "status": "running", "active": True, "ended": False,
+                                      "step": 6200, "total_steps": 75000, "pct": 8.3, "rate_step_s": 7.0, "eta_s": 9800,
+                                      "loss": 0.081, "grdn": 1.95, "lr": 3e-5, "log_age_s": 2.0}],
+                        "eval_progress": [], "eval_ladder": [], "cell_live_checks": [], "markers": {}, "progress": None,
+                    }},
+                },
+            },
         })
     srv = make_server(ReviewStore(tmp_path / "state", empty_training=True), free_port(), accounts=Accounts(), omx_center=center)
     th = threading.Thread(target=srv.serve_forever, daemon=True)
@@ -95,6 +139,21 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
             expect = playwright.expect
             try:
                 page.goto(base + "/learning/canonical", wait_until="domcontentloaded")
+                expect(page.locator("#canon-hosts .canon-host-card")).to_have_count(2)
+                expect(page.locator("#canon-hosts")).to_contain_text("1,248 / 7,500")
+                expect(page.locator("#canon-hosts")).to_contain_text("6,200 / 75,000")
+                expect(page.locator("#canon-hosts")).to_contain_text("align.done: RC=0")
+                expect(page.locator("#canon-hosts")).to_contain_text("pass 100/rev 0/rej 0")
+                expect(page.locator("#canon-hosts")).to_contain_text("arm_b 1")
+                expect(page.locator("#canon-hosts")).to_contain_text("평가 002500: 2")
+                expect(page.locator("#canon-hosts progress.canon-progress").first).to_be_visible()
+                assert page.locator("#canon-hosts progress.canon-progress").first.bounding_box()["width"] > 50
+                assert page.locator("#canon-hosts meter.canon-meter").first.bounding_box()["width"] > 40
+                expect(page.locator('#canon-hosts meter.canon-meter[data-level="warn"]')).to_have_count(1)
+                expect(page.locator('#canon-hosts meter.canon-meter[data-level="crit"]')).to_have_count(1)
+                if width == 1280:
+                    assert page.locator("#canon-hosts").bounding_box()["y"] < page.locator("#canon-spec-table").bounding_box()["y"]
+
                 expect(page.locator("#canon-spec-body tr")).to_have_count(12)
                 expect(page.locator("#canon-evidence-badge")).to_contain_text("실물 제어 아님")
                 expect(page.locator("#canonical-main")).to_contain_text("실물 로봇 제어·적용 권한이 없습니다")
@@ -108,10 +167,7 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
                 page.locator("#canon-unit").select_option("raw_ticks")
                 expect(page.locator("#canon-spec-body")).to_contain_text("2130")
 
-                expect(page.locator("#canon-hosts")).to_contain_text("align.done: RC=0")
-                expect(page.locator("#canon-hosts")).to_contain_text("pass 100/rev 0/rej 0")
-                expect(page.locator("#canon-hosts")).to_contain_text("arm_b 1")
-
+                expect(page.locator("#canon-eval-body")).to_contain_text("48/50")
                 page.locator("#canon-eval-body ui-button").first.click()
                 expect(page.locator("#canon-eval-detail")).to_be_visible()
                 expect(page.locator("#canon-eval-detail")).to_contain_text("canonical-test")

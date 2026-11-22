@@ -70,13 +70,14 @@ def _serve(tmp_path: Path, *, with_canonical: bool = False, accounts=None, monke
 
 def test_zero_config_serves_readonly_builtin_spec_and_blocks_writes(tmp_path):
     with _serve(tmp_path, with_canonical=False) as (base, _):
-        for route, mime_prefix in (("/learning/canonical", "text/html"), ("/canonical.js", "text/javascript"), ("/canonical.css", "text/css")):
+        for route, mime_prefix in (("/learning/canonical", "text/html"), ("/canonical.js", "text/javascript"),
+                                   ("/canonical-monitor.js", "text/javascript"), ("/canonical.css", "text/css")):
             with urllib.request.urlopen(base + route, timeout=5) as resp:
                 assert resp.status == 200 and resp.headers.get("Content-Type", "").startswith(mime_prefix)
         code, snap = raw_req(base, PREFIX)
         assert code == 200 and snap["configured"] is False and snap["writable"] is False
         assert snap["spec"]["design"] == "design2_idle_home_active_canonical"
-        assert snap["real_evidence"] is False and snap["policy_activation"] is False
+        assert snap["real_evidence"] is False and snap["policy_activation"] is False and "host_telemetry" in snap
 
         code2, spec = raw_req(base, PREFIX + "/spec")
         assert code2 == 200 and spec["spec_sha256"] == snap["spec_sha256"]
@@ -141,3 +142,28 @@ def test_collaboration_enforces_view_manage_csrf_no_paths_and_busy_conflict(tmp_
         }
         monkeypatch.setattr(center.canonical, "start_job", lambda b: (_ for _ in ()).throw(cp.BusyConflict("gpu busy")))
         assert collab_req(base, PREFIX + "/jobs", "reviewer", gpu_body, token)[0] == 409
+
+
+def test_peer_summary_bearer_is_fail_closed_and_enforces_token(tmp_path, monkeypatch):
+    with _serve(tmp_path, with_canonical=True, accounts=None, monkeypatch=monkeypatch) as (base, center):
+        # Without configured peer_token_file, bearer access must fail closed with 403.
+        assert raw_req(base, PREFIX + "/peer-summary")[0] == 403
+
+        tok_file = tmp_path / "peer.token"
+        tok_file.write_text("0123456789abcdef0123456789abcdef\n", encoding="utf-8")
+        center.canonical.peer_token_file = tok_file
+
+        assert raw_req(base, PREFIX + "/peer-summary")[0] == 403
+        req_bad = urllib.request.Request(base + PREFIX + "/peer-summary", headers={"Authorization": "Bearer wrong"})
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            urllib.request.urlopen(req_bad, timeout=5)
+        assert exc.value.code == 403
+
+        req_ok = urllib.request.Request(
+            base + PREFIX + "/peer-summary",
+            headers={"Authorization": "Bearer 0123456789abcdef0123456789abcdef"},
+        )
+        with urllib.request.urlopen(req_ok, timeout=5) as resp:
+            doc = json.loads(resp.read().decode("utf-8"))
+        assert resp.status == 200 and doc["real_evidence"] is False
+        assert "host_telemetry" in doc and "watched" in doc and str(tmp_path) not in json.dumps(doc)

@@ -170,8 +170,8 @@ def validate_canonical_spec(doc: dict) -> dict:
     if _finite_number(bridge.get("folded_tol_norm")) != FOLDED_TOL_NORM:
         raise ValueError(f"real_entry_bridge.folded_tol_norm must be {FOLDED_TOL_NORM}")
     phases = bridge.get("phases")
-    if not isinstance(phases, list) or len(phases) != 2:
-        raise ValueError("real_entry_bridge must define exactly 2 phases")
+    if not isinstance(phases, list) or len(phases) != 2 or not all(isinstance(p, dict) for p in phases):
+        raise ValueError("real_entry_bridge must define exactly 2 phase mappings")
     p1, p2 = phases[0].get("joints"), phases[1].get("joints")
     if p1 != ["shoulder_lift", "elbow_flex", "wrist_flex"]:
         raise ValueError("phase 1 must unfold/clear shoulder_lift, elbow_flex, wrist_flex first")

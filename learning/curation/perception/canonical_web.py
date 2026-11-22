@@ -9,9 +9,12 @@ from pathlib import Path
 import re
 import sys
 
-_CONTRACTS_SRC = Path(__file__).resolve().parents[3] / 'contracts' / 'learning' / 'src'
-if str(_CONTRACTS_SRC) not in sys.path:
-    sys.path.insert(0, str(_CONTRACTS_SRC))
+_ROOT = Path(__file__).resolve().parents[3]
+_CONTRACTS_SRC = _ROOT / 'contracts' / 'learning' / 'src'
+_OMX_TRAINING_SRC = _ROOT / 'learning' / 'training' / 'omx'
+for _p in (str(_CONTRACTS_SRC), str(_OMX_TRAINING_SRC)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from rosy.contracts.learning.omx_canonical import (  # noqa: E402
     AUTHORITY_STAMP,
@@ -23,11 +26,24 @@ STATIC = Path(__file__).with_name('review_app_web')
 PAGES = {
     '/learning/canonical': ('canonical.html', 'text/html'),
     '/canonical.js': ('canonical.js', 'text/javascript'),
+    '/canonical-monitor.js': ('canonical-monitor.js', 'text/javascript'),
     '/canonical.css': ('canonical.css', 'text/css'),
 }
 PREFIX = '/api/learning/canonical'
 _UUID_RE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 _ID_RE = r'[A-Za-z0-9_][A-Za-z0-9._-]{0,63}'
+_DEFAULT_TELEMETRY = None
+
+
+def _default_telemetry_snapshot():
+    global _DEFAULT_TELEMETRY
+    if _DEFAULT_TELEMETRY is None:
+        try:
+            from canonical_telemetry import HostTelemetry
+            _DEFAULT_TELEMETRY = HostTelemetry(Path.home)
+        except ImportError:
+            return None
+    return _DEFAULT_TELEMETRY.snapshot()
 
 
 def _default_spec_payload() -> dict:
@@ -44,7 +60,7 @@ def _default_snapshot() -> dict:
         'configured': False, 'writable': False, 'host_id': None,
         'spec_sha256': spec_doc['spec_sha256'], 'spec': spec_doc['spec'], 'spec_source': 'builtin',
         'named_sources': {}, 'gpu_lock': {'busy': False, 'holders': []},
-        'runs': [], 'watched': {}, 'peers': {}, **AUTHORITY_STAMP,
+        'runs': [], 'watched': {}, 'peers': {}, 'host_telemetry': _default_telemetry_snapshot(), **AUTHORITY_STAMP,
     }
 
 

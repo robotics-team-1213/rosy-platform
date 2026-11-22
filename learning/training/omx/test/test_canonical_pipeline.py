@@ -178,3 +178,249 @@ def test_peer_client_rejects_bad_origins_and_handles_timeout_and_ok(tmp_path):
     dead = cp.PeerClient({"dead": {"id": "dead", "label": "Dead", "url": "http://127.0.0.1:1"}})
     out = dead.refresh("dead")
     assert out["status"] == "unavailable" and out["summary"] is None
+    assert cp.CanonicalService(tmp_path / "no_tok", None).verify_peer_bearer("Bearer whatever") is False
+
+
+def test_host_telemetry_normal_na_timeout_and_disk_thresholds(tmp_path, monkeypatch):
+    import canonical_telemetry as ct
+
+    now = [1000.0]
+    calls = []
+
+    def runner_ok(cmd, timeout=2.0):
+        calls.append(cmd)
+        return (0, "RTX 5080 Laptop GPU, 97, 3936, 16303, 59, [N/A]\n")
+
+    monkeypatch.setattr(ct.shutil, "disk_usage", lambda p: SimpleNamespace(free=50 * 1024**3, total=300 * 1024**3))
+    tel = ct.HostTelemetry(lambda: tmp_path, ttl_s=5.0, runner=runner_ok, clock=lambda: now[0])
+    s1 = tel.snapshot()
+    assert s1["stale"] is False and s1["gpu"]["available"] is True and s1["gpu"]["util_pct"] == 97
+    assert s1["gpu"]["vram_used_mib"] == 3936 and s1["gpu"]["power_w"] is None
+    assert s1["disk"]["state"] == "warn" and str(tmp_path) not in json.dumps(s1)
+
+    now[0] = 1002.0
+    assert tel.snapshot()["stale"] is False and len(calls) == 1  # cached within TTL
+
+    def runner_timeout(cmd, timeout=2.0):
+        calls.append("timeout")
+        raise ct.subprocess.TimeoutExpired(cmd, timeout)
+
+    tel_to = ct.HostTelemetry(lambda: tmp_path, ttl_s=0.0, runner=runner_timeout, clock=lambda: now[0])
+    s2 = tel_to.snapshot()
+    assert s2["gpu"]["available"] is False
+    # Second call during 60s cooldown must not re-invoke runner.
+    monkeypatch.setattr(ct.shutil, "disk_usage", lambda p: SimpleNamespace(free=10 * 1024**3, total=300 * 1024**3))
+    now[0] = 1010.0
+    tel_to.snapshot()
+    import time as _time
+    _time.sleep(0.05)
+    assert tel_to.snapshot()["disk"]["state"] == "crit"
+    assert calls.count("timeout") == 1
+
+
+def test_scan_watch_dir_parses_train_eval_logs_markers_and_scrubs(tmp_path):
+    watch = tmp_path / "watch_mp"
+    watch.mkdir()
+    (watch / "collect.done").write_text("48\n", encoding="utf-8")
+    (watch / "arm_b.train.log").write_text(
+        "\x1b[32mTraining:  17%|##| 1248/7500 [03:10<15:52,  6.56step/s]\x1b[0m\r"
+        "INFO step:1K loss:0.099 grdn:2.309 lr:9.7e-05 /home/alice/secret Bearer tok123456\n",
+        encoding="utf-8",
+    )
+    (watch / "arm_a.train.log").write_text(
+        "Training: 100%|##| 7500/7500 [19:33<00:00,  6.39step/s]\r"
+        "INFO step:8K loss:nan grdn:1.767 lr:1.4e-06\nEnd of training\n",
+        encoding="utf-8",
+    )
+    (watch / "arm_b_ladder").mkdir()
+    (watch / "arm_b_ladder" / "dev-002500.log").write_text(
+        "EVAL 3101 arm_b ship-h1r1-l0 fail /home/rosy/x\nEVAL 3102 arm_b ship-h1r2-l0 pass 139.3 True\n",
+        encoding="utf-8",
+    )
+    (watch / "arm_b_ladder" / "002500.json").write_text(json.dumps({
+        "verdict": "pass", "real_evidence": True, "path": "/tmp/bad",
+    }), encoding="utf-8")
+
+    scanned = cp.scan_watch_dir(watch, {"id": "mp", "label": "Model PC", "host_id": "model"})
+    raw_dump = json.dumps(scanned, allow_nan=False)
+    assert "/home/alice" not in raw_dump and "tok123456" not in raw_dump and "/home/rosy" not in raw_dump
+    assert scanned["markers"]["collect.done"]["present"] is True
+    by_arm = {t["arm"]: t for t in scanned["training"]}
+    assert by_arm["arm_b"]["step"] == 1248 and by_arm["arm_b"]["total_steps"] == 7500 and by_arm["arm_b"]["loss"] == 0.099
+    assert by_arm["arm_a"]["ended"] is True and by_arm["arm_a"]["loss"] is None
+    assert scanned["eval_progress"][0]["checkpoint"] == "002500" and scanned["eval_progress"][0]["successes"] == 1
+    assert scanned["eval_ladder"][0]["folder"] == "arm_b_ladder" and scanned["eval_ladder"][0]["real_evidence"] is False
+
+
+def test_peer_server_fail_closed_and_single_route(tmp_path):
+    import urllib.error
+    import urllib.request
+    import canonical_telemetry as ct
+
+    tok_file = tmp_path / "peer.token"
+    tok_file.write_text("0123456789abcdef0123456789abcdef\n", encoding="utf-8")
+    if os.name == "posix":
+        tok_file.chmod(0o600)
+    watch = tmp_path / "watch_ai"
+    watch.mkdir()
+    cfg = ct.PeerServerConfig(
+        host="127.0.0.1", port=0, host_id="ai",
+        token=ct._load_peer_token(tok_file), jobs_dir=tmp_path / "jobs",
+        watch_roots={"ai_canon": {"id": "ai_canon", "label": "AI", "host_id": "ai", "path": watch}},
+    )
+    srv = ct.create_peer_server(cfg, telemetry=ct.HostTelemetry(lambda: watch, runner=lambda *a, **k: (1, "")))
+    th = threading.Thread(target=srv.serve_forever, daemon=True)
+    th.start()
+    base = f"http://127.0.0.1:{srv.server_port}"
+    tok = "0123456789abcdef0123456789abcdef"
+    try:
+        for path, method, hdrs, want in (
+            ("/api/learning/canonical/peer-summary", "GET", {}, 403),
+            ("/api/learning/canonical/peer-summary", "GET", {"Authorization": "Bearer wrong"}, 403),
+            ("/api/learning/canonical/peer-summary?a=1", "GET", {"Authorization": f"Bearer {tok}"}, 400),
+            ("/api/learning/canonical", "GET", {"Authorization": f"Bearer {tok}"}, 404),
+            ("/api/learning/canonical/peer-summary", "POST", {"Authorization": f"Bearer {tok}"}, 405),
+        ):
+            req = urllib.request.Request(base + path, data=b"{}" if method == "POST" else None, headers=hdrs, method=method)
+            with pytest.raises(urllib.error.HTTPError) as exc:
+                urllib.request.urlopen(req, timeout=5)
+            assert exc.value.code == want
+
+        with urllib.request.urlopen(urllib.request.Request(
+            base + "/api/learning/canonical/peer-summary", headers={"Authorization": f"Bearer {tok}"}
+        ), timeout=5) as resp:
+            doc = json.loads(resp.read().decode("utf-8"))
+        assert resp.status == 200 and doc["host_id"] == "ai" and doc["real_evidence"] is False
+        assert "host_telemetry" in doc and str(tmp_path) not in json.dumps(doc)
+    finally:
+        srv.shutdown(); srv.server_close(); th.join(timeout=5)
+
+
+def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
+    import types
+    import canonical_workers as cw
+
+    spec = oc.default_canonical_spec()
+    calls = {"pose_random_passed": False, "tasks_called": [], "cmds": [], "eval_results": []}
+
+    class _FakeDs:
+        @classmethod
+        def create(cls, *a, **k):
+            return cls()
+        def add_frame(self, f):
+            calls.setdefault("frames", 0)
+            calls["frames"] += 1
+        def save_episode(self):
+            calls.setdefault("eps", 0)
+            calls["eps"] += 1
+        def finalize(self):
+            pass
+
+    monkeypatch.setitem(sys.modules, "lerobot", types.ModuleType("lerobot"))
+    monkeypatch.setitem(sys.modules, "lerobot.datasets", types.ModuleType("lerobot.datasets"))
+    ld_mod = types.ModuleType("lerobot.datasets.lerobot_dataset")
+    ld_mod.LeRobotDataset = _FakeDs
+    monkeypatch.setitem(sys.modules, "lerobot.datasets.lerobot_dataset", ld_mod)
+
+    dg_mod = types.ModuleType("data_gate")
+    dg_mod.gate = lambda dst, **k: {"counts": {"pass": 2, "review": 0, "reject": 0}}
+    dg_mod.check_receipt = lambda dst: [0, 2]
+    monkeypatch.setitem(sys.modules, "data_gate", dg_mod)
+
+    class _FakeArm:
+        def __init__(self):
+            self.wait = [0.0] * 6
+
+    class _FakeLayout:
+        def __init__(self, **k):
+            self.arms = {"arm_a": _FakeArm(), "arm_b": _FakeArm()}
+            self.sim_arms = {"arm_a": _FakeArm(), "arm_b": _FakeArm()}
+        def containers(self):
+            return []
+
+    class _FakeWorld:
+        def __init__(self, layout, **k):
+            import numpy as np
+            self.q = {"arm_a": slice(0, 6), "arm_b": slice(0, 6)}
+            self.act = {"arm_a": slice(0, 6), "arm_b": slice(0, 6)}
+            self.renderers = {}
+        def render(self, d, view):
+            import numpy as np
+            return np.zeros((4, 4, 3), dtype=np.uint8)
+        def pose(self, d, c):
+            return ([0.0, 0.0, 0.02], 0.0)
+
+    class _FakeTeacher:
+        def __init__(self, world, seed=0, **extra):
+            if "pose_random" in extra:
+                calls["pose_random_passed"] = True
+            self.world = world
+            self.hook = lambda d, lbl: None
+            self.contacts = {}
+            self.carried = None
+        def fresh(self, here):
+            import numpy as np
+            z = np.zeros(6, dtype=np.float32)
+            return SimpleNamespace(qpos=z, ctrl=z)
+        def run_single(self, here, step):
+            d = self.fresh(here)
+            self.hook(d, "settle")
+            for _ in range(62):
+                self.hook(d, step["id"])
+            return {"result": "pass"}
+        def belt_in(self, d, step, idle):
+            calls["belt_in"] = calls.get("belt_in", 0) + 1
+        def frame(self, d, tgt, sid):
+            pass
+        def verdict(self, d, step, row, before):
+            return {"result": "pass"}
+
+    sites_m = types.ModuleType("omx_two_arm_sites"); sites_m.Layout = _FakeLayout
+    world_m = types.ModuleType("omx_two_arm_world"); world_m.World = _FakeWorld; world_m.FPS = 30
+    tasks_m = types.ModuleType("omx_two_arm_tasks")
+    tasks_m.get_task = lambda layout, name: (calls["tasks_called"].append(name), {
+        "name": name, "start": {}, "steps": [{"id": "s1", "container": "b1", "from": "belt", "to": "ship-h1r0-l0", "arm": "arm_a"}],
+    })[1]
+    teach_m = types.ModuleType("omx_two_arm_teacher"); teach_m.Teacher = _FakeTeacher
+    for nm, md in (("omx_two_arm_sites", sites_m), ("omx_two_arm_world", world_m), ("omx_two_arm_tasks", tasks_m), ("omx_two_arm_teacher", teach_m)):
+        monkeypatch.setitem(sys.modules, nm, md)
+
+    @cp.contextmanager if hasattr(cp, "contextmanager") else cw.contextmanager
+    def _no_lock(jd):
+        yield
+    monkeypatch.setattr(cw, "_gpu_job_lock", _no_lock)
+
+    out_c = tmp_path / "out_c"; out_c.mkdir()
+    res_c = cw.run_collect_dart({
+        "arm_id": "arm_a", "spec": spec, "spec_sha256": oc.canonical_spec_sha256(spec),
+        "jobs_dir": str(tmp_path / "jobs"),
+        "params": {"episodes": 1, "seed": 5201, "jitter_deg": 0.0, "color_random": False, "pose_random": True},
+    }, out_c)
+    assert res_c["episodes"] == 2 and calls["pose_random_passed"] is False and calls["tasks_called"] == ["stack"]
+    assert calls["frames"] == 62  # settle frame ignored
+
+    # train_stage passes admitted --dataset.episodes and writes immutable out/train on resume
+    ds_root = tmp_path / "ds"; ds_root.mkdir()
+    prev_dir = tmp_path / "prev_run" / "train"
+    ckpt = prev_dir / "checkpoints" / "last" / "pretrained_model"
+    ckpt.mkdir(parents=True)
+    (ckpt / "model.safetensors").write_bytes(b"weights")
+    out_t = tmp_path / "new_run"; out_t.mkdir()
+
+    def _fake_run(cmd, env=None, check=False):
+        calls["cmds"].append(cmd)
+        new_ckpt = out_t / "train" / "checkpoints" / "last" / "pretrained_model"
+        new_ckpt.mkdir(parents=True, exist_ok=True)
+        (new_ckpt / "model.safetensors").write_bytes(b"new-weights")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(cw.subprocess, "run", _fake_run)
+    res_t = cw.run_train_stage({
+        "arm_id": "arm_a", "spec_sha256": "abc", "jobs_dir": str(tmp_path / "jobs"),
+        "params": {"dataset_root": str(ds_root), "resume_train_dir": str(prev_dir), "steps": 100, "batch_size": 4,
+                   "save_freq": 50, "seed": 42, "chunk_size": 16, "n_action_steps": 4, "use_vae": False, "kl_weight": 10.0, "lr": 1e-4},
+    }, out_t)
+    assert res_t["admitted_episodes"] == 2
+    cmd_str = " ".join(calls["cmds"][0])
+    assert "--dataset.episodes=[0, 2]" in cmd_str and f"--output_dir={out_t / 'train'}" in cmd_str
+    assert f"--policy.pretrained_path={ckpt}" in cmd_str and "--resume=true" not in cmd_str
