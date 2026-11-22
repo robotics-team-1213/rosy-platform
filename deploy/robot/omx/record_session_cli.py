@@ -36,19 +36,20 @@ _PARENT_GLOBALS_LIST: list[dict] = []
 
 
 def claim_arm_lease(arm):
-    """D-1035: claim the arm for this session; (record, created), created False when this owner already held it."""
+    """D-1035: claim the arm for this session; (record, created, before): created False when this owner already
+    held a live lease, before is that lease as it was (record_session puts a pid-less reservation back at the end)."""
     owner = cell_arm_lease.default_owner()
-    before = cell_arm_lease.status(arm).get(arm)
     revision = None
     try:
         revision = (Path(__file__).resolve().parents[3] / "REVISION").read_text().strip() or None
     except OSError:
         pass
     try:
-        record = cell_arm_lease.claim(arm, owner, "record_session", pid=os.getpid(), revision=revision)
+        record, created, before = cell_arm_lease.claim(arm, owner, "record_session", pid=os.getpid(),
+                                                       revision=revision, report_created=True, with_previous=True)
     except cell_arm_lease.LeaseHeld as exc:
         raise SystemExit(f"REFUSED: arm lease: {exc}")
-    return record, not (before and before["owner"] == owner and before["live"])
+    return record, created, (before if not created else None)
 
 
 def _REGISTER_GLOBALS(g: dict) -> None:
@@ -166,6 +167,18 @@ def main(argv=None, *, _globals: dict | None = None):
         }
     else:
         ports = {"follower": config["robot"]["port"], "leader": config["teleop"]["port"]}
+    handed_arm, handed_dev = os.environ.get("ROSY_HANDOFF_ARM"), os.environ.get("ROSY_HANDOFF_DEVICE")
+    if handed_arm or handed_dev:
+        if handed_arm and args.arm != handed_arm:
+            raise SystemExit(f"REFUSED: observer handoff arm {handed_arm!r} != --arm {args.arm!r}")
+        if config["robot"]["type"] == "bi_omx_follower":
+            raise SystemExit("REFUSED: observer handoff does not allow bi_omx_follower")
+        if handed_dev:
+            try:
+                if Path(ports["follower"]).resolve(strict=True) != Path(handed_dev).resolve(strict=True):
+                    raise SystemExit(f"REFUSED: config follower port {ports['follower']!r} != observer device {handed_dev!r}")
+            except OSError as exc:
+                raise SystemExit(f"REFUSED: observer handoff port check failed: {exc}") from exc
     out = Path("session.jsonl")
     monitor_path = Path(f"motor-health-{time.time_ns()}.jsonl").absolute()
     monitor_state = Path(os.environ.get("ROSY_OMX_MONITOR_STATE", "motor-health-current.json")).absolute()
@@ -280,10 +293,10 @@ def main(argv=None, *, _globals: dict | None = None):
     )
     lock = attr("session_lock", session_lock)(args.arm)
     record = {}
-    lease_created = False
+    lease_created, lease_before, lease_record = False, None, None
     try:
         if args.arm:
-            lease_created = claim_arm_lease(args.arm)[1]
+            lease_record, lease_created, lease_before = claim_arm_lease(args.arm)
         # D-1048: cell_auto_fold's recovery session may open on the one held incident it names, nothing else
         recovery = os.environ.get("ROSY_RECOVERY_INCIDENT")
         omx_incident.refuse_if_held(args.arm, **({"allow_incident": recovery} if recovery else {}))
@@ -333,6 +346,8 @@ def main(argv=None, *, _globals: dict | None = None):
                                     else None)
             elif lease_created:
                 cell_arm_lease.release(args.arm)
+            elif lease_before:  # a reservation made ahead of a job: valid after this session as it was before it
+                cell_arm_lease.restore(args.arm, lease_before, lease_record)
             lock.close()
             if record.get("runner_held"):
                 print("RUNNER HOLD: chunk_runner holds the arm with torque ON (interrupt fold failed); lease and lock "

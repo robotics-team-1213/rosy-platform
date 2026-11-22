@@ -72,13 +72,33 @@ class _ArmLocks:
         hold_test_jobs(False, self.root)
 
 
+HELD_ENV = "ROSY_OMX_HELD_LOCKS"  # "<arm>:<cell fd>:<arm fd>", set by observer_handoff.py run for its session
+
+
+def _lock_file(root: Path, name: str, arm: str, slot: int):
+    """observer_handoff run holds this arm's locks across the whole handoff and passes the open files to its
+    session (decision H4: no gap between the port check and the session). The session flocks a dup of that same
+    open file description, which its holder already owns, so the parent's hold does not refuse its own child.
+    Only an fd that is really this lock file is reused; anything else opens the file anew and contends."""
+    held = os.environ.get(HELD_ENV, "").split(":")
+    if len(held) == 3 and held[0] == arm:
+        try:
+            fd = int(held[slot])
+            mine, ref = os.fstat(fd), (root / name).stat()
+            if (mine.st_dev, mine.st_ino) == (ref.st_dev, ref.st_ino):
+                return os.fdopen(os.dup(fd), "a")
+        except (ValueError, OSError):
+            pass
+    return (root / name).open("a")
+
+
 def session_lock(arm: str | None = None):
     """Held for a whole tuning run or recording session. Without `arm` it holds the whole cell. With `arm` it holds
     that arm only: the cell lock shared (the updater and the two-arm pipeline take it exclusively, so they still
     wait for every arm) and the arm's own lock, which its observer also checks (2026-11-01: two arms work at once)."""
     root = lock_root()
     root.mkdir(parents=True, exist_ok=True)
-    handle = (root / "session.lock").open("a")
+    handle = _lock_file(root, "session.lock", arm, 1) if arm else (root / "session.lock").open("a")
     try:
         fcntl.flock(handle, (fcntl.LOCK_SH if arm else fcntl.LOCK_EX) | fcntl.LOCK_NB)
     except BlockingIOError:
@@ -89,7 +109,7 @@ def session_lock(arm: str | None = None):
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", arm):
         handle.close()
         raise SystemExit(f"arm id {arm!r} is not a plain name")
-    own = (root / f"session-{arm}.lock").open("a")
+    own = _lock_file(root, f"session-{arm}.lock", arm, 2)
     try:
         fcntl.flock(own, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
