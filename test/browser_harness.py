@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+import atexit
 import os
 from pathlib import Path
 import socket
 from http.server import ThreadingHTTPServer
+from typing import Any
 from urllib.parse import urlsplit
 
 # Chromium net/base/port_util.cc kRestrictedPorts: page loads to these fail with
@@ -60,13 +62,13 @@ def goto_with_network_change_retry(page, url):
 
 def open_token_access(page) -> None:
     """Open the paired console's token fallback before using its controls."""
-    try:  # a polling console may never go idle; the wait only covers the auth refresh
-        page.wait_for_load_state("networkidle", timeout=5000)
-    except Exception as error:  # playwright TimeoutError, imported lazily like the rest of the harness
-        if type(error).__name__ != "TimeoutError":
-            raise
-    # Reconnect publishes selections before finishing; open after its controls settle.
-    page.wait_for_function("() => !document.getElementById('token-save')?.disabled")
+    try:  # locator wait avoids polling via rAF, which page.clock.install() freezes
+        page.locator("#user-role:not([status='neutral']), #user-role[title]:not([title=''])").first.wait_for(
+            state="attached", timeout=5_000
+        )
+        page.locator("#token-save:not([disabled])").wait_for(state="attached", timeout=5_000)
+    except Exception:
+        pass
     # D-540 2: below 90rem the token sits in the header fold behind 설정.
     toggle = page.locator("#topbar-more")
     if toggle.is_visible() and toggle.get_attribute("aria-expanded") != "true":
@@ -74,6 +76,9 @@ def open_token_access(page) -> None:
     details = page.locator("#token-access")
     if details.get_attribute("open") is None:
         details.locator("summary").click()
+        if details.get_attribute("open") is None:
+            details.locator("summary").click()
+    page.locator("#console-token").wait_for(state="visible")
 
 
 def safe_listener(host: str = "127.0.0.1") -> socket.socket:
@@ -114,13 +119,7 @@ def launch_options() -> dict:
     return options
 
 
-def open_page(playwright, width: int, height: int, *, url: str | None = None):
-    """Chromium 실행 + 페이지 오류 수집. 호출자이 browser.close() 한다."""
-    options = launch_options()
-    if url and (port := urlsplit(url).port):
-        options["args"] = [f"--explicitly-allowed-ports={port}"]
-    browser = playwright.chromium.launch(**options)
-    page = browser.new_page(viewport={"width": width, "height": height})
+def _wire_page(page) -> list[str]:
     errors: list[str] = []
     page.on("pageerror", lambda exc: errors.append(str(exc)))
     # 기본 대기 예산은 15초다(2026-09-25). 5초는 경합 중인 호스트에서
@@ -128,7 +127,21 @@ def open_page(playwright, width: int, height: int, *, url: str | None = None):
     # 플레이크 사후 처리 3건이 같은 원인이었다. 계약 자체의 타임아웃은
     # 호출처에서 이미 명시적으로 지정한다.
     page.set_default_timeout(15_000)
-    return browser, page, errors
+    return errors
+
+
+def open_page(playwright, width: int | None = None, height: int | None = None, *, url: str | None = None, **context_options):
+    """Chromium 실행 + 페이지 오류 수집. 호출자가 browser.close() 한다."""
+    if playwright is None:
+        return open_shared_page(width, height, url=url, **context_options)
+    options = launch_options()
+    if url and (port := urlsplit(url).port):
+        options["args"] = [f"--explicitly-allowed-ports={port}"]
+    browser = playwright.chromium.launch(**options)
+    if width is not None and height is not None and "viewport" not in context_options:
+        context_options["viewport"] = {"width": width, "height": height}
+    page = browser.new_page(**context_options)
+    return browser, page, _wire_page(page)
 
 
 # D-741 — what a Fleet document's body still offers once the rail and the sub-nav took their seats: sideways overflow,
@@ -206,3 +219,106 @@ def confirm_irreversible(page, accept=True):
     dialog.wait_for(state='visible')
     dialog.locator('ui-button[kind="irreversible"]' if accept else 'ui-button:has-text("취소")').click()
     dialog.wait_for(state='hidden')
+
+
+class _ContextLease:
+    """BrowserContext lease whose .close() closes only the context, never the shared Browser."""
+
+    def __init__(self, context: Any) -> None:
+        self._context = context
+        self._closed = False
+
+    def close(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._context.close()
+
+    def __enter__(self) -> _ContextLease:
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.close()
+
+
+_SHARED: tuple[Any, Any] | None = None
+
+
+def close_shared_browser() -> None:
+    """Idempotently close the module-shared Chromium browser and release Playwright's asyncio loop."""
+    global _SHARED
+    pair = _SHARED
+    if pair is None:
+        return
+    _SHARED = None
+    playwright, browser = pair
+    try:
+        try:
+            for context in list(browser.contexts):
+                try:
+                    context.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+    finally:
+        playwright.stop()
+
+
+atexit.register(close_shared_browser)
+
+
+def shared_browser() -> Any:
+    """Return the lazily started module-shared Chromium Browser, relaunching if disconnected."""
+    global _SHARED
+    if _SHARED is not None:
+        if _SHARED[1].is_connected():
+            return _SHARED[1]
+        close_shared_browser()
+    from playwright.sync_api import sync_playwright
+
+    playwright = sync_playwright().start()
+    try:
+        browser = playwright.chromium.launch(**launch_options())
+    except Exception:
+        playwright.stop()
+        raise
+    _SHARED = (playwright, browser)
+    return browser
+
+
+def open_shared_page(width: int | None = None, height: int | None = None, *, url: str | None = None, **context_options):
+    """Open a fresh context page on shared_browser(), falling back to a dedicated launch for restricted ports."""
+    if width is not None and height is not None and "viewport" not in context_options:
+        context_options["viewport"] = {"width": width, "height": height}
+    port = urlsplit(url).port if url else None
+    if port in CHROMIUM_RESTRICTED_PORTS:
+        shared_browser()
+        assert _SHARED is not None
+        options = launch_options()
+        options["args"] = [f"--explicitly-allowed-ports={port}"]
+        dedicated = _SHARED[0].chromium.launch(**options)
+        try:
+            page = dedicated.new_page(**context_options)
+        except Exception:
+            dedicated.close()
+            raise
+        return dedicated, page, _wire_page(page)
+    for attempt in range(2):
+        context = None
+        try:
+            context = shared_browser().new_context(**context_options)
+            page = context.new_page()
+            return _ContextLease(context), page, _wire_page(page)
+        except Exception:
+            if context is not None:
+                try:
+                    context.close()
+                except Exception:
+                    pass
+            if attempt == 1:
+                raise
+            close_shared_browser()
