@@ -25,6 +25,7 @@ from experiment_owner_status import OwnerStatus
 from experiment_studies import Studies
 from experiment_hub import Hub
 from experiment_collect_plans import CollectPlans
+from canonical_pipeline import CanonicalService
 
 
 def _worker_log_tail(root, max_chars=240):
@@ -49,7 +50,7 @@ def _worker_log_tail(root, max_chars=240):
 class Center:
     def __init__(self, config):
         if (not isinstance(config, dict) or not {'schema', 'root', 'python'} <= set(config)
-                or set(config) - {'schema', 'root', 'python', 'owner_status', 'host_id'}
+                or set(config) - {'schema', 'root', 'python', 'owner_status', 'host_id', 'canonical'}
                 or config['schema'] != 'rosy.omx.center-config/1'
                 or set(config['python']) != {'act', 'hilserl'}):
             raise ValueError('unsupported learning center configuration')
@@ -77,6 +78,10 @@ class Center:
         self.profiles = Profiles(self.connect, self.lock)
         self.hub = Hub(self)
         self.collect_plans = CollectPlans(self.root, self.lock)
+        self.canonical = CanonicalService(
+            self.root / 'canonical', config.get('canonical'),
+            host_id=self.host_id, default_python=self.python.get('act'),
+        )
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS datasets (id TEXT PRIMARY KEY, document TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL,'

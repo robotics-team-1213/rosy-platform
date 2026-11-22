@@ -1,6 +1,8 @@
 """Learning-center routes; review_app owns authentication and bounded JSON parsing."""
 import re
 
+import canonical_web
+
 PREFIX = '/api/learning/omx/center'
 
 
@@ -13,6 +15,8 @@ def _registered(workspace, prepared_id):
 
 
 def get(handler, path, center, workspace=None):
+    if canonical_web.get(handler, path, center):
+        return True
     if path == PREFIX + '/lerobot-studies':
         handler.send(center.studies.snapshot() if center else dict(configured=False, host_id=None,
             methods={}, studies=[], busy=False, active_run=None))
@@ -87,6 +91,8 @@ def get(handler, path, center, workspace=None):
 
 
 def post(handler, path, body, center, workspace=None, accounts=None):
+    if canonical_web.post(handler, path, body, center, accounts):
+        return True
     if not path.startswith(PREFIX + '/'):
         return False
     if center is None:
