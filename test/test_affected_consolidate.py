@@ -148,3 +148,28 @@ def test_browser_overlay_entries_skip_colcon(monkeypatch):
     include = affected_ci.ci_matrix(repo, at.select(repo, ["shared/web/surface_shell.js"]))["include"]
     overlay_browsers = [e for e in include if e["name"].startswith("browser-") and e["ros"] == "overlay"]
     assert overlay_browsers and all(e.get("colcon") is False for e in overlay_browsers)
+
+
+def test_git_history_flag_is_emitted_only_for_history_readers_and_preserved_across_consolidate():
+    import affected_ci
+    import affected_tests as at
+
+    repo = at.Repo.load(Path(__file__).resolve().parents[1])
+    sel = at.Selection("affected", [], invocations=[
+        ["operations/fleet/test/test_blocks.py"],
+        ["test/test_harness_contracts.py"],
+        ["test/architecture/test_module_structure.py"],
+        ["test/test_ci_image.py"],
+    ])
+    entries = {tuple(e["invocations"][0]): e for e in affected_ci.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"}
+    assert entries[("test/test_harness_contracts.py",)].get("git_history") is True
+    assert entries[("test/architecture/test_module_structure.py",)].get("git_history") is True
+    assert "git_history" not in entries[("operations/fleet/test/test_blocks.py",)]
+    assert "git_history" not in entries[("test/test_ci_image.py",)]
+
+    merged = affected_ros.consolidate([
+        {"name": "affected-1", "invocations": [["test/test_ci_image.py"]], "ros": "overlay", "kind": "pytest"},
+        {"name": "affected-2", "invocations": [["test/test_harness_contracts.py"]], "ros": "overlay",
+         "kind": "pytest", "git_history": True},
+    ], {})
+    assert len(merged) == 1 and merged[0].get("git_history") is True

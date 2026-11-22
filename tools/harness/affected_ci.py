@@ -56,6 +56,16 @@ CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json")
                    **FLEET_TEST_SECONDS}
 MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
 _STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_scheduling.py"
+_GIT_HISTORY_TESTS = ("test/test_harness_contracts.py", "test/architecture/test_module_structure.py")
+
+
+def _needs_git_history(entry: dict) -> bool:
+    """True only for matrix runners whose invocations can collect tests that query git history on ROOT."""
+    invocations = entry.get("invocations") or ()
+    paths = [p.split("::", 1)[0] for inv in invocations for p in inv
+             if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
+    skip = {p.split("=", 1)[1] for inv in invocations for p in inv if p.startswith("--ignore=")}
+    return any(affected_ros._under(h, p) and h not in skip for h in _GIT_HISTORY_TESTS for p in paths)
 
 
 def consolidated(include: list[dict]) -> list[dict]:
@@ -259,4 +269,6 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
             paths and all(p in at.GUARD_SET or affected_ros._under(p, "test") for p in paths)
         ):
             entry["colcon"] = False
+        if _needs_git_history(entry):
+            entry["git_history"] = True
     return {"include": include}

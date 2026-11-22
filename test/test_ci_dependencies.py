@@ -761,3 +761,30 @@ def test_ci_splits_fleet_non_browser_and_parallelizes_safe_multi_file_browsers(m
     assert "ROSY_RUN_BROWSER_TESTS" not in app_calls[0][1] and "-n" in app_calls[0][0]
     assert app_calls[1][1]["ROSY_RUN_BROWSER_TESTS"] == "1"
     assert "ROSY_BROWSER_STRICT" not in app_calls[1][1]
+
+
+def test_ci_scope_bare_partial_clone_and_test_tiered_checkout_and_caches():
+    import yaml
+
+    ci = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    scope_job = ci["jobs"]["scope"]
+    assert "container" not in scope_job
+    scope_steps = {s["name"]: s for s in scope_job["steps"]}
+    assert scope_steps["Checkout"]["with"] == {"fetch-depth": 0, "fetch-tags": False, "filter": "blob:limit=256k"}
+    assert scope_steps["Cache scope Python tools"]["with"]["path"] == "/tmp/rosy-scope-tools"
+
+    test_steps = {s["name"]: s for s in ci["jobs"]["test"]["steps"]}
+    assert test_steps["Checkout"]["with"]["fetch-depth"] == "${{ matrix.git_history && 0 || 1 }}"
+    assert test_steps["Checkout"]["with"]["filter"] == "${{ matrix.git_history && 'blob:none' || '' }}"
+
+    digest = re.search(r"rosy-ci@sha256:([0-9a-f]{64})", ci["jobs"]["test"]["container"]["image"]).group(1)
+    rosidl_cache = test_steps["Cache ROS interfaces overlay"]
+    assert f"{digest[:12]}-rosidl-${{{{ hashFiles('contracts/ros_idl/**') }}}}" in rosidl_cache["with"]["key"]
+    assert "build/interfaces" in rosidl_cache["with"]["path"] and "install/interfaces" in rosidl_cache["with"]["path"]
+    assert "--packages-skip interfaces" in test_steps["Build (colcon)"]["run"]
+    assert test_steps["Cache Pinky CPU torch tools"]["with"]["path"] == "/tmp/rosy-pinky-torch"
+
+    rg = yaml.safe_load((ROOT / ".github" / "workflows" / "review-gate.yml").read_text(encoding="utf-8"))
+    assert rg["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+    rg_co = next(s["with"] for s in rg["jobs"]["review-gate"]["steps"] if "uses" in s and "actions/checkout" in s["uses"])
+    assert rg_co == {"fetch-depth": 0, "fetch-tags": False, "filter": "blob:none"}

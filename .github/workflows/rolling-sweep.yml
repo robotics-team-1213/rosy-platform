@@ -62,12 +62,17 @@ jobs:
       - name: Build ROS-free platform API wheels once
         if: steps.plan.outputs.has_work == 'true'
         run: |
+          set -euo pipefail
           python3 -c 'import setuptools, wheel' 2>/dev/null || pip3 install --break-system-packages --quiet setuptools wheel
           wheelhouse=/tmp/rosy-platform-wheelhouse
           mkdir -p "$wheelhouse"
-          pip3 wheel --no-deps --no-build-isolation \
-            --wheel-dir "$wheelhouse" \
-            contracts/foundation contracts/skill contracts/motion contracts/learning operations/account operations/world operations/monitoring operations/notifications middleware/skills/api middleware/skills/manipulation operations/site_execution middleware/robot_execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway
+          printf '%s\n' \
+            contracts/foundation contracts/skill contracts/motion contracts/learning \
+            operations/account operations/world operations/monitoring operations/notifications \
+            middleware/skills/api middleware/skills/manipulation operations/site_execution \
+            middleware/robot_execution/local operations/processes/palletizing \
+            integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway \
+            | xargs -P 4 -I{} pip3 wheel --no-deps --no-build-isolation --wheel-dir "$wheelhouse" {}
 
       - name: Upload ROS-free platform API wheels
         if: steps.plan.outputs.has_work == 'true'
@@ -154,17 +159,20 @@ jobs:
             fi
           fi
 
-      - name: Cache Pinky CPU torch wheel
+      - name: Cache Pinky CPU torch tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
         with:
-          path: /tmp/pip-cache-pinky
-          key: ${{ runner.os }}-pinky-torch-2.7.1
+          path: /tmp/rosy-pinky-torch
+          key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-pinky-torch-2.7.1
 
       - name: Install Pinky CPU model comparison tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
-          pip3 install --cache-dir /tmp/pip-cache-pinky --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          if [ ! -d /tmp/rosy-pinky-torch/torch ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-pinky-torch --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          fi
+          echo "PYTHONPATH=/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Cache OMX ACT CPU verification tools
         if: matrix.name == 'omx-act-cpu'
@@ -193,7 +201,19 @@ jobs:
           name: rosy-rolling-wheelhouse
           path: /tmp/rosy-platform-wheelhouse
 
+      - name: Cache ROS interfaces overlay
+        if: matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false'
+        id: rosidl-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: |
+            build/interfaces
+            install/interfaces
+          key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-rosidl-${{ hashFiles('contracts/ros_idl/**') }}
+
       - name: Build platform wheels and overlay
+        env:
+          ROSIDL_CACHE_HIT: ${{ steps.rosidl-cache.outputs.cache-hit }}
         run: |
           wheelhouse=/tmp/rosy-platform-wheelhouse
           mkdir -p "$wheelhouse"
@@ -209,7 +229,12 @@ jobs:
               touch "$GZ_IGNORE"
             fi
             COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
-            colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install --event-handlers console_direct+
+            SKIP_ARGS=""
+            if [ "${ROSIDL_CACHE_HIT:-}" = "true" ] && [ -f install/interfaces/share/interfaces/package.sh ] && grep -qF "$(pwd)/install/interfaces" install/interfaces/share/interfaces/package.sh; then
+              . install/interfaces/share/interfaces/package.sh
+              SKIP_ARGS="--packages-skip interfaces"
+            fi
+            colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install $SKIP_ARGS --event-handlers console_direct+
           fi
 
       - name: Run shard with single-nodeid retry
