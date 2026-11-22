@@ -15,7 +15,7 @@ import pytest
 from core_common.protocol.port_events import PortEvent
 from fleet.server.auth.site_auth import build_authorize, build_role_guards
 from fleet.server.charge_bay_routes import install_charge_bay_routes
-from fleet.server.sitemap.pipeline_port_events import (
+from fleet.server.pipeline_port_events import (
     CLAIM_STRIP_FIELDS,
     flush_pending_port_events_async,
     task_view_for_request,
@@ -23,7 +23,7 @@ from fleet.server.sitemap.pipeline_port_events import (
 from fleet.server.sitemap.pipeline_routes import install_pipeline_routes
 from fleet.server.sitemap.pipeline_unload_release import continue_unload
 from fleet.server.work.port_event_routes import install_port_event_routes
-from fleet.server.work.port_event_store import PortEventConflict
+from fleet.server.port_event_store import PortEventConflict
 from rosy_account.principal import SitePrincipal
 from tools.sim.bay_departure_sim import build_world_261026_site_map
 
