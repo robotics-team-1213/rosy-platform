@@ -23,11 +23,13 @@
         </div>
       </div>
       <nav class="header-tools" aria-label="작업대 도구">
-        <div class="tool-cluster" data-group="device" role="group" aria-label="장치와 카메라">
+        <div class="tool-cluster" data-group="status" role="group" aria-label="서버와 카메라 상태">
           <span id="ftr-server" class="ui-tag mono">서버 확인 중</span>
           <span class="ui-tag" id="hdr-cam-health" data-tone="warn">카메라 확인 중</span>
-          <button type="button" id="hdr-camera-restart-btn" class="btn-tool btn-xs" title="선택한 팔의 카메라 재시작 [Shift+C]" disabled>카메라 재시작<kbd class="kbd-hint">⇧C</kbd></button>
-          <button type="button" id="hdr-refresh-btn" class="btn-tool btn-xs" title="상태와 목록 새로고침 [Shift+R]">새로고침<kbd class="kbd-hint">⇧R</kbd></button>
+        </div>
+        <div class="tool-cluster" data-group="prefs" role="group" aria-label="신호음과 도움말">
+          <button type="button" id="hdr-sound-btn" class="btn-tool btn-xs" aria-pressed="true" title="신호음 켜기/끄기 [M]">신호음 ON</button>
+          <button type="button" id="hdr-help-btn" class="btn-tool btn-xs" title="단축키 도움말 [?]" aria-label="단축키" aria-controls="sec-shortcuts">?</button>
         </div>
         <div class="tool-cluster" data-group="nav" role="group" aria-label="설정과 기록 메뉴">
           <div class="drawer-menu-wrap" id="drawer-menu-wrap">
@@ -40,9 +42,9 @@
             </div>
           </div>
         </div>
-        <div class="tool-cluster" data-group="prefs" role="group" aria-label="신호음과 도움말">
-          <button type="button" id="hdr-sound-btn" class="btn-tool btn-xs" aria-pressed="true" title="신호음 켜기/끄기 [M]">신호음 ON</button>
-          <button type="button" id="hdr-help-btn" class="btn-tool btn-xs" title="단축키 도움말 [?]" aria-label="단축키" aria-controls="sec-shortcuts">?</button>
+        <div class="tool-cluster" data-group="recover" role="group" aria-label="새로고침과 카메라 재시작">
+          <button type="button" id="hdr-refresh-btn" class="btn-tool btn-xs" title="상태와 목록 새로고침 [Shift+R]">새로고침<kbd class="kbd-hint">⇧R</kbd></button>
+          <button type="button" id="hdr-camera-restart-btn" class="btn-tool btn-xs" title="선택한 팔의 카메라 재시작 [Shift+C]" disabled>카메라 재시작<kbd class="kbd-hint">⇧C</kbd></button>
         </div>
       </nav>
     </div>
@@ -82,13 +84,13 @@
         </div>
         <div id="hdr-result-actions" class="result-ops" data-tabs="result" hidden>
           <span id="goal-result-line" class="goal-result-line mono" hidden></span>
+          <div class="ops-cluster ops-pose" role="group" aria-label="안전 복귀">
+            <button type="button" id="hdr-result-home-btn" class="btn-tool" title="팔로워 홈 포즈 복귀 (펼쳐진 팔 안전 접기 포함) [H]"><span class="btn-lbl">지금 홈 포즈</span><kbd class="kbd-hint">H</kbd></button>
+          </div>
           <div class="ops-cluster ops-next" role="group" aria-label="다음 회차 진행">
             <button type="button" id="hdr-quick-restart-btn" class="btn-primary" title="홈 복귀 확인 후 수집명 +1로 바로 다음 연동 준비 시작">홈 → 바로 다음</button>
             <button type="button" id="hdr-reset-retry-btn" class="btn-tool" title="임시 설정·스왑 초기화 후 홈 복귀하여 다시 시작">초기화 후 재시도</button>
             <button type="button" id="back-to-setup-btn" class="btn-tool">설정으로</button>
-          </div>
-          <div class="ops-cluster ops-pose" role="group" aria-label="안전 복귀">
-            <button type="button" id="hdr-result-home-btn" class="btn-tool" title="팔로워 홈 포즈 복귀 (펼쳐진 팔 안전 접기 포함) [H]"><span class="btn-lbl">지금 홈 포즈</span><kbd class="kbd-hint">H</kbd></button>
           </div>
         </div>
       </div>
@@ -101,21 +103,26 @@
   <main class="app-main">
     <div class="layout">
       <div class="bench-stage-col">
-        <section class="card manual-hold-card" id="manual-hold-card" aria-labelledby="h-manual-hold" role="alert" hidden>
+        <div class="card manual-hold-card" id="manual-hold-card" aria-labelledby="h-manual-hold" role="alert" hidden>
           <div class="mh-head">
             <div>
-              <h2 id="h-manual-hold" style="margin:0">수동 확인 보류 · 안전 복구 안내</h2>
+              <h2 id="h-manual-hold" style="margin:0">작업대 문제 진단 · 안전 복구 센터</h2>
               <p id="mh-reason" class="mh-reason"></p>
             </div>
-            <span id="mh-torque-badge" class="badge mono" data-tone="crit">토크 상태 확인 중</span>
+            <span id="mh-torque-badge" class="badge mono" data-tone="crit">상태 확인 중</span>
           </div>
           <div id="mh-facts" class="mh-facts mono"></div>
+          <ul id="mh-issue-list" class="mh-issue-list" hidden></ul>
           <p id="mh-cause-hint" class="mh-hint" hidden></p>
           <pre id="mh-log-tail" class="mh-log-tail mono quiet" hidden></pre>
           <div class="mh-actions">
+            <div id="mh-locks-box" class="mh-step" hidden></div>
             <div id="mh-release-box" class="mh-step" hidden>
               <label class="check-row"><input type="checkbox" id="mh-support-check"><span>사람이 팔을 손으로 물리적으로 받쳤습니다 (토크 OFF 안전 확인)</span></label>
               <button type="button" id="mh-release-btn" class="btn-tool" data-tone="warn" disabled>토크 해제(SIGUSR2) 요청</button>
+            </div>
+            <div id="mh-dead-lease-wrap" class="mh-step" hidden>
+              <label class="check-row"><input type="checkbox" id="mh-dead-lease-check"><span>팔이 접혀 있고 토크 OFF 상태임을 직접 확인했습니다 (죽은 러너 임대 해제)</span></label>
             </div>
             <div id="mh-clear-box" class="mh-step">
               <button type="button" id="mh-clear-btn" class="btn-primary">팔 확인 완료 · 보류 해제</button>
@@ -124,10 +131,11 @@
                 <button type="button" id="mh-clear-yes" class="btn-primary btn-xs">복원 확인</button>
                 <button type="button" id="mh-clear-no" class="btn-tool btn-xs">취소</button>
               </div>
+              <div id="mh-quick-actions" class="mh-quick-actions"></div>
               <button type="button" id="mh-log-btn" class="btn-tool btn-xs">실시간 로그 보기</button>
             </div>
           </div>
-        </section>
+        </div>
 
         <section class="card cam-panel" id="sec-cameras" data-tabs="setup prepare recording" aria-labelledby="h-cams">
           <h2 id="h-cams" class="bench-sr-only">실시간 카메라</h2>

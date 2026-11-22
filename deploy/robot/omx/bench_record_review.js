@@ -6,45 +6,114 @@ function renderManualHoldCard(st){
   const card=$('manual-hold-card');
   if(!card)return;
   const mh=st&&st.manual_hold&&st.manual_hold.active?st.manual_hold:null;
-  if(!mh){card.hidden=true;return;}
+  const rec=st&&st.recovery&&st.recovery.has_issues?st.recovery:null;
+  if(!mh&&!rec){card.hidden=true;return;}
   card.hidden=false;
-  if($('mh-reason'))$('mh-reason').textContent=mh.reason||'사람 확인 필요';
+  const isHold=Boolean(mh||rec?.incident_holds&&Object.keys(rec.incident_holds).length);
+  card.dataset.tone=(mh?.runner_alive||isHold)?'crit':'warn';
+  if($('h-manual-hold'))$('h-manual-hold').textContent=mh?'수동 확인 보류 · 안전 복구 안내':'작업대 문제 진단 · 복구 안내';
+  if($('mh-reason'))$('mh-reason').textContent=mh?.reason||st?.error||(rec?.issues?.[0]?.label)||'확인 또는 복구가 필요합니다';
   const badge=$('mh-torque-badge');
   if(badge){
-    badge.textContent=mh.runner_alive?'토크 ON 유지 중 (PID '+mh.runner_pid+')':(mh.lease_hold?'임대 hold 확인 필요':'러너 종료됨 (복원 대기)');
-    badge.dataset.tone=mh.runner_alive?'crit':(mh.lease_hold?'warn':'good');
+    if(mh){
+      badge.textContent=mh.runner_alive?'토크 ON 유지 중 (PID '+mh.runner_pid+')':(mh.lease_hold?'임대 hold 확인 필요':'러너 종료됨 (복원 대기)');
+      badge.dataset.tone=mh.runner_alive?'crit':(mh.lease_hold?'warn':'good');
+    }else{
+      badge.textContent='복구 가능 ('+(rec?.issues?.length||1)+'건)';
+      badge.dataset.tone='warn';
+    }
   }
   const facts=$('mh-facts');
   if(facts){
     const parts=[];
-    if(mh.arm)parts.push('팔: '+mh.arm);
-    if(mh.runner_pid)parts.push('PID: '+mh.runner_pid+(mh.runner_alive?' (실행 중)':' (종료)'));
-    if(Array.isArray(mh.live_pose))parts.push('관절: ['+mh.live_pose.join(', ')+']');
-    if(Array.isArray(mh.pending_units)&&mh.pending_units.length)parts.push('중지 유닛: '+mh.pending_units.length+'개');
-    facts.textContent=parts.join(' · ');
+    const armLabel=mh?.arm||st?.arm||(f&&f.arm?f.arm.value:'');
+    if(armLabel)parts.push('팔: '+armLabel);
+    if(mh?.runner_pid)parts.push('PID: '+mh.runner_pid+(mh.runner_alive?' (실행 중)':' (종료)'));
+    if(Array.isArray(mh?.live_pose))parts.push('관절: ['+mh.live_pose.join(', ')+']');
+    const pUnits=mh?.pending_units||rec?.pending_units||[];
+    if(pUnits.length)parts.push('중지 유닛: '+pUnits.length+'개');
+    facts.textContent=parts.join(' · ')||'아래 버튼을 눌러 바로 복구할 수 있습니다.';
+  }
+  const issUl=$('mh-issue-list');
+  if(issUl){
+    const rows=Array.isArray(rec?.issues)?rec.issues:[];
+    issUl.hidden=!rows.length;issUl.innerHTML='';
+    for(const it of rows){
+      const li=document.createElement('li');
+      li.textContent=it.label+(it.detail?(' — '+it.detail):'');
+      issUl.append(li);
+    }
   }
   const hint=$('mh-cause-hint');
   if(hint){
-    if(mh.worker_human_hold){
-      hint.textContent='원인 추정: cell-task-worker 또는 안전 워치독이 홈 이동 중 human-hold를 보냈습니다. 새 버전에서는 홈 이동 시 cell-task-worker를 잠시 중지해 재발을 막습니다.';
-      hint.hidden=false;
-    }else if(mh.detail){
-      hint.textContent='세부 사유: '+mh.detail;
-      hint.hidden=false;
-    }else{hint.hidden=true;}
+    if(mh?.worker_human_hold){hint.textContent='원인 추정: cell-task-worker 또는 워치독이 홈 이동 중 human-hold를 보냈습니다. 새 버전에서는 홈 이동 중 워커를 자동 일시정지합니다.';hint.hidden=false;}
+    else if(mh?.detail){hint.textContent='세부 사유: '+mh.detail;hint.hidden=false;}
+    else{hint.hidden=true;}
   }
   const tailEl=$('mh-log-tail');
-  if(tailEl){
-    const txt=Array.isArray(mh.log_tail)?mh.log_tail.join('\n'):'';
-    tailEl.textContent=txt;tailEl.hidden=!txt;
+  if(tailEl){const txt=Array.isArray(mh?.log_tail)?mh.log_tail.join('\n'):'';tailEl.textContent=txt;tailEl.hidden=!txt;}
+
+  const lockBox=$('mh-locks-box'), locks=Array.isArray(st?.active_locks)?st.active_locks:[];
+  if(lockBox){
+    if(locks.length){
+      lockBox.hidden=false;lockBox.innerHTML='<span class="quiet">점유 락:</span>';
+      const seenPids=new Set();
+      for(const lk of locks){
+        if(!lk.pid||seenPids.has(lk.pid))continue;
+        seenPids.add(lk.pid);
+        const btn=document.createElement('button');btn.type='button';btn.className='btn-tool btn-xs';btn.dataset.tone='warn';
+        btn.textContent='PID '+lk.pid+' ('+(lk.lock||'lock')+') 정상 종료';
+        btn.addEventListener('click',async()=>{btn.disabled=true;try{renderStatus(await api('/release_lock',{pid:lk.pid}));}catch(e){setReqError(e.message);}finally{btn.disabled=false;}});
+        lockBox.append(btn);
+      }
+    }else{lockBox.hidden=true;lockBox.innerHTML='';}
   }
-  const relBox=$('mh-release-box'), clearBtn=$('mh-clear-btn'), relBtn=$('mh-release-btn');
-  if(relBox)relBox.hidden=!mh.runner_alive;
+  const relBox=$('mh-release-box'), clearBtn=$('mh-clear-btn'), relBtn=$('mh-release-btn'), deadWrap=$('mh-dead-lease-wrap');
+  const deadArms=(mh?.dead_lease_arms||rec?.dead_lease_arms||[]);
+  if(relBox)relBox.hidden=!mh?.runner_alive;
+  if(deadWrap)deadWrap.hidden=!mh||mh.runner_alive||!deadArms.length;
   if(relBtn&&!relBtn.dataset.busy)relBtn.disabled=!($('mh-support-check')?.checked);
-  if(clearBtn)clearBtn.disabled=Boolean(mh.runner_alive);
+  if(clearBtn){
+    clearBtn.hidden=!mh;
+    clearBtn.disabled=Boolean(mh?.runner_alive||(deadArms.length&&!$('mh-dead-lease-check')?.checked));
+  }
+  const qa=$('mh-quick-actions');
+  if(qa){
+    qa.innerHTML='';
+    const tgtArm=mh?.arm||st?.arm||(f&&f.arm&&f.arm.value!=='arm_ab'?f.arm.value:'arm_a');
+    if(rec?.baseline_needed&&!mh?.active&&tgtArm&&tgtArm!=='arm_ab'){
+      const bBtn=document.createElement('button');bBtn.type='button';bBtn.className='btn-tool btn-xs';bBtn.textContent=tgtArm+' 기준 캡 복원 (torque OFF)';
+      bBtn.addEventListener('click',async()=>{bBtn.disabled=true;setReqError('');try{const r=await api('/api/recover/baseline',{arm:tgtArm});if(r.status)renderStatus(r.status);if(typeof window.pollLiveLogs==='function')window.pollLiveLogs();}catch(e){setReqError(e.message);}finally{bBtn.disabled=false;}});
+      qa.append(bBtn);
+    }
+    if(rec?.can_restore_units){
+      const uBtn=document.createElement('button');uBtn.type='button';uBtn.className='btn-tool btn-xs';uBtn.textContent='중지된 유닛 지금 복원';
+      uBtn.addEventListener('click',async()=>{uBtn.disabled=true;setReqError('');try{renderStatus(await api('/api/recover/restore_units',{}));}catch(e){setReqError(e.message);}finally{uBtn.disabled=false;}});
+      qa.append(uBtn);
+    }
+    if(rec?.incident_holds){
+      for(const incArm of Object.keys(rec.incident_holds)){
+        const sBtn=document.createElement('button');sBtn.type='button';sBtn.className='btn-tool btn-xs';sBtn.textContent=incArm+' Fleet 보류 동기화';
+        sBtn.addEventListener('click',async()=>{sBtn.disabled=true;setReqError('');try{const r=await api('/api/recover/sync_incident',{arm:incArm});if(r.status)renderStatus(r.status);else await pollStatus();}catch(e){setReqError(e.message);}finally{sBtn.disabled=false;}});
+        qa.append(sBtn);
+      }
+      const alt=['arm_a','arm_b','arm_s'].find(a=>!rec.incident_holds[a]);
+      if(alt&&typeof window.selectArm==='function'){
+        const sw=document.createElement('button');sw.type='button';sw.className='btn-tool btn-xs';sw.textContent='정상 팔('+alt+')로 전환';
+        sw.addEventListener('click',()=>window.selectArm(alt));
+        qa.append(sw);
+      }
+    }
+    if(rec?.can_ack_error){
+      const aBtn=document.createElement('button');aBtn.type='button';aBtn.className='btn-primary btn-xs';aBtn.textContent='오류 확인 · 대기 복귀';
+      aBtn.addEventListener('click',async()=>{aBtn.disabled=true;setReqError('');try{renderStatus(await api('/api/recover/ack_error',{}));}catch(e){setReqError(e.message);}finally{aBtn.disabled=false;}});
+      qa.append(aBtn);
+    }
+  }
 }
 window.renderManualHoldCard=renderManualHoldCard;
 
+$('mh-dead-lease-check')?.addEventListener('change',()=>{if(lastStatus)renderManualHoldCard(lastStatus);});
 if($('mh-support-check')&&$('mh-release-btn')){
   $('mh-support-check').addEventListener('change',()=>{
     $('mh-release-btn').disabled=!$('mh-support-check').checked||Boolean($('mh-release-btn').dataset.busy);
@@ -68,9 +137,12 @@ if($('mh-clear-btn')&&$('mh-clear-confirm')){
   $('mh-clear-yes')?.addEventListener('click',async()=>{
     $('mh-clear-confirm').hidden=true;setReqError('');
     try{
-      const st=await api('/api/manual_hold/clear',{confirmed:true});
+      const forceDead=Boolean($('mh-dead-lease-check')?.checked);
+      const st=await api('/api/manual_hold/clear',{confirmed:true,force_dead_lease:forceDead});
+      if($('mh-dead-lease-check'))$('mh-dead-lease-check').checked=false;
       if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good','수동 확인 보류 해제 및 대기 복귀 완료');
       renderStatus(st);
+      if(typeof window.pollLiveLogs==='function')window.pollLiveLogs();
     }catch(e){setReqError(e.message||String(e));await pollStatus();}
   });
 }

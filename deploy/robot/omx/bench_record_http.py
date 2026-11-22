@@ -223,6 +223,14 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.release_held_runner(body))
                 if self.path == "/api/manual_hold/clear":
                     return self.reply(200, bench.clear_manual_hold(body))
+                if self.path == "/api/recover/baseline":
+                    return self.reply(200, bench.recover_baseline(body))
+                if self.path == "/api/recover/restore_units":
+                    return self.reply(200, bench.recover_restore_units(body))
+                if self.path == "/api/recover/ack_error":
+                    return self.reply(200, bench.ack_bench_error(body))
+                if self.path == "/api/recover/sync_incident":
+                    return self.reply(200, bench.recover_sync_incident(body))
                 if self.path == "/api/defaults/reset":
                     return self.reply(200, bench.reset_defaults(body))
                 m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose|release_lease|prepare|record_episode|finish)", self.path)

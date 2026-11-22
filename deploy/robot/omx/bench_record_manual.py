@@ -139,83 +139,6 @@ class BenchManualMixin:
         """A recorder or Leader child ended without proof of a safe end: the marker outlives a service restart."""
         self.manual.write_text(json.dumps({"reason": reason, **meta}, ensure_ascii=False), encoding="utf-8")
 
-    def _record_home_hold(self, arm, rec_proc, rec_log_p, io_dir):
-        from bench_record_review import build_home_hold_record
-        rc = getattr(rec_proc, "returncode", None) if rec_proc is not None else None
-        msg, meta = build_home_hold_record(arm, rc, Path(rec_log_p), Path(io_dir), getattr(self, "_person_needed", None))
-        self._mark_manual(msg, **meta)
-        if hasattr(self, "_log_event"):
-            self._log_event("pose", "crit", msg)
-        return msg
-
-    def manual_hold_info(self):
-        from bench_record_review import diagnose_manual_hold
-        return diagnose_manual_hold(self)
-
-    def release_held_runner(self, body):
-        """Send SIGUSR2 to a verified chunk_runner PID after operator confirms physical arm support."""
-        if not isinstance(body, dict) or body.get("arm_supported_confirmed") is not True:
-            raise ValueError("먼저 사람이 물리적으로 팔을 받쳤는지 확인 체크하세요 (arm_supported_confirmed=true)")
-        from bench_record_inspect import ARMS
-        from bench_record_review import _pid_is_chunk_runner
-        from bench_record_handoff import load_json_value
-        import cell_arm_lease
-        info = self.manual_hold_info()
-        arm = body.get("arm") or info.get("arm")
-        if arm not in ARMS:
-            raise ValueError("해제할 팔(arm_a, arm_b, arm_s)을 확인할 수 없습니다")
-        pid = body.get("pid") if body.get("pid") is not None else info.get("runner_pid")
-        if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 1:
-            raise ValueError("유효한 러너 PID가 없습니다")
-        if not _pid_is_chunk_runner(pid):
-            raise ValueError(f"PID {pid}가 실행 중인 chunk_runner가 아닙니다 — release_lease/보류 해제를 진행하세요")
-        os.kill(pid, signal.SIGUSR2)
-        deadline = self.clock() + 6.0
-        while self.clock() < deadline and _pid_is_chunk_runner(pid):
-            time.sleep(0.2)
-        proof = self.prep / f"chunk-io-{ARMS[arm]}" / "released.json"
-        ev = load_json_value(proof, {})
-        torque_ok = isinstance(ev, dict) and ev.get("pid") == pid and ev.get("torque_off_confirmed") is True
-        record = cell_arm_lease.status(arm).get(arm)
-        if not _pid_is_chunk_runner(pid) and record and record.get("hold") and torque_ok and cell_arm_lease.release_exact(arm, record):
-            proof.unlink(missing_ok=True)
-        if hasattr(self, "_log_event"):
-            self._log_event("pose", "warn", f"{arm} HOLD 러너(PID {pid}) SIGUSR2 해제 요청 (torque_off={torque_ok})")
-        return {"ok": True, "arm": arm, "released_pid": pid, "torque_off_confirmed": torque_ok, "status": self.status()}
-
-    def clear_manual_hold(self, body):
-        """Clear .bench-manual-check.json after runner exited safely, restore pending units, and return to idle."""
-        if not isinstance(body, dict) or body.get("confirmed") is not True:
-            raise ValueError("수동 확인 완료 체크(confirmed=true)가 필요합니다")
-        if recorder_running(self.procs):
-            raise ValueError("record_session 또는 chunk_runner가 아직 실행 중입니다 — 먼저 팔을 받치고 SIGUSR2 해제 후 다시 시도하세요")
-        from bench_record_inspect import ARMS
-        from bench_record_handoff import load_json_value
-        import cell_arm_lease
-        for a, letter in ARMS.items():
-            rec = cell_arm_lease.status(a).get(a)
-            if not rec or not rec.get("hold"):
-                continue
-            pid = rec.get("pid")
-            if pid and cell_arm_lease._pid_alive(pid):
-                raise ValueError(f"{a} 임대 hold의 러너(PID {pid})가 아직 살아 있습니다 — 먼저 토크 해제를 완료하세요")
-            proof = self.prep / f"chunk-io-{letter}" / "released.json"
-            ev = load_json_value(proof, {})
-            if isinstance(ev, dict) and ev.get("pid") == pid and ev.get("torque_off_confirmed") is True and float(ev.get("t") or 0) >= float(rec.get("held_at") or 0):
-                cell_arm_lease.release_exact(a, rec)
-                proof.unlink(missing_ok=True)
-            else:
-                raise ValueError(f"{a}에 해제되지 않은 임대 hold가 남아 있습니다 — cell_arm_lease.py release-hold 확인 후 진행하세요")
-        self.manual.unlink(missing_ok=True)
-        self.restore_leftovers()
-        with self.lock:
-            if self.state.get("status") in ("homing", "leader_manual_check") and (self.state.get("error") or self.state.get("status") == "leader_manual_check"):
-                self.state = {"status": "idle"}
-            self.last_issue = {"kind": "recovered", "message": "수동 확인 보류 해제 및 대기 복귀", "arm": None}
-        if hasattr(self, "_log_event"):
-            self._log_event("bench", "good", "수동 확인 보류 해제 · 유닛 복원 및 대기 복귀 완료")
-        return self.status()
-
     def _check_manual(self):
         if self.manual.exists():
             try:
@@ -305,7 +228,8 @@ class BenchManualMixin:
         if pid is None or cell_arm_lease._pid_alive(pid):
             raise ValueError(f"{arm} 임대 hold의 러너가 아직 살아 있거나 알 수 없습니다 — 사람이 팔을 받친 뒤 러너에 SIGUSR2를 보내세요")
         from bench_record_handoff import load_json_value
-        evidence = load_json_value(self.prep / f"chunk-io-{ARMS[arm]}" / "released.json", {})
+        proof = self.prep / f"chunk-io-{ARMS[arm]}" / "released.json"
+        evidence = load_json_value(proof, {})
         if not isinstance(evidence, dict) or (evidence.get("pid") != pid or evidence.get("torque_off_confirmed") is not True
                 or float(evidence.get("t") or 0) < float(record.get("held_at") or 0)):
             raise ValueError(f"{arm} 임대 hold에 운영자 해제(SIGUSR2) 승인 기록이 없습니다 — 팔을 확인한 뒤 cell_arm_lease.py release-hold")

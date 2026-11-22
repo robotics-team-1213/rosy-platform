@@ -417,13 +417,16 @@ input.jc-inp{width:60px;flex:0 0 auto;min-height:26px;padding:1px 5px;border-rad
 
 /* Manual Hold Recovery & Episode Review */
 .manual-hold-card{border-color:var(--crit);background:#241518;display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
+.manual-hold-card[data-tone="warn"]{border-color:var(--warn);background:#262014}
 .mh-head{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px}
 .mh-reason{margin:4px 0 0;font-size:.86rem;color:#ffd0d1;font-weight:600}
+.manual-hold-card[data-tone="warn"] .mh-reason{color:#ffe6a1}
 .mh-facts{font-size:.77rem;color:var(--ink);padding:5px 8px;border-radius:6px;background:var(--ground-deep);border:1px solid var(--bd)}
+.mh-issue-list{margin:0;padding:0 0 0 18px;font-size:.78rem;display:flex;flex-direction:column;gap:3px}
 .mh-hint{margin:0;font-size:.8rem;color:var(--warn)}
 .mh-log-tail{margin:0;padding:6px 8px;max-height:110px;overflow:auto;border-radius:6px;background:var(--ground-deep);border:1px solid var(--bd-sub);font-size:.73rem;white-space:pre-wrap}
 .mh-actions{display:flex;flex-direction:column;gap:6px}
-.mh-step{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.mh-step,.mh-quick-actions{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .ep-review-box{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:8px;border-radius:8px;background:var(--ground-deep);border:1px solid var(--bd)}
 .ep-review-head,.ep-row-top,.ep-video-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px}
 .ep-review-bulk,.ep-row-btns{display:flex;flex-wrap:wrap;align-items:center;gap:4px}

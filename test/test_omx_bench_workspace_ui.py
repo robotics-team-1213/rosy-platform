@@ -169,6 +169,50 @@ def test_go_home_stops_worker_and_diagnoses_clear_manual_hold(tmp_path, monkeypa
     assert cleared["status"] == "idle" and cleared["manual_hold"] is None and not bench.manual.exists()
 
 
+def test_recovery_center_dead_lease_baseline_units_and_ack(tmp_path, monkeypatch):
+    import bench_record_recover as brr
+    import cell_arm_lease
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    # 1) clear_manual_hold resets leader_hold so _idle() stays idle and enforces force_dead_lease on dead held leases
+    cell_arm_lease.claim("arm_a", pid=999999, now=1.0)
+    cell_arm_lease.hold("arm_a", "runner HOLD", pid=999999)
+    bench.leader_hold = "stale leader hold"
+    bench.manual.write_text('{"reason":"stuck","arm":"arm_a"}', encoding="utf-8")
+    rec_diag = bench.status()["recovery"]
+    assert rec_diag["has_issues"] is True and "arm_a" in rec_diag["dead_lease_arms"] and rec_diag["baseline_needed"] is True
+    with pytest.raises(ValueError, match="죽은 러너"):
+        bench.clear_manual_hold({"confirmed": True})
+    st = bench.clear_manual_hold({"confirmed": True, "force_dead_lease": True})
+    assert st["status"] == "idle" and bench.leader_hold == "" and not cell_arm_lease.status("arm_a")["arm_a"]
+
+    # 2) recover_restore_units refuses while manual check exists, succeeds when removed
+    bench._remember(["rosy-omx-observer@arm_a.service"])
+    assert bench.status()["recovery"]["can_restore_units"] is True
+    bench.manual.write_text('{"reason":"wait"}', encoding="utf-8")
+    with pytest.raises(ValueError, match="수동 확인 보류"):
+        bench.recover_restore_units({})
+    bench.manual.unlink()
+    st = bench.recover_restore_units({})
+    assert ("start", "rosy-omx-observer@arm_a.service") in calls and not bench.pending.exists()
+
+    # 3) recover_baseline verifies commissioning_limits --baseline under arm lock
+    ran = []
+    monkeypatch.setattr(brr, "hold_arm_lock", lambda a: (object(), None))
+    monkeypatch.setattr(brr, "release", lambda h: None)
+    monkeypatch.setattr(brr.subprocess, "run", lambda cmd, **kw: (ran.append(cmd), SimpleNamespace(returncode=0, stdout='{"configuration_verified": true, "error": null}\n', stderr=''))[1])
+    bench.state = {"status": "failed", "error": "caps are not the baseline"}
+    res_b = bench.recover_baseline({"arm": "arm_a"})
+    assert res_b["ok"] is True and any("--baseline" in c for c in ran[0]) and res_b["status"]["status"] == "idle"
+
+    # 4) ack_bench_error resets ended error state to idle, refuses during active recording
+    bench.state = {"status": "unsafe_or_failed", "error": "abort"}
+    assert bench.status()["recovery"]["can_ack_error"] is True
+    assert bench.ack_bench_error()["status"] == "idle"
+    bench.state = {"status": "recording", "arm": "arm_a"}
+    with pytest.raises(ValueError, match="진행 중인 작업"):
+        bench.ack_bench_error()
+
+
 def test_episode_review_do_not_train_and_delete(tmp_path, monkeypatch):
     bench, _, _, _ = _setup(tmp_path, monkeypatch)
     ds = tmp_path / "home" / "rosy-data" / "omx-leader" / "demo-ds-1"
@@ -223,9 +267,10 @@ def test_ui_workspace_no_duplicate_pills_live_log_reset_review_and_clusters():
                    'id="goal-custom-panel"', 'id="sb-factory-reset-btn"', 'id="factory-reset-btn"',
                    'id="hdr-reset-retry-btn"', '/bench_record_log_reset.js',
                    'id="manual-hold-card"', 'id="ev-episode-review"', '/bench_record_review.js',
-                   'class="tool-cluster"', 'class="ops-cluster'):
+                   'id="mh-quick-actions"', 'class="tool-cluster"', 'class="ops-cluster'):
         assert marker in html, marker
     assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
     assert '.identity{flex:1 1 auto;overflow:hidden}' in css
     assert 'loadCellMap' in js and '/api/defaults/reset' in js and 'getCustomTaskOverride' in js
     assert '/api/dataset/episode/rate' in js and '/api/manual_hold/clear' in js
+    assert '/api/recover/baseline' in js and "st?.status==='homing'&&(st?.error||st?.manual_hold?.active)" in js

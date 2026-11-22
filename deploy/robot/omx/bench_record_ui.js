@@ -33,6 +33,7 @@ let lastAutoPhase='setup';
 let manualPhase=null;
 
 function benchSessionActive(st=lastStatus){
+  if(st?.status==='homing'&&(st?.error||st?.manual_hold?.active))return false;
   return BUSY.has(st?.status)||st?.phase==='prepare'||st?.phase==='recording';
 }
 
@@ -74,7 +75,8 @@ function applyBenchPhase(phase){
 }
 
 function syncBenchPhase(){
-  const nextAuto=resolveBenchPhase(lastStatus?.status,lastTelemetryActive,lastStatus?.phase);
+  const errHome=(lastStatus?.status==='homing'&&(lastStatus?.error||lastStatus?.manual_hold?.active));
+  const nextAuto=errHome?'setup':resolveBenchPhase(lastStatus?.status,lastTelemetryActive,lastStatus?.phase);
   if(nextAuto!==lastAutoPhase){
     lastAutoPhase=nextAuto;
     manualPhase=null;

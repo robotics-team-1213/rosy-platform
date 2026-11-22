@@ -55,15 +55,10 @@ class BenchInspectMixin:
         root = self.prep / "sessions"
         if not root.is_dir():
             return []
+        from bench_record_handoff import load_json_value
         rows = []
         for d in sorted((p for p in root.iterdir() if p.is_dir()), reverse=True)[:limit]:
-            sess_f = d / "session.json"
-            sess = {}
-            if sess_f.is_file():
-                try:
-                    sess = json.loads(sess_f.read_text(encoding="utf-8"))
-                except (OSError, ValueError):
-                    pass
+            sess = load_json_value(d / "session.json", {})
             sealed = (d / "seal.json").is_file() or (d / "manifest.json").is_file() or any(d.glob("*.seal.json"))
             hf = (d / "hub-receipt.json").is_file() or (d / "hf-upload.json").is_file()
             rows.append({"folder": d.name, "safe_end": sess.get("safe_end"), "interrupted": sess.get("interrupted"),
@@ -90,9 +85,11 @@ class BenchInspectMixin:
                     pass
             size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
             rc_p = self.prep / ".hf-receipts" / f"{d.name}.json"
-            rev = self.dataset_review_summary(d.name) if hasattr(self, "dataset_review_summary") else {}
             item = {"name": d.name, "episodes": ep_cnt, "videos": videos, "size_bytes": size_bytes,
-                    "empty": ep_cnt == 0, "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file(), "review_summary": rev}
+                    "empty": ep_cnt == 0, "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file()}
+            rev = self.dataset_review_summary(d.name) if hasattr(self, "dataset_review_summary") else {}
+            if any(rev.values()):
+                item["review_summary"] = rev
             if rc_p.is_file():
                 rc = json.loads(rc_p.read_text(encoding="utf-8"))
                 item.update(hf_uploaded=bool(rc.get("repo_id")), hf_repo_id=rc.get("repo_id", ""), hf_repo_url=rc.get("url", ""))
@@ -310,6 +307,8 @@ class BenchInspectMixin:
         out.update(self.issue_fields(out), **self.speed_fields(), **self.link_fields(out))
         mh = self.manual_hold_info() if hasattr(self, "manual_hold_info") else None
         out["manual_hold"] = mh if (mh and mh.get("active")) else None
+        rec = self.diagnose_bench_recovery(out) if hasattr(self, "diagnose_bench_recovery") else None
+        out["recovery"] = rec if (rec and rec.get("has_issues")) else None
         if out.get("folder") and out.get("status") in ("unsafe_or_failed", "failed", "seal_failed"):
             log_p = Path(out["folder"]) / "bench.log"
             try:
