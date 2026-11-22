@@ -259,7 +259,6 @@ def install_cameras_routes(app, ctx) -> None:
         res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
                                         map_version=getattr(active[2], "version", None))
         if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
-        if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
             return {"claimed": False, "task": strip_task_for_claim(task), "gate": res["gate"]}
         from fleet.server.sitemap.pipeline_evidence import bind_bed, has_valid_presence, take_presence
 
