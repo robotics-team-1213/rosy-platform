@@ -4,7 +4,7 @@
 .robot-stage-main { min-width: 0; min-height: 0; display: grid; gap: var(--space-3); align-content: start; }
 
 /* C23 dock: vertical strip on >=64rem, horizontal row above main on <64rem */
-.robot-dock { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; border-inline-start: 1px solid var(--border-default); background: var(--surface-chrome); }
+.robot-dock { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; border-inline-start: 1px solid var(--border-default); background: var(--surface-chrome); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .robot-dock-group { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); width: 100%; min-width: 0; }
 .robot-dock-group + .robot-dock-group { padding-block-start: var(--space-2); border-block-start: 1px solid var(--border-default); }
 .robot-dock-label { color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--body); }
@@ -12,6 +12,7 @@
 .robot-dock-btn {
   position: relative;
   box-sizing: border-box;
+  overflow: hidden;
   display: grid;
   justify-items: center;
   align-content: center;
@@ -35,7 +36,7 @@
 .robot-dock-btn[data-selected] { border-inline-start-color: var(--selection); }
 .robot-dock-icon { display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .robot-dock-icon > .ui-icon { width: var(--text-title); height: var(--text-title); }
-.robot-dock-id { white-space: nowrap; font-variant-numeric: tabular-nums; line-height: var(--leading-flat); }
+.robot-dock-id { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; line-height: var(--leading-flat); }
 
 .robot-dock-mark {
   position: absolute;
@@ -90,10 +91,13 @@
 
 .robot-panel-body {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: var(--space-3) var(--space-4);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   align-content: start;
 }
@@ -125,7 +129,7 @@
 }
 .robot-panel-jump:hover { border-color: var(--control-line); background: var(--surface-sheen); }
 .robot-panel-jump:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
-.robot-panel-section { min-width: 0; display: grid; gap: var(--space-2); scroll-margin-top: calc(var(--target-secondary) + var(--space-3)); }
+.robot-panel-section { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); scroll-margin-top: calc(var(--target-secondary) + var(--space-3)); }
 .robot-panel-section + .robot-panel-section { padding-block-start: var(--space-3); border-block-start: 1px solid var(--border-subtle); }
 .robot-panel-section > h3 { margin: 0; color: var(--text-secondary); font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body); }
 details.robot-panel-section > summary {
@@ -153,11 +157,33 @@ details.robot-panel-section > summary {
 
 @media (width < 64rem) {
   .robot-stage, .robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr); align-content: start; }
-  .robot-dock { order: -1; flex-direction: row; align-items: stretch; gap: var(--space-2); padding: var(--space-2) 0; border-inline-start: 0; border-block-end: 1px solid var(--border-subtle); overflow-x: auto; }
+  .robot-dock {
+    position: sticky;
+    top: var(--appbar-height);
+    z-index: 5;
+    order: -1;
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    height: calc(var(--target-secondary) + var(--space-3));
+    box-sizing: border-box;
+    border-inline-start: 0;
+    border-block-end: 1px solid var(--border-subtle);
+    background: var(--surface-chrome);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
   .robot-dock-group { flex-direction: row; flex: 1 1 auto; width: auto; align-items: stretch; }
   .robot-dock-group + .robot-dock-group { padding-block-start: 0; border-block-start: 0; padding-inline-start: var(--space-2); border-inline-start: 1px solid var(--border-default); }
   .robot-dock-label { display: none; }
-  .robot-dock-btn { flex: 1 1 0; width: auto; min-width: 44px; border-inline-start: 0; border-block-end: var(--selection-edge) solid transparent; }
+  .robot-dock-btn { flex: 1 1 0; width: auto; min-width: 44px; scroll-margin-top: calc(var(--appbar-height) + var(--space-2)); border-inline-start: 0; border-block-end: var(--selection-edge) solid transparent; }
   .robot-dock-btn[data-selected] { border-block-end-color: var(--selection); }
-  .robot-panel { position: fixed; inset: var(--appbar-height) 0 0 0; z-index: 4; border-inline-end: 0; background: var(--surface-canvas); }
+  .robot-panel {
+    position: fixed;
+    inset: calc(var(--appbar-height) + var(--target-secondary) + var(--space-3)) 0 0 0;
+    z-index: 4;
+    border-inline-end: 0;
+    background: var(--surface-canvas);
+  }
 }

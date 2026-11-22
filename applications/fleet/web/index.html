@@ -102,8 +102,6 @@
     <a class="ui-subnav-item" href="/console?view=records&amp;show=log">관제 기록</a>
   </nav></div>
   <div class="fleet-workspace">
-  <ui-status id="estop-feedback" hidden></ui-status>
-
   <!-- D-926 2 — 경로 줄: 문서 제목과 주소가 고른 영역을 본문 머리에도 보인다(area-nav.js). -->
   <div class="ui-pathbar"><h1>사이트 관제</h1><strong id="console-screen" hidden></strong></div>
   <script src="/console/assets/area-first.js"></script>
@@ -138,6 +136,7 @@
   <div class="assistant-layout">
   <div id="robot-stage" class="robot-stage">
   <div class="robot-stage-main">
+  <ui-status id="estop-feedback" hidden></ui-status>
   <!-- D-978: 관제 두 칸은 공용 틀 watch(2:1). 좁은 칸에서는 공용 기본 순서대로 지금 상태(now)가 먼저다(D-201 예외 먼저). -->
   <main id="fleet-main" class="ui-stage-grid" data-layout="watch" tabindex="-1">
     <div class="console-primary" data-pane="stage">

@@ -138,9 +138,17 @@
   min-height: 0;
   gap: 0;
 }
+.robot-stage-main > #estop-feedback {
+  inline-size: calc(100% - 2 * var(--inset-task-page));
+  margin: var(--space-2) auto 0;
+}
 @media (width >= 64rem) {
-  #robot-stage > .robot-panel { position: relative; top: auto; align-self: stretch; max-height: none; }
-  #robot-stage > .robot-dock { align-self: stretch; }
+  #robot-stage > .robot-panel { position: relative; top: auto; align-self: stretch; min-height: 0; max-height: 100%; overflow: hidden; }
+  #robot-stage > .robot-dock { align-self: stretch; min-height: 0; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+}
+@media (width >= 64rem) and (height >= 40rem) {
+  #robot-stage { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+  #robot-stage > .robot-stage-main { overflow: hidden; }
 }
 @container fleet-stage (width < 60rem) {
   #fleet-main[data-layout="watch"] {

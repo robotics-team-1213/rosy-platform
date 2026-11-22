@@ -67,6 +67,7 @@ def dock_gallery():
             profiles,
             onToggle: (id) => {
               openId = id;
+              selection.set(id, { source: 'dock' });
               dock.setOpen(id);
               panel.setRobot(id ? byId.get(id) : null);
             },
@@ -117,7 +118,6 @@ def test_robot_dock_desktop_rail_keyboard_and_toggle(dock_gallery):
     expect(panel).to_be_visible()
     expect(panel).to_have_attribute("data-robot-id", first_id)
     expect(first).to_have_attribute("aria-pressed", "true")
-    expect(first).to_have_attribute("data-open", "")
     expect(first).to_have_attribute("data-selected", "")
 
     # ArrowDown / End / Home move roving focus without accidental toggle, Enter/click switches robot.

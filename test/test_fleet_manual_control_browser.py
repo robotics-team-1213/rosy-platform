@@ -366,7 +366,6 @@ def test_manual_panel_disclosure_keeps_node_across_poll_and_stops_on_collapse_or
 
     sent: list[dict] = []
     api = _api()
-    api["/api/fleet/robots/rosy_45/state"]["state"]["mode"] = "MANUAL"
     api["/api/fleet/state"]["robots"][0]["state"]["mode"] = "MANUAL"
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)

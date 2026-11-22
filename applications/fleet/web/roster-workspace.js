@@ -243,7 +243,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     stage.append(dock.root);
   }
 
-  function open(id) {
+  function open(id, { fromSelection = false } = {}) {
     if (!id) return;
     yieldedForGoal = false;
     latestRecords = buildRecords();
@@ -255,7 +255,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     }
     openId = id;
     roster.openCard(id, { fromSelection: true });
-    selection?.set?.(id, { source: "dock" });
+    if (!fromSelection) selection?.set?.(id, { source: "dock" });
     dock.setOpen(id);
     panel.setRobot(found.profile, found.detail);
     render();
@@ -311,15 +311,11 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
 
   const offSelection = selection?.subscribe?.((id, meta) => {
     if (meta?.source === "dock" || meta?.source === "panel" || meta?.source === "lock") return;
-    roster.openCard(id || null, { fromSelection: true });
-    if (!panel.root.hidden && id) {
-      if (openId && openId !== id) {
-        manualControl.stop();
-        frontCamera.stop();
-      }
-      openId = id;
-      dock.setOpen(id);
+    if (id && (meta?.source === "roster" || meta?.source === "map" || !panel.root.hidden)) {
+      open(id, { fromSelection: true });
+      return;
     }
+    roster.openCard(id || null, { fromSelection: true });
     render();
   });
   scope.onDispose?.(() => {

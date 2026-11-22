@@ -46,7 +46,7 @@ def test_connected_ui_login_goal_cancel_readback_and_logout(connected_fleet):
 
                     page.goto(origin + '/console')
                     page.locator('[data-context-tab=status]').click()
-                    expect(robot_picker(page)).to_contain_text('rosy_01')
+                    expect(robot_picker(page).locator('[data-robot-id="rosy_01"]')).to_be_visible()
                     select_robot(page, 'rosy_01')
                     aim = page.locator('#robot-workspace [data-goal-robot-id=rosy_01]')
                     expect(aim).to_be_enabled()

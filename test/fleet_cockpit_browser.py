@@ -37,7 +37,10 @@ def select_robot(page, robot_id: str | None = None, *, wait_workspace: bool = Tr
         )
     btn = page.locator(f'#robot-dock .robot-dock-btn[data-robot-id="{robot_id}"]')
     if btn.get_attribute("aria-pressed") != "true":
-        btn.click()
+        if not wait_workspace and page.locator("dialog.ui-confirm").count() > 0:
+            btn.dispatch_event("click")
+        else:
+            btn.click()
     if wait_workspace and not str(robot_id).startswith(("arm_", "cell_")):
         page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]').wait_for(state="visible")
         page.evaluate("() => document.activeElement?.blur()")

@@ -117,7 +117,7 @@ def test_robot_panel_in_place_updates_collapse_and_focus_return(panel_gallery):
     settings_details = panel.locator('details[data-section="settings"]')
     assert manual_details.evaluate("node => !node.open")
     assert settings_details.evaluate("node => !node.open")
-    assert panel.locator('.robot-panel-jumps button', has_text='수동 조종').count() == 1
+    assert panel.locator('.robot-panel-jumps button[data-jump-section="manual"]', has_text='수동').count() == 1
 
     # Open manual disclosure, focus child select, and push a same-ID live update.
     manual_details.locator("summary").click()

@@ -67,7 +67,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
   const body = document.createElement("div");
   body.className = "robot-panel-body";
 
-  const foot = document.createElement("footer");
+  const foot = document.createElement("div");
   foot.className = "robot-panel-foot";
   foot.hidden = true;
 
@@ -109,7 +109,8 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
       details.append(summary, content);
       if (key === "manual") {
         details.addEventListener("toggle", () => {
-          if (!details.open) onManualCollapse?.();
+          if (details.open) details.scrollIntoView?.({block: "end"});
+          else onManualCollapse?.();
         });
       }
       return details;
