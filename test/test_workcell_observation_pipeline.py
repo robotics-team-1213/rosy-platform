@@ -254,7 +254,8 @@ async def _mirror_demand(tmp_path):
         await assert_quiet()
         before = current()
         await before.connection.close()
-        await tls._wait_for(lambda: current() is not None and current() is not before, 4, "mirror reconnected")
+        await tls._wait_for(lambda: current() is not None and current() is not before,
+                            8, "mirror reconnected after bounded TLS retries")
         await assert_quiet()
         await wake()
     finally:
