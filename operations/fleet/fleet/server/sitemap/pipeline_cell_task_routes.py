@@ -10,7 +10,7 @@ from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boun
 from fleet.pipeline.cell_site_targets import expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
-from fleet.server.sitemap.pipeline_port_events import (
+from fleet.server.pipeline_port_events import (
     IDENTITY_INPUT_FIELDS,
     TASK_IDENTITY_FIELDS,
     has_identity_input,

@@ -243,7 +243,7 @@ def install_unload_release_routes(app, ctx) -> None:
             if exc.status_code == 404:
                 return []
             raise
-        from fleet.server.sitemap.pipeline_port_events import flush_pending_port_events_async
+        from fleet.server.pipeline_port_events import flush_pending_port_events_async
 
         return await depart_tick(
             app.state,
