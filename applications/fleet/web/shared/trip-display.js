@@ -88,6 +88,8 @@ export const TRIP_ERROR_LABEL = {
   CALIBRATION_ACTIVE: '로봇이 보정 중입니다 · 보정이 끝난 뒤 다시 출발하세요',
   TRIP_LEASE_REFUSED: '로봇 CORE가 운행 점유를 거절했습니다(비상 정지·도킹 등) · 로봇 상태를 확인하세요',
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
+  TRIP_CANCELED: '운행이 취소됐습니다',
+  TRIP_PATH_UNAVAILABLE: '운행 경로를 실행할 수 없습니다 · 관제 운행 상태를 확인하세요',
 };
 /** D-541 5/7: why CORE ended the trip lease (``detail.lease_reason``). */
 const LEASE_END_LABEL = {
