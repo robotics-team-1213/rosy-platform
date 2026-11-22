@@ -1392,6 +1392,7 @@ safety_modules:
   - operations/fleet/fleet/server/cancel_all_store.py
   - operations/fleet/fleet/server/local_stop_transport.py
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
+  - operations/fleet/fleet/server/ledger/task_reconcile_routes.py  # D-1071 named-operator UNKNOWN task quiescence reconcile
   - operations/fleet/fleet/server/ledger/berth_parking_routes.py  # road-nav2/berth-park motion moved here by 973faf9de9 (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/ledger/berth_parking_helpers.py  # physical berth-park teleop and Fleet pin (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/ledger/berth_core_dock.py  # berth-park core_line: Fleet's POST /docking/dock and its cancel on Fleet's own deadline are a motion command and a stop path, like the two files above (D-430 §1); imports stdlib only
@@ -1696,6 +1697,7 @@ safety_anchors:
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}
   - {symbol: fleet.server.owner_recovery_routes.install_owner_recovery_routes.recover_owner, public: true}
+  - {symbol: fleet.server.task_reconcile_routes.install_task_reconcile_routes.reconcile_task, public: true}
   - {symbol: fleet.server.policy_approval.PolicyApprovals.tick}  # D-1024 3 lease issue only inside the window
   - {symbol: fleet.server.policy_approval.PolicyApprovals.tick_all}  # D-1024 3 ticker hook; no lease without a delivery port
   - {symbol: fleet.server.policy_delivery.CoreLeaseDelivery}  # D-1024 3 any non-accepted delivery is a failed delivery
