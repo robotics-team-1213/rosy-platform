@@ -149,7 +149,11 @@ jobs:
             fi
           fi
           if echo "$INVS_JSON" | grep -Eq 'operations/fleet/test|applications/fleet/test|test_account_pipeline.py|test_monitoring_browser.py|ROSY_RUN_BROWSER_TESTS=1'; then
-            fc-list | grep -qi 'noto.*cjk'
+            if dpkg -s fonts-wqy-zenhei >/dev/null 2>&1 || dpkg -s fonts-wqy-microhei >/dev/null 2>&1; then
+              echo "::error::WenQuanYi CJK fonts must not be installed in rosy-ci" >&2
+              exit 1
+            fi
+            fc-list | grep -i 'noto.*cjk' >/dev/null
             python3 -c 'from playwright.sync_api import sync_playwright as p; pw = p().start(); pw.chromium.launch().close(); pw.stop()'
           fi
           if echo "$INVS_JSON" | grep -Eq 'learning/curation/pinky|learning/training/pinky'; then

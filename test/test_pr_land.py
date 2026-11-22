@@ -232,7 +232,7 @@ def test_required_lab_invocations_deduplicates_browser_files_already_in_lab(monk
 
     bare = next(iter(pr_land.work_queue.LAB_ONLY))
     chunked = "test/test_measured_calibration_browser.py"
-    extra_only = "test/learning/perception/test_pixel_workspace_browser.py"
+    extra_only = "integrations/simulation/gazebo/test/test_extra_browser.py"
     monkeypatch.setattr(browser_scope, "targets", lambda ch: [bare, chunked, extra_only])
 
     result = _required(

@@ -811,3 +811,48 @@ def test_container_test_jobs_mark_safe_directory_in_system_gitconfig():
         assert system_cmd in step["run"]
     scope_step = next(s for s in ci["scope"]["steps"] if s.get("name") == "Fix git safe directory (container)")
     assert "--system" not in scope_step["run"] and 'safe.directory "${GITHUB_WORKSPACE}"' in scope_step["run"]
+
+
+def test_ci_browser_readiness_enforces_noto_cjk_without_wqy(tmp_path):
+    import yaml
+
+    bash = (Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe"
+            if os.name == "nt" else Path(shutil.which("bash") or "/missing-bash"))
+    if not bash.is_file():
+        pytest.skip("Bash is required for the real CI shell-step fixture")
+    ci_steps = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]["test"]["steps"]
+    fleet_ready = next(
+        s["run"] for s in ci_steps
+        if s.get("name") == "Fleet browser readiness (Chromium and CJK fonts from the image)"
+    )
+    rolling_steps = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "rolling-sweep.yml").read_text(encoding="utf8")
+    )["jobs"]["run-shard"]["steps"]
+    rolling_opt = next(s["run"] for s in rolling_steps if s.get("name") == "Install optional suite tools")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in {
+        "dpkg": 'test "$1" = "-s" && test "$2" = "${STUB_WQY:-}"\n',
+        "fc-list": (
+            'test "${STUB_NOTO:-1}" = 1 && printf "%s\\n" "Noto Sans CJK JP:style=Regular"\n'
+            'awk "BEGIN { for (i = 0; i < 4000; i++) print \\"DejaVu Sans:style=Regular\\" }"\n'
+        ),
+        "python3": "exit 0\n",
+    }.items():
+        stub = bin_dir / name
+        stub.write_text("#!/bin/sh\n" + body, encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
+
+    base_env = {**os.environ, "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
+                "INVS_JSON": "ROSY_RUN_BROWSER_TESTS=1", "SHARD_NAME": "test"}
+    cases = [("", "1", True), ("fonts-wqy-zenhei", "1", False),
+             ("fonts-wqy-microhei", "1", False), ("", "0", False)]
+    for label, script in (("ci.yml", fleet_ready), ("rolling-sweep.yml", rolling_opt)):
+        for wqy, noto, expect_ok in cases:
+            res = subprocess.run(
+                [str(bash), "--noprofile", "--norc", "-eo", "pipefail", "-c", script],
+                cwd=tmp_path, env={**base_env, "STUB_WQY": wqy, "STUB_NOTO": noto},
+                capture_output=True, text=True, timeout=30,
+            )
+            assert (res.returncode == 0) is expect_ok, (label, wqy, noto, res.returncode, res.stderr)
