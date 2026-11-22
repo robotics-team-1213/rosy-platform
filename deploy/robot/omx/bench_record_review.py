@@ -110,8 +110,15 @@ class BenchReviewMixin:
             cams = sorted(p.name.removeprefix("observation.images.") for p in (ds_folder / "videos").iterdir() if p.is_dir())
         static_set = set()
         st_doc = load_json_value(ds_folder / "static_episodes.json", {})
-        for entry in (st_doc.get("static_episodes") or st_doc.get("episodes") or []) if isinstance(st_doc, dict) else []:
-            if isinstance(entry, int):
+        raw_static = []
+        if isinstance(st_doc, dict):
+            for key in ("static", "static_episodes", "episodes"):
+                val = st_doc.get(key)
+                if isinstance(val, (list, tuple)):
+                    raw_static = val
+                    break
+        for entry in raw_static:
+            if isinstance(entry, int) and not isinstance(entry, bool):
                 static_set.add(entry)
             elif isinstance(entry, dict) and isinstance(entry.get("episode_index"), int):
                 static_set.add(entry["episode_index"])

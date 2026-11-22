@@ -21,12 +21,14 @@ from rosy.contracts.learning.omx_canonical import (  # noqa: E402
     canonical_spec_sha256,
     default_canonical_spec,
 )
+from rosy.contracts.learning.omx_recording_todo import build_recording_todo  # noqa: E402
 
 STATIC = Path(__file__).with_name('review_app_web')
 PAGES = {
     '/learning/canonical': ('canonical.html', 'text/html'),
     '/canonical.js': ('canonical.js', 'text/javascript'),
     '/canonical-monitor.js': ('canonical-monitor.js', 'text/javascript'),
+    '/canonical-todo.js': ('canonical-todo.js', 'text/javascript'),
     '/canonical.css': ('canonical.css', 'text/css'),
 }
 PREFIX = '/api/learning/canonical'
@@ -89,6 +91,11 @@ def get(handler, path: str, center, accounts=None) -> bool:
         return True
     if path == PREFIX + '/spec':
         handler.send(service.spec_payload() if service is not None else _default_spec_payload())
+        return True
+    if path == PREFIX + '/recording-todo':
+        if accounts is not None:
+            accounts.require(handler.learning_principal, 'view')
+        handler.send(service.recording_todo() if service is not None else build_recording_todo(None, source_state='unconfigured'))
         return True
     if path == PREFIX + '/peer-summary':
         if accounts is not None and getattr(handler, 'service_principal', None) is None:

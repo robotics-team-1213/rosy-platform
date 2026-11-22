@@ -313,7 +313,7 @@ def run_train_stage(req: dict, out: Path) -> dict:
     arm = req["arm_id"]
     params = req["params"]
     ds_root = Path(params["dataset_root"]).resolve()
-    admitted = data_gate.check_receipt(ds_root)
+    admitted = data_gate.check_receipt(ds_root, expected_scope="h1")
     if not admitted:
         raise ValueError("data_gate admitted zero episodes")
 

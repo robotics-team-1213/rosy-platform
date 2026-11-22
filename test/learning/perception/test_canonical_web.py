@@ -71,9 +71,13 @@ def _serve(tmp_path: Path, *, with_canonical: bool = False, accounts=None, monke
 def test_zero_config_serves_readonly_builtin_spec_and_blocks_writes(tmp_path):
     with _serve(tmp_path, with_canonical=False) as (base, _):
         for route, mime_prefix in (("/learning/canonical", "text/html"), ("/canonical.js", "text/javascript"),
-                                   ("/canonical-monitor.js", "text/javascript"), ("/canonical.css", "text/css")):
+                                   ("/canonical-monitor.js", "text/javascript"), ("/canonical-todo.js", "text/javascript"),
+                                   ("/canonical.css", "text/css")):
             with urllib.request.urlopen(base + route, timeout=5) as resp:
                 assert resp.status == 200 and resp.headers.get("Content-Type", "").startswith(mime_prefix)
+        code_todo, todo = raw_req(base, PREFIX + "/recording-todo")
+        assert code_todo == 200 and todo["inventory_status"] == "unconfigured" and todo["cards"] == []
+        assert todo["real_evidence"] is False and todo["policy_activation"] is False
         code, snap = raw_req(base, PREFIX)
         assert code == 200 and snap["configured"] is False and snap["writable"] is False
         assert snap["spec"]["design"] == "design2_idle_home_active_canonical"
@@ -101,9 +105,20 @@ def test_collaboration_enforces_view_manage_csrf_no_paths_and_busy_conflict(tmp_
         with opener.open(urllib.request.Request(base + "/learning/canonical", headers={"Cookie": "rosy_learning_session=reader"}), timeout=5) as page:
             assert page.status == 200 and "표준 시작 자세" in page.read().decode("utf-8")
         assert collab_req(base, PREFIX)[0] == 401
+        assert collab_req(base, PREFIX + "/recording-todo")[0] == 401
         code, snap = collab_req(base, PREFIX, "reader")
         assert code == 200 and snap["configured"] is True and snap["real_evidence"] is False
         assert str(tmp_path) not in json.dumps(snap)
+
+        from rosy.contracts.learning import omx_recording_todo as rt
+        inv_doc = rt.derive_inventory_from_manifest({
+            "schema": rt.CURATED_MANIFEST_SCHEMA, "curated_version": "omx-real-v1", "datasets": [],
+        })
+        (tmp_path / "watch_mp" / "recording-inventory.json").write_text(json.dumps(inv_doc), encoding="utf-8")
+        c_todo, todo_doc = collab_req(base, PREFIX + "/recording-todo", "reader")
+        assert c_todo == 200 and todo_doc["inventory_status"] == "ready"
+        assert todo_doc["cards"][0]["card_id"] == "arm_b-ship-h1-l0"
+        assert str(tmp_path) not in json.dumps(todo_doc)
 
         token = collab_req(base, "/api/accounts/session", "reviewer")[1]["token"]
         bad_body = {

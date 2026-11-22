@@ -68,6 +68,27 @@ def test_an_intact_three_camera_episode_passes_and_the_receipt_admits_it(tmp_pat
     assert dg.check_receipt(root) == [0]
 
 
+def test_nonfinite_episode_is_rejected_without_breaking_receipt_summary(tmp_path):
+    np, pd, _ = _media_deps()
+    root = make(tmp_path / "nonfinite")
+    ep_path = root / "meta/episodes/chunk-000/file-000.parquet"
+    episodes = pd.read_parquet(ep_path)
+    pd.concat([episodes, episodes.assign(episode_index=1)]).to_parquet(ep_path)
+    data_path = root / "data/chunk-000/file-000.parquet"
+    data = pd.read_parquet(data_path)
+    invalid = data.assign(episode_index=1, index=data["index"] + len(data))
+    state = np.stack(invalid["observation.state"])
+    state[0, 0] = np.nan
+    invalid["observation.state"] = list(state)
+    pd.concat([data, invalid]).to_parquet(data_path)
+
+    receipt = dg.gate(root, "arm_b", SIM)
+    assert receipt["counts"] == {"pass": 1, "review": 0, "reject": 1}
+    assert receipt["measured_summary"]["pan_f0_std_rad"] == 0
+    assert "pan_f0_rad" not in receipt["episodes"][1]["measured"]
+    assert "non-finite state or action" in receipt["episodes"][1]["reject"]
+
+
 def test_a_dropped_video_frame_is_rejected(tmp_path):
     r = dg.gate(make(tmp_path / "drop", video_frames={"side": 79}), "arm_b", SIM)
     assert r["episodes"][0]["verdict"] == "reject" and any("side: decoded 79 frames for 80 rows" in x for x in r["episodes"][0]["reject"])
@@ -155,3 +176,17 @@ def test_goal_regex_and_camera_map_without_video_deps():
     }
     with pytest.raises(ValueError, match="D-1065"):
         dg.camera_map({f"observation.images.{c}": {} for c in ("top", "side", "front")}, {})
+    assert dg.GOAL_SCOPES["h2"].search("Move the designated container from belt to ship-h2r1-l0.").group(1) == "ship-h2r1-l0"
+    assert dg.GOAL_SCOPES["unload"].search("Move the designated container from ship-l0 to temp-plate.").group(1) == "temp-plate"
+    assert dg.GOAL_RE.search("Move the designated container from belt to ship-h2r1-l0.") is None
+
+
+def test_goal_scope_enforcement_and_measured_summary(tmp_path):
+    h2 = make(tmp_path / "h2", task="Move the designated container from belt to ship-h2r2-l0.")
+    assert dg.gate(h2, "arm_b", SIM, goal_scope="h1")["episodes"][0]["verdict"] == "reject"
+    r = dg.gate(h2, "arm_b", SIM, goal_scope="h2")
+    assert r["counts"] == {"pass": 1, "review": 0, "reject": 0} and r["goal_scope"] == "h2"
+    assert "wrist_roll_f0_median_rad" in r["measured_summary"] and "pan_f0_std_rad" in r["measured_summary"]
+    with pytest.raises(ValueError, match="goal_scope"):
+        dg.check_receipt(h2, expected_scope="h1")
+    assert dg.check_receipt(h2, expected_scope="h2") == [0]

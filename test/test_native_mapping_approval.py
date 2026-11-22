@@ -255,6 +255,12 @@ def test_empty_or_stale_markers_cannot_start_navigation(tmp_path):
     approval.approve(root, bundle, evidence, reviewer="reviewer-c")
     (root / "opt/rosy/current/source-revision.txt").write_text("b" * 40)
     (root / "opt/rosy/current/SHA256SUMS").write_text(_sums(motion="e" * 64), encoding="utf-8")
+    carried = approval.check(root, runtime_mode="hardware")
+    assert carried["ready"] is True and carried["fingerprint_changed"] is True
+    # Tampering with a marker without matching bundle/robot_number still fails closed.
+    bad = json.loads((markers / "navigation.approved").read_text(encoding="utf-8"))
+    bad["source_revision"] = "c" * 40
+    (markers / "navigation.approved").write_text(json.dumps(bad), encoding="utf-8")
     with pytest.raises(ValueError, match="revision"):
         approval.check(root, runtime_mode="hardware")
 
@@ -365,25 +371,28 @@ def test_a_release_with_the_same_motion_files_keeps_the_approval(tmp_path, chang
     root = _approved_then_updated(tmp_path, approval, _sums(**changed))
     result = approval.check(root)
     assert result["measured_release_id"] == RELEASE and result["release_id"] == NEXT_RELEASE
+    assert result["fingerprint_changed"] is False
 
 
 @pytest.mark.parametrize("key", ["motion", "web", "unit", "ros"])
-def test_a_release_that_changes_a_motion_file_needs_a_new_measurement(tmp_path, key):
+def test_a_release_that_changes_a_motion_file_keeps_valid_preupdate_approval(tmp_path, key):
     approval = _module()
     root = _approved_then_updated(tmp_path, approval, _sums(**{key: "e" * 64}))
-    with pytest.raises(ValueError, match="differs from the active release"):
-        approval.check(root)
+    result = approval.check(root)
+    assert result["ready"] is True
+    assert result["measured_release_id"] == RELEASE and result["release_id"] == NEXT_RELEASE
+    assert result["fingerprint_changed"] is True
 
 
-def test_a_release_adding_an_unreviewed_package_needs_a_new_measurement(tmp_path):
+def test_a_release_adding_an_unreviewed_package_keeps_valid_preupdate_approval(tmp_path):
     approval = _module()
     extra = f"{'e' * 64}  install/lib/python3.12/site-packages/new_driver/node.py\n"
     root = _approved_then_updated(tmp_path, approval, _sums() + extra)
-    with pytest.raises(ValueError, match="differs from the active release"):
-        approval.check(root)
+    result = approval.check(root)
+    assert result["ready"] is True and result["fingerprint_changed"] is True
 
 
-def test_a_new_os_image_needs_a_new_measurement(tmp_path):
+def test_a_new_os_image_keeps_valid_preupdate_approval(tmp_path):
     approval = _module()
     root = _device(tmp_path)
     image = root / "etc/rosy/os-factory-release.json"
@@ -395,10 +404,10 @@ def test_a_new_os_image_needs_a_new_measurement(tmp_path):
     (current / "source-revision.txt").write_text(NEXT_REVISION, encoding="ascii")
     env = root / "etc/rosy/runtime.env"
     env.write_text(env.read_text(encoding="ascii").replace("MODE=motor", "MODE=hardware"), encoding="ascii")
-    assert approval.check(root)["measured_release_id"] == RELEASE
+    assert approval.check(root)["fingerprint_changed"] is False
     image.write_text('{"checksums_sha256": "2", "release_id": "2026.11.05-174"}', encoding="ascii")
-    with pytest.raises(ValueError, match="differs from the active release"):
-        approval.check(root)
+    result = approval.check(root)
+    assert result["ready"] is True and result["fingerprint_changed"] is True
 
 
 def test_an_empty_checksum_list_fails_closed(tmp_path):
@@ -408,7 +417,7 @@ def test_an_empty_checksum_list_fails_closed(tmp_path):
         approval.check(root)
 
 
-def test_a_marker_sealed_before_the_fingerprint_never_carries(tmp_path):
+def test_a_marker_sealed_before_the_fingerprint_carries_with_flag(tmp_path):
     approval = _module()
     root = _approved_then_updated(tmp_path, approval, _sums())
     for kind in ("hardware", "navigation"):
@@ -416,8 +425,29 @@ def test_a_marker_sealed_before_the_fingerprint_never_carries(tmp_path):
         marker = json.loads(path.read_text(encoding="utf-8"))
         marker.pop("motion_fingerprint")
         path.write_text(json.dumps(marker), encoding="utf-8")
-    with pytest.raises(ValueError, match="differs from the active release"):
-        approval.check(root)
+    result = approval.check(root)
+    assert result["ready"] is True and result["fingerprint_changed"] is True
+
+
+def test_sync_and_restore_shared_approvals_preserve_g4_across_os_slots(tmp_path):
+    import shutil
+    approval = _module()
+    root = _device(tmp_path)
+    (root / "var/lib/rosy-device").mkdir(parents=True)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    assert (root / "var/lib/rosy-device/approvals/g4.bundle.json").is_file()
+    shutil.rmtree(root / "etc/rosy/approvals")
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("MODE=motor", "MODE=hardware"), encoding="ascii")
+    assert approval.restore_approvals_from_shared(root) is True
+    assert approval.check(root)["ready"] is True
+    # Restoring never crosses robots.
+    import re as _re
+    env.write_text(_re.sub(r"ROSY_ROBOT_NUMBER=\d+", "ROSY_ROBOT_NUMBER=99", env.read_text(encoding="ascii")), encoding="ascii")
+    shutil.rmtree(root / "etc/rosy/approvals")
+    with pytest.raises(ValueError, match="robot_number"):
+        approval.restore_approvals_from_shared(root)
 
 
 def test_a_marker_sealed_before_the_fingerprint_still_passes_on_its_own_release(tmp_path):

@@ -324,14 +324,87 @@ def _save_state(state: dict, path: Path = STATE) -> None:
     tmp.replace(path)
 
 
+def _navigation_guard_blocks(root: Path) -> bool:
+    if (root / "run/rosy-os-update/motion.env").exists() or (root / "run/rosy-os-update/motion.env").is_symlink():
+        return True
+    if (root / "etc/rosy/os-slot.json").is_file():
+        import os_motion_guard  # noqa: PLC0415
+        try:
+            os_motion_guard.allow_navigation(root)
+        except (OSError, ValueError):
+            return True
+    return False
+
+
+def _maybe_auto_start_navigation(root: Path, *, log, runner=subprocess.run) -> str:
+    """Start rosy-navigation once per boot when valid G4 approval exists and the robot is IDLE."""
+    boot_path = root / "proc/sys/kernel/random/boot_id"
+    if not boot_path.is_file() or boot_path.is_symlink():
+        return "approved"
+    if not (root / "run/rosy/status-inputs.json").is_file():
+        return "approved"
+    if rosy_claim.check(root) is not None or _navigation_guard_blocks(root) or _status_inputs_busy(root) is not None:
+        return "approved"
+    try:
+        boot_id = boot_path.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeDecodeError):
+        return "approved"
+    if not boot_id:
+        return "approved"
+    marker = root / "run/rosy/nav-auto-started"
+    if marker.is_file() and not marker.is_symlink():
+        try:
+            if marker.read_text(encoding="utf-8").strip() == boot_id:
+                return "approved"
+        except OSError:
+            pass
+    probe = runner(["/usr/bin/systemctl", "is-active", "--quiet", "rosy-navigation.service"],
+                   capture_output=True, text=True, timeout=15)
+    if probe.returncode == 0:
+        _save_boot_marker(marker, boot_id)
+        return "approved"
+    started = runner(["/usr/bin/systemctl", "start", "rosy-navigation.service"],
+                     capture_output=True, text=True, timeout=60)
+    if started.returncode != 0:
+        log(f"navigation auto-start exited {started.returncode}: {(started.stderr or '').strip()}")
+        return "approved"
+    confirm = runner(["/usr/bin/systemctl", "is-active", "--quiet", "rosy-navigation.service"],
+                     capture_output=True, text=True, timeout=15)
+    if confirm.returncode != 0:
+        log("navigation auto-start did not stay active")
+        return "approved"
+    _save_boot_marker(marker, boot_id)
+    log("navigation auto-started from valid G4 approval")
+    return "navigation auto-started"
+
+
+def _save_boot_marker(marker: Path, boot_id: str) -> None:
+    if marker.is_symlink():
+        marker.unlink()
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    tmp = marker.with_suffix(".tmp")
+    tmp.write_text(boot_id + "\n", encoding="utf-8")
+    tmp.replace(marker)
+
+
 def run(root: Path = Path("/"), core: Core | None = None, sleep=time.sleep, *,
-        reapprove_fn=reapprove, pair_fn=pair) -> str:
+        reapprove_fn=reapprove, pair_fn=pair, runner=subprocess.run) -> str:
     def log(message: str) -> None:
         print(f"nav-reapprove: {message}", flush=True)
 
     if (root / str(DISABLED).lstrip("/")).exists():
         return "disabled"
+    try:
+        if (root / "etc/rosy/approvals/g4.bundle.json").is_file():
+            mapping_approval.sync_approvals_to_shared(root)
+        elif (root / mapping_approval.SHARED_APPROVALS / "g4.bundle.json").is_file():
+            if mapping_approval.restore_approvals_from_shared(root):
+                log("restored pre-update G4 approvals from shared storage")
+    except (OSError, ValueError) as exc:
+        log(f"shared approval sync/restore skipped: {exc}")
     if (why := approval_needs_remeasure(root)) is not None:
+        if why == "approved":
+            return _maybe_auto_start_navigation(root, log=log, runner=runner)
         return why
     if rosy_claim.check(root) is not None:
         return "claimed"

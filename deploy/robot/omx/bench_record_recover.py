@@ -2,7 +2,7 @@
 """Guided problem diagnosis and recovery center for stopped units, held runners, leases, baseline caps, and incidents."""
 from __future__ import annotations
 
-import json, os, signal, subprocess, time
+import json, os, re, signal, subprocess, time
 from pathlib import Path
 
 from bench_record_guard import arm_free, hold_arm_lock, recorder_running, release, resolve_record_config
@@ -104,18 +104,46 @@ def build_home_hold_record(arm: str, rc, rec_log_p: Path, io_dir: Path, person_n
     return msg, meta
 
 
+def _live_held_arm(prep: Path) -> str | None:
+    import cell_arm_lease
+    for candidate, letter in ARMS.items():
+        io_dir = prep / f"chunk-io-{letter}"
+        hold_doc = load_json_value(io_dir / "hold.json", {})
+        live_doc = load_json_value(io_dir / "live.json", {})
+        try:
+            lease = cell_arm_lease.status(candidate).get(candidate)
+        except Exception:
+            lease = None
+        pid = ((hold_doc.get("pid") if isinstance(hold_doc, dict) else None)
+               or (live_doc.get("pid") if isinstance(live_doc, dict) else None)
+               or (lease.get("pid") if isinstance(lease, dict) else None))
+        if not (isinstance(pid, int) and not isinstance(pid, bool) and _pid_is_chunk_runner(pid)):
+            continue
+        if ((isinstance(hold_doc, dict) and hold_doc.get("hold"))
+                or (isinstance(live_doc, dict) and (live_doc.get("human_hold_latched") or live_doc.get("torque_hold_commanded")))
+                or (isinstance(lease, dict) and lease.get("hold"))):
+            return candidate
+    return None
+
+
 def diagnose_manual_hold(bench) -> dict:
     doc = load_json_value(bench.manual, {}) if bench.manual.exists() else {}
     if not isinstance(doc, dict):
         doc = {}
     with bench.lock:
         st = dict(bench.state)
-    active = bench.manual.exists() or st.get("status") == "leader_manual_check" or (st.get("status") == "homing" and bool(st.get("error")))
+    live_arm = _live_held_arm(bench.prep)
+    active = (bench.manual.exists() or st.get("status") == "leader_manual_check"
+              or (st.get("status") == "homing" and bool(st.get("error"))) or bool(live_arm))
     if not active:
         return {"active": False}
-    arm = doc.get("arm") or st.get("step_arm") or (str(st.get("name") or "").removeprefix("home-") if str(st.get("name") or "").startswith("home-") else None)
-    if arm not in ARMS:
-        arm = "arm_a" if (st.get("name") == "home-arm_ab") else None
+    name_arm = str(st.get("name") or "").removeprefix("home-") if str(st.get("name") or "").startswith("home-") else None
+    msg_match = re.search(r"\b(arm_[abs])\b", f"{doc.get('reason') or ''} {st.get('error') or ''}")
+    arm = next((cand for cand in (
+        doc.get("arm"), live_arm, st.get("step_arm"), name_arm,
+        msg_match.group(1) if msg_match else None,
+        "arm_a" if st.get("name") == "home-arm_ab" else None,
+    ) if cand in ARMS), None)
     letter = ARMS.get(arm)
     io_dir = (bench.prep / f"chunk-io-{letter}") if letter else None
     live_doc = load_json_value(io_dir / "live.json", {}) if io_dir else {}
@@ -148,7 +176,8 @@ def diagnose_manual_hold(bench) -> dict:
         "torque_hold_commanded": bool(isinstance(live_doc, dict) and live_doc.get("torque_hold_commanded")),
         "lease_hold": bool(isinstance(lease, dict) and lease.get("hold")), "dead_lease_arms": dead_leases,
         "worker_human_hold": worker_hint, "pending_units": pending if isinstance(pending, list) else [],
-        "log_file": log_name, "log_tail": tail, "can_release_runner": bool(alive and arm and pid), "can_clear": bool(not alive),
+        "log_file": log_name, "log_tail": tail, "can_release_runner": bool(alive and arm and pid),
+        "can_clear": bool(not alive and not recorder_running(bench.procs)),
     }
 
 

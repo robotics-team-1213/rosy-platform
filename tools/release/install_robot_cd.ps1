@@ -38,6 +38,7 @@ $files = @(
     "deploy/robot/pinky_pro/native/os_update_manifest.py",
     "deploy/robot/pinky_pro/native/os_update_rollout.py",
     "deploy/robot/pinky_pro/native/os_update_transport.py",
+    "deploy/robot/pinky_pro/native/os_state_io.py",
     "deploy/robot/pinky_pro/native/os_state_layout.py",
     "deploy/robot/pinky_pro/native/auto_update_host.py",
     "deploy/robot/pinky_pro/native/rosy_claim.py",

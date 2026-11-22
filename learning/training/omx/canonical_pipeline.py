@@ -22,6 +22,7 @@ if str(_CONTRACTS_SRC) not in sys.path:
 
 from canonical_intake import handle_intake_request, scan_transferred_collections  # noqa: E402
 from canonical_telemetry import HostTelemetry, external_gpu_locks, load_peer_token  # noqa: E402
+from canonical_recording_todo import build_service_todo  # noqa: E402
 from canonical_watch import (  # noqa: E402
     BusyConflict, PeerClient, read_bounded_json, scan_watch_dir, scrub_text, strip_paths, tail_log, validate_peer_url,
 )
@@ -101,6 +102,7 @@ class CanonicalService:
         self.python: dict[str, Path] = {}
         self.named_sources: dict[str, dict] = {}
         self.watch_roots: dict[str, dict] = {}
+        self.recording_manifest_path: Path | None = None
         self.peers = PeerClient({})
         self.jobs_dir = Path.home() / "rosy-jobs"
         self.peer_token_file: Path | None = None
@@ -108,7 +110,8 @@ class CanonicalService:
         self.telemetry = HostTelemetry(self._disk_probe_path)
         if config is None:
             return
-        allowed = {"schema", "spec_path", "python", "named_sources", "watch_roots", "peers", "jobs_dir", "peer_token_file", "collections_dir"}
+        allowed = {"schema", "spec_path", "python", "named_sources", "watch_roots", "peers",
+                   "jobs_dir", "peer_token_file", "collections_dir", "recording_manifest_path"}
         if not isinstance(config, dict) or config.get("schema") != CONFIG_SCHEMA or set(config) - allowed:
             raise ValueError(f"invalid canonical config (requires {CONFIG_SCHEMA})")
         if root is None:
@@ -157,6 +160,8 @@ class CanonicalService:
             self.peer_token_file = _abs_path(config["peer_token_file"], "peer_token_file")
         if config.get("collections_dir") is not None:
             self.collections_dir = _abs_path(config["collections_dir"], "collections_dir")
+        if config.get("recording_manifest_path") is not None:
+            self.recording_manifest_path = _abs_path(config["recording_manifest_path"], "recording_manifest_path")
 
         self.db = self.root / "canonical.sqlite"
         with self.connect() as db:
@@ -180,6 +185,9 @@ class CanonicalService:
     def spec_payload(self) -> dict:
         return {"schema": self.spec["schema"], "spec_sha256": self.spec_sha256,
                 "source": self.spec_source, "spec": self.spec, **AUTHORITY_STAMP}
+
+    def recording_todo(self) -> dict:
+        return build_service_todo(self.recording_manifest_path, self.watch_roots)
 
     def verify_peer_bearer(self, header_value: str | None) -> bool:
         if self.peer_token_file is None or not isinstance(header_value, str) or not header_value.startswith("Bearer "):

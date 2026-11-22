@@ -160,3 +160,34 @@ def test_capture_refuses_unsafe_or_ambiguous_media(tmp_path, monkeypatch, case):
     with pytest.raises(ValueError):
         m.capture(root)
     assert device.read_bytes() == before
+
+
+def test_capture_accepts_relocated_backup_gpt_at_physical_disk_end_when_partitions_match(tmp_path, monkeypatch):
+    import struct
+    from test_sd_gpt_layout import ENTRY_BYTES, SECTOR, SECTORS, _header
+    m, root, layout, disk, device, _ = _card(tmp_path, monkeypatch, "a")
+    base = bytearray(device.read_bytes())
+    entries = base[2 * SECTOR:2 * SECTOR + ENTRY_BYTES]
+    big_sectors = SECTORS + 4096
+    big = bytearray(big_sectors * SECTOR)
+    big[:len(base)] = base
+    struct.pack_into("<I", big, 446 + 12, big_sectors - 1)
+    big[SECTOR:SECTOR + SECTOR] = _header(1, big_sectors - 1, 2, entries, sectors=big_sectors)
+    big[2 * SECTOR:2 * SECTOR + ENTRY_BYTES] = entries
+    big[(big_sectors - 33) * SECTOR:(big_sectors - 33) * SECTOR + ENTRY_BYTES] = entries
+    big[(big_sectors - 1) * SECTOR:big_sectors * SECTOR] = _header(big_sectors - 1, 1, big_sectors - 33, entries, sectors=big_sectors)
+    # Remove the old backup header inside the smaller table so capture hits the relocated end GPT.
+    big[(SECTORS - 1) * SECTOR:SECTORS * SECTOR] = b"\x00" * SECTOR
+    (disk / "size").write_text(str(big_sectors))
+    device.write_bytes(big)
+    assert m.capture(root)["layout"] == layout
+    # Tampered partition on the larger disk still fails closed.
+    tampered_entries = bytearray(entries)
+    tampered_entries[32] ^= 1
+    big[SECTOR:SECTOR + SECTOR] = _header(1, big_sectors - 1, 2, tampered_entries, sectors=big_sectors)
+    big[2 * SECTOR:2 * SECTOR + ENTRY_BYTES] = tampered_entries
+    big[(big_sectors - 33) * SECTOR:(big_sectors - 33) * SECTOR + ENTRY_BYTES] = tampered_entries
+    big[(big_sectors - 1) * SECTOR:big_sectors * SECTOR] = _header(big_sectors - 1, 1, big_sectors - 33, tampered_entries, sectors=big_sectors)
+    device.write_bytes(big)
+    with pytest.raises(ValueError, match="physical GPT differs"):
+        m.capture(root)

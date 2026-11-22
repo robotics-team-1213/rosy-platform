@@ -58,6 +58,22 @@ def _seed_watched(watch_dir: Path) -> None:
             },
         },
     }), encoding="utf-8")
+    from rosy.contracts.learning import omx_recording_todo as rt
+    inv = rt.derive_inventory_from_manifest({
+        "schema": rt.CURATED_MANIFEST_SCHEMA,
+        "curated_version": "omx-real-v1",
+        "hf_repo": "robotteam/rosy-omx-data",
+        "hf_revision": "1234567890abcdef",
+        "datasets": [
+            {"dataset_id": "r-f01-s03", "arm": "arm_a", "direction": "load", "bay": "ship-h1", "slot_id": "ship-h1r0-l0",
+             "split_role": "train", "episodes": {"raw_total": 5, "curated_total": 5}, "wrist_roll_branch": {"branch": "positive_canonical"},
+             "data_gate": {"goal_scope": "h1", "admissible": True, "counts": {"pass": 5, "review": 0, "reject": 0}, "dataset_reject": []}},
+            {"dataset_id": "l-f02-s01", "arm": "arm_b", "direction": "load", "bay": "ship-h1", "slot_id": "ship-h1r2-l1",
+             "split_role": "train", "episodes": {"raw_total": 10, "curated_total": 10}, "wrist_roll_branch": {"branch": "negative_raw"},
+             "data_gate": {"goal_scope": "h1", "admissible": True, "counts": {"pass": 10, "review": 0, "reject": 0}, "dataset_reject": []}},
+        ],
+    })
+    (watch_dir / "recording-inventory.json").write_text(json.dumps(inv), encoding="utf-8")
 
 
 def _serve_canonical(tmp_path: Path, *, configured: bool = True, monkeypatch=None):
@@ -155,6 +171,15 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
                     assert page.locator("#canon-hosts").bounding_box()["y"] < page.locator("#canon-spec-table").bounding_box()["y"]
 
                 expect(page.locator("#canon-spec-body tr")).to_have_count(12)
+                expect(page.locator("#canon-todo-cards .canon-todo-card").first).to_have_attribute("data-priority", "p1")
+                expect(page.locator('#canon-todo-cards [data-slot-state="target-empty"]').first).to_be_visible()
+                assert page.locator("#canon-todo-cards svg.canon-svg-topdown").first.bounding_box()["width"] > 50
+                assert page.locator("#canon-todo-cards svg.canon-svg-layers").first.bounding_box()["width"] > 30
+                page.locator('.canon-view-bar [data-canon-view="todo"]').click()
+                expect(page.locator("#canon-hosts")).to_be_hidden()
+                expect(page.locator("#canon-todo-section")).to_be_visible()
+                page.locator('.canon-view-bar [data-canon-view="all"]').click()
+                expect(page.locator("#canon-hosts")).to_be_visible()
                 expect(page.locator("#canon-evidence-badge")).to_contain_text("실물 제어 아님")
                 expect(page.locator("#canonical-main")).to_contain_text("실물 로봇 제어·적용 권한이 없습니다")
                 expect(page.locator("#canon-kpis")).to_contain_text("0.274 < 0.35 rad")
@@ -163,7 +188,14 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 if width == 390:
                     page.set_viewport_size({"width": 320, "height": 844})
-                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                    overflow = page.evaluate("""() => {
+                        if (document.documentElement.scrollWidth <= innerWidth) return [];
+                        return Array.from(document.querySelectorAll('main *'))
+                            .filter(el => el.getBoundingClientRect().right > innerWidth)
+                            .slice(0, 16)
+                            .map(el => [el.tagName, el.id, el.getAttribute('class'), el.getBoundingClientRect().right]);
+                    }""")
+                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), overflow
                     page.set_viewport_size({"width": 390, "height": 900})
 
                 page.locator("#canon-unit").select_option("sim_rad")
@@ -220,8 +252,13 @@ def test_unconfigured_canonical_page_shows_builtin_spec_and_blocks_start(tmp_pat
                 page.goto(base + "/learning/canonical", wait_until="domcontentloaded")
                 playwright.expect(page.locator("#canon-kpis")).to_contain_text("0.274 < 0.35 rad")
                 playwright.expect(page.locator("#canon-hosts-empty")).to_be_visible()
+                playwright.expect(page.locator("#canon-todo-empty")).to_be_visible()
                 playwright.expect(page.locator("#canon-job-submit")).to_be_disabled()
                 playwright.expect(page.locator("#canon-job-cause")).to_contain_text("설정되지 않았습니다")
+                page.route("**/api/learning/canonical/recording-todo", lambda route: route.fulfill(status=503))
+                page.reload(wait_until="domcontentloaded")
+                playwright.expect(page.locator("#canon-todo-meta")).to_contain_text("unavailable")
+                playwright.expect(page.locator("#canon-kpis")).to_contain_text("0.274 < 0.35 rad")
                 assert errors == []
             finally:
                 browser.close()

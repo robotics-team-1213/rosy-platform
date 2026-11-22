@@ -101,3 +101,63 @@ def test_data_gate_records_canonical_distance_and_spec_hash_without_weakening(tm
     assert measured["start_from_home_rad"] < dg.LIMITS["home_review_rad"]
     assert measured["start_from_canonical_rad"] == 0.0
     assert dg.check_receipt(root) == [0]
+
+
+def test_omx_recording_todo_geometry_validation_and_priority():
+    from rosy.contracts.learning import omx_recording_todo as rt
+
+    assert len(rt.SLOTS) == 18
+    assert rt.SLOT_BY_ID["ship-h1r2-l0"]["legacy_slot"] == "S01"
+    assert rt.SLOT_BY_ID["ship-h1r0-l2"]["goal_index_h1"] == 2
+    assert rt.SLOT_BY_ID["ship-h2r0-l0"]["goal_index_h1"] is None
+
+    unconf = rt.build_recording_todo(None, source_state="unconfigured")
+    assert unconf["inventory_status"] == "unconfigured" and unconf["cards"] == []
+    assert unconf["real_evidence"] is False and unconf["policy_activation"] is False
+
+    manifest = {
+        "schema": rt.CURATED_MANIFEST_SCHEMA,
+        "curated_version": "omx-real-v1",
+        "hf_repo": "robotteam/rosy-omx-data",
+        "hf_revision": "abcdef1234567890",
+        "datasets": [
+            {
+                "dataset_id": "psy-right-l0-s03",
+                "arm": "arm_a", "direction": "load", "bay": "ship-h1",
+                "slot_id": "ship-h1r0-l0", "split_role": "train",
+                "pick_pan_std_rad": 0.04,
+                "episodes": {"raw_total": 5, "curated_total": 5},
+                "wrist_roll_branch": {"branch": "positive_canonical"},
+                "data_gate": {"goal_scope": "h1", "admissible": True, "counts": {"pass": 5, "review": 0, "reject": 0}, "dataset_reject": []},
+            },
+            {
+                "dataset_id": "psy-left-l1-s01",
+                "arm": "arm_b", "direction": "load", "bay": "ship-h1",
+                "slot_id": "ship-h1r2-l1", "split_role": "train",
+                "episodes": {"raw_total": 10, "curated_total": 10},
+                "wrist_roll_branch": {"branch": "negative_raw"},
+                "data_gate": {"goal_scope": "h1", "admissible": True, "counts": {"pass": 10, "review": 0, "reject": 0}, "dataset_reject": []},
+            },
+            {
+                "dataset_id": "psy-left-s06-holdout",
+                "arm": "arm_b", "direction": "load", "bay": "ship-h2",
+                "slot_id": "ship-h2r0-l2", "split_role": "eval_holdout",
+                "episodes": {"raw_total": 8, "curated_total": 8},
+                "wrist_roll_branch": {"branch": "negative_raw"},
+                "data_gate": {"goal_scope": "h2", "admissible": True, "counts": {"pass": 8, "review": 0, "reject": 0}, "dataset_reject": []},
+            },
+        ],
+    }
+    inv = rt.derive_inventory_from_manifest(manifest, manifest_sha256="a" * 64)
+    todo = rt.build_recording_todo(inv, source_state="watch_root")
+    assert todo["inventory_status"] == "ready"
+    by_id = {c["card_id"]: c for c in todo["cards"]}
+    assert todo["cards"][0]["card_id"] == "arm_b-ship-h1-l0" and todo["cards"][0]["priority"] == "p1"
+    assert by_id["arm_a-ship-h1-l0"]["priority"] == "p2" and "near_fixed_layout" in by_id["arm_a-ship-h1-l0"]["warnings"]
+    assert "negative_wrist_branch" in by_id["arm_b-ship-h1-l1"]["warnings"]
+    assert by_id["arm_b-ship-h2-l2"]["holdout_episodes"] == 8 and by_id["arm_b-ship-h2-l2"]["episodes_pass"] == 0
+
+    with pytest.raises(ValueError, match="slot_id mismatches bay"):
+        rt.validate_manifest({**manifest, "datasets": [{**manifest["datasets"][0], "bay": "ship-h2"}]})
+    with pytest.raises(ValueError, match="non-negative int"):
+        rt.validate_inventory({**inv, "slots": [{**inv["slots"][0], "episodes_pass": -1}]})

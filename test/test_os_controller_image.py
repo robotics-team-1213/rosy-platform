@@ -43,6 +43,7 @@ def test_controller_unit_has_runtime_configuration_without_waiting_for_its_own_d
     assert "ProtectSystem=strict" in unit and "DevicePolicy=closed" in unit
     assert "DeviceAllow=block-mmc r" in unit and "DeviceAllow=block-mmc rw" not in unit
     assert "PrivateDevices=true" not in unit
+    assert "-/var/lib/rosy-device/approvals" in unit
     assert "rosy-os-trial-deadline" not in unit  # Independent deadline cannot wait for this controller.
 
 

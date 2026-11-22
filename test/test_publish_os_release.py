@@ -365,3 +365,70 @@ def test_tag_replacement_after_verification_cannot_publish_the_replacement(prepa
                          gh=transport, apply=True)
     assert created["draft"] is False
     assert replacement["draft"] is True
+
+
+def test_open_release_and_open_rollout_publish_and_promote_verified_assets(prepared, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    directory, public, value, private = prepared
+    mod = module()
+    with pytest.raises(ValueError, match="hosted CI"):
+        mod.open_rollout(directory, private, public, release_id=value["release_id"], canary=["rosy-pinky-b8xy"])
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    with pytest.raises(ValueError, match="cannot open a release"):
+        mod.publish(directory, public, release_id=value["release_id"], source_revision=value["source_revision"],
+                    publication_only=True, open_release=True)
+
+    state = {"release": None, "assets": {}, "next_id": 100, "ops": []}
+    def gh(argv):
+        endpoint = argv[2]
+        method = argv[argv.index("--method") + 1] if "--method" in argv else "GET"
+        if endpoint == "repos/robotics-team-1213/rosy-platform/releases" and method == "POST":
+            fields = dict(item.split("=", 1) for item in argv if "=" in item)
+            state["release"] = dict(id=17, tag_name=fields["tag_name"], target_commitish=fields["target_commitish"],
+                                    draft=True, prerelease=True, body=fields["body"])
+            state["ops"].append("create")
+            return 0, json.dumps(state["release"]), ""
+        if endpoint.startswith("https://uploads.github.com/") and method == "POST":
+            path = Path(argv[argv.index("--input") + 1])
+            raw = path.read_bytes()
+            state["next_id"] += 1
+            state["assets"][path.name] = dict(id=state["next_id"], name=path.name, size=len(raw),
+                                              digest="sha256:" + hashlib.sha256(raw).hexdigest(), raw=raw)
+            state["ops"].append(("upload", path.name))
+            return 0, json.dumps({k: v for k, v in state["assets"][path.name].items() if k != "raw"}), ""
+        if "/releases/assets/" in endpoint and method == "DELETE":
+            aid = int(endpoint.rsplit("/", 1)[-1])
+            state["assets"] = {k: v for k, v in state["assets"].items() if v["id"] != aid}
+            state["ops"].append(("delete", aid))
+            return 0, "", ""
+        if "/releases/assets/" in endpoint:
+            aid = int(endpoint.rsplit("/", 1)[-1])
+            asset = next(v for v in state["assets"].values() if v["id"] == aid)
+            return 0, asset["raw"].decode("utf-8"), ""
+        if endpoint.endswith("/releases/17") and method == "PATCH":
+            if "draft=false" in argv: state["release"]["draft"] = False
+            if "prerelease=false" in argv: state["release"]["prerelease"] = False
+            if "prerelease=true" in argv: state["release"]["prerelease"] = True
+            state["ops"].append(("patch", state["release"]["prerelease"]))
+            return 0, json.dumps(state["release"]), ""
+        if endpoint.endswith(("/releases/17", "/releases/tags/os-pinky-pro-" + value["release_id"])):
+            assets = [{k: v for k, v in a.items() if k != "raw"} for a in state["assets"].values()]
+            return 0, json.dumps(dict(state["release"], assets=assets)), ""
+        if "/releases?" in endpoint:
+            assets = [{k: v for k, v in a.items() if k != "raw"} for a in state["assets"].values()]
+            rows = [] if state["release"] is None else [dict(state["release"], assets=assets)]
+            return 0, json.dumps([rows] if "--slurp" in argv else rows), ""
+        if "matching-refs" in endpoint:
+            rows = [] if state["release"] is None or state["release"]["draft"] else [
+                dict(ref="refs/tags/" + state["release"]["tag_name"],
+                     object=dict(type="commit", sha=state["release"]["target_commitish"]))]
+            return 0, json.dumps(rows), ""
+        raise AssertionError(argv)
+
+    pub = mod.publish(directory, public, release_id=value["release_id"], source_revision=value["source_revision"],
+                      gh=gh, apply=True)
+    assert pub["prerelease"] is True
+    opened = mod.open_rollout(directory, private, public, release_id=value["release_id"],
+                              canary=["rosy-pinky-b8xy"], promote=True, open_release=True, apply=True, gh=gh)
+    assert opened["prerelease"] is False and opened["rollout"]["canary_ok"] is True
+    assert opened["rollout"]["canary"] == ["rosy-pinky-b8xy"]
