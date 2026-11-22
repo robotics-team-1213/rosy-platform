@@ -176,18 +176,20 @@ def camera_packet(sample, *, wall=None, monotonic=None):
 
 
 class CameraSender:
-    def __init__(self, vision_url, source_id, token, *, context, pace_from_config=False):
+    def __init__(self, vision_url, source_id, token, *, context, follow_receiver=False):
         self.url = secure_url(vision_url, "wss")
         if urlsplit(self.url).path in ("", "/"):
             self.url += protocol.WS_PATH
         self.source_id, self.token, self.context = source_id, token, _verified(context)
         self.connection = None
-        self._pace_from_config = pace_from_config
+        self._follow_receiver = follow_receiver
+        self._wanted = True
         self._frame_interval = 0.0
         self._last_frame_sent_at = -math.inf
         self._next_oversize_warning = -math.inf
 
     def close(self):
+        self._wanted = True
         self._frame_interval = 0.0
         self._last_frame_sent_at = -math.inf
         if self.connection is not None:
@@ -197,12 +199,18 @@ class CameraSender:
             except Exception:
                 pass
 
-    def _configure_pacing(self, message):
+    def _apply_receiver_control(self, message):
         if not isinstance(message, str):
             return
         try:
             config = json.loads(message)
-            if not isinstance(config, dict) or config.get("type") != "config":
+            if not isinstance(config, dict):
+                return
+            if config.get("type") == "demand":
+                if type(config.get("wanted")) is bool:
+                    self._wanted = config["wanted"]
+                return
+            if config.get("type") != "config":
                 return
             fps = config.get("fps")
             if type(fps) is not int or fps <= 0:
@@ -254,13 +262,15 @@ class CameraSender:
                     message = self.connection.recv(timeout=0)
                 except TimeoutError:
                     break
-                if self._pace_from_config:
-                    self._configure_pacing(message)
+                if self._follow_receiver:
+                    self._apply_receiver_control(message)
             # Return without a backlog: the worker can take the next capture when due.
-            if self._pace_from_config and time.monotonic() - self._last_frame_sent_at < self._frame_interval:
+            if self._follow_receiver and (
+                not self._wanted or time.monotonic() - self._last_frame_sent_at < self._frame_interval
+            ):
                 return
             self.connection.send(camera_packet(sample))
-            if self._pace_from_config:
+            if self._follow_receiver:
                 self._last_frame_sent_at = time.monotonic()
         except Exception:
             self.close()
@@ -411,7 +421,7 @@ def main(argv=None):
                     camera,
                     frames,
                     CameraSender(
-                        url, camera.source_id, tokens[camera.source_id], context=mirror_context, pace_from_config=True,
+                        url, camera.source_id, tokens[camera.source_id], context=mirror_context, follow_receiver=True,
                     ),
                     name=f"{camera.source_id}@mirror{index}",
                 )

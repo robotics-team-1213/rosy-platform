@@ -276,7 +276,7 @@ def test_camera_mirror_paces_by_receiver_config_without_pacing_primary(monkeypat
     ))
     context = ssl.create_default_context()
     primary = bridge.CameraSender("wss://primary.example", "top", "secret", context=context)
-    mirror = bridge.CameraSender("wss://mirror.example", "top", "secret", context=context, pace_from_config=True)
+    mirror = bridge.CameraSender("wss://mirror.example", "top", "secret", context=context, follow_receiver=True)
     source = bridge.LatestSource(wall=bridge.time.time, monotonic=bridge.time.monotonic)
     for now in (10.0, 10.1, 10.2, 10.35, 10.4):
         clock.now = now
@@ -453,10 +453,10 @@ def test_mirror_vision_routes_only_selected_cameras_with_its_own_trust_and_no_ar
         return original_source(channel, **kwargs)
 
     class Sender:
-        def __init__(self, url, source, token, *, context, pace_from_config=False):
+        def __init__(self, url, source, token, *, context, follow_receiver=False):
             self.key = (url, source, token, context)
             created.add(self.key)
-            if pace_from_config:
+            if follow_receiver:
                 paced.add(self.key)
         def send(self, sample):
             delivered.add(self.key)

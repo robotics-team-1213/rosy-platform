@@ -195,7 +195,7 @@ async def _mirror_demand(tmp_path):
     server = await ingest.start("127.0.0.1", 0, ssl_context=server_tls)
     port = server.sockets[0].getsockname()[1]
     sender = bridge.CameraSender(
-        f"wss://127.0.0.1:{port}", "top", "top-secret", context=context, pace_from_config=True,
+        f"wss://127.0.0.1:{port}", "top", "top-secret", context=context, follow_receiver=True,
     )
     encoded = BytesIO()
     Image.new("RGB", (640, 480), "green").save(encoded, format="JPEG")
