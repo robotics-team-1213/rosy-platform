@@ -338,7 +338,7 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
 
     dg_mod = types.ModuleType("data_gate")
     dg_mod.gate = lambda dst, **k: {"counts": {"pass": 2, "review": 0, "reject": 0}}
-    dg_mod.check_receipt = lambda dst: [0, 2]
+    dg_mod.check_receipt = lambda dst, *, expected_scope=None: [0, 2]
     monkeypatch.setitem(sys.modules, "data_gate", dg_mod)
 
     class _FakeArm:
@@ -464,7 +464,10 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", torch_m)
     seen_obs_keys = []
     fake_policy = SimpleNamespace(
-        config=SimpleNamespace(n_action_steps=4, input_features={"observation.images.top": {}}),
+        config=SimpleNamespace(n_action_steps=4, input_features={
+            "observation.images.top": {},
+            "observation.environment_state": SimpleNamespace(shape=(10,)),
+        }),
         reset=lambda: None,
         select_action=lambda b: (seen_obs_keys.append(set(b)), SimpleNamespace(cpu=lambda: SimpleNamespace(numpy=lambda: [np.zeros(6, dtype=np.float32)])))[1],
     )
@@ -473,9 +476,87 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
                                  delay_frames=0, seed_base=700, camera_cases=camera_cases)
     assert prof["arm_link_contacts"] == 0 and prof["neighbour_disturbed"] == 1
     assert prof["policy_successes"] == 1 and calls["teacher_seeds"] == [5201, 700, 700]
-    assert "observation.images.top" in seen_obs_keys[0]
+    assert "observation.images.top" in seen_obs_keys[0] and "observation.environment_state" in seen_obs_keys[0]
     assert calls["camera_seeds"] == [(0, 5201), (1, 700)]
     assert camera_cases[0]["angles_deg"]["top"]["rx"] == .1
+
+
+def test_recording_todo_uses_watched_inventory_and_real_receipts(tmp_path):
+    from rosy.contracts.learning import omx_recording_todo as rt
+
+    cfg = _make_config(tmp_path)
+    watch = Path(cfg["watch_roots"]["ai_canon"]["path"])
+    bad_link = watch / "recording-inventory.json"
+    bad_target = tmp_path / "outside-inv.json"
+    bad_target.write_text("{}", encoding="utf-8")
+    try:
+        bad_link.symlink_to(bad_target)
+        svc_link = cp.CanonicalService(tmp_path / "canon_todo_link", cfg)
+        assert svc_link.recording_todo()["inventory_status"] == "invalid"
+        bad_link.unlink()
+    except OSError:
+        pass
+    inv_doc = rt.derive_inventory_from_manifest({
+        "schema": rt.CURATED_MANIFEST_SCHEMA,
+        "curated_version": "omx-real-v1",
+        "datasets": [],
+    })
+    (watch / "recording-inventory.json").write_text(json.dumps(inv_doc), encoding="utf-8")
+    (watch / "real_aligned" / "real" / "arm_a").mkdir(parents=True, exist_ok=True)
+    (watch / "real_aligned" / "real" / "arm_a" / "gate-receipt.json").write_text(json.dumps({
+        "arm": "arm_a", "source": {"kind": "real"}, "counts": {"pass": 5, "review": 0, "reject": 0}, "dataset_reject": [],
+        "episodes": [None, {"verdict": "pass", "goal": []},
+                     *[{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(5)]],
+    }), encoding="utf-8")
+    (watch / "sim").mkdir()
+    (watch / "sim" / "gate-receipt.json").write_text(json.dumps({
+        "arm": "arm_a", "source": {"kind": "sim"},
+        "episodes": [{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(7)],
+    }), encoding="utf-8")
+    svc = cp.CanonicalService(tmp_path / "canon_todo", cfg)
+    todo_res = svc.recording_todo()
+    assert todo_res["inventory_status"] == "ready"
+    assert str(tmp_path) not in json.dumps(todo_res)
+    l0_a = next(c for c in todo_res["cards"] if c["card_id"] == "arm_a-ship-h1-l0")
+    assert any(s["slot_id"] == "ship-h1r0-l0" and s["local_gate_passed"] == 5 for s in l0_a["slots"])
+    b_first_tier = next(c for c in todo_res["cards"] if c["card_id"] == "arm_b-ship-h1-l0")
+    assert b_first_tier["bench_card_ids"] == ["belt-to-ship-h1r2-l0", "belt-to-ship-h1r1-l0"]
+
+
+def test_h1_train_worker_refuses_h2_gate_receipt(tmp_path):
+    import canonical_workers as workers
+    import data_gate as dg
+
+    (tmp_path / dg.RECEIPT).write_text(json.dumps({
+        "schema": dg.SCHEMA, "goal_scope": "h2", "files": dg.dataset_files(tmp_path),
+        "dataset_reject": [], "episodes": [{"episode_index": 0, "verdict": "pass"}],
+    }), encoding="utf-8")
+    with pytest.raises(ValueError, match="goal_scope 'h2'"):
+        workers.run_train_stage({"arm_id": "arm_a", "params": {"dataset_root": str(tmp_path)}}, tmp_path)
+
+
+def test_recording_todo_rejects_malformed_inventory_and_manifest(tmp_path):
+    import canonical_recording_todo as todo
+    from rosy.contracts.learning import omx_recording_todo as rt
+
+    path = tmp_path / "recording-inventory.json"
+    slot = {"arm": "arm_a", "slot_id": "ship-h1r0-l0"}
+    invalid_inventory = {"schema": rt.COLLECTION_INVENTORY_SCHEMA,
+                         "slots": [{**slot, "holdout_episodes": "bogus"}]}
+    invalid_manifest = {"schema": rt.CURATED_MANIFEST_SCHEMA, "datasets": [
+        {**slot, "bay": "ship-h1", "direction": "load", "split_role": "train", "data_gate": "bogus"},
+    ]}
+    for document in (invalid_inventory, invalid_manifest):
+        path.write_text(json.dumps(document), encoding="utf-8")
+        assert todo.build_service_todo(path, {})["inventory_status"] == "invalid"
+
+    minimal_inventory = {"schema": rt.COLLECTION_INVENTORY_SCHEMA,
+                         "slots": [{**slot, "target_episodes": 30, "remaining_episodes": 30}]}
+    path.write_text(json.dumps(minimal_inventory), encoding="utf-8")
+    result = todo.build_service_todo(path, {})
+    assert result["inventory_status"] == "ready"
+    assert result["cards"][0]["bench_card_ids"] == ["belt-to-ship-h1r0-l0"]
+    assert result["cards"][0]["slots"][0]["row"] == 0
 
 
 def test_canonical_watch_and_token_hardening(tmp_path):
