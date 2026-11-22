@@ -221,7 +221,7 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
     ds_dir = fake_home / 'rosy-data' / 'omx-leader' / 'h1-demo-01'
     (ds_dir / 'meta').mkdir(parents=True)
     (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
+    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0", "total_episodes": 1}', encoding='utf-8')
     (ds_dir / 'data' / 'chunk-000' / 'ep0.parquet').write_bytes(b'pq')
     # 1. Refuses without HF token
     with pytest.raises(ValueError):
@@ -365,7 +365,7 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
     ds_dir = tmp_path / 'home' / 'rosy-data' / 'omx-leader' / 'arm-s-ik-e2e'
     (ds_dir / 'meta').mkdir(parents=True)
     (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
+    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0", "total_episodes": 1}', encoding='utf-8')
     (ds_dir / 'data' / 'chunk-000' / 'episode_000000.parquet').write_bytes(b'PAR1')
 
     hf_calls = []

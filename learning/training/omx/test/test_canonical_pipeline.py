@@ -512,7 +512,7 @@ def test_canonical_watch_and_token_hardening(tmp_path):
     assert summary["checkpoint"] == "<path>" and summary["step_id"] == "002500"
 
 
-def test_canonical_intake_normalizes_bench_data_and_enqueues_idempotent_align(tmp_path):
+def test_canonical_intake_normalizes_bench_data_and_enqueues_idempotent_align(tmp_path, monkeypatch):
     import numpy as np
     import canonical_intake as ci
     import data_gate
