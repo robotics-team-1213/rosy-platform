@@ -30,6 +30,8 @@ def console_url():
                 if name in json.loads((WEB_COMMON / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]:
                     return str(WEB_COMMON / name)
             name = path.split("?", 1)[0]  # D-518/D-798: flat URLs, files in web/<document>/ folders
+            if name == "/console":
+                return str(WEB / "index.html")
             if name.startswith("/console/assets/"):
                 asset = CONSOLE_ASSETS.get(name.removeprefix("/console/assets/"))
                 if asset is not None:
