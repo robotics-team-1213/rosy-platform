@@ -105,6 +105,8 @@ class Collaboration:
         return hmac.new(token.encode(), self.cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
 
     def get(self, handler, path, token):
+        if getattr(handler, 'service_principal', None) is not None:
+            return False
         try:
             return self._get(handler, path, token)
         except self.unavailable:
@@ -269,6 +271,8 @@ class Collaboration:
         future.add_done_callback(done)
 
     def post(self, handler, path, body, token):
+        if getattr(handler, 'service_principal', None) is not None:
+            return False
         try:
             return self._post(handler, path, body, token)
         except self.unavailable:

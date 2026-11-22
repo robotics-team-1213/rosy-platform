@@ -91,9 +91,9 @@ def get(handler, path: str, center, accounts=None) -> bool:
         handler.send(service.spec_payload() if service is not None else _default_spec_payload())
         return True
     if path == PREFIX + '/peer-summary':
-        if accounts is not None:
+        if accounts is not None and getattr(handler, 'service_principal', None) is None:
             accounts.require(handler.learning_principal, 'view')
-        elif getattr(handler, 'learning_principal', None) is None:
+        elif getattr(handler, 'learning_principal', None) is None and getattr(handler, 'service_principal', None) is None:
             if service is None or not service.verify_peer_bearer(handler.headers.get('Authorization')):
                 handler.send({'error': '피어 인증 토큰을 확인하세요.'}, 403)
                 return True
@@ -109,6 +109,18 @@ def get(handler, path: str, center, accounts=None) -> bool:
             handler.send(service.get_run(match[1]))
         except KeyError:
             handler.send({'error': '실행 기록을 찾을 수 없습니다.'}, 404)
+        return True
+    if match := re.fullmatch(PREFIX + r'/runs/(' + _UUID_RE + r'|' + _ID_RE + r')/bundle-manifest', path):
+        try:
+            handler.send(service.bundle_manifest(match[1]))
+        except KeyError:
+            handler.send({'error': '실행 번들을 찾을 수 없습니다.'}, 404)
+        return True
+    if match := re.fullmatch(PREFIX + r'/runs/(' + _UUID_RE + r'|' + _ID_RE + r')/file/(.{1,256})', path):
+        try:
+            handler.send(service.bundle_file(match[1], match[2]), mime='application/octet-stream')
+        except (KeyError, FileNotFoundError):
+            handler.send({'error': '번들 파일을 찾을 수 없습니다.'}, 404)
         return True
     if match := re.fullmatch(PREFIX + r'/watched/(' + _ID_RE + r')', path):
         try:
@@ -131,7 +143,7 @@ def post(handler, path: str, body: dict, center, accounts=None) -> bool:
         return False
     service = _service(center)
     peer_ok = path == PREFIX + '/intake' and service is not None and service.configured and service.verify_peer_bearer(handler.headers.get('Authorization'))
-    if accounts is not None and not peer_ok:
+    if accounts is not None and not peer_ok and getattr(handler, 'service_principal', None) is None:
         accounts.require(handler.learning_principal, 'manage')
     if service is None or not service.configured:
         handler.send({'error': '표준 시작 자세 파이프라인이 설정되지 않았습니다.'}, 503)

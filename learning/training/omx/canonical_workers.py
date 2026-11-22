@@ -433,7 +433,7 @@ def run_cell_live_check(req: dict, out: Path) -> dict:
     import torch
     from lerobot.policies.act.modeling_act import ACTPolicy
     from lerobot.policies.factory import make_pre_post_processors
-    from experiment_artifact import package_cell_bundle
+    from experiment_artifact import export_cell_onnx, package_cell_bundle
 
     spec = validate_canonical_spec(req["spec"])
     arm = req["arm_id"]
@@ -444,6 +444,7 @@ def run_cell_live_check(req: dict, out: Path) -> dict:
     bundle_dir = out / "bundle"
     shutil.rmtree(bundle_dir, ignore_errors=True)
     bundle_info = package_cell_bundle(ckpt_dir, bundle_dir, arm_id=arm, rename_views={"rs": "top"}, target_device="cpu")
+    onnx_meta = export_cell_onnx(bundle_dir) if params.get("export_onnx", True) else None
     env = canonical_envelope_from_library(read_json(lib_path, max_bytes=8 * 1048576))
     frames = {}
     for role in ("top", "side", "wrist"):
@@ -490,7 +491,8 @@ def run_cell_live_check(req: dict, out: Path) -> dict:
         "schema": LIVE_CHECK_SCHEMA, "arm_id": arm,
         "policy_revision": bundle_info["policy_revision"], "checkpoint_sha256": bundle_info["checkpoint_sha256"],
         "envelope_low": [round(float(v), 3) for v in env.low], "envelope_high": [round(float(v), 3) for v in env.high],
-        "home_roll": round(env.home_roll, 3), "states": checked_states, **AUTHORITY_STAMP,
+        "home_roll": round(env.home_roll, 3), "states": checked_states,
+        **({"onnx_export": onnx_meta} if onnx_meta is not None else {}), **AUTHORITY_STAMP,
     }
     write_json(out / "cell_live_check.json", payload)
     return payload

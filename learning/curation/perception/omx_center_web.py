@@ -95,6 +95,8 @@ def peer_intake_ok(handler, path, center):
 
 
 def post(handler, path, body, center, workspace=None, accounts=None):
+    if getattr(handler, 'service_principal', None) is not None and path in (PREFIX + '/hub-upload', PREFIX + '/cuda-run'):
+        raise PermissionError('service token forbidden on hub-upload and cuda-run')
     if canonical_web.post(handler, path, body, center, accounts):
         return True
     if not path.startswith(PREFIX + '/'):

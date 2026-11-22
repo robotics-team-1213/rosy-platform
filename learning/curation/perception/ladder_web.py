@@ -480,9 +480,14 @@ def get(handler, path, ladder):
 def post(handler, path, body, ladder, collaboration):
     if not path.startswith(PREFIX):
         return False
-    if not collaboration:
+    svc = getattr(handler, 'service_principal', None)
+    if svc is not None:
+        if path == PREFIX + 'decision':
+            raise PermissionError('service token forbidden on ladder decision')
+    elif not collaboration:
         raise PermissionError('Ladder control requires an authenticated project manager')
-    collaboration.accounts.require(handler.learning_principal, 'manage')
+    else:
+        collaboration.accounts.require(handler.learning_principal, 'manage')
     if ladder is None:
         handler.send({'error': '학습 사다리가 연결되지 않았습니다.'}, 503)
     elif path == PREFIX + 'decision':
