@@ -292,6 +292,8 @@ main {
 .map-empty strong { color: var(--text-primary); font-size: var(--text-label); font-weight: var(--weight-label); letter-spacing: var(--track-label); }
 .map-empty p { max-width: 34ch; margin: 0; color: var(--text-secondary); font-size: var(--text-micro); line-height: var(--leading-copy); }
 .map-empty-icon { width: var(--text-display); height: var(--text-display); opacity: var(--disabled-opacity); }
+.map-empty > ui-button { pointer-events: auto; margin-top: var(--space-1); }
+.map-empty > ui-button[hidden] { display: none; }
 
 #map-canvas {
   /* D-201 — 지도는 페이지를 밀지 않고 프레임에 맞는다. 박스는 폭을 채우고

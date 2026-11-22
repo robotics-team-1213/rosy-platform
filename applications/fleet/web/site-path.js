@@ -22,7 +22,8 @@ export function fleetRow(sample) {
   return { name: "Fleet", word: "끊김", kind: "crit" };
 }
 
-export function visionRow(sample) {
+export function visionRow(sample, { locked = false } = {}) {
+  if (locked || sample?.authRequired === true) return { name: "Vision", word: "인증 필요", kind: "neutral" };
   if (!sample) return pending("Vision");
   if (sample.finished !== true) return { name: "Vision", word: "끊김", kind: "crit" };
   if (sample.status === 200 && Array.isArray(sample.names) && sample.names.length) {
@@ -35,5 +36,6 @@ export function visionRow(sample) {
 export function sitePathSummary(rows) {
   const issues = rows.filter((row) => row.kind === "warn" || row.kind === "crit");
   if (issues.length) return `${issues[0].name} ${issues[0].word}${issues.length > 1 ? ` 외 ${issues.length - 1}건` : ""}`;
+  if (rows.some((row) => row.kind === "neutral" && row.word === "인증 필요")) return "인증 필요";
   return rows.some((row) => row.kind === "neutral") ? "확인 중" : "모두 정상";
 }

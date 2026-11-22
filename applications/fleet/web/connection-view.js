@@ -10,26 +10,30 @@ export function createConnectionView({scope, el}) {
   });
 
   function show(reason, token) {
-    el("connection-guide").hidden = false;
-    const title = reason === "auth" ? "관제 접속 필요" : "관제 연결 확인 필요";
-    el("connection-guide-title").textContent = title;
-    el("connection-guide-detail").textContent = reason !== "auth"
+    const authNeeded = reason === "auth";
+    const title = authNeeded ? "관제 접속 필요" : "관제 연결 확인 필요";
+    const detail = !authNeeded
       ? "관제 PC의 연결 상태를 확인한 뒤 다시 접속하세요."
       : token ? "관제 토큰이 확인되지 않았습니다. 토큰을 확인한 뒤 다시 접속하세요."
-        : "아이디·비밀번호나 관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.";
+        : "아이디·비밀번호나 관제 토큰으로 접속하면 지도와 로봇 좌표를 확인할 수 있습니다.";
+    el("connection-guide").hidden = authNeeded;
+    el("connection-guide-title").textContent = title;
+    el("connection-guide-detail").textContent = detail;
+    el("connection-guide-action").hidden = !authNeeded;
     el("map-stage").dataset.mapState = "auth";
     const canvas = el("map-canvas");
     canvas.setAttribute("aria-hidden", "true"); canvas.tabIndex = -1; canvas.classList.add("idle");
     el("map-empty").hidden = false; el("map-legend").hidden = true;
     el("map-empty-title").textContent = title;
-    el("map-empty-detail").textContent = "관제에 접속하면 지도와 로봇 좌표를 확인할 수 있습니다.";
+    el("map-empty-detail").textContent = detail;
     el("map-tag").textContent = "접속 필요";
-    // 접속 안내는 위 띠 하나가 말한다. 발행 띠는 접속 전엔 읽을 상태가 없어 접는다.
+    // 발행 띠는 접속 전엔 읽을 상태가 없어 접는다.
     el("dispatch-control").hidden = true;
     el("dispatch-rearm").hidden = true;
   }
   return {show, hide: () => {
     el("connection-guide").hidden = true;
+    el("connection-guide-action").hidden = true;
     // 지난 세션의 발행 문구를 살아 있는 상태처럼 보이지 않는다. 다음 조회가 덮어쓴다.
     el("dispatch-control-title").textContent = "발행 상태 확인 중";
     el("dispatch-control-detail").textContent = "대기 작업과 정지 세대를 읽고 있습니다.";

@@ -89,12 +89,14 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
 
   function paintSitePath() {
     const list = el("site-path-list");
-    const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet), visionRow(pathSample.vision)];
+    const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet),
+      visionRow(pathSample.vision, { locked: Boolean(auth.locked || !auth.role) })];
     const summary = sitePathSummary(rows);
     const summaryNode = el("site-path-summary");
     if (summaryNode.textContent !== summary) summaryNode.textContent = summary;
     summaryNode.dataset.kind = rows.find((row) => row.kind === "crit")?.kind
-      || rows.find((row) => row.kind === "warn")?.kind || "good";
+      || rows.find((row) => row.kind === "warn")?.kind
+      || (rows.some((row) => row.kind === "neutral") ? "neutral" : "good");
     list.replaceChildren(...rows.map((row) => {
       const item = document.createElement("li");
       const name = document.createElement("b");
