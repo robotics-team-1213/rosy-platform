@@ -148,6 +148,33 @@ test("a cached ceiling ROI needs a fresh frame age before display", async (t) =>
   assert.equal(img.hidden, true);
 });
 
+test("legacy ROI uses HTTP Date with a conservative one-second rounding bound", async (t) => {
+  const date = new Date('2026-11-22T10:00:00Z');
+  const responseAt = date.getTime() / 1000;
+  const legacy = (captureAt, responseDate = date.toUTCString(), reportedAge = {}) => new Response('jpeg', {
+    headers: {'Date': responseDate, 'X-Frame-Captured-At': String(captureAt), ...reportedAge},
+  });
+  let response = legacy(responseAt + 0.4); // The capture can be in the same rounded second.
+  const {feed} = frameFeed(t, async () => response);
+  const img = imageNode();
+  feed.bind(img, {roiTarget: 'robot'});
+  await flush();
+  assert.match(img.src, /^blob:/);
+
+  for (const invalid of [
+    legacy(responseAt - 2.4), // The true age could exceed 3 s.
+    legacy(responseAt + 1), // The capture is beyond the rounded second.
+    legacy(responseAt, 'invalid'),
+    legacy(responseAt, date.toUTCString(), {'X-Frame-Age-Ms': '4000'}),
+  ]) {
+    response = invalid;
+    feed.setRunning(true);
+    await flush();
+    assert.equal(img.hidden, true);
+    assert.equal(img.src, '');
+  }
+});
+
 test("disposing the feed aborts a read and discards its late result", async (t) => {
   let resolveFrame, signal;
   const {feed} = frameFeed(t, (url, options) => new Promise(resolve => {

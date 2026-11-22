@@ -11,6 +11,19 @@ const LEASE_MARGIN_MS = 8000;
 const REQUEST_TIMEOUT_MS = 1500;
 const MAX_IN_FLIGHT = 4;
 
+function frameAge(headers, isRoi) {
+  const age = headers.get('X-Frame-Age-Ms');
+  if (age !== null || !isRoi) return age;
+  const date = headers.get('Date');
+  const responseAt = Date.parse(date);
+  const capturedAt = Number(headers.get('X-Frame-Captured-At')) * 1000;
+  if (!Number.isFinite(responseAt) || new Date(responseAt).toUTCString() !== date
+      || !Number.isFinite(capturedAt) || capturedAt <= 0) return null;
+  // HTTP Date truncates to seconds. Use the upper age bound and reject future seconds.
+  const ageUpperBound = responseAt + 1000 - capturedAt;
+  return ageUpperBound > 0 ? ageUpperBound : null;
+}
+
 export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now = Date.now}) {
   const watchers = new Map();
   const seen = new WeakSet();  // nodes painted while connected
@@ -111,7 +124,8 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     if (response.status === 429) return unavailable(watcher, 'warn', '영상 요청 한도 도달');
     const seq = response.headers.get('X-Frame-Seq');
     const badge = frameBadge({ok: response.ok, status: response.status,
-      ageMs: response.headers.get('X-Frame-Age-Ms'), frameState: response.headers.get('X-Frame-State'), rectified: false});
+      ageMs: frameAge(response.headers, Boolean(watcher.view.roiTarget)),
+      frameState: response.headers.get('X-Frame-State'), rectified: false});
     if (!response.ok || badge.state !== 'live') {
       return unavailable(watcher, badge.kind, badge.label, badge.detail);
     }
