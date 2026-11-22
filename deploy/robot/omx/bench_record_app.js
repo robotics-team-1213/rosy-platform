@@ -162,6 +162,8 @@ async function pollCameras(){
         const {missingReq}=renderCamHealthHeader(lastCamState,[],curArm);
         grid.innerHTML='';camLabels=[];
         if(missingReq.length)syncMissingCamPlaceholders(missingReq);
+        if(typeof renderArmCards==='function')renderArmCards();
+        if(typeof window.syncHardwareReadiness==='function')window.syncHardwareReadiness();
       }
       return;
     }
@@ -203,6 +205,7 @@ async function pollCameras(){
     syncMissingCamPlaceholders(missingReq);
     updateCameraRecordingMask();
     if(typeof renderArmCards==='function')renderArmCards();
+    if(typeof window.syncHardwareReadiness==='function')window.syncHardwareReadiness();
   }catch(_){
     note.textContent='카메라 미리보기를 불러오지 못했습니다.';
   }
@@ -509,6 +512,7 @@ function init(){
   pollStatus();
   setInterval(pollStatus,2000);
   pollArms();
+  setInterval(()=>{if(!benchSessionActive())pollArms();},5000);
   if(typeof loadGripMaps==='function')loadGripMaps();
   if(typeof loadCellMap==='function')loadCellMap();
   pollCameras();

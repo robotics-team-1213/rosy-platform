@@ -172,6 +172,8 @@ function validateStart(){
   const busyNow=benchSessionActive()||poseInFlight||startInFlight||cameraRestartInFlight;
   const armOk=Boolean(f.arm.value&&armContractValid()&&choices.instances[f.arm.value]&&armVerifiedBindings(f.arm.value));
   const armInfo=lastArmsStatus&&f.arm.value?lastArmsStatus[f.arm.value]:null;
+  if(armInfo?.follower_connected===false)reasons.push('팔로워 USB 미연결');
+  if(armInfo?.leader_connected===false&&!$('replay')?.value)reasons.push('리더 USB 미연결 (텔레옵 녹화 불가)');
   const hil=$('home-include-leader');
   const hasLP=Boolean(armInfo&&armInfo.has_leader_pose);
   const canLeaderAlign=Boolean(armOk&&armInfo&&(armInfo.leader_connected===true||(armInfo.leader_connected!==false&&hasLP)));
@@ -237,6 +239,7 @@ function validateStart(){
   renderStatusKv();
   if(typeof syncHeaderAndSlimBar==='function')syncHeaderAndSlimBar();
   if(typeof renderArmCards==='function')renderArmCards();
+  if(typeof window.syncHardwareReadiness==='function')window.syncHardwareReadiness();
   if(typeof renderParamsPanel==='function')renderParamsPanel();
   return reasons.length===0;
 }

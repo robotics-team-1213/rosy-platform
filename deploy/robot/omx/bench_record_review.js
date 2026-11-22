@@ -2,25 +2,79 @@
 (function(){
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
+function collectHardwareReadiness(arm){
+  if(typeof benchSessionActive==='function'&&benchSessionActive())return {arm:'',issues:[],hasCrit:false,hasAny:false};
+  const a=arm||(typeof f!=='undefined'&&f&&f.arm?f.arm.value:'')||lastStatus?.arm||'';
+  const issues=[];
+  const conn=a?(typeof armConnectivity==='function'?armConnectivity(a):(lastArmsStatus?.[a]||null)):null;
+  const hasReplay=Boolean($('replay')?.value);
+  if(conn?.follower_connected===false){
+    issues.push({kind:'follower_offline',tone:'crit',label:a+' 팔로워 USB 미연결',detail:'로봇 제어·녹화 불가 — 팔로워 USB/전원 확인 후 연결 재확인하세요.',action:'recheck'});
+  }
+  if(conn?.leader_connected===false&&!hasReplay){
+    issues.push({kind:'leader_offline',tone:'crit',label:a+' 리더 USB 미연결',detail:'텔레옵 녹화·학습 데이터 수집 불가 — 리더 USB를 연결하거나 리플레이 모드를 선택하세요.',action:'recheck'});
+  }
+  if(a&&typeof window.expectedCamsForArm==='function'&&typeof lastCamState==='object'&&lastCamState){
+    const req=window.expectedCamsForArm(a,(typeof f!=='undefined'&&f?.config?.value)||'');
+    const miss=req.filter(l=>!Object.hasOwn(lastCamState,l)||lastCamState[l]?.fresh===false);
+    if(miss.length){
+      const critMiss=miss.filter(l=>!(a==='arm_s'&&l==='arm_s_top'));
+      issues.push({kind:'cam_missing',tone:critMiss.length?'crit':'warn',label:'학습 카메라 미수신 ('+miss.join(', ')+')',detail:'필수 '+req.length+'대 중 '+(req.length-miss.length)+'대만 수신 중 — 누락 상태로 녹화하면 학습 입력 불완전',action:'restart_cam'});
+    }
+    const badQ=req.filter(l=>Object.hasOwn(lastCamState,l)&&lastCamState[l]?.fresh!==false&&lastCamState[l]?.quality&&(lastCamState[l].quality.condition!=='NORMAL'||lastCamState[l].quality.usable===false));
+    if(badQ.length){
+      issues.push({kind:'cam_quality',tone:'warn',label:'학습 카메라 영상 불량 ('+badQ.map(l=>l+':'+(lastCamState[l]?.quality?.condition||'불량')).join(', ')+')',detail:'조명/노출 비정상 — 이대로 녹화하면 학습 데이터 검수 탈락 위험',action:'restart_cam'});
+    }
+  }
+  if(typeof statusLoaded!=='undefined'&&statusLoaded&&lastStatus&&lastStatus.hf_logged_in===false){
+    issues.push({kind:'hf_offline',tone:'warn',label:'HF 팀 계정 미로그인',detail:'로컬 녹화는 가능하나 모델 PC·팀 저장소 학습 업로드 불가',action:'open_records'});
+  }
+  const hasCrit=issues.some(x=>x.tone==='crit');
+  return {arm:a,issues,hasCrit,hasAny:issues.length>0};
+}
+function hwReadinessAction(kind){
+  if(kind==='restart_cam')return {label:'카메라 재시작',run:()=>$('hdr-camera-restart-btn')?.click()};
+  if(kind==='open_records')return {label:'기록·HF 확인',run:()=>{if(typeof openDrawer==='function')openDrawer('records');}};
+  return {label:'연결 재확인',run:async()=>{await Promise.all([typeof pollArms==='function'?pollArms():null,typeof pollCameras==='function'?pollCameras():null,typeof pollStatus==='function'?pollStatus():null]);}};
+}
+function syncHardwareReadiness(){
+  const rd=collectHardwareReadiness();
+  if(typeof setNotice==='function'&&typeof clearNotice==='function'){
+    if(!rd.hasAny){clearNotice('hw-readiness');}
+    else{
+      const top=rd.issues.find(x=>x.tone==='crit')||rd.issues[0];
+      const summary=rd.issues.map(x=>x.label).join(' · ')+(top.detail?' — '+top.detail:'');
+      setNotice('hw-readiness',rd.hasCrit?'crit':'warn',summary,{persistent:rd.hasCrit,sig:'hw:'+rd.arm+':'+rd.issues.map(x=>x.kind+':'+x.label).join('|'),action:hwReadinessAction(top.action)});
+    }
+  }
+  renderManualHoldCard(lastStatus);
+}
+window.collectHardwareReadiness=collectHardwareReadiness;
+window.syncHardwareReadiness=syncHardwareReadiness;
+
 function renderManualHoldCard(st){
   const card=$('manual-hold-card');
   if(!card)return;
   const mh=st&&st.manual_hold&&st.manual_hold.active?st.manual_hold:null;
   const rec=st&&st.recovery&&st.recovery.has_issues?st.recovery:null;
-  if(!mh&&!rec){card.hidden=true;return;}
+  const rd=collectHardwareReadiness();
+  if(!mh&&!rec&&!rd.issues.length){card.hidden=true;return;}
   card.hidden=false;
   const isHold=Boolean(mh||rec?.incident_holds&&Object.keys(rec.incident_holds).length);
-  card.dataset.tone=(mh?.runner_alive||isHold)?'crit':'warn';
-  if($('h-manual-hold'))$('h-manual-hold').textContent=mh?'수동 확인 보류 · 안전 복구 안내':'작업대 문제 진단 · 복구 안내';
-  if($('mh-reason'))$('mh-reason').textContent=mh?.reason||st?.error||(rec?.issues?.[0]?.label)||'확인 또는 복구가 필요합니다';
+  card.dataset.tone=(mh?.runner_alive||isHold||rd.hasCrit)?'crit':'warn';
+  if($('h-manual-hold'))$('h-manual-hold').textContent=mh?'수동 확인 보류 · 안전 복구 안내':(rec?'작업대 문제 진단 · 복구 안내':(rd.hasCrit?'학습·녹화 준비 오류 · 즉시 점검':'학습·녹화 준비 주의'));
+  if($('mh-reason'))$('mh-reason').textContent=mh?.reason||st?.error||(rec?.issues?.[0]?.label)||(rd.issues[0]?(rd.issues[0].label+' — '+rd.issues[0].detail):'확인 또는 복구가 필요합니다');
   const badge=$('mh-torque-badge');
   if(badge){
     if(mh){
       badge.textContent=mh.runner_alive?'토크 ON 유지 중 (PID '+mh.runner_pid+')':(mh.lease_hold?'임대 hold 확인 필요':'러너 종료됨 (복원 대기)');
       badge.dataset.tone=mh.runner_alive?'crit':(mh.lease_hold?'warn':'good');
-    }else{
+    }else if(rec){
       badge.textContent='복구 가능 ('+(rec?.issues?.length||1)+'건)';
       badge.dataset.tone='warn';
+    }else{
+      badge.textContent=(rd.hasCrit?'학습 불가 ':'점검 필요 ')+rd.issues.length+'건';
+      badge.dataset.tone=rd.hasCrit?'crit':'warn';
     }
   }
   const facts=$('mh-facts');
@@ -36,7 +90,7 @@ function renderManualHoldCard(st){
   }
   const issUl=$('mh-issue-list');
   if(issUl){
-    const rows=Array.isArray(rec?.issues)?rec.issues:[];
+    const rows=[...(Array.isArray(rec?.issues)?rec.issues:[]),...rd.issues];
     issUl.hidden=!rows.length;issUl.innerHTML='';
     for(const it of rows){
       const li=document.createElement('li');
@@ -108,6 +162,23 @@ function renderManualHoldCard(st){
       const aBtn=document.createElement('button');aBtn.type='button';aBtn.className='btn-primary btn-xs';aBtn.textContent='오류 확인 · 대기 복귀';
       aBtn.addEventListener('click',async()=>{aBtn.disabled=true;setReqError('');try{renderStatus(await api('/api/recover/ack_error',{}));}catch(e){setReqError(e.message);}finally{aBtn.disabled=false;}});
       qa.append(aBtn);
+    }
+    if(rd.issues.some(x=>x.kind==='cam_missing'||x.kind==='cam_quality')){
+      const cBtn=document.createElement('button');cBtn.type='button';cBtn.className='btn-tool btn-xs';cBtn.textContent='카메라 지금 재시작';
+      cBtn.addEventListener('click',()=>$('hdr-camera-restart-btn')?.click());
+      qa.append(cBtn);
+    }
+    if(rd.issues.some(x=>x.kind==='follower_offline'||x.kind==='leader_offline')){
+      const rBtn=document.createElement('button');rBtn.type='button';rBtn.className='btn-tool btn-xs';rBtn.textContent='연결·상태 재확인';
+      rBtn.addEventListener('click',()=>hwReadinessAction('recheck').run());
+      qa.append(rBtn);
+      const getConn=a=>typeof armConnectivity==='function'?armConnectivity(a):lastArmsStatus?.[a];
+      const alt=['arm_a','arm_b','arm_s'].find(a=>a!==rd.arm&&getConn(a)?.follower_connected===true&&getConn(a)?.leader_connected===true);
+      if(alt&&typeof window.selectArm==='function'&&!Object.keys(rec?.incident_holds||{}).length){
+        const swBtn=document.createElement('button');swBtn.type='button';swBtn.className='btn-tool btn-xs';swBtn.textContent='정상 팔('+alt+')로 전환';
+        swBtn.addEventListener('click',()=>window.selectArm(alt));
+        qa.append(swBtn);
+      }
     }
   }
 }
