@@ -14,46 +14,43 @@ import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
-import { placeRosterCards as place, mustExpand, selectRobot, OMX_CELL_DEFS, createRoiPoller,
-  buildQuickControlPanel, createFrontCamera } from "./roster-cards.js";
+import { placeRosterCards as place, mustExpand, selectRobot } from "./roster-cards.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
-import {createCellFrameFeed} from "/console/assets/cell-frames.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 import { createRosterSummary, tag, navTag, queuedReason, offlineWhy,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
-  moveAddress = null, moveAddressBlocked = () => "", confirmedAction, onSelectionChanged = () => {} }) {
+  moveAddress = null, moveAddressBlocked = () => "", confirmedAction, selection = null,
+  onGoalArmed = () => {}, onSelectionChanged = () => {} }) {
   const { attentionItems, fillQueues } = createQueues({ scope, el, view, render, streamEvidence });
   const trip = createCardTrip({ scope, el, view, call, log, render, isOperator, namedReason });
   const motorHealth = createFleetMotorHealth({view, scope});
   const profiles = createRobotProfiles({call, scope, render});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
-  const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call, render });
-  // 셀 카메라 뷰도 천장 ROI와 같은 Vision 임대로 본다(D-136). Fleet은 바이트를 중계하지 않는다.
-  const cellFrames = createCellFrameFeed({ call, scope });
-  const frontCamera = createFrontCamera({ call, scope });
-  function openCard(robotId) {
-    if (typeof window !== "undefined" && robotId && typeof window.dispatchEvent === "function") {
-      window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: robotId } }));
-    }
+  function openCard(robotId, opts = {}) {
     if (typeof robotId === "string" && (robotId.startsWith("arm_") || robotId.startsWith("cell_"))) {
       view.focusAnchorId = robotId === "cell_s" ? "arm_s" : (robotId === "cell_ab" ? "arm_a" : robotId);
-      const onlineRobot = view.robots.find((r) => r.online) || view.robots[0];
-      if (onlineRobot && !view.focusRobot) {
-        view.focusRobot = onlineRobot.robot_id;  // D-651: inspecting an arm never arms the map
+      view.focusRobot = null;
+      view.selected = null;
+      view.pinning = null;
+      view.cursor = null;
+      const canvas = el("map-canvas");
+      if (canvas) {
+        canvas.classList.add("idle");
+        canvas.tabIndex = -1;
       }
-      render();
-      void refreshRoiPreview();
+      if (!opts?.fromSelection) selection?.set?.(view.focusAnchorId, { source: "roster" });
+      if (!opts?.fromSelection) render();
       return;
     }
     if (selectRobot(view, robotId)) {
       confirmedAction?.cancel();
       trip.close();
-      frontCamera.stop();
       onSelectionChanged();
       // D-651: 로봇을 고르는 것은 읽기다. 목표 받기는 '목표 지정' 단추로만 켜진다.
       view.focusAnchorId = view.focusRobot || null;
+      if (!opts?.fromSelection) selection?.set?.(view.focusRobot || null, { source: "roster" });
       const stage = el("map-stage");
       const birdseyeToggle = el("birdseye-toggle");
       if (stage && stage.dataset.view === "camera") {
@@ -67,36 +64,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   }
   function needsAttention(robot) {
     return view.stateUnavailable || mustExpand(robot) || attentionItems(robot).length > 0;
-  }
-  function workspace() {
-    const box = el("robot-workspace"), choice = el("robot-choice"), empty = el("robot-workspace-empty");
-    if (!box) return;
-    // D-651: 작업 카드는 운영자가 고를 때만 열린다. 연락이 끊긴 로봇도 이유와 함께 고를 수 있다.
-    const selectableRobots = view.robots;
-    if (view.focusRobot && !selectableRobots.some(robot => robot.robot_id === view.focusRobot)) openCard(null);
-    if (choice) {
-      const robotOptions = selectableRobots.map(robot => {
-        const host = view.robotNames?.[robot.robot_id];
-        const label = host && host !== robot.robot_id ? `${robot.robot_id} (${host})` : robot.robot_id;
-        return [robot.robot_id, `🤖 기동 로봇 · ${label}${robot.online ? " · 온라인" : ""}`];
-      });
-      // OMX arms are picked here (fa2716a0cd dropped them); they open the right inspector, never a roster card.
-      const omxOptions = OMX_CELL_DEFS.filter(def => (view.anchors || []).some(a => a.target_id === def.target_id)).map(def => {
-        const liveAnc = view.anchors.find(a => a.target_id === def.target_id);
-        return [def.target_id, `🦾 OMX 셀 · ${def.shortLabel} (${liveAnc.cell_status || "상태 미확인"} ↔ ${def.stationId} 연계)`];
-      });
-      const options = [...robotOptions, ...omxOptions];
-      const key = JSON.stringify(options);
-      if (choice.dataset.options !== key) {
-        const first = node("option", "로봇 또는 OMX 셀을 선택하세요"); first.value = "";
-        choice.replaceChildren(first, ...options.map(([id, name]) => { const option = node("option", name); option.value = id; return option; }));
-        choice.dataset.options = key;
-      }
-      choice.value = String(view.focusAnchorId || "").startsWith("arm_") ? view.focusAnchorId : (view.focusRobot || "");
-    }
-    const index = view.robots.findIndex(robot => robot.robot_id === view.focusRobot);
-    if (empty) empty.hidden = index >= 0;
-    place(box, index >= 0 ? [card(view.robots[index], index)] : []);
   }
   function card(robot, index) {
     const article = document.createElement("article");
@@ -248,14 +215,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       facts.appendChild(cellEl);
     });
     article.appendChild(facts);
-
-    if (!view.stateUnavailable) {
-      article.appendChild(buildQuickControlPanel({
-        robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-        roiObjectUrls, refreshRoiPreview, tag, cellFrames, frontCamera,
-      }));
-    }
-
     article.appendChild(motorHealth.detail(robot));
     article.appendChild(profiles.detail("robot", robot.robot_id));
     const context = createRobotAppActions(robot.robot_id, view.robotPeers);
@@ -378,7 +337,10 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       canvas.classList.toggle("idle", view.selected === null);
       canvas.tabIndex = view.selected ? 0 : -1;
       render();
-      if (view.selected) canvas.focus({preventScroll: true});
+      if (view.selected) {
+        onGoalArmed();
+        canvas.focus({preventScroll: true});
+      }
       else [...document.querySelectorAll("#robot-workspace ui-button[data-goal-robot-id]")]
         .find(button => button.dataset.goalRobotId === robot.robot_id)?.focus({preventScroll: true});
     }));
@@ -415,53 +377,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     setOffBy(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online && !shown.trip ? (offlineWhyId ? "위 사유" : "로봇 오프라인") : "");
     if (offlineWhyId) cancel.setAttribute("aria-describedby", offlineWhyId);
-    cancel.addEventListener("click", scope.guard(async () => {
-      const life = scope.capture();
-      life.check();
-      // Decide at click time: a card kept across polls (roster.place) may predate the trip.
-      const now = view.robots.find((row) => row.robot_id === robot.robot_id) || robot;
-      const stop = cancelScope(openTrip(view, robot.robot_id), now.state?.line_follow?.mode);
-      try {
-        if (stop.trip) {
-          try {
-            await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
-            life.check();
-            view.trafficTrips = (view.trafficTrips || []).filter((row) => row.trip_id !== stop.trip);
-            render();
-            log(`${robot.robot_id} 운행 취소`, "good");
-            return;
-          } catch (err) {  // the trip may have just ended: the goal cancel below still stops the robot
-            if (err.name === "AbortError") return;
-            log(`${robot.robot_id} 운행 취소 실패 — ${err.message} · 목표 취소를 보냅니다`, "bad");
-          }
-        }
-        const pending = view.pendingTasks[robot.robot_id];
-        if (pending) {
-          const readback = await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}`);
-          life.check();
-          if (readback.task?.status === "QUEUED") {
-            await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`, { method: "POST" });
-            life.check();
-            delete view.pendingTasks[robot.robot_id];
-            render();
-            log(`${robot.robot_id} task ${pending.task_id} QUEUED 취소`, "good");
-            return;
-          }
-          delete view.pendingTasks[robot.robot_id];
-        }
-        await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/cancel`, { method: "POST" });
-        life.check();
-        if (stop.lane) {
-          await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/line-follow`, {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "OFF" }) });
-          life.check();
-        }
-        log(`${robot.robot_id} ${stop.lane ? "목표·차선 추종 취소" : "항법 취소"}`, "good");
-      } catch (err) {
-        if (err.name === "AbortError") return;
-        log(`${robot.robot_id} 취소 실패 — ${err.message}`, "bad");
-      }
-    }));
+    cancel.addEventListener("click", scope.guard(() => cancelRobot(robot.robot_id, robot)));
     const lineFollow = state.line_follow || {};
     const cameraFaultLatched = lineFollow.mode === "CAMERA_LINE"
       && lineFollow.state === "LOST"
@@ -562,6 +478,53 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     return article;
   }
 
+  async function cancelRobot(robotId, fallback = null) {
+    const life = scope.capture();
+    life.check();
+    const robot = view.robots.find((row) => row.robot_id === robotId) || fallback || { robot_id: robotId, state: {} };
+    const stop = cancelScope(openTrip(view, robot.robot_id), robot.state?.line_follow?.mode);
+    try {
+      if (stop.trip) {
+        try {
+          await call(`/api/fleet/trips/${encodeURIComponent(stop.trip)}/cancel`, { method: "POST" });
+          life.check();
+          view.trafficTrips = (view.trafficTrips || []).filter((row) => row.trip_id !== stop.trip);
+          render();
+          log(`${robot.robot_id} 운행 취소`, "good");
+          return;
+        } catch (err) {
+          if (err.name === "AbortError") return;
+          log(`${robot.robot_id} 운행 취소 실패 — ${err.message} · 목표 취소를 보냅니다`, "bad");
+        }
+      }
+      const pending = view.pendingTasks[robot.robot_id];
+      if (pending) {
+        const readback = await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}`);
+        life.check();
+        if (readback.task?.status === "QUEUED") {
+          await call(`/api/fleet/tasks/${encodeURIComponent(pending.task_id)}/cancel`, { method: "POST" });
+          life.check();
+          delete view.pendingTasks[robot.robot_id];
+          render();
+          log(`${robot.robot_id} task ${pending.task_id} QUEUED 취소`, "good");
+          return;
+        }
+        delete view.pendingTasks[robot.robot_id];
+      }
+      await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/cancel`, { method: "POST" });
+      life.check();
+      if (stop.lane) {
+        await call(`/api/fleet/robots/${encodeURIComponent(robot.robot_id)}/line-follow`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "OFF" }) });
+        life.check();
+      }
+      log(`${robot.robot_id} ${stop.lane ? "목표·차선 추종 취소" : "항법 취소"}`, "good");
+    } catch (err) {
+      if (err.name === "AbortError") return;
+      log(`${robot.robot_id} 취소 실패 — ${err.message}`, "bad");
+    }
+  }
+
   function openTripForm(robotId) {
     openCard(robotId);
     trip.focus(robotId);
@@ -581,6 +544,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     controls()[at]?.focus({preventScroll: true});
   }
 
-  return { card, summary, workspace, place, fillQueues, queuedReason, needsAttention, attentionItems, openCard,
+  return { card, summary, place, fillQueues, queuedReason, needsAttention, attentionItems, openCard, cancelRobot,
     syncConvoy: trip.syncConvoy, closeTrip: trip.close, openTrip: openTripForm, paintTrip };
 }

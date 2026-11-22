@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 import pytest
-from fleet_cockpit_browser import select_robot
+from fleet_cockpit_browser import clear_robot_selection, select_robot
 from browser_harness import browser_tests_enabled
 from fleet.server.development_session import DevelopmentSessions
 from test_fleet_header_browser import _api, _fleet, _signed_in_page
@@ -150,6 +150,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                     expect(page.locator("#console-token")).to_be_focused()
                     if page.locator("#topbar-more").is_visible():
                         page.locator("#topbar-more").click()
+                    clear_robot_selection(page)
                     page.locator("#context-evidence-tab").click()
                     summary = page.locator("#log-panel > summary")
                     for opened in [False, True]:

@@ -184,6 +184,19 @@ export function createRobotDock({selection, profiles = [], onToggle, kinds, ids}
   }
 
   const offSelection = selection?.subscribe ? selection.subscribe(() => paintFlags()) : () => {};
+  root.addEventListener("keydown", (event) => {
+    const items = [...root.querySelectorAll(".robot-dock-btn")];
+    const idx = items.indexOf(event.target);
+    if (idx < 0 || !items.length) return;
+    let next = -1;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") next = (idx + 1) % items.length;
+    else if (event.key === "ArrowUp" || event.key === "ArrowLeft") next = (idx - 1 + items.length) % items.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    if (next < 0) return;
+    event.preventDefault();
+    items[next].focus();
+  });
   setProfiles(profiles);
 
   return {

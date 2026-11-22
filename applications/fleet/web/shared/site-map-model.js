@@ -131,13 +131,23 @@ export function editViewTurn(map, turn) {
   return {...copyMap(map), view_turn_deg: value};
 }
 
-export function repeatTripBody(map, start, leader = '') {
-  const starts = (map?.places || []).filter(place => place.kind === 'start').map(place => place.id);
+export function repeatPlaces(map) {
+  const all = map?.places || [];
+  const starts = all.filter(place => place.kind === 'start');
+  return starts.length >= 2 ? starts : all.filter(place => ['start', 'stop'].includes(place.kind));
+}
+
+export function repeatTripBody(map, start, leader = '', driveMode = '') {
+  const starts = repeatPlaces(map).map(place => place.id);
   if (!starts.includes(start)) throw new Error('출발 자리를 고르세요');
   const via = starts.filter(id => id !== start);
   if (!via.length) throw new Error('반복 운행에는 출발 자리가 두 곳 이상 필요합니다');
   const at = starts.indexOf(start);
-  return {to: start, via: [...starts.slice(at + 1), ...starts.slice(0, at)], repeat: true, ...(leader ? {convoy: {leader}} : {})};
+  return {
+    to: start, via: [...starts.slice(at + 1), ...starts.slice(0, at)], repeat: true,
+    ...(leader ? {convoy: {leader}} : {}),
+    ...(driveMode === 'nav2' ? {drive_mode: 'nav2'} : {}),
+  };
 }
 
 export function oneLapBody(map, start, via) {
@@ -180,7 +190,7 @@ export function planSummaryText(plan) {
 export function repeatTripReason({active, running, start}) {
   if (!active) return '활성 지도가 없습니다';
   if (running) return '이 로봇은 이미 운행 중입니다';
-  if ((active.map?.places || []).filter(place => place.kind === 'start').length < 2) return '반복 운행에는 출발 자리가 두 곳 이상 필요합니다';
+  if (repeatPlaces(active.map).length < 2) return '반복 운행에는 출발 자리가 두 곳 이상 필요합니다';
   return start ? '' : '출발 자리를 고르세요';
 }
 export function convoyLeaders(open, robotId) { return (open || []).filter(trip => trip.repeat && !trip.convoy && trip.robot_id !== robotId).map(trip => trip.robot_id); }

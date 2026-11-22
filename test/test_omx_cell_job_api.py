@@ -96,6 +96,15 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "--dry-run" in drive_argv and "--person-at-switch" not in drive_argv
     assert drive_argv[0] == "bash"
     assert "--commissioning" not in drive_argv
+    paced_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True}, wd)
+    assert "--paced-chunks" in paced_argv
+    for bad_paced in (
+        {"mode": "hybrid", "goal_site": "yard:r3-s2-t1"},
+        {"mode": "taught", "goal_site": "yard:r3-s2-t1"},
+        {"n_action": 8},
+    ):
+        with pytest.raises(ValueError, match="paced_chunks"):
+            api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, **bad_paced}, wd)
     live = {**base_policy, "dry_run": False}
     assert api.build_argv(api.JOBS["cell_policy_drive"], live, wd)[0] == "./with-session-arm-s-live.sh"
     with pytest.raises(ValueError, match="person_at_switch"):

@@ -183,7 +183,8 @@ def test_learning_center_offline_and_continuous_experience_actions(tmp_path):
                             'mode': 'cooperative', 'arms': [{'id': 'left'}, {'id': 'right'}],
                             'cameras': [{'id': 'top', 'placement': 'overhead'},
                                         {'id': 'wrist_left'}, {'id': 'wrist_right'}]}}] + self.datasets,
-                'runs': self.runs, 'methods': {m: {'available': True} for m in ('act', 'hilserl')}}
+                'runs': self.runs, 'methods': {'act': {'available': True, 'devices': ['cpu', 'cuda']},
+                                                'hilserl': {'available': True}}}
 
         def start(self, body):
             self.requests.append(body)
@@ -235,6 +236,7 @@ def test_learning_center_offline_and_continuous_experience_actions(tmp_path):
                 expect(page.locator('#dataset-profile')).to_contain_text('wrist_right')
                 expect(page.locator('#dataset-profile')).to_contain_text('합성 스모크')
                 expect(page.locator('#method')).to_contain_text('오프라인 경험 재학습')
+                expect(page.locator('#device')).to_have_value('cuda')
                 folder = tmp_path / 'upload'
                 folder.mkdir()
                 for name in ('dataset.json', 'episode.npz', 'conversion-receipt.json', 'native-split-receipt.json'):

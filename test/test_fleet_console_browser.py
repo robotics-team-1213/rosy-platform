@@ -133,7 +133,7 @@ def test_the_console_renders_what_swarm_control_says(console_url):
         assert page.locator('#roster article').first.get_attribute('data-robot-id') == 'rosy_03'
         assert page.locator('#roster article').count() == 3
         assert page.locator('#robot-workspace article').count() == 0
-        assert page.locator('#robot-workspace-empty').is_visible()
+        assert page.locator('#robot-panel').is_hidden()
         save_temp_screenshot(page, "fleet_console_exception_first.png")
         _open_cards(page)
         # D-82/§7.3 색 예산 — 색칠은 문제 있는 한 대(rosy_03: 끊김 crit + 대기
@@ -166,7 +166,7 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         summary = page.locator('#roster article[data-robot-id="rosy_01"]')
         assert 'rosy_01' in summary.inner_text()
         assert summary.locator('[data-fact="battery"]').count() == 1
-        choose = summary.locator('[data-select-robot-id="rosy_01"]')
+        choose = page.locator('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]')
         choose.focus()
         page.keyboard.press('Enter')
         card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
@@ -177,7 +177,7 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         assert card.is_visible()
         clear_robot_selection(page)
         assert page.locator('#robot-workspace article').count() == 0
-        assert page.locator('#robot-workspace-empty').is_visible()
+        assert page.locator('#robot-panel').is_hidden()
         assert not errors
     finally:
         browser.close()

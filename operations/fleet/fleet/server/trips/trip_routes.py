@@ -15,7 +15,7 @@ import math
 import sqlite3
 import time
 import uuid
-from typing import Annotated, Optional, Union
+from typing import Annotated, Literal, Optional, Union
 
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -80,6 +80,8 @@ class TripRequest(BaseModel):
     start_at: Optional[PlaceRef] = None
     #: D-517 9 M3: follow this robot's open repeat trip in a lane convoy (the same cycle).
     convoy: Optional[TripConvoy] = None
+    #: Optional Nav2 road-following execution mode over site-map edges.
+    drive_mode: Optional[Literal["nav2"]] = None
 
     @model_validator(mode="after")
     def _cycle(self) -> "TripRequest":
@@ -87,6 +89,8 @@ class TripRequest(BaseModel):
             raise ValueError("repeat needs a place id in to and at least one via place")
         if self.convoy is not None and not self.repeat:
             raise ValueError("convoy needs repeat")
+        if self.convoy is not None and self.drive_mode == "nav2":
+            raise ValueError("convoy is only supported for lane trips")
         if self.start_at is not None and (self.repeat or self.to != self.start_at or not self.via
                                           or self.start_at in self.via):
             raise ValueError("start_at needs a finite trip via another place back to start_at")
@@ -178,13 +182,20 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
         # keeps kind-restricted edges out and allows every drive mode (execution refuses it).
         # A robot held at 0 m/s may use no lane, so the planner answers TRIP_NO_ROUTE.
         caps = await caps_for(robot_id)
+        nav2 = body.drive_mode == "nav2"
+        if nav2 and caps is not None and (caps.max_speed <= 0 or "free" not in caps.modes):
+            detail = {"drive_mode": "free"}
+            record({"error": "TRIP_MODE_UNSUPPORTED", "detail": detail})
+            raise _refuse("TRIP_MODE_UNSUPPORTED", detail)
         bounds = {} if caps is None else {
-            "robot_kind": caps.kind, "drive_modes": caps.modes if caps.max_speed > 0 else frozenset(),
+            "robot_kind": caps.kind,
+            "drive_modes": (frozenset(("lane", "free")) if nav2 else caps.modes) if caps.max_speed > 0 else frozenset(),
             "max_speed_mps": caps.max_speed or None}
         request = PlanRequest(map_version=active[0], start_pose=(pose[0], pose[1], pose[2]), goal=goal,
                               via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
                               blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
-                              body_front_m=body_front_m(bounds.get("robot_kind")), **bounds)
+                              body_front_m=body_front_m(bounds.get("robot_kind")),
+                              stop_offset=not (nav2 and body.repeat), **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
         except PlanError as exc:
@@ -196,18 +207,19 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 _LOG.exception("trip planner failed on site map v%s", active[0])
             record({"error": "TRIP_PLAN_FAILED", "detail": {"kind": type(exc).__name__}})
             raise _refuse("TRIP_PLAN_FAILED", {"map_version": active[0]}, 500) from exc
-        body = plan_body(plan)
-        if any(active[2].arcs[arc_id(seg)].drive_mode == "lane" for seg in body["segments"]):
+        plan_data = plan_body(plan)
+        if not nav2 and any(active[2].arcs[arc_id(seg)].drive_mode == "lane" for seg in plan_data["segments"]):
             try:  # D-601 B: no lane trip for a robot whose line camera is not live
                 await runner.camera_check(robot_id, caps)
             except TripError as exc:
                 record({"error": exc.code, "detail": exc.detail})
                 raise _refuse(exc.code, exc.detail) from exc
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
-        body["start_check"] = start_check(active[2], body["segments"], *pose, runner.config.start_heading_tol_deg)
-        if (runner.config.auto_align and body["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
-                and body["start_check"]["heading_err_deg"] is not None):
-            body["start_check"]["auto_align"] = True  # D-603: the start turns the robot first
+        plan_data["start_check"] = start_check(
+            active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2)
+        if (runner.config.auto_align and plan_data["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
+                and plan_data["start_check"]["heading_err_deg"] is not None):
+            plan_data["start_check"]["auto_align"] = True  # D-603: the start turns the robot first
         # D-494 5: the whole body is kept so /trips/{plan_id}/start runs exactly this plan.
         # The fact bundle sits beside that plan. The trip loop does not execute it.
         context = route_context(planner="lane_graph", supplied={
@@ -216,14 +228,14 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
             "blocked_edges": list(summary.get("blocked_edges") or []),
             "extra_cost": dict(summary.get("extra_cost") or {}),
         }, holds={
-            "map_version": body["map_version"],
-            "segments": [seg["edge_id"] for seg in body["segments"]],
-            "places": list(body["places"]),
-            "length_m": body["length_m"], "eta_s": body["eta_s"],
+            "map_version": plan_data["map_version"],
+            "segments": [seg["edge_id"] for seg in plan_data["segments"]],
+            "places": list(plan_data["places"]),
+            "length_m": plan_data["length_m"], "eta_s": plan_data["eta_s"],
         })
         record({"segments": len(plan.segments), "length_m": plan.length_m, "eta_s": plan.eta_s,
-                "plan": body, "context": context})
-        return {"plan_id": plan_id, **body, "context": context, "expires_at": time.time() + PLAN_TTL_S}
+                "plan": plan_data, "context": context})
+        return {"plan_id": plan_id, **plan_data, "context": context, "expires_at": time.time() + PLAN_TTL_S}
 
     app.state.trip_plan = plan
 

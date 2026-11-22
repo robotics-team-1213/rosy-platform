@@ -20,7 +20,7 @@ class Cell:
     def act(self, command):
         self.sent.append(command)
         grasped = any(c == "run grasp_pick" for c in self.sent)
-        return {"ok": True, "state": [0, 0, 0, 0, 0, self.jaws if grasped else 57.5]}
+        return {"ok": True, "settled": True, "state": [0, 0, 0, 0, 0, self.jaws if grasped else 57.5]}
 
 
 @pytest.mark.parametrize("stop, carried", [(49.0, False), (45.5, True)])
@@ -77,7 +77,7 @@ def test_return_held_places_when_jaws_hold_box_and_folds_when_empty(tmp_path, ja
         def act(self, command):
             self.sent.append(command)
             after_rel = "run release_place" in self.sent
-            return {"ok": True, "state": [0, 0, 0, 0, 0, 48.8 if after_rel else self.jaws]}
+            return {"ok": True, "settled": True, "state": [0, 0, 0, 0, 0, 48.8 if after_rel else self.jaws]}
 
     library = tmp_path / "lib.json"
     library.write_text(json.dumps({"gripper_closed": 48.8, "jaw_empty_stop": 48.8, "chunks": {}}))

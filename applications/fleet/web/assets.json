@@ -410,6 +410,10 @@
       "path": "roster.js",
       "media_type": "application/javascript"
     },
+    "roster-workspace.js": {
+      "path": "roster-workspace.js",
+      "media_type": "application/javascript"
+    },
     "queues.js": {
       "path": "queues.js",
       "media_type": "application/javascript"

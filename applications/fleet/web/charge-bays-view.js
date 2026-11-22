@@ -9,14 +9,14 @@ export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from 
 /** Choices that act on a robot need the server's occupant; the console never substitutes one. */
 // The human-safety gate is cell-wide and must never be disabled for want of a robot.
 const needsRobot = (choice) => Boolean(choice.visionCheckCell || choice.cableGuardToggle
-  || choice.zoneId || choice.pinkyAction);
+  || choice.zoneId);
 
 function markNoRobot(button, choice, card) {
   if (!needsRobot(choice) || card.robot_id) return;
   setOffBy(button, "대상 로봇 없음");
 }
 
-export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null }) {
+export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null }) {
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
@@ -40,19 +40,14 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     if (!document.hidden) void refresh();
   });
 
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    scope.listen(window, "rosy:inspect-target", (ev) => {
-      const targetId = ev?.detail?.targetId;
-      const camId = ev?.detail?.camId;
-      if (!targetId) return;
-      activeInspectorId = targetId;
+  if (selection?.subscribe) {
+    const offSelection = selection.subscribe((id) => {
+      if (!id || (!String(id).startsWith("arm_") && !String(id).startsWith("cell_"))) return;
+      activeInspectorId = id;
       framesOn = false;
-      if (camId) selectedInspectorCam[activeInspectorId] = camId;
       if (lastRows) renderInspector(lastRows);
-      if (ev?.detail?.scroll && inspector?.scrollIntoView) {
-        inspector.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }
     });
+    scope.onDispose?.(offSelection);
   }
 
   function tag(text, status) {
@@ -116,10 +111,9 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
           body: JSON.stringify({subject_id: choice.decisionSubject, auto_execute: true}),
         });
       } else {
-        await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
+        await call("/api/fleet/pipeline/cell-tasks", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(choice.preset ? {preset: choice.preset} :
-            {robot_id: card.robot_id, action: choice.pinkyAction}),
+          body: JSON.stringify({preset: choice.preset}),
         });
       }
       await refresh();
@@ -159,9 +153,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       btn.textContent = t.shortTab;
       btn.addEventListener("click", () => {
         activeInspectorId = t.id;
-        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-          window.dispatchEvent(new CustomEvent("rosy:focus-anchor", { detail: { targetId: t.id, stationId: t.station_id || null } }));
-        }
+        selection?.set?.(t.id, { source: "inspector" });
         renderInspector(rows);
       });
       tabs.append(btn);
@@ -367,7 +359,6 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     renderInspector(rows);
     list.replaceChildren();
     const cellItems = new Map();
-    const robotItems = new Map();
     for (const b of rows?.bays || []) {
       const li = document.createElement("li");
       li.append(`${b.id} `, tag(b.text, b.status));
@@ -383,10 +374,9 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       const li = document.createElement("li");
       li.textContent = `${a.robot}: ${a.text}`;
       list.append(li);
-      robotItems.set(a.robot, li);
     }
     for (const card of rows?.cards || []) {
-      const li = (card.kind === "omx" ? cellItems : robotItems).get(card.id) || document.createElement("li");
+      const li = cellItems.get(card.id) || document.createElement("li");
       if (li.parentNode !== list) list.append(li);
       const article = document.createElement("article");
       article.className = "omx-dense-card";

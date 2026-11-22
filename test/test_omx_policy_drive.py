@@ -79,7 +79,7 @@ class Cell:
             lib = json.loads(Path(command[5:]).read_text())
             assert set(lib["chunks"]) == self.expected_chunks  # IK chunks stay beside the policy chunk
         reply = self.replies.get(command.split()[0] if command.startswith("load ") else command, {"ok": True})
-        return {"state": self.state, **reply}
+        return {"state": self.state, "settled": True, **reply}
 
 
 def write_lib(tmp_path, library=LIB):
@@ -808,14 +808,14 @@ def test_paced_chunks_flag_uses_guarded_loop_and_rejects_incompatible_modes(tmp_
     )
     assert res_auth["result"] == "refused" and res_auth["at"] == 0
     assert res_auth["reason"] == "operating envelope refused: start_not_home" and res_auth["parked"] is True
-    assert cell_auth.commands == ["state", "park"]
+    assert cell_auth.commands == ["state", "state", "park"]
 
     class CheckedLoadFailCell(Cell):
         def act(self, command):
             self.commands.append(command)
             if " load " in command:
                 return {"state": self.state, "ok": False, "error": "load_failed"}
-            return {"state": self.state, "ok": True}
+            return {"state": self.state, "ok": True, "settled": True}
 
     cell_load = CheckedLoadFailCell()
     res_load = drive.run_episode(
@@ -825,7 +825,64 @@ def test_paced_chunks_flag_uses_guarded_loop_and_rejects_incompatible_modes(tmp_
     )
     assert res_load["result"] == "refused" and res_load["at"] == 0
     assert res_load["reason"] == "load_failed" and res_load["parked"] is True
-    assert cell_load.commands[0] == "state" and " load " in cell_load.commands[1] and cell_load.commands[2] == "park"
+    assert cell_load.commands[:2] == ["state", "state"] and " load " in cell_load.commands[2] and cell_load.commands[3] == "park"
+
+    # Pre-authorize state refresh passes post-inference timestamp, refuses faulted state, and latches human-hold on jaw drift.
+    class RefreshAuthCell(Cell):
+        def __init__(self, states, *, expected_chunks=None):
+            super().__init__(expected_chunks=expected_chunks)
+            self._states = list(states)
+
+        def act(self, command):
+            if command == "state":
+                self.commands.append(command)
+                reply = {"state": self.state, **self._states.pop(0)}
+                self.state = list(reply["state"])
+                return reply
+            return super().act(command)
+
+    import time as _t
+
+    now = _t.time()
+    t0, t1 = now - 0.01, now
+    auth_seen_states = []
+    cell_fresh = RefreshAuthCell([{"ok": True, "t": t0}, {"ok": True, "t": t1}])
+    res_fresh = drive.run_episode(
+        cell_fresh, Policy([[[5, -50, 45, 48, -5, 49.0]]]), write_lib(tmp_path), tmp_path, offset=[0] * 6,
+        max_chunks=1, dry_run=False, log=[].append, paced_chunks=True,
+        authorize=lambda _lib, st, _seq: (auth_seen_states.append(st) or {"session_id": "s1", "library_sha256": "deadbeef"}),
+    )
+    assert res_fresh["result"] == "chunks_done" and len(auth_seen_states) == 1 and auth_seen_states[0]["t"] == t1
+
+    cell_refetch_fault = RefreshAuthCell([{"ok": True, "t": t0}, {"ok": False, "fault": "servo_err", "error": "servo_err"}])
+    res_refetch_fault = drive.run_episode(
+        cell_refetch_fault, Policy([[[5, -50, 45, 48, -5, 49.0]]]), write_lib(tmp_path), tmp_path, offset=[0] * 6,
+        max_chunks=1, dry_run=False, log=[].append, paced_chunks=True,
+        authorize=lambda *_a: pytest.fail("authorize must not run when refreshed state is faulted"),
+    )
+    assert res_refetch_fault["result"] == "fault" and res_refetch_fault["parked"] is False
+    assert cell_refetch_fault.commands == ["state", "state", "human-hold"]
+
+    transit_pose = [38.9, -55.0, 2.0, 55.0, 43.93, 49.0]
+    jaw_lib = write_lib(tmp_path, {
+        **LIB_GRASP,
+        "chunks": {**LIB_GRASP["chunks"], "home": [transit_pose] * 2,
+                   "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]},
+    })
+    for drifted_pose in ([38.9, -10.0, 2.0, 55.0, 43.93, 49.0], [38.9, -10.0, 2.0, 55.0, 86.0, 49.0]):
+        cell_drift = RefreshAuthCell(
+            [{"ok": True, "state": list(transit_pose)}, {"ok": True, "state": list(drifted_pose)}],
+            expected_chunks={"home", "reach", "grasp_pick", "policy"},
+        )
+        drift_rows = []
+        res_drift = drive.run_episode(
+            cell_drift, Policy([[[39.0, -55.0, 2.0, 55.0, 43.93, 49.0]]]), jaw_lib, tmp_path,
+            offset=[0] * 6, max_chunks=1, dry_run=False, log=drift_rows.append, kin=FakeKin(), paced_chunks=True,
+            authorize=lambda *_a: pytest.fail("authorize must not run when refreshed pose violates jaw gate"),
+        )
+        assert res_drift["result"] == "refused" and res_drift["parked"] is False
+        assert "jaw yaw" in drift_rows[-2]["jaw_warning"]
+        assert cell_drift.commands == ["state", "state", "human-hold"]
 
     # Mid-loop exception during inference catches, tries park, latches human-hold when park fails.
     class CrashPolicy(PacedPolicy):
@@ -900,3 +957,266 @@ def test_chunk_runner_settle_updates_holding_for_policy_chunks():
     r_open.settle_since, r_open.last_body = 0.0, [0, 0, 0, 0, 0]
     check_chunk_settled(r_open, [0, 0, 0, 0, 0, 75.0], 0.0, 0.5, lambda _n, d: d)
     assert r_open.holding is False
+
+
+def test_empty_jaw_overclose_floor_prevents_false_hold_without_weakening_real_hold():
+    from chunk_runner_run import Runner
+    from chunk_runner_settle import check_chunk_settled, confirm_grip_release
+    from omx_adapter.chunk_library import NAMES, SCHEMA
+
+    def _sent(grip: float) -> dict[str, float]:
+        return {**dict.fromkeys(NAMES, 0.0), "gripper.pos": grip}
+
+    # 1: Empty over-closed jaw (sent 46.52, physical stop 48.864, gripper_closed 48.5) must not latch _held_jaw or false hold.
+    lib_arm_s = {"schema": SCHEMA, "names": NAMES, "fps": 30, "gripper_closed": 48.5, "chunks": {"home": [[0] * 6]}}
+    reports_empty = []
+    r_empty = Runner(SimpleNamespace(get_observation=lambda: dict(zip(NAMES, [0, 0, 0, 0, 0, 48.864])), send_action=lambda a: a),
+                     lib_arm_s, fps=30, status=reports_empty.append, clock=lambda: 0.5)
+    r_empty.chunk, r_empty.queue, r_empty.target = "policy", [[0, 0, 0, 0, 0, 48.62]], [0, 0, 0, 0, 0, 46.71]
+    r_empty._fresh_present = True
+    confirm_grip_release(r_empty, _sent(46.52), [0, 0, 0, 0, 0, 48.864], committed=True, empty_margin=2.0)
+    assert r_empty._held_jaw is None
+    confirm_grip_release(r_empty, _sent(46.545), [0, 0, 0, 0, 0, 48.864], committed=True, empty_margin=2.0)
+    assert r_empty._release_until is None and r_empty._release_floor is None
+    r_empty.queue, r_empty.settle_since, r_empty.last_body, r_empty.last_grip = [], 0.0, [0, 0, 0, 0, 0], 48.864
+    check_chunk_settled(r_empty, [0, 0, 0, 0, 0, 48.864], 0.0, 0.5, lambda _n, d: d)
+    assert r_empty.holding is False and reports_empty[-1]["ok"] is True and reports_empty[-1]["holding"] is False
+
+    # 2: Same over-closed command while genuinely holding an object (55.0 > 48.5 + 2.0) must still arm release floor & hold.
+    reports_held = []
+    r_held = Runner(SimpleNamespace(get_observation=lambda: dict(zip(NAMES, [0, 0, 0, 0, 0, 55.0])), send_action=lambda a: a),
+                    lib_arm_s, fps=30, status=reports_held.append, clock=lambda: 0.5)
+    r_held.chunk, r_held.queue, r_held.target = "policy", [[0, 0, 0, 0, 0, 48.62]], [0, 0, 0, 0, 0, 46.71]
+    r_held._fresh_present = True
+    confirm_grip_release(r_held, _sent(46.52), [0, 0, 0, 0, 0, 55.0], committed=True, empty_margin=2.0)
+    assert r_held._held_jaw == pytest.approx(55.0)
+    confirm_grip_release(r_held, _sent(46.545), [0, 0, 0, 0, 0, 55.0], committed=True, empty_margin=2.0)
+    assert r_held._release_until == pytest.approx(48.62) and r_held._release_floor >= 57.0
+    r_held.queue, r_held.settle_since, r_held.last_body, r_held.last_grip = [], 0.0, [0, 0, 0, 0, 0], 55.0
+    check_chunk_settled(r_held, [0, 0, 0, 0, 0, 55.0], 0.0, 0.5, lambda _n, d: d)
+    assert reports_held[-1]["ok"] is False and reports_held[-1]["holding"] is True
+
+    # 3: Explicit jaw_empty_stop > gripper_closed (48.5 > 46.5) blocks false hold at 48.9 and preserves genuine hold at 51.0.
+    lib_stop = {"schema": SCHEMA, "names": NAMES, "fps": 30, "gripper_closed": 46.5, "jaw_empty_stop": 48.5, "chunks": {"home": [[0] * 6]}}
+    for present_g, want_held in ((48.9, False), (51.0, True)):
+        reports_s = []
+        rs = Runner(SimpleNamespace(get_observation=lambda g=present_g: dict(zip(NAMES, [0, 0, 0, 0, 0, g])), send_action=lambda a: a),
+                    lib_stop, fps=30, status=reports_s.append, clock=lambda: 0.5)
+        rs.chunk, rs.queue, rs.target = "policy", [], [0, 0, 0, 0, 0, 46.5]
+        rs._fresh_present = True
+        confirm_grip_release(rs, _sent(46.5), [0, 0, 0, 0, 0, present_g], committed=True, empty_margin=2.0)
+        assert (rs._held_jaw is not None) is want_held
+        rs.settle_since, rs.last_body, rs.last_grip = 0.0, [0, 0, 0, 0, 0], present_g
+        check_chunk_settled(rs, [0, 0, 0, 0, 0, present_g], 0.0, 0.5, lambda _n, d: d)
+        assert rs.holding is want_held and reports_s[-1]["holding"] is want_held
+
+    # 4: Partial/None library on non-policy chunks and huge int jaw_empty_stop never crash; policy chunks still fail closed.
+    for mock_lib in (None, {"chunks": {"home": [[0] * 6]}}):
+        r_mock = SimpleNamespace(
+            library=mock_lib, human_hold_latched=False, _fresh_present=True, chunk="park", queue=[],
+            target=[0, 0, 0, 0, 0, 48.0], settle_since=0.0, last_grip=48.0, last_body=[0, 0, 0, 0, 0],
+            jitter={"shaking": False}, paced_ticks=0, pace_floor=0.0, peak_lag=0.0, over_ticks=0,
+            damped_ticks=0, holding=False, fault=None, read_health=lambda: None, status=lambda _r: None,
+            report=lambda **_kw: None,
+        )
+        confirm_grip_release(r_mock, _sent(48.0), [0, 0, 0, 0, 0, 48.0], committed=True, empty_margin=2.0)
+        assert r_mock._held_jaw is None
+        if isinstance(mock_lib, dict):
+            check_chunk_settled(r_mock, [0, 0, 0, 0, 0, 48.0], 0.0, 0.5, lambda _n, d: d)
+            assert r_mock.chunk is None and r_mock.holding is False
+
+    lib_huge = {"schema": SCHEMA, "names": NAMES, "fps": 30, "gripper_closed": 48.5, "jaw_empty_stop": 10**400, "chunks": {"home": [[0] * 6]}}
+    r_huge = Runner(SimpleNamespace(get_observation=lambda: dict(zip(NAMES, [0, 0, 0, 0, 0, 48.864])), send_action=lambda a: a),
+                    lib_huge, fps=30, status=[].append, clock=lambda: 0.5)
+    r_huge.chunk, r_huge.queue, r_huge.target, r_huge._fresh_present = "policy", [], [0, 0, 0, 0, 0, 46.5], True
+    confirm_grip_release(r_huge, _sent(46.5), [0, 0, 0, 0, 0, 48.864], committed=True, empty_margin=2.0)
+    assert r_huge._held_jaw is None
+
+    r_bad_policy = Runner(SimpleNamespace(get_observation=lambda: dict(zip(NAMES, [0, 0, 0, 0, 0, 49.0])), send_action=lambda a: a),
+                          {"chunks": {"home": [[0] * 6]}}, fps=30, status=[].append, clock=lambda: 0.5)
+    r_bad_policy.chunk, r_bad_policy.queue, r_bad_policy.target = "policy", [], [0, 0, 0, 0, 0, 48.0]
+    with pytest.raises(ValueError, match="invalid gripper_closed"):
+        check_chunk_settled(r_bad_policy, [0, 0, 0, 0, 0, 49.0], 0.0, 0.5, lambda _n, d: d)
+
+
+def test_paced_pre_home_settles_sagged_start_or_fails_closed(tmp_path, monkeypatch):
+    import cell_policy_handoff as handoff
+    import cell_policy_paced as paced
+
+    clock_t = [100.0]
+    monkeypatch.setattr(paced.time, "time", lambda: clock_t[0])
+    lib_path = write_lib(tmp_path)
+    good_pose = [0, -58, 51, 50, -5, 49]
+    sagged_pose = [0, -58, 54.97, 50, -5, 49]
+    chunk = [[5, -50, 45, 48, -5, 49]] * 100
+
+    class PreHomeCell:
+        def __init__(self, pose, *, after_park=None, holding=False, current_ma=0,
+                     park_reply=None, load_fail=False, post_fault=None, cam_wait_s=0.0):
+            self.state, self.after_park = list(pose), after_park
+            self.holding, self.current_ma = holding, current_ma
+            self.park_reply = park_reply or {"ok": True, "command": "park", "settled": True}
+            self.load_fail, self.post_fault, self.cam_wait_s = load_fail, post_fault, cam_wait_s
+            self.events, self.loaded_has_home_only = [], False
+
+        def frame_receipt(self, view, **_kw):
+            clock_t[0] += self.cam_wait_s
+            self.events.append(f"frame:{view}")
+            return {"image": np.zeros((4, 4, 3), np.uint8), "source_stamp": clock_t[0]}
+
+        def act(self, cmd):
+            self.events.append(cmd)
+            if cmd == "state":
+                res = {"ok": True, "state": list(self.state), "t": clock_t[0],
+                       "health": {"current_ma": [0] * 5 + [self.current_ma]}}
+                if self.holding is not None:
+                    res["holding"] = self.holding
+                if self.post_fault and len(self.events) > 1:
+                    res["fault"] = self.post_fault
+                return res
+            if "load " in cmd:
+                if self.load_fail:
+                    return {"ok": False, "error": "bad_pre_load"}
+                loaded = json.loads(Path(cmd.split("load ", 1)[1]).read_text())
+                self.loaded_has_home_only = "policy" not in loaded["chunks"]
+                return {"ok": True}
+            if cmd.endswith("park"):
+                # Blocker #1 contract: pre-settle checked park requires pre-load of the assessed library first.
+                if cmd.startswith("checked s1 h1 ") and not self.loaded_has_home_only:
+                    return {"ok": False, "error": "checked command targets another library"}
+                if self.after_park is not None and self.park_reply.get("ok") and self.park_reply.get("settled") is True:
+                    self.state = list(self.after_park)
+                return {"state": list(self.state), **self.park_reply}
+            return {"ok": True, "settled": True, "state": list(self.state)}
+
+    # Already on home: 0 pre-settle loads/parks.
+    c_home = PreHomeCell(good_pose)
+    r_home = drive.run_episode(c_home, Policy([chunk]), lib_path, tmp_path, offset=[0] * 6,
+                               max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
+    assert r_home["result"] == "chunks_done" and sum(e.endswith("park") for e in c_home.events) == 1
+
+    # Sagged start + slow frame_receipt (1.2s): authorizes check_home=False, loads presettle lib, parks, captures fresh post-park frames.
+    seen_auth = []
+
+    class AuthStub:
+        supports_check_home = True
+
+        def __call__(self, _lib, _st, seq, *, check_home=True):
+            seen_auth.append((seq, check_home))
+            return {"session_id": "s1", "library_sha256": "h1" if seq == ("park",) else "h2"}
+
+    c_sag = PreHomeCell(sagged_pose, after_park=good_pose, cam_wait_s=1.2)
+    r_sag = drive.run_episode(c_sag, Policy([chunk]), lib_path, tmp_path, offset=[0] * 6,
+                              max_chunks=1, dry_run=False, log=[].append, authorize=AuthStub(), paced_chunks=True,
+                              max_obs_age_s=3.0)
+    assert r_sag["result"] == "chunks_done" and seen_auth == [(("park",), False), (("run policy", "park"), True)]
+    assert c_sag.events[0] == "state" and c_sag.events[1].startswith("checked s1 h1 load ")
+    assert c_sag.events[2:7] == ["checked s1 h1 park", "state", "frame:top", "frame:wrist", "state"]
+    assert c_sag.events[7].startswith("checked s1 h2 load ")
+
+    # Real Authorization passes check_home=False through to cell_envelope.assess.
+    import cell_envelope
+    import cell_pipeline_io
+    cal_path = tmp_path / "cal.json"
+    cal_path.write_text("{}")
+    assess_calls = []
+    with monkeypatch.context() as mp:
+        mp.setattr(cell_pipeline_io, "limit_error", lambda *_a, **_kw: None)
+        mp.setattr(cell_envelope, "assess", lambda *a, **kw: (assess_calls.append(kw), {"allowed": True, "session_id": "s", "library_sha256": "x"})[1])
+        handoff.Authorization({"calibration_path": str(cal_path)})(LIB, {"state": sagged_pose}, ("park",), check_home=False)
+    assert assess_calls[-1]["check_home"] is False
+
+    # Boundary refusals before motion: extended (>FOLDED_TOL=10), missing home, authorize ValueError, pre-load fail, off after park.
+    for kw, msg in (
+        ({"pose": [0, -58, 65.0, 50, -5, 49]}, "outside folded window"),
+        ({"pose": sagged_pose, "after_park": [0, -58, 54.5, 50, -5, 49]}, "START_POSE_OFF_HOME"),
+        ({"pose": sagged_pose, "load_fail": True}, "bad_pre_load"),
+    ):
+        c_ref = PreHomeCell(**kw)
+        r_ref = drive.run_episode(c_ref, Policy([chunk]), lib_path, tmp_path, offset=[0] * 6,
+                                  max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
+        assert r_ref["result"] == "refused" and msg in r_ref["reason"] and not any(e.startswith("frame:") for e in c_ref.events)
+
+    no_home_lib = tmp_path / "no-home.json"
+    no_home_lib.write_text(json.dumps({**LIB, "chunks": {"reach": LIB["chunks"]["reach"]}}))
+    r_no_home = drive.run_episode(PreHomeCell(sagged_pose), Policy([chunk]), no_home_lib, tmp_path,
+                                  offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
+    assert r_no_home["result"] == "refused" and "missing home" in r_no_home["reason"]
+
+    r_auth_err = drive.run_episode(
+        PreHomeCell(sagged_pose), Policy([chunk]), lib_path, tmp_path, offset=[0] * 6, max_chunks=1, dry_run=False,
+        log=[].append, authorize=lambda *_a, **_kw: (_ for _ in ()).throw(ValueError("denied")), paced_chunks=True,
+    )
+    assert r_auth_err["result"] == "refused" and "denied" in r_auth_err["reason"]
+
+    # Holding True/None, high gripper current, unsettled pre-park, post-park fault, and post-park jaw_zone_error send human-hold.
+    for kw in (
+        {"holding": True}, {"holding": None}, {"current_ma": 150},
+        {"park_reply": {"ok": True, "command": "park"}}, {"after_park": good_pose, "post_fault": "motor_err"},
+    ):
+        c_hh = PreHomeCell(sagged_pose, **kw)
+        r_hh = drive.run_episode(c_hh, Policy([chunk]), lib_path, tmp_path, offset=[0] * 6,
+                                 max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
+        assert r_hh["result"] in ("refused", "fault") and c_hh.events[-1] == "human-hold"
+
+    # Dry run skips pre-settle park.
+    c_dry = PreHomeCell(sagged_pose)
+    assert drive.run_episode(c_dry, Policy([chunk]), lib_path, tmp_path, offset=[0] * 6,
+                             max_chunks=1, dry_run=True, log=[].append, paced_chunks=True) == {"result": "dry_run", "chunks": 1}
+    assert c_dry.events[0] == "state" and not any(e.endswith("park") for e in c_dry.events)
+
+    # Post-park jaw_zone_error triggers human-hold without running inference.
+    bad_jaw_home = [38.9, -26.0, 2.0, 55.0, 43.93, 49.0]
+    jaw_lib = write_lib(tmp_path, {
+        **LIB_GRASP,
+        "chunks": {**LIB_GRASP["chunks"], "home": [bad_jaw_home] * 2,
+                   "reach": [[0, -58, 2, 40, -20, 49], [40, -10, 51, 55, 90, 60]]},
+    })
+    c_jaw = PreHomeCell([38.9, -32.0, 2.0, 55.0, 43.93, 49.0], after_park=bad_jaw_home)
+    r_jaw = drive.run_episode(c_jaw, Policy([chunk]), jaw_lib, tmp_path, offset=[0] * 6,
+                              max_chunks=1, dry_run=False, log=[].append, kin=FakeKin(), paced_chunks=True)
+    assert (r_jaw["result"] == "refused" and "jaw" in r_jaw["reason"]
+            and "park" in c_jaw.events and not any(e.startswith("frame:") for e in c_jaw.events)
+            and c_jaw.events[-1] == "human-hold")
+
+
+def test_paced_stops_on_unsettled_chunk_and_invalid_stamps(tmp_path):
+    import time as _t
+
+    lib_path = write_lib(tmp_path)
+    chunk = [[5, -50, 45, 48, -5, 49]] * 100
+    c_unsettled = Cell({"run policy": {"ok": True, "settled": False}})
+    r_unsettled = drive.run_episode(c_unsettled, Policy([chunk, chunk]), lib_path, tmp_path, offset=[0] * 6,
+                                    max_chunks=2, dry_run=False, log=[].append, paced_chunks=True)
+    assert r_unsettled["result"] == "unsettled" and r_unsettled["at"] == 0 and c_unsettled.commands.count("run policy") == 1
+
+    class BadReceiptCell(Cell):
+        def __init__(self, *, cam_stamp=None, state_t=_t.time()):
+            super().__init__()
+            self.cam_stamp, self.state_t = cam_stamp, state_t
+
+        def frame_receipt(self, _view, **_kw):
+            return {"image": np.zeros((4, 4, 3), np.uint8), **({"source_stamp": self.cam_stamp} if self.cam_stamp is not None else {})}
+
+        def act(self, command):
+            res = super().act(command)
+            if command == "state":
+                res["t"] = self.state_t
+            return res
+
+    now = _t.time()
+    for bad in (None, float("nan"), float("inf"), True, now + 5.0):
+        c_cam = BadReceiptCell(cam_stamp=bad, state_t=now)
+        r_cam = drive.run_episode(c_cam, Policy([chunk]), lib_path, tmp_path, offset=[0] * 6,
+                                  max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
+        assert r_cam["result"] == "refused" and "camera stamp" in r_cam["reason"] and "run policy" not in c_cam.commands
+
+    for bad_state_t in (float("nan"), float("inf"), True, now + 5.0):
+        c_st = BadReceiptCell(cam_stamp=now, state_t=bad_state_t)
+        r_st = drive.run_episode(c_st, Policy([chunk]), lib_path, tmp_path, offset=[0] * 6,
+                                 max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
+        assert r_st["result"] == "refused" and "state stamp" in r_st["reason"] and "run policy" not in c_st.commands
+
+    # dry_run tolerates invalid stamps without failing or loading.
+    assert drive.run_episode(BadReceiptCell(cam_stamp=None, state_t=float("nan")), Policy([chunk]), lib_path, tmp_path,
+                             offset=[0] * 6, max_chunks=1, dry_run=True, log=[].append, paced_chunks=True) == {"result": "dry_run", "chunks": 1}

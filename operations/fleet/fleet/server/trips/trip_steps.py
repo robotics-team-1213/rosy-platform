@@ -22,6 +22,7 @@ from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_field
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
+from fleet.server.trip_nav2_route import step_nav2_route
 from fleet.server.trip_ports import pose_diagnostics
 from fleet.server.trip_progress import MANOEUVRE
 from fleet.swarm.transport import RobotApiError
@@ -77,7 +78,7 @@ class TripSteps:
             await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)}, halt_free=self._auto_locate_on(robot_id))  # D-989: no deadman reliance
             return
         try:
-            if live.arc(live.view["segment_index"]).drive_mode == "lane":
+            if live.segment_is_lane(live.view["segment_index"]):
                 live.junction = await self._call(self._junction.junction_state(robot_id, **self._after(self._junction, robot_id))) or {}  # D-760 8: fenced
                 # D-520 2: CORE's arc record; a CORE restart resets arc_seq (as the junction seq)
                 sent, arc = live.sent, live.junction.get("arc")
@@ -106,7 +107,7 @@ class TripSteps:
             index, s, off = self._locate(live, pose)
             live.at, live.at_stamp = (index, s), getattr(pose, "odom_stamp", None)  # one pose, one assignment
             remaining = live.segments[index]["s_to"] - s
-            lane = live.arc(index).drive_mode == "lane"
+            lane = live.segment_is_lane(index)
             if lane and self.traffic.holds(live, index):  # CORE waits at the junction for the block
                 live.waiting_since = None
             failed = live.junction_end(self._clock(), remaining if lane else None, self.config)
@@ -158,6 +159,8 @@ class TripSteps:
                 last = index == len(live.segments) - 1
             if lane:
                 await self._step_lane(live, index, remaining, pose)
+            elif live.nav2:
+                await step_nav2_route(self, live, index, s, pose)
             else:
                 await self._step_free(live, index, s, pose)
         except _JunctionAborted as exc:
@@ -168,7 +171,7 @@ class TripSteps:
             await self._stop(live, "failed", "TRIP_GOAL_REFUSED", {"goal_reason": str(exc) or None})
             return
         except RobotApiError as exc:
-            lane = live.arc(live.view["segment_index"]).drive_mode == "lane"
+            lane = live.segment_is_lane(live.view["segment_index"])
             code = "TRIP_ROBOT_JUNCTION_UNSUPPORTED" if lane and exc.status == 404 else exc.code
             await self._stop(live, "failed", code, {"status": exc.status})
             return
@@ -183,7 +186,7 @@ class TripSteps:
             del live.view["wait"]  # a whole step without a link fault: the link_wait ``since`` may start over
         # after the step, so the last place's stop has gone out before "arrived"
         if last and live.view["hold"] is None and self._arrived(live, index, remaining, lane, pose):
-            if not await self._arrival_aligned(live, pose):
+            if not live.nav2 and not await self._arrival_aligned(live, pose):
                 if live.open:
                     self._save(live)
                 return  # waiting for a fresh sighting, or ended STATION_ALIGN_*

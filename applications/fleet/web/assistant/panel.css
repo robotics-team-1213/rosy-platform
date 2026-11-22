@@ -10,5 +10,6 @@
   .assistant-layout:has(> .assistant-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem); }
 }
 @media (width < 64rem) {
+  .assistant-layout:has(> .assistant-panel:not([hidden])) > #robot-stage,
   .assistant-layout:has(> .assistant-panel:not([hidden])) > #fleet-main { display: none; }
 }

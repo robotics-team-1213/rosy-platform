@@ -26,7 +26,8 @@ const planMetrics = (plan) => ({
 });
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
-  toWorld, refreshGuide, queuedReason, drawMap = () => {}, scheduleDraw = drawMap, onSelectRobot = () => {} }) {
+  toWorld, refreshGuide, queuedReason, drawMap = () => {}, scheduleDraw = drawMap, onSelectRobot = () => {},
+  selection = null, onGoalFinished = () => {} }) {
   let goalPlanSeq = 0;
 
   const setGoal = (patch) => { view.selectedGoal = { ...view.selectedGoal, ...patch, at: Date.now() }; drawMap(); render(); };
@@ -47,8 +48,14 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       const idx = cards.indexOf(active), step = event.key === "ArrowDown" ? 1 : -1;
       cards[idx < 0 ? (event.key === "ArrowDown" ? 0 : cards.length - 1) : (idx + step + cards.length) % cards.length].focus();
     } else if (event.key === "Enter" && cards.includes(active)) {
-      const choose = active.querySelector("ui-button[data-select-robot-id]");
-      if (choose && !choose.disabled) { event.preventDefault(); choose.click(); }
+      const id = active.dataset.robotId;
+      if (id) {
+        event.preventDefault();
+        selection?.set?.(id, { source: "roster" });
+        if (document.getElementById("robot-panel")?.hidden) {
+          document.querySelector(`#robot-dock .robot-dock-btn[data-robot-id="${id}"]`)?.focus({ preventScroll: true });
+        }
+      }
     } else if (event.key === "Escape" && view.selected) {
       const robotId = view.selected; disarmGoal("목표 지정 취소"); render(); focusGoalButton(robotId);
     }
@@ -82,16 +89,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       status: "SELECTED", statusText: "목표 핀 고정 · 도로 경로 확정", at: Date.now(),
     };
     view.lastDispatchedGoal = { robotId, x: point.x, y: point.y, yaw, label: where, at: Date.now() };
-    const stationInspectMap = {
-      S2: { targetId: "arm_a", camId: "arm_a_wrist" }, S3: { targetId: "arm_s", camId: "arm_s_wrist" },
-      S5: { targetId: "arm_b", camId: "arm_b_wrist" }, S1: { targetId: robotId, camId: "side" },
-      C1: { targetId: robotId, camId: "pinky" }, C2: { targetId: robotId, camId: "pinky" }, C3: { targetId: robotId, camId: "pinky" },
-    };
-    const linkedInspect = placeId ? stationInspectMap[String(placeId).toUpperCase()] : null;
-    if (linkedInspect && typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-      if (linkedInspect.targetId.startsWith("arm_")) view.focusAnchorId = linkedInspect.targetId;
-      window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: linkedInspect }));
-    }
+    const stationArmMap = { S2: "arm_a", S3: "arm_s", S5: "arm_b" };
+    const linkedArm = placeId ? stationArmMap[String(placeId).toUpperCase()] : null;
+    if (linkedArm) view.focusAnchorId = linkedArm;
     drawMap(); render();
 
     // A robot on its own (SLAM) map takes a site goal only as a lane trip Fleet plans from its measured site pose;
@@ -285,6 +285,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
 
   function focusGoalButton(robotId) {
     inbox.select("status");
+    onGoalFinished(robotId);
     [...document.querySelectorAll("#robot-workspace ui-button[data-goal-robot-id]")]
       .find(button => button.dataset.goalRobotId === robotId)?.focus({preventScroll: true});
   }
@@ -505,12 +506,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       if (!world) return;
       for (const r of view.guide?.robots || []) {
         if (r.pose && Math.hypot(r.pose.x - world.x, r.pose.y - world.y) <= 0.10) {
-          onSelectRobot(r.robot_id);
           view.focusAnchorId = r.robot_id;
-          if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-            window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: r.robot_id } }));
-          }
-          log(`${r.robot_id} 선택됨 · 우측 카메라·제어 인스펙터 연동 완료 — 이동할 목적지를 지도에서 찍으세요`, "good");
+          selection?.set?.(r.robot_id, { source: "map" });
+          log(`${r.robot_id} 선택됨 · 우측 도크에서 패널을 열거나 선택한 로봇의 목적지를 지도에서 찍으세요`, "good");
           render();
           return;
         }
@@ -521,11 +519,8 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
           const dHead = Math.hypot((anc.head_x ?? anc.base_x) - world.x, (anc.head_y ?? anc.base_y) - world.y);
           if (Math.min(dBase, dHead) <= 0.13) {
             view.focusAnchorId = anc.target_id;
-            onSelectRobot(anc.target_id);
-            if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-              window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: anc.target_id } }));
-            }
-            log(`${anc.label} 선택됨 · 우측 실시간 손목·상단 카메라 및 제어 인스펙터 연동 활성화`, "good");
+            selection?.set?.(anc.target_id, { source: "map" });
+            log(`${anc.label} 선택됨 · 우측 인스펙터와 도크 선택이 갱신되었습니다`, "good");
             render();
             return;
           }

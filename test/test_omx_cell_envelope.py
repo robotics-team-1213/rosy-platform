@@ -244,7 +244,7 @@ def test_reviewed_gate_load_keeps_its_own_durable_intent(tmp_path, task, envelop
     commands = []
     def act(command):
         commands.append(command)
-        return copy.deepcopy(state) if command == "state" else {"ok": True, "holding": True}
+        return copy.deepcopy(state) if command == "state" else {"ok": True, "settled": True, "holding": True}
     cell = SimpleNamespace(act=act)
     cell_attempts.start(attempts, run_id="current")
     gate = Gate(cell, config, calibration, sequence=sequence)
