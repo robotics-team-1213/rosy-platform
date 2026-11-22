@@ -473,7 +473,8 @@ def test_planned_stop_goal_clears_stale_site_claims(monkeypatch):
         _remember=lambda _: None, _verdict=lambda _: "TRUSTED", trip_refusal=lambda _: None,
     )
     reply = run(console_helpers._goal(console, robot_id, 0.5, 0.0, 0.0, task_id="t1", attempt_id="attempt",
-                                      attempt_seq=1, stop_binding={"site_map_id": "cell", "site_map_version": 261,
-                                                                   "binding_id": "fit-1", "map_grid_id": "grid-A"}))
+                                      attempt_seq=1, lease_source=None,
+                                      stop_binding={"site_map_id": "cell", "site_map_version": 261,
+                                                    "binding_id": "fit-1", "map_grid_id": "grid-A"}))
     assert reply["accepted"] is True and robot_id not in console._site_claims
     assert console._claims[robot_id] == [(0, 0), (0.5, 0.0)]
