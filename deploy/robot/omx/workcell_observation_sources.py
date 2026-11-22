@@ -22,6 +22,7 @@ from core_common.protocol.motor_health import MotorHealthResponse
 from core_common.protocol.workcell_observations import ArmObservation
 
 
+_CAMERA_SNAPSHOT_POLL_S = 0.020
 _WOB_GLOBALS_LIST: list[dict] = []
 
 
@@ -130,8 +131,22 @@ class NativeSource(LatestSource):
         super().__init__()
         self.channel, self.joint_names = SnapshotChannel(channel), joint_names
         self._joint_name_set = set(joint_names) if joint_names is not None else None
+        self._camera_poll_lock = threading.Lock() if joint_names is None else None
+        self._camera_poll_at = -math.inf
 
     def latest(self):
+        if self._camera_poll_lock is None:
+            self._read_snapshot()
+        else:
+            # Share the local read across destinations. Each worker still sends independently.
+            with self._camera_poll_lock:
+                now = self.monotonic()
+                if now >= self._camera_poll_at:
+                    self._camera_poll_at = now + _CAMERA_SNAPSHOT_POLL_S
+                    self._read_snapshot()
+        return super().latest()
+
+    def _read_snapshot(self):
         sample = self.channel.read()
         if sample is not None:
             try:
@@ -151,7 +166,6 @@ class NativeSource(LatestSource):
                 self.put(sample["captured_at"], value, received=sample["monotonic"])
             except (ValueError, TypeError):
                 pass
-        return super().latest()
 
 
 class ArmHealthSource:

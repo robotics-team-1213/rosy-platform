@@ -235,6 +235,66 @@ def test_camera_sender_uses_verified_source_scoped_persistent_websocket(monkeypa
     assert sum("camera preview JPEG exceeds" in record.message for record in caplog.records) == 1
 
 
+def test_camera_mirror_paces_by_receiver_config_without_pacing_primary(monkeypatch):
+    clock = SimpleNamespace(now=10.0)
+    frames = {"primary.example": [], "mirror.example": []}
+    dials = {"primary.example": 0, "mirror.example": 0}
+
+    class Connection:
+        socket = SimpleNamespace(settimeout=lambda _: None)
+
+        def __init__(self, host):
+            self.host = host
+            self.control = [json.dumps(protocol.make_config(fps=3))]
+            if dials[host] > 1:
+                self.control.clear()  # legacy receiver sends no config
+            self.control.extend(
+                json.dumps({"type": "config", "fps": malformed})
+                for malformed in (True, 0, -1, 0.001, float("inf"), "3", None)
+            )
+
+        def recv(self, timeout):
+            if not self.control:
+                raise TimeoutError()
+            return self.control.pop(0)
+
+        def send(self, value):
+            if isinstance(value, bytes):
+                frames[self.host].append(protocol.parse_header(value).seq)
+
+        def close(self):
+            pass
+
+    def connect(url, **kwargs):
+        host = bridge.urlsplit(url).hostname
+        dials[host] += 1
+        return Connection(host)
+
+    monkeypatch.setitem(sys.modules, "websockets.sync.client", SimpleNamespace(connect=connect))
+    monkeypatch.setattr(bridge, "time", SimpleNamespace(
+        monotonic=lambda: clock.now, time=lambda: 100.0 + clock.now,
+    ))
+    context = ssl.create_default_context()
+    primary = bridge.CameraSender("wss://primary.example", "top", "secret", context=context)
+    mirror = bridge.CameraSender("wss://mirror.example", "top", "secret", context=context, pace_from_config=True)
+    source = bridge.LatestSource(wall=bridge.time.time, monotonic=bridge.time.monotonic)
+    for now in (10.0, 10.1, 10.2, 10.35, 10.4):
+        clock.now = now
+        source.put(100.0 + now, (b"jpeg", 640, 480))
+        primary.send(source.latest())
+        mirror.send(source.latest())
+    assert frames == {"primary.example": [1, 2, 3, 4, 5], "mirror.example": [1, 4]}
+    assert dials == {"primary.example": 1, "mirror.example": 1}
+
+    mirror.close()
+    for now in (10.45, 10.5):
+        clock.now = now
+        source.put(100.0 + now, (b"jpeg", 640, 480))
+        mirror.send(source.latest())
+    assert dials["mirror.example"] == 2
+    assert frames["mirror.example"] == [1, 4, 6, 7]
+
+
 def test_joint_callback_conversion_rejects_aliases_nonfinite_and_wrong_identity():
     message = SimpleNamespace(header=SimpleNamespace(stamp=SimpleNamespace(sec=100, nanosec=0)),
                               name=["joint1"], position=[0.25])
@@ -385,11 +445,19 @@ def test_mirror_vision_routes_only_selected_cameras_with_its_own_trust_and_no_ar
                 ('wss://r.example', 'top', 'top-secret', '/etc/r-ca.crt')}
     if not selection:
         expected.add(('wss://r.example', 'side', 'side-secret', '/etc/r-ca.crt'))
-    created, delivered, stop = set(), set(), threading.Event()
+    created, delivered, paced, native_channels, stop = set(), set(), set(), [], threading.Event()
+    original_source = bridge.NativeSource
+
+    def native_source(channel, **kwargs):
+        native_channels.append(channel)
+        return original_source(channel, **kwargs)
+
     class Sender:
-        def __init__(self, url, source, token, *, context):
+        def __init__(self, url, source, token, *, context, pace_from_config=False):
             self.key = (url, source, token, context)
             created.add(self.key)
+            if pace_from_config:
+                paced.add(self.key)
         def send(self, sample):
             delivered.add(self.key)
             if expected <= delivered: stop.set()
@@ -397,6 +465,7 @@ def test_mirror_vision_routes_only_selected_cameras_with_its_own_trust_and_no_ar
     monkeypatch.setattr(bridge, 'run_usb_reports', lambda *args, **kwargs: None)
     monkeypatch.setattr(bridge, 'ArmSender', Sender)
     monkeypatch.setattr(bridge, 'CameraSender', Sender)
+    monkeypatch.setattr(bridge, 'NativeSource', native_source)
     monkeypatch.setattr(bridge, 'threading', SimpleNamespace(
         Event=lambda: stop, Thread=threading.Thread, Lock=threading.Lock,
         current_thread=threading.current_thread))
@@ -409,6 +478,8 @@ def test_mirror_vision_routes_only_selected_cameras_with_its_own_trust_and_no_ar
         timer.cancel()
     assert trust == ['/etc/cell-ca.crt', '/etc/r-ca.crt']
     assert created == delivered == expected
+    assert paced == {route for route in expected if route[0] == 'wss://r.example'}
+    assert native_channels == [arm.joint_topic, '/top/image_raw', '/side/image_raw']
 
 
 @pytest.mark.parametrize("binding", [

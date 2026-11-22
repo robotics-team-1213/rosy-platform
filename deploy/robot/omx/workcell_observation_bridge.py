@@ -176,21 +176,42 @@ def camera_packet(sample, *, wall=None, monotonic=None):
 
 
 class CameraSender:
-    def __init__(self, vision_url, source_id, token, *, context):
+    def __init__(self, vision_url, source_id, token, *, context, pace_from_config=False):
         self.url = secure_url(vision_url, "wss")
         if urlsplit(self.url).path in ("", "/"):
             self.url += protocol.WS_PATH
         self.source_id, self.token, self.context = source_id, token, _verified(context)
         self.connection = None
+        self._pace_from_config = pace_from_config
+        self._frame_interval = 0.0
+        self._last_frame_sent_at = -math.inf
         self._next_oversize_warning = -math.inf
 
     def close(self):
+        self._frame_interval = 0.0
+        self._last_frame_sent_at = -math.inf
         if self.connection is not None:
             connection, self.connection = self.connection, None
             try:
                 connection.close()
             except Exception:
                 pass
+
+    def _configure_pacing(self, message):
+        if not isinstance(message, str):
+            return
+        try:
+            config = json.loads(message)
+            if not isinstance(config, dict) or config.get("type") != "config":
+                return
+            fps = config.get("fps")
+            if type(fps) is not int or fps <= 0:
+                return
+            interval = 1 / fps
+        except (ValueError, OverflowError, RecursionError):
+            return
+        if 0 < interval < math.inf:
+            self._frame_interval = interval
 
     def send(self, sample):
         from websockets.sync.client import connect
@@ -230,10 +251,17 @@ class CameraSender:
                 self.connection.send(json.dumps(camera_hello(self.source_id, sample.value[1], sample.value[2])))
             for _ in range(8):
                 try:
-                    self.connection.recv(timeout=0)
+                    message = self.connection.recv(timeout=0)
                 except TimeoutError:
                     break
+                if self._pace_from_config:
+                    self._configure_pacing(message)
+            # Return without a backlog: the worker can take the next capture when due.
+            if self._pace_from_config and time.monotonic() - self._last_frame_sent_at < self._frame_interval:
+                return
             self.connection.send(camera_packet(sample))
+            if self._pace_from_config:
+                self._last_frame_sent_at = time.monotonic()
         except Exception:
             self.close()
             raise
@@ -369,19 +397,22 @@ def main(argv=None):
                     name=f"{arm.source_id}@fleet{index}",
                 )
         for camera in cell.cameras:
+            frames = NativeSource(camera.image_topic)
             deliver(
                 camera,
-                NativeSource(camera.image_topic),
+                frames,
                 CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context),
             )
-            # Own buffer and worker per mirror: a slow or absent site never delays the local Vision.
+            # Share capture, keep a separate network worker per destination.
             for index, (url, mirror_context, source_ids) in enumerate(mirrors, 1):
                 if camera.source_id not in source_ids:
                     continue
                 deliver(
                     camera,
-                    NativeSource(camera.image_topic),
-                    CameraSender(url, camera.source_id, tokens[camera.source_id], context=mirror_context),
+                    frames,
+                    CameraSender(
+                        url, camera.source_id, tokens[camera.source_id], context=mirror_context, pace_from_config=True,
+                    ),
                     name=f"{camera.source_id}@mirror{index}",
                 )
         workers.append(
