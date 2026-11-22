@@ -558,8 +558,24 @@ jobs:
                       status = 1
               _, seen_known, _ = known_failures.compare(first_out, known_list)
               all_req_known = bool(req_ids) and not checked_req and bool(seen_known)
-              if has_summary and not all_req_known and (len(target_paths) > 1 or bool(req_ids)
-                                  or any(not p.endswith(".py") for p in target_paths)):
+              all_opt_in_browser = (
+                  not is_browser
+                  and bool(target_paths)
+                  and all(
+                      "::" not in p and p.endswith(".py") and (
+                          p.endswith("_browser.py")
+                          or (Path(p).is_file() and bool(re.search(
+                              r"\bfrom\s+browser_harness\s+import\b.*\bbrowser_tests_enabled\b",
+                              Path(p).read_text(encoding="utf-8", errors="replace"),
+                          )))
+                      )
+                      for p in target_paths
+                  )
+              )
+              if has_summary and not all_req_known and not all_opt_in_browser and (
+                  len(target_paths) > 1 or bool(req_ids)
+                  or any(not p.endswith(".py") for p in target_paths)
+              ):
                   if not re.search(r"\b[1-9]\d* passed\b", full_out):
                       print(f"::error::pytest {' '.join(paths)} passed 0 items (all skipped or empty)", flush=True)
                       status = 1

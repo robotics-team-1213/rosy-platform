@@ -143,9 +143,6 @@ def markdown_readers(repo: Repo, path: str) -> list[str]:
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
 BROAD_TESTS = frozenset({"test"})
 
-
-
-
 # A broad module's path no test names selects the whole root suite (15-31 min remote, 2026-11-20).
 ROOT_FALLBACK = "no test names it, whole root suite"
 UNMAPPED_HINT = ("name this path literally in the test that loads it"
@@ -173,8 +170,6 @@ class Selection:
                 "unmapped": self.unmapped, "narrowed": self.narrowed, "reasons": self.reasons, "invocations": self.invocations,
                 "local_invocations": self.local_invocations,
                 "full_invocations": self.full_invocations}
-
-
 
 
 def changed_files(repo: Path, base: str, head: str | None = None) -> list[str]:
@@ -251,8 +246,6 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
     covered = [p for entry in CI_FULL_MATRIX for inv in entry["invocations"] for p in inv
                if not p.startswith("-")] + ["test"]
     return [p for p in dict.fromkeys(paths) if not any(_under(p, c) for c in covered)]
-
-
 
 
 def _narrowed_tests(repo: Repo, path: str, test: str, reverse: bool = False) -> list[str] | None:
@@ -345,6 +338,10 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             for test in markdown_readers(repo, path):
                 add(test, f"reads {path}")
             continue
+        if affected_narrow.is_contract_version_pin(repo, path):
+            for test in (*affected_narrow.CONTRACT_VERSION_READERS, *repo.referencing_tests(path)):
+                add(test, f"contract version pin ({path})")
+            continue
         module = repo.module_for(path)
         referencing = repo.referencing_tests(path) + affected_narrow.registry_readers(repo, path)
         for test in referencing:
@@ -354,10 +351,13 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             touched_paths.setdefault(module["name"], []).append(path)
             tests = module.get("tests") or []
             if set(tests) & BROAD_TESTS:
-                if referencing:
+                if referencing or path.endswith(".example"):
                     narrowed = [t for t in tests if t not in BROAD_TESTS] + (module.get("functional") or [])
+                    why_kind = "root test/" if referencing else "example template"
                     for test in narrowed:
-                        add(test, f"module {module['name']} ({path}; root test/ narrowed to functional)")
+                        add(test, f"module {module['name']} ({path}; {why_kind} narrowed to functional)")
+                    for test, why in ({} if referencing else affected_narrow.folder_tests(repo, path)).items():
+                        add(test, why)
                 else:
                     # No test names this file: the narrowing has nothing to stand on.
                     add("test", f"module {module['name']} ({path}; {ROOT_FALLBACK})")
