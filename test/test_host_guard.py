@@ -345,7 +345,7 @@ def _remote(tmp_path, command, units="pinky-backend.service\n", role=None):
     (tmp_path / "units").write_text(units)
     if role:
         (tmp_path / "role").write_text(role + "\n")
-    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "SSH_ORIGINAL_COMMAND": command,
+    env = {**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}", "SSH_ORIGINAL_COMMAND": command,
            "GUARD_UNITS": str(tmp_path / "units"), "GUARD_ROLE_FILE": str(tmp_path / "role"),
            "GUARD_RECOVERY_STATUS": str(tmp_path / "recovery-status.json"), "CALLS": str(tmp_path / "rcalls")}
     result = subprocess.run(["sh", str(REMOTE)], env=env, capture_output=True, text=True, timeout=10)
@@ -363,6 +363,18 @@ def test_the_forced_command_reports_down_units_in_health(tmp_path):
     assert 0 < avail <= total and abs(int(fields[0]) - 100 * avail // total) <= 2  # two meminfo reads
     assert 0 <= int(fields[16]) <= 100  # CPU busy over one second of /proc/stat
     assert fields[17] == "-" or -40 <= int(fields[17]) <= 120  # a VM test PC may have no thermal zone
+
+
+def test_the_forced_command_appends_storage_maintenance_summary_when_present(tmp_path):
+    maint = tmp_path / "rosy-test/maintenance"
+    maint.mkdir(parents=True)
+    (maint / "last-report.json").write_text(json.dumps({
+        "mode": "apply", "started": 1700000000, "free_before_GiB": 10.0, "free_after_GiB": 12.5,
+    }))
+    result, _ = _remote(tmp_path, "health")
+    fields = result.stdout.split()
+    assert result.returncode == 0 and len(fields) == 21, result.stdout
+    assert fields[18:] == ["1700000000", "done", "2.50"]
 
 
 def test_the_forced_command_sums_gpu_memory_and_ignores_a_broken_driver(tmp_path):
