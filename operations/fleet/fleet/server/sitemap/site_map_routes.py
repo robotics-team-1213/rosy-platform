@@ -104,7 +104,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
     from fleet.server.site_rules_routes import install_site_rules_routes  # D-982: beside the map it is judged on
     install_site_rules_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
                               require_named_operator=require_named_operator)
-    from fleet.server.sitemap.site_points_routes import install_site_points_routes
+    from fleet.server.site_points_routes import install_site_points_routes
     install_site_points_routes(app, site_maps=site_maps, read_guard=read_guard)
     try:
         from fleet.server.sitemap.pipeline_routes import install_pipeline_routes

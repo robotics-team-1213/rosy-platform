@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from hashlib import sha256
-import json
-from pathlib import Path
 import sqlite3
 
 from fastapi.testclient import TestClient
+import pytest
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -183,7 +182,7 @@ def test_site_points_stage_b_promotes_s_out_when_activated_with_split_edge_and_r
     assert s_out["in_active_map"] is True
     assert s_out["status"] == "verified" and s_out["dispatchable"] is True
     assert s_out["edges_in"] == ["lower_east_a"] and s_out["edges_out"] == ["lower_east_b"]
-    assert s_out["approach_pose"] == {"x": 0.29, "y": -0.478, "yaw": 0.0}
+    assert s_out["approach_pose"] == pytest.approx({"x": 0.29, "y": -0.478, "yaw": 0.0})
 
     handoff = next(h for h in full["handoffs"] if h["id"] == "outbound_stand_load")
     assert handoff["vehicle_stop_resolved"] is True and handoff["exit_stop_resolved"] is True
@@ -193,3 +192,47 @@ def test_site_points_stage_b_promotes_s_out_when_activated_with_split_edge_and_r
     port_places = {p["place_id"]: p for p in port["vehicle_places"]}
     assert port_places["S_OUT"]["status"] == "verified" and port_places["S_OUT"]["dispatchable"] is True
     assert port_places["S_EXIT"]["port_role"] == "outbound_exit"
+
+
+def test_site_points_stage_b_rejects_dangling_s_out_and_ambiguous_or_corrupt_rules(tmp_path):
+    client, store = _client_and_store(tmp_path)
+    # 1. Active map with NO rules activated yet stays 200 and Fail-Closed.
+    sm = SiteMap.model_validate(_base_v348_map())
+    draft = store.save_draft(sm, expected_revision=store.draft_view()["revision"], principal_id="op")
+    store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
+    no_rules = client.get("/api/fleet/site-points", headers=VIEWER)
+    assert no_rules.status_code == 200
+    assert no_rules.json()["sources"]["site_rules"] == {"version": None, "sha256": None}
+
+    # 2. Dangling S_OUT (no incoming/outgoing edges) + conflicting rules stay planned_unverified / dispatchable=False.
+    dangling_map = _base_v348_map()
+    dangling_map["places"].append({
+        "id": "S_OUT",
+        "kind": "stop",
+        "name": "S_OUT 미연결",
+        "x": 0.54,
+        "y": -0.478,
+        "yaw": 0.0,
+        "pinned": True,
+        "stop_zone": [[0.45, -0.56], [0.63, -0.56], [0.63, -0.40], [0.45, -0.40]],
+        "approach_m": 0.25,
+    })
+    ambiguous_rules = {
+        "return": {"exit_place": "S1"},
+        "stops": [
+            {"place": "S_OUT", "role": "load"},
+            {"place": "S_OUT", "role": "wait"},
+            {"place": "S3", "role": "unload"},
+        ],
+    }
+    _activate_map_and_rules(store, dangling_map, ambiguous_rules)
+    full = client.get("/api/fleet/site-points", headers=VIEWER).json()
+    s_out = next(p for p in full["vehicle_stops"] if p["id"] == "S_OUT")
+    assert s_out["status"] == "planned_unverified"
+    assert s_out["dispatchable"] is False
+
+    # 3. Corrupted active site_rules sha256 returns HTTP 422 rather than 500.
+    with sqlite3.connect(store.path) as con:
+        con.execute("UPDATE site_rules_versions SET sha256='0' WHERE version=(SELECT MAX(version) FROM site_rules_versions)")
+        con.commit()
+    assert client.get("/api/fleet/site-points", headers=VIEWER).status_code == 422

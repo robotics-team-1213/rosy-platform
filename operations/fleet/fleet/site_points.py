@@ -74,18 +74,22 @@ def _edge_links(site_map: SiteMap) -> tuple[dict[str, list[str]], dict[str, list
     return edges_in, edges_out
 
 
-def _stop_rules_by_place(rules: SiteRules | None) -> dict[str, dict[str, Any]]:
+def _stop_rules_by_place(rules: SiteRules | None) -> tuple[dict[str, dict[str, Any]], set[str]]:
     if rules is None:
-        return {}
+        return {}, set()
     by_place: dict[str, dict[str, Any]] = {}
+    ambiguous: set[str] = set()
     for stop in rules.stops:
+        if stop.place in by_place:
+            ambiguous.add(stop.place)
+            continue
         by_place[stop.place] = {
             "role": stop.role,
             "release": stop.release,
             "timeout_s": stop.timeout_s,
             "on_timeout": stop.on_timeout,
         }
-    return by_place
+    return by_place, ambiguous
 
 
 def _port_role_for(place_id: str, kind: str, rule_role: str | None, exit_place: str | None) -> str | None:
@@ -104,14 +108,25 @@ def _port_role_for(place_id: str, kind: str, rule_role: str | None, exit_place: 
     return None
 
 
-def _is_verified_stop(place, rule: dict[str, Any] | None) -> tuple[str, bool]:
+def _is_verified_stop(
+    place,
+    rule: dict[str, Any] | None,
+    *,
+    has_edges_in: bool,
+    has_edges_out: bool,
+    ambiguous_rule: bool = False,
+) -> tuple[str, bool]:
     if place.id == "S_OUT":
         ok = (
-            bool(place.pinned)
+            place.kind == "stop"
+            and bool(place.pinned)
             and place.stop_zone is not None
             and place.approach_m is not None
+            and not ambiguous_rule
             and rule is not None
             and rule.get("role") == "load"
+            and has_edges_in
+            and has_edges_out
         )
         return ("verified" if ok else "planned_unverified"), ok
     if place.kind == "charge":
@@ -153,7 +168,7 @@ def build_site_points(
         raise ValueError(f"unsupported site-points view: {view!r}")
 
     edges_in, edges_out = _edge_links(site_map)
-    stop_rules = _stop_rules_by_place(site_rules)
+    stop_rules, ambiguous_rules = _stop_rules_by_place(site_rules)
     exit_place = site_rules.return_.exit_place if site_rules is not None else None
 
     sources = {
@@ -179,14 +194,22 @@ def build_site_points(
     port_stop_by_id: dict[str, dict[str, Any]] = {}
 
     for place in site_map.places:
-        if place.kind not in ("stop", "charge", "park") and not include_junctions:
+        if place.kind not in ("stop", "charge", "park") and not include_junctions and place.id != "S_OUT":
             continue
         rule = stop_rules.get(place.id)
-        status, dispatchable = _is_verified_stop(place, rule)
+        p_edges_in = edges_in.get(place.id, [])
+        p_edges_out = edges_out.get(place.id, [])
+        status, dispatchable = _is_verified_stop(
+            place,
+            rule,
+            has_edges_in=bool(p_edges_in),
+            has_edges_out=bool(p_edges_out),
+            ambiguous_rule=place.id in ambiguous_rules,
+        )
         port_role = _port_role_for(place.id, place.kind, rule["role"] if rule else None, exit_place)
         app_pose = approach_pose(place) if place.kind == "stop" else None
 
-        if place.kind in ("stop", "charge") and port_role is not None:
+        if (place.kind in ("stop", "charge") or place.id == "S_OUT") and port_role is not None:
             port_entry = {
                 "place_id": place.id,
                 "port_role": port_role,
@@ -282,6 +305,7 @@ def build_site_points(
                 and v_stop is not None
                 and v_stop["status"] == "verified"
                 and v_stop["dispatchable"]
+                and v_stop["port_role"] == "intake_dropoff"
                 and targets_ok
             )
             h_status = "verified" if h_verified else "planned_unverified"
