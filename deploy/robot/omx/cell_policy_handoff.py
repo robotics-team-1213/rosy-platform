@@ -274,8 +274,23 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
             path.write_text(json.dumps(lib), encoding="utf-8")
             prefix = ""
             if authorize is not None:
+                auth_status = cell.act("state")
+                if not auth_status.get("ok") or auth_status.get("fault") or not isinstance(auth_status.get("state"), list):
+                    reason = auth_status.get("error") or "policy auth state unavailable"
+                    log({**row, "refused": reason, **_ack_status(auth_status)})
+                    return _fail("fault" if auth_status.get("fault") else "refused", n, reason,
+                                 fault=bool(auth_status.get("fault")))
+                auth_poses = [auth_status["state"], *([auth_status["target"]] if auth_status.get("target") is not None else [])]
+                if jaw_spec is not None:
+                    if jaw_warn := jaw_zone_error(auth_poses, kin, jaw_spec):
+                        row["jaw_warning"] = jaw_warn
+                        return _legacy_jaw_hold(row, n, jaw_warn)
+                    if not force_all and in_jaw_zone(auth_poses, kin, jaw_spec):
+                        if jaw_warn := jaw_zone_error(frames_cell, kin, jaw_spec, force_all=True):
+                            row["jaw_warning"] = jaw_warn
+                            return _legacy_jaw_hold(row, n, jaw_warn)
                 try:
-                    assessment = authorize(lib, status, ("run policy", "park"))
+                    assessment = authorize(lib, auth_status, ("run policy", "park"))
                 except ValueError as error:
                     log({**row, "refused": str(error)})
                     return _fail("refused", n, str(error))
