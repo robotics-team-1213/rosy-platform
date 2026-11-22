@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import inspect
 import json
 import os
 from pathlib import Path
@@ -235,9 +236,13 @@ class UpdaterStage:
 
                 report_download(0)
                 try:
+                    params = inspect.signature(self.http.download).parameters
+                    kwargs = ({"on_progress": report_download}
+                              if "on_progress" in params
+                              or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+                              else {})
                     digest = self.http.download(release["delta"] if delta else release["tarball"], part,
-                                                delta["size"] if delta else MAX_TARBALL_BYTES,
-                                                on_progress=report_download)
+                                                delta["size"] if delta else MAX_TARBALL_BYTES, **kwargs)
                 except UpdateError:
                     part.unlink(missing_ok=True)
                     raise
