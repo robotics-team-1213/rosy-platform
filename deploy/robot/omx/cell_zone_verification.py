@@ -17,6 +17,7 @@ import numpy as np
 from typing import Any
 
 from cell_area_zones import evaluate_zone, verify_stack_outcome, verify_stack_outcome_z_mm
+import cell_site_target
 
 BASIS = "predefined_side_and_top_target_zones"
 TOP_ONLY_BASIS = "top_camera_only_target_zone"  # a cell without a side camera (cell S): never equals BASIS on purpose
@@ -161,7 +162,7 @@ def _zone_rois(config: dict):
     raw = config.get("zone_rois")
     if raw is None:
         return None, None
-    shapes = {"top": re.compile(r"c[1-3]r[1-2]\Z"), "side": re.compile(r"c[1-3]t[1-3]\Z")}
+    shapes = {"top": re.compile(r"(?:c[1-3]r[1-2]|stand|ship-h[12]r[0-2]|tmp-[ab]-[1-3])\Z"), "side": re.compile(r"c[1-3]t[1-3]\Z")}
     if not isinstance(raw, dict) or set(raw) - set(shapes) - {"floor", "floor_depth_mm"}:
         return None, "zone_rois must be an object with top, side and floor tables"
 
@@ -190,7 +191,26 @@ def _zone_rois(config: dict):
 
 def _target(config: dict, dest_site: str):
     """(target dict, None) from the destination site's own layer/col/row, or (None, reason). No default slot or tier."""
-    site = (config.get("sites") or {}).get(dest_site) or {}
+    canon = cell_site_target.resolve_cell_ab_site(dest_site, None, allow_belt_temp=False)
+    site_map = config.get("sites") or {}
+    if canon is not None and not canon["is_legacy_pallet"]:
+        site = site_map.get(dest_site)
+        if not isinstance(site, dict):
+            return None, f"destination site {dest_site!r} not in the site config"
+        layer = site.get("layer")
+        implicit_t1 = (layer is None and canon["tier"] == 1 and dest_site == canon["base_site"]
+                       and "place" in site and "surface_z" in site)
+        if not implicit_t1 and (type(layer) is not int or layer != canon["tier"] - 1):
+            return None, "destination layer missing or disagrees with canonical tier"
+        if (("col" in site and (type(site["col"]) is not int or site["col"] != canon["col"]))
+                or ("row" in site and (type(site["row"]) is not int or site["row"] != canon["row"]))
+                or ("tier" in site and (type(site["tier"]) is not int or site["tier"] != canon["tier"]))):
+            return None, "site col/row/tier disagrees with canonical site"
+        return {
+            "site": dest_site, "site_id": canon["site_id"], "base_site": canon["base_site"],
+            "area": canon["area"], "col": canon["col"], "row": canon["row"], "tier": canon["tier"],
+        }, None
+    site = site_map.get(dest_site) or {}
     layer, col, row = site.get("layer"), site.get("col"), site.get("row")
     if type(layer) is not int or layer not in LAYERS:
         return None, "destination layer not in the site config or outside 0-2"
@@ -222,7 +242,9 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     # has floor ROIs: that is the one case where the zone check uses it.
     rois, bad_rois = _zone_rois(config)
     depth = depth_receipt = depth_why = None
-    if rois is not None and rois.get("floor") and dest_site.rsplit("-l", 1)[0] == "pallet":
+    dest_canon = cell_site_target.resolve_cell_ab_site(dest_site, None, allow_belt_temp=True)
+    dest_area = dest_canon["area"] if (dest_canon and not dest_canon["is_legacy_pallet"]) else dest_site.rsplit("-l", 1)[0]
+    if rois is not None and rois.get("floor") and dest_area in cell_site_target.STACKING_AREAS:
         depth, depth_receipt, depth_why = _depth_after(config, placed_at)
     rgb_deadline = time.time() + FRAME_WAIT_S  # one limit for the whole RGB read, top and side together
     top, why = _frame(source, "top", before_frame, placed_at, rgb_deadline)
@@ -247,13 +269,14 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         missing_before = "no before top frame"
     elif has_side and (before_side_frame or {}).get("image") is None:
         missing_before = "no before side frame"
-    slot_key = target and f"c{target.get('col')}r{target.get('row')}"
+    slot_key = target and (target.get("base_site") or f"c{target.get('col')}r{target.get('row')}")
     no_slot_roi = (f"zone_rois.top has no cell-specific ROI for {slot_key}"
-                   if has_side and rois is not None and rois.get("floor") and target and slot_key not in (rois.get("top") or {}) else None)
+                   if has_side and rois is not None and rois.get("floor") and target and cell_site_target.top_slot_roi(rois, target) is None else None)
     failure = why or side_why or depth_why or bad_target or bad_rois or no_slot_roi or stale or missing_before
     if failure:
         return {**out, "basis": f"unverified: {failure}"}
-    place = {k: target[k] for k in ("area", "col", "row", "tier") if k in target}
+    canon_fields = ("area", "col", "row", "tier", "base_site", "site") if "site_id" in target else ("area", "col", "row", "tier")
+    place = {k: target[k] for k in canon_fields if k in target}
     if not has_side:
         # The same before/after test as the top part of the two-camera check: the zone is occupied now and filled up since before.
         top_roi = tuple(target["roi"])
@@ -262,8 +285,12 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
         grown = float(after_zone.get("fill_ratio") or 0.0) - float(before_zone.get("fill_ratio") or 0.0) >= 0.15
         out["top"].update(zone=_plain(after_zone), before_zone=_plain(before_zone))
         return _plain({**out, "basis": TOP_ONLY_BASIS, "verified": bool(after_zone.get("within_zone") and grown)})
-    pick = {"area": (config.get("sites") or {}).get(source_site, {}).get("area") or source_site.rsplit("-l", 1)[0]}
-    verify = verify_stack_outcome_z_mm if target["area"] == "pallet" else verify_stack_outcome
+    src_canon = cell_site_target.resolve_cell_ab_site(source_site, None, allow_belt_temp=True)
+    pick_area = (config.get("sites") or {}).get(source_site, {}).get("area") or (
+        src_canon["area"] if src_canon and not src_canon["is_legacy_pallet"] else source_site.rsplit("-l", 1)[0])
+    pick = {"area": pick_area, **({"col": src_canon["col"], "row": src_canon["row"], "tier": src_canon["tier"]}
+                                   if src_canon and not src_canon["is_legacy_pallet"] else {})}
+    verify = verify_stack_outcome_z_mm if target["area"] in cell_site_target.STACKING_AREAS else verify_stack_outcome
     extra = {"after_depth": depth, "z_profile": config.get("z_profile")} if depth is not None else {}
     if rois is not None:
         extra["zone_rois"] = out["zone_rois"] = rois  # the cell's own zone table, for this check only
