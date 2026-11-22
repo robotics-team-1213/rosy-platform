@@ -338,28 +338,47 @@ def test_native_main_delivers_only_registered_channels_without_ros(manifest, tmp
         'top', *[arm.source_id for arm in manifest.workcells[0].arms]}
 
 
-def test_mirror_vision_gets_every_camera_with_its_own_trust_and_no_arms(manifest, tmp_path, monkeypatch):
+@pytest.mark.parametrize("selection", ["", ",top"])
+def test_mirror_vision_routes_only_selected_cameras_with_its_own_trust_and_no_arms(
+    manifest, tmp_path, monkeypatch, selection,
+):
     # 11-14 panel: R's console leases cell cameras from R's own Vision (D-136), so the bridge sends them there too
     import json
     from core_common.observation_snapshot import SnapshotChannel
     monkeypatch.setenv('ROSY_OBSERVATION_DIR', str(tmp_path / 'ipc'))
+    cell = manifest.workcells[0]
+    cell.cameras.append(cell.cameras[0].model_copy(update={
+        "source_id": "side", "label": "Side", "role": "side", "image_topic": "/side/image_raw",
+        "device_path": "/dev/v4l/by-path/example-side", "token_env": "EXAMPLE_SIDE",
+        "credential_sha256": sha256(b"side-secret").hexdigest(),
+    }))
     path = tmp_path / 'manifest.yaml'
     path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding='utf-8')
     monkeypatch.setenv('EXAMPLE_ARM', 'arm-secret')
     monkeypatch.setenv('EXAMPLE_TOP', 'top-secret')
-    monkeypatch.setenv('ROSY_OBSERVATION_MIRROR_VISION', 'wss://r.example,/etc/r-ca.crt')
+    monkeypatch.setenv('EXAMPLE_SIDE', 'side-secret')
+    monkeypatch.setenv('ROSY_OBSERVATION_MIRROR_VISION', f'wss://r.example,/etc/r-ca.crt{selection}')
     arm = manifest.workcells[0].arms[0]
     SnapshotChannel(arm.joint_topic).write('joints', json.dumps(
         dict.fromkeys(arm.joint_names, .25)).encode(), captured_at=bridge.time.time())
     SnapshotChannel('/top/image_raw').write('jpeg', b'jpeg', captured_at=bridge.time.time())
+    SnapshotChannel('/side/image_raw').write('jpeg', b'jpeg', captured_at=bridge.time.time())
     trust = []
     monkeypatch.setattr(bridge.ssl, 'create_default_context', lambda cafile=None: trust.append(str(cafile)) or str(cafile))
-    delivered, stop = set(), threading.Event()
+    expected = {('https://fleet.example', arm.source_id, 'arm-secret', '/etc/cell-ca.crt'),
+                ('wss://vision.example', 'top', 'top-secret', '/etc/cell-ca.crt'),
+                ('wss://vision.example', 'side', 'side-secret', '/etc/cell-ca.crt'),
+                ('wss://r.example', 'top', 'top-secret', '/etc/r-ca.crt')}
+    if not selection:
+        expected.add(('wss://r.example', 'side', 'side-secret', '/etc/r-ca.crt'))
+    created, delivered, stop = set(), set(), threading.Event()
     class Sender:
-        def __init__(self, url, source, token, *, context): self.key = (url, source, token, context)
+        def __init__(self, url, source, token, *, context):
+            self.key = (url, source, token, context)
+            created.add(self.key)
         def send(self, sample):
             delivered.add(self.key)
-            if len(delivered) == 3: stop.set()
+            if expected <= delivered: stop.set()
         def close(self): pass
     monkeypatch.setattr(bridge, 'run_usb_reports', lambda *args, **kwargs: None)
     monkeypatch.setattr(bridge, 'ArmSender', Sender)
@@ -375,17 +394,22 @@ def test_mirror_vision_gets_every_camera_with_its_own_trust_and_no_arms(manifest
     finally:
         timer.cancel()
     assert trust == ['/etc/cell-ca.crt', '/etc/r-ca.crt']
-    assert delivered == {('https://fleet.example', arm.source_id, 'arm-secret', '/etc/cell-ca.crt'),
-                         ('wss://vision.example', 'top', 'top-secret', '/etc/cell-ca.crt'),
-                         ('wss://r.example', 'top', 'top-secret', '/etc/r-ca.crt')}
+    assert created == delivered == expected
 
 
-@pytest.mark.parametrize("binding", ["wss://r.example", "wss://r.example,relative.crt", "ws://r.example,/etc/r.crt"])
-def test_mirror_vision_needs_wss_and_an_absolute_ca(manifest, tmp_path, monkeypatch, capsys, binding):
+@pytest.mark.parametrize("binding", [
+    "wss://r.example", "wss://r.example,relative.crt", "ws://r.example,/etc/r.crt",
+    "wss://r.example,/etc/r.crt,", "wss://r.example,/etc/r.crt,unknown",
+    "wss://r.example,/etc/r.crt,arm_feedback", "wss://r.example,/etc/r.crt,top,top",
+])
+def test_mirror_vision_rejects_invalid_destination_or_camera_selection(manifest, tmp_path, monkeypatch, capsys, binding):
     path = tmp_path / "manifest.yaml"
     path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding="utf-8")
     monkeypatch.setenv("EXAMPLE_ARM", "arm-secret")
     monkeypatch.setenv("EXAMPLE_TOP", "top-secret")
+    def no_workers(*args, **kwargs):
+        pytest.fail("invalid routing started workers")
+    monkeypatch.setattr(bridge.threading, "Thread", no_workers)
     with pytest.raises(SystemExit):
         bridge.main(["--manifest", str(path), "--workcell", "example", "--fleet-url", "https://fleet.example",
                      "--vision-url", "wss://vision.example", "--mirror-vision", binding])
