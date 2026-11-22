@@ -377,6 +377,8 @@ select option:disabled{color:#767b82}
 .arm-dot[data-conn="on"]{color:var(--good)}
 .arm-dot[data-conn="off"]{color:var(--ink-q)}
 .arm-dot[data-conn="unk"]{color:var(--warn)}
+.arm-dot[data-conn="warn"]{color:var(--warn)}
+.arm-dot[data-conn="err"]{color:var(--crit)}
 .arm-offline-toggle{align-self:flex-start}
 
 /* Map Toolbar & Enlarge Modal */

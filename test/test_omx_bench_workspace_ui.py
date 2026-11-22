@@ -321,6 +321,12 @@ def test_ui_workspace_no_duplicate_pills_live_log_reset_review_and_clusters():
     cam_js = (omx_dir / "bench_record_cam.js").read_text(encoding="utf-8")
     assert "saveCameraBaselineNow" in cam_js and "camAutoHealAt" in cam_js
     assert '/api/recover/baseline' in js and "st?.status==='homing'&&(st?.error||st?.manual_hold?.active)" in js
+    rev_js = (omx_dir / "bench_record_review.js").read_text(encoding="utf-8")
+    for tok in ("collectHardwareReadiness", "syncHardwareReadiness", "리더 USB 미연결", "팔로워 USB 미연결", "학습 카메라 미수신"):
+        assert tok in rev_js, tok
+    assert "setInterval(()=>{if(!benchSessionActive())pollArms();},5000)" in app_js
+    assert '.arm-dot[data-conn="err"]' in css and '.arm-dot[data-conn="warn"]' in css
+    assert '● 리더 미연결' in (omx_dir / "bench_record_params.js").read_text(encoding="utf-8")
 
 
 def test_camera_drift_filters_unrelated_arm_cameras(tmp_path, monkeypatch):

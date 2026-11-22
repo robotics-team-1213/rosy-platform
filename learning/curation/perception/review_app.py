@@ -24,10 +24,8 @@ import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
 import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, ladder_web, vlm_judge_web
 import review_classes, review_context, review_versions, omx_center_web, review_upload
-import learning_domains, learning_pipeline, promotion_request
-import review_static
-import learning_tasks_web
-import learning_recording_web
+import learning_domains, learning_pipeline, learning_service_auth, promotion_request
+import review_static, learning_tasks_web, learning_recording_web
 from workspace_links import WORKSPACE_LINKS_SCHEMA, check_workspace_links, load_workspace_links
 from learning_tasks import Tasks
 from review_ai_jobs import Jobs
@@ -78,7 +76,7 @@ def check_link(url):
     return url
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None, owners=None, recordings=None, recording_config=None, ladder=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None, owners=None, recordings=None, recording_config=None, ladder=None, service_tokens=None):
     check_bind_host(host)
     if workspace_links is not None:
         workspace_links = check_workspace_links({'schema': WORKSPACE_LINKS_SCHEMA, 'workspaces': workspace_links})
@@ -156,11 +154,13 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
             # OAuth authorization codes and errors must not enter access logs.
 
         def do_GET(self):
-            self.extra_headers = []
+            self.extra_headers, self.service_principal, self.peer_bearer_ok = [], None, False
             if not self.allowed_host():
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
+                if learning_service_auth.check_get(self, path, service_tokens, omx_center=omx_center):
+                    return
                 if collaboration and collaboration.get(self, path, token):
                     return
                 if storage_web.get(self, path): return
@@ -338,12 +338,9 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 self.send({'error': str(exc)}, 400)
 
         def do_POST(self):
-            self.extra_headers = []
+            self.extra_headers, self.service_principal = [], None
             path = urlparse(self.path).path
-            body_limit = (review_upload.BODY_LIMIT if path == '/api/catalog/upload' else
-                          4*1048576 if path == '/api/learning/omx/center/lerobot-study' else 1048576)
-            # Consume bounded rejected bodies before responding; Windows may otherwise
-            # reset the connection while the client is still transmitting its request.
+            body_limit = review_upload.BODY_LIMIT if path == '/api/catalog/upload' else (4*1048576 if path == '/api/learning/omx/center/lerobot-study' else 1048576)
             def deny():
                 try:
                     length = int(self.headers.get('Content-Length', '0'))
@@ -354,14 +351,16 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     pass
                 return self.send({'error': 'local workspace authorization required'}, 403)
             peer_intake = omx_center_web.peer_intake_ok(self, path, omx_center)
-            login_request = peer_intake or (collaboration and path == '/api/accounts/logout')
+            svc = None if peer_intake else learning_service_auth.handle_post(self, path, service_tokens, deny)
+            if svc is True:
+                return
+            login_request = peer_intake or svc is False or (collaboration and path == '/api/accounts/logout')
             expected_token = collaboration.csrf(self, token) if collaboration else token
             if (not peer_intake and not self.allowed_host()) or (not login_request and self.headers.get('X-Pinky-Token') != expected_token):
                 return deny()
-            origin = self.headers.get('Origin')
-            port = self.server.server_port
+            origin, port = self.headers.get('Origin'), self.server.server_port
             origins = [collaboration.origin] if collaboration and collaboration.origin else [f'http://127.0.0.1:{port}', f'http://localhost:{port}', f'http://{host}:{port}']
-            if not peer_intake and ((collaboration and not origin) or (origin and origin not in origins)):
+            if not peer_intake and svc is not False and ((collaboration and not origin) or (origin and origin not in origins)):
                 return deny()
             try:
                 length = int(self.headers.get('Content-Length', '0'))
@@ -526,6 +525,7 @@ def main():
     parser.add_argument('--catalog', type=Path, help='prepared verified-inputs folder shown in app')
     parser.add_argument('--object-classes', type=Path, help='Ultralytics data.yaml naming the object classes; first start binds it (D-485)')
     parser.add_argument('--cad-catalog', type=Path, help='verified CAD reference catalog shown in app')
+    parser.add_argument('--service-tokens', type=Path, help='JSON list of scoped service_offline_job tokens')
     args = parser.parse_args()
     if args.empty_eval and args.empty_training:
         parser.error('choose one empty workspace kind')
@@ -588,9 +588,9 @@ def main():
     recording_config = learning_recording_web.load_config(args.recording_config, parser)
     ladder = ladder_web.load(args.ladder_config, parser)
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
-                         storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs,
-                         vlm_eval_url=args.vlm_eval_url, workspace_links=workspace_links, owners=owners,
-                         recording_config=recording_config, ladder=ladder)
+                         storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs, vlm_eval_url=args.vlm_eval_url,
+                         workspace_links=workspace_links, owners=owners, recording_config=recording_config, ladder=ladder,
+                         service_tokens=learning_service_auth.load(args.service_tokens, parser))
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 
