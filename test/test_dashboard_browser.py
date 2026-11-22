@@ -383,7 +383,7 @@ window.fetch = async (input, options = {}) => {
 };
 """
 
-def _launch_page(playwright, extra_init="", width=390, height=844, real_map=False):
+def _launch_page(playwright=None, extra_init="", width=390, height=844, real_map=False):
     browser, page, _errors = open_page(playwright, width, height)
     html = (WEB / "index.html").read_text(encoding="utf-8")
     page.route(
@@ -487,12 +487,8 @@ window.fetch = async (input, options = {}) => {
 def test_development_entry_logs_in_without_a_code():
     """D-432/D-471: 개발 모드 로봇은 로그인 서랍에 코드 없는 입장이 열리고, 누르면 세션이 든다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=DEV_ENTRY_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=DEV_ENTRY_INIT)
+    try:
         page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
         # 토큰 없이 부팅 → 서랍 열림 + 개발 연결 모드 조사 후 버튼 등장.
         page.wait_for_function("!document.getElementById('dev-connect-row').hidden")
@@ -510,25 +506,25 @@ def test_development_entry_logs_in_without_a_code():
         assert sessionStorage_token(page) == "dev-session-token"
         page.wait_for_function(
             "document.querySelector('.entry-heading h1')?.textContent === '작업을 선택하세요'")
+    finally:
         browser.close()
 
 def test_paired_connection_never_offers_development_entry():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(
-            playwright, extra_init=DEV_ENTRY_INIT.replace("mode: 'development'", "mode: 'paired'"))
+    browser, page = _launch_page(
+        extra_init=DEV_ENTRY_INIT.replace("mode: 'development'", "mode: 'paired'"))
+    try:
         page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "window.__apiCalls.some((call) => call.path === '/api/v1/auth/connection')")
         assert page.locator("#dev-connect-row").is_hidden()
+    finally:
         browser.close()
 
 def test_compatibility_development_entry_names_pending_reason():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, extra_init=DEV_ENTRY_INIT)
+    browser, page = _launch_page(extra_init=DEV_ENTRY_INIT)
+    try:
         page.goto("http://rosy.test/dashboard?view=compatibility", wait_until="domcontentloaded")
         page.wait_for_function("!document.getElementById('dev-connect-row').hidden")
         page.click("#dev-connect")
@@ -537,6 +533,7 @@ def test_compatibility_development_entry_names_pending_reason():
         assert page.locator("#dev-connect").get_attribute("reason") == "개발 연결 확인 중"
         page.evaluate("window.__finishDevSession()")
         page.wait_for_function("document.getElementById('dev-connect').getAttribute('reason') === null")
+    finally:
         browser.close()
 
 def sessionStorage_token(page):
@@ -544,12 +541,8 @@ def sessionStorage_token(page):
 
 def test_delayed_positive_request_cannot_arrive_after_release_zero():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'"
@@ -581,6 +574,7 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
             output.parent.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(output), full_page=True)
         commands = page.evaluate("window.__teleopCommands")
+    finally:
         browser.close()
     assert commands[0] == {"linear": 0.03, "angular": 0}
     assert commands[-1] == {"linear": 0, "angular": 0}
@@ -596,12 +590,8 @@ def test_delayed_positive_request_cannot_arrive_after_release_zero():
 
 def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('robot-mode')?.textContent === '수동'"
@@ -643,6 +633,7 @@ def test_field_settings_save_limits_waypoint_and_dock_without_navigation():
         )
         assert page.url.startswith("http://rosy.test/dashboard")
         calls = page.evaluate("window.__apiCalls")
+    finally:
         browser.close()
     posts = {(call["method"], call["path"]) for call in calls}
     assert ("POST", "/api/v1/waypoints") in posts
@@ -680,12 +671,8 @@ def test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region():
     of the page is inert while open, and that Esc and cancel send no DELETE.
     """
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT, width=1366, height=768)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=WAYPOINT_ROW_INIT, width=1366, height=768)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('robot-mode')?.textContent === '수동'")
         page.locator("#view-inspect").click()
@@ -705,17 +692,14 @@ def test_waypoint_delete_dialog_keeps_the_estop_out_of_the_inert_region():
         page.wait_for_function("!document.querySelector('dialog.ui-confirm')")
         assert page.evaluate("document.querySelectorAll('[inert]').length") == 0
         calls = page.evaluate("window.__apiCalls")
+    finally:
         browser.close()
     assert not any(call["method"] == "DELETE" for call in calls)
 
 def test_traffic_policy_is_staged_before_stopped_only_apply():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -744,6 +728,7 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
             page.locator(".settings-card[aria-labelledby='traffic-policy-heading']").screenshot(
                 path=str(output))
         calls = page.evaluate("window.__apiCalls")
+    finally:
         browser.close()
     mutations = [
         (call["method"], call["path"])
@@ -757,12 +742,8 @@ def test_traffic_policy_is_staged_before_stopped_only_apply():
 
 def test_live_camera_preview_is_visible_beside_the_map():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -781,6 +762,7 @@ def test_live_camera_preview_is_visible_beside_the_map():
             output.parent.mkdir(parents=True, exist_ok=True)
             page.locator(".region-observe").screenshot(path=str(output))
         calls = page.evaluate("window.__apiCalls")
+    finally:
         browser.close()
     paths = [call["path"] for call in calls]
     assert "/api/v1/vision/front/status" in paths
@@ -793,16 +775,11 @@ def test_live_camera_preview_is_visible_beside_the_map():
 
 def test_unavailable_camera_keeps_missing_timestamps_missing():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(
-                playwright,
-                extra_init="window.__rosyVisionOverride = {available: false, stale: false, "
-                "source: null, width: null, height: null, age_ms: null, captured_at: null};",
-            )
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(
+        extra_init="window.__rosyVisionOverride = {available: false, stale: false, "
+        "source: null, width: null, height: null, age_ms: null, captured_at: null};",
+    )
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "window.__apiCalls?.some((call) => call.path === '/api/v1/vision/front/status')"
@@ -810,16 +787,13 @@ def test_unavailable_camera_keeps_missing_timestamps_missing():
         page.wait_for_timeout(100)
         assert page.locator("#vision-age").inner_text() == "\u2014"
         assert page.locator("#vision-captured").inner_text() == "\u2014"
+    finally:
         browser.close()
 
 def test_camera_preview_is_cleared_when_reauthentication_fails():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -844,17 +818,14 @@ def test_camera_preview_is_cleared_when_reauthentication_fails():
         after = page.evaluate(
             "window.__apiCalls.filter((call) => call.path === '/api/v1/vision/front/status').length"
         )
+    finally:
         browser.close()
     assert after == before
 
 def test_rate_limited_camera_never_leaves_an_old_frame_live():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -869,6 +840,7 @@ def test_rate_limited_camera_never_leaves_an_old_frame_live():
         )
         assert page.locator("#vision-frame").is_hidden()
         assert page.locator("#vision-status").inner_text() == "수신 대기"
+    finally:
         browser.close()
 
 CONSOLE_STATE_INIT = {
@@ -958,38 +930,33 @@ CONSOLE_STATE_INIT = {
 def test_compatibility_controls_wait_for_their_handlers():
     """A delayed module must not expose a clickable control that loses its click."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, sync_playwright
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, extra_init=CONSOLE_STATE_INIT["rmw-mismatch"])
-        held = []
-        page.route("**/app.js", lambda route: held.append(route))
-        try:
-            page.goto("http://rosy.test/dashboard#compatibility", wait_until="commit")
-            inspect = page.locator("#view-inspect")
-            inspect.wait_for(state="visible")
-            page.wait_for_function("!document.getElementById('compatibility-shell').hidden")
-            assert len(held) == 1, "The actual module request must remain pending"
-            with pytest.raises(PlaywrightTimeoutError):
-                inspect.click(timeout=250)
-            held.pop().fallback()
-            inspect.click()
-            page.wait_for_function("!document.getElementById('view-inspect-panel').hidden")
-            assert page.locator("#dds-rmw").is_visible()
-            assert page.locator("#ros-risk-list").is_visible()
-        finally:
-            for route in held:
-                route.fallback()
-            browser.close()
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    browser, page = _launch_page(extra_init=CONSOLE_STATE_INIT["rmw-mismatch"])
+    held = []
+    page.route("**/app.js", lambda route: held.append(route))
+    try:
+        page.goto("http://rosy.test/dashboard#compatibility", wait_until="commit")
+        inspect = page.locator("#view-inspect")
+        inspect.wait_for(state="visible")
+        page.wait_for_function("!document.getElementById('compatibility-shell').hidden")
+        assert len(held) == 1, "The actual module request must remain pending"
+        with pytest.raises(PlaywrightTimeoutError):
+            inspect.click(timeout=250)
+        held.pop().fallback()
+        inspect.click()
+        page.wait_for_function("!document.getElementById('view-inspect-panel').hidden")
+        assert page.locator("#dds-rmw").is_visible()
+        assert page.locator("#ros-risk-list").is_visible()
+    finally:
+        for route in held:
+            route.fallback()
+        browser.close()
 
 @pytest.mark.parametrize("state", list(CONSOLE_STATE_INIT))
 def test_console_state_matrix_renders_each_state(state):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=CONSOLE_STATE_INIT[state])
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=CONSOLE_STATE_INIT[state])
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -1092,12 +1059,13 @@ def test_console_state_matrix_renders_each_state(state):
             output = Path(shot_dir) / f"console_{state}_390x844_local.png"
             output.parent.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(output), full_page=True)
+    finally:
         browser.close()
 
 def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_targets():
-    from playwright.sync_api import sync_playwright, expect
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, extra_init=WAYPOINT_ROW_INIT)
+    from playwright.sync_api import expect
+    browser, page = _launch_page(extra_init=WAYPOINT_ROW_INIT)
+    try:
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_selector('#compatibility-shell[data-ready="true"]')
         page.locator('#view-inspect').click()
@@ -1121,13 +1089,14 @@ def test_compatibility_settings_confirmation_preserves_stop_and_rechecks_named_t
         page.evaluate("async()=>{const {session}=await import('/dashboard/assets/client.js');session.waypoints=[];}")
         dialog.locator('ui-button[kind=irreversible]').click()
         assert page.evaluate("__apiCalls.filter(c=>c.path==='/api/v1/navigation/goal').length") == 0
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("width,height", [(390, 844), (1366, 768)])
 def test_compatibility_slam_start_reports_session_acceptance(width, height):
-    from playwright.sync_api import sync_playwright, expect
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, width=width, height=height)
+    from playwright.sync_api import expect
+    browser, page = _launch_page(width=width, height=height)
+    try:
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_selector('#compatibility-shell[data-ready="true"]')
         page.locator('#view-inspect').click()
@@ -1143,12 +1112,13 @@ def test_compatibility_slam_start_reports_session_acceptance(width, height):
             card = page.locator('.settings-card[aria-labelledby="slam-heading"]')
             card.evaluate('(element) => element.scrollIntoView({block: "center"})')
             card.screenshot(path=str(output.with_name(f"compatibility_slam_card_{width}x{height}_local.png")))
+    finally:
         browser.close()
 
 def test_compatibility_traffic_confirmation_abort_releases_new_owner_without_old_readback():
-    from playwright.sync_api import sync_playwright, expect
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright)
+    from playwright.sync_api import expect
+    browser, page = _launch_page()
+    try:
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_selector('#compatibility-shell[data-ready="true"]')
         page.locator('#view-inspect').click()
@@ -1171,12 +1141,13 @@ def test_compatibility_traffic_confirmation_abort_releases_new_owner_without_old
         page.evaluate('() => finishOldPolicy()')
         page.wait_for_timeout(100)
         assert page.locator('#traffic-policy-message').inner_text() == message
+    finally:
         browser.close()
 
 def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion():
-    from playwright.sync_api import sync_playwright, expect
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright)
+    from playwright.sync_api import expect
+    browser, page = _launch_page()
+    try:
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
         page.locator('[data-mode=IDLE]').click()
@@ -1224,17 +1195,18 @@ def test_compatibility_confirmation_keeps_stop_live_and_owns_command_completion(
         page.evaluate('finishOff()')
         page.wait_for_function("!document.querySelector('[data-line-mode=IR_LINE]').disabled")
         expect(page.locator('[data-line-mode=OFF]')).to_have_attribute('aria-pressed','true')
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
 def test_compatibility_lane_follow_uses_drive_readiness_without_nav2(viewport):
-    from playwright.sync_api import sync_playwright, expect
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, width=viewport[0], height=viewport[1], extra_init="""
-          window.__rosyCapabilitiesOverride = {
-            teleop: true, navigation: {goal_navigation: false}, runtime: {drive: 'ready'}
-          };
-        """)
+    from playwright.sync_api import expect
+    browser, page = _launch_page(width=viewport[0], height=viewport[1], extra_init="""
+      window.__rosyCapabilitiesOverride = {
+        teleop: true, navigation: {goal_navigation: false}, runtime: {drive: 'ready'}
+      };
+    """)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility")
         button = page.locator('[data-line-mode="IR_LINE"]')
         page.wait_for_function("document.querySelector('#robot-mode')?.textContent === '수동'")
@@ -1267,12 +1239,13 @@ def test_compatibility_lane_follow_uses_drive_readiness_without_nav2(viewport):
         button.click()
         dialog.locator("ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__apiCalls.some(call => call.path === '/api/v1/line-follow/mode' && call.body.mode === 'IR_LINE')")
+    finally:
         browser.close()
 
 def test_compatibility_confirmation_rechecks_capability_and_network_targets():
-    from playwright.sync_api import sync_playwright, expect
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright)
+    from playwright.sync_api import expect
+    browser, page = _launch_page()
+    try:
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
         page.locator('[data-mode=NAVIGATION]').click()
@@ -1296,18 +1269,19 @@ def test_compatibility_confirmation_rechecks_capability_and_network_targets():
         assert body['ssid']=='fixture-b' and body['psk']=='fixture-secret' and body['confirmed'] is True
         assert body['idempotency_key']
         expect(page.locator('#network-psk-input')).to_have_value('')
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
 def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks(viewport):
-    from playwright.sync_api import sync_playwright, expect
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, width=viewport[0], height=viewport[1], real_map=True, extra_init="""
-          const interval=setInterval;
-          window.setInterval=(fn,ms)=>{if(ms===5000)window.slowTick=fn;return interval(fn,ms);};
-          window.__rosyMapSnapshot={width:10,height:10,resolution:1,origin:{x:-5,y:-5},
-            data:Array(100).fill(0),map_id:'fixture-map'};
-        """)
+    from playwright.sync_api import expect
+    browser, page = _launch_page(width=viewport[0], height=viewport[1], real_map=True, extra_init="""
+      const interval=setInterval;
+      window.setInterval=(fn,ms)=>{if(ms===5000)window.slowTick=fn;return interval(fn,ms);};
+      window.__rosyMapSnapshot={width:10,height:10,resolution:1,origin:{x:-5,y:-5},
+        data:Array(100).fill(0),map_id:'fixture-map'};
+    """)
+    try:
         page.goto('http://rosy.test/dashboard#compatibility')
         page.wait_for_function("document.querySelector('#robot-mode').textContent==='수동'")
         page.evaluate("""async()=>{const {session}=await import('/dashboard/assets/client.js');clearInterval(session.refreshTimer);session.refreshTimer=null;const prior=fetch;window.fetch=(url,options={})=>String(url).endsWith('/api/v1/mode')?new Promise(resolve=>window.finishOldMode=()=>resolve(new Response('{}'))):prior(url,options);}""")
@@ -1393,17 +1367,14 @@ def test_compatibility_old_auth_and_pagehide_cancel_confirmation_and_readbacks(v
         page.wait_for_function('__sockets.length>'+str(count))
         page.evaluate("oldSocket.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({mode:'NAVIGATION'})}))")
         assert page.locator('#robot-mode').inner_text()=='수동'
+    finally:
         browser.close()
 
 def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
     """D-92(a)/D-153 G3-5 — 불가역 모드 변경은 confirm을 지나며 거부하면 안 나간다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -1425,6 +1396,7 @@ def test_irreversible_mode_change_needs_confirm_and_decline_blocks_it():
         page.wait_for_function(
             "window.__apiCalls.some((call) => call.path === '/api/v1/mode')"
         )
+    finally:
         browser.close()
     # D-359 US-009 (P2-2 review) — the confirm names the mode in Korean, never the enum.
     assert "대기 모드로 변경할까요" in prompt and "IDLE" not in prompt

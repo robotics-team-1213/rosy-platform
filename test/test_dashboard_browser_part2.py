@@ -8,12 +8,8 @@ from test_dashboard_browser import (
 def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
     """D-123/D-92(a) — Cyclone 적용(저장+재부팅)도 confirm을 지나며 거부하면 안 나간다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -38,6 +34,7 @@ def test_irreversible_cyclone_apply_needs_confirm_and_decline_blocks_it():
             "window.__apiCalls.some((call) =>"
             " call.path === '/api/v1/system/dds/cyclone')"
         )
+    finally:
         browser.close()
     assert "CycloneDDS를 저장하고 로봇을 재부팅할까요" in prompt
     assert declined == []
@@ -77,12 +74,8 @@ CORE_ONLY_VIEWER_INIT = """
 
 def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=CORE_ONLY_VIEWER_INIT)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('safety-label')?.textContent === 'HW OFF'"
@@ -119,12 +112,12 @@ def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
         assert "/api/v1/logs/audit" not in paths
         assert "/api/v1/system/tokens" not in paths
         assert page.locator("#limits-save").is_disabled()
+    finally:
         browser.close()
 
 def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
     """Same evidence, other cause: the hero must match the banner, not contradict it."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     init = """
         window.__rosyStateOverrides = {robot_state: {evidence: {
           pose: {evidence: 'fresh', stale_after_s: 2.0},
@@ -132,17 +125,15 @@ def test_hardware_runtime_with_a_silent_safety_source_never_claims_ready():
           safety: {received_at: null, evidence: 'disconnected', stale_after_s: 0.2},
         }}};
     """
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=init)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('triage-title')?.textContent === '안전 회로 수신 끊김'"
         )
         assert page.locator("#safety-label").inner_text() == "UNVERIFIED"
         assert page.locator("#safety-source").inner_text() == "안전 회로 수신 끊김"
+    finally:
         browser.close()
 
 # Release 2026.09.24-010, rosy-pinky-e4us: CORE-only image, operator started
@@ -186,12 +177,8 @@ NO_MOTION_INIT = """
 
 def test_no_motion_hardware_runtime_is_on_and_says_the_drive_is_off():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=NO_MOTION_INIT, real_map=True)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=NO_MOTION_INIT, real_map=True)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('safety-label')?.textContent === 'NO DRIVE'"
@@ -220,30 +207,28 @@ def test_no_motion_hardware_runtime_is_on_and_says_the_drive_is_off():
         assert "/api/v1/system/capabilities" in paths
         assert "/api/v1/map" not in paths
         assert "/api/v1/map/costmap" not in paths
+    finally:
         browser.close()
 
 def test_map_snapshots_are_asked_for_when_the_server_has_them():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     init = NO_MOTION_INIT + """
     window.__rosyCapabilitiesOverride.runtime.maps = {occupancy: true, global_costmap: true};
     """
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=init, real_map=True)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=init, real_map=True)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "window.__apiCalls.some((call) => call.path === '/api/v1/map/costmap')"
         )
         paths = [call["path"] for call in page.evaluate("window.__apiCalls")]
         assert "/api/v1/map" in paths
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
 def test_compatibility_map_trust_tracks_localization_and_recovers(viewport):
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
     init = """
       window.__rosyMapSnapshot={width:100,height:80,resolution:0.1,origin:{x:-5,y:-4},
         data:Array(8000).fill(0),map_id:'fixture-map'};
@@ -262,8 +247,8 @@ def test_compatibility_map_trust_tracks_localization_and_recovers(viewport):
         if(data[i+2]>data[i+1]*1.2 && data[i+2]>data[i]*1.5 && data[i+2]>100) count++;
       return count;
     }"""
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1], real_map=True)
+    browser, page = _launch_page(extra_init=init, width=viewport[0], height=viewport[1], real_map=True)
+    try:
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto('http://rosy.test/dashboard#compatibility')
@@ -304,11 +289,11 @@ def test_compatibility_map_trust_tracks_localization_and_recovers(viewport):
         assert page.locator('[data-map-click=goal]').get_attribute('reason') == '안전 정지 중 주행 목표 불가'
         assert page.evaluate(blue_pixels) == 0
         assert errors == []
+    finally:
         browser.close()
 
 def test_fault_after_configured_reason_still_raises_a_blocked_fault():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     init = NO_MOTION_INIT + """
     const faulted = (id, first) => ({id, available: false, state: 'blocked', reason: first,
                                      reasons: [first, 'device_state:FAULT']});
@@ -318,22 +303,19 @@ def test_fault_after_configured_reason_still_raises_a_blocked_fault():
                     faulted('perception.localize', 'navigation_absent')],
     };
     """
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=init)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('triage')?.dataset.category === 'blocked' && document.getElementById('triage-context')?.textContent.includes('하드웨어 런타임 켜짐')")
         assert "고장" in page.locator("#triage-detail").inner_text()
         assert "하드웨어 런타임 켜짐 · 구동 꺼짐 (무동작)" in page.locator("#triage-context").text_content()
         assert "구동 꺼짐 (무동작) · 고장" in page.locator("#capability-list").inner_text()
+    finally:
         browser.close()
 
 def test_api_estop_does_not_claim_a_motor_power_cut():
     """An API e-stop is a software stop; the banner must not say power was cut."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     init = CORE_ONLY_VIEWER_INIT + """
     window.__rosyStateOverrides.robot_state.safety = {estop: true};
     window.__rosySafetyOverride = {estop: true, source: 'api:operator'};
@@ -345,11 +327,8 @@ def test_api_estop_does_not_claim_a_motor_power_cut():
                     'mobility.lead', 'perception.localize'].map(both),
     };
     """
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=init)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function(
             "document.getElementById('triage-title')?.textContent === 'API 비상정지 (operator)'"
@@ -363,6 +342,7 @@ def test_api_estop_does_not_claim_a_motor_power_cut():
         # The runtime reason comes first and SAFE_STOP is still shown.
         capabilities = page.locator("#capability-list").inner_text()
         assert "하드웨어 런타임 꺼짐 · 정지 상태" in capabilities
+    finally:
         browser.close()
 
 # --- D-193 S3: login code, whoami badge, logout, first-message WebSocket auth ---
@@ -393,14 +373,10 @@ FIT_VIEWPORTS = [(1536, 864), (1366, 768)]
 @pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
 def test_operate_view_fits_and_does_not_crush(viewport, state):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(
-                playwright, extra_init=state,
-                width=viewport[0], height=viewport[1])
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(
+        extra_init=state,
+        width=viewport[0], height=viewport[1])
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -411,6 +387,7 @@ def test_operate_view_fits_and_does_not_crush(viewport, state):
         )
         page.wait_for_timeout(700)
         fit = page.evaluate(FIT_PROBE)
+    finally:
         browser.close()
     assert fit["docOverflow"] <= 0, (
         f"{viewport}: 운용 뷰 문서가 스크롤된다 — 공간 문법 위반(D-201): {fit}"
@@ -426,10 +403,9 @@ def test_operate_view_fits_and_does_not_crush(viewport, state):
 
 @pytest.mark.parametrize("viewport", [(390, 844), (1366, 768)])
 def test_navigation_teleop_disabled_reasons_fit_the_action_column(viewport):
-    from playwright.sync_api import sync_playwright
     init = """window.__rosyStateOverrides={robot_state:{mode:'NAVIGATION'}};"""
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1])
+    browser, page = _launch_page(extra_init=init, width=viewport[0], height=viewport[1])
+    try:
         page.goto("http://rosy.test/dashboard#compatibility")
         page.wait_for_function("document.querySelector('#robot-mode')?.textContent === '내비게이션'")
         page.wait_for_function("document.querySelector('.teleop-pad ui-button')?.hasAttribute('reason')")
@@ -443,6 +419,7 @@ def test_navigation_teleop_disabled_reasons_fit_the_action_column(viewport):
           return {act:[act.clientWidth,act.scrollWidth,act.clientHeight,act.scrollHeight],pad:[pad.clientWidth,pad.scrollWidth],
             reasons:[...pad.querySelectorAll('ui-button')].map(button => button.querySelector('small[data-reason]')?.textContent)};
         }""")
+    finally:
         browser.close()
     assert len(sizes["reasons"]) == 4 and all(sizes["reasons"]), sizes
     assert sizes["act"][1] <= sizes["act"][0] + 1, sizes
@@ -454,9 +431,8 @@ def test_wide_but_short_operate_view_keeps_three_columns():
     """D-359 US-008: at 1366x600 (height < 40rem) the frame lets go and the page scrolls, but the
     three regions stay side by side — the columns follow width only."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        browser, page = _launch_page(playwright, width=1366, height=600)
+    browser, page = _launch_page(width=1366, height=600)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.wait_for_function("document.getElementById('robot-mode')?.textContent !== undefined")
         page.wait_for_timeout(700)
@@ -467,6 +443,7 @@ def test_wide_but_short_operate_view_keeps_three_columns():
                   sense: rect('.region-sense'), observe: rect('.region-observe'), act: rect('.region-act'),
                   estop: stop.top >= 0 && stop.bottom <= innerHeight && stop.right <= innerWidth};
         }""")
+    finally:
         browser.close()
     assert probe["overflow"] <= 0, probe
     assert probe["sense"]["right"] <= probe["observe"]["x"] + 1, probe
@@ -497,12 +474,8 @@ OFF_SCALE_CENSUS = """() => {
 @pytest.mark.parametrize("state_init", ["", CONSOLE_STATE_INIT["delayed"]])
 def test_visible_type_scale_is_closed(state_init):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=state_init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=state_init)
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -514,6 +487,7 @@ def test_visible_type_scale_is_closed(state_init):
         page.locator("#view-inspect").click()
         page.wait_for_timeout(300)
         off += page.evaluate(OFF_SCALE_CENSUS)
+    finally:
         browser.close()
     assert off == [], (
         "계단 밖 계산 크기가 화면에 있다 — 닫힌 여섯 단계 밖이다(D-203): "
@@ -571,12 +545,8 @@ TEXT_FLOOR_CENSUS = """() => {
 @pytest.mark.parametrize("state_init", ["", CONSOLE_STATE_INIT["safe-stop"]])
 def test_visible_text_meets_the_contrast_floor(state_init):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=state_init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=state_init)
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -587,6 +557,7 @@ def test_visible_text_meets_the_contrast_floor(state_init):
         page.locator("#view-inspect").click()
         page.wait_for_timeout(300)
         offenders += page.evaluate(TEXT_FLOOR_CENSUS)
+    finally:
         browser.close()
     assert offenders == [], (
         "바닥(4.5:1, 큰 값 3.0:1) 아래 텍스트가 있다(D-214): "
@@ -615,12 +586,8 @@ MOTION_CENSUS = """() => {
 def test_no_visible_element_moves():
     """D-220 — 상태 변화는 점프 컷이다. 보간은 없는 값을 있는 것처럼 보이게 한다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto(
             "http://rosy.test/dashboard#compatibility",
             wait_until="domcontentloaded",
@@ -631,14 +598,15 @@ def test_no_visible_element_moves():
         page.locator("#view-inspect").click()
         page.wait_for_timeout(300)
         moving += page.evaluate(MOTION_CENSUS)
+    finally:
         browser.close()
     assert moving == [], (
         "움직이는 요소가 있다 — 예산은 0이다, 예외는 ADR 로만(D-220): "
         + "; ".join(moving[:6])
     )
 
-def _open_dashboard(playwright, extra_init=""):
-    browser, page = _launch_page(playwright, extra_init=extra_init)
+def _open_dashboard(extra_init=""):
+    browser, page = _launch_page(extra_init=extra_init)
     page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
     page.wait_for_selector('#compatibility-shell[data-ready="true"]')
     return browser, page
@@ -651,46 +619,37 @@ def _storage(page):
 
 def test_legacy_dashboard_refresh_and_back_keep_the_tab_token():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard()
+    try:
         assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
         page.goto("http://rosy.test/dashboard", wait_until="domcontentloaded", timeout=5_000)
         page.reload(wait_until="domcontentloaded", timeout=5_000)
         page.go_back(wait_until="domcontentloaded", timeout=5_000)
         assert page.url == "http://rosy.test/dashboard?view=compatibility#compatibility"
         assert page.evaluate("sessionStorage.getItem('rosy.dashboard.token')") == "operator-test-token"
+    finally:
         browser.close()
 
 def test_legacy_dashboard_skip_link_keeps_owner_after_fragment_and_refresh():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        browser, page = _open_dashboard(playwright)
-        try:
-            page.keyboard.press("Tab")
-            assert page.locator(":focus").get_attribute("href") == "#dashboard-main"
-            page.keyboard.press("Enter")
-            assert page.locator(":focus").get_attribute("id") == "dashboard-main"
-            assert page.url.endswith("?view=compatibility#dashboard-main")
-            assert page.locator("#compatibility-shell").is_visible()
-            page.reload(wait_until="domcontentloaded")
-            page.wait_for_selector('#compatibility-shell[data-ready="true"]')
-            assert page.locator("#compatibility-shell").is_visible()
-            assert page.locator("#entry-shell").is_hidden()
-        finally:
-            browser.close()
+    browser, page = _open_dashboard()
+    try:
+        page.keyboard.press("Tab")
+        assert page.locator(":focus").get_attribute("href") == "#dashboard-main"
+        page.keyboard.press("Enter")
+        assert page.locator(":focus").get_attribute("id") == "dashboard-main"
+        assert page.url.endswith("?view=compatibility#dashboard-main")
+        assert page.locator("#compatibility-shell").is_visible()
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_selector('#compatibility-shell[data-ready="true"]')
+        assert page.locator("#compatibility-shell").is_visible()
+        assert page.locator("#entry-shell").is_hidden()
+    finally:
+        browser.close()
 
 def test_login_code_pairs_this_tab_and_shows_who_is_logged_in():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright, NO_TOKEN_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard(NO_TOKEN_INIT)
+    try:
         # The code tab is the default and the token form is hidden.
         assert "open" in page.locator("#auth-drawer").get_attribute("class")
         assert page.locator("#auth-tab-code").get_attribute("aria-selected") == "true"
@@ -718,16 +677,13 @@ def test_login_code_pairs_this_tab_and_shows_who_is_logged_in():
         assert socket["sent"] == ['{"type":"auth","token":"paired-test-token"}']
         for call in page.evaluate("window.__apiCalls"):
             assert "token" not in call["search"]
+    finally:
         browser.close()
 
 def test_keep_me_logged_in_puts_only_the_expiring_paired_token_in_local_storage():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright, NO_TOKEN_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard(NO_TOKEN_INIT)
+    try:
         page.locator("#code-input").fill("ABCD-EFGH")
         page.locator("#code-remember").check()
         page.locator("#code-submit").click()
@@ -748,24 +704,22 @@ def test_keep_me_logged_in_puts_only_the_expiring_paired_token_in_local_storage(
         assert _storage(page) == {"session": "operator-test-token", "local": None}
         assert page.locator("#token-input").input_value() == ""
         assert page.locator("#logout").inner_text() == "이 브라우저에서 잊기"
+    finally:
         browser.close()
 
 def test_an_expired_remembered_token_is_dropped_on_load():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     init = NO_TOKEN_INIT + (
         "localStorage.setItem('rosy.dashboard.paired', JSON.stringify("
         "{token: 'paired-test-token', expires_at: '2000-01-01T00:00:00+00:00'}));")
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright, init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard(init)
+    try:
         page.wait_for_function("() => window.__apiCalls.some(call => call.path === '/api/v1/auth/connection')")
         assert _storage(page) == {"session": None, "local": None}
         assert "open" in page.locator("#auth-drawer").get_attribute("class")
         assert page.evaluate("window.__apiCalls.map(({method,path})=>({method,path}))") == [
             {"method": "GET", "path": "/api/account/session"}, {"method": "GET", "path": "/api/v1/auth/connection"}]
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("reply, expected", [
@@ -784,13 +738,9 @@ def test_an_expired_remembered_token_is_dropped_on_load():
 ], ids=["wrong-used-expired-or-none", "burned", "rate-limited", "outside-lan"])
 def test_login_code_failures_say_what_the_robot_said(reply, expected):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     init = NO_TOKEN_INIT + f"window.__pairReply = {json.dumps(reply)};"
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright, init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard(init)
+    try:
         page.locator("#code-input").fill("ABCD-EFGH")
         page.locator("#code-submit").click()
         page.wait_for_function(
@@ -804,6 +754,7 @@ def test_login_code_failures_say_what_the_robot_said(reply, expected):
             assert page.locator("#code-submit").is_disabled()
         else:
             page.wait_for_function("!document.getElementById('code-submit').disabled")
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("typed, expected", [
@@ -813,12 +764,8 @@ def test_login_code_failures_say_what_the_robot_said(reply, expected):
 ])
 def test_a_malformed_code_is_caught_before_it_spends_an_attempt(typed, expected):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright, NO_TOKEN_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard(NO_TOKEN_INIT)
+    try:
         page.evaluate("document.getElementById('code-input').required = false; null")
         page.locator("#code-input").fill(typed)
         page.locator("#code-submit").click()
@@ -828,17 +775,14 @@ def test_a_malformed_code_is_caught_before_it_spends_an_attempt(typed, expected)
         )
         assert not [call for call in page.evaluate("window.__apiCalls")
                     if call["path"] == "/api/v1/auth/pair"]
+    finally:
         browser.close()
 
 def test_logout_deletes_the_paired_token_and_forgets_it():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     init = "sessionStorage.setItem('rosy.dashboard.token', 'paired-test-token');"
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright, init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard(init)
+    try:
         page.wait_for_function("document.getElementById('logout')?.textContent === '로그아웃'")
         page.locator("#logout").click()
         page.wait_for_function("document.getElementById('auth-drawer').classList.contains('open')")
@@ -851,16 +795,13 @@ def test_logout_deletes_the_paired_token_and_forgets_it():
         before = len(page.evaluate("window.__apiCalls"))
         page.wait_for_timeout(2_500)  # no polling with a forgotten token
         assert len(page.evaluate("window.__apiCalls")) == before
+    finally:
         browser.close()
 
 def test_logging_out_a_card_token_is_refused_by_core_and_only_forgotten_here():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard()
+    try:
         page.wait_for_function(
             "document.getElementById('logout')?.textContent === '이 브라우저에서 잊기'")
         page.locator("#logout").click()
@@ -869,16 +810,13 @@ def test_logging_out_a_card_token_is_refused_by_core_and_only_forgotten_here():
         assert "/api/v1/auth/logout" in paths  # CORE decides; it answers 409
         assert _storage(page) == {"session": None, "local": None}
         assert "로봇에 남아 있습니다" in page.locator("#auth-notice").inner_text()
+    finally:
         browser.close()
 
 def test_a_4401_close_with_a_revoked_token_signs_out_without_reconnecting():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard()
+    try:
         page.wait_for_function(
             "window.__sockets.length === 1 && window.__sockets[0].sent.length === 1")
         page.evaluate(
@@ -890,6 +828,7 @@ def test_a_4401_close_with_a_revoked_token_signs_out_without_reconnecting():
         assert _storage(page) == {"session": None, "local": None}
         page.wait_for_timeout(1_500)
         assert page.evaluate("window.__sockets.length") == 1
+    finally:
         browser.close()
 
 REFUSE_EVERY_SOCKET = (
@@ -905,12 +844,8 @@ REFUSE_EVERY_SOCKET = (
 
 def test_refused_sockets_reconnect_with_growing_backoff_not_a_hot_loop():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard()
+    try:
         page.wait_for_function("window.__sockets.length === 1")
         # Every socket is refused at once (1013 arrives as 1006 before accept).
         page.evaluate(REFUSE_EVERY_SOCKET)
@@ -922,38 +857,32 @@ def test_refused_sockets_reconnect_with_growing_backoff_not_a_hot_loop():
         polls = [call for call in page.evaluate("window.__apiCalls")
                  if call["path"] == "/api/v1/robot/state"]
         assert len(polls) >= 2
+    finally:
         browser.close()
 
 def test_a_paired_token_expiring_beyond_seven_days_is_not_remembered():
     # M1: "로그인 유지(최대 7일)" must not keep a longer-lived token in localStorage.
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     reply = {"status": 201, "body": {
         "id": "b1c2d3e4f5a6", "token": "paired-test-token", "role": "operator", "label": "",
         "source": "pair-physical", "expires_at": "2099-10-01T00:00:00+00:00"}}
     init = NO_TOKEN_INIT + f"window.__pairReply = {json.dumps(reply)};"
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright, init)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard(init)
+    try:
         page.locator("#code-input").fill("ABCD-EFGH")
         page.locator("#code-remember").check()
         page.locator("#code-submit").click()
         page.wait_for_function(
             "document.getElementById('whoami-role')?.textContent === 'operator'")
         assert _storage(page) == {"session": "paired-test-token", "local": None}
+    finally:
         browser.close()
 
 def test_a_socket_that_sends_one_frame_then_closes_still_backs_off():
     # L3: one delivered frame is not "stable"; the backoff keeps growing.
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _open_dashboard(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _open_dashboard()
+    try:
         page.wait_for_function("window.__sockets.length === 1")
         page.evaluate(
             "window.__flap = setInterval(() => {"
@@ -969,6 +898,7 @@ def test_a_socket_that_sends_one_frame_then_closes_still_backs_off():
         page.wait_for_timeout(4_000)
         count = page.evaluate("window.__sockets.length")
         assert 2 <= count <= 3, count
+    finally:
         browser.close()
 
 # --- D-247: the inspect view's device card and the operate view's motion reason ---
@@ -997,12 +927,8 @@ HARDWARE_INIT = """
 
 def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=HARDWARE_INIT, width=1366, height=768)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
@@ -1046,47 +972,38 @@ def test_inspect_view_lists_every_device_with_its_state_and_bench_tag():
         )
         page.wait_for_function(
             "document.getElementById('hardware-note')?.textContent === '장치 점검을 요청했습니다.'")
+    finally:
         browser.close()
 
 def test_a_viewer_sees_the_device_card_but_cannot_rerun_the_probe():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         assert page.locator("#hardware-refresh").is_disabled()
+    finally:
         browser.close()
 
 def test_no_probe_result_yet_is_said_not_blanked():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page()
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function(
             "document.getElementById('hardware-card')?.dataset.available === 'false'")
         assert page.locator("#hardware-note").inner_text() == "장치 점검 결과가 아직 없습니다"
         assert page.locator("#hardware-list .device-row").count() == 0
+    finally:
         browser.close()
 
 def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
     """D-247 6: 울려 보기 -> 들림 goes to the two admin routes and turns the row to 정상."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=HARDWARE_INIT, width=1366, height=768)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=HARDWARE_INIT, width=1366, height=768)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
@@ -1131,38 +1048,32 @@ def test_an_administrator_tests_the_buzzer_and_records_what_was_heard():
         page.evaluate(f"window.STEPS = {TYPE_STEPS}")
         assert page.evaluate(OFF_SCALE_CENSUS) == []
         assert page.evaluate(TEXT_FLOOR_CENSUS) == []
+    finally:
         browser.close()
 
 def test_a_viewer_gets_no_buzzer_or_lamp_test():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=CORE_ONLY_VIEWER_INIT + HARDWARE_INIT)
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         assert page.locator("#hardware-list .device-actions").count() == 0
         assert page.locator("#hardware-list [data-hw-action]").count() == 0
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
 def test_the_test_buttons_keep_the_inspect_view_inside_the_screen_width(viewport):
     """D-201: the admin action rows wrap inside the card; nothing scrolls sideways."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     outcome = HARDWARE_INIT + (
         "window.__rosyHardware.test = {request_id: '00112233445566778899aabb', action: 'buzzer',"
         " state: 'done', detail: 'BCM 4 · 2 kHz · duty 10 % · 3×150 ms',"
         " finished_at: new Date().toISOString()};"
     )
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, extra_init=outcome, width=viewport[0], height=viewport[1])
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(extra_init=outcome, width=viewport[0], height=viewport[1])
+    try:
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
         page.locator("#view-inspect").click()
         page.wait_for_function(
@@ -1175,6 +1086,7 @@ def test_the_test_buttons_keep_the_inspect_view_inside_the_screen_width(viewport
             "  outside: boxes.filter((box) => box.left < card.left - 1 || box.right > card.right + 1).length };"
             "})()")
         assert fit == {"page": 0, "outside": 0}, f"{viewport}: {fit}"
+    finally:
         browser.close()
 
 MOTION_REASON = "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모터 모드로 올려야 움직입니다."
@@ -1183,18 +1095,14 @@ MOTION_REASON = "모터가 꺼진 CORE 전용 모드입니다. 관리자가 모�
 def test_core_only_operate_view_says_why_it_cannot_move_and_still_fits(viewport):
     """D-247 7 + D-201: the reason replaces the vague profile line without scrolling the console."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     reason = CORE_ONLY_VIEWER_INIT + (
         "window.__rosyCommissioningOverride = {runtime_mode: 'core', motor_hold: true,"
         f" motion_reason: '{MOTION_REASON}'}};"
     )
     fits = {}
-    with sync_playwright() as playwright:
-        for label, init in (("before", CORE_ONLY_VIEWER_INIT), ("reason", reason)):
-            try:
-                browser, page = _launch_page(playwright, extra_init=init, width=viewport[0], height=viewport[1])
-            except Exception as error:
-                pytest.skip(f"Playwright Chromium unavailable: {error}")
+    for label, init in (("before", CORE_ONLY_VIEWER_INIT), ("reason", reason)):
+        browser, page = _launch_page(extra_init=init, width=viewport[0], height=viewport[1])
+        try:
             page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
             page.wait_for_function(
                 "document.getElementById('capability-count')?.textContent === '0 / 5'")
@@ -1204,6 +1112,7 @@ def test_core_only_operate_view_says_why_it_cannot_move_and_still_fits(viewport)
                 assert "권한" not in page.locator("#teleop-message").inner_text()
             page.wait_for_timeout(300)
             fits[label] = page.evaluate(FIT_PROBE)
+        finally:
             browser.close()
     fit = fits["reason"]
     assert fit["docOverflow"] <= 0, f"{viewport}: 이유 문장이 운용 뷰를 스크롤시킨다(D-201): {fits}"
@@ -1216,15 +1125,11 @@ def test_core_only_operate_view_says_why_it_cannot_move_and_still_fits(viewport)
 def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
     """D-259 — 지도 클릭 목표의 키보드 길. 진짜 map.js로 탄다(픽스처 스텁이 아님)."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(playwright, width=1366, height=768, real_map=True, extra_init="""
-              window.__rosyMapSnapshot={width:10,height:10,resolution:1,origin:{x:-5,y:-5},
-                data:Array(100).fill(0),map_id:'fixture-map'};
-            """)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(width=1366, height=768, real_map=True, extra_init="""
+      window.__rosyMapSnapshot={width:10,height:10,resolution:1,origin:{x:-5,y:-5},
+        data:Array(100).fill(0),map_id:'fixture-map'};
+    """)
+    try:
         errors = []
         page.on("pageerror", lambda exc: errors.append(str(exc)))
         page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded",
@@ -1248,6 +1153,7 @@ def test_map_keyboard_crosshair_posts_a_goal_with_the_same_confirm():
         )
         canvas.press("Escape")
         assert not errors, f"페이지 오류: {errors}"
+    finally:
         browser.close()
 
 # --- D-260 5: the operate view's summary line ------------------------------------
@@ -1284,20 +1190,16 @@ SUMMARY_PROBE = """() => {
   };
 }"""
 
-def _summary_page(playwright, extra_init, width=1366, height=768):
-    browser, page = _launch_page(playwright, extra_init=extra_init, width=width, height=height)
+def _summary_page(extra_init, width=1366, height=768):
+    browser, page = _launch_page(extra_init=extra_init, width=width, height=height)
     page.goto("http://rosy.test/dashboard#compatibility", wait_until="domcontentloaded", timeout=5_000)
     page.wait_for_function("document.getElementById('status-summary')?.dataset.state !== 'unknown'")
     return browser, page
 
 def test_the_summary_line_says_state_devices_power_and_todos():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _summary_page(playwright, STATUS_SUMMARY_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _summary_page(STATUS_SUMMARY_INIT)
+    try:
         assert page.locator("#summary-state").inner_text() == "주의"
         assert page.locator("#summary-state").get_attribute("data-state") == "caution"
         assert page.locator("#summary-reason").inner_text() == "배터리 전압 (ADC) 응답 없음"
@@ -1324,21 +1226,19 @@ def test_the_summary_line_says_state_devices_power_and_todos():
         # It is refreshed with the other slow data, as a viewer route.
         assert any(call["path"] == "/api/v1/host/status-summary" and call["method"] == "GET"
                    for call in page.evaluate("window.__apiCalls"))
+    finally:
         browser.close()
 
 def test_the_device_summary_opens_the_device_card_at_the_first_problem():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _summary_page(playwright, STATUS_SUMMARY_INIT + HARDWARE_INIT)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _summary_page(STATUS_SUMMARY_INIT + HARDWARE_INIT)
+    try:
         page.wait_for_function("document.querySelectorAll('#hardware-list .device-row').length === 6")
         page.locator("#summary-devices").click()
         page.wait_for_function("document.body.dataset.view === 'inspect'")
         assert page.locator("#view-inspect-panel").is_visible()
         assert page.evaluate("document.activeElement?.dataset.device") == "adc.battery"
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("payload,chip", [
@@ -1349,12 +1249,8 @@ def test_the_device_summary_opens_the_device_card_at_the_first_problem():
 ])
 def test_failed_and_ready_render_without_a_list_to_open(payload, chip):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _summary_page(playwright, f"window.__rosyStatusSummary = {payload};")
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _summary_page(f"window.__rosyStatusSummary = {payload};")
+    try:
         assert page.locator("#summary-state").inner_text() == chip
         if chip == "준비됨":
             assert page.locator("#summary-devices").inner_text() == "정상 14/14"
@@ -1366,29 +1262,27 @@ def test_failed_and_ready_render_without_a_list_to_open(payload, chip):
         else:
             assert page.locator("#summary-devices").inner_text() == "장치 점검 전"
             assert page.locator("#summary-power").inner_text() == "— % · — °C"
+    finally:
         browser.close()
 
 @pytest.mark.parametrize("viewport", FIT_VIEWPORTS)
 def test_a_held_robot_s_long_reason_keeps_the_console_inside_the_screen(viewport):
     """D-201: the held reason is the longest sentence; it is cut, never wraps or scrolls."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
     held = STATUS_SUMMARY_INIT + (
         "Object.assign(window.__rosyStatusSummary, {state: 'ready_held', label: '준비됨 — 못 움직임',"
         " reason: 'CORE 전용 모드'});"
     )
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _summary_page(playwright, held + CONSOLE_STATE_INIT["safe-stop"],
-                                          width=viewport[0], height=viewport[1])
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _summary_page(held + CONSOLE_STATE_INIT["safe-stop"],
+                                  width=viewport[0], height=viewport[1])
+    try:
         assert page.locator("#summary-state").inner_text() == "준비됨 — 못 움직임"
         # Held: the reason is D-247 7's sentence, whole in the title when it is cut.
         assert page.locator("#summary-reason").get_attribute("title").startswith("모터가 꺼진 CORE 전용 모드")
         page.wait_for_timeout(300)
         fit = page.evaluate(FIT_PROBE)
         line = page.evaluate(SUMMARY_PROBE)
+    finally:
         browser.close()
     assert fit["docOverflow"] <= 0 and fit["actOverflow"] <= 1 and fit["estopInside"], f"{viewport}: {fit}"
     assert line["page"] == 0 and line["inside"], f"{viewport}: {line}"
@@ -1419,13 +1313,9 @@ def test_the_home_bridge_offers_the_caller_role_surfaces(role, expected):
     # 비평 P1: /dashboard는 브리지다 — 목적지는 매니페스트 surfaces가 말하고
     # 서버가 역할로 걸러 준다. 클라이언트는 그릴 뿐이다.
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as playwright:
-        try:
-            browser, page = _launch_page(
-                playwright, extra_init=BRIDGE_INIT + f"window.__callerRole = {role!r};")
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page = _launch_page(
+        extra_init=BRIDGE_INIT + f"window.__callerRole = {role!r};")
+    try:
         page.route("http://rosy.test/console", lambda route: route.fulfill(
             status=200, content_type="text/html",
             body="<!doctype html><html lang=ko><body data-console=1></body></html>"))
@@ -1437,5 +1327,6 @@ def test_the_home_bridge_offers_the_caller_role_surfaces(role, expected):
         assert page.locator("#surface-bridge").get_attribute("aria-label") == "역할 화면"
         page.click("#surface-bridge a[href='/console']")
         page.wait_for_function("() => document.body.dataset.console === '1'")
+    finally:
         browser.close()
     assert drawn == expected

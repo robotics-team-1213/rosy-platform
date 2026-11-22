@@ -26,8 +26,13 @@ def write_context(cfg: Path, cfg_data: dict[str, Any], handoff: dict[str, Any], 
         return
     try:
         path = context_path(prep_dir, str(handoff.get("task_id")))
+        dst_base = dst.rsplit("-l", 1)[0]
+        sites = cfg_data.get("sites") if isinstance(cfg_data.get("sites"), dict) else {}
+        dst_cfg = sites.get(dst) if isinstance(sites.get(dst), dict) else (sites.get(dst_base) if isinstance(sites.get(dst_base), dict) else {})
+        dst_roi = ((zone or {}).get("target") or {}).get("roi") or dst_cfg.get("auto_roi")
         payload = {
             "cfg": str(cfg), "prep_dir": str(prep_dir), "arm_id": arm_id, "dst": dst, "src_site": src_site, "src_roi": list(src_roi),
+            **({"dst_roi": [int(v) for v in dst_roi]} if isinstance(dst_roi, (list, tuple)) and len(dst_roi) == 4 else {}),
             "handoff": {k: handoff.get(k) for k in ("task_id", "cell_id", "tier", "handoff_lease_id", "arm_id", "dst_site", "dst_site_id", "dst_area")},
             "before_frames": (zone or {}).get("before_frames"), "work_dir": work_dir,
         }
@@ -74,7 +79,11 @@ def remeasure(task_id: str, entry: dict[str, Any], prep_dir: Path, *, now: float
     cell = FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     before_obs = {"camera": "top", "_reused": True, "image": top,
                   "before_side": {"camera": "side", "_reused": True, "image": side} if side is not None else None}
-    zone = czv.measure(cell, before_obs, config, ctx["dst"], ctx["src_site"], ctx["src_roi"])
+    dst_base = ctx["dst"].rsplit("-l", 1)[0]
+    sites = config.get("sites") if isinstance(config.get("sites"), dict) else {}
+    dst_cfg = sites.get(ctx["dst"]) if isinstance(sites.get(ctx["dst"]), dict) else (sites.get(dst_base) if isinstance(sites.get(dst_base), dict) else {})
+    dst_roi = ctx.get("dst_roi") or dst_cfg.get("auto_roi")
+    zone = czv.measure(cell, before_obs, config, ctx["dst"], ctx["src_site"], dst_roi)
     if not zone_acceptance(zone, handoff, ctx["dst"]):
         raise RemeasureFailed(f"the placement is not verified now: {zone.get('basis')}")
     if handoff.get("cell_id") == "cell_s" and isinstance(stage.get("source_clearance"), dict) and ctx.get("cat"):

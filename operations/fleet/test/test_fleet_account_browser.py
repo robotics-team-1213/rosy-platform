@@ -1,4 +1,5 @@
 """D-683 account discovery, verified authentication and no automatic operation replay."""
+import functools
 import threading
 import os
 import json
@@ -8,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, safe_listener
+from browser_harness import browser_tests_enabled, open_shared_page, safe_listener
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -87,17 +88,21 @@ def test_denied_login_stays_visible_and_allows_another_account(account_page):
 AUTHORIZE_WAIT_MS = 20000
 
 
+@functools.lru_cache(maxsize=8)
+def _cached_password_scrypt(password: str) -> str:
+    return hash_password(password)
+
+
 @pytest.fixture
 def account_page(tmp_path, request, account_backend):
-    from playwright.sync_api import sync_playwright
     console = FleetConsole([RobotEndpoint('rosy_01', 'http://127.0.0.1:8080', 'robot-only')],
                            [FakeRobot('rosy_01')])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / 'fleet.sqlite3'), robot_ids=console.robot_ids)
     initial = getattr(request, 'param', 'pw-1234')
     logins = {'alice': {'principal_id': 'alice', 'role': 'operator',
-                       'password_scrypt': hash_password('pw-1234' if initial in ('multi', 'usb') else initial)}}
+                       'password_scrypt': _cached_password_scrypt('pw-1234' if initial in ('multi', 'usb') else initial)}}
     if initial == 'multi':
-        logins['bob'] = {'principal_id': 'bob', 'role': 'viewer', 'password_scrypt': hash_password('pw-1234')}
+        logins['bob'] = {'principal_id': 'bob', 'role': 'viewer', 'password_scrypt': _cached_password_scrypt('pw-1234')}
     observations = None
     if initial == 'usb':
         from core_common.protocol.workcell_observations import WorkcellObservationManifest
@@ -121,13 +126,11 @@ def account_page(tmp_path, request, account_backend):
         while not server.started and worker.is_alive() and time.monotonic() < deadline:
             time.sleep(.02)
         assert server.started
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
-            try:
-                context = browser.new_context(viewport={'width': 320, 'height': 900})
-                yield context.new_page(), origin
-            finally:
-                browser.close()
+        lease, page, _ = open_shared_page(320, 900)
+        try:
+            yield page, origin
+        finally:
+            lease.close()
     finally:
         server.should_exit = True
         worker.join(timeout=20)
@@ -502,12 +505,16 @@ def test_focus_revalidates_changed_role_for_the_same_principal(account_page):
     _credentials(page)
     page.locator('[data-login=submit]').click()
     expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    cancel = page.locator('#cancel-all')  # an operator-only control; the E-stop stays live for viewers (11-18)
+    expect(cancel).not_to_have_attribute('reason', '운영자 권한이 필요합니다')
     identity = {'principal_id': 'alice', 'role': 'viewer', 'via': 'cookie'}
     for path in ['/api/fleet/auth/session', '/api/fleet/session']:
         page.route('**' + path, lambda route: route.fulfill(content_type='application/json', body=json.dumps(identity)))
     page.evaluate("window.dispatchEvent(new Event('focus'))")
     expect(page.locator('#user-role')).to_have_attribute('title', 'alice · viewer')
-    expect(page.locator('#estop')).to_be_disabled()
+    expect(cancel).to_be_disabled()
+    expect(cancel).to_have_attribute('reason', '운영자 권한이 필요합니다')
+    expect(page.locator('#estop')).to_be_enabled()
 
 
 def test_empty_cell_token_uses_cookie_despite_stale_storage(account_page):

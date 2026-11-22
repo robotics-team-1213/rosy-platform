@@ -38,7 +38,8 @@ from cell_policy_timing import MAX_OBSERVATION_AGE_S, park_ack_ok, run_timed  # 
 def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chunks: int, dry_run: bool, log,
                 demonstrated=None, goal_slot: int | None = None, n_action=None,
                 max_obs_age_s=MAX_OBSERVATION_AGE_S, handoff=None, authorize=None,
-                params=None, tcp_x_m=None, kin=None, rim_z_m: float | None = None) -> dict:
+                params=None, tcp_x_m=None, kin=None, rim_z_m: float | None = None,
+                paced_chunks: bool = False) -> dict:
     library = json.loads(library_path.read_text(encoding="utf-8"))
     low, high, fastest = envelope(library)
     fps = float(library.get("fps", 30))
@@ -98,13 +99,9 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
         poses = [*([] if measured_pose is None else [measured_pose]), *([] if target_pose is None else [target_pose])]
         return jaw_zone_error(poses, kin, jaw_spec) if jaw_spec is not None else None
 
-    def _legacy_jaw_hold(row, n: int, jaw_warn: str) -> dict:
-        held_reply = cell.act("human-hold")
-        log({**row, "refused": jaw_warn})
-        log({"command": "human-hold", **_status(held_reply)})
-        return {"result": "refused", "at": n, "reason": jaw_warn}
-
-    if getattr(shadow, "chunk_size", None) is not None or sim_units or n_action is not None or handoff is not None:
+    if paced_chunks and (sim_units or n_action is not None or handoff is not None):
+        raise ValueError("paced_chunks requires normalized-unit ACT without sim_units, n_action, or handoff")
+    if not paced_chunks and (getattr(shadow, "chunk_size", None) is not None or sim_units or n_action is not None or handoff is not None):
         def infer(state, frames):
             model_state = np.asarray(state) if sim_units else np.asarray(state) + off
             obs, meta = shadow.inputs(model_state.tolist(), frames, **goal)
@@ -137,95 +134,12 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                          dry_run=dry_run, log=log, handoff=handoff, authorize=authorize,
                          jaw_gate=({**jaw_spec, "tcp_x_m": resolved_tcp} if jaw_spec is not None else None))
 
-    held, released = False, False
-    for n in range(max_chunks):
-        status = cell.act("state")
-        state = np.asarray(status["state"], dtype=float)
-        frames = {view: cell.frame(view) for view in shadow.image_views}
-        obs, meta = shadow.inputs(state.tolist() if sim_units else (state + off).tolist(), frames, **goal)
-        converted = np.asarray(shadow.infer(obs).chunk, dtype=float) - off
-        proposed = converted
-        if not held:
-            proposed = open_before_close(proposed, open_g, model_closed)
-        row = {"chunk": n, "state": state.tolist(), "meta": meta, "proposed_first": proposed[0].tolist(),
-               "proposed_last": proposed[-1].tolist()}
-        if dry_run:
-            row.update(dry_run=True, converted_chunk=converted.tolist())
-        live_poses = [state.tolist(), *([status["target"]] if status.get("target") is not None else [])]
-        if jaw_spec is not None and (jaw_warn := jaw_zone_error(live_poses, kin, jaw_spec)):
-            row["jaw_warning"] = jaw_warn
-            if not dry_run:
-                return _legacy_jaw_hold(row, n, jaw_warn)
-        force_all = jaw_spec is not None and in_jaw_zone(live_poses, kin, jaw_spec)
-        try:
-            frames_cell = shape_chunk(proposed, state, low, high, fastest)
-        except ValueError as error:
-            if dry_run:
-                row["envelope"] = {"ok": False, "reason": str(error)}
-            log({**row, "refused": str(error)})
-            if not dry_run:
-                log({"command": "park", **_status(cell.act("park"))})
-            return {"result": "refused", "at": n, "reason": str(error)}
-        if jaw_spec is not None and (jaw_warn := jaw_zone_error(frames_cell, kin, jaw_spec, force_all=force_all)):
-            row["jaw_warning"] = jaw_warn
-            if not dry_run:
-                return _legacy_jaw_hold(row, n, jaw_warn)
-        row["frames"] = len(frames_cell)
-        if dry_run:
-            log({**row, "envelope": {"ok": True}})
-            continue
-        lib = {**library, "chunks": {**library["chunks"], "policy": frames_cell},
-               **({"jaw_gate": {**jaw_spec, "tcp_x_m": resolved_tcp}} if jaw_spec is not None else {})}
-        path = work / f"policy-lib-{int(time.time())}-{n}.json"
-        path.write_text(json.dumps(lib), encoding="utf-8")
-        loaded = cell.act(f"load {path}")
-        log({**row, "command": "load", **_status(loaded)})
-        if not loaded.get("ok"):
-            log({"command": "park", **_status(cell.act("park"))})
-            return {"result": "refused", "at": n, "reason": loaded.get("error")}
-        ran = cell.act("run policy")
-        log({"command": "run policy", **_status(ran), **_moved(state, ran, frames.get("top"), cell, work, n)})
-        if ran.get("contact"):
-            if "overload-hold" not in (ran.get("error") or ""):
-                log({"command": "retreat", **_status(cell.act("retreat"))})
-            log({"command": "park", **_status(cell.act("park"))})
-            return {"result": "contact", "at": n, "error": ran.get("error")}
-        if not ran.get("ok"):
-            if not ran.get("fault"):
-                log({"command": "park", **_status(cell.act("park"))})
-            return {"result": "fault" if ran.get("fault") else "refused", "at": n, "error": ran.get("error")}
-        jaws = [f[5] for f in frames_cell]
-        # held only on the runner's measured hold: empty jaws parked at closed read as closed (11-19 false release)
-        held = held or bool(ran.get("holding"))
-        released = held and jaws[-1] > closed + 10.0  # held something, then opened: the place (OMX_RUN_STOP_ON_PLACE)
-        if released:
-            break
-    if dry_run:
-        return {"result": "dry_run", "chunks": max_chunks}
-    parked = cell.act("park")
-    log({"command": "park", **_status(parked)})
-    return {"result": "released" if released else "chunks_done", "held": held, "parked": park_ack_ok(parked)}
+    from cell_policy_handoff import run_paced_chunks
 
-
-def _moved(state, ran: dict, top_before, cell, work: Path, n: int) -> dict:
-    """Did the arm move: joint travel the encoders measured and how much the top view changed (mean |diff|, 0-255)."""
-    out = {"joint_travel": float(np.abs(np.asarray(ran.get("state") or state, dtype=float) - state).max())}
-    try:
-        import cv2
-
-        top_after = cell.frame("top")
-        out["top_change"] = round(float(np.abs(top_before.astype(np.int16) - top_after.astype(np.int16)).mean()), 2)
-        shots = work / "policy-frames"
-        shots.mkdir(exist_ok=True)
-        cv2.imwrite(str(shots / f"{int(time.time())}-{n}-before.jpg"), top_before)
-        cv2.imwrite(str(shots / f"{int(time.time())}-{n}-after.jpg"), top_after)
-    except Exception as exc:  # camera evidence never stops the episode
-        out["top_change_error"] = str(exc)[:120]
-    return out
-
-
-def _status(status: dict) -> dict:
-    return {k: status.get(k) for k in ("ok", "error", "fault", "contact", "holding", "settled", "state")}
+    return run_paced_chunks(cell, shadow, library, work, off=off, max_chunks=max_chunks, dry_run=dry_run, log=log,
+                            goal=goal, sim_units=sim_units, open_g=open_g, model_closed=model_closed, closed=closed,
+                            low=low, high=high, fastest=fastest, kin=kin, jaw_spec=jaw_spec,
+                            resolved_tcp=resolved_tcp, authorize=authorize, max_obs_age_s=max_obs_age_s)
 
 
 def main(argv=None) -> int:
@@ -248,6 +162,10 @@ def main(argv=None) -> int:
     parser.add_argument("--catalog", type=Path, help="with --roi and --site: count the source's objects before and after")
     parser.add_argument("--roi", type=int, nargs=4)
     parser.add_argument("--site")
+    parser.add_argument("--dest-site", help="with --paced-chunks: D-1057 top-camera destination zone site")
+    parser.add_argument("--task-id", help="Fleet cell task id for destination zone before-frame archiving")
+    parser.add_argument("--paced-chunks", action="store_true",
+                        help="use guarded step-rate-stretched chunk loop for normalized-unit full-chunk checkpoints (e.g. arm_s)")
     parser.add_argument("--source-kind", choices=("policy", "sim_optimized", "scripted_teacher"))
     args = parser.parse_args(argv)
     if not args.dry_run and not args.person_at_switch:
@@ -262,6 +180,8 @@ def main(argv=None) -> int:
         parser.error("ACT needs --policy-root, --policy-revision and --cell-calibration")
     if args.mode != "act" and not args.goal_site:
         parser.error("hybrid and taught modes need --goal-site")
+    if args.paced_chunks and (args.mode != "act" or args.n_action is not None):
+        parser.error("--paced-chunks requires act mode with a normalized-unit checkpoint and no --n-action")
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if not config.get("work_dir"):
         config["work_dir"] = str(args.config.parent)
@@ -275,6 +195,8 @@ def main(argv=None) -> int:
     else:
         source_kind = "policy" if args.mode != "taught" else "scripted_teacher"
     shadow = None if args.mode == "taught" else lrs.LeRobotShadow(args.policy_root, args.policy_revision, cell_config=config)
+    if args.paced_chunks and shadow is not None and shadow.sim_rule is not None:
+        parser.error("--paced-chunks requires act mode with a normalized-unit checkpoint and no --n-action")
     destination = mapped_slot = None
     goal_slot = args.goal_slot
     if args.goal_site is not None:
@@ -318,7 +240,7 @@ def main(argv=None) -> int:
             stream.write(json.dumps({"run": run_id, "t": time.time(), "operator": args.operator,
                                      "policy_revision": args.policy_revision, "offset": offset, **row}, default=str) + "\n")
 
-    log({"start": True, "mode": args.mode, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch,
+    log({"start": True, "mode": args.mode, "paced_chunks": args.paced_chunks, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch,
          "max_chunks": args.max_chunks, "n_action": args.n_action, "max_obs_age_s": args.max_obs_age_s,
          "goal_slot": goal_slot, "goal_site": args.goal_site, "goal_destination": destination,
          "goal_site_slot": mapped_slot, "units_sha256": shadow.files.get(lrs.UNITS) if shadow else None})
@@ -366,6 +288,14 @@ def main(argv=None) -> int:
     before = look() if look else None
     if before is not None and before.get("objects") == 0 and not args.dry_run:
         return _finish({"result": "nothing_to_pick", "source": {"before": 0}})  # the camera sees no object: no motion
+    if args.task_id:
+        config["_fleet_task"] = args.task_id
+    before_top = None
+    if args.dest_site and not args.dry_run and hasattr(cell, "frame_receipt"):
+        try:
+            before_top = cell.frame_receipt("top", max_age_s=2.0)
+        except Exception:
+            before_top = None
     def _execute() -> dict:
         if args.mode == "taught":
             try:
@@ -378,12 +308,18 @@ def main(argv=None) -> int:
             res = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks, dry_run=args.dry_run,
                               log=log, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
                               max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize,
-                              params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config), rim_z_m=rim_z_m)
+                              params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config), rim_z_m=rim_z_m,
+                              paced_chunks=args.paced_chunks)
         if look:
             after = look()
             res["source"] = {"before": before.get("objects"), "after": after.get("objects")}
             if None not in res["source"].values():
                 res["took_one"] = res["source"]["before"] - res["source"]["after"] == 1
+        if args.dest_site and not args.dry_run and res.get("result") in ("released", "chunks_done") and res.get("parked") is True:
+            import cell_zone_verification as czv
+            sites = config.get("sites") or {}
+            dst_roi = (sites.get(args.dest_site) or sites.get(args.dest_site.rsplit("-l", 1)[0]) or {}).get("auto_roi")
+            res["zone_verification"] = czv.measure(cell, before_top, config, args.dest_site, args.site or "pinky", dst_roi)
         return res
 
     if not args.dry_run and config.get("episodes"):

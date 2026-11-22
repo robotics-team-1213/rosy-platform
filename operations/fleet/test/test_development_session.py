@@ -64,8 +64,9 @@ def test_development_human_cookie_preserves_identity_role_and_logout(tmp_path):
     assert client.get("/api/fleet/session").status_code == 401
     assert client.post("/api/fleet/auth/login", headers=ORIGIN,
                        json={"login": "alice", "password": "correct horse"}).status_code == 204
-    assert client.get("/api/fleet/session").json() == {"principal_id": "alice", "role": "viewer"}
-    assert client.post("/api/fleet/estop", headers=ORIGIN).status_code == 403
+    assert client.get("/api/fleet/session").json() == {"principal_id": "alice", "role": "viewer", "estop": True}
+    assert client.post("/api/fleet/estop", headers=ORIGIN).status_code == 200  # D-1043: a signed-in human viewer may stop
+    assert client.post("/api/fleet/dispatch/rearm", json={"expected_generation": 0}, headers=ORIGIN).status_code == 403
     assert client.post(SESSION, headers=ORIGIN).status_code == 403
     assert client.post("/api/fleet/auth/logout", headers=ORIGIN).status_code == 204
     assert client.get("/api/fleet/session").status_code == 401

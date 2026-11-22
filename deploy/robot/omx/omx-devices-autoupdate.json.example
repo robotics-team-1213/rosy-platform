@@ -10,7 +10,7 @@
   "lock": "deploy/robot/omx/requirements-observation.lock",
   "system_site_packages": true,
   "uv": "~/.local/bin/uv",
-  "paths": ["deploy/robot/omx", "middleware/devices/omx/adapter/omx_adapter",
+  "paths": ["deploy/robot/omx", "middleware/devices/omx/adapter",
             "contracts/foundation", "contracts/learning/src",
             "operations/overhead",
             "tools/sim/cell_site_map.py", "shared/web/cell-site-map.json",

@@ -22,6 +22,10 @@ const BED_CONFIRM_ERROR = {
   BED_CONFIRM_ROBOT_MISMATCH: '작업에 지정된 핑키가 아닙니다',
   BED_CONFIRM_POSE_UNAVAILABLE: '지도에서 핑키 위치를 확인하지 못했습니다. 정차 위치를 확인하세요',
 };
+const PRESENCE_CONFIRM_ERROR = {
+  ...BED_CONFIRM_ERROR,
+  CELL_TASK_NOT_QUEUED: '대기(QUEUED) 상태의 작업에만 입회 표시할 수 있습니다',
+};
 
 export function createCellActions(ctx) {
   const {request, $} = ctx;
@@ -255,8 +259,9 @@ export function createCellActions(ctx) {
       }
     } catch (error) {
       if (current !== ctx.gen()) return;
+      const errTable = kind === 'presence' ? PRESENCE_CONFIRM_ERROR : BED_CONFIRM_ERROR;
       const text = error.status === 404 && !error.code ? `서버에 ${name} 기능이 아직 없습니다 (D-1057)`
-        : BED_CONFIRM_ERROR[error.code] || error.message;
+        : errTable[error.code] || error.message;
       if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${name} 실패: ${text}`;
     }
   }
