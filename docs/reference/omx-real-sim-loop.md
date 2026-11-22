@@ -39,9 +39,12 @@ python tools/sim/omx_loop.py all --run --run-sweep --run-dir RUN --capture CAPTU
 중심 오차, 양쪽 끝의 RMS 오차, 끝 간격을 함께 기록한다.
 후보의 중심 오차가 줄어도 끝 간격과 고정 구조물 오차를 확인한다.
 
-`transfer-audit --wrist-evidence FILE`에 비교에 사용하지 않은 실물 표본을 넣는다.
+보정에 사용하지 않은 실물 표본의 재투영 좌표를 `rosy.omx-wrist-holdout/1` JSON에 기록한다.
+그 파일을 `transfer-audit --wrist-evidence FILE`에 지정한다.
+이 명령은 입력 좌표의 오차를 계산한다.
 각 손목에서 CAD와 대응하는 고정점과 집게 끝을 같은 영상에서 잡는다.
-영상 해시, 카메라 역할, 관절 시각, 집게 개구, 배치와 장착 보정의 출처를 확인한다.
+영상 해시와 카메라 역할은 원본에서 별도로 확인한다.
+관절 시각, 집게 개구, 배치와 장착 보정의 출처도 확인한다.
 보관 영상에서 집게 끝만 비교한 기록은 후보 선별에 쓴다.
 현장 적용은 고정점과 집게 끝이 모두 검증된 뒤에 판단한다.
 
