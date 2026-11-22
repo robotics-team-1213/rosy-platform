@@ -19,6 +19,7 @@ import json
 import math
 from pathlib import Path
 import re
+import socket
 import threading
 import time
 from typing import Any, Callable, Sequence
@@ -249,6 +250,9 @@ class PolicyRegistry:
     def infer(self, req: Any) -> tuple[int, dict[str, Any]]:
         if not isinstance(req, dict):
             return 400, {"ok": False, "error": "request body must be a JSON object"}
+        req_id = req.get("request_id")
+        if req_id is not None and (not isinstance(req_id, str) or not (1 <= len(req_id) <= 128) or not req_id.strip()):
+            return 400, {"ok": False, "error": "request_id must be a non-empty string (<=128 chars)"}
         arm_id = req.get("arm_id")
         if not isinstance(arm_id, str) or arm_id not in self._arms:
             return 404, {"ok": False, "error": f"unknown arm_id {arm_id!r}"}
@@ -312,6 +316,7 @@ class PolicyRegistry:
         return 200, {
             "schema": SCHEMA,
             "ok": True,
+            **({"request_id": req_id} if req_id is not None else {}),
             "arm_id": arm_id,
             "revision": entry.revision,
             "chunk": validated,
@@ -335,58 +340,80 @@ def make_server(
     expected_token = token.encode("utf-8") if token is not None else None
 
     class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+        timeout = 60.0
+
+        def setup(self) -> None:
+            super().setup()
+            try:
+                self.connection.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            except OSError:
+                pass
+
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
             return
 
-        def _send_json(self, status: int, body: dict[str, Any]) -> None:
+        def _send_json(self, status: int, body: dict[str, Any], *, close: bool = False) -> None:
             raw = json.dumps(body).encode("utf-8")
+            if close:
+                self.close_connection = True
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(raw)))
+            if close:
+                self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(raw)
 
         def do_GET(self) -> None:  # noqa: N802
+            close = "Content-Length" in self.headers or "Transfer-Encoding" in self.headers
             if self.path != "/health":
-                self._send_json(404, {"ok": False, "error": "not found"})
+                self._send_json(404, {"ok": False, "error": "not found"}, close=close)
                 return
-            self._send_json(200, registry.health_payload())
+            self._send_json(200, registry.health_payload(), close=close)
 
         def do_POST(self) -> None:  # noqa: N802
             if self.path != "/infer":
-                self._send_json(404, {"ok": False, "error": "not found"})
+                self._send_json(404, {"ok": False, "error": "not found"}, close=True)
                 return
             if expected_token is not None:
                 auth = self.headers.get("Authorization") or ""
                 if not auth.startswith("Bearer "):
-                    self._send_json(401, {"ok": False, "error": "missing bearer token"})
+                    self._send_json(401, {"ok": False, "error": "missing bearer token"}, close=True)
                     return
                 presented = auth[len("Bearer "):].encode("utf-8")
                 if not hmac.compare_digest(presented, expected_token):
-                    self._send_json(401, {"ok": False, "error": "invalid bearer token"})
+                    self._send_json(401, {"ok": False, "error": "invalid bearer token"}, close=True)
                     return
 
-            raw_len = self.headers.get("Content-Length")
-            if raw_len is None:
-                self._send_json(411, {"ok": False, "error": "Content-Length required"})
+            if "Transfer-Encoding" in self.headers:
+                self._send_json(400, {"ok": False, "error": "Transfer-Encoding not supported"}, close=True)
                 return
-            try:
-                content_len = int(raw_len)
-            except ValueError:
-                self._send_json(400, {"ok": False, "error": "invalid Content-Length"})
+            raw_lens = self.headers.get_all("Content-Length") or []
+            if not raw_lens:
+                self._send_json(411, {"ok": False, "error": "Content-Length required"}, close=True)
                 return
-            if content_len < 0 or content_len > max_body_bytes:
-                self._send_json(413, {"ok": False, "error": "request body exceeds max_body_bytes"})
+            if len(raw_lens) > 1:
+                self._send_json(400, {"ok": False, "error": "multiple Content-Length headers"}, close=True)
                 return
+            raw_len = raw_lens[0].strip(" \t")
+            if not raw_len or not raw_len.isascii() or not raw_len.isdigit():
+                self._send_json(400, {"ok": False, "error": "invalid Content-Length"}, close=True)
+                return
+            norm_len = raw_len.lstrip("0") or "0"
+            if len(norm_len) > len(str(max_body_bytes)) or int(norm_len) > max_body_bytes:
+                self._send_json(413, {"ok": False, "error": "request body exceeds max_body_bytes"}, close=True)
+                return
+            content_len = int(norm_len)
 
             raw_body = self.rfile.read(content_len)
             if len(raw_body) != content_len:
-                self._send_json(400, {"ok": False, "error": "truncated request body"})
+                self._send_json(400, {"ok": False, "error": "truncated request body"}, close=True)
                 return
             try:
                 payload = json.loads(raw_body.decode("utf-8"))
             except Exception:
-                self._send_json(400, {"ok": False, "error": "invalid JSON"})
+                self._send_json(400, {"ok": False, "error": "invalid JSON"}, close=True)
                 return
 
             status, reply = registry.infer(payload)
@@ -395,6 +422,53 @@ def make_server(
     class _HTTPServer(ThreadingHTTPServer):
         allow_reuse_address = True
         daemon_threads = True
+        block_on_close = False
+
+        def __init__(self, server_address, RequestHandlerClass):
+            self._active_lock = threading.Lock()
+            self._active_socks: set[socket.socket] = set()
+            self._closed = False
+            super().__init__(server_address, RequestHandlerClass)
+
+        @staticmethod
+        def _close_sock(sock: socket.socket) -> None:
+            for fn in (lambda s=sock: s.shutdown(socket.SHUT_RDWR), lambda s=sock: s.close()):
+                try:
+                    fn()
+                except OSError:
+                    pass
+
+        def process_request(self, request, client_address):
+            with self._active_lock:
+                closed = self._closed
+                if not closed:
+                    self._active_socks.add(request)
+            if closed:
+                self._close_sock(request)
+                return
+            try:
+                super().process_request(request, client_address)
+            except BaseException:
+                with self._active_lock:
+                    self._active_socks.discard(request)
+                self._close_sock(request)
+                raise
+
+        def process_request_thread(self, request, client_address):
+            try:
+                super().process_request_thread(request, client_address)
+            finally:
+                with self._active_lock:
+                    self._active_socks.discard(request)
+
+        def server_close(self) -> None:
+            with self._active_lock:
+                self._closed = True
+                socks = list(self._active_socks)
+                self._active_socks.clear()
+            for sock in socks:
+                self._close_sock(sock)
+            super().server_close()
 
     return _HTTPServer((bind, port), Handler)
 

@@ -849,3 +849,126 @@ def test_review_regressions_playback_offsets_real_kin_mid_and_fault_isolation(tm
     ):
         spec_r2 = cli_mod._build_jaw_spec("a", site_cfg, lib_jaw, real_kin, task_spec)
         assert spec_r2 is not None and spec_r2["rim_z_m"] == pytest.approx(expected_rim)
+
+
+def test_remote_policy_shadow_reuses_keepalive_connection_caches_ip_and_verifies_request_id(tmp_path, monkeypatch):
+    import socket
+
+    mode = {"fail": False, "drop": False}
+    infer_calls = [0]
+
+    def arm_a_fn(obs):
+        infer_calls[0] += 1
+        if mode["drop"]:
+            for sock in list(srv_obj._active_socks):
+                srv_obj._close_sock(sock)
+            return [[0.0] * 6] * 4
+        if mode["fail"]:
+            raise RuntimeError("transient infer boom")
+        return [[0.0, -0.5, 0.4, 0.5, 0.0, 0.6]] * 4
+
+    srv_obj, url, revs = _make_remote_server(tmp_path / "ka", {"arm_a": arm_a_fn})
+    srv_obj.handle_error = lambda *_a, **_kw: None
+    accepted = [0]
+    orig_get_request = srv_obj.get_request
+
+    def _counting_accept():
+        accepted[0] += 1
+        return orig_get_request()
+
+    srv_obj.get_request = _counting_accept
+    port = srv_obj.server_address[1]
+    real_getaddrinfo = socket.getaddrinfo
+    real_socket_cls = socket.socket
+    dns_calls, connect_attempts = [], []
+
+    def _spy_getaddrinfo(host, p, *args, **kwargs):
+        dns_calls.append(host)
+        if host == "localhost":
+            good = real_getaddrinfo("127.0.0.1", p, *args, **kwargs)
+            bad = [(socket.AF_INET, g[1], g[2], g[3], ("127.0.0.2", p)) for g in good[:1]]
+            return bad + good
+        return real_getaddrinfo(host, p, *args, **kwargs)
+
+    class _TimeoutFirstSocket(real_socket_cls):
+        def connect(self, addr):
+            connect_attempts.append((addr, self.gettimeout()))
+            if addr[0] == "127.0.0.2":
+                raise TimeoutError("simulated connect timeout")
+            return super().connect(addr)
+
+    try:
+        img = np.zeros((24, 32, 3), dtype=np.uint8)
+        with monkeypatch.context() as mp:
+            mp.setattr(socket, "getaddrinfo", _spy_getaddrinfo)
+            mp.setattr(socket, "socket", _TimeoutFirstSocket)
+            sh = remote_mod.RemotePolicyShadow(f"http://localhost:{port}", "arm_a", revs["arm_a"], token="ka-tok", timeout_s=0.5)
+            assert any(a[0] == "127.0.0.2" and t is not None and 0 < t <= 0.35 for a, t in connect_attempts)
+            assert sh._resolved_addrs[0][3] == ("127.0.0.1", port) and len(sh._resolved_addrs) == 2
+            obs, _ = sh.inputs([0.0] * 6, {"top": img, "wrist": img})
+            for _ in range(3):
+                res = sh.infer(obs)
+                assert len(res.chunk) == 4
+            assert dns_calls == ["localhost"] and accepted[0] == 1 and infer_calls[0] == 3
+            assert sh._conn is not None and sh._conn.sock is not None
+            assert sh._conn.sock.gettimeout() == pytest.approx(0.5)
+            assert sh._conn.sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY) != 0
+
+            # Server 500 closes connection while retaining working address cache.
+            mode["fail"] = True
+            with pytest.raises(remote_mod.RemotePolicyError, match="HTTP 500"):
+                sh.infer(obs)
+            assert sh._conn is None and sh._resolved_addrs[0][3] == ("127.0.0.1", port) and infer_calls[0] == 4
+
+            mode["fail"] = False
+            assert len(sh.infer(obs).chunk) == 4
+            assert dns_calls == ["localhost"] and accepted[0] == 2 and infer_calls[0] == 5
+
+            # Mid-request socket drop fails closed with zero /infer resend and resets resolved cache.
+            mode["drop"] = True
+            with pytest.raises(remote_mod.RemotePolicyError):
+                sh.infer(obs)
+            assert sh._conn is None and sh._resolved_addrs == [] and infer_calls[0] == 6
+
+            mode["drop"] = False
+            res_reconnect = sh.infer(obs)
+            assert len(res_reconnect.chunk) == 4
+            assert dns_calls == ["localhost", "localhost"] and accepted[0] == 3 and infer_calls[0] == 7
+            sh.close()
+            assert sh._conn is None
+
+        # IPv6 link-local scope_id is preserved across distinct interfaces.
+        with monkeypatch.context() as mp_v6:
+            mp_v6.setattr(
+                socket,
+                "getaddrinfo",
+                lambda *_a, **_kw: [
+                    (socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("fe80::1", port, 0, 2)),
+                    (socket.AF_INET6, socket.SOCK_STREAM, 0, "", ("fe80::1", port, 0, 3)),
+                ],
+            )
+            scoped = sh._resolve_addrs()
+            assert len(scoped) == 2 and [a[3][3] for a in scoped] == [2, 3]
+
+        # Mismatched request_id in server reply fails closed.
+        class _WrongReqIdResp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_a):
+                return False
+
+            def read(self):
+                return json.dumps({
+                    "ok": True, "request_id": "wrong-req-id", "arm_id": "arm_a",
+                    "revision": revs["arm_a"], "chunk": [[0.0] * 6],
+                }).encode("utf-8")
+
+        sh_bad = remote_mod.RemotePolicyShadow(url, "arm_a", revs["arm_a"], timeout_s=0.5)
+        sh_bad._opener = lambda *_a, **_kw: _WrongReqIdResp()
+        obs_bad, _ = sh_bad.inputs([0.0] * 6, {"top": img, "wrist": img})
+        with pytest.raises(remote_mod.RemotePolicyError, match="request_id"):
+            sh_bad.infer(obs_bad)
+    finally:
+        srv_obj.shutdown()
+        srv_obj.server_close()

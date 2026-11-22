@@ -7,15 +7,19 @@ from __future__ import annotations
 
 import base64
 from hashlib import sha256
+import http.client
 import json
 import math
 from pathlib import Path
+import socket
+import threading
 import time
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 import arm_status_bridge
 import cell_act_inputs
@@ -79,19 +83,13 @@ class RemotePolicyShadow:
     joint_names = JOINT_NAMES
 
     def __init__(
-        self,
-        endpoint_url: str,
-        arm_id: str,
-        policy_revision: str,
-        *,
-        token: str | None = None,
-        timeout_s: float = 0.8,
-        expected_views: Mapping[str, tuple[int, int]] | None = None,
-        sim_rule: dict[str, Any] | None = None,
-        policy_root: Path | None = None,
-        config: dict[str, Any] | None = None,
-        opener: Any = None,
+        self, endpoint_url: str, arm_id: str, policy_revision: str, *,
+        token: str | None = None, timeout_s: float = 0.8, expected_views: Mapping[str, tuple[int, int]] | None = None,
+        sim_rule: dict[str, Any] | None = None, policy_root: Path | None = None, config: dict[str, Any] | None = None, opener: Any = None,
     ) -> None:
+        self._conn_lock = threading.Lock()
+        self._conn: http.client.HTTPConnection | None = None
+        self._resolved_addrs: list[tuple[int, int, int, Any]] = []
         parsed = urllib.parse.urlsplit(endpoint_url)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
             raise ValueError(f"invalid endpoint_url {endpoint_url!r}")
@@ -110,13 +108,18 @@ class RemotePolicyShadow:
         self.policy_revision = _validate_revision(policy_revision)
         self._token = token
         self.timeout_s = float(timeout_s)
-        self._opener = opener or urllib.request.urlopen
+        self._opener = opener
+        self._scheme = parsed.scheme
+        self._host = parsed.hostname or ""
+        self._port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        self._host_header = parsed.netloc
+        self._base_path = parsed.path.rstrip("/")
         self.files: dict[str, str] = {}
         self.sim_rule = sim_rule if sim_rule is not None else (
             read_sim_rule(Path(policy_root) / UNITS, config) if policy_root is not None else None
         )
 
-        health = self._get_json("/health")
+        health = self._request_json("GET", "/health")
         if not isinstance(health, dict) or health.get("ok") is not True:
             raise RemotePolicyError(f"unhealthy remote policy server at {self.endpoint_url}")
         arm_meta = (health.get("arms") or {}).get(arm_id)
@@ -150,46 +153,146 @@ class RemotePolicyShadow:
         self.chunk_size = chunk_sz
         self.goal_size = goal_sz
 
+    def _resolve_addrs(self) -> list[tuple[int, int, int, Any]]:
+        infos = socket.getaddrinfo(self._host, self._port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        ordered = [i for i in infos if i[0] == socket.AF_INET] + [i for i in infos if i[0] != socket.AF_INET]
+        self._resolved_addrs = list(dict.fromkeys((i[0], i[1], i[2], i[4]) for i in ordered))
+        if not self._resolved_addrs:
+            raise OSError(f"no addresses resolved for {self._host}:{self._port}")
+        return self._resolved_addrs
+
+    def _close_conn_locked(self, *, reset_dns: bool = False) -> None:
+        conn, self._conn = self._conn, None
+        if reset_dns:
+            self._resolved_addrs = []
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def _set_nodelay(self, sock: socket.socket | None) -> None:
+        if sock is not None:
+            try:
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            except OSError:
+                pass
+
+    def _connect_addr(self, addr: tuple[int, int, int, Any], timeout: float) -> http.client.HTTPConnection:
+        family, socktype, proto, sockaddr = addr
+        sock = socket.socket(family, socktype, proto)
+        try:
+            sock.settimeout(timeout)
+            sock.connect(sockaddr)
+            sock.settimeout(self.timeout_s)
+            self._set_nodelay(sock)
+        except Exception:
+            sock.close()
+            raise
+        conn = http.client.HTTPConnection(self._host, self._port, timeout=self.timeout_s)
+        conn.sock = sock
+        return conn
+
+    def _ensure_conn(self) -> http.client.HTTPConnection:
+        if self._conn is not None:
+            return self._conn
+        if self._scheme == "https":
+            conn = http.client.HTTPSConnection(self._host, self._port, timeout=self.timeout_s)
+            try:
+                conn.connect()
+            except Exception:
+                conn.close()
+                raise
+            self._set_nodelay(conn.sock)
+            self._conn = conn
+            return conn
+        deadline = time.monotonic() + self.timeout_s
+        used_cache = bool(self._resolved_addrs)
+        addrs, tried, last_exc = (list(self._resolved_addrs) if used_cache else self._resolve_addrs()), set(), None
+        while True:
+            pending = [a for a in addrs if a not in tried]
+            for idx, addr in enumerate(pending):
+                tried.add(addr)
+                rem = deadline - time.monotonic()
+                if rem <= 0:
+                    last_exc = last_exc or TimeoutError(f"connect timeout to {self._host}:{self._port}")
+                    break
+                slots = (len(pending) - idx) + (1 if used_cache else 0)
+                try:
+                    self._conn = self._connect_addr(addr, rem / slots)
+                    self._resolved_addrs = [addr] + [a for a in self._resolved_addrs if a != addr]
+                    return self._conn
+                except OSError as exc:
+                    last_exc = exc
+            if not used_cache or deadline - time.monotonic() <= 0:
+                break
+            used_cache, addrs = False, self._resolve_addrs()
+        self._resolved_addrs = []
+        raise last_exc or OSError(f"failed to connect to {self._host}:{self._port}")
+
+    def close(self) -> None:
+        with self._conn_lock:
+            self._close_conn_locked(reset_dns=False)
+
+    def __enter__(self) -> "RemotePolicyShadow":
+        return self
+
+    def __exit__(self, *_exc: Any) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        if getattr(self, "_conn_lock", None) is not None:
+            try:
+                self.close()
+            except Exception:
+                pass
+
     def _headers(self, *, content_type: str | None = None) -> dict[str, str]:
-        hdrs: dict[str, str] = {}
-        if content_type:
-            hdrs["Content-Type"] = content_type
+        hdrs = {"Content-Type": content_type} if content_type else {}
         if self._token is not None:
             hdrs["Authorization"] = f"Bearer {self._token}"
         return hdrs
 
-    def _get_json(self, route: str) -> dict[str, Any]:
-        req = urllib.request.Request(f"{self.endpoint_url}{route}", headers=self._headers(), method="GET")
-        try:
-            with self._opener(req, timeout=self.timeout_s) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except Exception as exc:
-            raise RemotePolicyError(f"GET {route} failed: {exc}") from exc
+    def _request_json(self, method: str, route: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        raw_req = json.dumps(body).encode("utf-8") if body is not None else None
+        ct = "application/json" if body is not None else None
+        if self._opener is not None:
+            req = urllib.request.Request(f"{self.endpoint_url}{route}", data=raw_req, headers=self._headers(content_type=ct), method=method)
+            try:
+                with self._opener(req, timeout=self.timeout_s) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")[:200] if exc.fp else ""
+                raise RemotePolicyError(f"{method} {route} HTTP {exc.code}: {detail}") from exc
+            except Exception as exc:
+                raise RemotePolicyError(f"{method} {route} failed: {exc}") from exc
 
-    def _post_json(self, route: str, body: dict[str, Any]) -> dict[str, Any]:
-        raw = json.dumps(body).encode("utf-8")
-        req = urllib.request.Request(
-            f"{self.endpoint_url}{route}",
-            data=raw,
-            headers=self._headers(content_type="application/json"),
-            method="POST",
-        )
-        try:
-            with self._opener(req, timeout=self.timeout_s) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")[:200] if exc.fp else ""
-            raise RemotePolicyError(f"POST {route} HTTP {exc.code}: {detail}") from exc
-        except Exception as exc:
-            raise RemotePolicyError(f"POST {route} failed: {exc}") from exc
+        target = f"{self._base_path}{route}" if self._base_path else route
+        headers = {"Host": self._host_header, "Connection": "keep-alive", **self._headers(content_type=ct)}
+        with self._conn_lock:
+            try:
+                conn = self._ensure_conn()
+                conn.request(method, target, body=raw_req, headers=headers)
+                resp = conn.getresponse()
+                raw = resp.read()
+            except Exception as exc:
+                self._close_conn_locked(reset_dns=True)
+                raise RemotePolicyError(f"{method} {route} failed: {exc}") from exc
+            will_close = bool(getattr(resp, "will_close", False)) or "close" in (resp.getheader("Connection") or "").lower()
+            if resp.status != 200:
+                detail = raw.decode("utf-8", errors="replace")[:200]
+                if will_close or resp.status >= 500 or resp.status in (400, 401, 404, 411, 413):
+                    self._close_conn_locked(reset_dns=False)
+                raise RemotePolicyError(f"{method} {route} HTTP {resp.status}: {detail}")
+            if will_close:
+                self._close_conn_locked(reset_dns=False)
+            try:
+                return json.loads(raw.decode("utf-8"))
+            except Exception as exc:
+                self._close_conn_locked(reset_dns=True)
+                raise RemotePolicyError(f"{method} {route} failed: {exc}") from exc
 
-    def inputs(
-        self,
-        state: Sequence[float],
-        frames: Mapping[str, Any],
-        *,
-        goal: Sequence[float] | None = None,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+    def inputs(self, state: Sequence[float], frames: Mapping[str, Any], *, goal: Sequence[float] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
         nums = _finite_floats(state, 6, "state")
 
         if self.sim_rule is not None:
@@ -229,31 +332,21 @@ class RemotePolicyShadow:
             else:
                 goal_vec = _finite_floats(goal, self.goal_size, "goal")
 
-        obs = {
-            "arm_id": self.arm_id,
-            "revision": self.policy_revision,
-            "state": model_state,
-            "frames": encoded_frames,
-            **({"goal": goal_vec} if goal_vec is not None else {}),
-        }
-        meta = {
-            "model_frame_sha256": frame_hashes,
-            "frame_count": len(frame_hashes),
-            "sim_converted": self.sim_rule is not None,
-            **({"goal_slot": goal_slot} if goal_slot is not None else {}),
-        }
+        obs = {"arm_id": self.arm_id, "revision": self.policy_revision, "state": model_state, "frames": encoded_frames, **({"goal": goal_vec} if goal_vec is not None else {})}
+        meta = {"model_frame_sha256": frame_hashes, "frame_count": len(frame_hashes), "sim_converted": self.sim_rule is not None, **({"goal_slot": goal_slot} if goal_slot is not None else {})}
         return obs, meta
 
     def infer(self, obs: dict[str, Any], *, state: Any = None) -> SimpleNamespace:
         t0 = time.perf_counter()
-        reply = self._post_json("/infer", obs)
+        req_id = f"{self.arm_id}-{uuid.uuid4().hex[:16]}"
+        reply = self._request_json("POST", "/infer", {**obs, "request_id": req_id})
         rtt_s = time.perf_counter() - t0
         if not isinstance(reply, dict) or reply.get("ok") is not True:
             raise RemotePolicyError(f"inference error reply: {reply!r}")
+        if reply.get("request_id") != req_id:
+            raise RemotePolicyError(f"reply request_id mismatch expected={req_id!r} got={reply.get('request_id')!r}")
         if reply.get("arm_id") != self.arm_id or reply.get("revision") != self.policy_revision:
-            raise RemotePolicyError(
-                f"reply mismatch arm={reply.get('arm_id')!r} rev={reply.get('revision')!r}"
-            )
+            raise RemotePolicyError(f"reply mismatch arm={reply.get('arm_id')!r} rev={reply.get('revision')!r}")
         raw_chunk = reply.get("chunk")
         if not isinstance(raw_chunk, list) or not (1 <= len(raw_chunk) <= self.chunk_size):
             raise RemotePolicyError(f"invalid chunk length {len(raw_chunk) if isinstance(raw_chunk, list) else None}")
@@ -277,10 +370,7 @@ class RemotePolicyShadow:
                 gap = 30.0 + (st_nums[-1] - held) * slope
                 obs_grip = float(obs["state"][-1])
                 if not 12.0 <= gap <= 60.0:
-                    grippers = [
-                        (st_nums[-1] if abs(ang - obs_grip) <= 1e-6 else g)
-                        for ang, g in zip(angles, grippers)
-                    ]
+                    grippers = [(st_nums[-1] if abs(ang - obs_grip) <= 1e-6 else g) for ang, g in zip(angles, grippers)]
             converted: list[tuple[float, ...]] = []
             for row, g_unit in zip(parsed_rows, grippers):
                 converted.append(tuple([_rad_to_body_units(v) for v in row[:5]] + [float(g_unit)]))
