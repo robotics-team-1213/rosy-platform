@@ -91,5 +91,7 @@ a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outl
 #site-points-layer .sp-cell-ref { fill: var(--series-primary); stroke: var(--ink); stroke-width: 1.5px; }
 #site-points-layer .sp-label, #site-points-layer .sp-role-tag { fill: var(--ink); font: var(--text-micro) var(--mono); paint-order: stroke; stroke: var(--surface-flat); stroke-width: 3px; }
 #site-points-layer .sp-role-tag { fill: var(--status-warn); }
+.site-points-panel { min-width: 0; }
+.site-points-panel summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .site-points-body { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
-.sp-stage-list { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-1); font-size: var(--text-micro); color: var(--ink-quiet); }
+.sp-stage-list { margin: 0; padding-inline-start: var(--space-5); display: grid; gap: var(--space-1); font-size: var(--text-micro); color: var(--text-secondary); }
