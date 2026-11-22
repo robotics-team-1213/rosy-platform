@@ -109,7 +109,11 @@ def test_service_tokens_allow_offline_jobs_and_block_human_approval_routes(tmp_p
         assert _req(base + "/api/learning/control", token=RAW_TOK)[0] == 403
 
         # Regression #1: GET /api/learning/canonical/peer-summary works with peer_token even when service_tokens & accounts are configured.
-        peer_tok = center.canonical.peer_token
+        peer_tok = "peer_tok_0123456789abcdef01234567"
+        peer_tok_file = tmp_path / "peer.token"
+        peer_tok_file.write_text(peer_tok + "\n", encoding="utf-8")
+        peer_tok_file.chmod(0o600)
+        center.canonical.peer_token_file = peer_tok_file
         assert _req(base + "/api/learning/canonical/peer-summary", token=peer_tok)[0] == 200
 
         # Regression #2: failed/running runs are refused by bundle-manifest & bundle file; nested subdir inside succeeded bundle works, symlink rejected.

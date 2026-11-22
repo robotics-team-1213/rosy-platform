@@ -1,6 +1,7 @@
 """PR-6 tests: D-358 external egress denial/redaction and D-878 strict JSON schema chat adapter."""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
