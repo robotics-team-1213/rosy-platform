@@ -23,16 +23,22 @@ pytestmark = pytest.mark.skipif(
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "operations" / "apps" / "games"))
 
-from browser_harness import open_page, save_temp_screenshot  # noqa: E402
+from browser_harness import free_port, open_page, open_shared_page, save_temp_screenshot  # noqa: E402
 
 from games.field import Field, Pose2D  # noqa: E402
 from games.game import Observation, Phase  # noqa: E402
 from games.game.state import MatchState  # noqa: E402
 from games.host.preview import (  # noqa: E402
     PreviewBoard,
-    PreviewServer as AccountPreviewServer,
+    PreviewServer as _BasePreviewServer,
     overlay_payload,
 )
+
+
+def AccountPreviewServer(board, **kwargs):
+    if kwargs.get("port") == 0:
+        kwargs["port"] = free_port()
+    return _BasePreviewServer(board, **kwargs)
 
 
 class _LayoutAccount:
@@ -70,7 +76,7 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
     import time
     from functools import partial
     from urllib.parse import parse_qs, urlsplit, urlencode
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
     from cryptography.fernet import Fernet
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from cryptography.hazmat.primitives import serialization
@@ -137,9 +143,8 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
     server._httpd.socket = tls.wrap_socket(server._httpd.socket, server_side=True)
     server.start()
     try:
-        with sync_playwright() as playwright:
-            browser = playwright.chromium.launch(headless=True)
-            page = browser.new_page(ignore_https_errors=True)
+        browser, page, _ = open_shared_page(url=origin, ignore_https_errors=True)
+        try:
             navigation_errors = []
             page.on('requestfailed', lambda request: navigation_errors.append((request.url, request.failure)))
             page.goto(origin)
@@ -174,6 +179,7 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             page.locator('#halt').wait_for(state='hidden', timeout=15000)
             expect(page.locator('#account-login')).to_be_visible()
             expect(page.locator('[data-account-profile]')).to_be_hidden()
+        finally:
             browser.close()
     finally:
         server.close()
@@ -201,7 +207,6 @@ def _play_payload() -> dict:
 
 def test_match_board_renders_published_play_state():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     # This case asserts the live label; a slow Chromium launch must not age the fixture.
     board = PreviewBoard(clock=lambda: 100.0)
@@ -209,8 +214,8 @@ def test_match_board_renders_published_play_state():
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             page.wait_for_function(
                 "() => document.getElementById('phase')?.dataset.phase === 'play'"
             )
@@ -227,6 +232,7 @@ def test_match_board_renders_published_play_state():
             shot = (Path(os.environ.get('ROSY_SHOT_DIR') or os.environ.get('TEMP', '/tmp')) / 'games_board_play.png').resolve()
             shot.parent.mkdir(parents=True, exist_ok=True)
             save_temp_screenshot(page, str(shot))
+        finally:
             browser.close()
     finally:
         server.close()
@@ -234,7 +240,6 @@ def test_match_board_renders_published_play_state():
 
 def test_match_board_names_server_judged_delay():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     now = [100.0]
     board = PreviewBoard(clock=lambda: now[0])
@@ -242,8 +247,8 @@ def test_match_board_names_server_judged_delay():
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             now[0] += 3.0
             page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('마지막 생성 3.0초 전')")
@@ -277,6 +282,7 @@ def test_match_board_names_server_judged_delay():
             shot = (Path(os.environ.get('ROSY_SHOT_DIR') or os.environ.get('TEMP', '/tmp')) / 'games_board_delayed.png').resolve()
             shot.parent.mkdir(parents=True, exist_ok=True)
             save_temp_screenshot(page, str(shot))
+        finally:
             browser.close()
     finally:
         server.close()
@@ -286,7 +292,6 @@ def test_match_board_names_server_judged_delay():
 @pytest.mark.parametrize('reported_fresh', [False, True])
 def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height, reported_fresh):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload())
@@ -298,8 +303,8 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.route("**/overlay.json", lambda route: route.fulfill(json=legacy))
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
@@ -317,6 +322,7 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             assert not errors
             save_temp_screenshot(page, f"games_board_unavailable_{width}x{height}.png")
+        finally:
             browser.close()
     finally:
         server.close()
@@ -324,14 +330,13 @@ def test_legacy_overlay_without_time_evidence_does_not_claim_fresh(width, height
 
 def test_first_overlay_failure_has_no_last_match_claim():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, 1280, 800, url=url)
+        browser, page, errors = open_page(None, 1280, 800, url=url)
+        try:
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('연결 오류')")
@@ -352,6 +357,7 @@ def test_first_overlay_failure_has_no_last_match_claim():
             assert page.locator("#field-evidence").is_hidden()
             assert "경기 정보가 없습니다" not in page.locator("#match-announcement").inner_text()
             assert not errors
+        finally:
             browser.close()
     finally:
         server.close()
@@ -376,15 +382,14 @@ def _lost_payload(reason="lost_ball") -> dict:
     return overlay_payload(field, observation, state, markers=())
 
 
-def _launch_board_page(playwright, url):
-    browser, page, errors = open_page(playwright, 1280, 800, url=url)
+def _launch_board_page(url):
+    browser, page, errors = open_page(None, 1280, 800, url=url)
     page.goto(url, wait_until="domcontentloaded")
     return browser, page, errors
 
 
 def test_chromium_opens_preview_on_a_normally_blocked_port():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     try:
         server = PreviewServer(PreviewBoard(), port=6000)
@@ -392,11 +397,12 @@ def test_chromium_opens_preview_on_a_normally_blocked_port():
         pytest.skip("port 6000 is occupied")
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, 390, 844, url=url)
+        browser, page, errors = open_page(None, 390, 844, url=url)
+        try:
             page.goto(url, wait_until="domcontentloaded")
             assert page.locator("#phase").is_visible()
             assert not errors
+        finally:
             browser.close()
     finally:
         server.close()
@@ -407,15 +413,14 @@ def test_chromium_opens_preview_on_a_normally_blocked_port():
 def test_match_board_shows_lost_hold_state(width, height, reason, label):
     """D-103 유실 HOLD — 공이나 로봇을 잃으면 이유가 보드에 보인다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_lost_payload(reason), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
                 "() => document.getElementById('phase')?.dataset.phase === 'hold'"
@@ -445,6 +450,7 @@ def test_match_board_shows_lost_hold_state(width, height, reason, label):
                 assert page.evaluate("document.documentElement.scrollHeight <= innerHeight")
             assert not errors, f"페이지 오류: {errors}"
             save_temp_screenshot(page, f"games_board_{reason}_{width}x{height}.png")
+        finally:
             browser.close()
     finally:
         server.close()
@@ -454,14 +460,13 @@ def test_match_board_shows_lost_hold_state(width, height, reason, label):
 def test_match_board_initial_state_before_any_publish(width, height):
     """최초 기동 — publish 전 보드는 기본 안내만 보이고 아무 상태도 그리지 않는다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function(
                 "() => document.getElementById('phase')?.textContent === '대기'"
@@ -481,6 +486,7 @@ def test_match_board_initial_state_before_any_publish(width, height):
                 assert page.locator("#halt").bounding_box()["y"] + page.locator("#halt").bounding_box()["height"] <= height
             assert not errors, f"페이지 오류: {errors}"
             save_temp_screenshot(page, f"games_board_initial_{width}x{height}.png")
+        finally:
             browser.close()
     finally:
         server.close()
@@ -489,21 +495,21 @@ def test_match_board_initial_state_before_any_publish(width, height):
 def test_missing_camera_frame_does_not_render_broken_image_placeholder():
     """An absent optional camera image stays absent even when CSS styles the img."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             page.wait_for_function(
                 "() => document.getElementById('phase')?.dataset.phase === 'play'"
             )
             assert page.locator("#frame").is_hidden()
             assert page.locator("#frame").evaluate("el => getComputedStyle(el).display") == "none"
             assert not errors, f"페이지 오류: {errors}"
+        finally:
             browser.close()
     finally:
         server.close()
@@ -534,21 +540,21 @@ GAMES_FIT_PROBE = """() => {
 def test_stop_stays_in_the_top_bar_inside_the_declared_viewport():
     """정지 버튼이 접힘 아래로 내려가면 스페이스를 알아도 손이 못 쓴다."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             page.wait_for_function(
                 "() => document.getElementById('phase')?.dataset.phase === 'play'"
             )
             page.wait_for_timeout(400)
             fit = page.evaluate(GAMES_FIT_PROBE)
             assert not errors, f"페이지 오류: {errors}"
+        finally:
             browser.close()
     finally:
         server.close()
@@ -567,7 +573,6 @@ def test_stop_stays_in_the_top_bar_inside_the_declared_viewport():
 @pytest.mark.parametrize("medium_width", [600, 480])
 def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate(medium_width):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     now = [100.0]
     board = PreviewBoard(clock=lambda: now[0])
@@ -575,8 +580,8 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate(medium
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             desktop = page.evaluate("""() => {
               const rect = (s) => document.querySelector(s).getBoundingClientRect();
@@ -631,6 +636,7 @@ def test_match_layout_uses_desktop_width_and_keeps_narrow_status_separate(medium
             assert scrolled["halt"]["top"] >= 0 and scrolled["halt"]["bottom"] <= scrolled["bar"]["bottom"], scrolled
             assert scrolled["stair"]["bottom"] <= 800, scrolled
             assert not errors
+        finally:
             browser.close()
     finally:
         server.close()
@@ -643,15 +649,14 @@ def test_the_space_bar_promise_is_real():
     힌트가 거짓말을 했다. 몸에 포커스가 있을 때 Space 는 /stop 을 친다.
     """
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             page.wait_for_function(
                 "document.getElementById('phase')?.dataset.phase === 'play'"
             )
@@ -667,6 +672,7 @@ def test_the_space_bar_promise_is_real():
             page.wait_for_timeout(250)
             assert stops == ["POST"], f"스페이스가 /stop 을 치지 않는다: {stops}"
             assert not errors, f"페이지 오류: {errors}"
+        finally:
             browser.close()
     finally:
         server.close()
@@ -674,7 +680,6 @@ def test_the_space_bar_promise_is_real():
 
 def test_match_state_is_announced_only_when_it_changes():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     now = [100.0]
     board = PreviewBoard(clock=lambda: now[0])
@@ -682,8 +687,8 @@ def test_match_state_is_announced_only_when_it_changes():
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             announcement = page.locator("#match-announcement")
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             assert announcement.get_attribute("role") == "status"
@@ -703,6 +708,7 @@ def test_match_state_is_announced_only_when_it_changes():
             assert "공을 잃음" in announcement.inner_text()
             assert len(page.evaluate("window.__announcements")) == 1
             assert not errors, f"페이지 오류: {errors}"
+        finally:
             browser.close()
     finally:
         server.close()
@@ -711,15 +717,14 @@ def test_match_state_is_announced_only_when_it_changes():
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
 def test_stop_failure_is_visible_and_can_be_retried(width, height):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             calls = []
@@ -755,6 +760,7 @@ def test_stop_failure_is_visible_and_can_be_retried(width, height):
             assert page.evaluate("document.activeElement?.id") == "halt"
             assert calls == ["POST", "POST"]
             assert not errors, f"페이지 오류: {errors}"
+        finally:
             browser.close()
     finally:
         server.close()
@@ -769,7 +775,7 @@ def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, heig
     import os
     import threading
     from functools import partial
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
     from games.host.preview import _Handler
 
     paused, entered, release, first_release = (threading.Event() for _ in range(4))
@@ -807,56 +813,55 @@ def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, heig
         paused.set()
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
-            def capture(state):
-                if stage != 'body' or not os.environ.get('ROSY_UI_CAPTURE_DIR'):
-                    return
-                destination = Path(os.environ['ROSY_UI_CAPTURE_DIR'])
-                destination.mkdir(parents=True, exist_ok=True)
-                page.screenshot(path=str(destination / f'games-{mode}-{prior_match}-{width}-{state}.png'))
-            try:
-                page.goto(url, wait_until='domcontentloaded')
-                if prior_match:
-                    page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'fresh'")
-                    paused.set()
-                assert entered.wait(5), 'fixture did not receive the paused overlay GET'
-                if mode == 'late':
-                    assert not release.wait(board.snapshot()[0]['stale_after_s'] + 0.3)
-                    first_release.set()
-                    page.wait_for_function("() => document.querySelector('#home-score').textContent === '3'")
-                    assert page.locator('#connection').get_attribute('data-evidence') == 'delayed'
-                    expect(page.locator('#phase')).to_have_text('마지막 수신 단계 · 경기 진행')
-                    expect(page.locator('.score')).to_have_attribute('aria-label', '마지막 수신 점수')
-                    capture('delayed')
-                elif prior_match:
-                    page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'delayed'", timeout=4500)
-                    expect(page.locator('#home-score')).to_have_text('2')
-                    expect(page.locator('#phase')).to_have_text('마지막 수신 단계 · 경기 진행')
-                    expect(page.locator('#field-evidence')).to_contain_text('현재 위치 아님')
-                    expect(page.locator('.score')).to_have_attribute('aria-label', '마지막 수신 점수')
-                    capture('delayed')
-                if mode == 'timeout':
-                    page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'disconnected'", timeout=7500)
-                expect(page.locator('#halt')).to_be_enabled()
-                expect(page.locator('#halt')).to_be_visible()
-                expect(page.locator('#home-score')).to_have_text('3' if mode == 'late' else '2' if prior_match else '—')
-                if mode == 'timeout' and not prior_match:
-                    expect(page.locator('#connection')).to_contain_text('경기 정보 없음')
-                    assert '마지막 수신 값' not in page.locator('#match-announcement').inner_text()
-                if mode == 'timeout':
-                    capture('disconnected')
-                paused.clear(); release.set(); first_release.set()
+        browser, page, errors = open_page(None, width, height, url=url)
+        def capture(state):
+            if stage != 'body' or not os.environ.get('ROSY_UI_CAPTURE_DIR'):
+                return
+            destination = Path(os.environ['ROSY_UI_CAPTURE_DIR'])
+            destination.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(destination / f'games-{mode}-{prior_match}-{width}-{state}.png'))
+        try:
+            page.goto(url, wait_until='domcontentloaded')
+            if prior_match:
                 page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'fresh'")
-                expect(page.locator('#phase')).to_have_text('경기 진행')
-                expect(page.locator('#field-evidence')).to_be_hidden()
-                expect(page.locator('.score')).to_have_attribute('aria-label', '점수')
-                capture('recovered')
-                assert not errors, errors
-            finally:
-                release.set()
+                paused.set()
+            assert entered.wait(5), 'fixture did not receive the paused overlay GET'
+            if mode == 'late':
+                assert not release.wait(board.snapshot()[0]['stale_after_s'] + 0.3)
                 first_release.set()
-                browser.close()
+                page.wait_for_function("() => document.querySelector('#home-score').textContent === '3'")
+                assert page.locator('#connection').get_attribute('data-evidence') == 'delayed'
+                expect(page.locator('#phase')).to_have_text('마지막 수신 단계 · 경기 진행')
+                expect(page.locator('.score')).to_have_attribute('aria-label', '마지막 수신 점수')
+                capture('delayed')
+            elif prior_match:
+                page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'delayed'", timeout=4500)
+                expect(page.locator('#home-score')).to_have_text('2')
+                expect(page.locator('#phase')).to_have_text('마지막 수신 단계 · 경기 진행')
+                expect(page.locator('#field-evidence')).to_contain_text('현재 위치 아님')
+                expect(page.locator('.score')).to_have_attribute('aria-label', '마지막 수신 점수')
+                capture('delayed')
+            if mode == 'timeout':
+                page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'disconnected'", timeout=7500)
+            expect(page.locator('#halt')).to_be_enabled()
+            expect(page.locator('#halt')).to_be_visible()
+            expect(page.locator('#home-score')).to_have_text('3' if mode == 'late' else '2' if prior_match else '—')
+            if mode == 'timeout' and not prior_match:
+                expect(page.locator('#connection')).to_contain_text('경기 정보 없음')
+                assert '마지막 수신 값' not in page.locator('#match-announcement').inner_text()
+            if mode == 'timeout':
+                capture('disconnected')
+            paused.clear(); release.set(); first_release.set()
+            page.wait_for_function("() => document.querySelector('#connection').dataset.evidence === 'fresh'")
+            expect(page.locator('#phase')).to_have_text('경기 진행')
+            expect(page.locator('#field-evidence')).to_be_hidden()
+            expect(page.locator('.score')).to_have_attribute('aria-label', '점수')
+            capture('recovered')
+            assert not errors, errors
+        finally:
+            release.set()
+            first_release.set()
+            browser.close()
     finally:
         release.set()
         first_release.set()
@@ -865,15 +870,14 @@ def test_hung_overlay_expires_and_recovers_without_stopping_controls(width, heig
 
 def test_overlay_failure_marks_last_received_match_as_stale():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('연결 오류')")
@@ -897,6 +901,7 @@ def test_overlay_failure_marks_last_received_match_as_stale():
             assert page.locator("#score-evidence").is_hidden()
             assert page.locator(".score").get_attribute("aria-label") == "점수"
             assert not errors, f"페이지 오류: {errors}"
+        finally:
             browser.close()
     finally:
         server.close()
@@ -905,14 +910,13 @@ def test_overlay_failure_marks_last_received_match_as_stale():
 @pytest.mark.parametrize("width,height", [(390, 844), (320, 568)])
 def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, height):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.route("**/overlay.json", lambda route: route.fulfill(status=503))
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.querySelector('#connection')?.textContent.includes('연결 오류')")
@@ -957,6 +961,7 @@ def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, heigh
             assert page.locator("#home-score").inner_text() == "2"
             check_layout("recovered")
             assert not errors, errors
+        finally:
             browser.close()
     finally:
         server.close()
@@ -964,15 +969,14 @@ def test_compact_board_recovery_keeps_equal_panels_and_stop_visible(width, heigh
 
 def test_missing_overlay_after_play_marks_cached_score_as_last_received():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = _launch_board_page(playwright, url)
+        browser, page, errors = _launch_board_page(url)
+        try:
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             board.publish({}, jpeg=None)
             page.wait_for_function("() => document.getElementById('connection')?.textContent.includes('마지막 경기 정보')")
@@ -980,6 +984,7 @@ def test_missing_overlay_after_play_marks_cached_score_as_last_received():
             assert page.locator("#phase").inner_text() == "마지막 수신 단계 · 경기 진행"
             assert "마지막 수신 값" in page.locator("#match-announcement").inner_text()
             assert not errors, f"페이지 오류: {errors}"
+        finally:
             browser.close()
     finally:
         server.close()
@@ -988,15 +993,14 @@ def test_missing_overlay_after_play_marks_cached_score_as_last_received():
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 844), (320, 568)])
 def test_stalled_stop_request_recovers_for_retry(width, height):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard()
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_function("() => document.getElementById('phase')?.dataset.phase === 'play'")
             page.evaluate("""() => {
@@ -1030,6 +1034,7 @@ def test_stalled_stop_request_recovers_for_retry(width, height):
             assert "시간 초과" in page.locator("#halt-status").inner_text()
             assert page.locator("#halt").get_attribute("aria-disabled") == "false"
             assert not errors, f"페이지 오류: {errors}"
+        finally:
             browser.close()
     finally:
         server.close()
@@ -1042,15 +1047,14 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     변이 증명: components.css `ui-topbar`에 `min-height: 300px`을 넣으면 빨갛다. 칩 검사는
     감시용이다 — US-003의 자간 0 이후 옛 네 칸 격자도 320px에서 넘치지 않는다(2026-09-30 실측)."""
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
     board = PreviewBoard(clock=lambda: 100.0)
     board.publish(_play_payload(), jpeg=None)
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.add_init_script("""(() => {
               const arc = CanvasRenderingContext2D.prototype.arc;
               CanvasRenderingContext2D.prototype.arc = function(x, y, radius, ...rest) {
@@ -1079,6 +1083,7 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
             })""")
             mark_status = page.evaluate("fetch('/common/brand/mark.svg').then(response => response.status)")
             save_temp_screenshot(page, f"games_board_live_{width}x{height}.png")
+        finally:
             browser.close()
     finally:
         server.close()
@@ -1103,7 +1108,7 @@ def test_compact_board_keeps_header_budget_stop_and_chips_in_view(width, height)
     assert account["left"] >= fit["panels"][0]["x"] - 1 and account["right"] <= fit["panels"][0]["right"] + 1, fit
     assert account["color"] != "rgb(0, 0, 238)", fit
 def test_visibility_observations_are_not_operational_approval():
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
     board = PreviewBoard(clock=lambda: 100.0)
     payload = _play_payload()
     payload.pop('visibility')
@@ -1111,8 +1116,8 @@ def test_visibility_observations_are_not_operational_approval():
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, 390, 844, url=url)
+        browser, page, errors = open_page(None, 390, 844, url=url)
+        try:
             page.goto(url)
             expect(page.locator('#phase')).to_have_text('경기 진행')
             expect(page.locator('#stair1')).to_have_text('마커·공 관측 정보 대기 · 운용 승인 아님')
@@ -1124,6 +1129,7 @@ def test_visibility_observations_are_not_operational_approval():
             disclosure.click()
             assert page.locator('#markers li').first.is_visible()
             assert errors == []
+        finally:
             browser.close()
     finally:
         server.close()
@@ -1132,15 +1138,14 @@ def test_visibility_observations_are_not_operational_approval():
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
 def test_board_evidence_matrix_on_declared_widths(width, height):
     """D-153 LOCAL cells; accepted stop requests are not physical SAFE_STOP readback."""
-    from playwright.sync_api import sync_playwright
 
     now = [100.0]
     board = PreviewBoard(clock=lambda: now[0])
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.goto(url, wait_until="domcontentloaded")
 
             def capture(state):
@@ -1190,6 +1195,7 @@ def test_board_evidence_matrix_on_declared_widths(width, height):
             assert "실제 정지 확인 중" in page.locator("#halt-status").inner_text()
             capture("stop_requested")
             assert not errors, errors
+        finally:
             browser.close()
     finally:
         server.close()
@@ -1197,7 +1203,7 @@ def test_board_evidence_matrix_on_declared_widths(width, height):
 
 @pytest.mark.parametrize("width,height", [(1280, 800), (390, 800), (320, 568)])
 def test_board_long_robot_ids_keep_score_columns_inside_viewport(width, height):
-    from playwright.sync_api import expect, sync_playwright
+    from playwright.sync_api import expect
 
     payload = _play_payload()
     home_id = "home_" + "robot" * 24
@@ -1209,8 +1215,8 @@ def test_board_long_robot_ids_keep_score_columns_inside_viewport(width, height):
     server = PreviewServer(board, port=0)
     url = server.start()
     try:
-        with sync_playwright() as playwright:
-            browser, page, errors = open_page(playwright, width, height, url=url)
+        browser, page, errors = open_page(None, width, height, url=url)
+        try:
             page.goto(url, wait_until="domcontentloaded")
             expect(page.locator("#home-name")).to_have_text(home_id)
             expect(page.locator("#away-name")).to_have_text(away_id)
@@ -1233,6 +1239,7 @@ def test_board_long_robot_ids_keep_score_columns_inside_viewport(width, height):
                 assert column["scrollWidth"] <= column["clientWidth"], layout
                 assert column["box"]["right"] <= layout["score"]["right"] + 1, layout
             assert not errors, errors
+        finally:
             browser.close()
     finally:
         server.close()

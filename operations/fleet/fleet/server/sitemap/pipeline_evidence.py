@@ -261,14 +261,31 @@ def _bed_ready(app, task: dict, pose: dict) -> bool:
     return not rec.get("invalid") and math.hypot(pose["x"] - rec["pose"]["x"], pose["y"] - rec["pose"]["y"]) <= BED_MOVE_LIMIT_M
 
 
-def _presence_valid(rec: dict) -> bool:
-    return 0 <= time.time() - rec["confirmed_at"] <= PRESENCE_TTL_S
+def _presence_valid(rec: dict, now: float | None = None) -> bool:
+    t = time.time() if now is None else now
+    return 0 <= t - rec["confirmed_at"] <= PRESENCE_TTL_S
 
 
-def take_presence(app, task: dict) -> dict | None:
+def _valid_presence_operator(rec: dict | None, now: float | None = None) -> str | None:
+    if rec is None or not _presence_valid(rec, now=now):
+        return None
+    op = rec.get("principal_id")
+    if not isinstance(op, str) or not op.strip() or op == "site-console" or op.startswith("development-"):
+        return None
+    return op.strip()
+
+
+def has_valid_presence(app, task: dict, now: float | None = None) -> bool:
+    """True when the task holds a non-expired named-operator presence confirmation (non-consuming)."""
+    rec = (getattr(app.state, "cell_presence", None) or {}).get(task["task_id"])
+    return _valid_presence_operator(rec, now=now) is not None
+
+
+def take_presence(app, task: dict, now: float | None = None) -> dict | None:
     """The valid presence confirmation of this task as {"operator", "at"}, used up by the claim that reads it; else None."""
     rec = (getattr(app.state, "cell_presence", None) or {}).pop(task["task_id"], None)
-    return None if rec is None or not _presence_valid(rec) else {"operator": rec["principal_id"], "at": rec["confirmed_at"]}
+    op = _valid_presence_operator(rec, now=now)
+    return None if op is None else {"operator": op, "at": rec["confirmed_at"]}
 
 
 def prune_evidence(app) -> None:

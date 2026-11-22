@@ -87,3 +87,10 @@ def _scrypt_mode(request, monkeypatch):
         if "alice" not in _REAL_HASHES:
             _REAL_HASHES["alice"] = _site_users.hash_password("alice")
         monkeypatch.setattr(mod, "BOOTSTRAP_PASSWORD_HASH", _REAL_HASHES["alice"])
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _close_shared_chromium_after_module():
+    yield
+    if "browser_harness" in sys.modules:
+        sys.modules["browser_harness"].close_shared_browser()

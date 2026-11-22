@@ -12,7 +12,7 @@ import time
 
 import pytest
 import uvicorn
-from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener
+from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener, shared_browser
 import yaml
 
 from test_cell_job_api import _setup
@@ -31,7 +31,6 @@ ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture
 def browser_site(tmp_path):
-    from playwright.sync_api import sync_playwright
     from core_common.protocol.channel_requests import DiscordRequestEnvelope
     from fleet.server.channel_requests import ChannelConfig
 
@@ -60,15 +59,18 @@ def browser_site(tmp_path):
         control = tasks.store.dispatch_control()
         if not control["dispatch_enabled"]:
             tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator-1")
-        with sync_playwright() as toolkit:
-            browser = toolkit.chromium.launch(headless=True)
-            try:
-                page = browser.new_page(viewport={"width": 1440, "height": 1000})
-                page.goto(origin + "/console/cell")
-                page.wait_for_load_state("networkidle")
-                yield page, tasks, origin
-            finally:
-                browser.close()
+        context = shared_browser().new_context(viewport={"width": 1440, "height": 1000})
+        try:
+            page = context.new_page()
+            page.goto(origin + "/console/cell")
+            page.locator("#estop").wait_for(state="visible")
+            page.wait_for_function(
+                "() => { const role = document.getElementById('user-role');"
+                " return role && (role.getAttribute('status') !== 'neutral' || Boolean(role.getAttribute('title'))); }"
+            )
+            yield page, tasks, origin
+        finally:
+            context.close()
     finally:
         server.should_exit = True
         worker.join(timeout=20)

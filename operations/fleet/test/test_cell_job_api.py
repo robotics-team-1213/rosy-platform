@@ -134,6 +134,8 @@ def test_cell_service_proposes_and_resolves_but_named_operator_alone_admits(tmp_
     assert repeated.status_code == 200 and repeated.json()["created"] is False
     assert viewer_admit.status_code == 403
     assert service_admit.status_code == 403
+    # D-1043: a viewer may press the stop, never resume a held cell job.
+    assert _post(client, f"/api/fleet/cell-jobs/{proposal_id}/resume", "viewer-secret").status_code == 403
     assert compiler.calls == 1
 
     control = tasks.store.dispatch_control()
