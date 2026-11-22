@@ -164,19 +164,22 @@ function renderNoticeHistory(){
   }
 }
 
+let activeNoticeAction=null;
 function renderNoticeBar(){
   const now=Date.now();
   for(const [k,v] of activeNotices.entries()){
     if(v.expiresAt&&now>=v.expiresAt)activeNotices.delete(k);
   }
   const reasonBar=$('start-reason-bar'), hdrReasons=$('hdr-start-reasons');
-  const moreBtn=$('reason-more-btn'), expBtn=$('reason-expand-btn'), closeBtn=$('reason-close-btn');
+  const actBtn=$('reason-action-btn'), moreBtn=$('reason-more-btn'), expBtn=$('reason-expand-btn'), closeBtn=$('reason-close-btn');
   if(!reasonBar||!hdrReasons)return;
   const list=[...activeNotices.values()].sort((a,b)=>(NOTICE_PRIO[b.tone]||0)-(NOTICE_PRIO[a.tone]||0));
   if(!list.length){
     hdrReasons.textContent='';
     reasonBar.hidden=true;
     reasonBar.classList.remove('expanded','muted','crit','good');
+    activeNoticeAction=null;
+    if(actBtn){actBtn.hidden=true;actBtn.textContent='';}
     if(moreBtn){moreBtn.hidden=true;moreBtn.textContent='';}
     if(expBtn){expBtn.hidden=true;expBtn.setAttribute('aria-expanded','false');expBtn.textContent='자세히';}
     if(closeBtn)closeBtn.hidden=true;
@@ -190,6 +193,20 @@ function renderNoticeBar(){
   const expanded=reasonBar.classList.contains('expanded');
   hdrReasons.textContent=expanded?list.map(n=>n.msg).join(' | '):top.msg;
   hdrReasons.title=hdrReasons.textContent;
+  activeNoticeAction=top.action||null;
+  if(actBtn){
+    if(!actBtn.dataset.bound){
+      actBtn.dataset.bound='1';
+      actBtn.addEventListener('click',async()=>{
+        const fn=activeNoticeAction?.run;
+        if(typeof fn!=='function'||actBtn.disabled)return;
+        actBtn.disabled=true;
+        try{await fn();}finally{actBtn.disabled=false;}
+      });
+    }
+    actBtn.hidden=!activeNoticeAction;
+    if(activeNoticeAction)actBtn.textContent=activeNoticeAction.label||'조치';
+  }
   if(moreBtn){
     const extra=list.length-1;
     moreBtn.hidden=expanded||extra<=0;
@@ -210,14 +227,16 @@ function renderNoticeBar(){
 function setNotice(key,tone,msg,opts){
   const text=String(msg||'').trim();
   if(!text){clearNotice(key);return;}
-  if(dismissedNoticeMsg.get(key)===text)return;
+  const sig=(opts&&opts.sig)||text;
+  if(dismissedNoticeMsg.get(key)===sig)return;
   dismissedNoticeMsg.delete(key);
   const prev=activeNotices.get(key);
   const ts=nowText();
   const persistent=Boolean(opts&&opts.persistent)||tone==='crit';
   const expiresAt=(tone==='good')?(Date.now()+((opts&&opts.ttlMs)||6000)):0;
-  activeNotices.set(key,{key,tone,msg:text,ts,persistent,expiresAt});
-  if(!prev||prev.msg!==text||prev.tone!==tone){
+  const action=(opts&&opts.action&&typeof opts.action.run==='function')?opts.action:null;
+  activeNotices.set(key,{key,tone,msg:text,sig,action,ts,persistent,expiresAt});
+  if(!prev||(prev.sig||prev.msg)!==sig||prev.tone!==tone){
     noticeHistory.unshift({ts,key,tone,msg:text});
     if(noticeHistory.length>20)noticeHistory.length=20;
     renderNoticeHistory();
@@ -237,7 +256,7 @@ function dismissTopNotice(){
   const list=[...activeNotices.values()].sort((a,b)=>(NOTICE_PRIO[b.tone]||0)-(NOTICE_PRIO[a.tone]||0));
   if(!list.length)return;
   const top=list[0];
-  dismissedNoticeMsg.set(top.key,top.msg);
+  dismissedNoticeMsg.set(top.key,top.sig||top.msg);
   activeNotices.delete(top.key);
   renderNoticeBar();
 }

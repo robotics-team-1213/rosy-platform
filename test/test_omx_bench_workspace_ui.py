@@ -300,13 +300,14 @@ def test_ui_workspace_no_duplicate_pills_live_log_reset_review_and_clusters():
     html = (omx_dir / "bench_record.html").read_text(encoding="utf-8")
     css = (omx_dir / "bench_record.css").read_text(encoding="utf-8")
     js = "\n".join((omx_dir / f).read_text(encoding="utf-8") for f in (
-        "bench_record_ui.js", "bench_record_map.js", "bench_record_log_reset.js", "bench_record_review.js", "bench_record_app.js",
+        "bench_record_ui.js", "bench_record_map.js", "bench_record_log_reset.js", "bench_record_review.js",
+        "bench_record_app.js", "bench_record_cam.js", "bench_record_status.js",
     ))
 
     assert 'id="rail-arm-pills"' not in html
     for marker in ('id="sec-live-log"', 'id="live-log-body"', 'id="goal-provenance"',
                    'id="goal-custom-panel"', 'id="sb-factory-reset-btn"', 'id="factory-reset-btn"',
-                   'id="hdr-reset-retry-btn"', '/bench_record_log_reset.js',
+                   'id="hdr-reset-retry-btn"', '/bench_record_log_reset.js', 'id="reason-action-btn"',
                    'id="manual-hold-card"', 'id="ev-episode-review"', '/bench_record_review.js',
                    'id="mh-quick-actions"', 'class="tool-cluster"', 'class="ops-cluster'):
         assert marker in html, marker
@@ -314,4 +315,31 @@ def test_ui_workspace_no_duplicate_pills_live_log_reset_review_and_clusters():
     assert '.identity{flex:1 1 auto;overflow:hidden}' in css
     assert 'loadCellMap' in js and '/api/defaults/reset' in js and 'getCustomTaskOverride' in js
     assert '/api/dataset/episode/rate' in js and '/api/manual_hold/clear' in js
+    assert 'function renderGoalPanelState(arm,t,' in (omx_dir / "bench_record_map.js").read_text(encoding="utf-8")
+    app_js = (omx_dir / "bench_record_app.js").read_text(encoding="utf-8")
+    assert app_js.index("renderStatus(st)") < app_js.index("clearNotice('conn-error')")
+    cam_js = (omx_dir / "bench_record_cam.js").read_text(encoding="utf-8")
+    assert "saveCameraBaselineNow" in cam_js and "camAutoHealAt" in cam_js
     assert '/api/recover/baseline' in js and "st?.status==='homing'&&(st?.error||st?.manual_hold?.active)" in js
+
+
+def test_camera_drift_filters_unrelated_arm_cameras(tmp_path, monkeypatch):
+    import io
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    bdir = bench.prep / "camera-baselines" / "arm_a"
+    bdir.mkdir(parents=True)
+    cams = ["top", "side", "arm_a_wrist", "arm_b_wrist", "arm_s_top", "arm_s_wrist"]
+    (bdir / "baseline.json").write_text(json.dumps({
+        "cameras": {c: {"quality": {"mean_intensity": 100.0, "spatial_contrast": 30.0}} for c in cams}
+    }), encoding="utf-8")
+    monkeypatch.setattr(
+        "bench_record_inspect.urllib.request.urlopen",
+        lambda *_a, **_kw: io.BytesIO(json.dumps({
+            c: {"fresh": True, "quality": {"condition": "NORMAL", "usable": True, "mean_intensity": 102.0, "spatial_contrast": 31.0}}
+            for c in cams
+        }).encode()),
+    )
+    res_a = bench.check_camera_drift("arm_a")
+    assert sorted(res_a["cameras"]) == ["arm_a_wrist", "side", "top"]
+    res_s = bench.check_camera_drift("arm_s")
+    assert sorted(res_s["cameras"]) == ["arm_s_top", "arm_s_wrist"]

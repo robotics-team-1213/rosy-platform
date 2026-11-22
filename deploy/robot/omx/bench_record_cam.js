@@ -375,41 +375,61 @@ if($('toggle-reverse-btn')){
 }
 initPhaseControls();
 
-async function checkCameraDrift(){
+const camAutoHealAt={};
+let camAutoHealInFlight=false;
+async function saveCameraBaselineNow(silent){
+  const btn=$('save-cam-base-btn'), arm=f&&f.arm?f.arm.value:'';
+  if(btn){btn.disabled=true;btn.textContent='저장 중...';}
+  if(!silent&&typeof setActivity==='function')setActivity('기준 카메라 저장 중...','live',arm||'');
+  try{
+    setReqError('');
+    await api('/api/camera_baseline',{arm});
+    await checkCameraDrift(true);
+    if(typeof setActivity==='function')setActivity(silent?'기준 카메라 자동 갱신':'기준 카메라 저장 완료','good',arm||'');
+  }catch(err){
+    if(!silent){
+      setReqError(err.message);
+      if(typeof setActivity==='function')setActivity('기준 카메라 저장 실패','crit',err.message);
+    }
+  }finally{if(btn){btn.disabled=false;btn.textContent='기준 카메라 저장';}}
+}
+async function checkCameraDrift(skipAuto){
   if(typeof benchSessionActive==='function'&&benchSessionActive())return;
   try{
     const arm=f&&f.arm?f.arm.value:'';
     const d=await api('/api/camera_check?arm='+encodeURIComponent(arm));
     if(!d||!d.cameras){clearNotice('cam-drift');return;}
-    const bad=Object.entries(d.cameras).filter(([,v])=>v.status!=='ok'&&v.status!=='no_baseline');
-    const noBase=Object.entries(d.cameras).filter(([,v])=>v.status==='no_baseline');
-    if(bad.length){
-      setNotice('cam-drift','warn','카메라 변화 감지: '+bad.map(([k,v])=>k+'('+v.status+(v.max_px!=null?' '+v.max_px+'px':'')+(v.delta_mean!=null?' Δ밝기'+v.delta_mean:'')+')').join(', ')+' — 각도/조명을 맞추거나 기준 재저장하세요.');
-    }else if(noBase.length){
-      setNotice('cam-drift','muted','카메라 기준 미저장 ('+noBase.map(([k])=>k).join(', ')+') — 현재 구도·조명이 맞으면 "기준 카메라 저장"을 누르세요.');
-    }else{
-      clearNotice('cam-drift');
-    }
+    const allow=(typeof ARM_PREVIEW_CAMS!=='undefined'&&ARM_PREVIEW_CAMS[arm])?ARM_PREVIEW_CAMS[arm]:null;
+    const ents=Object.entries(d.cameras).filter(([k])=>!allow||allow.has(k));
+    const hard=ents.filter(([,v])=>v.status==='stale'||v.status==='unusable_lighting');
+    const soft=ents.filter(([,v])=>v.status==='lighting_mismatch'||v.status==='no_baseline');
+    if(!hard.length&&soft.length){
+      const now=Date.now();
+      if(!skipAuto&&arm&&!camAutoHealInFlight&&now-(camAutoHealAt[arm]||0)>=60000){
+        camAutoHealInFlight=true;camAutoHealAt[arm]=now;
+        try{
+          await api('/api/camera_baseline',{arm});
+          clearNotice('cam-drift');
+          if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good',arm+' 카메라 조명·구도 기준 자동 갱신 ('+soft.map(([k])=>k).join(', ')+')');
+          return;
+        }catch(_){}
+        finally{camAutoHealInFlight=false;}
+      }
+      const isNoBase=soft.every(([,v])=>v.status==='no_baseline');
+      const sig='cam-soft:'+arm+':'+soft.map(([k,v])=>k+':'+v.status).join(',');
+      const msg=isNoBase
+        ?('카메라 기준 미저장 ('+soft.map(([k])=>k).join(', ')+') — 현재 구도·조명이 맞으면 기준 저장을 누르세요.')
+        :('카메라 변화 감지: '+soft.map(([k,v])=>k+'('+v.status+(v.max_px!=null?' '+v.max_px+'px':'')+(v.delta_mean!=null?' Δ밝기'+v.delta_mean:'')+')').join(', ')+' — 각도/조명을 맞추거나 기준 재저장하세요.');
+      setNotice('cam-drift',isNoBase?'muted':'warn',msg,{sig,action:{label:'기준 카메라 지금 저장',run:()=>saveCameraBaselineNow(false)}});
+    }else if(hard.length){
+      const hasStale=hard.some(([,v])=>v.status==='stale');
+      const action=hasStale?{label:'카메라 재시작',run:()=>$('hdr-camera-restart-btn')?.click()}:{label:'다시 확인',run:()=>checkCameraDrift(true)};
+      const sig='cam-hard:'+arm+':'+hard.map(([k,v])=>k+':'+v.status).join(',');
+      setNotice('cam-drift','warn','카메라 점검 필요: '+hard.map(([k,v])=>k+'('+(v.condition||v.status)+')').join(', '),{sig,action});
+    }else{clearNotice('cam-drift');}
   }catch(_){}
 }
-if($('save-cam-base-btn')){
-  $('save-cam-base-btn').addEventListener('click',async()=>{
-    const btn=$('save-cam-base-btn');
-    btn.disabled=true;btn.textContent='저장 중...';
-    if(typeof setActivity==='function')setActivity('기준 카메라 저장 중...','live',f?.arm?.value||'');
-    try{
-      setReqError('');
-      await api('/api/camera_baseline',{arm:f.arm.value});
-      await checkCameraDrift();
-      if(typeof setActivity==='function')setActivity('기준 카메라 저장 완료','good',f?.arm?.value||'');
-    }
-    catch(err){
-      setReqError(err.message);
-      if(typeof setActivity==='function')setActivity('기준 카메라 저장 실패','crit',err.message);
-    }
-    finally{btn.disabled=false;btn.textContent='기준 카메라 저장';}
-  });
-}
+if($('save-cam-base-btn'))$('save-cam-base-btn').addEventListener('click',()=>saveCameraBaselineNow(false));
 setInterval(checkCameraDrift,8000);
 setTimeout(checkCameraDrift,800);
 

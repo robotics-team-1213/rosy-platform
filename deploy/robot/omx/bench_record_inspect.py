@@ -261,9 +261,10 @@ class BenchInspectMixin:
         except (OSError, ValueError):
             base = {}
         base_cams = base.get("cameras") if isinstance(base.get("cameras"), dict) else {}
+        allow = {"arm_a": {"top", "side", "arm_a_wrist"}, "arm_b": {"top", "side", "arm_b_wrist"}, "arm_ab": {"top", "side", "arm_a_wrist", "arm_b_wrist"}, "arm_s": {"arm_s_top", "arm_s_wrist"}}.get(arm_key)
         out = {}
         for lbl, info in raw.items():
-            if not re.fullmatch(r"[a-zA-Z0-9_-]+", str(lbl)) or not isinstance(info, dict) or "quality" not in info:
+            if not re.fullmatch(r"[a-zA-Z0-9_-]+", str(lbl)) or (allow and lbl not in allow) or not isinstance(info, dict) or "quality" not in info:
                 continue
             q = info.get("quality") or {}
             if info.get("fresh") is False:

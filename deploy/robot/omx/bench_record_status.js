@@ -199,7 +199,12 @@ function validateStart(){
     $('start-guard-note').textContent=(reasons.length?'시작 대기 조건: '+reasons.join(' · '):'녹화 시작 가능 상태입니다.')+poseHint;
   }
   if(reasons.length&&!busyNow){
-    setNotice('start-reasons','warn','시작 대기: '+reasons.join(' · '));
+    const act=(lastStatus?.manual_hold?.active||lastStatus?.recovery?.has_issues)
+      ?{label:'복구 센터 보기',run:()=>$('manual-hold-card')?.scrollIntoView({block:'center'})}
+      :(reasons.some(r=>r.includes('카메라'))
+        ?{label:'카메라 재시작',run:()=>$('hdr-camera-restart-btn')?.click()}
+        :{label:'설정 열기',run:()=>{if(typeof openDrawer==='function')openDrawer('setup');}});
+    setNotice('start-reasons','warn','시작 대기: '+reasons.join(' · '),{sig:'start-reasons:'+reasons.join('|'),action:act});
   }else if(warnText&&!busyNow){
     setNotice('start-reasons','muted',warnText);
   }else{
