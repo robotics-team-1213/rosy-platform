@@ -8,7 +8,9 @@ Usage::
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -128,6 +130,12 @@ def activated(cwd: Path) -> bool:
     return False
 
 
+def shared_checkout(cwd: Path) -> bool:
+    """git-dir == common-dir: the main working tree (the shared main checkout), not a ``.worktrees/`` worktree."""
+    dirs = _run(["git", "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], cwd).splitlines()
+    return len(dirs) == 2 and Path(dirs[0]).resolve() == Path(dirs[1]).resolve()
+
+
 def cutover_refusal(cwd: Path) -> str | None:
     """Refuse submission while the cutover phase is drain; open and normal pass (activation is checked separately)."""
     state = land_freeze.load(cwd)
@@ -176,7 +184,18 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
         import browser_scope
         import land_browser
         import land_selection
-        b_paths = affected_browser.split(browser_scope.targets(changed))[1]  # the rest runs in the PR's CI run (D-1066)
+        covered_browsers = {
+            w.replace("\\", "/").removeprefix("./")
+            for inv in lab
+            if work_queue.BROWSER_ENV in itertools.takewhile(work_queue.ENV_WORD.match, inv)
+            and not any(w.startswith(("--ignore", "--deselect", "-k")) for w in inv)
+            for w in inv
+            if not w.startswith("-") and not work_queue.ENV_WORD.match(w) and "::" not in w and w.endswith("_browser.py")
+        }
+        b_paths = [
+            p for p in affected_browser.split(browser_scope.targets(changed))[1]
+            if p not in covered_browsers
+        ]  # the rest runs in the PR's CI run (D-1066)
         for group in land_selection.pack(cwd, b_paths):
             extra.extend(land_browser.chunks(cwd, group))
     return lab + [part for inv in extra for part in split_by_ci_entry(inv) if not ci_runnable(part)]
@@ -188,17 +207,30 @@ def preflight(cwd: Path, base: str, body: str = "") -> None:
     The first two stopped a submission only at the push, after the evidence had run (2026-11-21: a session lost a 20
     minute run to a missing trailer). CI's scope job runs the same two checks. The step-back check stops a PR that
     drops lines another PR merged into main within 7 days unless the PR body names it (shared-checkout.md)."""
-    for check in ("safety_review.py", "size_range.py"):
-        _run([sys.executable, f"tools/harness/{check}", base, "HEAD"], cwd)
-    for warning in step_back.size_warnings(cwd, base, "HEAD"):
-        print(f"[pr-land] warning: split this branch before submission, {warning}")
-    if os.environ.get("ROSY_STEP_BACK") == "off":
-        print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
-        return
-    try:
-        hits = step_back.report(cwd, base, "HEAD")
-    except step_back.ScanError as e:  # a git failure must not read as a pass
-        raise SystemExit(f"[pr-land] step-back scan incomplete: {e}\n[pr-land] fix the git problem (shallow clone: fetch full history) or set ROSY_STEP_BACK=off")
+    skip_sb = os.environ.get("ROSY_STEP_BACK") == "off"
+
+    def _run_step_back():
+        over = step_back.size_violations(cwd, base, "HEAD")
+        if over and not step_back.size_excepted(body):
+            return over, []
+        return over, step_back.report(cwd, base, "HEAD")
+
+    with ThreadPoolExecutor(max_workers=2 if skip_sb else 3) as pool:
+        checks = [pool.submit(_run, [sys.executable, f"tools/harness/{c}", base, "HEAD"], cwd)
+                  for c in ("safety_review.py", "size_range.py")]
+        sb = None if skip_sb else pool.submit(_run_step_back)
+        for fut in checks:
+            fut.result()
+        if skip_sb:
+            print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
+            return
+        try:
+            over, hits = sb.result()
+        except step_back.ScanError as e:  # a git failure must not read as a pass
+            raise SystemExit(f"[pr-land] step-back scan incomplete: {e}\n[pr-land] fix the git problem (shallow clone: fetch full history) or set ROSY_STEP_BACK=off")
+    if over and not step_back.size_excepted(body):
+        raise SystemExit("[pr-land] branch too big, split it before submission: " + "; ".join(over)
+                         + "\n[pr-land] or rerun with --body containing a line 'Size-Exception: <reason>', or set ROSY_STEP_BACK=off")
     for h in (h for h in hits if h["level"] == "info"):
         print(f"[pr-land] step-back info (never blocks):{step_back.fmt(h)}")
     for h in (h for h in hits if h["level"] == "warn"):
@@ -284,6 +316,9 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         print("[pr-land] CI log covers lab baseline passed IDs")
         return 0
 
+    if shared_checkout(cwd):  # the shared main checkout must stay on main; branches live in worktrees
+        raise SystemExit("[pr-land] this is the shared main checkout (git-dir == common-dir); run from your worktree:"
+                         " python tools/worktrees.py new|adopt <short-name> <type>/<topic>")
     branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
     if branch in ("main", "HEAD"):
         raise SystemExit(f"[pr-land] checkout a topic branch first (got {branch})")
@@ -295,6 +330,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     if refused and not args.dry_run:
         raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
+    if os.environ.get("ROSY_STEP_BACK") != "off" and not _run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/main"], cwd, check=False):
+        raise SystemExit("[pr-land] refs/remotes/origin/main is missing; run 'git fetch origin main' (the size check needs its merge base)")
     preflight(cwd, base, build_body(args.body, args.self_review))
     lab_needed = required_lab_invocations(cwd, base, head)
     if args.evidence and lab_needed:
@@ -325,7 +362,7 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     existing = json.loads(_run(["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number"], cwd) or "[]")
     if existing:
         pr = str(existing[0]["number"])
-        if args.self_review:
+        if args.self_review or args.body:  # the Size-Exception / Replaces lines checked above must reach the PR
             _run(["gh", "pr", "edit", pr, "--body", body], cwd)
     else:
         url = _run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body], cwd)

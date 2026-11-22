@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -172,3 +173,58 @@ def test_a_blame_failure_warns_and_keeps_the_confirmed_blocks(tmp_path, monkeypa
     hits = step_back.report(repo, "main", "feat")
     assert [(h["pr"], h["path"]) for h in hits if h["level"] == "block"] == [(4, "b.py")]
     assert any(h["level"] == "warn" and "a.py" in h["path"] for h in hits)
+
+
+def test_size_limits_block_each_over_the_limit_and_the_exception_line_passes(tmp_path):
+    repo = make_repo(tmp_path)
+    branch(repo)
+    commit(repo, {f"src/f{i}.py": f"value_{i} = {i}\n" for i in range(31)}, "many files")
+    assert step_back.size_violations(repo, "main", "feat") == ["31 changed files (limit 30)"]
+    for i in range(21):
+        commit(repo, {"one.py": f"x = {i}\n"}, f"c{i}")
+    assert len(step_back.size_violations(repo, "main", "feat")) == 2
+    assert "merge-base is 9 days old" in step_back.size_violations(repo, "main", "feat", now=time.time() + 9 * 86400)[-1]
+    assert step_back.size_excepted("x\nSize-Exception: one rename sweep")
+    assert step_back.size_excepted("- Size-Exception: one rename sweep")
+    assert not step_back.size_excepted("Size-Exception:   ")
+    assert not step_back.size_excepted("Size-Exception:")
+
+
+def test_size_limits_exempt_nothing_by_name_but_not_records_or_pure_renames(tmp_path):
+    repo = make_repo(tmp_path)
+    branch(repo, "publish/main-20261121-10")
+    commit(repo, {f"src/f{i}.py": f"value_{i} = {i}\n" for i in range(31)}, "many files")
+    assert step_back.size_violations(repo, "main", "publish/main-20261121-10") != []  # no branch is exempt by name
+    g(repo, "checkout", "-q", "main")
+    branch(repo, "bot/records-x")
+    commit(repo, {f"src/f{i}.py": f"value_{i} = {i}\n" for i in range(31)}, "many files")
+    assert step_back.size_violations(repo, "main", "bot/records-x") != []
+    g(repo, "checkout", "-q", "main")
+    branch(repo, "recs")
+    commit(repo, {f"docs/logs/2026/11/r{i}.md": f"record {i}\n" for i in range(40)} | {"docs/reference/api-changes/x.md": "x\n"}, "records")
+    assert step_back.size_violations(repo, "main", "recs") == []  # record and generated paths do not count
+    g(repo, "checkout", "-q", "main")
+    commit(repo, {f"mv/f{i}.py": f"moved_{i} = {i} # padding to keep similarity\n" for i in range(35)}, "add files")
+    branch(repo, "renames")
+    (repo / "mv2").mkdir()
+    for i in range(35):
+        g(repo, "mv", f"mv/f{i}.py", f"mv2/f{i}.py")
+    g(repo, "commit", "-q", "-m", "pure renames")
+    assert step_back.size_violations(repo, "main", "renames") == []
+
+
+def test_pr_of_commits_maps_multiple_prs_with_direct_main_and_merge_commits(tmp_path):
+    repo = make_repo(tmp_path)
+    g(repo, "checkout", "-q", "main")
+    commit(repo, {"direct.py": "d = 1\n"}, "direct commit on main")
+    g(repo, "checkout", "-q", "-b", "oldbranch", "main~2")
+    commit(repo, {"old.py": "o = 1\n"}, "from old base")
+    c_old = g(repo, "rev-parse", "HEAD")
+    g(repo, "checkout", "-q", "main")
+    g(repo, "merge", "--no-ff", "-q", "-m", "Merge pull request #10 from team/old", "oldbranch")
+    m10 = g(repo, "rev-parse", "HEAD")
+    c_pr1 = g(repo, "rev-parse", "main~3^2")
+    c_pr2 = g(repo, "rev-parse", "main~2^2")
+    c_base = g(repo, "rev-list", "--max-parents=0", "HEAD")
+    got = step_back.pr_of_commits(repo, "main", {c_pr1, c_pr2, c_old, m10, c_base}, time.time() - 3600)
+    assert got[c_pr1][0] == 1 and got[c_pr2][0] == 2 and got[c_old][0] == 10 and got[m10][0] == 10 and c_base not in got

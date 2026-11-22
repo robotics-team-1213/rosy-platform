@@ -52,7 +52,16 @@ class CellHandoff:
         pick = library["source"]["pick"]
         site = config["sites"][source]
         surface = surface_z(config, source)
-        rim = float(site.get("rim_z", max(surface, pick["z"] + grasp_depth(config, source))))
+        try:
+            raw_rim = site.get("rim_z")
+            if raw_rim is None:
+                raw_z = pick["z"]
+                pz = float("nan") if isinstance(raw_z, bool) else float(raw_z)
+                rim = max(surface, pz + grasp_depth(config, source))
+            else:
+                rim = float("nan") if isinstance(raw_rim, bool) else float(raw_rim)
+        except (TypeError, ValueError, OverflowError):
+            rim = float("nan")
         if not math.isfinite(rim) or rim < surface:
             raise ValueError("source rim_z must be finite and at or above surface_z")
         self.config, self.work, self.library_path, self.library = config, work, library_path, library
@@ -61,7 +70,7 @@ class CellHandoff:
                          yaw_deg=pick["yaw_deg"], min_z=rim + prm.get(params, "policy.rim_margin_m"),
                          xy_tol=prm.get(params, "policy.pose_xy_tol_m"),
                          angle_tol_deg=prm.get(params, "policy.pose_angle_tol_deg"), close_target=close_target,
-                         empty_stop=library.get("jaw_empty_stop", library["gripper_closed"]),
+                         empty_stop=float(library["gripper_closed"] if library.get("jaw_empty_stop") is None else library["jaw_empty_stop"]),
                          hold_current_ma=library.get("hold_current_ma"), tcp_x_m=omx_tcp.config_tcp(config))
 
     def carry(self, cell, status, authorize, log):

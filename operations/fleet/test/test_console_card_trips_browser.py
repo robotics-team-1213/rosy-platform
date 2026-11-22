@@ -366,7 +366,9 @@ def test_cancel_stops_the_trip_else_the_goal_and_the_lane(site):  # noqa: F811
         lost = _card(page, "rosy_03")
         assert lost.get_attribute("data-collapsed") is None
         assert "운행 멈춤 · 로봇 화면·Pilot에서 넘겨받음(kim-tablet)" in lost.locator(".trip-line").inner_text()
+        page.locator("#fleet-inbox").click()
         assert "운행 멈춤" in page.locator("#warning-list").inner_text()
+        page.locator("#queues-close").click()
 
         stop = _card(page, "rosy_01").locator('ui-button[data-cancel-scope="trip"]')
         assert stop.get_attribute("kind") == "quiet" and stop.inner_text().strip() == "운행 취소"
@@ -565,9 +567,11 @@ def test_a_regulation_wait_reads_on_the_card_and_past_its_bound_in_the_queue(sit
         over = {**waiting, "wait": {**waiting["wait"], "reason": "signal", "over_bound": True, "waiting": False}}
         api["/api/fleet/trips"] = {"running": over, "trips": [over, LOST], "open": [over]}
         page.clock.run_for(1500)
+        page.locator("#fleet-inbox").click()
         expect(page.locator("#warning-list")).to_contain_text("대기 상한 넘음 · 신호")
-        expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 상한 넘음 · 신호")
         assert "대기 상한" not in page.locator("#critical-list").inner_text()
+        page.locator("#queues-close").click()
+        expect(_card(page, "rosy_01").locator(".trip-line")).to_have_text("대기 상한 넘음 · 신호")
         assert not errors
         browser.close()
 

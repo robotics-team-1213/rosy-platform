@@ -60,23 +60,31 @@ def step_swept_poses(layout, arm_name, src, dst, here):
     import omx_two_arm_tasks as tasks
     z_up = tasks.carry_z(layout, here, src, dst)
     arm = layout.arms[arm_name]
-    key = (arm_name, tuple(arm.base), round(arm.yaw, 6), src, tuple(layout.sites[src]["xy"]), dst, tuple(layout.sites[dst]["xy"]), round(z_up, 4))
+    key = (arm_name, tuple(arm.base), round(arm.yaw, 6), src, tuple(layout.sites[src]["xy"]), round(layout.sites[src]["z"], 4), dst, tuple(layout.sites[dst]["xy"]), round(z_up, 4), layout.choices.get("wait_pose"))
     if key not in _SWEEP_CACHE:
-        problems, path, _ = tasks.check_reach(layout, dict(id="sweep", container="?", to=dst, arm=arm_name, **{"from": src}), here, arm)
+        step = dict(id="sweep", container="?", to=dst, arm=arm_name, **{"from": src})
+        problems, path, _ = tasks.check_reach(layout, step, here, arm)
         if problems:
             _SWEEP_CACHE[key] = None
         else:
-            _, t_carry, _ = duration(layout, src, dst)
-            seg_t = (0.0, 2.5, 4.0, 5.5, 7.0, 7.0 + t_carry, 8.5 + t_carry, 10.0 + t_carry, 11.5 + t_carry)
+            wps = tasks.waypoints(layout, step, here)
+            seg_t = [0.0, 2.5]
+            for prev, cur in zip(wps, wps[1:]):
+                dt_seg = math.hypot(cur[1][0] - prev[1][0], cur[1][1] - prev[1][1]) / TIMING["speed"] if cur[0] == "carry" else 1.5
+                seg_t.append(seg_t[-1] + dt_seg)
+            n_seg = len(wps) - 1
+            per = (len(path) - 1) // n_seg
             wait_q = getattr(arm, "wait", arm.home)
             n_wait = 6
             qs_t = [(2.5 * k / n_wait, wait_q + (path[0] - wait_q) * (k / n_wait), False) for k in range(n_wait)]
             ts = [seg_t[1]]
-            for s in range(7):
-                dt = (seg_t[s + 2] - seg_t[s + 1]) / 12
-                ts.extend(seg_t[s + 1] + dt * (k + 1) for k in range(12))
-            # solve_chain samples 12 steps per segment across 7 segments: indices 25..72 are lift through release (carrying the box).
-            qs_t.extend((t, q, 24 < i <= 72) for i, (t, q) in enumerate(zip(ts, path)))
+            for s in range(n_seg):
+                dt = (seg_t[s + 2] - seg_t[s + 1]) / per
+                ts.extend(seg_t[s + 1] + dt * (k + 1) for k in range(per))
+            close_i = next(i for i, w in enumerate(wps) if w[0] == "close")
+            rel_i = next(i for i, w in enumerate(wps) if w[0] == "release")
+            # Keep the box capsule active from after grasp close until release opens at the destination.
+            qs_t.extend((t_i, q, close_i * per < i <= rel_i * per) for i, (t_i, q) in enumerate(zip(ts, path)))
             t_retreat = seg_t[-1]
             qs_t.extend((t_retreat + 2.5 * k / n_wait, path[-1] + (wait_q - path[-1]) * (k / n_wait), False) for k in range(1, n_wait + 1))
             qs_t.append((t_retreat + TIMING["park"], wait_q, False))
@@ -124,11 +132,17 @@ def table_can(table):
 
 
 
-def duration(layout, a, b):
+def duration(layout, a, b, arm=None):
     """(pick, carry, place) seconds."""
+    import omx_two_arm_tasks as tasks
     ax, ay = layout.sites[a]["xy"]
     bx, by = layout.sites[b]["xy"]
-    return TIMING["pick"], math.hypot(ax - bx, ay - by) / TIMING["speed"], TIMING["place"]
+    via = tasks._carry_via(layout.arms.get(arm), (ax, ay), (bx, by)) if arm is not None else None
+    if via is not None:
+        dist = math.hypot(via[0] - ax, via[1] - ay) + math.hypot(bx - via[0], by - via[1])
+    else:
+        dist = math.hypot(ax - bx, ay - by)
+    return TIMING["pick"], dist / TIMING["speed"], TIMING["place"]
 
 
 def holds(layout, arm, a, b):
@@ -157,11 +171,11 @@ def schedule(layout, moves, arms, belt_arrivals=None, start=None):
             extra.append(dict(move=k, cargo_id=m["cargo_id"], source=a, destination=b, why="no arm of this mode can do it"))
             done[k] = ready
             continue
-        t_pick, t_carry, t_place = duration(layout, a, b)
-        t_src, t_end = t_pick + t_carry, t_pick + t_carry + t_place  # the source zones stay held through the carry, the target zones from the lift
         here_step = {c: s for c, s in here.items() if c != m["cargo_id"]}
         best = None
         for arm in able:
+            t_pick, t_carry, t_place = duration(layout, a, b, arm)
+            t_src, t_end = t_pick + t_carry, t_pick + t_carry + t_place  # the source zones stay held through the carry, the target zones from the lift
             hold_a, hold_b = holds(layout, arm, a, b)
             poses = step_swept_poses(layout, arm, a, b, here_step) if len(arms) > 1 else None
             t = max(ready, free[arm])
@@ -178,8 +192,8 @@ def schedule(layout, moves, arms, belt_arrivals=None, start=None):
                 t = min(clash)
             primary = HARBOR_ARMS.get(m.get("primary_arm")) == arm
             if best is None or (t, not primary) < (best[1], not best[4]):
-                best = (arm, t, hold_a, hold_b, primary, poses)
-        arm, t, hold_a, hold_b, _, poses = best
+                best = (arm, t, hold_a, hold_b, primary, poses, t_pick, t_src, t_end)
+        arm, t, hold_a, hold_b, _, poses, t_pick, t_src, t_end = best
         for z in hold_a:
             busy.setdefault(z, []).append((t, t + t_src))
         for z in hold_b:

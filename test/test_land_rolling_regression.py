@@ -172,9 +172,15 @@ def test_nodeid_retry_and_two_stage_closure_bisect(tmp_path):
 
 def test_rolling_sweep_workflow_contract():
     wf = yaml.safe_load((ROOT / ".github/workflows/rolling-sweep.yml").read_text(encoding="utf-8"))
+    ci = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     triggers = wf.get("on", wf.get(True))
     assert {"cron": "*/30 * * * *"} in triggers["schedule"]
     assert "workflow_dispatch" in triggers
     assert wf["concurrency"] == {"group": "rosy-rolling-sweep", "cancel-in-progress": False}
+    assert wf["permissions"].get("packages") == "read"
+    assert wf["jobs"]["run-shard"]["container"]["image"] == ci["jobs"]["test"]["container"]["image"]
+    text = (ROOT / ".github/workflows/rolling-sweep.yml").read_text(encoding="utf-8")
+    assert "apt-get" not in text and "playwright install" not in text
+    assert "rosy-rolling-wheelhouse" in text
     assert "ci-result" not in wf["jobs"]
     assert all(int(job.get("timeout-minutes", 0)) <= 25 for job in wf["jobs"].values())

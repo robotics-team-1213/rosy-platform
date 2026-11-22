@@ -1,4 +1,6 @@
 // Real-to-Sim <-> Sim-to-Real closed-loop pipeline view for the Cell workspace (D-947, D-1012).
+import { setOff, setOffBy } from "/common/cause-line.js";
+import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import {
   REAL2SIM_PATH,
   EVALUATE_PATH,
@@ -21,7 +23,7 @@ import {createCellViews} from './cell-real2sim-views.js';
 export * from './cell-real2sim-specs.js';
 
 // namedReason: '' when a named operator is signed in, else why moving controls stay off (shared authorization texts).
-export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => '운영자 권한이 필요합니다', cellFrames = null}) {
+export function createReal2SimPipeline({request, $, isOperator = () => false, namedReason = () => OPERATOR_REASON, cellFrames = null}) {
   const status = $('real2sim-status');
   let generation = 0;
   const state = {
@@ -88,19 +90,17 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
 
   function syncOperatorButtons() {
     const allowed = Boolean(isOperator());
-    const reason = allowed ? '' : '운영자 권한이 필요합니다';
+    const reason = allowed ? '' : OPERATOR_REASON;
     for (const id of ['real2sim-evaluate', 'real2sim-run', 'real2sim-promote']) {
       const btn = $(id);
       if (btn) {
-        btn.disabled = !allowed;
-        btn.setAttribute('reason', reason);
+        setOff(btn, !allowed, reason);
       }
     }
     for (const id of ['cell-task-preset-run', 'cell-task-create']) {
       const btn = $(id);
       if (btn) {
-        btn.disabled = false;
-        btn.removeAttribute('reason');
+        setOffBy(btn, '');
       }
     }
   }

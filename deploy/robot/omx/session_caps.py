@@ -109,6 +109,23 @@ def register_dump(bus, motors) -> dict:
     return out
 
 
+PROFILE_BASELINE_MAX = 1  # commissioning_limits.BASELINE rests the profile at 1/1 (a session restores what it found: 0 or 1)
+
+
+def raised_profile(bus) -> dict:
+    """The motor's profile registers above the resting 1/1: a session killed after its profile write and before its pwm write leaves them raised.
+    A register that cannot be read here is not a reason to refuse (the session's own cap writes read it again)."""
+    out = {}
+    for name in ("profile_acc", "profile_vel"):
+        try:
+            value = bus.read(name)
+        except Exception:
+            continue
+        if isinstance(value, int) and value > PROFILE_BASELINE_MAX:
+            out[name] = value
+    return out
+
+
 def log_registers(session, when: str, motors) -> None:
     try:
         session.log(step="registers", when=when, registers=session._with_follower(lambda bus: register_dump(bus, motors)))

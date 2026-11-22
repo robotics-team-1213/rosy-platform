@@ -16,6 +16,8 @@ def test_no_other_attribute_publishes_cmd_vel():
             continue
         scanned += 1
         text = (ROOT / path).read_text(encoding="utf-8-sig")
+        if "create_publisher" not in text:
+            continue
         for owner, function, publisher in _final_publishes(ast.parse(text), legacy_sensor_only=(
                 path in CMD_VEL_PARAMETER_ALLOWLIST)):
             found.add((path, owner, function))

@@ -319,7 +319,7 @@ def test_lane_following_reads_as_one_operator_word(fleet_site):
         assert ("/api/fleet/robots/rosy_03/line-follow", '{"mode":"IR_LINE"}') in posts
         card.locator("ui-button", has_text="IR 차선 추종 끄기").click()
         expect(card.locator("[data-line-follow]")).to_have_count(0, timeout=10000)
-        page.get_by_role("tab", name="알림", exact=True).click()
+        page.get_by_role("tab", name="기록·근거", exact=True).click()
         expect(page.locator("#log")).to_contain_text("IR 차선 추종 끔 · 꺼짐")
         assert _raw_words(page) == []
         assert not errors
@@ -385,9 +385,11 @@ def test_a_hundred_robots_stay_usable(tmp_path):
             first = [cards.nth(i).get_attribute("data-robot-id") for i in range(15)]
             exceptions = {robot_id for i, robot_id in enumerate(ids) if i % 20 == 7 or i % 10 == 9}
             assert set(first) == exceptions, first  # the 15 exception cards come first, open
+            page.locator("#fleet-inbox").click()
             assert page.locator("#critical-list li").first.inner_text().split(":")[0] in exceptions
             head = page.locator("#critical-head small").inner_text() + page.locator("#warning-head small").inner_text()
             assert "외" in head or len(head) < 120, head  # a group head never lists every name
+            page.locator("#queues-close").click()
             for width, height in [(1440, 900), (1024, 768)]:
                 page.set_viewport_size({"width": width, "height": height})
                 page.wait_for_timeout(1200)
@@ -454,6 +456,7 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
         assert server.started
         with sync_playwright() as playwright:
             browser, page, errors, _posts = _login(playwright, origin)
+            page.locator("#fleet-inbox").click()
             group = page.locator("#warning-list li[data-group] summary")
             expect(group).to_have_count(1, timeout=20000)
             expect(group).to_contain_text("연결 끊김 · 4대 (rosy_011 · rosy_012 · rosy_013 외 1대)")
@@ -462,6 +465,7 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
             assert page.locator("#warning-head small").inner_text() == ""
             group.click()
             expect(page.locator("#warning-list li[data-group] p")).to_contain_text("rosy_014")
+            page.locator("#queues-close").click()
             page.wait_for_function("() => (window.__mapMarkers || []).length === 10", timeout=20000)
             labels = page.evaluate("(window.__mapChips || []).map((chip) => chip.text)")
             assert "003" in labels, labels                      # the stuck robot always has its label

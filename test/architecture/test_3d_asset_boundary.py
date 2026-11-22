@@ -19,6 +19,7 @@ ALLOWED_ROOTS = {
     "middleware/perception/map/map_v2_fleet": "middleware/perception/map/map_v2_fleet",
     "middleware/perception/map/map_world_261026": "middleware/perception/map/map_world_261026",
     "integrations/simulation/gazebo/models": "integrations/simulation/gazebo/models",
+    "shared/web/meshes": "shared/web/meshes",  # browser twin (robot 3D view), small display copies
 }
 
 

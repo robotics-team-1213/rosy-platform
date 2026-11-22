@@ -23,6 +23,9 @@ UNITS = ['rosy-omx-observer@arm_a.service', 'rosy-omx-camera@top.service', 'rosy
 
 def _setup(tmp_path, monkeypatch, *, safe=True, record=None, procs=()):
     monkeypatch.setenv('ROSY_OMX_HOME', str(tmp_path / 'omxhome'))
+    monkeypatch.setenv('ROSY_ARM_LEASES', str(tmp_path / 'leases'))  # never the real cell's leases
+    import omx_incident
+    monkeypatch.setattr(omx_incident, 'refuse_if_held', lambda arm, *a, **k: None)  # no Fleet link, no local hold file of the real cell
     prep = tmp_path / 'prep'
     (prep / 'tasks').mkdir(parents=True)
     for name in ('caps-arm-a-tune.json', 'caps-arm-b-tune.json', 'caps.json'):
@@ -61,7 +64,10 @@ def _setup(tmp_path, monkeypatch, *, safe=True, record=None, procs=()):
         commands.append(command)
         if command[1].endswith('record_session.py'):
             (Path(cwd) / 'session.json').write_text(json.dumps(record or {'safe_end': safe}))
-        return SimpleNamespace(wait=lambda: 0, poll=lambda: 0)
+            if safe and not (record and not record.get('safe_end', True)):
+                (Path(cwd) / 'clean-end.json').write_text(json.dumps({'clean': True}))
+        return SimpleNamespace(wait=lambda timeout=None: 0, poll=lambda: 0, returncode=0, send_signal=lambda s: None,
+                               communicate=lambda timeout=None: ('{}', ''))
     bench = bench_record.Bench({'python': '/py', 'prep_root': str(prep)}, run=run, popen=popen, procs=lambda: list(procs),
                                mounts=lambda: 'proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\n')
     body = dict(name='teach-one', rig_revision='bench-r1', arm='arm_a', config='record-config-arm-a.json',
@@ -80,6 +86,19 @@ def finished(bench):
 
 def test_safe_session_hands_over_restores_in_reverse_and_seals(tmp_path, monkeypatch):
     bench, body, calls, commands = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr("bench_live_preview.SHM", tmp_path / "missing")
+    popen = bench.popen
+    live_folders = []
+
+    def inspect_preview(command, cwd, **kwargs):
+        if command[1].endswith("record_session.py"):
+            live_folder = Path(kwargs["env"]["ROSY_BENCH_LIVE_DIR"])
+            assert live_folder.parent == cwd and live_folder.is_dir()
+            assert bench.live_preview.folder == live_folder
+            live_folders.append(live_folder)
+        return popen(command, cwd, **kwargs)
+
+    bench.popen = inspect_preview
     bench.start(body)
     state = finished(bench)
     stops = [c[1] for c in calls if c[0] == 'stop']
@@ -91,6 +110,7 @@ def test_safe_session_hands_over_restores_in_reverse_and_seals(tmp_path, monkeyp
     assert commands[0][commands[0].index('--arm') + 1] == 'arm_a'
     assert commands[1][1].endswith('record_seal.py') and commands[1][commands[1].index('--calibration') + 1].endswith('omx_follower_arm.json')
     assert state['status'] == 'sealed'
+    assert len(live_folders) == 1 and not live_folders[0].exists()
 
 
 def test_unsafe_end_is_restored_but_never_sealed(tmp_path, monkeypatch):
@@ -101,9 +121,9 @@ def test_unsafe_end_is_restored_but_never_sealed(tmp_path, monkeypatch):
     assert len([c for c in calls if c[0] == 'start']) == 3
 
 
-@pytest.mark.parametrize('change', [{'at_bench': False}, {'config': '../etc/passwd'}, {'calibrations': ['/tmp/x.json']},
+@pytest.mark.parametrize('change', [{'config': '../etc/passwd'}, {'calibrations': ['/tmp/x.json']},
                                     {'name': 'Bad Name'}, {'arm': ''}, {'arm': 'arm_x'}])
-def test_start_refuses_without_presence_or_with_unlisted_inputs(tmp_path, monkeypatch, change):
+def test_start_refuses_with_unlisted_or_invalid_inputs(tmp_path, monkeypatch, change):
     bench, body, calls, commands = _setup(tmp_path, monkeypatch)
     with pytest.raises(ValueError):
         bench.start(dict(body, **change))
@@ -391,11 +411,11 @@ def test_choices_validate_task_cards_and_serve_bench_html(tmp_path, monkeypatch)
 
     page_bundle = (
         bench_record.PAGE
-        + (bench_record.HERE / 'bench_record_ui.js').read_text(encoding='utf-8')
-        + (bench_record.HERE / 'bench_record_app.js').read_text(encoding='utf-8')
+        + ((bench_record.HERE / 'bench_record_ui.js').read_text(encoding='utf-8') + (bench_record.HERE / 'bench_record_status.js').read_text(encoding='utf-8'))
+        + ((bench_record.HERE / 'bench_record_app.js').read_text(encoding='utf-8') + (bench_record.HERE / 'bench_record_drawers.js').read_text(encoding='utf-8'))
     )
-    for marker in ('id="status-bar"', 'id="hdr-record-btn"', 'id="hdr-estop-btn"', 'id="cal-list"',
-                   'id="ev-restore"', 'id="ev-manual"', 'id="request-error"', 'id="task-error"',
+    for marker in ('id="status-bar"', 'id="hdr-record-btn"', 'id="hdr-estop-btn"', 'id="cal-robot-list"',
+                   'id="ev-restore"', 'id="ev-manual"', 'id="start-reason-bar"', 'id="task-error"',
                    'arm_bindings', 'X-Bench'):
         assert marker in page_bundle
 
@@ -435,7 +455,7 @@ def test_mdns_allows_readonly_get_but_keeps_post_loopback_only(tmp_path, monkeyp
         threading.Thread(target=srv_ctrl.serve_forever, daemon=True).start()
         try:
             conn = http.client.HTTPConnection('127.0.0.1', port_c, timeout=5)
-            conn.request('POST', '/start', body=json.dumps(dict(body, at_bench=False)),
+            conn.request('POST', '/start', body=json.dumps(dict(body, name='Bad Name')),
                          headers={'Host': f'rosy-arm-cell.local:{port_c}', 'X-Bench': '1'})
             assert conn.getresponse().status == 400
             conn.close()
@@ -478,16 +498,14 @@ def test_release_lock_requires_at_bench_and_targets_omx_holder(tmp_path, monkeyp
     monkeypatch.setattr(bench_record.os, 'kill', lambda pid, sig: killed.append((pid, sig)))
 
     with pytest.raises(ValueError):
-        bench.release_lock({'at_bench': False, 'pid': 424242})
-    with pytest.raises(ValueError):
-        bench.release_lock({'at_bench': True})
+        bench.release_lock({})
 
     srv = bench_record.make_server(bench, 0, bind='127.0.0.1')
     port = srv.server_address[1]
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         conn = http.client.HTTPConnection('127.0.0.1', port, timeout=5)
-        conn.request('POST', '/release_lock', body=json.dumps({'at_bench': True, 'pid': 424242}),
+        conn.request('POST', '/release_lock', body=json.dumps({'pid': 424242}),
                      headers={'Host': f'127.0.0.1:{port}', 'X-Bench': '1'})
         resp = conn.getresponse()
         assert resp.status == 200
@@ -507,13 +525,113 @@ def test_go_home_requires_at_bench_and_runs_cell_pipeline(tmp_path, monkeypatch)
     monkeypatch.setattr(bench_record.subprocess, 'run', lambda cmd, **kw: (ran.append(cmd), SimpleNamespace(returncode=0, stdout='{"result":"home"}', stderr=''))[1])
     monkeypatch.setattr(bench_record, 'hold_other_arm_locks', lambda *a, **kw: ([], None))
 
-    with pytest.raises(ValueError):
-        bench.go_home({'arm': 'arm_a', 'at_bench': False})
-
-    res = bench.go_home({'arm': 'arm_a', 'at_bench': True})
+    res = bench.go_home({'arm': 'arm_a'})
     assert res['home_moved'] == ['arm_a']
     assert ran and '--stage' in ran[0] and 'home' in ran[0] and '--person-at-switch' in ran[0]
     assert 'omx_adapter' in str(bench_record.HERE.parents[2] / 'middleware' / 'devices' / 'omx' / 'adapter' / 'omx_adapter') or True
+
+
+def test_go_home_refuses_before_any_state_change_when_the_board_is_absent(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    (bench.prep / 'cell-arm-a-stack.json').write_text('{}')
+    (bench.prep / 'chunks-topdown-guard-arma-test.json').write_text('{}')
+    monkeypatch.setattr(bench, '_check_robot', lambda *a, **kw: None)
+    cfg = bench.prep / 'record-config-arm-a.json'
+    cfg.write_text(json.dumps({'robot': {'port': '/dev/serial/by-id/usb-not-plugged-if00'}}))
+    with pytest.raises(ValueError, match='연결되어 있지 않습니다'):
+        bench.go_home({'arm': 'arm_a'})
+    assert bench.state['status'] == 'idle'
+
+
+def _arm_s_live_files(bench):
+    robot_s = {'type': 'omx_follower', 'id': 'arm_s_follower', 'port': '/dev/ttyS'}
+    for name, text in (('cell-auto-arm-s-live.json', '{}'), ('chunks-arm-s-inplace-live.json', '{}'), ('caps-arm-s-tune.json', '{}'),
+                       ('record-config-arm-s-live.json', json.dumps({'robot': robot_s})),
+                       ('arm-s-robot-profile-live.json', json.dumps({
+                           'schema': 'rosy.omx-cell-robot-profile.v1', 'device_id': 'arm_s', 'instance_id': 'arm_s_follower',
+                           'robot_config_sha256': digest(robot_s), 'operating_envelope_path': 'envelope.json', 'work_dir': 'work'}))):
+        (bench.prep / name).write_text(text, encoding='utf-8')
+
+
+def test_go_home_arm_s_uses_live_file_names_and_points_leader_to_align_option(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    ran = []
+    monkeypatch.setattr(bench_record.subprocess, 'run', lambda cmd, **kw: (ran.append(cmd), SimpleNamespace(returncode=0, stdout='{"result":"home"}', stderr=''))[1])
+    monkeypatch.setattr(bench_record, 'hold_other_arm_locks', lambda *a, **kw: ([], None))
+    assert bench.go_home({'arm': 'arm_s', 'at_bench': True})['home_moved'] == ['arm_s']
+    assert ran[0][ran[0].index('--config') + 1].endswith('cell-auto-arm-s-live.json')
+    assert ran[0][ran[0].index('--library') + 1].endswith('chunks-arm-s-inplace-live.json')
+    assert ran[0][ran[0].index('--operating-profile') + 1].endswith('arm-s-robot-profile-live.json')
+    ran_leader = _leader_popen(bench, _LeaderProc(), monkeypatch)  # no saved leader pose is needed any more: the Leader goes to the Follower
+    assert bench.go_home({'arm': 'arm_s', 'at_bench': True, 'include_leader': True})['home_moved'] == ['arm_s']
+    assert '--match-follower' in ran_leader[0] and '--pose' not in ran_leader[0]
+
+
+def _home_with_stages(bench, monkeypatch, tmp_path, results):
+    """results: cell_pipeline home answers in order, as the real CLI gives them: stdout {"receipt","result"}, error in the receipt file."""
+    ran = []
+
+    def fake(cmd, **kw):
+        stage = cmd[cmd.index('--stage') + 1]
+        ran.append(stage)
+        result, error = results.pop(0)
+        receipt = tmp_path / f'receipt-{len(ran)}.json'
+        receipt.write_text(json.dumps({'stage': stage, 'result': result, **({'error': error} if error else {})}))
+        return SimpleNamespace(returncode=0 if result == 'home' else 1, stdout=json.dumps({'receipt': str(receipt), 'result': result}) + '\n', stderr='')
+    monkeypatch.setattr(bench_record.subprocess, 'run', fake)
+    monkeypatch.setattr(bench_record, 'hold_other_arm_locks', lambda *a, **kw: ([], None))
+    return ran
+
+
+def test_go_home_judges_the_home_result_not_the_exit_text_and_never_runs_recover(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    ran = _home_with_stages(bench, monkeypatch, tmp_path, [('home', None)])
+    assert bench.go_home({'arm': 'arm_s', 'at_bench': True})['home_moved'] == ['arm_s']
+    ran = _home_with_stages(bench, monkeypatch, tmp_path, [('refused', 'home requires an empty, folded arm')])
+    with pytest.raises(ValueError, match='cell_auto_fold') as exc:
+        bench.go_home({'arm': 'arm_s', 'at_bench': True})
+    assert 'result=refused' in str(exc.value) and ran == ['home'] and bench.status()['status'] == 'idle'  # one home, no recover
+    ran = _home_with_stages(bench, monkeypatch, tmp_path, [('stopped', 'initial live state refused')])
+    with pytest.raises(ValueError, match='result=stopped') as exc:
+        bench.go_home({'arm': 'arm_s', 'at_bench': True})
+    assert 'cell_auto_fold' not in str(exc.value) and ran == ['home']
+
+
+def test_go_home_exit_zero_without_a_home_result_is_not_success(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    monkeypatch.setattr(bench_record, 'hold_other_arm_locks', lambda *a, **kw: ([], None))
+    monkeypatch.setattr(bench_record.subprocess, 'run', lambda cmd, **kw: SimpleNamespace(returncode=0, stdout='{"result":"stopped"}', stderr=''))
+    with pytest.raises(ValueError, match='홈 이동 실패'):
+        bench.go_home({'arm': 'arm_s', 'at_bench': True})
+
+
+@pytest.mark.parametrize('code', [75, 1, None])
+def test_go_home_unclean_recorder_exit_keeps_units_and_busy_for_a_person(tmp_path, monkeypatch, code):
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    _home_with_stages(bench, monkeypatch, tmp_path, [('home', None)])
+    killed, waited = [], []
+
+    def wait(timeout=None):
+        waited.append(timeout)
+        if code is None:
+            raise bench_record.subprocess.TimeoutExpired('rec', timeout)
+        return code
+    bench.popen = lambda command, cwd, **kw: SimpleNamespace(
+        poll=lambda: 0, wait=wait, returncode=code, send_signal=lambda s: None, kill=lambda: killed.append(1))
+    with pytest.raises(ValueError, match='사람이 팔 상태를 확인'):
+        bench.go_home({'arm': 'arm_s', 'at_bench': True})
+    assert bench.status()['status'] == 'homing' and not any(c[0] == 'start' for c in calls)
+    assert waited[0] == 30  # longer than the runner's own 15 s no-answer judgement
+    assert bench.manual.exists()  # the marker outlives a service restart
+    bench.state = {'status': 'idle'}  # a restarted service: the marker, not memory, keeps the units stopped and the bench shut
+    bench.restore_leftovers()
+    assert not any(c[0] == 'start' for c in calls) and '복원 보류' in bench.status()['error']
+    with pytest.raises(ValueError, match='사람 확인'):
+        bench.go_home({'arm': 'arm_s', 'at_bench': True})
 
 
 def test_save_initial_pose_writes_pose_and_updates_home_chunk(tmp_path, monkeypatch):
@@ -524,10 +642,7 @@ def test_save_initial_pose_writes_pose_and_updates_home_chunk(tmp_path, monkeypa
     lib = bench.prep / 'chunks-topdown-guard-arma-test.json'
     lib.write_text(json.dumps({'chunks': {'home': [[0, 0, 0, 0, 0, 0]]}}))
 
-    with pytest.raises(ValueError):
-        bench.save_initial_pose({'arm': 'arm_a', 'at_bench': False})
-
-    res = bench.save_initial_pose({'arm': 'arm_a', 'at_bench': True})
+    res = bench.save_initial_pose({'arm': 'arm_a'})
     assert res['initial_pose_saved']['arm_a'] == [1.0, -50.0, 40.0, 30.0, 20.0, 10.0]
     assert json.loads((bench.prep / 'initial-pose-arm_a.json').read_text())['state'] == [1.0, -50.0, 40.0, 30.0, 20.0, 10.0]
     assert json.loads(lib.read_text())['chunks']['home'][-1] == [0, 0, 0, 0, 0, 0]
@@ -577,39 +692,30 @@ def test_http_functional_endpoints_end_to_end(tmp_path, monkeypatch):
         st, sc = req('POST', '/save_caps', {'arm': 'arm_a', 'values': {'11': {'pwm': 350, 'p': 640}}})
         assert st == 200 and 'saved' in json.loads(sc)
 
-        st, _ = req('POST', '/save_initial_pose', {'arm': 'arm_a', 'at_bench': False})
-        assert st == 400
-
-        st, sp = req('POST', '/save_initial_pose', {'arm': 'arm_a', 'at_bench': True})
+        st, sp = req('POST', '/save_initial_pose', {'arm': 'arm_a'})
         assert st == 200 and json.loads(sp)['initial_pose_saved']['arm_a'] == [2.0, -40.0, 30.0, 20.0, 10.0, 5.0]
 
-        st, _ = req('POST', '/release_lock', {'at_bench': True})
+        st, _ = req('POST', '/release_lock', {})
         assert st == 400
 
-        st, _ = req('POST', '/home', {'arm': 'arm_a', 'at_bench': False})
-        assert st == 400
-
-        st, hm = req('POST', '/home', {'arm': 'arm_a', 'at_bench': True})
+        st, hm = req('POST', '/home', {'arm': 'arm_a'})
         assert st == 200 and json.loads(hm)['home_moved'] == ['arm_a']
 
         (bench.prep / 'record-config-policy.json').write_text(json.dumps({
             'robot': {'type': 'omx_follower', 'id': 'omx_follower_arm', 'port': '/dev/ttyA'},
             'policy': {'type': 'act'},
         }))
-        st, _ = req('POST', '/start', dict(body, config='record-config-policy.json', at_bench=True))
+        st, _ = req('POST', '/start', dict(body, config='record-config-policy.json'))
         assert st == 400
 
         st, arms_raw = req('GET', '/api/arms')
         assert st == 200 and 'arm_ab' in json.loads(arms_raw)['arms']
 
-        st, arm_ip = req('POST', '/api/arms/arm_a/initial_pose', {'at_bench': True})
+        st, arm_ip = req('POST', '/api/arms/arm_a/initial_pose', {})
         assert st == 200 and json.loads(arm_ip)['initial_pose_saved']['arm_a'] == [2.0, -40.0, 30.0, 20.0, 10.0, 5.0]
 
         (bench.prep / 'leader-home-arm_a.json').write_text(json.dumps({'ticks': {'shoulder_pan': 2048, 'shoulder_lift': 2048, 'elbow_flex': 2048, 'wrist_flex': 2048, 'wrist_roll': 2048}}))
-        st, _ = req('POST', '/api/arms/arm_a/home', {'at_bench': True, 'include_leader': True, 'hands_off_leader': False})
-        assert st == 400
-
-        st, hm_l = req('POST', '/api/arms/arm_a/home', {'at_bench': True, 'include_leader': True, 'hands_off_leader': True})
+        st, hm_l = req('POST', '/api/arms/arm_a/home', {'include_leader': True})
         assert st == 200 and json.loads(hm_l)['home_moved'] == ['arm_a']
     finally:
         srv.shutdown()
@@ -833,7 +939,7 @@ def test_leader_home_move_writes_step_cmd_and_clears_wrist_roll_wrap(tmp_path, m
     cfg.write_text(json.dumps({'teleop': {'type': 'omx_leader', 'id': 'arm_b_leader', 'port': '/dev/null'}}), encoding='utf-8')
     pose = tmp_path / 'pose.json'
     pose.write_text(json.dumps({'ticks': {
-        'shoulder_pan': 2060, 'shoulder_lift': 670, 'elbow_flex': 3150, 'wrist_flex': 3050, 'wrist_roll': 23,
+        'shoulder_pan': 3200, 'shoulder_lift': 670, 'elbow_flex': 3150, 'wrist_flex': 3050, 'wrist_roll': 23,
     }}), encoding='utf-8')
 
     monkeypatch.setattr(leader_home, '_connect_leader', lambda _cfg: fake_leader)
@@ -841,14 +947,14 @@ def test_leader_home_move_writes_step_cmd_and_clears_wrist_roll_wrap(tmp_path, m
     monkeypatch.setattr(leader_home, 'protect_signals', lambda: None)
 
     # pan starts past its range (4179, a hand-turned multi-turn count): it comes back downward, and the
-    # 5 s deadline stretches to the 186 degrees at 1 degree/s instead of timing out
+    # 5 s deadline stretches to the 86 degrees at 1 degree/s instead of timing out (a move over 100 degrees is refused)
     clock = [0.0]
     monkeypatch.setattr(leader_home.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(leader_home.time, 'sleep', lambda s: clock.__setitem__(0, clock[0] + s))
     res = leader_home.move_leader_home(cfg, 'arm_b', pose, 'hands-off:test:now', timeout_s=5.0)
     assert res['ok'] is True
     pans = [g['shoulder_pan'] for g in bus.written_goals]
-    assert pans[0] > 4095 and pans == sorted(pans, reverse=True) and pans[-1] == 2060
+    assert pans[0] > 4095 and pans == sorted(pans, reverse=True) and pans[-1] == 3200
     assert bus.packet_handler.rebooted == [bus.motors['wrist_roll'].id]
     assert bus.written_goals
     assert all(v == 0 for v in bus.regs['Torque_Enable'].values())
@@ -860,375 +966,140 @@ def test_leader_home_move_writes_step_cmd_and_clears_wrist_roll_wrap(tmp_path, m
     assert 'pollArms' in html_src
 
 
-def test_go_home_prevalidates_arm_ab_and_rejects_bad_lerobot_bools(tmp_path, monkeypatch):
-    bench, body, _, _ = _setup(tmp_path, monkeypatch)
-    with pytest.raises(ValueError, match='hands_off_leader'):
-        bench.go_home({'arm': 'arm_ab', 'at_bench': True, 'include_leader': True, 'hands_off_leader': False})
-    with pytest.raises(ValueError, match='episode_time_s'):
-        bench.start(dict(body, lerobot_params={'episode_time_s': True}))
-    with pytest.raises(ValueError):
-        bench.start(dict(body, calibrations='not-a-list'))
+def _leader_for_match(tmp_path, ranges=None):
+    lh_spec = importlib.util.spec_from_file_location('leader_home', Path(__file__).resolve().parent.parent / 'deploy/robot/omx/leader_home.py')
+    leader_home = importlib.util.module_from_spec(lh_spec)
+    lh_spec.loader.exec_module(leader_home)
+    cal_file = tmp_path / 'arm_s_leader.json'
+    (tmp_path / 'arm_s_leader.mount.json').write_text(json.dumps({'shoulder_pan': -2048, 'wrist_roll': -2048}), encoding='utf-8')
+    ranges = ranges or {}
+    cal = {n: SimpleNamespace(range_min=ranges.get(n, (0, 4095))[0], range_max=ranges.get(n, (0, 4095))[1]) for n in leader_home.BODY}
+    return leader_home, SimpleNamespace(calibration=cal, calibration_fpath=str(cal_file))
 
 
-def test_api_telemetry_reads_live_telemetry_file(tmp_path, monkeypatch):
-    bench, _, _, _ = _setup(tmp_path, monkeypatch)
-    assert bench.telemetry()['active'] is False
-    (bench.prep / 'telemetry-live.json').write_text(json.dumps({
-        'active': True,
-        'tracking': True,
-        'loop_latency_ms': 18.4,
-        'motors': [{'name': 'shoulder_pan', 'leader_raw': 2098, 'present_raw': 2097, 'error_deg': 0.09}],
-    }), encoding='utf-8')
-    tel = bench.telemetry()
-    assert tel['active'] is True
-    assert tel['tracking'] is True
-    assert tel['loop_latency_ms'] == 18.4
-    assert tel['motors'][0]['name'] == 'shoulder_pan'
+def test_match_follower_applies_mount_and_keeps_small_differences(tmp_path):
+    leader_home, leader = _leader_for_match(tmp_path)
+    present = {'shoulder_pan': 100, 'shoulder_lift': 1000, 'elbow_flex': 3000, 'wrist_flex': 2000, 'wrist_roll': 2100}
+    target = leader_home._match_target([2048, 1040, 2000, 2020, 2048], present, leader)
+    # lift and wrist_flex rest on the stand under 30 deg away: kept; pan (follower 2048 - mount(-2048) = leader 0) and roll carry no
+    # weight, so they move onto the Follower however small the difference
+    assert target == {'shoulder_pan': 0, 'shoulder_lift': 1000, 'elbow_flex': 2000, 'wrist_flex': 2000, 'wrist_roll': 0}
+    moved = leader_home._match_target([3000, 1000, 3000, 2000, 2100], dict(present, shoulder_pan=2000), leader)
+    assert moved['shoulder_pan'] == 952   # 3000 + 2048 = 5048, the in-range turn
 
 
-def test_camera_baseline_and_drift_check(tmp_path, monkeypatch):
-    bench, _, _, _ = _setup(tmp_path, monkeypatch)
-    bdir = bench.prep / 'camera-baselines' / 'arm_a'
-    bdir.mkdir(parents=True)
-    (bdir / 'baseline.json').write_text(json.dumps({
-        'cameras': {'top': {'quality': {'mean_intensity': 100.0, 'spatial_contrast': 40.0}}}
-    }), encoding='utf-8')
-    import io
-    monkeypatch.setattr(
-        'bench_record_inspect.urllib.request.urlopen',
-        lambda *_a, **_kw: io.BytesIO(json.dumps({
-            'top': {'fresh': True, 'quality': {'condition': 'NORMAL', 'usable': True, 'mean_intensity': 140.0, 'spatial_contrast': 42.0}},
-            'side': {'fresh': True, 'quality': {'condition': 'NORMAL', 'usable': True, 'mean_intensity': 90.0, 'spatial_contrast': 35.0}},
-        }).encode()),
-    )
-    res = bench.check_camera_drift('arm_a')
-    assert res['cameras']['top']['status'] == 'lighting_mismatch'
-    assert res['cameras']['side']['status'] == 'no_baseline'
-    with pytest.raises(ValueError):
-        bench.save_camera_baseline({'arm': '../../evil', 'at_bench': True})
-    assert bench.check_camera_drift('../../evil')['arm'] == 'default'
+def test_match_follower_refuses_a_target_outside_the_leader_range(tmp_path):
+    leader_home, leader = _leader_for_match(tmp_path, ranges={'elbow_flex': (0, 1500)})
+    present = {'shoulder_pan': 0, 'shoulder_lift': 1000, 'elbow_flex': 1000, 'wrist_flex': 2000, 'wrist_roll': 0}
+    with pytest.raises(ValueError, match='elbow_flex'):
+        leader_home._match_target([2048, 1000, 3000, 2000, 2048], present, leader)
 
 
-def test_replay_teacher_mode_in_choices_and_start(tmp_path, monkeypatch):
-    bench, body, _, commands = _setup(tmp_path, monkeypatch)
-    rdir = bench.prep / 'replays'
-    rdir.mkdir()
-    (rdir / 'sim-pick.json').write_text('{"schema": "rosy.omx-replay-trajectory.v1"}', encoding='utf-8')
-    assert bench.choices()['replays'] == ['replays/sim-pick.json']
-    bench.start(dict(body, replay='replays/sim-pick.json'))
+class _LeaderProc:
+    """What Popen returns for leader_home: communicate() raises TimeoutExpired until SIGTERM arrives (when it obeys)."""
+    def __init__(self, rc=0, out='{}', obeys=True, hang=False):
+        self.rc, self.out, self.obeys, self.hang, self.signals, self.killed = rc, out, obeys, hang, [], False
+
+    @property
+    def returncode(self):
+        return self.rc
+
+    def send_signal(self, sig):
+        self.signals.append(sig)
+
+    def kill(self):
+        self.killed = True
+
+    def communicate(self, timeout=None):
+        import subprocess
+        if self.hang and not (self.obeys and self.signals):
+            raise subprocess.TimeoutExpired('leader_home', timeout)
+        return self.out, ''
+
+
+def _leader_popen(bench, proc, monkeypatch, own_seen=None):
+    import bench_record_leader
+    ran, record_popen = [], bench.popen
+
+    def popen(command, cwd, **kwargs):
+        if command[1].endswith('leader_home.py'):
+            ran.append(command)
+            return proc
+        return record_popen(command, cwd, **kwargs)
+    bench.popen = popen
+
+    def hold(arm, arms, procs, mounts, own=False):
+        (own_seen if own_seen is not None else []).append(own)
+        return [], None
+    monkeypatch.setattr(bench_record_leader, 'hold_other_arm_locks', hold)
+    return ran
+
+
+def test_align_leader_runs_without_hands_off_and_a_failure_blocks_the_recording(tmp_path, monkeypatch):
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
+    own = []
+    ran = _leader_popen(bench, _LeaderProc(rc=1, out='boom\n{"ok": false, "torque_off_confirmed": true, "restore_failures": []}'), monkeypatch, own)
+    with pytest.raises(ValueError, match='리더 정렬 실패'):
+        bench.start(dict(body, align_leader=True))
+    assert '--match-follower' in ran[0] and not commands and bench.status()['status'] == 'idle'
+    assert ran[0][ran[0].index('--attest') + 1].startswith('hands-off:bench-auto:')
+    assert own == [True]  # the arm's own lock is held while the child reads the Follower
+    _leader_popen(bench, _LeaderProc(), monkeypatch)
+    bench.start(dict(body, align_leader=True))
     finished(bench)
-    assert '--replay' in commands[0]
-    rs_src = (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/record_session.py').read_text(encoding='utf-8')
-    assert 'self.replay is not None' in rs_src
-    assert 'id="replay"' in (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record.html').read_text(encoding='utf-8')
+    assert commands[0][1].endswith('record_session.py')
 
 
-def test_reverse_replay_modes_and_task_override():
-    import bench_record_replay as brr
-    traj = {
-        'schema': 'rosy.omx-replay-trajectory.v1',
-        'fps': 30,
-        'frames': [[1, 0, 0, 0, 0, -50], [2, 0, 0, 0, 0, 50], [2, 0, 0, 0, 0, 50], [3, 0, 0, 0, 0, 50], [4, 0, 0, 0, 0, -50]],
-        'segments': {'A': [0, 2], 'reset': [2, 3], 'B': [3, 5]},
-    }
-    raw = json.dumps(traj).encode('utf-8')
-    sw = json.loads(brr.transform_replay(raw, mode='swap_ab').decode('utf-8'))
-    assert sw['frames'][:2] == [[3, 0, 0, 0, 0, 50], [4, 0, 0, 0, 0, -50]]
-    assert sw['frames'][3:] == [[1, 0, 0, 0, 0, -50], [2, 0, 0, 0, 0, 50]]
-    rev = json.loads(brr.transform_replay(raw, mode='reverse_motion', invert_gripper=True).decode('utf-8'))
-    assert rev['frames'][0][:5] == [2, 0, 0, 0, 0]
-    assert rev['frames'][0][5] == -50.0  # inverted from 50
-    with pytest.raises(ValueError):
-        brr.transform_replay(raw, mode='bad_mode')
+def test_stop_during_align_terminates_the_child_and_blocks_the_recording(tmp_path, monkeypatch):
+    import signal
+    import threading
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
+    proc = _LeaderProc(rc=1, out='{"ok": false, "torque_off_confirmed": true, "restore_failures": []}', hang=True)
+    _leader_popen(bench, proc, monkeypatch)
+    errors = []
 
-    tc = {'task_id': 'h1-belt-ship', 'layout': {'origin': 'belt', 'target_slot': 'ship-h1r0-l0'},
-          'record': {'single_task': 'Move belt to ship-h1r0-l0'}}
-    out = brr.apply_task_override(tc, {'swap_pick_place': True})
-    assert out['layout']['origin'] == 'ship-h1r0-l0'
-    assert out['layout']['target_slot'] == 'belt'
-    assert out['record']['single_task'] == 'Move ship-h1r0-l0 to belt'
-    assert 'ship-h1r0-l0-to-belt' in out['task_id']
-    with pytest.raises(ValueError):
-        brr.apply_task_override(tc, {'origin': 'belt', 'target_slot': 'belt'})
-
-
-def test_recording_progress_and_shell_elements(tmp_path):
-    import bench_record_replay as brr
-    ds = tmp_path / 'h1-belt-r1-20261121-010101'
-    (ds / 'meta').mkdir(parents=True)
-    (ds / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds / 'meta' / 'info.json').write_text('{"total_episodes": 3}', encoding='utf-8')
-    (ds / 'data' / 'chunk-000' / 'file-000.parquet').write_bytes(b'1')
-    p = brr.recording_progress({
-        'status': 'recording', 'recording_started': 100.0, 'started': 99.0,
-        'target_episodes': 10, 'task_id': 'h1-belt', 'dataset_root_prefix': str(tmp_path),
-    }, lambda: 112.5)
-    assert p['recording_elapsed_s'] == 12.5
-    assert p['episodes_done'] == 3
-    assert p['episodes_remaining'] == 7
-    html_src = (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record.html').read_text(encoding='utf-8')
-    for marker in ('id="hdr-estop-btn"', 'id="slim-prog"', 'id="sp-timer"', 'id="toggle-reverse-btn"', 'bench_record.css'):
-        assert marker in html_src
-    ui_js = (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record_ui.js').read_text(encoding='utf-8')
-    assert "arm_a:new Set(['top','side','arm_a_wrist'])" in ui_js
-    assert "arm_b:new Set(['top','side','arm_b_wrist'])" in ui_js
-
-
-def test_closed_loop_pipeline_api_and_guards(tmp_path, monkeypatch):
-    bench, _, _, _ = _setup(tmp_path, monkeypatch)
-    res = bench.pipeline_generate_replay({'source_type': 'isaac_sim', 'source_ref': 'isaac://h1', 'arm': 'arm_a'})
-    assert res['ok'] is True
-    assert res['replay_id'] == 'replays/pipe-isaac-sim-arm_a.json'
-    assert (bench.prep / res['replay_id']).is_file()
-    with pytest.raises(ValueError):
-        bench.pipeline_generate_replay({'source_type': 'isaac_sim', 'source_ref': '../../etc/passwd'})
-    with pytest.raises(ValueError):
-        bench.pipeline_run({'dataset_folder': 'not-sealed', 'trigger': 'auto_after_seal'})
-    st = bench.pipeline_run({'dataset_folder': 'h1-demo-01', 'trigger': 'manual'})
-    assert st['last_dataset'] == 'h1-demo-01'
-    import time as _t
-    for _ in range(30):
-        cur = bench.pipeline_status()
-        if cur['state'] in ('done', 'failed'):
+    def start():
+        try:
+            bench.start(dict(body, align_leader=True, hands_off_leader=True))
+        except ValueError as exc:
+            errors.append(str(exc))
+    worker = threading.Thread(target=start)
+    worker.start()
+    for _ in range(200):
+        if bench.leader_proc is not None:
             break
-        _t.sleep(0.05)
-    assert cur['state'] == 'done'
-    assert cur['loop_count'] >= 1
-    assert cur['next_checkpoint'].startswith('ckpt://h1-demo-01-aug')
+        time.sleep(0.01)
+    assert bench.stop()['status'] == 'homing'
+    worker.join(5)
+    assert proc.signals == [signal.SIGTERM] and not proc.killed
+    assert errors and '중단' in errors[0] and not commands and bench.status()['status'] == 'idle'
 
 
-def test_audit_hardening_replay_validation_and_collection_name(tmp_path, monkeypatch):
-    bench, _, _, _ = _setup(tmp_path, monkeypatch)
-    # 1. arm path traversal and missing replays/ ref must fail
-    with pytest.raises(ValueError):
-        bench.pipeline_generate_replay({'source_type': 'isaac_sim', 'arm': '../../evil'})
-    with pytest.raises(ValueError):
-        bench.pipeline_generate_replay({'source_type': 'teacher_traj', 'source_ref': 'replays/missing.json', 'arm': 'arm_a'})
-    # 2. out-of-range joint value in replay must fail
-    rdir = bench.prep / 'replays'
-    rdir.mkdir(exist_ok=True)
-    (rdir / 'bad.json').write_text(json.dumps({
-        'schema': 'rosy.omx-replay-trajectory.v1', 'fps': 15, 'frames': [[999, 0, 0, 0, 0, 0]],
-    }), encoding='utf-8')
-    with pytest.raises(ValueError):
-        bench.pipeline_generate_replay({'source_type': 'teacher_traj', 'source_ref': 'replays/bad.json', 'arm': 'arm_a'})
-    # 3. apply_task_override updates top-level single_task
-    import bench_record_replay as brr
-    tc = {'task_id': 'h1-01', 'single_task': 'Move belt to ship-h1r1-l0',
-          'layout': {'origin': 'belt', 'target_slot': 'ship-h1r1-l0'}}
-    ov = brr.apply_task_override(tc, {'swap_pick_place': True})
-    assert ov['single_task'] == 'Move ship-h1r1-l0 to belt'
-    # 4. session folder -> state['name'] resolution
-    bench.state = {'status': 'sealed', 'name': 'h1-seal-01', 'folder': str(tmp_path / 'sessions' / '20261121-000001-h1-seal-01')}
-    st2 = bench.pipeline_run({'dataset_folder': bench.state['folder'], 'trigger': 'auto_after_seal'})
-    assert st2['last_dataset'] == 'h1-seal-01'
-    # 5. HTTP routes for CSS, pipeline JS, and /api/pipeline/status
-    import threading, urllib.request
-    srv = bench_record.make_server(bench, 0)
-    t = threading.Thread(target=srv.serve_forever, daemon=True)
-    t.start()
-    try:
-        base = f'http://127.0.0.1:{srv.server_port}'
-        for path in ('/bench_record.css', '/bench_record_pipeline.js', '/api/pipeline/status', '/api/hf/status'):
-            with urllib.request.urlopen(base + path, timeout=5) as r:
-                assert r.status == 200
-    finally:
-        srv.shutdown()
-        srv.server_close()
+def test_a_leader_child_that_will_not_end_keeps_the_bench_in_manual_check(tmp_path, monkeypatch):
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
+    proc = _LeaderProc(hang=True, obeys=False)
+    _leader_popen(bench, proc, monkeypatch)
+    clock = [0.0]
+    monkeypatch.setattr(bench_record.time, 'monotonic', lambda: clock.__setitem__(0, clock[0] + 300) or clock[0])  # the 420 s deadline passes at once
+    with pytest.raises(ValueError, match='수동'):
+        bench.start(dict(body, align_leader=True, hands_off_leader=True))
+    assert proc.killed and bench.status()['status'] == 'leader_manual_check' and not commands
+    assert bench.manual.is_file() and '종료를 확인할 수 없습니다' in json.loads(bench.manual.read_text(encoding='utf-8'))['reason']  # on disk: a service restart still holds
+    import bench_record_guard
+    assert '사람 확인' in bench_record_guard.arm_free('arm_a', bench.manual)  # every bus path refuses on that marker
+    with pytest.raises(ValueError, match='사람 확인'):  # the marker is checked first now (the in-memory manual check is the second line)
+        bench.start(body)
 
 
-def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
-    bench, _, _, _ = _setup(tmp_path, monkeypatch)
-    fake_home = tmp_path / 'home'
-    (fake_home / '.cache' / 'huggingface').mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(Path, 'home', lambda: fake_home)
-    ds_dir = fake_home / 'rosy-data' / 'omx-leader' / 'h1-demo-01'
-    (ds_dir / 'meta').mkdir(parents=True)
-    (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
-    (ds_dir / 'data' / 'chunk-000' / 'ep0.parquet').write_bytes(b'pq')
-    # 1. Refuses without HF token
-    with pytest.raises(ValueError):
-        bench.hf_upload_start({'dataset': 'h1-demo-01'})
-    (fake_home / '.cache' / 'huggingface' / 'token').write_text('hf_dummy', encoding='utf-8')
-    # 2. Refuses DO_NOT_TRAIN dataset
-    (ds_dir / 'DO_NOT_TRAIN.txt').write_text('static', encoding='utf-8')
-    with pytest.raises(ValueError):
-        bench.hf_upload_start({'dataset': 'h1-demo-01'})
-    (ds_dir / 'DO_NOT_TRAIN.txt').unlink()
-    # 3. Mock HfApi and run async upload
-    import sys, types, time as _t
-    calls = []
-    class FakeHfApi:
-        def whoami(self): return {'name': 'livsb3'}
-        def create_repo(self, **kw): calls.append(('create', kw['repo_id']))
-        def upload_folder(self, **kw): calls.append(('upload', kw['repo_id']))
-    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
-    res = bench.hf_upload_start({'dataset': 'h1-demo-01'})
-    assert res['hf_upload']['state'] in ('encoding', 'uploading', 'done')
-    for _ in range(40):
-        st = bench.hf_upload_status()
-        if st['state'] in ('done', 'failed'):
-            break
-        _t.sleep(0.05)
-    assert st['state'] == 'done'
-    assert st['repo_id'] == 'livsb3/h1-demo-01'
-    assert ('upload', 'livsb3/h1-demo-01') in calls
-    ds_rows = bench.lerobot_datasets()
-    assert ds_rows[0]['hf_uploaded'] is True and ds_rows[0]['hf_repo_id'] == 'livsb3/h1-demo-01'
+def test_leader_home_checks_the_attest_before_touching_the_follower(monkeypatch):
+    lh_spec = importlib.util.spec_from_file_location('leader_home', ROOT / 'deploy/robot/omx/leader_home.py')
+    leader_home = importlib.util.module_from_spec(lh_spec)
+    lh_spec.loader.exec_module(leader_home)
+
+    def touched(*a, **kw):
+        raise AssertionError('the Follower was opened without an attest')
+    monkeypatch.setattr(leader_home, 'read_follower_pose', touched)
+    with pytest.raises(ValueError, match='attest'):
+        leader_home.main(['--config', 'x.json', '--arm', 'arm_a', '--match-follower'])
 
 
-def test_ik_planner_belt_in_to_pinky_arm_s(tmp_path, monkeypatch):
-    bench, _, _, _ = _setup(tmp_path, monkeypatch)
-    wd = bench.prep / 'cell-auto-1028'
-    wd.mkdir()
-    (wd / 'surface-belt.json').write_text(json.dumps({'steps': [
-        {'command': 'load lib', 'state': [0.8, -62.0, 53.0, 51.5, 45.0, 48.0]},
-        {'command': 'goto above_probe', 'state': [0.3, -11.2, 11.5, 50.4, 8.5, 48.0]},
-        {'command': 'run descend_probe', 'state': [0.3, -8.7, 19.8, 40.8, 8.5, 48.0]},
-    ]}), encoding='utf-8')
-    (wd / 'surface-pinky.json').write_text(json.dumps({'steps': [
-        {'command': 'goto above_probe', 'state': [42.8, 7.0, -10.3, 53.7, -18.7, 48.0]},
-        {'command': 'run descend_probe', 'state': [43.2, 7.3, -1.1, 45.3, -18.8, 48.0]},
-    ]}), encoding='utf-8')
-    res = bench.pipeline_generate_replay({
-        'source_type': 'ik_planner', 'arm': 'arm_s', 'origin': 'belt-in', 'target_slot': 'pinky',
-    })
-    assert res['replay_id'] == 'replays/pipe-ik-planner-arm_s.json'
-    traj = json.loads((bench.prep / res['replay_id']).read_text(encoding='utf-8'))
-    assert traj['ik_origin'] == 'belt-in' and traj['ik_target'] == 'pinky'
-    assert len(traj['frames']) > 50
-
-
-def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
-    import types
-
-    bench, body, _, commands = _setup(tmp_path, monkeypatch)
-    wd = bench.prep / 'cell-auto-1028'
-    wd.mkdir()
-    (wd / 'surface-belt.json').write_text(json.dumps({'steps': [
-        {'command': 'load lib', 'state': [0.8, -62.0, 53.0, 51.5, 45.0, 48.0]},
-        {'command': 'goto above_probe', 'state': [0.3, -11.2, 11.5, 50.4, 8.5, 48.0]},
-        {'command': 'run descend_probe', 'state': [0.3, -8.7, 19.8, 40.8, 8.5, 48.0]},
-    ]}), encoding='utf-8')
-    (wd / 'surface-pinky.json').write_text(json.dumps({'steps': [
-        {'command': 'goto above_probe', 'state': [42.8, 7.0, -10.3, 53.7, -18.7, 48.0]},
-        {'command': 'run descend_probe', 'state': [43.2, 7.3, -1.1, 45.3, -18.8, 48.0]},
-    ]}), encoding='utf-8')
-
-    robot_s = {'type': 'omx_follower', 'id': 'arm_s_follower', 'port': '/dev/ttyS'}
-    (bench.prep / 'caps-arm-s-tune.json').write_text('{}', encoding='utf-8')
-    (bench.prep / 'record-config-arm-s.json').write_text(json.dumps({'robot': robot_s}), encoding='utf-8')
-    (bench.prep / 'arm-s-robot-profile.json').write_text(json.dumps({
-        'schema': 'rosy.omx-cell-robot-profile.v1',
-        'device_id': 'arm_s',
-        'instance_id': 'arm_s_follower',
-        'robot_config_sha256': digest(robot_s),
-        'operating_envelope_path': 'envelope.json',
-        'work_dir': str(wd),
-    }), encoding='utf-8')
-    cal_s = tmp_path / 'home/.cache/huggingface/lerobot/calibration/robots/omx_follower/arm_s_follower.json'
-    cal_s.write_text('{}', encoding='utf-8')
-
-    res = bench.pipeline_generate_replay({
-        'source_type': 'ik_planner', 'arm': 'arm_s', 'origin': 'belt-in', 'target_slot': 'pinky',
-    })
-    assert res['ok'] is True
-    replay_file = bench.prep / res['replay_id']
-    assert replay_file.is_file()
-
-    traj = json.loads(replay_file.read_text(encoding='utf-8'))
-    assert traj['schema'] == 'rosy.omx-replay-trajectory.v1' and traj['fps'] == 30
-    frames, segs = traj['frames'], traj['segments']
-    assert max(abs(a - b) for p, q in zip(frames, frames[1:]) for a, b in zip(p, q)) <= 5.0 / 30 + 1e-3
-    (a0, a1), (r0, r1), (b0, b1) = (segs[k] for k in ('A', 'reset', 'B'))
-    assert a0 == 0 < a1 == r0 < r1 == b0 < b1 == len(frames) and a1 - a0 == b1 - b0
-
-    adapter_dir = ROOT / 'middleware/devices/omx/adapter'
-    tt_path = ROOT / 'deploy/robot/omx/teach_trajectory.py'
-    if adapter_dir.is_dir() and tt_path.is_file():
-        monkeypatch.syspath_prepend(str(adapter_dir))
-        tt_spec = importlib.util.spec_from_file_location('teach_trajectory', tt_path)
-        teach_trajectory = importlib.util.module_from_spec(tt_spec)
-        tt_spec.loader.exec_module(teach_trajectory)
-        assert teach_trajectory.load(replay_file, fps=30)['sha256']
-
-    arm_s_body = dict(
-        body, name='arm-s-ik-e2e', arm='arm_s',
-        config='record-config-arm-s.json', caps='caps-arm-s-tune.json',
-        calibrations=[str(cal_s)], replay=res['replay_id'],
-    )
-    assert bench.start(arm_s_body)['target_episodes'] == 2
-    state = finished(bench)
-    assert state['status'] == 'sealed' and state['target_episodes'] == 2
-    assert '--replay' in commands[0] and commands[0][commands[0].index('--arm') + 1] == 'arm_s'
-
-    pipe = bench.pipeline_run({'dataset_folder': state['folder'], 'trigger': 'auto_after_seal'})
-    assert pipe['last_dataset'] == 'arm-s-ik-e2e'
-    for _ in range(40):
-        pipe_cur = bench.pipeline_status()
-        if pipe_cur['state'] in ('done', 'failed'):
-            break
-        time.sleep(0.05)
-    assert pipe_cur['state'] == 'done' and pipe_cur['loop_count'] >= 1
-
-    hf_cache = tmp_path / 'home' / '.cache' / 'huggingface'
-    hf_cache.mkdir(parents=True, exist_ok=True)
-    (hf_cache / 'token').write_text('hf_dummy', encoding='utf-8')
-    ds_dir = tmp_path / 'home' / 'rosy-data' / 'omx-leader' / 'arm-s-ik-e2e'
-    (ds_dir / 'meta').mkdir(parents=True)
-    (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
-    (ds_dir / 'data' / 'chunk-000' / 'episode_000000.parquet').write_bytes(b'PAR1')
-
-    hf_calls = []
-    class FakeHfApi:
-        def whoami(self): return {'name': 'tester'}
-        def create_repo(self, **kw): hf_calls.append(('create', kw['repo_id']))
-        def upload_folder(self, **kw): hf_calls.append(('upload', kw['repo_id']))
-    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
-    bench.hf_upload_start({'dataset': 'arm-s-ik-e2e'})
-    for _ in range(40):
-        hf_st = bench.hf_upload_status()
-        if hf_st['state'] in ('done', 'failed'):
-            break
-        time.sleep(0.05)
-    assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'tester/arm-s-ik-e2e'
-    assert ('upload', 'tester/arm-s-ik-e2e') in hf_calls
-    assert (Path(state['folder']) / 'hf-upload.json').is_file()
-
-
-def test_active_handover_units_includes_cameras_bind_timer_first():
-    import types
-    import bench_record_inspect as bri
-    fake_out = "\n".join([
-        "rosy-omx-camera@arm_s_top.service loaded active running top",
-        "rosy-omx-camera-view.service loaded active running view",
-        "rosy-omx-cameras-bind.timer loaded active waiting bind",
-        "rosy-omx-bench-record.service loaded active running bench",
-    ])
-    fake_run = lambda *a, **kw: types.SimpleNamespace(stdout=fake_out, returncode=0)
-    units = bri.active_handover_units(fake_run)
-    assert units[0] == "rosy-omx-cameras-bind.timer"
-    assert "rosy-omx-camera@arm_s_top.service" in units
-    assert "rosy-omx-bench-record.service" not in units
-
-
-def test_dataset_size_and_delete_empty_only(tmp_path, monkeypatch):
-    bench, _, _, _ = _setup(tmp_path, monkeypatch)
-    ds_root = tmp_path / "home" / "rosy-data" / "omx-leader"
-    empty_ds = ds_root / "empty-ds-1"
-    (empty_ds / "meta").mkdir(parents=True)
-    (empty_ds / "meta" / "info.json").write_text("{}", encoding="utf-8")
-    full_ds = ds_root / "full-ds-1"
-    (full_ds / "data" / "chunk-000").mkdir(parents=True)
-    (full_ds / "data" / "chunk-000" / "episode_000000.parquet").write_bytes(b"PAR1")
-
-    rows = {r["name"]: r for r in bench.lerobot_datasets()}
-    assert rows["empty-ds-1"]["empty"] is True and rows["empty-ds-1"]["size_bytes"] == 2
-    assert rows["full-ds-1"]["empty"] is False and rows["full-ds-1"]["size_bytes"] == 4
-
-    with pytest.raises(ValueError, match="삭제할 수 없습니다"):
-        bench.dataset_delete({"dataset": "full-ds-1"})
-    res = bench.dataset_delete({"dataset": "empty-ds-1"})
-    assert res["ok"] is True and not empty_ds.exists() and full_ds.exists()

@@ -498,3 +498,331 @@ def test_a_measured_at_expiry_answer_keeps_the_result_and_the_next_stale_poll_me
     kept["owner_evidence"]["measured_at"] -= STALE_S  # time passes
     outbox.put("t-1", kept)
     assert resend_pending(outbox, _posting(_running(), sent), fresh)[0]["action"] == "resent" and fresh.calls == ["t-1"]
+
+
+def test_keepalive_https_request_reuses_reconnects_fails_ssl_and_raises_401(monkeypatch) -> None:
+    import http.client
+    import ssl
+    import cell_task_exec as cte
+    import cell_task_transport as ctt
+
+    assert cte.make_keepalive_https_request is ctt.make_keepalive_https_request
+    created = []
+    outcomes = [
+        (200, b'{"ok": 1}'),
+        (200, b'{"ok": 2}'),
+        http.client.RemoteDisconnected("stale"),
+        (200, b'{"ok": 3}'),
+        ssl.SSLError("bad cert"),
+        (401, b'{"error": "unauthorized"}'),
+    ]
+
+    class FakeConn:
+        def __init__(self, host, port, timeout=None, context=None):
+            created.append(self)
+            self.calls = 0
+
+        def request(self, method, path, body=None, headers=None):
+            self.calls += 1
+
+        def getresponse(self):
+            nxt = outcomes.pop(0)
+            if isinstance(nxt, BaseException):
+                raise nxt
+            status, payload = nxt
+            return type("Resp", (), {"status": status, "reason": "ERR" if status >= 400 else "OK", "headers": {}, "will_close": False, "read": lambda s: payload})()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(http.client, "HTTPSConnection", FakeConn)
+    req = cte.make_keepalive_https_request("https://fleet.invalid", "tok", ssl.create_default_context())
+    assert req("GET", "/a") == {"ok": 1}
+    assert req("GET", "/b") == {"ok": 2}
+    assert len(created) == 1 and created[0].calls == 2
+    assert req("POST", "/c", {"k": 1}) == {"ok": 3}  # reused conn disconnected -> reconnects once
+    assert len(created) == 2
+    with pytest.raises(ssl.SSLError):
+        req("GET", "/ssl")
+    assert len(created) == 2  # SSLError is never retried
+    with pytest.raises(HTTPError) as exc_info:
+        req("GET", "/unauth")
+    assert exc_info.value.code == 401
+
+
+def test_keepalive_https_request_never_retries_timeouts_or_read_errors(monkeypatch) -> None:
+    import http.client
+    import ssl
+    import cell_task_exec as cte
+
+    created = []
+    outcomes = [
+        ((200, b'{"ok": 0}'), None),
+        (TimeoutError("post header timeout"), None),
+        ((200, b'{"ok": 0}'), None),
+        (TimeoutError("get header timeout"), None),
+        ((200, b'{"ok": 0}'), None),
+        ((200, None), http.client.IncompleteRead(b"partial")),
+        ((200, None), ConnectionResetError("mid-body drop")),
+    ]
+
+    class FakeConn:
+        def __init__(self, host, port, timeout=None, context=None):
+            created.append(self)
+            self.calls = 0
+
+        def request(self, method, path, body=None, headers=None):
+            self.calls += 1
+
+        def getresponse(self):
+            resp_out, read_out = outcomes.pop(0)
+            if isinstance(resp_out, BaseException):
+                raise resp_out
+            status, payload = resp_out
+
+            def _read():
+                if isinstance(read_out, BaseException):
+                    raise read_out
+                return payload
+
+            return type("Resp", (), {"status": status, "reason": "OK", "headers": {}, "will_close": False, "read": lambda s: _read()})()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(http.client, "HTTPSConnection", FakeConn)
+    req = cte.make_keepalive_https_request("https://fleet.invalid", "tok", ssl.create_default_context())
+    assert req("GET", "/prime") == {"ok": 0}
+    with pytest.raises(TimeoutError):
+        req("POST", "/claim", {"task_id": "t-1"})
+    assert len(created) == 1 and created[0].calls == 2  # reused POST never retries TimeoutError
+    assert req("GET", "/prime2") == {"ok": 0}
+    with pytest.raises(TimeoutError):
+        req("GET", "/poll")
+    assert len(created) == 2 and created[1].calls == 2  # GET never retries TimeoutError
+    assert req("GET", "/prime3") == {"ok": 0}
+    with pytest.raises(http.client.IncompleteRead):
+        req("POST", "/claim", {"task_id": "t-2"})
+    assert len(created) == 3 and created[2].calls == 2  # no retry after response headers
+    with pytest.raises(ConnectionResetError):
+        req("POST", "/claim", {"task_id": "t-3"})
+    assert len(created) == 4 and created[3].calls == 1 and not outcomes
+
+
+def test_worker_skips_cell_ab_claim_when_peer_ab_session_locked(tmp_path: Path, monkeypatch) -> None:
+    calls: list[str] = []
+    seen_prep: list[Path | None] = []
+
+    def _req(method: str, path: str, body):
+        calls.append(f"{method}:{path}")
+        return {"tasks": [{"task_id": "t-locked", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 1}],
+                "human_safety": {"active_estop": False, "human_detected": {}},
+                "cells": {"cell_ab": {"phase": "ARM_IN_BED_ZONE", "active_task_id": "t-locked"}}}
+
+    monkeypatch.setattr(ctw, "peer_ab_session_locked", lambda arm, *, prep_dir=None: seen_prep.append(prep_dir) or (arm == "arm_b"))
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: {"ok": True}, prep_dir=tmp_path)
+    assert calls == ["GET:/api/fleet/pipeline/cell-tasks?status=QUEUED"] and seen_prep == [tmp_path]
+
+
+def test_execute_guarded_cell_task_sets_worker_lease_owner_env(tmp_path: Path, monkeypatch) -> None:
+    import os
+    import subprocess
+    import cell_task_exec as cte
+
+    (tmp_path / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1]}), encoding="utf-8")
+    (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json")}), encoding="utf-8")
+    monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+    monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": True, "state": None, "fresh": True})
+    monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0, "site": "pinky"})
+    seen_envs: list[dict[str, str]] = []
+
+    def fake_run(*a, **k):
+        seen_envs.append(k["env"])
+        return subprocess.CompletedProcess(
+            a,
+            0,
+            stdout=json.dumps({
+                "result": "placed",
+                "attempts": [{
+                    "verify": {"found": True, "inside": True, "verified": True, "basis": "map"},
+                    "transfer": {"result": "placed", "steps": [{"command": "park", "ok": True, "settled": True, "state": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1], "t": 12.5}]},
+                    "zone_verification": {"verified": True, "basis": "map", "z_gate": {"verdict": "PASS"}, "target": {"site": "belt", "area": "belt"}},
+                }],
+            }),
+            stderr="",
+        )
+
+    monkeypatch.setattr(cte.subprocess, "run", fake_run)
+    cte.execute_guarded_cell_task(
+        {"task_id": "t-env", "cell_id": "cell_s", "arm_id": "arm_s", "tier": 1, "handoff_lease_id": "lease-1",
+         "src_site": "pinky", "dst_site": "belt"},
+        prep_dir=tmp_path,
+    )
+    assert len(seen_envs) == 1
+    assert seen_envs[0]["ROSY_ARM_LEASE_OWNER"] == f"cell-task-worker:{os.getpid()}"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX fcntl.flock required")
+def test_peer_ab_session_locked_posix_flock_and_worker_warm_reuse(tmp_path: Path, monkeypatch) -> None:
+    import fcntl
+    import os
+    import time
+    import cell_arm_lease
+    import cell_task_exec as cte
+
+    omx_home = tmp_path / "omx-home"
+    lease_dir = tmp_path / "leases"
+    prep_dir = tmp_path / "prep"
+    (prep_dir / "chunk-io-b").mkdir(parents=True)
+    omx_home.mkdir()
+    monkeypatch.setenv("ROSY_OMX_HOME", str(omx_home))
+    monkeypatch.setenv("ROSY_ARM_LEASES", str(lease_dir))
+
+    whole_lock = omx_home / "session.lock"
+    arm_b_lock = omx_home / "session-arm_b.lock"
+    fh_whole = open(whole_lock, "a+")
+    fh_b = None
+    try:
+        fcntl.flock(fh_whole.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+        assert cte.peer_ab_session_locked("arm_a", prep_dir=prep_dir) is False  # honors ROSY_OMX_HOME & allows LOCK_SH
+        fcntl.flock(fh_whole.fileno(), fcntl.LOCK_EX)
+        assert cte.peer_ab_session_locked("arm_a", prep_dir=prep_dir) is True  # whole-cell LOCK_EX blocks
+        fcntl.flock(fh_whole.fileno(), fcntl.LOCK_UN)
+
+        fh_b = open(arm_b_lock, "a+")
+        fcntl.flock(fh_b.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True  # no lease -> blocked
+        assert cte.peer_ab_session_locked("arm_a", prep_dir=prep_dir) is True  # peer lock blocks arm_a too
+        assert cte.peer_ab_session_locked("arm_s", prep_dir=prep_dir) is False  # cell_s ignores cell_ab locks
+
+        owner = f"cell-task-worker:{os.getpid()}"
+        cell_arm_lease.claim("arm_b", owner, "record_session", pid=os.getpid(), root=lease_dir)
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True  # missing live.json -> fail-closed
+
+        live_path = prep_dir / "chunk-io-b" / "live.json"
+        clean_live = {"t": time.time(), "chunk": None, "human_hold_latched": False, "fault": None}
+        live_path.write_text(json.dumps(clean_live), encoding="utf-8")
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is False
+        assert cte.peer_ab_session_locked("arm_a", prep_dir=prep_dir) is False
+
+        live_path.write_text(json.dumps({**clean_live, "human_hold_latched": True}), encoding="utf-8")
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True
+        live_path.write_text(json.dumps({**clean_live, "t": time.time() - 60.0}), encoding="utf-8")
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True
+        live_path.write_text(json.dumps({**clean_live, "chunk": "grasp_pick"}), encoding="utf-8")
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True
+
+        live_path.write_text(json.dumps(clean_live), encoding="utf-8")
+        assert cell_arm_lease.hold("arm_b", "runner HOLD", pid=os.getpid(), owner=owner, root=lease_dir)
+        assert cte.peer_ab_session_locked("arm_b", prep_dir=prep_dir) is True
+    finally:
+        if fh_b is not None:
+            fh_b.close()
+        fh_whole.close()
+
+
+def test_stand_handoff_routing_normalization_zone_roi_and_non_dict_lease(tmp_path: Path, monkeypatch) -> None:
+    import subprocess
+    import numpy as np
+    from cell_fleet_handoff import handoff_refusal, run_contract_handoff_stage
+    import cell_area_zones as caz
+    import cell_task_exec as cte
+    import cell_task_transport as ctt
+
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    for dst in ("stand", "stand:r1-s1", "stand:r1-s1-t1"):
+        assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": dst}, tier=1) is None
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "pallet-l0", "dst_site": "stand"}, tier=1) is None
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "stand"}, tier=1) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "stand"}, tier=2) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_s", "src_site": "pinky", "dst_site": "stand"}, tier=1) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_s", "src_site": "stand", "dst_site": "belt"}, tier=1) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_s", "src_site": " stand ", "dst_site": "belt"}, tier=1) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": " stand "}, tier=1) == "UNKNOWN_SITE"
+
+    stage = run_contract_handoff_stage(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "pallet", "dst_site": "stand:r1-s1"}, tier=1)
+    assert stage["receipt"]["cell_id"] == "cell_ab" and stage["receipt"]["arm_roles_used"] == ["arm_a"]
+    assert cte.resolve_task_arm({"cell_id": "cell_ab", "dst_site": "stand:r1-s1"}) == "arm_a"
+    assert cte.resolve_task_arm({"cell_id": "cell_ab", "src_site": "stand"}) == "arm_a"
+    assert cte.resolve_task_arm({"cell_id": "cell_s", "dst_site": "stand"}) == "arm_s"
+
+    (tmp_path / "with-session-arm-a-par.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "with-session-arm-b-par.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1]}), encoding="utf-8")
+    (tmp_path / "cell-arm-a-stack.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json"), "sites": {"beltend": {}, "stand": {"place": [0.06, -0.115], "surface_z": 0.025}}}), encoding="utf-8")
+    (tmp_path / "cell-arm-b-stack.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json"), "sites": {"beltend": {}, "stand": {"place": [0.06, -0.115], "surface_z": 0.025}}}), encoding="utf-8")
+    monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+    monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": True, "state": None, "fresh": True})
+    monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0, "site": "beltend"})
+    cmds: list[list[str]] = []
+
+    def fake_run(cmd, **k):
+        cmds.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"result": "placed", "attempts": []}), stderr="")
+
+    monkeypatch.setattr(cte.subprocess, "run", fake_run)
+    cte.execute_guarded_cell_task(
+        {"task_id": "t-stand-a", "cell_id": "cell_ab", "arm_id": "arm_a", "tier": 1, "handoff_lease_id": "l-1",
+         "src_site": "belt", "dst_site": "stand:r1-s1-t1"},
+        prep_dir=tmp_path,
+    )
+    assert cmds and "--from" in cmds[0] and cmds[0][cmds[0].index("--from") + 1] == "beltend"
+    assert cmds[0][cmds[0].index("--dest") + 1] == "stand"
+
+    for bad_task in (
+        {"task_id": "t-stand-b", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 1, "handoff_lease_id": "l-2", "src_site": "belt", "dst_site": "stand"},
+        {"task_id": "t-stand-b-src", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 1, "handoff_lease_id": "l-3", "src_site": "stand", "dst_site": "pallet-l0"},
+        {"task_id": "t-stand-b-pad", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 1, "handoff_lease_id": "l-4", "src_site": "belt", "dst_site": " stand "},
+    ):
+        assert cte.execute_guarded_cell_task(bad_task, prep_dir=tmp_path)["error"] == "STAND_REQUIRES_ARM_A"
+    assert len(cmds) == 1
+
+    (tmp_path / "cell-arm-a-stack.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json"), "sites": {"beltend": {}}}), encoding="utf-8")
+    uncal = cte.execute_guarded_cell_task(
+        {"task_id": "t-stand-uncal", "cell_id": "cell_ab", "arm_id": "arm_a", "tier": 1, "handoff_lease_id": "l-5",
+         "src_site": "belt", "dst_site": "stand"},
+        prep_dir=tmp_path,
+    )
+    assert uncal["error"] == "STAND_NOT_CALIBRATED" and len(cmds) == 1
+
+    # Verify STAND_TOP_ROI is inspected when place area is stand and non-dict lease JSON fails closed.
+    monkeypatch.setattr(caz, "detect_side_self_profile_landmarks", lambda _img: [])
+    seen_rois: list[tuple[int, int, int, int]] = []
+    before_side = np.zeros((480, 640, 3), dtype=np.uint8)
+    after_side = np.full((480, 640, 3), 1, dtype=np.uint8)
+    before_top = np.full((480, 640, 3), 2, dtype=np.uint8)
+    after_top = np.full((480, 640, 3), 3, dtype=np.uint8)
+
+    def fake_eval(img, roi, **kw):
+        roi_t = tuple(roi)
+        seen_rois.append(roi_t)
+        if img is before_top and roi_t == (355, 40, 415, 160):
+            return {"within_zone": True, "fill_ratio": 0.55, "offset_px": 0.0, "orientation_ok": True}
+        if img is after_top and roi_t == tuple(caz.STAND_TOP_ROI):
+            return {"within_zone": True, "fill_ratio": 0.45, "offset_px": 0.0, "orientation_ok": True}
+        return {"within_zone": False, "fill_ratio": 0.05, "offset_px": 0.0, "orientation_ok": True}
+
+    monkeypatch.setattr(caz, "evaluate_zone", fake_eval)
+    res_z = caz.verify_stack_outcome(
+        before_side=before_side, after_side=after_side, before_top=before_top, after_top=after_top,
+        pick={"area": "belt", "col": 1, "row": 1, "tier": 1},
+        place={"area": "stand", "col": 1, "row": 1, "tier": 1, "yaw_deg": 0.0},
+    )
+    assert res_z["verified"] is True and tuple(caz.STAND_TOP_ROI) in seen_rois
+
+    monkeypatch.setattr(caz, "evaluate_zone", lambda img, roi, **kw: {"within_zone": img is after_side, "fill_ratio": 0.60 if img is after_side else 0.05, "offset_px": 0.0, "orientation_ok": True})
+    assert caz.verify_stack_outcome(
+        before_side=None, after_side=after_side, before_top=before_top, after_top=None,
+        pick={"area": "belt", "col": 1, "row": 1, "tier": 1}, place={"area": "stand", "tier": 1},
+    )["verified"] is False
+    assert caz.verify_stack_outcome(
+        before_side=before_side, after_side=after_side, before_top=before_top, after_top=after_top,
+        pick={"area": "belt", "col": 1, "row": 1, "tier": 1}, place={"area": "stand", "tier": 1},
+    )["verified"] is False
+
+    lease_root = tmp_path / "leases-nondict"
+    lease_root.mkdir()
+    (lease_root / "arm_b.json").write_text("[]", encoding="utf-8")
+    assert ctt._can_reuse_worker_arm_session("arm_b", prep_dir=tmp_path, lease_dir=lease_root, expected_owner="w:1") is False

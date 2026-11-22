@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
+import ssl
 import subprocess
 import sys
 
@@ -133,8 +135,117 @@ def test_pair_uses_a_short_operator_code_and_refuses_without_one():
         nr.pair(Core(), lambda argv, **kw: subprocess.CompletedProcess(argv, 1, "", "no"))
 
 
+def test_reapprove_waits_for_fresh_unplugged_voltage_before_trials(monkeypatch):
+    assert not nr._battery_ready_for_trial({"battery_status": {"charging": True, "filtered_voltage": 7.6}}, HEALTH)
+    assert not nr._battery_ready_for_trial({"battery_status": {"charging": None, "filtered_voltage": 7.6}}, HEALTH)
+    assert not nr._battery_ready_for_trial({"battery_status": {"charging": False, "filtered_voltage": None}}, HEALTH)
+    assert not nr._battery_ready_for_trial({"battery_status": {"charging": False, "filtered_voltage": 7.6}},
+                                           {"battery": {"evidence": "missing", "level": "ok"}})
+    assert not nr._battery_ready_for_trial({"battery_status": {"charging": False, "filtered_voltage": 7.6}},
+                                           {"battery": {"evidence": "stale", "level": "ok"}})
+    assert not nr._battery_ready_for_trial({"battery_status": {"charging": False, "filtered_voltage": 7.6}},
+                                           {"battery": {"evidence": "fresh", "level": "critical"}})
+    assert nr._battery_ready_for_trial({"battery_status": {"charging": False, "filtered_voltage": 7.6}}, HEALTH)
+
+    polls = iter([
+        OSError("CORE restarting"),
+        ({"battery_status": {"charging": False, "filtered_voltage": None}},
+         {"battery": {"evidence": "missing", "level": "ok"}}),
+        ({"battery_status": {"charging": False, "filtered_voltage": 7.6}},
+         {"battery": {"evidence": "stale", "level": "ok"}}),
+        ({"battery_status": {"charging": False, "filtered_voltage": 7.6}},
+         {"battery": {"evidence": "fresh", "level": "ok"}}),
+    ])
+    calls, phases = [], iter([{"phase": "MEASURING"}, {"phase": "IDLE", "approval": {"valid": True}}])
+
+    class ReapproveCore:
+        def get(self, path):
+            calls.append(("GET", path))
+            if path == "/api/v1/navigation/approval":
+                return next(phases)
+            if path == "/api/v1/robot/state":
+                item = next(polls)
+                if isinstance(item, Exception):
+                    raise item
+                self._current_poll = item
+                return self._current_poll[0]
+            if path == "/api/v1/power/health":
+                return self._current_poll[1]
+            raise AssertionError(f"unexpected GET {path}")
+
+        def post(self, path, body=None, ok=()):
+            calls.append(("POST", path))
+            return {}
+
+    slept = []
+    monkeypatch.setattr(nr.time, "sleep", slept.append)
+    monkeypatch.setattr(nr, "run_trial", lambda core, d, c, h: calls.append(("TRIAL", d, c)) or {"stop_latency_s": 0.1})
+    logs = []
+    nr.reapprove(ReapproveCore(), logs.append)
+
+    first_trial_idx = next(i for i, call in enumerate(calls) if call[0] == "TRIAL")
+    assert slept == [1.0, 1.0, 1.0]
+    assert calls[0] == ("POST", "/api/v1/navigation/approval/begin")
+    assert [c for c in calls[:first_trial_idx] if c[1] == "/api/v1/robot/state"] == [
+        ("GET", "/api/v1/robot/state")] * 4
+    assert [c for c in calls if c[0] == "TRIAL"] == [("TRIAL", d, c) for d, c, _ in nr.TRIALS]
+    assert calls[-3:] == [
+        ("POST", "/api/v1/navigation/approval/seal"),
+        ("GET", "/api/v1/navigation/approval"),
+        ("POST", "/api/v1/navigation/approval/navigation-start"),
+    ]
+
+
+def test_run_returns_cleanly_when_core_is_unavailable(robot_root):
+    assert nr.run(robot_root, FakeCore(), sleep=lambda _: None,
+                  pair_fn=lambda _: (_ for _ in ()).throw(OSError("connection refused"))).startswith("core unavailable:")
+
+    class DownCore(FakeCore):
+        def get(self, path):
+            raise OSError("CORE down")
+
+    down = DownCore()
+    assert nr.run(robot_root, down, sleep=lambda _: None, pair_fn=lambda _: "token").startswith("core unavailable:")
+    assert not any(call[0] == "POST" for call in down.calls)
+
+
+def test_core_keeps_tls_after_first_tls_response(monkeypatch):
+    class FakeResp:
+        status = 200
+
+        def read(self):
+            return b'{"ok":true}'
+
+    attempts = []
+
+    class FakeHTTPS:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def request(self, *args, **kwargs):
+            attempts.append("https")
+            if len(attempts) == 2:
+                raise ssl.SSLEOFError("CORE restarted mid-handshake")
+
+        def getresponse(self):
+            return FakeResp()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(nr.http.client, "HTTPSConnection", FakeHTTPS)
+    monkeypatch.setattr(nr.time, "sleep", lambda _: None)
+    core = nr.Core()
+    assert core.get("/api/v1/robot/state") == {"ok": True}
+    assert core.tls is True and core._tls_confirmed is True
+    assert core.get("/api/v1/robot/state") == {"ok": True}
+    assert core.tls is True and len(attempts) == 3
+
+
 def test_units_ship_enabled_and_the_run_never_fails_the_unit():
     service = (NATIVE / "rosy-nav-reapprove.service").read_text(encoding="utf-8")
+    assert not re.search(r"^\s*Requires=", service, re.MULTILINE)
+    assert re.search(r"^\s*Wants=.*\brosy-core\.service\b", service, re.MULTILINE)
     assert "navigation_reapprove.py run" in service and "Type=oneshot" in service
     assert "WantedBy=timers.target" in (NATIVE / "rosy-nav-reapprove.timer").read_text(encoding="utf-8")
     import image_layer_plan

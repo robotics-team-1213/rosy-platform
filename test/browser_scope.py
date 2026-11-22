@@ -24,7 +24,6 @@ FLEET_SAMPLE = [
     "applications/fleet/test/test_feature_browser_flows.py",
     "applications/fleet/test/test_integrated_sample_browser.py",
     "applications/fleet/test/test_browser_adapters.py",
-    "applications/fleet/test/test_integrated_sample_browser.py",
 ]
 FLEET = FLEET_SAMPLE + [
     "test/test_integrated_control_backend_browser.py",
@@ -43,6 +42,7 @@ FLEET = FLEET_SAMPLE + [
     "test/test_peer_picker_browser.py",
     "test/test_console_robot_video_browser.py",
     "test/test_fleet_ui_review_browser.py",
+    "test/test_unit_scope_browser.py",
     "operations/fleet/test/*_browser.py",
 ]
 ROBOT = [
@@ -111,16 +111,41 @@ RECOVERY = ["test/test_network_recovery_browser.py"]
 EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY
 
 SERVER = "operations/fleet/fleet/server/"
+WEB = "applications/fleet/web/"
 SCOPE: dict[str, list[str]] = {
     "applications/monitoring/": MONITORING,
     "operations/monitoring/": MONITORING,
     "applications/fleet/dev/": FLEET_SAMPLE + ["operations/fleet/test/test_app_connected_browser.py"],
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
+    # Only the console assistant panel tests fetch /api/fleet/assistant/*.
+    "operations/fleet/fleet/server/assistant/": FLEET_SAMPLE + ["operations/fleet/test/test_assistant_browser.py"],
     # Only the cell page and the work page fetch these routes (grep of applications/fleet/web, shared/web).
     "operations/fleet/fleet/server/cell/": ["operations/fleet/test/test_cell_app_browser.py",
                                            "operations/fleet/test/test_work_overview_browser.py"],
     "applications/fleet/web/": FLEET,
+    # Verified /console/cell and cell-*.js consumers (grep of web + *_browser.py).
+    "applications/fleet/web/cell/": FLEET_SAMPLE + [
+        "operations/fleet/test/test_cell_app_browser.py",
+        "operations/fleet/test/test_console_card_trips_browser.py",
+        "operations/fleet/test/test_development_console_browser.py",
+        "operations/fleet/test/test_device_care_pipeline_browser.py",
+        "operations/fleet/test/test_fleet_account_browser.py",
+        "operations/fleet/test/test_fleet_header_browser.py",
+        "operations/fleet/test/test_fleet_role_consumers_browser.py",
+        "operations/fleet/test/test_password_login_browser.py",
+        "operations/fleet/test/test_task_page_compositions_browser.py",
+        "shared/web/test/test_component_kit_browser.py",
+        "test/test_fleet_workcell_observation_browser.py",
+        "test/test_motor_health_ui_browser.py",
+        "test/test_unit_scope_browser.py",
+    ],
+    # Verified /console/maintenance and host-services.js consumers (grep of web + *_browser.py).
+    "applications/fleet/web/maintenance/": FLEET_SAMPLE + [
+        "operations/fleet/test/test_development_console_browser.py",
+        "operations/fleet/test/test_task_page_compositions_browser.py",
+        "test/test_host_recovery_browser.py",
+    ],
     "middleware/robot_ui/robot/": ROBOT + ["middleware/core/api/test/test_d283_console_browser.py"],
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
@@ -190,7 +215,7 @@ def targets(paths: list[str]) -> list[str]:
     selected: set[str] = set()
     for raw in paths:
         path = raw.replace("\\", "/").removeprefix("./")
-        if path.startswith("applications/fleet/dev/") and path.endswith(".md"):
+        if path.endswith(".md"):
             continue
         # These shared sample-engine/fixture modules reach all sample browsers, not production fixtures.
         if path in ("applications/fleet/test/test_sample_server.py", "applications/fleet/test/test_sample_browser.py"):
@@ -199,8 +224,10 @@ def targets(paths: list[str]) -> list[str]:
             continue
         for prefix, patterns in SCOPE.items():
             if path.startswith(prefix):
-                # A registered sub-prefix narrows the generic server entry (not applied to other prefixes).
-                if prefix == SERVER and any(q != SERVER and q.startswith(SERVER) and path.startswith(q) for q in SCOPE):
+                # A registered sub-prefix narrows the generic server/web entry (not applied to other prefixes).
+                if prefix in (SERVER, WEB) and any(
+                    q != prefix and q.startswith(prefix) and path.startswith(q) for q in SCOPE
+                ):
                     continue
                 for pattern in patterns:
                     selected.update(_expand(pattern))

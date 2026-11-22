@@ -1,6 +1,7 @@
 // 관제 화면의 읽기 갱신: 발행 제어 띠와 재허가, 현장 경로, Fleet 상태 폴링, 전체 주행 취소.
 // 폴링 주기는 셸(console.js)이 쥐고 이 팩토리의 함수를 부른다(D-798 3.2).
-import { namedOperatorReason } from "/console/assets/authorization.js";
+import { setOffBy } from "/common/cause-line.js";
+import { namedOperatorReason, isOperator} from "/console/assets/authorization.js";
 import { noteLink, showFleet } from "/console/assets/fleet-header.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
 
@@ -40,12 +41,10 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
         title.textContent = "정지 래치로 발행 차단";
         detail.textContent = `세대 ${state.generation} · 대기 작업 ${state.queued_tasks}개 · 미확정 동작 ${state.unresolved_actions}개`;
       }
-      rearm.hidden = !(auth.role === "operator" && !state.dispatch_enabled);
+      rearm.hidden = !(isOperator(auth.role) && !state.dispatch_enabled);
       // D-540 9: 재허가는 대기 작업을 다시 움직이므로 이름 있는 운영자만.
       const rearmNamed = namedOperatorReason(auth.role, auth.principal);
-      rearm.disabled = auth.locked || !state.rearm_available || Boolean(rearmNamed);
-      if (rearm.disabled) rearm.setAttribute("reason", auth.locked ? "관제 토큰 필요" : rearmNamed || "재허가 조건 미충족");
-      else rearm.removeAttribute("reason");
+      setOffBy(rearm, auth.locked ? "관제 토큰 필요" : !state.rearm_available ? "재허가 조건 미충족" : rearmNamed || "");
       return state;
     } catch (err) {
       if (err.name === "AbortError") return;
@@ -62,8 +61,7 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
         detail.textContent = "상태 확인에 실패해 재허가를 사용할 수 없습니다.";
       }
       rearm.hidden = true;
-      rearm.disabled = true;
-      rearm.setAttribute("reason", "발행 상태 확인 불가");
+      setOffBy(rearm, "발행 상태 확인 불가");
       return null;
     }
   }
@@ -87,15 +85,18 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
 
   const pathSample = { proxy: null, fleet: null, vision: null };
   let statePollInFlight = false;
+  let healthzInFlight = false;
 
   function paintSitePath() {
     const list = el("site-path-list");
-    const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet), visionRow(pathSample.vision)];
+    const rows = [proxyRow(pathSample.proxy), fleetRow(pathSample.fleet),
+      visionRow(pathSample.vision, { locked: Boolean(auth.locked || !auth.role) })];
     const summary = sitePathSummary(rows);
     const summaryNode = el("site-path-summary");
     if (summaryNode.textContent !== summary) summaryNode.textContent = summary;
     summaryNode.dataset.kind = rows.find((row) => row.kind === "crit")?.kind
-      || rows.find((row) => row.kind === "warn")?.kind || "good";
+      || rows.find((row) => row.kind === "warn")?.kind
+      || (rows.some((row) => row.kind === "neutral") ? "neutral" : "good");
     list.replaceChildren(...rows.map((row) => {
       const item = document.createElement("li");
       const name = document.createElement("b");
@@ -110,6 +111,8 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
   }
 
   async function refreshHealthz() {
+    if (healthzInFlight) return;
+    healthzInFlight = true;
     const life = pageScope.capture();
     try {
       const response = await fetch("/healthz", { cache: "no-store", signal: life.signal });
@@ -119,12 +122,15 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
     } catch (err) {
       if (err.name === "AbortError") return;
       pathSample.proxy = { finished: false };
+    } finally {
+      healthzInFlight = false;
     }
     paintSitePath();
   }
   pageScope.onDispose(() => {
     resetRobotApps();
     statePollInFlight = false;
+    healthzInFlight = false;
     view.focusRobot = null;
     view.pinning = null;
     view.selected = null;

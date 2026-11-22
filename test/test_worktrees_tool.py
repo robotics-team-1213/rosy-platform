@@ -6,8 +6,10 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import types
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -91,15 +93,15 @@ def test_clean_merged_worktree_is_pruned_with_its_branch(main):
     assert (main / "done.txt").read_text(encoding="utf-8") == "done"
 
 
-def test_clean_unmerged_worktree_needs_snapshot_and_keeps_its_branch(main):
+def test_clean_unmerged_worktree_is_pruned_and_keeps_its_branch(main, capsys):
+    """D-1070: its branch holds everything; the lossless prune takes it and keeps the branch for `adopt`."""
     wt = add(main, "open", commit=True)
     tip = git(wt, "rev-parse", "HEAD")
-    assert worktrees.prune(main, apply=True, now=LATER) == 0
-    assert wt.is_dir()
-    assert worktrees.prune(main, apply=True, snapshot=True, now=LATER) == 1
+    assert worktrees.prune(main, apply=True, now=LATER) == 1
     assert not wt.exists()
     assert git(main, "rev-parse", "feat/open") == tip
     assert refs(main, "refs/wip") == []  # nothing uncommitted and a branch holds the commits
+    assert "branch kept; re-attach: python tools/worktrees.py adopt open feat/open" in capsys.readouterr().out
 
 
 def _dirty(wt: Path) -> None:
@@ -239,14 +241,15 @@ def test_idle_threshold_is_respected(main):
     assert worktrees.prune(main, apply=True, now=now) == 1  # clean landed (any owner) goes at once
     assert not landed.exists() and wt.is_dir() and dirty.is_dir()
     assert worktrees.prune(main, apply=True, snapshot=True, now=now + 1.1 * HOUR) == 0  # dirty landed waits 72 h
-    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 71 * HOUR) == 0
-    assert wt.is_dir() and dirty.is_dir()
+    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 5 * HOUR) == 0  # clean waits 6 h (D-1070)
+    assert worktrees.prune(main, apply=True, snapshot=True, now=now + 71 * HOUR) == 1
+    assert not wt.exists() and dirty.is_dir()
 
 
 def test_idle_counts_uncommitted_files_and_the_given_threshold(main):
     wt = add(main, "fresh", owner=PEER)
     now = time.time()
-    assert worktrees.prune(main, apply=True, now=now + 100 * HOUR, idle_hours=200) == 0
+    assert worktrees.prune(main, apply=True, now=now + 5 * HOUR, idle_hours=200) == 0  # clean: at most 6 h
     # An uncommitted file written an hour before the clock keeps the worktree active.
     note = wt / "note.txt"
     note.write_text("wip", encoding="utf-8")
@@ -372,7 +375,7 @@ def test_status_names_a_verdict_per_worktree(main, capsys):
     assert worktrees.main(["status"], now=LATER) == 0
     verdict = {line.split()[0]: line for line in capsys.readouterr().out.splitlines()}
     assert "yes   removable" in verdict["done"]
-    assert "yes   needs snapshot" in verdict["open"]
+    assert "unmerged" in verdict["open"] and "yes   removable" in verdict["open"]  # clean, on a branch (D-1070)
     assert "-     locked" in verdict["held"]
     assert worktrees.main(["status"]) == 0
     verdict = {line.split()[0]: line for line in capsys.readouterr().out.splitlines()}
@@ -425,12 +428,63 @@ def test_default_cap_is_the_fifteen_slot_budget_counts_orphans_and_preserves_exp
     description = git(main, "config", "branch.docs/overflow.description")
     assert "over cap (14 >= 14): user-approved ADR exception" in description
     assert all((main / ".worktrees" / f"orphan-{index}").is_dir() for index in range(13))
+    assert worktrees.main(["new", "second", "fix/second", "--no-prune", "--force-over-cap", "incident"]) == 1
+    capsys.readouterr()
+    assert not (main / ".worktrees" / "second").exists()
+    assert not refs(main, "refs/heads/fix/second")
+
+    git(main, "update-ref", "refs/archive/fix/parked@test", "HEAD")
+    assert worktrees.main(["adopt", "parked", "fix/parked", "--no-prune", "--force-over-cap", "incident"]) == 1
+    assert not (main / ".worktrees" / "parked").exists()
+    assert not refs(main, "refs/heads/fix/parked")
+    assert refs(main, "refs/archive/fix/parked@test")
+
+
+def test_concurrent_creations_cannot_admit_the_same_slot(main, monkeypatch):
+    monkeypatch.setattr(worktrees, "CAP", 1)
+    reached_add, finish_add = threading.Event(), threading.Event()
+    real_git = worktrees.git
+
+    def pause_first(cwd, *args, **kwargs):
+        if args[:2] == ("worktree", "add") and ".worktrees/first" in args:
+            reached_add.set()
+            assert finish_add.wait(10)
+        return real_git(cwd, *args, **kwargs)
+
+    monkeypatch.setattr(worktrees, "git", pause_first)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(worktrees.main, ["new", "first", "fix/first", "--no-prune"])
+        try:
+            assert reached_add.wait(10)
+            assert worktrees.main(["new", "second", "fix/second", "--no-prune"]) == 1
+        finally:
+            finish_add.set()
+        assert first.result() == 0
+    assert refs(main, "refs/heads/fix/") == ["refs/heads/fix/first"]
+
+
+def test_adopt_add_failure_leaves_the_archived_branch_parked(main, monkeypatch):
+    archive = "refs/archive/fix/parked@test"
+    git(main, "update-ref", archive, "HEAD")
+    real_git = worktrees.git
+
+    def fail_add(cwd, *args, **kwargs):
+        if args[:2] == ("worktree", "add"):
+            assert refs(main, "refs/heads/fix/parked")
+            return subprocess.CompletedProcess(args, 1, "", "simulated checkout failure")
+        return real_git(cwd, *args, **kwargs)
+
+    monkeypatch.setattr(worktrees, "git", fail_add)
+    assert worktrees.main(["adopt", "parked", "fix/parked", "--no-prune"]) == 1
+    assert not refs(main, "refs/heads/fix/parked")
+    assert refs(main, archive) == [archive]
 
 
 def test_new_reports_finished_worktrees_and_removes_them_only_with_prune(main, monkeypatch, capsys):
     monkeypatch.setattr(worktrees, "CAP", 2)
     done = add(main, "done", commit=True, merge=True)
     kept = add(main, "open", commit=True)
+    (kept / "wip.txt").write_text("wip", encoding="utf-8")  # dirty: the lossless prune keeps it
     assert worktrees.main(["new", "next", "refactor/next"], now=LATER) == 1  # at the cap: nothing was swept
     assert f"1 finished worktree(s) can be removed: {worktrees.SWEEP}" in capsys.readouterr().out
     assert done.is_dir()
@@ -457,7 +511,8 @@ def test_snapshot_takes_only_the_callers_worktrees_unless_all(main, capsys):
     mine = add(main, "mine", commit=True)
     peer = add(main, "peer", commit=True, owner="t <t@t>; session other")
     bare = add(main, "bare", owner=None)  # a bare `git worktree add`, with uncommitted work
-    (bare / "wip.txt").write_text("wip", encoding="utf-8")
+    for wt in (mine, peer, bare):
+        (wt / "wip.txt").write_text("wip", encoding="utf-8")
     assert worktrees.main(["status"], now=LATER) == 0
     line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
     assert "yes   needs snapshot" in line["mine"]
@@ -466,7 +521,7 @@ def test_snapshot_takes_only_the_callers_worktrees_unless_all(main, capsys):
     out = capsys.readouterr().out
     assert "owner unknown: only with --all" in out and "owner t <t@t>; session other: only with --all" in out
     assert not mine.exists() and peer.is_dir() and (bare / "wip.txt").is_file()
-    assert refs(main, "refs/wip") == []
+    assert refs(main, "refs/wip") == [f"refs/wip/{DAY}/mine"]
     assert worktrees.main(["prune", "--snapshot", "--apply", "--all"], now=LATER) == 0
     assert not peer.exists() and not bare.exists()
     assert git(main, "show", f"refs/wip/{DAY}/bare:wip.txt") == "wip"
@@ -476,7 +531,7 @@ def test_cap_refusal_counts_removable_worktrees_per_owner(main, monkeypatch, cap
     monkeypatch.setattr(worktrees, "CAP", 3)
     add(main, "mine", commit=True, merge=True)
     add(main, "bare", commit=True, merge=True, owner=None)
-    add(main, "open", commit=True, owner=None)  # unmerged: not removable, not counted
+    (add(main, "open", commit=True, owner=None) / "wip.txt").write_text("wip", encoding="utf-8")  # dirty, unmerged
     assert worktrees.main(["new", "x", "feat/x", "--no-prune"], now=LATER) == 1
     err = capsys.readouterr().err
     assert "removable now by anyone: bare (removable; owner unknown)" in err
@@ -496,7 +551,8 @@ def test_status_explains_a_tip_that_is_a_merge_of_main(main, capsys):
     line = {text.split()[0]: text for text in capsys.readouterr().out.splitlines()}
     assert " unmerged " in line["half"] and "tip is a merge of main" in line["half"]
     assert "tip is a merge of main" not in line["open"]
-    assert worktrees.prune(main, apply=True, now=LATER) == 0  # unmerged stays unmerged: kept
+    assert worktrees.prune(main, apply=True, now=LATER) == 2  # clean (D-1070): worktrees go, unmerged branches stay
+    assert {"refs/heads/feat/half", "refs/heads/feat/open"} <= set(refs(main, "refs/heads"))
 
 
 @pytest.mark.parametrize("name, branch", [
@@ -641,8 +697,8 @@ def test_zero_wait_takes_any_owners_landed_clean_worktree(main, capsys):
     for branch in ("feat/mine", "feat/peer", "feat/sess", "feat/bare"):
         assert f"refs/heads/{branch}" not in refs(main, "refs/heads/feat")
     assert empty.is_dir() and blind.is_dir()
-    assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0
-    assert worktrees.prune(main, apply=True, now=now + 73 * HOUR) == 2  # no landing evidence: the 72 h rule
+    assert worktrees.prune(main, apply=True, now=now + 5 * HOUR) == 0
+    assert worktrees.prune(main, apply=True, now=now + 7 * HOUR) == 2  # no landing evidence: the clean 6 h rule
     assert not empty.exists() and not blind.exists()
 
 
@@ -780,7 +836,7 @@ def test_prune_archives_unlanded_branches_idle_without_a_worktree_and_loses_noth
     wt = add(main, "idle", commit=True)
     sha = git(wt, "rev-parse", "HEAD")
     git(main, "worktree", "remove", str(wt))
-    add(main, "busy", commit=True)  # checked out: never archived
+    (add(main, "busy", commit=True) / "wip.txt").write_text("wip", encoding="utf-8")  # checked out, dirty: kept
     later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
     assert worktrees.rules.archive_abandoned(main, time.time(), apply=True) == 0  # recent: kept
     worktrees.prune(main, now=later)
@@ -898,21 +954,35 @@ def test_prune_never_takes_a_used_worktree(main):
     """11-20: in-use worktrees were removed: no commit yet, clean in git, or an owner note only."""
     used = add(main, "used")  # tip == main, no commit of its own: not "landed"
     os.utime(used / "a.txt", (LATER - HOUR, LATER - HOUR))  # a tracked file touched an hour ago, content the same
+    # 11-22 (D-1070 revision): the index is no use signal; with core.fsmonitor every `git status` rewrites it
     indexed = add(main, "indexed")
     index = Path(git(indexed, "rev-parse", "--absolute-git-dir")) / "index"
-    os.utime(index, (LATER - HOUR, LATER - HOUR))  # git add/status an hour ago
+    os.utime(index, (LATER - HOUR, LATER - HOUR))  # a status an hour ago, nothing else: idle, removed
     noted = add(main, "noted", owner=f"{ME}; at {int(LATER - HOUR)}")  # `new` stamped its note an hour ago
     idle = add(main, "idle", owner=f"{ME}; at {int(LATER - 80 * HOUR)}")  # every file is 75 h old at LATER
     dirty = add(main, "dirty", commit=True, merge=True)
     (dirty / "wip.txt").write_text("wip", encoding="utf-8")
     os.utime(dirty / "wip.txt", (LATER - 100 * HOUR, LATER - 100 * HOUR))  # long untouched, still not lossless
-    assert worktrees.prune(main, apply=True, now=LATER) == 1  # lossless: only the idle one
-    assert not idle.exists()
-    for kept in (used, indexed, noted, dirty):
+    assert worktrees.prune(main, apply=True, now=LATER) == 2  # lossless: the idle one and the index-only one
+    assert not idle.exists() and not indexed.exists()
+    for kept in (used, noted, dirty):
         assert kept.is_dir(), kept.name
     # the same for the old unattended call (--snapshot --all): the used ones still stay
     assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=LATER) == 1
-    assert not dirty.exists() and all(p.is_dir() for p in (used, indexed, noted))
+    assert not dirty.exists() and all(p.is_dir() for p in (used, noted))
+
+
+def test_status_table_does_not_write_a_worktree_index(main):
+    """11-22: the tool's own status refreshed other sessions' index (and could hold their index.lock)."""
+    wt = add(main, "probed")
+    index = Path(git(wt, "rev-parse", "--absolute-git-dir")) / "index"
+    os.utime(wt / "a.txt", (LATER - 80 * HOUR, LATER - 80 * HOUR))  # stat differs from the index: a refresh would write
+    os.utime(index, (LATER - 90 * HOUR, LATER - 90 * HOUR))
+    before = index.stat().st_mtime
+    assert worktrees.main(["status"]) == 0
+    assert index.stat().st_mtime == before
+    git(wt, "status", "--porcelain")  # a plain status does write it: the check above is not vacuous
+    assert index.stat().st_mtime != before
 
 
 def test_a_note_younger_than_the_idle_hours_keeps_a_worktree_for_the_idle_hours_given(main):
@@ -929,7 +999,306 @@ def test_prune_treats_origin_main_ancestors_as_merged(main):
     assert not wt.exists() and "refs/heads/feat/prmerged" not in refs(main, "refs/heads")
 
 
+# --- D-1070: clean worktrees go after 6 h whatever their branch; adopt re-attaches the branch ----------
+
+def test_clean_worktree_goes_after_six_hours_dirty_locked_and_noted_ones_stay(main):
+    now = time.time()
+    clean = add(main, "clean", commit=True, owner=PEER)
+    dirty = add(main, "dirty", commit=True, owner=PEER)
+    (dirty / "wip.txt").write_text("wip", encoding="utf-8")
+    os.utime(dirty / "wip.txt", (now, now))
+    held = add(main, "held", commit=True, owner=PEER)
+    git(main, "worktree", "lock", str(held))
+    noted = add(main, "noted", commit=True, owner=f"{PEER}; at {int(now)}")
+    assert worktrees.prune(main, apply=True, now=now + 5 * HOUR) == 0
+    assert worktrees.prune(main, apply=True, now=now + 7 * HOUR) == 1
+    assert not clean.exists() and "refs/heads/feat/clean" in refs(main, "refs/heads")
+    assert all(p.is_dir() for p in (dirty, held, noted))
+    assert worktrees.prune(main, apply=True, now=now + 25 * HOUR) == 1  # the note guards a clean one 24 h
+    assert not noted.exists() and all(p.is_dir() for p in (dirty, held))
+    assert worktrees.prune(main, apply=True, now=now + 71 * HOUR) == 0  # dirty waits 72 h
+    assert all(p.is_dir() for p in (dirty, held))
+
+
+def test_adopt_reattaches_a_pruned_branch_and_checks_like_new(main, monkeypatch, capsys):
+    wt = add(main, "open", commit=True)
+    tip = git(wt, "rev-parse", "HEAD")
+    assert worktrees.prune(main, apply=True, now=LATER) == 1 and not wt.exists()
+    assert worktrees.main(["new", "open", "feat/open"]) == 1  # new never takes an existing branch
+    assert "adopt" in capsys.readouterr().err
+    for name, branch in (("x", "wip/open"), ("../x", "feat/open"), ("x", "feat/missing")):
+        assert worktrees.main(["adopt", name, branch]) == 1
+    monkeypatch.setattr(worktrees, "CAP", 1)
+    add(main, "other")
+    assert worktrees.main(["adopt", "open", "feat/open", "--no-prune"]) == 1
+    assert "the cap is 1" in capsys.readouterr().err and not wt.exists()
+    monkeypatch.setattr(worktrees, "CAP", 14)
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "sess-9")
+    assert worktrees.main(["adopt", "open", "feat/open"]) == 0
+    assert git(wt, "rev-parse", "HEAD") == tip and git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "feat/open"
+    assert git(main, "config", "branch.feat/open.description").startswith("owner: t <t@t>; session sess-9; at ")
+
+
+def test_adopt_restores_a_branch_archive_abandoned_moved(main):
+    """A pruned worktree's branch can be archived later (ABANDON_DAYS); adopt puts it back from refs/archive."""
+    wt = add(main, "open", commit=True)
+    tip = git(wt, "rev-parse", "HEAD")
+    assert worktrees.prune(main, apply=True, now=LATER) == 1
+    later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
+    assert worktrees.rules.archive_abandoned(main, later, apply=True) == 1
+    assert "refs/heads/feat/open" not in refs(main, "refs/heads")
+    assert worktrees.main(["adopt", "open", "feat/open"]) == 0
+    assert git(wt, "rev-parse", "HEAD") == tip
+
+
+def test_clean_worktree_on_a_branch_adopt_refuses_waits_the_full_idle_hours(main):
+    """A branch outside <type>/<topic> cannot be re-attached by adopt, so removing its worktree is not lossless."""
+    now = time.time()
+    wt = main / ".worktrees" / "odd"
+    git(main, "worktree", "add", "-q", str(wt), "-b", "cell/odd", "main")
+    (wt / "odd.txt").write_text("odd", encoding="utf-8")
+    git(wt, "add", "odd.txt")
+    git(wt, "commit", "-q", "-m", "odd")
+    assert worktrees.prune(main, apply=True, now=now + 7 * HOUR) == 0 and wt.is_dir()
+    assert worktrees.main(["adopt", "odd2", "cell/odd"]) == 1
+    assert worktrees.prune(main, apply=True, snapshot=True, everyone=True, now=now + 73 * HOUR) == 1
+    assert not wt.exists() and "refs/heads/cell/odd" in refs(main, "refs/heads")
+
+
+def test_adopt_refuses_a_stale_history_branch(main, monkeypatch, capsys):
+    wt = main / ".worktrees" / "old"
+    _old_line(main, monkeypatch)
+    git(main, "worktree", "remove", str(wt))
+    assert worktrees.main(["adopt", "old", "feat/old"]) == 1
+    assert "refused: feat/old is forks from main" in capsys.readouterr().err and not wt.exists()
+
+
 def test_newest_file_ignores_oserror(tmp_path, monkeypatch):
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
-    monkeypatch.setattr(worktrees.rules.os.path, "getmtime", lambda _p: (_ for _ in ()).throw(OSError("gone")))
+    broken = type("E", (), {"stat": staticmethod(lambda: (_ for _ in ()).throw(OSError("gone")))})()
+    assert worktrees.rules._entry_mtime(broken) == 0.0
+    monkeypatch.setattr(worktrees.rules, "_entry_mtime", lambda _e: 0.0)
     assert worktrees.rules.newest_file(tmp_path, lambda _r: False) == 0.0
+
+
+def test_status_notes_skips_gh_when_no_branch_over_24h(main, tmp_path, monkeypatch):
+    _bare_origin(main, tmp_path)
+    now = time.time()
+    _commit_n(add(main, "young"), 1, date=f"{int(now - 2 * HOUR)} +0000")
+    calls = []
+    monkeypatch.setattr(worktrees.rules, "open_pr_heads", lambda _r: calls.append(1) or set())
+    _, rows = worktrees.scan(main)
+    worktrees.rules.status_notes(main, rows, now)
+    assert calls == []
+
+
+def test_new_starts_from_origin_main_untracked_and_status_warns_on_wrong_head(main, capsys):
+    """D-1055: branches start at origin/main when it exists (no fetch, no upstream), else main."""
+    assert worktrees.main(["new", "local", "feat/local"]) == 0  # no origin/main: falls back to main
+    assert git(main / ".worktrees" / "local", "rev-parse", "HEAD") == git(main, "rev-parse", "main")
+    published = git(main, "rev-parse", "HEAD")
+    git(main, "commit", "-q", "--allow-empty", "-m", "local main only")
+    git(main, "update-ref", "refs/remotes/origin/main", published)
+    assert worktrees.main(["new", "pub", "feat/pub"]) == 0
+    assert git(main / ".worktrees" / "pub", "rev-parse", "HEAD") == published
+    assert subprocess.run(["git", "-C", str(main), "config", "branch.feat/pub.merge"]).returncode == 1  # --no-track
+    capsys.readouterr()
+    assert worktrees.main(["status"]) == 0
+    assert "wrong-head" not in capsys.readouterr().out
+    git(main, "switch", "-q", "-c", "fix/oops")  # 11-21: a session switched the shared checkout to its branch
+    assert worktrees.main(["status"]) == 0
+    out = capsys.readouterr().out
+    assert "WARN    wrong-head:" in out and "is on fix/oops, not main" in out and "worktrees.py adopt" in out
+
+
+def test_status_warns_on_a_worktree_outside_worktrees_and_never_removes_or_counts_it(main, tmp_path, capsys):
+    """11-21: opencode kept its own worktrees outside .worktrees/; no tool saw them. The land trees are the tools'."""
+    outside = tmp_path / "outside"
+    git(main, "worktree", "add", "-q", str(outside), "-b", "feat/outside", "main")
+    common = Path(git(main, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+    hidden = common / "rosy-land-wt" / "feat-x"
+    git(main, "worktree", "add", "-q", str(hidden), "-b", "land/feat/x-20261122000000", "main")
+    assert [Path(p).resolve() for p in worktrees.rules.foreign_worktrees(main)] == [outside.resolve()]
+    assert worktrees.main(["status"], now=LATER) == 0
+    out = capsys.readouterr().out
+    assert "WARN    worktree outside .worktrees/:" in out and "worktrees.py adopt" in out and "rosy-land-wt" not in out
+    assert "[worktrees] 0 under" in out  # not counted against the cap
+    assert worktrees.prune(main, apply=True, now=LATER) == 0 and outside.is_dir() and hidden.is_dir()
+
+
+def test_archive_abandoned_takes_idle_land_branches_but_not_a_checked_out_one(main):
+    """11-22: land/ leftovers of the retired land_async (D-1055) piled up; a hidden tree's branch stays."""
+    left = git(main, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "left")
+    git(main, "branch", "land/feat/left-20261101000001", left)
+    hidden = Path(git(main, "rev-parse", "--path-format=absolute", "--git-common-dir")) / "rosy-land-wt" / "feat-live"
+    git(main, "worktree", "add", "-q", str(hidden), "-b", "land/feat/live-20261101000002", left)
+    later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
+    assert worktrees.rules.archive_abandoned(main, later, apply=True) == 1
+    assert git(main, "rev-parse", f"refs/archive/land/feat/left-20261101000001@{left[:10]}") == left
+    assert refs(main, "refs/heads/land") == ["refs/heads/land/feat/live-20261101000002"]
+
+
+def _commit_n(wt: Path, n: int, date: str | None = None) -> None:
+    env = {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date} if date else {}
+    for i in range(n):
+        (wt / f"f_{i}_{time.time_ns()}.txt").write_text("x", encoding="utf-8")
+        git(wt, "add", ".")
+        git(wt, "commit", "-q", "-m", f"c{i}", **env)
+
+
+def _bare_origin(main: Path, tmp_path: Path) -> Path:
+    bare = tmp_path / "origin.git"
+    git(main, "init", "--bare", "-q", str(bare))
+    git(main, "remote", "add", "origin", str(bare))
+    git(main, "push", "-q", "origin", "main")
+    git(main, "fetch", "-q", "origin")
+    return bare
+
+
+def test_status_warns_on_branch_size_excluding_merges(main, capsys):
+    nine = add(main, "nine")
+    _commit_n(nine, 9)
+    for m in range(2):
+        (main / f"m{m}.txt").write_text("m", encoding="utf-8")
+        git(main, "add", f"m{m}.txt")
+        git(main, "commit", "-q", "-m", f"main-{m}")
+        git(nine, "merge", "-q", "--no-ff", "main", "-m", f"merge main {m}")
+    done = add(main, "done")
+    _commit_n(done, 11)
+    git(main, "merge", "-q", "--ff-only", "feat/done")
+    assert worktrees.main(["status"]) == 0
+    assert "split-soon" not in capsys.readouterr().out
+    ten = add(main, "ten")
+    _commit_n(ten, 10)
+    big = add(main, "big")
+    _commit_n(big, 21)
+    capsys.readouterr()
+    assert worktrees.main(["status"]) == 0
+    out = capsys.readouterr().out
+    assert "split-needed (>=20): big(21)" in out and "split-soon (>=10): ten(10)" in out and "nine(" not in out and "done(" not in out
+
+
+def test_status_warns_on_no_pr_after_24h_and_skips_when_gh_fails(main, tmp_path, monkeypatch, capsys):
+    _bare_origin(main, tmp_path)
+    now = time.time()
+    old_ts = str(int(now - 25 * HOUR))
+    new_ts = str(int(now - 2 * HOUR))
+    for name, ts in (("oldnopr", old_ts), ("oldhaspr", old_ts), ("fresh", new_ts), ("merged", old_ts)):
+        _commit_n(add(main, name), 1, date=f"{ts} +0000")
+    git(main, "merge", "-q", "--ff-only", "feat/merged")
+    monkeypatch.setattr(worktrees.rules, "_gh", lambda _r, *a: '[{"headRefName": "feat/oldhaspr"}]')
+    assert worktrees.main(["status"], now=now) == 0
+    out = capsys.readouterr().out
+    assert "WARN    no-pr (>24h since first own commit, no open PR): 1 worktree(s): oldnopr" in out
+    monkeypatch.setattr(worktrees.rules, "_gh", lambda _r, *a: None)
+    assert worktrees.main(["status"], now=now) == 0
+    assert "no-pr" not in capsys.readouterr().out
+
+
+def test_status_distinguishes_parked_branches_and_unavailable_pr_lookup(main, tmp_path, monkeypatch, capsys):
+    _bare_origin(main, tmp_path)
+    now = time.time()
+    for name, age in (("parked", 25), ("active-pr", 25), ("recent", 2), ("attached", 25), ("local-merge", 25)):
+        wt = add(main, name)
+        _commit_n(wt, 1, date=f"{int(now - age * HOUR)} +0000")
+        if name != "attached":
+            git(main, "worktree", "remove", str(wt))
+    git(main, "merge", "-q", "--ff-only", "feat/local-merge")
+    pr_lookups = []
+
+    def open_pr_heads(root):
+        pr_lookups.append(root)
+        return {"feat/active-pr"}
+
+    monkeypatch.setattr(worktrees.rules, "open_pr_heads", open_pr_heads)
+    assert worktrees.main(["status"], now=now) == 0
+    assert "1 branch(es) without a worktree or open PR" in capsys.readouterr().out
+    assert len(pr_lookups) == 1
+    monkeypatch.setattr(worktrees.rules, "open_pr_heads", lambda _: None)
+    assert worktrees.main(["status"], now=now) == 0
+    out = capsys.readouterr().out
+    assert "2 branch(es) without a worktree; open PR status unavailable" in out
+    assert "without a worktree or open PR" not in out
+
+
+def test_reserved_prefixes_match_shared_checkout_doc_and_stay_unarchived(main):
+    doc = (ROOT / "docs/reference/shared-checkout.md").read_text(encoding="utf-8")
+    sec = doc.split("### 예약 접두어", 1)[1].split("### ", 1)[0]
+    import re as _re
+    table_prefixes = {m.rstrip("*") for m in _re.findall(r"(?m)^\|\s*`([^`]+)`\s*\|", sec)}
+    assert table_prefixes == set(worktrees.rules.RESERVED_PREFIXES)
+    for branch in ("release/keep", "build/keep", "payload-reserved-1", "archive/keep", "feat/old"):
+        sha = git(main, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", branch)
+        git(main, "branch", branch, sha)
+    later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
+    assert worktrees.rules.archive_abandoned(main, later, apply=True) == 1
+    assert set(refs(main, "refs/heads")) == {
+        "refs/heads/archive/keep", "refs/heads/build/keep", "refs/heads/main",
+        "refs/heads/payload-reserved-1", "refs/heads/release/keep"}
+    arch = refs(main, "refs/archive/feat/old@*")
+    assert len(arch) == 1
+    assert worktrees.rules.reflog_time(main / ".git/logs" / arch[0]) > 0
+
+
+def test_prune_remote_archives_and_deletes_only_stale_own_unopened_branches(main, tmp_path, monkeypatch, capsys):
+    bare = _bare_origin(main, tmp_path)
+    now = time.time()
+    old_d, new_d = f"{int(now - 20 * 86400)} +0000", f"{int(now - 5 * 86400)} +0000"
+
+    def push_branch(branch: str, commits: list[tuple[str, str, str]]) -> str:
+        git(main, "checkout", "-q", "-b", branch, "origin/main")
+        for idx, (an, ae, dt) in enumerate(commits):
+            (main / f"p_{branch.replace('/', '_')}_{idx}.txt").write_text(branch, encoding="utf-8")
+            git(main, "add", ".")
+            git(main, "commit", "-q", "-m", f"{branch}-{idx}",
+                GIT_AUTHOR_NAME=an, GIT_AUTHOR_EMAIL=ae, GIT_COMMITTER_NAME=an, GIT_COMMITTER_EMAIL=ae,
+                GIT_AUTHOR_DATE=dt, GIT_COMMITTER_DATE=dt)
+        sha = git(main, "rev-parse", "HEAD")
+        git(main, "push", "-q", "origin", branch)
+        git(main, "checkout", "-q", "main")
+        return sha
+
+    stale_own = push_branch("feat/stale-own", [("t", "t@t", old_d)])
+    stale_moved = push_branch("feat/stale-moved", [("t", "t@t", old_d)])
+    push_branch("feat/stale-open-pr", [("t", "t@t", old_d)])
+    push_branch("feat/recent-own", [("t", "t@t", new_d)])
+    push_branch("release/keep", [("t", "t@t", old_d)])
+    push_branch("build/keep", [("t", "t@t", old_d)])
+    push_branch("feat/stale-teammate", [("peer", "peer@team", old_d)])
+    push_branch("feat/stale-mixed", [("peer", "peer@team", old_d), ("t", "t@t", old_d)])
+    git(main, "fetch", "-q", "origin")
+
+    monkeypatch.setattr(worktrees.rules, "_gh", lambda _r, *a: None)
+    assert worktrees.main(["prune", "--remote", "--apply"], now=now) == 0
+    assert "remote prune skipped" in capsys.readouterr().out
+    monkeypatch.setattr(worktrees.rules, "_gh", lambda _r, *a: '[{"headRefName": "feat/stale-open-pr"}]')
+    assert worktrees.main(["prune", "--remote"], now=now) == 0
+    dry = capsys.readouterr().out
+    assert "PLAN    origin/feat/stale-own" in dry and "PLAN    origin/feat/stale-moved" in dry
+    assert "REPORT  origin/feat/stale-teammate" in dry and "REPORT  origin/feat/stale-mixed" in dry
+    assert "feat/stale-open-pr" not in dry and "release/keep" not in dry and "build/keep" not in dry and "recent-own" not in dry
+    assert "refs/heads/feat/stale-own" in refs(bare, "refs/heads")
+
+    # Concurrent move on bare origin + archive ref conflict must both keep remote branches untouched
+    adv = git(bare, "commit-tree", f"{stale_moved}^{{tree}}", "-p", stale_moved, "-m", "race",
+              GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+    git(bare, "update-ref", "refs/heads/feat/stale-moved", adv)
+    conflict_ref = f"refs/archive/origin/feat/stale-own@{stale_own[:10]}"
+    git(main, "update-ref", conflict_ref, git(main, "rev-parse", "main"))
+    assert worktrees.main(["prune", "--remote", "--apply"], now=now) == 0
+    fail_out = capsys.readouterr().out
+    assert "FAIL    origin/feat/stale-own: could not write" in fail_out
+    assert "FAIL    origin/feat/stale-moved" in fail_out
+    assert "refs/heads/feat/stale-own" in refs(bare, "refs/heads")
+    git(main, "update-ref", "-d", conflict_ref)
+
+    assert worktrees.main(["prune", "--remote", "--apply"], now=now) == 0
+    out = capsys.readouterr().out
+    assert "DELETED origin/feat/stale-own" in out and "FAIL    origin/feat/stale-moved" in out
+    assert git(main, "rev-parse", conflict_ref) == stale_own
+    assert worktrees.rules.reflog_time(main / f".git/logs/{conflict_ref}") > 0
+    remote_heads = set(refs(bare, "refs/heads"))
+    assert "refs/heads/feat/stale-own" not in remote_heads
+    assert {"refs/heads/feat/stale-moved", "refs/heads/feat/stale-open-pr", "refs/heads/feat/recent-own",
+            "refs/heads/release/keep", "refs/heads/build/keep", "refs/heads/feat/stale-teammate",
+            "refs/heads/feat/stale-mixed"} <= remote_heads

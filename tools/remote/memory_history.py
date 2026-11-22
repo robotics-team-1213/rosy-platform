@@ -21,14 +21,18 @@ import math
 import os
 import re
 import subprocess
+import threading
 import time
 from pathlib import Path
+
+_LOCK = threading.RLock()
 
 FILE = "rosy-pytest-memory.jsonl"
 # Seconds-to-GB: default cgroup MemoryMax (6 GB); unmeasured runs reserve UNKNOWN_GB until recorded.
 FULL_GB, UNKNOWN_GB, MARGIN = 6, 2, 1.25
-# Past MAX_ROWS rows the file is rewritten to its last KEEP_ROWS (trim, called by land_tick every 10 min).
+# Past MAX_ROWS rows the file is rewritten to its last KEEP_ROWS (trim, also self-triggered once > SELF_TRIM_BYTES).
 MAX_ROWS, KEEP_ROWS = 20_000, 15_000
+SELF_TRIM_BYTES = 13_000_000
 PEAK = re.compile(r"^\[remote-pytest\] memory peak (\d+) MiB\r?$", re.M)
 CPU = re.compile(r"^\[remote-pytest\] cpu (\d+) ms over (\d+) ms\r?$", re.M)
 
@@ -72,26 +76,40 @@ def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str,
     row = {"key": key(inv), "host": host, "peak_mib": peak, "sha": sha,
            "time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), **({"cores": cores} if cores is not None else {}),
            **(timing or {})}
-    with history.open("a", encoding="utf-8") as out:
-        out.write(json.dumps(row) + "\n")
+    with _LOCK:
+        with history.open("a", encoding="utf-8") as out:
+            out.write(json.dumps(row) + "\n")
+        try:
+            if history.stat().st_size > SELF_TRIM_BYTES:
+                trim(history, MAX_ROWS, KEEP_ROWS)
+        except OSError:
+            pass
 
 
-def trim(history: Path | None, max_rows: int = MAX_ROWS, keep_rows: int = KEEP_ROWS) -> int:
+def trim(history: Path | None, max_rows: int | None = None, keep_rows: int | None = None) -> int:
     """Rewrite history to its last keep_rows rows once past max_rows; the dropped count, else 0."""
     if history is None:
         return 0
-    try:
-        with history.open(encoding="utf-8", errors="replace") as src:
-            rows = src.readlines()
-    except OSError:
-        return 0
-    if len(rows) <= max_rows:
-        return 0
-    kept, tmp = rows[-keep_rows:], history.with_suffix(".jsonl.tmp")
-    tmp.write_text("".join(kept), encoding="utf-8")
-    os.replace(tmp, history)
-    _cached_rows.cache_clear()
-    return len(rows) - len(kept)
+    max_rows = MAX_ROWS if max_rows is None else max_rows
+    keep_rows = KEEP_ROWS if keep_rows is None else keep_rows
+    with _LOCK:
+        try:
+            with history.open(encoding="utf-8", errors="replace") as src:
+                rows = src.readlines()
+        except OSError:
+            return 0
+        if len(rows) <= max_rows:
+            return 0
+        kept = rows[-keep_rows:]
+        tmp = history.with_name(f"{history.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            tmp.write_text("".join(kept), encoding="utf-8")
+            os.replace(tmp, history)
+        except OSError:
+            tmp.unlink(missing_ok=True)
+            return 0
+        _cached_rows.cache_clear()
+        return len(rows) - len(kept)
 
 
 @functools.lru_cache(maxsize=256)

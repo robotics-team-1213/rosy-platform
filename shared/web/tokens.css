@@ -100,8 +100,6 @@
   /* ---- brand: ROSY 정체성 전용. OKLCH L .79 / C .15 / H 322 -------- */
   --brand-rose: #e796f3;  /* Radix plum 11 */
 
-  /* 그림자의 바탕. 음영(shade)은 이 색의 알파다. */
-  --shadow-base: #000000;
 }
 
 /* ---- 밝게 (D-359 §3) — 같은 키, 같은 의미 집합, 값만 다르다 ---------
@@ -161,7 +159,6 @@
   /* brand — 워드마크 전용. L .52 C .18 H 335 (밝은 바탕 위 5.6:1) */
   --brand-rose: #b13295;  /* Radix pink 계열 H338 L .542 — 현재 위치 글자가 rose-wash 위 4.56:1, 위험과 색약 대비 1.85 (#bb42a4는 wash 위 3.93) */
 
-  --shadow-base: #000000;
 }
 
 /* ==== 파생·역할·척도 — 팔레트만 참조한다 =============================
@@ -356,6 +353,11 @@
 
   /* 포커스는 상태가 아니라 상호작용이다 — status 색을 쓰지 않는다. */
   --focus-ring: var(--series-primary);
+
+  /* 선택은 포커스와 다른 단계다. 표지 = 이 색의 굵은 줄(--space-1) + 체크·`선택됨` 글자(색만으로 알리지 않는다).
+   * 별칭 한 줄: 새 색을 만들지 않는다. 두 테마 작업 바탕(ground·deep·raise·soft) 위 3:1 이상은 시험이 지킨다. */
+  --selection: var(--series-secondary);
+  --selection-edge: var(--space-1);  /* 선택 표식 가장자리 굵기: 하위 탐색 같은 곳이 간격 토큰 대신 쓴다(D-292) */
 
   --flag-caution: var(--status-warn);
   --flag-danger-bg: var(--status-crit);

@@ -296,7 +296,7 @@ def test_channel_review_keeps_candidate_separate_from_execution(site, size):
 @pytest.mark.parametrize("size", [(1366, 768), (320, 568)])
 @pytest.mark.parametrize("role", ["viewer", "operator"])
 def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, size, role):
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import expect, sync_playwright
 
     rows = [{"source": source, "source_id": "same", "action_kind": kind,
              "status": state, "device_id": device, "workcell_id": cell, "reason": None,
@@ -350,9 +350,13 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
                 assert seat["width"] == 232 and seat["x"] + seat["width"] <= work["x"], (seat, work)
             else:
                 assert seat["y"] + seat["height"] <= work["y"], (seat, work)
-            assert page.evaluate("() => document.querySelector('.console-context').compareDocumentPosition(document.querySelector('.queues-panel')) & Node.DOCUMENT_POSITION_FOLLOWING")
+            expect(page.locator("#queues-panel")).to_be_hidden()
+            page.locator("#fleet-inbox").click()
+            expect(page.locator("#queues-panel")).to_be_visible()
+            assert page.evaluate("() => document.querySelector('#queues-panel').compareDocumentPosition(document.querySelector('.console-context')) & Node.DOCUMENT_POSITION_FOLLOWING")
             if size[0] < 1024:
-                assert page.locator("#work-overview").bounding_box()["y"] < page.locator(".console-context").bounding_box()["y"] < page.locator(".queues-panel").bounding_box()["y"]
+                assert page.locator("#work-overview").bounding_box()["y"] < page.locator(".console-context").bounding_box()["y"]
+            page.locator("#queues-close").click()
             page.locator("#work-list ui-button").filter(has_text="팔 작업").click()
             assert page.locator("#work-detail").inner_text().find("packing") >= 0
             assert page.locator("#work-detail").inner_text().find("목표 확인 대기") >= 0

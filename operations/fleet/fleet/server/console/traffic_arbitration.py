@@ -29,6 +29,8 @@ from fleet.server.traffic_arbitration_helpers import (
     remember_traffic_states,
     resolve_robot_frame,
     run_snapshot_traffic,
+    site_frame_clear,
+    site_route_for,
 )
 from fleet.swarm.session_arming import require_capability
 
@@ -51,7 +53,7 @@ class TrafficArbitration:
                  here[1] + (y - here[1]) * i / steps) for i in range(steps + 1)]
 
     def _standing_in_the_way(self, mover: str, route: Sequence, grid,
-                             goal: tuple) -> list[str]:
+                             goal: tuple, *, site_route=None) -> list[str]:
         """이 경로 위에 **서서** 길을 막은 로봇들. 순서로는 풀리지 않는 쪽이다."""
         if not route:
             return []
@@ -68,6 +70,8 @@ class TrafficArbitration:
                 # 출발점과 같은 보고는 길을 막은 로봇이 아니라 측위가 안 된 겹침이다 (D-116).
                 continue
             if self._map_mismatch(mover, robot_id):
+                if site_frame_clear(self, robot_id, site_route, self._yield_keep_out_m, trust_mod=trust) is True:
+                    continue
                 # D-1010: its pose is another frame's numbers, so this route-versus-pose
                 # verdict would be fiction. It stays a blocker for a human, never moved.
                 out.append(robot_id)
@@ -199,9 +203,17 @@ class TrafficArbitration:
         return next((rid for rid in sorted(self._claims)
                      if rid != mover and self._map_mismatch(mover, rid)), None), False
 
-    def _untrusted_blocks(self, robot_id: str, route: Sequence) -> bool:
-        return (self._verdict(robot_id) == trust.UNTRUSTED
-                and trust.blocks(route, self._trusted.get(robot_id)))
+    def _site_route(self, mover: str, route: Sequence):
+        return site_route_for(self, mover, route, trust_mod=trust)
+
+    def _untrusted_blocks(self, robot_id: str, route: Sequence, *, site_route=None) -> bool:
+        if self._verdict(robot_id) != trust.UNTRUSTED:
+            return False
+        clear = site_frame_clear(
+            self, robot_id, site_route, max(trust.UNTRUSTED_KEEP_OUT_M, self._yield_keep_out_m), trust_mod=trust)
+        if clear is not None:
+            return not clear
+        return trust.blocks(route, self._trusted.get(robot_id))
 
     def _pose_of(self, robot_id: str) -> Optional[tuple]:
         if self._verdict(robot_id) == trust.UNTRUSTED:

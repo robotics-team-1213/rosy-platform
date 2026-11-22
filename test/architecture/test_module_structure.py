@@ -24,6 +24,7 @@ Honest holes, not oversights:
 
 import ast
 import datetime as dt
+import functools
 import importlib.util
 import os
 import re
@@ -36,6 +37,7 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "harness"))  # also when run as a script
+from _ast_imports import file_import_stmts  # noqa: E402
 import size_limits  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -199,6 +201,12 @@ def layout_ok(rel: tuple, name: str) -> bool:
     return len(rel) == 2 and name in (rel[1], f"rosy_{rel[1]}")
 
 
+_PRUNE_DIRS = frozenset({"test", "tests", "build", "install", "log"})
+_WS_REF_NEEDLES = ("get_package_share_directory", "FindPackageShare", "find-pkg-share", "package://")
+_INCLUDE_RE = re.compile(r"#include\s*[<\"](\w+)/")
+
+
+@functools.lru_cache(maxsize=None)
 def _declared(name: str) -> set:
     return {
         (e.text or "").strip()
@@ -210,41 +218,51 @@ def _declared(name: str) -> set:
 def _files(name: str, suffixes):
     holders = (ROOT / holder for holder in size_limits.PACKAGE_HOLDERS.get(name, ()))
     for directory in (PACKAGES[name]["dir"], *holders):
-        for path in directory.rglob("*"):
-            if path.is_file() and path.suffix in suffixes and _is_prod(path):
-                yield path
+        for folder, dirs, files in os.walk(directory):
+            dirs[:] = [d for d in dirs if d not in _PRUNE_DIRS and not d.startswith(".")]
+            if not _is_prod(Path(folder)):
+                continue
+            for fname in files:
+                if fname.startswith("."):
+                    continue
+                if os.path.splitext(fname)[1] in suffixes:
+                    yield Path(folder) / fname
 
 
+@functools.lru_cache(maxsize=None)
 def _used(name: str) -> dict:
     """Workspace packages this package reaches, mapped to one example site."""
     used = {}
-    for path in _files(name, {".py"}):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except SyntaxError:
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                tops = [a.name.split(".")[0] for a in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                tops = [node.module.split(".")[0]]
-            else:
-                continue
-            for top in tops:
-                used.setdefault(top, f"{_rel(path).as_posix()} imports {top}")
-    for path in _files(name, {".py", ".xml", ".cpp", ".hpp", ".yaml",
-                               ".urdf", ".xacro", ".sdf", ".world", ".rviz"}):
+    all_suffixes = {".py", ".xml", ".cpp", ".hpp", ".yaml", ".urdf", ".xacro", ".sdf", ".world", ".rviz"}
+    for path in _files(name, all_suffixes):
+        rel_path = _rel(path)
+        rel_posix = rel_path.as_posix()
+        suffix = path.suffix
+        if suffix == ".py":
+            try:
+                for level, module, names in file_import_stmts(path):
+                    if level == 0:
+                        if module is None:
+                            for n in names:
+                                top = n.split(".", 1)[0]
+                                used.setdefault(top, f"{rel_posix} imports {top}")
+                        else:
+                            top = module.split(".", 1)[0]
+                            used.setdefault(top, f"{rel_posix} imports {top}")
+            except SyntaxError:
+                pass
         text = path.read_text(encoding="utf-8", errors="ignore")
-        for pattern in WORKSPACE_REF_PATTERNS:
-            for match in pattern.finditer(text):
-                used.setdefault(match.group(1), f"{_rel(path).as_posix()} references {match.group(1)}")
-        if "launch" in _rel(path).parts or ".launch." in path.name:
+        if any(k in text for k in _WS_REF_NEEDLES):
+            for pattern in WORKSPACE_REF_PATTERNS:
+                for match in pattern.finditer(text):
+                    used.setdefault(match.group(1), f"{rel_posix} references {match.group(1)}")
+        if "launch" in rel_path.parts or ".launch." in path.name:
             for pattern in LAUNCH_EXEC_PATTERNS:
                 for match in pattern.finditer(text):
-                    used.setdefault(match.group(1), f"{_rel(path).as_posix()} runs {match.group(1)}")
-        if path.suffix in {".cpp", ".hpp"}:
-            for match in re.finditer(r"#include\s*[<\"](\w+)/", text):
-                used.setdefault(match.group(1), f"{_rel(path).as_posix()} includes {match.group(1)}")
+                    used.setdefault(match.group(1), f"{rel_posix} runs {match.group(1)}")
+        if suffix in {".cpp", ".hpp"}:
+            for match in _INCLUDE_RE.finditer(text):
+                used.setdefault(match.group(1), f"{rel_posix} includes {match.group(1)}")
     return {top: site for top, site in used.items() if top in PACKAGES and top != name}
 
 
@@ -382,6 +400,7 @@ def test_core_chain_stays_one_way():
     )
 
 
+@functools.lru_cache(maxsize=1)
 def _measure() -> tuple[dict, dict, dict]:
     dirs = {**{name: _relpath(info["dir"]) for name, info in PACKAGES.items()}, **size_limits.STANDALONE}
     files, scripts = {}, {}

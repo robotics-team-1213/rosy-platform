@@ -23,19 +23,18 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
-from cell_camera_telemetry_sync import (
-    DEFAULT_PREP_DIR,
-    sync_cell_telemetry as _sync_cell_telemetry,
-)
+from cell_camera_telemetry_sync import DEFAULT_PREP_DIR, sync_cell_telemetry as _sync_cell_telemetry
 from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
 from cell_result_outbox import Outbox, abort_reason, remeasurer, result_bodies, resend_pending
 from cell_task_exec import (
-    check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen, query_safety_listing, resolve_task_arm,
+    check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen,
+    make_keepalive_https_request, peer_ab_session_locked, query_safety_listing, resolve_task_arm,
 )
 
 ensure_omx_paths()
+_DEFAULT_URLOPEN = urlopen
 
 
 def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR,
@@ -43,11 +42,8 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
     opener = make_ca_urlopen(ca_file) if ca_file else urlopen
     return _sync_cell_telemetry(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=opener)
 
-ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
-    "arm_s": ("s", "with-session-arm-s-live.sh", -1.0),
-    "arm_a": ("a", "with-session-arm-a-par.sh", -1.0),
-    "arm_b": ("b", "with-session-arm-b-par.sh", -1.0),
-}
+
+ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {"arm_s": ("s", "with-session-arm-s-live.sh", -1.0), "arm_a": ("a", "with-session-arm-a-par.sh", -1.0), "arm_b": ("b", "with-session-arm-b-par.sh", -1.0)}
 
 
 def make_default_request_fn(fleet_r_url: str, token: str, *, ca_file: str | None = None) -> Callable[[str, str, dict[str, Any] | None], dict[str, Any]]:
@@ -56,15 +52,12 @@ def make_default_request_fn(fleet_r_url: str, token: str, *, ca_file: str | None
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Fleet URL requires verified HTTPS")
     ctx = ssl.create_default_context(cafile=ca_file)
+    if urlopen is _DEFAULT_URLOPEN:
+        return make_keepalive_https_request(base, token, ctx, timeout_s=20.0)
 
     def _req(method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
         data = json.dumps(body).encode("utf-8") if body is not None else None
-        req = Request(
-            f"{base}{path}",
-            data=data,
-            method=method,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        )
+        req = Request(f"{base}{path}", data=data, method=method, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
         with urlopen(req, context=ctx, timeout=20) as resp:
             return json.load(resp)
 
@@ -205,7 +198,10 @@ def poll_and_execute_once(
         tier = task.get("tier")
         if type(tier) is not int or tier not in (1, 2, 3):
             continue
-        if hold_check_fn is not None and hold_check_fn(resolve_task_arm(task)).get("held"):
+        task_arm = resolve_task_arm(task)
+        if hold_check_fn is not None and hold_check_fn(task_arm).get("held"):
+            continue
+        if cell_id == "cell_ab" and peer_ab_session_locked(task_arm, prep_dir=prep_dir):
             continue
         claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id})
         if not claimed.get("claimed"):
@@ -368,7 +364,7 @@ def main(argv: list[str] | None = None) -> None:
                 last_cam_push = now_m
             if args.dry_run_hw or args.allow_legacy_live_jog or args.execute_mode == "guarded-pick":
                 _LAST_SAFETY_ERROR[0] = None
-                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, hold_check_fn=check_arm_hold)
+                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, prep_dir=prep_dir, hold_check_fn=check_arm_hold)
                 if not runs and _LAST_SAFETY_ERROR[0] is not None:
                     raise _LAST_SAFETY_ERROR[0]
             else:

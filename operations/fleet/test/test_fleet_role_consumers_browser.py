@@ -140,7 +140,9 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (path, width)
                 _assert_control(page.locator("#topbar-more"))
                 if path == "/console":
+                    page.locator("#fleet-inbox").click()
                     _assert_control(page.locator(".queue-row").first)
+                    page.locator("#queues-close").click()
                     # Current roster opens one selected robot's controls in its workspace.
                     page.locator('[data-select-robot-id="rosy_03"]').click()
                     _assert_control(page.locator("[data-auth-focus]"))
@@ -148,7 +150,7 @@ def test_fleet_role_styles_reach_fields_disclosures_and_headings(tmp_path, theme
                     expect(page.locator("#console-token")).to_be_focused()
                     if page.locator("#topbar-more").is_visible():
                         page.locator("#topbar-more").click()
-                    page.locator("#context-inbox-tab").click()
+                    page.locator("#context-evidence-tab").click()
                     summary = page.locator("#log-panel > summary")
                     for opened in [False, True]:
                         page.locator("#log-panel").evaluate("(node, open) => node.open = open", opened)

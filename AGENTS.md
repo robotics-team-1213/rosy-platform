@@ -47,14 +47,14 @@ Each folder's own `AGENTS.md` carries its files and rules. Root files: `README.m
 소스 이전(D-427·D-429·D-430) 뒤에도 모든 세션이 지킨다. 이전 경로 `legacy`와 잔여 검사에는 한 release 유예를 둔다.
 
 1. **우선순위:** main CI 초록불 > 안전(D-430 공백) > 기능. 충돌하면 앞이 이긴다.
-2. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. main 체크아웃에 커밋 안 된 변경을 남기면 다른 세션의 fast-forward와 pre-push가 막힌다. 순서는 아래 「같이 하는 깃」이다.
+2. **main 체크아웃에서 작업하지 않는다.** 모든 작업은 `.worktrees/<topic>`에서 한다. 공유 main 체크아웃에서는 브랜치를 바꾸거나(`checkout`, `switch`) 커밋하지 않는다. 순서는 아래 「같이 하는 깃」이다.
 3. **구조를 바꾸는 ADR은 D-427·D-429·D-430과의 관계를 표로 적는다.** ADR 없이 새 최상위 폴더를 만들지 않는다.
-4. **push 순서는 [D-868](docs/adr/D-868-local-main-first-merge-commit-publish.md)이 대체했다:** 모든 변경은 로컬 `main`에 먼저 착지하고, 공개 `main`에는 그 로컬 `main`을 merge commit PR로 올린다.
+4. **병합 경로는 [D-1055](docs/adr/D-1055-pr-merge-queue-only-merge-path-land-retired.md)다:** 공개 `main`에는 주제 PR 하나가 Merge Queue를 거쳐 merge commit으로만 들어간다. 로컬 `main` 먼저 착지(D-868 1·2항)는 폐기했다.
 5. **safety 태그 경로**(매니페스트 `concern: safety`, `safety_modules`, `safety_anchors`)를 바꾸거나 옮기는 커밋은 `Safety-Review:` trailer와 독립 리뷰가 필요하다(D-430 §5, CI가 검사).
 
 ### 같이 하는 깃
 
-여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 아래는 모든 세션이 늘 지킬 요약이다. 명령 전문·예외·도구 동작은 [`docs/reference/shared-checkout.md`](docs/reference/shared-checkout.md#같이-하는-깃)이고, 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다. 워크트리 한도에 닿았을 때, 도구가 거절하거나 멈췄을 때, 처음 보는 상태(`landed-dirty`, `stale-history`, `MAIN-RED` 등)가 나왔을 때는 진행하지 말고 그 문서를 읽는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다.
+여러 세션이 이 저장소의 `main` 체크아웃 하나와 git 인덱스 하나를 같이 쓴다. 아래는 모든 세션이 늘 지킬 요약이다. 명령 전문·예외·도구 동작은 [`docs/reference/shared-checkout.md`](docs/reference/shared-checkout.md#같이-하는-깃)이고, 명령 카드는 `.claude/skills/rosy-land-on-main/SKILL.md`다. 워크트리 한도에 닿았을 때, 도구가 거절하거나 멈췄을 때, 처음 보는 상태(`landed-dirty`, `stale-history`, PR의 `DIRTY` 등)가 나왔을 때는 진행하지 말고 그 문서를 읽는다. 브랜치 이름과 남의 미커밋을 지우지 않는 이유는 [D-372](docs/adr/D-372-topic-branch-names-and-shared-checkout-wip.md)다.
 
 제품 파일을 고치기 전에 1번과 2번이 끝나 있어야 한다. 끝난 기준은 `git worktree list`에 자신의 `.worktrees/<짧은이름>`이 있고, 그 디렉터리의 브랜치가 `main`이 아닌 것이다.
 
@@ -63,7 +63,7 @@ Each folder's own `AGENTS.md` carries its files and rules. Root files: `README.m
 3. **계약:** 제품 파일을 고치기 전에 README 「핵심 계약」과 아래 Working In This Directory, 바꾸려는 경로의 모듈 `AGENTS.md` 또는 해당 ADR을 연다.
 4. **ADR 번호:** 파일을 만들기 직전에 `python tools/harness/adr_reserve.py next "<주제>"`로 선점한다. ADR 파일과 Log 행은 한 커밋이고, 뒤에 `python tools/harness/rosy_harness.py lint`를 돌린다.
 5. **시험:** pytest는 이 노트북에서 돌리지 않는다. `tools/remote/remote_pytest.py`로만 돌리고(D-584), 결과는 `python test/known_failures.py`로 비교한다. 시험 PC가 닿지 않으면 그 시험은 "확인 못 함"이고 착지와 푸시는 하지 않는다. 호스트 pytest 통과는 장치, ARM64 이미지, 현장 수용을 대신하지 않는다.
-6. **착지와 푸시는 사용자가 말한 뒤에만 한다.** 기본은 워크트리에서 `python tools/land_async.py --tests auto`다. 착지는 `--ff-only`만 하고, 거절되면 남의 파일을 치우지 않고 알린다. 모든 변경은 로컬 `main`에 먼저 착지하고 공개 `main`은 merge commit PR로만 올린다(D-868). squash·rebase 병합과 force-push는 하지 않는다.
+6. **제출과 push는 사용자가 말한 뒤에만 한다.** 브랜치 워크트리에서 `python tools/pr_land.py --evidence`로 내면 GitHub Merge Queue가 merge commit으로 병합한다(D-1055). PR이 `DIRTY`·`CONFLICTING`일 때만 `git merge origin/main`을 하고 증거를 다시 돌린다. `BEHIND`는 그대로 둔다. squash·rebase 병합과 force-push는 하지 않는다.
 
 다른 PR이 최근 7일 안에 main에 넣은 줄을 지우거나 고치면 PR 본문에 `Replaces: #N (이유)`를 적는다(모두 덮는 `Step-Back: none (이유)`도 있다). `pr_land`가 검사하지만 squash·리베이스·옛 파일 복사는 정보로만 나온다([규칙과 못 잡는 것](docs/reference/shared-checkout.md#다른-pr의-최근-작업을-되돌리지-않는다)).
 
@@ -71,11 +71,11 @@ Each folder's own `AGENTS.md` carries its files and rules. Root files: `README.m
 
 ### GitHub 게시와 두 에이전트 검토
 
-공개 `main`은 로컬 `main`을 올린 PR의 merge commit 병합으로만 갱신한다(D-868). squash·rebase 병합은 쓰지 않는다. GitHub 사람 승인 수는 0, 필수 검사는 `ci-result`(2026-10-16 사용자 결정)와 `review-gate`(2026-11-02 ruleset 추가)다. 다른 사람의 최근 작업과 파일이 겹치는 PR만 `review-gate`가 승인 1명을 요구한다(2026-11-02, 정본은 PR 파이프라인). 작성 에이전트와 다른 읽기 전용 검토 에이전트가 base/head SHA를 지정해 검토하고, 게시 담당 한 명이 사용자에게 허용받은 범위의 push·PR·병합을 수행한다. 검토 결과·발견 사항 처리·시험 SHA·실제 CI 결과를 PR에 남긴다. 문서·생성물·merge 해결을 포함해 head가 바뀌면 변경 범위의 재검토와 새 SHA 검증이 필요하며 최종 게시 head는 검토 head와 같아야 한다. 절차와 종료 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md)이 소유한다. `tools/land.py`는 로컬 착지 도구이며 공개 `main`에 직접 push하는 경로가 아니다. 공개 `main`은 ruleset이 직접 push를 막는다.
+공개 `main`은 주제 PR을 Merge Queue로 merge commit 병합해서만 갱신한다(D-1055). squash·rebase 병합은 쓰지 않는다. GitHub 사람 승인 수는 0, 필수 검사는 `ci-result`(2026-10-16 사용자 결정)와 `review-gate`(2026-11-02 ruleset 추가)다. 다른 사람의 최근 작업과 파일이 겹치는 PR만 `review-gate`가 승인 1명을 요구한다(2026-11-02, 정본은 PR 파이프라인). 작성 에이전트와 다른 읽기 전용 검토 에이전트가 base/head SHA를 지정해 검토하고, 게시 담당 한 명이 사용자에게 허용받은 범위의 push·PR·병합을 수행한다. 검토 결과·발견 사항 처리·시험 SHA·실제 CI 결과를 PR에 남긴다. 문서·생성물·merge 해결을 포함해 head가 바뀌면 변경 범위의 재검토와 새 SHA 검증이 필요하며 최종 게시 head는 검토 head와 같아야 한다. 절차와 종료 조건은 [PR 파이프라인](docs/reference/pr-pipeline.md)이 소유한다. 공개 `main`은 ruleset이 직접 push를 막는다.
 
 ### Working In This Directory
 
-- 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다. 브랜치는 로컬 `main`에서 만들고 `git merge main`으로 갱신한다(D-868).
+- 새 소스 위치와 소유 영역은 `tools/harness/platform_parts.yaml`의 현재 root와 `d427_target`이 정본이다. 브랜치는 `origin/main`에서 만들고, PR이 `DIRTY`일 때만 `git merge origin/main`으로 갱신한다(D-1055).
 - Treat `docs/spec/ROSY CORE SRS.md`, `docs/reference/ROSY API & Protocol Reference.md`, and `docs/reference/ROSY ADR Log.md` as contracts. Do not invent REST paths, modes, or protocol fields that are not in the API ref or `core_common.protocol.schemas` (`contracts/foundation/core_common/protocol/schemas.py`).
 - External clients must not speak ROS. `core` is the only gateway (CORE SRS §1.3). Command Manager (`core_features.command`) is the only `cmd_vel` publisher (D-2).
 - Single process: main thread rclpy `EventsExecutor` (default since D-1058; `ROSY_CORE_EXECUTOR=threaded` is the rollback to `MultiThreadedExecutor`), worker thread uvicorn+FastAPI (D-1). Entry point is `core=core.main:main` — `ros2 run core core`. Do not split into two processes.

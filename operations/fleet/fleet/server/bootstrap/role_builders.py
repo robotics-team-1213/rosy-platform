@@ -29,6 +29,7 @@ from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_
 from fleet.server.lane_route_routes import install_lane_route_routes
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.map_pose_service import MapPoseService, install_map_pin_route, install_map_pose_routes
+from fleet.server.offline_pin import mover_site_pose, obstacle_site_pose
 from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
 from fleet.server.nudge_routes import install_nudge_step_route
 from fleet.server.mission_dispatcher import MissionDispatcher
@@ -161,6 +162,10 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
             lambda: ((active := site_maps.active())[1].map_id, active[0]) if site_maps.active() is not None else (None, None))
     app.state.execution_map_pose = execution_pose
     console.set_state_sink(map_pose.observe_state)
+    console.set_site_pose_providers(
+        mover=partial(mover_site_pose, map_pose),
+        obstacle=partial(obstacle_site_pose, map_pose),
+    )
     console.read_state = map_pose.state
     identity.map_pose = map_pose.arbitrated_pose
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)

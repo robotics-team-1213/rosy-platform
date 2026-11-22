@@ -26,6 +26,7 @@ from fleet.server.site_auth import SitePrincipal
 from fleet.server.owner_recovery_routes import install_owner_recovery_routes
 from fleet.server.policy_delivery import attach_ticker, build_policy_approvals
 from fleet.server.policy_approval_routes import install_policy_approval_routes
+from fleet.server.task_reconcile_routes import install_task_reconcile_routes
 from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
 from fleet.swarm.transport import RobotApiError
 
@@ -161,7 +162,7 @@ def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
     read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator, stop_targets=None,
-    convert_site_goal=None,
+    convert_site_goal=None, native_task_result=None,
 ) -> None:
     drive_cancel = drive_cancel or DriveCancelFence()
     stop_targets = tuple(dict.fromkeys((*configured_omx.items(), *(stop_targets or ()))))
@@ -322,6 +323,13 @@ def install_task_dispatch_routes(
                 }) from None
             console.discard_task_queue_entries({task_id})
             return {"task": task}
+
+        if require_named_operator is not None:
+            install_task_reconcile_routes(
+                app, console=console, task_service=task_service,
+                require_named_operator=require_named_operator,
+                native_task_result=native_task_result,
+            )
 
     @app.post("/api/fleet/robots/{robot_id}/cancel", dependencies=operator_guard, tags=["fleet"])
     async def fleet_cancel(robot_id: str,

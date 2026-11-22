@@ -1,13 +1,16 @@
 // D-513 7 / D-515 카메라 그림 경로 (map-view.js 에서 분리). 실영상에 맞는 보정 고르기, 위에서 본
 // 그림 펴기, 크게 보기·썸네일 회전, Vision 프레임 연결. 지도 그리기는 map-view.js 가 가지고
 // draw hook 과 toPx 투영을 넘긴다.
+import { setOffBy } from "/common/cause-line.js";
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 
 import { siteBounds, fitTransform, project } from "./site-layer.js";
 import { lensesMatch } from "/console/assets/map-fit.js";
 import { affineFromTriangles, warpMesh } from "./camera-warp.js";
-import { createPlaneFeed, planeCalibration, planeCalibrationsFor, planeToMap } from "/console/assets/vision-view.js";
+import { createPlaneFeed, planeCalibration, planeToMap } from "/console/assets/vision-view.js";
 
 const FRESH_MS = 3000;
+const PLANE_KEEP_MAX_MS = 30_000;
 
 const fresh = (frame) => Number.isFinite(frame.ageMs) && frame.ageMs >= 0 && frame.ageMs <= FRESH_MS;
 
@@ -18,13 +21,13 @@ export const keepFrame = (kept, incoming) =>
 
 // 낡음 기록: 생중계는 `카메라 HH:MM:SS`, 끊기면 찍은 시각에서의 나이를 붙인다. 표시 전용이며
 // 심각도 색과는 섞지 않는다.
-export function staleStamp(capturedAtMs, nowMs, stale = false) {
+export function staleStamp(capturedAtMs, nowMs, stale = false, label = "카메라") {
   if (!Number.isFinite(capturedAtMs)) return "";
   const clock = new Date(capturedAtMs);
   const time = [clock.getHours(), clock.getMinutes(), clock.getSeconds()]
     .map((part) => String(part).padStart(2, "0")).join(":");
   const ageS = Number.isFinite(nowMs) ? Math.max(0, Math.round((nowMs - capturedAtMs) / 1000)) : 0;
-  return `카메라 ${time}${stale ? ` · ${ageS}초 전` : ""}`;
+  return `${label} ${time}${stale ? evidenceAgeText(ageS) : ""}`;
 }
 
 export function cameraMapCalibration(frame, calibrations, siteMap) {
@@ -96,30 +99,75 @@ function warpOnto(ctx, image, mapToImage, bounds, toPx) {
 
 export function createCameraBackdrop({ scope, el, view, draw }) {
   let cameraFrame = null;
+  let capturedAt = 0;
+  let stamp = null;
   let calibrations = [];
   // D-560: Vision's map plane is the picture; the D-515 raw warp is only the fallback.
   let planes = null;
-  // 끊긴 뒤에도 마지막 plane 그림을 화면에 둔다. plane 피드는 스스로 만료하므로 마지막 것을 따로
-  // 기억한다(2026-11-14). 살아 있는 동안에는 실제 피드만 쓴다.
   let keptPlane = null;
+  let planeKey = null;
   let staleAt = 0; // 영상이 끊긴 시각(0 = 살아 있음). 그림을 지우는 대신 반투명+시각 글자로만 알린다.
-  const planeFrame = () => {
-    const frame = planes?.current() || (staleAt ? keptPlane : null);
-    return cameraFrame && fresh(cameraFrame) && frame?.source === cameraFrame.source ? frame : null;
+  let lastCorrectedKey = null, lastCorrectedImage = null, lastCorrectedCleared = false;
+  const calibration = () => {
+    const activeId = view.activeSiteMap?.map?.map_id;
+    return cameraMapCalibration(cameraFrame,
+      activeId ? calibrations.filter(row => row.map_id === activeId) : calibrations, view.siteMap);
   };
-  const setCalibrations = (rows) => { calibrations = rows; redraw(); };
-  const calibration = () => cameraMapCalibration(cameraFrame, calibrations, view.siteMap);
-  const usesPlane = () => {
-    const plane = planeCalibration(planeFrame(), calibrations, view.siteMap);
-    return Boolean(plane && plane.calibration_revision === calibration()?.calibration_revision);
+  const keyFor = (record) => view.displayMode === "overlay" && !view.map && record
+    ? JSON.stringify([record.source_id, record.map_id, record.calibration_revision]) : null;
+  const planeFrame = (record = calibration(), nowMs = Date.now()) => {
+    const key = keyFor(record);
+    if (keptPlane?.key !== key) keptPlane = null;
+    if (keptPlane && !staleAt && planes?.current() !== keptPlane.frame
+        && Number.isFinite(keptPlane.frame.capturedAtMs)
+        && nowMs - keptPlane.frame.capturedAtMs > PLANE_KEEP_MAX_MS) keptPlane = null;
+    return keptPlane?.frame ?? null;
   };
-  function drawTopDown(ctx, record, bounds, toPx, width, height, dpr, rot) {
-    const alpha = staleAt ? 0.5 : 1; // 끊긴 그림은 반투명 — 낡음 표시이지 오류 색은 아니다
-    if (!usesPlane()) {
-      drawCameraTopDown(ctx, cameraFrame, record, bounds, toPx, width, height, dpr, rot, alpha);
+  const usesPlane = () => Boolean(planeFrame());
+  function displayedPicture(record = calibration(), nowMs = Date.now()) {
+    if (view.displayMode === "overlay" && !view.map) {
+      const frame = planeFrame(record, nowMs);
+      if (frame) return {
+        kind: "plane", frame,
+        capturedAtMs: Number.isFinite(frame.capturedAtMs) ? frame.capturedAtMs : capturedAt,
+        stale: Boolean(staleAt) || planes?.current() !== frame,
+      };
+      if (!record) return { kind: "none" };
+    }
+    return cameraFrame
+      ? { kind: "raw", frame: cameraFrame, capturedAtMs: capturedAt, stale: Boolean(staleAt) }
+      : { kind: "none" };
+  }
+  function updateStamp() {
+    const nowMs = Date.now();
+    const hadKeptPlane = Boolean(keptPlane);
+    const pic = displayedPicture(calibration(), nowMs);
+    if (hadKeptPlane && !keptPlane) return redraw();
+    if (!stamp) return;
+    stamp.hidden = pic.kind === "none";
+    const label = pic.kind === "plane" && pic.stale ? "평면 영상 지연" : "카메라";
+    const next = staleStamp(pic.capturedAtMs, nowMs, pic.stale, label);
+    if (stamp.textContent !== next) stamp.textContent = next;
+  }
+  function refreshPlane() {
+    if (!planes) return;
+    const key = keyFor(calibration());
+    if (key !== planeKey) {
+      planeKey = key;
+      keptPlane = null;
+      planes.refresh(false);
+    }
+    if (key && !staleAt) planes.refresh(true, cameraFrame.seq);
+  }
+  const setCalibrations = (rows) => { calibrations = rows; refreshPlane(); redraw(); };
+  function drawTopDown(ctx, record, bounds, toPx, width, height, dpr, rot, pic = displayedPicture(record)) {
+    const alpha = pic.stale ? 0.5 : 1;
+    if (pic.kind === "raw") {
+      drawCameraTopDown(ctx, pic.frame, record, bounds, toPx, width, height, dpr, rot, alpha);
       return;
     }
-    const { image, plane } = planeFrame();
+    if (pic.kind !== "plane") return;
+    const { image, plane } = pic.frame;
     const affine = planeAffine(plane, image.naturalWidth, image.naturalHeight, toPx);
     if (!affine) return;
     ctx.save();
@@ -139,30 +187,50 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     const record = calibration(), bounds = siteBounds(view.siteMap);
     const ready = Boolean(record && bounds);
     canvas.hidden = !ready;
-    status.textContent = ready ? `교정 후 · ${record.map_id} · ${record.calibration_revision || "승인 교정"}`
+    const nextStatus = ready ? `교정 후 · ${record.map_id} · ${record.calibration_revision || "승인 교정"}`
       : "같은 지도의 승인 교정과 신선한 영상이 필요합니다.";
-    if (!ready) { canvas.width = canvas.width; return; }
-    if (!el("camera-comparison")?.open) return;
+    if (status.textContent !== nextStatus) status.textContent = nextStatus;
+    if (ready) lastCorrectedCleared = false;
+    if (!ready || !el("camera-comparison")?.open) {
+      lastCorrectedKey = null;
+      lastCorrectedImage = null;
+      if (!ready && !lastCorrectedCleared) {
+        canvas.width = canvas.width;
+        lastCorrectedCleared = true;
+      }
+      return;
+    }
+    const pic = displayedPicture(record);
+    const key = JSON.stringify([record.source_id, record.map_id, record.calibration_revision,
+      bounds, pic.kind, pic.frame?.seq ?? null, pic.stale]);
+    const image = pic.frame?.image ?? null;
+    if (lastCorrectedKey === key && lastCorrectedImage === image) return;
+    lastCorrectedKey = key;
+    lastCorrectedImage = image;
     canvas.width = 480; canvas.height = 270;
     const ctx = canvas.getContext("2d");
     const transform = fitTransform(bounds, canvas.width, canvas.height, 8);
     const toPx = (x, y) => { const p = project(transform, x, y); return {x: p.px, y: p.py}; };
-    drawTopDown(ctx, record, bounds, toPx, canvas.width, canvas.height, 1, 0);
+    drawTopDown(ctx, record, bounds, toPx, canvas.width, canvas.height, 1, 0, pic);
   }
   function redraw() {
     if (!view.map && view.siteMap) draw();
     drawCorrected();
     const status = el("map-display-status");
-    if (status) status.textContent = view.displayMode === "camera"
+    const observed = planeFrame()?.observedFraction;
+    const nextStatus = view.displayMode === "camera"
       ? cameraFrame ? "교정 전 · 카메라 원본" : "원본 영상 대기 · 신선한 프레임 없음"
       : view.displayMode === "overlay" && !calibration()
         ? "교정 영상 없음 · 2D 좌표 표시" : view.displayMode === "overlay"
-          ? `공유 map 좌표 · m · 영상 유효 영역 ${usesPlane() && Number.isFinite(planeFrame()?.observedFraction)
-            ? `${Math.round(planeFrame().observedFraction * 100)}%` : "미확인"}` : "공유 map 좌표 · m";
+          ? `공유 map 좌표 · m · 영상 유효 영역 ${Number.isFinite(observed)
+            ? `${Math.round(observed * 100)}%` : "미확인"}` : "공유 map 좌표 · m";
+    if (status && status.textContent !== nextStatus) status.textContent = nextStatus;
+    updateStamp();
   }
 
   function setCameraFrame(frame) {
     cameraFrame = keepFrame(cameraFrame, frame);
+    refreshPlane();
     redraw();
   }
   function bindCamera(visionView) {
@@ -172,45 +240,44 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
     const mode = el("map-display-mode");
     view.displayMode = mode.value || "coordinates";
+    const setLive = (url) => {
+      birdseye.hidden = !url;
+      if (url) birdseye.src = url;
+      setOffBy(toggle, url ? "" : "영상 대기");
+    };
+    const showFrame = () => setLive(cameraFrame?.url);
     const setMode = (value) => {
       view.displayMode = value;
       mode.value = value;
       stage.dataset.view = value === "camera" ? "camera" : "map";
       toggle.setAttribute("aria-pressed", String(value === "camera"));
+      showFrame();
+      refreshPlane();
       redraw();
     };
     scope.listen(mode, "change", () => setMode(mode.value));
     scope.listen(el("camera-comparison"), "toggle", drawCorrected);
-    planes = createPlaneFeed({ scope, visionView, onChange: () => {
-      if (planes?.current()) keptPlane = planes.current();
+    planes = createPlaneFeed({ scope, visionView, onChange: (reason) => {
+      const frame = planes.current(), record = calibration();
+      if (reason === "plane-unavailable") {
+        keptPlane = null;
+      } else if (planeKey && planeKey === keyFor(record) && frame?.source === record.source_id
+          && planeCalibration(frame, [record], view.siteMap)) {
+        keptPlane = { key: planeKey, frame };
+      }
       redraw();
     } });
-    const setLive = (url) => {
-      birdseye.hidden = !url;
-      if (url) birdseye.src = url;
-      toggle.disabled = !url;
-      if (url) toggle.removeAttribute("reason"); else toggle.setAttribute("reason", "영상 대기");
-    };
     setLive(null);
-    let lastFrame = null;
     // 2026-11-14 요청: 끊긴 뒤에도 마지막 프레임을 지도·썸네일에 둔다. 낡음은 바닥 왼쪽 작은
     // 시각 글자(1초마다 갱신)와 반투명으로만 알린다 — 오류 색과는 섞지 않는다.
-    const stamp = el("map-camera-stamp");
-    let capturedAt = 0;
-    const updateStamp = () => {
-      if (!stamp) return;
-      stamp.hidden = !lastFrame;
-      if (lastFrame) stamp.textContent = staleStamp(capturedAt, Date.now(), Boolean(staleAt));
-    };
+    stamp = el("map-camera-stamp");
     const goStale = () => {
-      if (!lastFrame) return;
+      if (!cameraFrame) return;
       staleAt = Date.now();
       stage.dataset.cameraStale = "true";
       redraw();
-      updateStamp();
     };
     scope.interval(updateStamp, 1000);
-    const showFrame = () => setLive(lastFrame?.url);
     scope.listen(toggle, "click", () => {
       setMode(view.displayMode === "camera" ? "coordinates" : "camera");
       showFrame();
@@ -224,23 +291,21 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       }
       const prevSeq = cameraFrame?.seq;
       const prevSource = cameraFrame?.source;
-      lastFrame = frame;
       capturedAt = Date.now() - frame.ageMs;
+      const wasStale = Boolean(staleAt);
       staleAt = 0;
-      keptPlane = null; // 살아 돌아왔다: 이전 끊김 때의 plane은 다음 plane이 올 때까지 쓰지 않는다
       delete stage.dataset.cameraStale;
       // D-631: the before-correction picture keeps the camera's original orientation.
       (frame.previewElement || frame.image)?.closest?.(".vision-frame")?.setAttribute("data-turn", "0");
-      const wantPlane = !view.map && planeCalibrationsFor(calibrations, view.siteMap, frame.source).length > 0;
-      if (!prevSeq || prevSeq !== frame.seq || prevSource !== frame.source) {
+      if (prevSeq == null || prevSeq !== frame.seq || prevSource !== frame.source || wasStale) {
         setCameraFrame(frame);
         showFrame();
       } else {
         cameraFrame = frame;
+        refreshPlane();
+        updateStamp();
       }
-      planes.refresh(wantPlane, frame.seq);
       cancelMapCameraExpiry = scope.timeout(goStale, Math.max(0, FRESH_MS - frame.ageMs));
-      updateStamp();
     })));
   }
   return { calibration, usesPlane, setCalibrations, drawTopDown, setCameraFrame, bindCamera };

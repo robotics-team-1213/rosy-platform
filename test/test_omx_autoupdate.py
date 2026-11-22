@@ -618,3 +618,18 @@ def test_example_configs_ship_the_updater_host_module(example):
     paths = json.loads((Path(__file__).parents[1] / example).read_text())["paths"]
     assert "deploy/robot/omx/omx_autoupdate.py" in paths
     assert "deploy/robot/omx/omx_autoupdate_host.py" in paths
+
+
+def test_omx_manifests_bundle_site_map_and_sim_gripper_assets():
+    import json
+    from omx_autoupdate_host import DEFAULT_PATHS
+
+    example_paths = json.loads((Path(__file__).parents[1] / "deploy/robot/omx/omx-devices-autoupdate.json.example").read_text())["paths"]
+    for required in (
+        "tools/sim/cell_site_map.py",
+        "shared/web/cell-site-map.json",
+        "learning/envs/isaac/palletizing_gripper.py",
+        "learning/envs/isaac/assets/omx_f_palletizing_description",
+    ):
+        assert required in DEFAULT_PATHS
+        assert required in example_paths

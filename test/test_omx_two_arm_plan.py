@@ -22,7 +22,8 @@ def layout():
 @pytest.fixture(scope="module")
 def reach(layout):
     """A fixed reach table: ship hold 1 and belt by both, plate a by arm_a, plate b lanes 1-2 by arm_b (and their second tier, the place the stern bay used to add)."""
-    table = {s: set(BOTH) for s in plan.planning_sites(layout) if layout.sites[s]["kind"] in ("ship", "belt")}
+    table = {s: set(BOTH) for s in plan.planning_sites(layout)
+             if layout.sites[s]["kind"] == "belt" or layout.sites[s].get("stack", "").startswith("h1")}
     table.update({f"tmp-a-{i}": {"arm_a"} for i in (1, 2, 3)})
     table.update({"tmp-b-1": {"arm_b"}, "tmp-b-2": {"arm_b"}, "tmp-b-3": set(), "tmp-b-1-l1": {"arm_b"}, "tmp-b-2-l1": {"arm_b"}})
     return plan.table_can(table)
@@ -208,7 +209,7 @@ def test_outbound_and_rearrange_replay_json_carry_after_zones_and_disjoint_overl
             here[s["container"]] = s["to"]
         windows, held = [], []
         for s in steps:
-            t_pick, t_carry, t_place = plan.duration(layout, s["from"], s["to"])
+            t_pick, t_carry, t_place = plan.duration(layout, s["from"], s["to"], s["arm"])
             t0 = s["planned_start_s"]
             windows.append((s["id"], s["arm"], t0, t0 + t_pick + t_carry + t_place))
             held.extend((s["id"], z, t0, t0 + t_pick + t_carry) for z in s["zones"][0])
@@ -276,3 +277,43 @@ def test_disjoint_zones_with_crossing_sweeps_are_not_scheduled_or_started_togeth
     _, timing, stop_reason, _ = stages.run_concurrent_steps(FakeTeacher(layout), None, task, dict(here))
     assert stop_reason is None
     assert timing["m7"]["start_s"] >= timing["m5"]["end_s"]
+
+
+def test_harbor_moves_routes_stand_destination_via_arm_a(layout, reach):
+    table = {s: reach(s, s, {}) for s in plan.planning_sites(layout)}
+    table["stand"] = {"arm_a"}
+    reach_with_stand = plan.table_can(table)
+    state = {c: s for c, s, _ in layout.plan_order()}
+    moves, why = plan.harbor_moves(layout, state, {"cargo_id": "bar-3", "destination": "stand"}, reach_with_stand)
+    assert why is None
+    out = [m for m in moves if m["phase_label"] == "반출"]
+    assert len(out) == 1 and out[0]["destination"] == "stand" and out[0]["arms"] == ["arm_a"]
+
+
+def test_tmp_a_to_stand_via_carry_sweeps_goal_block_and_temp_priority(layout):
+    import math
+    import numpy as np
+    import omx_two_arm_policy_goal as policy_goal
+
+    pa = plan.step_swept_poses(layout, "arm_a", "tmp-a-1", "stand", {})
+    assert pa is not None and len(pa) == 110
+    assert len(pa[80][1]) == 4 and pa[80][1][3][2] == pytest.approx(math.hypot(*layout.box[:2]) / 2)
+    assert len(pa[92][1]) == 3
+    assert plan.duration(layout, "tmp-a-1", "stand", "arm_a")[1] > plan.duration(layout, "tmp-a-1", "stand")[1]
+    pb = plan.step_swept_poses(layout, "arm_b", "ship-h1r2-l2", "tmp-b-1", {"bar-1": "ship-h1r1-l0"})
+    assert plan.sweeps_clear(pa, pb, ta=0.0, tb=0.0, slack_s=plan.SWEEP_SLACK_S)
+
+    goal = policy_goal.goal_block(layout, {"id": "g", "from": "tmp-a-1", "to": "stand", "arm": "arm_a"}, {}, mode="joints")
+    lower_pos = layout.arms["arm_a"].frames(np.array([*goal[6:11], 0.0]))[1]
+    assert np.allclose(lower_pos[:2], layout.sites["stand"]["xy"], atol=2e-3)
+
+    state = {c: s for c, s, _ in layout.plan_order()}
+    moves, why = plan.harbor_moves(layout, state, {"cargo_id": "bar-3"}, plan.validator_can(layout))
+    assert why is None
+    rehandles = [m["destination"] for m in moves if m["phase_label"] == "재취급"]
+    assert rehandles and all(d.startswith("tmp-") for d in rehandles)
+
+    full_18 = {**state, **{f"h2-{r}-{l}": f"ship-h2r{r}-l{l}" for r in range(3) for l in range(3)}}
+    b_only = lambda a, b, h: plan.validator_can(layout)(a, b, h) & {"arm_b"}
+    none, reason = plan.harbor_moves(layout, full_18, {"cargo_id": "bar-3"}, b_only)
+    assert none is None and reason == "NO_STAND_IN_REACH"

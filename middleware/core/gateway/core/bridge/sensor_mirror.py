@@ -80,7 +80,7 @@ class SensorMirror:
                  wall: Callable[[], float] = time.time) -> None:
         self._period, self._mono, self._wall = min_period_s, monotonic, wall
         self._last: dict[str, float] = {}
-        self._raw: dict[str, tuple[Any, float]] = {}   # key -> (raw message, wall time)
+        self._raw: dict[str, tuple[Any, float, float]] = {}  # raw message, display time, monotonic time
         self._motor_ready: bool | None = None
 
     def install(self, state: Any) -> None:
@@ -91,7 +91,7 @@ class SensorMirror:
         now = self._mono()
         if now - self._last.get(key, -math.inf) >= self._period:
             self._last[key] = now
-            self._raw[key] = (raw, self._wall())
+            self._raw[key] = (raw, self._wall(), now)
 
     def imu(self, msg: Any) -> None:
         self._keep("imu", msg)
@@ -104,7 +104,14 @@ class SensorMirror:
         if any(_is_wheel(n) for n in msg.name):
             self._keep("wheels", msg)
 
+    def invalidate_dock_observation(self) -> None:
+        self._raw.pop("dock_observation", None)
+
     def dock_observation(self, payload: Any) -> None:
+        previous = self._raw.get("dock_observation")
+        if (isinstance(payload, dict) and payload.get("visible") is False and previous
+                and isinstance(previous[0], dict) and previous[0].get("visible") is True):
+            self.invalidate_dock_observation()
         self._keep("dock_observation", payload)
 
     def motor_health(self, text: Any) -> None:
@@ -112,20 +119,36 @@ class SensorMirror:
 
     def motor_ready(self, ready: bool) -> None:
         self._motor_ready = bool(ready)  # latched and rare
-        self._raw.setdefault("motor", (None, self._wall()))
+        self._raw.setdefault("motor", (None, self._wall(), self._mono()))
 
     def sample(self, key: str) -> dict[str, Any] | None:
         """The last sample as a dict, or None. Runs on the API thread."""
         held = self._raw.get(key)
         if held is None:
             return None
-        raw, at = held
+        raw, at, received_mono = held
+        timing = {"received_at": at, "sample_age_s": max(0.0, self._mono() - received_mono)}
         if key in self._CONVERT:
-            return {**self._CONVERT[key](raw), "received_at": at}
+            return {**self._CONVERT[key](raw), **timing}
         if key == "dock_observation":
-            return {**raw, "received_at": at} if isinstance(raw, dict) else None
+            return {**raw, **timing} if isinstance(raw, dict) else None
         try:
             health = json.loads(raw) if raw is not None else None
         except (TypeError, ValueError):
             health = None
-        return {"health": health, "ready": self._motor_ready, "received_at": at}
+        return {"health": health, "ready": self._motor_ready, **timing}
+
+
+def ingest_dock_observation(feed, mirror: SensorMirror, raw: str, *, received_at: float,
+                            source_now: float) -> None:
+    """Mirror the feed's accepted observation or a validated visibility loss."""
+    try:
+        payload = json.loads(raw)
+        accepted = feed.ingest(payload, received_at=received_at, source_now=source_now)
+    except (TypeError, ValueError, OverflowError):
+        mirror.invalidate_dock_observation()
+        raise
+    if accepted or payload.get("visible") is False:
+        mirror.dock_observation(payload)
+    else:
+        mirror.invalidate_dock_observation()

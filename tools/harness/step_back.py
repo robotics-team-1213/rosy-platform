@@ -8,6 +8,7 @@ branch dropped recent main lines that the branch never repaired, the PR removes 
 while no own commit deleted them in that path, or the PR is too big to check. INFO (printed, never blocks): every other
 rewrite of a recent PR's lines. A git failure is loud: exit 2 with "scan incomplete" and the command. Only a blame
 failure on one file is a warning that keeps the blocks already confirmed.
+Size limits (30 counted files, 20 own commits, 7 day merge base) block unless the body has "Size-Exception: <reason>".
 What it cannot see (squash, rebase, an older file copied in an ordinary commit give INFO only): shared-checkout.md.
 """
 
@@ -122,19 +123,46 @@ def pr_of_commits(repo, base_ref: str, commits: set[str], since: float) -> dict[
     found: dict[str, tuple[int, int]] = {}
     if not commits:
         return found
+    merges: list[tuple[str, str, int, int]] = []
     for row in git(repo, "log", "--first-parent", "--merges", f"--since={int(since)}", "--format=%H %P|%ct|%s", base_ref).splitlines():
         ids, ct, subj = row.split("|", 2)
         merge, *parents = ids.split()
         m = re.match(r"Merge pull request #(\d+)", subj)
-        if not m or len(parents) != 2:
-            continue
-        if merge in commits:
-            found.setdefault(merge, (int(m.group(1)), int(ct)))
-        for c in git(repo, "rev-list", f"{parents[0]}..{parents[1]}").split():
-            if c in commits:
-                found.setdefault(c, (int(m.group(1)), int(ct)))
-        if len(found) == len(commits):
-            break
+        if m and len(parents) == 2:
+            merges.append((merge, parents[0], int(m.group(1)), int(ct)))
+    if not merges:
+        return found
+    oldest_p0 = merges[-1][1]
+    parents_of = {p[0]: p[1:] for ln in git(repo, "rev-list", "--parents", f"{oldest_p0}..{base_ref}").splitlines()
+                  if (p := ln.split())}
+    cur = git(repo, "rev-parse", f"{base_ref}^{{commit}}").strip()
+    first_chain: list[str] = []
+    while cur and cur != oldest_p0 and cur in parents_of:
+        first_chain.append(cur)
+        cur = parents_of[cur][0] if parents_of[cur] else ""
+    merge_meta = {m: (pr, ct) for m, _, pr, ct in merges}
+    seen_on_main: set[str] = set()
+    for u in reversed(first_chain):
+        ps = parents_of.get(u, ())
+        brought: list[str] = []
+        if len(ps) > 1:
+            stack = [p for p in ps[1:] if p in parents_of and p not in seen_on_main]
+            while stack:
+                x = stack.pop()
+                if x in seen_on_main:
+                    continue
+                seen_on_main.add(x)
+                brought.append(x)
+                for p in parents_of.get(x, ()):
+                    if p in parents_of and p not in seen_on_main:
+                        stack.append(p)
+        seen_on_main.add(u)
+        if info := merge_meta.get(u):
+            if u in commits:
+                found.setdefault(u, info)
+            for c in brought:
+                if c in commits:
+                    found.setdefault(c, info)
     return found
 
 
@@ -289,18 +317,38 @@ def acknowledged(body_text: str, prs) -> set:
     return ok & set(prs)
 
 
-def size_warnings(repo, base_ref: str, head_ref: str, now: float | None = None) -> list[str]:
-    """Never blocks: changed files > 30, own non-merge commits > 20, merge-base older than 7 days (rule 4)."""
+SIZE_EXCEPTION = re.compile(r"Size-Exception:\s*\S.*", re.I)
+
+
+def counted_files(repo, base: str, head_ref: str) -> int:
+    """Changed files that count toward the limit: not generated or record paths (skip list), not pure renames."""
+    toks, n, i = git(repo, "diff", "-M", "--name-status", "-z", base, head_ref).split("\0"), 0, 0
+    while i < len(toks) and toks[i]:
+        st = toks[i]
+        step = 3 if st[0] in "RC" else 2
+        if not (st == "R100" or skipped(toks[i + step - 1])):
+            n += 1
+        i += step
+    return n
+
+
+def size_violations(repo, base_ref: str, head_ref: str, now: float | None = None) -> list[str]:
+    """Counted changed files > 30, own non-merge commits > 20, merge-base older than 7 days (rule 4, blocking since D-1067). No branch is exempt by name."""
     try:
         base = merge_base(repo, base_ref, head_ref)
         now = time.time() if now is None else now
-        files = len(names(repo, base, head_ref))
+        files = counted_files(repo, base, head_ref)
         commits = int(git(repo, "rev-list", "--no-merges", "--count", f"{base_ref}..{head_ref}").strip() or 0)
         age = (now - int(git(repo, "log", "-1", "--format=%ct", base).strip() or now)) / 86400
     except ScanError as e:
         return [f"size check incomplete: {e}"]
     return [w for ok, w in ((files > 30, f"{files} changed files (limit 30)"), (commits > 20, f"{commits} own non-merge commits (limit 20)"),
                             (age > 7, f"merge-base is {age:.0f} days old (limit 7)")) if ok]
+
+
+def size_excepted(body: str) -> bool:
+    """The PR body carries a 'Size-Exception: <reason>' line with a non-empty reason."""
+    return any(SIZE_EXCEPTION.fullmatch(line.strip().lstrip("-*> ").strip()) for line in (body or "").splitlines())
 
 
 def blocking(hits: list[dict], body: str) -> list[dict]:

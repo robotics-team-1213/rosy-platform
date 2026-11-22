@@ -1,3 +1,4 @@
+import { setOffBy } from "./cause-line.js";
 import {node, action} from "./control-dom.js";
 
 const STATE_COPY = {pending: "불러오는 중", empty: "아직 자료가 없습니다", forbidden: "권한이 필요합니다",
@@ -25,7 +26,7 @@ export function createActionBar(actions) {
   const element = node("ui-actions", "", "ui-action-bar");
   for (const {label, onClick, kind = "quiet", reason = ""} of actions) {
     const button = action(label, onClick, kind);
-    if (reason) {button.setAttribute("disabled", ""); button.setAttribute("reason", reason);}
+    setOffBy(button, reason);
     element.append(button);
   }
   return element;

@@ -35,6 +35,8 @@ test('retry reason follows current work and stale epochs cannot clear a newer re
   t.after(() => { globalThis.document = previous; });
   const node = () => ({value: '', dataset: {}, attrs: new Map(),
     append() {}, replaceChildren() {},
+    get disabled() { return this.attrs.has('disabled'); },
+    set disabled(v) { if (v) this.setAttribute('disabled', ''); else this.removeAttribute('disabled'); },
     setAttribute(name, value) { this.attrs.set(name, value); },
     removeAttribute(name) { this.attrs.delete(name); }});
   globalThis.document = {createElement: node, activeElement: null};

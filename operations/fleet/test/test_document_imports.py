@@ -19,6 +19,7 @@ _DYNAMIC = re.compile(r"(?<![\w.])import\s*\(")
 _ASSET = "/console/assets/"
 
 SHARED = {
+    "activity-log.js",  # Timestamped event log helper shared by Console and Installation.
     "robot-profile-view.js",  # Read-only profiles shared by Console, Cell and Installation.
     "app-runtime.js",
     "address-drift.js",
@@ -30,6 +31,7 @@ SHARED = {
     "account-permissions.js",  # D-757: shared read-only session capability predicates
     "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
+    "unit-scope.js",  # D-960 §4: what this control unit's screen shows, read by the header and work views
     "map-fit.js",
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",

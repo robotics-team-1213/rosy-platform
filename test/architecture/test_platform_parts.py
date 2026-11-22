@@ -36,7 +36,7 @@ import pytest
 import yaml
 
 import ratchet_lists
-from _ast_imports import _imports, _matches
+from _ast_imports import _imports, _matches, file_import_stmts, resolve_import_stmts
 from _legacy_paths import LegacyScan, in_scope
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +57,7 @@ PACKAGE_DIR_ROOTS = {
 KNOWN_VIOLATIONS: dict[tuple[str, str], str] = {}
 
 
+@functools.lru_cache(maxsize=1)
 def _manifest() -> dict:
     return yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
 
@@ -75,6 +76,24 @@ def _tracked() -> list[str]:
 
 def _under(path: str, root: str) -> bool:
     return path == root or path.startswith(root + "/")
+
+
+def _make_owner(roots: list[dict]):
+    by_top: dict[str, list[tuple[int, str, str, dict]]] = {}
+    for root in roots:
+        rp = root["path"]
+        top = rp.split("/", 1)[0]
+        by_top.setdefault(top, []).append((len(rp), rp, rp + "/", root))
+    for bucket in by_top.values():
+        bucket.sort(key=lambda item: item[0], reverse=True)
+
+    def lookup(path: str) -> dict | None:
+        for _, rp, rp_slash, root in by_top.get(path.partition("/")[0], ()):
+            if path == rp or path.startswith(rp_slash):
+                return root
+        return None
+
+    return lookup
 
 
 def _owner(path: str, roots: list[dict]) -> dict | None:
@@ -108,6 +127,20 @@ def _package_of(path: str, root: dict) -> str:
 def _prefix_owners(roots: list[dict]) -> list[tuple[str, dict]]:
     pairs = [(prefix, root) for root in roots for prefix in root.get("import_prefix") or ()]
     return sorted(pairs, key=lambda pair: len(pair[0]), reverse=True)
+
+
+def _target_lookup(owners: list[tuple[str, dict]]):
+    by_top: dict[str, list[tuple[str, dict]]] = {}
+    for prefix, root in owners:
+        by_top.setdefault(prefix.split(".", 1)[0], []).append((prefix, root))
+
+    def lookup(name: str) -> dict | None:
+        for prefix, root in by_top.get(name.split(".", 1)[0], ()):
+            if _matches(name, prefix):
+                return root
+        return None
+
+    return lookup
 
 
 def _target_of(name: str, owners: list[tuple[str, dict]]) -> dict | None:
@@ -148,18 +181,18 @@ def _allowed(importer: dict, target: dict, rules: dict) -> bool:
 
 def _edges(manifest: dict, tracked: list[str]) -> dict[tuple[str, str], list[str]]:
     roots, rules = manifest["roots"], manifest["import_rules"]
-    owners = _prefix_owners(roots)
+    owner_of = _make_owner(roots)
+    target_of = _target_lookup(_prefix_owners(roots))
     edges: dict[tuple[str, str], list[str]] = {}
     for path in tracked:
         if not path.endswith(".py") or _is_test_file(path):
             continue
-        importer = _owner(path, roots)
+        importer = owner_of(path)
         if importer is None or importer["part"] not in rules:
             continue
-        source = (ROOT / path).read_text(encoding="utf-8-sig")
         forbidden_external = rules[importer["part"]].get("forbidden_external", ())
-        for name in _imports(source, _package_of(path, importer)):
-            target = _target_of(name, owners)
+        for name in resolve_import_stmts(file_import_stmts(ROOT / path), _package_of(path, importer)):
+            target = target_of(name)
             if target is not None:
                 if _allowed(importer, target, rules):
                     continue
@@ -335,13 +368,13 @@ def test_learning_ros_packages_record_their_device_install_exception():
 
 
 def test_every_tracked_file_has_exactly_one_owner():
-    roots = _manifest()["roots"]
+    owner_of = _make_owner(_manifest()["roots"])
     orphans = []
     for path in _tracked():
         pure = PurePosixPath(path)
         if len(pure.parts) == 1:
             continue  # repository root files
-        if _owner(path, roots) is None and pure.suffix != ".md":
+        if owner_of(path) is None and pure.suffix != ".md":
             orphans.append(path)
     assert orphans == [], f"add these to tools/harness/platform_parts.yaml: {orphans[:20]}"
 
@@ -403,12 +436,12 @@ DEPLOY_OMX_IMPORTS = {
 
 
 def test_deploy_omx_engine_imports_only_shrink():
-    owners = _prefix_owners(_manifest()["roots"])
+    target_of = _target_lookup(_prefix_owners(_manifest()["roots"]))
     found: dict[str, str] = {}
     for path in _tracked():
         if path.startswith("deploy/robot/omx/") and path.endswith(".py") and not _is_test_file(path):
-            for name in _imports((ROOT / path).read_text(encoding="utf-8-sig"), ""):
-                target = _target_of(name, owners)
+            for name in resolve_import_stmts(file_import_stmts(ROOT / path), ""):
+                target = target_of(name)
                 if target is not None:
                     found.setdefault(target["d427_target"], f"{path} imports {name}")
     ratchet_lists.check(found, DEPLOY_OMX_IMPORTS, "deploy/robot/omx reach (DEPLOY_OMX_IMPORTS)")
@@ -449,8 +482,12 @@ LEGACY_SCAN_ALLOWLIST: set[tuple[str, str]] = {
 
 
 def _read_text(path: str) -> str | None:
-    data = (ROOT / path).read_bytes()
-    return None if b"\0" in data[:8192] else data.decode("utf-8", "replace")
+    with (ROOT / path).open("rb") as handle:
+        head = handle.read(8192)
+        if b"\0" in head:
+            return None
+        data = head + handle.read()
+    return data.decode("utf-8", "replace")
 
 
 def _legacy_report(roots, tracked, read, allowlist) -> list[str]:

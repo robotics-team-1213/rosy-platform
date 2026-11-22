@@ -16,6 +16,7 @@ from urllib.request import urlopen
 
 from cell_presence import presence_ok, review_required, zone_acceptance
 from cell_remeasure import write_context
+from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
 
 
 def make_ca_urlopen(ca_file: str | Path | None = None):
@@ -49,12 +50,19 @@ def query_safety_listing(request_fn, timeout_s: float) -> tuple[Any, Exception |
     return answer.get("value"), answer.get("error")
 
 
+_STAND_ALIASES = ("stand", "stand:r1-s1", "stand:r1-s1-t1")
+
+
 def resolve_task_arm(task: dict[str, Any]) -> str:
     """Resolve the target OMX arm id for a queued Fleet cell task."""
     arm = str(task.get("arm_id") or "").strip()
     if arm:
         return arm
-    return "arm_s" if task.get("cell_id") == "cell_s" else "arm_b"
+    if task.get("cell_id") == "cell_s":
+        return "arm_s"
+    if str(task.get("dst_site") or "").strip() in _STAND_ALIASES or str(task.get("src_site") or "").strip() in _STAND_ALIASES:
+        return "arm_a"
+    return "arm_b"
 
 
 def check_arm_hold(arm_id: str) -> dict[str, Any]:
@@ -229,8 +237,22 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
         return {"arm": arm_id, "error": "CELL_CONFIG_OR_WRAPPER_MISSING",
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}
     cfg_data = json.loads(cfg.read_text(encoding="utf-8"))
-    src = str(handoff.get("src_site") or default_src)
-    dst = str(handoff.get("dst_site") or ("pallet-l0" if arm_id != "arm_s" else "belt"))
+    cfg_sites = cfg_data.get("sites") or {}
+    src = str(handoff.get("src_site") or default_src).strip()
+    dst = str(handoff.get("dst_site") or ("pallet-l0" if arm_id != "arm_s" else "belt")).strip()
+    if src in _STAND_ALIASES:
+        src = "stand"
+    elif src == "belt" and "belt" not in cfg_sites and "beltend" in cfg_sites:
+        src = "beltend"
+    if dst in _STAND_ALIASES:
+        dst = "stand"
+    if (src == "stand" or dst == "stand") and arm_id != "arm_a":
+        return {"arm": arm_id, "error": "STAND_REQUIRES_ARM_A",
+                "stop_event": {"command": "stop", "ok": False, "folded": False}}
+    stand_cfg = cfg_sites.get("stand")
+    if (dst == "stand" and not (isinstance(stand_cfg, dict) and isinstance(stand_cfg.get("place"), (list, tuple)) and len(stand_cfg["place"]) == 2 and "surface_z" in stand_cfg)) or (src == "stand" and not isinstance(stand_cfg, dict)):
+        return {"arm": arm_id, "error": "STAND_NOT_CALIBRATED",
+                "stop_event": {"command": "stop", "ok": False, "folded": False}}
     src_site = src.rsplit("-l", 1)[0]
     roi = (cfg_data.get("sites") or {}).get(src_site, {}).get("auto_roi") or default_roi
     src_roi = roi
@@ -261,7 +283,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
         cmd += ["--layers-below", str(hint)]
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                          env={**os.environ, "TOOLS_ROOT": str(tools_root())})  # the wrapper's tools-env reads it
+                          env={**os.environ, "TOOLS_ROOT": str(tools_root()),
+                               "ROSY_ARM_LEASE_OWNER": f"{WORKER_LEASE_PREFIX}{os.getpid()}"})  # the wrapper's tools-env reads it
     parsed = last_json_object(proc.stdout)
     # The wall clock at the end of the run bounds when the readbacks below existed (the runner's own clock is monotonic).
     measured_at = time.time()

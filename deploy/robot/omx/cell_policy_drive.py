@@ -28,15 +28,17 @@ from cell_policy_goals import GOALS, resolve_goal_site  # noqa: E402
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S  # noqa: E402
 
 from cell_policy_shape import (  # noqa: E402,F401
-    JOINTS, SIM_POLICY_FPS, calibration_offset, converted_closed, demonstrated_range,
-    envelope, open_before_close, resample_chunk, shape_chunk, widen, wrist_roll_warning,
+    JOINTS, SIM_POLICY_FPS, calibration_offset, closed_gripper, converted_closed, demonstrated_range,
+    envelope, in_jaw_zone, jaw_gate_spec, jaw_zone_error, open_before_close, resample_chunk, shape_chunk,
+    source_rim_z, trained_grasp_mismatch, widen, wrist_roll_warning,
 )
 from cell_policy_timing import MAX_OBSERVATION_AGE_S, run_timed  # noqa: E402
 
 
 def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chunks: int, dry_run: bool, log,
                 demonstrated=None, goal_slot: int | None = None, n_action=None,
-                max_obs_age_s=MAX_OBSERVATION_AGE_S, handoff=None, authorize=None) -> dict:
+                max_obs_age_s=MAX_OBSERVATION_AGE_S, handoff=None, authorize=None,
+                params=None, tcp_x_m=None, kin=None, rim_z_m: float | None = None) -> dict:
     library = json.loads(library_path.read_text(encoding="utf-8"))
     low, high, fastest = envelope(library)
     fps = float(library.get("fps", 30))
@@ -44,7 +46,41 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
     sim_units = getattr(shadow, "sim_rule", None) is not None
     if demonstrated is not None and not sim_units:
         low, high = widen(low, high, *demonstrated)
-    closed = float(library.get("jaw_empty_stop", library["gripper_closed"]))
+    jaw_spec = resolved_tcp = None
+    if "grasp_pick" in (library.get("chunks") or {}):
+        from omx_tcp import RANGE_M
+
+        parsed_tcp = {}
+        for label, raw in (("configured tcp_x_m", tcp_x_m), ("library tcp_x_m", library.get("tcp_x_m"))):
+            if raw is None:
+                continue
+            try:
+                val = float("nan" if isinstance(raw, bool) else raw)
+            except (TypeError, ValueError, OverflowError):
+                val = float("nan")
+            if not (math.isfinite(val) and RANGE_M[0] <= val <= RANGE_M[1]):
+                raise ValueError(f"{label} must be finite in {RANGE_M[0]}..{RANGE_M[1]}, got {raw!r}")
+            parsed_tcp[label] = val
+        cfg_tcp = parsed_tcp.get("configured tcp_x_m")
+        lib_tcp = parsed_tcp.get("library tcp_x_m")
+        if cfg_tcp is not None and lib_tcp is not None and abs(lib_tcp - cfg_tcp) > 1e-6:
+            raise ValueError(f"library tcp_x_m {lib_tcp} conflicts with configured {cfg_tcp}")
+        resolved_tcp = cfg_tcp if cfg_tcp is not None else lib_tcp
+        if kin is None:
+            from grasp_planner import load_kinematics
+
+            kin, _, _ = load_kinematics(None, resolved_tcp)
+        jaw_spec = jaw_gate_spec(library, kin, params, rim_z_m=rim_z_m)
+        if jaw_spec is not None and jaw_spec.get("rim_z_m") is not None:
+            library = {**library, "source": {**(library.get("source") or {}), "rim_z_m": float(jaw_spec["rim_z_m"])}}
+    if jaw_spec is not None and demonstrated is not None and not sim_units:
+        if mismatch := trained_grasp_mismatch(demonstrated[0], demonstrated[1], jaw_spec["grasp_roll"]):
+            row = {"preflight": "jaw_roll", "jaw_warning": mismatch, "dry_run": dry_run}
+            if not dry_run:
+                log({**row, "refused": mismatch})
+                return {"result": "refused", "at": 0, "reason": mismatch}
+            log(row)
+    closed = closed_gripper(library)
     model_closed = converted_closed(closed, shadow.sim_rule) if sim_units else closed
     home_roll = None
     if sim_units and shadow.arm_id == "arm_b":
@@ -58,6 +94,16 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
     off = np.asarray(offset, dtype=float)
     goal = {} if goal_slot is None else {"goal": goal_slot}
 
+    def live_jaw_error(measured_pose, target_pose) -> str | None:
+        poses = [*([] if measured_pose is None else [measured_pose]), *([] if target_pose is None else [target_pose])]
+        return jaw_zone_error(poses, kin, jaw_spec) if jaw_spec is not None else None
+
+    def _legacy_jaw_hold(row, n: int, jaw_warn: str) -> dict:
+        held_reply = cell.act("human-hold")
+        log({**row, "refused": jaw_warn})
+        log({"command": "human-hold", **_status(held_reply)})
+        return {"result": "refused", "at": n, "reason": jaw_warn}
+
     if getattr(shadow, "chunk_size", None) is not None or sim_units or n_action is not None or handoff is not None:
         def infer(state, frames):
             model_state = np.asarray(state) if sim_units else np.asarray(state) + off
@@ -66,7 +112,11 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
             chunk = np.asarray(shadow.infer(obs, **args).chunk, dtype=float)
             return (chunk if sim_units else chunk - off), meta
 
-        def shape(actions, target, model_fps, runner_fps, held, row, converted):
+        def shape(actions, target, model_fps, runner_fps, held, row, converted, measured=None):
+            if jaw_warn := live_jaw_error(measured, target):
+                row["jaw_warning"] = jaw_warn
+                if not dry_run:
+                    raise ValueError(jaw_warn)
             if home_roll is not None and (warning := wrist_roll_warning(converted, home_roll)):
                 row["wrist_roll_warning"] = warning
                 if not dry_run:
@@ -75,11 +125,17 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                 actions = open_before_close(actions, open_g, model_closed)
             if model_fps != runner_fps:
                 actions = resample_chunk(actions, target, runner_fps)
-            return shape_chunk(actions, target, low, high, fastest)
+            frames = shape_chunk(actions, target, low, high, fastest)
+            if jaw_spec is not None and (jaw_warn := jaw_zone_error(frames, kin, jaw_spec)):
+                row["jaw_warning"] = jaw_warn
+                if not dry_run:
+                    raise ValueError(jaw_warn)
+            return frames
 
         return run_timed(cell, shadow, library, work, infer=infer, shape=shape, max_step=fastest,
                          n_action=n_action, max_obs_age_s=max_obs_age_s, max_chunks=max_chunks,
-                         dry_run=dry_run, log=log, handoff=handoff, authorize=authorize)
+                         dry_run=dry_run, log=log, handoff=handoff, authorize=authorize,
+                         jaw_gate=({**jaw_spec, "tcp_x_m": resolved_tcp} if jaw_spec is not None else None))
 
     held, released = False, False
     for n in range(max_chunks):
@@ -95,6 +151,12 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                "proposed_last": proposed[-1].tolist()}
         if dry_run:
             row.update(dry_run=True, converted_chunk=converted.tolist())
+        live_poses = [state.tolist(), *([status["target"]] if status.get("target") is not None else [])]
+        if jaw_spec is not None and (jaw_warn := jaw_zone_error(live_poses, kin, jaw_spec)):
+            row["jaw_warning"] = jaw_warn
+            if not dry_run:
+                return _legacy_jaw_hold(row, n, jaw_warn)
+        force_all = jaw_spec is not None and in_jaw_zone(live_poses, kin, jaw_spec)
         try:
             frames_cell = shape_chunk(proposed, state, low, high, fastest)
         except ValueError as error:
@@ -104,11 +166,16 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
             if not dry_run:
                 log({"command": "park", **_status(cell.act("park"))})
             return {"result": "refused", "at": n, "reason": str(error)}
+        if jaw_spec is not None and (jaw_warn := jaw_zone_error(frames_cell, kin, jaw_spec, force_all=force_all)):
+            row["jaw_warning"] = jaw_warn
+            if not dry_run:
+                return _legacy_jaw_hold(row, n, jaw_warn)
         row["frames"] = len(frames_cell)
         if dry_run:
             log({**row, "envelope": {"ok": True}})
             continue
-        lib = {**library, "chunks": {**library["chunks"], "policy": frames_cell}}
+        lib = {**library, "chunks": {**library["chunks"], "policy": frames_cell},
+               **({"jaw_gate": {**jaw_spec, "tcp_x_m": resolved_tcp}} if jaw_spec is not None else {})}
         path = work / f"policy-lib-{int(time.time())}-{n}.json"
         path.write_text(json.dumps(lib), encoding="utf-8")
         loaded = cell.act(f"load {path}")
@@ -249,21 +316,22 @@ def main(argv=None) -> int:
     from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
     import cell_params as prm
 
-    authorize = handoff = None
+    authorize = handoff = rim_z_m = None
     try:
         config["params"] = prm.load(config.get("params_path"))["values"]
         config.pop("_commissioning", None)
         if not args.dry_run:
             config["_commissioning"] = {"person_at_switch": args.person_at_switch}
             authorize = Authorization(config)
+        library = json.loads(args.library.read_text(encoding="utf-8"))
+        source = args.site or "belt"
+        rim_z_m = source_rim_z(config, source, library)
         if args.mode != "act":
-            library = json.loads(args.library.read_text(encoding="utf-8"))
-            source = args.site or "belt"
             validate_taught_goal(config, source, args.goal_site, destination, library)
             if args.mode == "hybrid":
                 if "plan" not in config:
                     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text(encoding="utf-8"))
-                closed = library.get("jaw_empty_stop", library["gripper_closed"])
+                closed = closed_gripper(library)
                 if shadow.sim_rule is not None:
                     closed = converted_closed(closed, shadow.sim_rule)
                 handoff = CellHandoff(config, source, args.library, library, closed + 1, work)
@@ -296,10 +364,14 @@ def main(argv=None) -> int:
         except (OSError, ValueError, KeyError) as error:
             result = {"result": "refused", "reason": str(error)}
     else:
+        import omx_tcp
+
         demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
         result = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks,
                              dry_run=args.dry_run, log=log, demonstrated=demonstrated, goal_slot=goal_slot,
-                             n_action=args.n_action, max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize)
+                             n_action=args.n_action, max_obs_age_s=args.max_obs_age_s, handoff=handoff,
+                             authorize=authorize, params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config),
+                             rim_z_m=rim_z_m)
     if look:
         after = look()
         result["source"] = {"before": before.get("objects"), "after": after.get("objects")}

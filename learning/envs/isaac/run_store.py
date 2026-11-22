@@ -172,8 +172,7 @@ def _write(fd, name, value, *, exclusive=False):
 
 def requested(config: dict) -> dict:
     """The request's settings back from a normalized config: the seed, and the case of an arm S case run."""
-    return {'seed': config['seed'], **({'case': config['case']} if 'case' in config else {}),
-            **({'layers': config['layers']} if 'layers' in config else {})}
+    return {key: config[key] for key in ('seed', 'case', 'layers', 'layout_sha256') if key in config}
 
 
 def input_snapshot(scenario_id: str, config: dict, source_sha: str) -> dict:

@@ -1,0 +1,62 @@
+/* Choice parts (choice-list.js, choice-group.js) and the one selection mark (S3, ADR for --selection).
+   Selected = the --selection edge (a thick inline-start line, --space-1) PLUS a check mark or the word 선택됨; never colour
+   alone, never a filled row. Focus (--focus-ring, a different blue step) is not selection. A map marker or the 3D view
+   draws the same: colour var(--selection), edge width var(--space-1), and the check mark or label word.
+   No transition, no animation (D-220). Pages that draw these link this sheet after component-controls.css. */
+
+/* the mark: one rule for a selected row (li[data-selected]), a chosen option and a chosen chip */
+:is(li[data-selected], [role="option"][aria-selected="true"], [role="tab"][aria-selected="true"], .choice-chip:has(.choice-radio:checked),
+  .choice-group[data-mode="toggle"] ui-button[kind="toggle"][aria-pressed="true"]) { box-shadow: inset var(--space-1) 0 0 var(--selection); }
+.choice-group[data-mode="toggle"] ui-button[kind="toggle"][aria-pressed="mixed"] { box-shadow: inset var(--space-1) 0 0 var(--selection); border-style: dashed; }
+/* robot rows keep their own markup; leave room for the edge so selecting never moves a cell */
+.robot-row { padding-inline-start: var(--space-2); }
+@media (width >= 64rem) { .robot-row-head { padding-inline-start: var(--space-2); } }
+
+/* check mark: the space is always reserved (visibility), so choosing never changes a width */
+.choice-check { display: inline-flex; align-items: center; visibility: hidden; flex: none; }
+:is([role="option"][aria-selected="true"], .choice-radio:checked, ui-button[aria-pressed="true"]) > .choice-check,
+.choice-radio:checked ~ .choice-check { visibility: visible; }
+
+/* group frame */
+.choice-group { margin: 0; padding: 0; border: 0; min-width: 0; display: grid; gap: var(--space-2); }
+.choice-label { padding: 0; color: var(--text-secondary); font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body); }
+.choice-items { display: flex; flex-wrap: wrap; gap: var(--space-2); min-width: 0; }
+.choice-group[data-mode="check"] .choice-items { flex-direction: column; gap: 0; }
+.choice-group ui-button[kind="toggle"][aria-pressed="true"],
+.choice-group ui-button[kind="toggle"][aria-pressed="mixed"],
+li[data-selected] ui-button[kind="toggle"][aria-pressed="true"] { color: var(--text-primary); background: transparent; border-color: var(--selection); font-weight: var(--weight-strong); }
+.choice-group ui-button[kind="toggle"][aria-pressed="true"] small, li[data-selected] ui-button[kind="toggle"] small { color: var(--text-secondary); }
+.choice-group[data-mode="check"] .ui-check { accent-color: var(--selection); }
+.choice-reason { min-width: 0; white-space: normal; overflow-wrap: anywhere; color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }  /* a long reason wraps inside its chip, never widens the page */
+
+/* K1 chips: native radio inside, painted like a quiet button */
+/* the native radio is stretched over the whole chip with opacity 0: the chip is the real hit target (pointer, touch, a test's
+   locator.check()), the input stays the accessible radio, and forced-colors paints no stray circle */
+.choice-radio, input.choice-radio.ui-field:is([type="radio"], :disabled) { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; width: 100%; height: 100%; margin: 0; opacity: 0; appearance: none; cursor: pointer; }
+.choice-radio:disabled { cursor: not-allowed; }
+.choice-chip { max-width: 100%; position: relative; display: inline-flex; align-items: center; gap: var(--gap-button-content); box-sizing: border-box; min-width: var(--target-secondary); min-height: var(--target-secondary);
+  padding: 0 var(--inset-button); border: 1px solid var(--control-line); border-radius: var(--radius-button); color: var(--nominal-quiet); cursor: pointer;
+  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); }
+.choice-chip:hover:not([data-disabled]) { color: var(--text-primary); border-color: var(--ink); }
+.choice-chip:has(.choice-radio:checked) { color: var(--text-primary); border-color: var(--selection); font-weight: var(--weight-strong); }
+.choice-chip:has(.choice-radio:focus-visible) { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.choice-chip[data-disabled], .ui-check[data-disabled] { opacity: var(--disabled-opacity); cursor: not-allowed; }
+
+/* K3 listbox */
+.choice-list { display: grid; gap: var(--space-2); min-width: 0; }
+.choice-options { margin: 0; padding: 0; list-style: none; }
+.choice-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-2); min-height: var(--target-secondary);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2); border-block-start: 1px solid var(--border-subtle); cursor: pointer; min-width: 0; }
+.choice-option[aria-selected="true"] { font-weight: var(--weight-strong); }
+.choice-option[aria-disabled="true"] { opacity: var(--disabled-opacity); cursor: not-allowed; }
+.choice-option:hover:not([aria-disabled="true"]) { background: var(--surface-flat); }
+.choice-body { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); min-width: 0; }
+.choice-secondary { color: var(--text-secondary); font: var(--text-micro)/var(--leading-label) var(--body); }
+.choice-thumb { width: 3rem; height: 3rem; object-fit: cover; flex: none; }
+
+/* compact (width < 30rem): an unselected chip gives its tick width back so chips wrap in full; the selected one keeps edge, bold and tick */
+@media (width < 30rem) {
+  .choice-chip > .choice-check { display: none; }
+  .choice-chip:has(.choice-radio:checked) > .choice-check { display: inline-flex; }
+  .choice-chip { max-width: 100%; }
+}

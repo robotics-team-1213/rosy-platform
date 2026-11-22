@@ -282,8 +282,9 @@ class BayZoneMixin:
             self._ap_ask_at = h.now()
             return self._open_request(getattr(h._dock, "metadata", {}).get("reference_scan"), "alignpose",
                                       self._near(self._row_pose))
-        if (((h.phase is DockPhase.ACQUIRING and not self._crept) or h.phase is DockPhase.BACKOFF) and self._in_row and self._has_reference()
-                and self._req_open is None
+        if (((h.phase is DockPhase.ACQUIRING and not self._crept and self._in_row)
+             or (h.phase is DockPhase.BACKOFF and (self._in_row or self._reseat_active)))
+                and self._has_reference() and self._req_open is None
                 and (self._row_pose is None or h.now() - self._row_pose[3] > h._cfg.bay_row_pose_fresh_s / 2)
                 and h.now() - self._ap_ask_at >= h._cfg.bay_lidar_ask_s):
             self._ap_ask_at = h.now()                        # a fresh bay pose before the creep (the answer feeds _row_pose)

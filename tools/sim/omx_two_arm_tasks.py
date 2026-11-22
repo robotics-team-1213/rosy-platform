@@ -22,6 +22,8 @@ ARM_RADIUS, ARM_MARGIN = .03, .005  # capsule stand-in for a link; MuJoCo contac
 RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on studs (floor enforced) and the temp lanes have a funnel
 RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only needed while single-contact deck meshes made boxes creep; see omx_two_arm_world)
 LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
+BASE_SINGULARITY_R = .05  # matches cell_profile.yaml / ladder-cell.example.json singularity_radius_m
+CARRY_VIA_R = .09         # front-side (arm yaw) bypass radius: clears the 50 mm base singularity and stays outside the r08 ship hull
 CAPACITY = 3 * sites_mod.TEMP_TIERS  # containers per temporary plate: 3 lanes (3 x 1 each), 3 tiers (plate v11)
 TIERS = (1, 2, 3)       # 1단 (layer 0), 2단 (layer 1), 3단 (layer 2)
 _TASK_LOAD_CACHE = {}  # (resolved path, mtime_ns, size) -> parsed task file; load() hands out deep copies
@@ -57,6 +59,22 @@ def carry_z(layout, here, a, b):
     return max([layout.sites[a]["z"], layout.sites[b]["z"], *tops]) + layout.box[2] + CARRY_CLEAR + layout.hold_below
 
 
+def _carry_via(arm, a_xy, b_xy):
+    """Bypass waypoint on the arm's front (+yaw) side when the straight carry chord passes inside BASE_SINGULARITY_R."""
+    if arm is None:
+        return None
+    a, b, base = np.asarray(a_xy, float), np.asarray(b_xy, float), np.asarray(arm.base[:2], float)
+    ab = b - a
+    ab2 = float(ab @ ab)
+    if ab2 <= 1e-12:
+        return None
+    t = float((base - a) @ ab) / ab2
+    if 0. < t < 1. and float(np.linalg.norm((a + t * ab) - base)) < BASE_SINGULARITY_R:
+        return (round(float(base[0] + CARRY_VIA_R * math.cos(arm.yaw)), 6),
+                round(float(base[1] + CARRY_VIA_R * math.sin(arm.yaw)), 6))
+    return None
+
+
 def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEASE_DROP_UPPER):
     """Teacher path of one step as (name, xy, z, yaw, grip): approach, grasp, lift, carry, lower, release, retreat. grip is open/hold."""
     a, b = dict(layout.sites[step["from"]]), layout.sites[step["to"]]
@@ -64,9 +82,12 @@ def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEA
         a["xy"], a["yaw"] = pick
     z_up = carry_z(layout, here, step["from"], step["to"])
     za, zb = layout.hold_z(step["from"]), layout.hold_z(step["to"]) + (0 if b["kind"] == "belt" else drop_upper if b.get("layer", 0) > 0 else drop)  # released this far above its seat: 5 mm on studs and temp lanes, less on a lower container (a drop onto a container spins it)
+    z_app = za + layout.box[2] + CARRY_CLEAR if a["kind"] == "belt" and layout.choices.get("wait_pose") != "home" else z_up  # belt pick approach depends only on belt height when waiting beside the belt (wait_pose="home" crosses the ship)
     ya, yb = a["yaw"], a["yaw"] + wrap_pi(b["yaw"] - a["yaw"])
-    return [("approach", a["xy"], z_up, ya, "open"), ("grasp", a["xy"], za, ya, "open"), ("close", a["xy"], za, ya, "hold"),
-            ("lift", a["xy"], z_up, ya, "hold"), ("carry", b["xy"], z_up, yb, "hold"), ("lower", b["xy"], zb, yb, "hold"),
+    via = _carry_via(layout.arms.get(step.get("arm")), a["xy"], b["xy"])
+    carry = ([("carry", via, z_up, .5 * (ya + yb), "hold")] if via is not None else []) + [("carry", b["xy"], z_up, yb, "hold")]
+    return [("approach", a["xy"], z_app, ya, "open"), ("grasp", a["xy"], za, ya, "open"), ("close", a["xy"], za, ya, "hold"),
+            ("lift", a["xy"], z_up, ya, "hold"), *carry, ("lower", b["xy"], zb, yb, "hold"),
             ("release", b["xy"], zb, yb, "open"), ("retreat", b["xy"], z_up, yb, "open")]
 
 
@@ -86,9 +107,12 @@ def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
     two branches and a carry can also turn the symmetric container +-180 deg when the shortest turn drives joint5 below roll_floor.
     branch="other" takes the second-best branch (the jaw turned 180 deg), for the feasibility matrix. Returns (ok, approach q, joint path, note)."""
     note, found = "no branch converged", []
-    turns = (0., -math.pi, math.pi) if branch == "best" and len(wps) >= 8 and roll_floor is not None else (0.,)
+    turns = (0., -math.pi, math.pi) if branch == "best" and len(wps) >= 8 else (0.,)
     for turn in turns:
-        trial = list(wps[:4]) + [(n, xy, z, y + turn, g) for n, xy, z, y, g in wps[4:]] if turn else list(wps)
+        n_carry = max(1, len(wps) - 7)
+        trial = (list(wps[:4]) + [(n, xy, z, y + turn * min(1., (idx - 3) / n_carry), g)
+                 for idx, (n, xy, z, y, g) in enumerate(wps[4:], 4)]) if turn else list(wps)
+        reached_carry = False
         for j5 in (q0[4], -1.5, -.4, 0., .8, 1.5, 1.9):
             seed = np.array(q0, float)
             seed[4] = j5
@@ -98,7 +122,8 @@ def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
                 note = f"approach {err * 1000:.1f} mm short at x {first[0]:.3f} y {first[1]:.3f} z {first[2]:.3f}"
                 continue
             approach, path, last, yaw_last, failed = q, [q.copy()], first, trial[0][3], None
-            for name, xy, z, yaw, _ in trial[1:]:
+            for wp_i, (name, xy, z, yaw, _) in enumerate(trial[1:], 1):
+                reached_carry |= wp_i >= 4
                 target = np.array([*xy, z])
                 for s in np.linspace(0, 1, samples + 1)[1:]:
                     q, e_pos, e_rot = arm.ik(q, last + (target - last) * s, yaw_last + (yaw - yaw_last) * s, 40)
@@ -116,7 +141,7 @@ def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
             found = [f for k, f in enumerate(found) if all(abs(f[1][4] - g[1][4]) > .3 or f[3] is not g[3] for g in found[:k])]  # one entry per distinct branch
             if branch == "best" and roll_floor is not None and found[-1][0] >= roll_floor:
                 break
-        if not found or (branch == "best" and (roll_floor is None or max(f[0] for f in found) >= roll_floor)):
+        if not reached_carry or (found and (branch != "best" or roll_floor is None or max(f[0] for f in found) >= roll_floor)):
             break
     found.sort(key=lambda f: -f[0])
     pick = 0 if branch == "best" else 1
