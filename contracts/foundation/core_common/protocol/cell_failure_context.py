@@ -194,7 +194,7 @@ class CellFailureContext(_Strict):
 
     @model_validator(mode="after")
     def _validate_integrity(self) -> "CellFailureContext":
-        core = self.model_dump(mode="json", by_alias=True, exclude={"context_sha256", "freshness"})
+        core = self.model_dump(mode="json", by_alias=True, exclude={"context_sha256", "freshness"}, exclude_unset=True)
         _check_depth(core)
         _check_no_inline_images(core)
         encoded = json.dumps(core, sort_keys=True, separators=(",", ":"), allow_nan=False, ensure_ascii=False).encode("utf-8")
@@ -221,7 +221,7 @@ class CellReadiness(_Strict):
 
     @model_validator(mode="after")
     def _validate_digest(self) -> "CellReadiness":
-        core = self.model_dump(mode="json", by_alias=True, exclude={"readiness_digest"})
+        core = self.model_dump(mode="json", by_alias=True, exclude={"readiness_digest"}, exclude_unset=True)
         _check_depth(core)
         _check_no_inline_images(core)
         if canonical_sha256(core) != self.readiness_digest:

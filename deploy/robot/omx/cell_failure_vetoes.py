@@ -175,7 +175,7 @@ def build_allowed_fallback_menu(
     if auto_fold_armed:
         menu.append(_menu_item("home_unwedge", 2, "tier2_auto", "cell_job_api", False, False, codes, hard | {"HOLDING_HIGH_NO_RELEASE"}))
     else:
-        menu.append(_menu_item("home_unwedge", 3, "human_only", "cell_job_api", True, True, codes, {"LATCHED_HW_ERROR", "WINDUP_HIT", "FLEET_SAFETY_STOP_OR_ABORTED", "PEER_ARM_LOCKED_OR_HELD", "PENDING_INTENT_PRESENT"}))
+        menu.append(_menu_item("home_unwedge", 3, "human_only", "cell_job_api", True, True, codes, {"LATCHED_HW_ERROR", "WINDUP_HIT", "FLEET_SAFETY_STOP_OR_ABORTED", "PEER_ARM_LOCKED_OR_HELD", "PENDING_INTENT_PRESENT", "CHAIN_DEPTH_EXCEEDED"}))
 
     if executor_mode in ("ik_auto_pick", "recovery"):
         if attempt_cause in ("lift_stall", "no_progress"):

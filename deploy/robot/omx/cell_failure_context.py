@@ -150,6 +150,18 @@ def _dir_size(path: Path) -> int:
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file() and not p.is_symlink())
 
 
+def _select_excess(rows: list[tuple[float, str, str, int]], cap: int, pinned: set[str]) -> set[str]:
+    remaining = len(rows)
+    drops: set[str] = set()
+    for _, bid, _, _ in rows:
+        if remaining <= cap:
+            break
+        if bid not in pinned:
+            drops.add(bid)
+            remaining -= 1
+    return drops
+
+
 def _prune(root: Path, *, pinned: set[str], max_failure: int, max_control: int, max_bytes: int) -> None:
     rows: list[tuple[float, str, str, int]] = []
     for sub in root.iterdir():
@@ -166,13 +178,7 @@ def _prune(root: Path, *, pinned: set[str], max_failure: int, max_control: int, 
     rows.sort()
     fail_rows = [r for r in rows if r[2] != "control"]
     ctrl_rows = [r for r in rows if r[2] == "control"]
-    drop: set[str] = set()
-    for r in fail_rows[: max(0, len(fail_rows) - max_failure)]:
-        if r[1] not in pinned:
-            drop.add(r[1])
-    for r in ctrl_rows[: max(0, len(ctrl_rows) - max_control)]:
-        if r[1] not in pinned:
-            drop.add(r[1])
+    drop = _select_excess(fail_rows, max_failure, pinned) | _select_excess(ctrl_rows, max_control, pinned)
     total = sum(r[3] for r in rows if r[1] not in drop)
     for r in rows:
         if total <= max_bytes:
