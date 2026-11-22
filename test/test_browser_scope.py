@@ -194,6 +194,17 @@ def test_sim_sources_select_sim_browser():
         assert "test/learning/perception/test_sim_browser.py" in browser_scope.targets([path])
 
 
+def test_canonical_sources_select_canonical_browser():
+    for path in (
+        "learning/curation/perception/canonical_web.py",
+        "learning/curation/perception/review_app_web/canonical.html",
+        "learning/curation/perception/review_app_web/canonical.js",
+        "learning/curation/perception/review_app_web/canonical.css",
+        "contracts/learning/src/rosy/contracts/learning/omx_canonical.py",
+    ):
+        assert "test/learning/perception/test_canonical_browser.py" in browser_scope.targets([path]), path
+
+
 def test_common_robot_tasks_select_real_browser_flow():
     expected = 'test/learning/perception/test_learning_tasks_browser.py'
     recovery = 'test/learning/perception/test_learning_task_recovery_browser.py'

@@ -92,6 +92,7 @@ OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for 
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
 LADDER = ["test/learning/perception/test_ladder_browser.py"]
+CANONICAL = ["test/learning/perception/test_canonical_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
 ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py",
             "test/learning/perception/test_learning_auth_surface_browser.py"]
@@ -108,7 +109,7 @@ STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/lear
 # These HTTP suites also contain opt-in Chromium flows; filename discovery alone misses them.
 STORAGE = ["test/learning/perception/test_storage_" + name + "_http.py" for name in
            ("inventory", "jobs", "setup", "omx")]
-LEARNING = OMX_LEARNING + CAMERA + SIM + LADDER + PIPELINE + ACCOUNTS + TASKS + STAGES + STORAGE
+LEARNING = OMX_LEARNING + CAMERA + SIM + LADDER + CANONICAL + PIPELINE + ACCOUNTS + TASKS + STAGES + STORAGE
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
@@ -169,8 +170,8 @@ SCOPE: dict[str, list[str]] = {
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STAGES for name in
        ("catalog.html", "camera.html")},
     "learning/curation/perception/omx_web.py": OMX_LEARNING,
-    "learning/curation/perception/omx_center_web.py": OMX_LEARNING,
-    "learning/training/omx/": OMX_LEARNING + TASKS,
+    "learning/curation/perception/omx_center_web.py": OMX_LEARNING + CANONICAL,
+    "learning/training/omx/": OMX_LEARNING + TASKS + CANONICAL,
     "learning/training/omx/experiment_catalog.py": STORAGE,
     **{f"learning/curation/perception/{name}": STORAGE for name in
        ("storage_inventory.py", "storage_pool.py", "storage_jobs.py", "storage_files.py", "storage_hub.py",
@@ -188,9 +189,12 @@ SCOPE: dict[str, list[str]] = {
        ("sim_web.py", "review_app_web/sim.html", "review_app_web/sim.js")},
     **{f"learning/curation/perception/{name}": LADDER for name in
        ("ladder_web.py", "review_app_web/ladder.html", "review_app_web/ladder.js", "review_app_web/ladder.css")},
+    **{f"learning/curation/perception/{name}": CANONICAL for name in
+       ("canonical_web.py", "review_app_web/canonical.html", "review_app_web/canonical.js", "review_app_web/canonical-monitor.js", "review_app_web/canonical.css")},
+    "contracts/learning/src/rosy/contracts/learning/omx_canonical.py": CANONICAL,
     **{f"learning/curation/perception/{name}": PIPELINE for name in
        ("learning_control.py", "learning_pipeline.py")},
-    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + LADDER + ACCOUNTS + TASKS + STORAGE
+    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + LADDER + CANONICAL + ACCOUNTS + TASKS + STORAGE
        for name in ("learning.html", "learning.js")},
     **{f"learning/curation/perception/{name}": STAGES for name in
        ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "promotion_request.py", "review_app_web/vlm.html", "review_app_web/vlm.js",

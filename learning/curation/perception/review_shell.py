@@ -11,7 +11,7 @@ PAGES = {'learning.html': ('home', 'page'), 'catalog.html': ('catalog', 'page'),
          'vlm.html': ('review', 'true'), 'sim.html': ('tasks', 'true'), 'ladder.html': ('tasks', 'true'),
          'classes.html': ('review', 'true'), 'incidents.html': ('review', 'true'),
          'record.html': ('catalog', 'true'), 'imitate.html': ('catalog', 'true'),
-         'workflow.html': ('tasks', 'page')}
+         'workflow.html': ('tasks', 'page'), 'canonical.html': ('tasks', 'true')}
 
 
 def render(root, name):
