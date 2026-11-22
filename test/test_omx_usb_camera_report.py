@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from core_common.protocol.workcell_observations import UsbCameraDecisions
+from core_common.protocol.arm_incident.workcell_observations import UsbCameraDecisions
 
 OMX = Path(__file__).resolve().parents[1] / "deploy/robot/omx"
 TOP = "/dev/v4l/by-id/rosy-realsense-d435-color"

@@ -177,7 +177,7 @@ FACTS = {"torque_after": TORQUE0, "latched": {}, "windup_hits": [], "stops": [{"
 
 
 def test_evidence_is_what_the_fleet_rule_reads_for_that_incident():
-    from core_common.protocol.arm_incidents import clearable_after_fold
+    from core_common.protocol.arm_incident.arm_incidents import clearable_after_fold
 
     result, *_ = run(Cell(REACH))
     proof = af.evidence(result, HOME, TORQUE0, "inc-1", 1000.0)

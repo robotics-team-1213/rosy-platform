@@ -5,7 +5,7 @@ from hashlib import sha256
 import pytest
 from pydantic import ValidationError
 
-from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import ArmObservation, WorkcellObservationManifest
 
 
 @pytest.fixture

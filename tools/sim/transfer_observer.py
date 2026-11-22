@@ -27,7 +27,7 @@ from recovery_observer import LIMIT, NoRedirect, _json, _origin, _read  # noqa: 
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'contracts/foundation'))
-from core_common.protocol.arm_transfer_observations import (  # noqa: E402
+from core_common.protocol.arm_incident.arm_transfer_observations import (  # noqa: E402
     ArmTransferObservation, ArmTransferObservationContextResponse,
 )
 

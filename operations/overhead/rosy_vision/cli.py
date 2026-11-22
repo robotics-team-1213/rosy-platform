@@ -28,7 +28,7 @@ from typing import Sequence
 import yaml
 
 from core_common.protocol.discovery_txt import HOSTNAME
-from core_common.protocol.workcell_observations import WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import WorkcellObservationManifest
 from rosy_vision import protocol
 from rosy_vision.field_calib import FieldCalibrator
 from rosy_vision.ingest import STATUS_INTERVAL_S, IngestServer

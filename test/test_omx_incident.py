@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "deploy/robot/omx"))
 import omx_incident as oi  # noqa: E402
-from core_common.protocol.arm_incidents import ArmIncidentAccepted as Accepted, ArmIncidentHold as Hold  # noqa: E402
+from core_common.protocol.arm_incident.arm_incidents import ArmIncidentAccepted as Accepted, ArmIncidentHold as Hold  # noqa: E402
 
 SID = "6f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
 HOME = [0.8, -62.2, 51.8, 51.4, 45.0, 54.4]
@@ -637,7 +637,7 @@ def test_verified_baseline_caps_releases_clean_folded_arm_without_human_hold(tmp
 
     class NonHoldLink(Link):
         def post(self, report):
-            from core_common.protocol.arm_incidents import ArmIncidentAccepted
+            from core_common.protocol.arm_incident.arm_incidents import ArmIncidentAccepted
             return ArmIncidentAccepted(incident_id="a" * 32, hold=hold(bool(report.decision.get("hold"))))
 
     free_out = oi.handle(s, "arm_b", link=NonHoldLink(), verify_caps=lambda: True)

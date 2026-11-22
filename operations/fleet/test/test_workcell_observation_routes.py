@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from hashlib import sha256
 import pytest
 
-from core_common.protocol.workcell_observations import WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import WorkcellObservationManifest
 from fleet.server.workcell_observations import WorkcellObservations
 from fleet.server.workcell_observation_routes import install_workcell_observation_routes
 

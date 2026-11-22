@@ -1,0 +1,52 @@
+{
+ "schema": "rosy.omx-incident.v1",
+ "arm": "arm_b",
+ "stamp": "20261117T171027",
+ "session": "session.json",
+ "facts": {
+  "safe_end": true,
+  "latched": {},
+  "torque_after": {
+   "11": 0,
+   "12": 0,
+   "13": 0,
+   "14": 0,
+   "15": 0,
+   "16": 0
+  },
+  "caps_restored": true,
+  "folded": true,
+  "last_state": [
+   0.76,
+   -62.25,
+   53.11,
+   51.7,
+   44.81,
+   48.89
+  ],
+  "flagged": [
+   {
+    "command": "tick",
+    "error": null,
+    "fault": "session ended: RuntimeError: torque OFF not confirmed: [ConnectionError(\"Failed to write 'Torque_Enable' on id_=11 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=12 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=13 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=14 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=15 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=16 with '0' after 3 tries. [TxRxResult] Port is in use!\")]",
+    "caught": null,
+    "t": 1794903025.254
+   }
+  ],
+  "windup_hits": [],
+  "stop_reading": null,
+  "stops": [],
+  "fault_records": [
+   "arm_b_follower-20261117T081025-77a5f4.json"
+  ],
+  "frames": []
+ },
+ "decision": {
+  "actions": [],
+  "hold": true,
+  "offered": [],
+  "reason": "runner: session ended: RuntimeError: torque OFF not confirmed: [ConnectionError(\"Failed to write 'Torque_Enable' on id_=11 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=12 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=13 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=14 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=15 with '0' after 3 tries. [TxRxResult] Port is in use!\"), ConnectionError(\"Failed to write 'Torque_Enable' on id_=16 with '0' after 3 tries. [TxRxResult] Port is in use!\")]; a person checks the arm (jaws, contacts, wedged objects) before torque ON"
+ },
+ "recovery": null,
+ "reported": true
+}

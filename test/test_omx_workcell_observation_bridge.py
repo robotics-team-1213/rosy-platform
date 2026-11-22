@@ -16,7 +16,7 @@ import pytest
 import yaml
 
 from core_common.observation_snapshot import SnapshotChannel
-from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import ArmObservation, WorkcellObservationManifest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "operations" / "overhead"))
@@ -651,7 +651,7 @@ def test_the_cells_arm_health_files_come_from_the_environment_when_not_given(man
 
 
 def test_usb_camera_report_goes_to_the_workcell_route_with_an_arm_token_and_returns_decisions(monkeypatch):
-    from core_common.protocol.workcell_observations import UsbCameraReport
+    from core_common.protocol.arm_incident.workcell_observations import UsbCameraReport
     captured = {}
 
     class Response:
@@ -688,7 +688,7 @@ def test_a_failing_usb_report_is_logged_and_retried_without_stopping_the_loop(mo
 
 
 def test_arm_incident_report_and_hold_use_the_arms_own_source_route_and_token(monkeypatch):
-    from core_common.protocol.arm_incidents import ArmIncidentReport
+    from core_common.protocol.arm_incident.arm_incidents import ArmIncidentReport
     seen = []
     hold = {"held": True, "incident_ids": ["a" * 32], "reason": "1 open arm incident(s): overload"}
 

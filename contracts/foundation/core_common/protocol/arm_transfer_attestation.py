@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import Field
 
 from .arm_transfer import ArmActionId
-from .arm_transfer_observations import _Closed, _Counter
+from .arm_incident.arm_transfer_observations import _Closed, _Counter
 from .arm_transfer_preflight import ArmDigest, ArmPhysicalRef
 
 #: SOURCE_CLEAR: the object is at `source` and the arm zone is empty (before dispatch).

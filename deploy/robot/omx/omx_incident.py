@@ -36,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_decisions  # noqa: E402
+import omx_incident_reassess  # noqa: E402
 import push_replay  # noqa: E402
 from omx_incident_fleet import (  # noqa: E402
     INCIDENTS,
@@ -173,7 +174,7 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
 def software_stop(f: dict) -> str | None:
     """The shared rule (core_common, so Fleet's hold judges the same facts); not importable here: hold, as before."""
     try:
-        from core_common.protocol.arm_incidents import software_stop as rule
+        from core_common.protocol.arm_incident.arm_incidents import software_stop as rule
     except ImportError:
         return None
     return rule(f)
@@ -184,6 +185,10 @@ def decide(f: dict) -> dict:
     released = software_stop(f)
     if released:  # the guard's own stop on a folded arm that followed its command: listed for a cause, not held
         return {"actions": [], "hold": False, "offered": [], "reason": released}
+    off = bool(f["torque_after"]) and all(isinstance(v, int) and not isinstance(v, bool) and v == 0
+                                          for v in f["torque_after"].values())
+    if off and not f["folded"] and f.get("home") and f.get("last_state") and not f["latched"]:
+        return {"actions": [], "hold": True, "offered": [], "reason": "torque off with arm extended; guarded fold required"}
     signs = bool(f["latched"] or f["windup_hits"] or f["flagged"] or not f["safe_end"])
     if not signs and f.get("stops"):  # the recovery handled it; a person still names what stopped it
         return {"actions": [], "hold": False, "offered": [],
@@ -194,8 +199,6 @@ def decide(f: dict) -> dict:
                    and all(r.get("caught") for r in f["flagged"]))
     if caught_only:  # the runner already let go where the jaws pinched: a note, not a hold
         return {"actions": [], "hold": False, "offered": [], "reason": "jaws caught and reopened by the runner"}
-    off = bool(f["torque_after"]) and all(isinstance(v, int) and not isinstance(v, bool) and v == 0
-                                          for v in f["torque_after"].values())
     rebootable = [m for m, l in f["latched"].items()
                   if isinstance(l.get("hw_error"), int) and l["hw_error"] and not int(l["hw_error"]) & ~REBOOTABLE]
     offered = ["reboot_latched"] if rebootable and len(rebootable) == len(f["latched"]) and off and f["folded"] else []
@@ -341,15 +344,14 @@ def status(arm: str, link=None) -> dict:
             "incident_ids": fleet_ids, "fleet_reason": fleet_reason}
 
 
-def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None, recovery=None, only=None) -> int:
-    """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold.
-    recovery/only (D-1048): an assessor's auto-fold evidence for that one incident."""
+def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None, remeasured=None, recovery=None,
+          only=None) -> int:
+    """Clear one arm's open incidents as this token's operator (AI assessor with `remeasured`, D-1040, or `recovery`,
+    the auto-fold evidence of that one incident `only`, D-1048); lift the hold."""
     from omx_incident_fleet import clear_incidents
 
-    return clear_incidents(
-        arm, note, token_file, link or link_for(arm), cause=cause, basis=basis, token=token, refuse_fn=refuse_if_held,
-        recovery=recovery, only=only,
-    )
+    return clear_incidents(arm, note, token_file, link or link_for(arm), cause=cause, basis=basis, token=token,
+                           refuse_fn=refuse_if_held, remeasured=remeasured, recovery=recovery, only=only)
 
 
 def main(argv=None):
@@ -369,12 +371,13 @@ def main(argv=None):
                         "$ROSY_ARM_ASSESSOR_TOKEN_FILE, then ~/.config/rosy/*-operator-*.token")
     c.add_argument("--cause", help="optional structured stop cause (API v1.375)")
     c.add_argument("--basis", help="optional cause basis: repeat, measured, seen, unknown (API v1.375)")
+    omx_incident_reassess.arguments(sub, c)
     args = parser.parse_args(argv)
     if args.command == "status":
         print(json.dumps(status(args.arm)))
         return 0
-    if args.command == "clear":
-        return clear(args.arm, args.note, args.token_file, cause=args.cause, basis=args.basis)
+    if args.command in ("clear", "reassess"):
+        return omx_incident_reassess.run(args, clear)
     from joint_tune import session_lock
 
     lock = session_lock(args.arm)  # a by-hand run never overlaps a recording session of the same arm

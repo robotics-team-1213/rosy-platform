@@ -54,7 +54,7 @@ def close_job(rig, *, joints=True):
 
 
 def test_source_joint_facts_are_closed_finite_and_ordered():
-    contracts = import_module("core_common.protocol.arm_transfer_observations")
+    contracts = import_module("core_common.protocol.arm_incident.arm_transfer_observations")
     json.dumps(contracts.ArmOwnerObservation.model_json_schema())
     cls = contracts.ArmJointObservation
     original = joint_measurement(1_000_000_000, 4)
@@ -72,7 +72,7 @@ def test_source_joint_facts_are_closed_finite_and_ordered():
 def test_legacy_canonical_proof_omits_absent_joint_measurements(policy, explicit_null):
     from test_physical_transfer_evidence import context, samples
     from fleet.server.physical_transfer_observations import evidence_document, world_observations
-    from core_common.protocol.arm_transfer_observations import ArmTransferObservation
+    from core_common.protocol.arm_incident.arm_transfer_observations import ArmTransferObservation
     physical = import_module("rosy.world.state.projections.physical_transfer")
     assert hasattr(physical, "JointPhysicalState")
     raw = samples(policy)

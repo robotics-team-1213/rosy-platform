@@ -10,7 +10,7 @@ from core_common.protocol.arm_transfer import ArmActionId
 from core_common.protocol.arm_transfer_evidence import ArmTransferPhysicalEvidenceResponse
 from core_common.protocol.arm_transfer_jobs import ArmTransferJobResponse, ArmTransferRequestKey
 from core_common.protocol.arm_transfer_recheck import ArmTransferRecheckCreate, ArmTransferRecheckResponse
-from core_common.protocol.arm_transfer_observations import (
+from core_common.protocol.arm_incident.arm_transfer_observations import (
     ArmTransferObservationContextResponse, ArmTransferObservationRequest, ArmTransferObservationReply,
     ArmTransferPhysicalReceiptResponse, ArmTransferCancelRequest)
 from .local_action_transport import LocalActionUnavailable

@@ -18,7 +18,7 @@ from .arm_transfer_jobs import (  # noqa: F401
     ArmTransferRequest, ArmTransferRequestKey, ArmTransferJobCreate, ArmTransferJobAdmit,
     ArmTransferJobSnapshot, ArmTransferJobResponse, ArmTransferDelegation)
 from .wire_status import RobotMode, NavigationState, HealthState, Severity, AckStatus
-from .arm_transfer_observations import (  # noqa: F401
+from .arm_incident.arm_transfer_observations import (  # noqa: F401
     ArmObservationPose, ArmObservationBounds, ArmLinkObservation, ArmJointObservation, ArmOwnerObservation,
     ArmTransferObservation, ArmTransferObservationRequest, ArmTransferOwnerContext,
     ArmTransferObservationContext, ArmTransferObservationContextResponse, ArmTransferPhysicalReceipt,
@@ -71,7 +71,7 @@ from .channel_requests import (  # noqa: F401
     ChannelWorkPrepareRequest, ChannelMissionPrepareRequest, ChannelCellPrepareRequest, ChannelWorkAdmitRequest,
     ChannelIncidentReference, ChannelIncidentClaimRequest,
 )
-from .arm_incidents import (  # noqa: F401 (D-971)
+from .arm_incident.arm_incidents import (  # noqa: F401 (D-971)
     ArmIncidentFrame, ArmIncidentReport, ArmIncidentHold, ArmIncidentAccepted, ArmIncidentExplanation,
     ArmIncidentClear,
 )

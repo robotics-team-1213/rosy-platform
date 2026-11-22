@@ -24,7 +24,9 @@ Single source of pydantic schemas for REST snapshots and Fleet WS envelope (D-10
 
 ## Subdirectories
 
-None.
+| Directory | Purpose |
+|-----------|---------|
+| `arm_incident/` | OMX arm incident evidence rules and wire models for incidents, workcell observations, and arm-transfer observations |
 
 ## For AI Agents
 

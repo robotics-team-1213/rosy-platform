@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import omx_cameras  # noqa: E402
 import omx_devices  # noqa: E402
-from core_common.protocol.workcell_observations import UsbCameraReport  # noqa: E402
+from core_common.protocol.arm_incident.workcell_observations import UsbCameraReport  # noqa: E402
 
 ROLE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]{0,63}")
 USB_ID = re.compile(r"[0-9a-f]{4}:[0-9a-f]{4}")
