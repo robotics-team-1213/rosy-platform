@@ -170,7 +170,7 @@ def _berth_profile(
     ambiguous_rule: bool,
 ) -> dict[str, Any] | None:
     edges_wired = has_edges_in and has_edges_out
-    if kind == "charge":
+    if kind == "charge" and place_id not in NAV2_BERTH_STOPS:
         return {
             "mode": "camera_pink_line",
             "adr": "D-1013",
@@ -256,7 +256,7 @@ def build_site_points(
     berth_by_stop_id: dict[str, dict[str, Any] | None] = {}
 
     for place in site_map.places:
-        if place.kind not in ("stop", "charge", "park") and not include_junctions and place.id != "S_OUT":
+        if place.kind not in ("stop", "charge", "park") and not include_junctions and place.id not in NAV2_BERTH_STOPS:
             continue
         rule = stop_rules.get(place.id)
         p_edges_in = edges_in.get(place.id, [])
