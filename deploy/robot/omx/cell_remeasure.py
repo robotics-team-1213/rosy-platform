@@ -25,7 +25,7 @@ def write_context(cfg: Path, cfg_data: dict[str, Any], handoff: dict[str, Any], 
         path = context_path(prep_dir, str(handoff.get("task_id")))
         path.write_text(json.dumps({
             "cfg": str(cfg), "prep_dir": str(prep_dir), "arm_id": arm_id, "dst": dst, "src_site": src_site, "src_roi": list(src_roi),
-            "handoff": {k: handoff.get(k) for k in ("task_id", "cell_id", "tier", "handoff_lease_id", "arm_id")},
+            "handoff": {k: handoff.get(k) for k in ("task_id", "cell_id", "tier", "handoff_lease_id", "arm_id", "dst_site", "dst_site_id", "dst_area")},
             "before_frames": (zone or {}).get("before_frames"), "work_dir": cfg_data["work_dir"]}), encoding="utf-8")
     except (OSError, KeyError, TypeError):
         pass
