@@ -666,8 +666,11 @@ def test_home_button_uses_separate_leader_option_and_homing_shows_hands_off_noti
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
     js = ((omx_dir / 'bench_record_app.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8'))
     ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
-    assert "has_leader_pose&&$('home-include-leader')?.checked" in js
-    assert 'id="home-include-leader"' in html and '리더도 함께' in html
+    assert "leader_connected===true||" in js and "leader_connected!==false" in js and "$('home-include-leader')?.checked" in js
+    assert 'id="home-include-leader" checked' in html and '리더도 함께' in html
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+    prm_js = (omx_dir / 'bench_record_params.js').read_text(encoding='utf-8')
+    assert "leader_connected!==false" in st_js and "parseTickInput(" in prm_js
     assert '시작 전 리더를 팔로워 자세로 맞춤' in html
     assert '리더에서 손을 뗐습니다' not in html
     assert 'at_bench' not in html
@@ -1067,15 +1070,18 @@ def test_ui_connected_arm_cards_zoomed_map_and_inline_params_panel(tmp_path, mon
     map_js = (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
 
     for marker in ('id="arm-card-bar"', 'id="sb-speed-pills"', 'id="sb-joint-caps-table"',
-                   'id="sb-caps-save-btn"', 'id="map-modal-host"', '/bench_record_params.js'):
+                   'id="sb-caps-save-btn"', 'id="map-modal-host"', '/bench_record_params.js',
+                   'id="sb-grip-map"', 'id="sb-grip-save-btn"'):
         assert marker in html, marker
     assert html.index('id="arm-card-bar"') < html.index('id="sec-goal"')
     assert 'max-height:108px' not in css and 'min-height:176px' in css
     assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
-    for fn in ('function renderArmCards(', 'function renderParamsPanel(', 'function submitCaps(', '/api/teleop_speed'):
+    for fn in ('function renderArmCards(', 'function renderParamsPanel(', 'function submitCaps(', '/api/teleop_speed',
+               'function loadGripMaps(', 'function submitGripMap(', '/api/grip_map', '180,240'):
         assert fn in params_js, fn
-    assert 'arm_connectivity' in app_js and 'pollArms()' in app_js
+    assert 'arm_connectivity' in app_js and 'pollArms()' in app_js and 'loadGripMaps()' in app_js
     assert 'function renderArmSMapSvg(' in map_js and 'id="map-expand-btn"' in map_js and 'function openMapModal(' in map_js
+    assert 'renderArmSMapSvg(zoneBg,zoneCol,validArm,cards)' in map_js
 
     bench, _, _, _ = _setup(tmp_path, monkeypatch)
     srv = bench_record.make_server(bench, 0)
@@ -1089,6 +1095,16 @@ def test_ui_connected_arm_cards_zoomed_map_and_inline_params_panel(tmp_path, mon
                                      headers={'Content-Type': 'application/json', 'X-Bench': '1'}, method='POST')
         with urllib.request.urlopen(req, timeout=5) as r:
             assert r.status == 200 and json.loads(r.read())['teleop_speed_declared']['arm_s']['stage'] == 90
+        with urllib.request.urlopen(base + '/api/grip_map', timeout=5) as r:
+            assert r.status == 200 and 'arm_s' in json.loads(r.read())['arms']
+        greq = urllib.request.Request(
+            base + '/api/grip_map',
+            data=json.dumps({'arm': 'arm_s', 'leader_closed': 1930, 'leader_open': 2850,
+                             'follower_closed': 2000, 'follower_open': 2800}).encode(),
+            headers={'Content-Type': 'application/json', 'X-Bench': '1'}, method='POST',
+        )
+        with urllib.request.urlopen(greq, timeout=5) as r:
+            assert r.status == 200 and json.loads(r.read())['gripper']['follower_open'] == 2800
     finally:
         srv.shutdown()
         srv.server_close()

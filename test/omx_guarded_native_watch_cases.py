@@ -450,3 +450,35 @@ def test_single_tick_wrap_jump_and_untracking_and_follower_range_exit_still_fail
     leader3.raw['gripper'] = 2075
     step3()
     assert not motion3.failed and 'gripper' in motion3.clamped and any(follower3.torque.values())
+
+
+def test_moving_ticks_keep_momentum_at_high_stages_and_unready_gripper_aligns_at_stage_rate(guard):
+    motion, follower, leader, clock, step = _lagging(guard, tau=0.13, stage=180)
+    motion.command['shoulder_pan'] = 2120.0
+    motion.sent['shoulder_pan'] = 2120
+    motion.lag.x['shoulder_pan'] = 2120.0
+    motion.lag.prev['shoulder_pan'] = 2074  # delta=+1 tick (3.95 deg < 5 deg guard, cap ~2113 < 2120)
+    motion.velocity['shoulder_pan'] = 120.0 * guard.TICKS_PER_DEGREE
+    follower.raw['shoulder_pan'] = 2075
+    leader.raw['shoulder_pan'] = 2300
+    clock[0] += 1 / 30
+    motion.send(action(leader))
+    assert motion.command['shoulder_pan'] == 2120.0 and motion.velocity['shoulder_pan'] > 50.0 * guard.TICKS_PER_DEGREE and not motion.failed
+
+    # Unready gripper uses align_deg_s in staged mode vs 1 deg/s in unstaged legacy mode
+    f_s, l_s, clk_s = Bus(), Bus(leader=True), [10.0]
+    l_s.raw['gripper'] += 400
+    m_s = guard.NativeJointMotion(f_s, l_s, clock=lambda: clk_s[0], label='arm_s', stage=180)
+    m_s.send(action(l_s))
+    for _ in range(15):
+        clk_s[0] += 0.05
+        m_s.send(action(l_s))
+        f_s.raw.update(f_s.goals)
+    assert m_s.tracking and not m_s.grip_ready and abs(m_s.velocity['gripper']) / guard.TICKS_PER_DEGREE > 5.0
+
+    for stage in (180, 240):
+        m, f, l, clk, stp = _lagging(guard, tau=0.13, stage=stage)
+        for _ in range(20):
+            l.raw['shoulder_pan'] += stage * guard.TICKS_PER_DEGREE * 0.05
+            stp()
+        assert not m.failed and any(f.torque.values())

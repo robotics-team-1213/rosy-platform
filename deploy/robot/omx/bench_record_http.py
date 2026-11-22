@@ -74,6 +74,8 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                 return self.reply(200, jpg, "image/jpeg")
             if path == "/api/arms":
                 return self.reply(200, bench.arms_status())
+            if path == "/api/grip_map":
+                return self.reply(200, bench.grip_maps())
             if path == "/api/telemetry":
                 return self.reply(200, bench.telemetry())
             if path == "/api/camera_check":
@@ -129,6 +131,8 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.save_caps(body))
                 if self.path == "/api/teleop_speed":
                     return self.reply(200, bench.set_teleop_speed(body))
+                if self.path == "/api/grip_map":
+                    return self.reply(200, bench.save_grip_map(body))
                 if self.path == "/release_lock":
                     return self.reply(200, bench.release_lock(body))
                 if self.path == "/home":

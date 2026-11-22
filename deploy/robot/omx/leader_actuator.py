@@ -31,6 +31,8 @@ DEFAULT_CURRENT = 100
 #: accelerates faster than the Follower's tracking acceleration (10 degree/s^2).
 RATE_DEG_S = 1.0
 ACCEL_DEG_S2 = 10.0
+MAX_RATE_DEG_S = 30.0
+MAX_ACCEL_DEG_S2 = 120.0
 #: A joint is "loaded" when it holds more than this much error at this much of its PWM cap.
 LOADED_ERROR_DEG = 2.0
 LOADED_PWM_FRACTION = 0.9
@@ -50,6 +52,14 @@ GAIN_REGISTERS = ("Position_P_Gain", "Position_I_Gain")
 GRAVITY_MAX_TICKS = 120
 
 
+def validate_motion_limits(rate_deg_s: float, accel_deg_s2: float) -> tuple[float, float]:
+    """Validate bounded leader rate/accel before opening hardware so invalid limits never leak a serial bus."""
+    for name, val, upper in (("rate_deg_s", rate_deg_s, MAX_RATE_DEG_S), ("accel_deg_s2", accel_deg_s2, MAX_ACCEL_DEG_S2)):
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(val) or not 0 < val <= upper:
+            raise ValueError(f"leader {name} must be finite in (0, {upper}] (got {val!r})")
+    return float(rate_deg_s), float(accel_deg_s2)
+
+
 class LeaderActuator:
     """One Leader bus driven under caps and restored on every exit.
 
@@ -58,7 +68,9 @@ class LeaderActuator:
     so with torque OFF and reads every write back.
     """
 
-    def __init__(self, bus, *, clock=time.monotonic, log=None, label="leader"):
+    def __init__(self, bus, *, clock=time.monotonic, log=None, label="leader",
+                 rate_deg_s: float = RATE_DEG_S, accel_deg_s2: float = ACCEL_DEG_S2):
+        self.rate_deg_s, self.accel_deg_s2 = validate_motion_limits(rate_deg_s, accel_deg_s2)
         self.bus = bus
         self.clock = clock
         self.log = log or (lambda **row: None)
@@ -149,8 +161,8 @@ class LeaderActuator:
             raise ValueError("seed before stepping")
         if elapsed <= 0:
             raise ValueError("a step needs a positive elapsed time")
-        acceleration = ACCEL_DEG_S2 * TICKS_PER_DEGREE
-        limit = RATE_DEG_S * TICKS_PER_DEGREE
+        acceleration = self.accel_deg_s2 * TICKS_PER_DEGREE
+        limit = self.rate_deg_s * TICKS_PER_DEGREE
         command = {}
         for name in BODY:
             error = target[name] - self.command[name]

@@ -1309,3 +1309,41 @@ def test_arm_connectivity_checks_dev_paths_and_teleop_speed_api_updates_stage(tm
     bench.state = {'status': 'recording'}
     with pytest.raises(ValueError, match='진행 중'):
         bench.set_teleop_speed({'arm': 'arm_s', 'stage': 60})
+
+
+def test_grip_map_api_preserves_mount_and_validates_bounds(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    mount_dir = tmp_path / 'home' / '.cache' / 'huggingface' / 'lerobot' / 'calibration' / 'teleoperators' / 'omx_leader'
+    mount_dir.mkdir(parents=True, exist_ok=True)
+    mp = mount_dir / 'arm_s_leader.mount.json'
+    mp.write_text(json.dumps({'shoulder_pan': -2048, 'wrist_roll': -2048,
+                              'gripper': {'leader_open': 3700, 'leader_closed': 1930, 'follower_open': 2379, 'follower_closed': 2000},
+                              'follower_floor': {'shoulder_lift': 790}}), encoding='utf-8')
+    got = bench.grip_maps()['arms']['arm_s']
+    assert got['exists'] is True and got['gripper']['follower_open'] == 2379
+
+    saved = bench.save_grip_map({'arm': 'arm_s', 'leader_closed': 1930, 'leader_open': 2850, 'follower_closed': 2000, 'follower_open': 2800})
+    assert saved['gripper'] == {'leader_closed': 1930, 'leader_open': 2850, 'follower_closed': 2000, 'follower_open': 2800}
+    on_disk = json.loads(mp.read_text(encoding='utf-8'))
+    assert on_disk['shoulder_pan'] == -2048 and on_disk['wrist_roll'] == -2048 and on_disk['follower_floor'] == {'shoulder_lift': 790}
+    assert on_disk['gripper']['follower_open'] == 2800
+
+    for bad in (
+        {'arm': 'arm_ab', 'leader_closed': 1930, 'leader_open': 2850, 'follower_closed': 2000, 'follower_open': 2800},
+        {'arm': 'arm_s', 'leader_closed': 1930, 'leader_open': 2850, 'follower_closed': 2000, 'follower_open': 3500},
+        {'arm': 'arm_s', 'leader_closed': 2000, 'leader_open': 2000, 'follower_closed': 2000, 'follower_open': 2500},
+    ):
+        with pytest.raises(ValueError):
+            bench.save_grip_map(bad)
+
+    bench.state = {'status': 'recording'}
+    with pytest.raises(ValueError, match='진행 중'):
+        bench.save_grip_map({'arm': 'arm_s', 'leader_closed': 1930, 'leader_open': 2850, 'follower_closed': 2000, 'follower_open': 2800})
+
+    bench.state = {'status': 'idle'}
+    real_target = tmp_path / 'real-mount.json'
+    real_target.write_text('{}', encoding='utf-8')
+    mp.unlink()
+    mp.symlink_to(real_target)
+    with pytest.raises(ValueError, match='심볼릭 링크'):
+        bench.save_grip_map({'arm': 'arm_s', 'leader_closed': 1930, 'leader_open': 2850, 'follower_closed': 2000, 'follower_open': 2800})

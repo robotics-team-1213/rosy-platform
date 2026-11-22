@@ -25,8 +25,9 @@ from pathlib import Path
 
 ENV = "ROSY_TELEOP_STAGE"
 VEL_DEG_S_PER_RAW, ACC_DEG_S2_PER_RAW = 1.374, 21.4577
-ACCEL = {30: 30.0, 45: 60.0, 60: 90.0, 90: 135.0, 120: 180.0}  # 90 and 120: prepared for a human's hand speed, not the default (W17)
-ALIGN_DEG_S = 10.0  # start alignment rate of a staged full-arm session (1 degree/s elsewhere): 20 degrees apart = 2 s, not 20 s
+ACCEL = {30: 30.0, 45: 60.0, 60: 90.0, 90: 450.0, 120: 600.0, 180: 900.0, 240: 1200.0}
+ALIGN_STAGE = {30: 10.0, 45: 10.0, 60: 10.0, 90: 20.0, 120: 20.0, 180: 30.0, 240: 30.0}
+ALIGN_DEG_S = 10.0  # W14/W17 start alignment rate (stages >= 90 scale via ALIGN_STAGE)
 
 
 def _raw(value: float) -> int:
@@ -38,7 +39,9 @@ def profile_vel_raw(stage: int) -> int:
 
 
 def profile_acc_raw(stage: int) -> int:
-    return _raw(profile_vel_raw(stage) * VEL_DEG_S_PER_RAW / 0.15 / ACC_DEG_S2_PER_RAW)
+    if stage <= 60:
+        return _raw(profile_vel_raw(stage) * VEL_DEG_S_PER_RAW / 0.15 / ACC_DEG_S2_PER_RAW)
+    return min(100, _raw(profile_vel_raw(stage) * VEL_DEG_S_PER_RAW / 0.08 / ACC_DEG_S2_PER_RAW))
 
 
 def brake_deg_s2(stage: int) -> float:
@@ -47,12 +50,13 @@ def brake_deg_s2(stage: int) -> float:
 
 
 def tau_s(stage: int) -> float:
-    """Servo lag time constant for guarded_native_lag: 0.27 s measured at profile acceleration 8; the stages' own acceleration scales it (an estimate, see there)."""
-    return round(0.27 * math.sqrt(8 / profile_acc_raw(stage)), 2)
+    """Servo lag time constant for guarded_native_lag: base sqrt scaling plus 50 ms PID+loop floor at high stages."""
+    base = 0.27 * math.sqrt(8 / profile_acc_raw(stage))
+    return round(base if stage <= 60 else 0.05 + base, 2)
 
 
 STAGES = {s: {"track_deg_s": float(s), "profile_vel": profile_vel_raw(s), "profile_acc": profile_acc_raw(s), "accel_deg_s2": ACCEL[s],
-              "brake_deg_s2": brake_deg_s2(s), "tau_s": tau_s(s), "align_deg_s": ALIGN_DEG_S} for s in ACCEL}
+              "brake_deg_s2": brake_deg_s2(s), "tau_s": tau_s(stage=s), "align_deg_s": ALIGN_STAGE[s]} for s in ACCEL}
 
 
 def valid(value):

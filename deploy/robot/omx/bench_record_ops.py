@@ -7,6 +7,7 @@ from pathlib import Path
 
 from bench_record_inspect import ARMS, BI_ARM, HERE, active_handover_units
 from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, release, resolve_record_config
+from bench_record_leader import library_home_ticks
 from bench_record_step import at_home, finish_home_child, resolve_home_failure
 
 
@@ -154,11 +155,15 @@ class BenchOpsMixin:
                 rec_proc = None
                 clean = True
                 stopped_units, fresh, home_ok, stop_flag = [], False, False, [False]
+                leader_task = None
                 rec_log_p, rec_log = self.prep / ".bench-runs" / f"home-{a}.log", None
                 try:
                     handles, busy = hold_other_arm_locks(a, ARMS, self.procs, self.mounts)
                     if busy:
                         raise ValueError(f"{busy} — 점유 세션 종료 후 홈 이동을 실행하세요")
+                    home_ticks = library_home_ticks(lib_p) if inc_leader else None
+                    if home_ticks is not None:
+                        leader_task = self._start_parallel_leader(a, rcfg, home_ticks)
                     for unit in [u for u in active_handover_units(self.run) if u.startswith("rosy-omx-observer@")]:
                         stopped_units.append(unit)
                         self._remember(stopped_units)
@@ -173,6 +178,8 @@ class BenchOpsMixin:
                                "--config", str(tmp_cfg_p), "--caps", str(caps_p),
                                "--arm", a, "--chunks", str(lib_p),
                                "--io", str(io_dir), "--operating-profile", str(rprof)]
+                    if leader_task is not None:
+                        rec_cmd.append("--skip-leader-finish")
                     live_p = io_dir / "live.json"
                     for attempt in (0, 1):  # a baseline refusal is restored in place, under this reservation, and retried once
                         t0 = time.time()
@@ -217,6 +224,9 @@ class BenchOpsMixin:
                     self._home_child = None
                     if rec_log is not None:
                         rec_log.close()
+                    if leader_task is not None and leader_task["thread"] is not None and leader_task["thread"].is_alive():
+                        self._set(step="leader_align", step_arm=a)
+                    leader_err = self._finish_parallel_leader(leader_task)
                     if clean:
                         if getattr(self, "_arm_lock", None) is not None:  # a recovery that ended without handing its lock on
                             release([self._arm_lock])
@@ -224,7 +234,10 @@ class BenchOpsMixin:
                         if handles:
                             release(handles)
                         try:  # the Leader reads the Follower here: the observers and previews come back only after that
-                            if inc_leader and home_ok:
+                            if leader_task is not None:
+                                if leader_err is not None and home_ok:
+                                    raise leader_err
+                            elif inc_leader and home_ok:
                                 self._set(step="leader_align", step_arm=a)
                                 self._check_abort(f"{a} 리더 정렬")
                                 self._match_leader(a, rcfg, "리더 홈 이동")

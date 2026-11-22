@@ -4,8 +4,9 @@ const JOINT_SHORT={'11':'M11 회전','12':'M12 들기','13':'M13 팔꿈치','14'
 const PARAM_LABELS={'pwm':'최대 토크(PWM)','current':'최대 전류(mA)','p':'추적 강성(P)','i':'오차 보정(I)','acc':'가속도(acc)','vel':'속도(vel)'};
 const PARAM_SHORT={'pwm':'PWM','current':'전류','p':'P','i':'I','acc':'ACC','vel':'VEL'};
 const ARM_META={arm_s:{title:'Arm S',role:'공급·컨베이어'},arm_a:{title:'Arm A',role:'선박 좌'},arm_b:{title:'Arm B',role:'선박 우'},arm_ab:{title:'Arm A+B',role:'양팔 동시'}};
-const TELEOP_STAGES=[null,30,45,60,90,120];
+const TELEOP_STAGES=[null,30,45,60,90,120,180,240];
 let showOfflineArms=false, speedInFlight=false, capsSaveInFlight=false;
+let gripMapsData=null, gripMapLoaded=false, gripSaveInFlight=false;
 
 function armConnectivity(arm){
   const info=(lastArmsStatus&&lastArmsStatus[arm])||(choices&&choices.arm_connectivity&&choices.arm_connectivity[arm])||null;
@@ -181,6 +182,96 @@ function renderParamsPanel(){
     }
   }
   for(const inp of table.querySelectorAll('input[data-mid]'))inp.disabled=busy||capsSaveInFlight;
+  renderGripMap(false);
+}
+
+function parseTickInput(id){
+  const raw=String($(id)?.value??'').trim();
+  return raw?Number(raw):NaN;
+}
+
+function updateGripSpanText(){
+  const spanEl=$('sb-grip-span');
+  if(!spanEl)return;
+  const lc=parseTickInput('gm-lc'), lo=parseTickInput('gm-lo'), fc=parseTickInput('gm-fc'), fo=parseTickInput('gm-fo');
+  if([lc,lo,fc,fo].some(v=>!Number.isFinite(v))){spanEl.textContent='팔로워 집게 매핑 미설정';return;}
+  const fSpan=Math.abs(fo-fc), lSpan=Math.abs(lo-lc), deg=(fSpan*360/4096).toFixed(1);
+  spanEl.textContent='팔로워 폭 '+fSpan+'틱 ('+deg+'°) · 리더 폭 '+lSpan+'틱';
+}
+
+function renderGripMap(forceInputs){
+  const box=$('sb-grip-map');
+  if(!box)return;
+  const arm=f&&f.arm?f.arm.value:'';
+  const single=arm==='arm_a'||arm==='arm_b'||arm==='arm_s';
+  const busy=benchSessionActive()||poseInFlight||startInFlight;
+  const inputs=[$('gm-lc'),$('gm-lo'),$('gm-fc'),$('gm-fo')].filter(Boolean);
+  for(const inp of inputs)inp.disabled=!single||busy||gripSaveInFlight;
+  if($('sb-grip-save-btn'))$('sb-grip-save-btn').disabled=!single||busy||gripSaveInFlight;
+  if(!single){
+    box.dataset.arm='';
+    for(const inp of inputs)inp.value='';
+    if($('sb-grip-span'))$('sb-grip-span').textContent='단일 팔 선택 시 편집 가능';
+    return;
+  }
+  const row=gripMapsData&&gripMapsData[arm]?gripMapsData[arm].gripper:null;
+  const armChanged=box.dataset.arm!==arm;
+  if(forceInputs||(armChanged&&!box.contains(document.activeElement))){
+    box.dataset.arm=arm;
+    if(row){
+      if($('gm-lc'))$('gm-lc').value=String(row.leader_closed??'');
+      if($('gm-lo'))$('gm-lo').value=String(row.leader_open??'');
+      if($('gm-fc'))$('gm-fc').value=String(row.follower_closed??'');
+      if($('gm-fo'))$('gm-fo').value=String(row.follower_open??'');
+    }else{
+      for(const inp of inputs)inp.value='';
+    }
+    updateGripSpanText();
+  }else if(forceInputs){
+    updateGripSpanText();
+  }
+}
+
+async function loadGripMaps(){
+  try{
+    const res=await api('/api/grip_map');
+    gripMapsData=(res&&res.arms)||null;
+    gripMapLoaded=true;
+    renderGripMap(true);
+  }catch(_){}
+}
+
+async function submitGripMap(){
+  const arm=f&&f.arm?f.arm.value:'';
+  if(!['arm_a','arm_b','arm_s'].includes(arm)||gripSaveInFlight)return;
+  const payload={
+    arm,
+    leader_closed:parseTickInput('gm-lc'),
+    leader_open:parseTickInput('gm-lo'),
+    follower_closed:parseTickInput('gm-fc'),
+    follower_open:parseTickInput('gm-fo'),
+  };
+  for(const [k,v] of Object.entries(payload)){
+    if(k==='arm')continue;
+    if(!Number.isInteger(v)||v<0||v>4095){setReqError(k+' 값은 0~4095 정수여야 합니다');return;}
+  }
+  if(payload.leader_open===payload.leader_closed){setReqError('리더 열림/닫힘 값이 같을 수 없습니다');return;}
+  const fSpan=Math.abs(payload.follower_open-payload.follower_closed);
+  if(fSpan===0||fSpan>=100*4096/360){setReqError('팔로워 집게 폭은 1~1137틱(100° 미만)이어야 합니다');return;}
+  gripSaveInFlight=true;renderGripMap(false);
+  if(typeof setActivity==='function')setActivity('집게 폭 저장 중...','live',arm);
+  try{
+    setReqError('');
+    const res=await api('/api/grip_map',payload);
+    gripMapsData=res.arms||gripMapsData;
+    renderGripMap(true);
+    if(typeof setActivity==='function')setActivity('집게 폭 저장 완료','good',arm+' · '+payload.follower_closed+'..'+payload.follower_open);
+  }catch(err){
+    setReqError('집게 폭 저장: '+err.message);
+    if(typeof setActivity==='function')setActivity('집게 폭 저장 실패','crit',err.message);
+  }finally{
+    gripSaveInFlight=false;renderGripMap(false);
+  }
 }
 
 function renderCapsSummary(){
@@ -251,8 +342,13 @@ if($('sb-caps-drawer-btn'))$('sb-caps-drawer-btn').addEventListener('click',()=>
   if(typeof window.openDrawer==='function')window.openDrawer('bindings',$('sb-caps-drawer-btn'),$('caps'));
   $('caps-editor')?.scrollIntoView({block:'nearest'});
 });
+if($('sb-grip-save-btn'))$('sb-grip-save-btn').addEventListener('click',submitGripMap);
+for(const gid of ['gm-lc','gm-lo','gm-fc','gm-fo']){
+  if($(gid))$(gid).addEventListener('input',updateGripSpanText);
+}
 
 window.renderArmCards=renderArmCards;
 window.renderParamsPanel=renderParamsPanel;
+window.loadGripMaps=loadGripMaps;
 window.renderCapsEditor=renderCapsEditor;
 window.renderCapsSummary=renderCapsSummary;

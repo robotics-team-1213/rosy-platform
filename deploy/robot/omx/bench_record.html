@@ -63,7 +63,7 @@
         <button type="button" id="hdr-finish-btn" class="btn-tool topbar-op-btn" disabled hidden>연동 끝</button>
         <div id="home-include-leader-group" class="home-group" data-tabs="setup">
           <button type="button" id="hdr-home-btn" class="btn-tool" disabled title="선택한 팔 홈 이동 [H]"><span class="btn-lbl">홈 이동</span><kbd class="kbd-hint">H</kbd></button>
-          <label class="check-row topbar-check" id="home-include-leader-wrap"><input type="checkbox" id="home-include-leader"><span>리더도 함께</span></label>
+          <label class="check-row topbar-check" id="home-include-leader-wrap"><input type="checkbox" id="home-include-leader" checked><span>리더도 함께</span></label>
         </div>
         <div id="hdr-live-metrics" class="live-ops" data-tabs="recording" hidden>
           <button type="button" id="hdr-next-ep-btn" class="btn-tool topbar-op-btn" disabled title="다음 에피소드 (녹화 중에만 활성) [→ / N]">다음 에피소드<kbd class="kbd-hint">→</kbd></button>
@@ -213,6 +213,19 @@
             <div id="sb-speed-box" class="sb-param-block">
               <div class="sb-param-head"><span>추종 속도 (teleop)</span><span id="sb-speed-detail" class="mono quiet"></span></div>
               <div id="sb-speed-pills" class="speed-pills" role="group" aria-label="추종 속도 단계"></div>
+            </div>
+            <div id="sb-grip-map" class="sb-param-block">
+              <div class="sb-param-head">
+                <span>집게 폭 매핑 (리더 ↔ 팔로워)</span>
+                <button type="button" id="sb-grip-save-btn" class="btn-primary btn-xs">집게 폭 저장</button>
+              </div>
+              <div class="grip-map-grid mono">
+                <label class="jc-field"><span>리더 닫힘</span><input type="number" id="gm-lc" class="jc-inp" min="0" max="4095" step="1"></label>
+                <label class="jc-field"><span>리더 열림</span><input type="number" id="gm-lo" class="jc-inp" min="0" max="4095" step="1"></label>
+                <label class="jc-field"><span>팔로워 닫힘</span><input type="number" id="gm-fc" class="jc-inp" min="0" max="4095" step="1"></label>
+                <label class="jc-field"><span>팔로워 열림</span><input type="number" id="gm-fo" class="jc-inp" min="0" max="4095" step="1"></label>
+              </div>
+              <div id="sb-grip-span" class="mono quiet" style="font-size:.73rem">확인 중...</div>
             </div>
             <div id="sb-joint-caps-box" class="sb-param-block">
               <div class="sb-param-head">

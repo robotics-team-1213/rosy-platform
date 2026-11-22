@@ -1170,3 +1170,20 @@ def test_a_raised_servo_profile_left_by_a_killed_session_is_not_the_baseline(tmp
     with pytest.raises(SystemExit, match="not the baseline"):
         s.execute(config(tmp_path), CAPS, teleop_only=False)
     assert arm.writes == [] and not [c for c in calls if c[0] == "stop"]  # refused before any write or unit stop
+
+
+def test_chunks_skip_leader_finish_never_opens_leader_bus(tmp_path):
+    arm = follower()
+    s = m.Session(
+        open_bus=lambda which: arm if which == "follower" else pytest.fail("must not open leader bus"),
+        systemctl=lambda *a: "",
+        run=lambda cmd: 0,
+        log=lambda **kw: None,
+        chunks={"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "x"},
+        skip_leader_finish=True,
+    )
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert record["safe_end"] is True and record["leader_gripper_torque_after"] == "unused: external leader session"
+    with pytest.raises(SystemExit) as bad:
+        m.main(["--config", "c.json", "--caps", "caps.json", "--skip-leader-finish"])
+    assert bad.value.code == 2

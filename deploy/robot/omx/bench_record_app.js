@@ -481,6 +481,7 @@ function init(){
   pollStatus();
   setInterval(pollStatus,2000);
   pollArms();
+  if(typeof loadGripMaps==='function')loadGripMaps();
   pollCameras();
   setInterval(pollCameras,1500);
   setInterval(tickCameraFrames,150);

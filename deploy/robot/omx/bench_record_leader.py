@@ -2,13 +2,36 @@
 """Leader alignment and the stoppable leader_home child process for bench_record.py."""
 from __future__ import annotations
 
-import json, os, re, signal, subprocess, time
+import json, math, os, re, signal, subprocess, threading, time
+from pathlib import Path
 
 from bench_live_preview import camera_labels
 from bench_record_inspect import ARMS, BI_ARM, HERE
 from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, recorder_running, release, resolve_record_config
 
 BUSY = ("handing_over", "recording", "homing", "restoring", "sealing", "leader_manual_check")  # the recorder or a child owns the devices
+HOME_LEADER_RATE_DEG_S = 20
+
+
+def library_home_ticks(lib_p):
+    """Last home pose in `lib_p` (`chunks.home[-1][:5]`) mapped from [-100, 100] to raw Follower ticks, or None."""
+    try:
+        data = json.loads(Path(lib_p).read_text(encoding="utf-8"))
+        chunks = data.get("chunks") if isinstance(data, dict) else None
+        home = chunks.get("home") if isinstance(chunks, dict) else None
+        if not isinstance(home, list) or not home or not isinstance(home[-1], list) or len(home[-1]) < 5:
+            return None
+        ticks = []
+        for val in home[-1][:5]:
+            if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(val):
+                return None
+            tick = round((float(val) + 100.0) / 200.0 * 4095.0)
+            if not 0 <= tick <= 4095:
+                return None
+            ticks.append(tick)
+        return ticks
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
 
 
 class BenchLeaderMixin:
@@ -137,11 +160,44 @@ class BenchLeaderMixin:
             adapter_dir = str(HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter")
             env["PYTHONPATH"] = os.pathsep.join([adapter_dir, str(HERE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
             cmd = [self.python, str(HERE / "leader_home.py"), "--config", str(config), "--arm", arm, "--match-follower",
-                   "--timeout-s", "35", "--attest", f"hands-off:bench-auto:{int(time.time())}"]  # no person confirms: the bench itself runs it, for align and home alike
-            # leader_home stretches its own deadline to the distance at 1 degree/s; a full turn fits in 420 s
+                   "--rate-deg-s", str(HOME_LEADER_RATE_DEG_S), "--timeout-s", "35", "--attest", f"hands-off:bench-auto:{int(time.time())}"]
             self._run_leader_home(cmd, env, f"{arm} {label}")
         finally:
             release(handles)
+
+    def _start_parallel_leader(self, arm, config, home_ticks):
+        """Start leader_home with known Follower home ticks on its separate Leader USB bus in parallel with Follower homing."""
+        if not home_ticks:
+            return None
+        self._check_lease(arm)
+        env = dict(os.environ)
+        adapter_dir = str(HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter")
+        env["PYTHONPATH"] = os.pathsep.join([adapter_dir, str(HERE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
+        csv = ",".join(str(int(v)) for v in home_ticks)
+        cmd = [self.python, str(HERE / "leader_home.py"), "--config", str(config), "--arm", arm, "--target-follower-ticks", csv,
+               "--rate-deg-s", str(HOME_LEADER_RATE_DEG_S), "--timeout-s", "35", "--attest", f"hands-off:bench-auto:{int(time.time())}"]
+        task = {"arm": arm, "error": None, "thread": None}
+
+        def _worker():
+            try:
+                self._run_leader_home(cmd, env, f"{arm} 리더 홈 이동")
+            except Exception as exc:
+                task["error"] = exc
+
+        th = threading.Thread(target=_worker, name=f"leader-home-{arm}", daemon=True)
+        task["thread"] = th
+        th.start()
+        return task
+
+    @staticmethod
+    def _finish_parallel_leader(task):
+        """Always wait for a parallel Leader child to finish torque-OFF + restore and return any raised error."""
+        if task is None:
+            return None
+        th = task.get("thread")
+        if th is not None:
+            th.join()
+        return task.get("error")
 
     def align_leader(self, body, config, keep=False):
         """Move the Leader onto the Follower's current pose before a teleop recording starts.
