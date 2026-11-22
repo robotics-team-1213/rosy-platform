@@ -22,6 +22,7 @@ export function drawMapDatum(ctx, toPoint, bounds, {css, step = GRID_STEP_M, dpr
   const width = ctx.canvas?.width ?? Math.max(start.x, end.x) + 32 * dpr;
   const height = ctx.canvas?.height ?? bottom + 32 * dpr;
   const labels = [];
+  const pendingLabels = [];
   ctx.save();
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineWidth = 1;
@@ -52,7 +53,7 @@ export function drawMapDatum(ctx, toPoint, bounds, {css, step = GRID_STEP_M, dpr
       const half = horizontal ? (ctx.measureText?.(text)?.width ?? 0) / 2 : 0;
       const x = Math.max(half, Math.min(width / dpr - half, p.x));
       const y = Math.max(6, Math.min(height / dpr - 6, p.y));
-      ctx.fillText(text, x, y);
+      pendingLabels.push([text, x, y, ctx.textAlign]);
     };
     line(point(lo, 0), point(hi, 0));
     ctx.textAlign = horizontal ? "center" : outside ? "right" : "left";
@@ -70,6 +71,10 @@ export function drawMapDatum(ctx, toPoint, bounds, {css, step = GRID_STEP_M, dpr
     }
   }
   ctx.stroke();
+  for (const [text, x, y, align] of pendingLabels) {
+    ctx.textAlign = align;
+    ctx.fillText(text, x, y);
+  }
   ctx.restore();
   return labels;
 }

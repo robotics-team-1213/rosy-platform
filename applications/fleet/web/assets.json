@@ -42,6 +42,10 @@
       "path": "manual-control.js",
       "media_type": "application/javascript"
     },
+    "activity-log.js": {
+      "path": "shared/activity-log.js",
+      "media_type": "application/javascript"
+    },
     "alert-popup.css": {
       "path": "shared/alert-popup.css",
       "media_type": "text/css"

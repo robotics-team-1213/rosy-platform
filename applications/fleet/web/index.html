@@ -111,6 +111,28 @@
       <p id="connection-guide-detail">관제 PC의 연결 상태를 확인한 뒤 다시 접속하세요.</p></div>
   </section>
 
+  <!-- ADR-1000: Warning / Critical State Queues (MON-002), hosted in the top-right bell alert drawer. -->
+  <section id="queues-panel" class="panel queues-panel" data-open="false" role="region" aria-labelledby="queues-heading">
+    <div class="queues-drawer-head">
+      <h2 id="queues-heading">알림</h2>
+      <span id="queues-summary" class="queues-summary"></span>
+      <span class="spacer"></span>
+      <ui-button kind="quiet" id="queues-close" type="button" aria-label="알림 창 닫기">닫기</ui-button>
+    </div>
+    <!-- D-540 3 — 최우선이 먼저다. 결정이 있는 행(막힘 판단·바뀐 경로 확인)은 그 자리에서 펼친다. -->
+    <div class="queues-container">
+      <div class="queue critical-queue">
+        <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
+        <ul id="critical-list" class="issue-list"></ul>
+      </div>
+      <div class="queue warning-queue">
+        <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
+        <ul id="warning-list" class="issue-list"></ul>
+      </div>
+    </div>
+    <p id="queues-empty" class="hint queues-empty" role="status" hidden>현재 처리할 알림이 없습니다.</p>
+  </section>
+
   <div class="assistant-layout">
   <!-- D-978: 관제 두 칸은 공용 틀 watch(2:1). 좁은 칸에서는 공용 기본 순서대로 지금 상태(now)가 먼저다(D-201 예외 먼저). -->
   <main id="fleet-main" class="ui-stage-grid" data-layout="watch" tabindex="-1">
@@ -292,21 +314,6 @@
     </section>
     </div>
     <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">
-      <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
-      <section class="panel queues-panel" aria-labelledby="queues-heading">
-        <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>
-        <!-- D-540 3 — 최우선이 먼저다. 결정이 있는 행(막힘 판단·바뀐 경로 확인)은 그 자리에서 펼친다. -->
-        <div class="queues-container">
-          <div class="queue critical-queue">
-            <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
-            <ul id="critical-list" class="issue-list"></ul>
-          </div>
-          <div class="queue warning-queue">
-            <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
-            <ul id="warning-list" class="issue-list"></ul>
-          </div>
-        </div>
-      </section>
           <section id="dispatch-control" class="dispatch-control" role="status"
                    aria-live="polite" aria-labelledby="dispatch-control-title">
             <div>
@@ -324,7 +331,6 @@
       <section class="console-context" aria-label="관제 상세">
         <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
           <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="sign" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
           <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
           <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
@@ -506,26 +512,6 @@
 
       </section>
         </div>
-        <div class="context-panel" id="context-inbox" role="tabpanel" tabindex="0" aria-labelledby="context-inbox-tab" hidden>
-          <section class="panel" aria-labelledby="inbox-heading">
-            <h2 id="inbox-heading">알림 창</h2>
-            <p class="hint">이 창을 열면 메시지를 읽음으로 표시합니다. 개입이 해소되거나 로봇 상태가 바뀌지는 않습니다.</p>
-            <p class="hint">현재 제공되는 관제 메시지입니다. 사건 당시의 AI·CORE 판단과 영상 근거는 <a id="inbox-evidence" href="#incident-heading">사건 기록에서 확인</a>합니다.</p>
-            <h3>현재 개입</h3>
-            <ul id="inbox-current" class="issue-list"></ul>
-            <h3>전달된 판단 메시지</h3>
-            <ul id="inbox-messages" class="issue-list"></ul>
-          </section>
-      <details id="log-panel" class="log-panel" open>
-          <summary class="ui-disclosure-row">기록</summary>
-          <div class="log-toolbar">
-            <ui-button kind="quiet" id="log-clear" type="button" title="화면의 기록을 지웁니다">지우기</ui-button>
-          </div>
-          <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
-            <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
-          </div>
-        </details>
-        </div>
         <div class="context-panel" id="context-evidence" role="tabpanel" tabindex="0" aria-labelledby="context-evidence-tab" hidden>
 
       <section class="panel incident-panel" aria-labelledby="incident-heading">
@@ -536,7 +522,7 @@
             <ui-button kind="quiet" id="incident-refresh" data-action-icon="refresh" data-icon-only="" type="button">새로고침</ui-button>
             <ui-button kind="quiet" id="incident-export" data-action-icon="download" data-icon-only="" type="button" disabled>JSON 내보내기</ui-button>
           </div>
-          <p class="hint">현재 개입은 위 목록에서 확인합니다. 여기서는 사건 당시의 CORE 정지·Fleet 조치·카메라 관측·AI 참고 사실을 검토합니다.</p>
+          <p class="hint">현재 개입은 종 아이콘 알림 창에서 확인합니다. 여기서는 사건 당시의 CORE 정지·Fleet 조치·카메라 관측·AI 참고 사실을 검토합니다.</p>
           <ul id="incident-list" class="issue-list"></ul>
           <h3>AI 상황 사실</h3>
           <p class="hint">그림자 사실은 조치 명령이 아닙니다. Fleet 대기 순환과 다른 판단은 운영자가 확인합니다.</p>
@@ -547,6 +533,19 @@
         <h2 id="incident-side-heading">원인과 조치</h2><div id="incident-judgment"></div>
         <p class="hint">사건을 열면 담당 인수와 사람 검토를 여기에 적습니다.</p>
       </section>
+      <section class="panel" aria-labelledby="inbox-messages-heading">
+        <h3 id="inbox-messages-heading">판단 전달 기록</h3>
+        <ul id="inbox-messages" class="issue-list"></ul>
+      </section>
+      <details id="log-panel" class="log-panel" open>
+        <summary class="ui-disclosure-row">기록</summary>
+        <div class="log-toolbar">
+          <ui-button kind="quiet" id="log-clear" type="button" title="화면의 기록을 지웁니다">지우기</ui-button>
+        </div>
+        <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
+          <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
+        </div>
+      </details>
         </div>
       </section>
     </aside>

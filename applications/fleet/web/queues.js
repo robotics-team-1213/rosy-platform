@@ -333,12 +333,21 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     setTriageHead("warning-head", "주의 요망", rows.warn);
     setTriageHead("critical-head", "최우선 개입 요망", rows.crit);
 
-    // ADR-1000 & UX Law 1: Hide empty queues to prevent alarm colors in normal state.
-    // CSP `style-src 'self'` 는 style 속성을 막으므로 hidden 속성으로 토글한다
-    // (D-201 회차 계측에서 style.display 토글이 실서버에서는 무시됨을 확인).
+    // ADR-1000 & UX Law 1: Hide empty queues inside the drawer without closing the drawer itself.
+    const total = rows.warn.length + rows.crit.length;
     warnList.parentElement.hidden = rows.warn.length === 0;
     critList.parentElement.hidden = rows.crit.length === 0;
-    document.querySelector(".queues-panel").hidden = (rows.warn.length + rows.crit.length) === 0;
+    const container = document.querySelector(".queues-container");
+    if (container) container.hidden = total === 0;
+    const empty = el("queues-empty");
+    if (empty) empty.hidden = total > 0;
+    const summary = el("queues-summary");
+    if (summary) {
+      const parts = [];
+      if (rows.crit.length) parts.push(`최우선 ${rows.crit.length}`);
+      if (rows.warn.length) parts.push(`주의 ${rows.warn.length}`);
+      summary.textContent = parts.join(" · ");
+    }
   }
 
   return { attentionItems, attentionKey, fillQueues };

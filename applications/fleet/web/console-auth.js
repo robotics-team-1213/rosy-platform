@@ -7,11 +7,12 @@ import { showConnection, showSession, showSignedOut, stopNotice } from "/console
 export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient, render, operatorControls, assistant,
   confirmedAction, connectionView, workView, incidents, visionView, trackingView, mapView, formation,
   dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState, refreshRobotApps,
-  refreshDispatchControl, refreshDiscovery, refreshVision = () => {}, clearVisionSample = () => {} }) {
+  refreshDispatchControl, refreshDiscovery, refreshVision = () => {}, clearVisionSample = () => {}, inbox = null }) {
   function markLocked(reason = "auth") {
     assistant?.setIdentity({locked:true});
     resetRobotApps();
     confirmedAction.cancel();
+    inbox?.clear?.();
     stopNotice();
     cancelAllNotice();
     const firstLock = !auth.locked;
@@ -96,6 +97,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
       ]);
       life.check();
       render();
+      inbox?.openPendingDeepLink?.();
     } catch (_err) {
       if (_err.name === "AbortError") return;
       if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
