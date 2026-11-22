@@ -3,6 +3,7 @@ import {describeBy, setOff} from '/common/cause-line.js';
 import {actionIcon} from '/common/ui.js';
 import '/commands.js';
 import {hasActiveMonitorWork, renderMonitorHosts, statusTag} from '/canonical-monitor.js';
+import {initRecordingTodo, loadRecordingTodo} from '/canonical-todo.js';
 
 const $ = (id) => document.getElementById(id);
 const JOINTS = ['shoulder_pan', 'shoulder_lift', 'elbow_flex', 'wrist_flex', 'wrist_roll', 'gripper'];
@@ -361,7 +362,7 @@ function renderAll() {
 }
 
 async function loadSnapshot({background = false} = {}) {
-  const next = await api('');
+  const [next] = await Promise.all([api(''), loadRecordingTodo()]);
   if (background && busy) return;
   snap = next;
   renderAll();
@@ -449,6 +450,7 @@ $('canon-job-form').addEventListener('submit', (e) => {
   });
 });
 
+initRecordingTodo({notice: showNotice});
 work(async () => {
   await bootstrapAuth();
   await loadSnapshot();

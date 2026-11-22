@@ -3,7 +3,13 @@ from pathlib import Path
 import sys
 
 _ROOT = Path(__file__).resolve().parents[3]
+_CONTRACTS_SRC = _ROOT / "contracts" / "learning" / "src"
+if str(_CONTRACTS_SRC) not in sys.path:
+    sys.path.insert(0, str(_CONTRACTS_SRC))
+from rosy.contracts.learning.omx_recording_todo import H1_POLICY_GOALS  # noqa: E402
+
 _SIM_TASK_MAP = {"ship-h1": "stack", "stack-t1": "stack-t1", "stack-t2": "stack-t2", "stack-t3": "stack-t3"}
+_EVAL_ROLLOUT_FRAMES = 440
 
 
 def _step_and_here(plan: dict, arm: str, ep_idx: int) -> tuple[dict, dict]:
@@ -73,11 +79,19 @@ def eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str,
             peak, held, held_max = 0.0, 0, 0
             policy.reset()
             hist = []
+            goal_feat = in_feats.get("observation.environment_state")
+            goal_arr = None
+            if goal_feat is not None and step["to"] in H1_POLICY_GOALS:
+                n_slots = int(goal_feat.shape[0])
+                goal_arr = np.zeros((1, n_slots), dtype=np.float32)
+                goal_arr[0, min(H1_POLICY_GOALS.index(step["to"]), n_slots - 1)] = 1.0
             with torch.inference_mode():
-                for _ in range(360):
+                for _ in range(_EVAL_ROLLOUT_FRAMES):
                     obs = {
                         "observation.state": torch.from_numpy(data.qpos[world.q[arm]].astype(np.float32))[None],
                     }
+                    if goal_arr is not None:
+                        obs["observation.environment_state"] = torch.from_numpy(goal_arr)
                     for key, cam in ((top_key, "top"), ("side", "side"), ("wrist", arm_view)):
                         obs[f"observation.images.{key}"] = torch.from_numpy(world.render(data, cam)).permute(2, 0, 1)[None].float() / 255.0
                     hist.append(obs)

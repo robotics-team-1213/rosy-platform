@@ -155,3 +155,17 @@ def test_goal_regex_and_camera_map_without_video_deps():
     }
     with pytest.raises(ValueError, match="D-1065"):
         dg.camera_map({f"observation.images.{c}": {} for c in ("top", "side", "front")}, {})
+    assert dg.GOAL_SCOPES["h2"].search("Move the designated container from belt to ship-h2r1-l0.").group(1) == "ship-h2r1-l0"
+    assert dg.GOAL_SCOPES["unload"].search("Move the designated container from ship-l0 to temp-plate.").group(1) == "temp-plate"
+    assert dg.GOAL_RE.search("Move the designated container from belt to ship-h2r1-l0.") is None
+
+
+def test_goal_scope_enforcement_and_measured_summary(tmp_path):
+    h2 = make(tmp_path / "h2", task="Move the designated container from belt to ship-h2r2-l0.")
+    assert dg.gate(h2, "arm_b", SIM, goal_scope="h1")["episodes"][0]["verdict"] == "reject"
+    r = dg.gate(h2, "arm_b", SIM, goal_scope="h2")
+    assert r["counts"] == {"pass": 1, "review": 0, "reject": 0} and r["goal_scope"] == "h2"
+    assert "wrist_roll_f0_median_rad" in r["measured_summary"] and "pan_f0_std_rad" in r["measured_summary"]
+    with pytest.raises(ValueError, match="goal_scope"):
+        dg.check_receipt(h2, expected_scope="h1")
+    assert dg.check_receipt(h2, expected_scope="h2") == [0]

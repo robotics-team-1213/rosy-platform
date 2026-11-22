@@ -19,6 +19,7 @@ import json
 import math
 from pathlib import Path
 import re
+import statistics
 import sys
 
 _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts/learning/src"
@@ -26,6 +27,11 @@ _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts/learning/src"
 ROLES = ("top", "side", "wrist")  # D-1065 cell A/B roles
 LEGACY_TABLE = {"rs": "top"}  # 11-20~21 sim/mix data called the D435 rs (D-1065 §4); a real Purple-SY source passes its own map
 GOAL_RE = re.compile(r"from \S+ to (ship-h1r[0-2]-l[0-2]|tray|stand)\.$")
+GOAL_SCOPES = {
+    "h1": GOAL_RE,
+    "h2": re.compile(r"from \S+ to (ship-h2r[0-2]-l[0-2])\.$"),
+    "unload": re.compile(r"from ship-(?:h[12]r[0-2]-)?l[0-2] to (temp-plate|tmp-[ab]-[1-3](?:-l[0-2])?|belt|stand)\.$"),
+}
 HOME = {"arm_a": (0.023, -1.965, 1.666, 1.618, 1.41), "arm_b": (0.023, -1.967, 1.667, 1.626, 1.399)}  # sim radians
 LIMITS = dict(home_review_rad=0.35, black_mean=8.0, black_reject_s=1.0, frozen_diff=0.5, frozen_review_s=3.0,
               min_frames=60, gripper=(0.0, 1.3))
@@ -86,9 +92,12 @@ def video_scan(path: Path, t0: float, t1: float, fps: float) -> dict:
 
 
 def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = True,
-                     canonical_spec: dict | None = None) -> tuple[dict, list[dict]]:
+                     canonical_spec: dict | None = None, goal_scope: str = "h1") -> tuple[dict, list[dict]]:
     import numpy as np
     import pandas as pd
+    if goal_scope not in GOAL_SCOPES:
+        raise ValueError(f"unknown goal_scope {goal_scope}")
+    goal_re = GOAL_SCOPES[goal_scope]
     canon_rad = None
     if canonical_spec is not None:
         if str(_CONTRACTS_SRC) not in sys.path:
@@ -137,11 +146,14 @@ def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = 
             reject.append("gripper outside the sim gripper range")
         start = float(np.abs(state[0, 1:4] - home[1:4]).max()) if n else math.inf
         measured["start_from_home_rad"] = round(start, 3)
+        if n:
+            measured["wrist_roll_f0_rad"] = round(float(state[0, 4]), 3)
+            measured["pan_f0_rad"] = round(float(state[0, 0]), 3)
         if canon_rad is not None and n:
             measured["start_from_canonical_rad"] = round(float(np.abs(state[0, :5] - canon_rad).max()), 3)
         if start > LIMITS["home_review_rad"]:
             review.append(f"start {start:.2f} rad from home (joints 2-4)")
-        goal = GOAL_RE.search(task_text.get(int(frames.task_index.iloc[0]), "")) if n else None
+        goal = goal_re.search(task_text.get(int(frames.task_index.iloc[0]), "")) if n else None
         if goal is None:
             reject.append("goal not readable from the task text")
         if n < LIMITS["min_frames"]:
@@ -153,11 +165,13 @@ def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = 
 
 
 def gate(root, arm: str, source: dict, legacy: dict[str, str] | None = None, training_layout: str = "random",
-         canonical_spec: dict | None = None) -> dict:
+         canonical_spec: dict | None = None, goal_scope: str = "h1") -> dict:
     """Judge every episode and the source declaration; write gate-receipt.json next to meta/."""
     root = Path(root).resolve()
     if arm not in HOME:
         raise ValueError(f"unknown arm {arm}")
+    if goal_scope not in GOAL_SCOPES:
+        raise ValueError(f"unknown goal_scope {goal_scope}")
     if source.get("kind") not in ("sim", "real") or source.get("layout") not in ("random", "fixed"):
         raise ValueError("source must declare kind=sim|real and layout=random|fixed")
     spec_sha = None
@@ -168,15 +182,23 @@ def gate(root, arm: str, source: dict, legacy: dict[str, str] | None = None, tra
         spec_sha = canonical_spec_sha256(canonical_spec)
     legacy = dict(LEGACY_TABLE, **(legacy or {}))
     before = dataset_files(root)
-    meta, rows = episode_verdicts(root, arm, legacy, real=source["kind"] == "real", canonical_spec=canonical_spec)
+    meta, rows = episode_verdicts(root, arm, legacy, real=source["kind"] == "real",
+                                  canonical_spec=canonical_spec, goal_scope=goal_scope)
     dataset = []
     if training_layout == "random" and source["layout"] == "fixed":
         dataset.append("fixed-layout source in a randomized training set: evaluation only")
     if dataset_files(root) != before:
         raise ValueError("dataset changed while it was inspected")
     goals = sorted({r["goal"] for r in rows if r["verdict"] == "pass" and r["goal"]})
-    receipt = dict(schema=SCHEMA, arm=arm, source=source, legacy_names=legacy, cameras=meta["cameras"], fps=meta["fps"],
-                   limits=LIMITS, dataset_reject=dataset, goals_passing=goals,
+    rolls = [r["measured"]["wrist_roll_f0_rad"] for r in rows if "wrist_roll_f0_rad" in r["measured"]]
+    pans = [r["measured"]["pan_f0_rad"] for r in rows if "pan_f0_rad" in r["measured"]]
+    summary = {
+        "wrist_roll_f0_median_rad": round(statistics.median(rolls), 3) if rolls else None,
+        "pan_f0_std_rad": round(statistics.pstdev(pans), 4) if len(pans) >= 2 else (0.0 if pans else None),
+    }
+    receipt = dict(schema=SCHEMA, arm=arm, goal_scope=goal_scope, source=source, legacy_names=legacy,
+                   cameras=meta["cameras"], fps=meta["fps"], limits=LIMITS, dataset_reject=dataset,
+                   goals_passing=goals, measured_summary=summary,
                    counts={v: sum(r["verdict"] == v for r in rows) for v in ("pass", "review", "reject")},
                    episodes=rows, files=before, approved_reviews=[])
     if spec_sha is not None:
@@ -185,7 +207,7 @@ def gate(root, arm: str, source: dict, legacy: dict[str, str] | None = None, tra
     return receipt
 
 
-def check_receipt(root, receipt_path=None) -> list[int]:
+def check_receipt(root, receipt_path=None, *, expected_scope: str | None = None) -> list[int]:
     """The episodes a trainer may read: refuses a missing or stale receipt, a dataset-level reject, or open reviews."""
     root = Path(root).resolve()
     path = Path(receipt_path) if receipt_path else root / RECEIPT
@@ -194,6 +216,8 @@ def check_receipt(root, receipt_path=None) -> list[int]:
     receipt = json.loads(path.read_text(encoding="utf-8"))
     if receipt.get("schema") != SCHEMA:
         raise ValueError("unknown gate receipt schema")
+    if expected_scope is not None and receipt.get("goal_scope", "h1") != expected_scope:
+        raise ValueError(f"gate receipt goal_scope {receipt.get('goal_scope', 'h1')!r} != {expected_scope!r}")
     if dataset_files(root) != receipt["files"]:
         raise ValueError("dataset files differ from the gated ones: gate again")
     if receipt["dataset_reject"]:
@@ -216,9 +240,11 @@ def main(argv=None):
     g = sub.add_parser("gate")
     g.add_argument("dataset"); g.add_argument("--arm", required=True); g.add_argument("--source", required=True)
     g.add_argument("--legacy", default=""); g.add_argument("--training-layout", default="random", choices=("random", "fixed"))
+    g.add_argument("--goal-scope", default="h1", choices=tuple(GOAL_SCOPES))
     g.add_argument("--canonical-spec", type=Path, default=None)
     c = sub.add_parser("check")
     c.add_argument("dataset")
+    c.add_argument("--expected-scope", default=None, choices=tuple(GOAL_SCOPES))
     args = parser.parse_args(argv)
     if args.cmd == "gate":
         spec = None
@@ -227,10 +253,11 @@ def main(argv=None):
                 sys.path.insert(0, str(_CONTRACTS_SRC))
             from rosy.contracts.learning.omx_canonical import load_canonical_spec
             spec, _, _ = load_canonical_spec(args.canonical_spec)
-        r = gate(args.dataset, args.arm, _pairs(args.source), _pairs(args.legacy), args.training_layout, canonical_spec=spec)
+        r = gate(args.dataset, args.arm, _pairs(args.source), _pairs(args.legacy), args.training_layout,
+                 canonical_spec=spec, goal_scope=args.goal_scope)
         print(json.dumps(dict(counts=r["counts"], dataset_reject=r["dataset_reject"]), ensure_ascii=False))
     else:
-        print(json.dumps(dict(episodes=check_receipt(args.dataset))))
+        print(json.dumps(dict(episodes=check_receipt(args.dataset, expected_scope=args.expected_scope))))
 
 
 if __name__ == "__main__":

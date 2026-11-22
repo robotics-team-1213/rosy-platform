@@ -464,7 +464,10 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", torch_m)
     seen_obs_keys = []
     fake_policy = SimpleNamespace(
-        config=SimpleNamespace(n_action_steps=4, input_features={"observation.images.top": {}}),
+        config=SimpleNamespace(n_action_steps=4, input_features={
+            "observation.images.top": {},
+            "observation.environment_state": SimpleNamespace(shape=(10,)),
+        }),
         reset=lambda: None,
         select_action=lambda b: (seen_obs_keys.append(set(b)), SimpleNamespace(cpu=lambda: SimpleNamespace(numpy=lambda: [np.zeros(6, dtype=np.float32)])))[1],
     )
@@ -473,9 +476,39 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
                                  delay_frames=0, seed_base=700, camera_cases=camera_cases)
     assert prof["arm_link_contacts"] == 0 and prof["neighbour_disturbed"] == 1
     assert prof["policy_successes"] == 1 and calls["teacher_seeds"] == [5201, 700, 700]
-    assert "observation.images.top" in seen_obs_keys[0]
+    assert "observation.images.top" in seen_obs_keys[0] and "observation.environment_state" in seen_obs_keys[0]
     assert calls["camera_seeds"] == [(0, 5201), (1, 700)]
     assert camera_cases[0]["angles_deg"]["top"]["rx"] == .1
+
+    from rosy.contracts.learning import omx_recording_todo as rt
+    watch = Path(cfg["watch_roots"]["ai_canon"]["path"])
+    bad_link = watch / "recording-inventory.json"
+    bad_target = tmp_path / "outside-inv.json"
+    bad_target.write_text("{}", encoding="utf-8")
+    try:
+        bad_link.symlink_to(bad_target)
+        svc_link = cp.CanonicalService(tmp_path / "canon_todo_link", cfg)
+        assert svc_link.recording_todo()["inventory_status"] == "invalid"
+        bad_link.unlink()
+    except OSError:
+        pass
+    inv_doc = rt.derive_inventory_from_manifest({
+        "schema": rt.CURATED_MANIFEST_SCHEMA,
+        "curated_version": "omx-real-v1",
+        "datasets": [],
+    })
+    (watch / "recording-inventory.json").write_text(json.dumps(inv_doc), encoding="utf-8")
+    (watch / "real_aligned" / "real" / "arm_a").mkdir(parents=True, exist_ok=True)
+    (watch / "real_aligned" / "real" / "arm_a" / "gate-receipt.json").write_text(json.dumps({
+        "arm": "arm_a", "counts": {"pass": 5, "review": 0, "reject": 0}, "dataset_reject": [],
+        "episodes": [{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(5)],
+    }), encoding="utf-8")
+    svc = cp.CanonicalService(tmp_path / "canon_todo", cfg)
+    todo_res = svc.recording_todo()
+    assert todo_res["inventory_status"] == "ready"
+    assert str(tmp_path) not in json.dumps(todo_res)
+    l0_a = next(c for c in todo_res["cards"] if c["card_id"] == "arm_a-ship-h1-l0")
+    assert any(s["slot_id"] == "ship-h1r0-l0" and s["local_gate_passed"] == 5 for s in l0_a["slots"])
 
 
 def test_canonical_watch_and_token_hardening(tmp_path):

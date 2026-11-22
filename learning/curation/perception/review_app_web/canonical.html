@@ -15,19 +15,29 @@
 <div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>표준 시작 자세</h1><span class="ui-crumbs" id="learning-tool-path"></span><span data-spacer></span><ui-button id="canon-refresh" kind="quiet" data-action-icon="refresh">다시 확인</ui-button></div>
 <main id="canonical-main" class="learning-main ui-task-page" tabindex="-1">
 <div class="ui-workspace-bar canon-evidence-bar"><span id="canon-evidence-badge"></span><span id="canon-spec-sha" class="quiet canon-mono"></span><span data-spacer></span><span id="canon-poll-state" class="quiet canon-mono"></span></div>
-<p class="learning-lede">Model PC와 AI PC의 실시간 학습 진행률·자원 사용량, L1 사다리 평가, 오프라인 셀 검사 및 OMX Design 2 표준 시작 자세 규격을 확인합니다. 시뮬레이션·오프라인 근거이며 실물 로봇 제어·적용 권한이 없습니다(D-911).</p>
+<div class="canon-view-bar" role="group" aria-label="화면 보기"><ui-button kind="segment" type="button" data-canon-view="all" aria-pressed="true">전체</ui-button><ui-button kind="segment" type="button" data-canon-view="todo" aria-pressed="false">실물 촬영 To-Do</ui-button><ui-button kind="segment" type="button" data-canon-view="monitor" aria-pressed="false">학습·평가 모니터</ui-button><ui-button kind="segment" type="button" data-canon-view="spec" aria-pressed="false">규격</ui-button></div>
+<p class="learning-lede">Model PC와 AI PC의 실시간 학습 진행률·자원 사용량, L1 사다리 평가, 오프라인 셀 검사, 실물 촬영 To-Do 및 OMX Design 2 표준 시작 자세 규격을 확인합니다. 시뮬레이션·오프라인 근거이며 실물 로봇 제어·적용 권한이 없습니다(D-911).</p>
 <ui-status id="canon-notice" state="pending" role="status">표준 시작 자세 상태를 불러오는 중입니다.</ui-status>
 <ui-status id="canon-error" state="error" role="alert" hidden></ui-status>
 
-<section class="learning-section" aria-labelledby="canon-hosts-title">
+<section class="learning-section" data-canon-section="monitor" aria-labelledby="canon-hosts-title">
 <h2 id="canon-hosts-title">1 · 2-PC 실시간 학습 · 자원 모니터</h2>
 <p class="quiet">Model PC와 AI PC의 align.done, data_gate 통과 건수, DART 수집 시드, 학습 step/loss/ETA, 체크포인트와 GPU·VRAM·온도·CPU/RAM·디스크 사용량을 표시합니다.</p>
 <div id="canon-hosts" class="canon-monitor-grid" aria-live="polite"></div>
 <ui-empty id="canon-hosts-empty" hidden><h3>연결된 2-PC 관찰·피어 기록이 없습니다</h3><p>아래 내장 Design 2 규격만 읽기 전용으로 표시 중입니다. 실시간 2-PC 관찰을 연결하려면 omx-center.json에 canonical 설정을 추가하세요.</p></ui-empty>
 </section>
 
-<section class="learning-section" aria-labelledby="canon-eval-title">
-<h2 id="canon-eval-title">2 · 체크포인트 평가 사다리 &amp; 오프라인 cell_live_check</h2>
+<section id="canon-todo-section" class="learning-section" data-canon-section="todo" aria-labelledby="canon-todo-title">
+<h2 id="canon-todo-title">2 · 실물 촬영 To-Do &amp; r08 목표 슬롯 맵</h2>
+<div id="canon-todo-meta" class="ui-workspace-bar canon-evidence-bar"></div>
+<div class="ui-workspace-bar work-filters"><label class="ui-field-label">팔 <select id="canon-todo-arm" class="ui-field"><option value="all">전체 (arm_b · arm_a)</option><option value="arm_b">arm_b · 왼팔 (+y · S01쪽)</option><option value="arm_a">arm_a · 오른팔 (-y · S03쪽)</option></select></label><label class="ui-field-label">선박 구역 <select id="canon-todo-hold" class="ui-field"><option value="all">전체 (h1 · h2)</option><option value="ship-h1">ship-h1 · 선미 (S01~S03)</option><option value="ship-h2">ship-h2 · 선수 (S04~S06)</option></select></label><label class="ui-field-label">상태 <select id="canon-todo-gap" class="ui-field"><option value="all">전체 카드</option><option value="gap">부족·주의만</option></select></label></div>
+<div id="canon-todo-cards" class="canon-todo-grid" aria-live="polite"></div>
+<ui-empty id="canon-todo-empty" hidden><h3>연결된 실물 촬영 인벤토리가 없습니다</h3><p>curated inventory.json 또는 recording_manifest_path를 연결하면 data_gate 통과 기준 실물 부족 카드가 표시됩니다. 아래 공통 촬영 규격과 r08 좌표 기준은 항상 확인할 수 있습니다.</p></ui-empty>
+<details id="canon-filming-checklist"><summary>실물 촬영 공통 규격 · 3카메라 · data_gate · HF 업로드 기준</summary><div id="canon-filming-body" class="canon-filming-body"></div></details>
+</section>
+
+<section class="learning-section" data-canon-section="monitor" aria-labelledby="canon-eval-title">
+<h2 id="canon-eval-title">3 · 체크포인트 평가 사다리 &amp; 오프라인 cell_live_check</h2>
 <div id="canon-wrist-warn" class="canon-alert" role="alert" hidden></div>
 <h3>시뮬레이션 L1 평가 사다리</h3>
 <div class="ui-table-scroll" tabindex="0"><table id="canon-eval-table" class="ui-data-table" aria-label="체크포인트 L1 평가 사다리"><thead><tr><th>출처·체크포인트</th><th>판정</th><th>정상 (nominal)</th><th>지연 (delayed)</th><th>층별 성공</th><th>충돌</th><th>상세</th></tr></thead><tbody id="canon-eval-body"></tbody></table></div>
@@ -38,8 +48,8 @@
 <p id="canon-live-empty" class="quiet">오프라인 cell_live_check 결과가 아직 없습니다.</p>
 </section>
 
-<section class="learning-section" aria-labelledby="canon-job-title">
-<h2 id="canon-job-title">3 · 제한 실행기 &amp; 작업 로그</h2>
+<section class="learning-section" data-canon-section="monitor" aria-labelledby="canon-job-title">
+<h2 id="canon-job-title">4 · 제한 실행기 &amp; 작업 로그</h2>
 <p class="quiet">서버에 등록된 자료 이름과 완료된 실행 ID만 선택할 수 있습니다. 작업 로그는 이 호스트의 실행 기록에서 읽습니다.</p>
 <form id="canon-job-form" class="ui-form learning-form">
 <label class="ui-field-label">작업 종류 <select id="canon-kind" class="ui-field"><option value="align_real">align_real · 실물 정렬</option><option value="collect_dart">collect_dart · DART 수집</option><option value="train_stage">train_stage · ACT 학습</option><option value="eval_ladder">eval_ladder · L1 평가</option><option value="cell_live_check">cell_live_check · 셀 검사</option></select></label>
@@ -57,8 +67,8 @@
 <div id="canon-run-detail" class="canon-detail" hidden><div class="ui-workspace-bar"><h3 id="canon-run-title">선택한 작업</h3><ui-button id="canon-job-cancel" kind="quiet" data-action-icon="close" disabled>실행 중지 요청</ui-button></div><pre id="canon-job-log"></pre></div>
 </section>
 
-<section class="learning-section" aria-labelledby="canon-spec-title">
-<h2 id="canon-spec-title">4 · 표준 시작 자세 규격 &amp; 2단계 진입 브리지</h2>
+<section class="learning-section" data-canon-section="spec" aria-labelledby="canon-spec-title">
+<h2 id="canon-spec-title">5 · 표준 시작 자세 규격 &amp; 2단계 진입 브리지</h2>
 <div id="canon-kpis" class="canon-kpis"></div>
 <div class="ui-form learning-form"><label class="ui-field-label">표시 단위 <select id="canon-unit" class="ui-field"><option value="norm">정규화 (norm)</option><option value="sim_rad">시뮬 (sim_rad)</option><option value="raw_ticks">틱 (raw_ticks)</option><option value="all">모두 비교</option></select></label></div>
 <div class="ui-table-scroll" tabindex="0"><table id="canon-spec-table" class="ui-data-table" aria-label="표준 시작 자세 관절 비교"><thead><tr><th>팔</th><th>관절</th><th>idle_park</th><th>canonical_start</th><th>여유·안전 대역</th></tr></thead><tbody id="canon-spec-body"></tbody></table></div>
