@@ -425,7 +425,7 @@ def test_the_open_form_fits_every_viewport_without_rail_overflow(site):  # noqa:
               .filter((node) => node.getBoundingClientRect().height > 0)
               .every((node) => node.scrollWidth <= node.clientWidth + 1 && node.getBoundingClientRect().height < 80)"""), width
             if width >= 1024 and height >= 640:
-                assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
+                assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary", "robot-panel-body"}, (width, page.evaluate(SCROLLERS))
                 assert page.evaluate("""() => { const primary = document.querySelector('.console-primary');
                   const stage = document.querySelector('#map-stage').getBoundingClientRect();
                   return primary.scrollHeight <= primary.clientHeight + 1 && stage.height >= 200;

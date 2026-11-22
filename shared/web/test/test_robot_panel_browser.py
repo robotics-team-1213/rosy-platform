@@ -78,7 +78,7 @@ def panel_gallery():
             onManualCollapse: () => { window.__panelEvents.collapsed += 1; },
             onClose: () => { window.__panelEvents.closed += 1; },
             sections: {
-              status: (p) => { statusNode.textContent = `${p.id}:${p.battery?.percent ?? '-'}`; return statusNode; },
+              status: (p) => { statusNode.textContent = `${p.id}:${p.power?.text ?? '-'}`; return statusNode; },
               manual: (p) => (p.kind === 'mobile' ? manualNode : null),
               commands: (p) => (p.kind === 'arm' ? commandsNode : null),
               settings: (p) => { settingsNode.textContent = p.link?.text || ''; return settingsNode; },
@@ -131,7 +131,7 @@ def test_robot_panel_in_place_updates_collapse_and_focus_return(panel_gallery):
         battery: { percent: 81 },
       }));
     }""")
-    expect(page.locator("#panel-status-node")).to_have_text("rosy_01:81")
+    expect(page.locator("#panel-status-node")).to_have_text("rosy_01:81%")
     assert page.evaluate("() => window.__keptManual === document.getElementById('panel-manual-node')")
     assert manual_details.evaluate("node => node.open")
     expect(page.locator("#panel-manual-select")).to_be_focused()

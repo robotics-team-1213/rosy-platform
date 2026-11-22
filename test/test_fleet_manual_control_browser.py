@@ -387,13 +387,15 @@ def test_manual_panel_disclosure_keeps_node_across_poll_and_stops_on_collapse_or
         page.wait_for_function("() => document.querySelectorAll('[data-manual-direction][aria-pressed=\"true\"]').length === 1")
         sent.clear()
         details.locator("summary").click()
-        expect.poll(lambda: sent[-1] if sent else None).to_equal({"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0})
+        page.wait_for_timeout(150)
+        assert sent and sent[-1] == {"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0}
         details.locator("summary").click()
         page.keyboard.down("Space")
         page.wait_for_function("() => document.querySelectorAll('[data-manual-direction][aria-pressed=\"true\"]').length === 1")
         sent.clear()
         page.locator("#robot-panel .robot-panel-close").click()
         expect(page.locator("#robot-panel")).to_be_hidden()
-        expect.poll(lambda: sent[-1] if sent else None).to_equal({"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0})
+        page.wait_for_timeout(150)
+        assert sent and sent[-1] == {"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0}
         assert not errors
         browser.close()
