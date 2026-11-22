@@ -93,7 +93,7 @@ def run(args) -> int:
     # Remove traffic zones/signals, enable autonomous Nav2 recovery, and pre-seed version-1 map.
     site = yaml.safe_load((root / "site.yaml").read_text(encoding="utf-8"))
     site["fleet"]["traffic"] = {"authority": False}
-    site.setdefault("fleet", {}).setdefault("trip", {})["autonomous_robots"] = list(ft.ROBOTS)
+    site.setdefault("fleet", {}).setdefault("stuck_resolver", {})["autonomous_robots"] = list(ft.ROBOTS)
     (root / "site.yaml").write_text(yaml.safe_dump(site), encoding="utf-8")
     tasks_db = root / "tasks.sqlite"
     if tasks_db.exists():
