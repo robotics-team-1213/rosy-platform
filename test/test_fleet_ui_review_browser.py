@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from fleet_cockpit_browser import robot_picker, select_robot  # noqa: E402
 from browser_harness import browser_tests_enabled
 from console_browser_site import console_url  # noqa: F401
 from test_fleet_console_browser import MAP_GRID, SNAPSHOT, _open_console
@@ -32,7 +33,7 @@ def test_mobile_robot_status_precedes_map_and_critical_text_is_readable(console_
             page.goto(console_url, wait_until="networkidle")
             page.evaluate("theme => window.RosyTheme.set(theme)", theme)
             page.locator("#roster article").first.wait_for()
-            choice = page.locator("#robot-choice").bounding_box()
+            choice = robot_picker(page).bounding_box()
             roster = page.locator(".robot-list-details").bounding_box()
             map_panel = page.locator('[aria-labelledby="map-heading"]').bounding_box()
             assert choice["y"] + choice["height"] < 844
@@ -48,8 +49,7 @@ def test_mobile_robot_status_precedes_map_and_critical_text_is_readable(console_
                 Path(output).mkdir(parents=True, exist_ok=True)
                 page.screenshot(path=str(Path(output) / f"fleet-status-{theme}-{width}.png"), full_page=True)
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-            page.locator('#robot-choice').select_option('rosy_01')
-            page.locator('#robot-workspace article').wait_for()
+            select_robot(page, 'rosy_01')
             selected = page.locator('#robot-workspace').bounding_box()
             assert selected['y'] < page.locator('.robot-list-details').bounding_box()['y']
             assert selected['y'] < 844

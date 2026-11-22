@@ -79,25 +79,49 @@ export function createCellViews(ctx) {
       }
       stage.append(dualGrid);
     } else {
-      const mainCam = document.createElement('img');
-      mainCam.className = 'omx-inspector-main-cam omx-inspector-cam';
-      mainCam.alt = `${activeSpec.title} 메인 카메라`;
-      mainCam.tabIndex = 0;
-      mainCam.addEventListener('click', () => mainCam.classList.toggle('focused'));
-
+      const stageBar = document.createElement('div');
+      stageBar.className = 'omx-inspector-stage-bar';
       const qualLine = document.createElement('span');
       qualLine.className = 'cell-visual-badge';
       qualLine.textContent = `🎥 [${activeCam.label}]`;
+      const mainCam = document.createElement('img');
+      mainCam.className = 'omx-inspector-main-cam omx-inspector-cam';
+      mainCam.alt = `${activeSpec.title} 메인 카메라`;
+      const zoomBtn = document.createElement('ui-button');
+      zoomBtn.className = 'omx-inspector-zoom';
+      zoomBtn.setAttribute('kind', 'quiet');
+      zoomBtn.setAttribute('type', 'button');
+      zoomBtn.setAttribute('aria-expanded', 'false');
+      zoomBtn.setAttribute('aria-label', `${activeCam.label} 크게 보기`);
+      zoomBtn.textContent = '확대 보기';
+      const setCamZoom = (zoomed) => {
+        mainCam.classList.toggle('focused', zoomed);
+        zoomBtn.setAttribute('aria-expanded', String(zoomed));
+        zoomBtn.setAttribute('aria-label', `${activeCam.label} ${zoomed ? '원래 크기' : '확대 보기'}`);
+        zoomBtn.textContent = zoomed ? '원래 크기' : '확대 보기';
+      };
+      zoomBtn.addEventListener('click', () => setCamZoom(!mainCam.classList.contains('focused')));
+      mainCam.addEventListener('click', () => setCamZoom(!mainCam.classList.contains('focused')));
+      stage.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape' && mainCam.classList.contains('focused')) {
+          ev.stopPropagation();
+          setCamZoom(false);
+          zoomBtn.focus();
+        }
+      });
       frames()?.bind(mainCam, activeCam, qualLine, `🎥 [${activeCam.label}]`);
-      stage.append(mainCam, qualLine);
+      stageBar.append(qualLine, zoomBtn);
+      stage.append(stageBar, mainCam);
     }
 
     const pipGrid = document.createElement('div');
     pipGrid.className = 'omx-inspector-pip-grid';
     for (const v of camViews) {
-      const pip = document.createElement('div');
-      pip.className = `omx-inspector-pip${v.id === activeCam.id ? ' active' : ''}`;
-      pip.tabIndex = 0;
+      const pip = document.createElement('button');
+      pip.type = 'button';
+      const isActiveCam = v.id === activeCam.id;
+      pip.className = `omx-inspector-pip${isActiveCam ? ' active' : ''}`;
+      pip.setAttribute('aria-pressed', String(isActiveCam));
       const pImg = document.createElement('img');
       pImg.className = 'omx-inspector-cam';
       pImg.alt = v.label;
@@ -126,7 +150,12 @@ export function createCellViews(ctx) {
 
     const quickDispatchBar = document.createElement('div');
     quickDispatchBar.className = 'omx-inspector-quick-dispatch';
-    const tierSel = document.createElement('select'); tierSel.className = 'ui-field';
+    const tierField = document.createElement('label');
+    tierField.className = 'omx-inspector-field';
+    const tierLbl = document.createElement('span');
+    tierLbl.textContent = '적재 층';
+    const tierSel = document.createElement('select');
+    tierSel.className = 'ui-field';
     for (const [val, lbl] of [['1', 'T1 (1층·벨트)'], ['2', 'T2 (2층)'], ['3', 'T3 (3층)']]) {
       const opt = document.createElement('option');
       opt.value = val;
@@ -134,13 +163,20 @@ export function createCellViews(ctx) {
       if (activeSpec.id === 'arm_b' && val === '2') opt.selected = true;
       tierSel.append(opt);
     }
-    const dispSel = document.createElement('select'); dispSel.className = 'ui-field';
+    tierField.append(tierLbl, tierSel);
+    const dispField = document.createElement('label');
+    dispField.className = 'omx-inspector-field';
+    const dispLbl = document.createElement('span');
+    dispLbl.textContent = '복구 위치';
+    const dispSel = document.createElement('select');
+    dispSel.className = 'ui-field';
     for (const [val, lbl] of [['', '정위치 (Nominal)'], ['auto', 'Auto ROI 감지'], ['belt_far', 'Belt-Far 복구'], ['floor_front', 'Floor-Front 복구']]) {
       const opt = document.createElement('option');
       opt.value = val;
       opt.textContent = lbl;
       dispSel.append(opt);
     }
+    dispField.append(dispLbl, dispSel);
     const targetArm = activeSpec.id.startsWith('arm_') ? activeSpec.id : (activeSpec.id === 'cell_ab' ? 'arm_a' : 'arm_s');
     const targetCell = targetArm === 'arm_s' ? 'cell_s' : 'cell_ab';
     const runCustomBtn = document.createElement('ui-button');
@@ -172,7 +208,7 @@ export function createCellViews(ctx) {
         if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `인스펙터 맞춤 태스크 등록 실패: ${error.message}`;
       }
     });
-    quickDispatchBar.append(tierSel, dispSel, runCustomBtn);
+    quickDispatchBar.append(tierField, dispField, runCustomBtn);
 
     const actions = document.createElement('div');
     actions.className = 'omx-inspector-actions';

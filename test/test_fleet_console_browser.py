@@ -29,6 +29,7 @@ from browser_harness import (  # noqa: E402
     open_page,
     save_temp_screenshot,
 )
+from fleet_cockpit_browser import clear_robot_selection, select_robot, selected_robot_id  # noqa: E402
 
 MAP_GRID = {
     "map_id": "mock:1", "width": 40, "height": 40, "resolution": 0.05,
@@ -177,10 +178,10 @@ def test_normal_robot_is_reachable_from_the_exception_first_roster(console_url):
         card = page.locator('#robot-workspace article[data-robot-id="rosy_01"]')
         assert card.locator('[data-goal-robot-id="rosy_01"]').is_visible()
         assert card.locator('[data-map-recording]').is_visible()
-        assert page.locator('#robot-choice').input_value() == 'rosy_01'
+        assert selected_robot_id(page) == 'rosy_01'
         page.wait_for_timeout(1500)
         assert card.is_visible()
-        page.locator('#robot-choice').select_option('')
+        clear_robot_selection(page)
         assert page.locator('#robot-workspace article').count() == 0
         assert page.locator('#robot-workspace-empty').is_visible()
         assert not errors
@@ -224,13 +225,7 @@ def test_motion_buttons_follow_live_robot_capabilities(console_url, supported):
 
 def _open_cards(page, robot_id=None):
     """Select the robot whose task and evidence are inspected in the workspace."""
-    page.wait_for_function("() => document.querySelectorAll('#roster article').length > 0")
-    if robot_id is None:
-        robot_id = page.locator('#robot-choice option[value]:not([value=""])').evaluate_all(
-            "options => options.some(option => option.value === 'rosy_01') ? 'rosy_01' : options[0].value")
-    page.locator('#robot-choice').select_option(robot_id)
-    page.locator('#robot-workspace article').wait_for(state='visible')
-    page.evaluate("() => document.activeElement?.blur()")
+    return select_robot(page, robot_id)
 
 
 def _open_token_access(page):

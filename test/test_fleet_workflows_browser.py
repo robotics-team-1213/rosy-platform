@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fleet_cockpit_browser import select_robot  # noqa: E402
 from browser_harness import browser_tests_enabled
 
 from test_fleet_console_browser import API, _open_console as _open_base, _open_token_access, console_url  # noqa: F401
@@ -148,7 +149,7 @@ def test_robot_app_links_drop_previous_users_directory_before_new_response(conso
         with page.expect_request('**/api/fleet/peers'):
             page.locator('#token-save').click()
         expect(links).to_have_count(0)
-        page.locator('#robot-choice').select_option('rosy_01')
+        select_robot(page, 'rosy_01')
         expect(page.locator('[data-robot-app-guidance]')).to_be_visible()
         for route in waiting:
             route.fulfill(json={'peers': []})
@@ -172,7 +173,7 @@ def test_bfcache_return_clears_app_directory_before_session_is_revalidated(conso
           dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}));
         }''')
         # Existing page cleanup drops selection; reselecting must not revive the old directory.
-        page.locator('#robot-choice').select_option('rosy_01')
+        select_robot(page, 'rosy_01')
         expect(links).to_have_count(0)
         for route in waiting:
             route.fulfill(status=401, json={'detail': {'code': 'TOKEN_REQUIRED'}})

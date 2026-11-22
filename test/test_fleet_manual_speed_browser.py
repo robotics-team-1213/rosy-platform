@@ -4,7 +4,8 @@ import pytest
 
 from browser_harness import browser_tests_enabled
 from console_browser_site import console_url  # noqa: F401
-from test_fleet_console_browser import _open_cards, _open_console
+from fleet_cockpit_browser import open_manual_controls  # noqa: E402
+from test_fleet_console_browser import _open_console
 from test_fleet_manual_control_browser import _api
 
 pytestmark = pytest.mark.skipif(
@@ -30,7 +31,7 @@ def test_the_pad_sends_the_robots_live_limit_and_says_it(console_url):
         browser, page, errors = _open_console(playwright, _api_with(LIMITS))
         page.route("**/api/fleet/do", lambda route: (sent.append(route.request.post_data_json), route.fulfill(json={"accepted": True})))
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         expect(page.locator("[data-manual-reason]")).to_contain_text("전후진 0.12m/s · 회전 0.5rad/s")
         page.locator('[data-manual-direction="backward"]').hover()
         page.mouse.down()
@@ -58,7 +59,7 @@ def test_a_sealed_measured_speed_is_what_the_pad_shows_and_sends(console_url):
         browser, page, errors = _open_console(playwright, _api_with(limits))
         page.route("**/api/fleet/do", lambda route: (sent.append(route.request.post_data_json), route.fulfill(json={"accepted": True})))
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         expect(page.locator("[data-manual-reason]")).to_contain_text("측정 봉인 0.02·0.07로 제한")
         page.locator('[data-manual-direction="forward"]').hover()
         page.mouse.down()
@@ -82,7 +83,7 @@ def test_an_operator_raises_and_lowers_the_manual_speed_in_steps(console_url):
 
         page.route("**/api/fleet/robots/rosy_45/speed-limits", speed)
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         faster = page.locator('[data-manual-speed="faster"]')
         expect(faster).to_be_enabled()
         faster.click()
@@ -105,7 +106,7 @@ def test_the_pad_cannot_raise_past_the_signed_ceiling(console_url):
         page.route("**/api/fleet/robots/rosy_45/speed-limits",
                    lambda route: (puts.append(route.request.post_data_json), route.fulfill(json={"limits": {}})))
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         expect(page.locator('[data-manual-speed="faster"]')).to_be_enabled()
         page.locator('[data-manual-speed="faster"]').click()
         page.wait_for_timeout(200)
@@ -121,7 +122,7 @@ def test_a_robot_that_reports_no_limit_keeps_the_old_pad_speed_and_has_no_speed_
         browser, page, errors = _open_console(playwright, _api())
         page.route("**/api/fleet/do", lambda route: (sent.append(route.request.post_data_json), route.fulfill(json={"accepted": True})))
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         expect(page.locator("[data-manual-reason]")).to_contain_text("전후진 0.03m/s · 회전 0.1rad/s")
         expect(page.locator('[data-manual-speed="faster"]')).to_be_disabled()
         browser.close()

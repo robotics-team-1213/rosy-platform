@@ -24,7 +24,7 @@ def test_sr_only_is_defined_once_in_components_css():
 
 # Density tokens whose first readers (map and control stylesheets) arrive in later UI slices. Only shrinks: an entry that is
 # read by then fails the test until it is removed here.
-PENDING_TOKENS = {"--row-dense", "--target-tool"}
+PENDING_TOKENS = {"--row-dense"}
 
 
 def test_every_token_in_tokens_css_is_read_somewhere():
