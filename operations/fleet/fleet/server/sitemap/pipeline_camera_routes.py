@@ -8,6 +8,7 @@ import time
 from fastapi import HTTPException, Request
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
+from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
 from fleet.site_rules import SiteRules
 
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
@@ -269,6 +270,7 @@ def install_cameras_routes(app, ctx) -> None:
             "directive": task.get("directive"),
             "src_site": task["src_site"],
             "dst_site": task["dst_site"],
+            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot") if task.get(k) is not None},
             "displaced_to": task.get("displaced_to"),
             "presence": task["presence"],
         }
@@ -342,11 +344,7 @@ def install_cameras_routes(app, ctx) -> None:
             if cell_id == "cell_ab":
                 place = stage_result.get("place") or {}
                 z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
-                if not isinstance(place, dict):
-                    place = {}
-                verified = (verified and z_gate.get("verdict") == "PASS"
-                            and str(place.get("area") or place.get("area_id") or "").lower() == "pallet"
-                            and type(place.get("tier")) is int and place["tier"] == task["tier"])
+                verified = verified and isinstance(place, dict) and cell_ab_completion_verified(task, place, z_gate, verification)
             if not verified:
                 raise HTTPException(422, detail={"code": "UNVERIFIED_CELL_COMPLETION"})
         robot = {

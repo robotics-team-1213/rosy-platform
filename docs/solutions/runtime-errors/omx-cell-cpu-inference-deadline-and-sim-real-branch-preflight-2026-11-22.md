@@ -1,0 +1,60 @@
+---
+title: Real-cell CPU ACT inference misses chunk 1 deadline mathematically and arm_b mode-averages across the pi wrist-roll split
+date: 2026-11-22
+category: runtime-errors
+module: learning/training/omx (experiment_artifact.py, experiment_cuda_train.py), learning/registry/policy/sim_l1.py, deploy/robot/omx (cell_policy_timing.py, cell_policy_shape.py)
+problem_type: runtime_error
+component: learning
+symptoms:
+  - "cell_policy_drive.py --dry-run timed out at chunk 0 with default max_obs_age_s=0.6 (CPU bench 0.611-0.648s; pure forward median 0.4084s at threads=4)"
+  - "Even with --max-obs-age-s 1.5, chunk 0 dropped 9/16 frames (observation_age_s=0.641s, remaining=7 frames <=0.467s), guaranteeing chunk 1 misses previous_end=observed+1.067s"
+  - "On real arm_b home [0.8, -62.2, 53.1, 51.6, 45.2, 48.8], bdart-cos 7.5k emitted wrist_roll=-12.92..-12.15 (midway between real +45.2 and sim -54.8) and shoulder_lift=-74.41..-73.89 (outside reviewed -65.2..-7.1) for both slot=3 (ship-h1) and slot=9 (tray)"
+  - "Dual-GPU training chains crashed in 6-8s with FileExistsError because mkdir -p .../train pre-created output_dir before lerobot_train"
+root_cause: cpu_backbone_exceeds_chunk16_overlap_budget_and_pi_wrist_branch_averaging
+resolution_type: workflow_and_gate_fix
+severity: high
+tags: [omx, act, cell-timing, cpu-inference, wrist-roll, sim-real-mix, preflight, sim-l1, bundle]
+applies_when: "staging or evaluating an OMX ACT checkpoint for rosy-arm-cell, interpreting real-cell dry-run refusals, or launching CUDA lerobot_train chains"
+---
+
+# Real-cell CPU ACT inference deadline and sim-real wrist-roll split
+
+## Problem
+
+On 2026-11-22, the best simulation `arm_b` ACT checkpoint (`bdart-cos 7.5k`, sealed `42/42` lift and `27/42` place: `l0 14/14, l1 13/14, l2 0/14`; 7-frame causal delay spot `n8_d7` `12/18` with `l0/l1 12/12` and `0` collisions) was staged on `rosy-arm-cell` without moving the robot (`~/omx_models/h1-goal-b-bdart-cos-007500`). Non-motion dry-run and isolated CPU diagnostics (`D:/DevTemp/verify-1122/`) surfaced two hard blockers plus a chain-startup failure earlier that morning:
+
+1. **Chunk 0/1 CPU timing impossibility (`cell_policy_timing.py:12-33, 108-157`):**
+   - `MAX_OBSERVATION_AGE_S = 0.6` timed out chunk 0 during live-cell heartbeats (`inference_s = 0.611-0.648s`).
+   - Raising `--max-obs-age-s 1.5` completed chunk 0 (`inference_s = 0.516s`, `observation_age_s = 0.641s`), dropping `floor(0.641 * 15) = 9` frames of the 16-frame chunk (`action_steps = 7`).
+   - Because `len(frames)` is capped at `chunk_size=16` (`16 / 15 = 1.067s`), chunk 1 worker sleeps `2/30s` and sees at most `1.067 - (start - observed) - 0.067 = ~0.400s` before `previous_end`. Any `inference_s > ~0.35s` deterministically hits `next policy chunk missed its playback deadline` at chunk 1 regardless of `max_obs_age_s`.
+2. **`wrist_roll` branch averaging & start-pose envelope refusal (`cell-branch-diag-1122.json`):**
+   - With `arm_b` at its real home (`[0.8, -62.2, 53.1, 51.6, 45.2, 48.8]`), BOTH `goal_slot=3 (ship-h1)` AND `goal_slot=9 (in-domain tray)` produced `wrist_roll = -12.92` (`-12.15` for tray), sitting dead center between the real branch (`+45.2`) and simulation wait branch (`-54.8`), plus `shoulder_lift = -74.41..-73.89` outside reviewed `-65.2..-7.1` -> `frame 0 shoulder_lift=-66.1 outside reviewed -65.2..-7.1`.
+   - Feeding the same real camera frames with `input_wrist_roll` shifted `-100.0` (`-54.8`, sim branch) eliminated `wrist_roll_warning` (`null`) on both `slot=3` (`-54.11`) and `slot=9` (`-54.22`), proving the failure stems from `±180°` branch mixing and start-state mismatch rather than `ship-h1` goal OOD alone.
+3. **Training startup crash & deployment tree drift:**
+   - Pre-creating `.../train` caused `lerobot_train` (`resume=False`) to fail in 6-8s with `FileExistsError` on both AI PC (`arm_a`) and Model PC (`arm_b`).
+   - On `rosy-arm-cell`, `~/rosy-test/omx-tools-current` points to `cell/adaptive-ship` (`3fff92e55d`, lacking `UNITS.json` / `cell_policy_timing.py`, needed for active cell calibration params), separate from `omx-devices/current`.
+
+## CPU Benchmark Evidence on `rosy-arm-cell` (`i7-1165G7`, `torch 2.10.0+cpu`, `D:/DevTemp/verify-1122/cell-cpu-bench-1122.json`)
+
+| Variant (`n=5` warmed, fixed 3x `480x640` obs) | Median `inference_s` | `max_abs_diff` vs `baseline_t4` | Notes |
+|---|---|---|---|
+| `baseline_t4` (`threads=4, interop=4, FP32 NCHW`) | **`0.4084`** | `0.0` | ResNet18 x3 backbone alone = `0.3512s`; transformer rest = `0.088s` |
+| `threads_1` (`OMP=1`) | `1.1628` | `2.4e-7` | `2.8x` slower |
+| `threads_2` | `0.5926` | `2.4e-7` | Slower |
+| `threads_4` (`explicit`) | `0.4270` | `0.0` | Matches default plateau |
+| `threads_8` (SMT hyperthreads) | `1.2614` | `2.4e-7` | Thread thrashing (`max=3.899s`) |
+| `channels_last_t4` | `0.6720` | `2.4e-7` | Slower on CPU |
+| `bf16_autocast_t4` | `1.9545` | `0.0021` | No fast BF16 ISA on Tiger Lake |
+| `dyn_int8_linear_t4` | `0.7005` | `0.0158` | ResNet convs dominate (`0.35s`), Linear quantization adds overhead |
+
+Result: `0.35s` continuous-chunk ceiling cannot be reached on `i7-1165G7` with stock PyTorch `chunk_size=16` ACT without accelerator backend (ONNX/OpenVINO), off-box GPU proposal inference, or larger `chunk_size`.
+
+## Fix / Structural Preventions
+
+- **PR #491 (`experiment_cuda_train.py`, merged `6aad24b7`):** `preflight_cuda()` blocks existing `output_dir` when `resume=False`, verifies `data_gate` receipts (`reject=0, review=0`) and `~/rosy-jobs` GPU locks before spawning `lerobot_train`, reaps crashes immediately instead of polling, and exposes bounded `<=64 KiB` HTTP `bundle-manifest`.
+- **PR 2 (`experiment_artifact.py`, `experiment_cuda_train.py`, `sim_l1.py`):**
+  - `package_cell_bundle()` atomically converts `rs→top` across `config.json`, pre/postprocessor JSON, and normalizer `.safetensors`, sets `device='cpu'`, emits `UNITS.json` + `VIEW_NAMES.json`, verifies `CELL_CAMERA_ROLES` and zero symlinks, and computes `checkpoint_sha256` (`bundle_manifest()` exposes both `policy_revision` and `checkpoint_sha256`).
+  - `sim_l1.py` (`rosy.sim-l1-eval/2`) requires both `nominal` (`delay=0`) and `delayed` (`delay>=1`) profiles plus `per_layer` (`l0/l1/l2`) breakdown and `0` collisions (`neighbour_disturbed == 0` and `arm_link_contacts == 0`).
+- **Operational rules (`.claude/skills/rosy-omx-act-training/SKILL.md`):**
+  - Never raise `max_obs_age_s` as a "fix" for slow CPU inference without verifying chunk 1 `ready_at <= previous_end`.
+  - Never switch `~/rosy-test/omx-tools-current` away from `cell/adaptive-ship` while calibration services depend on it; stage policy dry-runs on an isolated tree/link and pass non-motion `goal_slot` + `wrist_roll` branch checks before live trials.

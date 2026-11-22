@@ -19,6 +19,7 @@ from omx_adapter.z_profile import (
     TIER_GRASP_Z_MM, TIER_MID_Z_MM, TIER_TOP_Z_MM, SideViewZProfile, evaluate_signed_tier_residual_mm,
 )
 from cell_spec_recovery_fsm import evaluate_execution_gate, select_recovery_skill
+import cell_site_target
 from cell_z_profile import (
     SIDE_COL_U_BOUNDS, detect_side_self_profile_landmarks, measure_side_gripper_pose_mm, perceive_slot_z_mm,
 )
@@ -221,8 +222,8 @@ def verify_stack_outcome(
         }
     pick_area = str(pick.get("area") or pick.get("area_id") or "pallet").strip().lower()
     place_area = str(place.get("area") or place.get("area_id") or "pallet").strip().lower()
-    pick_is_temp = pick_area.startswith("temp_plate") or pick_area.startswith("tmp-")
-    place_is_temp = place_area.startswith("temp_plate") or place_area.startswith("tmp-")
+    pick_is_temp = pick_area.startswith(("temp_plate", "temp_", "tmp-"))
+    place_is_temp = place_area.startswith(("temp_plate", "temp_", "tmp-"))
     pick_is_stand = pick_area in ("stand", "stand:r1-s1", "stand:r1-s1-t1")
     place_is_stand = place_area in ("stand", "stand:r1-s1", "stand:r1-s1-t1")
     pick_col, pick_row, pick_tier = int(pick.get("col") or 3), int(pick.get("row") or 1), int(pick.get("tier") or 2)
@@ -276,9 +277,9 @@ def verify_stack_outcome(
     top_orientation_ok = not place_is_stand
     expected_orient = "horizontal_ew" if place_is_stand else ("vertical_ns" if (not place_is_temp and abs(float(place.get("yaw_deg", -90.0)) + 90.0) <= 25.0) else None)
     if after_top is not None:
-        top_roi = (named("top", "stand") or STAND_TOP_ROI) if place_is_stand else (named("top", f"c{place_col}r{place_row}") or (TEMP_PLATE_TOP_ROI_BY_LANE.get(place_col, (182, 372, 234, 440)) if place_is_temp else TOP_ROI_BY_COL_ROW.get((place_col, place_row), (316, 160, 374, 270))))
-        top_zone_info = evaluate_zone(after_top, top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15, expected_orientation=expected_orient)
-        if (place_is_stand or (not strict_target and (same_side_band or pick_is_temp or place_is_temp))) and before_top is not None:
+        top_roi = cell_site_target.top_slot_roi(zone_rois, place) or (None if strict_target and (zone_rois or {}).get("floor") else (STAND_TOP_ROI if place_is_stand else (TEMP_PLATE_TOP_ROI_BY_LANE.get(place_col, (182, 372, 234, 440)) if place_is_temp else TOP_ROI_BY_COL_ROW.get((place_col, place_row), (316, 160, 374, 270)))))
+        top_zone_info = evaluate_zone(after_top, top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15, expected_orientation=expected_orient) if top_roi is not None else {"within_zone": False, "fill_ratio": 0.0, "orientation_ok": False}
+        if top_roi is not None and (place_is_stand or (not strict_target and (same_side_band or pick_is_temp or place_is_temp))) and before_top is not None:
             b_q_top = evaluate_zone(before_top, top_roi, min_fill=0.15)
             if top_zone_info["within_zone"] and (float(top_zone_info["fill_ratio"]) - float(b_q_top["fill_ratio"])) >= 0.15:
                 target_present = True
@@ -299,11 +300,11 @@ def verify_stack_outcome(
             top_orientation_ok = bool(top_zone_info.get("within_zone") and top_zone_info.get("orientation_ok") is True)
 
     depth_ref = None
-    if strict_target and (zone_rois or {}).get("floor"):
+    if strict_target and not place_is_stand and (zone_rois or {}).get("floor"):
         # D-1057: with floor ROIs configured the slot's occupancy and tier come from the depth map (black containers included);
         # the colour and side findings above stay in the record as auxiliary. No usable depth then means not verified.
         import cell_depth_slots
-        slot_roi = named("top", f"c{place_col}r{place_row}")  # the cell's own ROI of the target slot; no shared default here
+        slot_roi = cell_site_target.top_slot_roi(zone_rois, place)  # the cell's own ROI of the target slot; no shared default here
         depth_ref = cell_depth_slots.depth_reference(after_depth, after_top, slot_roi, zone_rois["floor"], place_tier,
                                                      floor_depth_mm=zone_rois.get("floor_depth_mm"))
         # Depth answers "which tier is filled". That the slot filled now, and how the container lies, stay separate evidence.
@@ -357,8 +358,8 @@ def verify_stack_outcome_z_mm(
     resolved_spec = str(spec_id or place.get("spec_id") or pick.get("spec_id") or place.get("object_id") or "C3")
     slot_obs = perceive_slot_z_mm(
         after_side, after_top, after_depth, col=place_col, row=place_row, tier=place_tier, z_profile=z_profile, spec_id=resolved_spec,
-        slot_roi=((zone_rois or {}).get("top") or {}).get(f"c{place_col}r{place_row}")
-        or (None if (zone_rois or {}).get("floor") else TOP_ROI_BY_COL_ROW.get((place_col, place_row))),
+        slot_roi=cell_site_target.top_slot_roi(zone_rois, place)
+        or (None if (zone_rois or {}).get("floor") else (TEMP_PLATE_TOP_ROI_BY_LANE.get(place_col) if str(place.get("area") or "").lower().startswith(("temp_", "tmp-")) else TOP_ROI_BY_COL_ROW.get((place_col, place_row)))),
         floor_rois=(zone_rois or {}).get("floor"), floor_depth_mm=(zone_rois or {}).get("floor_depth_mm"),
     )
     if slot_obs.get("found"):

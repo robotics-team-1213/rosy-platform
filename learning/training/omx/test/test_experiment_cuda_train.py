@@ -162,7 +162,10 @@ def test_bundle_manifest_and_file_verify_hashes_and_block_traversal_and_symlinks
     rid = str(uuid.uuid4())
     train_dir = tmp_path / 'ext-train'
     model_dir = train_dir / 'checkpoints' / '007500' / 'pretrained_model'
-    model_dir.mkdir(parents=True)
+    (model_dir / 'a-b').mkdir(parents=True)
+    (model_dir / 'a').mkdir(parents=True)
+    (model_dir / 'a-b' / 'x.json').write_text('{"x":1}', encoding='utf-8')
+    (model_dir / 'a' / 'y.json').write_text('{"y":2}', encoding='utf-8')
     (model_dir / 'config.json').write_text('{"type":"act"}', encoding='utf-8')
     weights = model_dir / 'model.safetensors'
     weights.write_bytes(b'safetensors-bytes')
@@ -181,7 +184,10 @@ def test_bundle_manifest_and_file_verify_hashes_and_block_traversal_and_symlinks
     manifest = c.bundle_manifest(rid)
     assert manifest['schema'] == cuda.MANIFEST_SCHEMA
     assert manifest['policy_revision'] == digest
-    assert {f['path'] for f in manifest['files']} == {'config.json', 'model.safetensors'}
+    assert 'checkpoint_sha256' in manifest
+    from rosy.contracts.learning.digest import checkpoint_sha256
+    assert manifest['checkpoint_sha256'] == checkpoint_sha256(model_dir)
+    assert {f['path'] for f in manifest['files']} == {'a-b/x.json', 'a/y.json', 'config.json', 'model.safetensors'}
     assert len(json.dumps(manifest).encode('utf-8')) <= cuda.MANIFEST_LIMIT
     assert c.bundle_file(rid, 'config.json') == b'{"type":"act"}'
     assert c.bundle_file(rid, 'model.safetensors') == b'safetensors-bytes'
