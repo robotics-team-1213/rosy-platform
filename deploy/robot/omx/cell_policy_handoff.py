@@ -20,9 +20,27 @@ def _carry(cell, library_path, sequence, authorize, log):
         from cell_envelope import digest
 
         runner.scope_sha = digest([runner.config, runner.calibration, sequence])
-    result = transfer_folded(runner, library_path, sequence=sequence)
+    result = transfer_folded(runner, library_path, sequence=sequence, strict_motion=True)
     log({"taught_carry": result})
     return result
+
+
+def _carry_hold_reason(res, label: str) -> str | None:
+    from cell_policy_timing import park_ack_ok
+
+    if isinstance(res, dict) and res.get("result") == "placed":
+        return None
+    steps = res.get("steps") if isinstance(res, dict) else ()
+    last_step = steps[-1] if isinstance(steps, list) and steps and isinstance(steps[-1], dict) else None
+    last_park = last_step if last_step and last_step.get("command") == "park" else None
+    has_overload = ("overload-hold" in str((res.get("error") if isinstance(res, dict) else "") or "")
+                    or any(isinstance(s, dict) and ("overload-hold" in str(s.get("error") or "") or "overload-hold" in str(s.get("fault") or ""))
+                           for s in (steps or ())))
+    if (not isinstance(res, dict) or res.get("result") == "fault"
+            or has_overload or not park_ack_ok(last_park, require_command=True)):
+        return ((res.get("error") if isinstance(res, dict) else None)
+                or f"{label} ended without settled park ({res.get('result') if isinstance(res, dict) else 'invalid'})")
+    return None
 
 
 class Authorization:
@@ -76,13 +94,14 @@ class CellHandoff:
                          hold_current_ma=library.get("hold_current_ma"), tcp_x_m=omx_tcp.config_tcp(config))
 
     def carry(self, cell, status, authorize, log):
+        from cell_policy_timing import ack_status, best_effort_hold, cmd_ack_ok, send_hold
         from grasp_planner import Planner, norm_to_rad
         from omx_adapter.chunk_library import GUARD_UNITS_PER_S
         from omx_adapter.motion_profile import retime
 
         try:
             current = cell.act("state")
-            if current.get("holding") is not True or current.get("fault") or not current.get("ok"):
+            if not isinstance(current, dict) or current.get("holding") is not True or current.get("fault") or not current.get("ok"):
                 raise ValueError("runner lost measured hold before handoff lift")
             state, target = current["state"], current["target"]
             # Recheck the handoff conditions after the FIFO round trip.
@@ -113,17 +132,26 @@ class CellHandoff:
                 a = authorize(lift_lib, current, (lift_cmd,))
                 prefix = f"checked {a['session_id']} {a['library_sha256']} "
             loaded = cell.act(f"{prefix}load {path}")
-            if not loaded.get("ok"):
-                raise ValueError(loaded.get("error") or "handoff lift load refused")
+            if not isinstance(loaded, dict) or not loaded.get("ok"):
+                raise ValueError((loaded.get("error") if isinstance(loaded, dict) else None) or "handoff lift load refused")
             lifted = cell.act(prefix + lift_cmd)
-            log({"command": lift_cmd, **lifted})
-            if lifted.get("holding") is not True or lifted.get("settled") is not True or not lifted.get("ok"):
-                raise ValueError(lifted.get("error") or "handoff lift did not settle with a measured hold")
+            log({"command": lift_cmd, **(lifted if isinstance(lifted, dict) else {"raw": lifted})})
+            if not cmd_ack_ok(lifted, (lift_cmd, lift_name), require_command=True) or lifted.get("holding") is not True:
+                raise ValueError((lifted.get("error") if isinstance(lifted, dict) else None) or "handoff lift did not settle with a measured hold")
             # Preserve the taught fold before going to the destination.
-            return _carry(cell, self.library_path, FOLDED[-len(RETURN_HELD) - 1:], authorize, log)
+            res = _carry(cell, self.library_path, FOLDED[-len(RETURN_HELD) - 1:], authorize, log)
+            if (why := _carry_hold_reason(res, "handoff carry")) is not None:
+                raise ValueError(why)
+            return res
         except (ValueError, OSError, KeyError, SystemExit) as exc:
-            log({"command": "human-hold", **cell.act("human-hold"), "reason": str(exc)})
+            hold_reply = send_hold(cell, log=log)
+            log({"command": "human-hold", **ack_status(hold_reply), "reason": str(exc)})
             return {"result": "refused", "reason": str(exc)}
+        except BaseException:
+            hold_row = best_effort_hold(cell, log=log)
+            if hold_row is not None:
+                log(hold_row)
+            raise
 
 
 def validate_taught_goal(config, source, goal_site, destination, library):
@@ -158,10 +186,25 @@ def validate_taught_goal(config, source, goal_site, destination, library):
 
 
 def run_taught(cell, library_path, *, dry_run, authorize, log):
+    from cell_policy_timing import ack_status, best_effort_hold, send_hold
+
     if dry_run:
         log({"dry_run": True, "taught_sequence": FOLDED})
         return {"result": "dry_run", "mode": "taught"}
-    return _carry(cell, library_path, FOLDED, authorize, log)
+    try:
+        res = _carry(cell, library_path, FOLDED, authorize, log)
+        if (why := _carry_hold_reason(res, "taught carry")) is not None:
+            raise ValueError(why)
+        return res
+    except (ValueError, OSError, KeyError, SystemExit) as exc:
+        hold_reply = send_hold(cell, log=log)
+        log({"command": "human-hold", **ack_status(hold_reply), "reason": str(exc)})
+        return {"result": "refused", "mode": "taught", "reason": str(exc), "parked": False}
+    except BaseException:
+        hold_row = best_effort_hold(cell, log=log)
+        if hold_row is not None:
+            log(hold_row)
+        raise
 
 
 from cell_policy_paced import run_paced_chunks  # noqa: E402,F401

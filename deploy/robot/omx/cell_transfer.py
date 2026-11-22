@@ -15,7 +15,7 @@ from pathlib import Path
 
 import cell_pipeline as cp
 from cell_envelope import assess, digest, same_session
-from cell_policy_timing import park_ack_ok
+from cell_policy_timing import cmd_ack_ok, park_ack_ok, retreat_ack_ok
 from cell_zones import Zones
 
 
@@ -204,21 +204,42 @@ RETURN_HELD = ("goto above_place", "run descend_place", "run release_place", "ru
 STILL_HOLDING_UNITS = 4.0
 
 
+def _motion_ack_ok(reply, command: str, *, strict: bool) -> bool:
+    if strict:
+        return cmd_ack_ok(reply, (command, f"run {command}"), require_command=True)
+    if (not isinstance(reply, dict) or reply.get("ok") is not True
+            or any(reply.get(k) for k in ("fault", "hold", "human_hold_latched"))
+            or reply.get("settled") is False):
+        return False
+    if "command" in reply:
+        cmd = str(reply["command"])
+        return (cmd.split(" ", 3)[-1] if cmd.startswith("checked ") else cmd) in (command, f"run {command}")
+    return True
+
+
+def _park_ok(reply, *, strict: bool) -> bool:
+    return cmd_ack_ok(reply, ("park", "run park"), require_command=True) if strict else park_ack_ok(reply)
+
+
+def _retreat_ack_ok(reply, *, strict: bool) -> bool:
+    return retreat_ack_ok(reply) if strict else _motion_ack_ok(reply, "retreat", strict=False)
+
+
 def transfer_folded(cell, library, closed: float | None = None, wrist=None, after_place=None, pinch=None, feel=None,
-                    sequence=FOLDED, lift_stall=None, at_stop=None, grasp_check=None) -> dict:
+                    sequence=FOLDED, lift_stall=None, at_stop=None, grasp_check=None, *, strict_motion: bool = False) -> dict:
     """cell_pipeline.transfer with a fold home between lift and place. Lifting a held box from the reach straight
     to the transit height took shoulder_lift to 525 of 600 and the runner's strain hold stopped it; folding home
     first and placing from home went clean twice (2026-10-28). `cell` is a Gate on the real arm. at_stop
     (cell_hooks.Stills) keeps every stop's frames before the arm moves on, a finished pick descent as its control, and is
     closed however the carry ends."""
     try:
-        return _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check)
+        return _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check, strict_motion=strict_motion)
     finally:
         if hasattr(at_stop, "close"):
             at_stop.close()
 
 
-def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check=None) -> dict:
+def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check=None, *, strict_motion: bool = False) -> dict:
     steps = []
     release_completed = False
     if closed is None:  # 2026-11-13 arm_s: judged against the 46.5 command, empty jaws at 50.0 counted as holding
@@ -235,57 +256,93 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
             steps[-1]["trace_receipt"] = status["trace_receipt"]  # byte range of the owner trace: release evidence only
         return status
 
+    def _fault(at, reply, fallback):
+        return {"result": "fault", "at": at, "steps": steps, "error": (reply.get("error") if isinstance(reply, dict) else None) or fallback}
+
+    def _seq_ok(cmds):
+        for c in cmds:
+            r = run(c)
+            if strict_motion and not (_park_ok(r, strict=True) if c == "park" else _motion_ack_ok(r, c, strict=True)):
+                return _fault(c, r, f"{c} unconfirmed")
+        return None
+
     for command in (f"load {library}", *sequence):  # FOLDED, or cp.SEQUENCE where auto.fold_before_transport is 0
         status = run(command)
         if not status.get("ok") and command in ("goto above_pick", "goto above_place") and "must park before recovery" in (status.get("error") or ""):
-            if park_ack_ok(run("park")):
+            if _park_ok(parked := run("park"), strict=strict_motion):
                 status = run(command)
+            elif strict_motion:
+                return _fault("park", parked, "recovery park unconfirmed")
+        if isinstance(status, dict) and ("release not confirmed" in str(status.get("error") or "") or (command == "run release_place" and status.get("holding") is True)) and (strict_motion or status.get("ok") is not True):
+            return _fault(command, status, "release not confirmed")
         if status.get("contact") and command == "park":
             # a fold's strain hold at the reach: back off and fold again (home in runs 3-4, 2026-10-28); a second stops
             if "overload-hold" not in (status.get("error") or ""):  # a shed load sags: no backing up from there
-                run("retreat")
+                retreated = run("retreat")
+                if not _retreat_ack_ok(retreated, strict=strict_motion):
+                    return _fault("retreat", retreated, "retreat unconfirmed")
                 status = run("park")
-                if park_ack_ok(status):
+                if _park_ok(status, strict=strict_motion):
                     continue
+                if strict_motion:
+                    return _fault("park", status, "retry park unconfirmed")
         if status.get("contact") and command == "run lift_place":
+            if strict_motion:
+                return _fault(command, status, "contact during lift_place")
             # strain after release: backing up brings the open jaws round the box again (2026-10-28 Pinky); fold from here
-            run("park")
-            continue
+            if "overload-hold" not in (status.get("error") or "") and park_ack_ok(run("park")):
+                continue
+            return _fault(command, status, "lift_place park unconfirmed")
         if status.get("contact") and at_stop is not None:  # the stop as it stands, before a retreat or a release hides it
             at_stop(status.get("state"), status)
         if status.get("contact") and command == "run lift_pick" and lift_stall is not None:
             # 2026-11-07: the retreat pressed the held box down (lag 2.54) and the park then refused to close on it
             freed = lift_stall(cell)
             steps.append({"command": "release and rise", **freed})
-            parked = freed["result"] == "risen" and park_ack_ok(run("park"))
+            parked = freed["result"] == "risen" and _park_ok(run("park"), strict=strict_motion)
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"), "released": bool(parked)}
         if status.get("contact"):  # the runner held with torque on: back up the same path (unless shedding), fold home
             if "overload-hold" not in (status.get("error") or ""):
-                run("retreat")
+                retreated = run("retreat")
+                if not _retreat_ack_ok(retreated, strict=strict_motion):
+                    return _fault("retreat", retreated, "retreat unconfirmed")
+            elif strict_motion:
+                return {"result": "contact", "at": command, "steps": steps, "error": status.get("error")}
+            parked = None
             for _ in range(4):
                 parked = run("park")
                 if parked.get("ok") or "shedding its load" not in (parked.get("error") or ""):
                     break
                 cp.time.sleep(1.0)
+            if strict_motion and not _park_ok(parked, strict=True):
+                return _fault("park", parked, "recovery park unconfirmed")
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error")}
-        if not status.get("ok") or (command == "park" and not park_ack_ok(status)):
-            if not status.get("fault") and command not in ("park", f"load {library}"):
-                run("park")
-            return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps}
+        is_motion = not command.startswith("load ")
+        cmd_ok = (_park_ok(status, strict=strict_motion) if command == "park" else
+                  _motion_ack_ok(status, command, strict=strict_motion) if is_motion else
+                  bool(isinstance(status, dict) and status.get("ok") is True and not any(status.get(k) for k in ("fault", "hold", "human_hold_latched"))))
+        if not cmd_ok:
+            lost_reply = isinstance(status, dict) and str(status.get("error") or "").startswith("no status within")
+            unconfirmed_motion = is_motion and isinstance(status, dict) and status.get("ok") is True and not cmd_ok
+            hard_fail = bool(not isinstance(status, dict) or status.get("fault") or status.get("hold") or status.get("human_hold_latched")
+                             or status.get("settled") is False or lost_reply or unconfirmed_motion)
+            if not hard_fail and command not in ("park", f"load {library}"):
+                if (flt := _seq_ok(("park",))):
+                    return flt
+            err_msg = (status.get("error") if isinstance(status, dict) else None) or (f"{command} did not settle" if unconfirmed_motion else None)
+            return {"result": "fault" if hard_fail else "refused", "at": command, "steps": steps, **({"error": err_msg} if err_msg else {})}
         if command == "goto above_pick" and wrist is not None:  # cell_hooks: reach and wrist corrections before the descent
             aligned = wrist()
             steps.append({"command": "wrist", **{k: aligned.get(k) for k in ("verdict", "dx_mm", "dy_mm", "total_mm", "hooks")}})
             if aligned["verdict"] == "refuse":
-                run("park")
-                return {"result": "misaligned", "at": "wrist", "wrist": aligned, "steps": steps}
+                return _seq_ok(("park",)) or {"result": "misaligned", "at": "wrist", "wrist": aligned, "steps": steps}
         if command == "run descend_pick" and hasattr(at_stop, "control"):  # reached the grasp height: met nothing
             at_stop.control(status)
         if command == "run descend_pick" and pinch is not None:  # cell_pinch: lowered, is the box between the fingers?
             seen = pinch()
             steps.append({"command": "pinch", **{k: seen.get(k) for k in ("verdict", "why", "dx_mm", "dy_mm")}})
             if seen["verdict"] == "refuse":
-                run("run lift_pick"), run("park")
-                return {"result": "misaligned", "at": "pinch", "pinch": seen, "steps": steps}
+                return _seq_ok(("run lift_pick", "park")) or {"result": "misaligned", "at": "pinch", "pinch": seen, "steps": steps}
         if command == "run lift_place" and status.get("ok") and after_place is not None:
             after_place()  # hover over the box just placed: the wrist reference for 'centred' (cell_wrist_ref)
         no_pick = "run grasp_pick" not in sequence
@@ -303,37 +360,32 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
         if command == "run grasp_pick" and not status.get("holding") and feel is not None:
             status = feel(run)  # cell_feel: an empty grasp feels again, shifted along the closing axis
             if status.get("contact") or not status.get("ok"):
-                run("retreat"), run("park")
+                if "overload-hold" not in (status.get("error") or "") and _retreat_ack_ok(run("retreat"), strict=strict_motion):
+                    if (flt := _seq_ok(("park",))):
+                        return flt
+                elif strict_motion:
+                    return _fault("feel", status, "feel recovery unconfirmed")
                 return {"result": "contact" if status.get("contact") else "refused", "at": "feel", "steps": steps}
         if command == "run grasp_pick" and not status.get("holding"):
-            for after in ("run lift_pick", "park"):
-                run(after)
-            return {"result": "empty", "at": command, "steps": steps}
+            return _seq_ok(("run lift_pick", "park")) or {"result": "empty", "at": command, "steps": steps}
         if command == "run release_place":
             release_completed = True
         if (not release_completed and command in ("run lift_pick", "park", "goto above_place", "run descend_place")
                 and status.get("holding") is False):
-            if command != "park":
-                run("park")
-            return {"result": "empty", "at": command, "steps": steps}
+            return (_seq_ok(("park",)) if command != "park" else None) or {"result": "empty", "at": command, "steps": steps}
         if command in ("run grasp_pick", "run lift_pick") and status.get("holding") and grasp_check is not None:
             checked = grasp_check(command, status, run)
             steps.append({"command": "grasp_debate", "at": command, **{k: checked.get(k) for k in ("verdict", "recovery_chunk", "dx_mm", "dy_mm", "reason", "telemetry", "vision", "debate")}})
             if checked.get("verdict") == "empty":
                 # 2026-11-17 arm_s floor: jaws closed on air (48.91, empty stop 49.0) passed the runner's holding test,
                 # the debate said "empty" twice, and the carry still went on to the belt
-                if command == "run grasp_pick":
-                    run("run lift_pick")
-                run("park")
-                return {"result": "empty", "at": command, "grasp_debate": checked, "steps": steps}
+                return _seq_ok(("run lift_pick", "park") if command == "run grasp_pick" else ("park",)) or {"result": "empty", "at": command, "grasp_debate": checked, "steps": steps}
             if checked.get("verdict") == "reinsert_and_park":
-                run("park")
-                return {"result": "reinserted", "at": command, "grasp_debate": checked, "steps": steps}
+                return _seq_ok(("park",)) or {"result": "reinserted", "at": command, "grasp_debate": checked, "steps": steps}
             if checked.get("verdict") == "reinsert_and_retry" and isinstance(checked.get("retry_status"), dict):
                 status = checked["retry_status"]
                 if not status.get("holding"):
-                    run("park")
-                    return {"result": "empty", "at": command, "grasp_debate": checked, "steps": steps}
+                    return _seq_ok(("park",)) or {"result": "empty", "at": command, "grasp_debate": checked, "steps": steps}
     if closed is None:
         try:
             closed = json.loads(Path(library).read_text())["gripper_closed"]

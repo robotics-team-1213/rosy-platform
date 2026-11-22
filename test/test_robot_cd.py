@@ -686,6 +686,21 @@ def test_state_dir_too_long_for_payload_paths_is_refused(tmp_path):
         tool.load_config(path)
 
 
+def test_load_config_validates_os_auto_rollout_boolean(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.setattr(tool, "verify_snapshot", lambda _: None)
+    path = tmp_path / "config.json"
+    base = {**CONFIG, "repo_id": 7, "state_dir": "/tmp/rcd", "trusted_root": str(ROOT)}
+    path.write_text(json.dumps({**base, "os_auto_rollout": True}), encoding="utf-8")
+    assert tool.load_config(path)["os_auto_rollout"] is True
+    path.write_text(json.dumps({**base, "os_auto_rollout": "yes"}), encoding="utf-8")
+    with pytest.raises(ValueError, match="os_auto_rollout"):
+        tool.load_config(path)
+    path.write_text(json.dumps({**base, "robots": ["Robot-A"], "canary": "Robot-A", "os_auto_rollout": True}), encoding="utf-8")
+    with pytest.raises(ValueError, match="lowercase RFC"):
+        tool.load_config(path)
+
+
 LATEST, DELIVERED = "ef" * 20, "cd" * 20
 
 

@@ -647,3 +647,330 @@ def test_a_sigterm_between_the_gate_and_torque_off_waits_until_the_verdict_has_b
         ci.OPERATOR_RELEASE = monkey_release
         for s, handler in saved.items():
             signal.signal(s, handler)
+
+
+@pytest.mark.parametrize("hold_at,sig", [(20, signal.SIGINT), (22, signal.SIGTERM)])
+def test_fifo_human_hold_with_concurrent_shutdown_signal_latches_hold_without_folding(hold_at, sig):
+    status, clock, queue, ticks = [], [0.0], ["run reach"], [0]
+    r = m.Runner(Robot(), library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals = []
+
+    def lines():
+        ticks[0] += 1
+        out = []
+        if ticks[0] == 20:
+            r.signals.append(sig)
+        if ticks[0] == hold_at:
+            out.append("human-hold")
+        if r.human_hold_latched and clock[0] > 5 and RELEASE not in r.signals:
+            r.signals.append(RELEASE)
+        if clock[0] > 60:
+            raise TimeoutError
+        return out or ([queue.pop(0)] if queue and not r.chunk and not r.signals else [])
+
+    r.run(lines)
+    assert r.human_hold_latched is True and any(row.get("hold") for row in interrupts(status))
+    assert interrupts(status)[-1]["released"] is True
+    assert not any(row.get("folding") or row.get("command") == "run park" for row in status)
+    assert not [row for row in status if row["command"] == "human-hold"]
+
+
+def test_fifo_human_hold_during_active_interrupt_fold_sends_zero_further_park_ticks():
+    robot, status, clock, queue, ticks, sent = Robot(), [], [0.0], ["run reach"], [0], {}
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals = []
+
+    def lines():
+        ticks[0] += 1
+        if ticks[0] == 20:
+            r.signals.append(signal.SIGINT)
+        if "before" not in sent and getattr(r, "_interrupt", None) and r._interrupt["phase"] == "park" and r.chunk == "park" and len(r.queue) > 2:
+            sent["before"], sent["pose"] = len(robot.sent), list(robot.pos[:5])
+            return ["human-hold"]
+        if r.human_hold_latched and "held_at" not in sent:
+            sent["held_at"] = clock[0]
+        if "held_at" in sent and clock[0] >= sent["held_at"] + 2.0 and RELEASE not in r.signals:
+            r.signals.append(RELEASE)
+        if clock[0] > 60:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk and not r.signals else []
+
+    r.run(lines)
+    assert r.human_hold_latched is True and r._interrupt["phase"] == "hold" and len(robot.sent) > sent["before"]
+    for action in robot.sent[sent["before"]:]:
+        assert [action[n] for n in m.NAMES[:5]] == pytest.approx(sent["pose"])
+    assert interrupts(status)[-1]["released"] is True
+    assert not [row for row in status if row["command"] == "human-hold"]
+
+
+def test_startup_alignment_concurrent_signal_and_fifo_human_hold_latches_hold_even_when_folded():
+    robot, status, clock, ticks = Robot(), [], [0.0], [0]
+    robot.motion = type("M", (), {"tracking": False, "failed": False, "held": None})()
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals = []
+
+    def lines():
+        ticks[0] += 1
+        if ticks[0] == 1:
+            r.signals.append(signal.SIGINT)
+            return ["human-hold"]
+        if r.human_hold_latched and clock[0] > 3.0 and RELEASE not in r.signals:
+            r.signals.append(RELEASE)
+        if clock[0] > 60:
+            raise TimeoutError
+        return []
+
+    r.run(lines)
+    assert r.human_hold_latched is True and any(row.get("hold") for row in interrupts(status))
+    assert not any(row.get("folded") for row in interrupts(status))
+    assert interrupts(status)[-1]["released"] is True
+    assert not [row for row in status if row["command"] == "human-hold"]
+
+
+def test_concurrent_premature_sigusr2_and_fifo_human_hold_sends_zero_post_intake_motion_and_requires_fresh_release():
+    robot, status, clock, queue, ticks, intake = Robot(), [], [0.0], ["run reach"], [0], {}
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.signals = []
+
+    def lines():
+        ticks[0] += 1
+        if ticks[0] == 11:
+            intake.update(before=len(robot.sent), pose=list(robot.pos[:5]), t=clock[0])
+            r.signals.append(RELEASE)
+            return ["human-hold"]
+        if r.human_hold_latched and clock[0] >= intake["t"] + 2.0 and not r.signals:
+            r.signals.append(RELEASE)
+        if clock[0] > 60:
+            raise TimeoutError
+        return [queue.pop(0)] if queue and not r.chunk else []
+
+    r.run(lines)
+    assert r.human_hold_latched is True and clock[0] >= intake["t"] + 2.0 and len(robot.sent) > intake["before"]
+    for action in robot.sent[intake["before"]:]:
+        assert [action[n] for n in m.NAMES[:5]] == pytest.approx(intake["pose"])
+    hold_rows = [row for row in status if row["command"] == "human-hold"]
+    assert any(row.get("ok") and row.get("human_hold_latched") and row.get("torque_hold_commanded") for row in hold_rows)
+    assert hold_rows[-1].get("released") is True
+
+
+def test_interrupt_hold_overload_clears_torque_hold_commanded_and_blocks_fifo_live_fallback(tmp_path, monkeypatch):
+    import time
+
+    sys.path.insert(0, str(OMX))
+    try:
+        import cell_pipeline_io as cpio
+        from cell_pipeline_io import FifoCell
+        from cell_policy_timing import hold_ack_ok
+    finally:
+        sys.path.remove(str(OMX))
+
+    robot, status = Robot(), []
+    robot.motion = type("M", (), {"held": {"wrist_flex": 1.0}, "failed": False, "last_effort_time": False})()
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: 1.0)
+    r.target, r.signals = list(HOME), [signal.SIGINT]
+    r.human_hold_latched, r._human_hold_ack_pending, r.torque_hold_commanded = True, True, True
+    r._interrupt = {"signal": signal.SIGINT, "phase": "hold", "seen": 1, "may_move": False, "since": 0.0,
+                    "still": 0, "last": None, "deadline": 60.0, "release_from": 1}
+
+    assert ci._hold_tick(r) is False
+    assert r.torque_hold_commanded is False and r._human_hold_ack_pending is False
+    assert status[-1]["command"] == "human-hold" and status[-1]["ok"] is False and status[-1]["person_needed"] is True
+    assert "guard overload" in status[-1]["error"]
+
+    io_dir = tmp_path / "io"
+    io_dir.mkdir()
+    (io_dir / "chunk-cmd").write_bytes(b"")
+    (io_dir / "chunk-status.jsonl").mkdir()  # force unreadable status file -> FifoCell relies on live fallback
+    live_path = io_dir / "live.json"
+    live_path.write_text(json.dumps({"t": time.time(), "state": list(HOME), "human_hold_latched": r.human_hold_latched,
+                                     "torque_hold_commanded": r.torque_hold_commanded, "fault": r.fault}))
+    cell = FifoCell(io_dir, {}, 0.08)
+    reply = cell.act("human-hold")
+    assert reply["ok"] is False and hold_ack_ok(reply) is False and "no status within" in reply["error"]
+
+    for pre_offset in (-0.005, 0.0004, 0.05):
+        live_path.write_text(json.dumps({"t": time.time() + pre_offset, "state": list(HOME), "human_hold_latched": True,
+                                         "torque_hold_commanded": True}))
+        assert hold_ack_ok(cell.act("human-hold")) is False
+
+    live_path.write_text(json.dumps({"t": 10**400, "state": list(HOME), "human_hold_latched": True, "torque_hold_commanded": True}))
+    real_open, real_close, sink_fd, live_vals = cpio.os.open, cpio.os.close, [None], [(0.1, "wrong-req"), (None, None), (0.1, None)]
+    hold_sink = tmp_path / "hold-sink"
+    with monkeypatch.context() as mp:
+        def _open_live(path, flags):
+            if Path(path) == io_dir / "chunk-cmd":
+                sink_fd[0] = real_open(hold_sink, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                return sink_fd[0]
+            return real_open(path, flags)
+
+        def _close_with_live(fd):
+            real_close(fd)
+            if fd == sink_fd[0]:
+                offset, forced_req = live_vals.pop(0)
+                t_val = 10**400 if offset is None else time.time() + offset
+                req = forced_req or hold_sink.read_text().strip().split()[1]
+                live_path.write_text(json.dumps({"t": t_val, "state": list(HOME), "human_hold_latched": True,
+                                                 "torque_hold_commanded": True, "hold_req": req}))
+
+        mp.setattr(cpio.os, "open", _open_live)
+        mp.setattr(cpio.os, "close", _close_with_live)
+        assert hold_ack_ok(cell.act("human-hold")) is False
+        assert hold_sink.read_text().startswith("human-hold ")
+        assert hold_ack_ok(cell.act("human-hold")) is False
+        assert hold_ack_ok(cell.act("human-hold")) is True
+
+    r._human_hold_ack_pending = True  # FIFO retry on already-overloaded hold must not re-arm pending ack
+    assert ci._hold_tick(r) is False
+    assert r.torque_hold_commanded is False and r._human_hold_ack_pending is False
+
+    robot2, status2 = Robot(), []
+    robot2.motion = type("M", (), {"failed": True})()
+    robot2.bus = type("B", (), {"sync_read": lambda *a, **kw: {n: (0 if i == 0 else 1) for i, n in enumerate(m.NAMES)}})()
+    r2 = m.Runner(robot2, library(), fps=30, status=status2.append, clock=lambda: 1.0)
+    r2.target, r2.human_hold_latched, r2._human_hold_ack_pending, r2.torque_hold_commanded = list(HOME), True, True, True
+    assert ci.emergency_hold(r2, RuntimeError("guard stop")) is False
+    assert r2._interrupt["guard_kind"] == "partial"
+    assert r2.torque_hold_commanded is False and r2._human_hold_ack_pending is False
+    r2._human_hold_ack_pending, r2.torque_hold_commanded = True, True
+    assert ci._guard_verdict(r2, robot2.bus.sync_read(), "repeat") is False
+    assert r2.torque_hold_commanded is False and r2._human_hold_ack_pending is False
+    live_path.write_text(json.dumps({"t": time.time(), "state": list(HOME), "human_hold_latched": r2.human_hold_latched,
+                                     "torque_hold_commanded": r2.torque_hold_commanded, "fault": r2.fault}))
+    assert hold_ack_ok(cell.act("human-hold")) is False
+
+
+def test_fifo_human_hold_ignores_pre_dispatch_status_row_and_reads_post_dispatch_overload(tmp_path, monkeypatch):
+    sys.path.insert(0, str(OMX))
+    try:
+        import cell_pipeline_io as cpio
+        from cell_policy_timing import hold_ack_ok, send_hold
+    finally:
+        sys.path.remove(str(OMX))
+
+    io_dir = tmp_path / "io"
+    io_dir.mkdir()
+    (io_dir / "chunk-cmd").write_bytes(b"")
+    status_path = io_dir / "chunk-status.jsonl"
+    status_path.write_text("", encoding="utf-8")
+    now, mono = [100.05], [0.0]
+    real_open, real_close, sink_fd = cpio.os.open, cpio.os.close, [None]
+    open_rows, close_rows, live_row = [], [], [None]
+
+    def _open_race(path, flags):
+        if Path(path) == io_dir / "chunk-cmd":
+            if open_rows:
+                with status_path.open("a", encoding="utf-8") as stream:
+                    for row in open_rows:
+                        stream.write(json.dumps(row) + "\n")
+            sink_fd[0] = real_open(tmp_path / "cmd-sink", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            return sink_fd[0]
+        return real_open(path, flags)
+
+    def _close_race(fd):
+        real_close(fd)
+        if fd == sink_fd[0] and (close_rows or live_row[0]):
+            req = (tmp_path / "cmd-sink").read_text(encoding="utf-8").strip().split()[1]
+            if live_row[0]:
+                (io_dir / "live.json").write_text(json.dumps(dict(live_row[0], hold_req=req)), encoding="utf-8")
+            with status_path.open("ab") as stream:
+                for row in close_rows:
+                    if isinstance(row, bytes):
+                        stream.write(row)
+                    elif isinstance(row, str):
+                        stream.write((row + "\n").encode("utf-8"))
+                    else:
+                        out = dict(row, hold_req=req) if row.get("hold_req") == "{req}" else row
+                        stream.write((json.dumps(out) + "\n").encode("utf-8"))
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cpio.time, "time", lambda: now[0])
+        mp.setattr(cpio.time, "monotonic", lambda: mono[0])
+        mp.setattr(cpio.time, "sleep", lambda dt: mono.__setitem__(0, mono[0] + dt))
+        mp.setattr(cpio.os, "open", _open_race)
+        mp.setattr(cpio.os, "close", _close_race)
+        cell = cpio.FifoCell(io_dir, {}, 0.08)
+
+        open_rows[:] = [
+            {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "t": 100.02},
+            {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "t": 100.05},
+            {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True},
+            {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "t": 10**400},
+        ]
+        close_rows[:] = [
+            {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": "{req}", "t": 10**400},
+            {"command": "human-hold", "ok": False, "human_hold_latched": True, "torque_hold_commanded": False,
+             "person_needed": True, "error": "guard overload during human hold; person needed", "hold_req": "{req}", "t": 100.06},
+        ]
+        reply = cell.act("human-hold")
+        assert reply["ok"] is False and hold_ack_ok(reply) is False and "guard overload" in reply["error"]
+
+        mono[0] = 0.0
+        open_rows[:] = [{"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "t": 100.02}]
+        close_rows[:] = []
+        assert cell.act("human-hold")["ok"] is False
+        with pytest.raises(OSError):
+            send_hold(cell, attempts=2, delay_s=0.0)
+
+        mono[0] = 0.0
+        open_rows[:] = []
+        close_rows[:] = [{"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": "{req}", "t": 100.06}]
+        assert hold_ack_ok(send_hold(cell, attempts=1, delay_s=0.0)) is True
+
+        # Case 4 (r28 P2 retry ordering): post-dispatch previous-request ok=True + current-request overload -> skips stale req, returns current overload; previous-only times out.
+        mono[0] = 0.0
+        open_rows[:] = []
+        close_rows[:] = [
+            {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": "prev-req-1", "t": 100.06},
+            {"command": "human-hold", "ok": False, "human_hold_latched": True, "torque_hold_commanded": False,
+             "person_needed": True, "error": "guard overload during human hold; person needed", "hold_req": "{req}", "t": 100.07},
+        ]
+        r_retry = cell.act("human-hold")
+        assert r_retry["ok"] is False and r_retry["hold_req"] != "prev-req-1" and "guard overload" in r_retry["error"]
+
+        mono[0] = 0.0
+        close_rows[:] = [{"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": "prev-req-1", "t": 100.06}]
+        with pytest.raises(OSError):
+            send_hold(cell, attempts=2, delay_s=0.0)
+
+        # Case 5: same-request superseded ok=True followed in the same poll buffer by ok=False overload returns overload.
+        mono[0] = 0.0
+        close_rows[:] = [
+            {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": "{req}", "t": 100.06},
+            {"command": "human-hold", "ok": False, "human_hold_latched": True, "torque_hold_commanded": False,
+             "person_needed": True, "error": "guard overload during human hold; person needed", "hold_req": "{req}", "t": 100.07},
+        ]
+        r_sup = cell.act("human-hold")
+        assert r_sup["ok"] is False and hold_ack_ok(r_sup) is False and "guard overload" in r_sup["error"]
+
+        # Case 5b (r32/r33): preceding/trailing invalid UTF-8 bytes or corrupt JSON after matching overload never discard matched_hold into live.json fallback.
+        mono[0] = 0.0
+        live_row[0] = {"t": 100.06, "state": list(HOME), "human_hold_latched": True, "torque_hold_commanded": True}
+        close_rows[:] = [
+            b"\xff\n",
+            {"command": "human-hold", "ok": False, "human_hold_latched": True, "torque_hold_commanded": False,
+             "person_needed": True, "error": "guard overload during human hold; person needed", "hold_req": "{req}", "t": 100.06},
+            "{corrupt",
+            b"\xff\n",
+            b"\x80",
+        ]
+        r_corrupt = cell.act("human-hold")
+        assert r_corrupt["ok"] is False and hold_ack_ok(r_corrupt) is False and "guard overload" in r_corrupt["error"]
+        live_row[0] = None
+
+    # Case 6: real Runner echoes hold_req for ok and retry overload reports.
+    robot3, status3 = Robot(), []
+    r3 = m.Runner(robot3, library(), fps=30, status=status3.append, clock=lambda: 1.0)
+    r3.target = list(HOME)
+    assert r3.command("human-hold req1") is True
+    r3.tick()
+    ack1 = [row for row in status3 if row.get("command") == "human-hold"][-1]
+    assert ack1["ok"] is True and ack1["hold_req"] == "req1" and r3.torque_hold_commanded is True
+    robot3.motion = type("M", (), {"held": {"wrist_flex": 1.0}, "failed": False, "last_effort_time": False})()
+    assert r3.command("human-hold req2") is True
+    r3.tick()
+    ack2 = [row for row in status3 if row.get("command") == "human-hold"][-1]
+    assert ack2["ok"] is False and ack2["hold_req"] == "req2" and ack2["person_needed"] is True and r3.torque_hold_commanded is False

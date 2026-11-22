@@ -56,7 +56,7 @@ def test_os_battery_has_no_charging_exception_and_requires_known_values(tmp_path
             m.authorize(root, TRANSACTION, host=host)
 
 
-@pytest.mark.parametrize("change", ["disabled", "hold", "network", "claim", "pending", "journal", "seal"])
+@pytest.mark.parametrize("change", ["disabled", "hold", "network", "claim", "pending", "journal"])
 def test_policy_and_ownership_are_rechecked_after_second_sample(tmp_path, monkeypatch, change):
     m, _, root, journal, _, _, directory, host = _policy(tmp_path, monkeypatch)
     original_sleep = host.sleep
@@ -77,15 +77,24 @@ def test_policy_and_ownership_are_rechecked_after_second_sample(tmp_path, monkey
             value = json.loads(journal.read_text())
             value["unexpected"] = True
             journal.write_text(json.dumps(value))
-        elif change == "journal":
-            journal.unlink()
         else:
-            from auto_update_host import APPROVALS
-            marker = root / APPROVALS[0]
-            marker.parent.mkdir(parents=True, exist_ok=True)
-            marker.write_text(json.dumps(dict(release_id=host.current_release())))
+            journal.unlink()
     host.sleep = sleep
     with pytest.raises(ValueError):
+        m.authorize(root, TRANSACTION, host=host)
+
+
+def test_sealed_g4_approvals_allow_idle_os_update_while_non_idle_still_refuses(tmp_path, monkeypatch):
+    from auto_update_host import APPROVALS
+    m, _, root, _, _, _, _, host = _policy(tmp_path, monkeypatch)
+    for rel in APPROVALS:
+        marker = root / rel
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(json.dumps({"release_id": host.current_release()}), encoding="utf-8")
+    assert m.authorize(root, TRANSACTION, host=host) is None
+    host.inputs_changes = {"robot_mode": "NAVIGATION"}
+    host.write_inputs()
+    with pytest.raises(ValueError, match="OS_UPDATE_POLICY"):
         m.authorize(root, TRANSACTION, host=host)
 
 

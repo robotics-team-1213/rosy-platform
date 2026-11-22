@@ -828,12 +828,13 @@ def test_bench_ribbon_camera_first_drawers_and_no_motion():
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
     css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
 
-    # 1) topbar has one set of arm pills, start with aria-describedby, home, drawer buttons, and estop as last element
+    # 1) topbar removes duplicate arm pills (single selector stays in #arm-card-bar), keeps start, home, drawers, and estop as last element
     topbar_m = re.search(r'<header class="app-topbar"[^>]*>(.*?)</header>', html, re.S)
     assert topbar_m
     topbar = topbar_m.group(1)
-    assert 'id="hdr-arm-pill"' not in topbar
-    for marker in ('id="rail-arm-pills"', 'id="phase-tabs"', 'id="hdr-record-btn"',
+    assert 'id="hdr-arm-pill"' not in topbar and 'id="rail-arm-pills"' not in topbar
+    assert 'id="arm-card-bar"' in html
+    for marker in ('id="phase-tabs"', 'id="hdr-record-btn"',
                    'aria-describedby="hdr-start-reasons"', 'id="hdr-home-btn"',
                    'data-drawer-btn="setup"', 'data-drawer-btn="bindings"',
                    'data-drawer-btn="start"', 'data-drawer-btn="records"', 'id="hdr-estop-btn"'):
@@ -926,10 +927,10 @@ def test_bench_v3_always_visible_goal_records_live_map_note_and_topbar_menu():
     assert '이 조합의 과제 카드 없음' in ui_js
     assert 'nEl.hidden=!lastMapNote' in ui_js
 
-    # 4) Topbar nowrap, single-row arm pills, and collapsible drawer menu
+    # 4) Topbar nowrap, single arm-card-bar selector, and collapsible drawer menu
     assert 'id="btn-drawer-menu"' in html and 'id="drawer-menu-pop"' in html
     assert '.drawer-menu-wrap.open .drawer-menu-pop' in css
-    assert '.arm-pills{display:inline-flex;flex-wrap:nowrap;' in css
+    assert '.arm-card-grid{' in css and 'id="rail-arm-pills"' not in html
     assert 'white-space:nowrap' in css
     assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
 
@@ -1136,7 +1137,8 @@ def test_ui_audio_cues_and_quick_restart_after_result_contract():
     last_btn = list(re.finditer(r'<button\b[^>]*\bid="([^"]+)"', ops_m.group(1)))
     assert last_btn and last_btn[-1].group(1) == 'hdr-estop-btn'
     context = re.search(r'<div id="hdr-row-menu"[^>]*>(.*?)<section id="hdr-row-ops"', html, re.S).group(1)
-    context_order = ('h1', 'rail-arm-pills', 'hdr-task-summary', 'goal-name-btn', 'ftr-server',
+    assert 'id="rail-arm-pills"' not in context
+    context_order = ('h1', 'hdr-task-summary', 'goal-name-btn', 'ftr-server',
                      'hdr-cam-health', 'hdr-help-btn', 'btn-drawer-menu', 'hdr-refresh-btn')
     positions = [context.index('<h1>' if m == 'h1' else f'id="{m}"') for m in context_order]
     assert positions == sorted(positions)
