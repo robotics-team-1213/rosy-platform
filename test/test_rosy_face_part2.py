@@ -704,6 +704,18 @@ def test_the_update_marker_is_strict(tmp_path, content):
     assert update is None or update["release"] is None
 
 
+@pytest.mark.parametrize("third,expected", [("0", 0), ("42", 42), ("100", 100), ("101", None), ("-1", None), ("abc", None), (None, None)])
+def test_read_update_parses_optional_percent(tmp_path, third, expected):
+    module = _display()
+    marker = tmp_path / "run/rosy-boot/update-display.txt"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    body = f"download\n2026.10.03-027\n{third}\n" if third is not None else "download\n2026.10.03-027\n"
+    marker.write_text(body, encoding="utf-8")
+    os.utime(marker, (WALL, WALL))
+
+    assert module.read_update(tmp_path, WALL) == {"step": "download", "release": "2026.10.03-027", "percent": expected}
+
+
 def test_standby_sleeps_the_panel_and_a_wake_card_wakes_it(tmp_path):
     module = _display()
     _status(tmp_path, "CORE_READY", runtime_mode="hardware")

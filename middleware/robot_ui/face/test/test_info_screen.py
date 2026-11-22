@@ -358,3 +358,29 @@ def test_identify_card_fills_solid_color_and_dispatches_from_card_renderer(color
         "screen": {"kind": "face", "identify_color": color},
     })
     assert ImageChops.difference(dispatched, image).getbbox() is None
+
+
+def test_render_update_draws_progress_bar_percent_and_dispatches():
+    import importlib.util
+    import emotion.info_screen as info_screen
+
+    p0 = info_screen.render_update("2026.11.22-225", "2026.11.22-224", step="download", percent=0)
+    p50 = info_screen.render_update("2026.11.22-225", "2026.11.22-224", step="unpack", percent=50)
+    p100 = info_screen.render_update("2026.11.22-225", "2026.11.22-224", step="health", percent=100)
+    p_none = info_screen.render_update("2026.11.22-225", "2026.11.22-224", step="download", percent=None)
+    p_rb = info_screen.render_update("2026.11.22-225", "2026.11.22-224", step="rollback", percent=None)
+    for img in (p0, p50, p100, p_none, p_rb):
+        assert img.size == DEFAULT_SIZE and img.mode == "RGB"
+    assert ImageChops.difference(p0, p50).getbbox() is not None
+    assert ImageChops.difference(p50, p100).getbbox() is not None
+    assert ImageChops.difference(p0, p_none).getbbox() is not None
+
+    renderer_path = ROOT.parents[2] / "deploy" / "robot" / "pinky_pro" / "native" / "face_card_renderer.py"
+    spec = importlib.util.spec_from_file_location("face_card_renderer_upd", renderer_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    dispatched = mod.card_renderer(info_screen)({
+        "release_id": "2026.11.22-224",
+        "screen": {"kind": "update", "release": "2026.11.22-225", "step": "unpack", "percent": 50},
+    })
+    assert ImageChops.difference(dispatched, p50).getbbox() is None

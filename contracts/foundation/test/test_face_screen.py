@@ -645,3 +645,17 @@ def test_a_live_greeting_outranks_the_rest_faces_but_not_a_caution():
 @pytest.mark.parametrize("name", sorted(fs.FACES))
 def test_every_face_name_survives_the_hand_over(name):
     assert fs.validate_face_inputs(handover(face=name), NOW)["face"] == name
+
+
+def test_active_apply_update_carries_step_and_percent():
+    answer = fs.screen_for(**READY, core=core(), update={"step": "health", "release": "2026.11.22-225", "percent": 88})
+    assert answer["kind"] == fs.UPDATE and answer["step"] == "health" and answer["percent"] == 88
+
+
+def test_staging_update_shows_when_idle_and_yields_to_emergency_caution_and_drive():
+    staging = {"step": "download", "release": "2026.11.22-225", "percent": 25}
+    idle = fs.screen_for(**READY, core=core(), update=staging)
+    assert idle["kind"] == fs.UPDATE and idle["step"] == "download" and idle["percent"] == 25
+    assert fs.screen_for(**READY, core=core(estop=True), update=staging)["kind"] == fs.STOPPED
+    assert fs.screen_for(**READY, core=core(caution=["line_follow_hold"]), update=staging)["kind"] == fs.FACE
+    assert fs.screen_for(**READY, core=core(robot_mode="NAVIGATION", nav_state="NAVIGATING"), update=staging)["kind"] == fs.FACE
