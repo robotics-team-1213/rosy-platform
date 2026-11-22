@@ -171,13 +171,23 @@ export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText =
   return [`[${liveBadge}]`, jointsStr, `folded=${Boolean(st.folded)}`, tempTxt, curTxt, st.substage || ""].filter(Boolean).join(" · ");
 }
 
-export function inspectorTargetsFromRows(rows) {
+function resolveCameraSource(source, obs = null) {
+  const cams = obs?.cameras || [];
+  if (!cams.length || !source) return source;
+  if (cams.some((c) => c.source_id === source)) return source;
+  const aliases = { arm_s_top: "omx_arm_s_top", arm_s_wrist: "omx_arm_s_wrist", top: "omx_overhead", side: "omx_side", arm_a_wrist: "omx_wrist_a", arm_b_wrist: "omx_wrist_b" };
+  const mapped = aliases[source];
+  return mapped && cams.some((c) => c.source_id === mapped) ? mapped : source;
+}
+
+export function inspectorTargetsFromRows(rows, obs = null) {
   const cards = rows?.cards || [];
   const s3 = cards.find((c) => c.id === "cell_s") || {};
   const s5 = cards.find((c) => c.id === "cell_ab") || {};
   const armLive = rows?.armLiveStates || {};
   const cellSOccupant = rows?.cellOccupants?.cell_s || null;
   const cellAbOccupant = rows?.cellOccupants?.cell_ab || null;
+  const mapViews = (views) => views.map((v) => (v.source ? { ...v, source: resolveCameraSource(v.source, obs) } : v));
   return [
     {
       id: "arm_s",
@@ -192,11 +202,11 @@ export function inspectorTargetsFromRows(rows) {
       task: s3.task || null,
       robot_id: cellSOccupant,
       dualPair: ["arm_s_top", "arm_s_wrist"],
-      cameraViews: [
+      cameraViews: mapViews([
         {id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist"},
         {id: "arm_s_top", label: "S3 상단", source: "arm_s_top"},
         ...(cellSOccupant ? [{id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: cellSOccupant}] : []),
-      ],
+      ]),
       buttons: s3.buttons || CELL_BUTTONS.cell_s,
       quickControls: (s3.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_s"} : c),
     },
@@ -213,12 +223,12 @@ export function inspectorTargetsFromRows(rows) {
       task: s5.task || null,
       robot_id: cellAbOccupant,
       dualPair: ["top", "arm_a_wrist"],
-      cameraViews: [
+      cameraViews: mapViews([
         {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
         {id: "top", label: "S5 상단", source: "top"},
         {id: "side", label: "측면 (A/B)", source: "side"},
         {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
-      ],
+      ]),
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
       quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_a"} : c),
     },
@@ -235,16 +245,16 @@ export function inspectorTargetsFromRows(rows) {
       task: s5.task || null,
       robot_id: cellAbOccupant,
       dualPair: ["top", "arm_b_wrist"],
-      cameraViews: [
+      cameraViews: mapViews([
         {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
         {id: "top", label: "S5 상단", source: "top"},
         {id: "side", label: "측면 (A/B)", source: "side"},
         {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
-      ],
+      ]),
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
       quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_b"} : c),
     },
-    ...(s3.id ? [{...s3, shortTab: "CELL_S", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText)}] : []),
-    ...(s5.id ? [{...s5, shortTab: "CELL_AB", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText)}] : []),
+    ...(s3.id ? [{...s3, cameraViews: mapViews(s3.cameraViews || []), shortTab: "CELL_S", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText)}] : []),
+    ...(s5.id ? [{...s5, cameraViews: mapViews(s5.cameraViews || []), shortTab: "CELL_AB", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText)}] : []),
   ];
 }

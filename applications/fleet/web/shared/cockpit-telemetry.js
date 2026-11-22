@@ -1,5 +1,6 @@
 import { cssColor } from "/common/ui.js";
 import { node } from "/common/control-dom.js";
+import { owns } from "/console/assets/unit-scope.js";
 
 let uPlotLoader = null;
 function loadUPlot() {
@@ -17,7 +18,7 @@ function makeHudCell(key, labelText) {
   const label = node("span", labelText, "cockpit-hud-label");
   const val = node("strong", "—", "cockpit-hud-val");
   cell.append(label, val);
-  return { cell, val };
+  return { cell, label, val };
 }
 
 export function createCockpitHud({ el }) {
@@ -43,14 +44,33 @@ export function createCockpitHud({ el }) {
     pathbar.append(hud);
   }
 
-  function setCell(key, text, tone = "neutral") {
+  function setCell(key, text, tone = "neutral", labelText = null) {
     const target = cells?.[key];
     if (!target) return;
+    if (labelText && target.label.textContent !== labelText) target.label.textContent = labelText;
     if (target.val.textContent !== text) target.val.textContent = text;
     if (target.cell.dataset.tone !== tone) target.cell.dataset.tone = tone;
   }
 
   function update(view) {
+    const critCount = el("critical-list")?.childElementCount || 0;
+    const warnCount = el("warning-list")?.childElementCount || 0;
+    const totalAlerts = critCount + warnCount;
+    const obs = view.workcellObs;
+    const sum = obs?.summary || null;
+
+    if (!owns("drive") && owns("arms")) {
+      const unitId = view.controlUnit?.unit_id || "ARM-CELL";
+      const critTotal = critCount + (sum?.heldCount || 0) + (sum?.faultArmCount || 0);
+      const warnTotal = warnCount + (sum?.warnArmCount || 0);
+      setCell("online", view.stateUnavailable ? "연결 끊김" : unitId, view.stateUnavailable ? "crit" : "neutral", "관제 단위");
+      setCell("mission", !sum ? "확인 중" : `${sum.armsFresh}/${sum.armsTotal} 실시간`, !sum ? "neutral" : sum.armsFresh > 0 ? "active" : "warn", "팔 피드백");
+      setCell("battery", !sum ? "—" : `${sum.camsTotal}대`, sum?.camsTotal ? "neutral" : "warn", "셀 카메라");
+      setCell("arms", !sum ? "—" : sum.heldCount > 0 ? `보류 ${sum.heldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : "이상 없음", sum?.heldCount > 0 ? "crit" : sum?.openIncidentCount > 0 ? "warn" : "neutral", "보류 · 사건");
+      setCell("alerts", critTotal + warnTotal > 0 ? `위험 ${critTotal} · 주의 ${warnTotal}` : "없음", critTotal > 0 ? "crit" : warnTotal > 0 ? "warn" : "neutral", "경보");
+      return;
+    }
+
     const robots = view.robots || [];
     const total = robots.length;
     const onlineRobots = robots.filter((r) => r.online);
@@ -73,38 +93,43 @@ export function createCockpitHud({ el }) {
     const minBatt = pcts.length ? Math.round(Math.min(...pcts)) : null;
 
     const anchors = view.anchors || [];
-    const heldArms = anchors.filter(
+    const anchorHeld = anchors.filter(
       (a) => a.held === true || a.cell_status === "HOLD" || a.cell_status === "PAUSED_HUMAN",
     ).length;
-
-    const critCount = el("critical-list")?.childElementCount || 0;
-    const warnCount = el("warning-list")?.childElementCount || 0;
-    const totalAlerts = critCount + warnCount;
+    const armTotal = sum?.armsTotal > 0 ? sum.armsTotal : anchors.length;
+    const armHeld = sum?.armsTotal > 0 ? sum.heldCount : anchorHeld;
+    const armReady = sum?.armsTotal > 0 ? sum.armsFresh : anchors.length;
+    const armsText = armTotal === 0 ? "—" : armHeld > 0 ? `${armHeld}/${armTotal} HOLD` : `${armReady}/${armTotal} OK`;
 
     setCell(
       "online",
       view.stateUnavailable ? "LINK LOST" : `${online}/${total} ON`,
       view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral",
+      "FLEET",
     );
     setCell(
       "mission",
       activeCount > 0 ? `${activeCount} RUN` : "0 IDLE",
       activeCount > 0 ? "active" : "neutral",
+      "MISSION",
     );
     setCell(
       "battery",
       minBatt === null ? "—" : `${minBatt}%`,
       minBatt === null ? "neutral" : minBatt <= 15 ? "crit" : minBatt <= 30 ? "warn" : "neutral",
+      "BATT MIN",
     );
     setCell(
       "arms",
-      anchors.length === 0 ? "—" : heldArms > 0 ? `${heldArms}/${anchors.length} HOLD` : `${anchors.length}/${anchors.length} OK`,
-      heldArms > 0 ? "warn" : "neutral",
+      armsText,
+      armHeld > 0 ? "crit" : (sum?.armsTotal > 0 && sum.armsFresh === 0) ? "warn" : "neutral",
+      "OMX CELL",
     );
     setCell(
       "alerts",
       estopActive ? "E-STOP" : totalAlerts > 0 ? `${critCount}C · ${warnCount}W` : "0 CLEAR",
       estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral",
+      "ALERTS",
     );
   }
 

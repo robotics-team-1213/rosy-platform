@@ -1,6 +1,7 @@
 // D-941 5/7: the charge-bay plan remains display-only; task buttons use pipeline APIs.
 import { setOffBy } from "/common/cause-line.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
+import { owns } from "/console/assets/unit-scope.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 
@@ -16,7 +17,7 @@ function markNoRobot(button, choice, card) {
   setOffBy(button, "대상 로봇 없음");
 }
 
-export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null }) {
+export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null, readWorkcellObs = null }) {
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
@@ -29,8 +30,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   }, true);
   let inFlight = false;
   let unavailable = false;
-  let liveStreamOn = true;
-  const selectedCamByCard = {};
+  const liveStreamOn = true;
+  let inspectorOpen = false;
   let activeInspectorId = null;
   // Choosing a robot only inspects it (no Vision lease); frames start after a click inside the cards or inspector.
   let framesOn = false;
@@ -39,8 +40,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   let lastRows = null;
 
   scope.listen(document, "visibilitychange", () => {
-    frames.setRunning(!document.hidden && liveStreamOn);
-    if (!document.hidden) void refresh();
+    frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive"));
+    if (!document.hidden && owns("drive")) void refresh();
   });
 
   if (selection?.subscribe) {
@@ -140,7 +141,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       inspector.replaceChildren();
       return;
     }
-    const targets = inspectorTargetsFromRows(rows);
+    const targets = inspectorTargetsFromRows(rows, readWorkcellObs?.());
     const active = targets.find((t) => t.id === activeInspectorId) || targets[0];
     if (!active) return;
 
@@ -384,15 +385,24 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       actions.append(button);
     }
 
-    inspector.replaceChildren(tabs, head, camStageNode, pipGrid, meta, quickDispatchBar, actions);
-    if (framesOn) for (const binding of cameraBindings) frames.bind(...binding);
+    const disclosure = document.createElement("details");
+    disclosure.className = "omx-pipeline-disclosure";
+    disclosure.open = inspectorOpen;
+    const summary = document.createElement("summary");
+    summary.textContent = `셀 파이프라인 제어 · ${active.shortTab} (${active.text || "대기 중"})`;
+    disclosure.addEventListener("toggle", () => {
+      inspectorOpen = disclosure.open;
+      frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive"));
+    });
+    disclosure.append(summary, tabs, head, camStageNode, pipGrid, meta, quickDispatchBar, actions);
+    inspector.replaceChildren(disclosure);
+    if (framesOn && inspectorOpen) for (const binding of cameraBindings) frames.bind(...binding);
   }
 
   function show(rows, note) {
     lastRows = rows;
     renderInspector(rows);
     list.replaceChildren();
-    const cellItems = new Map();
     for (const b of rows?.bays || []) {
       const li = document.createElement("li");
       li.append(`${b.id} `, tag(b.text, b.status));
@@ -402,113 +412,11 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       const li = document.createElement("li");
       li.append(`${c.id} `, tag(c.text, c.status));
       list.append(li);
-      cellItems.set(c.id, li);
     }
     for (const a of rows?.actions || []) {
       const li = document.createElement("li");
       li.textContent = `${a.robot}: ${a.text}`;
       list.append(li);
-    }
-    for (const card of rows?.cards || []) {
-      const li = cellItems.get(card.id) || document.createElement("li");
-      if (li.parentNode !== list) list.append(li);
-      const article = document.createElement("article");
-      article.className = "omx-dense-card";
-      article.addEventListener("click", (ev) => {
-        if (ev.target?.closest?.("ui-button, button, img")) return;
-        activeInspectorId = card.id === "cell_s" ? "arm_s" : (card.id === "cell_ab" ? "arm_a" : card.id);
-        renderInspector(rows);
-        frames.bind(camera, activeCam);
-      });
-      const activeCamId = selectedCamByCard[card.id] || card.cameraViews?.[0]?.id;
-      const activeCam = (card.cameraViews || []).find((v) => v.id === activeCamId)
-        || (card.cameraViews || [])[0] || {id: card.id, label: card.title, roiTarget: card.id};
-      const camera = document.createElement("img");
-      camera.loading = "lazy";
-      camera.className = "cell-cam-thumb";
-      camera.alt = `${card.title} 카메라`;
-      if (framesOn && (activeInspectorId === card.id ||
-          (card.id === "cell_s" && activeInspectorId === "arm_s") ||
-          (card.id === "cell_ab" && ["arm_a", "arm_b"].includes(activeInspectorId)))) {
-        queueMicrotask(() => { if (camera.isConnected) frames.bind(camera, activeCam); });
-      }
-      camera.tabIndex = 0;
-      camera.addEventListener("click", () => {
-        camera.classList.toggle("focused");
-        activeInspectorId = card.id === "cell_s" ? "arm_s" : (card.id === "cell_ab" ? "arm_a" : card.id);
-        renderInspector(rows);
-        frames.bind(camera, activeCam);
-      });
-      camera.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter" || ev.key === " ") {
-          ev.preventDefault();
-          camera.classList.toggle("focused");
-        } else if (ev.key === "Escape") {
-          camera.classList.remove("focused");
-        }
-      });
-      const details = document.createElement("div");
-      const title = document.createElement("strong");
-      title.textContent = card.title;
-      const camBar = document.createElement("div");
-      camBar.className = "omx-card-actions";
-      for (const v of (card.cameraViews || [])) {
-        const camBtn = document.createElement("ui-button");
-        camBtn.setAttribute("kind", "segment");
-        camBtn.setAttribute("aria-pressed", String(v.id === activeCamId));
-        camBtn.setAttribute("type", "button");
-        camBtn.setAttribute("data-work-read", "");
-        camBtn.textContent = v.label;
-        camBtn.addEventListener("click", () => {
-          selectedCamByCard[card.id] = v.id;
-          if (camera.isConnected) frames.bind(camera, v);
-          for (const ch of camBar.children || []) {
-            if (!ch.dataset.streamToggle) {
-              ch.setAttribute("aria-pressed", String(ch === camBtn));
-            }
-          }
-          const targetId = v.id.startsWith("arm_a") ? "arm_a"
-            : v.id.startsWith("arm_b") ? "arm_b"
-            : (v.id.startsWith("arm_s") || card.id === "cell_s") ? "arm_s"
-            : card.id;
-          activeInspectorId = targetId;
-          selectedInspectorCam[targetId] = v.id;
-          renderInspector(rows);
-        });
-        camBar.append(camBtn);
-      }
-      const streamBtn = document.createElement("ui-button");
-      streamBtn.setAttribute("kind", "quiet");
-      streamBtn.setAttribute("type", "button");
-      streamBtn.setAttribute("data-work-read", "");
-      streamBtn.dataset.streamToggle = "true";
-      streamBtn.textContent = liveStreamOn ? "자동갱신 ON(2초)" : "자동갱신 일시정지";
-      streamBtn.addEventListener("click", () => {
-        liveStreamOn = !liveStreamOn;
-        frames.setRunning(liveStreamOn);
-        streamBtn.textContent = liveStreamOn ? "자동갱신 ON(2초)" : "자동갱신 일시정지";
-      });
-      camBar.append(streamBtn);
-      const status = document.createElement("p");
-      status.append(tag(card.text, card.status));
-      const task = document.createElement("p");
-      const taskBase = card.task ? `${card.task.task_id} · ${card.task.status} · ${card.task.arm_id || "—"}` : "";
-      task.textContent = [taskBase, card.healthText || ""].filter(Boolean).join(" | ");
-      const buttons = document.createElement("div");
-      buttons.className = "omx-card-actions";
-      for (const choice of [...(card.buttons || []), ...(card.quickControls || [])]) {
-        const button = document.createElement("ui-button");
-        button.setAttribute("kind", "quiet");
-        button.setAttribute("type", "button");
-        button.setAttribute("data-work-read", "");
-        button.textContent = choice.label;
-        markNoRobot(button, choice, card);
-        button.addEventListener("click", () => executeChoice(choice, card, button));
-        buttons.append(button);
-      }
-      details.append(title, camBar, status, task, buttons);
-      article.append(camera, details);
-      li.append(article);
     }
     hint.textContent = note;
     hint.hidden = !note;
@@ -517,7 +425,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   async function refresh() {
     const life = scope.capture();
     life.check();
-    if (inFlight || unavailable || auth.locked || document.hidden) return;
+    if (inFlight || unavailable || auth.locked || document.hidden || !owns("drive")) return;
     inFlight = true;
     try {
       const plan = await call("/api/fleet/charge-bays", { signals: [life.signal] });

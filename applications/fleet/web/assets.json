@@ -106,6 +106,10 @@
       "path": "shared/cell-frames.js",
       "media_type": "application/javascript"
     },
+    "cell-cockpit-stage.js": {
+      "path": "shared/cell-cockpit-stage.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"

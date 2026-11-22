@@ -9,6 +9,7 @@ import { createRosterWorkspace } from "./roster-workspace.js";
 import { createManualControl } from "./manual-control.js";
 import { cardTripLine, placeOptions } from "./card-trip.js";
 import { createCockpitHud } from "/console/assets/cockpit-telemetry.js";
+import { createCellCockpitStage } from "/console/assets/cell-cockpit-stage.js";
 import { createInboxPanel } from "./inbox.js";
 import { createWorkView } from "./work-view.js";
 import { createChannelRequestView } from "./channel-request-view.js";
@@ -34,7 +35,7 @@ import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js";
-import { owns } from "/console/assets/unit-scope.js";
+import { owns, unitScope } from "/console/assets/unit-scope.js";
 // D-798 3.2 — 접속·잠금, 목표 지정, 읽기 갱신은 각자의 팩토리 파일이 가진다.
 import { createConsoleAuth } from "./console-auth.js";
 import { createConsoleGoal } from "./console-goal.js";
@@ -79,6 +80,7 @@ if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view, isLocked: () => auth.locked});
 const cockpitHud = createCockpitHud({ el });
 const selection = createSelection(null);
+let cellStage = null;
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
   el("incident-side").hidden = false;
@@ -95,6 +97,14 @@ function layoutConsole() {
     if (parent.moveBefore) parent.moveBefore(node, before);
     else parent.insertBefore(node, before);
   });
+  if (cellStage?.element) {
+    const host = layoutMedia.matches ? primary : main;
+    if (cellStage.element.parentNode !== host) {
+      if (host.moveBefore && cellStage.element.isConnected) host.moveBefore(cellStage.element, host.firstChild);
+      else host.insertBefore(cellStage.element, host.firstChild);
+    }
+    cellStage.setAreaHidden(Boolean(areaNav));
+  }
   inbox.select(inbox.choice);
   if (focused?.isConnected && document.activeElement !== focused) focused.focus({preventScroll: true});
 }
@@ -152,9 +162,25 @@ const view = {
   dispatchControl: null,
   stateUnavailable: false,
   stateLoaded: false,
+  workcellObs: null,
+  controlUnit: null,
   receivedAtMs: null,  // D-493: 마지막 state 응답을 받은 브라우저 시각
   addresses: {},  // robot_id -> GET /api/fleet/discovery/addresses 행(고정 주소 판정)
 };
+const stateWaiters = [];
+function drainStateWaiters() {
+  if (!(view.stateLoaded || unitScope() !== null)) return;
+  while (stateWaiters.length) stateWaiters.shift()();
+}
+const waitForScope = () => ((view.stateLoaded || unitScope() !== null)
+  ? Promise.resolve()
+  : new Promise((resolve) => stateWaiters.push(resolve)));
+const whenDrive = (fn) => () => ((view.stateLoaded || unitScope() !== null)
+  ? (owns("drive") ? fn() : undefined)
+  : waitForScope().then(() => (!auth.locked && owns("drive") ? fn() : undefined)));
+const whenDiscovery = (fn) => () => ((view.stateLoaded || unitScope() !== null)
+  ? ((owns("drive") || owns("enrollment")) ? fn() : undefined)
+  : waitForScope().then(() => (!auth.locked && (owns("drive") || owns("enrollment")) ? fn() : undefined)));
 const log = inbox.log;
 
 const fleetApi = createFleetClient({ credential: () => auth.token });
@@ -199,6 +225,7 @@ const { cancelAllNotice, refreshDispatchControl, pathSample, paintSitePath, refr
 // --- 로봇 목록 --------------------------------------------------------------
 
 function render() {
+  drainStateWaiters();
   // 지도 캔버스는 무장(목표 선택·위치 찍기)했을 때만 누를 수 있는 단추다 — role이 무장 상태를 따라간다.
   // 해제하면 뷰가 소유한 role로 돌린다(사이트 뷰는 img). 계층이 부여한 값을 덮어쓰지 않는다(WCAG 4.1.2).
   const goalCanvas = el("map-canvas");
@@ -222,10 +249,13 @@ function render() {
     const robotRows = order.map((index) => roster.summary(view.robots[index], index));
     roster.place(rosterBox, robotRows);
   } else {
+    const obsCount = view.workcellObs?.arms?.length || 0;
     const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
       : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
-      : view.stateLoaded ? "등록된 로봇이 없습니다. 발견 목록에서 페어링 상태를 확인하세요."
-        : "로봇 목록 불러오는 중";
+      : !view.stateLoaded ? "로봇 목록 불러오는 중"
+      : (!owns("drive") && owns("arms"))
+        ? (obsCount ? `팔 ${obsCount}대 관측 중 — 왼쪽 화면과 오른쪽 팔 도크에서 상태를 확인합니다.` : "팔 셀 관측 대기 중")
+        : "등록된 로봇이 없습니다. 발견 목록에서 페어링 상태를 확인하세요.";
     if (rosterBox.childElementCount !== 1 ||
         rosterBox.firstElementChild?.getAttribute("role") !== "status" ||
         rosterBox.firstElementChild.textContent !== message) {
@@ -237,6 +267,7 @@ function render() {
     }
   }
   rosterWorkspace.sync();
+  cellStage?.render();
   manualControl.update();
   if (focusedId && document.activeElement !== focused) {  // a kept workspace picker still has it
     const nextCard = [...focusedBox.querySelectorAll("article")]
@@ -267,9 +298,11 @@ function render() {
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
   const nextHint = point
     ? `${view.selected} 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m · 방향키로 이동, Enter로 확인, Escape로 취소`
-    : view.map || view.siteMap
-      ? "로봇을 선택하고 지도를 찍으면 확인 후 목표를 보냅니다."
-      : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
+    : (!owns("drive") && owns("arms"))
+      ? "왼쪽 셀 관측과 오른쪽 팔 도크에서 상태를 확인합니다."
+      : view.map || view.siteMap
+        ? "로봇을 선택하고 지도를 찍으면 확인 후 목표를 보냅니다."
+        : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
   refreshDiagnostics();
 }
@@ -399,21 +432,33 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection });
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection, readWorkcellObs: () => view.workcellObs });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 const trackingView = {
   ...rawTrackingView,
-  refresh: () => (owns("drive") ? rawTrackingView.refresh() : undefined),
+  refresh: whenDrive(() => rawTrackingView.refresh()),
 };
+cellStage = createCellCockpitStage({
+  scope: pageScope, call, view, auth, selection,
+  onChanged: () => render(),
+  onVisionSample: (sample) => {
+    if (auth.locked || !auth.role) return;
+    pathSample.vision = sample;
+    paintSitePath();
+  },
+});
+layoutConsole();
 
 // 잠금·세션 확인·토큰 입력·비밀번호 로그인·개발 접속은 console-auth.js 팩토리가 가진다(D-798 3.2).
 const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = createConsoleAuth({ pageScope, el, view, auth, assistant,
   call, fleetClient, render, operatorControls, confirmedAction, connectionView, workView, incidents, visionView,
-  trackingView, mapView, formation, dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
-  refreshRobotApps, refreshDispatchControl, refreshDiscovery, inbox,
+  trackingView, mapView: { ...mapView, refresh: whenDrive(() => mapView.refresh()) },
+  formation: { ...formation, refreshFormation: whenDrive(() => formation.refreshFormation()) },
+  dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
+  refreshRobotApps, refreshDispatchControl, refreshDiscovery: whenDiscovery(refreshDiscovery), inbox,
   refreshVision: () => (owns("drive") ? visionView.refreshSources() : undefined),
-  onLock: () => rosterWorkspace.close(),
+  onLock: () => { rosterWorkspace.close(); cellStage?.pause(); },
   clearVisionSample: () => { pathSample.vision = null; paintSitePath(); } });
 
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
@@ -432,25 +477,29 @@ paintSitePath();
 connectionMode();
 refreshState();
 refreshAuthorization();
-if (owns("drive")) {
-  mapView.refresh();
-  trackingView.refresh();
-  chargeBays.refresh();
-  platoon.refresh();
-  stationRecovery.refresh();
-  personRequests.refresh();
-}
+void waitForScope().then(() => {
+  if (!auth.locked && owns("arms")) void cellStage.refresh();
+  if (!auth.locked && owns("drive")) {
+    mapView.refresh();
+    trackingView.refresh();
+    chargeBays.refresh();
+    platoon.refresh();
+    stationRecovery.refresh();
+    personRequests.refresh();
+  }
+});
 // A hidden tab polls nothing but presence (it must still say visible:false); coming back reads at once.
 const poll = (fn, ms) => pageScope.interval(() => (!document.hidden ? fn() : undefined), ms);
-const pollDrive = (fn, ms) => poll(() => (owns("drive") ? fn() : undefined), ms);
+const pollDrive = (fn, ms) => poll(() => ((view.stateLoaded || unitScope() !== null) && owns("drive") ? fn() : undefined), ms);
 pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); trackingView.refresh(); } });
 pollDrive(() => { if (!auth.locked) return formation.refreshFormation(); }, MAP_MS);
 poll(refreshState, STATE_MS);
+poll(() => (!auth.locked && owns("arms") ? cellStage.refresh() : undefined), 1500);
 poll(() => { if (!auth.locked) return workView.refresh(); }, MAP_MS);
 poll(refreshHealthz, MAP_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);
 poll(() => { if (!auth.locked) return refreshDispatchControl(); }, STATE_MS);
-poll(refreshDiscovery, MAP_MS);
+poll(whenDiscovery(refreshDiscovery), MAP_MS);
 poll(refreshRobotApps, MAP_MS);
 pollDrive(() => mapView.refresh(), MAP_MS);
 pollDrive(() => chargeBays.refresh(), MAP_MS);
@@ -467,7 +516,7 @@ pageScope.onResume(() => {
   visionView.reset();
   trackingView.reset();
   refreshAuthorization();  // refreshes the map once the session answers
-  if (owns("drive")) {
+  if ((view.stateLoaded || unitScope() !== null) && owns("drive")) {
     trackingView.refresh();
   }
 });
