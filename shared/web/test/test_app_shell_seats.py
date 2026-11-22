@@ -157,3 +157,37 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
     assert len(rails) == 1, 'the rail is the same in every document'
     css = (web / 'app.css').read_text(encoding='utf-8')
     assert '.workspace-tabs' not in css and '.ui-rail' not in css, 'the rail is laid out by the shared sheet'
+
+
+# D-466 / D-741 6: merged from retired test_chrome_layout.py
+def test_sidebar_track_is_the_procedure_column():
+    root = WEB.parents[1]
+    chooser = WEB / "task-chooser.js"
+    shell = root / "middleware" / "robot_ui" / "robot" / "shell" / "shell.css"
+    fleet = root / "applications" / "fleet" / "web" / "shared" / "styles.css"
+    assert "--sidebar-track: minmax(13rem, 18rem);" in TOKENS
+    shell_css = shell.read_text(encoding="utf-8")
+    fleet_css = fleet.read_text(encoding="utf-8")
+    assert "--sidebar-track" not in shell_css and "procedure-tasks" not in shell_css
+    robot = shell.parents[1]
+    assert '<div class="ui-subnav"></div>' in (robot / "surface.html").read_text(encoding="utf-8")
+    assert ".ui-subnav:empty { display: none; }" in shell_css, "a screen without tasks folds the empty seat"
+    assert "subnav.append(taskChooser.element);" in (robot / "shell" / "mount.js").read_text(encoding="utf-8")
+    assert "--sidebar-track" not in fleet_css and "install-tasks" not in fleet_css
+    assert "minmax(13rem, 18rem)" not in shell_css
+    assert "minmax(12rem, .22fr)" not in fleet_css
+    chooser_js = chooser.read_text(encoding="utf-8")
+    assert 'rail.className = "ui-subnav-nav"' in chooser_js
+    assert 'tab.className = "ui-subnav-item"' in chooser_js and 'tab.type = "button"' in chooser_js
+
+
+def test_header_keeps_one_recipe_of_named_areas():
+    root = WEB.parents[1]
+    shell_css = (root / "middleware" / "robot_ui" / "robot" / "shell" / "shell.css").read_text(encoding="utf-8")
+    fleet_header = (root / "applications" / "fleet" / "web" / "shared" / "fleet-header.css").read_text(encoding="utf-8")
+    assert 'grid-template-areas: "brand role estop";' in shell_css
+    assert "grid-area: nav" not in shell_css and shell_css.count('grid-template-areas: "brand') == 1
+    assert '"identity status actions safety"' in fleet_header
+    assert '"identity safety" "status actions"' not in fleet_header
+    assert fleet_header.count("grid-template-areas") == 1
+    assert ".fleet-header-actions { grid-area: actions;" in fleet_header
