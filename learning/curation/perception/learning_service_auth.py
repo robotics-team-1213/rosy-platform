@@ -146,6 +146,7 @@ def check_get(handler, path: str, tokens: ServiceTokens | None) -> bool:
         assert principal is not None
         authorize("GET", path, principal)
         handler.service_principal = principal
+        handler.learning_principal = principal
         return False
     except PermissionError as exc:
         handler.send({"error": str(exc)}, 403)
@@ -167,6 +168,7 @@ def handle_post(handler, path: str, tokens: ServiceTokens | None, deny_fn) -> bo
         assert principal is not None
         authorize("POST", path, principal)
         handler.service_principal = principal
+        handler.learning_principal = principal
         return False
     except PermissionError as exc:
         handler.send({"error": str(exc)}, 403)

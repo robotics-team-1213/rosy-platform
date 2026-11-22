@@ -89,10 +89,16 @@ class EgressPolicy:
             raise EgressDeniedError("TLS_REQUIRED", "external tier requires https://")
         try:
             ip = ipaddress.ip_address(host)
-            if ip.is_link_local or ip.is_loopback or ip.is_private or ip in _TAILNET_NET:
-                raise EgressDeniedError("SSRF_BLOCKED", f"SSRF-protected address {host!r}")
         except ValueError:
-            pass
+            ip = None
+        if ip is not None and (
+            not ip.is_global
+            or ip.is_link_local
+            or ip.is_loopback
+            or ip.is_private
+            or (ip.version == 4 and ip in _TAILNET_NET)
+        ):
+            raise EgressDeniedError("SSRF_BLOCKED", f"SSRF-protected address {host!r}")
         if host not in {h.lower() for h in self.allowed_hosts}:
             raise EgressDeniedError("HOST_NOT_ALLOWED", f"host {host!r} not in allowed_hosts")
 
