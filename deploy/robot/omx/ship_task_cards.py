@@ -14,7 +14,7 @@ import yaml
 HOLDS, ROWS, LAYERS = (1, 2), (0, 1, 2), (0, 1, 2)
 ROW_NAME = ("A side row", "middle row", "B side row")  # r0 is nearest arm_a, r2 arm_b (tools/sim/omx_two_arm_sites.py r08_sites)
 LAYER_NAME = ("tier 1 (floor)", "tier 2", "tier 3 (top)")  # screen counts tiers from 1, IDs from l0
-H1_ARM = {0: "arm_a", 1: "arm_b", 2: "arm_b"}  # tools/sim/omx_two_arm_sites.py R08_STACK; hold 2 has no arm in any source
+H1_ARM = {0: "arm_a", 1: "arm_b", 2: "arm_b"}  # tools/sim/omx_two_arm_sites.py R08_STACK row-to-arm mapping
 UNVERIFIED = "도달 미검증(planned_unverified): shared/web/cell-site-map.json lists arm_a and arm_b for every spot, none verified on the real arm"
 
 
@@ -22,12 +22,10 @@ def card(hold: int, row: int, layer: int, root_prefix: str) -> dict:
     spot = f"ship-h{hold}r{row}-l{layer}"
     task_id = f"belt-to-{spot}"
     limits = [UNVERIFIED]
-    layout = {"origin": "belt", "target_slot": spot}
-    if hold == 1:
-        layout["shot_arm"] = H1_ARM[row]
-        limits.append("sim only: hold 1 is the one in reach (deploy/robot/omx/sim/two_arm_tasks.json)")
-    else:
-        limits.append("sim: hold 2 is not in reach (deploy/robot/omx/sim/two_arm_tasks.json); no arm is assigned to this card")
+    layout = {"origin": "belt", "target_slot": spot, "shot_arm": H1_ARM[row]}
+    limits.append(
+        "sim only: hold 1 uses direct carry and hold 2 uses the 180-deg symmetric carry turn (deploy/robot/omx/sim/two_arm_tasks.json)"
+    )
     return {
         "schema": "rosy.omx-task-card.v1", "task_id": task_id, "revision": 1,
         "single_task": f"Take the container from the belt pickup end and place it on ship hold h{hold}, {ROW_NAME[row]} (r{row}), "

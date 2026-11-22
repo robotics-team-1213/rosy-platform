@@ -146,8 +146,8 @@ STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 
                     (12., 50., 63., 65., 14.)))
 
 
-# Only hold 1 (next to the stern) is in reach with the stern at the table edge: hold 2 lies behind both arms, where no tool-down pose holds a
-# container along x (validator, stern x .155 to .215). So the stack is hold 1, 3 rows x 3 tiers, middle row first, in the stud plan's arm order.
+# Hold 1 (next to the stern) solves directly; hold 2 (Harbor hold 1, x -0.042 m) also solves in reach via the 180-deg symmetric carry turn
+# (omx_two_arm_tasks.solve_chain, stern x .155 to .215). Default stack tasks use 9 containers (R08_STACK); stack-h2 targets hold 2.
 # REPRODUCTION ONLY (single-photo fit, the CAD "v21-b" is the rated mount for both arms, user 11-18): arm_b's wrist camera as the real frame shows it (2026-11-08 22:30, arm at rest, the jaw silhouette traced and matched in MuJoCo with the
 # jaw opening fitted too, IoU 0.15 -> 0.68): 16 mm higher and 8 mm to the side of the D r06 CAD, the axis meeting the jaw axis 25 mm further
 # out, about the same 34 deg down. One frame at one pose: lens height and aim trade off; refit on frames at other poses.

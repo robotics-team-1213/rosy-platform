@@ -142,14 +142,15 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
                 continue  # a non-belt step keeps its plan's after_pick
             here_s = {k: v for k, v in here.items() if k != s["container"]}
             phase_idx = {"": 0, "approach": 0, "grasp": 6, "close": 19, "lift": 31, "carry": 43, "lower": 55, "release": 67, "retreat": 79, "park": 91}
-            if running and not all(
-                plan_mod.sweeps_clear(
-                    plan_mod.step_swept_poses(L, arm, s["from"], s["to"], here_s),
-                    (plan_mod.step_swept_poses(L, oa, r[0]["from"], r[0]["to"], r[2].here) or [])[phase_idx.get(r[2].phase, 0):],
-                )
-                for oa, r in running.items()
-            ):
-                continue
+            if running:
+                def pose_slice(oa, r):
+                    poses_oa = plan_mod.step_swept_poses(L, oa, r[0]["from"], r[0]["to"], r[2].here) or []
+                    ph = r[2].phase
+                    extra = max(0, len(poses_oa) - 98) if ph in ("lower", "release", "retreat", "park") else 0
+                    return poses_oa[phase_idx.get(ph, 0) + extra:]
+                if not all(plan_mod.sweeps_clear(plan_mod.step_swept_poses(L, arm, s["from"], s["to"], here_s), pose_slice(oa, r))
+                           for oa, r in running.items()):
+                    continue
             queue[arm].pop(0)
             started[s["id"]] = frames
             if s["from"] == "belt" and not belt_cargo():

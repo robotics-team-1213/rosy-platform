@@ -20,9 +20,8 @@ def zone(layout, site):
 
 
 def planning_sites(layout):
-    """Sites the plans use: all but ship hold 2, which the arms reach at grasp height but not on the validated carry from the conveyor
-    (omx_two_arm_tasks refuses it with the stern at the table edge), and temporary lanes under the hull."""
-    return [s for s, v in layout.sites.items() if not v.get("blocked") and (v["kind"] != "ship" or v["stack"].startswith("h1") or v["stack"] == "stern")]
+    """Sites the plans use: every unblocked site (ship holds 1 and 2, temporary lanes clear of the hull, stand, belt)."""
+    return [s for s, v in layout.sites.items() if not v.get("blocked")]
 
 
 def stack_key(layout, site):
@@ -58,17 +57,19 @@ def harbor_moves(layout, state, request, can, avoid=()):
     def seat(i):
         return next(s for s, v in layout.sites.items() if v.get("stack") == key and v["layer"] == base + i)
 
+    def outbound_lanes(cur):
+        if request.get("destination") in ("stand", "stand:r1-s1", "stand:r1-s1-t1"):
+            return ["stand"] if ("stand" in plan_sites and "stand" not in cur.values() and "stand" not in avoid) else []
+        return sorted(s for s in plan_sites if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
+                      and s not in cur.values() and s not in avoid)
+
     def finish(cur, moves):
         """Outbound to the first free lane that lets the whole job finish, then the blockers back, lowest first into the target's freed
         level; None when an arm is missing on the way. A reorder puts the old bottom back first, then the rest top first (the containers
         above it reversed): only the bottom needs the far arm, the rest stays with the near arm on its own side, so the two rows overlap."""
         if reorder:
             return put(cur, moves, [(c, seat(i), "복귀") for i, c in enumerate(blockers[-1:] + blockers[:-1])])
-        if request.get("destination") in ("stand", "stand:r1-s1", "stand:r1-s1-t1"):
-            lanes = ["stand"] if ("stand" in plan_sites and "stand" not in cur.values() and "stand" not in avoid) else []
-        else:
-            lanes = sorted(s for s in plan_sites if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
-                           and s not in cur.values() and s not in avoid)
+        lanes = outbound_lanes(cur)
         if not lanes:
             failures.append("NO_FREE_OUTBOUND_LANE")
         return next((done for stand in lanes if (done := put(cur, moves, [(target, stand, "반출")] + [
@@ -91,7 +92,7 @@ def harbor_moves(layout, state, request, can, avoid=()):
         cargo = blockers[i]
         occupied = set(cur.values()) - {cur[cargo]}  # it does not hold itself up
         options = sorted((t for t in temp_spots(layout, occupied, set(avoid), plan_sites) if stack_key(layout, t) != key),
-                         key=lambda t: zone(layout, t) != zone(layout, cur[cargo]))
+                         key=lambda t: (layout.sites[t]["kind"] != "temp", zone(layout, t) != zone(layout, cur[cargo])))
         for t in options[:REORDER_WIDTH] if reorder else options:  # shortcut: a reorder tries the first places only (three levels of every place took >10 min on the validator), widen if a plan Harbor would find is missed
             m = step(cur, cargo, t, "재취급")
             if m is not None and (found := search(i + 1, {**cur, cargo: t}, moves + [m])):
@@ -99,6 +100,13 @@ def harbor_moves(layout, state, request, can, avoid=()):
         failures.append("NO_TEMPORARY_SPACE_IN_REACH")
         return None
 
+    if not reorder:
+        clear_here = {c: s for c, s in state.items() if c != target and c not in blockers}
+        lanes = outbound_lanes(state)
+        if not lanes:
+            return None, "NO_FREE_OUTBOUND_LANE"
+        if not any(can(site, lane, clear_here) for lane in lanes):
+            return None, "NO_STAND_IN_REACH"
     moves = search(0, dict(state), [])
     return (moves, None) if moves else (None, failures[0] if failures else "NO_LEGAL_PLAN")
 
