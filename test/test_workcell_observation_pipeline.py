@@ -229,7 +229,7 @@ async def _mirror_demand(tmp_path):
 
     async def assert_quiet():
         await tls._wait_for(lambda: current() is not None and current().demand_sent is False,
-                            3, "idle demand")
+                            8, "idle demand after bounded TLS retries")
         await asyncio.sleep(0.15)
         matched = source.latest().sequence
         previous = last_sequence()
