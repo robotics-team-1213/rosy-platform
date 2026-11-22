@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -186,7 +187,8 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
         covered_browsers = {
             w.replace("\\", "/").removeprefix("./")
             for inv in lab
-            if not any(w.startswith(("--ignore", "--deselect", "-k")) for w in inv)
+            if work_queue.BROWSER_ENV in itertools.takewhile(work_queue.ENV_WORD.match, inv)
+            and not any(w.startswith(("--ignore", "--deselect", "-k")) for w in inv)
             for w in inv
             if not w.startswith("-") and not work_queue.ENV_WORD.match(w) and "::" not in w and w.endswith("_browser.py")
         }

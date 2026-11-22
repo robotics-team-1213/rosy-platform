@@ -240,11 +240,11 @@ def test_required_lab_invocations_deduplicates_browser_files_already_in_lab(monk
         [[bare], ["ROSY_RUN_BROWSER_TESTS=1", chunked]],
         changed=["shared/web/ui.js"],
     )
-    assert result == [
-        [bare],
-        ["ROSY_RUN_BROWSER_TESTS=1", chunked],
+    assert result[:2] == [[bare], ["ROSY_RUN_BROWSER_TESTS=1", chunked]]
+    assert sorted(result[2:]) == sorted([
+        ["ROSY_RUN_BROWSER_TESTS=1", bare],
         ["ROSY_RUN_BROWSER_TESTS=1", extra_only],
-    ]
+    ])
 
 
 def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypatch):
