@@ -7,26 +7,150 @@ Switch and rollback ordering remain in SiteUpdater.
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import re
 import shlex
 import subprocess
+from urllib.parse import urlsplit
 
 if __package__:
     from .site_update_io import (
-        ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
+        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, Rejected,
         Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
-        ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
+        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, Rejected,
         Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
     from verify_candidate import CandidateVerificationError, verified_services
+
+
+_NAV_IDLE_STATES = frozenset({'IDLE', 'ARRIVED', 'CANCELED', 'FAILED'})
+_DOCKING_IDLE_STATES = frozenset({'UNDOCKED', 'DOCKED', 'CHARGING'})
+
+
+def _arm_session_busy(root: Path) -> list[str]:
+    if os.name != 'posix':
+        return []
+    session_locks = list(root.glob('home/*/rosy-omx/session.lock'))
+    if not session_locks:
+        return []
+    try:
+        locks = Path('/proc/locks').read_text(encoding='utf-8')
+    except OSError:
+        return ['omx arm session state unknown']
+    for lock in session_locks:
+        try:
+            if f':{lock.stat().st_ino} ' in locks:
+                return ['omx arm session is active']
+        except OSError:
+            continue
+    return []
+
+
+def _robot_busy_reasons(row: object) -> list[str]:
+    if not isinstance(row, dict):
+        return ['malformed robot state row']
+    rid = str(row.get('robot_id') or 'robot')
+    reasons = [f'{rid}: {key} active' for key in ('goal', 'queued', 'held', 'yielding', 'named_stop_custody')
+               if row.get(key)]
+    state = row.get('state')
+    if not isinstance(state, dict):
+        return [*reasons, f'{rid}: state unavailable'] if row.get('online') is True else reasons
+    mode = state.get('mode')
+    if mode is not None and mode != 'IDLE':
+        reasons.append(f'{rid}: mode {mode}')
+    nav = state.get('navigation')
+    if nav is not None and nav not in _NAV_IDLE_STATES:
+        reasons.append(f'{rid}: navigation {nav}')
+    if state.get('trip_lease') is not None:
+        reasons.append(f'{rid}: trip_lease active')
+    lf = state.get('line_follow')
+    if isinstance(lf, dict) and (lf.get('mode') not in (None, 'OFF') or lf.get('state') not in (None, 'OFF')):
+        reasons.append(f'{rid}: line_follow active')
+    dock = state.get('docking')
+    if isinstance(dock, dict) and dock.get('state') not in (None, *_DOCKING_IDLE_STATES):
+        reasons.append(f"{rid}: docking {dock.get('state')}")
+    swarm = state.get('swarm')
+    if isinstance(swarm, dict) and (swarm.get('active') is True or swarm.get('role') not in (None, 'none')):
+        reasons.append(f'{rid}: swarm active')
+    if state.get('activity') is not None:
+        reasons.append(f'{rid}: activity active')
+    vel = state.get('velocity')
+    if isinstance(vel, dict):
+        linear, angular = vel.get('linear', 0.0), vel.get('angular', 0.0)
+        valid = (isinstance(linear, (int, float)) and not isinstance(linear, bool) and math.isfinite(linear)
+                 and isinstance(angular, (int, float)) and not isinstance(angular, bool) and math.isfinite(angular))
+        if not valid or abs(linear) >= 0.01 or abs(angular) >= 0.02:
+            reasons.append(f'{rid}: moving')
+    return reasons
+
+
+def _site_token_file(config: dict, root: Path) -> str | Path | None:
+    checks = [c for c in config.get('functional_checks', []) if isinstance(c, dict) and c.get('token_file')]
+    for check in checks:
+        if check.get('path') == '/api/fleet/state':
+            return check['token_file']
+    if checks:
+        return checks[0]['token_file']
+    for rel in ('etc/rosy/site-secrets/site-update-viewer.token', 'etc/rosy/site/secrets/site-update-viewer.token'):
+        default = root / rel
+        if default.is_symlink() or (default.exists() and not default.is_file()):
+            raise ValueError('site viewer token is not a regular file')
+        if default.is_file():
+            return default
+    return None
+
+
+def site_busy_reasons(config: dict, http, *, root: Path = Path('/')) -> list[str]:
+    """Fail-closed site idleness check across Fleet endpoints and local arm session locks."""
+    reasons = _arm_session_busy(root)
+    try:
+        token_file = _site_token_file(config, root)
+        if token_file is None:
+            return reasons
+        origin = urlsplit(config['health_url'])
+        base, ca = f'{origin.scheme}://{origin.netloc}', config.get('health_ca')
+        state = http.functional(f'{base}/api/fleet/state', ca, token_file)
+        if not isinstance(state, dict) or not isinstance(state.get('robots'), list):
+            raise ValueError('invalid state payload')
+        for row in state['robots']:
+            reasons.extend(_robot_busy_reasons(row))
+        trips = http.functional(f'{base}/api/fleet/trips', ca, token_file)
+        if not isinstance(trips, dict) or not isinstance(trips.get('open'), list) or not isinstance(trips.get('running'), list):
+            raise ValueError('invalid trips payload')
+        if trips['open']:
+            reasons.append(f"open trips ({len(trips['open'])})")
+        if trips['running']:
+            reasons.append(f"running trips ({len(trips['running'])})")
+        control = http.functional(f'{base}/api/fleet/dispatch-control', ca, token_file)
+        if (not isinstance(control, dict) or type(control.get('queued_tasks')) is not int
+                or type(control.get('unresolved_actions')) is not int):
+            raise ValueError('invalid dispatch-control payload')
+        if control['queued_tasks'] != 0:
+            reasons.append(f"queued tasks ({control['queued_tasks']})")
+        if control['unresolved_actions'] != 0:
+            reasons.append(f"unresolved actions ({control['unresolved_actions']})")
+        formation = http.functional(f'{base}/api/fleet/formation', ca, token_file)
+        if not isinstance(formation, dict):
+            raise ValueError('invalid formation payload')
+        if formation.get('active') not in (None, False) or formation.get('state') not in (None, 'IDLE', 'STOPPED', 'OFF'):
+            reasons.append(f"formation active ({formation.get('state')})")
+    except (Transient, OSError, ValueError, KeyError, TypeError):
+        return [*reasons, 'cannot verify site idle state']
+    return reasons
+
+
+def check_idle_cli(updater) -> int:
+    reasons = updater._site_busy()
+    print(json.dumps({'idle': not reasons, 'reasons': reasons}, sort_keys=True))
+    return EXIT_OK if not reasons else EXIT_LOCKED
 
 
 def _healthy(service, row):
@@ -107,6 +231,18 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
 
 
 class SiteRuntimeIO:
+    def _site_busy(self) -> list[str]:
+        return site_busy_reasons(self.config, self.http, root=self.paths.root)
+
+    def _defer_if_busy(self, state: dict, tag: str) -> bool:
+        busy = self._site_busy()
+        if not busy:
+            return False
+        summary = busy[:10]
+        log('deferred-busy', tag=tag, reasons=summary)
+        state['last_run'].update(result='deferred-busy', reasons=summary)
+        return True
+
     def _compose_files(self, env: dict[str, str], folder: Path | None = None) -> list[str]:
         pairing = allowed_overlays(env)
         if folder is not None:

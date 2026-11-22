@@ -89,6 +89,10 @@ def _idle_sample(root, now):
             return None
         if data.get('docking_state') not in {'UNDOCKED', 'DOCKED', 'CHARGING', None}:
             return None
+        if 'trip_lease_active' in data and data['trip_lease_active'] is not False:
+            return None
+        if 'calibration_active' in data and data['calibration_active'] is not False:
+            return None
         for field, bound in (('velocity_linear', .01), ('velocity_angular', .02)):
             value = data[field]
             if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or abs(value) >= bound:

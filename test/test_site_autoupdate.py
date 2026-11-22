@@ -117,6 +117,12 @@ class FakeHttp:
     def functional(self, url, ca_file, token_file):
         if url.endswith('/api/fleet/state'):
             return {'robots': [{'robot_id': 'robot-test'}]}
+        if url.endswith('/api/fleet/trips'):
+            return {'open': [], 'running': [], 'trips': []}
+        if url.endswith('/api/fleet/dispatch-control'):
+            return {'queued_tasks': 0, 'unresolved_actions': 0}
+        if url.endswith('/api/fleet/formation'):
+            return {'active': False, 'state': 'IDLE'}
         return {'sources': ['camera-test']}
 
 
@@ -307,7 +313,10 @@ def test_functional_failure_rolls_back_despite_healthy_containers(host, payload)
     token.write_text('never-log-this-token')
     host.config['functional_checks'] = [{'path': '/api/fleet/state', 'token_file': str(token),
                                         'required_ids': ['robot-test']}]
-    http.functional = lambda *args: payload if fake.running == NEW else {'robots': [{'robot_id': 'robot-test'}]}
+    base_functional = http.functional
+    http.functional = lambda url, ca, tok: (
+        (payload if fake.running == NEW else {'robots': [{'robot_id': 'robot-test'}]})
+        if url.endswith('/api/fleet/state') else base_functional(url, ca, tok))
     assert _updater(host, http, fake).run() == upd.EXIT_FAILED
     assert fake.running == OLD
     assert _tag(NEW) in json.loads(host.paths.state.read_text())['failed']
@@ -337,8 +346,10 @@ def test_candidate_cannot_replace_observed_robot_with_another_id(host):
     http, fake = FakeHttp(rows, blobs), FakeHost(host.paths)
     host.config['functional_checks'] = [{'path': '/api/fleet/state', 'token_file': 'unused',
                                         'required_ids': ['robot-test']}]
-    http.functional = lambda *args: {'robots': [{'robot_id':
-        'replacement' if fake.running == NEW else 'robot-test'}]}
+    base_functional = http.functional
+    http.functional = lambda url, ca, tok: (
+        {'robots': [{'robot_id': 'replacement' if fake.running == NEW else 'robot-test'}]}
+        if url.endswith('/api/fleet/state') else base_functional(url, ca, tok))
     assert _updater(host, http, fake).run() == upd.EXIT_FAILED
     assert fake.running == OLD
 
@@ -363,8 +374,10 @@ def test_enrolled_roster_check_needs_no_id_list_and_still_rolls_back_a_loss(host
     http, fake = FakeHttp(rows, blobs), FakeHost(host.paths)
     host.config['functional_checks'] = [{'path': '/api/fleet/state', 'token_file': 'unused',
                                         'required_ids': 'enrolled'}]
-    http.functional = lambda *args: {'robots': [{'robot_id':
-        'replacement' if fake.running == NEW else 'rosy_40'}]}
+    base_functional = http.functional
+    http.functional = lambda url, ca, tok: (
+        {'robots': [{'robot_id': 'replacement' if fake.running == NEW else 'rosy_40'}]}
+        if url.endswith('/api/fleet/state') else base_functional(url, ca, tok))
     from deploy.site import site_update_io as io
     assert io.functional_inventory(host.config, http)[1] == {'/api/fleet/state': []}
     assert _updater(host, http, fake).run() == upd.EXIT_FAILED

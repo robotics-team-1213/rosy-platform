@@ -81,3 +81,27 @@ def test_maintenance_claim_excludes_updater_and_detects_loss(module, tmp_path, m
         monkeypatch.setattr(rosy_claim, 'refresh', lambda *_a, **_k: False)
         with pytest.raises(RuntimeError, match='claim_lost'):
             lease.refresh()
+
+
+@pytest.mark.parametrize('extra,expected', [
+    ({'trip_lease_active': False, 'calibration_active': False}, True),
+    ({'trip_lease_active': True, 'calibration_active': False}, False),
+    ({'trip_lease_active': False, 'calibration_active': True}, False),
+    ({'trip_lease_active': None, 'calibration_active': False}, False),
+])
+def test_network_maintenance_blocks_on_active_trip_lease_or_calibration(module, tmp_path, extra, expected):
+    now = datetime.now(timezone.utc)
+    put(tmp_path, 'etc/rosy/runtime.env', 'ROSY_RUNTIME_MODE=core\nROSY_IO_DRIVE_ENABLED=false\n')
+    data = {'written_at': now.isoformat(), 'robot_mode': 'IDLE', 'nav_state': 'IDLE',
+            'swarm_role': None, 'velocity_linear': 0.0, 'velocity_angular': 0.0,
+            'docking_state': 'UNDOCKED', 'line_follow_mode': 'OFF', 'line_follow_state': 'OFF',
+            'swarm_active': False, 'estop': False, 'activity_kind': None, **extra}
+    put(tmp_path, 'run/rosy/status-inputs.json', data)
+    clock = [now]
+
+    def next_sample(_seconds):
+        clock[0] += timedelta(seconds=10)
+        put(tmp_path, 'run/rosy/status-inputs.json', {**data, 'written_at': clock[0].isoformat()})
+
+    assert module.maintenance_ready(tmp_path, run=runner(core='active'), sleep=next_sample,
+                                    now=lambda: clock[0]) is expected

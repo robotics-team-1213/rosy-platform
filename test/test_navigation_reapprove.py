@@ -255,3 +255,42 @@ def test_units_ship_enabled_and_the_run_never_fails_the_unit():
     assert "rosy-nav-reapprove.timer" in rootfs
     payload = (NATIVE.parent / "image/build-native-payload.sh").read_text(encoding="utf-8")
     assert "rosy-nav-reapprove.service" in payload and "rosy-nav-reapprove.timer" in payload
+
+
+@pytest.mark.parametrize("changes,expected_prefix", [
+    ({"navigation": "NAVIGATING"}, "navigation NAVIGATING"),
+    ({"navigation": "PLANNING"}, "navigation PLANNING"),
+    ({"navigation": "BLOCKED"}, "navigation BLOCKED"),
+    ({"trip_lease": {"lease_id": "L1"}}, "trip lease active"),
+    ({"line_follow": {"mode": "CAMERA_LINE", "state": "OFF"}}, "line follow active"),
+    ({"line_follow": {"mode": "OFF", "state": "TRACKING"}}, "line follow active"),
+    ({"docking": {"state": "DOCKING"}}, "docking DOCKING"),
+    ({"docking": {"state": "UNDOCKING"}}, "docking UNDOCKING"),
+    ({"swarm": {"active": True, "role": None}}, "swarm active"),
+    ({"swarm": {"active": False, "role": "leader"}}, "swarm active"),
+    ({"activity": {"kind": "CALIBRATING"}}, "activity active"),
+    ({"safety": {"estop": True}}, "estop engaged"),
+], ids=lambda v: str(v)[:32])
+def test_decide_blocks_during_any_working_state(changes, expected_prefix):
+    assert nr.decide(APPROVAL, {**ROBOT, **changes}, ROBOT, HEALTH, 0).startswith(expected_prefix)
+    assert nr.decide(APPROVAL, ROBOT, {**ROBOT, **changes}, HEALTH, 0).startswith(expected_prefix)
+
+
+@pytest.mark.parametrize("inputs", [
+    {"robot_mode": "NAVIGATION", "nav_state": "IDLE"},
+    {"robot_mode": "IDLE", "nav_state": "NAVIGATING"},
+    {"robot_mode": "IDLE", "nav_state": "IDLE", "trip_lease_active": True},
+    {"robot_mode": "IDLE", "nav_state": "IDLE", "calibration_active": True},
+    {"robot_mode": "IDLE", "nav_state": "IDLE", "trip_lease_active": None},
+    {"robot_mode": "IDLE", "nav_state": "IDLE", "calibration_active": None},
+    {"robot_mode": "IDLE", "nav_state": "IDLE", "docking_state": "DOCKING"},
+    {"robot_mode": "IDLE", "nav_state": "IDLE", "velocity_linear": 0.05},
+    "{corrupt",
+])
+def test_run_exits_before_pairing_when_status_inputs_busy_or_corrupt(robot_root, inputs):
+    status_path = robot_root / "run/rosy/status-inputs.json"
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+    status_path.write_text(inputs if isinstance(inputs, str) else json.dumps(inputs), encoding="utf-8")
+    never = lambda core, log: pytest.fail("must not re-measure")  # noqa: E731
+    assert nr.run(robot_root, FakeCore(), sleep=lambda s: None, reapprove_fn=never,
+                  pair_fn=lambda c: pytest.fail("must not pair when busy")) != "approved and navigation started"

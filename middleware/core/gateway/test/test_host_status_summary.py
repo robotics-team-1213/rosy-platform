@@ -39,14 +39,15 @@ def _config(tmp_path: Path, mode: str = "core") -> dict:
 
 
 class FakeState:
-    def __init__(self, percent=None, voltage=None, evidence="fresh", mode=None, nav=None):
+    def __init__(self, percent=None, voltage=None, evidence="fresh", mode=None, nav=None, trip_lease=None):
         self.percent, self.voltage, self.evidence, self.mode = percent, voltage, evidence, mode
-        self.navigation = nav
+        self.navigation, self.trip_lease = nav, trip_lease
 
     def snapshot(self):
         evidence = {} if self.evidence is None else {"battery": SimpleNamespace(evidence=self.evidence)}
         return SimpleNamespace(battery=SimpleNamespace(percent=self.percent, voltage=self.voltage),
-                               evidence=evidence, mode=self.mode, navigation=self.navigation)
+                               evidence=evidence, mode=self.mode, navigation=self.navigation,
+                               trip_lease=self.trip_lease)
 
 
 class FakeProbe:
@@ -329,9 +330,11 @@ def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
     assert set(written) == SCHEMA_1_KEYS | SCHEMA_2_KEYS | {
-        "calibration_active", "robot_id", "core_process_id", "line_follow_steering_law", "manual_quiet_s"}
+        "calibration_active", "robot_id", "core_process_id", "line_follow_steering_law",
+        "manual_quiet_s", "trip_lease_active"}
     assert written["calibration_active"] is None  # missing service is unknown, not idle
     assert written["manual_quiet_s"] is None  # missing service is unknown, so MANUAL keeps holding the updater
+    assert written["trip_lease_active"] is False
     assert written["schema"] == 2
     assert written["battery_warning_percent"] == 25.0
     assert written["devices"] == [{"id": "camera", "state": "no_response", "product": True}]
@@ -729,3 +732,15 @@ def test_write_status_inputs_keeps_0644_under_umask_0027(tmp_path):
         assert stat.S_IMODE(p600.stat().st_mode) == 0o600
     finally:
         os.umask(old_umask)
+
+
+def test_status_inputs_report_trip_lease_active_and_unknown_when_no_state(tmp_path):
+    cfg = _m1_config(tmp_path)
+    for state, expected in ((None, None),
+                            (FakeState(80.0, 8.0, mode="IDLE", nav="IDLE", trip_lease=None), False),
+                            (FakeState(80.0, 8.0, mode="NAVIGATION", nav="IDLE", trip_lease={"lease_id": "L1"}), True)):
+        svc = SimpleNamespace(host_files=HostFileExchange(), config=cfg, state=state,
+                              safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
+        svc.host_files.write_status_inputs(svc)
+        written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
+        assert written["trip_lease_active"] is expected

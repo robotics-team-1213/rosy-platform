@@ -31,7 +31,7 @@ if __package__:
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
-    from .site_update_runtime import SiteRuntimeIO, containers_reason, runtime_reason
+    from .site_update_runtime import SiteRuntimeIO, check_idle_cli, containers_reason, runtime_reason, site_busy_reasons
 else:  # pragma: no cover - installed host CLI
     if str(SCRIPT_DIR) not in sys.path:
         sys.path.insert(0, str(SCRIPT_DIR))
@@ -43,7 +43,7 @@ else:  # pragma: no cover - installed host CLI
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
-    from site_update_runtime import SiteRuntimeIO, containers_reason, runtime_reason
+    from site_update_runtime import SiteRuntimeIO, check_idle_cli, containers_reason, runtime_reason, site_busy_reasons
 
 
 class SiteUpdater(SiteRuntimeIO):
@@ -98,8 +98,6 @@ class SiteUpdater(SiteRuntimeIO):
             tail = (result.stderr or "").strip().splitlines()[-1:] or [""]
             raise Transient(f"{' '.join(args[:3])} failed: {tail[0][:200]}")
         return result
-
-
 
     # selection
     def list_releases(self) -> list[dict]:
@@ -258,9 +256,6 @@ class SiteUpdater(SiteRuntimeIO):
 
 
     # switch + health
-
-
-
     def switch(self, env: dict[str, str], previous: Path, target: Path, commit: str,
                current: str) -> tuple[bool, str]:
         shutil.copy2(self.paths.site_env, self.paths.env_backup)
@@ -498,6 +493,8 @@ class SiteUpdater(SiteRuntimeIO):
                 log("would-install", tag=tag, commit=commit, current=current)
                 state["last_run"]["result"] = "dry-run"
                 return EXIT_OK
+            if self._defer_if_busy(state, tag):
+                return EXIT_OK
             log("staging", tag=tag, commit=commit)
             target = self.stage(release, commit, sums)
             proof = self._verify(target, loaded=False, env=env)
@@ -509,6 +506,8 @@ class SiteUpdater(SiteRuntimeIO):
                     raise Rejected("docker image load failed")
             self._verify(target, loaded=True,
                          env=env)
+            if self._defer_if_busy(state, tag):
+                return EXIT_OK
             previous = self._prior_target()
             ok, reason = self.switch(env, previous, target, commit, current)
         except Refused as error:
@@ -563,6 +562,7 @@ def main(argv: list[str] | None = None) -> int:
                       help='also resume automatically once the newest signed candidate '
                            'contains every listed commit')
     commands.add_parser('resume', help='allow updates after local maintenance')
+    commands.add_parser('check-idle', help='exit 0 only when Fleet and local cell work are idle')
     args = parser.parse_args(argv)
     paths = Paths()
     if args.command == "status":
@@ -582,6 +582,8 @@ def main(argv: list[str] | None = None) -> int:
         log("config-error", reason=str(error))
         return EXIT_CONFIG
     updater = SiteUpdater(config, paths=paths, dry_run=getattr(args, "dry_run", False))
+    if args.command == "check-idle":
+        return check_idle_cli(updater)
     if args.command == "forget-failed":
         return forget_failed(updater, args.tag)
     if args.command in {'hold', 'resume'}:

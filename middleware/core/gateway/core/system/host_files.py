@@ -290,7 +290,9 @@ class HostFileExchange:
                 "manual_quiet_s": (round(svc.command.manual_quiet_s, 1)
                                    if getattr(svc, "command", None) is not None else None),
                 "calibration_active": (svc.calibration.current() is not None
-                                       if getattr(svc, "calibration", None) is not None else None)}
+                                       if getattr(svc, "calibration", None) is not None else None),
+                "trip_lease_active": (getattr(snapshot, "trip_lease", None) is not None
+                                      if snapshot is not None else None)}
 
     def write_face_inputs(self, svc: Any, content: dict[str, Any]) -> None:
         """D-433: replace rosy-face's hand-over atomically (0644: nothing in it is secret).

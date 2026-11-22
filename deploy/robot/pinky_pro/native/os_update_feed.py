@@ -209,6 +209,9 @@ class Feed:
                 metadata, raw, signature = self._metadata(entry)
                 try: self._admit_entry(entry, metadata)
                 except (Withdrawn, EngineeringDeferred): continue
+                if apply:
+                    busy, _ = _Policy(self.root, self.host)._sample()
+                    if busy: return dict(outcome="deferred-busy", release_id=identity, reasons=busy)
                 urls = [entry["assets"][name] for name, _ in bundle_assets(metadata["bundle"])]
                 bundle = stage(self.root, metadata, raw, signature, urls, host=self.host, http=self.http)
                 break
