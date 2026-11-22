@@ -105,7 +105,7 @@ class Collaboration:
         return hmac.new(token.encode(), self.cookie(handler, COOKIE).encode(), hashlib.sha256).hexdigest() if self.receiver else token
 
     def get(self, handler, path, token):
-        if getattr(handler, 'service_principal', None) is not None:
+        if getattr(handler, 'service_principal', None) is not None or getattr(handler, 'peer_bearer_ok', False):
             return False
         try:
             return self._get(handler, path, token)

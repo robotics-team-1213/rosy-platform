@@ -93,17 +93,19 @@ def get(handler, path: str, center, accounts=None) -> bool:
         handler.send(service.spec_payload() if service is not None else _default_spec_payload())
         return True
     if path == PREFIX + '/recording-todo':
-        if accounts is not None:
+        if accounts is not None and getattr(handler, 'service_principal', None) is None:
             accounts.require(handler.learning_principal, 'view')
         handler.send(service.recording_todo() if service is not None else build_recording_todo(None, source_state='unconfigured'))
         return True
     if path == PREFIX + '/peer-summary':
-        if accounts is not None and getattr(handler, 'service_principal', None) is None:
+        peer_ok = getattr(handler, 'peer_bearer_ok', False) or (
+            service is not None and getattr(service, 'configured', False) and service.verify_peer_bearer(handler.headers.get('Authorization'))
+        )
+        if accounts is not None and not peer_ok and getattr(handler, 'service_principal', None) is None:
             accounts.require(handler.learning_principal, 'view')
-        elif getattr(handler, 'learning_principal', None) is None and getattr(handler, 'service_principal', None) is None:
-            if service is None or not service.verify_peer_bearer(handler.headers.get('Authorization')):
-                handler.send({'error': '피어 인증 토큰을 확인하세요.'}, 403)
-                return True
+        elif not peer_ok and getattr(handler, 'learning_principal', None) is None and getattr(handler, 'service_principal', None) is None:
+            handler.send({'error': '피어 인증 토큰을 확인하세요.'}, 403)
+            return True
         handler.send(_default_snapshot() if service is None else service.peer_summary())
         return True
 

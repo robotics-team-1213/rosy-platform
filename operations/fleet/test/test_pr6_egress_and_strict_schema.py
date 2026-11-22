@@ -46,35 +46,80 @@ def test_d358_egress_default_deny_ssrf_images_and_redaction():
         ext.check_destination("https://other.example.com/v1", tier="external")
     assert e5.value.code == "HOST_NOT_ALLOWED"
 
+    for bad_ssrf in ("https://224.0.0.1/v1", "https://node.ts.net/v1", "https://@llm.example.com/v1"):
+        with pytest.raises(EgressDeniedError) as ex:
+            ext.check_destination(bad_ssrf, tier="external")
+        assert ex.value.code in ("SSRF_BLOCKED", "INVALID_DESTINATION")
+
+    with pytest.raises(EgressDeniedError) as e_img:
+        build_strict_chat_request(
+            "openai", "gpt-4o-mini",
+            [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AA"}}]}],
+            {"type": "object", "properties": {"a": {"type": "string"}}},
+        )
+    assert e_img.value.code == "IMAGES_NOT_ALLOWED"
+
     cleaned = pol.sanitize_payload({
         "token": "raw-secret-1",
-        "msg": "host 100.64.10.22 path /home/ai/rosy-test and C:\\Users\\op\\key Bearer sk_test_secretvalue123",
+        "access_token": "raw-access",
+        "openai_api_key": "raw-oak",
+        "msg": (
+            "host 100.64.10.22 ipv6 fd7a:115c:a1e0::1 path /home/ai/rosy-test and C:\\Users\\op\\key "
+            "Bearer sk_test_secretvalue123 bearer lowertok99 "
+            "sk-proj-abcdefghijkl1234 sk-ant-api03-abcdefghijkl AIzaSyD1234567890abcdef1234567890 "
+            "svc_offline_tok_0123456789abcdef"
+        ),
     })
     assert cleaned["token"] == "[REDACTED_SECRET]"
-    assert "100.64.10.22" not in cleaned["msg"] and "/home/ai" not in cleaned["msg"]
-    assert "C:\\Users\\op" not in cleaned["msg"] and "sk_test_secretvalue123" not in cleaned["msg"]
+    assert cleaned["access_token"] == "[REDACTED_SECRET]" and cleaned["openai_api_key"] == "[REDACTED_SECRET]"
+    for leaked in ("100.64.10.22", "fd7a:115c", "/home/ai", "C:\\Users\\op", "sk_test_secretvalue123",
+                   "lowertok99", "sk-proj-abcdefghijkl1234", "sk-ant-api03-abcdefghijkl",
+                   "AIzaSyD1234567890abcdef1234567890", "svc_offline_tok_0123456789abcdef"):
+        assert leaked not in cleaned["msg"]
 
 
 def test_d878_strict_schema_request_and_fail_closed_parsing():
-    with pytest.raises(ValueError, match="SCHEMA_NOT_STRICT"):
-        normalize_strict_schema({"type": "object", "properties": {"a": {"type": "string"}}, "additionalProperties": True})
+    for bad_schema in (
+        {"type": "object", "properties": {"a": {"type": "string"}}, "additionalProperties": True},
+        {"type": "object", "properties": {"a": {"type": "string"}}, "additionalProperties": {"type": "string"}},
+        {"type": "object", "properties": {"a": {"type": "string", "enum": []}}},
+    ):
+        with pytest.raises(ValueError, match="SCHEMA_NOT_STRICT"):
+            normalize_strict_schema(bad_schema)
 
-    schema = {"type": "object", "properties": {"verb": {"type": "string", "enum": ["escalate_human", "align_push"]}, "reason": {"type": "string"}}}
+    schema = {
+        "type": "object",
+        "properties": {
+            "verb": {"type": "string", "enum": ["escalate_human", "align_push"]},
+            "kind": {"const": "fallback"},
+            "score": {"type": "number"},
+            "steps": {"type": "array", "items": {"type": "integer"}},
+            "meta": {"type": "object", "properties": {"ok": {"type": "boolean"}, "note": {"type": ["string", "null"]}}},
+        },
+    }
     req = build_strict_chat_request("openai", "gpt-4o-mini", [{"role": "user", "content": "host 192.168.1.10 stalled"}], schema, name="fallback_decision")
     assert req["response_format"]["json_schema"]["strict"] is True
     assert req["response_format"]["json_schema"]["schema"]["additionalProperties"] is False
+    assert req["response_format"]["json_schema"]["schema"]["properties"]["meta"]["additionalProperties"] is False
     assert "192.168.1.10" not in req["messages"][0]["content"]
 
+    with pytest.raises(ValueError, match="UNSUPPORTED_PROVIDER"):
+        build_strict_chat_request("anthropic", "claude", [{"role": "user", "content": "hi"}], schema)
+
+    good_reply = json.dumps({"verb": "align_push", "kind": "fallback", "score": 0.85, "steps": [1, 2], "meta": {"ok": True, "note": None}})
     ok = parse_strict_chat_reply("openai", {
         "model": "gpt-4o-mini",
-        "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": '{"verb":"align_push","reason":"clear"}'}}],
+        "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": good_reply}}],
     }, "gpt-4o-mini", schema)
-    assert ok == {"verb": "align_push", "reason": "clear"}
+    assert ok["score"] == 0.85 and ok["meta"]["note"] is None
 
-    for bad in (
-        {"model": "gpt-4o-mini", "choices": [{"finish_reason": "length", "message": {"role": "assistant", "content": '{"verb":"align_push","reason":"x"}'}}]},
-        {"model": "gpt-4o-mini", "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": '{"verb":"invalid","reason":"x"}'}}]},
-        {"model": "gpt-4o-mini", "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": '{"verb":"align_push","reason":"x","extra":1}'}}]},
+    for bad_obj in (
+        {"verb": "align_push", "kind": "fallback", "score": True, "steps": [1], "meta": {"ok": True, "note": None}},
+        {"verb": "align_push", "kind": "wrong", "score": 0.5, "steps": [1], "meta": {"ok": True, "note": None}},
+        {"verb": "align_push", "kind": "fallback", "score": 0.5, "steps": ["bad"], "meta": {"ok": True, "note": None}},
+        {"verb": "align_push", "kind": "fallback", "score": 0.5, "steps": [1], "meta": {"ok": True, "note": 123}},
+        {"verb": "align_push", "kind": "fallback", "score": 0.5, "steps": [1], "meta": {"ok": True, "note": None, "extra": 1}},
     ):
+        env = {"model": "gpt-4o-mini", "choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": json.dumps(bad_obj)}}]}
         with pytest.raises(ValueError, match="STRICT_OUTPUT_INVALID"):
-            parse_strict_chat_reply("openai", bad, "gpt-4o-mini", schema)
+            parse_strict_chat_reply("openai", env, "gpt-4o-mini", schema)

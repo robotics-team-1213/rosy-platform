@@ -20,6 +20,7 @@ _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts" / "learning" 
 if str(_CONTRACTS_SRC) not in sys.path:
     sys.path.insert(0, str(_CONTRACTS_SRC))
 
+import canonical_bundle_store  # noqa: E402
 from canonical_intake import handle_intake_request, scan_transferred_collections  # noqa: E402
 from canonical_telemetry import HostTelemetry, external_gpu_locks, load_peer_token  # noqa: E402
 from canonical_recording_todo import build_service_todo  # noqa: E402
@@ -323,31 +324,10 @@ class CanonicalService:
         return self.peers.get(peer_id)
 
     def bundle_manifest(self, rid: str) -> dict:
-        self.get_run(rid)
-        bdir = self.root / "runs" / identifier(rid) / "output" / "bundle"
-        if bdir.is_symlink() or not bdir.is_dir():
-            raise KeyError("bundle missing for run")
-        base, files = bdir.resolve(), []
-        for p in sorted(bdir.rglob("*")):
-            if p.is_symlink() or not p.is_file() or not p.resolve().is_relative_to(base):
-                raise ValueError("unsafe file inside bundle directory")
-            files.append({"path": p.relative_to(bdir).as_posix(), "bytes": p.stat().st_size,
-                          "sha256": hashlib.sha256(p.read_bytes()).hexdigest()})
-        by_path = {f["path"]: f["sha256"] for f in files}
-        return {"schema": "rosy.canonical-bundle-manifest.v1", "run_id": rid,
-                "policy_revision": by_path.get("model.safetensors"), "onnx_sha256": by_path.get("model.onnx"), "files": files}
+        return canonical_bundle_store.bundle_manifest(self.root, self.get_run(rid))
 
     def bundle_file(self, rid: str, relpath: str) -> bytes:
-        self.get_run(rid)
-        bdir = self.root / "runs" / identifier(rid) / "output" / "bundle"
-        if bdir.is_symlink() or not bdir.is_dir():
-            raise KeyError("bundle missing for run")
-        if not relpath or relpath.startswith(("/", "\\")) or ".." in Path(relpath).parts or "\\" in relpath:
-            raise ValueError("invalid bundle file relpath")
-        target = bdir / relpath
-        if target.is_symlink() or not target.is_file() or not target.resolve().is_relative_to(bdir.resolve()):
-            raise FileNotFoundError(relpath)
-        return target.read_bytes()
+        return canonical_bundle_store.bundle_file(self.root, self.get_run(rid), relpath)
 
     def refresh_peer(self, peer_id: str) -> dict:
         if not self.configured:

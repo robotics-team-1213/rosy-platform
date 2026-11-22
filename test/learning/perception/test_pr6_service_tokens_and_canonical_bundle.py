@@ -104,5 +104,43 @@ def test_service_tokens_allow_offline_jobs_and_block_human_approval_routes(tmp_p
         # Allowed offline job POST executes (503/400 from ladder/canonical state, NOT 403!).
         c_post, _ = _req(base + "/api/learning/storage/preflight", method="POST", body={}, token=RAW_TOK)
         assert c_post == 400
+
+        # Regression: GET /api/learning/control is denied by _DENIED_PREFIXES (403).
+        assert _req(base + "/api/learning/control", token=RAW_TOK)[0] == 403
+
+        # Regression #1: GET /api/learning/canonical/peer-summary works with peer_token even when service_tokens & accounts are configured.
+        peer_tok = center.canonical.peer_token
+        assert _req(base + "/api/learning/canonical/peer-summary", token=peer_tok)[0] == 200
+
+        # Regression #2: failed/running runs are refused by bundle-manifest & bundle file; nested subdir inside succeeded bundle works, symlink rejected.
+        fid = "22222222-2222-2222-2222-222222222222"
+        fbdir = Path(center.root) / "canonical" / "runs" / fid / "output" / "bundle"
+        fbdir.mkdir(parents=True)
+        (fbdir / "model.onnx").write_bytes(b"BAD")
+        with center.canonical.connect() as db:
+            fdoc = {"id": fid, "request_id": fid, "kind": "cell_live_check", "arm_id": "arm_a", "gpu_required": False,
+                    "status": "failed", "created_at": 2.0, "params": {}, "result": {}}
+            db.execute("INSERT INTO runs VALUES (?,?,?,?,?,?,?)", (fid, fid, "cell_live_check", 0, json.dumps(fdoc), "{}", "{}"))
+        assert _req(base + f"/api/learning/canonical/runs/{fid}/bundle-manifest", token=RAW_TOK)[0] == 400
+        assert _req(base + f"/api/learning/canonical/runs/{fid}/file/model.onnx", token=RAW_TOK)[0] == 400
+
+        (bdir / "meta").mkdir()
+        (bdir / "meta" / "info.json").write_text('{"ok":true}', encoding="utf-8")
+        c_sub, raw_sub = _req(base + f"/api/learning/canonical/runs/{rid}/bundle-manifest", token=RAW_TOK)
+        assert c_sub == 200 and any(f["path"] == "meta/info.json" for f in json.loads(raw_sub)["files"])
+        c_subf, raw_subf = _req(base + f"/api/learning/canonical/runs/{rid}/file/meta/info.json", token=RAW_TOK)
+        assert c_subf == 200 and raw_subf == b'{"ok":true}'
+
+        # Running status run is refused (400), and symlinked bundle entry is refused (400).
+        rnid = "33333333-3333-3333-3333-333333333333"
+        (Path(center.root) / "canonical" / "runs" / rnid / "output" / "bundle").mkdir(parents=True)
+        with center.canonical.connect() as db:
+            rdoc = {"id": rnid, "request_id": rnid, "kind": "cell_live_check", "arm_id": "arm_a", "gpu_required": False,
+                    "status": "running", "created_at": 3.0, "params": {}, "result": {}}
+            db.execute("INSERT INTO runs VALUES (?,?,?,?,?,?,?)", (rnid, rnid, "cell_live_check", 0, json.dumps(rdoc), "{}", "{}"))
+        assert _req(base + f"/api/learning/canonical/runs/{rnid}/bundle-manifest", token=RAW_TOK)[0] == 400
+        (bdir / "meta" / "esc.json").symlink_to(tok_file)
+        assert _req(base + f"/api/learning/canonical/runs/{rid}/bundle-manifest", token=RAW_TOK)[0] == 400
+        assert _req(base + f"/api/learning/canonical/runs/{rid}/file/meta/esc.json", token=RAW_TOK)[0] == 400
     finally:
         srv.shutdown(); srv.server_close(); th.join(timeout=5)

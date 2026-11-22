@@ -41,7 +41,6 @@ _ALLOWED_GET_EXACT = frozenset({
     "/api/learning/canonical",
     "/api/learning/omx/center",
     "/api/learning/storage",
-    "/api/learning/control",
     "/api/learning/promotion-requests",
 })
 _ALLOWED_GET_PREFIXES = (
@@ -134,11 +133,21 @@ def authorize(method: str, path: str, principal: dict[str, Any]) -> None:
     raise PermissionError(f"unsupported HTTP method {method!r}")
 
 
-def check_get(handler, path: str, tokens: ServiceTokens | None) -> bool:
+def check_get(handler, path: str, tokens: ServiceTokens | None, *, omx_center=None) -> bool:
     """Authenticate + authorize Bearer GET if present; returns True if an HTTP error response was sent."""
+    auth = handler.headers.get("Authorization")
+    canon = getattr(omx_center, "canonical", None)
+    if (
+        path == "/api/learning/canonical/peer-summary"
+        and canon is not None
+        and getattr(canon, "configured", False)
+        and auth
+        and canon.verify_peer_bearer(auth)
+    ):
+        handler.peer_bearer_ok = True
+        return False
     if tokens is None:
         return False
-    auth = handler.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
         return False
     try:

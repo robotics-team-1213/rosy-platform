@@ -154,12 +154,12 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
             # OAuth authorization codes and errors must not enter access logs.
 
         def do_GET(self):
-            self.extra_headers, self.service_principal = [], None
+            self.extra_headers, self.service_principal, self.peer_bearer_ok = [], None, False
             if not self.allowed_host():
                 return self.send({'error': 'local host required'}, 403)
             path = urlparse(self.path).path
             try:
-                if learning_service_auth.check_get(self, path, service_tokens):
+                if learning_service_auth.check_get(self, path, service_tokens, omx_center=omx_center):
                     return
                 if collaboration and collaboration.get(self, path, token):
                     return
@@ -338,7 +338,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                 self.send({'error': str(exc)}, 400)
 
         def do_POST(self):
-            self.extra_headers = []
+            self.extra_headers, self.service_principal = [], None
             path = urlparse(self.path).path
             body_limit = review_upload.BODY_LIMIT if path == '/api/catalog/upload' else (4*1048576 if path == '/api/learning/omx/center/lerobot-study' else 1048576)
             def deny():
