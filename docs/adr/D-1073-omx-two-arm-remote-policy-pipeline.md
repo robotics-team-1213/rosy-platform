@@ -44,6 +44,18 @@
   - 원격 추론(`POST /infer`, LAN warm): 목표 RTT `< 50 ms` (hard timeout `<= 2.0 s`, 전체 관측~적재 경과 `<= MAX_OBSERVATION_AGE_S = 0.6 s`).
   - 충돌 가드 안전성: 테이블 하한(`min_z_m`) 위반 적재 **0건**, 정지 상대/미지 상대 간섭 청크 적재 **0건**, `mid` 이중 점유 **0건**, 원격 오류·타임아웃·가드 거부 시 양팔 `human-hold` 및 `coupled_stop` 래치 전환율 **100%**.
 
+#### 5. 실기 사전점검 현황 및 잔여 TODO (2026-11-23 기준)
+
+- **완료된 무동작 사전검증:** `<ai-pc-host>` CUDA GPU 원격 추론 서버 가동 및 D-1065 정규 역할(`top`/`side`/`wrist`) `sha256` 고정 75k ACT 번들 적재, Bearer 인증 401 fail-closed 확인, 양팔 관절 캘리브레이션 `joint_offsets = [0.0]*6` 및 `cell-arm-{a,b}/operating-envelope.json`(`reviews: []`, `payload = 0.016 kg`, 커미셔닝 허용 / 무심사 자율 거부) 정렬, 실측 `rigid_of(pallet, pallet)` 기반 `TwoArmChunkGuard` `T1`/`T3` 무동작 검증(`admitted=True`, `clearance_m` `0.2148–0.22599 m`)까지 완료하였다.
+- **현장 물리 조작 항목 (아래 엔지니어링·운영 TODO 제외):** ① `arm_b_wrist` USB 카메라 물리 재연결(`503` 해소), ② 작업대 UI에서 `arm_a` `human hold` 물리 지지 해제 및 `arm_b` `chunk_runner` `--person-at-switch` 기동.
+- **잔여 엔지니어링·운영 TODO:**
+  - [ ] **1. 원격 추론 LAN RTT `< 50 ms` KPI 달성 최적화:** 2026-11-23 실측 warm CUDA LAN RTT가 `arm_a` `median 135.57 ms / p95 139.93 ms`, `arm_b` `median 127.52 ms / p95 161.52 ms`로 목표 `< 50 ms`에 미달한다(`MAX_OBSERVATION_AGE_S = 0.6 s` 이내이나 여유 축소). `deploy/robot/omx/cell_remote_policy.py`의 요청당 신규 연결(`urllib.request.urlopen`)을 HTTP/1.1 keep-alive 연결 재사용으로 전환하고, `learning/training/omx/act_policy_http_server.py` keep-alive 지원 및 3뷰 JPEG 직렬화 오버헤드(Base64 JSON 경량화·품질/해상도 튜닝)를 개선한다.
+  - [ ] **2. 양팔 공통 `belt` 사이트 맵 등록 및 `arm_b` `pallet` 정밀 재보정:** 현재 양팔 `stack-calibration.json` 공통 사이트는 `pallet`뿐이므로 `not_places:belt` 기반 실기 CLI 실행 전 양팔 공통 `belt` 사이트 맵을 등록한다. 또한 `arm_b` `pallet` 보정 오차(`loo_error_mm.max = 12.65 mm`, `mean = 5.0 mm`; `arm_a` `max 4.46 mm / mean 2.39 mm`)를 재보정해 양팔 정합 정밀도를 높인다.
+  - [ ] **3. 안전 태그 등재·`cell-job-api` 공식 통합 및 셀 도구 승격:** `tools/harness/platform_parts.yaml`에 D-1073 신규 모듈 안전 태그를 등재(FULL CI 분리 후속 PR)하고, `deploy/robot/omx/cell_two_arm_policy_cli.py`를 셀 `cell-job-api` 공식 Job 경로(게이트·양팔 잠금·`--person-at-switch` 통합)로 편입해 SSH 직접 실행을 배제한다. 검증 완료 후 `rosy-arm-cell` 스테이징본을 공식 `omx-tools-current`로 승격한다.
+  - [ ] **4. `<ai-pc-host>` 원격 GPU 추론 서버 운영화 및 학습 락 조율:** 현재 수동 백그라운드(`nohup`)로 기동 중인 `act_policy_http_server.py`를 `systemd --user` 관리 서비스로 전환하고, 학습 작업 락(`train-*.lock` / `gpu.lock`)과의 VRAM·GPU 부하 경합 방지 및 자동 헬스체크·재기동 정책을 정립한다.
+  - [ ] **5. D-911 운영 봉투(`operating-envelope.json`) 인간 심사 등재:** 현재 양팔 `operating-envelope.json`은 `reviews: []`(감독 커미셔닝 전용) 상태이므로, 현장 감독 시험(`attempts.jsonl`) 결과를 누적한 뒤 `deploy/robot/omx/cell_envelope_review.py add --confirm-physical-review`로 정식 인간 심사 기록을 등재한다.
+  - [ ] **6. (선택 · 양팔 텔레오퍼/추가 녹화용) `arm_b` 리더 및 녹화 설정 정합:** 현재 6축 정책 추론 경로에는 불필요하나, 향후 양팔 동시 텔레오퍼·추가 데이터 녹화 시 `arm_b` 리더 보드 연결 및 `record-config-bi-ab.json` / `record-config-arm-b.json`과 실제 D-1065 `side` 카메라·엔드이펙터(`fingertip_m`) 설정 일치를 검증한다.
+
 ### Consequences & Invariants
 
 - 기존 6축 데이터·학습 체계와 `chunk_runner`·`cell_policy_shape`·`cell_two_arm` 안전 유틸리티를 그대로 재사용하므로 12축 데이터를 새로 수집하지 않고도 T1~T4 병렬/교대 파이프라인을 구성할 수 있다.
