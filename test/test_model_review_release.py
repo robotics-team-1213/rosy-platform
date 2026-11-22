@@ -462,6 +462,104 @@ def test_finished_learning_and_missing_center_database_allow_switch_check_read_o
     assert database.read_bytes() == before
 
 
+@pytest.mark.skipif(os.name == 'nt', reason='Linux managed release symlinks')
+@pytest.mark.parametrize('retained', [False, True])
+@pytest.mark.parametrize('status', ['launching', 'running', 'stopping'])
+def test_active_canonical_learning_refuses_update_and_rollback_before_any_switch(tmp_path, monkeypatch, retained, status):
+    source = tmp_path / 'source'
+    source_tree(source)
+    root = tmp_path / 'root'
+    active = root / 'releases/active'
+    older = root / 'releases/older'
+    source_tree(active)
+    source_tree(older)
+    (root / 'current').symlink_to(active)
+    state = tmp_path / 'state'
+    state.mkdir()
+    (state / 'reviews.sqlite3').write_bytes(b'human decisions')
+    canonical_db = center_config(state).parent / 'canonical' / 'canonical.sqlite'
+    canonical_db.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(canonical_db) as db:
+        db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+        db.execute('INSERT INTO runs VALUES (?)', (json.dumps({'status': status, 'kind': 'train_stage'}),))
+    unit = tmp_path / 'review.service'
+    unit.write_text(release.unit_contents(root / 'current', state, Path(sys.executable), '127.0.0.1', 8774))
+    old_unit = unit.read_bytes()
+    calls = []
+    monkeypatch.setattr(release, 'run_systemctl', lambda *a: calls.append(a))
+    monkeypatch.setattr(release, 'check_live', lambda *a: None)
+    monkeypatch.setattr(release.subprocess, 'run', lambda *a, **kw: calls.append(a))
+    with pytest.raises(ValueError, match='learning|learner'):
+        release.install(None if retained else source, 'older' if retained else 'new', root,
+            None if retained else state, None if retained else Path(sys.executable), '127.0.0.1', 8774, unit)
+    assert (root / 'current').resolve() == active
+    assert unit.read_bytes() == old_unit and calls == []
+    assert not (root / 'releases/new').exists()
+    assert not (root / (release.SERVICE + '.before-managed')).exists()
+    assert (state / 'reviews.sqlite3').read_bytes() == b'human decisions'
+
+
+@pytest.mark.parametrize('fault', ['dir_file', 'database', 'run_json', 'run_status'])
+def test_corrupt_canonical_learning_state_fails_closed(tmp_path, fault):
+    state = tmp_path / 'state'
+    state.mkdir()
+    canonical_dir = center_config(state).parent / 'canonical'
+    config = state / 'omx-center.json'
+    database = canonical_dir / 'canonical.sqlite'
+    if fault == 'dir_file':
+        canonical_dir.write_text('not-a-directory')
+    else:
+        canonical_dir.mkdir(parents=True, exist_ok=True)
+        if fault == 'database':
+            database.write_bytes(b'corrupt SQLite')
+        else:
+            with sqlite3.connect(database) as db:
+                db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+                db.execute('INSERT INTO runs VALUES (?)', ('{' if fault == 'run_json' else '{}',))
+    before = database.read_bytes() if database.exists() else None
+    with pytest.raises(ValueError, match='learning|learner'):
+        release.check_learning_idle(config)
+    assert (database.read_bytes() if database.exists() else None) == before
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='Linux symlink semantics')
+@pytest.mark.parametrize('target_kind', ['dir_symlink', 'db_symlink'])
+def test_symlinked_canonical_learning_paths_fail_closed(tmp_path, target_kind):
+    state = tmp_path / 'state'
+    state.mkdir()
+    canonical_dir = center_config(state).parent / 'canonical'
+    config = state / 'omx-center.json'
+    real_target = tmp_path / 'elsewhere'
+    real_target.mkdir()
+    if target_kind == 'dir_symlink':
+        canonical_dir.symlink_to(real_target)
+    else:
+        canonical_dir.mkdir(parents=True, exist_ok=True)
+        real_db = real_target / 'canonical.sqlite'
+        real_db.write_bytes(b'')
+        (canonical_dir / 'canonical.sqlite').symlink_to(real_db)
+    with pytest.raises(ValueError, match='learning|learner'):
+        release.check_learning_idle(config)
+
+
+def test_finished_canonical_learning_allows_switch_read_only(tmp_path):
+    state = tmp_path / 'state'
+    state.mkdir()
+    canonical_dir = center_config(state).parent / 'canonical'
+    config = state / 'omx-center.json'
+    release.check_learning_idle(config)
+    assert not canonical_dir.exists()
+    canonical_dir.mkdir(parents=True, exist_ok=True)
+    database = canonical_dir / 'canonical.sqlite'
+    with sqlite3.connect(database) as db:
+        db.execute('CREATE TABLE runs (document TEXT NOT NULL)')
+        for status in ('succeeded', 'failed', 'cancelled', 'interrupted'):
+            db.execute('INSERT INTO runs VALUES (?)', (json.dumps({'status': status}),))
+    before = database.read_bytes()
+    release.check_learning_idle(config)
+    assert database.read_bytes() == before
+
+
 @pytest.mark.skipif(os.name == 'nt', reason='Linux symlink semantics')
 @pytest.mark.parametrize('bad', ['wrong-schema', 'symlink', 'not-json'])
 def test_workspace_links_are_checked_before_the_unit_changes(tmp_path, bad):
