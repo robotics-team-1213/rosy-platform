@@ -172,6 +172,7 @@ jobs:
           if [ ! -d /tmp/rosy-pinky-torch/torch ]; then
             pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-pinky-torch --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
           fi
+          PYTHONPATH="/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" python3 -c "import numpy as np, torch, cv2; assert torch.__version__.startswith('2.7.1')"
           echo "PYTHONPATH=/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Cache OMX ACT CPU verification tools
@@ -233,6 +234,8 @@ jobs:
             if [ "${ROSIDL_CACHE_HIT:-}" = "true" ] && [ -f install/interfaces/share/interfaces/package.sh ] && grep -qF "$(pwd)/install/interfaces" install/interfaces/share/interfaces/package.sh; then
               . install/interfaces/share/interfaces/package.sh
               SKIP_ARGS="--packages-skip interfaces"
+            elif [ "${ROSIDL_CACHE_HIT:-}" = "true" ]; then
+              rm -rf build/interfaces install/interfaces
             fi
             colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS --build-base build --install-base install $SKIP_ARGS --event-handlers console_direct+
           fi

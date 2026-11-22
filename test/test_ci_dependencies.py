@@ -774,7 +774,7 @@ def test_ci_scope_bare_partial_clone_and_test_tiered_checkout_and_caches():
     assert scope_steps["Cache scope Python tools"]["with"]["path"] == "/tmp/rosy-scope-tools"
 
     test_steps = {s["name"]: s for s in ci["jobs"]["test"]["steps"]}
-    assert test_steps["Checkout"]["with"]["fetch-depth"] == "${{ matrix.git_history && 0 || 1 }}"
+    assert test_steps["Checkout"]["with"]["fetch-depth"] == "${{ !matrix.git_history && 1 || 0 }}"
     assert test_steps["Checkout"]["with"]["filter"] == "${{ matrix.git_history && 'blob:none' || '' }}"
 
     digest = re.search(r"rosy-ci@sha256:([0-9a-f]{64})", ci["jobs"]["test"]["container"]["image"]).group(1)
@@ -782,7 +782,17 @@ def test_ci_scope_bare_partial_clone_and_test_tiered_checkout_and_caches():
     assert f"{digest[:12]}-rosidl-${{{{ hashFiles('contracts/ros_idl/**') }}}}" in rosidl_cache["with"]["key"]
     assert "build/interfaces" in rosidl_cache["with"]["path"] and "install/interfaces" in rosidl_cache["with"]["path"]
     assert "--packages-skip interfaces" in test_steps["Build (colcon)"]["run"]
+    assert "rm -rf build/interfaces install/interfaces" in test_steps["Build (colcon)"]["run"]
     assert test_steps["Cache Pinky CPU torch tools"]["with"]["path"] == "/tmp/rosy-pinky-torch"
+
+    wheel_cmd = re.compile(r"pip3 wheel [^\n]*?((?:contracts|operations|middleware|integrations|applications)/\S+(?:\s+(?:contracts|operations|middleware|integrations|applications)/\S+)+)")
+    scope_pkgs = next(p for s in scope_job["steps"] if "Build ROS-free" in s["name"] for p in [re.findall(r"(?:contracts|operations|middleware|integrations|applications)/[a-z_/]+", s["run"])])
+    test_pkgs = wheel_cmd.search(test_steps["Build and install ROS-free platform API wheels"]["run"].replace("\\\n", " ")).group(1).split()
+    rolling = yaml.safe_load((ROOT / ".github" / "workflows" / "rolling-sweep.yml").read_text(encoding="utf-8"))
+    roll_plan_pkgs = next(re.findall(r"(?:contracts|operations|middleware|integrations|applications)/[a-z_/]+", s["run"]) for s in rolling["jobs"]["plan-sweep"]["steps"] if "Build ROS-free" in s["name"])
+    roll_run_pkgs = wheel_cmd.search(next(s["run"] for s in rolling["jobs"]["run-shard"]["steps"] if "Build platform wheels" in s["name"])).group(1).split()
+    assert scope_pkgs == test_pkgs == roll_plan_pkgs == roll_run_pkgs
+    assert "rm -rf build/interfaces install/interfaces" in next(s["run"] for s in rolling["jobs"]["run-shard"]["steps"] if "Build platform wheels" in s["name"])
 
     rg = yaml.safe_load((ROOT / ".github" / "workflows" / "review-gate.yml").read_text(encoding="utf-8"))
     assert rg["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"

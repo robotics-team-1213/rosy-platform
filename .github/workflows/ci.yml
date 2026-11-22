@@ -64,7 +64,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
         with:
           path: /tmp/rosy-scope-tools
-          key: ${{ runner.os }}-${{ runner.arch }}-scope-tools-pyyaml-setuptools-wheel-v1
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.runs_on || 'ubuntu-26.04' }}-scope-tools-pyyaml-setuptools-wheel-v1
 
       - name: CI image readiness (selector tools)
         run: |
@@ -191,7 +191,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
-          fetch-depth: ${{ matrix.git_history && 0 || 1 }}
+          fetch-depth: ${{ !matrix.git_history && 1 || 0 }}
           filter: ${{ matrix.git_history && 'blob:none' || '' }}
 
       - name: Fix git safe directory (container)
@@ -370,6 +370,8 @@ jobs:
           if [ "${ROSIDL_CACHE_HIT:-}" = "true" ] && [ -f install/interfaces/share/interfaces/package.sh ] && grep -qF "$(pwd)/install/interfaces" install/interfaces/share/interfaces/package.sh; then
             . install/interfaces/share/interfaces/package.sh
             SKIP_ARGS="--packages-skip interfaces"
+          elif [ "${ROSIDL_CACHE_HIT:-}" = "true" ]; then
+            rm -rf build/interfaces install/interfaces
           fi
           colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS \
             --build-base build --install-base install $SKIP_ARGS \
