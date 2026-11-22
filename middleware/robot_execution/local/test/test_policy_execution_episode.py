@@ -33,14 +33,21 @@ def produce(tmp_path):
     return doc, tmp_path/'episode', goal, identity
 
 
+def _fleet_join_export():
+    policy_dir = str(Path(__file__).resolve().parents[4] / 'learning/registry/policy')
+    if policy_dir not in sys.path:
+        sys.path.insert(0, policy_dir)
+    from fleet_join import export
+    return export
+
+
 def test_original_native_execution_to_episode_to_fleet(tmp_path):
     doc, root, goal, identity = produce(tmp_path)
     assert doc['profile'] == 'omx_policy_execution_v1'
     assert doc['status'] == 'incomplete'
     assert doc['revisions']['policy'] is not None
     assert doc['outcome']['task'] == 'unknown'
-    sys.path.insert(0, str(Path(__file__).resolve().parents[4]/'learning/registry/policy'))
-    from fleet_join import export
+    export = _fleet_join_export()
     result = export(root/'manifest.json', root/'owner-receipts/000000.json', tmp_path/'fleet.json')
     assert result['status'] == 'matched'
     assert result['policy_revision'] == doc['revisions']['policy']
@@ -171,7 +178,7 @@ def test_resealed_episode_does_not_promote_or_rebind_original_evidence(tmp_path,
 
 def test_fleet_same_action_goal_but_different_event_is_unmatched(tmp_path):
     doc,root,_,_=produce(tmp_path)
-    from fleet_join import export
+    export = _fleet_join_export()
     receipt=json.loads((root/'owner-receipts/000000.json').read_bytes())
     receipt['journal_event_id']+=1
     file=tmp_path/'other.json'
