@@ -131,13 +131,52 @@ lease_check() {
 }
 """
 
+DISK_PROFILE = r"""
+disk_temp_bytes() {
+  [ -e "$B" ] || { echo 0; return 0; }
+  local usage
+  usage=$(timeout -k 1 2 nice -n 15 ionice -c3 du -sbx -- "$B" 2>/dev/null) || return 1
+  echo "${usage%%$'\t'*}"
+}
+disk_watch() {
+  local peak=0 bytes stop=
+  trap 'stop=1' TERM
+  while [ -z "$stop" ] && kill -0 "$$" 2>/dev/null && [ -d "$B" ]; do
+    if bytes=$(disk_temp_bytes) && [ "$bytes" -gt "$peak" ]; then
+      peak=$bytes
+      echo "$peak" > "$D/$K.disk-peak.tmp" && mv -f "$D/$K.disk-peak.tmp" "$D/$K.disk-peak"
+      echo "[remote-pytest] disk temp sample bytes=$peak"
+    fi
+    [ -z "$stop" ] || break
+    sleep 2
+  done
+}
+disk_stop() {
+  kill "$disk_sampler" 2>/dev/null || true
+  wait "$disk_sampler" 2>/dev/null || true
+  disk_before=$(disk_temp_bytes) || disk_before=unknown
+  disk_peak=$(cat "$D/$K.disk-peak" 2>/dev/null) || disk_peak=unknown
+  if [ "$disk_before" != unknown ] && { [ "$disk_peak" = unknown ] || [ "$disk_before" -gt "$disk_peak" ]; }; then
+    disk_peak=$disk_before
+  fi
+}
+disk_report() {
+  local after
+  after=$(disk_temp_bytes) || after=unknown
+  echo "[remote-pytest] disk temp sampled_peak_bytes=$disk_peak before_cleanup_bytes=$disk_before after_cleanup_bytes=$after"
+}
+"""
+
 # $1 run, $2 deps, $3 CPUQuota ('' = none), $4 job k, $5 timeout s, then [ROSY_*=value ...] pytest args.
 # The lock pid is this shell's: it lives until pytest ends (the trap keeps bash from exec'ing).
 JOB = r"""R=~/rosy-test; V=$R/venvs/$2; CPU=$3; D=$R/runs/$1.jobs; K=$4; T=$5; L=~/rosy-jobs/$1.$4.lock
 echo $$ > "$D/$K.pid"; rm -f ~/rosy-jobs/"$1".resv
+""" + DISK_PROFILE + r"""
 # One lock per job (a run may run several at once on a host); release it before publishing completion.
-trap 'c=$?; [ $c = 124 ] && echo "[remote-pytest] timed out after $T s"
+trap 'c=$?; trap ":" TERM INT; [ $c = 124 ] && echo "[remote-pytest] timed out after $T s"
+[ -z "${disk_sampler:-}" ] || disk_stop
 [ -z "${B:-}" ] || { chmod -R u+rwX -- "$B"; rm -rf -- "$B"; } 2>/dev/null  # tests leave read-only dirs
+[ -z "${disk_sampler:-}" ] || disk_report
 echo $c > "$D/$K.rc.tmp"; rm -f "$L" ~/rosy-jobs/$$.alone-wait; mv -f "$D/$K.rc.tmp" "$D/$K.rc"' EXIT
 trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would still be 0
 """ + LEASE + r"""( while kill -0 $$ 2>/dev/null && sleep 60; do lease_check """ + str(LEASE_S) + r""" $$ || break; done ) </dev/null >/dev/null 2>&1 &
@@ -185,6 +224,10 @@ W='f=$1; shift; P=$$; s=$(date +%s%N); cg=${ROSY_CGROUP_FS:-/sys/fs/cgroup}$(cut
 { while kill -0 $P 2>/dev/null; do sleep 0.5; done; { cat "$cg/memory.peak" || echo
   sed -n "s/^usage_usec //p" "$cg/cpu.stat"; echo $(( ($(date +%s%N) - s) / 1000 )); } > "$f.tmp"
   mv -f "$f.tmp" "$f"; } < /dev/null > /dev/null 2>&1 & exec "$@"'
+if [ "${ROSY_TEST_DISK_PROFILE:-}" = 1 ]; then
+  disk_watch </dev/null &
+  disk_sampler=$!
+fi
 timeout --foreground -k 30 "$T" systemd-run --user --scope -q -p MemoryMax=${M}G ${CPU:+-p CPUQuota=$CPU} -- \
   bash -c "$W" peak "$B/peak" nice -n 15 ionice -c2 -n7 "$V/bin/python" -m pytest --basetemp "$B/p" "$@"
 c=$?

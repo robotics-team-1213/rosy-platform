@@ -37,12 +37,15 @@ def place(r, cls: str, hosts: list[str], probes: list[dict | None], cores: int =
         cores = p["nproc"] - max(p["load1"], p["lock_cores"]) - ((2 if cls == "sim" else r.SITE_RESERVE[0]) if site else 0)
         mem = min(p["avail_gb"], p["total_gb"] - p["lock_gb"]) - (r.SITE_RESERVE[1] if site else 0)
         short = [m for m in (("cores", cores, need_c), ("RAM", mem, floor_m)) if m[1] < m[2]]
-        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"] else "alone job running or waiting"
-               if cls == "pytest" and p.get("pytest_blocked") else f"no {cls} capability" if not p[cls]
-               else f"below disk floor {r.DISK_FLOOR_GB} GB" if r.disk_full(p)
+        why = ("marked busy (~/rosy-jobs/busy)" if p["busy"]
+               else "storage maintenance required (tools/doctor.py --hosts)" if r.disk_full(p)
+               else "alone job running or waiting" if cls == "pytest" and p.get("pytest_blocked")
+               else f"no {cls} capability" if not p[cls]
                else f"below {cls} floor {need_c} cores/{floor_m} GB ({', '.join(f'{n} {v:.1f} < {f}' for n, v, f in short)})" if short
                else f"light (under {need_m} GB): serial, smallest invocations" if mem < need_m else "ok")
         disk = f", disk {p['disk_free_gb']:.1f} GB free ({p['disk_use']}%)" if "disk_free_gb" in p else ""
+        if disk and "tmp_disk_use" in p:
+            disk += f", /tmp {p['tmp_disk_use']}%"
         stale = f"; busy marker {p['busy_ignored']} (ignored)" if p.get("busy_ignored") else ""
         notes.append(f"{host}: {cores:.1f} cores, {mem:.1f} GB free{disk}{' (site PC)' if site else ''} - {why}{stale}")
         (r.BLOCKED.add if why.startswith("alone job") else r.BLOCKED.discard)(host)

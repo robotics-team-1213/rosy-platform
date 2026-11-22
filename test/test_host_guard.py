@@ -165,6 +165,18 @@ def test_disk_and_gpu_headroom_are_recorded(tmp_path):
     assert row["resources"]["memory_low"] is False
 
 
+@pytest.mark.parametrize(("suffix", "expected"), [
+    ("1795277091 done 0.76", {"started": 1795277091, "state": "done", "free_change_gib": 0.76}),
+    ("1795277091 skipped -", {"started": 1795277091, "state": "skipped", "free_change_gib": None}),
+    ("bad done 0.76", None),
+])
+def test_storage_maintenance_reports_are_optional_and_diagnostic(tmp_path, suffix, expected):
+    assert _guard(tmp_path, f"{DISK_OK} {suffix}") == ["health"]
+    row = _status(tmp_path)["pc1"]
+    assert row["state"] == "ok"
+    assert row["resources"].get("storage_maintenance") == expected
+
+
 def test_low_ram_is_a_report_only_warning_before_the_memory_ladder(tmp_path):
     answer = f"8 10 1.2 24 7200 - {200 * GIB} 40 {100 * GIB} 50 {NO_GPU} {32 * GIB} {int(2.5 * GIB)} - -"
     assert _guard(tmp_path, answer, runs=7) == ["health"] * 7

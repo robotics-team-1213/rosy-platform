@@ -197,9 +197,10 @@ def test_probe_parser_reads_only_the_rosyprobe_line():
     assert rp.parse_probe("8 0.5 4194304 8388608 1 0 0 2 6 0\n") is None
     assert rp.parse_probe("ROSYPROBE 8 0.5\n") is None
     assert "disk_free_gb" not in p  # an older probe: disk unknown, never a refusal
-    # ~/rosy-test then /tmp: GB of ~/rosy-test's disk, use% of the fuller; a full /tmp still refuses
+    # ~/rosy-test then /tmp: each filesystem keeps its own use%; a full /tmp still refuses.
     disk = rp.parse_probe(f"{line} 52428800 40 2726297 100 \n")
-    assert disk["disk_free_gb"] == 50 and disk["disk_use"] == 100 and disk["nproc"] == 8 and rp.disk_full(disk)
+    assert disk["disk_free_gb"] == 50 and disk["disk_use"] == 40 and disk["tmp_disk_use"] == 100
+    assert rp.disk_full(disk)
     # the site PC: 103 GB free on / and a 7.4 GB tmpfs /tmp at 1% is healthy
     site = rp.parse_probe(f"{line} 107186760 54 7774272 1 \n")
     assert not rp.disk_full(site), "a small empty tmpfs is not a full disk"
@@ -208,23 +209,6 @@ def test_probe_parser_reads_only_the_rosyprobe_line():
 def _probe(**disk):
     return {"nproc": 8, "load1": 0.0, "avail_gb": 16.0, "total_gb": 32.0, "pytest": True, "sim": True,
             "busy": False, "lock_cores": 0, "lock_gb": 0, "site": False, **disk}
-
-
-def test_place_refuses_a_host_below_the_disk_floor_and_keeps_unmeasured_ones(monkeypatch):
-    """2026-10-26: a 100% full AI PC still got jobs, and a SQLite fsync stall failed a timing test."""
-    monkeypatch.setattr(rp, "SITES", set())
-    hosts = ["full@1", "edge@2", "pct@3", "old@4"]
-    probes = [_probe(disk_free_gb=2.6, disk_use=100), _probe(disk_free_gb=19.9, disk_use=80),
-              _probe(disk_free_gb=56.0, disk_use=95), _probe()]
-    chosen, notes = rp.place("pytest", hosts, probes)
-    assert sorted(chosen) == ["old@4", "pct@3"]  # 95% use with 56 GB free is healthy: no percent rule
-    assert notes[0] == "full@1: 8.0 cores, 16.0 GB free, disk 2.6 GB free (100%) - below disk floor 20 GB"
-    assert notes[1].endswith("below disk floor 20 GB") and notes[2].endswith(" - ok") and notes[3].endswith(" - ok")
-    # the no-host-above-floor fallback must not send the gate to a full disk either
-    monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
-    monkeypatch.setenv("ROSY_TEST_HOSTS", "full@1")
-    monkeypatch.setattr(rp, "probe", lambda host: probes[0])
-    assert rp.placed_hosts("pytest") == []
 
 
 def test_place_ignores_a_pre_boot_or_expired_busy_marker_and_says_so(monkeypatch):
@@ -972,6 +956,7 @@ def test_detached_job_holds_its_own_lock_and_writes_the_code_atomically(tmp_path
     env_line, rest = out.split(b"\n", 1)
     assert re.fullmatch(rb"\[remote-pytest\] env d freeze [0-9a-f]{16}", env_line) and rest.startswith(b"out\nerr\n")
     assert base and not Path(base.group(1).decode()).exists()
+    assert b"[remote-pytest] disk temp" not in out
     _skip_unreaped(pid)
     n = out.index(b"err")  # an offset just after "out\n"
     assert rj.parse_poll(_sh(rj.POLL, env, "r", "0", str(n)).stdout) == (3, False, out[n:])

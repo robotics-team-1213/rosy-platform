@@ -31,6 +31,7 @@ Every action is appended to <state>/actions.jsonl; <state>/status.json holds the
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import socket
@@ -365,12 +366,24 @@ def parse_health(answer: str) -> dict:
                "temp_c": None if fields[17] == "-" else int(fields[17])}
     memory_low = avail < WARN_AVAIL_PCT
     reboot_overdue = uptime > REBOOT_OVERDUE_S
-    return {
+    resources = {
         "avail_pct": avail, "swap_pct": swap, "load": load,
         "cores": cores, "uptime_s": uptime, "down": down,
         "disk": disk, "disk_low": disk_low, "gpu": gpu, "memory": memory, "memory_low": memory_low,
         "cpu": cpu, "reboot_overdue": reboot_overdue,
     }
+    if len(fields) >= 21:
+        started, state, change = fields[18:21]
+        try:
+            when = int(started)
+            delta = None if state == "skipped" and change == "-" else float(change)
+        except ValueError:
+            pass
+        else:
+            if when > 0 and ((state == "skipped" and delta is None)
+                             or (state == "done" and delta is not None and math.isfinite(delta))):
+                resources["storage_maintenance"] = {"started": when, "state": state, "free_change_gib": delta}
+    return resources
 
 
 def update_report(text: str | None) -> dict | None:
