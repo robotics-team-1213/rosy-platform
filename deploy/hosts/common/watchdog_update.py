@@ -10,8 +10,11 @@ import tempfile
 from pathlib import Path
 from urllib.request import urlopen
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from release.signing import sign_checksums, verify_signature
+if __package__:
+    from .release.signing import sign_checksums, verify_signature
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from release.signing import sign_checksums, verify_signature
 
 DOWNLOAD_URL = (
     "https://github.com/robotics-team-1213/rosy-platform/releases/download/"
@@ -81,16 +84,17 @@ def install_asset(asset: bytes, public_key: Path, active: Path) -> str:
         )
         if result.returncode:
             raise ValueError("signed watchdog script has invalid shell syntax")
-        with tempfile.NamedTemporaryFile(dir=active.parent, prefix=".watchdog-", delete=False) as staging:
-            staged = Path(staging.name)
-            try:
+        staging = tempfile.NamedTemporaryFile(dir=active.parent, prefix=".watchdog-", delete=False)
+        staged = Path(staging.name)
+        try:
+            with staging:
                 staging.write(script)
                 staging.flush()
                 os.fchmod(staging.fileno(), 0o755)
                 os.fsync(staging.fileno())
-                os.replace(staged, active)
-            finally:
-                staged.unlink(missing_ok=True)
+            os.replace(staged, active)
+        finally:
+            staged.unlink(missing_ok=True)
         directory = os.open(active.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(directory)
