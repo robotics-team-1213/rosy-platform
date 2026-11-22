@@ -15,6 +15,9 @@ from fleet.server.sitemap.pipeline_task_input import checked_finite_float, check
 from fleet.server.sitemap.pipeline_unload_release import install_unload_release_routes, manifest_count, unload_release
 
 
+_LEGACY_VEHICLE_SITE = "pinky"
+
+
 def install_cell_tasks_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
     operator_guard = ctx.operator_guard
@@ -141,7 +144,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
             raise HTTPException(409, detail={"code": "CELL_TASK_ID_EXISTS"})
         web_common = getattr(app.state, "web_common", None)
         try:
-            targets = resolve_cell_task_targets(cell_id, spec, web_common=web_common)
+            targets = resolve_cell_task_targets(
+                cell_id, spec, web_common=web_common, default_cell_s_src=_LEGACY_VEHICLE_SITE,
+                legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
+            )
         except ValueError as exc:
             raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
         tier, pose = checked_task_pose({**spec, "tier": targets["tier"]}, station)
@@ -212,7 +218,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
         if body.get("tiers") is not None:
             base_id = str(body.get("task_id") or f"stack-{uuid.uuid4().hex[:6]}")
             try:
-                specs = expand_multi_tier_specs(body, base_id=base_id, web_common=getattr(app.state, "web_common", None))
+                specs = expand_multi_tier_specs(
+                    body, base_id=base_id, web_common=getattr(app.state, "web_common", None),
+                    legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
+                )
             except ValueError as exc:
                 raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
             created = _enqueue_many(active, specs)

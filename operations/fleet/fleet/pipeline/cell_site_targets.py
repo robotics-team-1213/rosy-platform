@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 _STACKING_AREAS = frozenset({"pallet", "yard", "temp_a", "temp_b"})
-_LEGACY_CELL_AB_AREAS = frozenset({"pallet", "belt", "pinky", "temp_plate_a", "temp_plate_b"})
+_LEGACY_CELL_AB_AREAS = frozenset({"pallet", "belt", "temp_plate_a", "temp_plate_b"})
 _SIM_AREA_PREFIXES = ("ship-", "tmp-a-", "tmp-b-", "yard:", "temp_a:", "temp_b:", "stand:", "yard-", "temp_a-", "temp_b-", "stand-")
 
 
@@ -109,6 +109,7 @@ def resolve_cell_ab_site(
     web_common: Path | None = None,
     allow_legacy_passthrough: bool = False,
     allow_generic_pallet: bool = False,
+    legacy_sites: tuple[str, ...] | frozenset[str] = (),
 ) -> dict[str, Any]:
     idx = _index(str(_map_path(web_common).resolve()))
     site_str = "" if raw_site is None else str(raw_site).strip()
@@ -136,7 +137,7 @@ def resolve_cell_ab_site(
             "base_site": "pallet", "area": "pallet", "col": None, "row": None,
             "tier": enc, "arms": ("arm_a", "arm_b"), "is_legacy_pallet": True, "encoded_tier": enc,
         }
-    if allow_legacy_passthrough and site_str in _LEGACY_CELL_AB_AREAS:
+    if allow_legacy_passthrough and (site_str in _LEGACY_CELL_AB_AREAS or site_str in legacy_sites):
         arms = ("arm_a",) if site_str == "temp_plate_a" else ("arm_b",) if site_str == "temp_plate_b" else ("arm_a", "arm_b")
         resolved_t = tier_val if tier_val is not None else 1
         return {
@@ -161,7 +162,10 @@ def resolve_cell_ab_site(
     raise ValueError("UNKNOWN_CELL_SITE")
 
 
-def resolve_cell_task_targets(cell_id: str, spec: dict[str, Any], *, web_common: Path | None = None) -> dict[str, Any]:
+def resolve_cell_task_targets(
+    cell_id: str, spec: dict[str, Any], *, web_common: Path | None = None,
+    default_cell_s_src: str = "vehicle", legacy_sites: tuple[str, ...] | frozenset[str] = (),
+) -> dict[str, Any]:
     raw_src = spec.get("src_site")
     raw_dst = spec.get("dst_site")
     if cell_id != "cell_ab":
@@ -172,7 +176,7 @@ def resolve_cell_task_targets(cell_id: str, spec: dict[str, Any], *, web_common:
         tier = spec.get("tier", 1) if "tier" in spec else 1
         return {
             "arm_id": str(spec.get("arm_id") or "arm_s"),
-            "src_site": str(raw_src or "pinky"),
+            "src_site": str(raw_src or default_cell_s_src),
             "src_site_id": None,
             "dst_site": str(raw_dst or "belt"),
             "dst_site_id": None,
@@ -183,9 +187,12 @@ def resolve_cell_task_targets(cell_id: str, spec: dict[str, Any], *, web_common:
 
     has_tier = "tier" in spec
     dst = resolve_cell_ab_site(raw_dst, tier=spec.get("tier"), has_tier=has_tier,
-                               web_common=web_common, allow_legacy_passthrough=(raw_dst in ("belt", "pinky")))
+                               web_common=web_common,
+                               allow_legacy_passthrough=(raw_dst == "belt" or raw_dst in legacy_sites),
+                               legacy_sites=legacy_sites)
     src = resolve_cell_ab_site(raw_src if raw_src is not None else "belt", tier=None, has_tier=False,
-                               web_common=web_common, allow_legacy_passthrough=True, allow_generic_pallet=True) if (raw_src is None or raw_src != "") else None
+                               web_common=web_common, allow_legacy_passthrough=True, allow_generic_pallet=True,
+                               legacy_sites=legacy_sites) if (raw_src is None or raw_src != "") else None
     if src is None:
         raise ValueError("UNKNOWN_CELL_SITE")
     if dst["site_id"] is not None and src["site_id"] == dst["site_id"]:
@@ -217,7 +224,10 @@ def resolve_cell_task_targets(cell_id: str, spec: dict[str, Any], *, web_common:
     }
 
 
-def expand_multi_tier_specs(body: dict[str, Any], *, base_id: str, web_common: Path | None = None) -> list[dict[str, Any]]:
+def expand_multi_tier_specs(
+    body: dict[str, Any], *, base_id: str, web_common: Path | None = None,
+    legacy_sites: tuple[str, ...] | frozenset[str] = (),
+) -> list[dict[str, Any]]:
     cell_id = str(body.get("cell_id") or "cell_s")
     if cell_id != "cell_ab" or "tier" in body or body.get("preset"):
         raise ValueError("INVALID_CELL_TASK_INPUT")
@@ -229,7 +239,7 @@ def expand_multi_tier_specs(body: dict[str, Any], *, base_id: str, web_common: P
 
     raw_dst = body.get("dst_site")
     dst_text = "" if raw_dst is None else str(raw_dst).strip()
-    if dst_text in ("belt", "pinky", "temp_plate_a", "temp_plate_b"):
+    if dst_text in ("belt", "temp_plate_a", "temp_plate_b") or dst_text in legacy_sites:
         raise ValueError("UNKNOWN_CELL_SITE")
 
     base_spec = {k: v for k, v in body.items() if k not in ("tiers", "task_id", "depends_on")}
@@ -238,7 +248,7 @@ def expand_multi_tier_specs(body: dict[str, Any], *, base_id: str, web_common: P
     for tier_val in tiers:
         step_id = f"{base_id}-t{tier_val}"
         step_spec = {**base_spec, "task_id": step_id, "tier": tier_val, "depends_on": prev_id}
-        resolve_cell_task_targets("cell_ab", step_spec, web_common=web_common)
+        resolve_cell_task_targets("cell_ab", step_spec, web_common=web_common, legacy_sites=legacy_sites)
         specs.append(step_spec)
         prev_id = step_id
     return specs
