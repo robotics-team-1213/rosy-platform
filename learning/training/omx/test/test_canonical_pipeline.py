@@ -301,7 +301,21 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     import canonical_workers as cw
 
     spec = oc.default_canonical_spec()
+    spec["camera_angle_jitter_deg"] = .3
     calls = {"pose_random_passed": False, "tasks_called": [], "cmds": [], "eval_results": []}
+
+    def camera_sampler(_world, arm_view, bound, namespace):
+        assert arm_view == "a_wrist" and bound == .3
+
+        def set_angles(seed):
+            calls.setdefault("camera_seeds", []).append((namespace, seed))
+            return {role: {"rx": .1, "ry": -.2, "rz": .05} for role in ("top", "side", "wrist")}
+
+        return set_angles
+
+    cameras = types.ModuleType("omx_camera_pose")
+    cameras.camera_angle_sampler = camera_sampler
+    monkeypatch.setitem(sys.modules, "omx_camera_pose", cameras)
 
     class _FakeDs:
         @classmethod
@@ -400,6 +414,10 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     }, out_c)
     assert res_c["episodes"] == 2 and calls["pose_random_passed"] is False and calls["tasks_called"] == ["stack"]
     assert calls["frames"] == 62  # settle frame ignored
+    views = json.loads((out_c / "dataset" / "meta" / "camera_views.json").read_text())
+    assert views["episodes"][0]["episode_index"] == 0
+    assert views["episodes"][0]["scenario_seed"] == 5201
+    assert views["episodes"][0]["angles_deg"]["wrist"]["ry"] == -.2
 
     # train_stage passes admitted --dataset.episodes and writes immutable out/train on resume
     ds_root = tmp_path / "ds"; ds_root.mkdir()
@@ -450,10 +468,14 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
         reset=lambda: None,
         select_action=lambda b: (seen_obs_keys.append(set(b)), SimpleNamespace(cpu=lambda: SimpleNamespace(numpy=lambda: [np.zeros(6, dtype=np.float32)])))[1],
     )
-    prof, _ = cw._eval_sim_profile(fake_policy, lambda b: b, lambda x: x, spec, "arm_a", task_name="ship-h1", episodes=1, delay_frames=0, seed_base=700)
+    camera_cases = []
+    prof, _ = cw.eval_sim_profile(fake_policy, lambda b: b, lambda x: x, spec, "arm_a", task_name="ship-h1", episodes=1,
+                                 delay_frames=0, seed_base=700, camera_cases=camera_cases)
     assert prof["arm_link_contacts"] == 0 and prof["neighbour_disturbed"] == 1
     assert prof["policy_successes"] == 1 and calls["teacher_seeds"] == [5201, 700, 700]
     assert "observation.images.top" in seen_obs_keys[0]
+    assert calls["camera_seeds"] == [(0, 5201), (1, 700)]
+    assert camera_cases[0]["angles_deg"]["top"]["rx"] == .1
 
 
 def test_canonical_watch_and_token_hardening(tmp_path):
