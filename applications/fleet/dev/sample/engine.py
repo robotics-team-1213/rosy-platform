@@ -165,6 +165,10 @@ class SampleEngine:
     def _state(self):
         robot = {'robot_id': 'sample-robot', 'online': True, 'state_age_s': 0, 'error': None,
                  'goal': None, 'queued': None, 'held': None, 'yielding': None,
+                 'power_health_age_s': 0,
+                 'power_health': {'battery': {'evidence': 'fresh', 'percent': 83, 'sample_age_s': 0,
+                                              'stale_after_s': 30, 'level': 'ok',
+                                              'charging_state': 'unconfirmed', 'filtered_voltage': 12.1}},
                  'capabilities': {'navigation': {'goal_navigation': True}, 'swarm': {'lead': True, 'follow': True}},
                  'state': {'robot_id': 'sample-robot', 'mode': 'IDLE', 'map_id': 'sample-site',
                            'safety': {'estop': not self.work.dispatch['dispatch_enabled']},

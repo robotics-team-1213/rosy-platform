@@ -29,6 +29,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const profiles = createRobotProfiles({call, scope, render});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
   function openCard(robotId, opts = {}) {
+    if (!robotId) view.focusAnchorId = null;
     if (typeof robotId === "string" && (robotId.startsWith("arm_") || robotId.startsWith("cell_"))) {
       view.focusAnchorId = robotId === "cell_s" ? "arm_s" : (robotId === "cell_ab" ? "arm_a" : robotId);
       view.focusRobot = null;

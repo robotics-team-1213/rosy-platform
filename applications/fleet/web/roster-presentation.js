@@ -151,9 +151,11 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
       : formation && Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "";
     if (role) addFact(role, "nav");
     const source = motionSource(robot, view);
-    const sourceTag = addFact(source.text, source.cls, { keepPill: source.attention });
-    sourceTag.dataset.motionSource = source.key;
-    sourceTag.title = source.title;
+    if (!(calmOffline && !source.attention && source.key === "unknown")) {
+      const sourceTag = addFact(source.text, source.cls, { keepPill: source.attention });
+      sourceTag.dataset.motionSource = source.key;
+      sourceTag.title = source.title;
+    }
     article.append(facts);
     const lane = state.line_follow;
     const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"

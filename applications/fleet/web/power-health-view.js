@@ -5,8 +5,8 @@ function agoText(sec) {
 }
 
 export function powerHealthView(robot, receivedAtMs, nowMs) {
-  const unknown = { battery: "확인 불가", voltage: null, charging: "확인 불가",
-    problem: "배터리 값 없음 — 배터리 센서 서비스 확인", note: "" };
+  const unknown = { battery: "확인 불가", percent: null, voltage: null, charging: "확인 불가",
+    chargingConfirmed: false, problem: "배터리 값 없음 — 배터리 센서 서비스 확인", note: "" };
   // D-502: the battery latch ends itself on charge; an administrator can still release it earlier.
   const charged = robot.state?.safety?.releases_when_charged === true ? "충전되면 자동으로 풀립니다. 먼저 풀려면 " : "";
   const safetyRelease = robot.online && robot.state?.safety?.estop === true
@@ -39,18 +39,20 @@ export function powerHealthView(robot, receivedAtMs, nowMs) {
     && battery.shown_percent >= 0 && battery.shown_percent <= 100
     ? battery.shown_percent : null;
   const reading = held !== null ? held : battery.percent;
-  const percent = Number.isFinite(reading) && reading >= 0 && reading <= 100
-    ? `${Math.round(reading)}%` : "확인 불가";
+  const numericPercent = Number.isFinite(reading) && reading >= 0 && reading <= 100
+    ? Math.round(reading) : null;
+  const percent = numericPercent !== null ? `${numericPercent}%` : "확인 불가";
   const chargeAge = battery.charging_evidence_age_s;
+  const chargingConfirmed = battery.charging_state === "confirmed"
+    && Number.isFinite(chargeAge) && chargeAge >= 0 && chargeAge + age + elapsed <= 5;
   const chargingLabel = held !== null ? `충전 확인 · ${Math.round(held)}%` : "충전 확인";
   const charging = battery.charging_state !== "confirmed" ? "충전 미확인"
-    : Number.isFinite(chargeAge) && chargeAge >= 0 && chargeAge + age + elapsed <= 5
-      ? chargingLabel : "확인 불가";
+    : chargingConfirmed ? chargingLabel : "확인 불가";
   let problem = "";
   if (battery.level !== "ok") problem = "배터리 경고 — 충전·절전 확인";
   else if (charging !== "충전 확인" && ["DOCKED", "CHARGING"].includes(robot.state?.docking?.state))
     problem = "도킹 후 충전 미확인 — 도크·전압 근거 확인";
   const voltage = Number.isFinite(battery.filtered_voltage) ? battery.filtered_voltage : null;
-  return { battery: percent, voltage, charging, problem, safetyRelease,
+  return { battery: percent, percent: numericPercent, voltage, charging, chargingConfirmed, problem, safetyRelease,
     observedAgeS: Math.round(battery.sample_age_s + age + elapsed) };
 }

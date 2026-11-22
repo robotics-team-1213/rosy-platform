@@ -155,6 +155,11 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   const liveTag = document.createElement("ui-tag");
   liveTag.setAttribute("status", "neutral");
   liveTag.textContent = "확인 중";
+  const sampleBadge = document.createElement("ui-tag");
+  sampleBadge.setAttribute("status", "warn");
+  sampleBadge.className = "cell-stage-sample-tag";
+  sampleBadge.textContent = "샘플 데이터";
+  sampleBadge.hidden = true;
   const streamToggle = document.createElement("ui-button");
   streamToggle.setAttribute("kind", "quiet");
   streamToggle.setAttribute("type", "button");
@@ -163,7 +168,7 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   const workLink = node("a", "셀 작업 화면", "ui-action-link");
   workLink.dataset.kind = "quiet";
   workLink.href = "/console/cell";
-  actions.append(liveTag, streamToggle, workLink);
+  actions.append(sampleBadge, liveTag, streamToggle, workLink);
   head.append(titleWrap, actions);
 
   const camGrid = document.createElement("div");
@@ -249,12 +254,13 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
       }
     }
     for (const s of camGrid.querySelectorAll(".omx-inspector-cam-standby")) {
+      const img = s.previousElementSibling;
       if (!liveOn) {
         s.hidden = false;
         s.textContent = "영상 일시정지";
-      } else if (!s.previousElementSibling?.getAttribute("src")) {
+      } else if (!img?.getAttribute("src")) {
         s.hidden = false;
-        s.textContent = "영상 수신 대기";
+        s.textContent = img?.dataset?.frameStateText || "첫 프레임 대기 — 스트림 연결 확인";
       }
     }
   }
@@ -313,6 +319,7 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
     const parentText = cu?.parent ? `상위 관제: ${cu.parent}` : "독립 셀 관제";
     const revText = cu?.config_revision ? `구성 ${cu.config_revision}` : "";
     const sum = obs?.summary;
+    sampleBadge.hidden = view.fleet?.name !== "샘플 현장";
     const statText = sum ? `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간 · 카메라 ${sum.camsTotal}대` : "관측 대기";
     meta.textContent = [parentText, revText, statText].filter(Boolean).join(" · ");
     if (!sum || !sum.armsTotal) {
