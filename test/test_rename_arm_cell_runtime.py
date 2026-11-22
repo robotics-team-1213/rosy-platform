@@ -27,8 +27,15 @@ case "$1" in
       *config_files*)
         directory="$FIXTURE_DIR/cell-a"
         files="$directory/compose.yaml"
-        if [ "$SCENARIO" = overlay ]; then files="$files,$directory/compose.d1039.yaml"; fi
-        printf '%s|%s|\\n' "$files" "$directory"
+        env=""
+        case "$SCENARIO" in
+          overlay_dry|overlay_apply)
+            files="$files,$directory/compose.d1039.yaml"
+            env="$directory/cell-a.env"
+            ;;
+          overlay) files="$files,$directory/compose.different.yaml" ;;
+        esac
+        printf '%s|%s|%s\\n' "$files" "$directory" "$env"
         ;;
       *.Mounts*)
         if [[ "$4" = cell-a-* ]]; then echo cell-a_cell_a_data; else echo arm-cell_arm_cell_data; fi
@@ -45,7 +52,18 @@ case "$1" in
     esac
     ;;
   compose)
-    project="$3"; directory="$5"; file="$7"; shift 7
+    project="$3"; directory="$5"; shift 5
+    case "$SCENARIO" in
+      overlay_dry|overlay_apply)
+        [ "$1" = --env-file ] && [ "$2" = "$directory/cell-a.env" ]
+        shift 2
+        [ "$1" = -f ] && [ "$2" = "$directory/compose.yaml" ]
+        [ "$3" = -f ] && [ "$4" = "$directory/compose.d1039.yaml" ]
+        file="$2"; shift 4
+        echo "verified overlay and env" >> "$FIXTURE_DIR/actions"
+        ;;
+      *) file="$2"; shift 2 ;;
+    esac
     [ "$file" = "$directory/compose.yaml" ] && [ -f "$file" ]
     case "$1" in
       ps) printf '%s-%s\\n' "$project" "$3" ;;
@@ -80,6 +98,8 @@ printf 'LoadState=loaded\\nActiveState=%s\\nUnitFileState=%s\\n' "$active" "$ins
     ("scenario", "expected_message"),
     [
         ("overlay", "live Compose provenance differs"),
+        ("overlay_dry", "dry-run complete"),
+        ("overlay_apply", "live overlay switch requires an authenticated peer check"),
         ("peer", "peer-cell-a=no-healthcheck"),
         ("updater_active", "legacy updater rosy-cell-autoupdate.service is active"),
         ("updater_enabled", "legacy updater rosy-cell-autoupdate.timer is enabled"),
@@ -98,6 +118,9 @@ def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
     old_dir.mkdir()
     old_yaml = "volumes:\n  cell_a_data: {}\nnetworks:\n  cell_a_backend: {}\n"
     (old_dir / "compose.yaml").write_text(old_yaml)
+    if scenario in {"overlay_dry", "overlay_apply"}:
+        (old_dir / "compose.d1039.yaml").write_text("services: {}\n")
+        (old_dir / "cell-a.env").write_text("ROSY_SITE_FLEET_TAG=fixture\n")
     (tmp_path / "old.yaml").write_text(old_yaml)
     operator = tmp_path / "operator"
     sessions = operator / "rosy-omx"
@@ -134,7 +157,7 @@ def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
         "/var/backups/rosy-rename", f"{tmp_path}/backup"
     )
     result = subprocess.run(
-        ["bash", "-s", "--", "--apply"],
+        ["bash", "-s", "--"] + ([] if scenario == "overlay_dry" else ["--apply"]),
         input=runbook,
         env=dict(os.environ, FIXTURE_DIR=str(tmp_path), OPERATOR_HOME=str(operator),
                  SCENARIO=scenario, PATH=f"{bin_dir}:{os.environ['PATH']}"),
@@ -143,10 +166,14 @@ def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
         timeout=30,
     )
     assert expected_message in result.stdout + result.stderr
-    assert (result.returncode == 0) == (scenario == "success")
+    assert (result.returncode == 0) == (scenario in {"success", "overlay_dry"})
     actions = (tmp_path / "actions").read_text()
-    if scenario in {"overlay", "peer", "updater_active", "updater_enabled", "stale_s", "stale_motor", "job_lock"}:
+    if scenario in {"overlay", "overlay_dry", "overlay_apply", "peer", "updater_active", "updater_enabled",
+                    "stale_s", "stale_motor", "job_lock"}:
         assert " down" not in actions and " up" not in actions
+    if scenario in {"overlay_dry", "overlay_apply"}:
+        assert "verified overlay and env" in actions
+        assert not (tmp_path / "arm-cell").exists()
     if scenario == "down":
         assert "volume create" not in actions
     if scenario == "rollback":

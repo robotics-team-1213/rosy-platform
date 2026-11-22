@@ -28,6 +28,8 @@ OLD_NETWORK_KEY="cell_a_backend"; NEW_NETWORK_KEY="arm_cell_backend"
 # rosy-control-peers. Paths reference /etc/rosy/cell-a/..., /etc/rosy/control-unit/cell-a
 # and /etc/rosy/workcell-observations/... (the latter two stay as they are).
 SERVICES="fleet vision peer-cell-a"
+COMPOSE_NAMES=(compose.yaml)
+COMPOSE_ENV=""
 BACKUP_ROOT="/var/backups/rosy-rename"
 OPERATOR_HOME="${OPERATOR_HOME:-/home/robttt}"  # host operator user; never ~ (script runs as root)
 SESSION_LOCK="${OPERATOR_HOME}/rosy-omx/session.lock"
@@ -94,23 +96,36 @@ PY
 }
 
 compose() {
-  local project="$1" directory="$2"
+  local project="$1" directory="$2" name
+  local -a args=(-p "$project" --project-directory "$directory")
   shift 2
-  docker compose -p "$project" --project-directory "$directory" -f "$directory/compose.yaml" "$@"
+  if [ -n "$COMPOSE_ENV" ]; then args+=(--env-file "$directory/$COMPOSE_ENV"); fi
+  for name in "${COMPOSE_NAMES[@]}"; do args+=(-f "$directory/$name"); done
+  docker compose "${args[@]}" "$@"
 }
 
 verify_old_compose() {
-  local id provenance
+  local id provenance first="" name
   local -a containers
   id="$(docker ps -aq --filter "label=com.docker.compose.project=$OLD_ID")"
   readarray -t containers <<<"$id"
   [ "${#containers[@]}" -eq 3 ] || die "unexpected live Compose service set in $OLD_ID"
   for id in "${containers[@]}"; do
     provenance="$(docker inspect --format '{{index .Config.Labels "com.docker.compose.project.config_files"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}|{{index .Config.Labels "com.docker.compose.project.environment_file"}}' "$id")"
-    case "$provenance" in
-      "$OLD_DIR/compose.yaml|$OLD_DIR|"|"$OLD_DIR/compose.yaml|$OLD_DIR|$OLD_DIR/.env") ;;
-      *) die "live Compose provenance differs from the supported single file and default environment" ;;
-    esac
+    [ -z "$first" ] || [ "$provenance" = "$first" ] || die "live Compose provenance differs across containers"
+    first="$provenance"
+  done
+  case "$first" in
+    "$OLD_DIR/compose.yaml|$OLD_DIR|") ;;
+    "$OLD_DIR/compose.yaml|$OLD_DIR|$OLD_DIR/.env") COMPOSE_ENV=".env" ;;
+    "$OLD_DIR/compose.yaml,$OLD_DIR/compose.d1039.yaml|$OLD_DIR|$OLD_DIR/cell-a.env")
+      COMPOSE_NAMES+=(compose.d1039.yaml)
+      COMPOSE_ENV="cell-a.env"
+      ;;
+    *) die "live Compose provenance differs from the supported layouts" ;;
+  esac
+  for name in "${COMPOSE_NAMES[@]}" ${COMPOSE_ENV:+"$COMPOSE_ENV"}; do
+    [ -f "$OLD_DIR/$name" ] && [ ! -L "$OLD_DIR/$name" ] || die "missing or symlinked Compose input: $name"
   done
   compose "$OLD_ID" "$OLD_DIR" config --quiet
   verify_fleet_mount "$OLD_ID" "$OLD_DIR" "$OLD_VOLUME"
@@ -153,6 +168,9 @@ preconditions() {
   refuse_legacy_updater
   verify_old_compose
   refuse_if_busy
+  if [ "$DRY" = 0 ] && [ "${#COMPOSE_NAMES[@]}" -gt 1 ]; then
+    die "live overlay switch requires an authenticated peer check, a ledger write fence and updater handover"
+  fi
 }
 
 volume_manifest() { docker run --rm -v "$1:/data:ro" alpine sh -ec \
