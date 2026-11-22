@@ -359,3 +359,42 @@ def test_unknown_stop_state_is_not_called_an_engaged_emergency_stop(console_url)
         expect(reason).to_contain_text("비상정지 상태를 확인하고 해제하세요")
         assert not errors
         browser.close()
+
+
+def test_manual_panel_disclosure_keeps_node_across_poll_and_stops_on_collapse_or_close(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    sent: list[dict] = []
+    api = _api()
+    api["/api/fleet/robots/rosy_45/state"]["state"]["mode"] = "MANUAL"
+    api["/api/fleet/state"]["robots"][0]["state"]["mode"] = "MANUAL"
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.route("**/api/fleet/do", lambda route: (sent.append(route.request.post_data_json), route.fulfill(json={"accepted": True})))
+        page.goto(console_url, wait_until="load")
+        select_robot(page, "rosy_45")
+        details = page.locator('#robot-panel details[data-section="manual"]')
+        expect(details).to_have_count(1)
+        assert details.evaluate("node => !node.open")
+        details.locator("summary").click()
+        assert details.evaluate("node => node.open")
+        page.evaluate("() => { window.__manualRoot = document.querySelector('[data-manual-control]'); }")
+        page.wait_for_timeout(1500)
+        assert page.evaluate("() => window.__manualRoot === document.querySelector('[data-manual-control]')")
+        assert details.evaluate("node => node.open")
+        forward = page.locator('[data-manual-direction="forward"]')
+        forward.focus()
+        page.keyboard.down("Space")
+        page.wait_for_function("() => document.querySelectorAll('[data-manual-direction][aria-pressed=\"true\"]').length === 1")
+        sent.clear()
+        details.locator("summary").click()
+        expect.poll(lambda: sent[-1] if sent else None).to_equal({"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0})
+        details.locator("summary").click()
+        page.keyboard.down("Space")
+        page.wait_for_function("() => document.querySelectorAll('[data-manual-direction][aria-pressed=\"true\"]').length === 1")
+        sent.clear()
+        page.locator("#robot-panel .robot-panel-close").click()
+        expect(page.locator("#robot-panel")).to_be_hidden()
+        expect.poll(lambda: sent[-1] if sent else None).to_equal({"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0})
+        assert not errors
+        browser.close()

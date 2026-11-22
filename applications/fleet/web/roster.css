@@ -116,11 +116,7 @@
 @media (width < 64rem) {
   .context-panel > .panel[aria-labelledby="roster-heading"] { display: flex; flex-direction: column; }
   .robot-list-details { order: 1; }
-  .workspace-heading, #robot-workspace-empty, #robot-workspace { order: 2; }
-  /* 전화에서는 선택한 로봇의 상태가 먼저다. 조종은 그 아래, 넓은 단에서만 카드 위다. */
-  .manual-control { order: 3; }
-  .panel:has(#robot-workspace > article) > .robot-list-details { order: 4; }
-  .charge-bays { order: 5; }  /* the OMX cell cards follow the selected robot's status */
+  .charge-bays { order: 2; }
   .roster-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roster-block > h2 { grid-column: 1 / -1; }
   .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 1; grid-row: 2; justify-content: flex-start; }
@@ -132,15 +128,34 @@
   .roster-block > .dispatch-control { grid-row: 3; }
 }
 
-/* D-651: one map workplane and one selected robot workspace. */
-#robot-choice { width: 100%; min-width: 0; grid-column: 1 / -1; }
+/* C18 + C23 + C24 cockpit stage, 1366 stacking, and read-only roster summary. */
+#robot-stage { flex: 1 1 auto; min-height: 0; }
+#robot-stage > .robot-stage-main {
+  container-type: inline-size;
+  container-name: fleet-stage;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+}
+@media (width >= 64rem) {
+  #robot-stage > .robot-panel { position: relative; top: auto; align-self: stretch; max-height: none; }
+  #robot-stage > .robot-dock { align-self: stretch; }
+}
+@container fleet-stage (width < 60rem) {
+  #fleet-main[data-layout="watch"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: "stage" "now";
+  }
+}
+.robot-panel .robot-workspace-card { padding: var(--space-2); }
+.robot-panel-camera-box { display: grid; gap: var(--space-2); min-width: 0; }
 .robot-summary { padding: var(--space-2) var(--space-3); }
 .robot-summary .robot-line { width: 100%; }
 .robot-summary-evidence { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--text-label); overflow-wrap: anywhere; }
-.workspace-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border-default); }
-.workspace-heading h3, .workspace-heading .hint { margin: 0; font-size: var(--text-body); }
-#robot-workspace { min-width: 0; margin-top: var(--space-3); }
-.manual-control { margin-top: var(--space-3); }
+#robot-workspace { min-width: 0; }
+.manual-control { margin-top: var(--space-1); }
 .manual-control [data-manual-direction] { touch-action: none; }
 .manual-control [data-manual-pose] { margin: var(--space-2) 0; font-size: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
 /* 방향 넷은 언제나 2×2다. 폭에 맡기면 1366에서 3+1로 갈린다. */
@@ -158,85 +173,20 @@
 .robot-line:focus-visible, .robot-fold:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
-.quick-control-panel {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  contain: inline-size;
-  overflow: hidden;
-  margin: var(--space-2) 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-button);
-  background: var(--surface-raised);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
 .robot-head b {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
 }
-.quick-header-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  min-width: 0;
-}
-.quick-title {
-  font-size: var(--text-label);
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.quick-chip-row {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-1);
-  align-items: center;
-}
-@media (width < 30rem) {
-  .quick-chip-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
-
-/* Bounded 2x2 Telemetry & Sensor Bar-Graph Grid (CSP-Safe SVG Gauges) */
-.telemetry-gauge-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-  min-width: 0;
-  max-width: 100%;
-}
-@media (width < 30rem) {
-  .telemetry-gauge-grid { grid-template-columns: minmax(0, 1fr); }
-}
-.gauge-card {
-  box-sizing: border-box;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border-default);
-  background: var(--surface-flat);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.gauge-card-top, .gauge-meta-line {
+.gauge-meta-line {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-1);
   min-width: 0;
 }
-.gauge-card-title, .gauge-meta-line span {
+.gauge-meta-line span {
   font-size: var(--text-micro);
   color: var(--text-secondary);
   overflow: hidden;
@@ -244,22 +194,11 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.gauge-card-val, .gauge-meta-line strong {
+.gauge-meta-line strong {
   font-family: var(--mono);
   font-size: var(--text-micro);
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.gauge-card-sub {
-  display: block;
-  font-family: var(--mono);
-  font-size: var(--text-micro);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -279,76 +218,7 @@
 .gauge-fill.warn { fill: var(--status-warn); }
 .gauge-fill.crit { fill: var(--status-crit); }
 
-.sensor-pill-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin-top: var(--space-1);
-}
-.sensor-pill {
-  font-family: var(--mono);
-  font-size: var(--text-micro);
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border-default);
-  background: var(--surface-canvas);
-  color: var(--text-primary);
-  white-space: nowrap;
-}
-.sensor-pill.warn {
-  border-color: var(--status-warn-a45);
-  background: var(--surface-raised);
-  color: var(--status-warn);
-}
-
-/* OMX-AI Workcell Units & Fleet Coordination Cards */
-.omx-fleet-section {
-  border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.omx-fleet-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-2);
-  min-width: 0;
-}
-.omx-cell-card {
-  box-sizing: border-box;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border-default);
-  background: var(--surface-flat);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.omx-cell-card.selected {
-  border-color: var(--series-primary);
-  background: var(--surface-raised);
-}
-.omx-cell-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.omx-cell-title {
-  font-family: var(--mono);
-  font-size: var(--text-label);
-  color: var(--series-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.omx-bars-wrap, .hover-bars {
+.hover-bars {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -360,44 +230,6 @@
   gap: var(--space-1);
   min-width: 0;
 }
-.omx-cell-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-}
-.omx-summary-btns {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex-shrink: 0;
-}
-
-.tracker-box {
-  border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-  overflow: hidden;
-}
-.tracker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
-.tracker-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); min-width: 0; }
-.roi-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; overflow: hidden; }
-.anchor-roi-img { width: 112px; height: 112px; flex-shrink: 0; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: var(--surface-recessed); }
-.roi-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); overflow: hidden; }
-.roi-status-text, .roi-sub-text {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: var(--text-micro);
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.omx-cell-summary { color: var(--series-primary); white-space: nowrap; }
-
 /* 지도 오버레이 표시 켜기·끄기 툴바 */
 .map-overlay-toggles {
   display: flex;

@@ -112,14 +112,6 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const line = node("div", "", "robot-line");
     line.append(node("b", name, "ui-disclosure-name"));
     if (name !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
-    const choose = node("ui-button", view.focusRobot === robot.robot_id ? "선택됨" : "선택");
-    choose.type = "button";
-    choose.setAttribute("kind", "toggle");
-    choose.setAttribute("aria-pressed", String(view.focusRobot === robot.robot_id));
-    choose.setAttribute("aria-label", `${name} 선택`);
-    choose.dataset.selectRobotId = robot.robot_id;
-    choose.addEventListener("click", scope.guard(() => { openCard(robot.robot_id); render(); }));
-    line.append(choose);
     article.append(line);
     const state = view.stateUnavailable ? {} : robot.state || {};
     const link = linkTag(robot.link);

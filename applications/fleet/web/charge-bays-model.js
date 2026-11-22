@@ -13,12 +13,6 @@ const CELL_BUTTONS = {
     {label: "S3→S5 연속 실행", preset: "full_s3_to_s5_pipeline"},
   ],
 };
-const PINKY_BUTTONS = [
-  {label: "S3 도킹+하역", pinkyAction: "dock_and_unload_s3"},
-  {label: "S3 도킹", pinkyAction: "dock_s3"},
-  {label: "충전소(C1)", pinkyAction: "charge_c1"},
-  {label: "출구(S1) 출발", pinkyAction: "depart_s1"},
-];
 
 const BAY_STATE = Object.freeze({
   free: ["비어 있음", "neutral"], planned: ["배정됨", "warn"],
@@ -157,45 +151,12 @@ export function chargeBayRows(plan) {
         buttons: CELL_BUTTONS[id], quickControls,
       };
     }),
-    ...(plan?.actions?.length ? plan.actions.map((action) => action.robot_id) : ["rosy_42", "rosy_45", "rosy_46"])
-      .filter((id, index, ids) => id && ids.indexOf(id) === index)
-      .map((robot_id) => {
-        const action = actions.find((row) => row.robot === robot_id);
-        const rawAction = plan?.actions?.find((entry) => entry.robot_id === robot_id);
-        const dec = plan?.decisions?.[robot_id] || null;
-        const anyEstop = Boolean(plan?.human_safety?.active_estop);
-        const cableTangled = plan?.cable_tangled !== false;
-        return {kind: "pinky", id: robot_id, robot_id,
-          title: `Pinky AMR · ${robot_id}`,
-          // 도킹은 위에서 본다: 천장 Cam ROI 확대가 주 뷰, S3 상단이 보조(D-136 영상은 Vision 임대로만).
-          cameraViews: [
-            {id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: robot_id},
-            {id: "arm_s_top", label: "S3 상단", source: "arm_s_top"},
-          ],
-          status: anyEstop || rawAction?.blocked_by_cell || rawAction?.action === "wait" ? "warn" : "neutral",
-          text: action?.text || "작업 정보 없음",
-          healthText: dec
-            ? `Decision: ${dec.choice} (${dec.reason})`
-            : (cableTangled ? "Decision: back_and_retry (선 꼬임 보호 · 최대 1.5cm · 0.02m/s)" : "Decision: hold_line (정상 주행 속도 모드)"),
-          buttons: PINKY_BUTTONS,
-          quickControls: [
-            {label: "상황 판단·자동 실행 (Decision)", decisionSubject: robot_id},
-            {label: "임시칸 이동(C2·YAML)", zoneId: "STG_C2"},
-            {label: "임시칸 이동(S3·YAML)", zoneId: "STG_S3_WAIT"},
-            {label: "반출대 이동(S1·YAML)", zoneId: "EXP_S1"},
-            {label: cableTangled ? "선 꼬임 보호 ON · 해제" : "선 꼬임 보호 OFF · 켜기", cableGuardToggle: true},
-            {label: "미세 전진 1.5cm", pinkyAction: "micro_forward_2cm"},
-            {label: "미세 후진 1.5cm", pinkyAction: "micro_reverse_2cm"},
-            {label: "즉시 정지", pinkyAction: "stop_now"},
-            {
-              label: anyEstop ? "사람 이탈 · 자동 재개" : "사람 감지 비상정지",
-              humanSafetyCell: "all",
-              humanDetected: !anyEstop,
-            },
-          ]};
-      }),
   ];
-  return { bays, actions, cells, summary, cards, armLiveStates, stationCameraLinks, stationZones };
+  const cellOccupants = {
+    cell_s: plan?.omx_cells?.cell_s?.gate?.robot_id || null,
+    cell_ab: plan?.omx_cells?.cell_ab?.gate?.robot_id || null,
+  };
+  return { bays, actions, cells, summary, cards, armLiveStates, stationCameraLinks, stationZones, cellOccupants };
 }
 
 export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText = "folded: true (홈 대기)") {
@@ -213,8 +174,9 @@ export function inspectorTargetsFromRows(rows) {
   const cards = rows?.cards || [];
   const s3 = cards.find((c) => c.id === "cell_s") || {};
   const s5 = cards.find((c) => c.id === "cell_ab") || {};
-  const pinkyCards = cards.filter((c) => c.kind === "pinky");
   const armLive = rows?.armLiveStates || {};
+  const cellSOccupant = rows?.cellOccupants?.cell_s || null;
+  const cellAbOccupant = rows?.cellOccupants?.cell_ab || null;
   return [
     {
       id: "arm_s",
@@ -227,12 +189,12 @@ export function inspectorTargetsFromRows(rows) {
       healthText: s3.healthText || "folded: true (홈 대기)",
       jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || "folded: true (홈 대기)"),
       task: s3.task || null,
-      robot_id: "rosy_46",
+      robot_id: cellSOccupant,
       dualPair: ["arm_s_top", "arm_s_wrist"],
       cameraViews: [
         {id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist"},
         {id: "arm_s_top", label: "S3 상단", source: "arm_s_top"},
-        {id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: "rosy_46"},
+        ...(cellSOccupant ? [{id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: cellSOccupant}] : []),
       ],
       buttons: s3.buttons || CELL_BUTTONS.cell_s,
       quickControls: (s3.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_s"} : c),
@@ -248,7 +210,7 @@ export function inspectorTargetsFromRows(rows) {
       healthText: s5.healthText || "folded: true (홈 대기)",
       jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || "folded: true (홈 대기)"),
       task: s5.task || null,
-      robot_id: "rosy_46",
+      robot_id: cellAbOccupant,
       dualPair: ["top", "arm_a_wrist"],
       cameraViews: [
         {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
@@ -270,7 +232,7 @@ export function inspectorTargetsFromRows(rows) {
       healthText: s5.healthText || "folded: true (홈 대기)",
       jointLiveText: formatArmLiveJointText("arm_b", armLive, s5.healthText || "folded: true (홈 대기)"),
       task: s5.task || null,
-      robot_id: "rosy_46",
+      robot_id: cellAbOccupant,
       dualPair: ["top", "arm_b_wrist"],
       cameraViews: [
         {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
@@ -283,10 +245,5 @@ export function inspectorTargetsFromRows(rows) {
     },
     ...(s3.id ? [{...s3, shortTab: "📦 cell_s", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText)}] : []),
     ...(s5.id ? [{...s5, shortTab: "📦 cell_ab", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText)}] : []),
-    ...pinkyCards.map((p) => ({
-      ...p,
-      shortTab: `🤖 ${p.robot_id}`,
-      dualPair: ["pinky_dock", "arm_s_top"],
-    })),
   ];
 }
