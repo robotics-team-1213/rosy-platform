@@ -108,11 +108,13 @@ class DriveCancelFence:
             # (whose nav.canceled may arrive before this goal reply) already matches.
             self._tag(seen, task["task_id"])
         goal = task["request"]["goal"]
+        stop_binding = task["request"].get("stop_binding")
         try:
             receipt = await console.goal(
                 task["robot_id"], goal["x"], goal["y"], goal["yaw"],
                 task_id=task["task_id"], attempt_id=task["attempt_id"],
                 attempt_seq=task["attempt_seq"],
+                **({"stop_binding": stop_binding} if stop_binding is not None else {}),
             )
         except (Exception, asyncio.CancelledError) as exc:
             # A failed or cancelled call may still have reached CORE. Re-cancel, re-raise:

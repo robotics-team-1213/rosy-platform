@@ -4,16 +4,17 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from fleet.server.ledger.berth_parking_routes import (
+from fleet.server.berth_parking_routes import (
     BAY_DOCK_SPECS,
     centerline_axial_gaps,
     infer_bay_id,
     install_berth_parking_routes,
 )
-from fleet.server.ledger.berth_parking_scenario import dispatch_nav_target
+from fleet.server.berth_parking_scenario import dispatch_nav_target
 from fleet.server.site_auth import SitePrincipal
 
 
@@ -145,7 +146,7 @@ def test_road_nav2_refuses_a_robot_on_a_running_trip():
 
 def test_road_nav2_route_needs_a_named_operator():
     import inspect
-    from fleet.server.ledger import berth_parking_routes
+    from fleet.server import berth_parking_routes
     assert "Depends(require_named_operator)" in inspect.getsource(berth_parking_routes.install_berth_parking_routes)
 
 
@@ -159,30 +160,65 @@ def test_berth_park_failure_is_an_error_never_a_reported_dispatch():
     assert res.status_code >= 400 and '"dispatched":true' not in res.text.replace(" ", "")
 
 
-def test_queued_road_nav2_is_reported_queued_not_dispatched():
-    from fleet.server.ledger import berth_parking_routes as routes
+@pytest.mark.parametrize("named_stop, restricted, dry_run", [
+    (False, None, False), (True, None, False), (True, "charge", False),
+    (True, "lane", False), (True, "lane", True), (True, "lane", "true"),
+    (True, "precision", False), (True, "precision", True),
+])
+def test_queued_road_nav2_is_reported_queued_not_dispatched(named_stop, restricted, dry_run):
+    from fleet.server import berth_parking_routes as routes
     app = FastAPI()
+    if restricted == "charge":
+        app.state.charge_runtime = SimpleNamespace(robot_id="rosy_46")
+    submissions = []
+    proof = {"site_map_id": "cell", "site_map_version": 261,
+             "binding_id": "fit-1", "map_grid_id": "grid-A"}
 
     class Tasks:
         async def submit_navigation(self, **kwargs):
+            submissions.append(kwargs)
             return {"status": "QUEUED", "task_id": "t1"}
 
     async def plan(*args):
-        return {"target_nav2": {"x": 0.1, "y": 0.0, "yaw": 0.0}, "waypoints_site": []}
+        result = {"target_nav2": {"x": 0.1, "y": 0.0, "yaw": 0.0}, "waypoints_site": []}
+        if named_stop:
+            result["stop_binding"] = proof
+            result["named_stop_nav2_allowed"] = restricted != "lane"
+            result["named_stop_precision_required"] = restricted == "precision"
+        return result
 
     named = lambda: SitePrincipal(principal_id="op-named", role="operator")  # noqa: E731
     routes.install_berth_parking_routes(app, console=SimpleNamespace(trip_refusal=lambda ids: None), task_service=Tasks(),
                                         read_guard=[], operator_guard=[], require_operator=named,
                                         require_named_operator=named, compute_road_plan=plan,
                                         dispatch_nav=dispatch_nav_target)
-    res = TestClient(app).post("/api/fleet/robots/rosy_46/road-nav2", json={"x": 0.0, "y": 0.0},
+    target = {"place_id": "S3"} if named_stop else {"x": 0.0, "y": 0.0}
+    if dry_run:
+        target["dry_run"] = dry_run
+    res = TestClient(app).post("/api/fleet/robots/rosy_46/road-nav2", json=target,
                                headers={"Idempotency-Key": "k1"})
     body = res.json()
-    assert res.status_code == 200 and body["queued"] is True and body["dispatched"] is False
+    if type(dry_run) is not bool:
+        assert res.status_code == 422 and body["detail"]["code"] == "INVALID_DRY_RUN"
+        assert submissions == []
+    elif dry_run:
+        assert res.status_code == 200 and body["dry_run"] and not body["dispatched"]
+        assert submissions == []
+    elif restricted:
+        assert res.status_code == 409
+        assert body["detail"]["code"] == {
+            "charge": "NAMED_STOP_CHARGE_HANDOVER_UNAVAILABLE", "lane": "NAMED_STOP_REQUIRES_LANE_TRIP",
+            "precision": "PRECISION_STOP_REQUIRES_TRIP",
+        }[restricted]
+        assert submissions == []
+    else:
+        assert res.status_code == 200 and body["queued"] is True and body["dispatched"] is False
+        assert len(submissions) == 1
+        assert submissions[0].get("stop_binding") == (proof if named_stop else None)
 
 
 def test_only_a_measured_stop_face_counts_as_a_berth_park():
-    from fleet.server.ledger.berth_parking_helpers import BERTH_SUCCESS_REASONS
+    from fleet.server.berth_parking_helpers import BERTH_SUCCESS_REASONS
     assert "dock_stop_face_reached" in BERTH_SUCCESS_REASONS
     assert not {"completed", "reverse_timeout", "emergency_latched", "emergency_during_forward"} & BERTH_SUCCESS_REASONS
 

@@ -26,7 +26,9 @@ async def execute_core_line_dock(console: Any, robot_id: str, spec: Mapping[str,
         return None
 
     async def call(method: str, path: str, body: Optional[dict] = None) -> tuple[int, dict]:
-        resp = await http.request(method, path, json=body, headers=dict(headers()))
+        request_core = getattr(client, "_request", None)
+        resp = await (request_core(method, path, body) if request_core is not None else
+                      http.request(method, path, json=body, headers=dict(headers())))
         try:
             data = resp.json() if resp.content else {}
         except ValueError:

@@ -366,8 +366,17 @@ class SiteMapStore:
             self._db.execute("INSERT OR REPLACE INTO site_trips VALUES (?, ?, ?, ?, ?)",
                              (trip["trip_id"], trip["robot_id"], json.dumps(trip, sort_keys=True),
                               trip["state"], self.clock()))
-            self._db.execute("DELETE FROM site_trips WHERE trip_id NOT IN "  # the D-490 plan bound
+            self._db.execute("DELETE FROM site_trips WHERE "
+                             "json_extract(body, '$.detail.named_stop_handoff_pending') IS NULL "
+                             "AND trip_id NOT IN "  # the D-490 plan bound
                              "(SELECT trip_id FROM site_trips ORDER BY rowid DESC LIMIT ?)", (PLAN_KEEP,))
+
+    def pending_handoff_stops(self) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT body FROM site_trips WHERE json_type(body, '$.detail.named_stop_handoff_pending') = 'object'"
+            ).fetchall()
+        return [json.loads(row[0]) for row in rows]
 
     def trip(self, trip_id: str) -> Optional[dict]:
         with self._lock:

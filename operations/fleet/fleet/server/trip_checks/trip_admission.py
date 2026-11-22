@@ -16,6 +16,7 @@ from core_common.protocol.line_authority import MAX_TTL_S as AUTHORITY_MAX_TTL_S
 from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
 from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN, TRACK
+from fleet.server.named_stop_map_pose import precision_map_pose
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
 from fleet.server.trip_start_checks import (
@@ -159,8 +160,9 @@ class TripAdmission:
         """The job ended (done, operator cancel): its lease goes (DELETE). Its step trip ends first."""
         job = self.lease.jobs.get(robot_id)
         if job is not None and job.view["job_id"] == job_id:
-            if self.robot_busy(robot_id):  # the step trip shares the lease: never leave it driving lease-less
-                raise TripError(409, "TRIP_BUSY", {"trip_id": self._live[robot_id].view["trip_id"]})
+            live = self._live.get(robot_id)
+            if live is not None and live.open:  # an open step trip shares the lease
+                raise TripError(409, "TRIP_BUSY", {"trip_id": live.view["trip_id"]})
             del self.lease.jobs[robot_id]
             self.lease.close(job)
 
@@ -237,7 +239,7 @@ class TripAdmission:
         self._apply_replan(live, hold, principal_id)
 
     async def _pose_checks(self, robot_id: str, graph, segments: list, *, start: bool = False, start_at=None,
-                           caps=None, nav2: bool = False):
+                           caps=None, nav2: bool = False, precision_scope=None):
         """D-494 start checks on line following and the map pose: ``(pose, enable)`` or ``TripError``.
         D-601 A: at a start (not a lap) a robot with line following OFF passes, ``enable`` True: the
         trip turns the camera line on itself once it is open. D-601 D: a start also checks alignment."""
@@ -248,7 +250,8 @@ class TripAdmission:
             enable = start and mode == "OFF" and graph.arcs[arc_id(segments[0])].drive_mode == "lane"
             if mode not in LINE_MODES and not enable:
                 raise TripError(422, "TRIP_LINE_FOLLOW_NOT_ACTIVE", {"mode": mode})
-        pose = await self.map_pose(robot_id)
+        pose = (await precision_map_pose(self, robot_id, precision_scope) if precision_scope
+                else await self.map_pose(robot_id))
         anchor_age = getattr(pose, "anchor_age_s", None)
         if pose is None or pose.state != LOCALIZED or anchor_age is None or (
                 anchor_age > self.config.start_anchor_age_s and not self._still_on_pin(pose)):
@@ -299,7 +302,8 @@ class TripAdmission:
         return True
 
     async def _start_pose(self, robot_id: str, graph, segments: list, operator_name: str, *,
-                          start_at=None, caps=None, start_token=None, start_guard=None, nav2: bool = False):
+                          start_at=None, caps=None, start_token=None, start_guard=None,
+                          nav2: bool = False, precision_scope=None):
         """``_pose_checks(start=True)`` plus D-603: with ``fleet.trip.auto_align`` a TRIP_START_HEADING_MISMATCH
         (on the lane: off-lane is judged first) asks CORE to turn by the error, then checks again from a
         fresh sighting. ``(pose, enable, turns)``; a refused or aborted turn refuses the start."""
@@ -308,12 +312,13 @@ class TripAdmission:
         for attempt in range(ALIGN_TURNS + 1):
             try:
                 result = await self._pose_checks(robot_id, graph, segments, start=True,
-                                                 start_at=start_at, caps=caps, nav2=nav2)
+                                                 start_at=start_at, caps=caps, nav2=nav2,
+                                                 precision_scope=precision_scope)
                 await self._guard_start(robot_id, start_token, start_guard)
                 return (*result, turns)
             except TripError as exc:
                 err = exc.detail.get("heading_err_deg") if exc.code == "TRIP_START_HEADING_MISMATCH" else None
-                if not self.config.auto_align or err is None or attempt == ALIGN_TURNS:
+                if precision_scope or not self.config.auto_align or err is None or attempt == ALIGN_TURNS:
                     raise
             await self._guard_start(robot_id, start_token, start_guard)
             turns.append(await self._align(robot_id, round(-err, 1), operator_name))

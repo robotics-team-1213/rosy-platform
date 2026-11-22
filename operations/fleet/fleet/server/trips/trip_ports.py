@@ -85,13 +85,19 @@ class HttpLaneJunction:
             advance_m=advance_m, expect=expect)
 
     async def junction_state(self, robot_id: str, after: int = 0) -> Optional[dict]:
-        line = (await self._read(robot_id, after=after)).get("line_follow") or {}  # D-760 8 review: read > after
+        state = await self._read(robot_id, after=after)  # D-760 8 review: read > after
+        line = state.get("line_follow") or {}
         junction = line.get("junction")
         # D-507 3: the line-follow reason beside it, shown when the trip stops at an unexpected junction.
         # D-517 M3: a D-407 stuck or a RECOVERING state may reverse; no follower follows it then.
         # D-520 2: ``arc`` is CORE's ``line_follow.arc`` record (arc_seq, from_place_id, state, ...)
         recovering = line.get("state") == "RECOVERING" or line.get("stuck") is not None
+        held = (line.get("state") == "HOLD" and line.get("reason") == "junction_stop"
+                and line.get("linear") == 0.0 and line.get("angular") == 0.0
+                and (state.get("safety") or {}).get("estop") is False)
         return ({**junction, "line_reason": line.get("reason"), "line_recovering": recovering,
+                 **({"line_stop_held": True,
+                     "active_trip_lease_id": (state.get("trip_lease") or {}).get("lease_id")} if held else {}),
                  "arc": line.get("arc"), "regulation_wait": line.get("regulation_wait")}  # D-763 8 (API v1.227)
                 if isinstance(junction, dict) else None)
 
@@ -156,6 +162,10 @@ class TripConfig:
     advance_eps_m: float = 0.02
     #: A free goal is sent again only when its point moved this much.
     goal_resend_m: float = 0.05
+    #: 2026-11-21 (user): at a named precision stop Fleet re-parks by itself, this many times at most, when the
+    #: verdict is REPARK and the move is inside CORE's fine re-park caps; 0 leaves every correction to an operator.
+    #: CORE's named-stop custody takes one re-park per approach, so a larger value changes nothing today.
+    named_stop_auto_corrections: int = 1
     #: D-495 1: CORE turns at most this much at a junction.
     max_turn_deg: float = 150.0
     #: CORE ``waiting`` (at a junction without an instruction) this long stops the trip.
@@ -200,6 +210,10 @@ class TripConfig:
             if item.name in ("lane_camera_check", "auto_align", "map_binding_required"):
                 if not isinstance(value, bool):
                     raise ValueError(f"fleet.trip.{item.name} must be true or false")
+                continue
+            if item.name == "named_stop_auto_corrections":  # 0 leaves every correction to an operator
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise ValueError("fleet.trip.named_stop_auto_corrections must be a whole number, 0 or more")
                 continue
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
                     math.isfinite(value) and value > 0):
