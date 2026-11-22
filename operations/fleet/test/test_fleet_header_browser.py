@@ -486,8 +486,12 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
                 if shots:
                     page.screenshot(path=str(Path(shots) / f"{name}-{width}x{height}.png"))
             page.locator("#fleet-inbox").click()
-            expect(page.locator("#context-inbox")).to_be_visible()
-            expect(page.locator("#context-inbox-tab")).to_have_attribute("aria-selected", "true")
+            expect(page.locator("#queues-panel")).to_be_visible()
+            expect(page.locator("#queues-panel")).to_have_attribute("data-open", "true")
+            expect(page.locator("#fleet-inbox")).to_have_attribute("aria-expanded", "true")
+            page.keyboard.press("Escape")
+            expect(page.locator("#queues-panel")).to_be_hidden()
+            expect(page.locator("#fleet-inbox")).to_be_focused()
             assert not errors, (name, errors)
             page.close()
     for width, _height in SIZES:

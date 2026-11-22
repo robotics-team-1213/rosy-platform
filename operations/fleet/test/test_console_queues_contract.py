@@ -42,11 +42,10 @@ def test_degraded_capabilities_feed_the_warning_queue():
 
 
 def test_empty_queues_disappear_by_attribute_not_style():
-    """빈 큐는 hidden 속성으로 사라진다 — CSP style-src 'self' 는 style.display 를
-    무시하므로 실서버에서 토글이 죽는다(D-201 회차 계측)."""
+    """빈 큐는 hidden 속성으로 사라지고 알림 서랍 열림은 data-open으로 제어한다 — CSP style-src 'self' 회귀 방지."""
     source = console_source()
-    assert ".queues-panel\").hidden" in source
-    assert "queues-panel\").style.display" not in source
+    assert ".queues-container" in source and "queues-empty" in source
+    assert 'queues-panel").style.display' not in source
     assert "parentElement.hidden" in source
 
 
@@ -56,13 +55,15 @@ def test_the_queues_panel_heads_the_rail():
     styles = (WEB / "shared" / "styles.css").read_text(encoding="utf-8")
     shell = CONSOLE.read_text(encoding="utf-8")
     assert "main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);" in styles
-    # D-978: 두 칸은 공용 틀 watch(2:1)가 자리 이름으로 놓는다 — 지도는 stage, 큐 열은 now.
+    assert "#queues-panel" in styles and '#queues-panel:not([data-open="true"]) { display: none; }' in styles
+    # D-978: 두 칸은 공용 틀 watch(2:1)가 자리 이름으로 놓는다 — 지도는 stage, 맥락 열은 now.
     page = (WEB / "index.html").read_text(encoding="utf-8")
     assert '<main id="fleet-main" class="ui-stage-grid" data-layout="watch"' in page
     assert '<div class="console-primary" data-pane="stage">' in page
     assert '<aside class="console-secondary" data-pane="now"' in page
-    assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
-    assert "const MAP_PANEL = 2;" in shell  # D-892: queue, status summary, map.
+    assert '<section id="queues-panel" class="panel queues-panel" data-open="false"' in page
+    assert "const layoutPanels = [document.querySelector('.console-context')," in shell
+    assert "const MAP_PANEL = 1;" in shell
 
 
 def test_queue_and_roster_attention_share_one_rule():

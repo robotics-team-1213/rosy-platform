@@ -189,7 +189,11 @@ def test_records_area_raises_incidents_into_the_body_and_the_judgment_to_the_sid
             expect(panel).to_be_visible()
             expect(side).to_be_visible()
             expect(side.locator(".hint")).to_be_visible()
-            expect(page.locator(".queues-panel")).to_be_visible()
+            expect(page.locator("#queues-panel")).to_be_hidden()
+            expect(page.locator("#header-unread")).to_be_visible()
+            page.locator("#fleet-inbox").click()
+            expect(page.locator("#queues-panel")).to_be_visible()
+            page.locator("#queues-close").click()
             expect(page.locator('[aria-labelledby="map-heading"]')).to_be_hidden()
             expect(page.locator("#incident-traffic-list")).to_be_hidden()
             assert panel.evaluate("node => !node.closest('[role=tabpanel]')")
@@ -410,9 +414,6 @@ def test_context_tabs_keep_map_and_current_intervention_available(site, theme):
             _shot(page, f"context-status-{theme}-{width}x{height}.png")
             status.focus()
             status.press("ArrowRight")
-            expect(page.get_by_role("tab", name="알림", exact=True)).to_be_focused()
-            expect(page.locator("#context-inbox")).to_be_visible()
-            page.get_by_role("tab", name="알림", exact=True).press("ArrowRight")
             expect(page.get_by_role("tab", name="기록·근거")).to_be_focused()
             expect(page.locator("#context-evidence")).to_be_visible()
             expect(page.locator("#context-status")).not_to_be_visible()
@@ -455,6 +456,7 @@ def test_current_evidence_is_folded_and_keeps_keyboard_context_across_poll(site,
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts)
         page.set_viewport_size({"width": width, "height": 844 if width < 1000 else 768})
+        page.locator("#fleet-inbox").click()
         item = page.locator('.stuck-item[data-robot-id="rosy_01"]')
         expect(item).to_be_visible()
         assert "wire_marker" not in item.inner_text()
@@ -499,10 +501,18 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         entry.click()
         assert entry.get_attribute("aria-label") == unread
         button = page.locator("#fleet-inbox")
-        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
+        expect(page.locator("#header-unread")).to_have_text("2")
+        expect(button).to_have_attribute("data-crit", "true")
+        assert "최우선 1건" in button.get_attribute("aria-label")
         button.click()
-        expect(page.locator("#context-inbox")).to_be_visible()
-        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        expect(page.locator("#queues-panel")).to_be_visible()
+        expect(entry).to_have_attribute("aria-expanded", "false")  # mutual exclusion closes topbar menu
+        expect(page.locator("#header-unread")).to_have_text("2")  # opening never clears active alerts
+        assert page.locator("#critical-list").inner_text()
+        page.locator("#queues-close").click()
+        expect(page.locator("#queues-panel")).to_be_hidden()
+
+        page.get_by_role("tab", name="기록·근거").click()
         messages = page.locator("#inbox-messages")
         expect(messages).to_contain_text("로봇 문의 (CORE)")
         expect(messages).to_contain_text("AI 제안 대기")
@@ -515,15 +525,13 @@ def test_inbox_marks_read_without_resolving_and_shows_message_stages(site):
         expect(messages.locator("pre")).to_contain_text("situation-inquiry-v1")
         page.get_by_role("tab", name="로봇·작업").click()
         page.clock.run_for(6000)
-        expect(button).to_have_attribute("aria-label", "알림 창 · 미확인 메시지 0개")
+        expect(page.locator("#header-unread")).to_have_text("2")
         stuck["fleet_answer"] = {"decision": "RESUME", "tier": "ai", "accepted": False, "code": "EMERGENCY_ACTIVE"}
         page.clock.run_for(3000)
-        assert "미확인 메시지 0개" not in button.get_attribute("aria-label")
-        button.click()
+        page.get_by_role("tab", name="기록·근거").click()
         expect(messages).to_contain_text("CORE 거절 (EMERGENCY_ACTIVE)")
         assert messages.locator("li > details").get_attribute("open") is not None
         assert messages.locator("details details").get_attribute("open") is not None
-        assert page.locator("#critical-list").inner_text()
         snapshot = api.pop("/api/fleet/state")
         page.clock.run_for(4000)
         expect(messages).to_contain_text("상태 갱신 실패")
@@ -607,13 +615,13 @@ def _shot(page, name, *, full_page=False):
 
 
 def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scroll(site):
-    """D-540 7: at 1920, 1440 and 1024 the open stuck row's five answers are on screen with the rail at
-    scroll 0, the document does not scroll and the queue and roster have no scroll of their own. 390 is one
-    column: the document scrolls, nothing inside it does. Queue text is never cut (wrapping is fine)."""
+    """D-540 7 / C25: opening the bell drawer keeps all five decision buttons on screen at desktop widths,
+    with no document horizontal overflow or nested roster scroll. Queue text is never cut."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, [])
+        page.locator("#fleet-inbox").click()
         for width, height in [*WIDE, (390, 844)]:
             page.set_viewport_size({"width": width, "height": height})
             page.clock.run_for(1500)
@@ -626,9 +634,9 @@ def test_decision_buttons_show_at_rail_scroll_zero_and_the_rail_is_the_one_scrol
                 for decision in DECISIONS:
                     box = slot.locator(f'ui-button[data-decision="{decision}"]').bounding_box()
                     assert box and box["y"] >= 0 and box["y"] + box["height"] <= height, (width, decision, box)
-                assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary"}, (width, page.evaluate(SCROLLERS))
+                assert set(page.evaluate(SCROLLERS)) <= {"console-primary", "console-secondary", "queues-panel"}, (width, page.evaluate(SCROLLERS))
             else:
-                assert page.evaluate(SCROLLERS) == [], page.evaluate(SCROLLERS)
+                assert set(page.evaluate(SCROLLERS)) <= {"queues-panel"}, page.evaluate(SCROLLERS)
             assert page.evaluate("""() => [...document.querySelectorAll('.issue-list li, .queue-row')]
               .every((node) => node.scrollWidth <= node.clientWidth + 1)"""), width
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), width
@@ -650,6 +658,7 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
                "/api/fleet/robots/rosy_01/line-stuck/decision": (200, {"result": {"outcome": "hold"}})}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, API, posts, answers)
+        page.locator("#fleet-inbox").click()
         stuck_row = page.locator('li[data-key="rosy_01|stuck"] > .queue-row')
         replan_row = page.locator('li[data-key="rosy_02|replan"] > .queue-row')
         assert stuck_row.get_attribute("aria-expanded") == "true"
@@ -662,7 +671,7 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
         replan_row.click()
         page.clock.run_for(1500)  # the choice survives a poll
         assert replan_row.get_attribute("aria-expanded") == "true"
-        assert stuck_row.get_attribute("aria-expanded") == "false"
+        assert replan_row.get_attribute("aria-expanded") == "true" and stuck_row.get_attribute("aria-expanded") == "false"
         slot = page.locator('[data-decision-slot="rosy_02|replan"]')
         assert "바뀐 경로 3.2 m" in slot.inner_text()
         _shot(page, "console-replan-1440x900.png")
@@ -679,8 +688,8 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
 
 def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_poll(site):
     """B-1 (IEC 62682 alarm summarization): one stale robot's snapshot warns are one folded row, not four;
-    Enter expands the causes, a 1 Hz refresh keeps the row, its open state and focus, an age-only tick is
-    not a new inbox unread, and reading causes posts nothing."""
+    Enter expands the causes, a 1 Hz refresh keeps the row, its open state and focus, an age-only tick keeps
+    the live badge count unchanged, and reading causes posts nothing."""
     from playwright.sync_api import expect, sync_playwright
 
     stale = _robot("rosy_05", state_age_s=7.0)
@@ -691,6 +700,7 @@ def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_p
     posts = []
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts)
+        page.locator("#fleet-inbox").click()
         row = page.locator('#warning-list > li[data-folded="1"]')
         expect(page.locator("#warning-list > li")).to_have_count(1)  # one folded row, not battery/dock/degraded/goal
         expect(row.locator("summary")).to_contain_text("rosy_05")
@@ -704,14 +714,14 @@ def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_p
         expect(row.locator(".hint")).to_be_visible()
         expect(row.locator(".hint")).to_contain_text("이전 스냅샷 경고: 배터리 부족 · 도킹 실패 · 성능 저하 [cam] · 목표 실패")
         page.evaluate("() => { window.foldedSummary = document.querySelector('#warning-list li[data-folded] summary'); }")
-        unread = page.locator("#fleet-inbox").get_attribute("aria-label")
+        badge = page.locator("#header-unread").inner_text()
         stale["state_age_s"] = 9.0  # 1 Hz later the same robot is only older
         page.clock.run_for(2100)
         assert page.evaluate("() => document.querySelector('#warning-list li[data-folded] summary') === window.foldedSummary")
         assert page.evaluate("() => document.activeElement === window.foldedSummary")
         expect(row.locator("details")).to_have_attribute("open", "")
         expect(summary).to_contain_text("지연 경고 4건")
-        assert page.locator("#fleet-inbox").get_attribute("aria-label") == unread  # an age tick is not unread
+        assert page.locator("#header-unread").inner_text() == badge
         assert posts == []  # expanding causes is a read; nothing moves
         assert not errors
         _shot(page, "console-stale-rollup-1440x900.png")
@@ -719,8 +729,8 @@ def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_p
 
 
 def test_inbox_link_opens_and_focuses_decision_and_folded_rows(site):
-    """B-2: the inbox's "개입 목록으로" lands on the exact row — a folded B-1 rollup opens on its summary,
-    a closed decision row opens through the queue's own toggle — and the jump posts nothing."""
+    """C25 / B-2: bell drawer opens directly on decisions & folded rollups, closes on outside click,
+    handles 0-alert empty state cleanly, and opens on ?inbox=1 deep link after unlock."""
     from playwright.sync_api import expect, sync_playwright
 
     stale = _robot("rosy_05", state_age_s=7.0)
@@ -730,24 +740,28 @@ def test_inbox_link_opens_and_focuses_decision_and_folded_rows(site):
     posts = []
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts)
-        replan = page.locator('li[data-key="rosy_02|replan"]')
-        assert replan.locator(".queue-row").get_attribute("aria-expanded") == "false"  # the stuck row holds the open seat
+        expect(page.locator("#queues-panel")).to_be_hidden()
         page.locator("#fleet-inbox").click()
-        inbox = page.locator("#inbox-current")
-        expect(inbox.locator('li[data-key="rosy_05|stale-snapshot"]')).to_contain_text("지연 경고 4건")
+        expect(page.locator("#queues-panel")).to_be_visible()
 
-        inbox.locator('li[data-key="rosy_05|stale-snapshot"] a').click()  # folded B-1 row
         folded = page.locator('#warning-list > li[data-folded="1"]')
+        expect(folded).to_contain_text("지연 경고 4건")
+        folded.locator("summary").click()
         expect(folded.locator("details")).to_have_attribute("open", "")
-        assert page.evaluate(
-            "() => document.activeElement === document.querySelector('#warning-list li[data-folded] summary')")
 
-        inbox.locator('li[data-key="rosy_02|replan"] a').click()  # decision row, closed until now
+        replan = page.locator('li[data-key="rosy_02|replan"]')
+        assert replan.locator(".queue-row").get_attribute("aria-expanded") == "false"
+        replan.locator(".queue-row").click()
         expect(replan.locator(".queue-row")).to_have_attribute("aria-expanded", "true")
         expect(page.locator('[data-decision-slot="rosy_02|replan"]')).to_be_visible()
-        assert page.evaluate("""() =>
-            document.activeElement.closest('li[data-key="rosy_02|replan"]') !== null""")
-        assert posts == []  # the jump is a read; nothing moves
+
+        page.locator("#map-heading").click()  # outside pointerdown closes drawer
+        expect(page.locator("#queues-panel")).to_be_hidden()
+
+        page.goto(site + "/console?inbox=1")
+        page.clock.run_for(2500)
+        expect(page.locator("#queues-panel")).to_be_visible()
+        assert posts == []
         assert not errors
         _shot(page, "console-inbox-jump-1440x900.png")
         browser.close()
@@ -795,6 +809,7 @@ def test_the_open_stuck_row_shows_its_evidence_picture_below_the_answers(site):
         api["/api/fleet/robots/rosy_01/line-stuck/evidence"] = (preview, jpeg)
         page.reload()
         page.clock.run_for(1500)
+        page.locator("#fleet-inbox").click()
         slot = page.locator('[data-decision-slot="rosy_01|stuck"]')
         image = slot.locator(".stuck-evidence img")
         page.wait_for_function("""() => {
@@ -843,6 +858,7 @@ def test_the_deadlock_row_shows_fleet_and_ai_and_acts_only_through_the_trip_rout
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, posts, answers)
         page.clock.run_for(1500)
+        page.locator("#fleet-inbox").click()
 
         def slot_of(robot_id):
             page.locator(f'li[data-key="{robot_id}|deadlock"] > .queue-row').click()

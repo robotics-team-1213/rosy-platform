@@ -45,10 +45,19 @@ const pageScope = createPageScope();
 
 const el = (id) => document.getElementById(id);
 const layoutMedia = matchMedia("(min-width: 64rem)");
-// Current intervention stays outside context tabs; hidden panels keep their owners mounted.
-const layoutPanels = [document.querySelector('.queues-panel'), document.querySelector('.console-context'),
+// Alert queue lives in top-right bell drawer; context tabs & map panel split between wide columns.
+const layoutPanels = [document.querySelector('.console-context'),
   document.querySelector('[aria-labelledby="map-heading"]')];
-const MAP_PANEL = 2;
+const MAP_PANEL = 1;
+// 관제 토큰 — 서버가 루프백 밖으로 열리면 모든 /api/fleet/* 이 401 로 막힌다
+// (cli.run_console 강제, app.authorize). 토큰은 세션 스토리지에만 둔다 —
+// localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
+const auth = {
+  token: sessionStorage.getItem("rosy-console-token") || "",
+  role: null,
+  // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
+  locked: false,
+};
 const channelRequestView = createChannelRequestView({scope: pageScope, call, el,
   robots: () => view.robots,
   canManage: () => !auth.locked && hasOperatorRole(auth.role) && !namedReason(),
@@ -64,7 +73,7 @@ const workView = createWorkView({scope: pageScope, call, el, channelRequestView,
 const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? "work-new" : "work-overview") : area.get("show") === "log" ? el("log-panel") : document.querySelector(".incident-panel");
 layoutPanels.push(raised);
 if (areaNav) raised.dataset.raised = "";
-const inbox = createInboxPanel({scope: pageScope, el, readView: () => view});
+const inbox = createInboxPanel({scope: pageScope, el, readView: () => view, isLocked: () => auth.locked});
 pageScope.listen(el("focus-robot-choice"), "click", () => {
   inbox.select("status");
   el("robot-choice").scrollIntoView({block: "center"});
@@ -73,7 +82,7 @@ pageScope.listen(el("focus-robot-choice"), "click", () => {
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
   el("incident-side").hidden = false;
-  if (inbox.choice !== "inbox") inbox.select("evidence");
+  inbox.select("evidence");
 }
 function layoutConsole() {
   const main = el("fleet-main"), primary = main.querySelector('.console-primary'), secondary = main.querySelector('.console-secondary');
@@ -107,15 +116,6 @@ const MAP_MS = 5000;
 const dispatchGate = createPollGate();
 const discoveryGate = createPollGate();
 
-// 관제 토큰 — 서버가 루프백 밖으로 열리면 모든 /api/fleet/* 이 401 로 막힌다
-// (cli.run_console 강제, app.authorize). 토큰은 세션 스토리지에만 둔다 —
-// localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
-const auth = {
-  token: sessionStorage.getItem("rosy-console-token") || "",
-  role: null,
-  // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
-  locked: false,
-};
 // D-540 9: 움직이는 조작의 잠금 사유. 멈춤(비상 정지·취소·대형 해제·막힘 대기/중단)에는 쓰지 않는다.
 const namedReason = () => namedOperatorReason(auth.role, auth.principal);
 const confirmedAction = createConfirmedAction({scope: pageScope, identity: () => ({...auth}), confirm: confirmIrreversible});
@@ -128,7 +128,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling), 지도 오버레이 토글([data-layer-toggle])은 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not([data-layer-toggle]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#robot-choice):not(#map-display-mode):not([data-work-read])");
+    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not([data-layer-toggle]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#queues-close):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#robot-choice):not(#map-display-mode):not([data-work-read])");
 }
 
 const view = {
@@ -413,7 +413,7 @@ const trackingView = {
 const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = createConsoleAuth({ pageScope, el, view, auth, assistant,
   call, fleetClient, render, operatorControls, confirmedAction, connectionView, workView, incidents, visionView,
   trackingView, mapView, formation, dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
-  refreshRobotApps, refreshDispatchControl, refreshDiscovery,
+  refreshRobotApps, refreshDispatchControl, refreshDiscovery, inbox,
   refreshVision: () => (owns("drive") ? visionView.refreshSources() : undefined),
   clearVisionSample: () => { pathSample.vision = null; paintSitePath(); } });
 
