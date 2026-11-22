@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
+import errno
 import fcntl
 import hashlib
 import json
@@ -13,6 +14,11 @@ import subprocess
 import sys
 import time
 import uuid
+
+try:
+    import grp
+except ImportError:
+    grp = None
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -25,6 +31,7 @@ from os_media import capture
 from os_motion_guard import reconcile
 from os_rauc import verify_bundle
 from os_rauc_service import RUNTIME, _empty_cgroup, _stop, install as rauc_install, recover as rauc_recover
+from os_state_io import _write_atomic
 from os_state_layout import COMMON, _layout, _pairs, _path, _read
 import os_update_commit as commit_owner
 import os_update_health as health
@@ -100,6 +107,66 @@ def _quiet(root, run):
             _empty_cgroup(root, group, service=unit)
 
 
+def _backup_approvals(root: Path) -> None:
+    """Mirror /etc/rosy/approvals onto device-shared storage before switching OS slots."""
+    src = root / "etc/rosy/approvals"
+    shared_root = root / "var/lib/rosy-device"
+    if src.is_symlink() or not (src / "g4.bundle.json").is_file() or shared_root.is_symlink() or not shared_root.is_dir():
+        return
+    uid = root.stat().st_uid
+    files = [("g4.bundle.json", _read(src / "g4.bundle.json", 65536, uid))]
+    for name in ("hardware.approved", "navigation.approved"):
+        path = src / name
+        if path.is_symlink() or not path.is_file():
+            return
+        files.append((name, _read(path, 16384, uid)))
+    evidence_src = src / "g4-evidence"
+    if evidence_src.is_symlink() or not evidence_src.is_dir():
+        return
+    evidence = []
+    for item in sorted(evidence_src.iterdir()):
+        if item.is_symlink() or not item.is_file():
+            raise ValueError("unsafe G4 evidence entry during shared backup")
+        evidence.append((item.name, _read(item, 4 * 1024 * 1024, uid)))
+    dst = _path(root, "var/lib/rosy-device/approvals")
+    if dst.is_symlink():
+        raise ValueError("shared approvals path is a symlink")
+    group_id = grp.getgrnam("rosy-io").gr_gid if (root == Path("/") and grp is not None) else None
+    try:
+        dst.mkdir(mode=0o750, parents=True, exist_ok=True)
+    except OSError as exc:
+        if exc.errno == errno.EROFS:
+            # First OS update from an older p6 layout lacks /var/lib/rosy-device/approvals in ReadWritePaths=-...
+            return
+        raise
+    if dst.is_symlink():
+        raise ValueError("shared approvals path is a symlink")
+    if group_id is not None:
+        os.chown(dst, 0, group_id)
+    os.chmod(dst, 0o750)
+    dst_evidence = dst / "g4-evidence"
+    if dst_evidence.is_symlink():
+        raise ValueError("shared G4 evidence path is a symlink")
+    dst_evidence.mkdir(mode=0o750, exist_ok=True)
+    if group_id is not None:
+        os.chown(dst_evidence, 0, group_id)
+    os.chmod(dst_evidence, 0o750)
+    wanted = {name for name, _ in evidence}
+    for stale in list(dst_evidence.iterdir()):
+        if stale.name not in wanted:
+            stale.unlink()
+    for name, data in evidence:
+        target = dst_evidence / name
+        _write_atomic(target, data, 0o640)
+        if group_id is not None:
+            os.chown(target, 0, group_id)
+    for name, data in files:
+        target = dst / name
+        _write_atomic(target, data, 0o640)
+        if group_id is not None:
+            os.chown(target, 0, group_id)
+
+
 def source_health(root, transaction_id, *, host, run):
     """Read-only source observations; never restart CORE to hide an inconsistent release."""
     facts, _, _ = _snapshot(root)
@@ -111,7 +178,22 @@ def source_health(root, transaction_id, *, host, run):
     manager.verify(current)
     manager.check_python_runtime(current)
     projection = health.verify_ready(root)
-    services = {unit: health._service(run, unit) for unit in ("rosy-core.service", "rosy-io.service")}
+    services = {"rosy-core.service": health._service(run, "rosy-core.service")}
+    try:
+        services["rosy-io.service"] = health._service(run, "rosy-io.service")
+    except ValueError:
+        io_state = health._properties(run, "rosy-io.service", {"ActiveState"})
+        if io_state["ActiveState"] != "inactive":
+            raise
+        nav = health._service(run, "rosy-navigation.service")
+        nav_guard = health._properties(run, "rosy-navigation.service", {"DropInPaths"})
+        if "/etc/systemd/system/rosy-navigation.service.d/zz-rosy-os-guard.conf" not in nav_guard["DropInPaths"].split():
+            raise ValueError("navigation OS motion guard drop-in is not loaded")
+        guard_bytes = _read(_path(root, "etc/systemd/system/rosy-navigation.service.d/zz-rosy-os-guard.conf"),
+                            8192, root.stat().st_uid)
+        if b"os_motion_guard.py navigation" not in guard_bytes:
+            raise ValueError("navigation OS motion guard drop-in differs")
+        services["rosy-navigation.service"] = nav
     if (projection["boot_id"] != facts["boot_id"] or projection["slot"] != facts["slot"]
             or host.process_cwd(int(services["rosy-core.service"]["MainPID"])) != str(root / "opt/rosy/releases" / current)):
         raise ValueError("source projection or running CORE release differs")
@@ -185,6 +267,7 @@ def start(root: Path, bundle: Path, raw: bytes, signature: str, *, host: Host | 
                         raise ValueError("source changed before posting pending")
                     with locked(root) as store:
                         store.begin(verified, media, facts["boot_id"], transaction_id)
+                _backup_approvals(root)
                 reconcile(root)
                 _quiet(root, run)
                 _transition(root, transaction_id, "INSTALLING", facts["boot_id"])

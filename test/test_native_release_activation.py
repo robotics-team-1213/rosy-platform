@@ -572,3 +572,34 @@ def test_only_the_camera_may_restart_alone(native_case):
     with pytest.raises(ValueError, match="NATIVE_RESTART_UNIT"):
         manager.activate(first.name, ("rosy-core.service",))
     assert runtime.actions == [] and links.values["current"] is None
+
+
+def test_navigation_that_was_active_restarts_after_payload_activation(native_case):
+    manager_type, root, key, _private, first, second, links = native_case
+    actions, nav = [], {"up": False}
+    def runtime(action):
+        actions.append(action)
+        if action == "stop":
+            nav["up"] = False
+    def start_nav():
+        actions.append("start_nav")
+        nav["up"] = True
+    manager_type(root=root, public_key=key, runtime=runtime, links=links, io_settle_s=0).activate(first.name)
+    nav["up"] = True
+    manager = manager_type(root=root, public_key=key, runtime=runtime, links=links, io_settle_s=0,
+                           nav_active=lambda: nav["up"], start_nav=start_nav)
+    result = manager.activate(second.name)
+    assert result == {"ok": True, "release_id": second.name, "previous": first.name}
+    assert actions[-3:] == ["stop", "start", "start_nav"]
+    assert links.values["current"] == second.name
+
+
+def test_navigation_failing_after_payload_activation_rolls_back(native_case):
+    manager_type, root, key, _private, first, second, links = native_case
+    nav = {"up": True}
+    manager_type(root=root, public_key=key, runtime=lambda a: None, links=links, io_settle_s=0).activate(first.name)
+    manager = manager_type(root=root, public_key=key, runtime=lambda a: None, links=links, io_settle_s=0,
+                           nav_active=lambda: nav["up"], start_nav=lambda: nav.update(up=False))
+    with pytest.raises(RuntimeError, match="rolled back"):
+        manager.activate(second.name)
+    assert links.values["current"] == first.name

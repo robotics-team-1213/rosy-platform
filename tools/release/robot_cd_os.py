@@ -87,19 +87,25 @@ def _unsigned_identity(dist, release_id, sha):
 def _prepare(c):
     import download_artifact as download
     from tools.release import prepare_os_release as prepare
-    from tools.release.publish_os_release import publish
+    from tools.release.publish_os_release import open_rollout, publish
     from sign_image_release import sign_image_release
     from robot_cd import ROOT
     state = c.state
     release_id, sha = state["release_id"], state["sha"]
+    auto_rollout = c.config.get("os_auto_rollout") is True
     base = c.folder / ("os-" + release_id)
     base.mkdir(exist_ok=True)
     public = ROOT / "deploy/robot/pinky_pro/release/public-keys" / (c.config["key_name"] + ".pem")
+    private = Path(os.environ["LOCALAPPDATA"]) / "Rosy/signing" / (c.config["key_name"] + ".private.pem")
     output = base / "signed"
     # The preparer exposes this directory atomically after its independent guest
     # verification. A killed tick can resume it without signing a second bundle.
     if output.exists():
-        publish(output, public, release_id=release_id, source_revision=sha, publication_only=True)
+        if auto_rollout:
+            open_rollout(output, private, public, release_id=release_id,
+                         canary=list(c.config["robots"]), promote=True)
+        publish(output, public, release_id=release_id, source_revision=sha,
+                publication_only=not auto_rollout, open_release=auto_rollout)
         return output, public
     current = _artifact(c)
     if current != state["os_artifact"]:
@@ -133,13 +139,17 @@ def _prepare(c):
         raise ValueError("OS attempt directory already exists; refusing mutable input reuse")
     download.safe_extract(archive, dist)
     _unsigned_identity(dist, release_id, sha)
-    private = Path(os.environ["LOCALAPPDATA"]) / "Rosy/signing" / (c.config["key_name"] + ".private.pem")
     sign_image_release(dist, private, public)
     manifest = json.loads((ROOT / "trusted-snapshot.json").read_text(encoding="utf-8"))
+    canary = list(c.config["robots"]) if auto_rollout else []
     prepare.prepare_release("pinky_pro", dist, output, private, public, Path(c.config["os_cms_private_key"]),
-        release_id=release_id, source_revision=sha, canary=[],
-        tools_source=(Path(c.config["source_repository"]), manifest["source_revision"]), stage_timeout=3600)
-    publish(output, public, release_id=release_id, source_revision=sha, publication_only=True)
+        release_id=release_id, source_revision=sha, canary=canary,
+        tools_source=(Path(c.config["source_repository"]), manifest["source_revision"]), stage_timeout=7200)
+    if auto_rollout:
+        open_rollout(output, private, public, release_id=release_id,
+                     canary=canary, promote=True)
+    publish(output, public, release_id=release_id, source_revision=sha,
+            publication_only=not auto_rollout, open_release=auto_rollout)
     return output, public
 
 
@@ -223,10 +233,12 @@ def advance(c, sha, ci, reason=None):
         c.save(phase="os_publishing", os_output=str(output), os_public_key=str(public))
         return c.audit("os_prepared")
     if state["phase"] == "os_publishing":
+        auto_rollout = c.config.get("os_auto_rollout") is True
         result = publish(Path(state["os_output"]), Path(state["os_public_key"]), release_id=state["release_id"],
-            source_revision=sha, apply=True, publication_only=True, transaction=state["os_publication"],
-            journal=lambda transaction: c.save(os_publication=transaction))
-        c.save(phase="done", os_published_sha=sha, os_publication_result=result,
-               reason="engineering OS prerelease verified; empty rollout authorizes no device")
+            source_revision=sha, apply=True, publication_only=not auto_rollout, open_release=auto_rollout,
+            transaction=state["os_publication"], journal=lambda transaction: c.save(os_publication=transaction))
+        reason = ("engineering OS release opened and rolled out to fleet"
+                  if auto_rollout else "engineering OS prerelease verified; empty rollout authorizes no device")
+        c.save(phase="done", os_published_sha=sha, os_publication_result=result, reason=reason)
         return c.audit("os_published")
     raise ValueError("unknown OS publication phase")

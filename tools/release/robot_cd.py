@@ -521,11 +521,13 @@ class Coordinator:
 def load_config(path):
     config = json.loads(Path(path).read_text(encoding="utf-8"))
     required = {"repo", "repo_id", "state_dir", "robots", "canary", "key_name", "trusted_root"}
-    if set(config) - required - {"ssh_jump", "ssh_known_hosts", "base_source_revision", "os_engineering",
-                                "os_cms_private_key", "source_repository"} or not required <= set(config):
+    extra = {"ssh_jump", "ssh_known_hosts", "base_source_revision", "os_engineering",
+             "os_auto_rollout", "os_cms_private_key", "source_repository"}
+    if set(config) - required - extra or not required <= set(config):
         raise ValueError("invalid robot CD configuration fields")
-    if "os_engineering" in config and type(config["os_engineering"]) is not bool:
-        raise ValueError("os_engineering must be an explicit boolean")
+    for flag in ("os_engineering", "os_auto_rollout"):
+        if flag in config and type(config[flag]) is not bool:
+            raise ValueError(f"{flag} must be an explicit boolean")
     if config.get("os_engineering") is True:
         if config.get("repo") != "robotics-team-1213/rosy-platform":
             raise ValueError("OS engineering publisher is bound to the reviewed repository")
@@ -534,16 +536,17 @@ def load_config(path):
                 raise ValueError("OS engineering requires absolute source_repository and local CMS key paths")
         if not Path(config["source_repository"]).is_dir() or not Path(config["os_cms_private_key"]).is_file():
             raise ValueError("OS engineering local source or CMS key is unavailable")
-    if "base_source_revision" in config and (not isinstance(config["base_source_revision"], str)
-                                             or not SHA.fullmatch(config["base_source_revision"])):
+    if "base_source_revision" in config and (not isinstance(config["base_source_revision"], str) or not SHA.fullmatch(config["base_source_revision"])):
         raise ValueError("base_source_revision must be an operator-verified full source revision")
     if not re.fullmatch(r"[\w-]+/[\w.-]+", config["repo"]) or type(config["repo_id"]) is not int:
         raise ValueError("invalid repository identity")
-    if (not isinstance(config["robots"], list) or not config["robots"]
-            or config["canary"] not in config["robots"]):
+    if not isinstance(config["robots"], list) or not config["robots"] or config["canary"] not in config["robots"]:
         raise ValueError("canary must belong to the configured robots")
     if not all(isinstance(h, str) and re.fullmatch(r"[A-Za-z0-9.-]+", h) for h in config["robots"]):
         raise ValueError("invalid robot host")
+    if config.get("os_auto_rollout") and (len(set(config["robots"])) != len(config["robots"]) or any(
+            not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*", h) for h in config["robots"])):
+        raise ValueError("os_auto_rollout requires unique lowercase RFC hostnames in robots")
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", config["key_name"]):
         raise ValueError("invalid signing key name")
     if not Path(config["state_dir"]).is_absolute() or Path(config["state_dir"]).resolve().is_relative_to(ROOT):
@@ -565,13 +568,11 @@ def load_config(path):
     verify_snapshot(ROOT)
     return config
 
-
 def configure_environment(folder):
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     os.environ.update(TEMP=str(folder), TMP=str(folder), PYTHONDONTWRITEBYTECODE="1")
     tempfile.tempdir = str(folder)
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -594,7 +595,6 @@ def main():
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"Robot CD stopped: {type(error).__name__}: {error}", file=sys.stderr)
         return 1
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

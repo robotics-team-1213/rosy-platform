@@ -28,3 +28,5 @@ RestrictSUIDSGID=true
 LockPersonality=true
 # CORE on loopback; rosy-login-code runs here as a child and writes /run/rosy-boot.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ConfigurationDirectory=rosy/approvals
+ConfigurationDirectoryMode=0750
