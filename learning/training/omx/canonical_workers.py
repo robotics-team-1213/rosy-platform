@@ -124,7 +124,7 @@ def run_align_real(req: dict, out: Path) -> dict:
     )
     home24 = np.asarray(data_gate.HOME[arm][1:4], dtype=np.float64)
     flip, trim = bool(params["wrist_flip"]) and arm == "arm_b", bool(params["trim_dead_idle"])
-    t_starts, kept_counts = [], []
+    t_starts, kept_counts, view_episodes = [], [], []
     try:
         for _, ep in ep_df.iterrows():
             ep_idx = int(ep.episode_index)
@@ -162,12 +162,16 @@ def run_align_real(req: dict, out: Path) -> dict:
                 ds.add_frame({"task": task, "observation.state": st[i].astype(np.float32), "action": ac[i].astype(np.float32),
                               **{out_k: imgs[role][i] for role, out_k in out_cams.items()}})
             ds.save_episode()
+            view_episodes.append({"episode_index": len(view_episodes), "source_episode_index": ep_idx})
             t_starts.append(t_start); kept_counts.append(n - t_start)
     finally:
         ds.finalize()
 
     _progress(out, "gating", arm=arm)
-    receipt = data_gate.gate(dst, arm=arm, source={"kind": "real", "layout": "random"}, canonical_spec=spec)
+    view_file = "meta/camera_views.json"
+    write_json(dst / view_file, {"kind": "captured", "source_id": params["source_id"], "roles": src_cams,
+                                 "angles_deg": None, "wrist_rotated_180": flip, "episodes": view_episodes})
+    receipt = data_gate.gate(dst, arm=arm, source={"kind": "real", "layout": "random", "camera_views": view_file}, canonical_spec=spec)
     admitted = data_gate.check_receipt(dst)
     return {"kind": "align_real", "arm_id": arm, "episodes": len(admitted), "frames_total": int(sum(kept_counts)),
             "t_start_median": float(statistics.median(t_starts)) if t_starts else 0.0, "gate_counts": receipt["counts"],
@@ -198,6 +202,7 @@ def run_collect_dart(req: dict, out: Path) -> dict:
     import omx_two_arm_tasks as tasks
     import omx_two_arm_teacher as teaching
     import omx_two_arm_world as sim
+    from omx_camera_pose import camera_angle_sampler
 
     arm = req["arm_id"]
     spec = validate_canonical_spec(req["spec"])
@@ -208,6 +213,7 @@ def run_collect_dart(req: dict, out: Path) -> dict:
     canon_q = {a: np.asarray(spec["canonical_start"][a]["sim_rad"], dtype=np.float64) for a in ("arm_a", "arm_b")}
     idle_q = {a: np.asarray(spec["idle_park"][a]["sim_rad"], dtype=np.float64) for a in ("arm_a", "arm_b")}
     jitter_rad = math.radians(float(params["jitter_deg"]))
+    camera_deg = spec.get("camera_angle_jitter_deg", 0.0)
     axes = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
     vec = dict(dtype="float32", shape=(6,), names=axes)
     img = dict(dtype="video", shape=(480, 640, 3), names=["height", "width", "channels"])
@@ -224,11 +230,15 @@ def run_collect_dart(req: dict, out: Path) -> dict:
         )
         layout = sites.Layout(preset="v24-20261114", wrist_camera="v21-b")
         world = sim.World(layout)
+        set_camera_angles = camera_angle_sampler(world, arm_view, camera_deg, 0) if camera_deg else None
         rng = np.random.default_rng([int(params["seed"]), 31415])
         saved = 0
+        view_episodes = []
         try:
             for ep_i in range(params["episodes"]):
                 ep_seed = int(params["seed"]) + ep_i
+                # A mount stays fixed for a complete scenario. Keep every fourth scenario at the reference pose.
+                angles = set_camera_angles(ep_seed if ep_i % 4 != 3 else None) if set_camera_angles else None
                 for a in ("arm_a", "arm_b"):
                     q = canon_q[a].copy() if a == arm else idle_q[a].copy()
                     if a == arm and jitter_rad > 0:
@@ -261,6 +271,8 @@ def run_collect_dart(req: dict, out: Path) -> dict:
                                     "observation.images.rs": rs_i, "observation.images.side": sd_i, "observation.images.wrist": wr_i,
                                 })
                             ds.save_episode()
+                            if angles is not None:
+                                view_episodes.append({"episode_index": saved, "scenario_seed": ep_seed, "angles_deg": angles})
                             saved += 1
                     here[step["container"]] = step["to"]
                     if step.get("outbound"):
@@ -271,7 +283,13 @@ def run_collect_dart(req: dict, out: Path) -> dict:
                 r.close()
 
     _progress(out, "gating", arm=arm, saved=saved)
-    receipt = data_gate.gate(dst, arm=arm, source={"kind": "sim", "layout": "random"}, canonical_spec=spec)
+    source = {"kind": "sim", "layout": "random"}
+    if camera_deg:
+        view_file = "meta/camera_views.json"
+        (dst / "meta").mkdir(parents=True, exist_ok=True)
+        write_json(dst / view_file, {"kind": "simulated", "max_deg_per_axis": camera_deg, "episodes": view_episodes})
+        source["camera_views"] = view_file
+    receipt = data_gate.gate(dst, arm=arm, source=source, canonical_spec=spec)
     admitted = data_gate.check_receipt(dst)
     return {
         "kind": "collect_dart", "arm_id": arm, "episodes": len(admitted),
@@ -346,7 +364,8 @@ def _step_and_here(plan: dict, arm: str, ep_idx: int) -> tuple[dict, dict]:
     return plan["steps"][target_idx], here
 
 
-def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str, episodes: int, delay_frames: int, seed_base: int):
+def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str, episodes: int, delay_frames: int, seed_base: int,
+                      camera_cases=None):
     import numpy as np
     import torch
 
@@ -357,6 +376,7 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str
     import omx_two_arm_tasks as tasks
     import omx_two_arm_teacher as teaching
     import omx_two_arm_world as sim
+    from omx_camera_pose import camera_angle_sampler
 
     canon_q = {a: np.asarray(spec["canonical_start"][a]["sim_rad"], dtype=np.float64) for a in ("arm_a", "arm_b")}
     idle_q = {a: np.asarray(spec["idle_park"][a]["sim_rad"], dtype=np.float64) for a in ("arm_a", "arm_b")}
@@ -369,6 +389,8 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str
         layout.sim_arms[a].wait = (canon_q[a] if a == arm else idle_q[a]).copy()
     plan = tasks.get_task(layout, _SIM_TASK_MAP[task_name])
     world = sim.World(layout)
+    camera_deg = spec.get("camera_angle_jitter_deg", 0.0)
+    set_camera_angles = camera_angle_sampler(world, arm_view, camera_deg, 1) if camera_cases is not None and camera_deg else None
     in_feats = getattr(getattr(policy, "config", None), "input_features", None) or {}
     top_key = "top" if "observation.images.top" in in_feats else "rs"
     successes, teacher_ok, neighbour_hits, contact_hits = 0, 0, 0, 0
@@ -376,6 +398,7 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str
     try:
         for i in range(episodes):
             seed = seed_base + i
+            angles = set_camera_angles(seed) if set_camera_angles else None
             step, here = _step_and_here(plan, arm, i)
             layer_key = step["to"].split("-")[-1] if "-" in step["to"] else "l0"
             row_l = layer_stats.setdefault(layer_key, {"episodes": 0, "lifted": 0, "sustained_lift": 0, "successes": 0})
@@ -420,6 +443,9 @@ def _eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str
             if verdict.get("result") == "pass":
                 successes += 1
                 row_l["successes"] += 1
+            if angles is not None:
+                camera_cases.append({"scenario_seed": seed, "step": step["id"], "layer": layer_key,
+                                     "angles_deg": angles, "success": verdict.get("result") == "pass"})
             neighbour_hits += len(set(teacher.contacts.get("pad_neighbour", ())) | set(verdict.get("neighbours_disturbed", ())))
             contact_hits += len(teacher.contacts.get("arm_arm", ())) + len(teacher.contacts.get("arm_other", ()))
     finally:
@@ -462,6 +488,17 @@ def run_eval_ladder(req: dict, out: Path) -> dict:
             policy, pre, post, spec, arm, task_name=params["task"],
             episodes=params["delayed_episodes"], delay_frames=params["delay_frames"], seed_base=params["seed_base"] + 1000,
         )
+        if camera_deg := spec.get("camera_angle_jitter_deg", 0.0):
+            camera_cases = []
+            varied, varied_layers = _eval_sim_profile(
+                policy, pre, post, spec, arm, task_name=params["task"], episodes=params["nominal_episodes"],
+                delay_frames=0, seed_base=params["seed_base"], camera_cases=camera_cases,
+            )
+            write_json(out / "camera_robustness.json", {
+                "checkpoint_sha256": ckpt_sha, "spec_sha256": req["spec_sha256"], "arm_id": arm, "task": params["task"],
+                "max_deg_per_axis": camera_deg, "nominal": nom, "varied_views": varied,
+                "per_layer": varied_layers, "episodes": camera_cases,
+            })
 
     reasons = []
     if nom["policy_successes"] < nom["teacher_successes"]:

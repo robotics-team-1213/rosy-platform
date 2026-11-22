@@ -110,3 +110,32 @@ def test_policy_camera_report_binds_frames_and_rejects_a_different_profile(tmp_p
     with pytest.raises(SystemExit, match="2"):
         main(args)
     assert "original frame hashes" in capsys.readouterr().err
+
+
+def test_simulated_camera_angles_move_local_orientation_without_accumulation():
+    from types import SimpleNamespace
+
+    mujoco = pytest.importorskip("mujoco")
+    from omx_camera_pose import camera_angle_sampler
+
+    model = mujoco.MjModel.from_xml_string("""
+        <mujoco><worldbody>
+          <camera name="top" pos="0 0 1"/><camera name="side" pos="0 -1 0"/>
+          <body><joint/><geom size=".02"/><camera name="a_wrist" pos="0 .03 0"/></body>
+        </worldbody></mujoco>
+    """)
+    base, pos, fov = model.cam_quat.copy(), model.cam_pos.copy(), model.cam_fovy.copy()
+    world = SimpleNamespace(model=model)
+    collect = camera_angle_sampler(world, "a_wrist", .3, 0)
+    evaluate = camera_angle_sampler(world, "a_wrist", .3, 1)
+    angles = collect(25)
+    rotated = model.cam_quat.copy()
+    assert np.all(np.any(rotated != base, axis=1))
+    assert all(abs(d) <= .3 for role in angles.values() for d in role.values())
+    assert collect(26) != angles and evaluate(25) != angles
+    assert collect(25) == angles
+    np.testing.assert_array_equal(model.cam_quat, rotated)
+    np.testing.assert_array_equal(model.cam_pos, pos)
+    np.testing.assert_array_equal(model.cam_fovy, fov)
+    collect(None)
+    np.testing.assert_array_equal(model.cam_quat, base)

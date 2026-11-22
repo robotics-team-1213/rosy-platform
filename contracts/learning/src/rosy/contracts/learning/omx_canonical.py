@@ -147,6 +147,9 @@ def validate_canonical_spec(doc: dict) -> dict:
     jitter = _finite_number(doc.get("start_jitter_rad"))
     if not 0.0 <= jitter <= 0.2:
         raise ValueError("start_jitter_rad must lie in 0.0..0.2 rad")
+    camera_jitter = _finite_number(doc.get("camera_angle_jitter_deg", 0.0))
+    if not 0.0 <= camera_jitter <= 3.0:
+        raise ValueError("camera_angle_jitter_deg must lie in 0.0..3.0 degrees per axis")
 
     for section in ("idle_park", "canonical_start"):
         block = doc.get(section)
