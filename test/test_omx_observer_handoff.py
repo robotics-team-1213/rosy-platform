@@ -713,9 +713,23 @@ def test_a_signal_before_the_leader_has_a_child_still_reaches_its_background_pro
     sleeper = int(pids.read_text())
     os.kill(proc.pid, signal.SIGTERM)
     proc.wait(timeout=10)
-    time.sleep(0.3)
-    with pytest.raises(ProcessLookupError):
-        os.kill(sleeper, 0)
+
+    def alive(pid):  # a zombie nobody reaps (container PID 1) is not a running process
+        if Path("/proc").is_dir():
+            try:
+                return Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[0] not in ("Z", "X")
+            except OSError:
+                return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+
+    end = time.monotonic() + 2
+    while alive(sleeper) and time.monotonic() < end:
+        time.sleep(0.05)
+    assert not alive(sleeper), "background sleeper still running after leader SIGTERM"
 
 
 def test_a_stop_that_times_out_is_checked_before_any_restart(cell):
