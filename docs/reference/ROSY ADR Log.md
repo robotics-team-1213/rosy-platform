@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1060 | Pinky 작업은 Fleet trip으로 한 번만 배차한다. 기본 꺼짐(`ROSY_FLEET_PINKY_TASK_DISPATCH=1`), 거절 사유 기록, 취소는 trip 취소. [전문](../adr/D-1060-pinky-task-dispatch.md) | Proposed (2026-11-21, 패널 5 조각 3; Safety-Review 대기) |
 | D-1071 | 미확정(UNKNOWN) 네비게이션 작업의 정지 증거 기반 운영자 정산. [전문](../adr/D-1071-fleet-unknown-task-quiescence-reconcile.md) | Accepted (2026-11-22). 관련 결정: [D-330](D-330-fleet-action-admission-stop-and-recovery.md) · [D-421](D-421-fleet-cancel-all-driving-separate-from-latched-estop.md) · [D-540](D-540-fleet-console-structure-v2.md) · [D-732](D-732-core-native-outcome-ports.md). |
 | D-1070 | 깨끗한 워크트리는 6시간 뒤 누구나 지우고, 브랜치는 adopt로 다시 붙인다. [전문](../adr/D-1070-worktree-slot-policy-after-pr-path.md) | Accepted (2026-11-21, 조정 세션 지시). [D-886](D-886-worktree-budget-cap-and-merged-branch-sweep.md)의 한도 14는 그대로 두고, [D-790](D-790-worktree-rules-landed-orphan-stale-flaky.md) 이후 "병합되지 않은 것은 72시간" 규칙을 깨끗한 워크트리에 한해 바꾼다. |
 | D-1068 | Account 로그인 화면만 LAN 별칭으로 연다: issuer는 하나, 8443 호스트 블록과 경로 허용 목록. [전문](../adr/D-1068-account-lan-browser-alias.md) | Accepted (2026-11-21 14:3x, 사용자 요청 "테일스케일 없이도 콘솔 로그인 되게". 패널 8 판정 14:37, 안 (d)) |
