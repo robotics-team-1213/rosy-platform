@@ -255,6 +255,46 @@ def test_episode_review_do_not_train_and_delete(tmp_path, monkeypatch):
     assert all_del["deleted_all"] is True and not ds.exists()
 
 
+def test_dataset_episodes_parses_real_static_episodes_int_count_schema(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    ds = tmp_path / "home" / "rosy-data" / "omx-leader" / "demo-real-static"
+    (ds / "meta").mkdir(parents=True)
+    (ds / "meta" / "info.json").write_text(json.dumps({"total_episodes": 5, "total_frames": 500, "fps": 30}), encoding="utf-8")
+    (ds / "static_episodes.json").write_text(json.dumps({"episodes": 5, "static": [0, 1, 3], "threshold": 1.0}), encoding="utf-8")
+
+    srv = bench_record.make_server(bench, 0)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{srv.server_port}/api/dataset/episodes?dataset=demo-real-static", timeout=5) as r:
+            assert r.status == 200
+            body = json.loads(r.read())
+    finally:
+        srv.shutdown()
+        srv.server_close()
+    assert [e["index"] for e in body["episodes"] if e["static"]] == [0, 1, 3]
+
+
+def test_diagnose_manual_hold_detects_live_runner_after_service_restart(tmp_path, monkeypatch):
+    import bench_record_recover as brr
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    bench.state = {"status": "idle"}
+    bench.manual.write_text(json.dumps({"reason": "arm_a 홈용 record_session이 정상 종료되지 않았습니다"}), encoding="utf-8")
+    io_a = bench.prep / "chunk-io-a"
+    io_a.mkdir(exist_ok=True)
+    (io_a / "hold.json").write_text(json.dumps({"pid": 424242, "hold": True, "error": "HOLD: human hold already latched"}), encoding="utf-8")
+    (io_a / "live.json").write_text(json.dumps({"pid": 424242, "human_hold_latched": True, "torque_hold_commanded": True, "state": [0.0, -62.0, 55.0, 55.0, 40.0, 49.0]}), encoding="utf-8")
+    (bench.prep / ".bench-runs").mkdir(exist_ok=True)
+    (bench.prep / ".bench-runs" / "home-arm_a.log").write_text('{"command": "human-hold"}\n{"step": "RUNNER_HELD"}\n', encoding="utf-8")
+    monkeypatch.setattr(brr, "_pid_is_chunk_runner", lambda p: p == 424242)
+    bench.procs = lambda: ["python chunk_runner.py --io chunk-io-a"]
+
+    mh = bench.status()["manual_hold"]
+    assert mh["active"] is True and mh["arm"] == "arm_a" and mh["runner_pid"] == 424242
+    assert mh["runner_alive"] is True and mh["human_hold_latched"] is True and mh["torque_hold_commanded"] is True
+    assert mh["can_release_runner"] is True and mh["can_clear"] is False and mh["log_file"] == "home-arm_a.log"
+
+
 def test_ui_workspace_no_duplicate_pills_live_log_reset_review_and_clusters():
     omx_dir = ROOT / "deploy/robot/omx"
     html = (omx_dir / "bench_record.html").read_text(encoding="utf-8")
