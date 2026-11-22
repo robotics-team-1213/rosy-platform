@@ -134,12 +134,13 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                          dry_run=dry_run, log=log, handoff=handoff, authorize=authorize,
                          jaw_gate=({**jaw_spec, "tcp_x_m": resolved_tcp} if jaw_spec is not None else None))
 
-    from cell_policy_handoff import run_paced_chunks
+    from cell_policy_paced import run_paced_chunks
 
     return run_paced_chunks(cell, shadow, library, work, off=off, max_chunks=max_chunks, dry_run=dry_run, log=log,
                             goal=goal, sim_units=sim_units, open_g=open_g, model_closed=model_closed, closed=closed,
                             low=low, high=high, fastest=fastest, kin=kin, jaw_spec=jaw_spec,
-                            resolved_tcp=resolved_tcp, authorize=authorize, max_obs_age_s=max_obs_age_s)
+                            resolved_tcp=resolved_tcp, authorize=authorize, max_obs_age_s=max_obs_age_s,
+                            pre_home=paced_chunks)
 
 
 def main(argv=None) -> int:
