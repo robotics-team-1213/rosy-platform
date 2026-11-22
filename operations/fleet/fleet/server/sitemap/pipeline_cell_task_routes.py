@@ -10,6 +10,13 @@ from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boun
 from fleet.pipeline.cell_site_targets import expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
+from fleet.server.sitemap.pipeline_port_events import (
+    IDENTITY_INPUT_FIELDS,
+    TASK_IDENTITY_FIELDS,
+    has_identity_input,
+    task_view_for_request,
+    validate_task_identity,
+)
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
 from fleet.server.sitemap.pipeline_unload_release import install_unload_release_routes, manifest_count, unload_release
@@ -36,7 +43,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         state = app.state.omx_cell_states.get(cell_id) or {}
         return state.get("phase") == "ABORTED" or state.get("prev_phase") == "ABORTED"
     @app.get("/api/fleet/pipeline/status", dependencies=read_guard)
-    async def pipeline_status():
+    async def pipeline_status(request: Request):
         active = active_map()
         charge_bays = getattr(app.state, "charge_bays", None) or ChargeBays()
         robots, bays = await inputs(active)
@@ -51,7 +58,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         out = evaluate_fleet_pipeline(active[1], active[2], robots, bays,
                                       charge_bays=charge_bays, site_rules=rules(),
                                       cell_states=getattr(app.state, "omx_cell_states", None))
-        out["omx_cell_tasks"] = list(app.state.omx_cell_tasks.values())
+        out["omx_cell_tasks"] = [task_view_for_request(t, request) for t in app.state.omx_cell_tasks.values()]
         out["pinky_tasks"] = list(app.state.pinky_tasks.values())
         return out
 
@@ -135,7 +142,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
     async def list_cell_sites():
         return list_canonical_sites(getattr(app.state, "web_common", None))
 
-    def _build_cell_task(active, spec: dict, seen_ids: set[str] | None = None) -> dict:
+    def _build_cell_task(active, spec: dict, seen_ids: set[str] | None = None, *, principal_id: str | None = None) -> dict:
         cell_id = str(spec.get("cell_id") or "cell_s")
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
         if station is None:
@@ -149,6 +156,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 cell_id, spec, web_common=web_common, default_cell_s_src=_LEGACY_VEHICLE_SITE,
                 legacy_sites=("belt", _LEGACY_VEHICLE_SITE),
             )
+            identity_meta = validate_task_identity(spec, cell_id=cell_id, principal_id=principal_id)
         except ValueError as exc:
             raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
         tier, pose = checked_task_pose({**spec, "tier": targets["tier"]}, station)
@@ -182,6 +190,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             resolved_disp = raw_disp or None
         site_meta = (
             {"src_site_id": targets["src_site_id"], "dst_site_id": targets["dst_site_id"],
+             "dst_wire_ref": targets["dst_wire_ref"],
              "dst_area": targets["dst_area"], "dst_slot": targets["dst_slot"]}
             if cell_id == "cell_ab" else {}
         )
@@ -195,6 +204,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "src_site": targets["src_site"],
             "dst_site": targets["dst_site"],
             **site_meta,
+            **identity_meta,
             "tier": tier,
             "depends_on": spec.get("depends_on"),
             "displaced_to": resolved_disp,
@@ -210,11 +220,11 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "created_at": round(time.time(), 3),
         })
 
-    def _enqueue_many(active, specs: list[dict]) -> list[dict]:
+    def _enqueue_many(active, specs: list[dict], *, principal_id: str | None = None) -> list[dict]:
         seen_ids: set[str] = set()
         built = []
         for s in specs:
-            task = _build_cell_task(active, s, seen_ids=seen_ids)
+            task = _build_cell_task(active, s, seen_ids=seen_ids, principal_id=principal_id)
             seen_ids.add(task["task_id"])
             built.append(task)
         for task in built:
@@ -222,8 +232,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
         _save_ledger()
         return built
 
-    def _enqueue_one_task(active, spec: dict) -> dict:
-        return _enqueue_many(active, [spec])[0]
+    def _enqueue_one_task(active, spec: dict, *, principal_id: str | None = None) -> dict:
+        return _enqueue_many(active, [spec], principal_id=principal_id)[0]
 
     @app.post("/api/fleet/pipeline/cell-tasks", dependencies=operator_guard)
     async def create_cell_task(request: Request):
@@ -231,6 +241,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         body = await request.json()
         if not isinstance(body, dict):
             raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
+        principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
         if body.get("tiers") is not None:
             base_id = str(body.get("task_id") or f"stack-{uuid.uuid4().hex[:6]}")
             try:
@@ -240,7 +251,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 )
             except ValueError as exc:
                 raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
-            created = _enqueue_many(active, specs)
+            created = _enqueue_many(active, specs, principal_id=principal_id)
             return {"ok": True, "task": created[0], "tasks": created}
         preset_key = body.get("preset")
         if preset_key:
@@ -248,6 +259,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
             if preset is None:
                 raise HTTPException(422, detail={"code": "UNKNOWN_PRESET"})
             if "steps" in preset:
+                if has_identity_input(body):
+                    raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
                 base_id = str(body.get("task_id") or f"pipe-{uuid.uuid4().hex[:6]}")
                 step_specs = []
                 for idx, step in enumerate(preset["steps"]):
@@ -256,16 +269,17 @@ def install_cell_tasks_routes(app, ctx) -> None:
                         **CELL_TASK_PRESETS[step], "robot_id": body.get("robot_id", "rosy_01"),
                         "task_id": sid, "depends_on": step_specs[-1]["task_id"] if step_specs else None,
                     })
-                created_tasks = _enqueue_many(active, step_specs)
+                created_tasks = _enqueue_many(active, step_specs, principal_id=principal_id)
                 return {"ok": True, "task": created_tasks[0], "tasks": created_tasks}
-            merged = {**preset, **{k: v for k, v in body.items() if v is not None}}
-            task = _enqueue_one_task(active, merged)
+            merged = {**preset, **{k: v for k, v in body.items()
+                                   if k in (*IDENTITY_INPUT_FIELDS, "emit_release_permit") or v is not None}}
+            task = _enqueue_one_task(active, merged, principal_id=principal_id)
             return {"ok": True, "task": task, "tasks": [task]}
-        task = _enqueue_one_task(active, body)
+        task = _enqueue_one_task(active, body, principal_id=principal_id)
         return {"ok": True, "task": task, "tasks": [task]}
 
     @app.get("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
-    async def list_cell_tasks(cell_id: str | None = None, status: str | None = None):
+    async def list_cell_tasks(request: Request, cell_id: str | None = None, status: str | None = None):
         active = active_map()
         all_tasks = [_enrich_task_health(t) for t in app.state.omx_cell_tasks.values()]
         tasks = list(all_tasks)
@@ -278,10 +292,11 @@ def install_cell_tasks_routes(app, ctx) -> None:
         stores = {field: getattr(app.state, attr, None) or {} for field, attr in (
             ("bed_confirm_status", "cell_bed_confirmations"), ("presence_confirmation", "cell_presence"))}
         refusals = getattr(app.state, "cell_task_refusals", None) or {}  # last claim/complete refusal (camera routes)
-        tasks = [{**t, **{field: {"principal_id": rec.get("principal_id"), "invalid": bool(rec.get("invalid")),
-                                  "age_s": round(time.time() - rec["confirmed_at"], 1),
-                                  "bound": bool(rec.get("lease")) and rec.get("lease") == t.get("handoff_lease_id")}
-                          for field, store in stores.items() if (rec := store.get(t["task_id"]))},
+        tasks = [{**task_view_for_request(t, request),
+                  **{field: {"principal_id": rec.get("principal_id"), "invalid": bool(rec.get("invalid")),
+                             "age_s": round(time.time() - rec["confirmed_at"], 1),
+                             "bound": bool(rec.get("lease")) and rec.get("lease") == t.get("handoff_lease_id")}
+                     for field, store in stores.items() if (rec := store.get(t["task_id"]))},
                   **({"last_refusal": refusals[t["task_id"]]} if t["task_id"] in refusals else {})} for t in tasks]
         stations = resolve_omx_cells(active[1], active[2])
         cells_info = {}
@@ -343,12 +358,13 @@ def install_cell_tasks_routes(app, ctx) -> None:
         return {"ok": True, "task": task, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/retry", dependencies=operator_guard)
-    async def retry_cell_task(task_id: str):
+    async def retry_cell_task(task_id: str, request: Request):
         active = active_map()
         orig = app.state.omx_cell_tasks.get(task_id)
         if orig is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
         new_id = f"{task_id}-retry-{uuid.uuid4().hex[:4]}"
+        principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
         retried = _enqueue_one_task(
             active,
             {
@@ -363,8 +379,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 "depends_on": orig.get("depends_on"),
                 "displaced_to": orig.get("displaced_to"),
                 "preset": orig.get("preset"),
+                **{k: orig[k] for k in TASK_IDENTITY_FIELDS if k in orig},
                 **{k: orig[k] for k in ("execution_mode", "max_chunks") if orig.get(k) is not None},
             },
+            principal_id=principal_id,
         )
         return {"ok": True, "task": retried, "retried_from": task_id}
 

@@ -11,6 +11,11 @@ from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_
 from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
 from fleet.site_rules import SiteRules
 
+from fleet.server.sitemap.pipeline_port_events import (
+    build_completion_events,
+    flush_pending_port_events_async,
+    strip_task_for_claim,
+)
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap import pipeline_auto_events as auto_events
 from fleet.server.sitemap import pipeline_repark
@@ -216,12 +221,12 @@ def install_cameras_routes(app, ctx) -> None:
 
         if ((getattr(request.state, "site_principal", None) is not None or cell_owner_principals(cell_id))
                 and owner_principal_refusal(request, task) is not None):
-            return {"claimed": False, "task": task, "reason": "OWNER_PRINCIPAL_NOT_REGISTERED"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "OWNER_PRINCIPAL_NOT_REGISTERED"}
         if type(task.get("tier")) is not int or task["tier"] not in (1, 2, 3):
-            return {"claimed": False, "task": task, "reason": "INVALID_CELL_TIER"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "INVALID_CELL_TIER"}
         predecessor = task.get("depends_on")
         if predecessor and (app.state.omx_cell_tasks.get(predecessor) or {}).get("status") != "COMPLETED":
-            return {"claimed": False, "task": task, "reason": "PREVIOUS_TIER_NOT_VERIFIED"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "PREVIOUS_TIER_NOT_VERIFIED"}
         active_task = next((t for t in app.state.omx_cell_tasks.values()
                             if t["cell_id"] == cell_id and t["status"] == "RUNNING"), None)
         cell_state = app.state.omx_cell_states.get(cell_id) or {}
@@ -232,13 +237,13 @@ def install_cameras_routes(app, ctx) -> None:
                              and cell_state.get("robot_id") == task["robot_id"])
         if (active_task is not None or cell_state.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD")
                 or (cell_state.get("amr_motion_inhibited") and not held_for_two_tier)):
-            return {"claimed": False, "task": task, "reason": "CELL_BUSY_OR_HELD"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "CELL_BUSY_OR_HELD"}
         # D-1057: cell A/B release stays off until the depth acceptance; refused here, before anything in the ledger changes.
         if cell_id == "cell_ab" and os.environ.get("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
-            return {"claimed": False, "task": task, "reason": "CELL_AB_EVIDENCE_NOT_ENABLED"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "CELL_AB_EVIDENCE_NOT_ENABLED"}
         amr = _ready_amr(task)
         if amr is None:
-            return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
         if station is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
@@ -254,16 +259,16 @@ def install_cameras_routes(app, ctx) -> None:
         res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
                                         map_version=getattr(active[2], "version", None))
         if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
-            return {"claimed": False, "task": task, "gate": res["gate"]}
+            return {"claimed": False, "task": strip_task_for_claim(task), "gate": res["gate"]}
         from fleet.server.sitemap.pipeline_evidence import bind_bed, has_valid_presence, take_presence
 
         claim_now = time.time()
         if task.get("execution_mode") == "act_policy" and not has_valid_presence(app, task, now=claim_now):
-            return {"claimed": False, "task": task, "reason": "PRESENCE_CONFIRMATION_REQUIRED"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "PRESENCE_CONFIRMATION_REQUIRED"}
 
         # D-1057: binding the bed confirmation to the lease and going RUNNING are one step; if it lapsed meanwhile, nothing changes
         if not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
-            return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
+            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
 
         task["presence"] = take_presence(app, task, now=claim_now)  # D-1057/D-911: set only for a task a named operator confirmed in time
@@ -287,7 +292,7 @@ def install_cameras_routes(app, ctx) -> None:
             "tier_hint": task.get("tier_hint"),
             "presence": task["presence"],
         }
-        return {"claimed": True, "task": task, "handoff": handoff, "gate": res["gate"]}
+        return {"claimed": True, "task": strip_task_for_claim(task), "handoff": handoff, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/complete", dependencies=proposer_guard)
     @_records_refusal("complete")
@@ -414,8 +419,23 @@ def install_cameras_routes(app, ctx) -> None:
         _enrich_task_health(task)
         if phase == "ABORTED":
             pipeline_repark.on_abort(app.state, task, body.get("stage_result") or {}, time.time(), rules=rules())
+        elif phase == "RELEASED":
+            pending_events = build_completion_events(
+                app, task, cell_phase=cell_phase, stage_result=body.get("stage_result") or {},
+                human_detected=bool(_is_human_detected(cell_id)),
+            )
+            if pending_events:
+                task["pending_port_events"] = pending_events
         _save_ledger()
-        return {"ok": True, "task": task, "gate": res["gate"]}
+        flushed = 0
+        if task.get("pending_port_events"):
+            try:
+                flushed = await flush_pending_port_events_async(app)
+            except Exception:
+                flushed = 0
+        if flushed:
+            _save_ledger()
+        return {"ok": True, "task": strip_task_for_claim(task), "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/evaluate", dependencies=read_guard)
     async def pipeline_evaluate(request: Request):
