@@ -14,14 +14,21 @@ function robot(battery = {}) {
 test('charging requires fresh CORE evidence and never clears a safety stop', () => {
   const fresh = powerHealthView(robot(), 1000, 1000);
   assert.equal(fresh.battery, '63%');
+  assert.equal(fresh.percent, 63);
   assert.equal(fresh.charging, '충전 확인');
+  assert.equal(fresh.chargingConfirmed, true);
   assert.equal(fresh.safetyRelease, '로봇 안전 확인 후: 로봇 등록 목록 → 비상정지 해제… → 그 로봇 정지 화면의 Release code');
-  assert.equal(powerHealthView(robot({ charging_state: 'unconfirmed' }), 1000, 1000).charging,
-    '충전 미확인');
+  const unconfirmed = powerHealthView(robot({ charging_state: 'unconfirmed' }), 1000, 1000);
+  assert.equal(unconfirmed.charging, '충전 미확인');
+  assert.equal(unconfirmed.chargingConfirmed, false);
   const held = powerHealthView(robot({ shown_percent: 72.2, percent: 100 }), 1000, 1000);
   assert.equal(held.battery, '72%');
+  assert.equal(held.percent, 72);
   assert.equal(held.charging, '충전 확인 · 72%');
-  assert.equal(powerHealthView(robot({ evidence: 'stale' }), 1000, 1000).battery, '확인 불가');
+  const stale = powerHealthView(robot({ evidence: 'stale' }), 1000, 1000);
+  assert.equal(stale.battery, '확인 불가');
+  assert.equal(stale.percent, null);
+  assert.equal(stale.chargingConfirmed, false);
   assert.equal(powerHealthView(robot({ sample_age_s: 4.9 }), 1000, 1200).charging, '확인 불가');
   assert.equal(powerHealthView(robot({ charging_evidence_age_s: 4.9 }), 1000, 1200).charging, '확인 불가');
   assert.equal(powerHealthView(robot(), 1000, 7000).charging, '확인 불가');

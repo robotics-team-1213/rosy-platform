@@ -190,3 +190,19 @@ test("disposing the feed aborts a read and discards its late result", async (t) 
   await flush();
   assert.equal(image.src, '');
 });
+
+test("waiting, unregistered, and disconnected camera states give clear next-action labels", async (t) => {
+  const {feed} = frameFeed(t, async () => { throw Object.assign(new Error("down"), {status: 503}); }, ['camera_a']);
+  const imgUnreg = imageNode();
+  const badgeUnreg = {isConnected: true};
+  feed.bind(imgUnreg, {source: 'missing_cam'}, badgeUnreg, '손목');
+  await flush();
+  assert.match(badgeUnreg.textContent, /영상 원본 미등록.*등록 확인/);
+
+  const imgErr = imageNode();
+  const badgeErr = {isConnected: true};
+  feed.bind(imgErr, {source: 'camera_a'}, badgeErr, '상단');
+  assert.match(badgeErr.textContent, /첫 프레임 대기/);
+  await flush();
+  assert.match(badgeErr.textContent, /영상 연결 끊김 — Vision 확인/);
+});

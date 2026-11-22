@@ -141,6 +141,25 @@
   #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] {
     grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr);
   }
+  @media (width < 95rem) {
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] > .console-secondary {
+      grid-row: 1;
+      overflow: visible;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] > .console-secondary > .console-context {
+      display: none;
+    }
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] > .console-primary {
+      grid-row: 2;
+    }
+  }
   #robot-stage > .robot-panel { position: relative; top: auto; align-self: stretch; min-height: 0; max-height: 100%; overflow: hidden; }
   #robot-stage > .robot-dock { align-self: stretch; min-height: 0; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 }
@@ -270,7 +289,6 @@
   .cockpit-hud-cell:nth-child(odd) { border-inline-start: 0; }
   .cockpit-hud-cell:nth-child(n + 3) { border-block-start: 1px solid var(--border-subtle); }
   .cockpit-hud-cell[data-hud-key="alerts"] { grid-column: 1 / -1; border-inline-start: 0; }
-  .robot-panel-status-wrap > #robot-workspace { order: -1; }
 }
 
 .robot-panel-status-wrap { display: grid; gap: var(--space-2); min-width: 0; }
@@ -408,7 +426,7 @@
   color: var(--series-goal);
 }
 
-html[data-unit-scope-ready]:not([data-unit-drive]) :is(#dispatch-control, .charge-bays) { display: none; }
+html[data-unit-scope-ready]:not([data-unit-drive]) :is(#dispatch-control, .charge-bays, .panel[aria-labelledby="roster-heading"]) { display: none; }
 
 .cell-cockpit-stage { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 #fleet-main > .console-primary > #cell-cockpit-stage { flex: 0 0 auto; }

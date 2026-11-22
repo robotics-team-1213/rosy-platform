@@ -18,15 +18,6 @@ import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
 import { powerHealthView } from "./power-health-view.js";
 import { staleAgeS } from "./state-age.js";
 
-function readBatteryPercent(robot, state) {
-  const pct = state.battery?.percent;
-  if (typeof pct === "number" && Number.isFinite(pct)) return pct;
-  const frac = state.battery?.percentage;
-  if (typeof frac === "number" && Number.isFinite(frac)) return frac <= 1 ? frac * 100 : frac;
-  const shown = state.battery_status?.shown_percent ?? robot.power_health?.battery?.percent;
-  return typeof shown === "number" && Number.isFinite(shown) ? shown : null;
-}
-
 function appendKv(dl, rows) {
   const nodes = [];
   for (const [label, value] of rows) {
@@ -145,12 +136,12 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       }
     } else {
       const robot = detail?.robot || {};
-      const state = view.stateUnavailable ? {} : (robot.state || {});
-      const pct = robot.online && !view.stateUnavailable ? readBatteryPercent(robot, state) : null;
       const power = powerHealthView(robot, view.receivedAtMs, Date.now());
+      const pct = robot.online && !view.stateUnavailable ? power.percent : null;
       const readout = pct !== null
-        ? `${Math.round(pct)}%${typeof power.voltage === "number" ? ` · ${power.voltage.toFixed(1)}V` : ""}`
-        : robot.online ? "—" : "오프라인";
+        ? `${pct}%${typeof power.voltage === "number" ? ` · ${power.voltage.toFixed(1)}V` : ""}`
+        : !robot.online ? "오프라인"
+        : power.note ? `확인 불가 · ${power.note}` : "확인 불가";
       telemetryTrace.update({
         id: `batt:${profile.id}`,
         title: "POWER · BATT",
@@ -159,7 +150,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         unit: "%",
         minBound: 0,
         maxBound: 100,
-        tone: pct === null ? "neutral" : pct <= 15 ? "crit" : pct <= 25 ? "warn" : "primary",
+        tone: pct === null ? (robot.online && !view.stateUnavailable ? "warn" : "neutral") : pct <= 15 ? "crit" : pct <= 25 ? "warn" : "primary",
       });
     }
   }
@@ -184,7 +175,6 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         : !view.stateUnavailable && robot.online && robot.error
           ? { level: "caution", text: robot.error.code || "오류" }
           : undefined;
-      const chargingState = robot.power_health?.battery?.charging_state;
       const guideRow = !view.stateUnavailable
         ? (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id) || null
         : null;
@@ -201,9 +191,9 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         ageS,
         evidence,
         battery: {
-          percent: readBatteryPercent(robot, state),
+          percent: view.stateUnavailable ? null : power.percent,
           voltage: power.voltage,
-          charging: chargingState === "CHARGING" || state.power?.charging === true,
+          charging: power.chargingConfirmed,
         },
         pose: effectivePose,
         place: placeText,

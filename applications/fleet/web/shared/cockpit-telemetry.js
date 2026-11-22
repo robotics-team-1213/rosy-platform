@@ -1,6 +1,7 @@
 import { cssColor } from "/common/ui.js";
 import { node } from "/common/control-dom.js";
 import { owns } from "/console/assets/unit-scope.js";
+import { powerHealthView } from "/console/assets/power-health-view.js";
 
 let uPlotLoader = null;
 function loadUPlot() {
@@ -44,12 +45,13 @@ export function createCockpitHud({ el }) {
     pathbar.append(hud);
   }
 
-  function setCell(key, text, tone = "neutral", labelText = null) {
+  function setCell(key, text, tone = "neutral", labelText = null, title = "") {
     const target = cells?.[key];
     if (!target) return;
     if (labelText && target.label.textContent !== labelText) target.label.textContent = labelText;
     if (target.val.textContent !== text) target.val.textContent = text;
     if (target.cell.dataset.tone !== tone) target.cell.dataset.tone = tone;
+    if (target.cell.title !== title) target.cell.title = title;
   }
 
   function update(view) {
@@ -80,17 +82,22 @@ export function createCockpitHud({ el }) {
       (r) => r.online && (r.state?.navigation === "NAVIGATING" || r.goal),
     ).length;
 
-    const pcts = onlineRobots
-      .map((r) => {
-        const s = r.state || {};
-        const p = s.battery?.percent ?? r.power_health?.battery?.percent;
-        if (typeof p === "number" && Number.isFinite(p)) return p;
-        const frac = s.battery?.percentage;
-        if (typeof frac === "number" && Number.isFinite(frac)) return frac <= 1 ? frac * 100 : frac;
-        return null;
-      })
+    const nowMs = Date.now();
+    const validPcts = view.stateUnavailable ? [] : onlineRobots
+      .map((r) => powerHealthView(r, view.receivedAtMs, nowMs).percent)
       .filter((n) => n !== null);
-    const minBatt = pcts.length ? Math.round(Math.min(...pcts)) : null;
+    const minBatt = validPcts.length ? Math.min(...validPcts) : null;
+    const battText = online === 0 || view.stateUnavailable ? "—"
+      : minBatt === null ? "확인 불가"
+      : validPcts.length < online ? `${minBatt}% (${validPcts.length}/${online})`
+      : `${minBatt}%`;
+    const battTone = online === 0 || view.stateUnavailable ? "neutral"
+      : minBatt === null ? (view.stateLoaded ? "warn" : "neutral")
+      : minBatt <= 15 ? "crit" : minBatt <= 30 ? "warn" : "neutral";
+    const battTitle = online === 0 || view.stateUnavailable ? ""
+      : minBatt === null ? "유효 배터리 근거 없음"
+      : validPcts.length < online ? `유효 배터리 근거 ${validPcts.length}/${online}대 기준 최저값`
+      : "";
 
     const anchors = view.anchors || [];
     const anchorHeld = anchors.filter(
@@ -120,12 +127,7 @@ export function createCockpitHud({ el }) {
       activeCount > 0 ? "active" : "neutral",
       "MISSION",
     );
-    setCell(
-      "battery",
-      minBatt === null ? "—" : `${minBatt}%`,
-      minBatt === null ? "neutral" : minBatt <= 15 ? "crit" : minBatt <= 30 ? "warn" : "neutral",
-      "BATT MIN",
-    );
+    setCell("battery", battText, battTone, "BATT MIN", battTitle);
     setCell(
       "arms",
       armsText,

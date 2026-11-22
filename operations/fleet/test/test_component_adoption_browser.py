@@ -92,7 +92,19 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
             panel_box = panel.bounding_box()
             assert dock_box and panel_box
             assert dock_box["y"] + dock_box["height"] <= panel_box["y"] + 1
+            if width == 390:
+                twin_box = panel.locator(".robot-panel-twin").bounding_box()
+                ws_box = panel.locator("#robot-workspace").bounding_box()
+                assert twin_box and ws_box
+                assert twin_box["y"] < ws_box["y"]
+                assert twin_box["y"] + twin_box["height"] <= 844
         if width >= 1024:
+            if width < 1520:
+                expect(page.locator(".console-context")).to_be_hidden()
+                expect(page.locator("#cancel-all")).to_be_visible()
+                expect(page.locator("#estop")).to_be_visible()
+                map_box = page.locator("#map-stage").bounding_box()
+                assert map_box and map_box["width"] >= 700
             assert page.evaluate("() => { const s = document.querySelector('#fleet-main > .console-secondary'); return !s || s.scrollWidth <= s.clientWidth + 1; }")
             stamp_ok = page.evaluate("""() => {
               const stamp = document.getElementById('map-camera-stamp');
@@ -132,6 +144,13 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
 
         panel.locator(".robot-panel-close").click()
         expect(panel).to_be_hidden()
+        if width == 1366:
+            expect(page.locator(".console-context")).to_be_visible()
+            arm_btn.click()
+            expect(panel).to_be_visible()
+            page.keyboard.press("Escape")
+            expect(panel).to_be_hidden()
+            expect(arm_btn).to_be_focused()
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
         assert not posts and not errors
         browser.close()
@@ -260,6 +279,8 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         stage = page.locator("#" + "cell-cockpit-stage")
         expect(stage).to_be_visible()
         expect(page.locator('section[aria-labelledby="map-heading"]')).to_be_hidden()
+        expect(page.locator("#roster-heading")).to_be_hidden()
+        expect(page.locator("#site-path")).to_be_hidden()
         for arm_id in ("arm_a", "arm_b", "arm_s"):
             expect(stage.locator(f'.cell-stage-arm[data-arm-id="{arm_id}"]')).to_be_visible()
         hud_text = page.locator("#" + "cockpit-hud").inner_text()
@@ -292,5 +313,32 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         hit_drive = [u for u in seen_urls if any(p in u for p in forbidden)]
         assert not hit_drive, f"drive/discovery APIs hit under ARM-CELL scope: {hit_drive}"
         assert not failed_404, f"4xx/5xx API responses under ARM-CELL scope: {failed_404}"
+        assert not posts and not errors
+        browser.close()
+
+
+def test_cockpit_battery_expiry_syncs_hud_and_panel(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    api = copy.deepcopy(API)
+    with sync_playwright() as pw:
+        posts = []
+        browser, page, errors = _open(pw, site, api, posts, size=(1366, 768))
+        expect(page.locator('#cockpit-hud [data-hud-key="battery"]')).to_contain_text("80%")
+        page.locator('#robot-dock .robot-dock-btn[data-kind="mobile"]').first.click()
+        panel = page.locator("#" + "robot-panel")
+        expect(panel).to_be_visible()
+        expect(panel.locator(".telemetry-chart-value")).to_contain_text("80%")
+
+        for robot in api["/api/fleet/state"]["robots"]:
+            if robot.get("online"):
+                robot["power_health_age_s"] = 10.0
+
+        page.wait_for_function(
+            "() => document.querySelector('#cockpit-hud [data-hud-key=\"battery\"] .cockpit-hud-val')?.textContent === '확인 불가'",
+            timeout=8000,
+        )
+        expect(panel.locator(".telemetry-chart-value")).to_contain_text("확인 불가")
+        assert panel.locator(".telemetry-chart-plot").evaluate("n => n.offsetHeight") == 0
         assert not posts and not errors
         browser.close()
