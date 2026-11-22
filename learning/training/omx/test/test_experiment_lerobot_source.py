@@ -41,6 +41,8 @@ def test_manifest_is_canonical_and_case_collisions_are_rejected():
     files = manifest() + [dict(name='README.md', size=0, sha256='0'*64)]
     assert source.manifest_revision(files) == source.manifest_revision(list(reversed(files)))
     assert source.validate_files(files)[0]['name'] == 'README.md'
+    assert source.allowed('rosy_provenance.json') == 'rosy_provenance.json'
+    assert source.validate_files(manifest() + [dict(name='rosy_provenance.json', size=2, sha256='0'*64)])[1]['name'] == 'rosy_provenance.json'
     with pytest.raises(ValueError):
         source.validate_files(files + [dict(files[1])])
 
