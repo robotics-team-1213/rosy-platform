@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fleet_cockpit_browser import selected_robot_id
 from test_fleet_console_browser import (
     os, json, console_url, urlparse, pytest, pytestmark, DECLINE_CONFIRM, save_temp_screenshot,
     MAP_GRID, _robot, SNAPSHOT, FORMATION, API, _open_cards, _open_console, EMPTY_SNAPSHOT,
@@ -351,7 +352,10 @@ def test_keyboard_traverses_the_roster_and_arms_a_goal(console_url):
             "() => document.activeElement.querySelector('b')?.textContent === 'rosy_01'"
         )
         page.keyboard.press("Enter")
-        page.wait_for_function("() => document.querySelector('#robot-choice')?.value === 'rosy_01'")
+        page.wait_for_function(
+            "() => document.querySelector('#robot-dock .robot-dock-btn[data-robot-id=\"rosy_01\"]')?.hasAttribute('data-selected')"
+        )
+        assert selected_robot_id(page) == "rosy_01"
         assert page.locator('.robot.selected').count() == 0
         page.locator('#robot-workspace ui-button[data-goal-robot-id]').click()
         page.wait_for_function(

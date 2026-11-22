@@ -679,7 +679,7 @@ class Scripted:
         answer = self.answers.get(command, {})
         if isinstance(answer, list):  # one answer per call, then plain success
             answer = answer.pop(0) if answer else {}
-        return {"command": command, "ok": True, **answer}
+        return {"command": command, "ok": True, "settled": True, **answer}
 
 
 def test_transport_folds_home_between_lift_and_place():

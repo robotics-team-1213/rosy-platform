@@ -387,7 +387,8 @@ async function connect(credentialChange = false) {
   } catch (error) {
     if (localEdit) Object.assign(state, localEdit);
     state.loadState = error.status === 401 ? 'idle' : 'error';
-    if (error.status === 401 || error.status === 403) {
+    // D-1043: a 403 FORBIDDEN is a role refusal, not a lost session: the E-stop stays live for it.
+    if (error.status === 401 || (error.status === 403 && error.code !== 'FORBIDDEN')) {
       state.role = null;
       showSignedOut();
     }

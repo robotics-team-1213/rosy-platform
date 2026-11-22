@@ -12,7 +12,7 @@ import time
 
 import pytest
 import uvicorn
-from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener
+from browser_harness import BODY_FIT, browser_tests_enabled, open_token_access, safe_listener, shared_browser
 import yaml
 
 from test_cell_job_api import _setup
@@ -31,7 +31,6 @@ ROOT = Path(__file__).resolve().parents[3]
 
 @pytest.fixture
 def browser_site(tmp_path):
-    from playwright.sync_api import sync_playwright
     from core_common.protocol.channel_requests import DiscordRequestEnvelope
     from fleet.server.channel_requests import ChannelConfig
 
@@ -60,15 +59,18 @@ def browser_site(tmp_path):
         control = tasks.store.dispatch_control()
         if not control["dispatch_enabled"]:
             tasks.store.rearm_dispatch(expected_generation=control["generation"], actor_id="operator-1")
-        with sync_playwright() as toolkit:
-            browser = toolkit.chromium.launch(headless=True)
-            try:
-                page = browser.new_page(viewport={"width": 1440, "height": 1000})
-                page.goto(origin + "/console/cell")
-                page.wait_for_load_state("networkidle")
-                yield page, tasks, origin
-            finally:
-                browser.close()
+        context = shared_browser().new_context(viewport={"width": 1440, "height": 1000})
+        try:
+            page = context.new_page()
+            page.goto(origin + "/console/cell")
+            page.locator("#estop").wait_for(state="visible")
+            page.wait_for_function(
+                "() => { const role = document.getElementById('user-role');"
+                " return role && (role.getAttribute('status') !== 'neutral' || Boolean(role.getAttribute('title'))); }"
+            )
+            yield page, tasks, origin
+        finally:
+            context.close()
     finally:
         server.should_exit = True
         worker.join(timeout=20)
@@ -140,6 +142,24 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     expect(page.locator("#omx-right-inspector .omx-inspector-head")).to_contain_text("arm_b")
     expect(page.locator("#omx-right-inspector .omx-inspector-stage")).to_contain_text("arm_b 손목(근접)")
     expect(page.locator("#omx-right-inspector .omx-inspector-main-cam")).to_have_count(1)
+    pips = page.locator("#omx-right-inspector button.omx-inspector-pip")
+    expect(pips).to_have_count(4)
+    expect(pips.nth(0)).to_have_attribute("aria-pressed", "true")
+    pips.nth(1).focus()
+    page.keyboard.press("Enter")
+    expect(page.locator("#omx-right-inspector button.omx-inspector-pip").nth(1)).to_have_attribute("aria-pressed", "true")
+    expect(page.locator("#omx-right-inspector .omx-inspector-stage")).to_contain_text("S5 상단")
+    zoom = page.locator("#omx-right-inspector .omx-inspector-zoom")
+    expect(zoom).to_have_attribute("aria-expanded", "false")
+    zoom.focus()
+    page.keyboard.press("Enter")
+    expect(zoom).to_have_attribute("aria-expanded", "true")
+    expect(page.locator("#omx-right-inspector .omx-inspector-main-cam.focused")).to_have_count(1)
+    page.keyboard.press("Escape")
+    expect(zoom).to_have_attribute("aria-expanded", "false")
+    expect(page.locator("#omx-right-inspector .omx-inspector-main-cam.focused")).to_have_count(0)
+    expect(page.locator("#omx-right-inspector").get_by_label("적재 층")).to_have_count(1)
+    expect(page.locator("#omx-right-inspector").get_by_label("복구 위치")).to_have_count(1)
     assert not relay_hits, relay_hits
 
 

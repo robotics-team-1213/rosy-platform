@@ -242,9 +242,13 @@ jobs:
       - name: Fleet browser readiness (Chromium and CJK fonts from the image)
         if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py') || contains(toJSON(matrix.invocations), 'ROSY_RUN_BROWSER_TESTS=1')
         run: |
-          # The console is Korean: without fonts-noto-cjk, headless Chromium renders Hangul through
-          # Playwright's wide Unifont fallback and 320px layout-fit assertions see overflow.
-          fc-list | grep -qi 'noto.*cjk'
+          # The console is Korean: without fonts-noto-cjk (and with WenQuanYi absent), headless Chromium
+          # matches lab PC metrics instead of Playwright's wide Unifont or fonts-wqy-zenhei fallback.
+          if dpkg -s fonts-wqy-zenhei >/dev/null 2>&1 || dpkg -s fonts-wqy-microhei >/dev/null 2>&1; then
+            echo "::error::WenQuanYi CJK fonts must not be installed in rosy-ci" >&2
+            exit 1
+          fi
+          fc-list | grep -i 'noto.*cjk' >/dev/null
           python3 -c 'from playwright.sync_api import sync_playwright as p; pw = p().start(); pw.chromium.launch().close(); pw.stop()'
 
       - name: Install Pinky raw verification tools
@@ -554,8 +558,24 @@ jobs:
                       status = 1
               _, seen_known, _ = known_failures.compare(first_out, known_list)
               all_req_known = bool(req_ids) and not checked_req and bool(seen_known)
-              if has_summary and not all_req_known and (len(target_paths) > 1 or bool(req_ids)
-                                  or any(not p.endswith(".py") for p in target_paths)):
+              all_opt_in_browser = (
+                  not is_browser
+                  and bool(target_paths)
+                  and all(
+                      "::" not in p and p.endswith(".py") and (
+                          p.endswith("_browser.py")
+                          or (Path(p).is_file() and bool(re.search(
+                              r"\bfrom\s+browser_harness\s+import\b.*\bbrowser_tests_enabled\b",
+                              Path(p).read_text(encoding="utf-8", errors="replace"),
+                          )))
+                      )
+                      for p in target_paths
+                  )
+              )
+              if has_summary and not all_req_known and not all_opt_in_browser and (
+                  len(target_paths) > 1 or bool(req_ids)
+                  or any(not p.endswith(".py") for p in target_paths)
+              ):
                   if not re.search(r"\b[1-9]\d* passed\b", full_out):
                       print(f"::error::pytest {' '.join(paths)} passed 0 items (all skipped or empty)", flush=True)
                       status = 1

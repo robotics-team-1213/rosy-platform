@@ -4,7 +4,8 @@ import pytest
 
 from browser_harness import browser_tests_enabled
 from console_browser_site import console_url  # noqa: F401
-from test_fleet_console_browser import MAP_GRID, _open_cards, _open_console, _robot
+from fleet_cockpit_browser import open_robot_workspace  # noqa: E402
+from test_fleet_console_browser import MAP_GRID, _open_console, _robot
 
 pytestmark = pytest.mark.skipif(
     not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium",
@@ -24,8 +25,7 @@ def test_emergency_stop_chip_stays_inside_the_robot_card(console_url):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="networkidle")
-        _open_cards(page)
-        card = page.locator("#robot-workspace article").filter(has_text="rosy_01")
+        card = open_robot_workspace(page, "rosy_01")
         safety = card.locator('[data-fact="safety"]')
         assert "비상 정지" in safety.inner_text()
         measured = safety.evaluate("""node => {

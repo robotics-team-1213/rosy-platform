@@ -55,6 +55,7 @@ FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.jso
 CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json").read_text(encoding="utf-8")),
                    **FLEET_TEST_SECONDS}
 MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
+PR_JOB_CAP = 12  # leaves >=8 of 20 org runners free for Merge Queue, main push, and concurrent PRs
 _STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_scheduling.py"
 _GIT_HISTORY_TESTS = (
     "test/test_harness_contracts.py",
@@ -62,6 +63,7 @@ _GIT_HISTORY_TESTS = (
     "test/test_safety_review.py",
     "test/test_remote_test_tools.py",
     "test/test_remote_fixture_isolation.py",
+    "test/test_release_boundary_guards.py",
 )
 
 
@@ -82,7 +84,8 @@ def consolidated(include: list[dict]) -> list[dict]:
     A 60 s share per job was tried on 2026-11-21 (#343) and dropped: runs used 55% more runner seconds (984 to 1546)
     and, with several runs sharing the 20 concurrent jobs, the median job waited 177 s for a runner (45 s before)."""
     fine = affected_ros.consolidate(include, CI_TEST_SECONDS)
-    return fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+    out = fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+    return affected_ros.pack_to_limit(out, CI_TEST_SECONDS, PR_JOB_CAP)
 
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
@@ -157,14 +160,19 @@ def docs_only(sel: Selection) -> bool:
 def buildable(repo: Repo, sel: Selection) -> bool:
     """False only when nothing build-smoke reads can have changed: no changed file inside a colcon root
     (documents aside) and none of BUILD_DATA. A missing manifest means unknown, so the job stays."""
+    import affected_narrow
+
     if sel.mode != "affected" or sel.escalations:
         return True
     roots = repo.parts.get("colcon_roots") or ()
     if not roots:
         return True
-    return any(p in BUILD_DATA or p.startswith(BUILD_PREFIXES) or (not p.endswith(DOC_SUFFIXES)
-                                   and any(affected_ros._under(p, r) for r in roots))
-               for p in sel.changed)
+    return any(
+        not affected_narrow.is_contract_version_pin(repo, p)
+        and (p in BUILD_DATA or p.startswith(BUILD_PREFIXES)
+             or (not p.endswith(DOC_SUFFIXES) and any(affected_ros._under(p, r) for r in roots)))
+        for p in sel.changed
+    )
 
 
 # Slow root test files that dominate affected GUARD_SET runners when packed together.

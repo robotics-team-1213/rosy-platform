@@ -96,6 +96,15 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "--dry-run" in drive_argv and "--person-at-switch" not in drive_argv
     assert drive_argv[0] == "bash"
     assert "--commissioning" not in drive_argv
+    paced_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True}, wd)
+    assert "--paced-chunks" in paced_argv
+    for bad_paced in (
+        {"mode": "hybrid", "goal_site": "yard:r3-s2-t1"},
+        {"mode": "taught", "goal_site": "yard:r3-s2-t1"},
+        {"n_action": 8},
+    ):
+        with pytest.raises(ValueError, match="paced_chunks"):
+            api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, **bad_paced}, wd)
     live = {**base_policy, "dry_run": False}
     assert api.build_argv(api.JOBS["cell_policy_drive"], live, wd)[0] == "./with-session-arm-s-live.sh"
     with pytest.raises(ValueError, match="person_at_switch"):
@@ -107,11 +116,27 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     argv = api.build_argv(job, with_goal, wd)
     assert argv[argv.index("--goal-site") + 1] == "yard:r3-s2-t1"
     assert "--model-calibration" not in argv
-    hybrid = api.build_argv(job, {**with_goal, "mode": "hybrid", "n_action": 8, "max_obs_age_s": 0.6}, wd)
+    hybrid = api.build_argv(job, {**with_goal, "mode": "hybrid", "n_action": 8, "max_obs_age_s": 0.6, "source_kind": "policy"}, wd)
     assert hybrid[hybrid.index("--mode") + 1] == "hybrid"
     assert hybrid[hybrid.index("--n-action") + 1] == "8"
     assert hybrid[hybrid.index("--max-obs-age-s") + 1] == "0.6"
+    assert hybrid[hybrid.index("--source-kind") + 1] == "policy"
+    mixed_actor = api.build_argv(job, {**with_goal, "proposer": "Alice.Kim", "operator": "Bob.Lee"}, wd)
+    assert mixed_actor[mixed_actor.index("--operator") + 1] == "Bob.Lee"
+    with pytest.raises(ValueError, match="D-1024"):
+        api.build_argv(job, {**with_goal, "proposer": "Alice.Kim", "operator": "alice.kim"}, wd)
+    with pytest.raises(ValueError, match="source_kind"):
+        api.build_argv(job, {**with_goal, "source_kind": "bogus"}, wd)
+    for bad_sk in ("scripted_teacher", "sim_optimized"):
+        with pytest.raises(ValueError, match="policy"):
+            api.build_argv(job, {**with_goal, "mode": "act", "source_kind": bad_sk}, wd)
+        with pytest.raises(ValueError, match="policy"):
+            api.build_argv(job, {**with_goal, "mode": "hybrid", "source_kind": bad_sk}, wd)
     taught = {k: v for k, v in with_goal.items() if k not in {"policy_root", "policy_revision", "cell_calibration"}}
+    with pytest.raises(ValueError, match="taught"):
+        api.build_argv(job, {**taught, "mode": "taught", "source_kind": "policy"}, wd)
+    sim_taught = api.build_argv(job, {**taught, "mode": "taught", "source_kind": "sim_optimized"}, wd)
+    assert sim_taught[sim_taught.index("--source-kind") + 1] == "sim_optimized"
     fallback = api.build_argv(job, {**taught, "mode": "taught"}, wd)
     assert fallback[fallback.index("--mode") + 1] == "taught" and "--policy-root" not in fallback
     with pytest.raises(ValueError, match="goal_site"):
@@ -304,7 +329,7 @@ def test_resolve_goal_site_supports_standalone_cell_api_layout(tmp_path):
     shutil.copy2(repo_root / "tools" / "sim" / "cell_site_map.py", stage / "tools" / "sim" / "cell_site_map.py")
     shutil.copy2(repo_root / "shared" / "web" / "cell-site-map.json", stage / "shared" / "web" / "cell-site-map.json")
     out = subprocess.check_output(
-        [sys.executable, "-c", "import cell_policy_goals as g; print(g.resolve_goal_site('yard:r3-s2-t1'))"],
+        [sys.executable, "-c", "import cell_policy_goals as g; print(g.resolve_goal_site('yard:r1-s2-t1'))"],
         cwd=stage,
         text=True,
     )

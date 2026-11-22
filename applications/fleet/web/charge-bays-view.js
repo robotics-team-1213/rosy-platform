@@ -9,14 +9,14 @@ export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from 
 /** Choices that act on a robot need the server's occupant; the console never substitutes one. */
 // The human-safety gate is cell-wide and must never be disabled for want of a robot.
 const needsRobot = (choice) => Boolean(choice.visionCheckCell || choice.cableGuardToggle
-  || choice.zoneId || choice.pinkyAction);
+  || choice.zoneId);
 
 function markNoRobot(button, choice, card) {
   if (!needsRobot(choice) || card.robot_id) return;
   setOffBy(button, "대상 로봇 없음");
 }
 
-export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null }) {
+export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null, selection = null }) {
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
@@ -40,19 +40,14 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     if (!document.hidden) void refresh();
   });
 
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    scope.listen(window, "rosy:inspect-target", (ev) => {
-      const targetId = ev?.detail?.targetId;
-      const camId = ev?.detail?.camId;
-      if (!targetId) return;
-      activeInspectorId = targetId;
+  if (selection?.subscribe) {
+    const offSelection = selection.subscribe((id) => {
+      if (!id || (!String(id).startsWith("arm_") && !String(id).startsWith("cell_"))) return;
+      activeInspectorId = id;
       framesOn = false;
-      if (camId) selectedInspectorCam[activeInspectorId] = camId;
       if (lastRows) renderInspector(lastRows);
-      if (ev?.detail?.scroll && inspector?.scrollIntoView) {
-        inspector.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }
     });
+    scope.onDispose?.(offSelection);
   }
 
   function tag(text, status) {
@@ -116,13 +111,16 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
           body: JSON.stringify({subject_id: choice.decisionSubject, auto_execute: true}),
         });
       } else {
-        await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
+        await call("/api/fleet/pipeline/cell-tasks", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(choice.preset ? {preset: choice.preset} :
-            {robot_id: card.robot_id, action: choice.pinkyAction}),
+          body: JSON.stringify({preset: choice.preset}),
         });
       }
       await refresh();
+      if (choice.requiresPresence) {
+        hint.textContent = "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.";
+        hint.hidden = false;
+      }
     } catch (error) {
       hint.textContent = `작업 요청 실패: ${error.message}`;
       hint.hidden = false;
@@ -155,9 +153,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       btn.textContent = t.shortTab;
       btn.addEventListener("click", () => {
         activeInspectorId = t.id;
-        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
-          window.dispatchEvent(new CustomEvent("rosy:focus-anchor", { detail: { targetId: t.id, stationId: t.station_id || null } }));
-        }
+        selection?.set?.(t.id, { source: "inspector" });
         renderInspector(rows);
       });
       tabs.append(btn);
@@ -215,23 +211,51 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
       mainImg.alt = `${active.title} 실시간 메인 카메라`;
       mainImg.loading = "lazy";
-      mainImg.tabIndex = 0;
-      mainImg.addEventListener("click", () => mainImg.classList.toggle("focused"));
+      const stageBar = document.createElement("div");
+      stageBar.className = "omx-inspector-stage-bar";
       const mainCap = document.createElement("small");
       mainCap.className = "omx-inspector-cam-badge";
       mainCap.textContent = `🎥 [${activeCam.label}]`;
+      const zoomBtn = document.createElement("ui-button");
+      zoomBtn.className = "omx-inspector-zoom";
+      zoomBtn.setAttribute("kind", "quiet");
+      zoomBtn.setAttribute("type", "button");
+      zoomBtn.setAttribute("data-work-read", "");
+      zoomBtn.setAttribute("aria-expanded", "false");
+      zoomBtn.textContent = "크게 보기";
+      zoomBtn.setAttribute("aria-label", `${activeCam.label} 크게 보기`);
+      const applyZoom = (zoomed) => {
+        mainImg.classList.toggle("focused", zoomed);
+        zoomBtn.setAttribute("aria-expanded", String(zoomed));
+        zoomBtn.textContent = zoomed ? "원래 크기" : "크게 보기";
+        zoomBtn.setAttribute("aria-label", `${activeCam.label} ${zoomed ? "원래 크기" : "크게 보기"}`);
+      };
+      zoomBtn.addEventListener("click", () => applyZoom(!mainImg.classList.contains("focused")));
+      mainImg.addEventListener("click", () => applyZoom(!mainImg.classList.contains("focused")));
+      camStageNode.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape" && mainImg.classList.contains("focused")) {
+          ev.stopPropagation();
+          applyZoom(false);
+        }
+      });
+      stageBar.append(mainCap, zoomBtn);
       cameraBindings.push([mainImg, activeCam, mainCap, `🎥 [${activeCam.label}]`]);
-      camStageNode.append(mainImg, mainCap);
+      camStageNode.append(mainImg, stageBar);
     }
 
     const pipGrid = document.createElement("div");
     pipGrid.className = "omx-inspector-pip-grid";
     for (const v of camViews) {
-      const pip = document.createElement("div");
+      const pip = document.createElement("button");
+      pip.type = "button";
+      pip.setAttribute("data-work-read", "");
       pip.className = `omx-inspector-pip${v.id === activeCam.id ? " active" : ""}`;
+      pip.setAttribute("aria-pressed", String(v.id === activeCam.id));
+      pip.setAttribute("aria-label", `${v.label} 카메라 선택`);
       const pImg = document.createElement("img");
       pImg.className = "omx-inspector-cam";
-      pImg.alt = v.label;
+      pImg.alt = "";
+      pImg.setAttribute("aria-hidden", "true");
       pImg.loading = "lazy";
       cameraBindings.push([pImg, v]);
       const pLbl = document.createElement("small");
@@ -251,15 +275,24 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
     const quickDispatchBar = document.createElement("div");
     quickDispatchBar.className = "omx-inspector-quick-dispatch";
+    const tierField = document.createElement("label");
+    tierField.className = "omx-inspector-field";
+    const tierText = document.createElement("span");
+    tierText.textContent = "적재 층";
     const tierSel = document.createElement("select"); tierSel.className = "ui-field";
     tierSel.setAttribute("data-work-read", "");
-    for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]]) {
+    for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]] ) {
       const opt = document.createElement("option");
       opt.value = val;
       opt.textContent = lbl;
       if (active.id === "arm_b" && val === "2") opt.selected = true;
       tierSel.append(opt);
     }
+    tierField.append(tierText, tierSel);
+    const dispField = document.createElement("label");
+    dispField.className = "omx-inspector-field";
+    const dispText = document.createElement("span");
+    dispText.textContent = "복구 위치";
     const dispSel = document.createElement("select"); dispSel.className = "ui-field";
     dispSel.setAttribute("data-work-read", "");
     for (const [val, lbl] of [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]]) {
@@ -268,6 +301,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       opt.textContent = lbl;
       dispSel.append(opt);
     }
+    dispField.append(dispText, dispSel);
     const runCustomBtn = document.createElement("ui-button");
     runCustomBtn.setAttribute("kind", "primary");
     runCustomBtn.setAttribute("type", "button");
@@ -301,7 +335,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         setOffBy(runCustomBtn, "");
       }
     });
-    quickDispatchBar.append(tierSel, dispSel, runCustomBtn);
+    quickDispatchBar.append(tierField, dispField, runCustomBtn);
 
     const actions = document.createElement("div");
     actions.className = "omx-card-actions";
@@ -325,7 +359,6 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     renderInspector(rows);
     list.replaceChildren();
     const cellItems = new Map();
-    const robotItems = new Map();
     for (const b of rows?.bays || []) {
       const li = document.createElement("li");
       li.append(`${b.id} `, tag(b.text, b.status));
@@ -341,10 +374,9 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       const li = document.createElement("li");
       li.textContent = `${a.robot}: ${a.text}`;
       list.append(li);
-      robotItems.set(a.robot, li);
     }
     for (const card of rows?.cards || []) {
-      const li = (card.kind === "omx" ? cellItems : robotItems).get(card.id) || document.createElement("li");
+      const li = cellItems.get(card.id) || document.createElement("li");
       if (li.parentNode !== list) list.append(li);
       const article = document.createElement("article");
       article.className = "omx-dense-card";

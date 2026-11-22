@@ -91,7 +91,7 @@ def test_executor_normalizes_canonical_targets_refuses_uncalibrated_and_emits_pl
         "plan_path": str(tmp_path / "grasp-plan.json"),
         "sites": {
             "beltend": {},
-            "ship-h1r2": {"place": [0.15, -0.10], "surface_z": -0.01},
+            "ship-h1r0": {"place": [0.15, -0.10], "surface_z": -0.01},
             "tmp-a-1": {"place": [0.05, 0.14], "surface_z": 0.01},
         },
     }
@@ -136,10 +136,10 @@ def test_executor_normalizes_canonical_targets_refuses_uncalibrated_and_emits_pl
         "task_id": "t-yard-2", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 2,
         "handoff_lease_id": "l-2", "src_site": "belt", "dst_site": "yard-r1-c4-l2",
     }, prep_dir=tmp_path)
-    assert cmds[0][cmds[0].index("--dest") + 1] == "ship-h1r2-l1"
+    assert cmds[0][cmds[0].index("--dest") + 1] == "ship-h1r0-l1"
     assert ok["stage_result"]["task_verified"] is True
     assert ok["stage_result"]["place"] == {
-        "area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "col": 1, "row": 2, "tier": 2,
+        "area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "col": 1, "row": 2, "tier": 2,
     }
 
 
@@ -222,18 +222,18 @@ def test_stand_with_floor_rois_and_worker_slot_arm_calibration_guards(monkeypatc
     assert cst.calibration_refusal({"pallet-l0": {"place": [0.0, 0.0], "surface_z": 0.0}}, "temp_plate_a", "pallet-l0", 1) == "SITE_NOT_CALIBRATED"
 
     # Strict slot, site_id, and verification.target binding at zone_acceptance and cell_ab_place_verified.
-    handoff = {"cell_id": "cell_ab", "arm_id": "arm_b", "dst_site": "ship-h1r2-l1", "dst_site_id": "yard:r1-s2-t2",
+    handoff = {"cell_id": "cell_ab", "arm_id": "arm_b", "dst_site": "ship-h1r0-l1", "dst_site_id": "yard:r1-s2-t2",
                "dst_area": "yard", "dst_slot": {"col": 1, "row": 2, "tier": 2}, "tier": 2}
-    valid_target = {"site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "area": "yard", "col": 1, "row": 2, "tier": 2}
-    assert cp.zone_acceptance({"verified": True, "basis": cp.ZONE_BASIS, "target": valid_target}, handoff, "ship-h1r2-l1") is True
-    assert cp.zone_acceptance({"verified": True, "basis": cp.ZONE_BASIS, "target": {"site": "ship-h1r2-l1", "area": "yard", "col": 1, "row": 2, "tier": 2}}, handoff, "ship-h1r2-l1") is False
-    assert cp.zone_acceptance({"verified": True, "basis": cp.ZONE_BASIS, "target": {**valid_target, "col": 2}}, handoff, "ship-h1r2-l1") is False
+    valid_target = {"site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "area": "yard", "col": 1, "row": 2, "tier": 2}
+    assert cp.zone_acceptance({"verified": True, "basis": cp.ZONE_BASIS, "target": valid_target}, handoff, "ship-h1r0-l1") is True
+    assert cp.zone_acceptance({"verified": True, "basis": cp.ZONE_BASIS, "target": {"site": "ship-h1r0-l1", "area": "yard", "col": 1, "row": 2, "tier": 2}}, handoff, "ship-h1r0-l1") is False
+    assert cp.zone_acceptance({"verified": True, "basis": cp.ZONE_BASIS, "target": {**valid_target, "col": 2}}, handoff, "ship-h1r0-l1") is False
 
-    good_place = {"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "col": 1, "row": 2, "tier": 2}
+    good_place = {"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "col": 1, "row": 2, "tier": 2}
     good_ver = {"target": valid_target}
     assert cst.cell_ab_place_verified(handoff, good_place, {"verdict": "PASS"}, 2, good_ver) is True
-    assert cst.cell_ab_place_verified(handoff, {"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "tier": 2}, {"verdict": "PASS"}, 2, good_ver) is False
-    assert cst.cell_ab_place_verified(handoff, {"area": "yard", "site": "ship-h1r2-l1", "col": 1, "row": 2, "tier": 2}, {"verdict": "PASS"}, 2, good_ver) is False
+    assert cst.cell_ab_place_verified(handoff, {"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "tier": 2}, {"verdict": "PASS"}, 2, good_ver) is False
+    assert cst.cell_ab_place_verified(handoff, {"area": "yard", "site": "ship-h1r0-l1", "col": 1, "row": 2, "tier": 2}, {"verdict": "PASS"}, 2, good_ver) is False
     assert cst.cell_ab_place_verified(handoff, good_place, {"verdict": "PASS"}, 2, {"target": {**valid_target, "site_id": "yard:r2-s2-t2"}}) is False
     assert cst.cell_ab_place_verified(handoff, good_place, {"verdict": "PASS"}, 2, {}) is False
 

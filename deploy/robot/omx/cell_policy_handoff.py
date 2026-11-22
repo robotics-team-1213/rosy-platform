@@ -27,18 +27,20 @@ def _carry(cell, library_path, sequence, authorize, log):
 
 class Authorization:
     """Use the existing supervised envelope and bind runner commands to the checked library."""
+    supports_check_home = True
+
     def __init__(self, config):
         self.config = config
         self.calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text(encoding="utf-8"))
 
-    def __call__(self, library, state, sequence):
+    def __call__(self, library, state, sequence, *, check_home: bool = True):
         from cell_envelope import assess
         from cell_pipeline_io import limit_error
 
         limits = limit_error(dict(self.config, played_chunks=list(library["chunks"])), library)
         if limits:
             raise ValueError(limits)
-        result = assess(self.config, self.calibration, library, state, sequence=sequence)
+        result = assess(self.config, self.calibration, library, state, sequence=sequence, check_home=check_home)
         if not result["allowed"]:
             raise ValueError(f"operating envelope refused: {result['reason']}")
         return result
@@ -160,3 +162,6 @@ def run_taught(cell, library_path, *, dry_run, authorize, log):
         log({"dry_run": True, "taught_sequence": FOLDED})
         return {"result": "dry_run", "mode": "taught"}
     return _carry(cell, library_path, FOLDED, authorize, log)
+
+
+from cell_policy_paced import run_paced_chunks  # noqa: E402,F401

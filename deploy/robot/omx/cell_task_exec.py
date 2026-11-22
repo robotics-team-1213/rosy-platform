@@ -10,14 +10,18 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError
-from urllib.request import urlopen
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 from cell_presence import presence_ok, review_required, zone_acceptance
 from cell_remeasure import write_context
 import cell_site_target
+from cell_task_act import execute_act_policy_task
 from cell_task_transport import WORKER_LEASE_PREFIX, make_keepalive_https_request, peer_ab_session_locked  # noqa: F401
+
+_DEFAULT_URLOPEN = urlopen
 
 
 def make_ca_urlopen(ca_file: str | Path | None = None):
@@ -27,9 +31,34 @@ def make_ca_urlopen(ca_file: str | Path | None = None):
     ctx = ssl.create_default_context(cafile=str(Path(ca_file).expanduser()))
 
     def _open(req, **kwargs):
+        kwargs.pop("context", None)
         return urlopen(req, context=ctx, **kwargs)
 
     return _open
+
+
+def make_default_request_fn(
+    fleet_r_url: str, token: str, *, ca_file: str | None = None,
+) -> Callable[[str, str, dict[str, Any] | None], dict[str, Any]]:
+    base = fleet_r_url.rstrip("/")
+    parsed = urlsplit(base)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("Fleet URL requires verified HTTPS")
+    ctx = ssl.create_default_context(cafile=ca_file)
+    worker = sys.modules.get("cell_task_worker")
+    w_open = getattr(worker, "urlopen", _DEFAULT_URLOPEN) if worker is not None else _DEFAULT_URLOPEN
+    opener = w_open if w_open is not _DEFAULT_URLOPEN else urlopen
+    if opener is _DEFAULT_URLOPEN:
+        return make_keepalive_https_request(base, token, ctx, timeout_s=20.0)
+
+    def _req(method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        req = Request(f"{base}{path}", data=data, method=method,
+                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+        with opener(req, context=ctx, timeout=20) as resp:
+            return json.load(resp)
+
+    return _req
 
 
 def query_safety_listing(request_fn, timeout_s: float) -> tuple[Any, Exception | None]:
@@ -200,7 +229,8 @@ def source_clearance(cfg: Path, cat: Path, roi, site: str) -> dict[str, Any]:
         catalog = json.loads(cat.read_text(encoding="utf-8"))
         catalog = catalog.get("objects", catalog) if isinstance(catalog, dict) else catalog
         cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-        _img, mask, objects, error = cell_auto_pick_plan.observe(cell, config, calibration, site, roi, catalog)
+        frame = cell.frame_receipt("top", max_age_s=2.0)["image"] if callable(getattr(cell, "frame_receipt", None)) else None
+        _img, mask, objects, error = cell_auto_pick_plan.observe(cell, config, calibration, site, roi, catalog, image=frame)
         if error:
             return {"objects": None, "error": error, "site": site}
         return {"objects": len(objects), "foreground_px": int((mask > 0).sum()) if mask is not None else None, "site": site,
@@ -222,13 +252,21 @@ def zone_fix(target, centres, tol_m: float = ZONE_TOL_M) -> dict | None:
 
 
 def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dict[str, Any]:
-    """Execute one Fleet cell handoff via the arm's session wrapper and `cell_auto_pick.py`."""
+    """Execute one Fleet cell handoff via the arm's session wrapper and `cell_auto_pick.py` or `cell_policy_drive.py`."""
     arm_id = resolve_task_arm(handoff)
     hold = check_arm_hold(arm_id)
     if hold.get("held"):
         return {"arm": arm_id, "error": f"ARM_INCIDENT_HELD:{hold.get('reason')}",
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}
     wrapper, cfg, cat, default_roi, default_src = _arm_run_spec(arm_id, prep_dir)
+    if handoff.get("execution_mode") == "act_policy":
+        return execute_act_policy_task(
+            handoff, arm_id=arm_id, prep_dir=prep_dir, wrapper=wrapper, cfg=cfg, cat=cat, default_roi=default_roi,
+            lease_owner=f"{WORKER_LEASE_PREFIX}{os.getpid()}", tools_root_fn=tools_root, run_fn=subprocess.run,
+            last_json_fn=last_json_object, measured_fold_fn=measured_fold, source_clearance_fn=source_clearance,
+            fold_readback_fn=fold_readback, plan_home_fn=plan_home, write_context_fn=write_context,
+            timeout_exc=subprocess.TimeoutExpired,
+        )
     if not wrapper.is_file() or not cfg.is_file():
         return {"arm": arm_id, "error": "CELL_CONFIG_OR_WRAPPER_MISSING",
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}
@@ -263,12 +301,13 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
                     "stage_result": {"directive_id": handoff.get("task_id"), "arm_id": arm_id, "task_verified": False,
                                      "zone_fix": fix},
                     "stop_event": {"command": "stop", "ok": False, "folded": False}}
+    cat_path = cat if cat.is_file() else omx_dir / "object-catalog.example.json"
     cmd = [
         str(wrapper),
         sys.executable,
         str(omx_dir / "cell_auto_pick.py"),
         "--config", str(cfg),
-        "--catalog", str(cat if cat.is_file() else omx_dir / "object-catalog.example.json"),
+        "--catalog", str(cat_path),
         "--roi", *(str(int(v)) for v in roi),
         "--from", src,
         "--dest", dst,
@@ -279,9 +318,14 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     hint = (handoff.get("tier_hint") or {}).get("layers_below")
     if isinstance(hint, int) and not isinstance(hint, bool) and hint > 0:
         cmd += ["--layers-below", str(hint)]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                          env={**os.environ, "TOOLS_ROOT": str(tools_root()),
-                               "ROSY_ARM_LEASE_OWNER": f"{WORKER_LEASE_PREFIX}{os.getpid()}"})  # the wrapper's tools-env reads it
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                              env={**os.environ, "TOOLS_ROOT": str(tools_root()),
+                                   "ROSY_ARM_LEASE_OWNER": f"{WORKER_LEASE_PREFIX}{os.getpid()}"})  # the wrapper's tools-env reads it
+    except subprocess.TimeoutExpired:
+        return {"arm": arm_id, "error": "SUBPROCESS_TIMEOUT",
+                "stage_result": {"directive_id": handoff.get("task_id"), "arm_id": arm_id, "task_verified": False},
+                "stop_event": {"command": "stop", "ok": False, "folded": False}}
     parsed = last_json_object(proc.stdout)
     # The wall clock at the end of the run bounds when the readbacks below existed (the runner's own clock is monotonic).
     measured_at = time.time()
@@ -292,12 +336,12 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     fold = fold_readback(attempt, plan_home(cfg_data))
     # main's telemetry reader: the arm's last runner state must also say folded and be fresh (2026-11-19 panel)
     live_fold = measured_fold(arm_id, prep_dir)
-    clearance = source_clearance(cfg, cat if cat.is_file() else omx_dir / "object-catalog.example.json", roi, src_site) if placed else None
+    clearance = source_clearance(cfg, cat_path, roi, src_site) if placed else None
     # D-1057: cell_auto_pick records top-frame placement (`verify`) and measures zone_verification for Fleet tasks;
     # without zone_verification from the attempt row, task_verified stays False and Fleet refuses completion.
     zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None
     if placed:
-        write_context(cfg, cfg_data, handoff, arm_id, prep_dir, dst, src_site, src_roi, zone)  # for a later re-measurement
+        write_context(cfg, cfg_data, handoff, arm_id, prep_dir, dst, src_site, src_roi, zone, cat_path=cat_path)
     zone_ok = zone_acceptance(zone, handoff, dst)  # the measured slot and tier must be the task's own
     tier = handoff.get("tier")
     if dst_res and not dst_res["is_legacy_pallet"]:
@@ -306,7 +350,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
             "col": dst_res["col"], "row": dst_res["row"], "tier": tier if isinstance(tier, int) else dst_res["tier"],
         }
     else:
-        place_payload = {"area": dst.rsplit("-l", 1)[0], **({"tier": tier} if isinstance(tier, int) else {})}
+        dst_area = "belt" if dst == "belt_center" else dst.rsplit("-l", 1)[0]
+        place_payload = {"area": dst_area, **({"tier": tier} if isinstance(tier, int) else {})}
     verification = ({**zone, "placement": placement} if zone is not None else
                     {"verified": False, "basis": placement.get("basis") or "unverified: no placement record",
                      "placement": placement,

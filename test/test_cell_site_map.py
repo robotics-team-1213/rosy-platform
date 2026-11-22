@@ -51,11 +51,11 @@ def test_yard_row_and_hold_mapping_is_computed_from_slot_records():
     recs = json.loads((sites.SHIP_ASSETS / "slots.json").read_text(encoding="utf-8"))["tier_records"]
     assert min(r["y_mm"] for r in recs) == -38  # slots.json row 01 = ship y -38 = fixture y +38 (arm_b side)
     yard = {s["id"]: s for s in ZONES["yard"]["slots"]}
-    # Harbor row 1 (fixture y +38) is sim r2; columns 1-3 are sim h2, columns 4-6 sim h1
-    assert yard["yard:r1-s1"]["tiers"][0]["item"] == "ship-h2r2-l0"
-    assert yard["yard:r3-s2"]["tiers"][0]["item"] == "ship-h1r0-l0"
+    # Harbor row 1 (temp_a / arm_a side, fixture y -38) is sim r0; columns 1-3 are sim h2, columns 4-6 sim h1
+    assert yard["yard:r1-s1"]["tiers"][0]["item"] == "ship-h2r0-l0"
+    assert yard["yard:r3-s2"]["tiers"][0]["item"] == "ship-h1r2-l0"
     assert yard["yard:r1-s1"]["columns"] == [1, 3] and yard["yard:r1-s2"]["columns"] == [4, 6] and ZONES["yard"]["hold_boundary"] == {"columns": [3, 4]}
-    assert yard["yard:r1-s1"]["physical"] == ["010182", "030182", "050182"]  # row 01, bays 01-05 at tier 82
+    assert yard["yard:r1-s1"]["physical"] == ["010282", "030282", "050282"]  # row 02, bays 01-05 at tier 82
     assert all(len(s["physical"]) == 3 for s in yard.values())
 
 
@@ -63,8 +63,8 @@ def test_aliases_resolve():
     a = DOC["aliases"]
     assert a["legacy_layout"]["yard-r1-c1"] == "yard:r1-s1"
     assert a["legacy_layout"]["yard-r1-c4"] == "yard:r1-s2" and a["legacy_layout"]["temp_a-2"] == "temp_a:r2-s1" and a["legacy_layout"]["stand-1"] == "stand:r1-s1"
-    assert a["legacy_sim"]["ship-h2r2-l0"] == "yard:r1-s1-t1" and a["legacy_sim"]["ship-stern-l0"] == "not_places:ship_stern" and a["legacy_sim"]["stand"] == "stand:r1-s1-t1"
-    assert a["legacy_station_zones"]["EXP_S1"] == "stand:r1-s1" and a["legacy_station_zones"]["STG_C2"] is None
+    assert a["legacy_sim"]["ship-h2r0-l0"] == "yard:r1-s1-t1" and a["legacy_sim"]["ship-stern-l0"] == "not_places:ship_stern" and a["legacy_sim"]["stand"] == "stand:r1-s1-t1"
+    assert a["legacy_station_zones"]["EXP_S1"] == "stand:r1-s1" and a["legacy_station_zones"]["EXP_S5_PALLET"] == "yard" and a["legacy_station_zones"]["STG_C2"] is None
     assert {n["id"] for n in DOC["not_places"]} == {"belt", "supply_s", "ship_stern", "ship_bow", "vehicle_tray"}
 
 

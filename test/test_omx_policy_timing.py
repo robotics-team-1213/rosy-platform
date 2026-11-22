@@ -175,7 +175,7 @@ def test_taught_fallback_runs_the_existing_folded_sequence(tmp_path):
 
     def act(command):
         calls.append(command)
-        return {"ok": True, "holding": "run release_place" not in calls, "state": [0] * 5 + [49]}
+        return {"ok": True, "settled": True, "holding": "run release_place" not in calls, "state": [0] * 5 + [49]}
 
     cell = SimpleNamespace(act=act)
     assert run_taught(cell, path, dry_run=True, authorize=None, log=lambda _: None)["result"] == "dry_run"
@@ -1245,3 +1245,26 @@ def test_runner_telemetry_write_failure_during_jaw_gate_latches_hold(tmp_path, m
     for goals in post_seed_goals:
         goal_map = normalized(bus, goals)
         check_gate.check_tick(present_start, [goal_map[n] for n in NAMES])
+
+
+def test_park_ack_ok_requires_settled_and_run_timed_stops_when_unsettled(tmp_path):
+    from cell_policy_timing import park_ack_ok
+
+    assert park_ack_ok({"ok": True}) is False
+    assert park_ack_ok({"ok": True, "settled": True}) is True
+    assert park_ack_ok({"command": "park", "ok": True}) is False
+    assert park_ack_ok({"command": "park", "ok": True, "settled": True}) is True
+    assert park_ack_ok({"command": "checked s1 h1 park", "ok": True}) is False
+    assert park_ack_ok({"command": "checked s1 h1 park", "ok": True, "settled": True}) is True
+
+    calls, rows = [], []
+    cell = SimpleNamespace(act=lambda cmd: (calls.append(cmd) or {
+        "ok": True, "settled": False if cmd == "run policy" else True, "state": [0] * 6,
+    }))
+    shadow = SimpleNamespace(image_views=(), sim_rule={}, chunk_size=16)
+    res = run_timed(cell, shadow, {"fps": 30, "chunks": {}, "gripper_closed": 0}, tmp_path,
+                    infer=lambda *_: (np.zeros((16, 6)), {}),
+                    shape=lambda actions, *_: actions.tolist(), max_step=0.1, n_action=8,
+                    max_obs_age_s=0.6, max_chunks=2, dry_run=False, log=rows.append, clock=lambda: 1.0)
+    assert res["result"] == "refused" and "did not settle" in res["reason"]
+    assert calls.count("run policy") == 1 and calls[-1] == "human-hold"

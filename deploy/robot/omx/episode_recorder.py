@@ -222,11 +222,23 @@ def convert(episodes: Path, root: Path, repo_id: str, fps: int, image_names: dic
     import numpy as np
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-    def chosen(result: dict) -> bool:  # successes and labelled failures go to separate datasets, never one
-        has_frames = all(n > 0 for n in result.get("frames", {}).values()) if "frames" in result else result.get("kept")
-        return result.get("outcome", "success" if result.get("kept") else None) == outcome and has_frames
+    def chosen(folder: Path, result: dict) -> bool:  # successes and labelled failures go to separate datasets, never one
+        if "frames" in result:
+            fmap = result.get("frames")
+            has_frames = (
+                isinstance(fmap, dict)
+                and bool(fmap)
+                and all(isinstance(fmap.get(c), int) and not isinstance(fmap.get(c), bool) and fmap[c] > 0 for c in image_names)
+                and all(isinstance(v, int) and not isinstance(v, bool) and v > 0 for v in fmap.values())
+            )
+        else:
+            has_frames = bool(result.get("kept")) and all((folder / f"{c}.jsonl").is_file() for c in image_names)
+        got = result.get("outcome", "success" if result.get("kept") else None)
+        if outcome in ("failed", "failure"):
+            return got in ("failed", "failure") and has_frames
+        return got == outcome and has_frames
 
-    kept = sorted(p.parent for p in episodes.glob("*/result.json") if chosen(json.loads(p.read_text())))
+    kept = sorted(p.parent for p in episodes.glob("*/result.json") if chosen(p.parent, json.loads(p.read_text())))
     # shapes are tuples: LeRobot compares a frame's array shape to them (a list [6] failed every frame, 2026-10-28)
     features = {"action": {"dtype": "float32", "shape": (6,), "names": NAMES},
                 "observation.state": {"dtype": "float32", "shape": (6,), "names": NAMES}}
@@ -235,13 +247,17 @@ def convert(episodes: Path, root: Path, repo_id: str, fps: int, image_names: dic
                                                      "names": ["height", "width", "channels"]}
     ds = LeRobotDataset.create(repo_id, fps, features, root=root, robot_type="omx_follower", use_videos=True,
                                image_writer_threads=4)
+    saved: list[Path] = []
     for folder in kept:
         task = json.loads((folder / "task.json").read_text())["task"]
         ticks = [json.loads(line) for line in (folder / "ticks.jsonl").read_text().splitlines() if line]
         frames = {name: [json.loads(line) for line in (folder / f"{name}.jsonl").read_text().splitlines() if line]
                   for name in image_names}
+        pairs = aligned(ticks, frames)
+        if not pairs:
+            continue
         last_rgb: dict[str, tuple[int, np.ndarray]] = {}
-        for row, seqs in aligned(ticks, frames):
+        for row, seqs in pairs:
             frame = {"observation.state": np.asarray(row["state"], np.float32),
                      "action": np.asarray(row["action"], np.float32), "task": task}
             for name, feature in image_names.items():
@@ -256,8 +272,43 @@ def convert(episodes: Path, root: Path, repo_id: str, fps: int, image_names: dic
                 frame[f"observation.images.{feature}"] = rgb
             ds.add_frame(frame)
         ds.save_episode()
+        saved.append(folder)
     ds.finalize()
-    return len(kept)
+    kinds = [json.loads((f / "task.json").read_text(encoding="utf-8")).get("source_kind") for f in saved]
+    (Path(root) / "rosy_provenance.json").write_text(json.dumps(  # episode i of the dataset came from kinds[i] (None: not stamped)
+        {"episodes": [{"episode": i, "folder": f.name, "source_kind": k} for i, (f, k) in enumerate(zip(saved, kinds))]}), encoding="utf-8")
+    return len(saved)
+
+
+def dispatch_episode_command(runner, words: list[str], line: str, latch_error) -> None:
+    """Run one `episode ...` command; roll back `episode start` if report/read fails or latches a fault."""
+    from chunk_policy_playback import read_present_or_hold
+
+    if words[1:2] == ["start"]:
+        if runner.fault or getattr(getattr(runner.robot, "motion", None), "held", None):
+            raise ValueError(f"cannot start episode while faulted or held ({runner.fault or 'guard hold'})")
+        if runner.recorder.active:
+            raise ValueError(f"episode {runner.recorder.folder} is still open")
+        present, ok = read_present_or_hold(runner, "encoder read failed")
+        if not ok:
+            return
+        try:
+            reply = runner.recorder.command(words[1:])
+            runner.report(command=line, ok=True, present=present, **reply)
+        except BaseException as err:
+            if runner.recorder.active:
+                runner.recorder.command(["drop"])
+            if isinstance(err, OSError):
+                latch_error(runner, present, line, None, err)
+                return
+            raise
+        if runner.recorder.active and (runner.fault or runner.human_hold_latched):
+            runner.recorder.command(["drop"])
+        return
+    try:
+        runner.report(command=line, ok=True, **runner.recorder.command(words[1:]))
+    except OSError as write_error:
+        latch_error(runner, None, line, None, write_error)
 
 
 def main(argv=None):
@@ -269,7 +320,7 @@ def main(argv=None):
     c.add_argument("--repo-id", required=True)
     c.add_argument("--fps", type=int, default=30)
     c.add_argument("--images", default="top=top,front=front", help="camera=feature pairs (the teleop dataset's names)")
-    c.add_argument("--outcome", default="success", choices=["success", "failed"], help="which episodes go in this dataset")
+    c.add_argument("--outcome", default="success", choices=["success", "failed", "failure", "unknown"], help="which episodes go in this dataset")
     args = ap.parse_args(argv)
     names = dict(pair.split("=") for pair in args.images.split(","))
     print(convert(args.episodes, args.root, args.repo_id, args.fps, names, args.outcome), "episodes")

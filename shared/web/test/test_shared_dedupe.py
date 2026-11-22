@@ -24,7 +24,7 @@ def test_sr_only_is_defined_once_in_components_css():
 
 # Density tokens whose first readers (map and control stylesheets) arrive in later UI slices. Only shrinks: an entry that is
 # read by then fails the test until it is removed here.
-PENDING_TOKENS = {"--row-dense", "--target-tool"}
+PENDING_TOKENS = {"--row-dense"}
 
 
 def test_every_token_in_tokens_css_is_read_somewhere():
@@ -41,7 +41,7 @@ PRODUCT_ROOTS = (REPO / "applications" / "fleet" / "web", WEB)
 CONSUMERS = {".js", ".mjs", ".html", ".inc", ".py", ".ts"}
 #: 시험만 쓰는 export 중 시험 이음매(지우면 시험이 제품을 못 건드림). 이유 필수, 늘리지 않는다.
 TEST_SEAMS: dict[str, str] = {}
-UNUSED_CEILING = {"exports": 37, "test_only_exports": 5, "css_classes": 1, "html_ids": 9}
+UNUSED_CEILING = {"exports": 36, "test_only_exports": 5, "css_classes": 1, "html_ids": 9}
 _IDENT = re.compile(r"[A-Za-z_$][\w$]*")
 _HYPHEN_WORD = re.compile(r"[A-Za-z_][\w-]*")
 _EXPORT = re.compile(r"^export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)", re.M)

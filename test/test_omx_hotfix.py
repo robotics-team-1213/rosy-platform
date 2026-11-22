@@ -233,6 +233,7 @@ def test_the_floor_script_changes_only_floor_sha_in_the_updater_state(tmp_path):
 
 def test_hotfix_paths_include_policy_site_map_and_gripper_assets():
     for required in (
+        "contracts/learning/src",
         "tools/sim/cell_site_map.py",
         "shared/web/cell-site-map.json",
         "learning/envs/isaac/palletizing_gripper.py",

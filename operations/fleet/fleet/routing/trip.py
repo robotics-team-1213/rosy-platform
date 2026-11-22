@@ -38,6 +38,8 @@ class PlanRequest:
     extra_cost: Mapping[str, float] = field(default_factory=dict)
     #: Registered body front (fleet.stop_front.body_front_m); a "stop" place is halted this far before the line.
     body_front_m: float = FALLBACK_FRONT_M
+    #: When False (continuous Nav2 repeat loops), "stop" places end at their centre without front-bumper pullback.
+    stop_offset: bool = True
 
 
 @dataclass(frozen=True)
@@ -90,7 +92,8 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
     legs = _legs(graph, request)
     for index, (via, target) in enumerate(legs):
         last = index == len(legs) - 1
-        goal, loose = _goal(graph, target, request.arrive_yaw if last else None, config, request.body_front_m)
+        goal, loose = _goal(graph, target, request.arrive_yaw if last else None, config,
+                            request.body_front_m, stop_offset=request.stop_offset)
         kwargs = dict(speed=arc_speed, extra_cost=request.extra_cost, via=via)
         stats: dict = {}
         found = search(graph, at, goal, config, allowed=allowed, stats=stats, **kwargs)
@@ -136,7 +139,7 @@ def _arrived(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan 
     x, y, yaw = request.start_pose
     want = request.arrive_yaw if request.arrive_yaw is not None else getattr(
         graph.places[request.goal], "yaw", None)
-    stops = stop_goals(graph, request.goal, want, config, request.body_front_m)  # a stop line: judge the offset goal
+    stops = stop_goals(graph, request.goal, want, config, request.body_front_m) if request.stop_offset else []
     if stops:
         if not any(math.dist((x, y), xy) <= ARRIVED_M for _a, _s, xy in stops):
             return None
@@ -149,7 +152,7 @@ def _arrived(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan 
 
 
 def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig,
-          front_m: float = FALLBACK_FRONT_M) -> tuple[Goal, Goal | None]:
+          front_m: float = FALLBACK_FRONT_M, *, stop_offset: bool = True) -> tuple[Goal, Goal | None]:
     """The goal and, when an arrive yaw narrows a place goal, the same goal without it."""
     if isinstance(target, str):
         place = graph.places[target]
@@ -163,7 +166,7 @@ def _goal(graph: Graph, target, arrive_yaw, config: RoutingConfig,
         loose = Goal(graph.place_xy(target), place=target)
         line = loose if yaw is None else Goal(loose.xy, place=target,
                                               arrive_ok=lambda arc: heading_ok(yaw, arc.end_tangent, config))
-        stops = stop_goals(graph, target, yaw, config, front_m)
+        stops = stop_goals(graph, target, yaw, config, front_m) if stop_offset else []
         if stops:  # a stop line: the body front on it, so the centre is back by the front offset
             return Goal(stops[0][2], on_arcs={arc.id: s for arc, s, _xy in stops}), loose
         return line, (None if yaw is None else loose)

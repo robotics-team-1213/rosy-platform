@@ -23,6 +23,23 @@ class Prediction:
     state: list
 
 
+def park_ack_ok(reply) -> bool:
+    """True only on a settled, fault-free park ack, never on a preempting human-hold or timeout row."""
+    if not isinstance(reply, dict) or reply.get("ok") is not True:
+        return False
+    if reply.get("fault") or reply.get("hold") or reply.get("human_hold_latched"):
+        return False
+    if reply.get("settled") is not True:
+        return False
+    if "command" in reply:
+        cmd = str(reply["command"])
+        if cmd.startswith("checked "):
+            cmd = cmd.split(" ", 3)[-1]
+        if cmd not in ("park", "run park"):
+            return False
+    return True
+
+
 def action_window(chunk, observed, start, fps, steps, max_age):
     if start - observed > max_age:
         raise ValueError("stale policy observation")
@@ -186,8 +203,11 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
                        handoff=ran.get("handoff"), frames=len(frames), command="run policy", ok=ran.get("ok"),
                        state=prediction.state, end_state=ran.get("state"))
             previous_command = timing.get("last_command_mono")
-            if not ran.get("ok") or ran.get("fault"):
-                return stopped(n, ran.get("policy_stop") or ran.get("error") or ran.get("fault") or "policy playback refused", row, ran)
+            if not ran.get("ok") or ran.get("fault") or ran.get("settled") is False:
+                reason = ran.get("policy_stop") or ran.get("error") or ran.get("fault") or (
+                    "policy chunk did not settle" if ran.get("settled") is False else "policy playback refused"
+                )
+                return stopped(n, reason, row, ran)
             if dry_run:
                 row["envelope"] = {"ok": True}
             log(row)
@@ -198,11 +218,11 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
             held = held or bool(ran.get("holding"))
             if not dry_run and handoff is None and held and frames[-1][5] > library["gripper_closed"] + 10:
                 parked = cell.act(prefix + "park")
-                return {"result": "released", "held": held, "parked": bool(parked.get("ok"))}
+                return {"result": "released", "held": held, "parked": park_ack_ok(parked)}
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
     if dry_run:
         return {"result": "dry_run", "chunks": max_chunks}
     if handoff is not None:
         return stopped(max_chunks, "ACT ended before a verified handoff", {"chunk": max_chunks})
-    return {"result": "chunks_done", "held": held, "parked": bool(cell.act(prefix + "park").get("ok"))}
+    return {"result": "chunks_done", "held": held, "parked": park_ack_ok(cell.act(prefix + "park"))}

@@ -325,6 +325,9 @@ export function actionIcon(button, name) {
     area: "M4 18 8 5l12 3-3 12zM4 18h.01M8 5h.01M20 8h.01M17 20h.01",
     pixels: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
     folder: "M3 7V5h7l2 2h9v12H3z",
+    arm: "M4 20h10M9 20v-4l5-6 4 2 2-3M18 12l2 2M14 10h.01M9 16h.01",
+    warn: "M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01",
+    lock: "M5 11h14v10H5zM7 11V7a5 5 0 0 1 10 0v4",
   };
   const spec = paths[name];
   if (!spec) throw new RangeError(`Unknown action icon: ${name}`);

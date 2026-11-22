@@ -1,6 +1,9 @@
 """cell_identity (D-996 3-4): a container's identity comes from read tags only; mismatch holds before the place."""
+import json
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
@@ -62,3 +65,30 @@ def test_a_broken_identity_read_refuses_so_the_arm_parks(tmp_path):
     broken_queue = ci.hook({"identity": {"end_path": str(tmp_path / "none.json"), "frames": 1, "k": 1}},
                            Cell([None]), lambda *a: 1 / 0)
     assert broken_queue()["verdict"] in ("pass", "refuse")  # the gate answers even when the report cannot be queued
+
+
+def test_end_cli_accepts_side_only_frames_without_top_tag(tmp_path):
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+    if not hasattr(cv2, "aruco"):
+        pytest.skip("OpenCV without aruco")
+    import cell_marks
+
+    draw_marker = getattr(cv2.aruco, "generateImageMarker", None) or cv2.aruco.drawMarker
+    marker = draw_marker(cell_marks._dictionary(), 100, 60)
+    canvas = np.full((160, 160), 235, dtype=np.uint8)
+    canvas[40:120, 40:120] = 255  # 80 px white quiet square around 60 px (12 mm @ 5 px/mm) marker
+    canvas[50:110, 50:110] = marker
+    frames = []
+    for idx in range(5):
+        p = tmp_path / f"side_{idx}.png"
+        cv2.imwrite(str(p), canvas)
+        frames.append(str(p))
+
+    out = tmp_path / "end.json"
+    assert ci.main(["end", "--side", *frames, "--k", "3", "--out", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8")) == {"state": "read", "tag": 100}
+
+    with pytest.raises(SystemExit) as exc:
+        ci.main(["end", "--out", str(out)])
+    assert exc.value.code == 2

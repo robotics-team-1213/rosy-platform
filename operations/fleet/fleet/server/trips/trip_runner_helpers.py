@@ -52,7 +52,8 @@ def _check_start_traffic(runner, robot_id: str, plan: dict, request: dict,
         runner.authority.mode(caps) != "core" and ("TRIP_CONVOY_NO_AUTHORITY", {"leader": leader})))
     if refused:  # D-517 9 M3: a follower keeps its gap only through CORE authority
         raise TripError(422, *refused)
-    refused = runner.traffic.signal_refusal(plan["segments"], runner.authority.mode(caps))
+    authority_mode = "hold_back" if request.get("drive_mode") == "nav2" else runner.authority.mode(caps)
+    refused = runner.traffic.signal_refusal(plan["segments"], authority_mode)
     if refused:  # D-525 1/6: not from inside a signalled zone; crossing one needs CORE authority
         raise TripError(422, *refused)
     if repeat:  # D-517 3: no await from this check to the trip opening
@@ -104,7 +105,7 @@ class TripRunnerHelpers:
         """Drive mode (``lane``/``free``) of the open trip's current segment; None when it cannot be told."""
         live = self._live.get(robot_id)
         try:
-            return live.arc(live.view["segment_index"]).drive_mode if live is not None and live.open else None
+            return live.effective_mode(live.view["segment_index"]) if live is not None and live.open else None
         except (KeyError, IndexError, TypeError):
             return None
 
@@ -155,7 +156,7 @@ class TripRunnerHelpers:
 
     def _describe(self, live: LiveTrip) -> None:
         index = live.view["segment_index"]
-        live.view.update(current_edge=live.segments[index]["edge_id"], drive_mode=live.arc(index).drive_mode,
+        live.view.update(current_edge=live.segments[index]["edge_id"], drive_mode=live.effective_mode(index),
                          next_place=live.place(index),
                          next_action=STOP if live.view["hold"] else lane_action(live.graph, live.segments, index,
                                                                                 self._routing))

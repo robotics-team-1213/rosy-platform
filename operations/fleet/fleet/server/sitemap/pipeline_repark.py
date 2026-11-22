@@ -17,7 +17,8 @@ class UnknownRequest(KeyError):
 
 ROOT_KEY = "repark_root"
 CARRY_FIELDS = ("preset", "cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier",
-                "unload_batch_id", "unload_expected", "unload_index")
+                "unload_batch_id", "unload_expected", "unload_index",
+                "object_ref", "identity", "identity_observation_ref", "identity_attested_by", "emit_release_permit")
 
 
 def _event(state, request, result, why, now) -> None:

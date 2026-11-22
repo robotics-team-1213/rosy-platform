@@ -12,6 +12,8 @@ const REASONS = {ok:'적용 중', not_approved:'승인 없음', not_reported:'�
   config_stale:'설정 확인 만료', frame_stale:'새 영상 대기', geometry_changed:'촬영 조건 바뀜',
   map_changed:'지도 바뀜', invalid_config:'교정 기록 확인 필요', readback_stale:'적용 기록 만료'};
 
+const READING_REASON = '상태 읽는 중';
+
 export function createMeasuredCalibrationView({scope, root, call, visionView, auth}) {
   const el = id => root.querySelector(`#measured-${id}`);
   const file = el('bundle'), p95 = el('p95'), maximum = el('max'), conditions = el('conditions');
@@ -55,30 +57,33 @@ export function createMeasuredCalibrationView({scope, root, call, visionView, au
     const a = p95.valueAsNumber, b = maximum.valueAsNumber;
     return Number.isFinite(a) && Number.isFinite(b) && a > 0 && b >= a ? {p95_m:a,max_m:b} : null;
   }
+  // Write only what changed: the 2 s refresh must not touch a control whose state did not change.
   function setEnabled(control, enabled, reason) {
-    setOff(control, !enabled, enabled ? '' : reason);
-    control.setAttribute('title', enabled ? '' : reason);
-    control.setAttribute('aria-description', enabled ? '' : reason);
+    const value = enabled ? '' : reason;
+    const targetReason = enabled ? null : reason;
+    if (control.disabled === enabled || control.getAttribute('reason') !== targetReason) setOff(control, !enabled, value);
+    if (control.hasAttribute('data-reading-reason') !== (value === READING_REASON)) control.toggleAttribute('data-reading-reason');
+    for (const name of ['title','aria-description']) if (control.getAttribute(name) !== value) control.setAttribute(name, value);
   }
   function render() {
-    const pending = busy || reading;
-    const pendingReason = reading ? '적용 상태를 확인 중입니다.' : '요청을 처리 중입니다.';
+    // A read's reason is title/aria only (measured-calibration.css hides its line): a visible line would resize the
+    // layout above the checkbox between mousedown and mouseup on a slow device.
+    const busyReason = '요청을 처리 중입니다.', readingReason = READING_REASON;
     const editable = operator() && !busy;
     const operable = editable && !reading;
-    const editReason = pending ? pendingReason : `${NAMED_OPERATOR_REASON}.`;
+    const editReason = busy ? busyReason : `${NAMED_OPERATOR_REASON}.`;
+    const setOperable = (control, ok, why) => setEnabled(control, operable && ok, !editable ? editReason : ok ? (reading ? readingReason : '') : why);
     for (const input of [file,p95,maximum]) setEnabled(input,editable,editReason);
     setEnabled(conditions,editable && !!record,!editable ? editReason : '먼저 실측 교정을 승인 저장하세요.');
-    setEnabled(buttons.approve,operable && !!candidate && candidate.evidence_kind === 'measured'
-      && !!limits() && candidate.source_id === source,
-      !operable ? editReason : '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
-    setEnabled(buttons.revoke,operable && !!record,!operable ? editReason : '철회할 승인 기록이 없습니다.');
+    setOperable(buttons.approve,!!candidate && candidate.evidence_kind === 'measured' && !!limits() && candidate.source_id === source,
+      '선택한 카메라의 실측 묶음과 양수 p95·최대 오차 한도를 입력하세요.');
+    setOperable(buttons.revoke,!!record,'철회할 승인 기록이 없습니다.');
     const current = record && status?.calibration_revision === record.calibration_revision && status.state !== 'invalid';
-    setEnabled(buttons.confirm,operable && !!current && conditions.checked,
-      !operable ? editReason : '적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
-    setEnabled(buttons.read,!pending && !!current && !auth.locked,
-      auth.locked ? '먼저 로그인하세요.' : pending ? pendingReason : '현재 교정·촬영 상태를 먼저 확인하세요.');
-    setEnabled(buttons.refresh,!pending && !!source && !auth.locked,
-      auth.locked ? '먼저 로그인하세요.' : pending ? pendingReason : '카메라를 먼저 선택하세요.');
+    setOperable(buttons.confirm,!!current && conditions.checked,'적용 상태를 읽고 현재 촬영 조건 확인란을 선택하세요.');
+    const watch = (control, ok, why) => setEnabled(control, !busy && !reading && ok && !auth.locked,
+      auth.locked ? '먼저 로그인하세요.' : busy ? busyReason : ok ? (reading ? readingReason : '') : why);
+    watch(buttons.read,!!current,'현재 교정·촬영 상태를 먼저 확인하세요.');
+    watch(buttons.refresh,!!source,'카메라를 먼저 선택하세요.');
     const b = candidate || record?.bundle;
     summary.textContent = b ? `${b.source_id} · 지도 ${b.map_id} · 독립 검증 p95 ${b.floor.validation.p95_m} m / 최대 ${b.floor.validation.max_m} m · ${b.evidence_kind === 'measured' ? '실측 근거' : '합성 자료 — 승인 불가'}` : '이 카메라의 교정 묶음을 가져오세요.';
   }

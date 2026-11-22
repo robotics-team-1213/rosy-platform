@@ -386,7 +386,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         stop_transport=stop_transport, stop_targets=stop_targets, require_viewer=require_viewer,
         require_operator=require_operator, require_named_operator=require_named_operator,
         read_guard=read_guard, operator_guard=operator_guard, drive_cancel=drive_cancel,
-        convert_site_goal=site_goal_in_robot_frame, native_task_result=native_task_result)
+        convert_site_goal=site_goal_in_robot_frame, native_task_result=native_task_result, authorize=authorize)
     install_berth_parking_routes(
         app, console=console, task_service=task_service, read_guard=read_guard,
         operator_guard=operator_guard, require_operator=require_operator,

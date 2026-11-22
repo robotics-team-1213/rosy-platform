@@ -51,14 +51,14 @@ class TripProgress:
             nxt_dist, nxt_s, _t = nxt.project(pose.x, pose.y)
             onto_next = nxt_s > nxt_segment["s_from"] + self.config.advance_eps_m and nxt_dist < dist
             remaining = live.segments[index]["s_to"] - s
-            if arc.drive_mode == "lane":
+            if live.segment_is_lane(index):
                 # lap SIM 2 lap_12: CORE closed a straight while D-407 backed the robot 0.26 m short
                 # of SE; advancing there judged the pose against ring_e (0.276 m) and stopped a robot
                 # 0.07 m off ring_s. A carried-out place moves on only once the robot is on the next lane.
                 done = (self._completed(live, index) and remaining <= self.config.pass_window_m
                         and nxt_dist <= nxt.width_m / 2)
             else:
-                done = remaining <= self.config.advance_free_m
+                done = remaining <= self.config.advance_free_m and (not live.nav2 or nxt_dist <= nxt.width_m / 2)
             if not (done or onto_next):
                 break
             index += 1

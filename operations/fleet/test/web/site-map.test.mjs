@@ -490,3 +490,29 @@ test('camera endpoint connections need explicit same-frame review and remain inf
   assert.equal(unrestricted.edges[2].robot_kinds, undefined);
   assert.throws(() => cameraConnectionCandidates(base, {...observation, map_id: 'other'}));
 });
+
+test('repeatPlaces prefers start places and falls back to stop places, supporting nav2 drive_mode', async () => {
+  const {repeatPlaces, repeatTripBody, repeatTripReason} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const stopOnlyMap = {
+    places: [
+      {id: 'J', name: 'Junction', x: 0, y: 0, kind: 'junction'},
+      {id: 'S3', name: 'S3', x: 1, y: 0, kind: 'stop', yaw: 0},
+      {id: 'S4', name: 'S4', x: 0, y: -1, kind: 'stop', yaw: 0},
+    ],
+    edges: [],
+  };
+  assert.deepEqual(repeatPlaces(stopOnlyMap).map(p => p.id), ['S3', 'S4']);
+  assert.equal(repeatTripReason({active: {version: 1, map: stopOnlyMap}, running: null, start: 'S3'}), '');
+  assert.deepEqual(repeatTripBody(stopOnlyMap, 'S3', '', 'nav2'), {
+    to: 'S3', via: ['S4'], repeat: true, drive_mode: 'nav2',
+  });
+  const withStarts = {
+    places: [
+      ...stopOnlyMap.places,
+      {id: 'A', name: 'A', x: 0, y: 0, kind: 'start', yaw: 0},
+      {id: 'B', name: 'B', x: 1, y: 0, kind: 'start', yaw: 0},
+    ],
+  };
+  assert.deepEqual(repeatPlaces(withStarts).map(p => p.id), ['A', 'B']);
+  assert.deepEqual(repeatTripBody(withStarts, 'A', '', ''), {to: 'A', via: ['B'], repeat: true});
+});

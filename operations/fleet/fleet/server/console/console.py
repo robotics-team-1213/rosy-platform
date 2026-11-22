@@ -316,6 +316,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         return await self._client(robot_id).line_follow_mode(mode)
 
     goal = _helpers.goal
+    route = _helpers.route
     _goal = _helpers._goal
 
     # --- pinned-address holds (D-361 3) ------------------------------------------

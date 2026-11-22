@@ -101,18 +101,41 @@ def test_get_cell_sites_returns_all_37_sites_and_enforces_viewer_auth(monkeypatc
     assert res.status_code == 200
     body = res.json()
     assert body["schema"] == "rosy.cell-site-map.v1" and body["count"] == 37
+    zones = body["zones"]
+    assert [z["id"] for z in zones] == ["yard", "temp_a", "temp_b", "stand"]
+    assert all(set(z.keys()) == {"id", "label", "role", "grid", "slot_cells", "arms", "status"} for z in zones)
+    assert {z["id"]: z["role"] for z in zones} == {"yard": "보관", "temp_a": "임시", "temp_b": "임시", "stand": "반출"}
+    assert {z["id"]: z["label"] for z in zones} == {
+        "yard": "장치 야드", "temp_a": "임시 장치 A", "temp_b": "임시 장치 B", "stand": "반출대",
+    }
+    assert {z["id"]: z["grid"] for z in zones} == {
+        "yard": {"rows": 3, "columns": 6, "tiers": 3},
+        "temp_a": {"rows": 3, "columns": 3, "tiers": 3},
+        "temp_b": {"rows": 3, "columns": 3, "tiers": 3},
+        "stand": {"rows": 1, "columns": 3, "tiers": 1},
+    }
+    assert all(z["slot_cells"] == 3 and z["status"] == "planned_unverified" for z in zones)
+    assert {z["id"]: z["arms"] for z in zones} == {
+        "yard": ["arm_a", "arm_b"], "temp_a": ["arm_a"], "temp_b": ["arm_b"], "stand": ["arm_a"],
+    }
     by_id = {s["site_id"]: s for s in body["sites"]}
     assert len(by_id) == 37
-    assert by_id["yard:r1-s1-t1"]["wire_ref"] == "yard-r1-c1-l1" and by_id["yard:r1-s1-t1"]["sim_site"] == "ship-h2r2-l0"
-    assert by_id["yard:r1-s2-t2"]["wire_ref"] == "yard-r1-c4-l2" and by_id["yard:r1-s2-t2"]["sim_site"] == "ship-h1r2-l1"
+    for zone in zones:
+        area_sites = [s for s in body["sites"] if s["area"] == zone["id"]]
+        expected_count = zone["grid"]["rows"] * (zone["grid"]["columns"] // zone["slot_cells"]) * zone["grid"]["tiers"]
+        assert len(area_sites) == expected_count
+        assert {arm for s in area_sites for arm in s["arms"]} == set(zone["arms"])
+    assert by_id["yard:r1-s1-t1"]["wire_ref"] == "yard-r1-c1-l1" and by_id["yard:r1-s1-t1"]["sim_site"] == "ship-h2r0-l0"
+    assert by_id["yard:r1-s2-t2"]["wire_ref"] == "yard-r1-c4-l2" and by_id["yard:r1-s2-t2"]["sim_site"] == "ship-h1r0-l1"
+    assert by_id["yard:r1-s2-t2"]["col"] == 1
     assert by_id["temp_a:r2-s1-t3"]["arms"] == ["arm_a"] and by_id["temp_b:r3-s1-t2"]["arms"] == ["arm_b"]
     assert by_id["stand:r1-s1-t1"]["wire_ref"] == "stand-r1-c1-l1" and by_id["stand:r1-s1-t1"]["sim_site"] == "stand"
 
 
 @pytest.mark.parametrize("dst_input, expected_sim, expected_id, expected_area, expected_tier, expected_arm", [
-    ("yard:r1-s2-t2", "ship-h1r2-l1", "yard:r1-s2-t2", "yard", 2, "arm_b"),
-    ("yard-r1-c4-l2", "ship-h1r2-l1", "yard:r1-s2-t2", "yard", 2, "arm_b"),
-    ("ship-h1r2-l1", "ship-h1r2-l1", "yard:r1-s2-t2", "yard", 2, "arm_b"),
+    ("yard:r1-s2-t2", "ship-h1r0-l1", "yard:r1-s2-t2", "yard", 2, "arm_b"),
+    ("yard-r1-c4-l2", "ship-h1r0-l1", "yard:r1-s2-t2", "yard", 2, "arm_b"),
+    ("ship-h1r0-l1", "ship-h1r0-l1", "yard:r1-s2-t2", "yard", 2, "arm_b"),
     ("temp_a:r2-s1-t3", "tmp-a-2-l2", "temp_a:r2-s1-t3", "temp_a", 3, "arm_a"),
     ("temp_b-r3-c1-l1", "tmp-b-3", "temp_b:r3-s1-t1", "temp_b", 1, "arm_b"),
     ("stand:r1-s1-t1", "stand", "stand:r1-s1-t1", "stand", 1, "arm_a"),
@@ -130,6 +153,7 @@ def test_single_canonical_wire_and_sim_destinations_normalize_consistently(
     assert task["dst_site"] == expected_sim
     assert task["dst_site_id"] == expected_id
     assert task["dst_area"] == expected_area
+    assert task["dst_wire_ref"].startswith(f"{expected_area}-r")
     assert task["tier"] == expected_tier
     assert task["arm_id"] == expected_arm
     handoff, done = _complete_one(client, owner_ev, task["task_id"])
@@ -138,7 +162,7 @@ def test_single_canonical_wire_and_sim_destinations_normalize_consistently(
 
 
 @pytest.mark.parametrize("slot_input, area, sim_sites, default_arms", [
-    ("yard:r1-s2", "yard", ["ship-h1r2-l0", "ship-h1r2-l1", "ship-h1r2-l2"], ["arm_a", "arm_b", "arm_a"]),
+    ("yard:r1-s2", "yard", ["ship-h1r0-l0", "ship-h1r0-l1", "ship-h1r0-l2"], ["arm_a", "arm_b", "arm_a"]),
     ("temp_a:r1-s1", "temp_a", ["tmp-a-1", "tmp-a-1-l1", "tmp-a-1-l2"], ["arm_a", "arm_a", "arm_a"]),
     ("temp_b:r2-s1", "temp_b", ["tmp-b-2", "tmp-b-2-l1", "tmp-b-2-l2"], ["arm_b", "arm_b", "arm_b"]),
 ])
@@ -202,17 +226,17 @@ def test_complete_rejects_mismatched_area_site_tier_slot_or_z_gate(monkeypatch):
     claimed = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_ab", "task_id": "yard-strict"}).json()
     lease = claimed["handoff"]["handoff_lease_id"]
     for bad_place, zv, v_target, inc_tgt in (
-        ({"area": "pallet", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS", None, True),
-        ({"area": "yard", "site": "ship-h1r2-l0", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS", None, True),
-        ({"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "tier": 1, "col": 1, "row": 2}, "PASS", None, True),
-        ({"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 2, "row": 2}, "PASS", None, True),
-        ({"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "tier": 2}, "PASS", None, True),  # omitted col/row
-        ({"area": "yard", "site": "ship-h1r2-l1", "tier": 2, "col": 1, "row": 2}, "PASS", None, True),  # omitted site_id
-        ({"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r2-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS", None, True),
-        ({"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS", None, False),
-        ({"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS",
+        ({"area": "pallet", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS", None, True),
+        ({"area": "yard", "site": "ship-h1r0-l0", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS", None, True),
+        ({"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "tier": 1, "col": 1, "row": 2}, "PASS", None, True),
+        ({"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 2, "row": 2}, "PASS", None, True),
+        ({"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "tier": 2}, "PASS", None, True),  # omitted col/row
+        ({"area": "yard", "site": "ship-h1r0-l1", "tier": 2, "col": 1, "row": 2}, "PASS", None, True),  # omitted site_id
+        ({"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r2-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS", None, True),
+        ({"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS", None, False),
+        ({"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "PASS",
          {"area": "yard", "site": "ship-h1r1-l1", "site_id": "yard:r2-s2-t2", "tier": 2, "col": 2, "row": 2}, True),
-        ({"area": "yard", "site": "ship-h1r2-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "FAIL", None, True),
+        ({"area": "yard", "site": "ship-h1r0-l1", "site_id": "yard:r1-s2-t2", "tier": 2, "col": 1, "row": 2}, "FAIL", None, True),
     ):
         receipt, stage, hw, digest = _complete_payload(
             "yard-strict", lease, task["arm_id"], bad_place, z_verdict=zv, target=v_target, include_target=inc_tgt)

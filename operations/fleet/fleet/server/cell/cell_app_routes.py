@@ -116,6 +116,17 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
 
     runs_file = store.path.parent / "real2sim-runs.json" if store is not None else None
 
+    def _real2sim_module():
+        try:
+            from fleet.server import cell_real2sim
+            return cell_real2sim
+        except ModuleNotFoundError as exc:
+            raise HTTPException(
+                503,
+                detail={"code": "CELL_REAL2SIM_UNAVAILABLE",
+                        "message": f"real2sim simulation tooling is not installed on this Fleet host ({exc.name})"},
+            ) from None
+
     @app.get("/api/fleet/cell-app/real2sim-pipeline", dependencies=[Depends(require_viewer)])
     def real2sim_pipeline(
         snapshot: str | None = None,
@@ -125,10 +136,10 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
         ship_stern_hook_mm: float = 0.0,
     ):
         """Read-only Real-to-Sim / Sim-to-Real pipeline status, snapshot diff, CAD inventory, and Stage 1->2 handoff."""
-        from fleet.server.cell_real2sim import view as r2s_view
+        r2s = _real2sim_module()
 
         try:
-            return r2s_view(
+            return r2s.view(
                 snapshot,
                 prev,
                 berth_kit=berth_kit,
@@ -146,12 +157,12 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
     @app.post("/api/fleet/cell-app/real2sim-pipeline/evaluate", dependencies=[Depends(require_named_operator)])
     def real2sim_evaluate(body: dict):
         """Evaluate a snapshot or layout configuration and return the Stage 1 (MuJoCo) -> Stage 2 (Isaac Sim) handoff."""
-        from fleet.server.cell_real2sim import view as r2s_view
+        r2s = _real2sim_module()
 
         if not isinstance(body, dict):
             raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": "JSON object required"})
         try:
-            return r2s_view(
+            return r2s.view(
                 body.get("snapshot_id"),
                 body.get("prev_id"),
                 custom_snapshot=body.get("snapshot"),
@@ -173,13 +184,13 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
     @app.post("/api/fleet/cell-app/real2sim-pipeline/runs")
     def real2sim_queue_run(body: dict, principal=Depends(require_named_operator)):
         """Queue and record a Stage 1 (MuJoCo) -> Stage 2 (Isaac Sim) pipeline execution bundle."""
-        from fleet.server.cell_real2sim import queue_pipeline_run
+        r2s = _real2sim_module()
 
         if not isinstance(body, dict):
             raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": "JSON object required"})
         actor = getattr(principal, "principal_id", None) or "operator"
         try:
-            return queue_pipeline_run(body, actor_id=actor, runs_path=runs_file)
+            return r2s.queue_pipeline_run(body, actor_id=actor, runs_path=runs_file)
         except OSError as exc:
             raise HTTPException(503, detail={"code": "CELL_REAL2SIM_UNAVAILABLE", "message": str(exc)}) from exc
         except KeyError as exc:
@@ -190,18 +201,20 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
     @app.post("/api/fleet/cell-app/real2sim-pipeline/promote-physics")
     def real2sim_promote_physics(body: dict, principal=Depends(require_named_operator)):
         """Validate a SysID fit via verdict() and promote it into cell_physics.yaml as a named candidate."""
-        from fleet.server.cell_real2sim import promote_physics_candidate
+        r2s = _real2sim_module()
 
         if not isinstance(body, dict):
             raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": "JSON object required"})
         actor = getattr(principal, "principal_id", None) or "operator"
         try:
-            return promote_physics_candidate(
+            return r2s.promote_physics_candidate(
                 str(body.get("fit_id") or ""),
                 str(body.get("candidate_name") or ""),
                 actor_id=actor,
                 custom_fit=body.get("fit"),
             )
+        except OSError as exc:
+            raise HTTPException(503, detail={"code": "CELL_REAL2SIM_UNAVAILABLE", "message": str(exc)}) from exc
         except KeyError as exc:
             raise HTTPException(404, detail={"code": "CELL_REAL2SIM_NOT_FOUND", "message": str(exc)}) from exc
         except (ValueError, TypeError) as exc:

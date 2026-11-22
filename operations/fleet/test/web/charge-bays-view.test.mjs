@@ -109,22 +109,19 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.actions.length, 2);
   assert.equal(rows.cells.length, 2);
   assert.match(rows.summary, /15%/);
+  assert.equal(rows.cards.length, 2);
   assert.deepEqual(rows.cards[0].cameraViews.map(v => v.id), ['arm_s_top', 'arm_s_wrist']);
   assert.deepEqual(rows.cards[1].cameraViews.map(v => v.id), ['top', 'side', 'arm_a_wrist', 'arm_b_wrist']);
-  assert.deepEqual(rows.cards[2].cameraViews.map(v => v.id), ['pinky_dock', 'arm_s_top']);
-  assert.equal(rows.cards[2].cameraViews[0].roiTarget, 'rosy_60');  // 도킹은 천장 Cam 확대로 위에서 본다
   assert.ok(rows.cards.every(c => !c.cameraUrl), '카드는 Fleet 중계 URL을 들지 않는다(D-136)');
   assert.equal(rows.cards[0].title, 'cell_s · S3 하역 셔틀 (arm_s)');
   assert.equal(rows.cards[0].phase, 'ARM_IN_BED_ZONE');
   assert.equal(rows.cards[0].task.task_id, 'new');
   assert.deepEqual(rows.cards[0].buttons.map(b => b.preset),
-    ['s3_shuttle', 's3_recover_belt_far', 's3_recover_floor_front']);
+    ['s3_shuttle', 's3_act_policy', 's3_recover_belt_far', 's3_recover_floor_front']);
+  assert.equal(rows.cards[0].buttons[1].requiresPresence, true);
   assert.equal(rows.cards[1].title, 'cell_ab · S5 팔레트 적재 (arm_a·arm_b)');
   assert.deepEqual(rows.cards[1].buttons.map(b => b.preset),
     ['s5_tier1_arm_a', 's5_tier2_arm_b', 's5_tier3_arm_a', 'full_s3_to_s5_pipeline']);
-  assert.equal(rows.cards[2].robot_id, 'rosy_60');
-  assert.deepEqual(rows.cards[2].buttons.map(b => b.pinkyAction),
-    ['dock_and_unload_s3', 'dock_s3', 'charge_c1', 'depart_s1']);
   assert.equal(rows.cards[0].quickControls[0].decisionSubject, 'cell_s');
   assert.equal(rows.cards[0].quickControls[1].humanSafetyCell, 'cell_s');
   assert.equal(rows.cards[0].quickControls[2].zoneId, 'EXP_S3_BELT');
@@ -132,21 +129,30 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[0].quickControls[4].clearArmHold, 'cell_s');
   assert.equal(rows.cards[0].cameraViews.length, 2);
   assert.equal(rows.cards[1].cameraViews.length, 4);
-  assert.equal(rows.cards[2].cameraViews.length, 2);
-  assert.equal(rows.cards[2].quickControls[0].decisionSubject, 'rosy_60');
-  assert.equal(rows.cards[2].quickControls[1].zoneId, 'STG_C2');
-  assert.ok(rows.cards[2].quickControls.some(c => c.cableGuardToggle === true));
-  assert.deepEqual(chargeBayRows({}).cards.filter(c => c.robot_id).map(c => c.robot_id),
-    ['rosy_42', 'rosy_45', 'rosy_46']);
+  assert.deepEqual(chargeBayRows({}).cards.map(c => c.id), ['cell_s', 'cell_ab']);
 
+  const unlinkedTargets = inspectorTargetsFromRows(rows);
+  assert.deepEqual(unlinkedTargets.map(t => t.id), ['arm_s', 'arm_a', 'arm_b', 'cell_s', 'cell_ab']);
+  assert.equal(unlinkedTargets[0].robot_id, null);
+  assert.ok(!unlinkedTargets[0].cameraViews.some(v => v.id === 'pinky_dock'));
+
+  const occupiedRows = chargeBayRows({
+    ...plan,
+    omx_cells: {
+      cell_s: { gate: { phase: 'ARM_IN_BED_ZONE', robot_id: 'rosy_60' } },
+      cell_ab: { gate: { phase: 'IDLE' } },
+    },
+  });
   const targets = inspectorTargetsFromRows({
-    ...rows,
+    ...occupiedRows,
     armLiveStates: {
       arm_s: { joints_deg: [0.0, -58.0, 50.0, 50.0, -5.0, 58.1], folded: true, temp_c: 31.2, current_ma: 44.0, age_s: 2.0, fresh: true, substage: 'Fold Home 대기' },
     },
   });
-  assert.deepEqual(targets.map(t => t.id), ['arm_s', 'arm_a', 'arm_b', 'cell_s', 'cell_ab', 'rosy_60', 'rosy_40']);
+  assert.deepEqual(targets.map(t => t.id), ['arm_s', 'arm_a', 'arm_b', 'cell_s', 'cell_ab']);
+  assert.equal(targets[0].robot_id, 'rosy_60');
   assert.equal(targets[0].cameraViews[0].id, 'arm_s_wrist');
+  assert.equal(targets[0].cameraViews.at(-1).roiTarget, 'rosy_60');
   assert.equal(targets[1].cameraViews[0].id, 'arm_a_wrist');
   assert.equal(targets[2].cameraViews[0].id, 'arm_b_wrist');
   assert.deepEqual(targets[0].dualPair, ['arm_s_top', 'arm_s_wrist']);

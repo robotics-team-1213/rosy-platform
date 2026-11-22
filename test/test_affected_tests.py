@@ -1251,3 +1251,45 @@ def test_pack_drops_strict_child_paths_with_boundary_awareness():
     ])
     flat = [p for g in groups for p in g]
     assert flat == ["a/b", "a/b2/t.py", "x/y/", "dup/t.py", "dup/t.py"]
+
+
+def test_contract_version_pin_narrows_until_non_pin_code_is_added():
+    import affected_narrow
+
+    assert affected_narrow.is_contract_version_pin_text('"""doc"""\n# comment\nCONTRACT = "ROSY-API-REF-001 v1.440"\n')
+    assert not affected_narrow.is_contract_version_pin_text("")
+    assert not affected_narrow.is_contract_version_pin_text('"""doc only"""\n# comment\n')
+    assert not affected_narrow.is_contract_version_pin_text('CONTRACT = "v1"\x00')
+    assert not affected_narrow.is_contract_version_pin_text("CONTRACT = (")
+    assert not affected_narrow.is_contract_version_pin_text('CONTRACT = "v1"\nCONTRACT = "v2"\n')
+
+    repo = affected.Repo.load(ROOT)
+    cv = affected_narrow.CONTRACT_VERSION_FILE
+    pin_sel = affected.select(repo, [cv])
+    assert pin_sel.mode == "affected"
+    assert set(affected_narrow.CONTRACT_VERSION_READERS) <= set(pin_sel.reasons)
+    assert "middleware/core/gateway/test" not in pin_sel.reasons
+    assert "middleware/core/api/test/test_arm_lease_api.py" not in pin_sel.reasons
+
+    repo._texts[cv] = 'CONTRACT = "ROSY-API-REF-001 v1.1"\n\ndef helper():\n    return 1\n'
+    code_sel = affected.select(repo, [cv])
+    assert "middleware/core/gateway/test" in code_sel.reasons
+    assert "middleware/core/api/test/test_arm_lease_api.py" in code_sel.reasons
+
+
+def test_unreferenced_deploy_example_narrows_to_functional_while_script_keeps_root_suite(sample, monkeypatch):
+    repo = affected.Repo.load(sample)
+    ex = "deploy/robot/omx/sample.env.example"
+    sibling_test = "deploy/robot/omx/test_sample_env.py"
+    repo.tracked.extend([ex, sibling_test])
+    repo.test_files.append(sibling_test)
+    repo._texts[sibling_test] = "def test_ok():\n    pass\n"
+    monkeypatch.setattr(repo, "exists", lambda p: p in {ex, sibling_test} or (sample / p).exists())
+    ex_sel = affected.select(repo, [ex])
+    assert ex_sel.mode == "affected"
+    assert "test" not in ex_sel.reasons
+    assert "test/test_robot_runtime.py" in ex_sel.reasons
+    assert sibling_test in ex_sel.reasons
+
+    sh_sel = affected.select(repo, ["deploy/robot/run.sh"])
+    assert "test" in sh_sel.reasons
