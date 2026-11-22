@@ -275,3 +275,31 @@ def test_leaf_server_and_web_subprefixes_narrow_while_shared_and_root_assets_kee
         "operations/fleet/fleet/server/work/work_routes.py",
     ):
         assert whole_fleet <= set(browser_scope.targets([full_path])), full_path
+
+
+def test_unit_test_modules_and_contract_version_do_not_trigger_unrelated_browsers(monkeypatch):
+    assert browser_scope.targets(["middleware/core/api/core_api_web/api/contract_version.py"]) == []
+    monkeypatch.setattr(browser_scope, "_is_contract_version_pin", lambda p: False)
+    assert set(browser_scope.API_WEB) <= set(
+        browser_scope.targets(["middleware/core/api/core_api_web/api/contract_version.py"])
+    )
+    monkeypatch.undo()
+
+    assert browser_scope.targets(["shared/web/test/test_shared_dedupe.py"]) == []
+    assert browser_scope.targets(["learning/training/omx/test/test_cell_bundle.py"]) == []
+
+    theme_targets = set(browser_scope.targets(["shared/web/test/test_theme_browser.py"]))
+    assert {"shared/web/test/test_theme_browser.py", "operations/fleet/test/test_fleet_header_browser.py"} <= theme_targets
+    assert len(theme_targets) < 15
+
+    g2_targets = set(browser_scope.targets(["middleware/robot_ui/robot/test/test_role_g2_browser.py"]))
+    assert {
+        "middleware/robot_ui/robot/test/test_list_row_confirm_browser.py",
+        "middleware/robot_ui/robot/test/test_dashboard_entry_browser.py",
+    } <= g2_targets
+
+    assert "middleware/robot_ui/robot/test/test_remaining_workflows_browser.py" in browser_scope.targets(
+        ["middleware/robot_ui/robot/test/test_panel_copy_evidence_browser.py"]
+    )
+    shared_expanded = {p for pat in browser_scope.SHARED for p in browser_scope._expand(pat)}
+    assert shared_expanded <= set(browser_scope.targets(["shared/web/test/surface_registry.py"]))
