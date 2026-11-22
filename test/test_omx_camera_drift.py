@@ -16,14 +16,31 @@ def test_small_camera_shifts_accumulate_against_the_calibrated_frame(tmp_path, m
     monkeypatch.setenv("ROSY_REAL2SIM_FRAMES", str(tmp_path / "store"))
     scene = np.random.default_rng(0).integers(0, 256, (480, 650), dtype=np.uint8)
     scene = cv2.GaussianBlur(scene, (0, 0), 2)
-    monkeypatch.setattr(r2s, "measure_temp_plates", lambda *_: {
-        "plates": {}, "shape": {}, "camera_check": {"worst_mm": [0]},
-    })
+    surveyed = r2s.sites.Layout()
+    offset = 0
+
+    def measure_plates(*_):
+        plates = {
+            tag: {"seen": [1, 2, 3], "lanes": [
+                {"lane": lane, "xy": [xy[0] - offset / 1000, xy[1]], "yaw_deg": np.degrees(yaw)}
+                for lane, (xy, yaw) in enumerate(plate["lanes"], 1)
+            ]}
+            for tag, plate in surveyed.plates.items()
+        }
+        return {"plates": plates, "shape": {}, "camera_check": {"worst_mm": [0]}}
+
+    monkeypatch.setattr(r2s, "measure_temp_plates", measure_plates)
+    monkeypatch.setattr(refit.h, "measure_temp_plates", measure_plates)
     for name in ("measure_ship", "measure_belt", "measure_ship_fixation"):
         monkeypatch.setattr(r2s, name, lambda *_: {})
     monkeypatch.setattr(r2s, "overlay", lambda frame, *_: frame)
-    fitted = dict(r2s.sites.Layout().fixture["real_cameras"]["top"], f_px=618.5)
-    monkeypatch.setattr(refit, "refit_top_camera", lambda *_: {"ok": True, "camera": fitted})
+    fitted = dict(surveyed.fixture["real_cameras"]["top"], f_px=618.5)
+
+    def fit_top_camera(_, layout, __):
+        assert layout.sites["tmp-a-1"]["xy"] == surveyed.sites["tmp-a-1"]["xy"]
+        return {"ok": True, "camera": fitted}
+
+    monkeypatch.setattr(refit, "refit_top_camera", fit_top_camera)
     reference = prev = None
     for offset in (0, 2, 4, 5, 9):
         if offset == 9:
@@ -40,6 +57,7 @@ def test_small_camera_shifts_accumulate_against_the_calibrated_frame(tmp_path, m
         assert bool((snap["camera_fit"] or {}).get("ok")) == (offset == 4)
         if offset == 2:
             assert snap["camera_motion"]["dx_px"] == pytest.approx(-2, abs=.5)
+            assert snap["items"]["temp_plates"]["plates"]["a"][0]["xy"][0] != snap["camera_reference_lanes"]["tmp-a-1"][0]
         if offset in (4, 5, 9):
             assert snap["camera"]["top"] == fitted
     assert snap["camera_fit"]["moved_ok"]
@@ -69,11 +87,12 @@ def test_policy_camera_report_binds_frames_and_rejects_a_different_profile(tmp_p
 
     ref, live = tmp_path / "ref.png", tmp_path / "live.png"
     image = np.zeros((20, 20), np.uint8)
-    image[6, 6] = 255
+    for x, y in ((2, 3), (4, 5), (7, 10), (11, 17)):
+        image[y, x] = 255
     assert cv2.imwrite(str(ref), image)
     assert cv2.imwrite(str(live), np.roll(image, 1, axis=1))
     anchors = tmp_path / "anchors.json"
-    data = dict(camera="top", training_profile="native", live_profile="native",
+    data = dict(camera="top", training_profile="native", live_profile="native", reference_sha256=digest(ref), live_sha256=digest(live),
                 reference_xy=[[2, 3], [4, 5], [7, 10], [11, 17]], live_xy=[[3, 3], [5, 5], [8, 10], [12, 17]])
     anchors.write_text(json.dumps(data))
     args = [str(ref), str(live), str(anchors), "--max-shift-px", "2", "--max-residual-px", "0.5"]
@@ -84,3 +103,10 @@ def test_policy_camera_report_binds_frames_and_rejects_a_different_profile(tmp_p
     anchors.write_text(json.dumps(data))
     with pytest.raises(SystemExit, match="2"):
         main(args)
+    assert "matching capture profiles" in capsys.readouterr().err
+    data["live_profile"] = "native"
+    anchors.write_text(json.dumps(data))
+    assert cv2.imwrite(str(live), image)
+    with pytest.raises(SystemExit, match="2"):
+        main(args)
+    assert "original frame hashes" in capsys.readouterr().err

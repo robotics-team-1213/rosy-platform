@@ -87,14 +87,22 @@ def refit_top_camera(frame, layout, starts):
     return dict(best, ok=not why, why=why and f"{why}: not used", f_px=FACTORY_F_PX)
 
 
-def apply_refit(top, layout, tp, prev_plates, motion, moved_ok, starts):
+def apply_refit(top, layout, tp, prev_plates, motion, moved_ok, starts, *, anchor_lanes=None):
     """The measure() camera step: refit when the camera moved or the pad-size check failed, re-run that check through the fitted pose and
     keep the pose only when it passes. A refused refit stops the measurement (the old pose is already known to fail), unless
     moved_ok, which is recorded. -> (temp-plates result, camera_fit or None); `layout` carries the fitted pose when it was kept."""
     worst = lambda r: max((r.get("camera_check") or {}).get("worst_mm") or [99.0])  # noqa: E731
     if not (motion.get("moved") or motion.get("refit_required") or worst(tp) > GATE_MM):
         return tp, None
-    fit = refit_top_camera(top, layout, starts)
+    fit_layout = layout
+    if anchor_lanes is not None:
+        from copy import copy
+
+        fit_layout = copy(layout)
+        fit_layout.sites = dict(layout.sites)
+        for name, (x, y, yaw) in anchor_lanes.items():
+            fit_layout.sites[name] = dict(layout.sites[name], xy=(x, y), yaw=yaw)
+    fit = refit_top_camera(top, fit_layout, starts)
     if fit["ok"]:
         old = layout.fixture["real_cameras"]
         layout.fixture["real_cameras"] = dict(old, top=fit["camera"])

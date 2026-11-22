@@ -154,7 +154,7 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
         raise SystemExit(f"no readable top frame in {run / 'frames'}")
     top_digest = anchor.remember(frames["top"])
     frame = map_gate.provenance(layout.choices)["top_camera"]["frame"]
-    reference_top = None
+    reference_top, reference_lanes = None, None
     camera_motion = dict(checked=False, reason="no previous snapshot")
     if prev:
         if prev.get("preset") == preset and prev.get("frame", frame) == frame:
@@ -168,6 +168,7 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
                 reference_top = (prev.get("frames") or {}).get("top")
             if reference_top and isinstance(previous_pose, dict):
                 layout.fixture["real_cameras"] = dict(layout.fixture["real_cameras"], top=previous_pose)
+                reference_lanes = prev.get("camera_reference_lanes")
             else:
                 reference_top = None
             ref = anchor.reference(reference_top) if reference_top else None
@@ -177,6 +178,7 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
             m = anchor.motion(ref_image, top)
             camera_motion = (dict(checked=True, moved=anchor.moved(m), **m) if m else
                              dict(checked=False, refit_required=True, reason="no comparable calibrated top frame"))
+            camera_motion["reference_top"] = reference_top
         else:
             camera_motion = dict(checked=False, refit_required=True, reason="previous camera reference uses another preset or frame")
     prev_tp = prev["items"]["temp_plates"] if previous_plates_valid else None
@@ -190,9 +192,17 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
             layout, tp_first, worst_first = alt_layout, tp_alt, worst_alt
     import omx_real2sim_refit as refit  # PnP on the pad ends from every known pose, factory K; refused or unproven = stop (apply_refit)
     starts = {n: dict(getattr(sites, f"TOP_CAMERA_{n}")) for n in ("20261110", "20261112", "20261114")}
-    tp_first, camera_fit = refit.apply_refit(top, layout, tp_first, prev_tp, camera_motion, camera_moved_ok, starts)
+    if reference_lanes is None:
+        reference_lanes = {name: list(site["xy"]) + [site["yaw"]] for name, site in layout.sites.items()
+                           if site["kind"] == "temp" and site["layer"] == 0}
+    tp_first, camera_fit = refit.apply_refit(top, layout, tp_first, prev_tp, camera_motion, camera_moved_ok, starts,
+                                          anchor_lanes=reference_lanes)
     if (camera_fit or {}).get("ok") or (not prev and camera_fit is None):
         reference_top = top_digest
+    if not prev and camera_fit is None:
+        for tag, plate in tp_first["plates"].items():
+            for lane in plate.get("lanes", ()):
+                reference_lanes[f"tmp-{tag}-{lane['lane']}"] = list(lane["xy"]) + [math.radians(lane["yaw_deg"])]
     items = {"ship": lambda: measure_ship(top, layout), "belt": lambda: measure_belt(top, layout)}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
@@ -206,6 +216,7 @@ def measure(run, prev_path=None, camera_moved_ok=False, preset=None, twin=None, 
     snap = dict(schema=SCHEMA, frame=frame, preset=preset, gap_rows=rows, taken_at=json.loads(cap_file.read_text(encoding="utf-8"))["taken_at"] if cap_file.exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
                 camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_reference_top=reference_top,
+                camera_reference_lanes=reference_lanes if reference_top else None,
                 camera_motion=camera_motion, camera_fit=camera_fit,
                 items=dict(temp_plates=dict(plates={t: p["lanes"] for t, p in tp["plates"].items() if "lanes" in p},
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
@@ -370,6 +381,7 @@ def run_pipeline(run, prev_path=None, camera_moved_ok=False, extra_choices=()):
         schema="rosy.omx-real2sim-pipeline.v1",
         snapshot=rel,
         previous=str(prev_path) if prev_path else None,
+        camera_motion=snap.get("camera_motion"),
         changed=changed,
         rerun=rerun or ["stack"],
         gaps=sorted({GAPS[i] for i in changed if i in GAPS} | {r["id"] for r in snap.get("gap_rows") or []}),

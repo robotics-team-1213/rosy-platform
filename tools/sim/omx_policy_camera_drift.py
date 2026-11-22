@@ -7,14 +7,12 @@ across the task image, including surfaces at other working heights. Run on
 several independently captured pairs before considering a policy experiment.
 """
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
 
 import numpy as np
-
-from omx_cell_anchor import digest
-
 
 def translation_report(reference_xy, live_xy, *, max_shift_px, max_residual_px):
     if not all(math.isfinite(v) and v > 0 for v in (max_shift_px, max_residual_px)):
@@ -49,11 +47,15 @@ def main(argv=None):
     parser.add_argument("--max-shift-px", type=float, required=True)
     parser.add_argument("--max-residual-px", type=float, required=True)
     args = parser.parse_args(argv)
-    anchors = json.loads(args.anchors.read_text(encoding="utf-8"))
+    records = {name: getattr(args, name).read_bytes() for name in ("reference", "live", "anchors")}
+    hashes = {name: "sha256:" + hashlib.sha256(data).hexdigest() for name, data in records.items()}
+    anchors = json.loads(records["anchors"])
     camera, profile = anchors.get("camera"), anchors.get("training_profile")
     if camera not in ("top", "side") or not isinstance(profile, str) or not profile or anchors.get("live_profile") != profile:
         parser.error("requires a fixed top or side camera and matching capture profiles")
-    ref, live = (cv2.imread(str(p)) for p in (args.reference, args.live))
+    if any(anchors.get(f"{name}_sha256") != hashes[name] for name in ("reference", "live")):
+        parser.error("anchor annotations must identify both original frame hashes")
+    ref, live = (cv2.imdecode(np.frombuffer(records[name], np.uint8), cv2.IMREAD_COLOR) for name in ("reference", "live"))
     if ref is None or live is None or ref.shape != live.shape:
         parser.error("frames must be readable and at the same native resolution")
     height, width = ref.shape[:2]
@@ -65,8 +67,7 @@ def main(argv=None):
                 raise ValueError(f"{key} contains a point outside the frame")
     except (KeyError, TypeError, ValueError) as exc:
         parser.error(str(exc))
-    print(json.dumps(dict(report, camera=camera, profile=profile, size=[width, height],
-                          reference=digest(args.reference), live=digest(args.live), anchors=digest(args.anchors)), indent=2))
+    print(json.dumps(dict(report, camera=camera, profile=profile, size=[width, height], **hashes), indent=2))
     return 0 if report["candidate_matrix"] is not None else 1
 
 
