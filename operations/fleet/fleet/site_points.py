@@ -17,52 +17,20 @@ from typing import Any, Literal
 
 from core_common.stop_pose import REPARK_MAX_FORWARD_M, REPARK_MAX_LEFT_M
 from fleet.site_map import SiteMap, approach_pose
+from fleet.site_points_catalog import (
+    PLANNED_VEHICLE_STOPS,
+    SITE_HANDOFFS,
+    build_conveyor_transfer,
+    build_coordinate_frames,
+    build_end_to_end_stages,
+    build_zone_rules,
+)
 from fleet.site_rules import SiteRules
 
 SCHEMA_FULL = "rosy.site-points.v1"
 SCHEMA_PORT = "rosy.port-site-places.v1"
 BERTH_ALIGN_TOL_DEG = 3.0
 NAV2_BERTH_STOPS = frozenset({"S3", "S_OUT"})
-
-PLANNED_VEHICLE_STOPS: tuple[dict[str, str], ...] = (
-    {
-        "id": "S_OUT",
-        "name": "S_OUT 반출대 상차 정지선",
-        "kind": "stop",
-        "port_role": "outbound_pickup",
-        "expected_rule_role": "load",
-    },
-)
-
-SITE_HANDOFFS: tuple[dict[str, Any], ...] = (
-    {
-        "id": "s3_cell_s_unload",
-        "kind": "intake",
-        "direction": "vehicle_to_arm",
-        "vehicle_stop_id": "S3",
-        "intake_point_ref": "intake-s3",
-        "cell_id": "cell_s",
-        "arms": ["arm_s"],
-        "arm_src": "not_places:vehicle_tray",
-        "arm_dst": "not_places:belt",
-        "target_cell_zones": ["yard"],
-        "requires_arm_fold_for_align": True,
-    },
-    {
-        "id": "outbound_stand_load",
-        "kind": "outbound",
-        "direction": "arm_to_vehicle",
-        "vehicle_stop_id": "S_OUT",
-        "vehicle_exit_stop_id": "S1",
-        "cell_id": "cell_ab",
-        "arms": ["arm_a"],
-        "arm_src": "stand:r1-s1-t1",
-        "arm_dst": "not_places:vehicle_tray",
-        "cell_zone_id": "stand",
-        "wire_slot_ref": "stand-r1-c1-l1",
-        "requires_arm_fold_for_align": True,
-    },
-)
 
 
 def _edge_links(site_map: SiteMap) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
@@ -427,6 +395,13 @@ def build_site_points(
                         "release_evidence": "D-1063_top_camera",
                         "auto_depart": "D-1047",
                     },
+                    "arm_frame": "cell_s_arm_base",
+                    "belt_end": "belt-in",
+                    "waypoints": {
+                        "approach": f"{h['vehicle_stop_id']}:approach_pose",
+                        "stop": h["vehicle_stop_id"],
+                        "exit_edge": (edges_out.get(h["vehicle_stop_id"]) or ["upper_east"])[0],
+                    },
                     "flow": [
                         f"{h['vehicle_stop_id']}:approach_pose",
                         f"{h['vehicle_stop_id']}:stop_zone",
@@ -473,6 +448,15 @@ def build_site_points(
                     "exit_stop_resolved": bool(exit_id and exit_id in active_by_id),
                     "nav2_berth_ready": berth_ready,
                     "berth_missing": berth_missing,
+                    "arm_frame": "cell_ab_fixture",
+                    "stand_ref": h["arm_src"],
+                    "waypoints": {
+                        "branch_edge": "upper_east",
+                        "branch_node": "J_stand",
+                        "approach": f"{h['vehicle_stop_id']}:approach_pose",
+                        "stop": h["vehicle_stop_id"],
+                        "exit_stop": exit_id,
+                    },
                     "flow": [
                         h["arm_src"],
                         f"{h['arms'][0]}:vehicle_tray",
@@ -497,12 +481,24 @@ def build_site_points(
             }
         )
 
+    s3_ready = bool((berth_by_stop_id.get("S3") or {}).get("nav2_berth_ready"))
+    s_out_ready = bool((berth_by_stop_id.get("S_OUT") or {}).get("nav2_berth_ready"))
     return _with_digest(
         {
             "schema": SCHEMA_FULL,
             "sources": sources,
             "vehicle_stops": vehicle_stops,
             "arm_zones": cell_sites,
+            "coordinate_frames": build_coordinate_frames(site_map, site_rules, cell_sites),
+            "conveyor_transfer": build_conveyor_transfer(),
+            "zone_rules": build_zone_rules(cell_sites),
+            "end_to_end_stages": build_end_to_end_stages(
+                active_by_id=active_by_id,
+                stop_rules=stop_rules,
+                exit_place=exit_place,
+                s3_berth_ready=s3_ready,
+                s_out_berth_ready=s_out_ready,
+            ),
             "handoffs": handoffs_full,
             "legacy_aliases": dict(legacy_station_zones or {}),
         }
