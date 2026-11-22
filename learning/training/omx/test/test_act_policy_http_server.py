@@ -312,3 +312,141 @@ def test_read_policy_spec_rejects_bool_dims_and_lerobot_loader_passes_device_ove
     assert seen["cfg_device"] == "cpu" and seen["to_device"] == "cpu" and seen["eval"] is True
     assert seen["pre_over"] == {"device_processor": {"device": "cpu"}}
     assert seen["post_over"] == {"device_processor": {"device": "cpu"}}
+
+
+def test_http11_keepalive_request_id_and_oversized_close(tmp_path):
+    import http.client
+    import socket
+
+    pdir, rev = _make_checkpoint(tmp_path, "arm_a", views=("top", "wrist"), hw=(24, 32), n_steps=2, chunk_size=4)
+    accepted = [0]
+    reg = srv.PolicyRegistry.from_specs([f"arm_a={pdir}:{rev}"], loader=lambda *a: lambda obs: [[0.5] * 6] * 2)
+    server = srv.make_server("127.0.0.1", 0, reg, token="ka-tok", max_body_bytes=4096)
+    orig_get_request = server.get_request
+
+    def _counting_accept():
+        accepted[0] += 1
+        return orig_get_request()
+
+    server.get_request = _counting_accept
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=2.0)
+    conn2 = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=2.0)
+    try:
+        conn.request("GET", "/health", headers={"Connection": "keep-alive"})
+        r_health = conn.getresponse()
+        r_health.read()
+        assert r_health.status == 200 and r_health.version == 11 and not r_health.will_close
+
+        jpg = _encode_b64_jpeg(24, 32)
+        base_body = {"arm_id": "arm_a", "revision": rev, "state": [0.0] * 6, "frames": {"top": jpg, "wrist": jpg}}
+        for idx in range(2):
+            req_id = f"req-{idx}"
+            conn.request(
+                "POST",
+                "/infer",
+                body=json.dumps({**base_body, "request_id": req_id}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Authorization": "Bearer ka-tok", "Connection": "keep-alive"},
+            )
+            r_inf = conn.getresponse()
+            data = json.loads(r_inf.read().decode("utf-8"))
+            assert r_inf.status == 200 and not r_inf.will_close and data["request_id"] == req_id
+        assert accepted[0] == 1
+
+        for bad_id in ("   ", 123, "x" * 129):
+            conn.request(
+                "POST",
+                "/infer",
+                body=json.dumps({**base_body, "request_id": bad_id}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Authorization": "Bearer ka-tok"},
+            )
+            r_bad = conn.getresponse()
+            r_bad.read()
+            assert r_bad.status == 400
+
+        conn.request(
+            "POST",
+            "/infer",
+            body=b"{bad-json",
+            headers={"Content-Type": "application/json", "Authorization": "Bearer ka-tok"},
+        )
+        r_json = conn.getresponse()
+        r_json.read()
+        assert r_json.status == 400 and r_json.will_close and (r_json.getheader("Connection") or "").lower() == "close"
+
+        raw_ok_body = json.dumps({**base_body, "request_id": "early-check"}).encode("utf-8")
+        for method, route, body_bytes, hdrs, expected_status in (
+            ("POST", "/unknown", raw_ok_body, {"Content-Type": "application/json", "Authorization": "Bearer ka-tok", "Connection": "keep-alive"}, 404),
+            ("POST", "/infer", raw_ok_body, {"Content-Type": "application/json", "Connection": "keep-alive"}, 401),
+            ("POST", "/infer", raw_ok_body, {"Content-Type": "application/json", "Authorization": "Bearer wrong", "Connection": "keep-alive"}, 401),
+            ("GET", "/health", b"abcd", {"Connection": "keep-alive"}, 200),
+            ("GET", "/unknown", b"abcd", {"Connection": "keep-alive"}, 404),
+            ("POST", "/infer", b"0\r\n\r\n", {"Content-Type": "application/json", "Authorization": "Bearer ka-tok", "Transfer-Encoding": "chunked", "Connection": "keep-alive"}, 400),
+            ("GET", "/health", None, {"Content-Length": "", "Connection": "keep-alive"}, 200),
+            ("GET", "/health", None, {"Transfer-Encoding": "", "Connection": "keep-alive"}, 200),
+            ("POST", "/infer", raw_ok_body, {"Content-Type": "application/json", "Authorization": "Bearer ka-tok", "Transfer-Encoding": "", "Connection": "keep-alive"}, 400),
+        ):
+            early_conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=2.0)
+            try:
+                early_conn.request(method, route, body=body_bytes, headers=hdrs)
+                r_early = early_conn.getresponse()
+                r_early.read()
+                assert r_early.status == expected_status and r_early.will_close
+                assert (r_early.getheader("Connection") or "").lower() == "close"
+            finally:
+                early_conn.close()
+
+        conn2.request(
+            "POST",
+            "/infer",
+            body=json.dumps({**base_body, "request_id": "post-early-ok"}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": "Bearer ka-tok", "Connection": "keep-alive"},
+        )
+        r_after = conn2.getresponse()
+        d_after = json.loads(r_after.read().decode("utf-8"))
+        assert r_after.status == 200 and not r_after.will_close and d_after["request_id"] == "post-early-ok"
+
+        conn2.request(
+            "POST",
+            "/infer",
+            body=b"{" + b" " * 5000 + b"}",
+            headers={"Content-Type": "application/json", "Authorization": "Bearer ka-tok"},
+        )
+        r_big = conn2.getresponse()
+        r_big.read()
+        assert r_big.status == 413 and r_big.will_close and (r_big.getheader("Connection") or "").lower() == "close"
+
+        for wire_req, expected_line in (
+            (b"POST /infer HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer ka-tok\r\nConnection: keep-alive\r\nContent-Length: " + b"9" * 4301 + b"\r\n\r\n", b"HTTP/1.1 413 "),
+            (b"POST /infer HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer ka-tok\r\nConnection: keep-alive\r\nContent-Length: 4\xa0\r\n\r\n{}", b"HTTP/1.1 400 "),
+        ):
+            with socket.create_connection(("127.0.0.1", server.server_address[1]), timeout=2.0) as raw_sock:
+                raw_sock.sendall(wire_req)
+                buf = b""
+                while b"\r\n\r\n" not in buf:
+                    chunk = raw_sock.recv(4096)
+                    assert chunk
+                    buf += chunk
+                assert buf.startswith(expected_line) and b"\r\nconnection: close\r\n" in buf.lower()
+    finally:
+        conn.close()
+        conn2.close()
+        server.shutdown()
+        server.server_close()
+
+    class _StubSock:
+        def __init__(self):
+            self.events = []
+
+        def shutdown(self, how):
+            self.events.append(("shutdown", how))
+
+        def close(self):
+            self.events.append("close")
+
+    fake_sock = _StubSock()
+    server.process_request(fake_sock, ("127.0.0.1", 12345))
+    assert server._closed is True
+    assert not server._active_socks
+    assert "close" in fake_sock.events
