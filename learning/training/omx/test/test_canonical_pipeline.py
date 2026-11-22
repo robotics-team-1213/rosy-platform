@@ -132,10 +132,10 @@ def test_watch_roots_parses_scratch_layout_refuses_symlinks_and_strips_paths(tmp
         }}}},
     }))
     # Symlink trap inside watch root must be ignored.
-    secret = tmp_path / "secret.json"
-    secret.write_text(json.dumps({"verdict": "fake"}))
+    trap_target = tmp_path / "outside.json"
+    trap_target.write_text(json.dumps({"verdict": "fake"}))
     (watch / "eval_l1").mkdir()
-    (watch / "eval_l1" / "evil.json").symlink_to(secret)
+    (watch / "eval_l1" / "evil.json").symlink_to(trap_target)
 
     svc = cp.CanonicalService(tmp_path / "canon_root", cfg)
     watched = svc.get_watched("ai_canon")
