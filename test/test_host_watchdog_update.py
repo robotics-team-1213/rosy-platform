@@ -6,6 +6,8 @@ import sys
 import pytest
 
 from deploy.hosts.common import watchdog_update
+from deploy.hosts.common.test_rosy_ssh_watchdog import SCRIPT as BASELINE_SCRIPT
+from deploy.hosts.common.test_rosy_ssh_watchdog import run as run_watchdog
 from deploy.hosts.common.watchdog_update import build_asset, install_asset
 
 pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux system watchdog executable")
@@ -65,3 +67,12 @@ def test_failed_replacement_keeps_the_sequence_and_script(keys, tmp_path, monkey
         install_asset(build_asset(private, 3, SCRIPT), public, active)
     assert active.read_bytes() == baseline
     assert not list(tmp_path.glob(".watchdog-*"))
+
+
+def test_signed_watchdog_retains_cell_policy_through_repeated_ssh_failure(keys, tmp_path):
+    private, public = keys
+    active = tmp_path / "active"
+    script = BASELINE_SCRIPT.read_bytes().replace(b"\r\n", b"\n")
+    install_asset(build_asset(private, 1, script), public, active)
+    actions = [run_watchdog(tmp_path, env={"MAX_REBOOTS": "0"}, script=active)[1] for _ in range(3)]
+    assert actions == [["restart ssh"], ["restart NetworkManager", "restart ssh"], ["restart ssh"]]

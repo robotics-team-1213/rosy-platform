@@ -7,7 +7,7 @@ ConditionPathIsExecutable=/usr/local/sbin/rosy-ssh-watchdog
 
 [Service]
 Type=oneshot
-ExecCondition=/usr/local/bin/rosy-update-gate
+ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'
 ExecStart=/usr/bin/python3 -I /usr/local/lib/rosy-watchdog-update/watchdog_update.py apply
 StateDirectory=rosy-watchdog-update
 StateDirectoryMode=0700

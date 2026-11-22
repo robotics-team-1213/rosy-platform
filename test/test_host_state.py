@@ -156,11 +156,16 @@ def test_signed_watchdog_enrollment_preserves_local_reboot_policy(tmp_path):
     assert "systemctl daemon-reexec" not in calls
     assert "systemctl start rosy-ssh-watchdog.service" not in calls
     units = tmp_path / "host/etc/systemd/system"
-    assert "ExecCondition=/usr/local/bin/rosy-update-gate" in (units / "rosy-watchdog-update.service").read_text()
+    assert "ExecCondition=/bin/sh -c 'exec /usr/local/bin/rosy-update-gate'" in (
+        units / "rosy-watchdog-update.service"
+    ).read_text()
     drop_in = (units / "rosy-ssh-watchdog.service.d/20-signed-update.conf").read_text()
     assert "exec /var/lib/rosy-watchdog-update/active" in drop_in
     assert "exec /usr/local/sbin/rosy-ssh-watchdog" in drop_in
     assert config.read_text() == "ROSY_ROBOT=0\nMAX_REBOOTS=0\n"
+    updater = tmp_path / "host/usr/local/lib/rosy-watchdog-update/watchdog_update.py"
+    cli = subprocess.run([sys.executable, "-I", updater, "--help"], capture_output=True, text=True, timeout=10)
+    assert cli.returncode == 0, cli.stderr
 
 
 def test_kernel_activation_failure_is_not_a_successful_install(tmp_path):

@@ -13,8 +13,8 @@ from urllib.request import urlopen
 if __package__:
     from .release.signing import sign_checksums, verify_signature
 else:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from release.signing import sign_checksums, verify_signature
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "release"))
+    from signing import sign_checksums, verify_signature
 
 DOWNLOAD_URL = (
     "https://github.com/robotics-team-1213/rosy-platform/releases/download/"
