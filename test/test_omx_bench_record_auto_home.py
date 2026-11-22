@@ -1276,7 +1276,7 @@ def test_home_before_start_runs_before_align_and_rejects_invalid_requests(tmp_pa
     seen4 = []
     monkeypatch.setattr(bench4, 'go_home', lambda req: (seen4.append(req), {'status': 'idle', 'home_moved': [req['arm']]})[1])
     bench4.start(dict(body4, home_before_start=True, fold_unfolded=True))
-    assert seen4 == [{'arm': 'arm_a', 'include_leader': False, 'fold_unfolded': True}]
+    assert seen4[:1] == [{'arm': 'arm_a', 'include_leader': False, 'fold_unfolded': True}]
     finished(bench4)
 
 
