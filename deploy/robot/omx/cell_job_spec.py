@@ -14,6 +14,7 @@ SESSION = {
 }
 AB_ARMS = {"arm_a", "arm_b"}
 ARM = re.compile(r"arm_[abs]")
+ACTOR = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}")
 NAME = re.compile(r"[a-z0-9_][a-z0-9_.-]{0,62}")
 FILE = re.compile(r"(?:object-)?(cell|catalog|chunks)-[a-z0-9_.-]{1,60}\.json")
 TASK_FILE = re.compile(r"(?:task|plan)-[a-z0-9_.-]{1,60}\.json")
@@ -62,6 +63,12 @@ def _match(rx):
 def _safe_path(v):
     if not isinstance(v, str) or not SAFE_PATH.fullmatch(v) or ".." in Path(v).parts:
         raise ValueError("must be a safe path without '..'")
+    return v
+
+
+def _actor(v):
+    if not isinstance(v, str) or not ACTOR.fullmatch(v) or ".." in str(v).replace("\\", "/").split("/"):
+        raise ValueError(f"must match {ACTOR.pattern}")
     return v
 
 
@@ -161,7 +168,7 @@ JOBS = {
             "config": _match(FILE),
             "library": _match(FILE),
             "max_chunks": _int_range(1, 6),
-            "operator": _match(NAME),
+            "operator": _actor,
         },
         "optional": {
             "mode": _match(re.compile(r"act|hybrid|taught")),
@@ -171,12 +178,13 @@ JOBS = {
             "n_action": _int_range(1, 1000),
             "max_obs_age_s": _num(0.001, 5),
             "dry_run": _bool,
-            "proposer": _match(NAME),
+            "proposer": _actor,
             "goal_site": _goal_site,
             "model_calibration": _safe_path,
             "catalog": _match(FILE),
             "roi": _roi,
             "site": _match(NAME),
+            "source_kind": _match(re.compile(r"policy|sim_optimized|scripted_teacher")),
         },
     },
     "stack_plan": {
@@ -324,10 +332,16 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             if name == "catalog" and not (workdir / opt_checked[name]).is_file():
                 raise ValueError(f"{name}: no such file in the workdir")
     operator = checked.get("operator") or opt_checked.get("operator")
-    if "proposer" in opt_checked and (not operator or opt_checked["proposer"] == operator):
+    if "proposer" in opt_checked and (not operator or opt_checked["proposer"].casefold() == operator.casefold()):
         raise ValueError("operator must differ from proposer (D-1024)")
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")
+        if "source_kind" in opt_checked:
+            sk = opt_checked["source_kind"]
+            if mode != "taught" and sk != "policy":
+                raise ValueError(f"{mode} mode requires source_kind='policy', got {sk!r}")
+            if mode == "taught" and sk == "policy":
+                raise ValueError("taught mode cannot use source_kind='policy'")
         if mode != "act" and "goal_site" not in opt_checked:
             raise ValueError(f"{mode} needs goal_site")
         if mode != "taught":
@@ -361,7 +375,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         args += ["--goal-site", opt_checked["goal_site"]]
     if "model_calibration" in opt_checked:
         args += ["--model-calibration", opt_checked["model_calibration"]]
-    for option in ("mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below"):
+    for option in ("mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind"):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
     if moves_arm(job, params):

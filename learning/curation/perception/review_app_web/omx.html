@@ -72,6 +72,27 @@
 <ui-empty><h3>녹화는 작업대 PC의 녹화 화면에서 시작합니다</h3><p>팔이 움직이므로 이 화면(모델 PC)에서는 녹화를 시작하지 않습니다. 작업대 PC에서 녹화 화면(<code>bench_record.py</code>, 127.0.0.1:8771)을 열고, 리더 팔과 전원 스위치를 잡은 사람이 시작합니다. 안전하게 끝난 녹화는 자동으로 봉인됩니다. 이미 수집한 자료는 OMX 시연 준비 결과 폴더로 연결한 뒤 검수할 수 있습니다.</p><div class="learning-next-actions"><a data-kind="quiet" class="ui-action-link" href="/learning/camera">카메라 촬영 기준 확인</a><a data-kind="quiet" class="ui-action-link" href="/learning?connect=omx#connection-panel">기존 OMX 시연 폴더 연결</a><a data-kind="quiet" class="ui-action-link" href="#dataset-section">등록 자료 검수</a></div></ui-empty>
 <p class="quiet">OMX LeRobot 녹화는 모델 PC에서 시연 준비를 마친 폴더를 연결하고, 4단계에서 검수·변환합니다. Pinky Pilot의 MCAP 녹화(.tar)는 모델 PC 수신·영상 변환 후 자료 등록에서 검수하며 OMX 시연 입력과 구분합니다. 변환 완료 카드에서 학습 또는 HF 보관 준비로 이어갈 수 있습니다.</p>
 <details><summary>녹화 자료를 준비해서 연결하는 방법</summary><ol><li>OMX 리더·작업 팔 녹화는 종료된 수집 폴더와 촬영 기준을 모델 PC 운영자에게 전달합니다. 운영자는 고정된 LeRobot 환경에서 <code>learning/curation/omx/collection_pipeline.py prepare-native</code>로 새 준비 폴더를 만듭니다. 입력과 옵션은 같은 명령의 <code>--help</code>에서 확인합니다.</li><li>준비 결과의 <code>intake-receipt.json</code>, <code>inspection.json</code>, <code>decisions.json</code>을 보존한 폴더를 위의 “기존 OMX 시연 폴더 연결”에서 등록합니다. 원본 녹화 대신 준비 폴더를 선택합니다.</li><li>4단계에서 프레임·결과를 확인하고 검수를 저장한 뒤, 변환에 쓸 저장 검수 버전을 선택합니다. 완료 카드에서 학습 또는 고정 버전의 HF 보관 준비를 선택합니다.</li><li>Pinky의 <code>.tar</code>는 OMX 준비 명령에 넣지 않습니다. 모델 PC에서 원본 수신·해시 확인·영상 변환을 마친 뒤 Learning의 자료 등록에서 객체·픽셀 검수를 이어갑니다. 자동 수신 여부는 운영자가 마지막 수신 결과로 확인합니다.</li></ol></details>
+<section aria-labelledby="collect-plan-heading"><h3 id="collect-plan-heading">AI·시뮬 기반 실물 수집 계획 초안 만들기</h3>
+<p class="quiet">학습센터(8768)는 수집 계획 초안만 생성·저장하며 <code>policy_real_approved</code>를 발급하지 않습니다. <code>cell_collect_plan.py</code>는 dry-run 요청만 검증·출력하며, 실제 실행은 별도 Fleet 정책 승인 창·실행 lease와 셀 Gate·<code>--person-at-switch</code> 입회를 거쳐야 합니다.</p>
+<form id="collect-plan-form" class="ui-form learning-form">
+<label class="ui-field-label">계획 이름 <input id="collect-plan-id" class="ui-field" required pattern="[a-z0-9_][a-z0-9_.-]{0,62}" placeholder="s-policy-01"></label>
+<label class="ui-field-label">팔 <select id="collect-arm" class="ui-field"><option value="arm_s">arm_s</option><option value="arm_a">arm_a</option><option value="arm_b">arm_b</option></select></label>
+<label class="ui-field-label">제안자 <input id="collect-proposer" class="ui-field" required pattern="[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}" placeholder="decision-ai"></label>
+<label class="ui-field-label">실행기 <select id="collect-executor" class="ui-field"><option value="act">act (학습 정책)</option><option value="hybrid">hybrid (혼합)</option><option value="ik_chunk">ik_chunk (IK 운반)</option></select></label>
+<label class="ui-field-label">IK 값 출처 <select id="collect-values-from" class="ui-field"><option value="taught">taught (교시)</option><option value="sim_optimized">sim_optimized (시뮬 최적화)</option></select></label>
+<label class="ui-field-label">출발 구역 <input id="collect-from" class="ui-field" required value="belt"></label>
+<label class="ui-field-label">도착 구역 <input id="collect-to" class="ui-field" required value="tray" placeholder="yard:r3-s2-t1 또는 tray"></label>
+<label class="ui-field-label">셀 설정 파일 <input id="collect-config" class="ui-field" required value="cell-s.json"></label>
+<label class="ui-field-label">카탈로그 파일 <input id="collect-catalog" class="ui-field" required value="catalog-s.json"></label>
+<div id="collect-policy-fields">
+<label class="ui-field-label">완료된 학습 결과 <select id="collect-run" class="ui-field"><option value="">직접 입력</option></select></label>
+<label class="ui-field-label">청크 라이브러리 <input id="collect-library" class="ui-field" placeholder="chunks-s.json"></label>
+<label class="ui-field-label">셀 캘리브레이션 경로 <input id="collect-cal" class="ui-field" placeholder="~/cal/follower.json"></label>
+<label class="ui-field-label">정책 폴더 <input id="collect-policy-root" class="ui-field" placeholder="~/models/m1"></label>
+<label class="ui-field-label">정책 SHA-256 <input id="collect-policy-revision" class="ui-field" pattern="[0-9a-f]{64}" placeholder="64자리 16진수 해시"></label>
+</div>
+<ui-button kind="quiet" id="collect-plan-submit" type="submit" class="ui-field">수집 계획 초안 저장</ui-button><p id="collect-plan-status" role="status"></p>
+</form><div id="collect-plans-list" aria-live="polite"></div></section>
 </section>
 <section id="dataset-section" class="learning-section learning-panel" aria-labelledby="dataset-heading"><h2 id="dataset-heading">4 · 검수·학습 데이터</h2>
 <section class="learning-section learning-panel" aria-labelledby="prepared-heading"><h2 id="prepared-heading">연결된 시연 세트 요약</h2>

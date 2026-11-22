@@ -1427,6 +1427,7 @@ safety_review_paths:
   - deploy/robot/omx/chunk_policy_playback.py
   - deploy/robot/omx/chunk_runner_interrupt.py
   - deploy/robot/omx/chunk_runner_settle.py
+  - deploy/robot/omx/episode_recorder.py
   - deploy/robot/omx/guarded_device.py
   - deploy/robot/omx/guarded_native.py
   - deploy/robot/omx/guarded_native_effort.py

@@ -56,6 +56,10 @@ def get(handler, path, center, workspace=None):
             raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
         handler.send({'bundles': center.hub.bundles()})
         return True
+    if path == PREFIX + '/collect-plans':
+        plans = getattr(center, 'collect_plans', None)
+        handler.send({'configured': plans is not None, 'plans': plans.list() if plans else []})
+        return True
     match = re.fullmatch(PREFIX + r'/artifact/([0-9a-f-]{36})', path)
     if match:
         if center is None:
@@ -120,6 +124,12 @@ def post(handler, path, body, center, workspace=None, accounts=None):
         return True
     if path == PREFIX + '/hub-prepare':
         handler.send(center.hub.prepare(body))
+        return True
+    if path == PREFIX + '/collect-plan':
+        plans = getattr(center, 'collect_plans', None)
+        if plans is None:
+            raise ValueError('이 작업대에 OMX 수집 계획 저장소가 연결되지 않았습니다.')
+        handler.send(plans.create(body, getattr(handler, 'learning_principal', None)))
         return True
     if path == PREFIX + '/hub-upload':
         if set(body) != {'bundle_id', 'connection_id'}:
