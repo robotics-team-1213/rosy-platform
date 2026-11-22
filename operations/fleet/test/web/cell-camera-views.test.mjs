@@ -8,6 +8,7 @@ import {chargeBayRows, inspectorTargetsFromRows} from "../../../../applications/
 import {
   visualCardSpecs, inspectorSpecs, CAMERA_WALL_VIEWS, S3_VIEWS, S5_VIEWS,
 } from "../../../../applications/fleet/web/cell/cell-real2sim-specs.js";
+import {createCellFrameFeed} from "../../../../applications/fleet/web/shared/cell-frames.js";
 
 const body = {
   cells: {
@@ -50,7 +51,6 @@ test("docking views are the ceiling ROI zoom, never /side_camera or a Fleet rela
 });
 
 test("an image bound before it is attached is painted once attached", async () => {
-  const {createCellFrameFeed} = await import("../../../../applications/fleet/web/shared/cell-frames.js");
   const feed = createCellFrameFeed({call: async () => ({sources: []})});
   const img = {isConnected: false, hidden: false};
   feed.bind(img, {source: "arm_s_top"});
@@ -59,4 +59,107 @@ test("an image bound before it is attached is painted once attached", async () =
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(img.hidden, true);  // unregistered source painted, not dropped as detached
   feed.dispose();
+});
+
+const flush = () => new Promise(resolve => setImmediate(resolve));
+const imageNode = () => ({
+  isConnected: true, hidden: false, src: '',
+  removeAttribute(name) { if (name === 'src') this.src = ''; },
+});
+const jpeg = (age = 10) => new Response('jpeg', {
+  headers: {'X-Frame-Age-Ms': String(age), 'X-Frame-Seq': '7'},
+});
+
+function frameFeed(t, fetchFrame, sources = ['camera_a']) {
+  const priorLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', {
+    configurable: true, value: new URL('https://site.test'),
+  });
+  t.after(() => {
+    if (priorLocation) Object.defineProperty(globalThis, 'location', priorLocation);
+    else delete globalThis.location;
+  });
+  t.mock.method(globalThis, 'fetch', fetchFrame);
+  const requests = [];
+  const feed = createCellFrameFeed({call: async (path, options) => {
+    requests.push({path, options});
+    if (path.endsWith('/sources')) return {sources};
+    const source = JSON.parse(options.body).source_id;
+    return {lease: 'test-lease', frame_path: `/api/vision/sources/${source}/frame`};
+  }});
+  t.after(() => feed.dispose());
+  return {feed, requests};
+}
+
+test("an unresolved camera does not delay peers or open unbounded fetches", async (t) => {
+  const sources = ['camera_a', 'camera_b', 'camera_c', 'camera_d', 'camera_e'];
+  const images = sources.map(imageNode);
+  const started = [];
+  const {feed, requests} = frameFeed(t, (url, options) => new Promise(resolve => {
+    started.push({url, options, resolve});
+  }), sources);
+  feed.setRunning(false);
+  sources.forEach((source, index) => feed.bind(images[index], {source}));
+  feed.setRunning(true);
+  await flush();
+  assert.equal(started.length, 4);
+  assert.equal(requests.filter(({path}) => path.endsWith('/sources')).length, 1);
+  assert.ok(requests.every(({options}) => options.timeoutMs > 0));
+  assert.ok(started.every(({options}) => options.signal && options.redirect === 'error'));
+  assert.equal(started[0].options.headers.Authorization, 'Bearer test-lease');
+  started[1].resolve(jpeg());
+  await flush();
+  assert.equal(images[1].hidden, false);
+  assert.match(images[1].src, /^blob:/);
+  assert.equal(started.length, 5);
+  for (const request of started) request.resolve(jpeg());
+  await flush();
+});
+
+test("429 clears the image and marks the previous live badge unavailable", async (t) => {
+  let response = jpeg();
+  const {feed} = frameFeed(t, async () => response);
+  const img = imageNode();
+  const badge = {isConnected: true};
+  feed.bind(img, {source: 'camera_a'}, badge);
+  await flush();
+  assert.match(badge.textContent, /#7/);
+  response = new Response(null, {status: 429});
+  feed.setRunning(true);
+  await flush();
+  assert.doesNotMatch(badge.textContent, /#7/);
+  assert.equal(img.src, '');
+  assert.equal(img.hidden, true);
+});
+
+test("a cached ceiling ROI needs a fresh frame age before display", async (t) => {
+  let response = jpeg();
+  const {feed} = frameFeed(t, async () => response);
+  const img = imageNode();
+  const badge = {isConnected: true};
+  feed.bind(img, {roiTarget: 'robot'}, badge);
+  await flush();
+  assert.equal(img.hidden, false);
+  assert.match(img.src, /^blob:/);
+  response = new Response('old', {headers: {'X-Frame-Captured-At': '12.5'}});
+  feed.setRunning(true);
+  await flush();
+  assert.equal(img.src, '');
+  assert.equal(img.hidden, true);
+});
+
+test("disposing the feed aborts a read and discards its late result", async (t) => {
+  let resolveFrame, signal;
+  const {feed} = frameFeed(t, (url, options) => new Promise(resolve => {
+    resolveFrame = resolve;
+    signal = options.signal;
+  }));
+  const image = imageNode();
+  feed.bind(image, {source: 'camera_a'});
+  await flush();
+  feed.dispose();
+  assert.equal(signal?.aborted, true);
+  resolveFrame(jpeg());
+  await flush();
+  assert.equal(image.src, '');
 });

@@ -182,6 +182,7 @@ class CameraSender:
             self.url += protocol.WS_PATH
         self.source_id, self.token, self.context = source_id, token, _verified(context)
         self.connection = None
+        self._next_oversize_warning = -math.inf
 
     def close(self):
         if self.connection is not None:
@@ -195,6 +196,19 @@ class CameraSender:
         from websockets.sync.client import connect
 
         try:
+            jpeg = sample.value[0]
+            limit = protocol.DEFAULT_CONFIG["max_bytes"]
+            if isinstance(jpeg, bytes) and len(jpeg) > limit:
+                # This capture cannot become sendable by reconnecting or retrying.
+                now = time.monotonic()
+                if now >= self._next_oversize_warning:
+                    logging.getLogger(__name__).warning(
+                        "camera preview JPEG exceeds Vision limit source=%s host=%s bytes=%d limit=%d",
+                        self.source_id, urlsplit(self.url).hostname, len(jpeg), limit,
+                    )
+                    self._next_oversize_warning = now + 30
+                return
+
             if self.connection is None:
                 self.connection = connect(
                     self.url,

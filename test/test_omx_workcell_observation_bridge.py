@@ -194,13 +194,13 @@ def test_rejected_credentials_do_not_rotate_producer_epoch(monkeypatch, status):
     assert sent[0].epoch == sent[1].epoch and sent[0].sequence == sent[1].sequence == 1
 
 
-def test_camera_sender_uses_verified_source_scoped_persistent_websocket(monkeypatch):
-    sent, opened, timeouts = [], [], []
+def test_camera_sender_uses_verified_source_scoped_persistent_websocket(monkeypatch, caplog):
+    sent, opened, timeouts, closed = [], [], [], []
     class Connection:
         socket = SimpleNamespace(settimeout=lambda seconds: timeouts.append(seconds))
         def send(self, value): sent.append(value)
         def recv(self, timeout): raise TimeoutError()
-        def close(self): pass
+        def close(self): closed.append(True)
     def connect(url, **kwargs):
         opened.append((url, kwargs))
         return Connection()
@@ -208,17 +208,31 @@ def test_camera_sender_uses_verified_source_scoped_persistent_websocket(monkeypa
     packet = bridge.camera_packet
     monkeypatch.setattr(bridge, "camera_packet", lambda sample: packet(sample, wall=100.1, monotonic=10.1))
     source = bridge.LatestSource(wall=lambda: 100, monotonic=lambda: 10)
-    source.put(100, (b"jpeg", 640, 480))
     context = ssl.create_default_context()
     sender = bridge.CameraSender("wss://vision.example", "top", "top-secret", context=context)
-    sender.send(source.latest()); sender.send(source.latest()); sender.close()
+    oversized = b"x" * (protocol.DEFAULT_CONFIG["max_bytes"] + 1)
+    source.put(99.7, (oversized, 640, 480))
+    sender.send(source.latest())
+    assert opened == []
+    source.put(99.8, (b"jpeg", 640, 480))
+    sender.send(source.latest())
+    source.put(99.9, (oversized, 640, 480))
+    sender.send(source.latest())
+    source.put(100, (b"jpeg", 640, 480))
+    sender.send(source.latest())
+    assert closed == []
+    sender.close()
+    assert closed == [True]
     assert len(opened) == 1 and opened[0][0] == "wss://vision.example" + protocol.WS_PATH
     assert opened[0][1]["ssl"] is context and opened[0][1]["max_queue"] == 1
     assert "compression" in opened[0][1] and opened[0][1]["compression"] is None
     assert opened[0][1]["additional_headers"] == {"Authorization": "Bearer top-secret"}
     assert timeouts == [2]
     protocol.validate_hello(json.loads(sent[0]))
-    assert protocol.parse_header(sent[1]).width == 640 and sent[1][protocol.HEADER_SIZE:] == b"jpeg"
+    assert [protocol.parse_header(frame).seq for frame in sent[1:]] == [2, 4]
+    assert all(protocol.parse_header(frame).width == 640 and frame[protocol.HEADER_SIZE:] == b"jpeg"
+               for frame in sent[1:])
+    assert sum("camera preview JPEG exceeds" in record.message for record in caplog.records) == 1
 
 
 def test_joint_callback_conversion_rejects_aliases_nonfinite_and_wrong_identity():
