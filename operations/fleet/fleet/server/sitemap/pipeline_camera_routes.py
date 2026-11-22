@@ -11,7 +11,7 @@ from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_
 from fleet.pipeline.cell_site_targets import cell_ab_completion_verified
 from fleet.site_rules import SiteRules
 
-from fleet.server.sitemap.pipeline_port_events import (
+from fleet.server.pipeline_port_events import (
     build_completion_events,
     flush_pending_port_events_async,
     strip_task_for_claim,

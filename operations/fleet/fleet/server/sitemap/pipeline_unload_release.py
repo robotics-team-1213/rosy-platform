@@ -235,7 +235,7 @@ def install_unload_release_routes(app, ctx) -> None:
         return {**out, "departure": app.state.unload_releases.get(out.get("batch_id"))}
 
     def tick_args():
-        from fleet.server.sitemap.pipeline_port_events import flush_pending_port_events_async
+        from fleet.server.pipeline_port_events import flush_pending_port_events_async
 
         active = ctx.active_map()
         return dict(console=ctx.console, rules=ctx.rules(), site=active[1],
