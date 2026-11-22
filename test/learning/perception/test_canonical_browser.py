@@ -161,6 +161,10 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
                 for theme in ("light", "dark"):
                     page.evaluate("t => document.documentElement.dataset.theme = t", theme)
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                if width == 390:
+                    page.set_viewport_size({"width": 320, "height": 844})
+                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                    page.set_viewport_size({"width": 390, "height": 900})
 
                 page.locator("#canon-unit").select_option("sim_rad")
                 expect(page.locator("#canon-spec-body")).to_contain_text("0.5907")
@@ -194,9 +198,6 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
                     page.locator("#canon-job-cancel").click()
                     expect(page.locator("#canon-runs .canon-card")).to_contain_text("중지 요청")
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-                if width == 390:
-                    page.set_viewport_size({"width": 320, "height": 844})
-                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert errors == []
             finally:
                 browser.close()

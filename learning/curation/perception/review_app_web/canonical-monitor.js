@@ -230,11 +230,14 @@ function renderHostCard({title, hostId, entry, telemetry, peerId, peerStatus, fe
     const rejCount = (entry.gate_receipts || []).reduce((s, r) => s + (r.counts?.reject ?? 0) + (r.dataset_reject?.length ?? 0), 0);
     gates.append(
       statusTag(entry.align_done === 'RC=0' ? 'fresh' : 'delayed', `align.done: ${entry.align_done ?? '대기'}`),
-      statusTag(rejCount > 0 ? 'caution' : 'fresh', `data_gate: ${summarizeReceipts(entry.gate_receipts)}`),
+      statusTag(rejCount > 0 ? 'caution' : 'fresh', rejCount > 0 ? `data_gate 거부 ${rejCount}` : 'data_gate 통과'),
     );
     const seeds = entry.collect_seeds || {};
     gates.append(el('span', `DART 시드: arm_a ${seeds.arm_a ?? 0} · arm_b ${seeds.arm_b ?? 0}`, 'canon-mono quiet'));
     card.append(gates);
+    if (entry.gate_receipts?.length) {
+      card.append(el('p', summarizeReceipts(entry.gate_receipts), 'canon-mono quiet'));
+    }
   } else if (entry && entry.available === false) {
     card.append(el('p', '관찰 폴더를 읽을 수 없습니다.', 'quiet'));
   }
