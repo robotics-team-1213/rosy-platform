@@ -108,6 +108,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
 
     CELL_TASK_PRESETS: dict[str, dict] = {
         "s3_shuttle": {"preset": "s3_shuttle", "label": "S3 셔틀 (arm_s: Pinky -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None},
+        "s3_act_policy": {"preset": "s3_act_policy", "label": "S3 ACT 정책 구동 (arm_s · 최신 모델)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "execution_mode": "act_policy", "max_chunks": 4},
         "s3_auto_recover_or_shuttle": {"preset": "s3_auto_recover_or_shuttle", "label": "S3 자동 감지·복구 셔틀 (arm_s: Auto ROI -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "auto"},
         "s3_recover_belt_far": {"preset": "s3_recover_belt_far", "label": "S3 이탈 복구 (arm_s: Belt-Far -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "belt_far"},
         "s3_recover_floor_front": {"preset": "s3_recover_floor_front", "label": "S3 바닥 복구 (arm_s: Floor-Front -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "floor_front"},
@@ -155,6 +156,14 @@ def install_cell_tasks_routes(app, ctx) -> None:
         tier_hint = spec.get("tier_hint")
         if tier_hint is not None and not isinstance(tier_hint, dict):
             raise HTTPException(422, detail={"code": "INVALID_TIER_HINT"})
+        execution_mode = spec.get("execution_mode")
+        if execution_mode is not None and execution_mode not in ("guarded_pick", "act_policy"):
+            raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
+        if execution_mode == "act_policy" and (cell_id != "cell_s" or arm_id != "arm_s"):
+            raise HTTPException(422, detail={"code": "ACT_POLICY_UNSUPPORTED_ARM"})
+        max_chunks = spec.get("max_chunks")
+        if max_chunks is not None and (execution_mode != "act_policy" or type(max_chunks) is not int or not 1 <= max_chunks <= 6):
+            raise HTTPException(422, detail={"code": "INVALID_MAX_CHUNKS"})
         directive = spec.get("directive")
         if directive is not None and (not isinstance(directive, dict)
                                       or directive.get("schema") != "rosy.omx-cell-area-xyz-directive.v1"
@@ -162,9 +171,11 @@ def install_cell_tasks_routes(app, ctx) -> None:
                                       or directive.get("arm_id") != arm_id):
             raise HTTPException(422, detail={"code": "INVALID_CELL_DIRECTIVE"})
         raw_disp = spec.get("displaced_to")
+        if execution_mode == "act_policy" and raw_disp is not None:
+            raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
         dec_ov = {"displaced_to": raw_disp} if raw_disp in ("belt_far", "floor_front") else {}
         dec_row = _evaluate_decision(cell_id, "arm_target", dec_ov)
-        if raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site):
+        if execution_mode != "act_policy" and (raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site)):
             resolved_disp = app.state.detected_displaced_site or "belt_far"
             app.state.detected_displaced_site = None
         else:
@@ -193,6 +204,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "preset": spec.get("preset"),
             **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root", "zone_id", "col", "row", "tier_hint")
                if k in spec},
+            **{k: spec[k] for k in ("execution_mode", "max_chunks") if spec.get(k) is not None},
             "pose": pose,
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
@@ -351,6 +363,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 "depends_on": orig.get("depends_on"),
                 "displaced_to": orig.get("displaced_to"),
                 "preset": orig.get("preset"),
+                **{k: orig[k] for k in ("execution_mode", "max_chunks") if orig.get(k) is not None},
             },
         )
         return {"ok": True, "task": retried, "retried_from": task_id}

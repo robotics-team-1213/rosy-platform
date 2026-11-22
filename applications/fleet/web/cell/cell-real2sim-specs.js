@@ -32,6 +32,7 @@ const REFUSAL_TEXT = {
   PREVIOUS_TIER_NOT_VERIFIED: '아래층 적재가 아직 확인되지 않았습니다',
   CELL_AB_EVIDENCE_NOT_ENABLED: '셀 A/B 완료 확인(깊이 측정)이 아직 켜지지 않았습니다',
   BED_CONFIRMATION_INVALID: '적재함 확인이 무효가 되었습니다 (핑키 이동 또는 지도 변경). 핑키가 멈춘 상태에서 적재함을 다시 확인하세요',
+  PRESENCE_CONFIRMATION_REQUIRED: 'ACT 정책 구동은 이름 있는 운영자의 입회 표시가 필요합니다 (D-911)',
 };
 
 // Why a task ended ABORTED, when the cell worker's receipt says so (D-1057 T18: no reviewed envelope, the arm did not move).
@@ -220,13 +221,14 @@ export function cellTaskRows(body) {
       ? `[${stopEv.state.join(', ')}]`
       : '—';
     const disp = t.displaced_to ? ` (복구: ${t.displaced_to})` : '';
+    const modeTag = t.execution_mode === 'act_policy' ? ' · ACT 정책' : '';
     const queued = t.status === 'QUEUED';
     const evidence = [queued || t.status === 'RUNNING' ? bedConfirmState(t).text : '', queued ? presenceConfirmState(t).text : '',
       presenceUsedText(t), refusalText(t.last_refusal), abortText(t)].filter(Boolean).join(' · ');
     return [
       t.task_id,
       `${t.cell_id} / ${t.arm_id}`,
-      `${t.src_site} -> ${t.dst_site} (T${t.tier ?? 1})${disp}`,
+      `${t.src_site} -> ${t.dst_site} (T${t.tier ?? 1})${disp}${modeTag}`,
       t.status || 'QUEUED',
       foldedTxt,
       evidence || '—',
@@ -342,6 +344,7 @@ export function visualCardSpecs(body = {}) {
         {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_s'},
         {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_s'},
+        {label: 'S3 ACT 정책 구동 (arm_s)', preset: 's3_act_policy'},
         {label: '자동 감지·복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
         {label: 'Floor-Front 바닥 복구', preset: 's3_recover_floor_front'},
