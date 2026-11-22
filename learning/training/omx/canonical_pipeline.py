@@ -19,26 +19,16 @@ _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts" / "learning" 
 if str(_CONTRACTS_SRC) not in sys.path:
     sys.path.insert(0, str(_CONTRACTS_SRC))
 
+import canonical_bundle_store  # noqa: E402
 from canonical_intake import handle_intake_request, scan_transferred_collections  # noqa: E402
 from canonical_telemetry import HostTelemetry, external_gpu_locks, load_peer_token  # noqa: E402
 from canonical_recording_todo import build_service_todo  # noqa: E402
 from canonical_watch import (  # noqa: E402
-    BusyConflict,
-    PeerClient,
-    read_bounded_json,
-    scan_watch_dir,
-    scrub_text,
-    strip_paths,
-    tail_log,
-    validate_peer_url,
+    BusyConflict, PeerClient, read_bounded_json, scan_watch_dir, scrub_text, strip_paths, tail_log, validate_peer_url,
 )
 from experiment_io import identifier, write_json  # noqa: E402
 from experiment_process import process_stamp  # noqa: E402
-from rosy.contracts.learning.omx_canonical import (  # noqa: E402
-    AUTHORITY_STAMP,
-    ARM_IDS,
-    load_canonical_spec,
-)
+from rosy.contracts.learning.omx_canonical import AUTHORITY_STAMP, ARM_IDS, load_canonical_spec  # noqa: E402
 
 CONFIG_SCHEMA = "rosy.omx.canonical-config/1"
 REQUEST_SCHEMA = "rosy.omx.canonical-job-request/1"
@@ -331,6 +321,12 @@ class CanonicalService:
         if not self.configured:
             raise KeyError("unknown peer")
         return self.peers.get(peer_id)
+
+    def bundle_manifest(self, rid: str) -> dict:
+        return canonical_bundle_store.bundle_manifest(self.root, self.get_run(rid))
+
+    def bundle_file(self, rid: str, relpath: str) -> bytes:
+        return canonical_bundle_store.bundle_file(self.root, self.get_run(rid), relpath)
 
     def refresh_peer(self, peer_id: str) -> dict:
         if not self.configured:
