@@ -88,12 +88,14 @@ class Core:
     def __init__(self, port: int = 8080, token: str | None = None):
         self.port, self.token = port, token
         self.tls = True
+        self._tls_confirmed = False
 
     def req(self, method: str, path: str, body=None, timeout: float = 15.0):
         for attempt in range(3):
+            used_tls = self.tls
             conn = (http.client.HTTPSConnection("127.0.0.1", self.port, timeout=timeout,
                                                 context=ssl._create_unverified_context())
-                    if self.tls else http.client.HTTPConnection("127.0.0.1", self.port, timeout=timeout))
+                    if used_tls else http.client.HTTPConnection("127.0.0.1", self.port, timeout=timeout))
             headers = {"Authorization": f"Bearer {self.token}"} if self.token else {}
             data = None
             if body is not None:
@@ -102,13 +104,21 @@ class Core:
             try:
                 conn.request(method, path, body=data, headers=headers)
                 response = conn.getresponse()
+                if used_tls:
+                    self._tls_confirmed = True
                 raw = response.read().decode("utf-8", "replace")
                 try:
                     return response.status, (json.loads(raw) if raw else None)
                 except json.JSONDecodeError:
                     return response.status, raw
             except ssl.SSLError:
-                self.tls = False  # a plain-HTTP robot
+                # Only fall back to plain HTTP before TLS has ever worked; restart EOFs keep TLS.
+                if used_tls and not self._tls_confirmed:
+                    self.tls = False  # a plain-HTTP robot
+                elif attempt == 2:
+                    raise
+                else:
+                    time.sleep(2.0)  # begin and seal restart CORE
             except (OSError, http.client.HTTPException):
                 if attempt == 2:
                     raise
@@ -131,6 +141,9 @@ class Core:
 
 
 def pair(core: Core, runner=subprocess.run) -> str:
+    if hasattr(core, "req"):
+        # Confirm CORE answers before issuing a one-use login code to the LCD/boot console.
+        core.req("GET", "/api/v1/navigation/approval")
     out = runner(["/usr/bin/python3", "-I", "-B", str(HERE / "rosy-login-code.py"),
                   "--role", "operator", "--minutes", "5"], capture_output=True, text=True, timeout=30)
     match = CODE.search(out.stdout or "")
@@ -140,7 +153,9 @@ def pair(core: Core, runner=subprocess.run) -> str:
     return data["token"]
 
 
-def wait_for(check, timeout_s: float, what: str, sleep=time.sleep, clock=time.monotonic):
+def wait_for(check, timeout_s: float, what: str, sleep=None, clock=None):
+    sleep = sleep or time.sleep
+    clock = clock or time.monotonic
     end = clock() + timeout_s
     while clock() < end:
         try:
@@ -179,14 +194,25 @@ def run_trial(core: Core, direction: str, cause: str, hold_s: float) -> dict:
     return row
 
 
+def _battery_ready_for_trial(robot: dict, health: dict) -> bool:
+    """Match CORE's _require_unplugged check plus fresh power-health evidence after begin()."""
+    status = robot.get("battery_status") or {}
+    battery = health.get("battery") or {}
+    return (status.get("charging") is False
+            and status.get("filtered_voltage") is not None
+            and battery.get("evidence") == "fresh"
+            and battery.get("level") == "ok")
+
+
 def reapprove(core: Core, log) -> None:
     core.post("/api/v1/navigation/approval/begin")
     phase = wait_for(lambda: _phase_in(core, ("MEASURING", "FAILED")), 120, "MEASURING")
     if phase.get("phase") != "MEASURING":
         raise RuntimeError(f"begin failed: {phase.get('reason')}")
-    # begin restarts CORE; charging reads None until its first battery sample.
-    wait_for(lambda: (core.get("/api/v1/robot/state").get("battery_status") or {}).get("charging") is False,
-             60, "charging=false after begin")
+    # begin restarts CORE; wait for fresh unplugged voltage so trial/start does not 409 CHARGING_UNKNOWN.
+    wait_for(lambda: _battery_ready_for_trial(core.get("/api/v1/robot/state"),
+                                              core.get("/api/v1/power/health")),
+             60, "fresh unplugged battery after begin")
     for direction, cause, hold_s in TRIALS:
         for attempt in (1, 2):
             try:
@@ -234,13 +260,17 @@ def run(root: Path = Path("/"), core: Core | None = None, sleep=time.sleep, *,
     state_path = root / str(STATE).lstrip("/")
     attempts = _load_state(state_path).get(release, 0)
     core = core or Core()
-    core.token = pair_fn(core)
     try:
+        core.token = pair_fn(core)
         approval = core.get("/api/v1/navigation/approval")
         first = core.get("/api/v1/robot/state")
         sleep(10)
         second = core.get("/api/v1/robot/state")
         verdict = decide(approval, first, second, core.get("/api/v1/power/health"), attempts)
+    except (OSError, RuntimeError, http.client.HTTPException) as exc:
+        # Wants=rosy-core lets this unit run even if CORE failed to start; never fail the unit.
+        return f"core unavailable: {exc}"
+    try:
         if verdict != "run":
             return verdict
         _save_state({release: attempts + 1}, state_path)  # only the current release matters
