@@ -26,6 +26,25 @@ from experiment_studies import Studies
 from experiment_hub import Hub
 
 
+def _worker_log_tail(root, max_chars=240):
+    log = root / 'worker.log'
+    if log.is_symlink() or not log.is_file():
+        return ''
+    try:
+        size = log.stat().st_size
+        with log.open('rb') as stream:
+            if size > 4096:
+                stream.seek(size - 4096)
+            raw = stream.read(4096)
+    except OSError:
+        return ''
+    lines = [line.strip() for line in raw.decode('utf-8', errors='replace').splitlines() if line.strip()]
+    if not lines:
+        return ''
+    tail = ''.join(ch if ord(ch) >= 32 else ' ' for ch in lines[-1]).strip()
+    return tail[-max_chars:]
+
+
 class Center:
     def __init__(self, config):
         if (not isinstance(config, dict) or not {'schema', 'root', 'python'} <= set(config)
@@ -157,6 +176,10 @@ class Center:
                             row['result']['dataset_id'] = self.catalog.exported(db, row, root / 'output')
                         except (ValueError, OSError) as exc:
                             row.update(status='failed', error=str(exc))
+                elif code not in (0, None):
+                    tail = _worker_log_tail(root)
+                    msg = f'Worker exited with code {code}: {tail}' if tail else f'Worker exited with code {code}'
+                    row.update(status='failed', error=msg)
                 else:
                     row.update(status='interrupted', error='Worker exited without a completed result')
                 self.children.pop(rid, None)
@@ -177,6 +200,30 @@ class Center:
 
     def start(self, body):
         return self._start(body, 'offline_replay')
+
+    def start_cuda(self, body):
+        from experiment_cuda_train import start_cuda
+        return start_cuda(self, body)
+
+    def run(self, rid):
+        rid = identifier(rid)
+        with self.lock, self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self._refresh(db)
+            found = db.execute('SELECT document FROM runs WHERE id=?', (rid,)).fetchone()
+            if not found:
+                raise ValueError('unknown learning run')
+            return self.inbox.decorate(db, json.loads(found[0]))
+
+    def bundle_manifest(self, rid):
+        from experiment_cuda_train import bundle_manifest
+        rid = identifier(rid)
+        return bundle_manifest(self.root / 'runs' / rid, rid, self.run(rid))
+
+    def bundle_file(self, rid, relpath):
+        from experiment_cuda_train import bundle_file
+        rid = identifier(rid)
+        return bundle_file(self.root / 'runs' / rid, self.run(rid), relpath)
 
     def start_online(self, body):
         if body.get('method') != 'hilserl':
