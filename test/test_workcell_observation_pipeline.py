@@ -29,6 +29,7 @@ for relative in ("operations/overhead", "middleware/core/services", "operations/
     if path not in sys.path:
         sys.path.insert(0, path)
 from rosy_vision.ingest import IngestServer
+from rosy_vision.stream_demand import STREAM_HOLD_S, StreamDemand
 
 
 def _load(name, relative):
@@ -174,3 +175,94 @@ async def _pipeline(tmp_path):
             await ws_server.wait_closed()
             await asyncio.to_thread(fleet.stop)
         assert worker is None or not worker.is_alive(), "camera worker did not stop"
+
+
+def test_mirror_idles_until_authorized_read_and_resumes_after_reconnect(tmp_path):
+    asyncio.run(_mirror_demand(tmp_path))
+
+
+async def _mirror_demand(tmp_path):
+    from PIL import Image
+
+    pki = tls._write_pki(tmp_path)
+    context = ssl.create_default_context(cafile=pki["ca"])
+    server_tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server_tls.load_cert_chain(pki["chain"], pki["key"])
+    signer = VisionLeaseSigner("x" * 48)
+    ingest = IngestServer({"top": "top-secret"}, preview_signer=signer)
+    clock = [0.0]
+    ingest._demand = StreamDemand(clock=lambda: clock[0])
+    server = await ingest.start("127.0.0.1", 0, ssl_context=server_tls)
+    port = server.sockets[0].getsockname()[1]
+    sender = bridge.CameraSender(
+        f"wss://127.0.0.1:{port}", "top", "top-secret", context=context, pace_from_config=True,
+    )
+    encoded = BytesIO()
+    Image.new("RGB", (640, 480), "green").save(encoded, format="JPEG")
+    jpeg = encoded.getvalue()
+    source = bridge.LatestSource()
+    stop = threading.Event()
+    worker = threading.Thread(target=bridge.SourceWorker(source, sender.send).run, args=(stop,), daemon=True)
+
+    async def produce():
+        while not stop.is_set():
+            source.put(time.time(), (jpeg, 640, 480))
+            await asyncio.sleep(0.04)
+
+    token = signer.issue(principal_id="test-viewer", source_id="top")
+
+    def read(bearer):
+        request = Request(f"https://127.0.0.1:{port}/api/vision/sources/top/frame",
+                          headers={"Authorization": f"Bearer {bearer}"})
+        try:
+            with urlopen(request, context=context, timeout=2) as reply:
+                return reply.status, reply.read()
+        except HTTPError as error:
+            return error.code, b""
+
+    def current():
+        return ingest._sources.get("top")
+
+    def last_sequence():
+        frame = ingest.latest_frame("top")
+        return frame.header.seq if frame is not None else 0
+
+    async def assert_quiet():
+        await tls._wait_for(lambda: current() is not None and current().demand_sent is False,
+                            3, "idle demand")
+        await asyncio.sleep(0.15)
+        matched = source.latest().sequence
+        previous = last_sequence()
+        await tls._wait_for(lambda: source.latest().sequence >= matched + 12, 2, "advancing producer")
+        assert last_sequence() == previous
+
+    async def wake():
+        previous = last_sequence()
+        status, _ = await asyncio.to_thread(read, token)
+        assert status in (200, 404)
+        await tls._wait_for(lambda: last_sequence() > previous, 3, "authorized demand wakes mirror")
+        await asyncio.sleep(0.22)  # authorized preview rate limit is 200 ms
+        assert await asyncio.to_thread(read, token) == (200, jpeg)
+
+    worker.start()
+    producer = asyncio.create_task(produce())
+    try:
+        assert await asyncio.to_thread(read, "invalid") == (401, b"")
+        await assert_quiet()
+        await wake()
+        clock[0] += STREAM_HOLD_S
+        await assert_quiet()
+        before = current()
+        await before.connection.close()
+        await tls._wait_for(lambda: current() is not None and current() is not before, 4, "mirror reconnected")
+        await assert_quiet()
+        await wake()
+    finally:
+        stop.set()
+        producer.cancel()
+        await asyncio.gather(producer, return_exceptions=True)
+        await asyncio.to_thread(worker.join, 3)
+        await asyncio.to_thread(sender.close)
+        server.close()
+        await server.wait_closed()
+        assert not worker.is_alive()
