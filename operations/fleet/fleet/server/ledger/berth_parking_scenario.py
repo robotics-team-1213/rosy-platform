@@ -29,6 +29,9 @@ async def dispatch_nav_target(
     idempotency_key: str | None,
 ) -> dict[str, Any]:
     """One dispatch path; HTTP error on failure, queued reported separately from sent."""
+    stop_binding = target.get("stop_binding")
+    if stop_binding is not None and task_service is None:
+        raise HTTPException(503, detail={"code": "NAMED_STOP_DISPATCH_UNAVAILABLE"})
     try:
         if task_service is not None:
             task = await task_service.submit_navigation(
@@ -39,6 +42,7 @@ async def dispatch_nav_target(
                 source="operator",
                 actor_id=actor_id,
                 request_key=idempotency_key,
+                **({"stop_binding": stop_binding} if stop_binding is not None else {}),
             )
             return {
                 "accepted": task["status"] == "ACCEPTED",

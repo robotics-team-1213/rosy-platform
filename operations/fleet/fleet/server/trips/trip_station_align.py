@@ -64,8 +64,8 @@ class StationAlign:
     async def _arrival_aligned(self, live, pose) -> bool:
         """True: the trip may report ARRIVED. False: not yet (waiting) or ended (``live.open`` False)."""
         want = self._station_yaw(live)
-        if want is None:
-            return True
+        if want is None or live.view["detail"].get("named_stop_operation"):
+            return True  # a named Nav2 stop was judged on its approved map pose (D-1051), not a marker sighting
         now = self._clock()
         if not self._sighted(pose):  # no fresh marker sighting: wait, never judge from odom
             since = live.__dict__.setdefault("align_wait_at", now)

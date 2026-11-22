@@ -13,8 +13,8 @@ from urllib.request import HTTPSHandler, Request, build_opener
 
 import yaml
 
-from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold
-from core_common.protocol.workcell_observations import UsbCameraDecisions, WorkcellObservationManifest
+from core_common.protocol.arm_incident.arm_incidents import ArmIncidentAccepted, ArmIncidentHold
+from core_common.protocol.arm_incident.workcell_observations import UsbCameraDecisions, WorkcellObservationManifest
 from load_report_bridge import _NoRedirect
 from rosy_vision import protocol
 import usb_camera_report
@@ -143,12 +143,15 @@ def clear_arm_incident(
     context,
     cause=None,
     basis=None,
+    remeasured=None,
     recovery=None,
     opener_fn=None,
 ):
     """D-971: a named operator's clear over the API; the operator's own bearer, never the arm's source token.
+    D-1040: an AI assessor's clear may carry the fresh read of the arm (omx_incident.py reassess).
     recovery (D-1048): an assessor's auto-fold evidence."""
     payload = {"note": note, **({"cause": cause} if cause else {}), **({"basis": basis} if basis else {}),
+               **({"remeasured": remeasured} if remeasured else {}),
                **({"recovery": recovery} if recovery is not None else {})}
     request = Request(
         _arm_url(fleet_url, source_id) + f'/incidents/{quote(incident_id, safe="")}/clear',
@@ -215,7 +218,7 @@ class ArmIncidentLink:
     def hold(self):
         return get_arm_hold(self.fleet_url, self.source_id, self.token, context=self.context)
 
-    def clear(self, incident_id, note, operator_token, *, cause=None, basis=None, recovery=None):
+    def clear(self, incident_id, note, operator_token, *, cause=None, basis=None, remeasured=None, recovery=None):
         return clear_arm_incident(
             self.fleet_url,
             self.source_id,
@@ -225,6 +228,7 @@ class ArmIncidentLink:
             context=self.context,
             cause=cause,
             basis=basis,
+            remeasured=remeasured,
             recovery=recovery,
         )
 

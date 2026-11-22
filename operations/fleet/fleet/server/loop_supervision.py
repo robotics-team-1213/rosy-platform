@@ -184,7 +184,7 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
                    if app.state.charge_runtime is not None else None)
     lease_task = (supervisor.supervised(  # D-550 10
                       "goal-lease-renew", goal_lease_renew_loop(console, log))
-                  if getattr(getattr(console, "goal_leases", None), "ttl_s", 0) > 0 else None)
+                  if getattr(console, "goal_leases", None) is not None else None)
     identity_task = supervisor.supervised("identity", identity.run())  # D-596 blink answers
     lane_task = supervisor.supervised("lane-compliance", lane_compliance_loop(  # D-511 M0
         app.state.lane_compliance, log, lane_compliance_period_s))

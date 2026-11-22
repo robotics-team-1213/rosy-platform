@@ -62,6 +62,9 @@ class SiteRoster:
             return RosterConflict("FORMATION_ACTIVE",
                                   f"{robot_id} is in the running formation; stop it first")
         console = self._console
+        if console.goal_leases.holds_custody(robot_id):
+            return RosterConflict("NAMED_STOP_CUSTODY",
+                                  f"{robot_id} holds the named-stop custody claim. " + console.goal_leases.way_out(robot_id))
         if any(robot_id in table for table in (console._goals, console._queued,
                                                console._claims, console._yielding)):
             return RosterConflict("ROBOT_BUSY",
@@ -92,6 +95,10 @@ class SiteRoster:
         """Same robot, confirmed new pinned address (D-361 3 "move address")."""
         if endpoint.robot_id in self.static_ids or endpoint.robot_id not in self._console.robot_ids:
             raise HubError("UNKNOWN_ROBOT", endpoint.robot_id)
+        if self._console.goal_leases.holds_custody(endpoint.robot_id):
+            raise RosterConflict("NAMED_STOP_CUSTODY",
+                                 f"{endpoint.robot_id} holds the named-stop custody claim. "
+                                 + self._console.goal_leases.way_out(endpoint.robot_id))
         old = self._console._replace_client(endpoint, client)
         closer: Any = getattr(old, "aclose", None)
         if closer is not None:

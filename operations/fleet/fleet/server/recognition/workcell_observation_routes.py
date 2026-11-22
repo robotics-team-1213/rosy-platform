@@ -5,7 +5,7 @@ import logging
 from fastapi import Depends, Header, HTTPException, Request, Response
 from pydantic import ValidationError
 
-from core_common.protocol.workcell_observations import ArmObservation
+from core_common.protocol.arm_incident.workcell_observations import ArmObservation
 
 
 def assert_workcell_observation_credentials_isolated(service, *, console, principals,

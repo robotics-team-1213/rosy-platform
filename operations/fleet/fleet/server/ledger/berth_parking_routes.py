@@ -69,18 +69,38 @@ def install_berth_parking_routes(
     ) -> dict:
         if busy := console.trip_refusal([robot_id]):  # D-494 5: refused before a task is queued for it
             raise busy
-        if task_service is not None and not idempotency_key:
+        body = await request.json()
+        dry_run = body.get("dry_run", False)
+        if type(dry_run) is not bool:
+            raise HTTPException(422, detail={"code": "INVALID_DRY_RUN"})
+        if not dry_run and task_service is not None and not idempotency_key:
             raise HTTPException(status_code=400, detail={
                 "code": "IDEMPOTENCY_KEY_REQUIRED", "message": "Idempotency-Key is required for navigation requests"})
-        body = await request.json()
         target_x = float(body.get("x", 0.0))
         target_y = float(body.get("y", 0.0))
         target_yaw = float(body.get("yaw")) if body.get("yaw") is not None else None
         place_id = body.get("place_id") or None
         label = str(body.get("label") or "")
+        expected_version = body.get("expected_site_map_version")
+        if expected_version is not None and (type(expected_version) is not int or expected_version < 1):
+            raise HTTPException(422, detail={"code": "INVALID_SITE_MAP_VERSION"})
 
-        plan = await compute_road_plan(request, robot_id, target_x, target_y, target_yaw, place_id, label)
+        plan = await compute_road_plan(
+            request, robot_id, target_x, target_y, target_yaw, place_id, label,
+            **({"expected_site_map_version": expected_version} if expected_version is not None else {}),
+        )
+        if dry_run:
+            return {**plan, "planned": True, "dry_run": True, "dispatched": False}
         final_nav2 = plan["target_nav2"]
+        if "stop_binding" in plan:
+            if plan.get("named_stop_precision_required"):
+                raise HTTPException(409, detail={"code": "PRECISION_STOP_REQUIRES_TRIP"})
+            if not plan["named_stop_nav2_allowed"]:
+                raise HTTPException(409, detail={"code": "NAMED_STOP_REQUIRES_LANE_TRIP"})
+            charge_runtime = getattr(request.app.state, "charge_runtime", None)
+            if charge_runtime is not None and charge_runtime.robot_id == robot_id:
+                raise HTTPException(409, detail={"code": "NAMED_STOP_CHARGE_HANDOVER_UNAVAILABLE"})
+            final_nav2 = {**final_nav2, "stop_binding": plan["stop_binding"]}
         if dispatch_nav is None:
             raise HTTPException(status_code=503, detail={"code": "DISPATCH_UNAVAILABLE"})
         dispatch_res = await dispatch_nav(

@@ -7,7 +7,7 @@ import time
 from fastapi import Depends, Header, HTTPException, Request, Response
 from pydantic import ValidationError
 
-from core_common.protocol.workcell_observations import UsbCameraDecision, UsbCameraDecisions, UsbCameraReport
+from core_common.protocol.arm_incident.workcell_observations import UsbCameraDecision, UsbCameraDecisions, UsbCameraReport
 from fleet.server.camera_peer_routes import body as bounded_json
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 

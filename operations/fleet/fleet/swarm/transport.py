@@ -9,8 +9,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+from contextlib import nullcontext
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol, Sequence, runtime_checkable
 
 import httpx
@@ -85,6 +87,7 @@ class HttpRobotClient(StationTransport, NavigationTransport):
                  timeout_s: float = 5.0) -> None:
         self.robot_id = endpoint.robot_id
         self._ep = endpoint
+        self._motion_wire = None
         self._owns_http = http is None
         from fleet.swarm.discovery_transport import DiscoveryTransport, tls_context
         context = tls_context(endpoint)
@@ -105,10 +108,27 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     async def _get(self, path: str) -> dict:
         return self._check(await self._http.get(path, headers=self._headers()))
 
-    async def _mutate(self, path: str, body: Optional[dict[str, Any]] = None, *, method='POST') -> dict:
+    def bind_motion_wire(self, gate) -> None:
+        self._motion_wire = gate
+
+    async def _request(self, method, path, body=None) -> httpx.Response:
         from fleet.swarm.dispatch_guard import check_dispatch
-        check_dispatch(path=path)
-        return self._check(await self._http.request(method, path, json=body, headers=self._headers()))
+        gate = self._motion_wire
+        with (gate(self.robot_id, method, path, body) if gate is not None else nullcontext()) as unresolved:
+            if method.upper() in {"POST", "PUT", "DELETE"}:
+                check_dispatch(path=path)
+            try:
+                response = await self._http.request(method, path, json=body, headers=self._headers())
+            except (httpx.RequestError, asyncio.CancelledError):
+                if unresolved is not None:
+                    unresolved()
+                raise
+            if response.status_code >= 500 and unresolved is not None:
+                unresolved()
+            return response
+
+    async def _mutate(self, path: str, body: Optional[dict[str, Any]] = None, *, method='POST') -> dict:
+        return self._check(await self._request(method, path, body))
 
     _post = _mutate  # Existing callers retain the guarded POST boundary.
 
@@ -134,16 +154,12 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     async def line_follow_mode(self, mode: str) -> dict:
         if mode not in {"IR_LINE", "OFF"}:
             raise ValueError("Fleet may select only IR_LINE or OFF")
-        return self._check(await self._http.put(
-            "/api/v1/line-follow/mode", json={"mode": mode}, headers=self._headers()
-        ))
+        return await self._mutate("/api/v1/line-follow/mode", {"mode": mode}, method="PUT")
 
     async def line_follow_trip_start(self) -> dict:
         """D-601 A: only the trip loop, holding the trip lease after every start check, turns the camera
         line on; ``line_follow_mode`` (operator routes) still selects only IR_LINE or OFF."""
-        return self._check(await self._http.put(
-            "/api/v1/line-follow/mode", json={"mode": "CAMERA_LINE"}, headers=self._headers()
-        ))
+        return await self._mutate("/api/v1/line-follow/mode", {"mode": "CAMERA_LINE"}, method="PUT")
 
     async def rotate_to(self, delta_deg: float, operator_name: str, tol_deg: float | None = None) -> dict:
         """D-603 ``POST /api/v1/motion/rotate_to``: CORE turns in place by ``delta_deg`` (its odom, its

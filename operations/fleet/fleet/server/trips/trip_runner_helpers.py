@@ -99,7 +99,7 @@ class TripRunnerHelpers:
     def robot_busy(self, robot_id: str) -> bool:
         """A running trip owns this robot's motion (other Fleet commands answer TRIP_ROBOT_BUSY)."""
         live = self._live.get(robot_id)
-        return live is not None and live.open
+        return (live is not None and live.open) or robot_id in self.halts.pending_handoffs
 
     def leg_mode(self, robot_id: str) -> Optional[str]:
         """Drive mode (``lane``/``free``) of the open trip's current segment; None when it cannot be told."""
@@ -167,4 +167,5 @@ class TripRunnerHelpers:
             self.lease.close(live)  # D-541 7: DELETE after the halt
             self.authority.forget(live.view["robot_id"], live.view["detail"].get("stop_sent") is True)  # MEDIUM-2
         live.view["updated_at"] = self._clock()
+        self.halts.track_handoff_stop(live.view)
         self._store.put_trip(live.view)

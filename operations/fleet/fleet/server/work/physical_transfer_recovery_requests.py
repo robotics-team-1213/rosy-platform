@@ -8,7 +8,7 @@ from pydantic import TypeAdapter
 
 from core_common.protocol.arm_transfer import FleetArmTransferGrant
 from core_common.protocol.arm_transfer_jobs import ArmTransferRequestKey
-from core_common.protocol.arm_transfer_observations import ArmTransferObservation
+from core_common.protocol.arm_incident.arm_transfer_observations import ArmTransferObservation
 from .mission_store import MissionConflict
 from .physical_transfer_evidence import PhysicalEvidenceRejected, validate_transfer_observations
 from .physical_transfer_io import physical_io

@@ -1,0 +1,71 @@
+{
+ "schema": "rosy.omx-incident.v1",
+ "arm": "arm_a",
+ "stamp": "20261119T163401",
+ "session": "session.json",
+ "facts": {
+  "safe_end": true,
+  "latched": {},
+  "torque_after": {
+   "11": 0,
+   "12": 0,
+   "13": 0,
+   "14": 0,
+   "15": 0,
+   "16": 0
+  },
+  "caps_restored": true,
+  "folded": true,
+  "last_state": [
+   0.76,
+   -62.25,
+   53.06,
+   51.65,
+   44.91,
+   54.07
+  ],
+  "flagged": [
+   {
+    "command": "grip",
+    "error": "the jaws stopped 3.7 units short at PWM -217 of 300: something is in them; reopened",
+    "fault": null,
+    "caught": true,
+    "t": 1795073357.1600537
+   },
+   {
+    "command": "grip",
+    "error": "the jaws stopped 3.7 units short at PWM -212 of 300: something is in them; reopened",
+    "fault": null,
+    "caught": true,
+    "t": 1795073428.3753092
+   },
+   {
+    "command": "grip",
+    "error": "the jaws stopped 3.9 units short at PWM -224 of 300: something is in them; reopened",
+    "fault": null,
+    "caught": true,
+    "t": 1795073493.584234
+   },
+   {
+    "command": "run park",
+    "error": "contact in park: the jaws stopped 5.1 units short at PWM -279 of 300: something is in them; held at gripper 51.6",
+    "fault": "contact in park: the jaws stopped 5.1 units short at PWM -279 of 300: something is in them; held at gripper 51.6",
+    "caught": null,
+    "t": 1795073535.7090554
+   }
+  ],
+  "windup_hits": [],
+  "stop_reading": null,
+  "stops": [],
+  "fault_records": [],
+  "frames": []
+ },
+ "decision": {
+  "actions": [],
+  "hold": true,
+  "offered": [],
+  "reason": "runner: contact in park: the jaws stopped 5.1 units short at PWM -279 of 300: something is in them; held at gripper 51.6; a person checks the arm (jaws, contacts, wedged objects) before torque ON"
+ },
+ "recovery": null,
+ "reported": true
+}

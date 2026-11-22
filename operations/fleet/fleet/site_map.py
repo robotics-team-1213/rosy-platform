@@ -91,6 +91,26 @@ Id = Field(pattern=r"^[A-Za-z0-9_.-]{1,32}$")
 Finite = Field(allow_inf_nan=False)
 
 
+class PrecisionStopLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    evidence_ref: str = Field(min_length=1, max_length=160, pattern=r"\S")
+    reference_pose: tuple[float, float, float]
+    longitudinal_m: float = Field(gt=0, le=0.10, strict=True, allow_inf_nan=False)
+    lateral_m: float = Field(gt=0, le=0.10, strict=True, allow_inf_nan=False)
+    heading_rad: float = Field(gt=0, le=math.pi / 2, strict=True, allow_inf_nan=False)
+    position_uncertainty_m: float = Field(gt=0, strict=True, allow_inf_nan=False)
+    heading_uncertainty_rad: float = Field(gt=0, strict=True, allow_inf_nan=False)
+    max_correction_m: float = Field(ge=0.005, le=0.10, strict=True, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def _precision_fits(self):
+        if (self.position_uncertainty_m >= min(self.longitudinal_m, self.lateral_m)
+                or self.heading_uncertainty_rad >= self.heading_rad):
+            raise ValueError("precision stop uncertainty must fit inside its tolerance")
+        return self
+
+
 Polygon = Annotated[list[tuple[float, float]], Field(min_length=3, max_length=32)]
 
 
@@ -133,6 +153,7 @@ class SitePlace(BaseModel):
     #: along ``yaw`` the robot lines up first (see ``approach_pose``).
     stop_zone: Optional[Polygon] = None
     approach_m: Optional[float] = Field(default=None, ge=0.05, le=0.6, allow_inf_nan=False)
+    precision_stop: PrecisionStopLimits | None = None
 
     @model_validator(mode="after")
     def _stop_zone(self) -> "SitePlace":
@@ -153,6 +174,11 @@ class SitePlace(BaseModel):
 
     @model_validator(mode="after")
     def _start_heading(self) -> "SitePlace":
+        if self.precision_stop is not None:
+            if self.kind != "stop" or self.yaw is None:
+                raise ValueError("precision stop requires a stop and an explicit heading")
+            if self.precision_stop.reference_pose != (self.x, self.y, self.yaw):
+                raise ValueError("precision stop evidence must match this place's x, y and yaw")
         if self.kind == "start" and self.yaw is None:
             raise ValueError(f"start place {self.id} needs a yaw")
         if self.kind != "bend":
@@ -378,7 +404,7 @@ class SiteMap(BaseModel):
     def body(self) -> dict:
         body = self.model_dump(by_alias=True, mode="json")
         for place in body["places"]:  # bend fields only on bends: other stored maps stay byte-equal
-            for key in ("exit_yaw", "radius_m"):
+            for key in ("exit_yaw", "radius_m", "precision_stop"):
                 if place[key] is None:
                     del place[key]
             if not place["pinned"]:  # unpinned places stay byte-equal in stored maps

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pytest
 
-from core_common.protocol.workcell_observations import UsbCameraReport, WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import UsbCameraReport, WorkcellObservationManifest
 from fleet.server.usb_camera_decisions import FRESH_S, UsbCameraStore, install_usb_camera_routes
 from fleet.server.workcell_observations import WorkcellObservations
 

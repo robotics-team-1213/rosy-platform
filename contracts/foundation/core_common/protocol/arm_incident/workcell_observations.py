@@ -3,7 +3,7 @@ import math
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, model_serializer, model_validator
-from .motor_health import MotorHealthResponse
+from ..motor_health import MotorHealthResponse
 
 
 Identifier = Annotated[str, Field(pattern=r"^[A-Za-z_][A-Za-z0-9_-]{0,63}$")]

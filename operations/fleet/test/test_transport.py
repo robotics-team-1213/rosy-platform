@@ -273,6 +273,35 @@ def test_navigation_goal_forwards_attempt_as_correlation_id():
     }
 
 
+def test_line_handoff_keeps_its_scope_and_does_not_fall_back():
+    seen = []
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(404, json={})
+
+    scope = dict(lease_id="lease-1", trip_id="trip-1", junction_seq=12, stop_place_id="S3_entry", job_id="job-1")
+    options = dict(correlation_id="attempt-1", expected_boot_id="boot-1",
+                   expected_owner_generation=4, expected_map_grid_id="occupancy:robot-grid",
+                   plan_id="acc31f2d-f4ac-41aa-9bc1-37cb77a16664")
+    client = _client(handler)
+    with pytest.raises(ValueError, match="LINE_HANDOFF_GOAL_SCOPE_REQUIRED"):
+        run(client.navigation_goal(0.745, -0.207, 3.141592, line_handoff=scope))
+    assert seen == []
+    with pytest.raises(ValueError, match="BOUND_GOAL_PLAN_REQUIRED"):
+        run(client.navigation_goal(0.745, -0.207, 3.141592, expected_map_grid_id="occupancy:robot-grid"))
+    assert seen == []
+    with pytest.raises(RobotApiError):
+        run(client.navigation_goal(0.745, -0.207, 3.141592, line_handoff=scope, **options))
+    assert seen == [("/api/v1/navigation/line-handoff-goal",
+                     dict(x=0.745, y=-0.207, yaw=3.141592, **options, **scope))]
+    with pytest.raises(RobotApiError):
+        run(client.navigation_plan(0.745, -0.207, 3.141592, correlation_id="attempt-1",
+                                   expected_map_grid_id="occupancy:robot-grid", line_handoff=scope))
+    assert seen[-1] == ("/api/v1/navigation/bound-plan",
+                       dict(x=0.745, y=-0.207, yaw=3.141592, correlation_id="attempt-1",
+                            expected_map_grid_id="occupancy:robot-grid", line_stop=scope))
+
+
 def test_line_follow_mode_uses_put_and_only_forwards_ir_or_stop():
     seen = {}
 
