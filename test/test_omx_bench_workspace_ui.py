@@ -187,6 +187,7 @@ def test_recovery_center_dead_lease_baseline_units_and_ack(tmp_path, monkeypatch
 
     # 2) recover_restore_units refuses while manual check exists, succeeds when removed
     bench._remember(["rosy-omx-observer@arm_a.service"])
+    bench._retry_at = bench.clock() + 100
     assert bench.status()["recovery"]["can_restore_units"] is True
     bench.manual.write_text('{"reason":"wait"}', encoding="utf-8")
     with pytest.raises(ValueError, match="수동 확인 보류"):
