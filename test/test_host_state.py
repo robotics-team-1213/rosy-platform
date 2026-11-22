@@ -146,6 +146,23 @@ def test_recovery_install_is_a_single_explicit_approval_group():
         assert any(line.startswith("approval=recovery ") and target in line for line in lines), target
 
 
+def test_signed_watchdog_enrollment_preserves_local_reboot_policy(tmp_path):
+    fake, bin_dir = _fakes(tmp_path)
+    config = _host_file(tmp_path, "/etc/default/rosy-ssh-watchdog", "ROSY_ROBOT=0\nMAX_REBOOTS=0\n")
+    result = _run(tmp_path, bin_dir, fake, "install", "cell", "--approve", "watchdog-update")
+    assert result.returncode == 0, result.stdout + result.stderr
+    calls = _calls(fake)
+    assert "systemctl enable --now rosy-watchdog-update.timer" in calls
+    assert "systemctl daemon-reexec" not in calls
+    assert "systemctl start rosy-ssh-watchdog.service" not in calls
+    units = tmp_path / "host/etc/systemd/system"
+    assert "ExecCondition=/usr/local/bin/rosy-update-gate" in (units / "rosy-watchdog-update.service").read_text()
+    drop_in = (units / "rosy-ssh-watchdog.service.d/20-signed-update.conf").read_text()
+    assert "exec /var/lib/rosy-watchdog-update/active" in drop_in
+    assert "exec /usr/local/sbin/rosy-ssh-watchdog" in drop_in
+    assert config.read_text() == "ROSY_ROBOT=0\nMAX_REBOOTS=0\n"
+
+
 def test_kernel_activation_failure_is_not_a_successful_install(tmp_path):
     fake, bin_dir = _fakes(tmp_path)
     (bin_dir / "sysctl").write_text("#!/bin/sh\nexit 1\n")

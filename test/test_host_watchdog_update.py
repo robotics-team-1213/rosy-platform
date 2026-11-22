@@ -5,7 +5,8 @@ import sys
 
 import pytest
 
-from watchdog_update import build_asset, install_asset
+from deploy.hosts.common import watchdog_update
+from deploy.hosts.common.watchdog_update import build_asset, install_asset
 
 pytestmark = pytest.mark.skipif(sys.platform != "linux", reason="Linux system watchdog executable")
 SCRIPT = b"#!/usr/bin/env bash\nprintf 'healthy\\n'\n"
@@ -45,5 +46,22 @@ def test_invalid_asset_leaves_the_executable_in_place(keys, tmp_path):
         install_asset(changed, public, active)
     with pytest.raises(ValueError, match="syntax"):
         install_asset(invalid_script, public, active)
+    assert active.read_bytes() == baseline
+    assert not list(tmp_path.glob(".watchdog-*"))
+
+
+def test_failed_replacement_keeps_the_sequence_and_script(keys, tmp_path, monkeypatch):
+    private, public = keys
+    active = tmp_path / "active"
+    install_asset(build_asset(private, 2, SCRIPT), public, active)
+    baseline = active.read_bytes()
+
+    def reject_replace(staging, target):
+        assert staging.is_file() and target == active
+        raise OSError("replacement failed")
+
+    monkeypatch.setattr(watchdog_update.os, "replace", reject_replace)
+    with pytest.raises(OSError, match="replacement failed"):
+        install_asset(build_asset(private, 3, SCRIPT), public, active)
     assert active.read_bytes() == baseline
     assert not list(tmp_path.glob(".watchdog-*"))
