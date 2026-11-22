@@ -88,13 +88,16 @@ export function createCellViews(ctx) {
       mainCam.className = 'omx-inspector-main-cam omx-inspector-cam';
       mainCam.alt = `${activeSpec.title} 메인 카메라`;
       const zoomBtn = document.createElement('ui-button');
+      zoomBtn.className = 'omx-inspector-zoom';
       zoomBtn.setAttribute('kind', 'quiet');
       zoomBtn.setAttribute('type', 'button');
       zoomBtn.setAttribute('aria-expanded', 'false');
+      zoomBtn.setAttribute('aria-label', `${activeCam.label} 크게 보기`);
       zoomBtn.textContent = '확대 보기';
       const setCamZoom = (zoomed) => {
         mainCam.classList.toggle('focused', zoomed);
         zoomBtn.setAttribute('aria-expanded', String(zoomed));
+        zoomBtn.setAttribute('aria-label', `${activeCam.label} ${zoomed ? '원래 크기' : '확대 보기'}`);
         zoomBtn.textContent = zoomed ? '원래 크기' : '확대 보기';
       };
       zoomBtn.addEventListener('click', () => setCamZoom(!mainCam.classList.contains('focused')));
