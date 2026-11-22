@@ -63,6 +63,7 @@ _GIT_HISTORY_TESTS = (
     "test/test_safety_review.py",
     "test/test_remote_test_tools.py",
     "test/test_remote_fixture_isolation.py",
+    "test/test_release_boundary_guards.py",
 )
 
 

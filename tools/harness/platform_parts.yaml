@@ -1453,6 +1453,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_remap_jaws.py
   - deploy/robot/omx/cell_task_worker.py
   - deploy/robot/omx/cell_task_exec.py
+  - deploy/robot/omx/cell_task_act.py
   - deploy/robot/omx/cell_task_live_executor.py
   - deploy/robot/omx/omx_incident.py
   - deploy/robot/omx/omx_incident_auto.py

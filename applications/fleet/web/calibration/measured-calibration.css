@@ -2,6 +2,8 @@
 .measured-calibration input { max-width: 100%; min-width: 0; }
 .measured-calibration p { overflow-wrap: anywhere; }
 .measured-calibration .measured-limits { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+/* The 2 s background read names its reason in title/aria only: a visible line would resize the layout above the checkbox. */
+.measured-calibration ui-button[data-reading-reason] > small[data-reason] { display: none; }
 .measured-calibration img { display: block; width: 100%; max-width: 100%; height: auto; }
 
 /* styles.css의 main 두 칸은 관제 문서용이다. 설치는 넓은 단이 아니면 한 칸이다(전화에서 171px로 눌리던 작업 칸). */

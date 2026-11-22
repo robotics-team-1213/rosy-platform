@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -248,3 +249,193 @@ def test_open_cell_ignores_a_commissioning_mark_stored_in_the_config_file_and_wa
     config = setup.open_cell(args)[0]  # no --commissioning on this run
     assert "_commissioning" not in config and "ignored" in capsys.readouterr().err
     assert setup.open_cell(args, True)[0]["_commissioning"] == {"person_at_switch": True}  # only this run's own flag sets it
+
+
+def _act_setup(tmp_path, monkeypatch, *, act_cfg=None, cfg_override=None, live_folded=True, subprocess_res=None, returncode=0, handoff=None):
+    (tmp_path / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": HOME}), encoding="utf-8")
+    cfg_body = cfg_override if cfg_override is not None else {
+        "io": str(tmp_path / "chunk-io-s"),
+        "cameras": {},
+        "work_dir": str(tmp_path),
+        "plan_path": str(tmp_path / "grasp-plan.json"),
+        "sites": {"pinky": {"auto_roi": [49, 139, 295, 305]}, "belt": {"auto_roi": [309, 100, 634, 223]}},
+        "act_policy": act_cfg if act_cfg is not None else {
+            "execution_allowed": True,
+            "policy_root": "/home/robttt/omx_models/pinky_v1_aug2_act_200k",
+            "policy_revision": "b" * 64,
+            "cell_calibration": str(tmp_path / "arm_s.json"),
+            "model_calibration": str(tmp_path / "pinky.json"),
+        },
+    }
+    (tmp_path / "cell-auto-arm-s-live.json").write_text(
+        cfg_body if isinstance(cfg_body, str) else json.dumps(cfg_body), encoding="utf-8"
+    )
+    monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+    monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": live_folded, "state": [0.0] * 6, "fresh": True})
+    monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0, "site": "pinky"})
+    cmds = []
+    zone_ok = {"basis": cte.TOP_ONLY_BASIS, "verified": True, "before_frames": {"top": "t-1-top.jpg"},
+               "target": {"site": "belt", "area": "belt", "tier": 1, "roi": [309, 100, 634, 223]}}
+    payload = subprocess_res if subprocess_res is not None else {
+        "result": "chunks_done", "held": True, "parked": True, "park": PARK,
+        "source": {"before": 1, "after": 0}, "took_one": True, "zone_verification": zone_ok,
+    }
+    monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: (cmds.append(a[0]) or subprocess.CompletedProcess(
+        a, returncode, stdout="session up\n" + json.dumps(payload) + "\n", stderr="")))
+    base_handoff = {
+        **HANDOFF,
+        "execution_mode": "act_policy",
+        "max_chunks": 4,
+        "presence": {"operator": "livsbittt", "at": time.time() - 5},
+    }
+    if handoff:
+        base_handoff.update(handoff)
+    return cte.execute_guarded_cell_task(base_handoff, prep_dir=tmp_path), cmds
+
+
+def test_act_policy_exec_guards_and_verified_completion(tmp_path, monkeypatch):
+    monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+    bad_arm = cte.execute_guarded_cell_task({
+        "task_id": "t-a", "cell_id": "cell_ab", "arm_id": "arm_a", "execution_mode": "act_policy",
+        "presence": {"operator": "livsbittt", "at": time.time()},
+    }, prep_dir=tmp_path)
+    assert bad_arm["error"] == "ACT_POLICY_UNSUPPORTED_ARM"
+
+    no_pres = cte.execute_guarded_cell_task({
+        **HANDOFF, "execution_mode": "act_policy",
+    }, prep_dir=tmp_path)
+    assert no_pres["error"] == "PRESENCE_REQUIRED_FOR_ACT_POLICY"
+
+    ok, cmds = _act_setup(tmp_path, monkeypatch)
+    assert "error" not in ok
+    assert ok["stage_result"]["task_verified"] is True
+    assert ok["stage_result"]["verification"]["basis"] == cte.TOP_ONLY_BASIS
+    assert ok["stage_result"]["verification"]["target"] == {"site": "belt", "area": "belt", "tier": 1, "roi": [309, 100, 634, 223]}
+    assert ok["stage_result"]["verification"]["source"]["roi"] == [49, 139, 295, 305]
+    assert ok["stage_result"]["source_clearance"] == {"objects": 0, "site": "pinky"}
+    assert ok["stop_event"]["ok"] is True and ok["stop_event"]["folded"] is True
+    assert ok["stop_event"]["readback"]["folded"] is True
+    assert (tmp_path / "remeasure-t-1.json").is_file()
+    rm_ctx = json.loads((tmp_path / "remeasure-t-1.json").read_text(encoding="utf-8"))
+    assert rm_ctx["dst_roi"] == [309, 100, 634, 223] and rm_ctx["src_roi"] == [49, 139, 295, 305]
+    assert "--paced-chunks" in cmds[0] and "--person-at-switch" in cmds[0]
+    assert "--dest-site" in cmds[0] and "--task-id" in cmds[0]
+    assert "cell_policy_drive.py" in cmds[0][2]
+
+    # 65s remeasure on cell_s must pass dst_roi (belt) to czv.measure and src_roi (pinky) to source_clearance.
+    import cv2
+    import numpy as np
+    import cell_remeasure as crm
+    import cell_zone_verification as czv
+    (tmp_path / "zone-before").mkdir(exist_ok=True)
+    cv2.imwrite(str(tmp_path / "zone-before" / "t-1-top.jpg"), np.zeros((8, 8, 3), np.uint8))
+    seen_rm = {}
+    monkeypatch.setattr(czv, "measure", lambda cell, before, cfg, dst, src, roi: (
+        seen_rm.update(zone_roi=roi) or {"verified": True, "basis": cte.TOP_ONLY_BASIS,
+                                         "target": {"site": dst, "area": "belt", "tier": 1, "roi": roi}}))
+    monkeypatch.setattr(cte, "source_clearance", lambda cfg, cat, roi, src: seen_rm.update(sc_roi=roi) or {"objects": 0, "site": src})
+    monkeypatch.setattr("cell_pipeline.FifoCell", lambda *a, **k: object())
+    crm.remeasure("t-1", {"complete": {"stage_result": ok["stage_result"], "hardware_telemetry": ok,
+                                       "receipt": {"handoff_lease_id": "lease-1"}}}, tmp_path, now=time.time())
+    assert seen_rm["zone_roi"] == [309, 100, 634, 223] and seen_rm["sc_roi"] == [49, 139, 295, 305]
+
+    # Invalid task_ids and non-dict site configs fail closed before subprocess.
+    for bad_tid in ("../bad", "-flag", ""):
+        res_tid, c_tid = _act_setup(tmp_path, monkeypatch, handoff={"task_id": bad_tid})
+        assert res_tid["error"] == "ACT_POLICY_INVALID_ARGS" and c_tid == []
+    bad_site, c_site = _act_setup(tmp_path, monkeypatch, cfg_override={
+        "work_dir": str(tmp_path), "plan_path": str(tmp_path / "grasp-plan.json"),
+        "sites": {"pinky": "not-a-dict", "belt": {"auto_roi": [309, 100, 634, 223]}},
+        "act_policy": {"execution_allowed": True, "policy_root": "/m", "policy_revision": "b" * 64,
+                       "cell_calibration": "a", "model_calibration": "p"},
+    })
+    assert bad_site["error"] == "ACT_POLICY_INVALID_ARGS" and c_site == []
+
+    # Timeout writes human-hold to live arm_s FIFO naming convention (chunk-io-s, not chunk-io-arm-s).
+    tmo_dir = tmp_path / "tmo"
+    (tmo_dir / "chunk-io-s").mkdir(parents=True)
+    fifo_file = tmo_dir / "chunk-io-s" / "chunk-cmd"
+    fifo_file.write_bytes(b"")
+    (tmo_dir / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmo_dir / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
+    (tmo_dir / "cell-auto-arm-s-live.json").write_text(json.dumps({
+        "sites": {"pinky": {"auto_roi": [49, 139, 295, 305]}, "belt": {"auto_roi": [309, 100, 634, 223]}},
+        "act_policy": {"execution_allowed": True, "policy_root": "/m", "policy_revision": "b" * 64,
+                       "cell_calibration": "a", "model_calibration": "p"},
+    }), encoding="utf-8")
+    monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(subprocess.TimeoutExpired(a[0], 300)))
+    tmo = cte.execute_guarded_cell_task({**HANDOFF, "execution_mode": "act_policy",
+                                         "presence": {"operator": "livsbittt", "at": time.time() - 5}}, prep_dir=tmo_dir)
+    assert tmo["error"] == "SUBPROCESS_TIMEOUT" and tmo["stop_event"]["timeout_hold"]["chunk-io-s"] == "human-hold sent"
+    assert fifo_file.read_bytes() == b"human-hold\n"
+
+    # Passive act_shadow config alone or execution_allowed=False must fail closed (D-442 / D-1024).
+    shadow_only, c1 = _act_setup(tmp_path, monkeypatch, cfg_override={
+        "sites": {"pinky": {"auto_roi": [49, 139, 295, 305]}, "belt": {"auto_roi": [309, 100, 634, 223]}},
+        "act_shadow": {"policy_root": "/m", "policy_revision": "b" * 64, "cell_calibration": "a", "model_calibration": "p"},
+    })
+    assert shadow_only["error"] == "ACT_POLICY_CONFIG_MISSING" and c1 == []
+    disallowed, c2 = _act_setup(tmp_path, monkeypatch, act_cfg={
+        "execution_allowed": False, "policy_root": "/m", "policy_revision": "b" * 64,
+        "cell_calibration": "a", "model_calibration": "p",
+    })
+    assert disallowed["error"] == "ACT_POLICY_CONFIG_MISSING" and c2 == []
+
+    # Corrupt JSON, path traversal library, and leading-dash arguments fail closed before subprocess.
+    corrupt, c3 = _act_setup(tmp_path, monkeypatch, cfg_override="{not-json")
+    assert corrupt["error"] == "ACT_POLICY_CONFIG_INVALID" and c3 == []
+    trav, c4 = _act_setup(tmp_path, monkeypatch, act_cfg={
+        "execution_allowed": True, "policy_root": "/m", "policy_revision": "b" * 64,
+        "cell_calibration": "a", "model_calibration": "p", "library": "../outside.json",
+    })
+    assert trav["error"] == "ACT_POLICY_LIBRARY_MISSING" and c4 == []
+    bad_op, c5 = _act_setup(tmp_path, monkeypatch, handoff={"presence": {"operator": "-evil", "at": time.time() - 5}})
+    assert bad_op["error"] == "ACT_POLICY_INVALID_ARGS" and c5 == []
+
+    # Missing zone verification and out-of-tolerance park readback keep verified=False.
+    no_zone, _ = _act_setup(tmp_path, monkeypatch, subprocess_res={
+        "result": "chunks_done", "held": True, "parked": True, "park": PARK,
+        "source": {"before": 1, "after": 0}, "took_one": True,
+    })
+    assert no_zone["stage_result"]["task_verified"] is False
+    bad_fold, _ = _act_setup(tmp_path, monkeypatch, subprocess_res={
+        "result": "chunks_done", "held": True, "parked": True,
+        "park": {**PARK, "state": [20.0, -20.0, 10.0, 20.0, 20.0, 49.0]},
+        "source": {"before": 1, "after": 0}, "took_one": True,
+        "zone_verification": {"basis": cte.TOP_ONLY_BASIS, "verified": True,
+                              "target": {"site": "belt", "area": "belt", "tier": 1, "roi": [309, 100, 634, 223]}},
+    })
+    assert bad_fold["stop_event"]["folded"] is False and bad_fold["stage_result"]["task_verified"] is False
+
+    not_taken, _ = _act_setup(tmp_path, monkeypatch, subprocess_res={
+        "result": "chunks_done", "held": False, "parked": True, "park": PARK,
+        "source": {"before": 1, "after": 1}, "took_one": False,
+        "zone_verification": {"basis": cte.TOP_ONLY_BASIS, "verified": True,
+                              "target": {"site": "belt", "area": "belt", "tier": 1, "roi": [309, 100, 634, 223]}},
+    })
+    assert not_taken["stage_result"]["task_verified"] is False
+    assert not_taken["stop_event"]["folded"] is True
+    assert "error" in not_taken
+
+    for bad_sc in ({"objects": 1, "site": "pinky"}, {"objects": None, "site": "pinky"}):
+        monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+        monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": True, "state": [0.0] * 6, "fresh": True})
+        monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: bad_sc)
+        zone_ok_sc = {"basis": cte.TOP_ONLY_BASIS, "verified": True,
+                      "target": {"site": "belt", "area": "belt", "tier": 1, "roi": [309, 100, 634, 223]}}
+        monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+            a, 0, stdout=json.dumps({"result": "chunks_done", "held": True, "parked": True, "park": PARK,
+                                     "source": {"before": 1, "after": 0}, "took_one": True,
+                                     "zone_verification": zone_ok_sc}) + "\n", stderr=""))
+        bad = cte.execute_guarded_cell_task({
+            **HANDOFF, "execution_mode": "act_policy", "max_chunks": 4,
+            "presence": {"operator": "livsbittt", "at": time.time() - 5},
+        }, prep_dir=tmp_path)
+        assert bad["stage_result"]["task_verified"] is False and "error" in bad
+
+    contact, _ = _act_setup(tmp_path, monkeypatch, returncode=1, subprocess_res={
+        "result": "contact", "at": 1, "error": "strain", "source": {"before": 1, "after": 1}, "took_one": False,
+    })
+    assert contact["stage_result"]["task_verified"] is False and contact["error"] == "contact"

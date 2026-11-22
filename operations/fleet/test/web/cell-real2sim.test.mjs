@@ -15,6 +15,7 @@ import {
   runRows,
   cellTaskSummaryPairs,
   cellTaskRows,
+  refusalText,
   visualCardSpecs,
   inspectorSpecs,
   createReal2SimPipeline,
@@ -146,12 +147,24 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
         status: "COMPLETED",
         hardware_telemetry: {stop_event: {folded: true, state: [-0.07, -58.53, 50.96, 50.28, -4.71, 49.38]}},
       },
+      {
+        task_id: "act-s3-row",
+        cell_id: "cell_s",
+        arm_id: "arm_s",
+        src_site: "pinky",
+        dst_site: "belt",
+        tier: 1,
+        execution_mode: "act_policy",
+        status: "QUEUED",
+      },
     ],
   });
-  assert.equal(tRows.length, 1);
-  assert.equal(tRows[0][0], "live-e2e-cell-s-arm-s-v3");
-  assert.match(tRows[0][2], /복구: belt_far/);
-  assert.match(tRows[0][4], /folded: true/);
+  assert.equal(tRows.length, 2);
+  assert.equal(tRows[1][0], "live-e2e-cell-s-arm-s-v3");
+  assert.match(tRows[1][2], /복구: belt_far/);
+  assert.match(tRows[1][4], /folded: true/);
+  assert.match(tRows[0][2], /ACT 정책/);
+  assert.match(refusalText({op: "claim", code: "PRESENCE_CONFIRMATION_REQUIRED"}), /입회 표시/);
 
   const vCards = visualCardSpecs({
     cells: {
@@ -186,6 +199,7 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.equal(vCards[2].buttons[2].zoneId, "STG_C2");
   assert.equal(vCards[0].buttons[1].decisionSubject, "cell_s");
   assert.equal(vCards[0].buttons[2].visionCheckCell, "cell_s");
+  assert.ok(vCards[0].buttons.some(b => b.preset === "s3_act_policy"));
   assert.equal(vCards[0].cameraViews.length, 2);
   assert.equal(vCards[1].cameraViews.length, 4);
   assert.equal(vCards[2].cameraViews.length, 2);
@@ -220,6 +234,7 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.equal(iSpecs[2].cameraViews[0].id, "arm_b_wrist");
   assert.deepEqual(iSpecs[0].dualPair, ["arm_s_top", "arm_s_wrist"]);
   assert.deepEqual(iSpecs[1].dualPair, ["top", "arm_a_wrist"]);
+  assert.ok(iSpecs[0].buttons.some(b => b.preset === "s3_act_policy"));
   assert.match(iSpecs[0].telemetryRows[1][1], /folded=true/);
   assert.match(iSpecs[1].telemetryRows[1][1], /\[LIVE · 1초 전\]/);
   assert.match(iSpecs[2].telemetryRows[3][1], /홀드 활성/);

@@ -110,6 +110,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         expect(page.locator('#measured-conditions')).to_be_enabled()
         assert page.locator('#measured-confirm').is_disabled()
         page.locator('#measured-conditions').hover()
+        box = page.locator('#measured-conditions').bounding_box()
         page.mouse.down()
         state['hold'] = True
         with page.expect_request('**/measured-status'):
@@ -118,6 +119,9 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         expect(page.locator('#measured-read')).to_be_disabled()
         expect(page.locator('#measured-revoke')).to_be_disabled()
         assert state['pending']
+        # A background read must not move the checkbox (a reason line above it did on a slow 390 px runner): the
+        # press and release then land on different nodes and the click goes to the section.
+        assert page.locator('#measured-conditions').bounding_box() == box
         page.mouse.up()
         expect(page.locator('#measured-conditions')).to_be_checked()
         expect(page.locator('#measured-conditions')).to_be_enabled()

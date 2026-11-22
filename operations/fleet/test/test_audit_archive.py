@@ -76,6 +76,24 @@ def _store_with_one_request(tmp_path):
     return store.path
 
 
+def test_audit_keeps_a_full_length_account_identity_in_full(tmp_path):
+    """D-1043: a viewer press is audited with the whole Account subject (up to 128 characters), never cut or dropped."""
+    store = FleetTaskStore(Path(tmp_path) / "fleet.sqlite3")
+    who = "v" * 128
+    request_id = store.begin_api_audit(principal_id=who, role="viewer", method="POST", path="/api/fleet/estop")
+    store.finish_api_audit(request_id, status_code=200)
+    rows = [row for row in store.api_audit() if row["request_id"] == request_id]
+    assert [(row["principal_id"], row["role"]) for row in rows] == [(who, "viewer")] * 2
+    latch = store.trip_stop_latch(actor_id=who)  # the press must also close dispatch for a 128-character Account
+    assert not latch["dispatch_enabled"] and latch["reason"] == "SITE_STOP"
+    try:
+        store.begin_api_audit(principal_id="v" * 129, role="viewer", method="POST", path="/api/fleet/estop")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("an identity longer than any Account subject must be refused, not cut")
+
+
 def test_flush_copies_committed_rows_and_advances_the_watermark(tmp_path):
     db_path = _store_with_one_request(tmp_path)
     archive = FakePostgresArchive()

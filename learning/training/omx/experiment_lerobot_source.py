@@ -16,7 +16,7 @@ FILE_BYTES = 512 * 1024**2
 DATA_PATH = 'data/chunk-{chunk_index:03d}/file-{file_index:03d}.parquet'
 VIDEO_PATH = 'videos/{video_key}/chunk-{chunk_index:03d}/file-{file_index:03d}.mp4'
 SIDECARS = {'README.md', 'LICENSE', 'LICENCE', 'LICENSE.txt', 'LICENSE.md',
-            'UPSTREAM_README.md', 'source-provenance.json'}
+            'UPSTREAM_README.md', 'source-provenance.json', 'rosy_provenance.json'}
 CAMERA = r'observation\.images\.[A-Za-z0-9][A-Za-z0-9_.-]{0,127}'
 
 

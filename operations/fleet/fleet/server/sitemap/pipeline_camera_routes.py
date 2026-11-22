@@ -62,6 +62,7 @@ RECORDED_REFUSALS = frozenset({
     "AMR_BRAKE_BED_VELOCITY_UNMEASURED", "OMX_OWNER_EVIDENCE_UNAVAILABLE", "OMX_OWNER_EVIDENCE_MISMATCH",
     "UNVERIFIED_CELL_COMPLETION", "OWNER_PRINCIPAL_NOT_REGISTERED", "HUMAN_HOLD_ACTIVE",
     "CELL_BUSY_OR_HELD", "PREVIOUS_TIER_NOT_VERIFIED", "CELL_AB_EVIDENCE_NOT_ENABLED", "BED_CONFIRMATION_INVALID",
+    "PRESENCE_CONFIRMATION_REQUIRED",
 })
 
 
@@ -254,14 +255,18 @@ def install_cameras_routes(app, ctx) -> None:
                                         map_version=getattr(active[2], "version", None))
         if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
             return {"claimed": False, "task": task, "gate": res["gate"]}
-        from fleet.server.sitemap.pipeline_evidence import bind_bed, take_presence
+        from fleet.server.sitemap.pipeline_evidence import bind_bed, has_valid_presence, take_presence
+
+        claim_now = time.time()
+        if task.get("execution_mode") == "act_policy" and not has_valid_presence(app, task, now=claim_now):
+            return {"claimed": False, "task": task, "reason": "PRESENCE_CONFIRMATION_REQUIRED"}
 
         # D-1057: binding the bed confirmation to the lease and going RUNNING are one step; if it lapsed meanwhile, nothing changes
         if not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
             return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
 
-        task["presence"] = take_presence(app, task)  # D-1057/D-911: set only for a task a named operator confirmed in time
+        task["presence"] = take_presence(app, task, now=claim_now)  # D-1057/D-911: set only for a task a named operator confirmed in time
         task["status"] = "RUNNING"
         task["amr_claim_evidence"] = dict(amr)
         task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
@@ -276,7 +281,8 @@ def install_cameras_routes(app, ctx) -> None:
             "directive": task.get("directive"),
             "src_site": task["src_site"],
             "dst_site": task["dst_site"],
-            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot") if task.get(k) is not None},
+            **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "execution_mode", "max_chunks")
+               if task.get(k) is not None},
             "displaced_to": task.get("displaced_to"),
             "tier_hint": task.get("tier_hint"),
             "presence": task["presence"],

@@ -117,6 +117,10 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         });
       }
       await refresh();
+      if (choice.requiresPresence) {
+        hint.textContent = "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.";
+        hint.hidden = false;
+      }
     } catch (error) {
       hint.textContent = `작업 요청 실패: ${error.message}`;
       hint.hidden = false;
