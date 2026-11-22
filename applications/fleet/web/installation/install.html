@@ -368,7 +368,7 @@
           <h3 id="measured-heading">실측 카메라 교정</h3>
           <p class="hint">촬영·독립 측량 결과를 확인해 지도 미리보기에 적용합니다. 승인 저장과 영상 적용 상태를 따로 확인하세요.</p>
           <label class="file-picker">교정 묶음 <input class="ui-field" id="measured-bundle" type="file" accept="application/json,.json" disabled><span class="file-picker-button" aria-hidden="true">파일 선택</span><span data-file-name aria-live="polite">선택한 파일 없음</span></label>
-          <p class="hint"></p>
+          <p id="measured-summary" class="hint"></p>
           <div class="measured-limits">
             <label>허용 p95 오차 (m) <input class="ui-field" id="measured-p95" type="number" min="0" step="0.001" required disabled></label>
             <label>허용 최대 오차 (m) <input class="ui-field" id="measured-max" type="number" min="0" step="0.001" required disabled></label>
