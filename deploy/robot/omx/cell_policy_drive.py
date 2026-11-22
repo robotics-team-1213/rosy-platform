@@ -184,6 +184,8 @@ def main(argv=None) -> int:
     if args.paced_chunks and (args.mode != "act" or args.n_action is not None):
         parser.error("--paced-chunks requires act mode with a normalized-unit checkpoint and no --n-action")
     config = json.loads(args.config.read_text(encoding="utf-8"))
+    if not isinstance(config.get("io"), str) or not config["io"]:
+        parser.error("config.io must be a non-empty path")
     if not config.get("work_dir"):
         config["work_dir"] = str(args.config.parent)
     cfg_kind = (config.get("episodes") or {}).get("source_kind")
@@ -232,7 +234,8 @@ def main(argv=None) -> int:
     import cell_pipeline as cp
     work = Path(config.get("work_dir") or args.config.parent).expanduser()
     work.mkdir(parents=True, exist_ok=True)
-    cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
+    raw_io = Path(config["io"]).expanduser()
+    cell = cp.FifoCell(raw_io if raw_io.is_absolute() else args.config.parent / raw_io, config["cameras"])
     log_path = work / "policy-drive.jsonl"
     run_id = f"{int(time.time())}"
 

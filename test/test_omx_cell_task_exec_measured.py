@@ -346,6 +346,7 @@ def test_act_policy_exec_guards_and_verified_completion(tmp_path, monkeypatch):
         res_tid, c_tid = _act_setup(tmp_path, monkeypatch, handoff={"task_id": bad_tid})
         assert res_tid["error"] == "ACT_POLICY_INVALID_ARGS" and c_tid == []
     bad_site, c_site = _act_setup(tmp_path, monkeypatch, cfg_override={
+        "io": str(tmp_path / "chunk-io-s"),
         "work_dir": str(tmp_path), "plan_path": str(tmp_path / "grasp-plan.json"),
         "sites": {"pinky": "not-a-dict", "belt": {"auto_roi": [309, 100, 634, 223]}},
         "act_policy": {"execution_allowed": True, "policy_root": "/m", "policy_revision": "b" * 64,
@@ -361,6 +362,7 @@ def test_act_policy_exec_guards_and_verified_completion(tmp_path, monkeypatch):
     (tmo_dir / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     (tmo_dir / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
     (tmo_dir / "cell-auto-arm-s-live.json").write_text(json.dumps({
+        "io": str(tmo_dir / "chunk-io-s"),
         "sites": {"pinky": {"auto_roi": [49, 139, 295, 305]}, "belt": {"auto_roi": [309, 100, 634, 223]}},
         "act_policy": {"execution_allowed": True, "policy_root": "/m", "policy_revision": "b" * 64,
                        "cell_calibration": "a", "model_calibration": "p"},
@@ -370,10 +372,12 @@ def test_act_policy_exec_guards_and_verified_completion(tmp_path, monkeypatch):
                                          "presence": {"operator": "livsbittt", "at": time.time() - 5}}, prep_dir=tmo_dir)
     assert tmo["error"] == "SUBPROCESS_TIMEOUT" and tmo["stop_event"]["timeout_hold"]["chunk-io-s"] == "human-hold sent"
     assert tmo["stop_event"]["timeout_hold_latched"] == {"chunk-io-s": False}
-    assert fifo_file.read_bytes() == b"human-hold\n"
+    written = fifo_file.read_text(encoding="utf-8")
+    assert written.startswith("human-hold ") and len(written.split()) == 2
 
     # Passive act_shadow config alone or execution_allowed=False must fail closed (D-442 / D-1024).
     shadow_only, c1 = _act_setup(tmp_path, monkeypatch, cfg_override={
+        "io": str(tmp_path / "chunk-io-s"),
         "sites": {"pinky": {"auto_roi": [49, 139, 295, 305]}, "belt": {"auto_roi": [309, 100, 634, 223]}},
         "act_shadow": {"policy_root": "/m", "policy_revision": "b" * 64, "cell_calibration": "a", "model_calibration": "p"},
     })
@@ -442,27 +446,44 @@ def test_act_policy_exec_guards_and_verified_completion(tmp_path, monkeypatch):
     assert contact["stage_result"]["task_verified"] is False and contact["error"] == "contact"
 
     # Fresh runner live.json confirms human_hold_latched cleanly on subprocess timeout.
+    import cell_task_act as cta
+
     live_dir = tmp_path / "tmo_latched"
     (live_dir / "chunk-io-s").mkdir(parents=True)
     (live_dir / "chunk-io-s" / "chunk-cmd").write_bytes(b"")
-    (live_dir / "chunk-io-s" / "live.json").write_text(
-        json.dumps({"t": time.time(), "human_hold_latched": True, "torque_hold_commanded": True}), encoding="utf-8"
-    )
     (live_dir / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
     (live_dir / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
     (live_dir / "cell-auto-arm-s-live.json").write_text(json.dumps({
+        "io": str(live_dir / "chunk-io-s"),
         "sites": {"pinky": {"auto_roi": [49, 139, 295, 305]}, "belt": {"auto_roi": [309, 100, 634, 223]}},
         "act_policy": {"execution_allowed": True, "policy_root": "/m", "policy_revision": "b" * 64,
                        "cell_calibration": "a", "model_calibration": "p"},
     }), encoding="utf-8")
     monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(subprocess.TimeoutExpired(a[0], 300)))
-    tmo2 = cte.execute_guarded_cell_task({**HANDOFF, "execution_mode": "act_policy",
-                                          "presence": {"operator": "livsbittt", "at": time.time() - 5}}, prep_dir=live_dir)
+    real_open, real_close, live_fd = cta.os.open, cta.os.close, [None]
+
+    def _open_latched(path, flags):
+        fd = real_open(tmp_path / "tmo2-sink", cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)
+        live_fd[0] = fd
+        return fd
+
+    def _close_latched(fd):
+        real_close(fd)
+        if fd == live_fd[0]:
+            req = (tmp_path / "tmo2-sink").read_text(encoding="utf-8").strip().split()[1]
+            (live_dir / "chunk-io-s" / "live.json").write_text(
+                json.dumps({"t": time.time() + 0.01, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": req}), encoding="utf-8"
+            )
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.os, "open", _open_latched)
+        mp.setattr(cta.os, "close", _close_latched)
+        tmo2 = cte.execute_guarded_cell_task({**HANDOFF, "execution_mode": "act_policy",
+                                              "presence": {"operator": "livsbittt", "at": time.time() - 5}}, prep_dir=live_dir)
     assert tmo2["stop_event"]["timeout_hold"] == {"chunk-io-s": "human-hold sent"}
     assert tmo2["stop_event"]["timeout_hold_latched"] == {"chunk-io-s": True}
 
     # Unconfirmed torque_hold_commanded, non-finite timestamp, or stale live.json keep timeout_hold_latched False.
-    import cell_task_act as cta
     monkeypatch.setattr(cta.time, "sleep", lambda *_: None)
     mono = [0.0]
     monkeypatch.setattr(cta.time, "monotonic", lambda: (mono.__setitem__(0, mono[0] + 0.4) or mono[0]))
@@ -470,8 +491,356 @@ def test_act_policy_exec_guards_and_verified_completion(tmp_path, monkeypatch):
         {"t": time.time(), "human_hold_latched": True, "torque_hold_commanded": False},
         {"t": float("inf"), "human_hold_latched": True, "torque_hold_commanded": True},
         {"t": time.time() - 2.0, "human_hold_latched": True, "torque_hold_commanded": True},
+        {"t": time.time() + 0.0004, "human_hold_latched": True, "torque_hold_commanded": True},
+        {"t": time.time() + 0.05, "human_hold_latched": True, "torque_hold_commanded": True},
+        {"t": 10**400, "human_hold_latched": True, "torque_hold_commanded": True},
     ):
         mono[0] = 0.0
         (live_dir / "chunk-io-s" / "live.json").write_text(json.dumps(bad_live), encoding="utf-8")
         acks, latched = cta._hold_on_timeout(live_dir)
         assert acks == {"chunk-io-s": "human-hold sent"} and latched == {"chunk-io-s": False}
+
+    case_a_fd = [None]
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.os, "open", lambda _p, _f: (case_a_fd.__setitem__(0, real_open(tmp_path / "casea-sink", cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)) or case_a_fd[0]))
+        mp.setattr(cta.os, "close", lambda fd: (real_close(fd), fd == case_a_fd[0] and (live_dir / "chunk-io-s" / "live.json").write_text(json.dumps({"t": time.time() + 0.05, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": "earlier-req"}), encoding="utf-8")))
+        mono[0] = 0.0
+        acks_a, lat_a = cta._hold_on_timeout(live_dir)
+    assert acks_a == {"chunk-io-s": "human-hold sent"} and lat_a == {"chunk-io-s": False}
+
+
+def test_timeout_hold_dispatches_configured_first_and_preserves_colliding_or_missing_endpoints(tmp_path, monkeypatch):
+    import cell_task_act as cta
+
+    # 1: Configured owner dispatched first and all existing FIFOs written at t=0 before shared-deadline polling.
+    prep1 = tmp_path / "p1"
+    cfg1, s1, r2s1 = tmp_path / "cfg_io", prep1 / "chunk-io-s", prep1 / "chunk-io-s-r2s"
+    for d in (cfg1, s1, r2s1):
+        d.mkdir(parents=True)
+        (d / "chunk-cmd").write_bytes(b"")
+    clk, events, real_open, real_close = [0.0], [], cta.os.open, cta.os.close
+    monkeypatch.setattr(cta.time, "monotonic", lambda: clk[0])
+    monkeypatch.setattr(cta.time, "sleep", lambda dt: clk.__setitem__(0, clk[0] + dt))
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.os, "open", lambda path, flags: (events.append((Path(path).parent.name, clk[0])), real_open(path, flags))[1])
+        acks1, lat1 = cta._hold_on_timeout(prep1, {"io": str(cfg1)}, confirm_wait_s=0.35, poll_s=0.05)
+    assert events == [("cfg_io", 0.0), ("chunk-io-s", 0.0), ("chunk-io-s-r2s", 0.0)]
+    assert clk[0] <= 0.35 + 1e-6 and all(lat1[k] is False for k in ("cfg_io", "chunk-io-s", "chunk-io-s-r2s"))
+
+    # 2: Same-name colliding directories (configured OSError, fallback latched) preserve distinct receipts.
+    prep2 = tmp_path / "p2"
+    cfg2, fb2 = tmp_path / "custom" / "chunk-io-s", prep2 / "chunk-io-s"
+    for d in (cfg2, fb2):
+        d.mkdir(parents=True)
+        (d / "chunk-cmd").write_bytes(b"")
+    fb_fd = [None]
+
+    def _open_col(path, flags):
+        if Path(path).parent == cfg2:
+            raise OSError("no reader")
+        fd = real_open(tmp_path / "col-sink", cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)
+        fb_fd[0] = fd
+        return fd
+
+    def _close_col(fd):
+        real_close(fd)
+        if fd == fb_fd[0]:
+            req = (tmp_path / "col-sink").read_text(encoding="utf-8").strip().split()[1]
+            (fb2 / "live.json").write_text(json.dumps({"t": time.time() + 0.01, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": req}), encoding="utf-8")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.os, "open", _open_col)
+        mp.setattr(cta.os, "close", _close_col)
+        acks2, lat2 = cta._hold_on_timeout(prep2, {"io": str(cfg2)}, confirm_wait_s=0.05, poll_s=0.01)
+    assert len(acks2) == 2 and lat2[str(cfg2)] is False and "error:" in acks2[str(cfg2)] and lat2[str(fb2)] is True
+    assert "chunk-io-s" not in acks2 and "chunk-io-s" not in lat2
+
+    # 3: Missing configured FIFO with same-name fallback emits explicit missing receipt and never uses short key.
+    prep3 = tmp_path / "p3"
+    cfg3_missing, fb3 = tmp_path / "missing" / "chunk-io-s", prep3 / "chunk-io-s"
+    fb3.mkdir(parents=True)
+    (fb3 / "chunk-cmd").write_bytes(b"")
+    fb3_fd = [None]
+
+    def _open_miss(path, flags):
+        fd = real_open(tmp_path / "miss-sink", cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)
+        fb3_fd[0] = fd
+        return fd
+
+    def _close_miss(fd):
+        real_close(fd)
+        if fd == fb3_fd[0]:
+            req = (tmp_path / "miss-sink").read_text(encoding="utf-8").strip().split()[1]
+            (fb3 / "live.json").write_text(json.dumps({"t": time.time() + 0.01, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": req}), encoding="utf-8")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.os, "open", _open_miss)
+        mp.setattr(cta.os, "close", _close_miss)
+        acks3, lat3 = cta._hold_on_timeout(prep3, {"io": str(cfg3_missing)}, confirm_wait_s=0.05, poll_s=0.01)
+    assert acks3[str(cfg3_missing)] == "error: FileNotFoundError" and lat3[str(cfg3_missing)] is False
+    assert lat3[str(fb3)] is True and "chunk-io-s" not in acks3 and "chunk-io-s" not in lat3
+
+    # 4: Relative custom `io` (including trailing whitespace) resolves against cfg.parent identically across _hold_on_timeout, execute_act_policy_task, and cell_policy_drive.main.
+    prep4, cfg_dir, other_cwd = tmp_path / "p4", tmp_path / "cfg_root", tmp_path / "worker_cwd"
+    io_name = "custom-arm-io "
+    real_io, decoy_io = cfg_dir / io_name, other_cwd / io_name
+    for d in (prep4, real_io, decoy_io):
+        d.mkdir(parents=True)
+    (real_io / "chunk-cmd").write_bytes(b"")
+    (decoy_io / "chunk-cmd").write_bytes(b"")
+    (prep4 / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
+    (wrap4 := tmp_path / "wrap.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (cfg4 := cfg_dir / "cell.json").write_text(json.dumps({
+        "arm_id": "arm_s", "io": io_name, "cameras": {},
+        "sites": {"pinky": {"auto_roi": [0, 0, 10, 10]}, "belt": {}},
+        "act_policy": {"execution_allowed": True, "policy_root": str(tmp_path), "policy_revision": "a" * 64,
+                       "cell_calibration": str(tmp_path / "cell-cal.json"), "model_calibration": str(tmp_path / "m-cal.json")},
+    }), encoding="utf-8")
+    (tmp_path / "cell-cal.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "m-cal.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "lib4.json").write_text(json.dumps({"fps": 30, "gripper_closed": 46.6, "chunks": {"home": [[0] * 6], "reach": [[0] * 6, [1, 0, 0, 0, 0, 0]]}}), encoding="utf-8")
+
+    opened4, rel_fd = [], [None]
+
+    def _open_rel(path, flags):
+        opened4.append(str(path))
+        fd = real_open(tmp_path / "rel-sink", cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)
+        rel_fd[0] = fd
+        return fd
+
+    def _close_rel(fd):
+        real_close(fd)
+        if fd == rel_fd[0]:
+            req = (tmp_path / "rel-sink").read_text(encoding="utf-8").strip().split()[1]
+            (real_io / "live.json").write_text(
+                json.dumps({"t": time.time() + 0.01, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": req}), encoding="utf-8"
+            )
+
+    monkeypatch.chdir(other_cwd)
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.os, "open", _open_rel)
+        mp.setattr(cta.os, "close", _close_rel)
+        tmo4 = cta.execute_act_policy_task(
+            {"task_id": "t-rel", "cell_id": "cell_s", "src_site": "pinky", "dst_site": "belt",
+             "presence": {"operator": "livsbittt", "at": time.time() - 2}},
+            arm_id="arm_s", prep_dir=prep4, wrapper=wrap4, cfg=cfg4, cat=tmp_path / "cat.json", default_roi=(0, 0, 10, 10),
+            lease_owner="w1", tools_root_fn=lambda: tmp_path,
+            run_fn=lambda *_a, **_kw: (_ for _ in ()).throw(subprocess.TimeoutExpired("cmd", 300)),
+            last_json_fn=lambda _s: {}, measured_fold_fn=lambda *_a, **_kw: {}, source_clearance_fn=lambda *_a, **_kw: {},
+            fold_readback_fn=lambda *_a, **_kw: {}, plan_home_fn=lambda *_a, **_kw: [], write_context_fn=lambda *_a, **_kw: None,
+            timeout_exc=subprocess.TimeoutExpired,
+        )
+    assert opened4 == [str(real_io / "chunk-cmd")]
+    assert tmo4["stop_event"]["timeout_hold"] == {io_name: "human-hold sent"}
+    assert tmo4["stop_event"]["timeout_hold_latched"] == {io_name: True}
+
+    import cell_pipeline as cp
+    import cell_policy_drive as cpd
+    seen_io = []
+
+    class CapCell:
+        def __init__(self, io_dir, *_a, **_kw):
+            seen_io.append(Path(io_dir))
+
+        def act(self, cmd):
+            return {"command": cmd, "ok": True, "settled": True, "holding": False, "state": [0] * 6}
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cp, "FifoCell", CapCell)
+        mp.setattr(cpd, "calibration_offset", lambda *_a: [0.0] * 6)
+        mp.setattr(cpd, "demonstrated_range", lambda *_a: ([-100.0] * 6, [100.0] * 6))
+        mp.setattr(cpd.lrs, "LeRobotShadow", lambda *_a, **_kw: SimpleNamespace(
+            sim_rule=None, goal_size=None, image_views=(), files={},
+            inputs=lambda st, _f, **_k: ({"s": st}, {}), infer=lambda _o: SimpleNamespace(chunk=[[0.0] * 6] * 16),
+        ))
+        rc = cpd.main(["--config", str(cfg4), "--library", str(tmp_path / "lib4.json"), "--policy-root", str(tmp_path),
+                       "--policy-revision", "a" * 64, "--cell-calibration", str(tmp_path / "cell-cal.json"),
+                       "--model-calibration", str(tmp_path / "m-cal.json"), "--operator", "livsbittt", "--max-chunks", "1", "--dry-run"])
+    assert rc == 0 and seen_io == [real_io]
+
+    # 5: Omitted, empty, or non-string `io` fails closed before subprocess in execute_act_policy_task AND before checkpoint/FifoCell load in cell_policy_drive.main.
+    for bad_cfg_body in (
+        {"arm_id": "arm_s", "io": "", "cameras": {}},
+        {"arm_id": "arm_s", "io": None, "cameras": {}},
+        {"arm_id": "arm_s", "cameras": {}},
+    ):
+        res_bad_io, cmds_bad_io = _act_setup(tmp_path, monkeypatch, cfg_override={
+            **bad_cfg_body,
+            "sites": {"pinky": {"auto_roi": [49, 139, 295, 305]}, "belt": {"auto_roi": [309, 100, 634, 223]}},
+            "act_policy": {"execution_allowed": True, "policy_root": str(tmp_path), "policy_revision": "a" * 64,
+                           "cell_calibration": str(tmp_path / "cell-cal.json"), "model_calibration": str(tmp_path / "m-cal.json")},
+        })
+        assert res_bad_io["error"] == "ACT_POLICY_CONFIG_MISSING" and cmds_bad_io == []
+
+        (bad_cfg := cfg_dir / "bad-empty-io.json").write_text(json.dumps(bad_cfg_body), encoding="utf-8")
+        with monkeypatch.context() as mp:
+            mp.setattr(cp, "FifoCell", lambda *_a, **_kw: pytest.fail("invalid io must not construct FifoCell"))
+            mp.setattr(cpd.lrs, "LeRobotShadow", lambda *_a, **_kw: pytest.fail("invalid io must not initialize LeRobotShadow"))
+            with pytest.raises(SystemExit) as exc_info:
+                cpd.main(["--config", str(bad_cfg), "--library", str(tmp_path / "lib4.json"), "--policy-root", str(tmp_path),
+                          "--policy-revision", "a" * 64, "--cell-calibration", str(tmp_path / "cell-cal.json"),
+                          "--model-calibration", str(tmp_path / "m-cal.json"), "--operator", "livsbittt", "--max-chunks", "1", "--dry-run"])
+            assert exc_info.value.code == 2
+
+    # 6: OSError from fallback or configured `fifo.exists()` skips broken fallbacks and records explicit configured error without aborting HOLD.
+    prep6, cfg6 = tmp_path / "p6", tmp_path / "cfg6_io"
+    fb6 = prep6 / "chunk-io-s"
+    prep6b, cfg6b = tmp_path / "p6b", tmp_path / "cfg6b_io"
+    fb6b = prep6b / "chunk-io-s"
+    for d in (cfg6, fb6, cfg6b, fb6b):
+        d.mkdir(parents=True)
+        (d / "chunk-cmd").write_bytes(b"")
+    perm_targets: dict[int, Path] = {}
+    orig_exists = cta.Path.exists
+
+    def _exists_perm(self):
+        if self in (fb6 / "chunk-cmd", cfg6b / "chunk-cmd"):
+            raise PermissionError("unreadable fifo")
+        return orig_exists(self)
+
+    def _open_perm(path, flags):
+        sink_p = tmp_path / f"perm-sink-{len(perm_targets)}"
+        fd = real_open(sink_p, cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)
+        perm_targets[fd] = (Path(path).parent, sink_p)
+        return fd
+
+    def _close_perm(fd):
+        real_close(fd)
+        if item := perm_targets.get(fd):
+            parent, sink_p = item
+            req = sink_p.read_text(encoding="utf-8").strip().split()[1]
+            (parent / "live.json").write_text(json.dumps({"t": time.time() + 0.01, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": req}), encoding="utf-8")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.Path, "exists", _exists_perm)
+        mp.setattr(cta.os, "open", _open_perm)
+        mp.setattr(cta.os, "close", _close_perm)
+        acks6, lat6 = cta._hold_on_timeout(prep6, {"io": str(cfg6)}, confirm_wait_s=0.05, poll_s=0.01)
+        acks6b, lat6b = cta._hold_on_timeout(prep6b, {"io": str(cfg6b)}, confirm_wait_s=0.05, poll_s=0.01)
+    assert acks6["cfg6_io"] == "human-hold sent" and lat6["cfg6_io"] is True and "chunk-io-s" not in lat6
+    assert acks6b["cfg6b_io"] == "error: PermissionError" and lat6b["cfg6b_io"] is False and lat6b["chunk-io-s"] is True
+
+    # 7: Configured owner FIFO opens/writes BEFORE fallback paths are probed, and Python 3.12 symlink-loop `RuntimeError` on `resolve()` never blocks HOLD.
+    prep7, cfg7 = tmp_path / "p7", tmp_path / "cfg7_io"
+    fb7 = prep7 / "chunk-io-s"
+    prep7b, cfg7b = tmp_path / "p7b", tmp_path / "cfg7b_io"
+    fb7b = prep7b / "chunk-io-s"
+    for d in (cfg7, fb7, cfg7b, fb7b):
+        d.mkdir(parents=True)
+        (d / "chunk-cmd").write_bytes(b"")
+    orig_resolve = cta.Path.resolve
+    loop_events: list[tuple[str, str]] = []
+    loop_targets: dict[int, tuple[Path, Path]] = {}
+
+    def _resolve_loop(self, strict: bool = False):
+        loop_events.append(("resolve", self.parent.name))
+        if self in (fb7 / "chunk-cmd", cfg7b / "chunk-cmd"):
+            raise RuntimeError(f"Symlink loop from {self}")
+        return orig_resolve(self, strict=strict)
+
+    def _open_loop(path, flags):
+        loop_events.append(("open", Path(path).parent.name))
+        sink_p = tmp_path / f"loop-sink-{len(loop_targets)}"
+        fd = real_open(sink_p, cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)
+        loop_targets[fd] = (Path(path).parent, sink_p)
+        return fd
+
+    def _close_loop(fd):
+        real_close(fd)
+        if item := loop_targets.get(fd):
+            parent, sink_p = item
+            req = sink_p.read_text(encoding="utf-8").strip().split()[1]
+            (parent / "live.json").write_text(json.dumps({"t": time.time() + 0.01, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": req}), encoding="utf-8")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.Path, "resolve", _resolve_loop)
+        mp.setattr(cta.os, "open", _open_loop)
+        mp.setattr(cta.os, "close", _close_loop)
+        acks7, lat7 = cta._hold_on_timeout(prep7, {"io": str(cfg7)}, confirm_wait_s=0.05, poll_s=0.01)
+        acks7b, lat7b = cta._hold_on_timeout(prep7b, {"io": str(cfg7b)}, confirm_wait_s=0.05, poll_s=0.01)
+    assert loop_events[:2] == [("resolve", "cfg7_io"), ("open", "cfg7_io")]
+    assert acks7["cfg7_io"] == "human-hold sent" and lat7["cfg7_io"] is True and "chunk-io-s" not in acks7 and "chunk-io-s" not in lat7
+    assert acks7b["cfg7b_io"] == "error: RuntimeError" and lat7b["cfg7b_io"] is False and lat7b["chunk-io-s"] is True
+
+    # 8: Distinct per-endpoint hold_req tokens reject cross-endpoint live.json echo and confirm only exact match.
+    prep_b, cfg_b = tmp_path / "pb", tmp_path / "cfgb_io"
+    fb_b = prep_b / "chunk-io-s"
+    for d in (cfg_b, fb_b):
+        d.mkdir(parents=True)
+        (d / "chunk-cmd").write_bytes(b"")
+    b_fds, b_reqs, swap_mode = {}, {}, [True]
+
+    def _open_b(path, flags):
+        sink_p = tmp_path / f"b-sink-{Path(path).parent.name}-{swap_mode[0]}"
+        fd = real_open(sink_p, cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)
+        b_fds[fd] = (Path(path).parent, sink_p)
+        return fd
+
+    def _close_b(fd):
+        real_close(fd)
+        if item := b_fds.pop(fd, None):
+            parent, sink_p = item
+            b_reqs[parent.name] = sink_p.read_text(encoding="utf-8").strip().split()[1]
+            if len(b_reqs) == 2:
+                assert b_reqs["cfgb_io"] != b_reqs["chunk-io-s"]
+                cfg_req, fb_req = (b_reqs["chunk-io-s"], b_reqs["cfgb_io"]) if swap_mode[0] else (b_reqs["cfgb_io"], b_reqs["chunk-io-s"])
+                (cfg_b / "live.json").write_text(json.dumps({"t": time.time() + 0.05, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": cfg_req}), encoding="utf-8")
+                (fb_b / "live.json").write_text(json.dumps({"t": time.time() + 0.05, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": fb_req}), encoding="utf-8")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.os, "open", _open_b)
+        mp.setattr(cta.os, "close", _close_b)
+        _, lat_swap = cta._hold_on_timeout(prep_b, {"io": str(cfg_b)}, confirm_wait_s=0.06, poll_s=0.01)
+        assert lat_swap == {"cfgb_io": False, "chunk-io-s": False}
+        b_reqs.clear()
+        swap_mode[0] = False
+        _, lat_ok = cta._hold_on_timeout(prep_b, {"io": str(cfg_b)}, confirm_wait_s=0.06, poll_s=0.01)
+        assert lat_ok == {"cfgb_io": True, "chunk-io-s": True}
+
+    # 9: Huge integer timestamp (10**400) in configured live.json never blocks fallback dispatch or raises OverflowError.
+    prep9, cfg9 = tmp_path / "p9", tmp_path / "cfg9_io"
+    fb9 = prep9 / "chunk-io-s"
+    for d in (cfg9, fb9):
+        d.mkdir(parents=True)
+        (d / "chunk-cmd").write_bytes(b"")
+    (cfg9 / "live.json").write_text(json.dumps({"t": 10**400, "human_hold_latched": True, "torque_hold_commanded": True}), encoding="utf-8")
+    fds9 = {}
+
+    def _open9(path, flags):
+        sink_p = tmp_path / f"p9-sink-{Path(path).parent.name}"
+        fd = real_open(sink_p, cta.os.O_WRONLY | cta.os.O_CREAT | cta.os.O_TRUNC, 0o600)
+        fds9[fd] = (Path(path).parent, sink_p)
+        return fd
+
+    def _close9(fd):
+        real_close(fd)
+        if item := fds9.pop(fd, None):
+            parent, sink_p = item
+            req = sink_p.read_text(encoding="utf-8").strip().split()[1]
+            t_out = 10**400 if parent == cfg9 else time.time() + 0.05
+            (parent / "live.json").write_text(json.dumps({"t": t_out, "human_hold_latched": True, "torque_hold_commanded": True, "hold_req": req}), encoding="utf-8")
+
+    with monkeypatch.context() as mp:
+        mp.setattr(cta.os, "open", _open9)
+        mp.setattr(cta.os, "close", _close9)
+        acks9, lat9 = cta._hold_on_timeout(prep9, {"io": str(cfg9)}, confirm_wait_s=0.05, poll_s=0.01)
+    assert acks9 == {"cfg9_io": "human-hold sent", "chunk-io-s": "human-hold sent"}
+    assert lat9 == {"cfg9_io": False, "chunk-io-s": True}
+
+
+def test_act_policy_park_receipt_requires_owner_park_command_label(tmp_path, monkeypatch):
+    zone_ok = {"basis": cte.TOP_ONLY_BASIS, "verified": True, "before_frames": {"top": "t-1-top.jpg"},
+               "target": {"site": "belt", "area": "belt", "tier": 1, "roi": [309, 100, 634, 223]}}
+    base_res = {"result": "chunks_done", "held": True, "parked": True,
+                "source": {"before": 1, "after": 0}, "took_one": True, "zone_verification": zone_ok}
+
+    for park_val, expect_ok in (
+        ({**PARK, "command": "run park"}, True),
+        ({**PARK, "command": "checked s1 h1 park"}, True),
+        ({"ok": True, "settled": True, "state": PARK["state"]}, False),
+        ({**PARK, "command": "run policy"}, False),
+        ({**PARK, "human_hold_latched": True}, False),
+    ):
+        out, _ = _act_setup(tmp_path, monkeypatch, subprocess_res={**base_res, "park": park_val})
+        assert out["stop_event"]["folded"] is expect_ok
+        assert out["stage_result"]["task_verified"] is expect_ok

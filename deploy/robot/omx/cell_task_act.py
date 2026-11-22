@@ -13,8 +13,10 @@ from pathlib import Path
 import re
 import sys
 import time
+import uuid
 from typing import Any
 
+from cell_policy_timing import finite_stamp, park_ack_ok
 from cell_presence import presence_ok, zone_acceptance
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
@@ -28,52 +30,112 @@ def _fail(arm_id: str, error: str, *, directive_id: Any = None, extra_stop: dict
     return out
 
 
-def _hold_on_timeout(prep_dir: Path, cfg_data: dict[str, Any] | None = None) -> tuple[dict[str, str], dict[str, bool]]:
+def _hold_on_timeout(
+    prep_dir: Path,
+    cfg_data: dict[str, Any] | None = None,
+    *,
+    io_base: Path | None = None,
+    confirm_wait_s: float = 0.6,
+    poll_s: float = 0.05,
+) -> tuple[dict[str, str], dict[str, bool]]:
     acks: dict[str, str] = {}
     latched: dict[str, bool] = {}
-    candidates = [prep_dir / "chunk-io-s" / "chunk-cmd", prep_dir / "chunk-io-s-r2s" / "chunk-cmd"]
-    if isinstance(cfg_data, dict) and isinstance(cfg_data.get("io"), str) and cfg_data["io"].strip():
-        candidates.append(Path(cfg_data["io"].strip()).expanduser() / "chunk-cmd")
+    candidates: list[tuple[Path, bool]] = []
+    if isinstance(cfg_data, dict) and isinstance(cfg_data.get("io"), str) and cfg_data["io"]:
+        io_path = Path(cfg_data["io"]).expanduser()
+        if not io_path.is_absolute():
+            io_path = (io_base if io_base is not None else prep_dir) / io_path
+        candidates.append((io_path / "chunk-cmd", True))
+    candidates.extend((
+        (prep_dir / "chunk-io-s" / "chunk-cmd", False),
+        (prep_dir / "chunk-io-s-r2s" / "chunk-cmd", False),
+    ))
     seen: set[Path] = set()
+    records: list[tuple[Path, Path, str, float | None, float | None, str | None]] = []
     flags = os.O_WRONLY | getattr(os, "O_NONBLOCK", 0)
-    for fifo in candidates:
+    for fifo, is_cfg in candidates:
         try:
             resolved = fifo.resolve()
-        except OSError:
-            resolved = fifo
-        if resolved in seen or not fifo.exists():
+        except (OSError, RuntimeError) as exc:
+            if not is_cfg:
+                continue
+            if fifo in seen:
+                continue
+            seen.add(fifo)
+            records.append((fifo, fifo, f"error: {type(exc).__name__}", None, None, None))
+            continue
+        if resolved in seen:
+            continue
+        try:
+            exists = fifo.exists()
+        except (OSError, RuntimeError) as exc:
+            if not is_cfg:
+                continue
+            seen.add(resolved)
+            records.append((fifo, resolved, f"error: {type(exc).__name__}", None, None, None))
+            continue
+        if not exists:
+            if not is_cfg:
+                continue
+            seen.add(resolved)
+            records.append((fifo, resolved, "error: FileNotFoundError", None, None, None))
             continue
         seen.add(resolved)
+        pre_t: float | None = None
         try:
-            sent_at = time.time()
+            pre_live = json.loads((fifo.parent / "live.json").read_text(encoding="utf-8"))
+            pre_t = finite_stamp(pre_live.get("t")) if isinstance(pre_live, dict) else None
+        except (OSError, ValueError, RecursionError):
+            pass
+        hold_req = uuid.uuid4().hex[:12]
+        try:
             fd = os.open(str(fifo), flags)
             try:
-                os.write(fd, b"human-hold\n")
+                os.write(fd, f"human-hold {hold_req}\n".encode())
+                sent_at = time.time()
             finally:
                 os.close(fd)
-            acks[fifo.parent.name] = "human-hold sent"
-            live_path, confirmed = fifo.parent / "live.json", False
-            if live_path.is_file():
-                deadline = time.monotonic() + 0.6
-                while True:
-                    try:
-                        live_data = json.loads(live_path.read_text(encoding="utf-8"))
-                        t_val = live_data.get("t") if isinstance(live_data, dict) else None
-                        if (isinstance(live_data, dict) and live_data.get("human_hold_latched") is True
-                                and live_data.get("torque_hold_commanded") is True
-                                and isinstance(t_val, (int, float)) and not isinstance(t_val, bool)
-                                and math.isfinite(t_val) and sent_at - 0.05 <= t_val <= time.time() + 1.0):
-                            confirmed = True
-                            break
-                    except (OSError, ValueError):
-                        pass
-                    if time.monotonic() >= deadline:
-                        break
-                    time.sleep(0.05)
-            latched[fifo.parent.name] = confirmed
+            records.append((fifo, resolved, "human-hold sent", sent_at, pre_t, hold_req))
         except OSError as exc:
-            acks[fifo.parent.name] = f"error: {type(exc).__name__}"
-            latched[fifo.parent.name] = False
+            records.append((fifo, resolved, f"error: {type(exc).__name__}", None, None, None))
+    counts: dict[str, int] = {}
+    for fifo, _res, _ack, _sent, _pre, _req in records:
+        counts[fifo.parent.name] = counts.get(fifo.parent.name, 0) + 1
+    used_keys: set[str] = set()
+    dispatched: list[tuple[Path, str, float, float | None, str]] = []
+    for fifo, resolved, ack, sent_at, pre_t, hold_req in records:
+        key = fifo.parent.name if counts[fifo.parent.name] == 1 else str(fifo.parent)
+        if key in used_keys:
+            key = str(resolved.parent)
+        used_keys.add(key)
+        acks[key] = ack
+        if sent_at is not None and hold_req is not None:
+            dispatched.append((fifo, key, sent_at, pre_t, hold_req))
+        else:
+            latched[key] = False
+    deadline = time.monotonic() + max(0.0, confirm_wait_s)
+    confirmed: set[Path] = set()
+    while len(confirmed) < len(dispatched):
+        for fifo, _key, sent_at, pre_t, hold_req in dispatched:
+            if fifo in confirmed:
+                continue
+            try:
+                live_data = json.loads((fifo.parent / "live.json").read_text(encoding="utf-8"))
+                t_val = finite_stamp(live_data.get("t")) if isinstance(live_data, dict) else None
+                if (isinstance(live_data, dict) and live_data.get("human_hold_latched") is True
+                        and live_data.get("torque_hold_commanded") is True
+                        and live_data.get("hold_req") == hold_req
+                        and t_val is not None
+                        and sent_at + 0.001 <= t_val <= time.time() + 1.0
+                        and (pre_t is None or t_val > pre_t)):
+                    confirmed.add(fifo)
+            except (OSError, ValueError, RecursionError):
+                pass
+        if len(confirmed) >= len(dispatched) or time.monotonic() >= deadline:
+            break
+        time.sleep(min(poll_s, max(0.0, deadline - time.monotonic())))
+    for fifo, key, _sent_at, _pre, _req in dispatched:
+        latched[key] = fifo in confirmed
     return acks, latched
 
 
@@ -112,6 +174,8 @@ def execute_act_policy_task(
         return _fail(arm_id, "ACT_POLICY_CONFIG_INVALID")
     if not isinstance(cfg_data, dict):
         return _fail(arm_id, "ACT_POLICY_CONFIG_INVALID")
+    if not isinstance(cfg_data.get("io"), str) or not cfg_data["io"]:
+        return _fail(arm_id, "ACT_POLICY_CONFIG_MISSING")
     policy_cfg = cfg_data.get("act_policy")  # never fall back to passive act_shadow (D-442)
     req_keys = ("policy_root", "policy_revision", "cell_calibration", "model_calibration")
     if (not isinstance(policy_cfg, dict) or policy_cfg.get("execution_allowed") is not True
@@ -119,7 +183,8 @@ def execute_act_policy_task(
             or not _SHA256_RE.fullmatch(policy_cfg["policy_revision"].strip())):
         return _fail(arm_id, "ACT_POLICY_CONFIG_MISSING")
     max_obs_age_s = policy_cfg.get("max_obs_age_s", 2.0)
-    if type(max_obs_age_s) not in (int, float) or not math.isfinite(max_obs_age_s) or not 0 < max_obs_age_s <= 5.0:
+    obs_age = finite_stamp(max_obs_age_s)
+    if obs_age is None or not 0 < obs_age <= 5.0:
         return _fail(arm_id, "ACT_POLICY_CONFIG_MISSING")
     raw_lib = str(policy_cfg.get("library") or "chunks-arm-s-inplace-live.json").strip()
     try:
@@ -175,15 +240,17 @@ def execute_act_policy_task(
         proc = run_fn(cmd, capture_output=True, text=True, timeout=300,
                       env={**os.environ, "TOOLS_ROOT": str(tools_root_fn()), "ROSY_ARM_LEASE_OWNER": lease_owner})
     except timeout_exc:
-        acks, latched = _hold_on_timeout(prep_dir, cfg_data)
+        acks, latched = _hold_on_timeout(prep_dir, cfg_data, io_base=cfg.parent)
         extra = {"timeout_hold": acks, "timeout_hold_latched": latched} if acks else None
         return _fail(arm_id, "SUBPROCESS_TIMEOUT", directive_id=task_id, extra_stop=extra)
     parsed = last_json_fn(proc.stdout)
     measured_at = time.time()
-    park_row = {**parsed["park"], "command": "park"} if isinstance(parsed.get("park"), dict) else {}
+    raw_park = parsed.get("park") if isinstance(parsed.get("park"), dict) else {}
+    park_valid = park_ack_ok(raw_park, require_command=True)
+    park_row = {**raw_park, "command": "park"} if park_valid else dict(raw_park)
     fold = fold_readback_fn({"transfer": {"steps": [park_row]}}, plan_home_fn(cfg_data))
     live_fold = measured_fold_fn(arm_id, prep_dir)
-    folded = bool(parsed.get("parked") is True and fold["folded"] and live_fold["folded"])
+    folded = bool(parsed.get("parked") is True and park_valid and fold["folded"] and live_fold["folded"])
     source = parsed.get("source") if isinstance(parsed.get("source"), dict) else {}
     took_one = bool(parsed.get("took_one") is True and source.get("after") == 0)
     zone = parsed.get("zone_verification") if isinstance(parsed.get("zone_verification"), dict) else None
