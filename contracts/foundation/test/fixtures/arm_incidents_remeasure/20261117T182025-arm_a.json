@@ -1,0 +1,48 @@
+{
+ "schema": "rosy.omx-incident.v1",
+ "arm": "arm_a",
+ "stamp": "20261117T182025",
+ "session": "session.json",
+ "facts": {
+  "safe_end": true,
+  "latched": {},
+  "torque_after": {
+   "11": 0,
+   "12": 0,
+   "13": 0,
+   "14": 0,
+   "15": 0,
+   "16": 0
+  },
+  "caps_restored": true,
+  "folded": true,
+  "last_state": [
+   0.76,
+   -62.25,
+   53.06,
+   51.65,
+   44.96,
+   49.18
+  ],
+  "flagged": [],
+  "windup_hits": [
+   {
+    "session": "motor-health-1794906034892944679",
+    "t": 300.8,
+    "reason": "elbow_flex still 0.8 units short, PWM winding up 206 -> 246 of 600: pushing against something"
+   }
+  ],
+  "stop_reading": null,
+  "stops": [],
+  "fault_records": [],
+  "frames": []
+ },
+ "decision": {
+  "actions": [],
+  "hold": true,
+  "offered": [],
+  "reason": "wind-up before the end: elbow_flex still 0.8 units short, PWM winding up 206 -> 246 of 600: pushing against something; a person checks the arm (jaws, contacts, wedged objects) before torque ON"
+ },
+ "recovery": null,
+ "reported": true
+}

@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 import pytest
 
-from core_common.protocol.arm_incidents import ARM_INCIDENT_FRAME_BYTES, ArmIncidentReport
-from core_common.protocol.workcell_observations import WorkcellObservationManifest
+from core_common.protocol.arm_incident.arm_incidents import ARM_INCIDENT_FRAME_BYTES, ArmIncidentReport
+from core_common.protocol.arm_incident.workcell_observations import WorkcellObservationManifest
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -100,7 +100,7 @@ def test_store_is_idempotent_per_session_and_keeps_the_open_explained_cleared_st
     assert other != first and store.hold("arm_b").incident_ids == [first, other] and not store.hold("arm_a").held
     assert [i["incident_id"] for i in store.unexplained()] == [first, other]
     assert store.unexplained()[0]["frames"][0]["jpeg_b64"]
-    from core_common.protocol.arm_incidents import ArmIncidentExplanation
+    from core_common.protocol.arm_incident.arm_incidents import ArmIncidentExplanation
     explanation = ArmIncidentExplanation(seen="A box in the jaws.", suspected_cause="Overload from the box.", model="m:1")
     store.explain("arm_b", first, explanation)
     with pytest.raises(ValueError):
@@ -115,7 +115,7 @@ def test_store_is_idempotent_per_session_and_keeps_the_open_explained_cleared_st
     states = {i["incident_id"]: i for i in store.snapshot("arm_b")}
     assert states[first]["state"] == "cleared" and states[first]["cleared"] == {"by": "op-7", "at": 20.0, "note": "box removed",
                                                                                 "cause": None, "basis": None,
-                                                                                "kind": "person"}
+                                                                                "kind": "person", "remeasured": None}
     assert states[first]["explanation"]["seen"] == "A box in the jaws." and states[other]["state"] == "open"
     assert all("jpeg_b64" not in f for i in states.values() for f in i["frames"])  # no bytes in the console list
     assert store.hold("arm_b").incident_ids == [other]
@@ -297,7 +297,7 @@ def test_a_cleared_cause_and_its_basis_are_kept_and_listed_for_learning(client):
 
 
 def test_the_seconds_around_a_stop_arrive_frame_by_frame_from_the_arm_only(client, monkeypatch):
-    import fleet.server.arm_incidents as module
+    from fleet.server import arm_incident_store
     incident_id = post(client).json()["incident_id"]
     url = f"{PATH}/arms/arm_b/incidents/{incident_id}/evidence"
     first = client.post(url, json=evidence(), headers=SOURCE)
@@ -309,7 +309,7 @@ def test_the_seconds_around_a_stop_arrive_frame_by_frame_from_the_arm_only(clien
     assert client.post(url, json={**evidence(b"z"), "kind": "video"}, headers=SOURCE).status_code == 422
     assert client.post(url, json={**evidence(b"z"), "sha256": "0" * 64}, headers=SOURCE).status_code == 422
     assert client.post(url, content=b"{" + b" " * 300_000 + b"}", headers=SOURCE).status_code == 413
-    monkeypatch.setattr(module, "ARM_INCIDENT_EVIDENCE_FRAMES", 2)
+    monkeypatch.setattr(arm_incident_store, "ARM_INCIDENT_EVIDENCE_FRAMES", 2)
     assert client.post(url, json=evidence(b"a", "side", 0.5, "full"), headers=SOURCE).json()["seq"] == 1
     assert client.post(url, json=evidence(b"b"), headers=SOURCE).status_code == 409  # the incident's frames are full
     [row] = [a for a in client.get(PATH, headers=bearer("viewer-token")).json()["workcells"][0]["arms"]
@@ -323,7 +323,7 @@ def test_the_seconds_around_a_stop_arrive_frame_by_frame_from_the_arm_only(clien
 
 
 def test_whole_frames_expire_two_weeks_after_clearing_and_the_crops_and_label_stay():
-    from core_common.protocol.arm_incidents import ArmIncidentEvidenceFrame
+    from core_common.protocol.arm_incident.arm_incidents import ArmIncidentEvidenceFrame
     clock = [10.0]
     store = ArmIncidentStore(wall=lambda: clock[0])
     old = store.report(ArmIncidentReport.model_validate(report()))
@@ -381,7 +381,7 @@ def test_an_open_software_stop_reported_as_held_stops_holding_by_the_shared_rule
 
 def test_old_whole_frames_go_on_a_report_too_not_only_on_a_clear():
     """Review 2026-11-08: expiry ran only on clear(), so a quiet ledger kept every frame."""
-    from core_common.protocol.arm_incidents import ArmIncidentEvidenceFrame
+    from core_common.protocol.arm_incident.arm_incidents import ArmIncidentEvidenceFrame
     clock = [10.0]
     store = ArmIncidentStore(wall=lambda: clock[0])
     old = store.report(ArmIncidentReport.model_validate(report()))

@@ -105,7 +105,7 @@ def account_page(tmp_path, request, account_backend):
         logins['bob'] = {'principal_id': 'bob', 'role': 'viewer', 'password_scrypt': _cached_password_scrypt('pw-1234')}
     observations = None
     if initial == 'usb':
-        from core_common.protocol.workcell_observations import WorkcellObservationManifest
+        from core_common.protocol.arm_incident.workcell_observations import WorkcellObservationManifest
         from fleet.server.workcell_observations import WorkcellObservations
         from test_usb_camera_decisions import cell
         manifest = WorkcellObservationManifest.model_validate({

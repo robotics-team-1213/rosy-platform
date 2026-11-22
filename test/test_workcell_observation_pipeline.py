@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
-from core_common.protocol.workcell_observations import WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import WorkcellObservationManifest
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService

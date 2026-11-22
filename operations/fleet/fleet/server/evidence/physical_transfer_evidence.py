@@ -13,7 +13,7 @@ from typing import Annotated, Literal
 from pydantic import Field, field_serializer, model_validator
 
 from core_common.protocol.arm_transfer import ArmJournalId
-from core_common.protocol.arm_transfer_observations import _Closed
+from core_common.protocol.arm_incident.arm_transfer_observations import _Closed
 from core_common.protocol.arm_transfer_preflight import ArmDigest, ArmPhysicalRef
 from rosy.world.state.projections.omx_geometry import ArmGeometry
 from rosy.world.state.projections.physical_transfer import Bounds3, PhysicalPose, TransferObservation

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from fleet.server.auth.site_auth import build_authorize, build_role_guards
 from fleet.server.pipeline_routes import install_pipeline_routes
-from core_common.protocol.arm_incidents import ArmIncidentReport
+from core_common.protocol.arm_incident.arm_incidents import ArmIncidentReport
 from fleet.server.arm_incidents import ArmIncidentStore
 from rosy_account.principal import SitePrincipal
 
