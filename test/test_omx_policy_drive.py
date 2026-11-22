@@ -176,15 +176,15 @@ def test_sim_goal_cli_converts_and_logs_envelope_without_motion(tmp_path, monkey
 
     monkeypatch.setattr(drive, "demonstrated_range", wrong_units)
     with pytest.raises(SystemExit):
-        drive.main([*args, "--goal-site", "yard:r3-s1-t1"])
-    site_args = [*args, "--goal-site", "yard:r3-s2-t1"]
+        drive.main([*args, "--goal-site", "yard:r1-s1-t1"])
+    site_args = [*args, "--goal-site", "yard:r1-s2-t1"]
     assert drive.main(site_args) == int(outside)
     assert drive.main([*site_args, "--goal-slot", "9"]) == int(outside)
     assert cell.commands == ["state", "state"]
     np.testing.assert_array_equal(seen[0][drive.lrs.GOAL], [1] + [0] * 9)
     np.testing.assert_array_equal(seen[1][drive.lrs.GOAL], [0] * 9 + [1])
     start, row, _, override, *_ = map(json.loads, (tmp_path / "policy-drive.jsonl").read_text().splitlines())
-    assert start["goal_site"] == "yard:r3-s2-t1" and start["goal_destination"] == "ship-h1r0-l0"
+    assert start["goal_site"] == "yard:r1-s2-t1" and start["goal_destination"] == "ship-h1r0-l0"
     assert start["goal_site_slot"] == start["goal_slot"] == override["goal_site_slot"] == 0
     assert override["goal_slot"] == 9
     assert row["envelope"]["ok"] is not outside
@@ -204,7 +204,7 @@ class SimPolicy(Policy):
 def test_goal_sites_use_the_h1_training_order():
     for column in range(3):
         for tier in range(3):
-            assert drive.resolve_goal_site(f"yard:r{3 - column}-s2-t{tier + 1}") == (
+            assert drive.resolve_goal_site(f"yard:r{column + 1}-s2-t{tier + 1}") == (
                 f"ship-h1r{column}-l{tier}", 3 * column + tier,
             )
     for site in ("tray", "vehicle_tray", "not_places:vehicle_tray"):
