@@ -131,3 +131,93 @@ def test_package_cell_bundle_rewrites_normalizer_safetensors(tmp_path):
     tensors = sf.load_file(str(dst / 'policy_preprocessor_step_3_normalizer_processor.safetensors'))
     assert 'observation.images.top.mean' in tensors and 'observation.images.rs.mean' not in tensors
     assert summary['checkpoint_sha256'] == checkpoint_sha256(dst, allow_symlinks=False)
+
+
+def test_export_cell_onnx_rejects_bad_bundles_before_requiring_runtime(tmp_path):
+    from experiment_artifact import export_cell_onnx
+
+    src = tmp_path / 'src-bad'
+    _make_src_ckpt(src, top_view='rs', device='cpu')
+    with pytest.raises(ValueError, match='cell roles'):
+        export_cell_onnx(src)
+
+    dst = tmp_path / 'dst-ok'
+    package_cell_bundle(src, dst, arm_id='arm_a', rename_views={'rs': 'top'})
+    with pytest.raises(ValueError, match='policy_postprocessor.json'):
+        export_cell_onnx(dst)
+    cfg_path = dst / 'config.json'
+    cfg = json.loads(cfg_path.read_text(encoding='utf-8'))
+    cfg['type'] = 'diffusion'
+    cfg_path.write_text(json.dumps(cfg), encoding='utf-8')
+    with pytest.raises(ValueError, match='only ACT'):
+        export_cell_onnx(dst)
+    assert not (dst / 'model.onnx').exists()
+    assert not (dst / 'ONNX_EXPORT.json').exists()
+
+
+def test_export_cell_onnx_writes_verified_model_and_metadata(tmp_path, monkeypatch):
+    onnx = pytest.importorskip('onnx')
+    torch = pytest.importorskip('torch')
+    pytest.importorskip('lerobot')
+    import lerobot.policies.act.modeling_act as act_mod
+    from experiment_artifact import export_cell_onnx
+
+    src = tmp_path / 'src-tiny'
+    raw_sha = _make_src_ckpt(src, top_view='rs', device='cpu')
+    (src / 'policy_postprocessor.json').write_text(json.dumps({'name': 'policy_postprocessor', 'steps': []}), encoding='utf-8')
+    dst = tmp_path / 'bundle-tiny'
+    package_cell_bundle(src, dst, arm_id='arm_b', rename_views={'rs': 'top'})
+
+    class _TinyActModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.proj = torch.nn.Linear(6, 6)
+
+        def forward(self, batch):
+            state = batch['observation.state']
+            goal = batch['observation.environment_state'][:, :6]
+            img_sum = sum(t.mean(dim=(1, 2, 3), keepdim=False).unsqueeze(-1) for t in batch['observation.images'])
+            step = self.proj(state) + 0.1 * goal + 0.01 * img_sum
+            return (step.unsqueeze(1).repeat(1, 16, 1),)
+
+    class _FakeACTPolicy:
+        @classmethod
+        def from_pretrained(cls, path, local_files_only=True):
+            assert local_files_only is True
+            ns = type('_FakePolicy', (), {})()
+            ns.model = _TinyActModel()
+            ns.config = type('_FakeCfg', (), {
+                'device': 'cpu',
+                'input_features': {
+                    'observation.state': type('_F', (), {'shape': (6,)})(),
+                    'observation.environment_state': type('_F', (), {'shape': (10,)})(),
+                    'observation.images.top': type('_F', (), {'shape': (3, 480, 640)})(),
+                    'observation.images.side': type('_F', (), {'shape': (3, 480, 640)})(),
+                    'observation.images.wrist': type('_F', (), {'shape': (3, 480, 640)})(),
+                },
+                'image_features': [
+                    'observation.images.side',
+                    'observation.images.wrist',
+                    'observation.images.top',
+                ],
+            })()
+            ns.to = lambda _dev: ns
+            ns.eval = lambda: ns
+            return ns
+
+    monkeypatch.setattr(act_mod, 'ACTPolicy', _FakeACTPolicy)
+    meta = export_cell_onnx(dst, opset=17, parity_tol=1e-4)
+    assert meta['schema'] == 'rosy.omx-onnx-export.v1'
+    assert meta['policy_revision'] == raw_sha
+    assert meta['opset'] == 17
+    assert meta['output_shape'] == [1, 16, 6]
+    assert set(meta['inputs']) == {
+        'observation.state',
+        'observation.environment_state',
+        'observation.images.side',
+        'observation.images.wrist',
+        'observation.images.top',
+    }
+    onnx.checker.check_model(str(dst / 'model.onnx'), full_check=True)
+    saved_meta = json.loads((dst / 'ONNX_EXPORT.json').read_text(encoding='utf-8'))
+    assert saved_meta == meta

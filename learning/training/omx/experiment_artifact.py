@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
 import sys
 import zipfile
@@ -201,4 +202,141 @@ def package_cell_bundle(src_dir, dst_dir, *, arm_id, rename_views=None, target_d
         }
     except Exception:
         shutil.rmtree(partial, ignore_errors=True)
+        raise
+
+
+def _check_regular_file(path):
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f'regular file required: {path.name}')
+    return path
+
+
+def export_cell_onnx(bundle_dir, *, opset=17, parity_tol=1e-4):
+    """Atomically export model.onnx (opset 17) + ONNX_EXPORT.json for a validated cell bundle."""
+    import importlib.util
+    import sys
+
+    dst = Path(bundle_dir)
+    if dst.is_symlink() or not dst.is_dir():
+        raise ValueError('bundle directory must be a regular directory')
+    if any(p.is_symlink() for p in dst.rglob('*')):
+        raise ValueError('symlink forbidden in cell bundle')
+
+    config_path = _check_regular_file(dst / 'config.json')
+    weights_path = _check_regular_file(dst / 'model.safetensors')
+
+    config = json.loads(config_path.read_text(encoding='utf-8'))
+    if config.get('type') != 'act':
+        raise ValueError(f"unsupported policy type {config.get('type')!r}: only ACT ONNX export is supported")
+    _validate_cell_config(config)
+    _check_regular_file(dst / 'policy_preprocessor.json')
+    _check_regular_file(dst / 'policy_postprocessor.json')
+
+    with weights_path.open('rb') as stream:
+        policy_revision = hashlib.file_digest(stream, 'sha256').hexdigest()
+
+    import onnx
+    import torch
+    from lerobot.policies.act.modeling_act import ACTPolicy
+
+    prev_hub_offline = os.environ.get('HF_HUB_OFFLINE')
+    os.environ['HF_HUB_OFFLINE'] = '1'
+    try:
+        policy = ACTPolicy.from_pretrained(str(dst), local_files_only=True)
+    finally:
+        if prev_hub_offline is None:
+            os.environ.pop('HF_HUB_OFFLINE', None)
+        else:
+            os.environ['HF_HUB_OFFLINE'] = prev_hub_offline
+    policy.config.device = 'cpu'
+    policy.to('cpu').eval()
+
+    input_features = dict(policy.config.input_features)
+    image_keys = list(policy.config.image_features)
+    input_names = ['observation.state']
+    if 'observation.environment_state' in input_features:
+        input_names.append('observation.environment_state')
+    for key in image_keys:
+        if key not in input_names:
+            input_names.append(key)
+
+    class _OnnxChunkWrapper(torch.nn.Module):
+        def __init__(self, act_policy, names, imgs):
+            super().__init__()
+            self.act_policy = act_policy
+            self.names = list(names)
+            self.imgs = list(imgs)
+
+        def forward(self, *tensors):
+            batch = dict(zip(self.names, tensors))
+            if self.imgs:
+                batch['observation.images'] = [batch[key] for key in self.imgs]
+            return self.act_policy.model(batch)[0]
+
+    gen = torch.Generator().manual_seed(0)
+    inputs = {
+        name: torch.randn((1, *input_features[name].shape), generator=gen, dtype=torch.float32)
+        for name in input_names
+    }
+    wrapper = _OnnxChunkWrapper(policy, input_names, image_keys).eval()
+
+    tag = f'{os.getpid()}.{secrets.token_hex(4)}'
+    partial_onnx = dst / f'.model.onnx.{tag}'
+    partial_meta = dst / f'.ONNX_EXPORT.json.{tag}'
+    try:
+        with torch.no_grad():
+            torch_out = wrapper(*(inputs[name].clone() for name in input_names)).detach().cpu().numpy()
+            torch.onnx.export(
+                wrapper,
+                tuple(inputs[name].clone() for name in input_names),
+                str(partial_onnx),
+                input_names=input_names,
+                output_names=['action'],
+                opset_version=int(opset),
+                dynamo=False,
+                do_constant_folding=True,
+            )
+        external_data = partial_onnx.with_name(f'{partial_onnx.name}.data')
+        if external_data.exists():
+            external_data.unlink(missing_ok=True)
+            raise ValueError('ONNX export unexpectedly emitted external weight data')
+
+        onnx.checker.check_model(str(partial_onnx), full_check=True)
+
+        ov_parity_diff = None
+        if 'openvino' in sys.modules or importlib.util.find_spec('openvino') is not None:
+            import numpy as np
+            import openvino as ov
+
+            core = ov.Core()
+            compiled = core.compile_model(str(partial_onnx), 'CPU', {'PERFORMANCE_HINT': 'LATENCY'})
+            feed = {name: np.ascontiguousarray(inputs[name].numpy(), dtype=np.float32) for name in input_names}
+            ov_out = np.asarray(compiled(feed)[compiled.output(0)], dtype=np.float32)
+            ov_parity_diff = float(np.max(np.abs(ov_out - torch_out)))
+            if not np.isfinite(ov_parity_diff) or ov_parity_diff > parity_tol:
+                raise ValueError(f'OpenVINO ONNX parity {ov_parity_diff:.6g} exceeds tolerance {parity_tol}')
+
+        with partial_onnx.open('rb') as stream:
+            onnx_sha256 = hashlib.file_digest(stream, 'sha256').hexdigest()
+
+        meta = {
+            'schema': 'rosy.omx-onnx-export.v1',
+            'policy_revision': policy_revision,
+            'onnx_sha256': onnx_sha256,
+            'opset': int(opset),
+            'inputs': {name: list(inputs[name].shape) for name in input_names},
+            'output_name': 'action',
+            'output_shape': list(torch_out.shape),
+            'torch_version': torch.__version__,
+            'onnx_checker': True,
+            'openvino_parity_max_abs_diff': ov_parity_diff,
+        }
+        partial_meta.write_text(json.dumps(meta, indent=2) + '\n', encoding='utf-8')
+        partial_onnx.replace(dst / 'model.onnx')
+        partial_meta.replace(dst / 'ONNX_EXPORT.json')
+        return meta
+    except Exception:
+        partial_onnx.unlink(missing_ok=True)
+        partial_meta.unlink(missing_ok=True)
+        partial_onnx.with_name(f'{partial_onnx.name}.data').unlink(missing_ok=True)
         raise

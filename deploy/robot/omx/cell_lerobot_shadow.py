@@ -14,14 +14,19 @@ bus, runner or execution port (cell_act_shadow logs the chunk next to the real I
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import math
+import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 
 WEIGHTS = "model.safetensors"
+ONNX_MODEL = "model.onnx"
+ONNX_META = "ONNX_EXPORT.json"
 WARP = "cam_warp.json"
 UNITS = "UNITS.json"
 GOAL = "observation.environment_state"
@@ -112,8 +117,11 @@ def read_warp(path: Path, views: dict[str, tuple[int, int]]) -> dict | None:
     return {"camera": camera, "matrix": array, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def _load_lerobot(root: Path, device: str):
-    """predict(obs) -> (chunk, 6) array through the checkpoint's own pre/post processors (LeRobot 0.4.4)."""
+def _has_openvino() -> bool:
+    return "openvino" in sys.modules or importlib.util.find_spec("openvino") is not None
+
+
+def _load_torch(root: Path, device: str):
     import torch
     from lerobot.policies.act.modeling_act import ACTPolicy
     from lerobot.policies.factory import make_pre_post_processors
@@ -132,6 +140,32 @@ def _load_lerobot(root: Path, device: str):
         return np.asarray(post(chunk).detach().cpu().numpy(), dtype=np.float64).reshape(-1, len(JOINT_NAMES))
 
     return predict
+
+
+def _load_lerobot(root: Path, device: str):
+    """predict(obs) -> (chunk, 6) via OpenVINO pure-NumPy on CPU when valid model.onnx is present, else PyTorch."""
+    backend = os.environ.get("ROSY_ACT_BACKEND", "auto").strip().lower()
+    if backend not in ("auto", "torch", "openvino"):
+        raise ValueError(f"unsupported ROSY_ACT_BACKEND={backend!r}: expected 'auto', 'torch', or 'openvino'")
+    if backend == "torch":
+        return _load_torch(root, device)
+    if backend == "openvino":
+        if device != "cpu":
+            raise ValueError("ROSY_ACT_BACKEND='openvino' requires device='cpu'")
+        import cell_lerobot_openvino as ov_backend
+
+        return ov_backend.load_openvino(root, action_width=len(JOINT_NAMES))
+    onnx_present = (
+        (root / ONNX_MODEL).is_file()
+        or (root / ONNX_MODEL).is_symlink()
+        or (root / ONNX_META).is_file()
+        or (root / ONNX_META).is_symlink()
+    )
+    if device == "cpu" and onnx_present and _has_openvino():
+        import cell_lerobot_openvino as ov_backend
+
+        return ov_backend.load_openvino(root, action_width=len(JOINT_NAMES))
+    return _load_torch(root, device)
 
 
 class LeRobotShadow:
