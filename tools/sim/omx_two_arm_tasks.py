@@ -21,6 +21,7 @@ CARRY_CLEAR = .020       # container bottom clears the highest seated container 
 ARM_RADIUS, ARM_MARGIN = .03, .005  # capsule stand-in for a link; MuJoCo contacts are the real check
 RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on studs (floor enforced) and the temp lanes have a funnel
 RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only needed while single-contact deck meshes made boxes creep; see omx_two_arm_world)
+RELEASE_DROP_STAND = .009  # clears the 24-deg rear rail at y_l=-30 mm (+2.3 mm margin) during horizontal tool-down release
 LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
 BASE_SINGULARITY_R = .05  # matches cell_profile.yaml / ladder-cell.example.json singularity_radius_m
 CARRY_VIA_R = .09         # front-side (arm yaw) bypass radius: clears the 50 mm base singularity and stays outside the r08 ship hull
@@ -81,7 +82,8 @@ def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEA
     if pick:  # the container's true pose at pick time (teacher with ground truth, no perception)
         a["xy"], a["yaw"] = pick
     z_up = carry_z(layout, here, step["from"], step["to"])
-    za, zb = layout.hold_z(step["from"]), layout.hold_z(step["to"]) + (0 if b["kind"] == "belt" else drop_upper if b.get("layer", 0) > 0 else drop)  # released this far above its seat: 5 mm on studs and temp lanes, less on a lower container (a drop onto a container spins it)
+    drop_z = 0 if b["kind"] == "belt" else RELEASE_DROP_STAND if b["kind"] == "stand" else drop_upper if b.get("layer", 0) > 0 else drop
+    za, zb = layout.hold_z(step["from"]), layout.hold_z(step["to"]) + drop_z  # released this far above its seat
     z_app = za + layout.box[2] + CARRY_CLEAR if a["kind"] == "belt" and layout.choices.get("wait_pose") != "home" else z_up  # belt pick approach depends only on belt height when waiting beside the belt (wait_pose="home" crosses the ship)
     ya, yb = a["yaw"], a["yaw"] + wrap_pi(b["yaw"] - a["yaw"])
     via = _carry_via(layout.arms.get(step.get("arm")), a["xy"], b["xy"])

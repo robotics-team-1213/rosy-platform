@@ -40,7 +40,8 @@ FPS = 15
 COLOURS = dict(floor=[.41, .44, .46, 1], table=[.59, .43, .08, 1], belt=[.16, .18, .19, 1], plate=[.45, .60, .67, 1],
                plate_charcoal=[.20, .20, .20, 1], plate_sky=[.643, .859, .910, 1], pad=[.08, .09, .1, 1],
                ship=[.45, .60, .67, 1], container=[.62, .31, .14, 1], wall=[.76, .78, .78, 1],
-               black=[.11, .11, .09, 1], base=[.06, .065, .06, 1])
+               black=[.11, .11, .09, 1], base=[.06, .065, .06, 1], chute_navy=[.08, .15, .29, 1],
+               chute_gate=[.75, .28, .36, 1], dock_white=[.88, .88, .86, 1])
 
 
 @functools.lru_cache(maxsize=1)
@@ -147,6 +148,7 @@ class World:
                                pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["black"])
         self._ship(spec)
         self._temp(spec)
+        self._stand(spec)
 
     def _spec(self):
         L, c = self.layout, self.layout.choices
@@ -364,6 +366,57 @@ class World:
                     pts = ((hl, 0), (hl, seat), (hl + catch, seat + catch), (hl + catch + rim, seat + catch), (hl + catch + rim, 0))
                     spec.add_mesh(name=nm, uservert=[c for v in (v0, v1) for u, z in pts for c in (es * u, v, z)])
                     spec.worldbody.add_geom(name=nm, type=mujoco.mjtGeom.mjGEOM_MESH, meshname=nm, pos=[*xy, deck_z], quat=quat, rgba=proxy_rgba)
+
+    def _stand(self, spec):
+        """Conveyor-right r05 outbound stand: 2-color CAD visuals + white U-guide, and 24-deg chute + closed-gate collisions."""
+        stand = self.layout.sites.get("stand")
+        if not stand:
+            return
+        world, box, mesh = spec.worldbody, mujoco.mjtGeom.mjGEOM_BOX, mujoco.mjtGeom.mjGEOM_MESH
+        sx, sy = stand["xy"]
+        rail_z = sites.OUTBOUND_STAND_SPEC["rail_z_m"]
+        alpha = math.radians(24.0)
+        ca, sa, ta = math.cos(alpha), math.sin(alpha), math.tan(alpha)
+        z_pfloor = rail_z - (.0225 + .057 * ta)
+        cx, cy = sx + .015, sy  # chute local y_l=-15 mm maps to world x=sx
+        q_chute = [math.cos(-math.pi / 4), 0., 0., math.sin(-math.pi / 4)]
+        q_bot = [0., math.sqrt(.5), math.sqrt(.5), 0.]  # R_z(-90) @ R_y(180): bottom r05 plate inverted
+        vis = (
+            ("stand_chute_navy", "r05_outbound_chute_navy", [cx, cy, z_pfloor], q_chute, COLOURS["chute_navy"]),
+            ("stand_chute_sky", "r05_outbound_chute_sky", [cx, cy, z_pfloor], q_chute, COLOURS["plate_sky"]),
+            ("stand_chute_gate", "r05_outbound_chute_gate", [cx, cy, z_pfloor], q_chute, COLOURS["chute_gate"]),
+            ("stand_riser", "r05_outbound_riser_cradle", [cx, cy, max(0., z_pfloor - .033)], q_chute, COLOURS["black"]),
+            ("stand_plate_top", "r05_temp_slot_plate", [cx, cy, z_pfloor - .008], q_chute, COLOURS["chute_navy"]),
+        )
+        for gname, mname, pos, quat, rgba in vis:
+            spec.add_mesh(name=mname, file=self._asset(mname), scale=[.001] * 3)
+            world.add_geom(name=gname, type=mesh, meshname=mname, pos=pos, quat=quat, contype=0, conaffinity=0, rgba=rgba)
+        world.add_geom(name="stand_plate_bot", type=mesh, meshname="r05_temp_slot_plate",
+                       pos=[cx, cy, z_pfloor - .008], quat=q_bot, contype=0, conaffinity=0, rgba=COLOURS["chute_navy"])
+        for gname, pos, size in (
+            ("stand_dock_base", [cx + .071, cy, .005], [.015, .076, .005]),
+            ("stand_dock_l", [cx + .138, cy + .051, .005], [.082, .025, .005]),
+            ("stand_dock_r", [cx + .138, cy - .051, .005], [.082, .025, .005]),
+        ):
+            world.add_geom(name=gname, type=box, pos=pos, size=size, contype=0, conaffinity=0, rgba=COLOURS["dock_white"])
+        # Collisions: priority=2 low friction (0.22 < tan(24 deg)) overrides container friction 1.0 (cell_physics.yaml)
+        q_ramp = [math.cos(alpha / 2), 0., math.sin(alpha / 2), 0.]
+        half_len, half_t = .0735 / (2 * ca), .004
+        x_mid = cx + .00525
+        z_top_mid = rail_z - (x_mid - sx) * ta
+        kw = dict(type=box, priority=2, friction=[.22, .005, .0001], condim=4, rgba=[0, 0, 0, 0])
+        world.add_geom(name="stand_ramp", pos=[x_mid - half_t * sa, cy, z_top_mid - half_t * ca],
+                       size=[half_len, .0466, half_t], quat=q_ramp, **kw)
+        x_bf = cx + .0265
+        z_bf = rail_z - (x_bf - sx) * ta
+        world.add_geom(name="stand_gate_stop", pos=[x_bf + .004 * (ca + sa), cy, z_bf + .004 * (ca - sa)],
+                       size=[.004, .045, .004], quat=q_ramp, **kw)
+        for gname, sg in (("stand_wall_l", 1), ("stand_wall_r", -1)):
+            world.add_geom(name=gname, pos=[x_mid + .007 * sa, cy + sg * .0496, z_top_mid + .007 * ca],
+                           size=[half_len, .003, .007], quat=q_ramp, **kw)
+        z_back = z_pfloor + .0225 + .0735 * ta + .002
+        for gname, sg in (("stand_back_l", 1), ("stand_back_r", -1)):  # 30 mm center notch clears rear gripper pad
+            world.add_geom(name=gname, pos=[cx - .0345, cy + sg * .031, z_back], size=[.003, .016, .004], **kw)
 
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):

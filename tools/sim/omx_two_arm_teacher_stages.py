@@ -18,7 +18,8 @@ from cell_belt_handover import BeltHandover, Hold  # noqa: E402
 
 FPS = 15
 CARRY_SPEED = .05  # m/s; .08 let a 16 g container swing 10 deg in the jaws on the short reach to the near row
-OPEN_GAP = dict(belt=.042, ship=.033, temp=.038, outbound=.038)
+OPEN_GAP = dict(belt=.042, ship=.033, temp=.038, outbound=.038, stand=.038)
+STAND_CHUTE = dict(alpha_deg=24.0, slide_min_mm=18.0, slide_max_mm=44.0, z_tol_mm=3.5, tilt_tol_deg=4.5)
 HOLD_GAP = .030 - jaw.SQUEEZE_M
 SERVO_GAIN = 40.  # omx_physics design kp of every joint: about 0.16 s from command to arrival
 BELT_MISSING_AFTER_S = 20.  # a placed delivery that still shows nothing at the belt end after this much sim time is `missing`
@@ -46,11 +47,23 @@ def servo_values(model, ids):
 
 
 def judge_pose(world, data, cid, site, limits):
-    """Container against its target site: position, yaw (180 deg symmetric), height, tilt."""
+    """Container against its target site: position, yaw (180 deg symmetric), height, tilt (or 24-deg chute seat for `stand`)."""
     s = world.layout.sites[site]
     pos, yaw, tilt = world.pose(data, cid)
-    xy = float(np.linalg.norm(pos[:2] - s["xy"])) * 1000
     dyaw = abs(math.degrees(tasks.wrap_pi(yaw - s["yaw"])))
+    if s["kind"] == "stand":
+        dx_mm = float(pos[0] - s["xy"][0]) * 1000
+        dy_mm = float(abs(pos[1] - s["xy"][1])) * 1000
+        alpha = math.radians(STAND_CHUTE["alpha_deg"])
+        rail_z = sites.OUTBOUND_STAND_SPEC["rail_z_m"] - (float(pos[0]) - s["xy"][0]) * math.tan(alpha)
+        z_exp = rail_z + (world.layout.box[2] / 2.0) / math.cos(alpha)
+        dz = float(pos[2] - z_exp) * 1000
+        dtilt = abs(tilt - STAND_CHUTE["alpha_deg"])
+        ok = (STAND_CHUTE["slide_min_mm"] <= dx_mm <= STAND_CHUTE["slide_max_mm"] and dy_mm <= limits["xy_mm"]
+              and dyaw <= limits["yaw_deg"] and abs(dz) <= STAND_CHUTE["z_tol_mm"] and dtilt <= STAND_CHUTE["tilt_tol_deg"])
+        return dict(ok=bool(ok), xy_mm=round(dy_mm, 1), dx_mm=round(dx_mm, 1), dy_mm=round(dy_mm, 1),
+                    yaw_deg=round(dyaw, 1), z_mm=round(dz, 1), tilt_deg=round(tilt, 1))
+    xy = float(np.linalg.norm(pos[:2] - s["xy"])) * 1000
     dz = float(pos[2] - s["z"]) * 1000
     ok = xy <= limits["xy_mm"] and dyaw <= limits["yaw_deg"] and abs(dz) <= limits["z_mm"] and tilt <= limits["tilt_deg"]
     return dict(ok=bool(ok), xy_mm=round(xy, 1), yaw_deg=round(dyaw, 1), z_mm=round(dz, 1), tilt_deg=round(tilt, 1))

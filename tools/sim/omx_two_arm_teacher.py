@@ -401,7 +401,7 @@ class Teacher:
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("command", choices=["run", "validate"])
-    p.add_argument("task", choices=["stack", "stack-h2", "cell-stack", "rehandle", "outbound", "plan",
+    p.add_argument("task", choices=["stack", "stack-h2", "cell-stack", "rehandle", "outbound", "outbound-stand", "plan",
                                     "stack-t1", "stack-t2", "stack-t3", "stack-h2-t1", "stack-h2-t2", "stack-h2-t3",
                                     "cell-stack-t1", "cell-stack-t2", "cell-stack-t3"])
     p.add_argument("--tier", type=int, choices=list(tasks.TIERS), help="run or validate only tier 1 (1단/l0), 2 (2단/l1), or 3 (3단/l2)")

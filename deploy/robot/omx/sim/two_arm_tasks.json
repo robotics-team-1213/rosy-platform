@@ -577,6 +577,50 @@
      "arm": "arm_b"
     }
    ]
+  },
+  "outbound-stand": {
+   "supply": [
+    "bar-1"
+   ],
+   "start": {
+    "bar-2": "ship-h1r0-l0",
+    "bar-4": "tmp-a-2",
+    "bar-5": "ship-h2r0-l0"
+   },
+   "steps": [
+    {
+     "id": "o1",
+     "container": "bar-1",
+     "from": "belt",
+     "to": "stand",
+     "arm": "arm_a",
+     "outbound": true
+    },
+    {
+     "id": "o2",
+     "container": "bar-2",
+     "from": "ship-h1r0-l0",
+     "to": "stand",
+     "arm": "arm_a",
+     "outbound": true
+    },
+    {
+     "id": "o3",
+     "container": "bar-4",
+     "from": "tmp-a-2",
+     "to": "stand",
+     "arm": "arm_a",
+     "outbound": true
+    },
+    {
+     "id": "o4",
+     "container": "bar-5",
+     "from": "ship-h2r0-l0",
+     "to": "stand",
+     "arm": "arm_a",
+     "outbound": true
+    }
+   ]
   }
  }
 }

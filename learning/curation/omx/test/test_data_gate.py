@@ -118,3 +118,11 @@ def test_an_unchanged_camera_is_reviewed_only_for_real_sources(tmp_path):
     assert dg.gate(root, "arm_b", SIM)["counts"]["review"] == 0
     r = dg.gate(root, "arm_b", {"kind": "real", "layout": "random"})
     assert any("side: unchanged" in x for x in r["episodes"][0]["review"])
+
+
+def test_stand_destination_episode_passes_data_gate(tmp_path):
+    home_a = [0.023, -1.965, 1.666, 1.618, 1.41, 0.5]
+    root = make(tmp_path / "stand", task="Move the designated container from ship-h1r0-l0 to stand.", state0=home_a, gripper=0.5)
+    r = dg.gate(root, "arm_a", SIM)
+    assert r["counts"] == {"pass": 1, "review": 0, "reject": 0} and r["goals_passing"] == ["stand"]
+    assert dg.check_receipt(root) == [0]

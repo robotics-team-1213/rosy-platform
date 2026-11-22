@@ -1,6 +1,6 @@
 {
- "source": "Rosy/docs/research/ship-modular-2026-11-03: compact-ship-r08 (v15) + ship-berth (v15 quay & v16 berth-modular + belt-concave-stopper), berth-keyed v24 docking pieces, rosy-modeling/parts/omx-temp-slot (bridge v7 + plate v11) + PR33_C02_BASE, containers v3 body + real_door.py",
- "frame": "ship: x stern->bow, y port, z table, mm; arm_base/bridge: fixture axes at joint1 on table, mm; plate_v11: fixture axes at lane-2 on table, mm; container: body x 0..90 (doors +x), z 0..34.4",
+ "source": "Rosy/docs/research/ship-modular-2026-11-03: compact-ship-r08 (v15) + ship-berth (v15 quay & v16 berth-modular + belt-concave-stopper), berth-keyed v24 docking pieces, rosy-modeling/parts/omx-temp-slot (bridge v7 + plate v11) + PR33_C02_BASE, containers v3 body + real_door.py; rosy-modeling/parts/omx-temp-slot/outbound-stand (r05 outbound chute v6/v8, gate theta=0 chute-local)",
+ "frame": "ship: x stern->bow, y port, z table, mm; arm_base/bridge: fixture axes at joint1 on table, mm; plate_v11: fixture axes at lane-2 on table, mm; container: body x 0..90 (doors +x), z 0..34.4; chute: local x lateral (-48..48), y downhill (-35..68, T2 y=-15, gate stop y=26.5), z from upper r05 pocket floor, mm",
  "meshes": {
   "hull": {
    "faces": 25028,
@@ -284,6 +284,81 @@
      81.2706,
      84.8256,
      13.6
+    ]
+   ]
+  },
+  "r05_outbound_chute_navy": {
+   "faces": 4876,
+   "bounds_mm": [
+    [
+     -80.64,
+     -57.93,
+     0.0
+    ],
+    [
+     80.64,
+     68.0,
+     67.78
+    ]
+   ]
+  },
+  "r05_outbound_chute_sky": {
+   "faces": 1100,
+   "bounds_mm": [
+    [
+     -51.8,
+     -35.0,
+     29.23
+    ],
+    [
+     51.8,
+     42.0,
+     66.78
+    ]
+   ]
+  },
+  "r05_outbound_riser_cradle": {
+   "faces": 2470,
+   "bounds_mm": [
+    [
+     -88.76,
+     -73.0,
+     0.0
+    ],
+    [
+     88.76,
+     57.2,
+     31.0
+    ]
+   ]
+  },
+  "r05_temp_slot_plate": {
+   "faces": 1264,
+   "bounds_mm": [
+    [
+     -84.77,
+     -63.32,
+     0.0
+    ],
+    [
+     84.77,
+     53.2,
+     14.99
+    ]
+   ]
+  },
+  "r05_outbound_chute_gate": {
+   "faces": 676,
+   "bounds_mm": [
+    [
+     -40.15,
+     -4.0,
+     9.0
+    ],
+    [
+     40.15,
+     77.22,
+     31.3
     ]
    ]
   }
