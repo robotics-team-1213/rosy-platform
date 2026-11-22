@@ -20,7 +20,11 @@ checks everything again, for at most DEPART_QUEUE_WAIT_S from the first queue (q
 A named operator may still send it early with depart_s3; a release is used once per batch."""
 from __future__ import annotations
 
+import logging
+
 from fastapi import HTTPException
+
+_LOG = logging.getLogger(__name__)
 
 FOLD_MAX_AGE_S = 120.0  # an operator's depart may come a minute after the last park; older fold readings are not trusted
 DEPART_FOLD_AGE_S = 15.0  # the automatic send trusts only a fold reading this fresh (cell-quality posts every few s)
@@ -111,9 +115,14 @@ def continue_unload(state, enqueue) -> list[str]:
             continue
         _clearance, objects = _objects(last)
         if type(objects) is int and objects > 0:
-            made.append(enqueue({"robot_id": last["robot_id"], "task_id": f"{batch_id}-{len(rows) + 1}",
-                                 "depends_on": last["task_id"], "unload_batch_id": batch_id,
-                                 "unload_expected": last.get("unload_expected"), "unload_index": len(rows)})["task_id"])
+            spec = {
+                "robot_id": last["robot_id"], "task_id": f"{batch_id}-{len(rows) + 1}",
+                "depends_on": last["task_id"], "unload_batch_id": batch_id,
+                "unload_expected": last.get("unload_expected"), "unload_index": len(rows),
+            }
+            if last.get("emit_release_permit") is True:
+                spec["emit_release_permit"] = True
+            made.append(enqueue(spec)["task_id"])
     return made
 
 
@@ -133,8 +142,15 @@ def exit_target(rules, site) -> tuple[str, float, float, float] | None:
     return place_id, float(place.x), float(place.y), float(getattr(place, "yaw", 0.0) or 0.0)
 
 
-async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None) -> list[dict]:
+async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None,
+                      flush_port_events=None) -> list[dict]:
     """One pass: continue camera-driven unloads, then send each vehicle whose check held on two ticks to the exit."""
+    if flush_port_events is not None and any(t.get("pending_port_events") for t in state.omx_cell_tasks.values()):
+        try:
+            if await flush_port_events():
+                save()
+        except Exception:
+            _LOG.exception("pending port-event flush failed in depart_tick")
     continue_unload(state, enqueue)
     sent = []
     if getattr(state, "depart_ready", None) is None:
@@ -219,11 +235,14 @@ def install_unload_release_routes(app, ctx) -> None:
         return {**out, "departure": app.state.unload_releases.get(out.get("batch_id"))}
 
     def tick_args():
+        from fleet.server.pipeline_port_events import flush_pending_port_events_async
+
         active = ctx.active_map()
         return dict(console=ctx.console, rules=ctx.rules(), site=active[1],
                     enqueue=lambda spec: ctx._enqueue_one_task(active, {**ctx.CELL_TASK_PRESETS["s3_shuttle"], **spec}),
                     human_detected=bool(ctx._is_human_detected()), save=ctx._save_ledger, now=time.time(),
-                    task_log=getattr(ctx, "record_depart_task", None))
+                    task_log=getattr(ctx, "record_depart_task", None),
+                    flush_port_events=lambda: flush_pending_port_events_async(app))
 
     app.state.depart_tick = lambda: depart_tick(app.state, **tick_args())
     from fleet.server.sitemap.pipeline_repark import install_repark_routes

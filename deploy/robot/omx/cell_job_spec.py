@@ -123,18 +123,8 @@ JOBS = {
     "home": {
         "script": "cell_pipeline.py",
         "moving": True,
-        "argv": [
-            "--config", "{config}",
-            "--stage", "home",
-            "--library", "{library}",
-            "--operating-profile", "{operating_profile}",
-        ],
-        "params": {
-            "arm": _match(ARM),
-            "config": _match(FILE),
-            "library": _match(FILE),
-            "operating_profile": _safe_path,
-        },
+        "argv": ["--config", "{config}", "--stage", "home", "--library", "{library}", "--operating-profile", "{operating_profile}"],
+        "params": {"arm": _match(ARM), "config": _match(FILE), "library": _match(FILE), "operating_profile": _safe_path},
         "optional": {"operator": _match(NAME), "proposer": _match(NAME)},
     },
     "auto_pick": {
@@ -185,6 +175,7 @@ JOBS = {
             "roi": _roi,
             "site": _match(NAME),
             "source_kind": _match(re.compile(r"policy|sim_optimized|scripted_teacher")),
+            "paced_chunks": _bool,
         },
     },
     "stack_plan": {
@@ -336,6 +327,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         raise ValueError("operator must differ from proposer (D-1024)")
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")
+        if opt_checked.get("paced_chunks") and (mode != "act" or "n_action" in opt_checked):
+            raise ValueError("paced_chunks requires mode='act' without n_action")
         if "source_kind" in opt_checked:
             sk = opt_checked["source_kind"]
             if mode != "taught" and sk != "policy":
@@ -363,19 +356,14 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    if opt_checked.get("dry_run"):
-        args.append("--dry-run")
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks")):
+        if opt_checked.get(opt):
+            args.append(flag)
     if "catalog" in opt_checked:
         args += ["--catalog", opt_checked["catalog"]]
     if "roi" in opt_checked:
         args += ["--roi", *opt_checked["roi"]]
-    if "site" in opt_checked:
-        args += ["--site", opt_checked["site"]]
-    if "goal_site" in opt_checked:
-        args += ["--goal-site", opt_checked["goal_site"]]
-    if "model_calibration" in opt_checked:
-        args += ["--model-calibration", opt_checked["model_calibration"]]
-    for option in ("mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind"):
+    for option in ("site", "goal_site", "model_calibration", "mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind"):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
     if moves_arm(job, params):

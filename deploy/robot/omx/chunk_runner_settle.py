@@ -7,6 +7,7 @@ Single Responsibility:
 """
 from __future__ import annotations
 
+import math
 from pathlib import Path
 import sys
 import time
@@ -82,6 +83,25 @@ def arm_queue_release(runner, frames, *, force: bool = False, empty_margin: floa
     return True
 
 
+def _empty_jaw_floor(runner) -> float | None:
+    lib = getattr(runner, "library", None)
+    if not isinstance(lib, dict):
+        return None
+    try:
+        closed = library_gripper_closed(lib)
+    except ValueError:
+        closed = None
+    raw, stop = lib.get("jaw_empty_stop"), None
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        try:
+            cand = float(raw)
+            if math.isfinite(cand) and -100.0 <= cand <= 100.0:
+                stop = cand
+        except OverflowError:
+            pass
+    return max(closed, stop) if closed is not None and stop is not None else (stop if closed is None else closed)
+
+
 def confirm_grip_release(runner, sent, present, *, committed: bool, empty_margin: float) -> None:
     """Track mid-trajectory held-jaw openings and drop release HOLD only after confirmed jaw opening."""
     if not committed or not getattr(runner, "_fresh_present", False) or present is None or len(present) < 6:
@@ -103,7 +123,9 @@ def confirm_grip_release(runner, sent, present, *, committed: bool, empty_margin
                 runner._committed_grip = (prev_sent, True)
             runner._held_jaw = None
         else:
-            runner._held_jaw = float(present[5]) if float(present[5]) > sent_grip + empty_margin else None
+            floor = _empty_jaw_floor(runner)
+            grip_ref = sent_grip if floor is None else max(sent_grip, floor)
+            runner._held_jaw = float(present[5]) if float(present[5]) > grip_ref + empty_margin else None
             return
     if runner.human_hold_latched:
         return
@@ -135,13 +157,13 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
     release = runner.chunk.startswith("release")
     gripper_still = runner.last_grip is not None and abs(present[5] - runner.last_grip) < 0.3
     runner.last_grip = present[5]
-    settle_tol = cr_attr("SETTLE_TOL", SETTLE_TOL)
-    settle_s = cr_attr("SETTLE_S", SETTLE_S)
-    empty_margin = cr_attr("EMPTY_MARGIN", EMPTY_MARGIN)
-    policy_closed = runner.chunk == "policy" and runner.target[5] <= library_gripper_closed(runner.library) + empty_margin
+    settle_tol, settle_s, empty_margin = cr_attr("SETTLE_TOL", SETTLE_TOL), cr_attr("SETTLE_S", SETTLE_S), cr_attr("EMPTY_MARGIN", EMPTY_MARGIN)
+    empty_floor = _empty_jaw_floor(runner)
+    policy_closed = runner.chunk == "policy" and runner.target[5] <= max(
+        library_gripper_closed(runner.library), empty_floor if empty_floor is not None else -math.inf
+    ) + empty_margin
     body_still = (
-        runner.last_body is not None
-        and max(abs(a - b) for a, b in zip(present[:5], runner.last_body)) < 0.08
+        runner.last_body is not None and max(abs(a - b) for a, b in zip(present[:5], runner.last_body)) < 0.08
         and error <= settle_tol + min(runner.pace_floor, 0.8)
     )
     runner.last_body = list(present[:5])
@@ -152,23 +174,14 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
     else:
         settled = (error <= settle_tol or body_still) and not runner.jitter["shaking"]
     jaws_ready = (
-        gripper_still
-        if grasp or policy_closed
-        else (
-            abs(present[5] - runner.target[5]) <= 0.25
-            or (gripper_still and now - runner.settle_since >= 0.4)
-        )
-        if release
+        gripper_still if grasp or policy_closed else
+        (abs(present[5] - runner.target[5]) <= 0.25 or (gripper_still and now - runner.settle_since >= 0.4)) if release
         else True
     )
     if (settled and jaws_ready) or now - runner.settle_since >= settle_s:
         fields = dict(
-            command=f"run {runner.chunk}",
-            ok=True,
-            settled=settled,
-            paced_ticks=runner.paced_ticks,
-            peak_lag=round(runner.peak_lag, 2),
-            over_ticks=runner.over_ticks,
+            command=f"run {runner.chunk}", ok=True, settled=settled,
+            paced_ticks=runner.paced_ticks, peak_lag=round(runner.peak_lag, 2), over_ticks=runner.over_ticks,
             **({"damped_ticks": runner.damped_ticks} if runner.damped_ticks else {}),
             **({"sway": runner.sway_peak} if getattr(runner, "sway_peak", None) else {}),
             **({"speed_low": round(runner.speed_low, 2)} if getattr(runner, "speed_low", 1.0) < 1.0 else {}),
@@ -178,12 +191,11 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         if (runner.chunk == "park" or runner.chunk.endswith("; park")) and settled and getattr(runner, "_release_until", None) is None:
             runner.home_since = now
         backed_out = runner.chunk == "retreat" and settled
-        if (runner.chunk == "park" or runner.chunk.endswith("; park") or backed_out) and (
-            runner.fault or ""
-        ).startswith("contact"):
+        if (runner.chunk == "park" or runner.chunk.endswith("; park") or backed_out) and (runner.fault or "").startswith("contact"):
             runner.fault = None
+        grip_floor = float(runner.target[5]) if empty_floor is None else max(float(runner.target[5]), empty_floor)
         if grasp or policy_closed:
-            by_position = present[5] > runner.target[5] + empty_margin
+            by_position = present[5] > grip_floor + empty_margin
             fields["holding"] = by_position
             health = runner.read_health()
             if health:
@@ -198,7 +210,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
             runner.chunk in ("lift_pick", "park", "goto above_place", "descend_place")
             or runner.chunk.startswith(("lift_pick", "goto above_place", "descend_place"))
         ):
-            runner.holding = present[5] > runner.target[5] + empty_margin
+            runner.holding = present[5] > grip_floor + empty_margin
             fields["holding"] = runner.holding
         runner.chunk, runner.last_grip, runner.last_body = None, None, None
         unconfirmed_release = getattr(runner, "_release_until", None) is not None
@@ -268,14 +280,8 @@ def tick_or_report(runner, command_label: str) -> None:
         runner.tick()
     except Exception as error:
         try:
-            runner.status(
-                {
-                    "command": command_label,
-                    "ok": False,
-                    "fault": f"session ended: {type(error).__name__}: {error}"[:1000],
-                    "t": round(time.time(), 3),
-                }
-            )
+            runner.status({"command": command_label, "ok": False, "t": round(time.time(), 3),
+                           "fault": f"session ended: {type(error).__name__}: {error}"[:1000]})
         except Exception:  # noqa: BLE001
             pass
         raise
@@ -313,13 +319,9 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
                 if not runner.human_hold_latched and not getattr(runner, "signals", None):
                     stop_cmd = raw_stop.strip()
                     fold_on_stop = stop_cmd == "stop fold" or (
-                        stop_cmd != "stop now"
-                        and prm.get(
-                            runner.params,
-                            "runner.fold_on_stop",
-                            bool(runner.operating_context and runner.operating_context.get("scope") == "hardware"),
-                        )
-                    )
+                        stop_cmd != "stop now" and prm.get(
+                            runner.params, "runner.fold_on_stop",
+                            bool(runner.operating_context and runner.operating_context.get("scope") == "hardware")))
                     if not fold_on_stop and getattr(runner, "_release_until", None) is None:
                         runner.report(command=raw_stop, ok=True, present=runner.target)
                         return False
@@ -379,10 +381,8 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
         if runner.human_hold_latched or runner.fault or getattr(motion, "held", None):
             try:
                 runner.report(
-                    command="start",
-                    ok=False,
+                    command="start", ok=False, present=runner.target,
                     error=runner.fault or ("human hold latched" if runner.human_hold_latched else "guard hold active"),
-                    present=runner.target,
                 )
             except OSError as error:
                 if not runner.human_hold_latched:

@@ -140,7 +140,7 @@ def resolve_cell_ab_site(
         eff_tier = tier_val if tier_val is not None else 1
         return {
             "sim_site": "pallet" if (allow_generic_pallet and site_str == "pallet" and tier_val is None) else f"pallet-l{eff_tier - 1}",
-            "site_id": None, "slot_id": None,
+            "site_id": None, "slot_id": None, "wire_ref": None,
             "base_site": "pallet", "area": "pallet", "col": None, "row": None,
             "tier": eff_tier, "arms": ("arm_a", "arm_b"), "is_legacy_pallet": True, "encoded_tier": None,
         }
@@ -149,7 +149,7 @@ def resolve_cell_ab_site(
         if tier_val is not None and tier_val != enc:
             raise ValueError("INVALID_CELL_TASK_INPUT")
         return {
-            "sim_site": site_str, "site_id": None, "slot_id": None,
+            "sim_site": site_str, "site_id": None, "slot_id": None, "wire_ref": None,
             "base_site": "pallet", "area": "pallet", "col": None, "row": None,
             "tier": enc, "arms": ("arm_a", "arm_b"), "is_legacy_pallet": True, "encoded_tier": enc,
         }
@@ -157,7 +157,7 @@ def resolve_cell_ab_site(
         arms = ("arm_a",) if site_str == "temp_plate_a" else ("arm_b",) if site_str == "temp_plate_b" else ("arm_a", "arm_b")
         resolved_t = tier_val if tier_val is not None else 1
         return {
-            "sim_site": site_str, "site_id": None, "slot_id": None, "base_site": site_str,
+            "sim_site": site_str, "site_id": None, "slot_id": None, "wire_ref": None, "base_site": site_str,
             "area": site_str, "col": None, "row": None, "tier": resolved_t, "arms": arms,
             "is_legacy_pallet": True, "encoded_tier": None,
         }
@@ -196,6 +196,7 @@ def resolve_cell_task_targets(
             "src_site_id": None,
             "dst_site": str(raw_dst or "belt"),
             "dst_site_id": None,
+            "dst_wire_ref": None,
             "dst_area": str(raw_dst or "belt"),
             "dst_slot": None,
             "tier": tier,
@@ -234,6 +235,7 @@ def resolve_cell_task_targets(
         "src_site_id": src["site_id"],
         "dst_site": dst["sim_site"],
         "dst_site_id": dst["site_id"],
+        "dst_wire_ref": dst.get("wire_ref"),
         "dst_area": dst["area"],
         "dst_slot": slot_info,
         "tier": dst["tier"],
@@ -251,6 +253,8 @@ def expand_multi_tier_specs(
     if not isinstance(tiers, list) or not (1 <= len(tiers) <= 3):
         raise ValueError("INVALID_CELL_TASK_INPUT")
     if any(type(t) is not int or t not in (1, 2, 3) for t in tiers) or tiers != sorted(set(tiers)):
+        raise ValueError("INVALID_CELL_TASK_INPUT")
+    if len(tiers) > 1 and any(k in body for k in ("object_ref", "identity", "identity_observation_ref")):
         raise ValueError("INVALID_CELL_TASK_INPUT")
 
     raw_dst = body.get("dst_site")

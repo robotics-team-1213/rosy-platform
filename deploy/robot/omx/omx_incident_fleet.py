@@ -206,13 +206,17 @@ def report_for(source_id: str, session_id: str, f: dict, d: dict, acted):
     shown["windup_hits"] = shown["windup_hits"][:5]
     shown["fault_records"] = [Path(p).name for p in f["fault_records"]][-3:]
     shown["fault_record_kinds"] = list(f.get("fault_record_kinds") or [])[-3:]  # D-1047: paired with the names above
-    frames = []
+    frames, seen_roles = [], set()
     for path in f["frames"]:
+        role = Path(path).stem.rsplit("-", 1)[-1]
+        if role not in ("top", "side") or role in seen_roles:
+            continue
         data = Path(path).read_bytes() if Path(path).is_file() else b""
         if data[:2] == b"\xff\xd8" and len(data) <= ARM_INCIDENT_FRAME_BYTES:
+            seen_roles.add(role)
             frames.append(
                 {
-                    "role": Path(path).stem.rsplit("-", 1)[-1],
+                    "role": role,
                     "sha256": hashlib.sha256(data).hexdigest(),
                     "jpeg_b64": base64.b64encode(data).decode(),
                 }

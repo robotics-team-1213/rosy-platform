@@ -153,6 +153,7 @@ def test_single_canonical_wire_and_sim_destinations_normalize_consistently(
     assert task["dst_site"] == expected_sim
     assert task["dst_site_id"] == expected_id
     assert task["dst_area"] == expected_area
+    assert task["dst_wire_ref"].startswith(f"{expected_area}-r")
     assert task["tier"] == expected_tier
     assert task["arm_id"] == expected_arm
     handoff, done = _complete_one(client, owner_ev, task["task_id"])

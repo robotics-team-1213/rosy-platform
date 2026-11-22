@@ -31,6 +31,7 @@ FLEET_SAMPLE = [
     "applications/fleet/test/test_browser_adapters.py",
 ]
 FLEET = FLEET_SAMPLE + [
+    "test/test_browser_harness_geometry_browser.py",
     "test/test_integrated_control_backend_browser.py",
     "test/test_measured_calibration_browser.py",
     "test/test_motor_health_ui_browser.py",
