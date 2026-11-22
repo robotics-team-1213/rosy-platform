@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 import pytest
 import uvicorn
+from fleet_cockpit_browser import open_robot_workspace
 from browser_harness import browser_tests_enabled, launch_options, safe_listener
 
 from fakes import FakeRelay, FakeRobot, fresh_power_health
@@ -124,9 +125,7 @@ def _login(playwright, origin):
 
 
 def _card(page, robot_id):
-    page.locator('[data-context-tab="status"]').click()
-    page.locator("#robot-choice").select_option(robot_id)
-    return page.locator(f'#robot-workspace article[data-robot-id="{robot_id}"]')
+    return open_robot_workspace(page, robot_id)
 
 
 def _raw_words(page):
