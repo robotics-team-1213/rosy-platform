@@ -8,7 +8,6 @@ import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 

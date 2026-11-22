@@ -78,6 +78,14 @@ def test_d358_egress_default_deny_ssrf_images_and_redaction():
                    "AIzaSyD1234567890abcdef1234567890", "svc_offline_tok_0123456789abcdef"):
         assert leaked not in cleaned["msg"]
 
+    cleaned_meta = pol.sanitize_payload({
+        "max_tokens": 512, "prompt_tokens": 99, "access_token": "raw",
+        "msg": "see https://example.com/docs and D:/Dev/secret.txt key=sk_live_abcdefgh123456",
+    })
+    assert cleaned_meta["max_tokens"] == 512 and cleaned_meta["prompt_tokens"] == 99 and cleaned_meta["access_token"] == "[REDACTED_SECRET]"
+    assert "https://example.com/docs" in cleaned_meta["msg"]
+    assert "D:/Dev/secret.txt" not in cleaned_meta["msg"] and "sk_live_abcdefgh123456" not in cleaned_meta["msg"]
+
 
 def test_d878_strict_schema_request_and_fail_closed_parsing():
     for bad_schema in (
@@ -99,6 +107,7 @@ def test_d878_strict_schema_request_and_fail_closed_parsing():
         },
     }
     req = build_strict_chat_request("openai", "gpt-4o-mini", [{"role": "user", "content": "host 192.168.1.10 stalled"}], schema, name="fallback_decision")
+    assert req["max_tokens"] == 1024
     assert req["response_format"]["json_schema"]["strict"] is True
     assert req["response_format"]["json_schema"]["schema"]["additionalProperties"] is False
     assert req["response_format"]["json_schema"]["schema"]["properties"]["meta"]["additionalProperties"] is False

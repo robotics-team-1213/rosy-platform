@@ -1,7 +1,6 @@
 """Canonical OMX start-pose service: spec serving, SQLite job queue, concurrency/lock orchestration."""
 from __future__ import annotations
 
-import hashlib
 import hmac
 import json
 import math

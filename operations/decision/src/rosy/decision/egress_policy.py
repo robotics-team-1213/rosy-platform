@@ -12,13 +12,17 @@ from urllib.parse import urlparse
 from rosy.decision.structured_output import ollama_chat, ollama_reply, openai_chat, openai_reply
 
 _SECRET_KEY_RE = re.compile(r"(?:token|secret|password|api[-_]?key|apikey|authorization|cookie|bearer)", re.I)
+_TOKEN_COUNT_KEYS = frozenset({
+    "max_tokens", "max_completion_tokens", "prompt_tokens", "completion_tokens",
+    "input_tokens", "output_tokens", "total_tokens", "token_count", "tokens",
+})
 _TOKEN_RE = re.compile(
-    r"(?i:\bBearer\s+[A-Za-z0-9._\-+/=]{8,})|sk-[A-Za-z0-9._\-]{12,}|(?:hf|ghp|xoxb|rosy|svc)_[A-Za-z0-9._\-]{8,}|AIza[A-Za-z0-9_\-]{20,}"
+    r"(?i:\bBearer\s+[A-Za-z0-9._\-+/=]{8,})|sk-[A-Za-z0-9._\-]{12,}|(?:sk|hf|ghp|xoxb|rosy|svc)_[A-Za-z0-9._\-]{8,}|AIza[A-Za-z0-9_\-]{20,}"
 )
 _IPV4_RE = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3})\b")
-_IPV6_RE = re.compile(r"\b(?:fd[0-9a-f]{2}|fe80):[0-9a-f:]+\b", re.I)
+_IPV6_RE = re.compile(r"\b(?:f[cd][0-9a-f]{2}|fe80):[0-9a-f:]+\b", re.I)
 _POSIX_PATH_RE = re.compile(r"/(?:home|Users|var|etc|tmp|opt|mnt|root|srv|usr|private)/[A-Za-z0-9._/\-]+")
-_WIN_PATH_RE = re.compile(r"[A-Za-z]:[/\\](?:[^\s\"'`]+)")
+_WIN_PATH_RE = re.compile(r"""(?<![A-Za-z0-9_])[A-Za-z]:(?:\\|/(?!/))(?:[^\s"'`]+)""")
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 _INTERNAL_SUFFIXES = (".localhost", ".local", ".internal", ".ts.net")
 _TAILNET_NET = ipaddress.ip_network("100.64.0.0/10")
@@ -52,6 +56,13 @@ def _redact_str(text: str) -> str:
     return _WIN_PATH_RE.sub("[REDACTED_PATH]", out)
 
 
+def _is_secret_key(key: str) -> bool:
+    kl = key.lower()
+    if kl in _TOKEN_COUNT_KEYS or kl.endswith(("_tokens", "_token_count", "_token_limit")):
+        return False
+    return bool(_SECRET_KEY_RE.search(kl))
+
+
 def _redact_obj(value: Any) -> Any:
     if isinstance(value, str):
         return _redact_str(value)
@@ -59,7 +70,7 @@ def _redact_obj(value: Any) -> Any:
         return [_redact_obj(v) for v in value]
     if isinstance(value, dict):
         return {
-            k: ("[REDACTED_SECRET]" if _SECRET_KEY_RE.search(str(k)) else _redact_obj(v))
+            k: ("[REDACTED_SECRET]" if _is_secret_key(str(k)) else _redact_obj(v))
             for k, v in value.items()
         }
     return value
@@ -237,7 +248,10 @@ def build_strict_chat_request(
     strict_schema = normalize_strict_schema(schema)
     clean_msgs = pol.sanitize_payload(messages)
     body = ollama_chat(model, clean_msgs, strict_schema, num_predict=max_tokens) if prov == "ollama" else openai_chat(model, clean_msgs, strict_schema, name=name, max_tokens=max_tokens)
-    return pol.sanitize_payload(body)
+    encoded = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    if len(encoded) > pol.max_payload_bytes:
+        raise EgressDeniedError("PAYLOAD_TOO_LARGE", f"payload {len(encoded)} bytes > {pol.max_payload_bytes}")
+    return body
 
 
 def parse_strict_chat_reply(
