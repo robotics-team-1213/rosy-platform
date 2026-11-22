@@ -95,7 +95,8 @@ def test_precomputes_during_current_playback_or_stops_when_late(tmp_path, late):
             if command == "run policy" and not started.is_set():
                 started.set()
                 assert inferred.wait(1)
-            return {"ok": True, "state": state}
+            extra = {"human_hold_latched": True, "torque_hold_commanded": True} if command == "human-hold" else {}
+            return {"command": command, "ok": True, "settled": True, "state": state, **extra}
 
         def policy_state(self):
             if started.is_set():
@@ -148,7 +149,8 @@ def test_hybrid_holds_at_act_budget_without_a_verified_handoff(tmp_path):
 
     def act(command):
         calls.append(command)
-        return {"ok": True, "holding": True, "state": [0] * 6, "handoff": {"triggered": False}}
+        extra = {"command": "human-hold", "human_hold_latched": True, "torque_hold_commanded": True} if command == "human-hold" else {}
+        return {"command": command, "ok": True, "settled": True, "holding": True, "state": [0] * 6, "handoff": {"triggered": False}, **extra}
 
     cell = SimpleNamespace(act=act)
     shadow = SimpleNamespace(image_views=(), sim_rule={}, chunk_size=16)
@@ -175,7 +177,7 @@ def test_taught_fallback_runs_the_existing_folded_sequence(tmp_path):
 
     def act(command):
         calls.append(command)
-        return {"ok": True, "settled": True, "holding": "run release_place" not in calls, "state": [0] * 5 + [49]}
+        return {"command": command, "ok": True, "settled": True, "holding": "run release_place" not in calls, "state": [0] * 5 + [49]}
 
     cell = SimpleNamespace(act=act)
     assert run_taught(cell, path, dry_run=True, authorize=None, log=lambda _: None)["result"] == "dry_run"
@@ -212,7 +214,7 @@ def test_hybrid_lifts_then_runs_only_the_taught_carry(tmp_path, monkeypatch):
     def act(command):
         calls.append(command)
         released = command in RETURN_HELD[2:] and command != "park" or calls.count("park") > 1
-        return {"ok": True, "holding": not released, "settled": True,
+        return {"command": command, "ok": True, "holding": not released, "settled": True,
                 "state": [0] * 5 + [49] if released else state, "target": target}
 
     handoff = CellHandoff(config, "belt", path, library, 51, tmp_path)
@@ -1259,7 +1261,8 @@ def test_park_ack_ok_requires_settled_and_run_timed_stops_when_unsettled(tmp_pat
 
     calls, rows = [], []
     cell = SimpleNamespace(act=lambda cmd: (calls.append(cmd) or {
-        "ok": True, "settled": False if cmd == "run policy" else True, "state": [0] * 6,
+        "command": cmd, "ok": True, "settled": False if cmd == "run policy" else True, "state": [0] * 6,
+        **({"human_hold_latched": True, "torque_hold_commanded": True} if cmd == "human-hold" else {}),
     }))
     shadow = SimpleNamespace(image_views=(), sim_rule={}, chunk_size=16)
     res = run_timed(cell, shadow, {"fps": 30, "chunks": {}, "gripper_closed": 0}, tmp_path,

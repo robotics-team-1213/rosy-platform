@@ -57,7 +57,7 @@ def hold_runner(runner, present, reason, *, human: bool, empty_margin: float) ->
         stop = getattr(getattr(getattr(runner, "robot", None), "motion", None), "stop_streaming", None)
         if callable(stop):
             stop()
-        runner.torque_hold_commanded = False
+        runner.torque_hold_commanded, runner._human_hold_acked_req = False, None
         runner._human_hold_ack_pending = True
         runner.pending.clear()
         runner.retreat_frames = []
@@ -107,12 +107,13 @@ def halt_thermal_or_stall(runner, present, reason: str, *, empty_margin: float) 
 
 
 def human_hold_overload(runner, present) -> None:
-    """A guard overload while a human hold is latched: report once that a person is needed."""
-    if not getattr(runner, "_human_hold_overload_reported", False):
-        runner._human_hold_overload_reported, runner._human_hold_ack_pending = True, False
+    """A guard overload while a human hold is latched: report once per hold request that a person is needed."""
+    runner.torque_hold_commanded, runner._human_hold_ack_pending, runner._human_hold_acked_req, req = False, False, None, getattr(runner, "_human_hold_req", None)
+    if getattr(runner, "_human_hold_overload_reported", None) != (True, req):
+        runner._human_hold_overload_reported = (True, req)
         try:
             runner.report(command="human-hold", ok=False, error="guard overload during human hold; person needed",
-                          person_needed=True, present=present)
+                          person_needed=True, present=present, **({"hold_req": req} if req else {}))
         except OSError as error:
             safe_stderr({"command": "human-hold", "status_write_failed": str(error)[:300]})
 
@@ -150,9 +151,9 @@ def human_hold_ack(runner, present, *, hold_sent: bool = True) -> None:
     """The first tick after a human hold: torque is now commanded, report it once."""
     if not hold_sent or not runner._human_hold_ack_pending:
         return
-    runner._human_hold_ack_pending, runner.torque_hold_commanded = False, True
+    runner._human_hold_ack_pending, runner.torque_hold_commanded, runner._human_hold_acked_req = False, True, getattr(runner, "_human_hold_req", None)
     try:
-        runner.report(command="human-hold", ok=True, person_needed=True, present=present)
+        runner.report(command="human-hold", ok=True, person_needed=True, present=present, **({"hold_req": runner._human_hold_acked_req} if runner._human_hold_acked_req else {}))
     except OSError as error:
         safe_stderr({"command": "human-hold", "status_write_failed": str(error)[:300]})
 

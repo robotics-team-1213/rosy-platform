@@ -96,8 +96,7 @@ def _hold(runner, present, why: str, label: str = "HOLD") -> bool:
             _stderr({"command": "interrupt", "ignored_release": early, "reason": "SIGUSR2 before the HOLD"})
     error = f"{label}: {why}; a person must support the arm, then kill -USR2 the runner"
     _write_hold(runner, {"hold": True, "error": error, "label": label})
-    _say(runner, present, ok=False, hold=True, person_needed=True, error=error, **({"partial_guard_stop": True}
-                                                                                   if label != "HOLD" else {}))
+    _say(runner, present, ok=False, hold=True, person_needed=True, error=error, **({"partial_guard_stop": True} if label != "HOLD" else {}))
     return False
 
 
@@ -114,6 +113,7 @@ def _guard_stopped(runner):
 
 def _guard_verdict(runner, torque: dict, cause: str) -> bool:
     """Approve exit only when all 6 motors explicitly read torque 0."""
+    runner.torque_hold_commanded, runner._human_hold_ack_pending, runner._human_hold_acked_req = False, False, None
     state = runner._interrupt
     pairs = [[torque[k] for k in (m, n) if k in torque] for n, m in zip(NAMES, MOTORS)] if isinstance(torque, dict) and "error" not in torque else []
     vals = [p[0] for p in pairs if p and all(type(v) is int and v in (0, 1) for v in p) and len(set(p)) == 1]
@@ -138,16 +138,17 @@ def _hold_tick(runner) -> bool:
     if torque is None:
         try:
             sent = send_hold_action(runner.robot, runner.target)
-            if runner._human_hold_ack_pending:
-                runner._human_hold_ack_pending, runner.torque_hold_commanded = False, True
             try:
                 present, fresh = runner.present(), True  # refresh last_present for live.json; a failed read keeps the hold
             except Exception:  # noqa: BLE001
                 present, fresh = getattr(runner, "last_present", None) or runner.target, False
             shed_interrupt_hold(runner, sent, present, fresh=fresh)
+            if runner._human_hold_ack_pending:
+                runner._human_hold_ack_pending, runner.torque_hold_commanded, runner._human_hold_acked_req = False, True, getattr(runner, "_human_hold_req", None)
             if runner.ticks % max(1, round(getattr(runner, "fps", 30))) == 0:
                 check_hold_health(runner, MOTORS)
         except Exception as error:  # noqa: BLE001
+            runner.torque_hold_commanded, runner._human_hold_ack_pending, runner._human_hold_acked_req = False, False, None
             torque, cause = _guard_stopped(runner), f"{type(error).__name__}: {error}"
             state["guard_cause"], runner.shed_clear = cause, None
             if torque is None and not state.get("tick_error"):
@@ -176,8 +177,8 @@ def _start(runner, *, may_move: bool) -> bool:
     _new_state(runner, may_move)
     runner.pending.clear()
     present, read = _pose(runner)
-    if runner.human_hold_latched:
-        return _hold(runner, present, "human hold already latched")
+    if runner.human_hold_latched or getattr(runner, "_fifo_hold_seen", False):
+        return _hold(runner, present, "human hold already latched" if runner.human_hold_latched else "human hold requested via FIFO")
     if not read:
         return _hold(runner, present, "the pose could not be read")
     gated = halt_policy_gate(runner)
@@ -193,8 +194,8 @@ def _start(runner, *, may_move: bool) -> bool:
 
 def _verify(runner, state) -> bool:
     present, read = _pose(runner)
-    if runner.human_hold_latched or not read:
-        return _hold(runner, present, "human hold latched during verify" if runner.human_hold_latched else "the pose could not be read")
+    if runner.human_hold_latched or getattr(runner, "_fifo_hold_seen", False) or not read:
+        return _hold(runner, present, "human hold latched during verify" if runner.human_hold_latched else ("human hold requested via FIFO" if getattr(runner, "_fifo_hold_seen", False) else "the pose could not be read"))
     last, state["last"] = state["last"], list(present[:5])
     still = last is not None and max(abs(a - b) for a, b in zip(present[:5], last)) < STILL_UNITS
     state["still"] = state["still"] + 1 if still else 0
@@ -214,7 +215,7 @@ def _verify(runner, state) -> bool:
 def _fold(runner, present) -> bool:
     state, home = runner._interrupt, _home(runner)
     held = getattr(getattr(runner.robot, "motion", None), "held", None)
-    hard_fault = runner.fault and not runner.fault.startswith("contact")
+    hard_fault = bool(runner.fault and (not runner.fault.startswith("contact") or "overload-hold" in runner.fault))
     if not state["may_move"] or home is None or held or hard_fault:
         why = ("the guard is not tracking yet" if not state["may_move"] else "no home chunk" if home is None
                else f"guard hold {held}" if held else f"fault {runner.fault}")
@@ -265,14 +266,15 @@ def interrupt_step(runner, *, may_move: bool = True) -> bool:
         return False
     if state["phase"] == "verify":
         return _verify(runner, state)
+    if getattr(runner, "_fifo_hold_seen", False):
+        return _hold(runner, _pose(runner)[0], "human hold requested via FIFO")
     if getattr(runner, "_stopped", False):  # the park ended (settled or out of settle time)
         runner._stopped = False
         present, read = _pose(runner)
         if read and getattr(runner, "_park_settled", False) and folded(present, _home(runner)) and getattr(runner, "_release_until", None) is None:
             _say(runner, present, ok=True, folded=True, reason="folded home and settled, torque goes OFF")
             return _approve(runner, "park settled and home")
-        return _hold(runner, present, "the fold ended unsettled or short of home" if read else
-                     "the pose could not be read after the fold")
+        return _hold(runner, present, "the fold ended unsettled or short of home" if read else "the pose could not be read after the fold")
     if runner.chunk != "park":  # a contact or strain hold stopped the park
         return _hold(runner, _pose(runner)[0], f"the fold stopped ({runner.fault})")
     if runner.clock() > state["deadline"]:
@@ -285,8 +287,13 @@ def _interrupt_tick(runner, label: str, tick_or_report) -> bool:
         return True
     state = getattr(runner, "_interrupt", None)
     if state is None:
+        if getattr(runner, "_fifo_hold_seen", False) and not runner.human_hold_latched:
+            hold_cmd, runner._fifo_hold_seen = runner._fifo_hold_seen if isinstance(runner._fifo_hold_seen, str) else "human-hold", False
+            runner.command(hold_cmd)
         tick_or_report(runner, label)
         return False
+    if state["phase"] != "hold" and getattr(runner, "_fifo_hold_seen", False):
+        _hold(runner, _pose(runner)[0], "human hold requested via FIFO")
     if state["phase"] == "hold":
         return _hold_tick(runner)
     runner.tick()
@@ -298,13 +305,13 @@ def interrupt_tick(runner, label: str, tick_or_report) -> bool:
     try:
         return _interrupt_tick(runner, label, tick_or_report)
     except Exception as error:  # noqa: BLE001
-        if (not getattr(runner, "signals", None) and not getattr(runner, "human_hold_latched", False)
-                and not getattr(getattr(getattr(runner, "robot", None), "motion", None), "failed", False)):
+        if not getattr(runner, "signals", None) and not getattr(runner, "human_hold_latched", False) and not getattr(getattr(getattr(runner, "robot", None), "motion", None), "failed", False):
             raise  # no interrupt and no failed native guard: the existing stop (close_device), unchanged
         return emergency_hold(runner, error)
 
 
 def emergency_hold(runner, error) -> bool:
+    runner.torque_hold_commanded, runner._human_hold_ack_pending, runner._human_hold_acked_req = False, False, None
     state = getattr(runner, "_interrupt", None) or _new_state(runner, False)
     cause = f"{type(error).__name__}: {error}"
     torque = _guard_stopped(runner)

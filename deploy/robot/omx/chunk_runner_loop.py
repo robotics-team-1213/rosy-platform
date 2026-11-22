@@ -25,11 +25,19 @@ def run(runner, lines) -> None:
         if arrived:
             runner.last_input, runner.idle_parks = started, 0
         runner.pending += arrived
-        if getattr(runner, "signals", None):  # interrupt first: it folds or holds, so a FIFO human-hold is dropped
+        hold_lines = [line.strip() for line in runner.pending if line.strip().split()[:1] == ["human-hold"]]
+        if getattr(runner, "signals", None):  # interrupt first: it folds or holds, while a FIFO human-hold still forces HOLD
+            if hold_lines:
+                runner._fifo_hold_seen = hold_lines[-1]
+                hold_words = hold_lines[-1].split()
+                if len(hold_words) <= 2:
+                    runner._human_hold_req, runner._human_hold_ack_pending, runner._human_hold_acked_req = (
+                        hold_words[1] if len(hold_words) == 2 else None), True, None
             runner.pending.clear()
-        if "human-hold" in runner.pending:
+        if hold_lines or (getattr(runner, "_fifo_hold_seen", False) and not getattr(runner, "signals", None) and not runner.human_hold_latched):
+            hold_cmd = hold_lines[-1] if hold_lines else (runner._fifo_hold_seen if isinstance(runner._fifo_hold_seen, str) else "human-hold")
             runner.pending.clear()  # preempt even a queued stop or park
-            runner.command("human-hold")
+            runner.command(hold_cmd)
         while (
             len(runner.pending) > 1
             and runner.pending[0].strip().split()[:1] in (["state"], ["episode"])
@@ -65,6 +73,7 @@ def run(runner, lines) -> None:
                         "fault": runner.fault,
                         "human_hold_latched": runner.human_hold_latched,
                         "torque_hold_commanded": runner.torque_hold_commanded,
+                        **({"hold_req": runner._human_hold_acked_req} if getattr(runner, "_human_hold_acked_req", None) else {}),
                         **({"interrupt": runner._interrupt["phase"], "pid": os.getpid()} if getattr(runner, "_interrupt", None) else {}),
                         "health": runner.health,
                         **({"jitter": runner.jitter} if runner.jitter["shaking"] else {}),
