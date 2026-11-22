@@ -74,6 +74,25 @@ class NavigationTransport:
         return await self._post("/api/v1/navigation/goal/lease",
                                 {"correlation_id": correlation_id, "ttl_s": ttl_s})
 
+    async def navigation_route(self, points: list[dict], *,
+                               correlation_id: str | None = None,
+                               lease_ttl_s: float | None = None,
+                               expected_boot_id: str | None = None,
+                               expected_owner_generation: int | None = None) -> dict:
+        """D-1009: drive ordered pass/stop points in one native run (`POST /api/v1/navigation/route`)."""
+        if not points:
+            raise ValueError("ROUTE_POINTS_REQUIRED")
+        body: dict = {"points": points}
+        if correlation_id is not None:
+            body["correlation_id"] = correlation_id
+        if lease_ttl_s is not None:
+            body["lease_ttl_s"] = lease_ttl_s
+        if expected_boot_id is not None or expected_owner_generation is not None:
+            if expected_boot_id is None or expected_owner_generation is None:
+                raise ValueError("NATIVE_OWNER_EPOCH_PAIR_REQUIRED")
+            body.update(expected_boot_id=expected_boot_id, expected_owner_generation=expected_owner_generation)
+        return await self._post("/api/v1/navigation/route", body)
+
     async def navigation_handover(self, *, expected_boot_id, run_id, expected_owner_generation, correlation_id,
                                   expected_map_grid_id: str | None = None):
         if (type(expected_owner_generation) is not int or expected_owner_generation < 0

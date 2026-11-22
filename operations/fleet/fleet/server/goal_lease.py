@@ -91,12 +91,27 @@ class GoalLeases(dict):
         """Send one navigation goal; leased with the capability (a lease is renewed by correlation
         id, so a goal without an attempt id gets one), otherwise exactly as before. ``source``
         defaults to ``dispatch`` with an attempt id, else ``operator``."""
+        return await self._dispatch(
+            robot_id, client, caps, lambda options: client.navigation_goal(x, y, yaw, **options),
+            correlation_id, source, task_id)
+
+    async def send_route(self, robot_id: str, client, caps: Optional[dict], points: list[dict],
+                         correlation_id: Optional[str] = None, source: Optional[str] = None,
+                         task_id: Optional[str] = None) -> dict:
+        """Send one D-1009 pass/stop route with the exact same goal lease, stop-fence and cancellation rules."""
+        return await self._dispatch(
+            robot_id, client, caps, lambda options: client.navigation_route(points, **options),
+            correlation_id, source, task_id)
+
+    async def _dispatch(self, robot_id: str, client, caps: Optional[dict], sender: Callable[[dict], object],
+                        correlation_id: Optional[str], source: Optional[str] = None,
+                        task_id: Optional[str] = None) -> dict:
         source = source or ("dispatch" if correlation_id is not None else "operator")
         if source not in SOURCES:
             raise ValueError(f"unknown goal lease source {source!r}")
-        self._submission_generation[robot_id] = self._submission_generation.get(robot_id, 0)+1
+        gen = self._submission_generation[robot_id] = self._submission_generation.get(robot_id, 0) + 1
         stop = self.stop_token(robot_id)
-        self.pop(robot_id, None)
+        prev = self.pop(robot_id, None)
         options = {}
         lease = {"state": "unbounded"}
         if self.ttl_s > 0 and goal_lease_supported(caps):
@@ -115,16 +130,19 @@ class GoalLeases(dict):
         try:
             try:
                 with guard:
-                    result = await client.navigation_goal(x, y, yaw, **options)
+                    result = await sender(options)
                     if task_id is not None and self.bind_native_receipt is not None:
                         self.bind_native_receipt(task_id, correlation_id, robot_id, result,
                                                  expected_boot_id=options.get('expected_boot_id'))
-            except (Exception, asyncio.CancelledError):
+            except (Exception, asyncio.CancelledError) as exc:
                 if stop != self.stop_token(robot_id):
                     try:
                         await client.navigation_cancel()
                     except Exception:
                         logger.exception("late goal cancel for %s failed", robot_id)
+                elif (prev is not None and getattr(exc, "code", None) == "NAVIGATION_ACTIVE"
+                      and self._submission_generation.get(robot_id) == gen and robot_id not in self):
+                    self[robot_id] = prev
                 raise
             if (stop != self.stop_token(robot_id)
                     and not (isinstance(result, dict) and result.get("accepted") is False)):
