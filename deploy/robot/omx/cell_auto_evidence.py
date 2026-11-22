@@ -160,7 +160,7 @@ def pre_motion_frame(cell, config, calibration, catalog, source, source_roi, sou
     try:
         before = frame_receipt("top", previous=source_frame)
         frame = save_frame_receipt(path, before)
-        if config.get("_fleet_task"):  # D-1057: the before frame of the zone check; other carries take no extra read
+        if cell_zone_verification.zone_check_enabled(config):  # D-1057: before frame of the zone check
             before["before_side"] = cell_zone_verification.before_side(cell, config)
     except (OSError, ValueError, KeyError, TypeError):
         return None, None, "fresh camera frame unavailable"

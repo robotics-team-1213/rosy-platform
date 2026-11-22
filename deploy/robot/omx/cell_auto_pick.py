@@ -362,21 +362,10 @@ def run_auto(
 def main(argv=None):
     import cell_choices
     import cell_preflight
-    from cell_auto_setup import open_cell, parser
+    from cell_auto_setup import open_cell, pick_parser, validate_pick_args
 
-    ap = parser(__doc__)
-    ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one carry (D-911)")
-    ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
-    ap.add_argument("--task-id", help="correlate this one carry with a Fleet task; does not authorize completion")
-    ap.add_argument("--handoff-lease-id", help="Fleet lease paired with --task-id")
-    ap.add_argument("--scenario-id", help="scenario identifier from the cell task")
-    ap.add_argument("--goal", help="operator goal sentence; shadow only: the model's reading is logged, the carry order is unchanged")
-    ap.add_argument("--return-held", action="store_true", help="arm already holds an object at home: place it at --dest without picking")
-    args = ap.parse_args(argv)
-    if args.commissioning != args.person_at_switch:
-        raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
-    if bool(args.task_id) != bool(args.handoff_lease_id) or (args.task_id and args.dry_run):
-        raise SystemExit("--task-id and --handoff-lease-id require each other and a real single carry")
+    args = pick_parser(__doc__).parse_args(argv)
+    validate_pick_args(args)
     config, cell, calibration_path, work = open_cell(args, args.commissioning)
     dark = cell_preflight.ready(cell.frame, config)
     if dark:

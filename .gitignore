@@ -151,3 +151,6 @@ contracts/foundation/config/*.lock
 # SD operator preferences contain local paths; credentials remain in DPAPI.
 /sd-setup.local.json
 /sd-setup.local.json.tmp-*
+
+# D-1072 cell-job-api bearer tokens (example env template stays tracked).
+**/cell-job-*.token
