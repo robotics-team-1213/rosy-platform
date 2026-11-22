@@ -4698,7 +4698,8 @@
         "applications/fleet/web/sitemap/site-map-sources.js",
         "applications/fleet/web/sitemap/drawing-import.js",
         "applications/fleet/web/sitemap/extraction-review.js",
-        "applications/fleet/web/sitemap/map-authoring.js"
+        "applications/fleet/web/sitemap/map-authoring.js",
+        "applications/fleet/web/sitemap/map-editor.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -5057,6 +5058,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/site-map"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/map-editor.js",
+          "expression": "/api/fleet/site-points",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-points"
           ]
         }
       ],
@@ -5504,6 +5513,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/reality-check"
+        },
+        {
+          "id": "GET:/api/fleet/site-points",
+          "method": "GET",
+          "path": "/api/fleet/site-points",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_points_routes.py",
+          "handler": "fleet_site_points",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_points.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/site-points"
         }
       ],
       "flows": [

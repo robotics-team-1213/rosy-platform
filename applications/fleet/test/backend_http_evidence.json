@@ -2073,6 +2073,14 @@
         "test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_query"
       ],
       "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8"
+    },
+    "GET:/api/fleet/site-points": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_points.py",
+        "test_site_points_full_and_port_views_stage_a_fail_closed"
+      ],
+      "source_revision": "d882c3d42bd2583f7894e488c955ad194045bcce"
     }
   }
 }

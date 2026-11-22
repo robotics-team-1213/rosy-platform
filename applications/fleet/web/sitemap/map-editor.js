@@ -8,10 +8,123 @@ import {splitRoad, joinRoads} from '/console/assets/map-topology.js';
 const $ = id => document.getElementById(id);
 const SVG = 'http://www.w3.org/2000/svg';
 export function svgElement(name, attrs, parent) {
-  const node = document.createElementNS(SVG, name);
+  const doc = parent?.ownerDocument || document;
+  const node = doc.createElementNS(SVG, name);
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
   parent.append(node);
   return node;
+}
+
+const finitePose = (pose) => Boolean(pose && Number.isFinite(pose.x) && Number.isFinite(pose.y));
+
+export function drawSitePointsOverlay(svg, sitePoints, view) {
+  svg.querySelector('#site-points-layer')?.remove();
+  if (!sitePoints || !view) return;
+  const layer = svgElement('g', {id: 'site-points-layer'}, svg);
+  const lineOf = pts => pts.map(([x, y]) => view.toPx(x, y).join(',')).join(' ');
+  const wp = sitePoints.coordinate_frames?.vehicle_world?.waypoints || {};
+  const stopsById = Object.fromEntries((sitePoints.vehicle_stops || []).map(s => [s.id, s]));
+
+  // Planned S3 intake approach chain
+  const s3Stop = stopsById.S3;
+  const s3App = s3Stop?.berth?.approach_pose || wp.S3_intake?.planned_approach_ref_m;
+  if (finitePose(wp.S3_intake?.pose) && finitePose(s3App)) {
+    svgElement('polyline', {class: 'sp-planned-link', points: lineOf([[s3App.x, s3App.y], [wp.S3_intake.pose.x, wp.S3_intake.pose.y]])}, layer);
+    if (!s3Stop?.berth?.nav2_berth_ready) {
+      const [ax, ay] = view.toPx(s3App.x, s3App.y);
+      svgElement('polygon', {class: 'sp-planned-stop', points: `${ax},${ay - 6} ${ax + 6},${ay} ${ax},${ay + 6} ${ax - 6},${ay}`}, layer);
+      svgElement('text', {class: 'sp-label', x: ax + 8, y: ay - 6}, layer).textContent = 'S3_app(예정)';
+    }
+  }
+
+  // Outbound branch chain: J_stand -> S_OUT_app -> S_OUT
+  const jPose = wp.J_stand_branch?.pose;
+  const outApp = wp.S_OUT_outbound?.planned_approach_ref_m;
+  const outPose = wp.S_OUT_outbound?.pose || wp.S_OUT_outbound?.ceiling_ref_m;
+  if (finitePose(jPose) && finitePose(outPose)) {
+    const chain = finitePose(outApp) ? [[jPose.x, jPose.y], [outApp.x, outApp.y], [outPose.x, outPose.y]]
+      : [[jPose.x, jPose.y], [outPose.x, outPose.y]];
+    svgElement('polyline', {class: 'sp-planned-link', points: lineOf(chain)}, layer);
+    if (wp.J_stand_branch?.planned) {
+      const [jx, jy] = view.toPx(jPose.x, jPose.y);
+      svgElement('polygon', {class: 'sp-planned-stop', points: `${jx},${jy - 5} ${jx + 5},${jy} ${jx},${jy + 5} ${jx - 5},${jy}`}, layer);
+      svgElement('text', {class: 'sp-label', x: jx - 40, y: jy + 14}, layer).textContent = 'J_stand';
+    }
+    if (!wp.S_OUT_outbound?.in_active_map) {
+      const [ox, oy] = view.toPx(outPose.x, outPose.y);
+      svgElement('circle', {class: 'sp-planned-stop', cx: ox, cy: oy, r: 6}, layer);
+      svgElement('text', {class: 'sp-label', x: ox + 9, y: oy + 4}, layer).textContent = 'S_OUT(예정)';
+    }
+  }
+
+  // Stop role tags for verified intake/pickup stops
+  const roleTag = (id, stop) => {
+    if (id === 'S1') return wp.S1_pickup?.dual_role_exit_place ? '수령·출구' : '수령';
+    if (id === 'S3') return stop?.berth?.nav2_berth_ready ? '하역(접안)' : '하역(존미등록)';
+    if (id === 'S_OUT') return stop?.in_active_map ? '반출' : null;
+    return null;
+  };
+  for (const id of ['S1', 'S3', 'S_OUT']) {
+    const stop = stopsById[id];
+    const tag = roleTag(id, stop);
+    if (tag && finitePose(stop?.pose)) {
+      const [px, py] = view.toPx(stop.pose.x, stop.pose.y);
+      svgElement('text', {class: 'sp-role-tag', x: px + 12, y: py + 12}, layer).textContent = `[${tag}]`;
+    }
+  }
+
+  // Workcell reference marker (arm_s_base 180° / cell_ab_fixture -90° separated mm frames)
+  const hint = sitePoints.coordinate_frames?.cell_s_arm_base?.world_origin_hint_m;
+  if (Array.isArray(hint) && hint.length === 2 && Number.isFinite(hint[0]) && Number.isFinite(hint[1])) {
+    const [cx, cy] = view.toPx(hint[0], hint[1]);
+    const refDot = svgElement('polygon', {class: 'sp-cell-ref', points: `${cx},${cy - 6} ${cx + 6},${cy} ${cx},${cy + 6} ${cx - 6},${cy}`}, layer);
+    svgElement('title', {}, refDot).textContent = 'arm_s(180°)·cell_ab(-90°) 독립 mm 원점 · vehicle_tray는 arm_s_top 호모그래피 보정(+12.85 cm 오차) 필요';
+    svgElement('text', {class: 'sp-label', x: cx + 8, y: cy - 6}, layer).textContent = 'arm_s 180°·cell_ab -90°';
+  }
+}
+
+export function renderSitePointsSummary(panelEl, bodyEl, sitePoints) {
+  if (!panelEl || !bodyEl) return;
+  if (!sitePoints) {
+    panelEl.hidden = true;
+    bodyEl.replaceChildren();
+    return;
+  }
+  const doc = panelEl.ownerDocument || document;
+  panelEl.hidden = false;
+  const dl = doc.createElement('dl');
+  dl.className = 'legend-terms';
+  const zr = sitePoints.zone_rules || {};
+  const lc = zr.layer_counts || {};
+  const conv = sitePoints.conveyor_transfer || {};
+  const rows = [
+    ['3좌표계 축 변환', 'world_261026(m) · arm_s_base(180°, mm, tray X+12.85 cm 호모그래피) · cell_ab_fixture(-90°, mm, top.jpg 180°, s1=h2·s2=h1)'],
+    ['컨베이어 브리지', `belt-in(x≥134 mm) → v24 스토퍼(x=${conv.out_point?.stop_x_mm ?? 158} mm) → belt-out · Handover/Occ 연결 ${conv.handover_state_machine?.wired_to_runtime ? '완료' : '전'} · D-429 제어 금지`],
+    ['3단 37자리·재취급', `1층 ${lc.t1 ?? 13} + 2층 ${lc.t2 ?? 12} + 3층 ${lc.t3 ?? 12} = ${lc.total ?? 37}자리 · temp_a/b 각 9칸 LIFO · belt·stand 대피 금지`],
+  ];
+  for (const [k, v] of rows) {
+    const dt = doc.createElement('dt');
+    dt.textContent = k;
+    const dd = doc.createElement('dd');
+    dd.textContent = v;
+    dl.append(dt, dd);
+  }
+  const ul = doc.createElement('ul');
+  ul.className = 'sp-stage-list';
+  for (const st of sitePoints.end_to_end_stages || []) {
+    const li = doc.createElement('li');
+    const gapText = (st.gaps || []).length ? st.gaps.join(' · ') : '준비됨';
+    li.textContent = `${st.label || st.stage} (${st.runtime_status}): ${gapText}`;
+    ul.append(li);
+  }
+  bodyEl.replaceChildren(dl, ul);
+}
+
+export async function loadSitePointsOverlay(request, active, panelEl, bodyEl) {
+  let data = null;
+  try { data = active ? await request('/api/fleet/site-points') : null; } catch { data = null; }
+  renderSitePointsSummary(panelEl, bodyEl, data);
+  return data;
 }
 
 export function drawFacilities(svg, map, view) {
