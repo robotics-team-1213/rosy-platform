@@ -52,7 +52,7 @@ from guarded_native_cli import main, run_native  # noqa: E402,F401  (re-exported
 from guarded_native_track import body_command  # noqa: E402
 from guarded_native_lag import LagModel, check_following, follows_far  # noqa: E402
 from teleop_speed import STAGES, valid as valid_stage  # noqa: E402
-from guarded_native_mount import GRIP_ENDS, check_floor, check_grip_map, check_mount  # noqa: E402,F401  (GRIP_ENDS, check_mount re-exported)
+from guarded_native_mount import GRIP_ENDS, check_floor, check_grip_map, check_mount, validate_targets  # noqa: E402,F401  (GRIP_ENDS, check_mount re-exported)
 from guarded_native_probe import is_recoverable_telemetry, probe_hardware_errors, probe_held_overload, safe_print  # noqa: E402
 from guarded_native_effort import (  # noqa: E402
     alignment_deadline, check_effort, check_hardware_errors, commit_holds, read_body_pwm,
@@ -100,17 +100,19 @@ class NativeJointMotion:
         self.held, self.held_once, self.shed_load = {}, set(), shed_load
         self.squeeze = {}  # the gripper's own saturation clock while it squeezes a box (never a freeze, never a cut)
         self.grip_way = None  # after a relaxed squeeze: +1/-1 = the squeeze side of the jaws (no lead applied) until the trigger re-arms it
-        self.last_effort_time = self.last_effort_gap_at = self.last_present = self.prev_target = self.alignment_deadline = None
+        self.last_effort_time = self.last_effort_gap_at = self.last_present = self.prev_target = self.prev_mapped = self.alignment_deadline = None
         self.monitor = monitor
         self.boundary = self.resuming = self.grip_ready = False
-        self.stall = {}
+        self.stall, self.clamped = {}, set()
 
     def stop_streaming(self) -> None:
         """Zero streaming momentum on HOLD/rejection so the next hold send never coasts past the held pose."""
         self.velocity = dict.fromkeys(self.active, 0.0)
         self.v_ff_ema = dict.fromkeys(BODY, 0.0)
+        self.clamped.clear()
         if self.command is not None:
             self.prev_target = dict(self.command)
+            self.prev_mapped = dict(self.command)
 
     def has_stall_hold(self):
         return any(hold.get("stall") for hold in self.held.values())
@@ -237,35 +239,14 @@ class NativeJointMotion:
         target = {n: max(v, self.floor.get(n, v)) for n, v in mapped.items()}
         for name in () if self.has_stall_hold() else BODY:  # a stall hold is not following the Leader: the command is frozen, torque stays, the arm
             # holds; the comparison would only cut it. Release needs the Leader back within STALL_RELEASE_DEG, and the 100 degree test then applies again
-            if max(abs(mapped[name] - current[name]), abs(target[name] - current[name])) >= 100 * TICKS_PER_DEGREE - 1e-9 and not follows_far(self, name, target):  # raw and floored
+            if max(abs(mapped[name] - current[name]), abs(target[name] - current[name])) >= 100 * TICKS_PER_DEGREE - 1e-9 and not follows_far(self, name, mapped):  # raw and floored
                 raise ValueError(
                     f"{name}: difference >=100 degrees; leader={leader[name]}, "
                     f"target={target[name]}, current={current[name]}, offset={self.offsets[name]}, "
                     f"previous_command={self.command}; align manually with torque OFF"
                 )
-        for bus, values in (() if self.teacher else ((self.leader, {**mapped, "gripper": leader["gripper"]}),)) + ((self.follower, current),):
-            for name, value in values.items():
-                calibration = bus.calibration[name]
-                if not calibration.range_min <= value <= calibration.range_max:
-                    raise ValueError(f"{name}: outside calibrated range")
-        if self.teacher:
-            target["gripper"] = leader["gripper"]
-        elif not self.body_only:
-            if self.grip_map:  # trigger fraction (clamped to its commissioned ends) onto the Follower's jaw ends
-                ends = self.grip_map
-                part = (leader["gripper"] - ends["leader_closed"]) / (ends["leader_open"] - ends["leader_closed"])
-                target["gripper"] = round(ends["follower_closed"]
-                                          + max(0.0, min(1.0, part)) * (ends["follower_open"] - ends["follower_closed"]))
-            else:
-                grip = normalized(self.leader, {"gripper": leader["gripper"]})["gripper.pos"]
-                grip_id = self.follower.motors["gripper"].id
-                target["gripper"] = self.follower._unnormalize({grip_id: grip})[grip_id]
-        for name, value in target.items():
-            calibration = self.follower.calibration[name]
-            if not calibration.range_min <= value <= calibration.range_max:
-                raise ValueError(f"{name}: target outside follower calibrated range")
-        if not self.body_only and abs(target["gripper"] - current["gripper"]) >= 100 * TICKS_PER_DEGREE - 1e-9:
-            raise ValueError("gripper motor travel >=100 degrees; align manually with torque OFF")
+        validate_targets(self, leader, mapped, target, current)
+        raw_mapped = {**mapped, "gripper": leader["gripper"]}
         self._check_hardware_errors()
         if self.pwm_limits is None:
             use_sync = "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table")
@@ -298,11 +279,11 @@ class NativeJointMotion:
         if self.command is None:
             deadline = alignment_deadline(started, target, current)
             current = self._seed({n: current[n] for n in self.active}, target, started, mapped)
-            return {"started": started, "seed": current, "alignment_deadline": deadline, "target": dict(target)}
+            return {"started": started, "seed": current, "alignment_deadline": deadline, "target": dict(target), "mapped": raw_mapped}
         elapsed = min(now - self.last_time, MAX_STEP_S)
         command, state = self._body_command(target, current, elapsed, now, staged=staged_holds)  # every mode: align at 1 deg/s, then track
         return {"started": started, "command": command, "goals": self._round_goals(command), "time": now,
-                "body_state": state, "target": dict(target), "allow_stale_hold": allow_stale_hold,
+                "body_state": state, "target": dict(target), "mapped": raw_mapped, "allow_stale_hold": allow_stale_hold,
                 "staged_holds": staged_holds}
 
     def _check_hardware_errors(self):
@@ -370,6 +351,7 @@ class NativeJointMotion:
             if self.lag is not None:
                 self.lag.seed(prepared["seed"], self.clock())
             self.prev_target = dict(prepared.get("target") or self.command)
+            self.prev_mapped = dict(prepared.get("mapped") or self.prev_target)
             self.alignment_deadline = prepared["alignment_deadline"]
             self.last_time = self.clock()
             return normalized(self.follower, self.command)
@@ -379,6 +361,8 @@ class NativeJointMotion:
         self.command = prepared["command"]
         if "target" in prepared:
             self.prev_target = dict(prepared["target"])
+        if "mapped" in prepared:
+            self.prev_mapped = dict(prepared["mapped"])
         self.last_time = prepared["time"]
         if "body_state" in prepared:
             was_tracking = self.tracking

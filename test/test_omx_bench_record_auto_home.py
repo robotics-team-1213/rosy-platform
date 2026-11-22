@@ -1209,3 +1209,103 @@ def test_prepare_and_link_only_reject_bimanual_and_replay_and_link_command_check
     (folder / 'link' / 'state.json').write_text(json.dumps({'state': 'recording', 'episode': 1, 'seq': 2}), encoding='utf-8')
     bench.episode_rerecord({'arm': 'arm_a'})
     assert json.loads((folder / 'link' / 'control.json').read_text(encoding='utf-8')) == {'seq': 3, 'cmd': 'rerecord', 'episode': 1}
+
+
+def test_restart_cameras_and_resolve_config_work_with_arm_s_live_config(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    (bench.prep / 'record-config-arm-s-live.json').write_text(json.dumps({
+        'robot': {
+            'type': 'omx_follower',
+            'cameras': {
+                'top': {'index_or_path': '/dev/v4l/by-id/rosy-arm_s_jieli'},
+                'front': {'index_or_path': '/dev/v4l/by-id/rosy-arm_s_wrist'},
+            },
+        }
+    }))
+    import bench_record_guard as guard
+    import bench_record_leader as leader_mod
+    assert guard.resolve_record_config(bench.prep, 'arm_s').name == 'record-config-arm-s-live.json'
+    monkeypatch.setattr(leader_mod, 'camera_labels', lambda robot: {'arm_s_top': 'top', 'arm_s_wrist': 'front'})
+    ran = []
+    bench.run = lambda *a: (ran.append(a), SimpleNamespace(stdout='active\n' if a[0] == 'is-active' else '', returncode=0))[1]
+    res = bench.restart_cameras({'arm': 'arm_s'})
+    assert [a for a in ran if a[0] == 'restart'] == [
+        ('restart', 'rosy-omx-camera@arm_s_top.service'),
+        ('restart', 'rosy-omx-camera@arm_s_wrist.service'),
+        ('restart', 'rosy-omx-camera-view.service'),
+    ]
+    assert res['ok'] is True
+
+
+def test_home_before_start_runs_before_align_and_rejects_invalid_requests(tmp_path, monkeypatch):
+    bench, body, _, _ = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr('bench_live_preview.SHM', tmp_path / 'missing')
+    order = []
+
+    def fake_home(req):
+        order.append(('go_home', req))
+        return {'status': 'idle', 'home_moved': [req['arm']]}
+
+    monkeypatch.setattr(bench, 'go_home', fake_home)
+    monkeypatch.setattr(bench, 'align_leader', lambda *a, **kw: order.append(('align_leader',)))
+    for bad in (dict(body, home_before_start='yes'), dict(body, arm='arm_ab', home_before_start=True),
+                dict(body, replay='x.parquet', home_before_start=True)):
+        with pytest.raises(ValueError):
+            bench.start(bad)
+    assert order == []
+    bench.start(dict(body, align_leader=True, hands_off_leader=True, home_before_start=True))
+    assert order[:2] == [('go_home', {'arm': 'arm_a', 'include_leader': False}), ('align_leader',)]
+    finished(bench)
+    bench2, body2, _, commands2 = _setup(tmp_path / 'abort', monkeypatch)
+
+    def aborting_home(req):
+        with bench2.lock:
+            bench2.abort = True
+        return {'status': 'idle', 'home_moved': [req['arm']]}
+
+    monkeypatch.setattr(bench2, 'go_home', aborting_home)
+    with pytest.raises(ValueError, match='정지 요청'):
+        bench2.start(dict(body2, home_before_start=True))
+    assert commands2 == []
+    bench3, body3, _, commands3 = _setup(tmp_path / 'fail', monkeypatch)
+    monkeypatch.setattr(bench3, 'go_home', lambda req: (_ for _ in ()).throw(ValueError('HOME_UNFOLDED')))
+    with pytest.raises(ValueError, match='HOME_UNFOLDED'):
+        bench3.start(dict(body3, home_before_start=True))
+    assert commands3 == []
+    bench4, body4, _, _ = _setup(tmp_path / 'fold', monkeypatch)
+    seen4 = []
+    monkeypatch.setattr(bench4, 'go_home', lambda req: (seen4.append(req), {'status': 'idle', 'home_moved': [req['arm']]})[1])
+    bench4.start(dict(body4, home_before_start=True, fold_unfolded=True))
+    assert seen4 == [{'arm': 'arm_a', 'include_leader': False, 'fold_unfolded': True}]
+    finished(bench4)
+
+
+def test_arm_connectivity_checks_dev_paths_and_teleop_speed_api_updates_stage(tmp_path, monkeypatch):
+    import bench_record_guard as guard
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    dev_f = tmp_path / 'dev_f'
+    dev_f.write_text('')
+    monkeypatch.setattr(guard.Path, 'exists', lambda p: str(p) == '/dev/live_arm_s_f')
+    (bench.prep / 'record-config-arm-s-live.json').write_text(json.dumps({
+        'robot': {'type': 'omx_follower', 'port': '/dev/live_arm_s_f'},
+        'teleop': {'port': '/dev/missing_arm_s_l'},
+    }))
+    conn_s = guard.arm_connectivity(bench.prep, 'arm_s')
+    assert conn_s == {'connected': True, 'follower_connected': True, 'leader_connected': False}
+    arms = bench.arms_status()['arms']
+    assert arms['arm_s']['connected'] is True and arms['arm_s']['leader_connected'] is False
+    assert bench.choices()['arm_connectivity']['arm_s']['connected'] is True
+
+    st = bench.set_teleop_speed({'arm': 'arm_s', 'stage': 90})
+    assert json.loads((bench.prep / 'teleop-speed-arm_s.json').read_text()) == {'stage': 90}
+    assert st['teleop_speed_declared']['arm_s']['stage'] == 90
+    st2 = bench.set_teleop_speed({'arm': 'arm_s', 'stage': None})
+    assert not (bench.prep / 'teleop-speed-arm_s.json').exists()
+    assert st2['teleop_speed_declared']['arm_s']['stage'] is None
+    with pytest.raises(ValueError, match='단일 팔'):
+        bench.set_teleop_speed({'arm': 'arm_ab', 'stage': 90})
+    with pytest.raises(ValueError, match='추종 속도'):
+        bench.set_teleop_speed({'arm': 'arm_s', 'stage': 75})
+    bench.state = {'status': 'recording'}
+    with pytest.raises(ValueError, match='진행 중'):
+        bench.set_teleop_speed({'arm': 'arm_s', 'stage': 60})

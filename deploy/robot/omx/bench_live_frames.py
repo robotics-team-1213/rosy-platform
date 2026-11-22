@@ -29,7 +29,7 @@ class LiveFrames:
 
     def _run(self):
         previous = None
-        while not self.stopped.wait(0.2):
+        while not self.stopped.wait(0.1):
             observation = self.latest
             if observation is not None and observation is not previous:
                 previous = observation
@@ -39,7 +39,10 @@ class LiveFrames:
                     pass  # Preview failure cannot stop the recorder.
 
     def _encode(self, observation):
-        from PIL import Image
+        try:
+            import cv2
+        except ImportError:
+            cv2 = None
 
         timestamp = time.time()
         updated = False
@@ -47,16 +50,37 @@ class LiveFrames:
             shape = getattr(array, "shape", ())
             if not SAFE_KEY.fullmatch(key) or len(shape) != 3 or shape[2] != 3 or str(array.dtype) != "uint8":
                 continue
+            tmp = self.folder / f"{key}.jpg.tmp"
             try:
-                image = Image.fromarray(array)
-                image.thumbnail((640, 640))
-                tmp = self.folder / f"{key}.jpg.tmp"
-                image.save(tmp, "JPEG", quality=70)
+                if cv2 is not None:
+                    h, w = shape[0], shape[1]
+                    frame = array
+                    if max(h, w) > 640:
+                        if w >= h:
+                            w2, h2 = 640, max(1, int(round(h * 640 / w)))
+                        else:
+                            h2, w2 = 640, max(1, int(round(w * 640 / h)))
+                        frame = cv2.resize(frame, (w2, h2), interpolation=cv2.INTER_AREA)
+                    ok, encoded = cv2.imencode(
+                        ".jpg",
+                        cv2.cvtColor(frame, cv2.COLOR_RGB2BGR),
+                        [cv2.IMWRITE_JPEG_QUALITY, 70],
+                    )
+                    if not ok:
+                        raise RuntimeError("cv2.imencode failed")
+                    tmp.write_bytes(encoded.tobytes())
+                else:
+                    from PIL import Image
+
+                    image = Image.fromarray(array)
+                    image.thumbnail((640, 640))
+                    image.save(tmp, "JPEG", quality=70)
                 os.utime(tmp, (timestamp, timestamp))
                 os.replace(tmp, self.folder / f"{key}.jpg")
                 self.timestamps[key] = timestamp
                 updated = True
             except Exception:
+                tmp.unlink(missing_ok=True)
                 continue  # One camera may fail while the others keep publishing.
         if updated:
             tmp = self.folder / "meta.json.tmp"

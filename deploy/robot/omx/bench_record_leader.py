@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json, os, re, signal, subprocess, time
 
+from bench_live_preview import camera_labels
 from bench_record_inspect import ARMS, BI_ARM, HERE
-from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, recorder_running, release
+from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, recorder_running, release, resolve_record_config
 
 BUSY = ("handing_over", "recording", "homing", "restoring", "sealing", "leader_manual_check")  # the recorder or a child owns the devices
 
@@ -39,7 +40,11 @@ class BenchLeaderMixin:
         cameras = []
         for sub in ("arm_a", "arm_b") if arm == BI_ARM else (arm,):
             try:
-                found = json.loads((self.prep / f"record-config-arm-{ARMS[sub]}.json").read_text(encoding="utf-8-sig")).get("cameras") or {}
+                cfg = json.loads(resolve_record_config(self.prep, sub).read_text(encoding="utf-8-sig"))
+                robot = cfg.get("robot") if isinstance(cfg.get("robot"), dict) else {}
+                found = camera_labels(robot) if isinstance(robot.get("cameras"), dict) else {}
+                if not found:
+                    found = robot.get("cameras") or cfg.get("cameras") or {}
             except (OSError, ValueError, AttributeError):
                 found = {}
             cameras += [name for name in found if re.fullmatch(r"[\w-]+", str(name)) and name not in cameras]

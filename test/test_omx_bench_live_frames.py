@@ -150,3 +150,93 @@ def test_bench_camera_routes_use_fresh_recording_frames_then_fall_back(tmp_path,
         assert camera_frame(bench, "arm_s_wrist") == b"viewer"
     finally:
         preview.close()
+
+
+def test_camera_state_skips_viewer_and_keeps_stale_preview_keys(tmp_path, monkeypatch):
+    import time
+    from types import SimpleNamespace
+
+    from bench_record_http import camera_state
+
+    monkeypatch.setattr("bench_live_preview.SHM", tmp_path / "missing")
+    preview = SessionPreview(tmp_path, {})
+    try:
+        preview.labels = {"arm_s_top": "top"}
+        jpg = preview.folder / "top.jpg"
+        jpg.write_bytes(b"live")
+        now = time.time()
+        os.utime(jpg, (now - 4.0, now - 4.0))
+        monkeypatch.setattr("bench_record_http.urllib.request.urlopen", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("viewer polled")))
+        bench = SimpleNamespace(live_preview=preview, state={"status": "recording"}, lock=Lock())
+        assert camera_state(bench) == {"arm_s_top": {"fresh": True, "quality": {}}}
+        os.utime(jpg, (1, 1))
+        assert camera_state(bench) == {"arm_s_top": {"fresh": False, "quality": {}}}
+    finally:
+        preview.close()
+
+
+def test_http_server_flags_and_handler_reply_ignores_broken_pipe():
+    from types import SimpleNamespace
+    from bench_record_http import make_server
+
+    bench = SimpleNamespace(status=lambda: {"status": "idle"}, choices=lambda: {}, logs=lambda n: "")
+    server = make_server(bench, 0)
+    try:
+        assert server.daemon_threads is True
+        assert server.request_queue_size >= 32
+        assert server.allow_reuse_address is True
+
+        fake = server.RequestHandlerClass.__new__(server.RequestHandlerClass)
+        fake.send_response = lambda code: None
+        fake.send_header = lambda k, v: None
+        fake.end_headers = lambda: None
+        fake.close_connection = False
+        fake.wfile = SimpleNamespace(write=lambda b: (_ for _ in ()).throw(BrokenPipeError("gone")))
+        fake.reply(200, b"jpg", "image/jpeg")
+        assert fake.close_connection is True
+    finally:
+        server.server_close()
+
+
+def test_guarded_native_cli_wraps_reset_loop_during_preroll_and_teleop(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import guarded_native_cli as cli
+
+    monkeypatch.setenv(frames.LIVE_DIR, str(tmp_path))
+    obs = {"top": object()}
+    seen = []
+
+    class DummyRobot:
+        def get_observation(self):
+            return obs
+
+    def rec_loop(*args, **kwargs):
+        seen.append(kwargs["robot_observation_processor"](obs))
+        if kwargs.get("dataset") is None:
+            kwargs["events"]["stop_recording"] = True
+
+    def build_frame(features, values, *, prefix):
+        return values
+
+    def main_fn():
+        module.record_loop(
+            robot=DummyRobot(),
+            events={"stop_recording": False, "rerecord_episode": False, "exit_early": False},
+            robot_observation_processor=lambda v: v,
+            dataset=object(),
+        )
+
+    module = SimpleNamespace(
+        ACTION="action",
+        OBS_STR="observation",
+        build_dataset_frame=build_frame,
+        record_loop=rec_loop,
+        make_robot_from_config=None,
+        make_teleoperator_from_config=None,
+        main=main_fn,
+    )
+    offered = []
+    monkeypatch.setattr(frames, "offer_preview", lambda p, v: offered.append(v))
+    with pytest.raises(KeyboardInterrupt, match="before the first episode"):
+        cli.run_native(module, object, object)
+    assert offered == [obs] and seen == [obs]
