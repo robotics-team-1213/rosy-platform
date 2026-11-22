@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from browser_harness import browser_tests_enabled, open_page
+from browser_harness import browser_tests_enabled, open_shared_page
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / 'middleware' / 'robot_ui' / "robot"
@@ -60,10 +60,10 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_robot_overview_opens_same_core_pilot_without_starting_motion():
-    from playwright.sync_api import sync_playwright, expect
+    from playwright.sync_api import expect
 
-    with sync_playwright() as playwright:
-        browser, page, errors = open_page(playwright, 390, 844)
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         def serve_asset(body):
             def deliver(route):
@@ -88,18 +88,15 @@ def test_robot_overview_opens_same_core_pilot_without_starting_motion():
         pilot.click()
         expect(page).to_have_url('http://rosy.test/pilot')
         assert not errors
+    finally:
         browser.close()
 
 
 def test_setup_localization_fails_closed_when_capabilities_are_missing():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "localization.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/localization.js", lambda route: route.fulfill(
@@ -127,19 +124,16 @@ def test_setup_localization_fails_closed_when_capabilities_are_missing():
         _unmount_panel(page)
         assert page.evaluate("window.__stopped") is True
         assert errors == []
+    finally:
         browser.close()
 
 
 
 def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capability_poll():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "localization.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/localization.js", lambda route: route.fulfill(
@@ -199,18 +193,15 @@ def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capab
         page.wait_for_function("[...document.querySelectorAll('main details ui-button')].every(node => !node.disabled)")
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_line_follow_readback_failure_and_action_feedback_are_independent():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "console" / "line-follow.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/line-follow.js", lambda route: route.fulfill(
@@ -263,18 +254,15 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
         }]
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_docking_locks_pending_commands_and_preserves_selected_dock():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "console" / "docking.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/docking.js", lambda route: route.fulfill(
@@ -325,18 +313,15 @@ def test_console_docking_locks_pending_commands_and_preserves_selected_dock():
         assert "fixture dock list unavailable" in panel.locator("ui-status").nth(1).inner_text()
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_setup_docking_refuses_teach_without_fresh_pose():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "docking.js").read_text(encoding="utf-8")
         state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
@@ -364,18 +349,15 @@ def test_setup_docking_refuses_teach_without_fresh_pose():
         assert page.evaluate("window.__apiCalls") == []
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_docking_blocks_motion_when_capability_is_missing():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "console" / "docking.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/docking.js", lambda route: route.fulfill(
@@ -398,18 +380,15 @@ def test_console_docking_blocks_motion_when_capability_is_missing():
         assert page.evaluate("window.__calls") == []
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_device_host_operations_block_writes_when_host_agent_is_absent():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "host" / "operations.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/host/operations.js", lambda route: route.fulfill(
@@ -435,18 +414,15 @@ def test_device_host_operations_block_writes_when_host_agent_is_absent():
         assert page.evaluate("window.__calls") == []
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_admin_host_system_get_failures_clear_only_their_own_readback():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "host" / "system.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/host/system.js", lambda route: route.fulfill(
@@ -507,18 +483,15 @@ def test_admin_host_system_get_failures_clear_only_their_own_readback():
         assert "fixture identity offline" in overview_status.nth(0).inner_text()
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_mode_feedback_survives_state_and_capability_polling():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "console" / "mode.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/mode.js", lambda route: route.fulfill(
@@ -567,18 +540,15 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/mode","body":{"mode":"MANUAL"}}]
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_teleop_keeps_readiness_reasons_separate_from_action_feedback():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
         state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
@@ -646,18 +616,15 @@ def test_console_teleop_keeps_readiness_reasons_separate_from_action_feedback():
         assert action.inner_text() == forced_stop_feedback
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_teleop_timeout_and_failed_stop_feedback_survive_polling():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
         state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
@@ -705,18 +672,15 @@ def test_console_teleop_timeout_and_failed_stop_feedback_survive_polling():
         assert action.inner_text() == failed_stop_feedback
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_admin_security_preserves_token_and_safety_action_feedback_across_polling():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "system" / "security.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/system/security.js", lambda route: route.fulfill(
@@ -828,18 +792,15 @@ def test_admin_security_preserves_token_and_safety_action_feedback_across_pollin
         assert len([call for call in page.evaluate("window.__calls") if call["method"] == "PUT"]) == 1
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "map.js").read_text(encoding="utf-8")
         map_source = (WEB / "map.js").read_text(encoding="utf-8")
@@ -878,15 +839,15 @@ def test_console_map_is_keyboard_focusable_and_viewer_cannot_send_a_goal():
             "/api/v1/robot/state", "/api/v1/system/capabilities", "/api/v1/host/commissioning", "/api/v1/navigation/state",
         }
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_map_actions_require_hardware_runtime():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        browser, page, errors = open_page(playwright, 390, 844)
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "map.js").read_text(encoding="utf-8")
         map_source = (WEB / "map.js").read_text(encoding="utf-8")
@@ -919,19 +880,16 @@ def test_console_map_actions_require_hardware_runtime():
         assert goal.is_enabled()
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 @pytest.mark.parametrize("hold_ms,release", [(240, True), (3_150, False)])
 def test_console_teleop_sends_repeated_hold_and_terminal_zero(hold_ms, release):
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "teleop.js").read_text(encoding="utf-8")
         state_logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
@@ -973,18 +931,15 @@ def test_console_teleop_sends_repeated_hold_and_terminal_zero(hold_ms, release):
             assert "2초 한도" in page.locator("ui-status").filter(has_text="2초 한도").first.inner_text()
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_camera_preview_stops_on_hidden_document_and_unmount():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "camera.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/camera.js", lambda route: route.fulfill(
@@ -1013,18 +968,15 @@ def test_console_camera_preview_stops_on_hidden_document_and_unmount():
         _unmount_panel(page)
         assert page.evaluate("window.__stopped") == 2
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_mode_requires_navigation_capability_and_stops_held_motion():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "console" / "mode.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/mode.js", lambda route: route.fulfill(
@@ -1057,18 +1009,15 @@ def test_console_mode_requires_navigation_capability_and_stops_held_motion():
         assert page.evaluate("window.__stoppedMotion") == 1
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_line_follow_keeps_stop_available_when_navigation_capability_is_missing():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "console" / "line-follow.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/line-follow.js", lambda route: route.fulfill(
@@ -1089,14 +1038,14 @@ def test_line_follow_keeps_stop_available_when_navigation_capability_is_missing(
         assert page.evaluate("window.__calls") == [{"path":"/api/v1/line-follow/mode","method":"PUT","body":{"mode":"OFF"}}]
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_line_follow_start_uses_drive_capability_without_nav2():
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        browser, page, errors = open_page(playwright, 390, 844)
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels/console/line-follow.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/console/line-follow.js", lambda route: route.fulfill(
@@ -1116,18 +1065,15 @@ def test_line_follow_start_uses_drive_capability_without_nav2():
         assert start.evaluate('(el)=>el.disabled')
         assert "구동" in start.get_attribute("reason")
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "dock-admin.js").read_text(encoding="utf-8")
         logic = (ROOT / "shared" / "web" / "core_ui_logic.js").read_text(encoding="utf-8")
@@ -1167,18 +1113,15 @@ def test_admin_dock_registration_requires_loaded_types_and_fresh_pose():
         }]
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_setup_traffic_policy_stages_before_confirmed_apply():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "setup" / "traffic-policy.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/setup/traffic-policy.js", lambda route: route.fulfill(
@@ -1209,18 +1152,15 @@ def test_setup_traffic_policy_stages_before_confirmed_apply():
         assert page.evaluate("window.__calls[1].path") == "/api/v1/traffic/policy/apply"
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_admin_host_identity_editor_is_single_and_preserves_save_feedback():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "host" / "system.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/host/system.js", lambda route: route.fulfill(
@@ -1276,18 +1216,15 @@ def test_admin_host_identity_editor_is_single_and_preserves_save_feedback():
         assert page.locator("main .host-system-detail .ui-form").count() == 1
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_console_map_readiness_freshness_and_action_feedback_are_independent():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         module = (WEB / "panels" / "console" / "map.js").read_text(encoding="utf-8")
         map_source = (WEB / "map.js").read_text(encoding="utf-8")
@@ -1387,18 +1324,15 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         assert action.inner_text() == failed
         _unmount_panel(page)
         assert errors == []
+    finally:
         browser.close()
 
 
 def test_device_hardware_refresh_feedback_survives_measurement_polls():
     pytest.importorskip("playwright.sync_api")
-    from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as playwright:
-        try:
-            browser, page, errors = open_page(playwright, 390, 844)
-        except Exception as error:
-            pytest.skip(f"Playwright Chromium unavailable: {error}")
+    browser, page, errors = open_shared_page(390, 844)
+    try:
         _route_panel_test(page)
         source = (WEB / "panels" / "host" / "hardware.js").read_text(encoding="utf-8")
         page.route("http://rosy.test/assets/panels/host/hardware.js", lambda route: route.fulfill(
@@ -1455,4 +1389,5 @@ def test_device_hardware_refresh_feedback_survives_measurement_polls():
         ]
         page.evaluate("window.__unmount()")
         assert errors == []
+    finally:
         browser.close()

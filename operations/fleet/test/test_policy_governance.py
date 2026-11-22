@@ -110,6 +110,10 @@ def test_real_arm_stages_need_a_second_person(client):
                        json=dict(operator_confirmed=True)).status_code == 403
 
 
+def test_a_viewer_who_may_press_the_stop_still_cannot_clear_an_incident(client):
+    assert client.post(BASE + "/incidents/i1/clear", headers=auth("viewer-a"), json=dict(operator_confirmed=True, note="n")).status_code == 403  # D-1043
+
+
 @pytest.mark.parametrize("who", ["operator-a", "viewer-a"])
 def test_only_policy_admins_change_stages(client, who):
     assert propose(client, "L0", who).status_code == 403

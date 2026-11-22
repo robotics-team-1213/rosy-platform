@@ -586,6 +586,24 @@ def test_an_expired_presence_is_not_carried_by_the_claim():
     assert _claimed_response(env)["handoff"]["presence"] is None
 
 
+def test_s3_act_policy_claim_requires_valid_presence_with_bed_confirmation():
+    env = Env()
+    res = env.client.post("/api/fleet/pipeline/cell-tasks", headers=OP, json={"preset": "s3_act_policy", "task_id": "act-ev-1", "robot_id": "pinky_1"})
+    assert res.status_code == 200
+    assert env.client.post("/api/fleet/pipeline/cell-tasks/act-ev-1/bed-confirm", headers=OP, json={"robot_id": "pinky_1"}).status_code == 200
+    # Bed confirmed only: act_policy must still refuse without consuming bed confirmation and record last_refusal.
+    no_p = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s", "task_id": "act-ev-1"}).json()
+    assert no_p["claimed"] is False and no_p["reason"] == "PRESENCE_CONFIRMATION_REQUIRED"
+    rows = env.client.get("/api/fleet/pipeline/cell-tasks", headers=VIEW).json()["tasks"]
+    row = next(r for r in rows if r["task_id"] == "act-ev-1")
+    assert row["last_refusal"]["code"] == "PRESENCE_CONFIRMATION_REQUIRED"
+    assert env.client.post("/api/fleet/pipeline/cell-tasks/act-ev-1/presence-confirm", headers=OP, json={}).status_code == 200
+    claimed = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s", "task_id": "act-ev-1"}).json()
+    assert claimed["claimed"] is True and claimed["handoff"]["execution_mode"] == "act_policy" and claimed["handoff"]["max_chunks"] == 4
+    rows_after = env.client.get("/api/fleet/pipeline/cell-tasks", headers=VIEW).json()["tasks"]
+    assert "last_refusal" not in next(r for r in rows_after if r["task_id"] == "act-ev-1")
+
+
 def _claimed_response(env):
     env.confirm_bed()
     res = env.client.post("/api/fleet/pipeline/cell-tasks/claim", headers=SVC, json={"cell_id": "cell_s"}).json()

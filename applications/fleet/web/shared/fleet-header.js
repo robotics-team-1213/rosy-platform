@@ -4,7 +4,6 @@
 import { setOffBy } from "/common/cause-line.js";
 import { isOperator } from "./authorization.js";
 import "/common/ui.js";  // wires the `[data-theme-cycle]` button
-import {OPERATOR_REASON} from "/console/assets/authorization.js";
 import {renderAccountApps, roleLabel} from "/common/account-profile.js";
 import {applyUnitScope, scopeSummary} from "/console/assets/unit-scope.js";
 export {roleLabel};
@@ -53,12 +52,15 @@ export function showInboxCount(count) {
 }
 
 // The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,
-// else the /api/fleet/session body. Only a press the server would surely refuse is locked: no session (401)
-// or a role without stop rights (403). Unknown stays live — never harder to reach than a refused press.
+// else the /api/fleet/session body. Only a press the server would surely refuse is locked: no session (401), or a
+// session whose `estop` the server answers false (a bearer token without a named human, D-1043). Unknown stays live.
+export const STOP_HUMAN_REASON = "정지는 운영자 또는 로그인한 사용자만 누를 수 있습니다";
 export function estopReason(session) {
   if (session === null) return SESSION_REASON;
-  if (session && !isOperator(session.role)) return OPERATOR_REASON;
-  return "";
+  if (!session) return "";
+  // /api/fleet/session answers `estop`; /api/fleet/auth/session (Policy, Maintenance) answers `via` and `account_id` instead.
+  const tokenOnly = session.via === "bearer" && !session.account_id && session.role !== "operator";
+  return session.estop === false || (session.estop === undefined && tokenOnly) ? STOP_HUMAN_REASON : "";
 }
 
 function gateEstop(session) {

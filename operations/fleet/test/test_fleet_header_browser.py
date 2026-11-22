@@ -6,10 +6,14 @@ per document and viewport. The paired case has no development sessions: the E-st
 session is refused and unlocks with the shared token.
 """
 
+import atexit
 import copy
+import functools
 import json
 import os
 import re
+import shutil
+import tempfile
 import threading
 import time
 from contextlib import contextmanager
@@ -18,7 +22,7 @@ from urllib.parse import urlparse
 
 import pytest
 import uvicorn
-from browser_harness import browser_tests_enabled, launch_options, open_token_access, safe_listener
+from browser_harness import browser_tests_enabled, open_token_access, safe_listener, shared_browser
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -299,13 +303,38 @@ def _signed_in_page(browser, origin, **options):
     return page
 
 
-@contextmanager
-def _fleet(tmp_path, **options):
+@functools.lru_cache(maxsize=8)
+def _cached_password_scrypt(password: str) -> str:
+    return hash_password(password)
+
+
+_FLEET_SERVERS: dict[tuple[str | None, bool], tuple[str, uvicorn.Server, threading.Thread, object, Path]] = {}
+
+
+def _shutdown_cached_servers() -> None:
+    for _origin, server, worker, listener, db_dir in list(_FLEET_SERVERS.values()):
+        server.should_exit = True
+        worker.join(timeout=20)
+        listener.close()
+        shutil.rmtree(db_dir, ignore_errors=True)
+    _FLEET_SERVERS.clear()
+
+
+atexit.register(_shutdown_cached_servers)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _stop_cached_fleet_servers():
+    yield
+    _shutdown_cached_servers()
+
+
+def _start_fleet_server(db_dir: Path, **options):
     if options.get("development_sessions") is not None:
         options.setdefault("site_logins", {"alice": {"principal_id": "alice", "role": "operator",
-                            "password_scrypt": hash_password("correct horse")}})
+                            "password_scrypt": _cached_password_scrypt("correct horse")}})
     console = FleetConsole([RobotEndpoint("rosy_01", "http://127.0.0.1:8080", "t")], [FakeRobot("rosy_01")])
-    tasks = FleetTaskService(FleetTaskStore(tmp_path / "fleet.sqlite3"), robot_ids=console.robot_ids)
+    tasks = FleetTaskService(FleetTaskStore(db_dir / "fleet.sqlite3"), robot_ids=console.robot_ids)
     app = create_app(console, task_service=tasks, web_common=ROOT / "shared" / "web",
                      start_task_dispatcher=False, **options)
     listener = safe_listener()
@@ -318,19 +347,48 @@ def _fleet(tmp_path, **options):
         while not server.started and worker.is_alive() and time.monotonic() < deadline:
             time.sleep(0.02)
         assert server.started
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as playwright:
-            launch = launch_options()
-            launch["args"] = [f"--explicitly-allowed-ports={urlparse(origin).port}"]
-            browser = playwright.chromium.launch(**launch)
-            try:
-                yield browser, origin
-            finally:
-                browser.close()
-    finally:
+    except Exception:
         server.should_exit = True
         worker.join(timeout=20)
         listener.close()
+        raise
+    return origin, server, worker, listener
+
+
+@contextmanager
+def _fleet(tmp_path, **options):
+    cacheable = set(options) <= {"console_token", "development_sessions"}
+    if cacheable:
+        key = (options.get("console_token"), options.get("development_sessions") is not None)
+        entry = _FLEET_SERVERS.get(key)
+        if entry is None:
+            db_dir = Path(tempfile.mkdtemp(prefix="rosy-fleet-header-"))
+            try:
+                origin, server, worker, listener = _start_fleet_server(db_dir, **options)
+            except Exception:
+                shutil.rmtree(db_dir, ignore_errors=True)
+                raise
+            entry = (origin, server, worker, listener, db_dir)
+            _FLEET_SERVERS[key] = entry
+        origin = entry[0]
+        server = worker = listener = None
+    else:
+        origin, server, worker, listener = _start_fleet_server(tmp_path, **options)
+    browser = shared_browser()
+    before = set(browser.contexts)
+    try:
+        yield browser, origin
+    finally:
+        for context in list(browser.contexts):
+            if context not in before:
+                try:
+                    context.close()
+                except Exception:
+                    pass
+        if server is not None:
+            server.should_exit = True
+            worker.join(timeout=20)
+            listener.close()
 
 
 def test_four_documents_draw_one_header_and_one_estop(tmp_path):
@@ -374,7 +432,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             expect(page.locator("#link-state")).to_have_text("실시간", timeout=15000)
             for width, height in SIZES:
                 page.set_viewport_size({"width": width, "height": height})
-                page.wait_for_timeout(400)
+                page.evaluate("() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))")
                 fact = page.evaluate(PROBE)
                 assert page.locator('ui-topbar [data-header-region]').count() == 4
                 for region in ("identity", "actions", "safety"):
