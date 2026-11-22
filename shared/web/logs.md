@@ -1019,7 +1019,6 @@
 - 증거: `git grep`으로 소비처 없음 확인, 대비 시험은 `--surface-line`만 본다.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-10-31 · uncommitted · capture-wall 표면 등록과 캔버스 계약 준수
 
 - 변경: `surfaces.yaml`에 다중 녹화 벽(`tools/capture/multi_record.html`)을 `capture-wall`(dev)로 등록하고 캔버스 팔레트 계약 목록에 올렸다. 페이지는 참조 `./` 접두, 범위 제목 `Rosy 개발 — 함께 녹화`, 캔버스 색·글꼴을 `window.RosyPalette`로 읽도록 바뀌었고 `multi_record.py`는 `ui.js`와 의존 모듈 셋을 세션 `common/`에 복사한다(D-937).
@@ -1033,13 +1032,11 @@
 - 증거: node --test 403 passed, robot_ui 호출처 무변경. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · step 자리 표식
 
 - 변경: `app-shell.css`의 하위 탐색 현재 표식이 `aria-current="step"`(같은 문서 안 현재 단계, D-926 3)도 `page`와 같은 장미색 wash로 그린다. 빈 표식으로 단계가 보이지 않던 Cell 화면이 시각 표시를 얻는다.
 - 증거: Fleet Cell 화면 Chromium 실측(단계 배경 렌더 확인). 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · D-945 레이아웃 계약 시험
 
@@ -1047,13 +1044,11 @@
 - 증거: 정적 단정 전 통과(로컬 파일 검사). 원격 pytest는 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · D-945 focal 표면 검사 추가
 
 - 변경: `test_layout_canon.py`에 focal 문법(Pilot)의 순서·skip link 검사와 로봇 대시보드의 topbar-first·skip link 검사를 넣었다(대시보드 경로 줄 이행 유예의 근거를 주석으로 남김).
 - 증거: 정적 단정 전 통과. 원격 pytest는 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · 착지 시험 반영: 표식 토큰 true 인정, 검수 페이지 원복
 
@@ -1061,13 +1056,11 @@
 - 증거: test_layout_canon 전 통과, 검수 페이지 6건 완전 원복(net diff 0), node --test 403 passed. 원격 시험은 재착지 전 기록.
 - Gate: 없음. CE: 해당 없음 — 착지 시험이 계약 충돌을 잡은 사례로, 교훈은 아래 CE 판단 참조.
 
-
 ## 2026-11-01 · uncommitted · focal 검사에 경기 보드 포함
 
 - 변경: `test_layout_canon.py`의 focal 표면 검사가 Pilot·경기 보드 모두의 순서·skip link·h1 하나(sr-only 허용)를 검사한다.
 - 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 대시보드 두 상태 셸 h1 검사 추가
 
@@ -1075,20 +1068,17 @@
 - 증거: 정적 단정 전 통과. 원격 pytest는 다음 착지 전 기록.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · D-945 마무리 — 22rem 칸 경계 허가, 조작 표면 noscript·style 속성 계약
 
 - 변경: Fleet 좁은 좌석 하위 탐색 줄바꿈의 `@container (width >= 22rem)`를 `surfaces.yaml` console `container_breakpoints`에 근거와 함께 등록했다(`test_responsive_tiers`가 미허가 값으로 거절하던 것). `test_layout_canon.py`에 조작 표면 noscript 의무와 style 속성 금지 검사를 더했다.
 - 증거: 로컬 대조에서 main 대비 추가 실패가 `test_responsive_tiers` 하나였고 등록 뒤 통과. 원격 시험은 착지 기록.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · 공용 skip-link·sr-only 단일화, 같은 뜻 한 말 계약
 
 - 변경: 로봇·Fleet 로그인·모니터링의 `.skip-link` 재정의와 Pilot의 `.sr-only` 재정의를 지우고 `components.css` 정본만 쓴다(세 표면이 z-index·채움·숨김 방식이 제각각이었다). `test_shared_controls.py` 덧칠 검사 대상에 `skip-link`를 더했다. `test_operator_copy.py`에 표면 전체(검수·Pilot 포함) '같은 뜻 한 말' 검사를 두고 첫 항목으로 '권한이 거부'→'권한이 없습니다'를 정했다.
 - 증거: 원격 계약 시험. 감사 백로그는 `docs/validation/fleet-ui-consistency-2026-11-01/README.md`.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 신호기 등 역할 토큰 (D-525 보강, 사용자 결정)
 
@@ -1103,14 +1093,12 @@
 - Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
 - Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
 
-
 ## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 
 - Change: Common Account role labels retain their exact values and Fleet named export. Final reduced bundle and identity TLS/browser consumers passed after branding and maintenance closure; no additional shared behavior changed.
 - Evidence: D-962 independent image and identity backup scope at 5f02d723d1: remote 335 backend/signing/image/backup cases plus 71 opted-in identity TLS/browser cases passed, 0 skipped, 0 NEW. Full Account tables including HTTP audit preserved; stale/corrupt backup refusal, strict signed legacy/new groups, reused image pins, branding, login/profile/admin and first-password flows verified. Prior e81af2d7c3 closure also passed 320 cases including Fleet header browser/Node compatibility. OCI construction and live independent-image/timer acceptance remain pending.
 - Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
 - Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
-
 
 ## 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
 
@@ -1221,3 +1209,43 @@
 - 변경: 좁은 폭에서 가로로 밀리는 .ui-rail-nav/.ui-subnav-nav가 가려진 쪽 가장자리를 흐리게 하고(ui-wiring.js가 data-more 표시), 현재 항목을 가로로만 중앙에 둔다. 토큰 추가 없음.
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-21 · uncommitted · Foundation: shared choice and robot web parts (slice F3+F2 of #378)
+
+- 변경: shared/web choice group/list, selection mark, status tag, value text and the shared robot parts (dock, 3D model, panel, profile, stop control, alert center, account gate, announcer, busy scope, cause line, connection notice, evidence line) added; no screen uses them yet
+- 증거: lab affected run and known_failures: see PR; pytest not run on this PC (D-584)
+- gate 변화: none
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · Foundation: shared stylesheets for choice controls, dock and alert popup (slice F11 of #378)
+
+- 변경: contrast test for --selection (test_ui_token_contracts.py); Added three stylesheets with no screen using them yet: choice controls and selection mark, robot dock, Fleet alert popup; token --selection and --selection-edge added to tokens.css; registered in shared-assets.json, shared/web CMake and the Fleet asset list
+- 증거: lab affected run and known_failures: see PR; pytest not run on this PC (D-584)
+- gate 변화: none
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · pattern list and dedupe gates with baselines counted on main (slice S1 of #378)
+
+- 변경: shared/web/patterns.yaml, shared/web/test/test_patterns_registry.py, test_shared_dedupe.py, test_icon_gates.py, test_no_element_style.py, DESIGN.md (C1-C25 table, 5 sections moved to docs/reference/ui-design-details.md), tokens.css (unused --shadow-base removed), test/robot_literal_backlog.txt
+- 증거: baselines re-counted on current main with the gate functions (plain python); lab run per D-584 recorded in the PR; pytest not run on this PC
+- gate 변화: 새 검사: 패턴 목록 대조, 공용 도우미·직접 쓰기·본문 복제 상한, 소비자 없는 이름 상한, 아이콘 정적 검사 상한, 전 웹 표면 element style 검사
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · Pure skill, sample-data and localization state parts (slice 4 of #378)
+
+- 변경: Add skill-state.js, sample-data.js and localization-state.js to web_common with node tests; nothing imports them yet, so no screen changes. The rest of slice 4 (robot-profile, robot-row, robot-options, evidence-line) waits for status-tag.js and value-text.js from slice 2.
+- 증거: node --test skill-state and localization-state tests; remote lab affected run (see PR body)
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음
+
+## 2026-11-21 · uncommitted · Robot 3D assets: vendored three.js, OMX and Pinky meshes, asset boundary (slice S3 of #378)
+
+- 변경: Add shared/web/meshes (12 files + SOURCE.json), vendor/three.* (MIT) and tools/robot_meshes.py; list them in shared-assets.json and CMakeLists; allow shared/web/meshes in test_3d_asset_boundary
+- 증거: pyflakes, harness lint, lab affected run (test_asset_manifest, test_3d_asset_boundary); see PR body
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: 없음

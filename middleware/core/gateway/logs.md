@@ -10,7 +10,6 @@
 - 결정: D-61 Proposed
 - 교훈: 없음
 
-
 ## 2026-09-15 · uncommitted · docs(harness): stop carrying over unrerun ROS-SIM evidence
 - 변경: 리뷰 반영. `last_verified.commit`을 `uncommitted`로, SOURCE에 재실행 명령 추가
 - 증거: `python -m pytest test/test_harness_contracts.py test/test_network_topology_contracts.py -q` 62 passed; `python tools/harness/rosy_harness.py lint` 0 errors, 2 warnings(uncommitted). ROS 시험 자체는 미실행
@@ -53,7 +52,6 @@
 - 결정: 서버 계약을 바꾸지 않는다. 셋 다 S3·S4가 이미 배송한 데이터만 소비한다. 임계값(`stale_after_s`)은 읽지 않는다 — 피어가 커밋한 게이트(`test_dashboard.py:427-429`)가 클라이언트 접근을 금지하며, 표시와 재계산은 다르지만 그 경계를 이 세션이 일방적으로 옮기지 않았다
 - 교훈: 고침과 그 고침을 지키는 시험이 같은 좁은 패턴을 인코딩하면 둘 다 같은 구멍을 갖는다. em dash를 `>—<` 모양으로만 찾아 지웠고 시험도 같은 정규식을 썼더니 `SEQ —`·`voltage —`처럼 라벨이 앞에 붙은 4곳이 고침과 시험 양쪽을 빠져나갔다 — 리뷰어가 잡았다. 시험을 "텍스트가 대시로 끝나는 id 자리"로 넓히고 수정 전 마크업에 걸어 45곳을 잡는지 확인했다. 그리고 `표본 수집 대기` 같은 문구를 처음에 같은 결함으로 봤으나, 그건 "아직 안 물어서 기다린다"를 산문으로 말한 것이라 결함이 아니다 — `상태 없음` 하나만 "물었는데 없다"로 읽혀 기존 관용구 `확인 전`에 맞췄다
 
-
 ## 2026-09-18 · uncommitted · fix(core): 보고 pose 의 임자를 map 프레임으로 못박는다
 - 변경: `bridge/odometry.py` 에 `odom_owns_pose()`, `ros_bridge` 가 map→base TF 를 읽은 시각을 기억하고 그것이 신선하면 odom 콜백은 pose 를 건드리지 않는다. 시험 2건(`test_bridge_odometry.py`)
 - 증거: 미로 주행 뒤 실측 — Gazebo 정답 (2.005, 2.181), TF `map→base` (1.969, 2.228) 로 AMCL 은 6 cm 안에 있었는데 `/api/v1/robot/pose` 는 (4.219, 4.590) 을 돌려줬다. 그 값은 `/rosy_01/odom` 과 정확히 같다. 수정 뒤 같은 시나리오에서 측위 오차 3.27 m → 0.03 m
@@ -67,7 +65,6 @@
 - gate 변화: 없음
 - 결정: 두 문법을 한 화면에 섞지 않는다(concept 16 §4 L2). 점검 뷰의 패널은 지우지 않고 옮겼다 — 설치·정비가 쓰는 화면이고 절차 문법이 맞는 자리다
 - 교훈: 시험이 전부 통과해도 화면은 안 뜰 수 있다. 기존 브라우저 시험이 **CSS를 빈 문자열로 서빙**해서 배치는 한 번도 검증된 적이 없었고, 실제로 렌더해 재 보니 네 개의 결함이 한 번에 나왔다 — `[hidden]`이 `display:flex`에 져서 숨긴 뷰가 레이아웃을 먹고 있었고(3582px 스크롤), `aspect-ratio: 5/3`이 `flex:1`과 싸워 지도를 54px로 눌렀고, `hero-copy`의 `padding: 50px`이 상태줄을 141px로 만들었고, 존재를 잊고 있던 `.page-footer`가 64px를 더하고 있었다. 그리고 내가 `#page-footer`로 셀렉터를 썼는데 그건 클래스였다 — 재보지 않았으면 못 찾았다. 마지막으로 D-82가 위험을 어두운 빨강으로 바꾼 뒤 옛 옅은 빨강에 맞춰진 어두운 잉크가 대비 2.86:1로 남아 있었다. 값만 보는 게이트는 CSS 안의 **짝**을 못 본다 — 짝을 보는 게이트를 새로 넣었다
-
 
 ## 2026-09-18 · uncommitted · refactor(web): float the map controls so the map gets the observe region back
 - 변경: `.field-map-panel` 흐름에 있던 지도 툴바 두 줄(레이어·클릭 동작)을 `.map-stage` 안으로 옮기고 `.map-controls`로 묶어 지도 위 좌상단에 겹쳤다. 겹친 칩은 `--scrim` 바탕과 `--surface-line` 테두리로 점유 격자와 갈린다. `test_console_layout.py`에 게이트 1건
@@ -696,7 +693,6 @@
 - 근거: docs/plans/2026-09-06-module-split-criteria.md 행 추가(판정: 전부 Seam lie — deletion). test_module_criteria·test_bridge_display·test_bridge_reconcile·test_bridge_timers·test_emotion_map·test_goal_tracker 87 passed, flake8 초록.
 - gate 변화: 없음. 목표 좌표 표시는 NavigationManager 가 current_goal 을 선언하는 커밋에서 돌아온다(직접 접근 + 실측 시험 동반).
 
-
 ## 2026-10-02 · uncommitted · feat(bridge): D-395 P2-7 미션 조립과 배선
 
 - 변경: `services.py` 가 `wire_assist` 의 미션을 `loc_mission` 으로 든다. `ros_bridge.py`: 새 발행 `localization/mission`(신뢰, 깊이 5), `_on_odom` → `observe_odom`, 20 Hz line-follow 타이머 첫 줄에서 `loc_mission.tick()`(타이머 수 그대로). `observation.front_clearance` 가 LiDAR 표본을 미션에도 넘긴다(정면 여유는 미션이 필요할 때만 잰다). `docking_mode.route_nav_cmd_vel` 은 회전·전진 미션 중 Nav2 출력을 버린다. 직접 속성 접근(C6 새 reach 없음); 가짜 서비스 두 곳에 `loc_mission=None`.
@@ -815,7 +811,6 @@
 - 증거: RED11 및 독립리뷰RED2 보완 후 관련137 passed/1 ROS skip·NEW0, 구조76 passed, 실제설치Linux53 passed, 독립28 passed·APPROVE. docs/validation/d427-source-migration/pinky-twist-port-2026-10-04.md.
 - gate 변화: 없음. SOURCE/host만 검증했으며 ARM64/SD/Docker/CI/ROS-SIM/DEVICE/FIELD와 전체profile/OMX 타입admission은 pending이다.
 
-
 ## 2026-10-04 · uncommitted · fix: D-427 push5 통합 게이트 정합성
 
 - 변경: 운영 시나리오에서 MANUAL 해제를 실제 IDLE API로 명시했다. Fleet 재명령 문구는 의도를 한국어로 표시하고, CORE image closure는 정확한 ROS 열 개와 계약 wheel 두 개를 분리 검증한다. 운영 MANUAL·신호 감독 가드는 바꾸지 않았다.
@@ -848,13 +843,11 @@
 - 증거: Dashboard·role surface·paired camera 회귀 47 passed. 기존 API·동작·권한 검사를 약화하지 않았다.
 - gate 변화: SOURCE/LOCAL. 실기 화면 검증은 별도다.
 
-
 ## 2026-10-04 · uncommitted · feat(power): fresh battery evidence and idle saving
 
 - 변경: 반복 저배터리 표본의 wake를 단계 변화로 제한하여 기존 IDLE/STANDBY 타이머가 동작한다. Viewer GET /api/v1/power/health와 공유 typed 응답에 배터리·충전 확인 age, 정책 상한·wake 근거, shutdown 요청, 진단 요약을 제공한다. API Ref v1.92, envelope 1.0 유지.
 - 검증: injected clock 회귀와 auth/read-only API, 기존 배터리·정지·sentinel 경로 검증. 최종 근거는 docs/plans/2026-10-04-power-health-and-wake.md. OS halt·EEPROM·GPIO·기본 LiDAR 모터 정책 변경 없음.
 - gate 변화: SOURCE/LOCAL; 실제 소비전력·충전·RTC/외부 버튼 wake와 배포는 미검증.
-
 
 ## 2026-10-04 · uncommitted · feat(power): long testing dwell with low battery saving
 
@@ -885,7 +878,6 @@
 - 변경: private trial ledger, original odom stamp/frame and final CORE port restriction; no second publisher/API/config activation.
 - 증거: synthetic guard26PASS, installed geometry/CORE independent180PASS/NEW0. Actual measurement/braking UNKNOWN, no motion or push.
 - gate 변화: SOURCE/LOCAL only; HOLD/readiness retained. Plan docs/plans/2026-10-05-core-bounded-camera-trial.md.
-
 
 ## 2026-10-05 · uncommitted · fix(core): 제한 시험 STOP와 최종 제출 직렬화
 
@@ -1867,13 +1859,11 @@
 - 증거: 승인 원격14대상387PASS/NEW0. pending 순차 대입도 실제 Future 회귀와 event guard를 통과했으며 source 수정 두 건은 독립 scoped 안전 검토 PASS다.
 - gate 변화: 없음. actual native ACK/운영 factory/전체 충전 주기와 물리 장치는 별도다.
 
-
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original pack energy admission counterexample
 
 - 변경: Add actual CoreServices/native composition counterexample: parent adoption without any measured energy must return no handle and dispatch no native run. Existing fixture can now stop before parent admission. Remote behavioral RED pending; no product source changed.
 - 증거: Remote execution pending; test source only.
 - gate 변화: none. Full station goal remains ACTIVE.
-
 
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) independent map proof and energy context loss
 
@@ -1881,13 +1871,11 @@
 - 증거: not executed. The first committed parent-admission counterexample is still in the approved runner no-host retry window. No product energy code changed.
 - gate 변화: none.
 
-
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) new energy log formatting correction
 
 - 변경: Correct only the new entries created in bab06a2c34/4449dc4772/4be5552ec7: PowerShell stdin encoding replaced separators and required field labels were missing. Earlier session records and verification facts are unchanged.
 - 증거: Initial lint caught 4 malformed headings; corrected headings then exposed missing labels and the HEAD append-only comparison. This explicit format repair is recorded, with post-commit lint still required.
 - gate 변화: None. No source implementation, test execution or device acceptance is claimed.
-
 
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original energy remote verification not run
 
@@ -1895,13 +1883,11 @@
 - 증거: remote_pytest on bab06a2c34, test_native_execution_binding.py, approved first two test hosts, completed exit 1 after the default 600 s no-host retry. Tests did NOT run: no collection, behavioral RED, PASS count or run-1.txt; known_failures comparison is unavailable. Latest pure-source and slot-loss tests also remain unexecuted. Local committed-tree lint passed with 0 errors/33 warnings after the explicit journal-format repair; AST/diff checks pass.
 - gate 변화: None. Full station goal remains ACTIVE; this is the first consecutive test-infrastructure interruption after prior source progress. No local test fallback, landing, push or hardware activation.
 
-
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) original pack energy restriction implementation
 
 - 변경: Add serialized private pack ingress, releasing source locks before modes-to-ledger publication; install exact source once before first cycle. Native parent/entry/selection/final writer require original and latest published energy, matching profile/load/clock and full-window reserve. Failed admission consumes the attempt and returns no handle; positive native test fixtures now explicitly install synthetic energy.
 - 증거: Independent scoped static review PASS and source AST; execution pending. Regression oracles cover source clock offsets, full future window, pending new admission, low-to-high STOP, decoder cleanup, selected deadline, cap eight and fault/healthy publication after an entered writer. No tests were executed on these edits.
 - gate 변화: None. No ROS subscription/vendor adapter, runtime deployment, restart, physical movement or automatic activation.
-
 
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) private energy handover naming
 
@@ -1909,13 +1895,11 @@
 - 증거: Read existing event catalogue scanner: it treats every non-ROS .publish call as an event emission, which this private fact handover is not. No scanner, allowlist or event contract changed. Static AST only; independent scoped static review PASS, no runtime test result.
 - gate 변화: None. Existing remote source job still requests ba4868ef59; it does not test this subsequent naming change.
 
-
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) non-simulation station source evidence
 
 - 변경: Preserve source commits ba4868ef59 (energy restriction) and e5f51f5c7 (internal completion naming) with independent scoped static safety reviews, plus attended runbook and validation/station-pack-energy-source-2026-10-17/result.md.
 - 증거: Both official default-three-host pytest requests ended exit1 after600s with no hosts and no tests/report/RED/GREEN. Source request covered ba4868ef59 only; latest naming-only source also remains unexecuted. Changed Python AST/doc links/diff pass; harness lint0errors33warnings; source safety_review/size_range checked both commits successfully. FULL CI remains required and unrun. No simulation, local pytest, deployment, landing or push.
 - gate 변화: None. Actual vendor energy port, hardware factory/Fleet HTTP closure, source-rate capacity/long-run map limits and deferred physical three-cycle/relocation acceptance remain.
-
 
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) map refresh fixture preserves installed energy clock
 
@@ -1971,7 +1955,6 @@
 - 변경: boot/run/correlation이 현재 owner와 일치할 때만 잠금 안에서 취소하는 별도 경로를 추가했다. 기존 trip lease의 수명을 바꾸지 않아 취소 직후 새 owner가 들어오는 경쟁에서도 새 실행을 보존한다.
 - 증거: receiver·lease·Fleet sender/transport201 PASS, 별도 실제 Fleet dispatch→CORE→native 완료/취소 재조정2 PASS. odometry·localization·actuator는 합성이고 실제 정지 증거가 아니다. [검증 기록](../../../docs/validation/control-unit-pipeline-2026-10-24/result.md).
 - gate 변화: 기존 장치/FIELD gate는 유지한다. 최종 통합 검사와 공식 착지는 대기한다. CE 해당 없음: 경쟁과 receipt 범위를 회귀로 보존했다.
-
 
 ## 2026-10-25 · uncommitted · D-862 typed Fleet 정지의 기존 CORE 경로 회귀
 
@@ -2196,3 +2179,11 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 변경: 도킹 feed가 거부한 관측과 태그 유실을 진단 표본에도 즉시 반영한다. 센서 나이는 단조 시계로 계산하고 수신 시각은 벽시계로 표시한다.
 - 증거: 가짜 ROS 입력과 실제 CORE 센서 조회 경계를 쓰는 회귀 시험.
 - gate 변화: SOURCE 수정. 실물 도킹은 현장 결과로 확인한다.
+
+## 2026-11-21 · uncommitted · Run test_measured_calibration_browser.py as lab evidence again
+
+- 변경: affected_browser.LAB_FILES routes the file to pr_land lab, not CI browser jobs
+- 증거: affected_browser.split puts it in the lab part; test_calibration_browser_file_is_lab_only pins it
+- gate 변화: 없음
+- 결정: 없음
+- 교훈: fails on GitHub runners 3 of 3, passes on lab PCs; cause open

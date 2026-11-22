@@ -26,4 +26,4 @@
 
 ## 최근 기록
 
-- 없음
+- 2026-11-21 · uncommitted · v14 계열(LRASPP_r, drivable 직접 클래스) 원장 등록
