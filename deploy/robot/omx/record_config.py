@@ -103,9 +103,10 @@ def _cameras(cameras, fps):
         if not re.fullmatch(r'[a-z][a-z0-9_]*', name) or not isinstance(camera, dict):
             raise ValueError('invalid camera configuration')
         identity = camera.get('index_or_path')
-        if camera.get('type') != 'opencv' or not isinstance(identity, str) or not re.fullmatch(
-                r'/dev/v4l/by-id/[^/\\\s<>]+', identity):
-            raise ValueError('camera requires a persistent /dev/v4l/by-id/ identity')
+        if (camera.get('type') != 'opencv' or not isinstance(identity, str)
+                or not re.fullmatch(r'/dev/v4l/(?:by-id|by-path)/[^/\\\s<>]+', identity)
+                or identity.rsplit('/', 1)[-1] in {'.', '..'}):
+            raise ValueError('camera requires a persistent /dev/v4l/by-id/ or /dev/v4l/by-path/ identity')
         if identity in identities or camera.get('fps') != fps:
             raise ValueError('camera identities must be distinct and camera fps must match dataset fps')
         identities.add(identity)

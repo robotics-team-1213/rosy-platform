@@ -106,6 +106,8 @@ window.syncPrimaryCamForArm=syncPrimaryCamForArm;
 
 let emptyCamPolls=0;
 const camFrameBusy=new Map();
+const camFrameErrs=new Map();
+const LAST_ARM_KEY='omx_bench_last_arm';
 
 function tickCameraFrames(){
   const grid=$('cam-grid');
@@ -119,6 +121,7 @@ function tickCameraFrames(){
     const nextImg=new Image();
     const commit=()=>{
       camFrameBusy.delete(lbl);
+      camFrameErrs.delete(lbl);
       if(!img.isConnected)return;
       nextImg.alt=img.alt;
       nextImg.dataset.cam=lbl;
@@ -130,7 +133,15 @@ function tickCameraFrames(){
       if(typeof nextImg.decode==='function')nextImg.decode().then(commit,commit);
       else commit();
     };
-    nextImg.onerror=()=>{camFrameBusy.delete(lbl);};
+    nextImg.onerror=()=>{
+      camFrameBusy.delete(lbl);
+      const n=(camFrameErrs.get(lbl)||0)+1;
+      camFrameErrs.set(lbl,n);
+      if(n===3&&lastCamState){
+        const curArm=(typeof benchSessionActive==='function'&&benchSessionActive()&&lastStatus?.arm)?lastStatus.arm:(f&&f.arm?f.arm.value:'');
+        renderCamHealthHeader(lastCamState,camLabels,curArm);
+      }
+    };
     nextImg.src=url;
   }
 }
@@ -142,23 +153,23 @@ async function pollCameras(){
     lastCamState=st||{};
     const curArm=(typeof benchSessionActive==='function'&&benchSessionActive()&&lastStatus?.arm)?lastStatus.arm:(f&&f.arm?f.arm.value:'');
     const labels=previewCamsForArm(Object.keys(lastCamState),curArm);
-    const hdrCam=$('hdr-cam-health');
     if(!labels.length){
       emptyCamPolls++;
       note.textContent=benchSessionActive()
         ? '녹화 카메라 프레임 대기 중'
         : '카메라 뷰어(8767)가 대기 중이거나 연결된 카메라가 없습니다.';
       if(!camLabels.length||emptyCamPolls>=3){
-        if(hdrCam){hdrCam.textContent='카메라 0대';hdrCam.dataset.tone='warn';hdrCam.removeAttribute('title');}
+        const {missingReq}=renderCamHealthHeader(lastCamState,[],curArm);
         grid.innerHTML='';camLabels=[];
+        if(missingReq.length)syncMissingCamPlaceholders(missingReq);
       }
       return;
     }
     emptyCamPolls=0;
-    const freshCnt=labels.filter(l=>lastCamState[l]?.fresh!==false).length;
-    if(hdrCam){hdrCam.textContent='카메라 '+freshCnt+'/'+labels.length+'대';hdrCam.dataset.tone=freshCnt===labels.length?'good':'warn';}
-    if(hdrCam)hdrCam.title=labels.join(', ');
-    note.textContent='실시간 미리보기 ('+labels.join(', ')+')';
+    const {liveReq,missingReq}=renderCamHealthHeader(lastCamState,labels,curArm);
+    note.textContent=missingReq.length
+      ? ('미리보기 ('+(liveReq.join(', ')||'없음')+') · 미수신: '+missingReq.join(', '))
+      : ('실시간 미리보기 ('+labels.join(', ')+')');
     if(labels.join(',')!==camLabels.join(',')){
       camLabels=labels;
       grid.innerHTML='';
@@ -189,7 +200,9 @@ async function pollCameras(){
       }
       if(curArm!==lastCamArm)syncPrimaryCamForArm(curArm);
     }
+    syncMissingCamPlaceholders(missingReq);
     updateCameraRecordingMask();
+    if(typeof renderArmCards==='function')renderArmCards();
   }catch(_){
     note.textContent='카메라 미리보기를 불러오지 못했습니다.';
   }
@@ -323,6 +336,7 @@ function syncArmSelection(){
 
 function selectArm(arm){
   if(!arm||![...f.arm.options].some(o=>o.value===arm))return;
+  try{localStorage.setItem(LAST_ARM_KEY,arm);}catch(_){}
   const want=arm==='arm_ab'?new Set(['arm_a','arm_b']):new Set([arm]);
   for(const cb of $('arm-checks').querySelectorAll('input[type="checkbox"]')){
     cb.checked=want.has(cb.value);
@@ -348,13 +362,19 @@ function selectTask(val,opts){
   if(typeof window.closeDrawer==='function')window.closeDrawer(true);
 }
 
-let taskFilter='all';
-function taskMatchesFilter(v,c){
-  if(taskFilter==='all')return true;
+let taskFilter='arm';
+function taskMatchesMode(v,c,mode){
+  if(mode==='all')return true;
   const hay=(v+' '+(c.origin||'')+' '+(c.target_slot||'')+' '+(c.single_task||'')+' '+(c.raw||'')).toLowerCase();
-  if(taskFilter==='pinky')return /pinky|belt|conveyor|supply/.test(hay);
+  if(mode==='pinky')return /pinky|belt|conveyor|supply/.test(hay);
+  if(mode==='todo'){
+    if(typeof window.taskFitsArm==='function'&&!window.taskFitsArm(v,c,f.arm.value))return false;
+    const qInfo=typeof epQuota==='function'?epQuota(c):null;
+    return qInfo?qInfo.rem>0:(c.valid!==false);
+  }
   return typeof window.taskFitsArm==='function'?window.taskFitsArm(v,c,f.arm.value):true;
 }
+function taskMatchesFilter(v,c){return taskMatchesMode(v,c,taskFilter);}
 function stepTask(delta){
   const opts=[...($('task-listbox')?.querySelectorAll('.task-opt:not(:disabled)')||[])];
   if(!opts.length)return;
@@ -374,6 +394,14 @@ function renderTaskListbox(){
   const q=($('task-search')?.value||'').trim().toLowerCase();
   const cards=(choices&&choices.task_cards)?choices.task_cards:{};
   const tasks=choices&&Array.isArray(choices.tasks)?choices.tasks:[];
+  if($('task-filters')){
+    for(const b of $('task-filters').querySelectorAll('button[data-tfilter]')){
+      if(!b.dataset.baseLabel)b.dataset.baseLabel=b.textContent;
+      const mode=b.dataset.tfilter||'all';
+      const cnt=tasks.filter(v=>taskMatchesMode(v,cards[v]||{},mode)).length;
+      b.textContent=b.dataset.baseLabel+' ('+cnt+')';
+    }
+  }
   box.innerHTML='';
   const addOpt=(val,title,sub,disabled)=>{
     const btn=document.createElement('button');
@@ -418,11 +446,21 @@ async function loadChoices(){
       for(const a of choices.arms)f.arm.append(new Option(a,a));
       const singles=choices.arms.filter(a=>a!=='arm_ab');
       const connMap=choices.arm_connectivity||{};
-      const defaultArm=singles.find(a=>connMap[a]?.connected===true)||singles[0]||'';
+      const prefOrder=['arm_a','arm_b','arm_s'];
+      const urlArm=new URLSearchParams(location.search).get('arm');
+      let savedArm='';try{savedArm=localStorage.getItem(LAST_ARM_KEY)||'';}catch(_){}
+      const pickPref=a=>choices.arms.includes(a)&&connMap[a]?.connected===true;
+      const defaultArm=(urlArm&&choices.arms.includes(urlArm)?urlArm:null)
+        ||(savedArm&&pickPref(savedArm)?savedArm:null)
+        ||prefOrder.find(a=>singles.includes(a)&&connMap[a]?.connected===true)
+        ||singles.find(a=>connMap[a]?.connected===true)
+        ||prefOrder.find(a=>singles.includes(a))
+        ||singles[0]||'';
       $('arm-checks').innerHTML='';
+      const initWant=defaultArm==='arm_ab'?new Set(['arm_a','arm_b']):new Set([defaultArm]);
       for(const a of singles){
         const lbl=document.createElement('label');lbl.className='check-row';lbl.style.flex='1 1 110px';
-        const cb=document.createElement('input');cb.type='checkbox';cb.value=a;cb.checked=(a===defaultArm);
+        const cb=document.createElement('input');cb.type='checkbox';cb.value=a;cb.checked=initWant.has(a);
         const sp=document.createElement('span');sp.className='mono';sp.textContent=a;
         lbl.append(cb,sp);$('arm-checks').append(lbl);
       }

@@ -17,7 +17,8 @@ function armConnectivity(arm){
 function renderArmCards(){
   const bar=$('arm-card-bar');
   if(!bar||!armContractValid())return;
-  const arms=choices.arms||[];
+  const rank={arm_a:0,arm_b:1,arm_ab:2,arm_s:3};
+  const arms=[...(choices.arms||[])].sort((x,y)=>(rank[x]??9)-(rank[y]??9));
   const curArm=f&&f.arm?f.arm.value:'';
   const busy=benchSessionActive()||poseInFlight||startInFlight;
   const connArms=arms.filter(a=>armConnectivity(a).connected===true);
@@ -27,7 +28,13 @@ function renderArmCards(){
     const a=btn.dataset.arm;
     btn.hidden=(connArms.length>0&&!showOfflineArms&&armConnectivity(a).connected!==true&&a!==curArm);
   }
-  const sig=JSON.stringify([visible,curArm,showOfflineArms,busy,arms.map(a=>armConnectivity(a)),lastStatus?.teleop_speed_declared]);
+  const camTok=a=>{
+    const req=typeof window.expectedCamsForArm==='function'?window.expectedCamsForArm(a):[];
+    if(!req.length||typeof lastCamState!=='object'||!lastCamState)return '';
+    const ok=req.filter(l=>Object.hasOwn(lastCamState,l)&&lastCamState[l]?.fresh!==false).length;
+    return 'C'+ok+'/'+req.length+(ok<req.length?'!':'');
+  };
+  const sig=JSON.stringify([visible,curArm,showOfflineArms,busy,arms.map(a=>armConnectivity(a)),arms.map(camTok),lastStatus?.teleop_speed_declared]);
   if(bar.dataset.sig===sig)return;
   bar.dataset.sig=sig;
   bar.innerHTML='';
@@ -52,7 +59,7 @@ function renderArmCards(){
     const sub=document.createElement('div');sub.className='arm-card-meta mono';
     const fMark=c.follower_connected===true?'F✓':(c.follower_connected===false?'F✗':'F?');
     const lMark=c.leader_connected===true?'L✓':(c.leader_connected===false?'L✗':'L?');
-    sub.textContent=[meta.role,fMark+' '+lMark,spdTxt].filter(Boolean).join(' · ');
+    sub.textContent=[meta.role,fMark+' '+lMark,camTok(a),spdTxt].filter(Boolean).join(' · ');
     card.append(head,sub);
     card.addEventListener('click',()=>{if(!benchSessionActive())selectArm(a);});
     grid.append(card);

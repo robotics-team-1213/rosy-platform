@@ -1347,3 +1347,35 @@ def test_grip_map_api_preserves_mount_and_validates_bounds(tmp_path, monkeypatch
     mp.symlink_to(real_target)
     with pytest.raises(ValueError, match='심볼릭 링크'):
         bench.save_grip_map({'arm': 'arm_s', 'leader_closed': 1930, 'leader_open': 2850, 'follower_closed': 2000, 'follower_open': 2800})
+
+
+def test_restart_cameras_skips_disabled_arm_s_top_and_heals_rebound_side(tmp_path, monkeypatch):
+    bench, ran = _restart_setup(tmp_path, monkeypatch, cameras=('top', 'side', 'wrist'))
+    reg_dir = tmp_path / 'home' / '.config/rosy'
+    reg_dir.mkdir(parents=True, exist_ok=True)
+    fake_dev = tmp_path / 'devs'
+    fake_dev.mkdir()
+    for n in ('top', 'side-by-path', 'wrist-a', 'wrist-s'):
+        (fake_dev / n).write_text('')
+    (reg_dir / 'omx-cameras.json').write_text(json.dumps({'cameras': [
+        {'role': 'top', 'device': str(fake_dev / 'top')},
+        {'role': 'side', 'device': str(fake_dev / 'side-by-path')},
+        {'role': 'arm_a_wrist', 'device': str(fake_dev / 'wrist-a')},
+        {'role': 'arm_s_top', 'device': '/dev/v4l/by-id/rosy-arm_s_jieli', 'enabled': False},
+        {'role': 'arm_s_wrist', 'device': str(fake_dev / 'wrist-s')},
+    ]}))
+    (bench.prep / 'record-config-arm-s.json').write_text(json.dumps({
+        'robot': {'type': 'omx_follower', 'cameras': {
+            'top': {'index_or_path': '/dev/v4l/by-id/rosy-arm_s_jieli'},
+            'wrist': {'index_or_path': str(fake_dev / 'wrist-s')},
+        }}
+    }))
+    import bench_record_leader as leader_mod
+    monkeypatch.setattr(leader_mod, 'camera_labels', lambda robot: {
+        **({'arm_s_top': 'top'} if 'top' in robot.get('cameras', {}) else {}),
+        **({'arm_s_wrist': 'wrist'} if 'wrist' in robot.get('cameras', {}) else {}),
+    })
+    res = bench.restart_cameras({'arm': 'arm_s'})
+    restarted = [a[1] for a in ran if a[0] == 'restart']
+    assert 'rosy-omx-camera@arm_s_top.service' not in restarted
+    assert 'rosy-omx-camera@arm_s_wrist.service' in restarted and res['ok'] is True

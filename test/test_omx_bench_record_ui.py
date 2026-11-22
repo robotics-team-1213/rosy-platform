@@ -1160,3 +1160,26 @@ def test_result_home_button_auto_home_view_and_arm_connectivity_resilience(tmp_p
     assert guard.arm_connectivity(tmp_path, 'arm_s') == {'connected': None, 'follower_connected': None, 'leader_connected': None}
 
 
+def test_arm_ab_ui_priority_layout_no_wrap_and_camera_health_contract():
+    import re
+    omx_dir = ROOT / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    app_js = (omx_dir / 'bench_record_app.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+    st_js = (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8')
+
+    assert 'input.jc-inp{' in css and '.jc-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))' in css
+    assert '.app-shell[data-phase="setup"] #sec-params{order:-1}' in css
+    assert '.app-topbar:has(.drawer-menu-wrap.open){padding-bottom:44px}' in css
+    assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
+    assert '<details class="card acc-card sb-sec" id="sec-status"' in html and 'id="sec-status" open' not in html
+    assert '<details id="sb-joint-caps-box"' in html
+    assert 'class="pill-btn active" data-tfilter="arm" aria-pressed="true"' in html
+    assert 'id="cleanup-empty-ds-btn"' in html and 'id="ev-delete-empty-btn"' in html
+    assert "OPTIONAL_CAMS=new Set(['arm_s_top'])" in cam_js and 'function expectedCamsForArm(' in cam_js
+    assert "if(role==='left_wrist')return ['arm_a_wrist'];" in cam_js and "if(role==='right_wrist')return ['arm_b_wrist'];" in cam_js
+    assert 'function syncMissingCamPlaceholders(' in cam_js and "LAST_ARM_KEY='omx_bench_last_arm'" in app_js
+    assert "$('hdr-cam-health').hidden=false;" in st_js
+
+

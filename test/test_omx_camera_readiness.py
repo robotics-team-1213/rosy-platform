@@ -341,3 +341,95 @@ def test_viewer_receive_profile_is_the_measured_4mib_udp_buffer_only():
     participant = root.find('p:participant', ns)
     assert participant.get('is_default_profile') == 'true'
     assert participant.find('p:rtps/p:userTransports/p:transport_id', ns).text == transport.find('p:transport_id', ns).text
+
+
+def _readiness_mocks(runtime, monkeypatch, rdevs, controls=None, hw=None):
+    controls = controls or {'auto_exposure': 3, 'gain': 4}
+    hw = hw or {}
+    monkeypatch.setattr(runtime, 'identity', lambda d: dict(realpath=f"/dev/video{rdevs[d]['rdev']}", rdev=rdevs[d]['rdev']))
+    monkeypatch.setattr(runtime, 'producer', lambda u, d, wait_s=15.0: {'ActiveState': 'active', 'MainPID': '123', 'InvocationID': 'x'*32})
+    monkeypatch.setattr(runtime, 'get_controls', lambda d, n: dict(controls))
+    monkeypatch.setattr(runtime, 'command', lambda args: (
+        'auto_exposure 0x9a0901 (menu) : min=0 max=3\n 1: Manual\n 3: Auto\n'
+        'exposure_time_absolute 0x9a0902 (int) : min=1 max=5000 step=1\n'
+        'gain 0x00980913 (int) : min=0 max=7 step=1\n'))
+    monkeypatch.setattr(runtime.crs, 'hardware_identity', lambda d: hw.get(d))
+
+
+def test_readiness_archives_prior_boot_and_legacy_nov19_baselines(monkeypatch, tmp_path):
+    import json
+    runtime = load('camera_readiness')
+    profile = dict(cameras={
+        'top': dict(device='/dev/v4l/by-id/top', candidates=[dict(auto_exposure=1, exposure_time_absolute=400)]),
+        'front': dict(device='/dev/v4l/by-id/front', unit='arm_a_wrist', candidates=[dict(auto_exposure=1, exposure_time_absolute=400)]),
+    })
+    (tmp_path / 'environment.jsonl').write_text('{"keep":1}\n')
+    (tmp_path / 'recovery-budget.json').write_text('[100]')
+    (tmp_path / 'restoration.json').write_text('{"top":{"restored":true},"front":{"restored":true}}')
+    (tmp_path / 'baseline.json').write_text(json.dumps({
+        'profile_sha256': 'old', 'recorded_ns': 100,
+        'cameras': {
+            'top': {'device': '/dev/v4l/by-id/top', 'identity': {'realpath': '/dev/video10', 'rdev': 20746}, 'original': {'auto_exposure': 3, 'gain': 4}},
+            'front': {'device': '/dev/v4l/by-id/front', 'identity': {'realpath': '/dev/video8', 'rdev': 20744}, 'original': {'auto_exposure': 3, 'gain': 4}},
+        },
+    }))
+    _readiness_mocks(runtime, monkeypatch, {'/dev/v4l/by-id/top': {'rdev': 4}, '/dev/v4l/by-id/front': {'rdev': 8}},
+                     hw={'/dev/v4l/by-id/top': {'usb_id': '8086:0b07', 'usb_port': '2-1', 'interface': '2-1:1.3', 'serial': 'A'},
+                         '/dev/v4l/by-id/front': {'usb_id': '0c45:6366', 'usb_port': '1-4', 'interface': '1-4:1.0', 'serial': 'B'}})
+    monkeypatch.setattr(runtime.crs, 'current_boot_id', lambda: 'boot-2')
+    monkeypatch.setattr(runtime.crs, 'host_boot_time_ns', lambda now_ns=None: 1_000_000)
+
+    # Prior-boot baseline archives cleanly on prepare and keeps audit/budget ledgers
+    b = runtime.prepare(profile, tmp_path, 'dig1')
+    assert b['boot_id'] == 'boot-2' and b['cameras']['top']['identity']['rdev'] == 4
+    assert (tmp_path / 'environment.jsonl').read_text() == '{"keep":1}\n'
+    assert (tmp_path / 'recovery-budget.json').read_text() == '[100]'
+    assert any((tmp_path / 'archive').iterdir())
+
+    # New boot archives current boot_id baseline on both prepare and restore
+    monkeypatch.setattr(runtime.crs, 'current_boot_id', lambda: 'boot-3')
+    runtime.restore(tmp_path)
+    rest = json.loads((tmp_path / 'restoration.json').read_text())
+    assert rest['top']['skipped'] == 'prior_boot_baseline' and rest['top']['restored'] is True
+    assert not (tmp_path / 'baseline.json').exists()
+
+
+def test_readiness_same_boot_usb_reenum_and_profile_update_safety(monkeypatch, tmp_path):
+    import json
+    runtime = load('camera_readiness')
+    profile = dict(cameras={
+        'top': dict(device='/dev/v4l/by-id/top', candidates=[dict(auto_exposure=1, exposure_time_absolute=400)]),
+        'front': dict(device='/dev/v4l/by-id/front', unit='arm_a_wrist', candidates=[dict(auto_exposure=1, exposure_time_absolute=400)]),
+    })
+    hw = {'/dev/v4l/by-id/top': {'usb_id': '8086:0b07', 'usb_port': '2-1', 'interface': '2-1:1.3', 'serial': 'A'},
+          '/dev/v4l/by-id/front': {'usb_id': '0c45:6366', 'usb_port': '1-4', 'interface': '1-4:1.0', 'serial': 'B'}}
+    rdevs = {'/dev/v4l/by-id/top': {'rdev': 4}, '/dev/v4l/by-id/front': {'rdev': 8}}
+    _readiness_mocks(runtime, monkeypatch, rdevs, hw=hw)
+    monkeypatch.setattr(runtime.crs, 'current_boot_id', lambda: 'same-boot')
+    runtime.prepare(profile, tmp_path, 'dig1')
+
+    # Same physical camera + clean original controls re-enumerates safely
+    rdevs['/dev/v4l/by-id/front']['rdev'] = 12
+    b2 = runtime.prepare(profile, tmp_path, 'dig1')
+    assert b2['cameras']['front']['identity']['rdev'] == 12
+    assert json.loads((tmp_path / 'baseline.json').read_text())['cameras']['front']['identity']['rdev'] == 12
+
+    # Different physical USB camera still fails closed on same boot
+    hw['/dev/v4l/by-id/front'] = {'usb_id': '9999:0001', 'usb_port': '1-9', 'interface': '1-9:1.0', 'serial': 'Z'}
+    rdevs['/dev/v4l/by-id/front']['rdev'] = 14
+    with pytest.raises(RuntimeError, match='camera identity changed'):
+        runtime.prepare(profile, tmp_path, 'dig1')
+
+    # Clean profile digest change archives; dirty controls or mismatched identity refuses
+    rdevs['/dev/v4l/by-id/front']['rdev'] = 12
+    assert runtime.prepare(profile, tmp_path, 'dig2')['profile_sha256'] == 'dig2'
+    monkeypatch.setattr(runtime, 'get_controls', lambda d, n: {'auto_exposure': 1, 'gain': 7})
+    with pytest.raises(RuntimeError, match='profile changed'):
+        runtime.prepare(profile, tmp_path, 'dig3')
+
+    # control_locks(allow_missing=True) skips missing symlinks
+    def id_with_missing(d):
+        if 'front' in d:
+            raise FileNotFoundError(d)
+        return {'rdev': 4}
+    assert runtime.crs.locked_rdevs(profile['cameras'], id_with_missing, allow_missing=True) == [4]

@@ -8,6 +8,8 @@ function mapConfigCamToLabel(rawKey,arm){
   if(!role)return [];
   if(role==='top')return [prefix==='arm_s'?'arm_s_top':'top'];
   if(role==='side')return ['side'];
+  if(role==='left_wrist')return ['arm_a_wrist'];
+  if(role==='right_wrist')return ['arm_b_wrist'];
   if(role==='wrist'||role==='front'){
     if(prefix==='arm_a')return ['arm_a_wrist'];
     if(prefix==='arm_b')return ['arm_b_wrist'];
@@ -28,6 +30,85 @@ function resolveRecordingCams(arm,configName){
   return mapped.size?mapped:null;
 }
 window.resolveRecordingCams=resolveRecordingCams;
+const OPTIONAL_CAMS=new Set(['arm_s_top']);
+function isOptionalCam(lbl,arm){return arm==='arm_s'&&OPTIONAL_CAMS.has(lbl);}
+function expectedCamsForArm(arm,configName){
+  if(!arm)return [];
+  const cams=choices&&choices.config_meta&&configName&&choices.config_meta[configName]?choices.config_meta[configName].cameras:null;
+  const out=new Set();
+  if(Array.isArray(cams)&&cams.length){
+    for(const k of cams){for(const lbl of mapConfigCamToLabel(k,arm))out.add(lbl);}
+  }else if(ARM_PREVIEW_CAMS[arm]){
+    for(const lbl of ARM_PREVIEW_CAMS[arm])out.add(lbl);
+  }
+  return [...out].filter(lbl=>!isOptionalCam(lbl,arm));
+}
+window.isOptionalCam=isOptionalCam;
+window.expectedCamsForArm=expectedCamsForArm;
+
+function camHealthSummary(st,labels,curArm){
+  const cfg=(typeof benchSessionActive==='function'&&benchSessionActive()&&lastStatus?.config)?lastStatus.config:(f&&f.config?f.config.value:'');
+  const req=expectedCamsForArm(curArm,cfg);
+  const src=(st&&typeof st==='object')?st:{};
+  const errs=typeof camFrameErrs!=='undefined'?camFrameErrs:new Map();
+  const liveFn=l=>Object.hasOwn(src,l)&&src[l]?.fresh!==false&&(errs.get(l)||0)<3;
+  const reqList=req.length?req:labels;
+  const liveReq=reqList.filter(liveFn);
+  const missingReq=reqList.filter(l=>!liveFn(l));
+  return {req:reqList,liveReq,missingReq};
+}
+
+function renderCamHealthHeader(st,labels,curArm){
+  const hdrCam=$('hdr-cam-health'), rstBtn=$('hdr-camera-restart-btn');
+  const {req,liveReq,missingReq}=camHealthSummary(st,labels,curArm);
+  if(hdrCam){
+    hdrCam.hidden=false;
+    if(!req.length){hdrCam.textContent='카메라 0대';hdrCam.dataset.tone='warn';hdrCam.removeAttribute('title');}
+    else if(missingReq.length){
+      hdrCam.textContent='카메라 '+liveReq.length+'/'+req.length+'대 · '+missingReq.join(', ')+' 미수신';
+      hdrCam.dataset.tone=liveReq.length?'warn':'crit';
+      hdrCam.title='수신: '+(liveReq.join(', ')||'없음')+' / 미수신: '+missingReq.join(', ');
+    }else{
+      hdrCam.textContent='카메라 '+liveReq.length+'/'+req.length+'대';
+      hdrCam.dataset.tone='good';
+      hdrCam.title=req.join(', ');
+    }
+  }
+  if(rstBtn){
+    rstBtn.dataset.tone=missingReq.length?'warn':'';
+    rstBtn.title=missingReq.length?('미수신 카메라('+(missingReq.join(', '))+') 재시작 [Shift+C]'):'선택한 팔의 카메라 재시작 [Shift+C]';
+  }
+  return {req,liveReq,missingReq};
+}
+
+function syncMissingCamPlaceholders(missingReq){
+  const grid=$('cam-grid');
+  if(!grid)return;
+  for(const el of grid.querySelectorAll('.cam-box.cam-missing'))el.remove();
+  if(!missingReq.length)return;
+  let stack=grid.querySelector('.cam-pip-stack');
+  if(!stack){
+    stack=document.createElement('div');
+    stack.className='cam-pip-stack';
+    grid.append(stack);
+  }
+  for(const lbl of missingReq){
+    if(grid.querySelector('.cam-box[data-cam-box="'+lbl+'"]'))continue;
+    const box=document.createElement('div');box.className='cam-box cam-pip cam-missing';box.dataset.missingCam=lbl;box.tabIndex=0;
+    const pill=document.createElement('span');pill.className='cam-title-pill';pill.textContent=lbl;
+    const rec=document.createElement('span');rec.className='cam-rec-badge on';rec.textContent='● 미수신';
+    const body=document.createElement('div');body.className='cam-missing-body';
+    const stEl=document.createElement('strong');stEl.textContent=lbl+' 미수신';
+    const spEl=document.createElement('span');spEl.textContent='⇧C 카메라 재시작';
+    body.append(stEl,spEl);
+    box.append(pill,rec,body);
+    box.addEventListener('click',()=>$('hdr-camera-restart-btn')?.click());
+    box.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('hdr-camera-restart-btn')?.click();}});
+    stack.append(box);
+  }
+}
+window.renderCamHealthHeader=renderCamHealthHeader;
+window.syncMissingCamPlaceholders=syncMissingCamPlaceholders;
 
 function updateCameraRecordingMask(){
   const arm=f.arm?f.arm.value:'';
@@ -391,10 +472,43 @@ function renderLeRobotPanel(st){
   }
   const ul=$('lerobot-list'), empty=$('lerobot-empty');
   const rows=st&&Array.isArray(st.lerobot_datasets)?st.lerobot_datasets:[];
+  const emptyRows=rows.filter(r=>(r.episodes||0)===0);
+  const bulkBtn=$('cleanup-empty-ds-btn');
+  const busyAll=hfUploadInFlight||state==='encoding'||state==='uploading';
+  if(bulkBtn){
+    bulkBtn.hidden=!emptyRows.length;
+    bulkBtn.textContent='빈 데이터셋 '+emptyRows.length+'개 정리';
+    bulkBtn.disabled=Boolean((typeof benchSessionActive==='function'&&benchSessionActive())||busyAll);
+    if(!bulkBtn.dataset.bound){
+      bulkBtn.dataset.bound='1';
+      bulkBtn.addEventListener('click',async()=>{
+        const curEmpty=(lastStatus&&Array.isArray(lastStatus.lerobot_datasets)?lastStatus.lerobot_datasets:[]).filter(r=>(r.episodes||0)===0);
+        if(!curEmpty.length)return;
+        bulkBtn.disabled=true;setReqError('');
+        let done=0, latest=null;
+        try{
+          for(const row of curEmpty){
+            latest=await api('/api/dataset/delete',{dataset:row.name||''});
+            done++;
+          }
+          if(latest&&latest.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=latest.lerobot_datasets;}
+          if(typeof setActivity==='function')setActivity('빈 데이터셋 정리 완료','good',done+'개 삭제');
+          if(typeof pollStatus==='function')await pollStatus();
+          else if(lastStatus)renderLeRobotPanel(lastStatus);
+        }catch(e){
+          setReqError('빈 데이터셋 정리: '+(e.message||String(e)));
+          if(typeof pollStatus==='function')await pollStatus();
+        }finally{bulkBtn.disabled=false;}
+      });
+    }
+  }
+  if($('sum-recent-drawer')){
+    const recN=Array.isArray(st?.recent_sessions)?st.recent_sessions.length:0;
+    $('sum-recent-drawer').textContent='최근 '+recN+'건 · LeRobot '+rows.length+'개'+(emptyRows.length?' (빈 '+emptyRows.length+')':'');
+  }
   if(!ul||!empty)return;
   if(!rows.length){ul.innerHTML='';empty.hidden=false;return;}
   empty.hidden=true;ul.innerHTML='';
-  const busyAll=hfUploadInFlight||state==='encoding'||state==='uploading';
   for(const r of rows){
     const li=document.createElement('li');li.className='sess-item hf-ds-row';
     const top=document.createElement('div');top.className='hf-ds-top';
@@ -412,8 +526,11 @@ function renderLeRobotPanel(st){
       del.textContent='삭제';del.title='빈 데이터셋 폴더 삭제';
       del.addEventListener('click',async()=>{
         del.disabled=true;
-        try{const out=await api('/api/dataset/delete',{dataset:r.name||''});if(out&&out.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=out.lerobot_datasets;renderLeRobotPanel(lastStatus);}}
-        catch(e){setReqError(e.message||String(e));del.disabled=false;}
+        try{
+          const out=await api('/api/dataset/delete',{dataset:r.name||''});
+          if(typeof setActivity==='function')setActivity('빈 데이터셋 삭제','good',r.name||'');
+          if(out&&out.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=out.lerobot_datasets;renderLeRobotPanel(lastStatus);}
+        }catch(e){setReqError(e.message||String(e));del.disabled=false;}
       });
       act.append(del);
     }

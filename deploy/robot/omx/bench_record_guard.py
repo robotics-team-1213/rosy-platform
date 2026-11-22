@@ -16,6 +16,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import joint_tune_lock  # noqa: E402  (lock_root: where the per-arm session locks live)
+from camera_roles import load_registry, resolve_record_cameras  # noqa: E402
 
 
 def proc_cmdlines():
@@ -218,3 +219,57 @@ def arm_connectivity(prep, arm):
     f_ok = _port_exists(robot.get("port") if isinstance(robot, dict) else None)
     l_ok = _port_exists(teleop.get("port") if isinstance(teleop, dict) else None)
     return {"connected": f_ok, "follower_connected": f_ok, "leader_connected": l_ok}
+
+
+def iter_config_camera_items(robot):
+    if not isinstance(robot, dict):
+        return []
+    items = [(k, v) for k, v in (robot.get("cameras") or {}).items() if isinstance(v, dict)]
+    if robot.get("type") == "bi_omx_follower":
+        for side in ("arm_a", "arm_b"):
+            for k, v in ((robot.get(side) or {}).get("cameras") or {}).items():
+                if isinstance(v, dict):
+                    items.append((f"{side}.{k}", v))
+    return items
+
+
+def inspect_config_cameras(cfg_j, arm, registry, *, reg_err=None):
+    """Return (cam_keys, rebinds, issues, resolved_cfg) for one record-config JSON."""
+    r = cfg_j.get("robot") if isinstance(cfg_j, dict) else {}
+    cams = [k for k, _ in iter_config_camera_items(r)]
+    if reg_err:
+        return cams, [], [reg_err], cfg_j
+    resolved, rebinds, issues = resolve_record_cameras(cfg_j, arm, registry)
+    return cams, rebinds, issues, resolved
+
+
+def check_bimanual_child(prep, sub_arm, child_robot, check_single):
+    """Verify bi_omx_follower arm_a/arm_b child directly or against its signed single-arm profile with cameras={}."""
+    try:
+        return check_single(sub_arm, "", child_robot)
+    except ValueError as primary_exc:
+        if not isinstance(child_robot, dict) or child_robot.get("cameras") != {}:
+            raise
+        candidates = [resolve_record_config(prep, sub_arm)] + sorted(prep.glob("record-config*.json"))
+        seen = set()
+        for path in candidates:
+            if path in seen or not path.is_file():
+                continue
+            seen.add(path)
+            try:
+                ref_robot = json.loads(path.read_text(encoding="utf-8-sig")).get("robot")
+                if isinstance(ref_robot, dict) and ref_robot.get("type") == "omx_follower" and {**ref_robot, "cameras": {}} == child_robot:
+                    return check_single(sub_arm, path.name, ref_robot)
+            except (OSError, ValueError, TypeError):
+                continue
+        raise primary_exc
+
+
+def resolve_start_config(config_bytes, arm):
+    """Parse start config and resolve cameras from omx-cameras.json, failing closed on missing/corrupt camera state."""
+    cfg_data = json.loads(config_bytes.decode("utf-8-sig"))
+    registry = load_registry()
+    resolved, rebinds, issues = resolve_record_cameras(cfg_data, arm, registry)
+    if issues:
+        raise ValueError(f"카메라 확인 실패: {'; '.join(issues)}")
+    return resolved, rebinds

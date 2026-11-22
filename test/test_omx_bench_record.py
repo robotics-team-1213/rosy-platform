@@ -1203,3 +1203,84 @@ def test_leader_home_rejects_invalid_rate_before_connecting(tmp_path, monkeypatc
         leader_home.move_leader_home(tmp_path / 'cfg.json', 'arm_s', tmp_path / 'p.json', 'hands-off:test:now', rate_deg_s=0)
 
 
+def test_camera_rebind_bimanual_profile_and_fail_closed_start(tmp_path, monkeypatch):
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
+    fake_dev = tmp_path / 'devs'
+    fake_dev.mkdir()
+    reg_dir = tmp_path / 'home' / '.config/rosy'
+    reg_dir.mkdir(parents=True)
+    live_side = str(fake_dev / 'by-path-side')
+    live_a = str(fake_dev / 'by-id-arm-a-wrist')
+    Path(live_side).write_text('')
+    Path(live_a).write_text('')
+    (reg_dir / 'omx-cameras.json').write_text(json.dumps({'cameras': [
+        {'role': 'top', 'device': live_a + '-top'},
+        {'role': 'side', 'device': live_side},
+        {'role': 'arm_a_wrist', 'device': live_a},
+        {'role': 'arm_b_wrist', 'device': '/dev/v4l/by-id/missing-b-wrist'},
+    ]}))
+    Path(live_a + '-top').write_text('')
+
+    # Signed Arm A config still carries stale by-id side path -> choices heals via camera_rebinds, start refuses nothing & writes resolved snap
+    ra = {'type': 'omx_follower', 'id': 'omx_follower_arm', 'port': '/dev/ttyA', 'cameras': {
+        'top': {'type': 'opencv', 'index_or_path': live_a + '-top'},
+        'side': {'type': 'opencv', 'index_or_path': '/dev/v4l/by-id/stale-arm_a_jieli'},
+        'wrist': {'type': 'opencv', 'index_or_path': live_a},
+    }}
+    rb = {'type': 'omx_follower', 'id': 'arm_b_follower', 'port': '/dev/ttyB', 'cameras': {
+        'top': {'type': 'opencv', 'index_or_path': live_a + '-top'},
+        'side': {'type': 'opencv', 'index_or_path': '/dev/v4l/by-id/stale-arm_a_jieli'},
+        'wrist': {'type': 'opencv', 'index_or_path': '/dev/v4l/by-id/missing-b-wrist'},
+    }}
+    (bench.prep / 'record-config-arm-a.json').write_text(json.dumps({'robot': ra}))
+    (bench.prep / 'record-config-arm-b.json').write_text(json.dumps({'robot': rb}))
+    (bench.prep / 'arm-a-robot-profile.json').write_text(json.dumps({
+        'schema': 'rosy.omx-cell-robot-profile.v1', 'device_id': 'arm_a', 'instance_id': 'omx_follower_arm',
+        'robot_config_sha256': digest(ra), 'operating_envelope_path': 'envelope.json', 'work_dir': 'work'}))
+    (bench.prep / 'arm-b-robot-profile.json').write_text(json.dumps({
+        'schema': 'rosy.omx-cell-robot-profile.v1', 'device_id': 'arm_b', 'instance_id': 'arm_b_follower',
+        'robot_config_sha256': digest(rb), 'operating_envelope_path': 'envelope.json', 'work_dir': 'work'}))
+    (bench.prep / 'record-config-bi-ab.json').write_text(json.dumps({
+        'robot': {
+            'type': 'bi_omx_follower', 'id': 'bi_omx_ab',
+            'cameras': {'top': {'type': 'opencv', 'index_or_path': live_a + '-top'}, 'side': {'type': 'opencv', 'index_or_path': live_side},
+                        'arm_a_wrist': {'type': 'opencv', 'index_or_path': live_a}},
+            'arm_a': {**ra, 'cameras': {}},
+            'arm_b': {**rb, 'cameras': {}},
+        }
+    }))
+    (bench.prep / 'record-config-bi-tampered.json').write_text(json.dumps({
+        'robot': {'type': 'bi_omx_follower', 'id': 'bi_omx_ab',
+                  'cameras': {'top': {'type': 'opencv', 'index_or_path': live_a + '-top'}},
+                  'arm_a': {**ra, 'port': '/dev/ttyEVIL', 'cameras': {}}, 'arm_b': {**rb, 'cameras': {}}}
+    }))
+
+    ch = bench.choices()
+    assert ch['config_meta']['record-config-arm-a.json']['camera_issues'] == []
+    assert any('->' in x for x in ch['config_meta']['record-config-arm-a.json']['camera_rebinds'])
+    assert 'record-config-bi-ab.json' in ch['arm_bindings']['arm_ab']['configs']
+    assert 'record-config-bi-tampered.json' not in ch['arm_bindings']['arm_ab']['configs']
+    assert any('arm_b_wrist' in x for x in ch['config_meta']['record-config-arm-b.json']['camera_issues'])
+
+    monkeypatch.setattr('bench_live_preview.SHM', tmp_path / 'missing')
+    bench.start(body)
+    st = finished(bench)
+    assert st['status'] == 'sealed'
+    snap_cfg = json.loads((Path(st['snapshot']) / 'record-config.json').read_text())
+    assert snap_cfg['robot']['cameras']['side']['index_or_path'] == live_side
+
+    # Missing registered camera on Arm B refuses BEFORE stopping units
+    calls.clear()
+    with pytest.raises(ValueError, match='카메라 확인 실패'):
+        bench.start(dict(body, name='fail-b', arm='arm_b', config='record-config-arm-b.json',
+                         caps='caps-arm-b-tune.json',
+                         calibrations=[str(tmp_path / 'home/.cache/huggingface/lerobot/calibration/robots/omx_follower/arm_b_follower.json')]))
+    assert calls == []
+
+    # Corrupt omx-cameras.json fails closed before stopping units
+    (reg_dir / 'omx-cameras.json').write_text('{corrupt')
+    with pytest.raises(ValueError):
+        bench.start(dict(body, name='fail-corrupt'))
+    assert calls == []
+
+
