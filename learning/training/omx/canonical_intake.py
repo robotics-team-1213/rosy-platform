@@ -151,14 +151,6 @@ def select_arm_features(features: dict, arm_id: str, legacy_map: dict | None = N
     return filtered, legacy
 
 
-def _sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
 def _validate_manifest(col_dir: Path) -> tuple[dict, str]:
     mf_path = col_dir / "manifest.json"
     if (col_dir / "DO_NOT_TRAIN.txt").exists() or (col_dir / "dataset" / "DO_NOT_TRAIN.txt").exists():
@@ -184,8 +176,9 @@ def _validate_manifest(col_dir: Path) -> tuple[dict, str]:
     for rel, expected in files.items():
         if not isinstance(rel, str) or not rel or rel.startswith("/") or ".." in Path(rel).parts:
             raise ValueError(f"invalid manifest relpath: {rel!r}")
-        if _sha256_file(col_dir / rel) != expected:
-            raise ValueError(f"manifest file sha256 mismatch: {rel}")
+        with (col_dir / rel).open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != expected:
+                raise ValueError(f"manifest file sha256 mismatch: {rel}")
     ds_dir = col_dir / "dataset"
     info_path = ds_dir / "meta" / "info.json"
     info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else {}
