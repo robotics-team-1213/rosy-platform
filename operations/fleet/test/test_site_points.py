@@ -188,6 +188,12 @@ def test_site_points_full_and_port_views_stage_a_fail_closed(tmp_path):
     updated_by_id = {p["id"]: p for p in updated["vehicle_stops"]}
     assert updated_by_id["S3"]["pose"]["x"] == 0.761
     assert updated["coordinate_frames"]["vehicle_world"]["waypoints"]["S3_intake"]["pose"]["x"] == 0.761
+    assert updated["coordinate_frames"]["vehicle_world"]["top_camera_vs_world_deg"] == 180
+    assert updated["coordinate_frames"]["cell_s_arm_base"]["rotation_deg_vs_world"] == 180
+    assert updated["coordinate_frames"]["cell_s_arm_base"]["vehicle_tray_model_x_residual_cm"] == 12.85
+    assert updated["coordinate_frames"]["cell_ab_fixture"]["rotation_deg_vs_world"] == -90
+    assert updated["coordinate_frames"]["cell_ab_fixture"]["hold_mapping"] == {"s1": "ship-h2", "s2": "ship-h1"}
+    assert updated["conveyor_transfer"]["occupancy_gate"]["arm_ab_occlusion_table_wired"] is False
     assert "J_in" in updated_by_id and "J_out" in updated_by_id
     assert updated_by_id["J_in"]["berth"] is None
 

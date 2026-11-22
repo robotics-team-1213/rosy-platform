@@ -140,6 +140,8 @@ def build_coordinate_frames(
         "unit": "m",
         "source_schema": "rosy.site_map/1",
         "truth_status": "live_active_map",
+        "top_camera_vs_world_deg": 180,
+        "c1_lens_bend_note": "physical straight line (D-1013); bay_1 -1.5 cm is left-lens distortion",
         "waypoints": {
             "S1_pickup": {
                 "place_id": "S1",
@@ -152,6 +154,7 @@ def build_coordinate_frames(
             "S3_intake": {
                 "place_id": "S3",
                 "pose": _place_pose(s3_place),
+                "planned_approach_ref_m": {"x": 0.9238, "y": -0.207, "yaw": 3.1416},
                 "role": stop_rules.get("S3", "unload"),
                 "pinned": bool(s3_place.pinned) if s3_place is not None else False,
                 "bridge_arm_frame": "cell_s_arm_base",
@@ -166,6 +169,7 @@ def build_coordinate_frames(
             "S_OUT_outbound": {
                 "place_id": "S_OUT",
                 "pose": _place_pose(s_out_place),
+                "planned_approach_ref_m": {"x": 0.6148, "y": -0.1026, "yaw": 1.5708},
                 "ceiling_ref_m": {"x": 0.614, "y": 0.001, "yaw": 1.5708},
                 "in_active_map": s_out_place is not None,
                 "bridge_arm_frame": "cell_ab_fixture",
@@ -189,6 +193,11 @@ def build_coordinate_frames(
         "unit": "mm",
         "owner": "deploy/robot/omx/cell_spec_recovery_fsm.py",
         "calibration_status": "cell_local_reference",
+        "rotation_deg_vs_world": 180,
+        "axes_vs_world": {"+x": "-x_world", "+y": "-y_world"},
+        "world_origin_hint_m": [0.927, -0.036],
+        "vehicle_tray_model_x_residual_cm": 12.85,
+        "live_calibration_note": "arm_s_top homography required for vehicle_tray",
         "vehicle_tray": {
             "xyz_mm": [53.5, 172.0, 20.0],
             "yaw_deg": -85.0,
@@ -214,6 +223,13 @@ def build_coordinate_frames(
         "unit": "mm",
         "owner": "tools/sim/omx_two_arm_sites.py",
         "calibration_status": "cell_local_reference",
+        "rotation_deg_vs_world": -90,
+        "kabsch_fit_deg": -92.23,
+        "axes_vs_world": {"+x": "-y_world", "+y": "+x_world"},
+        "top_camera_vs_cell_ab_deg": 90,
+        "z_reference": "container_center (floor+16.2mm); tcp_hold_z=+3.21mm",
+        "parallax_max_mm": 47.6,
+        "hold_mapping": {"s1": "ship-h2", "s2": "ship-h1"},
         "arm_bases_mm": {
             "arm_a": {"measured_194": [91.0, -168.25, 84.0], "v24": [77.0, -164.65, 84.0], "yaw_deg": 90.0},
             "arm_b": {"measured_194": [91.0, 168.25, 84.0], "v24": [77.0, 167.65, 84.0], "yaw_deg": -90.0},
@@ -288,6 +304,7 @@ def build_conveyor_transfer() -> dict[str, Any]:
             "module": "deploy/robot/omx/cell_belt_occupancy.py",
             "s_load_requires": "empty",
             "ab_pick_requires": "occupied",
+            "arm_ab_occlusion_table_wired": False,
             "wired_to_runtime": False,
         },
         "identity_gate": {
