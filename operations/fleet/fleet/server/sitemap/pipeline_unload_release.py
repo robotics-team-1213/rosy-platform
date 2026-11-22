@@ -133,8 +133,12 @@ def exit_target(rules, site) -> tuple[str, float, float, float] | None:
     return place_id, float(place.x), float(place.y), float(getattr(place, "yaw", 0.0) or 0.0)
 
 
-async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None) -> list[dict]:
+async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None,
+                      flush_port_events=None) -> list[dict]:
     """One pass: continue camera-driven unloads, then send each vehicle whose check held on two ticks to the exit."""
+    if flush_port_events is not None and any(t.get("pending_port_events") for t in state.omx_cell_tasks.values()):
+        if await flush_port_events():
+            save()
     continue_unload(state, enqueue)
     sent = []
     if getattr(state, "depart_ready", None) is None:
@@ -219,11 +223,14 @@ def install_unload_release_routes(app, ctx) -> None:
         return {**out, "departure": app.state.unload_releases.get(out.get("batch_id"))}
 
     def tick_args():
+        from fleet.server.sitemap.pipeline_port_events import flush_pending_port_events
+
         active = ctx.active_map()
         return dict(console=ctx.console, rules=ctx.rules(), site=active[1],
                     enqueue=lambda spec: ctx._enqueue_one_task(active, {**ctx.CELL_TASK_PRESETS["s3_shuttle"], **spec}),
                     human_detected=bool(ctx._is_human_detected()), save=ctx._save_ledger, now=time.time(),
-                    task_log=getattr(ctx, "record_depart_task", None))
+                    task_log=getattr(ctx, "record_depart_task", None),
+                    flush_port_events=lambda: asyncio.to_thread(flush_pending_port_events, app))
 
     app.state.depart_tick = lambda: depart_tick(app.state, **tick_args())
     from fleet.server.sitemap.pipeline_repark import install_repark_routes
