@@ -7,7 +7,7 @@ import math
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 FAILURE_CONTEXT_SCHEMA = "rosy.omx-failure-context.v1"
 CELL_READINESS_SCHEMA = "rosy.cell-readiness.v1"
@@ -48,9 +48,15 @@ MEASURED_VETO_CODES = (
     "NO_MEASURED_OBJECTS",
 )
 
+def _no_dotdot(value: str) -> str:
+    if ".." in value:
+        raise ValueError("must not contain '..'")
+    return value
+
+
 Sha256Hex = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-BundleId = Annotated[str, Field(pattern=r"^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")]
-SafeAssetName = Annotated[str, Field(pattern=r"^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")]
+BundleId = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"), AfterValidator(_no_dotdot)]
+SafeAssetName = Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"), AfterValidator(_no_dotdot)]
 _LONG_B64_RE = re.compile(r"^[A-Za-z0-9+/=\r\n]{2048,}$")
 
 

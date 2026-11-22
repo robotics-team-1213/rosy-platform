@@ -254,6 +254,8 @@ def test_pr1_hardening_traversal_roundtrip_amr_bed_and_fail_closed_fence(tmp_pat
         bundle_id="roundtrip-1", kind="stop", arm_id="arm_b", cell_id="cell_ab", executor_mode="ik_auto_pick",
         correlation=corr, generation=gen, measurement=meas, spatial=spat, visual=vis, created_at_s=100, monotonic_s=10,
     )
+    with pytest.raises(ValidationError):
+        CellFailureContext.model_validate({**b, "bundle_id": "a..b"})
     with pytest.raises(ValueError, match="bundle_id"):
         cfc.write_bundle(tmp_path, {**b, "bundle_id": ".."})
     with pytest.raises(ValueError, match="bundle_id"):
