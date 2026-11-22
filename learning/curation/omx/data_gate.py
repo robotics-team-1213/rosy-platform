@@ -145,12 +145,16 @@ def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = 
         if not (lo <= float(min(state[:, 5].min(), action[:, 5].min())) and float(max(state[:, 5].max(), action[:, 5].max())) <= hi):
             reject.append("gripper outside the sim gripper range")
         start = float(np.abs(state[0, 1:4] - home[1:4]).max()) if n else math.inf
-        measured["start_from_home_rad"] = round(start, 3)
+        if math.isfinite(start):
+            measured["start_from_home_rad"] = round(start, 3)
         if n:
-            measured["wrist_roll_f0_rad"] = round(float(state[0, 4]), 3)
-            measured["pan_f0_rad"] = round(float(state[0, 0]), 3)
+            for key, column in (("wrist_roll_f0_rad", 4), ("pan_f0_rad", 0)):
+                if math.isfinite(state[0, column]):
+                    measured[key] = round(float(state[0, column]), 3)
         if canon_rad is not None and n:
-            measured["start_from_canonical_rad"] = round(float(np.abs(state[0, :5] - canon_rad).max()), 3)
+            distance = float(np.abs(state[0, :5] - canon_rad).max())
+            if math.isfinite(distance):
+                measured["start_from_canonical_rad"] = round(distance, 3)
         if start > LIMITS["home_review_rad"]:
             review.append(f"start {start:.2f} rad from home (joints 2-4)")
         goal = goal_re.search(task_text.get(int(frames.task_index.iloc[0]), "")) if n else None
@@ -190,8 +194,9 @@ def gate(root, arm: str, source: dict, legacy: dict[str, str] | None = None, tra
     if dataset_files(root) != before:
         raise ValueError("dataset changed while it was inspected")
     goals = sorted({r["goal"] for r in rows if r["verdict"] == "pass" and r["goal"]})
-    rolls = [r["measured"]["wrist_roll_f0_rad"] for r in rows if "wrist_roll_f0_rad" in r["measured"]]
-    pans = [r["measured"]["pan_f0_rad"] for r in rows if "pan_f0_rad" in r["measured"]]
+    passed = [r["measured"] for r in rows if r["verdict"] == "pass"]
+    rolls = [m["wrist_roll_f0_rad"] for m in passed if "wrist_roll_f0_rad" in m]
+    pans = [m["pan_f0_rad"] for m in passed if "pan_f0_rad" in m]
     summary = {
         "wrist_roll_f0_median_rad": round(statistics.median(rolls), 3) if rolls else None,
         "pan_f0_std_rad": round(statistics.pstdev(pans), 4) if len(pans) >= 2 else (0.0 if pans else None),

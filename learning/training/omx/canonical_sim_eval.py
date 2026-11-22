@@ -1,4 +1,5 @@
 """Closed-loop MuJoCo evaluation for canonical ACT policies."""
+from collections import deque
 from pathlib import Path
 import sys
 
@@ -47,10 +48,13 @@ def eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str,
         layout.arms[a].wait = (canon_q[a] if a == arm else idle_q[a]).copy()
         layout.sim_arms[a].wait = (canon_q[a] if a == arm else idle_q[a]).copy()
     plan = tasks.get_task(layout, _SIM_TASK_MAP[task_name])
+    in_feats = getattr(getattr(policy, "config", None), "input_features", None) or {}
+    goal_feat = in_feats.get("observation.environment_state")
+    if goal_feat is not None and tuple(goal_feat.shape) != (len(H1_POLICY_GOALS),):
+        raise ValueError("expected the 10-slot H1 policy goal feature")
     world = sim.World(layout)
     camera_deg = spec.get("camera_angle_jitter_deg", 0.0)
     set_camera_angles = camera_angle_sampler(world, arm_view, camera_deg, 1) if camera_cases is not None and camera_deg else None
-    in_feats = getattr(getattr(policy, "config", None), "input_features", None) or {}
     top_key = "top" if "observation.images.top" in in_feats else "rs"
     successes, teacher_ok, neighbour_hits, contact_hits = 0, 0, 0, 0
     layer_stats = {}
@@ -59,6 +63,10 @@ def eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str,
             seed = seed_base + i
             angles = set_camera_angles(seed) if set_camera_angles else None
             step, here = _step_and_here(plan, arm, i)
+            goal_arr = None
+            if goal_feat is not None:
+                goal_arr = np.zeros((1, len(H1_POLICY_GOALS)), dtype=np.float32)
+                goal_arr[0, H1_POLICY_GOALS.index(step["to"])] = 1.0
             layer_key = step["to"].split("-")[-1] if "-" in step["to"] else "l0"
             row_l = layer_stats.setdefault(layer_key, {"episodes": 0, "lifted": 0, "sustained_lift": 0, "successes": 0})
             row_l["episodes"] += 1
@@ -78,13 +86,7 @@ def eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str,
             start_z = world.pose(data, step["container"])[0][2]
             peak, held, held_max = 0.0, 0, 0
             policy.reset()
-            hist = []
-            goal_feat = in_feats.get("observation.environment_state")
-            goal_arr = None
-            if goal_feat is not None and step["to"] in H1_POLICY_GOALS:
-                n_slots = int(goal_feat.shape[0])
-                goal_arr = np.zeros((1, n_slots), dtype=np.float32)
-                goal_arr[0, min(H1_POLICY_GOALS.index(step["to"]), n_slots - 1)] = 1.0
+            hist = deque(maxlen=delay_frames + 1)
             with torch.inference_mode():
                 for _ in range(_EVAL_ROLLOUT_FRAMES):
                     obs = {
@@ -95,8 +97,7 @@ def eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str,
                     for key, cam in ((top_key, "top"), ("side", "side"), ("wrist", arm_view)):
                         obs[f"observation.images.{key}"] = torch.from_numpy(world.render(data, cam)).permute(2, 0, 1)[None].float() / 255.0
                     hist.append(obs)
-                    used = hist[-1 - delay_frames] if len(hist) > delay_frames else hist[0]
-                    cmd = post(policy.select_action(pre(used))).cpu().numpy()[0]
+                    cmd = post(policy.select_action(pre(hist[0]))).cpu().numpy()[0]
                     teacher.frame(data, {arm: cmd, **idle}, step["id"])
                     dz = world.pose(data, step["container"])[0][2] - start_z
                     peak = max(peak, dz)

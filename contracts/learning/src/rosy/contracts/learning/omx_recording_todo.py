@@ -29,6 +29,9 @@ VALID_SPLIT_ROLES = ("train", "eval_holdout", "exclude")
 VALID_WRIST_BRANCHES = ("positive_canonical", "negative_raw", "flipped_to_canonical")
 DEFAULT_TARGETS = {"ship-h1": 30, "ship-h2": 15}
 NEAR_FIXED_PAN_STD_RAD = 0.08  # ~2.5 norm std dev -> pick pose variance warning
+BENCH_ARM_BY_ROW = ("arm_a", "arm_b", "arm_b")  # deploy/robot/omx/ship_task_cards.py
+INVENTORY_COUNT_FIELDS = ("target_episodes", "episodes_raw", "episodes_pass", "episodes_review", "episodes_reject",
+                          "remaining_episodes", "holdout_episodes", "episodes_negative_branch", "episodes_canonical_branch")
 
 ARM_META = {
     "arm_b": {
@@ -135,7 +138,7 @@ FILMING_PROTOCOL = {
     "wrist_roll_branch_limit_norm": WRIST_ROLL_BRANCH_LIMIT_NORM,
     "hf_repo": "robotteam/rosy-omx-data",
     "curated_prefix": "curated/omx-real-v1",
-    "naming_template": "real/curated/{arm_side}_{arm_id}_{legacy_layer}_{slot_range}_{yyyymmdd}",
+    "naming_template": "curated/omx-real-v1/{bay}/{arm_id}/{source_repo_name}",
     "authority_note": (
         "수집 목표·현황 뷰입니다. 실물 촬영은 셀 PC bench_record.py의 task_card_id로 진행하며, "
         "학습 투입은 data_gate 통과본만 허용되고 실물 적용은 Fleet 승인이 별도 필요합니다(D-911)."
@@ -165,6 +168,14 @@ def _str_opt(val, label: str, max_len: int = 256) -> str | None:
     return val
 
 
+def _mapping_opt(value, label: str) -> dict:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be mapping")
+    return value
+
+
 def validate_manifest(doc: dict) -> dict:
     if not isinstance(doc, dict) or doc.get("schema") != CURATED_MANIFEST_SCHEMA:
         raise ValueError(f"manifest requires schema {CURATED_MANIFEST_SCHEMA}")
@@ -184,16 +195,17 @@ def validate_manifest(doc: dict) -> dict:
         if entry.get("split_role") not in VALID_SPLIT_ROLES:
             raise ValueError(f"datasets[{idx}].split_role invalid")
         if entry["direction"] == "load":
-            if entry.get("slot_id") not in SLOT_BY_ID or SLOT_BY_ID[entry["slot_id"]]["bay"] != bay:
+            slot_id = entry.get("slot_id")
+            if not isinstance(slot_id, str) or slot_id not in SLOT_BY_ID or SLOT_BY_ID[slot_id]["bay"] != bay:
                 raise ValueError(f"datasets[{idx}].slot_id mismatches bay")
-        eps = entry.get("episodes") or {}
+        eps = _mapping_opt(entry.get("episodes"), f"datasets[{idx}].episodes")
         _int_ge0(eps.get("raw_total", 0), f"datasets[{idx}].episodes.raw_total")
         _int_ge0(eps.get("curated_total", 0), f"datasets[{idx}].episodes.curated_total")
-        dg = entry.get("data_gate") or {}
-        counts = dg.get("counts") or {}
+        dg = _mapping_opt(entry.get("data_gate"), f"datasets[{idx}].data_gate")
+        counts = _mapping_opt(dg.get("counts"), f"datasets[{idx}].data_gate.counts")
         for k in ("pass", "review", "reject"):
             _int_ge0(counts.get(k, 0), f"datasets[{idx}].data_gate.counts.{k}")
-        wb = entry.get("wrist_roll_branch") or {}
+        wb = _mapping_opt(entry.get("wrist_roll_branch"), f"datasets[{idx}].wrist_roll_branch")
         if wb and wb.get("branch") not in VALID_WRIST_BRANCHES:
             raise ValueError(f"datasets[{idx}].wrist_roll_branch.branch invalid")
         _finite_opt(entry.get("pick_pan_std_rad"), f"datasets[{idx}].pick_pan_std_rad")
@@ -206,14 +218,24 @@ def validate_inventory(doc: dict) -> dict:
     slots = doc.get("slots")
     if not isinstance(slots, list) or len(slots) > 128:
         raise ValueError("inventory slots must be bounded list")
+    for key in ("hf_repo", "hf_revision", "curated_version", "manifest_sha256", "generated_at"):
+        _str_opt(doc.get(key), key)
+    seen = set()
     for idx, item in enumerate(slots):
         if not isinstance(item, dict):
             raise ValueError(f"slots[{idx}] must be mapping")
-        if item.get("arm") not in ARM_IDS or item.get("slot_id") not in SLOT_BY_ID:
+        arm, slot_id = item.get("arm"), item.get("slot_id")
+        if arm not in ARM_IDS or not isinstance(slot_id, str) or slot_id not in SLOT_BY_ID:
             raise ValueError(f"slots[{idx}] invalid arm or slot_id")
-        for key in ("target_episodes", "episodes_raw", "episodes_pass", "episodes_review", "episodes_reject", "remaining_episodes"):
+        if (arm, slot_id) in seen:
+            raise ValueError(f"slots[{idx}] duplicates an arm and slot")
+        seen.add((arm, slot_id))
+        for key in INVENTORY_COUNT_FIELDS:
             if key in item:
                 _int_ge0(item[key], f"slots[{idx}].{key}")
+        for key in ("near_fixed_layout", "negative_branch_only"):
+            if key in item and not isinstance(item[key], bool):
+                raise ValueError(f"slots[{idx}].{key} must be boolean")
         _finite_opt(item.get("pick_pan_std_rad"), f"slots[{idx}].pick_pan_std_rad")
     return doc
 
@@ -297,10 +319,13 @@ def _local_goal_counts(local_receipts: list[dict] | None) -> dict[tuple[str, str
     out: dict[tuple[str, str], int] = {}
     for rec in local_receipts or []:
         arm = rec.get("arm")
-        if arm not in ARM_IDS or rec.get("dataset_reject"):
+        source = rec.get("source")
+        if arm not in ARM_IDS or rec.get("dataset_reject") or not isinstance(source, dict) or source.get("kind") != "real":
             continue
         for g, n in (rec.get("goals_passing_counts") or {}).items():
-            out[(arm, g)] = max(out.get((arm, g), 0), int(n))
+            slot = SLOT_BY_ID.get(g)
+            if slot and slot["data_gate_scope"] == rec.get("goal_scope", "h1"):
+                out[(arm, g)] = max(out.get((arm, g), 0), n)
     return out
 
 
@@ -321,7 +346,14 @@ def build_recording_todo(inventory: dict | None, *, local_receipts: list[dict] |
     for row in inventory["slots"]:
         slot = SLOT_BY_ID[row["slot_id"]]
         key = (row["arm"], slot["bay"], slot["layer"])
-        groups.setdefault(key, []).append({**row, "local_gate_passed": local_counts.get((row["arm"], row["slot_id"]))})
+        groups.setdefault(key, []).append({
+            **slot, "arm": row["arm"],
+            **{field: row.get(field, 0) for field in INVENTORY_COUNT_FIELDS},
+            "negative_branch_only": row.get("negative_branch_only", False),
+            "near_fixed_layout": row.get("near_fixed_layout", False),
+            "task_card_id": slot["task_card_id"] if BENCH_ARM_BY_ROW[slot["row"]] == row["arm"] else None,
+            "local_gate_passed": local_counts.get((row["arm"], row["slot_id"])),
+        })
 
     prio_rank = {"p1": 0, "p2": 1, "p3": 2, "done": 3}
     cards = []
@@ -373,9 +405,9 @@ def build_recording_todo(inventory: dict | None, *, local_receipts: list[dict] |
             "remaining_episodes": rem,
             "holdout_episodes": holdout,
             "warnings": warnings,
-            "hf_path_hint": f"real/curated/{arm_meta['side'].capitalize()}_{arm}_{lm['legacy_layer']}_{legacy_slots[0]}_{legacy_slots[-1]}",
-            "bench_card_ids": [i["task_card_id"] for i in items],
-            "goal_text_examples": [SLOT_BY_ID[i["slot_id"]]["canonical_task"] for i in items],
+            "hf_path_hint": f"curated/omx-real-v1/{bay}/{arm}/",
+            "bench_card_ids": [i["task_card_id"] for i in items if i["task_card_id"]],
+            "goal_text_examples": [i["canonical_task"] for i in items if i["task_card_id"]],
             "slots": items,
         })
     cards.sort(key=lambda c: (prio_rank[c["priority"]], 0 if c["bay"] == "ship-h1" else 1, c["layer"], 0 if c["arm"] == "arm_b" else 1))

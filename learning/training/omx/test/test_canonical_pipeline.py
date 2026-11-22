@@ -338,7 +338,7 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
 
     dg_mod = types.ModuleType("data_gate")
     dg_mod.gate = lambda dst, **k: {"counts": {"pass": 2, "review": 0, "reject": 0}}
-    dg_mod.check_receipt = lambda dst: [0, 2]
+    dg_mod.check_receipt = lambda dst, *, expected_scope=None: [0, 2]
     monkeypatch.setitem(sys.modules, "data_gate", dg_mod)
 
     class _FakeArm:
@@ -500,8 +500,9 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     (watch / "recording-inventory.json").write_text(json.dumps(inv_doc), encoding="utf-8")
     (watch / "real_aligned" / "real" / "arm_a").mkdir(parents=True, exist_ok=True)
     (watch / "real_aligned" / "real" / "arm_a" / "gate-receipt.json").write_text(json.dumps({
-        "arm": "arm_a", "counts": {"pass": 5, "review": 0, "reject": 0}, "dataset_reject": [],
-        "episodes": [{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(5)],
+        "arm": "arm_a", "source": {"kind": "real"}, "counts": {"pass": 5, "review": 0, "reject": 0}, "dataset_reject": [],
+        "episodes": [None, {"verdict": "pass", "goal": []},
+                     *[{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(5)]],
     }), encoding="utf-8")
     svc = cp.CanonicalService(tmp_path / "canon_todo", cfg)
     todo_res = svc.recording_todo()
@@ -509,6 +510,44 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     assert str(tmp_path) not in json.dumps(todo_res)
     l0_a = next(c for c in todo_res["cards"] if c["card_id"] == "arm_a-ship-h1-l0")
     assert any(s["slot_id"] == "ship-h1r0-l0" and s["local_gate_passed"] == 5 for s in l0_a["slots"])
+    b_first_tier = next(c for c in todo_res["cards"] if c["card_id"] == "arm_b-ship-h1-l0")
+    assert b_first_tier["bench_card_ids"] == ["belt-to-ship-h1r2-l0", "belt-to-ship-h1r1-l0"]
+
+
+def test_h1_train_worker_refuses_h2_gate_receipt(tmp_path):
+    import canonical_workers as workers
+
+    dg = workers.data_gate
+    (tmp_path / dg.RECEIPT).write_text(json.dumps({
+        "schema": dg.SCHEMA, "goal_scope": "h2", "files": dg.dataset_files(tmp_path),
+        "dataset_reject": [], "episodes": [{"episode_index": 0, "verdict": "pass"}],
+    }), encoding="utf-8")
+    with pytest.raises(ValueError, match="goal_scope 'h2'"):
+        workers.run_train_stage({"arm_id": "arm_a", "params": {"dataset_root": str(tmp_path)}}, tmp_path)
+
+
+def test_recording_todo_rejects_malformed_inventory_and_manifest(tmp_path):
+    import canonical_recording_todo as todo
+    from rosy.contracts.learning import omx_recording_todo as rt
+
+    path = tmp_path / "recording-inventory.json"
+    slot = {"arm": "arm_a", "slot_id": "ship-h1r0-l0"}
+    invalid_inventory = {"schema": rt.COLLECTION_INVENTORY_SCHEMA,
+                         "slots": [{**slot, "holdout_episodes": "bogus"}]}
+    invalid_manifest = {"schema": rt.CURATED_MANIFEST_SCHEMA, "datasets": [
+        {**slot, "bay": "ship-h1", "direction": "load", "split_role": "train", "data_gate": "bogus"},
+    ]}
+    for document in (invalid_inventory, invalid_manifest):
+        path.write_text(json.dumps(document), encoding="utf-8")
+        assert todo.build_service_todo(path, {})["inventory_status"] == "invalid"
+
+    minimal_inventory = {"schema": rt.COLLECTION_INVENTORY_SCHEMA,
+                         "slots": [{**slot, "target_episodes": 30, "remaining_episodes": 30}]}
+    path.write_text(json.dumps(minimal_inventory), encoding="utf-8")
+    result = todo.build_service_todo(path, {})
+    assert result["inventory_status"] == "ready"
+    assert result["cards"][0]["bench_card_ids"] == ["belt-to-ship-h1r0-l0"]
+    assert result["cards"][0]["slots"][0]["row"] == 0
 
 
 def test_canonical_watch_and_token_hardening(tmp_path):

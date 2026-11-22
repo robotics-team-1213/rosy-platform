@@ -362,7 +362,8 @@ function renderAll() {
 }
 
 async function loadSnapshot({background = false} = {}) {
-  const [next] = await Promise.all([api(''), loadRecordingTodo()]);
+  if (!background) void loadRecordingTodo();
+  const next = await api('');
   if (background && busy) return;
   snap = next;
   renderAll();

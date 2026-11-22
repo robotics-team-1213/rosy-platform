@@ -195,7 +195,7 @@ function renderCard(card) {
       el('td', `${s.slot_id} (${s.legacy_slot})`, 'canon-mono'),
       el('td', `${s.episodes_pass}/${s.episodes_raw}${loc}`, 'canon-mono'),
       el('td', String(s.remaining_episodes), 'canon-mono'),
-      el('td', `${br} · ${s.task_card_id}`, 'canon-mono'),
+      el('td', `${br} · ${s.task_card_id || '이 팔의 촬영 카드 없음'}`, 'canon-mono'),
     );
     tbody.append(tr);
   }
@@ -208,7 +208,7 @@ function renderCard(card) {
   const copyBtn = document.createElement('ui-button');
   copyBtn.setAttribute('kind', 'quiet');
   copyBtn.setAttribute('type', 'button');
-  copyBtn.textContent = '촬영 경로·카드 ID 복사';
+  copyBtn.textContent = card.bench_card_ids.length ? '촬영 경로·카드 ID 복사' : '저장 경로 복사';
   actionIcon(copyBtn, 'list');
   copyBtn.addEventListener('click', () => copyTemplateText(card));
   foot.append(copyBtn);
@@ -284,10 +284,13 @@ function applyView(view) {
 }
 
 export async function loadRecordingTodo() {
-  const res = await accountFetch('/api/learning/canonical/recording-todo', {cache: 'no-store'});
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  todoDoc = data;
+  try {
+    const res = await accountFetch('/api/learning/canonical/recording-todo', {cache: 'no-store'});
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    todoDoc = await res.json();
+  } catch {
+    todoDoc = {...todoDoc, inventory_status: 'unavailable'};
+  }
   renderRecordingTodo();
 }
 

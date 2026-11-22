@@ -85,10 +85,11 @@ def _collect_local_receipts(watch_roots: dict) -> list[dict]:
             full = read_bounded_json(rpath, root=wroot)
             if full and isinstance(full.get("episodes"), list):
                 for ep in full["episodes"]:
-                    if ep.get("verdict") == "pass" and ep.get("goal"):
+                    if isinstance(ep, dict) and ep.get("verdict") == "pass" and isinstance(ep.get("goal"), str):
                         g = ep["goal"]
                         goals_counts[g] = goals_counts.get(g, 0) + 1
-            receipts.append({**r, "goals_passing_counts": goals_counts})
+            if full:
+                receipts.append({**r, "goal_scope": full.get("goal_scope", "h1"), "goals_passing_counts": goals_counts})
     return receipts
 
 

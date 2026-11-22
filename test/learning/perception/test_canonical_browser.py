@@ -248,6 +248,10 @@ def test_unconfigured_canonical_page_shows_builtin_spec_and_blocks_start(tmp_pat
                 playwright.expect(page.locator("#canon-todo-empty")).to_be_visible()
                 playwright.expect(page.locator("#canon-job-submit")).to_be_disabled()
                 playwright.expect(page.locator("#canon-job-cause")).to_contain_text("설정되지 않았습니다")
+                page.route("**/api/learning/canonical/recording-todo", lambda route: route.fulfill(status=503))
+                page.reload(wait_until="domcontentloaded")
+                playwright.expect(page.locator("#canon-todo-meta")).to_contain_text("unavailable")
+                playwright.expect(page.locator("#canon-kpis")).to_contain_text("0.274 < 0.35 rad")
                 assert errors == []
             finally:
                 browser.close()
