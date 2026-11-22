@@ -138,11 +138,11 @@
   min-height: 0;
   gap: 0;
 }
-.robot-stage-main > #estop-feedback {
-  inline-size: calc(100% - 2 * var(--inset-task-page));
-  margin: var(--space-2) auto 0;
-}
 @media (width >= 64rem) {
+  .fleet-workspace:has(#robot-stage > .robot-dock) > #estop-feedback {
+    inline-size: calc(100% - 56px - 2 * var(--inset-task-page));
+    margin-inline: var(--inset-task-page) auto;
+  }
   #robot-stage > .robot-panel { position: relative; top: auto; align-self: stretch; min-height: 0; max-height: 100%; overflow: hidden; }
   #robot-stage > .robot-dock { align-self: stretch; min-height: 0; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 }
