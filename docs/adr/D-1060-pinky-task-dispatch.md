@@ -11,11 +11,11 @@
 
 ### Decision
 
-1. 소비자 `pipeline_pinky_dispatch.dispatch_tick`가 파이프라인 1초 루프(`depart_tick` 다음)에서 돈다. 장소 목표가 있는 QUEUED 행마다 `app.state.trip_plan(robot, TripRequest(to=place), 요청자)` → `TripRunner.start(plan_id, 요청자)`를 한 번 부른다. 직접 goal을 보내지 않는다.
-2. 한 번만: 계획 전에 SENDING을, 시작 전에 `plan_id`(= trip_id)를 장부에 쓴다. 다음 tick에서 SENDING 행을 만나면(재기동·응답 유실·예외) 다시 계획·시작하지 않는다. trip이 있으면 SENT, 없으면 FAILED `DISPATCH_INTERRUPTED`.
+1. 소비자 `pipeline_pinky_dispatch.dispatch_tick`가 파이프라인 1초 루프(`depart_tick` 다음)에서 돈다. 장소 목표가 있는 QUEUED 행마다 계획 전 `start_token`을 읽고 `app.state.trip_plan(robot, TripRequest(to=place), 요청자)` → `TripRunner.start(plan_id, 요청자, start_token=token, start_guard=...)`를 한 번 부른다. 직접 goal을 보내지 않으며, `start_guard`가 준비 중 취소·dispatch 닫힘·cancel-all·사람/셀 보류를 막는다.
+2. 한 번만: 계획 전에 SENDING을, 시작 전에 `plan_id`(= trip_id)를 장부에 쓴다. 다음 tick에서 SENDING 행을 만나면(재기동·응답 유실·예외) 다시 계획·시작하지 않는다. trip이 있으면 SENT, 없으면 FAILED `DISPATCH_INTERRUPTED`(취소 요청이 있었으면 `CANCELLED`).
 3. SENT = trip 시작 영수증(trip 상태·lease id). ARRIVED·FAILED·CANCELLED는 trip 상태(`arrived`·`failed`·`canceled`)에서만 온다. 타이머로 정하지 않는다.
 4. 거절은 끝 상태 REFUSED와 사유이며 아무것도 움직이지 않는다. 사람이 새 작업을 보낸다.
-5. 취소: `POST /api/fleet/pipeline/pinky-tasks/{task_id}/cancel`(operator, 정지는 거절하지 않음). QUEUED는 끝내고, 진행 중이면 `TripRunner.cancel`로 trip을 멈춘다. 시작 중에 취소되면 시작 직후 그 trip을 취소한다.
+5. 취소: `POST /api/fleet/pipeline/pinky-tasks/{task_id}/cancel`(operator, 정지는 거절하지 않음). QUEUED는 바로 끝내고(`confirmed: true`), 진행 중(`SENDING`·`SENT`)이면 `cancel_requested`를 남기고 `TripRunner.cancel` 또는 `start_guard` 확인 후에만 끝낸다(실패하거나 시작 중이면 `confirmed: false`, 매 tick이 재시도하고 trip 상태로 맞춘다). 시작 후 취소가 겹치면 연 trip을 즉시 취소한다.
 6. `ROSY_FLEET_PINKY_TASK_DISPATCH=1`일 때만 돈다(기본 꺼짐). 배포만으로 주행하지 않는다.
 
 ### 가드 목록

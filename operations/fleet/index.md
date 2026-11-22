@@ -107,6 +107,7 @@
 
 - 2026-11-21 · uncommitted · depart_tick: a queued exit goal is withdrawn, not SENT
 - 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
+- 2026-11-22 · uncommitted · fix(fleet): Pinky 배차 start_guard·SENDING 취소 확인 및 실제 TripRunner E2E 검증 (D-1060)
 - 2026-11-21 · uncommitted · docs(adr): Pinky 작업 배차 ADR 번호를 D-1060으로 옮김
 - 2026-11-21 · uncommitted · fix(fleet): Pinky 작업 배차는 이름 있는 운영자 요청만 (D-1059 검토)
 - 2026-11-21 · uncommitted · feat(fleet): Pinky 작업을 Fleet trip으로 한 번 배차 (D-1059, 패널 5 조각 3)

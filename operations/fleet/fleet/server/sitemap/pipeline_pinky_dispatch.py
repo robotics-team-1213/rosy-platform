@@ -69,6 +69,23 @@ def last_cancel_all_at(task_service) -> str | None:
     return row[0] if row is not None else None
 
 
+def _cell_refusal(state, place, robot_id) -> str | None:
+    cell_id = CELL_AT_PLACE.get(place)
+    if cell_id is None:
+        return None
+    cell = state.omx_cell_states.get(cell_id) or {}
+    if "ABORTED" in (cell.get("phase"), cell.get("prev_phase")) or any(
+            (state.arm_holds.get(arm) or {}).get("held") for arm in ARMS_OF_CELL[cell_id]):
+        return "CELL_HOLD"
+    docked = (cell.get("docked_robot") or {}).get("robot_id")
+    if (cell.get("amr_motion_inhibited") or cell.get("phase") == "ARM_IN_BED_ZONE"
+            or (docked is not None and docked != robot_id)
+            or any(t.get("cell_id") == cell_id and t.get("status") in ("RUNNING", "PAUSED_HUMAN")
+                   for t in state.omx_cell_tasks.values())):
+        return "CELL_BUSY"
+    return None
+
+
 def refusal(state, task: dict, *, now: float, active, robot_row, human_detected: bool, dispatch_open: bool,
             cancel_all_at: str | None, trip_busy: bool) -> str | None:
     """Why this QUEUED task may not drive now, or None. Pure: every input is read by the caller."""
@@ -100,18 +117,8 @@ def refusal(state, task: dict, *, now: float, active, robot_row, human_detected:
         return "CANCEL_ALL_AFTER_REQUEST"
     if human_detected or any(s.get("phase") == "HUMAN_HOLD" for s in state.omx_cell_states.values()):
         return "HUMAN_HOLD"
-    cell_id = CELL_AT_PLACE.get(place)
-    if cell_id is not None:
-        cell = state.omx_cell_states.get(cell_id) or {}
-        if "ABORTED" in (cell.get("phase"), cell.get("prev_phase")) or any(
-                (state.arm_holds.get(arm) or {}).get("held") for arm in ARMS_OF_CELL[cell_id]):
-            return "CELL_HOLD"
-        docked = (cell.get("docked_robot") or {}).get("robot_id")
-        if (cell.get("amr_motion_inhibited") or cell.get("phase") == "ARM_IN_BED_ZONE"
-                or (docked is not None and docked != robot_id)
-                or any(t.get("cell_id") == cell_id and t.get("status") in ("RUNNING", "PAUSED_HUMAN")
-                       for t in state.omx_cell_tasks.values())):
-            return "CELL_BUSY"
+    if cell_why := _cell_refusal(state, place, robot_id):
+        return cell_why
     if trip_busy or any(t is not task and _ours(t) and t.get("robot_id") == robot_id and t.get("status") in IN_FLIGHT
                         for t in state.pinky_tasks.values()):
         return "ROBOT_DISPATCH_IN_FLIGHT"
@@ -133,7 +140,10 @@ def settle(task: dict, runner, now: float) -> bool:
     view = runner.view(trip_id) if (runner is not None and trip_id) else None
     if task["status"] == "SENDING":  # left over: never plan or start again
         if view is None:
-            _end(task, "FAILED", "DISPATCH_INTERRUPTED", now)
+            if task.get("cancel_requested"):
+                _end(task, "CANCELLED", "OPERATOR_CANCEL", now)
+            else:
+                _end(task, "FAILED", "DISPATCH_INTERRUPTED", now)
             return True
         task.update(status="SENT", trip_id=trip_id, sent_at=round(now, 3), receipt={"trip_state": view.get("state")})
     if view is None:
@@ -153,17 +163,23 @@ def settle(task: dict, runner, now: float) -> bool:
     return True
 
 
-async def dispatch_tick(state, *, console, runner, plan, task_service, active, human_detected: bool, save,
+async def dispatch_tick(state, *, console, runner, plan, task_service, active, human_detected, save,
                         now: float, trip_request) -> list[dict]:
     """One pass: settle in-flight rows, then dispatch each QUEUED place task at most once."""
     if not enabled():
         return []
+    human_now = (lambda: bool(human_detected())) if callable(human_detected) else (lambda: bool(human_detected))
     for task in list(state.pinky_tasks.values()):
         if not (_ours(task) and task.get("status") in IN_FLIGHT):
             continue
-        if task.get("cancel_requested") and (runner.view(task.get("trip_id")) or {}).get("state") in TRIP_OPEN:
-            task["cancel_receipt"] = await _cancel_trip(runner, task["trip_id"], task.get("cancelled_by"))  # unconfirmed: ask again
-        if settle(task, runner, now):
+        dirty = False
+        trip_id = task.get("trip_id") or task.get("plan_id")
+        if task.get("cancel_requested") and runner is not None and trip_id and (runner.view(trip_id) or {}).get("state") in TRIP_OPEN:
+            task["cancel_receipt"] = await _cancel_trip(runner, trip_id, task.get("cancelled_by"))  # unconfirmed: ask again
+            if not task.get("trip_id"):
+                task["trip_id"] = trip_id
+            dirty = True
+        if settle(task, runner, now) or dirty:
             save()
     queued = sorted((t for t in state.pinky_tasks.values() if t.get("status") == "QUEUED"),
                     key=lambda t: t.get("created_at") or 0)
@@ -176,15 +192,22 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
             _end(task, "REFUSED", why if task.get("place_id") else "ACTION_NOT_DISPATCHABLE", now)
         save()
         return sent
+    sending = getattr(state, "_pinky_dispatch_sending", None)
+    if sending is None:
+        sending = state._pinky_dispatch_sending = set()
     rows = {row["robot_id"]: row for row in (await console.snapshot())["robots"]}
-    dispatch_open = bool(task_service.store.dispatch_control().get("dispatch_enabled"))
-    cancel_all_at = last_cancel_all_at(task_service)
+    awaited = False
     for task in queued:
+        if awaited:
+            rows = {row["robot_id"]: row for row in (await console.snapshot())["robots"]}
+            awaited = False
         if task.get("status") != "QUEUED":  # an operator cancel landed while this tick awaited: never claim it
             continue
+        dispatch_open = bool(task_service.store.dispatch_control().get("dispatch_enabled"))
+        cancel_all_at = last_cancel_all_at(task_service)
         robot_id = task.get("robot_id")
         why = refusal(state, task, now=now, active=active, robot_row=rows.get(robot_id),
-                      human_detected=human_detected, dispatch_open=dispatch_open, cancel_all_at=cancel_all_at,
+                      human_detected=human_now(), dispatch_open=dispatch_open, cancel_all_at=cancel_all_at,
                       trip_busy=bool(runner.robot_busy(robot_id)))
         if why is not None:
             _end(task, "REFUSED", why, now)
@@ -193,24 +216,58 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
         task.update(status="SENDING", sending_at=round(now, 3), plan_id=None, trip_id=None)
         save()  # the claim is on disk before anything is planned or started
         token = runner._start_token(robot_id)  # no await since the claim: a cancel-all or E-stop during the plan refuses the start
+        tid = task.get("task_id")
+
+        async def _guard(t=task, rid=robot_id) -> None:
+            from fleet.server.trip_ports import TripError
+            if t.get("cancel_requested") or t.get("status") != "SENDING":
+                raise TripError(409, "OPERATOR_CANCEL")
+            if not bool(task_service.store.dispatch_control().get("dispatch_enabled")):
+                raise TripError(409, "DISPATCH_CLOSED")
+            latest_cancel = last_cancel_all_at(task_service)
+            if latest_cancel is not None and latest_cancel >= _iso(float(t.get("created_at") or 0.0)):
+                raise TripError(409, "CANCEL_ALL_AFTER_REQUEST")
+            if human_now() or any(s.get("phase") == "HUMAN_HOLD" for s in state.omx_cell_states.values()):
+                raise TripError(409, "HUMAN_HOLD")
+            if cell_why := _cell_refusal(state, t.get("place_id"), rid):
+                raise TripError(409, cell_why)
+
+        sending.add(tid)
         try:
+            awaited = True
             planned = await plan(robot_id, trip_request(task["place_id"]), task["requested_by"])
             task["plan_id"] = planned["plan_id"]
             save()  # a restart finds the plan id and never starts a second trip
-            if task["status"] != "SENDING":
+            if task.get("cancel_requested") or task["status"] != "SENDING":
+                if task["status"] == "SENDING":
+                    _end(task, "CANCELLED", "OPERATOR_CANCEL", now)
+                save()
                 continue  # cancelled while planning: the plan is never started
-            trip = await runner.start(planned["plan_id"], task["requested_by"], start_token=token)
+            trip = await runner.start(planned["plan_id"], task["requested_by"], start_token=token, start_guard=_guard)
+            task["trip_id"] = trip["trip_id"]
         except Exception as exc:  # a refusal of the trip path (TripError, coded HTTPException) is data
             if task["status"] == "SENDING":
-                _end(task, "FAILED", _code(exc), now)
+                if task.get("cancel_requested"):
+                    _end(task, "CANCELLED", "OPERATOR_CANCEL", now)
+                else:
+                    _end(task, "FAILED", _code(exc), now)
             save()
             continue
-        if task["status"] != "SENDING":  # cancelled while starting: stop the trip it just opened
-            receipt = await _cancel_trip(runner, trip["trip_id"], task.get("cancelled_by"))
-            task.update(trip_id=trip["trip_id"], cancel_receipt=receipt)
-            if _unconfirmed(receipt):  # the stop did not land: the trip is live, so the row stays in flight and re-asks
-                task.update(status="SENT", reason=None, ended_at=None, sent_at=round(now, 3), cancel_requested=True,
-                            receipt={"trip_state": trip.get("state")})
+        finally:
+            sending.discard(tid)
+        if task.get("cancel_requested") or task["status"] != "SENDING":  # cancelled while starting: stop the trip it just opened
+            if task["status"] not in TERMINAL:
+                receipt = await _cancel_trip(runner, trip["trip_id"], task.get("cancelled_by"))
+                task["cancel_receipt"] = receipt
+                if task["status"] in TERMINAL:
+                    pass
+                elif _unconfirmed(receipt):  # the stop did not land: the trip is live, so the row stays in flight and re-asks
+                    task.update(status="SENT", reason=None, ended_at=None, sent_at=round(now, 3), cancel_requested=True,
+                                receipt={"trip_state": trip.get("state")})
+                elif receipt.get("error") == "TRIP_NOT_RUNNING":
+                    settle(task, runner, now)
+                else:
+                    _end(task, "CANCELLED", "OPERATOR_CANCEL", now)
             save()
             continue
         task.update(status="SENT", trip_id=trip["trip_id"], sent_at=round(now, 3),
@@ -227,6 +284,8 @@ def _code(exc) -> str:
 
 
 async def _cancel_trip(runner, trip_id, principal_id) -> dict:
+    if runner is None:
+        return {"error": "TRIP_PATH_UNAVAILABLE"}
     try:
         return await runner.cancel(trip_id, principal_id, "pinky_task_cancel")
     except Exception as exc:  # TRIP_NOT_RUNNING: it already ended; its state settles the row
@@ -242,13 +301,25 @@ async def cancel_task(state, task: dict, *, runner, principal_id, now: float) ->
     """Cancel never refuses a stop: a queued row ends; an in-flight one ends only when its trip confirms the cancel.
     A failed or lost cancel leaves the row in flight (cancel_requested) and every tick re-asks and re-reads the trip."""
     task.update(cancelled_by=principal_id, cancel_requested=True)
-    if task["status"] in IN_FLIGHT and task.get("trip_id"):
-        receipt = task["cancel_receipt"] = await _cancel_trip(runner, task["trip_id"], principal_id)
-        if _unconfirmed(receipt):
-            return task
-        if receipt.get("error") == "TRIP_NOT_RUNNING":  # it ended by itself first: its own state is the truth
-            settle(task, runner, now)
-            return task
+    if task["status"] in IN_FLIGHT:
+        trip_id = task.get("trip_id") or task.get("plan_id")
+        view = runner.view(trip_id) if (runner is not None and trip_id) else None
+        if (task["status"] == "SENT" and trip_id) or (view is not None and view.get("state") in TRIP_OPEN):
+            receipt = task["cancel_receipt"] = await _cancel_trip(runner, trip_id, principal_id)
+            if trip_id and not task.get("trip_id"):
+                task["trip_id"] = trip_id
+            if _unconfirmed(receipt):
+                return task
+            if receipt.get("error") == "TRIP_NOT_RUNNING":  # it ended by itself first: its own state is the truth
+                settle(task, runner, now)
+                return task
+        elif task["status"] == "SENDING":
+            if view is not None:  # it already ended in runner (e.g. arrived) while sending
+                task["trip_id"] = trip_id
+                settle(task, runner, now)
+                return task
+            if task.get("task_id") in (getattr(state, "_pinky_dispatch_sending", None) or ()):
+                return task  # plan/start is actively running: let start_guard/dispatch_tick abort and confirm
     _end(task, "CANCELLED", "OPERATOR_CANCEL", now)
     return task
 
@@ -271,7 +342,7 @@ def install_pinky_dispatch(app, ctx) -> None:
     app.state.task_dispatch_tick = lambda: dispatch_tick(
         app.state, console=ctx.console, runner=getattr(app.state, "trip_runner", None),
         plan=getattr(app.state, "trip_plan", None), task_service=getattr(app.state, "task_service", None),
-        active=active_or_none(), human_detected=bool(ctx._is_human_detected()), save=ctx._save_ledger,
+        active=active_or_none(), human_detected=ctx._is_human_detected, save=ctx._save_ledger,
         now=time.time(), trip_request=trip_request)
 
     @app.post("/api/fleet/pipeline/pinky-tasks/{task_id}/cancel", dependencies=ctx.operator_guard)

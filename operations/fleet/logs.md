@@ -5628,3 +5628,8 @@
 - gate 변화: Safety-Review robot-08 coordinator review approved fa9516e9ed with the 120 s wait bound (panel7)
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-22 · uncommitted · fix(fleet): Pinky 배차 start_guard·SENDING 취소 확인 및 실제 TripRunner E2E 검증 (D-1060)
+- 변경: `pipeline_pinky_dispatch.py`에 `TripRunner.start(..., start_token=token, start_guard=_guard)`를 연결해 준비 중 운영자 취소·dispatch 닫힘·cancel-all·사람·셀 보류를 출발 전에 차단한다. `SENDING` 진행 중 취소는 확정 전까지 `confirmed: false`를 유지해 `LINK_LOST` 시 `SENT`로 되돌아가는 불일치를 없앴고, `runner is None` 가드·`TRIP_NOT_RUNNING` 정산·다건 tick 스냅샷/래치 재조회를 보강했다.
+- 증거: `test_pinky_task_dispatch.py` 단위 및 실제 `TripRunner`·`TripAdmission`·FastAPI E2E 시험 추가 후 원격 pytest 0 new 통과. 실물 미실시.
+- gate 변화: SOURCE. Safety-Review 재검토.
