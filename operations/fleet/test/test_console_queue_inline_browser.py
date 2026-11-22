@@ -680,7 +680,7 @@ def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_p
     """B-1 (IEC 62682 alarm summarization): one stale robot's snapshot warns are one folded row, not four;
     Enter expands the causes, a 1 Hz refresh keeps the row, its open state and focus, an age-only tick is
     not a new inbox unread, and reading causes posts nothing."""
-    from playwright.sync_api import expect, sync_playwright
+    from playwright.sync_api import expect
 
     stale = _robot("rosy_05", state_age_s=7.0)
     stale["state"].update(battery_status={"level": "warning"}, docking={"state": "DOCK_FAILED"},
@@ -688,8 +688,8 @@ def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_p
     api = {**API, "/api/fleet/trips": {"running": None, "trips": [], "open": []},
            "/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1}, "ts": 0.0, "robots": [stale]}}
     posts = []
-    with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, api, posts)
+    browser, page, errors = _open(None, site, api, posts)
+    try:
         row = page.locator('#warning-list > li[data-folded="1"]')
         expect(page.locator("#warning-list > li")).to_have_count(1)  # one folded row, not battery/dock/degraded/goal
         expect(row.locator("summary")).to_contain_text("rosy_05")
@@ -714,21 +714,22 @@ def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_p
         assert posts == []  # expanding causes is a read; nothing moves
         assert not errors
         _shot(page, "console-stale-rollup-1440x900.png")
+    finally:
         browser.close()
 
 
 def test_inbox_link_opens_and_focuses_decision_and_folded_rows(site):
     """B-2: the inbox's "개입 목록으로" lands on the exact row — a folded B-1 rollup opens on its summary,
     a closed decision row opens through the queue's own toggle — and the jump posts nothing."""
-    from playwright.sync_api import expect, sync_playwright
+    from playwright.sync_api import expect
 
     stale = _robot("rosy_05", state_age_s=7.0)
     stale["state"].update(battery_status={"level": "warning"}, docking={"state": "DOCK_FAILED"},
                           capabilities_degraded=["cam"], navigation="FAILED")
     api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [*API["/api/fleet/state"]["robots"], stale]}}
     posts = []
-    with sync_playwright() as playwright:
-        browser, page, errors = _open(playwright, site, api, posts)
+    browser, page, errors = _open(None, site, api, posts)
+    try:
         replan = page.locator('li[data-key="rosy_02|replan"]')
         assert replan.locator(".queue-row").get_attribute("aria-expanded") == "false"  # the stuck row holds the open seat
         page.locator("#fleet-inbox").click()
@@ -749,6 +750,7 @@ def test_inbox_link_opens_and_focuses_decision_and_folded_rows(site):
         assert posts == []  # the jump is a read; nothing moves
         assert not errors
         _shot(page, "console-inbox-jump-1440x900.png")
+    finally:
         browser.close()
 
 

@@ -44,7 +44,7 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
 
   async function refreshSiteMap() {
     const life = scope.capture();
-    life.check();
+    if (!life.current()) return;
     try {
       const siteMap = await call("/api/fleet/site-map");
       life.check();
@@ -163,11 +163,11 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
 
   async function refresh() {
     const life = scope.capture();
-    life.check();
+    if (!life.current()) return;
     if (auth.locked) return;
     sightingsUnavailable = false;
     await refreshSiteMap();
-    life.check();
+    if (!life.current()) return;
     // The activated site frame stays the coordinate basis when robots start or stop serving SLAM grids.
     if (!auth.locked && view.siteMap?.maps?.some(map => map.map_id === view.activeSiteMap?.map?.map_id)) {
       const hadGrid = Boolean(view.map);
