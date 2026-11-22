@@ -221,6 +221,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 raise ValueError("task_override는 JSON 객체여야 합니다")
             if task_override and not task:
                 raise ValueError("집기/놓기 스왑 또는 목표 변경은 작업 카드 선택이 필요합니다")
+        homed = self._pre_start_home(body, replay_path)
         if body.get("align_leader") is True:
             if replay_path:
                 raise ValueError("리더 정렬(align_leader)은 replay 없는 텔레옵에서만 쓸 수 있습니다")
@@ -233,7 +234,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
         with self.lock:
             if not claimed and self.state["status"] in ("handing_over", "homing", "recording", "restoring", "sealing", "leader_manual_check"):
                 raise ValueError("a bench session is already running or the Leader needs a manual check")
-            if claimed and self.abort:  # a /stop since the alignment began
+            if (claimed or homed) and self.abort:  # a /stop since home or the alignment began
                 raise ValueError("정지 요청이 있어 녹화를 시작하지 않습니다")
             handles, busy = hold_other_arm_locks(body["arm"], ARMS, self.procs, self.mounts)
             if busy:

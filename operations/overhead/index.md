@@ -43,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-11-22 · eb47dcbfa6 · 렌즈 모델 캐시 격리
 - 2026-11-20 · uncommitted · refactor(vision): 적재 단수 판정을 Fleet에서 Vision으로
 - 2026-11-20 · uncommitted · fix(vision): world_261026 왜곡·외삽 안정화 및 rectify 시드 폴백 보강
 - 2026-11-17 · uncommitted · feat(vision): R 핫패치 anchor 경로 코드화 및 Fleet POST 연령 재확인·통계·연결 위생
 - 2026-11-16 · uncommitted · fix(vision): world_261026 자동 보정 천장 조명 반사·충전소 가림 시드 보강 및 1칸 밀림 차단
-- 2026-11-11 · uncommitted · fix: Vision→Fleet 게시 재시도 — 끊긴 풀링 연결 1회 재송

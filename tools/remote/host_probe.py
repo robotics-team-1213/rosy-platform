@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import host_caps
 
-# Free GB hard floor of ~/rosy-test's and /tmp's disk (rosy-ops lab-host-storage rule 1, 30 GiB, is the earlier agent
-# pre-check). No percent rule: 90% of a 434-468 GB lab disk still leaves ~45 GB and would refuse healthy hosts.
-DISK_FLOOR_GB = 20
+# Use the displayed df percentage, as in the lab storage pre-check and D-883 guard.
+# A timer marker is a past sample and may use a different rounding rule.
+DISK_FLOOR_GB = 30
+DISK_USE_LIMIT = 90
 FULL_USE = 99
 
 REBOOT_CHECK = r"""reboot_soon() {
@@ -87,18 +88,20 @@ def parse_probe(out: str) -> dict | None:
              "sim_held": int(held), "browser_jobs": int(browsers)}
         free, use = [int(x) for x in disk[0::2]], [int(x) for x in disk[1::2]]
         p["caps"] = host_caps.parse(out)
-        if free and use:  # GB on ~/rosy-test's (jobs keep TMPDIR there); use% of the fuller; older probe: none
-            p["disk_free_gb"], p["disk_use"] = free[0] / 2**20, max(use)
+        if free and use:
+            p["disk_free_gb"], p["disk_use"] = free[0] / 2**20, use[0]
+        if len(use) > 1:
+            p["tmp_disk_use"] = use[1]
         return p
     except (IndexError, ValueError):
         return None
 
 
 def disk_full(p: dict) -> bool:
-    """Below DISK_FLOOR_GB free on ~/rosy-test's disk, or either filesystem at FULL_USE%; False when unmeasured.
-
-    2026-10-27: the site PC's /tmp is a 7.4 GB tmpfs at 1%; the floor on it refused that host every time."""
-    return "disk_free_gb" in p and (p["disk_free_gb"] < DISK_FLOOR_GB or p["disk_use"] >= FULL_USE)
+    """Use the test disk's capacity and check only saturation on a separate /tmp or tmpfs."""
+    return (p.get("disk_free_gb", DISK_FLOOR_GB) < DISK_FLOOR_GB
+            or p.get("disk_use", 0) >= DISK_USE_LIMIT
+            or p.get("tmp_disk_use", 0) >= FULL_USE)
 
 
 def current_profile(listing: str) -> list[str]:

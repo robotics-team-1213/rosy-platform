@@ -79,20 +79,24 @@ const JOINT_LABEL = {joint1: "관절 1", joint2: "관절 2", joint3: "관절 3",
 const degrees = rad => `${Math.round(rad * 180 / Math.PI)}°`;
 export const headingDeg = yaw => { const d = ((yaw * 180 / Math.PI) % 360 + 540) % 360 - 180; return Math.round(d === -180 ? 180 : d); };
 
-/** {summary, detail}: summary = kind, name, selected and one short link state (what is shown); detail = joints or pose (the accessible description and a toggletip). */
+const coord = value => (Math.abs(value) < 0.005 ? 0 : value).toFixed(2);
+
+/** {summary, detail, meta, hasJoints}: summary = name + abnormal link/skill; detail = joints or pose; meta = sr-only kind+selected. */
 export function describeRobot({kind, name, selected = false, joints, pose, link, skill}) {
-  let detail;
+  let detail, hasJoints = false;
   if (kind === "arm") {
     const shown = Object.keys(JOINT_LABEL).filter(key => finite(joints?.[key]));
-    detail = shown.length ? shown.map(key => `${JOINT_LABEL[key]} ${degrees(joints[key])}`).join(" · ") : `관절 ${EVIDENCE_LABEL.unavailable}`;
+    hasJoints = shown.length > 0;
+    detail = hasJoints ? shown.map(key => `${JOINT_LABEL[key]} ${degrees(joints[key])}`).join(" · ") : `관절 ${EVIDENCE_LABEL.unavailable} · 기준 자세 표시`;
   } else {
-    const placed = finite(pose?.x) && finite(pose?.y) ? `위치 x ${pose.x.toFixed(2)} · y ${pose.y.toFixed(2)} m` : `위치 ${EVIDENCE_LABEL.unavailable}`;
+    const placed = finite(pose?.x) && finite(pose?.y) ? `위치 x ${coord(pose.x)} · y ${coord(pose.y)} m` : `위치 ${EVIDENCE_LABEL.unavailable}`;
     detail = `${placed} · ${finite(pose?.yaw) ? `방향 ${headingDeg(pose.yaw)}°` : `방향 ${EVIDENCE_LABEL.unavailable}`}`;
   }
-  const state = link?.state ? link.text || EVIDENCE_LABEL[link.state] || EVIDENCE_LABEL.unavailable : null;
-  if (link?.state && link.state !== "fresh") detail = `마지막 보고 기준 · ${detail}`; // a late report's values are the last known ones
-  const summary = [`${ROBOT_KIND_LABEL[kind] ?? kind} ${name || EVIDENCE_LABEL.unavailable}`, selected ? "선택됨" : "선택 안 됨", ...(state ? [state] : []), ...(skill ? [skill] : [])].join(" · ");
-  return {summary, detail};
+  const abnormal = link?.state && link.state !== "fresh" ? (link.text || EVIDENCE_LABEL[link.state] || EVIDENCE_LABEL.unavailable) : null;
+  if (abnormal) detail = `마지막 보고 기준 · ${detail}`; // a late report's values are the last known ones
+  const meta = `${ROBOT_KIND_LABEL[kind] ?? kind} · ${selected ? "선택됨" : "선택 안 됨"}`;
+  const summary = [name || EVIDENCE_LABEL.unavailable, ...(abnormal ? [abnormal] : []), ...(skill ? [skill] : [])].join(" · ");
+  return {summary, detail, meta, hasJoints};
 }
 
 /**

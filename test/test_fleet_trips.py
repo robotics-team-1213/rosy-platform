@@ -174,3 +174,21 @@ def test_nav_run_raises_the_cyclone_participant_limit_only_for_nav(tmp_path):
     assert m.cyclone_profile(tmp_path).name == 'cyclonedds_localhost.xml'
     nav = m.cyclone_profile(tmp_path, nav=True).read_text(encoding='utf-8')
     assert '<MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>' in nav and '<NetworkInterface name="lo"/>' in nav
+
+
+def test_depart_adds_stops_onward_along_the_same_stretch():
+    m = _module()
+    graph = yaml.safe_load(m.GRAPH.read_text(encoding='utf-8'))
+    spawns, places, requests = m.layout(graph, False, 1)
+    for ns in m.ROBOTS:   # onward along the lane (one road starts its corner inside the hop, so the chord is a little shorter)
+        end, one = places[m.place_id(ns)], places[m.onward_id(ns, 1)]
+        assert 0.3 <= math.dist(end[:2], one[:2]) <= m.HOP_M + 1e-6
+        assert math.dist(spawns[ns][:2], one[:2]) > math.dist(spawns[ns][:2], end[:2]) + 0.25
+    assert set(m.layout(graph, False)[1]) == {m.place_id(ns) for ns in m.ROBOTS}  # without --depart: unchanged
+
+
+def test_depart_needs_nav(capsys):
+    m = _module()
+    with pytest.raises(SystemExit):
+        m.main(['--out', 'x', '--depart', '1'])
+    assert '--depart needs --nav' in capsys.readouterr().err

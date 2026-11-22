@@ -48,25 +48,38 @@ class UpdaterRecords:
     def _save_state(self, state: dict) -> None:
         _write_json(self.updates / "state.json", state)
 
-    def _update_marker(self, applying) -> None:
-        """D-433 row 3: the screen's "Updating" card, only while THIS run works on an apply.
+    def _update_marker(self, applying, *, percent: int | None = None) -> None:
+        """D-433 row 3: the screen's "Updating" card, only while THIS run works on an apply or stage.
 
-        Written by ``_journal`` (each step this run takes) and by the "applying"
-        finish at activation; every other finish removes it. A journal left
-        waiting (held, ineligible, stuck) therefore never keeps the card up and
-        hides a stop, a dead CORE or a login code behind it. Best effort.
+        Written by ``_write_progress`` / ``_journal`` and cleared at non-active exits.
         """
         marker = self.root / UPDATE_DISPLAY
         with contextlib.suppress(OSError):
             if isinstance(applying, dict) and RELEASE_ID.fullmatch(str(applying.get("release_id") or "")):
                 step = re.sub(r"[^a-z-]", "-", str(applying.get("step") or "applying").lower())[:32] or "applying"
+                pct = applying.get("percent") if percent is None else percent
+                valid_pct = type(pct) is int and 0 <= pct <= 100
+                text = f"{step}\n{applying['release_id']}\n{pct}\n" if valid_pct else f"{step}\n{applying['release_id']}\n"
                 marker.parent.mkdir(parents=True, exist_ok=True)
                 temporary = marker.with_name(f".{marker.name}.tmp")
-                temporary.write_text(f"{step}\n{applying['release_id']}\n", encoding="utf-8")
+                temporary.write_text(text, encoding="utf-8")
                 os.chmod(temporary, 0o644)
                 os.replace(temporary, marker)
             else:
                 marker.unlink(missing_ok=True)
+
+    def _write_progress(self, state: dict, phase: str, step: str, release_id: str, percent: int | None) -> None:
+        """Publish live update step and optional percentage to marker and status.json."""
+        pct = percent if type(percent) is int and 0 <= percent <= 100 else None
+        self._update_marker({"step": step, "release_id": release_id, "percent": pct})
+        status = {
+            "schema": 1, "updated_at": _z(self.host.now()), "hostname": self.host.hostname(),
+            "current_release": self.host.current_release(), "candidate": release_id, "phase": phase,
+            "reason": f"{step} ({pct}%)" if pct is not None else step, "last_result": state.get("last_result"),
+            "progress": {"step": step, "percent": pct},
+        }
+        with contextlib.suppress(OSError):
+            _write_json(self.updates / "status.json", status)
 
     def _face_swap(self) -> None:
         """D-433: hand the LCD, buzzer and lamp from rosy-boot-display to rosy-face, live.
@@ -130,11 +143,16 @@ class UpdaterRecords:
         """Write status.json; add a history line when the phase or its reason changed."""
         assert phase in PHASES, phase
         current = self.host.current_release()
+        applying = state.get("applying")
+        progress = ({"step": applying.get("step"), "percent": applying.get("percent")}
+                    if phase == "applying" and isinstance(applying, dict) else None)
         status = {
             "schema": 1, "updated_at": _z(self.host.now()), "hostname": self.host.hostname(),
             "current_release": current, "candidate": candidate, "phase": phase, "reason": reason,
             "last_result": state.get("last_result"),
         }
+        if progress is not None:
+            status["progress"] = progress
         # D-433: only an apply in progress in this run shows "Updating"; a wait clears it.
         self._update_marker(state.get("applying") if phase == "applying" else None)
         signature = [phase, candidate, _reason_class(reason)]

@@ -8,7 +8,7 @@ import math
 import threading
 import time
 
-from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import ArmObservation, WorkcellObservationManifest
 from core_common.protocol.motor_health import age_motor_health
 
 
@@ -18,6 +18,7 @@ class WorkcellObservations:
         self._joints = {arm.source_id: frozenset(arm.joint_names)
                         for cell in manifest.workcells for arm in cell.arms}
         self._arm_ids = {arm.source_id: arm.arm_id for cell in manifest.workcells for arm in cell.arms}
+        self._boards = {arm.source_id: (arm.arm_id, arm.board_id) for cell in manifest.workcells for arm in cell.arms}
         self._bindings = {
             arm.source_id: {'owner_id': arm.arm_id, 'sha256': sha256(json.dumps({
                 key: getattr(arm, key) for key in ('source_id', 'arm_id', 'board_id', 'joint_topic', 'joint_names')
@@ -53,6 +54,10 @@ class WorkcellObservations:
     def credential_values(self) -> tuple[str, ...]:
         """Server-side startup isolation checks only; never include these in read responses."""
         return tuple(self._tokens.values())
+
+    def arm_board(self, source_id: str) -> tuple[str, str] | None:
+        """(arm_id, board_id) the manifest declares for an arm source, or None (D-1040: a remeasure names both)."""
+        return self._boards.get(source_id)
 
     def arm_binding(self, source_id: str) -> dict:
         """Declared source configuration, excluding labels and credentials; no hardware attestation."""

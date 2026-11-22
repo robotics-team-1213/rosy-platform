@@ -50,12 +50,35 @@ def unconfirmed_items(record, arm, held_of=_held_reason):
     return out
 
 
+def _is_log_noise(line: str) -> bool:
+    if line.startswith("{") and line.endswith("}"):
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            return False
+        if isinstance(obj, dict) and not obj.get("error") and not obj.get("reason"):
+            return True
+    return line.startswith("motor-health:")
+
+
 def stop_cause(folder):
-    """Last non-empty line of the child's log (the exception or guard message that ended it)."""
+    """Real stop cause: prefer guard-end.json["reason"], else scan bench.log backwards skipping JSON/health tail."""
+    root = Path(folder)
+    guard_p = root / "guard-end.json"
+    if guard_p.is_file():
+        try:
+            reason = json.loads(guard_p.read_text(encoding="utf-8")).get("reason")
+            if isinstance(reason, str) and reason.strip():
+                return reason.strip()[:300]
+        except (OSError, ValueError, AttributeError):
+            pass
     try:
-        lines = [x.strip() for x in (Path(folder) / "bench.log").read_text(encoding="utf-8", errors="replace").splitlines() if x.strip()]
+        lines = [x.strip() for x in (root / "bench.log").read_text(encoding="utf-8", errors="replace").splitlines() if x.strip()]
     except OSError:
         return ""
+    for line in reversed(lines):
+        if not _is_log_noise(line):
+            return line[:300]
     return lines[-1][:300] if lines else ""
 
 

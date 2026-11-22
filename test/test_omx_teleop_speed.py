@@ -17,8 +17,10 @@ def test_each_stage_fixes_tracking_limit_servo_profile_and_acceleration():
         45: {'track_deg_s': 45.0, 'profile_vel': 37, 'profile_acc': 16, 'accel_deg_s2': 60.0, 'brake_deg_s2': 690.0, 'tau_s': 0.19, 'align_deg_s': 10.0},
         60: {'track_deg_s': 60.0, 'profile_vel': 49, 'profile_acc': 21, 'accel_deg_s2': 90.0, 'brake_deg_s2': 1640.0, 'tau_s': 0.17, 'align_deg_s': 10.0},
         # 90 and 120: prepared for a human's hand speed; the default stays "no stage". Their braking budget bottoms out (under 3 degrees is not promised).
-        90: {'track_deg_s': 90.0, 'profile_vel': 73, 'profile_acc': 32, 'accel_deg_s2': 135.0, 'brake_deg_s2': 11575.0, 'tau_s': 0.14, 'align_deg_s': 10.0},
-        120: {'track_deg_s': 120.0, 'profile_vel': 97, 'profile_acc': 42, 'accel_deg_s2': 180.0, 'brake_deg_s2': 20575.0, 'tau_s': 0.12, 'align_deg_s': 10.0},
+        90: {'track_deg_s': 90.0, 'profile_vel': 73, 'profile_acc': 59, 'accel_deg_s2': 450.0, 'brake_deg_s2': 11575.0, 'tau_s': 0.15, 'align_deg_s': 20.0},
+        120: {'track_deg_s': 120.0, 'profile_vel': 97, 'profile_acc': 78, 'accel_deg_s2': 600.0, 'brake_deg_s2': 20575.0, 'tau_s': 0.14, 'align_deg_s': 20.0},
+        180: {'track_deg_s': 180.0, 'profile_vel': 145, 'profile_acc': 100, 'accel_deg_s2': 900.0, 'brake_deg_s2': 46290.0, 'tau_s': 0.13, 'align_deg_s': 30.0},
+        240: {'track_deg_s': 240.0, 'profile_vel': 193, 'profile_acc': 100, 'accel_deg_s2': 1200.0, 'brake_deg_s2': 82290.0, 'tau_s': 0.13, 'align_deg_s': 30.0},
     }
     for stage, row in ts.STAGES.items():
         assert row['profile_vel'] * 1.374 >= 1.1 * stage - 1e-9  # at least 10 % faster than the tracking limit
@@ -37,7 +39,7 @@ def test_a_missing_or_bad_declaration_is_the_current_behaviour(tmp_path, content
 
 def test_a_valid_declaration_is_read(tmp_path):
     path = tmp_path / 'teleop-speed-arm_s.json'
-    for stage in (30, 45, 60, 90, 120):
+    for stage in (30, 45, 60, 90, 120, 180, 240):
         path.write_text(json.dumps({'stage': stage}))
         assert ts.read_stage(path) == stage and ts.summary(stage)['profile_vel'] == ts.STAGES[stage]['profile_vel']
     assert ts.stage_from_env({ts.ENV: '45'}) == 45 and ts.stage_from_env({ts.ENV: '50'}) is None and ts.stage_from_env({}) is None

@@ -12,7 +12,7 @@ WEB = Path(__file__).resolve().parents[1]
 MANIFEST = json.loads((WEB / "shared-assets.json").read_text(encoding="utf-8"))
 ASSETS = MANIFEST["shared_assets"]
 #: Installed next to the assets but not served under /common.
-NOT_SHARED = {"shared-assets.json", "vendor/three.LICENSE"}
+NOT_SHARED = {"shared-assets.json", "vendor/three.LICENSE", "vendor/uPlot.LICENSE"}
 
 
 def _installed_files() -> set[str]:

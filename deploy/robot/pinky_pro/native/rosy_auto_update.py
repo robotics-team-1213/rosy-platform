@@ -368,6 +368,11 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
 def _print_status(status: dict) -> None:
     for key in ("phase", "reason", "current_release", "candidate", "updated_at"):
         print(f"{key}: {status.get(key)}")
+    progress = status.get("progress")
+    if isinstance(progress, dict) and progress.get("step"):
+        pct = progress.get("percent")
+        pct_text = f"{pct}%" if type(pct) is int and 0 <= pct <= 100 else "--"
+        print(f"progress: {pct_text} ({progress['step']})")
     last = status.get("last_result")
     if last:
         print(f"last_result: {last.get('outcome')} {last.get('release_id')} at {last.get('at')} ({last.get('detail')})")

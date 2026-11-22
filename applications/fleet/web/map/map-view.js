@@ -71,7 +71,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     syncToggleButtons();
   }
   const {
-    CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, cellOf, activeCall, labelImportant,
+    CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, reserveBox, cellOf, activeCall, labelImportant,
     drawFormationOverlay, drawMediation, drawSighting, drawCameraTracking, sitePolygons, tracePolygon, drawCrosswalks,
     drawSiteOverlay,
   } = createMapOverlays({ view, css, font, layerOn, worldToCell, colorOf });
@@ -225,6 +225,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         ctx.restore();
       }
     }
+    if (showLanes && layerOn("labels")) {
+      for (const place of activeMap?.places || []) {
+        const pid = String(place.id || "");
+        if (!/^[CS]/.test(pid) || !Number.isFinite(place.x) || !Number.isFinite(place.y)) continue;
+        const p = toPx(place.x, place.y);
+        reserveBox({ x: (p.x + 5) * dpr, y: (p.y - 16) * dpr, w: (pid.length * 8 + 4) * dpr, h: 14 * dpr });
+      }
+    }
     if (layerOn("poses")) drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
@@ -232,7 +240,54 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
     }
+    drawNdOverlay(ctx, width, height, t.scale, rot);
     flushChips(ctx);
+  }
+
+  function drawNdOverlay(ctx, width, height, pxPerM, rot) {
+    if (!Number.isFinite(pxPerM) || pxPerM <= 0 || width < 220 || height < 180) return;
+    const cRect = el("map-canvas")?.getBoundingClientRect?.();
+    const aRect = el("map-axis-badge")?.getBoundingClientRect?.();
+    const wRect = el("device-watch")?.getBoundingClientRect?.();
+    const sRect = el("map-camera-stamp")?.getBoundingClientRect?.();
+    const hasCoords = Number.isFinite(cRect?.left) && Number.isFinite(cRect?.right);
+    const leftBound = hasCoords
+      ? (Number.isFinite(aRect?.right) && aRect.width > 0 ? Math.max(14, Math.ceil(aRect.right - cRect.left) + 12) : 14)
+      : 148;
+    let rightBound = hasCoords
+      ? (Number.isFinite(wRect?.left) && wRect.width > 0 && wRect.left < cRect.right ? Math.floor(wRect.left - cRect.left) - 12 : width - 12)
+      : width - 84;
+    if (hasCoords && Number.isFinite(sRect?.left) && sRect.width > 0 && sRect.top < cRect.top + 40 && sRect.left < cRect.right) {
+      rightBound = Math.min(rightBound, Math.floor(sRect.left - cRect.left) - 12);
+    }
+    if (rightBound - leftBound < 20) return;
+    const cx = leftBound + 9, cy = 18, dpr = window.devicePixelRatio || 1;
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.translate(cx, cy);
+    ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2);
+    ctx.strokeStyle = css("--border-default"); ctx.lineWidth = 1; ctx.stroke();
+    ctx.rotate((rot * Math.PI) / 180);
+    ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(3, -1); ctx.lineTo(-3, -1); ctx.closePath();
+    ctx.fillStyle = css("--series-primary"); ctx.fill();
+    ctx.rotate((-rot * Math.PI) / 180);
+    ctx.font = font("micro"); ctx.fillStyle = css("--ink-quiet");
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("N", 0, 3.5);
+    ctx.restore();
+    let stepM = pxPerM * 0.5 >= 40 ? 0.5 : pxPerM * 1.0 >= 28 ? 1.0 : 2.0;
+    const sx = cx + 16, sy = 25, maxBar = rightBound - sx;
+    if (stepM * pxPerM > maxBar && stepM > 0.5 && pxPerM * 0.5 >= 28) stepM = 0.5;
+    const barPx = stepM * pxPerM;
+    if (barPx > maxBar || barPx < 24) return;
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.strokeStyle = css("--ink-quiet"); ctx.fillStyle = css("--ink-quiet"); ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - 4); ctx.lineTo(sx, sy); ctx.lineTo(sx + barPx, sy); ctx.lineTo(sx + barPx, sy - 4);
+    ctx.stroke();
+    ctx.font = font("micro"); ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(`${stepM} m`, sx + barPx / 2, sy - 3);
+    ctx.restore();
   }
 
   function drawMetreGrid(ctx, toPoint, bounds, cameraOn) {

@@ -16,6 +16,7 @@ from urllib.error import HTTPError
 DROP_CODES = (409, 422)  # Fleet refused this exact body on its merits (another record, stale or invalid): not retried
 STALE_S = 65  # Fleet takes owner evidence for 60 s after measured_at; measured again only once that has surely passed
 WAITING_FOR_PERSON = "BED_CONFIRMATION_INVALID"  # 422 on /complete: the bed confirmation lapsed; a named operator confirms again
+WAITING_FOR_AMR = "AMR_BRAKE_BED_VELOCITY_UNMEASURED"  # 422 on /complete: AMR pose/stillness measurement lapsed; wait for measurement
 # 422 codes of Fleet's 60 s evidence limit: the result is kept and measured again (no arm motion) once STALE_S has passed
 RETRY_LATER = ("OMX_OWNER_EVIDENCE_UNAVAILABLE", "OWNER_EVIDENCE_MEASURED_AT_INVALID")
 EVIDENCE_MAX_AGE_S = 60  # Fleet's limit on owner evidence
@@ -150,10 +151,12 @@ def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any
             request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", entry["complete"])
         except HTTPError as exc:
             code = refusal_code(exc) if exc.code == 422 else None
-            if code == WAITING_FOR_PERSON:
+            if code in (WAITING_FOR_PERSON, WAITING_FOR_AMR):
                 entry["last_refusal"] = {"reason": code, "at": now}
                 outbox.put(task_id, entry)
-                done.append({"task_id": task_id, "action": "kept", "reason": "waiting for a named operator to confirm the bed"})
+                done.append({"task_id": task_id, "action": "kept",
+                             "reason": "waiting for a named operator to confirm the bed" if code == WAITING_FOR_PERSON
+                             else "waiting for measured AMR pose/stillness"})
             elif code in RETRY_LATER:
                 entry["last_refusal"] = {"reason": code, "at": now}
                 outbox.put(task_id, entry)

@@ -504,3 +504,57 @@ def test_unpinned_edge_keeps_its_settings_only_the_polyline_follows_the_trace():
     traced = [{"id": "e", "from": "A", "to": "B", "polyline": [[0, 0.01], [1, 0.01]], "speed_cap_mps": 0.15, "width_m": 0.2}]
     assert mod.merge_pinned(current, traced) == [
         {"id": "e", "from": "A", "to": "B", "polyline": [[0, 0.01], [1, 0.01]], "speed_cap_mps": 0.08, "width_m": 0.15}]
+
+
+def test_active_trips_hold_calibration_update(tmp_path, monkeypatch, capsys):
+    mod = _load_module()
+    token_file = tmp_path / "auto-calibration.token"
+    token_file.write_text("secret-bearer-token\n", encoding="utf-8")
+    state_file = tmp_path / "state.json"
+    monkeypatch.setenv("ROSY_AUTO_CALIBRATION_TOKEN_FILE", str(token_file))
+    monkeypatch.setattr(mod, "STATE_FILE", state_file)
+
+    ident = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    monkeypatch.setattr(mod, "run_vision_solve", lambda: {
+        "ok": True, "width": 1280, "height": 720, "frame_seq": 10, "rms_m": 0.002,
+        "map_to_image": [1.0, 0.0, -0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "image_to_map": [1.0, 0.0, 0.03, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+        "places": [{"id": "p1", "x": 0.13, "y": 0.2}], "edges": [],
+    })
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"route_active": True, "map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    applied = []
+    monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: applied.append(True) or {"cal_updated": True, "map_updated": True})
+
+    for _ in range(5):
+        assert mod.main([]) == 0
+        line = json.loads(capsys.readouterr().out.strip())
+    assert line["decision"] == "hold" and line["reason"] == "active_trips" and applied == []
+    assert len(json.loads(state_file.read_text(encoding="utf-8"))["history"]) == 5
+
+    assert mod.main(["--force"]) == 0
+    assert applied == [True]
+    capsys.readouterr()
+
+    # Check apply_fleet_update race guard and route_active deferral counter immunity (4 consecutive runs exit 0).
+    monkeypatch.setattr(mod, "fetch_fleet_current", lambda _t: {
+        "cur_cal": {"calibration_revision": 1, "map_to_image": ident},
+        "cur_map": {"route_active": False, "map": {"places": [{"id": "p1", "x": 0.1, "y": 0.2}]}},
+    })
+    monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: {
+        "cal_updated": False, "map_updated": False, "map_sync": "deferred", "map_sync_status": 409, "route_active": True})
+    for _ in range(8):
+        assert mod.main([]) == 0
+        capsys.readouterr()
+    assert json.loads(state_file.read_text(encoding="utf-8")).get("map_sync_refused_runs", 0) == 0
+
+
+def test_apply_fleet_update_clears_cal_when_site_map_returns_route_active(monkeypatch):
+    mod = _load_module()
+    sent = {}
+    monkeypatch.setattr(mod, "sh_json", lambda _c, _u, code: sent.setdefault("code", code) and {})
+    mod.apply_fleet_update("t", {"places": [], "edges": []}, needs_cal=True, needs_map=True)
+    compile(sent["code"], "apply", "exec")
+    assert "SITE_MAP_ROUTE_ACTIVE" in sent["code"] and "needs_cal = False" in sent["code"]

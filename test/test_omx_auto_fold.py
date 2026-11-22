@@ -177,7 +177,7 @@ FACTS = {"torque_after": TORQUE0, "latched": {}, "windup_hits": [], "stops": [{"
 
 
 def test_evidence_is_what_the_fleet_rule_reads_for_that_incident():
-    from core_common.protocol.arm_incidents import clearable_after_fold
+    from core_common.protocol.arm_incident.arm_incidents import clearable_after_fold
 
     result, *_ = run(Cell(REACH))
     proof = af.evidence(result, HOME, TORQUE0, "inc-1", 1000.0)
@@ -270,3 +270,98 @@ def test_launch_is_off_without_its_config(tmp_path, monkeypatch):
     started = []
     assert omx_incident.launch_auto_fold("arm_s", popen=lambda *a, **k: started.append(a))["started"] is True
     assert omx_incident.launch_auto_fold("arm_b", popen=lambda *a, **k: started.append(a))["started"] is False
+
+
+def test_supervised_recover_releases_torque_only_when_unmoved_and_runs_without_incident(tmp_path, monkeypatch):
+    import cell_corridor
+    import cell_objects
+    import cell_pipeline as cp
+    import cell_place_fit
+    import cell_space
+
+    # Unmoved block / holding high under release_unmoved=True ends cleanly with 'stop now' instead of human-hold
+    blocked = Cell(REACH)
+    res_blk = af.recover(blocked, HOME, CLOSED, plan=lambda s: [s, HOME],
+                         look=lambda f: {"clear": False, "low": [], "high": []},
+                         reserve=lambda f: {"ok": True}, release=lambda: None,
+                         release_and_rise=lambda c: {"result": "risen"}, low=lambda s: True,
+                         release_unmoved=True)
+    assert res_blk["ended"] == "stop_now" and res_blk["unmoved"] is True
+    assert blocked.commands == ["state", "stop now"]
+
+    # After moving (short park or failed detour): STILL latches human-hold even with release_unmoved=True
+    short = Cell(REACH, park_ok=False)
+    res_short = af.recover(short, HOME, CLOSED, plan=lambda s: [s, HOME],
+                           look=lambda f: {"clear": True, "low": [], "high": []},
+                           reserve=lambda f: {"ok": True}, release=lambda: None,
+                           release_and_rise=lambda c: {"result": "risen"}, low=lambda s: True,
+                           release_unmoved=True)
+    assert res_short["reason"] == "PARK_NOT_HOME" and short.commands[-1] == "human-hold"
+
+    # CLI: --supervised runs without ROSY_RECOVERY_INCIDENT while missing --supervised + env still errors
+    monkeypatch.delenv("ROSY_RECOVERY_INCIDENT", raising=False)
+    cfg = tmp_path / "cfg.json"
+    cal = tmp_path / "cal.json"
+    lib = tmp_path / "lib.json"
+    out = tmp_path / "out.json"
+    cal.write_text("{}")
+    cfg.write_text(json.dumps({
+        "io": str(tmp_path / "io"), "cameras": {}, "calibration_path": str(cal),
+        "work_dir": str(tmp_path), "space_dir": str(tmp_path / "space"),
+        "sites": {"pinky": {"surface_px": [[0, 0], [10, 0], [10, 10], [0, 10]]}},
+    }))
+    lib.write_text(json.dumps({"fps": 30, "gripper_closed": CLOSED, "chunks": {"home": [HOME]}}))
+    with pytest.raises(SystemExit):
+        af.main(["--arm", "arm_s", "--config", str(cfg), "--library", str(lib),
+                 "--site", "pinky", "--roi", "0", "0", "10", "10", "--out", str(out)])
+
+    fake_cell = Cell(REACH)
+    monkeypatch.setattr(cell_place_fit, "with_tiers", lambda data: [data])
+    monkeypatch.setattr(cp, "FifoCell", lambda *a, **k: SimpleNamespace(
+        act=fake_cell.act, frame=lambda role: "img"))
+    monkeypatch.setattr(cell_objects, "foreground", lambda *a, **k: "mask")
+    monkeypatch.setattr(cell_corridor, "check", lambda *a, **k: {"clear": True, "low": [], "high": [], "off_map": 0, "off_surface": 0})
+    monkeypatch.setattr(cell_corridor, "runs", lambda pts: (pts, []))
+    monkeypatch.setattr(cell_corridor, "corridor", lambda *a, **k: "lane")
+    monkeypatch.setattr(cell_space, "Space", lambda *a: SimpleNamespace(
+        reserve=lambda *a, **k: {"ok": True}, release=lambda *a: None))
+    rc = af.main(["--supervised", "--arm", "arm_s", "--config", str(cfg), "--library", str(lib),
+                  "--site", "pinky", "--roi", "0", "0", "10", "10", "--out", str(out)])
+    written = json.loads(out.read_text())
+    assert rc == 0 and written["result"] == "folded" and written["supervised"] is True and written["incident_id"] is None
+    assert "park" in fake_cell.commands and "stop" in fake_cell.commands
+
+    # R3 edge regressions:
+    # (1) Pan detour failure (PARK_NOT_HOME / DETOUR_REFUSED) with release_unmoved=True keeps human-hold (no KeyError 'yes')
+    detour_cell = Cell(REACH, park_ok=False)
+    res_detour = af.recover(detour_cell, HOME, CLOSED, plan=lambda s: [s, HOME],
+                            look=lambda f: {"clear": len(f) > 2, "low": [], "high": []},
+                            reserve=lambda f: {"ok": True}, release=lambda: None,
+                            release_and_rise=lambda c: {"result": "risen"}, low=lambda s: True,
+                            release_unmoved=True)
+    assert res_detour["reason"] == "PARK_NOT_HOME" and detour_cell.commands[-1] == "human-hold"
+    detour_ref = Cell(REACH, refuse=("jog",))
+    res_ref = af.recover(detour_ref, HOME, CLOSED, plan=lambda s: [s, HOME],
+                         look=lambda f: {"clear": len(f) > 2, "low": [], "high": []},
+                         reserve=lambda f: {"ok": True}, release=lambda: None,
+                         release_and_rise=lambda c: {"result": "risen"}, low=lambda s: True,
+                         release_unmoved=True)
+    assert res_ref["reason"] == "DETOUR_REFUSED" and detour_ref.commands[-1] == "human-hold"
+
+    # (2) Held load (HOLDING_HIGH / RISE_BLOCKED) with release_unmoved=True never cuts torque (never sends stop now)
+    high_cell = Cell([*REACH[:5], CLOSED + 10], target=[*REACH[:5], CLOSED])
+    res_high = af.recover(high_cell, HOME, CLOSED, plan=lambda s: [s, HOME],
+                          look=lambda f: {"clear": True, "low": [], "high": []},
+                          reserve=lambda f: {"ok": True}, release=lambda: None,
+                          release_and_rise=lambda c: {"result": "risen"}, low=lambda s: False,
+                          release_unmoved=True)
+    assert res_high["reason"] == "HOLDING_HIGH" and high_cell.commands == ["state", "human-hold"]
+
+    # (3) Space() failure right after FifoCell init in main(--supervised) cleanly sends stop now (no UnboundLocalError)
+    monkeypatch.setattr(cell_space, "Space", lambda *a: (_ for _ in ()).throw(RuntimeError("space dir bad")))
+    err_cell = Cell(REACH)
+    monkeypatch.setattr(cp, "FifoCell", lambda *a, **k: SimpleNamespace(act=err_cell.act))
+    rc_err = af.main(["--supervised", "--arm", "arm_s", "--config", str(cfg), "--library", str(lib),
+                      "--site", "pinky", "--roi", "0", "0", "10", "10", "--out", str(out)])
+    written_err = json.loads(out.read_text())
+    assert rc_err == 3 and written_err["ended"] == "stop_now" and written_err["unmoved"] is True and "stop now" in err_cell.commands

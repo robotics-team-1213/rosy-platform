@@ -5,8 +5,20 @@
 .device-watch {
   position: absolute;
   z-index: 3;
-  left: var(--space-3);
-  bottom: var(--space-3);
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--scrim-solid);
+  overflow: hidden;
+}
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  .device-watch ui-button {
+    min-width: 0;
+    min-height: var(--target-tool);
+    padding: 0 var(--space-3);
+  }
 }
 
 /* 전방 사진은 막힘 큐의 원본을 비추는 구석 그림이다. 지도 칸 안에 둔다. */
@@ -63,11 +75,6 @@
 }
 
 @media (width < 64rem) {
-  .device-watch {
-    left: var(--space-2);
-    bottom: var(--space-2);
-  }
-
   #map-stage > .watch-front {
     top: var(--space-2);
     left: var(--space-2);
@@ -88,6 +95,7 @@
   }
 
   #fleet-main .map-stage[data-watch="pip"]:not([data-view="camera"]):not([data-map-state="auth"]):not([data-map-state="unavailable"]):not([data-map-state="loading"]):has(> #map-birdseye:not([hidden])) > .device-watch {
+    top: auto;
     right: var(--space-2);
     bottom: var(--space-2);
   }

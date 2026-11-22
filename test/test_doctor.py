@@ -140,8 +140,9 @@ def test_land_queue_warns_on_a_run_that_keeps_preparing_or_went_quiet(repo, tmp_
 
 def test_hosts_reads_report_and_disk_low_over_ssh(repo, monkeypatch):
     monkeypatch.setattr(doctor.lab_hosts, "test_hosts", lambda: ["pc-a", "pc-b", "pc-c"])
-    replies = {"pc-a": (0, '{"free_after_GiB": 88.5}\nROSY-DISK-LOW=0\n'),
-               "pc-b": (0, '{"free_after_GiB": 12.0}\nROSY-DISK-LOW=1\n'),
+    replies = {"pc-a": (0, '{"started": 1700000000, "free_before_GiB": 88, "free_after_GiB": 88.5, "runner_tmp": ["one"], '
+                           '"removed_envs": 1, "studies": ["studies/test-example-a1B2c3", "studies/research"]}\nROSY-DISK-LOW=0\n'),
+               "pc-b": (0, '{"skip": "reservation example.resv"}\nROSY-DISK-LOW=1\n'),
                "pc-c": (255, "")}
 
     real_run = subprocess.run
@@ -156,7 +157,9 @@ def test_hosts_reads_report_and_disk_low_over_ssh(repo, monkeypatch):
     code, text = lines(repo, hosts=True)
     assert code == 0, text
     assert "OK   host pc-a: 88.5 GiB free at last maintenance, disk-low absent" in text
-    assert "WARN host pc-b: 12.0 GiB free at last maintenance, disk-low present" in text
+    assert ("free-space change +0.50 GiB, removed 1 temp paths, 0 runs, 1 venvs, 1 test workspaces; "
+            "report 2023-11-14 22:13 UTC") in text
+    assert "WARN host pc-b: ? GiB free at last maintenance, disk-low present; cleanup skipped (reservation example.resv)" in text
     assert "WARN host pc-c: unreachable over ssh" in text
     monkeypatch.setattr(doctor.subprocess, "run", real_run)
     assert "host pc" not in lines(repo)[1], "--hosts is off by default"

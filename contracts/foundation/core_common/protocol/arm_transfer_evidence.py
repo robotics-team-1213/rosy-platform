@@ -6,7 +6,7 @@ from pydantic import BeforeValidator, Field, model_validator
 
 from .arm_transfer import ArmActionId, ArmJournalId
 from .arm_transfer_preflight import ArmPhysicalRef
-from .arm_transfer_observations import (
+from .arm_incident.arm_transfer_observations import (
     ArmTransferObservation, ArmTransferPhysicalReceipt, _Closed, _Counter, _sequence,
 )
 

@@ -78,8 +78,21 @@ case "$1" in
     temp=$(set +f; cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null |
            awk '$1 ~ /^-?[0-9]+$/ {v=($1 >= 1000 || $1 <= -1000) ? $1/1000 : $1; if (!n || v > m) m=v; n++}
                 END {print (n ? int(m) : "-")}') || temp=-
-    printf '%s %s %s %s %s %s %s %s %s %s\n' "$(cut -d' ' -f1 /proc/loadavg)" "$(nproc)" "$(cut -d. -f1 /proc/uptime)" \
-      "${down:--}" "$(disk "$test_dir")" "$(disk /)" "${gpu:-- - - -}" "$mem" "${cpu:--}" "${temp:--}"
+    # Optional suffix: only bounded status fields from the existing storage timer's report.
+    storage=$(/usr/bin/python3 -I -c '
+import json, math, sys
+report = json.load(open(sys.argv[1]))
+assert report["mode"] == "apply"
+started = int(report["started"])
+if report.get("skip"):
+    print(started, "skipped", "-")
+else:
+    delta = report["free_after_GiB"] - report["free_before_GiB"]
+    assert math.isfinite(delta)
+    print(started, "done", f"{delta:.2f}")
+' "$test_dir/maintenance/last-report.json" 2>/dev/null) || storage=
+    printf '%s %s %s %s %s %s %s %s %s %s%s\n' "$(cut -d' ' -f1 /proc/loadavg)" "$(nproc)" "$(cut -d. -f1 /proc/uptime)" \
+      "${down:--}" "$(disk "$test_dir")" "$(disk /)" "${gpu:-- - - -}" "$mem" "${cpu:--}" "${temp:--}" "${storage:+ $storage}"
     ;;
   restart)
     [ $# -eq 2 ] && [ -f "$UNITS" ] && grep -v '^#' "$UNITS" | grep -qxF -- "$2" || refuse

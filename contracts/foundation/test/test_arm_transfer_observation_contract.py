@@ -14,7 +14,7 @@ NAMES = ("ArmObservationPose", "ArmObservationBounds", "ArmLinkObservation", "Ar
 
 def api():
     try:
-        return import_module("core_common.protocol.arm_transfer_observations")
+        return import_module("core_common.protocol.arm_incident.arm_transfer_observations")
     except ModuleNotFoundError:
         pytest.fail("physical observation/receipt wire contract is missing")
 

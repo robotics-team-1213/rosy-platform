@@ -24,7 +24,7 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
   // D-359 US-008 — 이번 그리기에 놓인 칩(캔버스 픽셀, 시험은 window.__mapChips). 추적 오차와
   // 중재 칩이 겹쳐 못 읽었다: 새 칩은 빈 자리가 날 때까지 아래·위로 한 칸씩 번갈아 비킨다.
   // US-009 — 칩은 자리만 먼저 정하고(로봇 표식 상자도 피한다) 선을 다 그린 뒤 flushChips가 칠한다.
-  let placedChips = [], pendingChips = [], markerBoxes = [], optionalChips = []; const CHIP_GAP = 2, CHIP_TRIES = 12;
+  let placedChips = [], pendingChips = [], markerBoxes = [], reservedBoxes = [], optionalChips = []; const CHIP_GAP = 2, CHIP_TRIES = 12;
   const chipsOverlap = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
   // Declutter: a chip not `important` (and without tone) never shifts; it shows only where still free.
@@ -56,7 +56,7 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
       return;
     }
     let y = anchorY;
-    const taken = (r) => [...placedChips, ...markerBoxes].some((o) => chipsOverlap(r, o));
+    const taken = (r) => [...placedChips, ...markerBoxes, ...reservedBoxes].some((o) => chipsOverlap(r, o));
     for (let step = 1; step <= CHIP_TRIES && taken(rectAt(y)); step += 1) {
       const rows = Math.ceil(step / 2);
       y = clampY(anchorY + (step % 2 ? 1 : -1) * rows * (height + CHIP_GAP));
@@ -69,7 +69,7 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
   function flushChips(ctx) {
     let hidden = 0;
     for (const { rect, chip } of optionalChips) {
-      if ([...placedChips, ...markerBoxes].some((o) => chipsOverlap(rect, o))) { hidden += 1; continue; }
+      if ([...placedChips, ...markerBoxes, ...reservedBoxes].some((o) => chipsOverlap(rect, o))) { hidden += 1; continue; }
       placedChips.push(rect);
       pendingChips.push(chip);
     }
@@ -372,13 +372,14 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
 
   // map-view.js draw()가 매 그리기 처음에 칩·표식 자리를 비우고, 로봇 표식 상자를 더한다.
   function resetChips() {
-    placedChips = []; pendingChips = []; markerBoxes = []; optionalChips = [];
+    placedChips = []; pendingChips = []; markerBoxes = []; reservedBoxes = []; optionalChips = [];
     window.__mapChips = placedChips;
     window.__mapMarkers = markerBoxes;
   }
   const addMarker = (box) => { markerBoxes.push(box); };
+  const reserveBox = (box) => { reservedBoxes.push(box); };
 
-  return { CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, cellOf, activeCall, labelImportant,
+  return { CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, reserveBox, cellOf, activeCall, labelImportant,
     drawFormationOverlay, drawMediation, drawSighting, drawCameraTracking, sitePolygons, tracePolygon, drawCrosswalks,
     drawSiteOverlay };
 }

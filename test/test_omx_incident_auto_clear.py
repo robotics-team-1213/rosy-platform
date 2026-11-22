@@ -31,6 +31,15 @@ def test_facts_carry_the_rest_evidence_and_list_totals(tmp_path):
     assert f["flagged"][0]["person_needed"] is True  # kept, so the rule can refuse it
 
 
+def test_torque_off_extended_arm_enters_incident_recovery_even_after_clean_stop(tmp_path):
+    extended = [0.0, -30.0, 10.0, 20.0, -5.0, 48.8]
+    rows = [{"command": "state", "ok": True, "state": extended, "target": extended}]
+    facts = omx_incident.facts(session(tmp_path, rows), HOME)
+    assert facts["safe_end"] and not facts["folded"]
+    decision = omx_incident.decide(facts)
+    assert decision["hold"] and "guarded fold required" in decision["reason"]
+
+
 def test_fault_record_kinds_are_read_from_the_record(tmp_path):
     record = tmp_path / "rec.json"
     record.write_text(json.dumps({"fault": "(5, 'Input/output error')", "stop_reasons": []}))

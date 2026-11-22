@@ -275,6 +275,7 @@ def test_ci_runs_the_account_browser_without_enabling_other_core_browsers(monkey
 @pytest.mark.parametrize('paths, expected', [
     (['test/test_a.py', 'test/test_b.py'], 1),  # root-test-*of3 since 2026-10-11: whole session skipped
     (['test/test_only_skips.py'], 0),  # one selected module that only skips is not a failure
+    (['test/test_only_skips.py', '--ignore=test/test_platform_g1_timing.py'], 0),
 ])
 def test_ci_fails_a_session_that_collected_nothing(monkeypatch, capsys, paths, expected):
     import json

@@ -45,7 +45,7 @@ def test_only_fresh_newer_rows_are_sent():
 def test_the_sample_is_a_valid_fleet_arm_observation():
     sys.path.insert(0, str(ROOT / "contracts/foundation"))
     try:
-        observations = pytest.importorskip("core_common.protocol.workcell_observations")
+        observations = pytest.importorskip("core_common.protocol.arm_incident.workcell_observations")
     finally:
         sys.path.remove(str(ROOT / "contracts/foundation"))
     sample = m.fresh_sample({"t": 1792850000.5, "state": [29.0, -17.8, 24.7, 43.1, -33.3, 46.6]}, None, 1792850000.6)
@@ -95,7 +95,7 @@ def test_a_guard_fault_goes_once_without_positions(tmp_path):
 
 def test_fleet_stores_and_serves_the_guard_fault(tmp_path):
     from hashlib import sha256
-    from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
+    from core_common.protocol.arm_incident.workcell_observations import ArmObservation, WorkcellObservationManifest
     from fleet.server.workcell_observations import WorkcellObservations
 
     manifest = WorkcellObservationManifest.model_validate({"schema": "rosy.workcell-observations/1", "workcells": [{

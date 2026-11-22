@@ -21,7 +21,9 @@ def stop_goals(graph: Graph, place_id: str, yaw: float | None, config: RoutingCo
     """``(arc, s, xy)`` for each lane arriving at a stop place (facing ``yaw`` when given); empty for any
     other kind. Heading is the arc's last non-zero segment (``end_tangent``), or ``yaw`` when the trip has one.
     shortcut: the offset runs along the arc, so a final lane shorter than the offset has no goal (the line is used)."""
-    if getattr(graph.places[place_id], "kind", None) != "stop":
+    place = graph.places[place_id]
+    # A commissioned precision stop (D-1051) names its measured reference pose: the robot centre goes there.
+    if getattr(place, "kind", None) != "stop" or getattr(place, "precision_stop", None) is not None:
         return []
     off = front_m + STOP_MARGIN_M
     return [(arc, arc.length_m - off, arc.point_at(arc.length_m - off)[:2]) for arc in graph.arcs.values()

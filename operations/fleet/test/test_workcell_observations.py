@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core_common.protocol.workcell_observations import ArmObservation, WorkcellObservationManifest
+from core_common.protocol.arm_incident.workcell_observations import ArmObservation, WorkcellObservationManifest
 from fleet.server.workcell_observations import WorkcellObservations
 
 

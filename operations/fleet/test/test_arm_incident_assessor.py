@@ -1,12 +1,15 @@
 """D-1039/D-1047: a configured AI assessor service clears only safe incidents of its own arms, three per arm a day, marked as a
 machine clear whose cause is never scored as truth; people clear every kind as before."""
 from hashlib import sha256
+import json
+from pathlib import Path
+import time
 
 from fastapi.testclient import TestClient
 import pytest
 
-from core_common.protocol.arm_incidents import ArmIncidentReport
-from core_common.protocol.workcell_observations import WorkcellObservationManifest
+from core_common.protocol.arm_incident.arm_incidents import ArmIncidentReport
+from core_common.protocol.arm_incident.workcell_observations import WorkcellObservationManifest
 from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.arm_incidents import MACHINE_CLEARS_PER_WINDOW, REPEAT_WINDOW_S, ArmIncidentStore, MachineClearRefused
@@ -18,6 +21,7 @@ from fleet.swarm.robots import RobotEndpoint
 
 PATH = "/api/fleet/workcell-observations"
 SECRETS = {"arm_a": "arm-a-secret", "arm_b": "arm-b-secret"}
+BOARDS = {"arm_a": "2B162C9B50323952582E3120FF06202D", "arm_b": "7F31D1FE50323952582E3120FF061D2D"}  # follower serials
 TOKENS = {"assessor-token": ("cell-a-ai-assessor", "service"), "operator-token": ("op-7", "operator")}
 ASSESSOR, OPERATOR = {"Authorization": "Bearer assessor-token"}, {"Authorization": "Bearer operator-token"}
 WHY = {"note": "folded home, torque off, frames clear", "cause": "blocked", "basis": "measured"}
@@ -62,7 +66,7 @@ def body(n, facts, source="arm_b"):
 
 def service():
     def arm(name):
-        return {"source_id": name, "arm_id": name, "label": name, "board_id": f"{name}-board",
+        return {"source_id": name, "arm_id": name, "label": name, "board_id": BOARDS[name],
                 "joint_topic": f"/omx_commissioning/{name}/joint_states", "joint_names": ["joint1"],
                 "token_env": f"{name.upper()}_TOKEN", "credential_sha256": sha256(SECRETS[name].encode()).hexdigest()}
     manifest = WorkcellObservationManifest.model_validate({"schema": "rosy.workcell-observations/1", "workcells": [{
@@ -188,6 +192,59 @@ def test_no_assessor_unless_configured(client, monkeypatch):
     assert row(client, incident_id)["state"] == "open"
 
 
+# D-1040: the two real kinds of 2026-11-17 (arm_b port lost writing torque OFF, arm_a wind-up holding home) clear only
+# with a fresh quiet read of the arm sent with the clear; it is kept with the clear row
+REMEASURE = Path(__file__).parents[3] / "contracts/foundation/test/fixtures/arm_incidents_remeasure"
+PORT_LOST, WOUND_UP = (json.loads((REMEASURE / f"{name}.json").read_text(encoding="utf-8"))["facts"]
+                       for name in ("20261117T171027-arm_b", "20261117T182025-arm_a"))
+ZERO = {m: 0 for m in ("11", "12", "13", "14", "15", "16")}
+# arm_b's one fault record of that port loss as the cell reads it again (the report holds only its name)
+LOST = {"name": PORT_LOST["fault_records"][0], "fault_type": "SerialException",
+        "fault": "device reports readiness to read but returned no data (device disconnected or multiple access on port?)"}
+
+
+def read(incident_id, **over):
+    return {"arm": "arm_b", "board_serial": BOARDS["arm_b"], "incident_id": incident_id, "at": time.time() + 1,
+            "torque_after": ZERO, "hardware_error": ZERO, "folded": True, "max_home_err": 0.4,
+            "frames": [{"role": "top", "sha256": "a" * 64}], "fault_records": [LOST], **over}
+
+
+@pytest.mark.parametrize("facts", [PORT_LOST, WOUND_UP], ids=["port lost", "wound up"])
+def test_assessor_clears_todays_real_kinds_only_with_a_fresh_quiet_read_which_the_row_keeps(client, facts):
+    incident_id = report(client, 40, facts)
+    assert code(clear(client, incident_id)) == (403, "AI_CLEAR_KIND_REFUSED")  # no read
+    other = report(client, 41, facts)
+    for bad in (read(incident_id, torque_after={**ZERO, "11": 1}), read(incident_id, hardware_error={**ZERO, "13": 32}),
+                read(incident_id, folded=False), read(incident_id, at=time.time() - 3600),  # read before the incident
+                read(other),  # a read made for another incident
+                read(incident_id, arm="arm_a", board_serial=BOARDS["arm_a"]),  # another arm's read
+                read(incident_id, board_serial=BOARDS["arm_a"])):  # this arm's name on another board
+        assert code(clear(client, incident_id, remeasured=bad)) == (403, "AI_CLEAR_KIND_REFUSED")
+    if facts is PORT_LOST:  # the port kind's fault record must be the lost port's text
+        overload = {**LOST, "fault_type": "OverloadError", "fault": "hardware error: overload on id 13"}
+        assert code(clear(client, incident_id, remeasured=read(incident_id, fault_records=[overload]))) == (
+            403, "AI_CLEAR_KIND_REFUSED")
+    assert clear(client, incident_id, remeasured=read(incident_id, torque_after={"11": 0})).status_code == 422
+    assert row(client, incident_id)["state"] == "open"
+    good = read(incident_id)
+    assert clear(client, incident_id, remeasured=good).status_code == 200
+    cleared = row(client, incident_id)["cleared"]
+    assert cleared["kind"] == "machine" and cleared["remeasured"] == good
+    # the day's limit (three, D-1047) still holds for the fourth on this arm, read or not
+    extra = [other, report(client, 42, facts), report(client, 43, facts)]
+    for incident in extra[:2]:
+        assert clear(client, incident, remeasured=read(incident)).status_code == 200
+    assert code(clear(client, extra[2], remeasured=read(extra[2]))) == (403, "AI_CLEAR_REPEAT_LIMIT")
+
+
+def test_a_read_never_frees_another_kind_and_a_persons_clear_does_not_keep_it(client):
+    for n, (kind, facts) in enumerate(UNSAFE.items(), start=50):
+        incident_id = report(client, n, facts)
+        assert code(clear(client, incident_id, remeasured=read(incident_id))) == (403, "AI_CLEAR_KIND_REFUSED"), kind
+    incident_id = report(client, 60, PORT_LOST)
+    assert clear(client, incident_id, headers=OPERATOR, remeasured=read(incident_id)).status_code == 200
+    assert row(client, incident_id)["cleared"]["remeasured"] is None  # a person's clear does not judge the read
+
 
 HOME6 = [0.0, -58.0, 50.0, 50.0, -5.0, 48.8]
 
@@ -201,12 +258,12 @@ def fold(incident_id, **over):
 def test_an_extended_contact_stop_clears_only_with_measured_auto_fold_evidence_for_it(client):
     stopped = {**SAFE, "folded": False, "home": HOME6,
                "stops": [{"command": "place", "error": "contact in place: wrist lag", "t": 1.0}]}
-    incident_id = report(client, 40, stopped)
+    incident_id = report(client, 80, stopped)
     assert code(clear(client, incident_id)) == (403, "AI_CLEAR_KIND_REFUSED")  # no fold: still a person
     out_on_reach = fold(incident_id, folded_state=[20.0, -20.0, 20.0, 45.0, -5.0, 48.8])
     assert code(clear(client, incident_id, recovery=out_on_reach)) == (403, "AI_CLEAR_KIND_REFUSED")
     assert code(clear(client, incident_id, recovery=fold("another"))) == (403, "AI_CLEAR_KIND_REFUSED")
     assert clear(client, incident_id, recovery=fold(incident_id)).status_code == 200
     assert row(client, incident_id)["recovery"]["auto_fold"]["kind"] == "auto_fold"
-    latched = report(client, 41, {**stopped, "latched": {"13": {"hw_error": 32, "bits": ["overload"]}}})
+    latched = report(client, 81, {**stopped, "latched": {"13": {"hw_error": 32, "bits": ["overload"]}}})
     assert code(clear(client, latched, recovery=fold(latched))) == (403, "AI_CLEAR_KIND_REFUSED")

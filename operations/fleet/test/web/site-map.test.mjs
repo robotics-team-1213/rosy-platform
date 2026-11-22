@@ -516,3 +516,68 @@ test('repeatPlaces prefers start places and falls back to stop places, supportin
   assert.deepEqual(repeatPlaces(withStarts).map(p => p.id), ['A', 'B']);
   assert.deepEqual(repeatTripBody(withStarts, 'A', '', ''), {to: 'A', via: ['B'], repeat: true});
 });
+
+test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor and planned stop overlays', async () => {
+  const {drawSitePointsOverlay, renderSitePointsSummary} = await import('/console/assets/map-editor.js');
+  const makeNode = (tag, ns = '') => {
+    const node = {
+      tagName: tag, namespaceURI: ns, attributes: {}, children: [], textContent: '', hidden: false, className: '', _parent: null,
+      setAttribute(k, v) { this.attributes[k] = String(v); },
+      append(...nodes) { for (const n of nodes) { if (n && typeof n === 'object') n._parent = this; this.children.push(n); } },
+      remove() { if (this._parent) this._parent.children = this._parent.children.filter(c => c !== this); this._removed = true; },
+      replaceChildren(...nodes) { this.children = nodes; },
+      querySelector(sel) { return sel === '#site-points-layer' ? this.children.find(c => c.attributes.id === 'site-points-layer') || null : null; },
+    };
+    return node;
+  };
+  const ownerDocument = {
+    createElementNS: (ns, tag) => ({...makeNode(tag, ns), ownerDocument}),
+    createElement: (tag) => ({...makeNode(tag), ownerDocument}),
+  };
+  const svg = {...makeNode('svg', 'http://www.w3.org/2000/svg'), ownerDocument};
+  const panelEl = {...makeNode('details'), ownerDocument, hidden: true};
+  const bodyEl = {...makeNode('div'), ownerDocument};
+  const view = {toPx: (x, y) => [100 + x * 100, 100 - y * 100]};
+  const payload = {
+    vehicle_stops: [
+      {id: 'S1', in_active_map: true, pose: {x: -0.678, y: -0.135}},
+      {id: 'S3', in_active_map: true, pose: {x: 0.745, y: -0.207}, berth: {nav2_berth_ready: false}},
+      {id: 'S_OUT', in_active_map: false, pose: null},
+    ],
+    coordinate_frames: {
+      vehicle_world: {waypoints: {
+        S1_pickup: {dual_role_exit_place: true},
+        S3_intake: {pose: {x: 0.745, y: -0.207}, planned_approach_ref_m: {x: 0.9238, y: -0.207}},
+        J_stand_branch: {pose: {x: 0.615, y: -0.207}, planned: true},
+        S_OUT_outbound: {in_active_map: false, pose: null, planned_approach_ref_m: {x: 0.6148, y: -0.1026}, ceiling_ref_m: {x: 0.614, y: 0.001}},
+      }},
+      cell_s_arm_base: {world_origin_hint_m: [0.927, -0.036]},
+    },
+    conveyor_transfer: {out_point: {stop_x_mm: 158}, handover_state_machine: {wired_to_runtime: false}},
+    zone_rules: {layer_counts: {t1: 13, t2: 12, t3: 12, total: 37}},
+    end_to_end_stages: [{stage: 'stage_1', label: 'S1 수령', runtime_status: 'ready_dual_role_exit', gaps: ['S_EXIT 미분리']}],
+  };
+
+  drawSitePointsOverlay(svg, payload, view);
+  const layer = svg.querySelector('#site-points-layer');
+  assert.ok(layer);
+  const texts = layer.children.filter(c => c.tagName === 'text').map(c => c.textContent);
+  assert.ok(texts.includes('S3_app(예정)'));
+  assert.ok(texts.includes('S_OUT(예정)'));
+  assert.ok(texts.includes('[수령·출구]'));
+  assert.ok(texts.includes('arm_s 180°·cell_ab -90°'));
+
+  renderSitePointsSummary(panelEl, bodyEl, payload);
+  assert.equal(panelEl.hidden, false);
+  const dlText = bodyEl.children[0].children.map(c => c.textContent).join(' | ');
+  assert.match(dlText, /180°.*-90°/);
+  assert.match(dlText, /x=158 mm/);
+  assert.match(dlText, /37자리/);
+  assert.match(bodyEl.children[1].children[0].textContent, /S_EXIT 미분리/);
+
+  drawSitePointsOverlay(svg, null, view);
+  assert.equal(svg.querySelector('#site-points-layer'), null);
+  renderSitePointsSummary(panelEl, bodyEl, null);
+  assert.equal(panelEl.hidden, true);
+  assert.equal(bodyEl.children.length, 0);
+});

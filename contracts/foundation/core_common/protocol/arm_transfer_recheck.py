@@ -7,7 +7,7 @@ from pydantic import BeforeValidator, Field, model_validator
 from .arm_transfer import ArmActionId
 from .arm_transfer_evidence import ArmTransferEvidenceOwner
 from .arm_transfer_jobs import ArmTransferRequestKey
-from .arm_transfer_observations import ArmTransferObservation, _Closed, _Counter, _sequence
+from .arm_incident.arm_transfer_observations import ArmTransferObservation, _Closed, _Counter, _sequence
 from .arm_transfer_preflight import ArmDigest, ArmPhysicalRef
 
 

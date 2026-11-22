@@ -38,7 +38,7 @@ import urllib.request
 SERVICE = "rosy-learning-center.service"
 INSTALLER = Path("deploy/model_pc/install_learning_center.py")
 UPDATER = Path("deploy/model_pc/learning_center_update.py")
-JOBS = ("experiment_train", "experiment_online", "experiment_export")
+JOBS = ("experiment_train", "experiment_online", "experiment_export", "experiment_cuda_train", "canonical_workers")
 KEEP_FLAGS = ("--state", "--center-config", "--python", "--port", "--collaboration")
 
 

@@ -102,15 +102,12 @@
 ## 시험
 
 - `operations/fleet/test`
+- `test/test_remaining_platform_installed.py`
 
 ## 최근 기록
 
-- 2026-11-21 · uncommitted · depart_tick: a queued exit goal is withdrawn, not SENT
-- 2026-11-21 · uncommitted · feat(site-map): 정지 장소 stop_zone·approach_m
-- 2026-11-22 · uncommitted · fix(fleet): Pinky 배차 start_guard·SENDING 취소 확인 및 실제 TripRunner E2E 검증 (D-1060)
-- 2026-11-21 · uncommitted · docs(adr): Pinky 작업 배차 ADR 번호를 D-1060으로 옮김
-- 2026-11-21 · uncommitted · fix(fleet): Pinky 작업 배차는 이름 있는 운영자 요청만 (D-1059 검토)
-- 2026-11-21 · uncommitted · feat(fleet): Pinky 작업을 Fleet trip으로 한 번 배차 (D-1059, 패널 5 조각 3)
-- 2026-11-20 · uncommitted · fix(fleet): CORE cancel result nav.failed CANCELED gets its own FAILED reason
-- 2026-11-20 · uncommitted · fix(site-map): 자동 트랙 보정이 고정 장소·차로를 지킴
-- 2026-11-18 · uncommitted · fix(map-pose): 늦은 odom·오래된 앵커·3 fps 짝짓기
+- 2026-11-21 · uncommitted · Refuse double-encoded text at the site map write boundary
+- 2026-11-21 · uncommitted · records bot folds a late-merged log shard at its dated position, not at the end
+- 2026-11-21 · uncommitted · Keep controls steady during the measured-calibration refresh
+- 2026-11-21 · uncommitted · Header E-stop stays live for a signed-in viewer (D-1043)
+- 2026-11-21 · uncommitted · Fleet E-stop route accepts a human viewer (D-1043)

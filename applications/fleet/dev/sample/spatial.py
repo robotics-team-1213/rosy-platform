@@ -58,4 +58,6 @@ class Spatial:
                                    'polygon_m': [[0, 0], [4, 0], [4, 2], [0, 2]], 'sources': []}]})
         if (method, path) == ('GET', '/place-markers'):
             return reply({'markers': self.markers})
+        if (method, path) == ('GET', '/site-points'):
+            return reply({'detail': 'Not Found'}, status=404)
         return None

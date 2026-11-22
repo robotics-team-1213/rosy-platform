@@ -1293,3 +1293,12 @@ def test_unreferenced_deploy_example_narrows_to_functional_while_script_keeps_ro
 
     sh_sel = affected.select(repo, ["deploy/robot/run.sh"])
     assert "test" in sh_sel.reasons
+
+
+def test_fleet_and_console_source_select_packaging_and_pattern_guards():
+    repo = affected.Repo.load(ROOT)
+    web_sel = affected.select(repo, ["applications/fleet/web/shared/fleet-header.js"])
+    assert "shared/web/test/test_patterns_registry.py" in web_sel.reasons
+
+    fleet_sel = affected.select(repo, ["operations/fleet/fleet/server/console/charge_bay_routes.py"])
+    assert "test/test_remaining_platform_installed.py" in fleet_sel.reasons

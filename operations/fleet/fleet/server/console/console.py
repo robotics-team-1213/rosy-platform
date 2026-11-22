@@ -45,7 +45,7 @@ from fleet.server.formation_control import FormationControl  # SERVER_HOLDERS co
 from fleet.server.traffic_arbitration import TrafficArbitration
 from fleet.swarm.robots import RobotEndpoint
 from fleet.swarm.session_arming import require_capability  # noqa: F401
-from fleet.swarm.transport import RobotApiError, RobotClient  # noqa: F401
+from fleet.swarm.transport import HttpRobotClient, RobotApiError, RobotClient  # noqa: F401
 
 _helpers = importlib.import_module("fleet.server.console_helpers")
 
@@ -102,6 +102,8 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         # "내가 무엇을 시켰는가"이지 로봇이 되돌려 준 값이 아니다.
         self._goals: dict[str, dict] = {}
         self.goal_leases = goal_lease.GoalLeases(goal_lease_ttl_s, self._clients, clock, lambda r: r in self._yielding)
+        for client in clients:
+            self.bind_robot_motion(client)
         #: 달리는 로봇이 점유한 경로. 교행 판정의 재료이자, 왜 기다리는지의 근거다.
         self._claims: dict[str, list] = {}
         #: 남의 경로와 부딪혀 아직 못 내려간 미션. 앞이 비면 그대로 다시 내려간다.
@@ -203,6 +205,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         robot_id = endpoint.robot_id
         if robot_id in self._clients:
             raise HubError("ROBOT_ID_CONFLICT", f"{robot_id} is already on the roster")
+        self.bind_robot_motion(client)
         self._clients[robot_id] = client
         self._order.append(robot_id)
         self._registered_endpoints[robot_id] = endpoint.base_url
@@ -230,6 +233,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         """SiteRoster only: the same robot moved to a confirmed new address."""
         robot_id = endpoint.robot_id
         old = self._clients[robot_id]
+        self.bind_robot_motion(client)
         self._clients[robot_id] = client
         self._capability_display.invalidate(robot_id)
         self._registered_endpoints[robot_id] = endpoint.base_url
@@ -240,6 +244,10 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
     def clients(self) -> dict[str, RobotClient]:
         """The live roster's clients (the localization service polls these)."""
         return dict(self._clients)
+
+    def bind_robot_motion(self, client: RobotClient) -> None:
+        if isinstance(client, HttpRobotClient):
+            client.bind_motion_wire(self.goal_leases.motion_wire)
 
     def set_localization_view(self, view: Optional[Callable[[str], Optional[dict]]]) -> None:
         self._localization_view = view

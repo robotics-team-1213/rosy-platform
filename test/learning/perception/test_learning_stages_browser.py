@@ -19,6 +19,7 @@ STAGE_PAGES = [('홈', None, None, '/learning'), ('자료 등록', '자료 하�
                ('정답 달기', '정답 하위 메뉴', '로봇암 시범 검수', '/learning/omx'),
                ('정답 달기', '정답 하위 메뉴', 'VLM 판단', '/learning/vlm'), ('학습 실행', '학습 하위 메뉴', '학습 과제', '/learning/tasks'),
                ('학습 실행', '학습 하위 메뉴', '인식 학습', '/learning'), ('학습 실행', '학습 하위 메뉴', 'SIM 실험', '/learning/sim'),
+               ('학습 실행', '학습 하위 메뉴', '표준 시작 자세', '/learning/canonical'),
                ('평가·승격', None, None, '/learning/evaluate')]
 
 
@@ -32,7 +33,7 @@ def test_task_pages_share_body_and_native_navigation_controls(browser_workspace,
     base = f'{origin.scheme}://{origin.netloc}'
     page.set_viewport_size({'width': width, 'height': 768 if width == 1366 else 844})
     targets = ['/learning', '/catalog', '/learning/camera', '/learning/workspaces', '/learning/omx',
-               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/evaluate', '/accounts']
+               '/learning/vlm', '/learning/tasks', '/learning/sim', '/learning/canonical', '/learning/evaluate', '/accounts']
     for target in targets:
         page.goto(base + target, wait_until='domcontentloaded')
         page.evaluate('theme => document.documentElement.dataset.theme = theme', theme)

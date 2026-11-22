@@ -438,8 +438,8 @@ def test_presence_route_needs_a_named_operator_and_dispatch_check_is_wired(tmp_p
     assert console.goal_leases.attempt_open is not None
 
 
-@pytest.mark.parametrize("ttl,started", [(0.0, False), (4.0, True)])
-def test_renew_task_runs_only_when_leases_are_on(tmp_path, monkeypatch, ttl, started):
+@pytest.mark.parametrize("ttl", [0.0, 4.0])
+def test_goal_lease_worker_reconciles_named_stops_even_with_default_ttl(tmp_path, monkeypatch, ttl):
     from test_trip_runner import Ports, _app
 
     calls = []
@@ -455,7 +455,7 @@ def test_renew_task_runs_only_when_leases_are_on(tmp_path, monkeypatch, ttl, sta
     console.goal_leases.ttl_s = ttl
     with client:
         pass
-    assert bool(calls) is started
+    assert calls == [console]
 
 
 @pytest.mark.parametrize("value,expected", [(None, 0.0), (0, 0.0), (3.5, 3.5), (5, 5.0)])

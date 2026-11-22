@@ -71,7 +71,7 @@ def auto_clear(arm: str, f: dict, link, clear_fn=None) -> dict:
     first; when it allows, the cell's AI assessor clears at once, so a link failure on a rested, torque-OFF arm no longer
     waits for a person. Fleet still re-judges the stored facts and its repeat limit; any refusal leaves the hold."""
     try:
-        from core_common.protocol.arm_incidents import machine_clearable
+        from core_common.protocol.arm_incident.arm_incidents import machine_clearable
 
         ok, why = machine_clearable(f)
     except Exception as exc:  # the rule cannot judge: the hold stays

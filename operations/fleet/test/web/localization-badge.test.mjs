@@ -121,3 +121,11 @@ test("an LED-confirmed blob is the pin place only while the map pose is not LOCA
   assert.equal(pinPrefill(identity, degraded, "rosy_40"), null);
   assert.equal(pinPrefill(null, degraded, "rosy_41"), null);
 });
+
+test("state.pose_frame overrides map_id and normalizes -0.00", () => {
+  const odomOrigin = { pose: { x: 0, y: -0.001, yaw: 0 }, pose_frame: "odom", map_id: "track", localization: { state: "LOCALIZED", pose_frame: "map" } };
+  assert.equal(robotPoseText(odomOrigin, { state: "LOCALIZED", pose_frame: "map" }), "odom 0.00, 0.00");
+  assert.equal(robotMapPose({ state: odomOrigin, localization: { state: "LOCALIZED", pose_frame: "map" } }), null);
+  const unknownLoc = { pose: { x: 0.4, y: -0.002, yaw: 0 }, map_id: "track" };
+  assert.equal(robotPoseText(unknownLoc, { state: "UNKNOWN", pose_frame: null }), "odom 0.40, 0.00");
+});

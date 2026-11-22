@@ -144,6 +144,35 @@ def test_the_scope_stops_before_the_fetch_and_outputs_go_only_after_a_good_fetch
     assert not (tmp_path / "log2/out").exists()
 
 
+@pytest.mark.parametrize(("terminal", "release_error"), [(True, False), (False, False), (True, True)])
+def test_durable_fetch_failure_releases_only_terminal_rebuildable_source(monkeypatch, tmp_path, terminal, release_error):
+    import remote_sim_job
+
+    calls = _fake_host(monkeypatch, (1, b"partial", b"file changed"))
+    code = 7 if terminal else rp.remote_job.VANISHED_EXIT
+    sha = "a" * 40
+    original_remote = rp.remote
+
+    def remote(host, script, *args, **kw):
+        if script == rs.RELEASE_SOURCE:
+            assert args[1] == sha
+            if release_error:
+                calls.append(script)
+                raise OSError("ssh")
+        return original_remote(host, script, *args, **kw)
+
+    def run(host, name, args, inner, sim, log, metadata, *, ssh):
+        calls.append("durable")
+        log.write_bytes(b"bench failed")
+        return code
+
+    monkeypatch.setattr(remote_sim_job, "run", run)
+    monkeypatch.setattr(rp, "remote", remote)
+    assert rs.run_sim("m@1", "model", "true", [], sha, tmp_path, tmp_path / "log", 1, durable=True) == code
+    trailing = [rs.STOP, rs.FETCH, rs.RELEASE_SOURCE] if terminal else []
+    assert calls == ["ship", "durable", *trailing]
+
+
 BASH = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None, reason="needs bash, flock")
 
 

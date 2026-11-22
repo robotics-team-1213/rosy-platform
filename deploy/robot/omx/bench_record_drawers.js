@@ -1,27 +1,38 @@
 async function pollArms(){
   try{const res=await api('/api/arms');if(res&&res.arms){lastArmsStatus=res.arms;validateStart();}}catch(_){}
 }
-if($('hdr-home-btn')){
-  $('hdr-home-btn').addEventListener('click',async()=>{
-    const btn=$('hdr-home-btn');
-    const incL=Boolean(lastArmsStatus&&f.arm.value&&lastArmsStatus[f.arm.value]?.has_leader_pose&&$('home-include-leader')?.checked);
-    poseInFlight=true;btn.disabled=true;btn.textContent='홈 이동 중...';validateStart();
-    try{
-      setReqError('');
-      const st=await api('/home',{arm:f.arm.value,include_leader:incL});
-      renderStatus(st);
-      poseFeedbackMsg='홈(이니셜) 위치 이동 완료: '+((st.home_moved||[]).join(', ')||f.arm.value)+(incL?' (리더 토크 OFF 복구됨)':'');
-      poseFeedbackUntil=Date.now()+6000;
-      setNotice('pose-feedback','good',poseFeedbackMsg,{ttlMs:6000});
-    }catch(err){setReqError(err.message);}
-    finally{poseInFlight=false;btn.textContent='홈 이동';validateStart();}
-  });
+async function triggerHomePose(btn,opts){
+  if(!btn||poseInFlight||benchSessionActive()||startInFlight||cameraRestartInFlight)return;
+  const arm=(opts?.useStatusArm&&lastStatus?.arm)?lastStatus.arm:f.arm.value;
+  const lbl=btn.querySelector('.btn-lbl')||btn;
+  const aInfo=lastArmsStatus&&arm?lastArmsStatus[arm]:null;
+  const incL=Boolean(opts?.allowLeader&&aInfo&&(aInfo.leader_connected===true||(aInfo.leader_connected!==false&&aInfo.has_leader_pose))&&$('home-include-leader')?.checked);
+  poseInFlight=true;btn.disabled=true;lbl.textContent='홈 이동 중...';validateStart();
+  if(typeof setActivity==='function')setActivity('홈 이동 요청 중...','live',arm);
+  try{
+    setReqError('');
+    const st=await api('/home',{arm,include_leader:incL,fold_unfolded:opts?.foldUnfolded!==false});
+    renderStatus(st);
+    poseFeedbackMsg='홈(이니셜) 위치 이동 완료: '+((st.home_moved||[]).join(', ')||arm)+(incL?' (리더 토크 OFF 복구됨)':'');
+    poseFeedbackUntil=Date.now()+6000;
+    setNotice('pose-feedback','good',poseFeedbackMsg,{ttlMs:6000});
+    if(typeof setActivity==='function')setActivity('홈 이동 완료','good',((st.home_moved||[]).join(', ')||arm)+(incL?' (리더 포함)':''));
+    if(typeof benchBeep==='function')benchBeep('done');
+  }catch(err){
+    setReqError(err.message);
+    if(typeof setActivity==='function')setActivity('홈 이동 실패','crit',err.message);
+    if(typeof benchBeep==='function')benchBeep('warn');
+  }
+  finally{poseInFlight=false;lbl.textContent=opts?.defaultLabel||'홈 이동';validateStart();}
 }
+if($('hdr-home-btn'))$('hdr-home-btn').addEventListener('click',()=>triggerHomePose($('hdr-home-btn'),{allowLeader:true,foldUnfolded:true,defaultLabel:'홈 이동'}));
+if($('hdr-result-home-btn'))$('hdr-result-home-btn').addEventListener('click',()=>triggerHomePose($('hdr-result-home-btn'),{allowLeader:true,useStatusArm:true,foldUnfolded:true,defaultLabel:'지금 홈 포즈'}));
 if($('home-include-leader'))$('home-include-leader').addEventListener('change',validateStart);
 if($('save-leader-pose-btn')){
   $('save-leader-pose-btn').addEventListener('click',async()=>{
     const btn=$('save-leader-pose-btn');
     poseInFlight=true;btn.disabled=true;btn.textContent='읽는 중...';validateStart();
+    if(typeof setActivity==='function')setActivity('리더 포즈 읽는 중...','live',f.arm.value);
     try{
       setReqError('');
       const st=await api('/save_leader_pose',{arm:f.arm.value});
@@ -29,8 +40,12 @@ if($('save-leader-pose-btn')){
       poseFeedbackMsg='리더 홈 포즈 저장 완료 ('+Object.keys(st.leader_pose_saved||{}).join(', ')+')';
       poseFeedbackUntil=Date.now()+6000;
       setNotice('pose-feedback','good',poseFeedbackMsg,{ttlMs:6000});
+      if(typeof setActivity==='function')setActivity('리더 포즈 저장 완료','good',Object.keys(st.leader_pose_saved||{}).join(', ')||f.arm.value);
       pollArms();
-    }catch(err){setReqError(err.message);}
+    }catch(err){
+      setReqError(err.message);
+      if(typeof setActivity==='function')setActivity('리더 포즈 저장 실패','crit',err.message);
+    }
     finally{poseInFlight=false;btn.textContent='리더 포즈 저장';validateStart();}
   });
 }
@@ -38,6 +53,7 @@ if($('save-init-pose-btn')){
   $('save-init-pose-btn').addEventListener('click',async()=>{
     const btn=$('save-init-pose-btn');
     poseInFlight=true;btn.disabled=true;btn.textContent='저장 중...';validateStart();
+    if(typeof setActivity==='function')setActivity('팔로워 포즈 저장 중...','live',f.arm.value);
     try{
       setReqError('');
       const st=await api('/save_initial_pose',{arm:f.arm.value});
@@ -47,8 +63,12 @@ if($('save-init-pose-btn')){
       poseFeedbackMsg='이니셜 포즈 저장 완료: '+txt;
       poseFeedbackUntil=Date.now()+6000;
       setNotice('pose-feedback','good',poseFeedbackMsg,{ttlMs:6000});
+      if(typeof setActivity==='function')setActivity('팔로워 포즈 저장 완료','good',txt||f.arm.value);
       pollArms();
-    }catch(err){setReqError(err.message);}
+    }catch(err){
+      setReqError(err.message);
+      if(typeof setActivity==='function')setActivity('팔로워 포즈 저장 실패','crit',err.message);
+    }
     finally{poseInFlight=false;btn.textContent='팔로워 포즈 저장';validateStart();}
   });
 }
@@ -142,7 +162,11 @@ if($('reason-close-btn')){
     if(typeof dismissTopNotice==='function')dismissTopNotice();
   });
 }
-if($('hdr-refresh-btn'))$('hdr-refresh-btn').addEventListener('click',()=>{pollStatus();pollCameras();});
+if($('hdr-refresh-btn'))$('hdr-refresh-btn').addEventListener('click',()=>{
+  if(typeof setActivity==='function')setActivity('상태·카메라 새로고침 중...','muted',f?.arm?.value||'');
+  pollStatus();
+  pollCameras();
+});
 if($('hdr-help-btn'))$('hdr-help-btn').addEventListener('click',()=>{
   const sec=$('sec-shortcuts');
   if(!sec)return;
@@ -191,9 +215,14 @@ async function keyboardStop(){
   if(stopInFlight)return;
   stopRequestVersion++;
   stopInFlight=true;setReqError('');
+  if(typeof setActivity==='function')setActivity('정지 요청 중...','warn','');
   try{
     const st=await api('/stop',{});renderStatus(st);
-  }catch(err){setReqError('정지 요청: '+err.message);}
+    if(typeof setActivity==='function')setActivity('정지 요청 전달 완료',st.stopped===false?'muted':'good',st.stop_result?.message||(STATUS_MAP[st.status]?.[0]||st.status||''));
+  }catch(err){
+    setReqError('정지 요청: '+err.message);
+    if(typeof setActivity==='function')setActivity('정지 요청 실패','crit',err.message);
+  }
   finally{stopInFlight=false;syncHeaderAndSlimBar();}
 }
 document.addEventListener('keydown',e=>{
@@ -238,9 +267,12 @@ document.addEventListener('keydown',e=>{
   }else if(e.shiftKey&&low==='c'){
     const cb=$('hdr-camera-restart-btn');if(!cb.disabled){e.preventDefault();cb.click();}
   }else if(!e.shiftKey&&low==='h'){
-    const hb=$('hdr-home-btn');if(hb&&!hb.disabled){e.preventDefault();hb.click();}
+    const hb=currentBenchPhase()==='result'?$('hdr-result-home-btn'):$('hdr-home-btn');
+    if(hb&&!hb.hidden&&!hb.disabled){e.preventDefault();hb.click();}
   }else if(!e.shiftKey&&low==='c'){
     if(camLabels.length>1){e.preventDefault();cyclePrimaryCam();}
+  }else if(!e.shiftKey&&low==='m'){
+    const sb=$('hdr-sound-btn');if(sb){e.preventDefault();sb.click();}
   }else if(!e.shiftKey&&low==='x'){
     const cb=$('reason-close-btn');if(cb&&!cb.hidden){e.preventDefault();cb.click();}
   }else if(e.key==='?'){
@@ -252,14 +284,22 @@ document.addEventListener('keydown',e=>{
   }
 });
 
-$('next-ep-btn').addEventListener('click',()=>{
-  const cur=f.name.value.trim();
-  const m=cur.match(/^(.*?)(\d+)$/);
-  if(m)f.name.value=m[1]+String(Number(m[2])+1).padStart(m[2].length,'0');
-  else if(cur)f.name.value=cur+'-02';
+function bumpCollectionName(prevName){
+  let cur=f.name.value.trim();
+  if(!cur&&typeof autoCollectionName==='function')autoCollectionName();
+  cur=f.name.value.trim();
+  const inc=s=>{
+    const m=s.match(/^(.*?)(\d+)$/);
+    return m?(m[1]+String(Number(m[2])+1).padStart(m[2].length,'0')):(s?s+'-02':'');
+  };
+  let next=inc(cur);
+  if(prevName&&next===prevName)next=inc(next);
+  if(next)f.name.value=next.slice(0,64);
   nameManuallyEdited=Boolean(f.name.value.trim());
   validateStart();
-});
+}
+window.bumpCollectionName=bumpCollectionName;
+$('next-ep-btn').addEventListener('click',()=>bumpCollectionName());
 
 $('copy-transfer-btn').addEventListener('click',async()=>{
   const folder=(lastStatus&&lastStatus.folder)?lastStatus.folder.split('/').pop():'<session-folder>';
@@ -277,7 +317,7 @@ f.addEventListener('submit',e=>{e.preventDefault();startBench('/start');});
 $('hdr-prepare-btn').addEventListener('click',()=>startBench('/prepare'));
 $('hdr-start-now-btn').addEventListener('click',()=>f.requestSubmit());
 
-async function startBench(path){
+async function startBench(path,opts){
   validateStart();
   if(!window.benchStartReady||currentBenchPhase()!=='setup')return;
   setReqError('');
@@ -299,6 +339,8 @@ async function startBench(path){
     invert_gripper:Boolean($('invert-gripper')?.checked),
     task_override:window.zoneSwapped?{swap_pick_place:true}:null,
     align_leader:Boolean($('align-leader')?.checked),
+    home_before_start:Boolean(!opts?.skipHome&&f.arm.value!=='arm_ab'&&!($('replay')?.value)),
+    fold_unfolded:Boolean(!opts?.skipHome&&f.arm.value!=='arm_ab'&&!($('replay')?.value)),
     lerobot_params:lp,
     calibrations:[...document.querySelectorAll('#cal-robot-list input:checked:not(:disabled), #cal-leader-list input:checked:not(:disabled)')].map(i=>i.value)
   };
@@ -307,16 +349,22 @@ async function startBench(path){
   const stopVersion=stopRequestVersion;
   const seq=++latestStatusSeq;
   validateStart();
+  const actionLabel=path==='/prepare'?'연동 준비 시작':'녹화 시작';
+  if(typeof setActivity==='function')setActivity(actionLabel+' 요청 중...','live',[body.arm,body.name].filter(Boolean).join(' · '));
   try{
     const st=await api(path,body);
     lastStartMeta={key:sessionKey(st),name:body.name,arm:body.arm,task:body.task,
       episodeTime:lp.episode_time_s??choices?.task_cards?.[body.task]?.episode_time_s??choices?.config_meta?.[body.config]?.episode_time_s};
     if(seq===latestStatusSeq&&stopVersion===stopRequestVersion&&st.status)renderStatus(st);
     await pollStatus();
+    if(typeof setActivity==='function')setActivity(actionLabel+' 시작됨','good',[body.arm,st?.status?(STATUS_MAP[st.status]?.[0]||st.status):''].filter(Boolean).join(' · '));
   }catch(err){
     setReqError(err.message);
+    if(typeof setActivity==='function')setActivity(actionLabel+' 실패','crit',err.message);
+    if(typeof benchBeep==='function')benchBeep('warn');
   }finally{
     startInFlight=false;
     validateStart();
   }
 }
+window.startBench=startBench;

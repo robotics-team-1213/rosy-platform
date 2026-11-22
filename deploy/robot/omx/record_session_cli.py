@@ -122,7 +122,13 @@ def main(argv=None, *, _globals: dict | None = None):
     parser.add_argument(
         "--arm", help="lock only this arm (its observer's instance name), so the other arm can work too"
     )
+    parser.add_argument(
+        "--skip-leader-finish", action="store_true",
+        help="--chunks: skip opening leader bus in finish() when leader is owned by a parallel process",
+    )
     args = parser.parse_args(argv)
+    if args.skip_leader_finish and not args.chunks:
+        parser.error("--skip-leader-finish requires --chunks")
     if (args.rim_z_m is not None or args.cell_config is not None or args.site is not None) and not args.chunks:
         parser.error("--rim-z-m, --cell-config and --site require --chunks")
     if args.site is not None and args.cell_config is None:
@@ -270,6 +276,7 @@ def main(argv=None, *, _globals: dict | None = None):
         replay=replay,
         chunks=chunks,
         operating_profile=args.operating_profile,
+        **({"skip_leader_finish": True} if args.skip_leader_finish else {}),
     )
     lock = attr("session_lock", session_lock)(args.arm)
     record = {}

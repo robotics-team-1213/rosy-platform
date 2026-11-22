@@ -75,3 +75,20 @@ def test_open_arm_incident_keeps_unsafe_and_status_rejudges_an_old_unsafe_state(
     omx_incident_fleet.hold_path('arm_a').unlink()  # the incident is cleared in Fleet: the next poll resolves it, no restart
     state = bench.status()
     assert state['status'] == 'stopped_safe' and state['unconfirmed'] == []
+
+
+def test_stop_cause_prefers_guard_end_reason_and_skips_json_tail(tmp_path):
+    import bench_record_safety as safety
+
+    folder = tmp_path / 'sess'
+    folder.mkdir()
+    (folder / 'bench.log').write_text(
+        'ValueError: wrist_roll: outside calibrated range\n'
+        '{"step": "registers", "when": "stop"}\n'
+        'motor-health: ok\n'
+        '{"incident": false}\n',
+        encoding='utf-8',
+    )
+    assert safety.stop_cause(folder) == 'ValueError: wrist_roll: outside calibrated range'
+    (folder / 'guard-end.json').write_text(json.dumps({'reason': 'exception: ValueError: wrist_roll: outside calibrated range'}), encoding='utf-8')
+    assert safety.stop_cause(folder) == 'exception: ValueError: wrist_roll: outside calibrated range'

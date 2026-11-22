@@ -134,7 +134,7 @@ def _effectively_held(answer) -> bool:
 def evidence_of(since: float) -> dict | None:
     """The newest stop bundle (cell_evidence) of this session: its jaw-tip crops, then whole frames from 3 s before on,
     at most ARM_INCIDENT_EVIDENCE_FRAMES; {"bundle", "files"} or None."""
-    from core_common.protocol.arm_incidents import ARM_INCIDENT_EVIDENCE_FRAMES
+    from core_common.protocol.arm_incident.arm_incidents import ARM_INCIDENT_EVIDENCE_FRAMES
 
     bundles = [p for p in sorted((INCIDENTS / "evidence").glob("*-stop")) if p.stat().st_mtime >= since]
     if not bundles:
@@ -151,7 +151,7 @@ def evidence_of(since: float) -> dict | None:
 
 def upload_evidence(sidecar: Path, reply, link) -> None:
     """Best effort, after the report: a frame Fleet did not take is left out, never resent and never a hold."""
-    from core_common.protocol.arm_incidents import ArmIncidentEvidenceFrame
+    from core_common.protocol.arm_incident.arm_incidents import ArmIncidentEvidenceFrame
 
     if not sidecar.is_file():
         return
@@ -181,7 +181,7 @@ def upload_evidence(sidecar: Path, reply, link) -> None:
 
 def send(arm: str, link, paths=None) -> bool:
     """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it), then their evidence."""
-    from core_common.protocol.arm_incidents import ArmIncidentReport
+    from core_common.protocol.arm_incident.arm_incidents import ArmIncidentReport
 
     for path in outbox(arm) if paths is None else paths:
         try:
@@ -199,7 +199,7 @@ def send(arm: str, link, paths=None) -> bool:
 
 def report_for(source_id: str, session_id: str, f: dict, d: dict, acted):
     """The Fleet report: measured facts without local paths, the decision, the device recovery, up to two frames."""
-    from core_common.protocol.arm_incidents import ARM_INCIDENT_FRAME_BYTES, ArmIncidentReport
+    from core_common.protocol.arm_incident.arm_incidents import ARM_INCIDENT_FRAME_BYTES, ArmIncidentReport
 
     plain = lambda value: json.loads(json.dumps(value, default=str))  # noqa: E731
     shown = {k: v for k, v in f.items() if k not in ("frames", "fault_records")}
@@ -247,8 +247,10 @@ def default_token_file() -> Path | None:
 
 
 def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=None, token=None, refuse_fn=None,
-                    recovery=None, only=None) -> int:
-    """Clear every open incident of one arm using explicit Core JWT or 0600 operator token file, then lift local hold."""
+                    remeasured=None, recovery=None, only=None) -> int:
+    """Clear every open incident of one arm using explicit Core JWT or 0600 operator token file, then lift local hold.
+    remeasured (D-1040): the fresh read of the arm sent with each clear. recovery/only (D-1048): an assessor's auto-fold
+    evidence for that one incident."""
     if not note.strip():
         raise SystemExit("a note of what was checked is required")
     if token is None:
@@ -267,18 +269,20 @@ def clear_incidents(arm, note, token_file=None, link=None, *, cause=None, basis=
     if only is not None:  # D-1048: the evidence belongs to one incident; never spend it on another
         cleared = [i for i in cleared if i == only]
     for incident_id in cleared:
+        # the read names the one incident it clears (D-1040); an older link without the argument still clears
+        extra = {"remeasured": {**remeasured, "incident_id": incident_id}} if remeasured else {}
         if recovery is not None:
-            answer = link.clear(incident_id, note, token, cause=cause, basis=basis, recovery=recovery)
+            answer = link.clear(incident_id, note, token, cause=cause, basis=basis, recovery=recovery, **extra)
             continue
         if cause is not None or basis is not None:
             try:
-                answer = link.clear(incident_id, note, token, cause=cause, basis=basis)
+                answer = link.clear(incident_id, note, token, cause=cause, basis=basis, **extra)
             except OSError as exc:
-                if getattr(exc, "code", None) != 422:
+                if getattr(exc, "code", None) != 422 or remeasured:  # an assessor's clear never drops its cause
                     raise
                 answer = link.clear(incident_id, note, token)
         else:
-            answer = link.clear(incident_id, note, token)
+            answer = link.clear(incident_id, note, token, **extra)
     print(json.dumps({"arm": arm, "cleared": cleared, "held": answer.held,
                       **({"cause": cause} if cause else {}), **({"basis": basis} if basis else {})}))
     if refuse_fn is not None:

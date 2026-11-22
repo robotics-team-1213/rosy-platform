@@ -19,10 +19,13 @@ import json
 import math
 from pathlib import Path
 import re
+import sys
+
+_CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts/learning/src"
 
 ROLES = ("top", "side", "wrist")  # D-1065 cell A/B roles
 LEGACY_TABLE = {"rs": "top"}  # 11-20~21 sim/mix data called the D435 rs (D-1065 §4); a real Purple-SY source passes its own map
-GOAL_RE = re.compile(r"from \S+ to (ship-h1r[0-2]-l[0-2]|tray)\.$")
+GOAL_RE = re.compile(r"from \S+ to (ship-h1r[0-2]-l[0-2]|tray|stand)\.$")
 HOME = {"arm_a": (0.023, -1.965, 1.666, 1.618, 1.41), "arm_b": (0.023, -1.967, 1.667, 1.626, 1.399)}  # sim radians
 LIMITS = dict(home_review_rad=0.35, black_mean=8.0, black_reject_s=1.0, frozen_diff=0.5, frozen_review_s=3.0,
               min_frames=60, gripper=(0.0, 1.3))
@@ -82,9 +85,17 @@ def video_scan(path: Path, t0: float, t1: float, fps: float) -> dict:
     return dict(stamps=stamps, black_s=black / fps, frozen_s=frozen / fps)
 
 
-def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = True) -> tuple[dict, list[dict]]:
+def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = True,
+                     canonical_spec: dict | None = None) -> tuple[dict, list[dict]]:
     import numpy as np
     import pandas as pd
+    canon_rad = None
+    if canonical_spec is not None:
+        if str(_CONTRACTS_SRC) not in sys.path:
+            sys.path.insert(0, str(_CONTRACTS_SRC))
+        from rosy.contracts.learning.omx_canonical import validate_canonical_spec
+        validate_canonical_spec(canonical_spec)
+        canon_rad = np.asarray(canonical_spec["canonical_start"][arm]["sim_rad"][:5], dtype=float)
     info = json.loads((root / "meta/info.json").read_text(encoding="utf-8"))
     fps = float(info["fps"])
     cams = camera_map(info["features"], legacy)
@@ -126,6 +137,8 @@ def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = 
             reject.append("gripper outside the sim gripper range")
         start = float(np.abs(state[0, 1:4] - home[1:4]).max()) if n else math.inf
         measured["start_from_home_rad"] = round(start, 3)
+        if canon_rad is not None and n:
+            measured["start_from_canonical_rad"] = round(float(np.abs(state[0, :5] - canon_rad).max()), 3)
         if start > LIMITS["home_review_rad"]:
             review.append(f"start {start:.2f} rad from home (joints 2-4)")
         goal = GOAL_RE.search(task_text.get(int(frames.task_index.iloc[0]), "")) if n else None
@@ -139,16 +152,23 @@ def episode_verdicts(root: Path, arm: str, legacy: dict[str, str], real: bool = 
     return dict(fps=fps, cameras=cams), rows
 
 
-def gate(root, arm: str, source: dict, legacy: dict[str, str] | None = None, training_layout: str = "random") -> dict:
+def gate(root, arm: str, source: dict, legacy: dict[str, str] | None = None, training_layout: str = "random",
+         canonical_spec: dict | None = None) -> dict:
     """Judge every episode and the source declaration; write gate-receipt.json next to meta/."""
     root = Path(root).resolve()
     if arm not in HOME:
         raise ValueError(f"unknown arm {arm}")
     if source.get("kind") not in ("sim", "real") or source.get("layout") not in ("random", "fixed"):
         raise ValueError("source must declare kind=sim|real and layout=random|fixed")
+    spec_sha = None
+    if canonical_spec is not None:
+        if str(_CONTRACTS_SRC) not in sys.path:
+            sys.path.insert(0, str(_CONTRACTS_SRC))
+        from rosy.contracts.learning.omx_canonical import canonical_spec_sha256
+        spec_sha = canonical_spec_sha256(canonical_spec)
     legacy = dict(LEGACY_TABLE, **(legacy or {}))
     before = dataset_files(root)
-    meta, rows = episode_verdicts(root, arm, legacy, real=source["kind"] == "real")
+    meta, rows = episode_verdicts(root, arm, legacy, real=source["kind"] == "real", canonical_spec=canonical_spec)
     dataset = []
     if training_layout == "random" and source["layout"] == "fixed":
         dataset.append("fixed-layout source in a randomized training set: evaluation only")
@@ -159,6 +179,8 @@ def gate(root, arm: str, source: dict, legacy: dict[str, str] | None = None, tra
                    limits=LIMITS, dataset_reject=dataset, goals_passing=goals,
                    counts={v: sum(r["verdict"] == v for r in rows) for v in ("pass", "review", "reject")},
                    episodes=rows, files=before, approved_reviews=[])
+    if spec_sha is not None:
+        receipt["canonical_spec_sha256"] = spec_sha
     (root / RECEIPT).write_text(json.dumps(receipt, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     return receipt
 
@@ -194,11 +216,18 @@ def main(argv=None):
     g = sub.add_parser("gate")
     g.add_argument("dataset"); g.add_argument("--arm", required=True); g.add_argument("--source", required=True)
     g.add_argument("--legacy", default=""); g.add_argument("--training-layout", default="random", choices=("random", "fixed"))
+    g.add_argument("--canonical-spec", type=Path, default=None)
     c = sub.add_parser("check")
     c.add_argument("dataset")
     args = parser.parse_args(argv)
     if args.cmd == "gate":
-        r = gate(args.dataset, args.arm, _pairs(args.source), _pairs(args.legacy), args.training_layout)
+        spec = None
+        if args.canonical_spec is not None:
+            if str(_CONTRACTS_SRC) not in sys.path:
+                sys.path.insert(0, str(_CONTRACTS_SRC))
+            from rosy.contracts.learning.omx_canonical import load_canonical_spec
+            spec, _, _ = load_canonical_spec(args.canonical_spec)
+        r = gate(args.dataset, args.arm, _pairs(args.source), _pairs(args.legacy), args.training_layout, canonical_spec=spec)
         print(json.dumps(dict(counts=r["counts"], dataset_reject=r["dataset_reject"]), ensure_ascii=False))
     else:
         print(json.dumps(dict(episodes=check_receipt(args.dataset))))
