@@ -4985,6 +4985,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 네트워크 검사 진입 전 실행을 가로채 기존 동작을 재현했다. 잘못된 옵션을 거절하는 회귀 시험을 추가했다.
 - gate 변화: 없음.
 
+## 2026-11-20 · uncommitted · feat(omx): observer session handoff for H4 (observer_handoff.py)
+
+- 변경: `rosy-omx-observer@<arm>` 실행 중 `session.lock` 미양보 문제(H4) 해결을 위해 `observer_handoff.py`와 `observer_handoff_io.py`를 추가해 잠금·arm lease 획득, observer 정지 및 포트 비점유 확인, `_lead` 리더(`PR_SET_PDEATHSIG=SIGTERM`) 기반 세션 실행 및 종료 후 재시작을 처리하고 `chunk_runner`가 `--joint-topic`/`snapshot_live`로 관측 스냅샷을 유지하도록 했다. `observation-bridge`·`arm-status` 서비스는 `Restart=on-failure`로 전환했으며 WINNAKEN 리뷰 3건(시그널 SIGHUP 정렬·잔여 프로세스 HOLD·사전 `--arm`/`--config` 포트 대조)을 반영했다.
+- 증거: `test/test_omx_observer_handoff.py` 단위 시험 및 원격 pytest, `rosy_harness.py lint` 통과
+- gate 변화: 없음 (`cell_arm_lease.py`, `chunk_runner.py`, `chunk_runner_interrupt.py` 안전 경로 `Safety-Review:` 필요)
+- 결정: H4
+- 교훈: none
+
 ## 2026-11-21 · uncommitted · fix(site): 자동 트랙 보정이 고정 안 된 장소의 방향·이름·차로 설정을 지킴
 
 - 변경: merge_pinned가 고정 안 된 장소는 x·y만, 차로는 polyline만 추적값으로 바꾸고 yaw·name·kind·속도·폭은 지금 지도 값을 지킨다. R v270에서 S1 yaw가 null로 바뀐 것을 보고 고쳤다.
@@ -5064,3 +5072,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-21 · uncommitted · fix(omx): observer handoff keeps the reservation, the group watch and the unit topic check
+
+- 변경: observer_handoff no longer re-pids or re-times a live PID-less lease of the same owner (cell_arm_lease.claim keep_live); the _lead leader now stays until no live process but itself is in the group (zombies do not count, container PID 1 never reaps); run refuses a unit env whose ROSY_OBSERVER_TOPIC is not the bridge manifest's joint topic before stopping the observer
+- 증거: plain-python checks of claim keep_live and group_members; new tests in test_omx_observer_handoff.py run only on the lab/CI Linux hosts (no pytest on this PC); lint 0 errors
+- gate 변화: none; no safety_review path
+- 결정: none
+- 교훈: none
