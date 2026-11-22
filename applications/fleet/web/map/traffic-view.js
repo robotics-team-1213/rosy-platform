@@ -103,7 +103,8 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
       const isOccupiedOrQueued = !String(zone.label || "").startsWith("점유 0/") || !String(zone.label || "").endsWith("대기 0");
       if (!isOccupiedOrQueued && !view.layers?.trafficLabels) continue;
       const p = toPoint(zone.anchor.x, zone.anchor.y);
-      drawChip(ctx, null, p.x, p.y, `${zone.unit} · ${zone.label}`);
+      const isQueued = !String(zone.label || "").endsWith("대기 0");
+      drawChip(ctx, null, p.x, p.y, `${zone.unit} · ${zone.label}`, undefined, isQueued);
     }
   }
   window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length,

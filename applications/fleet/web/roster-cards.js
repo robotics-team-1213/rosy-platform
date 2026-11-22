@@ -40,9 +40,9 @@ export function placeRosterCards(box, cards) {
 }
 
 export const OMX_CELL_DEFS = [
-  { target_id: "arm_a", kind: "omx_ai", label: "OMX-AI #1 (북동 상차 · Arm A)", shortLabel: "ARM_A · 북동 상차", stationId: "S2", stationName: "정지선 2 (상차)", stationX: 0.34, stationY: 0.015, base_x: 0.551, base_y: 0.365, head_x: 0.550, head_y: 0.109, head_yaw: -1.57, reach_m: 0.28, zoom: 4 },
-  { target_id: "arm_b", kind: "omx_ai", label: "OMX-AI #2 (동북 상차 · Arm B)", shortLabel: "ARM_B · 동북 상차", stationId: "S3", stationName: "하차 3 (동북)", stationX: 0.67, stationY: -0.06, base_x: 0.956, base_y: 0.370, head_x: 0.956, head_y: 0.113, head_yaw: -1.57, reach_m: 0.28, zoom: 4 },
-  { target_id: "arm_s", kind: "omx_ai", label: "OMX-AI #3 (동남 분류 · Arm S)", shortLabel: "ARM_S · 동남 분류", stationId: "S5", stationName: "분류 5 (동남)", stationX: 0.87, stationY: -0.38, base_x: 0.960, base_y: -0.035, head_x: 0.703, head_y: -0.035, head_yaw: 3.14, reach_m: 0.28, zoom: 4 },
+  { target_id: "arm_a", kind: "omx_ai", label: "OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)", shortLabel: "Arm A · S5", stationId: "S5", stationName: "S5 팔레트 적재 (1·3층)", stationX: 0.9212, stationY: -0.4776, base_x: 0.551, base_y: 0.365, head_x: 0.550, head_y: 0.109, head_yaw: -1.57, reach_m: 0.28, zoom: 4 },
+  { target_id: "arm_b", kind: "omx_ai", label: "OMX-AI #2 · arm_b (cell_ab · S5 2층 적재)", shortLabel: "Arm B · S5", stationId: "S5", stationName: "S5 팔레트 적재 (2층)", stationX: 0.9212, stationY: -0.4776, base_x: 0.956, base_y: 0.370, head_x: 0.956, head_y: 0.113, head_yaw: -1.57, reach_m: 0.28, zoom: 4 },
+  { target_id: "arm_s", kind: "omx_ai", label: "OMX-AI #3 · arm_s (cell_s · S3 하역 셔틀)", shortLabel: "Arm S · S3", stationId: "S3", stationName: "S3 하역 셔틀", stationX: 0.6987, stationY: -0.2512, base_x: 0.960, base_y: -0.035, head_x: 0.703, head_y: -0.035, head_yaw: 3.14, reach_m: 0.28, zoom: 4 },
 ];
 
 /** D-801: one robot's front camera in its card's ROI spot. Started by the person, closed on reselect or hide. */

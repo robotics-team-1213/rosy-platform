@@ -16,6 +16,14 @@ export function guideAttention(guide, robotId) {
     .map((f) => ({ severity: f.severity, text: `: ${f.text}`, code: f.code, target: f.target || null }));
 }
 
+function compactPoseLabel(row) {
+  if (!row.pose) return `${row.robot_id} · 위치 모름`;
+  if (row.online === false) return `${row.robot_id} · 연결 끊김`;
+  if (row.pose.state === "DEGRADED") return `${row.robot_id} · 추정`;
+  if (row.pose.anchor_source === "operator_pin") return `${row.robot_id} · 핀`;
+  return row.robot_id;
+}
+
 /** "rosy_26 · LOCALIZED · ±0.12 m" for the chip next to the body circle. */
 export function poseLabel(row) {
   const gone = row.online === false ? " · 연결 끊김" : "";
@@ -527,8 +535,8 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     if (labelsOn || isHoveredRobot) {
       const labelText = isHoveredRobot && row.pose
         ? `${row.robot_id} (${row.pose.x.toFixed(2)}, ${row.pose.y.toFixed(2)}m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
-        : poseLabel(row);
-      drawChip(ctx, null, p.x, p.y - ring - 10, labelText, worst);
+        : isFocused ? poseLabel(row) : compactPoseLabel(row);
+      drawChip(ctx, null, p.x, p.y - ring - 16, labelText, worst);
     }
   }
   window.__guideLayer = { robots: marks.length, findings: guide.robots.reduce((n, r) => n + (r.findings || []).length, 0) };

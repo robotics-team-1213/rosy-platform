@@ -50,11 +50,26 @@ a.ui-action-link:active { box-shadow: inset 0 0 0 var(--focus-ring-width) var(--
 }
 
 /* C15 3D robot view (robot-3d.js) — tokens only so dark/light WebGL backdrop & selection ring match. */
-.robot-view { margin: 0; display: grid; gap: var(--space-2); min-width: 0; }
+.robot-view { margin: 0; display: grid; gap: var(--space-1); min-width: 0; }
 .robot-view-stage { position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 6.5rem; max-height: clamp(6.5rem, 15.5dvh, 10.5rem); background: var(--surface-recessed); border: 1px solid var(--border-default); border-radius: var(--radius-control); overflow: hidden; }
 .robot-view-stage:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .robot-view[data-selected] .robot-view-stage { border-color: var(--selection); box-shadow: inset var(--space-1) 0 0 var(--selection); }
 .robot-view-stage > canvas { display: block; width: 100%; height: 100%; }
+.robot-view-badge {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-3);
+  z-index: 1;
+  max-width: calc(100% - var(--space-5));
+  padding: var(--space-1) var(--space-2);
+  border: 1px dashed var(--status-warn-a45);
+  border-radius: var(--radius-flag);
+  background: var(--scrim-solid);
+  color: var(--status-warn);
+  font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono);
+  letter-spacing: var(--track-state);
+  pointer-events: none;
+}
 .robot-view-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); }
 .robot-view-facts ui-button { white-space: nowrap; flex: none; }
 @media (width >= 64rem) and (hover: hover) and (pointer: fine) {

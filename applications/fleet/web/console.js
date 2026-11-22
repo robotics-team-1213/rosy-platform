@@ -422,7 +422,10 @@ function refreshDiagnostics() {
 // D-262: 신호등 카드는 signals.js 팩토리가 그린다.
 const rawSignals = createSignals({ scope: pageScope, el, view, log, call, refreshState,
   isOperator: () => hasOperatorRole(auth.role) && !auth.locked, namedReason });
-const signals = { ...rawSignals, presence: () => (owns("drive") ? rawSignals.presence() : undefined) };
+const signals = {
+  ...rawSignals,
+  presence: () => ((view.stateLoaded || unitScope() !== null) && owns("drive") ? rawSignals.presence() : undefined),
+};
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
 const visionView = createVisionView({
   scope: pageScope, el, call, rawOnly: true,
@@ -457,7 +460,7 @@ const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = creat
   formation: { ...formation, refreshFormation: whenDrive(() => formation.refreshFormation()) },
   dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
   refreshRobotApps, refreshDispatchControl, refreshDiscovery: whenDiscovery(refreshDiscovery), inbox,
-  refreshVision: () => (owns("drive") ? visionView.refreshSources() : undefined),
+  refreshVision: whenDrive(() => visionView.refreshSources()),
   onLock: () => { rosterWorkspace.close(); cellStage?.pause(); },
   clearVisionSample: () => { pathSample.vision = null; paintSitePath(); } });
 

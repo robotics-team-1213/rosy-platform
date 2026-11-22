@@ -96,10 +96,17 @@ export function createCockpitHud({ el }) {
     const anchorHeld = anchors.filter(
       (a) => a.held === true || a.cell_status === "HOLD" || a.cell_status === "PAUSED_HUMAN",
     ).length;
+    const anchorLive = anchors.filter((a) => a.live === true).length;
     const armTotal = sum?.armsTotal > 0 ? sum.armsTotal : anchors.length;
     const armHeld = sum?.armsTotal > 0 ? sum.heldCount : anchorHeld;
-    const armReady = sum?.armsTotal > 0 ? sum.armsFresh : anchors.length;
-    const armsText = armTotal === 0 ? "—" : armHeld > 0 ? `${armHeld}/${armTotal} HOLD` : `${armReady}/${armTotal} OK`;
+    const armReady = sum?.armsTotal > 0 ? sum.armsFresh : anchorLive;
+    const armsText = armTotal === 0
+      ? "—"
+      : armHeld > 0
+        ? `${armHeld}/${armTotal} HOLD`
+        : armReady === 0
+          ? `0/${armTotal} NO FEED`
+          : `${armReady}/${armTotal} LIVE`;
 
     setCell(
       "online",
@@ -109,7 +116,7 @@ export function createCockpitHud({ el }) {
     );
     setCell(
       "mission",
-      activeCount > 0 ? `${activeCount} RUN` : "0 IDLE",
+      activeCount > 0 ? `${activeCount} RUN` : "0 STBY",
       activeCount > 0 ? "active" : "neutral",
       "MISSION",
     );
@@ -122,7 +129,7 @@ export function createCockpitHud({ el }) {
     setCell(
       "arms",
       armsText,
-      armHeld > 0 ? "crit" : (sum?.armsTotal > 0 && sum.armsFresh === 0) ? "warn" : "neutral",
+      armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral",
       "OMX CELL",
     );
     setCell(
@@ -176,18 +183,21 @@ export function createTelemetryTrace() {
     return { stroke, fill, grid, warn, crit, bg };
   }
 
-  function ensureSeries(id, value) {
-    let series = history.get(id);
-    if (!series) {
-      series = Array.from({ length: 12 }, (_, idx) => (idx === 11 ? value : value));
-      history.set(id, series);
-      return series;
+  const MAX_SAMPLES = 24;
+  const SAMPLE_MIN_MS = 850;
+  function ensureSeries(id, value, now = Date.now()) {
+    let entry = history.get(id);
+    if (!entry) {
+      entry = { values: [value], lastAt: now };
+      history.set(id, entry);
+      return entry.values;
     }
-    if (series[series.length - 1] !== value || series.length < 16) {
-      series.push(value);
-      if (series.length > 24) series.shift();
+    if (entry.values[entry.values.length - 1] !== value || now - entry.lastAt >= SAMPLE_MIN_MS) {
+      entry.values.push(value);
+      if (entry.values.length > MAX_SAMPLES) entry.values.shift();
+      entry.lastAt = now;
     }
-    return series;
+    return entry.values;
   }
 
   function scheduleSizeSync() {
@@ -219,7 +229,7 @@ export function createTelemetryTrace() {
       const useBounds = latest.yBounds;
       const nextBoundsKey = useBounds ? useBounds.join(",") : "auto";
       currentBounds = useBounds;
-      const xs = useYs.map((_, idx) => idx);
+      const xs = useYs.map((_, idx) => MAX_SAMPLES - useYs.length + idx);
       const { stroke, fill, grid, warn, crit, bg } = colorsForTone(useTone);
       const measured = Math.floor(plotHost.clientWidth || 0);
       const width = Math.max(180, measured || 256);
@@ -239,7 +249,7 @@ export function createTelemetryTrace() {
           select: { show: false },
           axes: [{ show: false }, { show: false }],
           scales: {
-            x: { time: false },
+            x: { time: false, range: () => [0, MAX_SAMPLES - 1] },
             y: {
               range: (_u, dMin, dMax) => {
                 if (currentBounds) return currentBounds;
@@ -359,7 +369,9 @@ export function createTelemetryTrace() {
       const ys = ensureSeries(id, value);
       const lo = Math.min(...ys);
       const hi = Math.max(...ys);
-      metaEl.textContent = Math.round(lo) === Math.round(hi) ? "STEADY" : `${Math.round(lo)}–${Math.round(hi)}${unit}`;
+      metaEl.textContent = ys.length < 2
+        ? "1 SAMPLE"
+        : Math.round(lo) === Math.round(hi) ? "STEADY" : `${Math.round(lo)}–${Math.round(hi)}${unit}`;
       const yBounds = typeof minBound === "number" && typeof maxBound === "number" ? [minBound, maxBound] : null;
       lastSeries = { id, ys: [...ys], tone, yBounds };
       void drawPlot(id, lastSeries.ys, tone, yBounds);

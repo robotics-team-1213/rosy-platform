@@ -168,6 +168,7 @@ const JSON_POST = {method: 'POST', headers: {'Content-Type': 'application/json'}
 export function robotMapPose(robot) {
   const state = robot?.state, pose = state?.pose;
   if (!pose || ![pose.x, pose.y, pose.yaw].every(Number.isFinite)) return null;
+  if (state.pose_frame && state.pose_frame !== 'map') return null;
   const frame = robot.localization?.pose_frame || state.localization?.pose_frame || (state.map_id ? 'map' : 'odom');
   if (frame !== 'map') return null;
   const loc = state.localization;

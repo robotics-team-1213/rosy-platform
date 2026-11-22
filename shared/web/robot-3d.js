@@ -59,8 +59,11 @@ export function createRobotView(host, options = {}) {
   stage.setAttribute("aria-roledescription", "3D 보기");
   const canvas = el("canvas");
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-labelledby", `${id}-facts`);
-  stage.append(canvas);
+  canvas.setAttribute("aria-labelledby", `${id}-facts ${id}-meta`);
+  const badge = el("span", "robot-view-badge", "자세 미확인 · 기준 자세");
+  badge.setAttribute("aria-hidden", "true");
+  badge.hidden = true;
+  stage.append(canvas, badge);
   const presets = el("div", "robot-view-presets");
   presets.setAttribute("role", "group");
   presets.setAttribute("aria-label", "3D 시점");
@@ -76,28 +79,34 @@ export function createRobotView(host, options = {}) {
   const facts = el("figcaption", "robot-view-facts");
   const summary = el("span", "robot-view-summary");
   summary.id = `${id}-facts`;
+  const meta = el("span", "sr-only");
+  meta.id = `${id}-meta`;
   const detail = el("span", "sr-only"); // joints or pose: the accessible description, and the toggletip below for sighted users
   detail.id = `${id}-detail`;
   canvas.setAttribute("aria-describedby", detail.id);
   const more = el("ui-button", "", "값");
   more.setAttribute("kind", "quiet");
   more.setAttribute("type", "button");
-  facts.append(summary, more, detail);
+  facts.append(summary, more, meta, detail);
   const note = el("p", "robot-view-note");
   note.hidden = true;
   figure.append(stage, presets, note, facts);
   host.replaceChildren(figure);
   toggletip(more, {toString: () => detail.textContent}); // toggletip reads its text when opened, so it shows the current values
 
-  let three, renderer, scene, camera, robot, rig, disposed = false, pending = 0;
+  let three, renderer, scene, camera, robot, rig, disposed = false, pending = 0, hasJoints = false;
   let orbited = false, orbit = {az: 0, el: 0, dist: 1}, frame, presetName = options.preset || "iso";
   const colors = {}, parts = {materials: [], outlines: [], rings: {}, tick: null};
 
   const syncText = () => {
     const name = state.name || state.profile?.name;
     const text = describeRobot({kind, name, selected: state.selected, joints: state.joints, pose: state.pose, link: state.profile?.link, skill: state.skill});
+    hasJoints = text.hasJoints;
     summary.textContent = text.summary;
+    meta.textContent = text.meta;
     detail.textContent = text.detail;
+    badge.hidden = !(kind === "arm" && !hasJoints);
+    figure.dataset.pose = kind === "arm" ? (hasJoints ? "live" : "unverified") : "pose";
     more.setAttribute("aria-label", `${name || kind} ${kind === "arm" ? "관절 값" : "위치·방향 값"}`);
     more.textContent = kind === "arm" ? "관절 값" : "위치·방향";
     stage.setAttribute("aria-label", `${state.name || state.profile?.name || ""} 3D 보기 · 방향키 회전 · +/- 확대 · Home 처음 시점`.trim());
@@ -140,8 +149,8 @@ export function createRobotView(host, options = {}) {
     orbited = false;
   }
 
-  // a report that is late or lost is drawn faded toward the background (not transparent: that sorts badly), never as live
-  const live = () => !state.profile?.link || state.profile.link.state === "fresh";
+  // a report that is late or lost (or an arm with no live joints) is drawn faded toward the background, never as live
+  const live = () => (!state.profile?.link || state.profile.link.state === "fresh") && (kind !== "arm" || hasJoints);
   function tint() {
     for (const material of parts.materials) material.color.copy(colors.body).multiplyScalar(material.userData.shade ?? 1).lerp(colors.ground, live() ? 0 : 0.35);
   }

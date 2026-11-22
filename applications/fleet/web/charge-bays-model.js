@@ -160,12 +160,18 @@ export function chargeBayRows(plan) {
   return { bays, actions, cells, summary, cards, armLiveStates, stationCameraLinks, stationZones, cellOccupants };
 }
 
-export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText = "folded: true (홈 대기)") {
+const UNKNOWN_JOINT_TEXT = "관절 관측 없음 · 홈 여부 미확인";
+
+export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText = UNKNOWN_JOINT_TEXT) {
   const st = armLiveStates?.[armId];
   if (!st || !Array.isArray(st.joints_deg) || !st.joints_deg.length) return fallbackText;
   const jointsStr = st.joints_deg.slice(0, 6).map((v, i) => `J${i + 1}:${Number(v).toFixed(1)}°`).join(" ");
   const ageTxt = st.age_s != null ? evidenceAgeText(Math.round(Number(st.age_s))).slice(3) : "";
-  const liveBadge = st.fresh !== false ? `LIVE${ageTxt ? ` · ${ageTxt}` : ""}` : `스냅샷${ageTxt ? ` · ${ageTxt}` : ""}`;
+  const liveBadge = st.fresh === true
+    ? `LIVE${ageTxt ? ` · ${ageTxt}` : ""}`
+    : st.fresh === false
+      ? `스냅샷${ageTxt ? ` · ${ageTxt}` : ""}`
+      : `신선도 미확인${ageTxt ? ` · ${ageTxt}` : ""}`;
   const tempTxt = st.temp_c != null ? `${st.temp_c}°C` : "";
   const curTxt = st.current_ma != null ? `${st.current_ma}mA` : "";
   return [`[${liveBadge}]`, jointsStr, `folded=${Boolean(st.folded)}`, tempTxt, curTxt, st.substage || ""].filter(Boolean).join(" · ");
@@ -197,8 +203,8 @@ export function inspectorTargetsFromRows(rows, obs = null) {
       title: "OMX-AI #3 · arm_s (cell_s · S3 하역 셔틀)",
       status: s3.status || "neutral",
       text: s3.text || "대기 중",
-      healthText: s3.healthText || "folded: true (홈 대기)",
-      jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || "folded: true (홈 대기)"),
+      healthText: s3.healthText || UNKNOWN_JOINT_TEXT,
+      jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || UNKNOWN_JOINT_TEXT),
       task: s3.task || null,
       robot_id: cellSOccupant,
       dualPair: ["arm_s_top", "arm_s_wrist"],
@@ -218,8 +224,8 @@ export function inspectorTargetsFromRows(rows, obs = null) {
       title: "OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)",
       status: s5.status || "neutral",
       text: s5.text || "대기 중",
-      healthText: s5.healthText || "folded: true (홈 대기)",
-      jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || "folded: true (홈 대기)"),
+      healthText: s5.healthText || UNKNOWN_JOINT_TEXT,
+      jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || UNKNOWN_JOINT_TEXT),
       task: s5.task || null,
       robot_id: cellAbOccupant,
       dualPair: ["top", "arm_a_wrist"],
@@ -240,8 +246,8 @@ export function inspectorTargetsFromRows(rows, obs = null) {
       title: "OMX-AI #2 · arm_b (cell_ab · S5 2층 적재·반출)",
       status: s5.status || "neutral",
       text: s5.text || "대기 중",
-      healthText: s5.healthText || "folded: true (홈 대기)",
-      jointLiveText: formatArmLiveJointText("arm_b", armLive, s5.healthText || "folded: true (홈 대기)"),
+      healthText: s5.healthText || UNKNOWN_JOINT_TEXT,
+      jointLiveText: formatArmLiveJointText("arm_b", armLive, s5.healthText || UNKNOWN_JOINT_TEXT),
       task: s5.task || null,
       robot_id: cellAbOccupant,
       dualPair: ["top", "arm_b_wrist"],

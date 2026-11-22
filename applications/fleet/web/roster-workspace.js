@@ -13,6 +13,7 @@ import { node } from "/common/control-dom.js";
 import { cardTripLine } from "./card-trip.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { createTelemetryTrace } from "/console/assets/cockpit-telemetry.js";
+import { robotMapPose, robotPoseText, sitePoseText } from "./localization-badge.js";
 import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
 import { powerHealthView } from "./power-health-view.js";
 import { staleAgeS } from "./state-age.js";
@@ -110,7 +111,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
 
   function syncTwin(profile, detail) {
     const nextKey = `${profile.kind}:${profile.id}`;
-    const pose = detail?.robot?.state?.pose;
+    const pose = detail?.effectivePose ?? detail?.robot?.state?.pose;
     const joints = profile.kind === "arm" ? (detail?.obsArm?.positions || detail?.anc?.joints || undefined) : undefined;
     if (activeTwinKey !== nextKey) {
       disposeTwin();
@@ -184,6 +185,14 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
           ? { level: "caution", text: robot.error.code || "오류" }
           : undefined;
       const chargingState = robot.power_health?.battery?.charging_state;
+      const guideRow = !view.stateUnavailable
+        ? (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id) || null
+        : null;
+      const guidePose = guideRow?.pose && Number.isFinite(guideRow.pose.x) && Number.isFinite(guideRow.pose.y) ? guideRow.pose : null;
+      const effectivePose = view.stateUnavailable ? undefined : (robotMapPose(robot) || guidePose || state.pose);
+      const placeText = view.stateUnavailable
+        ? undefined
+        : (guidePose ? sitePoseText(guideRow) : null) || (state.pose ? robotPoseText(state, robot.localization) : undefined);
       const profile = robotProfile({
         id: robot.robot_id,
         name: view.robotNames?.[robot.robot_id] || robot.robot_id,
@@ -196,12 +205,13 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
           voltage: power.voltage,
           charging: chargingState === "CHARGING" || state.power?.charging === true,
         },
-        pose: state.pose,
+        pose: effectivePose,
+        place: placeText,
         estop: view.stateUnavailable ? undefined : state.safety?.estop,
         task: view.stateUnavailable ? undefined : (cardTripLine(view, robot.robot_id) || undefined),
         alarm,
       });
-      return { profile, detail: { robot } };
+      return { profile, detail: { robot, effectivePose } };
     });
     const obsArms = view.workcellObs?.arms || [];
     const defsById = new Map(OMX_CELL_DEFS.map((def) => [def.target_id, def]));

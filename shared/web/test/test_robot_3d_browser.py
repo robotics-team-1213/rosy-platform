@@ -81,14 +81,17 @@ def test_robot_3d_view_mounts_mobile_and_arm_updates_presets_and_disposes(view_g
         robotId: 'arm_a',
         name: 'OMX A',
         selected: true,
-        joints: { joint1: 0.2, joint2: -0.4, joint3: 0.6 },
       });
       window.__v3d = arm;
-      const ok = await arm.ready;
-      arm.setState({ joints: { joint1: 0.5, joint2: -0.2, joint3: 0.4 } });
-      return ok;
+      return await arm.ready;
     }""")
     assert isinstance(ready_arm, bool)
     expect(fig).to_have_attribute("data-kind", "arm")
+    expect(fig).to_have_attribute("data-pose", "unverified")
+    expect(page.locator("#test-3d-host .robot-view-badge")).to_be_visible()
+    assert "자세 미확인" in page.locator("#test-3d-host .robot-view-badge").inner_text()
+    page.evaluate("() => window.__v3d.setState({ joints: { joint1: 0.5, joint2: -0.2, joint3: 0.4 } })")
+    expect(fig).to_have_attribute("data-pose", "live")
+    expect(page.locator("#test-3d-host .robot-view-badge")).to_be_hidden()
     assert "OMX A" in page.locator("#test-3d-host .robot-view-summary").inner_text()
     page.evaluate("() => window.__v3d.dispose()")
