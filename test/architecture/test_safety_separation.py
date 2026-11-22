@@ -28,7 +28,8 @@ import ast
 import functools
 from pathlib import PurePosixPath
 
-from test_platform_parts import ROOT, _is_test_file, _owner, _package_of, _tracked
+from _ast_imports import file_import_stmts
+from test_platform_parts import ROOT, _is_test_file, _make_owner, _owner, _package_of, _tracked
 from test_platform_parts import _manifest as _read_manifest
 
 SAFETY = "safety"
@@ -45,14 +46,19 @@ _manifest = functools.lru_cache(maxsize=1)(_read_manifest)
 
 
 @functools.lru_cache(maxsize=1)
+def _owner_of():
+    return _make_owner(_manifest()["roots"])
+
+
+@functools.lru_cache(maxsize=1)
 def _index() -> dict[str, str]:
     """Dotted module name -> tracked path, for production files under an import_prefix."""
-    roots = _manifest()["roots"]
+    owner_of = _owner_of()
     modules: dict[str, str] = {}
     for path in _tracked():
         if not path.endswith(".py") or _is_test_file(path):
             continue
-        root = _owner(path, roots)
+        root = owner_of(path)
         if root is None or not root.get("import_prefix"):
             continue
         package = _package_of(path, root)
@@ -79,7 +85,7 @@ def _concern_of(path: str) -> str | None:
     manifest = _manifest()
     if path in manifest["safety_modules"]:
         return SAFETY
-    root = _owner(path, manifest["roots"])
+    root = _owner_of()(path)
     return None if root is None else root["concern"]
 
 
@@ -170,21 +176,22 @@ GUARDED = ("decision", "learning")
 
 def _import_refs(path: str) -> list[tuple[str, str | None]]:
     """(module, imported name or None) per static import, relative ones resolved."""
-    root = _owner(path, _manifest()["roots"])
+    root = _owner_of()(path)
     package = _package_of(path, root).split(".") if root is not None else []
+    idx = _index()
     refs = []
-    for node in ast.walk(_tree(path)):
-        if isinstance(node, ast.Import):
-            refs += [(alias.name, None) for alias in node.names]
-        elif isinstance(node, ast.ImportFrom):
-            base = package[:max(0, len(package) - node.level + 1)] if node.level else []
-            module = ".".join([*base, *(node.module.split(".") if node.module else [])])
-            for alias in node.names:
-                qualified = f"{module}.{alias.name}" if module else alias.name
-                if qualified in _index():
+    for level, mod, names in file_import_stmts(ROOT / path):
+        if level == 0 and mod is None:
+            refs.extend((alias_name, None) for alias_name in names)
+        else:
+            base = package[:max(0, len(package) - level + 1)] if level else []
+            module = ".".join([*base, *(mod.split(".") if mod else [])])
+            for alias_name in names:
+                qualified = f"{module}.{alias_name}" if module else alias_name
+                if qualified in idx:
                     refs.append((qualified, None))  # `from pkg import submodule`
-                elif alias.name != "*":
-                    refs.append((module, alias.name))
+                elif alias_name != "*":
+                    refs.append((module, alias_name))
     return refs
 
 
@@ -201,8 +208,8 @@ def _public() -> tuple[set[str], set[str]]:
 def _separation_edges() -> tuple[dict[tuple[str, str, str], str], dict[str, int]]:
     """Violations keyed (rule, importer path, imported module or symbol), and how many
     importers / resolved import edges each rule checked."""
-    manifest = _manifest()
-    roots = manifest["roots"]
+    owner_of = _owner_of()
+    idx = _index()
     public, owners = _public()
     violations: dict[tuple[str, str, str], str] = {}
     checked = {"rule1_files": 0, "rule1_edges": 0, "rule2_files": 0, "rule2_edges": 0,
@@ -214,7 +221,7 @@ def _separation_edges() -> tuple[dict[tuple[str, str, str], str], dict[str, int]
         if concern not in (SAFETY, *GUARDED):
             continue
         checked["rule1_files" if concern == SAFETY else "rule2_files"] += 1
-        if concern != SAFETY and _owner(path, roots)["part"] == "middleware":
+        if concern != SAFETY and owner_of(path)["part"] == "middleware":
             checked["rule2_robot_files"] += 1
         for module, name in _import_refs(path):
             full = f"{module}.{name}" if name else module
@@ -224,9 +231,9 @@ def _separation_edges() -> tuple[dict[tuple[str, str, str], str], dict[str, int]
             target = _module_of(full)
             if target is None:
                 continue
-            target_path = _index()[target]
+            target_path = idx[target]
             target_concern = _concern_of(target_path)
-            target_root = _owner(target_path, roots)
+            target_root = owner_of(target_path)
             if concern == SAFETY:
                 checked["rule1_edges"] += 1
                 models = target_root["part"] == "integrations" and _under_kind(target_root, "models")
@@ -494,3 +501,10 @@ def test_safety_review_trailer_check_sees_the_same_safety_paths():
                   if safety_review.is_safety(path, manifest["roots"], modules) != (_concern_of(path) == SAFETY)]
     assert mismatched == []
     assert sum(safety_review.is_safety(path, manifest["roots"], modules) for path in _tracked()) >= 20
+
+
+def test_safety_review_paths_are_tracked_files():
+    """A renamed or deleted entry would silently drop the trailer check (D-430 §5, 2026-11-20)."""
+    tracked = set(_tracked())
+    paths = _manifest().get("safety_review_paths") or []
+    assert paths and [path for path in paths if path not in tracked] == []

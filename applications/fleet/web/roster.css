@@ -30,14 +30,17 @@
   .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .omx-inspector-dual-pane { display: grid; gap: var(--space-1); min-width: 0; }
+.omx-inspector-stage-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1); min-width: 0; }
 .omx-inspector-cam-badge { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: center; min-width: 0; }
+.omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: end; min-width: 0; }
 @media (width < 30rem) {
   .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
 }
+.omx-inspector-field { display: grid; gap: var(--space-1); min-width: 0; font-size: var(--text-micro); color: var(--text-secondary); }
 .omx-inspector-quick-dispatch select { width: 100%; min-width: 0; font-size: var(--text-micro); }
 .omx-inspector-pip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.8rem, 1fr)); gap: var(--space-1); min-width: 0; }
-.omx-inspector-pip { display: grid; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
+.omx-inspector-pip { display: grid; gap: var(--space-1); width: 100%; padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); color: var(--text-primary); font-family: inherit; font-size: inherit; text-align: start; cursor: pointer; min-width: 0; }
+.omx-inspector-pip:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }
 .omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); }
 .omx-inspector-pip small { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -50,7 +53,6 @@
   min-width: 0;
   max-width: 100%;
   border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-raised);
   padding: var(--space-2) var(--space-3);
@@ -417,6 +419,25 @@
 
 /* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
 .map-stage { position: relative; }
+.map-axis-badge,
+.map-cursor-readout {
+  position: absolute;
+  top: var(--space-2);
+  z-index: 2;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-button);
+  background: var(--scrim-solid);
+  color: var(--text-primary);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  pointer-events: none;
+}
+.map-axis-badge { left: var(--space-2); }
+.map-cursor-readout { right: var(--space-2); }
+.map-stage:is([data-view="camera"], :not([data-map-state="site"], [data-map-state="ready"]))
+  > :is(.map-axis-badge, .map-cursor-readout) { display: none; }
+
 .map-hover-card {
   position: absolute;
   left: var(--space-3);

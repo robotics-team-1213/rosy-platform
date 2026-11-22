@@ -19,6 +19,7 @@ from core.bridge import (
     goal_tracker,
     observation,
     pilot_recorder_client,
+    sensor_mirror,
     thermal_policy,
     translate,
 )
@@ -113,12 +114,12 @@ class RosBridgeHelpersMixin:
         return None if context is None else context.seq
 
     def _on_dock_observation(self, msg) -> None:
-        """Tag evidence only; a malformed payload clears the feed (lost, not guessed)."""
+        """Route dock evidence and report malformed observations."""
         try:
-            self._svc.dock_feed.ingest(
-                json.loads(msg.data), received_at=self._line_clock(),
+            sensor_mirror.ingest_dock_observation(
+                self._svc.dock_feed, self._mirror, msg.data, received_at=self._line_clock(),
                 source_now=self._node.get_clock().now().nanoseconds * 1e-9)
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             self._node.get_logger().warning(
                 f"ignored dock observation: {exc}", throttle_duration_sec=5.0)
 
@@ -172,6 +173,7 @@ class RosBridgeHelpersMixin:
     def _on_motor_ready(self, msg) -> None:
         if self._readiness is not None:
             self._readiness.observe("motor_adapter", bool(msg.data), lease=True)
+        self._mirror.motor_ready(msg.data)
 
     def _note_wheels(self, out: CoreTwist) -> None:
         # D-422: update near-point memory after host publish, outside submission locks.
@@ -199,7 +201,10 @@ class RosBridgeHelpersMixin:
         observation.front_clearance(self._svc, sample, received_at=self._line_clock())
 
     def _on_imu(self, msg) -> None:
-        self._svc.state.set_sensor("imu", translate.imu_sample(msg, time.time()))
+        self._mirror.imu(msg)
+
+    def _on_joint_states(self, msg) -> None:
+        self._mirror.wheels(msg)
 
     def _on_us_range(self, msg) -> None:
         observation.us_range(self._svc, msg, received_at=time.time())
@@ -373,6 +378,7 @@ class RosBridgeHelpersMixin:
 
     def _on_motor_health(self, msg) -> None:
         thermal_policy.on_motor_health(self._svc, msg.data, time.monotonic())
+        self._mirror.motor_health(msg.data)
 
     def _tick_diagnostics(self) -> None:
         results = self.diagnostics.collect()

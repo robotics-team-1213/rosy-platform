@@ -26,6 +26,12 @@ export async function resolve(specifier, context, nextResolve) {
       try { return await nextResolve(specifier, context); }
       catch (error) {
         if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+        if (name === 'ui.js') {
+          return {
+            url: "data:text/javascript,export const actionIcon = () => null; export const iconSvg = () => null; export const confirmIrreversible = async () => false; export const openLiveDialog = () => ({close(){}}); export const readColour = () => ''; export const toggletip = () => null;",
+            shortCircuit: true,
+          };
+        }
         return {url:new URL(name, COMMON).href, shortCircuit:true};
       }
     }

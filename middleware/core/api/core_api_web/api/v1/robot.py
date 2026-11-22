@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -46,6 +47,9 @@ def robot_velocity(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
     snap = svc.state.snapshot()
     return snap.velocity.model_dump()
 
+# Topic-fed samples: a silent topic answers with evidence, not 404 (v1.429).
+_TOPIC_SENSORS = frozenset({"imu", "odometry", "wheels", "motor", "dock_observation"})
+
 sensors_router = APIRouter(prefix="/api/v1/sensors", tags=["sensors"])
 
 
@@ -63,7 +67,10 @@ def _json_safe(value):
 
 @sensors_router.get("")
 def list_sensors(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    return {"sensors": _json_safe(svc.state.get_sensors())}
+    samples = dict(svc.state.get_sensors())
+    for sensor in samples.keys() & _TOPIC_SENSORS:
+        samples[sensor] = {key: value for key, value in samples[sensor].items() if key != "sample_age_s"}
+    return {"sensors": _json_safe(samples)}
 
 
 @sensors_router.get("/{sensor_type}")
@@ -76,6 +83,15 @@ def sensor_detail(sensor_type: str, _: AuthContext = Depends(viewer),
         data = {"voltage": None, "received_at": None, "source": None, **(data or {}),
                 "evidence": health["evidence"], "sample_age_s": health["sample_age_s"],
                 "stale_after_s": health["stale_after_s"]}
+    if sensor_type in _TOPIC_SENSORS:
+        # A silent topic is an answer with evidence, not a 404 (v1.429).
+        at = (data or {}).get("received_at")
+        age = (data or {}).get("sample_age_s")
+        if age is None and at is not None:
+            elapsed = time.time() - at
+            age = elapsed if elapsed >= 0.0 else math.inf
+        data = {"received_at": None, **(data or {}), "sample_age_s": age, "stale_after_s": 5.0,
+                "evidence": "missing" if age is None else "fresh" if age <= 5.0 else "stale"}
     if data is None:
         raise ApiError("NOT_FOUND", 404, f"sensor '{sensor_type}' has no data yet")
     return _json_safe(data)

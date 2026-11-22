@@ -1,6 +1,10 @@
+import {node} from "/common/control-dom.js";
+import {setOffBy} from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
+import {owns, relays} from "/console/assets/unit-scope.js";
 // Known external proposals keep their neutral contract and independent admission.
-const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
+const CELL_APPROVES = "승인은 이 팔을 맡은 셀 관제 화면에서 합니다";
+const approvedElsewhere = () => !owns("arms") || relays();  // no arm here, or this unit only relays its children's jobs
 const states = {PROPOSED: "독립 운영자 승인 대기", READY: "승인됨 · 실행 준비", RUNNING: "실행 중",
   ACTION_SUCCEEDED: "동작 성공 · 물리 확인 대기", GOAL_CONFIRMED: "물리 목표 확인됨", HOLD: "보류 · 근거 확인 필요"};
 export function armAdmissionReason(job, control, actor, roleReason = "") {
@@ -59,22 +63,22 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
   let job = null, control = null, version = 0, busy = false, attempted = false, initial = false;
   let recovery = null, child = null, recoveryError = "", recoveryAttempted = false;
   function paint() {
-    admit.hidden = !job;
+    // D-960 §2 · D-994: 통합관제 R reads and relays a delegated arm job; its cell's named operator approves.
+    const cellApproves = approvedElsewhere();
+    panel.hidden = !active || (!owns("arms") && !relays());
+    admit.hidden = !job || cellApproves;
     const reason = busy ? "요청 처리 중입니다" : !job ? "작업을 먼저 조회하세요" : attempted ? "승인 요청 후 원본을 다시 조회하세요" :
       armAdmissionReason(job, control, principal(), approveReason());
-    admit.disabled = Boolean(reason); read.disabled = busy; input.readOnly = busy;
-    if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
+    setOffBy(admit, reason); setOffBy(read, busy ? "요청 처리 중입니다" : ""); input.readOnly = busy;
     const recoveryWait = busy ? "요청 처리 중입니다" : recovery?.child_mission_id ? "복구 횟수를 이미 사용했습니다" :
       recoveryAttempted ? "요청 후 작업을 다시 조회하세요" : "";
     const requestReason = recoveryWait || (!recovery?.can_request || !["AVAILABLE", "EXPIRED"].includes(recovery.status) ?
       "복구 관측을 요청할 수 있는 원본 실패 작업을 조회하세요" : "");
-    requestRecovery.disabled = Boolean(requestReason);
-    if (requestReason) requestRecovery.setAttribute("reason", requestReason); else requestRecovery.removeAttribute("reason");
+    setOffBy(requestRecovery, requestReason);
     // The role closure is initialized after the first render; read it only for an eligible approval.
     const recoveryReason = recoveryWait || (!recovery?.can_approve ?
       "독립 생산자의 새 관측과 다른 운영자 승인이 필요합니다" : approveReason());
-    approveRecovery.disabled = Boolean(recoveryReason);
-    if (recoveryReason) approveRecovery.setAttribute("reason", recoveryReason); else approveRecovery.removeAttribute("reason");
+    setOffBy(approveRecovery, recoveryReason);
   }
   function field(title, value, target = detail) { target.append(node("dt", title), node("dd", String(value ?? "미확인"))); }
   function showRecovery() {
@@ -138,7 +142,8 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
       try { control = await call("/api/fleet/dispatch-control"); life.check(); }
       catch { control = null; }
       if (current !== version || !life.current()) return;
-      if (["RUNNING", "HOLD", "ACTION_SUCCEEDED", "GOAL_CONFIRMED"].includes(job.status)) {
+      // Recovery lives on the cell that owns the arm; 통합관제 R relays no /recovery route (D-960 §2).
+      if (!approvedElsewhere() && ["RUNNING", "HOLD", "ACTION_SUCCEEDED", "GOAL_CONFIRMED"].includes(job.status)) {
         try {
           const result = await call(`/api/fleet/arm-transfers/jobs/${encodeURIComponent(id)}/recovery`); life.check();
           if (current !== version) return;
@@ -155,7 +160,7 @@ export function createArmTransferView({scope, call, anchor, active, approveReaso
         } catch { recoveryError = "복구 근거를 조회할 수 없습니다. 원본 작업은 보존돼 있습니다. 다시 조회하세요."; }
       }
       if (current !== version || !life.current()) return;
-      state.textContent = `${states[job.status] || "상태 확인 필요"} · 원본을 조회했습니다. ${armAdmissionReason(job, control, principal(), approveReason())}`;
+      state.textContent = `${states[job.status] || "상태 확인 필요"} · 원본을 조회했습니다. ${approvedElsewhere() ? CELL_APPROVES : armAdmissionReason(job, control, principal(), approveReason())}`;
       show();
     } catch (error) {
       if (!life.current() || current !== version) return;

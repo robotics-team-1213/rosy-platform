@@ -1,0 +1,4 @@
+{
+  "source": "shelf/meshes/shelf_big_movai.dae: Filipe Almeida (MOV.AI) warehouse shelf model (shelf/model.config); robot/jetcobot.dae: unknown: legacy mesh name per integrations/simulation/gazebo/models/AGENTS.md (Blender 4.4.1 export 2025-04-18, JETCOBOT_stl)",
+  "note": "See integrations/simulation/gazebo/models/AGENTS.md and shelf/model.config."
+}

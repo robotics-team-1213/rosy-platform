@@ -24,8 +24,12 @@ if _HERE not in sys.path:
 
 import cell_arm_lease  # noqa: E402
 from joint_tune import SerialBus as _DefaultSerialBus, no_interrupts, protect_signals, session_lock  # noqa: E402
-from record_session_helpers import compose, interrupt_on_parent_death, load_task_card, static_episodes  # noqa: E402
+from record_session_helpers import (  # noqa: E402
+    LEFT_KEYS, RUNNER_HOLD_EXIT, RUNNER_KILLED_EXIT, RUNNER_UNCONFIRMED_EXIT, RunnerHeld, RunnerUnconfirmed,
+    RunnerUnresponsive, compose, interrupt_on_parent_death,
+    load_task_card, static_episodes, wait_for_runner)
 from session_caps import load_caps, model_tuning, robot_tuning  # noqa: E402
+from teleop_speed import ENV as STAGE_ENV, STAGES, apply_to_caps  # noqa: E402
 
 
 _PARENT_GLOBALS_LIST: list[dict] = []
@@ -68,6 +72,28 @@ def _parent_attr(name: str, default=None, _globals: dict | None = None):
     return default
 
 
+def _resolve_session_rim_z(args, startup_lib: dict) -> float | None:
+    import cell_params as prm
+    from cell_policy_shape import source_rim_z
+    from chunk_runner import resolve_runner_rim_z
+
+    params = prm.load(args.params)["values"] if args.params else None
+    rim = resolve_runner_rim_z(startup_lib, params=params, rim_z_m=args.rim_z_m)
+    if args.cell_config is None:
+        return rim
+    cell_cfg = json.loads(args.cell_config.read_text(encoding="utf-8-sig"))
+    sites = cell_cfg.get("sites") if isinstance(cell_cfg, dict) else None
+    if not isinstance(sites, dict) or not sites:
+        raise ValueError("--cell-config must define a non-empty sites mapping")
+    site_name = args.site or (next(iter(sites)) if len(sites) == 1 else None)
+    if site_name is None or site_name not in sites:
+        raise ValueError("--cell-config requires --site naming a configured site")
+    site_rim = source_rim_z(cell_cfg, site_name, startup_lib)
+    if site_rim is None:
+        raise ValueError(f"site {site_name!r} in --cell-config has no surface_z or rim_z")
+    return resolve_runner_rim_z(None, rim_z_m=site_rim if rim is None else max(rim, site_rim))
+
+
 def main(argv=None, *, _globals: dict | None = None):
     attr = lambda name, default=None: _parent_attr(name, default, _globals)
     parser = argparse.ArgumentParser(
@@ -88,22 +114,39 @@ def main(argv=None, *, _globals: dict | None = None):
     parser.add_argument(
         "--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory"
     )
+    parser.add_argument("--teleop-stage", type=int, choices=sorted(STAGES), help="full-arm Leader session only: teleop_speed stage (tracking limit, servo profile)")
     parser.add_argument("--operating-profile", type=Path, help="--chunks/--replay: per-device operating profile")
+    parser.add_argument("--rim-z-m", type=float, help="--chunks: configured source rim height (m) enforced on policy jaw_gate and handoff")
+    parser.add_argument("--cell-config", type=Path, help="--chunks: cell config JSON whose sites.<site> supplies the source rim height")
+    parser.add_argument("--site", help="--chunks --cell-config: source site name whose rim height is bound at startup")
     parser.add_argument(
         "--arm", help="lock only this arm (its observer's instance name), so the other arm can work too"
     )
     args = parser.parse_args(argv)
+    if (args.rim_z_m is not None or args.cell_config is not None or args.site is not None) and not args.chunks:
+        parser.error("--rim-z-m, --cell-config and --site require --chunks")
+    if args.site is not None and args.cell_config is None:
+        parser.error("--site requires --cell-config")
     if args.operating_profile:
         if not (args.chunks or args.replay):
             parser.error("--operating-profile requires --chunks or --replay")
         args.operating_profile = args.operating_profile.expanduser().resolve()
     if args.body_only and not args.teleop_only:
         parser.error("--body-only requires --teleop-only")
+    if args.teleop_stage and (args.chunks or args.replay or args.body_only):
+        parser.error("--teleop-stage is for the one-arm full-arm Leader teleop and recording only")
     lc_fn = attr("load_caps", load_caps)
     mt_fn = attr("model_tuning", model_tuning)
     rt_fn = attr("robot_tuning", robot_tuning)
     caps = lc_fn(args.caps, model=mt_fn(), robot=rt_fn(args.operating_profile))
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
+    if args.teleop_stage:  # only a one-arm session that follows a Leader with the whole arm; every other kind keeps its caps untouched
+        if config["robot"]["type"] == "bi_omx_follower":
+            parser.error("--teleop-stage is for the one-arm full-arm Leader teleop and recording only")
+        caps = apply_to_caps(caps, args.teleop_stage)
+        os.environ[STAGE_ENV] = str(args.teleop_stage)  # the guard process (the session's child) reads it
+    else:
+        os.environ.pop(STAGE_ENV, None)
     if args.task_card is not None:
         card = attr("load_task_card", load_task_card)(args.task_card)
         config = attr("compose", compose)(config, card, stamp=time.strftime("%Y%m%d-%H%M%S"))
@@ -138,10 +181,13 @@ def main(argv=None, *, _globals: dict | None = None):
         sub = attr("subprocess", _std_subprocess)
         iopd = attr("interrupt_on_parent_death", interrupt_on_parent_death)
         ni = attr("no_interrupts", no_interrupts)
+        io = Path(chunks["io"]) if chunks else None
         child = sub.Popen(
             command,
             start_new_session=True,
             preexec_fn=iopd,
+            # the runner shares the session lock: a runner left holding keeps the arm locked after this process ends
+            pass_fds=tuple(h.fileno() for h in getattr(lock, "handles", ())) if io else (),
             env={
                 **os.environ,
                 "ROSY_OMX_MONITOR_LOG": str(monitor_path),
@@ -151,15 +197,40 @@ def main(argv=None, *, _globals: dict | None = None):
             },
         )
         try:
-            return child.wait()
+            code = child.wait()
+            if io is not None and code < 0:  # the runner alone was killed by a signal (-9): no fold confirmed it
+                raise RunnerUnconfirmed({"reason": f"runner ended by signal {-code}", "exit": code,
+                                         "runner_pid": child.pid, "runner_alive": False})
+            return code
         except KeyboardInterrupt:
             with ni():
-                child.send_signal(signal.SIGINT)
+                if io is None:  # lerobot-record: no fold of its own, as before
+                    child.send_signal(signal.SIGINT)
+                    try:
+                        child.wait(timeout=10)
+                    except sub.TimeoutExpired:
+                        child.kill()
+                        child.wait()
+                    raise
                 try:
-                    child.wait(timeout=10)
-                except sub.TimeoutExpired:
+                    child.send_signal(signal.SIGINT)  # chunk_runner folds and reads it back, or holds torque ON
+                    status = io / "chunk-status.jsonl"
+                    offset = status.stat().st_size if status.exists() else 0
+                    outcome, row = attr("wait_for_runner", wait_for_runner)(child, io, offset)
+                except Exception as error:  # noqa: BLE001  no fold confirmation: never fall through to finish()
+                    alive = child.poll() is None
+                    raise RunnerUnconfirmed({"reason": f"interrupt check failed: {type(error).__name__}: {error}"[:300],
+                                             "runner_pid": child.pid, "runner_alive": alive})
+                if outcome == "hold":
+                    raise RunnerHeld({**row, "runner_pid": child.pid})
+                if outcome == "silent":  # alive, no state change, no HOLD mark: the only kill left; torque is not cut
                     child.kill()
                     child.wait()
+                    raise RunnerUnresponsive({"killed_pid": child.pid, "reason": "no chunk-status.jsonl, live.json or "
+                                              "hold.json change for RUNNER_SILENT_S after SIGINT"})
+                if row is not None and row < 0:  # killed by a signal (-9: SIGKILL) mid-fold: nothing confirmed it
+                    raise RunnerUnconfirmed({"reason": f"runner ended by signal {-row}", "exit": row,
+                                             "runner_pid": child.pid, "runner_alive": False})
             raise
 
     attr("protect_signals", protect_signals)()
@@ -174,13 +245,18 @@ def main(argv=None, *, _globals: dict | None = None):
     if args.chunks is not None:
         from chunk_runner import load_library
 
-        load_library(args.chunks)
+        startup_lib = load_library(args.chunks)
+        try:
+            rim_z_m = _resolve_session_rim_z(args, startup_lib)
+        except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            parser.error(str(exc))
         chunks = {
             "library": str(args.chunks.resolve()),
             "io": str(args.io.resolve()),
             "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest(),
             **({"params": str(args.params.resolve())} if args.params else {}),
             **({"load_model": os.environ["ROSY_LOAD_MODEL"]} if os.environ.get("ROSY_LOAD_MODEL") else {}),
+            **({"rim_z_m": rim_z_m} if rim_z_m is not None else {}),
         }
     import omx_incident
 
@@ -232,14 +308,38 @@ def main(argv=None, *, _globals: dict | None = None):
                     motor_health_session=monitor_session,
                 )
                 Path("session.json").write_text(json.dumps(record, indent=2, default=str))
+                if record.get("runner_held"):
+                    raise SystemExit(RUNNER_HOLD_EXIT)  # the bus and arm stay the holding runner's: no incident read
+                # no confirmed fold: report the incident without a device, so no reboot (it would drop torque)
+                left = any(record.get(k) for k in LEFT_KEYS)
+                device = None if left else ports.get("follower") or ports.get(args.arm)
                 try:
-                    print(json.dumps(omx_incident.after_session(args.arm, ports.get("follower") or ports.get(args.arm)), default=str)[:2000])
+                    print(json.dumps(omx_incident.after_session(args.arm, device), default=str)[:2000])
                 except Exception as exc:
                     print(f"incident pipeline failed: {exc}")
         finally:
-            if lease_created:
+            key = next((k for k in LEFT_KEYS if record.get(k)), None)
+            if args.arm and key:  # every owner stays refused until a person runs release-hold (README)
+                cell_arm_lease.hold(args.arm, {"runner_held": "runner HOLD", "runner_killed": "runner killed",
+                                               "runner_unconfirmed": "runner fold unconfirmed"}[key],
+                                    pid=record[key].get("runner_pid") if record[key].get("runner_alive", key == "runner_held")
+                                    else None)
+            elif lease_created:
                 cell_arm_lease.release(args.arm)
             lock.close()
+            if record.get("runner_held"):
+                print("RUNNER HOLD: chunk_runner holds the arm with torque ON (interrupt fold failed); lease and lock "
+                      "stay with it. A person supports the arm, then kill -USR2 the runner; the session caps stay "
+                      "written until restored. "
+                      f"Report: {json.dumps(record['runner_held'], default=str)[:1000]}", file=sys.stderr, flush=True)
+            elif key:
+                print(f"{key.upper()}: the fold is unconfirmed and torque was NOT cut (readback "
+                      f"{record.get('torque_readback')}; {record[key].get('reason')}). A person supports the arm before "
+                      "any torque OFF; the lease stays held.", file=sys.stderr, flush=True)
+    if record.get("runner_killed"):
+        raise SystemExit(RUNNER_KILLED_EXIT)
+    if record.get("runner_unconfirmed"):
+        raise SystemExit(RUNNER_UNCONFIRMED_EXIT)
     if not record.get("safe_end"):
         raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")
     raise SystemExit(record.get("exit_code") or 0)

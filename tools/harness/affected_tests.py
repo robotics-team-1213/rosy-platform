@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -38,7 +39,7 @@ import affected_exclusive
 import affected_ros
 import safety_review  # D-430 5 judge, reused so the selector and the trailer rule agree
 from affected_ci import (CI_FULL_EXCLUDED, CI_FULL_MATRIX, FLEET_TEST_SECONDS, FULL_SUITES,  # noqa: F401
-                         ROOT_SHARDS, SUITE_SHARDS, ci_matrix)  # the CI full-run matrix, re-exported
+                         ROOT_SHARDS, SUITE_SHARDS, ci_matrix, consolidated)  # the CI full-run matrix, re-exported
 
 # D-436 §1: always on. The 2026-10-03 D-418 merge failures all sat here.
 # Ratchets (known lists that only shrink) run on every selection: 11-19 main grew omx_cell_boundary 148 -> 153
@@ -142,9 +143,8 @@ def markdown_readers(repo: Repo, path: str) -> list[str]:
 # ownership; D-436 §1 narrows it to `functional` plus referencing tests.
 BROAD_TESTS = frozenset({"test"})
 
-
-
-
+# A broad module's path no test names selects the whole root suite (15-31 min remote, 2026-11-20).
+ROOT_FALLBACK = "no test names it, whole root suite"
 UNMAPPED_HINT = ("name this path literally in the test that loads it"
                  " (f-string/module-name-only references are invisible to the selector)")
 
@@ -170,8 +170,6 @@ class Selection:
                 "unmapped": self.unmapped, "narrowed": self.narrowed, "reasons": self.reasons, "invocations": self.invocations,
                 "local_invocations": self.local_invocations,
                 "full_invocations": self.full_invocations}
-
-
 
 
 def changed_files(repo: Path, base: str, head: str | None = None) -> list[str]:
@@ -248,8 +246,6 @@ def _outside_ci_matrix(paths: list[str]) -> list[str]:
     covered = [p for entry in CI_FULL_MATRIX for inv in entry["invocations"] for p in inv
                if not p.startswith("-")] + ["test"]
     return [p for p in dict.fromkeys(paths) if not any(_under(p, c) for c in covered)]
-
-
 
 
 def _narrowed_tests(repo: Repo, path: str, test: str, reverse: bool = False) -> list[str] | None:
@@ -342,6 +338,10 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             for test in markdown_readers(repo, path):
                 add(test, f"reads {path}")
             continue
+        if affected_narrow.is_contract_version_pin(repo, path):
+            for test in (*affected_narrow.CONTRACT_VERSION_READERS, *repo.referencing_tests(path)):
+                add(test, f"contract version pin ({path})")
+            continue
         module = repo.module_for(path)
         referencing = repo.referencing_tests(path) + affected_narrow.registry_readers(repo, path)
         for test in referencing:
@@ -351,17 +351,36 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             touched_paths.setdefault(module["name"], []).append(path)
             tests = module.get("tests") or []
             if set(tests) & BROAD_TESTS:
-                if referencing:
+                if referencing or path.endswith(".example"):
                     narrowed = [t for t in tests if t not in BROAD_TESTS] + (module.get("functional") or [])
+                    why_kind = "root test/" if referencing else "example template"
                     for test in narrowed:
-                        add(test, f"module {module['name']} ({path}; root test/ narrowed to functional)")
+                        add(test, f"module {module['name']} ({path}; {why_kind} narrowed to functional)")
+                    for test, why in ({} if referencing else affected_narrow.folder_tests(repo, path)).items():
+                        add(test, why)
                 else:
                     # No test names this file: the narrowing has nothing to stand on.
-                    add("test", f"module {module['name']} ({path}; no test names it, whole root suite)")
+                    add("test", f"module {module['name']} ({path}; {ROOT_FALLBACK})")
                     broad_fallback_modules[module["name"]] = module
             else:
+                # A module with source_paths has one test folder per source root (perception/test, drive/test).
+                # A folder under another root than the changed file keeps only the files that reach it, like a
+                # reverse dependent; its "nobody imports it, keep the whole folder" fallback is for its own root.
+                # A root with no test folder of its own (an external holder) keeps the module's whole tests.
+                roots = (module["path"], *(module.get("source_paths") or ()))
+                own = max((r for r in roots if _under(path, r)), key=len, default=None)
+                own_has_tests = own is not None and any(_under(t, own) for t in tests)
                 for test in tests:
-                    kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules)                         else _narrowed_tests(repo, path, test)
+                    # A folder outside every root of this module, or registered by two modules (test/integration/*),
+                    # is no "own root" folder either: only the files that reach the change, never the whole folder.
+                    # (An external holder, own_has_tests False, still keeps its installing distribution's tests whole.)
+                    foreign = not any(_under(test, r) for r in roots) or sum(test in (m.get("tests") or []) for m in repo.modules) > 1
+                    other_root = own_has_tests and (
+                        foreign or max((r for r in roots if _under(test, r)), key=len, default=own) != own)
+                    kept = None if safety_review.is_safety(path, repo.safety_roots, repo.safety_modules) \
+                        else _narrowed_tests(repo, path, test, reverse=other_root)
+                    if other_root and kept == []:
+                        continue
                     for one in kept or [test]:
                         add(one, f"module {module['name']} ({path})" + (" [import closure]" if kept else ""))
             continue
@@ -421,11 +440,18 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                                     kept = None
                                     break
                                 kept = sorted({*(kept or []), *one})
+                        if kept == []:  # no file of this suite reaches the change: skip it, not "keep the whole folder"
+                            continue
                         for one in kept or [test]:
                             add(one, f"reverse dependent {other['name']} imports {'/'.join(prefixes)}"
                                 + (" [import closure]" if kept else ""))
+        # A test under the module's own source_paths (drive tests beside middleware/drive) is the module's test,
+        # reached through its tests list and import closure above, not a blanket prefix importer.
+        roots = (module["path"], *(module.get("source_paths") or ()))
+        registered = [t for m in repo.modules for t in m.get("tests") or []]  # judged by closure above
         for test in repo.test_files:
-            if not _under(test, module["path"]) and _imports(repo, test, prefixes, names):
+            if (not any(_under(test, root) for root in roots) and not any(_under(test, t) for t in registered)
+                    and _imports(repo, test, prefixes, names)):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
     # D-436 addendum 1 (panel 2026-11-09): a safety path stays FULL; static reach misses its config/IDL readers.
@@ -434,7 +460,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
         # CI runs the entire root suite in parallel shards for FULL. The local
         # pre-push gate keeps the module's functional tests and all named tests,
         # rather than repeating that 15k-test CI suite in one SSH invocation.
-        if "test" in sel.reasons and all("whole root suite" in why for why in sel.reasons["test"]):
+        if "test" in sel.reasons and all(ROOT_FALLBACK in why for why in sel.reasons["test"]):
             sel.reasons.pop("test", None)
             for module in broad_fallback_modules.values():
                 for test in module.get("functional") or []:
@@ -468,6 +494,12 @@ def pytest_command(paths: list[str], python: str = "python") -> list[str]:
             "-pno:launch_testing", "-pno:launch_ros"]
 
 
+def root_fallback_paths(sel: Selection) -> list[str]:
+    """Changed paths that pulled in the whole root suite because no test names them."""
+    return [m.group(1) for why in sel.reasons.get("test", ())
+            if (m := re.search(rf"\((.+); {ROOT_FALLBACK}\)$", why))]
+
+
 def render(sel: Selection) -> str:
     lines = [f"affected tier (D-436): mode={sel.mode}, {len(sel.changed)} changed file(s)"]
     for path in sel.changed:
@@ -486,6 +518,7 @@ def render(sel: Selection) -> str:
         for path in sorted(sel.reasons):
             lines.append(f"  {path}")
             lines += [f"      <- {why}" for why in sel.reasons[path]]
+        lines += [f"      hint ({path}): {UNMAPPED_HINT}" for path in root_fallback_paths(sel)]
     lines.append("pytest invocations (run each separately):")
     lines += ["  " + " ".join(pytest_command(inv)) for inv in sel.invocations]
     return "\n".join(lines) + "\n"
@@ -553,10 +586,12 @@ def main(repo_root: Path, base: str, mode: str, as_json: bool,
         print(render(sel), end="", file=sys.stderr)  # the human selection (was a second --print call in ci.yml)
         include = ci_matrix(repo, sel)["include"]
         if sel.mode != "full":  # only the PR selection is consolidated; the full matrix keeps its tuned runners
-            include = affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+            include = consolidated(include)
         print(json.dumps({"mode": sel.mode, "matrix": {"include": include}}, separators=(",", ":")))
         return 0
     if as_json:
+        for path in root_fallback_paths(sel):  # stderr: callers parse stdout as JSON
+            print(f"[affected] whole root suite for {path}; hint: {UNMAPPED_HINT}", file=sys.stderr)
         print(json.dumps(sel.to_json(), indent=2, ensure_ascii=False))
     else:
         print(render(sel), end="")

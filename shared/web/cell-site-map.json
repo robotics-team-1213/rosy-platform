@@ -30,25 +30,25 @@
       "arm_b"
      ],
      "physical": [
-      "010182",
-      "030182",
-      "050182"
+      "010282",
+      "030282",
+      "050282"
      ],
      "tiers": [
       {
        "tier": 1,
        "id": "yard:r1-s1-t1",
-       "item": "ship-h2r2-l0"
+       "item": "ship-h2r0-l0"
       },
       {
        "tier": 2,
        "id": "yard:r1-s1-t2",
-       "item": "ship-h2r2-l1"
+       "item": "ship-h2r0-l1"
       },
       {
        "tier": 3,
        "id": "yard:r1-s1-t3",
-       "item": "ship-h2r2-l2"
+       "item": "ship-h2r0-l2"
       }
      ],
      "status": "planned_unverified"
@@ -68,25 +68,25 @@
       "arm_b"
      ],
      "physical": [
-      "070182",
-      "090182",
-      "110182"
+      "070282",
+      "090282",
+      "110282"
      ],
      "tiers": [
       {
        "tier": 1,
        "id": "yard:r1-s2-t1",
-       "item": "ship-h1r2-l0"
+       "item": "ship-h1r0-l0"
       },
       {
        "tier": 2,
        "id": "yard:r1-s2-t2",
-       "item": "ship-h1r2-l1"
+       "item": "ship-h1r0-l1"
       },
       {
        "tier": 3,
        "id": "yard:r1-s2-t3",
-       "item": "ship-h1r2-l2"
+       "item": "ship-h1r0-l2"
       }
      ],
      "status": "planned_unverified"
@@ -182,25 +182,25 @@
       "arm_b"
      ],
      "physical": [
-      "010282",
-      "030282",
-      "050282"
+      "010182",
+      "030182",
+      "050182"
      ],
      "tiers": [
       {
        "tier": 1,
        "id": "yard:r3-s1-t1",
-       "item": "ship-h2r0-l0"
+       "item": "ship-h2r2-l0"
       },
       {
        "tier": 2,
        "id": "yard:r3-s1-t2",
-       "item": "ship-h2r0-l1"
+       "item": "ship-h2r2-l1"
       },
       {
        "tier": 3,
        "id": "yard:r3-s1-t3",
-       "item": "ship-h2r0-l2"
+       "item": "ship-h2r2-l2"
       }
      ],
      "status": "planned_unverified"
@@ -220,25 +220,25 @@
       "arm_b"
      ],
      "physical": [
-      "070282",
-      "090282",
-      "110282"
+      "070182",
+      "090182",
+      "110182"
      ],
      "tiers": [
       {
        "tier": 1,
        "id": "yard:r3-s2-t1",
-       "item": "ship-h1r0-l0"
+       "item": "ship-h1r2-l0"
       },
       {
        "tier": 2,
        "id": "yard:r3-s2-t2",
-       "item": "ship-h1r0-l1"
+       "item": "ship-h1r2-l1"
       },
       {
        "tier": 3,
        "id": "yard:r3-s2-t3",
-       "item": "ship-h1r0-l2"
+       "item": "ship-h1r2-l2"
       }
      ],
      "status": "planned_unverified"
@@ -503,7 +503,7 @@
       {
        "tier": 1,
        "id": "stand:r1-s1-t1",
-       "item": null
+       "item": "stand"
       }
      ],
      "status": "planned_unverified"
@@ -554,24 +554,24 @@
    "stand-1": "stand:r1-s1"
   },
   "legacy_sim": {
-   "ship-h2r2-l0": "yard:r1-s1-t1",
-   "ship-h2r2-l1": "yard:r1-s1-t2",
-   "ship-h2r2-l2": "yard:r1-s1-t3",
-   "ship-h1r2-l0": "yard:r1-s2-t1",
-   "ship-h1r2-l1": "yard:r1-s2-t2",
-   "ship-h1r2-l2": "yard:r1-s2-t3",
+   "ship-h2r0-l0": "yard:r1-s1-t1",
+   "ship-h2r0-l1": "yard:r1-s1-t2",
+   "ship-h2r0-l2": "yard:r1-s1-t3",
+   "ship-h1r0-l0": "yard:r1-s2-t1",
+   "ship-h1r0-l1": "yard:r1-s2-t2",
+   "ship-h1r0-l2": "yard:r1-s2-t3",
    "ship-h2r1-l0": "yard:r2-s1-t1",
    "ship-h2r1-l1": "yard:r2-s1-t2",
    "ship-h2r1-l2": "yard:r2-s1-t3",
    "ship-h1r1-l0": "yard:r2-s2-t1",
    "ship-h1r1-l1": "yard:r2-s2-t2",
    "ship-h1r1-l2": "yard:r2-s2-t3",
-   "ship-h2r0-l0": "yard:r3-s1-t1",
-   "ship-h2r0-l1": "yard:r3-s1-t2",
-   "ship-h2r0-l2": "yard:r3-s1-t3",
-   "ship-h1r0-l0": "yard:r3-s2-t1",
-   "ship-h1r0-l1": "yard:r3-s2-t2",
-   "ship-h1r0-l2": "yard:r3-s2-t3",
+   "ship-h2r2-l0": "yard:r3-s1-t1",
+   "ship-h2r2-l1": "yard:r3-s1-t2",
+   "ship-h2r2-l2": "yard:r3-s1-t3",
+   "ship-h1r2-l0": "yard:r3-s2-t1",
+   "ship-h1r2-l1": "yard:r3-s2-t2",
+   "ship-h1r2-l2": "yard:r3-s2-t3",
    "tmp-a-1": "temp_a:r1-s1-t1",
    "tmp-a-1-l1": "temp_a:r1-s1-t2",
    "tmp-a-1-l2": "temp_a:r1-s1-t3",
@@ -590,12 +590,13 @@
    "tmp-b-3": "temp_b:r3-s1-t1",
    "tmp-b-3-l1": "temp_b:r3-s1-t2",
    "tmp-b-3-l2": "temp_b:r3-s1-t3",
+   "stand": "stand:r1-s1-t1",
    "belt": "not_places:belt",
    "ship-stern-l0": "not_places:ship_stern"
   },
   "legacy_station_zones": {
    "EXP_S1": "stand:r1-s1",
-   "EXP_S5_PALLET": "stand:r1-s1",
+   "EXP_S5_PALLET": "yard",
    "EXP_S3_BELT": "not_places:belt",
    "STG_C2": null,
    "STG_S3_WAIT": null

@@ -715,3 +715,64 @@ def test_a_yield_whose_way_to_its_bay_crosses_the_mover_is_cancelled():
     assert run(console.hold_for_localization("rosy_02")) == ["rosy_03"]
     assert ("navigation_cancel",) in yielder.calls and "rosy_03" not in console._yielding
     assert ("navigation_cancel",) not in far.calls and "rosy_04" in console._yielding
+
+
+def _rotated_site_console(other_state, other_site_pose, mover_map_id="slam_a"):
+    import math as _m
+
+    mover = FakeRobot("rosy_01", state=_standing("rosy_01", (-2.0, 0.0), _loc()) | {"map_id": mover_map_id})
+    mover._path = _line(-2.0, 0, 2.0, 0)
+    other = FakeRobot("rosy_02", state=other_state)
+    console = _console(mover, other)
+    console.set_site_pose_providers(
+        mover=lambda rid: ("world_261026", 0.5, -0.2, _m.pi) if rid == "rosy_01" else None,
+        obstacle=lambda rid: other_site_pose if rid == "rosy_02" else None,
+    )
+    run(console.snapshot())
+    return console, mover, other
+
+
+def test_site_frame_clear_allows_mover_past_unlocalized_robot_parked_clear_on_active_map():
+    console, mover, _other = _rotated_site_console(
+        _standing("rosy_02", (0.0, 0.0), _loc("UNKNOWN", "odom")),
+        ("world_261026", -0.5, 0.60, -1.57),
+    )
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+    assert "queued" not in result and ("navigation_cancel",) not in mover.calls
+
+
+def test_site_frame_blocks_when_unlocalized_robot_is_within_keepout_on_active_map():
+    console, mover, _other = _rotated_site_console(
+        _standing("rosy_02", (9.0, 9.0), _loc("UNKNOWN", "odom")),
+        ("world_261026", -0.5, 0.05, -1.57),
+    )
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and result["blocked_by"] == "rosy_02"
+    assert ("navigation_cancel",) in mover.calls
+
+
+def test_site_frame_fails_closed_on_active_map_id_mismatch():
+    console, mover, _other = _rotated_site_console(
+        _standing("rosy_02", (0.0, 0.0), _loc("UNKNOWN", "odom")),
+        ("other_map", -0.5, 0.60, -1.57),
+    )
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+    assert result["reason"] == "LOCALIZATION_UNTRUSTED" and ("navigation_cancel",) in mover.calls
+
+
+def test_site_frame_clear_skips_foreign_map_standing_robot_far_from_route_but_holds_near_one_without_yield():
+    clear_console, _mover, clear_other = _rotated_site_console(
+        _standing("rosy_02", (0.0, 0.1), _loc()) | {"map_id": "slam_b"},
+        ("world_261026", -0.5, 0.60, 0.0),
+    )
+    assert "queued" not in run(clear_console.goal("rosy_01", 2.0, 0.0))
+    assert _goal_calls(clear_other) == 0
+
+    near_console, mover, near_other = _rotated_site_console(
+        _standing("rosy_02", (5.0, 5.0), _loc()) | {"map_id": "slam_b"},
+        ("world_261026", -0.5, 0.05, 0.0),
+    )
+    held = run(near_console.goal("rosy_01", 2.0, 0.0))
+    assert held["queued"] is True and held["reason"] == "NO_YIELD_SPACE"
+    assert held["blocked_by"] == "rosy_02" and _goal_calls(near_other) == 0
+    assert ("navigation_cancel",) in mover.calls

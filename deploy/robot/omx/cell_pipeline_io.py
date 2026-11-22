@@ -108,7 +108,7 @@ class FifoCell:
         return self._send(f"checked {assessment['session_id']} {assessment['library_sha256']} {command}", timeout)
 
     def act(self, command: str, timeout: float | None = None) -> dict:
-        if (self.operating_profile is not None and command != "state"
+        if (self.operating_profile is not None and command not in ("state", "human-hold")
                 and not command.startswith(("stop", "checked "))):
             from cell_envelope import _state_current
 
@@ -215,8 +215,15 @@ class FifoCell:
         with urllib.request.urlopen(url, timeout=10) as reply:
             return cv2.imdecode(np.frombuffer(reply.read(), np.uint8), cv2.IMREAD_COLOR)
 
+    def policy_state(self):
+        """Read the latest encoder sample without sending a FIFO command during playback."""
+        try:
+            return json.loads((self.io / "live.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
     def frame_receipt(self, camera: str, *, previous: dict | None = None,
-                      max_age_s: float = 2.0) -> dict:
+                      max_age_s: float = 2.0, timeout_s: float = 10.0) -> dict:
         """Read one source frame; reject stale or non-advancing evidence rather than reusing a cached image."""
         import cv2
 
@@ -231,7 +238,7 @@ class FifoCell:
             headers["If-None-Match"] = previous["etag"]
         request = urllib.request.Request(url, headers=headers)
         try:
-            with urllib.request.urlopen(request, timeout=10) as reply:
+            with urllib.request.urlopen(request, timeout=timeout_s) as reply:
                 if reply.status != 200:
                     raise ValueError(f"camera frame HTTP {reply.status}; no fresh JPEG")
                 sequence_text = reply.headers.get("X-Frame-Seq")

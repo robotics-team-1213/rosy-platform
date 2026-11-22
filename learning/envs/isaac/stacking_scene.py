@@ -12,12 +12,17 @@ def add_cargo(world, stage, plan, links, material, fixture, *, mapped, cube):
     cargo, contacts = [], []
     filters = [link[key] for link in links for key in ('link6', 'link7')]
     for i, item in enumerate(plan):
+        size = item['size'] if fixture.get('r08_scene') else [UNIT*item['cells'], UNIT, UNIT]
+        mass = (fixture.get('cargo_mass_kg') or [.02, .04, .06])[item['cells']-1]
         box = world.scene.add(DynamicCuboid('/World/Cargo'+str(i), name='cargo'+str(i), size=1.,
-            scale=np.array([UNIT*item['cells'], UNIT, UNIT]), mass=(fixture.get('cargo_mass_kg') or [.02, .04, .06])[item['cells']-1],
+            scale=np.array(size), mass=mass,
             position=np.array([.7, -.5+i*.065, .015]), color=np.array(item.get('color_rgb', colors[item['cells']])),
             physics_material=material))
         cargo.append(box)
-        if cube:
+        if fixture.get('r08_scene'):
+            from r08_scene import add_cargo_visual
+            add_cargo_visual(stage, box.prim, item)
+        elif cube:
             # Visual details inherit the cargo transform; the nominal box remains its only collider.
             def panel(name, position, scale, shade):
                 panel = UsdGeom.Cube.Define(stage, box.prim.GetPath().AppendChild(name))

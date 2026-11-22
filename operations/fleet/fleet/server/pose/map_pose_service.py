@@ -22,7 +22,8 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
-from rosy.world.state.projections.map_pose import (LOCALIZED, MapPose, MapPoseConfig, MapPoseTracker,
+from fleet.server.offline_pin import OfflinePinStore
+from rosy.world.state.projections.map_pose import (LOCALIZED, TRACK, MapPose, MapPoseConfig, MapPoseTracker,
                                          odom_from_snapshot, sighting_from_row)
 from fleet.swarm.transport import RobotApiError
 
@@ -65,13 +66,30 @@ class MapPoseService:
         self._numbers: dict[tuple[str, bool], int] = {}
         from fleet.server.map_pose_scope import MapPoseScopes
         self._source_scopes = MapPoseScopes(self)
+        self._offline_pins = OfflinePinStore()
+        self._update_listeners: list = []
+
+    def add_update_listener(self, listener: Callable[[Optional[str]], None]) -> None:
+        """Call `listener(robot_id)` after every state, qualified-state or sighting this service took in (robot_id None: any
+        robot). A listener that raises is ignored; it never blocks the pose feed. D-1057 bed confirmations void on motion here."""
+        self._update_listeners.append(listener)
+
+    def _updated(self, robot_id: Optional[str]) -> None:
+        for listener in self._update_listeners:
+            try:
+                listener(robot_id)
+            except Exception:
+                logger.debug("map pose: update listener failed", exc_info=True)
 
     def begin_source_scope(self, robot_id, *, boot_id, odom_epoch, client):
         """Trusted, opt-in source declaration after native identity verification; no network API."""
         return self._source_scopes.begin(robot_id, boot_id=boot_id, odom_epoch=odom_epoch, client=client)
 
     def observe_qualified_state(self, scope, state):
-        return self._source_scopes.observe(scope, state)
+        try:
+            return self._source_scopes.observe(scope, state)
+        finally:
+            self._updated(None)
 
     def qualified_pose(self, scope):
         return self._source_scopes.pose(scope)
@@ -96,6 +114,7 @@ class MapPoseService:
     def _tracker(self, robot_id: str) -> Optional[MapPoseTracker]:
         roster = set(self._robot_ids())
         self._source_scopes.prune(roster)
+        self._offline_pins.prune(roster)
         for gone in set(self._trackers) - roster:     # a robot that left starts over if it returns
             del self._trackers[gone]
         for key in [key for key in self._kept if key[0] not in roster]:   # and its kept reads
@@ -118,6 +137,7 @@ class MapPoseService:
             now_wall = self._wall()
             active_map = self.active_map_id()
             tracker.add_sighting(sighting, now_wall, active_map)
+            self._updated(sighting.robot_id)
 
     def auto_locate_enabled(self, robot_id: str) -> bool:
         return robot_id in self.config.auto_locate_robots
@@ -133,6 +153,21 @@ class MapPoseService:
             tracker.drop_auto_locate()
             return reason
         return tracker.add_auto_locate(sample[:3], sample[3], self._wall(), sample[4], self.active_map_id(), sample[5])
+
+    def observe_track(self, robot_id: str, x: float, y: float, heading: Optional[float], age_s: float,
+                      map_id: Optional[str], mode: str) -> Optional[str]:
+        """A confirmed ceiling-camera track point seen `age_s` ago, for a robot in `track_anchor_robots` and an identity
+        mode in `track_modes`. Returns why it was not taken. The caller reads the track; no identity is read here."""
+        tracker = self._tracker(robot_id) if robot_id in self.config.track_anchor_robots else None
+        if tracker is None:
+            return "DISABLED"
+        now = self._wall()
+        return tracker.add_track((x, y), heading, now - age_s, now, map_id, self.active_map_id(), mode)
+
+    def drop_track(self, robot_id: str) -> None:
+        """The identity behind this robot's track anchor is gone: the anchor ends now."""
+        if robot_id in self.config.track_anchor_robots:
+            self._tracker(robot_id).drop_auto_locate(TRACK)
 
     def auto_locate_blocked(self, robot_id: str) -> bool:
         tracker = self._tracker(robot_id) if self.auto_locate_enabled(robot_id) else None
@@ -159,12 +194,15 @@ class MapPoseService:
             if robot_id not in self._bad_snapshot:
                 self._bad_snapshot.add(robot_id)
                 logger.exception("map pose: snapshot of %s not usable", robot_id)
+        self._updated(robot_id)
 
     def _observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
         if not self._source_scopes.unqualified(robot_id):
             return
         if not isinstance(state, Mapping):
             return
+        if state:
+            self._offline_pins.clear(robot_id)
         peers = state.get("peers")
         if isinstance(peers, list):
             self._observe_peers(peers)
@@ -316,6 +354,15 @@ class MapPoseService:
         refused = tracker.add_pin(pose, now, active)
         return refused, tracker.pose(now, active)
 
+    def pin_offline(self, robot_id: str, pose: tuple[float, float, float],
+                    *, robot_online: bool = False) -> tuple[Optional[str], Optional[dict]]:
+        tracker = self._tracker(robot_id)
+        latest = tracker.latest_odom_stamp if tracker is not None else None
+        has_odom = latest is not None and 0.0 <= self._wall() - latest <= self.config.max_odom_age_s
+        return self._offline_pins.pin(
+            robot_id, pose, knows=self.knows(robot_id),
+            active_map_id=self.active_map_id(), robot_online=robot_online or has_odom)
+
     def arbitrated_pose(self, robot_id: str) -> Optional[MapPose]:
         """The robot's map pose for trip execution and the D-511 lane-compliance monitor
         (D-511 2 widens D-494 3); None for a robot not on the roster."""
@@ -362,6 +409,7 @@ class MapPinRequest(BaseModel):
     x: float = Field(ge=-1000.0, le=1000.0, allow_inf_nan=False)
     y: float = Field(ge=-1000.0, le=1000.0, allow_inf_nan=False)
     yaw: float = Field(ge=-2 * math.pi, le=2 * math.pi, allow_inf_nan=False)
+    offline_parked: bool = False
 
 
 def install_map_pin_route(app, *, service: MapPoseService, require_named_operator,
@@ -379,6 +427,22 @@ def install_map_pin_route(app, *, service: MapPoseService, require_named_operato
             raise refuse(404, "UNKNOWN_ROBOT", "robot is not on the roster")
         if busy(robot_id):
             raise refuse(409, "MAP_PIN_TRIP_ACTIVE", "the robot is on a trip; stop it before pinning")
+        if body.offline_parked:
+            robot_online = False
+            if service._gather_rest is not None:
+                try:
+                    robot_online = bool(await service.state(robot_id, max_age_s=0.0))
+                except (HubError, RobotApiError, OSError, httpx.HTTPError, asyncio.TimeoutError):
+                    pass
+            refused, row = service.pin_offline(robot_id, (body.x, body.y, body.yaw), robot_online=robot_online)
+            if refused == "UNKNOWN_ROBOT":
+                raise refuse(404, "UNKNOWN_ROBOT", "robot is not on the roster")
+            if refused is not None:
+                raise refuse(409, f"MAP_PIN_{refused}", f"cannot pin offline robot: {refused.lower()}")
+            record_event("map_pin", principal.principal_id, {
+                "robot_id": robot_id, "x": body.x, "y": body.y, "yaw": body.yaw,
+                "map_id": row["map_id"], "offline_parked": True})
+            return row
         before = service.arbitrated_pose(robot_id)
         refused, pose = await service.pin(robot_id, (body.x, body.y, body.yaw))
         if refused == "UNKNOWN_ROBOT":

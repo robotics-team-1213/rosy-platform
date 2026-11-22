@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -42,13 +43,50 @@ FULL_SUITES = (
 ROOT_SHARDS = 3
 # D-553 1: the slowest suites split by test file, like the root shards. fleet
 # alone held the CI critical path at ~580 s of a ~12 min run.
-SUITE_SHARDS = {"fleet": 5, "sensing": 2}  # Station suites (D-772) retain the fixed per-shard cost budget.
-# Fleet file weights from pytest result-line timestamps in CI 44563719449 and 44568270495.
-# Retain prior weights where timings are incomplete or inconsistent. Unlisted files weigh 1.
+SUITE_SHARDS = {"fleet": 8, "sensing": 2, "core-domain": 3}  # Station suites (D-772) retain the fixed per-shard cost budget.
+# Fleet file weights: setup + call + teardown seconds per file from one serial lab run of the whole suite with
+# the browser tests on (`--durations=0`, 2026-11-21, 3612 s over 571 files). Files under 2 s are unlisted and weigh 1.
+# CI log timestamps are no source for this: pytest's piped output arrives in blocks, so they lump files together.
 # The weights only choose runners; every discovered test still runs exactly once.
 # shortcut: static timing weights; refresh when CI's slowest Fleet shard drifts.
 FLEET_TEST_SECONDS = json.loads(Path(__file__).with_name("fleet_test_seconds.json").read_text(encoding="utf-8"))
-_STATION_SCHEDULING = "middleware/core/gateway/test/test_station_camera_scheduling.py"
+# Other slow files (8 s or more), measured the same way in 12 CI runs of 2026-11-20. affected_ros.consolidate
+# weighs jobs with both tables: at 1 per file it packed every guard invocation onto one 5-7 min runner.
+CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json").read_text(encoding="utf-8")),
+                   **FLEET_TEST_SECONDS}
+MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
+PR_JOB_CAP = 12  # leaves >=8 of 20 org runners free for Merge Queue, main push, and concurrent PRs
+_STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_scheduling.py"
+_GIT_HISTORY_TESTS = (
+    "test/test_harness_contracts.py",
+    "test/architecture/test_module_structure.py",
+    "test/test_safety_review.py",
+    "test/test_remote_test_tools.py",
+    "test/test_remote_fixture_isolation.py",
+    "test/test_release_boundary_guards.py",
+)
+
+
+def _needs_git_history(entry: dict) -> bool:
+    """True only for matrix runners whose invocations can collect tests that query git history on ROOT."""
+    for inv in entry.get("invocations") or ():
+        paths = [p.split("::", 1)[0] for p in inv
+                 if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
+        skip = {p.split("=", 1)[1] for p in inv if p.startswith("--ignore=")}
+        if any(affected_ros._under(h, p) and h not in skip for h in _GIT_HISTORY_TESTS for p in paths):
+            return True
+    return False
+
+
+def consolidated(include: list[dict]) -> list[dict]:
+    """Measured seconds spread a PR's small jobs over runners; a selection that would pass MAX_CI_JOBS keeps the coarser packing.
+
+    A 60 s share per job was tried on 2026-11-21 (#343) and dropped: runs used 55% more runner seconds (984 to 1546)
+    and, with several runs sharing the 20 concurrent jobs, the median job waited 177 s for a runner (45 s before)."""
+    fine = affected_ros.consolidate(include, CI_TEST_SECONDS)
+    out = fine if len(fine) <= MAX_CI_JOBS else affected_ros.consolidate(include, FLEET_TEST_SECONDS)
+    return affected_ros.pack_to_limit(out, CI_TEST_SECONDS, PR_JOB_CAP)
+
 CI_FULL_MATRIX = (
     # #181: actual ACT CPU weights run on their own gating runner, not behind learning-policy's optional imports.
     {"name": "omx-act-cpu", "invocations": [[
@@ -61,9 +99,10 @@ CI_FULL_MATRIX = (
         ["learning/training/world_model/test"], ["learning/evaluation/world_model/test"],
         ["operations/prediction/world_model/test"]], "ros": "none"},
     # 2026-11-18: core-domain was CI's longest runner (pytest step 16.5 and 22.4 min of a 25 min budget, runs
-    # 43769060136 and 42596065578); the gateway suite and the rest now run on two runners, same tests.
-    {"name": "core-domain", "invocations": [["middleware/core/gateway/test", f"--ignore={_STATION_SCHEDULING}"], [
-        "middleware/core/gateway/test/test_account_pipeline.py"
+    # 43769060136 and 42596065578) and again 20 min in 44745980037; SUITE_SHARDS splits its gateway files across
+    # runners, same tests. The browser journey stays its own invocation on the last shard.
+    {"name": "core-domain", "invocations": [["middleware/core/gateway/test"], [
+        "test/integration/core_fleet/test_account_pipeline.py"
     ]], "ros": "none"},
     # Runs the known load-sensitive simulation in a fresh runner (PRs #249 and #250).
     {"name": "core-station-simulation", "invocations": [[_STATION_SCHEDULING]], "ros": "none"},
@@ -121,22 +160,60 @@ def docs_only(sel: Selection) -> bool:
 def buildable(repo: Repo, sel: Selection) -> bool:
     """False only when nothing build-smoke reads can have changed: no changed file inside a colcon root
     (documents aside) and none of BUILD_DATA. A missing manifest means unknown, so the job stays."""
+    import affected_narrow
+
     if sel.mode != "affected" or sel.escalations:
         return True
     roots = repo.parts.get("colcon_roots") or ()
     if not roots:
         return True
-    return any(p in BUILD_DATA or p.startswith(BUILD_PREFIXES) or (not p.endswith(DOC_SUFFIXES)
-                                   and any(affected_ros._under(p, r) for r in roots))
-               for p in sel.changed)
+    return any(
+        not affected_narrow.is_contract_version_pin(repo, p)
+        and (p in BUILD_DATA or p.startswith(BUILD_PREFIXES)
+             or (not p.endswith(DOC_SUFFIXES) and any(affected_ros._under(p, r) for r in roots)))
+        for p in sel.changed
+    )
 
 
-def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
-    """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit."""
+# Slow root test files that dominate affected GUARD_SET runners when packed together.
+_HEAVY_ROOT_TESTS = (
+    "test/test_harness_contracts.py",
+    "test/test_affected_tests.py",
+    "test/test_land.py",
+    "test/test_robot_cd.py",
+    "test/test_readme_agent_start.py",
+    "test/test_ci_dependencies.py",
+    "test/test_remote_test_tools.py",
+)
+
+
+def _shard_py_invocation(inv: list[str], n: int = ROOT_SHARDS) -> list[list[str]]:
+    """Split an invocation with 12 or more .py targets across runners, slowest measured files first.
+
+    Directories in it go round the shards like files (#343: 28 files beside two directories ran 9 min on one runner)."""
+    flags = [p for p in inv if p.startswith("-")]
+    targets = [p for p in inv if not p.startswith("-")]
+    if n <= 1 or sum(p.endswith(".py") for p in targets) < 12:
+        return [inv]
+    rank = {p: i for i, p in enumerate(_HEAVY_ROOT_TESTS)}
+    ordered = sorted(targets, key=lambda p: (not p.endswith(".py"), -CI_TEST_SECONDS.get(PurePosixPath(p).name, 0),
+                                             rank.get(p, len(rank)), p))
+    return [[*ordered[i::n], *flags] for i in range(n) if ordered[i::n]]
+
+
+def _shard_groups(repo: Repo, entry: dict, flags: list[str] | None = None) -> list[list[str]]:
+    """A SUITE_SHARDS suite's (or root test/'s) files in balanced groups (Fleet by measured seconds); [] if unsplit.
+
+    Files the entry's own `--ignore=` flags give another runner stay out, since pytest runs a file named on
+    the command line even when it is also ignored. `flags` None is the full tier, which also leaves out
+    files a later invocation of the entry runs; an affected invocation drops only the ones it ignores too."""
     import affected_tests as at
+    skip = {f.split("=", 1)[1] for f in entry["invocations"][0] if f.startswith("--ignore=")}
+    skip = skip | {p for inv in entry["invocations"][1:] for p in inv} if flags is None else {p for p in skip if f"--ignore={p}" in flags}
     n = ROOT_SHARDS if entry["name"] == "root-test" else SUITE_SHARDS.get(entry["name"], 1)
     fleet = entry["name"] == "fleet"
-    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])) if n > 1 else []
+    files = sorted(t for t in repo.test_files if at._under(t, entry["invocations"][0][0])
+                   and t not in skip and t != _STATION_SCHEDULING) if n > 1 else []
     groups, loads = [[] for _ in range(n)], [0] * n
     for path in sorted(files, key=lambda p: (-FLEET_TEST_SECONDS.get(PurePosixPath(p).name, 1), p)) if fleet else files:
         i = min(range(n), key=lambda i: (loads[i], i))
@@ -148,12 +225,15 @@ def _shard_groups(repo: Repo, entry: dict) -> list[list[str]]:
 def ci_matrix(repo: Repo, sel: Selection) -> dict:
     """The GitHub job matrix: CI_FULL_MATRIX plus root test/ shards, or one entry per invocation."""
     import affected_tests as at  # here, not at the top: affected_tests imports this module
+    same_tree = False
     if sel.mode == "full":
-        root_tests = sorted(t for t in repo.test_files if at._under(t, "test"))
+        root_tests = sorted(t for t in repo.test_files if at._under(t, "test") and t != _STATION_SCHEDULING)
         entries = []
         for entry in CI_FULL_MATRIX:
             groups = _shard_groups(repo, entry)
-            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{len(groups)}", invocations=[g])
+            later = entry["invocations"][1:]  # e.g. the account browser journey: once, on the last shard
+            entries += [dict(entry, name=f"{entry['name']}-{i + 1}of{len(groups)}",
+                             invocations=[g, *(later if i == len(groups) - 1 else [])])
                         for i, g in enumerate(groups)] or [dict(entry)]
         for i in range(ROOT_SHARDS):
             entries.append({"name": f"root-test-{i + 1}of{ROOT_SHARDS}",
@@ -164,15 +244,22 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if modules:
             entries.append({"name": "modules", "invocations": modules, "ros": "overlay"})
     else:  # one runner per invocation; a whole SUITE_SHARDS suite keeps its full-tier groups (25 min limit)
+        if os.environ.get("ROSY_QUEUE_TESTED"):  # ci.yml sets it on merge_group only (D-1059)
+            import affected_queue
+            before_queue = sel
+            sel = affected_queue.narrowed(repo, sel)
+            same_tree = sel is not before_queue
         whole, out = {e["invocations"][0][0]: e for e in CI_FULL_MATRIX if SUITE_SHARDS.get(e["name"], 1) > 1}, []
         whole["test"] = {"name": "root-test", "invocations": [["test"]]}
         for inv in sel.invocations:
             if affected_exclusive.dedicated(inv):
                 continue  # ROS environment grouping must not split the job's leading environment.
-            split = [p for p in inv if p in whole and _shard_groups(repo, whole[p])]
+            split = [p for p in inv if p in whole and _shard_groups(repo, whole[p], inv)]
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
-            out += [rest] if any(not p.startswith("-") for p in rest) or not split else []
-            out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p])]
+            guard_only = all(p in at.GUARD_SET for p in rest if not p.startswith("-"))
+            if any(not p.startswith("-") for p in rest) or not split:
+                out += [rest] if split or guard_only else _shard_py_invocation(rest)
+            out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p], inv)]
         entries = affected_ros.entries(out, CI_FULL_MATRIX)
         exclusive_jobs = [inv for inv in sel.invocations if affected_exclusive.dedicated(inv)]
         if exclusive_jobs:
@@ -180,10 +267,26 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         if any(at._under(p.split("::", 1)[0], "learning/training/omx/test")
                for inv in sel.invocations for p in inv):
             entries.append(dict(next(e for e in CI_FULL_MATRIX if e["name"] == "omx-act-cpu")))
-    if not docs_only(sel) and buildable(repo, sel):
+    import affected_browser
+    entries += affected_browser.entries(repo, sel)  # pull_request runs only (D-1066); [] elsewhere
+    if not docs_only(sel) and buildable(repo, sel) and not same_tree:
         entries.append({"name": "build-smoke", "kind": "smoke", "invocations": []})
     for entry in entries:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)
         entry.setdefault("ros", "overlay")
-    return {"include": affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)}
+    include = affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)
+    for entry in include:
+        if entry["kind"] != "pytest" or not entry.get("invocations"):
+            continue
+        if _needs_git_history(entry):
+            entry["git_history"] = True
+        if entry["ros"] != "overlay":
+            continue
+        paths = [p.split("::", 1)[0] for inv in entry["invocations"] for p in inv
+                 if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
+        if entry["name"].startswith("browser-") or (
+            paths and all(p in at.GUARD_SET or affected_ros._under(p, "test") for p in paths)
+        ):
+            entry["colcon"] = False
+    return {"include": include}

@@ -46,6 +46,7 @@ CHANNEL_STALE_AFTER_S = {
 
 class ValueEvidence(BaseModel):
     received_at: Optional[str] = None
+    sampled_at: Optional[str] = None
     evidence: EvidenceState = EvidenceState.UNAVAILABLE
     stale_after_s: float = 0.0
 
@@ -60,6 +61,7 @@ def judge(
     received_at: Optional[float],
     now: float,
     stale_after_s: float,
+    sampled_at: Optional[float] = None,
 ) -> ValueEvidence:
     if not has_source:
         return ValueEvidence(evidence=EvidenceState.UNAVAILABLE, stale_after_s=stale_after_s)
@@ -68,7 +70,8 @@ def judge(
     stamp = _iso(received_at)
     if now - received_at <= stale_after_s:
         return ValueEvidence(
-            received_at=stamp, evidence=EvidenceState.FRESH, stale_after_s=stale_after_s
+            received_at=stamp, evidence=EvidenceState.FRESH, stale_after_s=stale_after_s,
+            sampled_at=(_iso(sampled_at) if sampled_at is not None and 0 <= now - sampled_at <= stale_after_s else None),
         )
     return ValueEvidence(
         received_at=stamp, evidence=EvidenceState.DELAYED, stale_after_s=stale_after_s

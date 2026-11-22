@@ -76,6 +76,9 @@ EXEMPT = {
     # Tests pin consumer text; none runs colcon or rosdep.
     "test/architecture/test_colcon_roots.py": "this test",
     "test/test_affected_build_smoke_scope.py": "docstring naming the smoke job's steps; runs nothing",
+    "tools/harness/affected_ci.py": "sets the colcon flag of a guard-only matrix entry; runs nothing",
+    "tools/harness/affected_ros.py": "compares the colcon flag when merging runners; runs nothing",
+    "test/test_affected_consolidate.py": "asserts the colcon flag of matrix entries; runs nothing",
     "test/test_ci_dependencies.py": "asserts on ci.yml",
     "test/test_image_customization_contract.py": "asserts on image scripts",
     "test/test_native_ros_payload.py": "asserts on the payload script",
@@ -123,8 +126,13 @@ def test_reader_cli_prints_the_roots_space_separated():
 
 
 def _invocation_lines() -> dict[str, list[tuple[int, str]]]:
-    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True,
-                             check=True).stdout.decode("utf-8").split("\0")
+    completed = subprocess.run(
+        ["git", "grep", "--no-textconv", "-a", "-l", "-z", "-F", "-e", "colcon", "-e", "rosdep"],
+        cwd=ROOT, capture_output=True,
+    )
+    if completed.returncode not in (0, 1):
+        raise subprocess.CalledProcessError(completed.returncode, completed.args, completed.stdout, completed.stderr)
+    tracked = completed.stdout.decode("utf-8").split("\0")
     hits: dict[str, list[tuple[int, str]]] = {}
     for name in filter(None, tracked):
         path = ROOT / name

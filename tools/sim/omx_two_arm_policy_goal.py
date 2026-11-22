@@ -39,7 +39,9 @@ def goal_block(layout, step, here, mode="joints"):
     if not ok:
         raise ValueError(f"{step['id']}: {note}")
     per = (len(path) - 1) // (len(wps) - 1)
-    grasp, lower = path[per], path[5 * per]  # waypoints 1 and 5: grasp and lower
+    grasp_i = next(i for i, w in enumerate(wps) if w[0] == "grasp")
+    lower_i = next(i for i, w in enumerate(wps) if w[0] == "lower")
+    grasp, lower = path[grasp_i * per], path[lower_i * per]
     return np.array([1., *grasp[:5], *lower[:5]], dtype=np.float32)
 
 

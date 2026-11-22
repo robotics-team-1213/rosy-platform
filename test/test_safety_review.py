@@ -13,11 +13,12 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is requ
 TRAILER = "Safety-Review: verifier lane docs/x.md"
 
 
-def _manifest(modules=(), anchors=()):
+def _manifest(modules=(), anchors=(), review=()):
     return yaml.safe_dump({
         "roots": [{"path": "pkg", "concern": "control"}, {"path": "guard", "concern": "safety"}],
         "safety_modules": list(modules),
         "safety_anchors": [{"symbol": symbol} for symbol in anchors],
+        **({"safety_review_paths": list(review)} if review else {}),
     })
 
 
@@ -67,6 +68,21 @@ def test_trailer_satisfies_and_safety_root_edits_need_it(repo):
     assert safety_review.main([start, "HEAD"]) == 0
     repo.commit({"guard/g.py": "g = 3\n"}, "guard edit without trailer")
     assert safety_review.main([start, "HEAD"]) == 1
+
+
+def test_a_review_path_needs_the_trailer_and_other_files_do_not(repo):
+    """2026-11-20: #292 changed OMX arm code untrailered because nothing under deploy/robot/omx was tagged."""
+    tag = repo.commit({safety_review.MANIFEST: _manifest(anchors=["pkg.x.Stop"], review=["arm/gate.py"]),
+                       "arm/gate.py": "gate = 1\n", "arm/view.py": "view = 1\n"}, "tag the gate", trailer=True)
+    repo.commit({"arm/view.py": "view = 2\n"}, "view only")
+    assert safety_review.main([tag, "HEAD"]) == 0
+    repo.commit({"arm/gate.py": "gate = 2\n"}, "gate with review", trailer=True)
+    assert safety_review.main([tag, "HEAD"]) == 0
+    bare = repo.commit({"arm/gate.py": "gate = 3\n"}, "gate without review")
+    assert safety_review.needs_review(bare, ()) == ["touches arm/gate.py"]
+    assert safety_review.main([tag, "HEAD"]) == 1
+    untag = repo.commit({safety_review.MANIFEST: _manifest(anchors=["pkg.x.Stop"])}, "drop the gate")
+    assert safety_review.needs_review(untag, ()) == ["untags review:arm/gate.py"]
 
 
 def test_removing_an_anchor_is_a_safety_change(repo):

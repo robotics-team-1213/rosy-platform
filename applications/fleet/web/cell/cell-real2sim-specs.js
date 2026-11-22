@@ -1,4 +1,5 @@
 // Real-to-Sim pipeline paths, table row builders and card/inspector specs (split from cell-real2sim.js).
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 
 export const REAL2SIM_PATH = '/api/fleet/cell-app/real2sim-pipeline';
 export const EVALUATE_PATH = '/api/fleet/cell-app/real2sim-pipeline/evaluate';
@@ -13,11 +14,87 @@ export const STATION_ZONES_DISPATCH_PATH = '/api/fleet/pipeline/station-zones/di
 export const CABLE_GUARD_PATH = '/api/fleet/pipeline/cable-guard';
 export const VISION_CHECK_PATH = '/api/fleet/pipeline/vision-auto-check';
 export const ARM_HOLDS_CLEAR_PATH = '/api/fleet/pipeline/arm-holds/clear';
+export const bedConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComponent(taskId)}/bed-confirm`;
+// D-1057 commissioning presence: a named operator is at the power switch; the next claim uses it up (T18).
+export const presenceConfirmPath = taskId => `${CELL_TASKS_PATH}/${encodeURIComponent(taskId)}/presence-confirm`;
+// D-1057: a named operator's bed confirmation lasts pipeline_evidence.BED_CONFIRM_TTL_S on the server.
+export const BED_CONFIRM_TTL_S = 120;
+
+// D-1057 refusals of claim/complete, said as the evidence that was missing.
+const REFUSAL_TEXT = {
+  AMR_BRAKE_BED_VELOCITY_UNMEASURED: '핑키 정지·정차 위치·적재함 확인 중 측정되지 않은 것이 있습니다',
+  OMX_OWNER_EVIDENCE_UNAVAILABLE: '팔 셀이 보낸 완료 증거가 없습니다',
+  OMX_OWNER_EVIDENCE_MISMATCH: '완료 보고가 팔 셀이 보낸 증거와 다릅니다',
+  UNVERIFIED_CELL_COMPLETION: '카메라 위치 확인·홈 복귀·적재 층 중 확인되지 않은 것이 있습니다',
+  OWNER_PRINCIPAL_NOT_REGISTERED: '증거를 보낸 계정이 이 셀의 주인으로 등록되지 않았습니다',
+  HUMAN_HOLD_ACTIVE: '사람 감지로 멈춘 상태입니다',
+  CELL_BUSY_OR_HELD: '셀이 다른 작업 중이거나 보류 중입니다',
+  PREVIOUS_TIER_NOT_VERIFIED: '아래층 적재가 아직 확인되지 않았습니다',
+  CELL_AB_EVIDENCE_NOT_ENABLED: '셀 A/B 완료 확인(깊이 측정)이 아직 켜지지 않았습니다',
+  BED_CONFIRMATION_INVALID: '적재함 확인이 무효가 되었습니다 (핑키 이동 또는 지도 변경). 핑키가 멈춘 상태에서 적재함을 다시 확인하세요',
+  PRESENCE_CONFIRMATION_REQUIRED: 'ACT 정책 구동은 이름 있는 운영자의 입회 표시가 필요합니다 (D-911)',
+};
+
+// Why a task ended ABORTED, when the cell worker's receipt says so (D-1057 T18: no reviewed envelope, the arm did not move).
+export function abortText(task) {
+  return task?.status === 'ABORTED' && task.receipt?.reason === 'REVIEW_REQUIRED'
+    ? '검토 필요 · 검토된 운전 범위가 없어 팔이 움직이지 않고 멈췄습니다. 입회 표시를 하고 다시 실행하거나 운전 범위 검토를 등록하세요'
+    : '';
+}
+
+// The presence the claim used up (row presence {operator, at}; null: the run stayed inside the reviewed envelope).
+export function presenceUsedText(task) {
+  const p = task?.presence;
+  if (!p?.operator) return '';
+  const at = Number.isFinite(p.at) ? ` · ${new Date(p.at * 1000).toLocaleTimeString('ko-KR', {hour12: false})}` : '';
+  return `시운전 입회: ${p.operator}${at}`;
+}
+// Field names of the server's AMR evidence (pipeline_evidence.amr_evidence), when a refusal lists the missing ones.
+const AMR_EVIDENCE_TEXT = {wheel_brake_locked: '정지', v_cmd_mps: '정지', pose: '정차 위치', bed_ready: '적재함 확인', observed_at: '측정 시각'};
+
+export function refusalText(refusal) {
+  if (!refusal?.code) return '';
+  const missing = [...new Set((Array.isArray(refusal.missing) ? refusal.missing : []).map(k => AMR_EVIDENCE_TEXT[k] || k))];
+  const text = missing.length ? `측정되지 않음: ${missing.join(', ')}` : REFUSAL_TEXT[refusal.code] || `사유 확인 필요 (${refusal.code})`;
+  return `${refusal.op === 'complete' ? '완료 거부' : '시작 거부'} · ${text}`;
+}
+
+// A row's operator confirmation (GET /cell-tasks) as a state and plain words; age_s is server time, so no clock skew.
+function confirmState(rec, name, voidedWhy, nowMs) {
+  if (!rec) return {state: 'none', text: ''};
+  if (rec.invalid) return {state: 'voided', text: `${name} 무효${voidedWhy}`};
+  const remaining = Math.floor(BED_CONFIRM_TTL_S - Number(rec.age_s));
+  if (!(remaining > 0)) return {state: 'expired', text: `${name} 만료`};
+  const until = new Date(nowMs + remaining * 1000).toLocaleTimeString('ko-KR', {hour12: false});
+  return {state: 'valid', remaining_s: remaining, text: `${name}됨 · ${remaining}초 남음 (${until}까지)`};
+}
+// A RUNNING task holds the confirmation its claim bound to the lease (row bed_confirmation, D-1057 T19): no 120 s
+// expiry there; it is lost when the server store voided or dropped it, and then a named operator confirms again.
+export function bedConfirmState(task, nowMs = Date.now()) {
+  if (task?.status === 'RUNNING' && task.bed_confirmation) {
+    const s = task.bed_confirm_status;
+    return s && !s.invalid && s.bound
+      ? {state: 'bound', text: `적재함 확인됨 · ${task.bed_confirmation.operator || '운영자'} (이 작업에 묶임)`}
+      : {state: 'lost', text: '적재함 확인 무효 (핑키 이동 또는 지도 변경)'};
+  }
+  return confirmState(task?.bed_confirm_status, '적재함 확인', ' (핑키 이동 또는 지도 변경)', nowMs);
+}
+// D-1057 PRESENCE_TTL_S is also 120 s; a presence is never voided, only used up by a claim or expired.
+export const presenceConfirmState = (task, nowMs = Date.now()) =>
+  confirmState(task?.presence_confirmation, '입회 표시', '', nowMs);
+
+// Destinations a cell task may name: the dst_site values the server already lists for that cell (presets, export stations).
+export function dstSiteOptions(body, cellId, tier) {
+  const sources = [...(body?.presets || []), ...(body?.station_zones?.export_stations || [])];
+  return [...new Set(sources
+    .filter(s => s.cell_id === cellId && s.dst_site && (cellId !== 'cell_ab' || Number(s.tier) === Number(tier)))
+    .map(s => s.dst_site))];
+}
 
 // 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
 // Pinky 도킹은 천장 Cam(ceiling_north) ROI 확대로 위에서 본다.
-export const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
-export const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
+const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
+const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
 export const S3_VIEWS = [
   {id: 'arm_s_top', label: 'S3 상단(arm_s_top)', source: 'arm_s_top'},
   {id: 'arm_s_wrist', label: 'arm_s 손목', source: 'arm_s_wrist'},
@@ -144,12 +221,17 @@ export function cellTaskRows(body) {
       ? `[${stopEv.state.join(', ')}]`
       : '—';
     const disp = t.displaced_to ? ` (복구: ${t.displaced_to})` : '';
+    const modeTag = t.execution_mode === 'act_policy' ? ' · ACT 정책' : '';
+    const queued = t.status === 'QUEUED';
+    const evidence = [queued || t.status === 'RUNNING' ? bedConfirmState(t).text : '', queued ? presenceConfirmState(t).text : '',
+      presenceUsedText(t), refusalText(t.last_refusal), abortText(t)].filter(Boolean).join(' · ');
     return [
       t.task_id,
       `${t.cell_id} / ${t.arm_id}`,
-      `${t.src_site} -> ${t.dst_site} (T${t.tier ?? 1})${disp}`,
+      `${t.src_site} -> ${t.dst_site} (T${t.tier ?? 1})${disp}${modeTag}`,
       t.status || 'QUEUED',
       foldedTxt,
+      evidence || '—',
     ];
   });
 }
@@ -198,10 +280,33 @@ export function visualCardSpecs(body = {}) {
     }
     return [{label: '재실행', retryTaskId: meta.task_id}];
   };
+  // The claim takes a cell's first QUEUED task, so the bed confirmation goes to that one.
+  const bedConfirmButtons = cellId => {
+    // A RUNNING task whose bound confirmation was lost waits for a new one before the release (D-1057 T19).
+    const lost = tasks.find(x => x.cell_id === cellId && x.status === 'RUNNING' && bedConfirmState(x).state === 'lost');
+    const again = lost ? [{label: `적재함 다시 확인 (${lost.task_id} · ${lost.robot_id})`, bedConfirmTaskId: lost.task_id,
+      robot_id: lost.robot_id, bedState: 'lost'}] : [];
+    const t = tasks.find(x => x.cell_id === cellId && x.status === 'QUEUED');
+    if (!t) return again;
+    const label = (s, name) => s.state === 'valid' ? s.text
+      : s.state === 'none' ? `${name} (${t.task_id} · ${t.robot_id})` : `${s.text} · 다시 확인`;
+    const bed = bedConfirmState(t), presence = presenceConfirmState(t);
+    return [
+      ...again,
+      {label: label(bed, '적재함 확인'), bedConfirmTaskId: t.task_id, robot_id: t.robot_id, bedState: bed.state},
+      {label: label(presence, '입회 표시'), presenceConfirmTaskId: t.task_id, robot_id: t.robot_id, presenceState: presence.state},
+    ];
+  };
+  const refusalFor = cellId => {
+    const t = [...tasks].reverse().find(x => x.cell_id === cellId && x.last_refusal && ['QUEUED', 'RUNNING'].includes(x.status));
+    return t ? refusalText(t.last_refusal) : '';
+  };
   const s3Gate = cells.cell_s?.gate || {};
   const s5Gate = cells.cell_ab?.gate || {};
   const s3Meta = formatTaskMeta(lastForCell('cell_s'), 'cell_s');
   const s5Meta = formatTaskMeta(lastForCell('cell_ab'), 'cell_ab');
+  s3Meta.folded_state = [s3Meta.folded_state, refusalFor('cell_s'), abortText(lastForCell('cell_s'))].filter(Boolean).join(' · ');
+  s5Meta.folded_state = [s5Meta.folded_state, refusalFor('cell_ab'), abortText(lastForCell('cell_ab'))].filter(Boolean).join(' · ');
   const lastPinky = pinkyTasks.length ? pinkyTasks[pinkyTasks.length - 1] : null;
   const pinkyId = lastPinky?.robot_id || 'rosy_46';
   const pinkyDec = decisions[pinkyId] || lastPinky?.decision || null;
@@ -239,6 +344,7 @@ export function visualCardSpecs(body = {}) {
         {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_s'},
         {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_s'},
+        {label: 'S3 ACT 정책 구동 (arm_s)', preset: 's3_act_policy'},
         {label: '자동 감지·복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
         {label: 'Floor-Front 바닥 복구', preset: 's3_recover_floor_front'},
@@ -250,6 +356,7 @@ export function visualCardSpecs(body = {}) {
           humanDetected: !s3Human,
         },
         {label: s3Hold ? '팔 홀드 해제 (arm_s · 확인됨)' : '팔 홀드 점검·해제 (arm_s)', clearArmHold: 'cell_s'},
+        ...bedConfirmButtons('cell_s'),
         ...taskControlButtons(s3Meta),
       ],
     },
@@ -275,6 +382,7 @@ export function visualCardSpecs(body = {}) {
           humanDetected: !s5Human,
         },
         {label: s5Hold ? '팔 홀드 해제 (arm_a/b · 확인됨)' : '팔 홀드 점검·해제 (arm_a/b)', clearArmHold: 'cell_ab'},
+        ...bedConfirmButtons('cell_ab'),
         ...taskControlButtons(s5Meta),
       ],
     },
@@ -336,8 +444,10 @@ export function inspectorSpecs(body = {}) {
     const live = armLiveStates[armId];
     if (live && Array.isArray(live.joints_deg) && live.joints_deg.length) {
       const stateArr = live.joints_deg.slice(0, 6).map(v => Number(v).toFixed(1)).join(', ');
-      const ageTxt = live.age_s != null ? `${Number(live.age_s).toFixed(0)}초 전` : '';
-      const modeBadge = live.fresh !== false ? `LIVE${ageTxt ? ` · ${ageTxt}` : ''}` : `스냅샷${ageTxt ? ` · ${ageTxt}` : ''}`;
+      const ageTxt = live.age_s != null ? evidenceAgeText(Math.round(Number(live.age_s))).slice(3) : '';
+      // Missing freshness is unknown, never a live badge: the server must state it.
+      const freshnessTxt = live.fresh === true ? 'LIVE' : live.fresh === false ? '지연 스냅샷' : '신선도 미확인';
+      const modeBadge = ageTxt ? `${freshnessTxt} · ${ageTxt}` : freshnessTxt;
       const tempTxt = live.temp_c != null ? `${live.temp_c}°C` : '';
       const curTxt = live.current_ma != null ? `${live.current_ma}mA` : '';
       return [
@@ -355,7 +465,7 @@ export function inspectorSpecs(body = {}) {
     if (stateArr) {
       return `${t.task_id} · folded=${Boolean(stopEv.folded)} · [${stateArr}] (완료 스냅샷)`;
     }
-    return fallbackText || 'folded: true · 홈 대기 (완료 스냅샷)';
+    return fallbackText || '관측 없음 · 상태 미확인';
   };
   const armHolds = body?.arm_holds || {};
   const holdText = armId => armHolds[armId]?.held

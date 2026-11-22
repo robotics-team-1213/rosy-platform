@@ -14,17 +14,21 @@ empty selection into a bare repo-wide pytest.
 
 from __future__ import annotations
 
+import ast
+from collections import deque
 from pathlib import Path
+import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+CONTRACT_VERSION = "middleware/core/api/core_api_web/api/contract_version.py"
+_TEST_MODULE = re.compile(r"(^|/)test/(?:.*/)?(test_[^/]*|[^/]*_test)\.py$")
 
 FLEET_SAMPLE = [
     "applications/fleet/test/test_sample_browser.py",
     "applications/fleet/test/test_feature_browser_flows.py",
     "applications/fleet/test/test_integrated_sample_browser.py",
     "applications/fleet/test/test_browser_adapters.py",
-    "applications/fleet/test/test_integrated_sample_browser.py",
 ]
 FLEET = FLEET_SAMPLE + [
     "test/test_integrated_control_backend_browser.py",
@@ -43,6 +47,7 @@ FLEET = FLEET_SAMPLE + [
     "test/test_peer_picker_browser.py",
     "test/test_console_robot_video_browser.py",
     "test/test_fleet_ui_review_browser.py",
+    "test/test_unit_scope_browser.py",
     "operations/fleet/test/*_browser.py",
 ]
 ROBOT = [
@@ -111,16 +116,41 @@ RECOVERY = ["test/test_network_recovery_browser.py"]
 EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY
 
 SERVER = "operations/fleet/fleet/server/"
+WEB = "applications/fleet/web/"
 SCOPE: dict[str, list[str]] = {
     "applications/monitoring/": MONITORING,
     "operations/monitoring/": MONITORING,
     "applications/fleet/dev/": FLEET_SAMPLE + ["operations/fleet/test/test_app_connected_browser.py"],
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
+    # Only the console assistant panel tests fetch /api/fleet/assistant/*.
+    "operations/fleet/fleet/server/assistant/": FLEET_SAMPLE + ["operations/fleet/test/test_assistant_browser.py"],
     # Only the cell page and the work page fetch these routes (grep of applications/fleet/web, shared/web).
     "operations/fleet/fleet/server/cell/": ["operations/fleet/test/test_cell_app_browser.py",
                                            "operations/fleet/test/test_work_overview_browser.py"],
     "applications/fleet/web/": FLEET,
+    # Verified /console/cell and cell-*.js consumers (grep of web + *_browser.py).
+    "applications/fleet/web/cell/": FLEET_SAMPLE + [
+        "operations/fleet/test/test_cell_app_browser.py",
+        "operations/fleet/test/test_console_card_trips_browser.py",
+        "operations/fleet/test/test_development_console_browser.py",
+        "operations/fleet/test/test_device_care_pipeline_browser.py",
+        "operations/fleet/test/test_fleet_account_browser.py",
+        "operations/fleet/test/test_fleet_header_browser.py",
+        "operations/fleet/test/test_fleet_role_consumers_browser.py",
+        "operations/fleet/test/test_password_login_browser.py",
+        "operations/fleet/test/test_task_page_compositions_browser.py",
+        "shared/web/test/test_component_kit_browser.py",
+        "test/test_fleet_workcell_observation_browser.py",
+        "test/test_motor_health_ui_browser.py",
+        "test/test_unit_scope_browser.py",
+    ],
+    # Verified /console/maintenance and host-services.js consumers (grep of web + *_browser.py).
+    "applications/fleet/web/maintenance/": FLEET_SAMPLE + [
+        "operations/fleet/test/test_development_console_browser.py",
+        "operations/fleet/test/test_task_page_compositions_browser.py",
+        "test/test_host_recovery_browser.py",
+    ],
     "middleware/robot_ui/robot/": ROBOT + ["middleware/core/api/test/test_d283_console_browser.py"],
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
@@ -133,7 +163,7 @@ SCOPE: dict[str, list[str]] = {
     "learning/curation/perception/review_app_web/commands.js": LEARNING,
     "learning/curation/perception/review_app_web/account-session.js": LEARNING,
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STORAGE for name in
-       ("omx.html", "omx.js", "omx-journey.js", "omx-profiles.js", "omx-review.js", "omx-export.js")},
+       ("omx.html", "omx.js", "omx-journey.js", "omx-profiles.js", "omx-review.js", "omx-export.js", "omx-collect.js")},
     # Their rail and sub-menu are walked by the OMX owner-status and stage browser tests.
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STAGES for name in
        ("catalog.html", "camera.html")},
@@ -185,22 +215,96 @@ def _expand(pattern: str) -> list[str]:
     return sorted(p.relative_to(ROOT).as_posix() for p in ROOT.glob(pattern))
 
 
+def _is_contract_version_pin(path: str) -> bool:
+    target = ROOT / path
+    if not target.is_file():
+        return False
+    try:
+        text = target.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(text) if text.strip() else None
+    except (OSError, UnicodeDecodeError, SyntaxError, ValueError):
+        return False
+    if tree is None:
+        return False
+    saw_contract = False
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+            continue
+        if (
+            isinstance(stmt, ast.Assign)
+            and len(stmt.targets) == 1
+            and isinstance(stmt.targets[0], ast.Name)
+            and stmt.targets[0].id == "CONTRACT"
+            and isinstance(stmt.value, ast.Constant)
+            and isinstance(stmt.value.value, str)
+        ):
+            if saw_contract:
+                return False
+            saw_contract = True
+            continue
+        return False
+    return saw_contract
+
+
+def _dependent_browser_targets(start: str, known: set[str]) -> set[str]:
+    texts: dict[str, str] = {}
+
+    def _text(rel: str) -> str:
+        if rel not in texts:
+            p = ROOT / rel
+            texts[rel] = p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
+        return texts[rel]
+
+    queue = deque([start])
+    seen = {start}
+    while queue:
+        cur = queue.popleft()
+        cur_name = Path(cur).name
+        stem = re.escape(Path(cur).stem)
+        imp_pat = re.compile(rf"^\s*(?:from\s+(?:\.+|[\w.]*\.)?{stem}\s+import|import\s+(?:[\w.]+\s*,\s*)*[\w.]*\b{stem}\b)", re.M)
+        name_pat = re.compile(rf"""['"/]{re.escape(cur_name)}['"]""")
+        parent = ROOT / Path(cur).parent
+        if parent.is_dir():
+            for sib in sorted(parent.glob("*.py")):
+                rel = sib.relative_to(ROOT).as_posix()
+                if rel in seen or not (_TEST_MODULE.search(rel) or rel in known):
+                    continue
+                body = _text(rel)
+                if imp_pat.search(body) or name_pat.search(body):
+                    seen.add(rel)
+                    queue.append(rel)
+        for target in sorted(known):
+            if target in seen:
+                continue
+            if cur in _text(target):
+                seen.add(target)
+                queue.append(target)
+    return {p for p in seen if p != start and p in known}
+
+
 def targets(paths: list[str]) -> list[str]:
     known = {t for pattern in EVERYTHING for t in _expand(pattern)}
     selected: set[str] = set()
     for raw in paths:
         path = raw.replace("\\", "/").removeprefix("./")
-        if path.startswith("applications/fleet/dev/") and path.endswith(".md"):
+        if path.endswith(".md") or (path == CONTRACT_VERSION and _is_contract_version_pin(path)):
             continue
         # These shared sample-engine/fixture modules reach all sample browsers, not production fixtures.
         if path in ("applications/fleet/test/test_sample_server.py", "applications/fleet/test/test_sample_browser.py"):
             for pattern in FLEET_SAMPLE:
                 selected.update(_expand(pattern))
             continue
+        is_test_mod = bool(_TEST_MODULE.search(path))
+        skipped_broad_scope = False
         for prefix, patterns in SCOPE.items():
             if path.startswith(prefix):
-                # A registered sub-prefix narrows the generic server entry (not applied to other prefixes).
-                if prefix == SERVER and any(q != SERVER and q.startswith(SERVER) and path.startswith(q) for q in SCOPE):
+                if is_test_mod and not prefix.endswith("/test/"):
+                    skipped_broad_scope = True
+                    continue
+                # A registered sub-prefix narrows the generic server/web entry (not applied to other prefixes).
+                if prefix in (SERVER, WEB) and any(
+                    q != prefix and q.startswith(prefix) and path.startswith(q) for q in SCOPE
+                ):
                     continue
                 for pattern in patterns:
                     selected.update(_expand(pattern))
@@ -208,6 +312,8 @@ def targets(paths: list[str]) -> list[str]:
         if path in known or (path.rsplit("/", 1)[-1].startswith("test_") and path.endswith("_browser.py")
                              and (ROOT / path).is_file()):
             selected.add(path)
+        if skipped_broad_scope:
+            selected.update(_dependent_browser_targets(path, known))
     return sorted(selected)
 
 

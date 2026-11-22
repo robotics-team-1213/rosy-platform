@@ -75,26 +75,31 @@ def check_publish_only(repo: Path) -> list[tuple]:
 
 
 def check_worktrees(repo: Path) -> list[tuple]:
-    rows = worktrees.scan(repo)[1]
+    root, rows = worktrees.scan(repo)
     removable = worktrees.prune(repo, quiet=True, say=lambda *_: None)  # dry run: lists, removes nothing
     text = f"worktrees: {len(rows) + 1} of {SLOTS} slots (main included), {removable} removable"
+    foreign = [("WARN", f"worktree outside .worktrees/: {path}", worktrees.rules.FOREIGN_FIX)
+               for path in worktrees.rules.foreign_worktrees(root)]  # never counted in the slots
     if len(rows) + 1 <= SLOTS:
-        return [("OK", text, None)]
-    return [("WARN", text, worktrees.SWEEP if removable else "python tools/worktrees.py status")]
+        return [("OK", text, None), *foreign]
+    return [("WARN", text, worktrees.SWEEP if removable else "python tools/worktrees.py status"), *foreign]
 
 
 def check_main(repo: Path, now: float) -> list[tuple]:
     state = update_status.ref_state(repo, now, 12)
+    root = Path(_git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()).parent
+    head = worktrees.rules.wrong_head(root)  # the ff advice below is for a checkout on main only
+    found = [("WARN", f"wrong-head: the shared main checkout is on {head}, not main", worktrees.rules.WRONG_HEAD_FIX)] if head else []
     counts = _git(repo, "rev-list", "--left-right", "--count", "main...origin/main")
     if counts.returncode:
-        return [("WARN", "main: cannot compare main with origin/main", "git fetch origin")]
+        return found + [("WARN", "main: cannot compare main with origin/main", "git fetch origin")]
     ahead, behind = counts.stdout.split()
     text = f"main: {ahead} ahead, {behind} behind origin/main; last fetch {state['fetched_h']}h ago"
     if state["verdict"] != "ok":
-        return [("WARN", f"{text} ({state['problem']})", "git fetch origin")]
+        return found + [("WARN", f"{text} ({state['problem']})", "git fetch origin")]
     if behind != "0":
-        return [("WARN", text, "in the main checkout: git merge --ff-only origin/main (D-868)")]
-    return [("OK", text, None)]
+        return found + [("WARN", text, None if head else "in the main checkout: git merge --ff-only origin/main")]
+    return found + [("OK", text, None)]
 
 
 def check_queue(repo: Path, now: float) -> list[tuple]:

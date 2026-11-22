@@ -209,6 +209,17 @@ class BatteryConfig:
         }[level]
 
 
+@dataclass(frozen=True)
+class PackVoltageSample:
+    voltage: float
+    captured_at: float
+    age_s: float
+    max_gap_s: float
+
+
+_PACK_SAMPLE_MAX_AGE_S = 5.0
+
+
 class BatteryMonitor:
     """전압 필터 + 잔량 환산 (SAF-005).
 
@@ -263,6 +274,16 @@ class BatteryMonitor:
         """필터를 통과한 전압. 표본이 하나도 없으면 None."""
         with self._lock:
             return self._voltage
+
+    def fresh_voltage_sample(self) -> Optional[PackVoltageSample]:
+        """An ADC reading and its source time, taken under the same lock."""
+        with self._lock:
+            if self._last_sample_at is None or self._voltage is None:
+                return None
+            age = self._clock() - self._last_sample_at
+            if not 0.0 <= age <= _PACK_SAMPLE_MAX_AGE_S:
+                return None
+            return PackVoltageSample(self._voltage, self._last_sample_at, age, _PACK_SAMPLE_MAX_AGE_S)
 
     @property
     def percent(self) -> Optional[float]:
@@ -341,11 +362,11 @@ class BatteryMonitor:
             age = None if self._last_sample_at is None else max(0.0, self._clock() - self._last_sample_at)
             charge_age = (None if self._charging_checked_at is None
                           else max(0.0, self._clock() - self._charging_checked_at))
-            confirmed = (self._charging and age is not None and age <= 5.0
+            confirmed = (self._charging and age is not None and age <= _PACK_SAMPLE_MAX_AGE_S
                          and charge_age is not None and charge_age <= 5.0)
             return {
-                "evidence": "missing" if age is None else "fresh" if age <= 5.0 else "stale",
-                "sample_age_s": age, "stale_after_s": 5.0,
+                "evidence": "missing" if age is None else "fresh" if age <= _PACK_SAMPLE_MAX_AGE_S else "stale",
+                "sample_age_s": age, "stale_after_s": _PACK_SAMPLE_MAX_AGE_S,
                 "level": self._level.value, "percent": self._percent_locked(),
                 "shown_percent": self._shown,
                 "filtered_voltage": self._voltage,
@@ -397,15 +418,12 @@ class BatteryMonitor:
         pending: list[tuple] = []
 
         with self._lock:
-            if self._voltage is None:
-                # 첫 표본은 0에서 램프업하지 않고 그 값으로 필터를 앉힌다.
-                self._voltage = value
-            else:
-                self._voltage = self._filtered_locked(value, current)
+            self._voltage = self._filtered_locked(value, current)
             self._last_sample_at = current
 
-            self._evaluate_level_locked(current, pending)
-            self._remember_display_locked(current)
+            percent = self._cfg.curve.percent(self._voltage)
+            self._evaluate_level_locked(percent, current, pending)
+            self._remember_display_locked(percent, current)
             self._reconcile_sentinel_locked(pending)
 
         self._emit_all(pending)
@@ -451,11 +469,7 @@ class BatteryMonitor:
         temp.write_text(json.dumps(document, indent=2), encoding="utf-8")
         os.replace(temp, path)
 
-    def _evaluate_level_locked(self, now: float, pending: list[tuple]) -> None:
-        percent = self._percent_locked()
-        if percent is None:
-            return
-
+    def _evaluate_level_locked(self, percent: float, now: float, pending: list[tuple]) -> None:
         cfg = self._cfg
         index = _LEVEL_ORDER.index(self._level)
 
@@ -510,11 +524,8 @@ class BatteryMonitor:
             self._events.publish(type_, severity=severity,
                                  source="battery_monitor", data=data)
 
-    def _remember_display_locked(self, now: float) -> None:
+    def _remember_display_locked(self, live: float, now: float) -> None:
         """Keep the screen estimate. Charging does not adopt the live percent."""
-        live = self._percent_locked()
-        if live is None:
-            return
         if self._charging:
             if self._shown is None:
                 self._shown = live
@@ -527,11 +538,10 @@ class BatteryMonitor:
 
     def _filtered_locked(self, value: float, now: float) -> float:
         tau = float(self._cfg.filter_tau_s)
-        if tau <= 0.0:
+        if self._voltage is None or self._last_sample_at is None or tau <= 0.0:
             return value
 
-        previous_at = self._last_sample_at
-        dt = 0.0 if previous_at is None else max(0.0, now - previous_at)
+        dt = max(0.0, now - self._last_sample_at)
         if dt <= 0.0:
             # 같은 시각에 두 표본이 오면 시간이 흐르지 않았으므로 값도 움직이지 않는다.
             return self._voltage

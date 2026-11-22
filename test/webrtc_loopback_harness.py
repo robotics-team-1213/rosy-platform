@@ -131,7 +131,7 @@ SHARED_BROWSER = '''async ({grant}) => {
 
 def run_loopback(root, tmp_path, *, secure=False, shared_client=False):
     from playwright.sync_api import sync_playwright
-    runtime = Path.home() / 'rosy-test/media-runtime-d789'
+    runtime = Path(os.environ.get('ROSY_TEST_MEDIA_RUNTIME') or Path.home() / 'rosy-test/media-runtime-d789')
     binary = runtime / 'amd64/mediamtx'
     assert binary.is_file(), 'prepared remote MediaMTX runtime missing'
     env = os.environ.copy()

@@ -1,21 +1,19 @@
 """Native local observations to authenticated Fleet and Vision ingress.
 
 Single Responsibility:
-  - Authenticated Fleet HTTPS & Vision WSS delivery workers (`post_arm`, `ArmSender`, `CameraSender`, `SourceWorker`, `main`).
+  - Fleet HTTPS delivery and worker startup. Vision WSS delivery lives in `workcell_camera_sender.py`.
   - Sample buffers/ROS decoders: `workcell_observation_sources.py`; incident & USB HTTP clients: `workcell_incident_client.py` (both re-exported).
 """
 from __future__ import annotations
 
 import argparse
-import json
 import logging
-import math
 from pathlib import Path
 import signal
 import ssl
 import sys
 import threading
-import time
+import time  # noqa: F401
 from urllib.error import HTTPError
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPSHandler, Request, build_opener
@@ -32,11 +30,12 @@ from core_common.protocol.workcell_observations import (  # noqa: F401
     UsbCameraDecisions,
     WorkcellObservationManifest,
 )
-from rosy_vision import protocol
+from rosy_vision import protocol  # noqa: F401
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from load_report_bridge import _NoRedirect  # noqa: E402
 import usb_camera_report  # noqa: E402,F401
+from workcell_camera_sender import CameraSender, camera_hello, camera_packet  # noqa: E402,F401
 from workcell_incident_client import (  # noqa: E402,F401
     ArmIncidentLink,
     _arm_url,
@@ -152,79 +151,6 @@ class ArmSender:
         self.sequence += 1
 
 
-def camera_hello(source_id, width, height):
-    message = {
-        "type": "hello",
-        "proto": protocol.PROTO,
-        "source": source_id,
-        "sensor": {"width": width, "height": height, "rotation_deg": 0},
-    }
-    protocol.validate_hello(message)
-    return message
-
-
-def camera_packet(sample, *, wall=None, monotonic=None):
-    age = sample_age(
-        sample,
-        time.time() if wall is None else wall,
-        time.monotonic() if monotonic is None else monotonic,
-    )
-    jpeg, width, height = sample.value
-    if not isinstance(jpeg, bytes) or not jpeg or len(jpeg) > protocol.DEFAULT_CONFIG["max_bytes"]:
-        raise ValueError("invalid or oversized camera JPEG")
-    return protocol.pack_header(protocol.FrameHeader(sample.sequence, math.ceil(age * 1000), width, height, 0)) + jpeg
-
-
-class CameraSender:
-    def __init__(self, vision_url, source_id, token, *, context):
-        self.url = secure_url(vision_url, "wss")
-        if urlsplit(self.url).path in ("", "/"):
-            self.url += protocol.WS_PATH
-        self.source_id, self.token, self.context = source_id, token, _verified(context)
-        self.connection = None
-
-    def close(self):
-        if self.connection is not None:
-            connection, self.connection = self.connection, None
-            try:
-                connection.close()
-            except Exception:
-                pass
-
-    def send(self, sample):
-        from websockets.sync.client import connect
-
-        try:
-            if self.connection is None:
-                self.connection = connect(
-                    self.url,
-                    ssl=self.context,
-                    compression=None,
-                    additional_headers={"Authorization": f"Bearer {self.token}"},
-                    open_timeout=2,
-                    close_timeout=1,
-                    max_queue=1,
-                    max_size=65536,
-                )
-                self.connection.socket.settimeout(2)
-                try:
-                    import socket as _socket
-
-                    self.connection.socket.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
-                except (AttributeError, OSError):
-                    pass
-                self.connection.send(json.dumps(camera_hello(self.source_id, sample.value[1], sample.value[2])))
-            for _ in range(8):
-                try:
-                    self.connection.recv(timeout=0)
-                except TimeoutError:
-                    break
-            self.connection.send(camera_packet(sample))
-        except Exception:
-            self.close()
-            raise
-
-
 class SourceWorker:
     def __init__(self, source, send):
         self.source, self.send = source, send
@@ -270,9 +196,9 @@ def main(argv=None):
     parser.add_argument(
         "--mirror-vision",
         action="append",
-        metavar="wss://URL,/absolute/ca.crt",
+        metavar="wss://URL,/absolute/ca.crt[,SOURCE_ID,...]",
         default=os.environ.get("ROSY_OBSERVATION_MIRROR_VISION", "").split(),
-        help="another site's Vision that also receives every camera (cameras only, own TLS trust)",
+        help="another site's Vision; optional registered camera source IDs, with its own TLS trust",
     )
     parser.add_argument(
         "--mirror-fleet",
@@ -304,12 +230,18 @@ def main(argv=None):
         secure_url(args.fleet_url, "https")
         secure_url(args.vision_url, "wss")
         context = ssl.create_default_context(cafile=args.ca_file)
+        camera_ids = {camera.source_id for camera in cell.cameras}
         mirrors = []
         for binding in args.mirror_vision:
-            url, separator, ca_file = binding.partition(",")
+            url, separator, settings = binding.partition(",")
+            ca_file, selected, source_list = settings.partition(",")
             if not separator or not Path(ca_file).is_absolute():
                 raise ValueError("mirror Vision must be wss://URL,/absolute/ca.crt")
-            mirrors.append((secure_url(url, "wss"), ssl.create_default_context(cafile=ca_file)))
+            sources = source_list.split(",") if selected else camera_ids
+            source_ids = set(sources)
+            if len(source_ids) != len(sources) or not source_ids <= camera_ids:
+                raise ValueError("mirror Vision sources must be unique registered cameras of this workcell")
+            mirrors.append((secure_url(url, "wss"), ssl.create_default_context(cafile=ca_file), source_ids))
         fleet_mirrors = []
         for binding in args.mirror_fleet:
             url, separator, ca_file = binding.partition(",")
@@ -349,17 +281,22 @@ def main(argv=None):
                     name=f"{arm.source_id}@fleet{index}",
                 )
         for camera in cell.cameras:
+            frames = NativeSource(camera.image_topic)
             deliver(
                 camera,
-                NativeSource(camera.image_topic),
+                frames,
                 CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context),
             )
-            # Own buffer and worker per mirror: a slow or absent site never delays the local Vision.
-            for index, (url, mirror_context) in enumerate(mirrors, 1):
+            # Share capture, keep a separate network worker per destination.
+            for index, (url, mirror_context, source_ids) in enumerate(mirrors, 1):
+                if camera.source_id not in source_ids:
+                    continue
                 deliver(
                     camera,
-                    NativeSource(camera.image_topic),
-                    CameraSender(url, camera.source_id, tokens[camera.source_id], context=mirror_context),
+                    frames,
+                    CameraSender(
+                        url, camera.source_id, tokens[camera.source_id], context=mirror_context, follow_receiver=True,
+                    ),
                     name=f"{camera.source_id}@mirror{index}",
                 )
         workers.append(

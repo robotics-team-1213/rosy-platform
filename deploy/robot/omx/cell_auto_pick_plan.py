@@ -198,6 +198,9 @@ def choose(
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
+    site_fp = {k: v for k, v in (config["sites"][site].get("finger_params") or {}).items() if k in prm.DEFAULTS}
+    fp = {**(p or {}), **site_fp} if site_fp else p
+    require_clearance = prm.get(fp, "auto.neighbour_clear_mm") > 0
     plan_fn = _parent_attr("plan_pick", plan_pick)
     for o in sorted(objects, key=lambda o: ("split_from" in o, math.dist(o["raw_m"], config["sites"][site]["start"]))):
         why = fix = None
@@ -218,19 +221,23 @@ def choose(
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
-            room = finger_room(mask, roi, pixel_fn, o, ends, p)
+            room = finger_room(mask, roi, pixel_fn, o, ends, fp, opening_width_mm=across(entry))
             if room["margin_mm"] is None:
                 o, room = next(
                     (
                         (e, r)
-                        for e in reachable_ends(o, entries[o["object"]], p)
-                        if (r := finger_room(mask, roi, pixel_fn, e, None, p))["margin_mm"] is not None
+                        for e in reachable_ends(o, entries[o["object"]], fp)
+                        if (r := finger_room(mask, roi, pixel_fn, e, None, fp, opening_width_mm=across(entry)))["margin_mm"] is not None
                     ),
                     (o, room),
                 )
             if room["margin_mm"] is None:
-                why = (("edge of view: a side is past the camera's view, " if room.get("unseen") else "no finger room: ")
-                       + f"{room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it")
+                prefix = "no finger room: "
+                if room.get("unseen"):
+                    prefix = "edge of view: a side is past the camera's view, "
+                elif require_clearance:
+                    prefix = "neighbour clearance: "
+                why = f"{prefix}{room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
         if why:
             refused.append(
                 {"centre_mm": o["centre_mm"], "object": o.get("object"), "colour": o.get("colour"), "why": why,
@@ -254,11 +261,12 @@ def choose(
             fresh = [
                 y for y in (base_yaw, base_yaw + 90.0) if all(abs(wrap90(y - f)) > 5.0 for f in failed_yaws)
             ] or [base_yaw, base_yaw + 90.0]
-            rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p)) for y in fresh]
+            rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p, opening_width_mm=across(entry))) for y in fresh]
             yaw, room = next(((y, r) for y, r in rooms if r["margin_mm"] is not None), (None, rooms[0][1]))
             if yaw is None:
+                reason = "neighbour clearance" if require_clearance else "no finger gap"
                 refused.append(
-                    {"centre_mm": o["centre_mm"], "object": o["object"], "why": "no finger gap on either closing axis"}
+                    {"centre_mm": o["centre_mm"], "object": o["object"], "why": f"{reason} on either closing axis"}
                 )
                 continue
         use_blend = bool((config.get("calibrate") or {}).get("blend_bias"))
@@ -287,7 +295,8 @@ def choose(
         )
         for xy, place_yaw in places:
             planned = plan_fn(config, site, dest_site, xy, o, entry, offset, bias, work, yaw, place_yaw)
-            for end in (reachable_ends(o, entry, p) if isinstance(planned, str) and "UNREACHABLE" in planned else []):
+            # The IK retry inherits room and bias measured at the original point.
+            for end in (reachable_ends(o, entry, p) if not require_clearance and isinstance(planned, str) and "UNREACHABLE" in planned else []):
                 planned = plan_fn(config, site, dest_site, xy, end, entry, offset, bias, work, yaw, place_yaw)
                 if not isinstance(planned, str):
                     o = end
@@ -297,20 +306,10 @@ def choose(
         if isinstance(planned, str):
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": f"planner: {planned}"})
             continue
-        usable.append(
-            {
-                "object": o,
-                "entry": entry,
-                "offset": offset,
-                "bias_region": region,
-                "bias_mm": bias,
-                "library": planned[0],
-                "pick": planned[1],
-                "place": planned[2],
-                "approach_m": planned[3],
-                "plan": planned[5],
-            }
-        )
+        usable.append({
+            "object": o, "entry": entry, "offset": offset, "bias_region": region, "bias_mm": bias,
+            "library": planned[0], "pick": planned[1], "place": planned[2], "approach_m": planned[3], "plan": planned[5],
+        })
     return usable, refused
 
 
@@ -357,18 +356,22 @@ def verify_placed(cell, config, calibration, dest_site, place_xy, roi, catalog, 
            <= tolerance for o in before_objects):
         return {"found": True, "inside": False, "verified": False,
                 "basis": "unverified: destination occupied before transfer", "frame": frame}
-    if source_site == dest_site and source_roi == roi:
-        source_objects = objects
-    else:
-        _, _, source_objects, error = obs_fn(cell, config, calibration, source_site, source_roi, catalog,
-                                             image=after["image"])
-        if error:
-            return {"found": False, "inside": False, "verified": False, "basis": f"unverified: {error}",
-                    "frame": frame}
-    if any(o.get("object") == object_id and 1000 * math.dist(o["raw_m"], source_xy) <= tolerance
-           for o in source_objects):
-        return {"found": True, "inside": False, "verified": False,
-                "basis": "unverified: source still occupied", "frame": frame}
+    sites_cfg = config.get("sites") or {}
+    base_src = str(source_site).rsplit("-l", 1)[0]
+    src_cfg = {**(sites_cfg.get(base_src) or {}), **(sites_cfg.get(source_site) or {})}
+    if not (int(src_cfg.get("layers_below") or 0) > 0 or int(src_cfg.get("layer") or 0) > 0):
+        if source_site == dest_site and source_roi == roi:
+            source_objects = objects
+        else:
+            _, _, source_objects, error = obs_fn(cell, config, calibration, source_site, source_roi, catalog,
+                                                 image=after["image"])
+            if error:
+                return {"found": False, "inside": False, "verified": False, "basis": f"unverified: {error}",
+                        "frame": frame}
+        if any(o.get("object") == object_id and 1000 * math.dist(o["raw_m"], source_xy) <= tolerance
+               for o in source_objects):
+            return {"found": True, "inside": False, "verified": False,
+                    "basis": "unverified: source still occupied", "frame": frame}
     near = [
         (1000 * math.dist((o["raw_m"][0] - bx / 1000, o["raw_m"][1] - by / 1000), place_xy), o)
         for o in objects

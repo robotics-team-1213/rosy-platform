@@ -6,6 +6,66 @@ import math
 from stacking_fixture import BELT_TOP, DT, UNIT, advance_joint, placed, target
 
 
+def record_evaluation_step(rows, step):
+    """Summarize sequential cargo progress without retaining the entire rollout."""
+    item = rows.setdefault(step["id"], dict(arm=step["arm"], samples=0,
+                           min_tcp_distance_m=step["tcp_distance_m"], max_rise_m=0.,
+                           max_opposing_contact_n=0., lifted=False, seated=False))
+    item["samples"] += 1
+    item["min_tcp_distance_m"] = min(item["min_tcp_distance_m"], step["tcp_distance_m"])
+    item["max_rise_m"] = max(item["max_rise_m"], step["rise_m"])
+    item["max_opposing_contact_n"] = max(item["max_opposing_contact_n"], min(step["finger_forces_n"]))
+    item["lifted"] |= step["lifted"]
+    item["seated"] |= step["seated"]
+    item["last_position_m"] = step["position_m"]
+    item["last_goal_distance_m"] = step["goal_distance_m"]
+    item["terminal"] = step["terminal"]
+
+
+def record_replay_phases(phases, index, *, lifted, at_target, seated):
+    """Record the first sample for each ordered, independently observed phase."""
+    if "unsupported_lift" not in phases:
+        if lifted:
+            phases["unsupported_lift"] = index
+    elif "held_at_target" not in phases:
+        if at_target:
+            phases["held_at_target"] = index
+    elif seated:
+        phases.setdefault("settled_on_support", index)
+
+
+def load_first_pick_replay(path, fixture, profile, item):
+    """Check a bounded teacher trace before using it in the simulation scene."""
+    import numpy as np
+
+    with path.open("rb") as stream:
+        raw = stream.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
+        raise ValueError("Replay input exceeds 1 MiB")
+    value = json.loads(raw)
+    joints = [f"joint{i}" for i in range(1, 6)] + ["gripper_joint_1"]
+    dt = DT * fixture["control_decimation"]
+    if (value.get("schema") != "omx.sim-replay-targets/1" or value.get("scenario") != fixture["case"]
+            or item["arm"] != 1 or value.get("arm") != "arm_b"
+            or value.get("target") != "ship-h1r1-l0" or value.get("joints") != joints
+            or value.get("control_hz") != round(1 / dt)):
+        raise ValueError("Replay does not match the CAD194 first pick")
+    samples = np.asarray(value["target_rad"], dtype=float)
+    if (samples.ndim != 2 or samples.shape[1] != 6 or not 2 <= len(samples) <= 6000
+            or not np.isfinite(samples).all()
+            or not np.allclose(samples[0], [*fixture["home_joints_rad"][1], 1.], rtol=0., atol=1e-6)):
+        raise ValueError("Invalid replay samples or first pose")
+    limits = [profile["joints"][name] for name in joints[:5]] + [profile["gripper"]]
+    pos = np.array([limit["position"] for limit in limits])
+    velocity = np.diff(samples, axis=0) / dt
+    acceleration = np.diff(np.vstack([np.zeros(6), velocity, np.zeros(6)]), axis=0) / dt
+    if (np.any(samples < pos[:, 0]) or np.any(samples > pos[:, 1])
+            or np.any(np.max(np.abs(velocity), axis=0) > np.array([x["velocity"] for x in limits]) + 1e-9)
+            or np.any(np.max(np.abs(acceleration), axis=0) > np.array([x["acceleration"] for x in limits]) + 1e-9)):
+        raise ValueError("Replay samples exceed simulation profile limits")
+    return samples, hashlib.sha256(raw).hexdigest()
+
+
 def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, cargo, contacts,
                      plan, profile, capture, tcp_position, initial, *, mapped, fixture):
     """Run the StackingEnv RSL-RL PPO training and deterministic evaluation episode."""
@@ -19,9 +79,21 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
     if mapped:
         from mapped_stack_fixture import free_lift, stable_box
         from mapped_stack_task import apply_servo
+    replay = getattr(args, "first_pick_replay", None)
+    paired = None
+    if getattr(args, "paired_start", None):
+        from omx_paired_reset import ARMS, read_start, readback
+
+        paired = read_start(args.paired_start, fixture["layout_sha256"], profile)
+    if replay:
+        samples, replay_sha = load_first_pick_replay(replay, fixture, profile, plan[0])
 
     def goal(item):
         return item['target'] if mapped else target(item)
+
+    def joint_readback():
+        return {arm: np.asarray(robot.get_joint_positions())[[*joint_indices[i], fingers[i][0]]].tolist()
+                for i, (arm, robot) in enumerate(zip(ARMS, robots, strict=True))}
 
     def accepted(index, sample):
         if not mapped:
@@ -61,11 +133,17 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
                 state = np.zeros(robot.num_dof)
                 state[joint_indices[i]] = initial['homes'][i] if mapped else [0., -.4, .7, 1.27, 0.]
                 state[fingers[i]] = [1., -1.]
+                if paired:
+                    q = paired["joints_rad"][ARMS[i]]
+                    state[joint_indices[i]] = q[:5]
+                    state[fingers[i]] = [q[5], -q[5]]
                 robot.set_joint_positions(state)
                 robot.set_joint_velocities(np.zeros(robot.num_dof))
                 robot.get_articulation_controller().apply_action(ArticulationAction(joint_positions=state))
                 self.targets.append(state.copy())
                 self.target_velocities.append(np.zeros(robot.num_dof))
+            if paired:
+                self.paired_initial = joint_readback()
             self.activate()
             for _ in range(12):
                 if mapped:
@@ -80,6 +158,8 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             jitter = self.rng.uniform(-1., 1., 2)*jitter_xy
             yaw = self.rng.uniform(-fixture.get('infeed_yaw_jitter_rad', .03),
                                    fixture.get('infeed_yaw_jitter_rad', .03))
+            if replay:
+                jitter, yaw = (0., 0.), 0.
             source = fixture.get('pickup_center_m', [(.16 if mapped else .20), -.09, BELT_TOP+.016])
             pose = [source[0]+jitter[0], source[1]+jitter[1], source[2]]
             self.source_z = pose[2]
@@ -166,6 +246,7 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
                     stage.GetPrimAtPath(links[active]['end_effector_link'])).ExtractTranslation())
             reach = float(np.linalg.norm(tcp-p))
             distance = float(np.linalg.norm(p-np.array(goal(plan[self.index]))))
+            rise = float(p[2]-self.source_z)
             reward = math.exp(-20*reach)+float(self.lifted)*(2+2*math.exp(-25*distance))-.01*float(np.square(action).sum())
             done = bool(p[2] < -.01 or np.linalg.norm(p[:2]) > .6)
             for i in range(self.index):
@@ -179,6 +260,7 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
                     done |= not accepted(i, previous)
             self.settle = self.settle+1 if good else 0
             settle_steps = fixture['settle_steps']//fixture['control_decimation'] if mapped else fixture['settle_steps']
+            item = plan[self.index]
             success = not done and self.settle >= settle_steps
             full_stack = success and self.index == len(plan)-1
             if success:
@@ -192,6 +274,12 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             timeout = bool(self.episode_length_buf[0] >= self.max_episode_length)
             info = dict(time_outs=torch.tensor([timeout and not done], device=self.device),
                         log={'Stack/placed': float(self.completed)}, stack_success=full_stack)
+            if fixture.get('r08_scene') and not self.auto_reset:
+                info['evaluation_step'] = dict(
+                    id=item['id'], arm=int(active), tcp_distance_m=reach, rise_m=rise,
+                    finger_forces_n=force[2*active:2*active+2].tolist(), lifted=sample['lifted'],
+                    seated=bool(success), position_m=sample['position'], goal_distance_m=distance,
+                    terminal=('stack_complete' if full_stack else 'invalid_cargo_pose' if done else 'timeout' if timeout else None))
             done |= timeout
             if done:
                 self.episodes += 1
@@ -200,8 +288,56 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
             return self.get_observations(), torch.tensor([reward], device=self.device), torch.tensor([done], device=self.device), info
 
     env = StackingEnv()
+    if paired:
+        return readback(paired, "isaac", env.paired_initial, joint_readback())
+    if replay:
+        from mapped_stack_fixture_helpers import half_extent, unsupported_hold
+
+        active, summaries = plan[0]["arm"], {}
+        item = plan[0]
+        destination = np.array(goal(item))
+        phases = {}
+        current = env.targets[active]
+        settle_steps = fixture["settle_steps"] // fixture["control_decimation"]
+        for index, command in enumerate(samples):
+            current[joint_indices[active]] = command[:5]
+            current[fingers[active]] = [command[5], -command[5]]
+            for _ in range(fixture["control_decimation"]):
+                for arm, robot in enumerate(robots):
+                    apply_servo(robot, env.targets[arm], joint_indices[arm], fingers[arm])
+                for _ in range(fixture["physics_substeps"]):
+                    world.step(render=False, update_fabric=True)
+            position, row, forces = env.measured(0)
+            body = row["body"]
+            lifted = free_lift(body, active, env.source_z)
+            env.lifted |= lifted
+            row["lifted"] = env.lifted
+            env.settle = env.settle + 1 if accepted(0, row) else 0
+            seated = env.settle >= settle_steps
+            at_target = unsupported_hold(body, active) and all(
+                abs(position[axis] - destination[axis]) <= half_extent(body, item["size"], axis)
+                for axis in (0, 1)
+            )
+            record_replay_phases(phases, index, lifted=lifted, at_target=at_target, seated=seated)
+            record_evaluation_step(summaries, dict(
+                id=item["id"], arm=active, tcp_distance_m=float(np.linalg.norm(tcp_position(active)-position)),
+                rise_m=float(position[2]-env.source_z), finger_forces_n=forces[2*active:2*active+2].tolist(),
+                lifted=env.lifted, seated=seated, position_m=row["position"],
+                goal_distance_m=float(np.linalg.norm(position-destination)),
+                terminal="replay_finished" if index == len(samples)-1 else None))
+        capture("first-pick-final.png")
+        settled = env.settle >= settle_steps
+        return dict(schema="rosy.omx-first-pick-replay/1", seed=args.seed, fixture=fixture,
+                    target_sha256=replay_sha, samples=len(samples), attachment_aid=False,
+                    settled_on_target=settled, observed_phases=phases,
+                    task_success=settled and "settled_on_support" in phases, progress=summaries,
+                    image="first-pick-final.png")
 
     # Observe uncommanded cargo transport on the belt before any policy is applied.
+    if 'belt_probe_start_m' in fixture:
+        cargo[0].set_world_pose(np.array(fixture['belt_probe_start_m']), np.array([1., 0., 0., 0.]))
+        cargo[0].set_linear_velocity(np.zeros(3))
+        cargo[0].set_angular_velocity(np.zeros(3))
     start = cargo[0].get_world_pose()[0].copy()
     for _ in range(120):
         for _ in range(fixture.get('physics_substeps', 1)):
@@ -231,16 +367,19 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
     env.auto_reset = False
     obs = env.reset(seed=args.seed+fixture['evaluation_seed_offset'])
     evaluation_successes = 0
+    evaluation_progress = {}
     for _ in range(env.max_episode_length):
         with torch.inference_mode():
             action = policy(obs)
         obs, _, done, info = env.step(action)
         evaluation_successes += int(info['stack_success'])
+        if 'evaluation_step' in info:
+            record_evaluation_step(evaluation_progress, info['evaluation_step'])
         if bool(done[0]):
             break
     capture('stacking-evaluation.png')
     stage.GetRootLayer().Export(str(args.report.parent/'stacking-scene.usda'))
-    return dict(schema='rosy.omx-stacking-rl/1', fixture=fixture, seed=args.seed,
+    report = dict(schema='rosy.omx-stacking-rl/1', fixture=fixture, seed=args.seed,
         updates=32, transitions=trained_transitions, parameter_delta=delta,
         training_verified=bool(math.isfinite(delta) and delta > 0), task_success=evaluation_successes > 0,
         evaluation_seed=args.seed+fixture['evaluation_seed_offset'], evaluation_episodes=1,
@@ -250,3 +389,6 @@ def run_ppo_stacking(args, world, stage, robots, links, joint_indices, fingers, 
         checkpoint=dict(name=checkpoint.name, bytes=checkpoint.stat().st_size,
                         sha256=hashlib.sha256(checkpoint.read_bytes()).hexdigest()),
         images=['stacking-initial.png', 'stacking-evaluation.png'])
+    if fixture.get('r08_scene'):
+        report['evaluation_progress'] = evaluation_progress
+    return report

@@ -46,7 +46,7 @@ def page(browser,width=390):
         path=route.request.url.split('receiver.fixture',1)[1]
         if path=='/':route.fulfill(status=200,content_type='text/html',body=HTML);return
         file=(WEB/'shared'/path.rsplit('/',1)[-1] if path in (
-              '/console/assets/device-request.js','/console/assets/request.js') else
+              '/console/assets/device-request.js','/console/assets/request.js','/console/assets/authorization.js') else
               COMMON/path[len('/common/'):] if path.startswith('/common/') else WEB/path.lstrip('/'))
         if not file.is_file():route.fulfill(status=404,body='');return
         route.fulfill(status=200,content_type='text/css' if file.suffix=='.css' else 'application/javascript',body=file.read_bytes())

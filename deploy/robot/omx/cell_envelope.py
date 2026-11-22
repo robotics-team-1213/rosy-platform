@@ -32,9 +32,15 @@ def _code_digest() -> str:
     root = Path(__file__).resolve().parent
     files = {name: root / name for name in (
         "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
-        "cell_auto_pick.py", "cell_transfer.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
+        "cell_auto_pick.py", "cell_transfer.py", "cell_unwedge.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
         "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",
-        "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
+        "guarded_native.py", "guarded_native_effort.py", "guarded_native_probe.py", "guarded_native_track.py",
+        "guarded_native_mount.py", "guarded_native_watch.py",
+        "guarded_native_lag.py", "guarded_native_link.py",
+        "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py",
+        "chunk_runner_commands.py", "chunk_runner_guards.py", "chunk_runner_interrupt.py", "chunk_runner_settle.py",
+        "chunk_runner_run.py", "chunk_runner_loop.py", "chunk_policy_playback.py", "motor_health.py",
+        "cell_policy_drive.py", "cell_policy_timing.py", "cell_policy_shape.py", "cell_policy_handoff.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, coordination, motion_profile)})
     cache_key = (
         tuple((name, path.stat().st_mtime_ns, path.stat().st_size) for name, path in sorted(files.items())),
@@ -143,7 +149,8 @@ def payload_check(config: dict, conditions: dict) -> tuple[dict | None, str | No
 
 
 def assess(config: dict, calibration: dict, library: dict, state: dict, *,
-           now=None, sequence=SEQUENCE, library_sha256: str | None = None) -> dict:
+           now=None, sequence=SEQUENCE, library_sha256: str | None = None,
+           check_home: bool = True, allow_pending: dict | None = None) -> dict:
     """Exact paths only: no radius shrink, spatial interpolation or automatic promotion from success."""
     out = {"schema": SCHEMA, "mode": "automatic", "status": "unverified", "allowed": False,
            "reason": "not_reviewed"}
@@ -180,7 +187,7 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
         out["payload"], over = payload_check(config, conditions)
         if over:  # supervised trials too: a person at the switch does not make an unknown or heavy load safe
             return {**out, "reason": over}
-        if "_commissioning" in config:
+        if "_commissioning" in config and not _reviewed(config, out["task_sha256"]):  # a reviewed task takes the review path
             trial = config["_commissioning"]
             if (not isinstance(trial, dict) or set(trial) != {"person_at_switch"}
                     or trial["person_at_switch"] is not True):
@@ -210,17 +217,16 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
         if (type(required) is not int or required < 1 or not _number(rate) or not 0 < rate <= 1
                 or not _number(tolerance) or tolerance <= 0):
             raise ValueError("review must specify repetition, success and start tolerances")
-        positions, home = state.get("state"), library["chunks"]["home"][-1]
-        if (not isinstance(positions, list) or len(positions) != 6 or len(home) != 6
-                or any(not _number(v) for v in positions + home)
-                or max(abs(a - b) for a, b in zip(positions[:5], home[:5])) > tolerance):
-            return {**out, "reason": "start_not_home"}
         ledger = Path(document["attempts_path"]).expanduser()
         if not ledger.is_absolute():
             ledger = review_path.parent / ledger
         if ledger.resolve() != (Path(config["work_dir"]).expanduser() / "attempts.jsonl").resolve():
             raise ValueError("review must use this pipeline's active attempt ledger")
-        if ledger.with_suffix(".pending.json").exists():
+        pending = ledger.with_suffix(".pending.json")
+        if allow_pending is None:
+            if pending.exists():
+                return {**out, "reason": "incomplete_attempt"}
+        elif not pending.exists() or json.loads(pending.read_text(encoding="utf-8")) != allow_pending:
             return {**out, "reason": "incomplete_attempt"}
         rows = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
         if any(not isinstance(row, dict) or not isinstance(row.get("envelope", {}), dict) for row in rows):
@@ -248,9 +254,23 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *,
                    reviewed_by=review["reviewed_by"])
         if len(trials) < required or successes / len(trials) < rate:
             return {**out, "status": "failed", "reason": "acceptance_not_met"}
+        positions, home = state.get("state"), library["chunks"]["home"][-1]
+        if (not isinstance(positions, list) or not isinstance(home, list)
+                or len(positions) != 6 or len(home) != 6 or any(not _number(v) for v in positions + home)
+                or (check_home and max(abs(a - b) for a, b in zip(positions[:5], home[:5])) > tolerance)):
+            return {**out, "reason": "start_not_home"}
         return {**out, "allowed": True, "status": "verified", "reason": "reviewed_exact_task"}
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError):
         return {**out, "reason": "evidence_unavailable"}
+
+
+def _reviewed(config: dict, task_sha256: str) -> bool:
+    """True when the operating envelope file holds a review of exactly this task (any read problem: no)."""
+    try:
+        document = json.loads(Path(config["operating_envelope_path"]).expanduser().read_text(encoding="utf-8"))
+        return any(isinstance(r, dict) and r.get("task_sha256") == task_sha256 for r in document["reviews"])
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, AttributeError):
+        return False
 
 
 def same_session(state: dict, assessment: dict, *, now=None, recovering: bool = False) -> bool:

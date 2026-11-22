@@ -4,9 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
-  # D-762 stage 1: a merge queue group runs the full tier against its base (no effect until the
-  # queue is turned on, stage 3). No `concurrency:` group: cancelling a queue or main push run hides
-  # its failure, and a workflow-level group would also bind ubuntu-26.04-rehearsal.yml's call.
+    types: [opened, synchronize, reopened, ready_for_review]
+  # D-762 stage 1: a merge queue group runs against its base.
+  # The `concurrency:` block below cancels only stale `pull_request` runs on new push;
+  # `merge_group`, `push`, `schedule`, `workflow_dispatch`, and `workflow_call` each key on `github.run_id`
+  # with `cancel-in-progress: false` so a queue or main push run is never cancelled.
   merge_group:
   # D-436: PR 은 affected 티어, main push·주간·수동 실행은 풀 티어를 GitHub 러너에서
   # 병렬 matrix 로 돈다. 로컬 PC 는 affected 티어와 pre-push 패스트 게이트만 돈다.
@@ -22,21 +24,22 @@ on:
         type: string
         default: ubuntu-24.04
 
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # D-436: 시험 범위와 병렬 matrix 를 정한다. pull_request 는 변경 범위(affected) 티어 —
   # 선택기가 공용 기반·CI/시험 설정·미분류 파일 때문에 FULL 로 올리면 풀 matrix 다.
   # main push·merge_group·schedule·workflow_dispatch·workflow_call(PR 이 아닌 호출)은 항상 풀이다.
   # D-430 Safety-Review 도 여기서 한 번만 돈다(전체 이력이 필요한 유일한 선행 검사).
   scope:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     # D-135 전환 (2026-09-20): ubuntu-26.04 리허설 연속 녹색 후 게이팅 러너를
     # 26.04 로 올렸다 — ubuntu-latest 의 강제 이동(10-19~11-19)보다 먼저 검증된
     # 전환이다. 되돌림은 이 기본값을 24.04 로 바꾸면 된다.
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
-    container:
-      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:59245c63b56db2a87722baf0b6696853f55d3f9c85dfc4688a53a946032a0685
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ github.token }}
+    # Bare ubuntu-26.04: scope runs only Python selector + pure-Python wheels (~36 s faster than pulling/extracting rosy-ci).
     # A lost runner otherwise holds the run for the 6 h default (run 38588670328 sat 45 min in an
     # install step). Measured scope: ~35 s. A publish PR's per-commit size rule walks its whole range
     # (#210: 3,145 commits, cancelled at 10 min on 2026-10-26), so the cap leaves room for that.
@@ -45,18 +48,34 @@ jobs:
       mode: ${{ steps.scope.outputs.mode }}
       matrix: ${{ steps.scope.outputs.matrix }}
     steps:
-      # 전체 이력: 모듈 logs.md 의 append-only 검사가 PR base / push 이전 커밋과 비교한다.
-      # 얕은 clone 이면 HEAD 만 비교되어 이미 커밋된 기록의 수정을 잡지 못한다 (D-61).
+      # 전체 이력: 모듈 logs.md·size_range·Safety-Review 검사가 전체 커밋 DAG 와 소스 블롭을 읽는다(D-61).
+      # blob:limit=256k + fetch-tags: false 는 소스 블롭을 모두 로컬에 두면서 138 MB 대용량 바이너리 이력과 태그 680 개를 생략한다.
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
           fetch-depth: 0
+          fetch-tags: false
+          filter: blob:limit=256k
 
       - name: Fix git safe directory (container)
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
+      - name: Cache scope Python tools
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: /tmp/rosy-scope-tools
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.runs_on || 'ubuntu-26.04' }}-scope-tools-pyyaml-setuptools-wheel-v1
+
       - name: CI image readiness (selector tools)
-        run: python3 -c 'import yaml' && git --version
+        run: |
+          if ! python3 -c 'import yaml, setuptools, wheel' 2>/dev/null; then
+            if [ ! -d /tmp/rosy-scope-tools/yaml ] || [ ! -d /tmp/rosy-scope-tools/setuptools ] || [ ! -d /tmp/rosy-scope-tools/wheel ]; then
+              pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-scope-tools pyyaml setuptools wheel
+            fi
+            echo "PYTHONPATH=/tmp/rosy-scope-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+            PYTHONPATH="/tmp/rosy-scope-tools${PYTHONPATH:+:$PYTHONPATH}" python3 -c 'import yaml, setuptools, wheel'
+          fi
+          git --version
 
       # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
       # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
@@ -87,6 +106,10 @@ jobs:
         id: scope
         shell: bash
         env:
+          QUEUE_DELTA: ${{ vars.ROSY_QUEUE_DELTA }}  # D-1059 switch: unset keeps the whole queue selection
+          ROSY_BROWSER_CI: ${{ github.event_name == 'pull_request' && '1' || '' }}  # D-1066: browser evidence rides the pull_request run only
+          PUSH_SAME: ${{ vars.ROSY_PUSH_SAME }}  # D-1064 switch: unset keeps the whole push selection
+          GH_TOKEN: ${{ github.token }}
           SCOPE_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event_name == 'push' && github.event.before || '' }}
         run: |
           set -eo pipefail
@@ -96,6 +119,10 @@ jobs:
                 echo "::error::missing or unreachable SCOPE_BASE ($SCOPE_BASE) for ${{ github.event_name }}; refusing silent narrowing"
                 exit 1
               fi
+              if [ "${{ github.event_name }}" = merge_group ] && [ "$QUEUE_DELTA" = 1 ]; then
+                # D-1059: the guard set alone when this tree is the one the pull request's green run passed.
+                ROSY_QUEUE_TESTED="$(python3 tools/harness/affected_queue.py)" && export ROSY_QUEUE_TESTED
+              fi
               out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               ;;
             push)
@@ -103,6 +130,10 @@ jobs:
                 echo "::warning::missing or unreachable push base ($SCOPE_BASE); escalating to --full"
                 out="$(python3 tools/harness/rosy_harness.py affected --base HEAD --full --ci-matrix)"
               else
+                if [ "$PUSH_SAME" = 1 ]; then
+                  # D-1064: the guard set alone when the merge queue run passed this very commit for this very range.
+                  ROSY_QUEUE_TESTED="$(python3 tools/harness/affected_queue.py --pushed "$SCOPE_BASE")" && export ROSY_QUEUE_TESTED
+                fi
                 out="$(python3 tools/harness/rosy_harness.py affected --base "$SCOPE_BASE" --ci-matrix)"
               fi
               ;;
@@ -114,6 +145,26 @@ jobs:
           echo "mode=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["mode"])' "$out")" >> "$GITHUB_OUTPUT"
           echo "matrix=$(python3 -c 'import json, sys; print(json.dumps(json.loads(sys.argv[1])["matrix"]))' "$out")" >> "$GITHUB_OUTPUT"
 
+      - name: Build ROS-free platform API wheels once
+        run: |
+          set -euo pipefail
+          wheelhouse=/tmp/rosy-platform-wheelhouse
+          mkdir -p "$wheelhouse"
+          printf '%s\n' \
+            contracts/foundation contracts/skill contracts/motion contracts/learning \
+            operations/account operations/world operations/monitoring operations/notifications \
+            middleware/skills/api middleware/skills/manipulation operations/site_execution \
+            middleware/robot_execution/local operations/processes/palletizing \
+            integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway \
+            | xargs -P 4 -I{} pip3 wheel --no-deps --no-build-isolation --wheel-dir "$wheelhouse" {}
+
+      - name: Upload ROS-free platform API wheels
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
+        with:
+          name: rosy-wheelhouse
+          path: /tmp/rosy-platform-wheelhouse/*.whl
+          retention-days: 1
+
   # D-436 병렬 실행: matrix 항목 하나가 러너 하나다(tools/harness/affected_tests.py 의
   # CI_FULL_MATRIX + 루트 test/ 3 분할, 또는 affected 호출마다 하나, 그리고 build-smoke).
   # 셋업(컨테이너·apt·pip ≈ 70 초, colcon ≈ 20 초)은 항목마다 반복되지만, 직렬 실행의
@@ -124,7 +175,7 @@ jobs:
     name: test (${{ matrix.name }})
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:59245c63b56db2a87722baf0b6696853f55d3f9c85dfc4688a53a946032a0685
+      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:8d4c773c166b46ccdaad27a891cdf2aed429b6b42644b8b33696ca36da9b25af
       credentials:
         username: ${{ github.actor }}
         password: ${{ github.token }}
@@ -135,15 +186,18 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
     steps:
-      # 전체 이력: 모듈 logs.md 의 append-only 검사가 PR base / push 이전 커밋과 비교한다.
-      # 얕은 clone 이면 HEAD 만 비교되어 이미 커밋된 기록의 수정을 잡지 못한다 (D-61).
+      # 전체 이력(D-61)은 git 이력·객체를 읽는 극소수 시험만 전체 clone 하고,
+      # 나머지는 shallow checkout(fetch-depth: 1, fetch-tags: false)으로 단축한다.
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ !matrix.git_history && 1 || 0 }}
+          fetch-tags: false
 
       - name: Fix git safe directory (container)
-        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        run: |
+          git config --system --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       # The image (.github/ci-image/Dockerfile, build-ci-image.yml) carries the apt packages, the hash-locked
       # device runtime, test tools, account OAuth, receiver crypto and Chromium. These asserts keep the old
@@ -177,16 +231,24 @@ jobs:
         if: contains(toJSON(matrix.invocations), 'operations/overhead/test')
         run: |
           # Test calibration against the deployed Vision runtime, retaining ROS apt packages.
-          pip3 install --no-cache-dir --break-system-packages \
-            --target /tmp/rosy-site-vision-tools -r deploy/site/requirements-vision.txt
-          echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          if [ -d /opt/rosy-ci/site-vision-tools ]; then
+            echo "PYTHONPATH=/opt/rosy-ci/site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          else
+            pip3 install --no-cache-dir --break-system-packages \
+              --target /tmp/rosy-site-vision-tools -r deploy/site/requirements-vision.txt
+            echo "PYTHONPATH=/tmp/rosy-site-vision-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          fi
 
       - name: Fleet browser readiness (Chromium and CJK fonts from the image)
-        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py')
+        if: contains(toJSON(matrix.invocations), 'operations/fleet/test') || contains(toJSON(matrix.invocations), 'applications/fleet/test') || contains(toJSON(matrix.invocations), 'test_account_pipeline.py') || contains(toJSON(matrix.invocations), 'test_monitoring_browser.py') || contains(toJSON(matrix.invocations), 'ROSY_RUN_BROWSER_TESTS=1')
         run: |
-          # The console is Korean: without fonts-noto-cjk, headless Chromium renders Hangul through
-          # Playwright's wide Unifont fallback and 320px layout-fit assertions see overflow.
-          fc-list | grep -qi 'noto.*cjk'
+          # The console is Korean: without fonts-noto-cjk (and with WenQuanYi absent), headless Chromium
+          # matches lab PC metrics instead of Playwright's wide Unifont or fonts-wqy-zenhei fallback.
+          if dpkg -s fonts-wqy-zenhei >/dev/null 2>&1 || dpkg -s fonts-wqy-microhei >/dev/null 2>&1; then
+            echo "::error::WenQuanYi CJK fonts must not be installed in rosy-ci" >&2
+            exit 1
+          fi
+          fc-list | grep -i 'noto.*cjk' >/dev/null
           python3 -c 'from playwright.sync_api import sync_playwright as p; pw = p().start(); pw.chromium.launch().close(); pw.stop()'
 
       - name: Install Pinky raw verification tools
@@ -195,15 +257,36 @@ jobs:
           # Real CDR/MCAP and video tests must run, not skip behind missing host tools.
           # Keep NumPy 2/OpenCV in this job's tool directory; Debian's NumPy has
           # no pip RECORD and must remain available to the ROS base image.
-          pip3 install --no-cache-dir --break-system-packages -c /opt/rosy-ci/runtime-constraints.txt \
-            --target /tmp/rosy-pinky-raw-tools -r learning/curation/pinky/requirements-raw.txt
-          echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          if [ -d /opt/rosy-ci/pinky-raw-tools ]; then
+            echo "PYTHONPATH=/opt/rosy-ci/pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          else
+            pip3 install --no-cache-dir --break-system-packages -c /opt/rosy-ci/runtime-constraints.txt \
+              --target /tmp/rosy-pinky-raw-tools -r learning/curation/pinky/requirements-raw.txt
+            echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Cache Pinky CPU torch tools
+        if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: /tmp/rosy-pinky-torch
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-pinky-torch-2.7.1
 
       - name: Install Pinky CPU model comparison tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
-          pip3 install --no-cache-dir --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
-          python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
+          if [ ! -d /tmp/rosy-pinky-torch/torch ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-pinky-torch --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          fi
+          PYTHONPATH="/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
+          echo "PYTHONPATH=/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+
+      - name: Cache OMX ACT CPU verification tools
+        if: matrix.name == 'omx-act-cpu'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: /tmp/rosy-omx-act-cpu
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
 
       - name: Install OMX ACT CPU verification tools
         if: matrix.name == 'omx-act-cpu'
@@ -212,9 +295,11 @@ jobs:
           TRANSFORMERS_OFFLINE: '1'
         run: |
           # Separate matrix runner/tool path: the Pinky comparison keeps its own torch pin.
-          pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu \
-            --extra-index-url https://download.pytorch.org/whl/cpu \
-            -r deploy/robot/omx/requirements-lerobot-export.txt
+          if [ ! -d /tmp/rosy-omx-act-cpu/torch ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-omx-act-cpu \
+              --extra-index-url https://download.pytorch.org/whl/cpu \
+              -r deploy/robot/omx/requirements-lerobot-export.txt
+          fi
           PYTHONPATH="/tmp/rosy-omx-act-cpu${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
           import json
           from importlib.metadata import version
@@ -239,25 +324,39 @@ jobs:
           echo "OPENBLAS_NUM_THREADS=2" >> "$GITHUB_ENV"
           echo "MKL_NUM_THREADS=2" >> "$GITHUB_ENV"
 
+      - name: Download ROS-free platform API wheels
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0 (pinned commit)
+        with:
+          name: rosy-wheelhouse
+          path: /tmp/rosy-platform-wheelhouse
+
       - name: Build and install ROS-free platform API wheels
         run: |
-          # Build actual wheels outside src/ and install before colcon/pytest. This catches
-          # missing package metadata and namespace-wheel ownership instead of adding modules
-          # to PYTHONPATH or treating them as ament packages.
-          # 2026-10-02 정정: --break-system-packages 는 install 계열에만 있는 옵션이다
-          # (pip wheel 은 환경에 설치하지 않으므로 PEP 668 우회가 필요 없다). wheel 줄에서
-          # 떼지 않으면 "no such option" 으로 40 초 만에 죽는다(실행 36967673107).
           wheelhouse=/tmp/rosy-platform-wheelhouse
           mkdir -p "$wheelhouse"
-          pip3 wheel --no-deps --no-build-isolation \
-            --wheel-dir "$wheelhouse" \
-            contracts/foundation contracts/skill contracts/motion contracts/learning operations/account operations/world operations/monitoring operations/notifications middleware/skills/api middleware/skills/manipulation operations/site_execution middleware/robot_execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway
+          if ! ls "$wheelhouse"/*.whl >/dev/null 2>&1; then
+            pip3 wheel --no-deps --no-build-isolation \
+              --wheel-dir "$wheelhouse" \
+              contracts/foundation contracts/skill contracts/motion contracts/learning operations/account operations/world operations/monitoring operations/notifications middleware/skills/api middleware/skills/manipulation operations/site_execution middleware/robot_execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway
+          fi
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            core_common==0.0.3 rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.16 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
+            core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.17 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
+
+      - name: Cache ROS interfaces overlay
+        if: matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')
+        id: rosidl-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: |
+            build/interfaces
+            install/interfaces
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-rosidl-${{ hashFiles('contracts/ros_idl/**') }}
 
       - name: Build (colcon)
-        if: matrix.kind == 'smoke' || matrix.ros == 'overlay'
+        if: matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')
+        env:
+          ROSIDL_CACHE_HIT: ${{ steps.rosidl-cache.outputs.cache-hit }}
         run: |
           # 러너 셸은 컨테이너 엔트리포인트를 우회하므로 ROS 환경을 직접 얹는다 —
           # 아니면 CMake가 ament_cmake를 찾지 못해 빌드 자체가 시작되지 않는다.
@@ -273,8 +372,15 @@ jobs:
           # D-427: colcon runs from the repo root over the manifest's colcon_roots;
           # build/install/log land at the repo root, never inside a source root.
           COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
+          SKIP_ARGS=""
+          if [ "${ROSIDL_CACHE_HIT:-}" = "true" ] && [ -f install/interfaces/share/interfaces/package.sh ] && grep -qF "$(pwd)/install/interfaces" install/interfaces/share/interfaces/package.sh; then
+            . install/interfaces/share/interfaces/package.sh
+            SKIP_ARGS="--packages-skip interfaces"
+          elif [ "${ROSIDL_CACHE_HIT:-}" = "true" ]; then
+            rm -rf build/interfaces install/interfaces
+          fi
           colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS \
-            --build-base build --install-base install \
+            --build-base build --install-base install $SKIP_ARGS \
             --event-handlers console_direct+
 
       - name: Lint (flake8)
@@ -293,30 +399,56 @@ jobs:
           # module harness: logs.md 는 이 base 이후로 앞부분이 보존되어야 한다 (비면 origin/main merge-base).
           HARNESS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
           ROSY_ROS: ${{ matrix.ros }}
+          # The Build (colcon) step's own condition: a missing matrix.colcon means build; only an explicit false skips.
+          ROSY_BUILT: ${{ matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false') }}
           ROSY_INVOCATIONS: ${{ toJSON(matrix.invocations) }}
         run: |
           # ROS setup.sh 는 미정의 변수를 참조하므로 -u 를 쓰지 않는다.
           set -eo pipefail
           case "$ROSY_ROS" in
-            overlay) . /opt/ros/jazzy/setup.sh; . install/setup.sh ;;
+            overlay) . /opt/ros/jazzy/setup.sh; [ "$ROSY_BUILT" = true ] && . install/setup.sh || true ;;
             base) . /opt/ros/jazzy/setup.sh ;;
           esac
           python3 - <<'PY'
+          import importlib.util
           import json
           import os
+          from pathlib import Path
           import re
           import subprocess
           import sys
 
           # Enable Fleet backend/app and the explicit account SSO journey; leave other CORE browsers opt-in.
-          account_browser = "middleware/core/gateway/test/test_account_pipeline.py"
+          account_browser = "test/integration/core_fleet/test_account_pipeline.py"
           native_ros = {
               "middleware/devices/omx/adapter/test/test_omx_ros_runtime.py": "113",
               "middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py": "114",
           }
           runs = []
-          sys.path.insert(0, "tools/harness")
+          for extra_path in ("tools/harness", "tools", "tools/remote", "test"):
+              if extra_path not in sys.path:
+                  sys.path.append(extra_path)
+          import land_browser
           from affected_exclusive import dedicated, split_environment
+          from affected_pack import is_serial, serial_prefixes
+          from affected_repo import Repo
+          serial = serial_prefixes(Repo(Path("."), [], [], [], []))
+          fleet_roots = ("operations/fleet/test", "applications/fleet/test")
+          fleet_opt_in = {
+              "applications/fleet/test/test_browser_adapters.py",
+              "applications/fleet/test/test_feature_browser_flows.py",
+          }
+          fleet_prefixes = tuple(r + "/" for r in fleet_roots)
+
+          def _is_ci_browser(p: str) -> bool:
+              if p in (account_browser, "test/test_monitoring_browser.py"):
+                  return True
+              base = p.split("::", 1)[0]
+              return base.rstrip("/") in fleet_roots or (
+                  base.startswith(fleet_prefixes) and (base.endswith("_browser.py") or base in fleet_opt_in)
+              )
+
+          has_xdist = importlib.util.find_spec("xdist") is not None
           for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
               paths, job_environment = split_environment(paths)
               flags = [p for p in paths if p.startswith("-")]
@@ -329,12 +461,15 @@ jobs:
                   if any(target.startswith(p.rstrip("/") + "/") for p in targets):
                       flags.append("--ignore=" + target)
                       isolated.append(target)
-              browser = [p for p in targets if p.startswith(("operations/fleet/test", "applications/fleet/test")) or p in (account_browser, "test/test_monitoring_browser.py")]
+              browser = [p for p in targets if _is_ci_browser(p)]
               rest = [p for p in targets if p not in browser]
               if rest:
                   runs.append(([*rest, *flags], job_environment))
               if browser:
-                  runs.append(([*browser, *flags], {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1"}))
+                  # STRICT (vacuous-run check) judges the whole run, so only for whole browser FILES; a directory,
+                  # mixed list or "::" node id selects part of a file or holds legitimate skips.
+                  strict = {"ROSY_BROWSER_STRICT": "1"} if all("::" not in p and p.endswith("_browser.py") for p in browser) else {}
+                  runs.append(([*browser, *flags], {**job_environment, "ROSY_RUN_BROWSER_TESTS": "1", **strict}))
               for target in isolated:
                   runs.append(([target], {
                       "ROSY_OMX_NATIVE_REQUIRED": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
@@ -363,17 +498,33 @@ jobs:
                       child_env.pop(key, None)
                   print(f"isolated native ROS: domain={child_env['ROS_DOMAIN_ID']} "
                         f"RMW={child_env['RMW_IMPLEMENTATION']} discovery=LOCALHOST plugins=explicit", flush=True)
-              proc = subprocess.Popen([sys.executable, "-m", "pytest", *paths, "-v",
+              targets = [p for p in paths if not p.startswith("-")]
+              is_browser = extra.get("ROSY_RUN_BROWSER_TESTS") == "1"
+              can_xdist = (has_xdist and not native_required
+                           and not act_cpu_required and not dedicated(paths)
+                           and not any("::" in p or is_serial(p, serial) for p in targets))
+              if not is_browser:
+                  xdist_args = ["-n", "auto"] if can_xdist else []
+              elif (can_xdist and len(targets) >= 2 and all(p.endswith(".py") for p in targets)
+                    and extra.get("ROSY_BROWSER_ALONE") != "1"
+                    and not any(p in land_browser.ALONE for p in targets)):
+                  xdist_args = ["-n", "2", "--dist", "loadfile"]
+              else:
+                  xdist_args = []
+              child_env["PYTHONUNBUFFERED"] = "1"
+              proc = subprocess.Popen([sys.executable, "-m", "pytest", *paths, *xdist_args, "-v",
                                        "--continue-on-collection-errors", *known_failures.NO_ROS_LAUNCH_PLUGINS],
                                       env=child_env, stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, errors="replace")
               out = []
               for line in proc.stdout:
                   sys.stdout.write(line)
+                  sys.stdout.flush()
                   out.append(line)
               code = proc.wait()
               failed = known_failures.failed_ids("".join(out))
               ids = [] if dedicated(paths) else known_failures.rerun_ids("".join(out), quarantine)
+              rerun_out = ""
               if known_failures.should_rerun(code, failed, ids):
                   print(f"rerunning quarantined failures once: {' '.join(ids)}", flush=True)
                   rerun = subprocess.run([sys.executable, "-m", "pytest", *ids, "-q", "-rA", "-p", "no:cacheprovider",
@@ -384,6 +535,7 @@ jobs:
                   if known_failures.rerun_passed(code, failed, ids, rerun.returncode, rerun.stdout):
                       print(f"::warning::FLAKY (passed on rerun, D-762): {' '.join(ids)}", flush=True)
                       code = 0
+                      rerun_out = rerun.stdout
               print("::endgroup::", flush=True)
               full_out = "".join(out)
               first_out = full_out.split(known_failures.RERUN_MARKER, 1)[0]
@@ -406,8 +558,24 @@ jobs:
                       status = 1
               _, seen_known, _ = known_failures.compare(first_out, known_list)
               all_req_known = bool(req_ids) and not checked_req and bool(seen_known)
-              if has_summary and not all_req_known and (len(target_paths) > 1 or bool(req_ids)
-                                  or any(not p.endswith(".py") for p in target_paths)):
+              all_opt_in_browser = (
+                  not is_browser
+                  and bool(target_paths)
+                  and all(
+                      "::" not in p and p.endswith(".py") and (
+                          p.endswith("_browser.py")
+                          or (Path(p).is_file() and bool(re.search(
+                              r"\bfrom\s+browser_harness\s+import\b.*\bbrowser_tests_enabled\b",
+                              Path(p).read_text(encoding="utf-8", errors="replace"),
+                          )))
+                      )
+                      for p in target_paths
+                  )
+              )
+              if has_summary and not all_req_known and not all_opt_in_browser and (
+                  len(target_paths) > 1 or bool(req_ids)
+                  or any(not p.endswith(".py") for p in target_paths)
+              ):
                   if not re.search(r"\b[1-9]\d* passed\b", full_out):
                       print(f"::error::pytest {' '.join(paths)} passed 0 items (all skipped or empty)", flush=True)
                       status = 1
@@ -415,6 +583,13 @@ jobs:
                   kind = "ACT CPU" if act_cpu_required else "ROS"
                   print(f"::error::native {kind} fixture must execute without skips: {' '.join(paths)}", flush=True)
                   status = 1
+              # D-1066: a STRICT browser run is no evidence unless something passed and nothing skipped.
+              if extra.get("ROSY_BROWSER_STRICT") == "1":
+                  from affected_browser import vacuous
+                  reason = vacuous(first_out + rerun_out)  # a rerun that passed is part of the verdict
+                  if reason:
+                      print(f"::error::browser evidence did not run for real: {' '.join(paths)}: {reason}", flush=True)
+                      status = 1
               # 경로가 여럿인데 0건 수집이면 세션 전체가 건너뛰어진 것이다(10-11부터 루트 test/ 가 그랬다).
               if known_failures.collected_nothing(full_out, paths):
                   print(f"::error::pytest {' '.join(paths)} collected 0 items", flush=True)
@@ -492,10 +667,50 @@ jobs:
   ci-result:
     name: ci-result
     needs: [scope, test]
-    if: always()
+    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     timeout-minutes: 5
     steps:
+      # merge_group.head_sha is the queue's synthetic merge commit, not the PR head; extract pr-N from gh-readonly-queue head_ref to read the PR head SHA.
+      # shortcut: checks only the PR named in head_ref (the group's last PR); a batched group's earlier PRs are not checked, upgrade by listing the queue entries if drain batching matters
+      - name: Cutover drain gate (merge_group)
+        if: github.event_name == 'merge_group' && vars.ROSY_CUTOVER_PHASE == 'drain'
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          ALLOW_SHAS: ${{ vars.ROSY_CUTOVER_ALLOW }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, urllib.request
+
+          allow = set(os.environ.get("ALLOW_SHAS", "").split())
+          head_ref = os.environ.get("HEAD_REF", "")
+          head_sha = os.environ.get("HEAD_SHA", "")
+          match = re.search(r"(?:^|/)pr-(\d+)(?:-|$)", head_ref)
+          pr_sha = ""
+          if match:
+              url = f"https://api.github.com/repos/{os.environ['REPO']}/pulls/{match.group(1)}"
+              req = urllib.request.Request(url, headers={
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "Accept": "application/vnd.github+json",
+              })
+              with urllib.request.urlopen(req, timeout=15) as resp:
+                  pr_sha = json.loads(resp.read().decode("utf-8"))["head"]["sha"]
+          candidate = pr_sha or head_sha
+          if not candidate or candidate not in allow:
+              print(f"::error::ROSY_CUTOVER_PHASE=drain: PR head {candidate or '<unknown>'} (ref={head_ref}) is not in ROSY_CUTOVER_ALLOW")
+              sys.exit(1)
+          print(f"cutover drain gate OK: {candidate} allowed")
+          PY
+      # D-1059: the merge commit this green pull_request run tested. A merge queue run reads it back
+      # (tools/harness/affected_queue.py) and repeats the guard set alone when its tree is the same.
+      # It stands before the verdict (tests pin that as the last step), so its own condition keeps a red run silent.
+      - name: Tested commit notice (D-1059)
+        if: github.event_name == 'pull_request' && needs.scope.result == 'success' && needs.test.result == 'success'
+        run: echo "::notice title=rosy-tested-commit::${{ github.sha }}"
+
       - name: All gating jobs passed
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}

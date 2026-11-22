@@ -33,7 +33,24 @@ def pack(repo, paths: list[str]) -> list[list[str]]:
 
     A serial suite never shares an invocation with others: remote_pytest runs a whole invocation without -n
     when any path in it is serial, so one gazebo path kept a dozen suites on one core (2026-10-28 turns)."""
-    kept = [p for p in paths if not any(o != p and p.startswith(o.rstrip('/') + '/') for o in paths)]
+    by_norm: dict[str, set[str]] = {}
+    for p in paths:
+        by_norm.setdefault(p.rstrip('/'), set()).add(p)
+
+    def _covered(p: str) -> bool:
+        if p.startswith('/') and any(o != p for o in by_norm.get('', ())):
+            return True
+        s = p.rstrip('/')
+        if p.endswith('/') and any(o != p for o in by_norm.get(s, ())):
+            return True
+        i = s.find('/')
+        while i != -1:
+            if s[:i] in by_norm:
+                return True
+            i = s.find('/', i + 1)
+        return False
+
+    kept = [p for p in paths if not _covered(p)]
     serial = serial_prefixes(repo)
     groups: list[tuple[list[str], dict[str, str], bool]] = []
     for path in kept:

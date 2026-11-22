@@ -37,7 +37,7 @@ from fleet.server.station_recovery_routes import install_station_recovery_routes
 from fleet.server.identity import IdentityError, IdentityService
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
-from fleet.server.site_auth import SitePrincipal
+from fleet.server.site_auth import SitePrincipal, may_press_estop
 from fleet.server.site_lanes import active_site_lanes_payload, site_lanes_payload
 from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.swarm.transport import RobotApiError
@@ -237,7 +237,9 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     @app.get("/api/fleet/session", dependencies=read_guard, tags=["fleet-auth"])
     def fleet_session(request: Request) -> dict:
         principal: SitePrincipal = request.state.site_principal
-        return {"principal_id": principal.principal_id, "role": principal.role}
+        # estop: the server's own answer, so the header never offers a stop it would refuse (D-1043).
+        return {"principal_id": principal.principal_id, "role": principal.role,
+                "estop": may_press_estop(request, principal)}
 
     @app.get("/api/fleet/site-map", dependencies=read_guard, tags=["sightings"])
     async def fleet_site_map() -> dict:

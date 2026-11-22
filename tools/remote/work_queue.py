@@ -76,14 +76,19 @@ def host_alone(inv: list[str]) -> bool:
     return _names(inv, HOST_ALONE)
 
 
-def lab_only(inv: list[str]) -> bool:
-    """An invocation that names a LAB_ONLY suite, a file of it or a folder above it."""
-    return _names(inv, LAB_ONLY)
+def lab_only(inv: list[str], above: bool = True) -> bool:
+    """An invocation that names a LAB_ONLY suite, a file of it or (``above``) a folder above it.
+
+    Placement keeps ``above``: the site PC must not take a folder that holds a lab-only file. Deciding whether CI
+    or lab evidence covers an invocation passes False: without the browser opt-in the lab-only file only skips,
+    so a folder above it is what CI's root shards already run. 2026-11-21: every selection that fell back to the
+    whole ``test`` folder ran it again as lab evidence (18,847 tests, 37 min in one invocation)."""
+    return _names(inv, LAB_ONLY, above)
 
 
-def _names(inv: list[str], suites) -> bool:
+def _names(inv: list[str], suites, above: bool = True) -> bool:
     paths = [w.replace("\\", "/").split("::")[0] for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]
-    return any(p == a or p.startswith(a + "/") or a.startswith(p + "/") for p in paths for a in suites)
+    return any(p == a or p.startswith(a + "/") or (above and a.startswith(p + "/")) for p in paths for a in suites)
 
 
 def workers(hosts: list[str], invocations: list[list[str]], headroom: dict,
@@ -329,19 +334,32 @@ def _file_weight(repo: Path, path: Path, fleet: dict[str, float]) -> float:
     return path.stat().st_size / BYTES_PER_S
 
 
+EVENTS_TAIL_BYTES = 8 * 1024 * 1024
+
+
+def _tail_lines(path: str, limit: int = EVENTS_TAIL_BYTES):
+    with open(path, "rb") as fh:
+        fh.seek(0, os.SEEK_END)
+        offset = max(0, fh.tell() - limit)
+        fh.seek(offset)
+        if offset > 0:
+            fh.readline()
+        for raw in fh:
+            yield raw.decode("utf-8", errors="replace")
+
+
 @functools.lru_cache(maxsize=4)
 def _history(events: str, mtime: float) -> dict[tuple, float]:
     runs = collections.defaultdict(list)
-    with open(events, encoding="utf-8") as f:
-        for line in f:
-            if '"run_s"' not in line:
-                continue
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            if row.get("event") == "tests" and isinstance(row.get("run_s"), (int, float)):
-                runs[tuple(row.get("argv") or ())].append(row["run_s"])
+    for line in _tail_lines(events):
+        if '"run_s"' not in line:
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if row.get("event") == "tests" and isinstance(row.get("run_s"), (int, float)):
+            runs[tuple(row.get("argv") or ())].append(row["run_s"])
     return {argv: statistics.median(v) for argv, v in runs.items()}
 
 
@@ -359,17 +377,16 @@ def history(repo: Path) -> dict[tuple, float]:
 def _fail_rates(events: str, mtime: float) -> dict[tuple, float]:
     """Share of an argv's finished runs (not cancelled) that ended new or flaky, from the landing events log."""
     seen = collections.defaultdict(lambda: [0, 0])
-    with open(events, encoding="utf-8") as f:
-        for line in f:
-            if '"tests"' not in line:
-                continue
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            if row.get("event") == "tests" and row.get("verdict") in ("pass", "new", "flaky"):
-                seen[tuple(row.get("argv") or ())][0] += row["verdict"] != "pass"
-                seen[tuple(row.get("argv") or ())][1] += 1
+    for line in _tail_lines(events):
+        if '"tests"' not in line:
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if row.get("event") == "tests" and row.get("verdict") in ("pass", "new", "flaky"):
+            seen[tuple(row.get("argv") or ())][0] += row["verdict"] != "pass"
+            seen[tuple(row.get("argv") or ())][1] += 1
     return {argv: bad / total for argv, (bad, total) in seen.items()}
 
 

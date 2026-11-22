@@ -38,7 +38,7 @@ def ci_runnable(inv: list[str]) -> bool:
     paths = [w.replace("\\", "/") for w in inv if not w.startswith("-")]
     return bool(paths) and not (
         any(work_queue.ENV_WORD.match(w) for w in inv)
-        or work_queue.lab_only(inv)
+        or work_queue.lab_only(inv, above=False)  # a folder above the lab-only file is CI's root-test, not lab evidence
         or work_queue.host_alone(inv)
         or affected_exclusive.dedicated(inv)
         or any(p.startswith(EXCLUDED_PREFIXES) for p in paths)

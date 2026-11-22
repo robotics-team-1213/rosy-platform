@@ -17,6 +17,7 @@ ROS-101: the only module allowed to import rclpy message types and talk to the R
 | `__init__.py` | Package marker |
 | `ros_bridge.py` | 25 subs, 5 pubs, 4 service clients, 7 timers, the Nav2 action client and TF. Exact list pinned in `test/test_bridge_timers.py` — update both together |
 | `observation.py` | ROS-free decide half of every sensor/evidence callback (D-338): parse, validate, admit/reject, route, mirror. The bridge keeps the node clock, `warn` and the act. Pinned by `core/test/test_bridge_observation.py` |
+| `sensor_mirror.py` | ROS-free, rate-limited (5 Hz per key) `/sensors` mirror for `imu`, `odometry`, `wheels` (joint_states), `motor` (health + ready) and `dock_observation`. Pinned by `test/test_sensor_mirror.py` |
 | `translate.py` | ROS-free message → domain dict conversion. Imports no ROS type, so host pytest runs it |
 | `nav_goal.py` | `NavGoalSpec` to the Nav2 action goal (D-1009): `NavigateThroughPoses` for a route leg with pass points, else `NavigateToPose`. Needs the ROS messages; split out of `ros_bridge.py` |
 | `goal_tracker.py` | ROS-free Nav2 goal generations: which result is current, what to cancel |

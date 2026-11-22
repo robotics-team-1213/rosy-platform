@@ -34,7 +34,7 @@ integrations/perception/perception_runtime/perception/camera_ground.py
 middleware/drive/tracking/wander/navigator.py
 middleware/perception/map/map_260905.world
 middleware/perception/map/map_260905_update_v2/original/map_260905.world
-middleware/perception/tools/device/hotpath_measure.py
+middleware/drive/tools/device/hotpath_measure.py
 middleware/perception/tools/device/ir_line_calibrate.py
 middleware/drive/behaviors/line_follow/clearance.py
 integrations/simulation/gazebo/config/simulation_actuation.yaml
@@ -90,4 +90,9 @@ operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_routes.py
 operations/fleet/fleet/server/tracking/tracking_anchors.py
+shared/web/patterns.yaml
 operations/overhead/rosy_vision/track/anchor_feed.py
+shared/web/shared-assets.json
+shared/web/meshes/pinky-pro.urdf
+# (b) provenance only: SOURCE.json names the upstream repo pinklab-art/pinky_pro (3D asset boundary, 2026-11-19); the upstream name is the record, not a robot configuration value.
+middleware/devices/pinky/description/SOURCE.json

@@ -2,6 +2,7 @@
 
 import re
 import sqlite3
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Depends, HTTPException
@@ -57,10 +58,39 @@ def install_control_unit_routes(app, service, *, authorize, require_viewer, requ
     async def summary(principal=Depends(require_viewer)):
         if principal.role == "service":
             raise HTTPException(403, detail={"code": "FORBIDDEN"})
+        children = sorted(unit.unit_id for unit in service.topology.units.values()
+                          if unit.parent == service.unit.unit_id)
+        # Read-only navigation metadata (D-977): https child origins only — no tokens,
+        # userinfo or paths travel; each origin checks its own Account login.
+        child_origins = {}
+        peers = getattr(getattr(service.peer, "config", None), "peers", None) or {}
+        for child in children:
+            entry = peers.get(child)
+            if entry is None:
+                continue
+            try:
+                parts = urlsplit(entry.url)
+                host, port = parts.hostname, parts.port
+            except ValueError:
+                continue
+            if parts.scheme != "https" or not host:
+                continue
+            authority = f"[{host}]" if ":" in host else host
+            child_origins[child] = f"https://{authority}" if port in (None, 443) else f"https://{authority}:{port}"
+        arm_children = set()
+        for unit in service.topology.units.values():
+            if not any(resource.startswith("workcell:") for resource in unit.resources):
+                continue
+            # The workcell's owning branch climbs to its direct child under this unit.
+            current = unit
+            while current.parent is not None and current.parent != service.unit.unit_id:
+                current = service.topology.unit(current.parent)
+            if current.parent == service.unit.unit_id:
+                arm_children.add(current.unit_id)
         return {"unit_id": service.unit.unit_id, "config_revision": service.topology.revision,
                 "parent": service.unit.parent, "resources": sorted(service.unit.resources),
-                "children": sorted(unit.unit_id for unit in service.topology.units.values()
-                                   if unit.parent == service.unit.unit_id)}
+                "children": children, "child_origins": child_origins,
+                "child_arm_units": sorted(arm_children)}
 
     @app.get(prefix + "/delegations")
     async def listing(principal=Depends(require_viewer)):

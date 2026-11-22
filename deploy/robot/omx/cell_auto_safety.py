@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+import shutil
 import sys
 import time
 from typing import Any
@@ -162,11 +163,11 @@ def object_sized(mask, params=None):
     return np.where(keep_lut[labels], mask, 0).astype(mask.dtype)
 
 
-def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
+def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None, *, opening_width_mm=None) -> dict:
     """Free mm on each closing side and the jaw margin that fits (cell_finger_room); margin None means no room."""
     import cell_finger_room as fr
 
-    return fr.jaw_margin(fr.own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params)
+    return fr.jaw_margin(fr.own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params, opening_width_mm=opening_width_mm)
 
 
 def after_failure(config: dict, site: str, target: dict, moved: dict, wrist_on: bool, failed_yaws: list) -> dict:
@@ -217,6 +218,16 @@ def episode_binding() -> dict:
             "attempt_id": f"{run['run_id']}-{run['n'] + 1:03d}"}
 
 
+def _episode_start_ok(reply, command: str, folder: Path) -> bool:
+    if not isinstance(reply, dict) or reply.get("ok") is not True:
+        return False
+    if reply.get("fault") or reply.get("hold") or reply.get("human_hold_latched"):
+        return False
+    if "command" in reply and reply["command"] != command:
+        return False
+    return reply.get("episode") == str(folder)
+
+
 def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     """A raw training episode around one carry (episode_recorder.py), when config['episodes'] names a root."""
     import cell_attempts
@@ -225,8 +236,20 @@ def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     spec = config.get("episodes")
     if not spec:
         return None
-    folder = Path(spec["root"]).expanduser() / f"{time.strftime('%Y%m%d-%H%M%S')}-{source}-to-{dest}"
-    folder.mkdir(parents=True, exist_ok=True)
+    root = Path(spec["root"]).expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    stem = f"{time.strftime('%Y%m%d-%H%M%S')}-{source}-to-{dest}"
+    folder = None
+    for n in range(1000):
+        candidate = root / (stem if n == 0 else f"{stem}-{n:02d}")
+        try:
+            candidate.mkdir(exist_ok=False)
+            folder = candidate
+            break
+        except FileExistsError:
+            continue
+    if folder is None:
+        return None
     task = spec.get("tasks", {}).get(f"{source}->{dest}") or f"Pick the green container from the {source} and place it on the {dest}."
     (folder / "task.json").write_text(
         json.dumps(
@@ -236,24 +259,39 @@ def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
                 "cameras": spec["cameras"],
                 "io": str(config.get("io", "")),
                 "payload": config.get("_payload"),
+                "source_kind": spec.get("source_kind"),  # policy / sim_optimized / scripted_teacher (cell_collect_plan)
                 **episode_binding(),
             }
         )
     )
-    if not cell.act(f"episode start {folder}").get("ok"):
+    cmd = f"episode start {folder}"
+    if not _episode_start_ok(cell.act(cmd), cmd, folder):
+        shutil.rmtree(folder, ignore_errors=True)
         return None
+    try:
+        import episode_recorder
+        session = episode_recorder.CameraSession(folder, spec["cameras"])
+    except BaseException:
+        cell.act("episode fail camera session startup failed")
+        raise
     binding = episode_binding()
     if binding:  # the attempt row written for this carry names the folder back
         cell_attempts.RUN["episode"] = {"attempt_id": binding["attempt_id"], "folder": str(folder)}
-    import episode_recorder
-    return episode_recorder.CameraSession(folder, spec["cameras"])
+    return session
 
 
-def close_episode(cell, episode, keep: bool, why: str = "") -> None:
+def close_episode(cell, episode, keep: bool, why: str = "", *, on_fifo_ack=None) -> dict | None:
     """A confirmed carry is saved; any other ending is kept as a labelled failure with why."""
     if episode is not None:
-        cell.act("episode save" if keep else f"episode fail {' '.join(why.split()) or 'unconfirmed'}")
-        episode.finish()
+        ack = None
+        try:
+            ack = cell.act("episode save" if keep else f"episode fail {' '.join(why.split()) or 'unconfirmed'}")
+            if on_fifo_ack is not None:
+                on_fifo_ack(ack)
+        finally:
+            episode.finish()
+        return ack
+    return None
 
 
 def score_pick_candidate(cand: dict[str, Any], start_xy: tuple[float, float] = (0.0, 0.0)) -> float:

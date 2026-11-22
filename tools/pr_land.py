@@ -2,13 +2,15 @@
 
 Usage::
 
-    python tools/pr_land.py [--title "..."] [--self-review "<reason>"] [--dry-run]
+    python tools/pr_land.py [--title "..."] [--self-review "<reason>"] [--evidence] [--dry-run]
 """
 
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import itertools
 import json
 import os
 import re
@@ -21,9 +23,12 @@ for _extra in (str(TOOLS), str(TOOLS / "remote"), str(TOOLS / "harness"), str(TO
     if _extra not in sys.path:
         sys.path.insert(0, _extra)
 
+import affected_browser  # noqa: E402
 import affected_ci  # noqa: E402
 import affected_exclusive  # noqa: E402
 import land_cache  # noqa: E402
+import land_freeze  # noqa: E402
+import step_back  # noqa: E402
 import work_queue  # noqa: E402
 
 ACT = next(e for e in affected_ci.CI_FULL_MATRIX if e["name"] == "omx-act-cpu")
@@ -53,16 +58,44 @@ def ci_entry(inv: list[str]) -> dict | None:
     return None
 
 
-def ci_runnable(inv: list[str]) -> bool:
-    """Same CI-runnable filter as land_ci.runnable(), plus OMX adapter hardware suites."""
+def _non_gating(paths: list[str]) -> bool:
+    roots = [w for e in affected_ci.CI_FULL_MATRIX if not e.get("gating", True)
+             for i in e["invocations"] for w in i if not w.startswith("-")]
+    return any(p == r or p.startswith(r + "/") or r.startswith(p + "/") for p in paths for r in roots)
+
+
+def ci_runnable(inv: list[str], selected: bool = False) -> bool:
+    """Same CI-runnable filter as land_ci.runnable(), plus OMX adapter hardware suites.
+
+    ``selected``: the invocation comes from the affected selection, which CI runs one gating runner per
+    invocation whether or not a full-matrix entry names it (2026-11-21: 29 to 56 such module suites ran again as
+    lab evidence on one PR). A root of a non-gating full-matrix entry stays lab evidence."""
     paths = [w.replace("\\", "/") for w in inv if not w.startswith("-")]
     return bool(paths) and not (
         any(work_queue.ENV_WORD.match(w) for w in inv)
-        or work_queue.lab_only(inv)
+        or work_queue.lab_only(inv, above=False)  # a folder above the lab-only file is CI's root-test, not lab evidence
         or work_queue.host_alone(inv)
         or affected_exclusive.dedicated(inv)
         or any(p.startswith(EXCLUDED_PREFIXES) for p in paths)
-    ) and ci_entry(inv) is not None
+    ) and (ci_entry(inv) is not None or (selected and not _non_gating(paths)))
+
+
+def split_by_ci_entry(inv: list[str]) -> list[list[str]]:
+    """Split a mixed invocation into one part per CI entry; paths no entry covers stay together.
+
+    Non-path words (flags, env tokens) go to every part, so ci_runnable() still rejects env/lab_only/alone parts.
+    """
+    paths = [w for w in inv if not w.startswith("-") and not work_queue.ENV_WORD.match(w)]
+    extras = [w for w in inv if w not in paths]
+    groups: dict[str, list[str]] = {}
+    for p in paths:
+        entry = ci_entry([p])
+        groups.setdefault(entry["name"] if entry else "", []).append(p)
+    parts = [extras + g for g in groups.values()]
+    # a group that fails as a whole may hold only one bad path: isolate it so the CI-runnable paths drop out
+    parts = [q for part in parts for q in ([part] if ci_runnable(part) or len(part) - len(extras) < 2
+             else [extras + [p] for p in part[len(extras):]])]
+    return parts if len(parts) > 1 else [inv]
 
 
 def passed_ids(text: str) -> set[str]:
@@ -97,6 +130,21 @@ def activated(cwd: Path) -> bool:
     return False
 
 
+def shared_checkout(cwd: Path) -> bool:
+    """git-dir == common-dir: the main working tree (the shared main checkout), not a ``.worktrees/`` worktree."""
+    dirs = _run(["git", "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], cwd).splitlines()
+    return len(dirs) == 2 and Path(dirs[0]).resolve() == Path(dirs[1]).resolve()
+
+
+def cutover_refusal(cwd: Path) -> str | None:
+    """Refuse submission while the cutover phase is drain; open and normal pass (activation is checked separately)."""
+    state = land_freeze.load(cwd)
+    if state["phase"] != "drain":
+        return None
+    who = state.get("owner") or "unknown"
+    return f"[pr-land] cutover phase drain: PR submission closed; owner {who}; state file {land_freeze.path(cwd)}"
+
+
 def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> str:
     """Enforce D-868 publishOnly separation and return base ref for PR diff checks."""
     if _run(["git", "config", "--bool", "rosy.publishOnly"], cwd, check=False).lower() == "true" and not activated(cwd):
@@ -109,7 +157,9 @@ def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> s
     base = origin_main or local_main
     if not base:
         raise SystemExit("[pr-land] neither origin/main nor main exists; fetch origin/main first (refusing HEAD^ fallback)")
-    if not allow_backlog and origin_main and local_main and origin_main != local_main:
+    behind_only = origin_main and local_main and subprocess.run(  # local main merely behind origin/main has nothing unpublished
+        ["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, origin_main], capture_output=True).returncode == 0
+    if not allow_backlog and origin_main and local_main and origin_main != local_main and not behind_only:
         anc = subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", local_main, head], capture_output=True)
         if anc.returncode == 0:
             raise SystemExit(
@@ -121,26 +171,79 @@ def check_coexistence(cwd: Path, head: str, *, allow_backlog: bool = False) -> s
 def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]:
     """Return non-CI-runnable invocations touched by base..head (OMX adapter, browser, host_alone, LAB_ONLY, sim)."""
     sel = json.loads(_run([sys.executable, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", head, "--json"], cwd))
-    invs = list(sel.get("local_invocations" if sel.get("mode") == "full" else "invocations") or [])
+    affected = sel.get("mode") != "full"  # CI runs an affected selection one runner per invocation; a FULL one by matrix
+    invs = list(sel.get("invocations" if affected else "local_invocations") or [])
+    lab = [part for inv in invs for part in split_by_ci_entry(inv) if not ci_runnable(part, selected=affected)]
+    extra: list[list[str]] = []
     changed = _run(["git", "diff", "--name-only", f"{base}...{head}"], cwd, check=False).splitlines()
     if any(p.startswith("middleware/devices/omx/adapter/") for p in changed):
         omx_suite = ["middleware/devices/omx/adapter/test"]
         if omx_suite not in invs:
-            invs.append(omx_suite)
+            extra.append(omx_suite)
     if changed and (cwd / "test/browser_scope.py").is_file() and (cwd / "tools/land_browser.py").is_file():
         import browser_scope
         import land_browser
         import land_selection
-        b_paths = browser_scope.targets(changed)
+        covered_browsers = {
+            w.replace("\\", "/").removeprefix("./")
+            for inv in lab
+            if work_queue.BROWSER_ENV in itertools.takewhile(work_queue.ENV_WORD.match, inv)
+            and not any(w.startswith(("--ignore", "--deselect", "-k")) for w in inv)
+            for w in inv
+            if not w.startswith("-") and not work_queue.ENV_WORD.match(w) and "::" not in w and w.endswith("_browser.py")
+        }
+        b_paths = [
+            p for p in affected_browser.split(browser_scope.targets(changed))[1]
+            if p not in covered_browsers
+        ]  # the rest runs in the PR's CI run (D-1066)
         for group in land_selection.pack(cwd, b_paths):
-            invs.extend(land_browser.chunks(cwd, group))
-    return [inv for inv in invs if not ci_runnable(inv)]
+            extra.extend(land_browser.chunks(cwd, group))
+    return lab + [part for inv in extra for part in split_by_ci_entry(inv) if not ci_runnable(part)]
 
 
-def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None:
-    """Require an intact lab land_cache pass for each lab-only invocation on head's tree & env."""
+def preflight(cwd: Path, base: str, body: str = "") -> None:
+    """The Safety-Review trailer, size rule and step-back check of base..HEAD, before any lab run.
+
+    The first two stopped a submission only at the push, after the evidence had run (2026-11-21: a session lost a 20
+    minute run to a missing trailer). CI's scope job runs the same two checks. The step-back check stops a PR that
+    drops lines another PR merged into main within 7 days unless the PR body names it (shared-checkout.md)."""
+    skip_sb = os.environ.get("ROSY_STEP_BACK") == "off"
+
+    def _run_step_back():
+        over = step_back.size_violations(cwd, base, "HEAD")
+        if over and not step_back.size_excepted(body):
+            return over, []
+        return over, step_back.report(cwd, base, "HEAD")
+
+    with ThreadPoolExecutor(max_workers=2 if skip_sb else 3) as pool:
+        checks = [pool.submit(_run, [sys.executable, f"tools/harness/{c}", base, "HEAD"], cwd)
+                  for c in ("safety_review.py", "size_range.py")]
+        sb = None if skip_sb else pool.submit(_run_step_back)
+        for fut in checks:
+            fut.result()
+        if skip_sb:
+            print("[pr-land] step-back check skipped (ROSY_STEP_BACK=off)")
+            return
+        try:
+            over, hits = sb.result()
+        except step_back.ScanError as e:  # a git failure must not read as a pass
+            raise SystemExit(f"[pr-land] step-back scan incomplete: {e}\n[pr-land] fix the git problem (shallow clone: fetch full history) or set ROSY_STEP_BACK=off")
+    if over and not step_back.size_excepted(body):
+        raise SystemExit("[pr-land] branch too big, split it before submission: " + "; ".join(over)
+                         + "\n[pr-land] or rerun with --body containing a line 'Size-Exception: <reason>', or set ROSY_STEP_BACK=off")
+    for h in (h for h in hits if h["level"] == "info"):
+        print(f"[pr-land] step-back info (never blocks):{step_back.fmt(h)}")
+    for h in (h for h in hits if h["level"] == "warn"):
+        print(f"[pr-land] step-back warning, scan incomplete for one file: {h['path']}")
+    if bad := step_back.blocking(hits, body):
+        raise SystemExit("[pr-land] step-back check: this branch removes recent work of other PRs\n" + step_back.explain(bad)
+                         + "\n[pr-land] pass the line with --body, or set ROSY_STEP_BACK=off to skip the check")
+
+
+def lab_missing(cwd: Path, head: str, required: list[list[str]]) -> list[list[str]]:
+    """Lab-only invocations without an intact land_cache pass on head's tree & env."""
     if not required:
-        return
+        return []
     tree = _run(["git", "rev-parse", f"{head}^{{tree}}"], cwd)
     env = land_cache.env_id(cwd, head)
     rows = [
@@ -161,20 +264,31 @@ def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None
             if row.get("log_sha256") != hashlib.sha256(data).hexdigest():
                 continue
             text = data.decode("utf-8-sig", errors="replace")
-            if passed_ids(text) and covers_lab_baseline(cwd, head, inv, text):
+            if (passed_ids(text) or land_cache.ALL_SKIPPED.search(text)) and covers_lab_baseline(cwd, head, inv, text):
                 ok = True
                 break
         if not ok:
             missing.append(inv)
+    return missing
+
+
+def verify_lab_evidence(cwd: Path, head: str, required: list[list[str]]) -> None:
+    """Require an intact lab land_cache pass for each lab-only invocation on head's tree & env."""
+    missing = lab_missing(cwd, head, required)
     if missing:
         cmds = "; ".join(" ".join(inv) for inv in missing[:3])
         raise SystemExit(f"[pr-land] lab-only change requires remote_pytest lab evidence before auto-merge: {cmds}")
+
+
+def session_name() -> str:
+    return os.environ.get("ROSY_SESSION_NAME") or os.environ.get("CLAUDE_SESSION_NAME") or "unknown"
 
 
 def build_body(summary: str, self_review: str) -> str:
     lines = [summary.strip() or "PR landing via Merge Queue (D-1052)."]
     if self_review.strip():
         lines += ["", f"Overlap-Review: self ({self_review.strip()})"]
+    lines += ["", f"Session: {session_name()}"]
     return "\n".join(lines) + "\n"
 
 
@@ -187,6 +301,8 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     parser.add_argument("--allow-backlog", action="store_true", help="allow PR from un-published local main ancestor")
     parser.add_argument("--verify-ci-log", nargs=2, metavar=("ARGV_JSON", "LOG_PATH"),
                         help="verify a CI log covers the lab baseline passed IDs for ARGV_JSON")
+    parser.add_argument("--evidence", action="store_true",
+                        help="run pr_evidence.py HEAD (real remote lab run) first when lab evidence is required")
     parser.add_argument("--dry-run", action="store_true", help="print commands without pushing/merging")
     args = parser.parse_args(argv)
     cwd = (repo or Path.cwd()).resolve()
@@ -200,6 +316,9 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         print("[pr-land] CI log covers lab baseline passed IDs")
         return 0
 
+    if shared_checkout(cwd):  # the shared main checkout must stay on main; branches live in worktrees
+        raise SystemExit("[pr-land] this is the shared main checkout (git-dir == common-dir); run from your worktree:"
+                         " python tools/worktrees.py new|adopt <short-name> <type>/<topic>")
     branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd)
     if branch in ("main", "HEAD"):
         raise SystemExit(f"[pr-land] checkout a topic branch first (got {branch})")
@@ -207,13 +326,26 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
         raise SystemExit("[pr-land] working tree is dirty; commit explicit files first")
 
     head = _run(["git", "rev-parse", "HEAD"], cwd)
+    refused = cutover_refusal(cwd)
+    if refused and not args.dry_run:
+        raise SystemExit(refused)
     base = check_coexistence(cwd, head, allow_backlog=args.allow_backlog)
+    if os.environ.get("ROSY_STEP_BACK") != "off" and not _run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/main"], cwd, check=False):
+        raise SystemExit("[pr-land] refs/remotes/origin/main is missing; run 'git fetch origin main' (the size check needs its merge base)")
+    preflight(cwd, base, build_body(args.body, args.self_review))
     lab_needed = required_lab_invocations(cwd, base, head)
+    if args.evidence and lab_needed:
+        import pr_evidence  # lazy: pr_evidence imports pr_land
+
+        if pr_evidence.main(["HEAD", "--base", base], repo=cwd):
+            raise SystemExit("[pr-land] pr_evidence failed; no evidence recorded")
     verify_lab_evidence(cwd, head, lab_needed)
 
     title = args.title or _run(["git", "log", "-1", "--format=%s", "HEAD"], cwd)
     body = build_body(args.body, args.self_review)
     if args.dry_run:
+        if refused:
+            print(f"{refused} (a real run would stop here)")
         print(f"[pr-land] dry-run branch={branch} lab_required={len(lab_needed)} title={title!r}")
         print(f"[pr-land] plan: git push -u origin {branch}; gh pr create|edit (base main, head {branch}); "
               f"gh pr merge --auto --merge --match-head-commit {head}; then exit (no waiting)")
@@ -222,11 +354,15 @@ def main(argv: list[str] | None = None, repo: Path | None = None) -> int:
     env = dict(os.environ)
     if not args.remote_prepush:
         env["ROSY_STATIC_PRE_PUSH"] = "1"
+    if _run(["git", "config", "--bool", "rosy.publishOnly"], cwd, check=False).lower() == "true" and activated(cwd):
+        # D-1055: reason only for this push's env, never global; check_coexistence already required activation.
+        session = os.environ.get("ROSY_SESSION_NAME") or os.environ.get("CLAUDE_SESSION_NAME") or "unknown"
+        env["ROSY_PUSH_REASON"] = f"pr_land D-1055 {session}"
     _run(["git", "push", "-u", "origin", branch], cwd, env=env)
     existing = json.loads(_run(["gh", "pr", "list", "--head", branch, "--state", "open", "--json", "number"], cwd) or "[]")
     if existing:
         pr = str(existing[0]["number"])
-        if args.self_review:
+        if args.self_review or args.body:  # the Size-Exception / Replaces lines checked above must reach the PR
             _run(["gh", "pr", "edit", pr, "--body", body], cwd)
     else:
         url = _run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title, "--body", body], cwd)

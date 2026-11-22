@@ -35,6 +35,7 @@ def test_long_intervention_action_wraps_and_keeps_confirmation(site, width):
 
     with sync_playwright() as pw:
         browser, page, errors = _open(pw, site, API, [], size=(width, 844))
+        page.locator("#fleet-inbox").click()
         button = page.locator('[data-decision="BACK_AND_RETRY"]').first
         assert button.inner_text().rstrip().endswith("…")
         button.evaluate("node => node.firstChild.textContent = '뒤쪽 공간을 확인한 뒤 후진하여 다시 시도하기…'")

@@ -60,11 +60,16 @@ def _write_private(path: str, payload: str, mode: int, prefix: str) -> None:
     temporary = os.path.join(directory, f".{prefix}.{secrets.token_hex(6)}")
     try:
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(temporary, flags, mode)
+        descriptor = os.open(temporary, flags, mode & 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            # rosy-core runs with UMask=0027, which would strip o+r from 0o644 status-inputs.
+            if hasattr(os, "fchmod"):
+                os.fchmod(handle.fileno(), mode)
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
+        if not hasattr(os, "fchmod"):
+            os.chmod(temporary, mode)
         os.replace(temporary, path)
     except OSError:
         try:

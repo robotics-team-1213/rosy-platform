@@ -19,18 +19,19 @@ import ssl
 import threading
 import time
 from typing import Any, Callable
-from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
-from cell_camera_telemetry_sync import (
-    DEFAULT_PREP_DIR,
-    sync_cell_telemetry as _sync_cell_telemetry,
-)
+from cell_bed_ready import observe_bed, send_bed_observation
+from cell_camera_telemetry_sync import DEFAULT_PREP_DIR, sync_cell_telemetry as _sync_cell_telemetry
 from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
+from cell_result_outbox import Outbox, abort_reason, remeasurer, result_bodies, resend_pending
+import cell_site_target
 from cell_task_exec import (
-    check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen, resolve_task_arm,
+    check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen,
+    make_default_request_fn, peer_ab_session_locked, query_safety_listing, resolve_task_arm,
 )
 
 ensure_omx_paths()
@@ -41,32 +42,8 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
     opener = make_ca_urlopen(ca_file) if ca_file else urlopen
     return _sync_cell_telemetry(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=opener)
 
-ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
-    "arm_s": ("s", "with-session-arm-s-live.sh", -1.0),
-    "arm_a": ("a", "with-session-arm-a-par.sh", -1.0),
-    "arm_b": ("b", "with-session-arm-b-par.sh", -1.0),
-}
 
-
-def make_default_request_fn(fleet_r_url: str, token: str, *, ca_file: str | None = None) -> Callable[[str, str, dict[str, Any] | None], dict[str, Any]]:
-    base = fleet_r_url.rstrip("/")
-    parsed = urlsplit(base)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-        raise ValueError("Fleet URL requires verified HTTPS")
-    ctx = ssl.create_default_context(cafile=ca_file)
-
-    def _req(method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        data = json.dumps(body).encode("utf-8") if body is not None else None
-        req = Request(
-            f"{base}{path}",
-            data=data,
-            method=method,
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        )
-        with urlopen(req, context=ctx, timeout=20) as resp:
-            return json.load(resp)
-
-    return _req
+ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {"arm_s": ("s", "with-session-arm-s-live.sh", -1.0), "arm_a": ("a", "with-session-arm-a-par.sh", -1.0), "arm_b": ("b", "with-session-arm-b-par.sh", -1.0)}
 
 
 def _poll_status_ack(status_file: Path, start_line: int, prefix: str, timeout_s: float, poll_s: float = 0.015) -> tuple[dict[str, Any], int]:
@@ -129,26 +106,24 @@ def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, dict[str
 
 
 _LAST_SAFETY_ERROR: list[Exception | None] = [None]
+_SAFETY_LISTING_TIMEOUT_S = 0.5
+_SAFETY_LISTING_RETRY_S = 1.5
+_BACKGROUND_SAFETY_MISSES = 3
 
 
 def _bounded_safety_listing(request_fn, *, cell_id: str | None = None, task_id: str | None = None) -> dict | None:
     """Only an explicit fresh Fleet `active_estop=False` can allow an arm task to continue."""
-    answer: dict[str, Any] = {}
-    finished = threading.Event()
-
-    def query() -> None:
-        try:
-            answer["value"] = request_fn("GET", "/api/fleet/pipeline/cell-tasks?status=QUEUED", None)
-        except Exception as exc:
-            answer["error"] = exc
-        finally:
-            finished.set()
-
-    threading.Thread(target=query, daemon=True).start()
-    if not finished.wait(0.5):
-        return None  # shortcut: one timed-out daemon query may finish later; no further poll after this failure
-    _LAST_SAFETY_ERROR[0] = answer.get("error")
-    listing = answer.get("value")
+    attempts = _BACKGROUND_SAFETY_MISSES if cell_id is None else 1
+    # Background feed loss can delay a Fleet stop by ~4.5 s over three deadlines; a received stop and leased tasks still hold on the first failed check.
+    for attempt in range(attempts):
+        listing, error = query_safety_listing(request_fn, _SAFETY_LISTING_TIMEOUT_S)
+        _LAST_SAFETY_ERROR[0] = error
+        no_response = (error is None or isinstance(error, (TimeoutError, ConnectionError))
+                       or (isinstance(error, URLError) and not isinstance(error, HTTPError)
+                           and isinstance(error.reason, OSError) and not isinstance(error.reason, ssl.SSLError)))
+        if listing is not None or not no_response or attempt == attempts - 1:
+            break
+        time.sleep(_SAFETY_LISTING_RETRY_S)
     if not isinstance(listing, dict) or not isinstance(listing.get("human_safety"), dict):
         return None
     safety = listing["human_safety"]
@@ -186,6 +161,7 @@ def poll_and_execute_once(
     live_act_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     prep_dir: Path = DEFAULT_PREP_DIR,
     hold_check_fn: Callable[[str], dict[str, Any]] | None = None,
+    bed_observe_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Poll Fleet tasks; release only after the actuator reports measured placement."""
     if live_act_fn is None:
@@ -195,6 +171,9 @@ def poll_and_execute_once(
         emergency_stop_arms(prep_dir)
         return []
     queued = list(listing.get("tasks") or [])
+    work_dir = getattr(pipeline, "work_dir", None)
+    outbox = Outbox(None if work_dir is None else Path(work_dir) / "pending-results.json")
+    resend_pending(outbox, request_fn, remeasurer(prep_dir))  # D-1057: resent (a stale one measured again); the arm does not run again
     completed_runs: list[dict[str, Any]] = []
     for task in queued:
         task_id = str(task["task_id"])
@@ -202,8 +181,12 @@ def poll_and_execute_once(
         tier = task.get("tier")
         if type(tier) is not int or tier not in (1, 2, 3):
             continue
-        if hold_check_fn is not None and hold_check_fn(resolve_task_arm(task)).get("held"):
+        task_arm = resolve_task_arm(task)
+        if hold_check_fn is not None and hold_check_fn(task_arm).get("held"):
             continue
+        if cell_id == "cell_ab" and peer_ab_session_locked(task_arm, prep_dir=prep_dir):
+            continue
+        send_bed_observation(request_fn, bed_observe_fn, task)  # D-1057 2-9: cell S only, before the claim
         claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id})
         if not claimed.get("claimed"):
             continue
@@ -276,16 +259,16 @@ def poll_and_execute_once(
                     and stage_result.get("arm_id") == handoff.get("arm_id")
                     and stage_result.get("task_verified") is True
                     and verification.get("verified") is True
-                    and verification.get("basis") == "predefined_side_and_top_target_zones"
-                    and stopped.get("ok") is True and stopped.get("folded") is True)
+                    and verification.get("basis") in (("predefined_side_and_top_target_zones", "top_camera_only_target_zone")
+                                                      if cell_id == "cell_s" else ("predefined_side_and_top_target_zones",))
+                    and stopped.get("ok") is True and stopped.get("folded") is True
+                    and isinstance(hw_tel.get("measured_at"), (int, float)) and not isinstance(hw_tel.get("measured_at"), bool))
         if cell_id == "cell_ab":
             place = stage_result.get("place") or {}
             z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
-            if not isinstance(place, dict):
-                place = {}
-            measured = (measured and z_gate.get("verdict") == "PASS"
-                        and str(place.get("area") or place.get("area_id") or "").lower() == "pallet"
-                        and type(place.get("tier")) is int and place["tier"] == tier)
+            measured = measured and isinstance(place, dict) and cell_site_target.cell_ab_place_verified(handoff, place, z_gate, tier, verification)
+        elif cell_id == "cell_s" and isinstance(stage_result.get("source_clearance"), dict):
+            measured = measured and type(stage_result["source_clearance"].get("objects")) is int
         phase = "RELEASED" if claim_bound and interlock_ok and measured and not safety_fault else "ABORTED"
         evidence = {"task_id": task_id, "lease": handoff.get("handoff_lease_id"),
                     "stage_result": stage_result, "hardware_telemetry": hw_tel}
@@ -297,13 +280,14 @@ def poll_and_execute_once(
                               safety_fault["reason"] if safety_fault else
                               "UNKNOWN_SITE" if not site_ok else
                               "HANDOFF_TASK_MISMATCH" if not claim_bound else
-                              "AMR_NOT_LOCKED_AT_HANDOFF" if not interlock_ok else "MEASURED_PLACEMENT_MISSING")}
+                              "AMR_NOT_LOCKED_AT_HANDOFF" if not interlock_ok else abort_reason(hw_tel))}
         omx_res = {"receipt": receipt, "stage_result": stage_result}
-        done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", {
-            "phase": phase, "goal_evidence_digest": digest,
-            "reason": receipt["reason"], "receipt": receipt,
-            "stage_result": stage_result, "hardware_telemetry": hw_tel,
-        })
+        owner_body, complete_body = result_bodies(handoff, phase, digest, receipt, stage_result, hw_tel)  # D-1057
+        outbox.put(task_id, {"lease": handoff.get("handoff_lease_id"), "owner_evidence": owner_body, "complete": complete_body})
+        if owner_body is not None:
+            request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence", owner_body)
+        done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", complete_body)
+        outbox.drop(task_id)  # Fleet has it; a failure above left the entry for resend_pending
         completed_runs.append({
             "task_id": task_id, "cell_id": cell_id, "arm_id": handoff.get("arm_id"), "task": done["task"],
             "claim_gate": claimed["gate"], "release_gate": done["gate"], "omx_result": omx_res,
@@ -362,7 +346,8 @@ def main(argv: list[str] | None = None) -> None:
                 last_cam_push = now_m
             if args.dry_run_hw or args.allow_legacy_live_jog or args.execute_mode == "guarded-pick":
                 _LAST_SAFETY_ERROR[0] = None
-                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, hold_check_fn=check_arm_hold)
+                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, prep_dir=prep_dir,
+                                             hold_check_fn=check_arm_hold, bed_observe_fn=lambda t: observe_bed(prep_dir, t))
                 if not runs and _LAST_SAFETY_ERROR[0] is not None:
                     raise _LAST_SAFETY_ERROR[0]
             else:

@@ -106,3 +106,11 @@ def test_random_starts_reach_the_goal_and_replan_converges(layout, seed):
     mid = apply_plan(layout, state, moves[:k])
     again, why = plan_to_goal(layout, mid, goal, can_all)
     assert why is None and reaches(apply_plan(layout, mid, again), want)
+
+
+def test_h2_stack_goal_plans_and_executes(layout):
+    state = {"A": "ship-h2r1-l1", "B": "tmp-a-1", "C": "ship-h2r1-l0", "D": "tmp-b-1"}
+    goal = {"h2r1": ["A", "B", "C"]}
+    want = {c: layout.stack_at[("h2r1", t)] for t, c in enumerate(["A", "B", "C"])}
+    moves, why = plan_to_goal(layout, state, goal, can_all)
+    assert why is None and moves and reaches(apply_plan(layout, state, moves), want)

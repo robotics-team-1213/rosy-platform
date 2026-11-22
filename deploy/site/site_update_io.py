@@ -51,15 +51,17 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     """Allow only canonical configured overlay names before candidate rebasing."""
     pairing, omx = (["-f", f"/opt/rosy/candidate/deploy/site/compose.{name}.yaml"] for name in ("pairing", "omx"))
     account = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
+    account_lan = ["-f", "/opt/rosy/candidate/deploy/site/compose.account-lan.yaml"]  # D-1068, only after Account
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
     workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
     allowed += [base + workcell for base in allowed]
     allowed += [base + CONTROL_UNIT_OVERLAY + remote for base in allowed  # D-960; remote peer D-994
                 for remote in ([], CONTROL_UNIT_REMOTE_OVERLAY)]
     allowed += [base + MONITORING_OVERLAY for base in allowed]  # D-936
-    if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account for base in allowed]:
+    if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account + lan for base in allowed
+                                                                         for lan in ([], account_lan)]:
         raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
-                      "the candidate's pairing, omx, workcell, control-unit(-remote), monitoring and Account overlays")
+                      "the candidate's pairing, omx, workcell, control-unit(-remote), monitoring, Account and Account LAN overlays")
     if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
         raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
     return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))

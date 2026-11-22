@@ -7,7 +7,7 @@ import browser_scope
 
 def test_monitoring_backend_and_app_share_the_real_browser_contract():
     expected = ['test/test_monitoring_browser.py']
-    assert browser_scope.targets(['applications/monitoring/README.md']) == expected
+    assert browser_scope.targets(['applications/monitoring/web/monitoring.js']) == expected
     assert browser_scope.targets(['operations/monitoring/src/rosy/monitoring/service.py']) == expected
 
 
@@ -42,7 +42,10 @@ def test_sample_engine_and_shared_fixture_select_all_sample_consumers_only():
 
 def test_development_markdown_does_not_select_browser_tests():
     for path in ('applications/fleet/dev/logs.md', 'applications/fleet/dev/index.md',
-                 'applications/fleet/dev/progress.md', 'applications/fleet/dev/AGENTS.md'):
+                 'applications/fleet/dev/progress.md', 'applications/fleet/dev/AGENTS.md',
+                 'shared/web/index.md', 'shared/web/logs.md', 'shared/web/logs/2026/11/21-x.md',
+                 'operations/fleet/logs.md', 'applications/fleet/web/AGENTS.md',
+                 'applications/monitoring/README.md'):
         assert browser_scope.targets([path]) == [], path
 
 
@@ -164,7 +167,16 @@ def test_full_registry_keeps_browser_files_after_splitting_them():
     unit_only = {"test/test_land_browser.py"}
     expected = {path for path in tracked if PurePosixPath(path).name.startswith("test_")
                 and path.endswith("_browser.py") and path not in unit_only}
-    assert not (expected - set(browser_scope.all_targets())), sorted(expected - set(browser_scope.all_targets()))
+    everything = browser_scope.all_targets()
+    assert not (expected - set(everything)), sorted(expected - set(everything))
+    # D-1066: the CI share plus the lab share is the registry, and the lab share survives pr_land's splitting.
+    import affected_browser
+    import pr_land
+    ci, lab = affected_browser.split(everything)
+    assert sorted(ci + lab) == everything
+    kept = [w for part in pr_land.split_by_ci_entry(["ROSY_RUN_BROWSER_TESTS=1", *lab])
+            for w in part if w.endswith(".py")]
+    assert sorted(set(kept)) == lab
 
 
 def test_recovery_page_and_shared_styles_select_the_offline_browser_flow():
@@ -222,3 +234,72 @@ def test_server_cell_file_maps_to_its_two_pages_and_other_server_files_keep_flee
         assert whole <= set(browser_scope.targets([path])), path
     assert set(cell) < set(browser_scope.targets(["operations/fleet/fleet/server/cell/a.py",
                                                   "operations/fleet/fleet/server/app.py"]))
+
+
+def test_fleet_sample_has_no_duplicates():
+    assert len(browser_scope.FLEET_SAMPLE) == len(set(browser_scope.FLEET_SAMPLE))
+
+
+def test_leaf_server_and_web_subprefixes_narrow_while_shared_and_root_assets_keep_fleet():
+    assistant = set(browser_scope.targets(["operations/fleet/fleet/server/assistant/routes.py"]))
+    assert assistant == set(browser_scope.FLEET_SAMPLE) | {"operations/fleet/test/test_assistant_browser.py"}
+
+    cell = set(browser_scope.targets(["applications/fleet/web/cell/cell.js"]))
+    assert set(browser_scope.FLEET_SAMPLE) <= cell
+    assert {
+        "operations/fleet/test/test_cell_app_browser.py",
+        "test/test_fleet_workcell_observation_browser.py",
+        "test/test_motor_health_ui_browser.py",
+        "shared/web/test/test_component_kit_browser.py",
+    } <= cell
+    assert "test/test_site_map_browser.py" not in cell and "operations/fleet/test/test_assistant_browser.py" not in cell
+
+    maint = set(browser_scope.targets(["applications/fleet/web/maintenance/host-services.js"]))
+    assert set(browser_scope.FLEET_SAMPLE) <= maint
+    assert {
+        "operations/fleet/test/test_development_console_browser.py",
+        "operations/fleet/test/test_task_page_compositions_browser.py",
+        "test/test_host_recovery_browser.py",
+    } <= maint
+    assert "test/test_fleet_console_browser.py" not in maint
+
+    whole_fleet = {p for pat in browser_scope.FLEET for p in browser_scope._expand(pat)}
+    for full_path in (
+        "applications/fleet/web/runtime.js",
+        "applications/fleet/web/installation/install.js",
+        "applications/fleet/web/devices/device-discovery.js",
+        "applications/fleet/web/calibration/measured-calibration-view.js",
+        "applications/fleet/web/shared/styles.css",
+        "applications/fleet/web/sitemap/site-map.js",
+        "operations/fleet/fleet/server/app.py",
+        "operations/fleet/fleet/server/work/work_routes.py",
+    ):
+        assert whole_fleet <= set(browser_scope.targets([full_path])), full_path
+
+
+def test_unit_test_modules_and_contract_version_do_not_trigger_unrelated_browsers(monkeypatch):
+    assert browser_scope.targets(["middleware/core/api/core_api_web/api/contract_version.py"]) == []
+    monkeypatch.setattr(browser_scope, "_is_contract_version_pin", lambda p: False)
+    assert set(browser_scope.API_WEB) <= set(
+        browser_scope.targets(["middleware/core/api/core_api_web/api/contract_version.py"])
+    )
+    monkeypatch.undo()
+
+    assert browser_scope.targets(["shared/web/test/test_shared_dedupe.py"]) == []
+    assert browser_scope.targets(["learning/training/omx/test/test_cell_bundle.py"]) == []
+
+    theme_targets = set(browser_scope.targets(["shared/web/test/test_theme_browser.py"]))
+    assert {"shared/web/test/test_theme_browser.py", "operations/fleet/test/test_fleet_header_browser.py"} <= theme_targets
+    assert len(theme_targets) < 15
+
+    g2_targets = set(browser_scope.targets(["middleware/robot_ui/robot/test/test_role_g2_browser.py"]))
+    assert {
+        "middleware/robot_ui/robot/test/test_list_row_confirm_browser.py",
+        "middleware/robot_ui/robot/test/test_dashboard_entry_browser.py",
+    } <= g2_targets
+
+    assert "middleware/robot_ui/robot/test/test_remaining_workflows_browser.py" in browser_scope.targets(
+        ["middleware/robot_ui/robot/test/test_panel_copy_evidence_browser.py"]
+    )
+    shared_expanded = {p for pat in browser_scope.SHARED for p in browser_scope._expand(pat)}
+    assert shared_expanded <= set(browser_scope.targets(["shared/web/test/surface_registry.py"]))

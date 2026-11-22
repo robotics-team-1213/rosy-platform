@@ -9,6 +9,8 @@ real repository through the CLI so the registry and the selector stay in step.
 
 from __future__ import annotations
 
+import dataclasses
+import functools
 import json
 import subprocess
 import sys
@@ -46,7 +48,7 @@ def _assert_g1_timing_is_dedicated(invocations):
 
 
 def test_g1_timing_full_ci_and_lab_have_one_exclusive_whole_file():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     _assert_g1_timing_is_dedicated(affected.lab_full_invocations(repo))
     matrix = affected.ci_matrix(repo, affected.Selection('full', []))['include']
     _assert_g1_timing_is_dedicated([inv for entry in matrix for inv in entry['invocations']])
@@ -56,7 +58,7 @@ def test_g1_timing_full_ci_and_lab_have_one_exclusive_whole_file():
     ['test/test_platform_g1_timing.py::test_real_uds_round_trip_stays_inside_the_bound',
      'test/test_affected_tests.py']])
 def test_g1_timing_owner_selections_keep_the_whole_file_exclusive(paths):
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     invocations = affected.pack(repo, paths)
     _assert_g1_timing_is_dedicated(invocations)
     matrix = affected.ci_matrix(repo, affected.Selection('affected', [], invocations=invocations))['include']
@@ -64,7 +66,7 @@ def test_g1_timing_owner_selections_keep_the_whole_file_exclusive(paths):
 
 
 def test_fleet_development_module_selects_application_contracts():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     module = repo.module_for('applications/fleet/dev/sample/engine.py')
     assert module['tests'] == ['applications/fleet/test']
     matrix = affected.ci_matrix(repo, affected.Selection('full', []))['include']
@@ -72,7 +74,7 @@ def test_fleet_development_module_selects_application_contracts():
 
 
 def test_external_drive_holders_select_their_installing_distribution():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     behavior = 'middleware/drive/behaviors/line_follow/manager.py'
     assert repo.module_for(behavior)['name'] == 'core_features'
     assert repo.module_for('middleware/drive/runtime/goal_node.py')['name'] == 'control'
@@ -85,7 +87,7 @@ def test_external_drive_holders_select_their_installing_distribution():
                                      "applications/fleet/web/console.js"])
 def test_a_surface_tree_change_selects_the_registry_contract_suites(changed):
     # 2026-10-18: the D-792 camera page landed red because these suites never name review_app_web.
-    selection = affected.select(affected.Repo.load(ROOT), [changed])
+    selection = affected.select(_real_repo(), [changed])
     assert {"shared/web/test/test_ui_token_contracts.py", "shared/web/test/test_shared_controls.py"} <= set(
         selection.reasons)
 
@@ -141,7 +143,7 @@ FILES = {
     "middleware/perception/control/battery.py": "from core_common import schemas\n",
     "middleware/perception/test/test_battery.py": "from control import battery\n",
     "middleware/core/gateway/core/node.py": "from control.battery import read\n",
-    "middleware/core/gateway/test/test_battery.py": "import core\n",
+    "middleware/core/gateway/test/test_battery.py": "from core import node\n",
     "middleware/core/gateway/test/conftest.py": "",
     "middleware/core/api/core_api_web/app.py": "import core\n",
     "middleware/core/api/test/test_app.py": "import core_api_web\n",
@@ -189,8 +191,19 @@ def sample(tmp_path_factory) -> Path:
     return repo
 
 
+@functools.lru_cache(maxsize=None)
+def _real_repo() -> affected.Repo:
+    """The real tree, read once for the tests that only read it: each fresh Repo re-read and re-parsed it (about 1.9 s a test)."""
+    return affected.Repo.load(ROOT)
+
+
+@functools.lru_cache(maxsize=None)
+def _sample_repo(sample: Path) -> affected.Repo:
+    return affected.Repo.load(sample)
+
+
 def _select(sample: Path, *changed: str) -> affected.Selection:
-    return affected.select(affected.Repo.load(sample), list(changed))
+    return affected.select(_sample_repo(sample), list(changed))
 
 
 @pytest.mark.parametrize("consumer", ["package_export", "transitive_runtime", "broad_owner"])
@@ -240,7 +253,7 @@ CASES = [
     ("unmapped file -> full (unknown never means nothing)", ["tools/mystery/run.sh"], "full", None),
     ("sensing -> sensing suite + direct reverse dependent gateway (api_web is two hops: not pulled)",
      ["middleware/perception/control/battery.py"], "affected",
-     {"middleware/perception/test/test_battery.py", "middleware/core/gateway/test"}),  # import closure narrows it
+     {"middleware/perception/test/test_battery.py", "middleware/core/gateway/test/test_battery.py"}),  # import closure narrows it
     ("ADR only -> the ADR Log readers (guards cover the ADR index)",
      ["docs/adr/D-1-sample.md"], "affected", {"test/test_network_topology_contracts.py"}),
     ("doc read by a contract test -> that test too",
@@ -338,8 +351,8 @@ def test_a_serial_suite_never_keeps_other_suites_off_xdist(tmp_path):
 def test_duplicate_basenames_run_in_separate_invocations(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
     owners = {path: i for i, inv in enumerate(sel.invocations) for path in inv}
-    assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test"]
-    repo = affected.Repo.load(sample)
+    assert owners["middleware/perception/test/test_battery.py"] != owners["middleware/core/gateway/test/test_battery.py"]
+    repo = _sample_repo(sample)
     for inv in sel.invocations:
         names = [PurePosixPath(t).name for p in inv for t in repo.test_files_under(p)]
         assert len(names) == len(set(names)), inv
@@ -366,9 +379,104 @@ def test_pack_separates_transitively_imported_test_helpers(tmp_path):
 
 
 
+def test_source_path_tests_are_not_pulled_by_the_other_root(tmp_path):
+    """2026-11-20 split: drive tests moved from perception/test to drive/test (a source_paths root of module
+    control, same `control` import prefix). A perception-only change must not pull them in as blanket prefix
+    importers; a drive change still selects the drive test that reaches it."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/perception\n    tests: [middleware/perception/test]\n",
+        "    path: middleware/perception\n    source_paths: [middleware/drive]\n"
+        "    tests: [middleware/perception/test, middleware/drive/test]\n")
+    assert harness != HARNESS_YAML
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "tools/harness/platform_parts.yaml": PARTS_YAML + "  - path: middleware/drive\n    import_prefix: [control]\n",
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/drive/motion/limits.py": "L = 1\n",
+             "middleware/drive/test/test_limits.py": "import control\nfrom motion import limits\n",
+             "middleware/drive/test/test_other_drive.py": "import control\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    vision = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert vision.mode == "affected"
+    assert not [t for t in vision.reasons if t.startswith("middleware/drive/")], vision.reasons
+
+    drive = affected.select(repo, ["middleware/drive/motion/limits.py"])
+    assert "middleware/drive/test/test_limits.py" in drive.reasons, drive.reasons
+    assert "middleware/drive/test/test_other_drive.py" not in drive.reasons
+
+
+def test_integration_folder_is_not_pulled_whole_by_a_change_it_does_not_import(tmp_path):
+    """A test folder outside the changed file's module roots, or registered by two modules (test/integration/*),
+    keeps only the files that reach the change; its "nobody imports it, keep the whole folder" fallback is for a
+    folder inside the module's own roots."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test]\n",
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test, test/integration/rig]\n").replace(
+        "    path: middleware/perception\n    tests: [middleware/perception/test]\n",
+        "    path: middleware/perception\n    tests: [middleware/perception/test, test/integration/rig]\n")
+    assert harness.count("test/integration/rig") == 2
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/core/api/core_api_web/thing.py": "T = 1\n",
+             "test/integration/rig/test_rig_power.py": "from core_api_web import thing\n",
+             "test/integration/rig/test_rig_other.py": "X = 1\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    vision = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert not [t for t in vision.reasons if t.startswith("test/integration/rig")], vision.reasons
+
+    power = affected.select(repo, ["middleware/core/api/core_api_web/thing.py"])
+    assert "test/integration/rig/test_rig_power.py" in power.reasons, power.reasons
+    assert "test/integration/rig" not in power.reasons and "test/integration/rig/test_rig_other.py" not in power.reasons
+
+
+def test_folder_registered_by_two_modules_is_narrowed_as_reverse_dependent_and_prefix_importer(tmp_path):
+    """A folder registered under a module that imports the changed module (reverse dependent) keeps only the
+    files that reach the change: [] from the narrowing means "skip the folder", and the prefix-import rule
+    does not pull a registered folder's file that the closure already left out."""
+    harness = HARNESS_YAML.replace(
+        "    path: middleware/core/gateway\n    tests: [middleware/core/gateway/test]\n",
+        "    path: middleware/core/gateway\n    tests: [middleware/core/gateway/test, test/integration/rig]\n").replace(
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test]\n",
+        "    path: middleware/core/api\n    tests: [middleware/core/api/test, test/integration/rig]\n")
+    assert harness.count("test/integration/rig") == 2
+    files = {**FILES, "tools/harness/harness.yaml": harness,
+             "middleware/perception/control/vision_only.py": "V = 1\n",
+             "middleware/core/gateway/core/node.py": "from control.battery import read\nfrom control import vision_only\n",
+             "test/integration/rig/test_rig_reaches.py": "from control import vision_only\n",
+             "test/integration/rig/test_rig_prefix.py": "import control\n",
+             "test/integration/rig/test_rig_other.py": "X = 1\n"}
+    _git(tmp_path, "init", "-q", "-b", "main")
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "-m", "base")
+    repo = affected.Repo.load(tmp_path)
+
+    away = affected.select(repo, ["middleware/perception/control/battery.py"])
+    assert not [t for t in away.reasons if t.startswith("test/integration/rig")], away.reasons
+
+    reach = affected.select(repo, ["middleware/perception/control/vision_only.py"])
+    assert "test/integration/rig/test_rig_reaches.py" in reach.reasons, reach.reasons
+    assert "test/integration/rig" not in reach.reasons and "test/integration/rig/test_rig_other.py" not in reach.reasons
+
+
 def test_reasons_name_the_reverse_dependency(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
-    assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test"])
+    assert any("reverse dependent core" in why for why in sel.reasons["middleware/core/gateway/test/test_battery.py"])
 
 
 def test_cli_json_diffs_against_base_and_working_tree(sample, capsys):
@@ -410,7 +518,7 @@ def test_committed_folder_moves_escalate(sample, capsys, change, mode):
 
 def test_real_repo_wide_ordinary_edits_stay_affected():
     """D-762 stage 0: an API version bump (its pin files), ADR-gap records and D-766 size data are not FULL."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     pins = ["middleware/core/api/core_api_web/api/app.py", "docs/reference/ROSY API & Protocol Reference.md",
             "operations/fleet/test/test_lane_route.py", "operations/fleet/test/test_mission_progress.py",
             "test/test_line_follow_contract_docs.py"]
@@ -423,7 +531,7 @@ def test_real_repo_wide_ordinary_edits_stay_affected():
 def test_real_repo_module_reached_through_a_sibling_import_maps_to_its_tests():
     """D-889 21, 11-01: test_experiment_hub.py loads experiment_center, which imports experiment_hub; the hub was
     "unknown -> full" in 17 landings because the selector followed one import level only."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     sel = affected.select(repo, ["learning/training/omx/experiment_hub.py"])
     assert sel.mode == "affected", sel.escalations
     assert "learning/training/omx/test/test_experiment_hub.py" in sel.reasons
@@ -436,7 +544,7 @@ def test_real_repo_module_reached_through_a_sibling_import_maps_to_its_tests():
 ])
 def test_real_repo_full_tier_covers_every_module_suite_and_the_local_selection(changed):
     """D-762 stage 0: a FULL landing never runs fewer suites than the old guards + mapped path."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     sel = affected.select(repo, changed)
     assert sel.mode == "full"
     full = [p for inv in sel.full_invocations for p in inv if not p.startswith("-")]
@@ -463,7 +571,7 @@ def test_real_registry_guard_set_exists():
 
 def test_real_repo_selector_paths_escalate():
     """The selector's own files and the harness config always escalate."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     for path in ("tools/harness/affected_tests.py", "tools/harness/harness.yaml",
                  "contracts/foundation/core_common/__init__.py", "contracts/foundation/setup.py"):
         assert affected.select(repo, [path]).mode == "full", path
@@ -471,7 +579,7 @@ def test_real_repo_selector_paths_escalate():
 
 def test_real_repo_ci_workflow_keeps_full_execution_coverage():
     """Textual readers do not establish coverage of the jobs a workflow changes."""
-    sel = affected.select(affected.Repo.load(ROOT), [".github/workflows/ci.yml"])
+    sel = affected.select(_real_repo(), [".github/workflows/ci.yml"])
     assert sel.mode == "full", sel.escalations
     assert "test" in sel.reasons
 
@@ -484,7 +592,7 @@ def _safety_escalations(sel):
 
 
 def test_real_repo_safety_paths_escalate_to_full_and_are_never_narrowed():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     # A concern: safety root file, and a safety_modules entry under the narrowable foundation.
     for path in ("middleware/drive/motion_limits/actuation.py",
                  "contracts/foundation/core_common/protocol/swarm_freshness.py"):
@@ -494,7 +602,7 @@ def test_real_repo_safety_paths_escalate_to_full_and_are_never_narrowed():
 
 
 def test_real_repo_non_safety_path_and_safety_markdown_are_not_escalated_by_the_safety_rule():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     for path in ("middleware/perception/control/battery.py",
                  "middleware/drive/motion_limits/AGENTS.md"):  # NOT_TRIGGERS: Markdown is not FULL
         assert not _safety_escalations(affected.select(repo, [path])), path
@@ -513,7 +621,7 @@ def test_safety_rule_follows_deepest_root_wins(tmp_path):
 
 
 def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
-    repo = affected.Repo.load(sample)
+    repo = _sample_repo(sample)
     matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
     shards = [e for e in matrix if e["name"].startswith("root-test-")]
     assert len(shards) == affected.ROOT_SHARDS
@@ -525,17 +633,19 @@ def test_ci_full_matrix_runs_every_root_test_once_with_the_overlay(sample):
 
 
 def test_ci_full_matrix_shards_slow_suites_by_file(sample):
-    repo = affected.Repo.load(sample)
+    repo = _sample_repo(sample)
     matrix = affected.ci_matrix(repo, _select(sample, ".github/workflows/ci.yml"))["include"]
     for name, n in affected.SUITE_SHARDS.items():
-        suite = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)["invocations"][0][0]
-        files = sorted(t for t in repo.test_files if t.startswith(suite + "/"))
+        entry = next(e for e in affected.CI_FULL_MATRIX if e["name"] == name)
+        suite, later = entry["invocations"][0][0], [p for inv in entry["invocations"][1:] for p in inv]
+        ignored = {f.split("=", 1)[1] for f in entry["invocations"][0] if f.startswith("--ignore=")}
+        files = sorted(t for t in repo.test_files if t.startswith(suite + "/") and t not in ignored and t not in later)
         shards = [e for e in matrix if e["name"] == name or e["name"].startswith(name + "-")]
         if len(files) < n:
-            assert [e["invocations"] for e in shards] == [[[suite]]]
+            assert [e["invocations"] for e in shards] == [entry["invocations"]]
             continue
         assert len(shards) == n
-        assert sorted(t for e in shards for inv in e["invocations"] for t in inv) == files
+        assert sorted(t for e in shards for inv in e["invocations"] for t in inv) == sorted(files + later)
 
 
 def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
@@ -547,7 +657,7 @@ def test_ci_full_matrix_keeps_gateway_and_sensing_on_separate_runners():
 
 
 def test_standalone_app_tests_are_required_in_full_and_affected_ci():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     path = 'applications/fleet/test'
     for selection in (affected.Selection('full', []), affected.select(repo, [path + '/test_sample_browser.py'])):
         matrix = affected.ci_matrix(repo, selection)['include']
@@ -560,7 +670,7 @@ def test_standalone_app_tests_are_required_in_full_and_affected_ci():
 
 
 def test_fleet_timing_data_selects_only_its_reader_and_guards(monkeypatch):
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     timing = "tools/harness/fleet_test_seconds.json"
     reader = "test/test_affected_tests.py"
     assert affected.select(repo, [timing]).mode == "full"  # legacy switch
@@ -580,7 +690,7 @@ def test_ci_fleet_shards_balance_measured_slow_files_without_losing_tests():
     # the measured table must keep the slowest shard near a quarter of the suite.
     costs = json.loads((ROOT / "tools/harness/fleet_test_seconds.json").read_text(encoding="utf-8"))
     assert costs["test_fleet_header_browser.py"] >= 100, "a measured slow Fleet file must be weighed"
-    repo = affected.Repo.load(ROOT)
+    repo = dataclasses.replace(_real_repo(), test_files=list(_real_repo().test_files))
     selection = affected.Selection("full", [])
     matrix = affected.ci_matrix(repo, selection)["include"]
     shards = [e for e in matrix if e["name"].startswith("fleet-")]
@@ -602,22 +712,19 @@ def _invocation_test_files(repo, invocation):
 
 
 def test_full_ci_runs_station_scheduling_on_its_own_required_runner():
-    repo = affected.Repo.load(ROOT)
-    suite = "middleware/core/gateway/test"
-    target = f"{suite}/test_station_camera_scheduling.py"
-    ignore = f"--ignore={target}"
+    repo = _real_repo()
+    target = "test/integration/core_fleet/test_station_camera_scheduling.py"
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     station = next(entry for entry in matrix if entry["name"] == "core-station-simulation")
     assert station["invocations"] == [[target]]
     assert station["gating"] and station["ros"] == "none"
     for invocations in ([inv for entry in matrix for inv in entry["invocations"]],
                         affected.lab_full_invocations(repo)):
-        assert any(suite in inv and ignore in inv for inv in invocations)
         assert sum(target in _invocation_test_files(repo, inv) for inv in invocations) == 1
 
 
 def test_account_native_tests_are_required_in_full_and_source_affected_ci():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     suite = 'operations/account/test'
     assert any(suite in invocation for invocation in affected.lab_full_invocations(repo))
     selections = [affected.Selection('full', []),
@@ -632,7 +739,7 @@ def test_account_native_tests_are_required_in_full_and_source_affected_ci():
 
 def test_ci_full_matrix_reaches_every_registered_module_suite():
     """D-762 stage 1: CI's full tier runs every registered test file, bar the reasoned exclusions."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     invocations = [inv for e in matrix for inv in e["invocations"]]
     ran = set().union(*(_invocation_test_files(repo, inv) for inv in invocations))
@@ -648,9 +755,37 @@ def test_ci_full_matrix_reaches_every_registered_module_suite():
         assert any(affected._under(t, suite) for t in ran), suite
 
 
+def test_ci_gateway_shards_run_every_file_once_in_full_and_affected():
+    """CI 44745980037 (2026-11-20): one runner for all of middleware/core/gateway/test took 20 min of pytest."""
+    repo = _real_repo()
+    suite = "middleware/core/gateway/test"
+    # The scheduling and account journeys moved to test/integration/core_fleet (they run Fleet code).
+    moved = "test/integration/core_fleet"
+    station, browser = f"{moved}/test_station_camera_scheduling.py", f"{moved}/test_account_pipeline.py"
+    files = sorted(p for p in repo.test_files if p.startswith(suite + "/"))
+    assert station in repo.test_files and browser in repo.test_files and not {station, browser} & set(files)
+    full = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
+    shards = [e for e in full if e["name"].startswith("core-domain-")]
+    assert len(shards) == affected.SUITE_SHARDS["core-domain"] and all(e["invocations"][0] for e in shards)
+    ran = [p for e in full for inv in e["invocations"] for p in inv if p.startswith(suite + "/")]
+    assert sorted(ran) == files, "full tier: each gateway file once"
+    assert [p for e in full for inv in e["invocations"] for p in inv].count(station) == 1, "station on its own runner"
+    assert [inv for e in shards for inv in e["invocations"]].count([browser]) == 1, "browser journey: own invocation"
+    assert not any(station in inv for e in shards for inv in e["invocations"])
+
+    def targets(*flags):  # what an affected run of the whole directory hands pytest, flags aside
+        sel = affected.Selection("affected", [], invocations=[[suite, *flags]])
+        runs = [inv for e in affected.ci_matrix(repo, sel)["include"] for inv in e["invocations"]]
+        assert all(set(flags) <= set(inv) for inv in runs), "every shard keeps the invocation's flags"
+        return sorted(p for inv in runs for p in inv if not p.startswith("-"))
+    # Naming the account file makes ci.yml run it with the browser opt-in: its plain tests still run, as in the directory run.
+    assert targets() == files
+    # The suite's own --ignore of the station file went with the move, so no ignore case is left to pin here.
+
+
 def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
     """PR #60 (2026-10-17): one affected runner for all of operations/fleet/test outlasted the 25 min limit."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     full = [e["invocations"][0] for e in affected.ci_matrix(repo, affected.Selection("full", []))["include"]
             if e["name"].startswith("fleet-")]
     sel = affected.Selection("affected", [], invocations=[
@@ -667,7 +802,7 @@ def test_ci_affected_whole_fleet_suite_uses_the_full_tier_groups():
 
 def test_ci_affected_matrix_uses_the_full_tier_ros_environment_per_path():
     """PR #96 (2026-10-18): gateway rclpy tests that main runs under ros: none ran under overlay on a PR."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     sel = affected.Selection("affected", [], invocations=[
         ["middleware/core/gateway/test/test_node_wiring.py", "test/test_land.py", "--ignore=x"]])
     matrix = [e for e in affected.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"]
@@ -681,7 +816,7 @@ def test_ci_affected_matrix_uses_the_full_tier_ros_environment_per_path():
 @pytest.mark.parametrize("flags", [[], ["--ignore=test/test_host_recovery.py"]])
 def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
     """PR #95: the unsplit root suite reached only 60% before the 25-minute limit."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     full = [e["invocations"][0] for e in affected.ci_matrix(repo, affected.Selection("full", []))["include"]
             if e["name"].startswith("root-test-")]
     other = "learning/registry/policy/test"
@@ -692,13 +827,14 @@ def test_ci_affected_whole_root_suite_uses_the_full_tier_groups(flags):
         [other, *flags], *[group + flags for group in full], affected_exclusive.DEDICATED]
     assert all(e["gating"] for e in matrix)
     assert [e["ros"] for e in matrix] == ["none", *["overlay"] * (len(full) + 1)]
-    assert sorted([p for group in full for p in group] + [affected_exclusive.TARGET]) == sorted(
+    # TARGET and the station scheduling file each run on their own runner, outside the root shards.
+    assert sorted([p for group in full for p in group] + [affected_exclusive.TARGET, "test/integration/core_fleet/test_station_camera_scheduling.py"]) == sorted(
         p for p in repo.test_files if p.startswith("test/"))
 
 
 def test_ci_affected_matrix_is_one_runner_per_invocation(sample):
     sel = _select(sample, "middleware/perception/control/battery.py")
-    matrix = affected.ci_matrix(affected.Repo.load(sample), sel)["include"]
+    matrix = affected.ci_matrix(_sample_repo(sample), sel)["include"]
     pytest_entries = [e for e in matrix if e["kind"] == "pytest"]
     # Each invocation becomes one runner per ROS environment; every selected path runs exactly once.
     assert sorted(p for e in pytest_entries for p in e["invocations"][0]) == sorted(p for inv in sel.invocations for p in inv)
@@ -743,7 +879,7 @@ def test_escalated_paths_are_still_mapped_for_the_local_run(sample):
 
 
 def test_parts_match_selects_a_shared_basename_by_its_parent(sample):
-    repo = affected.Repo.load(sample)
+    repo = _sample_repo(sample)
     assert "test/test_udev_rules.py" in repo.referencing_tests("deploy/robot/pinky_pro/udev/99-rosy.rules")
     assert "test/test_udev_rules.py" not in repo.referencing_tests("deploy/robot/pinky_pro/compose.yaml")
 
@@ -779,7 +915,7 @@ def test_full_ci_includes_learning_policy_registry_and_omx_helpers():
     'learning/training/omx/test/test_act_inference_native.py::test_actual_act_weights_consume_snapshot_and_keep_queue_source',
 ])
 def test_affected_act_tests_also_require_the_actual_cpu_runner(target):
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     matrix = affected.ci_matrix(repo, affected.Selection('affected', [], invocations=[[target]]))['include']
     native = [e for e in matrix if e['name'] == 'omx-act-cpu']
     assert len(native) == 1 and native[0]['gating'] and native[0]['ros'] == 'none'
@@ -787,7 +923,7 @@ def test_affected_act_tests_also_require_the_actual_cpu_runner(target):
 
 
 def test_unrelated_affected_tests_do_not_install_act_cpu_dependencies():
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     matrix = affected.ci_matrix(repo, affected.Selection(
         'affected', [], invocations=[['operations/world/test']]))['include']
     assert all(e['name'] != 'omx-act-cpu' for e in matrix)
@@ -795,7 +931,7 @@ def test_unrelated_affected_tests_do_not_install_act_cpu_dependencies():
 
 def test_modules_runner_gates():
     """D-762 stage 1: `modules` gates since 2026-10-27; only sensing still reports."""
-    repo = affected.Repo.load(ROOT)
+    repo = _real_repo()
     matrix = affected.ci_matrix(repo, affected.Selection("full", []))["include"]
     assert sorted(e["name"] for e in matrix if not e["gating"] and not e["name"].startswith("sensing")) == []
 
@@ -811,6 +947,14 @@ def test_unknown_paths_are_listed_with_a_hint_in_json_and_print(sample, capsys):
     assert "deploy/robot/run.sh\n      hint" not in text
     assert _select(sample, "deploy/robot/run.sh").unmapped == []
 
+
+def test_root_suite_fallback_names_the_path_and_the_fix(sample):
+    """2026-11-20: an unnamed page beside a named server pulled 18k tests into every commit's run."""
+    sel = _select(sample, "deploy/robot/run.sh")
+    assert affected.root_fallback_paths(sel) == ["deploy/robot/run.sh"]
+    assert "      hint (deploy/robot/run.sh): name this path literally" in affected.render(sel)
+    assert affected.root_fallback_paths(_select(sample, "deploy/robot/pinky_pro/udev/99-rosy.rules")) == []
+
 # 2026-10-26: a five-line `modules:` addition went FULL and held the land lock 45+ minutes.
 REAL_HARNESS = (ROOT / "tools/harness/harness.yaml").read_text(encoding="utf-8")
 NEW_MODULE = "  - name: zz_added\n    path: operations/zz_added\n    tests: [test/architecture]\n"
@@ -822,7 +966,7 @@ def _harness_with(entry: str, base: str = REAL_HARNESS) -> str:
 
 
 def _harness_select(head: str, base: str = REAL_HARNESS):
-    return affected.select(affected.Repo.load(ROOT), ["tools/harness/harness.yaml"], harness_texts=(base, head))
+    return affected.select(_real_repo(), ["tools/harness/harness.yaml"], harness_texts=(base, head))
 
 
 def test_harness_yaml_module_added_only_selects_its_suites_not_full():
@@ -872,17 +1016,17 @@ def test_harness_yaml_module_deletion_is_full():
 
 
 def test_harness_yaml_without_a_base_is_full():
-    sel = affected.select(affected.Repo.load(ROOT), ["tools/harness/harness.yaml"])
+    sel = affected.select(_real_repo(), ["tools/harness/harness.yaml"])
     _assert_harness_full(sel, "no base to compare")
 
 
-def test_harness_yaml_added_suite_without_test_functions_is_full():
+def test_harness_yaml_added_suite_without_test_functions_is_full(monkeypatch):
     """A test_*.py with no `def test_` collects nothing, so it does not show the module is tested."""
-    repo, target = affected.Repo.load(ROOT), "test/test_rosy_games_surface.py"
+    repo, target = _real_repo(), "test/test_rosy_games_surface.py"
     head = _harness_with(f"  - name: zz_added\n    path: operations/zz_added\n    tests: [{target}]\n")
     assert affected.affected_narrow.harness_modules_added(repo, REAL_HARNESS, head)[0]
     text = repo.text
-    repo.text = lambda path: "HELPER = 1\n" if path == target else text(path)
+    monkeypatch.setattr(repo, "text", lambda path: "HELPER = 1\n" if path == target else text(path))
     added, why = affected.affected_narrow.harness_modules_added(repo, REAL_HARNESS, head)
     assert not added and "no test function" in why
 
@@ -894,7 +1038,7 @@ def test_harness_yaml_added_suite_without_test_functions_is_full():
     ("tools/harness/zz_unknown.json", "full"),
 ])
 def test_harness_data_registries_are_not_full_but_code_and_manifests_are(path, mode):
-    sel = affected.select(affected.Repo.load(ROOT), [path])
+    sel = affected.select(_real_repo(), [path])
     assert sel.mode == mode, sel.escalations
     if mode == "affected":
         assert "test/test_harness_contracts.py" in sel.reasons
@@ -904,7 +1048,7 @@ def test_harness_yaml_added_module_taking_tracked_files_is_full():
     """A source_paths entry inside an existing module counts as an overlap, like path."""
     head = _harness_with("  - name: zz_added\n    path: operations/zz_added\n"
                          "    source_paths: [middleware/core/services/core_features]\n    tests: [test/architecture]\n")
-    added, why = affected.affected_narrow.harness_modules_added(affected.Repo.load(ROOT), REAL_HARNESS, head)
+    added, why = affected.affected_narrow.harness_modules_added(_real_repo(), REAL_HARNESS, head)
     assert not added and "overlaps module core_features" in why
 
 
@@ -912,12 +1056,12 @@ def test_harness_yaml_added_module_taking_tracked_files_is_full():
                                   "docs/index.md", "STATUS.md", "deploy/logs.md"])
 def test_records_select_only_their_readers(path):
     """2026-10-26: docs/logs.md selected tests that name it only in a comment or a fixture string."""
-    sel = affected.select(affected.Repo.load(ROOT), [path])
+    sel = affected.select(_real_repo(), [path])
     assert sel.mode == "affected" and set(sel.reasons) == GUARDS | set(affected.RECORD_READERS), sorted(sel.reasons)
 
 
 def test_a_module_record_read_by_a_contract_test_selects_it():
-    sel = affected.select(affected.Repo.load(ROOT), ["operations/apps/games/progress.md"])
+    sel = affected.select(_real_repo(), ["operations/apps/games/progress.md"])
     assert set(sel.reasons) == GUARDS | set(affected.RECORD_READERS) | {"test/test_rosy_games_surface.py"}
 
 
@@ -926,16 +1070,16 @@ def test_a_module_record_read_by_a_contract_test_selects_it():
     ("operations/fleet/docs/logs.md", False), ("docs/plans/index.md", False), ("operations/progress.md", False),
 ])
 def test_records_are_status_and_module_root_records_only(path, record):
-    assert affected.is_record(affected.Repo.load(ROOT), path) is record
+    assert affected.is_record(_real_repo(), path) is record
 
 
 def test_generated_module_index_does_not_select_the_module_suite():
     """2026-10-26: operations/fleet/index.md selected ~7,900 tests in three commits."""
-    assert "operations/fleet/test" not in affected.select(affected.Repo.load(ROOT), ["operations/fleet/index.md"]).reasons
+    assert "operations/fleet/test" not in affected.select(_real_repo(), ["operations/fleet/index.md"]).reasons
 
 
 def test_module_note_markdown_selects_readers_not_the_module_suite():
-    sel = affected.select(affected.Repo.load(ROOT), ["operations/fleet/docs/call-map.md"])
+    sel = affected.select(_real_repo(), ["operations/fleet/docs/call-map.md"])
     assert "operations/fleet/test" not in sel.reasons
 
 
@@ -947,7 +1091,7 @@ def test_module_note_markdown_selects_readers_not_the_module_suite():
     ("docs/adr/D-161-ubuntu-server-native-ros-runtime.md", "test/test_network_topology_contracts.py"),
 ])
 def test_contract_checked_markdown_keeps_its_selection(path, expected):
-    assert expected in affected.select(affected.Repo.load(ROOT), [path]).reasons
+    assert expected in affected.select(_real_repo(), [path]).reasons
 
 
 # --- Rule 8 (design 0.7): leaf tools select their tests; the gate tools stay FULL -------------------
@@ -967,7 +1111,7 @@ GATE_TOOLS = ["tools/land.py", "tools/land_queue.py", "tools/land_cache.py", "to
     ["tools/land_goal.py", "tools/land_stats.py"],
     ["tools/land_goal.py", "test/test_land_goal.py", "docs/logs.md"]])
 def test_landing_reports_select_their_readers_without_the_full_runtime_tier(changed):
-    sel = affected.select(affected.Repo.load(ROOT), changed)
+    sel = affected.select(_real_repo(), changed)
     assert sel.mode == "affected", sel.escalations
     assert GUARDS | {"test/test_land_goal.py", "test/test_land_events.py"} <= set(sel.reasons)
     assert "test" not in sel.reasons
@@ -977,7 +1121,7 @@ def test_landing_reports_select_their_readers_without_the_full_runtime_tier(chan
     "tools/harness/affected_tests.py", "tools/remote/remote_pytest.py", "tools/land_future_gate.py",
     "unregistered/" + "future" + "_owner.py"])
 def test_landing_reports_do_not_narrow_other_gates_or_unmapped_changes(other):
-    sel = affected.select(affected.Repo.load(ROOT), ["tools/land_goal.py", "tools/land_stats.py", other])
+    sel = affected.select(_real_repo(), ["tools/land_goal.py", "tools/land_stats.py", other])
     assert sel.mode == "full"
     assert any(reason.startswith(other + ":") for reason in sel.escalations), sel.escalations
 
@@ -985,13 +1129,13 @@ def test_landing_reports_do_not_narrow_other_gates_or_unmapped_changes(other):
 @pytest.mark.parametrize("path", GATE_TOOLS)
 def test_real_repo_gate_tools_stay_full(path):
     """A gate tool may not be tested by the narrow selection it would itself make."""
-    sel = affected.select(affected.Repo.load(ROOT), [path])
+    sel = affected.select(_real_repo(), [path])
     assert sel.mode == "full"
     assert f"{path}: harness configuration or the selector itself" in sel.escalations, sel.escalations
 
 
 def test_real_repo_gate_tool_markdown_is_not_full():
-    assert affected.select(affected.Repo.load(ROOT), ["tools/hooks/AGENTS.md"]).mode == "affected"
+    assert affected.select(_real_repo(), ["tools/hooks/AGENTS.md"]).mode == "affected"
 
 
 def test_head_files_are_read_at_head_not_from_the_checkout(sample, capsys):
@@ -1027,9 +1171,17 @@ PLAIN = "test/test_unrelated.py::test_y"
 
 
 def _kf_select(head: str, base: str = KF_HEADER, changed=(KF,), repo=None):
-    repo = repo or affected.Repo.load(ROOT)
+    repo = repo or _real_repo()
+    had = KF in repo._texts
+    old = repo._texts.get(KF)
     repo._texts[KF] = head
-    return affected.select(repo, list(changed), base_text=lambda path: base if path == KF else None)
+    try:
+        return affected.select(repo, list(changed), base_text=lambda path: base if path == KF else None)
+    finally:
+        if had:
+            repo._texts[KF] = old
+        else:
+            repo._texts.pop(KF, None)
 
 
 @pytest.mark.parametrize("base, head", [(f"{KF_HEADER}{PLAIN}  # r\n", KF_HEADER),
@@ -1066,7 +1218,7 @@ def test_known_failures_added_line_needing_a_person_stays_full(sample, head, cha
 
 
 def test_flaky_quarantine_stays_full_as_a_safety_root():
-    sel = affected.select(affected.Repo.load(ROOT), ["test/flaky_quarantine.txt"], base_text=lambda path: "")
+    sel = affected.select(_real_repo(), ["test/flaky_quarantine.txt"], base_text=lambda path: "")
     assert sel.mode == "full" and _safety_escalations(sel)
 
 
@@ -1074,7 +1226,7 @@ def test_full_json_forces_the_actual_lab_plan_on_an_affected_only_change(sample,
     assert harness.main(["affected", "--repo", str(sample), "--base", "HEAD", "--full", "--json"]) == 0
     result = json.loads(capsys.readouterr().out)
     assert result["mode"] == "full"
-    assert result["full_invocations"] == affected.lab_full_invocations(affected.Repo.load(sample), result["local_invocations"])
+    assert result["full_invocations"] == affected.lab_full_invocations(_sample_repo(sample), result["local_invocations"])
     assert ["test"] in result["full_invocations"]
 
 
@@ -1084,3 +1236,60 @@ def test_ci_matrix_cli_also_prints_the_human_selection_to_stderr_without_changin
     captured = capsys.readouterr()
     assert captured.out.count("\n") == 1 and json.loads(captured.out)["mode"] == "full"
     assert "affected tier (D-436): mode=full" in captured.err
+
+
+def test_pack_drops_strict_child_paths_with_boundary_awareness():
+    class FakeRepo:
+        root = None
+
+        @staticmethod
+        def test_import_names(path):
+            return {path: path}
+
+    groups = affected_pack.pack(FakeRepo(), [
+        "a/b", "a/b/", "a/b/sub/t.py", "a/b2/t.py", "x/y/", "x/y/t.py", "dup/t.py", "dup/t.py",
+    ])
+    flat = [p for g in groups for p in g]
+    assert flat == ["a/b", "a/b2/t.py", "x/y/", "dup/t.py", "dup/t.py"]
+
+
+def test_contract_version_pin_narrows_until_non_pin_code_is_added():
+    import affected_narrow
+
+    assert affected_narrow.is_contract_version_pin_text('"""doc"""\n# comment\nCONTRACT = "ROSY-API-REF-001 v1.440"\n')
+    assert not affected_narrow.is_contract_version_pin_text("")
+    assert not affected_narrow.is_contract_version_pin_text('"""doc only"""\n# comment\n')
+    assert not affected_narrow.is_contract_version_pin_text('CONTRACT = "v1"\x00')
+    assert not affected_narrow.is_contract_version_pin_text("CONTRACT = (")
+    assert not affected_narrow.is_contract_version_pin_text('CONTRACT = "v1"\nCONTRACT = "v2"\n')
+
+    repo = affected.Repo.load(ROOT)
+    cv = affected_narrow.CONTRACT_VERSION_FILE
+    pin_sel = affected.select(repo, [cv])
+    assert pin_sel.mode == "affected"
+    assert set(affected_narrow.CONTRACT_VERSION_READERS) <= set(pin_sel.reasons)
+    assert "middleware/core/gateway/test" not in pin_sel.reasons
+    assert "middleware/core/api/test/test_arm_lease_api.py" not in pin_sel.reasons
+
+    repo._texts[cv] = 'CONTRACT = "ROSY-API-REF-001 v1.1"\n\ndef helper():\n    return 1\n'
+    code_sel = affected.select(repo, [cv])
+    assert "middleware/core/gateway/test" in code_sel.reasons
+    assert "middleware/core/api/test/test_arm_lease_api.py" in code_sel.reasons
+
+
+def test_unreferenced_deploy_example_narrows_to_functional_while_script_keeps_root_suite(sample, monkeypatch):
+    repo = affected.Repo.load(sample)
+    ex = "deploy/robot/omx/sample.env.example"
+    sibling_test = "deploy/robot/omx/test_sample_env.py"
+    repo.tracked.extend([ex, sibling_test])
+    repo.test_files.append(sibling_test)
+    repo._texts[sibling_test] = "def test_ok():\n    pass\n"
+    monkeypatch.setattr(repo, "exists", lambda p: p in {ex, sibling_test} or (sample / p).exists())
+    ex_sel = affected.select(repo, [ex])
+    assert ex_sel.mode == "affected"
+    assert "test" not in ex_sel.reasons
+    assert "test/test_robot_runtime.py" in ex_sel.reasons
+    assert sibling_test in ex_sel.reasons
+
+    sh_sel = affected.select(repo, ["deploy/robot/run.sh"])
+    assert "test" in sh_sel.reasons

@@ -1,4 +1,5 @@
 // D-941 5/7: the charge-bay plan remains display-only; task buttons use pipeline APIs.
+import { setOffBy } from "/common/cause-line.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
@@ -7,13 +8,12 @@ export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from 
 
 /** Choices that act on a robot need the server's occupant; the console never substitutes one. */
 // The human-safety gate is cell-wide and must never be disabled for want of a robot.
-export const needsRobot = (choice) => Boolean(choice.visionCheckCell || choice.cableGuardToggle
+const needsRobot = (choice) => Boolean(choice.visionCheckCell || choice.cableGuardToggle
   || choice.zoneId || choice.pinkyAction);
 
 function markNoRobot(button, choice, card) {
   if (!needsRobot(choice) || card.robot_id) return;
-  button.setAttribute("disabled", "");
-  button.setAttribute("reason", "대상 로봇 없음");
+  setOffBy(button, "대상 로봇 없음");
 }
 
 export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null }) {
@@ -71,8 +71,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         eligible: () => !auth.locked, request: () => executeChoice(choice, card, button, true)});
     }
     const origLabel = button.textContent;
-    button.setAttribute("reason", "요청 처리 중");
-    button.setAttribute("disabled", "");
+    setOffBy(button, "요청 처리 중");
     button.textContent = `${origLabel} (처리 중…)`;
     try {
       if (choice.cancelTaskId) {
@@ -124,19 +123,23 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         });
       }
       await refresh();
+      if (choice.requiresPresence) {
+        hint.textContent = "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.";
+        hint.hidden = false;
+      }
     } catch (error) {
       hint.textContent = `작업 요청 실패: ${error.message}`;
       hint.hidden = false;
     } finally {
       button.textContent = origLabel;
-      button.removeAttribute("disabled");
-      button.removeAttribute("reason");
+      setOffBy(button, "");
     }
   }
 
   function renderInspector(rows) {
     if (!inspector) return;
-    if (!rows?.cards?.length || !activeInspectorId) {
+    // No choice yet still shows the first cell's tabs (frames stay off until a click, framesOn).
+    if (!rows?.cards?.length) {
       inspector.replaceChildren();
       return;
     }
@@ -216,23 +219,51 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
       mainImg.alt = `${active.title} 실시간 메인 카메라`;
       mainImg.loading = "lazy";
-      mainImg.tabIndex = 0;
-      mainImg.addEventListener("click", () => mainImg.classList.toggle("focused"));
+      const stageBar = document.createElement("div");
+      stageBar.className = "omx-inspector-stage-bar";
       const mainCap = document.createElement("small");
       mainCap.className = "omx-inspector-cam-badge";
       mainCap.textContent = `🎥 [${activeCam.label}]`;
+      const zoomBtn = document.createElement("ui-button");
+      zoomBtn.className = "omx-inspector-zoom";
+      zoomBtn.setAttribute("kind", "quiet");
+      zoomBtn.setAttribute("type", "button");
+      zoomBtn.setAttribute("data-work-read", "");
+      zoomBtn.setAttribute("aria-expanded", "false");
+      zoomBtn.textContent = "크게 보기";
+      zoomBtn.setAttribute("aria-label", `${activeCam.label} 크게 보기`);
+      const applyZoom = (zoomed) => {
+        mainImg.classList.toggle("focused", zoomed);
+        zoomBtn.setAttribute("aria-expanded", String(zoomed));
+        zoomBtn.textContent = zoomed ? "원래 크기" : "크게 보기";
+        zoomBtn.setAttribute("aria-label", `${activeCam.label} ${zoomed ? "원래 크기" : "크게 보기"}`);
+      };
+      zoomBtn.addEventListener("click", () => applyZoom(!mainImg.classList.contains("focused")));
+      mainImg.addEventListener("click", () => applyZoom(!mainImg.classList.contains("focused")));
+      camStageNode.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape" && mainImg.classList.contains("focused")) {
+          ev.stopPropagation();
+          applyZoom(false);
+        }
+      });
+      stageBar.append(mainCap, zoomBtn);
       cameraBindings.push([mainImg, activeCam, mainCap, `🎥 [${activeCam.label}]`]);
-      camStageNode.append(mainImg, mainCap);
+      camStageNode.append(mainImg, stageBar);
     }
 
     const pipGrid = document.createElement("div");
     pipGrid.className = "omx-inspector-pip-grid";
     for (const v of camViews) {
-      const pip = document.createElement("div");
+      const pip = document.createElement("button");
+      pip.type = "button";
+      pip.setAttribute("data-work-read", "");
       pip.className = `omx-inspector-pip${v.id === activeCam.id ? " active" : ""}`;
+      pip.setAttribute("aria-pressed", String(v.id === activeCam.id));
+      pip.setAttribute("aria-label", `${v.label} 카메라 선택`);
       const pImg = document.createElement("img");
       pImg.className = "omx-inspector-cam";
-      pImg.alt = v.label;
+      pImg.alt = "";
+      pImg.setAttribute("aria-hidden", "true");
       pImg.loading = "lazy";
       cameraBindings.push([pImg, v]);
       const pLbl = document.createElement("small");
@@ -252,15 +283,24 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
     const quickDispatchBar = document.createElement("div");
     quickDispatchBar.className = "omx-inspector-quick-dispatch";
+    const tierField = document.createElement("label");
+    tierField.className = "omx-inspector-field";
+    const tierText = document.createElement("span");
+    tierText.textContent = "적재 층";
     const tierSel = document.createElement("select"); tierSel.className = "ui-field";
     tierSel.setAttribute("data-work-read", "");
-    for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]]) {
+    for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]] ) {
       const opt = document.createElement("option");
       opt.value = val;
       opt.textContent = lbl;
       if (active.id === "arm_b" && val === "2") opt.selected = true;
       tierSel.append(opt);
     }
+    tierField.append(tierText, tierSel);
+    const dispField = document.createElement("label");
+    dispField.className = "omx-inspector-field";
+    const dispText = document.createElement("span");
+    dispText.textContent = "복구 위치";
     const dispSel = document.createElement("select"); dispSel.className = "ui-field";
     dispSel.setAttribute("data-work-read", "");
     for (const [val, lbl] of [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]]) {
@@ -269,6 +309,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       opt.textContent = lbl;
       dispSel.append(opt);
     }
+    dispField.append(dispText, dispSel);
     const runCustomBtn = document.createElement("ui-button");
     runCustomBtn.setAttribute("kind", "primary");
     runCustomBtn.setAttribute("type", "button");
@@ -278,8 +319,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     runCustomBtn.textContent = `▶ ${targetArm} 맞춤 실행`;
     runCustomBtn.addEventListener("click", async () => {
       if (auth.locked || runCustomBtn.hasAttribute("disabled")) return;
-      runCustomBtn.setAttribute("reason", "요청 처리 중");
-      runCustomBtn.setAttribute("disabled", "");
+      setOffBy(runCustomBtn, "요청 처리 중");
       const orig = runCustomBtn.textContent;
       runCustomBtn.textContent = "등록 중…";
       try {
@@ -300,11 +340,10 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         hint.hidden = false;
       } finally {
         runCustomBtn.textContent = orig;
-        runCustomBtn.removeAttribute("disabled");
-        runCustomBtn.removeAttribute("reason");
+        setOffBy(runCustomBtn, "");
       }
     });
-    quickDispatchBar.append(tierSel, dispSel, runCustomBtn);
+    quickDispatchBar.append(tierField, dispField, runCustomBtn);
 
     const actions = document.createElement("div");
     actions.className = "omx-card-actions";

@@ -1,6 +1,7 @@
 // D-908: a known external trip proposal keeps its neutral contract and an independent named operator admits it.
+import { node } from "/common/control-dom.js";
+import { setOffBy } from "/common/cause-line.js";
 import { armAdmissionReason as admissionReason } from "/console/assets/arm-transfer-view.js";
-const node = (tag, text = "", className = "") => Object.assign(document.createElement(tag), {textContent: text, className});
 const states = {PROPOSED: "독립 운영자 승인 대기", ADMITTED: "승인됨 · 작업 생성"};
 export function createTripProposalView({scope, call, anchor, active, approveReason, principal, confirm}) {
   const panel = node("section", "", "arm-transfer-work"), heading = node("h2", "외부 앱 이송 제안"),
@@ -29,8 +30,7 @@ export function createTripProposalView({scope, call, anchor, active, approveReas
     admit.hidden = !proposal;
     const reason = busy ? "요청 처리 중입니다" : !proposal ? "제안을 먼저 조회하세요" :
       attempted ? "승인 요청 후 원본을 다시 조회하세요" : reasonNow();
-    admit.disabled = Boolean(reason); read.disabled = busy; input.readOnly = busy;
-    if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
+    setOffBy(admit, reason); setOffBy(read, busy ? "요청 처리 중입니다" : ""); input.readOnly = busy;
   }
   function field(title, value) { detail.append(node("dt", title), node("dd", String(value ?? "미확인"))); }
   function show() {

@@ -16,7 +16,9 @@ or ``identity_ttl_s`` since confirmation.
 
 Use (addendum 3): ``confirmed_track_pose`` is a D-511 lane-compliance *input* and a console
 display. It is never directly a MapPoseService arbitrated pose, a trip input, an initialpose or a
-command (test_boundaries.py); D-989 fits a transform from it, for robots opted in. Nothing here moves a robot.
+command (test_boundaries.py); D-989 fits a transform from it, for robots opted in, and auto_locate_service.py (the one pose
+reader) feeds it as a ``track`` map pose anchor for robots in fleet.map_pose.track_anchor_robots whose ``mode`` is in
+track_modes (2026-11-21 user decision, default off). Nothing here moves a robot.
 """
 
 from __future__ import annotations
@@ -28,7 +30,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
+from fleet.localization.motion_match import MotionMatcher
 from fleet.server.identity_triggers import AutoTriggers, caution
+from rosy.world.state.projections.map_pose_samples import odom_from_snapshot
 
 logger = logging.getLogger("fleet.identity")
 
@@ -60,19 +64,25 @@ class IdentityConfig:
     auto_min_interval_s: float = 30.0  # D-596 2: at most one request per robot per this
     auto_marker_missing_s: float = 3.0
     auto_near_m: float = 0.5
+    motion_match: bool = False       # 2026-11-21: also name a robot by its motion (motion_match.py), no lamp; the site opts in
+    motion_min_move_m: float = 0.15  # the robot's own pose must have moved this far
+    motion_tol_m: float = 0.06       # camera and robot distances agree within this (camera error about 5 cm, 2026-11-21)
+    motion_still_m: float = 0.04     # anything that moved less stood still
+    motion_window_s: float = 30.0    # a motion baseline older than this starts over
 
     def __post_init__(self) -> None:
         numbers = (self.window_s, self.verdict_grace_s, self.identity_ttl_s, self.overlap_m,
                    self.track_step_m, self.track_lost_s, self.moving_linear_mps,
                    self.moving_angular_rps, self.retry_s, self.auto_min_interval_s,
-                   self.auto_marker_missing_s, self.auto_near_m)
+                   self.auto_marker_missing_s, self.auto_near_m, self.motion_min_move_m, self.motion_tol_m,
+                   self.motion_still_m, self.motion_window_s)
         if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
                    for v in numbers):
             raise ValueError("identity settings must be positive numbers")
         if self.window_s > 6.0:
             raise ValueError("identity window_s must be at most 6 s (D-472 4)")
-        if not isinstance(self.auto_request, bool):
-            raise ValueError("identity auto_request must be true or false")
+        if not isinstance(self.auto_request, bool) or not isinstance(self.motion_match, bool):
+            raise ValueError("identity auto_request and motion_match must be true or false")
 
     @classmethod
     def from_mapping(cls, raw: Optional[Mapping]) -> "IdentityConfig":
@@ -114,6 +124,7 @@ class _Binding:
     confirmed_at: float
     evidence: dict = field(default_factory=dict)
     yaw: Optional[float] = None
+    mode: str = "led"    # how it was named: "led" (lamp verdict) | "motion" (motion_match.py)
 
 
 class IdentityService:
@@ -128,6 +139,8 @@ class IdentityService:
         self._bindings: dict[str, _Binding] = {}
         self._last: dict[str, dict] = {}       # robot_id -> last outcome (readback)
         self._asked_at: dict[str, float] = {}
+        self._motion: dict[str, MotionMatcher] = {}  # source_id -> motion baseline
+        self._motion_epochs: dict[str, dict] = {}    # source_id -> odometry epoch of each robot at the last frame
         self.triggers = AutoTriggers(config)
         #: robot_id -> Fleet MapPose (MapPoseService.arbitrated_pose); app.py sets it. Only the
         #: expected place for asking and for checking a verdict, never written back (addendum 3).
@@ -362,6 +375,41 @@ class IdentityService:
                     crowded |= {first.robot_id, second.robot_id}
         for robot_id in sorted(crowded):
             self._drop(robot_id, "overlap")
+        self._match_by_motion(source_id, payload)
+
+    def _match_by_motion(self, source_id: str, payload) -> None:
+        """Bind the robot whose own pose and exactly one detection moved alike (motion_match.py). The binding is
+        marked ``mode`` "motion" wherever it is read; the map pose may take it only if the site lists that mode (map_pose.track_modes)."""
+        source = next((s for s in getattr(self.tracking, "sources", ()) if s.source_id == source_id), None)
+        if not self.config.motion_match or source is None or payload.status != "OK":
+            self._motion.pop(source_id, None)
+            return
+        robots, epochs = {}, {}
+        for robot_id in source.robot_ids:
+            # Wheel odometry: distance moved needs no frame, and a real robot reports no localization status
+            # (site 2026-11-21: every robot read UNKNOWN, so nothing was ever named). Stale odometry is no pose.
+            odom = odom_from_snapshot(self.tracking.robot_state(robot_id))
+            fresh = odom is not None and abs(payload.captured_at - odom.stamp) <= self.config.motion_window_s
+            robots[robot_id] = (odom.x, odom.y) if fresh else None
+            epochs[robot_id] = odom.epoch if fresh else None
+        if self._motion_epochs.get(source_id, epochs) != epochs:
+            self._motion.pop(source_id, None)   # odometry restarted (CORE restart) or came or went: not a move
+        self._motion_epochs[source_id] = epochs
+        points = [(d.x, d.y) for d in payload.detections if d.marker_id is None]
+        matcher = self._motion.setdefault(source_id, MotionMatcher(
+            self.config.track_step_m, min_move_m=self.config.motion_min_move_m, tol_m=self.config.motion_tol_m,
+            still_m=self.config.motion_still_m, window_s=self.config.motion_window_s))
+        found = matcher.observe(payload.captured_at, points, robots)
+        if found is None:
+            return
+        robot_id, (x, y), moved = found
+        if any(other.robot_id != robot_id and other.source_id == source_id
+               and math.hypot(other.x - x, other.y - y) <= self.config.overlap_m for other in self._bindings.values()):
+            return  # that detection already carries another robot's name
+        now = self._clock()
+        self._bindings[robot_id] = _Binding(robot_id, source_id, payload.map_id, payload.calibration_revision,
+                                            x, y, payload.captured_at, now, {"moved_m": round(moved, 3)}, mode="motion")
+        self._last[robot_id] = {"state": "CONFIRMED", "reason": None, "at": now, "source_id": source_id}
 
     def _continue(self, payload, x: float, y: float):
         """(x, y, yaw) of the one anonymous detection continuing (x, y), or a reason string."""
@@ -391,7 +439,8 @@ class IdentityService:
     def confirmed_track_pose(self, robot_id: str) -> dict:
         """Map-frame pose of the robot's confirmed track, or UNKNOWN with the reason.
 
-        Observation only (addendum 3): D-511 lane compliance and the console. ``yaw`` is None:
+        Observation only (addendum 3) unless the site opts a robot into the track anchor (map_pose.track_*).
+        ``mode`` is "led" or "motion" (None when UNKNOWN). ``yaw`` is None unless the detection has one:
         the blob tracker reports no heading. ``age_s`` is not clamped: a negative age is a
         future-stamped detection, which the consumer refuses like a future map pose sighting.
         """
@@ -410,12 +459,12 @@ class IdentityService:
             return {"robot_id": robot_id, "state": "UNKNOWN", "reason": last.get("reason"),
                     "x": None, "y": None, "yaw": None, "age_s": None, "source_id": last.get("source_id"),
                     "map_id": None, "calibration_revision": None, "confirmed_at": None,
-                    "use": "observation-only"}
+                    "mode": None, "use": "observation-only"}
         return {"robot_id": robot_id, "state": "CONFIRMED", "reason": None,
                 "x": binding.x, "y": binding.y, "yaw": binding.yaw, "age_s": round(now - binding.seen_at, 3),
                 "source_id": binding.source_id, "map_id": binding.map_id,
                 "calibration_revision": binding.calibration_revision,
-                "confirmed_at": binding.confirmed_at, "use": "observation-only"}
+                "confirmed_at": binding.confirmed_at, "mode": binding.mode, "use": "observation-only"}
 
     def _source_current(self, binding: _Binding) -> bool:
         source = next((s for s in self.tracking.sources if s.source_id == binding.source_id), None)

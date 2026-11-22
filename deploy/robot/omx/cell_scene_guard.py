@@ -45,6 +45,23 @@ def moved_blobs(before, after, roi, base_px, target_px, params=None, _pre=None) 
     return sorted(blobs, key=lambda b: -b["area"])
 
 
+def moving_rects(config: dict) -> list:
+    """Top-view rects ([x0, y0, x1, y1]) that may move during calibration: `belt` and any `moves: true` site."""
+    rects = []
+    for name, site in (config.get("sites") or {}).items():
+        if not site or (name != "belt" and not site.get("moves")):
+            continue
+        if site.get("moving_px"):
+            rects.append(site["moving_px"])
+            continue
+        if site.get("auto_roi"):
+            rects.append(site["auto_roi"])
+        if site.get("surface_px"):
+            xs, ys = [p[0] for p in site["surface_px"]], [p[1] for p in site["surface_px"]]
+            rects.append([min(xs), min(ys), max(xs), max(ys)])
+    return rects
+
+
 def scene_moved(before, after, ignore=()) -> list:
     """Regions that differ between two whole top views taken with the arms folded: [area, x0, y0, x1, y1]. Folded, the arm is in
     both views, so unlike moved_blobs the whole frame can be compared. `ignore` rects ([x0, y0, x1, y1]) always change, like

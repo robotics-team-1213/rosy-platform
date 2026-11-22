@@ -198,12 +198,16 @@ def require_manual_released(svc: CoreServicesLike) -> None:
         raise ApiError("MODE_CONFLICT", 409, "manual control is active")
 
 
-def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext) -> None:
+def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext, *, expected=None) -> bool:
     """D-2: Nav2 velocity only reaches the wheels in NAVIGATION."""
     # Nav goal, return-home, swarm follow and line-follow all drive through here.
     require_manual_released(svc)
     require_calibration_owner(svc, auth, "navigation")
+    if expected is not None and (svc.modes.mode, svc.modes.epoch) != expected:
+        raise ApiError("MODE_CONFLICT", 409, "the admitted navigation mode changed")
     if svc.line_follow.active:
+        if expected is not None:
+            raise ApiError("MODE_CONFLICT", 409, "line following changed since path admission")
         status = svc.line_follow.stop()
         svc.command.clear_navigation()
         svc.state.set_line_follow(status)
@@ -211,15 +215,21 @@ def enter_navigation_mode(svc: CoreServicesLike, auth: AuthContext) -> None:
         svc.nav.require_ready()
     except NavigationError as exc:
         raise ApiError(exc.code, 503, str(exc)) from exc
-    if svc.modes.mode is Mode.NAVIGATION:
-        return
-    svc.command.clear_navigation()
-    ok, reason = svc.modes.transition(Mode.NAVIGATION)
+    if expected is None and svc.modes.mode is Mode.NAVIGATION:
+        return False
+    if expected is None:
+        svc.command.clear_navigation()
+    args = {} if expected is None else {"expect": expected[0], "expect_epoch": expected[1]}
+    ok, reason = svc.modes.transition(Mode.NAVIGATION, **args)
     if not ok:
         raise ApiError("MODE_CONFLICT", 409, reason)
-    svc.state.set_mode(RobotMode.NAVIGATION)
+    if expected is not None and expected[0] is Mode.NAVIGATION:
+        return False
+    if expected is None:
+        svc.state.set_mode(RobotMode.NAVIGATION)
     svc.events.publish(
         "mode.changed",
         source="api",
         data={"from": "api", "to": Mode.NAVIGATION.value, "by": auth.role},
     )
+    return True

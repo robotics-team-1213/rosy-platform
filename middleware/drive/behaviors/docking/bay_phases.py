@@ -28,30 +28,35 @@ from core_common.protocol.schemas import NavigationState
 from core_features.docking.bay_align import BayAlignMixin
 from core_features.docking.bay_guards import BayGuardsMixin, entry_ok, heading_gate, rear_blocked, reverse_twist
 from core_features.docking.bay_zone import map_offsets
+from core_features.docking.bay_lidar_steer import BayLidarSteerMixin
+from core_features.docking.bay_centre import BayCentreMixin
+from core_features.docking.bay_reseat import BayReseatMixin
+from core_features.docking.bay_turn_watch import BayTurnMixin
+from core_features.docking.bay_zone_checks import BayZoneChecksMixin
 from core_features.docking.bay_zone_phases import BayZoneMixin
-from core_features.docking.charging import ChargingConfirmation
+from core_features.docking.charging import PackChargeConfirmation
 from core_features.docking.model import DockPhase
-from core_features.docking.parking import ParkingGains, turn_twist
+from core_features.docking.parking import ParkingGains
 from core_features.docking.rear_phases import rear_errors
 
 _TURN_GAINS = ParkingGains()
 _LOG = logging.getLogger(__name__)
 
 
-class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
+class BayPhases(BayZoneChecksMixin, BayZoneMixin, BayGuardsMixin, BayAlignMixin, BayTurnMixin, BayLidarSteerMixin, BayReseatMixin, BayCentreMixin):
     """The pink guide-line charge bay, under the manager's lock (D-1013)."""
 
     def __init__(self, host: Any) -> None:
         self._h = host
         # 전압 1소스(D-941 숫자: 20 s 창) — D-27 억제 입력이 아니다.
-        self._charging = ChargingConfirmation(clock=host._clock,
-                                              window_s=host._cfg.bay_charge_confirm_s,
-                                              instrumented=False)
+        self._charging = PackChargeConfirmation(clock=host._clock, window_s=host._cfg.bay_charge_confirm_s)
         self._est: Optional[tuple[float, float]] = None   # (횡, 방위) 추정 — 예측이 메운다
         self._no_obs_s = 0.0
         self._scan_s: Optional[float] = None
         self._resync = False
         self._turn_target: Optional[float] = None
+        self._site_verified, self._site_refusal = False, None      # CORE's judgement of the dock command's site_pose_evidence (Nav2 staging allowed only when accepted)
+        self._pitin = False                        # this dock run turned at the junction on the LiDAR pose (bay_zone.junction_geometry)
         self._stage_bad: Optional[float] = None           # first tick the arrival heading looked wrong
         self._turn_dir = -1.0                             # fixed turn sense: tray swings downstream
         self._creep_from: Optional[float] = None          # 정착 크립 시작 travelled
@@ -62,16 +67,21 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         self._slip: Optional[tuple[float, float]] = None   # (travelled, along) 창 시작
         self._backoff = False
         self._last_tick: Optional[float] = None
-        self._baseline_v: Optional[float] = None
         self._fleet_cue: Optional[tuple[float, dict]] = None
         # 칸 줄 안 시작(bay_zone.py): None | "check"(선 관측 기다려 판정) | "exit"(곧은 전진)
         self._zone: Optional[str] = None
         self._zone_checked = False      # "out" 판정 직후 한 번은 Nav2 스테이징으로 보낸다
         self._exit_m = 0.0
+        self._init_scan()                              # LiDAR bay pose requests (bay_zone_phases.py)
         # 몸 스캔(짐칸 포함 회전 판정, 앞 여유): (rotation_block, front_gap, rear_gap, at)
         self._body: Optional[tuple] = None
         self._init_guards()
         self._init_align()
+        self._init_tw()
+        self._init_ls()
+        self._init_reseat()
+        self._init_centre()
+        self._facing_bay = False                   # the last LiDAR pose had the nose toward the bay: a retry back-off stays still
 
     # --- 매니저가 부르는 자리 ---------------------------------------------------
 
@@ -93,7 +103,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         if status is not None:
             return self._h._charging.update(status, voltage, now=now), self._h._charging
         if self.active():
-            return self._charging.update(None, voltage, now=now), self._charging
+            return self._pack_charging(now), self._charging
         return self._h._rear_phases.docked_confirm(status, voltage, now)
 
     def note_body_scan(self, rotation_block: Optional[str], front_gap_m: Optional[float],
@@ -106,9 +116,11 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             return None
         return self._body
 
-    def _forward_block(self, now: float, since: float) -> Optional[str]:
+    def _forward_block(self, now: float, since: float, step: Optional[float] = None, facing_ok: bool = False) -> Optional[str]:
         """곧은 전진(칸 줄 나가기·재시도 후퇴·정착 크립) 전 앞 확인: None = 가도 된다, "wait" = 아직
         판정 없음(멈춰 기다림), 그 밖 = 실패 사유. 점이 없거나 앞 빔이 무응답이면 비어 있는 것이 아니다."""
+        if not facing_ok and self._facing_recent(now):
+            return "the last LiDAR bay pose has the nose toward the bay: no forward move in the row"      # settle creep / retry back-off / lane exit drive at the bay
         body = self._body_fresh(now)
         if body is not None and body[3] < since:
             body = None
@@ -117,8 +129,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         if body[0] in ("empty", "unknown"):
             return "LiDAR cannot vouch for the way ahead (%s)" % body[0]
         if body[1] is not None and body[1] < self._h._cfg.bay_exit_front_gap_m:
-            return "something ahead within %.2f m" % self._h._cfg.bay_exit_front_gap_m
-        return None
+            return "something ahead within %.2f m (front gap %.3f m, body scan %.1f s old)" % (self._h._cfg.bay_exit_front_gap_m, body[1], max(0.0, now - body[3]))
+        return self._row_forward_reason(step, now, since)
 
     def zone_entry(self) -> bool:
         """스테이징 전에 칸 줄 안인지 본다(시작·재시도 모두). 판정을 맡으면 True."""
@@ -129,6 +141,11 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             return False
         h = self._h
         self._reset_line_state()
+        self._row_pose = None if h._retries == 0 and h._reseats == 0 else self._row_pose      # a fresh dock starts without an old pose
+        if h._retries == 0 and h._reseats == 0:
+            self._pitin = False
+            self._cen_n = 0
+            self._facing_bay = False
         if h._detector is None and h._detector_factory is not None and h._dock is not None:
             h._detector = h._detector_factory(h._dock, h._type())
         if h._detector is not None:
@@ -136,6 +153,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         if h.executor is not None:
             h.executor.stop()
         self._zone = "check"
+        self._req_open = None                          # close the open request before the next ask is allowed
+        self._scan_asked, self._scan_match, self._scan_error, self._bay_lateral = False, None, None, None
         h._enter(DockPhase.BACKOFF)
         return True
 
@@ -173,6 +192,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
 
     def _stop(self) -> None:
         self._omega = 0.0
+        self._progress = None     # A commanded wait is not time spent pushing against the stop.
         if self._h.executor is not None:
             self._h.executor.stop()
 
@@ -182,12 +202,12 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             return obs
         # Only the corridor line was seen: heading and along are measured, the lateral is not. Fill it from
         # the running estimate, else from the map pose; never from the payload's placeholder (2026-11-18).
-        lateral = self._est[0] if self._est is not None else None
+        lateral = self._est[0] if self._est is not None else self._bay_lateral
         if lateral is None:
             pose = self._h._pose_provider()
             if pose is None or self._h._dock is None:
                 return None
-            lateral = map_offsets(pose, self._h._dock)[1]
+            lateral = self._bay_lateral if self._bay_lateral is not None else map_offsets(pose, self._h._dock)[1]
         along, _, _ = rear_errors(obs)
         ax, ay = math.cos(obs.yaw), math.sin(obs.yaw)
         return obs.model_copy(update={"x": along * ax + lateral * ay, "y": along * ay - lateral * ax})
@@ -214,47 +234,32 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
                 h._fail("bay staging arrival heading off the bay axis")
             return
         self._stage_bad = None
+        self._start_staging_turn(now, pose)
+
+    def _start_staging_turn(self, now: float, pose, bay_heading=None) -> None:
+        """The 180 turn at the staging point (also used by a pit-in arrival at the junction, which has no Nav2 leg); the turn is watched by bay_turn_watch."""
+        h = self._h
         self._reset_line_state()
         if h._retries == 0 and h._reseats == 0:
             self._seen.clear()           # a fresh dock; a guard failure always counts a retry or reseat
             self._align_n = 0
+            self._tw_flipped = False       # a fresh dock may flip its staging turn once again
         self._turn_dir = -math.copysign(1.0, h._cfg.bay_downstream_sign) if h._cfg.bay_downstream_sign else 0.0
-        self._turn_target = pose[2] + (self._turn_dir or 1.0) * math.pi
+        if h._cfg.bay_turn_first_dir:
+            self._turn_dir = math.copysign(1.0, h._cfg.bay_turn_first_dir)       # per-robot config: +1 ccw, -1 cw (0: the downstream rule)
+        elif self._turn_bad_dir and self._turn_dir == self._turn_bad_dir:
+            self._turn_dir = -self._turn_dir                                      # learned: this robot's body did not follow that sense
+        self._facing_bay = False                   # after the turn the rear is toward the bay
+        self._last_lidar = None                    # the turn changes the heading: the old facing-bay memory no longer holds
+        ang = math.pi
+        if bay_heading is not None:
+            self._pitin = True
+            # pit-in: turn to the LiDAR bay heading 0 (rear to the bay), not a fixed 180 (b8xy: it stood 13.5 deg short of 180 and ended -13 deg); at most 180, the rest is
+            # left to the in-place heading align the strict pit-in entry window triggers
+            ang = min(math.pi, (-(self._turn_dir or 1.0) * bay_heading) % math.tau)
+        self._turn_target = pose[2] + (self._turn_dir or 1.0) * ang
+        self._tw_start(pose[2], now, want=ang)
         h._enter(DockPhase.TURNING)
-
-    def _tick_turning(self, now: float) -> None:
-        h = self._h
-        pose = self._odometry()
-        if pose is None:
-            h._fail("bay odometry unavailable")
-            return
-        body = self._body_fresh(now)
-        if body is not None and body[3] < h._phase_since:
-            body = None          # a scan from before the stop at staging says nothing about here
-        if body is None or body[0] is not None:
-            # 짐칸 포함 회전 판정이 비어 있다고 할 때만 돈다 — 매 틱(2026-11-18 옆 칸 접촉).
-            self._stop()
-            if body is not None or now - h._phase_since > h._cfg.bay_scan_wait_s:
-                h._fail("bay turn not clear: %s" % (body[0] if body else "no fresh body scan"))
-            return
-        error = _wrap(self._turn_target - pose[2])
-        if error * self._turn_dir < 0.0:
-            if abs(error) > math.pi - 0.2:
-                error += self._turn_dir * 2.0 * math.pi  # start: near ±pi the wrap flips on noise, keep the sense
-            elif abs(error) > h._cfg.bay_turn_overshoot_rad:
-                self._stop()                             # a long way back would swing the tray upstream
-                h._fail("bay turn overshot the target")
-                return
-        angular, done = turn_twist(error, _TURN_GAINS)
-        if done:
-            self._stop()
-            h._begin_acquiring()      # 검출기 시작 + ACQUIRING (매니저 규칙 그대로)
-            return
-        if now - h._phase_since > h._cfg.turn_timeout_s:
-            self._stop()
-            h._retry("bay turn timed out")
-            return
-        self._drive(0.0, angular)
 
     def _tick_acquiring(self, now: float) -> None:
         """선 포획 + 캐스터 정착 크립 + 두 번 일치. 크립 없이는 후진 첫 cm 에 킥이 온다."""
@@ -272,18 +277,32 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
                     self._stop()
                     h._retry("bay line lost after the settle creep")
                 return
-            if self._match is not None and (
+            # a reference-scan dock judges lateral and heading by the LiDAR pose (entry window below): the camera heading is wrong at this site
+            # (-20 deg on a straight body), so the pre/post-creep camera comparison is not a jump check there; the camera still has to SEE the line
+            if self._match is not None and not self._has_reference() and (
                     abs(lateral - self._match[0]) > cfg.bay_gate_jump_m
                     or abs(heading - self._match[1]) > cfg.bay_gate_jump_rad):
+                # A frame that does not match the one before the creep is not evidence (the camera line can alternate between
+                # the corridor line and a spurious fit): stand still and wait for a matching one; retry only past the grace.
                 self._stop()
-                h._retry("bay line observation jumped after the creep")
+                if h._last_seen_at is None or now - h._last_seen_at > cfg.detector_lost_grace_s:
+                    h._retry("bay line observation jumped after the creep (lat %.0f mm, head %.1f deg vs %.0f mm, %.1f deg)"
+                             % (lateral * 1000.0, math.degrees(heading), self._match[0] * 1000.0, math.degrees(self._match[1])))
                 return
-            if not entry_ok(cfg, lateral, heading):
+            h._last_seen_at = now
+            camera_lateral = lateral
+            got = self._entry_values(now, lateral, heading)
+            if got == "stop":
+                return
+            lateral, heading = got
+            if not entry_ok(cfg, lateral, heading) or (self._pitin and abs(heading) > cfg.bay_pitin_entry_heading_rad):
                 if self._try_heading_align(now, lateral, heading):
                     return
                 # Too far off to converge: never reverse into it. A straight back-off keeps the bearing, so start over.
                 self._guard_fail("entry", "entry error outside the window (lat %.0f mm, head %.0f deg)"
-                                 % (lateral * 1000.0, math.degrees(heading)), h._retry)
+                                 % (lateral * 1000.0, math.degrees(heading)), h._fail if self._pitin else h._retry)       # pit-in: no Nav2 staging to retry from
+                return
+            if self._entrance_blocked(now, along, camera_lateral):
                 return
             self._est = (lateral, heading)
             self._no_obs_s = 0.0
@@ -296,6 +315,8 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             self._travel_cap_m = along + cfg.bay_travel_margin_m if self._along_m is not None else None
             self._progress = None
             self._slip = None
+            self._gap_hist, self._along_last = [], None
+            self._reset_ls()
             h._enter(DockPhase.ALIGNING)
             return
         if (along, lateral, heading) == (None, None, None):
@@ -311,7 +332,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             h.executor.reset_odometry_mark()
             self._creep_from = 0.0
         if abs(h.executor.travelled_m()) < cfg.bay_settle_creep_m:
-            block = self._forward_block(now, h._phase_since)
+            block = self._forward_block(now, h._phase_since, cfg.bay_settle_creep_m)
             if block is not None:
                 self._stop()
                 if block != "wait":
@@ -330,10 +351,18 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             h._fail("bay executor unavailable")
             return
         dt = now - self._last_tick if self._last_tick is not None else 0.0
+        self._note_rear_gap(now)
         self._ingest_observation(dt)
         if self._apply_fleet_evaluation(now) is not None:
             return
         speed = cfg.bay_reverse_speed
+        steer = self._lidar_steer(now)
+        if steer == "stop":
+            return
+        if steer == "use":
+            self._scan_s, self._no_obs_s, self._resync = None, 0.0, False      # the camera line is not what steers here
+            if self._rail_judge(now):
+                return
         if self._scan_s is not None:
             # 스캔은 정지 상태에서 천천히 ±bay_scan_rad — 회전 중 병진이 흐르면 눈감고 접촉한다.
             # 주기: +폭 0.25 s → 정지 → −2×폭 0.25 s → 정지(대칭 복귀), 2.5 s 주기.
@@ -357,14 +386,25 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             return
         if cfg.bay_coast_slow_s < self._no_obs_s:
             speed = 0.02
-        if self._blind_lateral(dt, speed):
+        if steer != "use" and self._blind_lateral(dt, speed):
             return
         body = self._body_fresh(now)
-        if body is not None and rear_blocked(cfg, body[2], self._along_m):
-            self._guard_fail("rear", "LiDAR sees something in the bay before the stop face", h._retry)
+        rear_along = self._rear_along if steer == "use" else self._along_m
+        if body is not None and rear_blocked(cfg, body[2], rear_along):
+            self._guard_fail("rear", "LiDAR sees something in the bay before the stop face (rear gap %.3f m, expected %.3f m from along %.3f m)" % (
+                body[2], max(0.0, rear_along - cfg.bay_turn_rear_overhang_m), rear_along), h._retry)
+            return
+        if self._lidar_seated(now):
+            self._begin_settling()               # the LiDAR puts the rear at the stored seated gap: the real stop
             return
         lateral, heading = self._est
-        angular = reverse_twist(cfg, lateral, heading)
+        angular = reverse_twist(cfg, lateral * (cfg.bay_lidar_lateral_gain_mult if steer == "use" else 1.0), heading)
+        if steer == "use":
+            angular = max(-cfg.bay_rail_max_angular, min(cfg.bay_rail_max_angular, angular))
+        if steer == "use" and self._lidar_stalled(now):
+            self._stop()
+            h._retry("bay reverse stalled in the rails (LiDAR rear gap unchanged over %.1f s while reversing): held" % cfg.bay_lidar_stall_s)
+            return
         self._drive(-speed, angular)
         # 추정은 오도메트리 명령으로 전파(프레임 사이를 메운다)
         self._est = (lateral + speed * math.sin(heading) * dt,
@@ -413,17 +453,20 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
 
     def _contact(self, travelled: float, now: float) -> bool:
         """접촉 3중 판정: 진행 멈춤 · 슬립 발산 · 거리 상한."""
-        h, cfg = self._h, self._h._cfg
+        cfg = self._h._cfg
+        moving = self._lidar_moving(now)
         if self._slip is not None and self._slip[0] == "contact":
-            self._begin_settling()
-            return True
-        last, since = self._progress or (travelled, now)
-        if travelled - last >= cfg.contact_progress_m:
+            if moving:
+                self._slip = None                  # the line's shape stood still but the LiDAR sees the body going back
+            else:
+                self._begin_settling()
+                return True
+        if self._progress is None or travelled - self._progress[0] >= cfg.contact_progress_m or moving:
             self._progress = (travelled, now)
-        elif now - since >= cfg.contact_stall_s:
+        elif now - self._progress[1] >= cfg.contact_stall_s:
             self._begin_settling()
             return True
-        if self._travel_cap_m is not None and travelled >= self._travel_cap_m:
+        if self._travel_cap_m is not None and travelled >= self._travel_cap_m and not moving:
             self._begin_settling()
             return True
         return False
@@ -435,9 +478,15 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         self._stop()
         if h.executor is not None:
             h.executor.set_collision_exemption(False)
-        self._charging.reset()
-        self._baseline_v = None
+        self._charging.begin_settling(h._battery)
+        self._req_open = None
+        self._seat_asked, self._seat_match, self._seat_tries = False, None, 0
         h._enter(DockPhase.SETTLING)
+
+    def _pack_charging(self, now: float) -> bool:
+        h, cfg = self._h, self._h._cfg
+        return self._charging.observe(h._battery, now=now, since_settled=now - h._phase_since,
+                                      baseline_delay_s=cfg.bay_settle_baseline_s, rise_v=cfg.bay_charge_rise_v)
 
     def _tick_settling(self, now: float) -> None:
         """전압 1소스(D-941): 멈춘 뒤 2 s 기준, 20 s 안 +0.05 V 상승."""
@@ -446,47 +495,15 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         if cue is not None and cue.get("verdict") == "RETRY_FROM_P":
             h._retry("fleet bay contact misaligned")
             return
-        voltage = getattr(h._battery, "voltage", None) if h._battery is not None else None
-        valid = voltage is not None and math.isfinite(float(voltage))
-        if self._baseline_v is None and valid and now - h._phase_since >= cfg.bay_settle_baseline_s:
-            self._baseline_v = float(voltage)
-        confirmed = self._charging.update(None, voltage, now=now)
-        peak = self._charging.peak_v
-        if (confirmed and self._baseline_v is not None and peak is not None
-                and peak - self._baseline_v >= cfg.bay_charge_rise_v):
+        if self._seat_blocked(now):
+            return
+        if self._pack_charging(now):
             h._mark_docked()
             return
         if now - h._phase_since > cfg.settle_timeout_s + cfg.bay_charge_confirm_s:
+            if self._settle_unconfirmed():
+                return
             h._retry("no charge after bay contact")
-
-    def _tick_backoff(self, now: float) -> None:
-        """재시도: 교차점 쪽으로 전진한 뒤 스테이징부터."""
-        h, cfg = self._h, self._h._cfg
-        if h.executor is None:
-            h._fail("bay executor unavailable")
-            return
-        if not self._backoff:
-            h.executor.reset_odometry_mark()
-            self._backoff = True
-        if abs(h.executor.travelled_m()) < cfg.bay_backoff_m:
-            if now - h._phase_since > cfg.backoff_timeout_s:
-                self._stop()
-                h._fail("bay backoff blocked")
-                return
-            block = self._forward_block(now, h._phase_since)
-            if block is not None:
-                self._stop()
-                if block != "wait":
-                    h._fail("bay backoff: " + block)
-                return
-            self._drive(cfg.undock_speed, 0.0)
-            return
-        self._stop()
-        self._reset_line_state()
-        if getattr(h, "_next_phase_after_backoff", None) is DockPhase.ACQUIRING:
-            h._begin_acquiring()             # a reseat: the line is in view, no Nav2 round trip
-        else:
-            h._begin_staging()
 
     # --- 보조 -----------------------------------------------------------------
 
@@ -544,6 +561,10 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
         self._fleet_cue = None
         self._zone = None
         self._exit_m = 0.0
+        self._entry_since, self._entry_asked, self._entry_match = None, False, None
+        self._reset_find()
+        self._reseat_active = False
+        self._reset_ls()                              # the LiDAR-steer state of an earlier attempt must not outlive its ALIGNING
         self._blind_s = self._blind_m = 0.0
 
     def _odometry(self):
@@ -557,6 +578,7 @@ class BayPhases(BayZoneMixin, BayGuardsMixin, BayAlignMixin):
             return None, None, None
         errors = rear_errors(observation)
         self._along_m = errors[0] if observation.along_measured else None
+        self._note_along()
         self._obs_age = max(0.0, self._h.now() - observation.at)
         return errors
 

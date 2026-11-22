@@ -57,3 +57,43 @@ test("an unchanged source refresh keeps the current lease/profile and operator c
   h.choose("south");
   assert.equal(h.view.currentSource(), "south");
 });
+
+test("invalidating page scope while refreshFrame awaits refreshSources resolves cleanly without AbortError", async () => {
+  const elements = new Map();
+  const el = (id) => {
+    if (!elements.has(id)) elements.set(id, {
+      value: "", dataset: {}, textContent: "", hidden: false,
+      querySelectorAll: () => [], setAttribute() {}, toggleAttribute() {},
+      getBoundingClientRect: () => ({ width: 480, height: 270 }),
+      replaceChildren(...options) { this.options = options; this.value = options[0]?.value || ""; },
+    });
+    return elements.get(id);
+  };
+  let current = true;
+  let calls = 0;
+  const scope = {
+    capture: () => ({
+      signal: new AbortController().signal,
+      current: () => current,
+      check() { if (!current) throw new DOMException("Page operation is no longer current", "AbortError"); },
+    }),
+    listen() {}, onDispose() {}, subscribe() {},
+  };
+  const view = createVisionView({
+    scope, el, isActive: () => true,
+    call: async (path) => {
+      calls += 1;
+      if (path === "/api/fleet/vision/sources") {
+        current = false;  // pageScope.invalidate() while refreshSources is in flight
+        return { sources: ["north"] };
+      }
+      throw new Error(`unexpected call after invalidation: ${path}`);
+    },
+  });
+  await assert.doesNotReject(view.refreshFrame());
+  assert.equal(calls, 1);
+  current = false;
+  await assert.doesNotReject(view.refreshSources());
+  await assert.doesNotReject(view.refreshFrame());
+  assert.equal(calls, 1);
+});

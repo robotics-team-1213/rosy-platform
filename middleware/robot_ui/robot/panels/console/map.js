@@ -57,6 +57,7 @@ export function mount(root, ctx) {
 
   let state = null;
   let mappingActive = null;
+  let navigationReady = null;
   let capabilities = null;
   let commissioning = null;
   let mapIdMismatch = false;
@@ -93,7 +94,14 @@ export function mount(root, ctx) {
   const safeStopped = () => state?.mode === "SAFE_STOP";
   const goalPoseReady = () => state && new HeadlessState(state).isFresh("pose")
     && (state.localization == null || (state.localization.state === "LOCALIZED" && state.localization.pose_frame === "map"));
-  const canMapAction = (mode) => baseMapAction() && (mode !== "goal" || (!safeStopped() && goalPoseReady()));
+  function goalBlockReason() {
+    if (safeStopped()) return "안전 정지 중 주행 목표 불가";
+    if (!goalPoseReady()) return "위치 추정 확인 후 가능";
+    if (navigationReady === false) return "내비게이션 준비 후 가능";
+    if (navigationReady !== true) return "내비게이션 준비 상태 확인 후 가능";
+    return "";
+  }
+  const canMapAction = (mode) => baseMapAction() && (mode !== "goal" || !goalBlockReason());
   function renderReadiness() {
     readinessStatus.hidden = false;
     const errors = [["로봇 상태", readErrors.state], ["내비게이션 기능", readErrors.capabilities], ["실행 모드", readErrors.commissioning]]
@@ -118,6 +126,9 @@ export function mount(root, ctx) {
     if (mapIdMismatch) clickReason.textContent = "로봇과 지도 ID가 달라 위치·주행 목표를 막았습니다. 지도 갱신을 기다리세요.";
     else if (baseMapAction() && safeStopped()) clickReason.textContent = "안전 정지 중에는 주행 목표를 보낼 수 없습니다. 초기 위치 설정은 사용할 수 있습니다.";
     else if (baseMapAction() && !goalPoseReady()) clickReason.textContent = "현재 위치 추정이 확인되지 않아 주행 목표를 막았습니다. 초기 위치 설정은 사용할 수 있습니다.";
+    else if (baseMapAction() && navigationReady !== true) clickReason.textContent = navigationReady === false
+      ? "내비게이션을 준비하는 중입니다. 초기 위치 설정은 사용할 수 있습니다."
+      : "내비게이션 준비 상태를 확인할 수 없습니다. 초기 위치 설정은 사용할 수 있습니다.";
     else if (baseMapAction()) clickReason.textContent = "지도를 선택하면 확인 후 위치 또는 주행 목표를 전송합니다.";
     else if (!operator) clickReason.textContent = "위치·주행 목표 설정에는 운용자 권한이 필요합니다.";
     else if (readErrors.capabilities) clickReason.textContent = `내비게이션 기능을 확인할 수 없어 지도 조작을 막았습니다: ${readErrors.capabilities}`;
@@ -150,8 +161,7 @@ export function mount(root, ctx) {
       && state.localization.pose_frame === "map" ? state.pose : null,
     getNavigation: () => !safeStopped() && new HeadlessState(state).isFresh("navigation") && goalPoseReady() ? state.navigation : null,
     canGoal: canMapAction,
-    goalReason: (mode) => mode === "goal" && baseMapAction()
-      ? safeStopped() ? "안전 정지 중 주행 목표 불가" : !goalPoseReady() ? "위치 추정 확인 후 가능" : "" : "",
+    goalReason: (mode) => mode === "goal" && baseMapAction() ? goalBlockReason() : "",
     setAction: (text) => { setText(action, text); },
     onTargetReadout: (target) => {
       targetReadout.hidden = target.unavailable;
@@ -174,8 +184,12 @@ export function mount(root, ctx) {
   });
   const stopMapping = ctx.store.poll("/api/v1/navigation/state", 1_000, (payload) => {
     mappingActive = typeof payload?.mapping_active === "boolean" ? payload.mapping_active : null;
-    renderStage();
-  }, () => { mappingActive = null; renderStage(); });
+    navigationReady = payload?.readiness?.ready ?? null;
+    renderStage(); syncMapActions(); map.setPose();
+  }, () => {
+    mappingActive = null; navigationReady = null;
+    renderStage(); syncMapActions(); map.setPose();
+  });
   const stopCommissioning = ctx.store.poll("/api/v1/host/commissioning", 2_000, (payload) => {
     commissioning = payload; readErrors.commissioning = null; renderReadiness(); syncMapActions(); map.setPose();
   }, (error) => {

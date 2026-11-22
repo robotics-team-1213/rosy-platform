@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from typing import Literal
 
 from fastapi import APIRouter, Depends
@@ -19,13 +20,16 @@ from core_api_web.api.v1.common import (
     stop_ends_trip_lease,
     viewer,
 )
-from core_api_web.api.deps import GOAL_LEASE_MAX_S, MAX_POINTS, AuthContext, RoutePoint, get_services, CoreServicesLike
-from core_api_web.api.errors import ApiError
+from core_api_web.api.deps import (GOAL_LEASE_MAX_S, MAX_POINTS, AuthContext, Mode, NavigationError,
+                                  RoutePoint, get_services, CoreServicesLike)
+from core_api_web.api.errors import ApiError, navigation_error_status
 from core_api_web.api.grants import NAVIGATE, check_grant
 from core_api_web.api.v1.localization import send_decision
 from core_common.domain.tasks import TaskKind
 from core_common.protocol.schemas import ScopedNavigationCancelRequest
+from core_common.protocol.trip_lease import TripLeaseError
 from core_api_web.api.v1.navigation_handover import navigation_handover
+from core_api_web.api.v1.navigation_plan import plan_scope, verify_plan_start
 
 
 navigation_router = APIRouter(prefix="/api/v1", tags=["navigation"])
@@ -42,6 +46,30 @@ class GoalRequest(BaseModel):
     lease_ttl_s: float | None = Field(default=None, gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
     expected_boot_id: UUID | None = None
     expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
+
+
+class BoundGoalRequest(GoalRequest):
+    expected_map_grid_id: str = Field(min_length=1, max_length=128, strict=True)
+    plan_id: UUID | None = None
+
+
+class PlanLineStop(BaseModel):
+    lease_id: str = Field(min_length=1, max_length=64, strict=True)
+    trip_id: str = Field(min_length=1, max_length=128, strict=True)
+    job_id: str | None = Field(default=None, max_length=128, strict=True)
+    junction_seq: int = Field(gt=0, strict=True)
+    stop_place_id: str = Field(min_length=1, max_length=128, strict=True)
+
+
+class LineHandoffGoalRequest(BoundGoalRequest, PlanLineStop):
+    correlation_id: str = Field(min_length=1, max_length=128, strict=True)
+    expected_boot_id: UUID
+    expected_owner_generation: int = Field(ge=0, strict=True)
+
+
+class BoundPlanRequest(BoundGoalRequest):
+    correlation_id: str = Field(min_length=1, max_length=128, strict=True)
+    line_stop: PlanLineStop | None = None
 
 
 class HomeRequest(BaseModel):
@@ -75,17 +103,141 @@ def _goal_gates(body, auth: AuthContext, svc: CoreServicesLike) -> None:
 @navigation_router.post("/navigation/goal")
 def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
                     svc: CoreServicesLike = Depends(get_services)):
+    return _navigation_goal(body, auth, svc)
+
+
+@navigation_router.post("/navigation/bound-goal")
+def bound_navigation_goal(body: BoundGoalRequest, auth: AuthContext = Depends(operator),
+                          svc: CoreServicesLike = Depends(get_services)):
+    return _bound_execution(body, auth, svc)
+
+
+@navigation_router.post("/navigation/bound-plan")
+def prepare_bound_path(body: BoundPlanRequest, auth: AuthContext = Depends(operator),
+                       svc: CoreServicesLike = Depends(get_services)):
+    require_calibration_owner(svc, auth, "navigation planning")
     _goal_gates(body, auth, svc)
-    with localized_start(svc):
+    with svc.state.map_grid_gate, localized_start(svc):
+        scope = plan_scope(svc, body, auth, body.line_stop)
         spec = svc.nav.resolve_goal(x=body.x, y=body.y, yaw=body.yaw, waypoint=body.waypoint)
-        token = svc.nav.reserve_goal(expected_boot_id=body.expected_boot_id,
-                                     expected_owner_generation=body.expected_owner_generation)
+    plan = svc.nav.prepare_path(spec, scope=scope, timeout_s=2.0)
+    with svc.state.map_grid_gate, localized_start(svc):
+        if plan_scope(svc, body, auth, body.line_stop) != scope:
+            raise ApiError("NAVIGATION_PLAN_CHANGED", 409, "the navigation scope changed during planning")
+        verify_plan_start(svc, plan)
+    return {"plan_id": plan.plan_id, "map_grid_id": body.expected_map_grid_id,
+            "frame": "map", "points": plan.points}
+
+
+@navigation_router.post("/navigation/line-handoff-goal")
+def line_handoff_navigation_goal(body: LineHandoffGoalRequest, auth: AuthContext = Depends(operator),
+                                 svc: CoreServicesLike = Depends(get_services)):
+    return _bound_execution(body, auth, svc, line_stop=body)
+
+
+def _bound_execution(body, auth, svc, *, line_stop=None):
+    admitted = False
+
+    def record_admission():
+        nonlocal admitted
+        admitted = True
+
+    try:
+        return _navigation_goal(body, auth, svc, expected_grid=body.expected_map_grid_id, line_stop=line_stop,
+                                record_admission=record_admission)
+    except (ApiError, NavigationError) as exc:
+        if admitted or body.plan_id is None:
+            raise
+        detail = dict(exc.detail or {}) if isinstance(exc, ApiError) else {}
+        detail.update(plan_id=str(body.plan_id), native_admitted=False)
+        status = exc.http_status if isinstance(exc, ApiError) else navigation_error_status(exc.code)
+        raise ApiError(exc.code, status, str(exc), detail=detail) from exc
+
+
+def _navigation_goal(body, auth, svc, *, expected_grid=None, line_stop=None, record_admission=None):
+    _goal_gates(body, auth, svc)
+    gate = svc.state.map_grid_gate if expected_grid is not None else nullcontext()
+    with gate, localized_start(svc):
+        if expected_grid is not None and svc.state.map_grid_id != expected_grid:
+            raise ApiError("NAVIGATION_MAP_GRID_CHANGED", 409, "the loaded grid differs from the approved goal grid")
+        if expected_grid is not None and body.plan_id is None:
+            raise ApiError("NAVIGATION_PLAN_REQUIRED", 409, "prepare and approve a bound path before execution")
+        pin = nullcontext()
+        extra = {}
+        scope = None
+        planned = None
+        if line_stop is not None:
+            svc.nav.require_ready()
+            svc.nav._require_executor()
+            trip = getattr(svc, "trip_lease", None)
+            if trip is None:
+                raise ApiError("NAVIGATION_HANDOFF_LEASE_CHANGED", 409, "trip lease is unavailable")
+            scope = dict(lease_id=line_stop.lease_id, trip_id=line_stop.trip_id,
+                         job_id=line_stop.job_id, owner_id=auth.token_id)
+            mode_epoch = svc.modes.epoch
+            if svc.modes.mode is not Mode.NAVIGATION:
+                raise ApiError("NAVIGATION_HANDOFF_STOP_CHANGED", 409, "lane motion mode changed")
+
+            def allows_handoff():
+                return (svc.modes.mode is Mode.NAVIGATION and svc.modes.epoch == mode_epoch
+                        and trip.commit_nav_handoff(**scope))
+
+        spec = svc.nav.resolve_goal(x=body.x, y=body.y, yaw=body.yaw, waypoint=body.waypoint)
+        owner = dict(expected_boot_id=body.expected_boot_id, expected_owner_generation=body.expected_owner_generation)
+        if expected_grid is not None:
+            if body.correlation_id is None:
+                raise ApiError("VALIDATION_ERROR", 400, "a prepared path needs a correlation_id")
+            require_calibration_owner(svc, auth, "navigation")
+            planned = plan_scope(svc, body, auth, line_stop)
+            grid_id, revision, mode, epoch, _ = planned.binding
+            admitted_epoch = epoch + int(mode is Mode.IDLE)
+            approved = []
+
+            def verify(plan):
+                verify_plan_start(svc, plan)
+                approved.append(plan)
+
+            def allows_plan():
+                if (svc.state.map_grid_context() != (grid_id, revision)
+                        or svc.modes.mode is not Mode.NAVIGATION or svc.modes.epoch != admitted_epoch):
+                    raise ApiError("NAVIGATION_PLAN_CHANGED", 409, "the navigation scope changed before execution")
+                verify_plan_start(svc, approved[0])
+                if scope is not None:
+                    if not allows_handoff():
+                        return False
+                    _consume_line_stop(svc, auth, line_stop)
+                return True
+
+            token = svc.nav.reserve_planned_goal(body.plan_id, spec, scope=planned, verify=verify, **owner)
+            extra["handoff_admission"] = allows_plan
+        else:
+            token = svc.nav.reserve_goal(**owner)
+        if scope is not None:
+            pin = trip.pin_nav_handoff(**scope, reservation=token)
         receipt = []
+        entered = False
         try:
-            enter_navigation_mode(svc, auth)
-            svc.nav.goal(spec, source=f"api:{auth.role}", correlation_id=body.correlation_id,
-                         lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
-                         receipt_sink=receipt.append)
+            with pin as pinned_lease:
+                if line_stop is None:
+                    entered = enter_navigation_mode(svc, auth, expected=None if planned is None else (mode, epoch))
+
+                def record(operation):
+                    receipt.append(operation)
+                    if record_admission is not None:
+                        record_admission()
+                    if pinned_lease is not None:
+                        # Owner release is still pinned, before the executor sees this run.
+                        pinned_lease.handoff_run_id = operation.run_id
+
+                svc.nav.goal(spec, source=f"api:{auth.role}", correlation_id=body.correlation_id,
+                             lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
+                             receipt_sink=record, **extra)
+        except TripLeaseError as exc:
+            raise ApiError("NAVIGATION_HANDOFF_LEASE_CHANGED", 409, str(exc)) from exc
+        except (ApiError, NavigationError):
+            if planned is not None and entered and not receipt:
+                svc.modes.transition(Mode.IDLE, expect=Mode.NAVIGATION, expect_epoch=admitted_epoch)
+            raise
         finally:
             svc.nav.release_goal_reservation(token)
     return {
@@ -94,6 +246,25 @@ def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
         "goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw},
         "operation": receipt[0].model_dump(mode="json"),
     }
+
+
+def _holds_handoff_lease(svc, auth, handoff) -> bool:
+    trip = getattr(svc, "trip_lease", None)
+    if trip is None or svc.safety.estop:
+        return False
+    return bool(trip.matches_nowait(lease_id=handoff.lease_id, trip_id=handoff.trip_id,
+                                    job_id=handoff.job_id, owner_id=auth.token_id))
+
+
+def _consume_line_stop(svc, auth, handoff) -> None:
+    status = svc.line_follow.stop_held_junction(
+        seq=handoff.junction_seq, place_id=handoff.stop_place_id,
+        admitted=lambda: _holds_handoff_lease(svc, auth, handoff),
+    )
+    if status is None:
+        raise ApiError("NAVIGATION_HANDOFF_STOP_CHANGED", 409, "the specified trip stop is no longer held")
+    svc.command.clear_navigation()
+    svc.state.set_line_follow(status)
 
 
 class RoutePointRequest(BaseModel):
@@ -209,6 +380,7 @@ def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = D
         "route": svc.nav.route_status(),
         "mapping_active": svc.nav.mapping_active,
         "map_id": svc.state.map_id,
+        "map_generation": svc.state.map_generation.value,
         "readiness": {
             "required": readiness.required,
             "ready": readiness.ready,

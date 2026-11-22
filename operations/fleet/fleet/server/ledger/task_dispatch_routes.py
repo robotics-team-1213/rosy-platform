@@ -16,16 +16,17 @@ import math
 import os
 from typing import Literal, Mapping, Optional
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from fleet.hub.hub import HubError
 from fleet.server.cancel_all import DriveCancelFence, cancel_all_driving
 from fleet.server.http_errors import http_error
-from fleet.server.site_auth import SitePrincipal
+from fleet.server.site_auth import SitePrincipal, may_press_estop
 from fleet.server.owner_recovery_routes import install_owner_recovery_routes
 from fleet.server.policy_delivery import attach_ticker, build_policy_approvals
 from fleet.server.policy_approval_routes import install_policy_approval_routes
+from fleet.server.task_reconcile_routes import install_task_reconcile_routes
 from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
 from fleet.swarm.transport import RobotApiError
 
@@ -161,7 +162,7 @@ def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
     read_guard, operator_guard, drive_cancel: DriveCancelFence | None = None, require_named_operator, stop_targets=None,
-    convert_site_goal=None,
+    convert_site_goal=None, native_task_result=None, authorize=None,
 ) -> None:
     drive_cancel = drive_cancel or DriveCancelFence()
     stop_targets = tuple(dict.fromkeys((*configured_omx.items(), *(stop_targets or ()))))
@@ -323,6 +324,13 @@ def install_task_dispatch_routes(
             console.discard_task_queue_entries({task_id})
             return {"task": task}
 
+        if require_named_operator is not None:
+            install_task_reconcile_routes(
+                app, console=console, task_service=task_service,
+                require_named_operator=require_named_operator,
+                native_task_result=native_task_result,
+            )
+
     @app.post("/api/fleet/robots/{robot_id}/cancel", dependencies=operator_guard, tags=["fleet"])
     async def fleet_cancel(robot_id: str,
                            principal: SitePrincipal = Depends(require_operator)) -> dict:
@@ -340,8 +348,13 @@ def install_task_dispatch_routes(
         return await cancel_all_driving(console, task_service, drive_cancel,
                                         actor_id=principal.principal_id)
 
-    @app.post("/api/fleet/estop", dependencies=operator_guard, tags=["fleet"])
-    async def fleet_estop(principal: SitePrincipal = Depends(require_operator)) -> dict:
+    # D-1043: an operator, or a human in an interactive Account session (cookie, or an Account-signed identity), may press
+    # the stop. A bearer token without a named human (Monitoring, token-only viewer, service, machine) still gets 403.
+    # Pressing only stops: release, rearm and clear stay operator-only.
+    @app.post("/api/fleet/estop", tags=["fleet"])
+    async def fleet_estop(request: Request, principal: SitePrincipal = Depends(authorize or require_viewer)) -> dict:
+        if not may_press_estop(request, principal):
+            raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "operator role or a signed-in human session required"})
         # 이쪽은 한 대가 거절해도 200 이다 — 어느 대가 섰고 어느 대가 못 섰는지는 본문에
         # 다 들어 있고, 화면은 그 목록을 보여 줘야 한다.
         stop_control = None

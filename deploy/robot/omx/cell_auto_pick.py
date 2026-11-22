@@ -8,8 +8,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_act_shadow  # noqa: E402
-import cell_attempts  # noqa: E402
-import cell_auto_record  # noqa: E402
+import cell_attempts, cell_auto_record  # noqa: E402,E401
 import cell_auto_evidence  # noqa: E402
 from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, reach_fix_of, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
 import cell_executor  # noqa: E402
@@ -31,11 +30,11 @@ from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402,F401
 import cell_params as prm  # noqa: E402
 from cell_pick_geom import across, box_centre, grasp_depth, grasp_yaw, jaw_open_for, parse_dest, reachable_ends, surface_z  # noqa: E402,F401
 import cell_pipeline as cp  # noqa: E402
-import cell_pivot  # noqa: E402
-import cell_place_fit  # noqa: E402
+import cell_pivot, cell_place_fit  # noqa: E402,E401
 from cell_return_held import _plan_return_held, run_return_held  # noqa: E402,F401
 from cell_transfer import FOLDED, STILL_HOLDING_UNITS, Gate, transfer_folded  # noqa: E402,F401
 import cell_wrist_ref  # noqa: E402
+import cell_zone_verification  # noqa: E402
 
 
 def run_auto(
@@ -135,8 +134,7 @@ def run_auto(
             row = {"observed": len(objects), "refused": refused}
             out["attempts"].append(row)
             if error or not usable:
-                kind = cell_diagnose.obstacle_type(refused)
-                row["error"] = error or ("no usable object" + (f" ({kind})" if kind else ""))
+                row["error"] = error or cell_diagnose.no_usable_object(refused)
                 tried["fail"] = {"stage": "choose", "class": row["error"]}
                 if not dry_run:
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
@@ -176,7 +174,7 @@ def run_auto(
                     bias_data, choices, work, failed_yaws, dest_view,
                 )
                 if not usable:
-                    row["error"] = "no usable object after the pivot"
+                    row.update(refused=refused, error=cell_diagnose.no_usable_object(refused, after_pivot=True))
                     return {**out, "result": "stopped: " + row["error"]}
                 target = usable[0]
                 cd.target(objects, usable, refused)
@@ -221,14 +219,14 @@ def run_auto(
             choice, tried["execution"] = cell_executor.choose(choices, attempt)
             gate = Gate(guarded, config, calibration, sequence=sequence)
             ledger = cell_attempts.ReplanLedger(config, calibration, source, dest, attempt, tried, t0, choices)
-            # shadow inference before the gate opens: no delay between the approval and the motion
             shadow_row = shadow.capture(cell, config, attempt, img, source=source, dest=dest) if shadow else None
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a), ledger.finish)
             if held is not None:
-                tried["envelope"] = held
-                tried["transfer"] = {"result": "held", "at": "preflight", "steps": [], "envelope": held}
                 close_episode(cell, episode, False, f"held: {held['reason']}")
-                cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                try:
+                    ledger.record_open_hold(gate, held)
+                except (OSError, ValueError, KeyError, TypeError):
+                    return {**out, "result": "held: audit_unavailable"}
                 return {**out, "result": f"held: {held['reason']}"}
             guard = cell_auto_evidence.scene_guard(
                 guarded, config, calibration, source, roi, box_centre(o), before_frame["image"])
@@ -299,6 +297,7 @@ def run_auto(
                                       tried["verify"].get("verified") is True and tried["verify"].get("inside") is True,
                                       "placement verification")
                 tried["verify"]["release"] = cell_release_evidence.from_steps(moved["steps"], config.get("io"))  # observation only
+                cell_zone_verification.record(row, tried, guarded, before_frame, config, dest_site, source, droi)
                 pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(
                     ".pending.json"
                 )

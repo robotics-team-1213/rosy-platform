@@ -361,7 +361,7 @@ def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, c
             teacher.compensate_zero, teacher.zero_est_noise_deg, teacher.estimated_prefix = bool(compensate_zero), zero_est_noise_deg, bool(estimated_prefix)
             teacher.closed_loop = tuple(closed_loop)
             data = teacher.fresh(here)  # step_gen brings a belt container in itself
-            rows.append(dict(step(driver, teacher, data, plan, here, skill), task=name, seed=seed))
+            rows.append(dict(step(driver, teacher, data, plan, here, skill), task=name, seed=seed, physics=driver.layout.choices.get("physics", "design")))
             print(json.dumps(rows[-1], default=str), flush=True)
             here[plan["container"]] = plan["to"]
             teacher.off_stand(data, plan, here)

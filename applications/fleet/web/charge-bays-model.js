@@ -1,7 +1,9 @@
 // D-941 5/7: DOM-free display model of the charge-bay plan (split from charge-bays-view.js).
-export const CELL_BUTTONS = {
+import { evidenceAgeText } from "/common/core_ui_logic.js";
+const CELL_BUTTONS = {
   cell_s: [
     {label: "S3 셔틀 (Pinky→Belt)", preset: "s3_shuttle"},
+    {label: "S3 ACT 정책 구동 (arm_s)", preset: "s3_act_policy", requiresPresence: true},
     {label: "Belt-Far 이탈 복구", preset: "s3_recover_belt_far"},
     {label: "Floor-Front 바닥 복구", preset: "s3_recover_floor_front"},
   ],
@@ -12,7 +14,7 @@ export const CELL_BUTTONS = {
     {label: "S3→S5 연속 실행", preset: "full_s3_to_s5_pipeline"},
   ],
 };
-export const PINKY_BUTTONS = [
+const PINKY_BUTTONS = [
   {label: "S3 도킹+하역", pinkyAction: "dock_and_unload_s3"},
   {label: "S3 도킹", pinkyAction: "dock_s3"},
   {label: "충전소(C1)", pinkyAction: "charge_c1"},
@@ -201,7 +203,7 @@ export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText =
   const st = armLiveStates?.[armId];
   if (!st || !Array.isArray(st.joints_deg) || !st.joints_deg.length) return fallbackText;
   const jointsStr = st.joints_deg.slice(0, 6).map((v, i) => `J${i + 1}:${Number(v).toFixed(1)}°`).join(" ");
-  const ageTxt = st.age_s != null ? `${Number(st.age_s).toFixed(0)}초 전` : "";
+  const ageTxt = st.age_s != null ? evidenceAgeText(Math.round(Number(st.age_s))).slice(3) : "";
   const liveBadge = st.fresh !== false ? `LIVE${ageTxt ? ` · ${ageTxt}` : ""}` : `스냅샷${ageTxt ? ` · ${ageTxt}` : ""}`;
   const tempTxt = st.temp_c != null ? `${st.temp_c}°C` : "";
   const curTxt = st.current_ma != null ? `${st.current_ma}mA` : "";

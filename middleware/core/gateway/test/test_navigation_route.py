@@ -10,7 +10,8 @@ from types import SimpleNamespace
 import pytest
 
 from core_common.protocol.schemas import NavigationState
-from core_features.navigation.manager import NavigationError, NavigationManager
+from core_features.navigation.manager import NavGoalSpec, NavigationError, NavigationManager
+from core_features.navigation.planned_path import PlannedPathScope
 from core_features.navigation.route import PASS, STOP, RoutePoint
 
 OPERATOR = {"Authorization": "Bearer rosy-dev-operator"}
@@ -49,6 +50,90 @@ def make(**kwargs):
     nav = NavigationManager(_Events(), _State(), None, SimpleNamespace(estop=False), **kwargs)
     nav.executor = Nav2()
     return nav, nav.executor
+
+
+@pytest.fixture
+def prepared_navigation():
+    now = [10.0]
+    nav, backend = make(lease_clock=lambda: now[0])
+    pose = SimpleNamespace(pose=SimpleNamespace(position=SimpleNamespace(x=0.745, y=-0.207)))
+    path = SimpleNamespace(poses=[pose])
+    sent = []
+    transport = [0, False, False]
+    backend.compute_navigation_path = lambda _spec, **_options: path
+    backend.send_native_path = lambda path, run, *, correlation_id: sent.append((path, run, correlation_id))
+    backend.path_controller_ready = lambda: True
+    backend.native_transport_snapshot = lambda: tuple(transport)
+    spec = NavGoalSpec(0.745, -0.207, math.pi)
+    return nav, backend, spec, path, sent, now, transport
+
+
+def test_prepared_path_consumes_once_and_sends_the_exact_path(prepared_navigation):
+    nav, backend, spec, path, sent, _, _ = prepared_navigation
+    scope = PlannedPathScope("operator", "attempt", ("approved-grid",))
+    plan = nav.prepare_path(spec, scope=scope, timeout_s=1)
+    assert plan.points == ((0.745, -0.207),)
+    assert nav.nav_state == NavigationState.IDLE and not backend.sent and not sent
+    token = nav.reserve_planned_goal(plan.plan_id, spec, scope=scope)
+    with pytest.raises(NavigationError, match="prepared navigation path"):
+        nav.reserve_planned_goal(plan.plan_id, spec, scope=scope)
+    with pytest.raises(NavigationError, match="reserved navigation path"):
+        nav.goal(NavGoalSpec(spec.x, spec.y, 0.0), correlation_id="attempt", lease_owner="operator", reservation=token)
+
+    with pytest.raises(NavigationError, match="reserved navigation path"):
+        nav.goal(spec, correlation_id="other-attempt", lease_owner="operator", reservation=token)
+    with pytest.raises(NavigationError, match="reserved navigation path"):
+        nav.goal(spec, correlation_id="attempt", lease_owner="other-operator", reservation=token)
+    path.poses[0].pose.position.x = 99.0
+    nav.goal(spec, correlation_id="attempt", lease_owner="operator", reservation=token)
+    assert not backend.sent
+    [(sent_path, run_id, correlation_id)] = sent
+    assert sent_path.poses[0].pose.position.x == 0.745
+    assert (run_id, correlation_id) == (nav.native.current.run_id, "attempt")
+    assert nav._handoff_run == run_id
+
+
+@pytest.mark.parametrize("change", ["scope", "owner", "transport", "executor", "age", "age_after_reserve", "cancel"])
+def test_prepared_path_rejects_changed_admission(prepared_navigation, change):
+    nav, backend, spec, _, sent, now, transport = prepared_navigation
+    scope = PlannedPathScope("operator", "attempt", ("approved-grid",))
+    plan = nav.prepare_path(spec, scope=scope, timeout_s=1)
+    if change == "scope":
+        scope = PlannedPathScope("operator", "attempt", ("other-grid",))
+    if change == "owner":
+        reservation = nav.reserve_goal()
+        nav.release_goal_reservation(reservation)
+    if change == "transport":
+        transport[0] += 1
+    if change == "executor":
+        nav.executor = Nav2()
+    if change == "cancel":
+        nav.cancel()
+    if change == "age":
+        now[0] += 5
+    if change == "age_after_reserve":
+        reservation = nav.reserve_planned_goal(plan.plan_id, spec, scope=scope)
+        now[0] += 5
+        with pytest.raises(NavigationError, match="reserved navigation path"):
+            nav.goal(spec, correlation_id="attempt", lease_owner="operator", reservation=reservation)
+        nav.release_goal_reservation(reservation)
+    else:
+        with pytest.raises(NavigationError, match="prepared navigation path"):
+            nav.reserve_planned_goal(plan.plan_id, spec, scope=scope)
+    assert not backend.sent and not sent
+
+
+def test_stop_during_planning_discards_the_result(prepared_navigation):
+    nav, backend, spec, path, sent, _, _ = prepared_navigation
+
+    def stopped(_spec, **_options):
+        nav.cancel()
+        return path
+
+    backend.compute_navigation_path = stopped
+    with pytest.raises(NavigationError, match="navigation changed while planning"):
+        nav.prepare_path(spec, scope=PlannedPathScope("operator", "attempt", ("grid",)), timeout_s=1)
+    assert not backend.sent and not sent
 
 
 def pts(spec):
@@ -381,3 +466,10 @@ def test_bridge_builds_through_poses_only_for_a_leg_with_pass_points(monkeypatch
     sys.modules.pop("core.bridge.nav_goal", None)
     if hasattr(core.bridge, "nav_goal"):
         delattr(core.bridge, "nav_goal")
+
+def test_navigation_state_carries_the_map_generation_and_it_follows_a_navigation_restart(robot):
+    tc, svc = robot
+    first = tc.get("/api/v1/navigation/state", headers=OPERATOR).json()["map_generation"]
+    assert isinstance(first, int) and first == svc.state.map_generation.value == svc.state.snapshot().map_generation
+    svc.state.map_generation.bump("a restarted navigation stack went ACTIVE")
+    assert tc.get("/api/v1/navigation/state", headers=OPERATOR).json()["map_generation"] == first + 1

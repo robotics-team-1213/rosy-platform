@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
-- 2026-11-20 · uncommitted · D-1055 PR + Merge Queue 유일 병합 경로
-- 2026-11-18 · uncommitted · D-1036 부록: 게시 브라우저 증거는 바뀐 범위만
-- 2026-11-14 · uncommitted · D-1029 저전력 충전 복귀
-- 2026-11-14 · uncommitted · fleet: D-1022 기체 SLAM 지도–현장 지도 결속
-- 2026-11-14 · uncommitted · API 참조 v1.401 재위치화 경로
+- 2026-11-21 · uncommitted · D-1063 Proposed: 공급암 S 인계 계약 보충(카메라 근거·2단 적재)
+- 2026-11-21 · uncommitted · ADR 색인 시험이 봇 전 PR/main에서 Log 행 누락을 경고로 처리
+- 2026-11-21 · uncommitted · records fragments cutover (D-1061)
+- 2026-11-21 · uncommitted · ci(records): 기록 봇이 rosy-records-bot App 토큰으로 PR을 연다
+- 2026-11-21 · uncommitted · D-1059 ci.yml 배선

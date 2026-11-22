@@ -3,7 +3,8 @@ Description=ROSY re-measure navigation approval after a release change (D-986 ad
 # Started only by rosy-nav-reapprove.timer. Acts only on a robot that was approved
 # before and whose approval failed only because the release changed; every outcome
 # is in the journal and the run exits 0.
-Requires=rosy-core.service
+# Wants (not Requires): begin and seal restart rosy-core.service; Requires would SIGTERM this unit mid-run.
+Wants=rosy-core.service
 After=rosy-core.service rosy-auto-update.service
 
 [Service]

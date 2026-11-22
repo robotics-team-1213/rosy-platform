@@ -119,7 +119,10 @@ jobs:
           fi
           echo "build=true" >>"$GITHUB_OUTPUT"
           base_commit="${INPUT_BASE_COMMIT:-}"
-          if [[ -z "$base_commit" && -n "${SITE_KEY_ID:-}" && -n "${SITE_PUBLIC_KEY_PEM:-}" ]]; then
+          # Only pushes pick the newest signed release as the base. A dispatch with an empty
+          # base_commit is a full build (its input says so): it rebuilds every image, which
+          # recovers a host missing a reused image whose release was already pruned (11-20 R).
+          if [[ "$EVENT_NAME" == "push" && -z "$base_commit" && -n "${SITE_KEY_ID:-}" && -n "${SITE_PUBLIC_KEY_PEM:-}" ]]; then
             base_tag="$(gh api "repos/${GH_REPO}/releases?per_page=25" --jq '
               [.[] | select((.tag_name | test("^site-[0-9a-f]{12}$"))
                 and ([.assets[].name] | index("release.json") != null)

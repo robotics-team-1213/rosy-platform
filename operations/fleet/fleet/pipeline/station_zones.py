@@ -36,7 +36,7 @@ def load_station_zones(override_path: Path | None = None) -> dict[str, Any]:
 # None = no cell place; "not_places:*" = a non-place entry of the map (belt feed).
 _SITE_ALIASES: dict[str, str | None] = {
     "EXP_S1": "stand:r1-s1",
-    "EXP_S5_PALLET": "stand:r1-s1",
+    "EXP_S5_PALLET": "yard",
     "EXP_S3_BELT": "not_places:belt",
     "STG_C2": None,
     "STG_S3_WAIT": None,

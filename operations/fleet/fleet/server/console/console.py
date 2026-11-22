@@ -135,6 +135,9 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         self._localization_view: Optional[Callable[[str], Optional[dict]]] = None
         #: D-494 3: every state read also feeds the trip-only map pose (its `odom_pose`).
         self._state_sink: Optional[Callable[[str, dict], None]] = None
+        #: Site-frame pose providers injected by role_builders for D-395/D-1010 traffic clearance.
+        self._site_mover_pose: Optional[Callable[[str], Optional[tuple]]] = None
+        self._site_obstacle_pose: Optional[Callable[[str], Optional[tuple]]] = None
         #: D-760 8: (robot_id, max_age_s) -> its REST state; app.py sets MapPoseService.state (one read per robot).
         self.read_state = lambda robot_id, max_age_s: self._client(robot_id).state()
         self._link_address_status = None
@@ -244,6 +247,15 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
     def set_state_sink(self, sink: Optional[Callable[[str, dict], None]]) -> None:
         self._state_sink = sink
 
+    def set_site_pose_providers(
+        self,
+        *,
+        mover: Optional[Callable[[str], Optional[tuple]]] = None,
+        obstacle: Optional[Callable[[str], Optional[tuple]]] = None,
+    ) -> None:
+        self._site_mover_pose = mover
+        self._site_obstacle_pose = obstacle
+
     def set_link_address_status(self, provider) -> None:
         """robot_id -> address status from the latest scan. None skips the lookup.
 
@@ -286,6 +298,10 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         for robot_id, mission in list(self._queued.items()):
             if mission.get("task_id") in task_ids:
                 self._queued.pop(robot_id, None)
+
+    def discard_queued_goal(self, robot_id: str) -> None:
+        """Drop the robot's Fleet-queued mission without sending it: its caller re-checks its own conditions."""
+        self._queued.pop(robot_id, None)
 
     def prune_task_queue_entries(self, active_task_ids: set[str]) -> None:
         for robot_id, mission in list(self._queued.items()):

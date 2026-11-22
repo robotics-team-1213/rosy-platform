@@ -184,13 +184,23 @@ def test_anchors_go_after_the_detections_without_the_markerless_pinky_guess():
 
 
 def test_a_hung_anchors_post_never_delays_the_detections_and_times_out_counted(monkeypatch):
-    monkeypatch.setattr(anchor_feed, "POST_TIMEOUT_S", 0.05)
+    release = None  # the timeout fires only when the test says so: no wall-clock race with the in-flight check
+
+    async def gated_timeout(aw, timeout):
+        post = asyncio.ensure_future(aw)
+        await release.wait()
+        post.cancel()
+        raise asyncio.TimeoutError
+
+    monkeypatch.setattr(anchor_feed.asyncio, "wait_for", gated_timeout)
     now = _Now()
     client = _AnchorClient(hang=True)
     worker = _worker(now, _Detector(), client)
     worker.anchors.tracker = _States()
 
     async def run():
+        nonlocal release
+        release = asyncio.Event()
         await worker.refresh_config()
         first = await worker.process(_frame(seq=1, captured_at=99.9), {})
         await asyncio.sleep(0.01)
@@ -198,7 +208,8 @@ def test_a_hung_anchors_post_never_delays_the_detections_and_times_out_counted(m
         worker.anchors._next_at = 0.0
         await worker.process(_frame(seq=2, captured_at=99.95), {})  # previous send in flight: not queued
         assert len(client.anchors) == 1 and len(client.published) == 2
-        await asyncio.sleep(0.15)
+        release.set()
+        await worker.anchors._task
     try:
         asyncio.run(run())
     finally:
@@ -254,7 +265,10 @@ def test_a_pinky_without_its_own_marker_is_a_home_guess_never_a_sighting(marker_
 def test_stats_block_per_source_has_ingest_line_and_post_counters():
     snap = {"frames": 9, "rx_fps": 3.0, "bytes_per_s": 100, "age_ms_p50": 20, "age_ms_max": 40,
             "dropped_bad_header": 0, "oversize": 0, "last_seq": 8, "seq_gaps": 0}
-    ingest = SimpleNamespace(stats=lambda source: snap if source == "ceiling_north" else None)
+    ingest = SimpleNamespace(
+        source_tokens={"ceiling_north": "ceiling-secret", "cell_wrist": "wrist-secret", "cell_top": "top-secret"},
+        stats=lambda source: snap if source in {"ceiling_north", "cell_top"} else None,
+    )
     guard = PostGuard("ceiling_north", _Now())
     guard.posted, guard.dropped_stale, guard.post_errors, guard.last_post_age_ms = 5, 2, 1, 130
     other = PostGuard("bench", _Now())
@@ -263,7 +277,10 @@ def test_stats_block_per_source_has_ingest_line_and_post_counters():
         cli._format_stats_line("ceiling_north", snap),
         "ceiling_north: fleet_posts posted=5 dropped_stale=2 post_errors=1 last_post_age_ms=130",
         "bench: no camera connected",
-        "bench: fleet_posts posted=0 dropped_stale=0 post_errors=0 last_post_age_ms=-"]
+        "bench: fleet_posts posted=0 dropped_stale=0 post_errors=0 last_post_age_ms=-",
+        cli._format_stats_line("cell_top", snap),
+        "cell_wrist: no camera connected",
+    ]
     assert cli.VISION_STATS_INTERVAL_S == 30.0
 
 

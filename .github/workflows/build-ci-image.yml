@@ -11,10 +11,13 @@ on:
   push:
     branches: [main]
     paths:
+      - .dockerignore
       - .github/ci-image/**
       - deploy/robot/pinky_pro/image/device-python-requirements.txt
       - deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt
       - deploy/robot/omx/requirements-cell.lock
+      - deploy/site/requirements-vision.txt
+      - learning/curation/pinky/requirements-raw.txt
       - .github/workflows/build-ci-image.yml
 
 permissions:
@@ -34,21 +37,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build image
-        shell: bash
-        run: |
-          set -euo pipefail
-          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
-          echo "IMAGE=ghcr.io/${owner}/rosy-ci:${GITHUB_SHA}" >> "$GITHUB_ENV"
-          docker build -f .github/ci-image/Dockerfile -t "ghcr.io/${owner}/rosy-ci:${GITHUB_SHA}" .
-
-      - name: Push image and print its digest
+      - name: Build and push image (OCI zstd)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner}/rosy-ci:${GITHUB_SHA}"
           printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push "$IMAGE"
-          digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")"
-          echo "ci image: $digest" | tee -a "$GITHUB_STEP_SUMMARY"
+          docker buildx create --name rosy-ci-zstd --driver docker-container --use
+          docker buildx build -f .github/ci-image/Dockerfile \
+            --cache-from "type=registry,ref=ghcr.io/${owner}/rosy-ci:buildcache" \
+            --cache-to "type=registry,ref=ghcr.io/${owner}/rosy-ci:buildcache,mode=max,oci-mediatypes=true,compression=zstd" \
+            --output "type=registry,name=${image},oci-mediatypes=true,compression=zstd,compression-level=3,force-compression=true" \
+            --metadata-file /tmp/build-meta.json .
+          digest="$(python3 -c 'import json; print(json.load(open("/tmp/build-meta.json"))["containerimage.digest"])')"
+          echo "ci image: ghcr.io/${owner}/rosy-ci@${digest}" | tee -a "$GITHUB_STEP_SUMMARY"

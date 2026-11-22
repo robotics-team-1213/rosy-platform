@@ -515,7 +515,7 @@ def note_warm_pass(wt: Path, sha: str, inv: list[str], state: dict, now: float |
 
 
 _CI_BROWSER = ("operations/fleet/test", "applications/fleet/test",
-               "middleware/core/gateway/test/test_account_pipeline.py", "test/test_monitoring_browser.py")
+               "test/integration/core_fleet/test_account_pipeline.py", "test/test_monitoring_browser.py")
 
 
 def _run_gha_entry_cmd(wt: Path, entry: dict, out_dir: Path) -> int:

@@ -185,6 +185,11 @@ It measures quality on original pixels, encodes JPEG once and atomically replace
 one native snapshot with its host-receive timestamp; it publishes no ROS Image or CameraInfo.
 these previews do not admit an arm operation.
 
+Set `ROSY_CAMERA_TIMESTAMP_MODE=exposure` for each camera that needs V4L2
+monotonic start-of-exposure time on its original RGB buffer. The exposure
+entrypoint rejects missing or invalid source timestamps. The default
+`preview` mode retains host-receive timestamps.
+
 Install the reviewed source snapshot and user unit on the camera host. Each
 `~/.config/rosy/omx-camera-<name>.env` binds `ROSY_CAMERA_SOURCE`,
 `ROSY_CAMERA_DEVICE`, `ROSY_CAMERA_TOPIC` and `ROSY_CAMERA_FRAME`
@@ -996,7 +1001,22 @@ python deploy/robot/omx/record_session.py \
 자동으로 덮어쓰지 않는다. 본체 관절은 실제 raw 위치를 읽고, 시작 시 한 번
 정한 회전수 차이를 유지한다. 목표와 현재 위치가 100° 이상 다르면 시작을
 거절하거나 실행을 중단한다. 이를 무시하는 실행 옵션은 제공하지 않는다.
-허용되는 시작 차이도 현재 위치를 먼저 목표로 쓴 뒤 초당 1° 이하로 줄인다.
+허용되는 시작 차이도 현재 위치를 먼저 목표로 쓴 뒤 줄인다. 전축 리더 텔레옵·녹화는
+본체 다섯 관절의 실제 위치가 목표의 2.5° 이내, 명령이 0.5° 이내인 상태를 0.5초
+유지할 때까지 모든 관절(집게 포함)을 최대 1°/초로 정렬하고(기한은 아래 body-only와
+같다), 이후 본체는 최대 25°/초·명령 가속도 10°/초²로 추종한다(`FULL_TRACK_DEG_S`: 사용자 결정은
+30°/초이나 서보 프로필 속도 27.5°/초 아래로 25에 둔다). 집게는 자신의 명령이 목표의
+0.5° 이내에 한 번 닿은 뒤에만 같은 한도를 쓰고 그 전에는 1°/초를 유지한다. 추종 속도는 남은
+거리에서 가속도 한도로 멈출 수 있는 속도(√(2·a·거리))를 넘지 않으므로 리더가 멈추면 명령이
+목표를 넘지 않는다. 집게는 정렬 판정에 넣지 않는다.
+전축 모드의 명령은 실측보다 `LEAD_DEG`(3°) 넘게 앞서지 않는다(2026-11-21 패널: 19:54 세션에서 정상 추종
+지연 5.1°가 팔 전체 토크 OFF를 불렀다). 막힌 관절은 Kp×3°로 밀 뿐이며, 그 상태에서 실측이 3초 동안
+0.5° 전진하지 않으면 그 관절의 명령을 실측에 고정하고(토크 ON, 팔 전체 동결) 리더 목표가 실측 2.5° 이내로
+돌아오면 해제해 정렬 단계부터 다시 추종한다. 집게도 같다. body_only·teacher는 이 제한이 없다.
+5° 추종 오차 검사는 마지막에 쓴 정수 명령 대비 실측이므로, 명령이 앞서갈 때 모터가 못
+따라가거나 집게가 물체에 막혀 5° 이상 벌어지면 이 검사가 세션을 끝낸다. 선언된 공백(에피소드
+저장) 뒤 재개와 overload hold 해제는 정렬 단계로 돌아가며, 재개 때는 MotorHealth의 표본 나이
+검사도 새로 시작한다.
 통신·샘플 간격·범위 오류는 조작을 중단한다. 녹화 action에는 제한 후 실제로
 명령한 값을 남긴다.
 
@@ -1025,7 +1045,7 @@ python deploy/robot/omx/record_session.py \
 집게 토크가 OFF인지 계속 검사한다. 본체는 정상 실행 중 토크를 유지한다.
 각 팔의 다섯 관절 모두 실제 위치는 현재 리더 목표의 2.5° 이내, 명령은 0.5°
 이내인 상태를 0.5초 유지할 때까지 최대 1°/초로 정렬하고, 이후 최대 10°/초·명령
-가속도 10°/초²로 추종한다. 정수 목표에는 모터 1틱 미만의 양자화 차이가 있다.
+가속도 10°/초²로 추종한다(전축 모드의 추종 한도 30°/초는 위 절). 정수 목표에는 모터 1틱 미만의 양자화 차이가 있다.
 기존 각도·추적 오차·지연 보호는 유지한다. 집게 위치는 관측값으로만 남고,
 이 모드의 녹화는 거절한다. 집게까지 추종하려면 각 장치의 실제 이동 범위를
 먼저 보정해야 한다.
@@ -1298,6 +1318,74 @@ python deploy/robot/omx/record_session.py --config <private-record-config.json> 
 python deploy/robot/omx/cell_pipeline.py --config <private-cell-config.json> --operating-profile <private-robot-profile.json> --stage transfer --from pinky --to belt
 ```
 
+**중단 신호(`--chunks`).** `record_session.py`가 SIGTERM·SIGINT·SIGHUP을 받으면 `chunk_runner.py`에 SIGINT를 보낸다.
+러너는 새 명령을 받지 않고 다음을 한다(`chunk_runner_interrupt.py`). 가드 한계와 모션 명령은 바꾸지 않는다.
+
+- 먼저 그 자리에 멈춘다. 진행 중 청크와 대기 프레임을 버리고 토크는 켜 둔다. 그다음 확인한다.
+  - 연속 5번(`VERIFY_TICKS`) 읽은 자세가 멈춰 있고(틱당 0.08단위 미만) home 3단위 안이면 끝내고 토크를 끈다.
+  - home 근처인데 2초(`VERIFY_S`) 안에 멈추지 않으면 HOLD다.
+- 멈춰 있되 home이 아니면 기존 `stop fold`(`park_path`)로 접는다. park가 settled=True로 끝나고, 다시 읽은 자세가 home 3단위 안일 때만 토크를 끈다(D-1048).
+- 다음 경우에는 `human-hold`로 마지막으로 안 자세에서 토크를 유지한다(HOLD):
+  - 접기를 시작할 수 없다(가드 hold, 접촉이 아닌 고장, home 청크 없음, 가드 추적 전).
+  - 접기가 멈췄거나, settled 없이 끝났거나, home에 못 미쳤다.
+  - tick이 오류를 냈다.
+  - 자세를 읽지 못했다.
+  - 120초(`INTERRUPT_PARK_S`) 안에 끝나지 않았다.
+- HOLD에 들어가면 다음을 쓰고 프로세스는 계속 산다. 상태 기록이 실패하면(디스크 등) stderr에만 쓰고 HOLD는 그대로다.
+  - `chunk-status.jsonl`·stderr에 `{"command": "interrupt", "hold": true, "person_needed": true}`.
+  - FIFO 옆 `hold.json`에 러너 PID와 이유.
+  - `live.json`에 `"interrupt": "hold"`.
+- 이후의 SIGINT·SIGTERM은 HOLD 보고만 되풀이한다.
+- 가드가 스스로 멈추면(`NativeJointMotion.send` 실패, 가드가 이미 토크 OFF를 시도함) 러너는 그 가드로 다시 보내지 않는다. 다시 보내면 가드가 토크 OFF를 또 시도한다. 대신 Torque_Enable을 1초마다 읽고, 바뀔 때마다 보고한다.
+  - 모두 0이면 `GUARD_STOPPED torque off`를 보고하고 끝난다. `record_session`은 기존 토크 확인·사고 측정 경로를 탄다.
+  - 일부만 0이면 `PARTIAL_GUARD_STOP`이다.
+  - 모두 1이거나 읽지 못하면 HOLD다.
+  - 마지막 두 경우는 사람을 기다린다.
+- 중단 신호가 기록된 뒤에는 어떤 예외든(신호가 그 틱 도중에 와도) HOLD나 가드 readback으로 간다. 그래도 실행 루프 자체가 예외로 끝나면 `chunk_runner.main`이 close_device 대신 `last_resort_hold`로 아무것도 보내지 않고 SIGUSR2를 기다린다.
+- 최종 보증: `chunk_runner.main`은 토크를 끄는 유일한 지점에서 `gated_close`를 부른다. Linux에서는 판정 직전부터 close_device가 끝날 때까지 `pthread_sigmask`로 SIGINT·SIGTERM·SIGHUP을 막는다. 그 사이에 온 신호는 판정이 끝난 뒤 전달된다. 판정은 `final_gate`의 기준을 따른다. pthread_sigmask는 호출한 스레드만 막는다. 그래서 `chunk_runner.py`는 스크립트로 시작하자마자, 스레드를 만들 수 있는 import보다 먼저 `main_thread_signals.route()`로 메인 스레드에서 SIGINT·SIGTERM·SIGHUP·SIGUSR2를 막는다. 그 뒤 만들어지는 스레드는 막힌 마스크를 물려받고, `threading.Thread.start`도 새 스레드를 막힌 채 만든다. 메인 스레드는 lerobot·numpy·torch import와 로봇·버스 초기화, Runner 생성이 모두 끝난 뒤에만 다시 연다(`unblock_main()`). 처리기는 그보다 먼저 설치돼 있으므로, 시작 중에 온 신호는 보류됐다가 그때 기록된다. 시작 시 `OPENBLAS_NUM_THREADS`·`OMP_NUM_THREADS`·`MKL_NUM_THREADS`가 정해져 있지 않으면 1로 둔다(`quiet_blas`). 러너의 계산은 틱마다 6원소 벡터 몇 개라 BLAS 병렬이 필요 없다. 다시 열 때 /proc 마스크로 받는 스레드가 있으면 stderr에 경고한다. `gated_close`는 늘 close_device 바로 앞에서 신호 기록을 한 번 더 읽고, 기록돼 있으면 HOLD로 간다. 따라서 이 신호들은 메인 스레드로만 가고, gated_close의 차단은 프로세스 전체에 유효하다. route 전에 이미 있던 스레드와, `/proc/self/task`의 SigBlk로 본 막지 않은 스레드(Thread.start 밖의 네이티브 스레드)는 stderr에 경고한다. SIGUSR2를 뺀 중단 신호가 기록돼 있는데 이번 실행에 승인된 끝이 없으면, 어느 경로로 반환했든 close_device 대신 `last_resort_hold`로 간다. 거기서는 아무것도 보내지 않고 SIGUSR2를 기다린다. 승인된 끝(`_off_approved`)은 다음 넷이다.
+  - park settled + home
+  - 멈춤 + home
+  - SIGUSR2 해제
+  - 가드 정지 뒤 모두 0
+- 중단이 기록된 뒤에는 일반 종료 경로(유휴 park·유휴 종료, 판사의 `stop`, 판사 stop fold의 `_stopped`, start 정렬 중 `stop`)가 꺼지고, 중단 판정만 실행을 끝낸다.
+- HOLD 루프는 유지 자세만 가드에 보내고, 틱을 세어 `live.json`을 계속 갱신한다. 청크·건강·접촉 판정은 하지 않는다. 중단 중이나 HOLD 중 FIFO로 온 `human-hold`는 버린다(중단이 먼저 처리되고, HOLD와 같은 뜻이다). `human-hold` 명령의 자세 읽기가 실패하면 마지막으로 안 자세로 유지한다.
+- 감독 복구: 사람이 팔을 받친 뒤 `kill -USR2 <러너 PID>`를 보낸다. HOLD에 들어간 **뒤에** 받은 SIGUSR2만 해제한다. 그 전에 받은 것은 무시하고 stderr에 남긴다. 러너는 그 자리에서 토크를 끄고 끝난다. 세션 cap은 기록된 값으로 남으므로 다음 세션 전에 되돌린다.
+
+`record_session.py`는 러너가 끝나거나 HOLD를 알릴 때까지 기다린다. 고정 10초 대기 뒤 kill하지 않는다.
+
+| 러너 결과 | `record_session` |
+|---|---|
+| 끝남(접힘 확인, 가드 정지) | 평소처럼 토크 0 확인·cap 복원·사고 측정 |
+| HOLD(상태 행, 이 자식 PID의 `hold.json` 또는 `live.json`의 `"interrupt": "hold"`, 상태 파일 읽기 오류) | 토크 OFF·cap 복원·사고 측정 없음. lease에 `hold`와 러너 PID를 남김. 종료 코드 75 |
+| 접힘 미확인: 신호로 죽음(음수 종료 코드, 예: -9; 중단 중이 아니어도, 러너만 죽어도) 또는 중단 확인 자체가 실패(`status.stat()` 등) | 토크 OFF·cap 복원 없음. 죽은 러너면 Torque_Enable만 읽음. 장치 없이 사고 보고. lease에 `hold`. `safe_end=false`, 종료 코드 77 |
+| 무응답: 살아 있으나 `chunk-status.jsonl`·`live.json`·`hold.json`이 15초(`RUNNER_SILENT_S`) 동안 그대로이고 HOLD 표시도 없음 | kill. 토크를 끄지 않고 Torque_Enable만 읽음. 장치 없이 사고 보고(재부팅 없음). lease에 `hold`. `safe_end=false`, 종료 코드 76 |
+
+`hold`가 붙은 lease는 pid·만료와 관계없이 살아 있다. 같은 소유자를 포함해 모든 claim을 거부하고, 일반 `release`도 거부한다. 사람이 팔을 확인한 뒤 `python cell_arm_lease.py release-hold --arm <팔>`(같은 소유자)로만 푼다.
+
+범위 밖(기존 동작): 중단 신호 전의 시작 단계 오류와 운전 중 예외, 가드 자체의 정지(`NativeJointMotion.send` 실패 시 가드의 토크 OFF).
+
+이 코드의 중단 경로가 접힘 확인(settled, home 3단위) 없이 토크를 끄는 예외는 두 가지뿐이다. 하나는 사람이 팔을 받친 뒤 보내는 SIGUSR2다. 다른 하나는 가드가 이미 끈 토크(GUARD_STOPPED, 모두 0으로 읽힘)에 OFF를 다시 쓰는 경우다. teleop·replay(lerobot-record) 자식은 예전처럼 10초 뒤 kill한다.
+
+**입회 실물 확인(중단 경로, 첫 실물 수용 전).** 사람이 비상 스위치 앞에서 지켜보며 한다.
+1. 뻗은 자세에서 세션을 중단한다. 그 자리에서 멈춘 뒤 park가 settled되고, home 3단위를 확인한 다음 토크 OFF가 되는지 본다. `record_session`은 exit 0, `safe_end`.
+2. 접힌 자세에서 중단한다. 멈춘 상태를 연속으로 읽은 뒤 토크 OFF가 되는지 본다.
+3. home을 막 떠나 움직이는 중에 중단한다. 그 자리에서 정지하고, 확인 뒤 토크 OFF(또는 접기)가 되는지 본다.
+4. park 경로를 막고 중단한다.
+   - HOLD(토크 ON), exit 75, `hold.json`, lease `hold`가 나오는지 본다.
+   - 다른 소유자와 같은 소유자의 claim·세션이 모두 거부되는지 본다.
+   - 접는 중에 미리 보낸 SIGUSR2가 무시되는지 본다.
+   - 팔을 받친 뒤 새 SIGUSR2를 보내면 토크 OFF가 되는지 본다.
+   - `release-hold`로 lease를 푼다.
+5. 가드 following error를 일으키는 접기에서 다음을 본다.
+   - 전부 꺼지면 GUARD_STOPPED와 readback 0, 부모의 사고 측정.
+   - 일부만 꺼지면 PARTIAL_GUARD_STOP, 이후 추가 토크 OFF가 없는지.
+6. 러너만 `kill -9`한다. 부모 exit 77, 토크 쓰기 없음, lease `hold`가 나오는지 본다.
+7. #263의 접힌 분기를 타는 자세(roll 차이 > 10)와 상자를 쥔 상태에서 각각 중단한다.
+8. 현장 설정으로 러너를 띄운 직후와 첫 동작 뒤에, `/proc/<러너 PID>/task/*/status`의 SigBlk로 SIGINT(2)·SIGTERM(15)·SIGHUP(1)을 받을 수 있는 비메인 스레드가 없는지 확인한다. 메인 스레드는 tid가 PID와 같은 항목이다.
+   - SigBlk 16진 마스크에 0x4003 비트가 모두 서 있어야 한다.
+   - 예: `for t in /proc/$PID/task/*; do [ "${t##*/}" = "$PID" ] || grep SigBlk $t/status; done`
+   - 러너 stderr에 `signal_routing` 경고가 없어야 한다.
+
 pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다. 선택하면 프로필이 work/review
 경로의 정본이며 옛 전역 경로로 다른 장부를 고르지 않는다. 같은 Fleet 장치에 팔이 둘이면 각
 `instance_id`·설정 SHA·장부 경로를 따로 둔다. manifest 상단의 `device_id`, `instance_id`,
@@ -1308,6 +1396,68 @@ pipeline 설정의 `operating_profile_path`로 선택을 저장할 수도 있다
 실제 recorder robot을 검사하고 같은 선택을 parent에 전달한다. 프로필 없는 기존 수동 세션은
 자동 파지에 사용할 수 없다. 카메라/좌표 보정·높이·물체·경로는 task 조건으로 계속 검사하며,
 이 소프트웨어 연계가 각 실물의 설치·최대 도달범위·인양 능력을 측정한 것은 아니다.
+
+## h1-goal ACT 섀도 확인
+
+체크포인트의 `config.json` 옆에 `UNITS.json`을 둔다. 아래는 arm B 예시다.
+arm A 체크포인트는 `arm_a`를 쓴다. 파일이 없으면 기존 LeRobot 정규화 단위를 쓴다.
+
+```json
+{"state": "sim_rad", "gripper": "sim_jaw", "arm": "arm_b"}
+```
+
+`arm`은 셀 설정의 `arm_id`와 같아야 한다. 해당 팔의 `arm-cal-<arm_id>.json`에서
+`held_30mm`와 `gap_mm_per_unit`을 읽는다. 셀 설정의 `arm_calibration_path`로 경로를 지정할 수 있다.
+기존 jaw 형상을 사용하므로 실행 소스 트리에 `learning/envs/isaac/palletizing_gripper.py`와
+그 파일이 읽는 `assets/omx_f_palletizing_description`이 필요하다.
+몸체의 첫 5축은 ±100 단위를 라디안으로 바꾼다. arm B의 손목 롤도 학습 때와 같이 그대로 변환한다.
+학습 변환은 턱 간격을 12~60 mm로 제한한다. 모델이 제한된 입력값을 그대로 내면 해당 프레임의
+실측 턱 위치로 복원한다. 다른 출력값은 턱 형상에서 간격을 구한 뒤 해당 팔의 보정값으로 역변환한다.
+
+`cell_policy_drive.py`에서 `--dry-run --goal-site yard:r3-s2-t1`로 확인한다. Cell Job API의
+`cell_policy_drive` 작업에는 목적지 `goal_site`를 준다. 사이트 맵에서 학습 목표에 대응하는 층 ID와
+`tray` 또는 `vehicle_tray`를 받는다. `--goal-slot N`은 CLI에서 매핑 결과를 수동으로 덮어쓴다.
+`policy-drive.jsonl`의 시작 행에 사이트 ID, 매핑한 학습 목표와 슬롯, 실제 사용한 슬롯을 기록한다.
+`--cell-calibration`에는
+러너의 LeRobot 보정 파일을 준다. 몸체 축의 tick 범위는 0~4095다. `--model-calibration`은
+기존 정규화 단위 체크포인트에 필요하다. sim 체크포인트의 학습 통계에는 시뮬레이션 값이 포함되므로
+envelope는 검토된 라이브러리 범위를 사용한다. `policy-drive.jsonl`에 변환 직후의 `converted_chunk`와
+기존 턱 보정 적용 뒤의 `envelope.ok` 및 거절 이유를 기록한다.
+
+sim 단위 체크포인트의 기본값은 추론당 8스텝이다. 15 fps에서 약 533 ms다.
+`--n-action` 또는 Job API의 `n_action`으로 바꿀 수 있다. 최대값은 체크포인트의 `chunk_size`다.
+현재 청크를 재생하는 동안 최신 인코더와 카메라 관측에서 다음 청크를 추론한다.
+실행 시각이 지난 프레임은 버린다. 추론이 다음 청크의 마감 시각을 넘거나 관측이
+`--max-obs-age-s`(Job API `max_obs_age_s`, 기본 0.6초)보다 오래되면 러너가 정지 상태를 유지한다.
+`--dry-run`은 기존 관측을 읽어 같은 재생 시각을 모의 실행한다. 로그에 관측 나이, 추론 시간, 명령 간격을 기록한다.
+
+`--mode act`는 기존 ACT 실행 방식이다. `--mode hybrid`는 ACT가 물체를 잡고 들어 올릴 때까지만 쓴다.
+러너가 연속으로 확인한 파지, 인코더 FK 높이와 자세가 `cell_params`의 `policy.*` 조건을 충족하면
+남은 ACT 명령을 버리고 위로 상대 이동한다. 이후 목적지에 맞는 라이브러리의 기존 접이식 운반 경로를 따른다.
+시뮬레이션 검증 전 임시 기본값은 연속 8프레임 파지, 림 위 25 mm, XY 오차 12 mm 이내,
+yaw와 수직 하향 자세 오차 각각 7° 이내, 인계 직후 10 mm 상승이다.
+ACT 청크 예산 안에 인계 조건을 충족하지 못하면 `human-hold`로 정지한다. 운반을 시작하려면 인계 조건을 충족해야 한다.
+`--mode taught`는 같은 라이브러리로 집기부터 놓기까지 실행한다. 모델 파일은 필요 없다.
+Hybrid와 taught에는 `--goal-site`와 그 위치에 맞는 라이브러리가 필요하다.
+Job API에도 `mode`를 지정한다. 실물 실행에는 `--person-at-switch` 또는 `person_at_switch: true`가 필요하다.
+
+arm B의 예측 손목 롤이 검토된 라이브러리 홈과 반 바퀴 건너편의 두 방향 모두에서 45°를 벗어나면
+`wrist_roll_warning`을 기록한다. 실물 실행은 해당 청크를 거절한다.
+
+`--goal-slot`은 학습의 `prepare10.py`가 사용한 0부터 시작하는 배열 인덱스다.
+
+| `N` | 학습 목표 |
+|---:|---|
+| 0 | `ship-h1r0-l0` |
+| 1 | `ship-h1r0-l1` |
+| 2 | `ship-h1r0-l2` |
+| 3 | `ship-h1r1-l0` |
+| 4 | `ship-h1r1-l1` |
+| 5 | `ship-h1r1-l2` |
+| 6 | `ship-h1r2-l0` |
+| 7 | `ship-h1r2-l1` |
+| 8 | `ship-h1r2-l2` |
+| 9 | `tray` |
 
 ## Fleet PC의 상시 관측과 기존 Cell 화면
 
@@ -1421,3 +1571,103 @@ sudo udevadm control --reload-rules
 적용하고 `udevadm settle --timeout=10` 뒤 운영자 계정의 실제 읽기·쓰기 권한을 확인한다.
 이 규칙은 리더·팔로워 역할을 지정하거나 serial 포트를 열지 않으며, 토크·관찰·제어 프로세스를
 시작하지 않는다. 팔로워 by-id 식별과 단일 버스 소유권 확인은 기존 관찰·시운전 절차를 따른다.
+
+## 셀 목표 슬롯 설정 (D-1057)
+
+셀 A/B의 배치 판정(`cell_zone_verification`)은 목적지 사이트의 슬롯을 설정에서 읽는다. 설정에 없으면 측정하지 않고
+`unverified`로 남는다. 기본 슬롯은 없다.
+
+기록 위치와 형식은 셀 설정 JSON의 `sites.<이름>`이다.
+
+| 키 | 뜻 | 범위 |
+|---|---|---|
+| `col` | 팔레트 열 (`cell_area_zones` 슬롯 표의 열) | 정수 1–3 |
+| `row` | 팔레트 행 | 정수 1–2 |
+| `layer` | 층(0이 1단). 기본 사이트 `pallet`에는 쓰지 않는다 | 정수 0–2 |
+
+`pallet`처럼 `surface_z`가 있는 기본 사이트에는 `col`·`row`만 적는다. 실행 때 `cell_place_fit.with_tiers`가
+`pallet-l0`, `pallet-l1`, `pallet-l2`를 만들면서 `col`·`row`를 그대로 복사하고 `layer`(와 `tier = layer + 1`)를
+붙인다. 작업의 `dst_site`(예 `pallet-l1`)와 handoff tier가 이 값과 다르면 완료 증거를 받지 않는다.
+
+```json
+"sites": {
+  "pallet": {"surface_z": -0.01, "place": [0.153, -0.128], "auto_roi": [246, 148, 400, 405], "col": 1, "row": 2}
+}
+```
+
+값은 그림을 보고 정한다. 읽기 전용 도구가 슬롯 ROI 표와 각 사이트의 place 점을 상단 프레임 한 장에 겹쳐 PNG로 만든다.
+
+```bash
+python3 deploy/robot/omx/cell_slot_overlay.py --config cell-arm-b-stack.json --frame top.jpg \
+  --out overlay.png --calibration <config의 calibration_path 파일>
+```
+
+place 점은 셀 보정(`cell_observe.predicted_pixel`)이 있어야 그려진다. `--calibration`이 없거나 변환이 안 되는
+사이트는 그림 아래 문구와 표준 출력의 `place_points_omitted`에 이름이 남는다. 설정 파일은 읽기만 한다.
+
+셀 S는 상단 카메라 판정만 쓰므로(ADR D-1057 2-1절) `col`·`row`가 필요 없고 사이트의 `auto_roi`가 지정 구역이다.
+
+### 판정 구역 표 덮어쓰기와 제안 도구 (D-1057)
+
+`cell_area_zones`의 구역 표(`TOP_ROI_BY_COL_ROW`, `SIDE_ROI_BY_COL_TIER`)는 카메라 위치에 묶여 있다. 셀 설정에 `zone_rois`가
+있으면 배치 판정(`cell_zone_verification`)만 그 표를 쓰고, 없으면 공용 상수를 쓴다. 다른 실행기 경로와 공용 상수는 그대로다.
+키는 상단 `c<열>r<행>`(열 1–3, 행 1–2), 측면 `c<열>t<층>`(층 1–3)이고 값은 640x480 영상의 `[x1, y1, x2, y2]` 정수다.
+이름 없는 칸은 공용 표를 쓴다. 형식이 틀리면 공용 표로 되돌아가지 않고 `unverified`가 된다.
+
+```json
+"zone_rois": {"top": {"c1r1": [285, 149, 330, 199]}, "side": {"c1t1": [177, 252, 260, 315]}}
+```
+
+`cell_zone_propose.py`는 상단·측면 프레임에서 트레이 칸 경계를 찾아 `zone_rois` 형식의 제안 JSON과 겹침 PNG(공용 표는 빨강,
+제안은 초록)를 만든다. 경계가 뚜렷하지 않은 칸은 `null`과 이유다. 이 도구는 셀 설정을 읽지도 쓰지도 않는다.
+
+`zone_rois`에는 `"floor": [[x1, y1, x2, y2], ...]`(색 영상 좌표의 팔레트 바닥 ROI, 비어 있는 머리 띠나 빈 칸)를 더할 수 있다. `floor`가 있으면 목표
+칸의 점유와 층을 깊이 상대 높이(`cell_depth_slots`, ADR D-1057 2-2절)로 판정하고 색·측면은 보조다. `floor`가 없으면 기존 판정이다.
+
+셀 설정의 `depth_frames`(정수 1–9, 기본 5)는 배치 뒤 깊이를 몇 장 연속 캡처해 픽셀별 중앙값으로 쓸지 정한다(3 s 마감, 근거는 ADR D-1057).
+
+### Fleet 작업의 감독 시험과 검토 기록 (D-911, D-1057 2-5)
+
+Fleet worker는 사람이 있다고 스스로 선언하지 않는다. 감독 시험(`--commissioning --person-at-switch`)은 이름 있는 운영자가 그 작업에
+`POST /api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm`을 한 뒤(120 s 안에 claim) 실행되는 작업에만 쓴다. 표시가 없는 작업은
+검토된 운전 범위로만 실행하며, 검토 기록이 없으면 팔은 움직이지 않고 worker가 `ABORTED`, 사유 `REVIEW_REQUIRED`로 보고한다.
+
+시험이 쌓이면 검토자가 다음 두 단계로 기록한다. 숫자와 이름은 사람이 정하고 소프트웨어는 채우지 않는다.
+
+```bash
+python3 deploy/robot/omx/cell_envelope_review.py list <work-dir>/attempts.jsonl
+python3 deploy/robot/omx/cell_envelope_review.py add --attempts <work-dir>/attempts.jsonl --envelope <operating_envelope_path> \
+  --task-sha256 <list의 key> --reviewed-by <이름> --evidence-ref <확인한 근거> \
+  --min-attempts <N> --min-success-rate <R> --home-tolerance <U> --confirm-physical-review
+```
+
+### Cell task worker와 팔 세션 래퍼의 관리 릴리스 (2026-11-21)
+
+`rosy-omx-cell-task-worker.service`는 `~/.local/share/rosy/omx-devices/current`(`rosy-omx-devices-autoupdate` 관리 릴리스)에서 돈다.
+worker는 팔 세션 래퍼를 같은 릴리스의 `deploy/robot/omx/session-wrappers/`에서 띄우고 `TOOLS_ROOT`를 넘긴다. 래퍼의
+`tools-env.sh`는 `OMX`·`PYTHONPATH`를 `TOOLS_ROOT`에서 만든다. 손으로 바꾸는 `~/rosy-test/omx-tools-current` 링크는 읽지 않는다.
+셀 설정·카탈로그·caps·chunk-io는 계속 `~/rosy-test/omx-record-prep-20261019`에 있다.
+공용 링크 `omx-tools-current`는 셀 도구 전용이다(2026-11-21 벤치 배포가 바꿔 `wrist.jaw_edge_px` unknown parameter로 셀 세션이 전부 실패). 벤치 페이지는
+`omx_hotfix.py deploy --link omx-bench-current`로 배포하고 벤치 서비스는 그 링크를 쓴다. `--link`는 `omx-<이름>-current`만 받는다.
+
+적용 순서(병합하고 omx-devices 자동 갱신이 끝난 뒤, 팔 세션이 없을 때만):
+
+1. 팔 세션이 없는지 확인한다: `pgrep -af record_session.py`의 출력이 없어야 한다. 출력이 있으면 멈춘다.
+2. 셀의 `~/.config/rosy/omx-devices-autoupdate.json`을 고친다(2026-11-21 live 릴리스에 `omx_adapter/kinematics.py`·`area_xyz.py`·`z_profile.py`·`pose_plan.py`가 없었다).
+   - `"paths"`: `"middleware/devices/omx/adapter/omx_adapter/camera_source.py"`를 `"middleware/devices/omx/adapter"`로 바꾼다. 결과는
+     `["deploy/robot/omx", "middleware/devices/omx/adapter", "contracts/foundation", "operations/overhead"]`.
+   - `"smoke"`: `sys.path`에 `'middleware/devices/omx/adapter'`를 더하고 끝의 `print('smoke ok')` 앞에
+     `from omx_adapter import kinematics, area_xyz, z_profile, pose_plan; `를 넣는다. 빠진 릴리스는 smoke에서 거절되고 옛 릴리스가 남는다.
+   - 다른 키는 바꾸지 않는다. 이 유닛을 `units`·`unit_files`에 넣지 않는다(재시작은 사람이 한다).
+3. 다음 릴리스를 기다린다(`systemctl --user start rosy-omx-devices-autoupdate.service`로 당길 수 있다). 다음을 확인한다:
+   - `readlink ~/.local/share/rosy/omx-devices/current`가 이 변경을 포함한 릴리스다.
+   - `ls ~/.local/share/rosy/omx-devices/current/middleware/devices/omx/adapter/omx_adapter/{kinematics,area_xyz,z_profile,pose_plan}.py`가 네 파일을 모두 보인다.
+   - `.../current/deploy/robot/omx/session-wrappers/`가 있다.
+   하나라도 없으면 여기서 멈춘다. 유닛을 설치하지 않는다.
+4. 셀 prep 폴더의 옛 래퍼(`with-session-arm-*.sh`, `tools-env-current.sh`)를 날짜 붙여 백업한다. 다른 도구가 아직 쓰므로 지우지 않는다.
+5. 유닛을 릴리스에서 설치하고 다시 시작한다:
+   `install -m 0644 ~/.local/share/rosy/omx-devices/current/deploy/robot/omx/rosy-omx-cell-task-worker.service ~/.config/systemd/user/`,
+   `systemctl --user daemon-reload`, `systemctl --user restart rosy-omx-cell-task-worker.service`.
+6. `systemctl --user show rosy-omx-cell-task-worker.service -p Environment`에 `TOOLS_ROOT=.../omx-devices/current`가 있는지 본다.
+7. 관제 PC에서 `python tools/remote/update_status.py`를 실행한다. 이 유닛은 `autoupdate`로 나오고 `ADHOC`가 없어야 한다.
+   코드 경로는 ExecStart의 첫 경로(`~/rosy-omx/current-env`)로 읽혀 `KNOWN`으로 나온다(`services.yaml`의 `known_drift`).

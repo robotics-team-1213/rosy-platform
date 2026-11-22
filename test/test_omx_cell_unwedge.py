@@ -4,6 +4,181 @@ import sys
 
 import pytest
 
+
+class HomeCell:
+    def __init__(self, measured, *, lag_axis=4, lag=0.0, held=False, jaw_moves=True):
+        self.measured = list(measured)
+        self.target = list(measured)
+        self.lag_axis, self.lag, self.held, self.jaw_moves = lag_axis, lag, held, jaw_moves
+        self.commands = []
+
+    def act(self, command):
+        self.commands.append(command)
+        if command.startswith("jog "):
+            _, name, delta = command.split()
+            axis = u.BODY.index(name.removesuffix(".pos"))
+            self.target[axis] += float(delta)
+            self.measured[axis] = self.target[axis]
+            self.measured[self.lag_axis] = self.target[self.lag_axis] - self.lag
+        elif command.startswith("grip ") and self.jaw_moves:
+            self.measured[5] = self.target[5] = float(command.split()[1])
+        return {"ok": True, "state": list(self.measured), "target": list(self.target), "holding": False,
+                "health": {"current_ma": [0, 0, 0, 0, 0, 10]}, "human_hold_latched": self.held or command == "human-hold"}
+
+
+RETURN_HOME = [0.8, -62.2, 53.1, 51.6, 45.2, 50.0]
+
+
+@pytest.mark.parametrize(("measured", "flex_max", "roll_min", "roll_out"), [
+    ([1.73, -63.76, 53.41, 55.56, -50.48, -1.0], 55.3, -55.5, False),
+    ([-0.22, -62.59, 54.43, 57.07, -49.30, -1.0], 56.0, -31.0, True),
+])
+def test_return_home_plans_from_measured_ab_poses(measured, flex_max, roll_min, roll_out):
+    limits = {"joint_min": {"wrist_roll.pos": roll_min}, "joint_max": {"wrist_flex.pos": flex_max}}
+    cell = HomeCell(measured)
+    result = u.return_home(cell, RETURN_HOME, limits, sleep=lambda _: None, log=None)
+    assert result["result"] == "home"
+    prefix = ["wrist_flex", "wrist_roll"] if roll_out else ["wrist_flex"]
+    assert [step["joint"] for step in result["plan"][:len(prefix) + 2]] == [*prefix, "elbow_flex", "wrist_roll"]
+    assert all(step["outside_limits"] for step in result["plan"][:len(prefix)])
+    if roll_out:
+        assert roll_min <= result["plan"][1]["goal"] < RETURN_HOME[4]
+    assert result["plan"][-1]["joint"] == "elbow_flex"
+    assert cell.target == pytest.approx(RETURN_HOME, abs=u.HOME_TOL)
+    assert all(row["delta"] < 0 for row in result["jogs"] if row["joint"] == "wrist_flex")
+    assert all(row["delta"] > 0 for row in result["jogs"] if row["joint"] == "wrist_roll")
+    assert "stop" not in cell.commands
+
+
+@pytest.mark.parametrize(("lag_axis", "lag", "held", "jaw_moves", "result", "last"), [
+    (1, 2.1, False, True, "bind_suspected", "stop now"),
+    (4, 0.0, True, True, "stopped", "state"),
+    (4, 0.0, False, False, "stopped", "stop now"),
+])
+def test_return_home_failure_commands(lag_axis, lag, held, jaw_moves, result, last):
+    state = list(RETURN_HOME)
+    state[4:] = [41.0, 20.0]
+    cell = HomeCell(state, lag_axis=lag_axis, lag=lag, held=held, jaw_moves=jaw_moves)
+    limits = {"joint_min": {"wrist_roll.pos": -31}, "joint_max": {"wrist_flex.pos": 56}}
+    out = u.return_home(cell, RETURN_HOME, limits, sleep=lambda _: None, log=None)
+    assert out["result"] == result
+    assert cell.commands[-1] == last and "stop" not in cell.commands
+    if held or lag:
+        assert not any(command.startswith("grip ") for command in cell.commands)
+
+
+def test_rehome_before_work_turns_a_hand_turned_wrist_back_and_leaves_others():
+    """11-19: wrists turned by hand with torque OFF; the next task now lifts and turns home before it starts."""
+    library = {"chunks": {"home": [RETURN_HOME]}}
+    limits = {"joint_min": {"wrist_roll.pos": -55.5}}
+    assert u.rehome_before_work(HomeCell(RETURN_HOME), library, limits, sleep=lambda _: None) is None
+    cell = HomeCell([*RETURN_HOME[:4], -50.5, 50.0])
+    out = u.rehome_before_work(cell, library, limits, sleep=lambda _: None)
+    assert out["result"] == "home" and out["plan"][0]["joint"] == "elbow_flex"
+    extended = HomeCell([0.8, -30.0, 20.0, 51.6, 45.2, 50.0])  # not folded: nothing moves
+    assert u.rehome_before_work(extended, library, limits, sleep=lambda _: None)["result"] == "refused"
+    assert not any(c.startswith("jog ") for c in extended.commands)
+    arm_s = HomeCell([0.0, -58.0, 50.0, 50.0, 57.5, 46.5])  # arm_s config has no joint window; home roll -5
+    s_home = {"chunks": {"home": [[0.0, -58.0, 50.0, 50.0, -5.0, 46.5]]}}
+    assert u.rehome_before_work(arm_s, s_home, {}, sleep=lambda _: None)["result"] == "refused"  # no window, no opt-in
+    out = u.rehome_before_work(arm_s, s_home, {"joint_window_full_range": True}, sleep=lambda _: None)
+    assert out["result"] == "home" and arm_s.target[4] == pytest.approx(-5.0, abs=u.HOME_TOL)
+    assert not any(c.startswith("grip ") for c in arm_s.commands)  # the jaws are never commanded
+
+
+@pytest.mark.parametrize("drop", ["holding", "health"])
+def test_return_home_refuses_a_state_that_does_not_say_the_jaws_are_empty(drop):
+    """The runner's state did not carry holding before 11-20 and a missing current read as 0 mA (robot-17 review)."""
+    cell = HomeCell([*RETURN_HOME[:4], -50.5, 50.0])
+    act = cell.act
+    cell.act = lambda command: {k: v for k, v in act(command).items() if k != drop}
+    out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -55.5}}, sleep=lambda _: None)
+    assert out["result"] == "refused" and not any(c.startswith("jog ") for c in cell.commands)
+
+
+def test_return_home_accepts_static_friction_plateau():
+    state = [*RETURN_HOME[:4], 41.0, 20.0]
+    cell = HomeCell(state, lag=1.75)
+    out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -32}}, sleep=lambda _: None)
+    assert out["result"] == "home"
+    assert out["jogs"][-1]["lags"][4] == 1.75
+
+
+@pytest.mark.parametrize(("moving", "result"), [(True, "bind_suspected"), (False, "stopped")])
+def test_return_home_only_labels_unsettled_motion_as_binding(moving, result):
+    class UnsettledCell(HomeCell):
+        def act(self, command):
+            before = self.measured[4]
+            if command == "state" and any(c.startswith("jog") for c in self.commands):
+                if moving:
+                    self.lag = 1.65 if self.lag > 1.7 else 1.8
+                    self.measured[4] = self.target[4] - self.lag
+                else:
+                    # A changing target alone is not measured joint movement.
+                    self.target[4] = self.measured[4] + (1.65 if self.lag > 1.7 else 1.8)
+                    self.lag = self.target[4] - self.measured[4]
+            status = super().act(command)
+            if command.startswith("jog") and not moving:
+                self.measured[4] = before
+            return status
+
+    cell = UnsettledCell([*RETURN_HOME[:4], -31.0, 20.0], lag=1.7)
+    limits = {"joint_min": {"wrist_roll.pos": -32}, "joint_max": {"wrist_flex.pos": 56}}
+    out = u.return_home(cell, RETURN_HOME, limits, lift=False, sleep=lambda _: None)
+    assert out["result"] == result
+    assert cell.commands[-1] == "human-hold"
+
+
+@pytest.mark.parametrize("lift", [None, ("shoulder_lift", -6.0), False])
+def test_return_home_lifts_from_held_target_then_restores_home(lift):
+    cell = HomeCell([*RETURN_HOME[:4], 20.0, 20.0])
+    cell.measured[0] += 9.0
+    cell.target[0] += 9.0
+    if lift is not False:
+        cell.target[u.BODY.index(lift[0] if lift else "elbow_flex")] += 0.75
+    out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -32}},
+                        lift=lift, sleep=lambda _: None)
+    assert out["result"] == "home"
+    plan = out["plan"]
+    if lift is False:
+        assert plan[0]["joint"] == "wrist_roll"
+    else:
+        joint, delta = lift or ("elbow_flex", -10.0)
+        axis = u.BODY.index(joint)
+        assert [step["joint"] for step in (plan[0], plan[1], plan[-1])] == [joint, "wrist_roll", joint]
+        assert plan[0]["goal"] == pytest.approx(out["start"]["target"][axis] + delta)
+        assert plan[-1]["goal"] == RETURN_HOME[axis]
+    assert cell.target == pytest.approx(RETURN_HOME, abs=0.01)
+
+
+@pytest.mark.parametrize(("fault", "error"), [
+    (None, "elbow_flex: strain"),
+    ("contact in jog", "elbow_flex: live state refused after jog"),
+    ("profile_mismatch", "elbow_flex: live state refused after jog"),
+])
+def test_return_home_stops_during_lift_before_turning(fault, error):
+    class LiftCell(HomeCell):
+        def act(self, command):
+            status = super().act(command)
+            if fault and command == "state" and any(c.startswith("jog") for c in self.commands):
+                status["fault"] = fault
+            return status
+
+    cell = LiftCell([*RETURN_HOME[:4], 20.0, 20.0], lag_axis=1, lag=2.1)
+    out = u.return_home(cell, RETURN_HOME, {"joint_min": {"wrist_roll.pos": -32}}, sleep=lambda _: None)
+    assert out["result"] == ("stopped" if fault == "profile_mismatch" else "bind_suspected")
+    assert out["error"] == error
+    assert [row["joint"] for row in out["jogs"]] == ["elbow_flex"]
+    assert cell.commands[-1] == "human-hold"
+
+
+def test_return_home_refuses_a_lift_outside_joint_limits_before_motion():
+    cell = HomeCell([*RETURN_HOME[:4], 20.0, 20.0])
+    limits = {"joint_min": {"elbow_flex.pos": RETURN_HOME[2] - 5}}
+    out = u.return_home(cell, RETURN_HOME, limits, sleep=lambda _: None)
+    assert out["result"] == "refused" and "elbow_flex" in out["error"]
+    assert cell.commands == ["state"]
+
 sys.path.insert(0, str(Path(__file__).parents[1] / "deploy/robot/omx"))
 import cell_unwedge as u  # noqa: E402
 from chunk_runner import SETTLE_TOL  # noqa: E402

@@ -28,7 +28,6 @@ Stationary sensor checks and bounded calibration motion for Drive. A certificate
 | `sensing_only.py` | Stationary diagnostic reporting. Exclusion never authorizes motion |
 | `sensor_tiers.py` | The only place that decides which sensors a partial calibration may drop |
 | `startup_diagnostics.py` | Sensor readiness transitions without flooding logs with samples |
-| `startup_profile.py` | Pure startup selection. Process selection never grants motion readiness |
 
 ## Subdirectories
 
@@ -44,7 +43,7 @@ None.
 
 ### Testing Requirements
 
-Matching tests live in `middleware/perception/test/test_calibration*.py`, `test_modes.py`, `test_round_trip.py`, `test_commissioning_certificate.py`, `test_sensing_only.py`, `test_sensor_tiers.py`, `test_startup_diagnostics.py`, and `test_startup_profile.py`. Run committed HEAD through `tools/remote/remote_pytest.py`, then `test/known_failures.py`.
+Matching tests live in `middleware/drive/test/test_calibration*.py`, `test_modes.py`, `test_round_trip.py`, `test_commissioning_certificate.py`, `test_sensing_only.py`, `test_sensor_tiers.py`, `test_startup_diagnostics.py`. `startup_profile` moved to `core_common` (its test stays `test_startup_profile.py`). Run committed HEAD through `tools/remote/remote_pytest.py`, then `test/known_failures.py`.
 
 ### Common Patterns
 

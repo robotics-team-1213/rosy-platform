@@ -1,10 +1,12 @@
 """Bounded PPO settings over the current CAD container contact scene."""
 
 from mapped_stack_fixture import container_fixture
+from r08_rl_fixture import CASE, fixture as r08_fixture
 
 
 def fixture(*, layers, case):
-    value = container_fixture(layers=layers, case=case)
+    value = (r08_fixture(layers, container_fixture(layers=layers, case='nominal')) if case == CASE
+             else container_fixture(layers=layers, case=case))
     return dict(value, revision=value['revision']+'-ppo-v1',
                 controller='RSL_RL_PPO_DIRECT_JOINT_VELOCITY',
                 control_decimation=4, max_episode_steps=1800*layers,

@@ -1,3 +1,4 @@
+import { setOffBy } from "/common/cause-line.js";
 ﻿// D-683: pages own authority and drafts; this component owns cookie login and verified logout.
 import {actionIcon} from '/common/ui.js';
 import {createFleetClient} from '/common/fleet-client.js';
@@ -140,8 +141,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         part('principal').textContent = '';
         paintLogout(part('logout'));
         part('logout').title = cookie ? '이 브라우저의 현장 로그인 종료' : '서버 토큰은 폐기하지 않습니다';
-        part('logout').disabled = false;
-        part('logout').removeAttribute('reason');
+        setOffBy(part('logout'), '');
       }
       return cookie;
     } catch (error) {
@@ -173,8 +173,8 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         errorText('새 비밀번호와 확인 입력이 일치하지 않습니다.');
         password.value = confirmation.value = ''; return;
       }
-      busy = true; submitButton.disabled = true;
-      submitButton.setAttribute('reason', changing ? '비밀번호 변경 결과 확인 중' : '로그인 결과 확인 중');
+      busy = true;
+      setOffBy(submitButton, changing ? '비밀번호 변경 결과 확인 중' : '로그인 결과 확인 중');
       errorText('');
       try {
         await cookieRequest(changing ? '/api/fleet/auth/change-password' : '/api/fleet/auth/login', {
@@ -195,8 +195,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
           : '비밀번호 변경 결과를 확인할 수 없습니다. 연결을 확인한 뒤 화면을 새로고침해 계정 상태를 확인하세요.') : failureText(error));
       } finally {
         password.value = ''; if (confirmation) confirmation.value = '';
-        busy = false; submitButton.disabled = false;
-        submitButton.removeAttribute('reason');
+        busy = false; setOffBy(submitButton, '');
       }
     }
     part('form').addEventListener('submit', submit);
@@ -207,8 +206,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
   }
   if (standalone) bindForm();
   else {
-    part('logout').disabled = true;
-    part('logout').setAttribute('reason', '계정 상태 확인 중');
+    setOffBy(part('logout'), '계정 상태 확인 중');
     window.addEventListener('focus', async () => {
       try {
         const session = await cookieRequest('/api/fleet/auth/session');
@@ -232,8 +230,8 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     });
     part('logout').addEventListener('click', async () => {
       if (busy) return;
-      busy = true; part('logout').disabled = true; errorText('');
-      part('logout').setAttribute('reason', '로그아웃 결과 확인 중');
+      busy = true; errorText('');
+      setOffBy(part('logout'), '로그아웃 결과 확인 중');
       try {
         if (cookie) {
           await cookieRequest('/api/fleet/auth/logout', {method: 'POST'});
@@ -250,8 +248,7 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
         link?.focus();
       } catch { errorText('로그아웃 결과 확인 불가 · 계정 메뉴에서 다시 확인하세요.'); }
       finally {
-        busy = false; part('logout').disabled = false;
-        part('logout').removeAttribute('reason');
+        busy = false; setOffBy(part('logout'), '');
       }
     });
   }

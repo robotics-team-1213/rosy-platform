@@ -44,6 +44,8 @@ INLINE_AUTH = {
         "X-Workcell-Observation-Token (arm ingress, intake.authorize)",
     ("POST", "/api/fleet/device-profiles/{device_id}/load-reports/{source_id}"):
         "X-Workcell-Observation-Token (arm ingress, observations.authorize)",
+    ("POST", "/api/fleet/estop"):
+        "authorize + inline may_press_estop(): an operator or an interactive human session (D-1043)",
     ("DELETE", "/api/fleet/ai/human-classes/{type_key}"):
         "authorize + inline permits_site('fleet.policy', policy-admin)",
 }

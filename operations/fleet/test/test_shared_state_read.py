@@ -270,7 +270,7 @@ def test_every_fleet_loop_together_reads_a_robot_at_most_3_times_a_second(tmp_pa
         robot.state = state
     console = FleetConsole([RobotEndpoint(rid, "http://127.0.0.1:8080", "robot-rest") for rid in ids],
                            robots, clock=clock)
-    localization = build_localization_service(console, None)
+    localization = build_localization_service(console, None, spread_sleep=lambda _: asyncio.sleep(0))
     app = create_app(console, start_task_dispatcher=False, localization_service=localization)
     map_pose = app.state.map_pose
     map_pose._clock = clock

@@ -1,4 +1,5 @@
 """Original occupancy callback and lifecycle handover; render is a separate read path."""
+import logging
 from core.bridge import map_pose, translate
 from core_features.maps import occupancy_map_id
 from core_features.navigation.map_evidence import GridContent, MAX_CELLS
@@ -39,17 +40,23 @@ def receive_map(bridge, msg, *, warn):
             stamp, load = _stamp(msg.header.stamp), _stamp(msg.info.map_load_time)
         except Exception:
             stamp = load = None
-        token = source.begin(stamp, load)
+    with svc.state.map_grid_gate:
+        update = svc.state.invalidate_map_grid()
+        if source is not None:
+            token = source.begin(stamp, load)
     map_pose.invalidate_map_pose(bridge)
     try:
         if source is not None and not source.complete(token, _original(msg)):
             return False
         grid = translate.grid_from_occupancy(msg)
-        current = svc.state.map_id
         grid_id = occupancy_map_id(grid)
-        map_id = grid_id if current is None or str(current).startswith('occupancy:') else current
-        svc.maps.set_map(grid, map_id=map_id)
-        svc.state.set_map_id(map_id, grid_id)  # same map_id keeps the odom token; the grid id always follows
+        with svc.state.map_grid_gate:
+            if svc.state.map_grid_context()[1] is not update:
+                return False
+            current = svc.state.map_id
+            map_id = grid_id if current is None or str(current).startswith('occupancy:') else current
+            svc.maps.set_map(grid, map_id=map_id)
+            svc.state.set_map_id(map_id, grid_id)  # same map_id keeps the odom token; the grid id always follows
         return True
     except Exception as exc:
         if source is not None:
@@ -64,7 +71,14 @@ def lifecycle(bridge, active):
     fence = svc.command._execution_fence
     parent = None if fence is None else fence._ledger._current
     if source is not None and parent is not None:
-        fence.request_stop(parent)
-    if source is not None:
-        source.lifecycle(active)
+        fence.request_stop(parent)               # the stop first: nothing in flight may outlive the map it was planned on
+    with svc.state.map_grid_gate:
+        svc.state.invalidate_map_grid()
+        if source is not None:
+            source.lifecycle(active)
     map_pose.invalidate_map_pose(bridge)
+    if active is True:                           # slam_toolbox / map_server went ACTIVE: a restarted stack means a new map origin (map_generation.py); LAST, after the stop and every invalidation
+        try:
+            svc.state.map_generation.bump("navigation lifecycle active")
+        except Exception:  # noqa: BLE001 - a counter failure must never break the lifecycle handling
+            logging.getLogger(__name__).exception("map generation bump failed")

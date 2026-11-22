@@ -107,9 +107,30 @@
   <script src="/console/assets/area-first.js"></script>
 
   <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
-    <div><h2 id="connection-guide-title">관제 접속 필요</h2>
-      <p id="connection-guide-detail">아이디·비밀번호나 관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.</p></div>
-    <ui-button id="connection-guide-action" kind="primary" data-login data-action-icon="login" type="button">관제 접속</ui-button>
+    <div><h2 id="connection-guide-title">관제 연결 확인 필요</h2>
+      <p id="connection-guide-detail">관제 PC의 연결 상태를 확인한 뒤 다시 접속하세요.</p></div>
+  </section>
+
+  <!-- ADR-1000: Warning / Critical State Queues (MON-002), hosted in the top-right bell alert drawer. -->
+  <section id="queues-panel" class="panel queues-panel" data-open="false" role="region" aria-labelledby="queues-heading">
+    <div class="queues-drawer-head">
+      <h2 id="queues-heading">알림</h2>
+      <span id="queues-summary" class="queues-summary"></span>
+      <span class="spacer"></span>
+      <ui-button kind="quiet" id="queues-close" type="button" aria-label="알림 창 닫기">닫기</ui-button>
+    </div>
+    <!-- D-540 3 — 최우선이 먼저다. 결정이 있는 행(막힘 판단·바뀐 경로 확인)은 그 자리에서 펼친다. -->
+    <div class="queues-container">
+      <div class="queue critical-queue">
+        <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
+        <ul id="critical-list" class="issue-list"></ul>
+      </div>
+      <div class="queue warning-queue">
+        <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
+        <ul id="warning-list" class="issue-list"></ul>
+      </div>
+    </div>
+    <p id="queues-empty" class="hint queues-empty" role="status" hidden>현재 처리할 알림이 없습니다.</p>
   </section>
 
   <div class="assistant-layout">
@@ -181,10 +202,10 @@
       <h2 id="work-new-heading">새 작업</h2>
       <ul class="work-list" aria-label="새 작업 종류">
         <li id="work-new-move-item" hidden><ui-button kind="toggle" id="work-new-move" type="button" data-work-read="" aria-pressed="false" aria-expanded="false" aria-controls="work-move">이동</ui-button></li>
-        <li id="work-new-cell-item" hidden><a class="ui-disclosure-row" href="/console/cell">팔레트 적재</a></li>
+        <li id="work-new-cell-item" data-unit-scope="arms" hidden><a class="ui-disclosure-row" href="/console/cell">팔레트 적재</a></li>
       </ul>
     </section>
-    <section class="panel" aria-labelledby="map-heading">
+    <section class="panel" aria-labelledby="map-heading" data-unit-scope="drive">
       <div class="map-head">
         <div>
           <h2 id="map-heading" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다">현장 지도</h2>
@@ -207,6 +228,7 @@
         <ui-button kind="quiet" type="button" data-layer-toggle="lanes" aria-pressed="true" title="도로 중심선과 충전소·정류장 장소 표시">도로·장소</ui-button>
         <ui-button kind="quiet" type="button" data-layer-toggle="traffic" aria-pressed="true" title="차로 점유·신호·구역 테두리 표시">교통·점유</ui-button>
         <ui-button kind="quiet" type="button" data-layer-toggle="labels" aria-pressed="true" title="지도 위 이름·상태 텍스트 칩 표시 (꺼도 마우스 호버 시 상세 카드가 표시됩니다)">라벨</ui-button>
+        <ui-button kind="quiet" type="button" data-layer-toggle="grid" aria-pressed="true" title="0.5 m 좌표 격자와 칸 표시">격자·칸</ui-button>
       </div>
       <details id="map-options" class="map-options">
         <summary class="ui-disclosure-row">지도 표시·경로 옵션</summary>
@@ -226,18 +248,21 @@
           </div>
         </fieldset>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
-        <p id="fleet-scope-note" class="hint">이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 보고, 선택한 로봇을 누르는 동안만 저속으로 조종할 수 있습니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에서도 사용할 수 있으며, 로봇의 비상정지는 관제 PC가 꺼져도 유지됩니다. 여기서는 목표·취소·정지 같은 원자 액션과 저속 조종 명령을 보내며, 바퀴 속도는 로봇 안에서만 만들어지고 최종 주행·안전 판단은 로봇의 CORE가 맡습니다.</p>
+        <p id="fleet-scope-note" class="hint">Rosy Fleet 사이트 관제입니다. 개별 로봇의 전방 카메라와 수동 조작은 Rosy Robot 화면에서 사용하며, 여기서는 목표·취소·정지 같은 원자 액션과 저속 조종을 보냅니다. 바퀴 속도는 로봇 안에서만 만들어지며 비상 정지는 관제 연결과 무관하게 유지됩니다.</p>
         </div>
       </details>
       <div class="map-board">
-      <div class="map-stage" id="map-stage" data-map-state="loading" data-watch="pip">
+      <div class="map-stage" id="map-stage" data-map-state="loading" data-watch="off">
         <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
+        <span id="map-axis-badge" class="map-axis-badge" aria-label="지도 좌표 방향">+X → · +Y ↑ · m</span>
+        <span id="map-cursor-readout" class="map-cursor-readout" role="status" aria-live="polite" hidden></span>
         <div class="map-empty" id="map-empty" role="status">
           <svg class="ui-icon map-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 20l-5.5-2.5v-13l5.5 2.5 6-2.5 5.5 2.5v13l-5.5-2.5z"/><path d="M9 7v13"/><path d="M15 4.5v13"/></svg>
           <strong id="map-empty-title">지도 대기</strong>
           <p id="map-empty-detail">Fleet에서 현장 지도를 확인하고 있습니다.</p>
+          <ui-button id="connection-guide-action" kind="primary" data-login data-action-icon="login" type="button" hidden>관제 접속</ui-button>
         </div>
         <!-- D-493 — 위에서 내려다본 천장 카메라. 지도가 없거나 "크게 보기"일 때 지도 칸을 채운다. 원본은 한 번에 한 곳에만 보인다. -->
         <img id="map-birdseye" class="map-birdseye" alt="천장 카메라 최신 영상 — 위에서 본 현장" hidden>
@@ -245,7 +270,7 @@
           <img id="watch-front-image" alt="">
         </figure>
         <div id="device-watch" class="device-watch">
-          <ui-button kind="segment" id="watch-ceiling" type="button" aria-pressed="true" aria-controls="map-birdseye">천장</ui-button>
+          <ui-button kind="segment" id="watch-ceiling" type="button" aria-pressed="false" aria-controls="map-birdseye">천장</ui-button>
         </div>
         <!-- 2026-11-14 — 영상이 끊겨도 마지막 프레임을 두고, 그 찍은 시각을 왼쪽 아래에 작게 남긴다. -->
         <p id="map-camera-stamp" class="map-camera-stamp" hidden></p>
@@ -289,21 +314,6 @@
     </section>
     </div>
     <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">
-      <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
-      <section class="panel queues-panel" aria-labelledby="queues-heading">
-        <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>
-        <!-- D-540 3 — 최우선이 먼저다. 결정이 있는 행(막힘 판단·바뀐 경로 확인)은 그 자리에서 펼친다. -->
-        <div class="queues-container">
-          <div class="queue critical-queue">
-            <ui-triage id="critical-head" status="crit"><b>최우선 개입 요망</b><small></small></ui-triage>
-            <ul id="critical-list" class="issue-list"></ul>
-          </div>
-          <div class="queue warning-queue">
-            <ui-triage id="warning-head" status="warn"><b>주의 요망</b><small></small></ui-triage>
-            <ul id="warning-list" class="issue-list"></ul>
-          </div>
-        </div>
-      </section>
           <section id="dispatch-control" class="dispatch-control" role="status"
                    aria-live="polite" aria-labelledby="dispatch-control-title">
             <div>
@@ -321,7 +331,6 @@
       <section class="console-context" aria-label="관제 상세">
         <div class="context-tabs" role="tablist" aria-label="관제 상세 보기">
           <ui-button kind="segment" role="tab" id="context-status-tab" data-context-tab="status" data-action-icon="robot" aria-controls="context-status" aria-selected="true">로봇·작업</ui-button>
-          <ui-button kind="segment" role="tab" id="context-inbox-tab" data-context-tab="inbox" data-action-icon="sign" aria-controls="context-inbox" aria-selected="false" tabindex="-1">알림</ui-button>
           <ui-button kind="segment" role="tab" id="context-evidence-tab" data-context-tab="evidence" data-action-icon="history" aria-controls="context-evidence" aria-selected="false" tabindex="-1">기록·근거</ui-button>
           <ui-button kind="segment" role="tab" id="context-tools-tab" data-context-tab="tools" data-action-icon="tools" aria-controls="context-tools" aria-selected="false" tabindex="-1">운영 도구</ui-button>
         </div>
@@ -332,7 +341,7 @@
         <ui-button kind="primary" id="work-admit" type="button" hidden>실행 승인</ui-button>
         <p id="work-evidence" class="hint" role="status">작업을 선택하세요.</p>
       </section>
-      <section class="panel" id="work-move" aria-labelledby="work-move-heading" hidden>
+      <section class="panel" id="work-move" aria-labelledby="work-move-heading" data-unit-scope="drive" hidden>
         <h2 id="work-move-heading">이동</h2>
         <label for="work-move-robot">로봇</label><select id="work-move-robot" class="ui-field" data-work-read=""></select>
         <p id="work-move-state" class="hint" role="status"></p>
@@ -377,7 +386,7 @@
         </div>
         <div class="context-panel" id="context-tools" role="tabpanel" tabindex="0" aria-labelledby="context-tools-tab" hidden>
       <ui-actions class="context-shortcuts"><ui-button id="assistant-toggle" data-work-read="" kind="quiet" type="button" aria-expanded="false" aria-controls="assistant-panel">관제 AI</ui-button><a class="ui-disclosure-row" href="/monitoring/" target="_blank" rel="noopener noreferrer">시스템 상태 · 새 창</a></ui-actions>
-      <section class="panel vision-preview" aria-labelledby="vision-heading">
+      <section class="panel vision-preview" aria-labelledby="vision-heading" data-unit-scope="drive">
         <div class="map-head">
           <h3 id="vision-heading">관제 카메라</h3>
           <span class="spacer"></span>
@@ -418,7 +427,7 @@
       </section>
       <section class="panel ops-block" aria-labelledby="fleet-operations-heading">
         <h2 id="fleet-operations-heading">대형·신호·기록</h2>
-        <div class="formation" aria-labelledby="formation-heading" data-role-lock>
+        <div class="formation" aria-labelledby="formation-heading" data-role-lock data-unit-scope="drive">
           <div class="robot-head">
             <h3 id="formation-heading">대형·대열</h3>
             <span class="spacer"></span>
@@ -448,7 +457,7 @@
               <p class="hint">방향이 없거나 앞이 겹치면 번호가 앞선 로봇이 리더입니다. 변경은 모양·간격만 바꾸고, 재개는 멈춘 대형을 다시 움직이며, 해제는 추종을 끕니다.</p>
             </details>
           <div class="robot-actions">
-            <ui-button kind="primary" id="formation-path" type="button">리더에게 길 주기</ui-button>
+            <ui-button kind="quiet" id="formation-path" type="button">리더에게 길 주기</ui-button>
           </div>
           <p class="hint" id="formation-detail"></p>
           <label class="robot-filter" for="formation-filter">로봇 찾기
@@ -462,12 +471,12 @@
             <select class="ui-field" id="convoy-start"></select>
           </div>
           <div class="robot-actions formation-actions">
-            <ui-button kind="primary" id="convoy-go" type="button">대열 시작</ui-button>
+            <ui-button kind="quiet" id="convoy-go" type="button">대열 시작</ui-button>
           </div>
           <p class="hint" id="convoy-detail" role="status"></p></details>
         </div>
 
-        <div class="signals" aria-labelledby="signals-heading">
+        <div class="signals" aria-labelledby="signals-heading" data-unit-scope="drive">
           <div class="robot-head">
             <h3 id="signals-heading" title="장치가 관제 접촉을 잃으면 스스로 적색 점멸(failsafe)로 들어가고, 콘솔이 마지막 명령을 한 번 다시 내립니다">신호등</h3>
             <span class="spacer"></span>
@@ -477,7 +486,7 @@
           <p class="hint" id="signals-hint" hidden></p>
         </div>
 
-        <div class="charge-bays" aria-labelledby="platoon-heading">
+        <div class="charge-bays" aria-labelledby="platoon-heading" data-unit-scope="drive">
           <div class="robot-head">
             <h3 id="platoon-heading" title="활성 지도의 한 방향 고리 위 로봇 사이 간격입니다. 따라가기는 로봇 CORE가 하며 Fleet은 보기만 합니다 (D-941)">대열 간격</h3>
             <span class="spacer"></span>
@@ -503,26 +512,6 @@
 
       </section>
         </div>
-        <div class="context-panel" id="context-inbox" role="tabpanel" tabindex="0" aria-labelledby="context-inbox-tab" hidden>
-          <section class="panel" aria-labelledby="inbox-heading">
-            <h2 id="inbox-heading">알림 창</h2>
-            <p class="hint">이 창을 열면 메시지를 읽음으로 표시합니다. 개입이 해소되거나 로봇 상태가 바뀌지는 않습니다.</p>
-            <p class="hint">현재 제공되는 관제 메시지입니다. 사건 당시의 AI·CORE 판단과 영상 근거는 <a id="inbox-evidence" href="#incident-heading">사건 기록에서 확인</a>합니다.</p>
-            <h3>현재 개입</h3>
-            <ul id="inbox-current" class="issue-list"></ul>
-            <h3>전달된 판단 메시지</h3>
-            <ul id="inbox-messages" class="issue-list"></ul>
-          </section>
-      <details id="log-panel" class="log-panel" open>
-          <summary class="ui-disclosure-row">기록</summary>
-          <div class="log-toolbar">
-            <ui-button kind="quiet" id="log-clear" type="button" title="화면의 기록을 지웁니다">지우기</ui-button>
-          </div>
-          <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
-            <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
-          </div>
-        </details>
-        </div>
         <div class="context-panel" id="context-evidence" role="tabpanel" tabindex="0" aria-labelledby="context-evidence-tab" hidden>
 
       <section class="panel incident-panel" aria-labelledby="incident-heading">
@@ -533,7 +522,7 @@
             <ui-button kind="quiet" id="incident-refresh" data-action-icon="refresh" data-icon-only="" type="button">새로고침</ui-button>
             <ui-button kind="quiet" id="incident-export" data-action-icon="download" data-icon-only="" type="button" disabled>JSON 내보내기</ui-button>
           </div>
-          <p class="hint">현재 개입은 위 목록에서 확인합니다. 여기서는 사건 당시의 CORE 정지·Fleet 조치·카메라 관측·AI 참고 사실을 검토합니다.</p>
+          <p class="hint">현재 개입은 종 아이콘 알림 창에서 확인합니다. 여기서는 사건 당시의 CORE 정지·Fleet 조치·카메라 관측·AI 참고 사실을 검토합니다.</p>
           <ul id="incident-list" class="issue-list"></ul>
           <h3>AI 상황 사실</h3>
           <p class="hint">그림자 사실은 조치 명령이 아닙니다. Fleet 대기 순환과 다른 판단은 운영자가 확인합니다.</p>
@@ -544,6 +533,19 @@
         <h2 id="incident-side-heading">원인과 조치</h2><div id="incident-judgment"></div>
         <p class="hint">사건을 열면 담당 인수와 사람 검토를 여기에 적습니다.</p>
       </section>
+      <section class="panel" aria-labelledby="inbox-messages-heading">
+        <h3 id="inbox-messages-heading">판단 전달 기록</h3>
+        <ul id="inbox-messages" class="issue-list"></ul>
+      </section>
+      <details id="log-panel" class="log-panel" open>
+        <summary class="ui-disclosure-row">기록</summary>
+        <div class="log-toolbar">
+          <ui-button kind="quiet" id="log-clear" type="button" title="화면의 기록을 지웁니다">지우기</ui-button>
+        </div>
+        <div id="log" class="log" role="status" aria-live="polite" aria-label="최근 관제 이벤트">
+          <ui-empty>최근 이벤트가 없습니다 — 관제 요청과 연결 상태 변화가 여기에 표시됩니다.</ui-empty>
+        </div>
+      </details>
         </div>
       </section>
     </aside>
@@ -557,7 +559,7 @@
     <label for="assistant-locale">대화·음성 언어 / Language</label>
     <select id="assistant-locale" class="ui-field" data-work-read=""><option value="ko-KR">한국어</option><option value="en-US">English</option></select>
     <textarea id="assistant-input" class="ui-field" rows="3" maxlength="2000" placeholder="현재 로봇 상태 알려줘" disabled></textarea>
-    <div class="map-head"><ui-button id="assistant-send" data-work-read="" kind="primary" type="button" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">전송</ui-button><ui-button id="assistant-retry" data-work-read="" kind="quiet" type="button" hidden>같은 요청 확인</ui-button></div>
+    <div class="map-head"><ui-button id="assistant-send" data-work-read="" kind="quiet" type="button" disabled reason="기명 운영자 로그인과 관제 AI 연결이 필요합니다">전송</ui-button><ui-button id="assistant-retry" data-work-read="" kind="quiet" type="button" hidden>같은 요청 확인</ui-button></div>
     <div class="map-head"><ui-button id="assistant-dictate" data-work-read="" kind="quiet" type="button">말하기</ui-button><ui-button id="assistant-dictate-stop" data-work-read="" kind="quiet" type="button">인식 마치기</ui-button><ui-button id="assistant-voice-prepare" data-work-read="" kind="quiet" type="button">음성 입력 준비</ui-button></div>
     <p id="assistant-voice-state" class="hint" role="status">음성 입력은 지원되는 브라우저의 한국어 음성이 필요합니다.</p>
     <div class="map-head"><ui-button id="assistant-read" data-work-read="" kind="quiet" type="button">답변 읽기</ui-button><ui-button id="assistant-read-stop" data-work-read="" kind="quiet" type="button">읽기 중단</ui-button></div>
