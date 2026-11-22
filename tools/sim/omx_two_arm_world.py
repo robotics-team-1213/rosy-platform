@@ -24,6 +24,7 @@ import numpy as np  # noqa: E402
 import omx_physics as physics  # noqa: E402
 import omx_two_arm_kin as kin  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
+import omx_two_arm_stand  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
 import ship_plate  # noqa: E402
 
@@ -40,7 +41,9 @@ FPS = 15
 COLOURS = dict(floor=[.41, .44, .46, 1], table=[.59, .43, .08, 1], belt=[.16, .18, .19, 1], plate=[.45, .60, .67, 1],
                plate_charcoal=[.20, .20, .20, 1], plate_sky=[.643, .859, .910, 1], pad=[.08, .09, .1, 1],
                ship=[.45, .60, .67, 1], container=[.62, .31, .14, 1], wall=[.76, .78, .78, 1],
-               black=[.11, .11, .09, 1], base=[.06, .065, .06, 1])
+               black=[.11, .11, .09, 1], base=[.06, .065, .06, 1], chute_gray=[.35, .37, .39, 1],
+               chute_gate=[.24, .25, .27, 1], r05_deck=[.38, .40, .42, 1], r05_rim=[.72, .73, .75, 1],
+               dock_white=[.76, .77, .79, 1])
 
 
 @functools.lru_cache(maxsize=1)
@@ -147,6 +150,7 @@ class World:
                                pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=COLOURS["black"])
         self._ship(spec)
         self._temp(spec)
+        self._stand(spec)
 
     def _spec(self):
         L, c = self.layout, self.layout.choices
@@ -364,6 +368,10 @@ class World:
                     pts = ((hl, 0), (hl, seat), (hl + catch, seat + catch), (hl + catch + rim, seat + catch), (hl + catch + rim, 0))
                     spec.add_mesh(name=nm, uservert=[c for v in (v0, v1) for u, z in pts for c in (es * u, v, z)])
                     spec.worldbody.add_geom(name=nm, type=mujoco.mjtGeom.mjGEOM_MESH, meshname=nm, pos=[*xy, deck_z], quat=quat, rgba=proxy_rgba)
+
+    def _stand(self, spec):
+        """Conveyor-right r05 outbound stand: real v6 gray chute + non-gooseneck gate on 2 floor-seated r05 plates + white U-dock."""
+        omx_two_arm_stand.add_stand(spec, self.layout, self._asset, COLOURS)
 
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):

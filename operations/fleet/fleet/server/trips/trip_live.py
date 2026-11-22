@@ -26,6 +26,8 @@ class LiveTrip:
         #: Our held replan stop (seq) that the confirmed plan's action may replace while executing.
         self.replaceable: Optional[int] = None
         self.last_goal: Optional[tuple[float, float]] = None
+        #: Active D-1009 Nav2 route span dispatched to CORE (``{"end_index", "points"}``).
+        self.active_route: Optional[dict] = None
         self.replan_pending = False
         self.waiting_since: Optional[float] = None
         self.junction: dict = {}
@@ -98,6 +100,17 @@ class LiveTrip:
     @property
     def open(self) -> bool:
         return self.view["state"] in OPEN
+
+    @property
+    def nav2(self) -> bool:
+        """Whether this trip drives painted lanes via CORE Nav2 ``navigation/route``."""
+        return self.request.get("drive_mode") == "nav2"
+
+    def segment_is_lane(self, index: int) -> bool:
+        return not self.nav2 and self.arc(index).drive_mode == "lane"
+
+    def effective_mode(self, index: int) -> str:
+        return "lane" if self.segment_is_lane(index) else "free"
 
     def arc(self, index: int):
         return self.graph.arcs[arc_id(self.segments[index])]

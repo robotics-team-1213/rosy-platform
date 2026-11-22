@@ -15,51 +15,22 @@ import hashlib
 import json
 from typing import Any, Literal
 
+from core_common.stop_pose import REPARK_MAX_FORWARD_M, REPARK_MAX_LEFT_M
 from fleet.site_map import SiteMap, approach_pose
+from fleet.site_points_catalog import (
+    PLANNED_VEHICLE_STOPS,
+    SITE_HANDOFFS,
+    build_conveyor_transfer,
+    build_coordinate_frames,
+    build_end_to_end_stages,
+    build_zone_rules,
+)
 from fleet.site_rules import SiteRules
 
 SCHEMA_FULL = "rosy.site-points.v1"
 SCHEMA_PORT = "rosy.port-site-places.v1"
-
-PLANNED_VEHICLE_STOPS: tuple[dict[str, str], ...] = (
-    {
-        "id": "S_OUT",
-        "name": "S_OUT 반출대 상차 정지선",
-        "kind": "stop",
-        "port_role": "outbound_pickup",
-        "expected_rule_role": "load",
-    },
-)
-
-SITE_HANDOFFS: tuple[dict[str, Any], ...] = (
-    {
-        "id": "s3_cell_s_unload",
-        "kind": "intake",
-        "direction": "vehicle_to_arm",
-        "vehicle_stop_id": "S3",
-        "intake_point_ref": "intake-s3",
-        "cell_id": "cell_s",
-        "arms": ["arm_s"],
-        "arm_src": "not_places:vehicle_tray",
-        "arm_dst": "not_places:belt",
-        "target_cell_zones": ["yard"],
-        "requires_arm_fold_for_align": True,
-    },
-    {
-        "id": "outbound_stand_load",
-        "kind": "outbound",
-        "direction": "arm_to_vehicle",
-        "vehicle_stop_id": "S_OUT",
-        "vehicle_exit_stop_id": "S1",
-        "cell_id": "cell_ab",
-        "arms": ["arm_a"],
-        "arm_src": "stand:r1-s1-t1",
-        "arm_dst": "not_places:vehicle_tray",
-        "cell_zone_id": "stand",
-        "wire_slot_ref": "stand-r1-c1-l1",
-        "requires_arm_fold_for_align": True,
-    },
-)
+BERTH_ALIGN_TOL_DEG = 3.0
+NAV2_BERTH_STOPS = frozenset({"S3", "S_OUT"})
 
 
 def _edge_links(site_map: SiteMap) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
@@ -153,6 +124,64 @@ def _with_digest(payload: dict[str, Any]) -> dict[str, Any]:
     return {**payload, "digest": hashlib.sha256(encoded.encode("utf-8")).hexdigest()}
 
 
+def _berth_profile(
+    *,
+    place_id: str,
+    kind: str,
+    in_active_map: bool,
+    pinned: bool,
+    stop_zone_defined: bool,
+    app_pose: tuple[float, float, float] | None,
+    has_edges_in: bool,
+    has_edges_out: bool,
+    rule: dict[str, Any] | None,
+    ambiguous_rule: bool,
+) -> dict[str, Any] | None:
+    edges_wired = has_edges_in and has_edges_out
+    if kind == "charge" and place_id not in NAV2_BERTH_STOPS:
+        return {
+            "mode": "camera_pink_line",
+            "adr": "D-1013",
+            "nav2_berth_ready": False,
+            "missing": [],
+            "approach_pose": None,
+            "stop_zone_defined": False,
+            "edges_wired": has_edges_in or has_edges_out,
+        }
+    if kind != "stop" and place_id not in NAV2_BERTH_STOPS:
+        return None
+    missing: list[str] = []
+    if not in_active_map:
+        missing.append("active_map")
+    if kind != "stop":
+        missing.append("stop_kind")
+    if not pinned:
+        missing.append("pinned")
+    if not stop_zone_defined:
+        missing.append("stop_zone")
+    if app_pose is None:
+        missing.append("approach_m")
+    if not has_edges_in:
+        missing.append("edges_in")
+    if not has_edges_out:
+        missing.append("edges_out")
+    expected_role = "unload" if place_id == "S3" else ("load" if place_id == "S_OUT" else None)
+    if ambiguous_rule:
+        missing.append("unambiguous_rule")
+    elif expected_role is not None and (rule is None or rule.get("role") != expected_role):
+        missing.append(f"{expected_role}_rule")
+    return {
+        "mode": "nav2_named_stop" if place_id in NAV2_BERTH_STOPS else "road_stop",
+        "nav2_berth_ready": len(missing) == 0,
+        "missing": missing,
+        "approach_pose": {"x": app_pose[0], "y": app_pose[1], "yaw": app_pose[2]} if app_pose is not None else None,
+        "stop_zone_defined": stop_zone_defined,
+        "edges_wired": edges_wired,
+        "repark_cap_m": {"forward_m": REPARK_MAX_FORWARD_M, "left_m": REPARK_MAX_LEFT_M},
+        "align_tol_deg": BERTH_ALIGN_TOL_DEG,
+    }
+
+
 def build_site_points(
     *,
     site_map_view: dict[str, Any],
@@ -192,9 +221,10 @@ def build_site_points(
     vehicle_stops: list[dict[str, Any]] = []
     vehicle_places_port: list[dict[str, Any]] = []
     port_stop_by_id: dict[str, dict[str, Any]] = {}
+    berth_by_stop_id: dict[str, dict[str, Any] | None] = {}
 
     for place in site_map.places:
-        if place.kind not in ("stop", "charge", "park") and not include_junctions and place.id != "S_OUT":
+        if place.kind not in ("stop", "charge", "park") and not include_junctions and place.id not in NAV2_BERTH_STOPS:
             continue
         rule = stop_rules.get(place.id)
         p_edges_in = edges_in.get(place.id, [])
@@ -208,6 +238,19 @@ def build_site_points(
         )
         port_role = _port_role_for(place.id, place.kind, rule["role"] if rule else None, exit_place)
         app_pose = approach_pose(place) if place.kind == "stop" else None
+        berth = _berth_profile(
+            place_id=place.id,
+            kind=place.kind,
+            in_active_map=True,
+            pinned=bool(place.pinned),
+            stop_zone_defined=place.stop_zone is not None,
+            app_pose=app_pose,
+            has_edges_in=bool(p_edges_in),
+            has_edges_out=bool(p_edges_out),
+            rule=rule,
+            ambiguous_rule=place.id in ambiguous_rules,
+        )
+        berth_by_stop_id[place.id] = berth
 
         if (place.kind in ("stop", "charge") or place.id == "S_OUT") and port_role is not None:
             port_entry = {
@@ -235,10 +278,11 @@ def build_site_points(
                     {"x": app_pose[0], "y": app_pose[1], "yaw": app_pose[2]} if app_pose is not None else None
                 ),
                 "rule": rule,
-                "edges_in": edges_in.get(place.id, []),
-                "edges_out": edges_out.get(place.id, []),
+                "edges_in": p_edges_in,
+                "edges_out": p_edges_out,
                 "status": status,
                 "dispatchable": dispatchable,
+                "berth": berth,
             }
         )
 
@@ -246,6 +290,19 @@ def build_site_points(
         pid = planned["id"]
         if pid in active_by_id:
             continue
+        berth = _berth_profile(
+            place_id=pid,
+            kind=planned["kind"],
+            in_active_map=False,
+            pinned=False,
+            stop_zone_defined=False,
+            app_pose=None,
+            has_edges_in=False,
+            has_edges_out=False,
+            rule=None,
+            ambiguous_rule=False,
+        )
+        berth_by_stop_id[pid] = berth
         port_entry = {
             "place_id": pid,
             "port_role": planned["port_role"],
@@ -272,6 +329,7 @@ def build_site_points(
                 "edges_out": [],
                 "status": "planned_unverified",
                 "dispatchable": False,
+                "berth": berth,
             }
         )
 
@@ -298,6 +356,9 @@ def build_site_points(
     for h in SITE_HANDOFFS:
         v_stop = port_stop_by_id.get(h["vehicle_stop_id"])
         stop_resolved = h["vehicle_stop_id"] in active_by_id
+        stop_berth = berth_by_stop_id.get(h["vehicle_stop_id"])
+        berth_ready = bool(stop_berth and stop_berth["nav2_berth_ready"])
+        berth_missing = list(stop_berth["missing"]) if stop_berth is not None else ["stop_missing"]
         if h["kind"] == "intake":
             targets_ok = all(zone_status_by_id.get(zid) == "verified" for zid in h["target_cell_zones"])
             h_verified = bool(
@@ -323,6 +384,31 @@ def build_site_points(
                 {
                     **h,
                     "vehicle_stop_resolved": stop_resolved,
+                    "nav2_berth_ready": berth_ready,
+                    "berth_missing": berth_missing,
+                    "intake_cell": {
+                        "cell_id": h["cell_id"],
+                        "arm_id": h["arms"][0],
+                        "station_stop_id": h["vehicle_stop_id"],
+                        "src": h["arm_src"],
+                        "dst": h["arm_dst"],
+                        "release_evidence": "D-1063_top_camera",
+                        "auto_depart": "D-1047",
+                    },
+                    "arm_frame": "cell_s_arm_base",
+                    "belt_end": "belt-in",
+                    "waypoints": {
+                        "approach": f"{h['vehicle_stop_id']}:approach_pose",
+                        "stop": h["vehicle_stop_id"],
+                        "exit_edge": (edges_out.get(h["vehicle_stop_id"]) or ["upper_east"])[0],
+                    },
+                    "flow": [
+                        f"{h['vehicle_stop_id']}:approach_pose",
+                        f"{h['vehicle_stop_id']}:stop_zone",
+                        f"{h['arms'][0]}:vehicle_tray",
+                        h["arm_dst"],
+                        f"cell_ab:{h['target_cell_zones'][0]}",
+                    ],
                     "status": h_status,
                     "dispatchable": h_verified,
                 }
@@ -360,6 +446,23 @@ def build_site_points(
                     "vehicle_exit_stop_id": exit_id,
                     "vehicle_stop_resolved": stop_resolved,
                     "exit_stop_resolved": bool(exit_id and exit_id in active_by_id),
+                    "nav2_berth_ready": berth_ready,
+                    "berth_missing": berth_missing,
+                    "arm_frame": "cell_ab_fixture",
+                    "stand_ref": h["arm_src"],
+                    "waypoints": {
+                        "branch_edge": "upper_east",
+                        "branch_node": "J_stand",
+                        "approach": f"{h['vehicle_stop_id']}:approach_pose",
+                        "stop": h["vehicle_stop_id"],
+                        "exit_stop": exit_id,
+                    },
+                    "flow": [
+                        h["arm_src"],
+                        f"{h['arms'][0]}:vehicle_tray",
+                        f"{h['vehicle_stop_id']}:stop_zone",
+                        exit_id or "S_EXIT",
+                    ],
                     "status": h_status,
                     "dispatchable": h_verified,
                 }
@@ -378,12 +481,24 @@ def build_site_points(
             }
         )
 
+    s3_ready = bool((berth_by_stop_id.get("S3") or {}).get("nav2_berth_ready"))
+    s_out_ready = bool((berth_by_stop_id.get("S_OUT") or {}).get("nav2_berth_ready"))
     return _with_digest(
         {
             "schema": SCHEMA_FULL,
             "sources": sources,
             "vehicle_stops": vehicle_stops,
             "arm_zones": cell_sites,
+            "coordinate_frames": build_coordinate_frames(site_map, site_rules, cell_sites),
+            "conveyor_transfer": build_conveyor_transfer(),
+            "zone_rules": build_zone_rules(cell_sites),
+            "end_to_end_stages": build_end_to_end_stages(
+                active_by_id=active_by_id,
+                stop_rules=stop_rules,
+                exit_place=exit_place,
+                s3_berth_ready=s3_ready,
+                s_out_berth_ready=s_out_ready,
+            ),
             "handoffs": handoffs_full,
             "legacy_aliases": dict(legacy_station_zones or {}),
         }

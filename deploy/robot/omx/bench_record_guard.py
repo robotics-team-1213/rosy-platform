@@ -181,3 +181,40 @@ def active_handover_units(run=systemctl):
     listed = run("list-units", "--state=active,activating", "--no-legend", "--plain", "rosy-omx-*").stdout.split()
     units = [u for u in listed if u.endswith((".service", ".timer"))]
     return [u for pattern in HANDOVER for u in units if re.fullmatch(pattern, u)]
+
+
+_ARM_LETTERS = {"arm_a": "a", "arm_b": "b", "arm_s": "s"}
+
+
+def resolve_record_config(prep, arm):
+    """Return the active record config JSON path for an arm, preferring `-live` when standard config is absent."""
+    letter = _ARM_LETTERS[arm]
+    primary = prep / f"record-config-arm-{letter}.json"
+    if primary.is_file():
+        return primary
+    live = prep / f"record-config-arm-{letter}-live.json"
+    return live if live.is_file() else primary
+
+
+def _port_exists(port):
+    return Path(port).exists() if isinstance(port, str) and port.startswith("/dev/") else None
+
+
+def arm_connectivity(prep, arm):
+    """Read-only USB board presence check for one arm (never opens a serial port)."""
+    if arm == "arm_ab":
+        a, b = arm_connectivity(prep, "arm_a"), arm_connectivity(prep, "arm_b")
+        f_vals, l_vals = (a["follower_connected"], b["follower_connected"]), (a["leader_connected"], b["leader_connected"])
+        f_ok = True if all(v is True for v in f_vals) else (False if any(v is False for v in f_vals) else None)
+        l_ok = True if all(v is True for v in l_vals) else (False if any(v is False for v in l_vals) else None)
+        return {"connected": f_ok, "follower_connected": f_ok, "leader_connected": l_ok}
+    if arm not in _ARM_LETTERS:
+        return {"connected": None, "follower_connected": None, "leader_connected": None}
+    try:
+        cfg = json.loads(resolve_record_config(prep, arm).read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError, TypeError):
+        return {"connected": None, "follower_connected": None, "leader_connected": None}
+    robot, teleop = (cfg.get("robot"), cfg.get("teleop")) if isinstance(cfg, dict) else (None, None)
+    f_ok = _port_exists(robot.get("port") if isinstance(robot, dict) else None)
+    l_ok = _port_exists(teleop.get("port") if isinstance(teleop, dict) else None)
+    return {"connected": f_ok, "follower_connected": f_ok, "leader_connected": l_ok}

@@ -67,7 +67,8 @@ def check_following(motion, current: dict, now: float) -> None:
     if lag is not None:
         expected = lag.advance({n: (motion.sent[n] if motion.sent is not None and n in motion.sent else int(motion.command[n])) for n in motion.active}, now)
         lag.measure(current, now, 0.0 if motion.last_time is None else now - motion.last_time)
-        for name in [n for n in motion.far if motion.prev_target is None or abs(motion.prev_target[n] - current[n]) < 100 * TICKS_PER_DEGREE]:
+        prev_ref = motion.prev_mapped if getattr(motion, "prev_mapped", None) is not None else motion.prev_target
+        for name in [n for n in motion.far if prev_ref is None or abs(prev_ref[n] - current[n]) < 100 * TICKS_PER_DEGREE]:
             motion.far.discard(name)  # back within 100 degrees: said again if it happens again
     for name in motion.active if lag is not None else (BODY if motion.teacher else motion.active):
         sent = motion.sent[name] if motion.sent is not None and name in motion.sent else int(motion.command[name])  # what was written
@@ -100,9 +101,10 @@ def follows_far(motion, name: str, target: dict) -> bool:
     and the target did not jump 100 degrees in one tick (that, and a difference at the start, still stop as before). The command is rate-limited
     (track limit, acceleration) and its lead over the arm bounded (LEAD_DEG + tau * speed), so the arm approaches at the limit speed with the same push as any
     following; cutting the torque of an extended arm would drop it. Said once per joint."""
-    if motion.lag is None or not motion.tracking or motion.prev_target is None:
+    prev_ref = motion.prev_mapped if getattr(motion, "prev_mapped", None) is not None else motion.prev_target
+    if motion.lag is None or not motion.tracking or prev_ref is None:
         return False
-    if abs(target[name] - motion.prev_target[name]) >= 100 * TICKS_PER_DEGREE - 1e-9:
+    if abs(target[name] - prev_ref[name]) >= 100 * TICKS_PER_DEGREE - 1e-9:
         return False
     if name not in motion.far:
         motion.far.add(name)

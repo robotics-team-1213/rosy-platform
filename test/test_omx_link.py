@@ -16,7 +16,8 @@ import guarded_native_link as gl  # noqa: E402
 
 def _patch_clock(guard, monkeypatch, clock):
     """Pin NativeJointMotion's clock across guard modules without real-time sleep flakes."""
-    for mod in (guard, sys.modules.get('guarded_native'), sys.modules.get('omx_guard_test')):
+    import guarded_native
+    for mod in (guard, guarded_native, sys.modules.get('omx_guard_test')):
         if mod is not None and hasattr(mod, 'NativeJointMotion'):
             monkeypatch.setattr(mod, 'NativeJointMotion', functools.partial(mod.NativeJointMotion, clock=lambda: clock[0]))
 

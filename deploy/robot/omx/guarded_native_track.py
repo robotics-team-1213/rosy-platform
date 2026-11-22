@@ -9,6 +9,7 @@ import math
 
 from guarded_device import BODY, LEAD_DEG, STALL_RELEASE_DEG, TICKS_PER_DEGREE
 from guarded_native_probe import safe_print
+from teleop_speed import ACC_DEG_S2_PER_RAW, STAGES
 
 
 def body_command(self, target, current, elapsed, now, staged=None):
@@ -45,6 +46,9 @@ def body_command(self, target, current, elapsed, now, staged=None):
     elif full and not self.grip_ready and abs(target["gripper"] - self.command["gripper"]) <= 0.5 * TICKS_PER_DEGREE:
         self.grip_ready = True  # the gripper's own command reached its target once: it may use the tracking limit
     acceleration = self.accel_deg_s2 * TICKS_PER_DEGREE
+    staged_full = bool(full and self.stage)
+    decel = (min(0.5 * self.brake_deg_s2, STAGES[self.stage]["profile_acc"] * ACC_DEG_S2_PER_RAW) * TICKS_PER_DEGREE
+             if staged_full else acceleration)
     limit = (self.track_deg_s if tracking else self.align_deg_s) * TICKS_PER_DEGREE
     command, velocity = {}, {}
     frozen = self.frozen(staged) if staged else self.frozen()
@@ -60,21 +64,21 @@ def body_command(self, target, current, elapsed, now, staged=None):
             velocity[name] = 0.0
             continue
         error = target[name] - self.command[name]
-        brake = math.sqrt((acceleration * elapsed) ** 2 + 2 * acceleration * abs(error)) - acceleration * elapsed
+        brake = math.sqrt((decel * elapsed) ** 2 + 2 * decel * abs(error)) - decel * elapsed
         v_ff_raw = ((target[name] - self.prev_target[name]) / elapsed
                     if self.prev_target is not None and elapsed > 0 else 0.0)
-        if self.teacher and name in BODY and abs(v_ff_raw) <= 1e-6 and abs(self.v_ff_ema[name]) > 1.0 and abs(error) > 1.0 and error * self.v_ff_ema[name] > 0:
+        if (self.teacher or staged_full) and name in BODY and abs(v_ff_raw) <= 1e-6 and abs(self.v_ff_ema[name]) > 1.0 and abs(error) > 1.0 and error * self.v_ff_ema[name] > 0:
             v_ff = 0.55 * self.v_ff_ema[name]
         else:
             v_ff = v_ff_raw
         v_ff = max(-limit, min(limit, v_ff))
-        if self.teacher and name in BODY:
+        if (self.teacher or staged_full) and name in BODY:
             self.v_ff_ema[name] = v_ff
-        if self.teacher and tracking and self.prev_target is not None and elapsed > 0:
+        if (self.teacher or staged_full) and tracking and self.prev_target is not None and elapsed > 0:
             if error * v_ff > 0:
                 reach = min(
                     abs(error) / elapsed,
-                    math.sqrt(min(limit, abs(v_ff)) ** 2 + 2 * acceleration * abs(error)),
+                    math.sqrt(min(limit, abs(v_ff)) ** 2 + 2 * decel * abs(error)),
                 )
                 brake = max(brake, reach)
         lim = limit if name != "gripper" or not full or self.grip_ready else TICKS_PER_DEGREE  # gripper: 1 deg/s until ready
@@ -86,7 +90,7 @@ def body_command(self, target, current, elapsed, now, staged=None):
             change = max(-acceleration * elapsed, min(acceleration * elapsed, desired - self.velocity[name]))
         velocity[name] = self.velocity[name] + change
         if full:  # never carry more speed than the remaining distance can be braked at the acceleration limit
-            stop = math.sqrt(2 * acceleration * abs(error))
+            stop = math.sqrt(2 * decel * abs(error))
             velocity[name] = max(-stop, min(stop, velocity[name]))
         command[name] = self.command[name] + velocity[name] * elapsed
         if full:  # one-sided: only this tick's advance is cut to present + LEAD_DEG in the direction of travel. The command is never

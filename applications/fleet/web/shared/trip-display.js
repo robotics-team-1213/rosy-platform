@@ -113,6 +113,7 @@ const TRIP_REASON_LABEL = {
   TRIP_ROBOT_JUNCTION_UNSUPPORTED: '로봇 CORE가 교차로 지시를 모릅니다 · 새 이미지가 필요합니다',
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
   TRIP_GOAL_REFUSED: '로봇이 목적지 지시를 거절해 멈췄습니다 · 현장을 확인하세요',
+  navigation: '로봇 Nav2 주행이 취소되거나 실패해 멈췄습니다 · 현장을 확인하세요',
   LINE_FOLLOW_NOT_ACTIVE: '로봇의 차선 주행이 켜져 있지 않습니다',
   lease_lost: '운행 끝 · 다시 몰려면 새 운행을 시작하세요',
   TRIP_LINE_FOLLOW_START_FAILED: '로봇이 카메라 차선 주행을 켜지 못해 운행을 멈췄습니다',

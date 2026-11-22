@@ -161,6 +161,8 @@ function pickTaskBySpot(spot){
   const poolFor=(tasks)=>{
     if(spot==='belt-in')return tasks.filter(v=>/conveyor|supply|arm[_ -]?s/.test((v+' '+(cards[v].single_task||'')+' '+(cards[v].raw||'')).toLowerCase()));
     if(spot==='pinky')return tasks.filter(v=>(v+' '+(cards[v].origin||'')+' '+(cards[v].target_slot||'')+' '+(cards[v].single_task||'')).toLowerCase().includes('pinky'));
+    if(spot==='supply')return tasks.filter(v=>(v+' '+(cards[v].origin||'')+' '+(cards[v].single_task||'')).toLowerCase().includes('supply'));
+    if(spot==='bowl')return tasks.filter(v=>(v+' '+(cards[v].origin||'')+' '+(cards[v].single_task||'')).toLowerCase().includes('strawberry'));
     if(spot==='tmp-a'||spot==='tmp-b')return pickStand(tasks,spot.slice(-1));
     if(spot==='belt')return tasks.filter(v=>String(cards[v].origin||'')==='belt');
     const nonTmpExact=tasks.filter(v=>String(cards[v].target_slot||'')===spot&&!String(cards[v].origin||'').startsWith('tmp-'));
@@ -178,7 +180,7 @@ function pickTaskBySpot(spot){
   else if(spot==='tmp-a'||spot==='tmp-b'){
     const armStand=poolFor(validArm);
     if(armStand.length){window.mapZone=spot;window.shipHold=null;}
-  }else if(spot==='pinky'||spot==='belt-in'){
+  }else if(spot==='pinky'||spot==='belt-in'||spot==='supply'||spot==='bowl'){
     if(arm==='arm_s'){window.mapZone='arm-s';window.shipHold=null;}
   }else if(spot==='belt'){
     window.mapZone=null;window.shipHold=null;
@@ -348,23 +350,32 @@ function renderCamGuide(){
   }
 
   let html='<div class="cam-guide-inner">';
+  html+='<div class="map-toolbar">';
+  if(arm==='arm_s'){
+    html+='<button type="button" class="pill-btn" data-map-view="toggle">'+(window.mapFullView?'Arm S 확대 보기':'전체 셀 보기')+'</button>';
+  }else{
+    html+='<span class="quiet mono" style="font-size:.74rem">셀 배치도</span>';
+  }
+  html+='<button type="button" id="map-expand-btn" class="btn-tool btn-xs">배치도 크게 보기</button>';
+  html+='</div>';
   html+='<div id="cam-map-note" class="cam-map-note quiet" hidden></div>';
-  html+='<svg class="cam-guide-svg" viewBox="0 0 360 178" preserveAspectRatio="xMidYMid meet" aria-label="작업대 구역 배치도">';
   const na=armZoneCount('tmp-a'), nb=armZoneCount('tmp-b'), ns=validAll.filter(v=>taskFitsArm(v,cards[v],'arm_s')).length;
-  html+='<g class="map-spot" data-spot="tmp-a" role="button" tabindex="0"'+dimAttr(arm!=='arm_b'&&arm!=='arm_s'&&na>0)+'><rect x="8" y="8" width="84" height="70" rx="6" fill="'+zoneBg('tmp-a')+'" stroke="'+zoneCol('tmp-a')+'" stroke-width="2"/><text x="50" y="38" fill="#eeeeef" font-size="11.5" text-anchor="middle">'+(activeZone==='tmp-a'?'▶ ':'')+'임시대 A (좌)</text><text x="50" y="54" fill="#b0b4ba" font-size="9" text-anchor="middle">'+(na?'카드 '+na+'개':'arm_a 전용')+'</text></g>';
-  html+='<g class="map-spot" data-spot="tmp-b" role="button" tabindex="0"'+dimAttr(arm!=='arm_a'&&arm!=='arm_s'&&nb>0)+'><rect x="268" y="8" width="84" height="70" rx="6" fill="'+zoneBg('tmp-b')+'" stroke="'+zoneCol('tmp-b')+'" stroke-width="2"/><text x="310" y="38" fill="#eeeeef" font-size="11.5" text-anchor="middle">'+(activeZone==='tmp-b'?'▶ ':'')+'임시대 B (우)</text><text x="310" y="54" fill="#b0b4ba" font-size="9" text-anchor="middle">'+(nb?'카드 '+nb+'개':'arm_b 전용')+'</text></g>';
+  let fullSvg='<svg class="cam-guide-svg" viewBox="0 0 360 184" preserveAspectRatio="xMidYMid meet" aria-label="작업대 구역 배치도">';
+  fullSvg+='<g class="map-spot" data-spot="tmp-a" role="button" tabindex="0"'+dimAttr(arm!=='arm_b'&&arm!=='arm_s'&&na>0)+'><rect x="8" y="8" width="84" height="72" rx="6" fill="'+zoneBg('tmp-a')+'" stroke="'+zoneCol('tmp-a')+'" stroke-width="2"/><text x="50" y="38" fill="#eeeeef" font-size="12" text-anchor="middle">'+(activeZone==='tmp-a'?'▶ ':'')+'임시대 A (좌)</text><text x="50" y="55" fill="#b0b4ba" font-size="10" text-anchor="middle">'+(na?'카드 '+na+'개':'arm_a 전용')+'</text></g>';
+  fullSvg+='<g class="map-spot" data-spot="tmp-b" role="button" tabindex="0"'+dimAttr(arm!=='arm_a'&&arm!=='arm_s'&&nb>0)+'><rect x="268" y="8" width="84" height="72" rx="6" fill="'+zoneBg('tmp-b')+'" stroke="'+zoneCol('tmp-b')+'" stroke-width="2"/><text x="310" y="38" fill="#eeeeef" font-size="12" text-anchor="middle">'+(activeZone==='tmp-b'?'▶ ':'')+'임시대 B (우)</text><text x="310" y="55" fill="#b0b4ba" font-size="10" text-anchor="middle">'+(nb?'카드 '+nb+'개':'arm_b 전용')+'</text></g>';
   for(const [k,y] of [[2,8],[1,46]]){
     const n=armZoneCount('ship-h'+k);
-    html+='<g class="map-spot" data-spot="ship-h'+k+'" role="button" tabindex="0"'+dimAttr(arm!=='arm_s')+'><rect x="100" y="'+y+'" width="160" height="32" rx="6" fill="'+zoneBg('ship-h'+k)+'" stroke="'+zoneCol('ship-h'+k)+'" stroke-width="2"/><text x="180" y="'+(y+14)+'" fill="#eeeeef" font-size="11" text-anchor="middle">'+(k===hold?'▶ ':'')+'화물칸 h'+k+' · '+HOLD_COLUMNS[k]+'</text><text x="180" y="'+(y+26)+'" fill="#b0b4ba" font-size="9" text-anchor="middle">'+(n?'과제 카드 '+n+'개':(arm==='arm_s'?'arm_a/b 전용':'과제 카드 없음'))+'</text></g>';
+    fullSvg+='<g class="map-spot" data-spot="ship-h'+k+'" role="button" tabindex="0"'+dimAttr(arm!=='arm_s')+'><rect x="100" y="'+y+'" width="160" height="34" rx="6" fill="'+zoneBg('ship-h'+k)+'" stroke="'+zoneCol('ship-h'+k)+'" stroke-width="2"/><text x="180" y="'+(y+14)+'" fill="#eeeeef" font-size="11.5" text-anchor="middle">'+(k===hold?'▶ ':'')+'화물칸 h'+k+' · '+HOLD_COLUMNS[k]+'</text><text x="180" y="'+(y+27)+'" fill="#b0b4ba" font-size="10" text-anchor="middle">'+(n?'과제 카드 '+n+'개':(arm==='arm_s'?'arm_a/b 전용':'과제 카드 없음'))+'</text></g>';
   }
-  html+='<g transform="translate(0,16)">';
-  html+='<g class="map-spot" data-spot="pinky" role="button" tabindex="0"'+dimAttr(!arm||arm==='arm_s')+'><rect x="8" y="72" width="96" height="40" rx="6" fill="'+zoneBg('pinky')+'" stroke="'+zoneCol('pinky')+'" stroke-width="2"/><text x="56" y="89" fill="#eeeeef" font-size="11" text-anchor="middle">핑키 로봇</text><text x="56" y="103" fill="#b0b4ba" font-size="9" text-anchor="middle">'+(arm==='arm_s'?'Arm S ('+ns+'개)':'arm_s 전용')+'</text></g>';
-  html+='<g class="map-spot" data-spot="belt-in" role="button" tabindex="0"'+dimAttr(!arm||arm==='arm_s')+'><rect x="114" y="72" width="110" height="40" rx="6" fill="'+zoneBg('belt-in')+'" stroke="'+zoneCol('belt-in')+'" stroke-width="2"/><text x="169" y="89" fill="#eeeeef" font-size="11" text-anchor="middle">벨트 공급단 (S)</text><text x="169" y="103" fill="#b0b4ba" font-size="9" text-anchor="middle">belt-in (놓는 곳)</text></g>';
-  html+='<text x="232" y="96" fill="#b0b4ba" font-size="12" text-anchor="middle">&rarr;</text>';
-  html+='<g class="map-spot" data-spot="belt" role="button" tabindex="0"'+dimAttr(arm!=='arm_s')+'><rect x="240" y="72" width="112" height="40" rx="6" fill="'+zoneBg('belt')+'" stroke="'+zoneCol('belt')+'" stroke-width="2"/><text x="296" y="89" fill="#eeeeef" font-size="11" text-anchor="middle">벨트 인출단 (A/B)</text><text x="296" y="103" fill="#b0b4ba" font-size="9" text-anchor="middle">belt (집는 곳)</text></g>';
-  html+='</g>';
-  html+='<g class="map-spot" data-spot="stand" role="button" tabindex="0"'+dimAttr(!arm||arm==='arm_a'||arm==='arm_ab')+'><rect x="8" y="134" width="344" height="36" rx="6" fill="'+zoneBg('stand')+'" stroke="'+zoneCol('stand')+'" stroke-width="2"/><text x="180" y="149" fill="#eeeeef" font-size="11" text-anchor="middle">반출대 (Arm A · 컨베이어 우측 상단)</text><text x="180" y="163" fill="#b0b4ba" font-size="9" text-anchor="middle">stand:r1-s1 (top.jpg ROI 410..570 × 30..125)</text></g>';
-  html+='</svg>';
+  fullSvg+='<g transform="translate(0,18)">';
+  fullSvg+='<g class="map-spot" data-spot="pinky" role="button" tabindex="0"'+dimAttr(!arm||arm==='arm_s')+'><rect x="8" y="72" width="96" height="42" rx="6" fill="'+zoneBg('pinky')+'" stroke="'+zoneCol('pinky')+'" stroke-width="2"/><text x="56" y="89" fill="#eeeeef" font-size="11.5" text-anchor="middle">핑키 로봇</text><text x="56" y="105" fill="#b0b4ba" font-size="10" text-anchor="middle">'+(arm==='arm_s'?'Arm S ('+ns+'개)':'arm_s 전용')+'</text></g>';
+  fullSvg+='<g class="map-spot" data-spot="belt-in" role="button" tabindex="0"'+dimAttr(!arm||arm==='arm_s')+'><rect x="114" y="72" width="110" height="42" rx="6" fill="'+zoneBg('belt-in')+'" stroke="'+zoneCol('belt-in')+'" stroke-width="2"/><text x="169" y="89" fill="#eeeeef" font-size="11.5" text-anchor="middle">벨트 공급단 (S)</text><text x="169" y="105" fill="#b0b4ba" font-size="10" text-anchor="middle">belt-in (놓는 곳)</text></g>';
+  fullSvg+='<text x="232" y="97" fill="#b0b4ba" font-size="13" text-anchor="middle">&rarr;</text>';
+  fullSvg+='<g class="map-spot" data-spot="belt" role="button" tabindex="0"'+dimAttr(arm!=='arm_s')+'><rect x="240" y="72" width="112" height="42" rx="6" fill="'+zoneBg('belt')+'" stroke="'+zoneCol('belt')+'" stroke-width="2"/><text x="296" y="89" fill="#eeeeef" font-size="11.5" text-anchor="middle">벨트 인출단 (A/B)</text><text x="296" y="105" fill="#b0b4ba" font-size="10" text-anchor="middle">belt (집는 곳)</text></g>';
+  fullSvg+='</g>';
+  fullSvg+='<g class="map-spot" data-spot="stand" role="button" tabindex="0"'+dimAttr(!arm||arm==='arm_a'||arm==='arm_ab')+'><rect x="8" y="138" width="344" height="38" rx="6" fill="'+zoneBg('stand')+'" stroke="'+zoneCol('stand')+'" stroke-width="2"/><text x="180" y="154" fill="#eeeeef" font-size="11.5" text-anchor="middle">반출대 (Arm A · 컨베이어 우측 상단)</text><text x="180" y="168" fill="#b0b4ba" font-size="10" text-anchor="middle">stand:r1-s1 (top.jpg ROI 410..570 × 30..125)</text></g>';
+  fullSvg+='</svg>';
+  html+=(arm==='arm_s'&&!window.mapFullView)?renderArmSMapSvg(zoneBg,zoneCol,ns):fullSvg;
 
   const tabs=armZones(arm);
   if(tabs.length>1){
@@ -388,10 +399,17 @@ function renderCamGuide(){
   const nEl=$('cam-map-note');
   if(nEl){nEl.textContent=lastMapNote;nEl.hidden=!lastMapNote;}
   box.hidden=(currentBenchPhase()==='result');
-  for(const el of box.querySelectorAll('[data-spot]')){
-    el.addEventListener('click',()=>pickTaskBySpot(el.dataset.spot));
-    el.addEventListener('keydown',(e)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pickTaskBySpot(el.dataset.spot);}});
-  }
+  const bindSpots=(root)=>{
+    for(const el of root.querySelectorAll('[data-spot]')){
+      el.addEventListener('click',()=>pickTaskBySpot(el.dataset.spot));
+      el.addEventListener('keydown',(e)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pickTaskBySpot(el.dataset.spot);}});
+    }
+  };
+  bindSpots(box);
+  const viewBtn=box.querySelector('[data-map-view]');
+  if(viewBtn)viewBtn.addEventListener('click',()=>{window.mapFullView=!window.mapFullView;renderCamGuide();});
+  const expBtn=$('map-expand-btn');
+  if(expBtn)expBtn.addEventListener('click',()=>openMapModal(bindSpots));
   for(const el of box.querySelectorAll('[data-zone-tab]')){
     el.addEventListener('click',()=>{
       const z=el.dataset.zoneTab;
@@ -434,3 +452,32 @@ function renderCamGuide(){
   }
   updateGoalSummaryRows();
 }
+
+window.mapFullView=false;
+function renderArmSMapSvg(zoneBg,zoneCol,ns){
+  let s='<svg class="cam-guide-svg" viewBox="0 0 360 162" preserveAspectRatio="xMidYMid meet" aria-label="Arm S 작업 구역 확대 배치도">';
+  s+='<g class="map-spot" data-spot="pinky" role="button" tabindex="0"><rect x="8" y="8" width="154" height="44" rx="8" fill="'+zoneBg('pinky')+'" stroke="'+zoneCol('pinky')+'" stroke-width="2"/><text x="85" y="27" fill="#eeeeef" font-size="13" font-weight="700" text-anchor="middle">핑키 로봇 (pinky)</text><text x="85" y="43" fill="#b0b4ba" font-size="10.5" text-anchor="middle">도착/상차 ('+ns+'개 과제)</text></g>';
+  s+='<g class="map-spot" data-spot="supply" role="button" tabindex="0"><rect x="8" y="59" width="154" height="44" rx="8" fill="'+zoneBg('supply')+'" stroke="'+zoneCol('supply')+'" stroke-width="2"/><text x="85" y="78" fill="#eeeeef" font-size="13" font-weight="700" text-anchor="middle">공급대 (supply)</text><text x="85" y="94" fill="#b0b4ba" font-size="10.5" text-anchor="middle">집는 곳</text></g>';
+  s+='<g class="map-spot" data-spot="bowl" role="button" tabindex="0"><rect x="8" y="110" width="154" height="44" rx="8" fill="'+zoneBg('bowl')+'" stroke="'+zoneCol('bowl')+'" stroke-width="2"/><text x="85" y="129" fill="#eeeeef" font-size="13" font-weight="700" text-anchor="middle">흰 그릇 (bowl)</text><text x="85" y="145" fill="#b0b4ba" font-size="10.5" text-anchor="middle">딸기 왕복 과제</text></g>';
+  s+='<text x="180" y="86" fill="#eeeeef" font-size="18" font-weight="700" text-anchor="middle">&rarr;</text>';
+  s+='<g class="map-spot" data-spot="belt-in" role="button" tabindex="0"><rect x="198" y="20" width="154" height="122" rx="10" fill="'+zoneBg('belt-in')+'" stroke="'+zoneCol('belt-in')+'" stroke-width="2.5"/><text x="275" y="68" fill="#eeeeef" font-size="14" font-weight="700" text-anchor="middle">벨트 공급단</text><text x="275" y="88" fill="#b0b4ba" font-size="11.5" text-anchor="middle">belt-in (놓는 곳)</text><text x="275" y="112" fill="#8ab4f8" font-size="10.5" text-anchor="middle">Arm A/B 구역으로 이송</text></g>';
+  return s+'</svg>';
+}
+
+function closeMapModal(){
+  const host=$('map-modal-host');
+  if(host)host.hidden=true;
+}
+function openMapModal(bindSpots){
+  const host=$('map-modal-host'), body=$('map-modal-body'), svg=document.querySelector('#cam-guide .cam-guide-svg');
+  if(!host||!body||!svg)return;
+  body.innerHTML='';
+  const cloned=svg.cloneNode(true);
+  body.append(cloned);
+  if(typeof bindSpots==='function')bindSpots(body);
+  host.hidden=false;
+  $('map-modal-close-btn')?.focus();
+}
+if($('map-modal-close-btn'))$('map-modal-close-btn').addEventListener('click',closeMapModal);
+if($('map-modal-backdrop'))$('map-modal-backdrop').addEventListener('click',closeMapModal);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('map-modal-host')&&!$('map-modal-host').hidden){e.preventDefault();e.stopImmediatePropagation();closeMapModal();}});

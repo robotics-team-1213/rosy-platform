@@ -58,7 +58,28 @@ function updateCameraRecordingMask(){
 }
 window.updateCameraRecordingMask=updateCameraRecordingMask;
 
+let lastCountdownSec=null;
+
+async function quickRestartAfterResult(){
+  if(benchSessionActive()||startInFlight||stopInFlight||poseInFlight||cameraRestartInFlight)return;
+  const prevSt=lastStatus;
+  const armNow=f&&f.arm?f.arm.value:'';
+  const alreadyHomed=Boolean(prevSt?.auto_home?.ok===true&&(!prevSt.auto_home.arm||prevSt.auto_home.arm===armNow)&&(prevSt?.status==='sealed'||prevSt?.status==='stopped_safe'));
+  if(typeof bumpCollectionName==='function')bumpCollectionName(prevSt?.name||'');
+  if(typeof setManualBenchPhase==='function')setManualBenchPhase('setup');
+  validateStart();
+  if(!window.benchStartReady){
+    if(typeof setActivity==='function')setActivity('바로 다음 시작 대기 — 설정 확인 필요','warn','');
+    if(typeof benchBeep==='function')benchBeep('warn');
+    return;
+  }
+  const targetPath=(armNow==='arm_ab'||Boolean($('replay')?.value))?'/start':'/prepare';
+  if(typeof setActivity==='function')setActivity(alreadyHomed?'홈 완료 확인 — 바로 다음 연동 시작 중...':'홈 복귀 후 바로 다음 연동 시작 중...','live',[armNow,f.name.value.trim()].filter(Boolean).join(' · '));
+  if(typeof startBench==='function')await startBench(targetPath,{skipHome:alreadyHomed});
+}
+
 function initPhaseControls(){
+  if($('hdr-quick-restart-btn'))$('hdr-quick-restart-btn').addEventListener('click',quickRestartAfterResult);
   if($('back-to-setup-btn')){
     $('back-to-setup-btn').addEventListener('click',()=>{
       if(typeof setManualBenchPhase==='function')setManualBenchPhase('setup');
@@ -113,6 +134,19 @@ function syncHeaderAndSlimBar(){
   $('hdr-next-ep-btn').disabled=!recording||pending||!statusLoaded;
   $('hdr-rerecord-btn').disabled=$('hdr-next-ep-btn').disabled;
   $('back-to-setup-btn').disabled=benchSessionActive()||pending;
+  const qBtn=$('hdr-quick-restart-btn'), rhBtn=$('hdr-result-home-btn');
+  const settling=st?.status==='restoring'||st?.status==='sealing';
+  const rhBlocked=Boolean(st?.manual_attention)||st?.error_kind==='needs_person'||st?.status==='unsafe_or_failed'||st?.status==='leader_manual_check'||st?.status==='failed'||st?.safe_end===false;
+  const armNow=f&&f.arm?f.arm.value:'';
+  const homedOk=Boolean(st?.auto_home?.ok===true&&(!st.auto_home.arm||st.auto_home.arm===armNow)&&(st?.status==='sealed'||st?.status==='stopped_safe'));
+  if(rhBtn){
+    rhBtn.disabled=benchSessionActive()||pending||poseInFlight||cameraRestartInFlight||settling||rhBlocked;
+    if(!poseInFlight){const lbl=rhBtn.querySelector('.btn-lbl');if(lbl)lbl.textContent=homedOk?'홈 완료 (다시 맞춤)':'지금 홈 포즈';}
+  }
+  if(qBtn){
+    qBtn.disabled=benchSessionActive()||pending||poseInFlight||cameraRestartInFlight||settling||rhBlocked;
+    qBtn.textContent=settling?'정리 중...':(homedOk?'바로 다음 연동 시작 (홈 완료)':'홈 → 바로 다음 시작');
+  }
   $('hdr-camera-restart-btn').disabled=!canRestartCameras();
 
   const preparationSteps={follower_home:0,leader_align:1,starting_recorder:2,connecting_cameras:2,aligning:3};
@@ -151,6 +185,13 @@ function syncHeaderAndSlimBar(){
     $(id).hidden=!value;
   }
   const timed=Boolean(timing)&&duration>0;
+  if(recording&&duration>0&&Number.isFinite(elapsed)){
+    const remSec=Math.ceil(duration-elapsed);
+    if(remSec>=1&&remSec<=3&&remSec!==lastCountdownSec){lastCountdownSec=remSec;if(typeof benchBeep==='function')benchBeep('countdown');}
+    else if(remSec>3||remSec<=0){lastCountdownSec=null;}
+  }else{
+    lastCountdownSec=null;
+  }
   $('slim-prog').hidden=!timed;
   const percent=timed?Math.min(100,Math.max(0,elapsed/duration*100)):0;
   $('sp-fill').style.width=percent+'%';
@@ -177,11 +218,20 @@ function syncHeaderAndSlimBar(){
   $('ftr-lock').dataset.tone=locks?.length?'warn':'';
 }
 
+const EPISODE_ACTION_LABELS={
+  '/record_episode':'에피소드 녹화 시작',
+  '/finish':'연동 끝',
+  '/api/episode/next':'다음 에피소드',
+  '/api/episode/rerecord':'다시 녹화'
+};
+
 async function episodeAction(path,fallback){
   if(startInFlight||stopInFlight)return;
+  const actionName=EPISODE_ACTION_LABELS[path]||path;
   const stopVersion=stopRequestVersion;
   startInFlight=true;
   setReqError('');
+  if(typeof setActivity==='function')setActivity(actionName+' 요청 중...','live',f?.arm?.value||'');
   const seq=++latestStatusSeq;
   validateStart();
   try{
@@ -191,7 +241,13 @@ async function episodeAction(path,fallback){
     });
     if(st?.status&&seq===latestStatusSeq&&stopVersion===stopRequestVersion)renderStatus(st);
     await pollStatus();
-  }catch(err){setReqError(err.status===404?'서버가 이 조작을 지원하지 않습니다.':err.message);}
+    if(path==='/api/episode/rerecord'&&typeof benchBeep==='function')benchBeep('rerecord');
+    if(typeof setActivity==='function')setActivity(actionName+' 완료','good',st?.status?(STATUS_MAP[st.status]?.[0]||st.status):'');
+  }catch(err){
+    setReqError(err.status===404?'서버가 이 조작을 지원하지 않습니다.':err.message);
+    if(typeof setActivity==='function')setActivity(actionName+' 실패','crit',err.status===404?'서버 미지원':err.message);
+    if(typeof benchBeep==='function')benchBeep('warn');
+  }
   finally{startInFlight=false;validateStart();}
 }
 
@@ -212,8 +268,17 @@ if($('hdr-estop-btn')){
     if(stopInFlight)return;
     stopRequestVersion++;
     stopInFlight=true;setReqError('');
-    try{renderStatus(await api('/stop',{}));}
-    catch(err){setReqError('비상정지 요청: '+err.message);}
+    if(typeof benchBeep==='function')benchBeep('warn');
+    if(typeof setActivity==='function')setActivity('비상정지(E-Stop) 요청 중...','crit','');
+    try{
+      const st=await api('/stop',{});
+      renderStatus(st);
+      if(typeof setActivity==='function')setActivity('비상정지 요청 전달 완료','warn',st?.stop_result?.message||(STATUS_MAP[st?.status]?.[0]||st?.status||''));
+    }
+    catch(err){
+      setReqError('비상정지 요청: '+err.message);
+      if(typeof setActivity==='function')setActivity('비상정지 요청 실패','crit',err.message);
+    }
     finally{stopInFlight=false;syncHeaderAndSlimBar();}
   });
 }
@@ -230,6 +295,7 @@ if($('toggle-reverse-btn')){
 initPhaseControls();
 
 async function checkCameraDrift(){
+  if(typeof benchSessionActive==='function'&&benchSessionActive())return;
   try{
     const arm=f&&f.arm?f.arm.value:'';
     const d=await api('/api/camera_check?arm='+encodeURIComponent(arm));
@@ -249,8 +315,17 @@ if($('save-cam-base-btn')){
   $('save-cam-base-btn').addEventListener('click',async()=>{
     const btn=$('save-cam-base-btn');
     btn.disabled=true;btn.textContent='저장 중...';
-    try{setReqError('');await api('/api/camera_baseline',{arm:f.arm.value});await checkCameraDrift();}
-    catch(err){setReqError(err.message);}
+    if(typeof setActivity==='function')setActivity('기준 카메라 저장 중...','live',f?.arm?.value||'');
+    try{
+      setReqError('');
+      await api('/api/camera_baseline',{arm:f.arm.value});
+      await checkCameraDrift();
+      if(typeof setActivity==='function')setActivity('기준 카메라 저장 완료','good',f?.arm?.value||'');
+    }
+    catch(err){
+      setReqError(err.message);
+      if(typeof setActivity==='function')setActivity('기준 카메라 저장 실패','crit',err.message);
+    }
     finally{btn.disabled=false;btn.textContent='기준 카메라 저장';}
   });
 }
@@ -374,5 +449,4 @@ setInterval(()=>{
 },1000);
 init();
 if(typeof applyBenchPhase==='function')applyBenchPhase('setup');
-pollArms();
 setInterval(pollArms,10000);
