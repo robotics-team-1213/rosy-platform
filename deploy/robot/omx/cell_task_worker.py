@@ -28,6 +28,7 @@ from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
 from cell_result_outbox import Outbox, abort_reason, remeasurer, result_bodies, resend_pending
+import cell_site_target
 from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen,
     make_keepalive_https_request, peer_ab_session_locked, query_safety_listing, resolve_task_arm,
@@ -282,11 +283,7 @@ def poll_and_execute_once(
         if cell_id == "cell_ab":
             place = stage_result.get("place") or {}
             z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
-            if not isinstance(place, dict):
-                place = {}
-            measured = (measured and z_gate.get("verdict") == "PASS"
-                        and str(place.get("area") or place.get("area_id") or "").lower() == "pallet"
-                        and type(place.get("tier")) is int and place["tier"] == tier)
+            measured = measured and isinstance(place, dict) and cell_site_target.cell_ab_place_verified(handoff, place, z_gate, tier, verification)
         phase = "RELEASED" if claim_bound and interlock_ok and measured and not safety_fault else "ABORTED"
         evidence = {"task_id": task_id, "lease": handoff.get("handoff_lease_id"),
                     "stage_result": stage_result, "hardware_telemetry": hw_tel}
