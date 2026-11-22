@@ -139,3 +139,37 @@ def test_tooltips_stay_short_names_or_two_sentence_definitions():
 
 def test_status_glyphs_are_not_reused_for_other_meanings_in_product_surfaces():
     check("status")
+
+
+# Fleet chrome actionIcon & header glyph contracts (merged from retired test_action_icon_contract.py)
+CHROME_ICONS = ("settings:", '"theme-dark":', '"theme-light":', '"theme-system":', "estop:")
+SESSION_ICONS = ("login:", "account:", "logout:")
+
+
+def test_action_icon_names_cover_fleet_chrome_and_keep_screen_reader_text():
+    ui_js = registry.REPO / "shared" / "web" / "ui.js"
+    body = ui_js.read_text(encoding="utf-8").split("export function actionIcon", 1)[1]
+    for name in (*CHROME_ICONS, *SESSION_ICONS):
+        assert name in body, name
+    assert "sr-only" in body
+    glyphs = re.findall(r'^\s+"?([\w-]+)"?: "([^"]+)",$', body.split("};", 1)[0], re.M)
+    paths = [d for _, d in glyphs]
+    assert len(glyphs) > 40 and len(set(paths)) == len(paths), [n for n, d in glyphs if paths.count(d) > 1]
+    names = dict(glyphs)
+    assert names["tools"] != names["settings"] and names["fit"] != names["box"] != names["expand"]
+    for side in ("pose:", "yaw:", "battery:", "safety:"):
+        assert side in body, side
+
+
+def test_fleet_documents_share_the_stop_and_chrome_icons():
+    fleet_web = registry.REPO / "applications" / "fleet" / "web"
+    for name in ("index.html", "installation/install.html"):
+        page = (fleet_web / name).read_text(encoding="utf-8")
+        assert 'data-action-icon="estop"' in page
+        assert ">비상 정지</span>" in page
+        assert "래치 · 로봇별 관리자 해제" in page
+        assert 'sr-only">전체 비상 정지' not in page
+        for icon in ("notification", "theme-dark", "refresh"):
+            assert f'data-action-icon="{icon}"' in page, (name, icon)
+        assert ('data-action-icon="connect"' in page) == (name == "index.html"), name
+        assert 'd="M4 7h16' not in page

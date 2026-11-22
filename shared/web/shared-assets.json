@@ -49,7 +49,6 @@
     "robot-3d-assets.js": "text/javascript",
     "robot-3d-model.js": "text/javascript",
     "evidence-line.js": "text/javascript",
-    "stop-control.js": "text/javascript",
     "alert-center.js": "text/javascript",
     "account-gate.js": "text/javascript",
     "announcer.js": "text/javascript",

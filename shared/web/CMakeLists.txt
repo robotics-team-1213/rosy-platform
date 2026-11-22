@@ -50,7 +50,6 @@ install(FILES
   robot-3d-assets.js
   robot-3d-model.js
   evidence-line.js
-  stop-control.js
   alert-center.js
   account-gate.js
   announcer.js
