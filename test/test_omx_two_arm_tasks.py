@@ -515,3 +515,34 @@ def test_outbound_stand_on_conveyor_right_is_arm_a_reachable_only(layout):
             assert tasks.link_clearance(layout, arm_a, path, full_ship) >= tasks.LINK_MARGIN
     minus_r2 = {k: v for k, v in full_ship.items() if not v.startswith("ship-h2r2-")}
     assert tasks.check_reach(layout, {"id": "h2r2-stand", "container": "b", "from": "ship-h2r2-l0", "to": "stand", "arm": "arm_a"}, minus_r2, arm_a)[0] == []
+
+
+def test_outbound_stand_task_validates_and_judge_pose_evaluates_chute_seating(layout, data):
+    import omx_two_arm_teacher_stages as stages
+    assert stages.OPEN_GAP["stand"] == pytest.approx(0.038)
+    for lay in (layout, sites.Layout(preset="v24-20261114")):
+        task = tasks.get_task(lay, "outbound-stand", data)
+        records = tasks.validate(lay, task, data)
+        assert len(records) == 4 and all(s["arm"] == "arm_a" and s["to"] == "stand" for s in task["steps"])
+    stand = layout.sites["stand"]
+    alpha = math.radians(24.0)
+    dx_m = 0.0344
+    rail_z = sites.OUTBOUND_STAND_SPEC["rail_z_m"] - dx_m * math.tan(alpha)
+    z_exp = rail_z + (layout.box[2] / 2.0) / math.cos(alpha)
+
+    class Fake:
+        def __init__(self, pos, yaw, tilt):
+            self.layout, self._p = layout, (np.array(pos), yaw, tilt)
+
+        def pose(self, _d, _c):
+            return self._p
+
+    def judge(dx=dx_m, dy=0., dz=0., yaw=stand["yaw"], tilt=24.0):
+        pos = [stand["xy"][0] + dx, stand["xy"][1] + dy, z_exp + dz]
+        return stages.judge_pose(Fake(pos, yaw, tilt), None, "bar-1", "stand", data["judge"])
+
+    assert judge()["ok"]
+    assert not judge(dx=0.005)["ok"]      # did not slide down chute
+    assert not judge(dy=0.006)["ok"]      # lateral offset outside xy_mm
+    assert not judge(tilt=0.0)["ok"]      # flat on floor instead of 24-deg ramp
+    assert not judge(dz=-0.015)["ok"]     # fell off chute
