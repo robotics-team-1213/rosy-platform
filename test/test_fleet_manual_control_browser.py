@@ -389,7 +389,10 @@ def test_manual_panel_disclosure_keeps_node_across_poll_and_stops_on_collapse_or
         details.locator("summary").click()
         page.wait_for_timeout(150)
         assert sent and sent[-1] == {"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0}
+        page.keyboard.up("Space")
         details.locator("summary").click()
+        assert details.evaluate("node => node.open")
+        forward.focus()
         page.keyboard.down("Space")
         page.wait_for_function("() => document.querySelectorAll('[data-manual-direction][aria-pressed=\"true\"]').length === 1")
         sent.clear()
@@ -397,5 +400,6 @@ def test_manual_panel_disclosure_keeps_node_across_poll_and_stops_on_collapse_or
         expect(page.locator("#robot-panel")).to_be_hidden()
         page.wait_for_timeout(150)
         assert sent and sent[-1] == {"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0}
+        page.keyboard.up("Space")
         assert not errors
         browser.close()

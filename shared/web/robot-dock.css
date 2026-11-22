@@ -1,6 +1,6 @@
 /* C23 robot dock + C24 robot panel + stage push/sheet layout (D-220 still, tokens only). */
 .robot-stage { display: grid; grid-template-columns: minmax(0, 1fr) 56px; min-width: 0; min-height: 0; }
-.robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr) 56px; }
+.robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: clamp(18rem, 24vw, 22rem) minmax(0, 1fr) 56px; }
 .robot-stage-main { min-width: 0; min-height: 0; display: grid; gap: var(--space-3); align-content: start; }
 
 /* C23 dock: vertical strip on >=64rem, horizontal row above main on <64rem */

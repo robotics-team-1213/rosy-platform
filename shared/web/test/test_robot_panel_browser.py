@@ -138,7 +138,7 @@ def test_robot_panel_in_place_updates_collapse_and_focus_return(panel_gallery):
 
     # Collapsing manual fires onManualCollapse; footer stop button calls onStop.
     manual_details.locator("summary").click()
-    assert page.evaluate("() => window.__panelEvents.collapsed === 1")
+    page.wait_for_function("() => window.__panelEvents.collapsed === 1")
     panel.locator('.robot-panel-foot ui-button, .robot-panel-foot button', has_text='주행 취소 · 이 로봇').click()
     assert page.evaluate("() => window.__panelEvents.stopped").__eq__(["rosy_01"])
 

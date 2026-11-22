@@ -128,11 +128,9 @@
   .roster-block > .dispatch-control { grid-row: 3; }
 }
 
-/* C18 + C23 + C24 cockpit stage, 1366 stacking, and read-only roster summary. */
+/* C18 + C23 + C24 cockpit stage and read-only roster summary. */
 #robot-stage { flex: 1 1 auto; min-height: 0; }
 #robot-stage > .robot-stage-main {
-  container-type: inline-size;
-  container-name: fleet-stage;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -143,19 +141,15 @@
     inline-size: calc(100% - 56px - 2 * var(--inset-task-page));
     margin-inline: var(--inset-task-page) auto;
   }
+  #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] {
+    grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr);
+  }
   #robot-stage > .robot-panel { position: relative; top: auto; align-self: stretch; min-height: 0; max-height: 100%; overflow: hidden; }
   #robot-stage > .robot-dock { align-self: stretch; min-height: 0; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 }
 @media (width >= 64rem) and (height >= 40rem) {
   #robot-stage { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
   #robot-stage > .robot-stage-main { overflow: hidden; }
-}
-@container fleet-stage (width < 60rem) {
-  #fleet-main[data-layout="watch"] {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
-    grid-template-areas: "stage" "now";
-  }
 }
 .robot-panel .robot-workspace-card { padding: var(--space-2); }
 .robot-panel-camera-box { display: grid; gap: var(--space-2); min-width: 0; }
