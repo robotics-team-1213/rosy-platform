@@ -487,18 +487,13 @@ function renderLeRobotPanel(st){
         bulkBtn.disabled=true;setReqError('');
         let done=0, latest=null;
         try{
-          for(const row of curEmpty){
-            latest=await api('/api/dataset/delete',{dataset:row.name||''});
-            done++;
-          }
+          for(const row of curEmpty){latest=await api('/api/dataset/delete',{dataset:row.name||''});done++;}
           if(latest&&latest.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=latest.lerobot_datasets;}
           if(typeof setActivity==='function')setActivity('빈 데이터셋 정리 완료','good',done+'개 삭제');
           if(typeof pollStatus==='function')await pollStatus();
           else if(lastStatus)renderLeRobotPanel(lastStatus);
-        }catch(e){
-          setReqError('빈 데이터셋 정리: '+(e.message||String(e)));
-          if(typeof pollStatus==='function')await pollStatus();
-        }finally{bulkBtn.disabled=false;}
+        }catch(e){setReqError('빈 데이터셋 정리: '+(e.message||String(e)));if(typeof pollStatus==='function')await pollStatus();}
+        finally{bulkBtn.disabled=false;}
       });
     }
   }
@@ -507,14 +502,26 @@ function renderLeRobotPanel(st){
     $('sum-recent-drawer').textContent='최근 '+recN+'건 · LeRobot '+rows.length+'개'+(emptyRows.length?' (빈 '+emptyRows.length+')':'');
   }
   if(!ul||!empty)return;
-  if(!rows.length){ul.innerHTML='';empty.hidden=false;return;}
-  empty.hidden=true;ul.innerHTML='';
+  if(!rows.length){ul.dataset.sig='';ul.innerHTML='';empty.hidden=false;return;}
+  empty.hidden=true;
+  const dsSig=JSON.stringify(rows.map(r=>[r.name,r.episodes,r.videos,r.size_bytes,r.do_not_train,r.hf_uploaded,r.review_summary]))+'|'+hfOk+'|'+busyAll+'|'+(busyAll?(up.dataset+':'+state):'');
+  if(ul.dataset.sig===dsSig)return;
+  ul.dataset.sig=dsSig;
+  const savedTrays=new Map();
+  for(const ex of ul.querySelectorAll('li.hf-ds-row')){const tr=ex.querySelector('.ep-review-tray');if(tr&&ex.dataset.dsName)savedTrays.set(ex.dataset.dsName,tr);}
+  ul.innerHTML='';
   for(const r of rows){
-    const li=document.createElement('li');li.className='sess-item hf-ds-row';
+    const li=document.createElement('li');li.className='sess-item hf-ds-row';li.dataset.dsName=r.name||'';
     const top=document.createElement('div');top.className='hf-ds-top';
     const left=document.createElement('span');left.className='mono';left.textContent=r.name||'';
-    const act=document.createElement('div');act.style.cssText='display:flex;align-items:center;gap:6px';
+    const act=document.createElement('div');act.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap';
     if(r.hf_uploaded){const tag=document.createElement('span');tag.className='ui-tag';tag.dataset.tone='good';tag.textContent='업로드 완료';act.append(tag);}
+    if((r.episodes||0)>0){
+      const revBtn=document.createElement('button');revBtn.type='button';revBtn.className='btn-tool btn-xs';
+      revBtn.textContent='평가·에피소드';revBtn.title='에피소드 재생·평가 및 불량 삭제';
+      revBtn.addEventListener('click',()=>window.toggleDatasetReviewTray?.(li,r.name||''));
+      act.append(revBtn);
+    }
     const btn=document.createElement('button');btn.type='button';btn.className='btn-tool btn-xs';
     btn.textContent=(busyAll&&up.dataset===r.name)?sTxt:'HF(LeRobot) 업로드';
     btn.disabled=Boolean(!hfOk||busyAll||r.do_not_train||(r.episodes||0)<1);
@@ -538,10 +545,14 @@ function renderLeRobotPanel(st){
     const meta=document.createElement('div');meta.className='hf-ds-meta quiet';
     const info=document.createElement('span');
     const sz=typeof r.size_bytes==='number'?(r.size_bytes>=1048576?(r.size_bytes/1048576).toFixed(1)+' MB':Math.max(1,Math.round(r.size_bytes/1024))+' KB'):'';
-    info.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(sz?' · '+sz:'')+(r.episodes===0?' · 빈 데이터셋':'')+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'');
+    const rs=r.review_summary||{};
+    const rTxt=(rs.good||rs.bad||rs.retry)?(' · 평가 합격 '+(rs.good||0)+'/불량 '+(rs.bad||0)):'';
+    info.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(sz?' · '+sz:'')+(r.episodes===0?' · 빈 데이터셋':'')+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'')+rTxt;
     meta.append(info);
     if(r.hf_repo_url){const a=document.createElement('a');a.href=r.hf_repo_url;a.target='_blank';a.rel='noopener';a.className='mono';a.textContent=r.hf_repo_id||'Repo';meta.append(a);}
-    li.append(top,meta);ul.append(li);
+    li.append(top,meta);
+    if(savedTrays.has(r.name))li.append(savedTrays.get(r.name));
+    ul.append(li);
   }
 }
 window.renderLeRobotPanel=renderLeRobotPanel;

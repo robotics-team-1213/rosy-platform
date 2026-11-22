@@ -135,9 +135,9 @@ class BenchManualMixin:
     def manual(self):
         return self.prep / ".bench-manual-check.json"
 
-    def _mark_manual(self, reason):
+    def _mark_manual(self, reason, **meta):
         """A recorder or Leader child ended without proof of a safe end: the marker outlives a service restart."""
-        self.manual.write_text(json.dumps({"reason": reason}), encoding="utf-8")
+        self.manual.write_text(json.dumps({"reason": reason, **meta}, ensure_ascii=False), encoding="utf-8")
 
     def _check_manual(self):
         if self.manual.exists():
@@ -227,12 +227,10 @@ class BenchManualMixin:
         pid = record.get("pid")
         if pid is None or cell_arm_lease._pid_alive(pid):
             raise ValueError(f"{arm} 임대 hold의 러너가 아직 살아 있거나 알 수 없습니다 — 사람이 팔을 받친 뒤 러너에 SIGUSR2를 보내세요")
+        from bench_record_handoff import load_json_value
         proof = self.prep / f"chunk-io-{ARMS[arm]}" / "released.json"
-        try:
-            evidence = json.loads(proof.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            evidence = {}
-        if (evidence.get("pid") != pid or evidence.get("torque_off_confirmed") is not True
+        evidence = load_json_value(proof, {})
+        if not isinstance(evidence, dict) or (evidence.get("pid") != pid or evidence.get("torque_off_confirmed") is not True
                 or float(evidence.get("t") or 0) < float(record.get("held_at") or 0)):
             raise ValueError(f"{arm} 임대 hold에 운영자 해제(SIGUSR2) 승인 기록이 없습니다 — 팔을 확인한 뒤 cell_arm_lease.py release-hold")
         if not cell_arm_lease.release_exact(arm, record):  # the very lease validated above, under the lease lock

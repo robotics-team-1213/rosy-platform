@@ -85,6 +85,60 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                 return self.reply(200, bench.pipeline_status())
             if path == "/api/hf/status":
                 return self.reply(200, bench.hf_upload_status())
+            if path == "/api/cell_map":
+                return self.reply(200, bench.cell_map())
+            if path == "/api/logs":
+                qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    lim = int((qs.get("limit") or ["80"])[0])
+                except ValueError:
+                    lim = 80
+                return self.reply(200, bench.live_logs(lim))
+            if path == "/api/defaults":
+                return self.reply(200, bench.defaults_summary())
+            if path == "/api/dataset/episodes":
+                qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    return self.reply(200, bench.dataset_episodes((qs.get("dataset") or [""])[0]))
+                except (ValueError, OSError) as exc:
+                    return self.reply(400, {"error": str(exc)})
+            if path == "/api/dataset/video":
+                qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    vp = bench.resolve_dataset_video(
+                        (qs.get("dataset") or [""])[0], (qs.get("cam") or [""])[0],
+                        int((qs.get("chunk") or ["0"])[0]), int((qs.get("file") or ["0"])[0]))
+                    sz = vp.stat().st_size
+                    rng = self.headers.get("Range") or ""
+                    m = re.match(r"bytes=(\d+)-(\d*)$", rng.strip())
+                    if m:
+                        s_i, e_i = int(m.group(1)), int(m.group(2)) if m.group(2) else sz - 1
+                        if s_i >= sz or s_i > e_i:
+                            return self.reply(416, b"", "video/mp4")
+                        e_i = min(e_i, sz - 1)
+                        with vp.open("rb") as fh:
+                            fh.seek(s_i)
+                            chunk_b = fh.read(e_i - s_i + 1)
+                        self.send_response(206)
+                        self.send_header("Content-Type", "video/mp4")
+                        self.send_header("Accept-Ranges", "bytes")
+                        self.send_header("Content-Range", f"bytes {s_i}-{e_i}/{sz}")
+                        self.send_header("Content-Length", str(len(chunk_b)))
+                        self.send_header("Cache-Control", "no-store")
+                        self.end_headers()
+                        self.wfile.write(chunk_b)
+                        return
+                    data = vp.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                except (ValueError, OSError) as exc:
+                    return self.reply(400, {"error": str(exc)})
             routes = {"/": lambda: (PAGE.encode(), "text/html; charset=utf-8"),
                       "/bench_record.css": lambda: ((HERE / "bench_record.css").read_bytes(), "text/css; charset=utf-8"),
                       "/bench_record_ui.js": lambda: ((HERE / "bench_record_ui.js").read_bytes(), "application/javascript; charset=utf-8"),
@@ -95,6 +149,8 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                       "/bench_record_drawers.js": lambda: ((HERE / "bench_record_drawers.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_cam.js": lambda: ((HERE / "bench_record_cam.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_log_reset.js": lambda: ((HERE / "bench_record_log_reset.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_review.js": lambda: ((HERE / "bench_record_review.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/choices.json": lambda: (bench.choices(), "application/json"),
                       "/status.json": lambda: (bench.status(), "application/json")}
             if path not in routes:
@@ -157,6 +213,26 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.hf_upload_config(body))
                 if self.path == "/api/dataset/delete":
                     return self.reply(200, bench.dataset_delete(body))
+                if self.path == "/api/dataset/episode/rate":
+                    return self.reply(200, bench.rate_episode(body))
+                if self.path == "/api/dataset/episode/delete":
+                    return self.reply(200, bench.delete_dataset_episodes(body))
+                if self.path == "/api/dataset/do_not_train":
+                    return self.reply(200, bench.set_dataset_do_not_train(body))
+                if self.path == "/api/manual_hold/release_runner":
+                    return self.reply(200, bench.release_held_runner(body))
+                if self.path == "/api/manual_hold/clear":
+                    return self.reply(200, bench.clear_manual_hold(body))
+                if self.path == "/api/recover/baseline":
+                    return self.reply(200, bench.recover_baseline(body))
+                if self.path == "/api/recover/restore_units":
+                    return self.reply(200, bench.recover_restore_units(body))
+                if self.path == "/api/recover/ack_error":
+                    return self.reply(200, bench.ack_bench_error(body))
+                if self.path == "/api/recover/sync_incident":
+                    return self.reply(200, bench.recover_sync_incident(body))
+                if self.path == "/api/defaults/reset":
+                    return self.reply(200, bench.reset_defaults(body))
                 m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose|release_lease|prepare|record_episode|finish)", self.path)
                 if m_arm:
                     arm_id, act = m_arm.group(1), m_arm.group(2)

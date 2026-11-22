@@ -169,7 +169,7 @@ def write_restore_list(path, units):
 
 
 # Dependents first: camera-view's Requires= pulls readiness down with it (record_session note, 2026-10-24).
-HANDOVER = (r"rosy-omx-cameras-bind\.timer",
+HANDOVER = (r"rosy-omx-cameras-bind\.timer", r"rosy-omx-cell-task-worker\.service",
             r"rosy-omx-camera-view\.service", r"rosy-omx-camera-readiness\.service",
             r"rosy-omx-camera@[\w-]+\.service", r"rosy-omx-observer@[\w-]+\.service")
 

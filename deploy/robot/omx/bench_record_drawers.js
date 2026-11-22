@@ -329,17 +329,18 @@ async function startBench(path,opts){
   if(sEt){const v=Number(sEt);if(!Number.isFinite(v)||v<1||v>3600){setReqError('에피소드 시간(episode_time_s)은 1~3600초여야 합니다.');return;}lp.episode_time_s=v;}
   if(sRt){const v=Number(sRt);if(!Number.isFinite(v)||v<0.5||v>600){setReqError('리셋 시간(reset_time_s)은 0.5~600초여야 합니다.');return;}lp.reset_time_s=v;}
   const revOn=$('toggle-reverse-btn')?.getAttribute('aria-pressed')==='true';
+  const customOv=typeof window.getCustomTaskOverride==='function'?window.getCustomTaskOverride():null;
   const body={
     arm:f.arm.value,
     name:f.name.value.trim(),
     rig_revision:f.rig_revision.value.trim(),
     config:f.config.value,
     caps:f.caps.value,
-    task:f.task.value,
+    task:customOv?'':f.task.value,
     replay:$('replay')?.value||'',
     replay_mode:revOn?($('reverse-mode')?.value||'swap_ab'):'none',
     invert_gripper:Boolean($('invert-gripper')?.checked),
-    task_override:window.zoneSwapped?{swap_pick_place:true}:null,
+    task_override:customOv||(window.zoneSwapped?{swap_pick_place:true}:null),
     align_leader:Boolean($('align-leader')?.checked),
     home_before_start:Boolean(!opts?.skipHome&&f.arm.value!=='arm_ab'&&!($('replay')?.value)),
     fold_unfolded:Boolean(!opts?.skipHome&&f.arm.value!=='arm_ab'&&!($('replay')?.value)),

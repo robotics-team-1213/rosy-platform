@@ -33,6 +33,7 @@ let lastAutoPhase='setup';
 let manualPhase=null;
 
 function benchSessionActive(st=lastStatus){
+  if(st?.status==='homing'&&(st?.error||st?.manual_hold?.active))return false;
   return BUSY.has(st?.status)||st?.phase==='prepare'||st?.phase==='recording';
 }
 
@@ -74,7 +75,8 @@ function applyBenchPhase(phase){
 }
 
 function syncBenchPhase(){
-  const nextAuto=resolveBenchPhase(lastStatus?.status,lastTelemetryActive,lastStatus?.phase);
+  const errHome=(lastStatus?.status==='homing'&&(lastStatus?.error||lastStatus?.manual_hold?.active));
+  const nextAuto=errHome?'setup':resolveBenchPhase(lastStatus?.status,lastTelemetryActive,lastStatus?.phase);
   if(nextAuto!==lastAutoPhase){
     lastAutoPhase=nextAuto;
     manualPhase=null;
@@ -219,6 +221,9 @@ function setNotice(key,tone,msg,opts){
     noticeHistory.unshift({ts,key,tone,msg:text});
     if(noticeHistory.length>20)noticeHistory.length=20;
     renderNoticeHistory();
+    if(typeof window.pushBenchLog==='function'&&(tone==='crit'||tone==='warn'||tone==='good')){
+      window.pushBenchLog('notice',tone==='crit'?'crit':(tone==='warn'?'warn':'good'),text);
+    }
   }
   renderNoticeBar();
 }
@@ -255,6 +260,9 @@ function setActivity(action,tone='muted',detail=''){
     noticeHistory.unshift({ts,key:'activity',tone:t,msg:line});
     if(noticeHistory.length>20)noticeHistory.length=20;
     renderNoticeHistory();
+  }
+  if(typeof window.pushBenchLog==='function'){
+    window.pushBenchLog('bench',t==='crit'?'crit':(t==='warn'?'warn':(t==='good'?'good':'info')),line);
   }
 }
 
@@ -379,8 +387,13 @@ function updateGoalSummaryRows(){
   const showSession=busyRun||phase==='result';
   const meta=lastStartMeta&&sessionKey(st)===lastStartMeta.key?lastStartMeta:null;
   const nm=(showSession&&(st?.name||meta?.name))||f.name.value.trim()||'수집명 미정';
-  const tid=(showSession&&(st?.task||meta?.task))||(c&&c.valid!==false&&c.task_id)||t||'과제 미선택';
-  for(const [id,value,label] of [['hdr-task-summary',tid,'과제'],['goal-name-btn',nm,'수집명']]){
+  const armCode=st?.arm||(f&&f.arm?f.arm.value:'');
+  const armDisp=armCode==='arm_ab'?'arm_a+b':armCode;
+  const customTask=(window.goalMode==='custom'&&window.customGoal?.origin&&window.customGoal?.target_slot)
+    ?(window.customGoal.origin+'→'+window.customGoal.target_slot):'';
+  const rawTid=(showSession&&(st?.task||meta?.task))||(c&&c.valid!==false&&c.task_id)||customTask||t||'과제 미선택';
+  const hdrTask=[armDisp,rawTid].filter(Boolean).join(' · ');
+  for(const [id,value,label] of [['hdr-task-summary',hdrTask,'과제'],['goal-name-btn',nm,'수집명']]){
     const btn=$(id);
     btn.textContent=value;
     btn.title=label+' '+value;

@@ -164,7 +164,7 @@ class BenchOpsMixin:
                     home_ticks = library_home_ticks(lib_p) if inc_leader else None
                     if home_ticks is not None:
                         leader_task = self._start_parallel_leader(a, rcfg, home_ticks)
-                    for unit in [u for u in active_handover_units(self.run) if u.startswith("rosy-omx-observer@")]:
+                    for unit in [u for u in active_handover_units(self.run) if u.startswith("rosy-omx-observer@") or u == "rosy-omx-cell-task-worker.service"]:
                         stopped_units.append(unit)
                         self._remember(stopped_units)
                         self.run("stop", unit)
@@ -246,9 +246,7 @@ class BenchOpsMixin:
                                 errs, _ = self._start_units(reversed(stopped_units))
                                 self._remember(errs)
                     else:  # keep the arm locks, the stopped units listed and the bench busy until a person checks the arm
-                        blocked = getattr(self, "_person_needed", None) or (
-                            f"{a} 홈용 record_session이 정상 종료되지 않았습니다 — 사람이 팔 상태를 확인하세요 (유닛 복원·idle 보류)")
-                        self._mark_manual(blocked)  # survives a service restart
+                        blocked = self._record_home_hold(a, rec_proc, rec_log_p, io_dir)
                         raise ValueError(blocked)
                 results.append(a)
         finally:
