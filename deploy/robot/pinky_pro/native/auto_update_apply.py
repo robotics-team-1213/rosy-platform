@@ -47,10 +47,14 @@ class UpdaterApply:
             raise UpdateError(f"IMAGE_LAYER_SYNC_FAILED: {detail}")
         return result
 
-    def _restart(self, sync_result: dict) -> list[str]:
+    def _restart(self, sync_result: dict, baseline: dict | None = None) -> list[str]:
         # Never restart this unit: it is the process running the update.
+        skip = {SELF_UNIT}
+        if "rosy-navigation.service" in (baseline or {}).get("active", {}):
+            # Avoid conflicting with an already-active navigation runtime.
+            skip.add("rosy-io.service")
         units = [unit for unit in sync_result.get("restart_units") or []
-                 if isinstance(unit, str) and UNIT_NAME.fullmatch(unit) and unit != SELF_UNIT]
+                 if isinstance(unit, str) and UNIT_NAME.fullmatch(unit) and unit not in skip]
         if units:
             restarted = self._systemctl("restart", *units, timeout=RESTART_TIMEOUT_S)
             if restarted.returncode != 0:
@@ -77,6 +81,10 @@ class UpdaterApply:
             if self._systemctl("is-active", "--quiet", unit).returncode == 0:
                 pid = self._main_pid(unit)
                 active[unit] = self.host.process_cwd(pid) if pid else None
+        if self._systemctl("is-active", "--quiet", "rosy-navigation.service").returncode == 0:
+            nav_pid = self._main_pid("rosy-navigation.service")
+            if nav_pid:
+                active["rosy-navigation.service"] = self.host.process_cwd(nav_pid)
         return {"active": active, "failed": self._failed_units() or []}
 
     @staticmethod
@@ -88,11 +96,14 @@ class UpdaterApply:
         return notes
 
     def _unit_problems(self, release_id: str, baseline: dict) -> list[str]:
-        """rosy-core always; io/camera only if they ran before; only newly failed units count."""
+        """rosy-core always; io/camera/navigation only if they ran before; only newly failed units count."""
         problems = []
         want = self.release_path(release_id)
+        active = baseline.get("active", {})
         required = [unit for unit in HEALTH_UNITS
-                    if unit == "rosy-core.service" or unit in baseline.get("active", {})]
+                    if unit == "rosy-core.service" or unit in active]
+        if "rosy-navigation.service" in active:
+            required.append("rosy-navigation.service")
         for unit in required:
             if self._systemctl("is-active", "--quiet", unit).returncode != 0:
                 problems.append(f"{unit} is not active")
@@ -167,7 +178,7 @@ class UpdaterApply:
                               "the next sync retries: " + " ".join(result["deferred"]))
             self._journal(state, "restart")
             self._recheck_waived(state)
-            self._restart(result)
+            self._restart(result, baseline=baseline)
             self._journal(state, "health")
             self._health(release_id, baseline, state)
         except Deferred as exc:

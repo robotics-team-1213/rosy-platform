@@ -773,3 +773,18 @@ def test_silent_sync_failure_names_the_exit_code():
     host = SimpleNamespace(run=lambda argv, timeout: subprocess.CompletedProcess(argv, -9, "", ""))
     with pytest.raises(UpdateError, match=r"IMAGE_LAYER_SYNC_FAILED: no output, exit -9"):
         UpdaterApply._sync(SimpleNamespace(host=host), "sync-image-layer.py")
+
+
+def test_apply_tracks_active_navigation_and_skips_conflicting_io_restart(device, host, hub, keys):
+    from auto_update_fakes import NEXT, updater
+    host.overrides["mainpid"] = lambda h, argv: subprocess.CompletedProcess(
+        argv, 0, {"rosy-core.service": "101\n", "rosy-io.service": "0\n",
+                  "rosy-camera.service": "103\n", "rosy-navigation.service": "104\n"}.get(argv[-1], "0\n"), "")
+    host.overrides["is-active"] = lambda h, argv: subprocess.CompletedProcess(
+        argv, 3 if argv[-1] == "rosy-io.service" else 0, "", "")
+    up = updater(host, hub)
+    baseline = up._baseline()
+    assert "rosy-navigation.service" in baseline["active"] and "rosy-io.service" not in baseline["active"]
+    assert up._restart({"restart_units": ["rosy-io.service", "rosy-navigation.service"]}, baseline=baseline) == ["rosy-navigation.service"]
+    host.links["current"] = NEXT
+    assert up._unit_problems(NEXT, baseline) == []

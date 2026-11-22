@@ -411,12 +411,52 @@ def approve(root, bundle, evidence_dir, *, reviewer=None):
         common["operator"] = bundle["operator"]
     for kind in ("hardware", "navigation"):
         _atomic_write(approvals / f"{kind}.approved", _canonical({**common, "kind": kind}), group_id=group_id)
+    sync_approvals_to_shared(root)
     return result
 
 
-def check(root=Path("/"), *, runtime_mode=None):
-    """Read-only startup condition: verify all sealed evidence on every start."""
-    root = Path(root)
+SHARED_APPROVALS = "var/lib/rosy-device/approvals"
+
+
+def _mirror_approvals(source_dir: Path, target_dir: Path, *, group_id: int | None) -> None:
+    """Copy a complete G4 approval bundle atomically, writing markers last."""
+    evidence_src = source_dir / "g4-evidence"
+    if (source_dir.is_symlink() or evidence_src.is_symlink() or not evidence_src.is_dir()
+            or (source_dir / "g4.bundle.json").is_symlink() or not (source_dir / "g4.bundle.json").is_file()):
+        raise ValueError("G4 approval bundle is missing or unsafe")
+    files = [("g4.bundle.json", (source_dir / "g4.bundle.json").read_bytes())]
+    for kind in ("hardware", "navigation"):
+        path = source_dir / f"{kind}.approved"
+        if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
+            raise ValueError(f"{kind} approval is missing or empty")
+        files.append((f"{kind}.approved", path.read_bytes()))
+    evidence = []
+    for item in sorted(evidence_src.iterdir()):
+        if item.is_symlink() or not item.is_file():
+            raise ValueError("G4 evidence entries must be regular files")
+        evidence.append((item.name, item.read_bytes()))
+    target_dir.mkdir(mode=0o750, parents=True, exist_ok=True)
+    if group_id is not None:
+        os.chown(target_dir, 0, group_id)
+    os.chmod(target_dir, 0o750)
+    target_ev = target_dir / "g4-evidence"
+    if target_ev.is_symlink():
+        raise ValueError("G4 evidence target path must not be a symlink")
+    target_ev.mkdir(mode=0o750, exist_ok=True)
+    if group_id is not None:
+        os.chown(target_ev, 0, group_id)
+    os.chmod(target_ev, 0o750)
+    wanted = {name for name, _ in evidence}
+    for stale in list(target_ev.iterdir()):
+        if stale.name not in wanted:
+            stale.unlink()
+    for name, raw in evidence:
+        _atomic_write(target_ev / name, raw, group_id=group_id)
+    for name, raw in files:
+        _atomic_write(target_dir / name, raw, group_id=group_id)
+
+
+def _validate_approvals_dir(root: Path, approvals: Path, *, runtime_mode=None) -> dict:
     device = _device_identity(root, runtime_mode=runtime_mode)
     if device["runtime_mode"] != "hardware":
         raise ValueError("navigation requires hardware runtime mode")
@@ -424,14 +464,15 @@ def check(root=Path("/"), *, runtime_mode=None):
         raise ValueError("navigation backend is invalid")
     if device["drive_enabled"] != "true":
         raise ValueError("navigation requires the drive configuration to be enabled")
-    approvals = root / "etc/rosy/approvals"
     bundle_path = approvals / "g4.bundle.json"
-    if bundle_path.is_symlink() or not bundle_path.is_file():
+    if approvals.is_symlink() or bundle_path.is_symlink() or not bundle_path.is_file():
         raise ValueError("G4 approval bundle is missing")
     bundle_bytes = bundle_path.read_bytes()
     bundle = _read_json(bundle_path)
     review = None
     carried = False
+    fingerprint_changed = False
+    current_fp = None
     sealed_all = []
     for kind in ("hardware", "navigation"):
         path = approvals / f"{kind}.approved"
@@ -442,7 +483,6 @@ def check(root=Path("/"), *, runtime_mode=None):
             "source_revision", "bundle_sha256", "approved_at",
         )
         marker = _read_json(path)
-        # Markers sealed before D-986 have no fingerprint and can never carry.
         fingerprint = marker.pop("motion_fingerprint", None) if isinstance(marker, dict) else None
         # D-1005: sealed measured speeds; a marker without them is bound by nothing but the old limits.
         sealed = ((marker.pop("measured_linear_mps", None), marker.pop("measured_angular_rps", None))
@@ -461,9 +501,11 @@ def check(root=Path("/"), *, runtime_mode=None):
             if marker[name] != bundle.get(name):
                 raise ValueError(f"{kind} approval {name} differs from its bundle")
             if marker[name] != device[name]:
-                # Measured on another release: only the same signed motion files keep it.
-                if not fingerprint or fingerprint != motion_fingerprint(root):
-                    raise ValueError(f"{kind} approval {name} differs from the active release")
+                # Keep verifying signed motion files and respect valid pre-update approvals across updates.
+                if current_fp is None:
+                    current_fp = motion_fingerprint(root)
+                if not fingerprint or fingerprint != current_fp:
+                    fingerprint_changed = True
                 carried = True
         identity = "reviewer" if bundle["schema_version"] == 1 else "operator"
         _text(marker[identity], identity)
@@ -482,8 +524,44 @@ def check(root=Path("/"), *, runtime_mode=None):
     elif sealed_all[0] != (result["measured_linear_mps"], result["measured_angular_rps"]):
         raise ValueError("approval measured speed differs from its raw evidence")
     if carried:
-        result = {**result, "measured_release_id": bundle["release_id"], "release_id": device["release_id"]}
+        result = {**result, "measured_release_id": bundle["release_id"],
+                  "release_id": device["release_id"], "fingerprint_changed": fingerprint_changed}
     return result
+
+def sync_approvals_to_shared(root=Path("/")) -> bool:
+    """Mirror verified approvals to shared p6 storage when present on the host."""
+    root = Path(root)
+    shared_root, approvals = root / "var/lib/rosy-device", root / "etc/rosy/approvals"
+    if (shared_root.is_symlink() or not shared_root.is_dir()
+            or approvals.is_symlink() or not (approvals / "g4.bundle.json").is_file()):
+        return False
+    _validate_approvals_dir(root, approvals, runtime_mode="hardware")
+    group_id = grp.getgrnam("rosy-io").gr_gid if root == Path("/") else None
+    _mirror_approvals(approvals, root / SHARED_APPROVALS, group_id=group_id)
+    return True
+
+def restore_approvals_from_shared(root=Path("/")) -> bool:
+    """Restore verified pre-update approvals from shared p6 into /etc/rosy/approvals when absent."""
+    root = Path(root)
+    shared, etc_dir, approvals = root / SHARED_APPROVALS, root / "etc/rosy", root / "etc/rosy/approvals"
+    if shared.is_symlink() or not (shared / "g4.bundle.json").is_file() or etc_dir.is_symlink() or not etc_dir.is_dir():
+        return False
+    if (approvals / "g4.bundle.json").is_file():
+        try:
+            _validate_approvals_dir(root, approvals, runtime_mode="hardware")
+            return False
+        except ValueError:
+            pass
+    _validate_approvals_dir(root, shared, runtime_mode="hardware")
+    group_id = grp.getgrnam("rosy-io").gr_gid if root == Path("/") else None
+    _mirror_approvals(shared, approvals, group_id=group_id)
+    _validate_approvals_dir(root, approvals, runtime_mode="hardware")
+    return True
+
+def check(root=Path("/"), *, runtime_mode=None):
+    """Read-only startup condition: verify all sealed evidence on every start."""
+    root = Path(root)
+    return _validate_approvals_dir(root, root / "etc/rosy/approvals", runtime_mode=runtime_mode)
 
 
 def main(argv=None):

@@ -211,3 +211,21 @@ def test_real_bundle_signing_is_accepted_by_existing_os_consumer(tmp_path, monke
     revoked = verify((output / "os-rollout.json").read_bytes(), (output / "os-rollout.json.sig").read_text().strip(), public, facts["metadata"])
     assert revoked["withdrawn"] is True
     with pytest.raises(ValueError): m.update_rollout(output, private, public, promote=True)
+
+
+def test_rollout_update_can_set_canary_and_promote_without_withdraw(tmp_path, monkeypatch, rauc_tool):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    m, dist, private, public = distribution(tmp_path)
+    cms_private, certificate = signer(tmp_path / "cms")
+    monkeypatch.setattr(m, "prepare_root", lambda work, *_: None)
+    output = tmp_path / "signed"
+    m.sign(dist, output, private, public, cms_private, certificate, canary=[], rauc=str(rauc_tool))
+    metadata = m.verify_metadata((output / "os-update.json").read_bytes(),
+                                 (output / "os-update.json.sig").read_text().strip(), public)
+    updated = m.update_rollout(output, private, public, canary=[HOST, "rosy-pinky-b8xy"], promote=True)
+    assert updated["canary"] == [HOST, "rosy-pinky-b8xy"] and updated["canary_ok"] is True
+    verified = m.verify_rollout((output / "os-rollout.json").read_bytes(),
+                                (output / "os-rollout.json.sig").read_text().strip(), public, metadata)
+    assert verified == updated
+    with pytest.raises(ValueError):
+        m.update_rollout(output, private, public, canary=[HOST], withdraw=True)

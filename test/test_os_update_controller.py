@@ -289,3 +289,57 @@ def test_verified_withdrawal_after_install_returns_to_source_without_arm(tmp_pat
     assert result["pending"] is None and result["failed_versions"]
     assert config.read_bytes() == boot.autoboot("a")
     assert not any("reboot" in argv for argv in calls)
+
+
+def test_source_health_accepts_active_guarded_navigation_when_io_is_inactive(tmp_path, monkeypatch):
+    m = importlib.import_module("os_update_controller")
+    _, _, _, root, _, _, host, _, _, _, _ = _source(tmp_path, monkeypatch)
+    from test_factory_release_signature import _keys, FACTORY_ID
+    from test_os_factory_release import _factory
+    private, public = _keys(tmp_path / "offline", "fixture")
+    release, _ = _factory(root, FACTORY_ID, private, public, signed=True)
+    (root / "opt/rosy/current").symlink_to("releases/" + FACTORY_ID)
+    schema = root / "var/lib/rosy-device/state/schema.json"
+    schema.parent.mkdir(parents=True)
+    schema.write_text('{"schema_version":1,"state_schema":1}')
+    native = m.Path(m.__file__).parent
+    io_guard = root / "etc/systemd/system/rosy-io.service.d/zz-rosy-os-guard.conf"
+    io_guard.parent.mkdir(parents=True)
+    io_guard.write_bytes((native / "rosy-os-io-guard.conf").read_bytes())
+    nav_guard = root / "etc/systemd/system/rosy-navigation.service.d/zz-rosy-os-guard.conf"
+    nav_guard.parent.mkdir(parents=True)
+    nav_guard.write_bytes((native / "rosy-os-navigation-guard.conf").read_bytes())
+    (root / "etc/systemd/system/rosy-io.service").write_bytes((release / "deploy/robot/native/rosy-io.service").read_bytes())
+    host.current_release = lambda: FACTORY_ID
+    host.process_cwd = lambda pid: str(release)
+    monkeypatch.setattr(m.health, "verify_ready", lambda r: dict(boot_id=SOURCE_BOOT, slot="a"))
+    monkeypatch.setattr(m.health, "_probe", lambda: None)
+    def run(argv, **kwargs):
+        unit = next((arg for arg in argv if arg.endswith(".service")), "")
+        if unit == "rosy-io.service":
+            data = dict(ActiveState="inactive", SubState="dead", MainPID="0", InvocationID="", Result="success")
+        elif unit == "rosy-navigation.service":
+            data = dict(ActiveState="active", SubState="running", MainPID="124", InvocationID="b" * 32, Result="success",
+                        DropInPaths="/etc/systemd/system/rosy-navigation.service.d/zz-rosy-os-guard.conf")
+        else:
+            data = dict(ActiveState="active", SubState="running", MainPID="123", InvocationID="a" * 32, Result="success")
+        return subprocess.CompletedProcess(argv, 0, "\n".join(k + "=" + v for k, v in data.items()), "")
+    m._claim(root, TRANSACTION, host)
+    assert m.source_health(root, TRANSACTION, host=host, run=run) == FACTORY_ID
+
+
+def test_backup_approvals_mirrors_valid_g4_tree_to_shared_storage(tmp_path, monkeypatch):
+    m = importlib.import_module("os_update_controller")
+    _, _, _, root, _, _, _, _, _, _, _ = _source(tmp_path, monkeypatch)
+    src = root / "etc/rosy/approvals"
+    (src / "g4-evidence").mkdir(parents=True)
+    (src / "g4.bundle.json").write_text('{"schema_version":2}', encoding="utf-8")
+    (src / "hardware.approved").write_text('{"kind":"hardware"}', encoding="utf-8")
+    (src / "navigation.approved").write_text('{"kind":"navigation"}', encoding="utf-8")
+    (src / "g4-evidence/sample.json").write_text('{"ok":true}', encoding="utf-8")
+    (root / "var/lib/rosy-device").mkdir(parents=True, exist_ok=True)
+    m._backup_approvals(root)
+    dst = root / "var/lib/rosy-device/approvals"
+    assert (dst / "g4.bundle.json").read_text() == '{"schema_version":2}'
+    assert (dst / "navigation.approved").read_text() == '{"kind":"navigation"}'
+    assert (dst / "g4-evidence/sample.json").read_text() == '{"ok":true}'

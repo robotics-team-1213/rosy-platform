@@ -247,7 +247,9 @@ def test_units_ship_enabled_and_the_run_never_fails_the_unit():
     assert not re.search(r"^\s*Requires=", service, re.MULTILINE)
     assert re.search(r"^\s*Wants=.*\brosy-core\.service\b", service, re.MULTILINE)
     assert "navigation_reapprove.py run" in service and "Type=oneshot" in service
-    assert "WantedBy=timers.target" in (NATIVE / "rosy-nav-reapprove.timer").read_text(encoding="utf-8")
+    assert "ConfigurationDirectory=rosy/approvals" in service
+    timer = (NATIVE / "rosy-nav-reapprove.timer").read_text(encoding="utf-8")
+    assert "WantedBy=timers.target" in timer and "OnBootSec=30s" in timer
     import image_layer_plan
     assert {"rosy-nav-reapprove.service", "rosy-nav-reapprove.timer"} <= set(image_layer_plan.UNITS)
     assert "rosy-nav-reapprove.timer" in image_layer_plan.ENABLED_UNITS
@@ -294,3 +296,55 @@ def test_run_exits_before_pairing_when_status_inputs_busy_or_corrupt(robot_root,
     never = lambda core, log: pytest.fail("must not re-measure")  # noqa: E731
     assert nr.run(robot_root, FakeCore(), sleep=lambda s: None, reapprove_fn=never,
                   pair_fn=lambda c: pytest.fail("must not pair when busy")) != "approved and navigation started"
+
+
+def test_approved_robot_auto_starts_navigation_once_per_boot_when_idle_and_unguarded(tmp_path, monkeypatch):
+    boot_file = tmp_path / "proc/sys/kernel/random/boot_id"
+    boot_file.parent.mkdir(parents=True)
+    boot_file.write_text("boot-uuid-1\n", encoding="utf-8")
+    status_path = tmp_path / "run/rosy/status-inputs.json"
+    status_path.parent.mkdir(parents=True)
+    status_path.write_text(json.dumps({"robot_mode": "IDLE", "nav_state": "IDLE", "estop": False}), encoding="utf-8")
+    monkeypatch.setattr(nr.mapping_approval, "check", lambda root: {"ready": True})
+    monkeypatch.setattr(nr.rosy_claim, "check", lambda root: None)
+    calls = []
+    nav_up = {"active": False}
+    def fake_runner(argv, **kwargs):
+        calls.append(argv)
+        if argv[1] == "is-active":
+            return subprocess.CompletedProcess(argv, 0 if nav_up["active"] else 3, "", "")
+        if argv[1] == "start":
+            nav_up["active"] = True
+        return subprocess.CompletedProcess(argv, 0, "", "")
+    assert nr.run(tmp_path, runner=fake_runner) == "navigation auto-started"
+    assert [c[1] for c in calls] == ["is-active", "start", "is-active"]
+    assert nr.run(tmp_path, runner=fake_runner) == "approved"
+    assert len(calls) == 3
+    # If start succeeds synchronously but ExecCondition/runtime fails to stay active, marker is withheld to retry.
+    boot_file.write_text("boot-uuid-1b\n", encoding="utf-8")
+    nav_up["active"] = False
+    calls.clear()
+    def flaky_runner(argv, **kwargs):
+        calls.append(argv)
+        if argv[1] == "is-active":
+            return subprocess.CompletedProcess(argv, 3, "", "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+    assert nr.run(tmp_path, runner=flaky_runner) == "approved"
+    assert not (tmp_path / "run/rosy/nav-auto-started").read_text(encoding="utf-8").strip() == "boot-uuid-1b"
+    # Motion hold env blocks auto-start on a fresh boot.
+    boot_file.write_text("boot-uuid-2\n", encoding="utf-8")
+    guard = tmp_path / "run/rosy-os-update/motion.env"
+    guard.parent.mkdir(parents=True)
+    guard.write_text("ROSY_IO_DRIVE_ENABLED=false\n", encoding="utf-8")
+    assert nr.run(tmp_path, runner=fake_runner) == "approved"
+    assert len(calls) == 3
+
+
+def test_run_restores_shared_approvals_before_auto_start(tmp_path, monkeypatch):
+    (tmp_path / "var/lib/rosy-device/approvals").mkdir(parents=True)
+    (tmp_path / "var/lib/rosy-device/approvals/g4.bundle.json").write_text("{}", encoding="utf-8")
+    restored = []
+    monkeypatch.setattr(nr.mapping_approval, "restore_approvals_from_shared", lambda root: restored.append(root) or True)
+    monkeypatch.setattr(nr.mapping_approval, "check", lambda root: {"ready": True})
+    assert nr.run(tmp_path) == "approved"
+    assert restored == [tmp_path]
