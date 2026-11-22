@@ -5,9 +5,6 @@ from pathlib import Path
 
 import pytest
 
-np = pytest.importorskip("numpy")
-pd = pytest.importorskip("pandas")
-av = pytest.importorskip("av")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import data_gate as dg  # noqa: E402
 
@@ -15,7 +12,12 @@ FPS = 15
 HOME_B = [0.023, -1.967, 1.667, 1.626, 1.399, 0.6]
 
 
+def _media_deps():
+    return pytest.importorskip("numpy"), pytest.importorskip("pandas"), pytest.importorskip("av")
+
+
 def _video(path, frames, black=False, static=False):
+    np, _, av = _media_deps()
     path.parent.mkdir(parents=True, exist_ok=True)
     with av.open(str(path), "w") as c:
         s = c.add_stream("mpeg4", rate=FPS)
@@ -30,6 +32,7 @@ def _video(path, frames, black=False, static=False):
 
 def make(root, *, cams=("top", "side", "wrist"), n=80, video_frames=None, black=None, task="Move the designated container from belt to ship-h1r1-l0.",
          state0=HOME_B, gripper=0.6, static=None):
+    np, pd, _ = _media_deps()
     root = Path(root)
     feats = {"observation.state": {"dtype": "float32", "shape": [6]}, "action": {"dtype": "float32", "shape": [6]}}
     for c in cams:
@@ -126,3 +129,29 @@ def test_stand_destination_episode_passes_data_gate(tmp_path):
     r = dg.gate(root, "arm_a", SIM)
     assert r["counts"] == {"pass": 1, "review": 0, "reject": 0} and r["goals_passing"] == ["stand"]
     assert dg.check_receipt(root) == [0]
+
+
+def test_goal_regex_and_camera_map_without_video_deps():
+    for valid, expected in (
+        ("Move the designated container from ship-h1r0-l0 to stand.", "stand"),
+        ("Move the designated container from belt to tray.", "tray"),
+        ("Move the designated container from belt to ship-h1r2-l2.", "ship-h1r2-l2"),
+    ):
+        m = dg.GOAL_RE.search(valid)
+        assert m and m.group(1) == expected
+    for invalid in ("Move from ship-h1r0-l0 to belt.", "pick something"):
+        assert dg.GOAL_RE.search(invalid) is None
+    feats = {f"observation.images.{c}": {} for c in ("top", "side", "wrist")}
+    assert dg.camera_map(feats, {}) == {
+        "observation.images.top": "top",
+        "observation.images.side": "side",
+        "observation.images.wrist": "wrist",
+    }
+    legacy_feats = {f"observation.images.{c}": {} for c in ("rs", "top", "wrist")}
+    assert dg.camera_map(legacy_feats, {"rs": "top", "top": "side"}) == {
+        "observation.images.rs": "top",
+        "observation.images.top": "side",
+        "observation.images.wrist": "wrist",
+    }
+    with pytest.raises(ValueError, match="D-1065"):
+        dg.camera_map({f"observation.images.{c}": {} for c in ("top", "side", "front")}, {})
