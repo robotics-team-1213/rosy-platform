@@ -77,6 +77,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_NOT_RUNNING: '진행 중인 운행이 아닙니다',
   TRIP_UNKNOWN: '없는 운행입니다',
   TRIP_NO_REPLAN: '확인할 바뀐 경로가 없습니다',
+  TRIP_NOT_HELD: '정지 대기 중인 운행이 아닙니다',
   TRIP_REPLAN_FAILED: '다시 계산한 경로가 없습니다 · 운행을 취소하세요',
   TRIP_EXECUTION_NOT_AVAILABLE: '출발은 운행 시작 버튼으로 따로 합니다',
   // D-541 7 trip lease: CORE가 운행 중 로봇을 쥐게 한다

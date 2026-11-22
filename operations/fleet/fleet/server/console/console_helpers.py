@@ -258,6 +258,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
     if self._verdict(robot_id) == trust.UNTRUSTED:
         # D-395: an unlocalized robot gets no goal (CORE would refuse it); it waits for LOCALIZED.
         self._claims.pop(robot_id, None)
+        getattr(self, "_site_claims", {}).pop(robot_id, None)
         decision = admission.untrusted_self_hold(robot_id)
         if route_points is not None:
             return {**admission.response_of(decision), "queued": False}
@@ -292,7 +293,8 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                 here = self._pose_of(robot_id)
                 nav_route = traffic.thin(([here] if here is not None else []) + [(float(p["x"]), float(p["y"])) for p in route_points])
             self.goal_leases.check_stop(robot_id, stop)
-            blocker, conflict = self._claim_blocker(robot_id, nav_route)
+            claim_site_route = self._site_route(robot_id, nav_route)
+            blocker, conflict = self._claim_blocker(robot_id, nav_route, site_route=claim_site_route)
             if blocker is not None:
                 stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
                 cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
@@ -301,6 +303,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                     raise RuntimeError("navigation goal cancellation was not confirmed")
                 self._goals.pop(robot_id, None)
                 self._claims.pop(robot_id, None)
+                getattr(self, "_site_claims", {}).pop(robot_id, None)
                 decision = (admission.route_conflict_hold if conflict else admission.map_frame_hold)(blocker, nav_route)
                 if route_points is not None:
                     return {**admission.response_of(decision), "queued": False}
@@ -326,6 +329,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                     raise RuntimeError("navigation goal cancellation was not confirmed")
                 self._goals.pop(robot_id, None)
                 self._claims.pop(robot_id, None)
+                getattr(self, "_site_claims", {}).pop(robot_id, None)
                 decision = admission.untrusted_blocker_hold(untrusted, intended)
                 if route_points is not None:
                     return {**admission.response_of(decision), "queued": False}
@@ -345,6 +349,7 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                         raise RuntimeError("navigation goal cancellation was not confirmed")
                     self._goals.pop(robot_id, None)
                     self._claims.pop(robot_id, None)
+                    getattr(self, "_site_claims", {}).pop(robot_id, None)
                     return {**admission.response_of(
                         admission.standing_hold(standing[0], standing, "YIELDING", intended)), "queued": False}
                 return await self._make_room(
@@ -352,6 +357,12 @@ async def _goal(self, robot_id: str, x: float, y: float, yaw: float, *,
                     task_id=task_id, attempt_id=attempt_id, attempt_seq=attempt_seq,
                 )
             self._claims[robot_id] = nav_route
+            site_claims = getattr(self, "_site_claims", None)
+            if site_claims is not None:
+                if claim_site_route is not None:
+                    site_claims[robot_id] = claim_site_route
+                else:
+                    site_claims.pop(robot_id, None)
             return result
         except (HubError, RobotApiError) as exc:
             raise RuntimeError("traffic refusal after mover dispatch; result remains unknown") from exc
@@ -415,6 +426,7 @@ async def _planned_stop_goal(self, robot_id, client, caps, target, attempt_id, s
         self._goals[robot_id] = dict(zip(("x", "y", "yaw"), target))
         self._queued.pop(robot_id, None)
         self._claims[robot_id] = route
+        getattr(self, "_site_claims", {}).pop(robot_id, None)
         return result
 
 
@@ -436,6 +448,7 @@ def hold_robot(self, robot_id: str, reason: str) -> None:
         pose = self._pose_of(robot_id)
         if pose is not None:
             self._claims[robot_id] = [pose]
+            getattr(self, "_site_claims", {}).pop(robot_id, None)
     self._held[robot_id] = {
         "reason": reason, "alarm": bool(previous.get("alarm")) or moving,
         "formation": bool(previous.get("formation")) or in_formation,
@@ -445,6 +458,7 @@ def hold_robot(self, robot_id: str, reason: str) -> None:
 def release_robot(self, robot_id: str) -> None:
     if self._held.pop(robot_id, None) is not None:
         self._claims.pop(robot_id, None)
+        getattr(self, "_site_claims", {}).pop(robot_id, None)
 
 
 async def stop_held_formation(self) -> None:

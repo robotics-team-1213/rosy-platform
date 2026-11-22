@@ -114,6 +114,7 @@ class TrafficArbitration:
             raise RuntimeError("navigation goal cancellation was not confirmed")
         self._goals.pop(mover, None)
         self._claims.pop(mover, None)
+        getattr(self, "_site_claims", {}).pop(mover, None)
         reason = "NO_YIELD_SPACE" if no_space else "YIELDING"
         blocked_by = (no_space or yielded)[0]
         decision = goal_admission.standing_hold(blocked_by, standing, reason, route)
@@ -166,6 +167,7 @@ class TrafficArbitration:
             self._queued[robot_id] = {**own, "blocked_by": mover, "waiting_on": [mover],
                                       "reason": "YIELDED"}
         self._claims.pop(robot_id, None)
+        getattr(self, "_site_claims", {}).pop(robot_id, None)
         self._yielding[robot_id] = {"bay": {"x": bay[0], "y": bay[1]}, "for": mover}
 
     async def _observe(self) -> None:
@@ -195,13 +197,30 @@ class TrafficArbitration:
     def _frame_of(self, robot_id: str) -> Optional[str]:
         return resolve_robot_frame(self, robot_id)
 
-    def _claim_blocker(self, mover: str, route) -> tuple[Optional[str], bool]:
+    def _claim_blocker(self, mover: str, route, *, site_route=None) -> tuple[Optional[str], bool]:
         """``(blocker, is_conflict)`` for a dispatched goal's route (D-1010)."""
-        conflict = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(mover,))
-        if conflict is not None:
-            return conflict, True
-        return next((rid for rid in sorted(self._claims)
-                     if rid != mover and self._map_mismatch(mover, rid)), None), False
+        site_claims = getattr(self, "_site_claims", {})
+        mover_frame = self._frame_of(mover)
+        mismatch: Optional[str] = None
+        for other_id in sorted(self._claims):
+            if other_id == mover:
+                continue
+            other_frame = self._frame_of(other_id)
+            if not self._map_mismatch(mover, other_id):
+                if traffic.blocking_robot(route, {other_id: self._claims[other_id]}, self._clearance_m) is not None:
+                    return other_id, True
+                continue
+            other_site = site_claims.get(other_id)
+            if site_route is not None and other_site is not None and site_route[0] == other_site[0]:
+                if traffic.blocking_robot(site_route[1], {other_id: other_site[1]}, self._clearance_m) is not None:
+                    return other_id, True
+                continue
+            if (mover_frame is None or other_frame is None) and (
+                traffic.blocking_robot(route, {other_id: self._claims[other_id]}, self._clearance_m) is not None
+            ):
+                return other_id, True
+            mismatch = mismatch or other_id
+        return mismatch, False
 
     def _site_route(self, mover: str, route: Sequence):
         return site_route_for(self, mover, route, trust_mod=trust)
@@ -298,7 +317,9 @@ class TrafficArbitration:
     async def cancel(self, robot_id: str) -> dict:
         result = await self.goal_leases.cancel(robot_id, self._client(robot_id))
         self._goals.pop(robot_id, None)
-        self._held.get(robot_id) or self._claims.pop(robot_id, None)  # D-361: held keeps its claim
+        if self._held.get(robot_id) is None:
+            self._claims.pop(robot_id, None)  # D-361: held keeps its claim
+            getattr(self, "_site_claims", {}).pop(robot_id, None)
         self._queued.pop(robot_id, None)
         self._yielding.pop(robot_id, None)
         return result
