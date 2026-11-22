@@ -123,30 +123,34 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const safety = !stateCurrent ? "안전 확인 불가"
       : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
     const facts = node("div", "", "robot-summary-status");
-    facts.append(tag(status, view.stateUnavailable || !robot.online ? "warn" : ""),
-      tag(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"));
-    // D-926: every fact on the card is the one chip shape; an unread battery is not an attention item.
+    const addFact = (text, cls) => {
+      const t = tag(text, cls);
+      if (!cls) t.setAttribute("variant", "inline");
+      facts.append(t);
+      return t;
+    };
+    addFact(status, view.stateUnavailable || !robot.online ? "warn" : "");
+    addFact(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn");
+    // D-926: nominal facts render inline via ui-tag[variant="inline"] (Dark-Cockpit); warnings/crits stay pill-framed.
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
-    const battery = tag(`배터리 ${power.battery}`, power.problem ? "warn" : "");
+    const battery = addFact(`배터리 ${power.battery}`, power.problem ? "warn" : "");
     battery.dataset.fact = "battery";
-    facts.append(battery, motorHealth.summary(robot));
+    facts.append(motorHealth.summary(robot));
     const heat = stateCurrent ? heatChip(state) : null;
-    if (heat) facts.append(tag(...heat));
+    if (heat) addFact(...heat);
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
-    const position = tag(loc?.text || "위치 미확인", loc ? loc.cls : "warn");
+    const position = addFact(loc?.text || "위치 미확인", loc ? loc.cls : "warn");
     position.dataset.localization = "";
     if (loc) position.title = [loc.title, sitePoseText(guideRow)].filter(Boolean).join(" · ");
-    facts.append(position);
     const formation = !view.stateUnavailable && view.formation?.active ? view.formation : null;
     const role = formation?.leader === robot.robot_id ? "대형 리더"
       : formation && Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "";
-    if (role) facts.append(tag(role, "nav"));
+    if (role) addFact(role, "nav");
     const source = motionSource(robot, view);
-    const sourceTag = tag(source.text, source.cls);
+    const sourceTag = addFact(source.text, source.cls);
     sourceTag.dataset.motionSource = source.key;
     sourceTag.title = source.title;
-    facts.append(sourceTag);
     article.append(facts);
     const lane = state.line_follow;
     const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"

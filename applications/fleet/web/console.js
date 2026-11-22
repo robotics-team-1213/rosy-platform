@@ -8,6 +8,7 @@ import { createRoster } from "./roster.js";
 import { createRosterWorkspace } from "./roster-workspace.js";
 import { createManualControl } from "./manual-control.js";
 import { cardTripLine, placeOptions } from "./card-trip.js";
+import { createCockpitHud } from "./cockpit-telemetry.js";
 import { createInboxPanel } from "./inbox.js";
 import { createWorkView } from "./work-view.js";
 import { createChannelRequestView } from "./channel-request-view.js";
@@ -76,6 +77,7 @@ const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? 
 layoutPanels.push(raised);
 if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view, isLocked: () => auth.locked});
+const cockpitHud = createCockpitHud({ el });
 const selection = createSelection(null);
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
@@ -244,6 +246,7 @@ function render() {
     nextFocused?.focus({preventScroll: true});
   }
   signals.render();
+  cockpitHud.update(view);
   roster.fillQueues();
   inbox.refresh();
   roster.syncConvoy();  // D-540 (d) 대형·대열

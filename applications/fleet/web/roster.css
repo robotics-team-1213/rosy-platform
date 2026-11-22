@@ -9,7 +9,7 @@
 .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 2; grid-row: 1; }
 .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; }
 
-.roster { display: flex; flex-direction: column; gap: var(--space-3); }
+.roster { display: flex; flex-direction: column; gap: var(--space-2); }
 .omx-dense-card { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-2); min-width: 0; margin-top: var(--space-1); padding: var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface-raised); }
 .omx-dense-card > div { min-width: 0; }
 .omx-dense-card strong { font-size: var(--text-label); overflow-wrap: anywhere; }
@@ -151,11 +151,11 @@
   #robot-stage { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
   #robot-stage > .robot-stage-main { overflow: hidden; }
 }
-.robot-panel .robot-workspace-card { padding: var(--space-2); }
+.robot-panel .robot-workspace-card { padding: var(--space-2); background: var(--surface-canvas); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
 .robot-panel-camera-box { display: grid; gap: var(--space-2); min-width: 0; }
-.robot-summary { padding: var(--space-2) var(--space-3); }
+.robot-summary { min-height: var(--row-dense); padding: var(--space-2); border: 1px solid var(--border-subtle); border-inline-start: var(--selection-edge) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); }
 .robot-summary .robot-line { width: 100%; }
-.robot-summary-evidence { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); color: var(--text-secondary); font-size: var(--text-label); overflow-wrap: anywhere; }
+.robot-summary-evidence { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); color: var(--text-secondary); font-size: var(--text-micro); overflow-wrap: anywhere; }
 #robot-workspace { min-width: 0; }
 .manual-control { margin-top: var(--space-1); }
 .manual-control [data-manual-direction] { touch-action: none; }
@@ -165,12 +165,14 @@
 .manual-control [data-manual-mode] { grid-column: 1 / -1; }
 .trip-mode { display: grid; gap: var(--space-2); }
 
-.robot-summary { border-bottom: 1px solid var(--border-subtle); }
-.robot-summary.selected { background: var(--surface-raised); }
+.robot-summary.s0 { border-inline-start-color: var(--robot-1); }
+.robot-summary.s1 { border-inline-start-color: var(--robot-2); }
+.robot-summary.s2 { border-inline-start-color: var(--robot-3); }
+.robot-summary.selected { background: var(--surface-raised); border-color: var(--selection); }
 .robot-summary .robot-line { align-items: center; justify-content: space-between; }
-.robot-summary .trip-line { margin: var(--space-1) 0; font-size: var(--text-label); overflow-wrap: anywhere; }
-.robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); }
-.robot-list-details { margin-top: var(--space-3); }
+.robot-summary .trip-line { margin: var(--space-1) 0 0; font-size: var(--text-micro); color: var(--text-secondary); overflow-wrap: anywhere; }
+.robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); }
+.robot-list-details { margin-top: var(--space-2); }
 
 .robot-line:focus-visible, .robot-fold:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
@@ -232,27 +234,82 @@
   gap: var(--space-1);
   min-width: 0;
 }
+/* EICAS Top HUD telemetry strip + PFD 3D/uPlot wraps + single-row ND bezel */
+.cockpit-hud {
+  margin-inline-start: auto;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  overflow: hidden;
+  min-width: 0;
+}
+.cockpit-hud-cell { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-1) var(--space-3); min-width: 0; }
+.cockpit-hud-cell + .cockpit-hud-cell { border-inline-start: 1px solid var(--border-subtle); }
+.cockpit-hud-label { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); white-space: nowrap; }
+.cockpit-hud-val { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; }
+.cockpit-hud-cell[data-tone="active"] .cockpit-hud-val { color: var(--series-primary); }
+.cockpit-hud-cell[data-tone="warn"] .cockpit-hud-val { color: var(--status-warn); }
+.cockpit-hud-cell[data-tone="crit"] { background: var(--status-crit-a10); }
+.cockpit-hud-cell[data-tone="crit"] .cockpit-hud-val { color: var(--status-crit); }
+@media (width < 64rem) {
+  .cockpit-hud { margin-inline-start: 0; flex-wrap: wrap; width: 100%; }
+  .cockpit-hud-cell { flex: 1 1 auto; padding: var(--space-1) var(--space-2); }
+}
+
+.robot-panel-status-wrap { display: grid; gap: var(--space-2); min-width: 0; }
+.robot-panel-twin { min-width: 0; }
+.telemetry-chart { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); min-width: 0; }
+.telemetry-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.telemetry-chart-title { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); }
+.telemetry-chart-value { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.telemetry-chart-meta { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.telemetry-chart-plot { min-width: 0; overflow: hidden; }
+.telemetry-chart-plot > div { width: 100%; }
+.telemetry-chart-plot > div > div { position: relative; user-select: none; }
+.telemetry-chart-plot canvas { display: block; width: 100%; height: 100%; }
+
 /* 지도 오버레이 표시 켜기·끄기 툴바 */
 .map-overlay-toggles {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-1) 0 var(--space-2);
+  padding: var(--space-1) 0;
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: var(--space-1);
+  scrollbar-width: none;
 }
 .map-overlay-toggles [data-layer-toggle][aria-pressed="true"] {
   border-color: var(--series-primary);
   color: var(--text-primary);
-  background: var(--surface-raised);
+  background: var(--surface-flat);
 }
 .map-overlay-toggles [data-layer-toggle][aria-pressed="false"] {
   opacity: var(--disabled-opacity);
 }
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  .map-overlay-toggles [data-layer-toggle] {
+    min-width: 0;
+    min-height: var(--target-tool);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-control);
+    font-size: var(--text-micro);
+    font-family: var(--mono);
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+  #fleet-main .panel[aria-labelledby="map-heading"] { padding: var(--space-3); }
+  #fleet-main :is(#map-options, #map-readouts) > summary { min-height: var(--target-tool); padding: var(--space-1) var(--space-2); font-size: var(--text-micro); }
+}
 
 /* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
-.map-stage { position: relative; }
+.map-stage { position: relative; border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-recessed); overflow: hidden; }
 .map-axis-badge,
 .map-cursor-readout {
   position: absolute;

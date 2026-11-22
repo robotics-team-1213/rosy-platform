@@ -48,3 +48,17 @@ a.ui-action-link:active { box-shadow: inset 0 0 0 var(--focus-ring-width) var(--
   .ui-primary-detail[data-open] > section:first-child { display: none; }
   .ui-primary-detail[data-open] > section + section { padding-inline-start: 0; border-inline-start: 0; }
 }
+
+/* C15 3D robot view (robot-3d.js) — tokens only so dark/light WebGL backdrop & selection ring match. */
+.robot-view { margin: 0; display: grid; gap: var(--space-2); min-width: 0; }
+.robot-view-stage { position: relative; width: 100%; aspect-ratio: 16 / 10; min-height: 9rem; background: var(--surface-recessed); border: 1px solid var(--border-default); border-radius: var(--radius-control); overflow: hidden; }
+.robot-view-stage:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.robot-view[data-selected] .robot-view-stage { border-color: var(--selection); box-shadow: inset var(--space-1) 0 0 var(--selection); }
+.robot-view-stage > canvas { display: block; width: 100%; height: 100%; }
+.robot-view-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-1); }
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  .robot-view-presets ui-button { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-1); font-size: var(--text-micro); }
+}
+.robot-view-facts { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; font: var(--weight-medium) var(--text-micro)/var(--leading-compact) var(--mono); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.robot-view-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.robot-view-note { margin: 0; font-size: var(--text-micro); color: var(--text-secondary); }

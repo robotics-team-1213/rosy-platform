@@ -5,8 +5,8 @@
 .device-watch {
   position: absolute;
   z-index: 3;
-  left: var(--space-3);
-  bottom: var(--space-3);
+  top: var(--space-2);
+  right: var(--space-2);
 }
 
 /* 전방 사진은 막힘 큐의 원본을 비추는 구석 그림이다. 지도 칸 안에 둔다. */

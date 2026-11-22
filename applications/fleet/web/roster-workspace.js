@@ -4,11 +4,13 @@
  */
 import { createRobotDock } from "/common/robot-dock.js";
 import { createRobotPanel } from "/common/robot-panel.js";
+import { createRobotView } from "/common/robot-3d.js";
 import { robotProfile } from "/common/robot-profile.js";
 import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { setOff } from "/common/cause-line.js";
 import { node } from "/common/control-dom.js";
 import { cardTripLine } from "./card-trip.js";
+import { createTelemetryTrace } from "./cockpit-telemetry.js";
 import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
 import { powerHealthView } from "./power-health-view.js";
 import { staleAgeS } from "./state-age.js";
@@ -33,6 +35,11 @@ function appendKv(dl, rows) {
 export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl }) {
   const stage = el("robot-stage");
   const frontCamera = createFrontCamera({ call, scope });
+  const statusWrap = document.createElement("div");
+  statusWrap.className = "robot-panel-status-wrap";
+  const twinHost = document.createElement("div");
+  twinHost.className = "robot-panel-twin";
+  const telemetryTrace = createTelemetryTrace();
   const workspaceBox = document.createElement("div");
   workspaceBox.id = "robot-workspace";
   workspaceBox.setAttribute("aria-label", "선택한 로봇의 작업");
@@ -60,6 +67,68 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   let latestRecords = [];
   let openId = null;
   let yieldedForGoal = false;
+  let activeTwinKey = null;
+  let activeTwinView = null;
+
+  function disposeTwin() {
+    activeTwinView?.dispose?.();
+    activeTwinView = null;
+    activeTwinKey = null;
+    twinHost.replaceChildren();
+  }
+
+  function syncTwin(profile, detail) {
+    const nextKey = `${profile.kind}:${profile.id}`;
+    const pose = detail?.robot?.state?.pose;
+    const joints = detail?.anc?.joints;
+    if (activeTwinKey !== nextKey) {
+      disposeTwin();
+      activeTwinKey = nextKey;
+      activeTwinView = createRobotView(twinHost, {
+        kind: profile.kind,
+        profile,
+        name: profile.name,
+        selected: true,
+        selection,
+        robotId: profile.id,
+        pose,
+        joints,
+      });
+    } else {
+      activeTwinView?.setState({ profile, name: profile.name, selected: true, pose, joints });
+    }
+    if (profile.kind === "arm") {
+      const ma = typeof detail?.anc?.current_ma === "number" ? detail.anc.current_ma : null;
+      const temp = typeof detail?.anc?.temp_c === "number" ? detail.anc.temp_c : null;
+      const readout = ma !== null ? `${ma} mA${temp !== null ? ` · ${temp} °C` : ""}` : "—";
+      telemetryTrace.update({
+        id: `arm:${profile.id}`,
+        title: "SERVO · LOAD",
+        readout,
+        value: ma,
+        unit: "mA",
+        tone: detail?.anc?.held ? "warn" : "primary",
+      });
+    } else {
+      const robot = detail?.robot || {};
+      const state = view.stateUnavailable ? {} : (robot.state || {});
+      const pct = robot.online && !view.stateUnavailable ? readBatteryPercent(robot, state) : null;
+      const power = powerHealthView(robot, view.receivedAtMs, Date.now());
+      const readout = pct !== null
+        ? `${Math.round(pct)}%${typeof power.voltage === "number" ? ` · ${power.voltage.toFixed(1)}V` : ""}`
+        : robot.online ? "—" : "오프라인";
+      telemetryTrace.update({
+        id: `batt:${profile.id}`,
+        title: "POWER · BATT",
+        readout,
+        value: pct,
+        unit: "%",
+        minBound: 0,
+        maxBound: 100,
+        tone: pct === null ? "neutral" : pct <= 15 ? "crit" : pct <= 25 ? "warn" : "primary",
+      });
+    }
+  }
 
   const isWide = () => typeof matchMedia !== "function" || matchMedia("(min-width: 64rem)").matches;
 
@@ -143,6 +212,8 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     onClose: () => {
       manualControl.stop();
       frontCamera.stop();
+      disposeTwin();
+      telemetryTrace.clear();
       openId = null;
       dock.setOpen(null);
       if (yieldedForGoal) return;
@@ -154,6 +225,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     },
     sections: {
       status(profile, detail) {
+        syncTwin(profile, detail);
         if (profile.kind === "arm") {
           const { def, anc, cellId } = detail || {};
           appendKv(armStatusBox, [
@@ -163,11 +235,19 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
             ["관절", anc?.joints_summary || EVIDENCE_LABEL.unavailable],
             ["서보", anc?.motor_summary || EVIDENCE_LABEL.unavailable],
           ]);
-          return armStatusBox;
+          const desired = [twinHost, telemetryTrace.root, armStatusBox];
+          if (statusWrap.childElementCount !== desired.length || desired.some((n, i) => statusWrap.children[i] !== n)) {
+            statusWrap.replaceChildren(...desired);
+          }
+          return statusWrap;
         }
         const index = view.robots.findIndex((r) => r.robot_id === profile.id);
         roster.place(workspaceBox, index >= 0 ? [roster.card(view.robots[index], index)] : []);
-        return workspaceBox;
+        const desired = [twinHost, telemetryTrace.root, workspaceBox];
+        if (statusWrap.childElementCount !== desired.length || desired.some((n, i) => statusWrap.children[i] !== n)) {
+          statusWrap.replaceChildren(...desired);
+        }
+        return statusWrap;
       },
       camera(profile, detail) {
         if (profile.kind === "arm") return armCameraHint;
@@ -265,6 +345,8 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     yieldedForGoal = false;
     manualControl.stop();
     frontCamera.stop();
+    disposeTwin();
+    telemetryTrace.clear();
     openId = null;
     dock.setOpen(null);
     panel.setRobot(null);
@@ -285,6 +367,8 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       } else {
         manualControl.stop();
         frontCamera.stop();
+        disposeTwin();
+        telemetryTrace.clear();
         openId = null;
         dock.setOpen(null);
         panel.setRobot(null);
@@ -296,6 +380,8 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     if (isWide() || panel.root.hidden) return;
     yieldedForGoal = true;
     manualControl.stop();
+    disposeTwin();
+    telemetryTrace.clear();
     panel.setRobot(null);
     dock.setOpen(null);
   }
@@ -320,6 +406,8 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   });
   scope.onDispose?.(() => {
     offSelection?.();
+    disposeTwin();
+    telemetryTrace.dispose();
     dock.dispose();
     panel.dispose();
   });

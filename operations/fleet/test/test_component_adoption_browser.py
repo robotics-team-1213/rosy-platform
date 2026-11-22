@@ -76,6 +76,7 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
         mobile_btn.click()
         expect(panel).to_be_visible()
         expect(panel).to_have_attribute("data-robot-id", mobile_id)
+        expect(panel.locator(".robot-panel-twin .robot-view")).to_have_count(1)
         expect(page.locator(f'#robot-workspace article[data-robot-id="{mobile_id}"]')).to_be_visible()
         manual_details = panel.locator('details[data-section="manual"]')
         expect(manual_details).to_have_count(1)
@@ -88,6 +89,7 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
         arm_btn.click()
         expect(panel).to_have_attribute("data-robot-id", "arm_a")
         expect(panel).to_have_attribute("data-kind", "arm")
+        expect(panel.locator(".robot-panel-twin .robot-view")).to_have_count(1)
         assert panel.locator('details[data-section="manual"]').count() == 0
         expect(panel.locator('a[href="/console/cell"]')).to_have_count(1)
 
