@@ -14,6 +14,8 @@ import build_payload_release
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_NATIVE = "deploy/robot/native/"
+# OMX's git-archive updater installs deploy/robot/omx/ directly, whereas Pinky native payloads must use deploy/robot/native/.
+RELEASE_LAYOUT_PREFIXES = (RELEASE_NATIVE, "deploy/robot/omx/")
 INTO_RELEASE = re.compile(
     r"""opt/rosy/(?:current|releases/[^/\s"']+)/(deploy/[^\s"'`)]+)"""
     r"""|release(?:_dir)? / "(deploy/[^"]+)\"""")
@@ -32,6 +34,14 @@ def test_payload_builder_uses_the_release_native_folder():
     assert '"$RELEASE_ROOT/deploy/robot/native"' in builder
 
 
+def _invalid_release_targets(text: str) -> list[str]:
+    return [
+        match.group(0)
+        for match in INTO_RELEASE.finditer(text)
+        if not ((match.group(1) or match.group(2)).rstrip("/") + "/").startswith(RELEASE_LAYOUT_PREFIXES)
+    ]
+
+
 def test_every_on_device_release_path_uses_the_release_layout():
     wrong = []
     for path in _deploy_files():
@@ -39,8 +49,11 @@ def test_every_on_device_release_path_uses_the_release_layout():
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        for match in INTO_RELEASE.finditer(text):
-            target = (match.group(1) or match.group(2)).rstrip("/") + "/"
-            if not target.startswith(RELEASE_NATIVE):
-                wrong.append(f"{path.relative_to(ROOT).as_posix()}: {match.group(0)}")
+        wrong.extend(f"{path.relative_to(ROOT).as_posix()}: {hit}" for hit in _invalid_release_targets(text))
     assert not wrong, wrong
+
+
+def test_pinky_pro_repo_path_is_still_rejected_while_omx_updater_root_is_allowed():
+    prefix = "deploy/robot"
+    assert _invalid_release_targets(f"opt/rosy/current/{prefix}/pinky_pro/rosy-core.service")
+    assert _invalid_release_targets(f'release / "{prefix}/omx/cell_collect_plan.py"') == []
