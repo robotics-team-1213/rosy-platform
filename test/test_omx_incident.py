@@ -645,4 +645,38 @@ def test_verified_baseline_caps_releases_clean_folded_arm_without_human_hold(tmp
     assert oi.held("arm_b") is None
 
 
+def test_report_for_filters_non_contract_wrist_still_and_duplicate_roles(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    oi.STILLS.mkdir(parents=True)
+    top = oi.STILLS / "arm_s-top.jpg"
+    wrist = oi.STILLS / "arm_s-wrist.jpg"
+    top_dup = tmp_path / "extra-top.jpg"
+    top.write_bytes(b"\xff\xd8" + b"top" * 10)
+    wrist.write_bytes(b"\xff\xd8" + b"wrist" * 10)
+    top_dup.write_bytes(b"\xff\xd8" + b"dup" * 10)
+
+    s = session(tmp_path, latched=False, windup=False, status=[
+        {"command": "human-hold", "fault": "human hold", "person_needed": True, "t": 150.0},
+    ])
+    for p in (tmp_path / "faults").glob("*"):
+        p.unlink()
+
+    link = Link()
+    out = oi.handle(s, "arm_s", link=link)
+    assert out["reported"] is True
+    assert len(link.posted) == 1
+    assert [f.role for f in link.posted[0].frames] == ["top"]
+    assert sorted(Path(p).name for p in out["facts"]["frames"]) == ["arm_s-top.jpg", "arm_s-wrist.jpg"]
+
+    report = oi.report_for(
+        "omx_arm_s",
+        SID,
+        {"safe_end": True, "latched": {}, "windup_hits": [], "fault_records": [],
+         "frames": [str(wrist), str(top), str(top_dup)]},
+        {"hold": True, "actions": [], "offered": [], "reason": "human hold"},
+        None,
+    )
+    assert len(report.frames) == 1 and report.frames[0].role == "top"
+
+
 

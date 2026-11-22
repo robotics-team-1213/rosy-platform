@@ -129,3 +129,29 @@ def test_wrist_finger_color_and_grasp_stability_params_validate():
     }
     vals = prm.validate(data)
     assert vals["wrist.finger_color"] == 1 and vals["grasp.min_stable_current_ma"] == 80.0
+
+
+def test_live_bench_cell_params_keys_validate():
+    data = {
+        "schema": prm.SCHEMA,
+        "params": {
+            "objects.hue_split_tol": {"value": 8, "unit": "hue", "source": "measured", "evidence": "2026-11-18 split multi-colour touching boxes"},
+            "wrist.jaw_edge_px": {"value": 120, "unit": "px", "source": "tuned", "evidence": "2026-11-17 hover scaled x0.8"},
+            "wrist.edge_goal_px": {"value": 192, "unit": "px", "source": "tuned", "evidence": "2026-11-17 hover scaled x0.8"},
+            "wrist.edge_unseen_ok": {"value": 1, "unit": "flag", "source": "measured", "evidence": "2026-11-19 arm_s Pinky hover edge fallback"},
+            "calibrate.remap_depth_unknown_blocks": {"value": 0, "unit": "flag", "source": "measured", "evidence": "2026-11-21 D435 dark board NaN holes"},
+            "calibrate.remap_depth_veto": {"value": 0, "unit": "flag", "source": "measured", "evidence": "2026-11-21 D435 unverified height frame"},
+            "calibrate.remap_foreground_blocks": {"value": 0, "unit": "flag", "source": "measured", "evidence": "2026-11-21 stale reference after move"},
+        },
+    }
+    vals = prm.validate(data)
+    assert vals["objects.hue_split_tol"] == 8 and vals["wrist.edge_unseen_ok"] == 1
+    assert vals["calibrate.remap_foreground_blocks"] == 0
+    bad_hue = copy.deepcopy(data)
+    bad_hue["params"]["objects.hue_split_tol"]["value"] = 31
+    with pytest.raises(ValueError, match="outside"):
+        prm.validate(bad_hue)
+    bad_flag = copy.deepcopy(data)
+    bad_flag["params"]["calibrate.remap_depth_veto"]["value"] = 2
+    with pytest.raises(ValueError, match="outside"):
+        prm.validate(bad_flag)
