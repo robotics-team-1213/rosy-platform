@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 import pytest
 import uvicorn
 from browser_harness import browser_tests_enabled, open_page, safe_listener
+from fleet_cockpit_browser import select_robot
 
 from fakes import FakeRobot
 from fleet.server.app import create_app
@@ -785,7 +786,7 @@ def test_compact_robot_list_keeps_all_four_safety_exceptions_visible_beside_the_
             must = page.locator(f'#roster article[data-robot-id="{robot_id}"]')
             expect(must).to_contain_text(evidence)
             assert must.locator(".robot-fold").count() == 0, robot_id
-        card.locator("[data-select-robot-id]").click()
+        select_robot(page, "nominal")
         page.clock.run_for(1500)
         expect(page.locator('#robot-workspace article[data-robot-id="nominal"]')).to_have_count(1)
         expect(page.locator('#roster article[data-robot-id="calib"]')).to_contain_text("kim")

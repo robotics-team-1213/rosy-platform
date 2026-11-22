@@ -5,6 +5,7 @@ import { createFormation } from "./formation.js";
 import { motionCommandReason } from "./motion-readiness.js";
 import { createMapView } from "./map-view.js";
 import { createRoster } from "./roster.js";
+import { createRosterWorkspace } from "./roster-workspace.js";
 import { createManualControl } from "./manual-control.js";
 import { cardTripLine, placeOptions } from "./card-trip.js";
 import { createInboxPanel } from "./inbox.js";
@@ -27,6 +28,7 @@ import { createDeviceDiscovery } from "/console/assets/device-discovery.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { confirmIrreversible } from "/common/ui.js";
+import { createSelection } from "/common/selection.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
@@ -74,11 +76,7 @@ const raised = area.get("view") !== "records" ? el(area.get("show") === "new" ? 
 layoutPanels.push(raised);
 if (areaNav) raised.dataset.raised = "";
 const inbox = createInboxPanel({scope: pageScope, el, readView: () => view, isLocked: () => auth.locked});
-pageScope.listen(el("focus-robot-choice"), "click", () => {
-  inbox.select("status");
-  el("robot-choice").scrollIntoView({block: "center"});
-  el("robot-choice").focus({preventScroll: true});
-});
+const selection = createSelection(null);
 if (!raised.id.startsWith("work-")) {
   layoutPanels[MAP_PANEL].hidden = true;
   el("incident-side").hidden = false;
@@ -128,7 +126,7 @@ function operatorControls() {
   // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling), 지도 오버레이 토글([data-layer-toggle])은 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not([data-layer-toggle]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#queues-close):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#robot-choice):not(#map-display-mode):not([data-work-read])");
+    "ui-button:not(#estop):not([data-auth-focus]):not(.robot-panel-close):not([data-always-live]):not([data-work-read]):not([data-layer-toggle]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#queues-close):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#map-display-mode):not([data-work-read]), .robot-panel input:not(#arm-transfer-id), .robot-panel select:not([data-work-read])");
 }
 
 const view = {
@@ -190,7 +188,7 @@ const assistant = createAssistantPanel({scope: pageScope, call, el, readSelectio
 const { cancelAllNotice, refreshDispatchControl, pathSample, paintSitePath, refreshHealthz, refreshState } = createConsoleRefresh({
   pageScope, el, view, auth, call, fleetApi, log, render, confirmedAction, dispatchGate, resetRobotApps,
   disarmGoal: (reason) => disarmGoal(reason),
-  openCard: (robotId) => roster.openCard(robotId),
+  openCard: (robotId) => rosterWorkspace.open(robotId),
   onFastTick: () => { manualControl.update(); mapView.draw(); },
 });
 
@@ -236,7 +234,7 @@ function render() {
       rosterBox.replaceChildren(empty);
     }
   }
-  roster.workspace();
+  rosterWorkspace.sync();
   manualControl.update();
   if (focusedId && document.activeElement !== focused) {  // a kept workspace picker still has it
     const nextCard = [...focusedBox.querySelectorAll("article")]
@@ -283,13 +281,14 @@ function resetRobotApps() { deviceDirectory.resetRobotApps(); }
 // 로스터 키보드·지도 목표 지정·운영자 핀은 console-goal.js 팩토리가 가진다(D-798 3.2).
 // 지도 좌표와 큐 사유는 아래의 mapView·roster가 답하므로 부를 때 찾는다.
 const { disarmGoal, focusGoalButton, commitWorldGoal, clearPinStart } = createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
-  render, confirmedAction, namedReason,
+  render, confirmedAction, namedReason, selection,
   toWorld: (grid, col, row) => mapView.toWorld(grid, col, row),
   refreshGuide: () => mapView.refreshGuide?.(),
   queuedReason: (result) => roster.queuedReason(result),
   drawMap: () => mapView.draw(),
   scheduleDraw: () => mapView.scheduleDraw(),
   onSelectRobot: (robotId) => roster.openCard(robotId),
+  onGoalFinished: (robotId) => rosterWorkspace.restoreAfterGoal(robotId),
 });
 view.dispatchGoalToPoint = (point, placeLabel = "", placeId = "") => commitWorldGoal(point, placeLabel, placeId);
 
@@ -320,19 +319,15 @@ const mapView = createMapView({ scope: pageScope,
 
 // Fleet 분해 3: 명렬 카드와 큐는 roster.js 팩토리가 그린다.
 // D-410 — 주소 이동 조작은 설치 화면이 소유해서 moveAddress 훅을 주지 않는다.
-const roster = createRoster({ scope: pageScope, el, view, log, call, render,
+const roster = createRoster({ scope: pageScope, el, view, log, call, render, selection,
   streamEvidence: mapView.streamEvidence, isOperator: () => hasOperatorRole(auth.role), namedReason, confirmedAction,
+  onGoalArmed: () => rosterWorkspace.yieldSheetForGoal(),
   onSelectionChanged: () => { clearPinStart(); } });
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
-// Wide tier: above the assignment card, so drive stays on the first screen. Phones reorder it below the card (roster.css).
-document.querySelector(".workspace-heading").before(manualControl.root);
-if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
-  roster.openCard(el("robot-choice").value || null);
-  render();
-});
-view.focusRobotWorkspace = (robotId) => roster.openCard(robotId);
+const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl });
+view.focusRobotWorkspace = (robotId) => rosterWorkspace.open(robotId);
 view.openFormationWorkspace = () => {
   confirmedAction.cancel(); roster.closeTrip(); view.pinning = null; clearPinStart();
   if (view.selected) disarmGoal('대형 관리로 목표 지정 취소');
@@ -341,7 +336,7 @@ view.openFormationWorkspace = () => {
   const heading = el('formation-heading'); heading.tabIndex = -1;
   heading.focus({preventScroll: false});
 };
-view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openTrip(robotId); render(); };
+view.openLeaderTrip = (robotId) => { rosterWorkspace.open(robotId); roster.openTrip(robotId); render(); };
 // D-763 6·9 — 새 작업의 이동은 로봇 카드의 운행 폼(card-trip.js) 그 자체다: 같은 계획·시작 요청, 같은 거절.
 // 이동이 종류 목록에 서는지는 서버의 종류 목록이 정한다(work-view.js showKinds, D-763 9). 꺼진 단추로 보이지 않는다.
 function paintMove() {
@@ -369,7 +364,7 @@ const personRequests = createPersonRequests({ scope: pageScope, view, call, log,
   isOperator: () => hasOperatorRole(auth.role), namedReason });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
   isOperator: () => hasOperatorRole(auth.role), namedReason,
-  openCard: (robotId) => { roster.openCard(robotId); render(); } });
+  openCard: (robotId) => { rosterWorkspace.open(robotId); } });
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
 function refreshDiagnostics() {
@@ -401,7 +396,7 @@ mapView.bindCamera(visionView);
 
 // --- 신호등 (ROSY-SIGNAL-001) --------------------------------------------------
 
-const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction });
+const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, confirmedAction, selection });
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.draw() });
 const trackingView = {
@@ -415,6 +410,7 @@ const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = creat
   trackingView, mapView, formation, dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
   refreshRobotApps, refreshDispatchControl, refreshDiscovery, inbox,
   refreshVision: () => (owns("drive") ? visionView.refreshSources() : undefined),
+  onLock: () => rosterWorkspace.close(),
   clearVisionSample: () => { pathSample.vision = null; paintSitePath(); } });
 
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
