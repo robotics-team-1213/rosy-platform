@@ -313,7 +313,8 @@ def external_gpu_locks(jobs_dir: Path | None) -> list[str]:
         if lp.is_symlink() or not lp.is_file():
             continue
         try:
-            pid = int(lp.read_bytes()[:32].decode("ascii", errors="ignore").strip().splitlines()[0])
+            tokens = lp.read_bytes()[:64].decode("ascii", errors="ignore").split()
+            pid = int(tokens[0])
         except (OSError, IndexError, ValueError):
             continue
         if pid <= 0:

@@ -490,3 +490,23 @@ def test_canonical_watch_and_token_hardening(tmp_path):
         mode_tok.chmod(0o644)
         with pytest.raises(ValueError, match="permissions"):
             ct.load_peer_token(mode_tok)
+
+    # Real hold_gpu.sh lock format is "<pid> gpu 4 8" (additional tokens after PID).
+    jobs_dir = tmp_path / "rosy_jobs_fmt"
+    jobs_dir.mkdir()
+    (jobs_dir / f"train-{os.getpid()}.lock").write_text(f"{os.getpid()} gpu 4 8\n", encoding="utf-8")
+    assert ct.external_gpu_locks(jobs_dir) == [f"external:train-{os.getpid()}"]
+
+    # Non-path keys holding host paths (e.g. replay summary.checkpoint) must scrub path values while keeping step IDs.
+    replay_watch = tmp_path / "replay_watch"
+    (replay_watch / "arm_b_ladder").mkdir(parents=True)
+    (replay_watch / "arm_b_ladder" / "replay-s06-002500.json").write_text(json.dumps({
+        "summary": {
+            "checkpoint": "/home/rosy/rosy-scratch/mix-1122-canon/arm_b/train/checkpoints/002500/pretrained_model",
+            "step_id": "002500",
+        },
+    }), encoding="utf-8")
+    scanned = cw.scan_watch_dir(replay_watch, {"id": "mp_canon", "label": "MP", "host_id": "model"})
+    summary = scanned["eval_ladder"][0]["summary"]
+    assert "/home/" not in json.dumps(scanned)
+    assert summary["checkpoint"] == "<path>" and summary["step_id"] == "002500"

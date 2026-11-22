@@ -175,6 +175,8 @@ def strip_paths(value):
         }
     if isinstance(value, list):
         return [strip_paths(item) for item in value]
+    if isinstance(value, str) and (_POSIX_PATH_RE.search(value) or _WIN_PATH_RE.search(value)):
+        return scrub_text(value, max_chars=256)
     return value
 
 
