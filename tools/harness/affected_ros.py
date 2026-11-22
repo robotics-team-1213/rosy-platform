@@ -64,6 +64,8 @@ def consolidate(entries: list[dict], seconds: dict[str, int]) -> list[dict]:
                      and o[1] + w <= cap), None)
         if host:
             host[0]["invocations"] = [*host[0]["invocations"], *entry["invocations"]]
+            if entry.get("git_history"):
+                host[0]["git_history"] = True
             out[out.index(host)] = (host[0], host[1] + w)
         else:
             out.append((dict(entry), w))

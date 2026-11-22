@@ -13,6 +13,10 @@ permissions:
   contents: read
   pull-requests: write   # request review from the people whose files overlap
 
+concurrency:
+  group: review-gate-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   review-gate:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
@@ -23,6 +27,8 @@ jobs:
         if: github.event_name != 'merge_group'
         with:
           fetch-depth: 0
+          fetch-tags: false
+          filter: blob:none
       # Run the base branch's gate so a PR cannot loosen its own check; gate edits take effect once merged.
       - if: github.event_name != 'merge_group'
         run: |

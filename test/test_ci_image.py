@@ -17,10 +17,9 @@ def _jobs():
 
 def test_ci_jobs_run_in_the_prebuilt_image_pinned_by_digest():
     jobs = _jobs()
-    for name in ("scope", "test"):
-        image = jobs[name]["container"]["image"].split()[0]
-        assert IMAGE.match(image), f"{name}: pin the CI image by digest, not a tag: {image}"
-    assert jobs["scope"]["container"]["image"] == jobs["test"]["container"]["image"]
+    assert "container" not in jobs["scope"], "scope runs bare on ubuntu-26.04 without pulling rosy-ci"
+    image = jobs["test"]["container"]["image"].split()[0]
+    assert IMAGE.match(image), f"test: pin the CI image by digest, not a tag: {image}"
 
 
 def test_test_jobs_install_no_apt_packages_and_never_apt_get_update():

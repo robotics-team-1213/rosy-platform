@@ -761,3 +761,53 @@ def test_ci_splits_fleet_non_browser_and_parallelizes_safe_multi_file_browsers(m
     assert "ROSY_RUN_BROWSER_TESTS" not in app_calls[0][1] and "-n" in app_calls[0][0]
     assert app_calls[1][1]["ROSY_RUN_BROWSER_TESTS"] == "1"
     assert "ROSY_BROWSER_STRICT" not in app_calls[1][1]
+
+
+def test_ci_scope_bare_partial_clone_and_test_tiered_checkout_and_caches():
+    import yaml
+
+    ci = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    scope_job = ci["jobs"]["scope"]
+    assert "container" not in scope_job
+    scope_steps = {s["name"]: s for s in scope_job["steps"]}
+    assert scope_steps["Checkout"]["with"] == {"fetch-depth": 0, "fetch-tags": False, "filter": "blob:limit=256k"}
+    assert scope_steps["Cache scope Python tools"]["with"]["path"] == "/tmp/rosy-scope-tools"
+
+    test_steps = {s["name"]: s for s in ci["jobs"]["test"]["steps"]}
+    assert test_steps["Checkout"]["with"] == {"fetch-depth": "${{ !matrix.git_history && 1 || 0 }}", "fetch-tags": False}
+
+    digest = re.search(r"rosy-ci@sha256:([0-9a-f]{64})", ci["jobs"]["test"]["container"]["image"]).group(1)
+    rosidl_cache = test_steps["Cache ROS interfaces overlay"]
+    assert f"{digest[:12]}-rosidl-${{{{ hashFiles('contracts/ros_idl/**') }}}}" in rosidl_cache["with"]["key"]
+    assert "build/interfaces" in rosidl_cache["with"]["path"] and "install/interfaces" in rosidl_cache["with"]["path"]
+    assert "--packages-skip interfaces" in test_steps["Build (colcon)"]["run"]
+    assert "rm -rf build/interfaces install/interfaces" in test_steps["Build (colcon)"]["run"]
+    assert test_steps["Cache Pinky CPU torch tools"]["with"]["path"] == "/tmp/rosy-pinky-torch"
+
+    wheel_cmd = re.compile(r"pip3 wheel [^\n]*?((?:contracts|operations|middleware|integrations|applications)/\S+(?:\s+(?:contracts|operations|middleware|integrations|applications)/\S+)+)")
+    scope_pkgs = next(p for s in scope_job["steps"] if "Build ROS-free" in s["name"] for p in [re.findall(r"(?:contracts|operations|middleware|integrations|applications)/[a-z_/]+", s["run"])])
+    test_pkgs = wheel_cmd.search(test_steps["Build and install ROS-free platform API wheels"]["run"].replace("\\\n", " ")).group(1).split()
+    rolling = yaml.safe_load((ROOT / ".github" / "workflows" / "rolling-sweep.yml").read_text(encoding="utf-8"))
+    roll_plan_pkgs = next(re.findall(r"(?:contracts|operations|middleware|integrations|applications)/[a-z_/]+", s["run"]) for s in rolling["jobs"]["plan-sweep"]["steps"] if "Build ROS-free" in s["name"])
+    roll_run_pkgs = wheel_cmd.search(next(s["run"] for s in rolling["jobs"]["run-shard"]["steps"] if "Build platform wheels" in s["name"])).group(1).split()
+    assert scope_pkgs == test_pkgs == roll_plan_pkgs == roll_run_pkgs
+    assert "rm -rf build/interfaces install/interfaces" in next(s["run"] for s in rolling["jobs"]["run-shard"]["steps"] if "Build platform wheels" in s["name"])
+
+    rg = yaml.safe_load((ROOT / ".github" / "workflows" / "review-gate.yml").read_text(encoding="utf-8"))
+    assert rg["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+    rg_co = next(s["with"] for s in rg["jobs"]["review-gate"]["steps"] if "uses" in s and "actions/checkout" in s["uses"])
+    assert rg_co == {"fetch-depth": 0, "fetch-tags": False, "filter": "blob:none"}
+
+
+def test_container_test_jobs_mark_safe_directory_in_system_gitconfig():
+    import yaml
+
+    # conftest.py:isolate_worker overrides HOME per xdist worker (-n auto), hiding --global safe.directory.
+    ci = yaml.safe_load(WORKFLOW.read_text(encoding="utf8"))["jobs"]
+    rolling = yaml.safe_load((ROOT / ".github" / "workflows" / "rolling-sweep.yml").read_text(encoding="utf8"))["jobs"]
+    system_cmd = 'git config --system --add safe.directory "${GITHUB_WORKSPACE}"'
+    for job in (ci["test"], rolling["run-shard"]):
+        step = next(s for s in job["steps"] if s.get("name") == "Fix git safe directory (container)")
+        assert system_cmd in step["run"]
+    scope_step = next(s for s in ci["scope"]["steps"] if s.get("name") == "Fix git safe directory (container)")
+    assert "--system" not in scope_step["run"] and 'safe.directory "${GITHUB_WORKSPACE}"' in scope_step["run"]
