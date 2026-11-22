@@ -326,6 +326,7 @@
   }
   #fleet-main .panel[aria-labelledby="map-heading"] { padding: var(--space-1) var(--space-2); }
   #fleet-main .panel[aria-labelledby="map-heading"] .map-head { flex-wrap: nowrap; gap: var(--space-1) var(--space-2); margin-bottom: var(--space-1); }
+  #fleet-main .panel[aria-labelledby="map-heading"] .map-head > div:first-child { flex: none; }
   #fleet-main .panel[aria-labelledby="map-heading"] .map-head h2 { margin: 0; font-size: var(--text-body); white-space: nowrap; }
   #fleet-main .panel[aria-labelledby="map-heading"] .map-head label[for="map-display-mode"] { font-size: var(--text-micro); white-space: nowrap; }
   #fleet-main .map-overlay-toggles { padding: 0 0 var(--space-1); margin-bottom: 0; }
