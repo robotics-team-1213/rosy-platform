@@ -13,7 +13,7 @@ import shutil
 from signing import verify_signature
 from auto_update_host import (BACKOFF_DEFAULT_S, BACKOFF_MAX_S, BACKOFF_MIN_S, Definitive, DISK_MARGIN_BYTES,
     MAX_LIST_BYTES, MAX_ROLLOUT_BYTES, MAX_SIG_BYTES, MAX_TARBALL_BYTES, _number, _outcome, parse_z, RELEASES,
-    STAGE_BACKOFF_BASE_S, STAGE_MAX_DEFINITIVE, TAG, _tail, TRUSTED_KEY, UNPACK_TIMEOUT_S, UpdateError,
+    STAGE_BACKOFF_BASE_S, STAGE_MAX_DEFINITIVE, STEP_PROGRESS, TAG, _tail, TRUSTED_KEY, UNPACK_TIMEOUT_S, UpdateError,
     VERIFY_TIMEOUT_S, _z)
 
 
@@ -207,50 +207,67 @@ class UpdaterStage:
     def _stage_once(self, state: dict, release: dict, rollout: dict) -> None:
         release_id = release["release_id"]
         delta = None
-        if not Path(self.release_path(release_id)).is_dir():
-            delta = self._delta_transport(release, rollout)
-            size = release.get("size") or 0
-            need = 2 * size + DISK_MARGIN_BYTES
-            free = self.host.free_bytes(self.root / RELEASES)
-            if free < need:
-                raise UpdateError(f"DISK_LOW: {free} bytes free, {need} needed for {release_id}")
-            downloads = self._clean_downloads()
-            part = downloads / f"{release_id}.tar.gz.part"
-            tarball = downloads / f"{release_id}.tar.gz"
-            try:
-                digest = self.http.download(release["delta"] if delta else release["tarball"], part,
-                                            delta["size"] if delta else MAX_TARBALL_BYTES)
-            except UpdateError:
-                part.unlink(missing_ok=True)
-                raise
-            if digest != (delta["sha256"] if delta else rollout["tarball_sha256"]) or (
-                    delta and part.stat().st_size != delta["size"]):
-                part.unlink(missing_ok=True)
-                raise Definitive(f"TARBALL_SHA256_MISMATCH: {release_id} got {digest}")
-            os.replace(part, tarball)
-            environment = (["env", f"ROSY_DELTA_BASE_ID={delta['base_release_id']}",
-                            f"ROSY_DELTA_BASE_SUMS={delta['base_sums_sha256']}",
-                            f"ROSY_DELTA_TARGET_SUMS={delta['target_sums_sha256']}"] if delta else [])
-            unpacked = self.host.run([*environment, "bash", self._native("rosy-release-unpack.sh"), release_id,
-                                      str(tarball), self._dev(RELEASES)], UNPACK_TIMEOUT_S)
-            tarball.unlink(missing_ok=True)  # the script removes it on success
-            if unpacked.returncode != 0:
-                error = f"UNPACK_FAILED: {_tail(unpacked.stderr or unpacked.stdout)}"
-                raise UpdateError(error) if unpacked.returncode in (124, 127) else Definitive(error)
-        verified = self.host.run(["python3", "-B", self._native("native_release.py"), "--root", str(self.root),
-                                  "--public-key", self._dev(TRUSTED_KEY), "verify", "--release-id", release_id],
-                                 VERIFY_TIMEOUT_S)
-        kind, error = _outcome(verified)
-        if kind == "definitive":
-            # Review H3: only a JSON verdict from the verifier fails the release.
-            self._mark_failed(state, release_id, f"verify: {error}")
-            raise UpdateError(f"VERIFY_FAILED: {release_id}: {error}")
-        if kind != "ok":
-            raise UpdateError(f"VERIFY_TRANSIENT: {release_id}: {error}")
-        if rollout.get("delta") is not None:
-            sums = Path(self.release_path(release_id)) / "SHA256SUMS"
-            if hashlib.sha256(sums.read_bytes()).hexdigest() != rollout["delta"]["target_sums_sha256"]:
-                raise Definitive("DELTA_TARGET_MISMATCH: full target checksum identity differs")
+        try:
+            if not Path(self.release_path(release_id)).is_dir():
+                delta = self._delta_transport(release, rollout)
+                size = release.get("size") or 0
+                need = 2 * size + DISK_MARGIN_BYTES
+                free = self.host.free_bytes(self.root / RELEASES)
+                if free < need:
+                    raise UpdateError(f"DISK_LOW: {free} bytes free, {need} needed for {release_id}")
+                downloads = self._clean_downloads()
+                part = downloads / f"{release_id}.tar.gz.part"
+                tarball = downloads / f"{release_id}.tar.gz"
+                total = delta["size"] if delta else release.get("size")
+                last_pct = object()
+
+                def report_download(downloaded: int) -> None:
+                    nonlocal last_pct
+                    pct = min(45, max(0, int(downloaded * 45 // total))) if total and total > 0 else None
+                    if pct != last_pct:
+                        last_pct = pct
+                        self._write_progress(state, "staging", "download", release_id, pct)
+
+                report_download(0)
+                try:
+                    digest = self.http.download(release["delta"] if delta else release["tarball"], part,
+                                                delta["size"] if delta else MAX_TARBALL_BYTES,
+                                                on_progress=report_download)
+                except UpdateError:
+                    part.unlink(missing_ok=True)
+                    raise
+                if digest != (delta["sha256"] if delta else rollout["tarball_sha256"]) or (
+                        delta and part.stat().st_size != delta["size"]):
+                    part.unlink(missing_ok=True)
+                    raise Definitive(f"TARBALL_SHA256_MISMATCH: {release_id} got {digest}")
+                os.replace(part, tarball)
+                self._write_progress(state, "staging", "unpack", release_id, STEP_PROGRESS["unpack"])
+                environment = (["env", f"ROSY_DELTA_BASE_ID={delta['base_release_id']}",
+                                f"ROSY_DELTA_BASE_SUMS={delta['base_sums_sha256']}",
+                                f"ROSY_DELTA_TARGET_SUMS={delta['target_sums_sha256']}"] if delta else [])
+                unpacked = self.host.run([*environment, "bash", self._native("rosy-release-unpack.sh"), release_id,
+                                          str(tarball), self._dev(RELEASES)], UNPACK_TIMEOUT_S)
+                tarball.unlink(missing_ok=True)  # the script removes it on success
+                if unpacked.returncode != 0:
+                    error = f"UNPACK_FAILED: {_tail(unpacked.stderr or unpacked.stdout)}"
+                    raise UpdateError(error) if unpacked.returncode in (124, 127) else Definitive(error)
+            self._write_progress(state, "staging", "verify", release_id, STEP_PROGRESS["verify"])
+            verified = self.host.run(["python3", "-B", self._native("native_release.py"), "--root", str(self.root),
+                                      "--public-key", self._dev(TRUSTED_KEY), "verify", "--release-id", release_id],
+                                     VERIFY_TIMEOUT_S)
+            kind, error = _outcome(verified)
+            if kind == "definitive":
+                # Review H3: only a JSON verdict from the verifier fails the release.
+                self._mark_failed(state, release_id, f"verify: {error}")
+                raise UpdateError(f"VERIFY_FAILED: {release_id}: {error}")
+            if kind != "ok":
+                raise UpdateError(f"VERIFY_TRANSIENT: {release_id}: {error}")
+            if rollout.get("delta") is not None:
+                sums = Path(self.release_path(release_id)) / "SHA256SUMS"
+                if hashlib.sha256(sums.read_bytes()).hexdigest() != rollout["delta"]["target_sums_sha256"]:
+                    raise Definitive("DELTA_TARGET_MISMATCH: full target checksum identity differs")
+        finally:
+            self._update_marker(None)
 
     def _gate(self, rollout: dict) -> str | None:
         if self.host.hostname() in rollout["canary"]:

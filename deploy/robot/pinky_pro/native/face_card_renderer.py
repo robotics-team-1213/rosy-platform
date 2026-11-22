@@ -19,8 +19,13 @@ def card_renderer(info_screen) -> Callable[[dict], object]:
         elif kind == "light":
             image = info_screen.render_light_assist()
         elif kind == "update":
-            image = info_screen.render_notice("Updating", [f"to {screen.get('release') or '?'}",
-                                                           f"now {card.get('release_id') or '?'}"], frame=frame)
+            if hasattr(info_screen, "render_update"):
+                image = info_screen.render_update(
+                    screen.get("release"), card.get("release_id"),
+                    step=screen.get("step"), percent=screen.get("percent"), frame=frame)
+            else:
+                image = info_screen.render_notice("Updating", [f"to {screen.get('release') or '?'}",
+                                                               f"now {card.get('release_id') or '?'}"], frame=frame)
         elif kind == "shutdown":
             image = info_screen.render_notice(str(card.get("shutdown_title") or "Shutting down"),
                                               [str(card.get("device_name") or "")])

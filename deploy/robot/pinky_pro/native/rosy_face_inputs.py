@@ -146,7 +146,8 @@ def read_update(root: Path, wall: float) -> dict | None:
     if not lines or not re.fullmatch(r"[a-z-]{1,32}", lines[0]):
         return None
     release = lines[1] if len(lines) > 1 and RELEASE_ID.fullmatch(lines[1]) else None
-    return {"step": lines[0], "release": release}
+    pct = int(lines[2]) if len(lines) > 2 and re.fullmatch(r"(?:100|[1-9]?[0-9])", lines[2]) else None
+    return {"step": lines[0], "release": release, "percent": pct}
 
 
 def chip_label(path: str = GPIOCHIP) -> str | None:

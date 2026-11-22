@@ -20,6 +20,7 @@ from .lcd_primitives import (  # noqa: F401 - preserve renderer exports
     ap_qr, _draw_qr, to_panel,
 )
 from .light_assist import render_light_assist as render_light_assist
+from .update_card import render_update as _render_update
 
 
 @dataclass(frozen=True)
@@ -479,6 +480,13 @@ def render_notice(title: str, lines: list[str], size: tuple[int, int] = DEFAULT_
         draw.text((16, y), text, font=font, fill=_MUTED)
         y += 28
     return image
+
+
+def render_update(release: str | None, current: str | None, *, step: str | None = None,
+                  percent: int | None = None, size: tuple[int, int] = DEFAULT_SIZE,
+                  frame: int = 0) -> Image.Image:
+    return _render_update(release, current, step=step, percent=percent, size=size,
+                          frame=frame, palette=(_BG, _FG, _MUTED, _WARN), dim=_dim)
 
 
 _IDENTIFY_STYLES = {
