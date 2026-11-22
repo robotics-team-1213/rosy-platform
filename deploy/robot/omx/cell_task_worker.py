@@ -33,6 +33,10 @@ from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen,
     make_default_request_fn, peer_ab_session_locked, query_safety_listing, resolve_task_arm,
 )
+from cell_task_transport import (
+    SAFETY_EXPLICIT_STOP, SAFETY_FEED_UNAVAILABLE, SAFETY_OK,
+    classify_safety_listing, select_arms_for_feed_loss, send_human_hold_to_arms,
+)
 
 ensure_omx_paths()
 
@@ -73,36 +77,16 @@ def execute_live_hardware_arm(
     raise RuntimeError("legacy_jog_executor_disabled: measured task executor required")
 
 
-def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, dict[str, Any]]:
+def emergency_stop_arms(
+    prep_dir: Path = DEFAULT_PREP_DIR,
+    *,
+    arms: set[str] | None = None,
+) -> dict[str, dict[str, Any]]:
     """Latch active runners at their present pose and report command acknowledgements."""
-    acknowledgements: dict[str, dict[str, Any]] = {}
-    pending: list[tuple[str, Path, int]] = []
-    for _, (suffix, _, _) in ARM_WRAPPERS.items():
-        for io_name in (f"chunk-io-{suffix}", f"chunk-io-{suffix}-r2s"):
-            io_dir = prep_dir / io_name
-            cmd_fifo = io_dir / "chunk-cmd"
-            if cmd_fifo.exists():
-                status_file = io_dir / "chunk-status.jsonl"
-                try:
-                    cursor = len(status_file.read_text(errors="replace").splitlines()) if status_file.exists() else 0
-                    fd = os.open(str(cmd_fifo), os.O_WRONLY | os.O_NONBLOCK)
-                    try:
-                        os.write(fd, b"human-hold\n")
-                    finally:
-                        os.close(fd)
-                    pending.append((io_name, status_file, cursor))
-                except (OSError, ValueError):
-                    acknowledgements[io_name] = {"ok": False, "error": "human_hold_command_failed"}
-    for io_name, status_file, cursor in pending:
-        try:
-            ack, _ = _poll_status_ack(status_file, cursor, "human-hold", 2.0)
-            acknowledgements[io_name] = ack if (ack.get("command") == "human-hold" and
-                ack.get("ok") is True and ack.get("human_hold_latched") is True and
-                ack.get("torque_hold_commanded") is True) else {
-                "ok": False, "error": "human_hold_ack_missing"}
-        except (OSError, ValueError):
-            acknowledgements[io_name] = {"ok": False, "error": "human_hold_ack_missing"}
-    return acknowledgements
+    return send_human_hold_to_arms(prep_dir, ARM_WRAPPERS, _poll_status_ack, arms=arms)
+
+
+_REAL_EMERGENCY_STOP_ARMS = emergency_stop_arms
 
 
 _LAST_SAFETY_ERROR: list[Exception | None] = [None]
@@ -111,10 +95,11 @@ _SAFETY_LISTING_RETRY_S = 1.5
 _BACKGROUND_SAFETY_MISSES = 3
 
 
-def _bounded_safety_listing(request_fn, *, cell_id: str | None = None, task_id: str | None = None) -> dict | None:
-    """Only an explicit fresh Fleet `active_estop=False` can allow an arm task to continue."""
+def _bounded_safety_status(request_fn, *, cell_id: str | None = None, task_id: str | None = None) -> tuple[str, dict | None]:
+    """Return (SAFETY_OK | SAFETY_EXPLICIT_STOP | SAFETY_FEED_UNAVAILABLE, listing_or_none)."""
     attempts = _BACKGROUND_SAFETY_MISSES if cell_id is None else 1
     # Background feed loss can delay a Fleet stop by ~4.5 s over three deadlines; a received stop and leased tasks still hold on the first failed check.
+    listing = None
     for attempt in range(attempts):
         listing, error = query_safety_listing(request_fn, _SAFETY_LISTING_TIMEOUT_S)
         _LAST_SAFETY_ERROR[0] = error
@@ -124,26 +109,21 @@ def _bounded_safety_listing(request_fn, *, cell_id: str | None = None, task_id: 
         if listing is not None or not no_response or attempt == attempts - 1:
             break
         time.sleep(_SAFETY_LISTING_RETRY_S)
-    if not isinstance(listing, dict) or not isinstance(listing.get("human_safety"), dict):
-        return None
-    safety = listing["human_safety"]
-    if safety.get("active_estop") is not False or not isinstance(safety.get("human_detected"), dict):
-        return None
-    if cell_id is not None:
-        cells = listing.get("cells")
-        if not isinstance(cells, dict):
-            return None
-        cell = cells.get(cell_id)
-        if (safety["human_detected"].get("all") or safety["human_detected"].get(cell_id)
-                or not isinstance(cell, dict) or cell.get("phase") != "ARM_IN_BED_ZONE"
-                or cell.get("active_task_id") != task_id):
-            return None
-    return listing
+    return classify_safety_listing(listing, cell_id=cell_id, task_id=task_id)
 
 
-def _hold_fault(prep_dir: Path, arm_id: str, reason: str) -> dict[str, Any]:
+def _bounded_safety_listing(request_fn, *, cell_id: str | None = None, task_id: str | None = None) -> dict | None:
+    """Only an explicit fresh Fleet `active_estop=False` can allow an arm task to continue."""
+    return _bounded_safety_status(request_fn, cell_id=cell_id, task_id=task_id)[1]
+
+
+def _hold_fault(prep_dir: Path, arm_id: str, reason: str, *, stop_all: bool = True) -> dict[str, Any]:
     try:
-        ack = emergency_stop_arms(prep_dir)
+        if not stop_all and emergency_stop_arms is _REAL_EMERGENCY_STOP_ARMS:
+            target = select_arms_for_feed_loss(prep_dir, ARM_WRAPPERS) | {arm_id}
+            ack = emergency_stop_arms(prep_dir, arms=target)
+        else:
+            ack = emergency_stop_arms(prep_dir)
     except Exception:
         ack = {}
     ack = ack if isinstance(ack, dict) else {}
@@ -166,9 +146,12 @@ def poll_and_execute_once(
     """Poll Fleet tasks; release only after the actuator reports measured placement."""
     if live_act_fn is None:
         return []
-    listing = _bounded_safety_listing(request_fn)
-    if listing is None:
-        emergency_stop_arms(prep_dir)
+    safety_state, listing = _bounded_safety_status(request_fn)
+    if safety_state != SAFETY_OK or listing is None:
+        if safety_state == SAFETY_FEED_UNAVAILABLE and emergency_stop_arms is _REAL_EMERGENCY_STOP_ARMS:
+            emergency_stop_arms(prep_dir, arms=select_arms_for_feed_loss(prep_dir, ARM_WRAPPERS))
+        else:
+            emergency_stop_arms(prep_dir)
         return []
     queued = list(listing.get("tasks") or [])
     work_dir = getattr(pipeline, "work_dir", None)
@@ -209,15 +192,18 @@ def poll_and_execute_once(
         site_ok = handoff_refusal(pipeline, handoff, tier) != "UNKNOWN_SITE"  # an unknown site never runs the arm
         claim_bound = claim_bound and site_ok
         safety_fault: dict[str, Any] = {}
-        if claim_bound and interlock_ok and _bounded_safety_listing(request_fn, cell_id=cell_id, task_id=task_id) is None:
-            safety_fault.update(_hold_fault(prep_dir, str(handoff.get("arm_id")), "HUMAN_HOLD_OR_SAFETY_FEED_LOST"))
+        if claim_bound and interlock_ok:
+            st, _ = _bounded_safety_status(request_fn, cell_id=cell_id, task_id=task_id)
+            if st != SAFETY_OK:
+                safety_fault.update(_hold_fault(prep_dir, str(handoff.get("arm_id")), "HUMAN_HOLD_OR_SAFETY_FEED_LOST", stop_all=(st == SAFETY_EXPLICIT_STOP)))
         stop_watch = threading.Event()
         watch_fault = safety_fault
 
         def watch_safety() -> None:
             while not stop_watch.is_set():
-                if _bounded_safety_listing(request_fn, cell_id=cell_id, task_id=task_id) is None:
-                    watch_fault.update(_hold_fault(prep_dir, str(handoff.get("arm_id")), "HUMAN_HOLD_OR_SAFETY_FEED_LOST"))
+                st, _ = _bounded_safety_status(request_fn, cell_id=cell_id, task_id=task_id)
+                if st != SAFETY_OK:
+                    watch_fault.update(_hold_fault(prep_dir, str(handoff.get("arm_id")), "HUMAN_HOLD_OR_SAFETY_FEED_LOST", stop_all=(st == SAFETY_EXPLICIT_STOP)))
                     return
                 stop_watch.wait(0.1)
 
@@ -237,8 +223,10 @@ def poll_and_execute_once(
                 watcher.join(timeout=15.0)
                 if watcher.is_alive():
                     safety_fault.update(_hold_fault(prep_dir, str(handoff.get("arm_id")), "SAFETY_WATCHDOG_UNRESPONSIVE"))
-        if claim_bound and interlock_ok and not safety_fault and _bounded_safety_listing(request_fn, cell_id=cell_id, task_id=task_id) is None:
-            safety_fault.update(_hold_fault(prep_dir, str(handoff.get("arm_id")), "HUMAN_HOLD_OR_SAFETY_FEED_LOST"))
+        if claim_bound and interlock_ok and not safety_fault:
+            st, _ = _bounded_safety_status(request_fn, cell_id=cell_id, task_id=task_id)
+            if st != SAFETY_OK:
+                safety_fault.update(_hold_fault(prep_dir, str(handoff.get("arm_id")), "HUMAN_HOLD_OR_SAFETY_FEED_LOST", stop_all=(st == SAFETY_EXPLICIT_STOP)))
         safety_fault = dict(safety_fault)  # detached if an unresponsive watchdog thread is still finishing
         if not isinstance(hw_tel, dict):
             hw_tel = {"error": "INVALID_ACTUATOR_RESULT"}

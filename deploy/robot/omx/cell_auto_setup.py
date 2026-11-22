@@ -37,7 +37,28 @@ def parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--colour", "--color", dest="want_colour", help="only pick object colour(s), e.g. yellow or orange,green")
     ap.add_argument("--dry-run", action="store_true", help="observe, choose and plan only; print JSON")
     ap.add_argument("--layers-below", type=int, help="tier hint: layers under the source stack top; raises, never lowers, the site value")
+    ap.add_argument("--verify-zones", action="store_true", help="record destination zone_verification even without --task-id")
     return ap
+
+
+def pick_parser(doc: str) -> argparse.ArgumentParser:
+    """Shared argument parser for `cell_auto_pick.py`."""
+    ap = parser(doc)
+    ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one carry (D-911)")
+    ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
+    ap.add_argument("--task-id", help="correlate this one carry with a Fleet task; does not authorize completion")
+    ap.add_argument("--handoff-lease-id", help="Fleet lease paired with --task-id")
+    ap.add_argument("--scenario-id", help="scenario identifier from the cell task")
+    ap.add_argument("--goal", help="operator goal sentence; shadow only: the model's reading is logged, the carry order is unchanged")
+    ap.add_argument("--return-held", action="store_true", help="arm already holds an object at home: place it at --dest without picking")
+    return ap
+
+
+def validate_pick_args(args) -> None:
+    if args.commissioning != args.person_at_switch:
+        raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
+    if bool(args.task_id) != bool(args.handoff_lease_id) or (args.task_id and args.dry_run):
+        raise SystemExit("--task-id and --handoff-lease-id require each other and a real single carry")
 
 
 def open_cell(args, commissioning=False):
@@ -52,6 +73,7 @@ def open_cell(args, commissioning=False):
         site = config["sites"][base_src]  # the planner reads sites[src].layers_below
         site["layers_below"] = max(int(site.get("layers_below", 0)), args.layers_below)
     config["_fleet_task"] = getattr(args, "task_id", None) or False  # D-1057: the placement zone check runs only for a Fleet task
+    config["_verify_zones"] = bool(getattr(args, "verify_zones", False))
     if config.pop("_commissioning", None) is not None:  # a stored file cannot attest that a person is at the switch (D-911)
         print("warning: _commissioning in the config file is ignored; only --commissioning --person-at-switch sets it", file=sys.stderr)
     if commissioning:

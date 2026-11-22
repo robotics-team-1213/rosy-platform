@@ -58,8 +58,18 @@ class CellJobClient:
             self._token = resolve_token(None, self._token_file)
         return {"Authorization": f"Bearer {self._token}"}
 
-    def _request(self, method: str, path: str, body: dict | None = None, *, auth: bool = True) -> bytes:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        body: dict | None = None,
+        *,
+        auth: bool = True,
+        extra_headers: dict[str, str] | None = None,
+    ) -> bytes:
         headers = self._auth_header() if auth else {}
+        if extra_headers:
+            headers.update(extra_headers)
         data = None
         if body is not None:
             data = json.dumps(body).encode("utf-8")
@@ -85,8 +95,9 @@ class CellJobClient:
     def frame(self, view: str) -> bytes:
         return self._request("GET", f"/frame/{view}.jpg")
 
-    def start(self, job: str, params: dict) -> dict:
-        return json.loads(self._request("POST", f"/jobs/{job}", params))
+    def start(self, job: str, params: dict, *, idempotency_key: str | None = None) -> dict:
+        extra = {"Idempotency-Key": idempotency_key} if idempotency_key else None
+        return json.loads(self._request("POST", f"/jobs/{job}", params, extra_headers=extra))
 
     def jobs(self) -> dict:
         return json.loads(self._request("GET", "/jobs"))

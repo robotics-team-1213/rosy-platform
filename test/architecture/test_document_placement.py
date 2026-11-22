@@ -49,6 +49,7 @@ MUST_IGNORE = [
     "learning-storage.json",
     "learning-accounts.key",
     "private/learning/oauth-client-secret",
+    "deploy/robot/omx/cell-job-machine.token",
 ]
 
 # D-226 table "추적하는 것": templates and public material next to the secrets.
@@ -69,6 +70,7 @@ MUST_TRACK = [
     "tools/remote/hosts.example.json",
     "learning/curation/perception/learning-collaboration.example.json",
     "learning/curation/perception/learning-storage.example.json",
+    "deploy/robot/omx/cell-job-tokens.example.env",
 ]
 
 # Live lab endpoints. Historical ADR, plan, validation, assessment, and log

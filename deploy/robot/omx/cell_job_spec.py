@@ -1,10 +1,31 @@
 """Job definitions and strict parameter/argv validation for `cell_job_api`."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import re
 
+from cell_job_validators import (  # noqa: E402,F401  (re-exported)
+    ACTOR,
+    ARM,
+    FIELD,
+    FILE,
+    FILTER_COL,
+    FILTER_OBJ,
+    METRE,
+    NAME,
+    SAFE_PATH,
+    SHA256,
+    TASK_FILE,
+    _actor,
+    _bool,
+    _int_range,
+    _is_amr_bed_site,
+    _match,
+    _num,
+    _roi,
+    _safe_path,
+    _task_site_names,
+)
 from cell_policy_goals import resolve_goal_site
 
 SESSION = {
@@ -13,63 +34,8 @@ SESSION = {
     "arm_s": "./with-session-arm-s-live.sh",
 }
 AB_ARMS = {"arm_a", "arm_b"}
-ARM = re.compile(r"arm_[abs]")
-ACTOR = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}")
-NAME = re.compile(r"[a-z0-9_][a-z0-9_.-]{0,62}")
-FILE = re.compile(r"(?:object-)?(cell|catalog|chunks)-[a-z0-9_.-]{1,60}\.json")
-TASK_FILE = re.compile(r"(?:task|plan)-[a-z0-9_.-]{1,60}\.json")
-FILTER_OBJ = re.compile(r"[a-z0-9_,-]{1,120}")
-FILTER_COL = re.compile(r"[a-z0-9_,-]{1,64}")
-SHA256 = re.compile(r"[0-9a-f]{64}")
-SAFE_PATH = re.compile(r"[A-Za-z0-9_./~:-]{1,240}")
 PY = 'exec ~/rosy-omx/current-env/bin/python "$OMX/$0" "$@"'
 ENV = "set -a; . ~/.config/rosy/omx-observation-bridge.env; set +a; . ./tools-env-current.sh; "
-FIELD = re.compile(r"\{(\w+)\}")
-
-
-def _num(lo, hi):
-    def check(v):
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
-            raise ValueError(f"a number in [{lo}, {hi}]")
-        return str(v)
-
-    return check
-
-
-def _int_range(lo: int, hi: int):
-    def check(v):
-        if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:
-            raise ValueError(f"an integer in [{lo}, {hi}]")
-        return str(v)
-
-    return check
-
-
-def _bool(v):
-    if not isinstance(v, bool):
-        raise ValueError("a boolean")
-    return v
-
-
-def _match(rx):
-    def check(v):
-        if not isinstance(v, str) or not rx.fullmatch(v):
-            raise ValueError(f"must match {rx.pattern}")
-        return v
-
-    return check
-
-
-def _safe_path(v):
-    if not isinstance(v, str) or not SAFE_PATH.fullmatch(v) or ".." in Path(v).parts:
-        raise ValueError("must be a safe path without '..'")
-    return v
-
-
-def _actor(v):
-    if not isinstance(v, str) or not ACTOR.fullmatch(v) or ".." in str(v).replace("\\", "/").split("/"):
-        raise ValueError(f"must match {ACTOR.pattern}")
-    return v
 
 
 def _goal_site(v):
@@ -80,13 +46,6 @@ def _goal_site(v):
     return v
 
 
-def _roi(v):
-    if not (isinstance(v, list) and len(v) == 4 and all(not isinstance(i, bool) and isinstance(i, int) and 0 <= i <= 1280 for i in v)):
-        raise ValueError("four integer pixels")
-    return [str(i) for i in v]
-
-
-METRE = _num(-0.5, 0.5)
 JOBS = {
     "incident_status": {
         "script": "omx_incident.py",
@@ -137,6 +96,7 @@ JOBS = {
             "operator": _match(NAME),
             "proposer": _match(NAME),
             "reviewed_auto": _bool,
+            "verify_zones": _bool,
             "object": _match(FILTER_OBJ),
             "colour": _match(FILTER_COL),
             "layers_below": _int_range(0, 5),
@@ -170,6 +130,8 @@ JOBS = {
             "dry_run": _bool,
             "proposer": _actor,
             "goal_site": _goal_site,
+            "goal_slot": _int_range(0, 31),
+            "act_backend": _match(re.compile(r"auto|torch|openvino")),
             "model_calibration": _safe_path,
             "catalog": _match(FILE),
             "roi": _roi,
@@ -220,82 +182,6 @@ def moves_arm(job, params):
     return bool(job.get("moving")) and not (job["script"] == "cell_policy_drive.py" and params.get("dry_run") is True)
 
 
-def _is_amr_bed_site(v: str) -> bool:
-    if not isinstance(v, str) or not v:
-        return False
-    s = v.strip().lower()
-    if s.startswith("not_places:"):
-        s = s[len("not_places:"):]
-    base = re.sub(r"-l[0-9]+$", "", s.split(":", 1)[0])
-    return base.startswith(("pinky", "bed")) or base in ("tray", "vehicle_tray")
-
-
-def _task_site_names(task_path: Path, config_path: Path | None) -> set[str]:
-    try:
-        task = json.loads(task_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise ValueError("task: invalid JSON object") from exc
-    if not isinstance(task, dict):
-        raise ValueError("task: invalid JSON object")
-    names: set[str] = set()
-
-    def _add(val):
-        if isinstance(val, str):
-            names.add(val)
-
-    for k in ("from", "to", "a", "b", "buffer"):
-        _add(task.get(k))
-    for k in ("columns", "sources", "destinations"):
-        seq = task.get(k)
-        if isinstance(seq, list):
-            for v in seq:
-                _add(v)
-    for k in ("layout", "initial", "goal"):
-        mp = task.get(k)
-        if isinstance(mp, dict):
-            for s in mp:
-                _add(s)
-    smap = task.get("site_map")
-    if isinstance(smap, dict):
-        for sk, sv in smap.items():
-            _add(sk)
-            _add(sv)
-    steps = task.get("steps")
-    if isinstance(steps, list):
-        for st in steps:
-            if isinstance(st, dict):
-                _add(st.get("from"))
-                _add(st.get("to"))
-    if config_path is not None and config_path.is_file():
-        try:
-            cfg = json.loads(config_path.read_text(encoding="utf-8"))
-            sites = cfg.get("sites") if isinstance(cfg, dict) else None
-            if isinstance(sites, dict):
-                if task.get("kind") in ("goal_stack", "outbound", "rehandle"):
-                    if not task.get("layout"):
-                        for k, v in sites.items():
-                            if isinstance(v, dict) and "layer" not in v and v.get("kind", "temp") == "temp" and _is_amr_bed_site(k):
-                                _add(k)
-                    try:
-                        import cell_task_runner
-
-                        for st in cell_task_runner.plan_steps(task, sites):
-                            _add(st.get("from"))
-                            _add(st.get("to"))
-                    except (ValueError, KeyError):
-                        pass
-                for s in list(names):
-                    base = s.rsplit("-l", 1)[0]
-                    for key in (s, base, f"{base}-l0", f"{base}-l1", f"{base}-l2"):
-                        alts = (sites.get(key) or {}).get("alternates") if isinstance(sites.get(key), dict) else None
-                        if isinstance(alts, list):
-                            for a in alts:
-                                _add(a)
-        except (OSError, ValueError):
-            pass
-    return names
-
-
 def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     """The job's argv from checked params; ValueError says what is wrong."""
     spec, opt_spec = job["params"], job.get("optional", {})
@@ -341,7 +227,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             for required in ("policy_root", "policy_revision", "cell_calibration"):
                 if required not in opt_checked:
                     raise ValueError(f"missing param {required}")
-            if "goal_site" not in opt_checked and "model_calibration" not in opt_checked:
+            if "goal_site" not in opt_checked and "goal_slot" not in opt_checked and "model_calibration" not in opt_checked:
                 raise ValueError("missing param model_calibration")
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
     if moves_arm(job, params):
@@ -349,6 +235,13 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         task_sites = _task_site_names(workdir / checked["task"], workdir / checked["config"] if "config" in checked else None) if "task" in checked else set()
         if any(_is_amr_bed_site(v) for v in (*direct_sites, *task_sites)):
             raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
+        if "goal_slot" in opt_checked:
+            from cell_policy_goals import GOALS
+            slot = int(opt_checked["goal_slot"])
+            if slot < 0 or slot >= len(GOALS):
+                raise ValueError("goal_slot outside mapped GOALS")
+            if _is_amr_bed_site(GOALS[slot]):
+                raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     args = []
     for item in job["argv"]:
         whole = FIELD.fullmatch(item)
@@ -359,11 +252,13 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks")):
         if opt_checked.get(opt):
             args.append(flag)
+    if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
+        args.append("--verify-zones")
     if "catalog" in opt_checked:
         args += ["--catalog", opt_checked["catalog"]]
     if "roi" in opt_checked:
         args += ["--roi", *opt_checked["roi"]]
-    for option in ("site", "goal_site", "model_calibration", "mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind"):
+    for option in ("site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind"):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
     if moves_arm(job, params):

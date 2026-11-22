@@ -289,7 +289,7 @@ def previous_report(out_dir, arm):
     return max(times, default=0.0)
 
 
-def upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since=None):
+def upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since=None, *, mode: str = "teleop"):
     base = Path(spec.get("_base", "."))
     cell = json.loads(Path(rel(base, spec["cell"])).read_text(encoding="utf-8"))
     record = json.loads(Path(rel(base, spec["record"])).read_text(encoding="utf-8"))
@@ -297,7 +297,7 @@ def upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since=None):
     cell_dir = Path(rel(base, spec["cell"])).parent
     params = prm.load(rel(cell_dir, cell["params_path"]) if cell.get("params_path") else None)["values"]
     device = (record.get("robot") or {}).get("port") or ""
-    checks = [check_hold(arm, incidents), check_boards(record)]
+    checks = [check_hold(arm, incidents), check_boards(record, mode=mode)]
     owner = bus_owner(arm, io)
     if owner:
         checks.append(row("bus ownership", "skipped", owner + "; register checks skipped, wait for the session"))
@@ -326,7 +326,7 @@ def upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since=None):
 
 
 def run(arms: dict, fix: bool = False, *, io: Io | None = None, out_dir="upkeep", incidents=None, since=None,
-        stamp=None) -> dict:
+        stamp=None, mode: str = "teleop") -> dict:
     """{arm: report}; each report is also written to <out_dir>/<stamp>-<arm>.json."""
     io, out_dir, reports = io or Io(), Path(out_dir), {}
     stamp = stamp or time.strftime("%Y%m%dT%H%M%S")
@@ -334,7 +334,7 @@ def run(arms: dict, fix: bool = False, *, io: Io | None = None, out_dir="upkeep"
     for arm, spec in arms.items():
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", arm):
             raise ValueError(f"arm name {arm!r} is not a plain name")
-        reports[arm] = upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since)
+        reports[arm] = upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since, mode=mode)
         (out_dir / f"{stamp}-{arm}.json").write_text(json.dumps(reports[arm], indent=1, default=str))
     return reports
 
@@ -354,11 +354,12 @@ def main(argv=None):
     ap.add_argument("--out", default="upkeep")
     ap.add_argument("--incidents", default=None, help="default: omx_incident's hold directory")
     ap.add_argument("--since", type=float, help="replay logs newer than this epoch (default: the previous report)")
+    ap.add_argument("--mode", choices=("autonomous", "teleop"), default="teleop", help="board presence policy")
     args = ap.parse_args(argv)
     arms = json.loads(args.manifest.read_text(encoding="utf-8"))
     for spec in arms.values():
         spec["_base"] = str(args.manifest.resolve().parent)
-    reports = run(arms, args.fix, out_dir=args.out, incidents=args.incidents, since=args.since)
+    reports = run(arms, args.fix, out_dir=args.out, incidents=args.incidents, since=args.since, mode=args.mode)
     print(summary(reports))
     return 0 if all(r["verdict"] == "ready" for r in reports.values()) else 1
 
