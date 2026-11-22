@@ -22,7 +22,7 @@ import omx_two_arm_teacher as teaching  # noqa: E402
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
 VIEWS = ("top", "side", "wrist")
 SHAPE = (480, 640, 3)
-REAL_CONTAINER_RGB = ((.92, .45, .62), (.62, .31, .14), (.78, .13, .12), (.86, .66, .10), (.10, .10, .10), (.18, .62, .24))
+REAL_CONTAINER_RGB = ((.92, .45, .62), (.62, .31, .14), (.78, .13, .12), (.86, .66, .10), (.10, .10, .10), (.18, .62, .24), (.58, .72, .78), (.74, .75, .76))
 SOURCE_GROUPS = {
     "belt": ["belt"],
     "ship-h1": [f"ship-h1r{r}-l{l}" for r in (0, 1, 2) for l in (0, 1, 2)],
@@ -227,7 +227,7 @@ def generate(out: Path, seeds: list[int], sources_spec: str, *, max_per_seed: in
     out = Path(out)
     if out.exists():
         raise ValueError(f"--out already exists: {out}")
-    layout_kw = {**({"preset": preset} if preset else {}), **(choices or {})}
+    layout_kw = {"ship_house": False, **({"preset": preset} if preset else {}), **(choices or {})}
     layout = sites.Layout(**layout_kw)
     candidates = expand_sources(sources_spec, layout)
     world = sim.World(layout)

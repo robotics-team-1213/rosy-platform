@@ -54,7 +54,7 @@ CHOICES = dict(
     preset=None,             # a named bundle of choices, PRESETS (explicit choices win)
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
-OUTBOUND_STAND_SPEC = dict(board_edge_x_m=0.155, intake_past_edge_m=0.059, rail_z_m=0.0809, yaw_deg=90.0, top_roi_px=(410, 30, 570, 125))
+OUTBOUND_STAND_SPEC = dict(board_edge_x_m=0.155, intake_past_edge_m=0.059, rail_z_m=0.0709, yaw_deg=90.0, top_roi_px=(410, 30, 570, 125))  # 2 stacked r05 plates on floor (no cradle): z_pfloor=23.0 mm, chute exit=45.5 mm, T2 rail_z=70.9 mm
 BERTH_V16_SPEC = dict(
     berth_kit="v24-docks",   # "v24-docks": printed black v20 cradle + v24 docks on PR33_C02_BASE + v24 belt stopper; "v18-modular-adjustable"/"v16-modular"/"v17-modular-tight": orange v16 berth; "v15-quay": legacy quay block
     confluence_pages=("23592971", "23234388", "23233175"),

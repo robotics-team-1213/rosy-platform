@@ -55,10 +55,11 @@ def test_mujoco_outbound_stand_geoms_and_teacher_execution():
     layout = sites.Layout(preset="v24-20261114")
     world = world_mod.World(layout)
     names = {mujoco.mj_id2name(world.model, mujoco.mjtObj.mjOBJ_GEOM, i) for i in range(world.model.ngeom)}
-    expected = {"stand_chute_navy", "stand_chute_sky", "stand_chute_gate", "stand_riser", "stand_plate_top",
-                "stand_plate_bot", "stand_dock_base", "stand_dock_l", "stand_dock_r", "stand_ramp",
+    expected = {"stand_chute", "stand_chute_gate", "stand_plate_top_deck", "stand_plate_top_rim",
+                "stand_plate_bot_deck", "stand_plate_bot_rim", "stand_udock", "stand_ramp",
                 "stand_gate_stop", "stand_wall_l", "stand_wall_r", "stand_back_l", "stand_back_r"}
     assert expected <= names
+    assert "stand_riser" not in names
 
     teacher = teaching.Teacher(world, seed=0)
     data = teacher.fresh({})

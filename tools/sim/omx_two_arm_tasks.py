@@ -24,6 +24,7 @@ RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only
 RELEASE_DROP_STAND = .009  # clears the 24-deg rear rail at y_l=-30 mm (+2.3 mm margin) during horizontal tool-down release
 LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
 BASE_SINGULARITY_R = .05  # matches cell_profile.yaml / ladder-cell.example.json singularity_radius_m
+STAND_CARRY_CLEAR_R = .065  # keeps held 90 mm container clear of a_link1 on near-base ship->stand carries
 CARRY_VIA_R = .09         # front-side (arm yaw) bypass radius: clears the 50 mm base singularity and stays outside the r08 ship hull
 CAPACITY = 3 * sites_mod.TEMP_TIERS  # containers per temporary plate: 3 lanes (3 x 1 each), 3 tiers (plate v11)
 TIERS = (1, 2, 3)       # 1단 (layer 0), 2단 (layer 1), 3단 (layer 2)
@@ -60,8 +61,8 @@ def carry_z(layout, here, a, b):
     return max([layout.sites[a]["z"], layout.sites[b]["z"], *tops]) + layout.box[2] + CARRY_CLEAR + layout.hold_below
 
 
-def _carry_via(arm, a_xy, b_xy):
-    """Bypass waypoint on the arm's front (+yaw) side when the straight carry chord passes inside BASE_SINGULARITY_R."""
+def _carry_via(arm, a_xy, b_xy, clear_r=BASE_SINGULARITY_R):
+    """Bypass waypoint on the arm's front (+yaw) side when the straight carry chord passes inside `clear_r`."""
     if arm is None:
         return None
     a, b, base = np.asarray(a_xy, float), np.asarray(b_xy, float), np.asarray(arm.base[:2], float)
@@ -70,7 +71,7 @@ def _carry_via(arm, a_xy, b_xy):
     if ab2 <= 1e-12:
         return None
     t = float((base - a) @ ab) / ab2
-    if 0. < t < 1. and float(np.linalg.norm((a + t * ab) - base)) < BASE_SINGULARITY_R:
+    if 0. < t < 1. and float(np.linalg.norm((a + t * ab) - base)) < clear_r:
         return (round(float(base[0] + CARRY_VIA_R * math.cos(arm.yaw)), 6),
                 round(float(base[1] + CARRY_VIA_R * math.sin(arm.yaw)), 6))
     return None
@@ -86,7 +87,8 @@ def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEA
     za, zb = layout.hold_z(step["from"]), layout.hold_z(step["to"]) + drop_z  # released this far above its seat
     z_app = za + layout.box[2] + CARRY_CLEAR if a["kind"] == "belt" and layout.choices.get("wait_pose") != "home" else z_up  # belt pick approach depends only on belt height when waiting beside the belt (wait_pose="home" crosses the ship)
     ya, yb = a["yaw"], a["yaw"] + wrap_pi(b["yaw"] - a["yaw"])
-    via = _carry_via(layout.arms.get(step.get("arm")), a["xy"], b["xy"])
+    via = _carry_via(layout.arms.get(step.get("arm")), a["xy"], b["xy"],
+                     clear_r=STAND_CARRY_CLEAR_R if b["kind"] == "stand" else BASE_SINGULARITY_R)
     carry = ([("carry", via, z_up, .5 * (ya + yb), "hold")] if via is not None else []) + [("carry", b["xy"], z_up, yb, "hold")]
     return [("approach", a["xy"], z_app, ya, "open"), ("grasp", a["xy"], za, ya, "open"), ("close", a["xy"], za, ya, "hold"),
             ("lift", a["xy"], z_up, ya, "hold"), *carry, ("lower", b["xy"], zb, yb, "hold"),
