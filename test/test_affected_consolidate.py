@@ -162,6 +162,7 @@ def test_git_history_flag_is_emitted_only_for_history_readers_and_preserved_acro
         ["test/test_safety_review.py"],
         ["test/test_remote_test_tools.py"],
         ["test/test_remote_fixture_isolation.py"],
+        ["test/test_release_boundary_guards.py"],
         ["test/test_ci_image.py"],
     ])
     entries = {tuple(e["invocations"][0]): e for e in affected_ci.ci_matrix(repo, sel)["include"] if e["kind"] == "pytest"}
@@ -170,6 +171,7 @@ def test_git_history_flag_is_emitted_only_for_history_readers_and_preserved_acro
     assert entries[("test/test_safety_review.py",)].get("git_history") is True
     assert entries[("test/test_remote_test_tools.py",)].get("git_history") is True
     assert entries[("test/test_remote_fixture_isolation.py",)].get("git_history") is True
+    assert entries[("test/test_release_boundary_guards.py",)].get("git_history") is True
     assert "git_history" not in entries[("operations/fleet/test/test_blocks.py",)]
     assert "git_history" not in entries[("test/test_ci_image.py",)]
 
@@ -185,7 +187,8 @@ def test_git_history_flag_is_emitted_only_for_history_readers_and_preserved_acro
              "--ignore=test/architecture/test_module_structure.py",
              "--ignore=test/test_safety_review.py",
              "--ignore=test/test_remote_test_tools.py",
-             "--ignore=test/test_remote_fixture_isolation.py"],
+             "--ignore=test/test_remote_fixture_isolation.py",
+             "--ignore=test/test_release_boundary_guards.py"],
         ],
     }) is False
 

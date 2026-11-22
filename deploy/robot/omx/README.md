@@ -1654,8 +1654,8 @@ worker는 팔 세션 래퍼를 같은 릴리스의 `deploy/robot/omx/session-wra
 
 1. 팔 세션이 없는지 확인한다: `pgrep -af record_session.py`의 출력이 없어야 한다. 출력이 있으면 멈춘다.
 2. 셀의 `~/.config/rosy/omx-devices-autoupdate.json`을 고친다(2026-11-21 live 릴리스에 `omx_adapter/kinematics.py`·`area_xyz.py`·`z_profile.py`·`pose_plan.py`가 없었다).
-   - `"paths"`: `"middleware/devices/omx/adapter/omx_adapter/camera_source.py"`를 `"middleware/devices/omx/adapter/omx_adapter"`로 바꾼다. 결과는
-     `["deploy/robot/omx", "middleware/devices/omx/adapter/omx_adapter", "contracts/foundation", "operations/overhead"]`.
+   - `"paths"`: `"middleware/devices/omx/adapter/omx_adapter/camera_source.py"`를 `"middleware/devices/omx/adapter"`로 바꾼다. 결과는
+     `["deploy/robot/omx", "middleware/devices/omx/adapter", "contracts/foundation", "operations/overhead"]`.
    - `"smoke"`: `sys.path`에 `'middleware/devices/omx/adapter'`를 더하고 끝의 `print('smoke ok')` 앞에
      `from omx_adapter import kinematics, area_xyz, z_profile, pose_plan; `를 넣는다. 빠진 릴리스는 smoke에서 거절되고 옛 릴리스가 남는다.
    - 다른 키는 바꾸지 않는다. 이 유닛을 `units`·`unit_files`에 넣지 않는다(재시작은 사람이 한다).

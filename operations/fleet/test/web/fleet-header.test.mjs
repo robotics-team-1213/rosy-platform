@@ -2,12 +2,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { OPERATOR_REASON } from "../../../../applications/fleet/web/shared/authorization.js";
 // Header unit tests isolate authorization; shared icon rendering has real-browser coverage.
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 const {
-  LATE_MS, SESSION_REASON, bindEstop, bindTopbarToggle, estopReason, linkState, noteLink, roleLabel, showFleet,
+  LATE_MS, SESSION_REASON, STOP_HUMAN_REASON, bindEstop, bindTopbarToggle, estopReason, linkState, noteLink, roleLabel, showFleet,
   showConnection, showInboxCount, showSession, showSignedOut, tickClock, watchFleet,
 } = await import("../../../../applications/fleet/web/shared/fleet-header.js");
 
@@ -79,7 +78,12 @@ test("Escape leaves a dialog-owned event and outside focus alone", () => {
 test("the E-stop locks only on a press the server would refuse", () => {
   assert.equal(estopReason(undefined), "");            // unknown: loading or Fleet unreachable
   assert.equal(estopReason(null), SESSION_REASON);     // 401
-  assert.equal(estopReason({role: "viewer"}), OPERATOR_REASON);
+  assert.equal(estopReason({role: "viewer"}), "");     // D-1043: a human viewer session may stop too
+  assert.equal(estopReason({role: "viewer", estop: true}), "");
+  assert.equal(estopReason({role: "viewer", estop: false}), STOP_HUMAN_REASON);  // token-only: the server says no
+  assert.equal(estopReason({role: "viewer", via: "bearer"}), STOP_HUMAN_REASON);  // /api/fleet/auth/session of a token
+  assert.equal(estopReason({role: "viewer", via: "cookie", account_id: "a1"}), "");
+  assert.equal(estopReason({role: "operator", via: "bearer"}), "");
   assert.equal(estopReason({role: "operator"}), "");
 });
 
@@ -138,8 +142,8 @@ test("a session shows its Korean role and title identity; a development session 
   assert.equal(nodes["user-role"].textContent, "보기 전용");
   assert.equal(nodes["user-role"].title, "vic · viewer");
   assert.equal(nodes["user-role"].getAttribute("status"), "neutral");
-  assert.equal(nodes.estop.disabled, true);
-  assert.equal(nodes.estop.getAttribute("reason"), OPERATOR_REASON);
+  assert.equal(nodes.estop.disabled, false);
+  assert.equal(nodes.estop.getAttribute("reason"), null);
 });
 
 test("a refused session locks the E-stop but leaves the account row closed; a lost Fleet does not lock it", () => {

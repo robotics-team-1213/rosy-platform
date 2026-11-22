@@ -117,7 +117,8 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[0].phase, 'ARM_IN_BED_ZONE');
   assert.equal(rows.cards[0].task.task_id, 'new');
   assert.deepEqual(rows.cards[0].buttons.map(b => b.preset),
-    ['s3_shuttle', 's3_recover_belt_far', 's3_recover_floor_front']);
+    ['s3_shuttle', 's3_act_policy', 's3_recover_belt_far', 's3_recover_floor_front']);
+  assert.equal(rows.cards[0].buttons[1].requiresPresence, true);
   assert.equal(rows.cards[1].title, 'cell_ab · S5 팔레트 적재 (arm_a·arm_b)');
   assert.deepEqual(rows.cards[1].buttons.map(b => b.preset),
     ['s5_tier1_arm_a', 's5_tier2_arm_b', 's5_tier3_arm_a', 'full_s3_to_s5_pipeline']);

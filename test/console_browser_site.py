@@ -17,7 +17,7 @@ CONSOLE_ASSETS = {name: (entry["path"], entry["media_type"]) for name, entry in 
 WEB_COMMON = ROOT / "shared" / "web"
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def console_url():
     # index.html 의 절대 경로(/common/tokens.css, /console/assets/*)를 풀어 준다.
     class Handler(SimpleHTTPRequestHandler):
