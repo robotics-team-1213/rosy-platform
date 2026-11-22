@@ -227,6 +227,26 @@ def test_what_this_prs_own_ci_run_executes_is_not_lab_evidence(monkeypatch):
     assert [w for inv in _required(monkeypatch, [], changed) for w in inv if w.endswith(".py")] == [lab_only]
 
 
+def test_required_lab_invocations_deduplicates_browser_files_already_in_lab(monkeypatch):
+    import browser_scope
+
+    bare = next(iter(pr_land.work_queue.LAB_ONLY))
+    chunked = "test/test_measured_calibration_browser.py"
+    extra_only = "test/learning/perception/test_pixel_workspace_browser.py"
+    monkeypatch.setattr(browser_scope, "targets", lambda ch: [bare, chunked, extra_only])
+
+    result = _required(
+        monkeypatch,
+        [[bare], ["ROSY_RUN_BROWSER_TESTS=1", chunked]],
+        changed=["shared/web/ui.js"],
+    )
+    assert result == [
+        [bare],
+        ["ROSY_RUN_BROWSER_TESTS=1", chunked],
+        ["ROSY_RUN_BROWSER_TESTS=1", extra_only],
+    ]
+
+
 def test_preflight_runs_the_trailer_and_size_checks_and_stops_on_either(monkeypatch):
     seen = []
     monkeypatch.undo()  # the autouse fixture stubs preflight for the other tests

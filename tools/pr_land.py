@@ -183,7 +183,17 @@ def required_lab_invocations(cwd: Path, base: str, head: str) -> list[list[str]]
         import browser_scope
         import land_browser
         import land_selection
-        b_paths = affected_browser.split(browser_scope.targets(changed))[1]  # the rest runs in the PR's CI run (D-1066)
+        covered_browsers = {
+            w.replace("\\", "/").removeprefix("./")
+            for inv in lab
+            if not any(w.startswith(("--ignore", "--deselect", "-k")) for w in inv)
+            for w in inv
+            if not w.startswith("-") and not work_queue.ENV_WORD.match(w) and "::" not in w and w.endswith("_browser.py")
+        }
+        b_paths = [
+            p for p in affected_browser.split(browser_scope.targets(changed))[1]
+            if p not in covered_browsers
+        ]  # the rest runs in the PR's CI run (D-1066)
         for group in land_selection.pack(cwd, b_paths):
             extra.extend(land_browser.chunks(cwd, group))
     return lab + [part for inv in extra for part in split_by_ci_entry(inv) if not ci_runnable(part)]
