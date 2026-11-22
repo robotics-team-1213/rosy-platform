@@ -19,6 +19,12 @@ from rosy.contracts.learning.omx_canonical import (  # noqa: E402
     default_canonical_spec,
 )
 
+STATIC = Path(__file__).with_name('review_app_web')
+PAGES = {
+    '/learning/canonical': ('canonical.html', 'text/html'),
+    '/canonical.js': ('canonical.js', 'text/javascript'),
+    '/canonical.css': ('canonical.css', 'text/css'),
+}
 PREFIX = '/api/learning/canonical'
 _UUID_RE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 _ID_RE = r'[A-Za-z0-9_][A-Za-z0-9._-]{0,63}'
@@ -47,6 +53,10 @@ def _service(center):
 
 
 def get(handler, path: str, center, accounts=None) -> bool:
+    if path in PAGES:
+        name, mime = PAGES[path]
+        handler.send((STATIC / name).read_bytes(), mime=mime + '; charset=utf-8')
+        return True
     if path != PREFIX and not path.startswith(PREFIX + '/'):
         return False
     service = _service(center)

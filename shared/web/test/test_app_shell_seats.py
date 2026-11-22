@@ -104,7 +104,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
               ('check', '/learning/evaluate', '평가·승격', '평가·승격')]
     subs = {'/learning': ['#learning-start', '#pipeline', '#review-section', '#learning-results', '#storage-section'], '/catalog': ['/catalog', '/learning/camera', '/learning/workspaces'],
             '/': ['/', '/pixels', '/incidents', '/learning/omx', '/learning/vlm'],
-            '/learning/tasks': ['/learning/tasks', '/learning/tasks/manage', '/learning#pipeline', '/learning/sim', '/learning/ladder'], '/learning/evaluate': None}
+            '/learning/tasks': ['/learning/tasks', '/learning/tasks/manage', '/learning#pipeline', '/learning/sim', '/learning/ladder', '/learning/canonical'], '/learning/evaluate': None}
     rails = set()
     for name, stage, here in [('learning.html', '/learning', None), ('index.html', '/', '/'),
                               ('pixels.html', '/', '/pixels'), ('incidents.html', '/', '/incidents'),
@@ -112,7 +112,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
                               ('vlm.html', '/', '/learning/vlm'), ('catalog.html', '/catalog', '/catalog'),
                               ('camera.html', '/catalog', '/learning/camera'),
                               ('workspaces.html', '/catalog', '/learning/workspaces'), ('tasks.html', '/learning/tasks', '/learning/tasks/manage'),
-                              ('sim.html', '/learning/tasks', '/learning/sim'), ('evaluate.html', '/learning/evaluate', None)]:
+                              ('sim.html', '/learning/tasks', '/learning/sim'), ('canonical.html', '/learning/tasks', '/learning/canonical'), ('evaluate.html', '/learning/evaluate', None)]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
         assert '<ui-shell grammar="procedure" class="ui-app-shell">' in html

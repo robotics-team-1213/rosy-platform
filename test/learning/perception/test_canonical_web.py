@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import sys
 import threading
+import urllib.error
+import urllib.request
 import uuid
 
 import pytest
@@ -68,6 +70,9 @@ def _serve(tmp_path: Path, *, with_canonical: bool = False, accounts=None, monke
 
 def test_zero_config_serves_readonly_builtin_spec_and_blocks_writes(tmp_path):
     with _serve(tmp_path, with_canonical=False) as (base, _):
+        for route, mime_prefix in (("/learning/canonical", "text/html"), ("/canonical.js", "text/javascript"), ("/canonical.css", "text/css")):
+            with urllib.request.urlopen(base + route, timeout=5) as resp:
+                assert resp.status == 200 and resp.headers.get("Content-Type", "").startswith(mime_prefix)
         code, snap = raw_req(base, PREFIX)
         assert code == 200 and snap["configured"] is False and snap["writable"] is False
         assert snap["spec"]["design"] == "design2_idle_home_active_canonical"
@@ -84,6 +89,15 @@ def test_zero_config_serves_readonly_builtin_spec_and_blocks_writes(tmp_path):
 def test_collaboration_enforces_view_manage_csrf_no_paths_and_busy_conflict(tmp_path, monkeypatch):
     accounts = Accounts()
     with _serve(tmp_path, with_canonical=True, accounts=accounts, monkeypatch=monkeypatch) as (base, center):
+        class _NoRedir(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a):
+                return None
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedir())
+        with pytest.raises(urllib.error.HTTPError) as exc:
+            opener.open(urllib.request.Request(base + "/learning/canonical"), timeout=5)
+        assert exc.value.code == 303 and exc.value.headers.get("Location") == "/accounts"
+        with opener.open(urllib.request.Request(base + "/learning/canonical", headers={"Cookie": "rosy_learning_session=reader"}), timeout=5) as page:
+            assert page.status == 200 and "표준 시작 자세" in page.read().decode("utf-8")
         assert collab_req(base, PREFIX)[0] == 401
         code, snap = collab_req(base, PREFIX, "reader")
         assert code == 200 and snap["configured"] is True and snap["real_evidence"] is False
