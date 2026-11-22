@@ -22,14 +22,7 @@ export function replanView(trip, { operator, named = "", busy = false }) {
         `장소 ${(plan.places || []).length}곳`].filter(Boolean).join(" · ")
       : `다시 계산한 경로가 없습니다${hold.code ? ` (${hold.code})` : ""} · 운행을 취소하세요`;
   const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : "";
-  return {
-    facts,
-    confirmReason: paused ? (lock || named) : (lock || named || (plan ? "" : "다시 계산한 경로가 없습니다")),
-    cancelReason: lock,
-    verb: paused ? "resume" : "confirm-replan",
-    confirmLabel: paused ? "운행 재개" : "바뀐 경로로 계속",
-    confirmDone: paused ? "운행을 재개합니다" : "바뀐 경로로 계속합니다",
-  };
+  return { facts, confirmReason: paused ? (lock || named) : (lock || named || (plan ? "" : "다시 계산한 경로가 없습니다")), cancelReason: lock };
 }
 
 /** D-577 (d) wait-cycle row for one robot: Fleet's decision per cycle robot, the AI facts naming it. */
@@ -126,9 +119,13 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
     const operator = isOperator(), named = namedReason();
     for (const trip of view.stateUnavailable ? [] : (view.trafficTrips || []).filter((row) => row.hold)) {
       const spec = replanView(trip, { operator, named, busy: busy.has(trip.trip_id) });
+      const paused = trip.hold?.reason === "fleet_hold" || trip.hold?.reason === "nav2_problem";
+      const confirmLabel = paused ? "운행 재개" : "바뀐 경로로 계속";
+      const verb = paused ? "resume" : "confirm-replan";
+      const confirmDone = paused ? "운행을 재개합니다" : "바뀐 경로로 계속합니다";
       fill(`${trip.robot_id}|replan`, JSON.stringify([trip.trip_id, trip.hold, spec, results.get(trip.trip_id) || null]),
         () => body(trip.robot_id, trip, [spec.facts], "바뀐 경로 확인", [
-          [primaryButton(spec.confirmLabel), "confirm", spec.confirmReason, () => send(trip, spec.verb, spec.confirmDone)],
+          [primaryButton(confirmLabel), "confirm", spec.confirmReason, () => send(trip, verb, confirmDone)],
           [quietButton("운행 취소"), "cancel", spec.cancelReason, () => send(trip, "cancel", "운행을 취소했습니다")]]));
     }
     for (const robotId of view.stateUnavailable ? [] : (view.traffic?.wait_cycle || []).filter((id) => !id.startsWith("signal:"))) {
