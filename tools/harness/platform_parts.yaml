@@ -1424,15 +1424,18 @@ safety_review_paths:
   - deploy/robot/omx/chunk_runner_run.py
   - deploy/robot/omx/chunk_runner_loop.py
   - deploy/robot/omx/chunk_policy_playback.py
+  - deploy/robot/omx/chunk_runner_interrupt.py
   - deploy/robot/omx/chunk_runner_settle.py
   - deploy/robot/omx/guarded_device.py
   - deploy/robot/omx/guarded_native.py
   - deploy/robot/omx/guarded_native_effort.py
   - deploy/robot/omx/guarded_native_lag.py
   - deploy/robot/omx/guarded_native_mount.py
+  - deploy/robot/omx/guarded_native_probe.py
   - deploy/robot/omx/guarded_native_track.py
   - deploy/robot/omx/guarded_native_watch.py
   - deploy/robot/omx/joint_push.py
+  - deploy/robot/omx/motor_health.py
   - deploy/robot/omx/session_caps.py
   - deploy/robot/omx/commissioning_limits.py
   - deploy/robot/omx/record_session.py
