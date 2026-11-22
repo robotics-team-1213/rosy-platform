@@ -367,9 +367,13 @@ def test_tag_replacement_after_verification_cannot_publish_the_replacement(prepa
     assert replacement["draft"] is True
 
 
-def test_open_release_and_open_rollout_publish_and_promote_verified_assets(prepared):
+def test_open_release_and_open_rollout_publish_and_promote_verified_assets(prepared, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
     directory, public, value, private = prepared
     mod = module()
+    with pytest.raises(ValueError, match="hosted CI"):
+        mod.open_rollout(directory, private, public, release_id=value["release_id"], canary=["rosy-pinky-b8xy"])
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     with pytest.raises(ValueError, match="cannot open a release"):
         mod.publish(directory, public, release_id=value["release_id"], source_revision=value["source_revision"],
                     publication_only=True, open_release=True)
