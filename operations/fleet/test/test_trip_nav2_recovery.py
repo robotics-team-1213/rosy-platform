@@ -249,13 +249,14 @@ def test_nav2_failed_no_detour_retries_then_holds_until_resume():
 
 def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
     clock = FakeClock()
+    clock.now = time.time()
     store = SiteMapStore(tmp_path / "site.sqlite", clock=clock)
     store.import_if_empty(_branch_map(), source="test")
     robot = RouteFakeRobot("rosy_42", modes=("lane", "free"))
     robot.power_health_value = fresh_power_health()
     robot._state["map_id"] = "site-branch"
     robot._state["pose"] = {"x": -0.7, "y": 0.0, "yaw": 0.0}
-    robot._state["odom_pose"] = {"x": -0.7, "y": 0.0, "yaw": 0.0, "stamp": time.time()}
+    robot._state["odom_pose"] = {"x": -0.7, "y": 0.0, "yaw": 0.0, "stamp": clock.now}
     console = FleetConsole([RobotEndpoint("rosy_42", "http://127.0.0.1:8081", "t")], [robot], clock=clock)
     users = {
         sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"},
@@ -266,41 +267,42 @@ def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
         task_service=FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=["rosy_42"]),
         site_maps=store, site_users=users,
     )
+    app.state.trip_runner._clock = clock
     op = {"Authorization": "Bearer op-tok"}
     vw = {"Authorization": "Bearer vw-tok"}
     with TestClient(app) as client:
-        assert client.post("/api/fleet/robots/rosy_42/map-pin", json={"x": -0.7, "y": 0.0, "yaw": 0.0},
-                           headers=op).status_code == 200
-        plan = client.post("/api/fleet/robots/rosy_42/trip",
-                           json={"to": "D", "drive_mode": "nav2"}, headers=op).json()
-        tid = plan["plan_id"]
-        assert client.post(f"/api/fleet/trips/{tid}/start", headers=op).status_code == 200
+        pin = client.post("/api/fleet/robots/rosy_42/map-pin", json={"x": -0.7, "y": 0.0, "yaw": 0.0}, headers=op)
+        assert pin.status_code == 200, pin.text
+        plan_res = client.post("/api/fleet/robots/rosy_42/trip", json={"to": "D", "drive_mode": "nav2"}, headers=op)
+        assert plan_res.status_code == 200, plan_res.text
+        tid = plan_res.json()["plan_id"]
+        start_res = client.post(f"/api/fleet/trips/{tid}/start", headers=op)
+        assert start_res.status_code == 200, start_res.text
 
         assert client.post(f"/api/fleet/trips/{tid}/pause", headers=vw).status_code == 403
         assert client.post(f"/api/fleet/trips/{tid}/resume", headers=op).status_code == 409
 
         runner = app.state.trip_runner
-        run(runner.tick())
+        client.portal.call(runner.tick)
         assert len(robot.routes) == 1
 
         paused = client.post(f"/api/fleet/trips/{tid}/pause", json={"reason": "blocked_ahead"}, headers=op)
-        assert paused.status_code == 200
+        assert paused.status_code == 200, paused.text
         assert paused.json()["hold"]["reason"] == "fleet_hold" and robot._state["navigation"] == "CANCELED"
 
         # Holding across > stall_s keeps trip open without dispatching any route.
         clock.advance(25.0)
-        run(runner.tick())
+        client.portal.call(runner.tick)
         assert runner.view(tid)["state"] == "running" and len(robot.routes) == 1
 
-        # Refresh map pin so resume guided replan sees a fresh localized pose.
-        robot._state["pose"] = {"x": -0.5, "y": 0.0, "yaw": 0.0}
         resumed = client.post(f"/api/fleet/trips/{tid}/resume", json={"blocked_edges": ["ab"]}, headers=op)
         assert resumed.status_code == 200, resumed.text
         data = resumed.json()
         assert data["hold"] is None and [s["edge_id"] for s in data["plan"]["segments"]] == ["ha", "ac", "cd"]
         assert data["detail"]["guided_blocked_edges"] == ["ab"]
 
-        run(runner.tick())
+        robot._state["navigation"] = "IDLE"
+        client.portal.call(runner.tick)
         assert len(robot.routes) == 2
 
 
@@ -342,3 +344,34 @@ def test_nav2_autonomous_waits_on_transient_conflict_and_fails_closed_on_untrust
     run(runner.tick())
     fail_view = runner.view("p-cf")
     assert fail_view["state"] == "failed" and fail_view["reason"] == "TRIP_GOAL_REFUSED"
+
+
+def test_multi_robot_nav2_claims_compare_in_site_frame_without_false_mismatch():
+    r1 = RouteFakeRobot("rosy_42")
+    r2 = RouteFakeRobot("rosy_46")
+    r1._state = {**r1._state, "map_id": "occupancy:42", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+                 "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
+    r2._state = {**r2._state, "map_id": "occupancy:46", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+                 "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
+    console = FleetConsole([
+        RobotEndpoint("rosy_42", "http://127.0.0.1:8081", "t"),
+        RobotEndpoint("rosy_46", "http://127.0.0.1:8082", "t"),
+    ], [r1, r2], clock=FakeClock())
+    console.set_site_pose_providers(
+        mover=lambda rid: ("world_261026", 0.0, 0.0, 0.0) if rid == "rosy_42" else ("world_261026", 0.0, 2.0, 0.0),
+    )
+
+    pts_far = [{"x": 0.0, "y": 0.0, "kind": "pass"}, {"x": 1.0, "y": 0.0, "kind": "stop", "yaw": 0.0}]
+    assert run(console.route("rosy_42", pts_far))["accepted"] is True
+    assert run(console.route("rosy_46", pts_far))["accepted"] is True  # y=0 vs y=2 in site frame
+
+    # Crossing path in site frame triggers ROUTE_CONFLICT instead of false MAP_FRAME_MISMATCH.
+    r2._state["navigation"] = "IDLE"
+    pts_cross = [{"x": 0.0, "y": 0.0, "kind": "pass"}, {"x": 0.5, "y": -1.8, "kind": "stop", "yaw": 0.0}]
+    conflict = run(console.route("rosy_46", pts_cross))
+    assert conflict["accepted"] is False and conflict["reason"] == "ROUTE_CONFLICT"
+
+    # Without site-frame pose proof, distinct frames still fail closed as MAP_FRAME_MISMATCH.
+    console.set_site_pose_providers(mover=lambda rid: ("world_261026", 0.0, 0.0, 0.0) if rid == "rosy_42" else None)
+    mismatch = run(console.route("rosy_46", pts_far))
+    assert mismatch["accepted"] is False and mismatch["reason"] == "MAP_FRAME_MISMATCH"

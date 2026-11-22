@@ -32,7 +32,9 @@ async def reroute_degraded(console, robots: list) -> set[str]:
                 continue
         mission = console._queued.pop(robot_id, None)
         goal = console._goals.pop(robot_id, None)
-        console._held.get(robot_id) or console._claims.pop(robot_id, None)  # D-361: held keeps its claim
+        if console._held.get(robot_id) is None:  # D-361: held keeps its claim
+            console._claims.pop(robot_id, None)
+            getattr(console, "_site_claims", {}).pop(robot_id, None)
         if lease.get("source") == "trip":
             continue  # Never reassign a trip route's single endpoint to another robot.
         if goal is not None and lease.get("task_id") is not None:

@@ -104,6 +104,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         self.goal_leases = goal_lease.GoalLeases(goal_lease_ttl_s, self._clients, clock, lambda r: r in self._yielding)
         #: 달리는 로봇이 점유한 경로. 교행 판정의 재료이자, 왜 기다리는지의 근거다.
         self._claims: dict[str, list] = {}
+        self._site_claims: dict[str, tuple[str, list[tuple[float, float]]]] = {}
         #: 남의 경로와 부딪혀 아직 못 내려간 미션. 앞이 비면 그대로 다시 내려간다.
         self._queued: dict[str, dict] = {}
         self._task_queue_release_callback: Optional[Callable[[dict], Any]] = None
@@ -221,8 +222,9 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         self._rest_tokens.pop(robot_id, None)
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
-        for table in (self._goals, self._claims, self._queued, self._yielding, self._seen, self._held,
-                      self._trusted, self._loc_null_since, self._robot_maps, self._robot_map_fallbacks, self.goal_leases):
+        for table in (self._goals, self._claims, self._site_claims, self._queued, self._yielding, self._seen,
+                      self._held, self._trusted, self._loc_null_since, self._robot_maps, self._robot_map_fallbacks,
+                      self.goal_leases):
             table.pop(robot_id, None)
         return client
 
@@ -352,6 +354,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
             else:
                 self._goals.pop(robot_id, None)
                 self._claims.pop(robot_id, None)
+                self._site_claims.pop(robot_id, None)
                 self._queued.pop(robot_id, None)
                 self._yielding.pop(robot_id, None)
                 # legacy stopped=True는 CORE HTTP 응답 수신만 뜻한다.
