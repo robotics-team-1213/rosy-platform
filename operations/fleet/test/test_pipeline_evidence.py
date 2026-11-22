@@ -710,3 +710,129 @@ def test_a_confirmation_that_lapses_between_the_check_and_the_bind_refuses_the_c
     assert res["claimed"] is False and res["reason"] == "AMR_BRAKE_BED_VELOCITY_UNMEASURED"
     assert task["status"] == "QUEUED" and not task.get("handoff_lease_id") and not task.get("claimed_at")
     assert env.app.state.omx_cell_states == cells_before
+
+
+def _real_tracker_env(monkeypatch, *, track_robots=(), max_anchor_age_s=10.0):
+    from rosy.world.state.projections.map_pose import MapPoseConfig, MapPoseTracker
+
+    env = Env()
+    cfg = MapPoseConfig(track_anchor_robots=tuple(track_robots), track_modes=("led", "motion"),
+                        max_anchor_age_s=max_anchor_age_s)
+    tracker = MapPoseTracker("pinky_1", cfg)
+    clock = [1000.0]
+    monkeypatch.setattr(ev.time, "time", lambda: clock[0])
+    # Match wall=clock[0] on heartbeat still samples so observed_at stays within [0, 2] s of time.time().
+    env.app.state.map_pose = SimpleNamespace(
+        arbitrated_pose=lambda rid: tracker.pose(clock[0], "m1"),
+        active_map_id=lambda: "m1",
+    )
+    return env, tracker, clock
+
+
+def _feed_still(env, tracker, clock, x=0.0, y=0.0, yaw=0.0):
+    from rosy.world.state.projections.map_pose_samples import OdomSample
+
+    tracker.add_odom(OdomSample(stamp=clock[0], x=x, y=y, yaw=yaw, epoch=1), clock[0])
+    env.beat(_snapshot(vel_at=clock[0]), age=0.1, still_s=1.5)
+
+
+def test_real_map_pose_tracker_stationary_bridged_sighting_and_track_pass_bed_claim_and_complete(monkeypatch):
+    from rosy.world.state.projections.map_pose_samples import Sighting
+
+    # 1. Interpolated / post-odom camera sighting sets source='bridged' while stationary inside S3.
+    env, tracker, clock = _real_tracker_env(monkeypatch)
+    _feed_still(env, tracker, clock)
+    for k in range(3):
+        tracker.add_sighting(Sighting("pinky_1", env.station[0], env.station[1], 0.1, clock[0], 0.9, "m1"), clock[0], "m1")
+        clock[0] += 0.5
+        _feed_still(env, tracker, clock, x=0.005 * min(k + 1, 1), y=0.0)
+    pose = tracker.pose(clock[0], "m1")
+    assert pose.state == "LOCALIZED" and pose.source == "bridged" and pose.anchor_source == "sighting"
+    lease = _claimed(env)
+    parts, digest = _owner_parts(lease, basis=TOP_ONLY)
+    assert _post_owner(env, lease, parts).status_code == 200
+    env.beat(_snapshot(vel_at=clock[0]), age=0.1, still_s=1.5)
+    assert env.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/complete", headers=SVC,
+                           json={"phase": "RELEASED", "goal_evidence_digest": digest, **parts}).status_code == 200
+
+    # 2. Stationary track anchor (ceiling_north track_anchor_robots) also bridges on subsequent 1 Hz odom.
+    env2, tracker2, clock2 = _real_tracker_env(monkeypatch, track_robots=("pinky_1",))
+    _feed_still(env2, tracker2, clock2)
+    for _ in range(3):
+        tracker2.add_track((env2.station[0], env2.station[1]), 0.0, clock2[0], clock2[0], "m1", "m1", "motion")
+        clock2[0] += 0.5
+        _feed_still(env2, tracker2, clock2)
+    pose2 = tracker2.pose(clock2[0], "m1")
+    assert pose2.state == "LOCALIZED" and pose2.source == "bridged" and pose2.anchor_source == "track"
+    lease2 = _claimed(env2)
+    parts2, digest2 = _owner_parts(lease2, basis=TOP_ONLY)
+    assert _post_owner(env2, lease2, parts2).status_code == 200
+    env2.beat(_snapshot(vel_at=clock2[0]), age=0.1, still_s=1.5)
+    assert env2.client.post(f"/api/fleet/pipeline/cell-tasks/{TASK}/complete", headers=SVC,
+                            json={"phase": "RELEASED", "goal_evidence_digest": digest2, **parts2}).status_code == 200
+
+
+def test_real_map_pose_tracker_stationary_pin_stays_valid_for_10s_then_refuses(monkeypatch):
+    env, tracker, clock = _real_tracker_env(monkeypatch)
+    _feed_still(env, tracker, clock)
+    assert tracker.add_pin((env.station[0], env.station[1], 0.0), clock[0], "m1") is None
+    for _ in range(5):  # 5.0 s since pin in <= max_odom_age_s (3.0 s) steps: still LOCALIZED + bridged
+        clock[0] += 1.0
+        _feed_still(env, tracker, clock)
+    pose = tracker.pose(clock[0], "m1")
+    assert pose.state == "LOCALIZED" and pose.source == "bridged" and pose.anchor_source == "operator_pin"
+    assert _claimed(env)
+    for _ in range(6):  # 11.0 s since pin: MapPoseTracker degrades beyond max_anchor_age_s=10 s
+        clock[0] += 1.0
+        _feed_still(env, tracker, clock)
+    assert env.amr() is None
+
+
+def test_bridged_poses_moving_dead_reckon_stale_anchor_turn_or_untrusted_source_remain_refused(monkeypatch):
+    from rosy.world.state.projections.map_pose_samples import Sighting
+
+    # Moving dead-reckoning from 0.10 m outside into S3 (> BED_MOVE_LIMIT_M) must be refused.
+    env, tracker, clock = _real_tracker_env(monkeypatch)
+    _feed_still(env, tracker, clock)
+    far_x = env.station[0] - 0.10
+    for k in range(3):
+        tracker.add_sighting(Sighting("pinky_1", far_x, env.station[1], 0.0, clock[0], 0.9, "m1"), clock[0], "m1")
+        clock[0] += 0.5
+        _feed_still(env, tracker, clock, x=0.10 if k == 2 else 0.0, y=0.0)
+    pose = tracker.pose(clock[0], "m1")
+    assert pose.state == "LOCALIZED" and pose.source == "bridged" and pose.dead_reckon_m > ev.BED_MOVE_LIMIT_M
+    assert env.amr() is None
+
+    # Turn in place > 2 deg is refused; camera sighting older than 2 s is refused even with fresh odom.
+    clock[0] += 1.0
+    _feed_still(env, tracker, clock, x=0.10, y=0.0)
+    tracker.add_sighting(Sighting("pinky_1", env.station[0], env.station[1], 0.0, clock[0], 0.9, "m1"), clock[0], "m1")
+    clock[0] += 0.4
+    _feed_still(env, tracker, clock, x=0.10, y=0.0)
+    tracker.add_sighting(Sighting("pinky_1", env.station[0], env.station[1], 0.0, clock[0], 0.9, "m1"), clock[0], "m1")
+    clock[0] += 0.2
+    _feed_still(env, tracker, clock, x=0.10, y=0.0, yaw=math.radians(3.0))
+    assert tracker.pose(clock[0], "m1").bridge_turn_deg > ev.STILL_BRIDGE_TURN_DEG
+    assert env.amr() is None
+
+    env_stale, tr_stale, cl_stale = _real_tracker_env(monkeypatch)
+    _feed_still(env_stale, tr_stale, cl_stale)
+    for _ in range(3):
+        tr_stale.add_sighting(Sighting("pinky_1", env_stale.station[0], env_stale.station[1], 0.0, cl_stale[0], 0.9, "m1"), cl_stale[0], "m1")
+        cl_stale[0] += 0.2
+        _feed_still(env_stale, tr_stale, cl_stale)
+    cl_stale[0] += 2.1  # sighting is 2.1 s old (> POSE_MAX_AGE_S=2.0), odom just refreshed within 3 s
+    _feed_still(env_stale, tr_stale, cl_stale)
+    assert tr_stale.pose(cl_stale[0], "m1").state == "LOCALIZED"
+    assert env_stale.amr() is None
+
+    # Auto-locate anchor, unknown anchor source, non-finite and bool fields remain refused.
+    for bad in (
+        SimpleNamespace(state="LOCALIZED", source="auto_locate", x=env.station[0], y=env.station[1], yaw=0.0, age_s=0.1, map_id="m1"),
+        SimpleNamespace(state="LOCALIZED", source="bridged", anchor_source="auto_locate", anchor_age_s=0.5, dead_reckon_m=0.0, bridge_turn_deg=0.0, x=env.station[0], y=env.station[1], yaw=0.0, age_s=0.1, map_id="m1"),
+        SimpleNamespace(state="LOCALIZED", source="bridged", anchor_source=None, anchor_age_s=0.5, dead_reckon_m=0.0, bridge_turn_deg=0.0, x=env.station[0], y=env.station[1], yaw=0.0, age_s=0.1, map_id="m1"),
+        SimpleNamespace(state="LOCALIZED", source="bridged", anchor_source="sighting", anchor_age_s=True, dead_reckon_m=0.0, bridge_turn_deg=0.0, x=env.station[0], y=env.station[1], yaw=0.0, age_s=0.1, map_id="m1"),
+        SimpleNamespace(state="LOCALIZED", source="bridged", anchor_source="sighting", anchor_age_s=0.5, dead_reckon_m=float("nan"), bridge_turn_deg=0.0, x=env.station[0], y=env.station[1], yaw=0.0, age_s=0.1, map_id="m1"),
+    ):
+        assert ev._zone_pose_stamp(bad, clock[0]) is None
+
