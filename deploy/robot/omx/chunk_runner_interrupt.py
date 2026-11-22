@@ -144,12 +144,12 @@ def _hold_tick(runner) -> bool:
             except Exception:  # noqa: BLE001
                 present, fresh = getattr(runner, "last_present", None) or runner.target, False
             shed_interrupt_hold(runner, sent, present, fresh=fresh)
-            if runner._human_hold_ack_pending:
-                runner._human_hold_ack_pending, runner.torque_hold_commanded, runner._human_hold_acked_req = False, True, getattr(runner, "_human_hold_req", None)
             if runner.ticks % max(1, round(getattr(runner, "fps", 30))) == 0:
                 check_hold_health(runner, MOTORS)
+            if runner._human_hold_ack_pending:
+                runner._human_hold_ack_pending, runner.torque_hold_commanded, runner._human_hold_acked_req = False, True, getattr(runner, "_human_hold_req", None)
         except Exception as error:  # noqa: BLE001
-            runner.torque_hold_commanded, runner._human_hold_ack_pending, runner._human_hold_acked_req = False, False, None
+            runner.torque_hold_commanded, runner._human_hold_acked_req = False, None
             torque, cause = _guard_stopped(runner), f"{type(error).__name__}: {error}"
             state["guard_cause"], runner.shed_clear = cause, None
             if torque is None and not state.get("tick_error"):
@@ -312,7 +312,7 @@ def interrupt_tick(runner, label: str, tick_or_report) -> bool:
 
 
 def emergency_hold(runner, error) -> bool:
-    runner.torque_hold_commanded, runner._human_hold_ack_pending, runner._human_hold_acked_req = False, False, None
+    runner.torque_hold_commanded, runner._human_hold_acked_req = False, None
     state = getattr(runner, "_interrupt", None) or _new_state(runner, False)
     cause = f"{type(error).__name__}: {error}"
     torque = _guard_stopped(runner)
