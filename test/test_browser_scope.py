@@ -234,3 +234,44 @@ def test_server_cell_file_maps_to_its_two_pages_and_other_server_files_keep_flee
         assert whole <= set(browser_scope.targets([path])), path
     assert set(cell) < set(browser_scope.targets(["operations/fleet/fleet/server/cell/a.py",
                                                   "operations/fleet/fleet/server/app.py"]))
+
+
+def test_fleet_sample_has_no_duplicates():
+    assert len(browser_scope.FLEET_SAMPLE) == len(set(browser_scope.FLEET_SAMPLE))
+
+
+def test_leaf_server_and_web_subprefixes_narrow_while_shared_and_root_assets_keep_fleet():
+    assistant = set(browser_scope.targets(["operations/fleet/fleet/server/assistant/routes.py"]))
+    assert assistant == set(browser_scope.FLEET_SAMPLE) | {"operations/fleet/test/test_assistant_browser.py"}
+
+    cell = set(browser_scope.targets(["applications/fleet/web/cell/cell.js"]))
+    assert set(browser_scope.FLEET_SAMPLE) <= cell
+    assert {
+        "operations/fleet/test/test_cell_app_browser.py",
+        "test/test_fleet_workcell_observation_browser.py",
+        "test/test_motor_health_ui_browser.py",
+        "shared/web/test/test_component_kit_browser.py",
+    } <= cell
+    assert "test/test_site_map_browser.py" not in cell and "operations/fleet/test/test_assistant_browser.py" not in cell
+
+    maint = set(browser_scope.targets(["applications/fleet/web/maintenance/host-services.js"]))
+    assert set(browser_scope.FLEET_SAMPLE) <= maint
+    assert {
+        "operations/fleet/test/test_development_console_browser.py",
+        "operations/fleet/test/test_task_page_compositions_browser.py",
+        "test/test_host_recovery_browser.py",
+    } <= maint
+    assert "test/test_fleet_console_browser.py" not in maint
+
+    whole_fleet = {p for pat in browser_scope.FLEET for p in browser_scope._expand(pat)}
+    for full_path in (
+        "applications/fleet/web/runtime.js",
+        "applications/fleet/web/installation/install.js",
+        "applications/fleet/web/devices/device-discovery.js",
+        "applications/fleet/web/calibration/measured-calibration-view.js",
+        "applications/fleet/web/shared/styles.css",
+        "applications/fleet/web/sitemap/site-map.js",
+        "operations/fleet/fleet/server/app.py",
+        "operations/fleet/fleet/server/work/work_routes.py",
+    ):
+        assert whole_fleet <= set(browser_scope.targets([full_path])), full_path

@@ -1,4 +1,5 @@
 // Cell task action handlers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
+import { setOffBy } from "/common/cause-line.js";
 import {
   CELL_TASKS_PATH,
   PINKY_TASKS_PATH,
@@ -54,8 +55,7 @@ export function createCellActions(ctx) {
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runPinkyQuickAction(targetRobotId, b.pinkyAction); });
     } else if (b.bedConfirmTaskId || b.presenceConfirmTaskId) {
       const reason = ctx.namedReason();  // D-1057: the server refuses a shared or development identity too
-      btn.disabled = Boolean(reason);
-      if (reason) btn.setAttribute('reason', reason);
+      setOffBy(btn, reason);
       const [kind, taskId] = b.bedConfirmTaskId ? ['bed', b.bedConfirmTaskId] : ['presence', b.presenceConfirmTaskId];
       btn.dataset[`${kind}ConfirmTaskId`] = taskId;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void confirmOperator(kind, taskId, targetRobotId); });

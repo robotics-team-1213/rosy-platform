@@ -118,13 +118,15 @@ def test_recording_progress_and_shell_elements(tmp_path):
     for marker in ('id="hdr-estop-btn"', 'id="slim-prog"', 'id="sp-timer"', 'id="toggle-reverse-btn"', 'bench_record.css'):
         assert marker in html_src
     ui_js = ((Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record_ui.js').read_text(encoding='utf-8')
+             + (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record_map.js').read_text(encoding='utf-8')
              + (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record_status.js').read_text(encoding='utf-8'))
     assert "arm_a:new Set(['top','side','arm_a_wrist'])" in ui_js
     assert "arm_b:new Set(['top','side','arm_b_wrist'])" in ui_js
 
 
 def test_ship_address_names_follow_the_site_map():
-    ui = (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record_ui.js').read_text(encoding='utf-8')
+    ui = ((Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record_ui.js').read_text(encoding='utf-8')
+          + (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record_map.js').read_text(encoding='utf-8'))
     site = json.loads((Path(__file__).resolve().parent.parent / 'shared/web/cell-site-map.json').read_text(encoding='utf-8'))
     # both holds are drawn, the grid follows the selected hold, no 0-based symbols next to the 1-based floor names
     for marker in ("data-spot=\"ship-h'+k+'\"", "for(const [k,y] of [[2,8],[1,46]])", "ship-h(\\d)r(\\d)-l(\\d)", "과제 카드 없음 (칸을 눌러도 연결되지 않음)", "'화물칸 h'+m[1]"):
@@ -133,7 +135,7 @@ def test_ship_address_names_follow_the_site_map():
         assert gone not in ui, gone
     # the map draws h2 above h1 between the stands (h2 x_mm 197 -> fixture x -.042 is farther from the arms and belt at +x than h1 x_mm 99 -> +.056), and only the selected hold gets a grid
     assert ui.index("[[2,8],[1,46]]") < ui.index('data-spot="pinky"') and ui.count("class=\"ship-grid'") == 1
-    assert "const hold=holdOf(tStr)||holdOf(oStr);" in ui and "if(hold){" in ui  # ship grid only when origin or target is ship-h*
+    assert 'function resolveActiveZone(' in ui and 'window.shipHold' in ui and 'if(hold){' in ui
     css = (Path(__file__).resolve().parent.parent / 'deploy/robot/omx/bench_record.css').read_text(encoding='utf-8')
     assert "ship-grids" not in css
     assert "ROW_LABELS=['A쪽 줄','가운데 줄','B쪽 줄']" in ui and "HOLD_COLUMNS={1:'4~6열',2:'1~3열'}" in ui
@@ -204,7 +206,7 @@ def test_audit_hardening_replay_validation_and_collection_name(tmp_path, monkeyp
     t.start()
     try:
         base = f'http://127.0.0.1:{srv.server_port}'
-        for path in ('/bench_record.css', '/bench_record_pipeline.js', '/api/pipeline/status', '/api/hf/status'):
+        for path in ('/bench_record.css', '/bench_record_map.js', '/bench_record_pipeline.js', '/api/pipeline/status', '/api/hf/status'):
             with urllib.request.urlopen(base + path, timeout=5) as r:
                 assert r.status == 200
     finally:
@@ -680,19 +682,20 @@ def test_bench_phase_tabs_and_section_visibility_contract():
     cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
     css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
 
-    for marker in ('id="phase-tabs"', 'data-phase-tab="setup"', 'data-phase-tab="live"', 'data-phase-tab="result"',
+    for marker in ('id="phase-tabs"', 'data-phase-tab="setup"', 'data-phase-tab="prepare"',
+                   'data-phase-tab="recording"', 'data-phase-tab="result"', 'id="prepare-ticks"', 'id="sp-fill"',
                    'id="ev-dataset"', 'id="ev-safe-end"', 'id="back-to-setup-btn"'):
         assert marker in html, marker
 
     expected_tabs = {
-        'slim-prog': {'live'},
-        'hdr-live-metrics': {'live'},
+        'hdr-prepare-btn': {'setup'},
+        'hdr-start-now-btn': {'setup'},
+        'hdr-live-metrics': {'recording'},
         'hdr-result-actions': {'result'},
         'home-include-leader-group': {'setup'},
-        'status-bar': {'live', 'result'},
-        'sec-cameras': {'setup', 'live'},
+        'sec-cameras': {'setup', 'prepare', 'recording'},
         'sec-guide': {'setup'},
-        'sec-telemetry': {'live'},
+        'sec-telemetry': {'prepare', 'recording'},
         'sec-evidence': {'result'},
     }
     for sec_id, tabs in expected_tabs.items():
@@ -702,7 +705,7 @@ def test_bench_phase_tabs_and_section_visibility_contract():
 
     assert 'function resolveBenchPhase(' in ui_js and 'function applyBenchPhase(' in ui_js
     assert 'setManualBenchPhase' in cam_js
-    assert '.app-shell[data-phase="live"]' in css
+    assert '.app-shell[data-phase="recording"]' in css
 
 
 def test_start_succeeds_without_at_bench(tmp_path, monkeypatch):
@@ -715,7 +718,9 @@ def test_start_succeeds_without_at_bench(tmp_path, monkeypatch):
 def test_ui_auto_selects_recommended_and_generates_name_without_at_bench():
     omx_dir = ROOT / 'deploy/robot/omx'
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
-    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
+    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
     app_js = ((omx_dir / 'bench_record_app.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8'))
 
     assert 'id="hdr-start-reasons"' in html
@@ -790,13 +795,18 @@ def test_auto_home_runs_once_after_safe_end_and_never_after_unsafe_end(tmp_path,
 def test_cargo_hold_grid_only_renders_for_ship_tasks():
     omx_dir = ROOT / 'deploy/robot/omx'
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
-    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
-    assert 'id="sec-cameras" data-tabs="setup live"' in html
-    assert "if(p==='setup'||p==='live')renderCamGuide();" in ui_js
-    assert 'const hold=holdOf(tStr)||holdOf(oStr);' in ui_js
+    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
+    assert 'id="sec-cameras" data-tabs="setup prepare recording"' in html
+    assert "if(p!=='result')renderCamGuide();" in ui_js
+    assert 'function taskFitsArm(' in ui_js and 'function resolveActiveZone(' in ui_js
     assert '||1;' not in ui_js
-    assert 'if(hold){' in ui_js
-    assert 'ship-grid' in ui_js and '화물칸 h' in ui_js
+    assert 'ship-grid' in ui_js and 'stand-grid' in ui_js and 'arm-s-table' in ui_js and 'map-zone-tabs' in ui_js
+    assert "box.hidden=(currentBenchPhase()==='result')" in ui_js
+    assert 'c?.shot_arm' in ui_js and 'explicit===arm' in ui_js
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+    assert '!st?.link&&(split||total===1)' in cam_js
 
 
 def test_bench_ribbon_camera_first_drawers_and_no_motion():
@@ -850,7 +860,9 @@ def test_bench_v2_camera_pip_goal_lines_and_nonblocking_top_warning():
     omx_dir = ROOT / 'deploy/robot/omx'
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
     css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
-    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
+    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
     app_js = ((omx_dir / 'bench_record_app.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8'))
 
     # 1) Primary camera + secondary PiP overlay structure and switch function
@@ -879,7 +891,9 @@ def test_bench_v3_always_visible_goal_records_live_map_note_and_topbar_menu():
     omx_dir = ROOT / 'deploy/robot/omx'
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
     css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
-    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
+    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
     app_js = ((omx_dir / 'bench_record_app.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8'))
 
     # The goal stays visible in every phase and gives a task picker when empty.
@@ -1010,10 +1024,10 @@ def test_the_leader_aligns_and_the_caps_come_back_before_the_observers_are_resto
 
 def test_bench_ui_shows_outbound_stand_and_filters_arm_b():
     root = Path(__file__).resolve().parent.parent / 'deploy/robot/omx'
-    ui = (root / 'bench_record_ui.js').read_text(encoding='utf-8')
+    map_js = (root / 'bench_record_map.js').read_text(encoding='utf-8')
     app = (root / 'bench_record_app.js').read_text(encoding='utf-8')
-    for marker in ('data-spot="stand"', '반출대', 'describeSpot', "'stand:r1-s1'", "'stand:r1-s1-t1'"):
-        assert marker in ui, marker
-    assert r'\bstand\b' in app and 'arm_b:' in app
+    for marker in ('data-spot="stand"', '반출대', 'describeSpot', "'stand:r1-s1'", "'stand:r1-s1-t1'", r'\bstand\b', "arm==='arm_b'"):
+        assert marker in map_js, marker
+    assert 'taskFitsArm' in app
 
 

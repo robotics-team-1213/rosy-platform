@@ -56,6 +56,24 @@ CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json")
                    **FLEET_TEST_SECONDS}
 MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
 _STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_scheduling.py"
+_GIT_HISTORY_TESTS = (
+    "test/test_harness_contracts.py",
+    "test/architecture/test_module_structure.py",
+    "test/test_safety_review.py",
+    "test/test_remote_test_tools.py",
+    "test/test_remote_fixture_isolation.py",
+)
+
+
+def _needs_git_history(entry: dict) -> bool:
+    """True only for matrix runners whose invocations can collect tests that query git history on ROOT."""
+    for inv in entry.get("invocations") or ():
+        paths = [p.split("::", 1)[0] for p in inv
+                 if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
+        skip = {p.split("=", 1)[1] for p in inv if p.startswith("--ignore=")}
+        if any(affected_ros._under(h, p) and h not in skip for h in _GIT_HISTORY_TESTS for p in paths):
+            return True
+    return False
 
 
 def consolidated(include: list[dict]) -> list[dict]:
@@ -230,8 +248,9 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
                 continue  # ROS environment grouping must not split the job's leading environment.
             split = [p for p in inv if p in whole and _shard_groups(repo, whole[p], inv)]
             rest, flags = [p for p in inv if p not in split], [p for p in inv if p.startswith("-")]
+            guard_only = all(p in at.GUARD_SET for p in rest if not p.startswith("-"))
             if any(not p.startswith("-") for p in rest) or not split:
-                out += _shard_py_invocation(rest) if not split else [rest]
+                out += [rest] if split or guard_only else _shard_py_invocation(rest)
             out += [[*group, *flags] for p in split for group in _shard_groups(repo, whole[p], inv)]
         entries = affected_ros.entries(out, CI_FULL_MATRIX)
         exclusive_jobs = [inv for inv in sel.invocations if affected_exclusive.dedicated(inv)]
@@ -248,7 +267,18 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         entry.setdefault("kind", "pytest")
         entry.setdefault("gating", True)
         entry.setdefault("ros", "overlay")
-        if (entry["kind"] == "pytest" and entry["ros"] == "overlay" and entry.get("invocations")
-                and all(p in at.GUARD_SET for inv in entry["invocations"] for p in inv if not p.startswith("-"))):
+    include = affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)
+    for entry in include:
+        if entry["kind"] != "pytest" or not entry.get("invocations"):
+            continue
+        if _needs_git_history(entry):
+            entry["git_history"] = True
+        if entry["ros"] != "overlay":
+            continue
+        paths = [p.split("::", 1)[0] for inv in entry["invocations"] for p in inv
+                 if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
+        if entry["name"].startswith("browser-") or (
+            paths and all(p in at.GUARD_SET or affected_ros._under(p, "test") for p in paths)
+        ):
             entry["colcon"] = False
-    return {"include": affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)}
+    return {"include": include}

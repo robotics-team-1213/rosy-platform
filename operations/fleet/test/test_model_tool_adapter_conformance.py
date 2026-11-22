@@ -162,15 +162,21 @@ SITE_DEVICE_ACTUATION_NAMES = [
 ]
 
 
+@pytest.fixture(scope="module")
+def _rejected_mission_env(tmp_path_factory):
+    client, mission_id = _running_mission(tmp_path_factory.mktemp("conformance_reject"))
+    scope, turn = _turn(client, _scope(client, mission_id))
+    return client, scope, turn
+
+
 @pytest.mark.parametrize("profile", ["interactions", "live"])
 @pytest.mark.parametrize("name", [
     "move", "set_gripper_state", "execute_action", "cancel_action", "stop",
     "emergency_stop", "rearm", "post_actions_execute",
     *SITE_DEVICE_ACTUATION_NAMES,
 ])
-def test_sample_actuation_and_openapi_operations_stay_outside_catalog(profile, name, tmp_path):
-    client, mission_id = _running_mission(tmp_path)
-    scope, turn = _turn(client, _scope(client, mission_id))
+def test_sample_actuation_and_openapi_operations_stay_outside_catalog(profile, name, _rejected_mission_env):
+    client, scope, turn = _rejected_mission_env
     adapter = _fixture_adapter(profile)
     arguments = {"x": 1, "y": 2, "high": True}
     call = adapter.decode(

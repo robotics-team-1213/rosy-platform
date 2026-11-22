@@ -47,6 +47,7 @@ _BRACE = re.compile(r"([\w$./-]*/)\{([\w./-]+(?:,[\w./-]+)+)\}")
 _BACKSLASHES = re.compile(r"\\+")
 _START = r"(?<![\w.-])"
 _END = r"(?![\w-]|\.\w)"
+_PRE_BLOCK = re.compile(r"[\w.-]")
 
 
 def in_scope(path: str) -> bool:
@@ -73,14 +74,19 @@ class LegacyScan:
 
     def __init__(self, legacies):
         self.legacies = sorted(set(legacies), key=len, reverse=True)
+        self._last_segs = tuple({legacy.rsplit("/", 1)[-1] for legacy in self.legacies})
+        self._first_slash = tuple({legacy.split("/", 1)[0] + "/" for legacy in self.legacies if "/" in legacy})
+        self._has_bare_legacy = any("/" not in legacy for legacy in self.legacies)
         self._slash = [
             (legacy, re.compile(f"{_START}{re.escape(legacy)}{_END}")) for legacy in self.legacies
         ]
-        self._join = [
-            (legacy, legacy.split("/"),
-             re.compile(_START + _SEPARATOR.join(map(re.escape, legacy.split("/"))) + _END))
-            for legacy in self.legacies if "/" in legacy
-        ]
+        self._join_groups: dict[str, list[tuple[str, list[str], re.Pattern[str]]]] = {}
+        for legacy in self.legacies:
+            if "/" not in legacy:
+                continue
+            segs = legacy.split("/")
+            pat = re.compile(_SEPARATOR.join(map(re.escape, segs)) + _END)
+            self._join_groups.setdefault(segs[0], []).append((legacy, segs, pat))
 
     def _legacy_of(self, path: str) -> str | None:
         return next((legacy for legacy in self.legacies if under(path, legacy)), None)
@@ -91,41 +97,53 @@ class LegacyScan:
         # Every form names the legacy's last segment: a ../ string can only resolve
         # into legacy without it from a folder inside legacy, and such a file is
         # already reported as left behind.
-        if not any(legacy.rsplit("/", 1)[-1] in text for legacy in self.legacies):
+        if not any(seg in text for seg in self._last_segs):
             return []
         if "\\" in text:
             text = _BACKSLASHES.sub("/", text)
         found, starts = [], set()
-        for legacy, pattern in self._slash:
-            at = text.find(legacy)
-            while at != -1:
-                if at not in starts and pattern.match(text, at):
-                    starts.add(at)
-                    start, end = at, at + len(legacy)
-                    while start > 0 and not _TOKEN_BREAK.match(text, start - 1):
-                        start -= 1
-                    while end < len(text) and not _TOKEN_BREAK.match(text, end):
-                        end += 1
-                    if not text.startswith(INSTALL_PREFIXES, start):
-                        found.append(("slash", text[start:end], legacy))
-                at = text.find(legacy, at + 1)
-        for legacy, segments, pattern in self._join:
-            if not all(segment in text for segment in segments):
-                continue
-            for match in pattern.finditer(text):
-                if "'" in match.group(0) or '"' in match.group(0):
-                    found.append(("join", match.group(0), legacy))
-        if "/{" in text:
-            for match in _BRACE.finditer(text):
-                prefix = match.group(1)
-                if prefix.startswith(INSTALL_PREFIXES):
+        if self._has_bare_legacy or any(fs in text for fs in self._first_slash):
+            for legacy, pattern in self._slash:
+                at = text.find(legacy)
+                while at != -1:
+                    if at not in starts and pattern.match(text, at):
+                        starts.add(at)
+                        start, end = at, at + len(legacy)
+                        while start > 0 and not _TOKEN_BREAK.match(text, start - 1):
+                            start -= 1
+                        while end < len(text) and not _TOKEN_BREAK.match(text, end):
+                            end += 1
+                        if not text.startswith(INSTALL_PREFIXES, start):
+                            found.append(("slash", text[start:end], legacy))
+                    at = text.find(legacy, at + 1)
+            if "/{" in text:
+                for line in text.splitlines():
+                    if "/{" not in line:
+                        continue
+                    for match in _BRACE.finditer(line):
+                        prefix = match.group(1)
+                        if prefix.startswith(INSTALL_PREFIXES):
+                            continue
+                        for alternative in match.group(2).split(","):
+                            candidate = prefix + alternative
+                            legacy = next((legacy for legacy, pattern in self._slash if pattern.search(candidate)), None)
+                            if legacy is not None:
+                                found.append(("brace", match.group(0), legacy))
+                                break
+        if "'" in text or '"' in text:
+            for first_seg, group in self._join_groups.items():
+                if first_seg not in text:
                     continue
-                for alternative in match.group(2).split(","):
-                    candidate = prefix + alternative
-                    legacy = next((legacy for legacy, pattern in self._slash if pattern.search(candidate)), None)
-                    if legacy is not None:
-                        found.append(("brace", match.group(0), legacy))
-                        break
+                for legacy, segments, pattern in group:
+                    if not all(segment in text for segment in segments):
+                        continue
+                    for match in pattern.finditer(text):
+                        s = match.start()
+                        if s > 0 and _PRE_BLOCK.match(text, s - 1):
+                            continue
+                        matched = match.group(0)
+                        if "'" in matched or '"' in matched:
+                            found.append(("join", matched, legacy))
         if "../" in text:
             folders = PurePosixPath(path).parent.parts
             bases = ["/".join(folders[:depth]) for depth in range(len(folders), -1, -1)]

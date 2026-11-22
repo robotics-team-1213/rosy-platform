@@ -65,6 +65,8 @@ install(FILES
   robot-dock-gallery.js
   robot-dock-model.js
   component-controls.css
+  choice-controls.css
+  robot-dock.css
   component-gallery.css
   component-gallery.html
   component-gallery.js

@@ -2,6 +2,7 @@
 // 카메라 영상을 지도 좌표(m) 평면으로 펴서 차선과 함께 보여 준다. 검토 중 제안이 없을 때 화면은
 // Fleet 에 승인된 추적 보정(D-457, 같은 source·지도·렌즈)으로 편다. 그 기록이 없으면 이 브라우저의
 // 표시 초안(localStorage)을 쓴다. 어떤 값도 sighting·CameraMap·주행에 쓰지 않는다.
+import { setOffBy } from "/common/cause-line.js";
 
 import {
   MAP_FIT_PREFIX, multiply3, invert3, project, scale3, projectPolyline, projectTriangles,
@@ -10,16 +11,11 @@ import {
   fitFromCalibration,
 } from "/console/assets/map-fit.js";
 import { warpImage } from "./field-view.js";
+import { storageGet, storageSet } from "./field-view.js";
 import { drawStartPointMarks, picturePose } from "./start-point-layer.js";
 
 // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 토큰에서 푼다(테마를 따른다).
 const tone = (name) => window.RosyPalette.cssColor(name);
-function storageGet(key) {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function storageSet(key, value) {
-  try { localStorage.setItem(key, value); return true; } catch { return false; }
-}
 function storageRemove(key) {
   try { localStorage.removeItem(key); } catch { /* 이 화면에서만 지워진다 */ }
 }
@@ -313,8 +309,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     life.check();
     const generation = ++fitGeneration;
     pending = null; // 지난 제안이 실패한 새 맞춤 뒤에 남지 않게
-    detectButton.setAttribute("disabled", "");
-    detectButton.setAttribute("reason", "맞추는 중");
+    setOffBy(detectButton, "맞추는 중");
     state.textContent = "Vision에서 차선 페인트를 사이트 지도에 맞추는 중입니다…";
     state.dataset.tone = "neutral";
     guidance.hidden = true;
@@ -332,8 +327,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
       }
     } finally {
       if (life.current() && generation === fitGeneration) {
-        detectButton.removeAttribute("disabled");
-        detectButton.removeAttribute("reason");
+        setOffBy(detectButton, "");
       }
     }
     render();
@@ -400,8 +394,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
       const life = scope.capture();
       life.check();
       const source = visionView.currentSource() || "ceiling_north";
-      autoExtractButton.setAttribute("disabled", "");
-      autoExtractButton.setAttribute("reason", "추출 중");
+      setOffBy(autoExtractButton, "추출 중");
       showSummary({ tone: "neutral", guidance: null, headline: `카메라(${source})에서 맵 초안을 자동 추출하고 있습니다…` });
       try {
         const lease = await call("/api/fleet/vision/lease", {
@@ -460,8 +453,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
         showSummary({ tone: "warn", guidance: null, headline: `카메라 맵 자동 추출 실패: ${error.message || error}` });
       } finally {
         if (life.current()) {
-          autoExtractButton.removeAttribute("disabled");
-          autoExtractButton.removeAttribute("reason");
+          setOffBy(autoExtractButton, "");
         }
       }
     });
@@ -505,8 +497,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
 
   function reset() {
     fitGeneration += 1; // 진행 중인 맞춤의 늦은 결과가 초기화를 덮지 않게
-    detectButton.removeAttribute("disabled");
-    detectButton.removeAttribute("reason");
+    setOffBy(detectButton, "");
     lanes = null;
     lanesAt = 0;
     calibrations = [];
@@ -523,8 +514,7 @@ export function createMapFitView({ scope, el, view, call, visionView, onChanged 
     pending = null;
     lastFrame = null;
     warped = null;
-    detectButton.removeAttribute("disabled");
-    detectButton.removeAttribute("reason");
+    setOffBy(detectButton, "");
   });
 
   return { render, reset };

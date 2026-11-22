@@ -35,27 +35,38 @@
           </div>
         </div>
         <button type="button" id="hdr-refresh-btn" class="btn-tool btn-xs" title="상태와 목록 새로고침 [Shift+R]">새로고침<kbd class="kbd-hint">⇧R</kbd></button>
+        <button type="button" id="hdr-camera-restart-btn" class="btn-tool btn-xs" title="선택한 팔의 카메라 재시작 [Shift+C]" disabled>카메라 재시작<kbd class="kbd-hint">⇧C</kbd></button>
       </nav>
     </div>
     <section id="hdr-row-ops" class="topbar-row topbar-ops" aria-label="녹화 및 로봇 조작">
-      <nav id="phase-tabs" aria-label="녹화 진행 단계">
+      <div id="phase-tabs" role="group" aria-label="녹화 진행 단계">
         <ol class="phase-steps">
-          <li><button type="button" class="phase-step" id="tab-setup" data-phase-tab="setup" aria-current="step">녹화 전</button></li>
-          <li><button type="button" class="phase-step" id="tab-live" data-phase-tab="live">녹화 중</button></li>
-          <li><button type="button" class="phase-step" id="tab-result" data-phase-tab="result">녹화 후</button></li>
+          <li class="phase-step" id="tab-setup" data-phase-tab="setup" aria-current="step">설정</li>
+          <li class="phase-step" id="tab-prepare" data-phase-tab="prepare">
+            <span>준비 <span id="starting-step-box" hidden></span></span>
+            <span id="prepare-ticks" class="phase-track" aria-hidden="true">
+              <span title="팔로워 홈"></span><span title="리더 정렬"></span><span title="카메라"></span><span title="가드 정렬"></span><span title="연동됨"></span>
+            </span>
+          </li>
+          <li class="phase-step" id="tab-live" data-phase-tab="recording">
+            <span>녹화 <span id="sp-quota" hidden></span> <span id="sp-timer" hidden></span></span>
+            <div id="slim-prog" class="slim-track phase-track" role="progressbar" aria-label="에피소드 경과" hidden><div class="slim-fill" id="sp-fill"></div></div>
+          </li>
+          <li class="phase-step" id="tab-result" data-phase-tab="result">결과</li>
         </ol>
-      </nav>
+      </div>
       <div class="primary-ops">
-        <button type="button" id="hdr-record-btn" class="btn-rec topbar-rec-btn" aria-describedby="hdr-start-reasons" disabled><span class="btn-lbl">● 녹화 시작</span><kbd class="kbd-hint">Space</kbd></button>
+        <button type="button" id="hdr-prepare-btn" class="btn-primary topbar-rec-btn" data-tabs="setup" aria-describedby="hdr-start-reasons" disabled>준비 시작<kbd class="kbd-hint">Space</kbd></button>
+        <button type="button" id="hdr-start-now-btn" class="btn-tool btn-xs" data-tabs="setup" disabled>한 번에 시작</button>
+        <button type="button" id="hdr-record-btn" class="btn-rec topbar-rec-btn" disabled hidden><span class="btn-lbl">● 녹화</span><kbd class="kbd-hint">Space</kbd></button>
+        <button type="button" id="hdr-finish-btn" class="btn-tool topbar-op-btn" disabled hidden>연동 끝</button>
         <div id="home-include-leader-group" class="home-group" data-tabs="setup">
           <button type="button" id="hdr-home-btn" class="btn-tool" disabled title="선택한 팔 홈 이동 [H]"><span class="btn-lbl">홈 이동</span><kbd class="kbd-hint">H</kbd></button>
           <label class="check-row topbar-check" id="home-include-leader-wrap"><input type="checkbox" id="home-include-leader"><span>리더도 함께</span></label>
         </div>
-        <div id="hdr-live-metrics" class="live-ops" data-tabs="live" hidden>
+        <div id="hdr-live-metrics" class="live-ops" data-tabs="recording" hidden>
           <button type="button" id="hdr-next-ep-btn" class="btn-tool topbar-op-btn" disabled title="다음 에피소드 (녹화 중에만 활성) [→ / N]">다음 에피소드<kbd class="kbd-hint">→</kbd></button>
           <button type="button" id="hdr-rerecord-btn" class="btn-tool topbar-op-btn" disabled title="다시 녹화 (녹화 중에만 활성) [← / R]">다시 녹화<kbd class="kbd-hint">←</kbd></button>
-          <span class="live-count">회차 <strong id="sp-quota" class="mono">— / —</strong></span>
-          <span class="live-elapsed">경과 <strong id="sp-timer" class="mono live-timer">00:00.0s</strong></span>
         </div>
         <div id="hdr-result-actions" class="result-ops" data-tabs="result" hidden>
           <span id="goal-result-line" class="goal-result-line mono" hidden></span>
@@ -66,19 +77,13 @@
         <button type="button" id="hdr-estop-btn" class="btn-estop" data-always-live title="즉시 정지 요청 · 물리 차단은 follower 전원 스위치">비상정지 (E-Stop)</button>
       </div>
     </section>
-    <div id="start-reason-bar" class="reason-strip" role="status" aria-live="polite" hidden>
-      <span id="hdr-start-reasons" class="reason-text quiet"></span>
-      <button type="button" id="reason-more-btn" class="btn-tool btn-xs" hidden></button>
-      <button type="button" id="reason-expand-btn" class="btn-tool btn-xs" aria-expanded="false" hidden>자세히</button>
-      <button type="button" id="reason-close-btn" class="btn-tool btn-xs" aria-label="알림 닫기" hidden>닫기<kbd class="kbd-hint">X</kbd></button>
-    </div>
   </header>
 
   <main class="app-main">
     <div class="layout">
-      <section class="card cam-panel" id="sec-cameras" data-tabs="setup live" aria-labelledby="h-cams">
-        <h2 id="h-cams" class="sr-only">실시간 카메라</h2>
-        <p id="cam-note" class="sr-only">작업대 카메라(8767)를 확인하는 중입니다.</p>
+      <section class="card cam-panel" id="sec-cameras" data-tabs="setup prepare recording" aria-labelledby="h-cams">
+        <h2 id="h-cams" class="bench-sr-only">실시간 카메라</h2>
+        <p id="cam-note" class="bench-sr-only">작업대 카메라(8767)를 확인하는 중입니다.</p>
         <div class="cam-stage">
           <div id="cam-grid" class="cam-grid"></div>
         </div>
@@ -149,27 +154,18 @@
         </section>
 
         <div id="bench-sidebar-scroll" class="bench-sidebar-scroll">
-        <details class="card acc-card sb-sec" id="sec-progress" open aria-labelledby="h-progress">
+        <details class="card acc-card sb-sec" id="sec-guide" data-tabs="setup" open aria-labelledby="h-guide">
           <summary class="acc-sum sb-sum">
-            <h2 id="h-progress" class="goal-kicker">진행</h2>
+            <div class="acc-head"><h2 id="h-guide" class="goal-kicker">위치 선택 · 배치도</h2><span id="sb-guide-sum" class="sum-line quiet mono">작업대 구역</span></div>
           </summary>
-          <div class="acc-body sb-body">
-            <div id="starting-step-box" class="step-banner mono" hidden></div>
-            <div class="slim-prog" id="slim-prog" data-tabs="live" aria-live="polite" aria-label="녹화 진행 상황">
-              <div class="live-metric-sub">
-                <span id="sp-rem" class="quiet"></span>
-                <span class="slim-item">직전 <strong id="sp-last" class="mono">—</strong></span>
-                <span id="sp-mode" class="ui-tag mono">정방향</span>
-              </div>
-              <div class="slim-track"><div class="slim-fill" id="sp-fill" style="width:0%"></div></div>
-            </div>
-            <div id="sb-prog-idle" class="quiet mono" style="font-size:.82rem">대기 중 · 녹화를 시작하면 진행 단계와 경과가 표시됩니다.</div>
+          <div class="acc-body guide-panel">
+            <div id="cam-guide" class="cam-guide-box" hidden></div>
           </div>
         </details>
 
         <details class="card acc-card sb-sec" id="sec-status" open aria-labelledby="h-status">
           <summary class="acc-sum sb-sum">
-            <div class="acc-head"><h2 id="h-status" class="goal-kicker">상태</h2><span class="badge" id="top-badge" data-tone="warn">확인 중</span></div>
+            <h2 id="h-status" class="goal-kicker">진단</h2>
           </summary>
           <div class="acc-body sb-body">
             <div class="sb-health-row">
@@ -177,18 +173,12 @@
               <span class="ui-tag mono" id="hdr-host">rosy-arm-cell</span>
             </div>
             <div id="sb-verdict-row" class="sb-verdict-row mono" hidden></div>
-            <dl id="sb-motor-summary" class="kv sb-params-kv mono">
-              <dt>팔로워</dt><dd id="sb-st-follower">—</dd>
-              <dt>리더</dt><dd id="sb-st-leader">—</dd>
-              <dt>토크</dt><dd id="sb-st-torque">—</dd>
-              <dt>보류/사고</dt><dd id="sb-st-hold">—</dd>
-            </dl>
-            <div class="status-bar" id="status-bar" data-tabs="live result" aria-label="녹화 상태" aria-live="polite">
+            <div>
               <span id="top-checked" class="quiet">마지막 확인: 미확인</span>
               <p id="stop-note" class="quiet" hidden>정상 종료 요청(SIGTERM)입니다. 물리 비상 정지는 follower 전원 스위치를 사용하세요.</p>
             </div>
-            <details class="card acc-card sb-sub-acc" id="sec-telemetry" data-tabs="live" open aria-labelledby="h-tel">
-              <summary class="acc-sum"><h3 id="h-tel" style="margin:0">관절 동기화 · 모터 부하</h3><div style="display:flex;gap:6px;align-items:center"><span id="tel-track" class="badge" data-tone="warn">대기</span><span id="tel-lat" class="badge mono">-- ms</span></div></summary>
+            <details class="card acc-card sb-sub-acc" id="sec-telemetry" data-tabs="prepare recording" open aria-labelledby="h-tel">
+              <summary class="acc-sum"><h3 id="h-tel" style="margin:0">관절 동기화 · 모터 부하</h3><span id="tel-lat" class="badge mono">-- ms</span></summary>
               <div class="acc-body">
                 <div id="tel-note" class="quiet" style="font-size:.82rem;margin-bottom:6px">녹화/구동 중 0.4초 주기로 관절 동기화(Δ°)와 루프 지연을 표시합니다.</div>
                 <div id="tel-grid" class="tel-grid mono" hidden></div>
@@ -215,17 +205,7 @@
               <dt>한계(caps)</dt><dd id="sb-param-caps">미선택</dd>
               <dt>에피소드</dt><dd id="sb-param-episodes">기본회</dd>
               <dt>회차/대기</dt><dd id="sb-param-timing">회차 길이 기본 · 사이 대기 기본</dd>
-              <dt>추종 단계</dt><dd id="sb-st-phase">—</dd>
             </dl>
-          </div>
-        </details>
-
-        <details class="card acc-card sb-sec" id="sec-guide" data-tabs="setup" open aria-labelledby="h-guide">
-          <summary class="acc-sum sb-sum">
-            <div class="acc-head"><h2 id="h-guide" class="goal-kicker">배치도</h2><span id="sb-guide-sum" class="sum-line quiet mono">작업대 구역</span></div>
-          </summary>
-          <div class="acc-body guide-panel">
-            <div id="cam-guide" class="cam-guide-box" hidden></div>
           </div>
         </details>
 
@@ -245,16 +225,18 @@
           </summary>
           <div class="acc-body sb-body">
             <dl id="shortcut-help-list" class="kv sb-params-kv mono">
-              <dt><kbd>Space</kbd> / <kbd>Ctrl+Enter</kbd></dt><dd>녹화 시작 · 중지</dd>
+              <dt><kbd>Space</kbd></dt><dd>준비 시작 · 녹화 · 녹화 끝</dd>
+              <dt><kbd>Ctrl+Enter</kbd> / <kbd>Alt+S</kbd></dt><dd>한 번에 시작</dd>
               <dt><kbd>→</kbd> / <kbd>N</kbd></dt><dd>다음 에피소드 (녹화 중)</dd>
               <dt><kbd>←</kbd> / <kbd>R</kbd></dt><dd>다시 녹화 (녹화 중)</dd>
               <dt><kbd>H</kbd></dt><dd>선택 팔 홈 이동</dd>
               <dt><kbd>Esc</kbd></dt><dd>녹화 중지 / 서랍 닫기</dd>
               <dt><kbd>C</kbd></dt><dd>주/보조 카메라 전환</dd>
+              <dt><kbd>Shift+C</kbd></dt><dd>카메라 재시작</dd>
               <dt><kbd>Shift+R</kbd></dt><dd>상태 · 카메라 새로고침</dd>
               <dt><kbd>1</kbd>~<kbd>4</kbd></dt><dd>서랍 1~4 열기/닫기</dd>
               <dt><kbd>/</kbd></dt><dd>작업 카드 검색</dd>
-              <dt><kbd>X</kbd></dt><dd>상단 알림 닫기</dd>
+              <dt><kbd>X</kbd></dt><dd>알림 닫기</dd>
               <dt><kbd>Alt+R</kbd></dt><dd>역방향 재생 전환</dd>
               <dt><kbd>Alt+W</kbd></dt><dd>집기↔놓기 스왑</dd>
               <dt><kbd>?</kbd></dt><dd>단축키 도움말</dd>
@@ -265,6 +247,23 @@
       </aside>
     </div>
   </main>
+  <footer id="status-bar" class="status-bar" aria-label="작업대 상태">
+    <dl id="sb-motor-summary" class="status-values">
+      <div><dt>단계</dt><dd id="top-badge">확인 중</dd></div>
+      <div hidden><dt>팔로워</dt><dd><span id="sb-st-follower" hidden></span> <span id="sb-st-torque" hidden></span></dd></div>
+      <div class="status-leader" hidden><dt>리더</dt><dd id="sb-st-leader"></dd></div>
+      <div hidden><dt>추종</dt><dd id="sb-st-phase"><span id="tel-track"></span></dd></div>
+      <div class="status-speed" hidden><dt>속도</dt><dd id="status-speed"></dd></div>
+      <div hidden><dt>카메라</dt><dd><span id="status-cameras"></span> <span id="status-camera-source" hidden></span></dd></div>
+      <div hidden><dt>보류·사고</dt><dd id="sb-st-hold"></dd></div>
+    </dl>
+    <div id="start-reason-bar" class="reason-strip" role="status" hidden>
+      <span class="status-label">알림</span><span id="hdr-start-reasons" class="reason-text quiet"></span>
+      <button type="button" id="reason-more-btn" class="btn-tool btn-xs" hidden></button>
+      <button type="button" id="reason-expand-btn" class="btn-tool btn-xs" aria-expanded="false" hidden>자세히</button>
+      <button type="button" id="reason-close-btn" class="btn-tool btn-xs" aria-label="알림 닫기" hidden>닫기<kbd class="kbd-hint">X</kbd></button>
+    </div>
+  </footer>
 
   <aside id="side-drawer-host" class="side-drawer-host" hidden role="dialog" aria-modal="false" aria-labelledby="drawer-panel-title">
     <div id="drawer-backdrop" class="drawer-backdrop"></div>
@@ -532,6 +531,7 @@
 </div>
 
 <script src="/bench_record_ui.js"></script>
+<script src="/bench_record_map.js"></script>
 <script src="/bench_record_status.js"></script>
 <script src="/bench_record_app.js"></script>
 <script src="/bench_record_drawers.js"></script>

@@ -53,10 +53,9 @@ class PeerCatalogueStore:
             peers.append(PeerSummary(**row.model_dump(), peer_id=identity, provenance='mdns',
                                      freshness=freshness, approval='approved' if identity else 'unapproved'))
         # Presence is supplied by an existing owner directory, never by scanner TXT.
-        discovered_ids = {(row.role, row.peer_id) for row in peers if row.peer_id is not None}
+        # mDNS rows carry observation/freshness; an approved-directory row independently
+        # supplies the browser link origin for the same peer, so overlap is not a duplicate.
         for row in directory:
-            row = PeerSummary.model_validate(row)
-            if (row.role, row.peer_id) not in discovered_ids:
-                peers.append(row)
+            peers.append(PeerSummary.model_validate(row))
         peers.sort(key=lambda row: (row.approval != 'approved', row.role, row.name, row.address or ''))
         return PeerCatalogue(peers=peers[:64], scanner_state=state, scanner_age_s=age)

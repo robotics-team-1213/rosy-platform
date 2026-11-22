@@ -207,3 +207,36 @@ def test_rows_caches_by_file_stat_and_invalidates_on_append(tmp_path):
     assert mh._rows(history, b) == []
     mh.record(history, b, "h", 1024, "ab" * 20, 2.0)
     assert len(mh._rows(history, b)) == 1
+
+
+def test_record_self_trims_past_size_and_row_limit(tmp_path, monkeypatch):
+    history = tmp_path / mh.FILE
+    for i in range(6):
+        mh.record(history, [f"test/t{i}.py"], "h", 100 + i, "ab" * 20)
+    monkeypatch.setattr(mh, "SELF_TRIM_BYTES", 1)
+    monkeypatch.setattr(mh, "MAX_ROWS", 5)
+    monkeypatch.setattr(mh, "KEEP_ROWS", 3)
+    mh.record(history, ["test/newest.py"], "h", 999, "cd" * 20)
+    kept = history.read_text(encoding="utf-8").splitlines()
+    assert len(kept) == 3 and '"test/newest.py"' in kept[-1]
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_record_self_trims_safely_across_concurrent_threads(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    history = tmp_path / mh.FILE
+    monkeypatch.setattr(mh, "SELF_TRIM_BYTES", 1)
+    monkeypatch.setattr(mh, "MAX_ROWS", 10)
+    monkeypatch.setattr(mh, "KEEP_ROWS", 5)
+
+    def worker(idx: int) -> None:
+        for step in range(8):
+            mh.record(history, [f"test/w{idx}_{step}.py"], "h", 100 + idx, "ab" * 20)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(worker, range(4)))
+
+    rows = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines()]
+    assert 5 <= len(rows) <= 10
+    assert not list(tmp_path.glob("*.tmp"))

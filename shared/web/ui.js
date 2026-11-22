@@ -348,6 +348,12 @@ export function actionIcon(button, name) {
   return button;
 }
 
+export function iconSvg(name) {
+  const holder = document.createElement("span");
+  actionIcon(holder, name);
+  return holder.firstElementChild;
+}
+
 let tooltip, tooltipOwner, tooltipHover, tooltipFocus, tooltipDismissed;
 function hideTooltip() {
   if (tooltipOwner) {

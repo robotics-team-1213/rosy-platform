@@ -19,6 +19,34 @@ export function createInboxPanel({scope, el, readView}) {
       + el("log").querySelectorAll('[data-unread]').length;
     showInboxCount(count);
   }
+  // B-2: "개입 목록으로" lands on the exact queue row (decision, folded cause or plain), not the panel.
+  // Rows are matched by dataset.key over the elements — never by interpolating key into a selector.
+  function jumpToQueueRow(key) {
+    const target = [...document.querySelectorAll('#critical-list > li, #warning-list > li')]
+      .find(node => node.dataset?.key === key);
+    if (!target) {
+      const queue = document.querySelector('.queues-panel');
+      queue.tabIndex = -1;
+      queue.focus();
+      return false;
+    }
+    target.scrollIntoView?.({block: 'nearest'});
+    const toggle = target.dataset.decision ? target.querySelector('.queue-row') : null;
+    if (toggle) {
+      if (toggle.getAttribute('aria-expanded') !== 'true') toggle.click();  // queues.js disclosure handler opens it
+      toggle.focus?.({preventScroll: true});
+      return true;
+    }
+    const details = target.querySelector('details');
+    if (details) {
+      details.open = true;
+      (details.querySelector('summary') || details).focus?.({preventScroll: true});
+      return true;
+    }
+    target.tabIndex = -1;
+    target.focus?.({preventScroll: true});
+    return true;
+  }
   function refreshInbox() {
     const rows = [...document.querySelectorAll('#critical-list > li, #warning-list > li')];
     const keys = new Set();
@@ -29,8 +57,10 @@ export function createInboxPanel({scope, el, readView}) {
       const key = row.dataset.key;
       if (!key) continue;
       keys.add(key);
-      const text = (row.querySelector('.queue-row') || row).textContent.trim();
-      const signature = text.replace(/\d+/g, "#");
+      // B-1: a folded rollup is read from its summary line; the folded causes live in dataset.foldedKind,
+      // so an age tick keeps the signature (no unread bump) but a changed cause set flips it.
+      const text = (row.querySelector('.queue-row') || row.querySelector('summary') || row).textContent.trim();
+      const signature = `${text.replace(/\d+/g, "#")}${row.dataset.foldedKind ? `|${row.dataset.foldedKind}` : ""}`;
       const old = inboxAttention.get(key);
       if (!old || old.signature !== signature) inboxAttention.set(key, {signature, unread: true});
       const item = document.createElement("li"), link = document.createElement("a");
@@ -38,10 +68,8 @@ export function createInboxPanel({scope, el, readView}) {
       item.append(document.createTextNode(`${text} `));
       link.href = "#queues-heading";
       link.textContent = "개입 목록으로";
-      link.addEventListener("click", () => {
-        const queue = document.querySelector('.queues-panel');
-        queue.tabIndex = -1;
-        queue.focus();
+      link.addEventListener("click", event => {
+        if (jumpToQueueRow(key)) event.preventDefault();  // keep anchor #queues-heading from stealing focus
       });
       item.append(link);
       summary.append(item);

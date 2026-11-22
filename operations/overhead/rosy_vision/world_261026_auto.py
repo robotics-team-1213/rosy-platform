@@ -14,18 +14,14 @@ import time
 import cv2
 import numpy as np
 
-#: Latest solved (K, D, H_undist_to_map) and its calibration revision for rectify.map_plane_jpeg.
-_LATEST_LENS_MODEL: dict[tuple[int, int], tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
-_LATEST_LENS_REV: dict[tuple[int, int], str | None] = {}
+#: Latest solved (K, D, H_undist_to_map) per source, frame size, and calibration revision.
+_LATEST_LENS_MODEL: dict[tuple[str, int, int, str | None], tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
 
 
 def get_latest_lens_model(
-    width: int, height: int, revision: str | None = None
+    width: int, height: int, revision: str | None = None, *, source_id: str = ""
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
-    key = (int(width), int(height))
-    if revision is not None and _LATEST_LENS_REV.get(key) != revision:
-        return None
-    return _LATEST_LENS_MODEL.get(key)
+    return _LATEST_LENS_MODEL.get((source_id, int(width), int(height), revision))
 
 
 def default_camera_matrix(width: int, height: int, hfov_deg: float = 67.8) -> np.ndarray:
@@ -144,6 +140,7 @@ def _segment_masks(img: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray,
 
 
 def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | None = None,
+                                          source_id: str = "",
                                           seed_map_to_image: np.ndarray | None = None) -> dict | None:
     """100% automatic OpenCV 12-DOF calibration + sub-pixel map tracer for ``world_261026``.
 
@@ -384,8 +381,7 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
     if not math.isfinite(rms_m) or rms_m > 0.015:
         return None
 
-    _LATEST_LENS_MODEL[(w, h)] = (K.copy(), D.copy(), image_to_map.copy())
-    _LATEST_LENS_REV[(w, h)] = revision
+    _LATEST_LENS_MODEL[(source_id, int(w), int(h), revision)] = (K.copy(), D.copy(), image_to_map.copy())
 
     # 3. Rectify + lens-undistort to top-down map plane and trace sub-pixel places & edges
     min_x, max_x, min_y, max_y = -1.37, 1.37, -0.76, 0.76

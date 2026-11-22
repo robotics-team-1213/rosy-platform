@@ -6,6 +6,8 @@ with openssl (the same tool signing.py shells out to).
 
 from __future__ import annotations
 
+import base64
+import binascii
 import datetime as dt
 import hashlib
 import importlib.util
@@ -18,6 +20,14 @@ import subprocess
 import tarfile
 
 import pytest
+
+try:
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+    _HAS_CRYPTOGRAPHY = True
+except ImportError:
+    _HAS_CRYPTOGRAPHY = False
 
 ROOT = Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location(
@@ -178,17 +188,96 @@ class FakeSsh:
 
 # --- fixtures --------------------------------------------------------------
 
+_REAL_OPENSSL_TESTS = frozenset({
+    "test_verified_boot_catalog_selects_feature_tag",
+    "test_signed_but_invalid_boot_catalog_is_not_published",
+    "test_signature_round_trips_through_signing_verify",
+    "test_self_verify_rejects_a_tampered_rollout",
+    "test_publish_creates_the_release_with_the_contract_argv_and_assets",
+    "test_open_wave_requires_a_verified_signature",
+    "test_resume_refuses_a_rollout_whose_signature_does_not_verify",
+    "test_a_missing_private_key_is_named_without_its_path",
+    "test_a_signer_failure_does_not_leak_the_key_path",
+    "test_a_tarball_whose_release_signature_fails_is_not_published",
+    "test_a_tarball_signed_by_another_key_is_not_published",
+    "test_in_process_ed25519_signature_verifies_with_real_openssl",
+})
+
+
+def _fast_sign(sums: bytes, private_key: Path) -> str:
+    try:
+        key = serialization.load_pem_private_key(private_key.read_bytes(), password=None)
+    except (OSError, ValueError, TypeError) as exc:
+        raise RuntimeError(f"openssl signing failed: {exc}") from exc
+    if not isinstance(key, Ed25519PrivateKey):
+        raise RuntimeError("expected an Ed25519 private key")
+    return base64.b64encode(key.sign(sums)).decode("ascii")
+
+
+def _fast_verify(sums: bytes, signature_b64: str, public_key: Path) -> list[signing.Rejection]:
+    if not public_key.is_file():
+        return [signing.Rejection("SIGNATURE_KEY_UNREADABLE", str(public_key),
+                                  "trusted release key not found; the device cannot establish who signed this release")]
+    stripped = "".join(signature_b64.split())
+    if not stripped:
+        return [signing.Rejection("SIGNATURE_MISSING", signing.SIGNATURE_FILENAME, "signature file is empty")]
+    try:
+        raw = base64.b64decode(stripped, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        return [signing.Rejection("SIGNATURE_MALFORMED", signing.SIGNATURE_FILENAME, f"not valid base64: {exc}")]
+    if len(raw) != signing.SIGNATURE_LENGTH:
+        return [signing.Rejection("SIGNATURE_MALFORMED", signing.SIGNATURE_FILENAME,
+                                  f"expected a {signing.SIGNATURE_LENGTH}-byte Ed25519 signature, got {len(raw)}")]
+    try:
+        key = serialization.load_pem_public_key(public_key.read_bytes())
+        if not isinstance(key, Ed25519PublicKey):
+            raise InvalidSignature
+        key.verify(raw, sums)
+    except (OSError, ValueError, TypeError, InvalidSignature):
+        return [signing.Rejection("SIGNATURE_INVALID", signing.SIGNATURE_FILENAME,
+                                  "signature does not verify against the trusted release key; "
+                                  "the checksum list was modified or signed by someone else")]
+    return []
+
+
+@pytest.fixture(autouse=True)
+def _fast_ed25519(request, monkeypatch):
+    if not _HAS_CRYPTOGRAPHY:
+        return
+    name = getattr(request.node, "originalname", request.node.name)
+    if name in _REAL_OPENSSL_TESTS:
+        return
+    monkeypatch.setattr(signing, "sign_checksums", _fast_sign)
+    monkeypatch.setattr(signing, "verify_signature", _fast_verify)
+    monkeypatch.setattr(tool.sign_rollout, "__defaults__", (_fast_sign, "release key"))
+
+
+@pytest.fixture(scope="module")
+def _keypair(tmp_path_factory):
+    base = tmp_path_factory.mktemp("keys")
+    private = base / "private.pem"
+    public = base / "pub.pem"
+    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
+                   check=True, capture_output=True)
+    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
+                   check=True, capture_output=True)
+    return private, public
+
+
+@pytest.fixture(scope="module")
+def _base_tarball(tmp_path_factory, _keypair):
+    return _tarball(tmp_path_factory.mktemp("tarball") / f"{RELEASE_ID}.tar.gz", _keypair[0])
+
+
 @pytest.fixture
-def keys(tmp_path, monkeypatch):
+def keys(tmp_path, monkeypatch, _keypair):
     appdata = tmp_path / "appdata"
     signing_dir = appdata / "Rosy" / "signing"
     signing_dir.mkdir(parents=True)
     private = signing_dir / "rosy-release-2026-01.private.pem"
     public = tmp_path / "pub.pem"
-    subprocess.run(["openssl", "genpkey", "-algorithm", "ed25519", "-out", str(private)],
-                   check=True, capture_output=True)
-    subprocess.run(["openssl", "pkey", "-in", str(private), "-pubout", "-out", str(public)],
-                   check=True, capture_output=True)
+    shutil.copyfile(_keypair[0], private)
+    shutil.copyfile(_keypair[1], public)
     monkeypatch.setenv("LOCALAPPDATA", str(appdata))
     return {"private": private, "public": public}
 
@@ -221,8 +310,11 @@ def _tarball(path: Path, private: Path, release_id=RELEASE_ID, revision=REVISION
 
 
 @pytest.fixture
-def tarball(tmp_path, keys):
-    return _tarball(tmp_path / "out" / f"{RELEASE_ID}.tar.gz", keys["private"])
+def tarball(tmp_path, _base_tarball):
+    dest = tmp_path / "out" / f"{RELEASE_ID}.tar.gz"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(_base_tarball, dest)
+    return dest
 
 
 def _run(args, keys, tmp_path, gh, ssh, clock=None):
@@ -1253,3 +1345,17 @@ def test_a_canary_that_needs_a_new_image_withdraws_at_once(tarball, keys, tmp_pa
     final = _verified(gh, keys)
     assert final["withdrawn"] is True and "NATIVE_PYTHON_RUNTIME" in final["reason"]
     assert clock.t < 300
+
+
+@pytest.mark.skipif(not _HAS_CRYPTOGRAPHY, reason="cryptography is required")
+def test_in_process_ed25519_signature_verifies_with_real_openssl(keys, tmp_path):
+    data = tool.rollout_bytes(tool.build_rollout(RELEASE_ID, "a" * 64, REVISION, "Z", CANARY, 600))
+    sig_b64 = _fast_sign(data, keys["private"])
+    assert signing.verify_signature(data, sig_b64, keys["public"]) == []
+    msg, sig = tmp_path / "msg.bin", tmp_path / "sig.bin"
+    msg.write_bytes(data)
+    sig.write_bytes(base64.b64decode(sig_b64))
+    res = subprocess.run([signing._openssl(), "pkeyutl", "-verify", "-pubin", "-inkey", str(keys["public"]),
+                          "-rawin", "-in", str(msg), "-sigfile", str(sig)],
+                         capture_output=True, check=False)
+    assert res.returncode == 0, res.stderr.decode("utf-8", "replace")

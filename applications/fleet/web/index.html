@@ -107,9 +107,8 @@
   <script src="/console/assets/area-first.js"></script>
 
   <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
-    <div><h2 id="connection-guide-title">관제 접속 필요</h2>
-      <p id="connection-guide-detail">아이디·비밀번호나 관제 토큰으로 접속하면 로봇·카메라·지도 상태를 확인할 수 있습니다.</p></div>
-    <ui-button id="connection-guide-action" kind="primary" data-login data-action-icon="login" type="button">관제 접속</ui-button>
+    <div><h2 id="connection-guide-title">관제 연결 확인 필요</h2>
+      <p id="connection-guide-detail">관제 PC의 연결 상태를 확인한 뒤 다시 접속하세요.</p></div>
   </section>
 
   <div class="assistant-layout">
@@ -207,6 +206,7 @@
         <ui-button kind="quiet" type="button" data-layer-toggle="lanes" aria-pressed="true" title="도로 중심선과 충전소·정류장 장소 표시">도로·장소</ui-button>
         <ui-button kind="quiet" type="button" data-layer-toggle="traffic" aria-pressed="true" title="차로 점유·신호·구역 테두리 표시">교통·점유</ui-button>
         <ui-button kind="quiet" type="button" data-layer-toggle="labels" aria-pressed="true" title="지도 위 이름·상태 텍스트 칩 표시 (꺼도 마우스 호버 시 상세 카드가 표시됩니다)">라벨</ui-button>
+        <ui-button kind="quiet" type="button" data-layer-toggle="grid" aria-pressed="true" title="0.5 m 좌표 격자와 칸 표시">격자·칸</ui-button>
       </div>
       <details id="map-options" class="map-options">
         <summary class="ui-disclosure-row">지도 표시·경로 옵션</summary>
@@ -234,10 +234,13 @@
         <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
+        <span id="map-axis-badge" class="map-axis-badge" aria-label="지도 좌표 방향">+X → · +Y ↑ · m</span>
+        <span id="map-cursor-readout" class="map-cursor-readout" role="status" aria-live="polite" hidden></span>
         <div class="map-empty" id="map-empty" role="status">
           <svg class="ui-icon map-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 20l-5.5-2.5v-13l5.5 2.5 6-2.5 5.5 2.5v13l-5.5-2.5z"/><path d="M9 7v13"/><path d="M15 4.5v13"/></svg>
           <strong id="map-empty-title">지도 대기</strong>
           <p id="map-empty-detail">Fleet에서 현장 지도를 확인하고 있습니다.</p>
+          <ui-button id="connection-guide-action" kind="primary" data-login data-action-icon="login" type="button" hidden>관제 접속</ui-button>
         </div>
         <!-- D-493 — 위에서 내려다본 천장 카메라. 지도가 없거나 "크게 보기"일 때 지도 칸을 채운다. 원본은 한 번에 한 곳에만 보인다. -->
         <img id="map-birdseye" class="map-birdseye" alt="천장 카메라 최신 영상 — 위에서 본 현장" hidden>

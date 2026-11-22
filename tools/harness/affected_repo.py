@@ -50,6 +50,43 @@ def app_of(path: str, parts: dict) -> str:
     return max(hits, key=lambda entry: len(entry[0]))[1] if hits else "core"
 
 
+def app_classifier(parts: dict):
+    """Compiled equivalent of ``app_of(path, parts)`` for repeated path lookups."""
+    neutral = tuple(parts.get("app_neutral") or ())
+    entries = [(root["path"], root.get("app", "core")) for root in parts.get("roots") or [] if "path" in root]
+    entries += list((parts.get("app_subtrees") or {}).items())
+    by_top: dict[str, list[tuple[int, int, str, str, str]]] = {}
+    globs: list[tuple[int, int, str, str]] = []
+    for idx, (key, app) in enumerate(entries):
+        if "*" in key:
+            globs.append((len(key), -idx, key, app))
+        else:
+            stripped = key.rstrip("/")
+            top = stripped.split("/", 1)[0]
+            by_top.setdefault(top, []).append((len(key), -idx, key, stripped + "/", app))
+    for bucket in by_top.values():
+        bucket.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    globs.sort(key=lambda item: (item[0], item[1]), reverse=True)
+
+    def classify(path: str) -> str:
+        for pattern in neutral:
+            if _match(path, pattern):
+                return NEUTRAL
+        best_len, best_neg_idx, best_app = -1, 0, "core"
+        for key_len, neg_idx, key, key_slash, app in by_top.get(path.partition("/")[0], ()):
+            if path == key or path.startswith(key_slash):
+                best_len, best_neg_idx, best_app = key_len, neg_idx, app
+                break
+        for key_len, neg_idx, key, app in globs:
+            if (key_len, neg_idx) <= (best_len, best_neg_idx):
+                break
+            if _match(path, key):
+                return app
+        return best_app
+
+    return classify
+
+
 def landing_apps(paths: list[str], parts: dict) -> list[str]:
     """The apps a landing's delta touches, sorted, neutral paths left out (land_events records them)."""
     return sorted({app_of(path, parts) for path in paths} - {NEUTRAL})
@@ -176,6 +213,14 @@ class Repo:
 
     def test_import_names(self, path: str) -> dict[str, str]:
         """Include sibling helper imports that also populate pytest's module cache."""
+        if vars(self).get("_test_file_len") != len(self.test_files):
+            self._test_file_set = frozenset(self.test_files)
+            self._test_file_len = len(self.test_files)
+            self._test_import_names_cache = {}
+        cache = vars(self).setdefault("_test_import_names_cache", {})
+        if path in cache:
+            return dict(cache[path])
+        test_set = self._test_file_set
         pending = list(self.test_files_under(path))
         visited: set[str] = set()
         names: dict[str, str] = {}
@@ -184,12 +229,16 @@ class Repo:
             if test in visited:
                 continue
             visited.add(test)
-            names[PurePosixPath(test).name] = test
+            parent, sep, basename = test.rpartition("/")
+            names[basename] = test
+            prefix = f"{parent}/" if sep else ""
             for name in self.imports(test):
-                sibling = str(PurePosixPath(test).parent / (name.split('.')[0] + '.py'))
-                if sibling in self.test_files and sibling not in visited:
+                sibling = f"{prefix}{name.partition('.')[0]}.py"
+                if sibling in test_set and sibling not in visited:
                     pending.append(sibling)
-        return {name: source for name, source in names.items() if name not in IGNORED_BASENAMES}
+        result = {name: source for name, source in names.items() if name not in IGNORED_BASENAMES}
+        cache[path] = result
+        return dict(result)
 
 
     def local_importers(self, path: str, depth: int | None = None) -> set[str]:
@@ -304,10 +353,11 @@ class Repo:
                 continue
             text = self.text(test)
             if (any(n in text for n in needles) or (helpers & self.imports(test))
-                    or (parts and (all(token in self.tokens(test) for token in parts)
-                                   if simple_parts
-                                   else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
-                                            for token in parts)))):
+                    or (parts and all(token in text for token in parts)
+                        and (all(token in self.tokens(test) for token in parts)
+                             if simple_parts
+                             else all(re.search(rf"(?<![\w.-]){re.escape(token)}(?![\w.-])", text)
+                                      for token in parts)))):
                 found.append(test)
         if not found and helper and not closure:  # the 2-hop chain: 2026-11-01 unknown -> full guard
             return self.referencing_tests(path, True)

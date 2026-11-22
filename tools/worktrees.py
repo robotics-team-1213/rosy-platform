@@ -1,28 +1,4 @@
-"""Keep ``.worktrees/`` from piling up: one gateway to create, one sweep to remove (D-761, D-790).
-
-Usage (from the main checkout or any worktree of the repository)::
-
-    python tools/worktrees.py status [--idle-hours N]
-    python tools/worktrees.py prune [--apply] [--snapshot] [--all] [--remote] [--idle-hours N]
-    python tools/worktrees.py new <short-name> <type>/<topic> [--from REF] [--owner TEXT]
-                                  [--prune | --no-prune] [--force-over-cap "<reason>"]
-    python tools/worktrees.py adopt <short-name> <type>/<topic> [--owner TEXT] [--prune | --no-prune]
-                                  [--force-over-cap "<reason>"]
-
-``prune`` is a dry run unless ``--apply``. Lossless prune removes clean, unblocked worktrees:
-already in ``main`` (D-790, 0 wait when its branch reflog shows an own commit) or any clean
-adoptable branch after ``CLEAN_IDLE_HOURS`` (6 h, D-1070: unmerged branch stays for ``adopt``),
-deleting landed unused branches by exact sha (D-886). ``--snapshot`` (person/dispatcher only)
-also takes dirty/unmerged worktrees owned by the caller (``--all`` for peers/unknown) into
-``refs/wip/<date>/<name>`` (restore with ``git worktree add`` or ``git checkout``). Never
-removed: main, cwd, locked, on ``main``, non-cache ignored files, ``stale-history`` (D-790).
-
-``status`` flags ``landed-dirty``, ``stale-history``, ``orphan`` (archived to zip after 1 h),
-``split-soon``/``split-needed``, ``no-pr``, and worktrees outside ``.worktrees/``. Idle is the
-newest of: tip commit, ``.git`` file, ``logs/HEAD`` entry, and non-cache file mtimes (not index).
-An owner note guards clean adoptable worktrees 24 h (else ``--idle-hours`` 72 h). ``--remote``
-reports (with ``--apply``, archives+deletes own-only) stale unopened origin branches. Standard library only.
-"""
+"""Worktree admission, status and cleanup (D-761). See docs/reference/shared-checkout.md."""
 
 from __future__ import annotations
 
@@ -37,6 +13,7 @@ import time
 from pathlib import Path
 
 import worktree_rules as rules
+from land_async import Busy, locked
 
 CAP = 14  # everything under .worktrees/, orphan directories included; with main, the 15-slot budget (D-886)
 IDLE_HOURS = 72.0
@@ -103,9 +80,12 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
     holder = (root / ".worktrees").resolve()
     if not holder.is_dir():
         return root, []
-    times = dict(line.split() for line in git(root, "for-each-ref", "--format=%(objectname) %(committerdate:unix)", "refs/heads").stdout.splitlines())
-    merged = {s for t in rules.merge_targets(root) for s in git(root, "for-each-ref", "--merged", t, "--format=%(objectname)", "refs/heads").stdout.split()}
+    refs = [line.split("\t") for line in git(root, "for-each-ref", "--format=%(objectname)\t%(committerdate:unix)\t%(parent)", "refs/heads").stdout.splitlines()]
+    times, parents_map = {p[0]: int(p[1]) for p in refs}, {p[0]: p[2].split() for p in refs}
+    targets = rules.merge_targets(root)
+    merged = {s for t in targets for s in git(root, "for-each-ref", "--merged", t, "--format=%(objectname)", "refs/heads").stdout.split()}
     owners, noted = rules.owner_notes(root, git)
+    common = Path(_must(git(root, "rev-parse", "--path-format=absolute", "--git-common-dir"), "git rev-parse"))
     rows = []
     for block in blocks[1:]:
         path = Path(block["worktree"])
@@ -113,9 +93,9 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
             continue
         sha = block.get("HEAD", "")
         if sha in times:
-            is_merged, tip = sha in merged, int(times[sha])
+            is_merged, tip, parents = sha in merged, times[sha], parents_map[sha]
         else:  # detached at a commit no branch points to
-            is_merged = rules.is_merged(root, sha)
+            is_merged, parents = rules.is_merged(root, sha, targets), None
             tip = int(git(root, "show", "-s", "--format=%ct", sha).stdout.strip() or 0)
         try:  # `.git` is a file "gitdir: <absolute or relative path>"
             git_dir = path / (path / ".git").read_text(encoding="utf-8").partition("gitdir:")[2].strip()
@@ -124,7 +104,7 @@ def scan(cwd: Path) -> tuple[Path, list[dict]]:
         reflog = rules.reflog_time(git_dir / "logs" / "HEAD")  # entry time: gc rewrites the file (D-886)
         branch = block.get("branch", "").removeprefix("refs/heads/")
         rows.append(_row(path, branch=branch, sha=sha, owner=owners.get(branch, ""), noted=noted.get(branch, 0.0),
-                         locked="locked" in block, merged=is_merged, git_dir=git_dir,
+                         locked="locked" in block, merged=is_merged, git_dir=git_dir, common=common, parents=parents,
                          last=max(tip, reflog, _mtime(path / ".git")) if reflog else float("inf")))
     listed = {row["path"].resolve() for row in rows}
     rows += [_row(path, orphan=True) for path in sorted(holder.iterdir())
@@ -161,12 +141,14 @@ def _status(path: Path) -> tuple[list[str], list[str]] | None:
 
 def _landed(row: dict) -> bool:
     """Work landed from this branch: its reflog records a commit made on it. No reflog reads as no."""
+    if "common" in row:
+        return rules.reflog_has_commit(row["common"] / "logs" / "refs" / "heads" / row["branch"])
     log = git(row["path"], "reflog", "show", "--format=%gs", f"refs/heads/{row['branch']}")
     return log.returncode == 0 and any(line.startswith("commit") for line in log.stdout.splitlines())
 
 
 def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool = False, full: bool = False,
-          me: str = "") -> None:
+          me: str = "", ct_cache: dict[str, int] | None = None) -> None:
     """Set ``idle_h``, ``wait_h`` and ``verdict``; ``git status`` runs only when the cheap facts do not decide.
 
     ``lossless`` stops at an unmerged branch (the lossless prune keeps it anyway);
@@ -190,7 +172,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
     kind, _, topic = row["branch"].partition("/")
     adoptable = kind in TYPES and rules.topic_ok(topic)
     row["wait_h"] = 0.0 if landed else min(idle_hours, rules.CLEAN_IDLE_HOURS) if adoptable else idle_hours
-    stale = None if row["merged"] or not row["sha"] else rules.stale_history(row["path"], row["sha"])
+    stale = None if row["merged"] or not row["sha"] else rules.stale_history(row["path"], row["sha"], ct_cache=ct_cache)
     if stale:
         row["note"] = stale
     # A young owner note (11-20: its session may be about to use it); a landed clean worktree has nothing to lose.
@@ -212,7 +194,7 @@ def judge(row: dict, now: float, idle_hours: float, here: Path, lossless: bool =
             if status[0]:  # uncommitted files: back to the full idle wait
                 row["fast"], row["wait_h"] = False, idle_hours
             row["last"] = max([row["last"], *(_newest(row["path"] / rel) for rel in row["changed"])])
-            if row["wait_h"]:
+            if row["wait_h"] and row["last"] < now:
                 row["last"] = max(row["last"], rules.newest_file(row["path"], lambda r: _is_cache(row["path"], r)))
     row["idle_h"] = max(0.0, (now - row["last"]) / 3600)
     row["landed_dirty"] = landed and bool(row["changed"])  # D-790: work continued after the branch landed
@@ -390,14 +372,15 @@ def _table(rows: list[dict], me: str, now: float, file=None) -> None:
               f"{row['verdict']}" + (f"  [{owner}]" if owner else ""), file=file)
 
 
-def _judge_status(root: Path, row: dict, now: float, idle_hours: float, here: Path, me: str) -> None:
-    judge(row, now, idle_hours, here, full=True, me=me)
+def _judge_status(root: Path, row: dict, now: float, idle_hours: float, here: Path, me: str,
+                  targets: list[str], merged_shas: set[str], ct_cache: dict[str, int]) -> None:
+    judge(row, now, idle_hours, here, full=True, me=me, ct_cache=ct_cache)
     # A tip that merged main in (tools/land.py does) and was not landed since is not an ancestor of main.
-    # Still unmerged, and correctly kept; the note only explains why a "landed-looking" branch is.
     if row["merged"] or row["orphan"] or row.get("note"):
         return
-    parents = git(root, "rev-list", "--parents", "-n1", row["sha"]).stdout.split()[2:]
-    if any(rules.is_merged(root, p) for p in parents):
+    parents = (row["parents"][1:] if row.get("parents") is not None
+               else git(root, "rev-list", "--parents", "-n1", row["sha"]).stdout.split()[2:])
+    if any(p in merged_shas or rules.is_merged(root, p, targets) for p in parents):
         row["note"] = "tip is a merge of main"
 
 
@@ -405,8 +388,9 @@ def cmd_status(cwd: Path, idle_hours: float, now: float) -> int:
     root, rows = scan(cwd)
     here, me = _here(cwd), _identity(root)
     if rows:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(rows))) as pool:
-            list(pool.map(lambda row: _judge_status(root, row, now, idle_hours, here, me), rows))
+        merged_shas, targets, ct_cache = {r["sha"] for r in rows if r["merged"] and r["sha"]}, rules.merge_targets(root), {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, len(rows))) as pool:
+            list(pool.map(lambda r: _judge_status(root, r, now, idle_hours, here, me, targets, merged_shas, ct_cache), rows))
     print(f"{'name':<32} {'branch':<44} {'main':<8} {'dirty':>5} {'idle':>7} {'lock':<6} {'you':<5} verdict  [owner]")
     _table(sorted(rows, key=lambda r: -r["idle_h"]), me, now)
     for row in rows:  # D-790: the two states that need a person, said in words
@@ -440,7 +424,7 @@ def _form_problem(root: Path, name: str, branch: str, reason: str | None, owner:
 
 
 def _has_branch(root: Path, branch: str) -> bool:
-    return git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0 or rules.restore_archived(root, branch)
+    return git(root, "rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode == 0
 
 
 def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, mode: str = "report",
@@ -449,7 +433,8 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
     base = base or ("origin/main" if git(root, "rev-parse", "-q", "--verify", "refs/remotes/origin/main").returncode == 0 else "main")  # D-1055, no fetch
     known = git(root, "rev-parse", "-q", "--verify", f"{base}^{{commit}}").returncode == 0
     problem = (_form_problem(root, name, branch, reason, owner)
-               or (f"branch {branch} already exists (re-attach it: adopt)" if _has_branch(root, branch) else None)
+               or (f"branch {branch} already exists (re-attach it: adopt)"
+                   if _has_branch(root, branch) or rules.archived_tip(root, branch) else None)
                or (f"--from {base}: not a commit" if not known else None))
     stale = None if problem or base in ("main", "origin/main") else rules.stale_history(root, base) or rules.unlanded(root, base)
     if stale:  # D-790: a worktree on the pre-rewrite line would carry it into main
@@ -461,9 +446,10 @@ def cmd_adopt(cwd: Path, name: str, branch: str, reason: str | None, now: float,
               owner: str | None = None) -> int:
     """D-1070: put an existing local branch (one a clean prune left) back at ``.worktrees/<name>``."""
     root, _ = scan(cwd)
-    problem = (_form_problem(root, name, branch, reason, owner)
-               or (f"branch {branch} does not exist" if not _has_branch(root, branch) else None))
-    stale = None if problem else rules.stale_history(root, branch)
+    problem = _form_problem(root, name, branch, reason, owner)
+    tip = None if problem else branch if _has_branch(root, branch) else rules.archived_tip(root, branch)
+    stale = rules.stale_history(root, tip) if tip else None
+    problem = problem or (f"branch {branch} does not exist" if not tip else None)
     if stale:  # D-790: the pre-rewrite line is archived by a person, never re-attached
         problem = f"refused: {branch} is {stale}; rebuild on a new branch from main (D-172)"
     return _attach(cwd, root, name, branch, [branch], problem, reason, now, mode, owner)
@@ -480,7 +466,20 @@ def _attach(cwd: Path, root: Path, name: str, branch: str, target: list[str], pr
             sweep(cwd, apply=mode == "apply", now=now)  # lossless only; never --snapshot from here
         except (RuntimeError, OSError) as exc:
             print(f"[worktrees] warning: prune failed, continuing: {exc}", file=sys.stderr)
+    common = root / _must(git(root, "rev-parse", "--git-common-dir"), "git rev-parse")
+    try:
+        with locked(common / "worktrees-admission.lock"):
+            return _admit(cwd, root, name, branch, target, reason, now, owner)
+    except Busy:
+        raise RuntimeError("another worktree creation is running; retry after it finishes") from None
+
+
+def _admit(cwd: Path, root: Path, name: str, branch: str, target: list[str], reason: str | None,
+           now: float, owner: str | None) -> int:
     rows = scan(cwd)[1]
+    if len(rows) > CAP:
+        print(f"refused: {len(rows)} worktrees; the cap is {CAP} plus one approved incident slot. {SWEEP}", file=sys.stderr)
+        return 1
     if len(rows) >= CAP and reason is None:
         here, me = _here(cwd), _identity(root)
         for row in rows:
@@ -499,11 +498,22 @@ def _attach(cwd: Path, root: Path, name: str, branch: str, target: list[str], pr
                   f" dispatcher: also --all): {row['name']} ({row['verdict']})", file=sys.stderr)
         print(f'{HINT}\nor, during an incident: add --force-over-cap "<reason>"', file=sys.stderr)
         return 1
+    if (root / ".worktrees" / name).exists():
+        raise RuntimeError(f"worktree {name} appeared during admission")
+    restored = None
+    if target == [branch] and not _has_branch(root, branch):
+        restored = rules.restore_archived(root, branch)
+        if not restored:
+            raise RuntimeError(f"branch {branch} could not be restored")
     add = ["worktree", "add", "--relative-paths", f".worktrees/{name}", *target]
     result = git(root, *add)
     if result.returncode != 0 and "relative-paths" in result.stderr:  # git older than 2.48
         add.remove("--relative-paths")
         result = git(root, *add)
+    if result.returncode != 0 and restored:
+        checkout = git(root, "for-each-ref", "--format=%(worktreepath)", f"refs/heads/{branch}")
+        if checkout.returncode == 0 and not checkout.stdout.strip():
+            git(root, "update-ref", "-d", f"refs/heads/{branch}", restored)
     _must(result, "git worktree add")
     # Who made it: `prune --snapshot` takes only the caller's own; people read it in `status` (D-790: --owner).
     note = f"owner: {owner.strip() if owner else _identity(root)}; at {int(now)}"
@@ -556,7 +566,7 @@ def main(argv: list[str] | None = None, now: float | None = None) -> int:
     for command in (new, adopt):
         command.add_argument("name", metavar="short-name")
         command.add_argument("branch", metavar="type/topic")
-        command.add_argument("--force-over-cap", metavar="REASON", help=f"create although {CAP} or more worktrees exist")
+        command.add_argument("--force-over-cap", metavar="REASON", help=f"use one incident slot above the cap of {CAP}")
         command.add_argument("--owner", help="owner note instead of the git identity and session")
         sweeping = command.add_mutually_exclusive_group()
         sweeping.add_argument("--prune", dest="mode", action="store_const", const="apply", default="report",

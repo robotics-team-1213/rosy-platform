@@ -5,9 +5,9 @@
 // never from a heartbeat: an unreadable or unchanging frame turns stale after 1 s and hidden after 2 s.
 
 export const MEDIA_GRANT_PATH = "/api/v1/vision/media/grants";
-export const STALE_WARN_MS = 1000;
-export const STALE_HIDE_MS = 2000;
-export const RENEW_MS = 20000;
+const STALE_WARN_MS = 1000;
+const STALE_HIDE_MS = 2000;
+const RENEW_MS = 20000;
 const ICE_TIMEOUT_MS = 8000;
 const READY_TIMEOUT_MS = 9000;      // inside the authority's 10 s startup demand
 const READY_RETRY_MS = 500;
@@ -16,7 +16,7 @@ const CHECK_MS = 250;
 // Watermark v1: 4x4 luma cells, 32 per row in a 128x24 strip; magic "RM", version 1,
 // uint32 epoch, uint32 sequence, uint64 capture ms (network order), CRC32 of those 19 bytes.
 const CELL = 4, COLS = 32, SIZE = 23;
-export const WATERMARK_WIDTH = 128, WATERMARK_HEIGHT = 24;
+const WATERMARK_WIDTH = 128; export const WATERMARK_HEIGHT = 24;
 
 function crc32(bytes) {
   let crc = ~0;
