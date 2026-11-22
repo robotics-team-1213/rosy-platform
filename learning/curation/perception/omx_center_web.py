@@ -134,6 +134,8 @@ def post(handler, path, body, center, workspace=None, accounts=None):
             raise ValueError('HF 업로드는 팀 공유(프로젝트) HF 연결로만 합니다.')
         handler.send(center.hub.upload(body['bundle_id'], credential['token']))
         return True
+    if path == PREFIX + '/cuda-run' and (accounts is not None or getattr(handler, 'learning_principal', None) is not None):
+        raise PermissionError('project users cannot import arbitrary server filesystem paths')
     name = {PREFIX + '/upload': 'upload',
             PREFIX + '/publish': 'publish',
             PREFIX + '/run': 'start',

@@ -144,11 +144,9 @@ def launch(center, db, request_id, request, row, stamp):
             def _reap(proc=child):
                 try:
                     proc.wait()
-                except Exception:
-                    return
-                if not center.db.exists():
-                    return
-                try:
+                    db_path = getattr(center, 'db', None)
+                    if not db_path or not db_path.exists():
+                        return
                     with center.lock, center.connect() as conn:
                         conn.execute('BEGIN IMMEDIATE')
                         center._refresh(conn)

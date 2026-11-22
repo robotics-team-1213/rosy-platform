@@ -44,13 +44,43 @@ def _safe_abs_path(value, label, center_root):
     if not isinstance(value, str) or not 1 <= len(value) <= 1024 or any(ord(c) < 32 for c in value):
         raise ValueError(f'bounded path string required: {label}')
     path = Path(value)
-    if not path.is_absolute():
-        raise ValueError(f'absolute path required: {label}')
+    if not path.is_absolute() or path.is_symlink():
+        raise ValueError(f'non-symlink absolute path required: {label}')
     resolved = path.resolve()
     center_resolved = Path(center_root).resolve()
     if resolved.is_relative_to(center_resolved) or center_resolved.is_relative_to(resolved):
         raise ValueError(f'external path must stay separate from learning center: {label}')
     return resolved
+
+
+def _valid_relpath(relpath):
+    if (not isinstance(relpath, str) or not 1 <= len(relpath) <= 256
+            or '\\' in relpath or '%' in relpath or relpath.startswith('/') or relpath.endswith('/')):
+        raise ValueError('invalid bundle file path')
+    parts = relpath.split('/')
+    for part in parts:
+        if not _SEGMENT_RE.fullmatch(part) or part in ('.', '..', '__pycache__'):
+            raise ValueError('invalid bundle file path segment')
+    return parts
+
+
+def _file_sha256(path):
+    if path.stat().st_size > FILE_LIMIT:
+        raise ValueError('bundle file exceeds size limit')
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def _resolve_resume_config(train_dir):
+    resolved_train = train_dir.resolve()
+    for candidate in (train_dir / 'checkpoints' / 'last' / 'pretrained_model' / 'train_config.json',
+                      train_dir / 'train_config.json'):
+        if candidate.is_file():
+            resolved = candidate.resolve()
+            if not resolved.is_relative_to(resolved_train):
+                raise ValueError('resume train_config.json escaped training directory')
+            return resolved
+    raise ValueError('resume=True requires existing train_config.json')
 
 
 def check_cuda_request(body, center_root):
@@ -168,10 +198,7 @@ def preflight_cuda(spec, train_dir, *, jobs_dir=None, check_gpu=True):
     else:
         if train_dir.is_symlink() or not train_dir.is_dir():
             raise ValueError('resume=True requires existing training output_dir')
-        cfg = train_dir / 'checkpoints' / 'last' / 'pretrained_model' / 'train_config.json'
-        alt = train_dir / 'train_config.json'
-        if not (cfg.is_file() or alt.is_file()):
-            raise ValueError('resume=True requires existing train_config.json')
+        _resolve_resume_config(train_dir)
     stale = check_job_locks(Path.home() / 'rosy-jobs' if jobs_dir is None else Path(jobs_dir))
     if check_gpu and os.name == 'posix':
         try:
@@ -246,8 +273,11 @@ def resolve_bundle_dir(run_root, row):
     weights = candidate / 'model.safetensors'
     if weights.is_symlink() or not weights.is_file():
         raise ValueError('regular model.safetensors required')
-    digest = hashlib.sha256(weights.read_bytes()).hexdigest()
-    if 'policy_sha256' in result and digest != result['policy_sha256']:
+    digest = _file_sha256(weights)
+    expected = result.get('policy_sha256')
+    if expected is None and isinstance(result.get('artifact_files'), dict):
+        expected = result['artifact_files'].get('model.safetensors')
+    if expected is not None and digest != expected:
         raise ValueError('completed model weights changed')
     return candidate, digest
 
@@ -262,8 +292,9 @@ def bundle_manifest(run_root, rid, row, *, prefix=PREFIX):
         if not path.is_file() or '__pycache__' in path.parts:
             continue
         rel = path.relative_to(bundle_dir).as_posix()
+        _valid_relpath(rel)
         size = path.stat().st_size
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digest = _file_sha256(path)
         files.append({'path': rel, 'size': size, 'sha256': digest, 'url': f'{prefix}/run/{rid}/file/{rel}'})
     manifest = {'schema': MANIFEST_SCHEMA, 'run_id': rid, 'policy_revision': policy_sha256, 'files': files}
     if len(json.dumps(manifest, ensure_ascii=False, allow_nan=False).encode('utf-8')) > MANIFEST_LIMIT:
@@ -272,13 +303,7 @@ def bundle_manifest(run_root, rid, row, *, prefix=PREFIX):
 
 
 def bundle_file(run_root, row, relpath):
-    if (not isinstance(relpath, str) or not 1 <= len(relpath) <= 256
-            or '\\' in relpath or '%' in relpath or relpath.startswith('/') or relpath.endswith('/')):
-        raise ValueError('invalid bundle file path')
-    parts = relpath.split('/')
-    for part in parts:
-        if not _SEGMENT_RE.fullmatch(part) or part in ('.', '..', '__pycache__'):
-            raise ValueError('invalid bundle file path segment')
+    parts = _valid_relpath(relpath)
     bundle_dir, _ = resolve_bundle_dir(run_root, row)
     bundle_resolved = bundle_dir.resolve()
     cur = bundle_dir
@@ -306,29 +331,28 @@ def main(argv=None):
             raise ValueError('unsupported CUDA training request schema')
         train_dir = Path(request['train_dir'])
         preflight_cuda(request, train_dir, check_gpu=False)
-        cmd = [
-            sys.executable, '-m', 'lerobot.scripts.lerobot_train',
-            '--dataset.repo_id=local/omx',
-            f"--dataset.root={request['dataset_root']}",
-            '--policy.type=act', '--policy.device=cuda', '--policy.push_to_hub=false',
-            f"--policy.chunk_size={request['chunk_size']}",
-            f"--policy.n_action_steps={request['n_action_steps']}",
-            f"--policy.use_vae={'true' if request['use_vae'] else 'false'}",
-            f"--policy.kl_weight={request['kl_weight']}",
-            f"--policy.optimizer_lr={request['optimizer_lr']}",
-            f"--policy.optimizer_lr_backbone={request['optimizer_lr_backbone']}",
-            f'--output_dir={train_dir}',
-            f"--steps={request['steps']}",
-            f"--batch_size={request['batch_size']}",
-            f"--save_freq={request['save_freq']}",
-            f"--log_freq={request['log_freq']}",
-            f"--seed={request['seed']}",
-        ]
         if request['resume']:
-            cfg = train_dir / 'checkpoints' / 'last' / 'pretrained_model' / 'train_config.json'
-            if not cfg.is_file():
-                cfg = train_dir / 'train_config.json'
-            cmd += ['--resume=true', f'--config_path={cfg}']
+            cfg = _resolve_resume_config(train_dir)
+            cmd = [sys.executable, '-m', 'lerobot.scripts.lerobot_train', f'--config_path={cfg}', '--resume=true']
+        else:
+            cmd = [
+                sys.executable, '-m', 'lerobot.scripts.lerobot_train',
+                '--dataset.repo_id=local/omx',
+                f"--dataset.root={request['dataset_root']}",
+                '--policy.type=act', '--policy.device=cuda', '--policy.push_to_hub=false',
+                f"--policy.chunk_size={request['chunk_size']}",
+                f"--policy.n_action_steps={request['n_action_steps']}",
+                f"--policy.use_vae={'true' if request['use_vae'] else 'false'}",
+                f"--policy.kl_weight={request['kl_weight']}",
+                f"--policy.optimizer_lr={request['optimizer_lr']}",
+                f"--policy.optimizer_lr_backbone={request['optimizer_lr_backbone']}",
+                f'--output_dir={train_dir}',
+                f"--steps={request['steps']}",
+                f"--batch_size={request['batch_size']}",
+                f"--save_freq={request['save_freq']}",
+                f"--log_freq={request['log_freq']}",
+                f"--seed={request['seed']}",
+            ]
         env = dict(os.environ, HF_HUB_OFFLINE='1', HF_DATASETS_OFFLINE='1', HF_HUB_DISABLE_TELEMETRY='1')
         with gpu_lease('cuda'):
             proc = subprocess.run(cmd, env=env, check=False)
@@ -338,8 +362,11 @@ def main(argv=None):
                 'error': f'lerobot_train exited with code {proc.returncode}',
             })
             return proc.returncode
+        resolved_train = train_dir.resolve()
         model_dir = (train_dir / 'checkpoints' / 'last' / 'pretrained_model').resolve()
-        digest = hashlib.sha256((model_dir / 'model.safetensors').read_bytes()).hexdigest()
+        if not model_dir.is_relative_to(resolved_train):
+            raise ValueError('trained checkpoint escaped training directory')
+        digest = _file_sha256(model_dir / 'model.safetensors')
         result = {
             'execution_mode': 'omx_cuda_train',
             'physical_learning_verified': False,

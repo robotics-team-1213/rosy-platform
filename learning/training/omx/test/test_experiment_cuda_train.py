@@ -198,3 +198,40 @@ def test_bundle_manifest_and_file_verify_hashes_and_block_traversal_and_symlinks
     weights.write_bytes(b'tampered')
     with pytest.raises(ValueError, match='changed'):
         c.bundle_manifest(rid)
+
+
+def test_preflight_blocks_dangling_symlink_busy_gpu_and_oversized_bundle(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    ds = _make_dataset(tmp_path / 'ds')
+    dangling = tmp_path / 'dangling-out'
+    dangling.symlink_to(tmp_path / 'nonexistent-target')
+    with pytest.raises(ValueError, match='non-symlink'):
+        cuda.check_cuda_request(_valid_body(ds, dangling), tmp_path / 'center')
+
+    out = tmp_path / 'train-gpu-busy'
+    spec = cuda.check_cuda_request(_valid_body(ds, out), tmp_path / 'center')
+    @contextmanager
+    def busy_lease(*a, **k):
+        raise cuda.GpuBusy('busy gpu')
+        yield
+    monkeypatch.setattr(cuda, 'gpu_lease', busy_lease)
+    monkeypatch.setattr(cuda.os, 'name', 'posix')
+    with pytest.raises(ValueError, match='busy gpu'):
+        cuda.preflight_cuda(spec, out, jobs_dir=tmp_path / 'jobs', check_gpu=True)
+
+    c = _make_center(tmp_path, monkeypatch, cuda_available=True)
+    rid = str(uuid.uuid4())
+    train_dir = tmp_path / 'ext-big'
+    model_dir = train_dir / 'checkpoints' / '007500' / 'pretrained_model'
+    model_dir.mkdir(parents=True)
+    weights = model_dir / 'model.safetensors'
+    weights.write_bytes(b'big')
+    monkeypatch.setattr(cuda, 'FILE_LIMIT', 2)
+    row = {
+        'id': rid, 'status': 'succeeded', 'execution_mode': 'omx_cuda_train',
+        'train_dir': str(train_dir), 'result': {'checkpoint_dir': str(model_dir)},
+    }
+    with c.connect() as db:
+        db.execute('INSERT INTO runs VALUES (?,?,?,?,?)', (rid, str(uuid.uuid4()), json.dumps(row), '{}', '{}'))
+    with pytest.raises(ValueError, match='size limit'):
+        c.bundle_manifest(rid)

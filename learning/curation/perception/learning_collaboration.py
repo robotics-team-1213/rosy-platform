@@ -205,7 +205,8 @@ class Collaboration:
 
     def authorize_write(self, handler, path, body):
         principal = self.identity(handler)
-        if path in ('/api/import', '/api/cad', '/api/learning/register', '/api/learning/vlm/import'):
+        if path in ('/api/import', '/api/cad', '/api/learning/register', '/api/learning/vlm/import',
+                    '/api/learning/omx/center/cuda-run'):
             raise PermissionError('project users cannot import arbitrary server filesystem paths')
         if path.startswith(('/api/review-ai/', '/api/review-ai-cancel/')):
             capability = 'edit'

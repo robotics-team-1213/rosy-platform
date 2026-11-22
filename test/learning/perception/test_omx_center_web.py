@@ -79,3 +79,5 @@ def test_cuda_run_status_and_bundle_routes_dispatch_and_reject_unconfigured():
             web.get(handler, path, None)
     with pytest.raises(ValueError, match='연결되지 않았습니다'):
         web.post(handler, f'{web.PREFIX}/cuda-run', {}, None)
+    with pytest.raises(PermissionError):
+        web.post(handler, f'{web.PREFIX}/cuda-run', {}, center, accounts=SimpleNamespace())
