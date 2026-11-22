@@ -23,7 +23,10 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   const inspector = typeof el === "function" ? el("omx-right-inspector") : null;
   // 셀 카메라는 Vision 임대 프레임으로만 본다(D-136). Fleet은 바이트를 중계하지 않는다.
   const frames = createCellFrameFeed({ call, scope });
-  for (const box of [list, inspector]) if (box) scope.listen(box, "click", () => { framesOn = true; }, true);
+  for (const box of [list, inspector]) if (box) scope.listen(box, "click", () => {
+    framesOn = true;
+    for (const s of inspector?.querySelectorAll(".omx-inspector-cam-standby") || []) s.hidden = true;
+  }, true);
   let inFlight = false;
   let unavailable = false;
   let liveStreamOn = true;
@@ -141,8 +144,9 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     tabs.className = "omx-inspector-tabs";
     for (const t of targets) {
       const btn = document.createElement("ui-button");
-      btn.setAttribute("kind", "quiet");
-      if (t.id === active.id) btn.setAttribute("kind", "primary");
+      btn.setAttribute("kind", "segment");
+      btn.setAttribute("aria-pressed", String(t.id === active.id));
+      btn.setAttribute("aria-selected", String(t.id === active.id));
       btn.setAttribute("type", "button");
       btn.setAttribute("data-work-read", "");
       btn.dataset.inspectTarget = t.id;
@@ -155,12 +159,13 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       tabs.append(btn);
     }
     const dualBtn = document.createElement("ui-button");
-    dualBtn.setAttribute("kind", "quiet");
-    if (dualCamMode) dualBtn.setAttribute("kind", "primary");
+    dualBtn.setAttribute("kind", "segment");
+    dualBtn.setAttribute("aria-pressed", String(dualCamMode));
     dualBtn.setAttribute("type", "button");
     dualBtn.setAttribute("data-work-read", "");
     dualBtn.dataset.dualCamToggle = "true";
-    dualBtn.textContent = dualCamMode ? "📺 2채널(상단+손목) ON" : "📺 2채널 동시 보기";
+    dualBtn.textContent = dualCamMode ? "2CH ON" : "2CH";
+    dualBtn.title = "상단+손목 2채널 동시 보기";
     dualBtn.addEventListener("click", () => {
       dualCamMode = !dualCamMode;
       renderInspector(rows);
@@ -189,29 +194,49 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       for (const dv of [viewA, viewB]) {
         const pane = document.createElement("div");
         pane.className = "omx-inspector-dual-pane";
+        const dFrame = document.createElement("div");
+        dFrame.className = "omx-inspector-cam-frame";
         const dImg = document.createElement("img");
         dImg.className = "omx-inspector-main-cam omx-inspector-cam";
         dImg.alt = `${dv.label} 실시간 카메라`;
         dImg.loading = "lazy";
+        dFrame.append(dImg);
+        if (!framesOn) {
+          const standby = document.createElement("span");
+          standby.className = "omx-inspector-cam-standby";
+          standby.setAttribute("role", "status");
+          standby.textContent = "영상 대기 · 클릭하여 연결";
+          dFrame.append(standby);
+        }
         const dCap = document.createElement("small");
         dCap.className = "omx-inspector-cam-badge";
-        dCap.textContent = `🎥 ${dv.label}`;
-        cameraBindings.push([dImg, dv, dCap, `🎥 ${dv.label}`]);
-        pane.append(dImg, dCap);
+        dCap.textContent = dv.label;
+        cameraBindings.push([dImg, dv, dCap, dv.label]);
+        pane.append(dFrame, dCap);
         camStageNode.append(pane);
       }
     } else {
       camStageNode = document.createElement("div");
       camStageNode.className = "omx-inspector-single-wrap";
+      const mainFrame = document.createElement("div");
+      mainFrame.className = "omx-inspector-cam-frame";
       const mainImg = document.createElement("img");
       mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
       mainImg.alt = `${active.title} 실시간 메인 카메라`;
       mainImg.loading = "lazy";
+      mainFrame.append(mainImg);
+      if (!framesOn) {
+        const standby = document.createElement("span");
+        standby.className = "omx-inspector-cam-standby";
+        standby.setAttribute("role", "status");
+        standby.textContent = "영상 대기 · 클릭하여 연결";
+        mainFrame.append(standby);
+      }
       const stageBar = document.createElement("div");
       stageBar.className = "omx-inspector-stage-bar";
       const mainCap = document.createElement("small");
       mainCap.className = "omx-inspector-cam-badge";
-      mainCap.textContent = `🎥 [${activeCam.label}]`;
+      mainCap.textContent = `[${activeCam.label}]`;
       const zoomBtn = document.createElement("ui-button");
       zoomBtn.className = "omx-inspector-zoom";
       zoomBtn.setAttribute("kind", "quiet");
@@ -235,8 +260,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         }
       });
       stageBar.append(mainCap, zoomBtn);
-      cameraBindings.push([mainImg, activeCam, mainCap, `🎥 [${activeCam.label}]`]);
-      camStageNode.append(mainImg, stageBar);
+      cameraBindings.push([mainImg, activeCam, mainCap, `[${activeCam.label}]`]);
+      camStageNode.append(mainFrame, stageBar);
     }
 
     const pipGrid = document.createElement("div");
@@ -248,15 +273,24 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       pip.className = `omx-inspector-pip${v.id === activeCam.id ? " active" : ""}`;
       pip.setAttribute("aria-pressed", String(v.id === activeCam.id));
       pip.setAttribute("aria-label", `${v.label} 카메라 선택`);
+      const pFrame = document.createElement("div");
+      pFrame.className = "omx-inspector-cam-frame";
       const pImg = document.createElement("img");
       pImg.className = "omx-inspector-cam";
       pImg.alt = "";
       pImg.setAttribute("aria-hidden", "true");
       pImg.loading = "lazy";
+      pFrame.append(pImg);
+      if (!framesOn) {
+        const standby = document.createElement("span");
+        standby.className = "omx-inspector-cam-standby";
+        standby.textContent = "대기";
+        pFrame.append(standby);
+      }
       cameraBindings.push([pImg, v]);
       const pLbl = document.createElement("small");
-      pLbl.textContent = `📷 ${v.label}`;
-      pip.append(pImg, pLbl);
+      pLbl.textContent = v.label;
+      pip.append(pFrame, pLbl);
       pip.addEventListener("click", () => {
         selectedInspectorCam[active.id] = v.id;
         renderInspector(rows);
@@ -304,7 +338,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     runCustomBtn.setAttribute("data-work-read", "");
     const targetArm = active.id.startsWith("arm_") ? active.id : (active.id === "cell_ab" ? "arm_a" : "arm_s");
     const targetCell = targetArm === "arm_s" ? "cell_s" : "cell_ab";
-    runCustomBtn.textContent = `▶ ${targetArm} 맞춤 실행`;
+    runCustomBtn.textContent = `${targetArm} 맞춤 실행`;
     runCustomBtn.addEventListener("click", async () => {
       if (auth.locked || runCustomBtn.hasAttribute("disabled")) return;
       setOffBy(runCustomBtn, "요청 처리 중");
@@ -416,18 +450,17 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       camBar.className = "omx-card-actions";
       for (const v of (card.cameraViews || [])) {
         const camBtn = document.createElement("ui-button");
-        camBtn.setAttribute("kind", "quiet");
-        if (v.id === activeCamId) camBtn.setAttribute("kind", "primary");
+        camBtn.setAttribute("kind", "segment");
+        camBtn.setAttribute("aria-pressed", String(v.id === activeCamId));
         camBtn.setAttribute("type", "button");
         camBtn.setAttribute("data-work-read", "");
-        camBtn.textContent = `📷 ${v.label}`;
+        camBtn.textContent = v.label;
         camBtn.addEventListener("click", () => {
           selectedCamByCard[card.id] = v.id;
           if (camera.isConnected) frames.bind(camera, v);
           for (const ch of camBar.children || []) {
             if (!ch.dataset.streamToggle) {
-              ch.setAttribute("kind", "quiet");
-              if (ch === camBtn) ch.setAttribute("kind", "primary");
+              ch.setAttribute("aria-pressed", String(ch === camBtn));
             }
           }
           const targetId = v.id.startsWith("arm_a") ? "arm_a"

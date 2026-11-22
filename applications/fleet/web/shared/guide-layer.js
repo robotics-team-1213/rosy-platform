@@ -236,8 +236,16 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
   const recessedCol = css("--surface-recessed");
   const scrimCol = css("--scrim-solid");
   const quietCol = css("--ink-quiet");
+  const drawBrackets = (x, y, h, arm) => {
+    ctx.beginPath();
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      const cx = x + sx * h, cy = y + sy * h;
+      ctx.moveTo(cx - sx * arm, cy); ctx.lineTo(cx, cy); ctx.lineTo(cx, cy - sy * arm);
+    }
+    ctx.lineWidth = 1.6; ctx.strokeStyle = css("--selection"); ctx.stroke();
+  };
 
-  // 1. Draw anchored OMX-AI arms (base anchor + 4x zoomed tracked head/gripper vector)
+  // 1. Anchored OMX-AI arms (base anchor + 4x tracked head/gripper vector)
   const anchors = omxOn && Array.isArray(view?.anchors) ? view.anchors : [];
   for (const anc of anchors) {
     if (anc.kind !== "omx_ai") continue;
@@ -246,53 +254,26 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     const reachPx = Math.max(14, scaleAt(anc.base_x, anc.base_y, anc.reach_m || 0.28));
     const isHoveredOmx = hovered?.kind === "omx_ai" && hovered.id === anc.target_id;
     const isSelectedOmx = isHoveredOmx || view?.focusAnchorId === anc.target_id || view?.anchorPinTarget === anc.target_id;
-    // Without a live head the base is all we know: no link, no head, a quiet colour.
     const live = anc.live === true;
     const armColor = !live ? quietCol : isSelectedOmx ? primaryCol : warnCol;
     ctx.save();
-    // Workspace reach circle (subtle unless hovered/selected)
-    ctx.beginPath();
-    ctx.arc(baseP.x, baseP.y, reachPx, 0, Math.PI * 2);
-    ctx.setLineDash([4, 4]);
-    ctx.lineWidth = isSelectedOmx ? 2.0 : 1.0;
-    ctx.strokeStyle = armColor;
-    ctx.globalAlpha = isSelectedOmx ? 0.8 : 0.28;
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-    // Base anchor square
+    ctx.beginPath(); ctx.arc(baseP.x, baseP.y, reachPx, 0, Math.PI * 2);
+    ctx.setLineDash([4, 4]); ctx.lineWidth = isSelectedOmx ? 2.0 : 1.0; ctx.strokeStyle = armColor;
+    ctx.globalAlpha = isSelectedOmx ? 0.8 : 0.28; ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
     const bs = isSelectedOmx ? 6.5 : 4.5;
-    ctx.fillStyle = recessedCol;
-    ctx.strokeStyle = armColor;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.rect(baseP.x - bs, baseP.y - bs, bs * 2, bs * 2);
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = recessedCol; ctx.strokeStyle = armColor; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.rect(baseP.x - bs, baseP.y - bs, bs * 2, bs * 2); ctx.fill(); ctx.stroke();
+    if (isSelectedOmx) drawBrackets(baseP.x, baseP.y, bs + 5, 4);
     if (live) {
-      // Base -> Head link vector
-      ctx.beginPath();
-      ctx.moveTo(baseP.x, baseP.y);
-      ctx.lineTo(headP.x, headP.y);
-      ctx.lineWidth = isSelectedOmx ? 3.2 : 2.2;
-      ctx.strokeStyle = armColor;
-      ctx.stroke();
-      // Distal Head / Gripper marker + orientation tip
-      ctx.beginPath();
-      ctx.arc(headP.x, headP.y, isSelectedOmx ? 5.5 : 4, 0, Math.PI * 2);
-      ctx.fillStyle = primaryCol;
-      ctx.fill();
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = inkCol;
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(baseP.x, baseP.y); ctx.lineTo(headP.x, headP.y);
+      ctx.lineWidth = isSelectedOmx ? 3.2 : 2.2; ctx.strokeStyle = armColor; ctx.stroke();
+      ctx.beginPath(); ctx.arc(headP.x, headP.y, isSelectedOmx ? 5.5 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = primaryCol; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = inkCol; ctx.stroke();
       if (typeof anc.head_yaw === "number") {
         const hTip = ahead(anc.head_x ?? anc.base_x, anc.head_y ?? anc.base_y, anc.head_yaw, 0.055);
-        ctx.beginPath();
-        ctx.moveTo(headP.x, headP.y);
-        ctx.lineTo(hTip.x, hTip.y);
-        ctx.lineWidth = 1.8;
-        ctx.strokeStyle = primaryCol;
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(headP.x, headP.y); ctx.lineTo(hTip.x, hTip.y);
+        ctx.lineWidth = 1.8; ctx.strokeStyle = primaryCol; ctx.stroke();
       }
     }
     ctx.restore();
@@ -444,7 +425,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
         const lenStr = typeof lenVal === "number" ? ` · ${lenVal.toFixed(2)}m` : "";
         const statusStr = selectedGoal?.statusText ? ` · ${selectedGoal.statusText}` : "";
         const goalTitle = selectedGoal?.label || `(${goalX.toFixed(2)}, ${goalY.toFixed(2)})`;
-        drawChip(ctx, null, gp.x, gp.y - 18, `🎯 ${goalTitle}${lenStr}${viaStr}${statusStr}`, "good");
+        drawChip(ctx, null, gp.x, gp.y - 18, `TARGET · ${goalTitle}${lenStr}${viaStr}${statusStr}`, "good");
       }
     }
     ctx.restore();
@@ -472,46 +453,30 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     ctx.save();
     ctx.globalAlpha = row.online ? 1 : 0.45;
 
-    // Tight selection/hover ring right around the true physical chassis (no giant radar rings)
+    // Physical body, 0.5m range ring & avionics reticle brackets when focused
     if (isFocused) {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
-      ctx.lineWidth = 2.2;
-      ctx.strokeStyle = isHoveredRobot ? primaryCol : colour;
-      ctx.stroke();
+      const rangeR = Math.max(r + 12, scaleAt(row.pose.x, row.pose.y, 0.5));
+      ctx.beginPath(); ctx.arc(p.x, p.y, rangeR, 0, Math.PI * 2);
+      ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.strokeStyle = quietCol; ctx.globalAlpha = 0.45; ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = row.online ? 1 : 0.45;
+      drawBrackets(p.x, p.y, r + 7, 5);
     }
-    // Tight uncertainty ring (body + 2cm camera tolerance)
     if (ring > r + 1.5) {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
-      ctx.setLineDash([2, 3]);
-      ctx.lineWidth = 1.2;
-      ctx.strokeStyle = colour;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
+      ctx.setLineDash([2, 3]); ctx.lineWidth = 1.2; ctx.strokeStyle = colour; ctx.stroke(); ctx.setLineDash([]);
     }
-    // Physical robot body circle (radius = 5.2 cm in world coordinates)
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = colour;
-    ctx.globalAlpha *= row.pose.state === "LOCALIZED" ? 0.55 : 0.32;
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = colour; ctx.globalAlpha *= row.pose.state === "LOCALIZED" ? 0.55 : 0.32; ctx.fill();
     ctx.globalAlpha = row.online ? 1 : 0.45;
     if (row.pose.state !== "LOCALIZED") ctx.setLineDash([3, 2]);
     ctx.lineWidth = isFocused ? 2.5 : (alert ? 2.2 : 1.8);
     ctx.strokeStyle = isHoveredRobot ? primaryCol : (alert || colour);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.stroke(); ctx.setLineDash([]);
 
-    // Forward heading vector (nose arrow)
+    // Forward heading vector + extended ND course projection when focused
     if (tip) {
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(tip.x, tip.y);
-      ctx.lineWidth = 2.4;
-      ctx.strokeStyle = primaryCol;
-      ctx.lineCap = "round";
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(tip.x, tip.y);
+      ctx.lineWidth = 2.4; ctx.strokeStyle = primaryCol; ctx.lineCap = "round"; ctx.stroke();
       const back = Math.atan2(p.y - tip.y, p.x - tip.x);
       ctx.beginPath();
       for (const turn of [-0.52, 0.52]) {
@@ -519,6 +484,12 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
         ctx.lineTo(tip.x + Math.cos(back + turn) * 5.5, tip.y + Math.sin(back + turn) * 5.5);
       }
       ctx.stroke();
+      if (isFocused && typeof row.pose.yaw === "number") {
+        const ext = ahead(row.pose.x, row.pose.y, row.pose.yaw, 0.35);
+        ctx.save(); ctx.beginPath(); ctx.moveTo(tip.x, tip.y); ctx.lineTo(ext.x, ext.y);
+        ctx.setLineDash([3, 3]); ctx.lineWidth = 1.4; ctx.strokeStyle = primaryCol; ctx.globalAlpha = 0.6;
+        ctx.stroke(); ctx.restore();
+      }
     }
 
     // Live hover trajectory preview line from focused Pinky to cursor strictly along road graph
@@ -527,32 +498,15 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
       const hw = view.hoverWorld;
       const roadHover = roadPolylineBetween(siteMapObj, row.pose, hw);
       if (roadHover && roadHover.points.length >= 2 && roadHover.length_m > 0.03) {
-        ctx.save();
-        ctx.globalAlpha = 0.58;
-        ctx.beginPath();
-        roadHover.points.forEach(([wx, wy], idx) => {
-          const pt = toPoint(wx, wy);
-          if (idx === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
-        });
-        ctx.setLineDash([4, 4]);
-        ctx.lineWidth = 1.7;
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = primaryCol;
-        ctx.stroke();
-        ctx.setLineDash([]);
+        ctx.save(); ctx.globalAlpha = 0.58; ctx.beginPath();
+        roadHover.points.forEach(([wx, wy], idx) => { const pt = toPoint(wx, wy); if (idx === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
+        ctx.setLineDash([4, 4]); ctx.lineWidth = 1.7; ctx.lineJoin = "round"; ctx.strokeStyle = primaryCol; ctx.stroke(); ctx.setLineDash([]);
         const hp = toPoint(hw.x, hw.y);
-        ctx.beginPath();
-        ctx.arc(hp.x, hp.y, 4, 0, Math.PI * 2);
-        ctx.strokeStyle = primaryCol;
-        ctx.lineWidth = 1.6;
-        ctx.stroke();
+        ctx.beginPath(); ctx.arc(hp.x, hp.y, 4, 0, Math.PI * 2); ctx.strokeStyle = primaryCol; ctx.lineWidth = 1.6; ctx.stroke();
         ctx.restore();
         if (labelsOn) {
           const viaTxt = roadHover.places?.length ? ` · ${roadHover.places.join("→")}` : "";
-          const hoverLabel = hw.place
-            ? `미리보기: ${hw.place.id} (${roadHover.length_m.toFixed(2)}m${viaTxt})`
-            : `클릭 시 목표 고정 (${roadHover.length_m.toFixed(2)}m${viaTxt})`;
+          const hoverLabel = hw.place ? `미리보기: ${hw.place.id} (${roadHover.length_m.toFixed(2)}m${viaTxt})` : `클릭 시 목표 고정 (${roadHover.length_m.toFixed(2)}m${viaTxt})`;
           drawChip(ctx, null, hp.x, hp.y - 14, hoverLabel, "");
         }
       }
@@ -563,30 +517,16 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
       const roadTarget = roadPolylineBetween(siteMapObj, row.pose, target);
       ctx.beginPath();
       if (roadTarget && roadTarget.points.length >= 2) {
-        roadTarget.points.forEach(([wx, wy], idx) => {
-          const pt = toPoint(wx, wy);
-          if (idx === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
-        });
-      } else {
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(target.q.x, target.q.y);
-      }
-      ctx.setLineDash([5, 4]);
-      ctx.lineWidth = 1.8;
-      ctx.strokeStyle = alert || colour;
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.arc(target.q.x, target.q.y, 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = alert || colour;
-      ctx.fill();
+        roadTarget.points.forEach(([wx, wy], idx) => { const pt = toPoint(wx, wy); if (idx === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
+      } else { ctx.moveTo(p.x, p.y); ctx.lineTo(target.q.x, target.q.y); }
+      ctx.setLineDash([5, 4]); ctx.lineWidth = 1.8; ctx.strokeStyle = alert || colour; ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(target.q.x, target.q.y, 3.5, 0, Math.PI * 2); ctx.fillStyle = alert || colour; ctx.fill();
     }
     ctx.restore();
 
     if (labelsOn || isHoveredRobot) {
       const labelText = isHoveredRobot && row.pose
-        ? `★ ${row.robot_id} (${row.pose.x.toFixed(2)}, ${row.pose.y.toFixed(2)}m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
+        ? `${row.robot_id} (${row.pose.x.toFixed(2)}, ${row.pose.y.toFixed(2)}m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
         : poseLabel(row);
       drawChip(ctx, null, p.x, p.y - ring - 10, labelText, worst);
     }

@@ -123,21 +123,24 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const safety = !stateCurrent ? "안전 확인 불가"
       : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
     const facts = node("div", "", "robot-summary-status");
-    const addFact = (text, cls) => {
+    const calmOffline = !view.stateUnavailable && !robot.online;
+    const addFact = (text, cls, { keepPill = false } = {}) => {
       const t = tag(text, cls);
-      if (!cls) t.setAttribute("variant", "inline");
+      if (!cls || cls === "nav" || cls === "ok" || (calmOffline && !keepPill)) {
+        t.setAttribute("variant", "inline");
+      }
       facts.append(t);
       return t;
     };
-    addFact(status, view.stateUnavailable || !robot.online ? "warn" : "");
+    addFact(status, view.stateUnavailable || !robot.online ? "warn" : "", { keepPill: true });
     addFact(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn");
-    // D-926: nominal facts render inline via ui-tag[variant="inline"] (Dark-Cockpit); warnings/crits stay pill-framed.
+    // D-926: nominal/active facts render inline via ui-tag[variant="inline"] (Dark-Cockpit); warnings/crits stay pill-framed.
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
     const battery = addFact(`배터리 ${power.battery}`, power.problem ? "warn" : "");
     battery.dataset.fact = "battery";
     facts.append(motorHealth.summary(robot));
     const heat = stateCurrent ? heatChip(state) : null;
-    if (heat) addFact(...heat);
+    if (heat) addFact(...heat, { keepPill: true });
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
     const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
     const position = addFact(loc?.text || "위치 미확인", loc ? loc.cls : "warn");
@@ -148,7 +151,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
       : formation && Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "";
     if (role) addFact(role, "nav");
     const source = motionSource(robot, view);
-    const sourceTag = addFact(source.text, source.cls);
+    const sourceTag = addFact(source.text, source.cls, { keepPill: source.attention });
     sourceTag.dataset.motionSource = source.key;
     sourceTag.title = source.title;
     article.append(facts);

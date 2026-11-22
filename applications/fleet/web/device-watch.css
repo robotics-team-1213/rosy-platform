@@ -7,6 +7,10 @@
   z-index: 3;
   top: var(--space-2);
   right: var(--space-2);
+  padding: var(--space-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--scrim-solid);
 }
 
 /* 전방 사진은 막힘 큐의 원본을 비추는 구석 그림이다. 지도 칸 안에 둔다. */
@@ -64,6 +68,8 @@
 
 @media (width < 64rem) {
   .device-watch {
+    top: auto;
+    right: auto;
     left: var(--space-2);
     bottom: var(--space-2);
   }

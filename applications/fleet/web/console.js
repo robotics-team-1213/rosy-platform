@@ -8,7 +8,7 @@ import { createRoster } from "./roster.js";
 import { createRosterWorkspace } from "./roster-workspace.js";
 import { createManualControl } from "./manual-control.js";
 import { cardTripLine, placeOptions } from "./card-trip.js";
-import { createCockpitHud } from "./cockpit-telemetry.js";
+import { createCockpitHud } from "/console/assets/cockpit-telemetry.js";
 import { createInboxPanel } from "./inbox.js";
 import { createWorkView } from "./work-view.js";
 import { createChannelRequestView } from "./channel-request-view.js";

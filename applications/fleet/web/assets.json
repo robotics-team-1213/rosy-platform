@@ -647,7 +647,7 @@
       "media_type": "text/javascript"
     },
     "cockpit-telemetry.js": {
-      "path": "cockpit-telemetry.js",
+      "path": "shared/cockpit-telemetry.js",
       "media_type": "text/javascript"
     }
   }

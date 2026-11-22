@@ -18,12 +18,15 @@
 .cell-cam-thumb.focused { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; cursor: zoom-out; }
 .omx-card-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .omx-card-actions ui-button { min-width: 0; }
-.omx-right-inspector:not(:empty) { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--series-primary); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
-.omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding-bottom: var(--space-1); border-bottom: 1px solid var(--border-subtle); }
+.omx-right-inspector:not(:empty) { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
+.omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); }
 .omx-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .omx-inspector-head strong { font-family: var(--mono); font-size: var(--text-label); color: var(--series-primary); overflow-wrap: anywhere; }
-.omx-inspector-main-cam { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: var(--surface-flat); cursor: zoom-in; }
+.omx-inspector-main-cam { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--border-default); background: var(--surface-recessed); cursor: zoom-in; }
 .omx-inspector-main-cam.focused { aspect-ratio: auto; max-height: 60vh; object-fit: contain; cursor: zoom-out; }
+.omx-inspector-cam-frame { position: relative; min-width: 0; }
+.omx-inspector-cam:not([src]) { opacity: 0; }
+.omx-inspector-cam-standby { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-1) var(--space-2); border: 1px dashed var(--border-default); border-radius: var(--radius-control); background: var(--surface-recessed); color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-compact) var(--mono); pointer-events: none; text-align: center; }
 .omx-inspector-single-wrap { display: grid; gap: var(--space-1); min-width: 0; }
 .omx-inspector-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); min-width: 0; }
 @media (width < 30rem) {
@@ -150,7 +153,16 @@
 @media (width >= 64rem) and (height >= 40rem) {
   #robot-stage { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
   #robot-stage > .robot-stage-main { overflow: hidden; }
+  #fleet-main .map-stage { flex: 1 1 auto; min-height: 15rem; }
+  #fleet-main .map-stage #map-canvas { height: 100%; }
+  #fleet-main .legend { margin-top: var(--space-1); gap: var(--space-1) var(--space-3); }
+  #robot-panel .robot-panel-body { gap: var(--space-2); }
 }
+#robot-panel .robot-workspace-card .robot-head { gap: var(--space-1) var(--space-2); }
+#robot-panel .robot-workspace-card .robot-head > :is(b, .spacer) { display: none; }
+#robot-panel .robot-workspace-card .facts { margin: var(--space-1) 0; }
+#robot-panel section[data-robot-profile] { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
+#robot-panel section[data-robot-profile] :is(h4, p) { margin: 0; font-size: var(--text-micro); line-height: var(--leading-compact); }
 .robot-panel .robot-workspace-card { padding: var(--space-2); background: var(--surface-canvas); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
 .robot-panel-camera-box { display: grid; gap: var(--space-2); min-width: 0; }
 .robot-summary { min-height: var(--row-dense); padding: var(--space-2); border: 1px solid var(--border-subtle); border-inline-start: var(--selection-edge) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); }
@@ -243,34 +255,39 @@
   gap: 0;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-control);
-  background: var(--surface-raised);
+  background: var(--surface-chrome);
   overflow: hidden;
   min-width: 0;
 }
-.cockpit-hud-cell { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-1) var(--space-3); min-width: 0; }
+.fleet-workspace > .ui-pathbar { flex-wrap: wrap; }
+.cockpit-hud-cell { display: flex; align-items: baseline; gap: var(--space-1); padding: var(--space-1) var(--space-2); min-width: 0; }
 .cockpit-hud-cell + .cockpit-hud-cell { border-inline-start: 1px solid var(--border-subtle); }
 .cockpit-hud-label { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); white-space: nowrap; }
 .cockpit-hud-val { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; }
 .cockpit-hud-cell[data-tone="active"] .cockpit-hud-val { color: var(--series-primary); }
 .cockpit-hud-cell[data-tone="warn"] .cockpit-hud-val { color: var(--status-warn); }
-.cockpit-hud-cell[data-tone="crit"] { background: var(--status-crit-a10); }
-.cockpit-hud-cell[data-tone="crit"] .cockpit-hud-val { color: var(--status-crit); }
+.cockpit-hud-cell[data-tone="crit"] { background: var(--status-crit); }
+.cockpit-hud-cell[data-tone="crit"] :is(.cockpit-hud-label, .cockpit-hud-val) { color: var(--text-on-danger); }
 @media (width < 64rem) {
-  .cockpit-hud { margin-inline-start: 0; flex-wrap: wrap; width: 100%; }
-  .cockpit-hud-cell { flex: 1 1 auto; padding: var(--space-1) var(--space-2); }
+  .cockpit-hud { margin-inline-start: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .cockpit-hud-cell { justify-content: space-between; }
+  .cockpit-hud-cell:nth-child(odd) { border-inline-start: 0; }
+  .cockpit-hud-cell:nth-child(n + 3) { border-block-start: 1px solid var(--border-subtle); }
+  .cockpit-hud-cell[data-hud-key="alerts"] { grid-column: 1 / -1; border-inline-start: 0; }
 }
 
-.robot-panel-status-wrap { display: grid; gap: var(--space-2); min-width: 0; }
+.robot-panel-status-wrap { display: grid; gap: var(--space-1); min-width: 0; }
 .robot-panel-twin { min-width: 0; }
-.telemetry-chart { display: grid; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); min-width: 0; }
+.telemetry-chart { display: grid; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-recessed); min-width: 0; }
 .telemetry-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .telemetry-chart-title { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); }
 .telemetry-chart-value { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
 .telemetry-chart-meta { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
-.telemetry-chart-plot { min-width: 0; overflow: hidden; }
-.telemetry-chart-plot > div { width: 100%; }
-.telemetry-chart-plot > div > div { position: relative; user-select: none; }
-.telemetry-chart-plot canvas { display: block; width: 100%; height: 100%; }
+.telemetry-chart-plot { min-width: 0; height: 44px; overflow: hidden; }
+.telemetry-chart-plot > div { width: 100%; height: 100%; }
+.telemetry-chart-plot > div > div { position: relative; width: 100%; height: 100%; user-select: none; }
+.telemetry-chart-plot > div > div > div { position: absolute; inset: 0; pointer-events: none; }
+.telemetry-chart-plot canvas { position: relative; display: block; width: 100%; height: 100%; }
 
 /* 지도 오버레이 표시 켜기·끄기 툴바 */
 .map-overlay-toggles {
@@ -294,6 +311,9 @@
   opacity: var(--disabled-opacity);
 }
 @media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  .fleet-workspace > .ui-pathbar { min-block-size: 0; padding-block: var(--space-1); row-gap: var(--space-1); }
+  #fleet-main > .console-primary { padding-block: var(--space-2); }
+  .omx-inspector-tabs ui-button { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-2); }
   .map-overlay-toggles [data-layer-toggle] {
     min-width: 0;
     min-height: var(--target-tool);
@@ -304,12 +324,17 @@
     white-space: nowrap;
     flex: 0 0 auto;
   }
-  #fleet-main .panel[aria-labelledby="map-heading"] { padding: var(--space-3); }
-  #fleet-main :is(#map-options, #map-readouts) > summary { min-height: var(--target-tool); padding: var(--space-1) var(--space-2); font-size: var(--text-micro); }
+  #fleet-main .panel[aria-labelledby="map-heading"] { padding: var(--space-1) var(--space-2); }
+  #fleet-main .panel[aria-labelledby="map-heading"] .map-head { flex-wrap: nowrap; gap: var(--space-1) var(--space-2); margin-bottom: var(--space-1); }
+  #fleet-main .panel[aria-labelledby="map-heading"] .map-head h2 { margin: 0; font-size: var(--text-body); white-space: nowrap; }
+  #fleet-main .panel[aria-labelledby="map-heading"] .map-head label[for="map-display-mode"] { font-size: var(--text-micro); white-space: nowrap; }
+  #fleet-main .map-overlay-toggles { padding: 0 0 var(--space-1); margin-bottom: 0; }
+  #fleet-main :is(.map-options, .map-readouts) { margin-top: var(--space-1); }
+  #fleet-main :is(#map-options, #map-readouts) > summary { min-height: var(--target-tool); padding: 0 var(--space-2); font-size: var(--text-micro); }
 }
 
 /* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
-.map-stage { position: relative; border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-recessed); overflow: hidden; }
+.map-stage { position: relative; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-recessed); overflow: hidden; }
 .map-axis-badge,
 .map-cursor-readout {
   position: absolute;

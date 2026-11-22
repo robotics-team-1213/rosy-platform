@@ -10,7 +10,7 @@ import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { setOff } from "/common/cause-line.js";
 import { node } from "/common/control-dom.js";
 import { cardTripLine } from "./card-trip.js";
-import { createTelemetryTrace } from "./cockpit-telemetry.js";
+import { createTelemetryTrace } from "/console/assets/cockpit-telemetry.js";
 import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
 import { powerHealthView } from "./power-health-view.js";
 import { staleAgeS } from "./state-age.js";

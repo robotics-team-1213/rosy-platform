@@ -112,6 +112,7 @@ export function createCockpitHud({ el }) {
 }
 
 export function createTelemetryTrace() {
+  const PLOT_HEIGHT = 44;
   const root = document.createElement("div");
   root.className = "telemetry-chart";
 
@@ -128,10 +129,15 @@ export function createTelemetryTrace() {
 
   const history = new Map();
   let plot = null;
+  let plotId = null;
   let plotTone = "primary";
+  let currentBounds = null;
+  let currentBoundsKey = "";
   let lastSeries = null;
   let disposed = false;
   let rendering = false;
+  let pendingRedraw = false;
+  let rafSync = 0;
 
   function colorsForTone(tone) {
     const stroke = cssColor(
@@ -139,7 +145,10 @@ export function createTelemetryTrace() {
     );
     const fill = cssColor(tone === "crit" ? "--status-crit-a10" : "--surface-sheen");
     const grid = cssColor("--border-subtle");
-    return { stroke, fill, grid };
+    const warn = cssColor("--status-warn");
+    const crit = cssColor("--status-crit");
+    const bg = cssColor("--surface-canvas");
+    return { stroke, fill, grid, warn, crit, bg };
   }
 
   function ensureSeries(id, value) {
@@ -156,22 +165,49 @@ export function createTelemetryTrace() {
     return series;
   }
 
-  async function drawPlot(ys, tone, yBounds) {
-    if (disposed || rendering) return;
+  function scheduleSizeSync() {
+    if (rafSync || disposed || typeof window.requestAnimationFrame !== "function") return;
+    rafSync = window.requestAnimationFrame(() => {
+      rafSync = 0;
+      if (disposed || !plot || !plotHost.clientWidth) return;
+      const w = Math.max(180, Math.floor(plotHost.clientWidth));
+      if (Math.abs((plot.width || 0) - w) > 2) {
+        plot.setSize({ width: w, height: PLOT_HEIGHT });
+      }
+    });
+  }
+
+  async function drawPlot(id, ys, tone, yBounds) {
+    if (disposed) return;
+    if (rendering) {
+      pendingRedraw = true;
+      return;
+    }
     rendering = true;
     try {
       const UPlot = await loadUPlot();
       if (disposed) return;
-      const xs = ys.map((_, idx) => idx);
-      const { stroke, fill, grid } = colorsForTone(tone);
-      const width = Math.max(180, Math.floor(plotHost.clientWidth || 256));
-      if (!plot || plotTone !== tone) {
+      const latest = lastSeries || { id, ys, tone, yBounds };
+      const useYs = latest.ys;
+      const useTone = latest.tone;
+      const useId = latest.id;
+      const useBounds = latest.yBounds;
+      const nextBoundsKey = useBounds ? useBounds.join(",") : "auto";
+      currentBounds = useBounds;
+      const xs = useYs.map((_, idx) => idx);
+      const { stroke, fill, grid, warn, crit, bg } = colorsForTone(useTone);
+      const measured = Math.floor(plotHost.clientWidth || 0);
+      const width = Math.max(180, measured || 256);
+      if (!plot || plotTone !== useTone || plotId !== useId || currentBoundsKey !== nextBoundsKey) {
         plot?.destroy?.();
         plotHost.replaceChildren();
-        plotTone = tone;
+        plotId = useId;
+        plotTone = useTone;
+        currentBoundsKey = nextBoundsKey;
         const opts = {
           width,
-          height: 64,
+          height: PLOT_HEIGHT,
+          padding: [6, 8, 4, 2],
           pxAlign: 0,
           legend: { show: false },
           cursor: { show: false },
@@ -181,9 +217,9 @@ export function createTelemetryTrace() {
             x: { time: false },
             y: {
               range: (_u, dMin, dMax) => {
-                if (yBounds) return yBounds;
-                const span = Math.max(1, dMax - dMin);
-                return [Math.max(0, dMin - span * 0.25), dMax + span * 0.25];
+                if (currentBounds) return currentBounds;
+                const pad = Math.max(40, (dMax - dMin) * 0.35, Math.abs(dMax) * 0.25);
+                return [Math.max(0, dMin - pad), dMax + pad];
               },
             },
           },
@@ -202,21 +238,61 @@ export function createTelemetryTrace() {
                   ctx.lineTo(bbox.left + bbox.width, y);
                   ctx.stroke();
                 }
+                if (currentBounds && currentBounds[0] === 0 && currentBounds[1] === 100) {
+                  ctx.setLineDash([4, 4]);
+                  ctx.globalAlpha = 0.35;
+                  for (const [val, col] of [[25, warn], [15, crit]]) {
+                    const py = Math.round(u.valToPos(val, "y", true)) + 0.5;
+                    ctx.strokeStyle = col;
+                    ctx.beginPath();
+                    ctx.moveTo(bbox.left, py);
+                    ctx.lineTo(bbox.left + bbox.width, py);
+                    ctx.stroke();
+                  }
+                }
+                ctx.restore();
+              },
+            ],
+            draw: [
+              (u) => {
+                const dxs = u.data?.[0] || [];
+                const dys = u.data?.[1] || [];
+                const lastIdx = dxs.length - 1;
+                const lastY = dys[lastIdx];
+                if (lastIdx < 0 || typeof lastY !== "number") return;
+                const px = u.valToPos(dxs[lastIdx], "x", true);
+                const py = u.valToPos(lastY, "y", true);
+                if (!Number.isFinite(px) || !Number.isFinite(py)) return;
+                const dpr = window.devicePixelRatio || 1;
+                const { ctx } = u;
+                ctx.save();
+                ctx.fillStyle = stroke;
+                ctx.strokeStyle = bg;
+                ctx.lineWidth = 1.5 * dpr;
+                ctx.beginPath();
+                ctx.arc(px, py, 3 * dpr, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
                 ctx.restore();
               },
             ],
           },
           series: [{}, { stroke, fill, width: 2, points: { show: false } }],
         };
-        plot = new UPlot(opts, [xs, ys], plotHost);
+        plot = new UPlot(opts, [xs, useYs], plotHost);
       } else {
-        plot.setData([xs, ys]);
-        if (Math.abs((plot.width || 0) - width) > 2) {
-          plot.setSize({ width, height: 64 });
+        plot.setData([xs, useYs]);
+        if (measured > 0 && Math.abs((plot.width || 0) - width) > 2) {
+          plot.setSize({ width, height: PLOT_HEIGHT });
         }
       }
+      if (!measured) scheduleSizeSync();
     } finally {
       rendering = false;
+      if (pendingRedraw && !disposed && lastSeries) {
+        pendingRedraw = false;
+        void drawPlot(lastSeries.id, lastSeries.ys, lastSeries.tone, lastSeries.yBounds);
+      }
     }
   }
 
@@ -224,7 +300,7 @@ export function createTelemetryTrace() {
     if (!disposed && lastSeries) {
       plot?.destroy?.();
       plot = null;
-      drawPlot(lastSeries.ys, lastSeries.tone, lastSeries.yBounds);
+      void drawPlot(lastSeries.id, lastSeries.ys, lastSeries.tone, lastSeries.yBounds);
     }
   };
   document.addEventListener("rosy:theme", onTheme);
@@ -233,7 +309,7 @@ export function createTelemetryTrace() {
     ? new ResizeObserver(() => {
         if (!disposed && plot && plotHost.clientWidth > 0) {
           const w = Math.max(180, Math.floor(plotHost.clientWidth));
-          if (Math.abs((plot.width || 0) - w) > 4) plot.setSize({ width: w, height: 64 });
+          if (Math.abs((plot.width || 0) - w) > 4) plot.setSize({ width: w, height: PLOT_HEIGHT });
         }
       })
     : null;
@@ -248,31 +324,41 @@ export function createTelemetryTrace() {
       if (typeof value !== "number" || !Number.isFinite(value) || !id) {
         metaEl.textContent = "NO DATA";
         lastSeries = null;
+        pendingRedraw = false;
         plot?.destroy?.();
         plot = null;
+        plotId = null;
         plotHost.replaceChildren();
         return;
       }
       const ys = ensureSeries(id, value);
       const lo = Math.min(...ys);
       const hi = Math.max(...ys);
-      metaEl.textContent = `${Math.round(lo)}–${Math.round(hi)}${unit}`;
+      metaEl.textContent = Math.round(lo) === Math.round(hi) ? "STEADY" : `${Math.round(lo)}–${Math.round(hi)}${unit}`;
       const yBounds = typeof minBound === "number" && typeof maxBound === "number" ? [minBound, maxBound] : null;
-      lastSeries = { ys: [...ys], tone, yBounds };
-      drawPlot(lastSeries.ys, tone, yBounds);
+      lastSeries = { id, ys: [...ys], tone, yBounds };
+      void drawPlot(id, lastSeries.ys, tone, yBounds);
     },
     clear() {
       lastSeries = null;
+      pendingRedraw = false;
       plot?.destroy?.();
       plot = null;
+      plotId = null;
       plotHost.replaceChildren();
     },
     dispose() {
       disposed = true;
+      pendingRedraw = false;
+      if (rafSync && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(rafSync);
+        rafSync = 0;
+      }
       document.removeEventListener("rosy:theme", onTheme);
       resize?.disconnect();
       plot?.destroy?.();
       plot = null;
+      plotId = null;
       history.clear();
     },
   };

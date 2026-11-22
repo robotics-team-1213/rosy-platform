@@ -188,7 +188,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const rot = view.siteViewTurn || 0;
     const side = rot === 90 || rot === 270;
     const fw = side ? height : width, fh = side ? width : height;
-    const t = fitTransform(bounds, fw, fh, 32);
+    const sitePad = rot === 90 ? { top: 32, right: 56, bottom: 46, left: 20 }
+      : rot === 180 ? { top: 56, right: 46, bottom: 32, left: 20 }
+      : rot === 270 ? { top: 46, right: 20, bottom: 32, left: 56 }
+      : { top: 32, right: 20, bottom: 56, left: 46 };
+    const t = fitTransform(bounds, fw, fh, sitePad);
     const turn = quarterTurn(rot, fw, fh);
     const toPx = (x, y) => { const p = project(t, x, y); return turn.point(p.px, p.py); };
     // D-593 pin on the site view (a motor-mode robot has no grid): canvas CSS px → map m.
@@ -232,7 +236,39 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (layerOn("sightings")) {
       for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
     }
+    drawNdOverlay(ctx, width, height, t.scale, rot);
     flushChips(ctx);
+  }
+
+  function drawNdOverlay(ctx, width, height, pxPerM, rot) {
+    if (!Number.isFinite(pxPerM) || pxPerM <= 0 || width < 220 || height < 180) return;
+    const stepM = pxPerM * 0.5 >= 40 ? 0.5 : pxPerM * 1.0 >= 28 ? 1.0 : 2.0;
+    const barPx = stepM * pxPerM;
+    const cx = 22, cy = height - 13;
+    const dpr = window.devicePixelRatio || 1;
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.translate(cx, cy);
+    ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI * 2);
+    ctx.strokeStyle = css("--border-default"); ctx.lineWidth = 1; ctx.stroke();
+    ctx.rotate((rot * Math.PI) / 180);
+    ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(3, -1); ctx.lineTo(-3, -1); ctx.closePath();
+    ctx.fillStyle = css("--series-primary"); ctx.fill();
+    ctx.rotate((-rot * Math.PI) / 180);
+    ctx.font = font("micro"); ctx.fillStyle = css("--ink-quiet");
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("N", 0, 3.5);
+    ctx.restore();
+
+    const sx = cx + 18, sy = height - 8;
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.strokeStyle = css("--ink-quiet"); ctx.fillStyle = css("--ink-quiet"); ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - 4); ctx.lineTo(sx, sy); ctx.lineTo(sx + barPx, sy); ctx.lineTo(sx + barPx, sy - 4);
+    ctx.stroke();
+    ctx.font = font("micro"); ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText(`${stepM} m`, sx + barPx / 2, sy - 3);
+    ctx.restore();
   }
 
   function drawMetreGrid(ctx, toPoint, bounds, cameraOn) {
