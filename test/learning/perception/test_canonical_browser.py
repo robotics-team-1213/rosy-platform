@@ -188,7 +188,14 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 if width == 390:
                     page.set_viewport_size({"width": 320, "height": 844})
-                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                    overflow = page.evaluate("""() => {
+                        if (document.documentElement.scrollWidth <= innerWidth) return [];
+                        return Array.from(document.querySelectorAll('main *'))
+                            .filter(el => el.getBoundingClientRect().right > innerWidth)
+                            .slice(0, 16)
+                            .map(el => [el.tagName, el.id, el.getAttribute('class'), el.getBoundingClientRect().right]);
+                    }""")
+                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), overflow
                     page.set_viewport_size({"width": 390, "height": 900})
 
                 page.locator("#canon-unit").select_option("sim_rad")
