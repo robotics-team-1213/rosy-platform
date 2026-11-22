@@ -28,7 +28,7 @@
 
 - `applications/fleet/test`
 - `operations/fleet/test`
-- `shared/web/test/test_patterns_registry.py`
+- `shared/web/test/test_shared_dedupe.py`
 - `test/test_remaining_platform_installed.py`
 
 ## 최근 기록
