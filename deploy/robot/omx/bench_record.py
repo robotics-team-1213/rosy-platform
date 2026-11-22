@@ -379,8 +379,8 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 sealed = self.popen(seal, cwd=folder, stdout=log, stderr=subprocess.STDOUT).wait()
             self._publish_end(status="sealed" if sealed == 0 else "seal_failed", seal_exit=sealed)
             if sealed == 0:
-                self._on_session_sealed(folder)
                 self._auto_home_after_session()
+                self._on_session_sealed(folder)
         except Exception as exc:
             self._set(status="failed", error=f"{type(exc).__name__}: {exc}")
 

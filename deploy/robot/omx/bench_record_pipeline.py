@@ -131,27 +131,30 @@ class BenchPipelineMixin:
         return {"ok": True, "replay_id": replay_id, "summary": f"{src_type} 궤적 준비 완료 ({len(base_traj.get('frames', []))}프레임)", "pipeline": snap}
 
     def _on_session_sealed(self, folder):
-        """Server-side post-seal auto handoff (runs independently of browser polling)."""
-        self._pipe_init()
-        self._hf_init()
-        with self.lock:
-            ds_name = str(self.state.get("name") or Path(folder).name)
-        cfg = load_handoff_config(self.prep)
-        col_dir = collections_root() / ds_name
-        if not (col_dir / "manifest.json").is_file():
-            return
-        if cfg.get("auto_loop"):
-            try:
-                self.pipeline_run({"dataset_folder": ds_name, "trigger": "auto_after_seal"})
-            except Exception as exc:
-                with self._pipe_lock:
-                    self._pipe_state["logs"] = (self._pipe_state["logs"] + [f"[auto-seal:pipe] {exc}"])[-15:]
-        if cfg.get("auto_hf_upload") and (not hasattr(self, "hf_logged_in") or self.hf_logged_in()):
-            try:
-                self.hf_upload_start({"dataset": ds_name})
-            except Exception as exc:
-                with self._pipe_lock:
-                    self._pipe_state["logs"] = (self._pipe_state["logs"] + [f"[auto-seal:hf] {exc}"])[-15:]
+        """Server-side post-seal auto handoff (isolated so failures never affect homing/seal state)."""
+        try:
+            self._pipe_init()
+            self._hf_init()
+            with self.lock:
+                ds_name = str(self.state.get("name") or Path(folder).name)
+            cfg = load_handoff_config(self.prep)
+            col_dir = collections_root() / ds_name
+            if not (col_dir / "manifest.json").is_file():
+                return
+            if cfg.get("auto_loop"):
+                try:
+                    self.pipeline_run({"dataset_folder": ds_name, "trigger": "auto_after_seal"})
+                except Exception as exc:
+                    with self._pipe_lock:
+                        self._pipe_state["logs"] = (self._pipe_state["logs"] + [f"[auto-seal:pipe] {exc}"])[-15:]
+            if cfg.get("auto_hf_upload") and (not hasattr(self, "hf_logged_in") or self.hf_logged_in()):
+                try:
+                    self.hf_upload_start({"dataset": ds_name})
+                except Exception as exc:
+                    with self._pipe_lock:
+                        self._pipe_state["logs"] = (self._pipe_state["logs"] + [f"[auto-seal:hf] {exc}"])[-15:]
+        except Exception:
+            pass
 
     def _run_pipeline_worker(self, ds_name):
         def log(msg):
@@ -230,13 +233,17 @@ class BenchPipelineMixin:
             raise ValueError("JSON object required")
         with self.lock:
             state_snap = dict(self.state)
-        raw_ds = str(body.get("dataset_folder") or "").strip()
+        raw_ds = str(body.get("dataset_folder") or body.get("collection") or "").strip()
         if (not raw_ds or raw_ds == state_snap.get("folder")) and state_snap.get("name"):
             ds_name = str(state_snap["name"]).strip()
+        elif raw_ds:
+            ds_name = Path(raw_ds).name
         else:
-            ds_name = Path(raw_ds).name if raw_ds else "latest-session"
-        if not _SAFE_NAME.fullmatch(ds_name):
-            raise ValueError("잘못된 데이터셋/세션 이름입니다")
+            q_pending = [r["collection"] for r in load_handoff_queue(self.prep) if r.get("status") != "done"]
+            cols = sorted((p.name for p in collections_root().iterdir() if p.is_dir() and (p / "manifest.json").is_file()), reverse=True) if collections_root().is_dir() else []
+            ds_name = (q_pending[-1] if q_pending else "") or (self._pipe_state.get("last_dataset") or "") or (cols[0] if cols else "")
+        if not ds_name or not _SAFE_NAME.fullmatch(ds_name):
+            raise ValueError("전송할 봉인 컬렉션 이름이 필요합니다 (최근 세션 또는 컬렉션을 선택하세요)")
         if body.get("trigger") == "auto_after_seal" and state_snap.get("status") != "sealed":
             raise ValueError("봉인 완료(sealed)된 세션만 자동 파이프라인을 실행할 수 있습니다")
         with self._pipe_lock:
@@ -297,6 +304,8 @@ class BenchPipelineMixin:
             with self._hf_lock:
                 self._hf_state.update(state="uploading", progress_pct=60, message=f"HF 팀 업로드 중 ({parquets}회 · {videos}영상)")
             hf_api.create_repo(repo_id=repo_id, repo_type="dataset", private=True, exist_ok=True)
+            if hasattr(hf_api, "repo_info") and not getattr(hf_api.repo_info(repo_id=repo_id, repo_type="dataset"), "private", False):
+                raise RuntimeError(f"비공개 팀 저장소만 업로드 가능합니다: {repo_id}")
             hf_api.upload_folder(
                 folder_path=str(ds_folder), repo_id=repo_id, repo_type="dataset",
                 path_in_repo=path_in_repo, commit_message=f"Upload OMX dataset {ds_name}",
@@ -327,11 +336,11 @@ class BenchPipelineMixin:
         col_dir = collections_root() / ds_name
         leader_dir = Path.home() / "rosy-data" / "omx-leader" / ds_name
         if (col_dir / "dataset").is_dir():
-            mf = col_dir / "manifest.json"
-            if not mf.is_file() or json.loads(mf.read_text(encoding="utf-8")).get("state") != "CLOSED":
-                raise ValueError("봉인(CLOSED) 완료된 컬렉션만 업로드할 수 있습니다")
+            verify_sealed_collection(col_dir)
             ds_folder = col_dir / "dataset"
         elif leader_dir.is_dir():
+            if any((p / "DO_NOT_TRAIN.txt").is_file() for p in (self.prep / "sessions").glob(f"*-{ds_name}")):
+                raise ValueError("정지회차(DO_NOT_TRAIN) 세션의 데이터셋은 업로드할 수 없습니다")
             ds_folder = leader_dir
         else:
             raise ValueError(f"LeRobot 데이터셋을 찾을 수 없습니다: {ds_name}")
@@ -339,6 +348,8 @@ class BenchPipelineMixin:
             raise ValueError("정지회차(DO_NOT_TRAIN) 데이터셋은 업로드할 수 없습니다")
         with self.lock:
             sess_dir = self.state.get("folder") if self.state.get("name") == ds_name else None
+        if sess_dir and (Path(sess_dir) / "DO_NOT_TRAIN.txt").is_file():
+            raise ValueError("정지회차(DO_NOT_TRAIN) 세션은 업로드할 수 없습니다")
         with self._hf_lock:
             if self._hf_state["state"] in ("encoding", "uploading"):
                 raise ValueError("이미 LeRobot 업로드가 진행 중입니다")

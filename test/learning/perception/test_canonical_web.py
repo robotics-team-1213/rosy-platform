@@ -208,12 +208,17 @@ def test_canonical_intake_bearer_and_accounts_enforced_fail_closed(tmp_path, mon
     cdir = cols / "cell-ab-01"
     (cdir / "dataset" / "meta").mkdir(parents=True)
     (cdir / "dataset" / "data" / "chunk-000").mkdir(parents=True)
-    (cdir / "dataset" / "meta" / "info.json").write_text(json.dumps({"codebase_version": "v3.0", "robot_type": "omx_follower", "total_episodes": 1}))
-    (cdir / "dataset" / "data" / "chunk-000" / "file-000.parquet").write_bytes(b"PAR1")
+    p_info = cdir / "dataset" / "meta" / "info.json"
+    p_pq = cdir / "dataset" / "data" / "chunk-000" / "file-000.parquet"
+    p_info.write_text(json.dumps({"codebase_version": "v3.0", "robot_type": "omx_follower", "total_episodes": 1}))
+    p_pq.write_bytes(b"PAR1")
     mf_raw = json.dumps({
         "schema": "rosy.omx-collection-session.v1", "state": "CLOSED", "mode": "hardware",
         "source_mode": "leader_native", "robot_type": "omx_follower", "arm_id": "arm_b", "total_episodes": 1,
-        "files": {"dataset/meta/info.json": "a"},
+        "files": {
+            "dataset/meta/info.json": hashlib.sha256(p_info.read_bytes()).hexdigest(),
+            "dataset/data/chunk-000/file-000.parquet": hashlib.sha256(p_pq.read_bytes()).hexdigest(),
+        },
     }).encode("utf-8")
     (cdir / "manifest.json").write_bytes(mf_raw)
     mf_sha = hashlib.sha256(mf_raw).hexdigest()
@@ -231,9 +236,9 @@ def test_canonical_intake_bearer_and_accounts_enforced_fail_closed(tmp_path, mon
         with pytest.raises(urllib.error.HTTPError) as exc:
             urllib.request.urlopen(req_bad, timeout=5)
         assert exc.value.code == 403
-        # 2. Reviewer with CSRF cannot bypass manage role without valid Bearer
-        token = accounts.login(base, "reviewer")
-        assert collab_req(base, PREFIX + "/intake", "reviewer", {"collection": "cell-ab-01"}, token)[0] == 403
+        # 2. Editor with CSRF cannot bypass manage role without valid Bearer
+        token = collab_req(base, "/api/accounts/session", "editor")[1]["token"]
+        assert collab_req(base, PREFIX + "/intake", "editor", {"collection": "cell-ab-01"}, token)[0] == 403
         # 3. Valid Bearer from remote Host without X-Pinky-Token / Origin succeeds
         seen = []
         monkeypatch.setattr(center.canonical, "start_job", lambda b: (seen.append(b), {"id": "job-ab-1", "arm_id": b["arm_id"]})[1])

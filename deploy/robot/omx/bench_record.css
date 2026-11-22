@@ -272,6 +272,7 @@ select option:disabled{color:#767b82}
 .pipe-step{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;border:1px solid var(--bd);background:var(--ground-soft);font-size:.8rem;font-weight:600;color:var(--ink-q)}
 .pipe-idx{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:var(--ground-deep);font-size:.72rem;font-family:ui-monospace,monospace}
 .pipe-step[data-state="running"]{border-color:var(--pri);background:#132238;color:var(--pri)}
+.pipe-step[data-state="warn"]{border-color:var(--warn);background:#2b2312;color:var(--warn)}
 .pipe-step[data-state="done"]{border-color:var(--good);background:#14261e;color:var(--good)}
 .pipe-step[data-state="failed"]{border-color:var(--crit);background:#2a1719;color:#ff9497}
 .pipe-arrow{color:var(--ink-q);font-size:.85rem;user-select:none}

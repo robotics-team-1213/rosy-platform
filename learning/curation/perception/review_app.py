@@ -377,7 +377,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                         raise ValueError('AI request fields do not match its action')
                 if path.startswith('/api/review-ai-cancel/') and body:
                     raise ValueError('AI cancellation accepts an empty object only')
-                if collaboration and collaboration.post(self, path, body, token):
+                if collaboration and not peer_intake and collaboration.post(self, path, body, token):
                     return
                 if storage_web.post(self, path, body): return
                 if learning_recording_web.post(self, path, body, recordings):

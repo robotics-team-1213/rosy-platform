@@ -16,15 +16,23 @@ from experiment_io import write_json
 _ID_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]{0,63}")
 _HEX64_RE = re.compile(r"[0-9a-f]{64}")
 _GOAL_CANON_RE = re.compile(r"from \S+ to (?:ship-h[12]r[0-2]-l[0-2]|tray|stand)\.$")
-_HOLD_SPOT_RE = re.compile(r"ship(?:\s+hold)?\s*h([12])[, ]+(?:[^()]*\()?r([0-2])\)?[, ]+(?:[^()]*\()?l([0-2])\)?", re.I)
+_ARROW_PAIR_RE = re.compile(
+    r"\b(ship-h[12]r[0-2]-l[0-2]|belt|tray|stand)\s*->\s*(ship-h[12]r[0-2]-l[0-2]|belt|tray|stand)\b", re.I
+)
+_HOLD_SPOT_RE = re.compile(r"ship(?:\s+hold)?\s*h([12])\b.*?\br([0-2])\b.*?\bl([0-2])\b", re.I)
 _HYPHEN_SPOT_RE = re.compile(r"ship-h([12])r([0-2])-l([0-2])", re.I)
+_INTAKE_FIELDS = frozenset({"collection", "manifest_sha256", "remote_path", "arm_id", "total_episodes", "rig_revision", "auto_align"})
 
 
 def normalize_bench_task(raw: str) -> str:
-    """Normalize verbose ship_task_cards / replay swap strings into concise data_gate goal syntax."""
+    """Normalize ship_task_cards and apply_task_override strings into data_gate goal syntax."""
     text = " ".join(str(raw or "").split()).strip()
     if not text:
         return ""
+    m_arrow = _ARROW_PAIR_RE.search(text)
+    if m_arrow:
+        orig, dest = m_arrow.group(1).lower(), m_arrow.group(2).lower()
+        return f"Pick container from belt to {dest}." if orig == "belt" else f"Move container from {orig} to {dest}."
     if _GOAL_CANON_RE.search(text):
         return text
     spot = ""
@@ -32,14 +40,29 @@ def normalize_bench_task(raw: str) -> str:
     if m:
         spot = f"ship-h{m.group(1)}r{m.group(2)}-l{m.group(3)}"
     if spot:
-        if re.search(rf"{re.escape(spot)}\s+to\s+(belt|tray|stand)\b", text, re.I):
-            dest = re.search(rf"{re.escape(spot)}\s+to\s+(belt|tray|stand)\b", text, re.I).group(1).lower()
-            return f"Move container from {spot} to {dest}."
+        m_rev = re.search(rf"{re.escape(spot)}\s+to\s+(belt|tray|stand)\b", text, re.I)
+        if m_rev:
+            return f"Move container from {spot} to {m_rev.group(1).lower()}."
         return f"Pick container from belt to {spot}."
     m_zone = re.search(r"\bto\s+(tray|stand)\b", text, re.I)
     if m_zone:
         return f"Pick container from belt to {m_zone.group(1).lower()}."
     return text
+
+
+def detect_source_units(src: Path, arm_id: str, info: dict) -> str:
+    """Resolve explicit units from record-config.json (copied alongside sealed dataset) or info.json."""
+    cfg_path = src.parent / "record-config.json"
+    try:
+        if cfg_path.is_file() and not cfg_path.is_symlink():
+            robot = (json.loads(cfg_path.read_text(encoding="utf-8-sig")) or {}).get("robot") or {}
+            child = robot.get(arm_id) if isinstance(robot.get(arm_id), dict) else robot
+            if isinstance(child.get("use_degrees"), bool):
+                return "deg" if child["use_degrees"] else "norm_100"
+    except (OSError, ValueError):
+        pass
+    u = str(info.get("units") or "").strip()
+    return u if u in ("rad", "sim_rad", "norm_100", "deg") else ""
 
 
 def detect_unit_mode(st, ac, *, robot_type: str = "", units: str = "") -> str:
@@ -122,6 +145,14 @@ def select_arm_features(features: dict, arm_id: str, legacy_map: dict | None = N
     return filtered, legacy
 
 
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def _validate_manifest(col_dir: Path) -> tuple[dict, str]:
     mf_path = col_dir / "manifest.json"
     if (col_dir / "DO_NOT_TRAIN.txt").exists() or (col_dir / "dataset" / "DO_NOT_TRAIN.txt").exists():
@@ -129,9 +160,12 @@ def _validate_manifest(col_dir: Path) -> tuple[dict, str]:
     if not mf_path.is_file() or mf_path.is_symlink():
         raise ValueError(f"sealed manifest.json missing: {col_dir.name}")
     root_res = col_dir.resolve()
+    seen = set()
     for p in col_dir.rglob("*"):
         if p.is_symlink() or not p.resolve().is_relative_to(root_res):
             raise ValueError(f"symlink or escaping path refused in {col_dir.name}")
+        if p.is_file() and p != mf_path:
+            seen.add(p.relative_to(col_dir).as_posix())
     raw = mf_path.read_bytes()
     manifest = json.loads(raw.decode("utf-8"))
     if manifest.get("schema") != "rosy.omx-collection-session.v1" or manifest.get("state") != "CLOSED" or manifest.get("mode") != "hardware":
@@ -139,16 +173,18 @@ def _validate_manifest(col_dir: Path) -> tuple[dict, str]:
     if manifest.get("source_mode") not in ("leader_native", "scripted_teacher"):
         raise ValueError(f"unsupported source_mode in {col_dir.name}")
     files = manifest.get("files")
-    if not isinstance(files, dict) or not files:
-        raise ValueError(f"empty manifest files list: {col_dir.name}")
-    for rel in files:
-        if not isinstance(rel, str) or not rel or rel.startswith("/") or ".." in Path(rel).parts or not (col_dir / rel).is_file():
-            raise ValueError(f"manifest file missing or invalid: {rel}")
-    if int(manifest.get("total_episodes") or 0) < 1:
-        raise ValueError(f"empty collection (total_episodes < 1) refused: {col_dir.name}")
+    if not isinstance(files, dict) or not files or seen != set(files):
+        raise ValueError(f"manifest files mismatch on disk: {col_dir.name}")
+    for rel, expected in files.items():
+        if not isinstance(rel, str) or not rel or rel.startswith("/") or ".." in Path(rel).parts:
+            raise ValueError(f"invalid manifest relpath: {rel!r}")
+        if _sha256_file(col_dir / rel) != expected:
+            raise ValueError(f"manifest file sha256 mismatch: {rel}")
     ds_dir = col_dir / "dataset"
-    if not (ds_dir / "meta" / "info.json").is_file() or not list(ds_dir.glob("data/**/*.parquet")):
-        raise ValueError(f"dataset parquet/meta incomplete: {col_dir.name}")
+    info_path = ds_dir / "meta" / "info.json"
+    info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else {}
+    if int(manifest.get("total_episodes") or 0) < 1 or int(info.get("total_episodes") or 0) < 1 or not list(ds_dir.glob("data/**/*.parquet")):
+        raise ValueError(f"empty collection (total_episodes < 1) refused: {col_dir.name}")
     return manifest, hashlib.sha256(raw).hexdigest()
 
 
@@ -184,9 +220,6 @@ def scan_transferred_collections(collections_dir: Path | None) -> dict[str, dict
     return found
 
 
-_INTAKE_FIELDS = frozenset({"collection", "manifest_sha256", "remote_path", "arm_id", "total_episodes", "rig_revision", "auto_align"})
-
-
 def handle_intake_request(service, body: dict) -> dict:
     """Admit one transferred sealed collection and enqueue idempotent align_real jobs."""
     if service.collections_dir is None:
@@ -206,20 +239,24 @@ def handle_intake_request(service, body: dict) -> dict:
         if not _HEX64_RE.fullmatch(req_sha) or req_sha != mf_sha:
             raise ValueError("manifest_sha256 mismatch")
 
-    req_arm = str(body.get("arm_id") or manifest.get("arm_id") or "").strip()
-    if manifest.get("robot_type") == "bi_omx_follower" or req_arm == "arm_ab":
+    mf_arm = str(manifest.get("arm_id") or ("arm_ab" if manifest.get("robot_type") == "bi_omx_follower" else "")).strip()
+    if "arm_id" in body and body["arm_id"] not in (None, ""):
+        req_arm = str(body["arm_id"]).strip()
+        if req_arm != mf_arm:
+            raise ValueError("request arm_id disagrees with sealed manifest arm_id")
+
+    if manifest.get("robot_type") == "bi_omx_follower" or mf_arm == "arm_ab":
         target_arms = ["arm_a", "arm_b"]
-    elif req_arm in ("arm_a", "arm_b"):
-        target_arms = [req_arm]
+    elif mf_arm in ("arm_a", "arm_b"):
+        target_arms = [mf_arm]
     else:
         target_arms = []
 
     raw_align = body.get("auto_align", True)
     if type(raw_align) is not bool:
         raise ValueError("auto_align must be bool")
-    auto_align = raw_align
     jobs = []
-    if auto_align and target_arms:
+    if raw_align and target_arms:
         for arm in target_arms:
             req_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"canonical-intake:{name}:{mf_sha}:{arm}"))
             jobs.append(service.start_job({

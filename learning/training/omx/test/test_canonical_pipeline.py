@@ -523,6 +523,8 @@ def test_canonical_intake_normalizes_bench_data_and_enqueues_idempotent_align(tm
     assert norm_txt == "Pick container from belt to ship-h1r0-l0."
     assert data_gate.GOAL_RE.search(norm_txt)
     assert ci.normalize_bench_task("Move ship-h1r1-l0 to tray") == "Move container from ship-h1r1-l0 to tray."
+    assert ci.normalize_bench_task("Take the container ... (ship-h1r0-l0 -> belt)") == "Move container from ship-h1r0-l0 to belt."
+    assert ci.normalize_bench_task("Take the container ... (ship-h1r0-l0 -> tray)") == "Move container from ship-h1r0-l0 to tray."
 
     # 12-DOF bi_omx_follower normalized [-100..100] at 30fps -> 6-DOF sim rad + linear gripper + 15fps.
     g0_b = spec["idle_park"]["arm_b"]["gripper_units"]
@@ -540,17 +542,33 @@ def test_canonical_intake_normalizes_bench_data_and_enqueues_idempotent_align(tm
     assert abs(st_out[1, 5] - spec["sim_jaw_open"]) < 1e-4
     assert abs(st_out[0, 1] - (spec["idle_park"]["arm_b"]["norm"][1] * 3.141592653589793 / 100.0)) < 1e-4
 
-    # Collection discovery + idempotent intake enqueueing arm_a + arm_b for bi_omx_follower.
+    # Explicit record-config.json use_degrees=True converts <= 105 deg with pi/180 (never pi/100).
+    deg_col = tmp_path / "deg_col"
+    (deg_col / "dataset").mkdir(parents=True)
+    (deg_col / "record-config.json").write_text(json.dumps({"robot": {"arm_b": {"use_degrees": True}}}), encoding="utf-8")
+    assert ci.detect_source_units(deg_col / "dataset", "arm_b", {}) == "deg"
+    deg_arr = np.asarray([[45.0, -45.0, 0.0, 0.0, 0.0, g0_b]], dtype=np.float64)
+    deg_out, _, _, _ = ci.prepare_episode_arrays(deg_arr, deg_arr, spec=spec, arm_id="arm_b", src_fps=15, target_fps=15, units="deg")
+    assert abs(deg_out[0, 0] - (45.0 * 3.141592653589793 / 180.0)) < 1e-5
+
+    # Collection discovery + full sha256 verification + idempotent intake enqueueing arm_a + arm_b.
+    import hashlib
     cols = tmp_path / "collections"
     valid = cols / "bi-sess-01"
     (valid / "dataset" / "meta").mkdir(parents=True)
     (valid / "dataset" / "data" / "chunk-000").mkdir(parents=True)
-    (valid / "dataset" / "meta" / "info.json").write_text(json.dumps({"codebase_version": "v3.0", "robot_type": "bi_omx_follower", "total_episodes": 2}))
-    (valid / "dataset" / "data" / "chunk-000" / "file-000.parquet").write_bytes(b"PAR1")
+    p_info = valid / "dataset" / "meta" / "info.json"
+    p_pq = valid / "dataset" / "data" / "chunk-000" / "file-000.parquet"
+    p_info.write_text(json.dumps({"codebase_version": "v3.0", "robot_type": "bi_omx_follower", "total_episodes": 2}))
+    p_pq.write_bytes(b"PAR1")
+    files_map = {
+        "dataset/meta/info.json": hashlib.sha256(p_info.read_bytes()).hexdigest(),
+        "dataset/data/chunk-000/file-000.parquet": hashlib.sha256(p_pq.read_bytes()).hexdigest(),
+    }
     mf_bytes = json.dumps({
         "schema": "rosy.omx-collection-session.v1", "state": "CLOSED", "mode": "hardware",
         "source_mode": "leader_native", "robot_type": "bi_omx_follower", "arm_id": "arm_ab", "total_episodes": 2,
-        "files": {"dataset/meta/info.json": "a", "dataset/data/chunk-000/file-000.parquet": "b"},
+        "files": files_map,
     }).encode("utf-8")
     (valid / "manifest.json").write_bytes(mf_bytes)
 
@@ -570,10 +588,12 @@ def test_canonical_intake_normalizes_bench_data_and_enqueues_idempotent_align(tm
 
     started = []
     monkeypatch.setattr(svc, "start_job", lambda b: (started.append(b), {"id": b["request_id"], "arm_id": b["arm_id"], "kind": b["kind"]})[1])
-    with pytest.raises(ValueError, match="unsupported intake"):
+    with pytest.raises(ValueError, match="valid collection request fields"):
         svc.intake_collection({"collection": "bi-sess-01", "extra_bad": 1})
     with pytest.raises(ValueError, match="auto_align must be bool"):
         svc.intake_collection({"collection": "bi-sess-01", "auto_align": "yes"})
+    with pytest.raises(ValueError, match="disagrees with sealed manifest"):
+        svc.intake_collection({"collection": "bi-sess-01", "arm_id": "arm_a"})
     res = svc.intake_collection({"collection": "bi-sess-01"})
     assert res["ok"] is True and res["arms"] == ["arm_a", "arm_b"]
     assert [s["arm_id"] for s in started] == ["arm_a", "arm_b"]

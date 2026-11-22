@@ -51,8 +51,19 @@ def test_verify_and_push_collection_fail_closed_and_unconfigured(tmp_path):
     pushed = brh.push_collection_to_model(col, {"model_target": "rosy@rosy-omen"}, run=fake_run)
     assert pushed["status"] == "done" and pushed["ok"] is True
     assert pushed["remote_path"] == "~/rosy-test/omx-collections/ab-valid"
-    assert cmds[1][0] == "scp" and "-o" in cmds[1] and "BatchMode=yes" in cmds[1]
+    assert cmds[0][:4] == ["ssh", "-o", "BatchMode=yes", "-o"] and "--" in cmds[0]
+    assert cmds[1][0] == "scp" and "-r" in cmds[1] and "--" in cmds[1]
     assert "sha256sum" in cmds[0][-1] and "test ! -e" in cmds[2][-1]
+
+    # SSH flag injection, bare "~", public HTTP URLs, and arbitrary hf_repo_id overrides are refused.
+    with pytest.raises(ValueError, match="model_target"):
+        brh.save_handoff_config(tmp_path, {"model_target": "-oProxyCommand=id@evil"})
+    with pytest.raises(ValueError, match="remote_collections_dir"):
+        brh.save_handoff_config(tmp_path, {"remote_collections_dir": "~other/cols"})
+    with pytest.raises(ValueError, match="https"):
+        brh.save_handoff_config(tmp_path, {"intake_url": "http://8.8.8.8:8765/api/learning/canonical/intake"})
+    with pytest.raises(ValueError, match="고정"):
+        brh.save_handoff_config(tmp_path, {"hf_repo_id": "robotteam/other-repo"})
 
     # Idempotent ALREADY_MATCHED skips SCP; differing manifest on remote fails closed without overwriting.
     match_cmds = []
@@ -60,14 +71,18 @@ def test_verify_and_push_collection_fail_closed_and_unconfigured(tmp_path):
     already = brh.push_collection_to_model(col, {"model_target": "rosy@rosy-omen"}, run=match_run)
     assert already["status"] == "done" and already.get("already_present") is True and len(match_cmds) == 1
 
-    diff_run = lambda cmd, **kw: types.SimpleNamespace(returncode=2, stdout="", stderr="remote collection exists with different manifest\n")
+    diff_run = lambda cmd, **kw: types.SimpleNamespace(returncode=2, stdout="", stderr="remote collection exists with different files\n")
     conflict = brh.push_collection_to_model(col, {"model_target": "rosy@rosy-omen"}, run=diff_run)
     assert conflict["status"] == "failed" and conflict["ok"] is False
 
-    # Sealed collection ds_folder ends in '/dataset', so validate_team_hf_upload must keep ds_name as subpath.
+    # Sealed collection ds_folder ends in '/dataset', so validate_team_hf_upload keeps ds_name & enforces total_episodes >= 1.
     fake_api = types.SimpleNamespace(whoami=lambda: {"name": "op", "orgs": [{"name": "robotteam"}]})
     repo_id, subpath = brh.validate_team_hf_upload(fake_api, col / "dataset", {}, ds_name="ab-valid")
     assert repo_id == "robotteam/rosy-omx-data" and subpath == "ab-valid"
+    empty_ep_col = _make_sealed_collection(fake_home, tmp_path, "ab-zero-info", episodes=1)
+    (empty_ep_col / "dataset" / "meta" / "info.json").write_text(json.dumps({"total_episodes": 0}), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="total_episodes >= 1"):
+        brh.validate_team_hf_upload(fake_api, empty_ep_col / "dataset", {}, ds_name="ab-zero-info")
 
     # Tampered file breaks sha256 verification before any ssh/scp runs.
     (col / "dataset" / "data" / "chunk-000" / "file-000.parquet").write_bytes(b"EVIL")

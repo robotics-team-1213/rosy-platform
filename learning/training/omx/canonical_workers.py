@@ -24,7 +24,7 @@ for _p in (str(_CONTRACTS_SRC), str(_OMX_CURATION)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from canonical_intake import normalize_bench_task, prepare_episode_arrays, select_arm_features  # noqa: E402
+from canonical_intake import detect_source_units, normalize_bench_task, prepare_episode_arrays, select_arm_features  # noqa: E402
 from canonical_watch import scrub_text  # noqa: E402
 from experiment_io import read_json, write_json  # noqa: E402
 from experiment_train import gpu_lease  # noqa: E402
@@ -107,6 +107,7 @@ def run_align_real(req: dict, out: Path) -> dict:
     src_fps = int(info["fps"])
     fps = 15 if src_fps in (15, 30) else src_fps
     robot_type = str(info.get("robot_type") or "")
+    src_units = str(params.get("unit_mode") or "") or detect_source_units(src, arm, info)
     tasks_df = pd.read_parquet(src / "meta" / "tasks.parquet")
     task_text = {int(row.task_index): text for text, row in tasks_df.iterrows()}
     ep_df = pd.concat([pd.read_parquet(f) for f in sorted((src / "meta" / "episodes").rglob("*.parquet"))]).sort_values("episode_index")
@@ -137,7 +138,7 @@ def run_align_real(req: dict, out: Path) -> dict:
             n_raw, task = len(rows), normalize_bench_task(task_text[int(rows.task_index.iloc[0])])
             st = np.stack(rows["observation.state"].to_numpy()).astype(np.float64)
             ac = np.stack(rows["action"].to_numpy()).astype(np.float64)
-            st, ac, stride, _ = prepare_episode_arrays(st, ac, spec=spec, arm_id=arm, robot_type=robot_type, src_fps=src_fps, target_fps=fps)
+            st, ac, stride, _ = prepare_episode_arrays(st, ac, spec=spec, arm_id=arm, robot_type=robot_type, src_fps=src_fps, target_fps=fps, units=src_units)
             n = len(st)
             if flip:
                 st[:, 4], ac[:, 4] = _wrap_pi(st[:, 4]), _wrap_pi(ac[:, 4])
@@ -177,6 +178,8 @@ def run_align_real(req: dict, out: Path) -> dict:
     _progress(out, "gating", arm=arm)
     receipt = data_gate.gate(dst, arm=arm, source={"kind": "real", "layout": "random"}, canonical_spec=spec)
     admitted = data_gate.check_receipt(dst)
+    if not admitted:
+        raise ValueError(f"data_gate admitted 0 episodes (reject={receipt['counts'].get('reject')}, review={receipt['counts'].get('review')})")
     return {"kind": "align_real", "arm_id": arm, "episodes": len(admitted), "frames_total": int(sum(kept_counts)),
             "t_start_median": float(statistics.median(t_starts)) if t_starts else 0.0, "gate_counts": receipt["counts"],
             "spec_sha256": req["spec_sha256"], **AUTHORITY_STAMP}

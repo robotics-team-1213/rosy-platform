@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import stat
 import subprocess
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_HF_TEAM_ORG = "robotteam"
@@ -19,9 +21,8 @@ DEFAULT_HF_DATASET_REPO = "robotteam/rosy-omx-data"
 CONFIG_FILE = ".bench-handoff-config.json"
 QUEUE_FILE = ".bench-handoff-queue.json"
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
-_SAFE_TARGET = re.compile(r"^(?:[A-Za-z0-9_.-]+@)?[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-_SAFE_REMOTE_DIR = re.compile(r"^[~A-Za-z0-9_./-]{1,256}$")
-_SAFE_HF_REPO = re.compile(r"^robotteam/[A-Za-z0-9._-]+$")
+_SAFE_TARGET = re.compile(r"^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*@)?[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_SAFE_REMOTE_DIR = re.compile(r"^(?:~/|/)[A-Za-z0-9_./-]{1,254}$")
 _SSH_OPTS = (
     "-o", "BatchMode=yes",
     "-o", "ConnectTimeout=10",
@@ -29,6 +30,7 @@ _SSH_OPTS = (
     "-o", "ServerAliveInterval=15",
     "-o", "ServerAliveCountMax=3",
 )
+_CGNAT_NET = ipaddress.ip_network("100.64.0.0/10")
 
 
 def atomic_write_json(path: Path, data: object) -> None:
@@ -69,19 +71,37 @@ def default_handoff_config() -> dict:
     }
 
 
+def _host_allows_plain_http(host: str | None) -> bool:
+    if not host:
+        return False
+    h = host.strip("[]").lower()
+    if h == "localhost" or h.endswith((".local", ".ts.net")):
+        return True
+    try:
+        ip = ipaddress.ip_address(h)
+        return ip.is_loopback or ip.is_private or (ip.version == 4 and ip in _CGNAT_NET)
+    except ValueError:
+        return "." not in h
+
+
 def _validate_url(url: str) -> str:
     clean = str(url or "").strip()
     if not clean:
         return ""
-    if len(clean) > 256 or any(ord(c) < 32 or c.isspace() for c in clean) or not clean.startswith(("http://", "https://")):
-        raise ValueError("intake_url은 http:// 또는 https:// 단일 URL이어야 합니다")
+    if len(clean) > 256 or any(ord(c) < 32 or c.isspace() for c in clean):
+        raise ValueError("intake_url 형식이 올바르지 않습니다")
+    parsed = urllib.parse.urlsplit(clean)
+    if parsed.username or parsed.password or parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("intake_url은 인증 정보 없는 http(사설/Tailscale)/https URL이어야 합니다")
+    if parsed.scheme == "http" and not _host_allows_plain_http(parsed.hostname):
+        raise ValueError("외부 호스트 intake_url은 https://만 허용됩니다")
     return clean.rstrip("/")
 
 
 def _validate_remote_dir(raw: str) -> str:
-    clean = str(raw or "~/rosy-test/omx-collections").strip().rstrip("/") or "~/rosy-test/omx-collections"
-    if not _SAFE_REMOTE_DIR.fullmatch(clean) or ".." in clean.split("/") or clean.startswith("/.."):
-        raise ValueError("remote_collections_dir 경로 형식이 올바르지 않습니다")
+    clean = str(raw or "~/rosy-test/omx-collections").strip().rstrip("/")
+    if not _SAFE_REMOTE_DIR.fullmatch(clean) or "//" in clean or "~" in clean[1:] or ".." in clean.split("/"):
+        raise ValueError("remote_collections_dir은 '~/' 또는 '/'로 시작하는 안전 경로여야 합니다")
     return clean
 
 
@@ -92,6 +112,7 @@ def load_handoff_config(prep: Path) -> dict:
         for k in cfg:
             if k in saved:
                 cfg[k] = saved[k]
+    cfg["hf_repo_id"] = DEFAULT_HF_DATASET_REPO
     return cfg
 
 
@@ -115,11 +136,9 @@ def save_handoff_config(prep: Path, patch: dict) -> dict:
         if tok and (len(tok) > 256 or any(ord(c) < 32 for c in tok)):
             raise ValueError("peer_token_file 경로 형식이 올바르지 않습니다")
         cfg["peer_token_file"] = tok
-    if "hf_repo_id" in patch:
-        repo = str(patch["hf_repo_id"] or DEFAULT_HF_DATASET_REPO).strip()
-        if not _SAFE_HF_REPO.fullmatch(repo):
-            raise ValueError(f"HF 저장소는 '{DEFAULT_HF_TEAM_ORG}/<name>' 형식이어야 합니다")
-        cfg["hf_repo_id"] = repo
+    if "hf_repo_id" in patch and str(patch["hf_repo_id"] or "").strip() not in ("", DEFAULT_HF_DATASET_REPO):
+        raise ValueError(f"HF 저장소는 '{DEFAULT_HF_DATASET_REPO}'로 고정됩니다")
+    cfg["hf_repo_id"] = DEFAULT_HF_DATASET_REPO
     atomic_write_json(prep / CONFIG_FILE, cfg)
     return cfg
 
@@ -173,10 +192,14 @@ def verify_sealed_collection(collection_dir: Path) -> dict:
     if seen != set(files):
         raise ValueError("manifest.json 파일 목록과 실제 파일이 일치하지 않습니다")
     for rel, expected in files.items():
+        if "\n" in rel or "\r" in rel or rel.startswith(("/", "-")) or ".." in Path(rel).parts:
+            raise ValueError(f"잘못된 manifest 경로입니다: {rel!r}")
         if _sha256_file(collection_dir / rel) != expected:
             raise ValueError(f"파일 SHA-256 불일치: {rel}")
+    info_path = collection_dir / "dataset" / "meta" / "info.json"
+    info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else {}
     parquets = list((collection_dir / "dataset").glob("data/**/*.parquet"))
-    if int(manifest.get("total_episodes") or 0) < 1 or not parquets:
+    if int(manifest.get("total_episodes") or 0) < 1 or int(info.get("total_episodes") or 0) < 1 or not parquets:
         raise ValueError(f"에피소드(parquet >= 1)가 없는 빈 컬렉션은 전송할 수 없습니다: {collection_dir.name}")
     return {
         "collection": collection_dir.name,
@@ -197,7 +220,7 @@ def _scp_dest(remote_dir: str) -> str:
 
 
 def push_collection_to_model(collection_dir: Path, config: dict, *, run=subprocess.run, verified: dict | None = None) -> dict:
-    """Push a verified collection to Model PC via staging directory and atomic rename."""
+    """Push a verified collection to Model PC via staging directory, full SHA-256 check, and atomic rename."""
     info = verified or verify_sealed_collection(collection_dir)
     target = str(config.get("model_target") or "").strip()
     if not target:
@@ -213,48 +236,39 @@ def push_collection_to_model(collection_dir: Path, config: dict, *, run=subproce
     staging_expr = _remote_shell_expr(f"{remote_dir}/.staging-{name}")
     final_expr = _remote_shell_expr(f"{remote_dir}/{name}")
     scp_staging = f"{_scp_dest(remote_dir)}/.staging-{name}"
+    sha_manifest_lines = "".join(
+        f"{digest}  {rel}\n" for rel, digest in sorted(info["manifest"]["files"].items())
+    ) + f"{info['manifest_sha256']}  manifest.json\n"
 
-    expected_sha = shlex.quote(info["manifest_sha256"])
     prep_cmd = (
         f"if test -f {final_expr}/manifest.json; then "
-        f"if printf '%s  %s/manifest.json\\n' {expected_sha} {final_expr} | sha256sum -c - >/dev/null 2>&1; then "
-        f"echo ALREADY_MATCHED; exit 0; "
-        f"else echo 'remote collection exists with different manifest' >&2; exit 2; fi; "
-        f"elif test -e {final_expr}; then "
-        f"echo 'remote path exists without manifest.json' >&2; exit 2; fi; "
+        f"if (cd {final_expr} && sha256sum -c - >/dev/null 2>&1); then echo ALREADY_MATCHED; exit 0; "
+        f"else echo 'remote collection exists with different or corrupt files' >&2; exit 2; fi; "
+        f"elif test -e {final_expr}; then echo 'remote path exists without manifest.json' >&2; exit 2; fi; "
         f"mkdir -p {base_expr} && rm -rf {staging_expr}"
     )
-    res0 = run(["ssh", *_SSH_OPTS, target, prep_cmd], capture_output=True, text=True, timeout=30)
+    res0 = run(["ssh", *_SSH_OPTS, "--", target, prep_cmd], input=sha_manifest_lines, capture_output=True, text=True, timeout=60)
     if res0.returncode != 0:
         err = (res0.stderr or res0.stdout or f"ssh exit {res0.returncode}").strip()
         return {"status": "failed", "ok": False, "error": f"모델 PC SSH 준비 실패: {err}", "verification": info}
     if "ALREADY_MATCHED" in (res0.stdout or ""):
-        return {
-            "status": "done", "ok": True, "already_present": True,
-            "remote_path": f"{remote_dir}/{name}", "target": target, "verification": info,
-        }
+        return {"status": "done", "ok": True, "already_present": True, "remote_path": f"{remote_dir}/{name}", "target": target, "verification": info}
 
-    res1 = run(["scp", *_SSH_OPTS, "-r", str(collection_dir), f"{target}:{scp_staging}"], capture_output=True, text=True, timeout=600)
+    res1 = run(["scp", *_SSH_OPTS, "-r", "--", str(collection_dir), f"{target}:{scp_staging}"], capture_output=True, text=True, timeout=600)
     if res1.returncode != 0:
         err = (res1.stderr or res1.stdout or f"scp exit {res1.returncode}").strip()
         return {"status": "failed", "ok": False, "error": f"모델 PC SCP 전송 실패: {err}", "verification": info}
 
     promote_cmd = (
-        f"(test ! -e {final_expr} && test -f {staging_expr}/manifest.json && "
-        f"printf '%s  %s/manifest.json\\n' {expected_sha} {staging_expr} | sha256sum -c - && "
-        f"mv {staging_expr} {final_expr}) || {{ rm -rf {staging_expr}; exit 1; }}"
+        f"(test ! -e {final_expr} && cd {staging_expr} && sha256sum -c - >/dev/null 2>&1 && "
+        f"mv -- {staging_expr} {final_expr}) || {{ rm -rf {staging_expr}; exit 1; }}"
     )
-    res2 = run(["ssh", *_SSH_OPTS, target, promote_cmd], capture_output=True, text=True, timeout=30)
+    res2 = run(["ssh", *_SSH_OPTS, "--", target, promote_cmd], input=sha_manifest_lines, capture_output=True, text=True, timeout=60)
     if res2.returncode != 0:
         err = (res2.stderr or res2.stdout or f"ssh promote exit {res2.returncode}").strip()
         return {"status": "failed", "ok": False, "error": f"모델 PC 수신 해시 검증 실패: {err}", "verification": info}
 
-    return {
-        "status": "done", "ok": True,
-        "remote_path": f"{remote_dir}/{name}",
-        "target": target,
-        "verification": info,
-    }
+    return {"status": "done", "ok": True, "remote_path": f"{remote_dir}/{name}", "target": target, "verification": info}
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -263,18 +277,35 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 
 def _read_bearer_token(token_file: Path) -> str:
-    if not token_file.is_file() or token_file.is_symlink():
-        raise ValueError("피어 토큰 파일이 없거나 심볼릭 링크입니다")
-    if os.name == "posix" and stat.S_IMODE(token_file.stat().st_mode) & 0o077:
-        raise ValueError("피어 토큰 파일 권한은 0600 이하여야 합니다")
-    token = token_file.read_text(encoding="utf-8").strip()
-    if not 16 <= len(token) <= 4096:
-        raise ValueError("피어 토큰 길이가 유효하지 않습니다")
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(token_file, flags)
+    except OSError as exc:
+        raise ValueError(f"피어 토큰 파일을 열 수 없습니다: {exc}") from None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise ValueError("피어 토큰 파일이 일반 파일이 아닙니다")
+        if os.name == "posix":
+            if st.st_uid != os.getuid():
+                raise ValueError("피어 토큰 파일 소유자가 일치하지 않습니다")
+            if stat.S_IMODE(st.st_mode) & 0o077:
+                raise ValueError("피어 토큰 파일 권한은 0600 이하여야 합니다")
+        if st.st_size > 4096:
+            raise ValueError("피어 토큰 크기 제한(4096B)을 초과했습니다")
+        raw = os.read(fd, 4097)
+    finally:
+        os.close(fd)
+    if len(raw) > 4096:
+        raise ValueError("피어 토큰 크기 제한(4096B)을 초과했습니다")
+    token = raw.decode("utf-8").strip()
+    if not 16 <= len(token) <= 4096 or any(ord(c) < 32 for c in token):
+        raise ValueError("피어 토큰 형식이 유효하지 않습니다")
     return token
 
 
 def notify_canonical_intake(config: dict, transfer_info: dict, *, urlopen=None) -> dict:
-    """Notify Model PC /api/learning/canonical/intake using Bearer authentication (no redirects)."""
+    """Notify Model PC /api/learning/canonical/intake using Bearer authentication (no redirects or proxies)."""
     url = _validate_url(config.get("intake_url") or "")
     if not url:
         return {"status": "unconfigured", "ok": False, "error": "Canonical intake URL이 설정되지 않았습니다"}
@@ -283,7 +314,7 @@ def notify_canonical_intake(config: dict, transfer_info: dict, *, urlopen=None) 
         return {"status": "failed", "ok": False, "error": "peer_token_file이 설정되지 않아 Canonical 인입을 호출할 수 없습니다"}
     try:
         token = _read_bearer_token(Path(tok_raw).expanduser())
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, UnicodeError) as exc:
         return {"status": "failed", "ok": False, "error": f"피어 토큰 오류: {exc}"}
 
     ver = transfer_info["verification"]
@@ -299,7 +330,7 @@ def notify_canonical_intake(config: dict, transfer_info: dict, *, urlopen=None) 
         url, data=json.dumps(payload).encode("utf-8"), method="POST",
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
     )
-    open_fn = urlopen or urllib.request.build_opener(_NoRedirectHandler()).open
+    open_fn = urlopen or urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirectHandler()).open
     try:
         with open_fn(req, timeout=15) as resp:
             doc = json.loads(resp.read().decode("utf-8"))
@@ -312,17 +343,28 @@ def notify_canonical_intake(config: dict, transfer_info: dict, *, urlopen=None) 
 
 
 def validate_team_hf_upload(api, ds_folder: Path, config: dict, *, ds_name: str = "") -> tuple[str, str]:
-    """Enforce team-org membership ('robotteam') and monorepo dataset destination ('robotteam/rosy-omx-data')."""
-    if (ds_folder / "DO_NOT_TRAIN.txt").exists() or not (ds_folder / "meta" / "info.json").is_file():
+    """Enforce robotteam org membership, non-empty episodes, no symlinks, and fixed robotteam/rosy-omx-data target."""
+    if not ds_folder.is_dir() or ds_folder.is_symlink():
+        raise RuntimeError("데이터셋 폴더를 찾을 수 없습니다")
+    root_res = ds_folder.resolve()
+    for p in ds_folder.rglob("*"):
+        if p.is_symlink() or not p.resolve().is_relative_to(root_res):
+            raise RuntimeError(f"데이터셋 내 링크/경로 이탈 차단: {p.name}")
+    info_path = ds_folder / "meta" / "info.json"
+    if (ds_folder / "DO_NOT_TRAIN.txt").exists() or not info_path.is_file():
         raise RuntimeError("DO_NOT_TRAIN이거나 meta/info.json이 없는 데이터셋은 업로드할 수 없습니다")
-    if not list(ds_folder.glob("data/**/*.parquet")):
-        raise RuntimeError("에피소드(parquet)가 없는 데이터셋은 업로드할 수 없습니다")
+    info = json.loads(info_path.read_text(encoding="utf-8"))
+    if int(info.get("total_episodes") or 0) < 1 or not list(ds_folder.glob("data/**/*.parquet")):
+        raise RuntimeError("에피소드(total_episodes >= 1, parquet)가 없는 데이터셋은 업로드할 수 없습니다")
     who = api.whoami() or {}
     user = str(who.get("name") or "")
     orgs = [str(o.get("name") or "") for o in (who.get("orgs") or []) if isinstance(o, dict)]
     if user != DEFAULT_HF_TEAM_ORG and DEFAULT_HF_TEAM_ORG not in orgs:
         raise RuntimeError(f"개인 HF 계정({user or 'unknown'}) 업로드 차단 — '{DEFAULT_HF_TEAM_ORG}' 팀 소속 계정이 필요합니다")
     repo_id = str(config.get("hf_repo_id") or DEFAULT_HF_DATASET_REPO).strip()
-    if not _SAFE_HF_REPO.fullmatch(repo_id):
-        raise RuntimeError(f"HF 저장소는 '{DEFAULT_HF_TEAM_ORG}/<repo>' 형식이어야 합니다: {repo_id}")
-    return repo_id, (ds_name or ds_folder.name)
+    if repo_id != DEFAULT_HF_DATASET_REPO:
+        raise RuntimeError(f"HF 저장소는 '{DEFAULT_HF_DATASET_REPO}'로 고정되어 있습니다: {repo_id}")
+    subpath = str(ds_name or ds_folder.name).strip()
+    if not subpath or subpath == "dataset" or not _SAFE_NAME.fullmatch(subpath):
+        raise RuntimeError(f"올바른 데이터셋 하위 경로가 필요합니다: {subpath!r}")
+    return repo_id, subpath

@@ -1,6 +1,7 @@
 (function(){
 const JOB_MAP={idle:['대기','warn'],running:['실행 중','live'],blocked:['설정 필요','warn'],transferred:['전송 완료','good'],done:['전달 완료','good'],failed:['실패','crit']};
 let lastPreviewReplay='';
+let lastPipeState=null;
 let pipeInFlight=false;
 
 function setBadge(el,state,label){
@@ -12,14 +13,9 @@ function setBadge(el,state,label){
 
 function renderPipeline(p){
   if(!p||typeof p!=='object')return;
+  lastPipeState=p;
   const jobState=p.state||'idle';
   setBadge($('pipe-job-badge'),jobState);
-  const rp=$('rail-pipe');
-  if(rp){
-    const [txt]=JOB_MAP[jobState]||['대기'];
-    rp.textContent=txt;
-    rp.className='rail-step'+(jobState==='done'||jobState==='transferred'?' ok':'');
-  }
   const sp=$('sum-pipe-drawer');
   if(sp){
     const [txt]=JOB_MAP[jobState]||['대기'];
@@ -73,10 +69,12 @@ async function triggerPipelineRun(reason){
   pipeInFlight=true;
   setReqError('');
   try{
+    const q=Array.isArray(lastPipeState?.pending_queue)?lastPipeState.pending_queue.filter(r=>r.status!=='done'):[];
+    const ds=lastStatus?.name||lastStatus?.folder||lastPipeState?.last_dataset||(q.length?q[q.length-1].collection:'');
     const st=await api('/api/pipeline/run',{
       source_type:$('pipe-source-type')?.value||'isaac_sim',
       source_ref:$('pipe-source-ref')?.value?.trim()||'',
-      dataset_folder:lastStatus?.name||lastStatus?.folder||'',
+      dataset_folder:ds,
       task:f?.task?.value||'',
       arm:f?.arm?.value||'',
       trigger:reason||'manual'
