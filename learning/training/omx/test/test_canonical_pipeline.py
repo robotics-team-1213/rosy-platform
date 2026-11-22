@@ -480,7 +480,11 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     assert calls["camera_seeds"] == [(0, 5201), (1, 700)]
     assert camera_cases[0]["angles_deg"]["top"]["rx"] == .1
 
+
+def test_recording_todo_uses_watched_inventory_and_real_receipts(tmp_path):
     from rosy.contracts.learning import omx_recording_todo as rt
+
+    cfg = _make_config(tmp_path)
     watch = Path(cfg["watch_roots"]["ai_canon"]["path"])
     bad_link = watch / "recording-inventory.json"
     bad_target = tmp_path / "outside-inv.json"
@@ -503,6 +507,11 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
         "arm": "arm_a", "source": {"kind": "real"}, "counts": {"pass": 5, "review": 0, "reject": 0}, "dataset_reject": [],
         "episodes": [None, {"verdict": "pass", "goal": []},
                      *[{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(5)]],
+    }), encoding="utf-8")
+    (watch / "sim").mkdir()
+    (watch / "sim" / "gate-receipt.json").write_text(json.dumps({
+        "arm": "arm_a", "source": {"kind": "sim"},
+        "episodes": [{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(7)],
     }), encoding="utf-8")
     svc = cp.CanonicalService(tmp_path / "canon_todo", cfg)
     todo_res = svc.recording_todo()
