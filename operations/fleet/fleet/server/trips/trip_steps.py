@@ -132,17 +132,18 @@ class TripSteps:
             # D-517 5: a wait cycle; only before this place is instructed (review M1: a hold over a turn
             # CORE carries out would freeze ``_locate``), else the resolver's next period says human
             if (resolver.get("decision") == "replan" and live.view["hold"] is None and not last
-                    and remaining <= self.config.arm_distance_m and not self._core_busy(live)
+                    and (remaining <= self.config.arm_distance_m or live.nav2) and not self._core_busy(live)
                     and (live.sent is None or live.sent["index"] != index)):
-                self._replan(live, index, frozenset(resolver["blocked_edges"]))
+                self._replan(live, index, frozenset(resolver["blocked_edges"]),
+                             start_pose=(pose.x, pose.y, pose.yaw) if live.nav2 else None)
                 if resolver.get("ai") and await self._ai_confirm(live):
                     self._save(live)
                     return
             if not last and not live.replan_pending and self._needs_replan(live, index):
                 live.replan_pending = True
             if (live.replan_pending and live.view["hold"] is None and not last
-                    and remaining <= self.config.arm_distance_m):
-                self._replan(live, index)
+                    and (remaining <= self.config.arm_distance_m or live.nav2)):
+                self._replan(live, index, start_pose=(pose.x, pose.y, pose.yaw) if live.nav2 else None)
                 self._describe(live)
             if robot_id in self.autonomous_robots and await self._ai_confirm(live, "fleet-rule"):
                 self._save(live)
@@ -197,10 +198,16 @@ class TripSteps:
                 self._release_queue(robot_id)
             self._save(live)
             return
+        prior_best = live.best_progress
         if self._stalled(live, index, s):
             await self._stop(live, "stopped", "stall", {"stall_s": self.config.stall_s,
                                                         "progress_m": round(live.best_progress, 3)})
             return
+        if (live.nav2 and prior_best > -math.inf and live.progress(index, s) >= prior_best + self.config.stall_m
+                and live.view["hold"] is None and live.active_route is not None
+                and live.nav2_retry_at == -math.inf
+                and (live.nav2_retries or live.nav2_replans or live.nav2_blocked)):
+            live.reset_nav2_recovery()
         self._save(live)
 
     # ---- steps --------------------------------------------------------------------------
@@ -367,6 +374,8 @@ class TripSteps:
             await self._stop(live, "stopped", "map_frame", {"map_id": active[1].map_id, "binding": reason})
 
     async def _step_free(self, live: LiveTrip, index: int, s: float, pose) -> None:
+        if live.view["hold"] is not None:
+            return
         segment = live.segments[index]
         active = self._store.active()
         if active is None or active[0] != live.view["map_version"]:

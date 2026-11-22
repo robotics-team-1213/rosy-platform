@@ -48,6 +48,22 @@ class TripConvoy(BaseModel):
     leader: str = Field(min_length=1, max_length=96)
 
 
+class TripPauseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    reason: Optional[str] = Field(default=None, max_length=120)
+
+
+class TripResumeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    blocked_edges: list[PlaceRef] = Field(default_factory=list, max_length=32)
+
+    @model_validator(mode="after")
+    def _unique_edges(self) -> "TripResumeRequest":
+        if len(set(self.blocked_edges)) != len(self.blocked_edges):
+            raise ValueError("blocked_edges contains a duplicate")
+        return self
+
+
 class SignalCommand(BaseModel):
     """D-525 4: an operator verb for one virtual signal."""
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -262,6 +278,23 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                                         principal: SitePrincipal = Depends(require_named_operator)) -> dict:
         try:
             return await runner.confirm_replan(trip_id, principal.principal_id)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+
+    @app.post("/api/fleet/trips/{trip_id}/pause", tags=["fleet"])
+    async def fleet_trip_pause(trip_id: str, body: Optional[TripPauseRequest] = None,
+                               principal: SitePrincipal = Depends(require_operator)) -> dict:
+        try:
+            return await runner.pause(trip_id, principal.principal_id, reason=body.reason if body else None)
+        except TripError as exc:
+            raise trip_error(exc) from exc
+
+    @app.post("/api/fleet/trips/{trip_id}/resume", tags=["fleet"])
+    async def fleet_trip_resume(trip_id: str, body: Optional[TripResumeRequest] = None,
+                                principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        try:
+            edges = tuple(body.blocked_edges) if body else ()
+            return await runner.resume(trip_id, principal.principal_id, blocked_edges=edges)
         except TripError as exc:
             raise trip_error(exc) from exc
 

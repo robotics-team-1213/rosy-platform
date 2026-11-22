@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from fleet.routing.execute import arc_id
+from fleet.routing.execute import arc_id, plan_again, route_key
 from fleet.server.charge_goal_gate import ready_free_goal
 from fleet.server.trip_geometry import SiteFrameMismatch, robot_frame_goal
 from fleet.server.trip_live import LiveTrip
@@ -16,8 +16,13 @@ NAV2_ROUTE_MIN_GAP_M = 0.03
 NAV2_CLOSED_LOOP_SPLIT_M = 0.60
 NAV2_SPLIT_MIN_SPAN_M = 0.25
 NAV2_SPLIT_WALL_CLEAR_M = 0.22
+NAV2_RETRY_S = 5.0
+NAV2_RETRIES = 2
+NAV2_MAX_REPLANS = 2
 _NAV_RUNNING = ("NAVIGATING", "PLANNING")
 _NAV_ABORTED = ("FAILED", "CANCELED")
+_IMMEDIATE_HOLD_REASONS = ("fleet_hold", "nav2_problem")
+_TRANSIENT_GOAL_REFUSALS = ("ROUTE_CONFLICT", "YIELDING")
 
 
 def _wrap_angle(angle: float) -> float:
@@ -121,7 +126,99 @@ def sample_nav2_route(
     return pts
 
 
-def _route_finished(runner, live: LiveTrip, index: int, s: float, nav: str | None) -> str:
+def _immediate_hold(live: LiveTrip) -> bool:
+    return (live.view["hold"] or {}).get("reason") in _IMMEDIATE_HOLD_REASONS
+
+
+def _traffic_end_index(runner, live: LiveTrip, index: int) -> int | None:
+    """Last segment index allowed by the Fleet traffic block table, or ``None`` if held here."""
+    if (live.traffic or {}).get("refused_at_m") is None:
+        return len(live.segments) - 1
+    allowed: int | None = None
+    for k in range(index, len(live.segments)):
+        if runner.traffic.holds(live, k):
+            break
+        allowed = k
+    return allowed
+
+
+async def _cancel_active_route(runner, live: LiveTrip, robot_id: str, nav: str | None) -> None:
+    if live.active_route is None:
+        return
+    if nav not in ("ARRIVED", "IDLE") and runner._cancel_goal is not None:
+        await runner._call(runner._cancel_goal(robot_id))
+    if not live.open:
+        return
+    live.active_route = None
+    runner._fence(robot_id)
+
+
+async def _handle_nav2_failure(runner, live: LiveTrip, index: int, _s: float, pose, active) -> None:
+    """Ask Fleet for an alternate path, retry transiently, or hold cleanly for Fleet resume."""
+    robot_id = live.view["robot_id"]
+    live.active_route = None
+    runner._fence(robot_id)
+    now = runner._clock()
+    if live.nav2_replans < NAV2_MAX_REPLANS:
+        candidates = []
+        if index + 1 < len(live.segments):
+            candidates.append(live.nav2_blocked | {live.segments[index + 1]["edge_id"]})
+        candidates.append(live.nav2_blocked | {live.segments[index]["edge_id"]})
+        passed = {live.place(i) for i in range(index) if live.place(i) is not None}
+        for closed in candidates:
+            if closed == live.nav2_blocked:
+                continue
+            body, _hold = plan_again(
+                active, (pose.x, pose.y, pose.yaw), live.request, live.view.get("caps") or {},
+                frozenset(runner._blocked()) | closed, passed, runner._routing, runner.config.max_turn_deg,
+            )
+            if body is None or route_key(body["segments"]) == route_key(live.segments[index:]):
+                continue
+            live.view["hold"] = {
+                "reason": "replan", "map_version": body["map_version"],
+                "plan": {k: body[k] for k in ("segments", "places", "actions")},
+                "length_m": body["length_m"], "eta_s": body["eta_s"],
+                "source": "nav2_problem", "blocked_edges": sorted(closed),
+            }
+            confirmed = await runner._ai_confirm(live, "fleet-rule")
+            if confirmed:
+                live.nav2_replans += 1
+                live.nav2_blocked.update(closed)
+                live.nav2_retries = 0
+                live.nav2_retry_at = -math.inf
+                live.progress_at = now
+                live.view["detail"]["nav2_problem"] = {
+                    "state": "rerouted", "blocked_edges": sorted(closed), "replans": live.nav2_replans, "at": now,
+                }
+                return
+            if live.view["hold"] is not None:
+                live.view["detail"]["nav2_problem"] = {
+                    "state": "held", "code": live.view["detail"].get("ai_replan_refused") or "NAV2_FAILED",
+                    "blocked_edges": sorted(closed), "at": now,
+                }
+                return
+    if live.nav2_retries < NAV2_RETRIES:
+        live.nav2_retries += 1
+        live.nav2_retry_at = now + NAV2_RETRY_S
+        # Bound retry cooldown without tripping stall_s during Fleet recovery.
+        live.progress_at = now
+        live.view["detail"]["nav2_problem"] = {
+            "state": "retry_wait", "attempt": live.nav2_retries, "max_retries": NAV2_RETRIES,
+            "retry_at": live.nav2_retry_at, "edge_id": live.segments[index]["edge_id"], "at": now,
+        }
+        return
+    edge_id = live.segments[index]["edge_id"]
+    live.view["hold"] = {
+        "reason": "nav2_problem", "code": "NAV2_FAILED", "plan": None,
+        "edge_id": edge_id, "attempts": live.nav2_retries, "at": now,
+    }
+    live.view["detail"]["nav2_problem"] = {
+        "state": "held", "code": "NAV2_FAILED", "edge_id": edge_id, "attempts": live.nav2_retries, "at": now,
+    }
+
+
+def _route_finished(runner, live: LiveTrip, index: int, s: float, nav: str | None,
+                    target_end: int | None = None) -> str:
     """Return ``'busy'``, ``'aborted'``, or ``'ready'`` for sending the next route."""
     if nav in _NAV_ABORTED:
         return "aborted"
@@ -133,7 +230,8 @@ def _route_finished(runner, live: LiveTrip, index: int, s: float, nav: str | Non
     if active.get("superseded"):
         return "ready"
     end_idx = active["end_index"]
-    more = end_idx < len(live.segments) - 1 and live.view["hold"] is None
+    limit = len(live.segments) - 1 if target_end is None else target_end
+    more = end_idx < limit and live.view["hold"] is None
     if nav in ("ARRIVED", "IDLE"):
         rem_to_end = (live.segments[end_idx]["s_to"] - s) if index == end_idx else math.inf
         done_here = index > end_idx or rem_to_end <= runner.config.arrive_free_m or live.view["hold"] is not None
@@ -158,30 +256,48 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
         return
     state = await runner._call(runner._robot_state(robot_id)) if runner._robot_state is not None else None
     nav = state.get("navigation") if isinstance(state, dict) else None
+    if _immediate_hold(live):
+        await _cancel_active_route(runner, live, robot_id, nav)
+        return
+    traffic_end = _traffic_end_index(runner, live, index)
+    target_end = None if traffic_end is None else (min(index, traffic_end) if live.view["hold"] is not None else traffic_end)
     if live.active_route is not None:
         if runner.config.map_binding_required:
             await runner._recheck_binding(live, active)
             if not live.open:
                 return
-        verdict = _route_finished(runner, live, index, s, nav)
+        verdict = _route_finished(runner, live, index, s, nav, target_end=target_end)
         if verdict == "aborted":
+            if nav == "FAILED" and robot_id in runner.autonomous_robots:
+                await _handle_nav2_failure(runner, live, index, s, pose, active)
+                return
             await runner._stop(live, "stopped", "navigation", {"navigation": nav})
             return
-        if live.active_route.get("superseded") or (
-            live.view["hold"] is not None and live.active_route["end_index"] > index
-        ):
-            if nav not in ("ARRIVED", "IDLE") and runner._cancel_goal is not None:
-                await runner._call(runner._cancel_goal(robot_id))
+        if live.active_route.get("superseded") or target_end is None or live.active_route["end_index"] > target_end:
+            await _cancel_active_route(runner, live, robot_id, nav)
             if not live.open:
                 return
-            live.active_route = None
-            runner._fence(robot_id)
-        else:
-            if verdict == "busy":
-                return
+        elif verdict == "busy":
+            return
+    if target_end is None:
+        live.view["detail"]["traffic_hold"] = {
+            "waiting_for": list((live.traffic or {}).get("waiting_for") or []),
+            "refused_at_m": round(float((live.traffic or {}).get("refused_at_m", 0.0)), 3),
+        }
+        return
+    live.view["detail"].pop("traffic_hold", None)
+    if runner._clock() < live.nav2_retry_at:
+        return
+    if (target_end == index and target_end < len(live.segments) - 1
+            and live.segments[index]["s_to"] - s <= runner.config.arrive_free_m and live.view["hold"] is None):
+        live.view["detail"]["traffic_hold"] = {
+            "waiting_for": list((live.traffic or {}).get("waiting_for") or []),
+            "refused_at_m": round(float((live.traffic or {}).get("refused_at_m", 0.0)), 3),
+        }
+        return
     if not await ready_free_goal(runner, live) or not live.open:
         return
-    end_index = index if live.view["hold"] is not None else len(live.segments) - 1
+    end_index = target_end
     site_pts = sample_nav2_route(live.graph, live.segments, index, s, end_index, walls=getattr(active[1], "walls", ()))
     robot_pts, frame_err = _convert_points(runner, live, active, site_pts, pose, state)
     if robot_pts is None:
@@ -202,13 +318,21 @@ async def step_nav2_route(runner, live: LiveTrip, index: int, s: float, pose) ->
             live.view["detail"]["goal_wait"] = exc.message
             return
         raise
+    await runner._after_send(live)
+    if not live.open:
+        return
+    if reply.get("accepted") is False or reply.get("queued"):
+        reason = reply.get("reason") or ""
+        if robot_id in runner.autonomous_robots and reason in _TRANSIENT_GOAL_REFUSALS:
+            live.active_route = None
+            live.view["detail"]["goal_wait"] = reason
+            runner._fence(robot_id)
+            return
+        raise _GoalRefused(reason)
     live.active_route = {"end_index": end_index, "points": len(payload)}
     live.view["detail"].pop("goal_wait", None)
     live.view["detail"]["nav2_route"] = {"points": len(payload), "end_index": end_index, "lap": live.view.get("lap")}
     runner._fence(robot_id)  # Ensure the next tick reads post-dispatch robot state, never pre-POST ARRIVED.
-    await runner._after_send(live)
-    if reply.get("accepted") is False or reply.get("queued"):
-        raise _GoalRefused(reply.get("reason") or "")
 
 
 def _convert_points(runner, live: LiveTrip, active, site_pts, pose, state):
