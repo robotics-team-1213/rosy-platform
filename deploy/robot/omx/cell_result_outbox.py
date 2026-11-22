@@ -119,11 +119,14 @@ def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any
             done.append({"task_id": task_id, "action": "dropped", "reason": "not RUNNING under the same lease"})
             continue
         measured = (entry.get("owner_evidence") or {}).get("measured_at")
+        remeasured = False
         if remeasure is not None and isinstance(measured, (int, float)) and now - measured >= STALE_S:
             try:
                 entry["owner_evidence"], entry["complete"] = remeasure(task_id, entry)
                 entry.pop("last_refusal", None)
+                entry["remeasured"] = True
                 outbox.put(task_id, entry)
+                remeasured = True
             except Exception as exc:  # RemeasureFailed or anything the cameras raise: say why, keep the task for a person
                 entry["last_refusal"] = {"reason": f"{type(exc).__name__}: {exc}"[:200], "at": now}
                 outbox.put(task_id, entry)
@@ -139,6 +142,11 @@ def resend_pending(outbox: Outbox, request_fn: Callable[[str, str, dict[str, Any
                 except HTTPError as exc:
                     if exc.code != 409 or refusal_code(exc) != "OWNER_EVIDENCE_ALREADY_RECORDED":
                         raise  # a 409 is only "already recorded": the entry stays and /complete is retried below
+                    if remeasured or entry.get("remeasured"):
+                        entry["last_refusal"] = {"reason": "OWNER_EVIDENCE_ALREADY_RECORDED", "at": now}
+                        outbox.put(task_id, entry)
+                        done.append({"task_id": task_id, "action": "kept", "reason": "OWNER_EVIDENCE_ALREADY_RECORDED"})
+                        continue
             request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", entry["complete"])
         except HTTPError as exc:
             code = refusal_code(exc) if exc.code == 422 else None

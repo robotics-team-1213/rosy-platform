@@ -20,9 +20,9 @@ import threading
 import time
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 
+from cell_bed_ready import observe_bed, send_bed_observation
 from cell_camera_telemetry_sync import DEFAULT_PREP_DIR, sync_cell_telemetry as _sync_cell_telemetry
 from cell_control_core import ensure_omx_paths
 from cell_fleet_handoff import handoff_refusal
@@ -31,11 +31,10 @@ from cell_result_outbox import Outbox, abort_reason, remeasurer, result_bodies, 
 import cell_site_target
 from cell_task_exec import (
     check_arm_hold, classify_poll_error, execute_guarded_cell_task, make_ca_urlopen,
-    make_keepalive_https_request, peer_ab_session_locked, query_safety_listing, resolve_task_arm,
+    make_default_request_fn, peer_ab_session_locked, query_safety_listing, resolve_task_arm,
 )
 
 ensure_omx_paths()
-_DEFAULT_URLOPEN = urlopen
 
 
 def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR,
@@ -45,24 +44,6 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
 
 
 ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {"arm_s": ("s", "with-session-arm-s-live.sh", -1.0), "arm_a": ("a", "with-session-arm-a-par.sh", -1.0), "arm_b": ("b", "with-session-arm-b-par.sh", -1.0)}
-
-
-def make_default_request_fn(fleet_r_url: str, token: str, *, ca_file: str | None = None) -> Callable[[str, str, dict[str, Any] | None], dict[str, Any]]:
-    base = fleet_r_url.rstrip("/")
-    parsed = urlsplit(base)
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-        raise ValueError("Fleet URL requires verified HTTPS")
-    ctx = ssl.create_default_context(cafile=ca_file)
-    if urlopen is _DEFAULT_URLOPEN:
-        return make_keepalive_https_request(base, token, ctx, timeout_s=20.0)
-
-    def _req(method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
-        data = json.dumps(body).encode("utf-8") if body is not None else None
-        req = Request(f"{base}{path}", data=data, method=method, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
-        with urlopen(req, context=ctx, timeout=20) as resp:
-            return json.load(resp)
-
-    return _req
 
 
 def _poll_status_ack(status_file: Path, start_line: int, prefix: str, timeout_s: float, poll_s: float = 0.015) -> tuple[dict[str, Any], int]:
@@ -180,6 +161,7 @@ def poll_and_execute_once(
     live_act_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     prep_dir: Path = DEFAULT_PREP_DIR,
     hold_check_fn: Callable[[str], dict[str, Any]] | None = None,
+    bed_observe_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Poll Fleet tasks; release only after the actuator reports measured placement."""
     if live_act_fn is None:
@@ -204,6 +186,7 @@ def poll_and_execute_once(
             continue
         if cell_id == "cell_ab" and peer_ab_session_locked(task_arm, prep_dir=prep_dir):
             continue
+        send_bed_observation(request_fn, bed_observe_fn, task)  # D-1057 2-9: cell S only, before the claim
         claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": task_id})
         if not claimed.get("claimed"):
             continue
@@ -284,6 +267,8 @@ def poll_and_execute_once(
             place = stage_result.get("place") or {}
             z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
             measured = measured and isinstance(place, dict) and cell_site_target.cell_ab_place_verified(handoff, place, z_gate, tier, verification)
+        elif cell_id == "cell_s" and isinstance(stage_result.get("source_clearance"), dict):
+            measured = measured and type(stage_result["source_clearance"].get("objects")) is int
         phase = "RELEASED" if claim_bound and interlock_ok and measured and not safety_fault else "ABORTED"
         evidence = {"task_id": task_id, "lease": handoff.get("handoff_lease_id"),
                     "stage_result": stage_result, "hardware_telemetry": hw_tel}
@@ -361,7 +346,8 @@ def main(argv: list[str] | None = None) -> None:
                 last_cam_push = now_m
             if args.dry_run_hw or args.allow_legacy_live_jog or args.execute_mode == "guarded-pick":
                 _LAST_SAFETY_ERROR[0] = None
-                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, prep_dir=prep_dir, hold_check_fn=check_arm_hold)
+                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, prep_dir=prep_dir,
+                                             hold_check_fn=check_arm_hold, bed_observe_fn=lambda t: observe_bed(prep_dir, t))
                 if not runs and _LAST_SAFETY_ERROR[0] is not None:
                     raise _LAST_SAFETY_ERROR[0]
             else:

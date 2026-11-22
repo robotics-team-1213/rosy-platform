@@ -36,7 +36,8 @@ def feel_hook(config: dict, cell, target: dict, write_library):
         import cell_arm_cal
 
         base_pick = dict(target["pick"])
-        c = math.radians(base_pick["yaw_deg"] + prm.get(params, "auto.closing_theory_deg"))
+        closing_off = next((v for v in (target.get("closing_offset_deg"), target.get("offset"), prm.get(params, "auto.closing_theory_deg")) if v is not None), 90.0)
+        c = math.radians(base_pick["yaw_deg"] + closing_off)
         status = {"ok": True, "holding": False}
         for k, (off, dz_mm) in enumerate(candidates):
             pick = dict(base_pick, x=round(base_pick["x"] + off * math.cos(c) / 1000, 4),
