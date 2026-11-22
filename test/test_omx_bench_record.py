@@ -1164,3 +1164,42 @@ def test_stop_home_runner_now_checks_chunk_cmd_fifo(tmp_path, monkeypatch):
     assert bench_record_step.stop_home_runner_now(io_dir) is False and sent == []
 
 
+def test_parallel_leader_home_and_target_follower_ticks(tmp_path, monkeypatch):
+    lh_spec = importlib.util.spec_from_file_location('leader_home', ROOT / 'deploy/robot/omx/leader_home.py')
+    leader_home = importlib.util.module_from_spec(lh_spec)
+    lh_spec.loader.exec_module(leader_home)
+
+    called = {}
+    monkeypatch.setattr(leader_home, 'read_follower_pose', lambda *_a: (_ for _ in ()).throw(AssertionError('must not open follower')))
+    monkeypatch.setattr(leader_home, 'move_leader_home', lambda cfg, arm, pose, attest, **kw: (called.update(arm=arm, **kw), {'ok': True})[1])
+    rc = leader_home.cli(['--config', str(tmp_path / 'cfg.json'), '--arm', 'arm_s',
+                          '--target-follower-ticks', '2048,862,3161,3078,2048', '--rate-deg-s', '20', '--attest', 'hands-off:test:now'])
+    assert rc == 0 and called['follower'] == [2048, 862, 3161, 3078, 2048] and called['rate_deg_s'] == 20.0
+
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    (bench.prep / 'chunks-arm-s-inplace-live.json').write_text(json.dumps({'chunks': {'home': [[0.0, -50.0, 50.0, 25.0, 0.0, 50.0]]}}), encoding='utf-8')
+    _home_with_stages(bench, monkeypatch, tmp_path, [('home', None), ('home', None)])
+    ran = _leader_popen(bench, _LeaderProc(), monkeypatch)
+    orig_popen, rec_cmds = bench.popen, []
+    bench.popen = lambda command, cwd, **kw: (rec_cmds.append(command) if any('record_session.py' in str(x) for x in command) else None, orig_popen(command, cwd, **kw))[1]
+    res = bench.go_home({'arm': 'arm_s', 'at_bench': True, 'include_leader': True})
+    assert res['home_moved'] == ['arm_s'] and ran and rec_cmds
+    cmd = ran[0]
+    assert '--target-follower-ticks' in cmd and '--match-follower' not in cmd and cmd[cmd.index('--rate-deg-s') + 1] == '20'
+    assert '--skip-leader-finish' in rec_cmds[-1]
+    assert calls.index(('start', 'rosy-omx-observer@arm_a.service')) > calls.index(('stop', 'rosy-omx-observer@arm_a.service'))
+    rec_cmds.clear()
+    bench.go_home({'arm': 'arm_s', 'at_bench': True, 'include_leader': False})
+    assert rec_cmds and '--skip-leader-finish' not in rec_cmds[-1]
+
+
+def test_leader_home_rejects_invalid_rate_before_connecting(tmp_path, monkeypatch):
+    lh_spec = importlib.util.spec_from_file_location('leader_home', ROOT / 'deploy/robot/omx/leader_home.py')
+    leader_home = importlib.util.module_from_spec(lh_spec)
+    lh_spec.loader.exec_module(leader_home)
+    monkeypatch.setattr(leader_home, '_connect_leader', lambda *a: (_ for _ in ()).throw(AssertionError('must not connect on invalid rate')))
+    with pytest.raises(ValueError, match='rate_deg_s'):
+        leader_home.move_leader_home(tmp_path / 'cfg.json', 'arm_s', tmp_path / 'p.json', 'hands-off:test:now', rate_deg_s=0)
+
+

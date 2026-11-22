@@ -3,9 +3,10 @@ async function pollArms(){
 }
 async function triggerHomePose(btn,opts){
   if(!btn||poseInFlight||benchSessionActive()||startInFlight||cameraRestartInFlight)return;
-  const arm=(opts?.allowLeader===false&&lastStatus?.arm)?lastStatus.arm:f.arm.value;
+  const arm=(opts?.useStatusArm&&lastStatus?.arm)?lastStatus.arm:f.arm.value;
   const lbl=btn.querySelector('.btn-lbl')||btn;
-  const incL=Boolean(opts?.allowLeader&&lastArmsStatus&&arm&&lastArmsStatus[arm]?.has_leader_pose&&$('home-include-leader')?.checked);
+  const aInfo=lastArmsStatus&&arm?lastArmsStatus[arm]:null;
+  const incL=Boolean(opts?.allowLeader&&aInfo&&(aInfo.leader_connected===true||(aInfo.leader_connected!==false&&aInfo.has_leader_pose))&&$('home-include-leader')?.checked);
   poseInFlight=true;btn.disabled=true;lbl.textContent='홈 이동 중...';validateStart();
   if(typeof setActivity==='function')setActivity('홈 이동 요청 중...','live',arm);
   try{
@@ -25,7 +26,7 @@ async function triggerHomePose(btn,opts){
   finally{poseInFlight=false;lbl.textContent=opts?.defaultLabel||'홈 이동';validateStart();}
 }
 if($('hdr-home-btn'))$('hdr-home-btn').addEventListener('click',()=>triggerHomePose($('hdr-home-btn'),{allowLeader:true,foldUnfolded:true,defaultLabel:'홈 이동'}));
-if($('hdr-result-home-btn'))$('hdr-result-home-btn').addEventListener('click',()=>triggerHomePose($('hdr-result-home-btn'),{allowLeader:false,foldUnfolded:true,defaultLabel:'지금 홈 포즈'}));
+if($('hdr-result-home-btn'))$('hdr-result-home-btn').addEventListener('click',()=>triggerHomePose($('hdr-result-home-btn'),{allowLeader:true,useStatusArm:true,foldUnfolded:true,defaultLabel:'지금 홈 포즈'}));
 if($('home-include-leader'))$('home-include-leader').addEventListener('change',validateStart);
 if($('save-leader-pose-btn')){
   $('save-leader-pose-btn').addEventListener('click',async()=>{

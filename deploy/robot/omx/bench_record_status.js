@@ -170,13 +170,14 @@ function validateStart(){
   const armInfo=lastArmsStatus&&f.arm.value?lastArmsStatus[f.arm.value]:null;
   const hil=$('home-include-leader');
   const hasLP=Boolean(armInfo&&armInfo.has_leader_pose);
-  if(hil){hil.disabled=!hasLP||busyNow;if(!hasLP)hil.checked=false;}
+  const canLeaderAlign=Boolean(armOk&&armInfo&&(armInfo.leader_connected===true||(armInfo.leader_connected!==false&&hasLP)));
+  if(hil){hil.disabled=!canLeaderAlign||busyNow;}
   const hb=$('hdr-home-btn');
   if(hb){
     hb.disabled=!armOk||busyNow||locks.length>0;
     if(!poseInFlight){
       const lbl=hb.querySelector('.btn-lbl');
-      const txt=(hasLP&&hil?.checked)?'홈 이동 (팔로워+리더)':'홈 이동';
+      const txt=(canLeaderAlign&&hil?.checked)?'홈 이동 (팔로워+리더)':'홈 이동';
       if(lbl)lbl.textContent=txt;else hb.textContent=txt;
     }
   }
@@ -190,7 +191,7 @@ function validateStart(){
   if(poseFeedbackMsg&&Date.now()<poseFeedbackUntil){
     $('start-guard-note').textContent=poseFeedbackMsg;
   }else{
-    const poseHint=(armInfo&&!armInfo.has_leader_pose)?' (리더 포즈 미저장 — 리더 포즈 저장 필요)':'';
+    const poseHint=(armInfo&&armInfo.leader_connected!==true&&!armInfo.has_leader_pose)?' (리더 포즈 미저장 — 리더 포즈 저장 필요)':'';
     $('start-guard-note').textContent=(reasons.length?'시작 대기 조건: '+reasons.join(' · '):'녹화 시작 가능 상태입니다.')+poseHint;
   }
   if(reasons.length&&!busyNow){

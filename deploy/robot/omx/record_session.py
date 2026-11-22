@@ -62,22 +62,11 @@ def release() -> str | None:
 
 
 class Session:
-    def __init__(
-        self,
-        *,
-        open_bus,
-        systemctl,
-        run,
-        log,
-        sleep=time.sleep,
-        clock=time.monotonic,
-        replay=None,
-        chunks=None,
-        operating_profile=None,
-    ) -> None:
+    def __init__(self, *, open_bus, systemctl, run, log, sleep=time.sleep, clock=time.monotonic,
+                 replay=None, chunks=None, operating_profile=None, skip_leader_finish=False) -> None:
         self.open_bus, self.systemctl, self.run_command, self.log = open_bus, systemctl, run, log
         self.sleep, self.clock, self.replay, self.chunks = sleep, clock, replay, chunks
-        self.operating_profile = operating_profile
+        self.operating_profile, self.skip_leader_finish = operating_profile, bool(skip_leader_finish)
         self.hardware_faults = {}
 
     def handover_units(self):
@@ -347,27 +336,30 @@ class Session:
     def finish(self, record: dict, stopped: list) -> None:
         torque_ok, record["torque_after"] = self.torque_off_until_confirmed()
         leader_unused = self.chunks is not None or self.replay is not None
-        try:
-            leader = self.open_bus("leader")
+        if self.chunks is not None and self.skip_leader_finish:
+            record["leader_gripper_torque_after"] = "unused: external leader session"
+        else:
             try:
-                leader.motor = LEADER_GRIPPER
-                leader.cleanup_write("torque", 0)
-                if not leader_unused:
-                    # --chunks/--replay run on follower only; keep torque OFF on leader,
-                    # but don't fail safe_end or reboot over an unused sagging 3.4V leader supply.
-                    self.note_fault(leader, leader=True)
-                    try:
-                        record["leader_rebooted_after"] = self.clear_leader_alerts(leader)
-                    except SystemExit as exc:
-                        record["leader_rebooted_after"] = f"error: {exc}"
-                leader.motor = LEADER_GRIPPER
-                record["leader_gripper_torque_after"] = leader.cleanup_read("torque")
-            finally:
-                leader.close()
-        except (Exception, SystemExit) as exc:
-            if isinstance(exc, SystemExit) and not leader_unused:
-                raise
-            record["leader_gripper_torque_after"] = f"unused: {exc}" if leader_unused else f"error: {exc}"
+                leader = self.open_bus("leader")
+                try:
+                    leader.motor = LEADER_GRIPPER
+                    leader.cleanup_write("torque", 0)
+                    if not leader_unused:
+                        # --chunks/--replay run on follower only; keep torque OFF on leader,
+                        # but don't fail safe_end or reboot over an unused sagging 3.4V leader supply.
+                        self.note_fault(leader, leader=True)
+                        try:
+                            record["leader_rebooted_after"] = self.clear_leader_alerts(leader)
+                        except SystemExit as exc:
+                            record["leader_rebooted_after"] = f"error: {exc}"
+                    leader.motor = LEADER_GRIPPER
+                    record["leader_gripper_torque_after"] = leader.cleanup_read("torque")
+                finally:
+                    leader.close()
+            except (Exception, SystemExit) as exc:
+                if isinstance(exc, SystemExit) and not leader_unused:
+                    raise
+                record["leader_gripper_torque_after"] = f"unused: {exc}" if leader_unused else f"error: {exc}"
         log_registers(self, "stop", FOLLOWER)
         failures = self.restore_caps()
         record["caps_restored"] = not failures or failures

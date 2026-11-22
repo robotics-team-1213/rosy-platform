@@ -375,7 +375,7 @@ function renderCamGuide(){
   fullSvg+='</g>';
   fullSvg+='<g class="map-spot" data-spot="stand" role="button" tabindex="0"'+dimAttr(!arm||arm==='arm_a'||arm==='arm_ab')+'><rect x="8" y="138" width="344" height="38" rx="6" fill="'+zoneBg('stand')+'" stroke="'+zoneCol('stand')+'" stroke-width="2"/><text x="180" y="154" fill="#eeeeef" font-size="11.5" text-anchor="middle">반출대 (Arm A · 컨베이어 우측 상단)</text><text x="180" y="168" fill="#b0b4ba" font-size="10" text-anchor="middle">stand:r1-s1 (top.jpg ROI 410..570 × 30..125)</text></g>';
   fullSvg+='</svg>';
-  html+=(arm==='arm_s'&&!window.mapFullView)?renderArmSMapSvg(zoneBg,zoneCol,ns):fullSvg;
+  html+=(arm==='arm_s'&&!window.mapFullView)?renderArmSMapSvg(zoneBg,zoneCol,validArm,cards):fullSvg;
 
   const tabs=armZones(arm);
   if(tabs.length>1){
@@ -454,13 +454,33 @@ function renderCamGuide(){
 }
 
 window.mapFullView=false;
-function renderArmSMapSvg(zoneBg,zoneCol,ns){
+const ARM_S_SPOTS={
+  pinky:{title:'핑키 로봇 (pinky)',sub:'도착/상차'},
+  supply:{title:'공급대 (supply)',sub:'집는 곳'},
+  bowl:{title:'흰 그릇 (bowl)',sub:'딸기 왕복'},
+};
+function renderArmSMapSvg(zoneBg,zoneCol,validArm,cards){
+  const counts=new Map();
+  for(const v of (validArm||[])){
+    const {rawO}=inferCardSpots(v,cards&&cards[v]);
+    const spot=ARM_S_SPOTS[rawO]?rawO:(rawO||'pinky');
+    counts.set(spot,(counts.get(spot)||0)+1);
+  }
+  const active=[...counts.entries()].filter(([,n])=>n>0);
+  const spots=active.length?active:[['pinky',0],['supply',0]];
+  const total=active.reduce((acc,[,n])=>acc+n,0);
+  const pad=8, avail=146, gap=spots.length>1?7:0;
+  const h=Math.floor((avail-gap*(spots.length-1))/spots.length);
   let s='<svg class="cam-guide-svg" viewBox="0 0 360 162" preserveAspectRatio="xMidYMid meet" aria-label="Arm S 작업 구역 확대 배치도">';
-  s+='<g class="map-spot" data-spot="pinky" role="button" tabindex="0"><rect x="8" y="8" width="154" height="44" rx="8" fill="'+zoneBg('pinky')+'" stroke="'+zoneCol('pinky')+'" stroke-width="2"/><text x="85" y="27" fill="#eeeeef" font-size="13" font-weight="700" text-anchor="middle">핑키 로봇 (pinky)</text><text x="85" y="43" fill="#b0b4ba" font-size="10.5" text-anchor="middle">도착/상차 ('+ns+'개 과제)</text></g>';
-  s+='<g class="map-spot" data-spot="supply" role="button" tabindex="0"><rect x="8" y="59" width="154" height="44" rx="8" fill="'+zoneBg('supply')+'" stroke="'+zoneCol('supply')+'" stroke-width="2"/><text x="85" y="78" fill="#eeeeef" font-size="13" font-weight="700" text-anchor="middle">공급대 (supply)</text><text x="85" y="94" fill="#b0b4ba" font-size="10.5" text-anchor="middle">집는 곳</text></g>';
-  s+='<g class="map-spot" data-spot="bowl" role="button" tabindex="0"><rect x="8" y="110" width="154" height="44" rx="8" fill="'+zoneBg('bowl')+'" stroke="'+zoneCol('bowl')+'" stroke-width="2"/><text x="85" y="129" fill="#eeeeef" font-size="13" font-weight="700" text-anchor="middle">흰 그릇 (bowl)</text><text x="85" y="145" fill="#b0b4ba" font-size="10.5" text-anchor="middle">딸기 왕복 과제</text></g>';
+  spots.forEach(([spot,n],idx)=>{
+    const y=pad+idx*(h+gap);
+    const meta=ARM_S_SPOTS[spot]||{title:describeSpot(spot),sub:'출발 구역'};
+    const ty1=Math.round(y+h/2-4), ty2=ty1+16;
+    const sub=meta.sub+(n?' ('+n+'개 과제)':'');
+    s+='<g class="map-spot" data-spot="'+escHtml(spot)+'" role="button" tabindex="0"><rect x="8" y="'+y+'" width="154" height="'+h+'" rx="8" fill="'+zoneBg(spot)+'" stroke="'+zoneCol(spot)+'" stroke-width="2"/><text x="85" y="'+ty1+'" fill="#eeeeef" font-size="13" font-weight="700" text-anchor="middle">'+escHtml(meta.title)+'</text><text x="85" y="'+ty2+'" fill="#b0b4ba" font-size="10.5" text-anchor="middle">'+escHtml(sub)+'</text></g>';
+  });
   s+='<text x="180" y="86" fill="#eeeeef" font-size="18" font-weight="700" text-anchor="middle">&rarr;</text>';
-  s+='<g class="map-spot" data-spot="belt-in" role="button" tabindex="0"><rect x="198" y="20" width="154" height="122" rx="10" fill="'+zoneBg('belt-in')+'" stroke="'+zoneCol('belt-in')+'" stroke-width="2.5"/><text x="275" y="68" fill="#eeeeef" font-size="14" font-weight="700" text-anchor="middle">벨트 공급단</text><text x="275" y="88" fill="#b0b4ba" font-size="11.5" text-anchor="middle">belt-in (놓는 곳)</text><text x="275" y="112" fill="#8ab4f8" font-size="10.5" text-anchor="middle">Arm A/B 구역으로 이송</text></g>';
+  s+='<g class="map-spot" data-spot="belt-in" role="button" tabindex="0"><rect x="198" y="20" width="154" height="122" rx="10" fill="'+zoneBg('belt-in')+'" stroke="'+zoneCol('belt-in')+'" stroke-width="2.5"/><text x="275" y="64" fill="#eeeeef" font-size="14" font-weight="700" text-anchor="middle">벨트 공급단</text><text x="275" y="84" fill="#b0b4ba" font-size="11.5" text-anchor="middle">belt-in (놓는 곳)'+(total?' · '+total+'개':'')+'</text><text x="275" y="108" fill="#8ab4f8" font-size="10.5" text-anchor="middle">Arm A/B 구역으로 이송</text></g>';
   return s+'</svg>';
 }
 

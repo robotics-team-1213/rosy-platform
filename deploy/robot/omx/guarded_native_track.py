@@ -81,7 +81,7 @@ def body_command(self, target, current, elapsed, now, staged=None):
                     math.sqrt(min(limit, abs(v_ff)) ** 2 + 2 * decel * abs(error)),
                 )
                 brake = max(brake, reach)
-        lim = limit if name != "gripper" or not full or self.grip_ready else TICKS_PER_DEGREE  # gripper: 1 deg/s until ready
+        lim = limit if name != "gripper" or not full or self.grip_ready else (self.align_deg_s if staged_full else 1.0) * TICKS_PER_DEGREE
         desired = math.copysign(min(lim, brake), error)
         if full and (desired * self.velocity[name] < 0 or abs(desired) < abs(self.velocity[name])):  # slowing or reversing: brake harder
             step = self.brake_deg_s2 * TICKS_PER_DEGREE * elapsed  # toward zero (reversal) or the smaller desired speed, never past it
@@ -96,19 +96,27 @@ def body_command(self, target, current, elapsed, now, staged=None):
         if full:  # one-sided: only this tick's advance is cut to present + LEAD_DEG in the direction of travel. The command is never
             # pulled toward the arm beyond the stage limit, so drift, sag or a push stays visible to the 5 degree check, and it never moves faster than permitted.
             lead, step = LEAD_DEG * TICKS_PER_DEGREE, command[name] - self.command[name]
-            retracted = False
+            retracted, moving_hold = False, False
             if self.lag is not None:
                 lead = self.lag.lead_ticks(name, LEAD_DEG)  # free motion at v lags by v * tau; a blocked joint measures 0 and keeps the 3 degrees
                 delta = self.lag.delta.get(name, 0)
                 max_step = lim * elapsed
-                if command[name] > current[name] and delta >= 0:
+                if command[name] > current[name] and delta == 0:
                     cap = current[name] + lead
                     held_in = min(command[name], max(cap, self.command[name] - max_step))
                     retracted = held_in < self.command[name]
-                elif command[name] < current[name] and delta <= 0:
+                elif command[name] > current[name] and delta > 0:
+                    cap = current[name] + lead
+                    held_in = min(command[name], max(cap, self.command[name]))
+                    moving_hold = held_in == self.command[name] and held_in < command[name]
+                elif command[name] < current[name] and delta == 0:
                     cap = current[name] - lead
                     held_in = max(command[name], min(cap, self.command[name] + max_step))
                     retracted = held_in > self.command[name]
+                elif command[name] < current[name] and delta < 0:
+                    cap = current[name] - lead
+                    held_in = max(command[name], min(cap, self.command[name]))
+                    moving_hold = held_in == self.command[name] and held_in > command[name]
                 else:
                     held_in = (min(command[name], max(current[name] + lead, self.command[name])) if step > 0
                                else max(command[name], min(current[name] - lead, self.command[name])) if step < 0 else command[name])
@@ -116,7 +124,14 @@ def body_command(self, target, current, elapsed, now, staged=None):
                 held_in = (min(command[name], max(current[name] + lead, self.command[name])) if step > 0
                            else max(command[name], min(current[name] - lead, self.command[name])) if step < 0 else command[name])
             if held_in != command[name] and elapsed > 0:
-                velocity[name] = 0.0 if retracted else max(-lim, min(lim, (held_in - self.command[name]) / elapsed))
+                if retracted:
+                    velocity[name] = 0.0
+                elif moving_hold:  # cap <= self.command on a still-moving tick: bleed momentum at accel rate instead of snapping velocity to 0
+                    decay = self.accel_deg_s2 * TICKS_PER_DEGREE * elapsed
+                    prev_v = self.velocity[name]
+                    velocity[name] = math.copysign(max(0.0, abs(prev_v) - decay), prev_v) if prev_v else 0.0
+                else:
+                    velocity[name] = max(-lim, min(lim, (held_in - self.command[name]) / elapsed))
             command[name] = held_in
         calibration = self.follower.calibration[name]
         if full and not calibration.range_min <= command[name] <= calibration.range_max:  # an overrun at the range end: held there, never a cut
