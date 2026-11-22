@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Literal
@@ -45,6 +46,18 @@ def install_site_points_routes(app, *, site_maps, read_guard) -> None:
                 status_code=exc.status_code,
                 detail={"code": exc.code, "detail": {"message": str(exc)}},
             ) from exc
+        if rules_view is not None:
+            expected_sha = hashlib.sha256(
+                json.dumps(rules_view["rules"], sort_keys=True, ensure_ascii=False).encode("utf-8")
+            ).hexdigest()
+            if rules_view.get("sha256") != expected_sha:
+                raise HTTPException(
+                    status_code=422,
+                    detail={
+                        "code": "SITE_RULES_BODY_HASH_MISMATCH",
+                        "detail": {"message": "active site rules body does not match recorded sha256"},
+                    },
+                )
         active = site_maps.active()
         if active_view is None or active is None:
             raise HTTPException(

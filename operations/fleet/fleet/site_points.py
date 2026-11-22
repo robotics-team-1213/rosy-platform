@@ -132,7 +132,7 @@ def _is_verified_stop(
     if place.kind == "charge":
         return "verified", False
     if place.kind == "stop":
-        return "verified", True
+        return ("planned_unverified", False) if ambiguous_rule else ("verified", True)
     return "junction", False
 
 
