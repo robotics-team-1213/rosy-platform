@@ -17,7 +17,6 @@
           </svg>
         </span>
         <h1>ROSY · OMX 작업대 녹화</h1>
-        <div id="rail-arm-pills" class="arm-pills" role="group" aria-label="팔 선택"></div>
         <button type="button" id="hdr-task-summary" class="btn-tool btn-xs context-btn mono" data-drawer-btn="setup" aria-controls="drawer-setup" aria-expanded="false">과제 미선택</button>
         <button type="button" id="goal-name-btn" class="btn-tool btn-xs context-btn mono" data-drawer-btn="bindings" aria-controls="drawer-bindings" aria-expanded="false">수집명 미정</button>
       </div>
@@ -73,6 +72,7 @@
           <span id="goal-result-line" class="goal-result-line mono" hidden></span>
           <button type="button" id="hdr-result-home-btn" class="btn-tool" title="팔로워 홈 포즈 복귀 (펼쳐진 팔 안전 접기 포함) [H]"><span class="btn-lbl">지금 홈 포즈</span><kbd class="kbd-hint">H</kbd></button>
           <button type="button" id="hdr-quick-restart-btn" class="btn-primary" title="홈 복귀 확인 후 수집명 +1로 바로 다음 연동 준비 시작">홈 → 바로 다음 시작</button>
+          <button type="button" id="hdr-reset-retry-btn" class="btn-tool" title="임시 설정·스왑 초기화 후 홈 복귀하여 다시 시작">초기화 후 다시 하기</button>
           <button type="button" id="back-to-setup-btn" class="btn-tool">다음 녹화 준비</button>
         </div>
       </div>
@@ -84,69 +84,102 @@
 
   <main class="app-main">
     <div class="layout">
-      <section class="card cam-panel" id="sec-cameras" data-tabs="setup prepare recording" aria-labelledby="h-cams">
-        <h2 id="h-cams" class="bench-sr-only">실시간 카메라</h2>
-        <p id="cam-note" class="bench-sr-only">작업대 카메라(8767)를 확인하는 중입니다.</p>
-        <div class="cam-stage">
-          <div id="cam-grid" class="cam-grid"></div>
-        </div>
-      </section>
-
-      <section class="card" id="sec-evidence" data-tabs="result" aria-labelledby="h-ev" hidden>
-        <div class="goal-head">
-          <h2 id="h-ev" style="margin:0">녹화 결과 · 회차 증거</h2>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            <span class="ui-tag" id="hdr-auto-home">자동 홈: 대기</span>
-            <span id="rail-ev" class="rail-step">대기</span>
+      <div class="bench-stage-col">
+        <section class="card cam-panel" id="sec-cameras" data-tabs="setup prepare recording" aria-labelledby="h-cams">
+          <h2 id="h-cams" class="bench-sr-only">실시간 카메라</h2>
+          <p id="cam-note" class="bench-sr-only">작업대 카메라(8767)를 확인하는 중입니다.</p>
+          <div class="cam-stage">
+            <div id="cam-grid" class="cam-grid"></div>
           </div>
-        </div>
-        <dl class="kv" style="margin-top:10px">
-          <dt>진행 상태</dt><dd id="ev-status" aria-live="polite">확인 중</dd>
-          <dt>팔</dt><dd id="ev-arm" class="mono">미확인</dd>
-          <dt>세션 폴더</dt><dd id="ev-folder" class="mono">미확인</dd>
-          <dt>에피소드 · 크기</dt><dd id="ev-dataset" class="mono">미확인</dd>
-          <dt>안전 종료 · 원인</dt><dd id="ev-safe-end">미확인</dd>
-          <dt>자동 홈 복귀</dt><dd id="ev-auto-home">대기</dd>
-          <dt>포즈·전송</dt><dd id="ev-extra" class="quiet">미확인</dd>
-        </dl>
-        <div id="ev-restore" class="alert crit" role="alert" hidden></div>
-        <div id="ev-manual" class="alert warn" role="alert" hidden></div>
-        <div id="ev-seal" class="alert good" role="status" hidden></div>
-        <pre id="ev-log-tail" class="mono quiet" style="white-space:pre-wrap;margin-top:8px;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;max-height:180px;overflow:auto" hidden></pre>
-        <div id="post-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px" hidden>
-          <button type="button" id="next-ep-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">다음 회차 준비 (수집명 +1)</button>
-          <button type="button" id="copy-transfer-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">모델 PC 반입 명령 복사</button>
-          <button type="button" id="ev-delete-empty-btn" class="btn-tool" data-tone="warn" style="min-height:40px;font-size:.9rem" hidden>빈 데이터셋 삭제 (0회)</button>
-        </div>
-      </section>
+        </section>
+
+        <section class="card" id="sec-evidence" data-tabs="result" aria-labelledby="h-ev" hidden>
+          <div class="goal-head">
+            <h2 id="h-ev" style="margin:0">녹화 결과 · 회차 증거</h2>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <span class="ui-tag" id="hdr-auto-home">자동 홈: 대기</span>
+              <span id="rail-ev" class="rail-step">대기</span>
+            </div>
+          </div>
+          <dl class="kv" style="margin-top:10px">
+            <dt>진행 상태</dt><dd id="ev-status" aria-live="polite">확인 중</dd>
+            <dt>팔</dt><dd id="ev-arm" class="mono">미확인</dd>
+            <dt>세션 폴더</dt><dd id="ev-folder" class="mono">미확인</dd>
+            <dt>에피소드 · 크기</dt><dd id="ev-dataset" class="mono">미확인</dd>
+            <dt>안전 종료 · 원인</dt><dd id="ev-safe-end">미확인</dd>
+            <dt>자동 홈 복귀</dt><dd id="ev-auto-home">대기</dd>
+            <dt>포즈·전송</dt><dd id="ev-extra" class="quiet">미확인</dd>
+          </dl>
+          <div id="ev-restore" class="alert crit" role="alert" hidden></div>
+          <div id="ev-manual" class="alert warn" role="alert" hidden></div>
+          <div id="ev-seal" class="alert good" role="status" hidden></div>
+          <pre id="ev-log-tail" class="mono quiet" style="white-space:pre-wrap;margin-top:8px;padding:8px;background:var(--ground-deep);border:1px solid var(--bd);border-radius:6px;max-height:180px;overflow:auto" hidden></pre>
+          <div id="post-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px" hidden>
+            <button type="button" id="next-ep-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">다음 회차 준비 (수집명 +1)</button>
+            <button type="button" id="copy-transfer-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">모델 PC 반입 명령 복사</button>
+            <button type="button" id="ev-delete-empty-btn" class="btn-tool" data-tone="warn" style="min-height:40px;font-size:.9rem" hidden>빈 데이터셋 삭제 (0회)</button>
+          </div>
+        </section>
+
+        <section class="card live-log-panel" id="sec-live-log" aria-labelledby="h-live-log">
+          <div class="live-log-head">
+            <div class="live-log-title">
+              <h2 id="h-live-log" class="goal-kicker">실시간 로그</h2>
+              <span id="live-log-count" class="ui-tag mono">0줄</span>
+              <span id="live-log-file" class="quiet mono" hidden></span>
+            </div>
+            <div class="live-log-tools">
+              <div id="live-log-filters" class="live-log-filters" role="group" aria-label="로그 필터">
+                <button type="button" class="pill-btn active" data-log-filter="all" aria-pressed="true">전체</button>
+                <button type="button" class="pill-btn" data-log-filter="session" aria-pressed="false">세션·로봇</button>
+                <button type="button" class="pill-btn" data-log-filter="config" aria-pressed="false">설정·맵</button>
+                <button type="button" class="pill-btn" data-log-filter="pipeline" aria-pressed="false">전달·HF</button>
+                <button type="button" class="pill-btn" data-log-filter="error" aria-pressed="false">주의·오류</button>
+              </div>
+              <label class="live-log-check"><input type="checkbox" id="live-log-autoscroll" checked><span>자동</span></label>
+              <button type="button" id="live-log-copy-btn" class="btn-tool btn-xs">복사</button>
+              <button type="button" id="live-log-clear-btn" class="btn-tool btn-xs">지우기</button>
+              <button type="button" id="live-log-toggle" class="btn-tool btn-xs" aria-expanded="true">접기</button>
+            </div>
+          </div>
+          <div id="live-log-body" class="live-log-body mono" role="log" aria-live="polite">로그를 불러오는 중...</div>
+        </section>
+      </div>
 
       <aside id="bench-sidebar" class="bench-sidebar" aria-label="작업대 정보 사이드바">
         <div id="arm-card-bar" class="arm-card-bar" role="group" aria-label="연결된 암 선택"></div>
         <section class="card sb-sec goal-panel" id="sec-goal" aria-labelledby="h-goal">
           <div class="goal-head">
-            <h2 id="h-goal" class="goal-kicker">목표</h2>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <h2 id="h-goal" class="goal-kicker">목표</h2>
+              <span id="goal-arm-badge" class="ui-tag mono" hidden></span>
+              <div id="goal-mode-pills" class="goal-mode-pills" role="group" aria-label="목표 지정 방식">
+                <button type="button" class="pill-btn active" data-goal-mode="card" aria-pressed="true">카드</button>
+                <button type="button" class="pill-btn" data-goal-mode="custom" aria-pressed="false">직접(기타)</button>
+              </div>
+            </div>
             <button type="button" id="swap-zones-btn" class="btn-tool btn-xs" title="집을 곳과 놓을 곳을 서로 바꿉니다 [Alt+W]" aria-pressed="false" hidden>⇄ 집기↔놓기 스왑<kbd class="kbd-hint">Alt+W</kbd></button>
           </div>
           <div id="goal-empty" class="goal-empty">
             <div class="goal-line goal-pick">
-              <span class="goal-tag">집을 곳</span>
+              <span class="goal-tag">① 집을 곳</span>
               <strong class="goal-name">—</strong>
             </div>
             <div class="goal-line goal-place">
-              <span class="goal-tag">놓을 곳</span>
+              <span class="goal-tag">② 놓을 곳</span>
               <strong class="goal-name">—</strong>
             </div>
-            <p class="goal-empty-msg quiet">과제를 고르면 목표 구역과 회차가 표시됩니다</p>
+            <p class="goal-empty-msg quiet">과제를 고르거나 직접(기타)에서 출발·도착 칸을 지정하세요</p>
             <button type="button" id="goal-pick-btn" class="btn-primary">과제 고르기</button>
           </div>
           <div id="goal-active" class="goal-active" hidden>
             <div class="goal-line goal-pick">
-              <span class="goal-tag">집을 곳</span>
+              <span class="goal-tag">① 집을 곳</span>
               <strong id="goal-origin-name" class="goal-name">—</strong>
               <span id="goal-origin-sub" class="goal-sub mono" hidden></span>
             </div>
             <div class="goal-line goal-place">
-              <span class="goal-tag">놓을 곳</span>
+              <span class="goal-tag">② 놓을 곳</span>
               <strong id="goal-target-name" class="goal-name">—</strong>
               <span id="goal-target-sub" class="goal-sub mono" hidden></span>
             </div>
@@ -155,6 +188,28 @@
               <span id="goal-rep-count" class="mono">0 / 0 회</span>
               <div class="prog-track goal-prog-track"><div class="prog-fill" id="goal-prog-fill" style="width:0%"></div></div>
             </div>
+          </div>
+          <div id="goal-provenance" class="goal-prov mono quiet" hidden></div>
+          <div id="goal-custom-panel" class="goal-custom-box" hidden>
+            <div class="goal-custom-head">
+              <span class="quiet">배치도 클릭 대상:</span>
+              <div class="dir-toggle" role="group" aria-label="직접 목표 배치도 클릭 대상">
+                <button type="button" class="pill-btn" data-custom-pick="origin" aria-pressed="false">① 출발 찍기</button>
+                <button type="button" class="pill-btn active" data-custom-pick="target" aria-pressed="true">② 도착 찍기</button>
+              </div>
+              <button type="button" id="custom-goal-reset-btn" class="btn-tool btn-xs">기본값</button>
+            </div>
+            <div class="goal-custom-grid">
+              <label class="jc-field" style="flex-direction:column;align-items:stretch"><span>① 집을 곳 (origin)</span>
+                <select id="custom-origin-sel"></select>
+                <input type="text" id="custom-origin-text" placeholder="예: belt, tmp-a-1" hidden>
+              </label>
+              <label class="jc-field" style="flex-direction:column;align-items:stretch"><span>② 놓을 곳 (target)</span>
+                <select id="custom-target-sel"></select>
+                <input type="text" id="custom-target-text" placeholder="예: ship-h1r0-l0" hidden>
+              </label>
+            </div>
+            <input type="text" id="custom-task-text" placeholder="작업 지시문 (비워두면 출발→도착으로 자동 생성)">
           </div>
         </section>
 
@@ -194,6 +249,8 @@
                 <a href="/status.json" target="_blank" rel="noopener">status</a>
                 <a href="/choices.json" target="_blank" rel="noopener">choices</a>
                 <a href="/cameras.json" target="_blank" rel="noopener">cameras</a>
+                <a href="/api/cell_map" target="_blank" rel="noopener">cell_map</a>
+                <a href="/api/logs" target="_blank" rel="noopener">logs</a>
               </div>
               <span class="quiet" style="font-size:.74rem">rosy-omx-bench-record.service</span>
             </div>
@@ -211,6 +268,17 @@
               <dt>에피소드</dt><dd id="sb-param-episodes">기본회</dd>
               <dt>회차/대기</dt><dd id="sb-param-timing">회차 길이 기본 · 사이 대기 기본</dd>
             </dl>
+            <div id="sb-reset-bar" class="sb-reset-bar">
+              <button type="button" id="sb-apply-rec-defaults-btn" class="btn-tool btn-xs" title="추천 속도 60°/s 및 기본 config/caps 적용">권장값(60°/s)</button>
+              <button type="button" id="sb-factory-reset-btn" class="btn-tool btn-xs" data-tone="warn" title="속도·집게·임시 설정을 공장 초기값으로 되돌립니다">공장 초기화</button>
+            </div>
+            <div id="sb-reset-confirm" class="reset-confirm-bar" hidden>
+              <span id="sb-reset-confirm-msg" class="quiet">공장 초기값(속도 25°/s·저장된 집게·기본 설정)으로 복원할까요?</span>
+              <div style="display:flex;gap:6px;flex:0 0 auto">
+                <button type="button" id="sb-reset-confirm-yes" class="btn-primary btn-xs">초기화 확인</button>
+                <button type="button" id="sb-reset-confirm-no" class="btn-tool btn-xs">취소</button>
+              </div>
+            </div>
             <div id="sb-speed-box" class="sb-param-block">
               <div class="sb-param-head"><span>추종 속도 (teleop)</span><span id="sb-speed-detail" class="mono quiet"></span></div>
               <div id="sb-speed-pills" class="speed-pills" role="group" aria-label="추종 속도 단계"></div>
@@ -218,7 +286,10 @@
             <div id="sb-grip-map" class="sb-param-block">
               <div class="sb-param-head">
                 <span>집게 폭 매핑 (리더 ↔ 팔로워)</span>
-                <button type="button" id="sb-grip-save-btn" class="btn-primary btn-xs">집게 폭 저장</button>
+                <div class="sb-param-actions">
+                  <button type="button" id="sb-grip-reset-btn" class="btn-tool btn-xs" title="저장된 공장 초기 집게 값으로 복원">기본값</button>
+                  <button type="button" id="sb-grip-save-btn" class="btn-primary btn-xs">집게 폭 저장</button>
+                </div>
               </div>
               <div class="grip-map-grid mono">
                 <label class="jc-field"><span>리더 닫힘</span><input type="number" id="gm-lc" class="jc-inp" min="0" max="4095" step="1"></label>
@@ -299,7 +370,7 @@
         <button type="button" id="reason-close-btn" class="btn-tool btn-xs" aria-label="알림 닫기" hidden>닫기<kbd class="kbd-hint">X</kbd></button>
       </div>
     </div>
-    <div id="activity-log-bar" class="activity-log-bar">
+    <div id="activity-log-bar" class="activity-log-bar" title="클릭하여 하단 실시간 로그 펼치기/이동">
       <span class="status-label">기록</span><span id="activity-log-text" class="activity-log-text mono" data-tone="muted">대기 중</span>
     </div>
   </footer>
@@ -386,6 +457,14 @@
                 <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
                   <button type="button" id="apply-rec-btn" class="btn-tool">추천 설정 자동 세팅</button>
                   <button type="button" id="save-preset-btn" class="btn-tool">현재 설정 저장</button>
+                  <button type="button" id="factory-reset-btn" class="btn-tool" data-tone="warn">공장 초기화</button>
+                </div>
+                <div id="drawer-reset-confirm" class="reset-confirm-bar" style="margin-bottom:10px" hidden>
+                  <span id="drawer-reset-confirm-msg" class="quiet">저장된 프리셋·속도(25°/s)·집게·오버라이드를 공장 초기값으로 복원할까요?</span>
+                  <div style="display:flex;gap:6px;flex:0 0 auto">
+                    <button type="button" id="drawer-reset-confirm-yes" class="btn-primary btn-xs">초기화 확인</button>
+                    <button type="button" id="drawer-reset-confirm-no" class="btn-tool btn-xs">취소</button>
+                  </div>
                 </div>
                 <fieldset class="group">
                   <legend>녹화 설정 · LeRobot 파라미터 · 역방향 리플레이</legend>
@@ -575,10 +654,11 @@
     <div id="map-modal-backdrop" class="drawer-backdrop"></div>
     <div class="map-modal-panel">
       <div class="drawer-panel-head">
-        <h2 id="map-modal-title" style="margin:0">작업대 배치도 확대 보기</h2>
+        <h2 id="map-modal-title" style="margin:0">작업대 배치도 · 출처 상세 보기</h2>
         <button type="button" id="map-modal-close-btn" class="btn-tool btn-xs" aria-label="배치도 닫기">닫기 (Esc)</button>
       </div>
       <div id="map-modal-body" class="map-modal-body"></div>
+      <div id="map-modal-sources" class="map-modal-sources mono quiet"></div>
     </div>
   </div>
 </div>
@@ -589,7 +669,8 @@
 <script src="/bench_record_app.js"></script>
 <script src="/bench_record_params.js"></script>
 <script src="/bench_record_drawers.js"></script>
-<script src="/bench_record_cam.js"></script>
 <script src="/bench_record_pipeline.js"></script>
+<script src="/bench_record_log_reset.js"></script>
+<script src="/bench_record_cam.js"></script>
 </body>
 </html>

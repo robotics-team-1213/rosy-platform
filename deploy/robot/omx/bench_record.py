@@ -48,9 +48,10 @@ from bench_record_http import PAGE, make_server  # noqa: E402,F401
 from bench_record_replay import apply_task_override, transform_replay  # noqa: E402
 from bench_record_pipeline import BenchPipelineMixin  # noqa: E402
 from bench_record_safety import end_verdict  # noqa: E402
+from bench_record_workspace import BenchWorkspaceMixin, prepare_session_task_card  # noqa: E402
 
 
-class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin, BenchLinkMixin, BenchPipelineMixin):
+class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin, BenchLinkMixin, BenchPipelineMixin, BenchWorkspaceMixin):
     def __init__(self, config, *, run=systemctl, popen=subprocess.Popen, clock=time.time, procs=proc_cmdlines,
                  mounts=proc_mounts):
         self.python, self.prep, self._config = config["python"], Path(config["prep_root"]).expanduser(), dict(config)
@@ -221,7 +222,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
         if task_override is not None:
             if not isinstance(task_override, dict):
                 raise ValueError("task_override는 JSON 객체여야 합니다")
-            if task_override and not task:
+            if task_override and not task and task_override.get("custom") is not True:
                 raise ValueError("집기/놓기 스왑 또는 목표 변경은 작업 카드 선택이 필요합니다")
         homed = self._pre_start_home(body, replay_path)
         if body.get("align_leader") is True:
@@ -249,31 +250,10 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 effective_cfg = config_bytes
                 effective_task = task
                 snap_files = [("caps.json", caps_bytes)]
-                ds_cfg = cfg_data.get("dataset") if isinstance(cfg_data.get("dataset"), dict) else {}
-                eff_task_id, eff_root_prefix, eff_target_eps = None, ds_cfg.get("root"), overrides.get("num_episodes") or ds_cfg.get("num_episodes")
-                if effective_task and (overrides or task_override):
-                    import yaml
-                    tc_data = yaml.safe_load(Path(effective_task).read_text(encoding="utf-8"))
-                    if not isinstance(tc_data, dict):
-                        raise ValueError("과제 카드 YAML 형식이 올바르지 않습니다")
-                    if overrides:
-                        tc_data.setdefault("record", {}).update(overrides)
-                    if task_override:
-                        tc_data = apply_task_override(tc_data, task_override)
-                    rec_blk = tc_data.get("record") or {}
-                    eff_task_id = tc_data.get("task_id")
-                    eff_root_prefix = rec_blk.get("root_prefix") or eff_root_prefix
-                    eff_target_eps = rec_blk.get("num_episodes") or eff_target_eps
-                    snap_files.append(("effective-task-card.yaml", json.dumps(tc_data, indent=2, ensure_ascii=False).encode("utf-8")))
-                    effective_task = str(snap / "effective-task-card.yaml")
-                elif effective_task and task_card:
-                    eff_task_id = task_card.get("task_id")
-                    eff_target_eps = task_card.get("num_episodes") or eff_target_eps
-                    try:
-                        import yaml
-                        eff_root_prefix = (yaml.safe_load(task_card.get("raw") or "") or {}).get("record", {}).get("root_prefix") or eff_root_prefix
-                    except Exception:
-                        pass
+                eff_task_id, eff_root_prefix, eff_target_eps, effective_task, tc_snap = prepare_session_task_card(
+                    effective_task, task_card, task_override, body["arm"], cfg_data, overrides, snap)
+                if tc_snap is not None:
+                    snap_files.append(tc_snap)
                 if overrides or cam_rebinds:
                     if overrides:
                         cfg_data.setdefault("dataset", {}).update(overrides)
@@ -306,6 +286,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                           "link": body.get("link_only") is True}
             self.child, self.abort = None, False
             self.state["claim"] = self._claim_bench()  # the session's own claim: its stop intent and its auto-home record are keyed by it
+        self._log_event("session", "info", f"{body['arm']} 세션 시작: {body['name']} ({eff_task_id or '자유'})")
         seal = [self.python, str(HERE / "record_seal.py"), "--session-dir", str(folder), "--name", body["name"],
                 "--rig-revision", body["rig_revision"], *[a for c in calibrations for a in ("--calibration", c)]]
         try:
@@ -378,6 +359,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
             with (folder / "bench.log").open("ab") as log:
                 sealed = self.popen(seal, cwd=folder, stdout=log, stderr=subprocess.STDOUT).wait()
             self._publish_end(status="sealed" if sealed == 0 else "seal_failed", seal_exit=sealed)
+            self._log_event("session", "good" if sealed == 0 else "crit", f"세션 종료: {'sealed' if sealed == 0 else 'seal_failed'} ({folder.name})")
             if sealed == 0:
                 self._auto_home_after_session()
                 self._on_session_sealed(folder)

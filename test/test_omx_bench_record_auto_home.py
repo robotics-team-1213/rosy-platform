@@ -153,8 +153,9 @@ def test_bench_context_precedes_phase_controls_and_sidebar_has_no_duplicate_summ
     html = (ROOT / 'deploy/robot/omx/bench_record.html').read_text(encoding='utf-8')
     css = (ROOT / 'deploy/robot/omx/bench_record.css').read_text(encoding='utf-8')
     context = re.search(r'<div id="hdr-row-menu"[^>]*>(.*?)<section id="hdr-row-ops"', html, re.S).group(1)
+    assert 'id="rail-arm-pills"' not in context
     ops = re.search(r'<section id="hdr-row-ops"[^>]*>(.*?)</section>', html, re.S).group(1)
-    context_order = ('h1', 'rail-arm-pills', 'hdr-task-summary', 'goal-name-btn', 'ftr-server',
+    context_order = ('h1', 'hdr-task-summary', 'goal-name-btn', 'ftr-server',
                      'hdr-cam-health', 'hdr-help-btn', 'btn-drawer-menu', 'hdr-refresh-btn')
     positions = [context.index('<h1>' if marker == 'h1' else f'id="{marker}"') for marker in context_order]
     assert positions == sorted(positions)

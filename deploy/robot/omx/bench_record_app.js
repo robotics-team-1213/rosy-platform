@@ -244,9 +244,9 @@ function autoCollectionName(){
   if(nameManuallyEdited&&f.name.value.trim())return;
   const arm=f.arm.value;
   if(!arm)return;
-  const t=f.task.value;
+  const t=(window.goalMode==='custom')?'':f.task.value;
   const c=choices&&choices.task_cards&&t?choices.task_cards[t]:null;
-  const tid=(c&&c.valid&&c.task_id)?String(c.task_id):'teleop';
+  const tid=(c&&c.valid&&c.task_id)?String(c.task_id):((window.goalMode==='custom'&&window.customGoal?.origin&&window.customGoal?.target_slot)?(window.customGoal.origin+'-to-'+window.customGoal.target_slot):'teleop');
   const d=new Date();
   const mm=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
   const hh=String(d.getHours()).padStart(2,'0'), mi=String(d.getMinutes()).padStart(2,'0');
@@ -293,12 +293,6 @@ function applyPresetOrRecommended(preferRec){
 }
 
 function syncArmPillsUI(){
-  const cur=f.arm.value;
-  for(const btn of document.querySelectorAll('#rail-arm-pills button[data-arm]')){
-    const on=btn.dataset.arm===cur;
-    btn.classList.toggle('active',on);
-    btn.setAttribute('aria-pressed',on?'true':'false');
-  }
   if(typeof renderArmCards==='function')renderArmCards();
 }
 
@@ -346,6 +340,9 @@ function selectArm(arm){
 
 function selectTask(val,opts){
   window.zoneSwapped=false;
+  if(typeof window.setGoalMode==='function'&&window.goalMode==='custom'&&!(opts&&opts.keepCustom)){
+    window.setGoalMode('card');
+  }
   if(!(opts&&opts.keepMapZone)){
     window.shipHold=null;
     window.mapZone=null;
@@ -464,13 +461,6 @@ async function loadChoices(){
         const sp=document.createElement('span');sp.className='mono';sp.textContent=a;
         lbl.append(cb,sp);$('arm-checks').append(lbl);
       }
-      $('rail-arm-pills').innerHTML='';
-      for(const a of choices.arms){
-        const btn=document.createElement('button');btn.type='button';btn.className='pill-btn mono';btn.dataset.arm=a;
-        btn.textContent=a==='arm_ab'?'arm_a+b':a;
-        btn.addEventListener('click',()=>selectArm(a));
-        $('rail-arm-pills').append(btn);
-      }
       if(defaultArm)f.arm.value=defaultArm;
       syncArmPillsUI();
       if(typeof renderArmCards==='function')renderArmCards();
@@ -520,6 +510,7 @@ function init(){
   setInterval(pollStatus,2000);
   pollArms();
   if(typeof loadGripMaps==='function')loadGripMaps();
+  if(typeof loadCellMap==='function')loadCellMap();
   pollCameras();
   setInterval(pollCameras,1500);
   setInterval(tickCameraFrames,150);

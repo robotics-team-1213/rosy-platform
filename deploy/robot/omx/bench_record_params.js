@@ -24,10 +24,6 @@ function renderArmCards(){
   const connArms=arms.filter(a=>armConnectivity(a).connected===true);
   const offArms=arms.filter(a=>armConnectivity(a).connected===false);
   const visible=(connArms.length>0&&!showOfflineArms)?arms.filter(a=>armConnectivity(a).connected===true||a===curArm):arms;
-  for(const btn of document.querySelectorAll('#rail-arm-pills button[data-arm]')){
-    const a=btn.dataset.arm;
-    btn.hidden=(connArms.length>0&&!showOfflineArms&&armConnectivity(a).connected!==true&&a!==curArm);
-  }
   const camTok=a=>{
     const req=typeof window.expectedCamsForArm==='function'?window.expectedCamsForArm(a):[];
     if(!req.length||typeof lastCamState!=='object'||!lastCamState)return '';

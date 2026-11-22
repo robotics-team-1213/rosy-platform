@@ -63,6 +63,8 @@ class BenchLinkMixin:
                 tmp = path.with_suffix(".json.tmp")
                 tmp.write_text(json.dumps({"stage": raw_stage}) + "\n", encoding="utf-8")
                 os.replace(tmp, path)
+        if hasattr(self, "_log_event"):
+            self._log_event("config", "info", f"{arm} 추종 속도 -> {raw_stage if raw_stage is not None else '기본(25)'}°/s")
         return self.status()
 
     def grip_maps(self):
@@ -110,10 +112,14 @@ class BenchLinkMixin:
                 if not isinstance(raw, dict):
                     raise ValueError(f"손상된 mount 파일: {mp.name}")
                 data = raw
+            from bench_record_workspace import snapshot_factory_grip
+            snapshot_factory_grip(self.prep, arm, data.get("gripper"))
             data["gripper"] = clean
             tmp = mp.with_name(mp.name + ".tmp")
             tmp.write_text(json.dumps(data, ensure_ascii=False) + "\n", encoding="utf-8")
             os.replace(tmp, mp)
+        if hasattr(self, "_log_event"):
+            self._log_event("config", "info", f"{arm} 집게 폭 저장 ({clean['follower_closed']}..{clean['follower_open']})")
         return {"saved": arm, "gripper": clean, **self.grip_maps()}
 
     def prepare(self, body):

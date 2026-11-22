@@ -226,7 +226,6 @@ function validateStart(){
   if(sfs)sfs.disabled=busyNow;
   const rfs=$('records-fieldset');
   if(rfs)rfs.disabled=busyNow;
-  for(const b of document.querySelectorAll('#rail-arm-pills button[data-arm]'))b.disabled=busyNow;
   for(const b of document.querySelectorAll('[data-drawer-btn]'))b.disabled=busyNow&&(b.dataset.drawerBtn!=='records');
   for(const b of document.querySelectorAll('#sec-goal button,#sec-guide button'))b.disabled=busyNow;
   updateGoalSummaryRows();

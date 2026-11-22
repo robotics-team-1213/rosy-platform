@@ -39,7 +39,12 @@ def _read_task_card(path):
     card = {"valid": True, "task_id": data["task_id"], "revision": data["revision"],
             "single_task": data["single_task"], "episode_time_s": rec["episode_time_s"],
             "reset_time_s": rec["reset_time_s"], "num_episodes": rec["num_episodes"],
-            "raw": path.read_text(encoding="utf-8-sig")}
+            "source_file": f"tasks/{path.name}", "repo_id": str(rec.get("repo_id") or ""),
+            "root_prefix": str(rec.get("root_prefix") or ""), "raw": path.read_text(encoding="utf-8-sig")}
+    if isinstance(data.get("known_limits"), list):
+        card["known_limits"] = [str(x) for x in data["known_limits"][:4]]
+    if isinstance(data.get("success"), dict) and isinstance(data["success"].get("end_state"), str):
+        card["success_end_state"] = data["success"]["end_state"]
     fallbacks = {"origin": shot.get("source"), "target_slot": shot.get("target"), "shot_arm": shot.get("arm")}
     for key in ("origin", "target_slot", "target_layer", "shot_arm", "home_pose"):
         val = layout.get(key) if layout.get(key) not in (None, "") else (data.get(key) if data.get(key) not in (None, "") else fallbacks.get(key))
@@ -379,7 +384,8 @@ class BenchInspectMixin:
     def _recommend(self, arm, binding):
         cfgs, caps_list, cals = binding.get("configs", []), binding.get("caps", []), binding.get("calibrations", [])
         pick_cfg = next((c for c in cfgs if f"arm-{ARMS.get(arm, 'bi')}" in c or c.endswith("-bi-ab.json")), cfgs[0] if cfgs else "")
-        pick_cap = max(caps_list, key=lambda n: (self.prep / n).stat().st_mtime) if caps_list else ""
+        base_caps = [c for c in caps_list if "-custom-" not in c] or caps_list
+        pick_cap = max(base_caps, key=lambda n: (self.prep / n).stat().st_mtime) if base_caps else ""
         robots = [c for c in cals if Path(c).parent.parent.name == "robots"]
         leaders = [c for c in cals if Path(c).parent.parent.name == "teleoperators"]
         want_l = {"arm_a": ("arm_a_leader", "omx_leader_arm"), "arm_b": ("arm_b_leader",),
