@@ -53,6 +53,7 @@ def test_image_dockerfile_holds_the_pins_ci_used_to_install():
     for needle in ("device-python-requirements.txt", "--require-hashes", "receiver-crypto-requirements.txt",
                    "requirements-cell.lock", "playwright==1.64.1", "pytest-xdist", "httpx==0.28.1", "oauthlib==4.0.0",
                    "joserfc==1.7.5", "rauc=1.11.3-2", "fonts-noto-cjk", "playwright install --with-deps chromium",
+                   "--only-shell", "--no-install-recommends", "fonts-wqy-zenhei", "os.link",
                    "manylinux_2_28_x86_64", "PYTHONPATH=/opt/rosy-ci/receiver-crypto"):
         assert needle in text, needle
 
@@ -61,4 +62,5 @@ def test_image_workflow_pushes_with_the_job_token_and_prints_the_digest():
     doc = yaml.safe_load((ROOT / ".github/workflows/build-ci-image.yml").read_text(encoding="utf-8"))
     assert doc["permissions"] == {"contents": "read", "packages": "write"}
     text = (ROOT / ".github/workflows/build-ci-image.yml").read_text(encoding="utf-8")
-    assert "github.token" in text and "RepoDigests" in text and "docker push" in text
+    for needle in ("github.token", "type=registry", "compression=zstd", "containerimage.digest", "buildx"):
+        assert needle in text, needle
