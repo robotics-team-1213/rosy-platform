@@ -306,20 +306,10 @@ def choose(
         if isinstance(planned, str):
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": f"planner: {planned}"})
             continue
-        usable.append(
-            {
-                "object": o,
-                "entry": entry,
-                "offset": offset,
-                "bias_region": region,
-                "bias_mm": bias,
-                "library": planned[0],
-                "pick": planned[1],
-                "place": planned[2],
-                "approach_m": planned[3],
-                "plan": planned[5],
-            }
-        )
+        usable.append({
+            "object": o, "entry": entry, "offset": offset, "bias_region": region, "bias_mm": bias,
+            "library": planned[0], "pick": planned[1], "place": planned[2], "approach_m": planned[3], "plan": planned[5],
+        })
     return usable, refused
 
 
@@ -366,18 +356,22 @@ def verify_placed(cell, config, calibration, dest_site, place_xy, roi, catalog, 
            <= tolerance for o in before_objects):
         return {"found": True, "inside": False, "verified": False,
                 "basis": "unverified: destination occupied before transfer", "frame": frame}
-    if source_site == dest_site and source_roi == roi:
-        source_objects = objects
-    else:
-        _, _, source_objects, error = obs_fn(cell, config, calibration, source_site, source_roi, catalog,
-                                             image=after["image"])
-        if error:
-            return {"found": False, "inside": False, "verified": False, "basis": f"unverified: {error}",
-                    "frame": frame}
-    if any(o.get("object") == object_id and 1000 * math.dist(o["raw_m"], source_xy) <= tolerance
-           for o in source_objects):
-        return {"found": True, "inside": False, "verified": False,
-                "basis": "unverified: source still occupied", "frame": frame}
+    sites_cfg = config.get("sites") or {}
+    base_src = str(source_site).rsplit("-l", 1)[0]
+    src_cfg = {**(sites_cfg.get(base_src) or {}), **(sites_cfg.get(source_site) or {})}
+    if not (int(src_cfg.get("layers_below") or 0) > 0 or int(src_cfg.get("layer") or 0) > 0):
+        if source_site == dest_site and source_roi == roi:
+            source_objects = objects
+        else:
+            _, _, source_objects, error = obs_fn(cell, config, calibration, source_site, source_roi, catalog,
+                                                 image=after["image"])
+            if error:
+                return {"found": False, "inside": False, "verified": False, "basis": f"unverified: {error}",
+                        "frame": frame}
+        if any(o.get("object") == object_id and 1000 * math.dist(o["raw_m"], source_xy) <= tolerance
+               for o in source_objects):
+            return {"found": True, "inside": False, "verified": False,
+                    "basis": "unverified: source still occupied", "frame": frame}
     near = [
         (1000 * math.dist((o["raw_m"][0] - bx / 1000, o["raw_m"][1] - by / 1000), place_xy), o)
         for o in objects

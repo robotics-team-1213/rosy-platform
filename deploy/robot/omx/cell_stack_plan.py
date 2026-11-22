@@ -1,6 +1,12 @@
 """Pure goal-driven stacking plan: from any observed state to goal stacks, serial moves, same move shape as cell_move_order."""
 
-from cell_move_order import HARBOR_ARMS, planning_sites, stack_key, temp_spots
+import argparse
+import json
+from pathlib import Path
+import sys
+from types import SimpleNamespace
+
+from cell_move_order import HARBOR_ARMS, planning_sites, resolve_order, stack_key, temp_spots
 
 PARK_WIDTH = 4  # temp places tried per blocker before backing up
 NODE_BUDGET = 20000
@@ -81,3 +87,47 @@ def plan_to_goal(layout, state, goal, can, avoid=()):
 
     moves = go(dict(state), [], 0)
     return (moves, None) if moves is not None else (None, failures[0] if failures else "NO_LEGAL_PLAN")
+
+
+def plan_from_spec(spec: dict) -> dict:
+    """Read-only JSON wrapper for `plan_to_goal` / `resolve_order` (`--plan-json` & `cell_task_runner`)."""
+    sites = spec.get("sites") or {}
+    stack_at = {(s["stack"], s["layer"]): n for n, s in sites.items() if "stack" in s and "layer" in s}
+    layout = SimpleNamespace(sites=sites, stack_at=stack_at)
+    state, avoid = dict(spec.get("state") or {}), tuple(spec.get("avoid") or ())
+
+    def can(src, dst, _here=None):
+        def arms_of(name):
+            info = sites.get(name) or {}
+            if info.get("arms"):
+                return set(info["arms"])
+            if info.get("arm"):
+                return {info["arm"]}
+            return set(HARBOR_ARMS.values())
+
+        return arms_of(src) & arms_of(dst)
+
+    mode = str(spec.get("mode") or "goal")
+    if mode == "goal":
+        moves, why = plan_to_goal(layout, state, dict(spec.get("goal") or {}), can, avoid)
+        return {"ok": why is None, "mode": mode, "moves": moves, "why": why}
+    if mode in ("outbound", "rehandle"):
+        req = {**dict(spec.get("request") or {}), **({"reorder": True} if mode == "rehandle" else {})}
+        out, why = resolve_order(spec, layout, state, req, can, avoid)
+        return {"ok": why is None, "mode": mode, "moves": None if out is None else out["moves"],
+                "order_source": None if out is None else out["order_source"], "why": why}
+    raise ValueError(f"unsupported plan mode {mode!r}")
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--plan-json", required=True, type=Path)
+    args = ap.parse_args(argv)
+    spec = json.loads(args.plan_json.read_text(encoding="utf-8"))
+    out = plan_from_spec(spec)
+    print(json.dumps(out, indent=1, ensure_ascii=False))
+    return 0 if out["ok"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

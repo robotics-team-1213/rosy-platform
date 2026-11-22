@@ -24,6 +24,7 @@ from experiment_profiles import Profiles
 from experiment_owner_status import OwnerStatus
 from experiment_studies import Studies
 from experiment_hub import Hub
+from experiment_collect_plans import CollectPlans
 
 
 def _worker_log_tail(root, max_chars=240):
@@ -75,6 +76,7 @@ class Center:
         self.reviews = Reviews(self.root, self.connect, self.lock)
         self.profiles = Profiles(self.connect, self.lock)
         self.hub = Hub(self)
+        self.collect_plans = CollectPlans(self.root, self.lock)
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS datasets (id TEXT PRIMARY KEY, document TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL,'

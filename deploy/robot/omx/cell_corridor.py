@@ -57,7 +57,11 @@ def corridor(paths, to_px, shape, roi, half_mm: float = HALF_WIDTH_MM) -> np.nda
         pixels = [to_px(p) for p in run]
         if any(p is None for p in pixels):
             continue  # off the map: no view to check against; check() counts it
-        a, b = pixels[0], to_px((run[0][0] + 0.01, run[0][1]))
+        a = pixels[0]
+        b = next((p for dx, dy in ((0.01, 0.0), (-0.01, 0.0), (0.0, 0.01), (0.0, -0.01))
+                  if (p := to_px((run[0][0] + dx, run[0][1] + dy))) is not None), None)
+        if b is None:
+            continue
         width = max(1, int(round(2 * half_mm * (((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5) / 10.0)))
         line = np.round(np.asarray(pixels, float) - [rx0, ry0]).astype(np.int32)
         cv2.polylines(out, [line], False, 1, width)

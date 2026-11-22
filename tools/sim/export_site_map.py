@@ -20,15 +20,15 @@ ZONES = (("yard", "장치 야드", "보관"), ("temp_a", "임시 장치 A", "임
 STAND_ARMS = ["arm_a"]  # user, 2026-11-17: the stand is reached by arm A only
 NOT_PLACES = (("belt", "공급 경로"), ("supply_s", "공급 작업대 S"), ("ship_stern", "선미"), ("ship_bow", "선수"), ("vehicle_tray", "이송 차량 짐칸"))
 # station_zones.yaml ids (values and API unchanged there); null = no place in this map
-LEGACY_STATION_ZONES = {"EXP_S1": "stand:r1-s1", "EXP_S5_PALLET": "stand:r1-s1", "EXP_S3_BELT": "not_places:belt", "STG_C2": None, "STG_S3_WAIT": None}
+LEGACY_STATION_ZONES = {"EXP_S1": "stand:r1-s1", "EXP_S5_PALLET": "yard", "EXP_S3_BELT": "not_places:belt", "STG_C2": None, "STG_S3_WAIT": None}
 
 
 def build_zones(L):
     """Zones in schema shape: slot `yard:r1-s1`, tier `yard:r1-s1-t1`, tier item = sim site name or null.
     Hold numbers are Harbor's (columns 1-3 = hold 1), never read from the sim's ship-h<k> names."""
     recs = {r["id"]: r for r in json.loads((sites.SHIP_ASSETS / "slots.json").read_text(encoding="utf-8"))["tier_records"]}
-    # Harbor row 1 is the lowest ship y = highest fixture y = the arm_b side (computed from the records, not typed)
-    ys = sorted({r["y_mm"] for r in recs.values()})
+    # Harbor row 1 is the temp_a / arm_a side (fixture y -38 mm = ship y +38 mm = ship-h*r0); row 3 is arm_b (ship-h*r2).
+    ys = sorted({r["y_mm"] for r in recs.values()}, reverse=True)
     yard, temp, by_stack = [], {"a": [], "b": []}, {}
     for name, s in L.sites.items():
         if s["kind"] in ("ship", "temp") and "stack" in s:

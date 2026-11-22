@@ -224,7 +224,13 @@ def install_cameras_routes(app, ctx) -> None:
         active_task = next((t for t in app.state.omx_cell_tasks.values()
                             if t["cell_id"] == cell_id and t["status"] == "RUNNING"), None)
         cell_state = app.state.omx_cell_states.get(cell_id) or {}
-        if active_task is not None or cell_state.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD") or cell_state.get("amr_motion_inhibited"):
+        held_for_two_tier = (cell_id == "cell_s" and active_task is None
+                             and bool(task.get("unload_batch_id"))
+                             and cell_state.get("unload_batch_id") == task.get("unload_batch_id")
+                             and cell_state.get("phase") == "CLAIMED"
+                             and cell_state.get("robot_id") == task["robot_id"])
+        if (active_task is not None or cell_state.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD")
+                or (cell_state.get("amr_motion_inhibited") and not held_for_two_tier)):
             return {"claimed": False, "task": task, "reason": "CELL_BUSY_OR_HELD"}
         # D-1057: cell A/B release stays off until the depth acceptance; refused here, before anything in the ledger changes.
         if cell_id == "cell_ab" and os.environ.get("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
@@ -272,6 +278,7 @@ def install_cameras_routes(app, ctx) -> None:
             "dst_site": task["dst_site"],
             **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot") if task.get(k) is not None},
             "displaced_to": task.get("displaced_to"),
+            "tier_hint": task.get("tier_hint"),
             "presence": task["presence"],
         }
         return {"claimed": True, "task": task, "handoff": handoff, "gate": res["gate"]}
@@ -347,6 +354,14 @@ def install_cameras_routes(app, ctx) -> None:
                 verified = verified and isinstance(place, dict) and cell_ab_completion_verified(task, place, z_gate, verification)
             if not verified:
                 raise HTTPException(422, detail={"code": "UNVERIFIED_CELL_COMPLETION"})
+        cell_phase = phase
+        if cell_id == "cell_s" and phase == "RELEASED" and task.get("unload_batch_id"):
+            sc = (body.get("stage_result") or {}).get("source_clearance")
+            objects = sc.get("objects") if isinstance(sc, dict) else None
+            if type(objects) is not int or objects < 0:
+                raise HTTPException(422, detail={"code": "UNVERIFIED_CELL_COMPLETION"})
+            if objects > 0:
+                cell_phase = "CLAIMED"
         robot = {
             "robot_id": task["robot_id"],
             "robot_kind": task["robot_kind"],
@@ -356,13 +371,14 @@ def install_cameras_routes(app, ctx) -> None:
             "v_cmd_mps": float((amr or {}).get("v_cmd_mps", 1.0)),
         }
         state = {
-            "phase": phase,
+            "phase": cell_phase,
             "tier": task["tier"],
             "robot_id": task["robot_id"],
             "stage_id": task_id,
+            **({"unload_batch_id": task["unload_batch_id"]} if task.get("unload_batch_id") else {}),
             "goal_evidence_digest": body.get("goal_evidence_digest"),
             "reason": body.get("reason") or ("TRANSFER_CONFIRMED" if phase == "RELEASED" else "TASK_ABORTED"),
-            "amr_motion_inhibited": phase == "ABORTED",
+            "amr_motion_inhibited": cell_phase in ("ABORTED", "CLAIMED"),
         }
         res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
                                         map_version=getattr(active[2], "version", None))

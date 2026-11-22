@@ -152,6 +152,9 @@ def install_cell_tasks_routes(app, ctx) -> None:
             raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
         tier, pose = checked_task_pose({**spec, "tier": targets["tier"]}, station)
         arm_id = targets["arm_id"]
+        tier_hint = spec.get("tier_hint")
+        if tier_hint is not None and not isinstance(tier_hint, dict):
+            raise HTTPException(422, detail={"code": "INVALID_TIER_HINT"})
         directive = spec.get("directive")
         if directive is not None and (not isinstance(directive, dict)
                                       or directive.get("schema") != "rosy.omx-cell-area-xyz-directive.v1"
@@ -188,7 +191,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cable_guard_micro": bool(spec.get("cable_guard_micro", dec_row["cable_guard_micro"])),
             "decision": dec_row,
             "preset": spec.get("preset"),
-            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root") if k in spec},
+            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root", "zone_id", "col", "row", "tier_hint")
+               if k in spec},
             "pose": pose,
             "status": "QUEUED",
             "created_at": round(time.time(), 3),

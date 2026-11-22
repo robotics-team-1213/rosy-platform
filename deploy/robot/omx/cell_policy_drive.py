@@ -32,7 +32,7 @@ from cell_policy_shape import (  # noqa: E402,F401
     envelope, in_jaw_zone, jaw_gate_spec, jaw_zone_error, open_before_close, resample_chunk, shape_chunk,
     source_rim_z, trained_grasp_mismatch, widen, wrist_roll_warning,
 )
-from cell_policy_timing import MAX_OBSERVATION_AGE_S, run_timed  # noqa: E402
+from cell_policy_timing import MAX_OBSERVATION_AGE_S, park_ack_ok, run_timed  # noqa: E402
 
 
 def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chunks: int, dry_run: bool, log,
@@ -204,7 +204,7 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
         return {"result": "dry_run", "chunks": max_chunks}
     parked = cell.act("park")
     log({"command": "park", **_status(parked)})
-    return {"result": "released" if released else "chunks_done", "held": held, "parked": bool(parked.get("ok"))}
+    return {"result": "released" if released else "chunks_done", "held": held, "parked": park_ack_ok(parked)}
 
 
 def _moved(state, ran: dict, top_before, cell, work: Path, n: int) -> dict:
@@ -248,6 +248,7 @@ def main(argv=None) -> int:
     parser.add_argument("--catalog", type=Path, help="with --roi and --site: count the source's objects before and after")
     parser.add_argument("--roi", type=int, nargs=4)
     parser.add_argument("--site")
+    parser.add_argument("--source-kind", choices=("policy", "sim_optimized", "scripted_teacher"))
     args = parser.parse_args(argv)
     if not args.dry_run and not args.person_at_switch:
         parser.error("moving the arm needs --person-at-switch (D-911)")
@@ -264,6 +265,15 @@ def main(argv=None) -> int:
     config = json.loads(args.config.read_text(encoding="utf-8"))
     if not config.get("work_dir"):
         config["work_dir"] = str(args.config.parent)
+    cfg_kind = (config.get("episodes") or {}).get("source_kind")
+    if args.source_kind or cfg_kind:
+        import cell_collect_plan
+        try:
+            source_kind = cell_collect_plan.resolve_source_kind(args.mode, args.source_kind, cfg_kind)
+        except ValueError as error:
+            parser.error(str(error))
+    else:
+        source_kind = "policy" if args.mode != "taught" else "scripted_teacher"
     shadow = None if args.mode == "taught" else lrs.LeRobotShadow(args.policy_root, args.policy_revision, cell_config=config)
     destination = mapped_slot = None
     goal_slot = args.goal_slot
@@ -297,7 +307,6 @@ def main(argv=None) -> int:
         offset = [0.0] * JOINTS
 
     import cell_pipeline as cp
-
     work = Path(config.get("work_dir") or args.config.parent).expanduser()
     work.mkdir(parents=True, exist_ok=True)
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
@@ -315,7 +324,6 @@ def main(argv=None) -> int:
          "goal_site_slot": mapped_slot, "units_sha256": shadow.files.get(lrs.UNITS) if shadow else None})
     from cell_policy_handoff import Authorization, CellHandoff, run_taught, validate_taught_goal
     import cell_params as prm
-
     authorize = handoff = rim_z_m = None
     try:
         config["params"] = prm.load(config.get("params_path"))["values"]
@@ -340,7 +348,6 @@ def main(argv=None) -> int:
     look = None
     if args.catalog and args.roi and args.site:
         import cell_auto_pick_plan
-
         calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text(encoding="utf-8"))
         catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
         catalog = catalog.get("objects", catalog) if isinstance(catalog, dict) else catalog
@@ -352,34 +359,39 @@ def main(argv=None) -> int:
                 return {"objects": None if error else len(objects), "error": error}
             except Exception as exc:
                 return {"objects": None, "error": str(exc)[:120]}
+    def _finish(out: dict) -> int:
+        log({"end": True, **out})
+        print(json.dumps(out))
+        return 0 if out["result"] in ("released", "chunks_done", "dry_run", "placed") and out.get("parked") is not False else 1
     before = look() if look else None
     if before is not None and before.get("objects") == 0 and not args.dry_run:
-        result = {"result": "nothing_to_pick", "source": {"before": 0}}  # the camera sees no object: no motion
-        log({"end": True, **result})
-        print(json.dumps(result))
-        return 1
-    if args.mode == "taught":
-        try:
-            result = run_taught(cell, args.library, dry_run=args.dry_run, authorize=authorize, log=log)
-        except (OSError, ValueError, KeyError) as error:
-            result = {"result": "refused", "reason": str(error)}
-    else:
-        import omx_tcp
+        return _finish({"result": "nothing_to_pick", "source": {"before": 0}})  # the camera sees no object: no motion
+    def _execute() -> dict:
+        if args.mode == "taught":
+            try:
+                res = run_taught(cell, args.library, dry_run=args.dry_run, authorize=authorize, log=log)
+            except (OSError, ValueError, KeyError) as error:
+                res = {"result": "refused", "reason": str(error)}
+        else:
+            import omx_tcp
+            demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
+            res = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks, dry_run=args.dry_run,
+                              log=log, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
+                              max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize,
+                              params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config), rim_z_m=rim_z_m)
+        if look:
+            after = look()
+            res["source"] = {"before": before.get("objects"), "after": after.get("objects")}
+            if None not in res["source"].values():
+                res["took_one"] = res["source"]["before"] - res["source"]["after"] == 1
+        return res
 
-        demonstrated = demonstrated_range(args.policy_root, offset) if shadow.sim_rule is None else None
-        result = run_episode(cell, shadow, args.library, work, offset=offset, max_chunks=args.max_chunks,
-                             dry_run=args.dry_run, log=log, demonstrated=demonstrated, goal_slot=goal_slot,
-                             n_action=args.n_action, max_obs_age_s=args.max_obs_age_s, handoff=handoff,
-                             authorize=authorize, params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config),
-                             rim_z_m=rim_z_m)
-    if look:
-        after = look()
-        result["source"] = {"before": before.get("objects"), "after": after.get("objects")}
-        if None not in result["source"].values():
-            result["took_one"] = result["source"]["after"] < result["source"]["before"]
-    log({"end": True, **result})
-    print(json.dumps(result))
-    return 0 if result["result"] in ("released", "chunks_done", "dry_run", "placed") else 1
+    if not args.dry_run and config.get("episodes"):
+        import cell_collect_plan
+        result = cell_collect_plan.run_recorded(cell, config, args.site or "belt", args.goal_site or "goal", source_kind, _execute)
+    else:
+        result = _execute()
+    return _finish(result)
 
 
 if __name__ == "__main__":

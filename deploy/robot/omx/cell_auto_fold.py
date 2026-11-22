@@ -80,10 +80,10 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         steps.append(row)
         log(row)
 
-    def hold(reason, **extra):
+    def hold(reason, is_holding: bool = False, **extra):
         # resting at home: end the session in place (torque OFF), nothing hangs out. The pose is read again right before
-        # the stop (review N1: seconds of corridor checks may pass after the last read)
-        if at_rest(known["state"], home) and at_rest(_ok_state(cell.act("state")), home):
+        # the stop (review N1: seconds of corridor checks may pass after the last read). Never drop a held load!
+        if not is_holding and at_rest(known["state"], home) and at_rest(_ok_state(cell.act("state")), home):
             stopped = cell.act("stop now")
             if stopped.get("ok") is True:
                 return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": None,
@@ -102,12 +102,12 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
                 "corridor": None}
     if holding(state, target, closed):
         if not low(state):
-            return hold("HOLDING_HIGH")
+            return hold("HOLDING_HIGH", is_holding=True)
         risen = [state[0], state[1] - RISE_UNITS, *state[2:]]
         rise_lane = [state, risen]
         if not look(rise_lane).get("clear") or not reserve(rise_lane).get("ok"):
             release()
-            return hold("RISE_BLOCKED")
+            return hold("RISE_BLOCKED", is_holding=True)
         known["state"] = None
         try:
             freed = release_and_rise(cell)
@@ -225,7 +225,10 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
             break
         sleep(5)
     if not out.is_file():
-        return done({"result": "failed", "why": ((proc.stdout or "") + (proc.stderr or ""))[-300:]})
+        output = ((proc.stdout or "") + (proc.stderr or ""))
+        if "session lock is held" in output:
+            marker.unlink(missing_ok=True)
+        return done({"result": "failed", "why": output[-300:]})
     result = json.loads(out.read_text())
     cand = result.get("candidate")
     _learn(result, result.get("result") == "folded")
@@ -234,7 +237,23 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     session = cwd / "session.json"
     for _ in range(36):  # the stop ends the recovery session; record_session writes torque_after when it has
         if session.is_file() and session.stat().st_mtime >= started - 2.0:  # file-time granularity; old sessions are minutes old
-            break
+            try:
+                sess = json.loads(session.read_text())
+            except (OSError, ValueError):
+                sess = None
+            if isinstance(sess, dict):
+                prof = sess.get("operating_profile")
+                chunks_io = (sess.get("chunks") or {}).get("io") if isinstance(sess.get("chunks"), dict) else None
+                io_tag = chunks_io.rstrip("/").rsplit("-", 1)[-1] if isinstance(chunks_io, str) else ""
+                sess_arm = (
+                    (sess.get("arm") if isinstance(sess.get("arm"), str) and sess.get("arm") else None)
+                    or (prof.get("instance_id") if isinstance(prof, dict) and prof.get("instance_id") else None)
+                    or (sess.get("motor_health_owner") if isinstance(sess.get("motor_health_owner"), str) and sess.get("motor_health_owner") else None)
+                    or (f"arm_{io_tag}" if io_tag in ("a", "b", "s") else None)
+                )
+                real_record = any(k in sess for k in ("arm", "operating_profile", "motor_health_owner", "chunks", "config"))
+                if sess_arm == arm or (not real_record and sess_arm is None and "torque_after" in sess):
+                    break
         sleep(5)
     else:
         return done({"result": "not_cleared", "why": "the recovery session did not report its end (no fresh session.json)"}, cand)
@@ -273,6 +292,7 @@ def main(argv=None) -> int:
     import cell_params as prm
     import cell_pipeline as cp
     import cell_pivot
+    import cell_place_fit
     import cell_space
     import cell_unwedge
     from cell_observe import predicted_pixel
@@ -288,7 +308,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     if not os.environ.get("ROSY_RECOVERY_INCIDENT"):
         ap.error("ROSY_RECOVERY_INCIDENT is required: this tool only folds an arm a held incident names")
-    config = json.loads(args.config.read_text(encoding="utf-8"))
+    config = cell_place_fit.with_tiers(json.loads(args.config.read_text(encoding="utf-8")))[0]
     params = config["params"] = prm.load(config.get("params_path"))["values"]
     calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text())
     library = json.loads(args.library.read_text())

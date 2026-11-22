@@ -162,7 +162,7 @@ class Runner:
         if last_run is None or last_run["proc"].poll() != 0:
             return False
         live = _read_json_dict(self.workdir / f"chunk-io-{arm.split('_')[-1]}" / "live.json")
-        if live is None or live.get("chunk") is not None or live.get("human_hold_latched") or live.get("fault"):
+        if live is None or live.get("chunk") is not None or live.get("human_hold_latched") or live.get("fault") or live.get("interrupt"):
             return False
         if "t" in live:
             ts = live["t"]

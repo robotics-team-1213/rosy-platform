@@ -27,7 +27,7 @@ CI_BROWSER_ROOTS = ("operations/fleet/test", "applications/fleet/test")
 LAB_PREFIXES = ("integrations/simulation/", "learning/envs/isaac/", "middleware/devices/omx/adapter/")
 # fails on GitHub runners only; back to lab until the cause is found, 2026-11-21
 LAB_FILES = ("test/test_measured_calibration_browser.py",)
-FILES_PER_JOB, MAX_JOBS = 12, 6
+FILES_PER_JOB, MAX_JOBS = 16, 4
 
 
 def lab_path(path: str) -> bool:

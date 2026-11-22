@@ -279,8 +279,8 @@ def test_rollout_is_checked_before_install_and_again_before_arm(tmp_path, monkey
 
 
 def test_verified_withdrawal_after_install_returns_to_source_without_arm(tmp_path, monkeypatch):
-    from os_update_feed import Withdrawn
     m, state, boot, root, _, config, host, calls, run, bundle, _ = _source(tmp_path, monkeypatch)
+    from os_update_feed import Withdrawn
     def admission(r, metadata, *, host):
         pending = state.read_state(r)["pending"]
         if pending is not None and pending["phase"] == "VERIFIED": raise Withdrawn("verified fixture withdrawal")

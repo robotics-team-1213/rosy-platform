@@ -260,6 +260,23 @@ def startup_tcp_x_m(library: dict | None) -> float:
     return val
 
 
+def write_status_row(status_path: Path, row: dict, *, protect: bool = False) -> None:
+    """Append `row` to `status_path` (the FIFO commit point); stdout echo is best-effort diagnostics."""
+    from chunk_runner_guards import safe_stderr
+
+    try:
+        with status_path.open("a") as f:
+            f.write(json.dumps(row) + "\n")
+    except OSError as error:  # interrupted: a full disk is reported, the fold or hold goes on (no torque OFF)
+        if not protect:
+            raise
+        safe_stderr({"status_write_failed": str(error)[:300], "row": row})
+    try:
+        print(json.dumps(row), flush=True)
+    except (OSError, ValueError) as error:
+        safe_stderr({"stdout_write_failed": str(error)[:300]})
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", required=True, type=Path, help="record config (robot section is used)")
@@ -287,31 +304,18 @@ def main(argv=None):
     if library.get("fps") != config["dataset"]["fps"]:  # one frame per tick: another fps replays at another speed
         raise SystemExit(f"chunk library fps {library.get('fps')} differs from the recorder fps {config['dataset']['fps']}")
     from lerobot.robots.omx_follower import OmxFollower, OmxFollowerConfig
-
     robot_cfg = {k: v for k, v in config["robot"].items() if k not in ("type", "cameras")}
     # LeRobot's ensure_safe_goal_position accepts only float/dict; draccus converts it for lerobot-record, JSON keeps 5 an int
     robot_cfg["max_relative_target"] = float(robot_cfg["max_relative_target"])
     robot = OmxFollower(OmxFollowerConfig(**robot_cfg, cameras={}))  # the camera services keep the cameras
     args.io.mkdir(parents=True, exist_ok=True)
     status_path = args.io / "chunk-status.jsonl"
-
     from chunk_runner_guards import safe_stderr
 
     def status(row):
         protect = bool(signals or getattr(runner, "human_hold_latched", False)
                        or getattr(runner, "_stop_after_park", None))
-        try:
-            with status_path.open("a") as f:
-                f.write(json.dumps(row) + "\n")
-        except OSError as error:  # interrupted: a full disk is reported, the fold or hold goes on (no torque OFF)
-            if not protect:
-                raise
-            safe_stderr({"status_write_failed": str(error)[:300], "row": row})
-        try:
-            print(json.dumps(row), flush=True)
-        except (OSError, ValueError) as error:
-            if not protect:
-                raise OSError(str(error)) from error
+        write_status_row(status_path, row, protect=protect)
 
     from guarded_native import NativeJointMotion, close_device, connect_passive
     from motor_health import MotorHealth

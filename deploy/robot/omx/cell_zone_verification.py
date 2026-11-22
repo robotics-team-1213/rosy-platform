@@ -60,12 +60,13 @@ def _frame(source, camera: str, previous: dict | None = None, after: float | Non
     the time that is left, and a read that returns after it is refused."""
     deadline = time.time() + FRAME_WAIT_S if deadline is None else deadline
     reason = "no frame"
+    prev_arg = None if isinstance(previous, dict) and previous.get("_reused") else previous
     while True:
         try:
             left = deadline - time.time()
             if left <= 0.02:
                 return None, f"{camera} frame read exceeded the {FRAME_WAIT_S} s limit" + ("" if reason == "no frame" else f" ({reason})")
-            receipt = source.frame_receipt(camera, previous=previous, max_age_s=MAX_FRAME_AGE_S, timeout_s=left)
+            receipt = source.frame_receipt(camera, previous=prev_arg, max_age_s=MAX_FRAME_AGE_S, timeout_s=left)
             if time.time() > deadline:
                 return None, f"{camera} frame read took longer than {FRAME_WAIT_S} s"
             if after is None or float(receipt["source_stamp"]) >= after:
@@ -211,14 +212,19 @@ def _target(config: dict, dest_site: str):
             "area": canon["area"], "col": canon["col"], "row": canon["row"], "tier": canon["tier"],
         }, None
     site = site_map.get(dest_site) or {}
-    layer, col, row = site.get("layer"), site.get("col"), site.get("row")
+    area_raw = dest_site.split(":", 1)[0].rsplit("-l", 1)[0]
+    area = "belt" if area_raw == "belt_center" else area_raw
+    single_slot = area in ("stand", "temp_plate_a", "temp_plate_b") and bool(site)
+    layer = site.get("layer", 0 if single_slot else None)
+    col = site.get("col", 1 if single_slot else None)
+    row = site.get("row", 1 if single_slot else None)
     if type(layer) is not int or layer not in LAYERS:
         return None, "destination layer not in the site config or outside 0-2"
     if type(col) is not int or col not in SLOT_COLS or type(row) is not int or row not in SLOT_ROWS:
         return None, "target slot col/row not in the site config (real cell configs name only the site place xy) or outside 1-3/1-2"
     if "tier" in site and site["tier"] != layer + 1:
         return None, "site tier and layer disagree"
-    return {"site": dest_site, "area": dest_site.rsplit("-l", 1)[0], "col": col, "row": row, "tier": layer + 1}, None
+    return {"site": dest_site, "area": area, "col": col, "row": row, "tier": layer + 1}, None
 
 
 def _top_target(config: dict, dest_site: str, roi):
@@ -301,5 +307,6 @@ def measure(cell, before_frame: dict | None, config: dict, dest_site: str, sourc
     top_ok = bool(isinstance(top_zone, dict) and top_zone.get("within_zone") and top_zone.get("orientation_ok") is True)
     if stack.get("depth_reference") is not None:  # D-1057: with floor ROIs the depth map decides; colour/side are auxiliary
         top_ok = True
-    return _plain({**out, **stack, "verified": bool(stack.get("verified")) and top_ok,
-                   "top": {**out["top"], "zone": top_zone}})
+    z_gate = stack.get("z_gate") if "z_gate" in stack else ({"verdict": "NOT_APPLICABLE"} if target["area"] not in cell_site_target.STACKING_AREAS else None)
+    return _plain({**out, **stack, **({"z_gate": z_gate} if z_gate is not None else {}),
+                   "verified": bool(stack.get("verified")) and top_ok, "top": {**out["top"], "zone": top_zone}})

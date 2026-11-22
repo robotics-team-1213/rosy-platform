@@ -351,6 +351,36 @@ def test_ci_strict_browser_run_judges_the_quarantine_rerun(monkeypatch, capsys, 
     assert 'browser evidence did not run for real' not in capsys.readouterr().out
 
 
+@pytest.mark.parametrize('paths, extra_env, output, expected', [
+    (['middleware/robot_ui/robot/test/test_a_browser.py', 'middleware/robot_ui/pilot/test/test_b_browser.py'],
+     {}, ['== 124 skipped in 1.04s ==\n'], 0),
+    (['middleware/robot_ui/pilot/test/test_pilot_app_proxy.py', 'middleware/robot_ui/pilot/test/test_pilot_browser.py'],
+     {}, ['== 75 skipped in 1.17s ==\n'], 0),
+    (['test/test_a.py', 'test/test_b.py'], {}, ['== 4 skipped in 0.1s ==\n'], 1),
+    (['ROSY_RUN_BROWSER_TESTS=1', 'ROSY_BROWSER_STRICT=1',
+      'middleware/robot_ui/robot/test/test_a_browser.py', 'middleware/robot_ui/pilot/test/test_b_browser.py'],
+     {}, ['== 4 skipped in 0.1s ==\n'], 1),
+])
+def test_ci_allows_unopted_browser_skips_in_affected_runners_only(monkeypatch, paths, extra_env, output, expected):
+    import json
+    import yaml
+    from types import SimpleNamespace
+
+    monkeypatch.chdir(ROOT)
+    steps = yaml.safe_load(WORKFLOW.read_text(encoding='utf8'))['jobs']['test']['steps']
+    script = next(step['run'] for step in steps if step['name'] == 'Test (matrix suite, D-436)')
+    python = script.split("python3 - <<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+    monkeypatch.delenv('ROSY_RUN_BROWSER_TESTS', raising=False)
+    for k, v in extra_env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv('ROSY_INVOCATIONS', json.dumps([paths]))
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs:
+                        SimpleNamespace(stdout=iter(output), wait=lambda: 0))
+    with pytest.raises(SystemExit) as ended:
+        exec(compile(python, str(WORKFLOW), 'exec'), {})
+    assert ended.value.code == expected
+
+
 def test_no_test_module_defines_a_nose_style_setup_function():
     # CI's apt pytest 7.4 calls a module-level plain setup()/teardown() once with the module as
     # its argument (nose compatibility), so a helper by that name gets the module as tmp_path.
