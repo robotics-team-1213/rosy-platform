@@ -327,7 +327,7 @@ function renderArmSTableHtml(tasks,cards,curTask){
   return html+'</div>';
 }
 
-function renderGoalPanelState(arm,c,okCard,isCustom,oStr,tStr){
+function renderGoalPanelState(arm,t,c,okCard,isCustom,oStr,tStr){
   const goalEmpty=$('goal-empty'), goalActive=$('goal-active'), swBtn=$('swap-zones-btn'), provEl=$('goal-provenance'), armBadge=$('goal-arm-badge');
   const activeGoal=okCard||isCustom;
   if(armBadge){
@@ -471,7 +471,7 @@ function renderCamGuide(){
     if(z==='pinky'||z==='belt-in')return validArm.filter(v=>/pinky|conveyor|supply|arm[_ -]?s/.test((v+' '+(cards[v].single_task||'')).toLowerCase())).length;
     return validArm.filter(v=>String(cards[v].origin||'')==='belt').length;
   };
-  renderGoalPanelState(arm,c,okCard,isCustom,oStr,tStr);
+  renderGoalPanelState(arm,t,c,okCard,isCustom,oStr,tStr);
   if($('sb-guide-sum')){
     $('sb-guide-sum').textContent=(arm==='arm_ab'?'arm_a+b':(arm||'팔 미선택'))+' · '+(isCustom?(oStr+'→'+tStr):(okCard?(c.task_id||t):zoneTitleLabel(activeZone)));
   }
