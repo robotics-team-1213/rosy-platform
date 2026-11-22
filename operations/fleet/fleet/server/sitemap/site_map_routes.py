@@ -208,7 +208,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
             raise site_map_error(exc.status_code, exc.code, exc.args[0]) from exc
         if view is None:
             raise site_map_error(404, "SITE_MAP_NOT_ACTIVE")
-        return view
+        return {**view, "route_active": bool(route_active())}
 
     @app.get("/api/fleet/site-map/lane-graph-crosswalks", dependencies=read_guard, tags=["site-map"])
     def site_map_lane_graph_crosswalks() -> dict:
