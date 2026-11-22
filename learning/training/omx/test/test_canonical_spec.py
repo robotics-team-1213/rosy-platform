@@ -33,6 +33,7 @@ def test_builtin_design2_spec_validates_and_hashes_deterministically(tmp_path):
     (lambda s: s["real_entry_bridge"]["phases"][0].__setitem__("joints", ["shoulder_pan", "elbow_flex", "wrist_flex"]), "phase 1"),
     (lambda s: s["real_entry_bridge"]["phases"][1].__setitem__("joints", ["shoulder_pan", "wrist_roll", "wrist_flex"]), "phase 2"),
     (lambda s: s.__setitem__("start_jitter_rad", 0.15), "data_gate limit"),
+    (lambda s: s.__setitem__("camera_angle_jitter_deg", 4), "camera_angle_jitter_deg"),
 ])
 def test_validate_canonical_spec_rejects_broken_bridge_or_gate_overflow(mutator, match):
     bad = oc.default_canonical_spec()
