@@ -26,6 +26,8 @@ FORBIDDEN_PORT_KEYS = frozenset({
     "stop_zone", "approach_m", "approach_pose", "pinned", "width_m", "speed_cap_mps",
     "turn_bans", "drive_mode", "junction", "workcell_id", "instance_id", "marker_id",
     "arm_fk", "arms", "physical", "item", "aliases", "legacy_aliases",
+    "berth", "nav2_berth_ready", "berth_missing", "repark_cap_m", "align_tol_deg",
+    "intake_cell", "flow",
 })
 
 
@@ -123,6 +125,18 @@ def test_site_points_full_and_port_views_stage_a_fail_closed(tmp_path):
     handoffs = {h["id"]: h for h in full["handoffs"]}
     assert handoffs["outbound_stand_load"]["vehicle_stop_resolved"] is False
     assert handoffs["outbound_stand_load"]["dispatchable"] is False
+    assert by_id["S3"]["dispatchable"] is True
+    assert by_id["S3"]["berth"]["mode"] == "nav2_named_stop"
+    assert by_id["S3"]["berth"]["nav2_berth_ready"] is False
+    assert by_id["S3"]["berth"]["missing"] == ["stop_zone", "approach_m"]
+    assert by_id["S3"]["berth"]["repark_cap_m"] == {"forward_m": 0.1, "left_m": 0.06}
+    assert by_id["S3"]["berth"]["align_tol_deg"] == 3.0
+    assert by_id["C1"]["berth"]["mode"] == "camera_pink_line"
+    assert by_id["C1"]["berth"]["adr"] == "D-1013"
+    assert by_id["S_OUT"]["berth"]["nav2_berth_ready"] is False
+    assert handoffs["s3_cell_s_unload"]["intake_cell"]["cell_id"] == "cell_s"
+    assert handoffs["s3_cell_s_unload"]["nav2_berth_ready"] is False
+    assert handoffs["outbound_stand_load"]["nav2_berth_ready"] is False
 
     # Updating S3 coordinates in the active map immediately reflects in site-points without editing any static config.
     _activate_map_and_rules(store, _base_v348_map(s3_x=0.761), rules)
@@ -130,6 +144,22 @@ def test_site_points_full_and_port_views_stage_a_fail_closed(tmp_path):
     updated_by_id = {p["id"]: p for p in updated["vehicle_stops"]}
     assert updated_by_id["S3"]["pose"]["x"] == 0.761
     assert "J_in" in updated_by_id and "J_out" in updated_by_id
+    assert updated_by_id["J_in"]["berth"] is None
+
+    # Adding stop_zone and approach_m to S3 makes S3 and intake handoff Nav2-berth ready.
+    berth_map = _base_v348_map(s3_x=0.745)
+    for place in berth_map["places"]:
+        if place["id"] == "S3":
+            place["stop_zone"] = [[0.65, -0.27], [0.84, -0.27], [0.84, -0.14], [0.65, -0.14]]
+            place["approach_m"] = 0.18
+    _activate_map_and_rules(store, berth_map, rules)
+    ready_full = client.get("/api/fleet/site-points", headers=VIEWER).json()
+    ready_s3 = next(p for p in ready_full["vehicle_stops"] if p["id"] == "S3")
+    assert ready_s3["berth"]["nav2_berth_ready"] is True
+    assert ready_s3["berth"]["missing"] == []
+    assert ready_s3["berth"]["approach_pose"] == pytest.approx({"x": 0.925, "y": -0.207, "yaw": 3.14159}, abs=1e-5)
+    ready_intake = next(h for h in ready_full["handoffs"] if h["id"] == "s3_cell_s_unload")
+    assert ready_intake["nav2_berth_ready"] is True and ready_intake["berth_missing"] == []
 
     port = client.get("/api/fleet/site-points?view=port", headers=VIEWER).json()
     assert port["schema"] == "rosy.port-site-places.v1"
@@ -183,10 +213,14 @@ def test_site_points_stage_b_promotes_s_out_when_activated_with_split_edge_and_r
     assert s_out["status"] == "verified" and s_out["dispatchable"] is True
     assert s_out["edges_in"] == ["lower_east_a"] and s_out["edges_out"] == ["lower_east_b"]
     assert s_out["approach_pose"] == pytest.approx({"x": 0.29, "y": -0.478, "yaw": 0.0})
+    assert s_out["berth"]["mode"] == "nav2_named_stop"
+    assert s_out["berth"]["nav2_berth_ready"] is True
+    assert s_out["berth"]["missing"] == []
 
     handoff = next(h for h in full["handoffs"] if h["id"] == "outbound_stand_load")
     assert handoff["vehicle_stop_resolved"] is True and handoff["exit_stop_resolved"] is True
     assert handoff["vehicle_exit_stop_id"] == "S_EXIT"
+    assert handoff["nav2_berth_ready"] is True and handoff["berth_missing"] == []
 
     port = client.get("/api/fleet/site-points?view=port", headers=VIEWER).json()
     port_places = {p["place_id"]: p for p in port["vehicle_places"]}
