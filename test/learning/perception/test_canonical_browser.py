@@ -56,8 +56,12 @@ def _serve_canonical(tmp_path: Path, *, configured: bool = True, monkeypatch=Non
         cfg = _canon_cfg(tmp_path)
         _seed_watched(tmp_path / "watch_mp")
         import canonical_pipeline as cp
+        _real_popen = cp.subprocess.Popen
         def _fake_popen(*a, **k):
-            if k.get("stdout"):
+            cmd = a[0] if a else k.get("args") or ()
+            if not any("canonical_workers.py" in str(arg) for arg in cmd):
+                return _real_popen(*a, **k)
+            if k.get("stdout") and hasattr(k["stdout"], "write"):
                 k["stdout"].write(b"[mock] align_real started\n")
                 k["stdout"].flush()
             return type("P", (), {"pid": 51001, "poll": lambda s: None})()
@@ -92,7 +96,8 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
             try:
                 page.goto(base + "/learning/canonical", wait_until="domcontentloaded")
                 expect(page.locator("#canon-spec-body tr")).to_have_count(12)
-                expect(page.locator("#canon-evidence-badge")).to_contain_text("실물 제어·승인 아님")
+                expect(page.locator("#canon-evidence-badge")).to_contain_text("실물 제어 아님")
+                expect(page.locator("#canonical-main")).to_contain_text("실물 로봇 제어·적용 권한이 없습니다")
                 expect(page.locator("#canon-kpis")).to_contain_text("0.274 < 0.35 rad")
                 for theme in ("light", "dark"):
                     page.evaluate("t => document.documentElement.dataset.theme = t", theme)
@@ -133,6 +138,9 @@ def test_canonical_page_flows(tmp_path, monkeypatch, width, session):
                     page.locator("#canon-job-cancel").click()
                     expect(page.locator("#canon-runs .canon-card")).to_contain_text("중지 요청")
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                if width == 390:
+                    page.set_viewport_size({"width": 320, "height": 844})
+                    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                 assert errors == []
             finally:
                 browser.close()

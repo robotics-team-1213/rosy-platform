@@ -108,7 +108,7 @@ function marginText(spec, arm, jname) {
 function renderSpec() {
   if (!snap?.spec) return;
   const spec = snap.spec, unit = $('canon-unit').value;
-  $('canon-evidence-badge').replaceChildren(statusTag('caution', '시뮬레이션·오프라인 게이트 근거 (실물 제어·승인 아님)'));
+  $('canon-evidence-badge').replaceChildren(statusTag('caution', '시뮬레이션 근거 · 실물 제어 아님'));
   $('canon-spec-sha').textContent = `sha256: ${(snap.spec_sha256 || '').slice(0, 12)} · ${snap.spec_source || 'builtin'}`;
 
   const lib = spec.envelope_margins?.arm_b_reviewed_lib || {};
