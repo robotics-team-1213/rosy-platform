@@ -386,7 +386,9 @@ with httpx.Client(verify='/run/secrets/site_ca', timeout=15.0) as client:
                 out["map_updated"] = True
                 out["map_version"] = refused.json().get("version")
             elif refused.status_code in (403, 409):
-                # A map-permission or revision problem must not block the calibration below.
+                if refused.status_code == 409 and "SITE_MAP_ROUTE_ACTIVE" in refused.text:
+                    needs_cal = False
+                    out["route_active"] = True
                 out["map_sync"] = "forbidden" if refused.status_code == 403 else "deferred"
                 out["map_sync_status"] = refused.status_code
             else:
@@ -493,6 +495,8 @@ def main(argv: list[str] | None = None) -> int:
         force=force,
         spread_m=places_spread_m([h["places"] for h in history]) if all(h.get("places") for h in history) else None,
     )
+    if not force and bool((cur_map or {}).get("route_active")) and outcome["decision"] == "approve":
+        outcome = {**outcome, "decision": "hold", "reason": "active_trips"}
 
     if dry_run:
         print(json.dumps({
@@ -538,7 +542,7 @@ def main(argv: list[str] | None = None) -> int:
     needs_map = force or needs_cal or (place_diff_m > MAP_PLACE_THRESHOLD_M)
     res = apply_fleet_update(token, approved_solve, needs_cal=needs_cal, needs_map=needs_map)
     map_sync = {k: res[k] for k in ("map_sync", "map_sync_status") if k in res}
-    if map_sync:
+    if map_sync and not res.get("route_active"):
         map_sync["map_sync_refused_runs"] = int(state.get("map_sync_refused_runs", 0)) + 1
     refused_too_long = map_sync.get("map_sync_refused_runs", 0) >= MAP_SYNC_REFUSED_FAIL_AFTER
     if map_sync:
