@@ -186,13 +186,13 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
     steps:
-      # 전체 이력(D-61)은 git 이력을 읽는 두 시험(test_harness_contracts, test_module_structure)만 blob:none 으로 받고,
-      # 나머지는 shallow checkout 으로 20 s -> ~6 s 로 단축한다.
+      # 전체 이력(D-61)은 git 이력·객체를 읽는 극소수 시험만 전체 clone 하고,
+      # 나머지는 shallow checkout(fetch-depth: 1, fetch-tags: false)으로 단축한다.
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
           fetch-depth: ${{ !matrix.git_history && 1 || 0 }}
-          filter: ${{ matrix.git_history && 'blob:none' || '' }}
+          fetch-tags: false
 
       - name: Fix git safe directory (container)
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"

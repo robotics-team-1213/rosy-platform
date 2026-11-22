@@ -774,8 +774,7 @@ def test_ci_scope_bare_partial_clone_and_test_tiered_checkout_and_caches():
     assert scope_steps["Cache scope Python tools"]["with"]["path"] == "/tmp/rosy-scope-tools"
 
     test_steps = {s["name"]: s for s in ci["jobs"]["test"]["steps"]}
-    assert test_steps["Checkout"]["with"]["fetch-depth"] == "${{ !matrix.git_history && 1 || 0 }}"
-    assert test_steps["Checkout"]["with"]["filter"] == "${{ matrix.git_history && 'blob:none' || '' }}"
+    assert test_steps["Checkout"]["with"] == {"fetch-depth": "${{ !matrix.git_history && 1 || 0 }}", "fetch-tags": False}
 
     digest = re.search(r"rosy-ci@sha256:([0-9a-f]{64})", ci["jobs"]["test"]["container"]["image"]).group(1)
     rosidl_cache = test_steps["Cache ROS interfaces overlay"]
