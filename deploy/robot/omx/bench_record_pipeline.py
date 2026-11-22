@@ -241,7 +241,9 @@ class BenchPipelineMixin:
         else:
             q_pending = [r["collection"] for r in load_handoff_queue(self.prep) if r.get("status") != "done"]
             cols = sorted((p.name for p in collections_root().iterdir() if p.is_dir() and (p / "manifest.json").is_file()), reverse=True) if collections_root().is_dir() else []
-            ds_name = (q_pending[-1] if q_pending else "") or (self._pipe_state.get("last_dataset") or "") or (cols[0] if cols else "")
+            with self._pipe_lock:
+                last_ds = self._pipe_state.get("last_dataset") or ""
+            ds_name = (q_pending[-1] if q_pending else "") or last_ds or (cols[0] if cols else "")
         if not ds_name or not _SAFE_NAME.fullmatch(ds_name):
             raise ValueError("전송할 봉인 컬렉션 이름이 필요합니다 (최근 세션 또는 컬렉션을 선택하세요)")
         if body.get("trigger") == "auto_after_seal" and state_snap.get("status") != "sealed":

@@ -15,7 +15,7 @@ from experiment_io import write_json
 
 _ID_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._-]{0,63}")
 _HEX64_RE = re.compile(r"[0-9a-f]{64}")
-_GOAL_CANON_RE = re.compile(r"from \S+ to (?:ship-h[12]r[0-2]-l[0-2]|tray|stand)\.$")
+_GOAL_CANON_RE = re.compile(r"from \S+ to (?:ship-h1r[0-2]-l[0-2]|tray|stand)\.$")
 _ARROW_PAIR_RE = re.compile(
     r"\b(ship-h[12]r[0-2]-l[0-2]|belt|tray|stand)\s*->\s*(ship-h[12]r[0-2]-l[0-2]|belt|tray|stand)\b", re.I
 )
@@ -25,29 +25,35 @@ _INTAKE_FIELDS = frozenset({"collection", "manifest_sha256", "remote_path", "arm
 
 
 def normalize_bench_task(raw: str) -> str:
-    """Normalize ship_task_cards and apply_task_override strings into data_gate goal syntax."""
+    """Normalize ship_task_cards and apply_task_override strings into data_gate GOAL_RE syntax or fail closed."""
     text = " ".join(str(raw or "").split()).strip()
     if not text:
-        return ""
+        raise ValueError("empty task text cannot be normalized for data_gate")
+    out = ""
     m_arrow = _ARROW_PAIR_RE.search(text)
     if m_arrow:
         orig, dest = m_arrow.group(1).lower(), m_arrow.group(2).lower()
-        return f"Pick container from belt to {dest}." if orig == "belt" else f"Move container from {orig} to {dest}."
-    if _GOAL_CANON_RE.search(text):
-        return text
-    spot = ""
-    m = _HYPHEN_SPOT_RE.search(text) or _HOLD_SPOT_RE.search(text)
-    if m:
-        spot = f"ship-h{m.group(1)}r{m.group(2)}-l{m.group(3)}"
-    if spot:
-        m_rev = re.search(rf"{re.escape(spot)}\s+to\s+(belt|tray|stand)\b", text, re.I)
-        if m_rev:
-            return f"Move container from {spot} to {m_rev.group(1).lower()}."
-        return f"Pick container from belt to {spot}."
-    m_zone = re.search(r"\bto\s+(tray|stand)\b", text, re.I)
-    if m_zone:
-        return f"Pick container from belt to {m_zone.group(1).lower()}."
-    return text
+        out = f"Pick container from belt to {dest}." if orig == "belt" else f"Move container from {orig} to {dest}."
+    elif _GOAL_CANON_RE.search(text):
+        out = text
+    else:
+        spot = ""
+        m = _HYPHEN_SPOT_RE.search(text) or _HOLD_SPOT_RE.search(text)
+        if m:
+            spot = f"ship-h{m.group(1)}r{m.group(2)}-l{m.group(3)}"
+        if spot:
+            m_rev = re.search(rf"{re.escape(spot)}\s+to\s+(belt|tray|stand)\b", text, re.I)
+            if m_rev:
+                out = f"Move container from {spot} to {m_rev.group(1).lower()}."
+            else:
+                out = f"Pick container from belt to {spot}."
+        else:
+            m_zone = re.search(r"\bto\s+(tray|stand)\b", text, re.I)
+            if m_zone:
+                out = f"Pick container from belt to {m_zone.group(1).lower()}."
+    if not out or not _GOAL_CANON_RE.search(out):
+        raise ValueError(f"task destination not admitted by data_gate (ship-h1r0..r2-l0..l2, tray, stand): {text!r}")
+    return out
 
 
 def detect_source_units(src: Path, arm_id: str, info: dict) -> str:
@@ -183,7 +189,8 @@ def _validate_manifest(col_dir: Path) -> tuple[dict, str]:
     ds_dir = col_dir / "dataset"
     info_path = ds_dir / "meta" / "info.json"
     info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else {}
-    if int(manifest.get("total_episodes") or 0) < 1 or int(info.get("total_episodes") or 0) < 1 or not list(ds_dir.glob("data/**/*.parquet")):
+    ep_m, ep_i = manifest.get("total_episodes"), info.get("total_episodes")
+    if type(ep_m) is not int or type(ep_i) is not int or ep_m < 1 or ep_i < 1 or not list(ds_dir.glob("data/**/*.parquet")):
         raise ValueError(f"empty collection (total_episodes < 1) refused: {col_dir.name}")
     return manifest, hashlib.sha256(raw).hexdigest()
 

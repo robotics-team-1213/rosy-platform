@@ -522,9 +522,19 @@ def test_canonical_intake_normalizes_bench_data_and_enqueues_idempotent_align(tm
     norm_txt = ci.normalize_bench_task(card_txt)
     assert norm_txt == "Pick container from belt to ship-h1r0-l0."
     assert data_gate.GOAL_RE.search(norm_txt)
-    assert ci.normalize_bench_task("Move ship-h1r1-l0 to tray") == "Move container from ship-h1r1-l0 to tray."
-    assert ci.normalize_bench_task("Take the container ... (ship-h1r0-l0 -> belt)") == "Move container from ship-h1r0-l0 to belt."
-    assert ci.normalize_bench_task("Take the container ... (ship-h1r0-l0 -> tray)") == "Move container from ship-h1r0-l0 to tray."
+    for valid_raw, expected in (
+        ("Move ship-h1r1-l0 to tray", "Move container from ship-h1r1-l0 to tray."),
+        ("Take the container ... (ship-h1r0-l0 -> tray)", "Move container from ship-h1r0-l0 to tray."),
+        ("Take the container ... (ship-h1r0-l0 -> stand)", "Move container from ship-h1r0-l0 to stand."),
+    ):
+        out_txt = ci.normalize_bench_task(valid_raw)
+        assert out_txt == expected and data_gate.GOAL_RE.search(out_txt)
+    for unsupported in (
+        "Take the container from the belt pickup end and place it on ship hold h2, A side row (r0), tier 1 (floor) (l0).",
+        "Take the container ... (ship-h1r0-l0 -> belt)",
+    ):
+        with pytest.raises(ValueError, match="data_gate"):
+            ci.normalize_bench_task(unsupported)
 
     # 12-DOF bi_omx_follower normalized [-100..100] at 30fps -> 6-DOF sim rad + linear gripper + 15fps.
     g0_b = spec["idle_park"]["arm_b"]["gripper_units"]

@@ -79,7 +79,7 @@ def _host_allows_plain_http(host: str | None) -> bool:
         return True
     try:
         ip = ipaddress.ip_address(h)
-        return ip.is_loopback or ip.is_private or (ip.version == 4 and ip in _CGNAT_NET)
+        return (not ip.is_unspecified) and (ip.is_loopback or ip.is_private or (ip.version == 4 and ip in _CGNAT_NET))
     except ValueError:
         return "." not in h
 
@@ -199,7 +199,8 @@ def verify_sealed_collection(collection_dir: Path) -> dict:
     info_path = collection_dir / "dataset" / "meta" / "info.json"
     info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else {}
     parquets = list((collection_dir / "dataset").glob("data/**/*.parquet"))
-    if int(manifest.get("total_episodes") or 0) < 1 or int(info.get("total_episodes") or 0) < 1 or not parquets:
+    ep_m, ep_i = manifest.get("total_episodes"), info.get("total_episodes")
+    if type(ep_m) is not int or type(ep_i) is not int or ep_m < 1 or ep_i < 1 or not parquets:
         raise ValueError(f"에피소드(parquet >= 1)가 없는 빈 컬렉션은 전송할 수 없습니다: {collection_dir.name}")
     return {
         "collection": collection_dir.name,
@@ -351,10 +352,13 @@ def validate_team_hf_upload(api, ds_folder: Path, config: dict, *, ds_name: str 
         if p.is_symlink() or not p.resolve().is_relative_to(root_res):
             raise RuntimeError(f"데이터셋 내 링크/경로 이탈 차단: {p.name}")
     info_path = ds_folder / "meta" / "info.json"
-    if (ds_folder / "DO_NOT_TRAIN.txt").exists() or not info_path.is_file():
+    if ((ds_folder / "DO_NOT_TRAIN.txt").exists()
+            or (ds_folder.name == "dataset" and (ds_folder.parent / "DO_NOT_TRAIN.txt").exists())
+            or not info_path.is_file()):
         raise RuntimeError("DO_NOT_TRAIN이거나 meta/info.json이 없는 데이터셋은 업로드할 수 없습니다")
     info = json.loads(info_path.read_text(encoding="utf-8"))
-    if int(info.get("total_episodes") or 0) < 1 or not list(ds_folder.glob("data/**/*.parquet")):
+    ep_i = info.get("total_episodes")
+    if type(ep_i) is not int or ep_i < 1 or not list(ds_folder.glob("data/**/*.parquet")):
         raise RuntimeError("에피소드(total_episodes >= 1, parquet)가 없는 데이터셋은 업로드할 수 없습니다")
     who = api.whoami() or {}
     user = str(who.get("name") or "")
