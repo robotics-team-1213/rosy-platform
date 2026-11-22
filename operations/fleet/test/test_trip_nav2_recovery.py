@@ -375,3 +375,105 @@ def test_multi_robot_nav2_claims_compare_in_site_frame_without_false_mismatch():
     console.set_site_pose_providers(mover=lambda rid: ("world_261026", 0.0, 0.0, 0.0) if rid == "rosy_42" else None)
     mismatch = run(console.route("rosy_46", pts_far))
     assert mismatch["accepted"] is False and mismatch["reason"] == "MAP_FRAME_MISMATCH"
+
+
+def test_nav2_unconfirmed_problem_replan_holds_across_ticks():
+    smap = _branch_map()
+    runner, store, ports = _setup(smap, caps=BOTH)
+    ports.map_id = "site-branch"
+    runner.autonomous_robots = frozenset({"rosy_60"})
+    graph = store.active()[2]
+    sent_routes: list[list[dict]] = []
+    robot_nav = {"navigation": "IDLE"}
+
+    async def robot_state(_rid):
+        return {"navigation": robot_nav["navigation"], "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+                "pose": {"x": ports.pose.x, "y": ports.pose.y, "yaw": ports.pose.yaw}}
+
+    async def send_route(_rid, points):
+        sent_routes.append(points)
+        robot_nav["navigation"] = "NAVIGATING"
+        return {"accepted": True}
+
+    runner._robot_state, runner._route = robot_state, send_route
+    ports.at(graph.arcs["ha:fwd"], 0.1)
+    ver = store.active()[0]
+    plan = plan_body(plan_trip(graph, PlanRequest(
+        map_version=ver, start_pose=(ports.pose.x, ports.pose.y, ports.pose.yaw), goal="D", stop_offset=False,
+    ), store.routing_config))
+    store.record_plan(plan_id="p-unconf", robot_id="rosy_60", principal_id="bob", map_version=ver,
+                      request={"to": "D", "drive_mode": "nav2"}, result={"plan": plan})
+    run(runner.start("p-unconf", "bob"))
+    _ticks(runner, ports, n=1)
+    assert len(sent_routes) == 1
+
+    # Detour plan succeeds, but _ai_confirm refuses because robot capabilities became unavailable.
+    runner._caps = lambda _rid: asyncio.sleep(0, result=None)
+    ports.at(graph.arcs["ha:fwd"], 0.65)
+    robot_nav["navigation"] = "FAILED"
+    _ticks(runner, ports, n=1)
+    view = runner.view("p-unconf")
+    assert view["hold"]["reason"] == "replan" and view["hold"]["source"] == "nav2_problem"
+    assert view["detail"]["nav2_problem"]["state"] == "held"
+
+    robot_nav["navigation"] = "IDLE"
+    ports.now += 35.0
+    _ticks(runner, ports, n=3)
+    held_view = runner.view("p-unconf")
+    assert held_view["state"] == "running" and held_view["hold"]["source"] == "nav2_problem"
+    assert len(sent_routes) == 1  # Wait held cleanly without re-sending the failed route.
+
+
+def test_planned_stop_goal_clears_stale_site_claims(monkeypatch):
+    from fleet.server import console_helpers
+    from fleet.server.map_binding_store import MapBindingStore
+
+    robot_id = "rosy_46"
+    boot_id = "1ad31f2d-f4ac-41aa-9bc1-37cb77a16664"
+    plan_id = "acc31f2d-f4ac-41aa-9bc1-37cb77a16664"
+    operation = {"boot_id": boot_id, "run_id": "c17ca896-9ae1-495c-a936-b7c7db3953fc", "kind": "navigate",
+                 "phase": "RUNNING", "correlation_id": "attempt"}
+    approval = {"binding_id": "fit-1", "site_map_id": "cell", "site_map_version": 261,
+                "robot_grid_id": "grid-A", "fit": {"yaw": 0, "tx": 0, "ty": 0, "residual_max_m": 0}}
+    bindings = SimpleNamespace(active=lambda _rid: approval)
+    bindings.matching_fit = lambda *args: MapBindingStore.matching_fit(bindings, *args)
+    maps = SimpleNamespace(
+        active=lambda: (261, SimpleNamespace(map_id="cell", edges=[SimpleNamespace(drive_mode="free", direction="two_way")],
+                                             turn_bans=[], crosswalks=[]), SimpleNamespace(arcs={})),
+        map_bindings=bindings,
+    )
+
+    async def state():
+        return {"localization": {"state": "LOCALIZED", "pose_frame": "map"}, "map_id": "same-name",
+                "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0}, "map_grid_id": "grid-A", "trip_lease": None,
+                "velocity": {"linear": 0.0, "angular": 0.0},
+                "evidence": {"pose": {"evidence": "fresh"}, "velocity": {"evidence": "fresh"}}}
+
+    async def get(path):
+        return {"owner": {"boot_id": boot_id, "owner_generation": 9}} if path == "/api/v1/navigation/state" else {}
+
+    async def navigation_plan(*_, **__kwargs):
+        return {"plan_id": plan_id, "map_grid_id": "grid-A", "frame": "map", "points": [[0, 0], [0.5, 0.0]]}
+
+    async def send(*_, **__options):
+        return {"accepted": True, "operation": operation}
+
+    monkeypatch.setattr(console_helpers, "require_capability", lambda *_: asyncio.sleep(0, result={}))
+    client = SimpleNamespace(state=state, _get=get, navigation_plan=navigation_plan)
+    console = SimpleNamespace(
+        _named_stop_site_maps=maps, _client=lambda _: client, _clients={robot_id: client},
+        clients=lambda: {robot_id: client}, robot_ids=[robot_id], _traffic_lock=asyncio.Lock(),
+        _goal_busy=set(), _clearance_m=0.2, _clock=time.monotonic,
+        _named_stop_traffic=SimpleNamespace(has_configured_controls=lambda: False),
+        goal_leases=SimpleNamespace(stop_token=lambda _: 0, send=send, check_stop=lambda *_: None,
+                                    pending={}, motion_epoch=0),
+        _formation_members=lambda: (), _yielding={}, _seen={}, _goals={}, _queued={}, _claims={},
+        _site_claims={robot_id: ("cell", [(0.0, 0.0), (1.0, 0.0)])},
+        _goal_admission=SimpleNamespace(yield_hold=lambda _: None),
+        _remember=lambda _: None, _verdict=lambda _: "TRUSTED", trip_refusal=lambda _: None,
+    )
+    reply = run(console_helpers._goal(console, robot_id, 0.5, 0.0, 0.0, task_id="t1", attempt_id="attempt",
+                                      attempt_seq=1, stop_binding={"site_map_id": "cell", "site_map_version": 261,
+                                                                   "binding_id": "fit-1", "map_grid_id": "grid-A"}))
+    assert reply["accepted"] is True and robot_id not in console._site_claims
+    assert console._claims[robot_id] == [(0, 0), (0.5, 0.0)]

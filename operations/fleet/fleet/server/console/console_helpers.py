@@ -426,6 +426,7 @@ async def _planned_stop_goal(self, robot_id, client, caps, target, attempt_id, s
         self._goals[robot_id] = dict(zip(("x", "y", "yaw"), target))
         self._queued.pop(robot_id, None)
         self._claims[robot_id] = route
+        getattr(self, "_site_claims", {}).pop(robot_id, None)
         return result
 
 

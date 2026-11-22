@@ -127,7 +127,8 @@ def sample_nav2_route(
 
 
 def _immediate_hold(live: LiveTrip) -> bool:
-    return (live.view["hold"] or {}).get("reason") in _IMMEDIATE_HOLD_REASONS
+    hold = live.view["hold"] or {}
+    return hold.get("reason") in _IMMEDIATE_HOLD_REASONS or hold.get("source") == "nav2_problem"
 
 
 def _traffic_end_index(runner, live: LiveTrip, index: int) -> int | None:
