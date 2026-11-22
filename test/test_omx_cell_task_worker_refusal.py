@@ -721,3 +721,108 @@ def test_peer_ab_session_locked_posix_flock_and_worker_warm_reuse(tmp_path: Path
         if fh_b is not None:
             fh_b.close()
         fh_whole.close()
+
+
+def test_stand_handoff_routing_normalization_zone_roi_and_non_dict_lease(tmp_path: Path, monkeypatch) -> None:
+    import subprocess
+    import numpy as np
+    from cell_fleet_handoff import handoff_refusal, run_contract_handoff_stage
+    import cell_area_zones as caz
+    import cell_task_exec as cte
+    import cell_task_transport as ctt
+
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    for dst in ("stand", "stand:r1-s1", "stand:r1-s1-t1"):
+        assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": dst}, tier=1) is None
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "pallet-l0", "dst_site": "stand"}, tier=1) is None
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "stand"}, tier=1) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "stand"}, tier=2) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_s", "src_site": "pinky", "dst_site": "stand"}, tier=1) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_s", "src_site": "stand", "dst_site": "belt"}, tier=1) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_s", "src_site": " stand ", "dst_site": "belt"}, tier=1) == "UNKNOWN_SITE"
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": " stand "}, tier=1) == "UNKNOWN_SITE"
+
+    stage = run_contract_handoff_stage(pipe, {**LOCKED, "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "pallet", "dst_site": "stand:r1-s1"}, tier=1)
+    assert stage["receipt"]["cell_id"] == "cell_ab" and stage["receipt"]["arm_roles_used"] == ["arm_a"]
+    assert cte.resolve_task_arm({"cell_id": "cell_ab", "dst_site": "stand:r1-s1"}) == "arm_a"
+    assert cte.resolve_task_arm({"cell_id": "cell_ab", "src_site": "stand"}) == "arm_a"
+    assert cte.resolve_task_arm({"cell_id": "cell_s", "dst_site": "stand"}) == "arm_s"
+
+    (tmp_path / "with-session-arm-a-par.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "with-session-arm-b-par.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1]}), encoding="utf-8")
+    (tmp_path / "cell-arm-a-stack.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json"), "sites": {"beltend": {}, "stand": {"place": [0.06, -0.115], "surface_z": 0.025}}}), encoding="utf-8")
+    (tmp_path / "cell-arm-b-stack.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json"), "sites": {"beltend": {}, "stand": {"place": [0.06, -0.115], "surface_z": 0.025}}}), encoding="utf-8")
+    monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+    monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": True, "state": None, "fresh": True})
+    monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0, "site": "beltend"})
+    cmds: list[list[str]] = []
+
+    def fake_run(cmd, **k):
+        cmds.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps({"result": "placed", "attempts": []}), stderr="")
+
+    monkeypatch.setattr(cte.subprocess, "run", fake_run)
+    cte.execute_guarded_cell_task(
+        {"task_id": "t-stand-a", "cell_id": "cell_ab", "arm_id": "arm_a", "tier": 1, "handoff_lease_id": "l-1",
+         "src_site": "belt", "dst_site": "stand:r1-s1-t1"},
+        prep_dir=tmp_path,
+    )
+    assert cmds and "--from" in cmds[0] and cmds[0][cmds[0].index("--from") + 1] == "beltend"
+    assert cmds[0][cmds[0].index("--dest") + 1] == "stand"
+
+    for bad_task in (
+        {"task_id": "t-stand-b", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 1, "handoff_lease_id": "l-2", "src_site": "belt", "dst_site": "stand"},
+        {"task_id": "t-stand-b-src", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 1, "handoff_lease_id": "l-3", "src_site": "stand", "dst_site": "pallet-l0"},
+        {"task_id": "t-stand-b-pad", "cell_id": "cell_ab", "arm_id": "arm_b", "tier": 1, "handoff_lease_id": "l-4", "src_site": "belt", "dst_site": " stand "},
+    ):
+        assert cte.execute_guarded_cell_task(bad_task, prep_dir=tmp_path)["error"] == "STAND_REQUIRES_ARM_A"
+    assert len(cmds) == 1
+
+    (tmp_path / "cell-arm-a-stack.json").write_text(json.dumps({"plan_path": str(tmp_path / "grasp-plan.json"), "sites": {"beltend": {}}}), encoding="utf-8")
+    uncal = cte.execute_guarded_cell_task(
+        {"task_id": "t-stand-uncal", "cell_id": "cell_ab", "arm_id": "arm_a", "tier": 1, "handoff_lease_id": "l-5",
+         "src_site": "belt", "dst_site": "stand"},
+        prep_dir=tmp_path,
+    )
+    assert uncal["error"] == "STAND_NOT_CALIBRATED" and len(cmds) == 1
+
+    # Verify STAND_TOP_ROI is inspected when place area is stand and non-dict lease JSON fails closed.
+    monkeypatch.setattr(caz, "detect_side_self_profile_landmarks", lambda _img: [])
+    seen_rois: list[tuple[int, int, int, int]] = []
+    before_side = np.zeros((480, 640, 3), dtype=np.uint8)
+    after_side = np.full((480, 640, 3), 1, dtype=np.uint8)
+    before_top = np.full((480, 640, 3), 2, dtype=np.uint8)
+    after_top = np.full((480, 640, 3), 3, dtype=np.uint8)
+
+    def fake_eval(img, roi, **kw):
+        roi_t = tuple(roi)
+        seen_rois.append(roi_t)
+        if img is before_top and roi_t == (355, 40, 415, 160):
+            return {"within_zone": True, "fill_ratio": 0.55, "offset_px": 0.0, "orientation_ok": True}
+        if img is after_top and roi_t == tuple(caz.STAND_TOP_ROI):
+            return {"within_zone": True, "fill_ratio": 0.45, "offset_px": 0.0, "orientation_ok": True}
+        return {"within_zone": False, "fill_ratio": 0.05, "offset_px": 0.0, "orientation_ok": True}
+
+    monkeypatch.setattr(caz, "evaluate_zone", fake_eval)
+    res_z = caz.verify_stack_outcome(
+        before_side=before_side, after_side=after_side, before_top=before_top, after_top=after_top,
+        pick={"area": "belt", "col": 1, "row": 1, "tier": 1},
+        place={"area": "stand", "col": 1, "row": 1, "tier": 1, "yaw_deg": 0.0},
+    )
+    assert res_z["verified"] is True and tuple(caz.STAND_TOP_ROI) in seen_rois
+
+    monkeypatch.setattr(caz, "evaluate_zone", lambda img, roi, **kw: {"within_zone": img is after_side, "fill_ratio": 0.60 if img is after_side else 0.05, "offset_px": 0.0, "orientation_ok": True})
+    assert caz.verify_stack_outcome(
+        before_side=None, after_side=after_side, before_top=before_top, after_top=None,
+        pick={"area": "belt", "col": 1, "row": 1, "tier": 1}, place={"area": "stand", "tier": 1},
+    )["verified"] is False
+    assert caz.verify_stack_outcome(
+        before_side=before_side, after_side=after_side, before_top=before_top, after_top=after_top,
+        pick={"area": "belt", "col": 1, "row": 1, "tier": 1}, place={"area": "stand", "tier": 1},
+    )["verified"] is False
+
+    lease_root = tmp_path / "leases-nondict"
+    lease_root.mkdir()
+    (lease_root / "arm_b.json").write_text("[]", encoding="utf-8")
+    assert ctt._can_reuse_worker_arm_session("arm_b", prep_dir=tmp_path, lease_dir=lease_root, expected_owner="w:1") is False

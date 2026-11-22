@@ -109,7 +109,7 @@ def _can_reuse_worker_arm_session(
 ) -> bool:
     """True only when this worker owns the warm idle arm session and live state is clean."""
     lease = cell_arm_lease._read(arm_id, cell_arm_lease.lease_root(lease_dir))
-    if lease is None or lease.get("owner") != expected_owner or lease.get("hold"):
+    if not isinstance(lease, dict) or lease.get("owner") != expected_owner or lease.get("hold"):
         return False
     if not cell_arm_lease.live(lease):
         return False

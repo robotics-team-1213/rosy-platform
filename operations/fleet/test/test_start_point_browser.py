@@ -273,7 +273,9 @@ def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
     open_token_access(page)
     page.locator('#console-token').fill('')
     page.locator('#token-save').click()
-    expect(page.locator('#connection-guide')).to_be_visible()
+    expect(page.locator('#connection-guide')).to_be_hidden()
+    expect(page.locator('#map-empty')).to_be_visible()
+    expect(page.locator('#connection-guide-action')).to_be_visible()
     expect(page.locator('#roster')).to_contain_text('관제에 접속하면')
     expect(page.locator('#map-empty-title')).to_have_text('관제 접속 필요')
     expect(page.locator('#dispatch-control')).to_be_hidden()  # D-487: one lock banner
@@ -296,10 +298,13 @@ def test_console_has_no_setup_tools_and_connection_guide_recovers(browser_site):
     # This fixture seeds its Bearer on every navigation; reproduce the refused session after return.
     page.locator('#console-token').fill('')
     page.locator('#token-save').click()
-    expect(page.locator('#connection-guide')).to_be_visible()
+    expect(page.locator('#connection-guide')).to_be_hidden()
+    expect(page.locator('#connection-guide-action')).to_be_visible()
     page.locator('#console-token').fill('operator-secret')
     page.locator('#console-token').press('Enter')
     expect(page.locator('#connection-guide')).to_be_hidden()
+    expect(page.locator('#connection-guide-action')).to_be_hidden()
+    expect(page.locator('#map-empty')).to_be_hidden()
     expect(page.locator('#dispatch-control')).to_be_visible()
     capture_console(page, 'connected-desktop.png')
     assert not [call for call in robot.calls if call[0] == 'navigation_goal']

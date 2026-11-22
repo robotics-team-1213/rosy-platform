@@ -39,11 +39,7 @@ jobs:
     # 26.04 로 올렸다 — ubuntu-latest 의 강제 이동(10-19~11-19)보다 먼저 검증된
     # 전환이다. 되돌림은 이 기본값을 24.04 로 바꾸면 된다.
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
-    container:
-      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:59245c63b56db2a87722baf0b6696853f55d3f9c85dfc4688a53a946032a0685
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ github.token }}
+    # Bare ubuntu-26.04: scope runs only Python selector + pure-Python wheels (~36 s faster than pulling/extracting rosy-ci).
     # A lost runner otherwise holds the run for the 6 h default (run 38588670328 sat 45 min in an
     # install step). Measured scope: ~35 s. A publish PR's per-commit size rule walks its whole range
     # (#210: 3,145 commits, cancelled at 10 min on 2026-10-26), so the cap leaves room for that.
@@ -52,18 +48,34 @@ jobs:
       mode: ${{ steps.scope.outputs.mode }}
       matrix: ${{ steps.scope.outputs.matrix }}
     steps:
-      # 전체 이력: 모듈 logs.md 의 append-only 검사가 PR base / push 이전 커밋과 비교한다.
-      # 얕은 clone 이면 HEAD 만 비교되어 이미 커밋된 기록의 수정을 잡지 못한다 (D-61).
+      # 전체 이력: 모듈 logs.md·size_range·Safety-Review 검사가 전체 커밋 DAG 와 소스 블롭을 읽는다(D-61).
+      # blob:limit=256k + fetch-tags: false 는 소스 블롭을 모두 로컬에 두면서 138 MB 대용량 바이너리 이력과 태그 680 개를 생략한다.
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
           fetch-depth: 0
+          fetch-tags: false
+          filter: blob:limit=256k
 
       - name: Fix git safe directory (container)
         run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
+      - name: Cache scope Python tools
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: /tmp/rosy-scope-tools
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ inputs.runs_on || 'ubuntu-26.04' }}-scope-tools-pyyaml-setuptools-wheel-v1
+
       - name: CI image readiness (selector tools)
-        run: python3 -c 'import yaml' && git --version
+        run: |
+          if ! python3 -c 'import yaml, setuptools, wheel' 2>/dev/null; then
+            if [ ! -d /tmp/rosy-scope-tools/yaml ] || [ ! -d /tmp/rosy-scope-tools/setuptools ] || [ ! -d /tmp/rosy-scope-tools/wheel ]; then
+              pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-scope-tools pyyaml setuptools wheel
+            fi
+            echo "PYTHONPATH=/tmp/rosy-scope-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
+            PYTHONPATH="/tmp/rosy-scope-tools${PYTHONPATH:+:$PYTHONPATH}" python3 -c 'import yaml, setuptools, wheel'
+          fi
+          git --version
 
       # D-430 §5: a commit that touches a safety-tagged path (platform_parts.yaml
       # `concern: safety` roots, `safety_modules`, `safety_anchors`) needs a
@@ -135,11 +147,16 @@ jobs:
 
       - name: Build ROS-free platform API wheels once
         run: |
+          set -euo pipefail
           wheelhouse=/tmp/rosy-platform-wheelhouse
           mkdir -p "$wheelhouse"
-          pip3 wheel --no-deps --no-build-isolation \
-            --wheel-dir "$wheelhouse" \
-            contracts/foundation contracts/skill contracts/motion contracts/learning operations/account operations/world operations/monitoring operations/notifications middleware/skills/api middleware/skills/manipulation operations/site_execution middleware/robot_execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway
+          printf '%s\n' \
+            contracts/foundation contracts/skill contracts/motion contracts/learning \
+            operations/account operations/world operations/monitoring operations/notifications \
+            middleware/skills/api middleware/skills/manipulation operations/site_execution \
+            middleware/robot_execution/local operations/processes/palletizing \
+            integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway \
+            | xargs -P 4 -I{} pip3 wheel --no-deps --no-build-isolation --wheel-dir "$wheelhouse" {}
 
       - name: Upload ROS-free platform API wheels
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (pinned commit)
@@ -158,7 +175,7 @@ jobs:
     name: test (${{ matrix.name }})
     runs-on: ${{ inputs.runs_on || 'ubuntu-26.04' }}
     container:
-      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:59245c63b56db2a87722baf0b6696853f55d3f9c85dfc4688a53a946032a0685
+      image: ghcr.io/robotics-team-1213/rosy-ci@sha256:8d4c773c166b46ccdaad27a891cdf2aed429b6b42644b8b33696ca36da9b25af
       credentials:
         username: ${{ github.actor }}
         password: ${{ github.token }}
@@ -169,15 +186,18 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.scope.outputs.matrix) }}
     steps:
-      # 전체 이력: 모듈 logs.md 의 append-only 검사가 PR base / push 이전 커밋과 비교한다.
-      # 얕은 clone 이면 HEAD 만 비교되어 이미 커밋된 기록의 수정을 잡지 못한다 (D-61).
+      # 전체 이력(D-61)은 git 이력·객체를 읽는 극소수 시험만 전체 clone 하고,
+      # 나머지는 shallow checkout(fetch-depth: 1, fetch-tags: false)으로 단축한다.
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (pinned commit)
         with:
-          fetch-depth: 0
+          fetch-depth: ${{ !matrix.git_history && 1 || 0 }}
+          fetch-tags: false
 
       - name: Fix git safe directory (container)
-        run: git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+        run: |
+          git config --system --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
 
       # The image (.github/ci-image/Dockerfile, build-ci-image.yml) carries the apt packages, the hash-locked
       # device runtime, test tools, account OAuth, receiver crypto and Chromium. These asserts keep the old
@@ -241,25 +261,28 @@ jobs:
             echo "PYTHONPATH=/tmp/rosy-pinky-raw-tools${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
           fi
 
-      - name: Cache Pinky CPU torch wheel
+      - name: Cache Pinky CPU torch tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
         with:
-          path: /tmp/pip-cache-pinky
-          key: ${{ runner.os }}-pinky-torch-2.7.1
+          path: /tmp/rosy-pinky-torch
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-pinky-torch-2.7.1
 
       - name: Install Pinky CPU model comparison tools
         if: contains(toJSON(matrix.invocations), 'learning/training/pinky')
         run: |
-          pip3 install --cache-dir /tmp/pip-cache-pinky --break-system-packages --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
-          python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
+          if [ ! -d /tmp/rosy-pinky-torch/torch ]; then
+            pip3 install --no-cache-dir --break-system-packages --target /tmp/rosy-pinky-torch --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+          fi
+          PYTHONPATH="/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" python3 -c "import numpy as np, torch, cv2; a=np.zeros((2,2,3),dtype=np.uint8); assert torch.from_numpy(a).numpy().shape==a.shape; assert cv2.resize(a,(4,4)).shape==(4,4,3); print(np.__version__,torch.__version__,cv2.__version__)"
+          echo "PYTHONPATH=/tmp/rosy-pinky-torch${PYTHONPATH:+:$PYTHONPATH}" >> "$GITHUB_ENV"
 
       - name: Cache OMX ACT CPU verification tools
         if: matrix.name == 'omx-act-cpu'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
         with:
           path: /tmp/rosy-omx-act-cpu
-          key: ${{ runner.os }}-${{ runner.arch }}-59245c63b56d-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-omx-act-cpu-${{ hashFiles('deploy/robot/omx/requirements-lerobot-export.txt') }}
 
       - name: Install OMX ACT CPU verification tools
         if: matrix.name == 'omx-act-cpu'
@@ -316,8 +339,20 @@ jobs:
             --find-links "$wheelhouse" \
             core_common==0.0.3 rosy-contracts-skill==0.1.1 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.17 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-notifications==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
 
+      - name: Cache ROS interfaces overlay
+        if: matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')
+        id: rosidl-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0 (pinned commit)
+        with:
+          path: |
+            build/interfaces
+            install/interfaces
+          key: ${{ runner.os }}-${{ runner.arch }}-8d4c773c166b-rosidl-${{ hashFiles('contracts/ros_idl/**') }}
+
       - name: Build (colcon)
         if: matrix.kind == 'smoke' || (matrix.ros == 'overlay' && toJSON(matrix.colcon) != 'false')
+        env:
+          ROSIDL_CACHE_HIT: ${{ steps.rosidl-cache.outputs.cache-hit }}
         run: |
           # 러너 셸은 컨테이너 엔트리포인트를 우회하므로 ROS 환경을 직접 얹는다 —
           # 아니면 CMake가 ament_cmake를 찾지 못해 빌드 자체가 시작되지 않는다.
@@ -333,8 +368,15 @@ jobs:
           # D-427: colcon runs from the repo root over the manifest's colcon_roots;
           # build/install/log land at the repo root, never inside a source root.
           COLCON_ROOTS="$(python3 tools/harness/colcon_roots.py)"
+          SKIP_ARGS=""
+          if [ "${ROSIDL_CACHE_HIT:-}" = "true" ] && [ -f install/interfaces/share/interfaces/package.sh ] && grep -qF "$(pwd)/install/interfaces" install/interfaces/share/interfaces/package.sh; then
+            . install/interfaces/share/interfaces/package.sh
+            SKIP_ARGS="--packages-skip interfaces"
+          elif [ "${ROSIDL_CACHE_HIT:-}" = "true" ]; then
+            rm -rf build/interfaces install/interfaces
+          fi
           colcon --log-base log build --symlink-install --base-paths $COLCON_ROOTS \
-            --build-base build --install-base install \
+            --build-base build --install-base install $SKIP_ARGS \
             --event-handlers console_direct+
 
       - name: Lint (flake8)

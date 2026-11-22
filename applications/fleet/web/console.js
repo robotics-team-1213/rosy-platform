@@ -395,7 +395,7 @@ const signals = { ...rawSignals, presence: () => (owns("drive") ? rawSignals.pre
 // D-410 — 운용 화면의 카메라는 영상 프리뷰만 띄운다. 경기장/맵 보정 뷰는 설치 화면이 가진다.
 const visionView = createVisionView({
   scope: pageScope, el, call, rawOnly: true,
-  onSources: (sample) => { pathSample.vision = sample; paintSitePath(); },
+  onSources: (sample) => { if (auth.locked || !auth.role) return; pathSample.vision = sample; paintSitePath(); },
 });
 mapView.bindCamera(visionView);
 
@@ -413,7 +413,9 @@ const trackingView = {
 const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = createConsoleAuth({ pageScope, el, view, auth, assistant,
   call, fleetClient, render, operatorControls, confirmedAction, connectionView, workView, incidents, visionView,
   trackingView, mapView, formation, dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
-  refreshRobotApps, refreshDispatchControl, refreshDiscovery });
+  refreshRobotApps, refreshDispatchControl, refreshDiscovery,
+  refreshVision: () => (owns("drive") ? visionView.refreshSources() : undefined),
+  clearVisionSample: () => { pathSample.vision = null; paintSitePath(); } });
 
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가
 // 바뀌면 다시 풀고 지도를 새로 고침 없이 다시 그린다(캐시는 ui.js가 먼저 비운다).
@@ -432,7 +434,6 @@ connectionMode();
 refreshState();
 refreshAuthorization();
 if (owns("drive")) {
-  visionView.refreshSources();
   mapView.refresh();
   trackingView.refresh();
   chargeBays.refresh();
@@ -460,7 +461,7 @@ pollDrive(() => mapView.refreshSightings(), STATE_MS);
 pollDrive(() => mapView.refreshTraffic(), STATE_MS);
 pollDrive(() => mapView.refreshGuide(), STATE_MS);  // D-536
 poll(() => trackingView.refresh(), TRACKING_MS);
-pollDrive(() => visionView.refreshFrame(), 1500);
+pollDrive(() => { if (!auth.locked && auth.role) return visionView.refreshFrame(); }, 1500);
 
 
 pageScope.onResume(() => {
@@ -469,6 +470,5 @@ pageScope.onResume(() => {
   refreshAuthorization();  // refreshes the map once the session answers
   if (owns("drive")) {
     trackingView.refresh();
-    visionView.refreshSources();
   }
 });

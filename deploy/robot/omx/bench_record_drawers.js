@@ -81,7 +81,7 @@ function closeDrawer(restoreFocus){
 }
 function openDrawer(name,openerEl,focusEl){
   const host=$('side-drawer-host');
-  if(!host||(BUSY.has(lastStatus?.status)&&name!=='records'))return;
+  if(!host||(benchSessionActive()&&name!=='records'))return;
   if(activeDrawer===name&&!host.hidden){closeDrawer(true);return;}
   const menuWrap=$('drawer-menu-wrap');
   if(menuWrap){menuWrap.classList.remove('open');$('btn-drawer-menu')?.setAttribute('aria-expanded','false');}
@@ -149,15 +149,10 @@ if($('hdr-help-btn'))$('hdr-help-btn').addEventListener('click',()=>{
   sec.open=true;
   sec.scrollIntoView({block:'nearest'});
 });
-if($('hdr-next-ep-btn'))$('hdr-next-ep-btn').addEventListener('click',()=>{
-  if(typeof setNotice==='function')setNotice('start-reasons','warn','서버 요청 없음: POST /api/episode/next (다음 에피소드)');
-});
-if($('hdr-rerecord-btn'))$('hdr-rerecord-btn').addEventListener('click',()=>{
-  if(typeof setNotice==='function')setNotice('start-reasons','warn','서버 요청 없음: POST /api/episode/rerecord (다시 녹화)');
-});
 f.arm.addEventListener('change',()=>{
   for(const cb of document.querySelectorAll('#cal-robot-list input, #cal-leader-list input'))cb.checked=false;
   applyArmRules(true);
+  if(typeof renderCamGuide==='function')renderCamGuide();
   updateCameraRecordingMask();
   pollCameras();
   validateStart();
@@ -194,10 +189,10 @@ function isEditableTarget(el){
 const DRAWER_KEYS={'1':['setup','btn-drawer-setup'],'2':['bindings','btn-drawer-bindings'],'3':['start','btn-drawer-start'],'4':['records','btn-drawer-records']};
 async function keyboardStop(){
   if(stopInFlight)return;
+  stopRequestVersion++;
   stopInFlight=true;setReqError('');
   try{
     const st=await api('/stop',{});renderStatus(st);
-    if(st&&st.stop_result&&st.stop_result.stopped===false)setNotice('stop-result','info',st.stop_result.message,{ttlMs:4000});
   }catch(err){setReqError('정지 요청: '+err.message);}
   finally{stopInFlight=false;syncHeaderAndSlimBar();}
 }
@@ -206,7 +201,7 @@ document.addEventListener('keydown',e=>{
   const editable=isEditableTarget(e.target);
   const low=String(e.key||'').toLowerCase();
   if((e.ctrlKey&&e.key==='Enter')||(e.altKey&&low==='s')){
-    if(window.benchStartReady&&!BUSY.has(lastStatus?.status)){e.preventDefault();f.requestSubmit();}
+    if(window.benchStartReady&&currentBenchPhase()==='setup'){e.preventDefault();f.requestSubmit();}
     return;
   }
   if(e.key==='Escape'||(e.altKey&&low==='x')){
@@ -226,19 +221,22 @@ document.addEventListener('keydown',e=>{
   }
   if(e.ctrlKey||e.metaKey||e.altKey||editable)return;
   if(e.key==='/'){
-    if(BUSY.has(lastStatus?.status))return;
+    if(benchSessionActive())return;
     openDrawer('setup',$('btn-drawer-setup'),$('task-search'));
     setTaskListOpen(true);
     const ts=$('task-search');if(ts){e.preventDefault();ts.focus();ts.select();}
   }else if(e.code==='Space'||e.key===' '){
     if(e.target&&e.target.closest&&e.target.closest('button, [role="button"], a, summary'))return;
-    const rb=$('hdr-record-btn');if(rb&&!rb.disabled){e.preventDefault();rb.click();}
+    const rb=$('hdr-prepare-btn').hidden?$('hdr-record-btn'):$('hdr-prepare-btn');
+    if(!rb.hidden&&!rb.disabled){e.preventDefault();rb.click();}
   }else if(e.key==='ArrowRight'||(!e.shiftKey&&low==='n')){
     const nb=$('hdr-next-ep-btn');if(nb&&!nb.disabled){e.preventDefault();nb.click();}
   }else if(e.key==='ArrowLeft'||(!e.shiftKey&&low==='r')){
     const rb=$('hdr-rerecord-btn');if(rb&&!rb.disabled){e.preventDefault();rb.click();}
   }else if(e.shiftKey&&low==='r'){
     const rfb=$('hdr-refresh-btn');if(rfb&&!rfb.disabled){e.preventDefault();rfb.click();}
+  }else if(e.shiftKey&&low==='c'){
+    const cb=$('hdr-camera-restart-btn');if(!cb.disabled){e.preventDefault();cb.click();}
   }else if(!e.shiftKey&&low==='h'){
     const hb=$('hdr-home-btn');if(hb&&!hb.disabled){e.preventDefault();hb.click();}
   }else if(!e.shiftKey&&low==='c'){
@@ -275,17 +273,19 @@ f.addEventListener('keydown',e=>{
   if(e.repeat&&(e.key==='Enter'||e.key===' '))e.preventDefault();
 });
 
-f.addEventListener('submit',async e=>{
-  e.preventDefault();
-  if(startInFlight||!validateStart())return;
-  startInFlight=true;
-  setReqError('');
+f.addEventListener('submit',e=>{e.preventDefault();startBench('/start');});
+$('hdr-prepare-btn').addEventListener('click',()=>startBench('/prepare'));
+$('hdr-start-now-btn').addEventListener('click',()=>f.requestSubmit());
+
+async function startBench(path){
   validateStart();
+  if(!window.benchStartReady||currentBenchPhase()!=='setup')return;
+  setReqError('');
   const lp={};
   const sEp=$('lp-episodes')?.value?.trim()||'', sEt=$('lp-ep-time')?.value?.trim()||'', sRt=$('lp-reset-time')?.value?.trim()||'';
-  if(sEp){const v=Number(sEp);if(!Number.isInteger(v)||v<1||v>500){setReqError('에피소드 수(num_episodes)는 1~500 정수여야 합니다.');startInFlight=false;validateStart();return;}lp.num_episodes=v;}
-  if(sEt){const v=Number(sEt);if(!Number.isFinite(v)||v<1||v>3600){setReqError('에피소드 시간(episode_time_s)은 1~3600초여야 합니다.');startInFlight=false;validateStart();return;}lp.episode_time_s=v;}
-  if(sRt){const v=Number(sRt);if(!Number.isFinite(v)||v<0.5||v>600){setReqError('리셋 시간(reset_time_s)은 0.5~600초여야 합니다.');startInFlight=false;validateStart();return;}lp.reset_time_s=v;}
+  if(sEp){const v=Number(sEp);if(!Number.isInteger(v)||v<1||v>500){setReqError('에피소드 수(num_episodes)는 1~500 정수여야 합니다.');return;}lp.num_episodes=v;}
+  if(sEt){const v=Number(sEt);if(!Number.isFinite(v)||v<1||v>3600){setReqError('에피소드 시간(episode_time_s)은 1~3600초여야 합니다.');return;}lp.episode_time_s=v;}
+  if(sRt){const v=Number(sRt);if(!Number.isFinite(v)||v<0.5||v>600){setReqError('리셋 시간(reset_time_s)은 0.5~600초여야 합니다.');return;}lp.reset_time_s=v;}
   const revOn=$('toggle-reverse-btn')?.getAttribute('aria-pressed')==='true';
   const body={
     arm:f.arm.value,
@@ -302,17 +302,21 @@ f.addEventListener('submit',async e=>{
     lerobot_params:lp,
     calibrations:[...document.querySelectorAll('#cal-robot-list input:checked:not(:disabled), #cal-leader-list input:checked:not(:disabled)')].map(i=>i.value)
   };
+  saveArmPreset();
+  startInFlight=true;
+  const stopVersion=stopRequestVersion;
   const seq=++latestStatusSeq;
+  validateStart();
   try{
-    const st=await api('/start',body);
-    if(seq!==latestStatusSeq)return;
-    saveArmPreset();
-    lastStartMeta={key:sessionKey(st),name:body.name,arm:body.arm,task:body.task};
-    renderStatus(st);
+    const st=await api(path,body);
+    lastStartMeta={key:sessionKey(st),name:body.name,arm:body.arm,task:body.task,
+      episodeTime:lp.episode_time_s??choices?.task_cards?.[body.task]?.episode_time_s??choices?.config_meta?.[body.config]?.episode_time_s};
+    if(seq===latestStatusSeq&&stopVersion===stopRequestVersion&&st.status)renderStatus(st);
+    await pollStatus();
   }catch(err){
     setReqError(err.message);
   }finally{
     startInFlight=false;
     validateStart();
   }
-});
+}

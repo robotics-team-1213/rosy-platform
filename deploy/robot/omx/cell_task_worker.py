@@ -364,7 +364,7 @@ def main(argv: list[str] | None = None) -> None:
                 last_cam_push = now_m
             if args.dry_run_hw or args.allow_legacy_live_jog or args.execute_mode == "guarded-pick":
                 _LAST_SAFETY_ERROR[0] = None
-                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, hold_check_fn=check_arm_hold)
+                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act, prep_dir=prep_dir, hold_check_fn=check_arm_hold)
                 if not runs and _LAST_SAFETY_ERROR[0] is not None:
                     raise _LAST_SAFETY_ERROR[0]
             else:

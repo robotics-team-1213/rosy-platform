@@ -294,8 +294,8 @@ class Session:
                     command.append(f"--operating-profile={Path(self.operating_profile).expanduser().resolve()}")
                 command += [
                     f"--{k.replace('_', '-')}={self.chunks[k]}"
-                    for k in ("params", "load_model")
-                    if self.chunks.get(k)
+                    for k in ("params", "load_model", "rim_z_m")
+                    if self.chunks.get(k) not in (None, "")
                 ]
                 record["source_mode"] = "scripted_teacher"
                 record["chunks"] = self.chunks

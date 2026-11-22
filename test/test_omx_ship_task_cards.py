@@ -23,5 +23,5 @@ def test_every_ship_spot_has_a_valid_card(tmp_path, monkeypatch):
         assert c['task_id'] == f"belt-to-{c['target_slot']}"
         h, r, l = c['target_slot'][len('ship-h')], c['target_slot'][-4], c['target_slot'][-1]
         assert f'hold h{h}' in c['single_task'] and f'(r{r})' in c['single_task'] and f'(l{l})' in c['single_task']
-        assert ('shot_arm' in c) == c['target_slot'].startswith('ship-h1')
+        assert c.get('shot_arm') == ('arm_a' if int(r) == 0 else 'arm_b')
         assert '도달 미검증(planned_unverified)' in c['raw']

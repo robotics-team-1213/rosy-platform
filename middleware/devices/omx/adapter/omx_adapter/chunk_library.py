@@ -34,21 +34,12 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
     `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S).
     `speed` is the fraction of the guard speed (a plan's transit_speed)."""
-    if (
-        start[1] >= -35.0
-        and goal[1] >= -35.0
-        and abs(start[0] - goal[0]) <= 15.0
-        and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0
-        and abs(start[4] - goal[4]) <= 45.0
-    ):
-        return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.25,
-                    rise_speed=RISE_SPEED)
+    if (start[1] >= -35.0 and goal[1] >= -35.0 and abs(start[0] - goal[0]) <= 15.0
+            and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0 and abs(start[4] - goal[4]) <= 45.0):
+        return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.25, rise_speed=RISE_SPEED)
     if transit is None:
-        transit = (
-            {1: max(TRANSIT[1], min(start[1], goal[1], -16.0) - 5.0), 2: TRANSIT[2], 3: TRANSIT[3]}
-            if start[1] > -22.0 and goal[1] > -22.0 and abs(start[0] - goal[0]) <= 15.0
-            else TRANSIT
-        )
+        transit = {1: max(TRANSIT[1], min(start[1], goal[1], -16.0) - 5.0), 2: TRANSIT[2], 3: TRANSIT[3]} if (
+            start[1] > -22.0 and goal[1] > -22.0 and abs(start[0] - goal[0]) <= 15.0) else TRANSIT
     waypoints = [list(start)]
     waypoints.append(waypoints[-1][:5] + [grip_transit])
     waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])
@@ -84,43 +75,52 @@ def park_path(start: list, home: list, closed: float, fps: int, transit: dict | 
     stay folded for near-home or already-folded pan turns (`wait` side -> `home`) instead of unfolding."""
     goal = list(home[:5]) + [closed]
     near_home = max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 5.0 and abs(start[5] - closed) <= 5.0
-    folded_pose = (
-        start[1] <= -50.0
-        and goal[1] <= -50.0
-        and max(abs(a - b) for a, b in zip(start[1:4], goal[1:4])) <= 10.0
-        and abs(start[0] - goal[0]) <= 70.0
-        and abs(start[4] - goal[4]) <= 45.0
-    )
+    folded_pose = (start[1] <= -50.0 and goal[1] <= -50.0 and max(abs(a - b) for a, b in zip(start[1:4], goal[1:4])) <= 10.0
+                   and abs(start[0] - goal[0]) <= 70.0 and abs(start[4] - goal[4]) <= 45.0)
     if near_home or folded_pose:
         waypoints = [list(start)] + ([list(start[:5]) + [closed]] if abs(start[5] - closed) > 5.0 else [])
         if abs(start[4] - goal[4]) > FOLDED_ROLL_LIFT[0]:
             waypoints += [[*w[:2], w[2] + FOLDED_ROLL_LIFT[1], *w[3:]] for w in (waypoints[-1], goal)]
         waypoints.append(goal)
         rate = (0.5 if abs(start[0] - goal[0]) <= 12.0 else 1.0) * speed * PARK_SPEED
-        return flow(waypoints, fps, rate, blend=[False] * len(waypoints), blend_s=0.2,
-                    rise_speed=RISE_SPEED)
+        return flow(waypoints, fps, rate, blend=[False] * len(waypoints), blend_s=0.2, rise_speed=RISE_SPEED)
     return transit_path(start, goal, closed, fps, transit, speed)
+
+
+def _finite_in(val, lo: float, hi: float) -> bool:
+    try:
+        f = float(val) if not isinstance(val, bool) and isinstance(val, (int, float)) else math.nan
+    except OverflowError:
+        return False
+    return math.isfinite(f) and lo <= f <= hi
 
 
 def load_library(path: Path) -> dict:
     library = json.loads(Path(path).read_text())
-    if library.get("schema") != SCHEMA or library.get("names") != NAMES:
+    if not isinstance(library, dict) or library.get("schema") != SCHEMA or library.get("names") != NAMES:
         raise SystemExit(f"chunk library needs schema {SCHEMA} and the six follower names")
-    if not isinstance(library.get("fps"), int) or library["fps"] <= 0:
+    fps = library.get("fps")
+    if type(fps) is not int or not 1 <= fps <= 1000:
         raise SystemExit("chunk library needs its fps")
     chunks = library.get("chunks")
     if not isinstance(chunks, dict) or not chunks:
         raise SystemExit("chunk library has no chunks")
     for name, frames in chunks.items():
-        if not frames or any(len(f) != 6 or not all(isinstance(v, (int, float)) and math.isfinite(v)
-                                                    and -100 <= v <= 100 for v in f) for f in frames):
+        if (not isinstance(frames, list) or not frames
+                or any(not isinstance(f, (list, tuple)) or len(f) != 6
+                       or not all(_finite_in(v, -100.0, 100.0) for v in f) for f in frames)):
             raise SystemExit(f"chunk {name}: frames must be six finite values within -100..100")
-        if too_fast(frames, library["fps"]):
+        if too_fast(frames, fps):
             raise SystemExit(f"chunk {name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s); "
                              "regenerate the library with grasp_planner.py or teach_trajectory.py")
-    if not isinstance(library.get("gripper_closed"), (int, float)):
-        raise SystemExit("chunk library needs gripper_closed (the taught fully closed value)")
+    if not _finite_in(library.get("gripper_closed"), -100.0, 100.0):
+        raise SystemExit("chunk library needs gripper_closed (finite value in -100..100)")
     speed = library.get("transit_speed", 0.85)
-    if isinstance(speed, bool) or not isinstance(speed, (int, float)) or not 0.1 <= speed <= 0.85:
+    if not _finite_in(speed, 0.1, 0.85):
         raise SystemExit(f"transit_speed {speed!r} must be 0.1..0.85 of the guard speed (blended corners need the rest)")
+    if (transit := library.get("transit")) is not None and (
+            not isinstance(transit, dict) or any(k not in (*NAMES, *"012345") or not _finite_in(v, -100.0, 100.0) for k, v in transit.items())):
+        raise SystemExit("chunk library transit joints must be finite values within -100..100")
+    if library.get("jaw_empty_stop") is not None and not _finite_in(library["jaw_empty_stop"], -100.0, 100.0):
+        raise SystemExit("chunk library jaw_empty_stop must be finite within -100..100")
     return library

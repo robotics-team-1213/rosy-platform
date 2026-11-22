@@ -66,6 +66,8 @@
     "robot-dock-gallery.js": "text/javascript",
     "robot-dock-model.js": "text/javascript",
     "component-controls.css": "text/css",
+    "choice-controls.css": "text/css",
+    "robot-dock.css": "text/css",
     "component-gallery.css": "text/css",
     "component-gallery.html": "text/html",
     "component-gallery.js": "text/javascript",

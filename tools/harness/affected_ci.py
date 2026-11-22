@@ -56,6 +56,24 @@ CI_TEST_SECONDS = {**json.loads(Path(__file__).with_name("ci_test_seconds.json")
                    **FLEET_TEST_SECONDS}
 MAX_CI_JOBS = 18  # GitHub Free runs 20 jobs at once; scope and ci-result take none while the tests run
 _STATION_SCHEDULING = "test/integration/core_fleet/test_station_camera_scheduling.py"
+_GIT_HISTORY_TESTS = (
+    "test/test_harness_contracts.py",
+    "test/architecture/test_module_structure.py",
+    "test/test_safety_review.py",
+    "test/test_remote_test_tools.py",
+    "test/test_remote_fixture_isolation.py",
+)
+
+
+def _needs_git_history(entry: dict) -> bool:
+    """True only for matrix runners whose invocations can collect tests that query git history on ROOT."""
+    for inv in entry.get("invocations") or ():
+        paths = [p.split("::", 1)[0] for p in inv
+                 if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
+        skip = {p.split("=", 1)[1] for p in inv if p.startswith("--ignore=")}
+        if any(affected_ros._under(h, p) and h not in skip for h in _GIT_HISTORY_TESTS for p in paths):
+            return True
+    return False
 
 
 def consolidated(include: list[dict]) -> list[dict]:
@@ -251,7 +269,11 @@ def ci_matrix(repo: Repo, sel: Selection) -> dict:
         entry.setdefault("ros", "overlay")
     include = affected_exclusive.matrix(entries, affected_exclusive.TARGET in repo.test_files)
     for entry in include:
-        if entry["kind"] != "pytest" or entry["ros"] != "overlay" or not entry.get("invocations"):
+        if entry["kind"] != "pytest" or not entry.get("invocations"):
+            continue
+        if _needs_git_history(entry):
+            entry["git_history"] = True
+        if entry["ros"] != "overlay":
             continue
         paths = [p.split("::", 1)[0] for inv in entry["invocations"] for p in inv
                  if not p.startswith("-") and not affected_exclusive.ENV.match(p)]
