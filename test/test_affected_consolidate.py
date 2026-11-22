@@ -272,3 +272,37 @@ def test_build_smoke_skips_pure_contract_version_pin_but_keeps_code_edits():
     repo._texts[affected_narrow.CONTRACT_VERSION_FILE] = 'CONTRACT = "v1.1"\n\ndef helper():\n    return 1\n'
     assert affected_ci.buildable(repo, pin_sel)
     assert affected_ci.buildable(SimpleNamespace(parts={"colcon_roots": ["middleware/core"]}), pin_sel)
+
+
+def test_pack_to_limit_respects_max_weight_so_heavy_shards_do_not_time_out():
+    import affected_ci
+
+    costs = {f"test_fleet_{i}.py": 480 for i in range(8)}
+    fleet_shards = [_e(f"affected-{i + 1}", "none", [f"operations/fleet/test/test_fleet_{i}.py"]) for i in range(8)]
+    special = [_e(f"browser-overlay-{i + 1}of9", "overlay", [f"test/test_b{i}_browser.py"]) for i in range(9)]
+    packed = affected_ros.pack_to_limit([*fleet_shards, *special], costs, affected_ci.PR_JOB_CAP)
+
+    affected_jobs = [e for e in packed if e["name"].startswith("affected-")]
+    assert len(packed) == 13
+    assert len(affected_jobs) == 4
+    assert all(affected_ros._entry_weight(e, costs) == 960 <= affected_ros.MAX_PACKED_WEIGHT for e in affected_jobs)
+    assert sorted(tuple(inv) for e in packed for inv in e["invocations"]) == sorted(
+        tuple(inv) for e in [*fleet_shards, *special] for inv in e["invocations"]
+    )
+
+
+def test_pack_to_limit_respects_max_files_for_unmeasured_root_shards():
+    import affected_ci
+
+    root_shards = [
+        {**_e(f"affected-{i + 1}", "overlay", [f"test/test_r{i}_{j}.py" for j in range(395)]), "colcon": False}
+        for i in range(3)
+    ]
+    special = [_e(f"browser-overlay-{i + 1}of10", "overlay", [f"test/test_b{i}_browser.py"]) for i in range(10)]
+    packed = affected_ros.pack_to_limit([*root_shards, *special], {}, affected_ci.PR_JOB_CAP)
+
+    assert len(packed) == 13
+    assert [len(e["invocations"]) for e in packed if e["name"].startswith("affected-")] == [1, 1, 1]
+    assert sorted(tuple(inv) for e in packed for inv in e["invocations"]) == sorted(
+        tuple(inv) for e in [*root_shards, *special] for inv in e["invocations"]
+    )
