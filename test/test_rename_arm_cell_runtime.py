@@ -19,8 +19,8 @@ case "$1" in
     if [ "$2" = -aq ]; then printf '%s\\n' cell-a-fleet cell-a-vision cell-a-peer-cell-a; fi
     ;;
   volume)
-    if [ "$2" = inspect ] && [ "$3" != cell-a_cell_a_data ]; then exit 1; fi
-    echo "volume $2 $3" >> "$FIXTURE_DIR/actions"
+    [ "$2" = inspect ] || exit 15
+    [ "$3" = cell-a_cell_a_data ]
     ;;
   inspect)
     case "$3" in
@@ -43,8 +43,6 @@ case "$1" in
       *.State.Health*)
         if [ "$SCENARIO" = peer ] && [ "$4" = cell-a-peer-cell-a ]; then
           echo no-healthcheck
-        elif [ "$SCENARIO" = rollback ] && [ "$4" = arm-cell-peer-cell-a ]; then
-          echo unhealthy
         else
           echo healthy
         fi
@@ -68,19 +66,8 @@ case "$1" in
     case "$1" in
       ps) printf '%s-%s\\n' "$project" "$3" ;;
       config) ;;
-      down)
-        echo "$project down" >> "$FIXTURE_DIR/actions"
-        if flock -n "$OPERATOR_HOME/rosy-omx/session.lock" true; then exit 5; fi
-        if [ "$SCENARIO" = down ] && [ "$project" = cell-a ]; then exit 6; fi
-        ;;
-      up)
-        echo "$project up" >> "$FIXTURE_DIR/actions"
-        if [ "$project" = cell-a ]; then cmp "$file" "$FIXTURE_DIR/old.yaml"; fi
-        ;;
+      *) exit 15 ;;
     esac
-    ;;
-  run)
-    if [[ "${*: -1}" == *sha256sum* ]]; then echo 'matching  fleet.sqlite'; fi
     ;;
   *) exit 15 ;;
 esac
@@ -98,17 +85,16 @@ printf 'LoadState=loaded\\nActiveState=%s\\nUnitFileState=%s\\n' "$active" "$ins
     ("scenario", "expected_message"),
     [
         ("overlay", "live Compose provenance differs"),
-        ("overlay_dry", "dry-run complete"),
-        ("overlay_apply", "live overlay switch requires an authenticated peer check"),
+        ("overlay_dry", "preflight passed"),
+        ("overlay_apply", "preflight only; live switch requires"),
+        ("single_apply", "preflight only; live switch requires"),
         ("peer", "peer-cell-a=no-healthcheck"),
         ("updater_active", "legacy updater rosy-cell-autoupdate.service is active"),
         ("updater_enabled", "legacy updater rosy-cell-autoupdate.timer is enabled"),
         ("stale_s", "arm_s lacks fresh complete passive torque-OFF evidence"),
         ("stale_motor", "arm_s lacks fresh complete passive torque-OFF evidence"),
         ("job_lock", "active job locks"),
-        ("down", "rollback verified"),
-        ("rollback", "rollback verified"),
-        ("success", "rename complete"),
+        ("success", "preflight passed"),
     ],
 )
 def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
@@ -121,7 +107,6 @@ def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
     if scenario in {"overlay_dry", "overlay_apply"}:
         (old_dir / "compose.d1039.yaml").write_text("services: {}\n")
         (old_dir / "cell-a.env").write_text("ROSY_SITE_FLEET_TAG=fixture\n")
-    (tmp_path / "old.yaml").write_text(old_yaml)
     operator = tmp_path / "operator"
     sessions = operator / "rosy-omx"
     sessions.mkdir(parents=True)
@@ -153,11 +138,9 @@ def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
         path = bin_dir / name
         path.write_text(content)
         path.chmod(0o755)
-    runbook = RUNBOOK.read_text().replace("/etc/rosy/", f"{tmp_path}/").replace(
-        "/var/backups/rosy-rename", f"{tmp_path}/backup"
-    )
+    runbook = RUNBOOK.read_text().replace("/etc/rosy/", f"{tmp_path}/")
     result = subprocess.run(
-        ["bash", "-s", "--"] + ([] if scenario == "overlay_dry" else ["--apply"]),
+        ["bash", "-s", "--"] + (["--apply"] if scenario.endswith("_apply") else []),
         input=runbook,
         env=dict(os.environ, FIXTURE_DIR=str(tmp_path), OPERATOR_HOME=str(operator),
                  SCENARIO=scenario, PATH=f"{bin_dir}:{os.environ['PATH']}"),
@@ -167,21 +150,11 @@ def test_arm_cell_runtime_rename(tmp_path, scenario, expected_message):
     )
     assert expected_message in result.stdout + result.stderr
     assert (result.returncode == 0) == (scenario in {"success", "overlay_dry"})
-    actions = (tmp_path / "actions").read_text()
-    if scenario in {"overlay", "overlay_dry", "overlay_apply", "peer", "updater_active", "updater_enabled",
-                    "stale_s", "stale_motor", "job_lock"}:
-        assert " down" not in actions and " up" not in actions
-    if scenario in {"overlay_dry", "overlay_apply"}:
-        assert "verified overlay and env" in actions
-        assert not (tmp_path / "arm-cell").exists()
-    if scenario == "down":
-        assert "volume create" not in actions
-    if scenario == "rollback":
-        assert actions.index("arm-cell down") < actions.index("cell-a up")
-        assert "volume rm" not in actions
-    if scenario == "success":
-        assert old_dir.is_symlink()
-        assert (old_dir / "compose.yaml").read_text().count("arm_cell_data") == 1
-    else:
-        assert not old_dir.is_symlink()
-        assert (old_dir / "compose.yaml").read_text() == old_yaml
+    actions = tmp_path / "actions"
+    if scenario == "overlay_dry":
+        assert "verified overlay and env" in actions.read_text()
+    if scenario.endswith("_apply"):
+        assert not actions.exists()
+    assert not (tmp_path / "arm-cell").exists()
+    assert not old_dir.is_symlink()
+    assert (old_dir / "compose.yaml").read_text() == old_yaml

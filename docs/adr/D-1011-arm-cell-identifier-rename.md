@@ -16,7 +16,7 @@
 2. **입력 별칭.** `UNIT_IDENTIFIER_ALIASES = {"CELL-A": "ARM-CELL"}` 한 곳에 두고, 입력이 도착하는 모든 경로에서 정규화한다: `ControlUnitTopology.unit()`(모든 범위 해석), peers 설정 key(`peers.CELL-A`), 수신 service principal(`control-unit:CELL-A` — 관제의 첫 인사이자 매 요청의 신원), 정지 ingress의 `target_unit`·`expected_controls` key, `/units/{unit_id}` 조회. 출력·저장은 항상 새 id다. 별칭과 새 key를 동시에 정의하는 peers 설정은 거절을 유지한다.
 3. **config_revision은 느슨하게 하지 않는다.** 구 revision을 가진 위임·정지 요청은 기존처럼 거절한다. 양쪽 설정(`unit_id`·manifest·peers·users)은 같은 보수 창구에 갱신한다.
 4. **원장 마이그레이션.** `ControlUnitStore`가 identity 충돌 검사 전에 멱등 마이그레이션을 돌린다. unit-id 열은 정확값만 재작성하고, `*_json` 문서는 **정확히 일치하는 값만**(부분문자열 아님) 바꾼다. `fleet_control_unit_identifier_events`에 감사 행(`from_id`·`to_id`·시각)을 남긴다. 재적용은 아무것도 쓰지 않는다. "DB를 재사용하지 않는다"는 일반 규칙에 이 개명만 이 회로로 허용한다(배포 문서 갱신).
-5. **호스트 전환은 dry-run 스크립트로.** `tools/ops/rename_arm_cell_runtime.sh`가 팔 세션 lock(`flock -n`, 없으면 거부)·작업 lock·motor-health 상태(`rosy.motor-health.v1`, 두 팔 모두 안전 상태)를 확인한 뒤, **스택을 먼저 끄고**(볼륨 속 sqlite/WAL 정합) 백업 → 볼륨 복사·모든 파일 sha256 대조 → `/etc/rosy/cell-a`를 `/etc/rosy/arm-cell`로 이동하고 compose 키·경로를 재작성(구 경로는 symlink) → Compose project 재기동 → fleet 컨테이너의 새 볼륨 mount 확인·건강 확인(healthcheck 없는 컨테이너는 건강 아님)을 `--apply`일 때만 수행한다. 실패 시 구 스택 `cell-a`를 자동으로 되살린다.
+5. **호스트 전환 전 사전 점검.** `tools/ops/rename_arm_cell_runtime.sh`는 Compose 구성과 서비스 건강, 팔 세션 lock(`flock -n`, 없으면 거부), 작업 lock, 모든 셀 팔의 최신 motor-health 상태를 읽기 전용으로 점검한다. 실제 전환은 원장 쓰기 차단, 양방향 피어 인증 검사, 갱신기 인계를 입증한 뒤에 진행한다. 전환 때 원본 스택을 정지하고 SQLite/WAL이 닫힌 상태로 백업한다. 새 볼륨의 파일별 SHA-256과 Fleet의 마운트를 확인한다. 새 스택을 수용하기 전 모든 필수 컨테이너의 명시적인 healthcheck 결과를 확인한다. 원장 쓰기를 재개하기 전에는 기존 구성과 볼륨으로 복구할 수 있어야 한다. 현재 스크립트는 `--apply`를 거부한다.
 
 ### Consequences
 
