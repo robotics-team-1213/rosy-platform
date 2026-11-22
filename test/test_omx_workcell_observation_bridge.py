@@ -25,6 +25,7 @@ _spec = importlib.util.spec_from_file_location("workcell_observation_bridge", RO
 bridge = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = bridge
 _spec.loader.exec_module(bridge)
+import workcell_camera_sender as camera_sender
 
 
 def test_terminal_health_file_advances_without_new_ros_positions_and_never_refreshes(monkeypatch, tmp_path):
@@ -205,8 +206,8 @@ def test_camera_sender_uses_verified_source_scoped_persistent_websocket(monkeypa
         opened.append((url, kwargs))
         return Connection()
     monkeypatch.setitem(sys.modules, "websockets.sync.client", SimpleNamespace(connect=connect))
-    packet = bridge.camera_packet
-    monkeypatch.setattr(bridge, "camera_packet", lambda sample: packet(sample, wall=100.1, monotonic=10.1))
+    packet = camera_sender.camera_packet
+    monkeypatch.setattr(camera_sender, "camera_packet", lambda sample: packet(sample, wall=100.1, monotonic=10.1))
     source = bridge.LatestSource(wall=lambda: 100, monotonic=lambda: 10)
     context = ssl.create_default_context()
     sender = bridge.CameraSender("wss://vision.example", "top", "top-secret", context=context)
@@ -271,13 +272,13 @@ def test_camera_mirror_paces_by_receiver_config_without_pacing_primary(monkeypat
         return Connection(host)
 
     monkeypatch.setitem(sys.modules, "websockets.sync.client", SimpleNamespace(connect=connect))
-    monkeypatch.setattr(bridge, "time", SimpleNamespace(
+    monkeypatch.setattr(camera_sender, "time", SimpleNamespace(
         monotonic=lambda: clock.now, time=lambda: 100.0 + clock.now,
     ))
     context = ssl.create_default_context()
     primary = bridge.CameraSender("wss://primary.example", "top", "secret", context=context)
     mirror = bridge.CameraSender("wss://mirror.example", "top", "secret", context=context, follow_receiver=True)
-    source = bridge.LatestSource(wall=bridge.time.time, monotonic=bridge.time.monotonic)
+    source = bridge.LatestSource(wall=camera_sender.time.time, monotonic=camera_sender.time.monotonic)
     for now in (10.0, 10.1, 10.2, 10.35, 10.4):
         clock.now = now
         source.put(100.0 + now, (b"jpeg", 640, 480))
