@@ -14,7 +14,7 @@ import pytest
 
 from core_common.protocol.port_events import PortEvent
 from fleet.server.auth.site_auth import build_authorize, build_role_guards
-from fleet.server.console.charge_bay_routes import install_charge_bay_routes
+from fleet.server.charge_bay_routes import install_charge_bay_routes
 from fleet.server.sitemap.pipeline_port_events import (
     CLAIM_STRIP_FIELDS,
     flush_pending_port_events_async,
