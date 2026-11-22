@@ -1,3 +1,5 @@
+import logging
+
 from fakes import run
 import pytest
 from fleet.hub.hub import HubError
@@ -421,3 +423,47 @@ def test_same_idempotency_key_returns_existing_task_without_second_dispatch(tmp_
     assert duplicate["task_id"] == first["task_id"]
     assert first["status"] == duplicate["status"] == "QUEUED"
     assert len(attempts) == 0
+
+
+def test_uncertain_dispatch_logs_cause_without_storing_raw_error(tmp_path, caplog):
+    service = _service(tmp_path / "fleet.sqlite3")
+    run(service.submit_navigation(
+        robot_id="rosy_01", x=1.0, y=2.0, yaw=0,
+        source="operator", actor_id="site-console", request_key="err-502",
+    ))
+
+    async def fail_502(_attempt):
+        raise RobotApiError("rosy_01", 502, "BAD_GATEWAY", "sensitive detail")
+
+    with caplog.at_level(logging.WARNING, logger="fleet.server.ledger.task_service"):
+        first = run(service.dispatch_next({"rosy_01"}, dispatch=fail_502))
+
+    assert first["status"] == "UNKNOWN"
+    assert first["reason"] == "COMMAND_RESULT_UNKNOWN"
+    assert "sensitive detail" not in repr(first)
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and first["task_id"] in r.getMessage()]
+    assert len(warnings) == 1
+    msg = warnings[0].getMessage()
+    assert "rosy_01" in msg and first["attempt_id"] in msg and "502" in msg and "BAD_GATEWAY" in msg
+
+    # Second task checks unclassified Exception logging.
+    caplog.clear()
+    service.store.release_resources(owner_kind="task", owner_id=first["task_id"])
+    run(service.submit_navigation(
+        robot_id="rosy_01", x=2.0, y=3.0, yaw=0,
+        source="operator", actor_id="site-console", request_key="err-timeout",
+    ))
+
+    async def fail_timeout(_attempt):
+        raise TimeoutError("socket dropped")
+
+    with caplog.at_level(logging.ERROR, logger="fleet.server.ledger.task_service"):
+        second = run(service.dispatch_next({"rosy_01"}, dispatch=fail_timeout))
+
+    assert second["status"] == "UNKNOWN"
+    assert second["reason"] == "COMMAND_RESULT_UNKNOWN"
+    assert "socket dropped" not in repr(second)
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR and second["task_id"] in r.getMessage()]
+    assert len(errors) == 1 and errors[0].exc_info is not None
+    err_msg = errors[0].getMessage()
+    assert "rosy_01" in err_msg and second["attempt_id"] in err_msg
