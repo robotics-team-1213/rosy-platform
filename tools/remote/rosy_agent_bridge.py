@@ -150,6 +150,15 @@ class RosyAgentBridge:
                 out = out.replace(tok, "[REDACTED]")
         return out
 
+    def _scrub_obj(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return self._scrub(value)
+        if isinstance(value, list):
+            return [self._scrub_obj(x) for x in value]
+        if isinstance(value, dict):
+            return {k: self._scrub_obj(v) for k, v in value.items()}
+        return value
+
     def _http(
         self, method: str, url: str, *, token: str = "", body: dict | None = None,
         headers: dict[str, str] | None = None, expect_binary: bool = False,
@@ -187,12 +196,12 @@ class RosyAgentBridge:
         except urllib.error.HTTPError as exc:
             raw = exc.read(MAX_ERROR_BYTES)
             try:
-                err_body = json.loads(raw.decode("utf-8", "replace"))
+                err_body = self._scrub_obj(json.loads(raw.decode("utf-8", "replace")))
             except ValueError:
                 err_body = {"error": self._scrub(raw.decode("utf-8", "replace")[:200])}
             detail = err_body.get("detail") if isinstance(err_body, dict) else None
             code = (detail.get("code") if isinstance(detail, dict) else None) or (err_body.get("code") if isinstance(err_body, dict) else None) or f"HTTP_{exc.code}"
-            return {"ok": False, "status": exc.code, "error_code": str(code), "detail": err_body}
+            return {"ok": False, "status": exc.code, "error_code": self._scrub(str(code)), "detail": err_body}
         except (OSError, TimeoutError, urllib.error.URLError) as exc:
             return {"ok": False, "status": 503, "error_code": "PLANE_UNREACHABLE", "detail": self._scrub(str(exc))[:200]}
 
