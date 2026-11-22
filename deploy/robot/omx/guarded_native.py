@@ -50,6 +50,7 @@ from guarded_device import (  # noqa: E402,F401  (re-exported: existing importer
 )
 from guarded_native_cli import main, run_native  # noqa: E402,F401  (re-exported)
 from guarded_native_track import body_command  # noqa: E402
+from guarded_native_lag import LagModel, check_following, follows_far  # noqa: E402
 from teleop_speed import STAGES, valid as valid_stage  # noqa: E402
 from guarded_native_mount import GRIP_ENDS, check_floor, check_grip_map, check_mount  # noqa: E402,F401  (GRIP_ENDS, check_mount re-exported)
 from guarded_native_effort import (  # noqa: E402
@@ -90,6 +91,8 @@ class NativeJointMotion:
         self.body_only, self.teacher = body_only, teacher
         self.stage = valid_stage(stage)  # teleop_speed stage of a full-arm Leader session, else None
         self.active = BODY if body_only else NAMES
+        self.far = set()  # joints followed while 100+ degrees from the Leader (guarded_native_lag.follows_far)
+        self.lag = LagModel(STAGES[self.stage]["tau_s"], STAGES[self.stage]["profile_vel"] * 1.374) if self.stage and not (teacher or body_only) else None
         self.label = label
         self.offsets = offsets
         # A Leader whose joint is assembled half a turn from the Follower's (arm_s pan, 2026-11-21) states it as a
@@ -153,6 +156,11 @@ class NativeJointMotion:
         return STAGES[self.stage]["brake_deg_s2"] if self.stage and self.full_arm else BRAKE_DEG_S2
 
     @property
+    def align_deg_s(self):
+        """Start alignment rate: a staged full-arm session aligns at ALIGN_DEG_S, everything else at 1 degree/s."""
+        return STAGES[self.stage]["align_deg_s"] if self.stage and self.full_arm else 1
+
+    @property
     def accel_deg_s2(self):
         """Command acceleration limit: the full-arm stage's value (teleop_speed), else ACCEL_DEG_S2."""
         return STAGES[self.stage]["accel_deg_s2"] if self.stage and self.full_arm else ACCEL_DEG_S2
@@ -208,10 +216,7 @@ class NativeJointMotion:
         if self.body_only and self.follower.read("Torque_Enable", "gripper", num_retry=READ_RETRY):
             raise ValueError("passive gripper torque must remain OFF")
         if self.command is not None:
-            for name in BODY if self.teacher else self.active:
-                sent = self.sent[name] if self.sent is not None and name in self.sent else int(self.command[name])  # what was written
-                if abs(current[name] - sent) > 5 * TICKS_PER_DEGREE + 1e-9:
-                    raise ValueError(f"{name}: following error >5 motor degrees; command={sent}, current={current[name]}")
+            check_following(self, current, started)  # the legacy 5 degree test, or the servo model's (guarded_native_lag) in a staged full-arm session
         if self.offsets is None:
             self.offsets = (
                 dict.fromkeys(BODY, 0)
@@ -225,7 +230,7 @@ class NativeJointMotion:
         target = {n: max(v, self.floor.get(n, v)) for n, v in mapped.items()}
         for name in () if self.has_stall_hold() else BODY:  # a stall hold is not following the Leader: the command is frozen, torque stays, the arm
             # holds; the comparison would only cut it. Release needs the Leader back within STALL_RELEASE_DEG, and the 100 degree test then applies again
-            if max(abs(mapped[name] - current[name]), abs(target[name] - current[name])) >= 100 * TICKS_PER_DEGREE - 1e-9:  # raw and floored
+            if max(abs(mapped[name] - current[name]), abs(target[name] - current[name])) >= 100 * TICKS_PER_DEGREE - 1e-9 and not follows_far(self, name, target):  # raw and floored
                 raise ValueError(
                     f"{name}: difference >=100 degrees; leader={leader[name]}, "
                     f"target={target[name]}, current={current[name]}, offset={self.offsets[name]}, "
@@ -348,6 +353,8 @@ class NativeJointMotion:
             else:
                 self.follower.enable_torque()
             self.command = dict(prepared["seed"])
+            if self.lag is not None:
+                self.lag.seed(prepared["seed"], self.clock())
             self.prev_target = dict(prepared.get("target") or self.command)
             self.alignment_deadline = prepared["alignment_deadline"]
             self.last_time = self.clock()

@@ -208,3 +208,162 @@ def test_a_watch_fault_found_at_the_next_loop_leaves_guard_fault(guard, monkeypa
     with pytest.raises(RuntimeError, match='pause watch fault'):
         guard.run_native(module, Follower, Leader)
     assert _reason(tmp_path).startswith('guard_fault: arm_s elbow_flex')
+
+
+def _human_speed(guard, tau, stage, steps=32, speed=60):
+    motion, follower, leader, clock, step = _lagging(guard, tau=tau, stage=stage)
+    start = follower.raw['shoulder_pan']
+    for _ in range(steps):  # the Leader moves at a human's pace: 60 deg/s for 1.6 s (96 degrees, under the 100 degree test)
+        leader.raw['shoulder_pan'] += speed * guard.TICKS_PER_DEGREE * 0.05
+        step()
+    assert not motion.failed
+    return (follower.raw['shoulder_pan'] - start) / guard.TICKS_PER_DEGREE, motion
+
+
+@pytest.mark.parametrize('tau', [0.1, 0.27])
+def test_a_staged_session_follows_well_past_the_legacy_speed_ceiling_without_a_stop(guard, tau):
+    legacy, _ = _human_speed(guard, tau, None)  # legacy: the lead limit caps the speed at 3 degrees / tau
+    staged, motion = _human_speed(guard, tau, 60)
+    assert staged > 1.5 * legacy and staged > 15 and not motion.held
+
+
+@pytest.mark.parametrize('factor', [0.7, 1.3])
+def test_a_servo_30_percent_off_the_model_is_followed_without_a_false_stop(guard, factor):
+    travel, motion = _human_speed(guard, 0.17 * factor, 60)
+    assert travel > 20 and not motion.failed
+
+
+@pytest.mark.parametrize('tau, push', [(0.17, 8), (0.1, 14)])  # a model that is slower than the servo leaves some slack on the behind side: the push must exceed it
+def test_a_joint_pushed_back_off_the_models_path_is_still_stopped(guard, tau, push):
+    motion, follower, leader, clock, step = _lagging(guard, tau=tau, stage=60)
+    for _ in range(20):
+        leader.raw['shoulder_pan'] += 60 * guard.TICKS_PER_DEGREE * 0.05
+        step()
+    follower.raw['shoulder_pan'] -= push * guard.TICKS_PER_DEGREE  # an outside force
+    with pytest.raises(ValueError, match='following error'):
+        step()
+    assert not any(follower.torque.values())
+
+
+def test_a_blocked_joint_in_a_staged_session_is_pushed_with_3_degrees_only_and_then_held(guard):
+    motion, follower, leader, clock, step = _lagging(guard, stage=60)
+    leader.raw['shoulder_lift'] += 40 * guard.TICKS_PER_DEGREE
+    for _ in range(100):  # 5 s: a measured speed of 0 keeps the allowed lead at 3 degrees however fast the stage is
+        step(blocked=('shoulder_lift',))
+        assert motion.command['shoulder_lift'] - follower.raw['shoulder_lift'] <= 3 * guard.TICKS_PER_DEGREE + 1.0
+    assert motion.held['shoulder_lift']['stall'] and any(follower.torque.values()) and not motion.failed
+
+
+def test_a_staged_start_aligns_at_10_degrees_per_second_and_the_legacy_start_at_1(guard):
+    def aligned_after(stage, limit):
+        follower, leader, clock = Bus(), Bus(leader=True), [10.0]
+        leader.raw['elbow_flex'] += 20 * guard.TICKS_PER_DEGREE  # the Leader starts 20 degrees away
+        motion = guard.NativeJointMotion(follower, leader, clock=lambda: clock[0], label='arm_s', stage=stage)
+        motion.send(action(leader))
+        for count in range(1, limit + 1):
+            clock[0] += 0.05
+            motion.send(action(leader))
+            follower.raw.update(follower.goals)
+            if motion.tracking:
+                return count
+        return None
+    assert 40 <= aligned_after(60, 100) <= 70  # about 2 s of travel at 10 deg/s plus the 0.5 s settle: not 20 s
+    assert aligned_after(None, 100) is None  # legacy: 1 degree/s, still aligning after 5 s
+
+
+def test_following_a_leader_100_degrees_ahead_keeps_the_torque_on_but_a_jump_or_a_start_that_far_still_stops(guard, capsys):
+    motion, follower, leader, clock, step = _lagging(guard, stage=60)
+    start = follower.raw['wrist_flex']
+    leader.raw['wrist_flex'] += 90 * guard.TICKS_PER_DEGREE
+    step()
+    leader.raw['wrist_flex'] += 60 * guard.TICKS_PER_DEGREE  # 150 degrees ahead of the arm, reached in steps of under 100 degrees
+    for _ in range(40):
+        step()
+    assert not motion.failed and any(follower.torque.values()) and 'wrist_flex' in motion.far
+    assert follower.raw['wrist_flex'] > start + 10 * guard.TICKS_PER_DEGREE  # it keeps following at the speed limit
+    assert capsys.readouterr().out.count('wrist_flex is 100 degrees or more behind the Leader') == 1
+    motion, follower, leader, clock, step = _lagging(guard, stage=60)
+    leader.raw['elbow_flex'] += 105 * guard.TICKS_PER_DEGREE  # one tick: the target jumped 100 degrees
+    with pytest.raises(ValueError, match='difference >=100'):
+        step()
+    assert not any(follower.torque.values())
+    motion, follower, leader, clock, step = _lagging(guard)  # legacy session: unchanged, 150 degrees ahead in two steps stops
+    leader.raw['wrist_flex'] += 90 * guard.TICKS_PER_DEGREE
+    step()
+    leader.raw['wrist_flex'] += 60 * guard.TICKS_PER_DEGREE
+    with pytest.raises(ValueError, match='difference >=100'):
+        step()
+
+
+def test_a_joint_blocked_while_moving_at_stage_60_enters_stall_hold_with_torque_on(guard):
+    motion, follower, leader, clock, step = _lagging(guard, tau=0.17, stage=60)
+    for _ in range(20):
+        leader.raw['shoulder_pan'] += 60 * guard.TICKS_PER_DEGREE * 0.05
+        step()
+    for _ in range(80):  # blocked mid-motion: must hold with torque ON instead of tripping following error
+        leader.raw['shoulder_pan'] += 20 * guard.TICKS_PER_DEGREE * 0.05
+        step(blocked=('shoulder_pan',))
+    assert motion.held['shoulder_pan']['stall'] and any(follower.torque.values()) and not motion.failed
+
+
+def test_stage_120_with_a_short_tick_following_the_model_does_not_trip_hard_bound(guard):
+    motion, follower, leader, clock, step = _lagging(guard, tau=0.12, stage=120)
+    for _ in range(20):
+        leader.raw['shoulder_pan'] += 120 * guard.TICKS_PER_DEGREE * 0.05
+        step()
+    clock[0] += 0.005
+    leader.raw['shoulder_pan'] += 120 * guard.TICKS_PER_DEGREE * 0.005
+    motion.send(action(leader))
+    assert not motion.failed and any(follower.torque.values())
+
+
+def test_a_joint_blocked_while_moving_at_stage_120_enters_stall_hold_with_torque_on(guard):
+    motion, follower, leader, clock, step = _lagging(guard, tau=0.14, stage=120)
+    for _ in range(15):
+        leader.raw['shoulder_pan'] += 120 * guard.TICKS_PER_DEGREE * 0.05
+        step()
+    step(blocked=('shoulder_pan',))
+    prev_cmd = motion.command['shoulder_pan']
+    clock[0] += 0.10  # 100 ms blocked sample pulls back at most 120 deg/s * 0.10 s = 12 deg, then reaches <= 3 deg lead
+    leader.raw['shoulder_pan'] = follower.raw['shoulder_pan'] + 8 * guard.TICKS_PER_DEGREE
+    motion.send(action(leader))
+    assert prev_cmd - motion.command['shoulder_pan'] <= 120 * guard.TICKS_PER_DEGREE * 0.10 + 1e-6
+    assert motion.velocity['shoulder_pan'] == 0.0
+    step(blocked=('shoulder_pan',))
+    assert motion.command['shoulder_pan'] - follower.raw['shoulder_pan'] <= guard.LEAD_DEG * guard.TICKS_PER_DEGREE + 1.0
+    for _ in range(80):
+        step(blocked=('shoulder_pan',))
+    assert motion.held['shoulder_pan']['stall'] and any(follower.torque.values()) and not motion.failed
+
+
+def test_stage_60_blocked_retraction_stays_within_stage_rate_limit_without_negative_velocity(guard):
+    motion, follower, leader, clock, step = _lagging(guard, tau=0.17, stage=60)
+    for i in range(26):
+        clock[0] += 1 / 30
+        leader.raw['shoulder_pan'] += 60 * guard.TICKS_PER_DEGREE / 30
+        motion.send(action(leader))
+        if i < 24:  # hold follower still for one full sample before measuring blocked tick
+            follower.raw['shoulder_pan'] = int(round(motion.lag.advance({'shoulder_pan': follower.goals['shoulder_pan']}, clock[0])['shoulder_pan']))
+    prev_cmd = motion.command['shoulder_pan']
+    clock[0] += 1 / 30  # second blocked 30 Hz sample sees delta=0, retracts within stage speed with zero velocity
+    leader.raw['shoulder_pan'] += 60 * guard.TICKS_PER_DEGREE / 30
+    motion.send(action(leader))
+    max_tick = 60 * guard.TICKS_PER_DEGREE / 30 + 1e-6
+    assert abs(motion.command['shoulder_pan'] - prev_cmd) <= max_tick
+    assert motion.velocity['shoulder_pan'] == 0.0
+    clock[0] += 1 / 30  # subsequent unblocked tick does not dip behind current
+    follower.raw['shoulder_pan'] += 10
+    leader.raw['shoulder_pan'] += 60 * guard.TICKS_PER_DEGREE / 30
+    motion.send(action(leader))
+    assert motion.command['shoulder_pan'] >= follower.raw['shoulder_pan'] and not motion.failed
+
+
+def test_restart_after_pause_clears_stale_lag_speed_so_first_tick_uses_3_deg_lead(guard):
+    motion, follower, leader, clock, step = _lagging(guard, tau=0.17, stage=60)
+    for _ in range(15):
+        leader.raw['shoulder_pan'] += 60 * guard.TICKS_PER_DEGREE * 0.05
+        step()
+    assert motion.lag.speed['shoulder_pan'] > 10.0
+    guard.restart_after_pause(motion, clock[0] + 5.0)
+    assert motion.lag.speed == {} and motion.lag.delta == {} and motion.lag.blocked_since == {}
+    assert motion.lag.lead_ticks('shoulder_pan', guard.LEAD_DEG) == pytest.approx(guard.LEAD_DEG * guard.TICKS_PER_DEGREE)

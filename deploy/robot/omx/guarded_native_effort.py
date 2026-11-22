@@ -202,6 +202,10 @@ def restart_after_pause(motion, started: float) -> None:
     motion.tracking, motion.aligned_since, motion.last_alignment_report = False, None, None
     motion.resuming = True
     motion.stall.clear()
+    if motion.lag is not None:
+        motion.lag.speed.clear()
+        motion.lag.delta.clear()
+        motion.lag.blocked_since.clear()
     resume = getattr(motion.monitor, "resume", None)
     if resume is not None:  # the monitor's own sample-age check starts over too; an undeclared delay still stops
         resume(motion)

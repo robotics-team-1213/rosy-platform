@@ -354,6 +354,11 @@
   /* 포커스는 상태가 아니라 상호작용이다 — status 색을 쓰지 않는다. */
   --focus-ring: var(--series-primary);
 
+  /* 선택은 포커스와 다른 단계다. 표지 = 이 색의 굵은 줄(--space-1) + 체크·`선택됨` 글자(색만으로 알리지 않는다).
+   * 별칭 한 줄: 새 색을 만들지 않는다. 두 테마 작업 바탕(ground·deep·raise·soft) 위 3:1 이상은 시험이 지킨다. */
+  --selection: var(--series-secondary);
+  --selection-edge: var(--space-1);  /* 선택 표식 가장자리 굵기: 하위 탐색 같은 곳이 간격 토큰 대신 쓴다(D-292) */
+
   --flag-caution: var(--status-warn);
   --flag-danger-bg: var(--status-crit);
   --flag-danger-ink: var(--text-on-danger);

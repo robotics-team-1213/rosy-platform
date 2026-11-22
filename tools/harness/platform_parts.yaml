@@ -1428,6 +1428,7 @@ safety_review_paths:
   - deploy/robot/omx/guarded_device.py
   - deploy/robot/omx/guarded_native.py
   - deploy/robot/omx/guarded_native_effort.py
+  - deploy/robot/omx/guarded_native_lag.py
   - deploy/robot/omx/guarded_native_mount.py
   - deploy/robot/omx/guarded_native_track.py
   - deploy/robot/omx/guarded_native_watch.py

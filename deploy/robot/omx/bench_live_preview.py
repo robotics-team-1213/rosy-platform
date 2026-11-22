@@ -87,9 +87,12 @@ def open_preview(folder, robot):
         return None  # A broken preview binding or temp directory must leave recording available.
 
 
-def recorder_env(preview):
+def recorder_env(preview, link_dir=None):
     env = os.environ.copy()
     env.pop(LIVE_DIR, None)
+    env.pop("ROSY_LINK_DIR", None)
+    if link_dir is not None:  # a linked session (W16): the recorder waits ready between episodes and reads its requests from this folder
+        env["ROSY_LINK_DIR"] = str(link_dir)
     if preview is not None:
         env[LIVE_DIR] = str(preview.folder)
     return env

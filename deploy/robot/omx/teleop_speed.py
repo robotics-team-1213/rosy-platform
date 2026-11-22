@@ -25,7 +25,8 @@ from pathlib import Path
 
 ENV = "ROSY_TELEOP_STAGE"
 VEL_DEG_S_PER_RAW, ACC_DEG_S2_PER_RAW = 1.374, 21.4577
-ACCEL = {30: 30.0, 45: 60.0, 60: 90.0}
+ACCEL = {30: 30.0, 45: 60.0, 60: 90.0, 90: 135.0, 120: 180.0}  # 90 and 120: prepared for a human's hand speed, not the default (W17)
+ALIGN_DEG_S = 10.0  # start alignment rate of a staged full-arm session (1 degree/s elsewhere): 20 degrees apart = 2 s, not 20 s
 
 
 def _raw(value: float) -> int:
@@ -41,11 +42,17 @@ def profile_acc_raw(stage: int) -> int:
 
 
 def brake_deg_s2(stage: int) -> float:
-    return float(max(200, 5 * math.ceil(round(stage**2 / (2 * (3 - 0.025 * stage - 0.4)) / 5, 6))))
+    budget = max(0.35, 3 - 0.025 * stage - 0.4)  # from 90 deg/s the 1/20 s tick term alone is 2.25 degrees: the budget bottoms out, under 3 degrees is then not promised
+    return float(max(200, 5 * math.ceil(round(stage**2 / (2 * budget) / 5, 6))))
+
+
+def tau_s(stage: int) -> float:
+    """Servo lag time constant for guarded_native_lag: 0.27 s measured at profile acceleration 8; the stages' own acceleration scales it (an estimate, see there)."""
+    return round(0.27 * math.sqrt(8 / profile_acc_raw(stage)), 2)
 
 
 STAGES = {s: {"track_deg_s": float(s), "profile_vel": profile_vel_raw(s), "profile_acc": profile_acc_raw(s), "accel_deg_s2": ACCEL[s],
-              "brake_deg_s2": brake_deg_s2(s)} for s in ACCEL}
+              "brake_deg_s2": brake_deg_s2(s), "tau_s": tau_s(s), "align_deg_s": ALIGN_DEG_S} for s in ACCEL}
 
 
 def valid(value):
@@ -69,7 +76,7 @@ def stage_from_env(env=None) -> int | None:
 
 def summary(stage) -> dict:
     """What status shows for the screen's parameter list; no stage = the default 25 deg/s with the caps file's own profile."""
-    return {"stage": None, **{"track_deg_s": 25.0, "accel_deg_s2": 10.0, "brake_deg_s2": 200.0}} if stage is None else {"stage": stage, **STAGES[stage]}
+    return {"stage": None, **{"track_deg_s": 25.0, "accel_deg_s2": 10.0, "brake_deg_s2": 200.0, "align_deg_s": 1.0}} if stage is None else {"stage": stage, **STAGES[stage]}
 
 
 def apply_to_caps(caps: dict, stage: int) -> dict:

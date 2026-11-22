@@ -45,7 +45,7 @@ def body_command(self, target, current, elapsed, now):
     elif full and not self.grip_ready and abs(target["gripper"] - self.command["gripper"]) <= 0.5 * TICKS_PER_DEGREE:
         self.grip_ready = True  # the gripper's own command reached its target once: it may use the tracking limit
     acceleration = self.accel_deg_s2 * TICKS_PER_DEGREE
-    limit = (self.track_deg_s if tracking else 1) * TICKS_PER_DEGREE
+    limit = (self.track_deg_s if tracking else self.align_deg_s) * TICKS_PER_DEGREE
     command, velocity = {}, {}
     frozen = self.frozen()
     for name in self.active:
@@ -89,13 +89,29 @@ def body_command(self, target, current, elapsed, now):
             velocity[name] = max(-stop, min(stop, velocity[name]))
         command[name] = self.command[name] + velocity[name] * elapsed
         if full:  # one-sided: only this tick's advance is cut to present + LEAD_DEG in the direction of travel. The command is never
-            # pulled toward the arm, so drift, sag or a push stays visible to the 5 degree check, and it never moves further than the
-            # rate limiter allowed.
+            # pulled toward the arm beyond the stage limit, so drift, sag or a push stays visible to the 5 degree check, and it never moves faster than permitted.
             lead, step = LEAD_DEG * TICKS_PER_DEGREE, command[name] - self.command[name]
-            held_in = (min(command[name], max(current[name] + lead, self.command[name])) if step > 0
-                       else max(command[name], min(current[name] - lead, self.command[name])) if step < 0 else command[name])
+            retracted = False
+            if self.lag is not None:
+                lead = self.lag.lead_ticks(name, LEAD_DEG)  # free motion at v lags by v * tau; a blocked joint measures 0 and keeps the 3 degrees
+                delta = self.lag.delta.get(name, 0)
+                max_step = lim * elapsed
+                if command[name] > current[name] and delta >= 0:
+                    cap = current[name] + lead
+                    held_in = min(command[name], max(cap, self.command[name] - max_step))
+                    retracted = held_in < self.command[name]
+                elif command[name] < current[name] and delta <= 0:
+                    cap = current[name] - lead
+                    held_in = max(command[name], min(cap, self.command[name] + max_step))
+                    retracted = held_in > self.command[name]
+                else:
+                    held_in = (min(command[name], max(current[name] + lead, self.command[name])) if step > 0
+                               else max(command[name], min(current[name] - lead, self.command[name])) if step < 0 else command[name])
+            else:
+                held_in = (min(command[name], max(current[name] + lead, self.command[name])) if step > 0
+                           else max(command[name], min(current[name] - lead, self.command[name])) if step < 0 else command[name])
             if held_in != command[name] and elapsed > 0:
-                velocity[name] = (held_in - self.command[name]) / elapsed  # the progress that really happened
+                velocity[name] = 0.0 if retracted else max(-lim, min(lim, (held_in - self.command[name]) / elapsed))
             command[name] = held_in
         calibration = self.follower.calibration[name]
         if full and not calibration.range_min <= command[name] <= calibration.range_max:  # an overrun at the range end: held there, never a cut
