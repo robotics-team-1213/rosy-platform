@@ -260,7 +260,7 @@ export function inspectorTargetsFromRows(rows, obs = null) {
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
       quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_b"} : c),
     },
-    ...(s3.id ? [{...s3, cameraViews: mapViews(s3.cameraViews || []), shortTab: "CELL_S", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText)}] : []),
-    ...(s5.id ? [{...s5, cameraViews: mapViews(s5.cameraViews || []), shortTab: "CELL_AB", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText)}] : []),
+    ...(s3.id ? [{...s3, cameraViews: mapViews(s3.cameraViews || []), shortTab: "CELL_S", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || UNKNOWN_JOINT_TEXT)}] : []),
+    ...(s5.id ? [{...s5, cameraViews: mapViews(s5.cameraViews || []), shortTab: "CELL_AB", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || UNKNOWN_JOINT_TEXT)}] : []),
   ];
 }

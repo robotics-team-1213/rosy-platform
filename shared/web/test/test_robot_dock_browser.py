@@ -160,6 +160,11 @@ def test_robot_dock_mobile_horizontal_bar_and_no_overflow(dock_gallery, width):
     buttons.first.click()
     expect(panel).to_be_visible()
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+    assert page.evaluate("() => { const t = document.getElementById('rosy-shared-tooltip'); return !t || t.hidden || getComputedStyle(t).display === 'none' || !t.textContent.trim(); }")
+    dock_box = dock.bounding_box()
+    panel_box = panel.bounding_box()
+    assert dock_box and panel_box
+    assert dock_box["y"] + dock_box["height"] <= panel_box["y"] + 1
 
     # Arm profile shows OMX commands and hides mobile manual section.
     arm_btn = dock.locator('.robot-dock-btn[data-kind="arm"]').first

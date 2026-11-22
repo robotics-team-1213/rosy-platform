@@ -41,7 +41,7 @@ function poseFrame(state, localization) {
   if (state?.pose_frame) return state.pose_frame;
   if (localization?.pose_frame) return localization.pose_frame;
   if (state?.localization?.pose_frame) return state.localization.pose_frame;
-  if (localization && localization.state === "UNKNOWN") return "odom";
+  if ((localization?.state ?? state?.localization?.state) === "UNKNOWN") return "odom";
   return state?.map_id ? "map" : "odom";
 }
 

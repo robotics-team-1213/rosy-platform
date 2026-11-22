@@ -497,7 +497,7 @@ const pollDrive = (fn, ms) => poll(() => ((view.stateLoaded || unitScope() !== n
 pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); trackingView.refresh(); } });
 pollDrive(() => { if (!auth.locked) return formation.refreshFormation(); }, MAP_MS);
 poll(refreshState, STATE_MS);
-poll(() => (!auth.locked && owns("arms") ? cellStage.refresh() : undefined), 1500);
+poll(() => ((view.stateLoaded || unitScope() !== null) && !auth.locked && owns("arms") ? cellStage.refresh() : undefined), 1500);
 poll(() => { if (!auth.locked) return workView.refresh(); }, MAP_MS);
 poll(refreshHealthz, MAP_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);

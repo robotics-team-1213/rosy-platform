@@ -128,4 +128,5 @@ test("state.pose_frame overrides map_id and normalizes -0.00", () => {
   assert.equal(robotMapPose({ state: odomOrigin, localization: { state: "LOCALIZED", pose_frame: "map" } }), null);
   const unknownLoc = { pose: { x: 0.4, y: -0.002, yaw: 0 }, map_id: "track" };
   assert.equal(robotPoseText(unknownLoc, { state: "UNKNOWN", pose_frame: null }), "odom 0.40, 0.00");
+  assert.equal(robotPoseText({ pose: { x: 0.4, y: -0.002, yaw: 0 }, map_id: "track", localization: { state: "UNKNOWN" } }, null), "odom 0.40, 0.00");
 });
