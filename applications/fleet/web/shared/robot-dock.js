@@ -10,7 +10,7 @@
  *     setOpen(id|null) repaints aria-pressed (at most one true) and data-selected from selection.get()
  *     dispose()        unsubscribes from selection
  */
-import {actionIcon, iconSvg} from "./ui.js";
+import {actionIcon, iconSvg} from "/common/ui.js";
 import {dockEntries} from "./robot-dock-model.js";
 
 const GROUPS = [

@@ -30,7 +30,7 @@ import { createDeviceDiscovery } from "/console/assets/device-discovery.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createFleetClient } from "/common/fleet-client.js";
 import { confirmIrreversible } from "/common/ui.js";
-import { createSelection } from "/common/selection.js";
+import { createSelection } from "/console/assets/selection.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
 import { area, areaNav } from "/console/assets/area-nav.js";

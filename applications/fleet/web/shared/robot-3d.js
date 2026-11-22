@@ -22,7 +22,7 @@
  * (CSS [data-selected]), all in --selection (D-1030), the same accent as the row's edge and 선택됨 toggle. Colours are read from the CSS
  * custom properties at draw time (dark and light themes); size is set by CSS and renderer.setSize(w, h, false).
  */
-import {readColour, toggletip} from "./ui.js";
+import {readColour, toggletip} from "/common/ui.js";
 import {loadThree, loadRobotModel} from "./robot-3d-assets.js";
 import {jointAngles, describeRobot, CAMERA_PRESETS, PRESET_LABEL, presetDirection, fitView} from "./robot-3d-model.js";
 
