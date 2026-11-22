@@ -54,6 +54,7 @@ CHOICES = dict(
     preset=None,             # a named bundle of choices, PRESETS (explicit choices win)
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
+OUTBOUND_STAND_SPEC = dict(board_edge_x_m=0.155, intake_past_edge_m=0.059, rail_z_m=0.0809, yaw_deg=90.0, top_roi_px=(410, 30, 570, 125))
 BERTH_V16_SPEC = dict(
     berth_kit="v24-docks",   # "v24-docks": printed black v20 cradle + v24 docks on PR33_C02_BASE + v24 belt stopper; "v18-modular-adjustable"/"v16-modular"/"v17-modular-tight": orange v16 berth; "v15-quay": legacy quay block
     confluence_pages=("23592971", "23234388", "23233175"),
@@ -438,6 +439,9 @@ class Layout:
                 for layer in range(TEMP_TIERS):
                     self.sites[f"tmp-{tag}-{i}" + (f"-l{layer}" if layer else "")] = dict(
                         kind="temp", xy=xy, z=self.deck_z + self.box[2] * (layer + .5), yaw=yaw, plate=tag, lane=i, layer=layer, stack=f"tmp-{tag}-{i}")
+        stand_xy = (round(OUTBOUND_STAND_SPEC["board_edge_x_m"] + OUTBOUND_STAND_SPEC["intake_past_edge_m"], 4), round(float(self.arms["arm_a"].base[1]), 5))
+        stand_z = round(OUTBOUND_STAND_SPEC["rail_z_m"] + self.box[2] / 2.0, 4)
+        self.sites["stand"] = dict(kind="stand", xy=stand_xy, z=stand_z, yaw=math.radians(OUTBOUND_STAND_SPEC["yaw_deg"]), arm="arm_a", layer=0, stack="stand")
         self.ship_xy = {n: s["xy"] for n, s in self.sites.items() if s["kind"] == "ship"}
         self.stack_at = {(s["stack"], s["layer"]): n for n, s in self.sites.items() if "stack" in s}  # what stands on what, ship and plates
         if c["ship_source"] == "r08-berth":

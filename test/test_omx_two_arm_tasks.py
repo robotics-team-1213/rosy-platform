@@ -481,3 +481,15 @@ def test_waiting_arms_hold_wait_pose_without_link1_link3_self_contact():
             n_settle += 1
         assert n_settle == 0
 
+
+def test_outbound_stand_on_conveyor_right_is_arm_a_reachable_only(layout):
+    stand = layout.sites["stand"]
+    assert stand["kind"] == "stand" and stand["arm"] == "arm_a"
+    target = np.array([*stand["xy"], stand["z"] + layout.hold_below])
+    ok_a, _, err_a = layout.arms["arm_a"].reach(layout.arms["arm_a"].wait, target, stand["yaw"])
+    ok_b, _, _ = layout.arms["arm_b"].reach(layout.arms["arm_b"].wait, target, stand["yaw"])
+    assert ok_a and err_a < 1e-3 and not ok_b
+    for src in ("ship-h1r0-l0", "belt"):
+        wps = tasks.waypoints(layout, {"from": src, "to": "stand", "arm": "arm_a"}, {"bar-1": src})
+        ok, _, path, note = tasks.solve_chain(layout.arms["arm_a"], wps, layout.arms["arm_a"].wait, roll_floor=layout.choices["roll_floor_norm"])
+        assert ok and path, f"{src} -> stand failed: {note}"

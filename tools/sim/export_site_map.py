@@ -60,7 +60,7 @@ def build_zones(L):
                     slots=[dict(z, arms=[L.plates[t]["arm"]]) for z in temp[t]]) for t in "ab"],
              dict(id="stand", label="반출대", role="반출", grid=dict(rows=1, columns=3, tiers=1), slot_cells=3,
                   slots=[dict(id="stand:r1-s1", label="반출대", row=1, slot=1, columns=[1, 3], arms=STAND_ARMS,
-                              tiers=[dict(tier=1, id="stand:r1-s1-t1", item=None)])])]
+                              tiers=[dict(tier=1, id="stand:r1-s1-t1", item="stand")])])]
     for z in zones:
         z["arms"] = sorted({a for s in z["slots"] for a in s["arms"]})
         z["status"] = STATUS

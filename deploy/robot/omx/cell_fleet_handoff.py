@@ -123,6 +123,10 @@ def scan_cell_s_extended_zones(
     }
 
 
+STAND_SITE_IDS: tuple[str, ...] = ("stand", "stand:r1-s1", "stand:r1-s1-t1")
+_CELL_AB_STAND_SOURCES: tuple[str, ...] = ("belt", "pallet", "pallet-l0", "pallet-l1", "pallet-l2", "temp_plate_a")
+
+
 def handoff_refusal(pipeline, handoff: dict[str, Any], tier: int = 1) -> str | None:
     """Why this handoff must not run, or None. Shared by the stage and the worker's real-arm call.
     A missing or NaN interlock fact is not a locked AMR; an unknown site never falls back to a default."""
@@ -132,11 +136,20 @@ def handoff_refusal(pipeline, handoff: dict[str, Any], tier: int = 1) -> str | N
         return "AMR_NOT_LOCKED_AT_HANDOFF"
     if not 1 <= int(tier) <= 3:
         return "UNKNOWN_SITE"
-    if str(handoff.get("cell_id") or "cell_s") == "cell_s":
-        ok = {str(handoff.get("src_site") or "pinky"), str(handoff.get("dst_site") or "belt")} <= set(pipeline.SITE_COORDS)
+    cell_id = str(handoff.get("cell_id") or "cell_s").strip()
+    arm_id = str(handoff.get("arm_id") or "").strip()
+    src = str(handoff.get("src_site") or ("pinky" if cell_id == "cell_s" else "belt")).strip()
+    dst = str(handoff.get("dst_site") or ("belt" if cell_id == "cell_s" else "pallet")).strip()
+    if cell_id == "cell_s":
+        ok = {src, dst} <= set(pipeline.SITE_COORDS) and not ({src, dst} & set(STAND_SITE_IDS))
+    elif dst in STAND_SITE_IDS:
+        ok = (
+            int(tier) == 1
+            and arm_id in ("", "arm_a")
+            and src in _CELL_AB_STAND_SOURCES
+        )
     else:  # Cell AB runs belt -> this tier's pallet level only; Fleet zones send the generic "pallet".
-        ok = (str(handoff.get("src_site") or "belt") == "belt"
-              and str(handoff.get("dst_site") or "pallet") in ("pallet", f"pallet-l{int(tier) - 1}"))
+        ok = src == "belt" and dst in ("pallet", f"pallet-l{int(tier) - 1}")
     return None if ok else "UNKNOWN_SITE"
 
 
@@ -149,20 +162,20 @@ def run_contract_handoff_stage(
 ) -> dict[str, Any]:
     """Execute an OMX workcell stage under `rosy.fleet-r-cell-contract.v1` and emit a `CellToFleetRReceipt`."""
     lease_id = str(handoff.get("handoff_lease_id") or "lease-0")
-    cell_id = str(handoff.get("cell_id") or "cell_s")
+    cell_id = str(handoff.get("cell_id") or "cell_s").strip()
     station_place = str(handoff.get("station_place") or ("S3" if cell_id == "cell_s" else "S5"))
     robot_id = str(handoff.get("robot_id") or "pinky_1")
+    src_clean = str(handoff.get("src_site") or ("pinky" if cell_id == "cell_s" else "belt")).strip()
+    dst_clean = str(handoff.get("dst_site") or ("belt" if cell_id == "cell_s" else "pallet")).strip()
 
     refusal = handoff_refusal(pipeline, handoff, tier)
-    arms = ["arm_s"] if cell_id == "cell_s" else ["arm_a", "arm_b"]
+    arms = ["arm_s"] if cell_id == "cell_s" else (["arm_a"] if dst_clean in STAND_SITE_IDS else ["arm_a", "arm_b"])
     stage_res: dict[str, Any] | None = None
     if refusal is None and cell_id == "cell_s":
-        src_site = str(handoff.get("src_site") or "pinky")
-        dst_site = str(handoff.get("dst_site") or "belt")
         stage_kwargs: dict[str, Any] = {
             "arm_id": "arm_s",
-            "src_site": src_site,
-            "dst_site": dst_site,
+            "src_site": src_clean,
+            "dst_site": dst_clean,
             "stage_id": stage_id,
             "yaw_deg": -85.0,
         }
@@ -173,17 +186,21 @@ def run_contract_handoff_stage(
             stage_res = pipeline.run_fleet_stage(**stage_kwargs)
         except TypeError:
             stage_res = pipeline.run_fleet_stage(
-                arm_id="arm_s", src_site=src_site, dst_site=dst_site, stage_id=stage_id, yaw_deg=-85.0
+                arm_id="arm_s", src_site=src_clean, dst_site=dst_clean, stage_id=stage_id, yaw_deg=-85.0
             )
     elif refusal is None:
-        lvl = max(0, min(2, int(tier) - 1))
-        stage_res = pipeline.run_fleet_stage(
-            arm_id="arm_a" if lvl % 2 == 0 else "arm_b",
-            src_site="belt",
-            dst_site=f"pallet-l{lvl}",
-            stage_id=stage_id,
-            yaw_deg=-90.0,
-        )
+        if dst_clean in STAND_SITE_IDS:
+            norm_src = "pallet-l0" if src_clean in ("pallet", "temp_plate_a") else src_clean
+            stage_res = pipeline.run_fleet_stage(arm_id="arm_a", src_site=norm_src, dst_site="stand", stage_id=stage_id, yaw_deg=0.0)
+        else:
+            lvl = max(0, min(2, int(tier) - 1))
+            stage_res = pipeline.run_fleet_stage(
+                arm_id="arm_a" if lvl % 2 == 0 else "arm_b",
+                src_site="belt",
+                dst_site=f"pallet-l{lvl}",
+                stage_id=stage_id,
+                yaw_deg=-90.0,
+            )
 
     converged = stage_res is not None and bool(
         stage_res.get("converged", stage_res.get("place_error_mm", 0.0) <= 5.0)

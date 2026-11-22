@@ -15,3 +15,5 @@ def test_every_yaml_zone_is_aliased_and_yaml_unchanged():
     for zid in zones["zones_by_id"]:
         assert zid in ("EXP_S1", "EXP_S5_PALLET", "EXP_S3_BELT", "STG_C2", "STG_S3_WAIT")
     assert zones["schema"] == "rosy.station-zones.v1"
+    assert zones["zones_by_id"]["EXP_S1"]["dst_site"] == "stand"
+    assert zones["zones_by_id"]["EXP_S1"]["arm_id"] == "arm_a"
