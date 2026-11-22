@@ -18,7 +18,7 @@ if _HERE not in sys.path:
 import cell_params as prm  # noqa: E402
 from chunk_policy_playback import absorb_telemetry_error  # noqa: E402
 from chunk_runner_commands import EMPTY_MARGIN  # noqa: E402
-from chunk_runner_guards import SETTLE_TOL, safe_stderr  # noqa: E402
+from chunk_runner_guards import SETTLE_TOL, library_gripper_closed, safe_stderr  # noqa: E402
 from chunk_runner_interrupt import folded, interrupt_step, interrupt_tick  # noqa: E402
 
 SETTLE_S = 3.0
@@ -138,6 +138,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
     settle_tol = cr_attr("SETTLE_TOL", SETTLE_TOL)
     settle_s = cr_attr("SETTLE_S", SETTLE_S)
     empty_margin = cr_attr("EMPTY_MARGIN", EMPTY_MARGIN)
+    policy_closed = runner.chunk == "policy" and runner.target[5] <= library_gripper_closed(runner.library) + empty_margin
     body_still = (
         runner.last_body is not None
         and max(abs(a - b) for a, b in zip(present[:5], runner.last_body)) < 0.08
@@ -152,7 +153,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         settled = (error <= settle_tol or body_still) and not runner.jitter["shaking"]
     jaws_ready = (
         gripper_still
-        if grasp
+        if grasp or policy_closed
         else (
             abs(present[5] - runner.target[5]) <= 0.25
             or (gripper_still and now - runner.settle_since >= 0.4)
@@ -181,7 +182,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
             runner.fault or ""
         ).startswith("contact"):
             runner.fault = None
-        if grasp:
+        if grasp or policy_closed:
             by_position = present[5] > runner.target[5] + empty_margin
             fields["holding"] = by_position
             health = runner.read_health()

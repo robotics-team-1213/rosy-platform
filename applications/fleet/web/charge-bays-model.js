@@ -3,6 +3,7 @@ import { evidenceAgeText } from "/common/core_ui_logic.js";
 const CELL_BUTTONS = {
   cell_s: [
     {label: "S3 셔틀 (Pinky→Belt)", preset: "s3_shuttle"},
+    {label: "S3 ACT 정책 구동 (arm_s)", preset: "s3_act_policy", requiresPresence: true},
     {label: "Belt-Far 이탈 복구", preset: "s3_recover_belt_far"},
     {label: "Floor-Front 바닥 복구", preset: "s3_recover_floor_front"},
   ],
