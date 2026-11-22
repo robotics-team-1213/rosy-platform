@@ -183,7 +183,7 @@ def test_recovery_center_dead_lease_baseline_units_and_ack(tmp_path, monkeypatch
     with pytest.raises(ValueError, match="죽은 러너"):
         bench.clear_manual_hold({"confirmed": True})
     st = bench.clear_manual_hold({"confirmed": True, "force_dead_lease": True})
-    assert st["status"] == "idle" and bench.leader_hold == "" and not cell_arm_lease.status("arm_a")["arm_a"]
+    assert st["status"] == "idle" and bench.leader_hold == "" and not cell_arm_lease.status("arm_a").get("arm_a")
 
     # 2) recover_restore_units refuses while manual check exists, succeeds when removed
     bench._remember(["rosy-omx-observer@arm_a.service"])
