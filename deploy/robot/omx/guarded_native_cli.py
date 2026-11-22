@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 from pathlib import Path
 import sys
 import time
@@ -18,6 +19,7 @@ import time
 from bench_live_frames import offer_preview, preview_reset_loop, start_live_frames
 from guarded_device import close_device, connect_passive
 from guarded_native_watch import BoundaryWatch
+from guarded_native_link import ENV as LINK_ENV, IDLE_LIMIT_S, LinkChannel, LinkEvents
 from teleop_speed import stage_from_env
 
 
@@ -176,11 +178,14 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
     module.make_teleoperator_from_config = teleop_factory
     original_frame = getattr(module, "build_dataset_frame", None)
     preview = start_live_frames() if original_frame is not None else None
+    link = LinkChannel(os.environ[LINK_ENV]) if os.environ.get(LINK_ENV) and not (teacher or body_only) else None  # W16: linked wait between episodes
     if original_frame is not None:
 
         def frame(features, values, prefix):
             if prefix == module.ACTION:
                 values = shared["sent"]
+                if link is not None:
+                    link.frames += 1
             elif preview is not None and prefix == module.OBS_STR:
                 offer_preview(preview, values)
             return original_frame(features, values, prefix=prefix)
@@ -199,9 +204,37 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
         def __setitem__(self, key, value):
             self.events[key] = value
 
+    def wait_linked(args, kwargs):
+        """Ready state: the same loop as the pre-roll (no dataset, same guard and pause watch around it) until the guard is aligned and the bench asks to record."""
+        if shared.get("motion") is not None:
+            shared["motion"].boundary = True  # the save that came before is a declared pause
+        link_ready = lambda: shared.get("motion") is None or (not shared["motion"].boundary and shared["motion"].tracking)
+        link.publish("waiting" if link_ready() else "aligning")
+        events = LinkEvents(kwargs["events"], link, True, is_ready=None if shared.get("motion") is None else link_ready)
+        robot = kwargs.get("robot")
+        observe = getattr(robot, "get_observation", None)
+        had_obs = robot is not None and "get_observation" in robot.__dict__
+        if preview is not None and observe is not None and not had_obs:
+            robot.get_observation = lambda: (lambda obs: (offer_preview(preview, obs), obs)[1])(observe())
+        try:
+            original_loop(*args, **{**kwargs, "dataset": None, "events": events, "control_time_s": IDLE_LIMIT_S})
+        finally:
+            if shared.get("motion") is not None:
+                shared["motion"].boundary = False
+            if observe is not None and preview is not None and not had_obs:
+                robot.__dict__.pop("get_observation", None)
+        if events.started and not events.finished and not kwargs["events"]["stop_recording"] and link_ready():
+            link.publish("recording")
+            return True
+        # finish, a stop event, unaligned abort, or the idle limit: clean end through lerobot's own exit (no frame saved, dataset finalized)
+        kwargs["events"]["stop_recording"] = kwargs["events"]["rerecord_episode"] = True
+        return False
+
     if original_loop is not None:  # each record loop (episode, reset) starts after lerobot's own pauses, e.g. save_episode
 
         def loop(*args, **kwargs):
+            if link is not None and prerolled[0] and kwargs.get("dataset") is None and kwargs.get("policy") is None:
+                return None  # lerobot's fixed reset period: replaced by the wait before the next episode; the save that follows stays under the pause watch
             shared["events"] = kwargs.get("events")
             watch = stop_watch()
             fault = getattr(watch, "fault_exc", None)
@@ -214,12 +247,21 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
                                         or "record loop pause longer than the bound: ending the session")
             if not prerolled[0] and kwargs.get("dataset") is not None and kwargs.get("policy") is None:
                 prerolled[0] = True  # the 1 degree/s alignment runs before episode 0 starts, not inside it: same loop, no dataset
+                if link is not None:
+                    link.publish("aligning")
                 original_loop(*args, **{**kwargs, "dataset": None, "events": PrerollEvents(kwargs["events"]), "control_time_s": 120})
                 if kwargs["events"].get("stop_recording"):  # Esc ends the pre-roll: no episode, the normal stop ending
                     raise KeyboardInterrupt("stop requested before the first episode")
                 if shared.get("motion") is None or not shared["motion"].tracking:
                     raise ValueError("leader alignment did not finish before the first episode (pre-roll ended without tracking, limit 120 s)")
-            if shared.get("motion") is not None:
+            episode = link is not None and kwargs.get("dataset") is not None and kwargs.get("policy") is None
+            if episode:
+                if not wait_linked(args, kwargs):
+                    start_watch()  # keep BoundaryWatch active through dataset.finalize() and disconnect()
+                    return None
+                link.frames = 0
+                kwargs = {**kwargs, "events": LinkEvents(kwargs["events"], link, False, require_frame=original_frame is not None)}
+            if not episode and shared.get("motion") is not None:
                 shared["motion"].boundary = True
             try:
                 return original_loop(*args, **kwargs)
@@ -227,6 +269,12 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
                 if shared.get("motion") is not None:
                     shared["motion"].boundary = False
                 start_watch()
+                if episode:
+                    link.publish("saving")
+                    kwargs["events"].poll_final()
+                    if not kwargs["events"].events.get("rerecord_episode"):
+                        link.episode += 1
+                    link.publish("saving")
 
         module.record_loop = loop
     fault = None

@@ -3,6 +3,33 @@ let camLabels=[];
 let lastCamState=null;
 let primaryCam='';
 let lastCamArm='';
+let cameraRestartInFlight=false;
+
+function canRestartCameras(){
+  const st=lastStatus;
+  return statusLoaded&&Boolean(f.arm.value)&&!benchSessionActive()&&!poseInFlight&&
+    !startInFlight&&!stopInFlight&&!cameraRestartInFlight&&
+    !st.active_locks?.length&&(st.status==='idle'||ENDED.has(st.status)||st.phase==='result');
+}
+
+$('hdr-camera-restart-btn').addEventListener('click',async()=>{
+  if(!canRestartCameras())return;
+  cameraRestartInFlight=true;
+  validateStart();
+  setReqError('');
+  try{
+    const result=await api('/api/cameras/restart',{arm:f.arm.value});
+    const failed=Object.entries(result.units||{}).filter(([,unit])=>!unit.restarted||!unit.active).map(([unit])=>unit);
+    setNotice('camera-restart',result.ok?'good':'warn',
+      result.ok?'카메라 재시작 완료':'카메라 재시작 실패'+(failed.length?': '+failed.join(', '):''));
+  }catch(err){setReqError('카메라 재시작: '+err.message);}
+  finally{
+    cameraRestartInFlight=false;
+    await pollStatus();
+    validateStart();
+    pollCameras();
+  }
+});
 
 function previewCamsForArm(allLabels,arm){
   const allowed=(typeof ARM_PREVIEW_CAMS!=='undefined'&&arm)?ARM_PREVIEW_CAMS[arm]:null;
@@ -81,7 +108,7 @@ async function pollCameras(){
     const labels=previewCamsForArm(Object.keys(lastCamState),curArm);
     const hdrCam=$('hdr-cam-health');
     if(!labels.length){
-      note.textContent=['handing_over','recording'].includes(lastStatus?.status)
+      note.textContent=benchSessionActive()
         ? '녹화 카메라 프레임 대기 중'
         : '카메라 뷰어(8767)가 대기 중이거나 연결된 카메라가 없습니다.';
       if(hdrCam){hdrCam.textContent='카메라 0대';hdrCam.dataset.tone='warn';hdrCam.removeAttribute('title');}
@@ -139,12 +166,10 @@ async function pollStatus(){
     renderStatus(st);
   }catch(err){
     if(seq!==latestStatusSeq)return;
-    const inActive=Boolean(lastStatus&&(lastStatus.status==='handing_over'||lastStatus.status==='recording'));
+    const inActive=benchSessionActive();
     setNotice('conn-error',inActive?'warn':'crit','상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':''),{persistent:!inActive});
     if(!inActive){
       statusLoaded=false;
-      $('top-badge').textContent='연결 끊김';
-      $('top-badge').dataset.tone='crit';
     }
     validateStart();
   }
@@ -233,6 +258,11 @@ function syncArmSelection(){
   else if(picked.length>1)mapped='__unsupported__';
   if(mapped&&mapped!=='__unsupported__'&&[...f.arm.options].some(o=>o.value===mapped))f.arm.value=mapped;
   else f.arm.value='';
+  window.mapZone=null;
+  window.shipHold=null;
+  window.standDir='to-ship';
+  window.zoneSwapped=false;
+  if(typeof window.clearMapNote==='function')window.clearMapNote();
   syncArmPillsUI();
   if(mapped==='__unsupported__'){
     $('arm-note').textContent='다중 선택은 현재 arm_a + arm_b(양팔 동시)만 지원합니다. arm_s는 단독으로 선택하세요.';
@@ -240,7 +270,13 @@ function syncArmSelection(){
   for(const cb of document.querySelectorAll('#cal-robot-list input, #cal-leader-list input'))cb.checked=false;
   applyArmRules(true);
   applyPresetOrRecommended(false);
-  if(taskFilter==='arm')renderTaskListbox();
+  if(f.task.value&&choices?.task_cards&&typeof window.taskFitsArm==='function'&&!window.taskFitsArm(f.task.value,choices.task_cards[f.task.value],f.arm.value)){
+    f.task.value='';
+    autoCollectionName();
+  }
+  renderTaskListbox();
+  updateTaskSummary();
+  pollCameras();
   validateStart();
 }
 
@@ -253,9 +289,12 @@ function selectArm(arm){
   syncArmSelection();
 }
 
-function selectTask(val){
+function selectTask(val,opts){
   window.zoneSwapped=false;
-  window.shipHold=null;
+  if(!(opts&&opts.keepMapZone)){
+    window.shipHold=null;
+    window.mapZone=null;
+  }
   if(typeof window.clearMapNote==='function')window.clearMapNote();
   f.task.value=val||'';
   renderTaskListbox();
@@ -273,9 +312,7 @@ function taskMatchesFilter(v,c){
   if(taskFilter==='all')return true;
   const hay=(v+' '+(c.origin||'')+' '+(c.target_slot||'')+' '+(c.single_task||'')+' '+(c.raw||'')).toLowerCase();
   if(taskFilter==='pinky')return /pinky|belt|conveyor|supply/.test(hay);
-  const arm=f.arm.value, blk={arm_a:/arm[_ -]?[bs]\b|tmp-b|belt-in|conveyor|supply/,arm_b:/arm[_ -]?[as]\b|tmp-a|belt-in|conveyor|supply/,arm_ab:/arm[_ -]?s\b|belt-in|conveyor|supply/};
-  if(arm==='arm_s')return /arm[_ -]?s\b|belt-in|conveyor|supply|pinky/.test(hay);
-  return blk[arm]?!blk[arm].test(hay):true;
+  return typeof window.taskFitsArm==='function'?window.taskFitsArm(v,c,f.arm.value):true;
 }
 function stepTask(delta){
   const opts=[...($('task-listbox')?.querySelectorAll('.task-opt:not(:disabled)')||[])];

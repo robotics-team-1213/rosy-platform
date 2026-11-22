@@ -46,12 +46,14 @@ def test_bench_v4_sidebar_single_notice_surface_history_and_starting_step():
     omx_dir = ROOT / 'deploy/robot/omx'
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
     css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
-    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
+    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
     app_js = ((omx_dir / 'bench_record_app.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8'))
     cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
 
     # 1) Sidebar sections in order and collapsible persistence
-    sb_ids = ('sec-goal', 'sec-progress', 'sec-status', 'sec-params', 'sec-guide', 'sec-notice-history')
+    sb_ids = ('sec-goal', 'sec-guide', 'sec-status', 'sec-params', 'sec-notice-history')
     assert 'id="bench-sidebar"' in html
     positions = [html.index(f'id="{sid}"') for sid in sb_ids]
     assert positions == sorted(positions)
@@ -86,11 +88,13 @@ def test_bench_v5_fixed_goal_single_params_table_status_kv_and_1366_collapse():
     omx_dir = ROOT / 'deploy/robot/omx'
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
     css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
-    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
+    ui_js = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_map.js').read_text(encoding='utf-8')
+             + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
     app_js = ((omx_dir / 'bench_record_app.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8'))
 
-    # 1) Goal fixed at top of sidebar, lower sections inside #bench-sidebar-scroll, scroll reset on task select
-    assert html.index('id="sec-goal"') < html.index('id="bench-sidebar-scroll"') < html.index('id="sec-progress"')
+    # 1) Goal fixed at top of sidebar, guide first inside #bench-sidebar-scroll, scroll reset on task select
+    assert html.index('id="sec-goal"') < html.index('id="bench-sidebar-scroll"') < html.index('id="sec-guide"') < html.index('id="sec-status"')
     assert re.search(r'\.bench-sidebar\{[^}]*overflow:hidden\}', css)
     assert re.search(r'\.bench-sidebar-scroll\{[^}]*overflow-y:auto', css)
     assert 'sbScroll.scrollTop=0' in app_js
@@ -106,8 +110,8 @@ def test_bench_v5_fixed_goal_single_params_table_status_kv_and_1366_collapse():
         assert f'id="{st_id}"' in html, st_id
     assert 'function renderStatusKv()' in ui_js
 
-    # 4) Guide collapsed by default at <= 1366px
-    assert '(max-width: 1366px)' in ui_js and "el.id==='sec-guide'&&narrow1366" in ui_js
+    # 4) Guide stays open at <= 1366px while preserving user toggle persistence
+    assert "el.id==='sec-guide'&&narrow1366" not in ui_js and 'omx_sb_sec_' in ui_js
 
     # 5) Notice strip (+N건) button expands and scrolls to notice history
     assert 'id="reason-more-btn"' in html
@@ -129,7 +133,7 @@ def test_bench_v6_two_row_header_red_record_shortcuts_and_arm_cam_filter():
     assert html.index('id="hdr-row-menu"') < html.index('id="hdr-row-ops"')
     assert 'class="btn-rec topbar-rec-btn"' in html
     assert '.btn-rec{background:var(--crit);' in css
-    assert 'btn-rec is-recording topbar-rec-btn' in cam_js
+    assert "record.classList.toggle('is-recording',stopping)" in cam_js
     assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
 
     # 2) Shortcut help section, key bindings, editable-focus guard, and repeat guard
@@ -163,11 +167,11 @@ def test_bench_context_precedes_phase_controls_and_sidebar_has_no_duplicate_summ
     assert re.search(r'\.context-btn\{[^}]*text-overflow:ellipsis', css)
 
     sidebar = html.split('id="bench-sidebar"', 1)[1].split('</aside>', 1)[0]
-    sections = ('sec-goal', 'sec-progress', 'sec-status', 'sec-params', 'sec-guide',
+    sections = ('sec-goal', 'sec-guide', 'sec-status', 'sec-params',
                 'sec-notice-history', 'sec-shortcuts')
     positions = [sidebar.index(f'id="{section}"') for section in sections]
     assert positions == sorted(positions)
-    assert 'id="sb-st-phase"' in sidebar.split('id="sec-params"', 1)[1].split('</details>', 1)[0]
+    assert 'id="sec-progress"' not in sidebar and 'id="sb-st-phase"' not in sidebar
     for marker in ('btn-sum-setup', 'btn-sum-bindings', 'sb-goal-sum', 'goal-task-id',
                    'sb-params-sum', 'sb-cam-health'):
         assert f'id="{marker}"' not in html
@@ -440,6 +444,7 @@ def test_a_live_lease_of_another_owner_refuses_but_the_benchs_own_live_lease_doe
 def test_the_cell_code_digest_covers_the_split_out_guard_modules():
     source = (ROOT / 'deploy/robot/omx/cell_envelope.py').read_text(encoding='utf-8')
     assert '"guarded_native_track.py"' in source and '"guarded_native_mount.py"' in source
+    assert '"guarded_native_lag.py"' in source and '"guarded_native_link.py"' in source
 
 
 def test_the_auto_home_is_recorded_only_for_the_request_that_owns_the_bench(tmp_path, monkeypatch):
@@ -782,7 +787,7 @@ def test_the_declared_teleop_stage_reaches_the_session_command_and_the_status(tm
     state = finished(bench)
     command = commands[0]
     assert command[command.index('--teleop-stage') + 1] == '45'
-    assert state['teleop_speed'] == {'stage': 45, 'track_deg_s': 45.0, 'profile_vel': 37, 'profile_acc': 16, 'accel_deg_s2': 60.0, 'brake_deg_s2': 690.0}
+    assert state['teleop_speed'] == {'stage': 45, 'track_deg_s': 45.0, 'profile_vel': 37, 'profile_acc': 16, 'accel_deg_s2': 60.0, 'brake_deg_s2': 690.0, 'tau_s': 0.19, 'align_deg_s': 10.0}
 
 
 @pytest.mark.parametrize('content', [None, '{"stage": 25}', 'garbage'])
@@ -793,7 +798,7 @@ def test_without_a_valid_declaration_the_session_command_and_caps_are_unchanged(
         (bench.prep / 'teleop-speed-arm_a.json').write_text(content)
     bench.start(body)
     state = finished(bench)
-    assert '--teleop-stage' not in commands[0] and state['teleop_speed'] == {'stage': None, 'track_deg_s': 25.0, 'accel_deg_s2': 10.0, 'brake_deg_s2': 200.0}
+    assert '--teleop-stage' not in commands[0] and state['teleop_speed'] == {'stage': None, 'track_deg_s': 25.0, 'accel_deg_s2': 10.0, 'brake_deg_s2': 200.0, 'align_deg_s': 1.0}
 
 
 def _restart_setup(tmp_path, monkeypatch, cameras=('top', 'side')):
@@ -931,7 +936,9 @@ def test_the_keyboard_stop_always_asks_the_server_and_only_an_open_drawer_takes_
     assert "if(e.key==='Escape'&&$('side-drawer-host')&&!$('side-drawer-host').hidden){e.preventDefault();closeDrawer(true);}" in branch
     assert 'else{e.preventDefault();keyboardStop();}' in branch  # Alt+X, and Esc with no drawer: always the stop request
     fn = js[js.index('async function keyboardStop()'):js.index("document.addEventListener('keydown'")]
-    assert "api('/stop',{})" in fn and 'stop_result' in fn and "setReqError('정지 요청: '" in fn
+    assert "api('/stop',{})" in fn and 'renderStatus(st)' in fn and "setReqError('정지 요청: '" in fn
+    ui = ((bench_record.HERE / 'bench_record_ui.js').read_text(encoding='utf-8') + (bench_record.HERE / 'bench_record_status.js').read_text(encoding='utf-8'))
+    assert 'st.stop_result?.message' in ui and "setNotice('stop-result'" in ui
 
 
 def _sealed(bench):
@@ -1033,3 +1040,172 @@ def test_unreadable_end_evidence_is_a_guard_event_and_a_clean_end_still_starts_t
     bench.state = {'status': 'sealing', 'arm': 'arm_s', 'folder': str(folder)}
     bench._publish_end(status='sealed')
     assert 'auto_home' not in bench.state and len(bench._auto_homes) == 1
+
+
+def _spied(bench):
+    popen, envs = bench.popen, []
+
+    def spy(command, cwd, **kw):
+        if command[1].endswith('record_session.py'):
+            envs.append(kw.get('env') or {})
+        return popen(command, cwd, **kw)
+    bench.popen = spy
+    return envs
+
+
+def test_prepare_starts_a_linked_session(tmp_path, monkeypatch):
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr("bench_live_preview.SHM", tmp_path / "missing")
+    envs = _spied(bench)
+    bench.prepare(body)
+    state = finished(bench)
+    assert envs[0]['ROSY_LINK_DIR'] == str(Path(state['folder']) / 'link') and state['link'] is True and state['target_episodes'] == 500
+    assert state['phase'] == 'result' and state['prepare'] is None  # the session ended (the fake recorder exits at once)
+
+
+def test_start_stays_the_one_shot_prepare_and_record(tmp_path, monkeypatch):
+    bench, body, calls, commands = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr("bench_live_preview.SHM", tmp_path / "missing")
+    envs = _spied(bench)
+    bench.start(body)
+    state = finished(bench)
+    assert 'ROSY_LINK_DIR' not in envs[0] and state['link'] is False and state['target_episodes'] != 500
+
+
+def _linked_state(bench, tmp_path, link_state, status='recording', link=True):
+    folder = tmp_path / 'session'
+    (folder / 'link').mkdir(parents=True, exist_ok=True)
+    if link_state is not None:
+        (folder / 'link' / 'state.json').write_text(json.dumps({'state': link_state, 'episode': 3}), encoding='utf-8')
+    bench.state = {'status': status, 'arm': 'arm_a', 'folder': str(folder), 'link': link}
+    return folder
+
+
+def test_the_phase_field_and_the_prepare_ready_flag_follow_the_recorders_own_state(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    assert bench.link_fields({'status': 'idle'}) == {'phase': 'setup', 'prepare': None, 'link': False}
+    _linked_state(bench, tmp_path, None, status='handing_over')
+    prepare = bench.link_fields(dict(bench.state))
+    assert prepare['phase'] == 'prepare' and prepare['prepare']['ready'] is False
+    for link_state, phase, ready in (('aligning', 'prepare', False), ('waiting', 'prepare', True), ('saving', 'prepare', False), ('recording', 'recording', None)):
+        _linked_state(bench, tmp_path, link_state)
+        fields = bench.link_fields(dict(bench.state))
+        assert fields['phase'] == phase and fields['link'] is True
+        assert (fields['prepare'] or {}).get('ready') == ready and (fields['prepare'] or {}).get('link_state', link_state) == link_state
+    assert bench.link_fields(dict(bench.state))['prepare'] is None  # recording: no prepare block
+    _linked_state(bench, tmp_path, None, status='recording', link=False)  # the one-shot start
+    assert bench.link_fields(dict(bench.state))['phase'] == 'recording'
+    for status in ('restoring', 'sealing', 'sealed', 'stopped_safe', 'failed', 'leader_manual_check'):
+        assert bench.link_fields({'status': status, 'link': True})['phase'] == 'result'
+    assert 'phase' in bench.status() and 'prepare' in bench.status()  # status.json carries them
+
+
+def test_record_next_rerecord_and_finish_write_one_request_each_only_in_the_state_they_belong_to(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    folder = _linked_state(bench, tmp_path, 'waiting')
+
+    def sent():
+        return json.loads((folder / 'link' / 'control.json').read_text(encoding='utf-8'))
+    bench.record_episode()
+    assert sent() == {'seq': 1, 'cmd': 'record'}
+    with pytest.raises(ValueError, match='녹화 중에만'):  # waiting: no next, no re-record
+        bench.episode_next()
+    with pytest.raises(ValueError, match='녹화 중에만'):
+        bench.episode_rerecord()
+    (folder / 'link' / 'state.json').write_text(json.dumps({'state': 'recording'}), encoding='utf-8')
+    bench.episode_next()
+    assert sent() == {'seq': 2, 'cmd': 'next'}
+    bench.episode_rerecord()
+    assert sent() == {'seq': 3, 'cmd': 'rerecord'}
+    with pytest.raises(ValueError, match='연동됨'):  # recording: no second record
+        bench.record_episode()
+    with pytest.raises(ValueError, match='연동을 끝낼 수 없습니다'):  # an episode is not cut off by finish
+        bench.finish()
+    (folder / 'link' / 'state.json').write_text(json.dumps({'state': 'waiting'}), encoding='utf-8')
+    bench.finish()
+    assert sent() == {'seq': 4, 'cmd': 'finish'} and bench._pre_cancel == set()  # finish cancels nothing: restore, seal and the auto home follow
+    bench.abort = True
+    with pytest.raises(ValueError, match='준비되어 있지 않습니다'):  # a stop is under way
+        bench.record_episode()
+    bench.abort = False
+    _linked_state(bench, tmp_path, 'waiting', link=False)
+    with pytest.raises(ValueError, match='준비되어 있지 않습니다'):  # not a linked session
+        bench.record_episode()
+    bench.state = {'status': 'idle'}
+    with pytest.raises(ValueError, match='준비되어 있지 않습니다'):
+        bench.finish()
+
+
+def test_stop_still_ends_a_linked_session_and_cancels_its_auto_home(tmp_path, monkeypatch):
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    _linked_state(bench, tmp_path, 'waiting')
+    signals = []
+    bench.child = SimpleNamespace(poll=lambda: None, send_signal=signals.append)
+    bench.stop()
+    assert len(signals) == 1 and bench._session_claim() in bench._pre_cancel  # /stop is unchanged: SIGTERM, the auto home cancelled
+
+
+def test_the_link_requests_are_routed_and_the_page_gets_a_prepare_route_per_arm():
+    source = (bench_record.HERE / 'bench_record_http.py').read_text(encoding='utf-8')
+    for route in ('"/prepare"', '"/record_episode"', '"/finish"', '"/api/episode/next"', '"/api/episode/rerecord"', 'prepare|record_episode|finish'):
+        assert route in source
+    import bench_live_preview
+    assert bench_live_preview.recorder_env(None, Path('/x/link'))['ROSY_LINK_DIR'] == '/x/link' and 'ROSY_LINK_DIR' not in bench_live_preview.recorder_env(None)
+
+
+def test_bench_status_bar_and_split_recording_controls():
+    omx_dir = ROOT / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    ui = ((omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_status.js').read_text(encoding='utf-8'))
+    app = ((omx_dir / 'bench_record_app.js').read_text(encoding='utf-8') + (omx_dir / 'bench_record_drawers.js').read_text(encoding='utf-8'))
+    cam = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+
+    footer = html.split('<footer id="status-bar"', 1)[1].split('</footer>', 1)[0]
+    for field in ('top-badge', 'sb-st-follower', 'sb-st-torque', 'sb-st-leader', 'sb-st-phase',
+                  'status-speed', 'status-cameras', 'status-camera-source', 'sb-st-hold', 'start-reason-bar'):
+        assert f'id="{field}"' in footer
+    assert footer.count('<div hidden>') >= 4
+    assert "const text=value??''" in ui and ".hidden=text===''" in ui
+    assert '.status-bar{position:fixed' in css and '@media(max-width:1366px)' in css
+    assert 'id="hdr-camera-restart-btn"' in html
+    assert "api('/api/cameras/restart',{arm:f.arm.value})" in app
+    assert "e.shiftKey&&low==='c'" in app and '!benchSessionActive()' in app
+
+    for button in ('hdr-prepare-btn', 'hdr-start-now-btn', 'hdr-record-btn', 'hdr-finish-btn',
+                   'hdr-rerecord-btn', 'back-to-setup-btn'):
+        assert f'id="{button}"' in html
+    assert "startBench('/prepare')" in app and "phase==='prepare'&&(st?.prepare?.ready===true||st?.ready===true)" in cam
+    assert "record.hidden=!(stopping||ready)" in cam and "'■ 녹화 끝'" in cam
+    assert "episodeAction('/record_episode')" in cam and "episodeAction('/finish','/stop')" in cam
+    assert "episodeAction('/api/episode/rerecord')" in cam
+    assert "saving:'에피소드 저장 중'" in ui and 'st?.prepare?.step??st?.starting_step' in cam
+
+
+def test_prepare_and_link_only_reject_bimanual_and_replay_and_link_command_checks_arm_and_pending_seq(tmp_path, monkeypatch):
+    bench, body, _, _ = _setup(tmp_path, monkeypatch)
+    for bad in (dict(body, arm='arm_ab'), dict(body, replay='r.parquet')):
+        with pytest.raises(ValueError, match='단일 팔'):
+            bench.prepare(bad)
+        with pytest.raises(ValueError, match='단일 팔'):
+            bench.start(dict(bad, link_only=True))
+    folder = _linked_state(bench, tmp_path, 'waiting')
+    (folder / 'link' / 'state.json').write_text(json.dumps({'state': 'waiting', 'seq': 0}), encoding='utf-8')
+    with pytest.raises(ValueError, match='arm_a'):
+        bench.record_episode({'arm': 'arm_b'})
+    bench.record_episode({'arm': 'arm_a'})
+    with pytest.raises(ValueError, match='아직 처리 중'):
+        bench.record_episode({'arm': 'arm_a'})
+    (folder / 'link' / 'state.json').write_text(json.dumps({
+        'state': 'recording', 'episode': 0, 'seq': 1, 'episode_started': 100.0,
+        'last_command': {'seq': 1, 'cmd': 'record', 'applied': True},
+    }), encoding='utf-8')
+    bench.clock = lambda: 104.5
+    st = bench.link_fields({'status': 'recording', 'link': True, 'folder': str(folder)})
+    assert st['episode_elapsed_s'] == 4.5 and st['link_last_command']['applied'] is True
+    (folder / 'link' / 'state.json').write_text(json.dumps({'state': 'waiting', 'episode': 0, 'seq': 1}), encoding='utf-8')
+    bench.finish({'arm': 'arm_a'})
+    assert json.loads((folder / 'link' / 'control.json').read_text(encoding='utf-8')) == {'seq': 2, 'cmd': 'finish'}
+    (folder / 'link' / 'state.json').write_text(json.dumps({'state': 'recording', 'episode': 1, 'seq': 2}), encoding='utf-8')
+    bench.episode_rerecord({'arm': 'arm_a'})
+    assert json.loads((folder / 'link' / 'control.json').read_text(encoding='utf-8')) == {'seq': 3, 'cmd': 'rerecord', 'episode': 1}

@@ -298,7 +298,7 @@ class BenchInspectMixin:
         out["hf_upload"] = self.hf_upload_status() if hasattr(self, "hf_upload_status") else {}
         out.update(recording_progress(out, self.clock))
         out.update(starting_step(out, self.__dict__.setdefault("_step_memory", {})))
-        out.update(self.issue_fields(out), **self.speed_fields())
+        out.update(self.issue_fields(out), **self.speed_fields(), **self.link_fields(out))
         if out.get("folder") and out.get("status") in ("unsafe_or_failed", "failed", "seal_failed"):
             log_p = Path(out["folder"]) / "bench.log"
             if log_p.is_file():

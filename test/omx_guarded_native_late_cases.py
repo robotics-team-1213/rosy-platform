@@ -1251,15 +1251,16 @@ def test_the_stage_sets_the_full_arm_tracking_limit_and_acceleration_and_nothing
 
 
 @pytest.mark.parametrize('tau', [0.3, 0.1])
-def test_stage_60_keeps_the_lead_within_3_degrees_and_the_5_degree_stop_quiet_on_a_lagging_follower(guard, tau):
+def test_stage_60_keeps_the_lead_inside_the_models_allowance_and_the_5_degree_stop_quiet_on_a_lagging_follower(guard, tau):
     motion, follower, leader, clock, step = _lagging(guard, tau=tau, stage=60)
-    assert motion.tracking
+    assert motion.tracking and motion.lag is not None
     start = follower.raw['shoulder_pan']
+    allowance = (guard.LEAD_DEG + motion.lag.tau_s * 60) * guard.TICKS_PER_DEGREE  # free motion at the limit lags by v * tau; 3 degrees of slack on top
     for _ in range(40):  # the Leader moves at 40 deg/s for 2 s: 80 degrees, inside the 100 degree test
         leader.raw['shoulder_pan'] += 40 * guard.TICKS_PER_DEGREE * 0.05
         before = follower.raw['shoulder_pan']
         step()
-        assert abs(motion.command['shoulder_pan'] - before) <= guard.LEAD_DEG * guard.TICKS_PER_DEGREE + 1e-6
+        assert abs(motion.command['shoulder_pan'] - before) <= allowance + 1e-6
     assert not motion.failed and not motion.held and follower.raw['shoulder_pan'] > start
 
 

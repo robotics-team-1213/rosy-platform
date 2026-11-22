@@ -84,6 +84,7 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
             routes = {"/": lambda: (PAGE.encode(), "text/html; charset=utf-8"),
                       "/bench_record.css": lambda: ((HERE / "bench_record.css").read_bytes(), "text/css; charset=utf-8"),
                       "/bench_record_ui.js": lambda: ((HERE / "bench_record_ui.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_map.js": lambda: ((HERE / "bench_record_map.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_status.js": lambda: ((HERE / "bench_record_status.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_app.js": lambda: ((HERE / "bench_record_app.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_drawers.js": lambda: ((HERE / "bench_record_drawers.js").read_bytes(), "application/javascript; charset=utf-8"),
@@ -109,6 +110,16 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     raise ValueError("JSON object required")
                 if self.path == "/start":
                     return self.reply(200, bench.start(body))
+                if self.path == "/prepare":
+                    return self.reply(200, bench.prepare(body))
+                if self.path == "/record_episode":
+                    return self.reply(200, bench.record_episode(body))
+                if self.path == "/finish":
+                    return self.reply(200, bench.finish(body))
+                if self.path == "/api/episode/next":
+                    return self.reply(200, bench.episode_next(body))
+                if self.path == "/api/episode/rerecord":
+                    return self.reply(200, bench.episode_rerecord(body))
                 if self.path == "/stop":
                     return self.reply(200, bench.stop())
                 if self.path == "/save_caps":
@@ -137,13 +148,15 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.hf_upload_config(body))
                 if self.path == "/api/dataset/delete":
                     return self.reply(200, bench.dataset_delete(body))
-                m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose|release_lease)", self.path)
+                m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose|release_lease|prepare|record_episode|finish)", self.path)
                 if m_arm:
                     arm_id, act = m_arm.group(1), m_arm.group(2)
                     if act == "start":
                         return self.reply(200, bench.start(dict(body, arm=arm_id)))
                     if act == "stop":
                         return self.reply(200, bench.stop())
+                    if act in ("prepare", "record_episode", "finish"):
+                        return self.reply(200, getattr(bench, act)(dict(body, arm=arm_id)))
                     if act == "home":
                         return self.reply(200, bench.go_home(dict(body, arm=arm_id)))
                     if act == "initial_pose":
