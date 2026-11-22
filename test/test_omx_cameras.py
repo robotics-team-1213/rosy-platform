@@ -203,3 +203,29 @@ def test_sync_readiness_aligns_camera_devices_with_their_unit_roles(tmp_path):
                         "from": "/dev/v4l/by-id/rosy-arm_a_wrist", "to": A_WRIST["device"]}]
     assert updated["cameras"]["front"]["device"] == A_WRIST["device"]
     assert oc.sync_readiness(reg, updated)[1] == []
+
+
+def test_disabled_camera_is_skipped_everywhere_and_does_not_block_side_auto_follow(tmp_path):
+    side = {"role": "side", "device": "/dev/v4l/by-id/rosy-arm_a_jieli", "topic": "/side_camera/image_raw",
+            "frame": "side_camera_link", "usb_id": "4c4a:4a55"}
+    arm_s_top = {"role": "arm_s_top", "device": "/dev/v4l/by-id/rosy-arm_s_jieli", "topic": "/arm_s_top_camera/image_raw",
+                 "frame": "arm_s_top_camera_link", "usb_id": "4c4a:4a55", "enabled": False}
+    reg = registry(tmp_path, [dict(TOP, usb_id="8086:0b07"), side, arm_s_top])
+    side_live = "/dev/v4l/by-path/pci-0000:00:14.0-usb-0:4:1.0-video-index0"
+    facts, names, present, realpath = _bench({
+        "/dev/video12": ({"id": "8086:0b07", "serial": "1", "usb": "2-1", "interface": "2-1:1.3", "speed_mbps": 5000}, [TOP["device"]]),
+        "/dev/video4": ({"id": "4c4a:4a55", "serial": "2", "usb": "0-4", "interface": "0-4:1.0", "speed_mbps": 480}, [side_live]),
+    })
+    rows = oc.propose(reg, facts, names, present, realpath)
+    assert [(r["node"], r["follow"]) for r in rows] == [("/dev/video4", "side")]
+    changes = oc.learn(reg, facts, rows, present, realpath)
+    assert changes == [{"role": "side", "from": side["device"], "to": side_live}]
+
+    plan = oc.bind(reg, tmp_path, present, {"/dev/video12", "/dev/video4"}, realpath=realpath)
+    assert plan["disabled"] == ["arm_s_top"] and "arm_s_top" not in plan["waiting"] and "arm_s_top" not in plan["write"]
+    ran = []
+    done = oc.apply(plan, tmp_path, lambda role: role == "arm_s_top", run=lambda argv, **kw: ran.append(argv))
+    assert "stopped rosy-omx-camera@arm_s_top.service" in done and any(a[-1] == "rosy-omx-camera@arm_s_top.service" and "stop" in a for a in ran)
+    text, changed, unregistered = oc.sync_manifest(reg, MANIFEST)
+    assert any(c["topic"] == "/side_camera/image_raw" and c["to"] == side_live for c in changed)
+    assert "/arm_s_top_camera/image_raw" not in text and unregistered == ["/arm_b_wrist_camera/image_raw"]

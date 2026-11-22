@@ -398,3 +398,12 @@ def test_port_restore_attempts_the_peer_even_when_the_first_write_fails(monkeypa
     with pytest.raises(subprocess.CalledProcessError):
         cu.port_set(["root", "peer"], False)
     assert restored == ["peer/disable"]
+
+
+def test_optional_camera_offline_leaves_upkeep_ok_without_usb_cycle():
+    io = cu.Io(fetch=lambda url: (200, JPEG) if "wrist" in url else (503, b""), labels=lambda: LABELS, roles=lambda: ROLES)
+    rows, top = cu.check_cameras("arm_s", {
+        "top": {"url": "http://v/frame/arm_s_top.jpg", "optional": True},
+        "wrist": {"url": "http://v/frame/arm_s_wrist.jpg"},
+    }, io, fix=True, bus_free=True, usb_recover_fn=lambda *a: (_ for _ in ()).throw(AssertionError("must not cycle optional")))
+    assert top is None and rows[0]["status"] == "ok" and "optional top offline" in rows[0]["detail"]

@@ -35,7 +35,7 @@ if not (HERE / "omx_adapter").is_dir():
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from teleop_speed import read_stage, summary as speed_summary  # noqa: E402
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
-    check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, write_restore_list, write_snapshot)
+    check_bimanual_child, check_proc_visible, hold_other_arm_locks, proc_cmdlines, proc_mounts, recorder_running, release, resolve_start_config, write_restore_list, write_snapshot)
 
 from bench_record_inspect import (  # noqa: E402,F401
     ARMS, BI_ARM, HANDOVER, NAME, BenchInspectMixin, _read_task_card, active_handover_units, systemctl)
@@ -123,7 +123,8 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
         if arm == BI_ARM:
             if not isinstance(robot, dict) or robot.get("type") != "bi_omx_follower":
                 raise ValueError("arm_ab는 양팔(bi_omx_follower) 설정만 녹화합니다")
-            return f"{self._check_single_robot('arm_a', name, robot.get('arm_a'), profile)}+{self._check_single_robot('arm_b', name, robot.get('arm_b'), profile)}"
+            chk = lambda a, n, r: self._check_single_robot(a, n, r, profile)  # noqa: E731
+            return f"{check_bimanual_child(self.prep, 'arm_a', robot.get('arm_a'), chk)}+{check_bimanual_child(self.prep, 'arm_b', robot.get('arm_b'), chk)}"
         return self._check_single_robot(arm, name, robot, profile)
 
     def start(self, body):
@@ -163,6 +164,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
             raise ValueError(f"선택한 녹화 설정은 {body['arm']}({instance})의 것이 아닙니다")
         if not self._caps_ok(body["arm"], body.get("caps", "")):
             raise ValueError(f"caps 파일은 {body['arm']}에 맞는 파일을 선택하세요")
+        cfg_data, cam_rebinds = resolve_start_config(config_bytes, body["arm"])
         stems = [Path(c).stem for c in calibrations]
         robots = [stem for c, stem in zip(calibrations, stems) if Path(c).parent.parent.name == "robots"]
         if not set(req_instances).issubset(set(robots)) or any(stem not in req_instances for stem in robots):
@@ -247,7 +249,6 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 effective_cfg = config_bytes
                 effective_task = task
                 snap_files = [("caps.json", caps_bytes)]
-                cfg_data = json.loads(config_bytes.decode("utf-8-sig"))
                 ds_cfg = cfg_data.get("dataset") if isinstance(cfg_data.get("dataset"), dict) else {}
                 eff_task_id, eff_root_prefix, eff_target_eps = None, ds_cfg.get("root"), overrides.get("num_episodes") or ds_cfg.get("num_episodes")
                 if effective_task and (overrides or task_override):
@@ -273,8 +274,9 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                         eff_root_prefix = (yaml.safe_load(task_card.get("raw") or "") or {}).get("record", {}).get("root_prefix") or eff_root_prefix
                     except Exception:
                         pass
-                elif overrides:
-                    cfg_data.setdefault("dataset", {}).update(overrides)
+                if overrides or cam_rebinds:
+                    if overrides:
+                        cfg_data.setdefault("dataset", {}).update(overrides)
                     effective_cfg = json.dumps(cfg_data, indent=2).encode("utf-8")
                 snap_files.insert(0, ("record-config.json", effective_cfg))
                 if replay_path:

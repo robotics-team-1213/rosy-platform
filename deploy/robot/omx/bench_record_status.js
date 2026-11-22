@@ -78,8 +78,12 @@ function applyArmRules(autoPickSingle){
   // a start (the recorder opens the device itself): 2026-11-21 this line blocked every arm_s start from the page
   const warns=[];
   const topName=arm==='arm_s'?'arm_s_top':'top';
-  if(m&&Array.isArray(m.cameras)&&m.cameras.includes('top')&&lastCamState&&(!lastCamState[topName]||lastCamState[topName].fresh===false)){
+  if(m&&Array.isArray(m.cameras)&&m.cameras.includes('top')&&arm!=='arm_s'&&lastCamState&&(!lastCamState[topName]||lastCamState[topName].fresh===false)){
     warns.push('주의: 선택 설정의 top 카메라('+topName+')가 현재 8767 미리보기에서 미수신 상태입니다');
+  }
+  if(typeof window.expectedCamsForArm==='function'&&lastCamState){
+    const miss=window.expectedCamsForArm(arm,f.config.value).filter(lbl=>lbl!==topName&&(!lastCamState[lbl]||lastCamState[lbl].fresh===false));
+    if(miss.length)warns.push('주의: 녹화 카메라('+miss.join(', ')+')가 8767 미리보기에서 미수신 상태입니다');
   }
   if(typeof renderCapsEditor==='function')renderCapsEditor();
   if(typeof renderParamsPanel==='function')renderParamsPanel();
@@ -432,16 +436,37 @@ function renderStatus(st){
     sealEl.className='alert good';
     postAct.hidden=true;
   }
+  const delEmptyBtn=$('ev-delete-empty-btn');
+  if(delEmptyBtn){
+    const rows=Array.isArray(st.lerobot_datasets)?st.lerobot_datasets:[];
+    const pfx=st.dataset_root_prefix?String(st.dataset_root_prefix).split('/').pop():'';
+    const match=rows.find(r=>(r.episodes||0)===0&&st.name&&(r.name===st.name||r.name.endsWith('-'+st.name)||(pfx&&r.name.startsWith(pfx))));
+    const ended=['sealed','stopped_not_sealed','stopped_safe','unsafe_or_failed','failed'].includes(code);
+    const keepPost=!postAct.hidden;
+    if($('next-ep-btn'))$('next-ep-btn').hidden=!keepPost;
+    if($('copy-transfer-btn'))$('copy-transfer-btn').hidden=!keepPost;
+    if(!keepPost&&match&&ended)postAct.hidden=false;
+    delEmptyBtn.hidden=!match||!ended;
+    delEmptyBtn.dataset.dataset=match?match.name:'';
+    if(!delEmptyBtn.dataset.bound){
+      delEmptyBtn.dataset.bound='1';
+      delEmptyBtn.addEventListener('click',async()=>{
+        const ds=delEmptyBtn.dataset.dataset;if(!ds)return;
+        delEmptyBtn.disabled=true;setReqError('');
+        try{
+          await api('/api/dataset/delete',{dataset:ds});
+          if(typeof setActivity==='function')setActivity('빈 데이터셋 삭제','good',ds);
+          delEmptyBtn.hidden=true;
+          if(typeof pollStatus==='function')await pollStatus();
+        }catch(e){setReqError(e.message||String(e));}finally{delEmptyBtn.disabled=false;}
+      });
+    }
+  }
   const logEl=$('ev-log-tail');
   if(st.log_tail){logEl.textContent=st.log_tail;logEl.hidden=false;}
   else{logEl.hidden=true;logEl.textContent='';}
   renderRecent(st.recent_sessions);
   if(typeof renderLeRobotPanel==='function')renderLeRobotPanel(st);
-  if($('sum-recent-drawer')){
-    const recN=Array.isArray(st.recent_sessions)?st.recent_sessions.length:0;
-    const dsN=Array.isArray(st.lerobot_datasets)?st.lerobot_datasets.length:0;
-    $('sum-recent-drawer').textContent='최근 '+recN+'건 · LeRobot '+dsN+'개';
-  }
   const scSig=JSON.stringify(st.scenario_counts||{});
   if($('task-listbox')&&$('task-listbox').dataset.scSig!==scSig){
     $('task-listbox').dataset.scSig=scSig;
@@ -514,12 +539,15 @@ function renderStatusKv(){
   const rate=speed?.track_deg_s;
   setStatusCell('status-speed',Number.isFinite(rate)?rate+'°/s':speed?.stage!=null?'단계 '+speed.stage:'');
   const cameras=st?.cameras??d?.cameras;
-  const labels=cameras?previewCamsForArm(Object.keys(cameras),st?.arm||f.arm.value):[];
+  const curArm=st?.arm||f.arm.value;
+  const reqCams=typeof window.expectedCamsForArm==='function'?window.expectedCamsForArm(curArm,st?.config||f.config.value):[];
+  const labels=cameras?previewCamsForArm(Object.keys(cameras),curArm):[];
+  const denom=reqCams.length?reqCams:labels;
   const source={unit:'유닛',recorder:'녹화기'}[st?.camera_source??d?.camera_source];
-  setStatusCell('status-cameras',labels.length?labels.filter(label=>cameras[label]?.fresh===true).length+'/'+labels.length:'',$('status-cameras'));
+  setStatusCell('status-cameras',denom.length&&cameras?denom.filter(label=>cameras[label]?.fresh===true).length+'/'+denom.length:'',$('status-cameras'));
   setStatusCell('status-camera-source',source,$('status-camera-source'));
   $('status-cameras').closest('dd').parentElement.hidden=$('status-cameras').hidden&&!source;
-  $('hdr-cam-health').hidden=labels.length>0;
+  $('hdr-cam-health').hidden=false;
 
   const holdReason=(typeof st?.manual_attention==='string'&&st.manual_attention)||st?.error||
     (st?.manual_attention||st?.error_kind==='needs_person'?'사람 확인 필요':null)||

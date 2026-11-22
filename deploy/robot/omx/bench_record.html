@@ -116,6 +116,7 @@
         <div id="post-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px" hidden>
           <button type="button" id="next-ep-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">다음 회차 준비 (수집명 +1)</button>
           <button type="button" id="copy-transfer-btn" class="btn-tool" style="min-height:40px;font-size:.9rem">모델 PC 반입 명령 복사</button>
+          <button type="button" id="ev-delete-empty-btn" class="btn-tool" data-tone="warn" style="min-height:40px;font-size:.9rem" hidden>빈 데이터셋 삭제 (0회)</button>
         </div>
       </section>
 
@@ -167,7 +168,7 @@
           </div>
         </details>
 
-        <details class="card acc-card sb-sec" id="sec-status" open aria-labelledby="h-status">
+        <details class="card acc-card sb-sec" id="sec-status" aria-labelledby="h-status">
           <summary class="acc-sum sb-sum">
             <h2 id="h-status" class="goal-kicker">진단</h2>
           </summary>
@@ -227,16 +228,17 @@
               </div>
               <div id="sb-grip-span" class="mono quiet" style="font-size:.73rem">확인 중...</div>
             </div>
-            <div id="sb-joint-caps-box" class="sb-param-block">
-              <div class="sb-param-head">
+            <details id="sb-joint-caps-box" class="sb-param-block">
+              <summary class="sb-param-head" style="cursor:pointer;list-style:none">
                 <span>관절 한계 · 동기화 (11~16)</span>
-                <div class="sb-param-actions">
-                  <button type="button" id="sb-caps-save-btn" class="btn-primary btn-xs">값 저장</button>
-                  <button type="button" id="sb-caps-drawer-btn" class="btn-tool btn-xs">막대 편집</button>
-                </div>
+                <span class="quiet">펼치기 ▾</span>
+              </summary>
+              <div class="sb-param-actions" style="margin:4px 0">
+                <button type="button" id="sb-caps-save-btn" class="btn-primary btn-xs">값 저장</button>
+                <button type="button" id="sb-caps-drawer-btn" class="btn-tool btn-xs">막대 편집</button>
               </div>
               <div id="sb-joint-caps-table" class="joint-caps-table mono"></div>
-            </div>
+            </details>
           </div>
         </details>
 
@@ -336,8 +338,9 @@
                         <button type="button" id="task-next-btn" class="btn-tool btn-xs" title="다음 작업 카드">▶ 다음</button>
                       </div>
                       <div id="task-filters" class="task-filters" role="group" aria-label="작업 카드 필터">
-                        <button type="button" class="pill-btn active" data-tfilter="all" aria-pressed="true">전체</button>
-                        <button type="button" class="pill-btn" data-tfilter="arm" aria-pressed="false">내 팔만</button>
+                        <button type="button" class="pill-btn" data-tfilter="all" aria-pressed="false">전체</button>
+                        <button type="button" class="pill-btn active" data-tfilter="arm" aria-pressed="true">내 팔만</button>
+                        <button type="button" class="pill-btn" data-tfilter="todo" aria-pressed="false">미완료</button>
                         <button type="button" class="pill-btn" data-tfilter="pinky" aria-pressed="false">Pinky/벨트</button>
                       </div>
                     </div>
@@ -496,6 +499,7 @@
               <label style="display:inline-flex;align-items:center;gap:6px;font-size:.84rem;cursor:pointer">
                 <input type="checkbox" id="hf-auto-upload"> 봉인 후 자동 업로드
               </label>
+              <button type="button" id="cleanup-empty-ds-btn" class="btn-tool btn-xs" data-tone="warn" hidden>빈 데이터셋 정리</button>
               <a id="hf-repo-link" class="quiet mono" href="#" target="_blank" rel="noopener" hidden></a>
             </div>
             <div id="hf-upload-live" class="alert" style="margin:0 0 8px" hidden>

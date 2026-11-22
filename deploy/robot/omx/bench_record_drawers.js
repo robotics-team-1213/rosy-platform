@@ -127,12 +127,14 @@ if($('btn-drawer-menu')){
     if(!w)return;
     const on=w.classList.toggle('open');
     $('btn-drawer-menu').setAttribute('aria-expanded',on?'true':'false');
+    if(typeof syncHeadHeight==='function')syncHeadHeight();
   });
   document.addEventListener('click',e=>{
     const w=$('drawer-menu-wrap');
     if(w&&w.classList.contains('open')&&!w.contains(e.target)){
       w.classList.remove('open');
       $('btn-drawer-menu').setAttribute('aria-expanded','false');
+      if(typeof syncHeadHeight==='function')syncHeadHeight();
     }
   });
 }

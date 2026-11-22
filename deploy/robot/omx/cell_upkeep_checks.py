@@ -139,11 +139,15 @@ def check_cameras(arm, cameras, io, fix=False, bus_free=True, usb_recover_fn=Non
     if usb_recover_fn is None:
         from cell_upkeep import usb_recover as usb_recover_fn
 
-    bad, fixed, top = [], [], None
+    bad, fixed, notes, ok_count, top = [], [], [], 0, None
     for name, camera in cameras.items():
         code, body = io.fetch(camera["url"])
         if code == 200 and body.startswith(b"\xff\xd8"):
+            ok_count += 1
             top = body if name == "top" else top
+            continue
+        if camera.get("optional"):
+            notes.append(f"optional {name} offline ({code or 'no answer'})")
             continue
         label, labels = Path(camera["url"]).stem, io.labels()
         if labels and label not in labels:
@@ -181,11 +185,12 @@ def check_cameras(arm, cameras, io, fix=False, bus_free=True, usb_recover_fn=Non
             continue
         bad.append(f"{name} {camera['url']}: {code or 'no answer'}" + ("" if code != 200 else ", not a JPEG"))
     if bad:
-        return [row("cameras", "fail", "; ".join(bad + fixed))], top
+        return [row("cameras", "fail", "; ".join(bad + fixed + notes))], top
+    detail = f"{ok_count} answer 200 with a JPEG" + (f"; {'; '.join(notes)}" if notes else "")
     return [
-        row("cameras", "fixed", "; ".join(fixed))
+        row("cameras", "fixed", "; ".join(fixed + notes))
         if fixed
-        else row("cameras", "ok", f"{len(cameras)} answer 200 with a JPEG")
+        else row("cameras", "ok", detail)
     ], top
 
 

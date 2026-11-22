@@ -226,8 +226,9 @@ function renderShipGridHtml(k,n,tStr,isStandTask,arm,tasks,cards){
       const owner=anyMatch&&!armMatch?taskArmOwnerHint(anyMatch,cards[anyMatch]):'';
       const ownerShort=owner==='arm_a'?'A전용':(owner==='arm_b'?'B전용':'');
       const q=(armMatch&&typeof epQuota==='function')?epQuota(cards[armMatch]):null;
-      const cls='slot-btn'+(hit?' active':'')+(!armMatch&&anyMatch?' other-arm':(!anyMatch?' empty-cell':''));
-      const lbl=(lv+1)+'층'+(hit?' ★':(ownerShort?' ('+ownerShort+')':(q&&q.done>0?' · '+q.done+'/'+q.goal:'')));
+      const doneCell=Boolean(q&&q.goal>0&&q.rem===0);
+      const cls='slot-btn'+(hit?' active':'')+(doneCell?' done-cell':'')+(!armMatch&&anyMatch?' other-arm':(!anyMatch?' empty-cell':''));
+      const lbl=(lv+1)+'층'+(hit?' ★':(ownerShort?' ('+ownerShort+')':(doneCell?' ✓':(q&&q.done>0?' · '+q.done+'/'+q.goal:''))));
       const tip=describeSpot(spot)+(owner?' · '+owner+' 전용':(armMatch?' · '+armMatch:' · 카드 없음'));
       html+='<button type="button" class="'+cls+'" aria-pressed="'+(hit?'true':'false')+'" data-spot="'+spot+'" title="'+escHtml(tip)+'" aria-label="'+escHtml(tip)+'">'+escHtml(lbl)+'</button>';
     }

@@ -67,6 +67,7 @@ function applyBenchPhase(phase){
   }
   const camBaseBtn=$('save-cam-base-btn');
   if(camBaseBtn)camBaseBtn.hidden=benchSessionActive();
+  if(p==='prepare'||p==='recording'){const secSt=$('sec-status');if(secSt)secSt.open=true;}
   if(benchSessionActive()&&typeof window.closeDrawer==='function'&&window.activeDrawerName?.()!=='records')window.closeDrawer(false);
   if(p!=='result')renderCamGuide();
   if(typeof updateGoalSummaryRows==='function')updateGoalSummaryRows();

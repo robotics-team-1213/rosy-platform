@@ -115,11 +115,16 @@ def inventory(registry: dict | None, facts: dict, names: dict, ask=formats, real
 
 
 def bind(registry: dict, env_dir: Path, present, plugged_nodes: set, realpath=os.path.realpath) -> dict:
-    """{"write": {role: env}, "restart": [role], "waiting": [role], "unregistered": [node]} for the registry now."""
-    out = {"write": {}, "restart": [], "waiting": [], "unregistered": []}
+    """{"write": {role: env}, "restart": [role], "waiting": [role], "unregistered": [node], "disabled": [role]} for the registry now."""
+    out = {"write": {}, "restart": [], "waiting": [], "unregistered": [], "disabled": []}
     used = set()
     for camera in registry["cameras"]:
         role, path = camera["role"], env_dir / f"omx-camera-{camera['role']}.env"
+        if camera.get("enabled") is False:
+            out["disabled"].append(role)
+            if present(camera["device"]):
+                used.add(realpath(camera["device"]))
+            continue
         if not present(camera["device"]):
             out["waiting"].append(role)
             continue
@@ -140,6 +145,11 @@ def bind(registry: dict, env_dir: Path, present, plugged_nodes: set, realpath=os
 def apply(plan: dict, env_dir: Path, units_running, run=subprocess.run) -> list:
     """Write the env files and (re)start units: a changed role, or a role whose camera is back but unit is down."""
     done = []
+    for role in plan.get("disabled", []):
+        if units_running(role):
+            unit = f"rosy-omx-camera@{role}.service"
+            run(["systemctl", "--user", "stop", unit], check=False, capture_output=True)
+            done.append(f"stopped {unit}")
     for role, env in plan["write"].items():
         path = env_dir / f"omx-camera-{role}.env"
         tmp = path.with_suffix(".tmp")
@@ -183,7 +193,7 @@ def arm_hubs(env_dir: Path = ENV_DIR, realpath=os.path.realpath) -> dict:
 
 def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.realpath, hubs=None) -> list:
     """One row per camera no present role uses."""
-    gone = [c for c in registry["cameras"] if not present(c["device"])]
+    gone = [c for c in registry["cameras"] if c.get("enabled") is not False and not present(c["device"])]
     used = {realpath(c["device"]) for c in registry["cameras"] if present(c["device"])}
     free = [n for n in sorted(facts) if n not in used]
     rows = []
@@ -213,6 +223,8 @@ def learn(registry: dict, facts: dict, proposals: list, present, realpath=os.pat
     changes = []
     by_role = {c["role"]: c for c in registry["cameras"]}
     for c in registry["cameras"]:
+        if c.get("enabled") is False:
+            continue
         fact = facts.get(realpath(c["device"])) if present(c["device"]) else None
         if fact and c.get("usb_id") != fact["id"]:
             c["usb_id"] = fact["id"]
@@ -325,7 +337,7 @@ def main(argv=None) -> int:
         subprocess.run(["systemctl", "--user", "is-active", "--quiet", f"rosy-omx-camera@{role}.service"]).returncode
         == 0
     )
-    plan["present"] = [c["role"] for c in registry["cameras"] if c["role"] not in plan["waiting"]]
+    plan["present"] = [c["role"] for c in registry["cameras"] if c["role"] not in plan["waiting"] and c.get("enabled") is not False]
     if args.apply:
         plan["done"] = apply(plan, args.env_dir, running)
     print(json.dumps({k: v for k, v in plan.items() if k != "write"} | {"write": sorted(plan["write"])}, indent=1))

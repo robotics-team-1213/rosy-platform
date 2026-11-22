@@ -13,22 +13,28 @@ import re
 import signal
 import stat
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import camera_readiness_state as crs  # noqa: E402
 
 CONTROLS = {'auto_exposure', 'exposure_time_absolute', 'gain', 'gamma', 'brightness'}
 
 
 @contextmanager
-def control_locks(cameras):
+def control_locks(cameras, *, allow_missing=False):
     """Serialize tuners across state directories and persistent aliases, without opening a stream."""
     import fcntl
     root = Path.home()/'.local/state/rosy/camera-control-locks'
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     streams = []
     try:
-        for rdev in sorted({identity(spec['device'])['rdev'] for spec in cameras.values()}):
+        for rdev in crs.locked_rdevs(cameras, identity, allow_missing=allow_missing):
             fd = os.open(root/str(rdev), os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
             stream = os.fdopen(fd, 'r+')
             streams.append(stream)
@@ -267,19 +273,29 @@ def prepare(profile, root, digest):
     target = root/'baseline.json'
     if target.exists():
         baseline = json.loads(target.read_text())
-        if baseline['profile_sha256'] != digest:
-            raise RuntimeError('profile changed; use a new state directory')
-        for role, spec in baseline['cameras'].items():
-            if identity(spec['device']) != spec['identity']:
-                raise RuntimeError('camera identity changed')
-            metadata = command(['v4l2-ctl', '--device='+spec['device'], '--list-ctrls-menus'])
-            profile_spec = profile['cameras'][role]
-            validate_controls(metadata, profile_spec['candidates']+profile_spec.get('bright_candidates', [])+[spec['original']])
-            # The baseline keeps the original settings; the owner to guard is this run's preview, not the first one.
-            spec['producer'] = producer(unit(role, spec), spec['device'])
-            if get_controls(spec['device'], spec['original']) != spec['original']:
-                raise RuntimeError('camera settings changed since baseline; refusing overwrite')
-        return baseline
+        if not crs.stale_baseline(baseline, root, digest, identity, get_controls):
+            orig_producers = {r: s.get('producer') for r, s in baseline['cameras'].items()}
+            changed = False
+            for role, spec in baseline['cameras'].items():
+                live_id = identity(spec['device'])
+                if live_id != spec['identity']:
+                    if not (crs.same_physical_camera(spec, crs.hardware_identity(spec['device']))
+                            and get_controls(spec['device'], spec['original']) == spec['original']):
+                        raise RuntimeError('camera identity changed')
+                    spec['identity'], changed = live_id, True
+                metadata = command(['v4l2-ctl', '--device='+spec['device'], '--list-ctrls-menus'])
+                profile_spec = profile['cameras'][role]
+                validate_controls(metadata, profile_spec['candidates']+profile_spec.get('bright_candidates', [])+[spec['original']])
+                # The baseline keeps the original settings; the owner to guard is this run's preview, not the first one.
+                spec['producer'] = producer(unit(role, spec), spec['device'])
+                if get_controls(spec['device'], spec['original']) != spec['original']:
+                    raise RuntimeError('camera settings changed since baseline; refusing overwrite')
+            if changed:
+                if len({s['identity']['rdev'] for s in baseline['cameras'].values()}) != len(baseline['cameras']):
+                    raise RuntimeError('camera aliases select the same device')
+                save(target, {**baseline, 'rebound_ns': time.time_ns(),
+                              'cameras': {r: {**s, 'producer': orig_producers[r]} for r, s in baseline['cameras'].items()}})
+            return baseline
     cameras = {}
     for role, spec in profile['cameras'].items():
         device = spec['device']
@@ -288,12 +304,12 @@ def prepare(profile, root, digest):
         metadata = command(['v4l2-ctl', '--device='+device, '--list-ctrls-menus'])
         original = get_controls(device, names)
         validate_controls(metadata, candidates+[original])
-        cameras[role] = dict(device=device, identity=identity(device), unit=unit(role, spec),
-                             producer=producer(unit(role, spec), device),
+        cameras[role] = dict(device=device, identity=identity(device), hardware=crs.hardware_identity(device),
+                             unit=unit(role, spec), producer=producer(unit(role, spec), device),
                              original=original, control_metadata=metadata)
     if len({s['identity']['rdev'] for s in cameras.values()}) != 2:
         raise RuntimeError('camera aliases select the same device')
-    baseline = dict(profile_sha256=digest, cameras=cameras, recorded_ns=time.time_ns())
+    baseline = dict(profile_sha256=digest, boot_id=crs.current_boot_id(), cameras=cameras, recorded_ns=time.time_ns())
     save(target, baseline, exclusive=True)  # durable before any setting write
     return baseline
 
@@ -303,6 +319,8 @@ def restore(root):
     if not path.exists():
         return
     baseline = json.loads(path.read_text())
+    if (prior := crs.prior_restore(baseline, root, identity)) is not None:
+        return save(root/'restoration.json', prior)
     results = {}
     for role, spec in baseline['cameras'].items():
         try:
@@ -358,7 +376,7 @@ def main():
     if args.operation == 'restore':
         path = args.state_dir/'baseline.json'
         if path.exists():
-            with control_locks(json.loads(path.read_text())['cameras']):
+            with control_locks(json.loads(path.read_text())['cameras'], allow_missing=True):
                 restore(args.state_dir)
         return
     if args.profile is None:

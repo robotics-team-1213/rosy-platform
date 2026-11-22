@@ -8,6 +8,7 @@ from pathlib import Path
 from bench_live_preview import camera_labels
 from bench_record_inspect import ARMS, BI_ARM, HERE
 from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, recorder_running, release, resolve_record_config
+from camera_roles import disabled_roles, load_registry, resolve_record_cameras, source_role
 
 BUSY = ("handing_over", "recording", "homing", "restoring", "sealing", "leader_manual_check")  # the recorder or a child owns the devices
 HOME_LEADER_RATE_DEG_S = 20
@@ -60,14 +61,21 @@ class BenchLeaderMixin:
         arm = body.get("arm")
         if arm not in (*ARMS, BI_ARM):
             raise ValueError("유효한 팔(arm_a, arm_b, arm_s, arm_ab)을 선택하세요")
+        reg = load_registry()
+        dis = disabled_roles(reg) if reg is not None else set()
         cameras = []
         for sub in ("arm_a", "arm_b") if arm == BI_ARM else (arm,):
             try:
                 cfg = json.loads(resolve_record_config(self.prep, sub).read_text(encoding="utf-8-sig"))
+                if reg is not None:
+                    cfg, _, _ = resolve_record_cameras(cfg, sub, reg)
                 robot = cfg.get("robot") if isinstance(cfg.get("robot"), dict) else {}
+                if dis and isinstance(robot.get("cameras"), dict):
+                    robot = {**robot, "cameras": {k: v for k, v in robot["cameras"].items() if source_role(k, sub) not in dis}}
                 found = camera_labels(robot) if isinstance(robot.get("cameras"), dict) else {}
                 if not found:
-                    found = robot.get("cameras") or cfg.get("cameras") or {}
+                    found = {k: v for k, v in (robot.get("cameras") or cfg.get("cameras") or {}).items()
+                             if source_role(k, sub) not in dis}
             except (OSError, ValueError, AttributeError):
                 found = {}
             cameras += [name for name in found if re.fullmatch(r"[\w-]+", str(name)) and name not in cameras]
