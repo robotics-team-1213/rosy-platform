@@ -28,7 +28,7 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                         "review_app_web/learning.html", "review_app_web/storage.js", "review_app_web/storage-settings.js",
                         "review_app_web/tasks.html", "review_app_web/tasks.js",
                         "review_app_web/omx.html", "review_app_web/omx.js",
-                        "review_app_web/omx-review.js", "review_app_web/omx-profiles.js", "review_app_web/omx-export.js", "review_app_web/omx-hub.js",
+                        "review_app_web/omx-review.js", "review_app_web/omx-profiles.js", "review_app_web/omx-export.js", "review_app_web/omx-hub.js", "review_app_web/omx-collect.js",
                         "review_app_web/camera.html", "review_app_web/camera.js")),
                      *("learning/curation/omx/" + name for name in
                        ("native_review.py", "native_capture.py", "native_environment.py", "native_segments.py",
@@ -36,11 +36,11 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                      "learning/training/omx/native_cycle.py",
                      *HUB_FILES, *FILE_PICKER_FILES,
                      *("learning/training/omx/experiment_" + name + ".py" for name in
-                       ("artifact", "catalog", "center", "dataset", "evaluation", "export", "hub", "inbox", "io",
+                       ("artifact", "catalog", "center", "collect_plans", "dataset", "evaluation", "export", "hub", "inbox", "io",
                         "jobs", "native", "online", "owner_status", "preview", "process", "profile",
                         "profiles", "reviews", "scope", "smoke", "train", "transfer")),
                      *("contracts/learning/src/rosy/contracts/learning/" + name for name in
-                       ("__init__.py", "artifacts.py", "digest.py", "omx.py", "png.py", "camera_setup.py")))
+                       ("__init__.py", "artifacts.py", "digest.py", "omx.py", "omx_collect_plan.py", "png.py", "camera_setup.py")))
 CAMERA_PROFILE = "middleware/devices/pinky/profile/config/camera_nominal.yaml"
 CAMERA_MAP_FILES = tuple("operations/overhead/rosy_vision/" + name
                          for name in ("__init__.py", "lane_map.py", "map_register.py"))

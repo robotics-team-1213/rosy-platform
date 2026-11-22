@@ -345,7 +345,7 @@ export function buildQuickControlPanel({
   const visibleOmx = OMX_CELL_DEFS.filter(def => (view.anchors || []).some(a => a.target_id === def.target_id));
   const omxHead = node("div", "", "quick-header-line");
   omxHead.append(
-    node("strong", "🦾 OMX-AI 셀 현황 · Fleet 연계 배차 (CELL-A ↔ Fleet R)", "quick-title"),
+    node("strong", "🦾 OMX-AI 셀 현황 · Fleet 연계 배차 (ARM-CELL ↔ Fleet R)", "quick-title"),
     node("small", `관측된 셀 ${visibleOmx.length}/3대`, "hint omx-cell-summary"),
   );
   omxSection.appendChild(omxHead);
@@ -501,7 +501,7 @@ export function buildQuickControlPanel({
   const deg = typeof activeAnchor.head_yaw === "number" ? `${Math.round((activeAnchor.head_yaw * 180) / Math.PI)}°` : "—";
   statusText.textContent = `${activeAnchor.target_id} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
   const descText = node("small", activeAnchor.kind === "omx_ai"
-    ? `CELL-A 관절(${activeAnchor.joints_summary || "6축 정상"}) + 실시간 ${chosenCam.label} 카메라 연동`
+    ? `ARM-CELL 관절(${activeAnchor.joints_summary || "6축 정상"}) + 실시간 ${chosenCam.label} 카메라 연동`
     : `천장 카메라 3x 추적 + 실시간 ${chosenCam.label} 카메라 연동`, "hint roi-sub-text");
   const lensRow = node("div", "", "tracker-tabs");
   for (const cv of camViewsForAnchor) {

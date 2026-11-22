@@ -354,7 +354,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       const confPct = Math.max(0, Math.min(100, Math.round((anc.confidence ?? 0.98) * 100)));
       const handoffMap = { arm_a: "S2 (상차)", arm_b: "S3 (하차)", arm_s: "S5 (분류)" };
       title = `🦾 ${anc.label || anc.target_id.toUpperCase()}`;
-      badge = anc.cell_status || (cell?.reachable ? "CELL-A ONLINE" : "VISION 4X");
+      badge = anc.cell_status || (cell?.reachable ? "ARM-CELL ONLINE" : "VISION 4X");
       badgeTone = "good";
       lines.push(["베이스 → 헤드", `(${anc.base_x.toFixed(2)}, ${anc.base_y.toFixed(2)}) → (${(anc.head_x ?? anc.base_x).toFixed(2)}, ${(anc.head_y ?? anc.base_y).toFixed(2)}) m · ${deg}`]);
       lines.push(["관절 · 연계역", `${anc.joints_summary || "6축 정상"} · Fleet 연계: ${handoffMap[anc.target_id] || "S2"}`]);

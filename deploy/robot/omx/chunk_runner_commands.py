@@ -89,7 +89,9 @@ def dispatch_runner_command(runner, line: str) -> bool:
     if verb not in ("state", "stop", "park"):
         runner.home_since = None
     try:
-        if runner.human_hold_latched and verb not in ("state", "human-hold"):
+        ep_words = words[3:] if verb == "checked" and len(words) >= 4 else words
+        is_episode_close = ep_words[:1] == ["episode"] and ep_words[1:2] in (["fail"], ["drop"])
+        if runner.human_hold_latched and verb not in ("state", "human-hold") and not is_episode_close:
             raise ValueError("human hold latched: only state or human-hold")
         if verb == "human-hold":
             if len(words) != 1:
@@ -188,10 +190,8 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 _latch_status_write_error(runner, present if fold_on_stop else None, line, None, write_error)
             return bool(runner.human_hold_latched)
         if verb == "episode":
-            try:
-                runner.report(command=line, ok=True, **runner.recorder.command(words[1:]))
-            except OSError as write_error:
-                _latch_status_write_error(runner, None, line, None, write_error)
+            from episode_recorder import dispatch_episode_command
+            dispatch_episode_command(runner, words, line, _latch_status_write_error)
             return True
         if runner.chunk is not None and verb != "splice":
             raise ValueError(f"chunk {runner.chunk} is still running")

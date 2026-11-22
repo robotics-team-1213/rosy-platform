@@ -2,9 +2,10 @@
 
 import pytest
 
+from fleet_cockpit_browser import open_manual_controls, select_robot  # noqa: E402
 from browser_harness import browser_tests_enabled
 from console_browser_site import console_url  # noqa: F401
-from test_fleet_console_browser import MAP_GRID, _open_cards, _open_console, _robot
+from test_fleet_console_browser import MAP_GRID, _open_console, _robot
 
 pytestmark = pytest.mark.skipif(
     not browser_tests_enabled(), reason="set ROSY_RUN_BROWSER_TESTS=1 for Chromium",
@@ -41,7 +42,7 @@ def test_viewer_manual_controls_stay_locked_and_send_no_move(console_url):
             page.route("**/api/fleet/do", move)
             page.goto(console_url, wait_until="load")
             expect(page.locator("#user-role")).to_contain_text("보기 전용")
-            _open_cards(page, "rosy_45")
+            open_manual_controls(page, "rosy_45")
             page.wait_for_timeout(250)
             controls = page.locator("[data-manual-direction]")
             expect(controls).to_have_count(4)
@@ -81,7 +82,7 @@ def test_selected_robot_hold_ends_with_zero(console_url, ending):
 
         page.route("**/api/fleet/do", move)
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         button = page.locator('[data-manual-direction="forward"]')
         expect(button).to_be_enabled()
         button.hover()
@@ -98,7 +99,7 @@ def test_selected_robot_hold_ends_with_zero(console_url, ending):
         elif ending == "blur":
             page.evaluate("window.dispatchEvent(new Event('blur'))")
         elif ending == "selection":
-            page.locator("#robot-choice").select_option("rosy_46")
+            select_robot(page, "rosy_46", wait_workspace=False)
         elif ending == "keyboard":
             page.keyboard.up("Space")
         elif ending == "cancel":
@@ -131,7 +132,7 @@ def test_rejected_zero_stays_visible_after_polling(console_url):
 
         page.route("**/api/fleet/do", move)
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         button = page.locator('[data-manual-direction="forward"]')
         expect(button).to_be_enabled()
         button.hover()
@@ -161,14 +162,14 @@ def test_late_drive_response_is_followed_by_zero_for_original_robot(console_url)
 
         page.route("**/api/fleet/do", move)
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         button = page.locator('[data-manual-direction="forward"]')
         expect(button).to_be_enabled()
         button.hover()
         page.mouse.down()
         page.wait_for_timeout(250)
         assert len(held) == 1
-        page.locator("#robot-choice").select_option("rosy_46")
+        select_robot(page, "rosy_46", wait_workspace=False)
         page.wait_for_timeout(150)
         assert sent[-1]["robot"] == "rosy_45" and sent[-1]["linear"] == 0
         zeros = sum(row["linear"] == 0 for row in sent)
@@ -190,11 +191,11 @@ def test_stale_or_stopped_robot_cannot_be_driven(console_url):
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         button = page.locator('[data-manual-direction="forward"]')
         expect(button).to_be_disabled()
         expect(page.locator("[data-manual-reason]")).to_contain_text("오래")
-        _open_cards(page, "rosy_46")
+        select_robot(page, "rosy_46")
         expect(button).to_be_disabled()
         expect(page.locator("[data-manual-reason]")).to_contain_text("비상정지")
         assert not errors
@@ -213,7 +214,7 @@ def test_manual_mode_is_confirmed_for_one_robot_and_waits_for_readback(console_u
             route.fulfill(status=200, json={"accepted": True})
         page.route("**/api/fleet/do", request)
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         switch = page.locator('[data-manual-mode]')
         expect(switch).to_be_enabled()
         switch.click()
@@ -239,12 +240,12 @@ def test_manual_confirmation_rechecks_target_and_safety(console_url, changed):
         page.route("**/api/fleet/do", lambda route: (sent.append(route.request.post_data_json),
                    route.fulfill(status=200, json={"accepted": True})))
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         page.locator('[data-manual-mode]').click()
         dialog = page.locator('dialog.ui-confirm')
         expect(dialog).to_have_count(1)
         if changed == "selection":
-            page.locator('#robot-choice').select_option('rosy_46')
+            select_robot(page, "rosy_46", wait_workspace=False)
             expect(dialog).to_have_count(0)
         else:
             if changed == "generation":
@@ -273,7 +274,7 @@ def test_dispatch_change_stops_hold_with_terminal_zero(console_url, changed):
         page.route("**/api/fleet/do", lambda route: (sent.append(route.request.post_data_json),
                    route.fulfill(status=200, json={"accepted": True})))
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         button = page.locator('[data-manual-direction=forward]')
         expect(button).to_be_enabled()
         button.hover()
@@ -305,10 +306,10 @@ def test_panel_separates_missing_from_old_and_names_the_stale_evidence(console_u
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         reason = page.locator("[data-manual-reason]")
         expect(reason).to_contain_text("시각을 받지 못했습니다")
-        _open_cards(page, "rosy_46")
+        select_robot(page, "rosy_46")
         expect(reason).to_contain_text("위치 지연 · 최신 관측을 기다립니다")
         expect(page.locator("[data-manual-pose]")).to_contain_text("위치 관측 지연")
         expect(page.locator('[data-manual-direction="forward"]')).to_have_attribute("reason", "위 사유")
@@ -323,7 +324,7 @@ def test_two_second_limit_says_why_and_the_pad_is_a_first_screen_square(console_
         browser, page, errors = _open_console(playwright, _api())
         page.set_viewport_size({"width": 1366, "height": 768})
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         forward = page.locator('[data-manual-direction="forward"]')
         expect(forward).to_be_enabled()
         expect(page.locator("[data-manual-pose]")).to_contain_text("위치 관측 최신")
@@ -351,10 +352,10 @@ def test_unknown_stop_state_is_not_called_an_engaged_emergency_stop(console_url)
     with sync_playwright() as playwright:
         browser, page, errors = _open_console(playwright, api)
         page.goto(console_url, wait_until="load")
-        _open_cards(page, "rosy_45")
+        open_manual_controls(page, "rosy_45")
         reason = page.locator("[data-manual-reason]")
         expect(reason).to_contain_text("정지 상태를 확인할 수 없습니다")
-        _open_cards(page, "rosy_46")
+        select_robot(page, "rosy_46")
         expect(reason).to_contain_text("비상정지 상태를 확인하고 해제하세요")
         assert not errors
         browser.close()

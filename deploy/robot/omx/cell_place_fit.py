@@ -164,13 +164,18 @@ def options(config: dict, dest_site: str, place_xy, held_axis_deg: float, entry:
         yaws = [along] + [y for y in yaws if abs((y - along + 90) % 180 - 90) > 5.0]
     for yaw in yaws:
         rel_pts = footprint((0.0, 0.0), yaw + held_axis_deg, length, width)
+        kept_yaw: list[tuple[float, float]] = []
         for dx, dy in offsets:
             x0, y0 = round(place_xy[0] + dx / 1000, 4), round(place_xy[1] + dy / 1000, 4)
             xy = (x0, y0)
+            if any(math.hypot(xy[0] - kx, xy[1] - ky) < 0.012 for kx, ky in kept_yaw):
+                continue
             why = why_not([(x0 + rx, y0 + ry) for rx, ry in rel_pts], pixel_fn, poly, occupied, roi, layer=layer)
             if why is None:
                 found.append((xy, yaw, math.hypot(dx, dy) + (0 if yaw == yaws[0] else 1000)))
-                break  # the nearest point for this yaw is enough
+                kept_yaw.append(xy)
+                if len(kept_yaw) >= 3:
+                    break
             reasons.add(why)
     if not found:
         return [], " / ".join(sorted(reasons)) or "does not fit on the surface"

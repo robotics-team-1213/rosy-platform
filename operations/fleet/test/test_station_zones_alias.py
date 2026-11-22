@@ -3,7 +3,7 @@ from fleet.pipeline.station_zones import load_station_zones, resolve_site_alias
 
 def test_alias_table():
     assert resolve_site_alias("EXP_S1") == "stand:r1-s1"
-    assert resolve_site_alias("EXP_S5_PALLET") == "stand:r1-s1"
+    assert resolve_site_alias("EXP_S5_PALLET") == "yard"
     assert resolve_site_alias("EXP_S3_BELT") == "not_places:belt"
     assert resolve_site_alias("STG_C2") is None
     assert resolve_site_alias("STG_S3_WAIT") is None
@@ -17,3 +17,4 @@ def test_every_yaml_zone_is_aliased_and_yaml_unchanged():
     assert zones["schema"] == "rosy.station-zones.v1"
     assert zones["zones_by_id"]["EXP_S1"]["dst_site"] == "stand"
     assert zones["zones_by_id"]["EXP_S1"]["arm_id"] == "arm_a"
+    assert (zones["zones_by_id"]["EXP_S1"]["x"], zones["zones_by_id"]["EXP_S1"]["y"]) == (-0.6763, -0.1383)

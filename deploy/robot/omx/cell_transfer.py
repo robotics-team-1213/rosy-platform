@@ -15,6 +15,7 @@ from pathlib import Path
 
 import cell_pipeline as cp
 from cell_envelope import assess, digest, same_session
+from cell_policy_timing import park_ack_ok
 from cell_zones import Zones
 
 
@@ -237,14 +238,14 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
     for command in (f"load {library}", *sequence):  # FOLDED, or cp.SEQUENCE where auto.fold_before_transport is 0
         status = run(command)
         if not status.get("ok") and command in ("goto above_pick", "goto above_place") and "must park before recovery" in (status.get("error") or ""):
-            if run("park").get("ok"):
+            if park_ack_ok(run("park")):
                 status = run(command)
         if status.get("contact") and command == "park":
             # a fold's strain hold at the reach: back off and fold again (home in runs 3-4, 2026-10-28); a second stops
             if "overload-hold" not in (status.get("error") or ""):  # a shed load sags: no backing up from there
                 run("retreat")
                 status = run("park")
-                if status.get("ok"):
+                if park_ack_ok(status):
                     continue
         if status.get("contact") and command == "run lift_place":
             # strain after release: backing up brings the open jaws round the box again (2026-10-28 Pinky); fold from here
@@ -256,7 +257,7 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
             # 2026-11-07: the retreat pressed the held box down (lag 2.54) and the park then refused to close on it
             freed = lift_stall(cell)
             steps.append({"command": "release and rise", **freed})
-            parked = freed["result"] == "risen" and run("park").get("ok")
+            parked = freed["result"] == "risen" and park_ack_ok(run("park"))
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"), "released": bool(parked)}
         if status.get("contact"):  # the runner held with torque on: back up the same path (unless shedding), fold home
             if "overload-hold" not in (status.get("error") or ""):
@@ -267,7 +268,7 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
                     break
                 cp.time.sleep(1.0)
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error")}
-        if not status.get("ok"):
+        if not status.get("ok") or (command == "park" and not park_ack_ok(status)):
             if not status.get("fault") and command not in ("park", f"load {library}"):
                 run("park")
             return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps}

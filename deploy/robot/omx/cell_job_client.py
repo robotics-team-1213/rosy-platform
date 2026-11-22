@@ -88,6 +88,9 @@ class CellJobClient:
     def start(self, job: str, params: dict) -> dict:
         return json.loads(self._request("POST", f"/jobs/{job}", params))
 
+    def jobs(self) -> dict:
+        return json.loads(self._request("GET", "/jobs"))
+
     def get(self, job_id: str) -> dict:
         return json.loads(self._request("GET", f"/jobs/{job_id}"))
 
