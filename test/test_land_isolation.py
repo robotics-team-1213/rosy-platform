@@ -284,6 +284,73 @@ def test_closed_record_stops_ancestry_scan_but_later_incomplete_record_stays_ope
                      (latest["candidate"], "main")]
 
 
+def test_open_entries_skips_unrelated_rows_and_memoizes_ancestry(pair, monkeypatch):
+    ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    git(pair, *ident, "commit", "-q", "-m", "init")
+    land_isolation.record(pair, "fix/old", "prepare", ["m/test/test_a.py"], ["m/test/test_a.py"])
+    land_isolation.record(pair, "fix/dup", "prepare", ["m/test/test_a.py"], ["m/test/test_a.py"])
+    git(pair, *ident, "commit", "-q", "--allow-empty", "-m", "other")
+    land_isolation.record(pair, "fix/unrelated", "done", ["m/test/test_other.py"], [])
+    git(pair, *ident, "commit", "-q", "--allow-empty", "-m", "close")
+    land_isolation.record(pair, "fix/close", "done", ["m/test/test_a.py"], [])
+    old, dup, unrelated, closer = land_isolation.rows(pair)
+    assert old["candidate"] == dup["candidate"]
+    calls = []
+
+    def fake_ancestor(a_pair, a, b):
+        calls.append((a, b))
+        return True
+
+    monkeypatch.setattr(land_isolation, "_ancestor", fake_ancestor)
+    now = closer["t"] + land_isolation.OPEN_AFTER_S + 1
+    assert land_isolation.open_entries(pair, now) == []
+    assert (old["candidate"], unrelated["candidate"]) not in calls
+    assert calls.count((old["candidate"], closer["candidate"])) == 1
+    assert calls.count((old["candidate"], "main")) == 1
+
+
+def test_open_entries_uses_single_topo_dag_for_branches_and_missing_shas(pair, monkeypatch):
+    import json
+
+    ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
+    git(pair, *ident, "commit", "-q", "-m", "c1")
+    c1 = git(pair, "rev-parse", "HEAD")
+    git(pair, "checkout", "-q", "-b", "side")
+    git(pair, *ident, "commit", "-q", "--allow-empty", "-m", "side")
+    side_c = git(pair, "rev-parse", "HEAD")
+    git(pair, "checkout", "-q", "main")
+    git(pair, *ident, "commit", "-q", "--allow-empty", "-m", "c2")
+    c2 = git(pair, "rev-parse", "HEAD")
+
+    old_c1 = {"t": 1000, "branch": "fix/c1", "kind": "prepare", "candidate": c1, "main": c1,
+              "alone": ["m/test/test_a.py"], "incomplete": ["m/test/test_a.py"]}
+    old_c2 = {"t": 1000, "branch": "fix/c2", "kind": "prepare", "candidate": c2, "main": c2,
+              "alone": ["m/test/test_b.py"], "incomplete": ["m/test/test_b.py"]}
+    unlanded_side = {"t": 1000, "branch": "fix/side", "kind": "prepare", "candidate": side_c, "main": c1,
+                     "alone": ["m/test/test_c.py"], "incomplete": ["m/test/test_c.py"]}
+    missing_sha = {"t": 1000, "branch": "fix/missing", "kind": "prepare", "candidate": "0" * 40, "main": c1,
+                   "alone": ["m/test/test_d.py"], "incomplete": ["m/test/test_d.py"]}
+    side_done = {"t": 1001, "branch": "side", "kind": "done", "candidate": side_c, "main": c2,
+                 "alone": ["m/test/test_b.py"], "incomplete": []}
+    c2_done = {"t": 1002, "branch": "main", "kind": "done", "candidate": c2, "main": c2,
+               "alone": ["m/test/test_a.py"], "incomplete": []}
+    rec_path = land_isolation._common(pair) / land_isolation.RECORD
+    rec_path.write_text("\n".join(json.dumps(r) for r in (old_c1, old_c2, unlanded_side, missing_sha, side_done, c2_done))
+                        + "\n", encoding="utf-8")
+
+    cmds: list[list[str]] = []
+    real_run = subprocess.run
+
+    def spy_run(cmd, *a, **kw):
+        cmds.append(list(cmd))
+        return real_run(cmd, *a, **kw)
+
+    monkeypatch.setattr(land_isolation.subprocess, "run", spy_run)
+    now = 1000 + land_isolation.OPEN_AFTER_S + 10
+    assert land_isolation.open_entries(pair, now) == [(old_c2, ["m/test/test_b.py"])]
+    assert not any("merge-base" in cmd for cmd in cmds)
+
+
 def test_turn_reruns_alone_only_tests_whose_referenced_file_main_changed(pair, monkeypatch):
     ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
     git(pair, *ident, "commit", "-q", "-m", "init")
