@@ -152,16 +152,18 @@
   #fleet-main .legend { margin-top: var(--space-1); gap: var(--space-1) var(--space-3); }
   #robot-panel .robot-panel-body { gap: var(--space-2); }
 }
-#robot-panel .robot-workspace-card .robot-head { gap: var(--space-1) var(--space-2); }
+#robot-panel .robot-workspace-card .robot-head { gap: var(--space-1); }
 #robot-panel .robot-workspace-card .robot-head > :is(b, .spacer) { display: none; }
+#robot-panel .robot-workspace-card .robot-head > .hint { flex: 1 0 100%; margin: 0; font-family: var(--mono); font-size: var(--text-micro); line-height: var(--leading-compact); }
+#robot-panel .robot-workspace-card .robot-head ui-tag[variant="inline"]:has(+ ui-tag[variant="inline"])::after { content: "·"; }
 #robot-panel .robot-workspace-card .facts { margin: var(--space-1) 0; }
 #robot-panel section[data-robot-profile] { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
 #robot-panel section[data-robot-profile] :is(h4, p) { margin: 0; font-size: var(--text-micro); line-height: var(--leading-compact); }
 .robot-panel .robot-workspace-card { padding: var(--space-2); background: var(--surface-canvas); border: 1px solid var(--border-default); border-radius: var(--radius-control); }
 .robot-panel-camera-box { display: grid; gap: var(--space-2); min-width: 0; }
-.robot-summary { min-height: var(--row-dense); padding: var(--space-2); border: 1px solid var(--border-subtle); border-inline-start: var(--selection-edge) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); }
-.robot-summary .robot-line { width: 100%; }
-.robot-summary-evidence { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-1); color: var(--text-secondary); font-size: var(--text-micro); overflow-wrap: anywhere; }
+.robot-summary { min-width: 0; max-width: 100%; min-height: var(--row-dense); padding: var(--space-2); border: 1px solid var(--border-subtle); border-inline-start: var(--selection-edge) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); }
+.robot-summary .robot-line { width: 100%; min-width: 0; }
+.robot-summary-evidence { display: block; min-width: 0; margin: var(--space-1) 0 0; color: var(--text-secondary); font-size: var(--text-micro); line-height: var(--leading-compact); overflow-wrap: anywhere; }
 #robot-workspace { min-width: 0; }
 .manual-control { margin-top: var(--space-1); }
 .manual-control [data-manual-direction] { touch-action: none; }
@@ -177,8 +179,9 @@
 .robot-summary.selected { background: var(--surface-raised); border-color: var(--selection); }
 .robot-summary .robot-line { align-items: center; justify-content: space-between; }
 .robot-summary .trip-line { margin: var(--space-1) 0 0; font-size: var(--text-micro); color: var(--text-secondary); overflow-wrap: anywhere; }
-.robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); }
-.robot-list-details { margin-top: var(--space-2); }
+.robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-1); min-width: 0; }
+.robot-summary-status ui-tag:not([variant="inline"]) { max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: var(--leading-compact); padding-block: var(--space-1); }
+.robot-list-details { min-width: 0; margin-top: var(--space-2); }
 
 .robot-line:focus-visible, .robot-fold:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
@@ -271,7 +274,7 @@
   .robot-panel-status-wrap > #robot-workspace { order: -1; }
 }
 
-.robot-panel-status-wrap { display: grid; gap: var(--space-1); min-width: 0; }
+.robot-panel-status-wrap { display: grid; gap: var(--space-2); min-width: 0; }
 .robot-panel-twin { min-width: 0; }
 .telemetry-chart { display: grid; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-recessed); min-width: 0; }
 .telemetry-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); min-width: 0; }
@@ -279,6 +282,7 @@
 .telemetry-chart-value { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
 .telemetry-chart-meta { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); }
 .telemetry-chart-plot { min-width: 0; height: 44px; overflow: hidden; }
+.telemetry-chart-plot:empty { display: none; }
 .telemetry-chart-plot > div { width: 100%; height: 100%; }
 .telemetry-chart-plot > div > div { position: relative; width: 100%; height: 100%; user-select: none; }
 .telemetry-chart-plot > div > div > div { position: absolute; inset: 0; pointer-events: none; }
@@ -330,7 +334,7 @@
 }
 
 /* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
-.map-stage { position: relative; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-recessed); overflow: hidden; }
+.map-stage { position: relative; container-type: inline-size; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-recessed); overflow: hidden; }
 .map-axis-badge,
 .map-cursor-readout {
   position: absolute;

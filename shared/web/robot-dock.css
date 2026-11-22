@@ -34,6 +34,7 @@
 /* --selection requires --surface-flat or lighter for 3:1 contrast in both themes */
 .robot-dock-btn[aria-pressed="true"] { background: var(--surface-flat); }
 .robot-dock-btn[data-selected] { border-inline-start-color: var(--selection); }
+.robot-dock-btn[data-link="unavailable"] .robot-dock-icon { opacity: var(--disabled-opacity); }
 .robot-dock-icon { display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .robot-dock-icon > .ui-icon { width: var(--text-title); height: var(--text-title); }
 .robot-dock-id { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; line-height: var(--leading-flat); }
@@ -45,13 +46,14 @@
   justify-content: center;
   padding: 1px;
   border-radius: var(--radius-flag);
+  background: var(--surface-canvas);
   pointer-events: none;
 }
-.robot-dock-mark > .ui-icon { width: var(--text-label); height: var(--text-label); }
+.robot-dock-mark > .ui-icon { width: var(--text-micro); height: var(--text-micro); }
 .robot-dock-mark[data-mark-kind="alarm"] { top: 2px; inset-inline-end: 2px; }
 .robot-dock-mark[data-mark-kind="link"] { bottom: 2px; inset-inline-end: 2px; }
 .robot-dock-mark:is([data-state="delayed"], [data-state="disconnected"], [data-state="caution"]) { color: var(--status-warn); }
-.robot-dock-mark[data-state="unknown"] { color: var(--text-secondary); }
+.robot-dock-mark[data-state="unknown"] { border: 1px dashed var(--border-strong); color: var(--text-secondary); }
 .robot-dock-mark[data-state="danger"] { background: var(--status-crit); color: var(--text-on-danger); }
 
 /* C24 panel: push column on >=64rem, full-screen sheet below header on <64rem */
@@ -95,7 +97,7 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-4);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
@@ -125,6 +127,7 @@
   cursor: pointer;
 }
 @media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  .robot-panel-close { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-3); }
   .robot-panel-jump { min-height: var(--target-tool); }
   details.robot-panel-section > summary { min-height: var(--target-tool); }
 }
