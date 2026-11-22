@@ -22,15 +22,8 @@ import fleet_trips as ft  # noqa: E402
 
 def seed_nav2_lane_map(tasks_db: Path) -> list[dict]:
     """Pre-seed rotated ``lane``-tagged site map as version 1 so native SIM ``map_revision=1`` holds."""
-    for rel in reversed(ft.FLEET_PATHS):
-        path_str = str(ft.REPO / rel)
-        if path_str not in sys.path:
-            sys.path.insert(0, path_str)
-    from fleet.server.site_map_store import SiteMapStore
-    from fleet.site_map import SiteMap, from_lane_graph
-
     raw = yaml.safe_load(ft.GRAPH.read_text(encoding="utf-8"))
-    base = from_lane_graph(ft.GRAPH, map_id=ft.GRAPH.parent.name).model_dump(by_alias=True)
+    base = ft.load_lane_site_map()
     turn = lambda a: None if a is None else ft.to_site((0.0, 0.0, a), True)[2]  # noqa: E731
     places = [
         dict(p, x=ft.to_site((p["x"], p["y"]), True)[0], y=ft.to_site((p["x"], p["y"]), True)[1],
@@ -49,7 +42,7 @@ def seed_nav2_lane_map(tasks_db: Path) -> list[dict]:
     raw_walls = json.loads((ft.REPO / "deploy/site/site-maps/map_v2_fleet-v5.json").read_text(encoding="utf-8"))["walls"]
     walls = [dict(w, face=[list(ft.to_site(p, True)) for p in w["face"]]) for w in raw_walls]
     rotated = {**base, "places": places, "edges": edges, "crosswalks": [], "walls": walls}
-    SiteMapStore(tasks_db).import_if_empty(SiteMap.model_validate(rotated), source=ft.GRAPH.name)
+    ft.import_site_map(tasks_db, rotated, source=ft.GRAPH.name)
     return edges
 
 
