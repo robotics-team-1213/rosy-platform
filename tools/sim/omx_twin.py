@@ -33,6 +33,7 @@ import time
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parents[1] / "deploy/robot/omx")]
 import numpy as np  # noqa: E402
+from omx_camera_pose import apply_delta  # noqa: E402
 from omx_twin_helpers import (  # noqa: E402, F401
     ARM_LINKS,
     GRID_HZ,
@@ -125,20 +126,6 @@ def batch(args):
 # -- camera fit -----------------------------------------------------------------------------------------------------------------
 STEPS = {"x": .004, "y": .004, "z": .004, "rx": .4, "ry": .4, "rz": .4, "fovy": .3}  # m, deg (camera frame), deg
 JOINT_STEPS = {f"j{k}": .4 for k in range(1, 6)}  # deg added to the real joint reading (a zero offset)
-_CAM_AXES = ((np.array([1.0, 0.0, 0.0]), "rx"), (np.array([0.0, 1.0, 0.0]), "ry"), (np.array([0.0, 0.0, 1.0]), "rz"))
-
-
-def apply_delta(cell, camera, base, delta):
-    """Camera pose = surveyed pose moved by delta: x/y/z in the world (m), rx/ry/rz about the camera's own axes (deg)."""
-    import mujoco
-    m, i = cell.model, cell.model.camera(camera).id
-    pos, quat, fovy = base
-    m.cam_pos[i] = pos + [delta.get("x", 0.), delta.get("y", 0.), delta.get("z", 0.)]
-    turn, q = np.zeros(4), quat.copy()
-    for axis, key in _CAM_AXES:
-        mujoco.mju_axisAngle2Quat(turn, axis, math.radians(delta.get(key, 0.)))
-        mujoco.mju_mulQuat(q, q.copy(), turn)
-    m.cam_quat[i], m.cam_fovy[i] = q, fovy + delta.get("fovy", 0.)
 
 
 def fit_camera(args):
