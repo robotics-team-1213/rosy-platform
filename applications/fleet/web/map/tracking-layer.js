@@ -93,7 +93,7 @@ export function offsetLabel(row) {
 // 한계를 넘어야 낡음이다. 마커 관측(measured)은 보정과 무관한 절대 위치라 세지 않는다.
 export const CALIBRATION_DRIFT_M = 0.4;
 export const CALIBRATION_DRIFT_POLLS = 3;
-export const STILL_POSE_M = 0.05;
+const STILL_POSE_M = 0.05;
 
 // tracking-view 가 폴링마다 한 번 부른다. previousPoses는 직전 rememberTrackingPoses 결과.
 // 잴 수 있는 정지 로봇이 없으면 null(낡음 판정의 연속을 끊는다 — 오탐 방지).

@@ -201,6 +201,61 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).to_have_attribute("aria-current", "page")
 
 
+def test_cell_exception_strip_surfaces_held_arm_and_jumps_even_from_other_step(browser_site):
+    """B-3: 보류 팔은 어느 단계 화면에서도 본문 머리에 요약되고, 관측 화면으로 바로 건너뛴다."""
+    from playwright.sync_api import expect
+
+    page, _, origin = browser_site
+    page.set_viewport_size({"width": 390, "height": 844})
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    observations_body = {
+        "workcells": [{
+            "workcell_id": "cell_ab", "label": "S5 셀",
+            "arms": [{
+                "source_id": "arm_a", "arm_id": "omx_a", "label": "S5 팔 arm_a", "binding_sha256": None,
+                "faults": [], "fresh": True, "source_age_s": 0.2, "receipt_age_s": 0.1, "sequence": 4,
+                "positions": {"joints": [0.0, 0.1]}, "motor_health": None,
+                "incidents": [{"incident_id": "a" * 32, "state": "open", "reported_at": time.time(),
+                               "decision": {"hold": True, "reason": "joint torque hold"}, "frames": [], "evidence": []}],
+            }],
+            "cameras": [],
+        }],
+    }
+    page.route("**/api/fleet/workcell-observations", lambda route: route.fulfill(json=observations_body))
+    _prepare(page)
+    writes = []
+    page.on("request", lambda request: writes.append(request.url) if request.method == "POST" else None)
+    show_screen(page, "recipe-heading")
+    strip = page.locator("#cell-exception-strip")
+    expect(strip).to_be_visible()
+    expect(strip).to_contain_text("arm_a")
+    expect(strip).to_contain_text("보류 사건 1건")
+    assert strip.bounding_box()["y"] < page.locator('ui-section[aria-labelledby="recipe-heading"]').bounding_box()["y"]
+    strip.get_by_role("button", name="관측으로 이동").click()
+    expect(page.locator("#workcell-observations")).to_be_visible()
+    card = page.locator('[data-arm-source="arm_a"]')
+    expect(card).to_be_visible()
+    expect(card).to_have_attribute("tabindex", "-1")
+    assert page.evaluate("document.activeElement && document.activeElement.getAttribute('data-arm-source')") == "arm_a"
+    details = card.locator("details", has_text="팔 사건")
+    assert details.evaluate("node => node.open") is True
+    assert writes == [], writes
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+
+    # 읽기 전용 딥링크 ?focus=arm:arm_a — 접속 뒤 관측 화면의 그 팔로 초점을 옮긴다.
+    page.goto(origin + "/console/cell?focus=arm:arm_a")
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-secret")
+    page.locator("#token-save").click()
+    expect(page).to_have_url(re.compile(r"#saved-heading$"))
+    expect(page.locator("#workcell-observations")).to_be_visible()
+    expect(page.locator('[data-arm-source="arm_a"]')).to_be_visible()
+    assert page.evaluate("document.activeElement && document.activeElement.getAttribute('data-arm-source')") == "arm_a"
+    assert page.locator('[data-arm-source="arm_a"] details', has_text="팔 사건").first.evaluate("node => node.open") is True
+    assert not errors, errors
+
+
 @pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
 def test_cell_page_keeps_emergency_stop_in_first_view(browser_site, width, height):
     from playwright.sync_api import expect

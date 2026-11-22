@@ -41,7 +41,7 @@ PRODUCT_ROOTS = (REPO / "applications" / "fleet" / "web", WEB)
 CONSUMERS = {".js", ".mjs", ".html", ".inc", ".py", ".ts"}
 #: 시험만 쓰는 export 중 시험 이음매(지우면 시험이 제품을 못 건드림). 이유 필수, 늘리지 않는다.
 TEST_SEAMS: dict[str, str] = {}
-UNUSED_CEILING = {"exports": 45, "test_only_exports": 5, "css_classes": 8, "html_ids": 9}
+UNUSED_CEILING = {"exports": 37, "test_only_exports": 5, "css_classes": 1, "html_ids": 9}
 _IDENT = re.compile(r"[A-Za-z_$][\w$]*")
 _HYPHEN_WORD = re.compile(r"[A-Za-z_][\w-]*")
 _EXPORT = re.compile(r"^export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)", re.M)

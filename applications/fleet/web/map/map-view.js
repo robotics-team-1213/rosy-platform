@@ -17,14 +17,14 @@ import { drawTrails } from "./trail-view.js";
 import { drawSignalLamps, drawTraffic } from "./traffic-view.js";
 import { drawGuide } from "/console/assets/guide-layer.js";
 import { robotMapPose } from "./localization-badge.js";
-import { drawMapDatum } from "./map-datum.js";
+import { axisOrientation, drawMapDatum, gridCellOf } from "./map-datum.js";
 
 // Map label: the short id ("rosy_012" -> "012").
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
   if (!view.displayMode) view.displayMode = "coordinates";
-  const camera = createCameraBackdrop({ scope, el, view, draw });
+  const camera = createCameraBackdrop({ scope, el, view, draw: scheduleDraw });
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
   const font = (role, displayScale = 1) => window.RosyPalette.canvasFont(role, "mono", displayScale);
@@ -34,10 +34,10 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: false, tracking: false };
   }
   const layerOn = (key) => view.layers?.[key] !== false;
+  const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "grid"];
   const toggleBar = el("map-overlay-toggles");
   if (toggleBar) {
     const syncToggleButtons = () => {
-      const subKeys = ["poses", "omx", "lanes", "traffic", "labels"];
       const anyOn = subKeys.some((k) => view.layers[k] !== false);
       for (const btn of toggleBar.querySelectorAll("[data-layer-toggle]")) {
         const k = btn.dataset.layerToggle;
@@ -59,9 +59,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (!btn) return;
       const key = btn.dataset.layerToggle;
       if (key === "all") {
-        const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "site", "grid", "sightings", "tracking"];
-        const nextVal = !["poses", "omx", "lanes", "traffic", "labels"].some((k) => view.layers[k] !== false);
-        for (const k of subKeys) view.layers[k] = nextVal;
+        const nextVal = !subKeys.some(layerOn);
+        for (const k of [...subKeys, "site", "sightings", "tracking"]) view.layers[k] = nextVal;
       } else {
         view.layers[key] = !(view.layers[key] !== false);
       }
@@ -77,6 +76,33 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawSiteOverlay,
   } = createMapOverlays({ view, css, font, layerOn, worldToCell, colorOf });
 
+  let pendingDraw = null;
+  function scheduleDraw() {
+    if (pendingDraw !== null) return;
+    if (typeof window.requestAnimationFrame !== "function") { draw(); return; }
+    pendingDraw = window.requestAnimationFrame(() => {
+      pendingDraw = null;
+      draw();
+    });
+  }
+  scope.onDispose(() => {
+    if (pendingDraw !== null) window.cancelAnimationFrame(pendingDraw);
+    pendingDraw = null;
+  });
+  scope.listen(document, "rosy:theme", scheduleDraw);
+
+  function clearCanvas(canvas, width, height) {
+    const resized = canvas.width !== width || canvas.height !== height;
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!resized) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+    }
+    return ctx;
+  }
+
   function paintGrid(grid) {
     const canvas = el("map-canvas");
     const { width, height } = grid;
@@ -84,9 +110,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     // to remain legible when a small grid is stretched across the console.
     const displaySize = Math.min(canvas.clientWidth || 1600, canvas.clientHeight || 1600) * (window.devicePixelRatio || 1);
     const scale = Math.min(10, Math.max(1, Math.round(displaySize / Math.max(width, height))));
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-    const ctx = canvas.getContext("2d");
+    const ctx = clearCanvas(canvas, width * scale, height * scale);
     ctx.imageSmoothingEnabled = false;
     const image = ctx.createImageData(width, height);
     // 로봇 지도(dashboard map.js)와 같은 raster 토큰이다 — 두 화면의 지형 색이 같다.
@@ -134,6 +158,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     return view.colors[(index >= 0 ? index : 0) % view.colors.length];
   }
 
+  let staticLayer = null;
+  let staticKey = null;
+
   // 점유 격자가 없을 때: 사이트 사각형에 맞춘 미터 축척 뷰. 목표 지정은 받지 않는다.
   function drawSiteView() {
     const bounds = siteBounds(view.siteMap);
@@ -153,9 +180,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const width = rect.width > 0 ? rect.width : fallback.width;
     const height = rect.height > 0 ? rect.height : fallback.height;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    const ctx = canvas.getContext("2d");
+    const ctx = clearCanvas(canvas, Math.round(width * dpr), Math.round(height * dpr));
     ctx.scale(dpr, dpr);
     // D-515 + D-513 7: 사이트 지도의 화면 방향(view_turn_deg, 시계 방향 quarter turn)만큼 미터 뷰를
     // 돌린다. 돌린 상자 크기에 맞춰 넣고, 모든 점(영상 삼각형·차로·로봇·글자 자리)을 toPx 하나로
@@ -171,29 +196,88 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     ctx.fillStyle = css("--ground-deep");
     ctx.fillRect(0, 0, width, height);
     if (cameraOn) camera.drawTopDown(ctx, calibration, bounds, toPx, width, height, dpr, rot);
-    const labelFont = font("micro");
-
-    // 0.5 m 격자
-    ctx.save();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = css("--line-quiet");
-    ctx.globalAlpha = cameraOn ? 0.18 : 0.5;
-    for (const gx of layerOn("grid") ? gridLines(bounds.min_x, bounds.max_x, GRID_STEP_M) : []) {
-      const a = toPx(gx, bounds.min_y);
-      const b = toPx(gx, bounds.max_y);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    const activeMap = view.activeSiteMap?.map;
+    const showLanes = layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id);
+    const polygons = layerOn("site") ? sitePolygons() : [];
+    const key = JSON.stringify([activeMap?.map_id, view.activeSiteMap?.version, bounds, width, height, dpr, rot,
+      ["site", "grid", "lanes", "labels"].map(layerOn), document.documentElement?.dataset?.theme, cameraOn, polygons, showLanes]);
+    staticLayer ??= document.createElement("canvas");
+    const off = staticLayer.getContext?.("2d");
+    if (off) {
+      if (staticKey !== key) {
+        clearCanvas(staticLayer, canvas.width, canvas.height).scale(dpr, dpr);
+        drawStaticSite(off, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null);
+        staticKey = key;
+      }
+      ctx.drawImage(staticLayer, 0, 0, canvas.width, canvas.height, 0, 0, canvas.width / dpr, canvas.height / dpr);
+    } else {
+      drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, showLanes ? activeMap : null);
     }
-    for (const gy of layerOn("grid") ? gridLines(bounds.min_y, bounds.max_y, GRID_STEP_M) : []) {
-      const a = toPx(bounds.min_x, gy);
-      const b = toPx(bounds.max_x, gy);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    drawPointerCell(ctx, toPx, bounds);
+    if (showLanes) {
+      const hovered = view.hoverEntity?.kind === "place" ? view.hoverEntity.place : null;
+      if (hovered && !(layerOn("labels") && /^[CS]/.test(String(hovered.id)))) {
+        const p = toPx(hovered.x, hovered.y);
+        ctx.save();
+        ctx.font = font("micro");
+        ctx.fillStyle = css("--ink");
+        ctx.fillText(String(hovered.id), p.x + 7, p.y - 6);
+        ctx.restore();
+      }
+    }
+    if (layerOn("poses")) drawTrails(ctx, view, toPx, 1.5, call);
+    traffic(ctx, toPx, t.scale);
+    drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
+    guide(ctx, toPx);
+    if (layerOn("sightings")) {
+      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
+    }
+    flushChips(ctx);
+  }
+
+  function drawMetreGrid(ctx, toPoint, bounds, cameraOn) {
+    if (!layerOn("grid")) return;
+    ctx.save();
+    ctx.lineWidth = 1 / (ctx.getTransform?.()?.a || 1);
+    ctx.strokeStyle = css("--line-quiet");
+    for (const step of [GRID_STEP_M, 1]) {
+      ctx.globalAlpha = (cameraOn ? 0.18 : 0.5) * (step === 1 ? 1 : 0.5);
+      ctx.beginPath();
+      for (const x of gridLines(bounds.min_x, bounds.max_x, step)) {
+        if (step !== 1 && Number.isInteger(x)) continue;
+        const a = toPoint(x, bounds.min_y), b = toPoint(x, bounds.max_y);
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      }
+      for (const y of gridLines(bounds.min_y, bounds.max_y, step)) {
+        if (step !== 1 && Number.isInteger(y)) continue;
+        const a = toPoint(bounds.min_x, y), b = toPoint(bounds.max_x, y);
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      }
+      ctx.stroke();
     }
     ctx.restore();
+  }
 
-    // 사각형 + 치수 + 출처(source_id)
+  function drawPointerCell(ctx, toPoint, bounds) {
+    const pointer = view.pointerWorld;
+    if (!layerOn("grid") || !pointer || pointer.x < bounds.min_x || pointer.x >= bounds.max_x
+        || pointer.y < bounds.min_y || pointer.y >= bounds.max_y) return;
+    const {x0, x1, y0, y1} = gridCellOf(pointer.x, pointer.y);
+    const a = toPoint(Math.max(x0, bounds.min_x), Math.max(y0, bounds.min_y));
+    const b = toPoint(Math.min(x1, bounds.max_x), Math.min(y1, bounds.max_y));
+    ctx.save();
+    ctx.fillStyle = css("--series-primary");
+    ctx.globalAlpha = 0.18;
+    ctx.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    ctx.restore();
+  }
+
+  function drawStaticSite(ctx, toPx, bounds, cameraOn, dpr, polygons, activeMap) {
+    drawMetreGrid(ctx, toPx, bounds, cameraOn);
+    const labelFont = font("micro");
     ctx.save();
     ctx.font = labelFont;
-    for (const entry of layerOn("site") ? sitePolygons() : []) {
+    for (const entry of polygons) {
       tracePolygon(ctx, entry.polygon_m, toPx);
       ctx.globalAlpha = 0.08;
       ctx.fillStyle = css("--series-primary");
@@ -205,12 +289,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
-    if (layerOn("site") && layerOn("labels")) {
-      drawMapDatum(ctx, toPx, bounds, {css});
-    }
-
-    const activeMap = view.activeSiteMap?.map;
-    if (layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id)) {
+    if (activeMap) {
       ctx.save();
       ctx.strokeStyle = css("--series-primary");
       ctx.fillStyle = css("--ink");
@@ -231,7 +310,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         const p = toPx(place.x, place.y);
         const isCharger = pid.startsWith("C");
         const isStation = pid.startsWith("S");
-        const isHovered = view.hoverEntity?.kind === "place" && view.hoverEntity.id === place.id;
         ctx.save();
         if (isCharger) {
           ctx.beginPath(); ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
@@ -248,21 +326,14 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
           ctx.fillStyle = css("--ink-quiet"); ctx.fill();
         }
         ctx.restore();
-        if ((layerOn("labels") && (isCharger || isStation)) || isHovered) {
+        if (layerOn("labels") && (isCharger || isStation)) {
           ctx.fillText(pid, p.x + 7, p.y - 6);
         }
       }
       ctx.restore();
     }
     drawCrosswalks(ctx, toPx, 1.5);
-    if (layerOn("poses")) drawTrails(ctx, view, toPx, 1.5, call);
-    traffic(ctx, toPx, t.scale);
-    drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
-    guide(ctx, toPx);
-    if (layerOn("sightings")) {
-      for (const s of view.sightings) drawSighting(ctx, s, toPx, Math.max(14, t.scale * 0.09), 2);
-    }
-    flushChips(ctx);
+    if (layerOn("grid")) drawMapDatum(ctx, toPx, bounds, {css, dpr});
   }
 
   const traffic = (ctx, toPoint, pxPerM) =>
@@ -310,6 +381,8 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     if (view.call && Date.now() >= view.call.until) view.call = null;
     const callLabel = view.call ? ` · 호출 ${view.call.robot_id}` : "";
     const grid = view.map;
+    const axisBadge = el("map-axis-badge");
+    if (axisBadge) axisBadge.textContent = `${axisOrientation(grid ? 0 : view.siteViewTurn)} · m`;
     if (!grid && !view.siteMap) drawTraffic(null, null, 0, {view: {}, el, on: true});
     resetChips();
     if (!grid) {
@@ -334,6 +407,18 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     const canvas = el("map-canvas");
     const ctx = canvas.getContext("2d");
     paintGrid(grid);
+    const toGridPoint = (x, y) => {
+      const cell = worldToCell(grid, x, y);
+      return {x: cell.col, y: grid.height - cell.row};
+    };
+    const gridBounds = {
+      min_x: grid.origin.x, min_y: grid.origin.y,
+      max_x: grid.origin.x + grid.width * grid.resolution,
+      max_y: grid.origin.y + grid.height * grid.resolution,
+    };
+    drawMetreGrid(ctx, toGridPoint, gridBounds, false);
+    drawPointerCell(ctx, toGridPoint, gridBounds);
+    if (layerOn("grid")) drawMapDatum(ctx, toGridPoint, gridBounds, {css});
     if (view.stateUnavailable) {
       el("map-tag").textContent = `로봇 위치 확인 불가${callLabel}`;
       canvas.setAttribute("aria-label", `로봇 위치 확인 불가${callLabel} — Fleet 상태 연결을 확인하세요`);
@@ -405,15 +490,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     drawFormationOverlay(ctx, grid);
     drawMediation(ctx, grid);
     drawSiteOverlay(ctx, grid);
-    // US-009 — 원점 글자(x·y·0,0)도 글자다. 선을 다 그린 뒤, 칩 바로 앞에 칠해 선이 글자를 지나지 않는다.
-    drawMapDatum(ctx, (x, y) => {
-      const cell = cellOf(grid, x, y);
-      return {x: cell.cx, y: cell.cy};
-    }, {
-      min_x: grid.origin.x, min_y: grid.origin.y,
-      max_x: grid.origin.x + grid.width * grid.resolution,
-      max_y: grid.origin.y + grid.height * grid.resolution,
-    }, {css});
     flushChips(ctx);
     if (view.selected && view.cursor) {
       const { col, row } = view.cursor;
@@ -438,6 +514,6 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const { refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling } = createMapPolling({ scope, el, view,
     auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged });
 
-  return { draw, refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling, toWorld, streamEvidence,
+  return { draw, scheduleDraw, refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling, toWorld, streamEvidence,
     setCameraFrame: camera.setCameraFrame, bindCamera: camera.bindCamera };
 }

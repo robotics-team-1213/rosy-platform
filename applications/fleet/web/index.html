@@ -207,6 +207,7 @@
         <ui-button kind="quiet" type="button" data-layer-toggle="lanes" aria-pressed="true" title="도로 중심선과 충전소·정류장 장소 표시">도로·장소</ui-button>
         <ui-button kind="quiet" type="button" data-layer-toggle="traffic" aria-pressed="true" title="차로 점유·신호·구역 테두리 표시">교통·점유</ui-button>
         <ui-button kind="quiet" type="button" data-layer-toggle="labels" aria-pressed="true" title="지도 위 이름·상태 텍스트 칩 표시 (꺼도 마우스 호버 시 상세 카드가 표시됩니다)">라벨</ui-button>
+        <ui-button kind="quiet" type="button" data-layer-toggle="grid" aria-pressed="true" title="0.5 m 좌표 격자와 칸 표시">격자·칸</ui-button>
       </div>
       <details id="map-options" class="map-options">
         <summary class="ui-disclosure-row">지도 표시·경로 옵션</summary>
@@ -234,6 +235,8 @@
         <p class="field-mismatch" id="field-mismatch" role="status" hidden></p>
         <canvas id="map-canvas" class="idle" width="800" height="600" tabindex="-1"
                 aria-label="지도에서 로봇 목표 위치 선택" aria-describedby="hint"></canvas>
+        <span id="map-axis-badge" class="map-axis-badge" aria-label="지도 좌표 방향">+X → · +Y ↑ · m</span>
+        <span id="map-cursor-readout" class="map-cursor-readout" role="status" aria-live="polite" hidden></span>
         <div class="map-empty" id="map-empty" role="status">
           <svg class="ui-icon map-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 20l-5.5-2.5v-13l5.5 2.5 6-2.5 5.5 2.5v13l-5.5-2.5z"/><path d="M9 7v13"/><path d="M15 4.5v13"/></svg>
           <strong id="map-empty-title">지도 대기</strong>

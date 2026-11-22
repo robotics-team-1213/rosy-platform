@@ -124,13 +124,13 @@ def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_i
             get_latest_lens_model,
             warp_undistorted_map_plane,
         )
-        model = get_latest_lens_model(width, height, calibration.revision)
+        model = get_latest_lens_model(width, height, calibration.revision, source_id=source_id)
         if model is None:
             seed_m2i = np.linalg.inv(np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3))
             auto_calibrate_and_trace_world_261026(
-                image, revision=calibration.revision, seed_map_to_image=seed_m2i
+                image, revision=calibration.revision, source_id=source_id, seed_map_to_image=seed_m2i
             )
-            model = get_latest_lens_model(width, height, calibration.revision) or get_latest_lens_model(width, height)
+            model = get_latest_lens_model(width, height, calibration.revision, source_id=source_id)
         if model is not None:
             K, D, _ = model
             image_to_plane = map_to_plane @ np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3)

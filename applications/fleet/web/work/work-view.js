@@ -1,4 +1,5 @@
 // Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
+import { setOffBy } from "/common/cause-line.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
 import {owns, relays} from "/console/assets/unit-scope.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
@@ -15,7 +16,7 @@ const approvals = {two_person: "두 사람 · 제안한 사람이 아닌 이름 
 const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
-export const workKind = row => ({task: "주행", trip: "운행", cell_job: "팔레트 적재"})[row.source] || "팔 작업";
+const workKind = row => ({task: "주행", trip: "운행", cell_job: "팔레트 적재"})[row.source] || "팔 작업";
 const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
 export const canAdmitWorkHere = (row, scope) => approvable(row) && owns("arms", scope) && !relays(scope);
 export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
@@ -104,8 +105,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     policyToggle.hidden = false;
     policyToggle.textContent = policy?.scope?.enabled ? "자동 승인 끄기" : "자동 승인 켜기";
     const reason = policyBusy ? "전환 요청 처리 중입니다" : approveReason();
-    if (reason) policyToggle.setAttribute("reason", reason); else policyToggle.removeAttribute("reason");
-    policyToggle.disabled = Boolean(reason);
+    setOffBy(policyToggle, reason);
   }
   async function refreshPolicy(life) {
     try {
@@ -181,8 +181,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     if (approvable(row) && !canAdmitHere) field("승인 위치", "이 팔을 맡은 셀 관제 화면에서 승인");
     admit.hidden = !canAdmitHere;
     const reason = busy ? "요청 처리 중입니다" : approveReason() || refusal;
-    if (reason) admit.setAttribute("reason", reason); else admit.removeAttribute("reason");
-    admit.disabled = Boolean(reason);
+    setOffBy(admit, reason);
   }
   async function select(row) {
     selected = workKey(row); refusal = ""; paint(); showDetail(row);

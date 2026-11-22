@@ -379,11 +379,29 @@ jobs:
               "middleware/devices/omx/adapter/test/test_omx_fleet_ros_actionserver.py": "114",
           }
           runs = []
-          sys.path.insert(0, "tools/harness")
+          for extra_path in ("tools/harness", "tools", "tools/remote", "test"):
+              if extra_path not in sys.path:
+                  sys.path.append(extra_path)
+          import land_browser
           from affected_exclusive import dedicated, split_environment
           from affected_pack import is_serial, serial_prefixes
           from affected_repo import Repo
           serial = serial_prefixes(Repo(Path("."), [], [], [], []))
+          fleet_roots = ("operations/fleet/test", "applications/fleet/test")
+          fleet_opt_in = {
+              "applications/fleet/test/test_browser_adapters.py",
+              "applications/fleet/test/test_feature_browser_flows.py",
+          }
+          fleet_prefixes = tuple(r + "/" for r in fleet_roots)
+
+          def _is_ci_browser(p: str) -> bool:
+              if p in (account_browser, "test/test_monitoring_browser.py"):
+                  return True
+              base = p.split("::", 1)[0]
+              return base.rstrip("/") in fleet_roots or (
+                  base.startswith(fleet_prefixes) and (base.endswith("_browser.py") or base in fleet_opt_in)
+              )
+
           has_xdist = importlib.util.find_spec("xdist") is not None
           for paths in json.loads(os.environ["ROSY_INVOCATIONS"]):
               paths, job_environment = split_environment(paths)
@@ -397,7 +415,7 @@ jobs:
                   if any(target.startswith(p.rstrip("/") + "/") for p in targets):
                       flags.append("--ignore=" + target)
                       isolated.append(target)
-              browser = [p for p in targets if p.startswith(("operations/fleet/test", "applications/fleet/test")) or p in (account_browser, "test/test_monitoring_browser.py")]
+              browser = [p for p in targets if _is_ci_browser(p)]
               rest = [p for p in targets if p not in browser]
               if rest:
                   runs.append(([*rest, *flags], job_environment))
@@ -435,10 +453,19 @@ jobs:
                   print(f"isolated native ROS: domain={child_env['ROS_DOMAIN_ID']} "
                         f"RMW={child_env['RMW_IMPLEMENTATION']} discovery=LOCALHOST plugins=explicit", flush=True)
               targets = [p for p in paths if not p.startswith("-")]
-              use_xdist = (has_xdist and not extra.get("ROSY_RUN_BROWSER_TESTS") and not native_required
+              is_browser = extra.get("ROSY_RUN_BROWSER_TESTS") == "1"
+              can_xdist = (has_xdist and not native_required
                            and not act_cpu_required and not dedicated(paths)
                            and not any("::" in p or is_serial(p, serial) for p in targets))
-              xdist_args = ["-n", "auto"] if use_xdist else []
+              if not is_browser:
+                  xdist_args = ["-n", "auto"] if can_xdist else []
+              elif (can_xdist and len(targets) >= 2 and all(p.endswith(".py") for p in targets)
+                    and extra.get("ROSY_BROWSER_ALONE") != "1"
+                    and not any(p in land_browser.ALONE for p in targets)):
+                  xdist_args = ["-n", "2", "--dist", "loadfile"]
+              else:
+                  xdist_args = []
+              child_env["PYTHONUNBUFFERED"] = "1"
               proc = subprocess.Popen([sys.executable, "-m", "pytest", *paths, *xdist_args, "-v",
                                        "--continue-on-collection-errors", *known_failures.NO_ROS_LAUNCH_PLUGINS],
                                       env=child_env, stdout=subprocess.PIPE,
@@ -446,6 +473,7 @@ jobs:
               out = []
               for line in proc.stdout:
                   sys.stdout.write(line)
+                  sys.stdout.flush()
                   out.append(line)
               code = proc.wait()
               failed = known_failures.failed_ids("".join(out))

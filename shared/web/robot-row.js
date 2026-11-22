@@ -16,7 +16,7 @@
  *     returned div gets dispose() to unsubscribe. Without it nothing changes (selectedId/onSelect as before).
  *   Rows stay in a list (ul), never boxes. Wide: one grid line per robot. Narrow: label above value, two per line.
  */
-import {actionIcon, toggletip} from "./ui.js";
+import {actionIcon, iconSvg, toggletip} from "./ui.js";
 import {statusTag} from "./status-tag.js";
 import {groupRobots} from "./robot-profile.js";
 import {quietRowTexts} from "./core_ui_logic.js";
@@ -39,12 +39,6 @@ function cell(name, label) {
   return node;
 }
 
-function iconNode(name) {
-  const holder = document.createElement("span");
-  actionIcon(holder, name);
-  return holder.firstElementChild;
-}
-
 export function createRobotRow(profile, {selected = false, onSelect} = {}) {
   const row = text("li", "robot-row");
   Object.assign(row.dataset, {robotId: profile.id, kind: profile.kind, link: profile.link.state});
@@ -53,7 +47,7 @@ export function createRobotRow(profile, {selected = false, onSelect} = {}) {
   const name = text("div", "robot-cell");
   name.dataset.col = "name";
   const title = text("span", "robot-name");
-  title.append(iconNode(profile.kind === "arm" ? "arm" : "robot"), text("b", "", profile.name));
+  title.append(iconSvg(profile.kind === "arm" ? "arm" : "robot"), text("b", "", profile.name));
   const sub = text("small", "robot-sub", profile.name === profile.id ? profile.kindLabel : `${profile.kindLabel} · ${profile.id}`);
   name.append(title, sub);
 
@@ -74,7 +68,7 @@ export function createRobotRow(profile, {selected = false, onSelect} = {}) {
     if (!shown) node.dataset.empty = ""; // a merged-away unknown leaves a calm blank cell, like a fresh link
     node.append(value);
   }
-  if (profile.power.charging) power.querySelector(".robot-value").prepend(iconNode("charging"));
+  if (profile.power.charging) power.querySelector(".robot-value").prepend(iconSvg("charging"));
 
   const alarm = cell("alarm", "경보");
   if (profile.alarm) alarm.append(statusTag(profile.alarm.tag, profile.alarm.text, {icon: profile.alarm.icon}));

@@ -1,4 +1,5 @@
 // Component-gallery binder for C23 robot dock + C24 robot panel.
+import { evidenceAgeText } from "./core_ui_logic.js";
 import {robotProfile} from "./robot-profile.js";
 import {createSelection} from "./selection.js";
 import {createRobotDock} from "./robot-dock.js";
@@ -16,9 +17,9 @@ const DEMO_SPECS = [
     task: "대기",
     detail: {
       locationText: "모름",
-      evidence: "Fleet 보고 · 1초 전",
+      evidence: `Fleet 보고${evidenceAgeText(1)}`,
       cameraId: "pinky_42_front",
-      cameraStamp: "최신 사진 · 2초 전",
+      cameraStamp: `최신 사진${evidenceAgeText(2)}`,
       poseReport: "꺼짐",
       limit: "속도 0.2 m/s",
     },
@@ -33,9 +34,9 @@ const DEMO_SPECS = [
     task: "대기",
     detail: {
       locationText: "대기 구역",
-      evidence: "Fleet 보고 · 12초 전",
+      evidence: `Fleet 보고${evidenceAgeText(12)}`,
       cameraId: "pinky_45_front",
-      cameraStamp: "지연 사진 · 12초 전",
+      cameraStamp: `지연 사진${evidenceAgeText(12)}`,
       poseReport: "켜짐",
       limit: "속도 0.2 m/s",
     },
@@ -50,9 +51,9 @@ const DEMO_SPECS = [
     task: "대기",
     detail: {
       locationText: "충전 거치대",
-      evidence: "Fleet 보고 · 1초 전",
+      evidence: `Fleet 보고${evidenceAgeText(1)}`,
       cameraId: "pinky_46_front",
-      cameraStamp: "최신 사진 · 1초 전",
+      cameraStamp: `최신 사진${evidenceAgeText(1)}`,
       poseReport: "켜짐",
       limit: "속도 0.2 m/s",
     },
@@ -69,9 +70,9 @@ const DEMO_SPECS = [
     task: "대기",
     detail: {
       holdText: "홀드 중",
-      evidence: "Fleet 보고 · 1초 전",
+      evidence: `Fleet 보고${evidenceAgeText(1)}`,
       cameraId: "arm_s_top, arm_s_wrist",
-      cameraStamp: "최신 사진 · 1초 전",
+      cameraStamp: `최신 사진${evidenceAgeText(1)}`,
       objects: "상자 소형, 상자 중형",
       commandCause: "홀드 중 · 해제는 현장 사람",
     },
@@ -87,9 +88,9 @@ const DEMO_SPECS = [
     task: "대기",
     detail: {
       holdText: "없음",
-      evidence: "Fleet 보고 · 1초 전",
+      evidence: `Fleet 보고${evidenceAgeText(1)}`,
       cameraId: "arm_a_top, arm_a_wrist",
-      cameraStamp: "최신 사진 · 1초 전",
+      cameraStamp: `최신 사진${evidenceAgeText(1)}`,
       objects: "상자 소형",
       commandCause: "현장 작업 화면에서만 보냄",
     },
@@ -104,9 +105,9 @@ const DEMO_SPECS = [
     task: "대기",
     detail: {
       holdText: "모름",
-      evidence: "연결 끊김 · 95초 전",
+      evidence: `연결 끊김${evidenceAgeText(95)}`,
       cameraId: "arm_b_top, arm_b_wrist",
-      cameraStamp: "연결 끊김 · 95초 전",
+      cameraStamp: `연결 끊김${evidenceAgeText(95)}`,
       objects: "상자 소형",
       commandCause: "연결 끊김 · 현장 전원 확인",
     },

@@ -9,7 +9,7 @@ import math
 import os
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 _ROOT = Path(__file__).resolve().parents[2]
 for _extra in (_ROOT / "tools", _ROOT / "tools" / "remote", _ROOT / "test"):
@@ -78,6 +78,7 @@ def entries(repo, sel) -> list[dict]:
         return []
     import browser_scope  # noqa: PLC0415  (test/, tools/: a failed import must fail the scope job loudly)
     import land_browser
+    import affected_ci
     import affected_ros
     import affected_tests as at
     paths = browser_scope.targets(list(sel.changed)) if sel.changed else browser_scope.all_targets()
@@ -87,14 +88,30 @@ def entries(repo, sel) -> list[dict]:
     out = []
     alone = [p for p in ci if p in land_browser.ALONE]
     if alone:
-        out.append({"name": "browser-alone", "ros": "overlay", "invocations": [[OPT_IN, STRICT, *alone]]})
+        out.append({"name": "browser-alone", "ros": "overlay",
+                    "invocations": [[OPT_IN, STRICT, land_browser.ALONE_ENV, *alone]]})
     groups: dict[str, list[str]] = {}
     for p in ci:
         if p not in land_browser.ALONE:
             groups.setdefault(affected_ros.full_tier_ros(p, at.CI_FULL_MATRIX), []).append(p)
+
+    def _weight(path: str) -> int:
+        seconds = affected_ci.CI_TEST_SECONDS.get(PurePosixPath(path).name)
+        if seconds is not None:
+            return seconds
+        file_path = repo.root / path
+        return max(1, file_path.stat().st_size // 1024) if file_path.is_file() else 1
+
     for ros, files in sorted(groups.items()):
-        files, jobs = sorted(files), min(MAX_JOBS, math.ceil(len(files) / FILES_PER_JOB))
-        for i in range(jobs):
+        files = sorted(files)
+        jobs = min(MAX_JOBS, math.ceil(len(files) / FILES_PER_JOB))
+        bins: list[tuple[int, list[str]]] = [(0, []) for _ in range(jobs)]
+        for p in sorted(files, key=lambda path: (-_weight(path), path)):
+            idx = min(range(jobs), key=lambda i: (bins[i][0], len(bins[i][1]), i))
+            total, members = bins[idx]
+            members.append(p)
+            bins[idx] = (total + _weight(p), members)
+        for i, (_, members) in enumerate(bins):
             out.append({"name": f"browser-{ros}-{i + 1}of{jobs}", "ros": ros,
-                        "invocations": [[OPT_IN, STRICT, *inv] for inv in at.pack(repo, files[i::jobs])]})
+                        "invocations": [[OPT_IN, STRICT, *inv] for inv in at.pack(repo, sorted(members))]})
     return out

@@ -676,6 +676,82 @@ def test_one_queue_row_open_at_a_time_and_the_replan_confirm_round_trips(site):
         browser.close()
 
 
+def test_stale_snapshot_warns_roll_up_into_one_expandable_row_kept_open_across_poll(site):
+    """B-1 (IEC 62682 alarm summarization): one stale robot's snapshot warns are one folded row, not four;
+    Enter expands the causes, a 1 Hz refresh keeps the row, its open state and focus, an age-only tick is
+    not a new inbox unread, and reading causes posts nothing."""
+    from playwright.sync_api import expect, sync_playwright
+
+    stale = _robot("rosy_05", state_age_s=7.0)
+    stale["state"].update(battery_status={"level": "warning"}, docking={"state": "DOCK_FAILED"},
+                          capabilities_degraded=["cam"], navigation="FAILED")
+    api = {**API, "/api/fleet/trips": {"running": None, "trips": [], "open": []},
+           "/api/fleet/state": {"fleet": {"name": "site", "online": 1, "total": 1}, "ts": 0.0, "robots": [stale]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        row = page.locator('#warning-list > li[data-folded="1"]')
+        expect(page.locator("#warning-list > li")).to_have_count(1)  # one folded row, not battery/dock/degraded/goal
+        expect(row.locator("summary")).to_contain_text("rosy_05")
+        expect(row.locator("summary")).to_contain_text("상태 오래됨")
+        expect(row.locator("summary")).to_contain_text("지연 경고 4건")
+        assert "배터리 부족" not in page.locator("#warning-list").inner_text()  # causes stay folded
+        summary = row.locator("summary")
+        summary.focus()
+        summary.press("Enter")
+        expect(row.locator("details")).to_have_attribute("open", "")
+        expect(row.locator(".hint")).to_be_visible()
+        expect(row.locator(".hint")).to_contain_text("이전 스냅샷 경고: 배터리 부족 · 도킹 실패 · 성능 저하 [cam] · 목표 실패")
+        page.evaluate("() => { window.foldedSummary = document.querySelector('#warning-list li[data-folded] summary'); }")
+        unread = page.locator("#fleet-inbox").get_attribute("aria-label")
+        stale["state_age_s"] = 9.0  # 1 Hz later the same robot is only older
+        page.clock.run_for(2100)
+        assert page.evaluate("() => document.querySelector('#warning-list li[data-folded] summary') === window.foldedSummary")
+        assert page.evaluate("() => document.activeElement === window.foldedSummary")
+        expect(row.locator("details")).to_have_attribute("open", "")
+        expect(summary).to_contain_text("지연 경고 4건")
+        assert page.locator("#fleet-inbox").get_attribute("aria-label") == unread  # an age tick is not unread
+        assert posts == []  # expanding causes is a read; nothing moves
+        assert not errors
+        _shot(page, "console-stale-rollup-1440x900.png")
+        browser.close()
+
+
+def test_inbox_link_opens_and_focuses_decision_and_folded_rows(site):
+    """B-2: the inbox's "개입 목록으로" lands on the exact row — a folded B-1 rollup opens on its summary,
+    a closed decision row opens through the queue's own toggle — and the jump posts nothing."""
+    from playwright.sync_api import expect, sync_playwright
+
+    stale = _robot("rosy_05", state_age_s=7.0)
+    stale["state"].update(battery_status={"level": "warning"}, docking={"state": "DOCK_FAILED"},
+                          capabilities_degraded=["cam"], navigation="FAILED")
+    api = {**API, "/api/fleet/state": {**API["/api/fleet/state"], "robots": [*API["/api/fleet/state"]["robots"], stale]}}
+    posts = []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, api, posts)
+        replan = page.locator('li[data-key="rosy_02|replan"]')
+        assert replan.locator(".queue-row").get_attribute("aria-expanded") == "false"  # the stuck row holds the open seat
+        page.locator("#fleet-inbox").click()
+        inbox = page.locator("#inbox-current")
+        expect(inbox.locator('li[data-key="rosy_05|stale-snapshot"]')).to_contain_text("지연 경고 4건")
+
+        inbox.locator('li[data-key="rosy_05|stale-snapshot"] a').click()  # folded B-1 row
+        folded = page.locator('#warning-list > li[data-folded="1"]')
+        expect(folded.locator("details")).to_have_attribute("open", "")
+        assert page.evaluate(
+            "() => document.activeElement === document.querySelector('#warning-list li[data-folded] summary')")
+
+        inbox.locator('li[data-key="rosy_02|replan"] a').click()  # decision row, closed until now
+        expect(replan.locator(".queue-row")).to_have_attribute("aria-expanded", "true")
+        expect(page.locator('[data-decision-slot="rosy_02|replan"]')).to_be_visible()
+        assert page.evaluate("""() =>
+            document.activeElement.closest('li[data-key="rosy_02|replan"]') !== null""")
+        assert posts == []  # the jump is a read; nothing moves
+        assert not errors
+        _shot(page, "console-inbox-jump-1440x900.png")
+        browser.close()
+
+
 def test_compact_robot_list_keeps_all_four_safety_exceptions_visible_beside_the_workspace(site):
     """D-651: selecting another robot never hides offline, E-stop, unknown safety or calibration evidence."""
     from playwright.sync_api import expect

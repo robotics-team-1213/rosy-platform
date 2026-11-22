@@ -94,7 +94,10 @@ def test_guard_and_binding_construction_stay_inside_allowed_writer_symbols():
         if not path.endswith(".py") or _is_test_file(path) or path.startswith(tuple(CMD_VEL_SCOPE_EXCLUDED)):
             continue
         scanned += 1
-        for symbol, kind in _construction_sites(ast.parse((ROOT / path).read_text(encoding="utf-8-sig"))):
+        text = (ROOT / path).read_text(encoding="utf-8-sig")
+        if "GuardedMotion" not in text and "PinkyTwistPort" not in text:
+            continue
+        for symbol, kind in _construction_sites(ast.parse(text)):
             (guards if kind == "guard" else bindings).add((path, symbol))
     assert scanned > 500
     assert guards and guards <= ALLOWED_GUARD, guards - ALLOWED_GUARD

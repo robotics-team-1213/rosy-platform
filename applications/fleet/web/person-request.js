@@ -1,6 +1,9 @@
 // D-721 Amendment: 사람 부탁. The system asks a person to do something physical; the person answers here.
 // An answer is a statement only: it starts no motion, releases no stop and passes no check. The row says so.
 // No import from queues.js: queues.js imports the text helpers below.
+import { setOffBy } from "/common/cause-line.js";
+import { OPERATOR_REASON } from "/console/assets/authorization.js";
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
 export const KIND_LABEL = Object.freeze({
@@ -15,14 +18,14 @@ export function personHeadline(request) {
   return `: 사람 부탁(${kind}) — ${request.text}${request.why ? ` · 이유: ${request.why}` : ""}`;
 }
 
-export const SHOWN_FRESH_S = 30;
+const SHOWN_FRESH_S = 30;
 
 /** Pure: whether the robot's own screen shows it. "Shown" means Fleet read it back from the robot lately. */
 export function deliveryText(request) {
   const age = request.delivery?.age_s;
   switch (request.delivery?.state) {
     case "delivered":
-      return Number.isFinite(age) && age <= SHOWN_FRESH_S ? `로봇 화면에도 표시 중 (${Math.round(age)}초 전 확인)`
+      return Number.isFinite(age) && age <= SHOWN_FRESH_S ? `로봇 화면에도 표시 중 (${evidenceAgeText(Math.round(age)).slice(3)} 확인)`
         : "로봇 화면 표시 확인 불가 — 최근에 로봇에서 읽지 못했습니다";
     case "waiting": return "앞선 부탁이 로봇 화면에 있어 이 부탁은 아직 로봇 화면에 없음 — 관제에서만 보입니다";
     case "not_delivered": return "로봇 화면에 전달하지 못함 — 관제에서만 보입니다";
@@ -35,7 +38,7 @@ export function deliveryText(request) {
 
 /** Pure: what the opened row shows and why its buttons are locked, if they are. */
 export function personView(request, { operator, named = "", busy = false }) {
-  const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : named;
+  const lock = !operator ? OPERATOR_REASON : busy ? "답을 보내는 중" : named;
   return { lines: [personHeadline(request).replace(/^:\s*/, ""), deliveryText(request), NO_MOTION_LINE], lock };
 }
 
@@ -96,8 +99,7 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
     if (primary) node.setAttribute("kind", "primary");
     node.type = "button";
     node.textContent = label;
-    node.disabled = Boolean(reason);
-    if (reason) node.setAttribute("reason", reason);
+    setOffBy(node, reason);
     node.addEventListener("click", scope.guard(click));
     return node;
   }

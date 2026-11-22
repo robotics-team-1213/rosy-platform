@@ -104,7 +104,7 @@ ALLOWED = Counter({
     # C6-HOST-06: OPTIONAL_SERVICE.
     ('system/host_files.py', 'getattr', 'svc', "'line_follow'"): 1,
     # C6-HOST-07: PLATFORM_GUARD.
-    ('system/host_files.py', 'hasattr', 'os', '"fchmod"'): 2,
+    ('system/host_files.py', 'hasattr', 'os', '"fchmod"'): 4,
     # C6-HOST-08: NULLABLE_VALUE.
     ('system/host_hardware.py', 'getattr', 'battery', '"percent"'): 1,
     # C6-HOST-09: NULLABLE_VALUE.

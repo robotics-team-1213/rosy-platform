@@ -47,9 +47,18 @@ _SECRET_NAME_WORDS = (
     r"passwo?rd | passwd | psk | passphrase | secret | api[_-]?key"
     r" | api[_-]?token | auth[_-]?token | access[_-]?token | bearer"
 )
+# Lowercase ASCII prefixes/tokens covering every alternative of _SECRET_NAME_WORDS for fast prefiltering.
+_SECRET_NEEDLES = (
+    "passw", "passph", "psk", "secret", "bearer",
+    "apikey", "api_key", "api-key",
+    "apitoken", "api_token", "api-token",
+    "authtoken", "auth_token", "auth-token",
+    "accesstoken", "access_token", "access-token",
+)
 
 _ASSIGNMENT = re.compile(
     rf"""
+    (?<![A-Za-z0-9_.\-])
     (?P<name>
         [A-Za-z0-9_.\-]*
         (?: {_SECRET_NAME_WORDS} )
@@ -151,6 +160,15 @@ _PUBLIC_PATH_TOKEN = re.compile(
     r"(?i)^[a-z][a-z0-9_.-]*(?:/[a-z][a-z0-9_.-]*)+/?$"
 )
 _PATH_WORD = r"[A-Za-z0-9_./-]*"
+_PATH_WORD_HEAD = re.compile(_PATH_WORD + "$")
+_PATH_WORD_TAIL = re.compile(_PATH_WORD)
+_PATH_SPLIT = re.compile(r"[/_.-]")
+_KT_STRING_ASSIGN = re.compile(
+    rf"\b([A-Za-z0-9_]*(?:{_SECRET_NAME_WORDS})[A-Za-z0-9_]*)\s*:\s*String\??\s*=",
+    re.IGNORECASE | re.VERBOSE,
+)
+_PSK_NAME = re.compile(r"psk|passphrase", re.IGNORECASE)
+_MD_SEP = re.compile(r":?-{3,}:?")
 
 
 # The absorption inventory intentionally records source and destination

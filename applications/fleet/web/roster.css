@@ -416,6 +416,25 @@
 
 /* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
 .map-stage { position: relative; }
+.map-axis-badge,
+.map-cursor-readout {
+  position: absolute;
+  top: var(--space-2);
+  z-index: 2;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-button);
+  background: var(--scrim-solid);
+  color: var(--text-primary);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  pointer-events: none;
+}
+.map-axis-badge { left: var(--space-2); }
+.map-cursor-readout { right: var(--space-2); }
+.map-stage:is([data-view="camera"], :not([data-map-state="site"], [data-map-state="ready"]))
+  > :is(.map-axis-badge, .map-cursor-readout) { display: none; }
+
 .map-hover-card {
   position: absolute;
   left: var(--space-3);

@@ -1,5 +1,6 @@
 // 현장 지도 오버레이(D-798 3.2, map-view.js에서 나눔): 칩 자리 잡기, 대형 슬롯·추적 오차, 중재 관계선,
 // 카메라 관측·관제 카메라 추적, 사이트 사각형·횡단보도. 격자 paint·좌표 변환·그리기 순서는 map-view.js가 쥔다.
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 import { offsetLabel, preferMarkers } from "./tracking-layer.js";
 import { robotMapPose } from "./localization-badge.js";
 
@@ -216,7 +217,7 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
   }
 
   function sightingLabel(s) {
-    const age = s.state === "delayed" ? ` · ${(s.age_ms / 1000).toFixed(1)}초 전` : "";
+    const age = s.state === "delayed" ? evidenceAgeText(Math.round((s.age_ms / 1000) * 10) / 10) : "";
     const name = activeCall(s.robot_id) ? `호출 ${s.robot_id}` : s.robot_id;
     return `${name} · 카메라${age}`;
   }

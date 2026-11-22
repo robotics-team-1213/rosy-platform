@@ -1,3 +1,5 @@
+import { setOffBy } from "/common/cause-line.js";
+import { isOperator } from "/console/assets/authorization.js";
 import {createPollGate} from '/console/assets/poll-gate.js';
 
 const FIELDS = ['device_id', 'display_name', 'manufacturer', 'model', 'device_kind', 'arm_count', 'hardware_ids'];
@@ -18,18 +20,17 @@ export function createDeviceProfiles({root, scope, call, identity, care = null})
   const gate = createPollGate();
   let selected = '', dirty = false, busy = false, loading = false;
   let initial = new URLSearchParams(root.ownerDocument.defaultView?.location?.search || '').get('profile');
-  const canEdit = () => identity()?.role === 'operator' && Boolean(identity()?.principal_id)
+  const canEdit = () => isOperator(identity()?.role) && Boolean(identity()?.principal_id)
     && identity().principal_id !== 'site-console';
   function updateAuthorization() {
     care?.authorization();
     const allowed = canEdit();
+    const saveReason = allowed && !busy ? '' : busy ? '저장 확인 중' : '이름 있는 운영자 계정이 필요합니다';
     for (const key of FIELDS) el(key).disabled = busy || !allowed || (key === 'device_id' && Boolean(selected));
-    el('save').disabled = busy || !allowed;
-    el('new').disabled = busy || !allowed;
     el('list').disabled = busy;
     el('permission').hidden = allowed;
-    if (allowed && !busy) el('save').removeAttribute('reason');
-    else el('save').setAttribute('reason', busy ? '저장 확인 중' : '이름 있는 운영자 계정이 필요합니다');
+    setOffBy(el('save'), saveReason);
+    setOffBy(el('new'), saveReason);
   }
   function fill(row = {}) {
     selected = row.device_id || '';

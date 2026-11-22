@@ -14,6 +14,7 @@
  *   revokeText(reason)       -> estop / mission_<known> / generic closed text (a new press is the only way back, never automatic)
  *   localizationState(view)  -> {state, text, tag, evidence ("요청 {by} · n초 남음"), tag_text (short, for the nowrap statusTag), freshness, severity, reason, actions[], candidates[]}
  */
+import { evidenceAgeText } from "./core_ui_logic.js";
 
 export const LOCALIZED_FRESH_S = 30;
 export const QUEUE_MAX_S = 120;
@@ -196,7 +197,7 @@ function resolveState(v) {
   if (locState === "LOCALIZED") {
     if (age !== null && age >= 0) {
       const secs = Math.round(age);
-      const text = freshness === "fresh" ? `확정 · ${secs}초 전` : `확정 · ${secs}초 전 (오래됨)`;
+      const text = freshness === "fresh" ? `확정${evidenceAgeText(secs)}` : `확정${evidenceAgeText(secs)} (오래됨)`;
       return {state: "localized", tag: freshness, text, freshness, severity: "neutral", reportList, locReason};
     }
     return {state: "localized", tag: "delayed", text: "확정 · 시각 미확인", freshness: "unknown", severity: "neutral", reportList, locReason};
@@ -277,7 +278,7 @@ export function localizationState(view) {
   let evidence = "";
   if (revoked) {
     const at = finiteOrNull(revoked.at), wall = finiteOrNull(v.wall_now_s);
-    const ago = at !== null && wall !== null && wall >= at ? ` · ${Math.round(wall - at)}초 전` : "";
+    const ago = at !== null && wall !== null && wall >= at ? evidenceAgeText(Math.round(wall - at)) : "";
     evidence = `${by ? `요청 ${by} · ` : ""}회전 권한 닫힘${ago}`;
   } else if (by) evidence = `요청 ${by}${left !== null && left > 0 ? ` · ${Math.round(left)}초 남음` : ""}`;
   let reason = "";

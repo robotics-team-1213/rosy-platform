@@ -1,5 +1,8 @@
+import { OPERATOR_REASON } from "/console/assets/authorization.js";
+import { node } from "/common/control-dom.js";
+import { setOffBy } from "/common/cause-line.js";
 import { DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL,
-  enumLabel, operatorModeLabel, EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+  enumLabel, operatorModeLabel, EVIDENCE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
 import { actionIcon } from "/common/ui.js";
 import { createPowerButton } from "/console/assets/power-action.js";
 import { createRobotAppActions } from "/console/assets/device-discovery.js";
@@ -17,7 +20,7 @@ export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
 import {createCellFrameFeed} from "/console/assets/cell-frames.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
-import { createRosterSummary, nodeWithText, tag, blockWith, navTag, queuedReason, offlineWhy,
+import { createRosterSummary, tag, navTag, queuedReason, offlineWhy,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
 export function createRoster({ scope, el, view, log, call, render, streamEvidence, isOperator, namedReason = () => "",
   moveAddress = null, moveAddressBlocked = () => "", confirmedAction, onSelectionChanged = () => {} }) {
@@ -85,8 +88,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       const options = [...robotOptions, ...omxOptions];
       const key = JSON.stringify(options);
       if (choice.dataset.options !== key) {
-        const first = nodeWithText("option", "", "로봇 또는 OMX 셀을 선택하세요"); first.value = "";
-        choice.replaceChildren(first, ...options.map(([id, name]) => { const option = nodeWithText("option", "", name); option.value = id; return option; }));
+        const first = node("option", "로봇 또는 OMX 셀을 선택하세요"); first.value = "";
+        choice.replaceChildren(first, ...options.map(([id, name]) => { const option = node("option", name); option.value = id; return option; }));
         choice.dataset.options = key;
       }
       choice.value = String(view.focusAnchorId || "").startsWith("arm_") ? view.focusAnchorId : (view.focusRobot || "");
@@ -96,14 +99,14 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     place(box, index >= 0 ? [card(view.robots[index], index)] : []);
   }
   function card(robot, index) {
-    const node = document.createElement("article");
+    const article = document.createElement("article");
     const displayName = view.robotNames?.[robot.robot_id] || robot.robot_id;
-    node.className = `robot robot-workspace-card s${index % view.colors.length}`;
-    node.dataset.robotId = robot.robot_id;
+    article.className = `robot robot-workspace-card s${index % view.colors.length}`;
+    article.dataset.robotId = robot.robot_id;
     const lagging = !robot.online && robot.link === "degraded";
-    if (!view.stateUnavailable && !robot.online && !lagging) node.classList.add("offline");
-    if (view.selected === robot.robot_id) node.classList.add("selected");
-    node.tabIndex = -1;
+    if (!view.stateUnavailable && !robot.online && !lagging) article.classList.add("offline");
+    if (view.selected === robot.robot_id) article.classList.add("selected");
+    article.tabIndex = -1;
     const state = view.stateUnavailable ? {} : (robot.state || {});
     const pose = state.pose;
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
@@ -119,12 +122,12 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       ? "비상정지가 활성화되어 목표를 보낼 수 없습니다."
       : estop !== false && robot.online
         ? "안전 상태를 확인할 수 없어 목표를 보낼 수 없습니다." : "";
-    const head = nodeWithText("div", "robot-head");
+    const head = node("div", "", "robot-head");
     const robotName = document.createElement("b");
     robotName.textContent = displayName;
-    const spacer = nodeWithText("span", "spacer");
+    const spacer = node("span", "", "spacer");
     head.append(robotName);
-    if (displayName !== robot.robot_id) head.append(nodeWithText("small", "hint", `Fleet ID ${robot.robot_id}`));
+    if (displayName !== robot.robot_id) head.append(node("small", `Fleet ID ${robot.robot_id}`, "hint"));
     head.append(spacer);
     const lane = state.line_follow || {};
     const laneOn = lane.mode === "CAMERA_LINE" || lane.mode === "IR_LINE";
@@ -203,15 +206,14 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       locTag.dataset.localization = "";
       head.appendChild(locTag);
     }
-    node.appendChild(head);
-    if (role) node.appendChild(nodeWithText('p', 'hint',
-      `목적지는 리더 ${formation.leader}에게 배정합니다 · 팔로워 ${Object.keys(formation.assignment || {}).filter(id => id !== formation.leader).join(', ') || '없음'}`));
+    article.appendChild(head);
+    if (role) article.appendChild(node('p', `목적지는 리더 ${formation.leader}에게 배정합니다 · 팔로워 ${Object.keys(formation.assignment || {}).filter(id => id !== formation.leader).join(', ') || '없음'}`, 'hint'));
     if (tripLine) {
-      const line = nodeWithText("p", "trip-line", tripLine);
+      const line = node("p", tripLine, "trip-line");
       line.dataset.fact = "trip";
-      node.appendChild(line);
+      article.appendChild(line);
     }
-    const facts = nodeWithText("div", "facts");
+    const facts = node("div", "", "facts");
     const battery = power.battery.endsWith("%") && typeof power.voltage === "number"
       ? `${power.battery} · ${power.voltage.toFixed(2)} V`
       : power.note ? `${power.battery} · ${power.note}` : power.battery;
@@ -226,7 +228,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       cellEl.dataset.fact = key;
       const labelEl = document.createElement("span");
       labelEl.title = label;
-      const srLabel = nodeWithText("span", "sr-only", label);
+      const srLabel = node("span", label, "sr-only");
       labelEl.appendChild(srLabel);
       actionIcon(labelEl, key);
       let valueEl;
@@ -237,52 +239,51 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         valueEl = document.createElement("strong");
         valueEl.textContent = value;
         if (key === "battery" && typeof power.observedAgeS === "number")
-          valueEl.title = `${power.observedAgeS}초 전`;
+          valueEl.title = evidenceAgeText(power.observedAgeS).slice(3);
       }
       cellEl.append(labelEl, valueEl);
       const sitePose = key === "pose" && !view.stateUnavailable
         ? sitePoseText((view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id)) : null;
-      if (sitePose) cellEl.append(nodeWithText("small", "fact-detail", sitePose));
+      if (sitePose) cellEl.append(node("small", sitePose, "fact-detail"));
       facts.appendChild(cellEl);
     });
-    node.appendChild(facts);
+    article.appendChild(facts);
 
     if (!view.stateUnavailable) {
-      node.appendChild(buildQuickControlPanel({
+      article.appendChild(buildQuickControlPanel({
         robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-        roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames, frontCamera,
+        roiObjectUrls, refreshRoiPreview, tag, cellFrames, frontCamera,
       }));
     }
 
-    node.appendChild(motorHealth.detail(robot));
-    node.appendChild(profiles.detail("robot", robot.robot_id));
-    const context = createRobotAppActions(robot.robot_id, view.robotPeers, nodeWithText);
-    const group = nodeWithText('ui-button', '', '대형·대열 관리');
+    article.appendChild(motorHealth.detail(robot));
+    article.appendChild(profiles.detail("robot", robot.robot_id));
+    const context = createRobotAppActions(robot.robot_id, view.robotPeers);
+    const group = node('ui-button', '대형·대열 관리');
     group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
     group.addEventListener('click', scope.guard(() => view.openFormationWorkspace?.()));
-    context.append(group); node.appendChild(context);
+    context.append(group); article.appendChild(context);
 
     if (!view.stateUnavailable) {
-      if (power.safetyRelease) node.appendChild(nodeWithText("p", "hint", power.safetyRelease));
+      if (power.safetyRelease) article.appendChild(node("p", power.safetyRelease, "hint"));
       const diagnostics = Object.entries(stateStale ? {} : state.diagnostics_summary || {})
         .filter(([, status]) => status === "WARNING" || status === "ERROR" || status === "UNKNOWN")
         .map(([name, status]) => `${name}: ${status}`);
-      if (diagnostics.length) node.appendChild(nodeWithText("p", "hint",
-        `진단: ${diagnostics.join(" · ")} — 로봇 진단 확인`));
+      if (diagnostics.length) article.appendChild(node("p", `진단: ${diagnostics.join(" · ")} — 로봇 진단 확인`, "hint"));
     }
 
     if (!view.stateUnavailable && robot.yielding) {
       // 운영자가 보내지 않은 좌표로 로봇이 움직인다. 이유를 적지 않으면 오작동으로 읽힌다.
-      const why = nodeWithText("p", "hint");
+      const why = node("p", "", "hint");
       why.textContent = `${robot.yielding.for} 가 지나가도록 비켜서는 중 — `
         + `(${robot.yielding.bay.x.toFixed(2)}, ${robot.yielding.bay.y.toFixed(2)}) 로 물러납니다`;
-      node.appendChild(why);
+      article.appendChild(why);
     }
 
     if (!view.stateUnavailable && robot.queued) {
       // 왜 안 가는지 화면이 말하지 않으면 운영자는 미션이 사라졌다고 읽는다.
-      const why = nodeWithText("p", "hint", queuedReason(robot.queued));
-      node.appendChild(why);
+      const why = node("p", queuedReason(robot.queued), "hint");
+      article.appendChild(why);
     }
 
     // 한 원인은 한 번 말한다(D-359 §5.3) — 카드 상태 줄이 원인을 이미 말하면
@@ -290,10 +291,10 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const offlineWhyId = !view.stateUnavailable && !robot.online && robot.error && !link
       ? `robot-why-${robot.robot_id}` : null;
     if (!view.stateUnavailable && !robot.online && robot.error && !link) {
-      const why = nodeWithText("p", "hint");
+      const why = node("p", "", "hint");
       why.textContent = offlineWhy(robot);
       why.id = offlineWhyId;
-      node.appendChild(why);
+      article.appendChild(why);
     }
 
     // 점검 2026-10-01 — 사이트 망이 바뀌면 오프라인만으로는 까닭을 모른다. 고정 주소가
@@ -301,13 +302,13 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const address = !view.stateUnavailable && !robot.online
       ? addressReason(view.addresses?.[robot.robot_id]) : null;
     if (address) {
-      const why = nodeWithText("p", "hint");
+      const why = node("p", "", "hint");
       why.dataset.addressReason = view.addresses[robot.robot_id].status;
       why.textContent = address.text;
-      node.appendChild(why);
+      article.appendChild(why);
     }
 
-    if (link?.text) node.appendChild(nodeWithText("p", "hint", link.text));
+    if (link?.text) article.appendChild(node("p", link.text, "hint"));
     if (link?.next) {
       if (link.focus === "console-token") {
         const next = document.createElement("ui-button");
@@ -323,29 +324,29 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
           if (more?.getAttribute("aria-expanded") === "false") more.click();
           token?.focus();
         }));
-        node.appendChild(next);
+        article.appendChild(next);
       } else {
-        node.appendChild(nodeWithText("p", "hint", link.next));
+        article.appendChild(node("p", link.next, "hint"));
       }
     }
 
     // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.
     if (!view.stateUnavailable && !robot.online) {
-      const seen = nodeWithText("p", "hint");
+      const seen = node("p", "", "hint");
       seen.dataset.fact = "last-seen";
       const ts = robot.state?.ts;
       if (typeof ts === "number" && ts > 0) {
         const age = Math.max(0, Math.floor((Date.now() / 1000) - ts));
-        seen.textContent = age < 60 ? `마지막 응답: ${age}초 전`
+        seen.textContent = age < 60 ? `마지막 응답: ${evidenceAgeText(age).slice(3)}`
           : age < 3600 ? `마지막 응답: ${Math.floor(age / 60)}분 전`
           : `마지막 응답: ${Math.floor(age / 3600)}시간 전`;
       } else {
         seen.textContent = "응답 없음";
       }
-      node.appendChild(seen);
+      article.appendChild(seen);
     }
 
-    const actions = nodeWithText("div", "robot-actions");
+    const actions = node("div", "", "robot-actions");
     const aim = document.createElement("ui-button");
     // D-406 — 목표 받기는 토글이다. 눌림(aria-pressed)이 계열 파랑 채움으로 보여
     // "지금 지도를 찍으면 이 로봇이 움직인다"가 색으로 말해진다.
@@ -357,7 +358,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const currentLineFollow = state.line_follow || {};
     const lineFollowActive = currentLineFollow.mode === "CAMERA_LINE" || currentLineFollow.mode === "IR_LINE";
     // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
-    blockWith(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
+    setOffBy(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
         : capabilityReason(robot.capabilities, 'navigation.goal_navigation')
           || motionCommandReason(view, robot.robot_id, 'goal')
@@ -389,7 +390,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     pin.dataset.pinRobotId = robot.robot_id;
     pin.textContent = view.pinning === robot.robot_id ? "위치를 찍고 방향으로 끄세요" : "위치 찍기";
     pin.setAttribute("aria-pressed", view.pinning === robot.robot_id ? "true" : "false");
-    blockWith(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
+    setOffBy(pin, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
         : !view.map && !view.siteMap ? "지도 없음" : openTrip(view, robot.robot_id) ? "운행 중" : ""));
     pin.addEventListener("click", scope.guard(() => {
@@ -411,7 +412,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     cancel.textContent = "운행 취소";
     cancel.title = shown.text;
     cancel.dataset.cancelScope = shown.trip ? "trip" : shown.lane ? "goal-lane" : "goal";
-    blockWith(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
+    setOffBy(cancel, view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online && !shown.trip ? (offlineWhyId ? "위 사유" : "로봇 오프라인") : "");
     if (offlineWhyId) cancel.setAttribute("aria-describedby", offlineWhyId);
     cancel.addEventListener("click", scope.guard(async () => {
@@ -470,9 +471,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       fallback.setAttribute("kind", "quiet");
       fallback.type = "button";
       fallback.textContent = lineFollow.mode === "IR_LINE" ? "IR 차선 추종 끄기" : "IR 차선 추종으로 전환…";
-      blockWith(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
+      setOffBy(fallback, view.stateUnavailable ? "Fleet 상태 확인 불가"
         : !robot.online ? "로봇 오프라인"
-          : !isOperator() ? "운영자 권한이 필요합니다"
+          : !isOperator() ? OPERATOR_REASON
             // D-540 9: IR 추적 선택은 움직임, 중지(OFF)는 멈춤이다.
             : lineFollow.mode !== "IR_LINE" ? namedReason() : "");
       fallback.addEventListener("click", scope.guard(async () => {
@@ -506,7 +507,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     identify.setAttribute("kind", "quiet");
     identify.type = "button";
     identify.textContent = "LED로 찾기";
-    blockWith(identify, !isOperator() ? "운영자 권한이 필요합니다"
+    setOffBy(identify, !isOperator() ? OPERATOR_REASON
       : namedReason() ? namedReason()
       : !robot.online || view.stateUnavailable ? "로봇 연결을 확인하세요"
         : estop !== false ? "안전 상태 확인이 필요합니다" : "");
@@ -534,7 +535,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         if (error.name !== "AbortError") log(`${robot.robot_id} LED 확인 거부 · ${error.message}`, "bad");
       }
     }));
-    const powerButton = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason, blockWith });
+    const powerButton = createPowerButton({ robot, state, view, scope, call, log, isOperator, namedReason });
     actions.append(aim, pin, trip.toggle(robot), cancel, identify, powerButton);
     if (address?.action === "move" && moveAddress) {
       // 기존 로봇별 "새 주소로 옮기기"를 그대로 부른다 — 확인 뒤 서버가 토큰으로 신원을 다시 읽는다.
@@ -543,22 +544,22 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       move.type = "button";
       move.dataset.moveRobotId = robot.robot_id;
       move.textContent = "새 주소로 옮기기…";
-      blockWith(move, moveAddressBlocked());
+      setOffBy(move, moveAddressBlocked());
       move.addEventListener("click", scope.guard(() => moveAddress(robot.robot_id)));
       actions.append(move);
     }
-    node.appendChild(actions);
+    article.appendChild(actions);
     const tripForm = view.stateUnavailable ? null : trip.section(robot);
-    if (tripForm) node.appendChild(tripForm);
+    if (tripForm) article.appendChild(tripForm);
     if (goalSafetyReason) {
-      const why = nodeWithText("p", "hint", goalSafetyReason);
-      node.appendChild(why);
+      const why = node("p", goalSafetyReason, "hint");
+      article.appendChild(why);
     }
     if (lineFollowActive) {
-      const why = nodeWithText("p", "hint", "차선 추종 중에는 목표를 받지 않습니다 · 운행 취소로 차선 추종을 끈 뒤 목표를 지정하세요.");
-      node.appendChild(why);
+      const why = node("p", "차선 추종 중에는 목표를 받지 않습니다 · 운행 취소로 차선 추종을 끈 뒤 목표를 지정하세요.", "hint");
+      article.appendChild(why);
     }
-    return node;
+    return article;
   }
 
   function openTripForm(robotId) {
