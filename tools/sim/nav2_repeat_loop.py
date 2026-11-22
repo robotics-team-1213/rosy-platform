@@ -20,13 +20,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fleet_trips as ft  # noqa: E402
 
 
-def seed_nav2_lane_map(tasks_db: Path) -> dict:
-    """Seed site map in rotated NAV_SITE_FROM_WORLD frame while keeping edges ``drive_mode='lane'``."""
-    from fleet.server.site_map_store import SiteMapStore
-    from fleet.site_map import SiteMap, from_lane_graph
-
+def activate_nav2_lane_map(fleet: str, operator: str, log) -> list[dict]:
+    """Activate rotated site map via Fleet HTTP API while keeping edges ``drive_mode='lane'``."""
     raw = yaml.safe_load(ft.GRAPH.read_text(encoding="utf-8"))
-    base = from_lane_graph(ft.GRAPH, map_id=ft.GRAPH.parent.name).model_dump(by_alias=True)
+    code, active = ft.call(f"{fleet}/site-map/active", operator, log=log)
+    if code != 200 or not isinstance(active.get("map"), dict):
+        raise RuntimeError(f"GET /site-map/active failed: {code} {active}")
+    base = active["map"]
     turn = lambda a: None if a is None else ft.to_site((0.0, 0.0, a), True)[2]  # noqa: E731
     places = [
         dict(p, x=ft.to_site((p["x"], p["y"]), True)[0], y=ft.to_site((p["x"], p["y"]), True)[1],
@@ -44,14 +44,32 @@ def seed_nav2_lane_map(tasks_db: Path) -> dict:
     edges = [dict(e, polyline=[list(ft.to_site(q, True)) for q in e["polyline"]]) for e in base["edges"]]
     raw_walls = json.loads((ft.REPO / "deploy/site/site-maps/map_v2_fleet-v5.json").read_text(encoding="utf-8"))["walls"]
     walls = [dict(w, face=[list(ft.to_site(p, True)) for p in w["face"]]) for w in raw_walls]
-    smap = SiteMap.model_validate({**base, "places": places, "edges": edges, "crosswalks": [], "walls": walls})
-    store = SiteMapStore(tasks_db)
-    store.import_if_empty(smap, source=ft.GRAPH.name)
-    return store.active()[2]
+    rotated = {**base, "places": places, "edges": edges, "crosswalks": [], "walls": walls}
+    code, draft = ft.call(f"{fleet}/site-map/draft", operator, "PUT", {"map": rotated}, log)
+    if code != 200 or not draft.get("revision"):
+        raise RuntimeError(f"PUT /site-map/draft failed: {code} {draft}")
+    code, activated = ft.call(f"{fleet}/site-map/activate", operator, "POST",
+                              {"expected_revision": draft["revision"]}, log)
+    if code != 200:
+        raise RuntimeError(f"POST /site-map/activate failed: {code} {activated}")
+    return edges
 
 
-def max_off_lane_m(graph, x: float, y: float) -> float:
-    return min(max(0.0, arc.project(x, y)[0] - arc.width_m / 2) for arc in graph.arcs.values())
+def _seg_dist(x: float, y: float, a: list[float], b: list[float]) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    len2 = dx * dx + dy * dy
+    if len2 <= 0.0:
+        return math.hypot(x - a[0], y - a[1])
+    t = max(0.0, min(1.0, ((x - a[0]) * dx + (y - a[1]) * dy) / len2))
+    return math.hypot(x - (a[0] + t * dx), y - (a[1] + t * dy))
+
+
+def max_off_lane_m(edges: list[dict], x: float, y: float) -> float:
+    return min(
+        max(0.0, min(_seg_dist(x, y, a, b) for a, b in zip(e["polyline"], e["polyline"][1:]))
+            - float(e.get("width_m", 0.30)) / 2.0)
+        for e in edges if len(e.get("polyline") or ()) >= 2
+    )
 
 
 def run(args) -> int:
@@ -78,8 +96,6 @@ def run(args) -> int:
     site = yaml.safe_load((root / "site.yaml").read_text(encoding="utf-8"))
     site["fleet"]["traffic"] = {"authority": False}
     (root / "site.yaml").write_text(yaml.safe_dump(site), encoding="utf-8")
-    sys.path[:0] = [str(ft.REPO / rel) for rel in ft.FLEET_PATHS]
-    graph = seed_nav2_lane_map(root / "tasks.sqlite")
 
     manifest = yaml.safe_load((root / "robots.yaml").read_text(encoding="utf-8"))["robots"]
     rest = {r["robot_id"]: r["token"] for r in manifest}
@@ -118,6 +134,10 @@ def run(args) -> int:
             if result["core_ready"]:
                 subprocess.Popen(fleet_cmd, env=dict(env, FLEET_TRIPS_TOKEN=secrets.token_urlsafe(24)),
                                  stdout=fleet_log, stderr=subprocess.STDOUT, start_new_session=True)
+                fleet_ready = ft.until(60, lambda: ft.call(f"{fleet}/site-map/active", operator)[0] == 200, 1.0)
+                if not fleet_ready:
+                    raise RuntimeError("Fleet HTTP did not become ready in time")
+                edges = activate_nav2_lane_map(fleet, operator, log)
                 result["localized"] = ft.until(180, lambda: all(
                     ft.call(f"{fleet}/robots/{ns}/map-pose", operator)[1].get("state") == "LOCALIZED"
                     for ns in ft.ROBOTS), 2.0)
@@ -147,7 +167,7 @@ def run(args) -> int:
                                 result["last_reason"] = v.get("reason")
                                 result["last_detail"] = v.get("detail")
                                 if isinstance(mp.get("x"), (int, float)) and isinstance(mp.get("y"), (int, float)):
-                                    off = max_off_lane_m(graph, mp["x"], mp["y"])
+                                    off = max_off_lane_m(edges, mp["x"], mp["y"])
                                     result["max_off_lane_m"] = max(result["max_off_lane_m"], round(off, 4))
                                     result["samples"] += 1
                                     trace.append({"lap": lap, "state": v.get("state"), "hold": v.get("hold") is not None,
