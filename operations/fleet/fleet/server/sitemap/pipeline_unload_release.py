@@ -234,17 +234,31 @@ def install_unload_release_routes(app, ctx) -> None:
         out = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(ctx._is_human_detected()))
         return {**out, "departure": app.state.unload_releases.get(out.get("batch_id"))}
 
-    def tick_args():
+    async def _depart_tick():
+        if not any(t.get("unload_batch_id") for t in app.state.omx_cell_tasks.values()):
+            return []
+        try:
+            active = ctx.active_map()
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return []
+            raise
         from fleet.server.sitemap.pipeline_port_events import flush_pending_port_events_async
 
-        active = ctx.active_map()
-        return dict(console=ctx.console, rules=ctx.rules(), site=active[1],
-                    enqueue=lambda spec: ctx._enqueue_one_task(active, {**ctx.CELL_TASK_PRESETS["s3_shuttle"], **spec}),
-                    human_detected=bool(ctx._is_human_detected()), save=ctx._save_ledger, now=time.time(),
-                    task_log=getattr(ctx, "record_depart_task", None),
-                    flush_port_events=lambda: flush_pending_port_events_async(app))
+        return await depart_tick(
+            app.state,
+            console=ctx.console,
+            rules=ctx.rules(),
+            site=active[1],
+            enqueue=lambda spec: ctx._enqueue_one_task(active, {**ctx.CELL_TASK_PRESETS["s3_shuttle"], **spec}),
+            human_detected=bool(ctx._is_human_detected()),
+            save=ctx._save_ledger,
+            now=time.time(),
+            task_log=getattr(ctx, "record_depart_task", None),
+            flush_port_events=lambda: flush_pending_port_events_async(app),
+        )
 
-    app.state.depart_tick = lambda: depart_tick(app.state, **tick_args())
+    app.state.depart_tick = _depart_tick
     from fleet.server.sitemap.pipeline_repark import install_repark_routes
 
     install_repark_routes(app, ctx)  # a vehicle re-park closes here; DONE re-queues the cell task

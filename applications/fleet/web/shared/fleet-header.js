@@ -59,7 +59,7 @@ export function estopReason(session) {
   if (session === null) return SESSION_REASON;
   if (!session) return "";
   // /api/fleet/session answers `estop`; /api/fleet/auth/session (Policy, Maintenance) answers `via` and `account_id` instead.
-  const tokenOnly = session.via === "bearer" && !session.account_id && session.role !== "operator";
+  const tokenOnly = session.via === "bearer" && !session.account_id && !isOperator(session.role);
   return session.estop === false || (session.estop === undefined && tokenOnly) ? STOP_HUMAN_REASON : "";
 }
 
