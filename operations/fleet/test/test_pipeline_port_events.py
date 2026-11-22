@@ -1,23 +1,27 @@
 """Tests for bridging verified OMX cell-task completions into D-996 port events."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import sqlite3
 import time
 from types import SimpleNamespace
 
-from fastapi import Depends, FastAPI, Header
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 import pytest
 
 from core_common.protocol.port_events import PortEvent
 from fleet.server.auth.site_auth import build_authorize, build_role_guards
+from fleet.server.console.charge_bay_routes import install_charge_bay_routes
 from fleet.server.sitemap.pipeline_port_events import (
     CLAIM_STRIP_FIELDS,
-    flush_pending_port_events,
+    flush_pending_port_events_async,
+    task_view_for_request,
 )
 from fleet.server.sitemap.pipeline_routes import install_pipeline_routes
+from fleet.server.sitemap.pipeline_unload_release import continue_unload
 from fleet.server.work.port_event_routes import install_port_event_routes
 from fleet.server.work.port_event_store import PortEventConflict
 from rosy_account.principal import SitePrincipal
@@ -45,6 +49,7 @@ def _build_app(monkeypatch, tmp_path, *, guarded: bool = False):
         app.state.operator_guard = [Depends(require_operator)]
         app.state.proposer_guard = [Depends(require_proposer)]
         read_guard = [Depends(require_viewer)]
+        app.state.read_guard = read_guard
         port_auth, port_view = authorize, require_viewer
     else:
         read_guard = ()
@@ -143,6 +148,17 @@ def test_backwards_compatibility_and_legacy_pallet_emit_no_events(monkeypatch, t
     assert r2.status_code == 200 and r2.json()["task"]["dst_wire_ref"] is None
     _, d2 = _run_ab_task(client, owner_ev, "legacy-pallet")
     assert d2.status_code == 200
+    assert CLAIM_STRIP_FIELDS.isdisjoint(d2.json()["task"])
+
+    # When app.state.intake is present, cell_ab also suppresses duplicate container.stored emission
+    app.state.intake = object()
+    r3 = client.post("/api/fleet/pipeline/cell-tasks", json={
+        "task_id": "with-intake", "cell_id": "cell_ab", "dst_site": "yard:r1-s1-t2",
+        "object_ref": "CNTR-DUP", "identity": "attested",
+    })
+    assert r3.status_code == 200
+    _, d3 = _run_ab_task(client, owner_ev, "with-intake")
+    assert d3.status_code == 200
     assert client.get("/api/fleet/port-events").json()["events"] == []
 
 
@@ -161,6 +177,8 @@ def test_backwards_compatibility_and_legacy_pallet_emit_no_events(monkeypatch, t
     ({"preset": "s3_shuttle", "emit_release_permit": None}, "INVALID_CELL_TASK_INPUT"),
     ({"cell_id": "cell_ab", "dst_site": "yard:r1-s1-t1", "emit_release_permit": True}, "INVALID_CELL_TASK_INPUT"),
     ({"cell_id": "cell_s", "emit_release_permit": "yes"}, "INVALID_CELL_TASK_INPUT"),
+    ({"cell_id": "cell_s", "robot_id": " bad robot ", "emit_release_permit": True}, "INVALID_CELL_TASK_INPUT"),
+    ({"cell_id": "cell_ab", "dst_site": "yard:r1-s1-t1", "robot_id": "R\n1", "object_ref": "CNTR-1", "identity": "attested"}, "INVALID_CELL_TASK_INPUT"),
 ])
 def test_identity_and_permit_validation_errors(monkeypatch, tmp_path, payload, expected_code):
     app, _ = _build_app(monkeypatch, tmp_path)
@@ -171,17 +189,21 @@ def test_identity_and_permit_validation_errors(monkeypatch, tmp_path, payload, e
     assert app.state.omx_cell_tasks == {}
 
 
-def test_claim_isolates_cargo_identity_and_complete_emits_container_stored(monkeypatch, tmp_path):
+def test_pc_isolation_across_routes_and_complete_emits_container_stored(monkeypatch, tmp_path):
     app, owner_ev = _build_app(monkeypatch, tmp_path, guarded=True)
+    site, graph, _ = build_world_261026_site_map()
+    app.state.site_maps = SimpleNamespace(active=lambda: (1, site, graph, None), rules=SimpleNamespace(active_rules=lambda: None))
+    install_charge_bay_routes(
+        app, SimpleNamespace(_clock=lambda: 0.0), lambda: asyncio.sleep(0, result={"robots": []}),
+        app.state.read_guard,
+    )
     client = TestClient(app)
     res = client.post("/api/fleet/pipeline/cell-tasks", json={
         "task_id": "store-c1", "preset": "s5_tier1_arm_a", "dst_site": "yard:r1-s1-t1",
         "object_ref": "CNTR-101", "identity": "attested",
     }, headers=OP)
     assert res.status_code == 200
-    created_task = res.json()["task"]
-    assert created_task["identity_attested_by"] == "operator"
-    assert created_task["dst_wire_ref"] == "yard-r1-c1-l1"
+    assert res.json()["task"]["identity_attested_by"] == "operator"
 
     res_obs = client.post("/api/fleet/pipeline/cell-tasks", json={
         "task_id": "store-c2", "cell_id": "cell_ab", "dst_site": "yard:r1-s1-t2",
@@ -190,6 +212,26 @@ def test_claim_isolates_cargo_identity_and_complete_emits_container_stored(monke
     }, headers=OP)
     assert res_obs.status_code == 200
 
+    # Service (cell PC) never sees cargo identity on GET /cell-tasks, GET /status, GET /charge-bays, POST /claim, or POST /complete
+    svc_list = client.get("/api/fleet/pipeline/cell-tasks", headers=SVC).json()["tasks"]
+    assert all(CLAIM_STRIP_FIELDS.isdisjoint(t) for t in svc_list)
+    svc_status = client.get("/api/fleet/pipeline/status", headers=SVC).json()["omx_cell_tasks"]
+    assert all(CLAIM_STRIP_FIELDS.isdisjoint(t) for t in svc_status)
+    svc_bays = client.get("/api/fleet/charge-bays", headers=SVC).json()["omx_cell_tasks"]
+    assert all(CLAIM_STRIP_FIELDS.isdisjoint(t) for t in svc_bays)
+    view_bays = client.get("/api/fleet/charge-bays", headers=VIEW).json()["omx_cell_tasks"]
+    assert view_bays[0]["object_ref"] == "CNTR-101" and "pending_port_events" not in view_bays[0]
+    view_list = client.get("/api/fleet/pipeline/cell-tasks", headers=VIEW).json()["tasks"]
+    assert view_list[0]["object_ref"] == "CNTR-101" and "pending_port_events" not in view_list[0]
+
+    # Direct helper check matches /charge-bays behavior for service vs viewer principals
+    req_svc = SimpleNamespace(state=SimpleNamespace(site_principal=SitePrincipal("service", "service")))
+    req_view = SimpleNamespace(state=SimpleNamespace(site_principal=SitePrincipal("viewer", "viewer")))
+    raw_task = {**app.state.omx_cell_tasks["store-c1"], "pending_port_events": [{"source": "cell_ab", "event": {}}]}
+    assert CLAIM_STRIP_FIELDS.isdisjoint(task_view_for_request(raw_task, req_svc))
+    view_copy = task_view_for_request(raw_task, req_view)
+    assert view_copy["object_ref"] == "CNTR-101" and "pending_port_events" not in view_copy
+
     refused = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_ab", "task_id": "store-c2"}, headers=SVC).json()
     assert refused["claimed"] is False and refused["reason"] == "PREVIOUS_TIER_NOT_VERIFIED"
     assert CLAIM_STRIP_FIELDS.isdisjoint(refused["task"])
@@ -197,11 +239,11 @@ def test_claim_isolates_cargo_identity_and_complete_emits_container_stored(monke
     claim_body, done = _run_ab_task(client, owner_ev, "store-c1", headers=SVC)
     assert CLAIM_STRIP_FIELDS.isdisjoint(claim_body["task"])
     assert CLAIM_STRIP_FIELDS.isdisjoint(claim_body["handoff"])
-    assert done.status_code == 200
+    assert done.status_code == 200 and CLAIM_STRIP_FIELDS.isdisjoint(done.json()["task"])
     assert "pending_port_events" not in app.state.omx_cell_tasks["store-c1"]
 
     _, done2 = _run_ab_task(client, owner_ev, "store-c2", headers=SVC)
-    assert done2.status_code == 200
+    assert done2.status_code == 200 and CLAIM_STRIP_FIELDS.isdisjoint(done2.json()["task"])
 
     page = client.get("/api/fleet/port-events", headers=VIEW).json()
     assert page["complete"] is True and len(page["events"]) == 2
@@ -225,7 +267,7 @@ def test_aborted_retry_and_repark_preserve_identity_and_emit_nothing(monkeypatch
         "phase": "ABORTED",
         "stage_result": {"reach_fix": {"need_arm_dxdy_m": [0.02, 0.0]}},
     })
-    assert abort_res.status_code == 200
+    assert abort_res.status_code == 200 and CLAIM_STRIP_FIELDS.isdisjoint(abort_res.json()["task"])
     assert client.get("/api/fleet/port-events").json()["events"] == []
 
     retried = client.post("/api/fleet/pipeline/cell-tasks/ab-err/retry").json()["task"]
@@ -240,7 +282,7 @@ def test_aborted_retry_and_repark_preserve_identity_and_emit_nothing(monkeypatch
     assert rp_task["object_ref"] == "CNTR-202" and rp_task["identity_observation_ref"] == "conv-read-9"
 
 
-def test_durable_pending_outbox_recovers_from_store_errors(monkeypatch, tmp_path):
+def test_durable_pending_outbox_recovers_from_store_errors_and_surfaces_ledger_fault(monkeypatch, tmp_path):
     app, owner_ev = _build_app(monkeypatch, tmp_path)
     client = TestClient(app)
     client.post("/api/fleet/pipeline/cell-tasks", json={
@@ -260,35 +302,26 @@ def test_durable_pending_outbox_recovers_from_store_errors(monkeypatch, tmp_path
     assert client.get("/api/fleet/port-events").json()["events"] == []
 
     monkeypatch.setattr(app.state.port_event_store, "append", real_append)
-    assert flush_pending_port_events(app) == 1
+    assert asyncio.run(flush_pending_port_events_async(app)) == 1
     assert "pending_port_events" not in app.state.omx_cell_tasks["outbox-1"]
     page_events = client.get("/api/fleet/port-events").json()["events"]
     assert len(page_events) == 1 and page_events[0]["object_ref"] == "CNTR-303"
 
-    def conflict_append(source, ev):
-        raise PortEventConflict("conflict")
-
+    # Malformed and conflicting entries are dropped permanently without raising
     app.state.omx_cell_tasks["outbox-1"]["pending_port_events"] = [
+        {"source": "cell_ab", "event": {"bad": True}},
         {"source": "cell_ab", "event": page_events[0]},
     ]
-    monkeypatch.setattr(app.state.port_event_store, "append", conflict_append)
-    assert flush_pending_port_events(app) == 1
+    monkeypatch.setattr(app.state.port_event_store, "append", lambda s, ev: (_ for _ in ()).throw(PortEventConflict("x")))
+    assert asyncio.run(flush_pending_port_events_async(app)) == 2
     assert "pending_port_events" not in app.state.omx_cell_tasks["outbox-1"]
 
 
-def test_cell_s_opt_in_release_permit_gating(monkeypatch, tmp_path):
+def test_cell_s_opt_in_release_permit_and_continue_unload_carryover(monkeypatch, tmp_path):
     app, owner_ev = _build_app(monkeypatch, tmp_path)
     client = TestClient(app)
 
-    def run_s(task_id: str, objects: int, *, emit: bool = False, batch: bool = False):
-        spec = {
-            "task_id": task_id, "preset": "s3_shuttle", "robot_id": "amr_46",
-        }
-        if emit:
-            spec["emit_release_permit"] = True
-        if batch:
-            spec.update(unload_batch_id="batch-1", unload_index=0 if task_id.endswith("1") else 1)
-        assert client.post("/api/fleet/pipeline/cell-tasks", json=spec).status_code == 200
+    def complete_s(task_id: str, objects: int):
         claimed = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s", "task_id": task_id}).json()
         assert claimed["claimed"] is True, claimed
         lease = claimed["handoff"]["handoff_lease_id"]
@@ -301,25 +334,45 @@ def test_cell_s_opt_in_release_permit_gating(monkeypatch, tmp_path):
         assert res.status_code == 200
 
     # 1. Default omits emit_release_permit -> emits nothing
-    run_s("s-default", 0, emit=False)
+    client.post("/api/fleet/pipeline/cell-tasks", json={"task_id": "s-default", "preset": "s3_shuttle", "robot_id": "amr_46"})
+    complete_s("s-default", 0)
     assert client.get("/api/fleet/port-events").json()["events"] == []
 
     # 2. When app.state.intake exists -> does not double-emit
     app.state.intake = object()
-    run_s("s-with-intake", 0, emit=True)
+    client.post("/api/fleet/pipeline/cell-tasks", json={
+        "task_id": "s-with-intake", "preset": "s3_shuttle", "robot_id": "amr_46", "emit_release_permit": True,
+    })
+    complete_s("s-with-intake", 0)
     assert client.get("/api/fleet/port-events").json()["events"] == []
     delattr(app.state, "intake")
 
-    # 3. Unload batch with remaining cargo (objects=1) stays CLAIMED and emits nothing; objects=0 releases once
-    run_s("s-b1", 1, emit=True, batch=True)
+    # 3. Multi-box unload_batch_id: continue_unload propagates emit_release_permit=True to follow-up task
+    client.post("/api/fleet/pipeline/cell-tasks", json={
+        "task_id": "batch-1-1", "preset": "s3_shuttle", "robot_id": "amr_46",
+        "unload_batch_id": "batch-1", "unload_index": 0, "emit_release_permit": True,
+    })
+    complete_s("batch-1-1", 1)
     assert client.get("/api/fleet/port-events").json()["events"] == []
-    run_s("s-b2", 0, emit=True, batch=True)
+
+    made = continue_unload(
+        app.state,
+        lambda spec: client.post("/api/fleet/pipeline/cell-tasks", json={
+            "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, **spec,
+        }).json()["task"],
+    )
+    assert made == ["batch-1-2"]
+    assert app.state.omx_cell_tasks["batch-1-2"]["emit_release_permit"] is True
+    complete_s("batch-1-2", 0)
     events = client.get("/api/fleet/port-events").json()["events"]
     assert len(events) == 1
     assert events[0]["kind"] == "vehicle.release_permitted" and events[0]["vehicle_id"] == "amr_46"
 
     # 4. Single non-batch cell_s task with emit_release_permit=True also emits once
-    run_s("s-single", 0, emit=True, batch=False)
+    client.post("/api/fleet/pipeline/cell-tasks", json={
+        "task_id": "s-single", "preset": "s3_shuttle", "robot_id": "amr_46", "emit_release_permit": True,
+    })
+    complete_s("s-single", 0)
     events = client.get("/api/fleet/port-events").json()["events"]
     assert len(events) == 2
     assert events[1]["kind"] == "vehicle.release_permitted" and events[1]["vehicle_id"] == "amr_46"

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from fleet.charge_bays import ChargeBays, RobotView, bays_from_map, thresholds_of
 from fleet.pipeline import resolve_omx_cells, evaluate_omx_cell_station
@@ -15,6 +15,7 @@ from fleet.pipeline.cell_fleet_contract import CONTRACT_VERSION
 from fleet.pipeline.station_zones import load_station_zones
 from fleet.server.pipeline_routes import install_pipeline_routes, _storage_dir
 from fleet.server.pipeline_evidence import amr_evidence, omx_owner_evidence
+from fleet.server.sitemap.pipeline_port_events import task_view_for_request
 
 # A saved cell claim follows a robot only while that robot is actually at the station.
 CELL_CLAIM_RADIUS_M = 0.18
@@ -78,7 +79,7 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
     app.state.charge_bays_tick = charge_bays_tick
 
     @app.get("/api/fleet/charge-bays", dependencies=read_guard, tags=["fleet"])
-    async def charge_bay_plan() -> dict:
+    async def charge_bay_plan(request: Request) -> dict:
         active, robots, bays = await bay_inputs()
         if active is None:
             raise HTTPException(404, detail={"code": "NO_ACTIVE_MAP"})
@@ -122,7 +123,7 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
         links_fn = getattr(app.state, "station_camera_links_for", None)
         return {"map_version": active[0],
                 "contract_version": CONTRACT_VERSION, "omx_cells": cell_evals,
-                "omx_cell_tasks": list((getattr(app.state, "omx_cell_tasks", None) or {}).values()),
+                "omx_cell_tasks": [task_view_for_request(t, request) for t in (getattr(app.state, "omx_cell_tasks", None) or {}).values()],
                 "pinky_tasks": list((getattr(app.state, "pinky_tasks", None) or {}).values()),
                 "pipeline_decisions": list((getattr(app.state, "pipeline_decisions", None) or [])[-20:]),
                 "cable_tangled": getattr(app.state, "cable_tangled", True),

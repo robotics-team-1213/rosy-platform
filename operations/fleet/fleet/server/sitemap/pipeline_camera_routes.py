@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import functools
 import hashlib
 import json
@@ -14,7 +13,7 @@ from fleet.site_rules import SiteRules
 
 from fleet.server.sitemap.pipeline_port_events import (
     build_completion_events,
-    flush_pending_port_events,
+    flush_pending_port_events_async,
     strip_task_for_claim,
 )
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
@@ -422,13 +421,15 @@ def install_cameras_routes(app, ctx) -> None:
             if pending_events:
                 task["pending_port_events"] = pending_events
         _save_ledger()
+        flushed = 0
         if task.get("pending_port_events"):
             try:
-                if await asyncio.to_thread(flush_pending_port_events, app):
-                    _save_ledger()
+                flushed = await flush_pending_port_events_async(app)
             except Exception:
-                pass
-        return {"ok": True, "task": task, "gate": res["gate"]}
+                flushed = 0
+        if flushed:
+            _save_ledger()
+        return {"ok": True, "task": strip_task_for_claim(task), "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/evaluate", dependencies=read_guard)
     async def pipeline_evaluate(request: Request):

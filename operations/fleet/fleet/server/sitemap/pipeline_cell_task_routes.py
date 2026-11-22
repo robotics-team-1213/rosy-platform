@@ -14,6 +14,7 @@ from fleet.server.sitemap.pipeline_port_events import (
     IDENTITY_INPUT_FIELDS,
     TASK_IDENTITY_FIELDS,
     has_identity_input,
+    task_view_for_request,
     validate_task_identity,
 )
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
@@ -42,7 +43,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         state = app.state.omx_cell_states.get(cell_id) or {}
         return state.get("phase") == "ABORTED" or state.get("prev_phase") == "ABORTED"
     @app.get("/api/fleet/pipeline/status", dependencies=read_guard)
-    async def pipeline_status():
+    async def pipeline_status(request: Request):
         active = active_map()
         charge_bays = getattr(app.state, "charge_bays", None) or ChargeBays()
         robots, bays = await inputs(active)
@@ -57,7 +58,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         out = evaluate_fleet_pipeline(active[1], active[2], robots, bays,
                                       charge_bays=charge_bays, site_rules=rules(),
                                       cell_states=getattr(app.state, "omx_cell_states", None))
-        out["omx_cell_tasks"] = list(app.state.omx_cell_tasks.values())
+        out["omx_cell_tasks"] = [task_view_for_request(t, request) for t in app.state.omx_cell_tasks.values()]
         out["pinky_tasks"] = list(app.state.pinky_tasks.values())
         return out
 
@@ -266,7 +267,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         return {"ok": True, "task": task, "tasks": [task]}
 
     @app.get("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
-    async def list_cell_tasks(cell_id: str | None = None, status: str | None = None):
+    async def list_cell_tasks(request: Request, cell_id: str | None = None, status: str | None = None):
         active = active_map()
         all_tasks = [_enrich_task_health(t) for t in app.state.omx_cell_tasks.values()]
         tasks = list(all_tasks)
@@ -279,10 +280,11 @@ def install_cell_tasks_routes(app, ctx) -> None:
         stores = {field: getattr(app.state, attr, None) or {} for field, attr in (
             ("bed_confirm_status", "cell_bed_confirmations"), ("presence_confirmation", "cell_presence"))}
         refusals = getattr(app.state, "cell_task_refusals", None) or {}  # last claim/complete refusal (camera routes)
-        tasks = [{**t, **{field: {"principal_id": rec.get("principal_id"), "invalid": bool(rec.get("invalid")),
-                                  "age_s": round(time.time() - rec["confirmed_at"], 1),
-                                  "bound": bool(rec.get("lease")) and rec.get("lease") == t.get("handoff_lease_id")}
-                          for field, store in stores.items() if (rec := store.get(t["task_id"]))},
+        tasks = [{**task_view_for_request(t, request),
+                  **{field: {"principal_id": rec.get("principal_id"), "invalid": bool(rec.get("invalid")),
+                             "age_s": round(time.time() - rec["confirmed_at"], 1),
+                             "bound": bool(rec.get("lease")) and rec.get("lease") == t.get("handoff_lease_id")}
+                     for field, store in stores.items() if (rec := store.get(t["task_id"]))},
                   **({"last_refusal": refusals[t["task_id"]]} if t["task_id"] in refusals else {})} for t in tasks]
         stations = resolve_omx_cells(active[1], active[2])
         cells_info = {}
