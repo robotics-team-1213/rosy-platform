@@ -92,7 +92,8 @@ def step_count(shadow, n_action):
 
 
 def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, max_obs_age_s,
-              max_chunks, dry_run, log, handoff=None, authorize=None, clock=time.monotonic, sleep=time.sleep):
+              max_chunks, dry_run, log, handoff=None, authorize=None, clock=time.monotonic, sleep=time.sleep,
+              jaw_gate: dict | None = None):
     fps = library.get("fps", 30)
     model_fps = SIM_FPS if getattr(shadow, "sim_rule", None) is not None else fps
     steps = step_count(shadow, n_action)
@@ -144,13 +145,15 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
                 actions, dropped = action_window(prediction.frames, prediction.observed, dispatch_at, model_fps, steps, max_obs_age_s)
                 row.update(action_steps=len(actions), dropped_actions=dropped,
                            proposed_first=actions[0].tolist(), proposed_last=actions[-1].tolist())
-                frames = shape(actions, target, model_fps, fps, held, row, prediction.frames)
+                frames = shape(actions, target, model_fps, fps, held, row, prediction.frames, state["state"])
                 if len(frames) > math.ceil(len(actions) * fps / model_fps):
                     raise ValueError("policy window cannot play at the reviewed step rate")
                 start = prediction.observed + dropped / model_fps
                 spec = dict(start=start, observed=prediction.observed, max_age=max_obs_age_s, max_step=max_step)
                 if handoff is not None:
                     spec["handoff"] = handoff.spec
+                if jaw_gate is not None:
+                    spec["jaw_gate"] = jaw_gate
                 previous_end = start + len(frames) / fps
                 if not dry_run:
                     generated = {**library, "policy_playback": spec, "chunks": {**library["chunks"], "policy": frames}}

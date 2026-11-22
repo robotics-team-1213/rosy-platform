@@ -33,7 +33,8 @@ def take(runner) -> list:
     # contact chunks keep nominal timing: the contact allowance follows the sent step, so reading slower there
     # would move where a contact is detected (2026-11-13 panel round 5)
     contact = any(part.startswith(CONTACT_CHUNKS) for part in (runner.chunk or "").split(" -> "))  # splices too
-    applied = prm.get(runner.params, "runner.speed_adapt") and not contact and not runner.recorder.active()
+    rec_active = runner.recorder.active() if callable(runner.recorder.active) else bool(runner.recorder.active)
+    applied = prm.get(runner.params, "runner.speed_adapt") and not contact and not rec_active
     if not applied:
         runner.speed_out = None
         return runner.queue.pop(0)

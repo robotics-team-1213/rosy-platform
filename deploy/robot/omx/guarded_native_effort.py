@@ -3,39 +3,66 @@
 
 Single Responsibility:
   - Read follower hardware errors (`check_hardware_errors`) and body PWM effort (`read_body_pwm`).
-  - Evaluate 0.2 s effort saturation, single-use overload-hold (`check_effort`), and held-joint thermal/timeout watch (`watch_hold`).
+  - Evaluate 0.2 s effort saturation, single-use overload-hold (`check_effort`), held-joint thermal/timeout watch
+    (`watch_hold`), and gripper/joint stall watch (`relax_squeeze`, `stall_watch`, `restart_after_pause`).
   - Seed initial follower goal position with 3-attempt readback verification before enabling torque (`seed_follower_pose`).
 """
 from __future__ import annotations
 
+import math
+
 from guarded_device import (
     BODY,
-    LEAD_DEG,
-    STALL_PROGRESS_DEG,
-    STALL_RELEASE_DEG,
-    STALL_S,
     HOLD_S,
     HOLD_TEMP_RISE_C,
+    LEAD_DEG,
     MAX_GAP_S,
     NAMES,
     READ_RETRY,
     SEED_TOLERANCE_TICKS,
+    STALL_PROGRESS_DEG,
+    STALL_RELEASE_DEG,
+    STALL_S,
     TICKS_PER_DEGREE,
     finite_values,
     normalized,
+)
+from guarded_native_probe import (  # noqa: E402,F401
+    TelemetryReadError,
+    check_hold_deadlines,
+    check_hold_health,
+    check_temp_limit,
+    enforce_temperatures,
+    is_hardware_fault,
+    is_valid_hw_status,
+    probe_hardware_errors,
+    probe_held_overload,
+    probe_runner_limits,
+    safe_print,
 )
 
 
 def check_hardware_errors(motion) -> None:
     if "read" not in vars(motion.follower) and hasattr(motion.follower, "model_ctrl_table"):
         errors = motion.follower.sync_read("Hardware_Error_Status", list(NAMES), normalize=False, num_retry=READ_RETRY)
+        if not isinstance(errors, dict):
+            raise TelemetryReadError("missing or non-finite joint sample")
         for name in NAMES:
-            if errors[name]:
+            if is_hardware_fault(errors.get(name)):
                 raise ValueError(f"{name}: hardware error")
+        for name in NAMES:
+            if name not in errors or not is_valid_hw_status(errors.get(name)):
+                raise TelemetryReadError("missing or non-finite joint sample")
         return
+    first_err = None
     for name in NAMES:
-        if motion.follower.read("Hardware_Error_Status", name, num_retry=READ_RETRY):
+        val = motion.follower.read("Hardware_Error_Status", name, num_retry=READ_RETRY)
+        if is_hardware_fault(val):
             raise ValueError(f"{name}: hardware error")
+        if not is_valid_hw_status(val):
+            first_err = first_err or TelemetryReadError(f"{name}: invalid hardware status {val}")
+    if first_err is not None:
+        raise first_err
 
 
 def read_body_pwm(motion) -> dict:
@@ -44,46 +71,61 @@ def read_body_pwm(motion) -> dict:
     return {name: motion.follower.read("Present_PWM", name, num_retry=READ_RETRY) for name in BODY}
 
 
-def watch_hold(motion, name: str, saturated: bool, pwm: float, now: float, hold: dict | None = None) -> None:
+def watch_hold(motion, name: str, saturated: bool, pwm: float, read_started: float, hold: dict | None = None) -> None:
     """A held joint (or a squeezing gripper, its own hold dict): at the cap for HOLD_S in a row, or warming, ends the session. It never frees itself."""
     hold = motion.held[name] if hold is None else hold
-    rise = motion.follower.read("Present_Temperature", name, num_retry=READ_RETRY) - hold["temp"]
+    temp = motion.follower.read("Present_Temperature", name, num_retry=READ_RETRY)
+    now = motion.clock()
+    if isinstance(temp, bool) or not isinstance(temp, (int, float)) or not math.isfinite(temp):
+        raise OSError(f"{name}: invalid held temperature {temp}")
+    check_temp_limit(motion, name, temp)
+    rise = temp - hold["temp"]
     if rise >= HOLD_TEMP_RISE_C:
         raise ValueError(
             f"{name}: overload risk; held joint warmed {rise} C at PWM={pwm} limit={motion.pwm_limits.get(name, 'gripper current mode')} "
             f"duration={now - hold['since']:.2f}s"
         )
+    check_hold_deadlines(motion, name, hold, now, pwm=pwm)
+    if not 0 <= now - read_started <= MAX_GAP_S:
+        raise OSError(f"{name}: stale held telemetry read (>0.5 seconds)")
+    hold["last_telemetry_at"] = read_started
     if not saturated:
         hold["saturated_since"] = None
         return
     if hold["saturated_since"] is None:
-        hold["saturated_since"] = now
-    if now - hold["saturated_since"] >= HOLD_S - 1e-9:
-        raise ValueError(
-            f"{name}: overload risk; hold timed out at PWM={pwm} limit={motion.pwm_limits.get(name, 'gripper current mode')} "
-            f"duration={now - hold['since']:.2f}s"
-        )
+        hold["saturated_since"] = read_started
 
 
-def check_effort(motion, current: dict, started: float) -> None:
+def check_effort(motion, current: dict, started: float, *, allow_stale_hold: bool = False) -> dict:
     before = motion.clock()
     if motion.last_effort_time is not None and before - motion.last_effort_time < 0.2 - 1e-9:
-        return
+        return {}
     pwm = motion._read_body_pwm()
     finite_values(pwm, BODY)
+    monitor_io_error = None
     if motion.monitor is not None:
-        motion.monitor.sample(motion, current, pwm, motion.clock())
+        try:
+            if allow_stale_hold and getattr(motion.monitor, "supports_hold_gap", False):
+                motion.monitor.sample(motion, current, pwm, motion.clock(), allow_gap=True)
+            else:
+                motion.monitor.sample(motion, current, pwm, motion.clock())
+        except (OSError, ValueError) as exc:
+            if not allow_stale_hold or (isinstance(exc, ValueError) and not getattr(exc, "recoverable_telemetry", False)):
+                raise
+            monitor_io_error = exc
     now = motion.clock()
+    max_gap = math.inf if allow_stale_hold else MAX_GAP_S
     if (
         not 0 <= now - started <= MAX_GAP_S
-        or not 0 <= now - motion.last_time <= MAX_GAP_S
-        or (motion.last_effort_time is not None and not 0 <= now - motion.last_effort_time <= MAX_GAP_S)
+        or not 0 <= now - motion.last_time <= max_gap
+        or (motion.last_effort_time is not None and not 0 <= now - motion.last_effort_time <= max_gap)
     ):
         raise ValueError("stale effort sample (>0.5 seconds)")
+    staged = {}
     for name in BODY:
         saturated = abs(pwm[name]) >= 0.9 * motion.pwm_limits[name]
         if name in motion.held:
-            motion._watch_hold(name, saturated, pwm[name], now)
+            motion._watch_hold(name, saturated, pwm[name], before)
             continue
         error = abs(current[name] - int(motion.command[name])) / TICKS_PER_DEGREE
         loaded = error > 2 and saturated
@@ -98,26 +140,40 @@ def check_effort(motion, current: dict, started: float) -> None:
             )
             if name in motion.held_once:
                 raise ValueError(f"{detail}; second overload on this joint")
-            motion.command[name] = current[name]
-            if name in motion.velocity:
-                motion.velocity[name] = 0.0
-            motion.held[name] = {
-                "since": now,
-                "saturated_since": now,
-                "temp": motion.follower.read("Present_Temperature", name, num_retry=READ_RETRY),
+            try:
+                temp = motion.follower.read("Present_Temperature", name, num_retry=READ_RETRY)
+                if isinstance(temp, bool) or not isinstance(temp, (int, float)) or not math.isfinite(temp):
+                    raise OSError(f"{name}: invalid held temperature {temp}")
+            except (OSError, TimeoutError, ConnectionError):
+                fail_now = motion.clock()
+                if not 0 <= fail_now - since < 1.0 + HOLD_S - 1e-9:
+                    raise ValueError(f"{detail}; hold temperature unreadable past {HOLD_S:.1f}s cap") from None
+                raise
+            check_temp_limit(motion, name, temp)
+            temp_now = motion.clock()
+            entry = min(temp_now, since + 1.0)
+            if not 0 <= temp_now - entry < HOLD_S - 1e-9:
+                raise ValueError(f"{detail}; overload hold deadline exceeded")
+            staged[name] = {
+                "goal": current[name],
+                "hold": {
+                    "since": entry,
+                    "saturated_since": entry,
+                    "temp": temp,
+                    "last_telemetry_at": before,
+                },
+                "detail": detail,
             }
-            motion.held_once.add(name)
-            motion.effort_since[name] = None
-            print(
-                f"{motion.label}: overload-hold {detail}; goal set to present, torque on, "
-                f"hold watch {HOLD_S:.0f} s",
-                flush=True,
-            )
+    if monitor_io_error is not None:
+        raise monitor_io_error
     if "gripper" in motion.active:  # a gripper that squeezes (its command leads it: blocked by the box) keeps its bounded lead; it is NEVER frozen or cut for it
         if motion.grip_way is None and abs(motion.command["gripper"] - current["gripper"]) >= (LEAD_DEG - 0.5) * TICKS_PER_DEGREE:
             squeeze = motion.squeeze.setdefault("gripper", {"saturated_since": None})
             grip_pwm = motion.follower.read("Present_PWM", "gripper", num_retry=READ_RETRY)
-            if abs(grip_pwm) < 0.9 * motion.follower.read("PWM_Limit", "gripper", num_retry=READ_RETRY):
+            grip_lim = motion.follower.read("PWM_Limit", "gripper", num_retry=READ_RETRY)
+            if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (grip_pwm, grip_lim)):
+                raise TelemetryReadError(f"gripper: invalid squeeze telemetry ({grip_pwm}, {grip_lim})")
+            if abs(grip_pwm) < 0.9 * grip_lim:
                 squeeze["saturated_since"] = None
             elif squeeze["saturated_since"] is None:
                 squeeze["saturated_since"] = now
@@ -125,7 +181,31 @@ def check_effort(motion, current: dict, started: float) -> None:
                 relax_squeeze(motion, current)
         else:
             motion.squeeze.pop("gripper", None)
-    motion.effort_pwm, motion.last_effort_time = pwm, now
+    motion.effort_pwm = pwm
+    if not staged:
+        if motion.last_effort_time is not None and not 0 <= now - motion.last_effort_time <= MAX_GAP_S:
+            motion.last_effort_gap_at = now
+        motion.last_effort_time = now
+    return staged
+
+
+def commit_holds(motion, staged: dict | None, now: float) -> None:
+    """Publish staged overload holds only after Goal_Position sync_write succeeds."""
+    if not staged:
+        return
+    if motion.last_effort_time is not None and not 0 <= now - motion.last_effort_time <= MAX_GAP_S:
+        motion.last_effort_gap_at = now
+    motion.last_effort_time = now
+    for name, item in staged.items():
+        if name in motion.velocity:
+            motion.velocity[name] = 0.0
+        motion.held[name] = item["hold"]
+        motion.held_once.add(name)
+        motion.effort_since[name] = None
+        safe_print(
+            f"{motion.label}: overload-hold {item['detail']}; goal set to present, torque on, "
+            f"hold watch {HOLD_S:.0f} s"
+        )
 
 
 def relax_squeeze(motion, current: dict) -> None:
@@ -135,8 +215,8 @@ def relax_squeeze(motion, current: dict) -> None:
     motion.grip_way = 1 if motion.command["gripper"] > current["gripper"] else -1
     motion.command["gripper"], motion.velocity["gripper"] = current["gripper"], 0.0
     motion.squeeze.pop("gripper", None)
-    print(f"{motion.label}: gripper squeeze relaxed: PWM at the cap for {HOLD_S:g} s, command set to the present position; "
-          f"re-armed when the trigger moves {STALL_RELEASE_DEG} degrees to the open side of the jaws", flush=True)
+    safe_print(f"{motion.label}: gripper squeeze relaxed: PWM at the cap for {HOLD_S:g} s, command set to the present position; "
+               f"re-armed when the trigger moves {STALL_RELEASE_DEG} degrees to the open side of the jaws")
 
 
 def seed_follower_pose(motion, current: dict, target: dict, started: float, raw: dict | None = None) -> dict:
@@ -195,7 +275,10 @@ def restart_after_pause(motion, started: float) -> None:
     clocks (effort load timers, held and squeezing joints' saturated-since) start fresh: the pause neither extends nor
     shortens the loop's own HOLD_S rule, which is unchanged while the loop runs; the boundary watch judges the pause alone."""
     motion.last_time, motion.last_effort_time, motion.prev_target = started, None, None
+    motion.last_effort_gap_at = None
     motion.effort_since = dict.fromkeys(motion.effort_since)
+    for hold in motion.held.values():
+        hold["last_telemetry_at"] = started
     for hold in (*motion.held.values(), *motion.squeeze.values()):
         hold["saturated_since"] = None
     motion.velocity = dict.fromkeys(motion.active, 0.0)

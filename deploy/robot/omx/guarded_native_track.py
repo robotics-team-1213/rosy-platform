@@ -8,9 +8,10 @@ from __future__ import annotations
 import math
 
 from guarded_device import BODY, LEAD_DEG, STALL_RELEASE_DEG, TICKS_PER_DEGREE
+from guarded_native_probe import safe_print
 
 
-def body_command(self, target, current, elapsed, now):
+def body_command(self, target, current, elapsed, now, staged=None):
     tracking, since = self.tracking, self.aligned_since
     full = not (self.teacher or self.body_only)  # full-arm Leader teleop and recording
     if not tracking and now >= self.alignment_deadline:
@@ -23,13 +24,12 @@ def body_command(self, target, current, elapsed, now):
         command_joint = max(self.active, key=lambda n: abs(self.command[n] - target[n]))
         present_pwm = self.effort_pwm.get(actual_joint)
         pwm_limit = self.pwm_limits.get(actual_joint)
-        print(
+        safe_print(
             f"{self.label}: phase=aligning; actual_joint={actual_joint} actual={current[actual_joint]} "
             f"target={target[actual_joint]} error_deg={abs(current[actual_joint] - target[actual_joint]) / TICKS_PER_DEGREE:.2f} "
             f"Present_PWM={present_pwm} PWM_Limit={pwm_limit}; "
             f"command_joint={command_joint} command={self.command[command_joint]} target={target[command_joint]} "
-            f"error_deg={abs(self.command[command_joint] - target[command_joint]) / TICKS_PER_DEGREE:.2f}",
-            flush=True,
+            f"error_deg={abs(self.command[command_joint] - target[command_joint]) / TICKS_PER_DEGREE:.2f}"
         )
         self.last_alignment_report = now
     if not tracking:
@@ -47,7 +47,7 @@ def body_command(self, target, current, elapsed, now):
     acceleration = self.accel_deg_s2 * TICKS_PER_DEGREE
     limit = (self.track_deg_s if tracking else self.align_deg_s) * TICKS_PER_DEGREE
     command, velocity = {}, {}
-    frozen = self.frozen()
+    frozen = self.frozen(staged) if staged else self.frozen()
     for name in self.active:
         if name == "gripper" and self.grip_way is not None:  # a relaxed squeeze: no lead while the trigger stays on the squeeze side of the jaws
             if self.grip_way * (target[name] - current[name]) < -STALL_RELEASE_DEG * TICKS_PER_DEGREE:
@@ -56,7 +56,8 @@ def body_command(self, target, current, elapsed, now):
                 command[name], velocity[name] = current[name], 0.0
                 continue
         if name in frozen:
-            command[name], velocity[name] = self.command[name], 0.0
+            command[name] = staged[name]["goal"] if staged and name in staged else self.command[name]
+            velocity[name] = 0.0
             continue
         error = target[name] - self.command[name]
         brake = math.sqrt((acceleration * elapsed) ** 2 + 2 * acceleration * abs(error)) - acceleration * elapsed
