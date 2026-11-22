@@ -18,6 +18,7 @@ learning/curation/pinky/fleet_observations.py learning/curation/pinky/fleet_rule
 middleware/core/gateway/core/trip_lease.py middleware/core/services/core_features/calibration/session.py operations/account/rosy_account/password_session.py|_iso  ③ 타임스탬프 소형 헬퍼, test_omx_demonstration.py가 ISO-8601 UTC 출력 동치 고정
 contracts/learning/src/rosy/contracts/learning/omx.py middleware/devices/omx/adapter/omx_adapter/demonstration.py|_json  ③ 로봇 payload에 계약 wheel이 없다, test_omx_demonstration.py가 writer-검증자 동치 고정
 contracts/foundation/core_common/protocol/discovery_txt.py deploy/site/fleet-mdns.py|_lan_ipv4  ③ deploy/site mDNS 미러, test_site_fleet_mdns.py가 mDNS/IPv4 동치 고정
+contracts/foundation/core_common/protocol/cell_failure_context.py deploy/robot/omx/cell_failure_context.py|_norm_for_hash  ③ 셀 PC stdlib 독립 배포 경계(계약 wheel 없음), test_omx_failure_context.py가 해시 동치 고정
 contracts/motion/src/rosy/contracts/motion/characteristics.py middleware/devices/omx/adapter/omx_adapter/contracts/hardware_profile.py|_number  ③ 로봇 payload 독립 배포 경계(test_structure_installed_packages), test_motion_characteristics.py가 헬퍼 동치 고정
 middleware/core/api/core_api_web/api/peer_pairing/peer_crypto.py operations/fleet/fleet/server/peer/camera_peer_crypto.py|_public  ③ D-841 Dec.8 의도 복제, test_peer_proof_ownership.py가 고정
 contracts/motion/src/rosy/contracts/motion/characteristics.py middleware/devices/omx/adapter/omx_adapter/contracts/hardware_profile.py|_range  ③ 로봇 payload 독립 배포 경계(test_structure_installed_packages), test_motion_characteristics.py가 헬퍼 동치 고정
