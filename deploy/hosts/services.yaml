@@ -81,6 +81,7 @@ roles:
     pinky-nav2.service: {run: "off", channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-ai-gpu-watchdog.service: {run: oneshot, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.service, doc: deploy/ai_pc/README.md}
     rosy-ai-gpu-watchdog.timer: {run: timer, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.timer, doc: deploy/ai_pc/README.md}
+    rosy-canonical-peer.service: {run: active, channel: snapshot, template: deploy/ai_pc/rosy-canonical-peer.service, source: ".local/share/rosy-learning-center/canonical-peer/current", note: "read-only canonical training telemetry peer for Model PC /learning/canonical; Tailnet IP, port and watch root live in ~/.config/rosy/canonical-peer.env", doc: deploy/ai_pc/README.md}
     rosy-decision-laya.service: {run: "off", channel: copy, doc: deploy/ai_pc/README.md}
     rosy-learning-center.service: {run: "off", channel: retired, note: "candidate retired 2026-10-31; synthetic-only data kept in ~/rosy-learning-candidate-retired-20261031", doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.service: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}

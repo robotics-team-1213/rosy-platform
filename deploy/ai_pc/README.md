@@ -69,3 +69,22 @@ sudo python3 deploy/hosts/common/rosy-host-state install ai --approve sim
 ### Isaac 실행 호스트 (2026-11-02)
 
 AI PC도 `tools/remote/isaac_batch.py --roles model,ai`로 Isaac 실행을 나눠 받는다. 실행 설정은 `~/.config/rosy/isaac-sdk.json`(SDK 6.2 venv `~/rosy-test/venvs/isaaclab-3.0.0-sim62/.venv`의 python·sha256·version)과 `~/.config/rosy/model-code.json`(`root`만, 서명 model-code 설치가 아니라 Isaac 실행 잠금용 빈 디렉터리)이다. Isaac 실행 승인은 GPU를 쓰는 프로세스가 하나도 없어야 한다. D-958 1단계(2026-11-02): `isaac_batch.py --pause ai=rosy-ollama.service`는 실행마다 `~/.local/lib/rosy-gpu-tenants/gpu_tenants.py claim`으로 GPU를 빌린다. 운행 중인 로봇이 없고(상황 서비스 입력 기록 2분 이내), 최근 10분 제안이 없을 때만 빌려주며, 그동안 situation `owner_mode`는 `shared`(분석기만)다. `rosy-gpu-tenants.timer`가 1분마다 확인하되 GPU 작업 잠금·Isaac 예약·기존 `gpu.lock`이 모두 비었을 때만 Ollama를 되살린다. helper가 바꾼 `shared`의 수정 시각이 그대로일 때만 `available`을 복원한다. 실험 선점·재대기는 아직 구현하지 않았으므로 본업이 돌아와도 GPU 반납까지 복구를 미룬다. `rosy-v11-sam-worker.service`는 2026-11-02부터 자동 시작을 끄고 필요할 때만 `systemctl --user start rosy-v11-sam-worker`로 켠다(저장소에 호출자가 없고 14일간 요청 기록이 없었다).
+
+## Canonical 학습 텔레메트리 피어 (`rosy-canonical-peer.service`)
+
+`rosy-canonical-peer.service`는 Model PC `/learning/canonical` 화면에 AI PC의 GPU·CPU·RAM·디스크·잠금·감시 학습 진행 상태를 읽기 전용으로 전달하는 systemd 사용자 서비스다. `learning/training/omx/canonical_telemetry.py serve-peer`를 실행하며 `GET /api/learning/canonical/peer-summary`만 Bearer 토큰 검증 후 응답한다(쓰기·제어 권한 없음).
+
+비공개 호스트 설정(저장소 커밋 금지, `0600`):
+- `~/.config/rosy/canonical-peer.token`: Model PC와 공유하는 Bearer 토큰
+- `~/.config/rosy/canonical-peer.env`:
+  ```dotenv
+  CANONICAL_PEER_HOST=<AI PC Tailscale IP>
+  CANONICAL_PEER_PORT=8770
+  CANONICAL_PEER_WATCH="<watch-id>=<감시 경로>:<표시 이름>"
+  ```
+
+설치 (`ai` 계정):
+1. 검토된 스냅샷을 `~/.local/share/rosy-learning-center/source/<sha>`에 두고 `~/.local/share/rosy-learning-center/canonical-peer/current` 심볼릭 링크로 연결한다.
+2. `cp deploy/ai_pc/rosy-canonical-peer.service ~/.config/systemd/user/` 후 `systemctl --user daemon-reload && systemctl --user enable --now rosy-canonical-peer.service`를 실행한다.
+3. 재부팅·로그아웃 뒤에도 유지되도록 `loginctl show-user ai -p Linger`가 `yes`인지 확인한다.
+
