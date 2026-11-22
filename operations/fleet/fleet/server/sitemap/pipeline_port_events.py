@@ -27,8 +27,7 @@ CLAIM_STRIP_FIELDS = frozenset({
     "identity_attested_by",
     "pending_port_events",
 })
-_IDENTITY_INPUT_FIELDS = ("object_ref", "identity", "identity_observation_ref")
-_VEHICLE_SOURCE_SITES = frozenset({"pinky", "vehicle", "vehicle_tray", "pinky_tray"})
+IDENTITY_INPUT_FIELDS = ("object_ref", "identity", "identity_observation_ref")
 
 
 def _check_ref(value: Any, *, limit: int = 128) -> str:
@@ -74,7 +73,7 @@ def validate_task_identity(spec: dict[str, Any], *, cell_id: str, principal_id: 
 
 
 def has_identity_input(body: dict[str, Any]) -> bool:
-    return any(key in body for key in _IDENTITY_INPUT_FIELDS)
+    return any(key in body for key in IDENTITY_INPUT_FIELDS)
 
 
 def strip_task_for_claim(task: dict[str, Any]) -> dict[str, Any]:
@@ -125,7 +124,9 @@ def build_completion_events(
             arm_live = app.state.arm_live_states.get("arm_s") or {}
             sc = (stage_result or {}).get("source_clearance")
             ready = (
-                task.get("src_site") in _VEHICLE_SOURCE_SITES
+                task.get("dst_site") == "belt"
+                and bool(task.get("src_site"))
+                and task.get("src_site") != "belt"
                 and not human_detected
                 and cstate.get("phase") == "RELEASED"
                 and not cstate.get("amr_motion_inhibited")

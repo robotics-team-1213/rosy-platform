@@ -10,7 +10,12 @@ from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boun
 from fleet.pipeline.cell_site_targets import expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
-from fleet.server.sitemap.pipeline_port_events import TASK_IDENTITY_FIELDS, has_identity_input, validate_task_identity
+from fleet.server.sitemap.pipeline_port_events import (
+    IDENTITY_INPUT_FIELDS,
+    TASK_IDENTITY_FIELDS,
+    has_identity_input,
+    validate_task_identity,
+)
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
 from fleet.server.sitemap.pipeline_unload_release import install_unload_release_routes, manifest_count, unload_release
@@ -253,7 +258,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
                     })
                 created_tasks = _enqueue_many(active, step_specs, principal_id=principal_id)
                 return {"ok": True, "task": created_tasks[0], "tasks": created_tasks}
-            merged = {**preset, **{k: v for k, v in body.items() if k in _IDENTITY_INPUT_FIELDS or v is not None}}
+            merged = {**preset, **{k: v for k, v in body.items()
+                                   if k in (*IDENTITY_INPUT_FIELDS, "emit_release_permit") or v is not None}}
             task = _enqueue_one_task(active, merged, principal_id=principal_id)
             return {"ok": True, "task": task, "tasks": [task]}
         task = _enqueue_one_task(active, body, principal_id=principal_id)
