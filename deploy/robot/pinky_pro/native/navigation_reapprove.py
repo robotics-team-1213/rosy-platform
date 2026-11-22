@@ -23,8 +23,11 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
+import math
+import os
 import re
 import ssl
+import stat
 import subprocess
 import sys
 import time
@@ -60,6 +63,11 @@ def approval_needs_remeasure(root: Path = Path("/")) -> str | None:
     return "approved"
 
 
+_NAV_IDLE = frozenset({"IDLE", "ARRIVED", "CANCELED", "FAILED"})
+_DOCKING_IDLE = frozenset({"UNDOCKED", "DOCKED", "CHARGING"})
+_MAX_STATUS_INPUTS_BYTES = 16 * 1024
+
+
 def decide(approval: dict, robot: dict, still: dict, health: dict, attempts: int) -> str:
     """'run' or the reason to skip; pure so the tests pin every gate."""
     if approval.get("phase") != "IDLE":
@@ -70,6 +78,24 @@ def decide(approval: dict, robot: dict, still: dict, health: dict, attempts: int
         velocity = sample.get("velocity") or {}
         if sample.get("mode") != "IDLE":
             return f"robot mode {sample.get('mode')}"
+        nav = sample.get("navigation")
+        if nav is not None and nav not in _NAV_IDLE:
+            return f"navigation {nav}"
+        if sample.get("trip_lease") is not None:
+            return "trip lease active"
+        line_follow = sample.get("line_follow") or {}
+        if line_follow.get("mode") not in (None, "OFF") or line_follow.get("state") not in (None, "OFF"):
+            return "line follow active"
+        dock = (sample.get("docking") or {}).get("state")
+        if dock is not None and dock not in _DOCKING_IDLE:
+            return f"docking {dock}"
+        swarm = sample.get("swarm") or {}
+        if swarm.get("active") is True or swarm.get("role") not in (None, "none"):
+            return "swarm active"
+        if sample.get("activity") is not None:
+            return "activity active"
+        if (sample.get("safety") or {}).get("estop") is True:
+            return "estop engaged"
         if abs(velocity.get("linear", 1.0)) > 1e-3 or abs(velocity.get("angular", 1.0)) > 1e-3:
             return "robot moving"
     battery = health.get("battery") or {}
@@ -80,6 +106,59 @@ def decide(approval: dict, robot: dict, still: dict, health: dict, attempts: int
     if attempts >= MAX_ATTEMPTS:
         return f"gave up after {attempts} attempts on this release"
     return "run"
+
+
+def _status_inputs_busy(root: Path) -> str | None:
+    """Fail-closed check of CORE's local status-inputs handover before pairing."""
+    path = root / "run/rosy/status-inputs.json"
+    if path.is_symlink():
+        return "status-inputs unreadable"
+    if not path.exists():
+        return None
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_size > _MAX_STATUS_INPUTS_BYTES:
+                return "status-inputs unreadable"
+            raw = os.read(fd, _MAX_STATUS_INPUTS_BYTES + 1)
+        finally:
+            os.close(fd)
+        if len(raw) > _MAX_STATUS_INPUTS_BYTES:
+            return "status-inputs unreadable"
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return "status-inputs unreadable"
+    if not isinstance(data, dict):
+        return "status-inputs unreadable"
+    if data.get("robot_mode") != "IDLE":
+        return f"robot mode {data.get('robot_mode')}"
+    if data.get("nav_state") not in _NAV_IDLE:
+        return f"navigation {data.get('nav_state')}"
+    if "trip_lease_active" in data and data["trip_lease_active"] is not False:
+        return "trip lease active"
+    if "calibration_active" in data and data["calibration_active"] is not False:
+        return "calibration active"
+    if (("line_follow_mode" in data and data["line_follow_mode"] != "OFF")
+            or ("line_follow_state" in data and data["line_follow_state"] != "OFF")):
+        return "line follow active"
+    if data.get("docking_state") not in (None, *_DOCKING_IDLE):
+        return f"docking {data.get('docking_state')}"
+    if (("swarm_active" in data and data["swarm_active"] is not False)
+            or data.get("swarm_role") not in (None, "none")):
+        return "swarm active"
+    if data.get("activity_kind") is not None:
+        return "activity active"
+    if "estop" in data and data["estop"] is not False:
+        return "estop engaged"
+    if "velocity_linear" in data or "velocity_angular" in data:
+        lin, ang = data.get("velocity_linear", 0.0), data.get("velocity_angular", 0.0)
+        ok = (isinstance(lin, (int, float)) and not isinstance(lin, bool) and math.isfinite(lin)
+              and isinstance(ang, (int, float)) and not isinstance(ang, bool) and math.isfinite(ang))
+        if not ok or abs(lin) >= 0.01 or abs(ang) >= 0.02:
+            return "robot moving"
+    return None
 
 
 class Core:
@@ -256,6 +335,8 @@ def run(root: Path = Path("/"), core: Core | None = None, sleep=time.sleep, *,
         return why
     if rosy_claim.check(root) is not None:
         return "claimed"
+    if (busy := _status_inputs_busy(root)) is not None:
+        return busy
     release = (root / "opt/rosy/current").resolve().name
     state_path = root / str(STATE).lstrip("/")
     attempts = _load_state(state_path).get(release, 0)

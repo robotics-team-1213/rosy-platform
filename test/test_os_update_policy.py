@@ -225,3 +225,17 @@ def test_manual_left_behind_still_holds_an_os_update():
     policy.host = type("Clock", (), {"now": staticmethod(lambda: moment)})()
     data = idle_inputs(moment, robot_mode="MANUAL", manual_quiet_s=900.0)
     assert "OS update requires robot mode IDLE" in policy._judge_inputs(data)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("trip_lease_active", True),
+    ("trip_lease_active", None),
+    ("calibration_active", True),
+    ("calibration_active", None),
+])
+def test_trip_lease_and_calibration_refuse_os_update(tmp_path, monkeypatch, field, value):
+    m, _, root, _, _, _, _, host = _policy(tmp_path, monkeypatch)
+    host.inputs_changes = {field: value}
+    host.write_inputs()
+    with pytest.raises(ValueError, match="OS_UPDATE_POLICY"):
+        m.authorize(root, TRANSACTION, host=host)
