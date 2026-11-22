@@ -488,6 +488,7 @@ def test_four_documents_draw_one_header_and_one_estop(tmp_path):
             page.locator("#fleet-inbox").click()
             expect(page.locator("#queues-panel")).to_be_visible()
             expect(page.locator("#queues-panel")).to_have_attribute("data-open", "true")
+            expect(page.locator("#fleet-inbox")).to_be_visible()
             expect(page.locator("#fleet-inbox")).to_have_attribute("aria-expanded", "true")
             page.keyboard.press("Escape")
             expect(page.locator("#queues-panel")).to_be_hidden()

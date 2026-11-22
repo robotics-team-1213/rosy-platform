@@ -78,7 +78,7 @@ ui-topbar {
   font-size: var(--text-micro);
   font-weight: var(--weight-label);
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: var(--leading-flat);
   pointer-events: none;
 }
 #fleet-inbox[data-crit="true"] #header-unread {

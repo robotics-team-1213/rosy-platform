@@ -62,6 +62,7 @@ export function createInboxPanel({ scope, el, readView, isLocked = () => false }
 
   function setDrawerOpen(open, { focus = false, restoreFocus = false } = {}) {
     const next = Boolean(open) && !isLocked();
+    const active = document.activeElement;
     drawerOpen = next;
     if (drawer) drawer.dataset.open = String(next);
     if (bell) bell.setAttribute("aria-expanded", String(next));
@@ -75,8 +76,9 @@ export function createInboxPanel({ scope, el, readView, isLocked = () => false }
       return;
     }
     if (restoreFocus && bell) {
-      const active = document.activeElement;
-      if (!active || active === document.body || drawer?.contains?.(active)) bell.focus?.({ preventScroll: true });
+      if (!active || active === document.body || active === document.documentElement || drawer?.contains?.(active)) {
+        bell.focus?.({ preventScroll: true });
+      }
     }
   }
 
