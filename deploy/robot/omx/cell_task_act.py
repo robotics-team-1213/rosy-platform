@@ -28,8 +28,9 @@ def _fail(arm_id: str, error: str, *, directive_id: Any = None, extra_stop: dict
     return out
 
 
-def _hold_on_timeout(prep_dir: Path, cfg_data: dict[str, Any] | None = None) -> dict[str, str]:
+def _hold_on_timeout(prep_dir: Path, cfg_data: dict[str, Any] | None = None) -> tuple[dict[str, str], dict[str, bool]]:
     acks: dict[str, str] = {}
+    latched: dict[str, bool] = {}
     candidates = [prep_dir / "chunk-io-s" / "chunk-cmd", prep_dir / "chunk-io-s-r2s" / "chunk-cmd"]
     if isinstance(cfg_data, dict) and isinstance(cfg_data.get("io"), str) and cfg_data["io"].strip():
         candidates.append(Path(cfg_data["io"].strip()).expanduser() / "chunk-cmd")
@@ -44,15 +45,36 @@ def _hold_on_timeout(prep_dir: Path, cfg_data: dict[str, Any] | None = None) -> 
             continue
         seen.add(resolved)
         try:
+            sent_at = time.time()
             fd = os.open(str(fifo), flags)
             try:
                 os.write(fd, b"human-hold\n")
             finally:
                 os.close(fd)
             acks[fifo.parent.name] = "human-hold sent"
+            live_path, confirmed = fifo.parent / "live.json", False
+            if live_path.is_file():
+                deadline = time.monotonic() + 0.6
+                while True:
+                    try:
+                        live_data = json.loads(live_path.read_text(encoding="utf-8"))
+                        t_val = live_data.get("t") if isinstance(live_data, dict) else None
+                        if (isinstance(live_data, dict) and live_data.get("human_hold_latched") is True
+                                and live_data.get("torque_hold_commanded") is True
+                                and isinstance(t_val, (int, float)) and not isinstance(t_val, bool)
+                                and math.isfinite(t_val) and sent_at - 0.05 <= t_val <= time.time() + 1.0):
+                            confirmed = True
+                            break
+                    except (OSError, ValueError):
+                        pass
+                    if time.monotonic() >= deadline:
+                        break
+                    time.sleep(0.05)
+            latched[fifo.parent.name] = confirmed
         except OSError as exc:
             acks[fifo.parent.name] = f"error: {type(exc).__name__}"
-    return acks
+            latched[fifo.parent.name] = False
+    return acks, latched
 
 
 def execute_act_policy_task(
@@ -153,8 +175,9 @@ def execute_act_policy_task(
         proc = run_fn(cmd, capture_output=True, text=True, timeout=300,
                       env={**os.environ, "TOOLS_ROOT": str(tools_root_fn()), "ROSY_ARM_LEASE_OWNER": lease_owner})
     except timeout_exc:
-        acks = _hold_on_timeout(prep_dir, cfg_data)
-        return _fail(arm_id, "SUBPROCESS_TIMEOUT", directive_id=task_id, extra_stop={"timeout_hold": acks} if acks else None)
+        acks, latched = _hold_on_timeout(prep_dir, cfg_data)
+        extra = {"timeout_hold": acks, "timeout_hold_latched": latched} if acks else None
+        return _fail(arm_id, "SUBPROCESS_TIMEOUT", directive_id=task_id, extra_stop=extra)
     parsed = last_json_fn(proc.stdout)
     measured_at = time.time()
     park_row = {**parsed["park"], "command": "park"} if isinstance(parsed.get("park"), dict) else {}

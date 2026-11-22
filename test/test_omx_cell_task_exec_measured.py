@@ -369,6 +369,7 @@ def test_act_policy_exec_guards_and_verified_completion(tmp_path, monkeypatch):
     tmo = cte.execute_guarded_cell_task({**HANDOFF, "execution_mode": "act_policy",
                                          "presence": {"operator": "livsbittt", "at": time.time() - 5}}, prep_dir=tmo_dir)
     assert tmo["error"] == "SUBPROCESS_TIMEOUT" and tmo["stop_event"]["timeout_hold"]["chunk-io-s"] == "human-hold sent"
+    assert tmo["stop_event"]["timeout_hold_latched"] == {"chunk-io-s": False}
     assert fifo_file.read_bytes() == b"human-hold\n"
 
     # Passive act_shadow config alone or execution_allowed=False must fail closed (D-442 / D-1024).
@@ -439,3 +440,38 @@ def test_act_policy_exec_guards_and_verified_completion(tmp_path, monkeypatch):
         "result": "contact", "at": 1, "error": "strain", "source": {"before": 1, "after": 1}, "took_one": False,
     })
     assert contact["stage_result"]["task_verified"] is False and contact["error"] == "contact"
+
+    # Fresh runner live.json confirms human_hold_latched cleanly on subprocess timeout.
+    live_dir = tmp_path / "tmo_latched"
+    (live_dir / "chunk-io-s").mkdir(parents=True)
+    (live_dir / "chunk-io-s" / "chunk-cmd").write_bytes(b"")
+    (live_dir / "chunk-io-s" / "live.json").write_text(
+        json.dumps({"t": time.time(), "human_hold_latched": True, "torque_hold_commanded": True}), encoding="utf-8"
+    )
+    (live_dir / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (live_dir / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
+    (live_dir / "cell-auto-arm-s-live.json").write_text(json.dumps({
+        "sites": {"pinky": {"auto_roi": [49, 139, 295, 305]}, "belt": {"auto_roi": [309, 100, 634, 223]}},
+        "act_policy": {"execution_allowed": True, "policy_root": "/m", "policy_revision": "b" * 64,
+                       "cell_calibration": "a", "model_calibration": "p"},
+    }), encoding="utf-8")
+    monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(subprocess.TimeoutExpired(a[0], 300)))
+    tmo2 = cte.execute_guarded_cell_task({**HANDOFF, "execution_mode": "act_policy",
+                                          "presence": {"operator": "livsbittt", "at": time.time() - 5}}, prep_dir=live_dir)
+    assert tmo2["stop_event"]["timeout_hold"] == {"chunk-io-s": "human-hold sent"}
+    assert tmo2["stop_event"]["timeout_hold_latched"] == {"chunk-io-s": True}
+
+    # Unconfirmed torque_hold_commanded, non-finite timestamp, or stale live.json keep timeout_hold_latched False.
+    import cell_task_act as cta
+    monkeypatch.setattr(cta.time, "sleep", lambda *_: None)
+    mono = [0.0]
+    monkeypatch.setattr(cta.time, "monotonic", lambda: (mono.__setitem__(0, mono[0] + 0.4) or mono[0]))
+    for bad_live in (
+        {"t": time.time(), "human_hold_latched": True, "torque_hold_commanded": False},
+        {"t": float("inf"), "human_hold_latched": True, "torque_hold_commanded": True},
+        {"t": time.time() - 2.0, "human_hold_latched": True, "torque_hold_commanded": True},
+    ):
+        mono[0] = 0.0
+        (live_dir / "chunk-io-s" / "live.json").write_text(json.dumps(bad_live), encoding="utf-8")
+        acks, latched = cta._hold_on_timeout(live_dir)
+        assert acks == {"chunk-io-s": "human-hold sent"} and latched == {"chunk-io-s": False}

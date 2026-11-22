@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Which container is this, from read tags only (D-996 3-4). No FIFO, no "the last one we saw", no guess.
 
-A reading point (conveyor end: top camera on the roof tag, side camera on the side tag; then the A/B wrist at hover)
+A reading point (conveyor end: side camera only on a non-grasp end face, or top/side roof+side tags; then the A/B wrist at hover)
 takes N frames. A tag counts as read only when one container-tag id is seen in at least k of them; two ids that both
 reach k is a MISMATCH, not a choice. Roof and side may each be unreadable, but two read faces that disagree are a
 MISMATCH. The read tag becomes an object_ref through the site profile's container_tags table in the cell
@@ -9,7 +9,7 @@ Fleet, which also compares it with the trip's declaration (intake_readings); thi
 Anything unreadable at every point is UNREADABLE and goes on only by a named person's attestation.
 
   cell_identity.py read FRAME.jpg [FRAME.jpg ...] [--k 3]     vote over frames of one face
-  cell_identity.py end --top T.jpg ... --side S.jpg ... --out end.json [--queue]
+  cell_identity.py end [--top T.jpg ...] [--side S.jpg ...] --out end.json [--queue]
                                                              conveyor-end reading, kept for the wrist gate
 """
 from __future__ import annotations
@@ -106,7 +106,7 @@ def main(argv=None) -> int:
     r.add_argument("frames", nargs="+")
     r.add_argument("--k", type=int, default=DEFAULT_K)
     e = sub.add_parser("end")
-    e.add_argument("--top", nargs="+", required=True)
+    e.add_argument("--top", nargs="+", default=[])
     e.add_argument("--side", nargs="+", default=[])
     e.add_argument("--k", type=int, default=DEFAULT_K)
     e.add_argument("--out", type=Path, required=True)
@@ -115,6 +115,8 @@ def main(argv=None) -> int:
     if args.cmd == "read":
         print(json.dumps(read_frames([cv2.imread(f) for f in args.frames], args.k)))
         return 0
+    if not args.top and not args.side:
+        ap.error("end needs at least one of --top or --side")
     end = read_end([cv2.imread(f) for f in args.top], [cv2.imread(f) for f in args.side], args.k)
     args.out.write_text(json.dumps(end), encoding="utf-8")
     if args.queue:

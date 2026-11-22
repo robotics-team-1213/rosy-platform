@@ -35,7 +35,7 @@ from pathlib import Path
 JOINTS = ["joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1"]
 MOTORS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"]
 TICKS = 4096
-STALE_S = 2.0  # a live file older than this means the runner stopped; positions are not re-sent
+STALE_S = 1.5  # leave 0.5 s headroom under Fleet's 2.0 s freshness window
 
 
 def to_radians(state, calibration=None) -> dict:
@@ -145,6 +145,7 @@ def main(argv=None):
     sender = ArmSender(args.fleet_url, args.source_id, token, context=ssl.create_default_context(cafile=args.ca_file))
     last_t = None
     while True:
+        sample = None
         try:
             now = time.time()
             health = arm_health(args.health_file, args.arm_id, now) if args.health_file else (None, None)
@@ -159,6 +160,8 @@ def main(argv=None):
                 sender.send(sample)
                 last_t = sample.captured_at
         except (OSError, ValueError) as error:  # a refused post never stops the bridge
+            if getattr(error, "code", None) == 409 and sample is not None:
+                last_t = sample.captured_at
             print(json.dumps({"error": str(error)[:200], "t": round(time.time(), 3)}), flush=True)
         time.sleep(args.period)
 

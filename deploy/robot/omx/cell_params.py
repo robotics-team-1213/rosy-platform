@@ -56,6 +56,9 @@ DEFAULTS = {
     "gripper.gap_mm_per_unit": (10.4, "mm", 3, 30),
     "scene.diff": (45, "gray", 5, 255), "scene.min_area_px": (350, "px", 20, 100000), "scene.beyond_px": (60, "px", 10, 300),
     "pivot.max_bias_mm": (25.0, "mm", 1, 200), "calibrate.consensus_px": (15.0, "px", 2, 60),
+    "calibrate.remap_depth_unknown_blocks": (1, "flag", 0, 1),
+    "calibrate.remap_foreground_blocks": (1, "flag", 0, 1),
+    "calibrate.remap_depth_veto": (1, "flag", 0, 1),
     "jaw_side.other_mm": (54.0, "mm", 20, 90), "jaw_side.other_deg": (79.0, "deg", -180, 360), "jaw_side.roi_px": (45.0, "px", 10, 200),
     "jaw_side.band_mm": (18.0, "mm", 5, 60), "jaw_side.above_mm": (74.0, "mm", 0, 200),
     "jaw_side.depth_band": (0, "flag", 0, 1), "jaw_side.validated_arm_a": (0, "flag", 0, 1), "jaw_side.validated_arm_b": (0, "flag", 0, 1),
@@ -82,6 +85,8 @@ DEFAULTS = {
     "look.other_finger_deg": (229.5, "deg", 0, 360), "look.other_finger_mm": (34.4, "mm", 10, 60),
     "objects.drop_shadow": (1, "flag", 0, 1), "objects.shadow_tol": (12.0, "lab", 2, 40), "objects.shadow_min_light": (0.45, "ratio", 0.1, 0.9),
     "objects.top_v_frac": (0.8, "ratio", 0, 0.95), "objects.side_retry_v_frac": (0.75, "ratio", 0, 0.95),
+    # cell_objects.split_hues: 0 = off; live arm_s bench params split touching multi-colour boxes
+    "objects.hue_split_tol": (0, "hue", 0, 30),
     "grasp.end_frac": (0.7, "ratio", 0, 1),
     "wrist.finger_color": (0, "mode", 0, 2),
     "grasp.stability_check": (1, "flag", 0, 1),
@@ -93,6 +98,9 @@ DEFAULTS = {
     "grasp.vision_after_grasp": (0, "flag", 0, 1),
     "grasp.reach_on_reinsert": (0, "flag", 0, 1),
     "wrist.parallax_px": (0.0, "px", -100.0, 100.0),
+    # cell_wrist_cross (arm_s bench params): 0 = check off; per cell, never shared
+    "wrist.jaw_edge_px": (0.0, "px", 0, 320), "wrist.edge_goal_px": (0.0, "px", 0, 400),
+    "wrist.edge_unseen_ok": (0, "flag", 0, 1),
     "objects.split_touching": (1, "flag", 0, 1), "objects.split_peak_frac": (0.6, "ratio", 0.3, 0.9),
     "objects.split_max": (6, "count", 2, 9), "objects.split_gap_mm": (8.0, "mm", 0, 20), "objects.split_stagger_mm": (20.0, "mm", 0, 40),
     "pivot.over_target": (0, "flag", 0, 1), "pivot.over_top_mm": (30.0, "mm", 5, 120), "pivot.over_clear_mm": (30.0, "mm", 10, 100),
