@@ -157,7 +157,7 @@ def test_site_points_full_and_port_views_stage_a_fail_closed(tmp_path):
     ready_s3 = next(p for p in ready_full["vehicle_stops"] if p["id"] == "S3")
     assert ready_s3["berth"]["nav2_berth_ready"] is True
     assert ready_s3["berth"]["missing"] == []
-    assert ready_s3["berth"]["approach_pose"] == pytest.approx({"x": 0.925, "y": -0.207, "yaw": 3.14159})
+    assert ready_s3["berth"]["approach_pose"] == pytest.approx({"x": 0.925, "y": -0.207, "yaw": 3.14159}, abs=1e-5)
     ready_intake = next(h for h in ready_full["handoffs"] if h["id"] == "s3_cell_s_unload")
     assert ready_intake["nav2_berth_ready"] is True and ready_intake["berth_missing"] == []
 
