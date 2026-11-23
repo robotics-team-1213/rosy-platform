@@ -810,24 +810,24 @@ def test_paced_chunks_flag_uses_guarded_loop_and_rejects_incompatible_modes(tmp_
             "--operator", "livsbittt", "--max-chunks", "1", "--dry-run"]
     assert drive.main([*base, "--paced-chunks"]) == 0
     assert seen == [True]
-    with pytest.raises(SystemExit):
-        drive.main([*base, "--paced-chunks", "--n-action", "8"])
+    assert drive.main([*base, "--paced-chunks", "--n-action", "8"]) == 0
     with pytest.raises(SystemExit):
         drive.main([*base, "--paced-chunks", "--mode", "hybrid", "--goal-site", "tray"])
-    monkeypatch.setattr(drive.lrs, "LeRobotShadow", lambda *a, **kw: SimPolicy([[[0] * 6] * 16]))
     with pytest.raises(SystemExit):
-        drive.main([*base, "--paced-chunks"])
+        drive.main([*base, "--paced-chunks", "--mode", "taught", "--goal-site", "tray"])
+    monkeypatch.setattr(drive.lrs, "LeRobotShadow", lambda *a, **kw: SimPolicy([[[0] * 6] * 16]))
+    assert drive.main([*base, "--paced-chunks", "--n-action", "4"]) == 0
 
-    # Direct run_episode with paced_chunks=True bypasses run_timed even when chunk_size is set on normalized checkpoints.
+    # Direct run_episode with paced_chunks=True bypasses run_timed and admits n_action; handoff still rejected.
     monkeypatch.setattr(drive, "run_episode", orig_run_episode)
     rows = []
     ep = drive.run_episode(cell, PacedPolicy(), lib_path, tmp_path, offset=[0] * 6,
-                           max_chunks=1, dry_run=True, log=rows.append, paced_chunks=True)
+                           max_chunks=1, dry_run=True, log=rows.append, paced_chunks=True, n_action=8)
     assert ep == {"result": "dry_run", "chunks": 1} and rows[0]["envelope"] == {"ok": True}
 
     with pytest.raises(ValueError, match="paced_chunks"):
         drive.run_episode(cell, PacedPolicy(), lib_path, tmp_path, offset=[0] * 6,
-                          max_chunks=1, dry_run=True, log=rows.append, paced_chunks=True, n_action=8)
+                          max_chunks=1, dry_run=True, log=rows.append, paced_chunks=True, handoff=object())
 
     # Checked failure recovery: chunk-0 authorize/load failures never send bare park; chunk-1 authorize failure parks with chunk-0 prefix.
     cell_auth = Cell()
@@ -1270,3 +1270,150 @@ def test_r22_paced_contact_during_unconfirmed_release_holds_and_owner_refuses_re
                             offset=[0] * 6, max_chunks=1, dry_run=False, log=[].append, paced_chunks=True)
     assert res["result"] == "contact" and res["parked"] is False
     assert cell.commands[cell.commands.index("run policy") + 1:] == ["human-hold"]
+
+
+def test_arm_b_wrist_roll_warning_allows_unfolded_transit_in_range():
+    from cell_policy_shape import wrist_roll_warning
+
+    assert wrist_roll_warning([[0.0, -20.0, 20.0, 45.0, 17.0, 55.0]], 45.2, roll_range=(-35.0, 45.2)) is None
+    assert "wrist_roll" in (wrist_roll_warning([[0.0, -55.0, 46.5, 49.0, -5.0, 55.0]], 45.2, roll_range=(-35.0, 45.2)) or "")
+    assert "wrist_roll" in (wrist_roll_warning([[0.0, -45.0, 48.0, 49.0, -5.0, 55.0]], 45.2, roll_range=(-35.0, 45.2)) or "")
+    assert "wrist_roll" in (wrist_roll_warning([[0.0, -20.0, 20.0, 45.0, 17.0, 55.0]], 45.2, roll_range=(25.0, 45.2)) or "")
+
+
+def test_paced_sim_entry_bridge_dry_and_live_execution(tmp_path):
+    home = [0.8, -62.2, 53.1, 51.6, 45.2, 48.8]
+    canon = [6.0, -55.0, 46.5, 49.0, 40.0, 55.78]
+    lib_entry = {
+        "fps": 30, "gripper_closed": 48.8,
+        "chunks": {
+            "home": [home],
+            "entry": [home, [0.8, -55.0, 46.5, 49.0, 45.2, 48.8], canon],
+            "reach": [[0.8, -62.2, 53.1, 51.6, 45.2, 48.8], [1.0, -62.17, 53.07, 51.57, 45.17, 48.8],
+                      [25.0, 18.0, 5.0, 25.0, -35.0, 57.5]],
+        },
+    }
+    lib_path = write_lib(tmp_path, lib_entry)
+
+    class EntryCell(Cell):
+        def __init__(self):
+            super().__init__(expected_chunks={"home", "entry", "reach"} | {"policy"})
+            self.state = list(home)
+            self.target = list(home)
+            self._checked_reads = 0
+
+        def act(self, command):
+            self.commands.append(command)
+            if command.startswith("load "):
+                return {"state": list(self.state), "command": "load", "ok": True, "settled": True, "holding": False}
+            base = command.split(" ", 3)[-1] if command.startswith("checked ") else command
+            if base == "state":
+                return {"state": list(self.state), "target": list(self.target), "command": "state", "ok": True, "settled": True, "holding": False, "health": {"current_ma": [0] * 6}}
+            if base == "run entry":
+                self.state, self.target = list(canon), list(canon)
+            elif base == "run policy":
+                self.state = [8.0, -40.0, 35.0, 45.0, 15.0, 55.8]
+                self.target = list(self.state)
+            elif base == "park":
+                self.state, self.target = list(home), list(home)
+            extra = {"human_hold_latched": True, "torque_hold_commanded": True} if base == "human-hold" else {}
+            return {"state": list(self.state), "target": list(self.target), "command": base, "ok": True, "settled": True, "holding": False, **extra}
+
+    c0_chunk = [[8.0, -40.0, 35.0, 45.0, 15.0, 55.8]] * 16
+    c1_chunk = [[12.0, -25.0, 20.0, 40.0, -10.0, 55.8]] * 16
+    dry_pol, dry_rows = SimPolicy([c0_chunk, c1_chunk]), []
+    dry_res = drive.run_episode(EntryCell(), dry_pol, lib_path, tmp_path, offset=[0] * 6,
+                                max_chunks=2, dry_run=True, log=dry_rows.append, paced_chunks=True, n_action=4)
+    assert dry_res == {"result": "dry_run", "chunks": 2} and dry_rows[0]["entry_pose"] == canon
+    assert dry_pol.seen[0] == canon and dry_pol.seen[1][0] == pytest.approx(8.0) and all(r["envelope"]["ok"] for r in dry_rows)
+
+    no_runner = Cell({"state": {"ok": False, "fault": "no runner", "error": "chunk_runner is not running"}})
+    nr_dry = drive.run_episode(no_runner, SimPolicy([c0_chunk]), lib_path, tmp_path, offset=[0] * 6,
+                               max_chunks=1, dry_run=True, log=[].append, paced_chunks=True, n_action=4)
+    assert nr_dry == {"result": "dry_run", "chunks": 1}
+    nr_live = drive.run_episode(no_runner, SimPolicy([c0_chunk]), lib_path, tmp_path, offset=[0] * 6,
+                                max_chunks=1, dry_run=False, log=[].append, paced_chunks=True, n_action=4)
+    assert nr_live["result"] == "fault" and "not running" in nr_live["reason"]
+
+    auth_checks = []
+
+    class Auth:
+        supports_check_home = True
+
+        def __call__(self, _lib, _st, seq, *, check_home=True):
+            auth_checks.append((seq, check_home))
+            return {"session_id": f"s{len(auth_checks)}", "library_sha256": f"h{len(auth_checks)}"}
+
+    live_cell = EntryCell()
+    live_res = drive.run_episode(live_cell, SimPolicy([c0_chunk]), lib_path, tmp_path, offset=[0] * 6,
+                                 max_chunks=1, dry_run=False, log=[].append, authorize=Auth(), paced_chunks=True, n_action=4)
+    assert live_res["result"] == "chunks_done" and live_res["parked"] is True
+    assert auth_checks == [(("run entry", "park"), True), (("run policy", "park"), False)]
+    assert live_cell.commands[-1] == "checked s2 h2 park" and "checked s1 h1 run entry" in live_cell.commands
+
+    fail_cell = EntryCell()
+
+    def auth_fail_policy(_lib, _st, seq, *, check_home=True):
+        if seq == ("run entry", "park"):
+            return {"session_id": "se", "library_sha256": "he"}
+        raise ValueError("operating envelope refused: test")
+
+    auth_fail_policy.supports_check_home = True
+    fail_res = drive.run_episode(fail_cell, SimPolicy([c0_chunk]), lib_path, tmp_path, offset=[0] * 6,
+                                 max_chunks=1, dry_run=False, log=[].append, authorize=auth_fail_policy, paced_chunks=True, n_action=4)
+    assert fail_res["result"] == "refused" and fail_res["parked"] is True
+    assert fail_cell.commands[-1] == "checked se he park"
+
+
+def test_remote_endpoint_cli_wiring_and_validation(tmp_path, monkeypatch):
+    import cell_pipeline
+    import cell_remote_policy as crp
+
+    tok = tmp_path / "remote.tok"
+    tok.write_text("x" * 32, encoding="utf-8")
+    tok.chmod(0o600)
+    cal_path = tmp_path / "cal.json"
+    cal_path.write_text(json.dumps(cal()))
+    cfg = tmp_path / "cell.json"
+    cfg.write_text(json.dumps({"arm_id": "arm_b", "io": "unused", "cameras": {}, "work_dir": str(tmp_path)}))
+    lib_path = write_lib(tmp_path)
+    pdir = tmp_path / "m"
+    pdir.mkdir()
+    created, closed = [], []
+
+    class FakeRemote:
+        image_views = {"top": (4, 4), "wrist": (4, 4)}
+        goal_size = 10
+        sim_rule = {"held_30mm": 53.4, "gap_mm_per_unit": 5.0}
+        chunk_size = 16
+        n_action_steps = 4
+        arm_id = "arm_b"
+        files = {}
+
+        def __init__(self, url, arm_id, rev, **kw):
+            created.append((url, arm_id, rev, kw))
+
+        def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr(crp, "RemotePolicyShadow", FakeRemote)
+    monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: Cell())
+    monkeypatch.setattr(drive, "run_episode", lambda *a, **kw: {"result": "dry_run", "chunks": 1})
+    rc = drive.main([
+        "--config", str(cfg), "--library", str(lib_path), "--policy-root", str(pdir),
+        "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--endpoint-url", "http://10.0.0.2:8790",
+        "--token-file", str(tok), "--goal-slot", "4", "--operator", "op_b", "--paced-chunks", "--max-chunks", "1", "--dry-run",
+    ])
+    assert rc == 0 and created[0][:3] == ("http://10.0.0.2:8790", "arm_b", "a" * 64) and created[0][3]["token"] == "x" * 32 and closed == [True]
+    with pytest.raises(SystemExit):
+        drive.main(["--config", str(cfg), "--library", str(lib_path), "--mode", "taught", "--goal-site", "tray",
+                    "--operator", "op_b", "--endpoint-url", "http://127.0.0.1:8790", "--dry-run"])
+    with pytest.raises(SystemExit):
+        drive.main(["--config", str(cfg), "--library", str(lib_path), "--policy-root", str(pdir),
+                    "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--model-calibration", str(cal_path),
+                    "--token-file", str(tok), "--operator", "op_b", "--dry-run"])
+    with pytest.raises(SystemExit):
+        drive.main(["--config", str(cfg), "--library", str(lib_path), "--policy-root", str(pdir),
+                    "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--endpoint-url", "http://10.0.0.2:8790",
+                    "--token-file", str(tok), "--arm-id", "arm_a", "--goal-slot", "4", "--operator", "op_b",
+                    "--paced-chunks", "--max-chunks", "1", "--dry-run"])

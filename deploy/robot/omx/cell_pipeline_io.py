@@ -1,6 +1,7 @@
 """Native cell FIFO/camera transport and stage receipts; never opens the actuator bus."""
 from __future__ import annotations
 
+import errno
 import http.client
 import hashlib
 import json
@@ -171,8 +172,10 @@ class FifoCell:
                 pre_t = None
             try:  # non-blocking: never hand a command to a later runner
                 fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
-            except OSError:
-                return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
+            except OSError as exc:
+                if exc.errno in (errno.ENOENT, errno.ENXIO):
+                    return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
+                return {"ok": False, "error": f"chunk-cmd open failed: {exc.strerror or type(exc).__name__}", "fault": "fifo io error"}
             try:
                 os.write(fd, (wire_cmd + "\n").encode())
                 sent_at = time.time()

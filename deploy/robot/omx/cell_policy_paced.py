@@ -7,80 +7,23 @@ import time
 
 import numpy as np
 
+from cell_policy_entry import (  # noqa: F401
+    PRE_SETTLE_TOL, STILL_TOL, STILL_WAIT_S,
+    check_idle_sample as _check_idle_sample, dry_no_runner_fallback, infer_chunk,
+    live_idle_ok as _live_idle_ok, moved_snapshot as _moved_snapshot, stationary_idle as _stationary_idle,
+)
 from cell_policy_timing import (
     FAULT_KEYS, ack_status as _ack_status, best_effort_hold as _best_effort_hold,
     empty_gripper_ok as _empty_gripper_ok, finite_stamp as _finite_num, max_diff as _max_diff, park_ack_ok,
-    pose6 as _pose6, retreat_ack_ok, send_hold as _send_hold, valid_state as _valid_state,
+    pose6 as _pose6, retreat_ack_ok, run_entry_chunk as _run_entry_chunk, send_hold as _send_hold,
+    step_count as _step_count, valid_state as _valid_state, validate_entry_chunk as _validate_entry_chunk,
 )
 
-PRE_SETTLE_TOL, STILL_TOL, STILL_WAIT_S, HOLD_CURRENT_LIMIT_MA = 2.0, 0.15, 0.08, 140.0
-
-
-def _moved_snapshot(state, ran: dict, top_before, cell, work: Path, n: int) -> dict:
-    """Did the arm move: joint travel the encoders measured and how much the top view changed (mean |diff|, 0-255)."""
-    out = {"joint_travel": float(np.abs(np.asarray(ran.get("state") or state, dtype=float) - state).max())}
-    try:
-        import cv2
-        top_after = cell.frame("top")
-        out["top_change"] = round(float(np.abs(top_before.astype(np.int16) - top_after.astype(np.int16)).mean()), 2)
-        shots = work / "policy-frames"
-        shots.mkdir(exist_ok=True)
-        cv2.imwrite(str(shots / f"{int(time.time())}-{n}-before.jpg"), top_before)
-        cv2.imwrite(str(shots / f"{int(time.time())}-{n}-after.jpg"), top_after)
-    except Exception as exc:  # camera evidence never stops the episode
-        out["top_change_error"] = str(exc)[:120]
-    return out
+HOLD_CURRENT_LIMIT_MA = 140.0
 
 
 def _finite_stamp(val, ref_now: float) -> bool:
     return (num := _finite_num(val)) is not None and 0.0 <= num <= ref_now + 1.0
-
-
-def _check_idle_sample(status: dict, home: list[float], *, check_home_target: bool, target_tol: float) -> tuple[list[float], list[float] | None] | None:
-    ok, _, _ = _valid_state(status)
-    if (not ok or status.get("holding") is True or status.get("chunk") is not None
-            or (status.get("jitter") or {}).get("shaking")
-            or (status.get("command") is not None and status.get("command") != "state")):
-        return None
-    pose = [float(v) for v in status["state"]]
-    tgt = _pose6(status["target"]) if status.get("target") is not None else None
-    if status.get("target") is not None and (tgt is None or _max_diff(pose, tgt, 5) > PRE_SETTLE_TOL
-                                             or (check_home_target and _max_diff(tgt, home, 5) > target_tol)):
-        return None
-    return pose, tgt
-
-
-def _live_idle_ok(cell, pose: list[float], home: list[float], *, check_home_target: bool, target_tol: float) -> bool:
-    if not hasattr(cell, "policy_state"):
-        return True
-    try:
-        live = cell.policy_state()
-    except Exception:
-        return False
-    lp, lt = (_pose6(live.get("state")), _finite_num(live.get("t"))) if isinstance(live, dict) else (None, None)
-    if (not isinstance(live, dict) or live.get("chunk") is not None or any(live.get(k) for k in FAULT_KEYS)
-            or (live.get("jitter") or {}).get("shaking") or lp is None or lt is None
-            or abs(time.time() - lt) > 1.0 or _max_diff(pose, lp) > STILL_TOL
-            or (live.get("lag") is not None and ((lag := _finite_num(live.get("lag"))) is None or lag > PRE_SETTLE_TOL))):
-        return False
-    tg = _pose6(live.get("target")) if live.get("target") is not None else None
-    return not (live.get("target") is not None and (tg is None or _max_diff(lp, tg, 5) > PRE_SETTLE_TOL
-                or (check_home_target and _max_diff(tg, home, 5) > target_tol)))
-
-
-def _stationary_idle(cell, status: dict, home: list[float], *, check_home_target: bool,
-                     max_off_home: float, sleep=time.sleep) -> tuple[dict, list[float] | None]:
-    p1, t1 = _check_idle_sample(status, home, check_home_target=check_home_target, target_tol=max_off_home) or (None, None)
-    if p1 is None or _max_diff(p1, home, 5) > max_off_home or not _live_idle_ok(cell, p1, home, check_home_target=check_home_target, target_tol=max_off_home):
-        return status, None
-    sleep(STILL_WAIT_S)
-    s2 = cell.act("state")
-    p2, t2 = _check_idle_sample(s2, home, check_home_target=check_home_target, target_tol=max_off_home) or (None, None)
-    if (p2 is None or _max_diff(p2, home, 5) > max_off_home or _max_diff(p2, p1) > STILL_TOL
-            or (t1 is not None and t2 is not None and _max_diff(t2, t1) > STILL_TOL)
-            or not _live_idle_ok(cell, p2, home, check_home_target=check_home_target, target_tol=max_off_home)):
-        return s2, None
-    return s2, p2
 
 
 def _pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw_spec,
@@ -136,10 +79,15 @@ def _pre_settle_home(cell, library: dict, status: dict, row: dict, log, kin, jaw
 def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks: int, dry_run: bool, log, goal: dict,
                      sim_units: bool, open_g: float, model_closed: float, closed: float, low, high, fastest: float,
                      kin, jaw_spec, resolved_tcp, authorize, max_obs_age_s: float = 0.6,
-                     pre_home: bool = False) -> dict:
+                     pre_home: bool = False, n_action: int | None = None,
+                     home_roll: float | None = None) -> dict:
     """Guarded step-rate-stretched chunk loop for full-chunk ACT checkpoints (e.g. arm_s)."""
-    from cell_policy_shape import in_jaw_zone, jaw_zone_error, open_before_close, shape_chunk
+    from cell_policy_shape import in_jaw_zone, jaw_zone_error, open_before_close, shape_chunk, wrist_roll_warning
 
+    entry_frames = _validate_entry_chunk(library, kin, jaw_spec)
+    entry_pose = entry_frames[-1] if entry_frames else None
+    entry_ran = False
+    dry_seed_state = list(entry_pose) if (dry_run and entry_pose is not None) else None
     held, released, prefix, moved, loaded_prefix, aborted, park_safe, hold_needed, safety_done = False, False, "", False, "", False, False, False, False
 
     def _hold_and_log(*rows: dict) -> None:
@@ -206,6 +154,9 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                                      pre_logs=({**row, "refused": msg},))
         ok, hold, err_msg = _valid_state(status)
         if not ok:
+            if (fallback := dry_no_runner_fallback(status, dry_run, dry_seed_state, library)) is not None:
+                hold_needed = prev_hold
+                return {"ok": True, "state": fallback, "holding": False}, [fallback], None
             fault = isinstance(status, dict) and bool(status.get("fault"))
             return None, None, _fail("fault" if fault else "refused", n, err_msg, fault=hold or hold_on_fail,
                                      pre_logs=({**row, "refused": err_msg, **(_ack_status(status) if isinstance(status, dict) else {})},))
@@ -220,20 +171,48 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
     try:
         for n in range(max_chunks):
             row, aborted = {"chunk": n, "dry_run": dry_run}, False
-            if n == 0 and pre_home and not dry_run:
+            if n == 0 and not dry_run and (pre_home or entry_frames is not None):
                 status, live_poses, err = _checked_state(row, n, catch_io=True, hold_on_fail=True)
                 if err is not None:
                     return err
-                status, pre_err = _pre_settle_home(cell, library, status, row, log, kin, jaw_spec)
-                if pre_err is not None:
-                    return pre_err
-                live_poses = [status["state"], *([status["target"]] if status.get("target") is not None else [])]
+                if pre_home:
+                    status, pre_err = _pre_settle_home(cell, library, status, row, log, kin, jaw_spec)
+                    if pre_err is not None:
+                        return pre_err
+                else:
+                    home_frames = (library.get("chunks") or {}).get("home") if isinstance(library, dict) else None
+                    home_pose = _pose6(home_frames[-1]) if isinstance(home_frames, (list, tuple)) and home_frames else None
+                    if (home_pose is None or not _empty_gripper_ok(status, HOLD_CURRENT_LIMIT_MA, now=time.time())
+                            or _max_diff(status["state"], home_pose, 5) > PRE_SETTLE_TOL):
+                        msg = "START_POSE_OFF_HOME: arm off home; run home stage first"
+                        return _fail("refused", n, msg, fault=True, pre_logs=({**row, "refused": msg},))
+                if entry_frames is not None:
+                    hold_needed = True
+                    _ran_e, entry_prefix, entry_err = _run_entry_chunk(
+                        cell, library, work, status, authorize, log,
+                        jaw_gate=({**jaw_spec, "tcp_x_m": resolved_tcp} if jaw_spec is not None else None),
+                    )
+                    if entry_err is not None:
+                        aborted, safety_done = True, True
+                        return entry_err
+                    moved, loaded_prefix, prefix, park_safe, hold_needed, entry_ran = True, entry_prefix, entry_prefix, True, False, True
+                    status, live_poses, err = _checked_state(row, n, catch_io=True, hold_on_fail=True)
+                    if err is not None:
+                        return err
+                else:
+                    live_poses = [status["state"], *([status["target"]] if status.get("target") is not None else [])]
             try:
-                if not (n == 0 and pre_home and not dry_run):
+                if not (n == 0 and not dry_run and (pre_home or entry_frames is not None)):
                     status, live_poses, err = _checked_state(row, n, catch_io=not dry_run, hold_on_fail=not dry_run)
                     if err is not None:
                         return err
-                state = np.asarray(status["state"], dtype=float)
+                if dry_seed_state is not None:
+                    if n == 0:
+                        row["entry_pose"] = list(entry_pose)
+                    state = np.asarray(dry_seed_state, dtype=float)
+                    live_poses = [list(dry_seed_state)]
+                else:
+                    state = np.asarray(status["state"], dtype=float)
                 frames, oldest_stamp, state_now = {}, None, time.time()
                 if "t" in status:
                     if _finite_stamp(status["t"], state_now):
@@ -252,7 +231,15 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                 else:
                     frames = {view: cell.frame(view) for view in shadow.image_views}
                 obs, meta = shadow.inputs(state.tolist() if sim_units else (state + off).tolist(), frames, **goal)
-                converted = np.asarray(shadow.infer(obs).chunk, dtype=float) - off
+                raw_chunk = infer_chunk(shadow, obs, state, sim_units)
+                converted = raw_chunk if sim_units else raw_chunk - off
+                if n_action is not None or sim_units:
+                    steps = _step_count(shadow, n_action) if getattr(shadow, "chunk_size", None) is not None else (n_action or len(converted))
+                    converted = converted[:steps]
+                if home_roll is not None and (roll_warn := wrist_roll_warning(converted, home_roll, roll_range=(low[4], high[4]))):
+                    row["wrist_roll_warning"] = roll_warn
+                    if not dry_run:
+                        return _legacy_jaw_hold(row, n, roll_warn)
                 proposed = converted if held else open_before_close(converted, open_g, model_closed)
                 row = {**row, "state": state.tolist(), "meta": meta, "proposed_first": proposed[0].tolist(),
                        "proposed_last": proposed[-1].tolist(), **({"converted_chunk": converted.tolist()} if dry_run else {})}
@@ -267,15 +254,21 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                     row["jaw_warning"] = jaw_warn
                     if not dry_run:
                         return _legacy_jaw_hold(row, n, jaw_warn)
+                if home_roll is not None and (roll_warn := wrist_roll_warning(frames_cell, home_roll, roll_range=(low[4], high[4]))):
+                    row["wrist_roll_warning"] = roll_warn
+                    if not dry_run:
+                        return _legacy_jaw_hold(row, n, roll_warn)
                 row["frames"] = len(frames_cell)
                 if dry_run:
+                    if dry_seed_state is not None:
+                        dry_seed_state = list(frames_cell[-1])
                     log({**row, "envelope": {"ok": True}})
                     continue
                 lib = {**library, "chunks": {**library["chunks"], "policy": frames_cell},
                        **({"jaw_gate": {**jaw_spec, "tcp_x_m": resolved_tcp}} if jaw_spec is not None else {})}
                 (path := work / f"policy-lib-{time.time_ns()}-{n}.json").write_text(json.dumps(lib), encoding="utf-8")
                 prefix = ""
-                if authorize is not None or (n == 0 and pre_home):
+                if authorize is not None or (n == 0 and (pre_home or entry_ran)):
                     auth_status, auth_poses, auth_fail = _checked_state(row, n, catch_io=True, hold_on_fail=True)
                     if auth_fail is not None:
                         return auth_fail
@@ -289,13 +282,13 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                             aborted = True
                             _hold_and_log({**row, "refused": reason, **_ack_status(auth_status)})
                             return {"result": "refused", "at": n, "reason": reason, "parked": False}
-                        if pre_home:
+                        if pre_home or entry_ran:
                             home_frames = (library.get("chunks") or {}).get("home") if isinstance(library, dict) else None
-                            home = _pose6(home_frames[-1]) if isinstance(home_frames, (list, tuple)) and home_frames else None
-                            auth_chk = _check_idle_sample(auth_status, home, check_home_target=True, target_tol=PRE_SETTLE_TOL) if home is not None else None
+                            start_ref = entry_pose if entry_ran else (_pose6(home_frames[-1]) if isinstance(home_frames, (list, tuple)) and home_frames else None)
+                            auth_chk = _check_idle_sample(auth_status, start_ref, check_home_target=True, target_tol=PRE_SETTLE_TOL) if start_ref is not None else None
                             auth_pose = auth_chk[0] if auth_chk is not None else None
-                            if (home is None or auth_pose is None or _max_diff(auth_pose, home, 5) > PRE_SETTLE_TOL
-                                    or not _live_idle_ok(cell, auth_pose, home, check_home_target=True, target_tol=PRE_SETTLE_TOL)):
+                            if (start_ref is None or auth_pose is None or _max_diff(auth_pose, start_ref, 5) > PRE_SETTLE_TOL
+                                    or not _live_idle_ok(cell, auth_pose, start_ref, check_home_target=True, target_tol=PRE_SETTLE_TOL)):
                                 reason = "START_POSE_OFF_HOME: arm not stationary at home before dispatch"
                                 aborted = True
                                 _hold_and_log({**row, "refused": reason, **_ack_status(auth_status)})
@@ -307,7 +300,8 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
                             return {"result": "refused", "at": n, "reason": reason, "parked": False}
                     if authorize is not None:
                         try:
-                            assessment = authorize(lib, auth_status, ("run policy", "park"))
+                            auth_kw = {"check_home": False} if (entry_ran and getattr(authorize, "supports_check_home", False)) else {}
+                            assessment = authorize(lib, auth_status, ("run policy", "park"), **auth_kw)
                         except ValueError as error:
                             return _fail("refused", n, str(error), pre_logs=({**row, "refused": str(error)},))
                         prefix = f"checked {assessment['session_id']} {assessment['library_sha256']} "

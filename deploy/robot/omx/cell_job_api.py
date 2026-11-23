@@ -76,10 +76,13 @@ class Runner:
 
     def __init__(self, workdir: Path, jobs: dict = JOBS, lock_dir: Path | None = None, lease_dir: Path | None = None,
                  *, incident_check_fn=None, fleet_safety_check_fn=None, fleet_r_url: str | None = None,
-                 fleet_token_file: Path | None = None, ca_file: Path | None = None):
+                 fleet_token_file: Path | None = None, ca_file: Path | None = None,
+                 motor_health_dir: Path | None = None, calibration_dir: Path | None = None):
         self.workdir, self.jobs, self.out = workdir, jobs, workdir / "cell-job-api"
         self.lock_dir = lock_dir
         self.lease_dir = lease_dir or (Path.home() / ".local" / "state" / "rosy" / "arm-leases")
+        self.motor_health_dir = motor_health_dir
+        self.calibration_dir = calibration_dir
         self._lease_owner = f"cell-job-api:{os.getpid()}"
         self._incident_check_fn, self._fleet_safety_check_fn = incident_check_fn, fleet_safety_check_fn
         self._fleet_r_url, self._fleet_token_file, self._ca_file = fleet_r_url, fleet_token_file, ca_file
@@ -193,6 +196,7 @@ class Runner:
                         self.workdir, self.lease_dir, self.lock_dir,
                         session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
                         live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
+                        motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir,
                     ):
                         return {"code": 409, "error_code": "TWO_ARM_NOT_READY", "error": ready_err}
                 elif arm in AB_ARMS:
@@ -200,6 +204,7 @@ class Runner:
                         arm, self.workdir, self.lease_dir, self.lock_dir,
                         session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
                         live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
+                        motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir,
                     ):
                         return {"code": 409, "error_code": "PEER_ARM_NOT_FOLDED", "error": peer_err}
             if job.get("camera"):

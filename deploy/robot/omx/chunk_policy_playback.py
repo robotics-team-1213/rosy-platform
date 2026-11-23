@@ -1,16 +1,8 @@
 """Per-tick expiry and measured handoff for a guarded runner policy chunk."""
 import math
 
+from cell_policy_entry import finite_stamp as _finite
 from chunk_runner_guards import safe_stderr
-
-
-def _finite(v) -> float | None:
-    if isinstance(v, bool) or not isinstance(v, (int, float)):
-        return None
-    try:
-        return f if math.isfinite(f := float(v)) else None
-    except OverflowError:
-        return None
 
 
 class Handoff:
@@ -253,20 +245,22 @@ def _hold_and_report(runner, present, reason: str, timing=None, **extra) -> bool
     if (getattr(runner, "_committed_grip", None) is None and runner.target is not None
             and len(runner.target) >= 6 and not runner.holding and len(present) >= 6 and runner.target[5] < present[5]):
         runner.target[5] = present[5]
+    chunk_name = getattr(runner, "chunk", None)
     runner.policy_playback = runner.jaw_gate = runner._trailing_jaw_gate = None
     runner.hold(present, "human hold", human=True)
+    cmd = f"run {chunk_name}" if chunk_name in ("policy", "entry") else "run policy"
     try:
-        runner.report(command="run policy", ok=False, policy_stop=reason,
+        runner.report(command=cmd, ok=False, policy_stop=reason,
                       **({"timing": timing} if timing is not None else {}), present=present, **extra)
     except OSError as error:
-        safe_stderr({"command": "run policy", "policy_stop": reason, "status_write_failed": str(error)[:300]})
+        safe_stderr({"command": cmd, "policy_stop": reason, "status_write_failed": str(error)[:300]})
     return False
 
 
 def active_jaw_gate(runner, play):
     if play is not None:
         return play.jaw_gate
-    return getattr(runner, "jaw_gate", None) if runner.chunk == "policy" else (
+    return getattr(runner, "jaw_gate", None) if runner.chunk in ("policy", "entry") else (
         getattr(runner, "_trailing_jaw_gate", None) if not runner.human_hold_latched else None)
 
 

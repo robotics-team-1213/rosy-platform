@@ -96,12 +96,11 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
     assert "--dry-run" in drive_argv and "--person-at-switch" not in drive_argv
     assert drive_argv[0] == "bash"
     assert "--commissioning" not in drive_argv
-    paced_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True}, wd)
-    assert "--paced-chunks" in paced_argv
+    paced_argv = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, "n_action": 8}, wd)
+    assert "--paced-chunks" in paced_argv and "--n-action" in paced_argv
     for bad_paced in (
         {"mode": "hybrid", "goal_site": "yard:r3-s2-t1"},
         {"mode": "taught", "goal_site": "yard:r3-s2-t1"},
-        {"n_action": 8},
     ):
         with pytest.raises(ValueError, match="paced_chunks"):
             api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "paced_chunks": True, **bad_paced}, wd)
@@ -147,8 +146,20 @@ def test_remap_and_policy_drive_argv_validation(tmp_path):
 
     with pytest.raises(ValueError, match="D-1024"):
         api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "proposer": "op_b"}, wd)
+    assert api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "max_chunks": 60}, wd)
     with pytest.raises(ValueError, match="max_chunks"):
-        api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "max_chunks": 7}, wd)
+        api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "max_chunks": 61}, wd)
+    remote_lo = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "arm": "arm_b", "endpoint_url": "http://127.0.0.1:8790"}, wd)
+    assert "--endpoint-url" in remote_lo and remote_lo[remote_lo.index("--arm-id") + 1] == "arm_b"
+    remote_tok = api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "endpoint_url": "http://100.108.76.123:8790", "token_file": "tok", "timeout_s": 0.5}, wd)
+    assert "--token-file" in remote_tok and remote_tok[remote_tok.index("--timeout-s") + 1] == "0.5"
+    for bad_ep in (
+        {"endpoint_url": "http://100.108.76.123:8790"},
+        {"token_file": "tok"},
+        {"endpoint_url": "http://127.0.0.1:8790", "mode": "taught", "goal_site": "yard:r3-s2-t1"},
+    ):
+        with pytest.raises(ValueError):
+            api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, **bad_ep}, wd)
     with pytest.raises(ValueError, match="safe path"):
         api.build_argv(api.JOBS["cell_policy_drive"], {**base_policy, "policy_root": "../secret"}, wd)
 
@@ -347,6 +358,7 @@ def test_check_arm_incident_hold_supports_standalone_cell_api_layout(tmp_path):
     for name in (
         "cell_decisions.py",
         "cell_job_guards.py",
+        "cell_job_peer_health.py",
         "cell_params.py",
         "joint_push.py",
         "joint_tune_lock.py",

@@ -1016,3 +1016,45 @@ def test_remote_policy_shadow_reuses_keepalive_connection_caches_ip_and_verifies
     finally:
         srv_obj.shutdown()
         srv_obj.server_close()
+
+
+def test_two_arm_single_row_library_and_worker_setup_exception(tmp_path):
+    from omx_adapter.chunk_library import NAMES as OMX_NAMES, SCHEMA as OMX_SCHEMA
+
+    home_real = [0.0, -58.0, 51.0, 50.0, 0.0, 49.0]
+    kins_real = {"a": PlanarKin(), "b": PlanarKin()}
+    rigids_x = {"a": np.array([0.0, -0.17, 0.0]), "b": np.array([0.0, 0.17, 0.0])}
+    tips_zero = {"a": 0.0, "b": 0.0}
+    auths = {a: (lambda *_x: {"session_id": "s", "library_sha256": "h" * 64}) for a in ("a", "b")}
+    lib_1 = {"schema": OMX_SCHEMA, "names": OMX_NAMES, "fps": 30, "gripper_closed": 49.0, "chunks": {"home": [home_real]}}
+
+    class _Cell:
+        def act(self, cmd):
+            base = cmd.split(" ", 3)[-1] if cmd.startswith("checked ") else cmd
+            return {"ok": True, "settled": True, "state": list(home_real), "command": base, "holding": False,
+                    **({"human_hold_latched": True, "torque_hold_commanded": True} if base == "human-hold" else {})}
+
+        def frame_receipt(self, _v, **_kw):
+            return {"image": np.zeros((4, 4, 3), np.uint8), "source_stamp": time.time()}
+
+    class _Shadow:
+        image_views, sim_rule = {"top": (4, 4), "wrist": (4, 4)}, None
+        inputs = staticmethod(lambda _s, _f, goal=None: ({}, {}))
+        infer = staticmethod(lambda _o, state=None: SimpleNamespace(chunk=[home_real] * 2, rtt_s=0.01))
+
+    res_ok = pol_mod.run_two_arm_policy(
+        {"a": _Cell(), "b": _Cell()}, {"a": _Shadow(), "b": _Shadow()}, {"a": lib_1, "b": lib_1},
+        guard_mod.TwoArmChunkGuard(kins_real, rigids_x, tips_zero, margin_m=0.02, min_z_m=-0.05),
+        {"src": "temp_a:r1-s1-t1", "dst": "temp_a:r2-s1-t1"}, {"src": "temp_b:r1-s1-t1", "dst": "temp_b:r2-s1-t1"},
+        tmp_path / "single_row", max_chunks=1, dry_run=True, authorizers=auths,
+    )
+    assert res_ok["result"] == "dry_run" and res_ok["arms"]["b"]["outcome"] == "dry_run"
+
+    bad_b = {**lib_1, "chunks": {"home": [[0.0, -58.0, 51.0, 50.0, float("nan"), 49.0]]}}
+    res_bad = pol_mod.run_two_arm_policy(
+        {"a": _Cell(), "b": _Cell()}, {"a": _Shadow(), "b": _Shadow()}, {"a": lib_1, "b": bad_b},
+        guard_mod.TwoArmChunkGuard(kins_real, rigids_x, tips_zero, margin_m=0.02, min_z_m=-0.05),
+        {"src": "temp_a:r1-s1-t1", "dst": "temp_a:r2-s1-t1"}, {"src": "temp_b:r1-s1-t1", "dst": "temp_b:r2-s1-t1"},
+        tmp_path / "bad_setup", max_chunks=1, dry_run=False, authorizers=auths,
+    )
+    assert res_bad["result"] == "refused" and "b" in res_bad["arms"] and "b:setup:" in (res_bad["stopped_reason"] or "")
