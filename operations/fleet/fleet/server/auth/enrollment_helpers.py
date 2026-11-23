@@ -114,10 +114,13 @@ class EnrolledRobotClient(HttpRobotClient):
     async def _socket_admission(self, address: str, port: int) -> None:
         if self._tls_identity is not None:
             from urllib.parse import urlsplit
+            from fleet.swarm.transport_helpers import check_response
             host = urlsplit(self._ep.base_url).hostname
-            await self._tls_identity.identity(httpx.URL(f"https://{address}:{port}"),
-                                              {"sni_hostname": host, "timeout": {
-                                                  "connect": 3.0, "read": 5.0, "write": 5.0, "pool": 5.0}})
+            limited = await self._tls_identity.identity(httpx.URL(f"https://{address}:{port}"),
+                                                        {"sni_hostname": host, "timeout": {
+                                                            "connect": 3.0, "read": 5.0, "write": 5.0, "pool": 5.0}})
+            if limited is not None:
+                check_response(self.robot_id, limited)
         self._refuse_socket()
 
     def _socket_auth_admission(self) -> None:

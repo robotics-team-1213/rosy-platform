@@ -165,8 +165,8 @@ def test_identity_rate_limit_defers_probes_and_requires_fresh_proof(tmp_path, mo
             for now, remaining in [(100.0, 3), (102.0, 1)]:
                 with pytest.raises(RobotApiError) as refused:
                     await client.state()
-                assert (refused.value.status, refused.value.code, refused.value.detail) == (
-                    429, 'RATE_LIMITED', {'retry_after_s': remaining})
+                assert (refused.value.status, refused.value.code) == (429, 'RATE_LIMITED')
+                assert refused.value.detail['retry_after_s'] == remaining
             assert len(calls) == 1
             now = 103.0
             identity['receiver_id'] = 'rosy_other'

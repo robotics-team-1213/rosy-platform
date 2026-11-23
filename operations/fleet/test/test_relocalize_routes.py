@@ -8,6 +8,7 @@ import math
 import time
 from hashlib import sha256
 
+import pytest
 from fastapi.testclient import TestClient
 
 from core_common.protocol.localization import CandidateReport
@@ -18,6 +19,7 @@ from fleet.server.console import FleetConsole
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
+from fleet.swarm.api.ports import RobotApiError
 
 OPERATOR, NAMED, VIEWER = "operator-secret", "named-secret", "viewer-secret"
 
@@ -189,3 +191,21 @@ def test_confirm_without_a_candidate_report_is_refused(tmp_path):
         reply = client.post("/api/fleet/robots/r1/localization/confirm",
                             json={"candidate_id": 0}, headers={"Authorization": f"Bearer {NAMED}"})
         assert reply.status_code == 409 and reply.json()["detail"]["code"] == "NO_CANDIDATES"
+
+
+@pytest.mark.parametrize("method", ["localization_candidates", "localization_decision"])
+def test_confirm_reports_receiver_rate_limit(tmp_path, monkeypatch, method):
+    app, robot = _app(tmp_path)
+
+    async def limited(*args):
+        raise RobotApiError("r1", 429, "RATE_LIMITED", "retry later", {"retry_after_s": 15})
+
+    monkeypatch.setattr(robot, method, limited)
+    with TestClient(app) as client:
+        reply = client.post("/api/fleet/robots/r1/localization/confirm",
+                            json={"candidate_id": 0}, headers={"Authorization": f"Bearer {NAMED}"})
+    assert reply.status_code == 429
+    assert reply.headers["Retry-After"] == "15"
+    assert reply.json()["detail"]["code"] == "RATE_LIMITED"
+    assert reply.json()["detail"]["retry_after_s"] == 15
+    assert not _events(app, "localization_confirm")
