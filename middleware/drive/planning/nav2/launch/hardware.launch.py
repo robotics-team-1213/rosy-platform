@@ -21,6 +21,7 @@ from launch.launch_description_sources import (
     PythonLaunchDescriptionSource,
 )
 from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
 from navigation.footprint_profile import load_footprint_profile
 from navigation.params_rewrite import write_prefixed_nav2_params
@@ -99,6 +100,7 @@ def _include_nav2(context, *args, **kwargs):
             "use_sim_time": LaunchConfiguration("use_sim_time").perform(context),
             "map": map_yaml,
             "params_file": rewritten_nav,
+            "navigation_autostart": "False",
             # Standalone nodes are the device-verified path: on this Jazzy build
             # load_composable_node entries are silently skipped / lose the
             # namespace (2026-11-03 solution doc), so composed Nav2 never runs.
@@ -128,6 +130,14 @@ def _include_nav2(context, *args, **kwargs):
         control_share = get_package_share_directory("control")
         return [
             nav2_include,
+            Node(
+                package="navigation",
+                executable="start_after_tf",
+                namespace=namespace,
+                output="screen",
+                parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+                arguments=[rewritten_nav],
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     os.path.join(control_share, "launch", "loc_assist.launch.py")

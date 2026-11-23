@@ -9,6 +9,10 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 ament_python_install_package(${PROJECT_NAME})
+install(PROGRAMS navigation/start_after_tf.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME start_after_tf
+)
 option(ROSY_NATIVE_MAP_READBACK "Build pinned standalone native map readback (D-783)" OFF)
 if(ROSY_NATIVE_MAP_READBACK)
   find_package(pluginlib REQUIRED)

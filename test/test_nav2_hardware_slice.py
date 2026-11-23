@@ -1,6 +1,7 @@
 """Nav2 hardware-slice contracts (D-2, D-4, composition, packaging)."""
 
 import sys
+from xml.etree import ElementTree
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,64 @@ def test_hardware_launch_composes_bringup_and_imports_nav_policy():
     assert "sys.path.insert" not in launch
     assert "mapping_bringup_launch.xml" in launch
     assert "nav2_web_server" not in launch
+
+
+def test_localization_hardware_defers_only_navigation_lifecycle():
+    hardware = (NAV_LAUNCH / "hardware.launch.py").read_text(encoding="utf-8")
+    localization, slam = hardware.split('launch_file = "mapping_bringup_launch.xml"', 1)
+    assert '"navigation_autostart": "False"' in localization
+    assert '"navigation_autostart": "False"' not in slam
+    assert 'executable="start_after_tf"' in hardware
+    root = ElementTree.parse(NAV_LAUNCH / "bringup_launch.xml")
+    assert root.find("./arg[@name='navigation_autostart']").get("default") == "$(var autostart)"
+    for launch_file, expected in (("localization_launch.xml", "$(var autostart)"),
+                                  ("navigation_launch.xml", "$(var navigation_autostart)")):
+        include = next(node for node in root.findall(".//include") if node.get("file").endswith(launch_file))
+        assert include.find("arg[@name='autostart']").get("value") == expected
+
+
+def test_navigation_startup_waits_for_both_costmaps_and_manager():
+    from unittest.mock import Mock
+
+    from navigation.start_after_tf import request_startup
+
+    buffer = Mock()
+    client = Mock()
+    request, latest = object(), object()
+    frames = [("map", "rosy_09/base_footprint"), ("rosy_09/odom", "rosy_09/base_footprint")]
+    client.service_is_ready.return_value = False
+    assert request_startup(buffer, client, request, frames, latest) is None
+    client.service_is_ready.return_value = True
+    buffer.can_transform.side_effect = [True, False]
+    assert request_startup(buffer, client, request, frames, latest) is None
+    client.call_async.assert_not_called()
+    buffer.can_transform.side_effect = [True, True]
+    assert request_startup(buffer, client, request, frames, latest) is client.call_async.return_value
+    client.call_async.assert_called_once_with(request)
+
+
+@pytest.mark.parametrize("namespace", ["", "rosy_09"])
+def test_startup_frames_match_hardware_costmap_parameters(tmp_path, namespace):
+    from navigation.params_rewrite import write_prefixed_nav2_params
+    from navigation.start_after_tf import costmap_frames
+
+    params = write_prefixed_nav2_params(NAV_PARAMS, namespace, directory=tmp_path)
+    prefix = f"{namespace}/" if namespace else ""
+    assert costmap_frames(params, f"/{namespace}") == [
+        ("map", prefix + "base_footprint"),
+        (prefix + "odom", prefix + "base_footprint"),
+    ]
+
+
+def test_startup_frames_read_flat_fully_qualified_costmap_parameters(tmp_path):
+    from navigation.start_after_tf import costmap_frames
+
+    params = tmp_path / "nav2.yaml"
+    params.write_text(yaml.safe_dump({
+        f"/pinky/{name}/{name}": {"ros__parameters": {"global_frame": frame, "robot_base_frame": "pinky/base"}}
+        for name, frame in (("global_costmap", "map"), ("local_costmap", "pinky/odom"))
+    }), encoding="utf-8")
+    assert costmap_frames(params, "/pinky") == [("map", "pinky/base"), ("pinky/odom", "pinky/base")]
 
 
 def test_hardware_io_mounts_a_host_site_map_directory():
@@ -366,6 +425,9 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
     launch_srcs.PythonLaunchDescriptionSource = _Source
     launch_subs = types.ModuleType("launch.substitutions")
     launch_subs.LaunchConfiguration = _LaunchCfg
+    launch_ros = types.ModuleType("launch_ros")
+    ros_actions = types.ModuleType("launch_ros.actions")
+    ros_actions.Node = types.SimpleNamespace
 
     for name, mod in {
         "ament_index_python": ament,
@@ -375,6 +437,8 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         "launch.conditions": launch_conds,
         "launch.launch_description_sources": launch_srcs,
         "launch.substitutions": launch_subs,
+        "launch_ros": launch_ros,
+        "launch_ros.actions": ros_actions,
     }.items():
         monkeypatch.setitem(sys.modules, name, mod)
 
@@ -424,12 +488,14 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         "mapper_params_file": str(pkg_dir / "params" / "mapper_params.yaml"),
     }
     loc_actions = hw._include_nav2({**base_ctx, "navigation_backend": "localization"})
-    assert [Path(a.source.path).name for a in loc_actions] == [
-        "bringup_launch.xml",
-        "loc_assist.launch.py",
-    ]
-    assert isinstance(loc_actions[1].condition, _IfCond)
-    assert loc_actions[1].condition.predicate.name == "enable_loc_assist"
+    bringup, startup, loc_assist = loc_actions
+    assert Path(bringup.source.path).name == "bringup_launch.xml"
+    assert bringup.launch_arguments["navigation_autostart"] == "False"
+    assert (startup.package, startup.executable, startup.namespace) == ("navigation", "start_after_tf", "pinky1")
+    assert startup.arguments == [bringup.launch_arguments["params_file"]]
+    assert Path(loc_assist.source.path).name == "loc_assist.launch.py"
+    assert isinstance(loc_assist.condition, _IfCond)
+    assert loc_assist.condition.predicate.name == "enable_loc_assist"
 
     slam_actions = hw._include_nav2({**base_ctx, "navigation_backend": "slam"})
     assert [Path(a.source.path).name for a in slam_actions] == [
