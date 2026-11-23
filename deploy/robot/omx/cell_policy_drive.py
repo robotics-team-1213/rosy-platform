@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -225,6 +226,14 @@ def main(argv=None) -> int:
             parser.error(str(error))
     else:
         source_kind = "policy" if args.mode != "taught" else "scripted_teacher"
+    if not args.dry_run and args.mode != "taught" and not args.endpoint_url:
+        for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+            os.environ.setdefault(var, "2")
+        if hasattr(os, "nice"):
+            try:
+                os.nice(10)
+            except OSError:
+                pass
     shadow = open_policy_shadow(args, config, parser, lrs)
     try:
         destination = mapped_slot = None

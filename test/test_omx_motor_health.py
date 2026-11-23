@@ -307,3 +307,24 @@ def test_sample_uses_batch_sync_read_on_real_dynamixel_bus(tmp_path):
     assert sync_calls == ['Present_Temperature', 'Present_Input_Voltage', 'Hardware_Error_Status', 'Torque_Enable']
     # All 20 per-motor health reads across the 5 body joints use 4 sync_read packets instead of 20 unicast reads
     assert len(arm.follower.reads) - before_reads == 0
+
+
+def test_sample_throttles_snapshot_publish_to_cadence_and_warning_changes(tmp_path, monkeypatch):
+    monitor = monitor_type()(tmp_path / 'health.jsonl')
+    clock = [10.0]
+    arm = motion()
+    arm.clock = lambda: clock[0]
+    monitor.admit(arm)
+    publishes = []
+    monkeypatch.setattr(monitor, 'publish', lambda: publishes.append(len(rows(monitor.path))))
+    cur = dict.fromkeys(NAMES, 2028)
+    quiet = dict.fromkeys(NAMES, 0)
+    warn = {**quiet, 'shoulder_lift': -391}
+
+    for ts, pwm in ((10.0, quiet), (10.25, quiet), (10.50, warn), (10.75, warn), (11.10, warn)):
+        clock[0] = ts
+        monitor.sample(arm, cur, pwm, ts)
+
+    assert len([r for r in rows(monitor.path) if r['event'] == 'sample']) == 5
+    # Published on 1st sample (10.0 -> 2 records), warning transition (10.50 -> 4), and >=0.5 s later (11.10 -> 6).
+    assert publishes == [2, 4, 6]

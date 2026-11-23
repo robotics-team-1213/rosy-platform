@@ -1443,3 +1443,42 @@ def test_remote_endpoint_cli_wiring_and_validation(tmp_path, monkeypatch):
             "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--endpoint-url", "http://10.0.0.2:8790",
             "--token-file", str(tok), "--goal-slot", "4", "--operator", "op_b", "--paced-chunks", "--max-chunks", "1", "--dry-run",
         ])
+
+
+def test_live_local_cpu_act_sets_nice_and_thread_env(tmp_path, monkeypatch):
+    import cell_pipeline
+    import cell_policy_handoff
+    import os
+
+    cal_path = tmp_path / "cal.json"
+    cal_path.write_text(json.dumps(cal()))
+    cfg = tmp_path / "cell.json"
+    cfg.write_text(json.dumps({"arm_id": "arm_b", "io": "unused", "cameras": {}, "work_dir": str(tmp_path)}))
+    lib_path = write_lib(tmp_path)
+    pdir = tmp_path / "m"
+    pdir.mkdir()
+
+    class FakeShadow:
+        image_views = {"top": (4, 4)}
+        goal_size = 10
+        sim_rule = {"held_30mm": 53.4, "gap_mm_per_unit": 5.0}
+        chunk_size = 16
+        n_action_steps = 4
+        arm_id = "arm_b"
+        files = {}
+
+    nice_calls = []
+    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr(drive.os, "nice", lambda inc: nice_calls.append(inc), raising=False)
+    monkeypatch.setattr(drive, "open_policy_shadow", lambda *a, **kw: FakeShadow())
+    monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_: Cell())
+    monkeypatch.setattr(cell_policy_handoff, "Authorization", lambda _cfg: None)
+    monkeypatch.setattr(drive, "run_episode", lambda *a, **kw: {"result": "chunks_done", "parked": True, "chunks": 1})
+
+    common = ["--config", str(cfg), "--library", str(lib_path), "--policy-root", str(pdir),
+              "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--goal-slot", "4",
+              "--operator", "op_b", "--paced-chunks", "--max-chunks", "1"]
+    assert drive.main([*common, "--dry-run"]) == 0 and nice_calls == []
+    assert drive.main([*common, "--person-at-switch"]) == 0 and nice_calls == [10]
+    assert all(os.environ[v] == "2" for v in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"))
