@@ -166,5 +166,22 @@ def test_pull_upload_push_and_verify_loc_cli(tmp_path):
 
         stub.activation_phase = "ROLLED_BACK"
         assert fme.main(["--fleet-url", url, "--token", "t", "push", "--robot", "rosy_46", "--activate"]) == 2
+
+        stub.state_payload = {
+            "robots": [
+                {
+                    "robot_id": "rosy_46",
+                    "online": True,
+                    "state": {"map_grid_id": grid_id, "localization": {"state": "LOCALIZED", "pose_frame": "map"}},
+                },
+                {
+                    "robot_id": "rosy_45",
+                    "online": True,
+                    "state": {"map_grid_id": grid_id, "localization": {"state": "LOCALIZED", "pose_frame": "map"}},
+                },
+            ]
+        }
+        assert fme.main(["--fleet-url", url, "--token", "t", "verify-loc",
+                         "--robot", "rosy_46", "--robot", "rosy_45", "--wait-s", "0.5"]) == 0
     finally:
         server.shutdown()

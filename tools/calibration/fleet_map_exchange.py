@@ -170,8 +170,10 @@ def cmd_verify_loc(client: FleetClient, args: argparse.Namespace) -> dict[str, A
         all_ok = True
         for rid in args.robot:
             r = entries.get(rid) or {}
-            loc = r.get("localization") if isinstance(r.get("localization"), dict) else {}
-            grid_id = r.get("map_grid_id")
+            st = r.get("state") if isinstance(r.get("state"), dict) else {}
+            raw_loc = r.get("localization") if isinstance(r.get("localization"), dict) else st.get("localization")
+            loc = raw_loc if isinstance(raw_loc, dict) else {}
+            grid_id = r.get("map_grid_id") if r.get("map_grid_id") is not None else st.get("map_grid_id")
             online = bool(r.get("online", True)) if r else False
             matched = (
                 online
