@@ -104,10 +104,54 @@ class FakeCell:
     def checked(self, cmd: str, auth):
         return self.act(f"checked {auth['session_id']} {auth['library_sha256']} {cmd}")
 
-    def frame_receipt(self, view: str, previous=None):
+    def frame_receipt(self, view: str, previous=None, *, max_age_s=2.0, timeout_s=10.0):
         self._seq += 1
         img = np.zeros((24, 32, 3), dtype=np.uint8)
         return {"camera": view, "image": img, "source_seq": self._seq, "source_stamp": time.time()}
+
+
+def test_camera_reads_share_state_and_oldest_frame_budget(monkeypatch):
+    t = 10.0
+    calls = []
+    monkeypatch.setattr(pol_mod, "time", SimpleNamespace(monotonic=lambda: t, time=lambda: t + 100.0))
+
+    def frame(role, *, previous, max_age_s, timeout_s):
+        nonlocal t
+        calls.append((max_age_s, timeout_s))
+        t += 0.1
+        return {"image": role, "source_stamp": 109.75 if role == "top" else t + 100.0}
+
+    views = dict.fromkeys(("top", "side", "wrist"))
+    images, observed = pol_mod._capture_frames(
+        SimpleNamespace(frame_receipt=frame), views, dry_run=False, max_age_s=0.6,
+        state_mono=9.9, prev_receipts={},
+    )
+    assert images == {role: role for role in views}
+    assert observed == pytest.approx(9.75)
+    assert [call[0] for call in calls] == [0.6] * 3
+    assert [call[1] for call in calls] == pytest.approx([0.5, 0.25, 0.15])
+
+
+@pytest.mark.parametrize(("elapsed", "expected_calls"), [(0.6, ["top"]), (0.0, [])])
+def test_camera_expiry_stops_capture_before_inference(monkeypatch, elapsed, expected_calls):
+    t = 10.0
+    calls = []
+    monkeypatch.setattr(pol_mod, "time", SimpleNamespace(monotonic=lambda: t, time=lambda: t + 100.0))
+
+    def frame(role, *, previous, max_age_s, timeout_s):
+        nonlocal t
+        calls.append(role)
+        t += elapsed
+        return {"image": role, "source_stamp": t + 100.0}
+
+    views = dict.fromkeys(("top", "side", "wrist"))
+    state_mono = 10.0 if elapsed else 9.0
+    with pytest.raises(ValueError, match="stale policy observation .* camera top"):
+        pol_mod._capture_frames(
+            SimpleNamespace(frame_receipt=frame), views, dry_run=False, max_age_s=0.6,
+            state_mono=state_mono, prev_receipts={},
+        )
+    assert calls == expected_calls
 
 
 def _base_lib(home=(0.0, -40.0, 40.0, 40.0, 0.0, 50.0)):

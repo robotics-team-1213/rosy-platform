@@ -83,22 +83,29 @@ def _read_state(cell: Any, *, dry_run: bool, max_age_s: float, label: str = "sta
 
 
 def _capture_frames(
-    cell: Any, views: Mapping[str, tuple[int, int]], *, dry_run: bool, max_age_s: float, prev_receipts: dict[str, dict[str, Any]],
+    cell: Any, views: Mapping[str, tuple[int, int]], *, dry_run: bool, max_age_s: float,
+    state_mono: float, prev_receipts: dict[str, dict[str, Any]],
 ) -> tuple[dict[str, Any], float]:
     frames: dict[str, Any] = {}
-    now_wall, now_mono = time.time(), time.monotonic()
-    obs_mono = now_mono
+    obs_mono = state_mono
     use_receipt = hasattr(cell, "frame_receipt")
     for role in views:
+        remaining = obs_mono + max_age_s - time.monotonic()
+        if not dry_run and remaining <= 0:
+            raise ValueError(f"stale policy observation before camera {role}")
         if use_receipt:
-            rec = cell.frame_receipt(role, previous=prev_receipts.get(role))
-            prev_receipts[role] = rec
+            limits = {} if dry_run else {"max_age_s": max_age_s, "timeout_s": remaining}
+            rec = cell.frame_receipt(role, previous=prev_receipts.get(role), **limits)
             if not dry_run:
+                now_wall, now_mono = time.time(), time.monotonic()
                 stamp = _check_stamp(rec.get("source_stamp"), now_wall, max_age_s, f"camera {role}")
                 obs_mono = min(obs_mono, now_mono - max(0.0, now_wall - stamp))
+            prev_receipts[role] = rec
             frames[role] = rec["image"]
         else:
             frames[role] = cell.frame(role)
+        if not dry_run and time.monotonic() >= obs_mono + max_age_s:
+            raise ValueError(f"stale policy observation after camera {role}")
     return frames, obs_mono
 
 
@@ -152,7 +159,7 @@ def run_two_arm_policy(
     """Run supervised concurrent per-arm 6-DoF remote policy loops guarded per chunk."""
     if set(cells) != set(ARMS) or set(shadows) != set(ARMS) or set(libraries) != set(ARMS):
         raise ValueError("cells, shadows, and libraries must specify keys 'a' and 'b'")
-    if max_chunks < 1 or max_obs_age_s <= 0.0:
+    if max_chunks < 1 or not math.isfinite(max_obs_age_s) or max_obs_age_s <= 0.0:
         raise ValueError("max_chunks >= 1 and max_obs_age_s > 0 required")
     if not dry_run and (authorizers is None or set(authorizers) != set(ARMS) or not all(callable(authorizers[k]) for k in ARMS)):
         raise ValueError("live execution requires per-arm D-911 authorizers")
@@ -232,10 +239,10 @@ def run_two_arm_policy(
             try:
                 st, vec, st_mono = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:pre")
                 guard.update_pose(arm, vec, holding=bool(st.get("holding", False)))
-                frames, cam_mono = _capture_frames(
-                    cell, shadow.image_views, dry_run=dry_run, max_age_s=max_obs_age_s, prev_receipts=prev_receipts,
+                frames, obs_mono = _capture_frames(
+                    cell, shadow.image_views, dry_run=dry_run, max_age_s=max_obs_age_s,
+                    state_mono=st_mono, prev_receipts=prev_receipts,
                 )
-                obs_mono = min(st_mono, cam_mono)
                 model_state = vec if sim_units else [vec[i] + float(offset[i]) for i in range(6)]
                 obs, meta = shadow.inputs(model_state, frames, goal=goal)
                 inferred = shadow.infer(obs, state=vec)
