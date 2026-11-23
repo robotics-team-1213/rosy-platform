@@ -336,6 +336,51 @@ def test_resolve_goal_site_supports_standalone_cell_api_layout(tmp_path):
     assert "ship-h1r0-l0" in out
 
 
+def test_check_arm_incident_hold_supports_standalone_cell_api_layout(tmp_path):
+    import os
+    import shutil
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parents[1]
+    stage = tmp_path / "cell-job-api"
+    stage.mkdir()
+    for name in (
+        "cell_decisions.py",
+        "cell_job_guards.py",
+        "cell_params.py",
+        "joint_push.py",
+        "joint_tune_lock.py",
+        "omx_incident.py",
+        "omx_incident_auto.py",
+        "omx_incident_fleet.py",
+        "omx_incident_reading.py",
+        "omx_incident_reassess.py",
+        "push_replay.py",
+    ):
+        shutil.copy2(repo_root / "deploy" / "robot" / "omx" / name, stage / name)
+
+    omx_home = tmp_path / "omx-home"
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    env["ROSY_OMX_HOME"] = str(omx_home)
+
+    script_unheld = (
+        "import cell_job_guards as g; "
+        "assert g.check_arm_incident_hold('arm_a') is None"
+    )
+    subprocess.check_call([sys.executable, "-c", script_unheld], cwd=stage, env=env)
+
+    inc_dir = omx_home / "incidents"
+    inc_dir.mkdir(parents=True)
+    (inc_dir / "HOLD-arm_a.json").write_text(json.dumps({"reason": "elbow overload"}), encoding="utf-8")
+
+    script_held = (
+        "import cell_job_guards as g; "
+        "res = g.check_arm_incident_hold('arm_a'); "
+        "assert res and 'elbow overload' in res, res"
+    )
+    subprocess.check_call([sys.executable, "-c", script_held], cwd=stage, env=env)
+
+
 def test_runner_whole_cell_ab_cross_lock_and_warm_reuse(tmp_path, monkeypatch):
     wd = _make_workdir(tmp_path)
     lease_dir = tmp_path / "leases"
