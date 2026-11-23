@@ -162,6 +162,37 @@ class AutoLocateService:
             logger.exception("auto locate track failed: robot_id=%s", robot_id)
             return {"state": "UNKNOWN", "reason": "TRACK_READ_FAILED"}
 
+    def tiebreak_camera_xy(
+        self, robot_id: str, expected_map_id: Optional[str] = None,
+    ) -> Optional[tuple[float, float]]:
+        """Confirmed fresh ceiling-camera (x, y) in `expected_map_id` for mirror-twin tiebreaks."""
+        identity = getattr(self.tracking, "identity", None)
+        if identity is None:
+            return None
+        track = self._track(identity, robot_id)
+        if track.get("state") != "CONFIRMED":
+            return None
+        modes = getattr(getattr(self.map_pose, "config", None), "track_modes", ("led",))
+        if track.get("mode", "led") not in modes:
+            return None
+        site_map = expected_map_id
+        if not site_map and self.map_pose is not None:
+            active_fn = getattr(self.map_pose, "active_map_id", None)
+            site_map = active_fn() if callable(active_fn) else None
+        if not site_map or track.get("map_id") != site_map:
+            return None
+        fps_of = getattr(self.tracking, "source_fps", None)
+        source_fps = fps_of(track.get("source_id")) if fps_of is not None else None
+        max_age = auto_locate.pair_fresh_s(source_fps)
+        age_s = auto_locate._finite_float(track.get("age_s"))
+        if age_s is None or age_s < 0.0 or age_s > max_age:
+            return None
+        x = auto_locate._finite_float(track.get("x"))
+        y = auto_locate._finite_float(track.get("y"))
+        if x is None or y is None:
+            return None
+        return (x, y)
+
     def _feed_map_pose(self, now: float) -> None:
         """Each tick, sessions over or not, each robot alone. If this stops, the feed reads DEGRADED in 3 s."""
         if self.map_pose is None:

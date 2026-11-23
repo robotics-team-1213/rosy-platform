@@ -131,12 +131,16 @@ def observe_pose_from_anchors(svc, states: Mapping[str, dict], localized: Mappin
             observations.setdefault(target, []).append((("objects", rid, status.objects_stamp), observed))
 
 
-def fresh_overhead_sighting(svc, rid: str, now: float, force: bool = False) -> Optional[cues.Sighting]:
+def fresh_overhead_sighting(
+    svc, rid: str, now: float, force: bool = False, expected_map_id: Optional[str] = None,
+) -> Optional[cues.Sighting]:
     """A fresh (<= 300 ms) overhead sighting, only while the D-257 flag is on (`force`: the SLAM fallback tie-break, 2026-11-18)."""
     if not (force or svc.overhead_cue) or svc._sightings is None:
         return None
     for row in svc._sightings.snapshot().get("sightings", ()):
         if row.get("robot_id") != rid:
+            continue
+        if expected_map_id is not None and row.get("map_id") != expected_map_id:
             continue
         try:
             age = svc._wall() - float(row["captured_at"])

@@ -28,13 +28,15 @@ TTL_S = 5.0
 
 
 def twins(report: CandidateReport) -> Optional[tuple]:
-    """The two best candidates by scan fit, if they are mirror twins; else None."""
+    """The two candidates if they are mirror twins fitting at or above MIN_FIT; else None."""
     ranked = sorted(report.candidates, key=lambda c: -c.scan_fit)
-    if len(ranked) < 2:
+    if len(ranked) != 2:
         return None
     a, b = ranked[0], ranked[1]
     opposite = abs(abs(wrap(a.yaw - b.yaw)) - math.pi) <= OPPOSITE_TOL_RAD
-    if (a.scan_fit < MIN_FIT or math.dist((a.x, a.y), (b.x, b.y)) < SEPARATION_M or not opposite
+    if (not (math.isfinite(a.scan_fit) and math.isfinite(b.scan_fit))
+            or a.scan_fit < MIN_FIT or b.scan_fit < MIN_FIT
+            or math.dist((a.x, a.y), (b.x, b.y)) < SEPARATION_M or not opposite
             or a.scan_fit - b.scan_fit > TWIN_FIT_GAP):
         return None
     return a, b

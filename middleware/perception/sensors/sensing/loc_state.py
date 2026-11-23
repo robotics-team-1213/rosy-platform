@@ -24,11 +24,17 @@ from dataclasses import dataclass
 from core_common.protocol.localization import LocState
 
 from .loc_verify import FAILED, PASSED, InjectionCheck
+from .localization import wrap
 
 #: Cues that differ between a pose and its 180-degree mirror. `last_good` and
 #: `overhead` are not here: they may support a decision but never carry it.
 ASYMMETRIC_CUES = frozenset({'square', 'paint', 'peers', 'slot'})
 DECISION_TTL_S = 5.
+TWIN_SEPARATION_M = 1.0
+TWIN_OPPOSITE_TOL_RAD = math.radians(25.0)
+TWIN_FIT_GAP = 0.10
+TWIN_POSE_TOL_M = 0.05
+TWIN_POSE_TOL_RAD = 0.05
 
 
 @dataclass(frozen=True)
@@ -67,8 +73,44 @@ class LocalizationStateMachine:
         self.check, self.state = None, LocState.CANDIDATES
         return Step(self.state, ('report_candidates',))
 
+    def _is_verified_overhead_twin_tiebreak(self, candidate_index, pose, source, cue_set, evidence) -> bool:
+        """Accept overhead-only twin tiebreak iff local laser candidates form a mirror pair."""
+        if (source != 'overhead' or 'overhead' not in cue_set
+                or not isinstance(evidence, dict) or evidence.get('tiebreak') != 'twin'):
+            return False
+        if len(self.candidates) != 2:
+            return False
+        a, b = self.candidates
+        if not (isinstance(a.scan_fit, (int, float)) and isinstance(b.scan_fit, (int, float))
+                and math.isfinite(a.scan_fit) and math.isfinite(b.scan_fit)):
+            return False
+        if a.scan_fit < self.min_fit or b.scan_fit < self.min_fit:
+            return False
+        if abs(a.scan_fit - b.scan_fit) > TWIN_FIT_GAP:
+            return False
+        if math.hypot(a.x - b.x, a.y - b.y) < TWIN_SEPARATION_M:
+            return False
+        if abs(abs(wrap(a.yaw - b.yaw)) - math.pi) > TWIN_OPPOSITE_TOL_RAD:
+            return False
+        if candidate_index is not None:
+            if not 0 <= candidate_index < len(self.candidates):
+                return False
+            c = self.candidates[candidate_index]
+            target = (c.x, c.y, c.yaw)
+        else:
+            target = pose
+        if (not isinstance(target, (tuple, list)) or len(target) != 3
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                           and math.isfinite(v) for v in target)):
+            return False
+        return any(
+            math.hypot(target[0] - c.x, target[1] - c.y) <= TWIN_POSE_TOL_M
+            and abs(wrap(target[2] - c.yaw)) <= TWIN_POSE_TOL_RAD
+            for c in self.candidates
+        )
+
     def decide(self, request_id, now_s, candidate_index=None, pose=None, source='candidate',
-               cues=(), received_s=None, ttl_s=DECISION_TTL_S):
+               cues=(), received_s=None, ttl_s=DECISION_TTL_S, evidence=None):
         """A Fleet (or human) decision: a candidate index or a direct (x, y, yaw).
 
         `cues` names what carried it; `received_s` is when this robot got it
@@ -84,8 +126,11 @@ class LocalizationStateMachine:
             return self._reject('busy')
         if (candidate_index is None) == (pose is None):
             return self._reject('ambiguous_decision')
-        if source != 'human' and not ASYMMETRIC_CUES & set(cues):
-            return self._reject('no_asymmetric_cue')
+        cue_set = set(cues)
+        if source != 'human' and not ASYMMETRIC_CUES & cue_set:
+            if not self._is_verified_overhead_twin_tiebreak(
+                    candidate_index, pose, source, cue_set, evidence):
+                return self._reject('no_asymmetric_cue')
         if candidate_index is not None:
             if not 0 <= candidate_index < len(self.candidates):
                 return self._reject('bad_index')
