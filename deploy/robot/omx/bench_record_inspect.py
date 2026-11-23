@@ -11,7 +11,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
-    HANDOVER, active_handover_units, arm_connectivity, check_proc_visible, hold_other_arm_locks, inspect_config_cameras, load_registry, proc_cmdlines, proc_mounts, recorder_running, release, systemctl, write_restore_list, write_snapshot)
+    HANDOVER, active_handover_units, arm_connectivity, check_proc_visible, hold_other_arm_locks, inspect_config_cameras, load_registry, proc_cmdlines, proc_mounts, recorder_running, release, resolve_config_arm, systemctl, write_restore_list, write_snapshot)
 from bench_record_replay import recording_progress  # noqa: E402
 from bench_record_step import starting_step  # noqa: E402
 from bench_record_safety import end_verdict  # noqa: E402
@@ -337,15 +337,18 @@ class BenchInspectMixin:
         except ValueError as exc:
             reg, reg_err = None, str(exc)
         configs = pick("record-config*.json")
-        robots = {}  # config file -> its robot.id, so the page can mark which files belong to the chosen arm
-        config_meta = {}
+        caps = pick("caps*.json")
+        calibrations = sorted(str(p) for p in (Path.home() / ".cache/huggingface/lerobot/calibration").glob("*/*/*.json"))
+        arm_bindings = {arm: self._arm_binding(arm, configs, caps, calibrations) for arm in (*ARMS, BI_ARM)}
+        cfg_owner = {c: a for a in ARMS for c in arm_bindings[a]["configs"]}
+        robots, config_meta = {}, {}  # config file -> robot.id / camera inspection, mapped via cfg_owner first
         for name in configs:
             try:
                 cfg_j = json.loads((self.prep / name).read_text(encoding="utf-8-sig"))
                 r = cfg_j["robot"]
                 robots[name] = r["id"]
                 ds = cfg_j.get("dataset") if isinstance(cfg_j.get("dataset"), dict) else {}
-                cfg_arm = BI_ARM if r.get("type") == "bi_omx_follower" else inv_inst.get(r["id"], "arm_s" if "arm-s" in name else "")
+                cfg_arm = resolve_config_arm(name, r, cfg_owner, inv_inst)
                 cams, rebinds, cam_issues, _ = inspect_config_cameras(cfg_j, cfg_arm, reg, reg_err=reg_err)
                 config_meta[name] = {
                     "fps": ds.get("fps"), "use_degrees": r.get("use_degrees"), "max_relative_target": r.get("max_relative_target"),
@@ -353,15 +356,12 @@ class BenchInspectMixin:
                     "episode_time_s": ds.get("episode_time_s"), "reset_time_s": ds.get("reset_time_s"), "num_episodes": ds.get("num_episodes")}
             except (OSError, ValueError, KeyError, TypeError):
                 pass
-        caps = pick("caps*.json")
         caps_data = {}
         for cname in caps:
             try:
                 caps_data[cname] = json.loads((self.prep / cname).read_text(encoding="utf-8-sig"))
             except (OSError, ValueError):
                 pass
-        calibrations = sorted(str(p) for p in (Path.home() / ".cache/huggingface/lerobot/calibration")
-                              .glob("*/*/*.json"))
         cal_meta = {}
         for cp in calibrations:
             try:
@@ -376,7 +376,6 @@ class BenchInspectMixin:
         tasks = ["tasks/" + p.name for p in task_paths]
         task_cards = {name: _read_task_card(p) for name, p in zip(tasks, task_paths)}
         replays = sorted("replays/" + p.name for p in (self.prep / "replays").glob("*.json")) if (self.prep / "replays").is_dir() else []
-        arm_bindings = {arm: self._arm_binding(arm, configs, caps, calibrations) for arm in (*ARMS, BI_ARM)}
         recommended = {arm: self._recommend(arm, arm_bindings[arm]) for arm in (*ARMS, BI_ARM)}
         return {"configs": configs, "config_meta": config_meta, "robots": robots, "caps": caps, "caps_data": caps_data,
                 "arms": [*ARMS, BI_ARM], "instances": instances, "arm_bindings": arm_bindings,

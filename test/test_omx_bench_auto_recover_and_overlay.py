@@ -1,6 +1,7 @@
 """Tests for safety-gated auto_recover (folded-only runner release) and top-camera Pick->Place goal overlay."""
 import json
 import os
+from pathlib import Path
 import threading
 import time
 import urllib.error
@@ -198,3 +199,130 @@ def test_cell_map_camera_overlay_polygons_and_overlay_js_served(tmp_path, monkey
         srv.shutdown()
         srv.server_close()
     assert "/bench_record_overlay.js" in html
+
+
+def test_choices_shared_instance_id_routes_arm_a_and_arm_s_to_distinct_cameras(tmp_path, monkeypatch):
+    from collection_profile import digest
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    dev_dir = tmp_path / "devs"
+    dev_dir.mkdir()
+    devs = {}
+    for name in ("d435", "side-usb", "a-wrist", "s-top", "s-wrist"):
+        p = dev_dir / name
+        p.write_text("ok", encoding="utf-8")
+        devs[name] = str(p)
+    ra = {"type": "omx_follower", "id": "omx_follower_arm", "port": "/dev/ttyA", "cameras": {
+        "top": {"type": "opencv", "index_or_path": devs["d435"]},
+        "side": {"type": "opencv", "index_or_path": str(dev_dir / "missing-arm_a_jieli")},
+        "wrist": {"type": "opencv", "index_or_path": devs["a-wrist"]},
+    }}
+    rs = {"type": "omx_follower", "id": "omx_follower_arm", "port": "/dev/ttyS", "cameras": {
+        "top": {"type": "opencv", "index_or_path": devs["s-top"]},
+        "wrist": {"type": "opencv", "index_or_path": devs["s-wrist"]},
+    }}
+    (bench.prep / "record-config-arm-a.json").write_text(json.dumps({"robot": ra}), encoding="utf-8")
+    (bench.prep / "record-config-arm-s-live.json").write_text(json.dumps({"robot": rs}), encoding="utf-8")
+    for letter, arm_id, rob in (("a", "arm_a", ra), ("s", "arm_s", rs)):
+        (bench.prep / f"arm-{letter}-robot-profile.json").write_text(json.dumps({
+            "schema": "rosy.omx-cell-robot-profile.v1", "device_id": arm_id, "instance_id": "omx_follower_arm",
+            "robot_config_sha256": digest(rob), "operating_envelope_path": "envelope.json", "work_dir": "work",
+        }), encoding="utf-8")
+    reg_dir = tmp_path / "home" / ".config" / "rosy"
+    reg_dir.mkdir(parents=True, exist_ok=True)
+    (reg_dir / "omx-cameras.json").write_text(json.dumps({"cameras": [
+        {"role": "top", "enabled": True, "device": devs["d435"]},
+        {"role": "side", "enabled": True, "device": devs["side-usb"]},
+        {"role": "arm_a_wrist", "enabled": True, "device": devs["a-wrist"]},
+        {"role": "arm_s_top", "enabled": False, "device": devs["s-top"]},
+        {"role": "arm_s_wrist", "enabled": True, "device": devs["s-wrist"]},
+    ]}), encoding="utf-8")
+    ch = bench.choices()
+    meta_a = ch["config_meta"]["record-config-arm-a.json"]
+    assert meta_a["camera_issues"] == []
+    assert any("side:" in rb and devs["side-usb"] in rb for rb in meta_a["camera_rebinds"])
+    assert not any("arm_s_" in rb for rb in meta_a["camera_rebinds"])
+    assert "record-config-arm-a.json" in ch["arm_bindings"]["arm_a"]["configs"]
+
+
+def test_link_zero_episodes_ends_as_stopped_safe_while_recorded_episodes_seal(tmp_path, monkeypatch):
+    from bench_record_link import link_zero_episodes
+    from test_omx_bench_record import finished
+
+    bench, body, _, commands = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr("bench_live_preview.SHM", tmp_path / "missing")
+    ds0 = tmp_path / "ds-zero"
+    ds1 = tmp_path / "ds-one"
+
+    def make_popen(ep_count):
+        def _popen(command, cwd, **kwargs):
+            commands.append(command)
+            if command[1].endswith("record_session.py"):
+                ds = ds1 if ep_count > 0 else ds0
+                (ds / "meta").mkdir(parents=True, exist_ok=True)
+                (ds / "meta" / "info.json").write_text(json.dumps({"total_episodes": ep_count}), encoding="utf-8")
+                if ep_count > 0:
+                    (ds / "data" / "chunk-000").mkdir(parents=True, exist_ok=True)
+                    (ds / "data" / "chunk-000" / "file-000.parquet").write_bytes(b"PAR1")
+                cfg_p = Path(cwd) / "cfg.json"
+                cfg_p.write_text(json.dumps({"dataset": {"root": str(ds)}}), encoding="utf-8")
+                (Path(cwd) / "link").mkdir(exist_ok=True)
+                (Path(cwd) / "link" / "state.json").write_text(json.dumps({"state": "waiting", "episode": ep_count}), encoding="utf-8")
+                (Path(cwd) / "session.json").write_text(json.dumps({"safe_end": True, "config": str(cfg_p)}), encoding="utf-8")
+                (Path(cwd) / "clean-end.json").write_text(json.dumps({"clean": True}), encoding="utf-8")
+            return SimpleNamespace(wait=lambda timeout=None: 0, poll=lambda: 0, returncode=0, send_signal=lambda s: None)
+        return _popen
+
+    bench.popen = make_popen(0)
+    bench.prepare(dict(body, name="zero-ep-link"))
+    st0 = finished(bench)
+    assert st0["status"] == "stopped_safe" and link_zero_episodes(st0["folder"], {"config": "cfg.json"}) is True
+    assert not any(c[1].endswith("record_seal.py") for c in commands)
+
+    commands.clear()
+    bench.popen = make_popen(1)
+    bench.prepare(dict(body, name="one-ep-link"))
+    st1 = finished(bench)
+    assert st1["status"] == "sealed" and any(c[1].endswith("record_seal.py") for c in commands)
+    assert link_zero_episodes(st1["folder"], {"config": "cfg.json"}) is False
+    assert link_zero_episodes(tmp_path, {}) is False
+
+
+def test_arm_a_ik_planner_builds_joint_bounded_pallet_replay(tmp_path, monkeypatch):
+    import importlib.util
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    cdir = bench.prep / "cell-arm-a"
+    cdir.mkdir(parents=True)
+    (bench.prep / "cell-arm-a-stack.json").write_text(json.dumps({
+        "joint_min": {"wrist_roll.pos": -31.0},
+        "joint_max": {"wrist_roll.pos": 62.0, "wrist_flex.pos": 56.0},
+    }), encoding="utf-8")
+    (cdir / "auto-pallet-0-160_127.json").write_text(json.dumps({
+        "gripper_closed": 49.0,
+        "transit": {"shoulder_lift.pos": -27.0, "elbow_flex.pos": 18.0, "wrist_flex.pos": 46.0},
+        "chunks": {
+            "above_pick": [[20.6, 5.8, 5.0, 39.3, 20.5, 55.0]],
+            "descend_pick": [[20.6, 10.4, 7.0, 58.0, -40.0, 55.0]],
+            "grasp_pick": [[20.6, 10.4, 7.0, 32.7, 20.5, 47.0]],
+            "lift_pick": [[20.6, 6.8, 5.7, 37.6, 20.5, 49.0]],
+            "above_place": [[17.9, -10.1, 18.2, 42.0, 17.9, 49.0]],
+            "descend_place": [[17.9, -6.0, 22.2, 33.9, 17.9, 49.0]],
+            "release_place": [[17.9, -6.0, 22.2, 33.9, 17.9, 55.0]],
+            "lift_place": [[17.9, -11.4, 13.4, 48.0, 17.9, 55.0]],
+            "home": [[0.8, -62.2, 53.1, 51.6, 45.2, 49.0]],
+        },
+    }), encoding="utf-8")
+    res = bench.pipeline_generate_replay({
+        "source_type": "ik_planner", "arm": "arm_a", "origin": "pallet", "target_slot": "ship-h1r0-l0",
+    })
+    assert res["replay_id"] == "replays/pipe-ik-planner-arm_a.json"
+    rp = bench.prep / res["replay_id"]
+    traj = json.loads(rp.read_text(encoding="utf-8"))
+    frames = traj["frames"]
+    assert all(f[3] <= 56.0 and -31.0 <= f[4] <= 62.0 and f[5] >= 49.0 for f in frames)
+    monkeypatch.syspath_prepend(str(ROOT / "middleware/devices/omx/adapter"))
+    spec = importlib.util.spec_from_file_location("teach_trajectory", ROOT / "deploy/robot/omx/teach_trajectory.py")
+    tt = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tt)
+    assert tt.load(rp, fps=30)["sha256"]
