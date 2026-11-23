@@ -250,7 +250,10 @@ class Session:
                 "sha256": hashlib.sha256(text).hexdigest(),
                 "text": text.decode("utf-8"),
             }
-        config = validate_config(json.loads(config_path.read_text(encoding="utf-8-sig")))
+        config = validate_config(
+            json.loads(config_path.read_text(encoding="utf-8-sig")),
+            require_new_root=not (self.chunks or teleop_only),
+        )
         if self.operating_profile:
             from cell_robot_profile import load
 

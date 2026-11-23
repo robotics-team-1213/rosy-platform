@@ -19,7 +19,7 @@ def _positive(value, name, integer=False):
         raise ValueError(f'{name} must be an integer')
 
 
-def validate_config(config):
+def validate_config(config, *, require_new_root=True):
     if not isinstance(config, dict):
         raise ValueError('record config must be an object')
     if 'policy' in config:
@@ -67,7 +67,7 @@ def validate_config(config):
         raise ValueError('recording output belongs outside the source checkout')
     if '..' in PurePosixPath(root.replace('\\', '/')).parts:
         raise ValueError('dataset root must not contain parent traversal')
-    if Path(root).exists():
+    if require_new_root and Path(root).exists():
         raise ValueError('dataset root already exists; select a new recording')
     for key in ('fps', 'num_episodes'):
         _positive(dataset.get(key), key, integer=True)
