@@ -232,18 +232,18 @@ def dispatch_runner_command(runner, line: str) -> bool:
                     raise ValueError("timed policy frames cannot be shifted")
                 new_play = start(runner)
                 new_gate = new_play.jaw_gate
-            elif words[1] == "policy" and "jaw_gate" in runner.library:
+            elif words[1] in ("policy", "entry") and "jaw_gate" in runner.library:
                 from chunk_policy_playback import start_jaw_gate
 
                 if len(words) != 2:
-                    raise ValueError("jaw-gated policy frames cannot be shifted")
+                    raise ValueError(f"jaw-gated {words[1]} frames cannot be shifted")
                 new_gate = start_jaw_gate(runner, runner.library["jaw_gate"])
-            if words[1] == "policy" and new_gate is None and policy_requires_jaw_gate(runner):
-                raise ValueError("policy chunk requires jaw_gate when grasp_pick or rim height is configured")
+            if words[1] in ("policy", "entry") and new_gate is None and policy_requires_jaw_gate(runner):
+                raise ValueError(f"{words[1]} chunk requires jaw_gate when grasp_pick or rim height is configured")
             queued = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
             if not _arm_release(runner, queued, force=words[1].startswith("release")):
                 return True
-            if words[1] == "policy":
+            if words[1] in ("policy", "entry"):
                 same_gate = new_gate is not None and new_gate.same_as(getattr(runner, "_trailing_jaw_gate", None))
                 _clear_trailing_gate(runner, stop_motion=not same_gate)
             else:

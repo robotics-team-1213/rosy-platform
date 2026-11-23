@@ -8,7 +8,6 @@ coupled `human-hold` across both arms and optional non-faulted `safe_fold`.
 """
 from __future__ import annotations
 
-import copy
 from hashlib import sha256
 import json
 import math
@@ -17,6 +16,7 @@ import threading
 import time
 from typing import Any, Callable, Mapping, Sequence
 
+from cell_policy_entry import build_two_arm_chunk_library as _build_chunk_library, check_obs_stamp as _check_stamp, two_arm_roll_bounds
 import cell_policy_shape
 from cell_policy_timing import MAX_OBSERVATION_AGE_S
 import cell_two_arm
@@ -45,17 +45,6 @@ def _hold_both(cells: Mapping[str, Any], faulted: Mapping[str, bool], *, dry_run
     if dry_run:
         return {arm: False for arm in ARMS}
     return {arm: (False if faulted.get(arm) else _hold_arm(cells[arm])) for arm in ARMS}
-
-
-def _check_stamp(stamp: Any, now_wall: float, max_age_s: float, label: str) -> float:
-    if isinstance(stamp, bool) or not isinstance(stamp, (int, float)) or not math.isfinite(float(stamp)):
-        raise ValueError(f"invalid {label} stamp {stamp!r}")
-    val = float(stamp)
-    if val - now_wall > 0.5:
-        raise ValueError(f"future {label} stamp {val:.3f} > {now_wall:.3f}")
-    if now_wall - val > max_age_s:
-        raise ValueError(f"stale {label} stamp (age {now_wall - val:.3f}s > {max_age_s:.3f}s)")
-    return val
 
 
 def _read_state(cell: Any, *, dry_run: bool, max_age_s: float, label: str = "state") -> tuple[dict[str, Any], list[float], float]:
@@ -124,23 +113,6 @@ def _shape_candidate(
     candidate = cell_policy_shape.resample_chunk(actions, list(start_state), fps) if sim_units else actions
     shaped = cell_policy_shape.shape_chunk(candidate, list(start_state), low, high, fastest)
     return [[float(x) for x in row] for row in shaped], fastest
-
-
-def _build_chunk_library(
-    lib: Mapping[str, Any], shaped: list[list[float]], obs_mono: float, max_obs_age_s: float, fastest: float, jaw_spec: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    # Budget 2 runner ticks (cell_policy_timing) for authorize + FIFO load/run latency before frame 0 is due.
-    fps = max(1.0, float(lib.get("fps", 30.0)))
-    start_mono = max(obs_mono, time.monotonic()) + 2.0 / fps
-    chunk_lib = copy.deepcopy(dict(lib))
-    chunk_lib.setdefault("chunks", {})["policy"] = shaped
-    playback: dict[str, Any] = {"observed": obs_mono, "start": start_mono, "max_age": max_obs_age_s, "max_step": float(fastest)}
-    if jaw_spec is not None:
-        playback["jaw_gate"] = dict(jaw_spec)
-        if jaw_spec.get("rim_z_m") is not None:
-            chunk_lib["source"] = {**(chunk_lib.get("source") or {}), "rim_z_m": float(jaw_spec["rim_z_m"])}
-    chunk_lib["policy_playback"] = playback
-    return chunk_lib
 
 
 def run_two_arm_policy(
@@ -217,20 +189,29 @@ def run_two_arm_policy(
             }
 
     def worker(arm: str) -> None:
-        cell, shadow, lib = cells[arm], shadows[arm], libraries[arm]
-        offset = list(offsets[arm]) if offsets and offsets.get(arm) is not None else [0.0] * 6
-        demo_rng = demo_ranges.get(arm) if demo_ranges else None
-        goal = goals.get(arm) if goals else None
-        jaw_spec = jaw_specs.get(arm) if jaw_specs else None
-        arm_kin = kins.get(arm) if kins else None
-        need_mid = bool(plan["need_mid"][arm])
-        sim_rule = getattr(shadow, "sim_rule", None)
-        sim_units = sim_rule is not None
-        prev_receipts: dict[str, dict[str, Any]] = {}
         chunks_done, reason = 0, None
         outcome = "dry_run" if dry_run else "chunks_done"
-        home_rows = (lib.get("chunks") or {}).get("home") or []
-        home_roll = float(home_rows[0][4]) if home_rows else 0.0
+        try:
+            cell, shadow, lib = cells[arm], shadows[arm], libraries[arm]
+            offset = list(offsets[arm]) if offsets and offsets.get(arm) is not None else [0.0] * 6
+            demo_rng = demo_ranges.get(arm) if demo_ranges else None
+            goal = goals.get(arm) if goals else None
+            jaw_spec = jaw_specs.get(arm) if jaw_specs else None
+            arm_kin = kins.get(arm) if kins else None
+            need_mid = bool(plan["need_mid"][arm])
+            sim_rule = getattr(shadow, "sim_rule", None)
+            sim_units = sim_rule is not None
+            prev_receipts: dict[str, dict[str, Any]] = {}
+            home_roll, roll_range = two_arm_roll_bounds(arm, lib, demo_rng, sim_units)
+        except Exception as exc:
+            outcome = "refused"
+            reason = f"{arm}:setup:{exc}"
+            guard.latch_stop(reason)
+            hold_both_safe()
+            emit({"arm": arm, "event": "error", "reason": reason})
+            with state_lock:
+                arm_reports[arm] = {"outcome": outcome, "chunks_done": 0, "reason": reason}
+            return
 
         for idx in range(max_chunks):
             if guard.stopped_reason is not None:
@@ -265,7 +246,10 @@ def run_two_arm_policy(
                         emit({"arm": arm, "chunk_index": idx, "event": "jaw_warning", "reason": jaw_warn})
                         if not dry_run:
                             raise ValueError(jaw_warn)
-                roll_warn = cell_policy_shape.wrist_roll_warning(np.asarray(shaped, dtype=float), home_roll) if arm == "b" else None
+                roll_warn = (
+                    cell_policy_shape.wrist_roll_warning(np.asarray(shaped, dtype=float), home_roll, roll_range=roll_range)
+                    if arm == "b" else None
+                )
                 if roll_warn and sim_units and not dry_run:
                     emit({"arm": arm, "chunk_index": idx, "event": "wrist_roll_warning", "reason": roll_warn})
                     raise ValueError(roll_warn)
@@ -374,6 +358,8 @@ def run_two_arm_policy(
     with state_lock:
         any_moved, any_faulted, any_held = any(moved_arms.values()), any(faulted.values()), any(held_arms.values())
     stopped = guard.stopped_reason
+    if set(arm_reports) != set(ARMS) and stopped is None:
+        stopped = "incomplete_arm_reports"
     if not dry_run and fold_context is not None and any_moved and not any_faulted and not any_held and stopped is None:
         if cell_two_arm.away_from_home(cells, libraries):
             park_report = cell_two_arm.safe_fold(

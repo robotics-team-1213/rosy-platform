@@ -17,6 +17,15 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
+from cell_job_peer_health import (  # noqa: F401
+    FOLLOWER_JOINTS,
+    finite_float as _finite_float,
+    is_stale_row as _is_stale_row,
+    latest_status_row as _latest_status_row,
+    live_folded as _live_folded,
+    passive_motor_health_folded as _passive_motor_health_folded,
+)
+
 ROLE_HUMAN = "cell-job-human"
 ROLE_MACHINE = "cell-job-machine"
 IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -101,32 +110,6 @@ def check_arm_incident_hold(arm: str | None) -> str | None:
         return f"local hold {lf.name}" if lf is not None else None
 
 
-def _live_folded(row: dict[str, Any]) -> bool | None:
-    if isinstance(row.get("folded"), bool):
-        return row["folded"]
-    st = row.get("state")
-    if isinstance(st, list) and len(st) >= 6 and all(
-        isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v)) for v in st[:6]
-    ):
-        return float(st[1]) <= -50.0 and float(st[2]) >= 45.0
-    return None
-
-
-def _latest_status_row(status_path: Path) -> dict[str, Any] | None:
-    try:
-        lines = [ln.strip() for ln in status_path.read_text(encoding="utf-8", errors="replace").splitlines()[-25:] if ln.strip().startswith("{")]
-    except OSError:
-        return None
-    for raw in reversed(lines):
-        try:
-            row = json.loads(raw)
-        except ValueError:
-            continue
-        if isinstance(row, dict) and isinstance(row.get("state"), list):
-            return row
-    return None
-
-
 def check_peer_ab_folded(
     arm: str | None,
     workdir: Path,
@@ -137,6 +120,8 @@ def check_peer_ab_folded(
     read_json_fn: Callable[[Path], dict[str, Any] | None],
     live_max_age_s: float,
     incident_check_fn: Callable[[str], str | None] = check_arm_incident_hold,
+    motor_health_dir: Path | None = None,
+    calibration_dir: Path | None = None,
 ) -> str | None:
     """For cell_ab moving jobs, ensure the peer arm is not active, held, or unfolded."""
     if arm not in ("arm_a", "arm_b"):
@@ -151,22 +136,34 @@ def check_peer_ab_folded(
     live = read_json_fn(io_dir / "live.json")
     lease_path = lease_dir / f"{peer}.json"
     lease = read_json_fn(lease_path)
-    if live is not None:
-        if live.get("chunk") is not None or live.get("human_hold_latched") or live.get("fault") or live.get("interrupt"):
-            return f"peer {peer} is active or latched"
-        if _live_folded(live) is False:
-            return f"peer {peer} is not folded at home"
-    elif (st_row := _latest_status_row(io_dir / "chunk-status.jsonl")) is not None and _live_folded(st_row) is False:
-        return f"peer {peer} is not folded at home"
     peer_locked = bool(session_lock_held_fn(peer, lock_dir))
     peer_lease = True if (lease is None and lease_path.is_file()) else bool(lease and cell_arm_lease.live(lease))
+    live_err = None
+    if live is not None:
+        if live.get("human_hold_latched"):
+            return f"peer {peer} is active or latched"
+        if live.get("chunk") is not None or live.get("fault") or live.get("interrupt"):
+            live_err = f"peer {peer} is active or latched"
+        elif _live_folded(live) is False:
+            live_err = f"peer {peer} is not folded at home"
+    elif (st_row := _latest_status_row(io_dir / "chunk-status.jsonl")) is not None and _live_folded(st_row) is False:
+        live_err = f"peer {peer} is not folded at home"
+    if live_err is not None:
+        stale_live = _is_stale_row(live, live_max_age_s) if live is not None else False
+        health_dir = motor_health_dir if motor_health_dir is not None else (Path.home() / ".local" / "state" / "rosy" / "motor-health")
+        if not (not peer_locked and not peer_lease and stale_live
+                and _passive_motor_health_folded(
+                    peer, health_dir, max_age_s=live_max_age_s,
+                    read_json_fn=read_json_fn, calibration_dir=calibration_dir,
+                )):
+            return live_err
     if peer_locked or peer_lease:
         if live is None or _live_folded(live) is not True:
             return f"peer {peer} has an active session or lease without confirmed folded state"
-        ts = live.get("t")
-        if isinstance(ts, bool) or not isinstance(ts, (int, float)) or not math.isfinite(float(ts)):
+        tval = _finite_float(live.get("t"))
+        if tval is None:
             return f"peer {peer} live fold timestamp missing or invalid"
-        age = time.time() - float(ts)
+        age = time.time() - tval
         if age > live_max_age_s or age < -2.0:
             return f"peer {peer} live fold state is stale"
     return None

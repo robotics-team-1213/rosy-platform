@@ -123,7 +123,7 @@ JOBS = {
             "arm": _match(ARM),
             "config": _match(FILE),
             "library": _match(FILE),
-            "max_chunks": _int_range(1, 6),
+            "max_chunks": _int_range(1, 60),
             "operator": _actor,
         },
         "optional": {
@@ -138,6 +138,9 @@ JOBS = {
             "goal_site": _goal_site,
             "goal_slot": _int_range(0, 31),
             "act_backend": _match(re.compile(r"auto|torch|openvino")),
+            "endpoint_url": _http_url,
+            "token_file": _safe_path,
+            "timeout_s": _num(0.05, 2.0),
             "model_calibration": _safe_path,
             "catalog": _match(FILE),
             "roi": _roi,
@@ -292,8 +295,16 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")
-        if opt_checked.get("paced_chunks") and (mode != "act" or "n_action" in opt_checked):
-            raise ValueError("paced_chunks requires mode='act' without n_action")
+        if opt_checked.get("paced_chunks") and mode != "act":
+            raise ValueError("paced_chunks requires mode='act'")
+        if "token_file" in opt_checked and "endpoint_url" not in opt_checked:
+            raise ValueError("token_file requires endpoint_url")
+        if "endpoint_url" in opt_checked:
+            if mode == "taught":
+                raise ValueError("taught mode cannot use endpoint_url")
+            host = (urlsplit(opt_checked["endpoint_url"]).hostname or "").lower()
+            if host not in _LOOPBACK_HOSTS and "token_file" not in opt_checked:
+                raise ValueError("non-loopback endpoint_url requires token_file")
         if "source_kind" in opt_checked:
             sk = opt_checked["source_kind"]
             if mode != "taught" and sk != "policy":
@@ -340,12 +351,14 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     for option in (
         "site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
         "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
-        "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
+        "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
         "margin_m", "min_z_m",
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    if job["script"] == "cell_policy_drive.py" and "endpoint_url" in opt_checked:
+        args += ["--arm-id", checked["arm"]]
     if moves_arm(job, params):
         reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
         arm_list = list(job_arms(job, params))
