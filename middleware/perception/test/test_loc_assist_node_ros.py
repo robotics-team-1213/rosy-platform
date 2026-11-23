@@ -2,6 +2,7 @@
 import json
 import math
 import time
+from concurrent.futures import Future
 
 import pytest
 
@@ -27,6 +28,14 @@ def node():
 
 def camera_topics(node):
     return [s.topic_name for s in node.subscriptions if s.topic_name.endswith('camera/front')]
+
+
+def test_candidate_search_can_cross_the_budget_without_crashing(node):
+    budget = node.p('search_budget_s')
+    for elapsed in (budget + 0.1, budget - 0.1, budget + 0.1):
+        node.search = Future()
+        node.search.set_result(([], [], None, node.generation, elapsed, [], None))
+        node.finish_search(node.now())
 
 
 def test_the_camera_subscription_exists_only_outside_localized(node):

@@ -378,8 +378,12 @@ class LocAssistNode(Node):
         if generation == self.generation:
             self.clear = mask
         budget = self.p('search_budget_s')
-        log = self.get_logger().warning if elapsed > budget else self.get_logger().info
-        log(f'candidate search {elapsed:.2f} s (budget {budget:.1f} s): {len(found)} candidates')
+        message = f'candidate search {elapsed:.2f} s (budget {budget:.1f} s): {len(found)} candidates'
+        # rclpy fixes the severity at each logging call site.
+        if elapsed > budget:
+            self.get_logger().warning(message)
+        else:
+            self.get_logger().info(message)
         recent = now - self.sighted_at <= self.p('sighting_max_age_s')
         scores = None
         if recent and self.paint is not None and self.paint_map is not None:
