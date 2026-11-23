@@ -245,7 +245,10 @@ function syncHeaderAndSlimBar(){
   }
   const degrees=Number.isFinite(st?.starting_deg_left)?' · '+st.starting_deg_left.toFixed(1)+'도 남음':'';
   const stepName=STARTING_STEP_MAP[curStep];
-  const prepLabel=ready?'연동됨':stepName?stepName+degrees:st?.step==='camera_restart'?'카메라 재시작 중':'';
+  const tRows=Array.isArray(lastTelemetry?.motors)?lastTelemetry.motors:[];
+  const tMaxLag=tRows.reduce((m,r)=>Math.max(m,(r.leader_raw!=null&&r.present_raw!=null)?Math.abs((r.leader_raw-r.present_raw)*360/4096):Math.abs(Number(r.error_deg)||0)),0);
+  const tStat=ready&&lastTelemetry?.active&&Number.isFinite(lastTelemetry.loop_latency_ms)?(' · '+Math.round(lastTelemetry.loop_latency_ms)+'ms · Δ'+tMaxLag.toFixed(1)+'°'):'';
+  const prepLabel=ready?('텔레옵 연동됨'+tStat):stepName?stepName+degrees:st?.step==='camera_restart'?'카메라 재시작 중':'';
   const stepBox=$('starting-step-box');
   stepBox.textContent=phase==='prepare'&&prepLabel?'· '+prepLabel:'';
   stepBox.title=stepBox.textContent;

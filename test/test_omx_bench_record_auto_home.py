@@ -1399,6 +1399,7 @@ def test_leader_home_exact_caps_rate_applies_exact_gains_and_names_lag_joint(tmp
     import contextlib, signal, leader_actuator
 
     leader_home, leader = _leader_for_match(tmp_path)
+    leader.bus = None
     assert leader_home.EXACT_HOME_PWM <= leader_actuator.CAP_MAX
     assert leader_home.EXACT_HOME_CURRENT <= leader_actuator.CURRENT_MAX
     assert leader_home.EXACT_HOME_RATE_DEG_S <= leader_actuator.MAX_RATE_DEG_S

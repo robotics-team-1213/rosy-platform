@@ -541,6 +541,7 @@ function renderCamGuide(){
     tag.hidden=!lblTgt;
   }
   updateGoalSummaryRows();
+  if(typeof window.renderCamGoalOverlay==='function')window.renderCamGoalOverlay();
 }
 
 const ARM_S_SPOTS={pinky:{title:'핑키 로봇 (pinky)',sub:'도착/상차'},supply:{title:'공급대 (supply)',sub:'집는 곳'},bowl:{title:'흰 그릇 (bowl)',sub:'딸기 왕복'}};

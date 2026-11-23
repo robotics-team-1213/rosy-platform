@@ -230,9 +230,11 @@ class BenchRecoverMixin:
             issues.append({"kind": "ended_error", "arm": st.get("arm"), "label": "이전 세션 오류/중단 상태", "detail": str(st.get("error") or (st.get("auto_home") or {}).get("error") or code)})
         can_ack = bool(ended_err and not self.manual.exists() and not self.pending.exists() and not locks)
         has_any = bool(issues or dead_leases)
+        from bench_record_auto_recover import assess_auto_recover
+        auto_rec = assess_auto_recover(self, st, mh, pending, locks, dead_leases, inc_holds, baseline_needed, can_ack)
         return {"has_issues": has_any, "issues": issues, "pending_units": pending, "dead_lease_arms": dead_leases,
                 "incident_holds": inc_holds, "baseline_needed": baseline_needed, "can_ack_error": can_ack,
-                "can_restore_units": bool(pending and not self.manual.exists())}
+                "can_restore_units": bool(pending and not self.manual.exists()), "auto_recover": auto_rec}
 
     def release_held_runner(self, body):
         """Send SIGUSR2 to a verified chunk_runner PID after operator confirms physical arm support."""

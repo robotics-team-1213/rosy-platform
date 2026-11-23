@@ -12,6 +12,7 @@ import time
 
 from bench_record_handoff import atomic_write_json, load_json_value, save_handoff_config
 from bench_record_inspect import ARMS, BI_ARM
+from bench_record_overlay_map import build_camera_overlay
 from bench_record_replay import apply_task_override
 from teleop_speed import read_stage, summary as speed_summary
 
@@ -22,8 +23,6 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _SECRET_HF_RE = re.compile(r"\bhf_[A-Za-z0-9]{10,}\b")
 _SECRET_BEARER_RE = re.compile(r"(?i)(Bearer\s+)[^\s\"']+")
 _GRIP_KEYS = ("leader_closed", "leader_open", "follower_closed", "follower_open")
-
-
 def sanitize_log_line(text: str) -> str:
     clean = _ANSI_RE.sub("", str(text or ""))
     clean = _SECRET_HF_RE.sub("hf_<REDACTED>", clean)
@@ -241,7 +240,7 @@ def build_cell_map_payload(prep: Path, repo_root: Path | None = None) -> dict:
         "schema": sd.get("schema"), "revision": sd.get("revision"), "tier_height_mm": sd.get("tier_height_mm", 32.4),
         "zones": sd.get("zones", []), "not_places": sd.get("not_places", []), "aliases": sd.get("aliases", {}),
         "spot_catalog": _build_spot_catalog(sd), "sim_tasks": sim_tasks, "calibrated_sites": calibrated_sites,
-        "task_provenance": task_prov, "sources": sources,
+        "task_provenance": task_prov, "sources": sources, "camera_overlay": build_camera_overlay(prep),
     }
 
 

@@ -1,5 +1,6 @@
 // Manual hold diagnosis/recovery panel and per-episode evaluation, playback, DO_NOT_TRAIN, and deletion.
 (function(){
+let autoRecoverInFlight=false, lastAutoRecoverSig='', lastAutoRecoverAt=0;
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 function collectHardwareReadiness(arm){
@@ -100,7 +101,8 @@ function renderManualHoldCard(st){
   }
   const hint=$('mh-cause-hint');
   if(hint){
-    if(mh?.worker_human_hold){hint.textContent='원인 추정: cell-task-worker 또는 워치독이 홈 이동 중 human-hold를 보냈습니다. 새 버전에서는 홈 이동 중 워커를 자동 일시정지합니다.';hint.hidden=false;}
+    if(mh?.runner_alive&&rec?.auto_recover?.eligible===false&&rec?.auto_recover?.reason){hint.textContent='자동 토크 해제 보류: '+rec.auto_recover.reason;hint.hidden=false;}
+    else if(mh?.worker_human_hold){hint.textContent='원인 추정: cell-task-worker 또는 워치독이 홈 이동 중 human-hold를 보냈습니다. 새 버전에서는 홈 이동 중 워커를 자동 일시정지합니다.';hint.hidden=false;}
     else if(mh?.detail){hint.textContent='세부 사유: '+mh.detail;hint.hidden=false;}
     else{hint.hidden=true;}
   }
@@ -134,7 +136,20 @@ function renderManualHoldCard(st){
   const qa=$('mh-quick-actions');
   if(qa){
     qa.innerHTML='';
-    const tgtArm=mh?.arm||st?.arm||(f&&f.arm&&f.arm.value!=='arm_ab'?f.arm.value:'arm_a');
+    const tgtArm=rec?.auto_recover?.arm||mh?.arm||st?.arm||(f&&f.arm&&f.arm.value!=='arm_ab'?f.arm.value:'arm_a');
+    if(rec?.auto_recover?.eligible){
+      const arBtn=document.createElement('button');arBtn.type='button';arBtn.id='mh-auto-recover-btn';arBtn.className='btn-primary btn-xs';
+      arBtn.textContent=autoRecoverInFlight?'안전 자동 복구 중...':'안전 자동 복구 실행';
+      arBtn.disabled=autoRecoverInFlight;
+      arBtn.addEventListener('click',()=>runAutoRecover(false,tgtArm));
+      qa.append(arBtn);
+      const arSig=JSON.stringify([mh?.arm||'',mh?.runner_pid||null,(rec.issues||[]).map(i=>i.kind),rec.dead_lease_arms||[],rec.pending_units||[],Boolean(rec.baseline_needed)]);
+      const nowMs=Date.now();
+      if(!autoRecoverInFlight&&!(typeof benchSessionActive==='function'&&benchSessionActive())&&arSig!==lastAutoRecoverSig&&nowMs-lastAutoRecoverAt>=30000){
+        lastAutoRecoverSig=arSig;lastAutoRecoverAt=nowMs;
+        queueMicrotask(()=>runAutoRecover(true,tgtArm));
+      }
+    }
     if(rec?.baseline_needed&&!mh?.active&&tgtArm&&tgtArm!=='arm_ab'){
       const bBtn=document.createElement('button');bBtn.type='button';bBtn.className='btn-tool btn-xs';bBtn.textContent=tgtArm+' 기준 캡 복원 (torque OFF)';
       bBtn.addEventListener('click',async()=>{bBtn.disabled=true;setReqError('');try{const r=await api('/api/recover/baseline',{arm:tgtArm});if(r.status)renderStatus(r.status);if(typeof window.pollLiveLogs==='function')window.pollLiveLogs();}catch(e){setReqError(e.message);}finally{bBtn.disabled=false;}});
@@ -182,6 +197,31 @@ function renderManualHoldCard(st){
     }
   }
 }
+async function runAutoRecover(isAuto,arm){
+  if(autoRecoverInFlight||(typeof benchSessionActive==='function'&&benchSessionActive()))return;
+  autoRecoverInFlight=true;setReqError('');
+  if($('mh-auto-recover-btn')){$('mh-auto-recover-btn').disabled=true;$('mh-auto-recover-btn').textContent='안전 자동 복구 중...';}
+  if(typeof setActivity==='function')setActivity(isAuto?'안전 접힘 확인 · 자동 복구 중...':'안전 자동 복구 실행 중...','live',arm||'');
+  try{
+    const res=await api('/api/recover/auto',arm?{arm}:{});
+    const steps=Array.isArray(res?.steps)?res.steps.join(' → '):'완료';
+    if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good','안전 자동 복구 완료 ('+steps+')');
+    if(typeof setNotice==='function')setNotice('pose-feedback','good','안전 자동 복구 완료: '+steps,{ttlMs:6000});
+    if(typeof setActivity==='function')setActivity('안전 자동 복구 완료','good',steps);
+    if(res&&res.status)renderStatus(res.status);else await pollStatus();
+    if(typeof window.pollLiveLogs==='function')window.pollLiveLogs();
+  }catch(e){
+    const msg=e.message||String(e);
+    setReqError('자동 복구 보류: '+msg);
+    if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','warn','자동 복구 보류: '+msg);
+    if(typeof setActivity==='function')setActivity('자동 복구 보류','warn',msg);
+    await pollStatus();
+  }finally{
+    autoRecoverInFlight=false;
+    if($('mh-auto-recover-btn')){$('mh-auto-recover-btn').disabled=false;$('mh-auto-recover-btn').textContent='안전 자동 복구 실행';}
+  }
+}
+window.runAutoRecover=runAutoRecover;
 window.renderManualHoldCard=renderManualHoldCard;
 
 $('mh-dead-lease-check')?.addEventListener('change',()=>{if(lastStatus)renderManualHoldCard(lastStatus);});
