@@ -241,6 +241,9 @@ def test_read_policy_spec_rejects_bool_dims_and_lerobot_loader_passes_device_ove
         def __init__(self, arr):
             self.arr = np.asarray(arr, dtype=np.float32)
 
+        def to(self, arg):
+            return FakeTensor(self.arr.astype(np.float32) if arg == np.float32 else self.arr)
+
         def permute(self, *dims):
             return FakeTensor(np.transpose(self.arr, dims))
 
@@ -249,6 +252,10 @@ def test_read_policy_spec_rejects_bool_dims_and_lerobot_loader_passes_device_ove
 
         def unsqueeze(self, dim):
             return FakeTensor(np.expand_dims(self.arr, axis=dim))
+
+        def div_(self, other):
+            self.arr = self.arr / other
+            return self
 
         def __truediv__(self, other):
             return FakeTensor(self.arr / other)
@@ -280,7 +287,7 @@ def test_read_policy_spec_rejects_bool_dims_and_lerobot_loader_passes_device_ove
     fake_torch = types.ModuleType("torch")
     fake_torch.float32 = np.float32
     fake_torch.device = lambda d: d
-    fake_torch.tensor = lambda x, dtype=None: FakeTensor(x)
+    fake_torch.tensor = lambda x, dtype=None, device=None: FakeTensor(x)
     fake_torch.from_numpy = lambda x: FakeTensor(x)
     fake_torch.inference_mode = contextlib.nullcontext
 
@@ -529,4 +536,55 @@ def test_gpu_training_busy_health_and_503_fail_closed(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_load_lerobot_arm_moves_uint8_to_device_before_float_scale(tmp_path, monkeypatch):
+    import contextlib, types
+
+    recorded, state_devs, target_dev = [], [], "device:cuda:0"
+
+    class _FakeTensor:
+        def __init__(self, arr, *, dtype="float32", device="cpu"):
+            self.arr, self.dtype, self.device, self.ops = arr, dtype, device, []
+
+        def _rec(self, tag):
+            self.ops.append(tag)
+            return self
+
+        def to(self, arg):
+            is_f = arg == "dtype:float32"
+            tag = ("to_float", self.dtype, self.device) if is_f else ("to_device", arg, self.dtype)
+            setattr(self, "dtype" if is_f else "device", "float32" if is_f else arg)
+            return self._rec(tag)
+
+        def div_(self, scale):
+            self.arr = self.arr.astype(np.float64) / scale
+            return self._rec(("div_", scale, self.dtype, self.device))
+
+        permute = lambda self, *d: self._rec(("permute", d))
+        unsqueeze = lambda self, d: self._rec(("unsqueeze", d))
+        detach = cpu = lambda self: self
+        numpy = lambda self: self.arr
+
+    class _FakePolicy:
+        config = types.SimpleNamespace(device="cpu")
+        to = eval = lambda self, *_a: self
+        predict_action_chunk = lambda self, b: _FakeTensor(np.full((6, 6), float(b["observation.images.top"].arr.mean()), dtype=np.float32))
+
+    fake_torch = types.ModuleType("torch")
+    fake_torch.float32, fake_torch.device, fake_torch.inference_mode = "dtype:float32", (lambda d: f"device:{d}"), contextlib.nullcontext
+    fake_torch.tensor = lambda data, *, dtype=None, device=None: (state_devs.append(device) or _FakeTensor(np.asarray(data), dtype=dtype, device=device))
+    fake_torch.from_numpy = lambda arr: (recorded.append(_FakeTensor(arr, dtype=str(arr.dtype))) or recorded[-1])
+    for name in ("lerobot", "lerobot.policies", "lerobot.policies.act", "lerobot.policies.act.modeling_act", "lerobot.policies.factory"):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    sys.modules["lerobot.policies.act.modeling_act"].ACTPolicy = types.SimpleNamespace(from_pretrained=lambda *_a, **_k: _FakePolicy())
+    sys.modules["lerobot.policies.factory"].make_pre_post_processors = lambda *_a, **_k: (lambda b: b, lambda c: c)
+
+    predict = srv._load_lerobot_arm(tmp_path, {"top": (4, 6)}, n_action_steps=4, goal_size=2, device="cuda:0")
+    out = predict({"state": [0.1] * 6, "goal": [1.0, 0.0], "frames_rgb": {"top": np.full((4, 6, 3), 255, dtype=np.uint8)}})
+    assert state_devs == [target_dev, target_dev]
+    ops = recorded[0].ops
+    assert ops.index(("to_device", target_dev, "uint8")) < ops.index(("to_float", "uint8", target_dev)) < ops.index(("div_", 255.0, "float32", target_dev))
+    assert len(out) == 4 and all(len(row) == 6 and all(v == pytest.approx(1.0) for v in row) for row in out)
 
