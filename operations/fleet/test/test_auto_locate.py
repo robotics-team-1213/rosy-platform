@@ -492,6 +492,8 @@ def test_tiebreak_camera_xy_enforces_confirmed_mode_map_and_freshness():
     current_track["age_s"] = 0.3
 
     no_map_svc = AutoLocateService(tracking, map_pose=None, clock=lambda: 10.0)
+    assert no_map_svc.tiebreak_camera_xy("r1", expected_map_id="site-a") is None  # mode="motion" refused under default track_modes
+    current_track["mode"] = "led"
     assert no_map_svc.tiebreak_camera_xy("r1") is None
     assert no_map_svc.tiebreak_camera_xy("r1", expected_map_id="site-a") == (1.25, -0.75)
 
