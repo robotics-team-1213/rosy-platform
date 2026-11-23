@@ -233,7 +233,8 @@ class BenchRecoverMixin:
         from bench_record_auto_recover import assess_auto_recover
         auto_rec = assess_auto_recover(self, st, mh, pending, locks, dead_leases, inc_holds, baseline_needed, can_ack)
         return {"has_issues": has_any, "issues": issues, "pending_units": pending, "dead_lease_arms": dead_leases,
-                "incident_holds": inc_holds, "baseline_needed": baseline_needed, "can_ack_error": can_ack,
+                "incident_holds": inc_holds, "fleet_clear_available": bool(self._config.get("fleet_console_origin")),
+                "baseline_needed": baseline_needed, "can_ack_error": can_ack,
                 "can_restore_units": bool(pending and not self.manual.exists()), "auto_recover": auto_rec}
 
     def release_held_runner(self, body):

@@ -1,6 +1,21 @@
 // Manual hold diagnosis/recovery panel and per-episode evaluation, playback, DO_NOT_TRAIN, and deletion.
 (function(){
 let autoRecoverInFlight=false, lastAutoRecoverSig='', lastAutoRecoverAt=0;
+const fleetSyncInFlight=new Set(), fleetSyncAt=new Map();
+
+async function syncFleetIncident(arm, manual){
+  if(fleetSyncInFlight.has(arm))return;
+  fleetSyncInFlight.add(arm);
+  fleetSyncAt.set(arm,Date.now());
+  try{
+    const result=await api('/api/recover/sync_incident',{arm});
+    if(manual||result.cleared)await pollStatus();
+  }catch(error){
+    if(manual)setReqError(error.message);
+  }finally{
+    fleetSyncInFlight.delete(arm);
+  }
+}
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 function collectHardwareReadiness(arm){
@@ -162,8 +177,19 @@ function renderManualHoldCard(st){
     }
     if(rec?.incident_holds){
       for(const incArm of Object.keys(rec.incident_holds)){
+        if(rec.fleet_clear_available){
+          const link=document.createElement('a');
+          link.className='btn-tool btn-xs';link.textContent=incArm+' Fleet 사고 해제 ↗';
+          link.href='/api/recover/fleet_clear?arm='+encodeURIComponent(incArm);
+          link.target='_blank';link.rel='noopener noreferrer';
+          qa.append(link);
+        }
         const sBtn=document.createElement('button');sBtn.type='button';sBtn.className='btn-tool btn-xs';sBtn.textContent=incArm+' Fleet 보류 동기화';
-        sBtn.addEventListener('click',async()=>{sBtn.disabled=true;setReqError('');try{const r=await api('/api/recover/sync_incident',{arm:incArm});if(r.status)renderStatus(r.status);else await pollStatus();}catch(e){setReqError(e.message);}finally{sBtn.disabled=false;}});
+        sBtn.disabled=fleetSyncInFlight.has(incArm);
+        sBtn.addEventListener('click',async()=>{sBtn.disabled=true;setReqError('');try{await syncFleetIncident(incArm,true);}finally{sBtn.disabled=false;}});
+        const canSync=rec.fleet_clear_available&&(st.status==='idle'||ENDED.has(st.status)&&st.status!=='leader_manual_check')
+          &&!benchSessionActive(st)&&!mh&&!locks.length&&!rec.pending_units?.length;
+        if(canSync&&Date.now()-(fleetSyncAt.get(incArm)||0)>=15000)void syncFleetIncident(incArm,false);
         qa.append(sBtn);
       }
       const alt=['arm_a','arm_b','arm_s'].find(a=>!rec.incident_holds[a]);
