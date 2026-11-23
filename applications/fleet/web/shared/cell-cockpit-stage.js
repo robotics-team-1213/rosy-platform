@@ -1,7 +1,9 @@
 // D-960 / D-136 — ARM-CELL Primary Stage & shared Workcell Observation Normalizer.
 // Fetches read-only /api/fleet/workcell-observations on both R and ARM-CELL and renders the primary
 // workcell camera wall + 3-arm EICAS strip when this control unit owns arms without drive (!owns("drive") && owns("arms")).
-import { node } from "/common/control-dom.js";
+// DOM construction is declarative htm/preact; only the host <section> is created imperatively.
+import { html, render as renderDom, useLayoutEffect, useRef } from "/common/vendor/htm-preact.esm.min.js";
+import { UiButton } from "/common/preact-ui.js";
 import { createMotorHealthState, renderMotorHealthSummary } from "/common/motor-health.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
@@ -132,6 +134,78 @@ export function normalizeWorkcellObservations(payload, receivedAtMs = Date.now()
   return { receivedAtMs, arms, cameras, summary };
 }
 
+/** One camera tile. frames.bind runs once per camera identity; the feed keeps painting between polls. */
+function CameraTile({ cam, frames, liveOn }) {
+  const imgRef = useRef(null);
+  const statusRef = useRef(null);
+  const standbyRef = useRef(null);
+  useLayoutEffect(() => {
+    frames.bind(imgRef.current, { source: cam.source_id }, statusRef.current, cam.label);
+  }, [cam.source_id, cam.label, frames]);
+  // No dep list: sync the standby text after every poll render like the pre-preact version did.
+  useLayoutEffect(() => {
+    const img = imgRef.current;
+    const standby = standbyRef.current;
+    if (!img || !standby) return;
+    if (!liveOn) {
+      standby.hidden = false;
+      standby.textContent = "영상 일시정지";
+    } else if (!img.getAttribute("src")) {
+      standby.hidden = false;
+      standby.textContent = img.dataset.frameStateText || "첫 프레임 대기 — 스트림 연결 확인";
+    }
+  });
+  const toggleZoom = () => imgRef.current?.classList.toggle("focused");
+  const onKeyDown = (ev) => {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      toggleZoom();
+    } else if (ev.key === "Escape") {
+      imgRef.current?.classList.remove("focused");
+    }
+  };
+  return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} tabIndex=${0} onKeyDown=${onKeyDown}>
+    <div class="cell-stage-cam-head">
+      <strong>${cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label}</strong>
+      <small ref=${statusRef} class="omx-inspector-cam-badge">영상 확인 중</small>
+    </div>
+    <div class="omx-inspector-cam-frame">
+      <img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`} loading="lazy"
+        onClick=${toggleZoom} onLoad=${() => { if (standbyRef.current) standbyRef.current.hidden = true; }} />
+      <span ref=${standbyRef} class="omx-inspector-cam-standby" role="status">영상 대기</span>
+    </div>
+  </article>`;
+}
+
+/** One arm card. mhState is created once per arm id by the stage and accepted again on every render. */
+function ArmCard({ arm, selected, mhState, selection, receivedAtMs }) {
+  const mhRef = useRef(null);
+  useLayoutEffect(() => {
+    mhState.accept(arm.motorHealth, { receivedAtMs });
+    renderMotorHealthSummary(mhRef.current, mhState.read(Date.now()));
+  });
+  const badge = arm.held ? { status: "crit", text: `보류 ${arm.heldIncidents.length}건` }
+    : arm.openIncidents.length ? { status: "warn", text: `사건 ${arm.openIncidents.length}건` }
+    : arm.fresh ? { status: "active", text: "실시간" }
+    : { status: "warn", text: "대기 · 만료" };
+  return html`<button type="button" class=${`cell-stage-arm${selected ? " selected" : ""}`} data-arm-id=${arm.id}
+    onClick=${() => selection?.set?.(arm.id, { source: "roster" })}>
+    <div class="cell-stage-arm-head">
+      <strong>${arm.label}</strong>
+      <ui-tag status=${badge.status}>${badge.text}</ui-tag>
+    </div>
+    <p ref=${mhRef} />
+    ${arm.jointsDeg && arm.jointsDeg.some((v) => v !== null)
+      ? html`<dl class="cell-stage-joints-grid">
+          ${JOINT_SHORT.map((name, idx) => {
+            const deg = arm.jointsDeg[idx];
+            return html`<div class="cell-stage-joint" key=${name}><dt>${name}</dt><dd>${deg === null ? "—" : `${deg.toFixed(1)}°`}</dd></div>`;
+          })}
+        </dl>`
+      : html`<p class="cell-stage-joints">엔코더 최신 피드백 없음</p>`}
+  </button>`;
+}
+
 export function createCellCockpitStage({ scope, call, view, auth, selection, onChanged, onVisionSample }) {
   const gate = createPollGate({ slowCodes: { WORKCELL_OBSERVATIONS_UNAVAILABLE: 30000 } });
   const frames = createCellFrameFeed({ call, scope, intervalMs: 2000 });
@@ -141,54 +215,19 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   section.setAttribute("aria-labelledby", "cell-stage-heading");
   section.hidden = true;
 
-  const head = document.createElement("div");
-  head.className = "cell-stage-head";
-  const titleWrap = document.createElement("div");
-  const title = document.createElement("h2");
-  title.id = "cell-stage-heading";
-  title.textContent = "셀 작업대 관제";
-  const meta = node("p", "작업 셀 실시간 관측 연결 대기", "cell-stage-meta");
-  titleWrap.append(title, meta);
-
-  const actions = document.createElement("div");
-  actions.className = "cell-stage-actions";
-  const liveTag = document.createElement("ui-tag");
-  liveTag.setAttribute("status", "neutral");
-  liveTag.textContent = "확인 중";
-  const sampleBadge = document.createElement("ui-tag");
-  sampleBadge.setAttribute("status", "warn");
-  sampleBadge.className = "cell-stage-sample-tag";
-  sampleBadge.textContent = "샘플 데이터";
-  sampleBadge.hidden = true;
-  const streamToggle = document.createElement("ui-button");
-  streamToggle.setAttribute("kind", "quiet");
-  streamToggle.setAttribute("type", "button");
-  streamToggle.setAttribute("data-work-read", "");
-  streamToggle.textContent = "영상 자동갱신 ON";
-  const workLink = node("a", "셀 작업 화면", "ui-action-link");
-  workLink.dataset.kind = "quiet";
-  workLink.href = "/console/cell";
-  actions.append(sampleBadge, liveTag, streamToggle, workLink);
-  head.append(titleWrap, actions);
-
-  const camGrid = document.createElement("div");
-  camGrid.className = "cell-stage-cameras";
-  camGrid.setAttribute("role", "region");
-  camGrid.setAttribute("aria-label", "셀 실시간 카메라");
-
-  const armGrid = document.createElement("div");
-  armGrid.className = "cell-stage-arms";
-  armGrid.setAttribute("role", "region");
-  armGrid.setAttribute("aria-label", "셀 팔 상태 요약");
-
-  section.append(head, camGrid, armGrid);
+  // One motor-health state per arm id, kept across polls so evidence age is continuous.
+  const mhStates = new Map();
+  const mhStateFor = (id) => {
+    let state = mhStates.get(id);
+    if (!state) mhStates.set(id, (state = createMotorHealthState()));
+    return state;
+  };
 
   let areaHidden = false;
   let inFlight = false;
   let liveOn = true;
   let controlUnitFetched = false;
   let visionCheckedAt = 0;
-  let camLayoutKey = "";
 
   const isStageActive = () => !areaHidden && !owns("drive") && owns("arms");
 
@@ -196,116 +235,16 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
     frames.setRunning(liveOn && isStageActive() && !auth.locked && !document.hidden);
   };
 
-  streamToggle.addEventListener("click", () => {
+  const onToggleLive = () => {
     liveOn = !liveOn;
-    streamToggle.textContent = liveOn ? "영상 자동갱신 ON" : "영상 일시정지";
     syncFeedState();
     render();
-  });
+  };
 
-    const offSel = selection?.subscribe?.(() => render());
-    scope.onDispose?.(offSel);
+  const offSel = selection?.subscribe?.(() => render());
+  scope.onDispose?.(offSel);
+  scope.onDispose?.(() => renderDom(null, section));
   scope.listen(document, "visibilitychange", syncFeedState);
-
-  function renderCameras(obs) {
-    const cams = obs?.cameras || [];
-    const nextKey = cams.map((c) => `${c.source_id}:${c.label}:${c.arm_id || ""}`).join("|");
-    if (nextKey !== camLayoutKey) {
-      camLayoutKey = nextKey;
-      if (!cams.length) {
-        const empty = node("p", "등록된 셀 카메라가 없습니다.", "hint");
-        camGrid.replaceChildren(empty);
-      } else {
-        const cards = cams.map((cam) => {
-          const card = document.createElement("article");
-          card.className = "cell-stage-cam";
-          card.dataset.cameraSource = cam.source_id;
-          const camHead = document.createElement("div");
-          camHead.className = "cell-stage-cam-head";
-          const camTitle = node("strong", cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label);
-          const camStatus = node("small", "영상 확인 중", "omx-inspector-cam-badge");
-          camHead.append(camTitle, camStatus);
-          const frameBox = document.createElement("div");
-          frameBox.className = "omx-inspector-cam-frame";
-          const img = document.createElement("img");
-          img.className = "omx-inspector-main-cam omx-inspector-cam";
-          img.alt = `${cam.label} 실시간 카메라`;
-          img.loading = "lazy";
-          const standby = node("span", "영상 대기", "omx-inspector-cam-standby");
-          standby.setAttribute("role", "status");
-          img.addEventListener("load", () => { standby.hidden = true; });
-          frameBox.append(img, standby);
-          const toggleZoom = () => img.classList.toggle("focused");
-          img.addEventListener("click", toggleZoom);
-          card.tabIndex = 0;
-          card.addEventListener("keydown", (ev) => {
-            if (ev.key === "Enter" || ev.key === " ") {
-              ev.preventDefault();
-              toggleZoom();
-            } else if (ev.key === "Escape") {
-              img.classList.remove("focused");
-            }
-          });
-          card.append(camHead, frameBox);
-          frames.bind(img, { source: cam.source_id }, camStatus, cam.label);
-          return card;
-        });
-        camGrid.replaceChildren(...cards);
-      }
-    }
-    for (const s of camGrid.querySelectorAll(".omx-inspector-cam-standby")) {
-      const img = s.previousElementSibling;
-      if (!liveOn) {
-        s.hidden = false;
-        s.textContent = "영상 일시정지";
-      } else if (!img?.getAttribute("src")) {
-        s.hidden = false;
-        s.textContent = img?.dataset?.frameStateText || "첫 프레임 대기 — 스트림 연결 확인";
-      }
-    }
-  }
-
-  function renderArms(obs) {
-    const arms = obs?.arms || [];
-    if (!arms.length) {
-      armGrid.replaceChildren(node("p", auth.locked ? "접속 후 팔 관측을 표시합니다." : "관측 중인 팔이 없습니다.", "hint"));
-      return;
-    }
-    const selectedId = selection?.get?.();
-    const cards = arms.map((arm) => {
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = `cell-stage-arm${selectedId === arm.id ? " selected" : ""}`;
-      card.dataset.armId = arm.id;
-      const top = document.createElement("div");
-      top.className = "cell-stage-arm-head";
-      const name = node("strong", arm.label);
-      const badge = document.createElement("ui-tag");
-      if (arm.held) {
-        badge.setAttribute("status", "crit");
-        badge.textContent = `보류 ${arm.heldIncidents.length}건`;
-      } else if (arm.openIncidents.length) {
-        badge.setAttribute("status", "warn");
-        badge.textContent = `사건 ${arm.openIncidents.length}건`;
-      } else if (arm.fresh) {
-        badge.setAttribute("status", "active");
-        badge.textContent = "실시간";
-      } else {
-        badge.setAttribute("status", "warn");
-        badge.textContent = "대기 · 만료";
-      }
-      top.append(name, badge);
-      const joints = node("p", arm.jointsText || "엔코더 최신 피드백 없음", "cell-stage-joints");
-      const mhWrap = document.createElement("p");
-      const mhState = createMotorHealthState();
-      mhState.accept(arm.motorHealth, { receivedAtMs: obs.receivedAtMs });
-      renderMotorHealthSummary(mhWrap, mhState.read(Date.now()));
-      card.append(top, mhWrap, joints);
-      card.addEventListener("click", () => selection?.set?.(arm.id, { source: "roster" }));
-      return card;
-    });
-    armGrid.replaceChildren(...cards);
-  }
 
   function render() {
     const show = isStageActive();
@@ -314,29 +253,53 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
     if (!show) return;
     const obs = view.workcellObs;
     const cu = view.controlUnit;
+    const sum = obs?.summary;
     const unitId = cu?.unit_id || "ARM-CELL";
-    title.textContent = `${unitId} 작업 셀 관제`;
     const parentText = cu?.parent ? `상위 관제: ${cu.parent}` : "독립 셀 관제";
     const revText = cu?.config_revision ? `구성 ${cu.config_revision}` : "";
-    const sum = obs?.summary;
-    sampleBadge.hidden = view.fleet?.name !== "샘플 현장";
     const statText = sum ? `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간 · 카메라 ${sum.camsTotal}대` : "관측 대기";
-    meta.textContent = [parentText, revText, statText].filter(Boolean).join(" · ");
-    if (!sum || !sum.armsTotal) {
-      liveTag.setAttribute("status", "neutral");
-      liveTag.textContent = "수신 대기";
-    } else if (sum.heldCount > 0 || sum.faultArmCount > 0) {
-      liveTag.setAttribute("status", "crit");
-      liveTag.textContent = sum.heldCount ? `보류 ${sum.heldCount}건` : "고장 확인";
-    } else if (sum.armsFresh > 0) {
-      liveTag.setAttribute("status", "active");
-      liveTag.textContent = `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간`;
-    } else {
-      liveTag.setAttribute("status", "warn");
-      liveTag.textContent = "피드백 대기";
+    let liveStatus = "neutral";
+    let liveText = "수신 대기";
+    if (sum?.armsTotal) {
+      if (sum.heldCount > 0 || sum.faultArmCount > 0) {
+        liveStatus = "crit";
+        liveText = sum.heldCount ? `보류 ${sum.heldCount}건` : "고장 확인";
+      } else if (sum.armsFresh > 0) {
+        liveStatus = "active";
+        liveText = `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간`;
+      } else {
+        liveStatus = "warn";
+        liveText = "피드백 대기";
+      }
     }
-    renderCameras(obs);
-    renderArms(obs);
+    const cams = obs?.cameras || [];
+    const arms = obs?.arms || [];
+    const selectedId = selection?.get?.();
+    renderDom(html`
+      <div class="cell-stage-head">
+        <div>
+          <h2 id="cell-stage-heading">${unitId} 작업 셀 관제</h2>
+          <p class="cell-stage-meta">${[parentText, revText, statText].filter(Boolean).join(" · ")}</p>
+        </div>
+        <div class="cell-stage-actions">
+          <ui-tag class="cell-stage-sample-tag" status="warn" hidden=${view.fleet?.name !== "샘플 현장"}>샘플 데이터</ui-tag>
+          <ui-tag status=${liveStatus}>${liveText}</ui-tag>
+          <${UiButton} kind="segment" type="button" data-work-read="" aria-pressed=${liveOn ? "true" : "false"} onClick=${onToggleLive}
+          >${liveOn ? "영상 자동갱신 ON" : "영상 일시정지"}</${UiButton}>
+          <a class="ui-action-link" data-kind="quiet" href="/console/cell">셀 작업 화면</a>
+        </div>
+      </div>
+      <div class="cell-stage-cameras" role="region" aria-label="셀 실시간 카메라">
+        ${cams.length
+          ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn} />`)
+          : html`<p class="hint">등록된 셀 카메라가 없습니다.</p>`}
+      </div>
+      <div class="cell-stage-arms" role="region" aria-label="셀 팔 상태 요약">
+        ${arms.length
+          ? arms.map((arm) => html`<${ArmCard} key=${arm.id} arm=${arm} selected=${selectedId === arm.id} mhState=${mhStateFor(arm.id)} selection=${selection} receivedAtMs=${obs.receivedAtMs} />`)
+          : html`<p class="hint">${auth.locked ? "접속 후 팔 관측을 표시합니다." : "관측 중인 팔이 없습니다."}</p>`}
+      </div>
+    `, section);
   }
 
   async function refreshControlUnit(signal) {

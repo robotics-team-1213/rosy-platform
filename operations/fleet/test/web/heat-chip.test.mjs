@@ -11,16 +11,68 @@ test('the card shows heat only when CORE slows or stops the robot', () => {
 });
 
 test('rendered thermal chips follow robot freshness and recover with fresh state', () => {
+  class Text {
+    constructor(data) { this.nodeType = 3; this.data = String(data ?? ''); this.parentNode = null; }
+    get nextSibling() {
+      if (!this.parentNode) return null;
+      const list = this.parentNode.childNodes;
+      return list[list.indexOf(this) + 1] || null;
+    }
+    get textContent() { return this.data; }
+    set textContent(v) { this.data = String(v ?? ''); }
+  }
   class Node {
     constructor(tag) {
-      this.tag = tag; this.children = []; this.dataset = {}; this.classList = { add() {} };
+      this.tag = tag; this.nodeType = 1; this.localName = tag; this.nodeName = tag.toUpperCase();
+      this.childNodes = []; this.dataset = {}; this.attrs = {}; this.parentNode = null;
+      this.classList = { add() {}, remove() {}, toggle() {} };
     }
-    append(...children) { this.children.push(...children); }
-    setAttribute() {}
+    get children() { return this.childNodes.filter((c) => c.nodeType === 1); }
+    get firstChild() { return this.childNodes[0] || null; }
+    get nextSibling() {
+      if (!this.parentNode) return null;
+      const list = this.parentNode.childNodes;
+      return list[list.indexOf(this) + 1] || null;
+    }
+    get textContent() { return this.childNodes.map((c) => (c.nodeType === 3 ? c.data : c.textContent)).join(''); }
+    set textContent(v) {
+      for (const c of this.childNodes) c.parentNode = null;
+      this.childNodes = [];
+      if (v !== '' && v !== null && v !== undefined) this.appendChild(new Text(v));
+    }
+    _attach(child, before = null) {
+      const node = typeof child === 'string' || typeof child === 'number' ? new Text(child) : child;
+      if (node.parentNode) node.parentNode.removeChild(node);
+      node.parentNode = this;
+      const idx = before ? this.childNodes.indexOf(before) : -1;
+      if (idx >= 0) this.childNodes.splice(idx, 0, node);
+      else this.childNodes.push(node);
+      return node;
+    }
+    append(...children) { for (const c of children) this._attach(c); }
+    appendChild(child) { return this._attach(child); }
+    insertBefore(child, before) { return this._attach(child, before || null); }
+    removeChild(child) {
+      const idx = this.childNodes.indexOf(child);
+      if (idx >= 0) { this.childNodes.splice(idx, 1); child.parentNode = null; }
+      return child;
+    }
+    replaceChildren(...children) {
+      for (const c of this.childNodes) c.parentNode = null;
+      this.childNodes = [];
+      for (const c of children) this._attach(c);
+    }
+    setAttribute(k, v) { this.attrs[k] = String(v); }
+    getAttribute(k) { return Object.hasOwn(this.attrs, k) ? this.attrs[k] : null; }
+    removeAttribute(k) { delete this.attrs[k]; }
     addEventListener() {}
+    removeEventListener() {}
   }
   const previousDocument = globalThis.document;
-  globalThis.document = { createElement: (tag) => new Node(tag) };
+  globalThis.document = {
+    createElement: (tag) => new Node(tag),
+    createTextNode: (text) => new Text(text),
+  };
   try {
     const view = { colors: ['pink'], receivedAtMs: Date.now() };
     const summary = createRosterSummary({ scope: { guard: (handler) => handler }, view,

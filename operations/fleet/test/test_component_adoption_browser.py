@@ -308,6 +308,7 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         expect(page.locator("#site-path")).to_be_hidden()
         for arm_id in ("arm_a", "arm_b", "arm_s"):
             expect(stage.locator(f'.cell-stage-arm[data-arm-id="{arm_id}"]')).to_be_visible()
+        expect(stage.locator('.cell-stage-arm[data-arm-id="arm_a"] .cell-stage-joints-grid .cell-stage-joint')).to_have_count(6)
         assert "모터 확인 불가 · 확인 불가" not in stage.locator('.cell-stage-arm[data-arm-id="arm_b"]').inner_text()
         work_link_box = stage.locator('.cell-stage-actions a[href="/console/cell"]').bounding_box()
         assert work_link_box and abs(work_link_box["height"] - 36) <= 1
