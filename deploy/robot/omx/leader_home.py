@@ -28,6 +28,8 @@ from leader_actuator import (
 DEFAULT_GAINS = {n: {"p": 1200, "i": 100} for n in BODY}
 # a lighter Leader resting on its stand holds a small offset by itself; driving lift against gravity for less than this stalls at the PWM limit
 KEEP_DEG = 30
+EXACT_HOME_PWM = 280
+EXACT_HOME_CURRENT = 200
 # the Follower's resting pose; pan and roll carry no weight, so any offset moves onto the Follower.
 MAX_TRAVEL_DEG = 100  # per joint, one automatic Leader move
 GRAVITY_JOINTS = ("shoulder_lift", "elbow_flex", "wrist_flex")
@@ -89,7 +91,7 @@ def _resolve_target(pose_path: Path, leader) -> dict[str, float]:
     return target
 
 
-def _match_target(follower: list[int], present: dict[str, int], leader) -> dict[str, float]:
+def _match_target(follower: list[int], present: dict[str, int], leader, *, exact: bool = False) -> dict[str, float]:
     """Leader ticks the guard maps onto the Follower's own: follower = leader + mount + one turn per k."""
     cal = getattr(leader, "calibration", None) or {}
     mount = leader_mount(leader)
@@ -104,7 +106,7 @@ def _match_target(follower: list[int], present: dict[str, int], leader) -> dict[
         if not found:
             raise ValueError(f"리더 {name}에서 팔로워 자세({f_raw})에 해당하는 값이 캘리브레이션 범위({lo}..{hi}) 밖입니다")
         want = min(found, key=lambda t: abs(t - present[name]))
-        keep = name in GRAVITY_JOINTS and lo <= present[name] <= hi and abs(want - present[name]) < KEEP_DEG * TICKS_PER_DEGREE
+        keep = not exact and name in GRAVITY_JOINTS and lo <= present[name] <= hi and abs(want - present[name]) < KEEP_DEG * TICKS_PER_DEGREE
         target[name] = float(present[name] if keep else want)
     return target
 
@@ -201,7 +203,7 @@ def check_attest(attest: str) -> None:
 
 def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, *, timeout_s: float = 45.0,
                      follower: list[int] | None = None, rate_deg_s: float = HOME_RATE_DEG_S,
-                     accel_deg_s2: float = HOME_ACCEL_DEG_S2) -> dict:
+                     accel_deg_s2: float = HOME_ACCEL_DEG_S2, exact: bool = False) -> dict:
     check_attest(attest)
     rate_deg_s, accel_deg_s2 = validate_motion_limits(rate_deg_s, accel_deg_s2)
     teleop_cfg = _load_teleop_cfg(config_path, arm)
@@ -214,11 +216,12 @@ def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, 
     _END.update(torque_off_confirmed=True, restore_failures=[])
     try:
         present = _clear_wrist_roll_wrap(leader, _present_ticks(leader), returning=True)
-        target = _resolve_target(pose_path, leader) if follower is None else _match_target(follower, present, leader)
+        target = _resolve_target(pose_path, leader) if follower is None else _match_target(follower, present, leader, exact=exact)
         check_travel(present, target)  # before any torque: a long move is refused, not confirmed (no hands-off check exists)
         far_deg = max(abs(present[n] - target[n]) for n in BODY) / TICKS_PER_DEGREE
         timeout_s = max(timeout_s, far_deg / actuator.rate_deg_s + 15.0)
-        actuator.admit(pwm=DEFAULT_PWM, current=DEFAULT_CURRENT, gains=DEFAULT_GAINS)
+        actuator.admit(pwm=EXACT_HOME_PWM if exact else DEFAULT_PWM,
+                       current=EXACT_HOME_CURRENT if exact else DEFAULT_CURRENT, gains=DEFAULT_GAINS)
         actuator.enable()
         actuator.seed(present)
         deadline = time.monotonic() + timeout_s
@@ -237,7 +240,12 @@ def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, 
             if all(abs(present[n] - target[n]) <= 15 for n in BODY) and all(
                 abs(actuator.command[n] - target[n]) <= 1.0 for n in BODY
             ):
-                return {"ok": True, "arm": arm, "ticks": present, "start_deviation_deg": round(far_deg, 1)}
+                end_deg = max(abs(present[n] - target[n]) for n in BODY) / TICKS_PER_DEGREE
+                return {
+                    "ok": True, "arm": arm, "ticks": present,
+                    "target": {n: round(target[n]) for n in BODY},
+                    "start_deviation_deg": round(far_deg, 1), "end_deviation_deg": round(end_deg, 1),
+                }
             time.sleep(1.0 / 30.0)
         raise TimeoutError(f"리더 {arm} 홈 이동 시간 초과 ({timeout_s}s)")
     except BaseException:
@@ -272,6 +280,7 @@ def main(argv=None) -> int:
     ap.add_argument("--match-follower", action="store_true", help="move the Leader to the Follower's current pose (mount applied)")
     ap.add_argument("--target-follower-ticks", default="", help="5 comma-separated Follower body ticks for parallel align without opening Follower port")
     ap.add_argument("--rate-deg-s", type=float, default=HOME_RATE_DEG_S)
+    ap.add_argument("--exact", action="store_true", help="move all 5 body joints to exact target using EXACT_HOME caps")
     ap.add_argument("--read-pose", action="store_true")
     ap.add_argument("--read-follower-pose", action="store_true")
     args = ap.parse_args(argv)
@@ -296,7 +305,7 @@ def main(argv=None) -> int:
     else:
         follower = read_follower_pose(args.config, args.arm) if args.match_follower else None
     print(json.dumps(move_leader_home(args.config, args.arm, args.pose, args.attest, timeout_s=args.timeout_s,
-                                      follower=follower, rate_deg_s=args.rate_deg_s)))
+                                      follower=follower, rate_deg_s=args.rate_deg_s, exact=args.exact)))
     return 0
 
 

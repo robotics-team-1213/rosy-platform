@@ -240,7 +240,7 @@ class BenchOpsMixin:
                             elif inc_leader and home_ok:
                                 self._set(step="leader_align", step_arm=a)
                                 self._check_abort(f"{a} 리더 정렬")
-                                self._match_leader(a, rcfg, "리더 홈 이동")
+                                self._match_leader(a, rcfg, "리더 홈 이동", exact=True)
                         finally:
                             if stopped_units:
                                 errs, _ = self._start_units(reversed(stopped_units))
