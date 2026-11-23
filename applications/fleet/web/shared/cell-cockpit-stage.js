@@ -300,7 +300,7 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
       const mhState = createMotorHealthState();
       mhState.accept(arm.motorHealth, { receivedAtMs: obs.receivedAtMs });
       renderMotorHealthSummary(mhWrap, mhState.read(Date.now()));
-      card.append(top, joints, mhWrap);
+      card.append(top, mhWrap, joints);
       card.addEventListener("click", () => selection?.set?.(arm.id, { source: "roster" }));
       return card;
     });
