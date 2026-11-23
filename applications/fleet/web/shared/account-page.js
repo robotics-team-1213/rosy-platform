@@ -1,4 +1,5 @@
 import { setOffBy } from "/common/cause-line.js";
+import { uiTag } from "/common/control-dom.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {canManageAccounts, canViewAccountSetup, CAPABILITIES, roleGrants} from '/console/assets/account-permissions.js';
@@ -60,7 +61,7 @@ async function perform(fn) {
   finally {
     busy = false;
     for (const button of document.querySelectorAll('ui-button, button')) {
-      button.disabled = invalidated; if (!invalidated) button.removeAttribute('reason');
+      setOffBy(button, invalidated ? '로그인 계정 또는 관리 권한이 변경되었습니다' : '');
     }
   }
 }
@@ -115,8 +116,7 @@ async function load() {
     button.setAttribute('kind', 'quiet'); button.setAttribute('type', 'button');
     button.textContent = '편집'; button.setAttribute('aria-label', `${row.login} 편집`);
     button.addEventListener('click', () => edit(row));
-    const tag = document.createElement('ui-tag'); tag.setAttribute('status', row.enabled ? 'neutral' : 'warn');
-    tag.textContent = row.enabled ? '사용 중' : '정지됨';
+    const tag = uiTag(row.enabled ? '사용 중' : '정지됨', row.enabled ? 'neutral' : 'warn');
     for (const value of [row.login, row.principal_id || '—', [...$('account-role').options].find(option => option.value === row.role)?.textContent || row.role || '—', tag, button]) {
       const cell = document.createElement('td'); cell.append(value); item.append(cell);
     }
@@ -244,9 +244,9 @@ function drawRequests() {
   $('request-empty').textContent = requests ? '대기 중인 요청이 없습니다.' : '요청 목록을 읽지 못했습니다. 새로 고쳐 주세요.';
   $('request-empty').hidden = !!requests?.some(row => row.state === 'pending');
   for (const row of requests || []) {
-    const item = document.createElement('tr'), tag = document.createElement('ui-tag'), cell = document.createElement('td');
-    tag.setAttribute('status', requestState[row.state][1]);
-    tag.textContent = requestState[row.state][0] + (row.state === 'rejected' && row.reason ? ` · ${row.reason}` : '');
+    const item = document.createElement('tr'), cell = document.createElement('td');
+    const tag = uiTag(requestState[row.state][0] + (row.state === 'rejected' && row.reason ? ` · ${row.reason}` : ''),
+      requestState[row.state][1]);
     for (const value of [row.kind === 'grant' ? '기존 계정 권한' : '새 계정', row.requester_name,
         row.username + (row.login_taken && row.state === 'pending' ? ' (이미 있는 ID)' : ''),
         row.resource || '지정 없음', row.note || '—', tag]) {

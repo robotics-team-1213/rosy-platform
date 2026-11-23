@@ -1,3 +1,4 @@
+import {patchAttr, patchHidden, patchText} from '/common/control-dom.js';
 import {createScope} from '/common/scope.js';
 import {frameBadge} from '/console/assets/vision-view.js';
 import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
@@ -20,12 +21,14 @@ const element = (tag, text = '') => {
   const node = document.createElement(tag); node.textContent = text; return node;
 };
 const staleArm = entry => {
-  entry.values.textContent = '최신 피드백 없음'; entry.status.textContent = '수신 대기 · 원본 만료';
-  entry.status.setAttribute('state', 'unavailable');
+  patchText(entry.values, '최신 피드백 없음');
+  patchText(entry.status, '수신 대기 · 원본 만료');
+  patchAttr(entry.status, 'state', 'unavailable');
 };
 const staleCamera = entry => {
-  entry.image.hidden = true; entry.status.textContent = '최신 영상 없음';
-  entry.status.setAttribute('state', 'unavailable');
+  patchHidden(entry.image, true);
+  patchText(entry.status, '최신 영상 없음');
+  patchAttr(entry.status, 'state', 'unavailable');
 };
 
 const BASE = '/api/fleet/workcell-observations';
@@ -230,9 +233,9 @@ export function createCellObservation({request, root, credential = () => '', onS
       if (performance.now() >= expires) { staleCamera(entry); return; }
       if (entry.url) URL.revokeObjectURL(entry.url);
       entry.image.src = url; entry.url = url; entry.blob = blob; url = null;
-      entry.identity = identity; entry.expires = expires; entry.image.hidden = false;
-      entry.status.setAttribute('state', 'ready');
-      entry.status.textContent = `원본 최신 영상 · #${sequence}`;
+      entry.identity = identity; entry.expires = expires; patchHidden(entry.image, false);
+      patchAttr(entry.status, 'state', 'ready');
+      patchText(entry.status, `원본 최신 영상 · #${sequence}`);
     } catch (error) {
       if (current()) {
         if (error.status === 401 || error.status === 403) clear();
@@ -393,7 +396,7 @@ export function createCellObservation({request, root, credential = () => '', onS
       const expiry = setInterval(() => {
         for (const entry of arms.values()) {
           if (performance.now() >= entry.expires) staleArm(entry);
-          if (performance.now() - entry.healthPaintedAt >= 200) paintHealth(entry);
+          if (performance.now() - entry.healthPaintedAt >= 1000) paintHealth(entry);
         }
         for (const entry of cameras.values()) if (performance.now() >= entry.expires) staleCamera(entry);
         // 연결이 끊긴 동안 만료 판정이 옛 팔 목록으로 요약을 되살리지 않는다(번쩍임 없음).
@@ -420,12 +423,13 @@ export function createCellObservation({request, root, credential = () => '', onS
         for (const frame of frames) URL.revokeObjectURL(frame.url);
         faultFrames.delete(session);
       }
-      empty.hidden = state.workcells.length > 0;
-      empty.textContent = '등록된 작업 셀 관측이 없습니다.';
+      patchHidden(empty, state.workcells.length > 0);
+      patchText(empty, '등록된 작업 셀 관측이 없습니다.');
       for (const cell of state.workcells) for (const arm of cell.arms) {
         const entry = arms.get(arm.source_id);
-        root.querySelector(`[data-arm-source="${CSS.escape(arm.source_id)}"] [data-robot-profile]`)
-          ?.replaceWith(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
+        const existingProfile = root.querySelector(`[data-arm-source="${CSS.escape(arm.source_id)}"] [data-robot-profile]`);
+        const nextProfile = profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256});
+        if (existingProfile && existingProfile !== nextProfile) existingProfile.replaceWith(nextProfile);
         // motor_health ages already include source/receipt aging; add only this browser request's transit.
         entry.health.accept(arm.motor_health, {requestedAtMs, receivedAtMs: Date.now()});
         paintHealth(entry);
@@ -434,9 +438,9 @@ export function createCellObservation({request, root, credential = () => '', onS
         const age = Math.max(0, arm.source_age_s, arm.receipt_age_s);
         entry.expires = arm.fresh && Number.isFinite(age) ? observedAt + (2 - age) * 1000 : 0;
         if (!arm.positions || performance.now() >= entry.expires) { staleArm(entry); continue; }
-        entry.values.textContent = JSON.stringify(arm.positions, null, 2);
-        entry.status.setAttribute('state', 'ready');
-        entry.status.textContent = `실제 피드백 · #${arm.sequence}`;
+        patchText(entry.values, JSON.stringify(arm.positions, null, 2));
+        patchAttr(entry.status, 'state', 'ready');
+        patchText(entry.status, `실제 피드백 · #${arm.sequence}`);
       }
       for (const [source, entry] of cameras) void picture(source, entry, scope);
       lastWorkcells = state.workcells; observedDisconnected = false;
@@ -446,8 +450,8 @@ export function createCellObservation({request, root, credential = () => '', onS
       if (error.status === 401 || error.status === 403) clear();
       else {
         for (const entry of arms.values()) { entry.health.disconnect(); paintHealth(entry); }
-        empty.hidden = false;
-        empty.textContent = error.status === 503 ? '관측 구성을 확인할 수 없습니다.' : '관측 연결 확인 중 · 오래된 값은 표시하지 않습니다.';
+        patchHidden(empty, false);
+        patchText(empty, error.status === 503 ? '관측 구성을 확인할 수 없습니다.' : '관측 연결 확인 중 · 오래된 값은 표시하지 않습니다.');
         if (error.status === 503 && !lastWorkcells.length) {
           observedDisconnected = false;
           emitSummary([]);

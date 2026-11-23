@@ -52,3 +52,40 @@ test("arm anchors come from the tracking response and leave with it", async () =
   await tracking.refresh();
   assert.deepEqual(view.anchors, []);
 });
+
+test("identical tracking polls skip table rebuilds until coordinates change", async () => {
+  let replaceCount = 0;
+  const nodes = new Map();
+  const el = (id) => {
+    if (!nodes.has(id)) {
+      nodes.set(id, {
+        hidden: true,
+        dataset: {},
+        replaceChildren(...rows) { replaceCount += 1; this.rows = rows; },
+      });
+    }
+    return nodes.get(id);
+  };
+  globalThis.document = { createElement: () => ({ children: [], append(child) { this.children.push(child); } }) };
+  let body = {
+    lease_s: 1,
+    sources: [{ source_id: "north", status: "OK", age_ms: 0 }],
+    robots: [{ robot_id: "rosy_01", status: "MARKER", camera: { x: 1.25, y: 2.5 } }],
+  };
+  const tracking = createTrackingView({
+    el,
+    view: {},
+    auth: { locked: false },
+    call: async () => body,
+    scope: { capture: () => ({ check() {}, signal: new AbortController().signal }), timeout: () => () => {} },
+  });
+  await tracking.refresh();
+  assert.equal(replaceCount, 1);
+  await tracking.refresh();
+  await tracking.refresh();
+  assert.equal(replaceCount, 1);
+  body = { ...body, robots: [{ robot_id: "rosy_01", status: "MARKER", camera: { x: 1.5, y: 2.5 } }] };
+  await tracking.refresh();
+  assert.equal(replaceCount, 2);
+  assert.equal(el("tracking-position-rows").rows[0].children[1].textContent, "1.50");
+});

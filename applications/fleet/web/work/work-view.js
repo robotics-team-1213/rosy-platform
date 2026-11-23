@@ -1,5 +1,6 @@
 // Source identity stays separate; Mission and Cell Job approval use the existing server admission route.
 import { setOffBy } from "/common/cause-line.js";
+import { patchHidden, patchText } from "/common/control-dom.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
 import {owns, relays} from "/console/assets/unit-scope.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
@@ -53,6 +54,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
   let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
+  let lastListSig = "", lastDetailSig = "", lastRequestsSig = "";
   const newStatus = Object.assign(document.createElement("p"), {id: "work-new-status", role: "status",
     textContent: "만들 수 있는 작업을 확인하고 있습니다."});
   el("work-new").querySelector("ul").before(newStatus);
@@ -64,14 +66,14 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   const trips = createTripProposalView({scope, call, anchor, active, approveReason, principal, confirm});
   const integrated = createIntegratedControlView({scope, call, anchor, active,
     approveReason, principal, taskStatus: workStatus});
-  const clear = () => { detail.replaceChildren(); admit.hidden = true; };
+  const clear = () => { lastDetailSig = ""; if (detail.childElementCount) detail.replaceChildren(); patchHidden(admit, true); };
   // D-763 9 — 새 작업은 서버가 여기서 실행할 수 있다고 답한 종류만 보인다. 답이 없으면 아무 종류도 없다.
   function showKinds(kinds = []) {
-    el("work-new-move-item").hidden = !kinds.includes("trip");
-    el("work-new-cell-item").hidden = !kinds.includes("CELL_TRANSFER");
-    newStatus.textContent = kinds.includes("trip") || kinds.includes("CELL_TRANSFER")
+    patchHidden(el("work-new-move-item"), !kinds.includes("trip"));
+    patchHidden(el("work-new-cell-item"), !kinds.includes("CELL_TRANSFER"));
+    patchText(newStatus, kinds.includes("trip") || kinds.includes("CELL_TRANSFER")
       ? "작업 종류를 선택하세요. 실행 전 장치 상태와 권한을 다시 확인합니다."
-      : "현재 만들 수 있는 작업이 없습니다. 장치 연결과 작업 설정을 확인하세요.";
+      : "현재 만들 수 있는 작업이 없습니다. 장치 연결과 작업 설정을 확인하세요.");
   }
   el("work-overview").hidden = !active;
   // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다.
@@ -98,12 +100,12 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   el("work-state").before(policyPanel);
   let policy = null, policyBusy = false, policyAbsent = false, policyNotice = "";
   function paintPolicy() {
-    if (policyAbsent) { policyPanel.hidden = true; return; }
-    policyPanel.hidden = false;
-    policyStatus.textContent = policyNotice || policyScopeText(policy)
-      || "자동 승인 범위를 확인하지 못했습니다.";
-    policyToggle.hidden = false;
-    policyToggle.textContent = policy?.scope?.enabled ? "자동 승인 끄기" : "자동 승인 켜기";
+    if (policyAbsent) { patchHidden(policyPanel, true); return; }
+    patchHidden(policyPanel, false);
+    patchText(policyStatus, policyNotice || policyScopeText(policy)
+      || "자동 승인 범위를 확인하지 못했습니다.");
+    patchHidden(policyToggle, false);
+    patchText(policyToggle, policy?.scope?.enabled ? "자동 승인 끄기" : "자동 승인 켜기");
     const reason = policyBusy ? "전환 요청 처리 중입니다" : approveReason();
     setOffBy(policyToggle, reason);
   }
@@ -140,53 +142,58 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     document.querySelector('[aria-labelledby="roster-heading"]').hidden = true;
   }
   function clearRequests(message) {
+    lastRequestsSig = "";
     const requests = el("channel-requests"), state = el("channel-requests-state");
     const focused = requests.contains(document.activeElement);
-    requests.replaceChildren(); state.textContent = message;
+    if (requests.childElementCount) requests.replaceChildren();
+    patchText(state, message);
     if (focused) state.focus({preventScroll: true});
   }
   function reset(message = "접속 후 작업을 확인할 수 있습니다.", preserveUnits = false) {
     if (!preserveUnits) { units.reset(); arms.reset(); trips.reset(); integrated.reset(); }
     channelRequestView.reset();
-    rows = []; selected = null; detailVersion++;
+    rows = []; selected = null; detailVersion++; lastListSig = "";
     showKinds();
-    newStatus.textContent = message;
-    list.replaceChildren(); clear();
+    patchText(newStatus, message);
+    if (list.childElementCount) list.replaceChildren();
+    clear();
     clearRequests(message);
-    el("work-state").textContent = message;
-    el("work-evidence").textContent = "작업을 선택하세요.";
-  }
-  function field(label, value) {
-    const term = document.createElement("dt"), text = document.createElement("dd");
-    term.textContent = label; text.textContent = value || "미확인";
-    detail.append(term, text);
+    patchText(el("work-state"), message);
+    patchText(el("work-evidence"), "작업을 선택하세요.");
   }
   function showDetail(row) {
-    clear();
-    field("업무", {navigate: "이동", trip: "이동", PICK_PLACE: "파지·배치", CELL_TRANSFER: "팔레트 적재"}[row.action_kind] || "기타 작업");
-    field("담당 장치", row.device_id);
-    field("작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음");
-    field("실행 책임", row.source === "task" || row.source === "trip" ? "CORE · 주행" : "OMX · 팔");
-    field("상태", workStatus(row.status));
-    // D-763 7 — the step-kind registry's rule on the work read (PROPOSED rows only); read-only, no approve here.
-    if (row.approval) field("승인 조건", approvals[row.approval] || "승인 조건 확인 필요");
-    // D-865 P3 — 자동 승인 범위 소속을 읽기 전용으로 보여 준다. 승인 권한은 서버가 소유한다.
-    const autoText = autoAdmitDetail(row, policy);
-    if (autoText) field("자동 승인", autoText);
-    field("최근 원장 갱신", new Date(row.updated_at).toLocaleString());
-    field("사유", row.reason || "기록된 사유 없음");
-    field("작업 식별자", row.source_id);
-    // D-741 7 — 막힌 단추에 그 이유를 적는다. 권한은 세션에서, 그 밖의 거절은 서버가 답한 말 그대로다.
     const canAdmitHere = canAdmitWorkHere(row);
-    if (approvable(row) && !canAdmitHere) field("승인 위치", "이 팔을 맡은 셀 관제 화면에서 승인");
-    admit.hidden = !canAdmitHere;
     const reason = busy ? "요청 처리 중입니다" : approveReason() || refusal;
+    const autoText = autoAdmitDetail(row, policy);
+    const detailRows = [
+      ["업무", {navigate: "이동", trip: "이동", PICK_PLACE: "파지·배치", CELL_TRANSFER: "팔레트 적재"}[row.action_kind] || "기타 작업"],
+      ["담당 장치", row.device_id],
+      ["작업 공간", row.workcell_id || "주행 지도 · 작업 공간 지정 없음"],
+      ["실행 책임", row.source === "task" || row.source === "trip" ? "CORE · 주행" : "OMX · 팔"],
+      ["상태", workStatus(row.status)],
+      ...(row.approval ? [["승인 조건", approvals[row.approval] || "승인 조건 확인 필요"]] : []),
+      ...(autoText ? [["자동 승인", autoText]] : []),
+      ["최근 원장 갱신", new Date(row.updated_at).toLocaleString()],
+      ["사유", row.reason || "기록된 사유 없음"],
+      ["작업 식별자", row.source_id],
+      ...(approvable(row) && !canAdmitHere ? [["승인 위치", "이 팔을 맡은 셀 관제 화면에서 승인"]] : []),
+    ];
+    const detailSig = JSON.stringify([detailRows, canAdmitHere, reason]);
+    if (detailSig !== lastDetailSig || !detail.firstElementChild) {
+      lastDetailSig = detailSig;
+      detail.replaceChildren(...detailRows.flatMap(([label, value]) => {
+        const term = document.createElement("dt"), text = document.createElement("dd");
+        term.textContent = label; text.textContent = value || "미확인";
+        return [term, text];
+      }));
+    }
+    patchHidden(admit, !canAdmitHere);
     setOffBy(admit, reason);
   }
   async function select(row) {
     selected = workKey(row); refusal = ""; paint(); showDetail(row);
     const version = ++detailVersion, life = scope.capture();
-    el("work-evidence").textContent = "결과 근거 조회 중";
+    patchText(el("work-evidence"), "결과 근거 조회 중");
     try {
       const path = {task: "tasks", trip: "trips", cell_job: "cell-jobs"}[row.source] || "missions";
       const result = await call(`/api/fleet/${path}/${encodeURIComponent(row.source_id)}`);
@@ -195,10 +202,10 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       const current = result.task || result.mission || result.job || {...result, status: result.state};
       showDetail({...row, ...current, source: row.source, source_id: row.source_id, device_id: row.device_id});
       const count = result.history?.length || 0;
-      el("work-evidence").textContent = `${workStatus(current?.status)} · 최근 이력 ${count}건${result.history_truncated ? " · 이전 이력 더 있음" : ""}`;
+      patchText(el("work-evidence"), `${workStatus(current?.status)} · 최근 이력 ${count}건${result.history_truncated ? " · 이전 이력 더 있음" : ""}`);
     } catch (error) {
       if (!life.current() || version !== detailVersion) return;
-      el("work-evidence").textContent = error.status === 404 ? "이 작업의 상세를 조회할 수 없습니다." : "결과 근거를 확인할 수 없습니다.";
+      patchText(el("work-evidence"), error.status === 404 ? "이 작업의 상세를 조회할 수 없습니다." : "결과 근거를 확인할 수 없습니다.");
     }
   }
   function paint() {
@@ -206,31 +213,38 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     const selection = rows.find(row => workKey(row) === selected);
     if (selection && filter !== "all" && selection.source !== filter) {
       selected = null; detailVersion++; clear();
-      el("work-evidence").textContent = "필터에 맞는 작업을 선택하세요.";
+      patchText(el("work-evidence"), "필터에 맞는 작업을 선택하세요.");
     }
-    const focused = document.activeElement?.closest('[data-work-key]')?.dataset.workKey;
-    list.replaceChildren();
-    for (const row of rows.filter(row => filter === "all" || row.source === filter)) {
-      const item = document.createElement("li"), button = document.createElement("ui-button");
-      button.setAttribute("kind", "toggle"); button.setAttribute("type", "button");  // toggle: aria-pressed draws the selection
-      button.dataset.workKey = workKey(row);
-      button.setAttribute("data-work-read", "");
-      button.setAttribute("aria-pressed", String(selected === workKey(row)));
-      button.title = `${row.source} · ${row.source_id} · ${row.status}`;
-      button.textContent = workLine(row);
-      button.addEventListener("click", () => select(row));
-      item.append(button);
-      // D-865 P3 — 승인 대기 행의 자동 승인 범위 소속 표시(auto_admit 표기 규칙).
-      if (autoAdmitScope(row, policy).member) {
-        const badge = document.createElement("span");
-        badge.className = "work-auto-admit"; badge.textContent = "자동 승인";
-        badge.title = "승인 범위 안의 작업입니다. 사람 클릭 없이 정책이 승인할 수 있습니다.";
-        item.append(badge);
+    const visibleRows = rows.filter(row => filter === "all" || row.source === filter);
+    const listSig = JSON.stringify(visibleRows.map(row => [
+      workKey(row), selected === workKey(row), row.status, workLine(row), autoAdmitScope(row, policy).member,
+    ]));
+    if (listSig !== lastListSig || (visibleRows.length > 0 && !list.firstElementChild)) {
+      lastListSig = listSig;
+      const focused = document.activeElement?.closest('[data-work-key]')?.dataset.workKey;
+      list.replaceChildren();
+      for (const row of visibleRows) {
+        const item = document.createElement("li"), button = document.createElement("ui-button");
+        button.setAttribute("kind", "toggle"); button.setAttribute("type", "button");  // toggle: aria-pressed draws the selection
+        button.dataset.workKey = workKey(row);
+        button.setAttribute("data-work-read", "");
+        button.setAttribute("aria-pressed", String(selected === workKey(row)));
+        button.title = `${row.source} · ${row.source_id} · ${row.status}`;
+        button.textContent = workLine(row);
+        button.addEventListener("click", () => select(row));
+        item.append(button);
+        // D-865 P3 — 승인 대기 행의 자동 승인 범위 소속 표시(auto_admit 표기 규칙).
+        if (autoAdmitScope(row, policy).member) {
+          const badge = document.createElement("span");
+          badge.className = "work-auto-admit"; badge.textContent = "자동 승인";
+          badge.title = "승인 범위 안의 작업입니다. 사람 클릭 없이 정책이 승인할 수 있습니다.";
+          item.append(badge);
+        }
+        list.append(item);
+        if (focused === workKey(row)) button.focus({preventScroll: true});
       }
-      list.append(item);
-      if (focused === workKey(row)) button.focus({preventScroll: true});
     }
-    el("work-empty").hidden = list.childElementCount > 0;
+    patchHidden(el("work-empty"), list.childElementCount > 0);
   }
   // 승인은 Cell·대화 검토와 같은 원장 경로다: 현재 정지 세대를 읽어 그대로 보내고, 판단은 서버가 한다.
   async function approve() {
@@ -264,14 +278,14 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       const changed = rows.find(row => workKey(row) === selected);
       if (previous && changed && previous.updated_at !== changed.updated_at) {
         detailVersion++;
-        el("work-evidence").textContent = "작업 상태가 갱신됐습니다. 작업을 다시 선택해 결과 근거를 확인하세요.";
+        patchText(el("work-evidence"), "작업 상태가 갱신됐습니다. 작업을 다시 선택해 결과 근거를 확인하세요.");
       }
-      el("work-state").textContent = `${shown && result.truncated_sources.length ? `최근 ${result.rows.length}건 중 ` : ""}${rows.length}건 · 조회 ${new Date(result.observed_at).toLocaleTimeString()}${result.truncated_sources.length ? " · 최근 목록 일부" : ""}`;
-      el("work-sources").textContent = [result.tasks_available ? "주행 원장" : "주행 원장 미설정",
+      patchText(el("work-state"), `${shown && result.truncated_sources.length ? `최근 ${result.rows.length}건 중 ` : ""}${rows.length}건 · 조회 ${new Date(result.observed_at).toLocaleTimeString()}${result.truncated_sources.length ? " · 최근 목록 일부" : ""}`);
+      patchText(el("work-sources"), [result.tasks_available ? "주행 원장" : "주행 원장 미설정",
         result.missions_available ? "내 팔 작업 원장" : "팔 작업 원장 미설정",
-        result.cell_jobs_available ? "팔레트 적재 작업 원장" : "팔레트 적재 작업 원장 미설정", "운행 기록"].join(" · ");
+        result.cell_jobs_available ? "팔레트 적재 작업 원장" : "팔레트 적재 작업 원장 미설정", "운행 기록"].join(" · "));
       const current = rows.find(row => workKey(row) === selected);
-      if (selected && !current) { selected = null; detailVersion++; clear(); el("work-evidence").textContent = "선택한 작업이 현재 조회 범위에 없습니다."; }
+      if (selected && !current) { selected = null; detailVersion++; clear(); patchText(el("work-evidence"), "선택한 작업이 현재 조회 범위에 없습니다."); }
       if (current) showDetail(current);
       paint();
       await refreshRequests(life);
@@ -284,24 +298,28 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     const requests = el("channel-requests"), state = el("channel-requests-state");
     try {
       const result = await call("/api/fleet/channel-requests"); life.check();
-      const focused = requests.contains(document.activeElement) ? document.activeElement?.closest("[data-request-id]")?.dataset.requestId : null;
-      let restored;
-      requests.replaceChildren();
-      for (const row of result.rows) {
-        const item = document.createElement("li"), text = document.createElement("p"), info = document.createElement("p");
-        text.textContent = row.content;
-        info.className = "hint";
-        info.textContent = `접수 · ${new Date(row.received_at).toLocaleString()} · ${row.request_id}`;
-        item.append(text, info); requests.append(item);
-        const button = document.createElement("ui-button");
-        button.dataset.requestId = row.request_id;
-        button.setAttribute("kind", "quiet"); button.setAttribute("type", "button");
-        button.textContent = "요청 검토";
-        button.addEventListener("click", () => channelRequestView.select(row)); item.append(button);
-        if (focused === row.request_id) restored = button;
+      const reqSig = JSON.stringify(result.rows.map(row => [row.request_id, row.received_at, row.content]));
+      if (reqSig !== lastRequestsSig) {
+        lastRequestsSig = reqSig;
+        const focused = requests.contains(document.activeElement) ? document.activeElement?.closest("[data-request-id]")?.dataset.requestId : null;
+        let restored;
+        requests.replaceChildren();
+        for (const row of result.rows) {
+          const item = document.createElement("li"), text = document.createElement("p"), info = document.createElement("p");
+          text.textContent = row.content;
+          info.className = "hint";
+          info.textContent = `접수 · ${new Date(row.received_at).toLocaleString()} · ${row.request_id}`;
+          item.append(text, info); requests.append(item);
+          const button = document.createElement("ui-button");
+          button.dataset.requestId = row.request_id;
+          button.setAttribute("kind", "quiet"); button.setAttribute("type", "button");
+          button.textContent = "요청 검토";
+          button.addEventListener("click", () => channelRequestView.select(row)); item.append(button);
+          if (focused === row.request_id) restored = button;
+        }
+        if (focused) (restored || state).focus({preventScroll: true});
       }
-      state.textContent = `${result.rows.length}건 · 접수된 원문입니다. 실행 승인은 별도로 확인합니다.`;
-      if (focused) (restored || state).focus({preventScroll: true});
+      patchText(state, `${result.rows.length}건 · 접수된 원문입니다. 실행 승인은 별도로 확인합니다.`);
     } catch (error) {
       if (!life.current()) return;
       channelRequestView.reset();

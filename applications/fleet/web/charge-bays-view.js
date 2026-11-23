@@ -1,5 +1,6 @@
 // D-941 5/7: the charge-bay plan remains display-only; task buttons use pipeline APIs.
 import { setOffBy } from "/common/cause-line.js";
+import { patchHidden, patchText, uiTag } from "/common/control-dom.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 import { owns } from "/console/assets/unit-scope.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
@@ -38,6 +39,9 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   const selectedInspectorCam = {};
   let dualCamMode = false;
   let lastRows = null;
+  let lastInspectorSig = "";
+  let lastListSig = "";
+  const draftChoices = new Map();
 
   scope.listen(document, "visibilitychange", () => {
     frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive"));
@@ -49,16 +53,10 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       if (!id || (!String(id).startsWith("arm_") && !String(id).startsWith("cell_"))) return;
       activeInspectorId = id;
       framesOn = false;
+      lastInspectorSig = "";
       if (lastRows) renderInspector(lastRows);
     });
     scope.onDispose?.(offSelection);
-  }
-
-  function tag(text, status) {
-    const t = document.createElement("ui-tag");
-    t.setAttribute("status", status);
-    t.textContent = text;
-    return t;
   }
 
   async function executeChoice(choice, card, button, confirmed = false) {
@@ -122,12 +120,12 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       }
       await refresh();
       if (choice.requiresPresence) {
-        hint.textContent = "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.";
-        hint.hidden = false;
+        patchText(hint, "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.");
+        patchHidden(hint, false);
       }
     } catch (error) {
-      hint.textContent = `작업 요청 실패: ${error.message}`;
-      hint.hidden = false;
+      patchText(hint, `작업 요청 실패: ${error.message}`);
+      patchHidden(hint, false);
     } finally {
       button.textContent = origLabel;
       setOffBy(button, "");
@@ -138,12 +136,37 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     if (!inspector) return;
     // No choice yet still shows the first cell's tabs (frames stay off until a click, framesOn).
     if (!rows?.cards?.length) {
-      inspector.replaceChildren();
+      lastInspectorSig = "";
+      if (inspector.childElementCount) inspector.replaceChildren();
       return;
     }
     const targets = inspectorTargetsFromRows(rows, readWorkcellObs?.());
     const active = targets.find((t) => t.id === activeInspectorId) || targets[0];
     if (!active) return;
+
+    const camViews = active.cameraViews || [];
+    const activeCamId = selectedInspectorCam[active.id] || camViews[0]?.id || "arm_s_top";
+    const activeCam = camViews.find((v) => v.id === activeCamId) || camViews[0]
+      || {id: activeCamId, label: activeCamId, source: activeCamId};
+    const nextSig = JSON.stringify([
+      active.id,
+      active.robot_id || null,
+      dualCamMode,
+      framesOn,
+      activeCamId,
+      targets.map((t) => [t.id, t.shortTab]),
+      active.title,
+      active.text || "대기 중",
+      active.status || "neutral",
+      active.task ? [active.task.task_id, active.task.status, active.task.arm_id || ""] : null,
+      active.jointLiveText || active.healthText || "",
+      camViews.map((v) => [v.id, v.source, v.label]),
+      active.dualPair || null,
+      active.buttons || [],
+      active.quickControls || [],
+    ]);
+    if (nextSig === lastInspectorSig && inspector.firstElementChild) return;
+    lastInspectorSig = nextSig;
 
     const tabs = document.createElement("div");
     tabs.className = "omx-inspector-tabs";
@@ -158,6 +181,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       btn.textContent = t.shortTab;
       btn.addEventListener("click", () => {
         activeInspectorId = t.id;
+        lastInspectorSig = "";
         selection?.set?.(t.id, { source: "inspector" });
         renderInspector(rows);
       });
@@ -173,6 +197,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     dualBtn.title = "상단+손목 2채널 동시 보기";
     dualBtn.addEventListener("click", () => {
       dualCamMode = !dualCamMode;
+      lastInspectorSig = "";
       renderInspector(rows);
     });
     tabs.append(dualBtn);
@@ -181,12 +206,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     head.className = "omx-inspector-head";
     const titleEl = document.createElement("strong");
     titleEl.textContent = active.title;
-    head.append(titleEl, tag(active.text || "대기 중", active.status || "neutral"));
-
-    const camViews = active.cameraViews || [];
-    const activeCamId = selectedInspectorCam[active.id] || camViews[0]?.id || "arm_s_top";
-    const activeCam = camViews.find((v) => v.id === activeCamId) || camViews[0]
-      || {id: activeCamId, label: activeCamId, source: activeCamId};
+    head.append(titleEl, uiTag(active.text || "대기 중", active.status || "neutral"));
 
     const cameraBindings = [];
     let camStageNode;
@@ -298,6 +318,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       pip.append(pFrame, pLbl);
       pip.addEventListener("click", () => {
         selectedInspectorCam[active.id] = v.id;
+        lastInspectorSig = "";
         renderInspector(rows);
       });
       pipGrid.append(pip);
@@ -308,6 +329,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     const taskBase = active.task ? `${active.task.task_id} · ${active.task.status} · ${active.task.arm_id || "—"}` : "";
     meta.textContent = [taskBase, active.jointLiveText || active.healthText || ""].filter(Boolean).join(" | ");
 
+    const draft = draftChoices.get(active.id) || {};
     const quickDispatchBar = document.createElement("div");
     quickDispatchBar.className = "omx-inspector-quick-dispatch";
     const tierField = document.createElement("label");
@@ -316,13 +338,15 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     tierText.textContent = "적재 층";
     const tierSel = document.createElement("select"); tierSel.className = "ui-field";
     tierSel.setAttribute("data-work-read", "");
+    const initialTier = draft.tier ?? (active.id === "arm_b" ? "2" : "1");
     for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]] ) {
       const opt = document.createElement("option");
       opt.value = val;
       opt.textContent = lbl;
-      if (active.id === "arm_b" && val === "2") opt.selected = true;
+      if (val === initialTier) opt.selected = true;
       tierSel.append(opt);
     }
+    tierSel.addEventListener("change", () => draftChoices.set(active.id, { ...draftChoices.get(active.id), tier: tierSel.value }));
     tierField.append(tierText, tierSel);
     const dispField = document.createElement("label");
     dispField.className = "omx-inspector-field";
@@ -330,12 +354,15 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     dispText.textContent = "복구 위치";
     const dispSel = document.createElement("select"); dispSel.className = "ui-field";
     dispSel.setAttribute("data-work-read", "");
+    const initialDisp = draft.disp ?? "";
     for (const [val, lbl] of [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]]) {
       const opt = document.createElement("option");
       opt.value = val;
       opt.textContent = lbl;
+      if (val === initialDisp) opt.selected = true;
       dispSel.append(opt);
     }
+    dispSel.addEventListener("change", () => draftChoices.set(active.id, { ...draftChoices.get(active.id), disp: dispSel.value }));
     dispField.append(dispText, dispSel);
     const runCustomBtn = document.createElement("ui-button");
     runCustomBtn.setAttribute("kind", "primary");
@@ -363,8 +390,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         });
         await refresh();
       } catch (err) {
-        hint.textContent = `맞춤 실행 실패: ${err.message}`;
-        hint.hidden = false;
+        patchText(hint, `맞춤 실행 실패: ${err.message}`);
+        patchHidden(hint, false);
       } finally {
         runCustomBtn.textContent = orig;
         setOffBy(runCustomBtn, "");
@@ -402,24 +429,29 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   function show(rows, note) {
     lastRows = rows;
     renderInspector(rows);
-    list.replaceChildren();
-    for (const b of rows?.bays || []) {
-      const li = document.createElement("li");
-      li.append(`${b.id} `, tag(b.text, b.status));
-      list.append(li);
+    const listSig = JSON.stringify([rows?.bays || [], rows?.cells || [], rows?.actions || []]);
+    if (listSig !== lastListSig) {
+      lastListSig = listSig;
+      const items = [];
+      for (const b of rows?.bays || []) {
+        const li = document.createElement("li");
+        li.append(`${b.id} `, uiTag(b.text, b.status));
+        items.push(li);
+      }
+      for (const c of rows?.cells || []) {
+        const li = document.createElement("li");
+        li.append(`${c.id} `, uiTag(c.text, c.status));
+        items.push(li);
+      }
+      for (const a of rows?.actions || []) {
+        const li = document.createElement("li");
+        li.textContent = `${a.robot}: ${a.text}`;
+        items.push(li);
+      }
+      list.replaceChildren(...items);
     }
-    for (const c of rows?.cells || []) {
-      const li = document.createElement("li");
-      li.append(`${c.id} `, tag(c.text, c.status));
-      list.append(li);
-    }
-    for (const a of rows?.actions || []) {
-      const li = document.createElement("li");
-      li.textContent = `${a.robot}: ${a.text}`;
-      list.append(li);
-    }
-    hint.textContent = note;
-    hint.hidden = !note;
+    patchText(hint, note);
+    patchHidden(hint, !note);
   }
 
   async function refresh() {
@@ -431,12 +463,12 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       const plan = await call("/api/fleet/charge-bays", { signals: [life.signal] });
       life.check();
       const rows = chargeBayRows(plan);
-      state.textContent = `칸 ${rows.bays.length}`;
+      patchText(state, `칸 ${rows.bays.length}`);
       show(rows, rows.bays.length ? rows.summary : "활성 지도에 충전 칸(charge)이 없습니다");
     } catch (error) {
       if (error.name === "AbortError") return;
       if (isRouteAbsent(error.status, error.code)) unavailable = true;
-      state.textContent = "—";
+      patchText(state, "—");
       show(null, error.code === "NO_ACTIVE_MAP" ? "활성 지도가 없습니다" : "충전 칸 계획을 읽지 못했습니다");
     } finally {
       inFlight = false;

@@ -3,6 +3,7 @@
 // 그리는 것과 여는 것은 다른 일이다. 서버 기하를 복제하지 않는다.
 // 운영자 말은 공용 표(core_ui_logic.js, D-540 6)에서 온다. 열거값은 title에만.
 import { setOff, setOffBy } from "/common/cause-line.js";
+import { patchAttr, patchText } from "/common/control-dom.js";
 import { FORMATION_SHAPE_LABEL, FORMATION_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { capabilityReason, chooseLeader, motionCommandReason, formationReason, leaderPathKind } from "./motion-readiness.js";
 
@@ -32,12 +33,13 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     Object.assign(new Option(label, value), { title: value })));
   // 꺼진 버튼은 "위 사유"이고 원인은 #formation-why 한 줄이 말한다.
   // D-540 9: 대형을 열고·바꾸고·재개하는 것은 움직임이다. 해제(formation-stop)는 멈춤이라 열려 있다.
+  let lastFormationSig = "";
   function setButtons(why, off) {
     const named = namedReason();
     for (const [id, value] of Object.entries(off)) {
       setOff(el(id), value || (named !== "" && id !== "formation-stop"), ABOVE);
     }
-    el("formation-why").textContent = named ? [named, why].filter(Boolean).join(" · ") : why;
+    patchText(el("formation-why"), named ? [named, why].filter(Boolean).join(" · ") : why);
   }
 
   // 팔로워 칸은 리더를 뺀 로봇이다. 리더를 바꾸면 다시 그리되, 운영자가 푼 칸은 그대로 둔다.
@@ -105,9 +107,15 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     const text = el("formation-filter").value.trim().toLowerCase();
     const hit = (id) => !text || id.toLowerCase().includes(text);
     for (const select of document.querySelectorAll(".formation select[data-robot-picker]")) {
-      for (const option of select.options) option.hidden = !hit(option.value) && option.value !== select.value;
+      for (const option of select.options) {
+        const hide = !hit(option.value) && option.value !== select.value;
+        if (option.hidden !== hide) option.hidden = hide;
+      }
     }
-    for (const label of el("formation-members").children) label.hidden = !hit(label.title);
+    for (const label of el("formation-members").children) {
+      const hide = !hit(label.title);
+      if (label.hidden !== hide) label.hidden = hide;
+    }
   }
 
   const followers = () => [...el("formation-members").querySelectorAll("input:checked")].map((b) => b.value);
@@ -149,6 +157,7 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
   function syncPendingSummary() {
     fillMembers();
     if (view.formationUnavailable || (view.formation && view.formation.active)) return;
+    lastFormationSig = "";
     rememberLeaderOverride();
     const leader = el("formation-leader").value;
     const shape = el("formation-shape").value;
@@ -160,21 +169,22 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     });
     setPath();
     const how = leader === view.leaderChoice?.id ? (LEADER_HOW[view.leaderChoice.by] || "번호 앞") : "직접 지정";
-    el("formation-detail").textContent = reason ? ""
-      : `리더 ${leader} · 팔로워 ${members.length}대(${fewIds(members)}) · ${shapeLabel(shape)} · 간격 ${spacing} m · ${how}`;
+    patchText(el("formation-detail"), reason ? ""
+      : `리더 ${leader} · 팔로워 ${members.length}대(${fewIds(members)}) · ${shapeLabel(shape)} · 간격 ${spacing} m · ${how}`);
   }
 
   function renderFormation(status) {
     const stateEl = el("formation-state");
-    stateEl.textContent = stateLabel(status.state);
-    stateEl.title = status.state || "";
-    stateEl.setAttribute("status", status.state === "RUNNING" ? "active"
+    patchText(stateEl, stateLabel(status.state));
+    const nextTitle = status.state || "";
+    if (stateEl.title !== nextTitle) stateEl.title = nextTitle;
+    patchAttr(stateEl, "status", status.state === "RUNNING" ? "active"
       : status.state === "HOLDING" ? "warn" : "neutral");
     // 대형이 열려 있는 동안에는 리더·팔로워를 바꿀 수 없다 — 해제하고 다시 연다. 모양·간격은
     // 대형 변경이 보내는 값이라 열려 있어야 한다(숨기면 변경 버튼이 보이지 않는 값을 보낸다).
     el("formation-leader").disabled = status.active;
     el("formation-members").querySelectorAll("input").forEach((i) => { i.disabled = status.active; });
-    el("formation-form-summary").textContent = status.active ? "모양·간격 바꾸기" : "대형 설정 · 리더와 팔로워";
+    patchText(el("formation-form-summary"), status.active ? "모양·간격 바꾸기" : "대형 설정 · 리더와 팔로워");
 
     const detail = el("formation-detail");
     if (!status.active) {
@@ -212,14 +222,18 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     if (pending.length) {
       items.push(["재개 차단", pending.map(formatFormationCause).join(", ")]);
     }
-    const dl = document.createElement("dl");
-    dl.className = "diag-readout";
-    for (const [term, desc] of items) {
-      const dt = document.createElement("dt"); dt.textContent = term;
-      const dd = document.createElement("dd"); dd.textContent = desc;
-      dl.append(dt, dd);
+    const nextSig = JSON.stringify(items);
+    if (nextSig !== lastFormationSig || detail.firstElementChild?.tagName !== "DL") {
+      lastFormationSig = nextSig;
+      const dl = document.createElement("dl");
+      dl.className = "diag-readout";
+      for (const [term, desc] of items) {
+        const dt = document.createElement("dt"); dt.textContent = term;
+        const dd = document.createElement("dd"); dd.textContent = desc;
+        dl.append(dt, dd);
+      }
+      detail.replaceChildren(dl);
     }
-    detail.replaceChildren(dl);
   }
 
   function applyFormation(status) {
@@ -239,13 +253,14 @@ export function createFormation({ scope, el, view, log, call, render, namedReaso
     } catch (err) {
       if (err.name === "AbortError") return;
       const wasActive = view.formation?.active === true;
+      lastFormationSig = "";
       view.formation = null;
       view.formationUnavailable = true;
       const state = el("formation-state");
-      state.textContent = "확인 불가";
-      state.removeAttribute("title");
-      state.setAttribute("status", "warn");
-      el("formation-detail").textContent = "대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중. Fleet 연결을 확인하세요.";
+      patchText(state, "확인 불가");
+      patchAttr(state, "title", null);
+      patchAttr(state, "status", "warn");
+      patchText(el("formation-detail"), "대형 상태를 읽지 못했습니다 · 새 상태를 기다리는 중. Fleet 연결을 확인하세요.");
       // 마지막 확인 상태가 활성일 때는 해제 요청만 남긴다. 최종 판정은 Fleet API다.
       setButtons("대형 상태 확인 불가", { "formation-start": true, "formation-reform": true,
         "formation-resume": true, "formation-stop": !wasActive });

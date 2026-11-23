@@ -689,6 +689,10 @@
     "selection.js": {
       "path": "shared/selection.js",
       "media_type": "text/javascript"
+    },
+    "decision-slot.js": {
+      "path": "decision-slot.js",
+      "media_type": "application/javascript"
     }
   }
 }
