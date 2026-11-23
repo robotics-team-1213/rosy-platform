@@ -52,8 +52,9 @@ def _seed_live_hold(bench, monkeypatch, *, arm="arm_a", pid=515151, state=None, 
         "reason": f"{arm} 홈용 record_session이 HOLD(토크 유지, PID {pid}) 상태로 보류되었습니다",
         "detail": f"{label}: near home but never still",
     }), encoding="utf-8")
-    cell_arm_lease.claim(arm, pid=pid, now=1.0)
-    cell_arm_lease.hold(arm, "HOLD", pid=pid)
+    if not cell_arm_lease.status(arm).get(arm):
+        cell_arm_lease.claim(arm, pid=pid, now=1.0)
+        cell_arm_lease.hold(arm, "HOLD", pid=pid)
     monkeypatch.setattr(brr, "_pid_is_chunk_runner", lambda p: p == pid)
 
 
@@ -169,7 +170,7 @@ def test_auto_recover_refuses_unfolded_hold_without_signalling_runner(tmp_path, 
     finally:
         srv.shutdown()
         srv.server_close()
-    assert not killed and bench.manual.exists()
+    assert all(sig == 0 for _, sig in killed) and bench.manual.exists()
 
 
 def test_cell_map_camera_overlay_polygons_and_overlay_js_served(tmp_path, monkeypatch):
