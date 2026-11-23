@@ -1,6 +1,7 @@
 """Nav2 hardware-slice contracts (D-2, D-4, composition, packaging)."""
 
 import sys
+from xml.etree import ElementTree
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,40 @@ def test_hardware_launch_composes_bringup_and_imports_nav_policy():
     assert "sys.path.insert" not in launch
     assert "mapping_bringup_launch.xml" in launch
     assert "nav2_web_server" not in launch
+
+
+def test_localization_hardware_defers_only_navigation_lifecycle():
+    hardware = (NAV_LAUNCH / "hardware.launch.py").read_text(encoding="utf-8")
+    localization, slam = hardware.split('launch_file = "mapping_bringup_launch.xml"', 1)
+    assert '"navigation_autostart": "False"' in localization
+    assert '"navigation_autostart": "False"' not in slam
+    assert 'executable="start_after_tf"' in hardware
+    root = ElementTree.parse(NAV_LAUNCH / "bringup_launch.xml")
+    assert root.find("./arg[@name='navigation_autostart']").get("default") == "$(var autostart)"
+    for launch_file, expected in (("localization_launch.xml", "$(var autostart)"),
+                                  ("navigation_launch.xml", "$(var navigation_autostart)")):
+        include = next(node for node in root.findall(".//include") if node.get("file").endswith(launch_file))
+        assert include.find("arg[@name='autostart']").get("value") == expected
+
+
+def test_navigation_startup_waits_for_both_costmaps_and_manager():
+    from unittest.mock import Mock
+
+    from navigation.start_after_tf import request_startup
+
+    buffer = Mock()
+    client = Mock()
+    request, latest = object(), object()
+    frames = [("map", "rosy_09/base_footprint"), ("rosy_09/odom", "rosy_09/base_footprint")]
+    client.service_is_ready.return_value = False
+    assert request_startup(buffer, client, request, frames, latest) is None
+    client.service_is_ready.return_value = True
+    buffer.can_transform.side_effect = [True, False]
+    assert request_startup(buffer, client, request, frames, latest) is None
+    client.call_async.assert_not_called()
+    buffer.can_transform.side_effect = [True, True]
+    assert request_startup(buffer, client, request, frames, latest) is client.call_async.return_value
+    client.call_async.assert_called_once_with(request)
 
 
 def test_hardware_io_mounts_a_host_site_map_directory():
