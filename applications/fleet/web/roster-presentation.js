@@ -112,7 +112,6 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const line = node("div", "", "robot-line");
     line.append(node("b", name, "ui-disclosure-name"));
     if (name !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
-    article.append(line);
     const state = view.stateUnavailable ? {} : robot.state || {};
     const link = linkTag(robot.link);
     const status = view.stateUnavailable ? "Fleet 상태 확인 불가" : !robot.online ? (link?.word || "오프라인")
@@ -122,22 +121,25 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
       && staleAgeS(robot, view.receivedAtMs, Date.now()) === null;
     const safety = !stateCurrent ? "안전 확인 불가"
       : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
+    const headMeta = node("span", "", "robot-summary-head-meta");
     const facts = node("div", "", "robot-summary-status");
     const calmOffline = !view.stateUnavailable && !robot.online;
-    const addFact = (text, cls, { keepPill = false } = {}) => {
+    const addFact = (text, cls, { keepPill = false, target = facts } = {}) => {
       const t = tag(text, cls);
       if (!cls || cls === "nav" || cls === "ok" || (calmOffline && !keepPill)) {
         t.setAttribute("variant", "inline");
       }
-      facts.append(t);
+      target.append(t);
       return t;
     };
-    addFact(status, view.stateUnavailable || !robot.online ? "warn" : "", { keepPill: true });
-    addFact(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn");
+    addFact(status, view.stateUnavailable || !robot.online ? "warn" : "", { keepPill: true, target: headMeta });
     // D-926: nominal/active facts render inline via ui-tag[variant="inline"] (Dark-Cockpit); warnings/crits stay pill-framed.
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
-    const battery = addFact(`배터리 ${power.battery}`, power.problem ? "warn" : "");
+    const battery = addFact(`배터리 ${power.battery}`, power.problem ? "warn" : "", { target: headMeta });
     battery.dataset.fact = "battery";
+    line.append(headMeta);
+    article.append(line);
+    addFact(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn");
     facts.append(motorHealth.summary(robot));
     const heat = stateCurrent ? heatChip(state) : null;
     if (heat) addFact(...heat, { keepPill: true });
