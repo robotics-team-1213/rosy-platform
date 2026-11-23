@@ -135,7 +135,7 @@ def _include_nav2(context, *args, **kwargs):
                 condition=IfCondition(LaunchConfiguration("enable_loc_assist")),
                 launch_arguments={
                     "namespace": namespace,
-                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    "use_sim_time": LaunchConfiguration("use_sim_time").perform(context),
                     "map_yaml": map_yaml,
                 }.items(),
             ),
@@ -146,6 +146,7 @@ def _include_nav2(context, *args, **kwargs):
 def generate_launch_description():
     bringup_share = get_package_share_directory("bringup")
     nav_share = get_package_share_directory("navigation")
+    control_share = get_package_share_directory("control")
     default_params = os.path.join(nav_share, "params", "nav2_params.yaml")
     default_mapper_params = os.path.join(nav_share, "params", "mapper_params.yaml")
 

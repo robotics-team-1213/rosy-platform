@@ -100,6 +100,19 @@ def test_fuse_three_maps_consensus_keeps_two_of_three_static_walls(tmp_path):
     assert grid.cells[25, 25] == 0   # transient cleared
     assert grid.cells[15, 30] == 1   # 2/3 consensus static obstacle kept
 
+    # With min_support=3 on 3 maps where r3 had unknown (-1) over a 2-pass wall, uncontradicted wall stays WALL (1).
+    r1_u, r2_u, r3_u = _base_room(), _base_room(), _base_room()
+    r1_u[15:18, 30] = 0
+    r2_u[15:18, 30] = 0
+    r3_u[15:18, 30] = 205
+    u_paths = [
+        _write_site_map(tmp_path / "mu", f"u{i}", arr)
+        for i, arr in enumerate((r1_u, r2_u, r3_u), 1)
+    ]
+    out_u = tmp_path / "out" / "master_uncontradicted.yaml"
+    assert mmf.main([str(p) for p in u_paths] + ["--min-support", "3", "--write", str(out_u)]) == 0
+    assert sma.load_map(out_u).cells[16, 30] == 1
+
 
 def test_fuse_refuses_invalid_inputs_low_overlap_nonzero_yaw_or_overwrite(tmp_path):
     r1 = _base_room()
@@ -110,6 +123,10 @@ def test_fuse_refuses_invalid_inputs_low_overlap_nonzero_yaw_or_overwrite(tmp_pa
     disjoint = _write_site_map(tmp_path / "in", "disjoint", _base_room(), origin=(10.0, 10.0, 0.0))
 
     assert mmf.main([str(p1)]) == sma.REFUSED
+    assert mmf.main([str(p1), str(p1)]) == sma.REFUSED
+    assert mmf.main([str(p1), str(tmp_path / "in" / "missing.yaml")]) == sma.REFUSED
+    assert mmf.main([str(p1), str(p2), "--min-support", "3"]) == sma.REFUSED
+    assert mmf.main([str(p1), str(p2), "--min-support", "0"]) == sma.REFUSED
     assert mmf.main([str(p1), str(bad_yaw)]) == sma.REFUSED
     assert mmf.main([str(p1), str(bad_res)]) == sma.REFUSED
     assert mmf.main([str(p1), str(disjoint)]) == sma.REFUSED
@@ -123,3 +140,4 @@ def test_fuse_refuses_invalid_inputs_low_overlap_nonzero_yaw_or_overwrite(tmp_pa
     bundle = tmp_path / "sealed"
     assert mmf.main([str(p1), str(p2), "--seal-bundle", str(bundle), "--name", "m"]) == 0
     assert mmf.main([str(p1), str(p2), "--seal-bundle", str(bundle), "--name", "m"]) == sma.REFUSED
+    assert mmf.main([str(p1), str(p2), "--seal-bundle", str(bundle), "--name", "other"]) == sma.REFUSED

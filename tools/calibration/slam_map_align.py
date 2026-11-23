@@ -159,6 +159,10 @@ def boundary_symmetry(cells: np.ndarray) -> float:
     return best
 
 
+def _clean_zero(value: float) -> float:
+    return 0.0 if abs(float(value)) < 5e-7 else float(value)
+
+
 def write_aligned(grid: Grid, fit: Fit, out_yaml: Path, source: dict) -> str:
     """Write the grid in the site frame. Evidence for rotating the grid rather than putting yaw in the origin
     (navigation2 jazzy, the installed 1.3.13): ``nav2_map_server`` map_io.cpp does publish origin[2] as the
@@ -171,7 +175,8 @@ def write_aligned(grid: Grid, fit: Fit, out_yaml: Path, source: dict) -> str:
     c, s = math.cos(fit.yaw), math.sin(fit.yaw)
     corners = [fit.apply((grid.origin[0] + a * w * r, grid.origin[1] + b * h * r)) for a in (0, 1) for b in (0, 1)]
     x0, y0 = min(p[0] for p in corners), min(p[1] for p in corners)
-    nw, nh = math.ceil((max(p[0] for p in corners) - x0) / r), math.ceil((max(p[1] for p in corners) - y0) / r)
+    nw = max(1, math.ceil((max(p[0] for p in corners) - x0) / r - 1e-9))
+    nh = max(1, math.ceil((max(p[1] for p in corners) - y0) / r - 1e-9))
     qx = x0 + (np.arange(nw) + 0.5) * r - fit.tx
     qy = y0 + (np.arange(nh) + 0.5) * r - fit.ty
     gx, gy = np.meshgrid(qx, qy)
@@ -182,12 +187,16 @@ def write_aligned(grid: Grid, fit: Fit, out_yaml: Path, source: dict) -> str:
     new = np.full((nh, nw), -1, np.int8)
     new[inside] = grid.cells[cj[inside], ci[inside]]
     pix = np.select([new == 1, new == 0], [0, 254], 205).astype(np.uint8)[::-1]
+    # Keep free_thresh <= 0.196 so pixel 205 (occ=0.196078) never decodes as FREE when source uses map_saver default 0.25.
+    free_t = min(max(float(source.get("free_thresh", 0.196)), 0.01), 0.196)
+    occ_t = max(min(float(source.get("occupied_thresh", 0.65)), 0.99), 0.65)
+    ox_w, oy_w = _clean_zero(x0), _clean_zero(y0)
     out_pgm.write_bytes(b"P5\n# slam_map_align.py: site frame\n" + f"{nw} {nh}\n255\n".encode() + pix.tobytes())
     out_yaml.write_text(
         f"image: {out_pgm.name}\nmode: trinary\nresolution: {r}\n"
-        f"origin: [{x0:.4f}, {y0:.4f}, 0.0]\nnegate: 0\noccupied_thresh: {source.get('occupied_thresh', 0.65)}\n"
-        f"free_thresh: {source.get('free_thresh', 0.196)}\n", encoding="utf-8")
-    return f"{out_yaml} ({nw}x{nh} cells, origin {x0:.3f},{y0:.3f}, yaw 0)"
+        f"origin: [{ox_w:.6f}, {oy_w:.6f}, 0.0]\nnegate: 0\noccupied_thresh: {occ_t}\n"
+        f"free_thresh: {free_t}\n", encoding="utf-8")
+    return f"{out_yaml} ({nw}x{nh} cells, origin {ox_w:.3f},{oy_w:.3f}, yaw 0)"
 
 
 # ---------------------------------------------------------------- correspondences
@@ -263,10 +272,12 @@ def seal_aligned_bundle(
     aligned_yaml: Path | None = None,
 ) -> tuple[Path, str]:
     """Resample aligned map to yaw=0 and seal it via map_bundle.import_saved."""
-    target_yaml = dest_dir / "maps" / f"{name}.yaml"
-    target_pgm = dest_dir / "maps" / f"{name}.pgm"
-    if target_yaml.exists() or target_pgm.exists():
-        raise AlignError(f"{target_yaml} (or its PGM) exists; refusing to overwrite")
+    maps_dir = dest_dir / "maps"
+    target_yaml = maps_dir / f"{name}.yaml"
+    target_pgm = maps_dir / f"{name}.pgm"
+    manifest_path = maps_dir / "manifest.json"
+    if target_yaml.exists() or target_pgm.exists() or manifest_path.exists():
+        raise AlignError(f"{maps_dir} already contains sealed map or manifest; refusing to overwrite")
     mb = load_map_bundle_module()
     alignment = {
         "tool": "slam_map_align",
@@ -279,19 +290,22 @@ def seal_aligned_bundle(
     }
     if symmetry is not None:
         alignment["boundary_symmetry"] = round(float(symmetry), 4)
-    if aligned_yaml is not None:
-        sealed = mb.import_saved(
-            aligned_yaml, dest_dir, name, margin_m=margin_m, source=source,
-            site_map_id=site_map_id, alignment=alignment, require_zero_yaw=True,
-        )
-    else:
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_yaml = Path(tmp) / f"{name}.yaml"
-            write_aligned(grid, fit, tmp_yaml, source_meta)
+    try:
+        if aligned_yaml is not None:
             sealed = mb.import_saved(
-                tmp_yaml, dest_dir, name, margin_m=margin_m, source=source,
+                aligned_yaml, dest_dir, name, margin_m=margin_m, source=source,
                 site_map_id=site_map_id, alignment=alignment, require_zero_yaw=True,
             )
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_yaml = Path(tmp) / f"{name}.yaml"
+                write_aligned(grid, fit, tmp_yaml, source_meta)
+                sealed = mb.import_saved(
+                    tmp_yaml, dest_dir, name, margin_m=margin_m, source=source,
+                    site_map_id=site_map_id, alignment=alignment, require_zero_yaw=True,
+                )
+    except ValueError as exc:
+        raise AlignError(str(exc)) from exc
     manifest = json.loads((sealed.parent / "manifest.json").read_text(encoding="utf-8"))
     return sealed, manifest["grid_id"]
 
@@ -357,10 +371,9 @@ def main(argv=None) -> int:
             if args.write.exists() or args.write.with_suffix(".pgm").exists():
                 raise AlignError(f"{args.write} (or its PGM) exists; refusing to overwrite")
         if args.seal_bundle:
-            bundle_yaml = args.seal_bundle / "maps" / f"{args.name}.yaml"
-            bundle_pgm = args.seal_bundle / "maps" / f"{args.name}.pgm"
-            if bundle_yaml.exists() or bundle_pgm.exists():
-                raise AlignError(f"{bundle_yaml} (or its PGM) exists; refusing to overwrite")
+            maps_dir = args.seal_bundle / "maps"
+            if (maps_dir / f"{args.name}.yaml").exists() or (maps_dir / f"{args.name}.pgm").exists() or (maps_dir / "manifest.json").exists():
+                raise AlignError(f"{maps_dir} already contains sealed map or manifest; refusing to overwrite")
         if args.write:
             print("wrote", write_aligned(grid, fit, args.write, source_meta))
         if args.seal_bundle:

@@ -143,6 +143,22 @@ def test_seal_bundle_writes_zero_yaw_grid_and_site_manifest(tmp_path):
     assert manifest["origin"][2] == 0.0
     assert manifest["alignment"]["tool"] == "slam_map_align"
     assert manifest["alignment"]["pair_count"] == 4
-    # Refuses overwrite if bundle files already exist.
+    # Refuses overwrite if bundle files or manifest already exist.
     assert sma.main([str(src), "--site-map", str(site_json)] + pair_args
                     + ["--seal-bundle", str(bundle), "--name", "master_site"]) == sma.REFUSED
+    assert sma.main([str(src), "--site-map", str(site_json)] + pair_args
+                    + ["--seal-bundle", str(bundle), "--name", "other_name"]) == sma.REFUSED
+
+    # Source map saved with map_saver default free_thresh=0.25 must keep rotated unknown corners as UNKNOWN (-1), not FREE (0).
+    src_text = src.read_text(encoding="utf-8").replace("free_thresh: 0.196", "free_thresh: 0.25")
+    src.write_text(src_text, encoding="utf-8")
+    rot45 = _site(slam_pts, yaw=math.radians(45), t=(2.0, 3.0))
+    rot_site = tmp_path / "site45.json"
+    rot_site.write_text(json.dumps({
+        "map_id": "site_45",
+        "places": [{"id": f"P{i}", "name": f"P{i}", "x": sx, "y": sy} for i, (sx, sy) in enumerate(rot45)],
+    }), encoding="utf-8")
+    out45 = tmp_path / "aligned45.yaml"
+    assert sma.main([str(src), "--site-map", str(rot_site)] + pair_args + ["--write", str(out45)]) == 0
+    g45 = sma.load_map(out45)
+    assert int((g45.cells == -1).sum()) > 0

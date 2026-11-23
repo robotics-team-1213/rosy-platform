@@ -77,24 +77,40 @@ def _is_occupied(meta, pixel) -> bool:
     return prob > meta["occupied_thresh"]
 
 
+def _clean_zero(value: float) -> float:
+    return 0.0 if abs(float(value)) < 5e-7 else float(value)
+
+
+def _norm_zero(value: float) -> float:
+    return 0.0 if value == 0.0 else float(value)
+
+
+def _validate_map_fields(m: dict) -> list[str]:
+    found = []
+    if not all(math.isfinite(float(v)) for v in m["origin"]):
+        found.append("origin must contain finite numbers")
+    if not math.isfinite(m["resolution"]) or not 0.005 <= m["resolution"] <= 0.2:
+        found.append(f"resolution {m['resolution']} m outside 0.005..0.2")
+    if (not math.isfinite(m["free_thresh"]) or not math.isfinite(m["occupied_thresh"])
+            or not 0.0 <= m["free_thresh"] < m["occupied_thresh"] <= 1.0):
+        found.append("thresholds must satisfy 0 <= free < occupied <= 1")
+    if not any(not _is_occupied(m, p) and p > 0 for r in m["rows"] for p in r):
+        found.append("the map has no free or unknown cell")
+    return found
+
+
 def problems(yaml_path) -> list[str]:
     """Everything wrong with a map; [] means it can be used."""
     try:
         m = load(yaml_path)
     except (OSError, ValueError, IndexError) as exc:
         return [f"unreadable map: {exc}"]
-    found = []
-    if not 0.005 <= m["resolution"] <= 0.2:
-        found.append(f"resolution {m['resolution']} m outside 0.005..0.2")
-    if not 0.0 <= m["free_thresh"] < m["occupied_thresh"] <= 1.0:
-        found.append("thresholds must satisfy 0 <= free < occupied <= 1")
+    found = _validate_map_fields(m)
     rows = m["rows"]
     border = list(rows[0]) + list(rows[-1]) + [r[0] for r in rows] + [r[-1] for r in rows]
     open_border = sum(not _is_occupied(m, p) for p in border)
     if open_border:
         found.append(f"{open_border} border cells are not occupied: the outside of the map must be wall")
-    if not any(not _is_occupied(m, p) and p > 0 for r in rows for p in r):
-        found.append("the map has no free or unknown cell")
     return found
 
 
@@ -116,11 +132,11 @@ def occupancy_grid_id(yaml_path) -> str:
         {
             "width": int(m["width"]),
             "height": int(m["height"]),
-            "resolution": float(m["resolution"]),
+            "resolution": _norm_zero(float(m["resolution"])),
             "origin": {
-                "x": float(m["origin"][0]),
-                "y": float(m["origin"][1]),
-                "yaw": float(m["origin"][2]),
+                "x": _norm_zero(float(m["origin"][0])),
+                "y": _norm_zero(float(m["origin"][1])),
+                "yaw": _norm_zero(float(m["origin"][2])),
             },
             "data": data,
         },
@@ -152,15 +168,16 @@ def verify_bundle(yaml_path, *, require_zero_yaw: bool = False, require_manifest
             actual_pgm_sha = hashlib.sha256((m["path"].parent / m["image"]).read_bytes()).hexdigest()
             if manifest.get("pgm_sha256") != actual_pgm_sha:
                 found.append("pgm_sha256 mismatch against manifest.json")
-            if "name" in manifest and manifest.get("name") != m["path"].stem:
+            if (require_manifest or "name" in manifest) and manifest.get("name") != m["path"].stem:
                 found.append("manifest name mismatch against map filename")
-            if "grid_id" in manifest or manifest.get("site_map_id"):
+            if require_manifest or "grid_id" in manifest or manifest.get("site_map_id"):
                 if manifest.get("grid_id") != occupancy_grid_id(m["path"]):
                     found.append("grid_id mismatch against manifest.json")
         elif manifest_path.is_file():
             found.append("manifest.json must be a JSON object")
     if require_zero_yaw or (isinstance(manifest, dict) and bool(manifest.get("site_map_id"))):
-        if abs(float(m["origin"][2])) > 1e-6:
+        yaw = float(m["origin"][2])
+        if not math.isfinite(yaw) or abs(yaw) > 1e-6:
             found.append("origin yaw must be 0.0 for site-aligned Nav2 AMCL/costmap")
     return found
 
@@ -169,8 +186,14 @@ def import_saved(src_yaml, dest_dir, name: str, margin_m: float = 0.20, source: 
                  site_map_id: str | None = None, alignment: dict | None = None,
                  require_zero_yaw: bool = False) -> Path:
     """Copy a saved map into <dest_dir>/maps with an occupied margin; returns the written yaml."""
+    if not math.isfinite(margin_m) or margin_m < 0.0:
+        raise ValueError("margin_m must be finite and non-negative")
     m = load(src_yaml)
-    if (require_zero_yaw or site_map_id) and abs(float(m["origin"][2])) > 1e-6:
+    field_errors = _validate_map_fields(m)
+    if field_errors:
+        raise ValueError("source map is not usable: " + "; ".join(field_errors))
+    yaw_check = float(m["origin"][2])
+    if (require_zero_yaw or site_map_id) and (not math.isfinite(yaw_check) or abs(yaw_check) > 1e-6):
         raise ValueError("origin yaw must be 0.0 before sealing a site-aligned bundle; resample with slam_map_align.py first")
     pad = max(1, math.ceil(margin_m / m["resolution"]))
     width, height = m["width"] + 2 * pad, m["height"] + 2 * pad
@@ -179,7 +202,9 @@ def import_saved(src_yaml, dest_dir, name: str, margin_m: float = 0.20, source: 
     ox, oy, oyaw = m["origin"]
     # Padding adds cells to the left and bottom: the image origin moves by pad cells, rotated by the map yaw.
     shift = pad * m["resolution"]
-    ox, oy = ox - shift * math.cos(oyaw) + shift * math.sin(oyaw), oy - shift * math.sin(oyaw) - shift * math.cos(oyaw)
+    ox = _clean_zero(ox - shift * math.cos(oyaw) + shift * math.sin(oyaw))
+    oy = _clean_zero(oy - shift * math.sin(oyaw) - shift * math.cos(oyaw))
+    oyaw_w = _clean_zero(oyaw)
     maps = Path(dest_dir) / "maps"
     maps.mkdir(parents=True, exist_ok=True)
     pgm = f"P5\n# rosy map bundle: {name}\n{width} {height}\n255\n".encode() + b"".join(rows)
@@ -188,15 +213,15 @@ def import_saved(src_yaml, dest_dir, name: str, margin_m: float = 0.20, source: 
     out_pgm.write_bytes(pgm)
     out_yaml.write_text(
         f"image: {name}.pgm\nmode: trinary\nresolution: {m['resolution']}\n"
-        f"origin: [{ox:.6f}, {oy:.6f}, {oyaw}]\nnegate: {m['negate']}\n"
+        f"origin: [{ox:.6f}, {oy:.6f}, {oyaw_w}]\nnegate: {m['negate']}\n"
         f"occupied_thresh: {m['occupied_thresh']}\nfree_thresh: {m['free_thresh']}\n", encoding="utf-8", newline="\n")
-    written_origin = load(out_yaml)["origin"]
+    written_origin = [_norm_zero(float(v)) for v in load(out_yaml)["origin"]]
     manifest = dict(
         name=name, source=source, margin_cells=pad, resolution=m["resolution"],
         source_pgm_sha256=hashlib.sha256((Path(src_yaml).parent / m["image"]).read_bytes()).hexdigest(),
         pgm_sha256=hashlib.sha256(pgm).hexdigest(),
         grid_id=occupancy_grid_id(out_yaml),
-        origin=[float(v) for v in written_origin],
+        origin=written_origin,
     )
     if site_map_id:
         manifest["site_map_id"] = site_map_id

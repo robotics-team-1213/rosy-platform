@@ -29,15 +29,23 @@ DEFAULT_MIN_FREE_M2 = 1.0
 
 
 def load_aligned_map(yaml_path: Path) -> tuple[sma.Grid, dict, str]:
-    """Load an already site-aligned yaw=0 Nav2 map, refusing non-zero origin yaw or missing image."""
-    meta = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
-    if not isinstance(meta, dict) or "origin" not in meta or "image" not in meta:
-        raise sma.AlignError(f"{yaml_path}: invalid Nav2 map yaml")
-    yaw = float(meta["origin"][2])
-    if not math.isfinite(yaw) or abs(yaw) > 1e-6:
-        raise sma.AlignError(f"{yaml_path}: non-zero origin yaw ({yaw}); align via slam_map_align.py first")
-    grid = sma.load_map(yaml_path)
-    pgm_sha = hashlib.sha256((yaml_path.parent / meta["image"]).read_bytes()).hexdigest()
+    """Load an already site-aligned yaw=0 Nav2 map, refusing missing files or non-zero origin yaw."""
+    try:
+        meta = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        if not isinstance(meta, dict) or "origin" not in meta or "image" not in meta:
+            raise ValueError("invalid Nav2 map yaml")
+        origin = meta["origin"]
+        if not isinstance(origin, (list, tuple)) or len(origin) != 3:
+            raise ValueError("origin must have 3 elements")
+        yaw = float(origin[2])
+        if not math.isfinite(yaw) or abs(yaw) > 1e-6:
+            raise sma.AlignError(f"{yaml_path}: non-zero origin yaw ({yaw}); align via slam_map_align.py first")
+        grid = sma.load_map(yaml_path)
+        pgm_sha = hashlib.sha256((yaml_path.parent / meta["image"]).read_bytes()).hexdigest()
+    except sma.AlignError:
+        raise
+    except (OSError, yaml.YAMLError, ValueError, TypeError, IndexError, KeyError) as exc:
+        raise sma.AlignError(f"{yaml_path}: cannot load aligned map: {exc}") from exc
     return grid, meta, pgm_sha
 
 
@@ -101,6 +109,9 @@ def fuse_aligned_grids(
     """Consensus-fuse 2+ site-aligned yaw=0 grids into one verified master occupancy grid."""
     if len(grids) < 2:
         raise sma.AlignError(f"need at least 2 aligned maps to fuse, got {len(grids)}")
+    req_support = int(min_support)
+    if not 1 <= req_support <= len(grids):
+        raise sma.AlignError(f"min_support {req_support} must be in 1..{len(grids)}")
     res = float(grids[0].resolution)
     for idx, g in enumerate(grids):
         if abs(float(g.resolution) - res) > 1e-9:
@@ -130,10 +141,10 @@ def fuse_aligned_grids(
     n_free = sum(m.astype(np.int32) for m in free_masks)
     n_obs = n_occ + n_free
     support = sum(dilate_occupied(m).astype(np.int32) for m in occ_masks)
-    req_support = min(max(1, int(min_support)), len(grids))
+    needed = np.minimum(req_support, n_obs)
 
-    keep_wall = ((n_obs == 1) & (n_occ == 1)) | ((n_obs >= 2) & (n_occ >= 1) & (support >= req_support))
-    transient_removed = int(((n_obs >= 2) & (n_occ >= 1) & (support < req_support)).sum())
+    keep_wall = (n_occ >= 1) & (support >= needed)
+    transient_removed = int(((n_obs >= 2) & (n_occ >= 1) & (support < needed)).sum())
     blind_filled = int(((n_obs == 1) & (n_occ == 1)).sum())
     fused = np.full((nh, nw), -1, np.int8)
     fused[n_obs >= 1] = 0
@@ -166,16 +177,24 @@ def fuse_aligned_grids(
     return sma.Grid(fused, res, (x0, y0)), stats
 
 
+def _clean_zero(value: float) -> float:
+    return 0.0 if abs(float(value)) < 5e-7 else float(value)
+
+
 def _write_zero_yaw_grid(grid: sma.Grid, out_yaml: Path, source_meta: dict) -> Path:
     h, w = grid.cells.shape
     out_pgm = out_yaml.with_suffix(".pgm")
     pix = np.select([grid.cells == 1, grid.cells == 0], [0, 254], 205).astype(np.uint8)[::-1]
+    # Keep free_thresh <= 0.196 so pixel 205 (occ=0.196078) never decodes as FREE when source uses map_saver default 0.25.
+    free_t = min(max(float(source_meta.get("free_thresh", 0.196)), 0.01), 0.196)
+    occ_t = max(min(float(source_meta.get("occupied_thresh", 0.65)), 0.99), 0.65)
+    ox_w, oy_w = _clean_zero(grid.origin[0]), _clean_zero(grid.origin[1])
     out_pgm.write_bytes(b"P5\n# master_map_fuse.py: site frame\n" + f"{w} {h}\n255\n".encode() + pix.tobytes())
     out_yaml.write_text(
         f"image: {out_pgm.name}\nmode: trinary\nresolution: {grid.resolution}\n"
-        f"origin: [{grid.origin[0]:.6f}, {grid.origin[1]:.6f}, 0.0]\nnegate: 0\n"
-        f"occupied_thresh: {source_meta.get('occupied_thresh', 0.65)}\n"
-        f"free_thresh: {source_meta.get('free_thresh', 0.196)}\n",
+        f"origin: [{ox_w:.6f}, {oy_w:.6f}, 0.0]\nnegate: 0\n"
+        f"occupied_thresh: {occ_t}\n"
+        f"free_thresh: {free_t}\n",
         encoding="utf-8",
     )
     return out_yaml
@@ -198,6 +217,8 @@ def main(argv=None) -> int:
     try:
         if len(args.map_yamls) < 2:
             raise sma.AlignError(f"need at least 2 aligned maps to fuse, got {len(args.map_yamls)}")
+        if len({p.resolve() for p in args.map_yamls}) != len(args.map_yamls):
+            raise sma.AlignError("duplicate input map paths supplied")
         if args.seal_bundle and not args.name:
             raise sma.AlignError("--seal-bundle requires --name")
         loaded = [load_aligned_map(p) for p in args.map_yamls]
@@ -211,10 +232,9 @@ def main(argv=None) -> int:
             if args.write.exists() or args.write.with_suffix(".pgm").exists():
                 raise sma.AlignError(f"{args.write} (or its PGM) exists; refusing to overwrite")
         if args.seal_bundle:
-            bundle_yaml = args.seal_bundle / "maps" / f"{args.name}.yaml"
-            bundle_pgm = args.seal_bundle / "maps" / f"{args.name}.pgm"
-            if bundle_yaml.exists() or bundle_pgm.exists():
-                raise sma.AlignError(f"{bundle_yaml} (or its PGM) exists; refusing to overwrite")
+            maps_dir = args.seal_bundle / "maps"
+            if (maps_dir / f"{args.name}.yaml").exists() or (maps_dir / f"{args.name}.pgm").exists() or (maps_dir / "manifest.json").exists():
+                raise sma.AlignError(f"{maps_dir} already contains sealed map or manifest; refusing to overwrite")
         fused, stats = fuse_aligned_grids(
             [g for g, _, _ in loaded],
             min_overlap=args.min_overlap,
@@ -233,18 +253,21 @@ def main(argv=None) -> int:
         written_yaml = _write_zero_yaw_grid(fused, args.write, loaded[0][1]) if args.write else None
         if args.seal_bundle:
             mb = sma.load_map_bundle_module()
-            if written_yaml is not None:
-                sealed = mb.import_saved(
-                    written_yaml, args.seal_bundle, args.name, margin_m=args.margin_m, source=args.source,
-                    site_map_id=args.site_map_id, alignment=provenance, require_zero_yaw=True,
-                )
-            else:
-                with tempfile.TemporaryDirectory() as tmp:
-                    tmp_yaml = _write_zero_yaw_grid(fused, Path(tmp) / f"{args.name}.yaml", loaded[0][1])
+            try:
+                if written_yaml is not None:
                     sealed = mb.import_saved(
-                        tmp_yaml, args.seal_bundle, args.name, margin_m=args.margin_m, source=args.source,
+                        written_yaml, args.seal_bundle, args.name, margin_m=args.margin_m, source=args.source,
                         site_map_id=args.site_map_id, alignment=provenance, require_zero_yaw=True,
                     )
+                else:
+                    with tempfile.TemporaryDirectory() as tmp:
+                        tmp_yaml = _write_zero_yaw_grid(fused, Path(tmp) / f"{args.name}.yaml", loaded[0][1])
+                        sealed = mb.import_saved(
+                            tmp_yaml, args.seal_bundle, args.name, margin_m=args.margin_m, source=args.source,
+                            site_map_id=args.site_map_id, alignment=provenance, require_zero_yaw=True,
+                        )
+            except ValueError as exc:
+                raise sma.AlignError(str(exc)) from exc
             manifest = json.loads((sealed.parent / "manifest.json").read_text(encoding="utf-8"))
             print(f"sealed {sealed} (grid_id={manifest['grid_id']}, site_map_id={args.site_map_id})")
         elif written_yaml is not None:
