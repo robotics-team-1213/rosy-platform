@@ -87,6 +87,9 @@ ALLOWLIST: dict[str, CommandSpec] = {
         CommandSpec("navigation_fallback.status", Role.VIEWER, False),
         CommandSpec("navigation_fallback.stage", Role.MACHINE, False),
         CommandSpec("navigation_fallback.switch", Role.MACHINE, False, frozenset({"reason"})),
+        CommandSpec("site_map.status", Role.VIEWER, False),
+        CommandSpec("site_map.stage", Role.MACHINE, False),
+        CommandSpec("site_map.activate", Role.MACHINE, False),
         CommandSpec("release.status", Role.VIEWER, False),
         CommandSpec("release.install", Role.ADMINISTRATOR, True, frozenset({"release_id"})),
         CommandSpec("release.rollback", Role.ADMINISTRATOR, True),
@@ -122,6 +125,7 @@ class HostCommands(Protocol):
     def network_status(self) -> dict: ...
     def navigation_approval(self, action: str, *arguments: str) -> dict: ...
     def navigation_fallback(self, action: str, *arguments: str) -> dict: ...
+    def site_map(self, action: str) -> dict: ...
     def lane_perception_status(self) -> dict: ...
     def set_lane_perception(self, paint_source: str) -> dict: ...
     def register_ssh_key(self, public_key: str) -> dict: ...
@@ -471,6 +475,9 @@ class HostAgent:
             "navigation_fallback.status": lambda: self._commands.navigation_fallback("status"),
             "navigation_fallback.stage": lambda: self._commands.navigation_fallback("stage"),
             "navigation_fallback.switch": lambda: self._commands.navigation_fallback("switch", params["reason"]),
+            "site_map.status": lambda: self._commands.site_map("status"),
+            "site_map.stage": lambda: self._commands.site_map("stage"),
+            "site_map.activate": lambda: self._commands.site_map("activate"),
             "release.status": lambda: self._commands.release_status(),
             "release.install": lambda: self._commands.install_release(params["release_id"]),
             "release.rollback": lambda: self._commands.rollback_release(),

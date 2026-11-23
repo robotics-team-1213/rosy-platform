@@ -107,7 +107,13 @@ def _sha(content):
 
 def _pgm_cells(pgm):
     """Width x height of a binary P5 with maxval 255 whose body size matches, else ValueError."""
-    match = re.match(rb"P5\s+(\d+)\s+(\d+)\s+255\s", pgm)
+    header = re.compile(
+        rb"P5(?:[ \t\r\n]+(?:#[^\r\n]*\r?\n[ \t\r\n]*)*|#[^\r\n]*\r?\n[ \t\r\n]*)"
+        rb"(\d+)(?:[ \t\r\n]+(?:#[^\r\n]*\r?\n[ \t\r\n]*)*|#[^\r\n]*\r?\n[ \t\r\n]*)"
+        rb"(\d+)(?:[ \t\r\n]+(?:#[^\r\n]*\r?\n[ \t\r\n]*)*|#[^\r\n]*\r?\n[ \t\r\n]*)"
+        rb"255[ \t\r\n]"
+    )
+    match = header.match(pgm)
     if not match:
         raise ValueError("the wall map image is not a P5 PGM with maxval 255")
     width, height = int(match[1]), int(match[2])

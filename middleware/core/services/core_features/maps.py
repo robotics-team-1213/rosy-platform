@@ -91,12 +91,31 @@ class GridFrame:
 
 def occupancy_map_id(grid: dict[str, Any]) -> str:
     """Stable id for an occupancy grid so MAP-001 can name an unsaved map."""
+    raw_res = grid.get("resolution")
+    if isinstance(raw_res, (int, float)) and not isinstance(raw_res, bool):
+        res: Any = round(float(raw_res), 6)
+        res = 0.0 if res == 0.0 else res
+    else:
+        res = raw_res
+    raw_origin = grid.get("origin") or {}
+    origin = (
+        {
+            key: (
+                0.0
+                if isinstance(val, (int, float)) and not isinstance(val, bool) and val == 0.0
+                else val
+            )
+            for key, val in raw_origin.items()
+        }
+        if isinstance(raw_origin, dict)
+        else raw_origin
+    )
     payload = json.dumps(
         {
             "width": grid.get("width"),
             "height": grid.get("height"),
-            "resolution": grid.get("resolution"),
-            "origin": grid.get("origin") or {},
+            "resolution": res,
+            "origin": origin,
             "data": list(grid.get("data") or ()),
         },
         sort_keys=True,

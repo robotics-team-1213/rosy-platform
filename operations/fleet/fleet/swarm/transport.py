@@ -111,14 +111,17 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     def bind_motion_wire(self, gate) -> None:
         self._motion_wire = gate
 
-    async def _request(self, method, path, body=None) -> httpx.Response:
+    async def _request(self, method, path, body=None, *, timeout=httpx.USE_CLIENT_DEFAULT) -> httpx.Response:
         from fleet.swarm.dispatch_guard import check_dispatch
         gate = self._motion_wire
         with (gate(self.robot_id, method, path, body) if gate is not None else nullcontext()) as unresolved:
             if method.upper() in {"POST", "PUT", "DELETE"}:
                 check_dispatch(path=path)
+            kwargs = {"json": body, "headers": self._headers()}
+            if timeout is not httpx.USE_CLIENT_DEFAULT:
+                kwargs["timeout"] = timeout
             try:
-                response = await self._http.request(method, path, json=body, headers=self._headers())
+                response = await self._http.request(method, path, **kwargs)
             except (httpx.RequestError, asyncio.CancelledError):
                 if unresolved is not None:
                     unresolved()
@@ -127,8 +130,11 @@ class HttpRobotClient(StationTransport, NavigationTransport):
                 unresolved()
             return response
 
-    async def _mutate(self, path: str, body: Optional[dict[str, Any]] = None, *, method='POST') -> dict:
-        return self._check(await self._request(method, path, body))
+    async def _mutate(
+        self, path: str, body: Optional[dict[str, Any]] = None, *, method='POST',
+        timeout=httpx.USE_CLIENT_DEFAULT,
+    ) -> dict:
+        return self._check(await self._request(method, path, body, timeout=timeout))
 
     _post = _mutate  # Existing callers retain the guarded POST boundary.
 
@@ -315,6 +321,15 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     async def slam_fallback_wall_map(self, payload: dict) -> dict:
         """SLAM fallback: the active site map's wall grid, for CORE to spool and the host to stage (2026-11-18)."""
         return await self._post("/api/v1/navigation/slam-fallback/wall-map", payload)
+
+    async def site_map_status(self) -> dict:
+        """Read staged/active master site map status from CORE."""
+        return await self._get("/api/v1/map/site")
+
+    async def site_map_push(self, payload: dict) -> dict:
+        """Push a sealed site-aligned master map bundle to CORE for staging and optional activation."""
+        timeout = 40.0 if payload.get("activate") else httpx.USE_CLIENT_DEFAULT
+        return await self._post("/api/v1/map/site", payload, timeout=timeout)
 
     async def localization_suspect(self, reason: str) -> dict:
         if not reason or len(reason) > 64:

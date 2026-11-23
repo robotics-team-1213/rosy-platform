@@ -70,3 +70,5 @@ Needs numpy, PyYAML and `mcap` for the analysis path; tests inject fakes for COR
 <!-- MANUAL: -->
 
 `migrate_calibration.py` moved from perception/tools (D-751): existing destinations and bound records are rejected; source measurements are preserved and values are not activated.
+
+`fleet_map_exchange.py` (2026-11-23): operator CLI for pulling `/api/fleet/robots/{robot_id}/map/bundle`, uploading sealed `master_map_fuse.py --seal-bundle` bundles via `PUT /api/fleet/site-map/master-grid`, pushing/activating via `POST /api/fleet/robots/{robot_id}/master-map/push`, and verifying stationary `LOCALIZED` + matching `grid_id` convergence.

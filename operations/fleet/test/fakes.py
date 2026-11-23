@@ -148,6 +148,9 @@ class FakeRobot:
         self.mission_status_error: Optional[BaseException] = None
         #: D-407: raised by `line_stuck_decision` (e.g. RobotApiError 409 STUCK_ID_MISMATCH).
         self.stuck_decision_error: Optional[BaseException] = None
+        self.site_map_status_value: dict = {"available": False, "phase": "IDLE"}
+        self.site_map_pushed: list[dict] = []
+        self.site_map_push_error: Optional[BaseException] = None
         self.front_status_value: dict = {"available": True, "stale": False, "age_ms": 40}
 
     def _record(self, *call) -> None:
@@ -179,6 +182,27 @@ class FakeRobot:
         if self.map_error is not None:
             raise self.map_error
         return dict(self._map) if self._map is not None else {}
+
+    async def site_map_status(self) -> dict:
+        self._record("site_map_status")
+        return dict(self.site_map_status_value)
+
+    async def site_map_push(self, payload: dict) -> dict:
+        self._record("site_map_push", payload.get("grid_id"))
+        if self.site_map_push_error is not None:
+            raise self.site_map_push_error
+        self.site_map_pushed.append(dict(payload))
+        return {
+            "staged": True,
+            "activated": bool(payload.get("activate", False)),
+            "site_map": {
+                "map_id": payload.get("map_id"),
+                "version": payload.get("version"),
+                "sha256": payload.get("sha256"),
+                "grid_id": payload.get("grid_id"),
+            },
+            "activation": {"phase": "ACTIVE"} if payload.get("activate") else None,
+        }
 
     async def capabilities(self) -> dict:
         return {"navigation": {"goal_navigation": True},

@@ -36,7 +36,8 @@ def main():
                                         "navigation_approval.status", "navigation_approval.begin",
                                         "navigation_approval.cancel", "navigation_approval.seal",
                                         "navigation_approval.start_navigation", "navigation_fallback.status",
-                                        "navigation_fallback.stage", "navigation_fallback.switch"),
+                                        "navigation_fallback.stage", "navigation_fallback.switch",
+                                        "site_map.status", "site_map.stage", "site_map.activate"),
                       audit=audit)
     threading.Thread(target=watch_approval_expiry, name="approval-expiry", daemon=True).start()
     serve_forever(agent, expected_uid=uid, group_gid=gid)

@@ -68,6 +68,9 @@ class SpyCommands:
     def navigation_fallback(self, action: str, *arguments: str) -> dict:
         return self._record("navigation_fallback", action, *arguments)
 
+    def site_map(self, action: str, *arguments: str) -> dict:
+        return self._record("site_map", action, *arguments)
+
     def release_status(self) -> dict:
         return self._record("release_status")
 
@@ -135,6 +138,9 @@ def test_the_allowlist_matches_the_contract():
         "navigation_fallback.status",
         "navigation_fallback.stage",
         "navigation_fallback.switch",
+        "site_map.status",
+        "site_map.stage",
+        "site_map.activate",
         "lane_perception.status",
         "lane_perception.set",
         "network.apply_profile",
@@ -950,3 +956,18 @@ def test_the_fallback_switch_refuses_a_path_or_option_as_its_reason(agent):
     for reason in ("../etc/passwd", "--now", "", "a b"):
         refused = agent.handle(_request("navigation_fallback.switch", role="machine", confirmed=False, reason=reason))
         assert refused["ok"] is False and refused["code"] == "HOST_AGENT_PARAM_INVALID", reason
+
+
+def test_site_map_role_matrix(agent, commands):
+    assert agent.handle(_request("site_map.status", role="viewer", confirmed=False))["ok"] is True
+    for cmd in ("site_map.stage", "site_map.activate"):
+        for role in ("viewer", "operator", "administrator"):
+            refused = agent.handle(_request(cmd, role=role, confirmed=False))
+            assert refused["ok"] is False and refused["code"] == "HOST_AGENT_ROLE_INSUFFICIENT", (cmd, role)
+        ok = agent.handle(_request(cmd, role="machine", confirmed=False))
+        assert ok["ok"] is True, cmd
+    assert [c[:2] for c in commands.calls] == [
+        ("site_map", ("status",)),
+        ("site_map", ("stage",)),
+        ("site_map", ("activate",)),
+    ]

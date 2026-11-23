@@ -166,3 +166,148 @@ def test_path_rejects_non_finite_poses():
         store.set_path([{"x": float("nan"), "y": 0.0}])
     store.set_path([{"x": 1.5, "y": -0.25}])
     assert store.get_path() == [{"x": 1.5, "y": -0.25}]
+
+
+def test_site_map_get_and_post_enforce_auth_validation_and_stop_evidence(client, monkeypatch, tmp_path):
+    import base64
+    import hashlib
+    import json
+    from core_api_web.api.deps import Mode
+    from core_api_web.api.host_agent_client import AgentReply
+    from core_api_web.api.v1 import map as v1_map
+
+    monkeypatch.setattr(v1_map, "_ACTIVATE_POLL_S", 0.0)
+
+    class FakeHost:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, bool]] = []
+            self.status_sequence: list[AgentReply] = []
+            self.stage_reply: AgentReply | None = None
+
+        def request(self, command: str, *, role: str, user_id: str | None = None, **_kwargs) -> AgentReply:
+            self.calls.append((command, role, svc.modes.motion_reserved))
+            if command == "site_map.status":
+                if self.status_sequence:
+                    return self.status_sequence.pop(0)
+                return AgentReply(True, "OK", data={"phase": "IDLE", "backend": "slam"})
+            if command == "site_map.stage":
+                if self.stage_reply is not None:
+                    return self.stage_reply
+                return AgentReply(True, "OK", data={"staged": "site_site-a_v1"})
+            return AgentReply(True, "OK", data={"phase": "ACTIVATING"})
+
+    tc, svc = client
+    fake_host = FakeHost()
+    svc.host_agent = fake_host
+    state_dir = tmp_path / "core-state"
+    monkeypatch.setenv("STATE_DIRECTORY", str(state_dir))
+
+    assert tc.get("/api/v1/map/site").status_code == 401
+    st = tc.get("/api/v1/map/site", headers=VIEWER)
+    assert st.status_code == 200 and st.json()["available"] is True and st.json()["phase"] == "IDLE"
+
+    pgm = b"P5\n# rosy map bundle: test\n4 4\n255\n" + bytes([254] * 16)
+    payload = {
+        "map_id": "site-a",
+        "version": 1,
+        "sha256": hashlib.sha256(pgm).hexdigest(),
+        "resolution": 0.05,
+        "origin": [-0.1, -0.1, 0.0],
+        "occupied_thresh": 0.65,
+        "free_thresh": 0.196,
+        "pgm_base64": base64.b64encode(pgm).decode("ascii"),
+        "grid_id": "occupancy:1234567890ab",
+        "activate": False,
+    }
+    assert tc.post("/api/v1/map/site", json=payload, headers=VIEWER).status_code == 403
+
+    bad_sha = tc.post("/api/v1/map/site", json={**payload, "sha256": "0" * 64}, headers=OPERATOR)
+    assert bad_sha.status_code == 400 and bad_sha.json()["error"]["code"] == "SHA256_MISMATCH"
+
+    bad_yaw = tc.post("/api/v1/map/site", json={**payload, "origin": [-0.1, -0.1, 0.25]}, headers=OPERATOR)
+    assert bad_yaw.status_code == 400 and bad_yaw.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    staged = tc.post("/api/v1/map/site", json=payload, headers=OPERATOR)
+    assert staged.status_code == 202 and staged.json()["staged"] is True and staged.json()["activated"] is False
+    assert fake_host.calls[-1][:2] == ("site_map.stage", "machine")
+
+    # Unreachable host agent maps to 503
+    fake_host.stage_reply = AgentReply(False, "HOST_AGENT_UNAVAILABLE", "socket missing")
+    unreach = tc.post("/api/v1/map/site", json=payload, headers=OPERATOR)
+    assert unreach.status_code == 503
+    fake_host.stage_reply = None
+
+    now = [100.0]
+    monkeypatch.setattr(svc.state, "_monotonic", lambda: now[0])
+    monkeypatch.setattr(svc.state, "_clock", lambda: 1_700_000_000.0 + now[0])
+
+    # Moving -> ROBOT_NOT_STOPPED
+    svc.state.set_velocity(0.2, 0.0, sampled_at=now[0])
+    moving = tc.post("/api/v1/map/site", json={**payload, "activate": True}, headers=OPERATOR)
+    assert moving.status_code == 409 and moving.json()["error"]["code"] == "ROBOT_NOT_STOPPED"
+
+    # Zero velocity held < 2.0 s -> ROBOT_NOT_STOPPED
+    for step in (100.4, 100.8, 101.2):
+        now[0] = step
+        svc.state.set_velocity(0.0, 0.0, sampled_at=1_700_000_000.0 + now[0])
+    too_soon = tc.post("/api/v1/map/site", json={**payload, "activate": True}, headers=OPERATOR)
+    assert too_soon.status_code == 409 and too_soon.json()["error"]["code"] == "ROBOT_NOT_STOPPED"
+
+    # Odometry silence gap > 0.5 s followed by 1 zero sample resets zero_velocity_since -> refused
+    now[0] = 102.5
+    svc.state.set_velocity(0.0, 0.0, sampled_at=1_700_000_000.0 + now[0])
+    assert svc.state.zero_velocity_since == 102.5
+    after_gap = tc.post("/api/v1/map/site", json={**payload, "activate": True}, headers=OPERATOR)
+    assert after_gap.status_code == 409 and after_gap.json()["error"]["code"] == "ROBOT_NOT_STOPPED"
+
+    # Continuous zero samples <= 0.4 s apart across >= 2.0 s pass
+    for offset in (0.4, 0.8, 1.2, 1.6, 2.0, 2.2):
+        now[0] = 102.5 + offset
+        svc.state.set_velocity(0.0, 0.0, sampled_at=1_700_000_000.0 + now[0])
+
+    # Rejected timestamp (sampled_at=None after seeing finite stamp) resets zero_velocity_since -> refused
+    now[0] = 104.9
+    svc.state.set_velocity(0.0, 0.0, sampled_at=None)
+    assert svc.state.zero_velocity_since is None
+    rejected_stamp = tc.post("/api/v1/map/site", json={**payload, "activate": True}, headers=OPERATOR)
+    assert rejected_stamp.status_code == 409 and rejected_stamp.json()["error"]["code"] == "ROBOT_NOT_STOPPED"
+
+    # Re-establish continuous >= 2.0 s zero velocity with valid timestamps
+    for offset in (0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.2):
+        now[0] = 105.0 + offset
+        svc.state.set_velocity(0.0, 0.0, sampled_at=1_700_000_000.0 + now[0])
+
+    # Mode / E-stop / Calibration / Trip lease gates refuse
+    svc.modes.transition(Mode.MANUAL)
+    assert tc.post("/api/v1/map/site", json={**payload, "activate": True}, headers=OPERATOR).json()["error"]["code"] == "MODE_CONFLICT"
+    svc.modes.transition(Mode.IDLE)
+
+    svc.safety.trigger_estop("operator")
+    assert tc.post("/api/v1/map/site", json={**payload, "activate": True}, headers=OPERATOR).json()["error"]["code"] == "ESTOP_ACTIVE"
+    svc.modes.release_emergency()
+    svc.safety.release(by="operator")
+
+    # Activation reserves idle motion across stage + activate + status poll, then releases
+    fake_host.calls.clear()
+    fake_host.status_sequence = [
+        AgentReply(True, "OK", data={"phase": "ACTIVATING"}),
+        AgentReply(True, "OK", data={"phase": "ACTIVE", "backend": "localization"}),
+    ]
+    act = tc.post("/api/v1/map/site", json={**payload, "activate": True}, headers=OPERATOR)
+    assert act.status_code == 202 and act.json()["activated"] is True
+    assert act.json()["activation"]["phase"] == "ACTIVE"
+    assert svc.modes.motion_reserved is False
+    assert fake_host.calls == [
+        ("site_map.stage", "machine", True),
+        ("site_map.activate", "machine", True),
+        ("site_map.status", "machine", True),
+        ("site_map.status", "machine", True),
+    ]
+    stop_doc = json.loads((state_dir / "site-map-stop.json").read_text(encoding="utf-8"))
+    assert stop_doc["goal_active"] is False and stop_doc["written_at"] - stop_doc["zero_since"] >= 2.0
+
+    # Rolled-back terminal phase returns 409 SITE_MAP_ACTIVATE_FAILED and releases motion_reserved
+    fake_host.status_sequence = [AgentReply(True, "OK", data={"phase": "ROLLED_BACK", "reason": "nav failed"})]
+    failed_act = tc.post("/api/v1/map/site", json={**payload, "activate": True}, headers=OPERATOR)
+    assert failed_act.status_code == 409 and failed_act.json()["error"]["code"] == "SITE_MAP_ACTIVATE_FAILED"
+    assert svc.modes.motion_reserved is False

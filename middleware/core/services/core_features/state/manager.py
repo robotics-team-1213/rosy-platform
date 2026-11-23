@@ -71,6 +71,8 @@ class StateManager:
         self._odom_source: tuple = (None, None)  # (frame, source stamp ns) last given
         self._odom_write_token = object()  # Private original-source scope, including rejected writes.
         self._velocity = Velocity()
+        self._zero_velocity_since: Optional[float] = None
+        self._saw_velocity_stamp: bool = False
         self._battery = Battery()
         self._battery_status = BatteryStatus()
         self._docking = DockingStatus()
@@ -263,9 +265,31 @@ class StateManager:
 
     def set_velocity(self, linear: float, angular: float, *, sampled_at: Optional[float] = None) -> None:
         with self._lock:
+            now = self._monotonic()
+            prev_mono = self._received_mono.get("velocity")
+            max_gap = min(float(self._stale_after_s.get("velocity", 0.5)), 0.5)
+            gap = prev_mono is None or (now - prev_mono) > max_gap
+            valid_stamp = True
+            if sampled_at is not None:
+                if math.isfinite(float(sampled_at)):
+                    self._saw_velocity_stamp = True
+                else:
+                    valid_stamp = False
+            elif self._saw_velocity_stamp:
+                valid_stamp = False
             self._velocity = Velocity(linear=linear, angular=angular)
             self._velocity_sampled_at = sampled_at
+            if valid_stamp and abs(float(linear)) < 0.01 and abs(float(angular)) < 0.02:
+                if self._zero_velocity_since is None or gap:
+                    self._zero_velocity_since = now
+            else:
+                self._zero_velocity_since = None
             self._mark("velocity")
+
+    @property
+    def zero_velocity_since(self) -> Optional[float]:
+        with self._lock:
+            return self._zero_velocity_since
 
     def set_battery(self, percent: Optional[float], voltage: Optional[float] = None) -> None:
         with self._lock:

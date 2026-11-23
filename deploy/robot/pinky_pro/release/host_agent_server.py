@@ -289,6 +289,10 @@ class SubprocessCommands:
         import navigation_fallback_host as host
         return host.run_action(Path("/"), host.SystemOps(), action, *arguments)
 
+    def site_map(self, action: str) -> dict:
+        import site_map_host as host
+        return host.run_action(Path("/"), host.SystemOps(), action)
+
     def lane_perception_status(self) -> dict:
         from host_lane_perception import LanePerceptionConfig
         return LanePerceptionConfig().get()

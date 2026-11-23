@@ -132,7 +132,7 @@ def occupancy_grid_id(yaml_path) -> str:
         {
             "width": int(m["width"]),
             "height": int(m["height"]),
-            "resolution": _norm_zero(float(m["resolution"])),
+            "resolution": _norm_zero(round(float(m["resolution"]), 6)),
             "origin": {
                 "x": _norm_zero(float(m["origin"][0])),
                 "y": _norm_zero(float(m["origin"][1])),
