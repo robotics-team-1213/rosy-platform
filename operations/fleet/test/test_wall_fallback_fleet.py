@@ -83,7 +83,8 @@ class Sightings:
 
 
 def robot(phase):
-    state = {"robot_id": "r1", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+    state = {"robot_id": "r1", "map_grid_id": "occupancy:123456789012",
+             "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
              "localization": {"state": "CANDIDATES", "pose_frame": "odom", "request_id": "r1-1"}}
     if phase is not None:
         state["slam_fallback"] = {"phase": phase, "fallback_active": phase in ("WAITING_LOCALIZATION", "ACTIVE")}
@@ -166,6 +167,7 @@ def test_shared_map_twin_tiebreak_anchors_first_pinky_to_localize_peer_by_unmapp
             self._state = {
                 "robot_id": self.robot_id,
                 "map_id": self._state.get("map_id"),
+                "map_grid_id": self._state["map_grid_id"],
                 "pose": {"x": pose.x, "y": pose.y, "yaw": pose.yaw},
                 "localization": {"state": "LOCALIZED", "pose_frame": "map", "request_id": None},
             }
@@ -173,14 +175,14 @@ def test_shared_map_twin_tiebreak_anchors_first_pinky_to_localize_peer_by_unmapp
 
     clock = FakeClock()
     r1 = SharedMapRobot("r1", state={
-        "robot_id": "r1", "map_id": "site-a",
+        "robot_id": "r1", "map_id": "site-a", "map_grid_id": "occupancy:123456789012",
         "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
         "localization": {"state": "CANDIDATES", "pose_frame": "odom", "request_id": "r1-1"},
     })
     r1.candidates = report()
 
     r2 = SharedMapRobot("r2", state={
-        "robot_id": "r2", "map_id": "site-a",
+        "robot_id": "r2", "map_id": "site-a", "map_grid_id": "occupancy:123456789012",
         "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
         "localization": {"state": "CANDIDATES", "pose_frame": "odom", "request_id": "r2-1"},
     })
@@ -247,7 +249,8 @@ def test_tiebreak_rejects_three_candidates_wrong_map_sighting_and_tracks_unconfi
     svc_err.set_active_map_id(lambda: "site-a")
     svc_err.set_tiebreak_camera(lambda rid, m: (-0.9, 0.4) if m == "site-a" else None)
     ticks(svc_err, c_err, 3.0)
-    r_err._state = {"robot_id": "r1", "map_id": "site-a", "pose": {"x": -1.0, "y": 0.5, "yaw": 0.0},
+    r_err._state = {"robot_id": "r1", "map_id": "site-a", "map_grid_id": "occupancy:123456789012",
+                    "pose": {"x": -1.0, "y": 0.5, "yaw": 0.0},
                     "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
     ticks(svc_err, c_err, 0.5)
     assert svc_err.anchors() == set()
@@ -261,7 +264,8 @@ def test_tiebreak_rejects_three_candidates_wrong_map_sighting_and_tracks_unconfi
     svc_to.set_active_map_id(lambda: "site-a")
     svc_to.set_tiebreak_camera(lambda rid, m: (-0.9, 0.4) if m == "site-a" else None)
     ticks(svc_to, c_to, 3.0)
-    r_to._state = {"robot_id": "r1", "map_id": "site-a", "pose": {"x": -1.0, "y": 0.5, "yaw": 0.0},
+    r_to._state = {"robot_id": "r1", "map_id": "site-a", "map_grid_id": "occupancy:123456789012",
+                    "pose": {"x": -1.0, "y": 0.5, "yaw": 0.0},
                     "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
     ticks(svc_to, c_to, 0.5)
     assert svc_to.anchors() == {"r1"}

@@ -39,7 +39,8 @@ def report(robot_id, pose, *, stamp=0.0, request_id=None, objects=()):
 
 
 def state(robot_id, loc_state, frame="map", pose=(0.0, 0.0, 0.0)):
-    return {"robot_id": robot_id, "pose": {"x": pose[0], "y": pose[1], "yaw": pose[2]},
+    return {"robot_id": robot_id, "map_id": "occupancy:123456789012", "map_grid_id": "occupancy:123456789012",
+            "pose": {"x": pose[0], "y": pose[1], "yaw": pose[2]},
             "localization": {"state": loc_state, "pose_frame": frame}}
 
 
@@ -429,6 +430,18 @@ def test_an_anchored_chain_localizes_through_peers():
     assert [[c.value for c in r.decisions[0].cues] for r in (a, x, z)] == [["slot"], ["peers"], ["peers"]]
     assert all(r.decisions[0].candidate_index == 0 for r in (a, x, z))
     assert svc.anchors() == {"a", "x", "z"}
+
+
+@pytest.mark.parametrize("grid_id", ["occupancy:987654321098", None])
+def test_peer_pose_requires_the_same_known_occupancy_grid(grid_id):
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    x = Localizing("x", X_OFF, objects=[seen_from(X_OFF, ON_A)])
+    x._state["map_grid_id"] = grid_id
+    svc = service(a, x, clock=clock)
+    ticks(svc, clock, 12.0)
+    assert svc.anchors() == {"a"}
+    assert x.decisions == []
 
 
 def test_a_robot_that_leaves_localized_loses_its_anchor():
@@ -1072,6 +1085,25 @@ def test_an_unconfirmed_decision_the_robot_then_reaches_gives_an_anchor():
     assert svc.anchors() == {"r"}
 
 
+@pytest.mark.parametrize("robot_type", [Localizing, TimingOut])
+def test_automatic_decision_does_not_anchor_after_occupancy_grid_changes(robot_type):
+    clock = FakeClock()
+    robot = robot_type("r", ON_A)
+    svc = service(robot, clock=clock)
+    for _ in range(12):
+        ticks(svc, clock, 0.5)
+        if robot.decisions:
+            break
+    assert len(robot.decisions) == 1 and svc.anchors() == set()
+    robot._state = state("r", "UNKNOWN", "odom")
+    robot._state["map_grid_id"] = None
+    ticks(svc, clock, 0.5)
+    robot._state = state("r", "LOCALIZED", pose=ON_A)
+    robot._state["map_grid_id"] = "occupancy:987654321098"
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == set()
+
+
 @pytest.mark.parametrize("pose", [(ON_A[0] + 0.06, ON_A[1], ON_A[2]),
                                   (ON_A[0], ON_A[1], ON_A[2] + math.radians(6)), mirror(ON_A)])
 def test_an_unconfirmed_decision_reached_elsewhere_gives_no_anchor(pose):
@@ -1128,9 +1160,9 @@ def test_a_busy_refusal_is_retried_on_later_polls():
 
 
 def candidates_state(robot_id, request_id, reason=None):
-    return {"robot_id": robot_id, "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
-            "localization": {"state": "CANDIDATES", "pose_frame": "odom", "reason": reason,
-                             "request_id": request_id}}
+    result = state(robot_id, "CANDIDATES", "odom")
+    result["localization"].update(reason=reason, request_id=request_id)
+    return result
 
 
 def test_s1_a_lead_pending_at_the_rotate_rung_holds_the_ladder_until_the_decision():
