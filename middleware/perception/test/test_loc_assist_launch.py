@@ -34,12 +34,14 @@ def test_the_entry_point_is_installed():
     assert "'loc_assist_node = control.loc_assist_node:main'" in text(SENSING / 'setup.py')
 
 
-def test_the_device_hardware_launch_has_it_off_by_default():
+def test_the_device_hardware_launch_gates_loc_assist_to_localization_backend():
     hardware = text(HARDWARE)
-    assert 'DeclareLaunchArgument("enable_loc_assist", default_value="false")' in hardware
+    assert 'DeclareLaunchArgument("enable_loc_assist", default_value="true")' in hardware
     assert '"loc_assist.launch.py"' in hardware
     assert 'condition=IfCondition(LaunchConfiguration("enable_loc_assist"))' in hardware
-    assert '"map_yaml": LaunchConfiguration("map")' in hardware
+    assert 'if backend == "localization":' in hardware
+    assert hardware.index('"loc_assist.launch.py"') > hardware.index('if backend == "localization":')
+    assert hardware.index('"loc_assist.launch.py"') < hardware.index('def generate_launch_description():')
 
 
 def test_gazebo_multi_robot_nav_has_it_on_by_default():
@@ -55,10 +57,11 @@ def test_the_legacy_localization_launch_brings_the_node_its_readiness_waits_for(
     assert "executable='localization_node'" in legacy
 
 
-def test_nav2_keeps_its_initial_pose_setting():
-    """The user decides set_initial_pose separately; P2-3 leaves it as it is."""
+def test_nav2_disables_fabricated_initial_pose():
+    """D-1046 (2026-11-18): AMCL must wait for loc_assist + Fleet rather than seeding (0, 0, 0)."""
     params = text(SRC.parent / 'middleware' / 'drive' / 'planning' / 'nav2' / 'params' / 'nav2_params.yaml')
-    assert 'set_initial_pose: true' in params
+    assert 'set_initial_pose: false' in params
+    assert 'set_initial_pose: true' not in params
 
 
 def test_localization_node_no_longer_injects_or_scatters_amcl():
