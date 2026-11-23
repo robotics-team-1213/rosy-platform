@@ -180,17 +180,25 @@ def _load_lerobot_arm(
     )
 
     def predict(obs: dict[str, Any]) -> list[list[float]]:
-        batch: dict[str, Any] = {
-            "observation.state": torch.tensor(obs["state"], dtype=torch.float32).unsqueeze(0),
-        }
-        if goal_size is not None:
-            batch[GOAL_KEY] = torch.tensor(obs["goal"], dtype=torch.float32).unsqueeze(0)
-        for role in views:
-            rgb = obs["frames_rgb"][role]
-            img = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float().unsqueeze(0) / 255.0
-            batch[f"{IMAGE_PREFIX}{role}"] = img
-
         with torch.inference_mode():
+            batch: dict[str, Any] = {
+                "observation.state": torch.tensor(obs["state"], dtype=torch.float32, device=target_device).unsqueeze(0),
+            }
+            if goal_size is not None:
+                batch[GOAL_KEY] = torch.tensor(obs["goal"], dtype=torch.float32, device=target_device).unsqueeze(0)
+            for role in views:
+                rgb = obs["frames_rgb"][role]
+                # Move uint8 to target_device before float scaling to avoid cv2/PyTorch CPU OpenMP thrashing.
+                img = (
+                    torch.from_numpy(np.ascontiguousarray(rgb))
+                    .to(target_device)
+                    .permute(2, 0, 1)
+                    .unsqueeze(0)
+                    .to(torch.float32)
+                    .div_(255.0)
+                )
+                batch[f"{IMAGE_PREFIX}{role}"] = img
+
             chunk = policy.predict_action_chunk(pre(batch))
             arr = np.asarray(post(chunk).detach().cpu().numpy(), dtype=np.float64).reshape(-1, len(JOINT_NAMES))
         return [[float(x) for x in r] for r in arr[:n_action_steps]]
