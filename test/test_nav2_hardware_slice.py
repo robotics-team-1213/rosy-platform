@@ -172,6 +172,17 @@ def test_startup_frames_match_hardware_costmap_parameters(tmp_path, namespace):
     ]
 
 
+def test_startup_frames_read_flat_fully_qualified_costmap_parameters(tmp_path):
+    from navigation.start_after_tf import costmap_frames
+
+    params = tmp_path / "nav2.yaml"
+    params.write_text(yaml.safe_dump({
+        f"/pinky/{name}/{name}": {"ros__parameters": {"global_frame": frame, "robot_base_frame": "pinky/base"}}
+        for name, frame in (("global_costmap", "map"), ("local_costmap", "pinky/odom"))
+    }), encoding="utf-8")
+    assert costmap_frames(params, "/pinky") == [("map", "pinky/base"), ("pinky/odom", "pinky/base")]
+
+
 def test_hardware_io_mounts_a_host_site_map_directory():
     io = compose()["services"]["rosy-io"]
     motor = compose()["services"]["rosy-motor"]

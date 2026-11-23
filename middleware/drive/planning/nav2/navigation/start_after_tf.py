@@ -11,10 +11,10 @@ def costmap_frames(params_path, namespace):
     params = yaml.safe_load(Path(params_path).read_text(encoding="utf-8"))
     frames = []
     for name in ("global_costmap", "local_costmap"):
-        if namespace == "/":
-            config = params.get(name, {}).get(name, {})
-        else:
-            config = params.get(f"{namespace}/{name}", {}).get(name, {})
+        group = f"{namespace.rstrip('/')}/{name}"
+        nested = params.get(group, params.get(group.lstrip("/"), {})).get(name, {})
+        flat = f"{group}/{name}"
+        config = params.get(flat, params.get(flat.lstrip("/"), nested))
         values = config.get("ros__parameters", {})
         frames.append((values.get("global_frame", "map"), values.get("robot_base_frame", "base_link")))
     return frames
