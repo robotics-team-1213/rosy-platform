@@ -560,7 +560,7 @@ details.robot-panel-section > summary {
   #fleet-main .map-overlay-toggles { padding: 0; margin-bottom: 0; }
   #fleet-main :is(.map-options, .map-readouts) { margin-top: var(--space-1); }
   #fleet-main :is(#map-options, #map-readouts, #site-path) > summary { min-height: var(--target-tool); padding: 0 var(--space-2); font-size: var(--text-micro); }
-  #cancel-all, .context-tabs ui-button, .cell-stage-actions ui-button { min-height: var(--target-tool); }
+  #cancel-all, .cell-stage-actions ui-button { min-height: var(--target-tool); }
 }
 
 /* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
