@@ -28,11 +28,13 @@ from leader_actuator import (
 DEFAULT_GAINS = {n: {"p": 1200, "i": 100} for n in BODY}
 # a lighter Leader resting on its stand holds a small offset by itself; driving lift against gravity for less than this stalls at the PWM limit
 KEEP_DEG = 30
-EXACT_HOME_PWM = 280
-EXACT_HOME_CURRENT = 200
+EXACT_HOME_PWM = 380
+EXACT_HOME_CURRENT = 270
+EXACT_HOME_RATE_DEG_S = 10.0
 # the Follower's resting pose; pan and roll carry no weight, so any offset moves onto the Follower.
 MAX_TRAVEL_DEG = 100  # per joint, one automatic Leader move
 GRAVITY_JOINTS = ("shoulder_lift", "elbow_flex", "wrist_flex")
+EXACT_HOME_GAINS = {n: ({"p": 1500, "i": 250} if n in GRAVITY_JOINTS else {"p": 1200, "i": 100}) for n in BODY}
 HOME_RATE_DEG_S = 20.0
 HOME_ACCEL_DEG_S2 = 80.0
 # the Leader may lag its last command by this much; more means it is blocked or held, so no further command is sent
@@ -206,6 +208,8 @@ def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, 
                      accel_deg_s2: float = HOME_ACCEL_DEG_S2, exact: bool = False) -> dict:
     check_attest(attest)
     rate_deg_s, accel_deg_s2 = validate_motion_limits(rate_deg_s, accel_deg_s2)
+    if exact:
+        rate_deg_s = min(rate_deg_s, EXACT_HOME_RATE_DEG_S)
     teleop_cfg = _load_teleop_cfg(config_path, arm)
     protect_signals()
     _END.update(torque_off_confirmed=False, restore_failures=[])  # device access starts: unconfirmed until the connect returns
@@ -221,7 +225,8 @@ def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, 
         far_deg = max(abs(present[n] - target[n]) for n in BODY) / TICKS_PER_DEGREE
         timeout_s = max(timeout_s, far_deg / actuator.rate_deg_s + 15.0)
         actuator.admit(pwm=EXACT_HOME_PWM if exact else DEFAULT_PWM,
-                       current=EXACT_HOME_CURRENT if exact else DEFAULT_CURRENT, gains=DEFAULT_GAINS)
+                       current=EXACT_HOME_CURRENT if exact else DEFAULT_CURRENT,
+                       gains=EXACT_HOME_GAINS if exact else DEFAULT_GAINS)
         actuator.enable()
         actuator.seed(present)
         deadline = time.monotonic() + timeout_s
@@ -231,9 +236,10 @@ def move_leader_home(config_path: Path, arm: str, pose_path: Path, attest: str, 
             elapsed = max(1.0 / 30.0, min(0.1, now - last))
             last = now
             present = _present_ticks(leader)
-            lag = max(abs(present[n] - actuator.command[n]) for n in BODY) / TICKS_PER_DEGREE
+            worst = max(BODY, key=lambda n: abs(present[n] - actuator.command[n]))
+            lag = abs(present[worst] - actuator.command[worst]) / TICKS_PER_DEGREE
             if lag > MAX_TRACK_DEG:  # measured against the last command sent, before the next one
-                raise RuntimeError(f"리더 {arm} 추종 오차 {lag:.1f}도가 {MAX_TRACK_DEG}도를 넘어 정지합니다")
+                raise RuntimeError(f"리더 {arm} {worst} 추종 오차 {lag:.1f}도가 {MAX_TRACK_DEG}도를 넘어 정지합니다")
             actuator.check_effort(present)
             cmd = actuator.step(target, elapsed)
             actuator.write(cmd)

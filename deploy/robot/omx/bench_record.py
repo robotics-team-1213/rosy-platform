@@ -57,9 +57,10 @@ from bench_record_safety import end_verdict  # noqa: E402
 from bench_record_workspace import BenchWorkspaceMixin, prepare_session_task_card  # noqa: E402
 from bench_record_review import BenchReviewMixin  # noqa: E402
 from bench_record_recover import BenchRecoverMixin  # noqa: E402
+from bench_record_auto_recover import BenchAutoRecoverMixin  # noqa: E402
 
 
-class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin, BenchLinkMixin, BenchPipelineMixin, BenchWorkspaceMixin, BenchReviewMixin, BenchRecoverMixin):
+class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin, BenchLinkMixin, BenchPipelineMixin, BenchWorkspaceMixin, BenchReviewMixin, BenchRecoverMixin, BenchAutoRecoverMixin):
     def __init__(self, config, *, run=systemctl, popen=subprocess.Popen, clock=time.time, procs=proc_cmdlines,
                  mounts=proc_mounts):
         self.python, self.prep, self._config = config["python"], Path(config["prep_root"]).expanduser(), dict(config)

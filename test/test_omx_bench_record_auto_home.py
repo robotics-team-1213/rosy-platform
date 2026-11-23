@@ -1380,3 +1380,60 @@ def test_restart_cameras_skips_disabled_arm_s_top_and_heals_rebound_side(tmp_pat
     restarted = [a[1] for a in ran if a[0] == 'restart']
     assert 'rosy-omx-camera@arm_s_top.service' not in restarted
     assert 'rosy-omx-camera@arm_s_wrist.service' in restarted and res['ok'] is True
+
+
+def test_go_home_stops_home_runner_via_fifo_after_home_ok(tmp_path, monkeypatch):
+    import bench_record_ops
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    _arm_s_live_files(bench)
+    _home_with_stages(bench, monkeypatch, tmp_path, [('home', None)])
+    stop_calls, finish_calls = [], []
+    monkeypatch.setattr(bench_record_ops, 'stop_home_runner_now', lambda io_dir: (stop_calls.append(io_dir), True)[1])
+    monkeypatch.setattr(bench_record_ops, 'finish_home_child', lambda _b, _rp, _lp, stop_sent=False: (finish_calls.append(stop_sent), True)[1])
+    res = bench.go_home({'arm': 'arm_s', 'at_bench': True})
+    assert res['home_moved'] == ['arm_s'] and len(stop_calls) == 1 and finish_calls == [True]
+
+
+def test_leader_home_exact_caps_rate_applies_exact_gains_and_names_lag_joint(tmp_path, monkeypatch):
+    import contextlib, signal, leader_actuator
+
+    leader_home, leader = _leader_for_match(tmp_path)
+    leader.bus = None
+    assert leader_home.EXACT_HOME_PWM <= leader_actuator.CAP_MAX
+    assert leader_home.EXACT_HOME_CURRENT <= leader_actuator.CURRENT_MAX
+    assert leader_home.EXACT_HOME_RATE_DEG_S <= leader_actuator.MAX_RATE_DEG_S
+    if not hasattr(signal, 'SIGHUP'):
+        monkeypatch.setattr(leader_home, 'protect_signals', lambda: None)
+        monkeypatch.setattr(leader_home, 'no_interrupts', contextlib.nullcontext)
+    present = {n: 2048 for n in leader_home.BODY}
+    monkeypatch.setattr(leader_home, 'leader_mount', lambda _l: {})
+    monkeypatch.setattr(leader_home, '_load_teleop_cfg', lambda *_a: SimpleNamespace())
+    monkeypatch.setattr(leader_home, '_connect_leader', lambda _c: leader)
+    monkeypatch.setattr(leader_home, 'close_device', lambda _l: None)
+    monkeypatch.setattr(leader_home, '_present_ticks', lambda _l: dict(present))
+    seen_act, seen_admit = [], []
+
+    def make_act(_bus, **kw):
+        seen_act.append(kw)
+        return SimpleNamespace(
+            rate_deg_s=kw['rate_deg_s'], command=dict(present),
+            admit=lambda **akw: seen_admit.append(akw), enable=lambda: None,
+            seed=lambda _p: None, check_effort=lambda _p: None,
+            step=lambda t, _e: t, write=lambda _c: None, restore=lambda: [],
+        )
+
+    monkeypatch.setattr(leader_home, 'LeaderActuator', make_act)
+    cfg_p = tmp_path / 'cfg.json'
+    out = leader_home.move_leader_home(cfg_p, 'arm_a', cfg_p, 'hands-off:test:1',
+                                       follower=list(present.values()), rate_deg_s=20.0, exact=True)
+    assert out['ok'] is True
+    assert seen_act[0]['rate_deg_s'] == leader_home.EXACT_HOME_RATE_DEG_S
+    assert seen_admit[0]['pwm'] == leader_home.EXACT_HOME_PWM
+    assert seen_admit[0]['current'] == leader_home.EXACT_HOME_CURRENT
+    assert seen_admit[0]['gains'] == leader_home.EXACT_HOME_GAINS
+
+    monkeypatch.setattr(leader_home, '_present_ticks', lambda _l: {**present, 'shoulder_lift': 2048 - 70})
+    with pytest.raises(RuntimeError, match='shoulder_lift.*추종 오차'):
+        leader_home.move_leader_home(cfg_p, 'arm_a', cfg_p, 'hands-off:test:1',
+                                     follower=list(present.values()), rate_deg_s=20.0, exact=True)

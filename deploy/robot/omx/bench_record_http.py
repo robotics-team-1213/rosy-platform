@@ -150,6 +150,7 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                       "/bench_record_cam.js": lambda: ((HERE / "bench_record_cam.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_log_reset.js": lambda: ((HERE / "bench_record_log_reset.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_overlay.js": lambda: ((HERE / "bench_record_overlay.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_review.js": lambda: ((HERE / "bench_record_review.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/choices.json": lambda: (bench.choices(), "application/json"),
                       "/status.json": lambda: (bench.status(), "application/json")}
@@ -231,6 +232,8 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.ack_bench_error(body))
                 if self.path == "/api/recover/sync_incident":
                     return self.reply(200, bench.recover_sync_incident(body))
+                if self.path == "/api/recover/auto":
+                    return self.reply(200, bench.auto_recover(body))
                 if self.path == "/api/defaults/reset":
                     return self.reply(200, bench.reset_defaults(body))
                 m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose|release_lease|prepare|record_episode|finish)", self.path)

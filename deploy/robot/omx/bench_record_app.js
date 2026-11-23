@@ -80,6 +80,7 @@ function applyCameraLayout(){
   }else if(stack){
     stack.remove();
   }
+  if(typeof window.renderCamGoalOverlay==='function')window.renderCamGoalOverlay();
 }
 function switchPrimaryCam(lbl){
   if(!lbl||!camLabels.includes(lbl)||lbl===primaryCam)return;
