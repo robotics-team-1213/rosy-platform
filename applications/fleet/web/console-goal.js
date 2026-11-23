@@ -1,3 +1,4 @@
+import { patchHidden, patchText, uiTag } from "/common/control-dom.js";
 import { isOperator } from "/console/assets/authorization.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
@@ -312,10 +313,17 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy));
   }
 
+  let lastHoverSig = "";
+
   function renderHoverCard(entity) {
     const card = el("map-hover-card");
     if (!card) return;
-    if (!entity) { card.hidden = true; card.replaceChildren(); return; }
+    if (!entity) {
+      lastHoverSig = "";
+      patchHidden(card, true);
+      if (card.childElementCount) card.replaceChildren();
+      return;
+    }
     const lines = [], bars = [];
     let title = "", badge = "", badgeTone = "neutral", footer = "";
     if (entity.kind === "pinky") {
@@ -383,27 +391,29 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       footer = `클릭 시 🎯 ${pl.id} 핀 고정 및 ${activeId || "선택한 로봇"} 도로(lane_graph) 즉시 주행`;
     }
 
-    const headRow = document.createElement("div"); headRow.className = "hover-card-head";
-    const strong = document.createElement("strong"); strong.textContent = title;
-    const tag = document.createElement("ui-tag");
-    tag.setAttribute("status", badgeTone); tag.setAttribute("variant", "inline"); tag.textContent = badge;
-    headRow.append(strong, tag);
-    const dl = document.createElement("dl"); dl.className = "hover-card-grid";
-    for (const [k, v] of lines) { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); }
-    const barBox = document.createElement("div"); barBox.className = "hover-bars";
-    for (const [label, valText, pct, tone] of bars) {
-      const row = document.createElement("div"); row.className = "gauge-row-compact";
-      const meta = document.createElement("div"); meta.className = "gauge-meta-line";
-      const lSpan = document.createElement("span"); lSpan.textContent = label;
-      const vStrong = document.createElement("strong"); vStrong.textContent = valText;
-      meta.append(lSpan, vStrong);
-      row.append(meta, makeSvgBar(pct, tone));
-      barBox.appendChild(row);
-    }
+    const hoverSig = JSON.stringify([title, badge, badgeTone, lines, bars, footer]);
+    if (hoverSig !== lastHoverSig || !card.firstElementChild) {
+      lastHoverSig = hoverSig;
+      const headRow = document.createElement("div"); headRow.className = "hover-card-head";
+      const strong = document.createElement("strong"); strong.textContent = title;
+      headRow.append(strong, uiTag(badge, badgeTone, "inline"));
+      const dl = document.createElement("dl"); dl.className = "hover-card-grid";
+      for (const [k, v] of lines) { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); }
+      const barBox = document.createElement("div"); barBox.className = "hover-bars";
+      for (const [label, valText, pct, tone] of bars) {
+        const row = document.createElement("div"); row.className = "gauge-row-compact";
+        const meta = document.createElement("div"); meta.className = "gauge-meta-line";
+        const lSpan = document.createElement("span"); lSpan.textContent = label;
+        const vStrong = document.createElement("strong"); vStrong.textContent = valText;
+        meta.append(lSpan, vStrong);
+        row.append(meta, makeSvgBar(pct, tone));
+        barBox.appendChild(row);
+      }
 
-    const foot = document.createElement("p"); foot.className = "hover-card-foot"; foot.textContent = footer;
-    card.replaceChildren(headRow, dl, ...(bars.length ? [barBox] : []), foot);
-    card.hidden = false;
+      const foot = document.createElement("p"); foot.className = "hover-card-foot"; foot.textContent = footer;
+      card.replaceChildren(headRow, dl, ...(bars.length ? [barBox] : []), foot);
+    }
+    patchHidden(card, false);
   }
 
   function clearMapHover() {

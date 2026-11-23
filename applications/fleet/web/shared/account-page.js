@@ -60,7 +60,7 @@ async function perform(fn) {
   finally {
     busy = false;
     for (const button of document.querySelectorAll('ui-button, button')) {
-      button.disabled = invalidated; if (!invalidated) button.removeAttribute('reason');
+      setOffBy(button, invalidated ? '로그인 계정 또는 관리 권한이 변경되었습니다' : '');
     }
   }
 }

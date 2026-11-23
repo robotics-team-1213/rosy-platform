@@ -1,5 +1,6 @@
 // D-941 2: gaps between robots on the active map's loop, read-only. Following runs on CORE;
 // Fleet only shows who is ahead and how far (`dispatch: false`).
+import { patchHidden, patchText, uiTag } from "/common/control-dom.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
 const GAP_STATE = Object.freeze({
@@ -36,19 +37,21 @@ export function createPlatoonView({ scope, el, call, auth }) {
   const hint = el("platoon-hint");
   let inFlight = false;
   let unavailable = false;
+  let lastListSig = "";
 
   function show(rows, note) {
-    list.replaceChildren();
-    for (const r of rows?.robots || []) {
-      const li = document.createElement("li");
-      const t = document.createElement("ui-tag");
-      t.setAttribute("status", r.status);
-      t.textContent = r.text;
-      li.append(`${r.robot} `, t);
-      list.append(li);
+    const robots = rows?.robots || [];
+    const listSig = JSON.stringify(robots);
+    if (listSig !== lastListSig) {
+      lastListSig = listSig;
+      list.replaceChildren(...robots.map((r) => {
+        const li = document.createElement("li");
+        li.append(`${r.robot} `, uiTag(r.text, r.status));
+        return li;
+      }));
     }
-    hint.textContent = note;
-    hint.hidden = !note;
+    patchText(hint, note);
+    patchHidden(hint, !note);
   }
 
   async function refresh() {
@@ -60,12 +63,12 @@ export function createPlatoonView({ scope, el, call, auth }) {
       const body = await call("/api/fleet/platoon", { signals: [life.signal] });
       life.check();
       const rows = platoonRows(body);
-      state.textContent = `${rows.robots.filter((r) => r.status !== "neutral").length}대 따라감`;
+      patchText(state, `${rows.robots.filter((r) => r.status !== "neutral").length}대 따라감`);
       show(rows, rows.robots.length ? rows.summary : `${rows.summary} · 위치가 잡힌 로봇이 없습니다`);
     } catch (error) {
       if (error.name === "AbortError") return;
       if (isRouteAbsent(error.status, error.code)) unavailable = true;
-      state.textContent = "—";
+      patchText(state, "—");
       show(null, error.code === "NO_ACTIVE_MAP" ? "활성 지도가 없습니다"
         : error.code === "NO_LOOP" ? "활성 지도에 한 방향 고리가 없습니다" : "대열 간격을 읽지 못했습니다");
     } finally {

@@ -4,8 +4,7 @@
 // trip routes plus the robot card. No new motion route.
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import {AI_FACT_LABEL, RESOLVER_DECISION_LABEL, tripErrorText} from "/console/assets/trip-display.js";
-import { setOffBy } from "/common/cause-line.js";
-import { primaryButton, quietButton } from "./queues.js";
+import { buildDecisionBox, createDecisionSlotFiller } from "./decision-slot.js";
 
 /** What the slot shows for one held trip: the changed route, pause/failure hold, or why there is none. */
 export function replanView(trip, { operator, named = "", busy = false }) {
@@ -48,7 +47,8 @@ export function deadlockView(traffic, trip, aiFacts, robotId, { operator, named 
 }
 
 export function createTripReplan({ scope, view, call, log, isOperator, namedReason = () => "", openCard = () => {} }) {
-  const busy = new Set(), results = new Map(), signatures = new Map();  // by trip id / slot key
+  const busy = new Set(), results = new Map();  // by trip id
+  const fill = createDecisionSlotFiller({ focusAttr: "replan" });
 
   async function send(trip, verb, done) {
     if (busy.has(trip.trip_id)) return;
@@ -73,48 +73,6 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
     }
   }
 
-  // buttons: [node, data-replan key, disabled reason, click]
-  function body(robotId, trip, lines, label, buttons) {
-    const box = document.createElement("div");
-    box.className = "stuck-item";
-    for (const text of lines) {
-      const line = document.createElement("p");
-      line.className = "stuck-resolver";
-      line.textContent = text;
-      box.append(line);
-    }
-    const actions = document.createElement("div");
-    actions.className = "stuck-actions ui-action-bar";
-    actions.setAttribute("role", "group");
-    actions.setAttribute("aria-label", `${robotId} ${label}`);
-    for (const [node, key, reason, click] of buttons) {
-      node.dataset.replan = key;
-      setOffBy(node, reason);
-      node.addEventListener("click", scope.guard(click));
-      actions.append(node);
-    }
-    box.append(actions);
-    const last = trip && results.get(trip.trip_id);
-    if (last) {
-      const line = document.createElement("p");
-      line.className = "stuck-result";
-      line.dataset.kind = last.kind;
-      line.setAttribute("role", last.kind === "bad" ? "alert" : "status");
-      line.textContent = last.text;
-      box.append(line);
-    }
-    return box;
-  }
-
-  function fill(key, signature, make) {
-    const slot = document.querySelector(`[data-decision-slot="${CSS.escape(key)}"]`);
-    if (!slot || (slot.firstElementChild && signatures.get(key) === signature)) return;
-    const focusKey = slot.contains(document.activeElement) ? document.activeElement.dataset.replan : null;
-    slot.replaceChildren(make());
-    signatures.set(key, signature);
-    if (focusKey) slot.querySelector(`[data-replan="${focusKey}"]`)?.focus({ preventScroll: true });
-  }
-
   function render() {
     const operator = isOperator(), named = namedReason();
     for (const trip of view.stateUnavailable ? [] : (view.trafficTrips || []).filter((row) => row.hold)) {
@@ -123,23 +81,37 @@ export function createTripReplan({ scope, view, call, log, isOperator, namedReas
       const confirmLabel = paused ? "운행 재개" : "바뀐 경로로 계속";
       const verb = paused ? "resume" : "confirm-replan";
       const confirmDone = paused ? "운행을 재개합니다" : "바뀐 경로로 계속합니다";
-      fill(`${trip.robot_id}|replan`, JSON.stringify([trip.trip_id, trip.hold, spec, results.get(trip.trip_id) || null]),
-        () => body(trip.robot_id, trip, [spec.facts], "바뀐 경로 확인", [
-          [primaryButton(confirmLabel), "confirm", spec.confirmReason, () => send(trip, verb, confirmDone)],
-          [quietButton("운행 취소"), "cancel", spec.cancelReason, () => send(trip, "cancel", "운행을 취소했습니다")]]));
+      const result = results.get(trip.trip_id) || null;
+      fill(`${trip.robot_id}|replan`, JSON.stringify([trip.trip_id, trip.hold, spec, result]), () => buildDecisionBox({
+        scope,
+        lines: [spec.facts],
+        groupLabel: `${trip.robot_id} 바뀐 경로 확인`,
+        buttons: [
+          { label: confirmLabel, primary: true, reason: spec.confirmReason, dataset: { replan: "confirm" }, onClick: () => send(trip, verb, confirmDone) },
+          { label: "운행 취소", reason: spec.cancelReason, dataset: { replan: "cancel" }, onClick: () => send(trip, "cancel", "운행을 취소했습니다") },
+        ],
+        result,
+      }));
     }
     for (const robotId of view.stateUnavailable ? [] : (view.traffic?.wait_cycle || []).filter((id) => !id.startsWith("signal:"))) {
       const trip = (view.trafficTrips || []).find((row) => row.robot_id === robotId) || null;
       const spec = deadlockView(view.traffic, trip, view.trafficAi, robotId,
         { operator, named, busy: Boolean(trip && busy.has(trip.trip_id)) });
-      fill(`${robotId}|deadlock`, JSON.stringify([trip?.trip_id, spec, (trip && results.get(trip.trip_id)) || null]),
-        () => body(robotId, trip, spec.lines, "교착 조치", [
-          [primaryButton("바뀐 경로로 계속"), "confirm", spec.confirmReason, () => send(trip, "confirm-replan", "바뀐 경로로 계속합니다")],
-          [quietButton("운행 취소"), "cancel", spec.cancelReason, () => send(trip, "cancel", "운행을 취소했습니다")],
-          [quietButton("로봇 카드 열기"), "card", "", () => {
+      const result = (trip && results.get(trip.trip_id)) || null;
+      fill(`${robotId}|deadlock`, JSON.stringify([trip?.trip_id, spec, result]), () => buildDecisionBox({
+        scope,
+        lines: spec.lines,
+        groupLabel: `${robotId} 교착 조치`,
+        buttons: [
+          { label: "바뀐 경로로 계속", primary: true, reason: spec.confirmReason, dataset: { replan: "confirm" }, onClick: () => send(trip, "confirm-replan", "바뀐 경로로 계속합니다") },
+          { label: "운행 취소", reason: spec.cancelReason, dataset: { replan: "cancel" }, onClick: () => send(trip, "cancel", "운행을 취소했습니다") },
+          { label: "로봇 카드 열기", reason: "", dataset: { replan: "card" }, onClick: () => {
             openCard(robotId);
             document.querySelector(`article[data-robot-id="${CSS.escape(robotId)}"]`)?.scrollIntoView({ block: "nearest" });
-          }]]));
+          } },
+        ],
+        result,
+      }));
     }
   }
 

@@ -8,6 +8,13 @@ export function node(tag, text = "", className = "") {
   return result;
 }
 
+export function uiTag(text, status = "neutral", variant = "") {
+  const tag = node("ui-tag", text);
+  if (status) tag.setAttribute("status", status);
+  if (variant) tag.setAttribute("variant", variant);
+  return tag;
+}
+
 export function patchText(el, value) {
   const next = String(value ?? "");
   if (el && el.textContent !== next) el.textContent = next;

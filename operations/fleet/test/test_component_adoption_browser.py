@@ -386,6 +386,22 @@ def test_steady_polls_produce_zero_dom_churn_and_preserve_card_identity(site):
     }
     api["/api/fleet/trips"] = {"running": None, "trips": [], "open": []}
     api["/api/fleet/device-profile-sources/robot/rosy_01"] = {"profile": None}
+    api["/api/fleet/tracking"] = {
+        "lease_s": 10,
+        "sources": [{"source_id": "ceiling_north", "status": "OK", "age_ms": 20}],
+        "robots": [],
+        "unknown": [],
+    }
+    api["/api/fleet/charge-bays"] = {
+        "thresholds": {"go_percent": 15, "leave_percent": 80},
+        "bays": [{"bay": "C1", "state": "free", "robot_id": None}],
+        "actions": [],
+    }
+    api["/api/fleet/platoon"] = {
+        "loop": {"edges": ["e1"], "perimeter_m": 2.0},
+        "target_gap_m": 0.5,
+        "robots": [{"robot_id": "rosy_01", "state": "alone"}],
+    }
     state_polls = []
 
     with sync_playwright() as pw:
@@ -405,7 +421,10 @@ def test_steady_polls_produce_zero_dom_churn_and_preserve_card_identity(site):
             dockBtn: document.querySelector('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]'),
             hudBatt: document.querySelector('#cockpit-hud [data-hud-key="battery"]'),
           };
-          const counts = { roster: 0, workspace: 0, hud: 0, sitePath: 0, dock: 0, dockAttr: 0, hudAttr: 0 };
+          const counts = {
+            roster: 0, workspace: 0, hud: 0, sitePath: 0, dock: 0, dockAttr: 0, hudAttr: 0,
+            trackingRows: 0, chargeBays: 0, platoonRows: 0, formationDetail: 0,
+          };
           window.__churnCounts = counts;
           const watchChild = (sel, key) => {
             const target = document.querySelector(sel);
@@ -424,6 +443,10 @@ def test_steady_polls_produce_zero_dom_churn_and_preserve_card_identity(site):
           watchChild("#cockpit-hud", "hud");
           watchChild("#site-path-list", "sitePath");
           watchChild("#robot-dock", "dock");
+          watchChild("#tracking-position-rows", "trackingRows");
+          watchChild("#charge-bay-rows", "chargeBays");
+          watchChild("#platoon-rows", "platoonRows");
+          watchChild("#formation-detail", "formationDetail");
           watchAttr("#robot-dock", "dockAttr");
           watchAttr("#cockpit-hud", "hudAttr");
         }""")
@@ -451,6 +474,10 @@ def test_steady_polls_produce_zero_dom_churn_and_preserve_card_identity(site):
             "dock": 0,
             "dockAttr": 0,
             "hudAttr": 0,
+            "trackingRows": 0,
+            "chargeBays": 0,
+            "platoonRows": 0,
+            "formationDetail": 0,
         }, f"unexpected DOM churn on steady polls: {result['counts']}"
 
         api["/api/fleet/state"]["robots"][0]["power_health"]["battery"]["percent"] = 62

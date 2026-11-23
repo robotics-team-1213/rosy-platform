@@ -132,7 +132,7 @@ HELPERS = (
     {"name": "iconSvg", "module": "shared/web/ui.js", "aliases": ["iconNode"], "ceiling": 0},
 )
 DIRECT = (
-    {"what": "reason 속성 직접 쓰기", "pattern": r"""(?:set|remove)Attribute\(\s*["']reason["']""", "owners": ["shared/web/ui.js", "shared/web/cause-line.js"], "ceiling": 5},
+    {"what": "reason 속성 직접 쓰기", "pattern": r"""(?:set|remove)Attribute\(\s*["']reason["']""", "owners": ["shared/web/ui.js", "shared/web/cause-line.js"], "ceiling": 4},
     {"what": "운영자 역할 직접 비교", "pattern": r"""role\s*[!=]==?\s*["']operator["']""", "owners": ["applications/fleet/web/shared/authorization.js"], "ceiling": 0},
     {"what": "권한 문구 직접 쓰기", "pattern": "운영자 권한이 필요합니다", "owners": ["applications/fleet/web/shared/authorization.js"], "ceiling": 0},
     {"what": "'초 전' 손 포맷", "pattern": "초 전", "owners": ["shared/web/core_ui_logic.js", "shared/web/component-gallery.js"], "ceiling": 0},

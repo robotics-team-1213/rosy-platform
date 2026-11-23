@@ -1,5 +1,6 @@
 // D-793 /console/policy: 학습 정책 단계·승인 창·확인 요청·사고 잠금. 규칙은 서버가 판단한다.
 import { setOffBy } from "/common/cause-line.js";
+import { patchAttr, patchHidden, patchText, uiTag } from "/common/control-dom.js";
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {developmentToken} from '/console/assets/development-auth.js';
@@ -38,9 +39,12 @@ function button(label, lock, onClick, kind = 'quiet') {
   return node;
 }
 
+const renderedSigs = new Map();
+
 function message(text, kind = 'warning') {
-  $('policy-message').hidden = !text; $('policy-message').textContent = text || '';
-  $('policy-message').setAttribute('state', kind);
+  patchHidden($('policy-message'), !text);
+  patchText($('policy-message'), text || '');
+  patchAttr($('policy-message'), 'state', kind);
 }
 
 async function post(path, body, success) {
@@ -59,15 +63,18 @@ async function confirmed(opener, text, action, path, body, success) {
   if (await confirmIrreversible({message: text, action, opener})) await post(path, body, success);
 }
 
-function list(id, items, render, empty) {
+function list(id, items, render, empty, sigInput = items) {
   const target = $(id);
+  const sig = JSON.stringify(sigInput);
+  if (renderedSigs.get(id) === sig && target.firstElementChild) return;
+  renderedSigs.set(id, sig);
   target.replaceChildren(...(items.length ? items.map(render) : [element('li', empty)]));
 }
 
 function renderIncident(item) {
   const row = element('li');
-  row.append(element('ui-tag', item.cleared_ns === null ? '잠금' : '해제됨',
-    {status: item.cleared_ns === null ? 'crit' : 'neutral'}), element('span', ` ${item.description} — 신고 ${item.reported_by}`));
+  row.append(uiTag(item.cleared_ns === null ? '잠금' : '해제됨', item.cleared_ns === null ? 'crit' : 'neutral'),
+    element('span', ` ${item.description} — 신고 ${item.reported_by}`));
   if (item.cleared_ns === null) {
     row.append(button('잠금 해제…', incidentLock(item, who), node => confirmed(node,
       `"${item.description}" 사고 잠금을 해제할까요? 원인을 확인한 뒤에만 해제하세요.`, '잠금 해제',
@@ -78,8 +85,7 @@ function renderIncident(item) {
 
 function renderConfirmation(item) {
   const row = element('li');
-  row.append(element('ui-tag', item.resolution ? RESOLUTION_LABELS[item.resolution] : '대기',
-    {status: item.resolution ? 'neutral' : 'warn'}),
+  row.append(uiTag(item.resolution ? RESOLUTION_LABELS[item.resolution] : '대기', item.resolution ? 'neutral' : 'warn'),
   element('span', ` ${REASON_LABELS[item.reason] || item.reason}${item.policy_revision ? ` · ${item.policy_revision}` : ''} — ${item.created_by}`),
   element('pre', JSON.stringify(item.evidence, null, 2), {class: 'policy-evidence'}));
   if (!item.resolution) {
@@ -99,7 +105,7 @@ function renderConfirmation(item) {
 function renderWindow(item) {
   const row = element('li');
   const status = item.active ? '열림' : item.approved_by ? '닫힘' : item.closed_ns ? '취소됨' : '승인 대기';
-  row.append(element('ui-tag', status, {status: item.active ? 'active' : item.approved_by || item.closed_ns ? 'neutral' : 'warn'}),
+  row.append(uiTag(status, item.active ? 'active' : item.approved_by || item.closed_ns ? 'neutral' : 'warn'),
     element('span', ` ${WINDOW_LABELS[item.kind]} · ${item.policy_revision} · ${item.scope} — 요청 ${item.requested_by}`
       + (item.active ? ` · ${remaining(item.expires_ns, state.now_ns)} 남음` : '')));
   if (!item.approved_by && !item.closed_ns) {
@@ -127,8 +133,8 @@ function cell(...children) {
 function renderProposal(item) {
   const row = element('tr');
   const actions = element('ui-actions');
-  row.append(cell(element('ui-tag', item.state === 'PENDING' ? '대기' : item.state === 'APPROVED' ? '승인됨' : '거절됨',
-    {status: item.state === 'PENDING' ? 'warn' : 'neutral'})),
+  row.append(cell(uiTag(item.state === 'PENDING' ? '대기' : item.state === 'APPROVED' ? '승인됨' : '거절됨',
+    item.state === 'PENDING' ? 'warn' : 'neutral')),
   cell(item.policy_revision), cell(`${STAGE_LABELS[item.from_stage] || '미등록'} → ${STAGE_LABELS[item.to_stage]}`),
   cell(item.proposed_by), cell(item.note), cell(actions));
   if (item.state === 'PENDING') {
@@ -143,27 +149,43 @@ function renderProposal(item) {
 }
 
 function render() {
-  $('policy-content').hidden = false;
+  patchHidden($('policy-content'), false);
   const verdict = executionVerdict(state);
-  $('policy-verdict').textContent = verdict.text; $('policy-verdict').setAttribute('state', verdict.state);
-  $('policy-figures').replaceChildren(...policyFigures(state).map(item => {
-    const cell = element('div', '', item.alert ? {'data-alert': ''} : {});
-    cell.append(element('dt', item.label), element('dd', item.value), element('dd', item.note, {'data-note': ''}));
-    return cell;
-  }));
-  list('policy-incidents', state.incidents, renderIncident, '사고 기록이 없습니다.');
-  list('policy-confirmations', state.confirmations, renderConfirmation, '확인 요청이 없습니다.');
-  list('policy-windows', state.windows, renderWindow, '승인 창 기록이 없습니다.');
-  list('policy-stages', state.policies, renderStage, '등록된 정책이 없습니다. 학습 결과를 0단계로 등록하세요.');
+  patchText($('policy-verdict'), verdict.text); patchAttr($('policy-verdict'), 'state', verdict.state);
+  const figures = policyFigures(state);
+  const figSig = JSON.stringify(figures);
+  const figBox = $('policy-figures');
+  if (renderedSigs.get('policy-figures') !== figSig || !figBox.firstElementChild) {
+    renderedSigs.set('policy-figures', figSig);
+    figBox.replaceChildren(...figures.map(item => {
+      const cell = element('div', '', item.alert ? {'data-alert': ''} : {});
+      cell.append(element('dt', item.label), element('dd', item.value), element('dd', item.note, {'data-note': ''}));
+      return cell;
+    }));
+  }
+  list('policy-incidents', state.incidents, renderIncident, '사고 기록이 없습니다.', [state.incidents, who, state.rules]);
+  list('policy-confirmations', state.confirmations, renderConfirmation, '확인 요청이 없습니다.', [state.confirmations, who, state.rules]);
+  list('policy-windows', state.windows, renderWindow, '승인 창 기록이 없습니다.',
+    [state.windows.map(w => w.active ? [w, remaining(w.expires_ns, state.now_ns)] : w), who, state.rules]);
+  list('policy-stages', state.policies, renderStage, '등록된 정책이 없습니다. 학습 결과를 0단계로 등록하세요.', state.policies);
   const proposals = $('policy-proposals');
-  proposals.replaceChildren(...(state.proposals.length ? state.proposals.map(renderProposal) : [(() => {
-    const row = element('tr'), empty = element('td', '단계 제안 기록이 없습니다.', {colspan: '6'});
-    row.append(empty);
-    return row;
-  })()]));
-  const policies = $('policy-window-policy'), chosen = policies.value;
-  policies.replaceChildren(...state.policies.map(item => element('option', `${item.policy_revision} (${STAGE_LABELS[item.stage] || item.stage})`, {value: item.policy_revision})));
-  if (chosen) policies.value = chosen;
+  const propSig = JSON.stringify([state.proposals, who, state.rules]);
+  if (renderedSigs.get('policy-proposals') !== propSig || !proposals.firstElementChild) {
+    renderedSigs.set('policy-proposals', propSig);
+    proposals.replaceChildren(...(state.proposals.length ? state.proposals.map(renderProposal) : [(() => {
+      const row = element('tr'), empty = element('td', '단계 제안 기록이 없습니다.', {colspan: '6'});
+      row.append(empty);
+      return row;
+    })()]));
+  }
+  const policies = $('policy-window-policy');
+  const polOptsSig = JSON.stringify(state.policies.map(item => [item.policy_revision, item.stage]));
+  if (renderedSigs.get('policy-window-policy') !== polOptsSig) {
+    renderedSigs.set('policy-window-policy', polOptsSig);
+    const chosen = policies.value;
+    policies.replaceChildren(...state.policies.map(item => element('option', `${item.policy_revision} (${STAGE_LABELS[item.stage] || item.stage})`, {value: item.policy_revision})));
+    if (chosen) policies.value = chosen;
+  }
   if (!$('policy-window-kind').options.length) {
     for (const [kind, rule] of Object.entries(state.rules.windows)) {
       $('policy-window-kind').append(element('option', `${WINDOW_LABELS[kind]} · ${rule.min_stage} 이상 · 기본 ${rule.default_minutes}분, 최대 ${rule.max_minutes}분`, {value: kind}));
@@ -183,8 +205,8 @@ async function refresh() {
   refreshing = true;
   try { state = await request(base()); render(); }
   catch (error) {
-    $('policy-content').hidden = true;
-    $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
+    patchHidden($('policy-content'), true);
+    patchText($('policy-verdict'), errorText(error)); patchAttr($('policy-verdict'), 'state', 'unavailable');
   } finally { refreshing = false; }
 }
 
