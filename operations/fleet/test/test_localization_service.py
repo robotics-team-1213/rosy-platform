@@ -39,7 +39,8 @@ def report(robot_id, pose, *, stamp=0.0, request_id=None, objects=()):
 
 
 def state(robot_id, loc_state, frame="map", pose=(0.0, 0.0, 0.0)):
-    return {"robot_id": robot_id, "pose": {"x": pose[0], "y": pose[1], "yaw": pose[2]},
+    return {"robot_id": robot_id, "map_id": "test-site", "map_grid_id": "occupancy:123456789012",
+            "pose": {"x": pose[0], "y": pose[1], "yaw": pose[2]},
             "localization": {"state": loc_state, "pose_frame": frame}}
 
 
@@ -429,6 +430,18 @@ def test_an_anchored_chain_localizes_through_peers():
     assert [[c.value for c in r.decisions[0].cues] for r in (a, x, z)] == [["slot"], ["peers"], ["peers"]]
     assert all(r.decisions[0].candidate_index == 0 for r in (a, x, z))
     assert svc.anchors() == {"a", "x", "z"}
+
+
+@pytest.mark.parametrize("grid_id", ["occupancy:987654321098", None])
+def test_peer_pose_requires_the_same_known_occupancy_grid(grid_id):
+    clock = FakeClock()
+    a = Localizing("a", ON_A)
+    x = Localizing("x", X_OFF, objects=[seen_from(X_OFF, ON_A)])
+    x._state["map_grid_id"] = grid_id
+    svc = service(a, x, clock=clock)
+    ticks(svc, clock, 12.0)
+    assert svc.anchors() == {"a"}
+    assert x.decisions == []
 
 
 def test_a_robot_that_leaves_localized_loses_its_anchor():
