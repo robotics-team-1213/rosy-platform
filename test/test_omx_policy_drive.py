@@ -131,6 +131,34 @@ def test_dry_run_never_loads_or_moves(tmp_path):
     assert result["result"] == "dry_run" and set(cell.commands) == {"state"}
 
 
+def test_hybrid_pre_lift_masks_only_model_input_and_keeps_handoff(tmp_path, monkeypatch):
+    class GoalPolicy(Policy):
+        goal_size = 10
+
+        def inputs(self, state, frames, *, goal, mask_goal=False):
+            self.seen.append((goal, mask_goal))
+            return {"state": state}, {}
+
+    shadow = GoalPolicy(GRASP_THEN_RELEASE)
+    cell, handoff = Cell(), object()
+
+    def timed(cell, model, library, work, **kwargs):
+        assert kwargs["handoff"] is handoff
+        assert kwargs["dry_run"] is True
+        kwargs["infer"](cell.state, {})
+        return {"result": "dry_run"}
+
+    monkeypatch.setattr(drive, "run_timed", timed)
+    path = write_lib(tmp_path)
+    kwargs = dict(offset=[0] * 6, max_chunks=1, dry_run=True, log=lambda row: None, goal_slot=1)
+    with pytest.raises(ValueError, match="hybrid handoff"):
+        drive.run_episode(cell, shadow, path, tmp_path, mask_pick_goal=True, **kwargs)
+    result = drive.run_episode(cell, shadow, path, tmp_path, handoff=handoff, mask_pick_goal=True, **kwargs)
+    assert result["result"] == "dry_run"
+    assert shadow.seen == [(1, True)]
+    assert cell.commands == []
+
+
 @pytest.mark.parametrize("outside", [False, True])
 def test_sim_goal_cli_converts_and_logs_envelope_without_motion(tmp_path, monkeypatch, outside):
     import hashlib

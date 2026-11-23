@@ -58,6 +58,15 @@ def test_goal_feature_requires_a_valid_slot_or_one_hot(tmp_path):
         obs, meta = shadow.inputs([0] * 6, frames, goal=goal)
         np.testing.assert_array_equal(obs[lrs.GOAL], [0] * 9 + [1])
         assert obs[lrs.GOAL].dtype == np.float32 and meta["goal_slot"] == 9
+    with pytest.raises(ValueError, match="one-hot"):
+        shadow.inputs([0] * 6, frames, goal=[0] * 10)
+    goal = np.asarray([0] * 9 + [1], dtype=np.float32)
+    obs, meta = shadow.inputs([0] * 6, frames, goal=goal, mask_goal=True)
+    np.testing.assert_array_equal(obs[lrs.GOAL], [0] * 10)
+    np.testing.assert_array_equal(goal, [0] * 9 + [1])
+    assert meta["goal_slot"] == 9 and meta["goal_masked"] is True
+    with pytest.raises(ValueError, match="goal slot"):
+        shadow.inputs([0] * 6, frames, goal=10, mask_goal=True)
 
 
 @pytest.mark.parametrize("arm,roll,gripper,held", [

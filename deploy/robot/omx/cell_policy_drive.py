@@ -39,7 +39,9 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
                 demonstrated=None, goal_slot: int | None = None, n_action=None,
                 max_obs_age_s=MAX_OBSERVATION_AGE_S, handoff=None, authorize=None,
                 params=None, tcp_x_m=None, kin=None, rim_z_m: float | None = None,
-                paced_chunks: bool = False) -> dict:
+                paced_chunks: bool = False, mask_pick_goal: bool = False) -> dict:
+    if mask_pick_goal and (handoff is None or goal_slot is None or getattr(shadow, "goal_size", None) is None):
+        raise ValueError("masked pickup requires a goal-conditioned hybrid handoff")
     library = json.loads(library_path.read_text(encoding="utf-8"))
     low, high, fastest = envelope(library)
     fps = float(library.get("fps", 30))
@@ -94,6 +96,8 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
     open_g = max(f[5] for chunk in library["chunks"].values() for f in chunk if len(f) == JOINTS)
     off = np.asarray(offset, dtype=float)
     goal = {} if goal_slot is None else {"goal": goal_slot}
+    if mask_pick_goal:
+        goal["mask_goal"] = True
 
     def live_jaw_error(measured_pose, target_pose) -> str | None:
         poses = [*([] if measured_pose is None else [measured_pose]), *([] if target_pose is None else [target_pose])]
@@ -148,6 +152,8 @@ def main(argv=None) -> int:
     parser.add_argument("--config", required=True, type=Path, help="the arm's cell-auto config (io, cameras, work_dir)")
     parser.add_argument("--library", required=True, type=Path, help="the arm's reviewed chunk library")
     parser.add_argument("--mode", choices=("act", "hybrid", "taught"), default="act")
+    parser.add_argument("--mask-pick-goal", action="store_true",
+                        help="hybrid only: use a zero goal vector for an ACT checkpoint trained with masked pickup")
     parser.add_argument("--policy-root", type=Path)
     parser.add_argument("--policy-revision", help="sha256 of model.safetensors")
     parser.add_argument("--model-calibration", type=Path, help="LeRobot calibration for a normalized-unit checkpoint")
@@ -181,6 +187,8 @@ def main(argv=None) -> int:
         parser.error("ACT needs --policy-root, --policy-revision and --cell-calibration")
     if args.mode != "act" and not args.goal_site:
         parser.error("hybrid and taught modes need --goal-site")
+    if args.mask_pick_goal and args.mode != "hybrid":
+        parser.error("--mask-pick-goal requires hybrid mode")
     if args.paced_chunks and (args.mode != "act" or args.n_action is not None):
         parser.error("--paced-chunks requires act mode with a normalized-unit checkpoint and no --n-action")
     config = json.loads(args.config.read_text(encoding="utf-8"))
@@ -220,6 +228,8 @@ def main(argv=None) -> int:
             parser.error(f"checkpoint requires --goal-site or --goal-slot 0..{shadow.goal_size - 1}")
     elif goal_slot is not None:
         parser.error("checkpoint has no goal input")
+    if args.mask_pick_goal and (shadow is None or shadow.goal_size is None):
+        parser.error("--mask-pick-goal requires a goal-conditioned checkpoint")
     cell_cal = json.loads(args.cell_calibration.read_text(encoding="utf-8")) if shadow else {}
     if shadow is not None and shadow.sim_rule is None:
         if args.model_calibration is None:
@@ -244,7 +254,8 @@ def main(argv=None) -> int:
             stream.write(json.dumps({"run": run_id, "t": time.time(), "operator": args.operator,
                                      "policy_revision": args.policy_revision, "offset": offset, **row}, default=str) + "\n")
 
-    log({"start": True, "mode": args.mode, "paced_chunks": args.paced_chunks, "dry_run": args.dry_run, "person_at_switch": args.person_at_switch,
+    log({"start": True, "mode": args.mode, "paced_chunks": args.paced_chunks, "mask_pick_goal": args.mask_pick_goal,
+         "dry_run": args.dry_run, "person_at_switch": args.person_at_switch,
          "max_chunks": args.max_chunks, "n_action": args.n_action, "max_obs_age_s": args.max_obs_age_s,
          "goal_slot": goal_slot, "goal_site": args.goal_site, "goal_destination": destination,
          "goal_site_slot": mapped_slot, "units_sha256": shadow.files.get(lrs.UNITS) if shadow else None})
@@ -313,7 +324,7 @@ def main(argv=None) -> int:
                               log=log, demonstrated=demonstrated, goal_slot=goal_slot, n_action=args.n_action,
                               max_obs_age_s=args.max_obs_age_s, handoff=handoff, authorize=authorize,
                               params=config.get("params"), tcp_x_m=omx_tcp.config_tcp(config), rim_z_m=rim_z_m,
-                              paced_chunks=args.paced_chunks)
+                              paced_chunks=args.paced_chunks, mask_pick_goal=args.mask_pick_goal)
         if look:
             after = look()
             res["source"] = {"before": before.get("objects"), "after": after.get("objects")}
