@@ -164,7 +164,7 @@ def test_startup_frames_match_hardware_costmap_parameters(tmp_path, namespace):
     from navigation.params_rewrite import write_prefixed_nav2_params
     from navigation.start_after_tf import costmap_frames
 
-    params = write_prefixed_nav2_params(NAV_PARAMS / "nav2_params.yaml", namespace, directory=tmp_path)
+    params = write_prefixed_nav2_params(NAV_PARAMS, namespace, directory=tmp_path)
     prefix = f"{namespace}/" if namespace else ""
     assert costmap_frames(params, f"/{namespace}") == [
         ("map", prefix + "base_footprint"),
@@ -414,6 +414,9 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
     launch_srcs.PythonLaunchDescriptionSource = _Source
     launch_subs = types.ModuleType("launch.substitutions")
     launch_subs.LaunchConfiguration = _LaunchCfg
+    launch_ros = types.ModuleType("launch_ros")
+    ros_actions = types.ModuleType("launch_ros.actions")
+    ros_actions.Node = types.SimpleNamespace
 
     for name, mod in {
         "ament_index_python": ament,
@@ -423,6 +426,8 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         "launch.conditions": launch_conds,
         "launch.launch_description_sources": launch_srcs,
         "launch.substitutions": launch_subs,
+        "launch_ros": launch_ros,
+        "launch_ros.actions": ros_actions,
     }.items():
         monkeypatch.setitem(sys.modules, name, mod)
 
@@ -472,12 +477,14 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
         "mapper_params_file": str(pkg_dir / "params" / "mapper_params.yaml"),
     }
     loc_actions = hw._include_nav2({**base_ctx, "navigation_backend": "localization"})
-    assert [Path(a.source.path).name for a in loc_actions] == [
-        "bringup_launch.xml",
-        "loc_assist.launch.py",
-    ]
-    assert isinstance(loc_actions[1].condition, _IfCond)
-    assert loc_actions[1].condition.predicate.name == "enable_loc_assist"
+    bringup, startup, loc_assist = loc_actions
+    assert Path(bringup.source.path).name == "bringup_launch.xml"
+    assert bringup.launch_arguments["navigation_autostart"] == "False"
+    assert (startup.package, startup.executable, startup.namespace) == ("navigation", "start_after_tf", "pinky1")
+    assert startup.arguments == [bringup.launch_arguments["params_file"]]
+    assert Path(loc_assist.source.path).name == "loc_assist.launch.py"
+    assert isinstance(loc_assist.condition, _IfCond)
+    assert loc_assist.condition.predicate.name == "enable_loc_assist"
 
     slam_actions = hw._include_nav2({**base_ctx, "navigation_backend": "slam"})
     assert [Path(a.source.path).name for a in slam_actions] == [
