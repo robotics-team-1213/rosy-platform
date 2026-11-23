@@ -159,7 +159,10 @@ export function showSignedOut({refused = true} = {}) {
 export function showFleet(fleet, robots = null) {
   // D-974: an instance in a control-unit tree is named by its unit (R and ARM-CELL share one host).
   const fleetEl = $("fleet-name");
-  patchText(fleetEl, fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트");
+  const nextFleetName = fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트";
+  if (fleetEl.textContent !== nextFleetName) {
+    $("fleet-name").textContent = fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트";
+  }
   applyUnitScope(fleet.scope);  // D-960 §4: hide jobs another unit's screen owns
   const summary = scopeSummary(fleet.scope);
   if (fleetEl.title !== summary) fleetEl.title = summary;

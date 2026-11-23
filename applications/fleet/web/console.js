@@ -33,7 +33,7 @@ import { confirmIrreversible } from "/common/ui.js";
 import { createSelection } from "/console/assets/selection.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
-import { patchAttr, patchText } from "/common/control-dom.js";
+import { patchText } from "/common/control-dom.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js";
 import { owns, unitScope } from "/console/assets/unit-scope.js";
@@ -230,9 +230,11 @@ function render() {
   // 지도 캔버스는 무장(목표 선택·위치 찍기)했을 때만 누를 수 있는 단추다 — role이 무장 상태를 따라간다.
   // 해제하면 뷰가 소유한 role로 돌린다(사이트 뷰는 img). 계층이 부여한 값을 덮어쓰지 않는다(WCAG 4.1.2).
   const goalCanvas = el("map-canvas");
-  if (view.selected || view.pinning || view.focusRobot) patchAttr(goalCanvas, "role", "button");
-  else if (goalCanvas.getAttribute("role") === "button") {
-    patchAttr(goalCanvas, "role", !view.map && view.siteMap ? "img" : null);
+  if (view.selected || view.pinning || view.focusRobot) {
+    if (goalCanvas.getAttribute("role") !== "button") goalCanvas.setAttribute("role", "button");
+  } else if (goalCanvas.getAttribute("role") === "button") {
+    if (!view.map && view.siteMap) goalCanvas.setAttribute("role", "img");
+    else goalCanvas.removeAttribute("role");
   }
   const rosterBox = el("roster");
   const focused = document.activeElement;

@@ -338,8 +338,8 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
 
     // ADR-1000 & UX Law 1: Hide empty queues inside the drawer without closing the drawer itself.
     const total = rows.warn.length + rows.crit.length;
-    patchHidden(warnList.parentElement, rows.warn.length === 0);
-    patchHidden(critList.parentElement, rows.crit.length === 0);
+    if (warnList.parentElement.hidden !== (rows.warn.length === 0)) warnList.parentElement.hidden = rows.warn.length === 0;
+    if (critList.parentElement.hidden !== (rows.crit.length === 0)) critList.parentElement.hidden = rows.crit.length === 0;
     const container = document.querySelector(".queues-container");
     if (container) patchHidden(container, total === 0);
     const empty = el("queues-empty");
