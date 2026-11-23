@@ -5,9 +5,17 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.454
+**Version:** v1.455
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.455 OMX Cell Job API (v1.455) 두 팔 원격 정책 작업(`cell_two_arm_policy`) 통합 (Cell)
+
+- `:8781` `cell_job_api.py` / `cell_job_spec.py`에 D-1073 두 팔 원격 GPU 정책 실행 잡(`cell_two_arm_policy` → `cell_two_arm_policy_cli.py`)을 추가합니다.
+- **실행·인증 게이트:**
+  - `dry_run: true`는 무동작(`moves_arm = False`)으로 `cell-job-human`·`cell-job-machine` 모두 허용되며, 라이브 모션은 `cell-job-human` + `person_at_switch: true` + distinct `proposer != operator` (D-1024) + `./with-session-arm-a-par.sh`·`./with-session-arm-b-par.sh` 이중 래퍼가 필수입니다 (`cell-job-machine`의 라이브 시도는 `403 MACHINE_COMMISSIONING_FORBIDDEN`).
+  - 비루프백 `endpoint_url`은 `token_file` 필수이며 `task_a`·`task_b`의 비-`belt` 사이트 중복과 AMR 적재함 사이트(`pinky`/`bed`/`tray`) 라이브 모션은 400으로 거부됩니다.
+- **두 팔 상태·잠금 직렬화:** 라이브 `cell_two_arm_policy`는 `arm_a`·`arm_b` 양쪽 `incident`·`fleet` 안전·`session-arm_{a,b}.lock`·`check_two_arm_ab_ready`(`409 TWO_ARM_NOT_READY`)를 함께 검사하고, 진행 중 `arm_a`/`arm_b` 단일 팔 이동 잡과 상호 배타로 잠기며 시작·종료 시 양팔 `cell-state-dirty-arm_{a,b}.json`을 함께 기록합니다.
 
 ### v1.454 OMX Cell Job API (v1.454) 토큰 분리·안전 게이트·멱등성 (Cell)
 
@@ -4975,6 +4983,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.455 | 2026-11-23 | [Cell] Additive: POST /jobs/cell_two_arm_policy, 두 팔 직렬화·준비 게이트(409 TWO_ARM_NOT_READY), dual cell-state-dirty 기록 |
 | v1.454 | 2026-11-22 | [Cell] cell-job-human/machine 토큰 분리, Idempotency-Key, warm 재사용 안전 게이트, depth-d435.lock, act_backend/goal_slot/verify_zones 추가 |
 | v1.453 | 2026-11-22 | [Fleet] Additive: POST /api/fleet/trips/{trip_id}/pause and /resume, Nav2 traffic holds, and autonomous Nav2 failure reroute/retry/hold recovery |
 | v1.452 | 2026-11-22 | [Fleet] Additive: optional drive_mode nav2 on POST /api/fleet/robots/{robot_id}/trip via CORE D-1009 /api/v1/navigation/route |
