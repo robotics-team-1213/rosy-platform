@@ -302,12 +302,13 @@ class EnrollmentIdentityTransport(httpx.AsyncBaseTransport):
         return httpx.Response(429, headers={'Retry-After': str(wait)},
                               json=reason_body('RATE_LIMITED', {'retry_after_s': wait}))
 
-    async def identity(self, target: httpx.URL, extensions: dict) -> httpx.Response | None:
+    async def identity(self, target: httpx.URL, extensions: dict, *,
+                       skip_backoff: bool = False) -> httpx.Response | None:
         binding = self.bindings.binding(self.endpoint.robot_id)
         if binding is None:
             raise EnrollmentTlsError('approved TLS binding is missing')
         remaining = ceil(self._retry_at - monotonic())
-        if self._limited_origin == target.netloc and remaining > 0:
+        if not skip_backoff and self._limited_origin == target.netloc and remaining > 0:
             return self._rate_limited(remaining)
         probe = httpx.Request('GET', target.copy_with(path='/api/v1/auth/peer-pairing/identity', query=b''),
                               headers={'Host': f'{binding.hostname}:{binding.port}'}, extensions=extensions)
@@ -341,7 +342,10 @@ class EnrollmentIdentityTransport(httpx.AsyncBaseTransport):
             await response.aclose()
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        limited = await self.identity(request.url, request.extensions)
+        from fleet.server.enrollment_helpers import STOP_PATHS
+        # CORE may have budget again before its Retry-After expires. Give stops a fresh probe.
+        limited = await self.identity(request.url, request.extensions,
+                                      skip_backoff=request.url.path in STOP_PATHS)
         if limited is not None:
             return limited
         if self.before_send is not None:

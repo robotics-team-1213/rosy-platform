@@ -168,14 +168,21 @@ def test_identity_rate_limit_defers_probes_and_requires_fresh_proof(tmp_path, mo
                 assert (refused.value.status, refused.value.code) == (429, 'RATE_LIMITED')
                 assert refused.value.detail['retry_after_s'] == remaining
             assert len(calls) == 1
+            await client.estop()
+            assert [request.url.path for request in calls[1:]] == [
+                '/api/v1/auth/peer-pairing/identity', '/api/v1/safety/stop',
+            ]
+            with pytest.raises(RobotApiError, match='RATE_LIMITED'):
+                await client.state()
+            assert len(calls) == 3
             now = 103.0
             identity['receiver_id'] = 'rosy_other'
             with pytest.raises(EnrollmentTlsError):
                 await client.state()
-            assert len(calls) == 2
+            assert len(calls) == 4
             identity['receiver_id'] = 'rosy_09'
             assert (await client.state())['robot_id'] == 'rosy_09'
-            assert len(calls) == 4
+            assert len(calls) == 6
         finally:
             await client.aclose()
 
