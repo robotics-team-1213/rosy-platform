@@ -46,6 +46,24 @@ UNCONFIRMED_YAW_RAD = math.radians(5.0)
 #: No decision while a CORE mission moves the robot, nor this long after it ends: a pose
 #: decided mid-rotation failed its check at fit 0.18-0.39 (S1 re-run, F1 WSL run).
 MISSION_QUIET_S = 1.0
+_FALLBACK_POST_WAIT_PHASES = frozenset({
+    "MONITORING", "ACTIVE", "STOPPING", "SWITCHING", "FAILED",
+})
+
+
+def _tiebreak_eligible(state: Mapping, active_map: Optional[str]) -> bool:
+    """True while waiting on a first pose in slam_fallback wait or shared-site-map AMCL."""
+    fb = state.get("slam_fallback")
+    if isinstance(fb, Mapping):
+        phase = fb.get("phase")
+        if phase == "WAITING_LOCALIZATION":
+            return True
+        if phase in _FALLBACK_POST_WAIT_PHASES:
+            return False
+    status = trust.status_of(state)
+    if status is not None and status.state is LocState.LOCALIZED:
+        return False
+    return bool(active_map) and state.get("map_id") == active_map
 
 
 def load_lane_rules(path: Optional[Path]) -> dict:
@@ -157,12 +175,44 @@ class LocalizationService:
         self._fallback: set[str] = set()
         self._tiebreak = Tiebreak()
         self._wall_sync = None
+        #: Optional ceiling-camera (x, y) tiebreaker when ArUco sightings are absent.
+        self._tiebreak_camera: Optional[Callable[[str, Optional[str]], Optional[tuple[float, float]]]] = None
+        self._active_map_id: Optional[Callable[[], Optional[str]]] = None
 
     def set_wall_sync(self, sync) -> None:
         self._wall_sync = sync
 
     def set_overhead_pose(self, provider: Optional[Callable[[str], object]]) -> None:
         self._overhead_pose = provider
+
+    def set_tiebreak_camera(
+        self, provider: Optional[Callable[[str, Optional[str]], Optional[tuple[float, float]]]],
+    ) -> None:
+        self._tiebreak_camera = provider
+
+    def set_active_map_id(self, provider: Optional[Callable[[], Optional[str]]]) -> None:
+        self._active_map_id = provider
+
+    def _current_active_map_id(self) -> Optional[str]:
+        if self._active_map_id is None:
+            return None
+        try:
+            active_map = self._active_map_id()
+        except Exception:  # noqa: BLE001
+            return None
+        return str(active_map) if active_map else None
+
+    def _tiebreak_camera_xy(self, rid: str, now: float) -> Optional[tuple[float, float]]:
+        sighting = fresh_overhead_sighting(self, rid, now, force=True)
+        if sighting is not None:
+            return (sighting.x, sighting.y)
+        if self._tiebreak_camera is None:
+            return None
+        try:
+            return self._tiebreak_camera(rid, self._current_active_map_id())
+        except Exception:  # noqa: BLE001
+            logger.exception("tiebreak camera read failed: robot_id=%s", rid)
+            return None
 
     # --- console --------------------------------------------------------------------
 
@@ -223,8 +273,11 @@ class LocalizationService:
         results = await asyncio.gather(*(self._bounded(self._read_state(rid)) for rid in ids),
                                        return_exceptions=True)
         states = {rid: r for rid, r in zip(ids, results) if isinstance(r, dict)}
-        self._fallback = {rid for rid, s in states.items()  # only the wait for the first pose: never once ACTIVE
-                          if isinstance(s.get("slam_fallback"), dict) and s["slam_fallback"].get("phase") == "WAITING_LOCALIZATION"}
+        active_map = self._current_active_map_id()
+        self._fallback = {
+            rid for rid, s in states.items()
+            if _tiebreak_eligible(s, active_map)
+        }
         if self._wall_sync is not None:
             try:
                 await self._wall_sync.sync(states)
@@ -349,8 +402,7 @@ class LocalizationService:
                 observations.setdefault(peer, []).append(((rid, *key), seen))
         decision = self._arbiter.observe(report, context, now)
         if decision is None and rid in self._fallback:
-            sighting = fresh_overhead_sighting(self, rid, now, force=True)
-            tie = self._tiebreak.observe(report, None if sighting is None else (sighting.x, sighting.y), now)
+            tie = self._tiebreak.observe(report, self._tiebreak_camera_xy(rid, now), now)
             if tie is not None:
                 await self._post_decision(rid, client, tie, (tie.pose.x, tie.pose.y, tie.pose.yaw), now)
                 return
@@ -362,9 +414,14 @@ class LocalizationService:
                              decision: LocalizationDecision, pose: cues.Pose, now: float) -> None:
         record = {"request_id": decision.request_id, "candidate_index": decision.candidate_index,
                   "cues": [c.value for c in decision.cues], "result": "sent"}
-        # Context.peers holds anchors only, so a `peers` cue is anchored too.
-        anchoring = decision.source is DecisionSource.HUMAN or any(
-            k in service_logic.WORLD_CUES or k == "peers" for k in record["cues"])
+        evidence = getattr(decision, "evidence", None) or {}
+        twin_tiebreak = isinstance(evidence, Mapping) and evidence.get("tiebreak") == "twin"
+        # Context.peers holds anchors only, so `peers` or a laser-verified twin tiebreak is anchored too.
+        anchoring = (
+            decision.source is DecisionSource.HUMAN
+            or twin_tiebreak
+            or any(k in service_logic.WORLD_CUES or k == "peers" for k in record["cues"])
+        )
         try:
             await self._bounded(client.localization_decision(decision))
             logger.info("localization: %s decision %s candidate %s cues %s", rid,

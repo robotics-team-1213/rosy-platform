@@ -868,3 +868,31 @@ def test_node_on_decision_wires_auto_recovery_and_preserves_other_sources(monkey
     candidates_ready(node.core, now=1.0)
     node.on_decision(SimpleNamespace(data=json.dumps(decision('r-1', 1.5))))
     assert one(published[-1], 'inject').source == 'candidate'
+
+
+def test_wall_tiebreak_decision_threads_evidence_and_localizes():
+    a = core()
+    c0 = PoseCandidate(-1.0, 0.5, 0.0, 0.95, 'global')
+    c1 = PoseCandidate(1.0, -0.5, math.pi, 0.94, 'global')
+    a.search_started(0.0, ODOM)
+    req_id = one(a.search_finished(0.0, ODOM, [c0, c1]), 'state')['status']['request_id']
+
+    rej = a.on_decision(1.0, {
+        'request_id': req_id, 'stamp': 1.0, 'source': 'overhead',
+        'candidate_index': None, 'pose': {'x': -1.0, 'y': 0.5, 'yaw': 0.0},
+        'cues': ['overhead'], 'evidence': {},
+    })
+    assert one(rej, 'result')['accepted'] is False
+    assert one(rej, 'result')['reason'] == 'no_asymmetric_cue'
+
+    out = a.on_decision(1.5, {
+        'request_id': req_id, 'stamp': 1.5, 'source': 'overhead',
+        'candidate_index': None, 'pose': {'x': -1.0, 'y': 0.5, 'yaw': 0.0},
+        'cues': ['overhead'], 'evidence': {'tiebreak': 'twin', 'camera_xy': [-0.95, 0.45]},
+    })
+    inject = one(out, 'inject')
+    assert inject.pose == (-1.0, 0.5, 0.0) and inject.source == 'overhead'
+    done = hold(a, 1.6, 5.1)
+    assert one(done, 'result') == {
+        'request_id': req_id, 'accepted': True, 'reason': None, 'state': 'LOCALIZED',
+    }
