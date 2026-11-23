@@ -1472,6 +1472,10 @@ safety_review_paths:
   - deploy/robot/omx/cell_policy_timing.py
   - deploy/robot/omx/cell_policy_handoff.py
   - deploy/robot/omx/cell_policy_paced.py
+  - deploy/robot/omx/cell_remote_policy.py
+  - deploy/robot/omx/cell_two_arm_guard.py
+  - deploy/robot/omx/cell_two_arm_policy.py
+  - deploy/robot/omx/cell_two_arm_policy_cli.py
   - deploy/robot/omx/cell_stack_guard.py
   - deploy/robot/omx/cell_arm_lease.py
   - deploy/robot/omx/commissioning_stop.py
