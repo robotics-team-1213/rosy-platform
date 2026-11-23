@@ -18,6 +18,7 @@ from cryptography.x509.oid import NameOID
 from enrollment_fakes import CODE, NAME, PINNED, FakeCore, build, scan_row
 from fleet.server.enrollment import EnrollmentService
 from fleet.swarm.robots import RobotEndpoint
+from fleet.swarm.api.ports import RobotApiError
 from fleet.server.enrollment_tls import EnrolledTlsBinding, EnrolledTlsBindings, EnrollmentTlsError
 from fleet.server.enrollment import EnrolledRobotClient, RobotGate, EnrollmentError
 from core_common.discover import DiscoveredDevice
@@ -135,6 +136,49 @@ def test_dhcp_rest_bearer_follows_only_verified_receiver(tmp_path, monkeypatch):
             await client.state()
         assert not calls
         await client.aclose()
+    asyncio.run(scenario())
+
+
+def test_identity_rate_limit_defers_probes_and_requires_fresh_proof(tmp_path, monkeypatch):
+    bindings, _, identity, _ = approved(tmp_path)
+    discovered(monkeypatch, [])
+    endpoint = bindings.endpoint(dict(robot_id='rosy_09', address=PINNED), 'runtime-fixture')
+    now = 100.0
+    monkeypatch.setattr('fleet.server.enrollment_tls.monotonic', lambda: now, raising=False)
+    calls = []
+
+    def receive(request):
+        calls.append(request)
+        if request.url.path.endswith('/identity'):
+            assert 'Authorization' not in request.headers
+            if now == 100.0:
+                return httpx.Response(429, headers={'Retry-After': '3'})
+            return httpx.Response(200, json=identity)
+        assert 'Authorization' in request.headers
+        return httpx.Response(200, json={'robot_id': 'rosy_09'})
+
+    async def scenario():
+        nonlocal now
+        client = EnrolledRobotClient(endpoint, RobotGate(), tls_bindings=bindings,
+                                     transport=httpx.MockTransport(receive))
+        try:
+            for now, remaining in [(100.0, 3), (102.0, 1)]:
+                with pytest.raises(RobotApiError) as refused:
+                    await client.state()
+                assert (refused.value.status, refused.value.code, refused.value.detail) == (
+                    429, 'RATE_LIMITED', {'retry_after_s': remaining})
+            assert len(calls) == 1
+            now = 103.0
+            identity['receiver_id'] = 'rosy_other'
+            with pytest.raises(EnrollmentTlsError):
+                await client.state()
+            assert len(calls) == 2
+            identity['receiver_id'] = 'rosy_09'
+            assert (await client.state())['robot_id'] == 'rosy_09'
+            assert len(calls) == 4
+        finally:
+            await client.aclose()
+
     asyncio.run(scenario())
 
 
