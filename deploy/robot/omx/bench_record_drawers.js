@@ -5,7 +5,7 @@ async function triggerHomePose(btn,opts){
   if(!btn||poseInFlight||benchSessionActive()||startInFlight||cameraRestartInFlight)return;
   const arm=(opts?.useStatusArm&&lastStatus?.arm)?lastStatus.arm:f.arm.value;
   const lbl=btn.querySelector('.btn-lbl')||btn;
-  const aInfo=lastArmsStatus&&arm?lastArmsStatus[arm]:null;
+  const aInfo=arm?((lastArmsStatus&&lastArmsStatus[arm])||(choices?.arm_connectivity?.[arm]||null)):null;
   const incL=Boolean(opts?.allowLeader&&aInfo&&(aInfo.leader_connected===true||(aInfo.leader_connected!==false&&aInfo.has_leader_pose))&&$('home-include-leader')?.checked);
   poseInFlight=true;btn.disabled=true;lbl.textContent='홈 이동 중...';validateStart();
   if(typeof setActivity==='function')setActivity('홈 이동 요청 중...','live',arm);

@@ -349,3 +349,49 @@ def test_camera_drift_filters_unrelated_arm_cameras(tmp_path, monkeypatch):
     assert sorted(res_a["cameras"]) == ["arm_a_wrist", "side", "top"]
     res_s = bench.check_camera_drift("arm_s")
     assert sorted(res_s["cameras"]) == ["arm_s_top", "arm_s_wrist"]
+
+
+def test_bench_record_exposes_in_repo_omx_adapter_on_sys_path():
+    import os, sys
+
+    adapter_dir = str(ROOT / "middleware" / "devices" / "omx" / "adapter")
+    assert adapter_dir in sys.path and adapter_dir in os.environ.get("PYTHONPATH", "").split(os.pathsep)
+    from cell_task_exec import _arm_run_spec
+    assert callable(_arm_run_spec)
+
+
+def test_leader_home_exact_moves_all_five_body_joints_and_stays_within_caps(tmp_path, monkeypatch):
+    import contextlib, signal, leader_actuator, leader_home
+
+    assert leader_home.EXACT_HOME_PWM <= leader_actuator.CAP_MAX and leader_home.EXACT_HOME_CURRENT <= leader_actuator.CURRENT_MAX
+    cal = {n: SimpleNamespace(range_min=0, range_max=4095) for n in leader_home.BODY}
+    leader = SimpleNamespace(calibration=cal, bus=None)
+    present = {n: v for n, v in zip(leader_home.BODY, [2048, 1000, 2000, 2000, 2048])}
+    follower = [2048, 1080, 2080, 2080, 2048]
+    monkeypatch.setattr(leader_home, "leader_mount", lambda _l: {})
+    assert leader_home._match_target(follower, present, leader, exact=False)["shoulder_lift"] == 1000.0
+    exact_tgt = leader_home._match_target(follower, present, leader, exact=True)
+    assert all(exact_tgt[n] == float(v) for n, v in zip(leader_home.BODY, follower))
+
+    bench, _, cfg_p, _ = _setup(tmp_path, monkeypatch)
+    seen = []
+    monkeypatch.setattr(bench, "_run_leader_home", lambda cmd, _env, _lbl: seen.append(list(cmd)))
+    monkeypatch.setattr(bench, "_check_lease", lambda _arm: None)
+    monkeypatch.setattr("bench_record_leader.hold_other_arm_locks", lambda *_a, **_k: ([], None))
+    bench._match_leader("arm_a", cfg_p, "리더 홈 이동", exact=True)
+    bench._start_parallel_leader("arm_a", cfg_p, [2048, 1000, 2000, 2000, 2048])["thread"].join(timeout=5)
+    assert len(seen) == 2 and all("--exact" in c for c in seen)
+    assert "choices?.arm_connectivity?.[arm]" in (ROOT / "deploy" / "robot" / "omx" / "bench_record_drawers.js").read_text(encoding="utf-8")
+    admit_kw = []
+    if not hasattr(signal, "SIGHUP"):
+        monkeypatch.setattr(leader_home, "protect_signals", lambda: None)
+        monkeypatch.setattr(leader_home, "no_interrupts", contextlib.nullcontext)
+    monkeypatch.setattr(leader_home, "_load_teleop_cfg", lambda *_a: SimpleNamespace())
+    monkeypatch.setattr(leader_home, "_connect_leader", lambda _c: leader)
+    monkeypatch.setattr(leader_home, "close_device", lambda _l: None)
+    monkeypatch.setattr(leader_home, "_present_ticks", lambda _l: dict(present))
+    monkeypatch.setattr(leader_home, "LeaderActuator", lambda *_a, **_k: SimpleNamespace(
+        rate_deg_s=20.0, command=dict(present), admit=lambda **kw: admit_kw.append(kw), enable=lambda: None,
+        seed=lambda _p: None, check_effort=lambda _p: None, step=lambda t, _e: t, write=lambda _c: None, restore=lambda: []))
+    assert leader_home.main(["--config", str(cfg_p), "--arm", "arm_a", "--target-follower-ticks", "2048,1000,2000,2000,2048", "--exact", "--attest", "hands-off:test:1"]) == 0
+    assert admit_kw and admit_kw[0]["pwm"] == leader_home.EXACT_HOME_PWM and admit_kw[0]["current"] == leader_home.EXACT_HOME_CURRENT

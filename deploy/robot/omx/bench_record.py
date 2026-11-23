@@ -29,9 +29,15 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 if not (HERE / "omx_adapter").is_dir():
+    _in_repo = HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter" if len(HERE.parents) > 2 else None
     _rel = sorted((Path.home() / "rosy-omx" / "releases").glob("*/omx_adapter"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if _rel:
-        os.environ["PYTHONPATH"] = f"{_rel[0].parent}:{os.environ['PYTHONPATH']}" if os.environ.get("PYTHONPATH") else str(_rel[0].parent)
+    _adapter_root = _in_repo if (_in_repo is not None and (_in_repo / "omx_adapter").is_dir()) else (_rel[0].parent if _rel else None)
+    if _adapter_root is not None:
+        if str(_adapter_root) not in sys.path:
+            sys.path.insert(0, str(_adapter_root))
+        _pp = os.environ.get("PYTHONPATH", "")
+        if str(_adapter_root) not in _pp.split(os.pathsep):
+            os.environ["PYTHONPATH"] = f"{_adapter_root}{os.pathsep}{_pp}" if _pp else str(_adapter_root)
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from teleop_speed import read_stage, summary as speed_summary  # noqa: E402
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)

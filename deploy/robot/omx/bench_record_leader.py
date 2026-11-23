@@ -154,7 +154,7 @@ class BenchLeaderMixin:
             return "토크 OFF를 확인하지 못했습니다"
         return f"복원 실패 {end['restore_failures']}" if end.get("restore_failures") else ""
 
-    def _match_leader(self, arm, config, label="리더 정렬"):
+    def _match_leader(self, arm, config, label="리더 정렬", *, exact=False):
         """leader_home --match-follower: the Leader goes to the Follower's present pose. The arm's own lock is held too: the
         child reads (and torque-OFFs) the Follower, so no other owner may hold it."""
         handles = []
@@ -168,6 +168,7 @@ class BenchLeaderMixin:
             adapter_dir = str(HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter")
             env["PYTHONPATH"] = os.pathsep.join([adapter_dir, str(HERE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
             cmd = [self.python, str(HERE / "leader_home.py"), "--config", str(config), "--arm", arm, "--match-follower",
+                   *(["--exact"] if exact else []),
                    "--rate-deg-s", str(HOME_LEADER_RATE_DEG_S), "--timeout-s", "35", "--attest", f"hands-off:bench-auto:{int(time.time())}"]
             self._run_leader_home(cmd, env, f"{arm} {label}")
         finally:
@@ -183,7 +184,7 @@ class BenchLeaderMixin:
         env["PYTHONPATH"] = os.pathsep.join([adapter_dir, str(HERE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
         csv = ",".join(str(int(v)) for v in home_ticks)
         cmd = [self.python, str(HERE / "leader_home.py"), "--config", str(config), "--arm", arm, "--target-follower-ticks", csv,
-               "--rate-deg-s", str(HOME_LEADER_RATE_DEG_S), "--timeout-s", "35", "--attest", f"hands-off:bench-auto:{int(time.time())}"]
+               "--exact", "--rate-deg-s", str(HOME_LEADER_RATE_DEG_S), "--timeout-s", "35", "--attest", f"hands-off:bench-auto:{int(time.time())}"]
         task = {"arm": arm, "error": None, "thread": None}
 
         def _worker():
