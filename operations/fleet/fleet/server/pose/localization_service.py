@@ -46,23 +46,16 @@ UNCONFIRMED_YAW_RAD = math.radians(5.0)
 #: No decision while a CORE mission moves the robot, nor this long after it ends: a pose
 #: decided mid-rotation failed its check at fit 0.18-0.39 (S1 re-run, F1 WSL run).
 MISSION_QUIET_S = 1.0
-_FALLBACK_POST_WAIT_PHASES = frozenset({
-    "MONITORING", "ACTIVE", "STOPPING", "SWITCHING", "FAILED",
-})
-
-
 def _tiebreak_eligible(state: Mapping, active_map: Optional[str]) -> bool:
     """True while waiting on a first pose in slam_fallback wait or shared-site-map AMCL."""
-    fb = state.get("slam_fallback")
-    if isinstance(fb, Mapping):
-        phase = fb.get("phase")
-        if phase == "WAITING_LOCALIZATION":
-            return True
-        if phase in _FALLBACK_POST_WAIT_PHASES:
-            return False
     status = trust.status_of(state)
     if status is not None and status.state is LocState.LOCALIZED:
         return False
+    fb = state.get("slam_fallback")
+    if isinstance(fb, Mapping):
+        phase = fb.get("phase")
+        if phase is not None:
+            return phase == "WAITING_LOCALIZATION"
     return bool(active_map) and state.get("map_id") == active_map
 
 
@@ -203,13 +196,14 @@ class LocalizationService:
         return str(active_map) if active_map else None
 
     def _tiebreak_camera_xy(self, rid: str, now: float) -> Optional[tuple[float, float]]:
-        sighting = fresh_overhead_sighting(self, rid, now, force=True)
+        active_map = self._current_active_map_id()
+        sighting = fresh_overhead_sighting(self, rid, now, force=True, expected_map_id=active_map)
         if sighting is not None:
             return (sighting.x, sighting.y)
         if self._tiebreak_camera is None:
             return None
         try:
-            return self._tiebreak_camera(rid, self._current_active_map_id())
+            return self._tiebreak_camera(rid, active_map)
         except Exception:  # noqa: BLE001
             logger.exception("tiebreak camera read failed: robot_id=%s", rid)
             return None

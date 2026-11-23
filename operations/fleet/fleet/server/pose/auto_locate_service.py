@@ -173,13 +173,13 @@ class AutoLocateService:
         if track.get("state") != "CONFIRMED":
             return None
         modes = getattr(getattr(self.map_pose, "config", None), "track_modes", ("led",))
-        if (track.get("mode") or "led") not in modes:
+        if track.get("mode", "led") not in modes:
             return None
         site_map = expected_map_id
         if not site_map and self.map_pose is not None:
             active_fn = getattr(self.map_pose, "active_map_id", None)
             site_map = active_fn() if callable(active_fn) else None
-        if site_map and track.get("map_id") != site_map:
+        if not site_map or track.get("map_id") != site_map:
             return None
         fps_of = getattr(self.tracking, "source_fps", None)
         source_fps = fps_of(track.get("source_id")) if fps_of is not None else None

@@ -379,7 +379,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         stuck_resolver_enrolled=stuck_resolver_enrolled, realign_config=realign_config,
         autonomous_robots=autonomous_robots, incident_model_config=incident_model_config,
         vision_signer=vision_signer, vision_sources=vision_sources)
-    if localization_service is not None and getattr(tracking, "auto_locate", None) is not None:
+    if (callable(getattr(localization_service, "set_tiebreak_camera", None))
+            and getattr(tracking, "auto_locate", None) is not None):
         localization_service.set_tiebreak_camera(tracking.auto_locate.tiebreak_camera_xy)
 
     from fleet.server.channel.execution.outcomes.reconcile import task_result as native_task_result

@@ -209,6 +209,64 @@ def test_shared_map_twin_tiebreak_anchors_first_pinky_to_localize_peer_by_unmapp
     assert svc.anchors() == {"r1", "r2"}
 
 
+def test_tiebreak_rejects_three_candidates_wrong_map_sighting_and_tracks_unconfirmed_or_refusal():
+    from fleet.server.auto_locate_service import AutoLocateService
+    from fleet.swarm.transport import RobotApiError
+
+    three = report(poses=(A, MIRROR, (0.0, 2.0, 1.0)), fits=(0.99, 0.99, 0.90))
+    assert decide(three, (-0.9, 0.4)) is None
+    assert decide(report(fits=(0.95, 0.84)), (-0.9, 0.4)) is None
+
+    # Wrong-map sighting does not shadow AutoLocateService.tiebreak_camera_xy on the active site map.
+    clock = FakeClock()
+    r = robot(None)
+    r._state["map_id"] = "site-a"
+    wrong_sightings = SimpleNamespace(snapshot=lambda: {"sightings": [{
+        "robot_id": "r1", "map_id": "site-b", "x": 0.9, "y": -0.4, "yaw": math.pi, "captured_at": clock(),
+    }]})
+    identity = SimpleNamespace(confirmed_track_pose=lambda rid: {
+        "state": "CONFIRMED", "mode": "led", "x": -0.9, "y": 0.4, "yaw": 0.0,
+        "age_s": 0.1, "source_id": "cam-1", "map_id": "site-a",
+    })
+    tracking = SimpleNamespace(identity=identity, sources=[], source_fps=lambda sid: 10.0)
+    map_pose = SimpleNamespace(config=SimpleNamespace(track_modes=("led",)), active_map_id=lambda: "site-a")
+    auto_loc = AutoLocateService(tracking, map_pose=map_pose, clock=clock)
+    svc = LocalizationService(lambda: {"r1": r}, slots=[], squares=[], sightings=wrong_sightings,
+                              clock=clock, wall=clock)
+    svc.set_active_map_id(map_pose.active_map_id)
+    svc.set_tiebreak_camera(auto_loc.tiebreak_camera_xy)
+    ticks(svc, clock, 3.0)
+    assert len(r.decisions) == 1 and (r.decisions[0].pose.x, r.decisions[0].pose.y) == (-1.0, 0.5)
+
+    # RobotApiError refusal must not anchor even if the robot later reports LOCALIZED on its own.
+    c_err = FakeClock()
+    r_err = robot(None)
+    r_err._state["map_id"] = "site-a"
+    r_err.decision_error = RobotApiError("r1", 409, "NO_ASYMMETRIC_CUE", "rejected")
+    svc_err = LocalizationService(lambda: {"r1": r_err}, slots=[], squares=[], sightings=None, clock=c_err, wall=c_err)
+    svc_err.set_active_map_id(lambda: "site-a")
+    svc_err.set_tiebreak_camera(lambda rid, m: (-0.9, 0.4) if m == "site-a" else None)
+    ticks(svc_err, c_err, 3.0)
+    r_err._state = {"robot_id": "r1", "map_id": "site-a", "pose": {"x": -1.0, "y": 0.5, "yaw": 0.0},
+                    "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
+    ticks(svc_err, c_err, 0.5)
+    assert svc_err.anchors() == set()
+
+    # Timed-out twin tiebreak remains unconfirmed and still anchors once robot reaches that pose.
+    c_to = FakeClock()
+    r_to = robot(None)
+    r_to._state["map_id"] = "site-a"
+    r_to.decision_error = asyncio.TimeoutError()
+    svc_to = LocalizationService(lambda: {"r1": r_to}, slots=[], squares=[], sightings=None, clock=c_to, wall=c_to)
+    svc_to.set_active_map_id(lambda: "site-a")
+    svc_to.set_tiebreak_camera(lambda rid, m: (-0.9, 0.4) if m == "site-a" else None)
+    ticks(svc_to, c_to, 3.0)
+    r_to._state = {"robot_id": "r1", "map_id": "site-a", "pose": {"x": -1.0, "y": 0.5, "yaw": 0.0},
+                    "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
+    ticks(svc_to, c_to, 0.5)
+    assert svc_to.anchors() == {"r1"}
+
+
 # --- the wall grid push ------------------------------------------------------------------------
 
 

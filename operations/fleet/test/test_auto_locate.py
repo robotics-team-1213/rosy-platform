@@ -460,6 +460,8 @@ def test_tiebreak_camera_xy_enforces_confirmed_mode_map_and_freshness():
 
     assert svc.tiebreak_camera_xy("r1") == (1.25, -0.75)
 
+    current_track["mode"] = None
+    assert svc.tiebreak_camera_xy("r1") is None
     current_track["mode"] = "motion"
     assert svc.tiebreak_camera_xy("r1") is None
     map_pose.config.track_modes = ("led", "motion")
@@ -478,4 +480,20 @@ def test_tiebreak_camera_xy_enforces_confirmed_mode_map_and_freshness():
     assert svc.tiebreak_camera_xy("r1") is None
     current_track["state"] = "CONFIRMED"
     current_track["x"] = float("nan")
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["x"] = 1.25
+    current_track["y"] = float("inf")
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["y"] = -0.75
+    current_track["age_s"] = -0.1
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["age_s"] = float("nan")
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["age_s"] = 0.3
+
+    no_map_svc = AutoLocateService(tracking, map_pose=None, clock=lambda: 10.0)
+    assert no_map_svc.tiebreak_camera_xy("r1") is None
+    assert no_map_svc.tiebreak_camera_xy("r1", expected_map_id="site-a") == (1.25, -0.75)
+
+    tracking.identity = None
     assert svc.tiebreak_camera_xy("r1") is None

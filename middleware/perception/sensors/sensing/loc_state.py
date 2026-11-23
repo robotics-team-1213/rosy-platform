@@ -81,6 +81,9 @@ class LocalizationStateMachine:
         if len(self.candidates) != 2:
             return False
         a, b = self.candidates
+        if not (isinstance(a.scan_fit, (int, float)) and isinstance(b.scan_fit, (int, float))
+                and math.isfinite(a.scan_fit) and math.isfinite(b.scan_fit)):
+            return False
         if a.scan_fit < self.min_fit or b.scan_fit < self.min_fit:
             return False
         if abs(a.scan_fit - b.scan_fit) > TWIN_FIT_GAP:
@@ -96,7 +99,9 @@ class LocalizationStateMachine:
             target = (c.x, c.y, c.yaw)
         else:
             target = pose
-        if len(target) != 3 or not all(math.isfinite(v) for v in target):
+        if (not isinstance(target, (tuple, list)) or len(target) != 3
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                           and math.isfinite(v) for v in target)):
             return False
         return any(
             math.hypot(target[0] - c.x, target[1] - c.y) <= TWIN_POSE_TOL_M

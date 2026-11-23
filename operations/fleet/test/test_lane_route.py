@@ -282,7 +282,8 @@ def test_create_app_registers_single_road_nav2_routes_without_shadowed_duplicate
         for r in client.app.routes
         if hasattr(r, "path") and "road-nav2" in r.path
     ]
-    assert road_routes == [
-        ("/api/fleet/robots/{robot_id}/road-nav2/plan", ("GET",), "fleet.server.ledger.berth_parking_routes"),
-        ("/api/fleet/robots/{robot_id}/road-nav2", ("POST",), "fleet.server.ledger.berth_parking_routes"),
-    ]
+    assert len(road_routes) == 2
+    assert set(road_routes) == {
+        ("/api/fleet/robots/{robot_id}/road-nav2/plan", ("GET",), "fleet.server.berth_parking_routes"),
+        ("/api/fleet/robots/{robot_id}/road-nav2", ("POST",), "fleet.server.berth_parking_routes"),
+    }

@@ -40,7 +40,7 @@ class RouteRequest(BaseModel):
 
 
 def install_lane_route_routes(app, *, console, task_service, site_maps,
-                              require_named_operator, read_guard) -> None:
+                              require_named_operator) -> None:
     """D-494 5: map activation waits for a running trip, not for this route (no guard here)."""
     # One process remembers how far each robot has followed each edge list.
     # A closed lap starts and ends on one point; without this the end is the start.

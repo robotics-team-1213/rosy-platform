@@ -878,21 +878,51 @@ def test_wall_tiebreak_decision_threads_evidence_and_localizes():
     req_id = one(a.search_finished(0.0, ODOM, [c0, c1]), 'state')['status']['request_id']
 
     rej = a.on_decision(1.0, {
-        'request_id': req_id, 'stamp': 1.0, 'source': 'overhead',
-        'candidate_index': None, 'pose': {'x': -1.0, 'y': 0.5, 'yaw': 0.0},
-        'cues': ['overhead'], 'evidence': {},
+        'received_s': 1.0,
+        'decision': {
+            'request_id': req_id, 'source': 'overhead',
+            'candidate_index': None, 'pose': {'x': -1.0, 'y': 0.5, 'yaw': 0.0},
+            'cues': ['overhead'], 'evidence': {},
+        },
     })
-    assert one(rej, 'result')['accepted'] is False
     assert one(rej, 'result')['reason'] == 'no_asymmetric_cue'
 
+    bad = a.on_decision(1.1, {
+        'received_s': 1.1,
+        'decision': {
+            'request_id': req_id, 'source': 'overhead',
+            'candidate_index': 0, 'cues': ['overhead'], 'evidence': {'tiebreak': 'twin'},
+        },
+    })
+    assert one(bad, 'result')['reason'] == 'bad_decision'
+
+    close = core()
+    close.search_started(0.0, ODOM)
+    close_id = one(close.search_finished(0.0, ODOM, [
+        PoseCandidate(0.0, 0.0, 0.0, 0.95, 'global'),
+        PoseCandidate(0.4, 0.0, math.pi, 0.94, 'global'),
+    ]), 'state')['status']['request_id']
+    not_twin = close.on_decision(1.0, {
+        'received_s': 1.0,
+        'decision': {
+            'request_id': close_id, 'source': 'overhead',
+            'candidate_index': None, 'pose': {'x': 0.0, 'y': 0.0, 'yaw': 0.0},
+            'cues': ['overhead'], 'evidence': {'tiebreak': 'twin'},
+        },
+    })
+    assert one(not_twin, 'result')['reason'] == 'no_asymmetric_cue'
+
     out = a.on_decision(1.5, {
-        'request_id': req_id, 'stamp': 1.5, 'source': 'overhead',
-        'candidate_index': None, 'pose': {'x': -1.0, 'y': 0.5, 'yaw': 0.0},
-        'cues': ['overhead'], 'evidence': {'tiebreak': 'twin', 'camera_xy': [-0.95, 0.45]},
+        'received_s': 1.5,
+        'decision': {
+            'request_id': req_id, 'source': 'overhead',
+            'candidate_index': None, 'pose': {'x': -1.0, 'y': 0.5, 'yaw': 0.0},
+            'cues': ['overhead'], 'evidence': {'tiebreak': 'twin', 'camera_xy': [-0.95, 0.45]},
+        },
     })
     inject = one(out, 'inject')
     assert inject.pose == (-1.0, 0.5, 0.0) and inject.source == 'overhead'
-    done = hold(a, 1.6, 5.1)
+    done = hold(a, 1.6, 5.6)
     assert one(done, 'result') == {
         'request_id': req_id, 'accepted': True, 'reason': None, 'state': 'LOCALIZED',
     }

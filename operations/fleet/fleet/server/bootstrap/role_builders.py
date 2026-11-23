@@ -171,7 +171,8 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
     console.formation_relay_factory = lambda enabled: anchored_relay_factory(map_pose, enabled)
     if localization_service is not None:
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)
-        localization_service.set_active_map_id(map_pose.active_map_id)
+        if callable(getattr(localization_service, "set_active_map_id", None)):
+            localization_service.set_active_map_id(map_pose.active_map_id)
         localization_service.set_wall_sync(WallMapSync(site_maps, console.clients, time.monotonic))
     app.state.map_pose = map_pose
     if tracking is not None:
@@ -275,7 +276,7 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
                                   trip_lease, autonomous_robots, hub, sightings, simulation_pose, tracking,
                                   require_operator, require_named_operator, read_guard):
     install_lane_route_routes(app, console=console, task_service=task_service, site_maps=site_maps,
-                              require_named_operator=require_named_operator, read_guard=read_guard)
+                              require_named_operator=require_named_operator)
     from fleet.server.map_binding_routes import install_map_binding_routes  # D-1022
     install_map_binding_routes(app, console=console, site_maps=site_maps, read_guard=read_guard,
                                require_named_operator=require_named_operator)
