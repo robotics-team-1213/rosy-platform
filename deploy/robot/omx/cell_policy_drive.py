@@ -176,7 +176,7 @@ def main(argv=None) -> int:
     parser.add_argument("--endpoint-url", help="D-1073 remote GPU ACT HTTP server base URL")
     parser.add_argument("--token-file", type=Path, help="bearer token file for --endpoint-url")
     parser.add_argument("--timeout-s", type=float, default=0.8, help="remote inference HTTP timeout seconds (0, 2.0]")
-    parser.add_argument("--arm-id", help="remote arm_id override (defaults to config.arm_id or profile instance_id)")
+    parser.add_argument("--arm-id", help="remote arm_id override (defaults to config.arm_id or profile device_id)")
     parser.add_argument("--operator", required=True, help="named person who approved this run")
     parser.add_argument("--person-at-switch", action="store_true", help="D-911: a person stands at the power switch")
     parser.add_argument("--dry-run", action="store_true")

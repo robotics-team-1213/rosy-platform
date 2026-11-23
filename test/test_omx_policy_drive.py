@@ -1417,3 +1417,29 @@ def test_remote_endpoint_cli_wiring_and_validation(tmp_path, monkeypatch):
                     "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--endpoint-url", "http://10.0.0.2:8790",
                     "--token-file", str(tok), "--arm-id", "arm_a", "--goal-slot", "4", "--operator", "op_b",
                     "--paced-chunks", "--max-chunks", "1", "--dry-run"])
+    prof_b = tmp_path / "arm-b-robot-profile.json"
+    prof_b.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1", "device_id": "arm_b", "instance_id": "arm_b_follower",
+        "robot_config_sha256": "a" * 64, "operating_envelope_path": str(tmp_path / "env.json"), "work_dir": str(tmp_path),
+    }))
+    cfg_prof = tmp_path / "cell-prof.json"
+    cfg_prof.write_text(json.dumps({"arm_id": "arm_b", "operating_profile_path": str(prof_b), "io": "unused", "cameras": {}}))
+    created.clear()
+    rc_prof = drive.main([
+        "--config", str(cfg_prof), "--library", str(lib_path), "--policy-root", str(pdir),
+        "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--endpoint-url", "http://10.0.0.2:8790",
+        "--token-file", str(tok), "--goal-slot", "4", "--operator", "op_b", "--paced-chunks", "--max-chunks", "1", "--dry-run",
+    ])
+    assert rc_prof == 0 and created[0][1] == "arm_b"
+    prof_a = tmp_path / "arm-a-robot-profile.json"
+    prof_a.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1", "device_id": "arm_a", "instance_id": "omx_follower_arm",
+        "robot_config_sha256": "a" * 64, "operating_envelope_path": str(tmp_path / "env.json"), "work_dir": str(tmp_path),
+    }))
+    cfg_prof.write_text(json.dumps({"arm_id": "arm_b", "operating_profile_path": str(prof_a), "io": "unused", "cameras": {}}))
+    with pytest.raises(SystemExit):
+        drive.main([
+            "--config", str(cfg_prof), "--library", str(lib_path), "--policy-root", str(pdir),
+            "--policy-revision", "a" * 64, "--cell-calibration", str(cal_path), "--endpoint-url", "http://10.0.0.2:8790",
+            "--token-file", str(tok), "--goal-slot", "4", "--operator", "op_b", "--paced-chunks", "--max-chunks", "1", "--dry-run",
+        ])

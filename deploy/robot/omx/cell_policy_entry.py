@@ -11,8 +11,6 @@ import time
 from typing import Any, Mapping
 from urllib.parse import urlsplit, urlunsplit
 
-import numpy as np
-
 ENTRY_START_TOL, PRE_SETTLE_TOL, STILL_TOL, STILL_WAIT_S = 2.0, 2.0, 0.15, 0.08
 FAULT_KEYS = ("fault", "contact", "hold", "human_hold_latched")
 
@@ -174,6 +172,7 @@ def run_entry_chunk(
 
 def moved_snapshot(state, ran: dict, top_before, cell, work: Path, n: int) -> dict:
     """Did the arm move: joint travel the encoders measured and how much the top view changed (mean |diff|, 0-255)."""
+    import numpy as np
     out = {"joint_travel": float(np.abs(np.asarray(ran.get("state") or state, dtype=float) - state).max())}
     try:
         import cv2
@@ -244,16 +243,17 @@ def dry_no_runner_fallback(status: dict, dry_run: bool, dry_seed_state, library:
     return pose6(home_frames[-1]) if isinstance(home_frames, (list, tuple)) and home_frames else None
 
 
-def infer_chunk(shadow, obs, state: np.ndarray, sim_units: bool) -> np.ndarray:
+def infer_chunk(shadow, obs, state, sim_units: bool):
+    import numpy as np
     sig = inspect.signature(shadow.infer).parameters
     kw = {"state": state.tolist()} if (sim_units and ("state" in sig or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.values()))) else {}
     return np.asarray(shadow.infer(obs, **kw).chunk, dtype=float)
 
 
 def wrist_roll_warning(chunk, home_roll: float, *, roll_range: tuple[float, float] | None = None) -> str | None:
+    import numpy as np
     from arm_status_bridge import TICKS
     from cell_policy_shape import SCALE, finite_float
-
     home_val = finite_float(home_roll)
     if home_val is None:
         raise ValueError("home_roll must be a finite number")
@@ -345,7 +345,7 @@ def configured_arm_id(config: dict, parser: argparse.ArgumentParser) -> str | No
         import cell_robot_profile
 
         try:
-            prof_id = cell_robot_profile.load(Path(str(prof_path)).expanduser())["binding"]["instance_id"]
+            prof_id = cell_robot_profile.load(Path(str(prof_path)).expanduser())["binding"]["device_id"]
         except (OSError, ValueError, KeyError) as error:
             parser.error(f"cannot resolve remote arm_id from operating_profile_path: {error}")
     if cfg_id and prof_id and cfg_id != prof_id:

@@ -30,7 +30,7 @@ applies_when: Running sim-unit ACT policies on dual-arm OMX cells or recovering 
 
 ### 3. 작업 구간과 일치하는 청크 라이브러리 + 물리 팔 바인딩 + 섀도 정리
 - 작업 위치(`beltend` 픽업 / `pallet` 2층 적재)와 `jaw_gate_spec`이 일치하는 검토 완료 라이브러리(`chunks-arm-b-beltend-ship-t2-canon.json`)를 사용한다.
-- `cell_policy_drive.py`는 `--arm-id`가 설정(`config.arm_id` / `operating_profile_path` `instance_id`)과 다르면 거부해 잘못된 원격 팔/체크 우회를 막고, 로그에는 자격증명/쿼리를 제거한 URL만 남긴다.
+- `cell_policy_drive.py`는 `--arm-id`가 설정(`config.arm_id` / `operating_profile_path` `binding.device_id`)과 다르면 거부해 잘못된 원격 팔/체크 우회를 막고, 로그에는 자격증명/쿼리를 제거한 URL만 남긴다. 실기 `rosy-arm-cell` dry-run 검증에서 `rosy.omx-cell-robot-profile.v1`의 `binding.instance_id`가 네이티브 팔로워 ID(`arm_b_follower`/`omx_follower_arm`)이고 논리 팔 ID(`arm_a`/`arm_b`/`arm_s`)는 `binding.device_id`에 들어감을 확인해 `binding.device_id`를 비교·선택하도록 교정했다.
 - `RemotePolicyShadow`는 자격증명/쿼리 URL을 거부하고 `/health` 검증 실패 시 소켓을 닫으며 `close()` 후 재오픈을 막고, `run_timed`는 종료 전 비행 중 `pending` 워커를 배수한다.
 
 ### 4. sim-unit ACT는 `--paced-chunks` + 원격 추론 플래그로 실행한다
