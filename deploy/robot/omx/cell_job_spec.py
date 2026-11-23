@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 
 from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     ACTOR,
@@ -18,6 +19,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     TASK_FILE,
     _actor,
     _bool,
+    _http_url,
     _int_range,
     _is_amr_bed_site,
     _match,
@@ -25,6 +27,8 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     _roi,
     _safe_path,
     _task_site_names,
+    _two_arm_task,
+    _two_arm_task_sites,
 )
 from cell_policy_goals import resolve_goal_site
 
@@ -34,6 +38,8 @@ SESSION = {
     "arm_s": "./with-session-arm-s-live.sh",
 }
 AB_ARMS = {"arm_a", "arm_b"}
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+_BELT_SITES = frozenset({"belt", "not_places:belt"})
 PY = 'exec ~/rosy-omx/current-env/bin/python "$OMX/$0" "$@"'
 ENV = "set -a; . ~/.config/rosy/omx-observation-bridge.env; set +a; . ./tools-env-current.sh; "
 
@@ -175,11 +181,71 @@ JOBS = {
             "layers_below": _int_range(0, 5),
         },
     },
+    "cell_two_arm_policy": {
+        "script": "cell_two_arm_policy_cli.py",
+        "moving": True,
+        "camera": True,
+        "commissioning": True,
+        "arms": ("arm_a", "arm_b"),
+        "argv": [
+            "--config-a", "{config_a}",
+            "--config-b", "{config_b}",
+            "--endpoint-url", "{endpoint_url}",
+            "--revision-a", "{revision_a}",
+            "--revision-b", "{revision_b}",
+            "--library-a", "{library_a}",
+            "--library-b", "{library_b}",
+            "--task-a", "{task_a}",
+            "--task-b", "{task_b}",
+            "--proposer", "{proposer}",
+            "--operator", "{operator}",
+        ],
+        "params": {
+            "config_a": _match(FILE),
+            "config_b": _match(FILE),
+            "library_a": _match(FILE),
+            "library_b": _match(FILE),
+            "endpoint_url": _http_url,
+            "revision_a": _match(SHA256),
+            "revision_b": _match(SHA256),
+            "task_a": _two_arm_task,
+            "task_b": _two_arm_task,
+            "proposer": _actor,
+            "operator": _actor,
+        },
+        "optional": {
+            "token_file": _safe_path,
+            "policy_root_a": _safe_path,
+            "policy_root_b": _safe_path,
+            "model_cal_a": _safe_path,
+            "model_cal_b": _safe_path,
+            "cell_cal_a": _safe_path,
+            "cell_cal_b": _safe_path,
+            "work_dir": _safe_path,
+            "goal_a": _int_range(0, 31),
+            "goal_b": _int_range(0, 31),
+            "model_site_a": _match(NAME),
+            "model_site_b": _match(NAME),
+            "max_chunks": _int_range(1, 16),
+            "timeout_s": _num(0.05, 2.0),
+            "margin_m": _num(0.005, 0.2),
+            "min_z_m": _num(-0.1, 0.2),
+            "dry_run": _bool,
+        },
+    },
 }
 
 
+def job_arms(job: dict, params: dict) -> tuple[str, ...]:
+    if job.get("arms"):
+        return tuple(job["arms"])
+    return (params["arm"],) if params.get("arm") else ()
+
+
 def moves_arm(job, params):
-    return bool(job.get("moving")) and not (job["script"] == "cell_policy_drive.py" and params.get("dry_run") is True)
+    return bool(job.get("moving")) and not (
+        job["script"] in ("cell_policy_drive.py", "cell_two_arm_policy_cli.py") and params.get("dry_run") is True
+    )
 
 
 def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
@@ -209,8 +275,21 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             if name == "catalog" and not (workdir / opt_checked[name]).is_file():
                 raise ValueError(f"{name}: no such file in the workdir")
     operator = checked.get("operator") or opt_checked.get("operator")
-    if "proposer" in opt_checked and (not operator or opt_checked["proposer"].casefold() == operator.casefold()):
+    proposer = checked.get("proposer") or opt_checked.get("proposer")
+    if proposer and (not operator or proposer.casefold() == operator.casefold()):
         raise ValueError("operator must differ from proposer (D-1024)")
+    if job["script"] == "cell_two_arm_policy_cli.py":
+        host = (urlsplit(checked["endpoint_url"]).hostname or "").lower()
+        if host not in _LOOPBACK_HOSTS and "token_file" not in opt_checked:
+            raise ValueError("non-loopback endpoint_url requires token_file")
+        src_a, dst_a = _two_arm_task_sites(checked["task_a"])
+        src_b, dst_b = _two_arm_task_sites(checked["task_b"])
+        na = ("belt" if src_a in _BELT_SITES else src_a, "belt" if dst_a in _BELT_SITES else dst_a)
+        nb = ("belt" if src_b in _BELT_SITES else src_b, "belt" if dst_b in _BELT_SITES else dst_b)
+        if na[1] == nb[1] or (na[0] == nb[0] and na[0] != "belt") or na[0] == nb[1] or na[1] == nb[0]:
+            raise ValueError("task_a and task_b overlap on non-belt site")
+        if moves_arm(job, params) and any(_is_amr_bed_site(v) for v in (src_a, dst_a, src_b, dst_b)):
+            raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")
         if opt_checked.get("paced_chunks") and (mode != "act" or "n_action" in opt_checked):
@@ -258,21 +337,27 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         args += ["--catalog", opt_checked["catalog"]]
     if "roi" in opt_checked:
         args += ["--roi", *opt_checked["roi"]]
-    for option in ("site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind"):
+    for option in (
+        "site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
+        "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
+        "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
+        "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
+        "margin_m", "min_z_m",
+    ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
     if moves_arm(job, params):
         reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
+        arm_list = list(job_arms(job, params))
+        if not arm_list or any(a not in SESSION for a in arm_list):
+            raise ValueError(f"no session wrapper for {params.get('arm') or arm_list}")
+        prefix = [SESSION[a] for a in arm_list]
         if reviewed_run:
             if params.get("person_at_switch") is True:
                 raise ValueError("reviewed automatic jobs cannot be combined with person_at_switch (D-911)")
-            if params["arm"] not in SESSION:
-                raise ValueError(f"no session wrapper for {params['arm']}")
-            return [SESSION[params["arm"]], "bash", "-c", PY, job["script"], *args]
+            return [*prefix, "bash", "-c", PY, job["script"], *args]
         if params.get("person_at_switch") is not True:
             raise ValueError("a moving job needs person_at_switch: true")
-        if params["arm"] not in SESSION:
-            raise ValueError(f"no session wrapper for {params['arm']}")
         tail = ["--commissioning", "--person-at-switch"] if job.get("commissioning", True) else ["--person-at-switch"]
-        return [SESSION[params["arm"]], "bash", "-c", PY, job["script"], *args, *tail]
+        return [*prefix, "bash", "-c", PY, job["script"], *args, *tail]
     return ["bash", "-c", ENV + PY, job["script"], *args]
