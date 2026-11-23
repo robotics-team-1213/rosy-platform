@@ -8,7 +8,7 @@ p { margin: var(--space-2) 0; }
 .quiet, footer { color: var(--text-secondary); font-size: var(--text-label); }
 section { margin-bottom: var(--space-6); }
 main > section { margin-bottom: 0; }
-.connection { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: start; padding-bottom: var(--space-5); border-bottom: 1px solid var(--border-default); }
+.connection { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: start; padding-bottom: var(--space-5); border-bottom: 1px solid var(--line-06); }
 .connection > div { flex: 1 1 16rem; }
 .connection form { flex: 1 1 24rem; min-width: 0; }
 .login-fields { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
@@ -19,17 +19,17 @@ main > section { margin-bottom: 0; }
 .summary { font-weight: var(--weight-strong); }
 .section-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; margin-bottom: var(--space-3); padding-top: var(--space-4); }
 .section-heading p { margin: 0; }
-.graph-scroll { max-width: 100%; overflow: auto; border-block: 1px solid var(--border-default); background: var(--surface-flat); scrollbar-color: var(--text-secondary) var(--surface-flat); }
+.graph-scroll { max-width: 100%; overflow: auto; border-block: 1px solid var(--line-10); background: var(--surface-recessed); scrollbar-color: var(--text-secondary) var(--surface-recessed); }
 #graph { display: block; min-width: 40rem; }  /* 원래 크기로 둔다. 늘리면 표가 첫 화면 밖으로 밀린다. */
 #graph .edge { fill: none; stroke: var(--text-secondary); stroke-width: 1.5; }
 #graph .edge.problem { stroke: var(--flag-caution); stroke-width: 2; }
 #graph .edge.old { stroke-dasharray: 4 5; }
-#graph rect { fill: var(--ground); stroke: var(--border-default); }
+#graph rect { fill: var(--ground); stroke: var(--line-10); }
 #graph text { fill: var(--text-primary); font: var(--text-label) var(--body); }
 #graph .detail { fill: var(--text-secondary); font-size: var(--text-micro); }
-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
 th { text-align: left; color: var(--text-secondary); font-size: var(--text-label); font-weight: var(--weight-strong); }
-th, td { padding: var(--space-3) var(--space-2); vertical-align: top; border-bottom: 1px solid var(--border-default); overflow-wrap: anywhere; }
+th, td { padding: var(--space-3) var(--space-2); vertical-align: top; border-bottom: 1px solid var(--line-06); overflow-wrap: anywhere; }
 th:first-child, td:first-child { width: 30%; padding-left: 0; }
 td:last-child, th:last-child { padding-right: 0; }
 td p { margin: 0 0 var(--space-1); }
@@ -39,8 +39,8 @@ code, time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .caution { color: var(--flag-caution); }
 .pager { display: flex; align-items: center; justify-content: end; gap: var(--space-3); margin-top: var(--space-3); }
 #history-rows { padding-left: var(--space-5); }
-#history-rows li { padding: var(--space-2) 0; border-bottom: 1px solid var(--border-default); overflow-wrap: anywhere; }
-footer { margin-top: var(--space-6); border-top: 1px solid var(--border-default); padding-top: var(--space-4); max-width: 75ch; }
+#history-rows li { padding: var(--space-2) 0; border-bottom: 1px solid var(--line-06); overflow-wrap: anywhere; }
+footer { margin-top: var(--space-6); border-top: 1px solid var(--line-06); padding-top: var(--space-4); max-width: 75ch; }
 @media (width < 30rem) {
   .connection { gap: var(--space-3); }
   .connection > div, .connection form { flex-basis: 100%; }

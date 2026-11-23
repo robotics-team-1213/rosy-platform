@@ -7,7 +7,7 @@
   gap: var(--space-3);
   min-width: 0;
   padding: var(--space-3) 0;
-  border-top: 1px solid var(--surface-line);
+  border-top: 1px solid var(--line-06);
 }
 .event-time, .event-severity { overflow-wrap: anywhere; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); }
 .event-type { overflow: hidden; font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--mono); overflow-wrap: anywhere; white-space: normal; }
