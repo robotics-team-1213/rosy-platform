@@ -1,5 +1,5 @@
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
-import { node } from "/common/control-dom.js";
+import { node, patchText } from "/common/control-dom.js";
 import { setOffBy } from "/common/cause-line.js";
 import { DOCK_STATE_LABEL, POWER_MODE_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL,
   enumLabel, operatorModeLabel, EVIDENCE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
@@ -14,7 +14,7 @@ import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
-import { placeRosterCards as place, mustExpand, selectRobot } from "./roster-cards.js";
+import { placeRosterCards as place, mustExpand, selectRobot, lastSeenText, workspaceCardKey } from "./roster-cards.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
@@ -28,6 +28,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const motorHealth = createFleetMotorHealth({view, scope});
   const profiles = createRobotProfiles({call, scope, render});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
+  const workspaceCards = new Map();
   function openCard(robotId, opts = {}) {
     if (!robotId) view.focusAnchorId = null;
     if (typeof robotId === "string" && (robotId.startsWith("arm_") || robotId.startsWith("cell_"))) {
@@ -67,21 +68,57 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     return view.stateUnavailable || mustExpand(robot) || attentionItems(robot).length > 0;
   }
   function card(robot, index) {
-    const article = document.createElement("article");
+    const now = Date.now();
     const displayName = view.robotNames?.[robot.robot_id] || robot.robot_id;
+    const state = view.stateUnavailable ? {} : (robot.state || {});
+    const pose = state.pose;
+    const power = powerHealthView(robot, view.receivedAtMs, now);
+    const nav = navTag(state, robot.robot_id, now);
+    const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
+    const estop = state.safety?.estop;
+    const stateStale = staleAgeS(robot, view.receivedAtMs, now) !== null;
+    const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
+    const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
+    const sitePose = !view.stateUnavailable ? sitePoseText(guideRow) : null;
+    const address = !view.stateUnavailable && !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
+    const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);
+    const motorDetail = motorHealth.detail(robot);
+    const profileDetail = profiles.detail("robot", robot.robot_id);
+    const calmBattTitle = typeof power.observedAgeS === "number"
+      ? (power.observedAgeS < 2 ? "실시간" : evidenceAgeText(power.observedAgeS).slice(3))
+      : "";
+    const sig = workspaceCardKey({
+      robot, slot: index % view.colors.length, displayName, view, state, power, nav, tripLine, stateStale,
+      loc, sitePose, address, evidence, operator: isOperator(), named: namedReason(),
+      goalMotion: motionCommandReason(view, robot.robot_id, "goal"),
+      openTripId: openTrip(view, robot.robot_id)?.trip_id || null,
+      tripKey: trip.stateKey(robot),
+      moveBlocked: address?.action === "move" && moveAddress ? moveAddressBlocked() : "",
+    });
+    const cached = workspaceCards.get(robot.robot_id);
+    if (cached && cached.sig === sig) {
+      const seen = cached.article.querySelector('[data-fact="last-seen"]');
+      if (seen) patchText(seen, lastSeenText(robot, now));
+      const battVal = cached.article.querySelector('[data-fact="battery"] strong');
+      if (battVal && battVal.title !== calmBattTitle) battVal.title = calmBattTitle;
+      const active = document.activeElement;
+      const keptOther = active?.matches("select, .motor-health-scroll")
+        && active.closest("#robot-workspace article") !== cached.article
+        && active.closest("#robot-workspace article")?.dataset.robotId === robot.robot_id;
+      if (!keptOther) {
+        const factsBox = cached.article.querySelector(".facts");
+        if (motorDetail.parentNode !== cached.article && factsBox) factsBox.after(motorDetail);
+        if (profileDetail.parentNode !== cached.article) (motorDetail.parentNode === cached.article ? motorDetail : factsBox)?.after(profileDetail);
+      }
+      return cached.article;
+    }
+    const article = document.createElement("article");
     article.className = `robot robot-workspace-card s${index % view.colors.length}`;
     article.dataset.robotId = robot.robot_id;
     const lagging = !robot.online && robot.link === "degraded";
     if (!view.stateUnavailable && !robot.online && !lagging) article.classList.add("offline");
     if (view.selected === robot.robot_id) article.classList.add("selected");
     article.tabIndex = -1;
-    const state = view.stateUnavailable ? {} : (robot.state || {});
-    const pose = state.pose;
-    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
-    const nav = navTag(state, robot.robot_id);
-    const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
-    const estop = state.safety?.estop;
-    const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
     const safetyLabel = !robot.online ? "—" : view.stateUnavailable || stateStale ? EVIDENCE_LABEL.unavailable : estop === true ? estopText(state, "비상 정지")
       : estop === false ? "정상" : EVIDENCE_LABEL.unavailable;
     const goalSafetyReason = view.stateUnavailable
@@ -168,14 +205,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       roleTag.dataset.formationRole = role === "대형 리더" ? "leader" : "follower";
       head.appendChild(roleTag);
     }
-    const evidence = view.stateUnavailable ? null : streamEvidence(view.formation, robot.robot_id);
     if (evidence) {
       const relay = inlineIfCalm(tag(evidence.text, evidence.cls), evidence.cls);
       relay.dataset.evidence = evidence.evidence;
       head.appendChild(relay);
     }
-    const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
-    const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
     if (loc) {
       const locTag = inlineIfCalm(tag(loc.text, loc.cls), loc.cls);
       locTag.title = loc.title;
@@ -214,18 +248,15 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       } else {
         valueEl = document.createElement("strong");
         valueEl.textContent = value;
-        if (key === "battery" && typeof power.observedAgeS === "number")
-          valueEl.title = evidenceAgeText(power.observedAgeS).slice(3);
+        if (key === "battery" && calmBattTitle) valueEl.title = calmBattTitle;
       }
       cellEl.append(labelEl, valueEl);
-      const sitePose = key === "pose" && !view.stateUnavailable
-        ? sitePoseText((view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id)) : null;
-      if (sitePose) cellEl.append(node("small", sitePose, "fact-detail"));
+      if (key === "pose" && sitePose) cellEl.append(node("small", sitePose, "fact-detail"));
       facts.appendChild(cellEl);
     });
     article.appendChild(facts);
-    article.appendChild(motorHealth.detail(robot));
-    article.appendChild(profiles.detail("robot", robot.robot_id));
+    article.appendChild(motorDetail);
+    article.appendChild(profileDetail);
     const context = createRobotAppActions(robot.robot_id, view.robotPeers);
     const group = node('ui-button', '대형·대열 관리');
     group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
@@ -267,8 +298,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     // 점검 2026-10-01 — 사이트 망이 바뀌면 오프라인만으로는 까닭을 모른다. 고정 주소가
     // 지금 망에 있는지는 서버가 판정하고(GET /api/fleet/discovery/addresses), 여기는 옮겨 적는다.
-    const address = !view.stateUnavailable && !robot.online
-      ? addressReason(view.addresses?.[robot.robot_id]) : null;
     if (address) {
       const why = node("p", "", "hint");
       why.dataset.addressReason = view.addresses[robot.robot_id].status;
@@ -300,17 +329,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     // D-416 — 오프라인 로봇의 마지막 응답 시각: "언제부터 안 됐지?"에 바로 답한다.
     if (!view.stateUnavailable && !robot.online) {
-      const seen = node("p", "", "hint");
+      const seen = node("p", lastSeenText(robot, now), "hint");
       seen.dataset.fact = "last-seen";
-      const ts = robot.state?.ts;
-      if (typeof ts === "number" && ts > 0) {
-        const age = Math.max(0, Math.floor((Date.now() / 1000) - ts));
-        seen.textContent = age < 60 ? `마지막 응답: ${evidenceAgeText(age).slice(3)}`
-          : age < 3600 ? `마지막 응답: ${Math.floor(age / 60)}분 전`
-          : `마지막 응답: ${Math.floor(age / 3600)}시간 전`;
-      } else {
-        seen.textContent = "응답 없음";
-      }
       article.appendChild(seen);
     }
 
@@ -484,6 +504,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       const why = node("p", "차선 추종 중에는 목표를 받지 않습니다 · 운행 취소로 차선 추종을 끈 뒤 목표를 지정하세요.", "hint");
       article.appendChild(why);
     }
+    workspaceCards.set(robot.robot_id, { sig, article });
     return article;
   }
 

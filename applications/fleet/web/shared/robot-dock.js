@@ -11,6 +11,7 @@
  *     dispose()        unsubscribes from selection
  */
 import {actionIcon, iconSvg} from "/common/ui.js";
+import {patchAttr, patchData, patchText} from "/common/control-dom.js";
 import {dockEntries} from "./robot-dock-model.js";
 
 const GROUPS = [
@@ -37,16 +38,15 @@ function makeMark(mark) {
 }
 
 function syncButton(btn, entry, profile, {openId, selectedId, markSigs}) {
-  btn.dataset.robotId = entry.id;
-  btn.dataset.kind = entry.kind;
-  btn.dataset.link = profile?.link?.state || "unavailable";
-  if (profile?.alarm) btn.dataset.alarm = profile.alarm.tag || profile.alarm.level || "unknown";
-  else btn.removeAttribute("data-alarm");
-  btn.toggleAttribute("data-selected", selectedId === entry.id);
-  btn.setAttribute("aria-pressed", String(openId === entry.id));
-  btn.setAttribute("aria-label", entry.label);
-  if (openId === entry.id) btn.removeAttribute("data-ui-tooltip");
-  else btn.setAttribute("data-ui-tooltip", entry.label);
+  patchData(btn, "robotId", entry.id);
+  patchData(btn, "kind", entry.kind);
+  patchData(btn, "link", profile?.link?.state || "unavailable");
+  if (profile?.alarm) patchData(btn, "alarm", profile.alarm.tag || profile.alarm.level || "unknown");
+  else patchAttr(btn, "data-alarm", null);
+  patchAttr(btn, "data-selected", selectedId === entry.id ? "" : null);
+  patchAttr(btn, "aria-pressed", String(openId === entry.id));
+  patchAttr(btn, "aria-label", entry.label);
+  patchAttr(btn, "data-ui-tooltip", openId === entry.id ? null : entry.label);
 
   const iconName = entry.kind === "arm" ? "arm" : "robot";
   let iconWrap = btn.querySelector(":scope > .robot-dock-icon");
@@ -66,7 +66,7 @@ function syncButton(btn, entry, profile, {openId, selectedId, markSigs}) {
     idSpan.className = "robot-dock-id";
     btn.append(idSpan);
   }
-  if (idSpan.textContent !== entry.short) idSpan.textContent = entry.short;
+  patchText(idSpan, entry.short);
 
   const marksSig = `${entry.id}|${entry.marks.map((m) => `${m.kind}:${m.state}:${MARK_ICON[m.state] || "minus"}`).join(",")}`;
   if (!markSigs || markSigs.get(entry.id) !== marksSig) {
@@ -101,10 +101,10 @@ export function createRobotDock({selection, profiles = [], onToggle, kinds, ids}
   function paintFlags() {
     const selectedId = selection?.get?.() ?? null;
     for (const [id, btn] of buttons) {
-      btn.setAttribute("aria-pressed", String(openId === id));
-      btn.toggleAttribute("data-selected", selectedId === id);
-      if (openId === id) btn.removeAttribute("data-ui-tooltip");
-      else if (btn.getAttribute("aria-label")) btn.setAttribute("data-ui-tooltip", btn.getAttribute("aria-label"));
+      patchAttr(btn, "aria-pressed", String(openId === id));
+      patchAttr(btn, "data-selected", selectedId === id ? "" : null);
+      const label = btn.getAttribute("aria-label");
+      patchAttr(btn, "data-ui-tooltip", openId === id ? null : label);
     }
   }
 

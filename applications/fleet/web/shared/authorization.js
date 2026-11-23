@@ -26,8 +26,12 @@ function lockNote(control) {
 function describe(control, id, on) {
   const ids = (control.getAttribute("aria-describedby") || "").split(/\s+/).filter((item) => item && item !== id);
   if (on) ids.push(id);
-  if (ids.length) control.setAttribute("aria-describedby", ids.join(" "));
-  else control.removeAttribute("aria-describedby");
+  const next = ids.join(" ");
+  if (ids.length) {
+    if (control.getAttribute("aria-describedby") !== next) control.setAttribute("aria-describedby", next);
+  } else if (control.getAttribute("aria-describedby") !== null) {
+    control.removeAttribute("aria-describedby");
+  }
 }
 
 export function applyRoleToControls(role, controls) {
@@ -39,17 +43,17 @@ export function applyRoleToControls(role, controls) {
           reason: control.getAttribute("reason"),
         });
       }
-      control.disabled = true;
+      if (!control.disabled) control.disabled = true;
       const note = lockNote(control);
       // 묶음 안내가 있으면 버튼마다 같은 사유를 되풀이하지 않는다 — 안내 한 줄이 묶음 전체를 말한다.
       // 숨은 버튼은 묶음 안내를 켜지 않는다 — 화면에 없는 조작의 사유를 보이지 않는다.
       if (control.localName === "ui-button" && (!note || control.hidden)) {
-        control.setAttribute("reason", OPERATOR_REASON);
+        if (control.getAttribute("reason") !== OPERATOR_REASON) control.setAttribute("reason", OPERATOR_REASON);
         continue;
       }
       if (note) {
-        if (control.localName === "ui-button") control.removeAttribute("reason");
-        note.hidden = false;
+        if (control.localName === "ui-button" && control.getAttribute("reason") !== null) control.removeAttribute("reason");
+        if (note.hidden) note.hidden = false;
         describe(control, note.id, true);
       }
     }

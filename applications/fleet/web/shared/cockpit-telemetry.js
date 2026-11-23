@@ -1,6 +1,6 @@
 import { html, render } from "/common/vendor/htm-preact.esm.min.js";
 import { cssColor } from "/common/ui.js";
-import { node } from "/common/control-dom.js";
+import { node, patchText } from "/common/control-dom.js";
 import { owns } from "/console/assets/unit-scope.js";
 import { powerHealthView } from "/console/assets/power-health-view.js";
 
@@ -41,6 +41,14 @@ export function createCockpitHud({ el }) {
     pathbar.append(hud);
   }
 
+  let lastHudSig = "";
+  function renderItems(items) {
+    const sig = JSON.stringify(items);
+    if (sig === lastHudSig) return;
+    lastHudSig = sig;
+    render(html`<${CockpitHudCells} items=${items} />`, hud);
+  }
+
   function update(view) {
     const critCount = el("critical-list")?.childElementCount || 0;
     const warnCount = el("warning-list")?.childElementCount || 0;
@@ -52,13 +60,13 @@ export function createCockpitHud({ el }) {
       const unitId = view.controlUnit?.unit_id || "ARM-CELL";
       const critTotal = critCount + (sum?.heldCount || 0) + (sum?.faultArmCount || 0);
       const warnTotal = warnCount + (sum?.warnArmCount || 0);
-      render(html`<${CockpitHudCells} items=${[
+      renderItems([
         { key: "online", label: "관제 단위", text: view.stateUnavailable ? "연결 끊김" : unitId, tone: view.stateUnavailable ? "crit" : "neutral" },
         { key: "mission", label: "팔 피드백", text: !sum ? "확인 중" : `${sum.armsFresh}/${sum.armsTotal} 실시간`, tone: !sum ? "neutral" : sum.armsFresh > 0 ? "active" : "warn" },
         { key: "battery", label: "셀 카메라", text: !sum ? "—" : `${sum.camsTotal}대`, tone: sum?.camsTotal ? "neutral" : "warn" },
         { key: "arms", label: "보류 · 사건", text: !sum ? "—" : sum.heldCount > 0 ? `보류 ${sum.heldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : "이상 없음", tone: sum?.heldCount > 0 ? "crit" : sum?.openIncidentCount > 0 ? "warn" : "neutral" },
         { key: "alerts", label: "경보", text: critTotal + warnTotal > 0 ? `위험 ${critTotal} · 주의 ${warnTotal}` : "없음", tone: critTotal > 0 ? "crit" : warnTotal > 0 ? "warn" : "neutral" },
-      ]} />`, hud);
+      ]);
       return;
     }
 
@@ -104,13 +112,13 @@ export function createCockpitHud({ el }) {
           ? `0/${armTotal} NO FEED`
           : `${armReady}/${armTotal} LIVE`;
 
-    render(html`<${CockpitHudCells} items=${[
+    renderItems([
       { key: "online", label: "로봇", text: view.stateUnavailable ? "연결 끊김" : `${online}/${total} ON`, tone: view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral" },
       { key: "mission", label: "운행", text: activeCount > 0 ? `${activeCount} RUN` : "0 STBY", tone: activeCount > 0 ? "active" : "neutral" },
       { key: "battery", label: "최저 배터리", text: battText, tone: battTone, title: battTitle },
       { key: "arms", label: "셀 팔", text: armsText, tone: armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
       { key: "alerts", label: "경보", text: estopActive ? "E-STOP" : totalAlerts > 0 ? `위험 ${critCount} · 주의 ${warnCount}` : "이상 없음", tone: estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral" },
-    ]} />`, hud);
+    ]);
   }
 
   return { update };
@@ -157,20 +165,21 @@ export function createTelemetryTrace() {
   }
 
   const MAX_SAMPLES = 24;
-  const SAMPLE_MIN_MS = 850;
+  const SAMPLE_MIN_MS = 5000;
   function ensureSeries(id, value, now = Date.now()) {
     let entry = history.get(id);
     if (!entry) {
       entry = { values: [value], lastAt: now };
       history.set(id, entry);
-      return entry.values;
+      return { values: entry.values, changed: true };
     }
     if (entry.values[entry.values.length - 1] !== value || now - entry.lastAt >= SAMPLE_MIN_MS) {
       entry.values.push(value);
       if (entry.values.length > MAX_SAMPLES) entry.values.shift();
       entry.lastAt = now;
+      return { values: entry.values, changed: true };
     }
-    return entry.values;
+    return { values: entry.values, changed: false };
   }
 
   function measurePlotWidth() {
@@ -340,25 +349,30 @@ export function createTelemetryTrace() {
     root,
     update({ id, title = "TELEMETRY", readout = "—", value = null, unit = "", minBound = null, maxBound = null, tone = "primary" } = {}) {
       if (disposed) return;
-      titleEl.textContent = title;
-      valueEl.textContent = readout;
+      patchText(titleEl, title);
+      patchText(valueEl, readout);
       if (typeof value !== "number" || !Number.isFinite(value) || !id) {
-        metaEl.textContent = "NO DATA";
-        lastSeries = null;
-        pendingRedraw = false;
-        plot?.destroy?.();
-        plot = null;
-        plotId = null;
-        plotHost.replaceChildren();
+        patchText(metaEl, "NO DATA");
+        if (lastSeries || plot || plotHost.childElementCount) {
+          lastSeries = null;
+          pendingRedraw = false;
+          plot?.destroy?.();
+          plot = null;
+          plotId = null;
+          plotHost.replaceChildren();
+        }
         return;
       }
-      const ys = ensureSeries(id, value);
+      const { values: ys, changed } = ensureSeries(id, value);
       const lo = Math.min(...ys);
       const hi = Math.max(...ys);
-      metaEl.textContent = ys.length < 2
+      const nextMeta = ys.length < 2
         ? "1 SAMPLE"
         : Math.round(lo) === Math.round(hi) ? "STEADY" : `${Math.round(lo)}–${Math.round(hi)}${unit}`;
+      patchText(metaEl, nextMeta);
       const yBounds = typeof minBound === "number" && typeof maxBound === "number" ? [minBound, maxBound] : null;
+      const nextBoundsKey = yBounds ? yBounds.join(",") : "auto";
+      if (!changed && plot && plotId === id && plotTone === tone && currentBoundsKey === nextBoundsKey) return;
       lastSeries = { id, ys: [...ys], tone, yBounds };
       void drawPlot(id, lastSeries.ys, tone, yBounds);
     },

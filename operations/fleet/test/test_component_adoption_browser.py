@@ -372,3 +372,91 @@ def test_cockpit_battery_expiry_syncs_hud_and_panel(site):
         assert panel.locator(".telemetry-chart-plot").evaluate("n => n.offsetHeight") == 0
         assert not posts and not errors
         browser.close()
+
+
+def test_steady_polls_produce_zero_dom_churn_and_preserve_card_identity(site):
+    from playwright.sync_api import expect, sync_playwright
+    from test_console_queue_inline_browser import OFFLINE, _robot
+
+    api = copy.deepcopy(API)
+    api["/api/fleet/state"] = {
+        "fleet": {"name": "site", "online": 1, "total": 2},
+        "ts": 0.0,
+        "robots": [_robot("rosy_01"), OFFLINE],
+    }
+    api["/api/fleet/trips"] = {"running": None, "trips": [], "open": []}
+    api["/api/fleet/device-profile-sources/robot/rosy_01"] = {"profile": None}
+    state_polls = []
+
+    with sync_playwright() as pw:
+        posts = []
+        browser, page, errors = _open(pw, site, api, posts, size=(1366, 768))
+        page.on("response", lambda res: state_polls.append(res.status) if res.url.endswith("/api/fleet/state") else None)
+        page.locator('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]').click()
+        panel = page.locator("#" + "robot-panel")
+        expect(panel).to_be_visible()
+        expect(page.locator('#robot-workspace article[data-robot-id="rosy_01"]')).to_be_visible()
+        page.clock.run_for(5500)
+
+        page.evaluate("""() => {
+          window.__savedRefs = {
+            rosterCard: document.querySelector('#roster article[data-robot-id="rosy_01"]'),
+            workspaceCard: document.querySelector('#robot-workspace article[data-robot-id="rosy_01"]'),
+            dockBtn: document.querySelector('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]'),
+            hudBatt: document.querySelector('#cockpit-hud [data-hud-key="battery"]'),
+          };
+          const counts = { roster: 0, workspace: 0, hud: 0, sitePath: 0, dock: 0, dockAttr: 0, hudAttr: 0 };
+          window.__churnCounts = counts;
+          const watchChild = (sel, key) => {
+            const target = document.querySelector(sel);
+            new MutationObserver((records) => {
+              for (const r of records) if (r.type === "childList") counts[key] += 1;
+            }).observe(target, { childList: true, subtree: true });
+          };
+          const watchAttr = (sel, key) => {
+            const target = document.querySelector(sel);
+            new MutationObserver((records) => {
+              for (const r of records) if (r.type === "attributes") counts[key] += 1;
+            }).observe(target, { attributes: true, subtree: true });
+          };
+          watchChild("#roster", "roster");
+          watchChild("#robot-workspace", "workspace");
+          watchChild("#cockpit-hud", "hud");
+          watchChild("#site-path-list", "sitePath");
+          watchChild("#robot-dock", "dock");
+          watchAttr("#robot-dock", "dockAttr");
+          watchAttr("#cockpit-hud", "hudAttr");
+        }""")
+
+        before_polls = len(state_polls)
+        page.clock.run_for(6000)
+        assert len(state_polls) - before_polls >= 5
+
+        result = page.evaluate("""() => ({
+          counts: window.__churnCounts,
+          sameRosterCard: document.querySelector('#roster article[data-robot-id="rosy_01"]') === window.__savedRefs.rosterCard,
+          sameWorkspaceCard: document.querySelector('#robot-workspace article[data-robot-id="rosy_01"]') === window.__savedRefs.workspaceCard,
+          sameDockBtn: document.querySelector('#robot-dock .robot-dock-btn[data-robot-id="rosy_01"]') === window.__savedRefs.dockBtn,
+          sameHudBatt: document.querySelector('#cockpit-hud [data-hud-key="battery"]') === window.__savedRefs.hudBatt,
+        })""")
+        assert result["sameRosterCard"], "roster summary <article> was replaced on steady polls"
+        assert result["sameWorkspaceCard"], "workspace <article> was replaced on steady polls"
+        assert result["sameDockBtn"], "dock button was replaced on steady polls"
+        assert result["sameHudBatt"], "cockpit HUD cell was replaced on steady polls"
+        assert result["counts"] == {
+            "roster": 0,
+            "workspace": 0,
+            "hud": 0,
+            "sitePath": 0,
+            "dock": 0,
+            "dockAttr": 0,
+            "hudAttr": 0,
+        }, f"unexpected DOM churn on steady polls: {result['counts']}"
+
+        api["/api/fleet/state"]["robots"][0]["power_health"]["battery"]["percent"] = 62
+        page.clock.run_for(1500)
+        expect(page.locator('#cockpit-hud [data-hud-key="battery"]')).to_contain_text("62%")
+        expect(panel.locator(".telemetry-chart-value")).to_contain_text("62%")
+        expect(page.locator('#robot-workspace [data-fact="battery"]')).to_contain_text("62%")
+        assert not posts and not errors
+        browser.close()

@@ -2,6 +2,7 @@
 // markup (test_fleet_header.py pins it) and drive it only through this module: link word and clock, alerts
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
 import { setOffBy } from "/common/cause-line.js";
+import { patchAttr, patchData, patchHidden, patchText } from "/common/control-dom.js";
 import { isOperator } from "./authorization.js";
 import "/common/ui.js";  // wires the `[data-theme-cycle]` button
 import {renderAccountApps, roleLabel} from "/common/account-profile.js";
@@ -24,11 +25,11 @@ export function linkState(now = Date.now()) {
 }
 function paintLink(now) {
   const tag = $("link-state"), state = linkState(now);
-  tag.title = LINK[state][0];
+  if (tag.title !== LINK[state][0]) tag.title = LINK[state][0];
   if (tag.dataset.link === state) return;
   tag.dataset.link = state;
-  tag.textContent = LINK[state][0];
-  tag.setAttribute("status", LINK[state][1]);
+  patchText(tag, LINK[state][0]);
+  patchAttr(tag, "status", LINK[state][1]);
 }
 export function noteLink(error = null, now = Date.now()) {
   if (error?.name === "AbortError") return;
@@ -44,11 +45,14 @@ function openInbox() {
 }
 export function showInboxCount(count) {
   const inbox = $("fleet-inbox"), unread = $("header-unread");
-  unread.textContent = count ? String(count) : "";
-  unread.hidden = !count;
-  inbox.setAttribute("aria-label", `알림 창 · 미확인 메시지 ${count}개`);
-  inbox.setAttribute("data-ui-tooltip", `${inbox.getAttribute("aria-label")} · 읽음은 개입 해소가 아닙니다`);
-  inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
+  patchText(unread, count ? String(count) : "");
+  patchHidden(unread, !count);
+  const aria = `알림 창 · 미확인 메시지 ${count}개`;
+  patchAttr(inbox, "aria-label", aria);
+  patchAttr(inbox, "data-ui-tooltip", `${aria} · 읽음은 개입 해소가 아닙니다`);
+  if (inbox.title !== "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다") {
+    inbox.title = "읽음 표시는 개입 해소나 로봇 상태 변경이 아닙니다";
+  }
 }
 
 // The one E-stop rule. `session` is undefined while unknown (loading, Fleet unreachable), null after a 401,
@@ -154,16 +158,18 @@ export function showSignedOut({refused = true} = {}) {
 
 export function showFleet(fleet, robots = null) {
   // D-974: an instance in a control-unit tree is named by its unit (R and ARM-CELL share one host).
-  $("fleet-name").textContent = fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트";
+  const fleetEl = $("fleet-name");
+  patchText(fleetEl, fleet.unit ? (fleet.root ? `통합관제 ${fleet.unit}` : fleet.unit) : fleet.name || "사이트");
   applyUnitScope(fleet.scope);  // D-960 §4: hide jobs another unit's screen owns
-  $("fleet-name").title = scopeSummary(fleet.scope);
+  const summary = scopeSummary(fleet.scope);
+  if (fleetEl.title !== summary) fleetEl.title = summary;
   const pill = $("online-pill");
   if (!pill) return;  // 연결 수는 관제 문서에만 있다(D-741 3)
-  delete pill.dataset.locked;
+  patchData(pill, "locked", null);
   // A robot answering late (link "degraded") still counts as connected on the pill.
   const linked = robots ? robots.filter(robot => robot.online || robot.link === "degraded").length : fleet.online;
-  pill.textContent = `${linked}/${fleet.total}`;
-  pill.setAttribute("status", fleet.online === fleet.total ? "neutral" : linked === fleet.total ? "warn" : "crit");
+  patchText(pill, `${linked}/${fleet.total}`);
+  patchAttr(pill, "status", fleet.online === fleet.total ? "neutral" : linked === fleet.total ? "warn" : "crit");
 }
 
 // Pages without their own state poll (설치·보정, 현장 지도, Cell) read Fleet every 5 s for the site name
@@ -184,7 +190,7 @@ export function watchFleet(request, {every = 5000, interval = setInterval} = {})
 
 export function tickClock() {
   const now = Date.now();
-  $("clock").textContent = new Date(now).toTimeString().slice(0, 8);
+  patchText($("clock"), new Date(now).toTimeString().slice(0, 8));
   paintLink(now);  // 답이 끊긴 채 시간이 가면 이 틱이 지연으로 바꾼다
 }
 

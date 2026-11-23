@@ -33,6 +33,7 @@ import { confirmIrreversible } from "/common/ui.js";
 import { createSelection } from "/console/assets/selection.js";
 import { createConfirmedAction } from "./confirmed-action.js";
 import { createPageScope } from "/common/scope.js";
+import { patchAttr, patchText } from "/common/control-dom.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js";
 import { owns, unitScope } from "/console/assets/unit-scope.js";
@@ -229,10 +230,9 @@ function render() {
   // 지도 캔버스는 무장(목표 선택·위치 찍기)했을 때만 누를 수 있는 단추다 — role이 무장 상태를 따라간다.
   // 해제하면 뷰가 소유한 role로 돌린다(사이트 뷰는 img). 계층이 부여한 값을 덮어쓰지 않는다(WCAG 4.1.2).
   const goalCanvas = el("map-canvas");
-  if (view.selected || view.pinning || view.focusRobot) goalCanvas.setAttribute("role", "button");
+  if (view.selected || view.pinning || view.focusRobot) patchAttr(goalCanvas, "role", "button");
   else if (goalCanvas.getAttribute("role") === "button") {
-    if (!view.map && view.siteMap) goalCanvas.setAttribute("role", "img");
-    else goalCanvas.removeAttribute("role");
+    patchAttr(goalCanvas, "role", !view.map && view.siteMap ? "img" : null);
   }
   const rosterBox = el("roster");
   const focused = document.activeElement;
@@ -404,10 +404,7 @@ const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
 
 // D-415 — 진단 패널 갱신: 상태 주기·발견·로봇 오류·카메라
 function refreshDiagnostics() {
-  const diag = (id, text) => {
-    const node = el(id);
-    if (node) node.textContent = text;
-  };
+  const diag = (id, text) => patchText(el(id), text);
   diag("diag-state", view.stateUnavailable ? "불가"
     : `${view.robots.length}대 · ${view.stateLoaded ? "갱신됨" : "대기"}`);
   diag("diag-scanner", deviceDirectory.scannerLost ? "끊김"
@@ -497,7 +494,7 @@ const pollDrive = (fn, ms) => poll(() => ((view.stateLoaded || unitScope() !== n
 pageScope.listen(document, "visibilitychange", () => { if (!document.hidden) { refreshState(); trackingView.refresh(); } });
 pollDrive(() => { if (!auth.locked) return formation.refreshFormation(); }, MAP_MS);
 poll(refreshState, STATE_MS);
-poll(() => ((view.stateLoaded || unitScope() !== null) && !auth.locked && owns("arms") ? cellStage.refresh() : undefined), 1500);
+poll(() => ((view.stateLoaded || unitScope() !== null) && !auth.locked && owns("arms") ? cellStage.refresh() : undefined), 2000);
 poll(() => { if (!auth.locked) return workView.refresh(); }, MAP_MS);
 poll(refreshHealthz, MAP_MS);
 pageScope.interval(() => signals.presence(), STATE_MS);

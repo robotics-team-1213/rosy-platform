@@ -1,4 +1,45 @@
+import { evidenceAgeText } from "/common/core_ui_logic.js";
 import { createRobotVideo, bindVisibility } from "/console/assets/robot-video.js";
+
+/** Calm whole-second / 5-second stepped offline last-seen line for in-place updates. */
+export function lastSeenText(robot, nowMs = Date.now()) {
+  const ts = robot?.state?.ts;
+  if (typeof ts !== "number" || ts <= 0) return "응답 없음";
+  const raw = Math.max(0, Math.floor((nowMs / 1000) - ts));
+  if (raw >= 3600) return `마지막 응답: ${Math.floor(raw / 3600)}시간 전`;
+  if (raw >= 60) return `마지막 응답: ${Math.floor(raw / 60)}분 전`;
+  const calm = raw < 5 ? raw : Math.floor(raw / 5) * 5;
+  return `마지막 응답: ${evidenceAgeText(calm).slice(3)}`;
+}
+
+/** Deterministic key over every field rendered in roster.card() (excluding calm sub-second clocks). */
+export function workspaceCardKey({
+  robot, slot, displayName, view, state, power, nav, tripLine, stateStale,
+  loc, sitePose, address, evidence, operator, named, goalMotion, openTripId, tripKey, moveBlocked,
+}) {
+  const pose = state.pose;
+  return JSON.stringify({
+    id: robot.robot_id, slot, displayName, online: robot.online, link: robot.link,
+    linkReason: robot.link_reason || null, ruleM: robot.rule_m || null, error: robot.error || null,
+    calibration: robot.calibration || null, queued: robot.queued || null, yielding: robot.yielding || null,
+    pose: pose ? [pose.x?.toFixed?.(2), pose.y?.toFixed?.(2), pose.yaw?.toFixed?.(2), state.pose_frame, state.map_id] : null,
+    sitePose, mode: state.mode, lineFollow: state.line_follow || null, powerMode: state.power || null,
+    dock: state.docking?.state || null, diag: stateStale ? null : (state.diagnostics_summary || null),
+    safety: state.safety || null, caps: robot.capabilities || null, locState: robot.localization || null,
+    chargeState: robot.power_health?.battery?.charging_state || null,
+    power: {
+      battery: power.battery, charging: power.charging, note: power.note, safetyRelease: power.safetyRelease,
+      voltage: typeof power.voltage === "number" ? power.voltage.toFixed(2) : null,
+    },
+    nav, tripLine, stateStale, evidence, loc, address,
+    addressStatus: view.addresses?.[robot.robot_id]?.status || null,
+    selected: view.selected === robot.robot_id, pinning: view.pinning === robot.robot_id,
+    stateUnavailable: Boolean(view.stateUnavailable), hasMap: Boolean(view.map), hasSiteMap: Boolean(view.siteMap),
+    formation: view.formation?.active ? { leader: view.formation.leader, members: Object.keys(view.formation.assignment || {}) } : null,
+    operator: Boolean(operator), named, goalMotion, openTripId, tripKey,
+    peers: view.robotPeers, moveBlocked,
+  });
+}
 
 /** D-651: all four safety exceptions remain visible in the compact list, ahead of nominal robots. */
 export function mustExpand(robot) {
@@ -24,18 +65,29 @@ export function placeRosterCards(box, cards) {
   const keep = focused?.parentElement === box ? focused : null;
   if (keep) {
     const current = cards.find(node => node.dataset.robotId === keep.dataset.robotId);
-    const profile = current?.querySelector("[data-robot-profile]");
-    if (profile) keep.querySelector("[data-robot-profile]")?.replaceWith(profile);
+    const motor = current && current !== keep ? current.querySelector("[data-motor-robot]") : null;
+    const oldMotor = keep.querySelector("[data-motor-robot]");
+    if (motor && oldMotor !== motor) {
+      if (oldMotor) oldMotor.replaceWith(motor);
+      else keep.querySelector(".facts")?.after(motor);
+    }
+    const profile = current && current !== keep ? current.querySelector("[data-robot-profile]") : null;
+    const oldProfile = keep.querySelector("[data-robot-profile]");
+    if (profile && oldProfile !== profile) {
+      if (oldProfile) oldProfile.replaceWith(profile);
+      else (keep.querySelector("[data-motor-robot]") || keep.querySelector(".facts"))?.after(profile);
+    }
     const form = keep.querySelector(".card-trip"), previous = form?.querySelector(".stuck-result");
     const note = current?.querySelector(".card-trip .stuck-result");
     if (previous?.textContent !== note?.textContent) {
       previous?.remove();
-      if (form && note) form.append(note);
+      if (form && note) form.append(note.cloneNode(true));
     }
   }
   const nodes = cards.map((node) => (keep && node.dataset.robotId === keep.dataset.robotId ? keep : node));
-  if (!nodes.includes(keep)) { box.replaceChildren(...nodes); return; }
-  for (const node of [...box.children]) if (node !== keep) node.remove();
+  if (nodes.length === box.children.length && nodes.every((node, i) => box.children[i] === node)) return;
+  const wanted = new Set(nodes);
+  for (const node of [...box.children]) if (!wanted.has(node)) node.remove();
   nodes.forEach((node, i) => { if (box.children[i] !== node) box.insertBefore(node, box.children[i] || null); });
 }
 

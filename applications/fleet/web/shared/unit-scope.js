@@ -21,11 +21,16 @@ export function scopeSummary(scope) {
   return (ROLE[scope.role] || "관제") + " · 맡은 일: " + (jobs.join(", ") || "없음");
 }
 
+function syncAttr(root, name, on) {
+  const next = Boolean(on);
+  if (typeof root.hasAttribute !== "function" || root.hasAttribute(name) !== next) root.toggleAttribute(name, next);
+}
+
 // Flags on <html> so blocks a view mounts later follow the same CSS rule (fleet-header.css).
 export function applyUnitScope(scope, root = globalThis.document?.documentElement) {
   current = scope && typeof scope === "object" ? scope : null;
   if (!root) return;
-  root.toggleAttribute("data-unit-scope-ready", current !== null);
-  for (const key of KEYS) root.toggleAttribute("data-unit-" + key, owns(key));
-  root.toggleAttribute("data-unit-root", current?.role !== "cell" || relays());  // a cell with children keeps its subtree stop controls
+  syncAttr(root, "data-unit-scope-ready", current !== null);
+  for (const key of KEYS) syncAttr(root, "data-unit-" + key, owns(key));
+  syncAttr(root, "data-unit-root", current?.role !== "cell" || relays());  // a cell with children keeps its subtree stop controls
 }
