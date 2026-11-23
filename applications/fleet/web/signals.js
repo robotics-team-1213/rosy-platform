@@ -3,6 +3,7 @@
 // all_red 는 "명령된 정지"다 — 둘을 같은 색으로 뭉뜽그리면 운영자는 장비 고장을
 // 정지 성공으로 읽어 버린다.
 import { setOffBy } from "/common/cause-line.js";
+import { patchHidden, patchText } from "/common/control-dom.js";
 
 const SIGNAL_INTENT_LABEL = Object.freeze({
   failsafe: "감독 중단", manual: "수동", cycle: "자동 순환",
@@ -240,20 +241,26 @@ export function createSignals({ scope, el, view, log, call, refreshState, isOper
     return node;
   }
 
+  let lastSignalsSig = "";
   function render() {
     const box = el("signal-cards");
     if (!box) return;
     const rows = Object.values(view.signals || {});
     const virtual = view.traffic?.signals || [];
+    const operator = isOperator();
+    const named = namedReason();
+    const sig = JSON.stringify([rows, virtual, operator, named]);
+    if (sig === lastSignalsSig && box.childElementCount === rows.length + virtual.length) return;
+    lastSignalsSig = sig;
     box.replaceChildren(...rows.map(card), ...virtual.map(virtualCard));
-    el("signals-state").textContent = rows.length
+    patchText(el("signals-state"), rows.length
       ? `${rows.filter((r) => r.online).length}/${rows.length} 연결${virtual.length ? ` · 가상 ${virtual.length}` : ""}`
-      : virtual.length ? `가상 ${virtual.length}` : "—";
+      : virtual.length ? `가상 ${virtual.length}` : "—");
     // D-415 — 빈 상태는 ui-empty 규칙으로 말한다.
     const empty = el("signals-hint");
     if (empty) {
-      empty.hidden = rows.length + virtual.length > 0;
-      if (!rows.length && !virtual.length) empty.textContent = "설정된 신호등이 없습니다. 장치 연결과 현장 설치 상태를 확인하세요.";
+      patchHidden(empty, rows.length + virtual.length > 0);
+      if (!rows.length && !virtual.length) patchText(empty, "설정된 신호등이 없습니다. 장치 연결과 현장 설치 상태를 확인하세요.");
     }
   }
 

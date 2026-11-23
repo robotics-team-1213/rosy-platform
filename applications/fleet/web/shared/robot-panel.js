@@ -17,6 +17,7 @@
  *     dispose()       unsubscribes from selection
  */
 import {actionIcon} from "/common/ui.js";
+import {patchAttr, patchData, patchHidden, patchText} from "/common/control-dom.js";
 import {EVIDENCE_LABEL} from "/common/core_ui_logic.js";
 
 const STATUS_TAGS = Object.freeze({
@@ -114,9 +115,9 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
   const boundButtons = new WeakSet();
   const ensureStopButton = (btn) => {
     const target = btn || stopButton || fallbackStopBtn;
-    target.classList.add("robot-panel-stop");
-    target.setAttribute("type", "button");
-    target.setAttribute("data-always-live", "");
+    if (!target.classList.contains("robot-panel-stop")) target.classList.add("robot-panel-stop");
+    patchAttr(target, "type", "button");
+    patchAttr(target, "data-always-live", "");
     if (!boundButtons.has(target)) {
       boundButtons.add(target);
       target.addEventListener("click", () => activeStop?.());
@@ -211,12 +212,12 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
     if (wasHidden) opener = document.activeElement;
     currentId = nextId;
 
-    root.dataset.kind = profile.kind || "";
-    root.dataset.robotId = nextId;
+    patchData(root, "kind", profile.kind || "");
+    patchData(root, "robotId", nextId);
 
     const displayName = profile.name || nextId;
-    if (title.textContent !== displayName) title.textContent = displayName;
-    closeBtn.setAttribute("aria-label", `${displayName} 패널 닫기`);
+    patchText(title, displayName);
+    patchAttr(closeBtn, "aria-label", `${displayName} 패널 닫기`);
 
     const linkState = profile.link?.state;
     if (linkState && linkState !== "fresh") {
@@ -226,13 +227,13 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
         linkSlot.dataset.tagState = tagState;
         linkSlot.dataset.tagText = linkText;
         linkSlot.replaceChildren(statusTag(tagState, profile.link.text));
-        linkSlot.hidden = false;
+        patchHidden(linkSlot, false);
       }
     } else if (!linkSlot.hidden || linkSlot.childElementCount) {
-      delete linkSlot.dataset.tagState;
-      delete linkSlot.dataset.tagText;
-      linkSlot.replaceChildren();
-      linkSlot.hidden = true;
+      patchData(linkSlot, "tagState", null);
+      patchData(linkSlot, "tagText", null);
+      if (linkSlot.childElementCount) linkSlot.replaceChildren();
+      patchHidden(linkSlot, true);
     }
 
     if (!sameId) {
@@ -277,7 +278,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
     });
 
     activeStop = null;
-    if (stopButton && footerMode !== "btn") stopButton.hidden = true;
+    if (stopButton && footerMode !== "btn") patchHidden(stopButton, true);
     const stopSpec = typeof stop === "function" ? stop(profile) : stop;
     if (stopSpec?.label) {
       const stopBtn = ensureStopButton(stopSpec.button);
@@ -287,30 +288,30 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
         footerMode = "btn";
         footerNoteEl = null;
       }
-      stopBtn.hidden = false;
-      if (stopBtn.textContent !== stopSpec.label) stopBtn.textContent = stopSpec.label;
-      foot.hidden = false;
+      patchHidden(stopBtn, false);
+      patchText(stopBtn, stopSpec.label);
+      patchHidden(foot, false);
     } else if (stopSpec?.note) {
-      if (stopButton) stopButton.hidden = true;
+      if (stopButton) patchHidden(stopButton, true);
       if (footerMode !== "note" || !footerNoteEl) {
         footerNoteEl = document.createElement("p");
         footerNoteEl.className = "robot-panel-stop-note";
         foot.replaceChildren(footerNoteEl);
         footerMode = "note";
       }
-      if (footerNoteEl.textContent !== stopSpec.note) footerNoteEl.textContent = stopSpec.note;
-      foot.hidden = false;
+      patchText(footerNoteEl, stopSpec.note);
+      patchHidden(foot, false);
     } else {
-      if (stopButton) stopButton.hidden = true;
+      if (stopButton) patchHidden(stopButton, true);
       if (foot.childElementCount || !foot.hidden) {
-        foot.replaceChildren();
-        foot.hidden = true;
+        if (foot.childElementCount) foot.replaceChildren();
+        patchHidden(foot, true);
       }
       footerMode = null;
       footerNoteEl = null;
     }
 
-    root.hidden = false;
+    patchHidden(root, false);
     if (!sameId) title.focus();
   }
 

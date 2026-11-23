@@ -10,6 +10,7 @@ import {tripWaitText} from "/console/assets/trip-display.js";
 import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { setOffBy } from "/common/cause-line.js";
+import { patchText } from "/common/control-dom.js";
 import { endedTripText, openTrip, primaryButton, quietButton } from "./queues.js";
 import { ruleJudgeSection } from "./site-rules-judge.js";
 
@@ -317,7 +318,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       || ready(robot)
       || repeatTripReason({ active: view.activeSiteMap, running: openTrip(view, chosen), start });
     setOffBy(el("convoy-go"), reason);
-    el("convoy-detail").textContent = convoy.note || (reason ? "" : `팔로워 ${chosen} · 리더 ${lead} 뒤에서 반복 운행 · 출발 ${start}`);
+    patchText(el("convoy-detail"), convoy.note || (reason ? "" : `팔로워 ${chosen} · 리더 ${lead} 뒤에서 반복 운행 · 출발 ${start}`));
   }
 
   function bindConvoy() {
@@ -345,5 +346,42 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     };
   }
 
-  return { toggle, section, syncConvoy, focus, close: () => { form = null; } };
+  function stateKey(robot) {
+    const id = robot?.robot_id;
+    const open = form?.robotId === id;
+    if (!open) return JSON.stringify({ open: false, gate: tripGate(robot) });
+    const canNav2 = (robot.capabilities?.controls?.items || []).some(
+      (item) => item?.kind === "base_velocity" && Array.isArray(item.drive_modes) && item.drive_modes.includes("free"));
+    const freshBatt = robot.power_health?.battery?.evidence === "fresh" ? robot.power_health.battery.percent : null;
+    const running = openTrip(view, id);
+    return JSON.stringify({
+      open: true,
+      kind: form.kind,
+      driveMode: form.driveMode,
+      to: form.to,
+      start: form.start,
+      lapStart: form.lapStart,
+      via: form.via,
+      planId: form.plan?.plan_id || null,
+      lapPlanId: form.lapPlan?.plan_id || null,
+      busy: form.busy,
+      note: form.note,
+      rule: form.rule ? {
+        kind: form.rule.kind,
+        values: form.rule.values,
+        draft: form.rule.draft,
+        busy: form.rule.busy,
+        note: form.rule.note,
+        answer: form.rule.answer,
+      } : null,
+      canNav2,
+      freshBatt,
+      ready: view.stateUnavailable ? "unavailable" : ready(robot),
+      runningId: running?.trip_id || null,
+      placeIds: places().map((p) => p.id),
+      loopCap: loopCapacityText(view.traffic),
+    });
+  }
+
+  return { toggle, section, syncConvoy, focus, stateKey, close: () => { form = null; } };
 }

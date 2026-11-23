@@ -7,6 +7,20 @@ import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
 import { createRobotView } from "/console/assets/robot-3d.js";
 import { createTelemetryTrace } from "/console/assets/cockpit-telemetry.js";
 
+/** Round mobile pose and arm joint angles so unchanged poll jitter never triggers redundant Three.js draws. */
+function roundPose(pose) {
+  if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) return "";
+  const yaw = Number.isFinite(pose.yaw) ? pose.yaw.toFixed(2) : "";
+  return `${pose.x.toFixed(2)},${pose.y.toFixed(2)},${yaw}`;
+}
+
+function roundJoints(joints) {
+  if (!joints || typeof joints !== "object") return "";
+  return Object.keys(joints).sort()
+    .map((key) => `${key}:${typeof joints[key] === "number" && Number.isFinite(joints[key]) ? joints[key].toFixed(3) : ""}`)
+    .join(",");
+}
+
 /** Mount createRobotView once per robot identity and push state updates without WebGL churn. */
 export function Robot3dHost({
   kind,
@@ -24,6 +38,19 @@ export function Robot3dHost({
   const hostRef = useRef(null);
   const viewRef = useRef(null);
   const skipFirstStateRef = useRef(false);
+  const lastStateSigRef = useRef("");
+
+  const linkState = profile?.link?.state || "";
+  const linkText = linkState && linkState !== "fresh" ? (profile?.link?.text || "") : "";
+  const stateSig = JSON.stringify([
+    name || profile?.name || "",
+    Boolean(selected),
+    linkState,
+    linkText,
+    roundPose(pose),
+    roundJoints(joints),
+    skill || "",
+  ]);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -42,8 +69,10 @@ export function Robot3dHost({
     });
     viewRef.current = instance;
     skipFirstStateRef.current = true;
+    lastStateSigRef.current = stateSig;
     return () => {
       skipFirstStateRef.current = false;
+      lastStateSigRef.current = "";
       viewRef.current = null;
       instance.dispose?.();
       host.replaceChildren();
@@ -55,8 +84,10 @@ export function Robot3dHost({
       skipFirstStateRef.current = false;
       return;
     }
+    if (lastStateSigRef.current === stateSig) return;
+    lastStateSigRef.current = stateSig;
     viewRef.current?.setState({ profile, name, selected, pose, joints, skill });
-  }, [profile, name, selected, pose, joints, skill]);
+  }, [stateSig]);
 
   return html`<div class=${className} ref=${hostRef} />`;
 }

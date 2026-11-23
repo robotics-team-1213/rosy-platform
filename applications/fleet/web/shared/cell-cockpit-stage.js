@@ -4,6 +4,7 @@
 // DOM construction is declarative htm/preact; only the host <section> is created imperatively.
 import { html, render as renderDom, useLayoutEffect, useRef } from "/common/vendor/htm-preact.esm.min.js";
 import { UiButton } from "/common/preact-ui.js";
+import { patchHidden } from "/common/control-dom.js";
 import { createMotorHealthState, renderMotorHealthSummary } from "/common/motor-health.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
@@ -206,6 +207,29 @@ function ArmCard({ arm, selected, mhState, selection, receivedAtMs }) {
   </button>`;
 }
 
+function obsSignature(obs) {
+  if (!obs) return "";
+  return JSON.stringify({
+    arms: (obs.arms || []).map((a) => ({
+      id: a.id,
+      label: a.label,
+      fresh: a.fresh,
+      held: a.heldIncidents.length,
+      open: a.openIncidents.length,
+      faults: a.faults,
+      hw: a.hwFaultMotors,
+      warn: a.warnMotors,
+      temp: a.maxTempC,
+      pwm: a.maxPwmPct,
+      ma: a.maxCurrentMa,
+      mhStatus: a.motorHealth?.status || "",
+      mhEv: a.motorHealth?.evidence || "",
+      joints: a.jointsDeg ? a.jointsDeg.map((d) => (d === null ? null : d.toFixed(1))) : null,
+    })),
+    cams: (obs.cameras || []).map((c) => [c.source_id, c.label, c.role, c.stream, c.arm_id, c.fresh]),
+  });
+}
+
 export function createCellCockpitStage({ scope, call, view, auth, selection, onChanged, onVisionSample }) {
   const gate = createPollGate({ slowCodes: { WORKCELL_OBSERVATIONS_UNAVAILABLE: 30000 } });
   const frames = createCellFrameFeed({ call, scope, intervalMs: 2000 });
@@ -228,6 +252,9 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   let liveOn = true;
   let controlUnitFetched = false;
   let visionCheckedAt = 0;
+  let lastStageSig = "";
+  let lastObsSig = "";
+  let notifiedOnce = false;
 
   const isStageActive = () => !areaHidden && !owns("drive") && owns("arms");
 
@@ -243,14 +270,21 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
 
   const offSel = selection?.subscribe?.(() => render());
   scope.onDispose?.(offSel);
-  scope.onDispose?.(() => renderDom(null, section));
+  scope.onDispose?.(() => {
+    lastStageSig = "";
+    lastObsSig = "";
+    renderDom(null, section);
+  });
   scope.listen(document, "visibilitychange", syncFeedState);
 
   function render() {
     const show = isStageActive();
-    section.hidden = !show;
+    patchHidden(section, !show);
     syncFeedState();
-    if (!show) return;
+    if (!show) {
+      lastStageSig = "";
+      return;
+    }
     const obs = view.workcellObs;
     const cu = view.controlUnit;
     const sum = obs?.summary;
@@ -274,7 +308,13 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
     }
     const cams = obs?.cameras || [];
     const arms = obs?.arms || [];
-    const selectedId = selection?.get?.();
+    const selectedId = selection?.get?.() ?? null;
+    const stageSig = JSON.stringify([
+      unitId, parentText, revText, statText, liveStatus, liveText,
+      view.fleet?.name === "샘플 현장", liveOn, selectedId, Boolean(auth.locked), obsSignature(obs),
+    ]);
+    if (stageSig === lastStageSig) return;
+    lastStageSig = stageSig;
     renderDom(html`
       <div class="cell-stage-head">
         <div>
@@ -341,13 +381,22 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
       ]);
       life.check();
       gate.ok();
-      view.workcellObs = normalizeWorkcellObservations(payload, Date.now());
-      render();
-      onChanged?.();
+      const nextObs = normalizeWorkcellObservations(payload, Date.now());
+      view.workcellObs = nextObs;
+      for (const arm of nextObs.arms) mhStateFor(arm.id).accept(arm.motorHealth, { receivedAtMs: nextObs.receivedAtMs });
+      const nextSig = obsSignature(nextObs);
+      if (!notifiedOnce || nextSig !== lastObsSig) {
+        lastObsSig = nextSig;
+        notifiedOnce = true;
+        render();
+        onChanged?.();
+      }
     } catch (err) {
       if (err?.name === "AbortError") return;
       if (typeof err?.status === "number") gate.fail(err.status, err.code);
       if (err?.status === 503 || err?.status === 404) {
+        lastObsSig = "";
+        notifiedOnce = false;
         view.workcellObs = null;
         render();
       }
@@ -366,6 +415,8 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
     },
     pause() {
       controlUnitFetched = false;
+      lastObsSig = "";
+      notifiedOnce = false;
       gate.reset();
       syncFeedState();
     },

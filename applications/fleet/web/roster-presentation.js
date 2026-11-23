@@ -121,9 +121,13 @@ function isInlineTag(text, cls, { calmOffline = false, keepPill = false } = {}) 
 function MotorSummaryHost({ node }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
-    if (!ref.current) return;
-    if (node) ref.current.replaceChildren(node);
-    else ref.current.replaceChildren();
+    const host = ref.current;
+    if (!host) return;
+    if (node) {
+      if (host.firstChild !== node || host.childNodes.length !== 1) host.replaceChildren(node);
+    } else if (host.childNodes.length) {
+      host.replaceChildren();
+    }
   }, [node]);
   return html`<span ref=${ref} />`;
 }
@@ -133,7 +137,7 @@ function FactTag({ text, cls, calmOffline, keepPill = false, ...rest }) {
   return html`<ui-tag status=${TAG_STATUS[cls] || "neutral"} variant=${inline ? "inline" : undefined} ...${rest}>${text}</ui-tag>`;
 }
 
-function RosterSummaryBody({ robot, view, attentionItems, motorHealth }) {
+function summarizeRobot(robot, view, attentionItems) {
   const name = view.robotNames?.[robot.robot_id] || robot.robot_id;
   const state = view.stateUnavailable ? {} : robot.state || {};
   const link = linkTag(robot.link);
@@ -173,44 +177,77 @@ function RosterSummaryBody({ robot, view, attentionItems, motorHealth }) {
     evidence.push(...attentionItems(robot).map((item) => item.text.replace(/^:\s*/, "")));
   }
   const dedupedEvidence = [...new Set(evidence)];
+  return {
+    name,
+    status,
+    statusWarn: Boolean(view.stateUnavailable || !robot.online),
+    battery: power.battery,
+    batteryProblem: Boolean(power.problem),
+    safety,
+    estopTrue: estop === true,
+    heat,
+    loc,
+    locTitle,
+    role,
+    source,
+    showSource,
+    trip,
+    addressStatus: address ? view.addresses[robot.robot_id].status : null,
+    addressText: address ? address.text : null,
+    dedupedEvidence,
+    calmOffline,
+  };
+}
 
+function RosterSummaryBody({ robotId, model, motorNode }) {
   return html`
-    <div class="robot-line" title=${name !== robot.robot_id ? `Fleet ID ${robot.robot_id}` : undefined}>
-      <b class="ui-disclosure-name">${name}</b>
+    <div class="robot-line" title=${model.name !== robotId ? `Fleet ID ${robotId}` : undefined}>
+      <b class="ui-disclosure-name">${model.name}</b>
       <span class="robot-summary-head-meta">
-        <${FactTag} text=${status} cls=${view.stateUnavailable || !robot.online ? "warn" : ""} calmOffline=${calmOffline} keepPill=${true} />
-        <${FactTag} text=${`배터리 ${power.battery}`} cls=${power.problem ? "warn" : ""} calmOffline=${calmOffline} data-fact="battery" />
+        <${FactTag} text=${model.status} cls=${model.statusWarn ? "warn" : ""} calmOffline=${model.calmOffline} keepPill=${true} />
+        <${FactTag} text=${`배터리 ${model.battery}`} cls=${model.batteryProblem ? "warn" : ""} calmOffline=${model.calmOffline} data-fact="battery" />
       </span>
     </div>
     <div class="robot-summary-status">
-      <${FactTag} text=${safety} cls=${estop === true ? "crit" : safety === "안전 정상" ? "" : "warn"} calmOffline=${calmOffline} keepPill=${estop === true} />
-      <${MotorSummaryHost} node=${motorHealth.summary(robot)} />
-      ${heat ? html`<${FactTag} text=${heat[0]} cls=${heat[1]} calmOffline=${calmOffline} keepPill=${true} />` : null}
-      <${FactTag} text=${loc?.text || "위치 미확인"} cls=${loc ? loc.cls : "warn"} calmOffline=${calmOffline} data-localization="" title=${locTitle} />
-      ${role ? html`<${FactTag} text=${role} cls="nav" calmOffline=${calmOffline} />` : null}
-      ${showSource ? html`<${FactTag} text=${source.text} cls=${source.cls} calmOffline=${calmOffline} keepPill=${source.attention} data-motion-source=${source.key} title=${source.title} />` : null}
+      <${FactTag} text=${model.safety} cls=${model.estopTrue ? "crit" : model.safety === "안전 정상" ? "" : "warn"} calmOffline=${model.calmOffline} keepPill=${model.estopTrue} />
+      <${MotorSummaryHost} node=${motorNode} />
+      ${model.heat ? html`<${FactTag} text=${model.heat[0]} cls=${model.heat[1]} calmOffline=${model.calmOffline} keepPill=${true} />` : null}
+      <${FactTag} text=${model.loc?.text || "위치 미확인"} cls=${model.loc ? model.loc.cls : "warn"} calmOffline=${model.calmOffline} data-localization="" title=${model.locTitle} />
+      ${model.role ? html`<${FactTag} text=${model.role} cls="nav" calmOffline=${model.calmOffline} />` : null}
+      ${model.showSource ? html`<${FactTag} text=${model.source.text} cls=${model.source.cls} calmOffline=${model.calmOffline} keepPill=${model.source.attention} data-motion-source=${model.source.key} title=${model.source.title} />` : null}
     </div>
-    ${trip !== "—" ? html`<p class="trip-line">${trip}</p>` : null}
-    ${address ? html`<p class="robot-summary-evidence" data-address-reason=${view.addresses[robot.robot_id].status}>${address.text}</p>` : null}
-    ${dedupedEvidence.length ? html`<p class="robot-summary-evidence">${dedupedEvidence.join(" · ")}</p>` : null}
+    ${model.trip !== "—" ? html`<p class="trip-line">${model.trip}</p>` : null}
+    ${model.addressText ? html`<p class="robot-summary-evidence" data-address-reason=${model.addressStatus}>${model.addressText}</p>` : null}
+    ${model.dedupedEvidence.length ? html`<p class="robot-summary-evidence">${model.dedupedEvidence.join(" · ")}</p>` : null}
   `;
 }
 
 export function createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth}) {
   const cards = new Map();
   return function summary(robot, index) {
-    let article = cards.get(robot.robot_id);
-    if (!article) {
-      article = document.createElement("article");
-      cards.set(robot.robot_id, article);
+    let entry = cards.get(robot.robot_id);
+    if (!entry) {
+      const article = document.createElement("article");
+      article.dataset.robotId = robot.robot_id;
+      article.tabIndex = -1;
+      entry = { article, sig: "", motorNode: null };
+      cards.set(robot.robot_id, entry);
     }
-    article.className = `robot-summary s${index % view.colors.length}${view.focusRobot === robot.robot_id ? " selected" : ""}`;
-    article.dataset.robotId = robot.robot_id;
-    article.tabIndex = -1;
-    renderDom(
-      html`<${RosterSummaryBody} robot=${robot} view=${view} attentionItems=${attentionItems} motorHealth=${motorHealth} />`,
-      article,
-    );
+    const { article } = entry;
+    const nextClass = `robot-summary s${index % view.colors.length}${view.focusRobot === robot.robot_id ? " selected" : ""}`;
+    if (article.className !== nextClass) article.className = nextClass;
+    if (article.dataset.robotId !== robot.robot_id) article.dataset.robotId = robot.robot_id;
+    const model = summarizeRobot(robot, view, attentionItems);
+    const motorNode = motorHealth.summary(robot);
+    const sig = JSON.stringify(model);
+    if (entry.sig !== sig || entry.motorNode !== motorNode) {
+      entry.sig = sig;
+      entry.motorNode = motorNode;
+      renderDom(
+        html`<${RosterSummaryBody} robotId=${robot.robot_id} model=${model} motorNode=${motorNode} />`,
+        article,
+      );
+    }
     return article;
   };
 }
