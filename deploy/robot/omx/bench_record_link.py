@@ -196,3 +196,36 @@ class BenchLinkMixin:
                 extra["episode_elapsed_s"] = round(max(0.0, self.clock() - ep_started), 1)
             return {"phase": "recording", "prepare": None, "link": bool(out.get("link")), **extra}
         return {"phase": "setup", "prepare": None, "link": False}
+
+
+def link_zero_episodes(folder: Path, record: dict) -> bool:
+    """True only when a linked session positively has 0 recorded episodes; fails closed (False) on doubt."""
+    folder = Path(folder)
+    try:
+        link_p = folder / "link" / "state.json"
+        if link_p.is_file():
+            ep = json.loads(link_p.read_text(encoding="utf-8")).get("episode")
+            if isinstance(ep, int) and not isinstance(ep, bool) and ep > 0:
+                return False
+        se = record.get("static_episodes") if isinstance(record, dict) else None
+        if isinstance(se, dict) and isinstance(se.get("episodes"), int) and se["episodes"] > 0:
+            return False
+        cfg_raw = record.get("config") if isinstance(record, dict) else None
+        if not isinstance(cfg_raw, str) or not cfg_raw.strip():
+            return False
+        cfg_p = Path(cfg_raw)
+        if not cfg_p.is_absolute():
+            cfg_p = folder / cfg_p
+        ds_raw = (json.loads(cfg_p.read_text(encoding="utf-8-sig")).get("dataset") or {}).get("root")
+        if not isinstance(ds_raw, str) or not ds_raw.strip():
+            return False
+        ds_root = Path(ds_raw)
+        if ds_root.is_dir():
+            if list(ds_root.glob("data/**/*.parquet")):
+                return False
+            info_p = ds_root / "meta" / "info.json"
+            if info_p.is_file() and int(json.loads(info_p.read_text(encoding="utf-8")).get("total_episodes") or 0) > 0:
+                return False
+        return True
+    except (OSError, ValueError, TypeError, KeyError):
+        return False

@@ -263,6 +263,57 @@ def _read_live_norm_pose_held(prep: Path, arm: str, python_exe: str) -> list[flo
         return None
 
 
+def _pick_chunk_library(prep: Path, arm: str, origin: str, target_slot: str) -> Path | None:
+    cdir = Path(prep) / f"cell-arm-{arm.split('_')[-1] if '_' in arm else arm}"
+    files = sorted(cdir.glob("auto-*.json"), key=lambda p: p.stat().st_mtime, reverse=True) if cdir.is_dir() else []
+    hints = f"{origin} {target_slot}".lower()
+    tokens = (["pallet"] if ("ship" in hints or "pallet" in hints) else []) + [t for t in re.split(r"[^a-z0-9]+", hints) if len(t) >= 3]
+    return next((p for tok in tokens for p in files if tok in p.name.lower()), files[0] if files else None)
+
+
+def _clamp_wp(wp: list[float], jmin: dict, jmax: dict, g_min: float) -> list[float]:
+    names = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
+    out = [round(max(float(jmin.get(f"{n}.pos", -100.0)), min(float(jmax.get(f"{n}.pos", 100.0)), float(v))), 3) for n, v in zip(names, wp[:5])]
+    return [*out, round(max(float(g_min), float(wp[5])), 3)]
+
+
+def _build_arm_chunk_replay(prep: Path, arm: str, origin: str, target_slot: str, python_exe: str | None, hold) -> dict | None:
+    lib_p = _pick_chunk_library(prep, arm, origin, target_slot)
+    if lib_p is None:
+        return None
+    chunks = (lib := json.loads(lib_p.read_text(encoding="utf-8"))).get("chunks") or {}
+    req = ("above_pick", "descend_pick", "grasp_pick", "lift_pick", "above_place", "descend_place", "release_place", "lift_place", "home")
+    if any(not chunks.get(k) for k in req):
+        raise ValueError(f"chunk 파일({lib_p.name})에 필수 동작 단계가 없습니다")
+    stack_p = Path(prep) / f"cell-arm-{arm.split('_')[-1] if '_' in arm else arm}-stack.json"
+    stack = json.loads(stack_p.read_text(encoding="utf-8")) if stack_p.is_file() else {}
+    jmin, jmax, tr = stack.get("joint_min") or {}, stack.get("joint_max") or {}, lib.get("transit") or {}
+    tsl, tef, twf = float(tr.get("shoulder_lift.pos", -27.0)), float(tr.get("elbow_flex.pos", 18.0)), float(tr.get("wrist_flex.pos", 46.0))
+    g_c = float(lib.get("gripper_closed") or 49.0)
+    g_o = max(g_c + 3.0, float(chunks["above_pick"][0][5]))
+    home = list(_read_live_norm_pose(prep, arm, python_exe, hold) or chunks["home"][-1])
+    rise = [home[0], tsl, tef, twf, home[4], g_o]
+    tp, tpl = [chunks["above_pick"][0][0], tsl, tef, twf, chunks["above_pick"][0][4]], [chunks["above_place"][0][0], tsl, tef, twf, chunks["above_place"][0][4]]
+    raw_wps = [
+        home, rise, [*tp, g_o], [*chunks["above_pick"][0][:5], g_o], [*chunks["descend_pick"][-1][:5], g_o],
+        [*chunks["grasp_pick"][-1][:5], g_c], [*chunks["lift_pick"][-1][:5], g_c], [*tp, g_c], [*tpl, g_c],
+        [*chunks["above_place"][0][:5], g_c], [*chunks["descend_place"][-1][:5], g_c],
+        [*chunks["release_place"][-1][:5], g_o], [*chunks["lift_place"][-1][:5], g_o], [*tpl, g_o], rise, [*home[:5], g_o],
+    ]
+    a_wps = [home, *[_clamp_wp(w, jmin, jmax, g_c) for w in raw_wps[1:]]]
+    motion_a = _interp_waypoints(a_wps, max_step=0.10)
+    seg_a, reset_n, seg_b = [list(motion_a[0])] * 60 + motion_a, 60, [list(motion_a[-1])] * 60 + list(reversed(motion_a))
+    traj = {
+        "schema": "rosy.omx-replay-trajectory.v1", "fps": 30, "frames": seg_a + [list(seg_a[-1])] * reset_n + seg_b,
+        "names": ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"],
+        "segments": {"A": [0, len(seg_a)], "reset": [len(seg_a), len(seg_a) + reset_n], "B": [len(seg_a) + reset_n, 2 * len(seg_a) + reset_n]},
+        "source": {"kind": "ik_planner", "origin": origin, "target": target_slot, "library": lib_p.name},
+        "ik_origin": origin, "ik_target": target_slot,
+    }
+    validate_replay_payload(traj)
+    return traj
+
+
 def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: str = "pinky", python_exe: str | None = None, hold=None) -> dict:
     """Build a speed-bounded rosy.omx-replay-trajectory.v1 from calibrated IK surfaces/chunks."""
     if origin and target_slot and origin == target_slot:
@@ -332,4 +383,6 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
             "ik_origin": origin,
             "ik_target": target_slot,
         }
+    if (traj := _build_arm_chunk_replay(prep, arm, origin, target_slot, python_exe, hold)) is not None:
+        return traj
     raise ValueError(f"IK 표면 캘리브레이션(surface-belt/pinky.json)을 찾을 수 없습니다: {work_dir}")

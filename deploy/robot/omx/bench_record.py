@@ -50,6 +50,7 @@ from bench_live_preview import open_preview, recorder_env  # noqa: E402
 from bench_record_leader import BenchLeaderMixin  # noqa: E402
 from bench_record_manual import BenchManualMixin  # noqa: E402
 from bench_record_link import BenchLinkMixin  # noqa: E402
+from bench_record_link import link_zero_episodes  # noqa: E402
 from bench_record_http import PAGE, make_server  # noqa: E402,F401
 from bench_record_replay import apply_task_override, transform_replay  # noqa: E402
 from bench_record_pipeline import BenchPipelineMixin  # noqa: E402
@@ -363,6 +364,11 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 # unsafe_or_failed unless session.json proves the safe end (bench_record_safety); the status that was published decides the auto home
                 if self._publish_end(verdict=end_verdict) == "stopped_safe":
                     self._auto_home_after_session()
+                return
+            if self.state.get("link") and link_zero_episodes(folder, record):
+                self._publish_end(status="stopped_safe")
+                self._log_event("session", "info", f"연동 종료 (녹화 0회, 봉인 생략): {folder.name}")
+                self._auto_home_after_session()
                 return
             self._set(status="sealing")
             with (folder / "bench.log").open("ab") as log:
