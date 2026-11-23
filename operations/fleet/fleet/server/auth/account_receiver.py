@@ -42,6 +42,7 @@ def fleet_return_allowed(target):
         return False
     query = dict(pairs)
     allowed = ({'view', 'show', 'inbox', 'arm_transfer', 'robot'} if url.path == '/console' else
+               {'focus'} if url.path == '/console/cell' else
                {'robot'} if url.path == '/console/site-map' else set())
     if (len(query) != len(pairs) or set(query) - allowed
             or url.fragment and url.fragment not in ANCHORS.get(url.path, ())):
@@ -54,6 +55,8 @@ def fleet_return_allowed(target):
     if 'inbox' in query and query['inbox'] != '1':
         return False
     if 'robot' in query and not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', query['robot']):
+        return False
+    if 'focus' in query and not re.fullmatch(r'arm:[A-Za-z0-9._:-]{1,64}', query['focus']):
         return False
     if 'arm_transfer' in query and (query.get('view') != 'work'
             or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}', query['arm_transfer'])):

@@ -186,6 +186,7 @@ def test_receiver_sends_a_person_back_to_the_console_when_the_login_flow_expired
     '/console?view=work&show=new',
     '/console?view=records&show=log&inbox=1',
     '/console?view=work&arm_transfer=job:one&robot=r1',
+    '/console/cell?focus=arm%3Aomx_arm_s',
     '/console/site-map?robot=r1#teach-heading',
     '/console/install#cameras',
     '/console/install#camera-link',
@@ -209,6 +210,8 @@ def test_receiver_pkce_preserves_known_document_query_and_anchor(receiver, targe
     '/console?view=records&arm_transfer=job:one', '/console?view=work&arm_transfer=bad/one',
     '/console?robot=' + 'x' * 129, '/console?robot=../../x', '/console/site-map#other', '/console/install#other', '/console/install#hosts',
     '/console/install?view=work', '/api/fleet/auth/authorize?client_id=evil',
+    '/console/cell?focus=arm:a&focus=arm:b', '/console/cell?focus=arm:../a',
+    '/console/cell?focus=arm:', '/console/cell?focus=arm:' + 'x' * 65, '/console?focus=arm:a',
     '/console?view=work&arm_transfer=' + 'x' * 193, '/console?' + 'x' * 4096,
 ])
 def test_receiver_rejects_unsafe_or_unknown_document_returns(receiver, target):
