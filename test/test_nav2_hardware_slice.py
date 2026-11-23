@@ -305,7 +305,10 @@ def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_loc
     monkeypatch, tmp_path
 ):
     import importlib.util
+    import tempfile
     import types
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
 
     class _LaunchCfg:
         def __init__(self, name):

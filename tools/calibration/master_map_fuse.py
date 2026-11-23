@@ -177,29 +177,6 @@ def fuse_aligned_grids(
     return sma.Grid(fused, res, (x0, y0)), stats
 
 
-def _clean_zero(value: float) -> float:
-    return 0.0 if abs(float(value)) < 5e-7 else float(value)
-
-
-def _write_zero_yaw_grid(grid: sma.Grid, out_yaml: Path, source_meta: dict) -> Path:
-    h, w = grid.cells.shape
-    out_pgm = out_yaml.with_suffix(".pgm")
-    pix = np.select([grid.cells == 1, grid.cells == 0], [0, 254], 205).astype(np.uint8)[::-1]
-    # Keep free_thresh <= 0.196 so pixel 205 (occ=0.196078) never decodes as FREE when source uses map_saver default 0.25.
-    free_t = min(max(float(source_meta.get("free_thresh", 0.196)), 0.01), 0.196)
-    occ_t = max(min(float(source_meta.get("occupied_thresh", 0.65)), 0.99), 0.65)
-    ox_w, oy_w = _clean_zero(grid.origin[0]), _clean_zero(grid.origin[1])
-    out_pgm.write_bytes(b"P5\n# master_map_fuse.py: site frame\n" + f"{w} {h}\n255\n".encode() + pix.tobytes())
-    out_yaml.write_text(
-        f"image: {out_pgm.name}\nmode: trinary\nresolution: {grid.resolution}\n"
-        f"origin: [{ox_w:.6f}, {oy_w:.6f}, 0.0]\nnegate: 0\n"
-        f"occupied_thresh: {occ_t}\n"
-        f"free_thresh: {free_t}\n",
-        encoding="utf-8",
-    )
-    return out_yaml
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("map_yamls", nargs="+", type=Path, help="two or more aligned yaw=0 Nav2 map yamls")
@@ -250,7 +227,10 @@ def main(argv=None) -> int:
             "source_pgm_sha256s": [sha for _, _, sha in loaded],
             **stats,
         }
-        written_yaml = _write_zero_yaw_grid(fused, args.write, loaded[0][1]) if args.write else None
+        written_yaml = (
+            sma.write_zero_yaw_grid(fused, args.write, loaded[0][1], comment="master_map_fuse.py: site frame")
+            if args.write else None
+        )
         if args.seal_bundle:
             mb = sma.load_map_bundle_module()
             try:
@@ -261,7 +241,12 @@ def main(argv=None) -> int:
                     )
                 else:
                     with tempfile.TemporaryDirectory() as tmp:
-                        tmp_yaml = _write_zero_yaw_grid(fused, Path(tmp) / f"{args.name}.yaml", loaded[0][1])
+                        tmp_yaml = sma.write_zero_yaw_grid(
+                            fused,
+                            Path(tmp) / f"{args.name}.yaml",
+                            loaded[0][1],
+                            comment="master_map_fuse.py: site frame",
+                        )
                         sealed = mb.import_saved(
                             tmp_yaml, args.seal_bundle, args.name, margin_m=args.margin_m, source=args.source,
                             site_map_id=args.site_map_id, alignment=provenance, require_zero_yaw=True,

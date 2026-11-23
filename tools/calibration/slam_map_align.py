@@ -159,8 +159,30 @@ def boundary_symmetry(cells: np.ndarray) -> float:
     return best
 
 
-def _clean_zero(value: float) -> float:
-    return 0.0 if abs(float(value)) < 5e-7 else float(value)
+def write_zero_yaw_grid(
+    grid: Grid,
+    out_yaml: Path,
+    source_meta: dict,
+    *,
+    comment: str = "slam_map_align.py: site frame",
+) -> Path:
+    """Write a zero-yaw site-frame PGM + YAML pair, clamping thresholds so pixel 205 stays unknown."""
+    h, w = grid.cells.shape
+    out_pgm = out_yaml.with_suffix(".pgm")
+    pix = np.select([grid.cells == 1, grid.cells == 0], [0, 254], 205).astype(np.uint8)[::-1]
+    # Keep free_thresh <= 0.196 so pixel 205 (occ=0.196078) never decodes as FREE when source uses map_saver default 0.25.
+    free_t = min(max(float(source_meta.get("free_thresh", 0.196)), 0.01), 0.196)
+    occ_t = max(min(float(source_meta.get("occupied_thresh", 0.65)), 0.99), 0.65)
+    ox_w = 0.0 if abs(float(grid.origin[0])) < 5e-7 else float(grid.origin[0])
+    oy_w = 0.0 if abs(float(grid.origin[1])) < 5e-7 else float(grid.origin[1])
+    out_pgm.write_bytes(b"P5\n# " + comment.encode() + b"\n" + f"{w} {h}\n255\n".encode() + pix.tobytes())
+    out_yaml.write_text(
+        f"image: {out_pgm.name}\nmode: trinary\nresolution: {grid.resolution}\n"
+        f"origin: [{ox_w:.6f}, {oy_w:.6f}, 0.0]\nnegate: 0\noccupied_thresh: {occ_t}\n"
+        f"free_thresh: {free_t}\n",
+        encoding="utf-8",
+    )
+    return out_yaml
 
 
 def write_aligned(grid: Grid, fit: Fit, out_yaml: Path, source: dict) -> str:
@@ -169,7 +191,6 @@ def write_aligned(grid: Grid, fit: Fit, out_yaml: Path, source: dict) -> str:
     OccupancyGrid orientation, but ``nav2_costmap_2d`` static_layer.cpp only reads ``origin.position.x/y``
     (grep for yaw/orientation finds nothing) and ``nav2_amcl`` map conversion only reads position, so a yaw
     in the yaml shifts nothing in the planner or localiser. The cells are resampled (nearest) into a new PGM."""
-    out_pgm = out_yaml.with_suffix(".pgm")
     h, w = grid.cells.shape
     r = grid.resolution
     c, s = math.cos(fit.yaw), math.sin(fit.yaw)
@@ -186,16 +207,9 @@ def write_aligned(grid: Grid, fit: Fit, out_yaml: Path, source: dict) -> str:
     inside = (ci >= 0) & (ci < w) & (cj >= 0) & (cj < h)
     new = np.full((nh, nw), -1, np.int8)
     new[inside] = grid.cells[cj[inside], ci[inside]]
-    pix = np.select([new == 1, new == 0], [0, 254], 205).astype(np.uint8)[::-1]
-    # Keep free_thresh <= 0.196 so pixel 205 (occ=0.196078) never decodes as FREE when source uses map_saver default 0.25.
-    free_t = min(max(float(source.get("free_thresh", 0.196)), 0.01), 0.196)
-    occ_t = max(min(float(source.get("occupied_thresh", 0.65)), 0.99), 0.65)
-    ox_w, oy_w = _clean_zero(x0), _clean_zero(y0)
-    out_pgm.write_bytes(b"P5\n# slam_map_align.py: site frame\n" + f"{nw} {nh}\n255\n".encode() + pix.tobytes())
-    out_yaml.write_text(
-        f"image: {out_pgm.name}\nmode: trinary\nresolution: {r}\n"
-        f"origin: [{ox_w:.6f}, {oy_w:.6f}, 0.0]\nnegate: 0\noccupied_thresh: {occ_t}\n"
-        f"free_thresh: {free_t}\n", encoding="utf-8")
+    write_zero_yaw_grid(Grid(new, r, (x0, y0)), out_yaml, source, comment="slam_map_align.py: site frame")
+    ox_w = 0.0 if abs(float(x0)) < 5e-7 else float(x0)
+    oy_w = 0.0 if abs(float(y0)) < 5e-7 else float(y0)
     return f"{out_yaml} ({nw}x{nh} cells, origin {ox_w:.3f},{oy_w:.3f}, yaw 0)"
 
 
