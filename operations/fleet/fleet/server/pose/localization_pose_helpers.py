@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import math
-import re
 from typing import Mapping, Optional
 
 from core_common.protocol.localization import LocState
@@ -22,8 +21,6 @@ def map_frame(state: Mapping) -> MapFrame | None:
     if not isinstance(map_id, str) or not map_id:
         return None
     grid = state.get("map_grid_id")
-    if grid is None and re.fullmatch(r"occupancy:[0-9a-f]{12}", map_id):
-        grid = map_id
     return (map_id, grid) if isinstance(grid, str) and grid else None
 
 
@@ -74,7 +71,7 @@ async def handle_pose_request(svc, rid: str, client: transport.RobotClient, stat
             by = None if decision is None else "model"
     if decision is not None:
         await svc._post_decision(rid, client, decision,
-                                 (decision.pose.x, decision.pose.y, decision.pose.yaw), now)
+                                 (decision.pose.x, decision.pose.y, decision.pose.yaw), now, map_frame(state))
     if by is not None:
         tries += 1
         svc._pose_tries[rid] = tries
@@ -107,13 +104,13 @@ def track_anchor_provenance(svc, states: Mapping[str, dict], localized: Mapping[
             if operator is not None and operator[0] == frame and svc._reached(operator[1], pose, now):
                 svc._anchors.add(rid)
                 logger.info("localization: %s LOCALIZED at the operator-confirmed pose: anchor", rid)
-            elif previous is None and decided is not None and not service_logic.disagrees(decided, pose):
+            elif decided is not None and decided[0] == frame and not service_logic.disagrees(decided[1], pose):
                 svc._anchors.add(rid)
                 logger.info("localization: %s LOCALIZED by a Fleet decision: anchor", rid)
-            elif previous is None and unconfirmed is not None and svc._reached(unconfirmed, pose, now):
+            elif unconfirmed is not None and unconfirmed[0] == frame and svc._reached(unconfirmed[1], pose, now):
                 svc._anchors.add(rid)
                 logger.info("localization: %s LOCALIZED at timed-out decision %s: confirmed, anchor",
-                            rid, unconfirmed[0])
+                            rid, unconfirmed[1][0])
             else:
                 logger.info("localization: %s LOCALIZED without a Fleet-known decision: "
                             "not an anchor, not a peer", rid)

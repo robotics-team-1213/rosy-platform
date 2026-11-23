@@ -143,11 +143,11 @@ class LocalizationService:
         #: Anchor provenance (S1 finding 3): anchored robots, the decided pose of an anchoring
         #: decision sent and not yet seen LOCALIZED, and each LOCALIZED robot's last pose.
         self._anchors: set[str] = set()
-        self._pending: dict[str, cues.Pose] = {}
+        self._pending: dict[str, tuple[MapFrame, cues.Pose]] = {}
         self._operator_pending: dict[str, tuple[MapFrame, tuple[str, cues.Pose, bool, float]]] = {}
         #: robot_id -> (request_id, decided pose, whether its cues anchor, Fleet time) of a
         #: timed-out decision POST.
-        self._unconfirmed: dict[str, tuple] = {}
+        self._unconfirmed: dict[str, tuple[MapFrame, tuple[str, cues.Pose, bool, float]]] = {}
         self._localized_at: dict[str, tuple[cues.Pose, float, MapFrame | None]] = {}
         #: robot_id -> ((request_id, stamp), Fleet monotonic time first seen).
         self._report_seen: dict[str, tuple] = {}
@@ -341,7 +341,8 @@ class LocalizationService:
         frame = map_frame(state) if isinstance(state, Mapping) else None
         status = trust.status_of(state)
         answer = await self._bounded(client.localization_decision(decision))
-        if (frame is not None and status is not None and status.state is LocState.CANDIDATES
+        if (decision.source is DecisionSource.HUMAN and frame is not None
+                and status is not None and status.state is LocState.CANDIDATES
                 and status.request_id == decision.request_id and answer.get("request_id") == decision.request_id):
             p = decision.pose
             self._operator_pending[rid] = (frame, (decision.request_id, (p.x, p.y, p.yaw), True, self._clock()))
@@ -419,14 +420,15 @@ class LocalizationService:
         if decision is None and rid in self._fallback:
             tie = self._tiebreak.observe(report, self._tiebreak_camera_xy(rid, now), now)
             if tie is not None:
-                await self._post_decision(rid, client, tie, (tie.pose.x, tie.pose.y, tie.pose.yaw), now)
+                await self._post_decision(rid, client, tie, (tie.pose.x, tie.pose.y, tie.pose.yaw), now, frame)
                 return
         if decision is not None:
             c = report.candidates[decision.candidate_index]
-            await self._post_decision(rid, client, decision, (c.x, c.y, c.yaw), now)
+            await self._post_decision(rid, client, decision, (c.x, c.y, c.yaw), now, frame)
 
     async def _post_decision(self, rid: str, client: transport.RobotClient,
-                             decision: LocalizationDecision, pose: cues.Pose, now: float) -> None:
+                             decision: LocalizationDecision, pose: cues.Pose, now: float,
+                             frame: MapFrame | None) -> None:
         record = {"request_id": decision.request_id, "candidate_index": decision.candidate_index,
                   "cues": [c.value for c in decision.cues], "result": "sent"}
         evidence = getattr(decision, "evidence", None) or {}
@@ -442,12 +444,13 @@ class LocalizationService:
             logger.info("localization: %s decision %s candidate %s cues %s", rid,
                         decision.request_id, decision.candidate_index, record["cues"])
             self._unconfirmed.pop(rid, None)
-            if anchoring:
-                self._pending[rid] = pose
+            if anchoring and frame is not None:
+                self._pending[rid] = (frame, pose)
         except asyncio.TimeoutError:
             # CORE may have taken it (S1 run 3 d3): confirmed later by the robot's pose.
             record["result"] = "unreachable"
-            self._unconfirmed[rid] = (decision.request_id, pose, anchoring, now)
+            if frame is not None:
+                self._unconfirmed[rid] = (frame, (decision.request_id, pose, anchoring, now))
             logger.warning("localization: decision %s to %s timed out; unconfirmed for %.0f s",
                            decision.request_id, rid, UNCONFIRMED_S)
         except transport.RobotApiError as exc:
