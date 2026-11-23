@@ -1,3 +1,4 @@
+import { html, render } from "/common/vendor/htm-preact.esm.min.js";
 import { cssColor } from "/common/ui.js";
 import { node } from "/common/control-dom.js";
 import { owns } from "/console/assets/unit-scope.js";
@@ -11,15 +12,19 @@ function loadUPlot() {
   return uPlotLoader;
 }
 
-function makeHudCell(key, labelText) {
-  const cell = document.createElement("div");
-  cell.className = "cockpit-hud-cell";
-  cell.dataset.hudKey = key;
-  cell.dataset.tone = "neutral";
-  const label = node("span", labelText, "cockpit-hud-label");
-  const val = node("strong", "—", "cockpit-hud-val");
-  cell.append(label, val);
-  return { cell, label, val };
+function CockpitHudCells({ items }) {
+  return html`${items.map((item) => html`
+    <div
+      class="cockpit-hud-cell"
+      key=${item.key}
+      data-hud-key=${item.key}
+      data-tone=${item.tone}
+      title=${item.title || undefined}
+    >
+      <span class="cockpit-hud-label">${item.label}</span>
+      <strong class="cockpit-hud-val">${item.text}</strong>
+    </div>
+  `)}`;
 }
 
 export function createCockpitHud({ el }) {
@@ -27,31 +32,13 @@ export function createCockpitHud({ el }) {
   if (!pathbar) return { update() {} };
 
   let hud = el("cockpit-hud");
-  let cells;
   if (!hud) {
     hud = document.createElement("div");
     hud.id = "cockpit-hud";
     hud.className = "cockpit-hud";
     hud.setAttribute("role", "region");
     hud.setAttribute("aria-label", "함대 계기 요약");
-    cells = {
-      online: makeHudCell("online", "FLEET"),
-      mission: makeHudCell("mission", "MISSION"),
-      battery: makeHudCell("battery", "BATT MIN"),
-      arms: makeHudCell("arms", "OMX CELL"),
-      alerts: makeHudCell("alerts", "ALERTS"),
-    };
-    for (const c of Object.values(cells)) hud.append(c.cell);
     pathbar.append(hud);
-  }
-
-  function setCell(key, text, tone = "neutral", labelText = null, title = "") {
-    const target = cells?.[key];
-    if (!target) return;
-    if (labelText && target.label.textContent !== labelText) target.label.textContent = labelText;
-    if (target.val.textContent !== text) target.val.textContent = text;
-    if (target.cell.dataset.tone !== tone) target.cell.dataset.tone = tone;
-    if (target.cell.title !== title) target.cell.title = title;
   }
 
   function update(view) {
@@ -65,11 +52,13 @@ export function createCockpitHud({ el }) {
       const unitId = view.controlUnit?.unit_id || "ARM-CELL";
       const critTotal = critCount + (sum?.heldCount || 0) + (sum?.faultArmCount || 0);
       const warnTotal = warnCount + (sum?.warnArmCount || 0);
-      setCell("online", view.stateUnavailable ? "연결 끊김" : unitId, view.stateUnavailable ? "crit" : "neutral", "관제 단위");
-      setCell("mission", !sum ? "확인 중" : `${sum.armsFresh}/${sum.armsTotal} 실시간`, !sum ? "neutral" : sum.armsFresh > 0 ? "active" : "warn", "팔 피드백");
-      setCell("battery", !sum ? "—" : `${sum.camsTotal}대`, sum?.camsTotal ? "neutral" : "warn", "셀 카메라");
-      setCell("arms", !sum ? "—" : sum.heldCount > 0 ? `보류 ${sum.heldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : "이상 없음", sum?.heldCount > 0 ? "crit" : sum?.openIncidentCount > 0 ? "warn" : "neutral", "보류 · 사건");
-      setCell("alerts", critTotal + warnTotal > 0 ? `위험 ${critTotal} · 주의 ${warnTotal}` : "없음", critTotal > 0 ? "crit" : warnTotal > 0 ? "warn" : "neutral", "경보");
+      render(html`<${CockpitHudCells} items=${[
+        { key: "online", label: "관제 단위", text: view.stateUnavailable ? "연결 끊김" : unitId, tone: view.stateUnavailable ? "crit" : "neutral" },
+        { key: "mission", label: "팔 피드백", text: !sum ? "확인 중" : `${sum.armsFresh}/${sum.armsTotal} 실시간`, tone: !sum ? "neutral" : sum.armsFresh > 0 ? "active" : "warn" },
+        { key: "battery", label: "셀 카메라", text: !sum ? "—" : `${sum.camsTotal}대`, tone: sum?.camsTotal ? "neutral" : "warn" },
+        { key: "arms", label: "보류 · 사건", text: !sum ? "—" : sum.heldCount > 0 ? `보류 ${sum.heldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : "이상 없음", tone: sum?.heldCount > 0 ? "crit" : sum?.openIncidentCount > 0 ? "warn" : "neutral" },
+        { key: "alerts", label: "경보", text: critTotal + warnTotal > 0 ? `위험 ${critTotal} · 주의 ${warnTotal}` : "없음", tone: critTotal > 0 ? "crit" : warnTotal > 0 ? "warn" : "neutral" },
+      ]} />`, hud);
       return;
     }
 
@@ -115,31 +104,13 @@ export function createCockpitHud({ el }) {
           ? `0/${armTotal} NO FEED`
           : `${armReady}/${armTotal} LIVE`;
 
-    setCell(
-      "online",
-      view.stateUnavailable ? "LINK LOST" : `${online}/${total} ON`,
-      view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral",
-      "FLEET",
-    );
-    setCell(
-      "mission",
-      activeCount > 0 ? `${activeCount} RUN` : "0 STBY",
-      activeCount > 0 ? "active" : "neutral",
-      "MISSION",
-    );
-    setCell("battery", battText, battTone, "BATT MIN", battTitle);
-    setCell(
-      "arms",
-      armsText,
-      armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral",
-      "OMX CELL",
-    );
-    setCell(
-      "alerts",
-      estopActive ? "E-STOP" : totalAlerts > 0 ? `${critCount}C · ${warnCount}W` : "0 CLEAR",
-      estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral",
-      "ALERTS",
-    );
+    render(html`<${CockpitHudCells} items=${[
+      { key: "online", label: "로봇", text: view.stateUnavailable ? "연결 끊김" : `${online}/${total} ON`, tone: view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral" },
+      { key: "mission", label: "운행", text: activeCount > 0 ? `${activeCount} RUN` : "0 STBY", tone: activeCount > 0 ? "active" : "neutral" },
+      { key: "battery", label: "최저 배터리", text: battText, tone: battTone, title: battTitle },
+      { key: "arms", label: "셀 팔", text: armsText, tone: armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
+      { key: "alerts", label: "경보", text: estopActive ? "E-STOP" : totalAlerts > 0 ? `위험 ${critCount} · 주의 ${warnCount}` : "이상 없음", tone: estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral" },
+    ]} />`, hud);
   }
 
   return { update };
@@ -202,14 +173,19 @@ export function createTelemetryTrace() {
     return entry.values;
   }
 
+  function measurePlotWidth() {
+    return Math.floor(plotHost.clientWidth || head.clientWidth || root.clientWidth || 0);
+  }
+
   function scheduleSizeSync() {
     if (rafSync || disposed || typeof window.requestAnimationFrame !== "function") return;
     rafSync = window.requestAnimationFrame(() => {
       rafSync = 0;
-      if (disposed || !plot || !plotHost.clientWidth) return;
-      const w = Math.max(180, Math.floor(plotHost.clientWidth));
-      if (Math.abs((plot.width || 0) - w) > 2) {
-        plot.setSize({ width: w, height: PLOT_HEIGHT });
+      const w = measurePlotWidth();
+      if (disposed || !plot || !w) return;
+      const clamped = Math.max(180, w);
+      if (Math.abs((plot.width || 0) - clamped) > 2) {
+        plot.setSize({ width: clamped, height: PLOT_HEIGHT });
       }
     });
   }
@@ -233,7 +209,8 @@ export function createTelemetryTrace() {
       currentBounds = useBounds;
       const xs = useYs.map((_, idx) => MAX_SAMPLES - useYs.length + idx);
       const { stroke, fill, grid, warn, crit, bg } = colorsForTone(useTone);
-      const measured = Math.floor(plotHost.clientWidth || 0);
+      const measured = measurePlotWidth();
+      if (!measured && typeof ResizeObserver === "function") return;
       const width = Math.max(180, measured || 256);
       if (!plot || plotTone !== useTone || plotId !== useId || currentBoundsKey !== nextBoundsKey) {
         plot?.destroy?.();
@@ -344,12 +321,19 @@ export function createTelemetryTrace() {
 
   const resize = typeof ResizeObserver === "function"
     ? new ResizeObserver(() => {
-        if (!disposed && plot && plotHost.clientWidth > 0) {
-          const w = Math.max(180, Math.floor(plotHost.clientWidth));
-          if (Math.abs((plot.width || 0) - w) > 4) plot.setSize({ width: w, height: PLOT_HEIGHT });
+        const measured = measurePlotWidth();
+        if (disposed || !measured) return;
+        if (!plot && lastSeries && !rendering) {
+          void drawPlot(lastSeries.id, lastSeries.ys, lastSeries.tone, lastSeries.yBounds);
+          return;
+        }
+        if (plot) {
+          const w = Math.max(180, measured);
+          if (Math.abs((plot.width || 0) - w) > 2) plot.setSize({ width: w, height: PLOT_HEIGHT });
         }
       })
     : null;
+  resize?.observe(root);
   resize?.observe(plotHost);
 
   return {

@@ -256,7 +256,7 @@
   cursor: pointer;
 }
 @media (width >= 64rem) and (hover: hover) and (pointer: fine) {
-  .robot-panel-close { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-3); }
+  ui-button.robot-panel-close { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-3); }
   .robot-panel-jump { min-height: var(--target-tool); }
   details.robot-panel-section > summary { min-height: var(--target-tool); }
 }
@@ -483,7 +483,7 @@ details.robot-panel-section > summary {
   gap: 0;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-control);
-  background: var(--surface-chrome);
+  background: var(--surface-recessed);
   overflow: hidden;
   min-width: 0;
 }
@@ -494,8 +494,10 @@ details.robot-panel-section > summary {
 .cockpit-hud-val { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; }
 .cockpit-hud-cell[data-tone="active"] .cockpit-hud-val { color: var(--series-primary); }
 .cockpit-hud-cell[data-tone="warn"] .cockpit-hud-val { color: var(--status-warn); }
-.cockpit-hud-cell[data-tone="crit"] { background: var(--status-crit); }
-.cockpit-hud-cell[data-tone="crit"] :is(.cockpit-hud-label, .cockpit-hud-val) { color: var(--text-on-danger); }
+.cockpit-hud-cell[data-tone="crit"] { background: var(--status-crit-a10); box-shadow: inset 0 0 0 1px var(--status-crit-a45); }
+.cockpit-hud-cell[data-tone="crit"] :is(.cockpit-hud-label, .cockpit-hud-val) { color: var(--text-primary); }
+.cockpit-hud-cell[data-tone="crit"] .cockpit-hud-val { display: inline-flex; align-items: center; gap: var(--space-1); }
+.cockpit-hud-cell[data-tone="crit"] .cockpit-hud-val::before { content: ""; flex: none; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: var(--status-crit); }
 @media (width < 64rem) {
   .cockpit-hud { margin-inline-start: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   .cockpit-hud-cell { justify-content: space-between; }
@@ -506,6 +508,23 @@ details.robot-panel-section > summary {
 
 .robot-panel-status-wrap { display: grid; gap: var(--space-2); min-width: 0; }
 .robot-panel-twin { min-width: 0; }
+#robot-panel .robot-view[data-selected] .robot-view-stage { border-color: var(--border-default); box-shadow: none; }
+.cockpit-disclosure-row {
+  box-sizing: border-box;
+  display: list-item;
+  align-content: center;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-block: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body);
+  text-align: start;
+  cursor: pointer;
+}
+.cockpit-disclosure-row:hover { color: var(--text-primary); }
+.cockpit-disclosure-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .telemetry-chart { display: grid; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-recessed); min-width: 0; }
 .telemetry-chart-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1) var(--space-2); min-width: 0; }
 .telemetry-chart-title { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); white-space: nowrap; flex: none; }
@@ -559,8 +578,8 @@ details.robot-panel-section > summary {
   #fleet-main .panel[aria-labelledby="map-heading"] .map-head label[for="map-display-mode"] { font-size: var(--text-micro); white-space: nowrap; }
   #fleet-main .map-overlay-toggles { padding: 0; margin-bottom: 0; }
   #fleet-main :is(.map-options, .map-readouts) { margin-top: var(--space-1); }
-  #fleet-main :is(#map-options, #map-readouts, #site-path) > summary { min-height: var(--target-tool); padding: 0 var(--space-2); font-size: var(--text-micro); }
-  #cancel-all, .cell-stage-actions ui-button { min-height: var(--target-tool); }
+  .cockpit-disclosure-row { min-height: var(--target-tool); }
+  #cancel-all, .cell-stage-actions :is(ui-button, .ui-action-link) { min-height: var(--target-tool); }
 }
 
 /* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */

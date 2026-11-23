@@ -654,6 +654,10 @@
       "path": "shared/cockpit-telemetry.js",
       "media_type": "text/javascript"
     },
+    "cockpit-hosts.js": {
+      "path": "shared/cockpit-hosts.js",
+      "media_type": "text/javascript"
+    },
     "robot-dock.js": {
       "path": "shared/robot-dock.js",
       "media_type": "text/javascript"

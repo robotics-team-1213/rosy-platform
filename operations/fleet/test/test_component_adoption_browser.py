@@ -81,6 +81,11 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
         expect(panel).to_be_visible()
         expect(panel).to_have_attribute("data-robot-id", mobile_id)
         expect(panel.locator(".robot-panel-twin .robot-view")).to_have_count(1)
+        expect(panel.locator(".telemetry-chart-plot canvas")).to_have_count(1)
+        assert panel.locator(".telemetry-chart-plot").evaluate("node => node.clientWidth >= 180")
+        cam_details = panel.locator('details[data-section="camera"]')
+        expect(cam_details).to_have_count(1)
+        assert cam_details.evaluate("node => node.open") is (height > 800)
         expect(page.locator(f'#robot-workspace article[data-robot-id="{mobile_id}"]')).to_be_visible()
         manual_details = panel.locator('details[data-section="manual"]')
         expect(manual_details).to_have_count(1)
@@ -125,6 +130,20 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
               return !overlapWatch && inTopBand;
             }""")
             assert stamp_ok
+            if width == 1366:
+                dock.locator('.robot-dock-btn[data-robot-id="rosy_04"]').click()
+                expect(panel).to_have_attribute("data-robot-id", "rosy_04")
+                cam_sec = panel.locator('details[data-section="camera"]')
+                if not cam_sec.evaluate("n => n.open"):
+                    cam_sec.locator("summary").click()
+                cam_btn = cam_sec.locator("ui-button")
+                expect(cam_btn).to_have_attribute("disabled", "")
+                assert "오프라인" in (cam_btn.get_attribute("reason") or "")
+                expect(cam_btn.locator("small[data-reason]")).to_be_visible()
+                mobile_btn.click()
+                expect(panel).to_have_attribute("data-robot-id", mobile_id)
+                expect(cam_sec.locator("ui-button")).not_to_have_attribute("disabled", "")
+                expect(cam_sec.locator("ui-button small[data-reason]")).to_have_count(0)
 
         # Switching to observed OMX arm via dock hides mobile jog, marks unverified joints, and collapses empty telemetry plot.
         arm_btn = dock.locator('.robot-dock-btn[data-robot-id="arm_a"]')
@@ -144,8 +163,12 @@ def test_cockpit_dock_and_panel_replace_legacy_robot_selector(site, width, heigh
             Path(output).mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(Path(output) / f"fleet-cockpit-{width}.png"))
 
+        if width == 1366:
+            close_box = panel.locator(".robot-panel-close").bounding_box()
+            assert close_box and abs(close_box["height"] - 36) <= 1
         panel.locator(".robot-panel-close").click()
         expect(panel).to_be_hidden()
+        expect(panel.locator(".robot-panel-twin .robot-view")).to_have_count(0)
         if width == 1366:
             expect(page.locator(".console-context")).to_be_visible()
             arm_btn.click()
@@ -285,6 +308,9 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         expect(page.locator("#site-path")).to_be_hidden()
         for arm_id in ("arm_a", "arm_b", "arm_s"):
             expect(stage.locator(f'.cell-stage-arm[data-arm-id="{arm_id}"]')).to_be_visible()
+        assert "모터 확인 불가 · 확인 불가" not in stage.locator('.cell-stage-arm[data-arm-id="arm_b"]').inner_text()
+        work_link_box = stage.locator('.cell-stage-actions a[href="/console/cell"]').bounding_box()
+        assert work_link_box and abs(work_link_box["height"] - 36) <= 1
         hud_text = page.locator("#" + "cockpit-hud").inner_text()
         assert "ARM-CELL" in hud_text
 
@@ -295,6 +321,7 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         dock.locator('.robot-dock-btn[data-robot-id="arm_s"]').click()
         panel = page.locator('#robot-panel[data-robot-id="arm_s"]')
         expect(panel).to_be_visible()
+        expect(panel.locator('.robot-panel-jumps button[data-jump-section="health"]')).to_have_count(1)
         arm_fig = panel.locator(".robot-panel-twin .robot-view")
         expect(arm_fig).to_be_visible()
         expect(arm_fig).to_have_attribute("data-pose", "live")
