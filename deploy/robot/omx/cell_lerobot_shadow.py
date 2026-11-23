@@ -122,7 +122,16 @@ def _has_openvino() -> bool:
 
 
 def _load_torch(root: Path, device: str):
+    if device == "cpu":
+        for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+            os.environ.setdefault(var, "2")
     import torch
+    if device == "cpu":
+        torch.set_num_threads(min(2, os.cpu_count() or 1))
+        try:
+            torch.set_num_interop_threads(1)
+        except RuntimeError:
+            pass
     from lerobot.policies.act.modeling_act import ACTPolicy
     from lerobot.policies.factory import make_pre_post_processors
 
