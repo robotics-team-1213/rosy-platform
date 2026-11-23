@@ -39,6 +39,7 @@ applies_when: Running sim-unit ACT policies on dual-arm OMX cells or recovering 
 ### 5. `PEER_ARM_NOT_FOLDED` 및 `dry_run` 상태 조회는 fail-closed를 지킨다
 - `cell_job_guards.py`: `live.json`의 타임스탬프 `t`가 누락·비유한·오버플로·미래 값(`_is_stale_row`)이면 stale 판정을 내리지 않는다. 타임스탬프가 유효하게 만료(`age > max_age_s`)되고 `human_hold_latched`·lock·lease가 없을 때만, 신선하고 무결함·무토크인 `motor-health/<peer>.json`과 **실제 팔로워 캘리브레이션(`{peer}_follower.json`의 `drive_mode==0`, `homing_offset==0`, `0<=range_min<range_max<=4095`)**으로 접힘 상태를 확인한다. 캘리브레이션이 없거나 어긋나면 fail-closed 한다.
 - `cell_pipeline_io.py`: `ENOENT`/`ENXIO`만 `"no runner"`로 반환하고 `EACCES`/`EPERM` 등 다른 I/O 오류는 별도 `fifo io error`로 격리해 `dry_run`이 권한 오류를 가리지 않게 한다. `cell_policy_paced.py`의 `dry_run` 대체 상태는 `_pose6()` 검증을 통과한 시드/`home[-1]`만 사용한다.
+- `record_config.py`·`record_session.py`: `record_session.py --chunks` / `--teleop-only` 모드는 LeRobot 데이터셋을 `dataset.root`에 새로 기록하지 않으므로 `validate_config(..., require_new_root=not (self.chunks or teleop_only))`로 기존 데이터셋 폴더 때문에 `with-session-arm-{a,b,s}*.sh` 세션 시작이 실패하는 문제를 방지했다(실제 녹화 시에는 기존 `dataset root already exists` 거부 유지).
 
 ## 확인 결과
 

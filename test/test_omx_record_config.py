@@ -158,3 +158,12 @@ def test_by_path_camera_identity_is_accepted_and_traversal_rejected(module, conf
         bad_cfg['robot']['cameras']['side']['index_or_path'] = bad
         with pytest.raises(ValueError, match='camera'):
             module.validate_config(bad_cfg)
+
+
+def test_existing_dataset_root_allowed_only_when_not_requiring_new_root(module, config, tmp_path):
+    existing = tmp_path / 'existing-ds'
+    existing.mkdir()
+    config['dataset']['root'] = str(existing)
+    with pytest.raises(ValueError, match='dataset root already exists'):
+        module.validate_config(config)
+    assert module.validate_config(config, require_new_root=False) == config
