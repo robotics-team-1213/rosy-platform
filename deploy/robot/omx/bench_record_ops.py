@@ -8,7 +8,7 @@ from pathlib import Path
 from bench_record_inspect import ARMS, BI_ARM, HERE, active_handover_units
 from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, release, resolve_record_config
 from bench_record_leader import library_home_ticks
-from bench_record_step import at_home, finish_home_child, resolve_home_failure
+from bench_record_step import at_home, finish_home_child, resolve_home_failure, stop_home_runner_now
 
 
 HOME_UNFOLDED = "home requires an empty, folded arm"  # cell_unwedge.return_home's refusal, written to the receipt
@@ -219,6 +219,8 @@ class BenchOpsMixin:
                         if not self._home_ok(res):
                             resolve_home_failure(self, a, res, stack, lib_p, io_dir, env, fold_unfolded, stop_flag)
                     home_ok = True
+                    if not stop_flag[0]:
+                        stop_flag[0] = stop_home_runner_now(io_dir)
                 finally:
                     clean = finish_home_child(self, rec_proc, rec_log_p, stop_flag[0])
                     self._home_child = None
@@ -246,6 +248,8 @@ class BenchOpsMixin:
                                 errs, _ = self._start_units(reversed(stopped_units))
                                 self._remember(errs)
                     else:  # keep the arm locks, the stopped units listed and the bench busy until a person checks the arm
+                        if leader_err is not None and hasattr(self, "_log_event"):
+                            self._log_event("pose", "warn", f"{a} 리더 홈 오류: {leader_err}")
                         blocked = self._record_home_hold(a, rec_proc, rec_log_p, io_dir)
                         raise ValueError(blocked)
                 results.append(a)
