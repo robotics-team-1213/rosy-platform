@@ -57,6 +57,7 @@ const JUMP_SPECS = [
   ["status", "상태"],
   ["camera", "카메라"],
   ["commands", "명령"],
+  ["health", "모터"],
   ["manual", "수동"],
   ["settings", "설정"],
 ];
@@ -82,7 +83,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
 
   const closeBtn = document.createElement("ui-button");
   closeBtn.className = "robot-panel-close";
-  closeBtn.setAttribute("kind", "quiet");
+  closeBtn.setAttribute("kind", "segment");
   closeBtn.setAttribute("type", "button");
   closeBtn.textContent = "닫기";
 
@@ -124,10 +125,13 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
   };
 
   function makeSectionWrapper(key, heading, content) {
-    if (key === "settings" || key === "manual") {
+    if (key === "settings" || key === "manual" || key === "camera") {
       const details = document.createElement("details");
       details.className = "robot-panel-section";
       details.dataset.section = key;
+      if (key === "camera") {
+        details.open = typeof window !== "undefined" && window.innerHeight > 800;
+      }
       const summary = document.createElement("summary");
       summary.textContent = heading;
       details.append(summary, content);

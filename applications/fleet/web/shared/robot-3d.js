@@ -85,7 +85,7 @@ export function createRobotView(host, options = {}) {
   detail.id = `${id}-detail`;
   canvas.setAttribute("aria-describedby", detail.id);
   const more = el("ui-button", "", "값");
-  more.setAttribute("kind", "quiet");
+  more.setAttribute("kind", "segment");
   more.setAttribute("type", "button");
   facts.append(summary, more, meta, detail);
   const note = el("p", "robot-view-note");

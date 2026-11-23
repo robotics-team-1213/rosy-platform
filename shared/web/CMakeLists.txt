@@ -39,6 +39,7 @@ install(FILES
   interaction-controls.js
   workflow-controls.js
   cause-line.js
+  preact-ui.js
   component-controls.css
   component-gallery.css
   component-gallery.html
@@ -68,6 +69,8 @@ install(FILES
   vendor/three.LICENSE
   vendor/uPlot.esm.min.js
   vendor/uPlot.LICENSE
+  vendor/htm-preact.esm.min.js
+  vendor/htm-preact.LICENSE
   DESTINATION share/${PROJECT_NAME}/vendor
 )
 

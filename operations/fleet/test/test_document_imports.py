@@ -78,6 +78,7 @@ OWN = {
         "robot-3d-assets.js",
         "selection.js",
         "cockpit-telemetry.js",
+        "cockpit-hosts.js",
         "cell-cockpit-stage.js",
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.

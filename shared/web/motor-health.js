@@ -87,7 +87,10 @@ export function renderMotorHealthSummary(root, health) {
   const cause = health.status === "fault"
     ? [...health.motors.filter(stopped).map(stoppedText), health.stopReasons[0]].filter(Boolean).join(" · ") || health.lastFault
     : warning || (health.lastFault ? `마지막 중단: ${health.lastFault}` : "");
-  root.textContent = [health.label, health.evidenceLabel, faults, count, cause].filter(Boolean).join(" · ");
+  const evidenceLabel = health.label && health.evidenceLabel && health.label.endsWith(health.evidenceLabel)
+    ? ""
+    : health.evidenceLabel;
+  root.textContent = [health.label, evidenceLabel, faults, count, cause].filter(Boolean).join(" · ");
   root.title = `${health.ageText}${health.lastFault ? ` · 마지막 중단: ${health.lastFault}` : ""}`;
 }
 
