@@ -412,6 +412,100 @@ def test_a_killed_fetch_lock_in_the_mirror_does_not_block_the_next_archive(tmp_p
     assert (target / "deploy" / "tool.py").read_text() == "print(1)\n"
 
 
+def test_archive_clears_ephemeral_mirror_so_packs_do_not_accumulate(tmp_path):
+    import subprocess as sp
+    source = tmp_path / "source"
+    (source / "deploy").mkdir(parents=True)
+    git = ["git", "-C", str(source), "-c", "user.email=t@t", "-c", "user.name=t"]
+    sp.run(["git", "init", "-q", str(source)], check=True)
+    sp.run(git + ["config", "uploadpack.allowReachableSHA1InWant", "true"], check=True)
+    shas = []
+    for n in ("first", "second"):
+        (source / "deploy" / "tool.py").write_text(f"print('{n}')\n")
+        sp.run(git + ["add", "."], check=True)
+        sp.run(git + ["commit", "-qm", n], check=True)
+        shas.append(sp.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip())
+    root = tmp_path / "root"
+    root.mkdir()
+    host = m.Host({"root": str(root), "repo_url": "file://" + str(source)})
+    for idx, (sha, n) in enumerate(zip(shas, ("first", "second"))):
+        target = tmp_path / f"release_{idx}"
+        target.mkdir()
+        host.archive(sha, ["deploy"], target)
+        assert (target / "deploy" / "tool.py").read_text() == f"print('{n}')\n"
+        assert not (root / "mirror.git").exists()
+
+
+def test_archive_preserves_mirror_when_named_ref_exists(tmp_path):
+    import subprocess as sp
+    source = tmp_path / "source"
+    (source / "deploy").mkdir(parents=True)
+    (source / "deploy" / "tool.py").write_text("print(1)\n")
+    git = ["git", "-C", str(source), "-c", "user.email=t@t", "-c", "user.name=t"]
+    sp.run(["git", "init", "-q", str(source)], check=True)
+    sp.run(git + ["add", "."], check=True)
+    sp.run(git + ["commit", "-qm", "c"], check=True)
+    sp.run(git + ["config", "uploadpack.allowReachableSHA1InWant", "true"], check=True)
+    sha = sp.run(git + ["rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    root = tmp_path / "root"
+    root.mkdir()
+    mirror = root / "mirror.git"
+    sp.run(["git", "init", "--bare", "-q", str(mirror)], check=True)
+    (mirror / "refs" / "heads" / "keep").parent.mkdir(parents=True, exist_ok=True)
+    (mirror / "refs" / "heads" / "keep").write_text(sha + "\n")
+    target = tmp_path / "release"
+    target.mkdir()
+    m.Host({"root": str(root), "repo_url": "file://" + str(source)}).archive(sha, ["deploy"], target)
+    assert (target / "deploy" / "tool.py").read_text() == "print(1)\n"
+    assert mirror.is_dir() and (mirror / "refs" / "heads" / "keep").is_file()
+
+
+def test_clear_ephemeral_mirror_fails_closed_on_detached_head_index_or_unreadable_refs(tmp_path, monkeypatch):
+    import subprocess as sp
+    from omx_autoupdate_host import _clear_ephemeral_mirror
+    mirror = tmp_path / "mirror.git"
+    real_walk = os.walk
+    for case in ("detached_head", "has_index", "unreadable_refs"):
+        repo = mirror.with_name(f"mirror-{case}.git")
+        sp.run(["git", "init", "--bare", "-q", str(repo)], check=True)
+        if case == "detached_head":
+            (repo / "HEAD").write_text("a" * 40 + "\n")
+        elif case == "has_index":
+            (repo / "index").write_bytes(b"DIRC")
+        elif case == "unreadable_refs":
+            def fail_refs_walk(top, *a, onerror=None, **kw):
+                if Path(top) == repo / "refs":
+                    if onerror is not None:
+                        onerror(PermissionError("denied"))
+                    return iter(())
+                return real_walk(top, *a, onerror=onerror, **kw)
+
+            monkeypatch.setattr(os, "walk", fail_refs_walk)
+        try:
+            _clear_ephemeral_mirror(repo)
+            assert repo.exists(), f"{case} should fail closed and preserve mirror"
+        finally:
+            if case == "unreadable_refs":
+                monkeypatch.setattr(os, "walk", real_walk)
+
+
+def test_clear_ephemeral_mirror_preserves_separate_git_dir_worktree(tmp_path, monkeypatch):
+    import subprocess as sp
+    from omx_autoupdate_host import _clear_ephemeral_mirror
+    mirror = tmp_path / "mirror.git"
+    worktree = tmp_path / "worktree"
+    sp.run(["git", "init", "-q", "--separate-git-dir", str(mirror), str(worktree)], check=True)
+    assert (worktree / ".git").is_file()
+    _clear_ephemeral_mirror(mirror)
+    assert mirror.is_dir() and (mirror / "HEAD").is_file() and (worktree / ".git").is_file()
+    # Even if GIT_CONFIG_COUNT overrides core.bare=true in process env, mirror's own config stays authoritative.
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.bare")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    _clear_ephemeral_mirror(mirror)
+    assert mirror.is_dir() and (mirror / "HEAD").is_file() and (worktree / ".git").is_file()
+
+
 def test_failed_preparations_of_older_releases_are_removed(tmp_path):
     host = FakeHost()
     (tmp_path / "releases" / "0123456789ab.tmp").mkdir(parents=True)
