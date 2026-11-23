@@ -70,23 +70,26 @@ class MapAgreement:
         occupied = self.grid >= 65
         self.likelihood = np.zeros(occupied.shape, dtype=float)
         self.near = np.zeros_like(occupied)
-        radius = int(math.ceil(tolerance / resolution))
+        eff_tol = max(float(tolerance), float(resolution) * math.sqrt(2))
+        sigma = max(.025, .75 * float(resolution))
+        self._ray_margin = max(.06, 2.0 * float(resolution))
+        radius = int(math.ceil(eff_tol / resolution))
         h, w = occupied.shape
         for dy in range(-radius, radius + 1):
             for dx in range(-radius, radius + 1):
-                if math.hypot(dx, dy) * resolution > tolerance + 1e-7:
+                if math.hypot(dx, dy) * resolution > eff_tol + 1e-7:
                     continue
                 y0, y1 = max(0, dy), min(h, h + dy)
                 x0, x1 = max(0, dx), min(w, w + dx)
                 self.near[y0:y1, x0:x1] |= occupied[y0-dy:y1-dy, x0-dx:x1-dx]
-        spread = int(math.ceil(.12 / resolution))
+        spread = int(math.ceil(max(.12, 3.0 * sigma) / resolution))
         for dy in range(-spread, spread + 1):
             for dx in range(-spread, spread + 1):
                 y0, y1 = max(0, dy), min(h, h + dy)
                 x0, x1 = max(0, dx), min(w, w + dx)
                 if y1 <= y0 or x1 <= x0:
                     continue
-                value = math.exp(-((dx*resolution)**2 + (dy*resolution)**2) / (2*.025**2))
+                value = math.exp(-((dx*resolution)**2 + (dy*resolution)**2) / (2*sigma**2))
                 dest = self.likelihood[y0:y1, x0:x1]
                 np.maximum(dest, occupied[y0-dy:y1-dy, x0-dx:x1-dx] * value, out=dest)
 
@@ -107,7 +110,7 @@ class MapAgreement:
         # repeated maze corridors. Check the observed free ray as well.
         steps = np.arange(.05, max(ranges), self.resolution * .75)
         if len(steps):
-            distances = np.minimum(steps[None, :], np.maximum(0., ranges[:, None] - .06))
+            distances = np.minimum(steps[None, :], np.maximum(0., ranges[:, None] - self._ray_margin))
             direction = np.column_stack((np.cos(angles), np.sin(angles)))
             ray = np.asarray(sensor_pose[:2]) + direction[:, None, :] * distances[:, :, None]
             ray_cells = np.floor((ray-self.origin) / self.resolution).astype(int)
