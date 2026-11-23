@@ -10,6 +10,37 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy/robot/omx")
 from test_omx_policy_timing import _make_guard_bus  # noqa: E402
 
 
+@pytest.mark.parametrize(
+    ("started", "last_tick", "last_effort", "overdue"),
+    [(9.55, 9.9, 9.78, "tick_ms=520.0"),
+     (9.9, 9.55, 9.78, "last_tick_ms=520.0"),
+     (9.9, 9.9, 9.55, "last_effort_ms=520.0")],
+)
+def test_stale_effort_fault_reports_sampling_segments(started, last_tick, last_effort, overdue):
+    from guarded_device import BODY
+    from guarded_native_effort import check_effort
+
+    now = 10.0
+
+    def pwm():
+        nonlocal now
+        now += 0.03
+        return dict.fromkeys(BODY, 0)
+
+    def monitor(*_):
+        nonlocal now
+        now += 0.04
+
+    motion = SimpleNamespace(clock=lambda: now, last_time=last_tick, last_effort_time=last_effort,
+                             _read_body_pwm=pwm, monitor=SimpleNamespace(sample=monitor))
+    with pytest.raises(ValueError, match=r"stale effort sample \(>0\.5 seconds\)") as error:
+        check_effort(motion, {}, started)
+    assert overdue in str(error.value)
+    assert "pwm_ms=30.0" in str(error.value)
+    assert "monitor_ms=40.0" in str(error.value)
+    assert motion.last_time == last_tick and motion.last_effort_time == last_effort
+
+
 @pytest.mark.parametrize("interrupt_mode", [False, True])
 def test_encoder_loss_as_overload_release_timer_expires_blocks_stale_release(tmp_path, monkeypatch, interrupt_mode):
     import signal
