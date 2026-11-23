@@ -8,7 +8,7 @@
   top: var(--space-2);
   right: var(--space-2);
   padding: 0;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-control);
   background: var(--scrim-solid);
   overflow: hidden;
@@ -32,7 +32,7 @@
   aspect-ratio: 16 / 9;
   overflow: hidden;
   background: var(--surface-recessed);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-button);
 }
 
@@ -60,7 +60,7 @@
   aspect-ratio: auto;
   object-fit: contain;
   background: var(--surface-recessed);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-button);
 }
 

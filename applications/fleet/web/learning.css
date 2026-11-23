@@ -47,9 +47,9 @@
   container-type: inline-size;
   min-width: 0;
   background: var(--surface-raised);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-panel);
-  padding: var(--space-5);
+  padding: var(--space-4);
   gap: var(--space-3);
 }
 
