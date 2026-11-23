@@ -159,6 +159,19 @@ def test_navigation_startup_waits_for_both_costmaps_and_manager():
     client.call_async.assert_called_once_with(request)
 
 
+@pytest.mark.parametrize("namespace", ["", "rosy_09"])
+def test_startup_frames_match_hardware_costmap_parameters(tmp_path, namespace):
+    from navigation.params_rewrite import write_prefixed_nav2_params
+    from navigation.start_after_tf import costmap_frames
+
+    params = write_prefixed_nav2_params(NAV_PARAMS / "nav2_params.yaml", namespace, directory=tmp_path)
+    prefix = f"{namespace}/" if namespace else ""
+    assert costmap_frames(params, f"/{namespace}") == [
+        ("map", prefix + "base_footprint"),
+        (prefix + "odom", prefix + "base_footprint"),
+    ]
+
+
 def test_hardware_io_mounts_a_host_site_map_directory():
     io = compose()["services"]["rosy-io"]
     motor = compose()["services"]["rosy-motor"]

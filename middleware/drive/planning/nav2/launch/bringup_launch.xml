@@ -7,6 +7,7 @@
     <arg name="use_sim_time" default="False"/>
     <arg name="params_file" default="$(find-pkg-share navigation)/params/nav2_params.yaml"/>
     <arg name="autostart" default="True"/>
+    <arg name="navigation_autostart" default="$(var autostart)"/>
     <arg name="container_name" default="nav2_container"/>
     <arg name="use_composition" default="True"/>
     <arg name="use_respawn" default="False"/>
@@ -62,7 +63,7 @@
             <arg name="namespace" value=""/>
             <arg name="params_file" value="$(var params_file)"/>
             <arg name="use_sim_time" value="$(var use_sim_time)"/>
-            <arg name="autostart" value="$(var autostart)"/>
+            <arg name="autostart" value="$(var navigation_autostart)"/>
             <arg name="use_composition" value="$(var use_composition)"/>
             <arg name="use_respawn" value="$(var use_respawn)"/>
             <arg name="container_name" value="$(var namespace)/$(var container_name)"/>
