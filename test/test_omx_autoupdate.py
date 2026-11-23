@@ -460,10 +460,11 @@ def test_archive_preserves_mirror_when_named_ref_exists(tmp_path):
     assert mirror.is_dir() and (mirror / "refs" / "heads" / "keep").is_file()
 
 
-def test_clear_ephemeral_mirror_fails_closed_on_detached_head_index_or_unreadable_refs(tmp_path):
+def test_clear_ephemeral_mirror_fails_closed_on_detached_head_index_or_unreadable_refs(tmp_path, monkeypatch):
     import subprocess as sp
     from omx_autoupdate_host import _clear_ephemeral_mirror
     mirror = tmp_path / "mirror.git"
+    real_walk = os.walk
     for case in ("detached_head", "has_index", "unreadable_refs"):
         repo = mirror.with_name(f"mirror-{case}.git")
         sp.run(["git", "init", "--bare", "-q", str(repo)], check=True)
@@ -472,15 +473,20 @@ def test_clear_ephemeral_mirror_fails_closed_on_detached_head_index_or_unreadabl
         elif case == "has_index":
             (repo / "index").write_bytes(b"DIRC")
         elif case == "unreadable_refs":
-            os.chmod(repo / "refs" / "heads", 0o000)
+            def fail_refs_walk(top, *a, onerror=None, **kw):
+                if Path(top) == repo / "refs":
+                    if onerror is not None:
+                        onerror(PermissionError("denied"))
+                    return iter(())
+                return real_walk(top, *a, onerror=onerror, **kw)
+
+            monkeypatch.setattr(os, "walk", fail_refs_walk)
         try:
             _clear_ephemeral_mirror(repo)
-            if case == "unreadable_refs" and os.geteuid() == 0:
-                continue  # root ignores 0o000 permissions
             assert repo.exists(), f"{case} should fail closed and preserve mirror"
         finally:
             if case == "unreadable_refs":
-                os.chmod(repo / "refs" / "heads", 0o755)
+                monkeypatch.setattr(os, "walk", real_walk)
 
 
 def test_clear_ephemeral_mirror_preserves_separate_git_dir_worktree(tmp_path, monkeypatch):
