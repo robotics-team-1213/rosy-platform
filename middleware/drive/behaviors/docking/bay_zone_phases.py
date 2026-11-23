@@ -49,9 +49,9 @@ class BayZoneMixin:
     def _init_scan(self) -> None:
         self._seat_tries, self._seat_ask_at, self._req_t, self._req_lat = 0, -1e9, 0.0, None
         self._row_pose = None                        # (x, lateral, heading, at): the newest good LiDAR bay pose, for the lane-keeping guards
-        # LiDAR bay pose (bay_scan_pose.py): one ask per check; request ids drop late answers
         self._scan_asked, self._scan_match, self._scan_error = False, None, None
         self._seat_asked, self._seat_match = False, None            # SETTLING: the seated check asks once
+        self._seat_observation, self._seat_raw_valid = None, False
         self._req_seq, self._req_open, self._req_kind = 0, None, ""
         self._req_track, self._ans_track, self._track_why, self._req_track_was, self._cen_req_seed = False, False, None, False, None
         self._last_lidar = None
@@ -177,15 +177,9 @@ class BayZoneMixin:
         return False
 
     def seat_anchor_evidence(self):
-        """The seat error {along, lateral, heading, inliers, margin} when the stopped LiDAR seat scan matched the dock's reference scan AND the robot stood still from that scan to
-        now (wheel odometry within 3 mm / 0.01 rad of where it was when the scan was matched); else None: no anchor."""
-        geo, seat = self._seat_geo(), (self._seat_match[0] if self._seat_match is not None else None)
-        if geo is None or seat is None:
-            return None
-        then, now = getattr(self, "_seat_odom", None), self._odometry()
-        if then is None or now is None or math.hypot(now[0] - then[0], now[1] - then[1]) > 0.003 or abs(_wrap(now[2] - then[2])) > 0.01:
-            return None
-        return {"along_m": geo[0], "lateral_m": geo[1], "heading_deg": math.degrees(geo[2]), "inliers": seat.inliers, "margin": seat.margin}
+        if self.bay_identity == "confirmed" and self._seat_raw_valid and self._seat_geo() is not None:
+            return self._seat_geo(), self._seat_odom, self._h._type().staging_offset_m
+        return None
 
     def _seat_geo(self):
         """(x out of the stop face, lateral, heading) from the stopped robot's LiDAR seat check, or None (no reference / no good fit)."""
@@ -269,7 +263,7 @@ class BayZoneMixin:
         raw = self._h._detector.relative_pose() if self._h._detector is not None else None
         return raw is not None and not raw.lateral_measured
 
-    def scan_request(self) -> Optional[tuple]:
+    def scan_request(self, scan_lag_s: float = 0.0, stamp_ns=None) -> Optional[tuple]:
         """CORE 가 LiDAR 콜백에서 묻는다(락 없음): 기준 스캔을 가진 칸이 자세를 기다리면 (요청 번호, 스캔)을 한 번 내준다.
         세 때: 칸 줄 판정, 정착 크리프 뒤 진입 가드(정지 중 새로 잰다), SETTLING 안착 확인."""
         h = self._h
@@ -307,6 +301,9 @@ class BayZoneMixin:
             if h.now() - h._phase_since < h._cfg.bay_seat_check_delay_s or h.now() - self._seat_ask_at < 1.0:
                 return None
             self._seat_asked, self._seat_ask_at = True, h.now()
+            self._seat_odom = self._odometry()
+            self._seat_observation = h._anchor.observe(scan_lag_s, stamp_ns)
+            self._seat_raw_valid = False
             self._seat_tries += 1
             return self._open_request(ref, "seat", self._near(self._row_pose) or (0.0, 0.0, 0.0))     # seated: close to the reference itself
         if h.phase is DockPhase.ACQUIRING and self._find_since is not None and not self._find_asked:
@@ -360,6 +357,9 @@ class BayZoneMixin:
                 self._h._last_event = "LiDAR answer dropped: request %s is not the open one (%s): late" % (request_id, self._req_open)
             return
         self._req_lat = float(at) - self._req_t
+        if self._req_kind == "seat":
+            # A single-seed track uses a synthetic 1.0 margin.
+            self._seat_raw_valid = self._req_track or scan_fit_pose(match, self._h._cfg) is not None
         if match is not None and self._req_kind != "turn" and math.isfinite(match.heading) and match.inliers >= 0.5:      # not the turn watch (its heading is relative, not a bay heading)
             self._last_lidar = (match.heading, float(at))        # the last LiDAR bay heading of this run (any request): "facing the bay" is remembered across verdicts
         self._track_why, self._ans_track, self._req_track_was = None, self._req_track, self._req_track
@@ -381,7 +381,6 @@ class BayZoneMixin:
         kind, self._req_open = self._req_kind, None
         if kind == "seat":
             self._seat_match = (match, float(at))
-            self._seat_odom = self._odometry()               # where the wheels were at the seat scan: the anchor needs the robot still from here to DOCKED
             why = pose_gate(match, self._h._cfg, self._h._type().staging_offset_m)
             if why is not None:
                 self._h._last_event = "seat LiDAR pose dropped: %s (try %d)" % (why, self._seat_tries)

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from core_common.protocol.schemas import DockState, NavigationState
 from core_features.docking.model import DockPhase
+from core_features.docking.dock_anchor import docked_seat_evidence
 
 if TYPE_CHECKING:
     from core_features.docking.charging import ChargingConfirmation
@@ -390,15 +391,31 @@ class DockingPhasesMixin:
 
     # --- 공통 -----------------------------------------------------------------
 
+    def _same_anchor_run(self, candidate):
+        op = self.native.current
+        return (candidate is not None and op is not None and op.run_id == candidate.frame.run_id
+                and self._dock is not None and self._dock.id == candidate.frame.dock_id)
+
+    def _publish_seat_anchor(self, candidate):
+        self._pending_seat_anchor = None
+        try:
+            tracked, wheels, staging = candidate.docked_geometry
+            seat = docked_seat_evidence(candidate.identity, tracked, self._cfg, staging, wheels, self._bay_phases._odometry())
+            if seat is not None:
+                self._anchor.record(candidate.frame.dock_id, "docked", seat, candidate.frame.observation, expected_refs=candidate.frame.refs)
+        except Exception as exc:  # noqa: BLE001 - never block DOCKED
+            _LOG.warning("dock anchor not recorded: %s", exc)
+
     def _record_dock_anchor(self) -> None:
         """DOCKED in a bay (line dock): the seated pair (odom pose, bay) for Fleet, ONLY when the stopped seat scan matched the reference scan and the robot stood still from that
         scan to now. A charge contact with a failed or absent seat scan publishes nothing (it could name the wrong bay). An anchor failure never blocks DOCKED."""
         try:
-            if self._dock is None or not self._bay_phases.active():
+            candidate = self._pending_seat_anchor
+            if not self._same_anchor_run(candidate) or not self._bay_phases.active() or candidate.frame.observation is not self._bay_phases._seat_observation:
                 return
-            seat = self._bay_phases.seat_anchor_evidence()
-            if seat is not None:
-                self._anchor.record(self._dock.id, "docked", seat)
+            candidate.docked_geometry = self._bay_phases.seat_anchor_evidence()
+            if candidate.docked_geometry is not None and candidate.identity is not None:
+                self._publish_seat_anchor(candidate)
         except Exception as exc:  # noqa: BLE001 - never block DOCKED
             _LOG.warning("dock anchor not recorded: %s", exc)
 

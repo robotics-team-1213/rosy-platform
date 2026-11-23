@@ -39,6 +39,43 @@ def good(**kw):
     return BayScanPose(**args)
 
 
+@pytest.mark.parametrize("other_x", [0.1, 0.4])
+def test_simultaneous_grid_builds_keep_the_reference_requested_by_each_matcher(monkeypatch, other_x):
+    from concurrent.futures import ThreadPoolExecutor
+    from core_features.docking import bay_scan_pose
+    pytest.importorskip("numpy")
+    started, release = threading.Event(), threading.Event()
+    local = threading.local()
+
+    class Field:
+        def __init__(self, ref):
+            self.ref = ref
+            if getattr(local, "slow", False):
+                started.set()
+                assert release.wait(5)
+
+    def icp(cur, field, *args):
+        return float(field.ref[0][0]), 0.0, 0.0, 0.9, 0.001
+
+    monkeypatch.setattr(bay_scan_pose, "_FIELD", (None, None))
+    monkeypatch.setattr(bay_scan_pose, "_Field", Field)
+    monkeypatch.setattr(bay_scan_pose, "_icp", icp)
+    def slow_match():
+        local.slow = True
+        return locate([(0.1, 0.0)] * 45, [(0.1, 0.0)] * 45)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        slow = workers.submit(slow_match)
+        try:
+            assert started.wait(2)
+            points = [(other_x, 0.0)] * 45
+            fast = workers.submit(bay_scan_pose.locate_track, points, points, (0., 0., 0.))
+            assert fast.result(timeout=2).x == pytest.approx(other_x)
+        finally:
+            release.set()
+        assert slow.result(timeout=2).x == pytest.approx(0.1)
+    assert bay_scan_pose.locate_near(points, points, (0., 0., 0.)).x == pytest.approx(other_x)
+
+
 def test_the_seated_scan_matches_itself_at_the_origin():
     m = locate(pts("seated"), pts("seated"))
     assert m is not None and m.inliers >= 0.95 and m.margin >= 0.4
@@ -252,6 +289,8 @@ def answer_kinds(zone=None, entry=None, seat=None, log=None, find=None):
                 find_asks.append(1)
                 answer = answer(len(find_asks)) if callable(answer) else answer         # a callable gets the number of the ask
             m.note_bay_scan_match(answer, request_id=request[0])
+            if kind == "seat":
+                m.note_bay_seat_matches({"bay1": answer}, request[-1])
         return done(m)
     return until
 

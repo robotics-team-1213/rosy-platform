@@ -24,6 +24,7 @@ from core.bridge.hitl import parse_hitl_request
 from core_features.command.arbitration import Mode
 from core_features.command.manager import Twist as CoreTwist
 from core_features.docking.bay_guards import rear_band_gap
+from core_features.docking.dock_anchor import SeatComparison
 from core_features.line_follow import LineFollowMode, LineObservation
 from core_features.line_follow.clearance import front_clearance as _front_clearance
 from core_features.line_follow.clearance import scan_points as _scan_points
@@ -225,12 +226,13 @@ def bay_body_scan(services, sample, *, received_at: float) -> None:
             # the stored seated scan through the same body filter and the same strip: its rear gap is the stop-face reference
             ref_view = body.scan_view(seat[1], forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
             docking.note_bay_seat_gap(seat[0], rear_band_gap(ref_view.points, rear), ref_view.points)
-        request = docking.bay_scan_request()
+        request = docking.bay_scan_request(_anchor_scan_lag(sample), sample.get("source_stamp_ns"))
         if request is not None:
             _match_bay_scan(docking, body, config, view.points, request[1], request[0],
                             step=request[3] if len(request) > 3 and request[2] == "turn" else None,
                             near=request[3] if len(request) > 3 and request[2] in ("near", "track") else None,
-                            track=len(request) > 3 and request[2] == "track")
+                            track=len(request) > 3 and request[2] == "track",
+                            seat_frame=request[-1] if isinstance(request[-1], SeatComparison) else None)
     except (AttributeError, KeyError, TypeError, ValueError):
         return
 
@@ -252,18 +254,35 @@ def anchor_probe(services, sample) -> None:
     must never raise: any failure is swallowed and the scan path goes on."""
     try:
         docking = services.docking
-        probe = docking.anchor_probe_request()
+        probe = docking.anchor_probe_request(_anchor_scan_lag(sample), sample.get("source_stamp_ns"))
         if probe is None:
             return
         config = services.line_follow.config
         body = _tray_body(config, docking.bay_body_overhang_m())
         view = body.scan_view(sample, forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
-        _match_bay_scan(docking, body, config, view.points, probe[2], probe[0], answer=docking.note_anchor_probe_match)
+        request_id, refs = probe
+
+        def compare_bays():
+            matches = _match_seat_references(body, config, view.points, refs)
+            docking.note_anchor_probe_match(matches, request_id)
+
+        docking.submit_anchor_comparison(compare_bays)
     except Exception:  # noqa: BLE001 - never break the scan path
         return
 
 
-def _match_bay_scan(docking, body, config, live_points, reference, request_id, step=None, near=None, track=False, answer=None) -> None:
+def _match_seat_references(body, config, live_points, refs):
+    try:
+        matches = {}
+        for dock_id, reference in refs.items():
+            ref = body.scan_view(reference, forward_deg=config.lidar_forward_deg, self_mask=config.lidar_self_mask)
+            matches[dock_id] = bay_scan_pose.locate(ref.points, live_points)
+        return matches
+    except Exception:  # noqa: BLE001 - an incomplete comparison cannot establish the bay
+        return {}
+
+
+def _match_bay_scan(docking, body, config, live_points, reference, request_id, step=None, near=None, track=False, seat_frame=None) -> None:
     """The robot's pose in the bay frame by LiDAR, once per zone check, off the scan thread (a few hundred ms of numpy).
 
     The reference scan goes through the same body filter as the live one. Any failure answers None: the zone
@@ -282,7 +301,15 @@ def _match_bay_scan(docking, body, config, live_points, reference, request_id, s
                 match = bay_scan_pose.locate(ref_view.points, live_points)
         except Exception as exc:                           # noqa: BLE001 - the map path is the answer to anything
             match, error = None, "%s: %s" % (type(exc).__name__, exc)
-        (answer or docking.note_bay_scan_match)(match, error=error, request_id=request_id)
+        if seat_frame is None:
+            docking.note_bay_scan_match(match, error=error, request_id=request_id)
+            return
+        docking.note_bay_scan_match(match, error=error, request_id=request_id, seat_frame=seat_frame)
+        if seat_frame.observation is not None and match is not None:
+            def compare_seat():
+                matches = _match_seat_references(body, config, live_points, seat_frame.refs)
+                docking.note_bay_seat_matches(matches, seat_frame)
+            docking.submit_anchor_comparison(compare_seat)
     threading.Thread(target=run, name="bay-scan-pose", daemon=True).start()
 
 
@@ -294,6 +321,14 @@ def _scan_lag_s(sample) -> float:
     if type(stamp) is not int or type(now) is not int or stamp <= 0:
         return 0.0
     return max(0.0, (now - stamp) / 1e9)
+
+
+def _anchor_scan_lag(sample) -> float:
+    """A new departure anchor needs a stamped frame in the same, forward-running ROS clock."""
+    stamp, now = sample.get("source_stamp_ns"), sample.get("source_now_ns")
+    if type(stamp) is not int or type(now) is not int or not 0 < stamp <= now:
+        return math.inf
+    return (now - stamp) / 1e9
 
 
 def front_clearance(services, sample, *, received_at: float) -> None:
