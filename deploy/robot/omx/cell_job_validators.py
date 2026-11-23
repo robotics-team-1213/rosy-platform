@@ -4,16 +4,19 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 
 ARM = re.compile(r"arm_[abs]")
 ACTOR = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}")
 NAME = re.compile(r"[a-z0-9_][a-z0-9_.-]{0,62}")
+TWO_ARM_SITE = re.compile(r"[a-z0-9_:-]{1,48}")
 FILE = re.compile(r"(?:object-)?(cell|catalog|chunks)-[a-z0-9_.-]{1,60}\.json")
 TASK_FILE = re.compile(r"(?:task|plan)-[a-z0-9_.-]{1,60}\.json")
 FILTER_OBJ = re.compile(r"[a-z0-9_,-]{1,120}")
 FILTER_COL = re.compile(r"[a-z0-9_,-]{1,64}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 SAFE_PATH = re.compile(r"[A-Za-z0-9_./~:-]{1,240}")
+HTTP_URL = re.compile(r"^https?://[A-Za-z0-9._:\[\]-]+(?:/[A-Za-z0-9_./-]*)?$")
 FIELD = re.compile(r"\{(\w+)\}")
 
 
@@ -60,6 +63,38 @@ def _actor(v):
     if not isinstance(v, str) or not ACTOR.fullmatch(v) or ".." in str(v).replace("\\", "/").split("/"):
         raise ValueError(f"must match {ACTOR.pattern}")
     return v
+
+
+def _http_url(v):
+    if not isinstance(v, str) or len(v) > 240 or not HTTP_URL.fullmatch(v):
+        raise ValueError("must be an http(s) URL without query or credentials")
+    parsed = urlsplit(v)
+    if (
+        parsed.scheme not in ("http", "https")
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("must be an http(s) URL without query or credentials")
+    return v
+
+
+def _two_arm_task_sites(v: str) -> tuple[str, str]:
+    if not isinstance(v, str) or v.count("->") != 1:
+        raise ValueError("must be '<src>-><dst>'")
+    src, dst = (p.strip() for p in v.split("->", 1))
+    if not TWO_ARM_SITE.fullmatch(src) or not TWO_ARM_SITE.fullmatch(dst):
+        raise ValueError("task endpoint must be a valid site name")
+    if src == dst:
+        raise ValueError("task source and destination must differ")
+    return src, dst
+
+
+def _two_arm_task(v):
+    src, dst = _two_arm_task_sites(v)
+    return f"{src}->{dst}"
 
 
 def _roi(v):

@@ -450,3 +450,83 @@ def test_http11_keepalive_request_id_and_oversized_close(tmp_path):
     assert server._closed is True
     assert not server._active_socks
     assert "close" in fake_sock.events
+
+
+def test_gpu_training_busy_health_and_503_fail_closed(tmp_path):
+    import os
+    import subprocess
+    import time
+
+    pdir, rev = _make_checkpoint(tmp_path, "arm_a", views=("top", "wrist"), hw=(24, 32))
+    lock_file = tmp_path / "gpu.lock"
+    lock_file.write_text("", encoding="utf-8")
+    jobs_dir = tmp_path / "rosy-jobs"
+    jobs_dir.mkdir()
+
+    reg = srv.PolicyRegistry.from_specs(
+        [f"arm_a={pdir}:{rev}"],
+        loader=lambda *a: lambda obs: [[0.25] * 6] * 4,
+        gpu_lock_file=lock_file,
+        jobs_dir=jobs_dir,
+        reject_when_training_busy=True,
+    )
+    server = srv.make_server("127.0.0.1", 0, reg, token="tok-lock")
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    jpg = _encode_b64_jpeg(24, 32)
+    infer_body = {"arm_id": "arm_a", "revision": rev, "request_id": "req-busy-1", "state": [0.0] * 6, "frames": {"top": jpg, "wrist": jpg}}
+
+    try:
+        # 1. Idle: /health reports free, /infer returns 200
+        code, h_idle = _http_json(f"{base_url}/health")
+        assert code == 200 and h_idle["gpu_training_busy"] is False and h_idle["gpu_training_reason"] is None
+        code, r_idle = _http_json(f"{base_url}/infer", method="POST", body=infer_body, token="tok-lock")
+        assert code == 200 and r_idle["ok"] is True
+
+        # 2. Live train-*.lock with current PID marks GPU busy -> /health true, /infer 503 with request_id
+        train_lock = jobs_dir / "train-999999.lock"
+        train_lock.write_text(f"{os.getpid()} gpu 8 12\n", encoding="utf-8")
+        code, h_train = _http_json(f"{base_url}/health")
+        assert code == 200 and h_train["gpu_training_busy"] is True and "train-999999.lock" in h_train["gpu_training_reason"]
+        code, r_busy = _http_json(f"{base_url}/infer", method="POST", body=infer_body, token="tok-lock")
+        assert code == 503 and r_busy["error"] == "gpu_training_busy" and r_busy["request_id"] == "req-busy-1"
+        train_lock.unlink()
+
+        # 3. Exclusive flock in another process (on POSIX) marks GPU busy, then frees cleanly; server never holds flock
+        fcntl = pytest.importorskip("fcntl")
+        holder = subprocess.Popen(
+            [
+                sys.executable, "-c",
+                "import fcntl, sys, time; fh = open(sys.argv[1], 'r+'); "
+                "fcntl.flock(fh.fileno(), fcntl.LOCK_EX); print('LOCKED', flush=True); time.sleep(5)",
+                str(lock_file),
+            ],
+            stdout=subprocess.PIPE, text=True,
+        )
+        try:
+            assert holder.stdout.readline().strip() == "LOCKED"
+            code, h_flock = _http_json(f"{base_url}/health")
+            assert code == 200 and h_flock["gpu_training_busy"] is True and h_flock["gpu_training_reason"] == "gpu_lock_held"
+            code, r_flock = _http_json(f"{base_url}/infer", method="POST", body=infer_body, token="tok-lock")
+            assert code == 503 and r_flock["error"] == "gpu_training_busy"
+        finally:
+            holder.terminate()
+            holder.wait(timeout=5)
+
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            code, h_free = _http_json(f"{base_url}/health")
+            if h_free["gpu_training_busy"] is False:
+                break
+            time.sleep(0.05)
+        assert h_free["gpu_training_busy"] is False
+        code, r_ok = _http_json(f"{base_url}/infer", method="POST", body=infer_body, token="tok-lock")
+        assert code == 200
+        with lock_file.open("r+") as fh:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    finally:
+        server.shutdown()
+        server.server_close()
+

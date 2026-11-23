@@ -172,6 +172,11 @@ def check_peer_ab_folded(
     return None
 
 
+def check_two_arm_ab_ready(workdir: Path, lease_dir: Path, lock_dir: Path | None, **kw) -> str | None:
+    """Ensure both arm_a and arm_b are idle and folded for D-1073 two-arm runs."""
+    return check_peer_ab_folded("arm_b", workdir, lease_dir, lock_dir, **kw) or check_peer_ab_folded("arm_a", workdir, lease_dir, lock_dir, **kw)
+
+
 def check_fleet_safety_online(
     arm: str | None,
     *,

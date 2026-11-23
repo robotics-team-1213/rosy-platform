@@ -1,0 +1,19 @@
+[Unit]
+Description=ROSY OMX per-arm ACT remote GPU HTTP inference server (D-1073)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# %h/.config/rosy/omx-act-http.env (0600) sets ROSY_ACT_HTTP_PYTHON, ROSY_ACT_HTTP_SERVER, ROSY_ACT_HTTP_ARGS.
+EnvironmentFile=%h/.config/rosy/omx-act-http.env
+ExecStart=/bin/bash -c 'exec "$ROSY_ACT_HTTP_PYTHON" "$ROSY_ACT_HTTP_SERVER" $ROSY_ACT_HTTP_ARGS'
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=10
+MemoryMax=6G
+NoNewPrivileges=yes
+UMask=0077
+
+[Install]
+WantedBy=default.target

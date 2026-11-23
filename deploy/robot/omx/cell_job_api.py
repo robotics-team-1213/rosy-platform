@@ -22,10 +22,10 @@ from cell_depth_lock import is_depth_lock_held  # noqa: E402
 from cell_job_guards import (  # noqa: E402
     IDEMPOTENCY_KEY_RE, ROLE_HUMAN, ROLE_MACHINE, IdempotencyStore, Principal,
     authenticate_bearer, authorize_principal, check_arm_incident_hold, check_fleet_safety_online,
-    check_peer_ab_folded, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
+    check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
-from cell_job_spec import AB_ARMS, JOBS, SESSION, build_argv, moves_arm  # noqa: E402,F401
+from cell_job_spec import AB_ARMS, JOBS, SESSION, build_argv, job_arms, moves_arm  # noqa: E402,F401
 
 try:
     import fcntl
@@ -63,6 +63,12 @@ def _whole_cell_lock_held(lock_dir: Path | None = None) -> bool:
 
 def _tools_tree(workdir: Path) -> str | None:
     return tools_tree_name(workdir)
+
+
+def _dirty_arms(run: dict) -> tuple[str, ...]:
+    if run.get("arms"):
+        return tuple(run["arms"])
+    return (run["arm"],) if run.get("arm") else ()
 
 
 class Runner:
@@ -110,12 +116,13 @@ class Runner:
         }
         with open(self.out / "audit.jsonl", "a", encoding="utf-8") as fh:
             fh.write(json.dumps(row) + "\n")
-        if run["moving"] and run["arm"]:
-            write_cell_state_dirty(
-                self.workdir, run["arm"], job_id=jid, job=run["job"], start=run["start"], end=ended, exit_code=code,
-                fleet_online=bool(run.get("fleet_online")),
-                principal=Principal(row["principal_role"], row["principal_id"]),
-            )
+        if run["moving"]:
+            for dirty_arm in _dirty_arms(run):
+                write_cell_state_dirty(
+                    self.workdir, dirty_arm, job_id=jid, job=run["job"], start=run["start"], end=ended, exit_code=code,
+                    fleet_online=bool(run.get("fleet_online")),
+                    principal=Principal(row["principal_role"], row["principal_id"]),
+                )
         run["audited"] = True
 
     def _can_reuse_arm_session_locked(self, arm: str) -> bool:
@@ -142,7 +149,9 @@ class Runner:
             argv = build_argv(job, eff_params, self.workdir)
         except ValueError as exc:
             return {"code": 400, "error": str(exc)}
-        arm = eff_params.get("arm")
+        arms = job_arms(job, eff_params)
+        target_arms = set(arms)
+        arm = arms[0] if len(arms) == 1 else ("arm_ab" if target_arms == AB_ARMS else None)
         moving = moves_arm(job, eff_params)
         idem_digest = IdempotencyStore.payload_sha256(name, eff_params) if idempotency_key else None
         with self.lock:
@@ -160,27 +169,39 @@ class Runner:
                 for r in self.runs.values():
                     if not r["moving"] or r["proc"].poll() is not None:
                         continue
-                    if r["arm"] == arm:
-                        return {"code": 409, "error": f"a moving job already runs on {arm}"}
-                    if arm in AB_ARMS and r["arm"] in AB_ARMS:
+                    r_arms = set(r.get("arms") or (() if not r.get("arm") else (r["arm"],)))
+                    if overlap := (target_arms & r_arms):
+                        return {"code": 409, "error": f"a moving job already runs on {sorted(overlap)[0]}"}
+                    if (target_arms & AB_ARMS) and (r_arms & AB_ARMS):
                         return {"code": 409, "error": f"A/B cell space is held by {r['arm']} ({r['job']})"}
-                if inc_reason := self._check_incident(arm):
-                    return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{arm} held: {inc_reason}"}
-                fleet_st = self._check_fleet_safety(arm)
-                fleet_online = bool(fleet_st.get("online"))
-                if fleet_st.get("blocked"):
-                    return {"code": 409, "error_code": "FLEET_SAFETY_STOP", "error": fleet_st.get("reason") or "Fleet safety stop"}
+                for a in arms:
+                    if inc_reason := self._check_incident(a):
+                        return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{a} held: {inc_reason}"}
+                for a in arms or (None,):
+                    fleet_st = self._check_fleet_safety(a)
+                    fleet_online = fleet_online or bool(fleet_st.get("online"))
+                    if fleet_st.get("blocked"):
+                        return {"code": 409, "error_code": "FLEET_SAFETY_STOP", "error": fleet_st.get("reason") or "Fleet safety stop"}
                 if _whole_cell_lock_held(self.lock_dir):
                     return {"code": 409, "error": "whole-cell session.lock is held by another process"}
-                for check_arm in (sorted(AB_ARMS) if arm in AB_ARMS else [arm]):
+                lock_arms = sorted(AB_ARMS) if (target_arms & AB_ARMS) else list(arms)
+                for check_arm in lock_arms:
                     if _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
                         return {"code": 409, "error": f"session lock for {check_arm} is held by another process"}
-                if peer_err := check_peer_ab_folded(
-                    arm, self.workdir, self.lease_dir, self.lock_dir,
-                    session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
-                    live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
-                ):
-                    return {"code": 409, "error_code": "PEER_ARM_NOT_FOLDED", "error": peer_err}
+                if target_arms == AB_ARMS:
+                    if ready_err := check_two_arm_ab_ready(
+                        self.workdir, self.lease_dir, self.lock_dir,
+                        session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
+                        live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
+                    ):
+                        return {"code": 409, "error_code": "TWO_ARM_NOT_READY", "error": ready_err}
+                elif arm in AB_ARMS:
+                    if peer_err := check_peer_ab_folded(
+                        arm, self.workdir, self.lease_dir, self.lock_dir,
+                        session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
+                        live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
+                    ):
+                        return {"code": 409, "error_code": "PEER_ARM_NOT_FOLDED", "error": peer_err}
             if job.get("camera"):
                 if any(r["camera"] and r["proc"].poll() is None for r in self.runs.values()):
                     return {"code": 409, "error": "another camera job is running (one D435 depth reader at a time)"}
@@ -199,7 +220,7 @@ class Runner:
             now = time.time()
             run = {
                 "job": name, "params": eff_params, "argv": argv, "proc": proc, "log": log,
-                "moving": moving, "camera": bool(job.get("camera")), "arm": arm,
+                "moving": moving, "camera": bool(job.get("camera")), "arm": arm, "arms": arms,
                 "purpose": eff_params.get("purpose") or name,
                 "holder": eff_params.get("operator") or arm or name,
                 "principal_role": principal.role, "principal_id": principal.principal_id,
@@ -208,11 +229,12 @@ class Runner:
                 "omx_tools_tree": _tools_tree(self.workdir), "audited": False,
             }
             self.runs[jid] = run
-            if moving and arm:
-                write_cell_state_dirty(
-                    self.workdir, arm, job_id=jid, job=name, start=now, end=None, exit_code=None,
-                    fleet_online=fleet_online, principal=principal,
-                )
+            if moving:
+                for dirty_arm in _dirty_arms(run):
+                    write_cell_state_dirty(
+                        self.workdir, dirty_arm, job_id=jid, job=name, start=now, end=None, exit_code=None,
+                        fleet_online=fleet_online, principal=principal,
+                    )
             if idempotency_key and idem_digest is not None:
                 self._idempotency.record(idempotency_key, idem_digest, jid, name)
             if isinstance(proc, _REAL_POPEN):
