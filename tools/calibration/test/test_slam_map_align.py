@@ -108,3 +108,41 @@ def test_cli_refuses_with_exit_3(tmp_path):
     src = _write_rect_map(tmp_path)
     bad = ["--pair", "0,0=0,0", "--pair", "1,0=1,0", "--pair", "0,1=0,1.4"]
     assert sma.main([str(src)] + bad) == sma.REFUSED
+
+
+def test_seal_bundle_writes_zero_yaw_grid_and_site_manifest(tmp_path):
+    import json
+
+    src = _write_rect_map(tmp_path)
+    slam_pts = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (0.5, 0.5)]
+    site_pts = _site(slam_pts, yaw=math.radians(90), t=(2.0, 3.0))
+    site_json = tmp_path / "site.json"
+    site_json.write_text(json.dumps({
+        "map_id": "site_berth_v2",
+        "places": [
+            {"id": f"P{i}", "name": f"P{i}", "x": sx, "y": sy}
+            for i, (sx, sy) in enumerate(site_pts)
+        ],
+    }), encoding="utf-8")
+    pair_args = []
+    for i, (px, py) in enumerate(slam_pts):
+        pair_args.extend(["--pair", f"P{i}={px},{py}"])
+
+    bundle = tmp_path / "bundle"
+    assert sma.main([str(src), "--site-map", str(site_json)] + pair_args
+                    + ["--seal-bundle", str(bundle)]) == sma.REFUSED  # missing --name
+    assert sma.main([str(src), "--site-map", str(site_json)] + pair_args
+                    + ["--seal-bundle", str(bundle), "--name", "master_site", "--source", "pinky1/test"]) == 0
+
+    sealed = bundle / "maps" / "master_site.yaml"
+    manifest = json.loads((bundle / "maps" / "manifest.json").read_text(encoding="utf-8"))
+    mb = sma.load_map_bundle_module()
+    assert mb.verify_bundle(sealed, require_zero_yaw=True, require_manifest=True) == []
+    assert manifest["site_map_id"] == "site_berth_v2"
+    assert manifest["grid_id"] == mb.occupancy_grid_id(sealed)
+    assert manifest["origin"][2] == 0.0
+    assert manifest["alignment"]["tool"] == "slam_map_align"
+    assert manifest["alignment"]["pair_count"] == 4
+    # Refuses overwrite if bundle files already exist.
+    assert sma.main([str(src), "--site-map", str(site_json)] + pair_args
+                    + ["--seal-bundle", str(bundle), "--name", "master_site"]) == sma.REFUSED

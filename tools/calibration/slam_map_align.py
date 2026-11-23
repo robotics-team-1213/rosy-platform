@@ -20,10 +20,12 @@ non-zero origin yaw (see ``write_aligned``), so a rotated map is resampled into 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import math
 import re
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -227,6 +229,73 @@ def load_places(path: Path | None) -> dict[str, tuple[float, float]]:
     return places
 
 
+def load_site_map_id(path: Path | None) -> str | None:
+    """Return site map_id from --site-map JSON when present."""
+    if path is None:
+        return None
+    body = json.loads(path.read_text(encoding="utf-8"))
+    body = body.get("map", body) if isinstance(body, dict) else body
+    raw = body.get("map_id") if isinstance(body, dict) else None
+    return str(raw).strip() if isinstance(raw, str) and raw.strip() else None
+
+
+def load_map_bundle_module():
+    """Load middleware/perception/map/map_bundle.py without requiring ROS."""
+    path = Path(__file__).resolve().parents[2] / "middleware" / "perception" / "map" / "map_bundle.py"
+    spec = importlib.util.spec_from_file_location("map_bundle", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def seal_aligned_bundle(
+    grid: Grid,
+    fit: Fit,
+    source_meta: dict,
+    dest_dir: Path,
+    name: str,
+    *,
+    site_map_id: str | None,
+    margin_m: float = 0.20,
+    source: str = "",
+    symmetry: float | None = None,
+    pair_count: int = 0,
+    aligned_yaml: Path | None = None,
+) -> tuple[Path, str]:
+    """Resample aligned map to yaw=0 and seal it via map_bundle.import_saved."""
+    target_yaml = dest_dir / "maps" / f"{name}.yaml"
+    target_pgm = dest_dir / "maps" / f"{name}.pgm"
+    if target_yaml.exists() or target_pgm.exists():
+        raise AlignError(f"{target_yaml} (or its PGM) exists; refusing to overwrite")
+    mb = load_map_bundle_module()
+    alignment = {
+        "tool": "slam_map_align",
+        "yaw_deg": round(math.degrees(fit.yaw), 6),
+        "tx_m": round(fit.tx, 6),
+        "ty_m": round(fit.ty, 6),
+        "max_residual_m": round(fit.max, 6),
+        "rms_residual_m": round(fit.rms, 6),
+        "pair_count": int(pair_count),
+    }
+    if symmetry is not None:
+        alignment["boundary_symmetry"] = round(float(symmetry), 4)
+    if aligned_yaml is not None:
+        sealed = mb.import_saved(
+            aligned_yaml, dest_dir, name, margin_m=margin_m, source=source,
+            site_map_id=site_map_id, alignment=alignment, require_zero_yaw=True,
+        )
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_yaml = Path(tmp) / f"{name}.yaml"
+            write_aligned(grid, fit, tmp_yaml, source_meta)
+            sealed = mb.import_saved(
+                tmp_yaml, dest_dir, name, margin_m=margin_m, source=source,
+                site_map_id=site_map_id, alignment=alignment, require_zero_yaw=True,
+            )
+    manifest = json.loads((sealed.parent / "manifest.json").read_text(encoding="utf-8"))
+    return sealed, manifest["grid_id"]
+
+
 def align(slam, site, max_residual: float, symmetry: float | None = None, allow_ambiguous: bool = False):
     """Fit and judge. Returns (fit, warnings). Raises AlignError on any refusal."""
     fit, notes = fit_rigid(slam, site), []
@@ -259,8 +328,15 @@ def main(argv=None) -> int:
     ap.add_argument("--max-residual", type=float, default=DEFAULT_MAX_RESIDUAL_M)
     ap.add_argument("--allow-ambiguous", action="store_true")
     ap.add_argument("--write", type=Path, metavar="OUT.yaml", help="new aligned map yaml (+ PGM beside it)")
+    ap.add_argument("--seal-bundle", type=Path, metavar="DEST_DIR", help="write closed bundle + manifest via map_bundle")
+    ap.add_argument("--name", default="", help="map name inside --seal-bundle")
+    ap.add_argument("--site-map-id", default=None, help="override site_map_id recorded in manifest.json")
+    ap.add_argument("--margin-m", type=float, default=0.20, help="occupied margin around sealed map (m)")
+    ap.add_argument("--source", default="", help="provenance string written to manifest.json")
     args = ap.parse_args(argv)
     try:
+        if args.seal_bundle and not args.name:
+            raise AlignError("--seal-bundle requires --name")
         slam, site = parse_pairs(args.pair, load_places(args.site_map))
         grid = load_map(args.map_yaml)
         sym = boundary_symmetry(grid.cells)
@@ -273,14 +349,28 @@ def main(argv=None) -> int:
         print(f"boundary 180-degree self-similarity: {sym:.2f}")
         for n in notes:
             print(n)
+        source_meta = yaml.safe_load(args.map_yaml.read_text(encoding="utf-8"))
         if args.write:
-            src = {Path(args.map_yaml).resolve(), Path(args.map_yaml).with_name(
-                yaml.safe_load(args.map_yaml.read_text(encoding="utf-8"))["image"]).resolve()}
+            src = {Path(args.map_yaml).resolve(), Path(args.map_yaml).with_name(source_meta["image"]).resolve()}
             if args.write.resolve() in src or args.write.with_suffix(".pgm").resolve() in src:
                 raise AlignError("--write would overwrite the input map")
             if args.write.exists() or args.write.with_suffix(".pgm").exists():
                 raise AlignError(f"{args.write} (or its PGM) exists; refusing to overwrite")
-            print("wrote", write_aligned(grid, fit, args.write, yaml.safe_load(args.map_yaml.read_text(encoding="utf-8"))))
+        if args.seal_bundle:
+            bundle_yaml = args.seal_bundle / "maps" / f"{args.name}.yaml"
+            bundle_pgm = args.seal_bundle / "maps" / f"{args.name}.pgm"
+            if bundle_yaml.exists() or bundle_pgm.exists():
+                raise AlignError(f"{bundle_yaml} (or its PGM) exists; refusing to overwrite")
+        if args.write:
+            print("wrote", write_aligned(grid, fit, args.write, source_meta))
+        if args.seal_bundle:
+            site_id = args.site_map_id or load_site_map_id(args.site_map)
+            sealed, grid_id = seal_aligned_bundle(
+                grid, fit, source_meta, args.seal_bundle, args.name,
+                site_map_id=site_id, margin_m=args.margin_m, source=args.source,
+                symmetry=sym, pair_count=len(slam), aligned_yaml=args.write,
+            )
+            print(f"sealed {sealed} (grid_id={grid_id}, site_map_id={site_id})")
     except AlignError as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return REFUSED

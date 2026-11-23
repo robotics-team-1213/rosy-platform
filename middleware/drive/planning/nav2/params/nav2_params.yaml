@@ -37,7 +37,8 @@ amcl:
     z_rand: 0.5
     z_short: 0.05
     scan_topic: scan
-    set_initial_pose: true
+    # D-1046 / D-395 (2026-11-18 user decision): never fabricate (0, 0, 0); first pose comes from loc_assist + Fleet.
+    set_initial_pose: false
     initial_pose:
       x: 0.0
       y: 0.0
