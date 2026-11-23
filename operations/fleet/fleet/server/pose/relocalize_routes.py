@@ -159,8 +159,11 @@ def install_relocalize_routes(app, *, service, clients: Callable[[], Mapping],
             evidence={"candidate_index": index, "scan_fit": candidate.scan_fit},
             ttl_s=5.0)
         try:
-            answer = await asyncio.wait_for(clients()[robot_id].localization_decision(decision),
-                                            CALL_TIMEOUT_S)
+            client = clients()[robot_id]
+            if service is None:
+                answer = await asyncio.wait_for(client.localization_decision(decision), CALL_TIMEOUT_S)
+            else:
+                answer = await service.confirm_operator_pose(robot_id, client, decision)
         except RobotApiError as exc:
             if exc.status == 429:
                 raise _rate_limit(exc, robot_id) from exc

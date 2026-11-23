@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from typing import Mapping, Optional
 
 from core_common.protocol.localization import LocState
@@ -11,6 +12,19 @@ from fleet.localization import cues, pose_request, service_logic, trust
 from fleet.swarm import transport
 
 logger = logging.getLogger("fleet.localization")
+
+MapFrame = tuple[str, str]
+
+
+def map_frame(state: Mapping) -> MapFrame | None:
+    """Map name and content identity used for comparing independent robot observations."""
+    map_id = state.get("map_id")
+    if not isinstance(map_id, str) or not map_id:
+        return None
+    grid = state.get("map_grid_id")
+    if grid is None and re.fullmatch(r"occupancy:[0-9a-f]{12}", map_id):
+        grid = map_id
+    return (map_id, grid) if isinstance(grid, str) and grid else None
 
 
 async def handle_pose_request(svc, rid: str, client: transport.RobotClient, state: Mapping, now: float) -> None:
@@ -83,14 +97,20 @@ def track_anchor_provenance(svc, states: Mapping[str, dict], localized: Mapping[
             svc._anchors.discard(rid)
             svc._localized_at.pop(rid, None)
             continue
-        svc._localized_at[rid] = (pose, now)
-        if previous is None:
+        frame = map_frame(states[rid])
+        svc._localized_at[rid] = (pose, now, frame)
+        if previous is None or previous[2] != frame:
+            svc._anchors.discard(rid)
             decided = svc._pending.pop(rid, None)
             unconfirmed = svc._unconfirmed.pop(rid, None)
-            if decided is not None and not service_logic.disagrees(decided, pose):
+            operator = svc._operator_pending.pop(rid, None)
+            if operator is not None and operator[0] == frame and svc._reached(operator[1], pose, now):
+                svc._anchors.add(rid)
+                logger.info("localization: %s LOCALIZED at the operator-confirmed pose: anchor", rid)
+            elif previous is None and decided is not None and not service_logic.disagrees(decided, pose):
                 svc._anchors.add(rid)
                 logger.info("localization: %s LOCALIZED by a Fleet decision: anchor", rid)
-            elif unconfirmed is not None and svc._reached(unconfirmed, pose, now):
+            elif previous is None and unconfirmed is not None and svc._reached(unconfirmed, pose, now):
                 svc._anchors.add(rid)
                 logger.info("localization: %s LOCALIZED at timed-out decision %s: confirmed, anchor",
                             rid, unconfirmed[0])
@@ -116,6 +136,9 @@ def observe_pose_from_anchors(svc, states: Mapping[str, dict], localized: Mappin
                               anchors: Mapping[str, cues.Pose], observations: dict, now: float) -> None:
     """D-395 rev. 4 §5 follow-up (S1 R1): a LOCALIZED anchor's status carries what its lidar sees."""
     for rid, pose in anchors.items():
+        frame = map_frame(states[rid])
+        if frame is None:
+            continue
         status = trust.status_of(states.get(rid))
         if status is None or status.objects_stamp is None:
             svc._objects_seen.pop(rid, None)
@@ -125,7 +148,7 @@ def observe_pose_from_anchors(svc, states: Mapping[str, dict], localized: Mappin
             seen = svc._objects_seen[rid] = (status.objects_stamp, now)
         if now - seen[1] > service_logic.REPORT_FRESH_S:
             continue
-        targets = {o: p for o, p in localized.items() if o != rid}
+        targets = {o: p for o, p in localized.items() if o != rid and map_frame(states[o]) == frame}
         for target, observed in service_logic.peer_observations(
                 status.unmapped_objects, pose, targets).items():
             observations.setdefault(target, []).append((("objects", rid, status.objects_stamp), observed))
@@ -169,6 +192,7 @@ def forget_removed_robots(svc, current: set) -> None:
         svc._quiet_until.pop(rid, None)
         svc._anchors.discard(rid)
         svc._pending.pop(rid, None)
+        svc._operator_pending.pop(rid, None)
         svc._unconfirmed.pop(rid, None)
         svc._localized_at.pop(rid, None)
         svc._pose_req.pop(rid, None)
