@@ -102,3 +102,33 @@ class LocalizationTests(unittest.TestCase):
         self.assertTrue(result['unique'], result)
         self.assertLess(math.dist(result['pose'][:2], truth[:2]), .03)
         self.assertLess(abs(math.atan2(math.sin(result['pose'][2]-.37), math.cos(result['pose'][2]-.37))), .03)
+
+    def test_coarse_5cm_grid_keeps_one_cell_wall_tolerance_and_rejects_intervening_walls(self):
+        point_grid = np.zeros((40, 40), dtype=np.int8)
+        point_grid[20, 20] = 100
+        point_map = MapAgreement(point_grid, .05, (0., 0.))
+        self.assertTrue(point_map.near[19:22, 19:22].all())
+        self.assertFalse(point_map.near[18, 20] or point_map.near[22, 20])
+        self.assertFalse(point_map.near[20, 18] or point_map.near[20, 22])
+        self.assertAlmostEqual(point_map._ray_margin, .10)
+
+        wall_grid = np.zeros((40, 40), dtype=np.int8)
+        wall_grid[:, 20] = 100
+        wall_map = MapAgreement(wall_grid, .05, (0., 0.))
+        angles = np.linspace(-.4, .4, 60)
+        self.assertGreater(wall_map.score((.40, 1.00, 0.), (.99 - .40) / np.cos(angles), angles), .90)
+        self.assertLess(wall_map.score((.25, 1.00, 0.), (.99 - .40) / np.cos(angles), angles), .1)
+
+        wall_grid[:, 15] = 100
+        blocked_map = MapAgreement(wall_grid, .05, (0., 0.))
+        self.assertLess(blocked_map.score((.40, 1.00, 0.), (1.02 - .40) / np.cos(angles), angles), .1)
+
+    def test_2cm_grid_keeps_legacy_tolerance_and_ray_margin(self):
+        grid = np.zeros((30, 30), dtype=np.int8)
+        grid[10, 10] = 100
+        m = MapAgreement(grid, .02, (0., 0.), tolerance=.04)
+        self.assertTrue(m.near[10, 12])
+        self.assertFalse(m.near[12, 12])
+        self.assertFalse(m.near[10, 13])
+        self.assertAlmostEqual(m._ray_margin, .06)
+        self.assertAlmostEqual(m.likelihood[10, 11], math.exp(-(.02**2) / (2 * .025**2)))
