@@ -118,7 +118,7 @@ class FakeHttp:
         if url.endswith('/api/fleet/state'):
             return {'robots': [{'robot_id': 'robot-test'}]}
         if url.endswith('/api/fleet/trips'):
-            return {'open': [], 'running': [], 'trips': []}
+            return {'open': [], 'running': None, 'trips': []}
         if url.endswith('/api/fleet/dispatch-control'):
             return {'queued_tasks': 0, 'unresolved_actions': 0}
         if url.endswith('/api/fleet/formation'):
