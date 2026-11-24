@@ -32,6 +32,7 @@ class RosBridgeHelpersMixin:
     """Sensor/status subscription adapters and display/power reconciliation helpers."""
 
     _sensor_sink = None
+    _file_writer = None
 
     def _init_bridge_state(self, node, services) -> None:
         self._last_odom_ts = 0.0
@@ -267,15 +268,36 @@ class RosBridgeHelpersMixin:
         if not display.face_inputs_due(
                 content, self._face_inputs_last, now, self._face_inputs_at, period):
             return
-        try:
-            self._svc.host_files.write_face_inputs(self._svc, content)
-        except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
+        writer = self._file_writer
+        if writer is None:
+            try:
+                self._svc.host_files.write_face_inputs(self._svc, content)
+            except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
+                if not self._face_inputs_failed:
+                    self._node.get_logger().warning(
+                        f"face inputs not written: {type(exc).__name__}: {exc}")
+                self._face_inputs_failed = True
+                return
+            self._face_inputs_failed = False
+            self._face_inputs_last, self._face_inputs_at = content, now
+            return
+
+        def _on_ok() -> None:
+            self._face_inputs_failed = False
+
+        def _on_error(exc: Exception) -> None:
             if not self._face_inputs_failed:
                 self._node.get_logger().warning(
                     f"face inputs not written: {type(exc).__name__}: {exc}")
             self._face_inputs_failed = True
-            return
-        self._face_inputs_failed = False
+            self._face_inputs_last = None
+
+        writer.submit(
+            "face_inputs",
+            lambda payload=content: self._svc.host_files.write_face_inputs(self._svc, payload),
+            on_ok=_on_ok,
+            on_error=_on_error,
+        )
         self._face_inputs_last, self._face_inputs_at = content, now
 
     def _publish_display_info(self, status) -> None:
