@@ -98,7 +98,7 @@ def test_recover_unlatch_preconditions_checked_context_and_zero_jump_sync():
     r.tick()
     assert r.human_hold_latched is True and r.fault == "human hold"
     stop0, chk0 = robot.motion.stop_calls, len(robot.checked_calls)
-    r.pos[1] = -21.5
+    robot.pos[1] = -21.5
     assert r.command("recover-unlatch") is True
     ack = status[-1]
     assert ack["ok"] is True and ack["command"] == "recover-unlatch"
@@ -381,8 +381,8 @@ def test_cell_job_api_recover_hold_admission_and_safety_guards(tmp_path, monkeyp
     (tmp_path / "chunk-io-b" / "live.json").write_text(json.dumps({"human_hold_latched": True, "torque_hold_commanded": True, "chunk": None, "t": time.time()}), encoding="utf-8")
     (tmp_path / "leases").mkdir()
     (tmp_path / "leases" / "arm_b.json").write_text(json.dumps({"pid": None, "expires_at": time.time() + 60.0}), encoding="utf-8")
-    assert guards.live_hold_attach_err("arm_b", tmp_path, tmp_path / "leases", tmp_path,
-                                       session_lock_held_fn=lambda *_: False,
+    assert api.live_hold_attach_err("arm_b", tmp_path, tmp_path / "leases", tmp_path,
+                                    session_lock_held_fn=lambda *_: False,
                                        read_json_fn=lambda p: json.loads(p.read_text()) if p.is_file() else None,
                                        live_max_age_s=15.0, pid_alive_fn=lambda _: True) is not None
     (tmp_path / "chunk-io-a" / "live.json").write_text(json.dumps({"chunk": None, "state": [0, 10, 10, 0, 0, 0], "t": time.time()}), encoding="utf-8")
