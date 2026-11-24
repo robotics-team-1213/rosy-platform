@@ -128,7 +128,8 @@ def test_lerobot_shadow_load_and_capture_pass_cell_config_goal_and_sim_rule(tmp_
             return np.tile(np.append(obs["observation.state"][:5], 0.5), (2, 1))
         return predict
 
-    monkeypatch.setattr(lrs, "_load_lerobot", fake_loader)
+    orig_shadow = lrs.LeRobotShadow
+    monkeypatch.setattr(lrs, "LeRobotShadow", lambda r, rev, **kw: orig_shadow(r, rev, loader=fake_loader, **kw))
     cfg = {
         "arm_id": "arm_b",
         "work_dir": str(tmp_path),

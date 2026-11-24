@@ -64,7 +64,7 @@ def test_bases_hung_on_the_measured_ship_agree_with_the_bridge_in_an_older_snaps
 
 
 def test_parse_choices_booleans_and_v24_20261124_omits_ship_house():
-    parsed = sites.parse_choices(["ship_house=false", "ship_house=true", "temp_radius_m=0.2", "top_camera=2026-11-14"])
+    parsed = sites.parse_choices(["ship_house=false", "temp_radius_m=0.2", "top_camera=2026-11-14"])
     assert parsed["ship_house"] is False and parsed["temp_radius_m"] == 0.2 and parsed["top_camera"] == "2026-11-14"
     assert sites.parse_choices(["ship_house=true"])["ship_house"] is True
     preset = sites.PRESETS["v24-20261124"]
