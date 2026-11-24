@@ -99,7 +99,9 @@ export function chargeBayRows(plan) {
       const maxTemp = hs.max_temp_c ?? (Array.isArray(stopHealth.temp_c) && stopHealth.temp_c.length ? Math.max(...stopHealth.temp_c) : null);
       const maxCur = hs.max_current_ma ?? (Array.isArray(stopHealth.current_ma) && stopHealth.current_ma.length ? Math.max(...stopHealth.current_ma) : null);
       const substage = hs.substage || (task?.status === "RUNNING" ? "Grasp → Lift → Place 실행 중" : (task?.status === "COMPLETED" ? "Fold Home 완료" : "대기"));
-      const dec = plan?.decisions?.[id] || task?.decision || null;
+      const dec = Array.isArray(plan?.decisions)
+        ? [...plan.decisions].reverse().find((d) => d?.subject_id === id) || task?.decision || null
+        : plan?.decisions?.[id] || task?.decision || null;
       const armHolds = plan?.arm_holds || {};
       const cellHeldArms = (id === "cell_s" ? ["arm_s"] : ["arm_a", "arm_b"]).filter((a) => armHolds[a]?.held);
       const holdTxt = cellHeldArms.length ? `홀드(${cellHeldArms.join("/")})` : "";
@@ -127,7 +129,7 @@ export function chargeBayRows(plan) {
         {label: "비전 자동 점검", visionCheckCell: id},
         {label: cellHeldArms.length ? "팔 홀드 해제(확인됨)" : "팔 홀드 점검·해제", clearArmHold: id},
         ...(id === "cell_s" ? [{label: "자동 감지·복구 셔틀", preset: "s3_auto_recover_or_shuttle"}] : []),
-        ...(task && (task.status === "QUEUED" || task.status === "RUNNING" || task.status === "PAUSED_HUMAN")
+        ...(task && task.status === "QUEUED"
           ? [{label: "작업 취소", cancelTaskId: task.task_id}]
           : []),
         ...(task && (task.status === "COMPLETED" || task.status === "CANCELLED" || task.status === "ABORTED")

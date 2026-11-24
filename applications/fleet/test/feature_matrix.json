@@ -4134,7 +4134,8 @@
       ],
       "consumers": [
         "applications/fleet/web/cell/cell.js",
-        "applications/fleet/web/cell/cell-real2sim-specs.js"
+        "applications/fleet/web/cell/cell-real2sim-specs.js",
+        "applications/fleet/web/cell/cell-pipeline-panel.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4260,6 +4261,38 @@
           "request_ids": [
             "GET:/api/fleet/pipeline/station-zones",
             "PUT:/api/fleet/pipeline/station-zones"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/status",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/status"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/unload-release",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/unload-release"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/pinky-tasks/${encodeURIComponent(id)}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-pipeline-panel.js",
+          "expression": "/api/fleet/pipeline/repark/${encodeURIComponent(id)}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/repark/{request_id}"
           ]
         }
       ],
@@ -4629,6 +4662,74 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/pipeline/station-zones"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/status",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/status",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "pipeline_status",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/status"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/unload-release",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/unload-release",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_unload_release.py",
+          "handler": "read_unload_release",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_unload_release.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/unload-release"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/pinky-tasks/{task_id}/cancel",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_pinky_dispatch.py",
+          "handler": "cancel_pinky_task",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful cancel acknowledgment",
+          "contract_tests": [
+            "operations/fleet/test/test_pinky_task_dispatch.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/repark/{request_id}",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/repark/{request_id}",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_repark.py",
+          "handler": "close_repark",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful repark completion or refusal",
+          "contract_tests": [
+            "operations/fleet/test/test_repark.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/repark/{request_id}"
         }
       ],
       "flows": [

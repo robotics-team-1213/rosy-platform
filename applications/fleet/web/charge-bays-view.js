@@ -115,12 +115,12 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       } else {
         await call("/api/fleet/pipeline/cell-tasks", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({preset: choice.preset}),
+          body: JSON.stringify({preset: choice.preset, ...(card.robot_id ? {robot_id: card.robot_id} : {})}),
         });
       }
       await refresh();
       if (choice.requiresPresence) {
-        patchText(hint, "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.");
+        patchText(hint, "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell#real2sim-heading)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.");
         patchHidden(hint, false);
       }
     } catch (error) {

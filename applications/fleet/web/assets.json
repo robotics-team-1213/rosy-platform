@@ -102,6 +102,10 @@
       "path": "cell/cell-real2sim-views.js",
       "media_type": "application/javascript"
     },
+    "cell-pipeline-panel.js": {
+      "path": "cell/cell-pipeline-panel.js",
+      "media_type": "application/javascript"
+    },
     "cell-frames.js": {
       "path": "shared/cell-frames.js",
       "media_type": "application/javascript"

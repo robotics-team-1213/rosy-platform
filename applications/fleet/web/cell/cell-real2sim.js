@@ -19,6 +19,12 @@ import {
 } from './cell-real2sim-specs.js';
 import {createCellActions} from './cell-real2sim-actions.js';
 import {createCellViews} from './cell-real2sim-views.js';
+import {
+  createPipelinePanel,
+  discoverPinkyIds,
+  PIPELINE_STATUS_PATH,
+  UNLOAD_RELEASE_PATH,
+} from './cell-pipeline-panel.js';
 
 export * from './cell-real2sim-specs.js';
 
@@ -31,8 +37,12 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     selectedInspectorTarget: 'arm_s',
     selectedInspectorCamByTarget: {},
     dualInspectorCamMode: false,
+    selectedRobotId: null,
   };
   let lastCellTasksBody = null;
+  let lastStatusBody = null;
+  let lastUnloadRelease = null;
+  let pollTimer = null;
   let liveStreamOn = true;
 
   const ctx = {
@@ -52,6 +62,13 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     runPresetTask, createCustomTask, loadStationZonesYaml, saveStationZonesYaml,
     runVisionAutoCheck, toggleCableGuard,
   } = actions;
+  const pipelinePanel = createPipelinePanel({
+    ...ctx,
+    onRobotChange: rid => {
+      state.selectedRobotId = rid;
+      void refreshCellTasks(++generation);
+    },
+  });
   const {renderRightInspector, renderVisualCards, renderCameraMatrix} = createCellViews(ctx);
 
   function toggleLiveStream() {
@@ -164,8 +181,27 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     status.textContent = `스냅샷 ${body.active?.id || '—'} · 이전 ${body.previous?.id || '없음'} · Stage 1(MuJoCo) -> Stage 2(Isaac Sim) 파이프라인 준비 완료`;
   }
 
+  function stopPolling() {
+    if (pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function ensurePolling() {
+    if (pollTimer !== null || typeof window === 'undefined' || typeof window.setInterval !== 'function') return;
+    if (!$('cell-visual-cards')?.parentNode) return;
+    pollTimer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        void refreshCellTasks(generation);
+      }
+    }, 3000);
+    pollTimer?.unref?.();
+  }
+
   function clear() {
     generation++;
+    stopPolling();
     if ($('real2sim-figures')) {
       $('real2sim-figures').hidden = true;
       $('real2sim-figures').replaceChildren();
@@ -259,6 +295,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
   function renderCellTasks(body) {
     lastCellTasksBody = body;
     renderDstOptions();
+    pipelinePanel.render(body, lastStatusBody, lastUnloadRelease);
     renderVisualCards(body);
     renderCameraMatrix();
     renderRightInspector(body);
@@ -287,7 +324,32 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     try {
       const body = await request(CELL_TASKS_PATH);
       if (expectedGen !== generation) return;
-      renderCellTasks(body);
+      let statusBody = null;
+      try {
+        statusBody = await request(PIPELINE_STATUS_PATH);
+      } catch {
+        statusBody = null;
+      }
+      if (expectedGen !== generation) return;
+      lastStatusBody = statusBody;
+      const ids = discoverPinkyIds(body, statusBody);
+      if (!state.selectedRobotId || !ids.includes(state.selectedRobotId)) {
+        state.selectedRobotId = ids[0] || 'rosy_46';
+      }
+      let unloadReleaseBody = null;
+      try {
+        unloadReleaseBody = await request(`${UNLOAD_RELEASE_PATH}?robot_id=${encodeURIComponent(state.selectedRobotId)}`);
+      } catch {
+        unloadReleaseBody = null;
+      }
+      if (expectedGen !== generation) return;
+      lastUnloadRelease = unloadReleaseBody;
+      renderCellTasks({
+        ...body,
+        pinky_robots: ids,
+        selected_robot_id: state.selectedRobotId,
+      });
+      ensurePolling();
     } catch (error) {
       if (expectedGen !== generation) return;
       if ($('cell-tasks-status')) {

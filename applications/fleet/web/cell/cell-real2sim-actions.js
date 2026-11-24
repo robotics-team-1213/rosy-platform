@@ -1,5 +1,6 @@
 // Cell task action handlers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
 import { setOffBy } from "/common/cause-line.js";
+import { pinkyCancelPath, reparkClosePath } from './cell-pipeline-panel.js';
 import {
   CELL_TASKS_PATH,
   PINKY_TASKS_PATH,
@@ -30,6 +31,7 @@ const PRESENCE_CONFIRM_ERROR = {
 export function createCellActions(ctx) {
   const {request, $} = ctx;
   const refreshCellTasks = (...args) => ctx.refreshCellTasks(...args);
+  const activeRobotId = explicit => explicit || ctx.state?.selectedRobotId || 'rosy_46';
 
   function bindActionButton(btn, b, fallbackRobotId = 'rosy_46') {
     const targetRobotId = b.robot_id || fallbackRobotId;
@@ -53,8 +55,9 @@ export function createCellActions(ctx) {
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runStationZoneDispatch(b.zoneId, targetRobotId); });
     } else if (b.preset) {
       btn.dataset.cellQuickPreset = b.preset;
-      btn.addEventListener('click', ev => { ev.stopPropagation(); void runQuickPreset(b.preset); });
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runQuickPreset(b.preset, b.robot_id); });
     } else if (b.pinkyAction) {
+      setOffBy(btn, ctx.namedReason());
       btn.dataset.pinkyQuickAction = b.pinkyAction;
       btn.addEventListener('click', ev => { ev.stopPropagation(); void runPinkyQuickAction(targetRobotId, b.pinkyAction); });
     } else if (b.bedConfirmTaskId || b.presenceConfirmTaskId) {
@@ -107,7 +110,7 @@ export function createCellActions(ctx) {
       await refreshCellTasks(current);
       if ($('cell-tasks-status')) {
         const spawned = res.spawned_cell_task ? ` + 셀 태스크(${res.spawned_cell_task.task_id})` : '';
-        $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 실행 완료 -> ${res.pinky_task?.target_place || '—'}${spawned}`;
+        $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 요청 등록됨 (QUEUED) -> ${res.pinky_task?.target_place || '—'}${spawned}`;
       }
     } catch (error) {
       if (current !== ctx.gen()) return;
@@ -115,14 +118,14 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runVisionAutoCheck(cellId = 'cell_s') {
+  async function runVisionAutoCheck(cellId = 'cell_s', robotId = null) {
     const current = ctx.bump();
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 카메라(${cellId}) 자동 안전·이탈 점검 중입니다.`;
     try {
       const res = await request(VISION_CHECK_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({cell_id: cellId, robot_id: 'rosy_46'}),
+        body: JSON.stringify({cell_id: cellId, robot_id: activeRobotId(robotId)}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -136,14 +139,14 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function toggleCableGuard() {
+  async function toggleCableGuard(robotId = null) {
     const current = ctx.bump();
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = '선 꼬임 보호 모드를 전환하는 중입니다.';
     try {
       const res = await request(CABLE_GUARD_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({toggle: true, robot_id: 'rosy_46'}),
+        body: JSON.stringify({toggle: true, robot_id: activeRobotId(robotId)}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -227,7 +230,7 @@ export function createCellActions(ctx) {
       await refreshCellTasks(current);
       if ($('cell-tasks-status')) {
         const d = res.decision || {};
-        $('cell-tasks-status').textContent = `Decision(${subjectId}): ${d.choice || '—'} (${d.reason || ''}) -> 자동 실행 완료`;
+        $('cell-tasks-status').textContent = `Decision(${subjectId}): ${d.choice || '—'} (${d.reason || ''}) -> 판정·요청 등록됨`;
       }
     } catch (error) {
       if (current !== ctx.gen()) return;
@@ -283,14 +286,53 @@ export function createCellActions(ctx) {
     }
   }
 
-  async function runQuickPreset(preset) {
+  async function cancelPinkyTask(taskId) {
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `핑키 배차(${taskId}) 취소를 요청하는 중입니다.`;
+    try {
+      const res = await request(pinkyCancelPath(taskId), {method: 'POST'});
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = res?.confirmed === false
+          ? `정지 요청 전송됨 (${taskId}) · 트립 종료 미확인(자동 재시도 중)`
+          : `핑키 배차 취소 완료: ${taskId}`;
+      }
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `핑키 배차 취소 실패: ${error.message}`;
+    }
+  }
+
+  async function closeRepark(requestId, stateVal) {
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `재주차(${requestId}) ${stateVal} 보고 중입니다.`;
+    try {
+      const res = await request(reparkClosePath(requestId), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({state: stateVal}),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const retry = res?.request?.retry_task_id ? ` -> 재시도(${res.request.retry_task_id})` : '';
+        $('cell-tasks-status').textContent = `재주차(${requestId}) ${stateVal} 처리 완료${retry}`;
+      }
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `재주차 처리 실패: ${error.message}`;
+    }
+  }
+
+  async function runQuickPreset(preset, robotId = null) {
     const current = ctx.bump();
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `카드 원클릭 프리셋(${preset})을 실행하는 중입니다.`;
     try {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({preset}),
+        body: JSON.stringify({preset, robot_id: activeRobotId(robotId)}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -317,7 +359,7 @@ export function createCellActions(ctx) {
       await refreshCellTasks(current);
       if ($('cell-tasks-status')) {
         const spawned = res.spawned_cell_task ? ` + 셀 태스크(${res.spawned_cell_task.task_id})` : '';
-        $('cell-tasks-status').textContent = `핑키(${robotId}) ${action} 완료 -> ${res.pinky_task?.target_place || '—'}${spawned}`;
+        $('cell-tasks-status').textContent = `핑키(${robotId}) ${action} 배차 요청 등록됨 (QUEUED) -> ${res.pinky_task?.target_place || '—'}${spawned}`;
       }
     } catch (error) {
       if (current !== ctx.gen()) return;
@@ -333,7 +375,7 @@ export function createCellActions(ctx) {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({preset}),
+        body: JSON.stringify({preset, robot_id: activeRobotId()}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -359,7 +401,7 @@ export function createCellActions(ctx) {
       const res = await request(CELL_TASKS_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({cell_id: cellId, arm_id: armId, tier, displaced_to: displacedTo, dst_site: dstSite}),
+        body: JSON.stringify({cell_id: cellId, arm_id: armId, robot_id: activeRobotId(), tier, displaced_to: displacedTo, dst_site: dstSite}),
       });
       if (current !== ctx.gen()) return;
       await refreshCellTasks(current);
@@ -372,5 +414,5 @@ export function createCellActions(ctx) {
     }
   }
 
-  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
+  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, cancelPinkyTask, closeRepark, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
 }

@@ -2026,6 +2026,38 @@
       ],
       "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
     },
+    "GET:/api/fleet/pipeline/status": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_pipeline_http_status_and_evaluate"
+      ],
+      "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
+    },
+    "GET:/api/fleet/pipeline/unload-release": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_unload_release.py",
+        "test_dock_and_unload_needs_no_count_and_an_operator_depart_is_gated"
+      ],
+      "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
+    },
+    "POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pinky_task_dispatch.py",
+        "test_real_trip_runner_and_pipeline_routes_e2e"
+      ],
+      "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
+    },
+    "POST:/api/fleet/pipeline/repark/{request_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_repark.py",
+        "test_route_404_409_and_done_through_the_ledger"
+      ],
+      "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
+    },
     "GET:/api/fleet/cell-app/real2sim-pipeline": {
       "status": 200,
       "test": [

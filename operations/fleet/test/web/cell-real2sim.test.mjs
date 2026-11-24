@@ -278,3 +278,21 @@ test("cell task refresh renders across the main/views module split", async () =>
     globalThis.document = previous;
   }
 });
+
+test("decisions list lookup, QUEUED-only cancel, dead-button removal, and dynamic pinky list", () => {
+  const cards = visualCardSpecs({
+    decisions: [{subject_id: "cell_s", choice: "USE_BELT_FAR", reason: "vision"}],
+    tasks: [
+      {task_id: "q-1", cell_id: "cell_s", arm_id: "arm_s", status: "QUEUED"},
+      {task_id: "r-1", cell_id: "cell_ab", arm_id: "arm_a", status: "RUNNING"},
+    ],
+  });
+  assert.match(cards[0].folded_state, /Decision: USE_BELT_FAR/);
+  assert.ok(cards[0].buttons.some(b => b.cancelTaskId === "q-1"));
+  assert.ok(!cards[1].buttons.some(b => b.cancelTaskId));
+  for (const dead of ["micro_forward_2cm", "micro_reverse_2cm", "stop_now"]) {
+    assert.ok(!cards[2].buttons.some(b => b.pinkyAction === dead), dead);
+  }
+  const dynSpecs = inspectorSpecs({pinky_robots: ["rosy_99"]});
+  assert.deepEqual(dynSpecs.map(s => s.id), ["arm_s", "arm_a", "arm_b", "cell_s", "cell_ab", "rosy_99"]);
+});
