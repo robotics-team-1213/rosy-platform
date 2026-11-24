@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { workKey, workLine, workStatus, autoAdmitScope, policyScopeText, autoAdmitDetail, canAdmitWorkHere } = await import("../../../../applications/fleet/web/work/work-view.js");
+const { workKey, workLine, workStatus, formatWorkTime, autoAdmitScope, policyScopeText, autoAdmitDetail, canAdmitWorkHere } = await import("../../../../applications/fleet/web/work/work-view.js");
 
 test("two ledgers can reuse the same ID without sharing selection", () => {
   assert.notEqual(workKey({source: "task", source_id: "same"}), workKey({source: "mission", source_id: "same"}));
@@ -69,4 +69,15 @@ test("D-960: FleetR relays arm jobs without admitting them locally; owning cell 
   assert.equal(canAdmitWorkHere(waiting, { role: "root", drive: true, arms: true, children: true }), false);
   assert.equal(canAdmitWorkHere(waiting, { role: "cell", drive: true, arms: false, children: false }), false);
   assert.equal(canAdmitWorkHere({ ...waiting, status: "RUNNING" }, null), false);
+});
+
+test("formatWorkTime handles Unix epoch seconds, ms, and ISO strings without 1970 dates", () => {
+  for (const sample of [1795524570.123, 1795524570123, "2026-11-24T12:49:30.123+00:00"]) {
+    const out = formatWorkTime(sample);
+    assert.match(out, /2026/);
+    assert.doesNotMatch(out, /1970/);
+  }
+  for (const empty of [null, undefined, "", 0, -1, Number.NaN, "not-a-date"]) {
+    assert.equal(formatWorkTime(empty), "미확인");
+  }
 });
