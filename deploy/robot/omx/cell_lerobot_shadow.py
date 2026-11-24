@@ -151,7 +151,7 @@ def _load_torch(root: Path, device: str):
     return predict
 
 
-def _load_lerobot(root: Path, device: str):
+def _load_lerobot(root: Path, device: str, *, policy_revision: str | None = None, onnx_sha256: str | None = None):
     """predict(obs) -> (chunk, 6) via OpenVINO pure-NumPy on CPU when valid model.onnx is present, else PyTorch."""
     backend = os.environ.get("ROSY_ACT_BACKEND", "auto").strip().lower()
     if backend not in ("auto", "torch", "openvino"):
@@ -163,7 +163,7 @@ def _load_lerobot(root: Path, device: str):
             raise ValueError("ROSY_ACT_BACKEND='openvino' requires device='cpu'")
         import cell_lerobot_openvino as ov_backend
 
-        return ov_backend.load_openvino(root, action_width=len(JOINT_NAMES))
+        return ov_backend.load_openvino(root, policy_revision, onnx_sha256=onnx_sha256, action_width=len(JOINT_NAMES))
     onnx_present = (
         (root / ONNX_MODEL).is_file()
         or (root / ONNX_MODEL).is_symlink()
@@ -173,7 +173,7 @@ def _load_lerobot(root: Path, device: str):
     if device == "cpu" and onnx_present and _has_openvino():
         import cell_lerobot_openvino as ov_backend
 
-        return ov_backend.load_openvino(root, action_width=len(JOINT_NAMES))
+        return ov_backend.load_openvino(root, policy_revision, onnx_sha256=onnx_sha256, action_width=len(JOINT_NAMES))
     return _load_torch(root, device)
 
 
@@ -196,7 +196,10 @@ class LeRobotShadow:
         self.sim_rule = read_sim_rule(root / UNITS, cell_config)
         self.arm_id = (cell_config or {}).get("arm_id")
         self.warp = read_warp(root / WARP, self.image_views)
-        self._predict = loader(root, device)
+        self._predict = (
+            loader(root, device, policy_revision=self.policy_revision, onnx_sha256=self.files.get(ONNX_MODEL))
+            if loader is _load_lerobot else loader(root, device)
+        )
 
     def inputs(self, state, frames: dict, *, goal=None, mask_goal: bool = False) -> tuple[dict, dict]:
         """(model observation, row metadata); a missing camera, a wrong size or a non-finite joint raises."""

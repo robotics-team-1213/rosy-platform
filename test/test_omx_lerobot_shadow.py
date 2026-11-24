@@ -289,3 +289,48 @@ def test_load_torch_caps_cpu_threads_and_preserves_caller_env(tmp_path, monkeypa
     assert os.environ["OMP_NUM_THREADS"] == "3"
     assert os.environ["MKL_NUM_THREADS"] == "2" and os.environ["OPENBLAS_NUM_THREADS"] == "2"
     assert calls == [("threads", min(2, os.cpu_count() or 1))]
+
+
+def test_collect_arm_models_discovers_stack_configs_and_prefers_auto(tmp_path):
+    import cell_camera_telemetry_sync as sync
+
+    for sub in ("m_a", "m_b", "m_auto"):
+        (tmp_path / sub).mkdir()
+    root_a, sha_a = checkpoint(tmp_path / "m_a")
+    root_b, sha_b = checkpoint(tmp_path / "m_b")
+    root_auto, sha_auto = checkpoint(tmp_path / "m_auto")
+    (tmp_path / "cell-arm-a-stack.json").write_text(
+        json.dumps({"work_dir": str(tmp_path), "act_shadow": {"kind": "lerobot", "policy_root": str(root_a), "policy_revision": sha_a}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "cell-arm-b-stack.json").write_text(
+        json.dumps({"work_dir": str(tmp_path), "act_shadow": {"kind": "lerobot", "policy_root": str(root_b), "policy_revision": sha_b}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "cell-auto-arm-b-live.json").write_text(
+        json.dumps({"work_dir": str(tmp_path), "act_shadow": {"kind": "lerobot", "policy_root": str(root_auto), "policy_revision": sha_auto}}),
+        encoding="utf-8",
+    )
+    models = sync._collect_arm_models(tmp_path)
+    assert models["arm_a"]["policy_revision"] == sha_a and models["arm_a"]["config"] == "cell-arm-a-stack.json"
+    assert models["arm_b"]["policy_revision"] == sha_auto and models["arm_b"]["config"] == "cell-auto-arm-b-live.json"
+
+
+def test_resolve_goal_site_accepts_canonical_ship_h1_sites_directly():
+    import cell_policy_goals
+
+    assert cell_policy_goals.resolve_goal_site("ship-h1r0-l0") == ("ship-h1r0-l0", 0)
+    assert cell_policy_goals.resolve_goal_site("ship-h1r2-l2") == ("ship-h1r2-l2", 8)
+
+
+def test_trained_grasp_mismatch_supports_opt_in_square_ninety_deg_symmetry():
+    from cell_policy_entry import trained_grasp_mismatch
+
+    demo_low = [0, 0, 0, 0, 2.6, 0]
+    demo_high = [0, 0, 0, 0, 48.7, 0]
+    msg_180 = trained_grasp_mismatch(demo_low, demo_high, -14.0, square=False)
+    assert msg_180 is not None and "mod 100." in msg_180
+    assert trained_grasp_mismatch(demo_low, demo_high, -14.0, square=True) is None
+    msg_90 = trained_grasp_mismatch([0, 0, 0, 0, 10.0, 0], [0, 0, 0, 0, 15.0, 0], -14.0, square=True)
+    assert msg_90 is not None and "mod 50." in msg_90
+

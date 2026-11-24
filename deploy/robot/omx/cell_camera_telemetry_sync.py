@@ -77,7 +77,10 @@ def _collect_arm_models(prep_dir: Path) -> dict[str, Any]:
     """Per arm: the pinned shadow model and a summary of its proposals, {} without one. Never an execution grant."""
     models: dict[str, Any] = {arm_id: {} for arm_id in ARM_SUFFIXES}
     for arm_id, suffix in ARM_SUFFIXES.items():
-        for path in sorted(prep_dir.glob(f"cell-auto-arm-{suffix}-*.json")):
+        candidates = sorted(prep_dir.glob(f"cell-auto-arm-{suffix}-*.json"))
+        seen = set(candidates)
+        candidates.extend(p for p in sorted(prep_dir.glob(f"cell-arm-{suffix}-*.json")) if p not in seen)
+        for path in candidates:
             try:
                 config = json.loads(path.read_text(encoding="utf-8"))
                 spec = config.get("act_shadow")

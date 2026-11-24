@@ -280,19 +280,19 @@ def wrist_roll_warning(chunk, home_roll: float, *, roll_range: tuple[float, floa
     return None
 
 
-def trained_grasp_mismatch(demo_low, demo_high, grasp_roll: float, *, margin: float | None = None) -> str | None:
-    """Refuse when no 180-deg twin of the library grasp_roll falls inside the trained q01..q99 wrist_roll interval."""
+def trained_grasp_mismatch(demo_low, demo_high, grasp_roll: float, *, margin: float | None = None, square: bool = False) -> str | None:
+    """Refuse when no symmetric branch of the library grasp_roll falls inside the trained q01..q99 wrist_roll interval."""
     from arm_status_bridge import TICKS
     from cell_policy_shape import MARGIN, SCALE
 
     eff_margin = MARGIN if margin is None else margin
-    half_turn = SCALE["wrist_roll"] * TICKS / (TICKS - 1) / 2
+    step = SCALE["wrist_roll"] * TICKS / (TICKS - 1) / (4 if square else 2)
     lo, hi = float(demo_low[4]) - eff_margin, float(demo_high[4]) + eff_margin
-    if any(lo <= grasp_roll + k * half_turn <= hi for k in (-2, -1, 0, 1, 2)):
+    if any(lo <= grasp_roll + k * step <= hi for k in (range(-4, 5) if square else range(-2, 3))):
         return None
     return (
         f"trained wrist_roll {demo_low[4]:.1f}..{demo_high[4]:.1f} misses reviewed grasp_pick "
-        f"({grasp_roll:.1f} mod {half_turn:.1f} +- {eff_margin:.1f})"
+        f"({grasp_roll:.1f} mod {step:.1f} +- {eff_margin:.1f})"
     )
 
 
