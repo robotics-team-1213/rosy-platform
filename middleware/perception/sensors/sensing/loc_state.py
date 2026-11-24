@@ -74,23 +74,37 @@ class LocalizationStateMachine:
         return Step(self.state, ('report_candidates',))
 
     def _is_verified_overhead_twin_tiebreak(self, candidate_index, pose, source, cue_set, evidence) -> bool:
-        """Accept overhead-only twin tiebreak iff local laser candidates form a mirror pair."""
-        if (source != 'overhead' or 'overhead' not in cue_set
-                or not isinstance(evidence, dict) or evidence.get('tiebreak') != 'twin'):
+        """Accept overhead-only twin tiebreak (2 mirrors) or unique corroboration (1 strong laser candidate)."""
+        if source != 'overhead' or 'overhead' not in cue_set or not isinstance(evidence, dict):
             return False
-        if len(self.candidates) != 2:
-            return False
-        a, b = self.candidates
-        if not (isinstance(a.scan_fit, (int, float)) and isinstance(b.scan_fit, (int, float))
-                and math.isfinite(a.scan_fit) and math.isfinite(b.scan_fit)):
-            return False
-        if a.scan_fit < self.min_fit or b.scan_fit < self.min_fit:
-            return False
-        if abs(a.scan_fit - b.scan_fit) > TWIN_FIT_GAP:
-            return False
-        if math.hypot(a.x - b.x, a.y - b.y) < TWIN_SEPARATION_M:
-            return False
-        if abs(abs(wrap(a.yaw - b.yaw)) - math.pi) > TWIN_OPPOSITE_TOL_RAD:
+        mode = evidence.get('tiebreak')
+        if mode == 'twin':
+            if len(self.candidates) != 2:
+                return False
+            a, b = self.candidates
+            if not (isinstance(a.scan_fit, (int, float)) and isinstance(b.scan_fit, (int, float))
+                    and math.isfinite(a.scan_fit) and math.isfinite(b.scan_fit)):
+                return False
+            if a.scan_fit < self.min_fit or b.scan_fit < self.min_fit:
+                return False
+            if abs(a.scan_fit - b.scan_fit) > TWIN_FIT_GAP:
+                return False
+            if math.hypot(a.x - b.x, a.y - b.y) < TWIN_SEPARATION_M:
+                return False
+            if abs(abs(wrap(a.yaw - b.yaw)) - math.pi) > TWIN_OPPOSITE_TOL_RAD:
+                return False
+        elif mode == 'unique':
+            if len(self.candidates) != 1:
+                return False
+            c = self.candidates[0]
+            if (not isinstance(c.scan_fit, (int, float)) or isinstance(c.scan_fit, bool)
+                    or not math.isfinite(c.scan_fit) or c.scan_fit < max(self.min_fit, 0.85)):
+                return False
+            cam_dist = evidence.get('camera_to_chosen_m')
+            if (not isinstance(cam_dist, (int, float)) or isinstance(cam_dist, bool)
+                    or not math.isfinite(cam_dist) or not 0.0 <= cam_dist <= 0.35):
+                return False
+        else:
             return False
         if candidate_index is not None:
             if not 0 <= candidate_index < len(self.candidates):

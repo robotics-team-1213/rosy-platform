@@ -86,7 +86,10 @@ def search_job(stopping, bundle, generation, field, *search_args):
     if stopping.is_set():
         return [], [], None, -1, 0., notes, paint_map
     started = time.monotonic()
-    found, objects, mask = search(field, *search_args)
+    diagnostics = []
+    found, objects, mask = search(field, *search_args, diagnostics=diagnostics)
+    if not found:
+        notes.extend(diagnostics)
     return found, objects, mask, generation, time.monotonic() - started, notes, paint_map
 
 
@@ -140,6 +143,10 @@ class LocAssistNode(Node):
     def _squares(self):
         path = self.p('lane_rules_file') or lane_rules_near(self.p('map_yaml'))
         self.bundle = os.path.dirname(path) if path else None
+        if not path and self.p('map_yaml'):
+            map_dir = os.path.dirname(os.path.abspath(self.p('map_yaml')))
+            if os.path.isfile(os.path.join(map_dir, 'road_lines.stl')):
+                self.bundle = map_dir
         if not path:
             self.get_logger().info('no lane_rules.yaml: slot candidates off, global search only')
             return []
@@ -156,6 +163,7 @@ class LocAssistNode(Node):
     def on_map(self, msg):
         self.field = self.clear = None
         self.generation += 1
+        self.core.on_map_changed()
         info = msg.info
         try:
             rotation = yaw(info.origin.orientation)
@@ -197,7 +205,8 @@ class LocAssistNode(Node):
         tr = tf.transform.translation
         sensor = (tr.x, tr.y, yaw(tf.transform.rotation))
         ranges, angles = self.scan_arrays(msg)
-        fit = self.field.score(sensor, ranges, angles)
+        scorer = self.field.robust_score if hasattr(self.field, 'robust_score') else self.field.score
+        fit = scorer(sensor, ranges, angles)
         now = self.now()
         self.publish(self.core.on_fit(now, fit))
         if self.core.objects_due(now):
@@ -281,7 +290,8 @@ class LocAssistNode(Node):
         except Exception:
             return 0.0
         ranges, angles = self.scan_arrays(self.scan)
-        return self.field.score(sensor_from_base(candidate_pose, mount), ranges, angles)
+        scorer = self.field.robust_score if hasattr(self.field, 'robust_score') else self.field.score
+        return scorer(sensor_from_base(candidate_pose, mount), ranges, angles)
 
     def on_suspect(self, msg):
         payload = self._json(msg, 'localization/suspect')

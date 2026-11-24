@@ -48,17 +48,34 @@ def _localized(state: Mapping) -> tuple[str, str]:
     return str(state.get("map_id") or grid), grid
 
 
+def _site_matches(binding: Mapping, site: Optional[tuple[str, int]],
+                  frame_for_version: Optional[Callable[[int], Optional[str]]] = None) -> bool:
+    if site is None or binding["site_map_id"] != site[0]:
+        return False
+    if binding["site_map_version"] == int(site[1]):
+        return True
+    if frame_for_version is None:
+        return False
+    bound_frame = binding.get("site_frame_sha256") or frame_for_version(int(binding["site_map_version"]))
+    cur_frame = frame_for_version(int(site[1]))
+    return bool(bound_frame and cur_frame and bound_frame == cur_frame)
+
+
 class MapBindingStore:
     def __init__(self, db: sqlite3.Connection, lock: threading.RLock, clock: Callable[[], float],
-                 event: Callable[[str, str, dict], None]) -> None:
+                 event: Callable[[str, str, dict], None],
+                 frame_for_version: Optional[Callable[[int], Optional[str]]] = None) -> None:
         self._db, self._lock, self._clock, self._event = db, lock, clock, event
+        self._frame_for_version = frame_for_version
         with self._lock, self._db:
             self._db.execute("""
                 CREATE TABLE IF NOT EXISTS robot_map_bindings (
                     binding_id TEXT PRIMARY KEY, robot_id TEXT NOT NULL, robot_map_id TEXT NOT NULL,
                     robot_grid_id TEXT NOT NULL, site_map_id TEXT NOT NULL, site_map_version INTEGER NOT NULL,
                     fit TEXT NOT NULL, approved_by TEXT NOT NULL, approved_at REAL NOT NULL,
-                    revoked_by TEXT, revoked_at REAL, revoke_reason TEXT)""")
+                    revoked_by TEXT, revoked_at REAL, revoke_reason TEXT, site_frame_sha256 TEXT)""")
+            if "site_frame_sha256" not in {row[1] for row in self._db.execute("PRAGMA table_info(robot_map_bindings)")}:
+                self._db.execute("ALTER TABLE robot_map_bindings ADD COLUMN site_frame_sha256 TEXT")
 
     def approve(self, robot_id: str, state: Mapping, site: tuple[str, int], pairs, holdout,
                 principal_id: str) -> dict:
@@ -70,14 +87,16 @@ class MapBindingStore:
         body = {"yaw": fit.yaw, "tx": fit.tx, "ty": fit.ty, "residual_max_m": fit.max, "residual_rms_m": fit.rms,
                 "pairs": [{"robot": list(r), "site": list(s)} for r, s in pairs],
                 "holdout": [{"robot": list(r), "site": list(s), "err_m": e} for (r, s), e in zip(holdout, errors)]}
+        frame_sha = self._frame_for_version(int(site[1])) if self._frame_for_version is not None else None
         binding_id, now = uuid.uuid4().hex, self._clock()
         with self._lock, self._db:
             self._db.execute("UPDATE robot_map_bindings SET revoked_by = ?, revoked_at = ?, revoke_reason = "
                              "'superseded' WHERE robot_id = ? AND revoked_at IS NULL", (principal_id, now, robot_id))
             self._db.execute("INSERT INTO robot_map_bindings (binding_id, robot_id, robot_map_id, robot_grid_id, "
-                             "site_map_id, site_map_version, fit, approved_by, approved_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                             "site_map_id, site_map_version, fit, approved_by, approved_at, site_frame_sha256) "
+                             "VALUES (?,?,?,?,?,?,?,?,?,?)",
                              (binding_id, robot_id, robot_map_id, grid, site[0], int(site[1]), json.dumps(body),
-                              principal_id, now))
+                              principal_id, now, frame_sha))
             self._event("map_binding_approve", principal_id, {"robot_id": robot_id, "binding_id": binding_id,
                         "robot_grid_id": grid, "site_map_version": int(site[1]), "residual_max_m": fit.max})
         return self.active(robot_id)
@@ -95,12 +114,13 @@ class MapBindingStore:
         with self._lock:
             row = self._db.execute(
                 "SELECT binding_id, robot_map_id, robot_grid_id, site_map_id, site_map_version, fit, approved_by, "
-                "approved_at FROM robot_map_bindings WHERE robot_id = ? AND revoked_at IS NULL", (robot_id,)).fetchone()
+                "approved_at, site_frame_sha256 FROM robot_map_bindings WHERE robot_id = ? AND revoked_at IS NULL",
+                (robot_id,)).fetchone()
         if row is None:
             return None
         return {"binding_id": row[0], "robot_id": robot_id, "robot_map_id": row[1], "robot_grid_id": row[2],
                 "site_map_id": row[3], "site_map_version": row[4], "fit": json.loads(row[5]),
-                "approved_by": row[6], "approved_at": row[7]}
+                "approved_by": row[6], "approved_at": row[7], "site_frame_sha256": row[8]}
 
     def history(self, robot_id: str, limit: int = 20) -> list[dict]:
         with self._lock:
@@ -112,12 +132,25 @@ class MapBindingStore:
                 "revoked_at", "revoke_reason")
         return [dict(zip(keys, row)) for row in rows]
 
+    def binding_for_grid(self, robot_id: str, robot_grid_id: Optional[str],
+                         site: Optional[tuple[str, int]]) -> tuple[Optional[Fit], str]:
+        """Read-only frame transform for a bound robot grid, even before the robot is LOCALIZED."""
+        binding = self.active(robot_id)
+        if binding is None:
+            return None, "MAP_BINDING_REQUIRED"
+        if not _site_matches(binding, site, getattr(self, "_frame_for_version", None)):
+            return None, "MAP_BINDING_SITE_CHANGED"
+        if robot_grid_id != binding["robot_grid_id"]:
+            return None, "MAP_BINDING_GRID_CHANGED"
+        f = binding["fit"]
+        return Fit(f["yaw"], f["tx"], f["ty"], (f["residual_max_m"],)), ""
+
     def matching_fit(self, robot_id: str, state: Mapping, site: Optional[tuple[str, int]]) -> tuple[Optional[Fit], str]:
         """(fit, "") when the active binding covers this robot state and the active site map, else (None, reason)."""
         binding = self.active(robot_id)
         if binding is None:
             return None, "MAP_BINDING_REQUIRED"
-        if site is None or binding["site_map_id"] != site[0] or binding["site_map_version"] != int(site[1]):
+        if not _site_matches(binding, site, getattr(self, "_frame_for_version", None)):
             return None, "MAP_BINDING_SITE_CHANGED"
         loc = state.get("localization") or {}
         if loc.get("state") != "LOCALIZED" or loc.get("pose_frame") != "map":

@@ -194,3 +194,31 @@ def test_unverified_overhead_twin_tiebreak_is_rejected():
            pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
     reject([c0, c1, Cand(x=0.0, y=2.0, yaw=1.0, scan_fit=0.90, origin="global")],
            pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+
+
+def test_unique_overhead_corroboration_accepts_strong_single_candidate_and_rejects_mismatches():
+    Cand = type(TRUE)
+    c0 = Cand(x=-1.0, y=0.5, yaw=0.0, scan_fit=0.91, origin="global")
+
+    m_ok = machine()
+    m_ok.offer([c0], 0.)
+    step = m_ok.decide("r1-1", 1., pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",),
+                       evidence={"tiebreak": "unique", "camera_to_chosen_m": 0.22})
+    assert step.actions == ("inject_pose",) and step.pose == (-1.0, 0.5, 0.0)
+
+    def reject(candidates, **kwargs):
+        m = machine()
+        m.offer(candidates, 0.)
+        bad = m.decide("r1-1", 1., **kwargs)
+        assert (bad.actions, bad.reason) == (("reject_decision",), "no_asymmetric_cue")
+
+    reject([c0], pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",),
+           evidence={"tiebreak": "unique", "camera_to_chosen_m": 0.36})
+    reject([c0], pose=(-1.0, 0.5, math.pi), source="overhead", cues=("overhead",),
+           evidence={"tiebreak": "unique", "camera_to_chosen_m": 0.10})
+    reject([c0, Cand(x=1.0, y=-0.5, yaw=math.pi, scan_fit=0.90, origin="global")],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",),
+           evidence={"tiebreak": "unique", "camera_to_chosen_m": 0.10})
+    reject([Cand(x=-1.0, y=0.5, yaw=0.0, scan_fit=0.84, origin="global")],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",),
+           evidence={"tiebreak": "unique", "camera_to_chosen_m": 0.10})
