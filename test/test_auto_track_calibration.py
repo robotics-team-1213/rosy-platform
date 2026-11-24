@@ -165,7 +165,7 @@ def test_dry_run_and_mean_approval_in_main(tmp_path, monkeypatch, capsys):
     assert dry_line["decision"] == "approve"
     assert applied == []
 
-    # Reset idx to 4 for the real 5th run.
+    # Reset idx to 4 for default run (no --sync-map): calibration updates, map stays untouched.
     idx["n"] = 4
     assert mod.main([]) == 0
     upd_line = json.loads(capsys.readouterr().out.strip())
@@ -173,10 +173,26 @@ def test_dry_run_and_mean_approval_in_main(tmp_path, monkeypatch, capsys):
     assert upd_line["decision"] == "approve"
     assert len(applied) == 1
     approved_solved, needs_cal, needs_map = applied[0]
-    assert needs_cal and needs_map
+    assert needs_cal and not needs_map
     # Mean of shifts [0.030..0.038] is 0.034, NOT the last solve (0.038).
     assert abs(approved_solved["map_to_image"][2] - (-0.034)) < 1e-6
     assert abs(approved_solved["places"][0]["x"] - 0.134) < 1e-6
+
+    # Explicit --sync-map activates map sync alongside calibration when requested.
+    idx["n"] = 4
+    assert mod.main(["--sync-map", "--force"]) == 0
+    capsys.readouterr()
+    assert len(applied) == 2
+    assert applied[1][1] and applied[1][2]
+
+
+def test_place_diff_alone_holds_without_sync_map_flag():
+    mod = _load_module()
+    stable_small = [_shifted_corners(mod, 0.002) for _ in range(5)]
+    held = mod.decide(stable_small, place_diff_m=0.05, now=100_000.0)
+    assert held["decision"] == "hold" and held["reason"] == "within_threshold"
+    approved = mod.decide(stable_small, place_diff_m=0.05, now=100_000.0, sync_map=True)
+    assert approved["decision"] == "approve" and approved["reason"] == "place_diff_exceeded"
 
 
 def test_world_261026_auto_handles_glare_split_and_charger_occlusion():
@@ -309,15 +325,15 @@ def test_deferred_map_activation_retains_history_and_retries(tmp_path, monkeypat
     monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: outcomes.pop(0))
 
     for _ in range(4):
-        assert mod.main([]) == 0
+        assert mod.main(["--sync-map"]) == 0
         capsys.readouterr()
-    assert mod.main([]) == 0
+    assert mod.main(["--sync-map"]) == 0
     deferred = json.loads(capsys.readouterr().out.strip())
     assert deferred["status"] == "deferred" and deferred["map_sync_status"] == 409
     saved = json.loads(state_file.read_text(encoding="utf-8"))
     assert len(saved["history"]) == 5 and saved["last_approved_at"] is None
 
-    assert mod.main([]) == 0
+    assert mod.main(["--sync-map"]) == 0
     updated = json.loads(capsys.readouterr().out.strip())
     assert updated["status"] == "updated" and updated["map_updated"] is True
 
@@ -388,9 +404,9 @@ def test_forbidden_map_sync_still_applies_calibration_and_records_it(tmp_path, m
         "cal_updated": True, "calibration_revision": 2, "map_updated": False,
         "map_sync": "forbidden", "map_sync_status": 403})
     for _ in range(4):
-        assert mod.main([]) == 0
+        assert mod.main(["--sync-map"]) == 0
         capsys.readouterr()
-    assert mod.main([]) == 0
+    assert mod.main(["--sync-map"]) == 0
     cap = capsys.readouterr()
     out = json.loads(cap.out.strip())
     assert out["status"] == "updated" and out["map_sync"] == "forbidden" and out["map_sync_status"] == 403
@@ -420,7 +436,7 @@ def test_a_map_sync_refused_three_times_in_a_row_fails_the_run(tmp_path, monkeyp
     })
     monkeypatch.setattr(mod, "apply_fleet_update", lambda *_a, **_k: {
         "cal_updated": False, "map_updated": False, "map_sync": "forbidden", "map_sync_status": 403})
-    codes = [mod.main([]) for _ in range(7)]
+    codes = [mod.main(["--sync-map"]) for _ in range(7)]
     capsys.readouterr()
     assert codes == [0, 0, 0, 0, 0, 0, 1]  # 4 holds fill the series, then refusals 1, 2, 3
     assert json.loads(state_file.read_text(encoding="utf-8"))["map_sync_refused_runs"] == 3

@@ -32,6 +32,7 @@ ROBOT_RADIUS_M = 0.0826
 OWN_POSE_EXTRA_M = 0.05
 MAX_BRIDGE_EXTRA_M = 0.3
 LAST_SEEN_S = 60.0
+PREVIOUS_REVISION_GRACE_S = 10.0
 
 
 class TrackingError(ValueError):
@@ -89,6 +90,7 @@ class TrackingService:
         self._anchors: dict[str, dict] = default_anchors(self._clock())
         self._anchor_states: dict[str, dict] = {}
         self._omx_cells: dict[str, dict] = {}
+        self._prev_revisions: dict[str, tuple[str, str, float]] = {}
 
     @property
     def enabled(self) -> bool:
@@ -175,12 +177,17 @@ class TrackingService:
                 approved_by=approved_by, approved_at=self._clock())
         except (KeyError, TypeError, ValueError) as exc:
             raise TrackingError(422, "INVALID_CALIBRATION", str(exc)) from exc
+        prev = self.calibrations.get(source.source_id)
         self.calibrations.put(record)
+        if prev is not None and prev.map_id == source.map_id and prev.calibration_revision != record.calibration_revision:
+            self._prev_revisions[source.source_id] = (
+                prev.map_id, prev.calibration_revision, self._clock() + PREVIOUS_REVISION_GRACE_S)
         return record.to_dict()
 
     def revoke(self, source_id: str, *, principal_id: str) -> dict:
         if source_id not in self._by_id:
             raise TrackingError(404, "UNKNOWN_SOURCE", "no configured source with this id")
+        self._prev_revisions.pop(source_id, None)
         removed = self.calibrations.delete(source_id, principal_id=principal_id, at=self._clock())
         return {"source_id": source_id, "removed": removed}
 
@@ -358,6 +365,14 @@ class TrackingService:
         record = self.calibrations.get(source.source_id)
         if record is not None and record.map_id == source.map_id:
             allowed.add(record.calibration_revision)
+        prev = self._prev_revisions.get(source.source_id)
+        if prev is not None:
+            prev_map_id, prev_rev, expires_at = prev
+            now = self._clock()
+            if now <= expires_at and prev_map_id == source.map_id:
+                allowed.add(prev_rev)
+            elif now > expires_at:
+                self._prev_revisions.pop(source.source_id, None)
         return allowed
 
     def _pose(self, robot_id: str, map_id: str, now: float) -> Optional[Pose]:

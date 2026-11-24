@@ -891,3 +891,36 @@ def test_report_identity_transforms_yaw_px_to_map_frame_or_none(make_worker, mon
     asyncio.run(worker._report_identity(
         {"request_id": "req-no-yaw", "color": "blue", "not_before": 100.0, "not_after": 104.0}, 104.5))
     assert client.identity[-1]["yaw"] is None
+
+
+def test_409_calibration_mismatch_triggers_immediate_config_refresh_with_cooldown(make_worker):
+    now = [100.0]
+    updated_config = {
+        **CONFIG,
+        "calibration": {**CONFIG["calibration"], "calibration_revision": "paint-new-rev"},
+    }
+    worker, client = make_worker(
+        configs=[CONFIG, updated_config, updated_config],
+        error=TrackPublishError(409, "CALIBRATION_MISMATCH", "stale rev"),
+        clock=lambda: now[0],
+    )
+    refreshes = []
+    orig_refresh = worker.refresh_config
+
+    async def tracked_refresh():
+        refreshes.append(now[0])
+        await orig_refresh()
+
+    worker.refresh_config = tracked_refresh
+    asyncio.run(orig_refresh())
+    # First rejected frame with stale revision triggers immediate refresh.
+    asyncio.run(worker.process(_frame(seq=1, captured_at=99.8), {}))
+    assert refreshes == [100.0]
+    assert worker.config["calibration"]["calibration_revision"] == "paint-new-rev"
+    # Within 1s cooldown, a second 409 does not spam fetch_config; after 1s it refreshes again.
+    now[0] = 100.5
+    asyncio.run(worker.process(_frame(seq=2, captured_at=100.3), {}))
+    assert refreshes == [100.0]
+    now[0] = 101.1
+    asyncio.run(worker.process(_frame(seq=3, captured_at=100.9), {}))
+    assert refreshes == [100.0, 101.1]
