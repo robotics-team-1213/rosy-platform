@@ -6,14 +6,17 @@ import argparse
 import json
 import os
 from pathlib import Path
+import time
 from typing import Any, Mapping, Sequence
 
 import cell_auto_setup
+import cell_bundle_emit
 import cell_coordinate
 import cell_job_api
 import cell_params
 import cell_pipeline_io
 import cell_pivot
+from cell_policy_entry import dry_no_runner_fallback
 import cell_policy_handoff
 import cell_policy_shape
 import cell_remote_policy
@@ -105,6 +108,32 @@ def _build_jaw_spec(
     return spec
 
 
+class _PassiveDryRunCell:
+    """Read-only `--dry-run` wrapper supplying library home pose for `state` when `no runner`."""
+
+    def __init__(self, inner: Any, pose: Sequence[float]):
+        self._inner = inner
+        self._pose = [float(x) for x in pose]
+
+    def act(self, command: str, timeout: float | None = None) -> dict[str, Any]:
+        if command == "state":
+            return {"ok": True, "state": list(self._pose), "holding": False, "t": time.time(), "passive_source": "library_home"}
+        return {"ok": False, "fault": "dry_run_passive_cell", "error": f"passive dry-run cell refuses {command!r}"}
+
+    def checked(self, command: str, assessment: Mapping[str, Any], timeout: float | None = None) -> dict[str, Any]:
+        return {"ok": False, "fault": "dry_run_passive_cell", "error": f"passive dry-run cell refuses checked {command!r}"}
+
+    def __getattr__(self, name: str) -> Any:
+        if name in ("frame", "frame_receipt"):
+            return getattr(self._inner, name)
+        raise AttributeError(name)
+
+    def close(self) -> None:
+        close = getattr(self._inner, "close", None)
+        if callable(close):
+            close()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config-a", type=Path, required=True)
@@ -167,8 +196,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     cells = cell_two_arm.open_cells(configs, cell_pipeline_io.FifoCell)
+    passive_arms: list[str] = []
     try:
-        if not args.dry_run and cell_two_arm.away_from_home(cells, libs):
+        if args.dry_run:
+            for arm in ARMS:
+                st = cells[arm].act("state")
+                if (fallback := dry_no_runner_fallback(st, True, None, libs[arm])) is not None:
+                    cells[arm] = _PassiveDryRunCell(cells[arm], fallback)
+                    passive_arms.append(arm)
+        elif cell_two_arm.away_from_home(cells, libs):
             raise SystemExit("one or both arms are away from home before live start; return home first")
 
         kins = cell_two_arm.kinematics_for(
@@ -242,9 +278,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         receipt["proposer"] = args.proposer.strip()
         receipt["operator"] = args.operator.strip()
+        if passive_arms:
+            receipt["passive_dry_run_arms"] = passive_arms
+        if not args.dry_run and receipt.get("result") not in ("dry_run", "chunks_done", "released"):
+            if bid := cell_bundle_emit.emit_two_arm_policy_failure(
+                cells, configs, work_dir, receipt, tasks, {"a": args.revision_a, "b": args.revision_b},
+            ):
+                receipt["failure_bundle_id"] = bid
         receipt_path = work_dir / "receipt.json"
         receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
-        print(json.dumps({"result": receipt["result"], "task_id": receipt["task_id"], "receipt": str(receipt_path)}))
+        summary: dict[str, Any] = {"result": receipt["result"], "task_id": receipt["task_id"], "receipt": str(receipt_path)}
+        if receipt.get("failure_bundle_id"):
+            summary["failure_bundle_id"] = receipt["failure_bundle_id"]
+        if passive_arms:
+            summary["passive_dry_run_arms"] = passive_arms
+        print(json.dumps(summary))
         return 0 if receipt["result"] in ("dry_run", "chunks_done", "released") else 1
     finally:
         for cell in cells.values():
