@@ -182,10 +182,12 @@ def _fence_ambiguous_depart(state, *, batch: str, robot_id: str, target_place: s
         task_log(robot_id, batch, target_place, now)
     tasks = getattr(state, "pinky_tasks", None)
     if isinstance(tasks, dict):
-        depart_task = tasks.setdefault(f"depart-{batch}", {
-            "task_id": f"depart-{batch}", "robot_id": robot_id, "action": "depart_s3",
-            "target_place": target_place, "status": "SENT", "auto": True, "created_at": round(now, 3),
-        })
+        depart_task = tasks.setdefault(f"depart-{batch}", {})
+        for _k, _v in (
+            ("task_id", f"depart-{batch}"), ("robot_id", robot_id), ("action", "depart_s3"),
+            ("target_place", target_place), ("status", "SENT"), ("auto", True), ("created_at", round(now, 3)),
+        ):
+            depart_task.setdefault(_k, _v)
         depart_task.update(cancel_requested=True, cancelled_by=cancelled_by,
                            cancel_receipt=cancel_receipt or {"error": err_code})
     record.update(state="HELD", reason=reason, **({"last_error": last_error} if last_error is not None else {}))

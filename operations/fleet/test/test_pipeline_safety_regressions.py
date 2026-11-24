@@ -186,7 +186,7 @@ def test_fleet_estop_and_restart_revoke_staged_omx_homing_fence(tmp_path, monkey
     assert inv_latch.status_code == 409 and inv_latch.json()["detail"]["code"] == "STOP_AUTHORITY_UNAVAILABLE"
 
     # Restarting with a persisted pending_safe_home_arms entry from a previous authority epoch prunes it.
-    from fleet.server.sitemap import pipeline_routes as pr
+    from fleet.server import pipeline_routes as pr
 
     monkeypatch.setattr(pr, "_storage_dir", lambda: tmp_path)
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
@@ -194,7 +194,7 @@ def test_fleet_estop_and_restart_revoke_staged_omx_homing_fence(tmp_path, monkey
     from fleet.server.sitemap.pipeline_ledger import write_ledger
     app_r1 = FastAPI()
     app_r1.state.pipeline_governance_db_path = gov_db
-    install_pipeline_routes(app_r1, site_maps=maps)
+    pr.install_pipeline_routes(app_r1, site_maps=maps)
     payload = {
         "omx_cell_states": app_r1.state.omx_cell_states, "omx_cell_tasks": app_r1.state.omx_cell_tasks,
         "pinky_tasks": app_r1.state.pinky_tasks, "unload_releases": {}, "cell_auto_events": [],
@@ -209,7 +209,7 @@ def test_fleet_estop_and_restart_revoke_staged_omx_homing_fence(tmp_path, monkey
 
     app_r2 = FastAPI()
     app_r2.state.pipeline_governance_db_path = gov_db
-    install_pipeline_routes(app_r2, site_maps=maps)
+    pr.install_pipeline_routes(app_r2, site_maps=maps)
     assert app_r2.state.pending_safe_home_arms == {}
     assert app_r2.state.pipeline_homing_sessions["t1"]["stage"] == "SKIPPED"
 

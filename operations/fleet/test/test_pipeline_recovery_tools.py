@@ -185,10 +185,14 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
     }).status_code == 200
 
     # Non-owner & cross-cell owner (cell_s) cannot submit arm_b acks or cell_ab telemetry; cell_ab owner succeeds.
-    app_no, client_no = _app(tmp_path, monkeypatch, role_principal=SimpleNamespace(principal_id="omx-owner-s", role="service"))
+    from fleet.server.pipeline_recovery_policy import effective_stop_fence
+
+    p_no = tmp_path / "no"
+    p_no.mkdir()
+    app_no, client_no = _app(p_no, monkeypatch, role_principal=SimpleNamespace(principal_id="omx-owner-s", role="service"))
     app_no.state.pending_safe_home_arms["arm_b"] = {
         "request_id": "req-x", "root_task_id": "t-armb", "strategy": "release_and_lift",
-        "stop_generation": 0, "expires_at": time.time() + 60,
+        "stop_generation": effective_stop_fence(app_no.state)[1], "expires_at": time.time() + 60,
     }
     app_no.state.arm_live_states["arm_b"] = {"folded": False}
     client_no.post("/api/fleet/pipeline/cell-quality", json={
@@ -200,10 +204,12 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
     assert app_no.state.arm_live_states["arm_b"]["folded"] is False
     assert "top" not in app_no.state.cell_camera_quality
 
-    app_own, client_own = _app(tmp_path, monkeypatch, role_principal=SimpleNamespace(principal_id="omx-owner-ab", role="service"))
+    p_own = tmp_path / "own"
+    p_own.mkdir()
+    app_own, client_own = _app(p_own, monkeypatch, role_principal=SimpleNamespace(principal_id="omx-owner-ab", role="service"))
     app_own.state.pending_safe_home_arms["arm_b"] = {
         "request_id": "req-x", "root_task_id": "t-armb", "strategy": "release_and_lift",
-        "stop_generation": 0, "expires_at": time.time() + 60,
+        "stop_generation": effective_stop_fence(app_own.state)[1], "expires_at": time.time() + 60,
     }
     client_own.post("/api/fleet/pipeline/cell-quality", json={
         "safe_home_acks": [{"arm_id": "arm_b", "request_id": "req-x", "outcome": "risen_for_visual_verify"}]
@@ -259,7 +265,9 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
     })
     assert v_park.status_code == 200 and v_park.json()["result"]["ready_for_hold_clear"] is True
     # Pruned running stage -> SKIPPED still blocks /arm-holds/clear AND blocks auto_fold fallback!
-    app_sk, client_sk = _app(tmp_path, monkeypatch, role_principal=SimpleNamespace(principal_id="op-kim", role="operator"))
+    p_sk = tmp_path / "sk"
+    p_sk.mkdir()
+    app_sk, client_sk = _app(p_sk, monkeypatch, role_principal=SimpleNamespace(principal_id="op-kim", role="operator"))
     _seed_abort(app_sk, "t-sk", cell_id="cell_ab", arm_id="arm_b", robot_id="rosy_46", folded=False)
     app_sk.state.pending_safe_home_arms["arm_b"] = {
         "request_id": "sk-1", "root_task_id": "t-sk", "arm_id": "arm_b",
@@ -279,7 +287,7 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
     for out_str, rid in (("risen_for_visual_verify", "sk-bad"), ("done", "sk-unk")):
         app_sk.state.pending_safe_home_arms["arm_b"] = {
             "request_id": rid, "root_task_id": "t-sk", "arm_id": "arm_b", "strategy": "guarded_slow_park",
-            "stop_generation": 0, "expires_at": time.time() + 60,
+            "stop_generation": effective_stop_fence(app_sk.state)[1], "expires_at": time.time() + 60,
         }
         client_sk.post("/api/fleet/pipeline/cell-quality", json={
             "safe_home_acks": [{"arm_id": "arm_b", "request_id": rid, "outcome": out_str}]
