@@ -22,6 +22,7 @@ else:  # pragma: no cover - exercised by the packaged host CLI
     )
 
 
+WORLD_DEPLOYMENT_FILES = ("compose.world.yaml", "Caddyfile.world")
 REQUIRED_DEPLOYMENT_FILES = (
     "compose.yaml", "Caddyfile", ".env.example", "README.md",
     "robots.yaml.example", "site-cameras.yaml.example", "site-users.yaml.example",
@@ -35,6 +36,7 @@ REQUIRED_DEPLOYMENT_FILES = (
     "compose.control-unit-remote.yaml",
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
+    *WORLD_DEPLOYMENT_FILES,
     "compose.account.yaml", "Caddyfile.account",
     "compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service", "account-lan-cert.sh",  # D-1068 LAN login alias
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
@@ -60,7 +62,8 @@ PG_BACKUP_FILES = ("compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-
 MONITORING_DEPLOYMENT_FILES = ("compose.monitoring.yaml", "Caddyfile.monitoring")  # D-936
 SERVICES = ("fleet", "vision", "proxy", "postgres")
 ACCOUNT_SERVICES = (*SERVICES, "account")
-ALL_IMAGE_SERVICES = (*ACCOUNT_SERVICES, "monitoring")
+OPTIONAL_IMAGE_SERVICES = ("monitoring", "world")
+ALL_IMAGE_SERVICES = (*ACCOUNT_SERVICES, *OPTIONAL_IMAGE_SERVICES)
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -70,12 +73,12 @@ class CandidateVerificationError(ValueError):
 
 
 def verified_services(value: object) -> tuple[str, ...]:
-    """Canonicalize only the legacy, independent-Account and optional own-Monitoring-image inventories."""
-    if isinstance(value, list) and all(isinstance(s, str) for s in value) and value.count("monitoring") <= 1:
-        rest = [s for s in value if s != "monitoring"]  # D-1001: optional own image; older candidates lack it
+    """Canonicalize the base inventory and any optional independent images."""
+    if isinstance(value, list) and all(isinstance(s, str) for s in value) and len(value) == len(set(value)):
+        rest = {s for s in value if s not in OPTIONAL_IMAGE_SERVICES}
         for services in (SERVICES[:3], SERVICES, ACCOUNT_SERVICES):
-            if len(rest) == len(services) and set(rest) == set(services):
-                return (*services, *(("monitoring",) if "monitoring" in value else ()))
+            if rest == set(services):
+                return (*services, *(s for s in OPTIONAL_IMAGE_SERVICES if s in value))
     raise CandidateVerificationError("candidate images must contain exactly the legacy or independent Account inventory")
 
 
@@ -174,8 +177,9 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         required.discard("compose.control-unit.yaml")
     if "compose.control-unit-remote.yaml" not in hashes:
         required.discard("compose.control-unit-remote.yaml")
-    if not set(hashes) & set(MONITORING_DEPLOYMENT_FILES):
-        required.difference_update(MONITORING_DEPLOYMENT_FILES)
+    for pair in (MONITORING_DEPLOYMENT_FILES, WORLD_DEPLOYMENT_FILES):
+        if not set(hashes).intersection(pair):
+            required.difference_update(pair)
     unsupported = set(hashes) - required
     if unsupported:
         raise CandidateVerificationError("unsupported deployment file path")
@@ -261,6 +265,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "control_unit": "compose.control-unit.yaml" in hashes,
         "control_unit_remote": "compose.control-unit-remote.yaml" in hashes,
         "monitoring": set(MONITORING_DEPLOYMENT_FILES) <= set(hashes),
+        "world": set(WORLD_DEPLOYMENT_FILES) <= set(hashes),
         "image_archive_sha256": archive_hash,
     }
 
@@ -427,6 +432,7 @@ def verify_candidate(
             "control_unit": summary["control_unit"],
             "control_unit_remote": summary["control_unit_remote"],
             "monitoring": summary["monitoring"],
+            "world": summary["world"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],
             "verified_images": summary["verified_images"],

@@ -8,11 +8,12 @@ from io import BytesIO
 import json
 import os
 from pathlib import Path
+import posixpath
 import socket
 import sys
 import threading
 import time
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 _HERE = str(Path(__file__).resolve().parent)
 if _HERE not in sys.path:
@@ -53,6 +54,32 @@ LIVE_PATHS = {
 }
 
 
+def _data_path(data_dir: Path, relative: str) -> Path:
+    path = (data_dir / relative).resolve()
+    if not path.is_relative_to(data_dir):
+        raise ValueError("path escapes the World data directory")
+    return path
+
+
+class _MountedBundle:
+    """Map the state reader's two bundle paths onto the mounted data layout."""
+
+    def __init__(self, data_dir: Path):
+        self.data_dir = data_dir
+
+    def __truediv__(self, name: str) -> Path:
+        if name == "data":
+            return self.data_dir
+        if name != "manifest.json":
+            raise ValueError(f"unknown World bundle path: {name}")
+        manifest = _data_path(self.data_dir, name)
+        # The standalone bundle builder writes its manifest beside data/.
+        if (not manifest.exists() and self.data_dir.name == "data"
+                and (self.data_dir.parent / "SHA256SUMS.txt").is_file()):
+            return _data_path(self.data_dir.parent, name)
+        return manifest
+
+
 class WorldHandler(SimpleHTTPRequestHandler):
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map, ".webmanifest": "application/manifest+json"}
 
@@ -72,6 +99,23 @@ class WorldHandler(SimpleHTTPRequestHandler):
 
     def _worlds_dir(self) -> Path:
         return getattr(self.server, "worlds_dir", Path(self.directory) / "data" / "worlds")
+
+    def _bundle(self) -> Path | _MountedBundle:
+        return getattr(self.server, "mounted_bundle", None) or Path(self.directory)
+
+    def translate_path(self, path):
+        bundle = getattr(self.server, "mounted_bundle", None)
+        if bundle is not None:
+            decoded = unquote(urlsplit(path).path)
+            normalized = posixpath.normpath(decoded).lstrip("/")
+            if normalized == "manifest.json":
+                return str(bundle / "manifest.json")
+            if normalized == "data" or normalized.startswith("data/"):
+                data_path = _data_path(bundle.data_dir, normalized[5:])
+                if data_path.is_dir():
+                    raise ValueError("directories cannot be served from World data")
+                return str(data_path)
+        return super().translate_path(path)
 
     def _authorize_ingest(self) -> tuple[bool, int, str]:
         token = getattr(self.server, "ingest_token", None)
@@ -115,7 +159,7 @@ class WorldHandler(SimpleHTTPRequestHandler):
                 return self.json_reply(400, {"error": f"invalid adapter: {adapter_filter}"})
             now_ms = time.time_ns() // 1_000_000
             return self.json_reply(
-                200, discover_worlds(Path(self.directory), now_ms, adapter_filter, worlds_dir=self._worlds_dir()),
+                200, discover_worlds(self._bundle(), now_ms, adapter_filter, worlds_dir=self._worlds_dir()),
             )
         if self.path == "/sim/control":
             controller = getattr(self.server, "sim_control", None)
@@ -129,6 +173,16 @@ class WorldHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(self.server.health)))
             self.end_headers()
             return BytesIO(self.server.health)
+        if getattr(self.server, "mounted_bundle", None) is not None:
+            decoded = unquote(parts.path)
+            if ".." in decoded.split("/") or "\\" in decoded or "\0" in decoded:
+                self.send_error(404)
+                return None
+            try:
+                return super().send_head()
+            except (ValueError, RuntimeError):
+                self.send_error(404)
+                return None
         return super().send_head()
 
     def do_GET(self):
@@ -148,7 +202,7 @@ class WorldHandler(SimpleHTTPRequestHandler):
                 self.copyfile(reply, self.wfile)
             return
 
-        bundle_dir = Path(self.directory)
+        bundle_dir = self._bundle()
         data_dir = bundle_dir / "data"
         worlds_dir = self._worlds_dir()
         canonical = _canonical_reference(bundle_dir)
@@ -337,7 +391,7 @@ class WorldHandler(SimpleHTTPRequestHandler):
         body["world_id"] = raw_id
         body["adapter"] = adapter
         body.setdefault("observed_at_ms", time.time_ns() // 1_000_000)
-        canonical = _canonical_reference(Path(self.directory))
+        canonical = _canonical_reference(self._bundle())
         parity = verify_world_parity(canonical, body)
         _atomic_write_json(target, body)
         return self._reply_json(200, {"ok": True, "world_id": raw_id, "adapter": adapter, "parity": parity})
@@ -404,16 +458,19 @@ def make_server(
     host: str = "127.0.0.1",
     port: int = DEFAULT_PORT,
     *,
+    data_dir: Path | None = None,
     worlds_dir: Path | None = None,
     ingest_token: str | None = None,
     mdns_host: str | None = None,
     fleet_mdns_host: str | None = None,
 ) -> ThreadingHTTPServer:
+    bundle = _MountedBundle(data_dir.resolve()) if data_dir is not None else None
     handler = partial(WorldHandler, directory=str(root))
     server = WorldHTTPServer((host, port), handler)
     server.daemon_threads = True
     server.stop_event = threading.Event()
-    server.worlds_dir = (worlds_dir if worlds_dir is not None else (root / "data" / "worlds")).resolve()
+    server.mounted_bundle = bundle
+    server.worlds_dir = (worlds_dir if worlds_dir is not None else ((bundle or root) / "data" / "worlds")).resolve()
     resolved_token = ingest_token if ingest_token is not None else os.environ.get("ROSY_WORLD_INGEST_TOKEN", "")
     server.ingest_token = resolved_token.strip() or None
     default_mdns = f"{socket.gethostname().split('.')[0].lower()}.local"
@@ -428,6 +485,7 @@ def make_server(
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, default=Path(__file__).parent)
+    parser.add_argument("--data-dir", type=Path, help="read data from this directory instead of <bundle>/data")
     parser.add_argument("--worlds-dir", type=Path, default=None, help="writable directory for live world JSON snapshots")
     parser.add_argument("--ingest-token-env", default="ROSY_WORLD_INGEST_TOKEN", help="env var holding bearer token for remote POST/DELETE /api/worlds/<id>")
     parser.add_argument("--mdns-host", default=None, help="advertised .local hostname (or $ROSY_WORLD_MDNS_HOST)")
@@ -440,16 +498,19 @@ def main():
     worlds_dir = args.worlds_dir if args.worlds_dir is not None else (Path(env_worlds) if env_worlds else None)
     ingest_token = os.environ.get(args.ingest_token_env, "").strip() or None
     try:
-        for name in ("index.html", "app.js", "SHA256SUMS.txt"):
+        bundle = _MountedBundle(args.data_dir.resolve()) if args.data_dir is not None else root
+        required_web = ("index.html", "app.js") if args.data_dir is not None else ("index.html", "app.js", "SHA256SUMS.txt")
+        for name in required_web:
             if not (root / name).is_file():
                 raise ValueError(f"incomplete bundle: {name} is missing")
-        manifest = json.loads((root / "manifest.json").read_bytes())
+        manifest = json.loads((bundle / "manifest.json").read_bytes())
         if not isinstance(manifest.get("inputs"), dict):
             raise ValueError("invalid ROSY World manifest")
         with make_server(
             root,
             args.host,
             args.port,
+            data_dir=args.data_dir,
             worlds_dir=worlds_dir,
             ingest_token=ingest_token,
             mdns_host=args.mdns_host,

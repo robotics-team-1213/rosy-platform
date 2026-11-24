@@ -1,0 +1,19 @@
+FROM python:3.12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 rosy \
+    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin rosy
+
+COPY deploy/site/secret_exec.py /opt/rosy/secret_exec.py
+COPY applications/world/serve.py applications/world/bridge_real_fleet.py applications/world/world_state.py applications/world/world_mdns.py applications/world/world_mdns_probe.py /opt/rosy/world/
+COPY tools/sim/world_env_adapter.py /opt/rosy/world/world_env_adapter.py
+COPY applications/world/web/ /opt/rosy/world/web/
+COPY shared/web/ /opt/rosy/world/web/common/
+RUN python3 -c "import sys; sys.path.insert(0, '/opt/rosy/world'); import serve, bridge_real_fleet, world_state, world_env_adapter"
+
+WORKDIR /opt/rosy/world
+USER 10001:10001
+ENTRYPOINT ["python3", "/opt/rosy/secret_exec.py"]

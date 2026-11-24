@@ -17,14 +17,14 @@ from urllib.parse import urlsplit
 
 if __package__:
     from .site_update_io import (
-        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, Rejected,
+        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, WORLD_OVERLAY, Rejected,
         Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
-        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, Rejected,
+        ACCOUNT_OVERLAY, COMPANIONS, EXIT_LOCKED, EXIT_OK, PROJECT, SERVICES, STACK_UNIT, WORLD_OVERLAY, Rejected,
         Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         log, read_env,
     )
@@ -175,7 +175,7 @@ def runtime_reason(rows, hashes: dict, run) -> str:
         if not isinstance(row, dict):
             continue
         service = row.get('Service')
-        if service not in (*SERVICES, *COMPANIONS):
+        if service not in (*SERVICES, *COMPANIONS, 'world'):
             continue
         try:
             details = json.loads(run(['docker', 'container', 'inspect', row['ID']]).stdout)[0]
@@ -197,16 +197,17 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
     independent = 'account' in services or 'account' in accepted or 'account' in (image_references or {})
     if independent and (not accepted.get('account') or not (image_references or {}).get('account')):
         return 'account signed image identity proof is incomplete'
-    own_monitoring = 'monitoring' in services or 'monitoring' in accepted or 'monitoring' in (image_references or {})
-    if own_monitoring and (not accepted.get('monitoring') or not (image_references or {}).get('monitoring')):
-        return 'monitoring signed image identity proof is incomplete'
-    if any(isinstance(row, dict) and row.get('Service') in SERVICES
+    for role in ('monitoring', 'world'):
+        own_image = role in services or role in accepted or role in (image_references or {})
+        if own_image and (not accepted.get(role) or not (image_references or {}).get(role)):
+            return f'{role} signed image identity proof is incomplete'
+    if any(isinstance(row, dict) and row.get('Service') in (*SERVICES, 'world')
            and row['Service'] not in services for row in rows):
         return 'runtime contains a managed service outside the signed candidate'
     present = {row.get('Service') for row in rows
                if isinstance(row, dict) and row.get('Service') in COMPANIONS}
     if companions is None:
-        companions = present - {'control-unit-peer'} - ({'account'} if independent else set())
+        companions = present - {'control-unit-peer', 'world-real-bridge'} - ({'account'} if independent else set())
     if present - (set(services) | companions):
         return 'runtime contains an unconfigured companion'
     if ('account' in present and not independent and
@@ -280,6 +281,8 @@ class SiteRuntimeIO:
             refs = manifest.get('image_references')
             if 'account' in services and refs is None:
                 raise Rejected('independent Account signed image reference proof is missing')
+            if 'world' in services and refs is None:
+                raise Rejected('world signed image reference proof is missing')
             if refs is not None:
                 if (not isinstance(refs, dict) or set(refs) != set(services)
                         or any(not isinstance(refs[s], str)
@@ -291,9 +294,11 @@ class SiteRuntimeIO:
             overlays = shlex.split((env or {}).get('ROSY_SITE_PAIRING_COMPOSE', ''))
             for name, field in (('account', 'account_https'), ('account-lan', 'account_lan'), ('omx', 'omx'), ('workcell', 'workcell'),
                                 ('control-unit', 'control_unit'), ('control-unit-remote', 'control_unit_remote'),
-                                ('monitoring', 'monitoring')):
+                                ('monitoring', 'monitoring'), ('world', 'world')):
                 if f'/opt/rosy/candidate/deploy/site/compose.{name}.yaml' in overlays and not manifest.get(field):
                     raise Rejected(f'{name} overlay is not covered by this signed candidate')
+            if WORLD_OVERLAY[1] in overlays and 'world' not in services:
+                raise Rejected('world overlay requires a signed world image')
             if loaded:
                 accepted = manifest.get('accepted_image_ids')
                 if (not isinstance(accepted, dict) or set(accepted) != set(services)
@@ -383,8 +388,8 @@ class SiteRuntimeIO:
         self.check_overrides(env, commit, folder=folder, env_file=self.paths.env_backup,
                              services=outgoing)
         # Account remains an optional overlay across old Fleet-owned and new independent images.
-        outgoing = tuple(s for s in outgoing if s not in ('account', 'monitoring'))  # D-1001: optional overlays
-        incoming = tuple(s for s in incoming if s not in ('account', 'monitoring'))
+        outgoing = tuple(s for s in outgoing if s not in ('account', 'monitoring', 'world'))
+        incoming = tuple(s for s in incoming if s not in ('account', 'monitoring', 'world'))
         if outgoing == incoming:
             return
         if set(outgoing) - set(incoming) != {'postgres'}:

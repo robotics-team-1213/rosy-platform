@@ -46,9 +46,9 @@ def _finite_number(value: object) -> float | None:
 def _bundle_site_map_sha256(bundle_dir: Path | None) -> str:
     if bundle_dir is None:
         return ""
-    manifest_path = bundle_dir / "manifest.json"
+    manifest_path = bundle_dir / "data" / "manifest.json"
     if not manifest_path.is_file():
-        return ""
+        manifest_path = bundle_dir / "manifest.json"
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -59,8 +59,11 @@ def _bundle_site_map_sha256(bundle_dir: Path | None) -> str:
     return ""
 
 
-def _read_secret(env_name: str, file_env_name: str) -> str | None:
-    file_path = os.environ.get(file_env_name, "").strip()
+def _read_secret(env_name: str, file_env_name: str, file_path: Path | None = None) -> str | None:
+    raw = os.environ.get(env_name, "").strip()
+    if raw:
+        return raw
+    file_path = file_path or os.environ.get(file_env_name, "").strip()
     if file_path:
         try:
             text = Path(file_path).read_text(encoding="utf-8").strip()
@@ -68,8 +71,7 @@ def _read_secret(env_name: str, file_env_name: str) -> str | None:
                 return text
         except OSError:
             pass
-    raw = os.environ.get(env_name, "").strip()
-    return raw or None
+    return None
 
 
 def fleet_state_to_world_state(
@@ -250,14 +252,18 @@ def _fetch_active_map(fleet_url: str, token: str | None, ca_file: Path | None) -
 def _write_local(worlds_dir: Path, world_id: str, payload: dict[str, Any]) -> None:
     worlds_dir.mkdir(parents=True, exist_ok=True)
     raw = (json.dumps(payload, allow_nan=False, ensure_ascii=False) + "\n").encode("utf-8")
+    _atomic_write(worlds_dir / f"{world_id}.json", raw)
+
+
+def _atomic_write(path: Path, raw: bytes) -> None:
     temp_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(dir=worlds_dir, prefix=f".{world_id}.", suffix=".tmp", delete=False) as h:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as h:
             temp_path = Path(h.name)
             h.write(raw)
             h.flush()
             os.fsync(h.fileno())
-        os.replace(temp_path, worlds_dir / f"{world_id}.json")
+        os.replace(temp_path, path)
         temp_path = None
     finally:
         if temp_path is not None:
@@ -297,10 +303,12 @@ def main() -> None:
     parser.add_argument("--world-id", default="real-site")
     parser.add_argument("--site-map-sha256", help="canonical 64-hex site map SHA-256")
     parser.add_argument("--fleet-token-env", default="ROSY_FLEET_TOKEN")
+    parser.add_argument("--fleet-token-file", type=Path)
     parser.add_argument("--fleet-token-file-env", default="ROSY_FLEET_TOKEN_FILE")
     parser.add_argument("--ingest-token-env", default="ROSY_WORLD_INGEST_TOKEN")
     parser.add_argument("--ca-file", type=Path, help="optional PEM CA file (or use SSL_CERT_FILE)")
     parser.add_argument("--interval", type=float, default=0.5, help="polling interval in seconds (0.2-10.0)")
+    parser.add_argument("--heartbeat-file", type=Path, help="write Fleet poll time after a successful fetch")
     parser.add_argument("--once", action="store_true", help="poll once and exit")
     args = parser.parse_args()
 
@@ -329,7 +337,7 @@ def main() -> None:
 
     def tick() -> bool:
         nonlocal cached_fleet_url, cached_world_url, map_url, map_expires_at, active_map
-        fleet_token = _read_secret(args.fleet_token_env, args.fleet_token_file_env)
+        fleet_token = _read_secret(args.fleet_token_env, args.fleet_token_file_env, args.fleet_token_file)
         ingest_token = os.environ.get(args.ingest_token_env, "").strip() or None
         if cached_fleet_url is None and args.fleet_mdns_host:
             try:
@@ -346,6 +354,11 @@ def main() -> None:
             if args.fleet_mdns_host:
                 cached_fleet_url = None
             return False
+        if args.heartbeat_file is not None:
+            try:
+                _atomic_write(args.heartbeat_file, f"{time.time()}\n".encode("ascii"))
+            except OSError as exc:
+                warn("heartbeat", exc)
         cell_tasks = _fetch_optional(cached_fleet_url, "/api/fleet/pipeline/cell-tasks", fleet_token, ca_file)
         arm_live_states = (cell_tasks or {}).get("arm_live_states")
         if map_url != cached_fleet_url or time.monotonic() >= map_expires_at:
