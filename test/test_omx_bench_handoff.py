@@ -158,3 +158,57 @@ def test_server_on_session_sealed_triggers_honest_auto_handoff_and_persists_conf
     assert st["stages"]["seal"] == "done" and st["stages"]["transfer"] == "done" and st["stages"]["intake"] == "done"
     assert st["intake_job_id"] == "intake-job-1"
     assert (col / "manifest.json").is_file()
+
+
+def test_handoff_and_hf_upload_refuse_missing_or_black_top_video(tmp_path, monkeypatch):
+    import bench_record_handoff as brh_mod
+    import bench_record_preflight as preflight
+
+    fake_home = tmp_path / "home"
+    col = _make_sealed_collection(fake_home, tmp_path, "cam-gate-01", episodes=1)
+    ds = col / "dataset"
+
+    def _rewrite_manifest_and_info(cams):
+        (ds / "meta" / "info.json").write_text(json.dumps({
+            "codebase_version": "v3.0", "robot_type": "omx_follower", "total_episodes": 1, "fps": 30,
+            "features": {f"observation.images.{c}": {"dtype": "video", "shape": [480, 640, 3]} for c in cams},
+        }), encoding="utf-8")
+        mf_p = col / "manifest.json"
+        mf = json.loads(mf_p.read_text(encoding="utf-8"))
+        mf["files"] = {
+            p.relative_to(col).as_posix(): brh._sha256_file(p)
+            for p in sorted(col.rglob("*")) if p.is_file() and p != mf_p
+        }
+        mf_p.write_text(json.dumps(mf, indent=2), encoding="utf-8")
+
+    # 1) Missing observation.images.top
+    front_mp4 = ds / "videos" / "observation.images.front" / "chunk-000" / "file-000.mp4"
+    front_mp4.parent.mkdir(parents=True)
+    front_mp4.write_bytes(b"FAKE_MP4")
+    _rewrite_manifest_and_info(["front"])
+    with pytest.raises(ValueError, match="observation.images.top"):
+        brh_mod.verify_sealed_collection(col)
+
+    # 2) Black observation.images.top screen (max_luma=0.0)
+    top_mp4 = ds / "videos" / "observation.images.top" / "chunk-000" / "file-000.mp4"
+    top_mp4.parent.mkdir(parents=True)
+    top_mp4.write_bytes(b"FAKE_BLACK_MP4")
+    _rewrite_manifest_and_info(["top", "front"])
+    monkeypatch.setattr(preflight, "_probe_video_luma",
+                        lambda p: (2278, [0.0, 0.0, 0.0]) if "observation.images.top" in str(p) else (2278, [128.0, 128.0, 128.0]))
+    with pytest.raises(ValueError, match="검은 화면"):
+        brh_mod.verify_sealed_collection(col)
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    bench.hf_logged_in = lambda: True
+    with pytest.raises(ValueError, match="검은 화면"):
+        bench.hf_upload_start({"dataset": "cam-gate-01"})
+
+    # 3) Valid non-black top & front passes both verify_sealed_collection and check_dataset_cameras
+    monkeypatch.setattr(preflight, "_probe_video_luma",
+                        lambda p: (898, [148.2, 148.2, 148.2]) if "observation.images.top" in str(p) else (898, [126.7, 126.7, 127.0]))
+    ver = brh_mod.verify_sealed_collection(col)
+    assert ver["total_episodes"] == 1
+    cam_ok = preflight.check_dataset_cameras(ds)
+    assert cam_ok["checked"] is True and cam_ok["cameras"]["observation.images.top"]["max_luma"] == 148.2

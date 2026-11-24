@@ -116,3 +116,67 @@ def check_replay_corridor(prep: Path, arm: str, traj: dict, *, opener=None) -> d
             "reason": f"{arm} 하강/적재 경로에 객체 또는 점유 슬롯 감지 ({len(low_hits)}건: {pts_txt}) — 장애물·슬롯 확인 후 다시 생성하세요",
         }
     return {"checked": True, "clear": True, "low": [], "reason": "clear"}
+
+
+def _probe_video_luma(mp4_path: Path) -> tuple[int, list[float]]:
+    import cv2
+
+    cap = cv2.VideoCapture(str(mp4_path))
+    if not cap.isOpened():
+        return 0, []
+    try:
+        n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        means = []
+        for idx in (0, max(0, n // 2), max(0, n - 1)):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+            ok, fr = cap.read()
+            if ok and fr is not None:
+                means.append(float(fr.mean()))
+        return n, means
+    finally:
+        cap.release()
+
+
+def check_dataset_cameras(dataset_dir: Path, *, require_top: bool = True, probe=None) -> dict:
+    """Fail closed before transfer/intake/upload when top video is missing, undecodable, or black."""
+    dataset_dir = Path(dataset_dir)
+    info_p = dataset_dir / "meta" / "info.json"
+    info = {}
+    if info_p.is_file():
+        try:
+            loaded = json.loads(info_p.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                info = loaded
+        except (OSError, ValueError):
+            info = {}
+    features = info.get("features") if isinstance(info.get("features"), dict) else {}
+    declared = [
+        k for k, v in features.items()
+        if isinstance(v, dict) and (v.get("dtype") == "video" or k.startswith("observation.images."))
+    ]
+    videos_dir = dataset_dir / "videos"
+    if not declared and not videos_dir.is_dir():
+        return {"checked": False, "cameras": {}}
+    if not declared:
+        declared = sorted(p.name for p in videos_dir.iterdir() if p.is_dir())
+    if require_top and "observation.images.top" not in declared:
+        raise ValueError("top 카메라 영상(observation.images.top)이 없는 데이터셋은 전송·업로드할 수 없습니다")
+    probe_fn = probe or _probe_video_luma
+    summary = {}
+    for key in declared:
+        mp4s = sorted((videos_dir / key).rglob("*.mp4")) if (videos_dir / key).is_dir() else []
+        if not mp4s:
+            raise ValueError(f"{key} 영상 파일(.mp4)이 없어 전송·업로드할 수 없습니다")
+        max_luma = 0.0
+        for mp4 in mp4s:
+            if mp4.stat().st_size <= 0:
+                raise ValueError(f"{key} 영상 파일이 비어 있습니다 ({mp4.name})")
+            n_frames, means = probe_fn(mp4)
+            if n_frames <= 0 or not means:
+                raise ValueError(f"{key} 영상을 디코딩할 수 없습니다 ({mp4.name})")
+            luma = max(float(m) for m in means)
+            if luma < 2.0:
+                raise ValueError(f"{key} 영상이 검은 화면(카메라 미수신, max_luma={luma:.1f})이라 전송·업로드할 수 없습니다")
+            max_luma = max(max_luma, luma)
+        summary[key] = {"files": len(mp4s), "max_luma": round(max_luma, 1)}
+    return {"checked": True, "cameras": summary}
