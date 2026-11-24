@@ -227,6 +227,13 @@ class CellFailureContext(_Strict):
         return self
 
 
+class CellScopeReadiness(_Strict):
+    arms: list[Literal["arm_s", "arm_a", "arm_b"]]
+    fleet_safety: dict[str, Any] = Field(default_factory=dict)
+    blocking_refusals: list[Annotated[str, Field(max_length=120)]] = Field(default_factory=list)
+    allowed_tiers_now: list[Annotated[int, Field(ge=0, le=3)]] = Field(default_factory=list)
+
+
 class CellReadiness(_Strict):
     schema_id: Literal["rosy.cell-readiness.v1"] = Field(CELL_READINESS_SCHEMA, alias="schema")
     observed_at: float
@@ -234,6 +241,7 @@ class CellReadiness(_Strict):
     cell_state_gen: Annotated[int, Field(ge=0)]
     readiness_digest: Sha256Hex
     arms: dict[Literal["arm_s", "arm_a", "arm_b"], dict[str, Any]]
+    cells: dict[Literal["cell_s", "cell_ab"], CellScopeReadiness] | None = None
     blocking_refusals: list[Annotated[str, Field(max_length=120)]] = Field(default_factory=list)
     allowed_tiers_now: list[Annotated[int, Field(ge=0, le=3)]] = Field(default_factory=list)
 
@@ -252,6 +260,7 @@ __all__ = [
     "CameraManifestEntry",
     "CellFailureContext",
     "CellReadiness",
+    "CellScopeReadiness",
     "FAILURE_ASSET_MAX_BYTES",
     "FAILURE_BUNDLE_MAX_FRAMES",
     "FAILURE_CONTEXT_DEFAULT_TTL_S",

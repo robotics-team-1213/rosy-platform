@@ -17,6 +17,8 @@ SupplementaryGroups=dialout i2c video gpio spi
 # localization/state; without it CORE reports localization null. On since 2026-11-18 (user decision:
 # real Pinky runs D-395 so docking and line follow can be admitted); a robot's runtime.env can still say false.
 Environment=ROSY_NAVIGATION_BACKEND=localization ROSY_MAP=/var/lib/rosy/maps/site.yaml ROSY_ENABLE_LOC_ASSIST=true
+# D-185 R3: native C++ EventsExecutor cuts idle node CPU; runtime.env can roll back with ROSY_EXECUTOR=single.
+Environment=ROSY_EXECUTOR=events
 EnvironmentFile=/etc/rosy/runtime.env
 # Empty marker files cannot authorize navigation. Recheck sealed G4 evidence,
 # the active release and robot identity at every service start.

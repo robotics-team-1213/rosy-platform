@@ -121,3 +121,10 @@ test("isArmAttentionOrLive and activeCellWorkRows isolate active work and attent
   ]);
   assert.deepEqual(filtered.map((r) => r.source_id), ["j1", "m1"]);
 });
+
+test("cell-cockpit-stage keeps previously-live camera visible during disconnect and avoids #seq re-render churn", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../../../../applications/fleet/web/shared/cell-cockpit-stage.js", import.meta.url), "utf8");
+  assert.match(src, /hasFrame/);
+  assert.doesNotMatch(src, /onLoad=\$\(\(\) => \{ if \(standbyRef\.current\) standbyRef\.current\.hidden = true; \}\)/);
+});

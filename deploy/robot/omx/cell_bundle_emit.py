@@ -252,7 +252,7 @@ def _emit_common(
         if extra_meas:
             meas.update({k: _clamp_depth(v, 3) for k, v in extra_meas.items()})
         gen = {"cell_state_gen": _read_state_gen(work, config)}
-        attempts_tail = [_clamp_depth(r, 1) for r in _read_jsonl_tail(work / "attempts.jsonl", 3)]
+        attempts_tail = [_clamp_depth(r, 2) for r in _read_jsonl_tail(work / "attempts.jsonl", 3)]
         decisions_tail = [_clamp_depth(r, 1) for r in _read_jsonl_tail(work / "decisions.jsonl", 5)]
         why_tail = [_clamp_depth(r, 1) for r in _read_jsonl_tail(work / "why.jsonl", 3)]
         bid = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime(at_s))}-{arm_id_val}-{kind}-{uuid.uuid4().hex[:6]}"

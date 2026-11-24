@@ -88,9 +88,8 @@ class Arc:
         t = min(max((s_m - self.knots[found]) / span, 0.0), 1.0)
         return ax + t * (bx - ax), ay + t * (by - ay), math.atan2(by - ay, bx - ax)
 
-    def project(self, x: float, y: float) -> tuple[float, float, float]:
-        """``(distance, s, tangent)`` of the closest polyline point."""
-        best = (math.inf, 0.0, 0.0)
+    def project_segments(self, x: float, y: float):
+        """Yield ``(distance, s, tangent)`` of the closest point on each non-zero segment."""
         for index in range(len(self.polyline) - 1):
             (ax, ay), (bx, by) = self.polyline[index], self.polyline[index + 1]
             dx, dy = bx - ax, by - ay
@@ -99,9 +98,11 @@ class Arc:
                 continue
             t = max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / span2))
             dist = math.hypot(x - ax - t * dx, y - ay - t * dy)
-            if dist < best[0]:
-                best = (dist, self.knots[index] + t * math.sqrt(span2), math.atan2(dy, dx))
-        return best
+            yield (dist, self.knots[index] + t * math.sqrt(span2), math.atan2(dy, dx))
+
+    def project(self, x: float, y: float) -> tuple[float, float, float]:
+        """``(distance, s, tangent)`` of the closest polyline point."""
+        return min(self.project_segments(x, y), key=lambda item: item[0], default=(math.inf, 0.0, 0.0))
 
 
 @dataclass(frozen=True)

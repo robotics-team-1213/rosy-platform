@@ -4,6 +4,7 @@
 // 위임 토큰은 Authorization 헤더로만 보낸다. 패널이 가려지거나 탭이 숨으면 세션을 닫고,
 // 다시 보이면 같은 선택으로 연다. 새 화면이 1초 넘게 없으면 경고, 2초 넘으면 영상을 숨긴다.
 // 실패한 타일은 "영상 없음"으로 남는다: Fleet 경유 JPEG나 고속 MJPEG는 열지 않는다.
+import { formatDisconnectDuration } from "/common/camera-frame-hold.js";
 import { setOffBy } from "/common/cause-line.js";
 
 import {createFleetClient} from "/common/fleet-client.js";
@@ -32,10 +33,40 @@ function el(doc, tag, text, attrs = {}) {
 
 export function createRobotVideo({doc = document, call, open = openRobotCamera, fetchImpl}) {
   let sessions = [], running = null;
+  const views = [];
   const grantPath = (robot, suffix = "") => `/api/fleet/robots/${encodeURIComponent(robot)}/media-grant${suffix}`;
+
+  function clearTicker(view) {
+    if (view.disconnectTimer !== null) {
+      clearInterval(view.disconnectTimer);
+      view.disconnectTimer = null;
+    }
+  }
 
   function show(view, robot, state) {
     view.tile.dataset.state = state.state;
+    if (state.state === "live") {
+      view.hadLive = true;
+      view.disconnectedAt = null;
+      clearTicker(view);
+      view.video.hidden = false;
+      view.label.textContent = LABEL.live(robot, state);
+      return;
+    }
+    if (state.state === "hidden" && view.hadLive) {
+      view.video.hidden = false;
+      view.disconnectedAt ??= Date.now();
+      const paintDisconnect = () => {
+        view.label.textContent = `${robot} · 끊어짐 · ${formatDisconnectDuration(Date.now() - view.disconnectedAt)}`;
+      };
+      paintDisconnect();
+      if (view.disconnectTimer === null) view.disconnectTimer = setInterval(paintDisconnect, 1000);
+      return;
+    }
+    if (state.state !== "stale") {
+      view.disconnectedAt = null;
+      clearTicker(view);
+    }
     view.video.hidden = !["live", "stale"].includes(state.state);
     view.label.textContent = (LABEL[state.state] ?? (() => robot))(robot, state);
   }
@@ -47,7 +78,8 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
     const label = el(doc, "figcaption", LABEL.connecting(robot));
     tile.append(video, label);
     stage.append(tile);
-    const view = {tile, video, label};
+    const view = {tile, video, label, hadLive: false, disconnectedAt: null, disconnectTimer: null};
+    views.push(view);
     let grant = null;
     try {
       grant = await call(grantPath(robot), {method: "POST"});
@@ -73,6 +105,7 @@ export function createRobotVideo({doc = document, call, open = openRobotCamera, 
       await Promise.all(picked.map((robot) => openTile(stage, robot)));
     },
     stop() {
+      views.splice(0).forEach(clearTicker);
       sessions.splice(0).forEach((session) => session.close("stopped"));
       running?.stage.replaceChildren();
       running = null;

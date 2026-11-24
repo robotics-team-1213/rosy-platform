@@ -20,6 +20,8 @@ SupplementaryGroups=dialout i2c video gpio spi
 # Driving needs ROSY_IO_DRIVE_ENABLED=true in /etc/rosy/runtime.env, which
 # overrides this line (EnvironmentFile= wins over Environment=).
 Environment=ROSY_IO_DRIVE_ENABLED=false
+# D-185 R3: native C++ EventsExecutor cuts idle bringup CPU; runtime.env can roll back with ROSY_EXECUTOR=single.
+Environment=ROSY_EXECUTOR=events
 EnvironmentFile=/etc/rosy/runtime.env
 # D-174 F6: no home under ProtectHome=true; keep ROS logs in a service-owned directory.
 LogsDirectory=rosy-io

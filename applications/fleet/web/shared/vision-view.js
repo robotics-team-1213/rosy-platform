@@ -1,3 +1,5 @@
+import { createCameraFrameHold, decodeImageUrl, paintCameraFrameHold } from "/common/camera-frame-hold.js";
+
 const NO_SOURCE = "관제 카메라 인증 후 영상을 불러옵니다.";
 const DEFAULT_RECTIFICATION = Object.freeze({ fx: 1, fy: 1, cx: 0.5, cy: 0.5, k1: 0, k2: 0, p1: 0, p2: 0, k3: 0, corners: [[0, 0], [1, 0], [1, 1], [0, 1]], output_aspect: 0 });
 const AUTO_RECTIFICATION = Object.freeze({ mode: "auto" }), MAP_RECTIFICATION = Object.freeze({ mode: "map" });
@@ -140,26 +142,58 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   const profileFields = [...adjustments.querySelectorAll("[data-rect]")], cornerFields = [...adjustments.querySelectorAll("[data-corner]")];
   const profileFieldsets = [...adjustments.querySelectorAll("fieldset")], cornerModes = el("vision-corner-modes") || absentPanel();
   const cornerHint = el("vision-corner-hint") || absentPanel(), adjustmentState = el("vision-adjustment-state") || absentPanel(), proposalPolygon = el("vision-proposal-polygon");
-  let lease = null, leaseExpiresAt = 0, planeLease = null, objectUrl = null, lastFrameKey = "", lastDecodedImage = null, busy = false, previewLifetime = new AbortController(), lastSourcesAt = 0, refreshTimer = null;
+  let lease = null, leaseExpiresAt = 0, planeLease = null, lastFrameKey = "", lastDecodedImage = null, busy = false, previewLifetime = new AbortController(), lastSourcesAt = 0, refreshTimer = null, disconnectTimer = null;
   let viewMode = rawOnly ? "raw" : "adjusted", draggingPointerId = null, proposalCorners = null;
   let currentLens = null, currentLensInfo = null, selectedSource = "", sourceAvailable = false, availableSources = [];
   const frameListeners = [];
+  const hold = createCameraFrameHold();
+  let overlay = null;
+  if (typeof stage.append === "function") {
+    stage.classList?.add?.("cam-frame-hold");
+    overlay = document.createElement("span");
+    overlay.className = "cam-frame-overlay";
+    overlay.setAttribute?.("role", "status");
+    overlay.hidden = true;
+    stage.append(overlay);
+  }
   let cancelFrameExpiry = () => {};
+  function stopDisconnectTimer() {
+    if (disconnectTimer !== null) {
+      clearInterval(disconnectTimer);
+      disconnectTimer = null;
+    }
+  }
   function pausePreview() {
     previewLifetime.abort(); previewLifetime = new AbortController();
     if (busy?.kind === "frame") busy = false;
   }
   scope.onDispose(() => {
-    cancelFrameExpiry(); pausePreview(); busy = false; refreshTimer?.(); refreshTimer = null;
+    cancelFrameExpiry(); stopDisconnectTimer(); pausePreview(); busy = false; refreshTimer?.(); refreshTimer = null;
     lease = null; leaseExpiresAt = 0; draggingPointerId = null;
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    objectUrl = null;
+    hold.dispose();
   });
   function showState(label, kind = "neutral", detail = label) {
-    cancelFrameExpiry(); status.textContent = label; status.setAttribute("status", kind); message.textContent = detail;
+    cancelFrameExpiry(); stopDisconnectTimer(); status.textContent = label; status.setAttribute("status", kind); message.textContent = detail;
+    hold.disconnect({ kind, label, detail, dropFrame: true });
+    paintCameraFrameHold(stage, image, overlay, hold.snapshot());
     image.hidden = true; stage.hidden = true; cornerOverlay.toggleAttribute("hidden", true); frame.dataset.state = kind;
-    if (objectUrl) URL.revokeObjectURL(objectUrl);
-    objectUrl = null;
+    for (const listener of frameListeners) listener({ state: "stale", source: select.value });
+  }
+  function holdDisconnected(label, detail) {
+    if (!hold.snapshot().hasFrame) { showState(label, "warn", detail); return; }
+    cancelFrameExpiry();
+    hold.disconnect({ kind: "warn", label, detail, dropFrame: false });
+    const paint = () => {
+      const snap = hold.snapshot();
+      paintCameraFrameHold(stage, image, overlay, snap);
+      status.textContent = snap.overlayText;
+    };
+    paint();
+    status.setAttribute("status", "warn");
+    message.textContent = detail;
+    image.hidden = false; stage.hidden = false;
+    frame.dataset.state = "disconnected";
+    if (disconnectTimer === null) disconnectTimer = setInterval(paint, 1000);
     for (const listener of frameListeners) listener({ state: "stale", source: select.value });
   }
   function readProfile() {
@@ -321,23 +355,27 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
       if (response.ok) currentLensInfo = lens;
       if (response.ok && (lens?.kind ?? null) !== currentLens) { currentLens = lens?.kind ?? null; loadProfile(source); lease = null; }
       const rectifiedHeader = response.headers.get("X-Frame-Rectified"), rectified = rectifiedHeader === "true" || rectifiedHeader === "auto";
-      if (response.status === 429 && objectUrl) return;
+      if (response.status === 429 && hold.snapshot().hasFrame) return;
       const badge = frameBadge({ ok: response.ok, status: response.status, rectified: rectifiedHeader === "auto" ? "auto" : rectified,
         frameState: response.headers.get("X-Frame-State"), ageMs: response.headers.get("X-Frame-Age-Ms") });
       if (!response.ok || badge.state !== "live") {
-        if (badge.state === "unauthorized") lease = null;
-        if (!objectUrl || badge.state === "unauthorized") showState(badge.label, badge.kind, badge.detail);
-        else { status.textContent = badge.label; status.setAttribute("status", badge.kind); }
+        if (badge.state === "unauthorized") { lease = null; showState(badge.label, badge.kind, badge.detail); }
+        else holdDisconnected(badge.label, badge.detail);
         return;
       }
       const seq = response.headers.get("X-Frame-Seq"), nextKey = seq ? `${source}:${seq}:${rectifiedHeader || "false"}` : "";
-      if (nextKey && nextKey === lastFrameKey && lastDecodedImage && objectUrl) {
+      const currentSnap = hold.snapshot();
+      if (nextKey && nextKey === lastFrameKey && lastDecodedImage && currentSnap.hasFrame) {
         const frameAge = Number(response.headers.get("X-Frame-Age-Ms")) + Date.now() - requestedAt;
         if (Number.isFinite(frameAge) && frameAge <= FRAME_LATE_MS) {
-          status.textContent = badge.label; status.setAttribute("status", badge.kind);
+          stopDisconnectTimer();
+          hold.markLive({ label: badge.label, detail: badge.detail, kind: badge.kind });
+          paintCameraFrameHold(stage, image, overlay, hold.snapshot());
+          frame.dataset.state = "online";
+          status.textContent = badge.label; status.setAttribute("status", badge.kind); message.textContent = badge.detail;
           el("vision-meta").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${seq} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
-          for (const listener of frameListeners) listener({ image: lastDecodedImage, previewElement: image, rectified, source, seq, url: objectUrl, lens: currentLensInfo, ageMs: frameAge, state: badge.state });
-          cancelFrameExpiry(); cancelFrameExpiry = scope.timeout(() => showState("영상 만료", "warn", "새 프레임을 기다립니다."), Math.max(0, FRAME_LATE_MS - frameAge));
+          for (const listener of frameListeners) listener({ image: lastDecodedImage, previewElement: image, rectified, source, seq, url: currentSnap.url, lens: currentLensInfo, ageMs: frameAge, state: badge.state });
+          cancelFrameExpiry(); cancelFrameExpiry = scope.timeout(() => holdDisconnected("영상 만료", "새 프레임을 기다립니다."), Math.max(0, FRAME_LATE_MS - frameAge));
           return;
         }
       }
@@ -346,25 +384,28 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
       if (!current() || source !== select.value) return;
       const nextUrl = URL.createObjectURL(blob), nextImage = new Image();
       nextImage.src = nextUrl;
-      const decoded = await nextImage.decode().then(() => true, () => false);
+      const decoded = await decodeImageUrl(nextUrl, { ImageCtor: function () { return nextImage; } });
       if (!current() || source !== select.value) { URL.revokeObjectURL(nextUrl); return; }
       const frameAge = Number(response.headers.get("X-Frame-Age-Ms")) + Date.now() - requestedAt;
       if (!decoded || !Number.isFinite(frameAge) || frameAge > FRAME_LATE_MS) {
-        URL.revokeObjectURL(nextUrl); if (!objectUrl) showState("영상 만료", "warn", "새 프레임을 기다립니다."); return;
+        URL.revokeObjectURL(nextUrl); holdDisconnected("영상 만료", "새 프레임을 기다립니다."); return;
       }
-      cancelFrameExpiry();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-      objectUrl = nextUrl; lastFrameKey = nextKey; lastDecodedImage = nextImage;
+      cancelFrameExpiry(); stopDisconnectTimer();
+      hold.acceptFrame({ url: nextUrl, seq, label: badge.label, detail: badge.detail, kind: badge.kind });
+      lastFrameKey = nextKey; lastDecodedImage = nextImage;
+      paintCameraFrameHold(stage, image, overlay, hold.snapshot());
       status.textContent = badge.label; status.setAttribute("status", badge.kind); message.textContent = badge.detail;
-      image.src = nextUrl; image.hidden = false; stage.hidden = false; updateCornerOverlay();
+      image.hidden = false; stage.hidden = false; updateCornerOverlay();
       frame.dataset.state = "online"; frame.dataset.editing = String(viewMode === "raw" && !rawOnly);
       cornerOverlay.toggleAttribute("hidden", viewMode !== "raw" || rawOnly);
       el("vision-meta").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${seq || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
       for (const listener of frameListeners) listener({ image: nextImage, previewElement: image, rectified, source, seq, url: nextUrl, lens: currentLensInfo, ageMs: frameAge, state: badge.state });
-      cancelFrameExpiry(); cancelFrameExpiry = scope.timeout(() => showState("영상 만료", "warn", "새 프레임을 기다립니다."), Math.max(0, FRAME_LATE_MS - frameAge));
+      cancelFrameExpiry(); cancelFrameExpiry = scope.timeout(() => holdDisconnected("영상 만료", "새 프레임을 기다립니다."), Math.max(0, FRAME_LATE_MS - frameAge));
     } catch (error) {
       if (error.name === "AbortError" || !current()) return;
-      lease = null; showState("영상 정지", "warn", error.message || "Vision에 연결할 수 없습니다.");
+      lease = null;
+      if (error.status === 401 || error.status === 403) showState("영상 권한 없음", "warn", error.message || "Vision 권한을 확인하세요.");
+      else holdDisconnected("영상 정지", error.message || "Vision에 연결할 수 없습니다.");
     } finally {
       if (life.current() && busy === work) busy = false;
     }

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import math
+import sqlite3
+import threading
+from contextlib import nullcontext
 from typing import Optional
 
 from rosy.world.state.projections.map_pose import LOCALIZED
@@ -18,10 +21,27 @@ def _finite_pose(pose: tuple[float, float, float]) -> bool:
 
 
 class OfflinePinStore:
-    """In-memory operator pins for powered-off parked robots (cleared on any live state report)."""
+    """Operator pins for powered-off parked robots (cleared on live state, optionally persisted)."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, db: Optional[sqlite3.Connection] = None,
+                 lock: Optional[threading.RLock] = None) -> None:
         self._pins: dict[str, SitePose] = {}
+        self._db = db
+        self._lock = lock if lock is not None else nullcontext()
+        if self._db is not None:
+            with self._lock, self._db:
+                self._db.execute("""
+                    CREATE TABLE IF NOT EXISTS fleet_offline_pins (
+                        robot_id TEXT PRIMARY KEY,
+                        map_id TEXT NOT NULL,
+                        x REAL NOT NULL,
+                        y REAL NOT NULL,
+                        yaw REAL NOT NULL
+                    )""")
+                for robot_id, map_id, x, y, yaw in self._db.execute(
+                    "SELECT robot_id, map_id, x, y, yaw FROM fleet_offline_pins"
+                ):
+                    self._pins[robot_id] = (map_id, float(x), float(y), float(yaw))
 
     def pin(
         self,
@@ -41,7 +61,14 @@ class OfflinePinStore:
         if robot_online:
             return "ROBOT_ONLINE", None
         x, y, yaw = float(pose[0]), float(pose[1]), float(pose[2])
-        self._pins[robot_id] = (active_map_id, x, y, yaw)
+        with self._lock:
+            self._pins[robot_id] = (active_map_id, x, y, yaw)
+            if self._db is not None:
+                with self._db:
+                    self._db.execute(
+                        "INSERT OR REPLACE INTO fleet_offline_pins (robot_id, map_id, x, y, yaw) VALUES (?, ?, ?, ?, ?)",
+                        (robot_id, active_map_id, x, y, yaw),
+                    )
         return None, {
             "robot_id": robot_id,
             "state": "OFFLINE_PARKED",
@@ -53,11 +80,28 @@ class OfflinePinStore:
         }
 
     def clear(self, robot_id: str) -> None:
-        self._pins.pop(robot_id, None)
+        if robot_id not in self._pins:
+            return
+        with self._lock:
+            if self._pins.pop(robot_id, None) is not None and self._db is not None:
+                with self._db:
+                    self._db.execute("DELETE FROM fleet_offline_pins WHERE robot_id=?", (robot_id,))
 
     def prune(self, roster: set[str]) -> None:
-        for gone in set(self._pins) - roster:
-            del self._pins[gone]
+        if not self._pins:
+            return
+        with self._lock:
+            gone = set(self._pins) - roster
+            if not gone:
+                return
+            for robot_id in gone:
+                self._pins.pop(robot_id, None)
+            if self._db is not None:
+                with self._db:
+                    self._db.executemany(
+                        "DELETE FROM fleet_offline_pins WHERE robot_id=?",
+                        [(robot_id,) for robot_id in gone],
+                    )
 
     def pose_on(self, robot_id: str, active_map_id: Optional[str]) -> Optional[SitePose]:
         if active_map_id is None:

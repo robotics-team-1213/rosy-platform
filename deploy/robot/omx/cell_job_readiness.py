@@ -16,6 +16,7 @@ from cell_failure_context import canonical_sha256, list_bundles, load_bundle, re
 from cell_job_guards import _live_folded, read_json_dict
 
 ARMS = ("arm_s", "arm_a", "arm_b")
+CELL_ARMS = {"cell_s": ("arm_s",), "cell_ab": ("arm_a", "arm_b")}
 READINESS_SCHEMA = "rosy.cell-readiness.v1"
 _FORWARD_HEADERS = ("X-Frame-Seq", "X-Source-Stamp", "ETag", "Cache-Control")
 _LOG_TAIL_BYTES = 65_536
@@ -95,56 +96,97 @@ def _arm_summary(arm: str, runner, now: float, *, session_lock_held_fn, inc_reas
     return info, blocks
 
 
-def build_readiness(runner, *, whole_cell_lock_fn, session_lock_fn, depth_lock_fn, holds_by_arm: dict[str, str | None] | None = None) -> dict[str, Any]:
+def build_readiness(
+    runner,
+    *,
+    whole_cell_lock_fn,
+    session_lock_fn,
+    depth_lock_fn,
+    holds_by_arm: dict[str, str | None] | None = None,
+    cell: str | None = None,
+) -> dict[str, Any]:
     """Assemble strict `rosy.cell-readiness.v1` payload matching `CellReadiness`."""
+    if cell is not None and cell not in CELL_ARMS:
+        raise ValueError(f"unknown cell {cell!r}")
+    target_cells = (cell,) if cell is not None else tuple(CELL_ARMS)
+    target_arms = tuple(a for cid in target_cells for a in CELL_ARMS[cid])
     now = time.time()
     gen = runner.state_gen()
     whole_locked = bool(whole_cell_lock_fn(runner.lock_dir))
     depth_locked = bool(depth_lock_fn(runner.lock_dir))
-    holds = holds_by_arm if holds_by_arm is not None else {arm: runner._check_incident(arm) for arm in ARMS}
+    holds = holds_by_arm if holds_by_arm is not None else {arm: runner._check_incident(arm) for arm in target_arms}
     with runner.lock:
         runs_snap = [
             (jid, tuple(r.get("arms") or (() if not r.get("arm") else (r["arm"],))))
             for jid, r in runner.runs.items()
             if r["proc"].poll() is None
         ]
-    active_by_arm = {arm: next((jid for jid, r_arms in runs_snap if arm in r_arms), None) for arm in ARMS}
+    active_by_arm = {arm: next((jid for jid, r_arms in runs_snap if arm in r_arms), None) for arm in target_arms}
     fleet_by_cell = {
-        "cell_s": runner._check_fleet_safety("arm_s") or {},
-        "cell_ab": runner._check_fleet_safety("arm_a") or {},
+        cid: (runner._check_fleet_safety("arm_s" if cid == "cell_s" else "arm_a") or {})
+        for cid in target_cells
     }
-    refusals: list[str] = []
+    base_refusals: list[str] = []
     if whole_locked:
-        refusals.append("whole_cell_lock_held")
+        base_refusals.append("whole_cell_lock_held")
     if depth_locked:
-        refusals.append("depth_lock_held")
-    fleet_blocked = False
-    for cid, fst in fleet_by_cell.items():
-        if fst.get("blocked"):
-            fleet_blocked = True
-            refusals.append(f"fleet_safety:{cid}:{str(fst.get('reason') or 'blocked')[:85]}")
+        base_refusals.append("depth_lock_held")
     arms: dict[str, dict[str, Any]] = {}
-    for arm in ARMS:
+    arm_blocks_by_arm: dict[str, list[str]] = {}
+    for arm in target_arms:
         cid = "cell_s" if arm == "arm_s" else "cell_ab"
         info, arm_blocks = _arm_summary(
             arm, runner, now, session_lock_held_fn=session_lock_fn,
             inc_reason=holds.get(arm), active_job=active_by_arm[arm], cell_fleet=fleet_by_cell[cid],
         )
         arms[arm] = info
-        refusals.extend(arm_blocks)
-    all_blocked = all(arms[a]["incident_held"] or arms[a]["fault"] or arms[a]["human_hold_latched"] for a in ARMS)
-    if whole_locked or fleet_blocked or all_blocked:
-        tiers = [0]
-    elif refusals or any(arms[a]["dirty"] for a in ARMS):
-        tiers = [0, 1]
+        arm_blocks_by_arm[arm] = arm_blocks
+
+    cells: dict[str, dict[str, Any]] = {}
+    for cid in target_cells:
+        c_arms = CELL_ARMS[cid]
+        fst = fleet_by_cell[cid]
+        c_fleet_blocked = bool(fst.get("blocked"))
+        c_refusals = list(base_refusals)
+        if c_fleet_blocked:
+            c_refusals.append(f"fleet_safety:{cid}:{str(fst.get('reason') or 'blocked')[:85]}")
+        for arm in c_arms:
+            c_refusals.extend(arm_blocks_by_arm[arm])
+        c_all_blocked = all(arms[a]["incident_held"] or arms[a]["fault"] or arms[a]["human_hold_latched"] for a in c_arms)
+        c_tiers = (
+            [0] if (whole_locked or c_fleet_blocked or c_all_blocked)
+            else ([0, 1] if (c_refusals or any(arms[a]["dirty"] for a in c_arms)) else [0, 1, 2])
+        )
+        cells[cid] = {
+            "arms": list(c_arms),
+            "fleet_safety": {"cell_id": cid, "online": bool(fst.get("online")), "blocked": c_fleet_blocked, "reason": fst.get("reason")},
+            "blocking_refusals": [r[:120] for r in c_refusals[:20]],
+            "allowed_tiers_now": c_tiers,
+        }
+
+    if cell is not None:
+        refusals = list(cells[cell]["blocking_refusals"])
+        tiers = list(cells[cell]["allowed_tiers_now"])
     else:
-        tiers = [0, 1, 2]
+        refusals = list(base_refusals)
+        for cid in target_cells:
+            if fleet_by_cell[cid].get("blocked"):
+                refusals.append(f"fleet_safety:{cid}:{str(fleet_by_cell[cid].get('reason') or 'blocked')[:85]}")
+        for arm in target_arms:
+            refusals.extend(arm_blocks_by_arm[arm])
+        any_fleet_blocked = any(bool(fleet_by_cell[cid].get("blocked")) for cid in target_cells)
+        all_blocked = all(arms[a]["incident_held"] or arms[a]["fault"] or arms[a]["human_hold_latched"] for a in target_arms)
+        tiers = (
+            [0] if (whole_locked or any_fleet_blocked or all_blocked)
+            else ([0, 1] if (refusals or any(arms[a]["dirty"] for a in target_arms)) else [0, 1, 2])
+        )
     core = {
         "schema": READINESS_SCHEMA,
         "observed_at": round(now, 3),
         "max_age_s": 5.0,
         "cell_state_gen": gen,
         "arms": arms,
+        "cells": cells,
         "blocking_refusals": [r[:120] for r in refusals[:20]],
         "allowed_tiers_now": tiers,
     }
@@ -203,8 +245,13 @@ def handle_get_route(raw_target: str, runner, *, whole_cell_lock_fn, session_loc
     base_hdrs = {"X-Cell-State-Gen": str(gen)}
 
     if path == "/readiness":
-        holds_by_arm = {arm: runner._check_incident(arm) for arm in ARMS}
-        body = build_readiness(runner, whole_cell_lock_fn=whole_cell_lock_fn, session_lock_fn=session_lock_fn, depth_lock_fn=depth_lock_fn, holds_by_arm=holds_by_arm)
+        raw_cells = urllib.parse.parse_qs(parsed.query, keep_blank_values=True).get("cell")
+        if raw_cells is not None and (len(raw_cells) != 1 or raw_cells[0] not in CELL_ARMS):
+            return 400, {"error": "invalid cell query parameter"}, "application/json", base_hdrs
+        cell_param = raw_cells[0] if raw_cells is not None else None
+        rel_arms = CELL_ARMS[cell_param] if cell_param is not None else ARMS
+        holds_by_arm = {arm: runner._check_incident(arm) for arm in rel_arms}
+        body = build_readiness(runner, whole_cell_lock_fn=whole_cell_lock_fn, session_lock_fn=session_lock_fn, depth_lock_fn=depth_lock_fn, holds_by_arm=holds_by_arm, cell=cell_param)
         return 200, body, "application/json", base_hdrs
     if path == "/failures":
         arm = (qs.get("arm") or [None])[0]

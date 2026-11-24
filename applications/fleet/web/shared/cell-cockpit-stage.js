@@ -53,7 +53,7 @@ function CameraTile({ cam, frames, liveOn, hidden }) {
     </div>
     <div class="omx-inspector-cam-frame">
       <img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`}
-        onClick=${toggleZoom} onLoad=${() => { if (standbyRef.current) standbyRef.current.hidden = true; }} />
+        onClick=${toggleZoom} />
       <span ref=${standbyRef} class="omx-inspector-cam-standby" role="status" />
     </div>
   </article>`;
@@ -112,7 +112,9 @@ export function createCellCockpitStage({
     onStateChange(_key, state) {
       if (!state || state.roiTarget) return;
       const prev = camStates.get(state.source);
-      if (prev && prev.live === state.live && prev.kind === state.kind && prev.text === state.text) return;
+      if (prev && prev.live === state.live && prev.hasFrame === state.hasFrame
+          && prev.phase === state.phase && prev.kind === state.kind
+          && (state.hasFrame || prev.label === state.label)) return;
       camStates.set(state.source, state);
       const obsCams = view.workcellObs?.cameras || [];
       const liveCount = obsCams.filter((c) => camStates.get(c.source_id)?.live).length;
@@ -124,7 +126,8 @@ export function createCellCockpitStage({
       view.cellLiveCamCount = liveCount;
       view.cellCamChecked = checked;
       if (state.kind === "neutral" && !prev) return;
-      if (summaryChanged || prev?.live !== state.live || prev?.text !== state.text) {
+      if (summaryChanged || prev?.live !== state.live || prev?.hasFrame !== state.hasFrame
+          || prev?.phase !== state.phase || (!state.hasFrame && prev?.label !== state.label)) {
         if (renderingStage) {
           if (!notifyQueued) {
             notifyQueued = true;
@@ -166,7 +169,7 @@ export function createCellCockpitStage({
   let notifiedOnce = false;
 
   const isStageActive = () => !areaHidden && !owns("drive") && owns("arms");
-  const isCamActive = (cam) => Boolean(camStates.get(cam.source_id)?.live || cam.fresh);
+  const isCamActive = (cam) => Boolean(camStates.get(cam.source_id)?.live || camStates.get(cam.source_id)?.hasFrame || cam.fresh);
 
   function onSourcesSample(sample) {
     if (!owns("drive") && owns("arms")) onVisionSample?.(sample);
@@ -251,7 +254,7 @@ export function createCellCockpitStage({
     const cams = obs?.cameras || [];
     const activeCams = cams.filter(isCamActive);
     const hiddenCamCount = cams.length - activeCams.length;
-    const camDiag = cams.map((c) => camStates.get(c.source_id)?.text).find(Boolean) || "영상 연결 확인 중";
+    const camDiag = cams.map((c) => camStates.get(c.source_id)?.label).find(Boolean) || "영상 연결 확인 중";
     const arms = obs?.arms || [];
     const selectedId = selection?.get?.() ?? null;
     const alertArms = arms.filter((arm) => arm.held || arm.openIncidents.length > 0 || arm.hwFaultMotors > 0 || arm.motorHealth?.status === "fault");
