@@ -389,3 +389,51 @@ def test_route_prototype_latches_invisible_after_simulation_context_changes():
     params['camera_ground_source'] = 'GAZEBO'
     namespace['_on_camera'](node, msg)
     assert publications == [target, None, None, None] and len(calls) == 2
+
+
+def test_paint_motion_skips_warp_mask_on_zero_pose_delta(monkeypatch):
+    import importlib
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    for pkg, names in (("sensor_msgs", ("CompressedImage", "LaserScan")),
+                       ("std_msgs", ("String", "UInt16MultiArray"))):
+        root_mod = ModuleType(pkg)
+        msg_mod = ModuleType(f"{pkg}.msg")
+        for name in names:
+            setattr(msg_mod, name, type(name, (), {}))
+        monkeypatch.setitem(sys.modules, pkg, root_mod)
+        monkeypatch.setitem(sys.modules, f"{pkg}.msg", msg_mod)
+    monkeypatch.delitem(sys.modules, "control.line_observer_helpers", raising=False)
+    helpers_mod = importlib.import_module("control.line_observer_helpers")
+    from perception_runtime.perception.lane_keep_lines import HORIZON_MARGIN_PX
+
+    history = SimpleNamespace(poses={1.0: (0.2, 0.3, 0.5), 1.25: (0.2, 0.3, 0.5), 1.5: (0.25, 0.3, 0.5)})
+    history.pose_at = lambda t: history.poses.get(t)
+    params = {'learned_paint_max_dxy_m': 0.10, 'learned_paint_max_dyaw_rad': 0.40}
+
+    class Dummy(helpers_mod.LineObserverHelpersMixin):
+        def __init__(self):
+            self._odom_history = history
+            self._lane_keeper = SimpleNamespace(_x_offset=0.03)
+
+        def get_parameter(self, name):
+            return SimpleNamespace(value=params[name])
+
+    ground = SimpleNamespace(horizon_row=1.0, focal_px=200.0, principal_x=8.0,
+                             principal_y=8.0, pitch_rad=0.2, height_m=0.1)
+    cut = int(np.ceil(ground.horizon_row)) + HORIZON_MARGIN_PX
+    mask = np.ones((16, 16), dtype=np.uint8)
+    warp_calls = []
+    monkeypatch.setattr(helpers_mod, 'warp_mask', lambda m, h, c: warp_calls.append(c) or m)
+    monkeypatch.setattr(helpers_mod, 'mask_homography', lambda *a, **k: (np.eye(3), 0.05, 0.0))
+    monkeypatch.setattr(helpers_mod, 'drop_small_components', lambda m: m)
+
+    motion = Dummy()._paint_motion(ground)
+    out_mask, dxy, dyaw = motion(mask, 1.0, 1.25)
+    assert (dxy, dyaw) == (0.0, 0.0)
+    assert out_mask[:cut].sum() == 0
+    assert warp_calls == []
+
+    moved_mask, dxy2, _ = motion(mask, 1.0, 1.5)
+    assert dxy2 == 0.05 and len(warp_calls) == 1 and moved_mask is mask

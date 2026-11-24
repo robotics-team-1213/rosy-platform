@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 import cv2
+import numpy as np
 import yaml
 from sensor_msgs.msg import CompressedImage, LaserScan
 from std_msgs.msg import String, UInt16MultiArray
@@ -135,6 +136,18 @@ class LineObserverHelpersMixin:
             dst = self._odom_history.pose_at(dst_stamp)
             if src is None or dst is None:
                 return 'no_odom'
+            # Skip perspective warp + CCL when odom reports no planar pose change.
+            if (
+                abs(dst[0] - src[0]) < 1e-6
+                and abs(dst[1] - src[1]) < 1e-6
+                and abs(math.remainder(dst[2] - src[2], math.tau)) < 1e-6
+            ):
+                if cut > 0 and np.any(mask[:cut]):
+                    out_mask = mask.copy()
+                    out_mask[:cut] = 0
+                else:
+                    out_mask = mask
+                return out_mask, 0.0, 0.0
             moved = mask_homography(
                 ground,
                 self._lane_keeper._x_offset,
