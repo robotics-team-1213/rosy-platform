@@ -11,12 +11,12 @@ export function batteryMeterState({ percent = null, charging = false, online = t
   return { tone, charging: Boolean(charging && valid), meter: `${clamped ?? 0}%` };
 }
 
-function BatteryMeter(props) {
+export function BatteryMeter(props) {
   const st = batteryMeterState(props);
-  return html`<span class="batt-meter" data-tone=${st.tone} data-charging=${String(st.charging)} aria-hidden="true"><span class="batt-fill" data-meter=${st.meter}></span></span>`;
+  return html`<span class="batt-meter" data-tone=${st.tone} data-batt-charging=${String(st.charging)} aria-hidden="true"><span class="batt-fill" data-meter=${st.meter}></span></span>`;
 }
 
-function createBatteryMeter(props) {
+export function createBatteryMeter(props) {
   const wrap = node("span", "", "batt-meter");
   wrap.setAttribute("aria-hidden", "true");
   wrap.append(node("span", "", "batt-fill"));
@@ -24,11 +24,11 @@ function createBatteryMeter(props) {
   return wrap;
 }
 
-function patchBatteryMeter(el, props) {
+export function patchBatteryMeter(el, props) {
   if (!el) return;
   const st = batteryMeterState(props);
   patchData(el, "tone", st.tone);
-  patchData(el, "charging", String(st.charging));
+  patchData(el, "battCharging", String(st.charging));
   patchAttr(el.firstElementChild, "data-meter", st.meter);
 }
 

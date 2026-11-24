@@ -485,8 +485,8 @@ details[data-more] > summary { cursor: pointer; font-size: var(--text-micro); co
 .batt-meter[data-tone="unknown"] { border-style: dashed; border-color: var(--border-default); background: transparent; }
 .batt-meter[data-tone="unknown"]::after { background: var(--border-default); }
 .batt-meter[data-tone="unknown"] .batt-fill { width: 0%; }
-.batt-meter[data-charging="true"] { border-color: var(--series-primary); }
-.batt-meter[data-charging="true"]::after, .batt-meter[data-charging="true"] .batt-fill { background: var(--series-primary); }
+.batt-meter[data-batt-charging="true"] { border-color: var(--series-primary); }
+.batt-meter[data-batt-charging="true"]::after, .batt-meter[data-batt-charging="true"] .batt-fill { background: var(--series-primary); }
 .cockpit-hud-val { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; }
 .cockpit-hud-cell[data-tone="active"] .cockpit-hud-val { color: var(--series-primary); }
 .cockpit-hud-cell[data-tone="warn"] .cockpit-hud-val { color: var(--status-warn); }

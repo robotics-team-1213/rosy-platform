@@ -452,12 +452,13 @@ const chargeBays = createChargeBaysView({ scope: pageScope, el, call, auth, conf
 const platoon = createPlatoonView({ scope: pageScope, el, call, auth });
 const rawTrackingView = createTrackingView({ scope: pageScope, el, view, call, auth, onChanged: () => mapView.scheduleDraw() });
 const trackingView = { ...rawTrackingView, refresh: whenDrive(() => rawTrackingView.refresh()) };
+let hadObsArms = false;
 cellStage = createCellCockpitStage({
   scope: pageScope, call, view, auth, selection,
   contextHost: el("cell-context-panel"),
   isOperator: () => hasOperatorRole(auth.role) && !auth.locked,
   namedReason,
-  onChanged: () => schedulePollRender(),
+  onChanged: () => { const hasArms = Boolean(view.workcellObs?.arms?.length); schedulePollRender({ urgent: hasArms && !hadObsArms }); hadObsArms = hasArms; },
   onVisionSample: (sample) => {
     if (auth.locked || !auth.role) return;
     pathSample.vision = sample;
