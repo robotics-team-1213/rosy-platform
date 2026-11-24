@@ -200,10 +200,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.dry_run:
             for arm in ARMS:
-                st = cells[arm].act("state")
-                if (fallback := dry_no_runner_fallback(st, True, None, libs[arm])) is not None:
-                    cells[arm] = _PassiveDryRunCell(cells[arm], fallback)
-                    passive_arms.append(arm)
+                if callable(act_fn := getattr(cells[arm], "act", None)):
+                    st = act_fn("state")
+                    if (fallback := dry_no_runner_fallback(st, True, None, libs[arm])) is not None:
+                        cells[arm] = _PassiveDryRunCell(cells[arm], fallback)
+                        passive_arms.append(arm)
         elif cell_two_arm.away_from_home(cells, libs):
             raise SystemExit("one or both arms are away from home before live start; return home first")
 
