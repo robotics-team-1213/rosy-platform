@@ -318,13 +318,15 @@ def main(argv=None):
                        or getattr(runner, "_stop_after_park", None) or getattr(runner, "_recovery_active", False))
         write_status_row(status_path, row, protect=protect)
 
+    from inspect import signature
     from guarded_native import NativeJointMotion, close_device, connect_passive
     from motor_health import MotorHealth
     lines = fifo_lines(args.io / "chunk-cmd")
     # The guard owns the hardware lifecycle and every goal (D-872): passive connect (no vendor
     # configure), seeded torque ON, 10 deg/s streaming, following-error, effort and fault stops.
     connect_passive(robot, follower=True)
-    motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
+    monitor = MotorHealth(async_publish=True) if "async_publish" in signature(MotorHealth).parameters else MotorHealth()
+    motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=monitor)
     motion.shed_load = True  # a guard hold freezes only the held joint: runner_strain.shed moves lift and elbow
     guarded = Guarded(robot, motion)
     runner = None

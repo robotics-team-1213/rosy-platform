@@ -371,3 +371,28 @@ def test_advisor_str_spec_nested_panel_and_arbiter_model():
     arb.__name__ = "arbiter_fn"
     out = judge_seat.cooperate([lambda *_: {"decision": "hold"}, lambda *_: {"decision": "stop"}], arbiter=arb)("p", [], None)
     assert out["decision"] == "hold" and out["model"] == "arbiter_fn"
+
+
+def test_chunk_runner_async_health_and_live_flush_on_unlatch_and_stop(tmp_path, monkeypatch):
+    import bus_watchdog
+    import cell_job_guards
+    import guarded_native
+    import motor_health
+    seen, ended, lives = [], [], []
+    cfg, lib = tmp_path / "c.json", tmp_path / "l.json"
+    cfg.write_text(json.dumps({"robot": {"type": "omx_follower", "port": "/dev/null", "max_relative_target": 5}, "dataset": {"fps": 30}}))
+    lib.write_text(json.dumps(_lib()))
+    monkeypatch.setitem(sys.modules, "lerobot.robots.omx_follower", SimpleNamespace(OmxFollowerConfig=lambda **k: k, OmxFollower=lambda _c: _Robot(HOME)))
+    for mod, attr, val in ((guarded_native, "connect_passive", lambda *_a, **_k: None), (guarded_native, "close_device", lambda *_a: None), (bus_watchdog, "arm", lambda *_a: None), (m, "fifo_lines", lambda *_a: SimpleNamespace(close=lambda: None)), (m, "runtime_context", lambda *_a, **_k: {"scope": "simulation"}), (motor_health, "MotorHealth", lambda *, async_publish=False: seen.append(async_publish) or SimpleNamespace(end=lambda: ended.append(True))), (m, "Runner", type("_R", (m.Runner,), {"run": lambda self, _l: None}))):
+        monkeypatch.setattr(mod, attr, val)
+    m.main(["--config", str(cfg), "--library", str(lib), "--io", str(tmp_path / "io")])
+    assert seen == [True] and ended == [True]
+    r = m.Runner(_Robot(HOME), _lib(), fps=30, status=lambda _row: None, live=lives.append)
+    r.target = list(HOME)
+    r.command("human-hold")
+    r.tick()
+    assert r.command("recover-unlatch") is True and lives and lives[-1]["human_hold_latched"] is False and lives[-1]["fault"] is None
+    assert r.command("stop") is False and len(lives) >= 2 and not (lives[-1]["human_hold_latched"] or lives[-1]["torque_hold_commanded"] or lives[-1]["fault"])
+    (tmp_path / "chunk-io-b").mkdir()
+    (tmp_path / "chunk-io-b" / "live.json").write_text(json.dumps(lives[-1]), encoding="utf-8")
+    assert cell_job_guards.check_peer_ab_folded("arm_a", tmp_path, tmp_path / "leases", tmp_path, session_lock_held_fn=lambda *_: False, read_json_fn=lambda p: json.loads(p.read_text()) if p.is_file() else None, live_max_age_s=15.0, incident_check_fn=lambda _: None) is None
