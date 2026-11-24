@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import sys
 import threading
 import time
@@ -260,10 +261,24 @@ def test_real_fleet_app_closed_loop_with_virtual_six_robot_core_and_world(tmp_pa
                     break
             assert moved
 
+            joint_degrees = [24, -17, 29, 45, 90, 8]
+            report = http.post("/api/fleet/pipeline/cell-quality", headers=auth, json={
+                "schema": "rosy.pipeline.cell-quality.v1",
+                "arm_states": {"arm_a": {"joints_deg": joint_degrees, "folded": False}},
+            })
+            assert report.status_code == 200
+            # Verify graceful 404 handling when no active map is configured while testing real _arm_live_catalog output.
+            assert http.get("/api/fleet/pipeline/cell-tasks", headers=auth).status_code == 404
+            arm_catalog = report.json()["arm_live_states"]
             world_payload = bridge_real_fleet.fleet_state_to_world_state(
                 latest_fleet, site_map_sha256=site_map_sha,
+                arm_live_states=arm_catalog,
             )
             assert world_payload is not None
+            assert world_payload["arms"]["arm_a"] == pytest.approx([math.radians(q) for q in joint_degrees])
+            assert world_payload["arms_observed"] == {"arm_s": False, "arm_a": True, "arm_b": False}
+            assert world_payload["arms_fresh"]["arm_a"] is True
+            assert world_payload["pinky"]["has_cargo"] is False
             push_res = adapter.push_world_snapshot(world_url, "real-site", world_payload)
             assert push_res["ok"] and push_res["parity"]["ok"]
 
@@ -271,6 +286,12 @@ def test_real_fleet_app_closed_loop_with_virtual_six_robot_core_and_world(tmp_pa
             real_entry = next(w for w in reg["worlds"] if w["world_id"] == "real-site")
             assert real_entry["status"] == "live"
             assert real_entry["parity"]["ok"] is True
+            stream = f"{world_url}/sim/stream?world=real-site&max_events=1"
+            with urllib.request.urlopen(stream, timeout=2.0) as res:
+                assert res.readline() == b"event: state\n"
+                frame = json.loads(res.readline()[6:])
+            assert frame["arms_observed"] == world_payload["arms_observed"]
+            assert frame["arms_fresh"] == world_payload["arms_fresh"]
 
             # Verify Fleet emergency stop propagates through virtual CORE past SharedGather's 1s cache TTL.
             estop = http.post("/api/fleet/estop", headers=auth)

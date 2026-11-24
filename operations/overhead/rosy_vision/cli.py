@@ -353,11 +353,14 @@ def _vision_ingest(args: argparse.Namespace, configs, *, environ=os.environ):
                      if config.phone_token is not None}
     source_tokens.update(preview_tokens)
     paired = PairedCredentials(paired_sources, forbidden_digests=reserved_digests) if paired_sources else None
+    source_widths = {config.camera.source_id: config.stream_width for config in configs
+                     if config.stream_width is not None}
     ingest = IngestServer(
         source_tokens,
         preview_signer=VisionLeaseSigner(preview_secret) if preview_secret else None,
         map_paint=load_map_paint(args.map_paint) if args.map_paint else None,
         paired=paired,
+        source_widths=source_widths,
     )
     return ingest, sync
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+import json
 import time
 import uuid
 from typing import Any
@@ -20,7 +21,8 @@ from core_common.protocol.cell_plans import (
 from fleet.pipeline import resolve_omx_cells
 from fleet.pipeline.cell_plan_planner import plan_cell_moves
 from fleet.pipeline.cell_site_targets import resolve_cell_task_targets
-from fleet.server.pipeline_port_events import task_view_for_request
+from fleet.server.pipeline_port_events import task_view_for_request, validate_task_identity
+from .pipeline_cell_plan_admit import admit_cell_plan_guarded
 from .pipeline_governance_store import (
     canonical_digest, prepare_task_governance, safe_canonical_digest, scoped_idempotency_key, validate_request_key,
 )
@@ -51,8 +53,39 @@ def _aggregate_plan_status(tasks: list[dict[str, Any]]) -> str:
     return "PROPOSED"
 
 
+def _collect_caller_cargo(body: dict[str, Any]) -> tuple[set[str], dict[int, dict[str, Any]]]:
+    cargo_ids: set[str] = set()
+    step_identities: dict[int, dict[str, Any]] = {}
+    raw_steps = body.get("steps") if body.get("steps") is not None else body.get("harbor_order")
+    if isinstance(raw_steps, list):
+        for idx, item in enumerate(raw_steps):
+            if not isinstance(item, dict):
+                continue
+            cid = item.get("cargo_id")
+            if isinstance(cid, str) and cid.strip():
+                cargo_ids.add(cid.strip())
+            if any(k in item for k in ("identity", "identity_observation_ref")):
+                step_identities[idx] = item
+    for key in ("cargo_id", "target_cargo_id"):
+        val = body.get(key)
+        if isinstance(val, str) and val.strip():
+            cargo_ids.add(val.strip())
+    if isinstance(body.get("request"), dict):
+        val = body["request"].get("cargo_id")
+        if isinstance(val, str) and val.strip():
+            cargo_ids.add(val.strip())
+    if isinstance(body.get("state"), dict):
+        cargo_ids.update(str(k).strip() for k in body["state"] if str(k).strip())
+    if isinstance(body.get("goal"), dict):
+        for vals in body["goal"].values():
+            if isinstance(vals, list):
+                cargo_ids.update(str(v).strip() for v in vals if str(v).strip())
+    return cargo_ids, step_identities
+
+
 def install_cell_plan_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
+    operator_guard = ctx.operator_guard
     proposer_guard = getattr(ctx, "proposer_guard", ctx.operator_guard)
     gov = getattr(ctx, "gov", None) or getattr(app.state, "pipeline_governance", None)
     active_map = ctx.active_map
@@ -135,12 +168,18 @@ def install_cell_plan_routes(app, ctx) -> None:
             raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_PLAN_INPUT"}) from None
         if not planned["ok"]:
             raise HTTPException(422, detail={"code": planned["why"] or "NO_LEGAL_PLAN"})
+        principal = getattr(getattr(request, "state", None), "site_principal", None)
+        is_service = getattr(principal, "role", None) == "service"
+        moves = [
+            {k: v for k, v in m.items() if (not is_service or k != "cargo_id")}
+            for m in planned["moves"]
+        ]
         return CellPlanDryRunResponse(
             schema=_SCHEMA,
             mode=planned["mode"],
             order_source=planned["order_source"],
-            moves=planned["moves"],
-            final_state=planned.get("final_state"),
+            moves=moves,
+            final_state=None if is_service else planned.get("final_state"),
             why=planned.get("why"),
         ).model_dump(by_alias=True)
 
@@ -196,6 +235,7 @@ def install_cell_plan_routes(app, ctx) -> None:
             }
             validated_steps: list[tuple[dict[str, Any], dict[str, Any], int, dict[str, float], str, dict[str, Any]]] = []
             prev_task_id: str | None = body.get("depends_on")
+            caller_cargo_ids, step_identities = _collect_caller_cargo(body)
 
             for idx, move in enumerate(planned["moves"]):
                 task_id = f"{plan_id}-s{idx + 1}"
@@ -212,7 +252,22 @@ def install_cell_plan_routes(app, ctx) -> None:
                     "robot_kind": robot_kind,
                     **gov_passthrough,
                 }
-                targets = resolve_cell_task_targets("cell_ab", step_spec, web_common=web_common, legacy_sites=("belt", "vehicle"))
+                step_id_src = step_identities.get(idx, {})
+                step_identity = step_id_src.get("identity") or body.get("identity")
+                step_obs_ref = step_id_src.get("identity_observation_ref") or body.get("identity_observation_ref")
+                move_cargo = move.get("cargo_id")
+                try:
+                    targets = resolve_cell_task_targets("cell_ab", step_spec, web_common=web_common, legacy_sites=("belt", "vehicle"))
+                    identity_meta: dict[str, Any] = {}
+                    if isinstance(move_cargo, str) and move_cargo in caller_cargo_ids and targets["dst_wire_ref"] is not None:
+                        ident_spec = {
+                            "object_ref": move_cargo,
+                            "identity": step_identity if step_identity is not None else "attested",
+                            **({"identity_observation_ref": step_obs_ref} if step_obs_ref is not None else {}),
+                        }
+                        identity_meta = validate_task_identity(ident_spec, cell_id="cell_ab", principal_id=principal_id)
+                except ValueError as exc:
+                    raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_TASK_INPUT"}) from None
                 tier, pose = checked_task_pose(step_spec, station)
                 target_status, gov_meta = prepare_task_governance(
                     app, step_spec, principal_id=principal_id, principal_role=principal_role,
@@ -221,7 +276,7 @@ def install_cell_plan_routes(app, ctx) -> None:
                     is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog,
                     vehicle_sites=(),
                 )
-                validated_steps.append((move, targets, tier, pose, target_status, {**gov_meta, "task_id": task_id, "depends_on": prev_task_id}))
+                validated_steps.append((move, targets, tier, pose, target_status, {**gov_meta, **identity_meta, "task_id": task_id, "depends_on": prev_task_id}))
                 prev_task_id = task_id
 
             dec_row = _evaluate_decision("cell_ab", "arm_target", {})
@@ -374,6 +429,7 @@ def install_cell_plan_routes(app, ctx) -> None:
                     task["cancel_reason"] = cancel_req.reason
                     task["cancelled_by"] = principal_id
                     task["cancelled_at"] = now
+                    _enrich_task_health(task)
                     cancelled_ids.append(tid)
             if not cancelled_ids:
                 raise HTTPException(409, detail={"code": "CELL_PLAN_NOT_CANCELLABLE"})
@@ -395,3 +451,28 @@ def install_cell_plan_routes(app, ctx) -> None:
                 tasks=tasks,
                 cancelled_task_ids=cancelled_ids,
             ).model_dump(by_alias=True)
+
+    @app.post("/api/fleet/pipeline/cell-plans/{plan_id}/admit", dependencies=operator_guard)
+    async def admit_cell_plan(plan_id: str, request: Request):
+        raw_body = await request.body()
+        try:
+            body = json.loads(raw_body) if raw_body.strip() else {}
+        except (ValueError, UnicodeDecodeError):
+            raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"}) from None
+        if not isinstance(body, dict):
+            raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
+        checked_json_value(body)
+        principal = getattr(request.state, "site_principal", None)
+        res = admit_cell_plan_guarded(app, ctx, plan_id, body, principal)
+        rec = app.state.omx_cell_plans[plan_id]
+        tasks = [
+            _enriched_plan_task(tid, request)
+            for tid in rec["task_ids"] if tid in app.state.omx_cell_tasks
+        ]
+        return {
+            "ok": True,
+            "schema": _SCHEMA,
+            "plan": _plan_view(plan_id, request),
+            "tasks": tasks,
+            **res,
+        }
