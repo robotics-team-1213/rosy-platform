@@ -151,15 +151,25 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
     capped dispatch near 4 per second). Dispatch stays serial: console.goal's traffic check
     reads and writes claims across awaits and relies on it.
     """
+    last_idle_housekeeping: float | None = None
     drained = 0
     while True:
         dispatched = None
         try:
-            # BEGIN IMMEDIATE can wait 5 s for the write lock: never on the loop that answers heartbeats
-            await asyncio.to_thread(task_service.scheduler.expire_queued)
-            from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
-            await reconcile_tasks(task_service, console)
+            tick_at = clock()
+            housekeeping_due = last_idle_housekeeping is None or tick_at - last_idle_housekeeping >= 1.0
+            if housekeeping_due:
+                # BEGIN IMMEDIATE can wait 5 s for the write lock: never on the loop that answers heartbeats
+                await asyncio.to_thread(task_service.scheduler.expire_queued)
+                from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
+                await reconcile_tasks(task_service, console)
+                last_idle_housekeeping = tick_at
             queued_ids = await asyncio.to_thread(task_service.store.queued_task_ids)
+            if queued_ids and not housekeeping_due:
+                await asyncio.to_thread(task_service.scheduler.expire_queued)
+                from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
+                await reconcile_tasks(task_service, console)
+                last_idle_housekeeping = tick_at
             console.prune_task_queue_entries(queued_ids)
             # An empty queue skips the per-robot state read; dispatch_next still runs (drain gate).
             snapshot = await console.snapshot() if queued_ids else {"robots": []}

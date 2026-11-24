@@ -35,6 +35,8 @@ class FleetTaskScheduler:
         return task
 
     def claim_next(self, available_robot_ids: set[str], *, lease_seconds: float = 30.0) -> dict | None:
+        if not available_robot_ids and hasattr(self.store, "queued_task_ids") and not self.store.queued_task_ids():
+            return None
         observed_at = self._monotonic()
         task = self.store.claim_next(worker_id=self.worker_id,
                                      available_robot_ids=available_robot_ids,
@@ -71,4 +73,6 @@ class FleetTaskScheduler:
 
     def expire_queued(self) -> None:
         """Expire queued work even when no robot is currently dispatchable."""
+        if hasattr(self.store, "queued_task_ids") and not self.store.queued_task_ids():
+            return
         self.store.claim_next(worker_id=self.worker_id, available_robot_ids=set())

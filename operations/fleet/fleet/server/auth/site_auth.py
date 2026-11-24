@@ -27,6 +27,29 @@ AI_EXPLANATION = re.compile(r"^/api/fleet/workcell-observations/arms/[A-Za-z0-9_
 # D-1039: an AI assessor service (site_users role service, named in ROSY_FLEET_ARM_ASSESSORS with its arms) posts
 # only an arm incident clear; which incidents it may clear is decided on the stored facts in arm_incidents
 ARM_CLEAR = re.compile(r"^/api/fleet/workcell-observations/arms/[A-Za-z0-9_-]{1,32}/incidents/[0-9a-f]{32}/clear$")
+BED_OBSERVATION = re.compile(r"^/api/fleet/pipeline/cell-tasks/[^/]+/bed-observation$")
+
+_AUDIT_EXEMPT_PATHS = frozenset({
+    "/api/fleet/sightings",
+    "/api/fleet/policy-evidence",
+    "/api/fleet/traffic/signals/presence",
+    "/api/fleet/signals/presence",
+    "/api/fleet/goal-lease/presence",
+    "/api/fleet/pipeline/cell-quality",
+    "/api/fleet/vision/lease",
+    "/api/fleet/pipeline/cell-tasks/claim",
+}) | AI_PATHS
+
+
+def _skip_api_audit(path: str) -> bool:
+    """High-frequency telemetry/polling POSTs and self-audited routes skip fleet_api_audit."""
+    return (
+        path in _AUDIT_EXEMPT_PATHS
+        or bool(AI_EXPLANATION.match(path))
+        or (path.startswith("/api/fleet/traffic/signals/") and path.endswith("/demand"))
+        or path.startswith("/api/fleet/pipeline/cell-camera/")
+        or bool(BED_OBSERVATION.match(path))
+    )
 
 _LOG = logging.getLogger(__name__)
 
@@ -211,13 +234,7 @@ def build_authorize(console_token: Optional[str],
                                                          "message": "ai_observer may post only facts and heartbeats"})
         if (task_service is not None and request.method == "POST"
                 and request.url.path.startswith("/api/fleet/")
-                and request.url.path != "/api/fleet/sightings"
-                and request.url.path != "/api/fleet/policy-evidence"
-                and request.url.path not in AI_PATHS   # D-577 4: audited in fleet_ai_facts
-                and not AI_EXPLANATION.match(request.url.path)   # D-971: the explanation row is its own record
-                # D-525 rev 4: a signal demand repeats every 0.5 s; the route audits only a new one
-                and not (request.url.path.startswith("/api/fleet/traffic/signals/")
-                         and request.url.path.endswith("/demand"))):
+                and not _skip_api_audit(request.url.path)):
             try:
                 request.state.site_api_audit_id = task_service.store.begin_api_audit(
                     principal_id=principal.principal_id, role=principal.role,

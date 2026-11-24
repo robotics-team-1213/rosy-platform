@@ -141,7 +141,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     observation_path = answer_log_path or (journal.path if journal is not None else None)
     if observation_path is not None:
         from fleet.server.observation_store import ObservationStore
-        gather.observations = ObservationStore(observation_path)
+        gather.observations = ObservationStore(observation_path, debounce_s=10.0, prune_interval_s=60.0)
 
     @app.get("/api/fleet/observations", dependencies=read_guard, tags=["fleet-observations"])
     def observation_history(after_id: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200),
