@@ -80,7 +80,10 @@ def evaluate_fleet_pipeline(
                         ((float(r.pose[0]) - station.station_xy[0]) ** 2 +
                          (float(r.pose[1]) - station.station_xy[1]) ** 2) ** 0.5 <= 0.18)), None)
         if docked is not None:
-            pose = docked.pose
+            pose = getattr(docked, "pose", None)
+            if pose is None:
+                st_pose = (state.get("docked_robot") or {}).get("pose")
+                pose = (st_pose["x"], st_pose["y"]) if isinstance(st_pose, dict) and "x" in st_pose and "y" in st_pose else station.station_xy
             docked_view = {"robot_id": docked.robot_id, "robot_kind": get_robot_profile(
                 getattr(docked, "kind", None) or docked.robot_id).kind,
                 "pose": {"x": float(pose[0]), "y": float(pose[1]),
