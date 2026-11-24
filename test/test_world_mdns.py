@@ -156,11 +156,14 @@ def test_two_sided_docker_compose_and_mdns_contracts() -> None:
     assert "ROSY_WORLD_MDNS_HOST" in link_compose["services"]["fleet"]["environment"]
     assert "logging" not in link_compose["services"]["fleet"]
 
-    # Co-located overlay uses Dockerfile + /run/avahi-daemon + mDNS host targets without overriding fleet logging.
+    # Co-located overlay uses Dockerfile + /run/avahi-daemon + internal site_backend fleet URL without overriding fleet logging.
     site_world = yaml.safe_load((ROOT / "deploy/site/compose.world.yaml").read_text(encoding="utf-8"))
     assert "logging" not in site_world["services"]["fleet"]
+    assert set(site_world["services"]["world"]["networks"]) == {"site_backend", "site_edge"}
+    assert any("/var/lib/rosy-world/worlds:" in t and "uid=10001" in t for t in site_world["services"]["world"]["tmpfs"])
     bridge = site_world["services"]["world-real-bridge"]
-    assert "--fleet-mdns-host" in " ".join(bridge["command"])
+    assert bridge["networks"] == ["site_backend"]
+    assert "--fleet-url" in bridge["command"] and "https://fleet:${ROSY_FLEET_PORT:-8080}" in bridge["command"]
     assert bridge["environment"]["ROSY_FLEET_TOKEN_FILE"] == "/run/secrets/world_fleet_viewer_token"
     assert "world_fleet_viewer_token" in bridge["secrets"]
     assert "registry_token" not in bridge["secrets"]
