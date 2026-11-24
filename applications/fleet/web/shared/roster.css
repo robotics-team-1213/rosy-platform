@@ -360,6 +360,10 @@ details.robot-panel-section > summary {
 .robot-summary .robot-line { width: 100%; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1) var(--space-2); }
 .robot-summary-head-meta { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .robot-summary-evidence { display: block; min-width: 0; margin: var(--space-2) 0 0; padding: var(--space-1) var(--space-2); border: 0; border-inline-start: var(--selection-edge) solid var(--status-warn); border-radius: var(--radius-control); background: var(--surface-recessed); color: var(--text-primary); font-size: var(--text-micro); line-height: var(--leading-compact); overflow-wrap: anywhere; }
+@media (width >= 64rem) {
+  .robot-summary-evidence:not([data-address-reason]):has(> span) { display: flex; gap: var(--space-1); white-space: nowrap; }
+  .robot-summary-evidence:not([data-address-reason]):has(> span) > span { overflow: hidden; text-overflow: ellipsis; }
+}
 #robot-workspace { min-width: 0; }
 .manual-control { margin-top: var(--space-1); }
 .manual-control [data-manual-direction] { touch-action: none; }
