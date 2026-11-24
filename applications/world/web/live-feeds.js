@@ -12,7 +12,7 @@ const PINKY_SIM_FRAME = "world_261026_cad";
 const PINKY_SIM_FRESH_MS = 3000;
 const CAMERA_FRESH_MS = 3000;
 const CAMERA_SOURCES = {
-  field: { file: "field-live.jpg", label: "Rosy Cam 현장 상단", freshMs: 5000 },
+  field: { file: "field-live.jpg", label: "Rosy Cam 현장 상단", freshMs: 5000, fleet: true },
   gazebo: { file: "pinky-camera.jpg", label: "Gazebo Pinky 전방" },
   mujoco: { file: "mujoco-top.jpg", label: "MuJoCo OMX 셀 상단" },
   isaac: { file: "isaac-view.json", label: "Isaac Sim", telemetry: true },
@@ -263,44 +263,132 @@ export function initLiveFeeds({
     clearCameraFrame(session);
   }
 
+  // D-136: field camera uses Fleet /api/fleet/vision/sources + lease -> Vision frame bytes.
+  const FLEET_VISION_SOURCES = "/api/fleet/vision/sources";
+  const FLEET_VISION_LEASE = "/api/fleet/vision/lease";
+  const FLEET_LEASE_MARGIN_MS = 15000;
+  const FLEET_SOURCES_TTL_MS = 30000;
+
+  function pickCeilingSource(sources) {
+    const ids = (Array.isArray(sources) ? sources : []).flatMap((e) => {
+      const id = typeof e === "string" ? e : (typeof e?.source_id === "string" ? e.source_id : (typeof e?.id === "string" ? e.id : null));
+      return id && id.trim() && e?.enabled !== false ? [id] : [];
+    });
+    return ids.find((id) => /(^|[_-])(ceiling|top)/.test(id)) || ids[0] || null;
+  }
+
+  function haltFieldFeed(session, message) {
+    if (cameraSession !== session) return {};
+    session.halted = true;
+    clearCameraFrame(session);
+    status("pinky-camera-status", "unavailable", message);
+    return {};
+  }
+
+  function haltStatus(session, code) {
+    return code === 401 || code === 403 ? `${session.label} · 로그인 필요` : code === 503 ? `${session.label} · 카메라 미리보기 비활성` : null;
+  }
+
+  async function issueFieldLease(session, sourceId, signal) {
+    const res = await fetch(FLEET_VISION_LEASE, {
+      method: "POST", cache: "no-store", redirect: "error", signal,
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_id: sourceId }),
+    });
+    const haltMsg = haltStatus(session, res.status);
+    if (haltMsg) return haltFieldFeed(session, haltMsg);
+    if (!res.ok) throw new Error("Vision lease unavailable");
+    const issued = await res.json();
+    const framePath = typeof issued?.frame_path === "string" ? issued.frame_path.trim() : "";
+    if (!framePath || typeof issued?.lease !== "string" || !issued.lease) throw new Error("Invalid vision lease");
+    const path = new URL(framePath, location.origin);
+    if (path.origin !== location.origin || path.username || path.password) throw new Error("Vision frame path is not same-origin");
+    const life = Number(issued.expires_in_s);
+    return { source: sourceId, token: issued.lease, path, expiresAt: Date.now() + Math.max(1, Number.isFinite(life) && life > 0 ? life : 60) * 1000 };
+  }
+
+  async function fetchFieldFleetFrame(session, signal) {
+    if (!session.sourcesAt || Date.now() - session.sourcesAt > FLEET_SOURCES_TTL_MS) {
+      const res = await fetch(FLEET_VISION_SOURCES, { cache: "no-store", redirect: "error", signal });
+      if (cameraSession !== session) return {};
+      if (res.status === 404) return { local: true };
+      const haltMsg = haltStatus(session, res.status);
+      if (haltMsg) return haltFieldFeed(session, haltMsg);
+      if (!res.ok) throw new Error("Vision sources unavailable");
+      const listing = await res.json();
+      if (cameraSession !== session) return {};
+      session.sources = Array.isArray(listing?.sources) ? listing.sources : [];
+      session.sourcesAt = Date.now();
+    }
+    const sourceId = pickCeilingSource(session.sources);
+    if (!sourceId) { if (cameraSession === session) status("pinky-camera-status", "unavailable", `${session.label} · 연결된 카메라 없음`); return {}; }
+    if (!session.lease || session.lease.source !== sourceId || Date.now() >= session.lease.expiresAt - FLEET_LEASE_MARGIN_MS) {
+      const leased = await issueFieldLease(session, sourceId, signal);
+      if (cameraSession !== session || session.halted) return {};
+      session.lease = leased;
+    }
+    const res = await fetch(session.lease.path, {
+      cache: "no-store", redirect: "error", credentials: "omit", signal,
+      headers: { Authorization: `Bearer ${session.lease.token}` },
+    });
+    if (cameraSession !== session) return {};
+    if (res.status === 503) return haltFieldFeed(session, `${session.label} · 카메라 미리보기 비활성`);
+    if (res.status === 401 || res.status === 403) { session.lease = undefined; clearCameraFrame(session); status("pinky-camera-status", "unavailable", `${session.label} · 영상 권한 없음`); return {}; }
+    if (!res.ok) throw new Error("Vision frame unavailable");
+    if (!(res.headers.get("Content-Type")?.split(";")[0] ?? "").startsWith("image/")) throw new Error("Vision frame is not an image");
+    const age = Number(res.headers.get("X-Frame-Age-Ms"));
+    return { frame: await res.blob(), ageMs: Number.isFinite(age) && age >= 0 ? age : 0 };
+  }
   async function pollPinkyCamera(session) {
     const request = new AbortController();
     session.request = request;
     const deadline = setTimeout(() => request.abort(), 2500);
     let nextUrl;
     try {
-      const response = await fetch(`./data/${session.file}`, {
-        cache: "no-store", redirect: "error", signal: request.signal,
-      });
-      const modifiedAt = Date.parse(response.headers.get("Last-Modified"));
-      const serverAt = Date.parse(response.headers.get("Date"));
-      const type = response.headers.get("Content-Type")?.split(";")[0];
-      if (!response.ok || type !== (session.telemetry ? "application/json" : "image/jpeg")) {
-        throw new Error("Camera source unavailable");
+      let frame;
+      let metadata = null;
+      let age = 0;
+      if (session.fleet && !session.local) {
+        const fleet = await fetchFieldFleetFrame(session, request.signal);
+        if (cameraSession !== session || session.halted) return;
+        if (fleet.local) session.local = true;  // 404: standalone bundle, read the local file from now on.
+        else if (fleet.frame) {
+          frame = fleet.frame;
+          age = fleet.ageMs;
+        } else return;  // honest status already shown; keep the slow retry.
       }
-      const metadata = session.telemetry ? await response.json() : null;
-      const age = (Number.isFinite(serverAt) ? serverAt : Date.now())
-        - (metadata ? metadata.observed_at_ms : modifiedAt);
+      if (!frame) {
+        const response = await fetch(`./data/${session.file}`, {
+          cache: "no-store", redirect: "error", signal: request.signal,
+        });
+        const modifiedAt = Date.parse(response.headers.get("Last-Modified"));
+        const serverAt = Date.parse(response.headers.get("Date"));
+        const type = response.headers.get("Content-Type")?.split(";")[0];
+        if (!response.ok || type !== (session.telemetry ? "application/json" : "image/jpeg")) {
+          throw new Error("Camera source unavailable");
+        }
+        metadata = session.telemetry ? await response.json() : null;
+        age = (Number.isFinite(serverAt) ? serverAt : Date.now())
+          - (metadata ? metadata.observed_at_ms : modifiedAt);
+        if (session.telemetry) {
+          if (metadata?.schema !== "rosy.world.isaac-view.v1" || !/^sim-[a-z0-9-]{1,80}$/.test(metadata.run_id)
+              || !isLayoutSha(metadata.stage_sha256) || !Number.isSafeInteger(metadata.observed_at_ms)
+              || !Number.isFinite(metadata.sim_time_s) || metadata.sim_time_s <= 0
+              || !Number.isSafeInteger(metadata.sequence) || metadata.sequence < 1
+              || !vector(metadata.cargo_xyz_m, 3) || !["scene", "belt"].includes(metadata.scenario)
+              || typeof metadata.jpeg !== "string" || metadata.jpeg.length > 682672) {
+            throw new Error("Invalid Isaac frame envelope");
+          }
+          const previous = session.latest;
+          if (previous?.run_id === metadata.run_id && (metadata.sequence <= previous.sequence
+              || metadata.sim_time_s <= previous.sim_time_s)) return;
+          frame = new Blob([Uint8Array.from(atob(metadata.jpeg), (char) => char.charCodeAt(0))], { type: "image/jpeg" });
+        } else frame = await response.blob();
+      }
       const freshMs = session.freshMs ?? CAMERA_FRESH_MS;
       const remaining = performance.now() + freshMs - age;
       if (!Number.isFinite(age) || age < -1000 || age >= freshMs) {
         throw new Error("No recent camera frame");
       }
-      let frame;
-      if (session.telemetry) {
-        if (metadata?.schema !== "rosy.world.isaac-view.v1" || !/^sim-[a-z0-9-]{1,80}$/.test(metadata.run_id)
-            || !isLayoutSha(metadata.stage_sha256) || !Number.isSafeInteger(metadata.observed_at_ms)
-            || !Number.isFinite(metadata.sim_time_s) || metadata.sim_time_s <= 0
-            || !Number.isSafeInteger(metadata.sequence) || metadata.sequence < 1
-            || !vector(metadata.cargo_xyz_m, 3) || !["scene", "belt"].includes(metadata.scenario)
-            || typeof metadata.jpeg !== "string" || metadata.jpeg.length > 682672) {
-          throw new Error("Invalid Isaac frame envelope");
-        }
-        const previous = session.latest;
-        if (previous?.run_id === metadata.run_id && (metadata.sequence <= previous.sequence
-            || metadata.sim_time_s <= previous.sim_time_s)) return;
-        frame = new Blob([Uint8Array.from(atob(metadata.jpeg), (char) => char.charCodeAt(0))], { type: "image/jpeg" });
-      } else frame = await response.blob();
       if (cameraSession !== session) return;
       if (frame.size < 4 || frame.size > 512000) throw new Error("Invalid camera frame");
       nextUrl = URL.createObjectURL(frame);
@@ -332,7 +420,7 @@ export function initLiveFeeds({
     } finally {
       if (nextUrl) URL.revokeObjectURL(nextUrl);
       clearTimeout(deadline);
-      if (cameraSession === session) {
+      if (cameraSession === session && !session.halted) {
         const delay = byId("pinky-camera-status").getAttribute("state") === "unavailable" ? 2000 : 400;
         session.next = setTimeout(() => pollPinkyCamera(session), delay);
       }

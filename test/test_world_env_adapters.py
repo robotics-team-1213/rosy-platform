@@ -143,7 +143,7 @@ def test_parallel_worlds_discovery_stream_security_and_control_guards(tmp_path: 
             reg = json.loads(resp.read().decode("utf-8"))
         by_id = {w["world_id"]: w for w in reg["worlds"]}
         assert {"isaac-train-01", "mujoco-ab-02", "gazebo-nav-03", "verified-replay", "real-site"} <= set(by_id)
-        assert by_id["isaac-train-01"]["status"] == "live" and by_id["isaac-train-01"]["parity"]["ok"]
+        assert by_id["isaac-train-01"]["status"] == "synthetic_demo" and by_id["isaac-train-01"]["parity"]["ok"]
         assert by_id["isaac-train-01"]["training"]["episode"] >= 148
         assert by_id["real-site"]["status"] == "waiting"
 
@@ -156,7 +156,7 @@ def test_parallel_worlds_discovery_stream_security_and_control_guards(tmp_path: 
         with urllib.request.urlopen(f"{origin}/sim/stream?world=isaac-train-01&max_events=1", timeout=5) as resp:
             line = next(l for l in resp.read().decode("utf-8").splitlines() if l.startswith("data: "))
             evt = json.loads(line[6:])
-        assert evt["world_id"] == "isaac-train-01" and evt["adapter"] == "isaac" and evt["stream_mode"] == "live"
+        assert evt["world_id"] == "isaac-train-01" and evt["adapter"] == "isaac" and evt["stream_mode"] == "synthetic_demo"
         assert evt["parity"]["ok"] is True
 
         # 4. Real stream must emit idle (waiting), never fallback to verified_replay.

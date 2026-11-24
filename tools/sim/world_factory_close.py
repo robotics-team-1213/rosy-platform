@@ -13,6 +13,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from factory_flow_receipts import SCHEMA, STAGES, verify  # noqa: E402
 from factory_isaac_handoff import prepare as prepare_isaac_handoff  # noqa: E402
 
+_PASSING_KEYS = ("pass", "passed", "ok")
+_PASSING_STATUSES = ("pass", "passed", "ok")
+
+
+def _evidence_passes(evidence: object) -> bool:
+    """A downstream stage counts only with a non-empty JSON object holding a passing indicator."""
+    if not isinstance(evidence, dict) or not evidence:
+        return False
+    if any(evidence.get(key) is False for key in _PASSING_KEYS):
+        return False
+    if "status" in evidence and evidence.get("status") not in _PASSING_STATUSES:
+        return False
+    return any(evidence.get(key) is True for key in _PASSING_KEYS) or evidence.get("status") in _PASSING_STATUSES
+
 
 def close_factory_flow(
     prefix_dir: Path,
@@ -57,7 +71,12 @@ def close_factory_flow(
         src = src_path.resolve(strict=True)
         if not src.is_file() or src.stat().st_size == 0:
             raise ValueError(f"{stage} evidence missing or empty: {src_path}")
-        json.loads(src.read_text(encoding="utf-8"))
+        try:
+            evidence = json.loads(src.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{stage} evidence is not valid JSON: {src_path}") from error
+        if not _evidence_passes(evidence):
+            raise ValueError(f"{stage} evidence is empty, non-object or failing: {src_path}")
         rel = f"ev/{stage}-0.json"
         dst = out_dir / rel
         shutil.copyfile(src, dst)

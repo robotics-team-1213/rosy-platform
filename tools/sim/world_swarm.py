@@ -1,4 +1,4 @@
-"""Run parallel simulation/training worlds publishing live state to data/worlds/.
+"""Run parallel simulation/training worlds publishing synthetic demo state to data/worlds/.
 
 Keeps site map, registration, Pinky+J-v3 URDF, and OMX-AI fleet identical across
 environments (`isaac`, `gazebo`, `mujoco`) so ONLY the physics/environment adapter differs.
@@ -144,11 +144,11 @@ def build_worker_snapshot(
         "ros_domain_id": worker["ros_domain_id"],
         "physics_profile": worker["physics_profile"],
         "parity": worker_parity,
-        "capabilities": ["reset", "step", "pause"],
+        "capabilities": [],
     }
     return {
         "schema": FACTORY_STATE_SCHEMA,
-        "stream_mode": "live",
+        "stream_mode": "synthetic_demo",
         "world_id": worker["world_id"],
         "adapter": worker["backend"],
         "simulator": worker["backend"],

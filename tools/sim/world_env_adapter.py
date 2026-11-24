@@ -189,7 +189,8 @@ class WorldEnvAdapter(Protocol):
 
 class _BaseFileAdapter:
     backend: str = "mujoco"
-    default_capabilities: tuple[str, ...] = ("reset", "step", "pause")
+    # No unbacked control claims: only an explicit capabilities=(...) argument advertises commands.
+    default_capabilities: tuple[str, ...] = ()
 
     def __init__(
         self,
@@ -479,7 +480,7 @@ class TrainingWorldHook:
             "ros_domain_id": self.ros_domain_id,
             "physics_profile": self.physics_profile,
             "parity": self.parity,
-            "capabilities": [] if backend == "real" else ["reset", "step", "pause"],
+            "capabilities": [],
         }
         self.publisher = WorldPublisher(
             world_id=self.world_id,
@@ -500,6 +501,7 @@ class TrainingWorldHook:
         pinky: dict[str, Any],
         pinkys: list[dict[str, Any]] | None = None,
         arms: dict[str, list[float]] | None = None,
+        arms_observed: dict[str, bool] | None = None,
         cargo: dict[str, Any] | None = None,
         cell_ab: dict[str, Any] | None = None,
         episode: int | None = None,
@@ -537,7 +539,7 @@ class TrainingWorldHook:
         }
         for rid in CANONICAL_FLEET_ROBOTS["pinkys"]:
             if rid not in present_ids:
-                active_pinkys.append({"id": rid, "pose_m": defaults[rid], "yaw_rad": -1.5708, "observed": False})
+                active_pinkys.append({"id": rid, "pose_m": defaults[rid], "yaw_rad": -1.5708, "observed": False, "has_cargo": False})
         default_arms = {arm_id: [0.0, -1.0, 0.7, 0.3, 0.0, 0.0] for arm_id in CANONICAL_FLEET_ROBOTS["arms"]}
         if isinstance(arms, dict):
             default_arms.update({k: list(v) for k, v in arms.items()})
@@ -561,6 +563,7 @@ class TrainingWorldHook:
             "pinky": pinky,
             "pinkys": active_pinkys,
             "arms": default_arms,
+            "arms_observed": {arm: bool((arms_observed or {}).get(arm)) for arm in CANONICAL_FLEET_ROBOTS["arms"]},
             "cargo": cargo or {"zone": "s3", "pose_m": list(pinky["pose_m"]), "yaw_rad": pinky.get("yaw_rad", 0.0), "observed": False},
             "cell_ab": cell_ab or {"active_arm": None, "active_step": None, "stacked": []},
         }
