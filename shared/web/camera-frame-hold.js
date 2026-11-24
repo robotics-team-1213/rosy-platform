@@ -11,6 +11,7 @@ export function formatDisconnectDuration(ms) {
 export function decodeImageUrl(url, { ImageCtor = globalThis.Image } = {}) {
   if (typeof ImageCtor !== "function") return Promise.resolve(true);
   const img = new ImageCtor();
+  img.decoding = "async";
   img.src = url;
   return typeof img.decode === "function"
     ? img.decode().then(() => true, () => false)
@@ -117,6 +118,7 @@ export function paintCameraFrameHold(frameEl, imgEl, overlayEl, snap) {
     if (frameEl.dataset.camHasFrame !== nextHas) frameEl.dataset.camHasFrame = nextHas;
   }
   if (imgEl) {
+    if (imgEl.decoding !== "async") imgEl.decoding = "async";
     const hideImg = !snap.hasFrame;
     if (imgEl.hidden !== hideImg) imgEl.hidden = hideImg;
     if (snap.url) {
