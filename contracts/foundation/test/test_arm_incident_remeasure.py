@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from core_common.protocol.arm_incident.arm_incidents import PORT_LOST_FAULT, ArmIncidentClear, classify, machine_clearable
+from core_common.protocol.arm_incident.arm_incidents import (
+    PORT_LOST_FAULT, STALE_EFFORT_FAULT, ArmIncidentClear, classify, machine_clearable,
+)
 
 # 2026-11-17 the cell's own incident.json (fault records as report_for sends them, frames left out): arm_b 17:10 lost
 # its port writing torque OFF during a USB hub re-enumeration; arm_a 18:37 wound up holding home under an orphan session
@@ -178,3 +180,61 @@ def test_truncated_flagged_or_fault_records_stay_with_a_person():
         assert ok is False and "truncated" in reason, (bad, ok, reason)
     complete = {**PORT, "flagged_total": len(PORT["flagged"]), "fault_records_total": len(PORT["fault_records"])}
     assert clearable(complete)[0] is True
+
+
+STALE_REC = "omx_follower_arm-20261123T052904-126e8b.json"
+STALE_TEXT = "session ended: ValueError: stale effort sample (>0.5 seconds)"
+STALE = {
+    "safe_end": True, "latched": {}, "folded": True, "caps_restored": True,
+    "torque_after": dict(ZERO), "last_state": [0.76, -62.25, 52.97, 51.65, 44.96, 49.3],
+    "windup_hits": [], "stop_reading": None, "stops": [],
+    "flagged": [{"command": "run goto above_pick", "error": None, "fault": STALE_TEXT, "caught": None,
+                 "person_needed": None, "t": 1795411744.754}],
+    "flagged_total": 1,
+    "fault_records": [STALE_REC],
+    "fault_records_total": 1,
+    "fault_record_kinds": [{"fault": "stale effort sample (>0.5 seconds)", "stop_reasons": []}],
+}
+STALE_FAULT = {"name": STALE_REC, "fault_type": STALE_EFFORT_FAULT[0], "fault": STALE_EFFORT_FAULT[1]}
+
+
+def test_clean_stale_effort_clears_only_with_matching_quiet_fresh_remeasure():
+    assert clearable(STALE, None) == (False, "stale effort sample: no valid remeasure")
+    read_a = {**READ, "arm": "arm_a", "board_serial": "2B162C9B50323952582E3120FF06202D", "fault_records": [STALE_FAULT]}
+    ok, msg = clearable(STALE, read_a, binding=("arm_a", "2B162C9B50323952582E3120FF06202D"))
+    assert ok is True and msg.startswith("stale effort sample, then a fresh read")
+    for bad_read in (
+        {**read_a, "folded": False},
+        {**read_a, "torque_after": {**ZERO, "12": 1}},
+        {**read_a, "hardware_error": {**ZERO, "13": 32}},
+        {**read_a, "fault_records": [{**STALE_FAULT, "fault_type": "OverloadError"}]},
+        {**read_a, "fault_records": [{**STALE_FAULT, "fault": "hardware error: overload"}]},
+        {**read_a, "fault_records": []},
+    ):
+        assert clearable(STALE, bad_read, binding=("arm_a", "2B162C9B50323952582E3120FF06202D"))[0] is False
+    for bad_facts in (
+        {**STALE, "folded": False},
+        {**STALE, "safe_end": False},
+        {**STALE, "torque_after": {**ZERO, "11": 1}},
+        {**STALE, "caps_restored": False},
+        {**STALE, "latched": {"13": {"hw_error": 32}}},
+        {**STALE, "stops": [{"command": "place", "error": "contact in place: wrist lag", "t": 1.0}]},
+        {**STALE, "fault_record_kinds": [{"fault": "stale effort sample (>0.5 seconds)", "stop_reasons": ["overload"]}]},
+        {**STALE, "fault_record_kinds": [{"fault": "overheating on id 12", "stop_reasons": []}]},
+        {**STALE, "fault_record_kinds": []},
+        {**STALE, "fault_records": [], "fault_records_total": 0, "fault_record_kinds": [{"fault": "stale effort sample (>0.5 seconds)", "stop_reasons": ["overload"]}]},
+        {**STALE, "flagged": [{**STALE["flagged"][0], "fault": STALE_TEXT + "; contact"}]},
+        {**STALE, "flagged": [{**STALE["flagged"][0], "caught": True}]},
+        {**STALE, "flagged": [{**STALE["flagged"][0], "person_needed": True}]},
+        {**STALE, "flagged_total": 2},
+    ):
+        assert clearable(bad_facts, read_a, binding=("arm_a", "2B162C9B50323952582E3120FF06202D"))[0] is False
+    # Current guarded_native_effort.py format includes tick_ms/last_tick_ms/last_effort_ms/pwm_ms/monitor_ms telemetry.
+    diag = "stale effort sample (>0.5 seconds): tick_ms=12.3 last_tick_ms=612.4 last_effort_ms=n/a pwm_ms=4.5 monitor_ms=0.2"
+    stale_diag = {
+        **STALE,
+        "flagged": [{**STALE["flagged"][0], "fault": f"runner: session ended: ValueError: {diag}"}],
+        "fault_record_kinds": [{"fault": diag, "stop_reasons": []}],
+    }
+    read_diag = {**read_a, "fault_records": [{**STALE_FAULT, "fault": diag}]}
+    assert clearable(stale_diag, read_diag, binding=("arm_a", "2B162C9B50323952582E3120FF06202D"))[0] is True
