@@ -75,14 +75,18 @@ def candidates(state, plan):
 
 
 def recover(cell, home, closed, *, plan, look, reserve, release, release_and_rise, low, log=lambda row: None, order=None,
-            release_unmoved: bool = False, moved_out: list | None = None, advisor=None, load_check=None,
+            release_unmoved: bool = False, moved_out: list | None = None, latched_out: list | None = None,
+            allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
-            sleep=time.sleep) -> dict:
+            held_plan=None, library_sha256=None, sleep=time.sleep) -> dict:
     """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
+    from cell_pipeline_io import fold_from_hold, park_succeeded
     from cell_recovery_plan import build_candidates, classify_situation, run_detour_jogs
+    from chunk_runner_recover import ensure_live_unlatch
 
     steps, known, moved = [], {"state": None}, {"yes": False}  # known: last state seen; moved: any release/jog/park sent
+    latched = {"started": False, "active": False}
 
     def mark_moved():
         moved["yes"] = True
@@ -94,42 +98,56 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         log(row)
 
     def hold(reason, is_holding: bool = False, **extra):
-        # resting at home: end the session in place (torque OFF), nothing hangs out. The pose is read again right before
-        # the stop (review N1: seconds of corridor checks may pass after the last read). Never drop a held load!
-        if not is_holding and at_rest(known["state"], home) and at_rest(_ok_state(cell.act("state")), home):
+        # resting at home: end the session in place (torque OFF), nothing hangs out. Never drop a held load or cut torque after unlatch/motion!
+        if not allow_live_unlatch and not is_holding and not moved["yes"] and not latched["started"] and at_rest(known["state"], home) and at_rest(_ok_state(cell.act("state")), home):
             if (stopped := cell.act("stop now")).get("ok") is True:
                 return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": None, "ended": "stop_now", **extra}
-        if release_unmoved and not moved["yes"] and not is_holding:
+        if not allow_live_unlatch and release_unmoved and not moved["yes"] and not is_holding and not latched["started"] and known["state"] is not None:
             if (stopped := cell.act("stop now")).get("ok") is True:
                 return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": None, "ended": "stop_now", "unmoved": True, **extra}
         held = cell.act("human-hold")
         return {"schema": SCHEMA, "result": "held", "reason": reason, "steps": steps, "hold_ok": held.get("ok"), **extra}
 
     status = cell.act("state")
+    if isinstance(status, dict) and bool(status.get("human_hold_latched")):
+        latched["started"] = latched["active"] = True
+        if latched_out is not None:
+            latched_out.append(True)
     state = _ok_state(status)
-    target = status.get("target") if isinstance(status.get("target"), list) and len(status["target"]) >= 6 else state
+    target = status.get("target") if isinstance(status, dict) and isinstance(status.get("target"), list) and len(status["target"]) >= 6 else state
     known["state"] = state
     if state is None:
         return hold("STATE_UNREADABLE")
+    if latched["active"] and not allow_live_unlatch:
+        return hold("LIVE_HOLD_LATCHED")
     if folded(state, home):
-        return {"schema": SCHEMA, "result": "folded", "candidate": "already_home", "state": state, "steps": steps, "corridor": None}
+        if latched["active"]:
+            if status.get("holding") or holding(state, target, closed) or (target[5] <= closed + 1.0 and state[5] > target[5] + 2.0):
+                return hold("HOLDING_AT_HOME", is_holding=True)
+            ok_u, err_u = ensure_live_unlatch(cell, latched, note)
+            if not ok_u:
+                return hold("UNLATCH_REFUSED", error=err_u)
+        return {"schema": SCHEMA, "result": "folded", "candidate": "already_home", "state": state, "steps": steps,
+                "corridor": None, **({"unlatched_live_hold": True} if latched["started"] else {})}
     is_low = bool(low(state))
-    if holding(state, target, closed):
+    if (latched["started"] and status.get("holding")) or holding(state, target, closed):
         if not is_low:
             return hold("HOLDING_HIGH", is_holding=True)
         rise_lane = [state, [state[0], state[1] - RISE_UNITS, *state[2:]]]
         if not look(rise_lane).get("clear") or not reserve(rise_lane).get("ok"):
             release()
             return hold("RISE_BLOCKED", is_holding=True)
+        ok_u, err_u = ensure_live_unlatch(cell, latched, note)
+        if not ok_u:
+            release()
+            return hold("UNLATCH_REFUSED", is_holding=True, error=err_u)
         known["state"] = None
         mark_moved()
-        try:
-            freed = release_and_rise(cell)
-        finally:
-            release()
+        freed = release_and_rise(cell)
         note({"step": "release_and_rise", **{k: freed.get(k) for k in ("result", "at", "error", "jaws", "lags")}})
         if freed.get("result") != "risen":
-            return hold("RELEASE_STUCK")
+            return hold("RELEASE_STUCK")  # arm moved and still occupies rise_lane; keep space reservation until TTL
+        release()
         status = cell.act("state")
         state = known["state"] = _ok_state(status)
         if state is None:
@@ -137,42 +155,69 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         target = status.get("target") if isinstance(status.get("target"), list) and len(status["target"]) >= 6 else state
         is_low = bool(low(state))
 
+    park_fn = held_plan if (latched["started"] and held_plan is not None) else plan
     situation = classify_situation(state, target, home, closed, low_ok=is_low, is_holding=False)
-    tries = (build_candidates(list(target[:6]), home, closed, plan, bounds=bounds, tcp_x_m=tcp_x_m,
+    tries = (build_candidates(list(target[:6]), home, closed, park_fn, bounds=bounds, tcp_x_m=tcp_x_m,
                               clear_z_m=clear_z_m, situation=situation, extended=True)
-             if extended_detours else list(candidates(list(target[:6]), plan)))  # the runner parks from its held target
+             if extended_detours else list(candidates(list(target[:6]), park_fn)))  # the runner parks from its held target
     if order is not None:
         rank = {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
         tries.sort(key=lambda c: (0 if situation == "low_open_jaws" and c[0].startswith("lift_") else 1, rank.get(c[0], len(rank))))
 
     def _try_candidate(name, before, frames):
-        verdict = look(frames)
-        note({"step": "check", "candidate": name, "clear": verdict.get("clear"), "low": len(verdict.get("low") or []),
+        can_fold_direct = (
+            latched["active"] and not before and held_plan is not None and library_sha256
+            and status.get("library_sha256") == library_sha256 and status.get("torque_hold_commanded") is True
+            and not status.get("holding")
+        )
+        cand_frames = [state, *held_plan(state)] if can_fold_direct else frames
+        cand_name = "fold-from-hold" if can_fold_direct else name
+        verdict = look(cand_frames)
+        note({"step": "check", "candidate": cand_name, "clear": verdict.get("clear"), "low": len(verdict.get("low") or []),
               "high": len(verdict.get("high") or []), "off_map": verdict.get("off_map"), "off_surface": verdict.get("off_surface")})
         if not verdict.get("clear"):
             return None
         if load_check is not None:
-            lc = load_check(frames)
-            note({"step": "load_check", "candidate": name, "ok": lc.get("ok"), "verdict": lc.get("verdict")})
+            lc = load_check(cand_frames)
+            note({"step": "load_check", "candidate": cand_name, "ok": lc.get("ok"), "verdict": lc.get("verdict")})
             if not lc.get("ok"):
                 return None
-        if not (booked := reserve(frames)).get("ok"):
-            note({"step": "reserve", "candidate": name, "refused": booked.get("reason")})
+        if not (booked := reserve(cand_frames)).get("ok"):
+            note({"step": "reserve", "candidate": cand_name, "refused": booked.get("reason")})
             return None
+        if can_fold_direct:
+            known["state"] = None
+            mark_moved()
+            try:
+                parked = fold_from_hold(cell, status)
+            except Exception as exc:  # noqa: BLE001
+                parked = {"ok": False, "error": str(exc)}
+            at = known["state"] = _ok_state(parked)
+            note({"step": "fold_from_hold", "candidate": cand_name, "ok": parked.get("ok"), "settled": parked.get("settled"),
+                  "error": parked.get("error"), "contact": parked.get("contact")})
+            if park_succeeded(parked) and at is not None and folded(at, home):
+                release()
+                return {"schema": SCHEMA, "result": "folded", "candidate": cand_name, "state": at, "steps": steps,
+                        "corridor": verdict, "unlatched_live_hold": True}
+            return hold("PARK_NOT_HOME", candidate=cand_name, error=parked.get("error"))
+        ok_u, err_u = ensure_live_unlatch(cell, latched, note)
+        if not ok_u:
+            release()
+            return hold("UNLATCH_REFUSED", candidate=name, error=err_u)
         known["state"] = None  # from the first command the arm is no longer where it was read
         mark_moved()
-        try:
-            ok_jog, err_reason, err_ack = run_detour_jogs(cell, list(before), settle_tol=SETTLE_TOL, sleep=sleep)
-            if not ok_jog:
-                return hold(err_reason or "DETOUR_REFUSED", candidate=name, error=(err_ack or {}).get("error"))
-            parked = cell.act("park")
-        finally:
-            release()
+        ok_jog, err_reason, err_ack = run_detour_jogs(cell, list(before), settle_tol=SETTLE_TOL, sleep=sleep)
+        if not ok_jog:
+            return hold(err_reason or "DETOUR_REFUSED", candidate=name, error=(err_ack or {}).get("error"))
+        parked = cell.act("park-slow" if latched["started"] else "park")
         at = known["state"] = _ok_state(parked)
         note({"step": "park", "candidate": name, "ok": parked.get("ok"), "settled": parked.get("settled"),
               "error": parked.get("error"), "contact": parked.get("contact")})
-        if parked.get("ok") is True and parked.get("settled") is True and at is not None and folded(at, home):
-            return {"schema": SCHEMA, "result": "folded", "candidate": name, "state": at, "steps": steps, "corridor": verdict}
+        ok_park = park_succeeded(parked) if latched["started"] else (parked.get("ok") is True and parked.get("settled") is True)
+        if ok_park and at is not None and folded(at, home):
+            release()
+            return {"schema": SCHEMA, "result": "folded", "candidate": name, "state": at, "steps": steps,
+                    "corridor": verdict, **({"unlatched_live_hold": True} if latched["started"] else {})}
         return hold("PARK_NOT_HOME", candidate=name, error=parked.get("error"))
 
     for name, before, frames in tries:
@@ -291,6 +336,7 @@ def main(argv=None) -> int:
     `launch --arm A --config-file F` is how omx_incident starts it."""
     import argparse
     import os
+    from chunk_runner_recover import run_fold_session_cli
 
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv[:1] == ["launch"]:
@@ -301,19 +347,6 @@ def main(argv=None) -> int:
         print(json.dumps(launch(opts.arm, opts.config_file), default=str))
         return 0
 
-    import cell_choices
-    import cell_corridor
-    import cell_params as prm
-    import cell_pipeline as cp
-    import cell_pivot
-    import cell_place_fit
-    import cell_recovery_plan as crp
-    import cell_space
-    import cell_unwedge
-    import omx_tcp
-    from cell_observe import predicted_pixel
-    from omx_adapter.chunk_library import NAMES, park_path
-
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--arm", required=True, help="the arm this session holds (its space reservation key)")
     ap.add_argument("--config", type=Path, required=True, help="the arm's cell-auto config (io, cameras, sites)")
@@ -322,74 +355,16 @@ def main(argv=None) -> int:
     ap.add_argument("--roi", nargs=4, type=int, required=True)
     ap.add_argument("--out", type=Path, required=True, help="result JSON")
     ap.add_argument("--supervised", action="store_true", help="bench operator recovery (no held incident id)")
+    ap.add_argument("--unlatch-hold", action="store_true", help="allow guarded torque-ON unlatch of an active human-hold")
     ap.add_argument("--vlm-url", help="optional AI-PC vision endpoint URL for tier-2 recovery proposals")
     ap.add_argument("--vlm-model", default="qwen3-vl:8b-instruct")
     ap.add_argument("--vlm-provider", default="ollama")
-    ap.add_argument("--vlm-timeout", type=float, default=15.0)
+    ap.add_argument("--vlm-config", type=Path, help="optional JSON config for single VLM or multi-VLM/LLM panel")
+    ap.add_argument("--vlm-timeout", type=float, default=25.0)
     args = ap.parse_args(argv)
     if not args.supervised and not os.environ.get("ROSY_RECOVERY_INCIDENT"):
         ap.error("ROSY_RECOVERY_INCIDENT is required: this tool only folds an arm a held incident names")
-    arm, cell, space, home, choices_path, moved_out = args.arm, None, None, [], None, []
-    try:
-        config = cell_place_fit.with_tiers(json.loads(args.config.read_text(encoding="utf-8")))[0]
-        params = config["params"] = prm.load(config.get("params_path"))["values"]
-        calibration, library = json.loads(Path(config["calibration_path"]).expanduser().read_text()), json.loads(args.library.read_text())
-        home, closed = library["chunks"]["home"][-1], float(library["gripper_closed"])
-        transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None
-        cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-        space = cell_space.Space(Path(config.get("space_dir", "~/rosy-omx/space")).expanduser())
-        to_px = lambda p: predicted_pixel(config, calibration, args.site, p)  # noqa: E731
-        tcp_x_m, clear_z_m = omx_tcp.config_tcp(config) or library.get("tcp_x_m"), prm.get(params, "corridor.clear_z_m", cell_corridor.CLEAR_Z_M)
-        bounds = crp.joint_bounds(config)
-        choices_path = Path(config.get("work_dir") or ".") / f"auto-fold-choices-{arm}.json"
-        choices = cell_choices.Choices(choices_path)
-        for name in crp.extended_candidate_names():
-            choices.offer(CHOICE, name, "D-1048")
-        choices.save()
-        plan = lambda s: park_path(list(s), home, closed, library["fps"], transit, library.get("transit_speed", 0.85))  # noqa: E731
-        low = lambda s: crp.fk_z(s, tcp_x_m=tcp_x_m) < clear_z_m  # noqa: E731
-        look = crp.build_multi_site_look(cell, config, calibration, args.site, args.roi, params, to_px, tcp_x_m)
-        load_check = crp.make_load_checker(config, library, params)
-        advisor = None
-        if args.vlm_url:
-            from cell_recovery_advisor import make_advisor
-            spec = {"provider": args.vlm_provider, "url": args.vlm_url, "model": args.vlm_model, "vision": True}
-            cam_views = tuple(k for k in ("top", "side", f"{arm}_wrist", "wrist") if k in (config.get("cameras") or {})) or ("top", "side", "wrist")
-            advisor = make_advisor(spec, cell, home=home, plan=plan, bounds=bounds, tcp_x_m=tcp_x_m,
-                                   clear_z_m=clear_z_m, views=cam_views, timeout_s=args.vlm_timeout, propose_only=not args.supervised)
-
-        def reserve(frames):
-            r = cell_corridor.runs([cell_pivot.joints_tcp(f, tcp_x_m=tcp_x_m)[:3] for f in frames])
-            lane = cell_corridor.corridor(r[0] + r[1], to_px, (args.roi[3] - args.roi[1], args.roi[2] - args.roi[0]),
-                                          args.roi, prm.get(params, "corridor.half_width_mm", cell_corridor.HALF_WIDTH_MM))
-            return space.reserve(arm, lane, ttl_s=300.0)
-
-        result = recover(cell, home, closed, plan=plan, look=look, reserve=reserve, release=lambda: space.release(arm),
-                         release_and_rise=cell_unwedge.release_and_rise, low=low, order=lambda n: choices.ranked(CHOICE, n),
-                         release_unmoved=args.supervised, moved_out=moved_out, advisor=advisor, load_check=load_check,
-                         bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m, extended_detours=True)
-    except Exception as exc:  # whatever broke, keep torque ON if moved; else stop now when supervised
-        err = f"ERROR: {type(exc).__name__}: {str(exc)[:160]}"
-        if space is not None:
-            space.release(arm)
-        if cell is None:
-            result = {"schema": SCHEMA, "result": "held", "reason": err, "hold_ok": None,
-                      **({"unmoved": True} if args.supervised else {}), "steps": []}
-        else:
-            stopped = cell.act("stop now") if args.supervised and not moved_out else {}
-            if stopped.get("ok") is True:
-                result = {"schema": SCHEMA, "result": "held", "reason": err, "hold_ok": None, "ended": "stop_now", "unmoved": True, "steps": []}
-            else:
-                result = {"schema": SCHEMA, "result": "held", "reason": err, "hold_ok": cell.act("human-hold").get("ok"), "steps": []}
-    result["incident_id"] = None if args.supervised else os.environ["ROSY_RECOVERY_INCIDENT"]
-    result["home"], result["supervised"] = list(home), bool(args.supervised)
-    if choices_path is not None:
-        result["choices_path"] = str(choices_path)
-    if result["result"] == "folded":
-        result["stop"] = cell.act("stop")  # at home: the runner's stop folds nothing more and turns torque OFF
-    args.out.write_text(json.dumps(result, default=str, indent=1))
-    print(json.dumps({k: result.get(k) for k in ("result", "reason", "candidate")}))
-    return 0 if result["result"] == "folded" else 3
+    return run_fold_session_cli(args, recover, SCHEMA)
 
 
 if __name__ == "__main__":

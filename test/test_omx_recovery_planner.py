@@ -329,7 +329,7 @@ def test_choices_ranking_cannot_bypass_low_open_jaws_lift_priority(tmp_path):
 
     def _look(frames):
         seen_candidates.append(frames[1] if len(frames) > 1 else frames[0])
-        return {"clear": False, "low": [], "high": []} if False else {"clear": True, "low": [], "high": []}
+        return {"clear": True, "low": [], "high": []}
 
     out = af.recover(
         _Cell(), HOME_B, 48.8, plan=lambda s: [s, HOME_B], look=_look,

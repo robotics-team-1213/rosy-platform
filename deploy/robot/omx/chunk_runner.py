@@ -315,7 +315,7 @@ def main(argv=None):
     from chunk_runner_guards import safe_stderr
     def status(row):
         protect = bool(signals or getattr(runner, "human_hold_latched", False)
-                       or getattr(runner, "_stop_after_park", None))
+                       or getattr(runner, "_stop_after_park", None) or getattr(runner, "_recovery_active", False))
         write_status_row(status_path, row, protect=protect)
 
     from guarded_native import NativeJointMotion, close_device, connect_passive
@@ -343,7 +343,7 @@ def main(argv=None):
                 tmp.write_text(json.dumps(row))
                 os.replace(tmp, live_path)
             except OSError:
-                if not signals and not getattr(runner, "human_hold_latched", False):
+                if not signals and not getattr(runner, "human_hold_latched", False) and not getattr(runner, "_recovery_active", False):
                     raise
 
         if args.joint_topic:
@@ -370,6 +370,7 @@ def main(argv=None):
             if (not signals and not getattr(runner, "human_hold_latched", False)
                     and not getattr(runner, "_stop_after_park", None)
                     and getattr(runner, "_release_until", None) is None
+                    and not getattr(runner, "_recovery_active", False)
                     and not getattr(motion, "failed", False)):
                 raise  # no interrupt, no latched HOLD, no pending fold, no unconfirmed release, and no failed guard: torque OFF in finally
             __import__("chunk_runner_interrupt").last_resort_hold(runner, signals, error)  # returns on SIGUSR2 only

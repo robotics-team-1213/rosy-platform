@@ -378,14 +378,14 @@ def build_multi_site_look(cell, config: dict, calibration: dict, primary_site: s
             if gap.any():
                 x0, y0, x1, y1 = roi
                 gap_lab = config.get("transit_surface_lab")
-                if gap_lab is None:
+                if not gap_lab:
                     gap_lab = np.median(cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2LAB)[gap], axis=0).tolist()
                 first_lab = gap_lab[0] if isinstance(gap_lab[0], (list, tuple)) else gap_lab
                 patch = img[y0:y1, x0:x1].copy()
                 patch[~gap] = cv2.cvtColor(np.array([[first_lab]], np.uint8), cv2.COLOR_LAB2BGR)[0, 0]
                 gap_fg = cell_objects.foreground(patch, (0, 0, x1 - x0, y1 - y0), params=params, surface_lab=gap_lab)
                 gap_fg[~gap] = 0
-                if config.get("transit_surface_lab") is None and int((gap_fg > 0).sum()) >= 0.20 * int(gap.sum()):
+                if not config.get("transit_surface_lab") and int((gap_fg > 0).sum()) >= 0.20 * int(gap.sum()):
                     gap_fg[gap] = 255
                 mask = low_mask | gap_fg
         return cell_corridor.check(pts, mask, roi, to_px, params=params, surface_px=polys, high_surface_px=high_hull)

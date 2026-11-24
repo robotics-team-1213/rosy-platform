@@ -1423,6 +1423,7 @@ safety_modules:
 safety_review_paths:
   - deploy/robot/omx/chunk_runner.py
   - deploy/robot/omx/chunk_runner_commands.py
+  - deploy/robot/omx/chunk_runner_recover.py
   - deploy/robot/omx/chunk_runner_guards.py
   - deploy/robot/omx/chunk_runner_run.py
   - deploy/robot/omx/chunk_runner_loop.py

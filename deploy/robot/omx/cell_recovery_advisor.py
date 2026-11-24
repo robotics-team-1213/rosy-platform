@@ -27,7 +27,8 @@ PROPOSAL_SCHEMA = {
     },
 }
 DEFAULT_VIEWS = ("top", "side", "wrist")
-MAX_TIMEOUT_S = 15.0
+MAX_TIMEOUT_S = 30.0
+_COOP_META = frozenset({"role", "model", "deliberation", "consensus"})
 
 
 def _finite_num(raw, lo: float, hi: float) -> float | None:
@@ -227,13 +228,83 @@ def capture_views(cell, views: tuple[str, ...] = DEFAULT_VIEWS) -> tuple[list[st
     return images_b64, captured, missing
 
 
+_NAMED_PREFIXES = ("zai:", "glm:", "openai:", "opencode:", "codex:", "claude:", "vllm:", "litellm:", "openrouter:", "cli:", "ollama:")
+
+
+def _str_to_spec(spec: str) -> dict:
+    s = spec.strip()
+    low = s.lower()
+    if low.startswith(_NAMED_PREFIXES) or (low.startswith("http:") and not low.startswith(("http://", "https://"))):
+        prov, model = s.split(":", 1)
+        return {"provider": prov.lower(), "model": model}
+    if low.startswith("glm"):
+        return {"provider": "zai", "model": s}
+    return {"provider": "ollama", "model": s}
+
+
 def _clamp_timeout(spec, timeout_s: float):
-    t = min(float(timeout_s), MAX_TIMEOUT_S)
+    raw_cap = float(timeout_s) if not isinstance(timeout_s, bool) and isinstance(timeout_s, (int, float)) and math.isfinite(float(timeout_s)) and float(timeout_s) > 0 else MAX_TIMEOUT_S
+    cap = min(raw_cap, MAX_TIMEOUT_S)
+    if isinstance(spec, str):
+        spec = _str_to_spec(spec)
+    if isinstance(spec, (list, tuple)):
+        return type(spec)(_clamp_timeout(item, cap) for item in spec)
     if isinstance(spec, dict):
-        raw_t = spec.get("timeout_s")
-        valid_t = isinstance(raw_t, (int, float)) and not isinstance(raw_t, bool) and math.isfinite(raw_t) and raw_t > 0
-        return {**spec, "timeout_s": min(float(raw_t) if valid_t else t, t)}
+        if "models" in spec or "profiles" in spec:
+            out = dict(spec)
+            for key in ("models", "profiles"):
+                if key in out and isinstance(out[key], (list, tuple)):
+                    out[key] = type(out[key])(_clamp_timeout(item, cap) for item in out[key])
+            if out.get("arbiter") is not None:
+                out["arbiter"] = _clamp_timeout(out["arbiter"], cap)
+            return out
+        vals = []
+        for key in ("timeout", "timeout_s"):
+            raw_t = spec.get(key)
+            if isinstance(raw_t, (int, float)) and not isinstance(raw_t, bool) and math.isfinite(float(raw_t)) and float(raw_t) > 0:
+                vals.append(float(raw_t))
+        clamped = min([*vals, cap])
+        return {**spec, "timeout": clamped, "timeout_s": clamped}
     return spec
+
+
+def select_recovery_backend(spec_or_fn):
+    """Select a vision backend or multi-model deliberation panel with at least one vision member."""
+    from cell_vlm_facts import _validate_vision_spec, select_vision_backend
+    import judge_seat
+
+    if spec_or_fn is judge_seat.rules:
+        raise ValueError("judge_seat.rules cannot act as a vision recovery backend")
+    is_panel = isinstance(spec_or_fn, (list, tuple)) or (
+        isinstance(spec_or_fn, dict) and ("models" in spec_or_fn or "profiles" in spec_or_fn)
+    )
+    if not is_panel:
+        return select_vision_backend(spec_or_fn)
+    raw_items = spec_or_fn if isinstance(spec_or_fn, (list, tuple)) else (
+        spec_or_fn.get("models") if "models" in spec_or_fn else spec_or_fn.get("profiles")
+    )
+    if not isinstance(raw_items, (list, tuple)):
+        raise ValueError("recovery panel 'models'/'profiles' must be a list or tuple")
+    items = [item for item in raw_items if item is not None]
+    if not items or any(item is judge_seat.rules for item in items) or (isinstance(spec_or_fn, dict) and spec_or_fn.get("arbiter") is judge_seat.rules):
+        raise ValueError("a vision backend is required for recovery deliberation")
+    has_vision = False
+    for item in items:
+        if isinstance(item, (list, tuple)) or (isinstance(item, dict) and ("models" in item or "profiles" in item)):
+            select_recovery_backend(item)
+            has_vision = True
+        else:
+            try:
+                _validate_vision_spec(item)
+                has_vision = True
+            except ValueError:
+                pass
+    if not has_vision:
+        raise ValueError("recovery panel requires at least one vision model")
+    backend = judge_seat.from_config(spec_or_fn)
+    if backend is judge_seat.rules or backend is None:
+        raise ValueError("a vision backend is required for recovery deliberation")
+    return backend
 
 
 def make_advisor(
@@ -251,9 +322,8 @@ def make_advisor(
     propose_only: bool = False,
 ):
     """Build an opt-in Tier-2 AI-PC recovery advisor returning validated numeric candidates or None."""
-    from cell_vlm_facts import select_vision_backend
-
-    backend = select_vision_backend(_clamp_timeout(backend_spec, timeout_s))
+    backend = select_recovery_backend(_clamp_timeout(backend_spec, timeout_s))
+    is_panel = bool(getattr(backend, "_is_coop_panel", False))
 
     def advisor(context: dict) -> dict:
         t0 = time.monotonic()
@@ -276,11 +346,21 @@ def make_advisor(
                                                  "views_captured": captured, "views_missing": missing,
                                                  "error": f"{type(exc).__name__}: {str(exc)[:120]}"}}
         latency = round(time.monotonic() - t0, 3)
-        clean, veto = validate_proposal(raw, holding=bool(context.get("holding")), low=bool(context.get("low")),
+        coop_audit: dict[str, Any] = {}
+        proposal_raw = raw
+        if is_panel and isinstance(raw, dict) and isinstance(raw.get("deliberation"), list):
+            coop_audit = {
+                "consensus": raw.get("consensus"),
+                "chosen_model": raw.get("model"),
+                "deliberation": raw["deliberation"],
+            }
+            proposal_raw = {k: v for k, v in raw.items() if k not in _COOP_META}
+        clean, veto = validate_proposal(proposal_raw, holding=bool(context.get("holding")), low=bool(context.get("low")),
                                         min_confidence=min_confidence)
         audit: dict[str, Any] = {
             "ok": clean is not None, "latency_s": latency, "views_captured": captured,
-            "views_missing": missing, "proposal": raw if isinstance(raw, dict) else None, "veto": veto,
+            "views_missing": missing, "proposal": proposal_raw if isinstance(proposal_raw, dict) else None,
+            "veto": veto, **coop_audit,
         }
         if clean is None:
             return {"candidate": None, "audit": audit}
@@ -296,3 +376,21 @@ def make_advisor(
         return {"candidate": cand, "audit": audit}
 
     return advisor
+
+
+def build_advisor_from_args(args, config: dict, cell, *, arm: str, home: list[float], plan, bounds,
+                            tcp_x_m: float | None, clear_z_m: float):
+    """Build an optional single-VLM or multi-VLM/LLM cooperation advisor from CLI arguments."""
+    from pathlib import Path
+
+    if not getattr(args, "vlm_config", None) and not getattr(args, "vlm_url", None):
+        return None
+    if getattr(args, "vlm_config", None):
+        spec = json.loads(Path(args.vlm_config).expanduser().read_text(encoding="utf-8"))
+    else:
+        spec = {"provider": args.vlm_provider, "url": args.vlm_url, "model": args.vlm_model, "vision": True}
+    cam_views = tuple(k for k in ("top", "side", f"{arm}_wrist", "wrist") if k in (config.get("cameras") or {})) or DEFAULT_VIEWS
+    return make_advisor(
+        spec, cell, home=home, plan=plan, bounds=bounds, tcp_x_m=tcp_x_m, clear_z_m=clear_z_m,
+        views=cam_views, timeout_s=float(args.vlm_timeout), propose_only=not bool(getattr(args, "supervised", False)),
+    )

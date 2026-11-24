@@ -109,3 +109,41 @@ def passive_motor_health_folded(
 def is_stale_row(row: dict[str, Any], max_age_s: float) -> bool:
     tval = finite_float(row.get("t"))
     return tval is not None and (time.time() - tval > max_age_s)
+
+
+def live_hold_attach_err(
+    arm: str | None,
+    workdir: Path,
+    lease_dir: Path,
+    lock_dir: Path | None,
+    *,
+    session_lock_held_fn: Callable[[str, Path | None], bool],
+    read_json_fn: Callable[[Path], dict[str, Any] | None],
+    live_max_age_s: float,
+    pid_alive_fn: Callable[[int], bool],
+) -> str | None:
+    """Confirm `arm` holds a fresh, non-interrupted active `human-hold` session safe for attach recovery."""
+    import cell_arm_lease
+
+    if arm not in ("arm_a", "arm_b", "arm_s"):
+        return f"unsupported arm for live-hold recovery: {arm}"
+    live = read_json_fn(workdir / f"chunk-io-{arm.split('_')[-1]}" / "live.json")
+    if live is None:
+        return f"no live.json for {arm}"
+    if live.get("human_hold_latched") is not True:
+        return f"{arm} is not in an active human-hold"
+    if live.get("torque_hold_commanded") is not True:
+        return f"{arm} human-hold torque hold is not confirmed"
+    if live.get("chunk") is not None or live.get("interrupt"):
+        return f"{arm} has an active chunk or shutdown interrupt"
+    tval = finite_float(live.get("t"))
+    if tval is None or not (-2.0 <= time.time() - tval <= live_max_age_s):
+        return f"{arm} live hold state is stale"
+    if session_lock_held_fn(arm, lock_dir):
+        return None
+    lease = read_json_fn(lease_dir / f"{arm}.json")
+    if lease and cell_arm_lease.live(lease):
+        pid = lease.get("pid")
+        if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0 and pid_alive_fn(pid):
+            return None
+    return f"no live session or lease holds {arm}"

@@ -11,9 +11,7 @@ import math
 import sys
 from typing import Any
 
-from omx_adapter.chunk_library import (
-    GUARD_UNITS_PER_S, NAMES, chain_path, park_path, receding_horizon_splice, transit_path,
-)
+from omx_adapter.chunk_library import GUARD_UNITS_PER_S, NAMES, chain_path, park_path, receding_horizon_splice, transit_path
 import cell_params as prm
 
 JOG_MAX = 5.0
@@ -23,6 +21,7 @@ CONTACT_LAG, CONTACT_TICKS = prm.default("runner.contact_lag"), prm.default("run
 TEMP_STOP = 65
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 MOTORS = [n.split(".")[0] for n in NAMES]
+RECOVERY_PARKS = ("park-slow", "fold-from-hold")
 
 
 def safe_stderr(row: dict) -> None:
@@ -38,7 +37,10 @@ def hold_runner(runner, present, reason, *, human: bool, empty_margin: float) ->
     saved, runner._committed_grip = getattr(runner, "_committed_grip", None), None
     if saved is not None and runner.target is not None and len(runner.target) >= 6:
         runner.target[5], runner.holding = saved
-    chunk, jogging = runner.chunk, bool(runner.jog_path)
+    chunk, jogging, caller_human = runner.chunk, bool(runner.jog_path), human
+    recovery = chunk in RECOVERY_PARKS
+    rec_active = recovery or bool(getattr(runner, "_recovery_active", False))
+    human = human or rec_active
     runner.queue, runner.retreat_frames = [], (runner.played or runner.jog_path[:-1])[::-1]
     # Freeze unheld obstructed jaws at the measured angle so human-hold does not squeeze and heat the gripper motor.
     grip_target = (
@@ -59,26 +61,28 @@ def hold_runner(runner, present, reason, *, human: bool, empty_margin: float) ->
     if human or fold_abort:
         if not runner.human_hold_latched:
             runner._human_hold_release_from = len(getattr(runner, "signals", None) or ())
-        runner.human_hold_latched = True
+        runner.human_hold_latched, runner._recovery_active = True, False
         runner.policy_playback = runner.jaw_gate = runner._trailing_jaw_gate = None
         stop = getattr(getattr(getattr(runner, "robot", None), "motion", None), "stop_streaming", None)
         if callable(stop):
             stop()
         runner.torque_hold_commanded, runner._human_hold_acked_req = False, None
-        runner._human_hold_ack_pending = True
+        runner._human_hold_ack_pending, runner._human_hold_overload_reported = True, None
         runner.pending.clear()
         runner.retreat_frames = []
         runner.grip_from = runner._release_until = runner._release_floor = runner._held_jaw = None
         runner._stop_after_park, runner._stopped, runner.home_since = None, False, None
-    elif (getattr(runner, "policy_playback", None) is not None
-          or getattr(runner, "jaw_gate", None) is not None
-          or getattr(runner, "_trailing_jaw_gate", None) is not None):
+    elif getattr(runner, "policy_playback", None) is not None or getattr(runner, "jaw_gate", None) is not None or getattr(runner, "_trailing_jaw_gate", None) is not None:
         from chunk_policy_playback import halt_policy_gate
         gated = halt_policy_gate(runner)
     if chunk == "park":
         runner.last_input = runner.clock()
         runner._stop_after_park = None
-    if not human:
+    if recovery or (rec_active and not caller_human):
+        from chunk_policy_playback import report_policy_halt
+        report_policy_halt(runner, present, True, command=f"run {chunk}" if chunk else ("run jog" if jogging else "fault"),
+                           ok=False, settled=False, error=reason, person_needed=True, contact=reason.startswith("contact"))
+    elif not human:
         fields = dict(
             command=f"run {chunk or 'jog'}" if chunk or jogging else "fault",
             ok=False, error=runner.fault, contact=True, **({"sway": sway} if sway else {}),
@@ -92,22 +96,24 @@ def hold_runner(runner, present, reason, *, human: bool, empty_margin: float) ->
 
 
 def halt_thermal_or_stall(runner, present, reason: str, *, empty_margin: float) -> None:
-    """Freeze on motor overtemp/stall; latch human HOLD if a direct stop fold was active."""
+    """Freeze on motor overtemp/stall; latch human HOLD if a direct stop fold or recovery park was active."""
     from chunk_policy_playback import halt_policy_gate, report_policy_halt
 
     chunk, sway = runner.chunk, runner.sway_peak
-    stop_cmd = getattr(runner, "_stop_after_park", None)
+    stop_cmd, recovery = getattr(runner, "_stop_after_park", None), (chunk in RECOVERY_PARKS or bool(getattr(runner, "_recovery_active", False)))
     already_held = bool(runner.human_hold_latched)
-    fold_abort = bool(stop_cmd) and getattr(runner, "_interrupt", None) is None
+    fold_abort = (bool(stop_cmd) or recovery) and getattr(runner, "_interrupt", None) is None
     if already_held:
         runner.fault, runner._stop_after_park = reason, None
     elif fold_abort:
-        hold_runner(runner, present, reason, human=True, empty_margin=empty_margin)
+        hold_runner(runner, present, reason, human=not recovery, empty_margin=empty_margin)
     else:
         runner.fault, runner.queue, runner.target = reason, [], present[:5] + [runner.target[5]]
         runner.chunk, runner.pitch_hold, runner.sway_peak, runner.speed_low = None, 0.0, {}, 1.0
         runner._stop_after_park = None
-    gated = already_held or halt_policy_gate(runner) or bool(stop_cmd)
+    if fold_abort and recovery and not already_held:
+        return
+    gated = already_held or halt_policy_gate(runner) or bool(stop_cmd) or recovery
     extra = dict(hold=True, folded=False, person_needed=True) if (fold_abort or already_held) else {}
     report_policy_halt(runner, present, gated, command=f"run {chunk}" if chunk else "fault",
                        ok=False, error=reason, **({"sway": sway} if sway else {}), **extra)
@@ -198,7 +204,6 @@ def read_motor_health(robot) -> dict[str, list[int]] | None:
     pwm, current, temp = (bus.sync_read(n, **kw) for n in ("Present_PWM", "Present_Current", "Present_Temperature"))
     if isinstance(temp, dict):
         from guarded_native_effort import enforce_temperatures
-
         enforce_temperatures(getattr(robot, "motion", None), temp)
     return {
         "pwm": [signed(pwm[m]) for m in MOTORS], "current_ma": [signed(current[m]) for m in MOTORS],
