@@ -80,6 +80,7 @@ OWN = {
         "cockpit-telemetry.js",
         "cockpit-hosts.js",
         "cell-cockpit-stage.js",
+        "cell-context-panel.js",
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
         "robot-video.js",  # D-801: the robot card's front camera reuses the console video tiles

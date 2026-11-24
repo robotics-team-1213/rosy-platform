@@ -2,6 +2,7 @@ import {patchAttr, patchHidden, patchText} from '/common/control-dom.js';
 import {createScope} from '/common/scope.js';
 import {frameBadge} from '/console/assets/vision-view.js';
 import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
+import {INCIDENT_BASES, INCIDENT_CAUSES} from '/console/assets/cell-frames.js';
 import {createMotorHealthState, jointLabel, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
 
 // A second joint lagging with the stopped one points at an outside restraint, not that motor (arm_a, 2026-11-01).
@@ -21,14 +22,19 @@ const element = (tag, text = '') => {
   const node = document.createElement(tag); node.textContent = text; return node;
 };
 const staleArm = entry => {
+  entry.fresh = false;
   patchText(entry.values, '최신 피드백 없음');
   patchText(entry.status, '수신 대기 · 원본 만료');
   patchAttr(entry.status, 'state', 'unavailable');
+  entry.updateVisibility?.();
 };
-const staleCamera = entry => {
+const staleCamera = (entry, detail = '') => {
+  entry.live = false;
+  entry.reason = detail;
   patchHidden(entry.image, true);
-  patchText(entry.status, '최신 영상 없음');
+  patchText(entry.status, detail ? `최신 영상 없음 · ${detail}` : '최신 영상 없음');
   patchAttr(entry.status, 'state', 'unavailable');
+  entry.updateVisibility?.();
 };
 
 const BASE = '/api/fleet/workcell-observations';
@@ -75,9 +81,50 @@ export function createCellObservation({request, root, credential = () => '', onS
   root.replaceChildren(empty);
   function paintHealth(entry) {
     const health = entry.health.read();
+    entry.healthSeverity = health.severity || 'unknown';
     renderMotorHealthSummary(entry.healthSummary, health);
     if (entry.healthDetails.open) renderMotorHealth(entry.healthView, health);
     entry.healthPaintedAt = performance.now();
+    entry.updateVisibility?.();
+  }
+
+  const isArmEntryActive = entry => Boolean(
+    entry.fresh || entry.openIncidents > 0 || entry.healthSeverity === 'crit'
+    || entry.healthSeverity === 'warn' || entry.focused,
+  );
+
+  function updateCellVisibility(cellState) {
+    if (!cellState) return;
+    const liveCams = cellState.camEntries.filter(cam => cam.live);
+    const idleCams = cellState.camEntries.length - liveCams.length;
+    const firstReason = cellState.camEntries.map(cam => cam.reason).find(Boolean) || '';
+    for (const camEntry of cellState.camEntries) {
+      patchHidden(camEntry.card, !cellState.showAllCameras && !camEntry.live);
+    }
+    patchHidden(cellState.camBar, cellState.camEntries.length === 0 || (idleCams === 0 && !cellState.showAllCameras));
+    patchText(cellState.camSummary, cellState.showAllCameras
+      ? `전체 셀 카메라 ${cellState.camEntries.length}대 표시 중`
+      : `실시간 카메라 ${liveCams.length}/${cellState.camEntries.length}대 · 대기 ${idleCams}대 숨김`);
+    patchText(cellState.camToggle, cellState.showAllCameras ? '실시간 카메라만 보기' : `대기 카메라 ${idleCams}대 보기`);
+    patchHidden(cellState.camEmpty, cellState.camEntries.length === 0 || cellState.showAllCameras || liveCams.length > 0);
+    patchText(cellState.camEmptyText, firstReason
+      ? `실시간 카메라 0/${cellState.camEntries.length}대 · ${firstReason}`
+      : `실시간 카메라 0/${cellState.camEntries.length}대 · 영상 연결 확인 중`);
+
+    const activeArms = cellState.armEntries.filter(isArmEntryActive);
+    const idleArms = cellState.armEntries.length - activeArms.length;
+    for (const armEntry of cellState.armEntries) {
+      patchHidden(armEntry.card, !cellState.showAllArms && !isArmEntryActive(armEntry));
+    }
+    patchHidden(cellState.armBar, cellState.armEntries.length === 0 || (idleArms === 0 && !cellState.showAllArms));
+    patchText(cellState.armSummary, cellState.showAllArms
+      ? `전체 팔 ${cellState.armEntries.length}대 표시 중`
+      : activeArms.length
+        ? `활성·주의 팔 ${activeArms.length}대 표시 · 대기 팔 ${idleArms}대 숨김`
+        : `활성·주의 팔 없음 · 대기 팔 ${idleArms}대 숨김`);
+    patchText(cellState.armToggle, cellState.showAllArms ? '활성·주의 팔만 보기' : `대기 팔 ${idleArms}대 보기`);
+    patchHidden(cellState.armEmpty, cellState.armEntries.length === 0 || cellState.showAllArms || activeArms.length > 0);
+    patchText(cellState.armEmptyText, `활성·주의 팔 0/${cellState.armEntries.length}대 · 현재 대기 상태입니다.`);
   }
 
   const emitSummary = items => {
@@ -142,12 +189,54 @@ export function createCellObservation({request, root, credential = () => '', onS
     empty.textContent = '등록된 작업 셀 관측이 없습니다.';
     for (const cell of workcells) {
       const section = element('section');
-      section.append(element('h3', cell.label));
+      const cellState = {
+        showAllArms: false,
+        showAllCameras: false,
+        armEntries: [],
+        camEntries: [],
+        armBar: element('div'),
+        armSummary: element('p'),
+        armToggle: element('ui-button'),
+        armEmpty: element('div'),
+        armEmptyText: element('p'),
+        camBar: element('div'),
+        camSummary: element('p'),
+        camToggle: element('ui-button'),
+        camEmpty: element('div'),
+        camEmptyText: element('p'),
+      };
+      const refreshCell = () => updateCellVisibility(cellState);
+      cellState.camBar.className = 'cell-obs-toolbar';
+      cellState.camToggle.setAttribute('kind', 'quiet');
+      cellState.camToggle.setAttribute('type', 'button');
+      cellState.camToggle.setAttribute('data-work-read', '');
+      cellState.camToggle.addEventListener('click', () => {
+        cellState.showAllCameras = !cellState.showAllCameras;
+        refreshCell();
+      });
+      cellState.camBar.append(cellState.camSummary, cellState.camToggle);
+      cellState.camEmpty.className = 'cell-obs-empty-strip';
+      cellState.camEmpty.append(cellState.camEmptyText);
+
+      cellState.armBar.className = 'cell-obs-toolbar';
+      cellState.armToggle.setAttribute('kind', 'quiet');
+      cellState.armToggle.setAttribute('type', 'button');
+      cellState.armToggle.setAttribute('data-work-read', '');
+      cellState.armToggle.addEventListener('click', () => {
+        cellState.showAllArms = !cellState.showAllArms;
+        refreshCell();
+      });
+      cellState.armBar.append(cellState.armSummary, cellState.armToggle);
+      cellState.armEmpty.className = 'cell-obs-empty-strip';
+      cellState.armEmpty.append(cellState.armEmptyText);
+
+      section.append(element('h3', cell.label), cellState.camBar, cellState.camEmpty);
       // every camera of the cell side by side, the shared views first; a click enlarges one (2026-11-01)
       const wall = element('div'); wall.className = 'cell-camera-wall';
       const grid = element('div'); grid.className = 'cell-observation-grid';
       for (const arm of cell.arms) {
         const card = element('article'); card.className = 'cell-observation-card'; card.dataset.armSource = arm.source_id;
+        card.dataset.armHeld = 'false';
         const status = element('ui-status'); status.setAttribute('state', 'unavailable');
         const values = element('pre');
         const healthDetails = element('details'), healthSummary = element('summary'), healthView = element('section');
@@ -158,11 +247,13 @@ export function createCellObservation({request, root, credential = () => '', onS
         const incidents = element('details'), incidentsSummary = element('summary'), incidentsList = element('ol');
         incidentsSummary.className = 'ui-disclosure-row'; incidentsSummary.textContent = '팔 사건 없음';
         incidentsList.className = 'cell-incident-history'; incidents.append(incidentsSummary, incidentsList);
-        const entry = {status, values, expires: 0, health: createMotorHealthState(), healthDetails, healthSummary, healthView,
+        const entry = {card, status, values, expires: 0, fresh: Boolean(arm.fresh && arm.positions), openIncidents: 0,
+          healthSeverity: 'unknown', focused: false, updateVisibility: refreshCell,
+          health: createMotorHealthState(), healthDetails, healthSummary, healthView,
           history, historySummary, historyList, faults: '', incidents, incidentsSummary, incidentsList, incidentKey: ''};
         healthDetails.addEventListener('toggle', () => paintHealth(entry));
-        paintHealth(entry); staleArm(entry); arms.set(arm.source_id, entry);
-        card.append(element('h4', arm.label), healthDetails, incidents, history, element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
+        paintHealth(entry); staleArm(entry); arms.set(arm.source_id, entry); cellState.armEntries.push(entry);
+        card.append(element('h4', arm.label), status, incidents, healthDetails, element('ui-text', '엔코더 각도 · rad'), values, history); grid.append(card);
         card.append(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
       }
       const rank = camera => ({overhead: 0, side: 1}[camera.role] ?? 2) + (camera.stream === 'depth' ? 0.5 : 0);
@@ -170,7 +261,8 @@ export function createCellObservation({request, root, credential = () => '', onS
         const card = element('article'); card.className = 'cell-observation-card'; card.dataset.cameraSource = camera.source_id;
         const status = element('ui-status'); status.setAttribute('state', 'unavailable');
         const image = element('img'); image.alt = `${camera.label} 현재 영상`; image.hidden = true;
-        const entry = {image, status, expires: 0, pending: false, lease: null, identity: null, url: null};
+        const entry = {card, image, status, expires: 0, pending: false, lease: null, identity: null, url: null,
+          live: false, reason: '', updateVisibility: refreshCell};
         image.onerror = () => staleCamera(entry);
         card.title = '눌러서 크게 보기'; card.tabIndex = 0; card.setAttribute('role', 'button');
         card.setAttribute('aria-pressed', 'false'); card.setAttribute('aria-label', `${camera.label} 크게 보기`);
@@ -181,11 +273,12 @@ export function createCellObservation({request, root, credential = () => '', onS
           else if (event.key === 'Escape') zoom(false);
         });
         entry.label = camera.label;
-        staleCamera(entry); cameras.set(camera.source_id, entry);
+        staleCamera(entry); cameras.set(camera.source_id, entry); cellState.camEntries.push(entry);
         card.append(element('h4', camera.stream === 'depth' ? `${camera.label} · 깊이` : camera.label), element('ui-text', camera.role === 'overhead'
           ? '공용 상단 카메라' : camera.role === 'side' ? '공용 측면 카메라' : `설정된 팔: ${camera.arm_id}`), status, image); wall.append(card);
       }
-      section.append(wall, grid); root.append(section);
+      refreshCell();
+      section.append(wall, cellState.armBar, cellState.armEmpty, grid); root.append(section);
     }
   }
 
@@ -219,9 +312,12 @@ export function createCellObservation({request, root, credential = () => '', onS
         ageMs: response.headers.get('X-Frame-Age-Ms'), frameState: response.headers.get('X-Frame-State'), rectified: false});
       const age = Number(response.headers.get('X-Frame-Age-Ms'));
       const sequence = response.headers.get('X-Frame-Seq');
+      if (response.status === 404 && response.headers.get('X-Frame-State') !== 'stale') {
+        staleCamera(entry, '카메라 송신기 미연결 (Vision 404)'); return;
+      }
       if (badge.state !== 'live' || age > 2000 || !sequence || !/^\d+$/.test(sequence)) {
         if (badge.state === 'unauthorized') entry.lease = null;
-        staleCamera(entry); return;
+        staleCamera(entry, badge.label); return;
       }
       const identity = `${sequence}:${response.headers.get('X-Frame-Captured-At') || ''}`;
       if (entry.identity === identity) return;
@@ -233,13 +329,15 @@ export function createCellObservation({request, root, credential = () => '', onS
       if (performance.now() >= expires) { staleCamera(entry); return; }
       if (entry.url) URL.revokeObjectURL(entry.url);
       entry.image.src = url; entry.url = url; entry.blob = blob; url = null;
-      entry.identity = identity; entry.expires = expires; patchHidden(entry.image, false);
+      entry.identity = identity; entry.expires = expires; entry.live = true; entry.reason = '';
+      patchHidden(entry.image, false);
       patchAttr(entry.status, 'state', 'ready');
       patchText(entry.status, `원본 최신 영상 · #${sequence}`);
+      entry.updateVisibility?.();
     } catch (error) {
       if (current()) {
         if (error.status === 401 || error.status === 403) clear();
-        else staleCamera(entry);
+        else staleCamera(entry, 'Vision 연결 확인');
       }
     } finally {
       if (url) URL.revokeObjectURL(url);
@@ -295,11 +393,6 @@ export function createCellObservation({request, root, credential = () => '', onS
     image.src = incidentFrames.get(key);
   }
 
-  // what stopped the arm, as cell_why names it, and how the person knows: a cause seen in pictures alone is weaker than a
-  // repeat (11-07: people, models and frame strips all misread contact; measurement and repeats decided)
-  const CAUSES = [['unknown', '원인: 판단 불가'], ['blocked', '막힘 (닿음)'], ['wrong_position', '위치가 어긋나 닿음'], ['snagged', '걸림'],
-    ['too_fast', '속도 초과'], ['no_room', '공간 부족으로 거부'], ['software_or_config', '코드·설정'], ['camera_or_map', '카메라·지도'], ['other', '기타']];
-  const BASES = [['unknown', '근거: 없음'], ['repeat', '같은 동작을 다시 해 봄'], ['measured', '측정값'], ['seen', '사진·눈으로']];
   function choice(label, options) {
     const select = element('select'); select.className = 'ui-field'; select.setAttribute('aria-label', label);
     for (const [value, text] of options) { const option = element('option', text); option.value = value; select.append(option); }
@@ -329,13 +422,16 @@ export function createCellObservation({request, root, credential = () => '', onS
     entry.incidentKey = key;
     // a guard stop the recovery handled comes with decision.hold false: it waits for a person's cause, the arm stays free
     const open = incidents.filter(i => i.state !== 'cleared'), held = open.filter(i => i.decision?.hold !== false);
+    const cleared = incidents.filter(i => i.state === 'cleared');
     const naming = open.length - held.length;
     entry.openIncidents = open.length;
+    entry.card.dataset.armHeld = String(held.length > 0);
     entry.incidentsSummary.textContent = incidents.length
       ? `팔 사건 ${incidents.length}건 · ${held.length ? `보류 중 ${held.length}건 (세션 시작 불가)` : naming ? '보류 없음' : '모두 해제됨'}`
         + (naming ? ` · 원인 기록 대기 ${naming}건` : '') : '팔 사건 없음';
     if (held.length) entry.incidents.open = true;
-    entry.incidentsList.replaceChildren(...incidents.map(incident => {
+
+    const renderIncidentItem = incident => {
       const item = element('li');
       item.append(element('strong', `${STATE_LABEL[incident.state] || incident.state} · ${when(incident.reported_at)}`),
         ...incidentLines(incident).map(line => element('p', line)));
@@ -354,9 +450,9 @@ export function createCellObservation({request, root, credential = () => '', onS
           if (!box.open || strip.childElementCount) return;
           for (const shot of incident.evidence) {
             const figure = element('figure'), image = element('img');
-            const when = `${shot.t_rel_s > 0 ? '+' : ''}${shot.t_rel_s.toFixed(1)}초`;
-            image.alt = `${shot.camera} 카메라 ${shot.kind === 'tip' ? '집게 끝 확대' : '전체'} · 정지 ${when}`;
-            figure.append(image, element('figcaption', `${shot.camera} · ${shot.kind === 'tip' ? '집게 끝' : '전체'} · ${when}`));
+            const at = `${shot.t_rel_s > 0 ? '+' : ''}${shot.t_rel_s.toFixed(1)}초`;
+            image.alt = `${shot.camera} 카메라 ${shot.kind === 'tip' ? '집게 끝 확대' : '전체'} · 정지 ${at}`;
+            figure.append(image, element('figcaption', `${shot.camera} · ${shot.kind === 'tip' ? '집게 끝' : '전체'} · ${at}`));
             strip.append(figure); void incidentFrame(source, incident, `evidence/${shot.seq}`, image, scope);
           }
         });
@@ -374,7 +470,7 @@ export function createCellObservation({request, root, credential = () => '', onS
         item.append(element('p', `해제: ${incident.cleared.by} · ${when(incident.cleared.at)}${label} · ${incident.cleared.note}`));
       } else {
         // the cause and how the person knows it are kept with the clear: the labels learning scores rules and models against
-        const cause = choice('원인', CAUSES), basis = choice('근거', BASES);
+        const cause = choice('원인', INCIDENT_CAUSES), basis = choice('근거', INCIDENT_BASES);
         const note = element('input'); note.className = 'ui-field'; note.maxLength = 400;
         note.setAttribute('aria-label', '확인한 내용'); note.placeholder = '팔과 집게를 확인한 내용 (필수) · 같은 동작을 다시 해 봤다면 그 결과';
         const button = element('ui-button', '확인했습니다 · 해제'); button.setAttribute('type', 'button');
@@ -384,7 +480,22 @@ export function createCellObservation({request, root, credential = () => '', onS
         item.append(cause, basis, note, button, message);
       }
       return item;
-    }));
+    };
+
+    const visibleCleared = open.length > 0 ? [] : cleared.slice(0, 3);
+    const foldedCleared = open.length > 0 ? cleared : cleared.slice(3);
+    entry.incidentsList.replaceChildren(...[...open, ...visibleCleared].map(renderIncidentItem));
+    if (foldedCleared.length > 0) {
+      const fold = element('details'); fold.className = 'cell-incident-cleared-fold';
+      const summary = element('summary', `해제된 이전 사건 ${foldedCleared.length}건 보기`);
+      const list = element('ol'); list.className = 'cell-incident-history';
+      list.replaceChildren(...foldedCleared.map(renderIncidentItem));
+      fold.append(summary, list);
+      entry.incidents.replaceChildren(entry.incidentsSummary, entry.incidentsList, fold);
+    } else {
+      entry.incidents.replaceChildren(entry.incidentsSummary, entry.incidentsList);
+    }
+    entry.updateVisibility?.();
   }
 
   async function refresh() {
@@ -398,7 +509,7 @@ export function createCellObservation({request, root, credential = () => '', onS
           if (performance.now() >= entry.expires) staleArm(entry);
           if (performance.now() - entry.healthPaintedAt >= 1000) paintHealth(entry);
         }
-        for (const entry of cameras.values()) if (performance.now() >= entry.expires) staleCamera(entry);
+        for (const entry of cameras.values()) if (entry.live && performance.now() >= entry.expires) staleCamera(entry);
         // 연결이 끊긴 동안 만료 판정이 옛 팔 목록으로 요약을 되살리지 않는다(번쩍임 없음).
         if (!observedDisconnected) summarize(lastWorkcells);
       }, 100);
@@ -438,9 +549,11 @@ export function createCellObservation({request, root, credential = () => '', onS
         const age = Math.max(0, arm.source_age_s, arm.receipt_age_s);
         entry.expires = arm.fresh && Number.isFinite(age) ? observedAt + (2 - age) * 1000 : 0;
         if (!arm.positions || performance.now() >= entry.expires) { staleArm(entry); continue; }
+        entry.fresh = true;
         patchText(entry.values, JSON.stringify(arm.positions, null, 2));
         patchAttr(entry.status, 'state', 'ready');
         patchText(entry.status, `실제 피드백 · #${arm.sequence}`);
+        entry.updateVisibility?.();
       }
       for (const [source, entry] of cameras) void picture(source, entry, scope);
       lastWorkcells = state.workcells; observedDisconnected = false;
@@ -468,7 +581,11 @@ export function createCellObservation({request, root, credential = () => '', onS
     const card = root.querySelector(`[data-arm-source="${CSS.escape(sourceId)}"]`);
     if (!card) return false;
     const entry = arms.get(sourceId);
-    if (entry?.openIncidents) entry.incidents.open = true;  // 사람이 확인할 팔 사건은 펼쳐 둔다
+    if (entry) {
+      entry.focused = true;
+      entry.updateVisibility?.();
+      if (entry.openIncidents) entry.incidents.open = true;  // 사람이 확인할 팔 사건은 펼쳐 둔다
+    }
     card.tabIndex = -1;
     card.scrollIntoView?.({block: 'nearest'});
     card.focus?.({preventScroll: true});

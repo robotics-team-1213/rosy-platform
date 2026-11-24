@@ -17,13 +17,13 @@ import {createCellFrameFeed} from '/console/assets/cell-frames.js';
 import {createCellLine, createPlanFigures} from '/console/assets/cell-line.js';
 
 const $ = id => document.getElementById(id);
-// D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
-bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading', mark: 'step',
-  groups: {'saved-heading': ['observation-heading', 'print-heading', 'catalog-heading', 'real2sim-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
+// D-926 3: each Cell step is its own screen; live observation and real2sim sit in their own subnav screens.
+bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'observation-heading', mark: 'step',
+  groups: {'saved-heading': ['print-heading', 'catalog-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 // B-3 — 읽기 전용 ?focus= 딥링크. 알려진 단계 머리글이나 팔 카드만 허용하고 토큰·자격증은 URL에서 읽지 않는다(D-977).
-const SUBNAV_HEADINGS = ['saved-heading', 'recipe-heading', 'cell-heading', 'preview-heading', 'proposal-heading', 'mission-heading', 'observation-heading'];
+const SUBNAV_HEADINGS = ['observation-heading', 'real2sim-heading', 'saved-heading', 'recipe-heading', 'cell-heading', 'preview-heading', 'proposal-heading', 'mission-heading'];
 const focusParam = channelQuery.get('focus') || '';
 const armFocusMatch = /^arm:([A-Za-z0-9._:-]{1,64})$/.exec(focusParam);
 let pendingFocusHandled = false;
@@ -52,10 +52,10 @@ const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value, onSummary: renderExceptions});
-// B-3 — 관측 화면은 저장된 문서 단계에 속한다(D-926 groups). 화면이 바뀐 뒤에 카드로 옮겨야 초점이 살아 있다.
+// B-3 — 관측 화면은 팔 관측·사건 단계(#observation-heading)에 선다. 화면이 바뀐 뒤에 카드로 옮겨야 초점이 살아 있다.
 function jumpToObservations(land) {
-  if (location.hash === '#saved-heading') land();
-  else { location.hash = '#saved-heading'; addEventListener('hashchange', land, {once: true}); }
+  if (!location.hash || location.hash === '#observation-heading') land();
+  else { location.hash = '#observation-heading'; addEventListener('hashchange', land, {once: true}); }
 }
 if (SUBNAV_HEADINGS.includes(focusParam)) {
   if (focusParam === 'observation-heading') jumpToObservations(() => $('observation-heading')?.scrollIntoView({block: 'nearest'}));
@@ -63,7 +63,7 @@ if (SUBNAV_HEADINGS.includes(focusParam)) {
 }
 function focusArmFromLink() {
   if (!armFocusMatch || pendingFocusHandled) return;
-  if (location.hash && location.hash !== '#saved-heading') return;
+  if (location.hash && location.hash !== '#observation-heading') return;
   jumpToObservations(() => { pendingFocusHandled = observations.focusArm(armFocusMatch[1]); });
 }
 // 요약이 바뀔 때만 다시 그린다(관측 모듈이 서명으로 지켜 준다). 접속 끊김·해제는 빈 목록으로 줄을 지운다.

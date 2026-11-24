@@ -239,6 +239,7 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
     api["/api/fleet/auth/session"] = {"authenticated": True, "role": "operator", "account_id": "op", "estop": False}
     api["/api/fleet/peers"] = {"peers": []}
     api["/api/fleet/dispatch-control"] = {"paused": False}
+    api["/api/fleet/work"] = {"rows": []}
     api["/api/fleet/workcell-observations"] = {
         "schema_version": "rosy.workcell-observations.v1",
         "workcells": [{
@@ -306,6 +307,10 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         expect(page.locator('section[aria-labelledby="map-heading"]')).to_be_hidden()
         expect(page.locator("#roster-heading")).to_be_hidden()
         expect(page.locator("#site-path")).to_be_hidden()
+        expect(page.locator('.doc-tabs a[href="/console/site-map"]')).to_be_hidden()
+        expect(page.locator('.doc-tabs a[href="/console/install"]')).to_be_hidden()
+        for href in ("/console", "/console?view=work", "/console?view=records"):
+            expect(page.locator(f'.doc-tabs a[href="{href}"]')).to_be_visible()
         for arm_id in ("arm_a", "arm_b", "arm_s"):
             expect(stage.locator(f'.cell-stage-arm[data-arm-id="{arm_id}"]')).to_be_visible()
         expect(stage.locator('.cell-stage-arm[data-arm-id="arm_a"] .cell-stage-joints-grid .cell-stage-joint')).to_have_count(6)
@@ -314,6 +319,10 @@ def test_arm_cell_scope_shows_cell_cockpit_and_zero_drive_404s(site):
         assert work_link_box and abs(work_link_box["height"] - 36) <= 1
         hud_text = page.locator("#" + "cockpit-hud").inner_text()
         assert "ARM-CELL" in hud_text
+        context_panel = page.locator("#cell-context-panel")
+        expect(context_panel).to_be_visible()
+        expect(context_panel).to_contain_text("셀 작업 · 열린 사건")
+        expect(context_panel.locator('a[href="/console/cell#observation-heading"]')).to_be_visible()
 
         dock = page.locator("#" + "robot-dock")
         expect(dock).to_be_visible()

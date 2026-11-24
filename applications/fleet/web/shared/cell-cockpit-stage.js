@@ -6,6 +6,7 @@ import { html, render as renderDom, useLayoutEffect, useRef } from "/common/vend
 import { UiButton } from "/common/preact-ui.js";
 import { patchHidden } from "/common/control-dom.js";
 import { createMotorHealthState, renderMotorHealthSummary } from "/common/motor-health.js";
+import { createCellContextPanel } from "/console/assets/cell-context-panel.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { owns } from "/console/assets/unit-scope.js";
@@ -15,6 +16,21 @@ const JOINT_SHORT = ["J1", "J2", "J3", "J4", "J5", "G"];
 const RAD_TO_DEG = 180 / Math.PI;
 const CAMERA_RANK = { overhead: 0, side: 1, wrist: 2 };
 const VISION_REFRESH_MS = 15000;
+const OBS_BASE = "/api/fleet/workcell-observations";
+
+export function isArmAttentionOrLive(arm, selectedId = null) {
+  if (!arm) return false;
+  return Boolean(
+    arm.held
+    || (arm.openIncidents && arm.openIncidents.length > 0)
+    || arm.hwFaultMotors > 0
+    || arm.warnMotors > 0
+    || arm.motorHealth?.status === "fault"
+    || arm.motorHealth?.status === "warn"
+    || arm.fresh
+    || (selectedId && arm.id === selectedId),
+  );
+}
 
 export function canonicalArmId(raw) {
   return String(raw || "").trim().toLowerCase().replace(/^omx_/, "").replace(/_follower$/, "");
@@ -136,14 +152,13 @@ export function normalizeWorkcellObservations(payload, receivedAtMs = Date.now()
 }
 
 /** One camera tile. frames.bind runs once per camera identity; the feed keeps painting between polls. */
-function CameraTile({ cam, frames, liveOn }) {
+function CameraTile({ cam, frames, liveOn, hidden }) {
   const imgRef = useRef(null);
   const statusRef = useRef(null);
   const standbyRef = useRef(null);
   useLayoutEffect(() => {
     frames.bind(imgRef.current, { source: cam.source_id }, statusRef.current, cam.label);
   }, [cam.source_id, cam.label, frames]);
-  // No dep list: sync the standby text after every poll render like the pre-preact version did.
   useLayoutEffect(() => {
     const img = imgRef.current;
     const standby = standbyRef.current;
@@ -151,29 +166,39 @@ function CameraTile({ cam, frames, liveOn }) {
     if (!liveOn) {
       standby.hidden = false;
       standby.textContent = "영상 일시정지";
-    } else if (!img.getAttribute("src")) {
-      standby.hidden = false;
-      standby.textContent = img.dataset.frameStateText || "첫 프레임 대기 — 스트림 연결 확인";
+    } else {
+      frames.repaint?.({ source: cam.source_id });
+      if (!img.getAttribute("src")) {
+        standby.hidden = false;
+        standby.textContent = img.dataset.frameStateText || "첫 프레임 대기 — 스트림 연결 확인";
+      } else {
+        standby.hidden = true;
+      }
     }
   });
-  const toggleZoom = () => imgRef.current?.classList.toggle("focused");
+  const toggleZoom = (ev) => {
+    const img = imgRef.current;
+    if (!img?.getAttribute("src")) return;
+    ev.stopPropagation();
+    img.classList.toggle("focused");
+  };
   const onKeyDown = (ev) => {
     if (ev.key === "Enter" || ev.key === " ") {
       ev.preventDefault();
-      toggleZoom();
+      toggleZoom(ev);
     } else if (ev.key === "Escape") {
       imgRef.current?.classList.remove("focused");
     }
   };
-  return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} tabIndex=${0} onKeyDown=${onKeyDown}>
+  return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} hidden=${hidden} tabIndex=${0} onKeyDown=${onKeyDown}>
     <div class="cell-stage-cam-head">
       <strong>${cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label}</strong>
-      <small ref=${statusRef} class="omx-inspector-cam-badge">영상 확인 중</small>
+      <small ref=${statusRef} class="omx-inspector-cam-badge" />
     </div>
     <div class="omx-inspector-cam-frame">
-      <img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`} loading="lazy"
+      <img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`}
         onClick=${toggleZoom} onLoad=${() => { if (standbyRef.current) standbyRef.current.hidden = true; }} />
-      <span ref=${standbyRef} class="omx-inspector-cam-standby" role="status">영상 대기</span>
+      <span ref=${standbyRef} class="omx-inspector-cam-standby" role="status" />
     </div>
   </article>`;
 }
@@ -230,9 +255,58 @@ function obsSignature(obs) {
   });
 }
 
-export function createCellCockpitStage({ scope, call, view, auth, selection, onChanged, onVisionSample }) {
+export function createCellCockpitStage({
+  scope,
+  call,
+  view,
+  auth,
+  selection,
+  contextHost = null,
+  isOperator = () => false,
+  namedReason = () => "",
+  onChanged,
+  onVisionSample,
+}) {
   const gate = createPollGate({ slowCodes: { WORKCELL_OBSERVATIONS_UNAVAILABLE: 30000 } });
-  const frames = createCellFrameFeed({ call, scope, intervalMs: 2000 });
+  const camStates = new Map();
+  let renderingStage = false;
+  let notifyQueued = false;
+  const frames = createCellFrameFeed({
+    call,
+    scope,
+    intervalMs: 2000,
+    onStateChange(_key, state) {
+      if (!state || state.roiTarget) return;
+      const prev = camStates.get(state.source);
+      if (prev && prev.live === state.live && prev.kind === state.kind && prev.text === state.text) return;
+      camStates.set(state.source, state);
+      const obsCams = view.workcellObs?.cameras || [];
+      const liveCount = obsCams.filter((c) => camStates.get(c.source_id)?.live).length;
+      const checked = obsCams.some((c) => {
+        const st = camStates.get(c.source_id);
+        return st && st.kind !== "neutral";
+      });
+      const summaryChanged = view.cellLiveCamCount !== liveCount || Boolean(view.cellCamChecked) !== checked;
+      view.cellLiveCamCount = liveCount;
+      view.cellCamChecked = checked;
+      if (state.kind === "neutral" && !prev) return;
+      if (summaryChanged || prev?.live !== state.live || prev?.text !== state.text) {
+        if (renderingStage) {
+          if (!notifyQueued) {
+            notifyQueued = true;
+            queueMicrotask(() => {
+              notifyQueued = false;
+              render();
+              onChanged?.();
+            });
+          }
+          return;
+        }
+        render();
+        onChanged?.();
+      }
+    },
+  });
   const section = document.createElement("section");
   section.className = "panel cell-cockpit-stage";
   section.id = "cell-cockpit-stage";
@@ -250,6 +324,8 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   let areaHidden = false;
   let inFlight = false;
   let liveOn = true;
+  let showAllCams = false;
+  let showAllArms = false;
   let controlUnitFetched = false;
   let visionCheckedAt = 0;
   let lastStageSig = "";
@@ -257,6 +333,30 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   let notifiedOnce = false;
 
   const isStageActive = () => !areaHidden && !owns("drive") && owns("arms");
+  const isCamActive = (cam) => Boolean(camStates.get(cam.source_id)?.live || cam.fresh);
+
+  async function clearIncident(sourceId, incidentId, payload) {
+    await call(`${OBS_BASE}/arms/${encodeURIComponent(sourceId)}/incidents/${encodeURIComponent(incidentId)}/clear`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      timeoutMs: 3000,
+    });
+    gate.reset();
+    await refresh();
+  }
+
+  const contextPanel = contextHost ? createCellContextPanel({
+    scope,
+    call,
+    view,
+    auth,
+    host: contextHost,
+    isStageActive,
+    isOperator,
+    namedReason,
+    onClearIncident: clearIncident,
+  }) : null;
 
   const syncFeedState = () => {
     frames.setRunning(liveOn && isStageActive() && !auth.locked && !document.hidden);
@@ -280,6 +380,7 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   function render() {
     const show = isStageActive();
     patchHidden(section, !show);
+    contextPanel?.render();
     syncFeedState();
     if (!show) {
       lastStageSig = "";
@@ -291,7 +392,10 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
     const unitId = cu?.unit_id || "ARM-CELL";
     const parentText = cu?.parent ? `상위 관제: ${cu.parent}` : "독립 셀 관제";
     const revText = cu?.config_revision ? `구성 ${cu.config_revision}` : "";
-    const statText = sum ? `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간 · 카메라 ${sum.camsTotal}대` : "관측 대기";
+    const camStat = sum
+      ? (view.cellCamChecked ? `카메라 ${view.cellLiveCamCount ?? 0}/${sum.camsTotal} 실시간` : `카메라 ${sum.camsTotal}대`)
+      : "";
+    const statText = sum ? `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간 · ${camStat}` : "관측 대기";
     let liveStatus = "neutral";
     let liveText = "수신 대기";
     if (sum?.armsTotal) {
@@ -307,39 +411,84 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
       }
     }
     const cams = obs?.cameras || [];
+    const activeCams = cams.filter(isCamActive);
+    const hiddenCamCount = cams.length - activeCams.length;
+    const camDiag = cams.map((c) => camStates.get(c.source_id)?.text).find(Boolean) || "영상 연결 확인 중";
     const arms = obs?.arms || [];
     const selectedId = selection?.get?.() ?? null;
+    const alertArms = arms.filter((arm) => arm.held || arm.openIncidents.length > 0 || arm.hwFaultMotors > 0 || arm.motorHealth?.status === "fault");
+    const activeArms = arms.filter((arm) => isArmAttentionOrLive(arm, selectedId));
+    const idleArmCount = arms.length - activeArms.length;
+    const visibleArms = showAllArms ? arms : activeArms;
     const stageSig = JSON.stringify([
       unitId, parentText, revText, statText, liveStatus, liveText,
-      view.fleet?.name === "샘플 현장", liveOn, selectedId, Boolean(auth.locked), obsSignature(obs),
+      view.fleet?.name === "샘플 현장", liveOn, selectedId, Boolean(auth.locked),
+      showAllCams, showAllArms, activeCams.map((c) => c.source_id), camDiag, obsSignature(obs),
     ]);
     if (stageSig === lastStageSig) return;
     lastStageSig = stageSig;
-    renderDom(html`
-      <div class="cell-stage-head">
-        <div>
-          <h2 id="cell-stage-heading">${unitId} 작업 셀 관제</h2>
-          <p class="cell-stage-meta">${[parentText, revText, statText].filter(Boolean).join(" · ")}</p>
+    renderingStage = true;
+    try {
+      renderDom(html`
+        <div class="cell-stage-head">
+          <div>
+            <h2 id="cell-stage-heading">${unitId} 작업 셀 관제</h2>
+            <p class="cell-stage-meta">${[parentText, revText, statText].filter(Boolean).join(" · ")}</p>
+          </div>
+          <div class="cell-stage-actions">
+            <ui-tag class="cell-stage-sample-tag" status="warn" hidden=${view.fleet?.name !== "샘플 현장"}>샘플 데이터</ui-tag>
+            <ui-tag status=${liveStatus}>${liveText}</ui-tag>
+            <${UiButton} kind="segment" type="button" data-work-read="" aria-pressed=${liveOn ? "true" : "false"} onClick=${onToggleLive}
+            >${liveOn ? "영상 일시정지" : "영상 다시 보기"}</${UiButton}>
+            <a class="ui-action-link" data-kind="quiet" href="/console/cell">셀 작업 화면</a>
+          </div>
         </div>
-        <div class="cell-stage-actions">
-          <ui-tag class="cell-stage-sample-tag" status="warn" hidden=${view.fleet?.name !== "샘플 현장"}>샘플 데이터</ui-tag>
-          <ui-tag status=${liveStatus}>${liveText}</ui-tag>
-          <${UiButton} kind="segment" type="button" data-work-read="" aria-pressed=${liveOn ? "true" : "false"} onClick=${onToggleLive}
-          >${liveOn ? "영상 자동갱신 ON" : "영상 일시정지"}</${UiButton}>
-          <a class="ui-action-link" data-kind="quiet" href="/console/cell">셀 작업 화면</a>
+        ${alertArms.length
+          ? html`<div class="cell-stage-alert" role="status">
+              <p><strong>${alertArms.map((a) => a.label).join(", ")}</strong> · 확인이 필요한 정지·고장 상태입니다. 오른쪽 ‘셀 작업 · 열린 사건’에서 원인을 적고 해제하세요.</p>
+              <a class="ui-action-link" data-kind="quiet" href=${`/console/cell?focus=arm:${encodeURIComponent(alertArms[0].sourceId)}#observation-heading`}>팔 관측 상세</a>
+            </div>`
+          : null}
+        ${cams.length && (hiddenCamCount > 0 || showAllCams)
+          ? html`<div class="cell-stage-cam-banner">
+              <p class="hint">
+                ${showAllCams
+                  ? `전체 셀 카메라 ${cams.length}대 표시 중`
+                  : `실시간 카메라 ${activeCams.length}/${cams.length}대${!activeCams.length ? ` · ${camDiag}` : ` · 대기 ${hiddenCamCount}대 숨김`}`}
+              </p>
+              <${UiButton} kind="quiet" type="button" data-work-read="" onClick=${() => { showAllCams = !showAllCams; render(); }}>
+                ${showAllCams ? "실시간 카메라만 보기" : `대기 카메라 ${hiddenCamCount}대 보기`}
+              </${UiButton}>
+            </div>`
+          : null}
+        <div class="cell-stage-cameras" role="region" aria-label="셀 실시간 카메라">
+          ${cams.length
+            ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn} hidden=${!showAllCams && !isCamActive(cam)} />`)
+            : html`<p class="hint">등록된 셀 카메라가 없습니다.</p>`}
         </div>
-      </div>
-      <div class="cell-stage-cameras" role="region" aria-label="셀 실시간 카메라">
-        ${cams.length
-          ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn} />`)
-          : html`<p class="hint">등록된 셀 카메라가 없습니다.</p>`}
-      </div>
-      <div class="cell-stage-arms" role="region" aria-label="셀 팔 상태 요약">
-        ${arms.length
-          ? arms.map((arm) => html`<${ArmCard} key=${arm.id} arm=${arm} selected=${selectedId === arm.id} mhState=${mhStateFor(arm.id)} selection=${selection} receivedAtMs=${obs.receivedAtMs} />`)
-          : html`<p class="hint">${auth.locked ? "접속 후 팔 관측을 표시합니다." : "관측 중인 팔이 없습니다."}</p>`}
-      </div>
-    `, section);
+        ${arms.length && idleArmCount > 0
+          ? html`<div class="cell-stage-standby">
+              <p class="hint">
+                ${showAllArms
+                  ? `전체 팔 ${arms.length}대 표시 중`
+                  : activeArms.length
+                    ? `활성·주의 팔 ${activeArms.length}대 표시 · 대기 팔 ${idleArmCount}대 숨김`
+                    : `활성·주의 팔 없음 · 대기 팔 ${idleArmCount}대`}
+              </p>
+              <${UiButton} kind="quiet" type="button" data-work-read="" onClick=${() => { showAllArms = !showAllArms; render(); }}>
+                ${showAllArms ? "활성·주의 팔만 보기" : `대기 팔 ${idleArmCount}대 보기`}
+              </${UiButton}>
+            </div>`
+          : null}
+        <div class="cell-stage-arms" role="region" aria-label="셀 팔 상태 요약">
+          ${arms.length
+            ? visibleArms.map((arm) => html`<${ArmCard} key=${arm.id} arm=${arm} selected=${selectedId === arm.id} mhState=${mhStateFor(arm.id)} selection=${selection} receivedAtMs=${obs.receivedAtMs} />`)
+            : html`<p class="hint">${auth.locked ? "접속 후 팔 관측을 표시합니다." : "관측 중인 팔이 없습니다."}</p>`}
+        </div>
+      `, section);
+    } finally {
+      renderingStage = false;
+    }
   }
 
   async function refreshControlUnit(signal) {
@@ -378,6 +527,7 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
         call("/api/fleet/workcell-observations", { signal: life.signal }),
         refreshControlUnit(life.signal),
         isStageActive() ? refreshVisionSummary(life.signal) : Promise.resolve(),
+        isStageActive() && contextPanel ? contextPanel.refresh(life.signal) : Promise.resolve(),
       ]);
       life.check();
       gate.ok();
@@ -419,6 +569,7 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
       notifiedOnce = false;
       gate.reset();
       syncFeedState();
+      contextPanel?.pause();
     },
   };
 }

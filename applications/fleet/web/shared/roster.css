@@ -668,7 +668,25 @@ html[data-unit-scope-ready]:not([data-unit-drive]) :is(#dispatch-control, .charg
 .cell-stage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .cell-stage-cameras { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--space-2); min-width: 0; }
 .cell-stage-cameras .omx-inspector-cam-frame:not(:has(> .omx-inspector-main-cam.focused)) { min-height: 5.5rem; max-height: 8.5rem; }
-.cell-stage-cam { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-canvas); min-width: 0; }
+.cell-stage-cam:not([hidden]) { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-canvas); min-width: 0; }
+.cell-stage-cam-banner,
+.cell-stage-standby { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-canvas); min-width: 0; }
+.cell-stage-cam-banner > .hint,
+.cell-stage-standby > .hint { margin: 0; }
+.cell-stage-alert { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--status-crit-a45); border-radius: var(--radius-control); background: var(--status-crit-a07); }
+.cell-stage-alert > p { margin: 0; font-size: var(--text-label); color: var(--text-primary); }
+.cell-stage-cameras:not(:has(> .cell-stage-cam:not([hidden]))) { display: none; }
+.cell-context-panel:not([hidden]) { display: grid; gap: var(--space-3); min-width: 0; }
+.cell-context-section { display: grid; gap: var(--space-2); min-width: 0; }
+.cell-context-section h3 { margin: 0; font-size: var(--text-label); color: var(--text-secondary); }
+.cell-context-list { display: grid; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
+.cell-context-item { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-canvas); min-width: 0; }
+.cell-context-item-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.cell-context-item-head strong { font-family: var(--mono); font-size: var(--text-body); }
+.cell-context-reason { margin: 0; font-size: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
+.cell-context-item-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.cell-context-clear { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--line-06); }
+.cell-context-links { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .cell-stage-cam-head { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
 .cell-stage-cam-head strong { font-size: var(--text-label); white-space: nowrap; flex: none; }
 .cell-stage-cam-head .omx-inspector-cam-badge { min-width: 0; flex: 1 1 auto; text-align: end; }
