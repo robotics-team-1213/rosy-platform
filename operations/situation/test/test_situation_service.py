@@ -439,3 +439,140 @@ def test_build_commit_of_an_autoupdate_release_comes_from_its_release_file(tmp_p
     package.mkdir(parents=True)
     (tmp_path / "release/RELEASE").write_text("a" * 40 + "\n")
     assert service.build_commit(package) == "a" * 12
+
+
+def test_cursor_file_is_written_only_when_cursor_changes(tmp_path, monkeypatch):
+    fleet = FakeFleet()
+    situation = _service(tmp_path, fleet)
+    writes = []
+    original = type(situation._cursor_file).write_text
+
+    def spy_write(self, data, *args, **kwargs):
+        if self == situation._cursor_file:
+            writes.append(data)
+        return original(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(type(situation._cursor_file), "write_text", spy_write)
+    situation.step()
+    assert writes == []
+    fleet.events = [{"audit_id": 4, "type": "nav.pose"}]
+    situation.step()
+    situation.step()
+    assert len(writes) == 1 and json.loads(writes[0]) == {"after_id": 4}
+
+
+def test_log_prunes_old_files_only_once_per_utc_day(tmp_path, monkeypatch):
+    wall = Clock()
+    wall.now = 1_700_000_000.0
+    situation = _service(tmp_path, FakeFleet())
+    situation.wall = wall
+    logs = tmp_path / "state" / "logs"
+    logs.mkdir(parents=True)
+    (logs / "2000-01-01-input.jsonl").write_text("{}\n")
+    glob_calls = []
+    original_glob = type(logs).glob
+
+    def spy_glob(self, pattern):
+        if self == logs:
+            glob_calls.append(pattern)
+        return original_glob(self, pattern)
+
+    monkeypatch.setattr(type(logs), "glob", spy_glob)
+    situation._log("input", {"observed_at": wall.now})
+    situation._log("input", {"observed_at": wall.now + 1})
+    assert len(glob_calls) == 1
+    assert not (logs / "2000-01-01-input.jsonl").exists()
+    wall.now += 86_400.0
+    situation._log("input", {"observed_at": wall.now})
+    assert len(glob_calls) == 2
+
+
+def test_input_log_is_throttled_when_idle_and_immediate_on_change(tmp_path):
+    class RobotFleet(FakeFleet):
+        online = False
+
+        def call(self, path, body=None):
+            if path == "/api/fleet/state":
+                self.calls.append((path, body))
+                return {"robots": [{"robot_id": "pinky", "online": self.online, "state": {"mode": "IDLE"}}]}
+            return super().call(path, body)
+
+    fleet, clock = RobotFleet(), Clock()
+    situation = _service(tmp_path, fleet, clock=clock)
+    situation.wall = clock
+    situation.step()
+    for _ in range(10):
+        clock.now += 1.0
+        situation.step()
+    lines = lambda: (next((tmp_path / "state" / "logs").glob("*-input.jsonl")).read_text().splitlines())
+    assert len(lines()) == 1
+    clock.now += 20.0
+    situation.step()
+    assert len(lines()) == 2
+    fleet.online = True
+    clock.now += 1.0
+    situation.step()
+    assert len(lines()) == 3
+
+
+def test_ai_problems_polling_is_throttled_when_idle_and_immediate_when_stuck(tmp_path):
+    class Immediate:
+        def submit(self, fn, *args):
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+    class StuckFleet(FakeFleet):
+        pending = []
+
+        def call(self, path, body=None):
+            if path == "/api/fleet/line-stuck":
+                self.calls.append((path, body))
+                return {"pending": list(self.pending)}
+            return super().call(path, body)
+
+    class Model:
+        def profile(self):
+            return "model@digest"
+
+        def judge(self, _case, _now):
+            return None
+
+    fleet, clock = StuckFleet(), Clock()
+    (tmp_path / "mode").write_text("available")
+    situation = Situation(fleet, tmp_path / "state", tmp_path / "mode", clock=clock,
+                          wall=clock, vlm=Model(), executor=Immediate())
+    situation.step()  # loads profile
+    clock.now += 1.0
+    situation.step()  # initial problems poll
+    for _ in range(3):
+        clock.now += 1.0
+        situation.step()
+    assert fleet.paths().count("/api/fleet/ai/problems") == 1
+    clock.now += 2.0
+    situation.step()  # >= 5s since first poll
+    assert fleet.paths().count("/api/fleet/ai/problems") == 2
+    fleet.pending = [{"robot_id": "pinky", "stuck_id": "s1"}]
+    clock.now += 1.0
+    situation.step()  # read observes pending line_stuck
+    clock.now += 1.0
+    situation.step()  # next step polls immediately without waiting 5s
+    assert fleet.paths().count("/api/fleet/ai/problems") == 3
+
+
+def test_consecutive_read_failures_back_off_to_5s_and_reset_on_success(tmp_path):
+    class FlakyFleet(FakeFleet):
+        down = True
+
+        def call(self, path, body=None):
+            if self.down and path == "/api/fleet/state":
+                raise OSError("down")
+            return super().call(path, body)
+
+    fleet, clock = FlakyFleet(), Clock()
+    situation = _service(tmp_path, fleet, clock=clock)
+    assert [situation.step() for _ in range(5)] == [1.0, 2.0, 4.0, 5.0, 5.0]
+    fleet.down = False
+    assert situation.step() <= 1.0
+    fleet.down = True
+    assert situation.step() == 1.0
