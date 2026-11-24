@@ -6,7 +6,7 @@ import { namedOperatorReason, isOperator} from "/console/assets/authorization.js
 import { noteLink, showFleet } from "/console/assets/fleet-header.js";
 import { fleetRow, proxyRow, visionRow, sitePathSummary } from "./site-path.js";
 
-export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi, log, render, confirmedAction,
+export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi, log, render, renderPoll = render, confirmedAction,
   dispatchGate, resetRobotApps, disarmGoal, openCard }) {
   // A chooser deep link only reveals/focuses an existing card; it never arms a goal.
   let requestedRobotFocus = new URLSearchParams(location.search).get("robot");
@@ -158,9 +158,12 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       pathSample.fleet = { finished: true, status: 200 };
       fleetAnswered = true;
       paintSitePath();
+      const wasLoaded = view.stateLoaded, wasUnavail = view.stateUnavailable, prevAt = view.receivedAtMs;
       const motorHealthReceivedAtMs = Date.now();
+      const prev = new Map(view.robots.map((r) => [r.robot_id, [Boolean(r.online), view.calmPower?.read(r, { receivedAtMs: prevAt, nowMs: motorHealthReceivedAtMs, stateUnavailable: wasUnavail }).percent ?? null]]));
       view.robots = snapshot.robots.map(robot => ({...robot, motorHealthRequestedAtMs, motorHealthReceivedAtMs}));
       view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
+      const nowMs = view.receivedAtMs;
       if (requestedRobotFocus) openCard(requestedRobotFocus);
       view.stateUnavailable = false;
       view.stateLoaded = true;
@@ -172,7 +175,10 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       }
       view.signals = snapshot.signals || {};
       showFleet(snapshot.fleet, snapshot.robots);
-      render();
+      const urgent = !wasLoaded || wasUnavail || Boolean(requestedRobotFocus) || view.robots.length !== prev.size
+        || view.robots.some((r) => Boolean(r.online) !== prev.get(r.robot_id)?.[0] || r.state?.safety?.estop === true
+          || (view.calmPower && view.calmPower.read(r, { receivedAtMs: nowMs, nowMs, stateUnavailable: false }).percent !== prev.get(r.robot_id)?.[1]));
+      (urgent ? render : renderPoll)();
       if (requestedRobotFocus) {
         const card = [...el("roster").querySelectorAll("article")]
           .find(node => node.dataset.robotId === requestedRobotFocus);

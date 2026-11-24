@@ -690,6 +690,10 @@
       "path": "shared/cockpit-hosts.js",
       "media_type": "text/javascript"
     },
+    "calm-power.js": {
+      "path": "shared/calm-power.js",
+      "media_type": "application/javascript"
+    },
     "robot-dock.js": {
       "path": "shared/robot-dock.js",
       "media_type": "text/javascript"

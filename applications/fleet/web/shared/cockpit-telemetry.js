@@ -1,8 +1,41 @@
-import { html, render } from "/common/vendor/htm-preact.esm.min.js";
-import { cssColor } from "/common/ui.js";
-import { node, patchText } from "/common/control-dom.js";
+import { html, render, useLayoutEffect, useRef } from "/common/vendor/htm-preact.esm.min.js";
+import { cssColor, iconSvg } from "/common/ui.js";
+import { node, patchAttr, patchData, patchHidden, patchText } from "/common/control-dom.js";
 import { owns } from "/console/assets/unit-scope.js";
 import { powerHealthView } from "/console/assets/power-health-view.js";
+
+const HUD_ICONS = { online: "robot", mission: "next", battery: null, arms: "arm", alerts: "notification" };
+
+export function batteryMeterState({ percent = null, charging = false, online = true, stale = false } = {}) {
+  const valid = online && !stale && typeof percent === "number" && Number.isFinite(percent);
+  const clamped = valid ? Math.max(0, Math.min(100, Math.round(percent))) : null;
+  const tone = clamped === null ? "unknown" : clamped <= 15 ? "crit" : clamped <= 30 ? "warn" : "good";
+  return { tone, charging: Boolean(charging && valid), meter: `${clamped ?? 0}%` };
+}
+
+function BatteryMeter(props) {
+  const st = batteryMeterState(props);
+  return html`<span class="batt-meter" data-tone=${st.tone} data-charging=${String(st.charging)} aria-hidden="true"><span class="batt-fill" data-meter=${st.meter}></span></span>`;
+}
+
+function createBatteryMeter(props) {
+  const wrap = document.createElement("span");
+  wrap.className = "batt-meter";
+  wrap.setAttribute("aria-hidden", "true");
+  const fill = document.createElement("span");
+  fill.className = "batt-fill";
+  wrap.append(fill);
+  patchBatteryMeter(wrap, props);
+  return wrap;
+}
+
+function patchBatteryMeter(el, props) {
+  if (!el) return;
+  const st = batteryMeterState(props);
+  patchData(el, "tone", st.tone);
+  patchData(el, "charging", String(st.charging));
+  patchAttr(el.firstElementChild, "data-meter", st.meter);
+}
 
 let uPlotLoader = null;
 function loadUPlot() {
@@ -10,6 +43,18 @@ function loadUPlot() {
     uPlotLoader = import("/common/vendor/uPlot.esm.min.js").then((mod) => mod.default || mod);
   }
   return uPlotLoader;
+}
+
+function HudIcon({ name }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const host = ref.current;
+    if (!host) return;
+    const svg = name ? iconSvg(name) : null;
+    if (svg) host.replaceChildren(svg);
+    else if (host.childNodes.length) host.replaceChildren();
+  }, [name]);
+  return name ? html`<span class="hud-icon" aria-hidden="true" ref=${ref} />` : null;
 }
 
 function CockpitHudCells({ items }) {
@@ -21,7 +66,8 @@ function CockpitHudCells({ items }) {
       data-tone=${item.tone}
       title=${item.title || undefined}
     >
-      <span class="cockpit-hud-label">${item.label}</span>
+      <span class="cockpit-hud-label"><${HudIcon} name=${item.icon} />${item.label}</span>
+      ${item.battery ? html`<${BatteryMeter} ...${item.battery} />` : null}
       <strong class="cockpit-hud-val">${item.text}</strong>
     </div>
   `)}`;
@@ -80,8 +126,11 @@ export function createCockpitHud({ el }) {
     ).length;
 
     const nowMs = Date.now();
+    const readPwr = (r) => (view.calmPower
+      ? view.calmPower.read(r, { receivedAtMs: view.receivedAtMs, nowMs, stateUnavailable: view.stateUnavailable })
+      : powerHealthView(r, view.receivedAtMs, nowMs));
     const validPcts = view.stateUnavailable ? [] : onlineRobots
-      .map((r) => powerHealthView(r, view.receivedAtMs, nowMs).percent)
+      .map((r) => readPwr(r).percent)
       .filter((n) => n !== null);
     const minBatt = validPcts.length ? Math.min(...validPcts) : null;
     const battText = online === 0 || view.stateUnavailable ? "—"
@@ -113,11 +162,11 @@ export function createCockpitHud({ el }) {
           : `${armReady}/${armTotal} LIVE`;
 
     renderItems([
-      { key: "online", label: "로봇", text: view.stateUnavailable ? "연결 끊김" : `${online}/${total} ON`, tone: view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral" },
-      { key: "mission", label: "운행", text: activeCount > 0 ? `${activeCount} RUN` : "0 STBY", tone: activeCount > 0 ? "active" : "neutral" },
-      { key: "battery", label: "최저 배터리", text: battText, tone: battTone, title: battTitle },
-      { key: "arms", label: "셀 팔", text: armsText, tone: armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
-      { key: "alerts", label: "경보", text: estopActive ? "E-STOP" : totalAlerts > 0 ? `위험 ${critCount} · 주의 ${warnCount}` : "이상 없음", tone: estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral" },
+      { key: "online", icon: HUD_ICONS.online, label: "로봇", text: view.stateUnavailable ? "연결 끊김" : `${online}/${total} ON`, tone: view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral" },
+      { key: "mission", icon: HUD_ICONS.mission, label: "운행", text: activeCount > 0 ? `${activeCount} RUN` : "0 STBY", tone: activeCount > 0 ? "active" : "neutral" },
+      { key: "battery", icon: HUD_ICONS.battery, label: "최저 배터리", text: battText, tone: battTone, title: battTitle, battery: { percent: minBatt, online: online > 0 && !view.stateUnavailable, charging: false } },
+      { key: "arms", icon: HUD_ICONS.arms, label: "셀 팔", text: armsText, tone: armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
+      { key: "alerts", icon: HUD_ICONS.alerts, label: "경보", text: estopActive ? "E-STOP" : totalAlerts > 0 ? `위험 ${critCount} · 주의 ${warnCount}` : "이상 없음", tone: estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral" },
     ]);
   }
 
@@ -132,9 +181,13 @@ export function createTelemetryTrace() {
   const head = document.createElement("div");
   head.className = "telemetry-chart-head";
   const titleEl = node("span", "TELEMETRY", "telemetry-chart-title");
+  const readoutEl = node("span", "", "batt-readout");
+  const battMeter = createBatteryMeter();
+  battMeter.hidden = true;
   const valueEl = node("strong", "—", "telemetry-chart-value");
+  readoutEl.append(battMeter, valueEl);
   const metaEl = node("span", "—", "telemetry-chart-meta");
-  head.append(titleEl, metaEl, valueEl);
+  head.append(titleEl, metaEl, readoutEl);
 
   const plotHost = document.createElement("div");
   plotHost.className = "telemetry-chart-plot";
@@ -347,9 +400,12 @@ export function createTelemetryTrace() {
 
   return {
     root,
-    update({ id, title = "TELEMETRY", readout = "—", value = null, unit = "", minBound = null, maxBound = null, tone = "primary" } = {}) {
+    update({ id, title = "TELEMETRY", readout = "—", value = null, unit = "", minBound = null, maxBound = null, tone = "primary", battery = null } = {}) {
       if (disposed) return;
       patchText(titleEl, title);
+      const meterProps = battery ?? (typeof id === "string" && id.startsWith("batt:") ? { percent: value, online: value !== null, charging: false } : null);
+      patchHidden(battMeter, !meterProps);
+      if (meterProps) patchBatteryMeter(battMeter, meterProps);
       patchText(valueEl, readout);
       if (typeof value !== "number" || !Number.isFinite(value) || !id) {
         patchText(metaEl, "NO DATA");

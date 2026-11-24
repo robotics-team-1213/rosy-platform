@@ -576,7 +576,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
 
   // 사이트 사각형·격자·교통·상황·관측 폴링은 map-polling.js가 가진다. 이 뷰를 다시 그리게 draw를 건넨다.
   const { refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling } = createMapPolling({ scope, el, view,
-    auth, call, camera, draw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged });
+    auth, call, camera, draw, scheduleDraw, layerOn, onMapChanged, onMapUnavailable, onTrafficChanged });
 
   return { draw, scheduleDraw, refresh, refreshSightings, refreshTraffic, refreshGuide, resetPolling, toWorld, streamEvidence,
     setCameraFrame: camera.setCameraFrame, bindCamera: camera.bindCamera };
