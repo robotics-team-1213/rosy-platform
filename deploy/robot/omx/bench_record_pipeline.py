@@ -18,7 +18,7 @@ from bench_record_handoff import (
     verify_sealed_collection,
 )
 from bench_record_inspect import ARMS
-from bench_record_preflight import check_replay_corridor
+from bench_record_preflight import check_dataset_cameras, check_replay_corridor
 from bench_record_replay import build_ik_replay, transform_replay, validate_replay_payload
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
@@ -360,6 +360,7 @@ class BenchPipelineMixin:
             sess_dir = self.state.get("folder") if self.state.get("name") == ds_name else None
         if sess_dir and (Path(sess_dir) / "DO_NOT_TRAIN.txt").is_file():
             raise ValueError("정지회차(DO_NOT_TRAIN) 세션은 업로드할 수 없습니다")
+        check_dataset_cameras(ds_folder)
         with self._hf_lock:
             if self._hf_state["state"] in ("encoding", "uploading"):
                 raise ValueError("이미 LeRobot 업로드가 진행 중입니다")
