@@ -135,7 +135,8 @@ class Runner:
                     fleet_online=bool(run.get("fleet_online")),
                     principal=Principal(row["principal_role"], row["principal_id"]),
                 )
-        self._state_gen.bump()
+        if run["moving"] and code == 0:
+            self._state_gen.bump()
         run["audited"] = True
 
     def _can_reuse_arm_session_locked(self, arm: str) -> bool:
