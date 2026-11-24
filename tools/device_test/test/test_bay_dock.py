@@ -405,9 +405,11 @@ def test_observation_read_skips_stale_and_duplicate_received_at(tmp_path):
     code, s = run(tmp_path, r)
     assert code == 0 and s["observation"]["frames"] == 14
 
+    dup_dir = tmp_path / "dup"
+    dup_dir.mkdir()
     dup = Robot(obs=obs(14, evidence="fresh", received_at=1000.0),
                 approval={"valid": True, "measured_release_id": "rel2"})
-    code2, s2 = run(tmp_path / "dup", dup)
+    code2, s2 = run(dup_dir, dup)
     assert code2 == 2 and "aborted at line_view" in s2["outcome"] and "only 1 visible" in s2["outcome"]
     cleaned(dup)
 
