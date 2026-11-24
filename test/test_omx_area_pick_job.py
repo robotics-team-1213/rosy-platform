@@ -479,3 +479,25 @@ def test_arm_s_hover_refine_ignores_uncalibrated_across_mm(tmp_path: Path, monke
     assert cur_d["pick"]["x"] != 0.041 and cur_d["pick"]["y"] == pytest.approx(0.175, abs=1e-6)
     assert cell_arm_cal.load(wd, "arm_s")["finger_sign"] == {"along": 1.0, "across": 1.0}
 
+
+def test_dry_run_map_pose_preflight_detects_moved_top_camera(tmp_path):
+    from unittest.mock import Mock
+    import cell_auto_evidence as evidence
+
+    ref = np.zeros((120, 160, 3), dtype=np.uint8)
+    for y in range(20, 100, 16):
+        for x in range(20, 140, 20):
+            import cv2
+            cv2.rectangle(ref, (x, y), (x + 10, y + 8), (255, 255, 255), -1)
+    ref_p = tmp_path / "ref.jpg"
+    import cv2
+    assert cv2.imwrite(str(ref_p), ref)
+    moved = np.roll(ref, 28, axis=0)
+    cell = Mock()
+    cell.frame.return_value = moved
+    out: dict = {}
+    err = evidence.map_pose_preflight(cell, {"preflight": {"reference_top": str(ref_p)}, "params": {"calibrate.max_shift_px": 6.0}}, {}, tmp_path / "cal.json", tmp_path, True, out)
+    assert err == "top camera moved since map reference"
+    assert out["map_pose_check"]["max_px"] > 6.0
+
+

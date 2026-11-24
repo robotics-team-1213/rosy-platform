@@ -133,24 +133,3 @@ def test_return_held_records_held_open_only_with_ledger(tmp_path, monkeypatch, s
     )
     assert out["result"] == "held: session_changed"
     assert_hold_ledger(tmp_path, before_rehome, active_ledger, ("held", "belt"))
-
-
-def test_dry_run_map_pose_preflight_detects_moved_top_camera(tmp_path):
-    cv2 = pytest.importorskip("cv2")
-    np = pytest.importorskip("numpy")
-    import cell_auto_evidence as evidence
-
-    ref = np.zeros((120, 160, 3), dtype=np.uint8)
-    for y in range(20, 100, 16):
-        for x in range(20, 140, 20):
-            cv2.rectangle(ref, (x, y), (x + 10, y + 8), (255, 255, 255), -1)
-    ref_p = tmp_path / "ref.jpg"
-    assert cv2.imwrite(str(ref_p), ref)
-    moved = np.roll(ref, 28, axis=0)
-    cell = Mock()
-    cell.frame.return_value = moved
-    out: dict = {}
-    err = evidence.map_pose_preflight(cell, {"preflight": {"reference_top": str(ref_p)}, "params": {"calibrate.max_shift_px": 6.0}}, {}, tmp_path / "cal.json", tmp_path, True, out)
-    assert err == "top camera moved since map reference"
-    assert out["map_pose_check"]["max_px"] > 6.0
-
