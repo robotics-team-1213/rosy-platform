@@ -31,7 +31,7 @@ def _code_digest() -> str:
 
     root = Path(__file__).resolve().parent
     files = {name: root / name for name in (
-        "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
+        "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_pipeline_liveness.py", "cell_attempts.py",
         "cell_auto_pick.py", "cell_transfer.py", "cell_unwedge.py", "cell_auto_fold.py", "cell_recovery_plan.py", "cell_recovery_advisor.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
         "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",
         "guarded_native.py", "guarded_native_effort.py", "guarded_native_probe.py", "guarded_native_track.py",
