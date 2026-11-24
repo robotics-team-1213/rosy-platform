@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -371,3 +373,97 @@ def test_advisor_str_spec_nested_panel_and_arbiter_model():
     arb.__name__ = "arbiter_fn"
     out = judge_seat.cooperate([lambda *_: {"decision": "hold"}, lambda *_: {"decision": "stop"}], arbiter=arb)("p", [], None)
     assert out["decision"] == "hold" and out["model"] == "arbiter_fn"
+
+
+def test_chunk_runner_async_health_and_live_flush_on_unlatch_and_stop(tmp_path, monkeypatch):
+    import bus_watchdog
+    import cell_job_guards
+    import guarded_native
+    import motor_health
+    seen, ended, lives = [], [], []
+    cfg, lib = tmp_path / "c.json", tmp_path / "l.json"
+    cfg.write_text(json.dumps({"robot": {"type": "omx_follower", "port": "/dev/null", "max_relative_target": 5}, "dataset": {"fps": 30}}))
+    lib.write_text(json.dumps(_lib()))
+    monkeypatch.setitem(sys.modules, "lerobot.robots.omx_follower", SimpleNamespace(OmxFollowerConfig=lambda **k: k, OmxFollower=lambda _c: _Robot(HOME)))
+    for mod, attr, val in ((guarded_native, "connect_passive", lambda *_a, **_k: None), (guarded_native, "close_device", lambda *_a: None), (bus_watchdog, "arm", lambda *_a: None), (m, "fifo_lines", lambda *_a: SimpleNamespace(close=lambda: None)), (m, "runtime_context", lambda *_a, **_k: {"scope": "simulation"}), (motor_health, "MotorHealth", lambda *, async_publish=False: seen.append(async_publish) or SimpleNamespace(end=lambda: ended.append(True))), (m, "Runner", type("_R", (m.Runner,), {"run": lambda self, _l: None}))):
+        monkeypatch.setattr(mod, attr, val)
+    m.main(["--config", str(cfg), "--library", str(lib), "--io", str(tmp_path / "io")])
+    assert seen == [True] and ended == [True]
+    r = m.Runner(_Robot(HOME), _lib(), fps=30, status=lambda _row: None, live=lives.append)
+    r.target = list(HOME)
+    r.command("human-hold")
+    r.tick()
+    assert r.command("recover-unlatch") is True and lives and lives[-1]["human_hold_latched"] is False and lives[-1]["fault"] is None
+    assert r.command("stop") is False and len(lives) >= 2 and not (lives[-1]["human_hold_latched"] or lives[-1]["torque_hold_commanded"] or lives[-1]["fault"])
+    (tmp_path / "chunk-io-b").mkdir()
+    (tmp_path / "chunk-io-b" / "live.json").write_text(json.dumps(lives[-1]), encoding="utf-8")
+    assert cell_job_guards.check_peer_ab_folded("arm_a", tmp_path, tmp_path / "leases", tmp_path, session_lock_held_fn=lambda *_: False, read_json_fn=lambda p: json.loads(p.read_text()) if p.is_file() else None, live_max_age_s=15.0, incident_check_fn=lambda _: None) is None
+
+
+def test_publish_live_always_includes_pid_and_fifo_cell_fast_fails_dead_or_stalled_runner(tmp_path, monkeypatch):
+    lives = []
+    r = m.Runner(_Robot(HOME), _lib(), fps=30, status=lambda _row: None, live=lives.append)
+    r.target = list(HOME)
+    r._interrupt = None
+    r._crl_publish = True
+    from chunk_runner_loop import publish_live
+    publish_live(r)
+    assert lives and lives[-1]["pid"] == os.getpid() and lives[-1]["holding"] is False and "interrupt" not in lives[-1]
+    r.holding = True
+    publish_live(r)
+    assert lives[-1]["holding"] is True
+    r.holding = False
+
+    io_dir = tmp_path / "io_liveness"
+    io_dir.mkdir()
+    status_path = io_dir / "chunk-status.jsonl"
+    status_path.write_text("", encoding="utf-8")
+    live_path = io_dir / "live.json"
+    (io_dir / "chunk-cmd").write_text("", encoding="utf-8")
+    monkeypatch.setattr(cpio.os, "open", lambda *_a, **_k: 123)
+    monkeypatch.setattr(cpio.os, "close", lambda _fd: None)
+    monkeypatch.setattr(cpio.os, "write", lambda _fd, data: len(data))
+
+    # 1. Dead PID -> runner_dead quickly; final status row written before exit is still drained
+    live_path.write_text(json.dumps({"t": 100.0, "pid": 999999}), encoding="utf-8")
+    monkeypatch.setattr(cpio.os, "kill", lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()) if pid == 999999 else None)
+    cell = cpio.FifoCell(io_dir, {}, timeout_s=30.0, stall_timeout_s=0.15)
+    t0 = time.monotonic()
+    dead_res = cell.act("park")
+    assert dead_res["ok"] is False and dead_res["fault"] == "runner_dead" and time.monotonic() - t0 < 1.0
+
+    def kill_after_final_status(pid, sig):
+        if pid == 999999:
+            status_path.write_text(json.dumps({"command": "park", "ok": True, "settled": True}) + "\n", encoding="utf-8")
+            raise ProcessLookupError()
+
+    monkeypatch.setattr(cpio.os, "kill", kill_after_final_status)
+    assert cell.act("park")["ok"] is True
+    status_path.write_text("", encoding="utf-8")
+
+    # 2. PermissionError is treated as alive, advancing live.json t stays alive, stalled t -> runner_stalled
+    monkeypatch.setattr(cpio.os, "kill", lambda _pid, _sig: (_ for _ in ()).throw(PermissionError()))
+    live_path.write_text(json.dumps({"t": 100.0, "pid": 4242}), encoding="utf-8")
+    stall_res = cell.act("park")
+    assert stall_res["ok"] is False and stall_res["fault"] == "runner_stalled"
+
+    ticks = [100.0]
+    def advancing_policy_state():
+        ticks[0] += 1.0
+        return {"t": ticks[0], "pid": 4242}
+    adv_cell = cpio.FifoCell(io_dir, {}, timeout_s=0.12, stall_timeout_s=0.05)
+    monkeypatch.setattr(adv_cell, "policy_state", advancing_policy_state)
+    adv_res = adv_cell.act("park")
+    assert adv_res["ok"] is False and "no status within" in adv_res["error"]
+
+    # 3. Missing live.json falls back cleanly to deadline
+    live_path.unlink()
+    missing_cell = cpio.FifoCell(io_dir, {}, timeout_s=0.05, stall_timeout_s=0.02)
+    miss_res = missing_cell.act("park")
+    assert miss_res["ok"] is False and "no status within" in miss_res["error"]
+
+    # 4. human-hold path untouched even with dead PID
+    monkeypatch.setattr(cpio.os, "kill", lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()) if pid == 999999 else None)
+    live_path.write_text(json.dumps({"t": 100.0, "pid": 999999}), encoding="utf-8")
+    hold_res = cpio.FifoCell(io_dir, {}, timeout_s=0.05, stall_timeout_s=0.02).act("human-hold")
+    assert hold_res["ok"] is False and hold_res.get("command") == "human-hold" and "no status within" in hold_res["error"]

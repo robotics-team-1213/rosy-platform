@@ -24,6 +24,10 @@ from test_site_autoupdate import (  # noqa: F401 - host is a pytest fixture
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'state': {'velocity': {'linear': 0.05, 'angular': 0.0}}}]}),
     ('/api/fleet/state', {'robots': [{'robot_id': 'rosy_46', 'online': True, 'state': None}]}),
     ('/api/fleet/trips', {'open': [{'trip_id': 't1'}], 'running': [], 'trips': []}),
+    ('/api/fleet/trips', {'open': [], 'running': {'trip_id': 't1'}, 'trips': []}),
+    ('/api/fleet/trips', {'open': [], 'running': {}, 'trips': []}),
+    ('/api/fleet/trips', {'open': [], 'trips': []}),
+    ('/api/fleet/trips', {'open': [], 'running': 'bad', 'trips': []}),
     ('/api/fleet/dispatch-control', {'queued_tasks': 1, 'unresolved_actions': 0}),
     ('/api/fleet/dispatch-control', {'queued_tasks': 0, 'unresolved_actions': 1}),
     ('/api/fleet/formation', {'active': True, 'state': 'RUNNING'}),
@@ -94,6 +98,11 @@ def test_site_check_idle_cli_and_maintenance_units(host, monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out)['idle'] is True
 
     base_functional = http.functional
+    http.functional = lambda u, c, t: ({'open': [], 'running': [], 'trips': []}
+                                       if u.endswith('/api/fleet/trips') else base_functional(u, c, t))
+    assert upd.main(['check-idle']) == upd.EXIT_OK
+    assert json.loads(capsys.readouterr().out)['idle'] is True
+
     http.functional = lambda u, c, t: ({'open': [{'trip_id': 't1'}], 'running': [], 'trips': []}
                                        if u.endswith('/api/fleet/trips') else base_functional(u, c, t))
     assert upd.main(['check-idle']) == upd.EXIT_LOCKED

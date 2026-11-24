@@ -154,3 +154,106 @@ def test_motor_health_is_published_every_two_seconds_as_json(world, monkeypatch)
     motors = json.loads(message.data)["motors"]
     assert [m["id"] for m in motors] == [1, 2]
     assert set(motors[0]) == {"id", "temperature_c", "temperature_limit_c", "input_voltage_v", "hardware_error"}
+
+
+@pytest.mark.parametrize("prefix,expected", [("", ["l_wheel_joint", "r_wheel_joint"]), ("rosy_01", ["rosy_01/l_wheel_joint", "rosy_01/r_wheel_joint"])])
+def test_joint_states_match_urdf_wheel_joint_names(world, monkeypatch, prefix, expected):
+    node = _node(world, monkeypatch, drive_enabled=False, frame_prefix=prefix)
+    for _ in range(3):
+        node.update_and_publish()
+    assert world.publishers["joint_states"].messages[-1].name == expected
+
+
+def test_motor_ready_clears_after_three_feedback_failures_and_recovers(world, monkeypatch):
+    node = _node(world, monkeypatch, drive_enabled=True)
+    assert _ready(world)[-1] is True
+    feedback = [(None, None, None, None)]
+    monkeypatch.setattr(node.driver, "get_feedback", lambda: feedback[0])
+    odom_before = len(world.publishers["odom"].messages)
+    for _ in range(2):
+        node.update_and_publish()
+    assert _ready(world)[-1] is True
+    node.update_and_publish()
+    assert _ready(world)[-1] is False
+    assert len(world.publishers["odom"].messages) == odom_before
+
+    feedback[0] = (0.0, 0.0, 1000, 2000)
+    node.update_and_publish()
+    assert _ready(world)[-1] is True
+    assert len(world.publishers["odom"].messages) == odom_before + 1
+
+
+def test_bringup_executor_kind_defaults_to_single_and_rejects_unknown(world):
+    bringup_mod = importlib.import_module("bringup.bringup")
+    assert bringup_mod._executor_kind({}) == "single"
+    assert bringup_mod._executor_kind({"ROSY_EXECUTOR": "  "}) == "single"
+    assert bringup_mod._executor_kind({"ROSY_EXECUTOR": "SINGLE"}) == "single"
+    assert bringup_mod._executor_kind({"ROSY_EXECUTOR": " events "}) == "events"
+    with pytest.raises(ValueError, match="ROSY_EXECUTOR must be one of 'events', 'single'"):
+        bringup_mod._executor_kind({"ROSY_EXECUTOR": "multi"})
+
+
+def test_bringup_spin_node_supports_single_and_events_executors(world):
+    from types import SimpleNamespace
+    bringup_mod = importlib.import_module("bringup.bringup")
+
+    class ExternalShutdown(Exception):
+        pass
+
+    single_calls = []
+    fake_rclpy = SimpleNamespace(
+        __name__="rclpy",
+        spin=lambda node: single_calls.append(node),
+        executors=SimpleNamespace(ExternalShutdownException=ExternalShutdown),
+    )
+    bringup_mod._spin_node("node", rclpy_mod=fake_rclpy, environ={"ROSY_EXECUTOR": "single"})
+    assert single_calls == ["node"]
+
+    events_log = []
+
+    class FakeEventsExecutor:
+        def __init__(self, *, raise_exc=None):
+            self._raise_exc = raise_exc
+
+        def add_node(self, node):
+            events_log.append(("add", node))
+
+        def spin(self):
+            events_log.append(("spin",))
+            if self._raise_exc is not None:
+                raise self._raise_exc
+
+        def remove_node(self, node):
+            events_log.append(("remove", node))
+
+        def shutdown(self, timeout_sec=0):
+            events_log.append(("shutdown", timeout_sec))
+
+    bringup_mod._spin_node(
+        "node",
+        rclpy_mod=fake_rclpy,
+        environ={"ROSY_EXECUTOR": "events"},
+        import_module=lambda name: SimpleNamespace(EventsExecutor=lambda: FakeEventsExecutor()),
+    )
+    assert events_log == [("add", "node"), ("spin",), ("remove", "node"), ("shutdown", 0)]
+
+    events_log.clear()
+    bringup_mod._spin_node(
+        "node",
+        rclpy_mod=fake_rclpy,
+        environ={"ROSY_EXECUTOR": "events"},
+        import_module=lambda name: SimpleNamespace(
+            EventsExecutor=lambda: FakeEventsExecutor(raise_exc=ExternalShutdown())),
+    )
+    assert events_log == [("add", "node"), ("spin",), ("remove", "node"), ("shutdown", 0)]
+
+    events_log.clear()
+    with pytest.raises(KeyboardInterrupt):
+        bringup_mod._spin_node(
+            "node",
+            rclpy_mod=fake_rclpy,
+            environ={"ROSY_EXECUTOR": "events"},
+            import_module=lambda name: SimpleNamespace(
+                EventsExecutor=lambda: FakeEventsExecutor(raise_exc=KeyboardInterrupt())),
+        )
+    assert events_log == [("add", "node"), ("spin",), ("remove", "node"), ("shutdown", 0)]

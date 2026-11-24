@@ -28,6 +28,45 @@ _VISUAL_CLEAR_MAX_AGE_S = 60.0
 _SEQ_WINDOW = 5
 
 
+def effective_stop_fence(state) -> tuple[bool, int | None]:
+    """Read durable stop authority across human holds, pipeline governance, and Fleet dispatch latch."""
+    if getattr(state, "_pipeline_ledger_fault", False) or getattr(state, "_fleet_estop_latch_unresolved", False):
+        return True, None
+    held = bool(
+        any(bool(v) for v in (getattr(state, "human_detected", None) or {}).values())
+        or any((s or {}).get("phase") == "HUMAN_HOLD" for s in (getattr(state, "omx_cell_states", None) or {}).values())
+    )
+    gov = getattr(state, "pipeline_governance", None)
+    gov_gen = gov_epoch = 0
+    if gov is not None:
+        try:
+            snap = gov.snapshot()
+            gov_gen, gov_epoch = int(snap["stop_generation"]), int(snap["authority_epoch"])
+        except Exception:
+            return True, None
+    mem_gen = int(getattr(state, "safety_stop_generation", 0))
+    task_svc = getattr(state, "task_service", None)
+    dispatch_gen = dispatch_epoch = 0
+    if task_svc is not None:
+        try:
+            ctrl = task_svc.store.dispatch_control()
+        except Exception:
+            return True, None
+        if not isinstance(ctrl, dict):
+            return True, None
+        if ctrl.get("dispatch_enabled") is not True:
+            held = True
+        raw_gen = ctrl.get("generation")
+        if raw_gen is not None:
+            if type(raw_gen) is not int:
+                return True, None
+            dispatch_gen = raw_gen
+        raw_ep = ctrl.get("authority_epoch")
+        if type(raw_ep) is int:
+            dispatch_epoch = raw_ep
+    return held, max(gov_gen, mem_gen) + dispatch_gen + (gov_epoch + dispatch_epoch) * 1_000_000
+
+
 def arm_folded_fresh(state, arm_id: str, now: float) -> bool:
     arm = (getattr(state, "arm_live_states", None) or {}).get(arm_id) or {}
     ts = arm.get("folded_updated_at")
@@ -246,12 +285,13 @@ def collect_unresolved_failures(state, now: float, *, human_detected: bool, acti
     holds = getattr(state, "arm_holds", None) or {}
     reparks = getattr(state, "repark_requests", None) or {}
     budgets_map = getattr(state, "pipeline_recovery_budgets", None) or {}
-    cur_gen = int(getattr(state, "safety_stop_generation", 0))
-    pending_home = {
+    fence_held, cur_gen = effective_stop_fence(state)
+    human_detected = bool(human_detected or fence_held)
+    pending_home = {} if cur_gen is None else {
         a: r for a, r in (getattr(state, "pending_safe_home_arms", None) or {}).items()
         if isinstance(r, dict)
         and (not isinstance(r.get("expires_at"), (int, float)) or isinstance(r.get("expires_at"), bool) or now <= float(r["expires_at"]))
-        and int(r.get("stop_generation", cur_gen)) == cur_gen
+        and r.get("stop_generation") == cur_gen
     }
     home_hist = getattr(state, "safe_home_history", None) or {}
     sessions = getattr(state, "pipeline_homing_sessions", None) or {}
@@ -511,14 +551,14 @@ def cell_quality_recovery_sync(app, request, body: dict, *, human_hold: bool, sa
     from fleet.server.sitemap.pipeline_evidence import cell_owner_principals
 
     pending_home = getattr(app.state, "pending_safe_home_arms", None)
-    cur_gen = int(getattr(app.state, "safety_stop_generation", 0))
+    fence_held, cur_gen = effective_stop_fence(app.state)
     sessions = getattr(app.state, "pipeline_homing_sessions", None) or {}
     changed = False
-    if isinstance(pending_home, dict):
+    if isinstance(pending_home, dict) and cur_gen is not None:
         for arm_id in [a for a, r in pending_home.items()
                        if not isinstance(r, dict)
                        or (isinstance(r.get("expires_at"), (int, float)) and not isinstance(r.get("expires_at"), bool) and now > float(r["expires_at"]))
-                       or int(r.get("stop_generation", cur_gen)) != cur_gen]:
+                       or r.get("stop_generation") != cur_gen]:
             row = pending_home.pop(arm_id, None) or {}
             root = row.get("root_task_id")
             if root and isinstance(sessions.get(root), dict):
@@ -542,4 +582,4 @@ def cell_quality_recovery_sync(app, request, body: dict, *, human_hold: bool, sa
         changed = True
     if changed and not getattr(app.state, "_pipeline_ledger_fault", False):
         save_fn()
-    return {} if (human_hold or getattr(app.state, "_pipeline_ledger_fault", False)) else dict(pending_home or {})
+    return {} if (human_hold or fence_held or cur_gen is None or getattr(app.state, "_pipeline_ledger_fault", False)) else dict(pending_home or {})

@@ -45,7 +45,8 @@ class MapPoseService:
                  source_map_ids: Iterable[str] = (),
                  client_identity=None,
                  wall: Callable[[], float] = time.time,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic,
+                 offline_pins: Optional[OfflinePinStore] = None) -> None:
         self.config = config
         self._robot_ids = robot_ids
         self._gather = gather              # hub snapshot when fresh, else REST
@@ -66,7 +67,7 @@ class MapPoseService:
         self._numbers: dict[tuple[str, bool], int] = {}
         from fleet.server.map_pose_scope import MapPoseScopes
         self._source_scopes = MapPoseScopes(self)
-        self._offline_pins = OfflinePinStore()
+        self._offline_pins = offline_pins if offline_pins is not None else OfflinePinStore()
         self._update_listeners: list = []
 
     def add_update_listener(self, listener: Callable[[Optional[str]], None]) -> None:

@@ -131,6 +131,10 @@ def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTP
 def install_trip_routes(app, *, console, site_maps, routing_config, require_operator, require_named_operator,
                         caps_for, runner, read_guard) -> None:
     app.state.trip_runner = runner
+    if getattr(runner, "human_hold_fn", None) is None:
+        runner.human_hold_fn = lambda: bool(
+            callable(getattr(app.state, "pipeline_human_hold_fn", None)) and app.state.pipeline_human_hold_fn()
+        )
     not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE",
                        {"message": "start the plan with POST /api/fleet/trips/{plan_id}/start"}, 501)
     failed_versions: set = set()  # an unexpected planner failure is logged once per map version

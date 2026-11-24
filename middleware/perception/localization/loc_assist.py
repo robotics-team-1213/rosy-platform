@@ -63,6 +63,7 @@ SETTLE_CAP_S = 5.
 #: LOCALIZED objects (S1 R1): computed at most once per state period, sent while the scan
 #: they came from is younger than this.
 OBJECTS_FRESH_S = 1.
+AUTO_UNIQUE_MAX_FAILS = 2
 
 
 @dataclass(frozen=True)
@@ -107,11 +108,13 @@ def verify_recovery_pose(
 
 class LocAssist:
     def __init__(self, new_request_id, *, rereport_s=2., state_period_s=.5, retry_s=5.,
-                 moved_m=.05, moved_rad=.17, hold_s=3., min_fit=.85, fit_drop_s=1., max_gap_s=.5):
+                 moved_m=.05, moved_rad=.17, hold_s=3., min_fit=.85, fit_drop_s=1., max_gap_s=.5,
+                 auto_unique=True):
         self.machine = LocalizationStateMachine(new_request_id, hold_s=hold_s, min_fit=min_fit,
                                                 fit_drop_s=fit_drop_s, max_gap_s=max_gap_s)
         self.rereport_s, self.state_period_s, self.retry_s = rereport_s, state_period_s, retry_s
         self.moved_m, self.moved_rad = moved_m, moved_rad
+        self._auto_unique, self._auto_unique_fails = bool(auto_unique), 0
         self.pose = self.fit = None
         self.held = False
         self._epoch = 0                     # pickups so far: a search spanning one is void
@@ -148,6 +151,7 @@ class LocAssist:
             out = self._after(self.machine.picked_up(now_s), now_s)
             self._wanted = True
             self._empty_streak = 0
+            self._auto_unique_fails = 0
         self.held = bool(active)
         return out
 
@@ -229,33 +233,17 @@ class LocAssist:
                                     decision.request_id))]
         return out + self._state_if_changed(now_s)
 
-    def try_auto_recovery(
-        self,
-        now_s,
-        candidate_pose,
-        *,
-        fit,
-        camera_xy,
-        camera_yaw=None,
-        request_id: Optional[str] = None,
-        min_fit=0.85,
-        max_xy_m=0.15,
-        max_yaw_rad=math.radians(20.0),
-    ) -> tuple[list, Optional[str]]:
+    def try_auto_recovery(self, now_s, candidate_pose, *, fit, camera_xy, camera_yaw=None,
+                          request_id: Optional[str] = None, min_fit=0.85, max_xy_m=0.15,
+                          max_yaw_rad=math.radians(20.0)) -> tuple[list, Optional[str]]:
         """Path B bounded-window auto-recovery: inject only when stationary and verified."""
         if self.held:
             return [], 'held'
         if not self._is_settled(now_s):
             return [], 'not_settled'
-        ok, reason = verify_recovery_pose(
-            candidate_pose,
-            fit=fit,
-            camera_xy=camera_xy,
-            camera_yaw=camera_yaw,
-            min_fit=min_fit,
-            max_xy_m=max_xy_m,
-            max_yaw_rad=max_yaw_rad,
-        )
+        ok, reason = verify_recovery_pose(candidate_pose, fit=fit, camera_xy=camera_xy,
+                                          camera_yaw=camera_yaw, min_fit=min_fit,
+                                          max_xy_m=max_xy_m, max_yaw_rad=max_yaw_rad)
         if not ok:
             return [], reason
         xy_std, yaw_std = COVARIANCE['auto_recovery']
@@ -307,6 +295,7 @@ class LocAssist:
                  and _moved(odom, self._searched_odom, self.moved_m, self.moved_rad))
         if moved:
             self._empty_streak = 0
+            self._auto_unique_fails = 0
         retry_s = min(30.0, self.retry_s * (2 ** min(max(0, self._empty_streak - 1), 3)))
         waited = now_s - self._searched_at >= retry_s
         state = self.machine.state
@@ -327,6 +316,7 @@ class LocAssist:
     def on_map_changed(self):
         """Reset empty-search backoff when a new map arrives."""
         self._empty_streak = 0
+        self._auto_unique_fails = 0
 
     def search_started(self, now_s, odom):
         self._searching = (tuple(odom), self._epoch, float(now_s))
@@ -339,7 +329,8 @@ class LocAssist:
         `evidence_s`: when that camera evidence was seen. Evidence from before the
         search started is dropped: it may belong to where the robot was before."""
         searching, self._searching = self._searching, None
-        if searching is None or self.machine.check is not None or self.machine.state is LocState.LOCALIZED:
+        if (searching is None or self.machine.check is not None
+                or self.machine.state is LocState.LOCALIZED or self._mission_running(now_s)):
             return []
         started, epoch, start_s = searching
         if self.held or epoch != self._epoch:
@@ -363,7 +354,16 @@ class LocAssist:
             'square_sightings': [{'bearing_rad': s.bearing_rad, 'range_m': s.range_m,
                                   'confidence': s.confidence} for s in list(sightings)[:MAX_SIGHTINGS]],
         }
-        return [self._candidates(now_s)] + self._state_if_changed(now_s)
+        out = [self._candidates(now_s)]
+        if (self._auto_unique and self._auto_unique_fails < AUTO_UNIQUE_MAX_FAILS
+                and self._is_settled(now_s) and len(candidates) == 1
+                and getattr(candidates[0], 'unique_margin', None) is not None):
+            auto = self.machine.auto_lock_unique(now_s)
+            if 'inject_pose' in auto.actions:
+                self._pending = self.machine.request_id
+                xy_std, yaw_std = COVARIANCE['candidate']
+                out.append(('inject', Injection(auto.pose, xy_std, yaw_std, 'unique_map', self.machine.request_id)))
+        return out + self._state_if_changed(now_s)
 
     # --- outputs ------------------------------------------------------------
     def _after(self, step, now_s):
@@ -372,9 +372,12 @@ class LocAssist:
         if self._pending is not None and state is LocState.LOCALIZED:
             out.append(self._result(self._pending, True, None))
             self._pending = None
+            self._auto_unique_fails = 0
         elif self._pending is not None and self.machine.check is None:
             out.append(self._result(self._pending, False, step.reason or self.machine.reason))
             self._pending = None
+            if self.machine.source == 'unique_map':
+                self._auto_unique_fails += 1
         if state is LocState.SUSPECT and 'report_status' in step.actions:
             self._wanted = True             # a fresh SUSPECT searches at once
             self._empty_streak = 0

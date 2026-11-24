@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/common/motor-health.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/cell.css">
+  <link rel="stylesheet" href="/console/assets/omx-inspector.css">
   <link rel="stylesheet" href="/console/assets/file-picker.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
@@ -101,7 +102,7 @@
 
   <!-- D-926 2 — 경로 줄: 문서 제목과 현재 단계를 본문 머리에도 보인다(subnav-screens.js). -->
   <div class="ui-pathbar"><h1>팔레트 적재 작업 준비</h1><strong id="cell-screen">팔 관측·사건</strong></div>
-  <ol id="cell-line" class="ui-stage-track" data-line="fleet" aria-label="작업 준비 진행"></ol>
+  <ol id="cell-line" class="ui-stage-track" data-line="fleet" data-unit-scope="arms" aria-label="작업 준비 진행"></ol>
 
   <p id="cell-unit-note" class="hint" role="status" data-unit-scope="no-arms">이 관제는 팔 셀을 맡지 않습니다. 팔 작업 준비·카메라·관절은 그 팔을 맡은 셀 관제 화면에서 봅니다. <span id="cell-unit-links"></span></p>
   <main id="cell-main" class="fleet-task-page ui-task-page" tabindex="-1" data-unit-scope="arms">
@@ -217,7 +218,7 @@
         <ui-button id="cell-task-preset-run" kind="primary" type="button">프리셋 태스크 즉시 실행</ui-button>
         <ui-button id="cell-task-refresh" kind="quiet" type="button">셀 태스크 새로고침</ui-button>
         <ui-button id="cell-vision-auto-check" kind="quiet" type="button">카메라 비전 자동 점검</ui-button>
-        <ui-button id="cell-live-stream-toggle" kind="quiet" type="button">영상 일시정지</ui-button>
+        <ui-button id="cell-live-stream-toggle" kind="segment" type="button" aria-pressed="true">영상 일시정지</ui-button>
       </div>
       <ui-text id="cell-tasks-status" role="status" aria-live="polite">접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.</ui-text>
       <div class="cell-split-workspace" id="cell-split-workspace">

@@ -9,7 +9,7 @@ the robot stands inside the bay line, rear toward the bay, no cable) -> approval
 navigation approval is not valid for the current release, D-985; the approval refuses to measure under an
 update hold) -> hold -> os_update_guard (an old image's rosy-os-update.timer stops navigation every minute and
 the update hold does not stop it: stop the timer for the run, restore it in cleanup) -> navigation_start
-(LOCALIZED) -> line_view (dock/observation over SSH; the bay line, not only the aisle line) -> dock_register
+(LOCALIZED) -> line_view (GET /api/v1/sensors/dock_observation; the bay line, not only the aisle line) -> dock_register
 (SLAM origin moves with every navigation restart, so every run registers) -> leave_bay (a start at the stop
 face first drives straight out, then back in) -> dock (watch, cancel at 180 s); --cycles N repeats leave_bay +
 dock. Every abort names its step; cleanup cancels the dock/approval, zeroes teleop, restores the timer, IDLE,
@@ -30,8 +30,6 @@ import signal
 import statistics
 import sys
 import time
-
-import yaml
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
@@ -64,10 +62,7 @@ DOCK_END = ("DOCKED", "DOCK_FAILED", "UNDOCKED")
 SECTORS = ("front", "front-left", "left", "rear-left", "rear", "rear-right", "right", "front-right")
 BAY_TYPE = {"name": "bay_line_c", "detector": "camera_line", "approach": "line", "staging_offset_m": 0.32,
             "max_retries": 1}
-# rosy runs as a plain user: the topics need the robot's ROS_DOMAIN_ID etc. from runtime.env (sudo -n, as the updater does)
-OBS_CMD = ("sudo -n bash -c 'set -a; . /etc/rosy/runtime.env; set +a; . /opt/ros/jazzy/setup.bash 2>/dev/null; "
-           "t=$(ros2 topic list 2>/dev/null | grep -m1 /dock/observation); "
-           "[ -n \"$t\" ] && timeout 20 ros2 topic echo --field data \"$t\" 2>/dev/null'")
+OBS_WINDOW_S, OBS_POLL_S, OBS_TARGET_N = 20.0, 0.2, 20
 TIMER = "rosy-os-update.timer"
 DOCKED_ALONG_M = 0.05                   # stop face -> base_link when seated (bay_phases DOCKED_ALONG)
 EXIT_ALONG_M = 0.12                     # a bay line this close behind: the robot sits at the stop face
@@ -329,19 +324,30 @@ class BayDock(_load_run()):
 
     # 4
     def line_view(self):
-        rc, out = self.sh(OBS_CMD)
-        obs = []
-        for chunk in out.split("\n---"):
-            try:
-                value = yaml.safe_load(chunk)
-                obs.append(json.loads(value) if isinstance(value, str) else value)
-            except (ValueError, yaml.YAMLError):
-                continue            # the cut-off last message
-        obs = [o for o in obs if isinstance(o, dict)]
+        t0, any_200, last_status, last_at = self.r.now(), False, None, None
+        obs, visible_n = [], 0
+        while visible_n < OBS_TARGET_N and self.r.now() - t0 <= OBS_WINDOW_S:
+            s, body = self.r.core.call("GET", "/sensors/dock_observation", timeout=1.0, attempts=1)
+            if s == 200 and isinstance(body, dict):
+                any_200 = True
+                if body.get("evidence") == "fresh":
+                    at = body.get("received_at")
+                    if at is None or at != last_at:
+                        if at is not None:
+                            last_at = at
+                        obs.append(body)
+                        if body.get("visible"):
+                            visible_n += 1
+            else:
+                last_status = s
+            if visible_n < OBS_TARGET_N and self.r.now() - t0 <= OBS_WINDOW_S:
+                self.r.sleep(OBS_POLL_S)
+        if not any_200 and last_status is not None:
+            raise Abort(f"line_view: GET /sensors/dock_observation -> {last_status}")
         (self.ev / "observations.jsonl").write_text("".join(json.dumps(o) + "\n" for o in obs), encoding="utf-8")
         summary = summarize_observations(obs)
         self.summary["observation"] = summary
-        self.phase("line_view", ssh_rc=rc, **{k: summary[k] for k in ("frames", "visible", "bay_line", "aisle_line")})
+        self.phase("line_view", source="core_api", **{k: summary[k] for k in ("frames", "visible", "bay_line", "aisle_line")})
         if not summary["ok"]:
             raise Abort(f"line_view: {summary['reason']}")
         pose = self.get("/robot/state").get("pose")

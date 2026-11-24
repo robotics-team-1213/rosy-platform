@@ -101,8 +101,9 @@ class CellJobClient:
     def health(self) -> dict:
         return json.loads(self._request("GET", "/health", auth=False))
 
-    def readiness(self) -> dict:
-        return json.loads(self._request("GET", "/readiness"))
+    def readiness(self, *, cell: str | None = None) -> dict:
+        q = f"?{urllib.parse.urlencode({'cell': cell})}" if cell is not None else ""
+        return json.loads(self._request("GET", f"/readiness{q}"))
 
     def failures(self, *, arm: str | None = None, kind: str | None = None, limit: int = 20) -> dict:
         q = urllib.parse.urlencode({k: str(v) for k, v in (("arm", arm), ("kind", kind), ("limit", limit)) if v is not None})

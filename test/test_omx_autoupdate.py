@@ -971,3 +971,76 @@ def test_manual_rollback_never_reactivates_incomplete_or_unsmoked_release(tmp_pa
         out = capsys.readouterr().out
         assert '"rollback_refused"' in out and '"smoke_failed"' in out
         assert current(r_smk) == str(Path("releases") / ("b" * 12)) and h_smk.restarts == restarts_smk
+
+
+def test_observer_defer_reasons_distinguish_missing_stale_invalid_hw_error_and_torque(tmp_path, monkeypatch, capsys):
+    import json
+
+    health = tmp_path / "arm_b.json"
+    device = tmp_path / "follower_b"
+    device.write_text("", encoding="utf-8")
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: real_run(args, **kw) if args[0] not in ("fuser", "systemctl") else None)
+
+    class _NoBusHost(m.Host):
+        def device_in_use(self):
+            return False
+
+    cfg = {
+        "devices": [str(device)],
+        "follower_device": str(device),
+        "observers": [{"unit": "rosy-omx-observer@arm_b.service", "device": str(device), "health": str(health)}],
+    }
+    host = _NoBusHost(cfg)
+
+    # Missing file -> observer_missing
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_missing"
+    assert host.follower_torque_off(tmp_path, tmp_path) is False
+
+    # Corrupt JSON / non-UTF-8 bytes / huge int overflow / partial motor count -> observer_invalid
+    health.write_text("{bad json", encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_bytes(b"\xff\xfe\xfd")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": 10**400, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False}] * 5}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+
+    # Stale, future-skewed, or ended snapshot -> observer_stale
+    for stale_payload in (
+        {"expected_motor_count": 6, "observed_at": now - 30.0, "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now + 60.0, "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "status": "ended", "motors": [{"torque_enabled": False}] * 6},
+    ):
+        health.write_text(json.dumps(stale_payload), encoding="utf-8")
+        assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+    # Hardware errors fail closed with follower_hardware_error (including None / fault / top-level status fault)
+    for payload in (
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 128}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": None}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "fault": True}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "status": "fault", "motors": [{"torque_enabled": False}] * 6},
+    ):
+        health.write_text(json.dumps(payload), encoding="utf-8")
+        assert host.follower_idle_reason(tmp_path, tmp_path) == "follower_hardware_error"
+        assert host.follower_torque_off(tmp_path, tmp_path) is False
+
+    # Torque ON -> follower_torque_not_off
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": True, "hardware_error": 0}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "follower_torque_not_off"
+
+    # Healthy idle -> None + True; also verify Updater.run() surfaces specific reason in deferred log
+    fh = FakeHost()
+    fh.follower_idle_reason = host.follower_idle_reason
+    fh.follower_torque_off = host.follower_torque_off
+    u = updater(tmp_path / "u_reason", fh)
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 128}] * 6}), encoding="utf-8")
+    assert u.run() == "deferred"
+    assert '"reason": "follower_hardware_error"' in capsys.readouterr().out
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 0}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    assert host.follower_torque_off(tmp_path, tmp_path) is True
+    assert u.run() == "switched"

@@ -199,16 +199,64 @@ def settle(task: dict, runner, now: float, state=None) -> bool:
         return changed
     if state_str == "arrived":
         _end(task, "ARRIVED", None, now, state=state)
-    elif state_str == "canceled":
-        _end(task, "CANCELLED", view.get("reason") or "TRIP_CANCELED", now, state=state)
+    elif state_str in ("canceled", "stopped"):
+        if _unconfirmed(view) or (task.get("cancel_requested") and _unconfirmed(task.get("cancel_receipt"))):
+            return False
+        if state_str == "canceled":
+            _end(task, "CANCELLED", view.get("reason") or "TRIP_CANCELED", now, state=state)
+        else:
+            _end(task, "FAILED", view.get("reason") or state_str, now, state=state)
     else:
         _end(task, "FAILED", view.get("reason") or state_str, now, state=state)
     return True
 
 
+async def _retry_halt_trip(runner, trip_id: str) -> dict:
+    if runner is None or not hasattr(runner, "retry_halt"):
+        return {"error": "HALT_RETRY_UNAVAILABLE"}
+    try:
+        return await runner.retry_halt(trip_id)
+    except Exception as exc:
+        return {"error": _code(exc)}
+
+
+def _depart_submit_active(state, task: dict) -> bool:
+    tid = task.get("task_id") or ""
+    if not tid.startswith("depart-"):
+        return False
+    return tid[len("depart-"):] in (getattr(state, "_depart_submitting", None) or ())
+
+
+async def retry_native_cancels(state, *, console, save, now: float) -> None:
+    """Retry any pending cancel on native S3 departure rows even when trip dispatch is disabled."""
+    dirty = False
+    for task in list(state.pinky_tasks.values()):
+        if task.get("status") == "SENT" and not _ours(task) and task.get("cancel_requested"):
+            receipt = await _cancel_native_goal(console, task.get("robot_id"))
+            if _depart_submit_active(state, task):
+                task["cancel_receipt"] = receipt if _unconfirmed(receipt) else {"error": "DEPART_SUBMIT_IN_FLIGHT"}
+            else:
+                task["cancel_receipt"] = receipt
+                if not _unconfirmed(receipt):
+                    _end(task, "CANCELLED", "OPERATOR_CANCEL", now, state=state)
+            dirty = True
+    if dirty:
+        save()
+
+
+def _dispatch_open_for_trip(state, task_service) -> bool:
+    if getattr(state, "_fleet_estop_latch_unresolved", False) or getattr(state, "_pipeline_ledger_fault", False):
+        return False
+    try:
+        return task_service.store.dispatch_control().get("dispatch_enabled") is True
+    except Exception:
+        return False
+
+
 async def dispatch_tick(state, *, console, runner, plan, task_service, active, human_detected, save,
                         now: float, trip_request) -> list[dict]:
-    """One pass: settle in-flight rows, then dispatch each QUEUED place task at most once."""
+    """One pass: retry native cancels, settle in-flight rows, then dispatch each QUEUED place task at most once."""
+    await retry_native_cancels(state, console=console, save=save, now=now)
     if not enabled():
         return []
     human_now = (lambda: bool(human_detected())) if callable(human_detected) else (lambda: bool(human_detected))
@@ -217,11 +265,16 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
             continue
         dirty = False
         trip_id = task.get("trip_id") or task.get("plan_id")
-        if task.get("cancel_requested") and runner is not None and trip_id and (runner.view(trip_id) or {}).get("state") in TRIP_OPEN:
-            task["cancel_receipt"] = await _cancel_trip(runner, trip_id, task.get("cancelled_by"))  # unconfirmed: ask again
-            if not task.get("trip_id"):
-                task["trip_id"] = trip_id
-            dirty = True
+        if task.get("cancel_requested") and runner is not None and trip_id:
+            view = runner.view(trip_id) or {}
+            if view.get("state") in TRIP_OPEN:
+                task["cancel_receipt"] = await _cancel_trip(runner, trip_id, task.get("cancelled_by"))  # unconfirmed: ask again
+                if not task.get("trip_id"):
+                    task["trip_id"] = trip_id
+                dirty = True
+            elif view.get("state") in ("canceled", "stopped") and (_unconfirmed(view) or _unconfirmed(task.get("cancel_receipt"))):
+                task["cancel_receipt"] = await _retry_halt_trip(runner, trip_id)
+                dirty = True
         if settle(task, runner, now, state=state) or dirty:
             save()
     queued = sorted((t for t in state.pinky_tasks.values() if t.get("status") == "QUEUED"),
@@ -246,7 +299,7 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
             awaited = False
         if task.get("status") != "QUEUED":  # an operator cancel landed while this tick awaited: never claim it
             continue
-        dispatch_open = bool(task_service.store.dispatch_control().get("dispatch_enabled"))
+        dispatch_open = _dispatch_open_for_trip(state, task_service)
         cancel_all_at = last_cancel_all_at(task_service)
         robot_id = task.get("robot_id")
         why = refusal(state, task, now=now, active=active, robot_row=rows.get(robot_id),
@@ -265,7 +318,7 @@ async def dispatch_tick(state, *, console, runner, plan, task_service, active, h
             from fleet.server.trip_ports import TripError
             if t.get("cancel_requested") or t.get("status") != "SENDING":
                 raise TripError(409, "OPERATOR_CANCEL")
-            if not bool(task_service.store.dispatch_control().get("dispatch_enabled")):
+            if not _dispatch_open_for_trip(state, task_service):
                 raise TripError(409, "DISPATCH_CLOSED")
             latest_cancel = last_cancel_all_at(task_service)
             if latest_cancel is not None and latest_cancel >= _iso(float(t.get("created_at") or 0.0)):
@@ -338,12 +391,50 @@ async def _cancel_trip(runner, trip_id, principal_id) -> dict:
         return {"error": _code(exc)}
 
 
+async def _cancel_native_goal(console, robot_id: str | None) -> dict:
+    """Withdraw queued native goal and cancel any live CORE Nav2 goal, requiring positive ack."""
+    if console is None or not robot_id or not callable(getattr(console, "cancel", None)):
+        return {"error": "CONSOLE_CANCEL_UNAVAILABLE"}
+    discard_err = None
+    discard = getattr(console, "discard_queued_goal", None)
+    if callable(discard):
+        try:
+            discard(robot_id)
+        except Exception as exc:
+            discard_err = _code(exc)
+    try:
+        res = await console.cancel(robot_id)
+    except Exception as exc:
+        return {"error": _code(exc)}
+    from fleet.server.console.goal_admission import cancel_confirmed as _native_cancel_confirmed
+
+    confirmed = (
+        isinstance(res, dict)
+        and "error" not in res
+        and res.get("ok") is not False
+        and res.get("cancel_confirmed") is not False
+        and res.get("stop_sent") is not False
+        and (_native_cancel_confirmed(res) or res.get("cancel_confirmed") is True or res.get("stop_sent") is True)
+    )
+    if not confirmed:
+        base = dict(res) if isinstance(res, dict) else {}
+        return {**base, "error": (base.get("error") if isinstance(base.get("error"), str) and base.get("error") else "NATIVE_CANCEL_UNCONFIRMED")}
+    if discard_err is not None:
+        return {**res, "error": discard_err}
+    return res
+
+
 def _unconfirmed(receipt) -> bool:
-    """A cancel the trip path did not confirm. TRIP_NOT_RUNNING is confirmation enough: the trip is already over."""
-    return bool(receipt) and "error" in receipt and receipt["error"] != "TRIP_NOT_RUNNING"
+    """A cancel the trip path did not confirm (including stop_sent=False or error under receipt detail)."""
+    if not receipt:
+        return False
+    if "error" in receipt and receipt["error"] != "TRIP_NOT_RUNNING":
+        return True
+    detail = receipt.get("detail")
+    return isinstance(detail, dict) and (detail.get("stop_sent") is False or ("error" in detail and detail["error"] != "TRIP_NOT_RUNNING"))
 
 
-async def cancel_task(state, task: dict, *, runner, principal_id, now: float) -> dict:
+async def cancel_task(state, task: dict, *, runner, principal_id, now: float, console=None) -> dict:
     """Cancel never refuses a stop: a queued row ends; an in-flight one ends only when its trip confirms the cancel.
     A failed or lost cancel leaves the row in flight (cancel_requested) and every tick re-asks and re-reads the trip."""
     task.update(cancelled_by=principal_id, cancel_requested=True)
@@ -351,13 +442,25 @@ async def cancel_task(state, task: dict, *, runner, principal_id, now: float) ->
         trip_id = task.get("trip_id") or task.get("plan_id")
         view = runner.view(trip_id) if (runner is not None and trip_id) else None
         if (task["status"] == "SENT" and trip_id) or (view is not None and view.get("state") in TRIP_OPEN):
-            receipt = task["cancel_receipt"] = await _cancel_trip(runner, trip_id, principal_id)
+            if view is not None and view.get("state") in ("canceled", "stopped"):
+                receipt = task["cancel_receipt"] = await _retry_halt_trip(runner, trip_id)
+            else:
+                receipt = task["cancel_receipt"] = await _cancel_trip(runner, trip_id, principal_id)
             if trip_id and not task.get("trip_id"):
                 task["trip_id"] = trip_id
-            if _unconfirmed(receipt):
+            cur_view = runner.view(trip_id) if runner is not None else None
+            if _unconfirmed(receipt) or _unconfirmed(cur_view):
                 return task
             if receipt.get("error") == "TRIP_NOT_RUNNING":  # it ended by itself first: its own state is the truth
                 settle(task, runner, now, state=state)
+                return task
+        elif task["status"] == "SENT":
+            receipt = await _cancel_native_goal(console, task.get("robot_id"))
+            if _depart_submit_active(state, task):
+                task["cancel_receipt"] = receipt if _unconfirmed(receipt) else {"error": "DEPART_SUBMIT_IN_FLIGHT"}
+                return task
+            task["cancel_receipt"] = receipt
+            if _unconfirmed(receipt):
                 return task
         elif task["status"] == "SENDING":
             if view is not None:  # it already ended in runner (e.g. arrived) while sending
@@ -400,6 +503,7 @@ def install_pinky_dispatch(app, ctx) -> None:
             raise HTTPException(409, detail={"code": "PINKY_TASK_ENDED", "status": task["status"]})
         principal = getattr(request.state, "site_principal", None)
         await cancel_task(app.state, task, runner=getattr(app.state, "trip_runner", None),
-                          principal_id=getattr(principal, "principal_id", None), now=time.time())
+                          principal_id=getattr(principal, "principal_id", None), now=time.time(),
+                          console=ctx.console)
         ctx._save_ledger()
         return {"ok": True, "confirmed": task["status"] in TERMINAL, "pinky_task": task}

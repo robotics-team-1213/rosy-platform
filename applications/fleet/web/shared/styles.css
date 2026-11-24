@@ -1,6 +1,5 @@
 * { box-sizing: border-box; }
-.connection-guide { margin: var(--space-3) var(--space-5); }
-.connection-guide { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-flat); }
+.connection-guide { margin: var(--space-3) var(--space-5); display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-flat); }
 .connection-guide > div { flex: 1 1 16rem; min-width: 0; }
 .connection-guide h2 { margin: 0 0 var(--space-2); font-size: var(--text-title); }
 .connection-guide p { margin: 0; color: var(--text-secondary); }
@@ -60,9 +59,6 @@
 .ops-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .ops-block > h2, .ops-block > .console-diagnostics { grid-column: 1 / -1; margin: 0; }
 .ops-block > .formation, .ops-block > .signals { margin: 0; }
-@media (width >= 110rem) {
-  .ops-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 
 html { min-width: 320px; background: var(--surface-canvas); }
 
@@ -156,16 +152,11 @@ body {
   font-size: var(--text-label);
   line-height: var(--leading-body);
 }
-.dispatch-control > div { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
-.dispatch-control strong { color: var(--text-primary); white-space: nowrap; }
-.dispatch-control small { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; }
+.dispatch-control > div { display: grid; gap: var(--space-1); min-width: 0; margin-right: auto; }
 .dispatch-control strong { color: var(--text-primary); }
 .dispatch-control small { color: var(--text-secondary); line-height: var(--leading-body); }
 #cancel-all-result { margin: 0; color: var(--text-primary); }
 #cancel-all-details { color: var(--text-primary); }
-/* D-421 — 재허가와 전체 주행 취소는 글 뒤에서 오른쪽에 붙어 선다(한 열 단에서는 글 아래). */
-.dispatch-control > div { margin-right: auto; }
 /* D-493 — 발행 제어가 없는 Fleet·확인 중에는 알릴 상태가 없다. 띠는 전체 주행 취소 버튼 한 줄로 준다. */
 .dispatch-control:is(:not([data-state]), [data-state="absent"]) { justify-content: flex-end; padding: 0; border: 0; background: none; }
 .dispatch-control:is(:not([data-state]), [data-state="absent"]) :is(#dispatch-control-title, #dispatch-control-detail) { display: none; }
@@ -190,13 +181,11 @@ main {
   /* D-540 3 — 문서는 스크롤하지 않는다. 지도 열은 머리 아래 높이를 채우고 레일 하나만 스크롤한다.
      큐와 로봇 목록은 자기 높이 상한과 자체 스크롤이 없다. */
   #fleet-main { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
-  #fleet-main > .console-secondary { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior: contain; align-content: start; }  /* holds its .sr-only boxes */
-  #fleet-main > .console-secondary { overflow-x: hidden; grid-auto-rows: max-content; }  /* rows fit their panel: a shrunk camera panel never runs under the next */
+  /* holds .sr-only boxes; rows fit their panel so a shrunk camera panel never runs under the next */
+  #fleet-main > .console-secondary { position: relative; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; align-content: start; grid-auto-rows: max-content; }
   #fleet-main > .console-primary { min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
   /* 지도 칸: 머리, 남는 높이를 다 쓰는 지도, 그 아래 범례·배경 학습·접힘 한 줄(넘치면 다음 줄). */
   #fleet-main > .console-primary > .panel:not([hidden]) { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
-  html[data-unit-scope-ready]:not([data-unit-drive]) #fleet-main > .console-primary > .panel[data-unit-scope="drive"],
-  html[data-unit-scope-ready]:not([data-unit-arms]) #fleet-main > .console-primary > .panel[data-unit-scope="arms"] { display: none; }
   /* 지도와 큰 영상은 칸을 채울 뿐 칸 높이를 정하지 않는다(그림 고유 크기가 문서를 밀지 않게). */
   #fleet-main .map-stage { flex: none; min-height: max(28rem, calc(100dvh - 18rem)); }
   #fleet-main .field-mismatch { position: relative; z-index: 1; }
@@ -209,9 +198,6 @@ main {
   .ops-block .log { min-height: calc(var(--text-micro) * var(--leading-copy) * 2); max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
   /* 오른쪽 열의 카메라는 썸네일이다. 크게 보려면 지도 칸으로 보낸다(#birdseye-toggle). */
   .console-secondary .vision-frame { max-height: 8.5rem; }
-}
-@media (width >= 110rem) {
-  .ops-block > .console-diagnostics { grid-column: 2; }
 }
 /* A fixed frame needs enough height; its map uses the space left by actual controls. */
 @media (width >= 64rem) and (height >= 40rem) {

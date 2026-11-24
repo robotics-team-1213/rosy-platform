@@ -3,7 +3,7 @@
 ## 1. 웹 UI 접속 및 사용법
 - **접속 주소:** `http://rosy-arm-cell.tailb4b84d.ts.net:8771/` (Tailscale 연결 필요)
 - **암 선택 및 카메라 표시:**
-  - `arm_a`, `arm_b`, `arm_ab`(양팔 동시), `arm_s` 중 선택하면 해당 암에서 **실제로 녹화되는 카메라만 선명(`● 녹화`)** 하게 표시되고, 나머지 카메라는 **흐림(`미녹화`)** 처리됩니다.
+  - `arm_a`, `arm_b`, `arm_ab`(양팔 동시), `arm_s` 중 선택하면 해당 암에서 **녹화에 포함되는 카메라만 선명** 하게 표시됩니다. 녹화 중이 아니면 포함 카메라는 `녹화 대상`(중립 `armed`), 녹화 중일 때만 `● 녹화 중`(경고색 `live`), 미포함 카메라는 `미포함`(흐림) 배지를 표시합니다.
 - **리더-팔로워 및 홈 이동:**
   - `arm_a`, `arm_b`는 저장된 리더 포즈(`has_leader_pose: true`)가 준비되어 있어 작업대 확인(`at_bench`) 및 `리더 팔에서 손을 떼었습니다(hands_off_leader)` 체크 후 바로 홈 이동/녹화가 가능합니다.
   - `arm_s`는 작업대 현장에서 리더와 팔로워를 수동 정렬한 뒤 `리더 포즈 저장`을 먼저 실행해야 합니다.
@@ -16,7 +16,7 @@
 
 ## 2. 모듈 구성
 - `deploy/robot/omx/bench_record.py` — 웹 UI HTTP 서버, 세션 락 격리, `arms_status`, `go_home`, `save_leader_pose`, `save_initial_pose`, `lerobot_params` 검증
-- `deploy/robot/omx/bench_record.html` — 반응형 2단 웹 UI, `ARM_PREVIEW_CAMS` 미녹화 카메라 흐림, `caps` 바 차트 편집기, 과제 검색/시나리오 수집 현황
+- `deploy/robot/omx/bench_record.html` — 반응형 2단 웹 UI, `ARM_PREVIEW_CAMS` 미포함 카메라 흐림, `caps` 바 차트 편집기, 과제 검색/시나리오 수집 현황
 - `deploy/robot/omx/leader_home.py` — `LeaderActuator` 기반 가드된 리더 홈 이동 및 `--read-pose`, Mode 4 `wrist_roll` 멀티턴 초기화
 - `test/test_omx_bench_record.py` — 단위/회귀 테스트 (57개)
 

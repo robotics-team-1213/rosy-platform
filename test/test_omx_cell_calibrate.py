@@ -534,6 +534,53 @@ def test_a_tcp_remap_that_cannot_tell_the_jaws_apart_saves_no_map(tmp_path, monk
         _tcp_remap(tmp_path, monkeypatch, ["ref"] * 8, pairs=set())
 
 
+def test_a_tcp_remap_does_not_gate_mark_jaws_on_unlabelled_jaw_predictions(tmp_path, monkeypatch):
+    """Under tcp_marks, unlabelled marks mix both jaws (~54 mm apart), so near=predicted(...) must be skipped."""
+    import types
+
+    def write(c, pose, _place, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"chunks": {"above_pick": [[pose["x"], pose["y"], pose["z"], pose["yaw_deg"], 0.0]]}}))
+        return path
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=write))
+    monkeypatch.setattr(cc.cell_pivot, "joints_tcp", lambda s, **k: tuple(s[:4]))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    o = (0.054 * math.cos(math.radians(79.0)), 0.054 * math.sin(math.radians(79.0)))
+    jaw = {"ref": -0.5, "other": 0.5}
+    shows = ["ref", "other", "ref", "other", "ref", "other", "ref", "other"]
+    pairs, gates = {1, 2, 5}, []
+
+    class Cell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            return np.zeros((48, 64, 3), np.uint8)
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    def mark(cell, config, near=None, report=None, **kw):
+        gates.append(near)
+        p, i = points[cell.i], cell.i
+        seen = [to_px((p[0] + s * o[0], p[1] + s * o[1])) for s in ((jaw[shows[i]], -jaw[shows[i]]) if i in pairs else (jaw[shows[i]],))]
+        kept = [b for b in seen if near is None or math.dist(b, near[0][0]) <= near[1]]
+        if not kept:
+            report.update(reason="blobs outside near", blobs=[[x, y, 400.0] for x, y in seen])
+            return None
+        report.update(reason=None, side=None, blobs=[[x, y, 400.0] for x, y in seen])
+        return kept[0]
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", mark)
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}}
+    record = cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
+    assert all(g is None for g in gates)
+    assert record["marks"] == "tcp" and len(record["points"]) == 8 and record["loo_error_mm"]["max"] < 0.5
+
+
 def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
     assert cc.enough_agree(5, 8) and cc.enough_agree(5, 9)
     assert not cc.enough_agree(5, 10)  # half: either side of the jaws could be the true one
@@ -809,3 +856,57 @@ def test_moving_rects_includes_belt_and_moves_sites():
         }
     }
     assert sg.moving_rects(cfg) == [[300, 20, 400, 120], [100, 0, 310, 200]]
+
+
+@pytest.mark.parametrize(
+    ("site_extra", "low_zones", "expected_z_to", "error_fragment"),
+    [
+        ({}, (), 0.010, None),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.030}], -0.020, None),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.30, 0.40], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.040}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.015}, {"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.040}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": False}], None, "invalid low_zones entry"),
+        ({"probe_z_to_m": -0.020}, [{"x": [float("-inf"), float("inf")], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "invalid low_zones entry"),
+        ({"probe_z_to_m": True}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": "-0.02"}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": float("nan")}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": 0.10}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": -0.051}, (), None, "invalid probe_z_to_m"),
+        ({"place": [0.15]}, (), None, "invalid place"),
+        ({"place": {"a": 1, "b": 2}}, (), None, "invalid place"),
+        ({"place": [True, 0.0]}, (), None, "invalid place"),
+        ({"yaw_deg": True}, (), None, "invalid yaw_deg"),
+    ],
+)
+def test_surface_step_gates_probe_z_to_m_against_low_zones(tmp_path, monkeypatch, capsys, site_extra, low_zones, expected_z_to, error_fragment):
+    pytest.importorskip("cv2")
+    import cell_pipeline as cp
+    import cell_surface
+
+    cal_path = tmp_path / "cal.json"
+    cal_path.write_text(json.dumps({"schema": cc.cal.SCHEMA, "sites": {}}), encoding="utf-8")
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps({"limits": {"low_zones": low_zones}}), encoding="utf-8")
+    config = {
+        "calibration_path": str(cal_path),
+        "plan_path": str(plan_path),
+        "work_dir": str(tmp_path),
+        "io": str(tmp_path),
+        "cameras": {"top": "http://unused"},
+        "sites": {"pallet": {"place": [0.15, 0.0], "yaw_deg": 0.0, **site_extra}},
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(config), encoding="utf-8")
+    calls = {"probe": [], "touch": 0}
+    monkeypatch.setattr(cp, "FifoCell", lambda *a: type("Cell", (), {"frame": lambda self, _: np.zeros((32, 32, 3), np.uint8)})())
+    monkeypatch.setattr(cc, "check", lambda *a: {})
+    monkeypatch.setattr(cc, "stale", lambda *a: ["surface pallet"])
+    monkeypatch.setattr(cell_surface, "probe_library", lambda plan, x, y, yaw, z_from, z_to, tcp_x_m=None: calls["probe"].append(z_to) or {"chunks": {}})
+    monkeypatch.setattr(cell_surface, "touch", lambda *a, **kw: calls.__setitem__("touch", calls["touch"] + 1) or {"result": "touched", "surface_z": -0.01})
+    assert cc.main(["--config", str(cfg_path), "auto", "--only", "surface", "--commissioning", "--person-at-switch"]) == 0
+    out = capsys.readouterr().out
+    if error_fragment is None:
+        assert calls["probe"] == [expected_z_to] and calls["touch"] == 1
+    else:
+        assert calls["probe"] == [] and calls["touch"] == 0 and error_fragment in out

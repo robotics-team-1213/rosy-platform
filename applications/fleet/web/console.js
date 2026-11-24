@@ -36,6 +36,7 @@ import { createPageScope } from "/common/scope.js";
 import { patchText } from "/common/control-dom.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js";
+import { classifyAuthFailure, readStoredToken } from "/console/assets/fleet-session.js";
 import { owns, unitScope } from "/console/assets/unit-scope.js";
 // D-798 3.2 — 접속·잠금, 목표 지정, 읽기 갱신은 각자의 팩토리 파일이 가진다.
 import { createConsoleAuth } from "./console-auth.js";
@@ -58,7 +59,7 @@ const MAP_PANEL = 1;
 // (cli.run_console 강제, app.authorize). 토큰은 세션 스토리지에만 둔다 —
 // localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
 const auth = {
-  token: sessionStorage.getItem("rosy-console-token") || "",
+  token: readStoredToken(),
   role: null,
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
   locked: false,
@@ -204,7 +205,7 @@ async function call(path, options = {}) {
     return body;
   } catch (error) {
     task.check();
-    if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
+    if (classifyAuthFailure(error).offerLogin && !cameraPreview) markLocked();
     throw error;
   }
 }
@@ -295,6 +296,7 @@ function render() {
   view.attention = new Set(view.robots.filter((r) => roster.attentionItems(r).some((i) => i.severity === "crit")).map((r) => r.robot_id));
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
+  document.documentElement.toggleAttribute("data-read-only", Boolean(auth.role && !hasOperatorRole(auth.role)));
   const hint = el("hint");
   const point = view.selected && view.cursor && view.map
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
@@ -364,7 +366,7 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render, sel
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
-const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl });
+const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator: () => hasOperatorRole(auth.role), namedReason });
 view.focusRobotWorkspace = (robotId) => rosterWorkspace.open(robotId);
 view.openFormationWorkspace = () => {
   confirmedAction.cancel(); roster.closeTrip(); view.pinning = null; clearPinStart();

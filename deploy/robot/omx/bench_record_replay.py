@@ -2,8 +2,16 @@
 """Replay trajectory reversal, pick-place task override, and live recording progress helpers."""
 from __future__ import annotations
 
-import json, math, re
+import json, math, re, sys
 from pathlib import Path
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bench_record_pose import (
+    _read_held_cli_pose as _read_live_norm_pose_held,
+    read_chunk_home_pose,
+    read_live_norm_pose as _read_live_norm_pose,
+)
 
 REPLAY_MODES = ("none", "swap_ab", "reverse_motion")
 _SLOT_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -203,66 +211,6 @@ def _interp_waypoints(waypoints: list[list[float]], max_step: float = 0.15) -> l
     return out
 
 
-def _read_live_norm_pose(prep: Path, arm: str, python_exe: str | None, hold=None) -> list[float] | None:
-    """Read follower current ticks via leader_home.py (torque OFF) and convert to LeRobot norm units.
-    hold() -> (lock handles, why not): the read writes torque OFF, so it runs only while this arm's session lock is held."""
-    if not python_exe or hold is None:
-        return None
-    import bench_record_guard
-    manual = Path(prep) / ".bench-manual-check.json"
-    if bench_record_guard.arm_free(arm, manual):  # held lease, incident hold or person-check marker: no read that torque-OFFs the Follower
-        return None
-    handles, busy = hold()
-    if busy:
-        return None
-    try:
-        if bench_record_guard.arm_free(arm, manual):  # again with the lock held: a hold recorded by the session that just released it
-            return None
-        return _read_live_norm_pose_held(prep, arm, python_exe)
-    finally:
-        for handle in handles:
-            handle.close()
-
-
-def _read_live_norm_pose_held(prep: Path, arm: str, python_exe: str) -> list[float] | None:
-    letter = arm.split("_")[-1] if "_" in arm else arm
-    cfgs = sorted(prep.glob(f"record-config-arm-{letter}*.json"))
-    lh = Path(__file__).resolve().parent / "leader_home.py"
-    if not cfgs or not lh.is_file():
-        return None
-    import subprocess
-    import bench_record_guard
-    try:
-        out = subprocess.run(
-            [python_exe, str(lh), "--config", str(cfgs[0]), "--arm", arm, "--read-follower-pose"],
-            capture_output=True, text=True, timeout=8,
-        )
-        if out.returncode != 0:
-            if bench_record_guard.follower_torque_on(out.stdout):  # it wrote nothing: a person supports the arm first, also after a restart
-                (prep / ".bench-manual-check.json").write_text(json.dumps({"reason": bench_record_guard.FOLLOWER_TORQUE_ON}), encoding="utf-8")
-            return None
-        ticks = json.loads(out.stdout.strip().splitlines()[-1]).get("state")
-        if not isinstance(ticks, list) or len(ticks) != 6:
-            return None
-        cal_p = Path.home() / ".cache/huggingface/lerobot/calibration/robots/omx_follower"
-        robot_id = json.loads(cfgs[0].read_text(encoding="utf-8-sig")).get("robot", {}).get("id", "omx_follower_arm")
-        cal = json.loads((cal_p / f"{robot_id}.json").read_text(encoding="utf-8")) if (cal_p / f"{robot_id}.json").is_file() else {}
-        names = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
-        norm = []
-        for i, n in enumerate(names):
-            c = cal.get(n, {})
-            lo, hi = float(c.get("range_min", 0)), float(c.get("range_max", 4095))
-            span = max(1.0, hi - lo)
-            v = ((float(ticks[i]) - lo) / span * 100.0) if i == 5 else ((float(ticks[i]) - lo) / span * 200.0 - 100.0)
-            norm.append(round(max(-100.0, min(100.0, v)), 3))
-        return norm
-    except subprocess.TimeoutExpired:  # killed with the Follower torque-OFF write possibly half done: a person checks, also after a restart
-        (prep / ".bench-manual-check.json").write_text(json.dumps({"reason": f"{arm} 팔로워 위치 읽기를 강제 종료했습니다 — 팔로워 토크 상태를 확인하세요"}), encoding="utf-8")
-        return None
-    except Exception:
-        return None
-
-
 _REQ_CHUNKS = ("above_pick", "descend_pick", "grasp_pick", "lift_pick", "above_place", "descend_place", "release_place", "lift_place", "home")
 
 def _has_req_chunks(path: Path) -> bool:
@@ -353,7 +301,7 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
     belt_p, pinky_p = _surface_poses("belt"), _surface_poses("pinky")
     if belt_p and pinky_p:
         live_home = _read_live_norm_pose(prep, arm, python_exe, hold)
-        home = live_home or belt_p[0] or pinky_p[0] or [0.85, -62.3, 53.0, 51.5, 45.0, 48.9]
+        home = live_home or read_chunk_home_pose(prep, arm) or belt_p[0] or pinky_p[0] or [0.85, -62.3, 53.0, 51.5, 45.0, 48.9]
         pick_p = pinky_p if "pinky" in origin.lower() else belt_p
         place_p = belt_p if "pinky" in origin.lower() else pinky_p
         g_open, g_close = 48.0, 38.0
@@ -384,7 +332,7 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
         reset_n = 30
         seg_b = [list(motion_a[-1])] * 30 + list(reversed(motion_a))
         frames = seg_a + [list(seg_a[-1])] * reset_n + seg_b
-        return {
+        traj = {
             "schema": "rosy.omx-replay-trajectory.v1",
             "fps": 30,
             "names": ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"],
@@ -394,6 +342,8 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
             "ik_origin": origin,
             "ik_target": target_slot,
         }
+        validate_replay_payload(traj)
+        return traj
     if (traj := _build_arm_chunk_replay(prep, arm, origin, target_slot, python_exe, hold)) is not None:
         return traj
     raise ValueError(f"IK 표면 캘리브레이션(surface-belt/pinky.json)을 찾을 수 없습니다: {work_dir}")

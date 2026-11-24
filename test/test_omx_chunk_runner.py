@@ -439,7 +439,7 @@ def test_the_live_state_is_published_at_ten_hz_outside_policy_playback():
                  sleep=lambda s: clock.__setitem__(0, clock[0] + s),
                  live=lambda row: (published.append(clock[0]), rows.append(row)))
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk and (queue[0] != "stop" or clock[0] >= 0.5) else [])
-    assert rows and set(rows[-1]) == {"t", "state", "target", "chunk", "fault", "health", "lag", "human_hold_latched", "torque_hold_commanded", "policy_start"}
+    assert rows and set(rows[-1]) == {"t", "pid", "state", "target", "chunk", "fault", "health", "holding", "lag", "human_hold_latched", "torque_hold_commanded", "policy_start"}
     assert len(published) > 1 and [b - a for a, b in zip(published, published[1:])] == pytest.approx([0.1] * (len(published) - 1))
     assert all(row["policy_start"] is None for row in rows)
     assert rows[-1]["state"][0] == 18.0  # held at the end of the approach chunk

@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import math
 import os
 from pathlib import Path
 import ssl
@@ -256,7 +257,25 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
                 if req_id in next_acks or spec.get("started"):
                     continue
                 exp = spec.get("expires_at")
-                if isinstance(exp, (int, float)) and not isinstance(exp, bool) and now_t > float(exp):
+                if exp is None:
+                    next_acks[req_id] = {"arm_id": str(arm_id), "request_id": req_id,
+                                         "outcome": "skipped", "detail": "SAFE_HOME_EXPIRY_MISSING"}
+                    continue
+                if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+                    next_acks[req_id] = {"arm_id": str(arm_id), "request_id": req_id,
+                                         "outcome": "skipped", "detail": "SAFE_HOME_EXPIRY_INVALID"}
+                    continue
+                try:
+                    exp_f = float(exp)
+                except (TypeError, ValueError, OverflowError):
+                    next_acks[req_id] = {"arm_id": str(arm_id), "request_id": req_id,
+                                         "outcome": "skipped", "detail": "SAFE_HOME_EXPIRY_INVALID"}
+                    continue
+                if not math.isfinite(exp_f):
+                    next_acks[req_id] = {"arm_id": str(arm_id), "request_id": req_id,
+                                         "outcome": "skipped", "detail": "SAFE_HOME_EXPIRY_INVALID"}
+                    continue
+                if now_t > exp_f:
                     next_acks[req_id] = {"arm_id": str(arm_id), "request_id": req_id,
                                          "outcome": "skipped", "detail": "SAFE_HOME_EXPIRED"}
                     continue

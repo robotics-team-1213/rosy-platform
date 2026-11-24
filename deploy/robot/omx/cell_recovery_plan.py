@@ -187,7 +187,7 @@ def fk_lift_plan(start: list[float], *, lift_units: float = 20.0, clear_z_m: flo
             continue
         delta, seg, _ = _step_toward_z(cur, axis, sdir, clear_z_m, bounds, tcp_x_m, budget - used)
         if abs(delta) >= 1e-6:
-            cmds.extend(chunk_jog_commands(name, delta))
+            cmds.extend(chunk_jog_commands(name, delta, step_max=2.0 if axis == 1 else STEP_MAX))
             frames.extend(seg)
             used += len(seg)
     if not cmds or fk_z(cur, tcp_x_m=tcp_x_m) < clear_z_m:
@@ -341,17 +341,7 @@ def build_multi_site_look(cell, config: dict, calibration: dict, primary_site: s
     sites = config.get("sites") or {}
     primary = sites.get(primary_site) if isinstance(sites, dict) else None
     polys = cell_corridor.calibrated_surface_polygons(config, primary_site)
-    valid_sites, seen_polys = [], set()
-    for s in (sites.values() if isinstance(sites, dict) else ()):
-        if not isinstance(s, dict) or (s.get("tier_of") and s["tier_of"] in sites):
-            continue
-        poly = s.get("surface_px")
-        if not (isinstance(poly, (list, tuple)) and len(poly) >= 3):
-            continue
-        key = tuple((int(round(p[0])), int(round(p[1]))) for p in poly if isinstance(p, (list, tuple)) and len(p) >= 2)
-        if len(key) >= 3 and key not in seen_polys:
-            seen_polys.add(key)
-            valid_sites.append(s)
+    valid_sites, _ = cell_corridor.valid_surface_sites(sites if isinstance(sites, dict) else None)
 
     def look(frames):
         img = cell.frame("top")
@@ -363,11 +353,8 @@ def build_multi_site_look(cell, config: dict, calibration: dict, primary_site: s
 
         import cv2
 
-        low_mask = np.zeros((roi[3] - roi[1], roi[2] - roi[0]), np.uint8)
-        area_px = 0.0
-        for s in valid_sites:
-            low_mask |= cell_objects.foreground(img, roi, params=params, surface_px=s.get("surface_px"), surface_lab=s.get("surface_lab"))
-            area_px += float(cv2.contourArea(np.asarray(s["surface_px"], np.int32).reshape(-1, 2)))
+        low_mask, _ = cell_corridor.site_foreground_mask(img, sites, roi, params)
+        area_px = sum(float(cv2.contourArea(np.asarray(s["surface_px"], np.int32).reshape(-1, 2))) for s in valid_sites)
         base_px = to_px((0.0, 0.0))
         extra = [base_px] if (base_px is not None and area_px >= MIN_SITE_AREA_PX) else None
         high_hull = cell_corridor.transit_hull_polygon(polys, extra_pts=extra) if area_px >= MIN_SITE_AREA_PX else None

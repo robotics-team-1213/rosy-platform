@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OMX = ROOT / "deploy/robot/omx"
 # the worker unit's PYTHONPATH and the wrappers' tools-env.sh (search order)
 SEARCH = [ROOT, OMX, ROOT / "middleware/devices/omx/adapter", ROOT / "operations/overhead", ROOT / "contracts/foundation"]
-# the worker, its executor, and what the session wrappers run: cell_auto_pick (worker argv) and record_session (wrapper)
-ENTRIES = [OMX / n for n in ("cell_task_worker.py", "cell_task_exec.py", "cell_auto_pick.py", "record_session.py")]
+# the worker, its executor, cell-job-api, and what the session wrappers run: cell_auto_pick (worker argv) and record_session (wrapper)
+ENTRIES = [OMX / n for n in ("cell_task_worker.py", "cell_task_exec.py", "cell_auto_pick.py", "record_session.py", "cell_job_api.py")]
 
 
 def _resolve(name: str) -> list[Path]:

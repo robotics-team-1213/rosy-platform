@@ -3,11 +3,12 @@ import {setOffBy} from '/common/cause-line.js';
 import {operatorReason as roleReason} from "/console/assets/authorization.js";
 // D-488 M1 site map page: view the active map or the draft, edit the draft, activate it,
 // and preview a D-490 trip plan. D-540 4: robots are drawn read-only; trips start and stop on the 관제 robot card.
+import {createPageScope} from '/common/scope.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
-import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
+import {bindTokenAccess, classifyAuthFailure, writeStoredToken} from '/console/assets/fleet-session.js';
 import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
@@ -26,14 +27,13 @@ import {drawFacilities, drawSitePointsOverlay, loadSitePointsOverlay, svgElement
 const $ = id => document.getElementById(id);
 const W = 800, H = 480;
 
-// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
-const stored = sessionStorage.getItem('rosy-console-token') || '';
-$('console-token').value = stored;
-const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
+const pageScope = createPageScope();
+const tokenAccess = bindTokenAccess({scope: pageScope, persist: false, onCredential: () => { void connect(true); }});
+const request = createFleetClient({credential: () => tokenAccess.getToken(), origin: location.origin});
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null, sitePoints: null};
 const ROBOT_POLL_MS = 1000;
 let calibrations = [];
-const teach = createTeachPanel({request, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
+const teach = createTeachPanel({request, scope: pageScope, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
   map: () => shown(),
   places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
@@ -262,8 +262,11 @@ function syncButtons() {
 }
 
 // D-540 4: one read line and the robot layer; operating a trip is the 관제 card's (D-540 3).
+let robotPollBusy = false;
 async function pollRobots() {
-  if (state.loadState === 'ready' && !document.hidden) {  // a background tab does not keep reading trips and guide
+  if (robotPollBusy || state.loadState !== 'ready' || document.hidden) return;  // a background tab does not keep reading trips and guide
+  robotPollBusy = true;
+  try {
     const [tripsRes, guideRes] = await Promise.allSettled([
       request('/api/fleet/trips'),
       request('/api/fleet/guide'),
@@ -285,10 +288,12 @@ async function pollRobots() {
     // The map redraw (view turn, source change) clears the robot layer, so every poll repaints it.
     drawRobots();
     syncButtons();
+  } finally {
+    robotPollBusy = false;
   }
-  setTimeout(pollRobots, ROBOT_POLL_MS);
 }
-pollRobots();
+pageScope.interval(() => { void pollRobots(); }, ROBOT_POLL_MS);
+pageScope.listen(document, 'visibilitychange', () => { if (!document.hidden) void pollRobots(); });
 
 async function load() {
   state.planEpoch += 1;
@@ -371,10 +376,10 @@ async function connect(credentialChange = false) {
   notice('접속 중 · 0초 경과');
   try {
     const session = await request('/api/fleet/session');
-    sessionStorage.setItem('rosy-console-token', $('console-token').value);
+    writeStoredToken(tokenAccess.getToken());
     state.role = session.role;
     showSession(session, {credentialChange});
-    loginForm.refresh(false);
+    tokenAccess.refreshLogin(false);
     syncButtons();
     await load();
     if (localEdit) {
@@ -389,12 +394,13 @@ async function connect(credentialChange = false) {
   } catch (error) {
     if (localEdit) Object.assign(state, localEdit);
     state.loadState = error.status === 401 ? 'idle' : 'error';
-    // D-1043: a 403 FORBIDDEN is a role refusal, not a lost session: the E-stop stays live for it.
-    if (error.status === 401 || (error.status === 403 && error.code !== 'FORBIDDEN')) {
+    // D-1043: 403 FORBIDDEN keeps the session and E-stop live; 401 and generic 403 sign out and lock E-stop.
+    const failure = classifyAuthFailure(error);
+    if (failure.signOut) {
       state.role = null;
       showSignedOut();
     }
-    if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') loginForm.refresh(true);
+    if (failure.offerLogin) tokenAccess.refreshLogin(true);
     render();
     if (localEdit) select(state.selected);
     syncButtons();
@@ -405,7 +411,6 @@ async function connect(credentialChange = false) {
     setOffBy($('token-save'), '');
   }
 }
-$('token-save').addEventListener('click', () => connect(true));
 
 $('profile-save').addEventListener('click', () => guarded(async () => {
   if (operatorReason()) return;
@@ -559,11 +564,11 @@ $('trip-plan').addEventListener('click', () => guarded(async () => {
   render();
 }));
 
-bindEstop(request);
-bindTopbarToggle();
+bindEstop(request, {listen: (node, type, fn) => pageScope.listen(node, type, fn), life: () => pageScope.capture()});
+bindTopbarToggle((node, type, fn) => pageScope.listen(node, type, fn));
 tickClock();
-setInterval(tickClock, 1000);
-watchFleet(request);
+pageScope.interval(tickClock, 1000);
+watchFleet(request, {scope: pageScope});
 const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'map-heading', stage: 'map-heading',
   groups: {'survey-heading': ['survey-heading', 'drawing-heading'],
     'camera-draft-heading': ['camera-draft-heading', 'drawing-heading', 'survey-heading']},
@@ -581,17 +586,9 @@ $('site-map-svg').addEventListener('keydown', event => {
   dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
   $('site-map-svg').querySelector(`[data-place="${CSS.escape(id)}"]`)?.focus();
 });
-$('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
-
-developmentToken($('console-token').value).then(token => {
-  if (token) { $('console-token').value = token; connect(); }
-  // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
-  else loginForm.refresh(true).then(cookie => {
-    if (cookie || stored) connect();
-    else if (!state.role && state.loadState === 'idle') showSignedOut();  // not if someone connected meanwhile
-  });
-}).catch(() => {});
-// D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
-const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
-  $('console-token').value = ''; connect(true);
-}});
+pageScope.onResume(() => { void connect(); });
+void tokenAccess.bootstrap({
+  developmentToken,
+  connect: () => connect(),
+  onSignedOut: () => { if (!state.role && state.loadState === 'idle') showSignedOut(); },
+});

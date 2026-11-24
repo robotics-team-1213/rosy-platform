@@ -79,6 +79,9 @@ class Console:
             raise RuntimeError("robot offline")
         return {"accepted": True}
 
+    async def cancel(self, robot_id):
+        return {"canceled": True}
+
 
 def tick(state, console, rules=RULES, human=False, now=None):
     saves = []
@@ -228,6 +231,45 @@ def test_a_queued_goal_after_a_dispatch_without_confirmed_cancel_is_cancelled_to
     assert console.queued == {} and console.cancels == ["rosy_46"]
 
 
+def test_unconfirmed_queued_cancel_and_ambiguous_send_fence_resends(monkeypatch):
+    monkeypatch.delenv("ROSY_FLEET_PINKY_TASK_DISPATCH", raising=False)
+    state, console = _state([_task(0)]), QueuingConsole()
+    plain = console.goal
+
+    async def attempted_fail_cancel(robot_id, x, y, yaw=0.0, **kw):
+        return {**await plain(robot_id, x, y, yaw), "dispatch_attempted": True, "reason": "ROUTE_CONFLICT"}
+
+    console.goal = attempted_fail_cancel
+    tick(state, console)
+    tick(state, console)
+    assert state.unload_releases["u"]["state"] == "HELD"
+    assert state.unload_releases["u"]["reason"] == "DEPART_CANCEL_UNCONFIRMED"
+    assert state.pinky_tasks["depart-u"]["cancel_requested"] is True
+    n_goals = len(console.goals)
+
+    async def confirmed_cancel(robot_id):
+        console.cancels.append(robot_id)
+        return {"canceled": True}
+
+    console.cancel = confirmed_cancel
+    tick(state, console)  # retries native cancel even with ROSY_FLEET_PINKY_TASK_DISPATCH off; never resends goal
+    assert len(console.goals) == n_goals and state.pinky_tasks["depart-u"]["status"] == "CANCELLED"
+
+    # Post-dispatch exception outside human hold with unconfirmed cancel fences further sends
+    state2, console2 = _state([_task(0)]), Console(fail=1)
+
+    async def fail_cancel(_rid):
+        return {}
+
+    console2.cancel = fail_cancel
+    tick(state2, console2)
+    tick(state2, console2)
+    assert state2.unload_releases["u"]["state"] == "HELD"
+    assert state2.unload_releases["u"]["reason"] == "DEPART_SEND_AMBIGUOUS"
+    assert state2.pinky_tasks["depart-u"]["cancel_requested"] is True
+    assert len(console2.goals) == 1
+
+
 def _client(tmp_path, monkeypatch, *, rules=RULES):
     from tools.sim.bay_departure_sim import build_world_261026_site_map
     from fleet.server.sitemap import pipeline_routes as routes
@@ -312,3 +354,256 @@ def test_repark_completed_retry_supersedes_aborted_ancestor_only():
         bad_arm = _state([_task(0)])
         bad_arm.arm_live_states["arm_s"]["updated_at"] = bad_ts
         assert "ARM_NOT_HOME" in reasons(bad_arm)
+
+
+def test_depart_tick_rolls_back_failed_save_and_blocks_on_ledger_fault():
+    site = SimpleNamespace(places=[SimpleNamespace(id="S1", x=1.0, y=2.0, yaw=0.0)])
+    rules = SimpleNamespace(return_=SimpleNamespace(exit_place="S1"))
+    calls = []
+
+    class _GoalConsole:
+        async def goal(self, robot_id, x, y, yaw):
+            calls.append((robot_id, x, y, yaw))
+            return {"accepted": True}
+
+    state = _state([_task(0)])
+
+    def fail_save():
+        raise RuntimeError("disk full")
+
+    args = dict(console=_GoalConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                human_detected=False, save=fail_save, now=time.time())
+    asyncio.run(ur.depart_tick(state, **args))
+    with pytest.raises(RuntimeError, match="disk full"):
+        asyncio.run(ur.depart_tick(state, **args))
+    assert "u" not in state.unload_releases
+    assert calls == []
+
+    state._pipeline_ledger_fault = True
+    fault_free_saves = []
+    args_fault = dict(console=_GoalConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                      human_detected=False, save=lambda: fault_free_saves.append(1), now=time.time())
+    asyncio.run(ur.depart_tick(state, **args_fault))
+    assert "u" not in state.unload_releases and calls == [] and fault_free_saves == []
+
+
+def test_depart_tick_fences_cancelled_goal_and_blocks_replay_on_restore(tmp_path, monkeypatch):
+    from fastapi import FastAPI
+
+    from fleet.server.sitemap.pipeline_routes import install_pipeline_routes
+
+    site = SimpleNamespace(places=[SimpleNamespace(id="S1", x=1.0, y=2.0, yaw=0.0)])
+    rules = SimpleNamespace(return_=SimpleNamespace(exit_place="S1"))
+    goal_calls = []
+
+    class _CancelGoalConsole:
+        async def goal(self, robot_id, x, y, yaw):
+            goal_calls.append((robot_id, x, y, yaw))
+            raise asyncio.CancelledError
+
+        async def cancel(self, _robot_id):
+            return {"canceled": False}
+
+    state = _state([_task(0)])
+    state.omx_cell_states["cell_s"]["docked_robot"] = {"robot_id": "rosy_46"}
+    args = dict(console=_CancelGoalConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                human_detected=False, save=lambda: None, now=time.time())
+    asyncio.run(ur.depart_tick(state, **args))
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(ur.depart_tick(state, **args))
+
+    rec = state.unload_releases["u"]
+    assert rec["state"] == "HELD" and rec["reason"] == "DEPART_SEND_AMBIGUOUS"
+    assert rec["submit_in_flight"] is True
+    assert state.pinky_tasks["depart-u"]["cancel_requested"] is True
+    assert len(goal_calls) == 1
+
+    asyncio.run(ur.depart_tick(state, **args))
+    assert len(goal_calls) == 1
+
+    # Simulate persisted SENDING+submit_in_flight across restart before except/finally could persist HELD.
+    from fleet.server.sitemap import pipeline_routes as pr
+
+    monkeypatch.setattr(pr, "_storage_dir", lambda: tmp_path)
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    app1 = FastAPI()
+    install_pipeline_routes(app1)
+    app1.state.omx_cell_tasks = {"u-1": _task(0)}
+    app1.state.unload_releases = {
+        "u": {"robot_id": "rosy_46", "state": "SENDING", "target": "S1", "submit_in_flight": True, "at": time.time()},
+    }
+    from fleet.server.sitemap.pipeline_ledger import write_ledger
+    payload = {
+        "omx_cell_states": app1.state.omx_cell_states, "omx_cell_tasks": app1.state.omx_cell_tasks,
+        "pinky_tasks": app1.state.pinky_tasks, "unload_releases": app1.state.unload_releases,
+        "cell_auto_events": [], "repark_requests": {}, "repark_done": [], "pipeline_decisions": [],
+        "detected_displaced_site": None, "cable_tangled": True, "human_detected": app1.state.human_detected,
+        "_gov_managed": True,
+    }
+    write_ledger(tmp_path / "rosy-pipeline-ledger.json", payload)
+    app1.state.pipeline_governance.commit_enqueue(bump_dispatch=False, ledger_snapshot=payload)
+
+    app2 = FastAPI()
+    install_pipeline_routes(app2)
+    restored = app2.state.unload_releases["u"]
+    assert restored["state"] == "HELD" and restored["reason"] == "DEPART_RESTART_AMBIGUOUS"
+    assert app2.state.pinky_tasks["depart-u"]["cancel_requested"] is True
+
+
+def test_depart_tick_post_ack_dispatch_failure_and_retry_save_failure_preserve_fence():
+    site = SimpleNamespace(places=[SimpleNamespace(id="S1", x=1.0, y=2.0, yaw=0.0)])
+    rules = SimpleNamespace(return_=SimpleNamespace(exit_place="S1"))
+    goal_calls = []
+    dispatch_open_flag = [True]
+    fail_second_dispatch = [False]
+
+    def _dispatch_open():
+        if fail_second_dispatch[0]:
+            raise RuntimeError("store down")
+        return dispatch_open_flag[0]
+
+    class _AckConsole:
+        async def goal(self, robot_id, x, y, yaw):
+            goal_calls.append((robot_id, x, y, yaw))
+            fail_second_dispatch[0] = True
+            return {"accepted": True}
+
+        async def cancel(self, _robot_id):
+            return {"canceled": False}
+
+    state = _state([_task(0)])
+    args = dict(console=_AckConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                human_detected=False, save=lambda: None, now=time.time(), dispatch_open=_dispatch_open)
+    asyncio.run(ur.depart_tick(state, **args))
+    asyncio.run(ur.depart_tick(state, **args))
+    rec = state.unload_releases["u"]
+    assert rec["state"] == "HELD" and rec["reason"] == "HUMAN_HOLD_AFTER_SEND"
+    assert rec["submit_in_flight"] is True
+    assert state.pinky_tasks["depart-u"]["cancel_requested"] is True
+    assert len(goal_calls) == 1
+
+    fail_second_dispatch[0] = False
+    asyncio.run(ur.depart_tick(state, **args))
+    assert len(goal_calls) == 1
+
+    # Save failure after a clean rejected goal must restore submit_in_flight so next tick fences instead of replaying.
+    retry_goals = []
+
+    class _RejectConsole:
+        async def goal(self, robot_id, x, y, yaw):
+            retry_goals.append(robot_id)
+            return {"accepted": False, "error": "busy"}
+
+    saves = [0]
+
+    def _fail_second_save():
+        saves[0] += 1
+        if saves[0] == 2:
+            raise RuntimeError("disk fault")
+
+    s2 = _state([_task(0)])
+    args2 = dict(console=_RejectConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                 human_detected=False, save=_fail_second_save, now=time.time())
+    asyncio.run(ur.depart_tick(s2, **args2))
+    with pytest.raises(RuntimeError, match="disk fault"):
+        asyncio.run(ur.depart_tick(s2, **args2))
+    assert s2.unload_releases["u"]["submit_in_flight"] is True
+    asyncio.run(ur.depart_tick(s2, console=_RejectConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                               human_detected=False, save=lambda: None, now=time.time()))
+    assert s2.unload_releases["u"]["state"] == "HELD" and len(retry_goals) == 1
+
+    # human_detected callback raising post-ACK must trigger cancellation and top-of-tick recovery runs first.
+    human_goals = []
+
+    class _HumanFaultConsole:
+        async def goal(self, robot_id, x, y, yaw):
+            human_goals.append(robot_id)
+            raise_human[0] = True
+            return {"accepted": True}
+
+        async def cancel(self, _robot_id):
+            return {"canceled": False}
+
+    raise_human = [False]
+
+    def _human_fn():
+        if raise_human[0]:
+            raise RuntimeError("human gate unavailable")
+        return False
+
+    s3 = _state([_task(0)])
+    args3 = dict(console=_HumanFaultConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                 human_detected=_human_fn, save=lambda: None, now=time.time())
+    asyncio.run(ur.depart_tick(s3, **args3))
+    asyncio.run(ur.depart_tick(s3, **args3))
+    assert s3.unload_releases["u"]["state"] == "HELD" and s3.unload_releases["u"]["reason"] == "HUMAN_HOLD_AFTER_SEND"
+    assert s3.pinky_tasks["depart-u"]["cancel_requested"] is True and len(human_goals) == 1
+
+    # Repeated fault with an unrecovered SENDING+submit_in_flight row still runs top-of-tick recovery first.
+    s4 = _state([_task(0)])
+    s4.unload_releases["u"] = {"robot_id": "rosy_46", "state": "SENDING", "target": "S1", "submit_in_flight": True}
+    asyncio.run(ur.depart_tick(s4, console=_HumanFaultConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                               human_detected=lambda: (_ for _ in ()).throw(RuntimeError("still broken")),
+                               save=lambda: None, now=time.time()))
+    assert s4.unload_releases["u"]["state"] == "HELD" and s4.unload_releases["u"]["reason"] == "DEPART_SEND_AMBIGUOUS"
+
+    # Save failure on accepted SENT settlement must restore submit_in_flight and cancel on next tick.
+    s5 = _state([_task(0)])
+    saves5 = [0]
+    s5_goals = []
+    s5_cancels = []
+
+    class _SentSaveFailConsole:
+        async def goal(self, robot_id, x, y, yaw):
+            s5_goals.append(robot_id)
+            return {"accepted": True}
+
+        async def cancel(self, robot_id):
+            s5_cancels.append(robot_id)
+            return {"canceled": False}
+
+    def _fail_sent_save():
+        saves5[0] += 1
+        if saves5[0] == 2:
+            raise RuntimeError("disk full on SENT")
+
+    args5 = dict(console=_SentSaveFailConsole(), rules=rules, site=site, enqueue=lambda _s: None,
+                 human_detected=False, save=_fail_sent_save, now=time.time())
+    asyncio.run(ur.depart_tick(s5, **args5))
+    with pytest.raises(RuntimeError, match="disk full on SENT"):
+        asyncio.run(ur.depart_tick(s5, **args5))
+    assert s5.unload_releases["u"]["submit_in_flight"] is True
+
+    args5_recover = dict(args5, save=lambda: None)
+    asyncio.run(ur.depart_tick(s5, **args5_recover))
+    assert s5.unload_releases["u"]["state"] == "HELD"
+    assert s5.unload_releases["u"]["reason"] == "DEPART_SEND_AMBIGUOUS"
+    assert s5.pinky_tasks["depart-u"]["cancel_requested"] is True
+    assert len(s5_cancels) == 1 and len(s5_goals) == 1
+
+
+def test_retry_native_cancels_attempts_all_robots_when_save_fails():
+    cancels = []
+
+    class _MultiCancelConsole:
+        async def cancel(self, robot_id):
+            cancels.append(robot_id)
+            return {"canceled": False}
+
+    state = SimpleNamespace(
+        omx_cell_tasks={},
+        omx_cell_states={"cell_s": {"phase": "RELEASED"}},
+        arm_live_states={},
+        arm_holds={},
+        unload_releases={
+            "b1": {"robot_id": "rosy_46", "state": "SENT", "target": "S1", "submit_in_flight": True},
+            "b2": {"robot_id": "rosy_47", "state": "SENT", "target": "S1", "submit_in_flight": True},
+        },
+        pinky_tasks={},
+    )
+    args = dict(console=_MultiCancelConsole(), rules=None, site=None, enqueue=lambda _s: None,
+                human_detected=False, save=lambda: (_ for _ in ()).throw(OSError("disk full")), now=time.time())
+    for _ in range(2):
+        with pytest.raises(OSError, match="disk full"):
+            asyncio.run(ur.depart_tick(state, **args))
+    assert cancels.count("rosy_46") == 2 and cancels.count("rosy_47") == 2

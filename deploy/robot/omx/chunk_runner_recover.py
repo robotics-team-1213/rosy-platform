@@ -198,12 +198,15 @@ def dispatch_recover_unlatch(runner, words: list[str], line: str, latch_error_fn
     prev_fault = getattr(runner, "fault", None)
     runner.holding = bool(clamped_box and present[5] > grip_target + empty_margin)
     _clear_hold_state(runner, synced_target)
-    runner._recovery_active = True
+    runner._recovery_active = runner._recovery_live_flush = True
     runner.queue, runner.chunk, runner.played = [], None, []
     try:
         runner.report(command=line, ok=True, unlatched_from_hold=True, previous_fault=prev_fault, present=present)
     except OSError as write_error:
         latch_error_fn(runner, present, line, "status write failed after unlatch", write_error)
+    if not runner.human_hold_latched:
+        from chunk_runner_loop import publish_live
+        publish_live(runner, state=present, best_effort=True)
     return True
 
 
@@ -242,7 +245,7 @@ def queue_recovery_park(runner, words: list[str], *, checked: bool, empty_margin
     halt_policy_gate(runner)
     frames = recovery_park_path(runner.library, start, runner.fps)
     _clear_hold_state(runner, start)
-    runner._recovery_active = True
+    runner._recovery_active = runner._recovery_live_flush = True
     runner.queue, runner.chunk, runner.settle_since, runner.played = frames, verb, None, []
 
 

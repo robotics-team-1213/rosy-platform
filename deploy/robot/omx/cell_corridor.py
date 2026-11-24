@@ -153,6 +153,37 @@ def transit_hull_polygon(polygons: list, extra_pts: list | None = None) -> list 
     return cv2.convexHull(np.asarray(pts, np.int32)).reshape(-1, 2).tolist()
 
 
+def valid_surface_sites(sites: dict | None) -> tuple[list[dict], list[list[list[int]]]]:
+    """Return deduplicated (site_dicts, surface_px_polygons) across calibrated cell sites."""
+    if not isinstance(sites, dict):
+        return [], []
+    out_sites, polys, seen = [], [], set()
+    for s in sites.values():
+        if not isinstance(s, dict) or (s.get("tier_of") and s["tier_of"] in sites):
+            continue
+        poly = s.get("surface_px")
+        if not (isinstance(poly, (list, tuple)) and len(poly) >= 3):
+            continue
+        pts = [[int(round(p[0])), int(round(p[1]))] for p in poly if isinstance(p, (list, tuple)) and len(p) >= 2]
+        key = tuple((x, y) for x, y in pts)
+        if len(pts) >= 3 and key not in seen:
+            seen.add(key)
+            out_sites.append(s)
+            polys.append(pts)
+    return out_sites, polys
+
+
+def site_foreground_mask(img, sites: dict | None, roi, params) -> tuple[np.ndarray, list[dict]]:
+    """Union calibrated-site foreground masks over `roi` without duplicating polygon iteration."""
+    import cell_objects
+
+    valid_sites, _ = valid_surface_sites(sites)
+    mask = np.zeros((roi[3] - roi[1], roi[2] - roi[0]), np.uint8)
+    for s in valid_sites:
+        mask |= cell_objects.foreground(img, roi, params=params, surface_px=s.get("surface_px"), surface_lab=s.get("surface_lab"))
+    return mask, valid_sites
+
+
 def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params=None,
           surface_px=None, high_surface_px=None) -> dict:
     """The verdict for one planned leg (TCP points in metres): {"clear", "low", "high", "off_map", "off_surface"}.

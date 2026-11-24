@@ -218,6 +218,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
             runner.holding = present[5] > grip_floor + empty_margin
             fields["holding"] = runner.holding
         runner.chunk, runner.last_grip, runner.last_body = None, None, None
+        runner.last_input = now
         unconfirmed_release = getattr(runner, "_release_until", None) is not None
         if unconfirmed_release:
             fields.update(ok=False, holding=True, error="release not confirmed by jaw feedback")
@@ -255,6 +256,8 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
 def check_runner_idle(runner, cr_attr) -> bool:
     """Fold home, then end the session (True), when no command has come for a while."""
     if runner.chunk is not None or runner.queue or runner.pending or getattr(runner, "_release_until", None) is not None or getattr(runner, "_recovery_active", False):
+        if runner.chunk is not None or runner.queue or runner.pending:
+            runner.last_input = runner.clock()
         return False
     quiet = runner.clock() - runner.last_input
     idle_retry_s, idle_park_s, idle_stop_s = cr_attr("IDLE_RETRY_S", IDLE_RETRY_S), cr_attr("IDLE_PARK_S", IDLE_PARK_S), cr_attr("IDLE_STOP_S", IDLE_STOP_S)

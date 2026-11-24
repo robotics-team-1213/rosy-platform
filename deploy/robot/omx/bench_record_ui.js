@@ -37,6 +37,12 @@ function benchSessionActive(st=lastStatus){
   return BUSY.has(st?.status)||st?.phase==='prepare'||st?.phase==='recording';
 }
 
+// only the recording phase with the server's recording status is an active take; setup/prepare/result/idle are standby
+function isActivelyRecording(){
+  return currentBenchPhase()==='recording'&&lastStatus?.status==='recording';
+}
+window.isActivelyRecording=isActivelyRecording;
+
 function resolveBenchPhase(statusCode,telemetryActive,phase){
   if(BENCH_PHASES.includes(phase))return phase;
   if(statusCode==='recording')return 'recording';
@@ -71,6 +77,7 @@ function applyBenchPhase(phase){
   if(p==='prepare'||p==='recording'){const secSt=$('sec-status');if(secSt)secSt.open=true;}
   if(benchSessionActive()&&typeof window.closeDrawer==='function'&&window.activeDrawerName?.()!=='records')window.closeDrawer(false);
   if(p!=='result')renderCamGuide();
+  if(typeof updateCameraRecordingMask==='function')updateCameraRecordingMask();
   if(typeof updateGoalSummaryRows==='function')updateGoalSummaryRows();
 }
 

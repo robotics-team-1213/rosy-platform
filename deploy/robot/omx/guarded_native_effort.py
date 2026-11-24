@@ -96,6 +96,26 @@ def watch_hold(motion, name: str, saturated: bool, pwm: float, read_started: flo
         hold["saturated_since"] = read_started
 
 
+def _sampled_gripper_effort(motion, sample_time: float | None):
+    mon = getattr(motion, "monitor", None)
+    motions = getattr(mon, "motions", None)
+    key_fn = getattr(mon, "key", None)
+    if not isinstance(motions, dict) or not callable(key_fn):
+        return None, None
+    state = motions.get(key_fn(motion))
+    if not isinstance(state, dict):
+        return None, None
+    grip_lim = ((state.get("limits") or {}).get("gripper") or {}).get("pwm_limit")
+    grip_pwm = None
+    last = state.get("last")
+    if sample_time is not None and isinstance(last, dict) and last.get("sample_time") == sample_time:
+        for entry in last.get("motors") or ():
+            if entry.get("joint") == "gripper" and isinstance(entry.get("pwm"), (int, float)) and not isinstance(entry.get("pwm"), bool):
+                grip_pwm = entry["pwm"]
+                break
+    return grip_pwm, grip_lim
+
+
 def check_effort(motion, current: dict, started: float, *, allow_stale_hold: bool = False) -> dict:
     before = motion.clock()
     if motion.last_effort_time is not None and before - motion.last_effort_time < 0.2 - 1e-9:
@@ -183,8 +203,11 @@ def check_effort(motion, current: dict, started: float, *, allow_stale_hold: boo
     if "gripper" in motion.active:  # a gripper that squeezes (its command leads it: blocked by the box) keeps its bounded lead; it is NEVER frozen or cut for it
         if motion.grip_way is None and abs(motion.command["gripper"] - current["gripper"]) >= (LEAD_DEG - 0.5) * TICKS_PER_DEGREE:
             squeeze = motion.squeeze.setdefault("gripper", {"saturated_since": None})
-            grip_pwm = motion.follower.read("Present_PWM", "gripper", num_retry=READ_RETRY)
-            grip_lim = motion.follower.read("PWM_Limit", "gripper", num_retry=READ_RETRY)
+            grip_pwm, grip_lim = _sampled_gripper_effort(motion, monitor_started)
+            if grip_pwm is None:
+                grip_pwm = motion.follower.read("Present_PWM", "gripper", num_retry=READ_RETRY)
+            if grip_lim is None:
+                grip_lim = motion.follower.read("PWM_Limit", "gripper", num_retry=READ_RETRY)
             if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (grip_pwm, grip_lim)):
                 raise TelemetryReadError(f"gripper: invalid squeeze telemetry ({grip_pwm}, {grip_lim})")
             if abs(grip_pwm) < 0.9 * grip_lim:

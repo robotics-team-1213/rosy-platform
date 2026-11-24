@@ -59,7 +59,10 @@ class DelegatedArmJobs:
         return self._recheck(lambda: self._observed().rechecks.request(mission_id, recheck_key, principal_id=principal_id))
 
     def read_recheck(self, mission_id, recheck_key):
-        return self._recheck(lambda: self._observed().rechecks.read(mission_id, recheck_key))
+        try:
+            return self._recheck(lambda: self._observed().rechecks.read(mission_id, recheck_key))
+        except KeyError:
+            raise HTTPException(404, detail={"code": "ARM_TRANSFER_RECHECK_NOT_FOUND"}) from None
 
     @staticmethod
     def _recheck(function):

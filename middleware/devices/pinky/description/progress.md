@@ -36,7 +36,7 @@ plans:
 - 로봇 URDF/xacro, visual/collision meshes, RViz 모델 뷰. 첫 하드웨어는 Pinky Pro다. `namespace`/`frame_prefix`를 지원한다(D-4).
 - 시뮬레이션 렌더는 DART 호환 primitive collision과 축 방향 wheel cylinder를 사용하고, 실제 description의 상세 collision mesh는 보존한다.
 - `deploy/robot/pinky_pro/image/ 빌더`의 io-build 단계가 `description`을 복사·빌드한다. 단 `.dockerignore`가 `src/description/meshes/**`를 build context에서 제외하고, Dockerfile이 `RUN mkdir -p src/description/meshes`로 빈 폴더만 만든다 — meshes 자체는 device 이미지에 실리지 않는다.
-- Gazebo는 `rosy_gz.urdf.xacro`를 쓴다. `left_wheel_joint`/`right_wheel_joint` 이름은 `bringup`과 맞춰야 한다.
+- Gazebo는 `rosy_gz.urdf.xacro`를 쓴다. `l_wheel_joint`/`r_wheel_joint` 이름은 `bringup`과 맞춰야 한다.
 - 2026-10-12 원본/반빔 정지 비교는 센서 경계 오차 개선을 지지하지만 회전 안전 거절은 남았다. 새 위상 후보의 SOURCE와 LOCAL은 GO다. 2026-10-13 원본 맵 Leg9는 실제 안전 정책 실패로 종료되어 ROS-SIM은 HOLD이며 지도 완주·실물 수용은 미완료다.
 
 ## 다음 gate
@@ -48,4 +48,4 @@ plans:
 
 - Gazebo 전용 플러그인/토픽을 `rosy_gz.urdf.xacro`에서 깨지 않는다.
 - inertia helper는 `urdf/common/insert_inertia.urdf.xacro`에 유지한다.
-- `left_wheel_joint`/`right_wheel_joint` 이름을 `bringup`과 어긋나게 바꾸지 않는다.
+- `l_wheel_joint`/`r_wheel_joint` 이름을 `bringup`과 어긋나게 바꾸지 않는다.

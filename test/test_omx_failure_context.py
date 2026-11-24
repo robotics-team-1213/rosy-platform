@@ -138,9 +138,24 @@ def test_cell_readiness_and_digest_validation():
     }
     core["readiness_digest"] = canonical_sha256(core)
     ready = CellReadiness.model_validate(core)
-    assert ready.cell_state_gen == 7
+    assert ready.cell_state_gen == 7 and ready.cells is None
     with pytest.raises(ValidationError):
         CellReadiness.model_validate({**core, "readiness_digest": "0" * 64})
+
+    with_cells = {
+        **{k: v for k, v in core.items() if k != "readiness_digest"},
+        "cells": {
+            "cell_s": {"arms": ["arm_s"], "fleet_safety": {"blocked": True}, "blocking_refusals": ["fleet_safety:cell_s:estop"], "allowed_tiers_now": [0]},
+            "cell_ab": {"arms": ["arm_a", "arm_b"], "fleet_safety": {"blocked": False}, "blocking_refusals": [], "allowed_tiers_now": [0, 1, 2]},
+        },
+    }
+    with_cells["readiness_digest"] = canonical_sha256(with_cells)
+    parsed_cells = CellReadiness.model_validate(with_cells)
+    assert parsed_cells.cells is not None and parsed_cells.cells["cell_ab"].allowed_tiers_now == [0, 1, 2]
+    bad_cell_key = {**{k: v for k, v in with_cells.items() if k != "readiness_digest"}, "cells": {**with_cells["cells"], "cell_x": {"arms": ["arm_s"], "allowed_tiers_now": [0]}}}
+    bad_cell_key["readiness_digest"] = canonical_sha256(bad_cell_key)
+    with pytest.raises(ValidationError):
+        CellReadiness.model_validate(bad_cell_key)
 
 
 def test_all_16_measured_vetoes_triggered():

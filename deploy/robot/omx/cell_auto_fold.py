@@ -177,16 +177,22 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     tries = (build_candidates(list(target[:6]), home, closed, park_fn, bounds=bounds, tcp_x_m=tcp_x_m,
                               clear_z_m=clear_z_m, situation=situation, extended=True)
              if extended_detours else list(candidates(list(target[:6]), park_fn)))  # the runner parks from its held target
-    if order is not None:
-        rank = {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
-        tries.sort(key=lambda c: (0 if situation == "low_open_jaws" and c[0].startswith("lift_") else 1, rank.get(c[0], len(rank))))
+    prefer_direct = bool(
+        latched["active"] and held_plan is not None and library_sha256
+        and status.get("library_sha256") == library_sha256
+        and status.get("torque_hold_commanded") is True and not status.get("holding")
+    )
+    rank = (
+        {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
+        if order is not None else {name: i for i, (name, _, _) in enumerate(tries)}
+    )
+    tries.sort(key=lambda c: (
+        0 if (prefer_direct and c[0] == "park") else (1 if situation == "low_open_jaws" and c[0].startswith("lift_") else 2),
+        rank.get(c[0], len(rank)),
+    ))
 
     def _try_candidate(name, before, frames):
-        can_fold_direct = (
-            latched["active"] and not before and held_plan is not None and library_sha256
-            and status.get("library_sha256") == library_sha256 and status.get("torque_hold_commanded") is True
-            and not status.get("holding")
-        )
+        can_fold_direct = prefer_direct and not before
         cand_frames = [state, *held_plan(state)] if can_fold_direct else frames
         cand_name = "fold-from-hold" if can_fold_direct else name
         verdict = look(cand_frames)
@@ -286,9 +292,10 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     through its wrapper as a recovery session for that incident alone, folds (main), waits for the session's own end
     (torque OFF confirmed in session.json) and clears that incident with the evidence. Anything short leaves the hold."""
     import os
-    import subprocess
 
-    from cell_auto_fold_stages import write_req_result as _write_req_result
+    from cell_auto_fold_stages import (
+        expiry_error as _expiry_error, run_launch_command as _run_launch_command, write_req_result as _write_req_result,
+    )
     import omx_incident
     import omx_incident_auto
 
@@ -296,8 +303,10 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
         res = {"result": "skipped", "why": f"invalid stage: {stage}"}
         _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
         return res
-    if expires_at is not None and now() > float(expires_at):
-        res = {"result": "skipped", "why": "SAFE_HOME_EXPIRED"}
+    fleet_req = (stage != "full") or bool(request_id) or (safety_fence is not None) or (stop_generation is not None)
+    exp_err = _expiry_error(expires_at, required=fleet_req, now_t=now())
+    if exp_err is not None:
+        res = {"result": "skipped", "why": exp_err}
         _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
         return res
     conf = json.loads(Path(conf_file).read_text(encoding="utf-8"))[arm]
@@ -324,16 +333,6 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     with os.fdopen(fd, "w") as stream:
         stream.write(json.dumps({"incident_id": incident, "arm": arm, "stage": stage, "at": now()}))
     out, cwd = marker.with_name(f"auto-fold-{incident}{suffix}.result.json"), Path(conf["cwd"]).expanduser()
-    command = [conf["wrapper"], sys.executable, str(Path(__file__).resolve()), "--arm", arm, "--config", conf["config"],
-               "--library", conf["library"], "--site", conf["site"], "--roi", *map(str, conf["roi"]),
-               "--stage", stage, "--out", str(out)]
-    if expires_at is not None:
-        command += ["--expires-at", f"{float(expires_at):.3f}"]
-    if stop_generation is not None:
-        command += ["--stop-generation", str(int(stop_generation))]
-    if safety_fence:
-        command += ["--safety-fence", str(safety_fence)]
-    env = {**os.environ, "ROSY_RECOVERY_INCIDENT": incident}
     started = now()
 
     def done(out_row: dict, candidate=None) -> dict:
@@ -342,21 +341,13 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
                                       "why": out_row.get("why"), "candidate": candidate})
         return out_row
 
-    proc = None
-    for _ in range(12):  # the session that held the arm may still be ending: its lock frees within a minute
-        if expires_at is not None and now() > float(expires_at):
-            marker.unlink(missing_ok=True)
-            return done({"result": "skipped", "why": "SAFE_HOME_EXPIRED"})
-        # no short timeout: killing the wrapper mid-fold would leave the arm out on its reach
-        proc = (run or subprocess.run)(command, cwd=cwd, env=env, timeout=3600, capture_output=True, text=True)
-        if "session lock is held" not in (proc.stdout or "") + (proc.stderr or ""):
-            break
-        sleep(5)
-    if not out.is_file():
-        output = ((proc.stdout or "") + (proc.stderr or "")) if proc is not None else "no process run"
-        if "session lock is held" in output:
-            marker.unlink(missing_ok=True)
-        return done({"result": "failed", "why": output[-300:]})
+    early = _run_launch_command(
+        Path(__file__).resolve(), arm, conf, stage=stage, out=out, cwd=cwd, incident=incident, marker=marker,
+        expires_at=expires_at, stop_generation=stop_generation, safety_fence=safety_fence, run=run,
+        sleep=sleep, now=now, require_expiry=fleet_req,
+    )
+    if early is not None:
+        return done(early)
     result = json.loads(out.read_text())
     cand = result.get("candidate")
     _learn(result, result.get("result") in ("folded", "risen_for_visual_verify"))

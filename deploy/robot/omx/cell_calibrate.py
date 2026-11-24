@@ -191,8 +191,9 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             log({"point": [x, y], "stopped": failed, "error": status.get("error"), "state": status.get("state")})
             break
-        kept = consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
+        # tcp_marks holds unlabelled single-jaw pixels (~70 px apart > follow_px) until remap_marks labels them
+        kept = [] if tcp_marks else consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         near = predicted(kept, (x, y)) if len(kept) >= 4 else None
         report = {}
         mark = cell_pivot.mark_jaws(
@@ -351,26 +352,7 @@ def main(argv=None):
         elif step.startswith("surface"):
             import cell_surface
 
-            site = step.split()[1]
-            s = config["sites"][site]
-            if not s.get("place"):
-                done.append({step: "no place point to touch"})
-                continue
-            tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else config["plan"].get("tcp_x_m")
-            lib = work / f"surface-{site}.library.json"
-            lib.write_text(json.dumps(cell_surface.probe_library(
-                config["plan"], *s["place"], s["yaw_deg"], 0.10, 0.010, tcp_x_m=tcp_x_m)))
-            touched = cell_surface.touch(cell, lib, tcp_x_m=tcp_x_m)
-            if touched["result"] == "touched":
-                s["surface_z"] = touched["surface_z"]
-            if config.get("work_dir"):
-                rcp = Path(config["work_dir"]).expanduser() / f"surface-{site}.json"
-                rtmp = rcp.with_suffix(".tmp")
-                rtmp.write_text(json.dumps({"result": touched["result"], "surface_z": touched.get("surface_z"), "site": site,
-                                            "xy": list(s["place"]), "measured": time.strftime("%Y-%m-%d %H:%M"),
-                                            "sets_surface_z": touched["result"] == "touched"}, indent=1), encoding="utf-8")
-                rtmp.replace(rcp)
-            done.append({step: touched["result"], "surface_z": touched.get("surface_z")})
+            done.append(cell_surface.run_surface_step(cell, config, step, work))
         elif step == "post-eval":
             import cell_post_eval
             rep = cell_post_eval.run_post_eval(

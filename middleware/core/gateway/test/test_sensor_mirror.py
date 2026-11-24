@@ -217,3 +217,13 @@ def test_sensor_list_omits_detail_age_and_legacy_stamp_is_serializable(core_clie
     assert legacy.status_code == 200
     assert legacy.json()["evidence"] == "stale"
     assert legacy.json()["sample_age_s"] is None
+
+
+def test_wheels_matches_namespaced_and_unnamespaced_urdf_joint_names():
+    m, _ = _mirror()
+    m.wheels(NS(header=_hdr(), name=["rosy_01/l_wheel_joint", "rosy_01/r_wheel_joint"],
+                position=[1.5, 2.5], velocity=[0.3, -0.3], effort=[]))
+    w = m.sample("wheels")
+    assert w["names"] == ["rosy_01/l_wheel_joint", "rosy_01/r_wheel_joint"]
+    assert w["position"] == [1.5, 2.5]
+    assert w["velocity"] == [0.3, -0.3]

@@ -8,6 +8,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
+from core_common.protocol.cell_failure_context import FALLBACK_VERBS
+
 
 class ToolEffectClass(str, Enum):
     READ_ONLY = "read_only"
@@ -81,6 +83,37 @@ _PICK_PLACE_ARGUMENTS = json.dumps({
     "required": ["target", "destination"], "additionalProperties": False,
 }, separators=(",", ":"))
 
+_CELL_ID_ARGS = json.dumps({
+    "type": "object", "properties": {"cell_id": {"type": "string", "enum": ["cell_s", "cell_ab"]}},
+    "required": ["cell_id"], "additionalProperties": False,
+}, separators=(",", ":"))
+_CELL_FAILURE_ARGS = json.dumps({
+    "type": "object",
+    "properties": {
+        "arm_id": {"type": "string", "enum": ["arm_s", "arm_a", "arm_b"]},
+        "bundle_id": {"type": "string", "maxLength": 96},
+    },
+    "required": ["arm_id"], "additionalProperties": False,
+}, separators=(",", ":"))
+_CELL_FALLBACK_ARGS = json.dumps({
+    "type": "object",
+    "properties": {
+        "cell_id": {"type": "string", "enum": ["cell_s", "cell_ab"]},
+        "arm_id": {"type": "string", "enum": ["arm_s", "arm_a", "arm_b"]},
+        "verb": {"type": "string", "enum": list(FALLBACK_VERBS)},
+        "expected_context_sha256": {"type": "string", "minLength": 64, "maxLength": 64},
+        "expected_readiness_digest": {"type": "string", "minLength": 64, "maxLength": 64},
+        "expected_dispatch_generation": {"type": "integer", "minimum": 0},
+        "expected_stop_generation": {"type": "integer", "minimum": 0},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 512},
+    },
+    "required": [
+        "cell_id", "arm_id", "verb", "expected_context_sha256",
+        "expected_readiness_digest", "expected_dispatch_generation", "expected_stop_generation", "rationale",
+    ],
+    "additionalProperties": False,
+}, separators=(",", ":"))
+
 MODEL_TOOL_CATALOG = MappingProxyType({
     "get_fleet_state": ModelToolDefinition(
         name="get_fleet_state", description="Read the current Fleet status for the scoped read-only question.",
@@ -118,12 +151,30 @@ MODEL_TOOL_CATALOG = MappingProxyType({
         effect_class=ToolEffectClass.CANDIDATE_WRITING, feedback_enabled=False,
         _parameters_json=_PICK_PLACE_ARGUMENTS,
     ),
+    "get_cell_readiness": ModelToolDefinition(
+        name="get_cell_readiness",
+        description="Read server-verified cell readiness, authority generations, and arm holds.",
+        effect_class=ToolEffectClass.READ_ONLY, feedback_enabled=True,
+        _parameters_json=_CELL_ID_ARGS, scope="cell",
+    ),
+    "get_cell_failure_context": ModelToolDefinition(
+        name="get_cell_failure_context",
+        description="Read metadata and allowed fallback menu of the latest CellFailureContext bundle.",
+        effect_class=ToolEffectClass.READ_ONLY, feedback_enabled=True,
+        _parameters_json=_CELL_FAILURE_ARGS, scope="cell",
+    ),
+    "propose_cell_fallback": ModelToolDefinition(
+        name="propose_cell_fallback",
+        description="Propose one closed-menu fallback candidate (PROPOSED only; never dispatches motion).",
+        effect_class=ToolEffectClass.CANDIDATE_WRITING, feedback_enabled=True,
+        _parameters_json=_CELL_FALLBACK_ARGS, scope="cell",
+    ),
 })
 
 
 def provider_tool_schemas(*, feedback_only: bool = True, scope: str = 'mission') -> list[dict[str, Any]]:
     """Project only the selected turn's catalog entries as fresh JSON objects."""
-    if scope not in {'mission', 'incident', 'channel'}:
+    if scope not in {'mission', 'incident', 'channel', 'cell'}:
         raise ValueError('UNSUPPORTED_TOOL_SCOPE')
     return [
         definition.provider_schema()

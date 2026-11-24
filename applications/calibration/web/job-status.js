@@ -39,13 +39,15 @@ function renderRecentJobs(rows) {
   wrap.appendChild(tbl);
 }
 
-export async function loadJobStatus() {
+export async function loadJobStatus({ onStatus } = {}) {
   const note = $("jobStatusNote");
   const tag = $("jobStatusTag");
   let status;
   try {
     status = await fetchJson("/api/calibration/status");
+    onStatus?.(status);
   } catch (err) {
+    onStatus?.(null);
     const noCells = err.status === 404;
     const login = err.status === 401;
     tag.setAttribute("status", noCells || login ? "neutral" : "crit");

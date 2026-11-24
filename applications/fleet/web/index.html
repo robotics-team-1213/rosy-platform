@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/console/assets/styles.css">
   <link rel="stylesheet" href="/console/assets/roster.css">
+  <link rel="stylesheet" href="/console/assets/omx-inspector.css">
   <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/assistant.css">
@@ -216,8 +217,8 @@
         <div class="spacer"></div>
         <label for="map-display-mode">표시</label>
         <select class="ui-field" id="map-display-mode" aria-label="지도 표시 방식">
+          <option value="overlay">실제 환경 + 좌표</option>
           <option value="coordinates">2D 좌표·선</option>
-          <option value="overlay">교정 영상 + 좌표</option>
           <option value="camera">원본 영상만</option>
         </select>
       </div>
@@ -315,7 +316,7 @@
     </div>
     <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">
           <section id="dispatch-control" class="dispatch-control" role="status"
-                   aria-live="polite" aria-labelledby="dispatch-control-title">
+                   aria-live="polite" aria-labelledby="dispatch-control-title" data-unit-scope="drive">
             <div>
               <strong id="dispatch-control-title">발행 상태 확인 중</strong>
               <small id="dispatch-control-detail">대기 작업과 정지 세대를 읽고 있습니다.</small>
@@ -348,7 +349,7 @@
         <div id="work-move-form"></div>
       </section>
       <section class="panel cell-context-panel" id="cell-context-panel" aria-labelledby="cell-context-heading" hidden></section>
-      <section class="panel" aria-labelledby="roster-heading">
+      <section class="panel" aria-labelledby="roster-heading" data-unit-scope="drive">
         <div class="roster-block" data-unit-scope="drive">
           <h2 id="roster-heading">등록 로봇</h2>
           <p id="discovery-pending" class="hint" role="status" hidden><span></span> · <a href="/console/install">설치·보정에서 등록</a></p>

@@ -7,33 +7,55 @@ import json
 import math
 import os
 from pathlib import Path
+import subprocess
 import sys
+import threading
 import time
 from typing import Any, Callable
 
 
-def _safety_fence_error(args) -> str | None:
-    if args.expires_at is not None and time.time() > float(args.expires_at):
-        return "SAFE_HOME_EXPIRED"
-    if args.safety_fence is None and args.stop_generation is None:
-        return None
-    fence_path = Path(args.safety_fence) if (args.safety_fence and args.safety_fence.strip()) else None
-    if fence_path is None or not fence_path.is_file():
-        return "SAFETY_FENCE_MISSING"
+def expiry_error(expires_at: Any, *, required: bool, now_t: float) -> str | None:
+    if expires_at is None:
+        return "SAFE_HOME_EXPIRY_MISSING" if required else None
+    if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
+        return "SAFE_HOME_EXPIRY_INVALID"
     try:
-        fence = json.loads(fence_path.read_text(encoding="utf-8"))
-        upd = fence.get("updated_at") if isinstance(fence, dict) else None
-        sg = fence.get("stop_generation") if isinstance(fence, dict) else None
-        if not isinstance(fence, dict) or type(fence.get("human_hold")) is not bool:
+        exp_f = float(expires_at)
+    except (TypeError, ValueError, OverflowError):
+        return "SAFE_HOME_EXPIRY_INVALID"
+    if not math.isfinite(exp_f):
+        return "SAFE_HOME_EXPIRY_INVALID"
+    if now_t > exp_f:
+        return "SAFE_HOME_EXPIRED"
+    return None
+
+
+def _safety_fence_error(args) -> str | None:
+    if args.expires_at is not None:
+        exp_err = expiry_error(args.expires_at, required=True, now_t=time.time())
+        if exp_err is not None:
+            return exp_err
+    if args.safety_fence is not None or args.stop_generation is not None:
+        fence_path = Path(args.safety_fence) if (args.safety_fence and args.safety_fence.strip()) else None
+        if fence_path is None or not fence_path.is_file():
+            return "SAFETY_FENCE_MISSING"
+        try:
+            fence = json.loads(fence_path.read_text(encoding="utf-8"))
+            upd = fence.get("updated_at") if isinstance(fence, dict) else None
+            sg = fence.get("stop_generation") if isinstance(fence, dict) else None
+            if not isinstance(fence, dict) or type(fence.get("human_hold")) is not bool:
+                return "SAFETY_FENCE_UNREADABLE"
+            if fence["human_hold"]:
+                return "HUMAN_HOLD_ACTIVE"
+            if isinstance(upd, bool) or not isinstance(upd, (int, float)) or not math.isfinite(upd) or not (-5.0 <= (time.time() - upd) <= 15.0):
+                return "SAFETY_FENCE_STALE"
+            if type(sg) is not int or args.stop_generation is None or sg != args.stop_generation:
+                return "STOP_GENERATION_PREEMPTED"
+        except Exception:
             return "SAFETY_FENCE_UNREADABLE"
-        if fence["human_hold"]:
-            return "HUMAN_HOLD_ACTIVE"
-        if isinstance(upd, bool) or not isinstance(upd, (int, float)) or not math.isfinite(upd) or not (-5.0 <= (time.time() - upd) <= 15.0):
-            return "SAFETY_FENCE_STALE"
-        if type(sg) is not int or args.stop_generation is None or sg != args.stop_generation:
-            return "STOP_GENERATION_PREEMPTED"
-    except Exception:
-        return "SAFETY_FENCE_UNREADABLE"
+    fleet_requested = (getattr(args, "stage", "full") != "full") or (args.safety_fence is not None) or (args.stop_generation is not None)
+    if fleet_requested and args.expires_at is None:
+        return "SAFE_HOME_EXPIRY_MISSING"
     return None
 
 
@@ -81,6 +103,69 @@ def write_req_result(incidents_dir: Path, request_id: str | None, arm: str, stag
     tmp = target.with_name(f"{target.name}.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(payload, default=str), encoding="utf-8")
     os.replace(tmp, target)
+
+
+class FencedCell:
+    """Guard both `act()` and `checked()` with a session-wide safety-fence watcher through settling."""
+
+    def __init__(self, cell, fence_check: Callable[[], str | None], *, poll_s: float = 0.05):
+        self._cell, self._fence_check, self._poll_s = cell, fence_check, poll_s
+        self.tripped_reason: str | None = None
+        self._lock = threading.Lock()
+        self._done = threading.Event()
+        self._watcher: threading.Thread | None = None
+
+    def __enter__(self) -> "FencedCell":
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.close()
+
+    def close(self) -> None:
+        self._done.set()
+        if self._watcher is not None:
+            self._watcher.join(timeout=1.0)
+
+    def __getattr__(self, name: str):
+        return getattr(self._cell, name)
+
+    def _ensure_watcher(self) -> None:
+        with self._lock:
+            if self._watcher is not None:
+                return
+
+            def _watch() -> None:
+                while not self._done.wait(self._poll_s):
+                    watch_err = self._fence_check()
+                    if watch_err is not None:
+                        self.tripped_reason = watch_err
+                        try:
+                            self._cell.act("human-hold")
+                        except Exception:
+                            pass
+                        return
+
+            self._watcher = threading.Thread(target=_watch, daemon=True)
+            self._watcher.start()
+
+    def _guard_motion(self, call_fn: Callable[[], dict]) -> dict:
+        err = self.tripped_reason or self._fence_check()
+        if err is not None:
+            self.tripped_reason = err
+            return {"ok": False, "error": err, "fence_tripped": True}
+        self._ensure_watcher()
+        res = call_fn()
+        if self.tripped_reason is not None:
+            return {"ok": False, "error": self.tripped_reason, "fence_tripped": True, "motion_reply": res}
+        return res
+
+    def act(self, command: str, *args, **kwargs) -> dict:
+        if command in ("state", "human-hold", "stop now") or command.startswith(("human-hold ", "stop ")):
+            return self._cell.act(command, *args, **kwargs)
+        return self._guard_motion(lambda: self._cell.act(command, *args, **kwargs))
+
+    def checked(self, command: str, assessment: dict, *args, **kwargs) -> dict:
+        return self._guard_motion(lambda: self._cell.checked(command, assessment, *args, **kwargs))
 
 
 def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], recover_fn: Callable[..., dict],
@@ -136,7 +221,15 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
                         "ended": "stop_now", "unmoved": True, "steps": []}
             return {"schema": schema, "result": "held", "reason": fence_bad,
                     "hold_ok": cell.act("human-hold").get("ok"), "steps": []}
-        return recover_fn(cell, home, closed, stage=args.stage, **kw)
+        with FencedCell(cell, lambda: _safety_fence_error(args)) as fenced:
+            out = recover_fn(fenced, home, closed, stage=args.stage, **kw)
+            if fenced.tripped_reason is not None:
+                if out.get("result") != "held":
+                    held = cell.act("human-hold")
+                    return {"schema": schema, "result": "held", "reason": fenced.tripped_reason,
+                            "hold_ok": held.get("ok"), "steps": out.get("steps") or []}
+                out["reason"] = fenced.tripped_reason
+        return out
 
     rc = run_fold_session_cli(args, _guarded_recover, schema)
     if rc == 3 and args.out.is_file():
@@ -146,3 +239,46 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
         except Exception:
             pass
     return rc
+
+
+def run_launch_command(
+    script_path: Path, arm: str, conf: dict[str, Any], *, stage: str, out: Path, cwd: Path,
+    incident: str, marker: Path, expires_at: float | None, stop_generation: int | None,
+    safety_fence: str | None, run: Callable[..., Any] | None, sleep: Callable[[float], Any],
+    now: Callable[[], float], require_expiry: bool = False,
+) -> dict[str, Any] | None:
+    """Invoke auto-fold subprocess with lock retries; return early skip/failure payload or None once `out` exists."""
+    req_exp = bool(require_expiry or (stage != "full") or (safety_fence is not None) or (stop_generation is not None))
+    exp_err = expiry_error(expires_at, required=req_exp, now_t=now())
+    if exp_err is not None:
+        marker.unlink(missing_ok=True)
+        return {"result": "skipped", "why": exp_err}
+    command = [
+        conf["wrapper"], sys.executable, str(script_path), "--arm", arm, "--config", conf["config"],
+        "--library", conf["library"], "--site", conf["site"], "--roi", *map(str, conf["roi"]),
+        "--stage", stage, "--out", str(out),
+    ]
+    if expires_at is not None:
+        command += ["--expires-at", f"{float(expires_at):.3f}"]
+    if stop_generation is not None:
+        command += ["--stop-generation", str(int(stop_generation))]
+    if safety_fence:
+        command += ["--safety-fence", str(safety_fence)]
+    env = {**os.environ, "ROSY_RECOVERY_INCIDENT": incident}
+    proc = None
+    for _ in range(12):  # the session that held the arm may still be ending: its lock frees within a minute
+        exp_err = expiry_error(expires_at, required=req_exp, now_t=now())
+        if exp_err is not None:
+            marker.unlink(missing_ok=True)
+            return {"result": "skipped", "why": exp_err}
+        # no short timeout: killing the wrapper mid-fold would leave the arm out on its reach
+        proc = (run or subprocess.run)(command, cwd=cwd, env=env, timeout=3600, capture_output=True, text=True)
+        if "session lock is held" not in (proc.stdout or "") + (proc.stderr or ""):
+            break
+        sleep(5)
+    if not out.is_file():
+        output = ((proc.stdout or "") + (proc.stderr or "")) if proc is not None else "no process run"
+        if "session lock is held" in output:
+            marker.unlink(missing_ok=True)
+        return {"result": "failed", "why": output[-300:]}
+    return None

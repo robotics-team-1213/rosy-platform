@@ -151,8 +151,10 @@ def safe_folded_hold(prep: Path, arm: str | None, mh: dict | None, now=time.time
     live_doc = load_json_value(live_p, {})
     if not isinstance(live_doc, dict) or live_doc.get("pid") != pid:
         return False, "live.json의 PID가 실행 중인 러너와 일치하지 않습니다"
-    if live_doc.get("holding") is not False:
+    if live_doc.get("holding") is True:
         return False, "그리퍼 파지 중(holding=true) 상태는 자동 토크 해제를 금지합니다"
+    if live_doc.get("holding") is not False:
+        return False, "그리퍼 파지 여부(holding)가 확인되지 않아 자동 토크 해제를 금지합니다"
     if live_doc.get("fault"):
         return False, f"런타임 fault({live_doc.get('fault')}) 상태는 수동 확인이 필요합니다"
     state = live_doc.get("state")

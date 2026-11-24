@@ -38,6 +38,8 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     selectedInspectorCamByTarget: {},
     dualInspectorCamMode: false,
     selectedRobotId: null,
+    unconfirmedStopWarning: '',
+    stopGen: 0,
   };
   let lastCellTasksBody = null;
   let lastStatusBody = null;
@@ -76,8 +78,9 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     const btn = $('cell-live-stream-toggle');
     if (btn) {
       btn.textContent = liveStreamOn ? '영상 일시정지' : '영상 다시 보기';
+      btn.setAttribute('aria-pressed', String(liveStreamOn));
     }
-    cellFrames?.setRunning(liveStreamOn);
+    cellFrames?.setPaused(!liveStreamOn);
   }
 
   function renderSelect(selectEl, items, currentValue, labelFn) {
@@ -201,6 +204,8 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
 
   function clear() {
     generation++;
+    state.stopGen++;
+    state.unconfirmedStopWarning = '';
     stopPolling();
     if ($('real2sim-figures')) {
       $('real2sim-figures').hidden = true;
@@ -315,8 +320,12 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     syncOperatorButtons();
     const taskStatus = $('cell-tasks-status');
     if (taskStatus) {
-      const s = body?.summary || {};
-      taskStatus.textContent = `OMX 셀 태스크 원장: 전체 ${s.total ?? (body?.tasks?.length || 0)}건 (대기 ${s.queued ?? 0} · 실행 ${s.running ?? 0} · 완료 ${s.completed ?? 0})`;
+      if (state.unconfirmedStopWarning) {
+        taskStatus.textContent = state.unconfirmedStopWarning;
+      } else {
+        const s = body?.summary || {};
+        taskStatus.textContent = `OMX 셀 태스크 원장: 전체 ${s.total ?? (body?.tasks?.length || 0)}건 (대기 ${s.queued ?? 0} · 실행 ${s.running ?? 0} · 완료 ${s.completed ?? 0})`;
+      }
     }
   }
 
@@ -352,7 +361,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
       ensurePolling();
     } catch (error) {
       if (expectedGen !== generation) return;
-      if ($('cell-tasks-status')) {
+      if ($('cell-tasks-status') && !state.unconfirmedStopWarning) {
         $('cell-tasks-status').textContent = `OMX 셀 태스크 조회 실패: ${error.message}`;
       }
     }

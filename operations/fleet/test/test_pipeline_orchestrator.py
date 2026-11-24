@@ -397,6 +397,139 @@ def test_human_interrupted_running_cell_is_not_requeued():
     assert listed["cells"]["cell_s"]["gate"]["amr_motion_inhibited"] is True
 
 
+def test_human_stop_without_active_map_and_requires_positive_console_ack():
+    class _FakeConsole:
+        def __init__(self, cancel_reply):
+            self.cancel_reply = cancel_reply
+            self.calls = []
+
+        def discard_queued_goal(self, robot_id):
+            self.calls.append(("discard", robot_id))
+
+        async def cancel(self, robot_id):
+            self.calls.append(("cancel", robot_id))
+            return self.cancel_reply
+
+    app_partial = FastAPI()
+    con_ok = _FakeConsole({"canceled": True})
+    install_pipeline_routes(app_partial, site_maps=SimpleNamespace(active=lambda: None), console=con_ok)
+    res_partial = TestClient(app_partial).post(
+        "/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s", "human_detected": True, "robot_id": "rosy_46"},
+    ).json()
+    assert ("cancel", "rosy_46") in con_ok.calls
+    assert res_partial["ok"] is False and res_partial["stop_confirmed"] is False
+    assert "core_estop:unavailable" in res_partial["unconfirmed_pinky_stops"]
+    assert "omx_local_stop:unavailable" in res_partial["unconfirmed_pinky_stops"]
+    assert res_partial["pinky_estop"]["cancel_receipt"] == {"canceled": True}
+    assert res_partial["pinky_estop"]["status"] == "UNCONFIRMED"
+
+    app_full = FastAPI()
+    app_full.state.task_service = SimpleNamespace(store=SimpleNamespace(trip_stop_latch=lambda **_k: {"dispatch_enabled": False}))
+
+    async def _full_site_estop(_reason):
+        return {
+            "robots": [{"robot_id": "rosy_46", "stopped": True}],
+            "fleet_dispatch_control": {"dispatch_enabled": False},
+            "omx_local_stop": {"state": "LOCAL_LATCHED", "instances": [{"workcell_id": "cell_s", "instance_id": "omx1", "state": "LOCAL_LATCHED"}]},
+        }
+
+    app_full.state.execute_site_estop = _full_site_estop
+    install_pipeline_routes(app_full, site_maps=SimpleNamespace(active=lambda: None), console=con_ok)
+    c_full = TestClient(app_full)
+    res_full = c_full.post(
+        "/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s", "human_detected": True},
+    ).json()
+    assert res_full["ok"] is True and res_full["stop_confirmed"] is True
+    assert res_full["pinky_estop"]["status"] == "COMPLETED"
+    assert res_full["pinky_estop"]["robot_id"] is None
+    assert app_full.state.omx_cell_states["cell_s"]["docked_robot"] is None
+
+    # OMX stop that is only REQUESTED must NOT confirm the hold.
+    async def _req_only_estop(_reason):
+        return {
+            "robots": [{"robot_id": "rosy_46", "stopped": True}],
+            "fleet_dispatch_control": {"dispatch_enabled": False},
+            "omx_local_stop": {"state": "REQUESTED", "instances": [{"workcell_id": "cell_s", "instance_id": "omx1", "state": "REQUESTED"}]},
+        }
+
+    app_req = FastAPI()
+    app_req.state.task_service = SimpleNamespace(store=SimpleNamespace(trip_stop_latch=lambda **_k: {"dispatch_enabled": False}))
+    app_req.state.execute_site_estop = _req_only_estop
+    install_pipeline_routes(app_req, site_maps=SimpleNamespace(active=lambda: None), console=con_ok)
+    res_req = TestClient(app_req).post(
+        "/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s", "human_detected": True},
+    ).json()
+    assert res_req["ok"] is False and res_req["stop_confirmed"] is False
+    assert "omx_stop:omx1" in res_req["unconfirmed_pinky_stops"]
+    assert res_req["pinky_estop"]["status"] == "UNCONFIRMED"
+
+    app_bad = FastAPI()
+    con_bad = _FakeConsole({})
+    install_pipeline_routes(app_bad, site_maps=SimpleNamespace(active=lambda: None), console=con_bad)
+    c_bad = TestClient(app_bad)
+    res_bad = c_bad.post("/api/fleet/pipeline/vision-auto-check", json={"cell_id": "cell_ab", "intrusion_score": 0.9, "robot_id": "rosy_46"}).json()
+    assert res_bad["ok"] is False and res_bad["stop_confirmed"] is False
+    assert "pinky:rosy_46" in res_bad["unconfirmed_pinky_stops"]
+    assert res_bad["pinky_estop"]["status"] == "UNCONFIRMED"
+    assert app_bad.state.omx_cell_states["cell_ab"]["docked_robot"] is None
+
+
+def test_core_estop_runs_before_slow_halt_save_fail_and_cancel_ack(tmp_path):
+    import asyncio
+    from fleet.server.trip_halts import TripHalts
+    from fleet.server.trip_ports import TripConfig
+
+    order = []
+
+    class _FastEstopConsole:
+        async def estop_all(self):
+            order.append("estop_all")
+            return {"robots": [{"robot_id": "rosy_46", "stopped": True}]}
+
+    class _SlowRunner:
+        def __init__(self):
+            self.live = SimpleNamespace(
+                open=True,
+                view={"trip_id": "t-slow", "robot_id": "rosy_99", "state": "running", "detail": {}},
+            )
+            self._live = {"rosy_99": self.live}
+            self.halts = None
+
+        def aligning_robots(self):
+            return []
+
+        def close_all(self, reason):
+            self.live.open = False
+            self.live.view["state"] = "canceled"
+            self.live.view["detail"]["stop_sent"] = False
+            return [self.live]
+
+        async def halt_closed(self, lives):
+            assert "estop_all" in order  # CORE estop already executed before slow ledger/trip halt
+            order.append("halt_closed")
+            lives[0].view["detail"] = {"stop_sent": False, "error": "SAVE_FAILED:OSError"}
+
+    app = FastAPI()
+    app.state.trip_runner = _SlowRunner()
+    install_pipeline_routes(app, site_maps=SimpleNamespace(active=lambda: None), console=_FastEstopConsole())
+    res = TestClient(app).post("/api/fleet/pipeline/human-safety-gate", json={"cell_id": "cell_s", "human_detected": True}).json()
+    assert order == ["estop_all", "halt_closed"]
+    assert res["stop_confirmed"] is False and "t-slow" in res["unconfirmed_pinky_stops"]
+
+    async def _call(val):
+        return await val
+
+    store = SimpleNamespace(trips=lambda **kw: [], pending_handoff_stops=lambda: [], unconfirmed_trip_stops=lambda: [])
+    junc = SimpleNamespace(hold=lambda _r: None)
+
+    async def _neg_cancel(_rid):
+        return {}
+
+    halts = TripHalts(store, junc, TripConfig(), _call, lambda: 1.0, _neg_cancel, lambda _r: None, lambda _r: False)
+    out = asyncio.run(halts.halt_robot("rosy_46", False, None))
+    assert out["stop_sent"] is False and out["error"] == "CANCEL_UNCONFIRMED"
+
+
 def test_three_tier_pipeline_waits_for_predecessor_completion():
     from tools.sim.bay_departure_sim import build_world_261026_site_map
 
@@ -832,7 +965,8 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
         "/api/fleet/pipeline/vision-auto-check",
         json={"cell_id": "cell_ab", "intrusion_score": 0.82, "displaced_to": "belt_far"},
     ).json()
-    assert vis_intrude["ok"] is True
+    assert vis_intrude["stop_confirmed"] is False and "pinky:console_unavailable" in vis_intrude["unconfirmed_pinky_stops"]
+    assert app.state.omx_cell_states["cell_ab"]["docked_robot"] is None
     assert vis_intrude["vision"]["human_detected"] is True
     assert vis_intrude["safety_event"]["active_estop"] is True
     assert len(vis_intrude["safety_event"]["paused_tasks"]) >= 1
@@ -983,3 +1117,29 @@ def test_cell_task_resolves_robot_id_explicit_docked_and_fallback():
     assert bad_type.status_code == 422 and bad_type.json()["detail"]["code"] == "INVALID_ROBOT_ID"
     assert app.state.detected_displaced_site == "belt_far"
     app.state.detected_displaced_site = None
+
+
+def test_evaluate_fleet_pipeline_handles_offline_docked_robot_without_pose():
+    site_map = _map()
+    graph = build_graph(site_map)
+    offline_robot = SimpleNamespace(robot_id="rosy_42", kind="pinky", online=False, pose=None, yaw=None)
+
+    out_station = evaluate_fleet_pipeline(
+        site_map, graph, [offline_robot], [],
+        cell_states={"cell_s": {"robot_id": "rosy_42", "phase": "CLAIMED"}},
+    )
+    cell_s = out_station["omx_cell_layer"]["cells"]["cell_s"]
+    assert cell_s["handoff"]["robot_id"] == "rosy_42"
+    assert cell_s["gate"]["cell_can_claim"] is False
+
+    out_state_pose = evaluate_fleet_pipeline(
+        site_map, graph, [offline_robot], [],
+        cell_states={"cell_s": {
+            "robot_id": "rosy_42",
+            "phase": "CLAIMED",
+            "docked_robot": {"pose": {"x": 1.25, "y": -0.5}},
+        }},
+    )
+    cell_s2 = out_state_pose["omx_cell_layer"]["cells"]["cell_s"]
+    assert cell_s2["handoff"]["station_pose_xy_yaw"] == (1.25, -0.5, 0.0)
+    assert cell_s2["gate"]["cell_can_claim"] is False

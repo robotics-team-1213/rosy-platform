@@ -74,7 +74,7 @@ export function createCellActions(ctx) {
   }
 
   async function runHumanSafetyGate(cellId, humanDetected, robotId) {
-    const current = ctx.bump();
+    const myStopGen = ctx.state ? ++ctx.state.stopGen : 0;
     const actionTxt = humanDetected ? '사람 감지 비상정지(HUMAN_HOLD)' : '사람 이탈 · 작업 자동 재개';
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${actionTxt} (${cellId}) 처리 중입니다.`;
     try {
@@ -83,17 +83,24 @@ export function createCellActions(ctx) {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({cell_id: cellId, human_detected: humanDetected, robot_id: robotId}),
       });
-      if (current !== ctx.gen()) return;
-      await refreshCellTasks(current);
-      if ($('cell-tasks-status')) {
-        const detail = humanDetected
-          ? `일시정지 태스크 ${(res.paused_tasks || []).length}건`
-          : `자동 재개 태스크 ${(res.resumed_tasks || []).length}건`;
-        $('cell-tasks-status').textContent = `${actionTxt} 완료 (${detail})`;
+      if (ctx.state && myStopGen !== ctx.state.stopGen) return;
+      const unconfirmed = Array.isArray(res?.unconfirmed_pinky_stops) ? res.unconfirmed_pinky_stops : [];
+      const stopConfirmed = res?.stop_confirmed === true && res?.ok !== false && unconfirmed.length === 0;
+      const warnMsg = !stopConfirmed
+        ? `${actionTxt} 경고: 셀 정지 적용됨 · Pinky 정지 미확인(${unconfirmed.join(', ') || '확인 필요'}) — 수동 확인 필요`
+        : '';
+      if (ctx.state) ctx.state.unconfirmedStopWarning = warnMsg;
+      const okMsg = !stopConfirmed ? warnMsg : `${actionTxt} 완료 (일시정지 태스크 ${(res.paused_tasks || []).length}건)`;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = okMsg;
+      await refreshCellTasks(ctx.gen());
+      if ($('cell-tasks-status') && (!ctx.state || myStopGen === ctx.state.stopGen)) {
+        $('cell-tasks-status').textContent = okMsg;
       }
     } catch (error) {
-      if (current !== ctx.gen()) return;
-      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${actionTxt} 실패: ${error.message}`;
+      if (ctx.state && myStopGen !== ctx.state.stopGen) return;
+      const errMsg = `${actionTxt} 실패 (정지 미확인 — 수동 확인 필요): ${error.message}`;
+      if (ctx.state && humanDetected) ctx.state.unconfirmedStopWarning = errMsg;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = errMsg;
     }
   }
 
@@ -119,23 +126,41 @@ export function createCellActions(ctx) {
   }
 
   async function runVisionAutoCheck(cellId = 'cell_s', robotId = null) {
-    const current = ctx.bump();
-    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 카메라(${cellId}) 자동 안전·이탈 점검 중입니다.`;
+    const myStopGen = ctx.state ? ++ctx.state.stopGen : 0;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 카메라(${cellId}) 안전 비상정지 점검 중입니다.`;
     try {
       const res = await request(VISION_CHECK_PATH, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({cell_id: cellId, robot_id: activeRobotId(robotId)}),
+        body: JSON.stringify({
+          cell_id: cellId,
+          robot_id: activeRobotId(robotId),
+          human_detected: true,
+          intrusion_score: 1.0,
+          evidence_source: 'operator_camera_inspection',
+        }),
       });
-      if (current !== ctx.gen()) return;
-      await refreshCellTasks(current);
-      if ($('cell-tasks-status')) {
-        const v = res.vision || {};
-        $('cell-tasks-status').textContent = `비전 자동 점검(${cellId}) 완료: 사람 감지=${v.human_detected ? 'YES(E-Stop)' : 'NO(정상)'} · 이탈=${v.displaced_to || '없음'} · 프레임 ${v.snapshot_bytes ?? 0}B`;
+      if (ctx.state && myStopGen !== ctx.state.stopGen) return;
+      const v = res?.vision || {};
+      const unconfirmed = Array.isArray(res?.unconfirmed_pinky_stops) ? res.unconfirmed_pinky_stops : [];
+      const stopConfirmed = res?.stop_confirmed === true && res?.ok !== false && unconfirmed.length === 0;
+      const stopWarn = !stopConfirmed
+        ? ` · 경고: Pinky 정지 미확인(${unconfirmed.join(', ') || '확인 필요'})`
+        : '';
+      const msg = `비전 자동 점검(${cellId}) 완료: 사람 감지=${v.human_detected ? 'YES(E-Stop)' : 'NO(정상)'} · 이탈=${v.displaced_to || '없음'} · 프레임 ${v.snapshot_bytes ?? 0}B${stopWarn}`;
+      if (ctx.state) {
+        ctx.state.unconfirmedStopWarning = stopConfirmed ? '' : msg;
+      }
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = msg;
+      await refreshCellTasks(ctx.gen());
+      if ($('cell-tasks-status') && (!ctx.state || myStopGen === ctx.state.stopGen)) {
+        $('cell-tasks-status').textContent = msg;
       }
     } catch (error) {
-      if (current !== ctx.gen()) return;
-      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 자동 점검 실패: ${error.message}`;
+      if (ctx.state && myStopGen !== ctx.state.stopGen) return;
+      const errMsg = `비전 자동 점검 실패 (정지 미확인 — 수동 확인 필요): ${error.message}`;
+      if (ctx.state) ctx.state.unconfirmedStopWarning = errMsg;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = errMsg;
     }
   }
 

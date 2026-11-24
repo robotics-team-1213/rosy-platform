@@ -235,20 +235,20 @@ def test_session_wrappers_allow_chunk_override_and_have_lf_endings():
     expectations = {
         "with-session-arm-a-par.sh": (
             'ROSY_SESSION_CHUNKS:-chunks-topdown-guard-arma-closed49-20261103.json',
-            True,
+            "rosy-omx-observer@arm_a.service",
         ),
         "with-session-arm-b-par.sh": (
             'ROSY_SESSION_CHUNKS:-chunks-topdown-guard-armb-v21.json',
-            True,
+            "rosy-omx-observer@arm_b.service",
         ),
     }
-    for name, (chunk_expr, need_sleep) in expectations.items():
+    for name, (chunk_expr, observer_unit) in expectations.items():
         raw = (wrappers / name).read_bytes()
         assert b"\r" not in raw, f"{name} must use LF line endings"
         text = raw.decode("utf-8")
         assert chunk_expr in text
-        if need_sleep:
-            assert "sleep 1" in text
+        assert f"systemctl --user is-active --quiet {observer_unit}" in text
+        assert "sleep 0.2" in text
 
 
 def test_retreat_refuses_authorize_load_unsettled_command_mismatch_and_post_droop(tmp_path):

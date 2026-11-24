@@ -688,6 +688,7 @@ roots:
       fleet/server/tracking: fleet.server
       fleet/server/evidence: fleet.server
       fleet/server/sitemap: fleet.server
+      fleet/server/pipeline: fleet.server
       fleet/server/pose: fleet.server
       fleet/server/recognition: fleet.server
       fleet/server/rightofway: fleet.server
@@ -1471,6 +1472,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_pipeline.py
   - deploy/robot/omx/cell_pipeline_stages.py
   - deploy/robot/omx/cell_pipeline_io.py
+  - deploy/robot/omx/cell_pipeline_liveness.py
   - deploy/robot/omx/hardware_owner_goals.py
   - deploy/robot/omx/cell_policy_drive.py
   - deploy/robot/omx/cell_policy_shape.py
@@ -1509,11 +1511,13 @@ safety_review_paths:
   - deploy/robot/omx/cell_vlm_fence.py
   - deploy/robot/omx/cell_vlm_orchestrator.py
   - deploy/robot/omx/cell_envelope_review.py
+  - operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
+  - operations/fleet/fleet/server/sitemap/pipeline_governance_store.py
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
-  - operations/fleet/fleet/server/sitemap/pipeline_recovery_policy.py
-  - operations/fleet/fleet/server/sitemap/pipeline_recovery_tools.py
+  - operations/fleet/fleet/server/pipeline/pipeline_recovery_policy.py
+  - operations/fleet/fleet/server/pipeline/pipeline_recovery_tools.py
   - middleware/devices/omx/adapter/omx_adapter/chunk_library.py  # park_path, transit_path
   - tools/harness/safety_review.py  # the check itself
   - tools/harness/safety_review_exempt.json

@@ -18,6 +18,7 @@ from bench_record_handoff import (
     verify_sealed_collection,
 )
 from bench_record_inspect import ARMS
+from bench_record_preflight import check_replay_corridor
 from bench_record_replay import build_ik_replay, transform_replay, validate_replay_payload
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
@@ -92,11 +93,18 @@ class BenchPipelineMixin:
         rdir.mkdir(parents=True, exist_ok=True)
         existing = sorted(rdir.glob("*.json"))
         base_traj = None
+        preflight = None
         if src_type == "ik_planner":
             origin = str(body.get("origin") or "belt-in").strip()
             target_slot = str(body.get("target_slot") or "pinky").strip()
             hold = lambda: hold_other_arm_locks(arm, ARMS, self.procs, self.mounts, own=True)  # noqa: E731
             base_traj = build_ik_replay(self.prep, arm, origin=origin, target_slot=target_slot, python_exe=getattr(self, "python", None), hold=hold)
+            preflight = check_replay_corridor(self.prep, arm, base_traj)
+            if preflight.get("checked") and not preflight.get("clear"):
+                with self._pipe_lock:
+                    self._pipe_state["logs"] = (self._pipe_state["logs"] + [f"[sim:blocked] {preflight['reason']}"])[-15:]
+                raise ValueError(preflight["reason"])
+            base_traj["preflight"] = preflight
         elif src_ref.startswith("replays/"):
             cand = self.prep / src_ref
             if not cand.is_file():
@@ -128,7 +136,7 @@ class BenchPipelineMixin:
             self._pipe_state["stages"]["sim"] = "done"
             self._pipe_state["logs"] = (self._pipe_state["logs"] + [f"[sim] {src_type} -> {replay_id} ({len(base_traj.get('frames', []))} frames)"])[-15:]
             snap = json.loads(json.dumps(self._pipe_state))
-        return {"ok": True, "replay_id": replay_id, "summary": f"{src_type} 궤적 준비 완료 ({len(base_traj.get('frames', []))}프레임)", "pipeline": snap}
+        return {"ok": True, "replay_id": replay_id, "summary": f"{src_type} 궤적 준비 완료 ({len(base_traj.get('frames', []))}프레임)", "pipeline": snap, **({"preflight": preflight} if preflight is not None else {})}
 
     def _on_session_sealed(self, folder):
         """Server-side post-seal auto handoff (isolated so failures never affect homing/seal state)."""

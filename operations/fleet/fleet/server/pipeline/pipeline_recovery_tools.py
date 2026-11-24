@@ -1,6 +1,7 @@
 """Guarded LLM/VLA recovery tool HTTP endpoints, CAS/idempotency/role enforcement & bounded dispatch."""
 from __future__ import annotations
 
+from contextlib import suppress
 import copy
 import json
 import time
@@ -20,12 +21,54 @@ from core_common.protocol.pipeline_recovery_tools import (
     VisualCheckpointArgs,
 )
 from fleet.server.sitemap import pipeline_auto_events, pipeline_pinky_dispatch, pipeline_repark
-from fleet.server.sitemap.pipeline_recovery_policy import (
+from fleet.server.pipeline_recovery_policy import (
     ARM_CELL,
     arm_folded_fresh,
     collect_unresolved_failures,
+    effective_stop_fence,
     evaluate_visual_checkpoint,
 )
+
+
+def clear_label(body: dict, key: str) -> str | None:
+    """An optional clear label from the operator: only a non-empty string of at most 64 chars passes."""
+    value = body.get(key)
+    return value if isinstance(value, str) and value.strip() and len(value) <= 64 else None
+
+
+def arm_incident_sources(app, arm: str) -> list[str]:
+    """Observation source_id candidates for a pipeline arm; incidents are keyed by source_id (D-971)."""
+    candidates = [f"omx_{arm}", arm]  # fallback: the OMX naming the cell control PCs report under
+    obs = getattr(app.state, "workcell_observations_service", None)
+    snapshot = getattr(obs, "snapshot", None)
+    if not callable(snapshot):
+        return candidates
+    try:
+        cells = snapshot().get("workcells") or []
+    except Exception:
+        return candidates
+    matched = [entry["source_id"] for cell in cells for entry in cell.get("arms") or ()
+               if entry.get("arm_id") == arm
+               or str(entry.get("arm_id") or "").removesuffix("_follower") == arm
+               or entry.get("source_id") in (arm, f"omx_{arm}")]
+    return matched + [c for c in candidates if c not in matched]
+
+
+def clear_open_arm_incidents(app, arms: list[str], note: str, principal_id: str, cause: str, basis: str) -> None:
+    """Clearing the Fleet arm hold also clears that arm's open incident rows in the shared D-971 store."""
+    incidents = getattr(app.state, "arm_incidents", None)
+    if incidents is None:
+        return
+    for arm in arms:
+        for source_id in arm_incident_sources(app, arm):
+            hold = incidents.hold(source_id)
+            if not hold.held:
+                continue
+            for incident_id in hold.incident_ids:
+                try:  # already cleared or not this arm's row: the first record stands
+                    incidents.clear(source_id, incident_id, note, principal_id, cause=cause, basis=basis)
+                except (KeyError, ValueError):
+                    pass
 
 
 def policy_spec() -> dict:
@@ -145,12 +188,32 @@ def _optional_active(ctx):
         return None
 
 
-def _save_or_rollback(state, ctx, snap: dict[str, object]) -> None:
+def _save_or_rollback(state, ctx, snap: dict[str, object], *, bump_dispatch: bool = False) -> None:
+    commit_ledger = getattr(ctx, "_commit_ledger", None)
+    if callable(commit_ledger):
+        try:
+            commit_ledger(bump_dispatch=bump_dispatch)
+        except Exception:
+            for attr, val in snap.items():
+                setattr(state, attr, val)
+            if not getattr(state, "_pipeline_ledger_fault", False):
+                with suppress(Exception):
+                    commit_ledger(commit=False)
+            raise
+        return
+    saved = False
     try:
         ctx._save_ledger()
+        saved = True
+        gov = getattr(ctx, "gov", None) or getattr(state, "pipeline_governance", None)
+        if bump_dispatch and gov is not None:
+            gov.bump_dispatch_generation()
     except Exception:
         for attr, val in snap.items():
             setattr(state, attr, val)
+        if saved:
+            with suppress(Exception):
+                ctx._save_ledger()
         raise
 
 
@@ -171,8 +234,9 @@ def install_recovery_tool_routes(app, ctx) -> None:
     async def get_recovery_tools():
         now = time.time()
         active = _optional_active(ctx)
+        fence_held, _fence_gen = effective_stop_fence(app.state)
         failures = collect_unresolved_failures(
-            app.state, now, human_detected=bool(ctx._is_human_detected()),
+            app.state, now, human_detected=bool(ctx._is_human_detected() or fence_held),
             active=active, dispatch_enabled=pipeline_pinky_dispatch.enabled(),
         )
         return {
@@ -223,8 +287,9 @@ def install_recovery_tool_routes(app, ctx) -> None:
             return {**prev["response"], "idempotent_replay": True}
 
         active = _optional_active(ctx)
+        fence_held, fence_gen = effective_stop_fence(app.state)
         failures = collect_unresolved_failures(
-            app.state, now, human_detected=bool(ctx._is_human_detected()),
+            app.state, now, human_detected=bool(ctx._is_human_detected() or fence_held),
             active=active, dispatch_enabled=pipeline_pinky_dispatch.enabled(),
         )
         snap = {attr: copy.deepcopy(getattr(app.state, attr, None)) for attr in _STATE_ATTRS}
@@ -255,6 +320,8 @@ def install_recovery_tool_routes(app, ctx) -> None:
 
         if not req.root_task_id:
             _refuse(422, "ROOT_TASK_ID_REQUIRED")
+        if fence_gen is None and req.tool_name != "escalate_human":
+            _refuse(409, "STOP_AUTHORITY_UNAVAILABLE")
         failure = next((f for f in failures if f["root_task_id"] == req.root_task_id), None)
         if failure is None:
             _refuse(404, "UNKNOWN_FAILURE_CONTEXT")
@@ -286,7 +353,7 @@ def install_recovery_tool_routes(app, ctx) -> None:
             _save_or_rollback(app.state, ctx, snap)
             return resp
 
-        if ctx._is_human_detected() or any((s or {}).get("phase") == "HUMAN_HOLD" for s in app.state.omx_cell_states.values()):
+        if ctx._is_human_detected() or fence_held or any((s or {}).get("phase") == "HUMAN_HOLD" for s in app.state.omx_cell_states.values()):
             _refuse(409, "HUMAN_HOLD_ACTIVE")
         gate = failure["eligible_tools"].get(req.tool_name) or {}
         if not gate.get("allowed"):
@@ -304,6 +371,7 @@ def install_recovery_tool_routes(app, ctx) -> None:
 
         budgets = app.state.pipeline_recovery_budgets.setdefault(req.root_task_id, {})
         result: dict = {}
+        bump_dispatch = False
         if req.tool_name == "safe_fold_home":
             strategy = req.arguments.get("strategy", "auto_fold")
             target_arm = failure["arm_id"]
@@ -326,7 +394,7 @@ def install_recovery_tool_routes(app, ctx) -> None:
                 exp_at = min(now + 60.0, float(vis_at) + 60.0) if (strategy == "guarded_slow_park" and isinstance(vis_at, (int, float))) else (now + 60.0)
                 req_row = {"request_id": req.request_id, "root_task_id": req.root_task_id, "arm_id": target_arm,
                            "strategy": strategy, "expires_at": round(exp_at, 3),
-                           "stop_generation": int(getattr(app.state, "safety_stop_generation", 0)),
+                           "stop_generation": fence_gen,
                            "requested_by": principal, "caller_kind": req.caller_kind, "requested_at": round(now, 3)}
                 app.state.pending_safe_home_arms[target_arm] = req_row
                 sess.update({"arm_id": target_arm, "stage": f"EXECUTING_{strategy.upper()}", "active_request_id": req.request_id,
@@ -345,7 +413,8 @@ def install_recovery_tool_routes(app, ctx) -> None:
             spec = {**ctx.CELL_TASK_PRESETS[f"s3_recover_{site}"], "fallback_from_task_id": req.root_task_id,
                     "fallback_chain_depth": int(failure["fallback_chain_depth"]) + 1, "requires_presence_confirm": True,
                     **({"robot_id": failure["robot_id"]} if failure.get("robot_id") else {})}
-            task = ctx._enqueue_one_task(ctx.active_map(), spec, principal_id=principal, save=False)
+            task = ctx._enqueue_one_task(ctx.active_map(), spec, principal_id=principal, principal_role=actor_role, save=False)
+            bump_dispatch = task.get("status") == "QUEUED"
             budgets["enqueue_displaced_recovery"] = budgets.get("enqueue_displaced_recovery", 0) + 1
             result = {"action": "ENQUEUED_DISPLACED_RECOVERY", "requires_presence_confirm": True, "task": task}
         elif req.tool_name == "request_repark":
@@ -369,7 +438,8 @@ def install_recovery_tool_routes(app, ctx) -> None:
                         "fallback_from_task_id": req.root_task_id, "requires_presence_confirm": True,
                         "fallback_chain_depth": int(failure["fallback_chain_depth"]) + 1,
                         **({"robot_id": failure["robot_id"]} if failure.get("robot_id") else {})}
-                task = ctx._enqueue_one_task(ctx.active_map(), spec, principal_id=principal, save=False)
+                task = ctx._enqueue_one_task(ctx.active_map(), spec, principal_id=principal, principal_role=actor_role, save=False)
+                bump_dispatch = task.get("status") == "QUEUED"
                 budgets["enqueue_vla_act_fallback"] = budgets.get("enqueue_vla_act_fallback", 0) + 1
                 result = {"action": "ENQUEUED_ACT_FALLBACK_REQUIRES_PRESENCE", "requires_presence_confirm": True, "task": task}
         elif req.tool_name == "dispatch_pinky_reroute":
@@ -404,5 +474,5 @@ def install_recovery_tool_routes(app, ctx) -> None:
                 "status": "EXECUTED", "result": result, "audit_record": audit}
         _record_idempotency(app.state, idem_key, req_hash, resp, now, http_status=200)
         _append_audit(app.state, audit)
-        _save_or_rollback(app.state, ctx, snap)
+        _save_or_rollback(app.state, ctx, snap, bump_dispatch=bump_dispatch)
         return resp

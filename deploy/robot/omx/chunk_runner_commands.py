@@ -179,7 +179,8 @@ def dispatch_runner_command(runner, line: str) -> bool:
             except OSError as write_error:
                 _latch_status_write_error(runner, present if fold_on_stop else None, line, None, write_error)
             if not runner.human_hold_latched:
-                runner._recovery_active = False
+                from chunk_runner_loop import finish_recovery_stop
+                finish_recovery_stop(runner, state=present if fold_on_stop else None)
             return bool(runner.human_hold_latched)
         if verb == "episode":
             from episode_recorder import dispatch_episode_command

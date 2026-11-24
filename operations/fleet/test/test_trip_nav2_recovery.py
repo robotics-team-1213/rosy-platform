@@ -262,9 +262,11 @@ def test_http_pause_and_resume_with_guided_blocked_edges(tmp_path):
         sha256(b"op-tok").hexdigest(): {"principal_id": "bob", "role": "operator"},
         sha256(b"vw-tok").hexdigest(): {"principal_id": "carol", "role": "viewer"},
     }
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=["rosy_42"])
+    tasks.store.rearm_dispatch(expected_generation=tasks.store.dispatch_control()["generation"], actor_id="bob")
     app = create_app(
         console,
-        task_service=FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=["rosy_42"]),
+        task_service=tasks,
         site_maps=store, site_users=users,
     )
     app.state.trip_runner._clock = clock

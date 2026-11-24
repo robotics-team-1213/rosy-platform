@@ -572,3 +572,105 @@ def test_commit_rounds_to_the_nearest_tick_in_both_directions(guard):
     command["elbow_flex"], command["wrist_flex"] = 2048.7, 2047.3
     motion.commit({"started": clock[0], "command": command, "time": clock[0]})
     assert follower.goals["elbow_flex"] == 2049 and follower.goals["wrist_flex"] == 2047
+
+
+def test_teacher_replay_holds_frame_index_until_tracking_latches(guard, monkeypatch):
+    import guarded_native_cli
+
+    class Follower:
+        def __init__(self):
+            self.bus, self.cameras = Bus(), {}
+
+    follower = Follower()
+    monkeypatch.setattr(guarded_native_cli, "start_live_frames", lambda *a, **k: None)
+
+    class ReplayTeleop:
+        def __init__(self):
+            self.names = [n + ".pos" for n in NAMES]
+            self.frames = [[0.0] * 6, [10.0] * 6, [20.0] * 6]
+            self.calls = 0
+
+        def connect(self, calibrate=True):
+            pass
+
+        def disconnect(self):
+            pass
+
+        def get_action(self):
+            f = self.frames[min(self.calls, len(self.frames) - 1)]
+            self.calls += 1
+            return dict(zip(self.names, f))
+
+    teleop = ReplayTeleop()
+    motion_state = [SimpleNamespace(tracking=False, failed=False, monitor=None, boundary=False)]
+    calls_at_send = []
+
+    class FakeMotion:
+        def __init__(self, *a, **k):
+            pass
+
+        def __getattr__(self, name):
+            return getattr(motion_state[0], name)
+
+        def send(self, act):
+            calls_at_send.append((teleop.calls, act["shoulder_pan.pos"]))
+            return act
+
+    monkeypatch.setattr(guard, "NativeJointMotion", FakeMotion)
+    monkeypatch.setitem(sys.modules, "guarded_native", guard)
+    monkeypatch.setitem(sys.modules, "motor_health", SimpleNamespace(MotorHealth=lambda **kw: SimpleNamespace(admit=lambda *a: None, end=lambda: None)))
+    module = SimpleNamespace(
+        record=None,
+        make_robot_from_config=lambda cfg: follower,
+        make_teleoperator_from_config=lambda cfg: teleop,
+        ACTION="action",
+        OBS_STR="observation",
+        build_dataset_frame=lambda features, values, prefix: values,
+        record_loop=lambda *a, **kw: None,
+    )
+
+    def main():
+        rob = module.make_robot_from_config(SimpleNamespace(use_degrees=False))
+        tel = module.make_teleoperator_from_config(None)
+        rob.connect()
+        tel.connect()
+        rob.send_action(tel.get_action())  # motion=None -> holds calls==0
+        rob.send_action(tel.get_action())  # tracking=False -> holds calls==0
+        motion_state[0].tracking = True
+        rob.send_action(tel.get_action())  # tracking=True -> advances calls to 1
+        rob.send_action(tel.get_action())  # tracking=True -> advances calls to 2
+
+    module.main = main
+    guard.run_native(module, Follower, SimpleNamespace, teacher=True)
+    assert calls_at_send == [(0, 0.0), (0, 0.0), (1, 0.0), (2, 10.0)]
+
+
+def test_gripper_squeeze_reuses_monitor_pwm_and_cached_limit(guard, tmp_path):
+    import motor_health
+
+    follower, leader, clock = Bus(), Bus(leader=True), [10.0]
+    follower.raw['gripper'] = 2000
+    leader.raw['gripper'] = 2500
+    orig_read = follower.read
+
+    def read_with_limits(register, motor, **kwargs):
+        if register == 'Temperature_Limit':
+            return 70
+        if register == 'Min_Voltage_Limit':
+            return 60
+        if register == 'Max_Voltage_Limit':
+            return 140
+        if register == 'Present_Input_Voltage':
+            return 120
+        return orig_read(register, motor, **kwargs)
+
+    follower.read = read_with_limits
+    monitor = motor_health.MotorHealth(tmp_path / 'squeeze.jsonl', async_publish=True)
+    motion = guard.NativeJointMotion(follower, leader, monitor=monitor, clock=lambda: clock[0])
+    motion.send(action(leader))
+    follower.events.clear()
+    clock[0] += 0.25
+    motion.send(action(leader))
+    pwm_reads = [e for e in follower.events if e[0] == 'read' and e[2] == 'gripper']
+    assert pwm_reads == [('read', 'Present_PWM', 'gripper')]
+    monitor.end()

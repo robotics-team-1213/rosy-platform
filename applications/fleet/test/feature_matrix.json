@@ -4770,7 +4770,7 @@
           "id": "POST:/api/fleet/pipeline/recovery-tools/invoke",
           "method": "POST",
           "path": "/api/fleet/pipeline/recovery-tools/invoke",
-          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_recovery_tools.py",
+          "implementation": "operations/fleet/fleet/server/pipeline/pipeline_recovery_tools.py",
           "handler": "invoke_recovery_tool",
           "expected_statuses": [
             200
@@ -7567,6 +7567,7 @@
         "applications/fleet/web/cell/cell-observation.js",
         "applications/fleet/web/shared/cell-frames.js",
         "applications/fleet/web/shared/cell-cockpit-stage.js",
+        "applications/fleet/web/shared/cell-obs-model.js",
         "applications/fleet/web/roster-cards.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
@@ -7687,6 +7688,14 @@
         },
         {
           "consumer": "applications/fleet/web/shared/cell-cockpit-stage.js",
+          "expression": "/api/fleet/workcell-observations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/workcell-observations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-obs-model.js",
           "expression": "/api/fleet/workcell-observations",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -8539,6 +8548,237 @@
           ],
           "test_scope": "Passed remote standalone sample-host browser and API readback/reconciliation, plus actual backend HTTP duplicate/restart/live-send guards. Recommissioning attestation is not device proof or automatic rearm.",
           "source_revision": "bbffbf8577ce1968ad293ac4f8e4d5d7113ea83c"
+        }
+      ]
+    },
+    {
+      "id": "pinky_localization_binding",
+      "title": "Pinky localization monitoring, candidate confirm/relocalize, and D-1022 map binding",
+      "entrypoints": [
+        "applications/fleet/web/index.html"
+      ],
+      "consumers": [
+        "applications/fleet/web/localization-panel.js",
+        "applications/fleet/web/localization-panel-logic.js",
+        "applications/fleet/web/roster-workspace.js"
+      ],
+      "availability": "Configured Fleet console with LocalizationService and SiteMapStore; write actions require a named operator.",
+      "calls": [
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/localization",
+          "resolution": "template-literal; robot_id URL-encoded",
+          "request_ids": [
+            "GET:/api/fleet/robots/{robot_id}/localization"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/localization/confirm",
+          "resolution": "template-literal; robot_id URL-encoded",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/localization/confirm"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/relocalize",
+          "resolution": "template-literal; robot_id URL-encoded",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/relocalize"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(id)}/map-binding",
+          "resolution": "template-literal; GET/POST/DELETE map-binding",
+          "request_ids": [
+            "GET:/api/fleet/robots/{robot_id}/map-binding",
+            "POST:/api/fleet/robots/{robot_id}/map-binding",
+            "DELETE:/api/fleet/robots/{robot_id}/map-binding"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/localization-panel.js",
+          "expression": "/api/fleet/tracking/identity",
+          "resolution": "literal",
+          "request_ids": [
+            "GET:/api/fleet/tracking/identity"
+          ]
+        }
+      ],
+      "requests": [
+        {
+          "id": "GET:/api/fleet/robots/{robot_id}/localization",
+          "method": "GET",
+          "path": "/api/fleet/robots/{robot_id}/localization",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_localization",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/localization"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/localization/confirm",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/localization/confirm",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_localization_confirm",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/localization/confirm"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/relocalize",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/relocalize",
+          "implementation": "operations/fleet/fleet/server/pose/relocalize_routes.py",
+          "handler": "robot_relocalize",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_relocalize_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/relocalize"
+        },
+        {
+          "id": "GET:/api/fleet/robots/{robot_id}/map-binding",
+          "method": "GET",
+          "path": "/api/fleet/robots/{robot_id}/map-binding",
+          "implementation": "operations/fleet/fleet/server/sitemap/map_binding_routes.py",
+          "handler": "map_binding_read",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_map_binding_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/map-binding"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/map-binding",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/map-binding",
+          "implementation": "operations/fleet/fleet/server/sitemap/map_binding_routes.py",
+          "handler": "map_binding_approve",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_map_binding_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/map-binding"
+        },
+        {
+          "id": "DELETE:/api/fleet/robots/{robot_id}/map-binding",
+          "method": "DELETE",
+          "path": "/api/fleet/robots/{robot_id}/map-binding",
+          "implementation": "operations/fleet/fleet/server/sitemap/map_binding_routes.py",
+          "handler": "map_binding_revoke",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Real authenticated HTTP and SQLite with FakeRobot localization/map-binding fixtures; no physical device movement or deployed TLS.",
+          "contract_tests": [
+            "operations/fleet/test/test_map_binding_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#DELETE:/api/fleet/robots/{robot_id}/map-binding"
+        }
+      ],
+      "flows": [
+        {
+          "id": "pinky_localization_binding.happy",
+          "kind": "happy",
+          "steps": [
+            {
+              "request_ids": [
+                "GET:/api/fleet/robots/{robot_id}/localization",
+                "POST:/api/fleet/robots/{robot_id}/relocalize",
+                "POST:/api/fleet/robots/{robot_id}/localization/confirm",
+                "GET:/api/fleet/tracking/identity",
+                "POST:/api/fleet/robots/{robot_id}/map-binding",
+                "GET:/api/fleet/robots/{robot_id}/map-binding"
+              ],
+              "screen_assertion": "Candidate confirm transitions robot to LOCALIZED and D-1022 binding readback confirms matches=true."
+            }
+          ],
+          "scenario_id": "pinky_localization_binding.happy",
+          "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pinky_localization_binding]",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_sample_flows.py::test_pinky_localization_and_map_binding_flow"
+          ],
+          "test_scope": "Standalone sample-host Chromium + sample API flow; no device movement.",
+          "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+        },
+        {
+          "id": "pinky_localization_binding.refused",
+          "kind": "refused",
+          "steps": [
+            {
+              "request_ids": [
+                "POST:/api/fleet/robots/{robot_id}/localization/confirm",
+                "POST:/api/fleet/robots/{robot_id}/relocalize",
+                "POST:/api/fleet/robots/{robot_id}/map-binding"
+              ],
+              "screen_assertion": "Invalid candidate index, already localized relocalize, and missing holdout binding are refused with 404/409."
+            }
+          ],
+          "scenario_id": "pinky_localization_binding.refused",
+          "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pinky_localization_binding]",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_sample_flows.py::test_pinky_localization_and_map_binding_flow"
+          ],
+          "test_scope": "Standalone sample-host Chromium + sample API flow; no device movement.",
+          "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+        },
+        {
+          "id": "pinky_localization_binding.terminal",
+          "kind": "terminal",
+          "steps": [
+            {
+              "request_ids": [
+                "DELETE:/api/fleet/robots/{robot_id}/map-binding",
+                "GET:/api/fleet/robots/{robot_id}/map-binding"
+              ],
+              "screen_assertion": "Revoking active map binding clears matches and restores MAP_BINDING_REQUIRED readback."
+            }
+          ],
+          "scenario_id": "pinky_localization_binding.terminal",
+          "browser_test": "applications/fleet/test/test_feature_browser_flows.py::test_representative_contract_in_browser[pinky_localization_binding]",
+          "sample_status": "verified",
+          "sample_contract_nodes": [
+            "applications/fleet/test/test_sample_flows.py::test_pinky_localization_and_map_binding_flow"
+          ],
+          "test_scope": "Standalone sample-host Chromium + sample API flow; no device movement.",
+          "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
         }
       ]
     }

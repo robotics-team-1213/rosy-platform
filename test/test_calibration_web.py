@@ -214,6 +214,9 @@ def _write_test_profile(tmp_path: Path, live_url: str, *, include_tcp_x: bool = 
 
 def test_unconfigured_profiles_serves_static_grid_assets(open_screen):
     assert call(open_screen, "/grid.js")[0] == 200 and call(open_screen, "/requests.js")[0] == 200
+    assert call(open_screen, "/status-logic.js")[0] == 200
+    _, html = call(open_screen, "/")
+    assert b'href="/common/brand/platform.svg"' in html
     status, body = call(open_screen, web.PROFILES_API)
     data = json.loads(body)
     assert status == 200 and data["configured"] is False and data["profiles"] == []

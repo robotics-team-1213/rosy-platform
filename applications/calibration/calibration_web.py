@@ -324,6 +324,16 @@ class Handler(BaseHTTPRequestHandler):
         return self.json(404, {"error": "없는 프레임 종류입니다."})
 
 
+def _load_jobs(cells: Path | None, **hooks):
+    if not cells:
+        return None
+    try:
+        return calibration_jobs.Jobs(cells, **hooks)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(f"calibration jobs disabled ({cells}): {exc}", file=sys.stderr)
+        return None
+
+
 def make_server(store: Path, port: int = 8776, account=None, host: str = "127.0.0.1",
                 profiles_path: Path | None = None, cells: Path | None = None, **hooks) -> ThreadingHTTPServer:
     if account and not account.resource.startswith("site:"):
@@ -331,7 +341,7 @@ def make_server(store: Path, port: int = 8776, account=None, host: str = "127.0.
     return ThreadingHTTPServer(
         (host, port),
         partial(Handler, store=Path(store), account=account, profiles_path=profiles_path,
-                jobs=calibration_jobs.Jobs(cells, **hooks) if cells else None),
+                jobs=_load_jobs(cells, **hooks)),
     )
 
 
