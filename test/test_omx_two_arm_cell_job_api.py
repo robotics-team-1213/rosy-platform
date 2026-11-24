@@ -222,3 +222,16 @@ def test_cell_two_arm_policy_dual_locks_readiness_gates_and_dirty_markers(tmp_pa
     for arm_name in ("arm_a", "arm_b"):
         dirty = json.loads((wd / f"cell-state-dirty-{arm_name}.json").read_text(encoding="utf-8"))
         assert dirty["job_id"] == started["id"] and dirty["exit_code"] == 0 and dirty["ended_at"] is not None
+
+
+def test_cell_two_arm_policy_jpeg_quality_forwarding_and_validation(tmp_path):
+    wd = _make_workdir(tmp_path)
+    job = api.JOBS["cell_two_arm_policy"]
+
+    argv = api.build_argv(job, _base_two_arm_params(dry_run=True, jpeg_quality=90), wd)
+    idx = argv.index("--jpeg-quality")
+    assert argv[idx + 1] == "90"
+
+    for bad_q in (49, 101, True, False, 85.5, "90"):
+        with pytest.raises(ValueError, match="jpeg_quality"):
+            api.build_argv(job, _base_two_arm_params(dry_run=True, jpeg_quality=bad_q), wd)

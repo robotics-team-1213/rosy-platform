@@ -190,7 +190,11 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse("TRIP_POSE_UNTRUSTED", detail, 409)
             map_pose, binding_id = bound
         else:
-            map_pose = await runner.map_pose(robot_id)
+            try:
+                map_pose = await runner.map_pose(robot_id)
+            except (HubError, RobotApiError, OSError) as exc:
+                record({"error": "ROBOT_POSE_UNAVAILABLE", "detail": {"kind": type(exc).__name__}})
+                raise http_error(exc) from exc
         pose_state = map_pose.state if map_pose is not None else None
         if pose_state == LOCALIZED and map_pose.yaw is not None:
             pose = (map_pose.x, map_pose.y, map_pose.yaw)

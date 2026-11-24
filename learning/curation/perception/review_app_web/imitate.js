@@ -1,6 +1,7 @@
 import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
+import {startVisibilityPoll} from '/learning-poll.js';
 import {domEl as node, makeUuid as uuid} from '/learning-ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/omx/center';
 const active=new Set(['launching','running','stopping']);
@@ -154,4 +155,4 @@ $('study-select').onchange=async()=>{studyId=$('study-select').value;reset();awa
 $('study-name').oninput=availability;for(const [id] of TRAIN_FIELDS)$(id).oninput=availability;
 $('imitate-refresh').onclick=refresh;
 addEventListener('popstate',()=>{const u=new URL(location.href),id=u.searchParams.get('study')||'';if(id!==studyId){studyId=id;reset();refresh();}panel(u.searchParams.get('panel'));});
-panel(new URL(location.href).searchParams.get('panel'));readPending();refresh();setInterval(()=>{if(!document.hidden&&!working)refresh();},5000);
+panel(new URL(location.href).searchParams.get('panel'));readPending();refresh();startVisibilityPoll(()=>refresh(),5000,{shouldRun:()=>!working});

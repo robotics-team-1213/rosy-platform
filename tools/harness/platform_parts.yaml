@@ -100,6 +100,7 @@ app_subtrees:
   tools/drivable_branch_replay.py: vision  # only middleware/perception + integrations/perception (and core foundation)
   tools/development_link.py: site-fleet  # sys.path = operations/fleet + core foundation; issues Fleet pairing and TLS material
   tools/sim/omx_*: omx-cell
+  tools/sim/world_*: site-fleet
   test/test_omx_*: omx-cell
   tools/land*.py: tooling
   tools/publish*.py: tooling
@@ -836,6 +837,16 @@ roots:
     wave: none
     import_prefix: []
     note: D-876 independent Monitoring application boundary and backend browser contracts; visual UI acceptance follows separately. Static artifacts consume canonical shared web assets.
+    concern: other
+    capability: fleet
+    app: site-fleet
+  - path: applications/world
+    layout_target: applications/world
+    part: operations
+    d427_target: operations/ui/world
+    wave: none
+    import_prefix: []
+    note: D-1075 Rosy World offline/live studio and read-only Fleet/training observation surface; no CORE/Fleet command authority.
     concern: other
     capability: fleet
     app: site-fleet

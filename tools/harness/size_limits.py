@@ -67,6 +67,7 @@ STANDALONE = {
     "rosy-notifications": "operations/notifications",
     "rosy-monitoring-web": "applications/monitoring",
     "rosy-calibration": "applications/calibration",  # D-1004 screen server and page
+    "rosy-world-web": "applications/world",  # Rosy World 3D standalone web surface and server
     "rosy-cam": "operations/site_ui/cam",
     "rosy-media": "operations/site_ui/media",
     "rosy-media-edge": "middleware/media",

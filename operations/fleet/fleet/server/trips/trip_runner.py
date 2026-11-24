@@ -45,6 +45,7 @@ from fleet.server.trip_station_align import StationAlign
 from fleet.server.trip_steps import TripSteps
 from fleet.server.named_stop_map_pose import commissioned_stop, precision_line_fence
 from fleet.swarm.dispatch_guard import dispatch_guard
+from fleet.swarm.transport import RobotApiError
 from fleet.traffic.lane_traffic import TrafficService
 from fleet.traffic.trip_advice import AdviceSender
 from fleet.traffic.trip_authority import AuthoritySender
@@ -445,6 +446,13 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             if (refresh := getattr(self._poses, "refresh", None)) is not None:  # one forced state/odom read per tick (D-494 3)
                 await self._call(refresh(robot_id, force_rest=True, **self._after(self._poses, robot_id)))
             self._unread.discard(robot_id)
+        except RobotApiError as exc:
+            if exc.status != 429:  # D-760 8: non-rate-limit CORE errors still fail the read
+                raise
+            self._unread.add(robot_id)
+            if self._clock() - self._refresh_warned_at >= 30.0:
+                self._refresh_warned_at = self._clock()
+                _LOG.warning("state refresh for %s rate-limited (repeats muted 30 s)", robot_id, exc_info=True)
         except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
             self._unread.add(robot_id)
             if self._clock() - self._refresh_warned_at >= 30.0:

@@ -33,6 +33,24 @@ def expand(plan):
     return {'scenario': plan['scenario'], 'sha': plan['sha'], 'runs': runs}
 
 
+def attach_world_monitor(plan, *, world_url=None, world_mdns_host=None, world_port=8140):
+    """Assign deterministic Rosy World monitor coordinates to every batch run."""
+    if not (world_url or world_mdns_host):
+        return plan
+    runs = {}
+    for name, cfg in plan['runs'].items():
+        clean = re.sub(r'[^a-zA-Z0-9._-]+', '-', f'isaac-{name}').strip('.-')[:64] or 'isaac-run'
+        updated = dict(cfg)
+        updated.setdefault('world_id', clean)
+        if world_url:
+            updated['world_url'] = world_url
+        if world_mdns_host:
+            updated['world_mdns_host'] = world_mdns_host
+            updated['world_port'] = int(world_port)
+        runs[name] = updated
+    return {**plan, 'runs': runs}
+
+
 def pauses(values):
     """['ai=rosy-ollama.service'] -> {'ai': ['rosy-ollama.service']}, refusing anything but unit names."""
     found = {}
@@ -191,8 +209,14 @@ def main():
     parser.add_argument('--status', action='store_true', help='only list run states')
     parser.add_argument('--busy-limit', type=int, default=3, help='busy checks (about 2.5 min each) before a host retires')
     parser.add_argument('--pause', action='append', default=[], help='ROLE=unit.service[,unit.service] stopped for the batch')
+    parser.add_argument('--world-url', help='optional Rosy World HTTP base URL for parallel run telemetry')
+    parser.add_argument('--world-mdns-host', help='optional Rosy World .local mDNS hostname')
+    parser.add_argument('--world-port', type=int, default=8140, help='Rosy World port when using --world-mdns-host')
     args = parser.parse_args()
     plan, paused = expand(remote_isaac._json(args.plan)), pauses(args.pause)
+    plan = attach_world_monitor(
+        plan, world_url=args.world_url, world_mdns_host=args.world_mdns_host, world_port=args.world_port,
+    )
     if args.status:
         states = {name: state(args.out / name) for name in plan['runs']}
     else:

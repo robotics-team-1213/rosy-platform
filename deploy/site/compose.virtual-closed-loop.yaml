@@ -1,0 +1,180 @@
+# Virtual closed-loop Fleet + 6-robot CORE + Rosy World verification stack.
+# Runs the real `rosy-site-fleet` image against 6 virtual CORE HTTP endpoints
+# (`rosy_42`, `rosy_45`, `rosy_46`, `arm_s`, `arm_a`, `arm_b`) and pairs over mDNS with Rosy World.
+services:
+  virtual-core-fleet:
+    image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
+    mem_limit: 256m
+    user: "10001:10001"
+    command:
+      - python
+      - -B
+      - /world/virtual_core_fleet.py
+      - --host
+      - 0.0.0.0
+      - --advertise-host
+      - virtual-core-fleet
+      - --base-port
+      - "9101"
+      - --token-env
+      - ROSY_VIRTUAL_CORE_TOKEN
+      - --world-id
+      - "${ROSY_VIRTUAL_WORLD_ID:-sim-fleet-loop}"
+      - --world-backend
+      - "${ROSY_VIRTUAL_WORLD_BACKEND:-gazebo}"
+      - --world-mdns-host
+      - "${ROSY_WORLD_MDNS_HOST:-rosy-world.local}"
+      - --world-port
+      - "${ROSY_WORLD_PORT:-8140}"
+    environment:
+      ROSY_VIRTUAL_CORE_TOKEN: "${ROSY_VIRTUAL_CORE_TOKEN:?set ROSY_VIRTUAL_CORE_TOKEN}"
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
+    volumes:
+      - type: bind
+        source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
+        target: /world
+        read_only: true
+      - type: bind
+        source: /run/avahi-daemon
+        target: /run/avahi-daemon
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9101/healthz', timeout=2).read()"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    networks: [virtual_site]
+
+  fleet:
+    image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
+    command:
+      - --
+      - python3
+      - -m
+      - fleet.cli
+      - console
+      - --robots
+      - /run/rosy-config/robots.yaml
+      - --users-file
+      - /run/rosy-config/site-users.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "${ROSY_VIRTUAL_FLEET_PORT:-18443}"
+      - --web-common
+      - /opt/rosy/web-common
+      - --token-env
+      - ROSY_SITE_REGISTRY_TOKEN
+      - --tasks-db
+      - /var/lib/rosy/fleet.sqlite3
+      - --tls-cert
+      - /run/secrets/site_cert
+      - --tls-key
+      - /run/secrets/site_key
+    environment:
+      ROSY_CREDENTIAL_PATHS: '{"ROSY_SITE_REGISTRY_TOKEN":"/run/secrets/registry_token"}'
+      ROSY_WORLD_MDNS_HOST: "${ROSY_WORLD_MDNS_HOST:-rosy-world.local}"
+      ROSY_WORLD_MDNS_PORT: "${ROSY_WORLD_PORT:-8140}"
+      ROSY_WORLD_MDNS_SCHEME: "${ROSY_WORLD_MDNS_SCHEME:-http}"
+      SSL_CERT_FILE: /run/secrets/site_ca
+    ports:
+      - "${ROSY_VIRTUAL_FLEET_PORT:-18443}:${ROSY_VIRTUAL_FLEET_PORT:-18443}"
+    volumes:
+      - "${ROSY_VIRTUAL_CONFIG_DIR:?set ROSY_VIRTUAL_CONFIG_DIR}:/run/rosy-config:ro"
+      - virtual_fleet_state:/var/lib/rosy
+      - type: bind
+        source: /run/avahi-daemon
+        target: /run/avahi-daemon
+        read_only: true
+        bind:
+          create_host_path: false
+    secrets:
+      - registry_token
+      - site_cert
+      - site_key
+      - site_ca
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      virtual-core-fleet:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import ssl,urllib.request; ctx=ssl.create_default_context(cafile='/run/secrets/site_ca'); urllib.request.urlopen('https://${ROSY_SITE_TLS_HOST:-localhost}:${ROSY_VIRTUAL_FLEET_PORT:-18443}/healthz', timeout=2, context=ctx).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [virtual_site]
+
+  fleet-mdns:
+    image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
+    mem_limit: 128m
+    network_mode: host
+    user: "10001:10001"
+    command:
+      - python
+      - -B
+      - /world/world_mdns.py
+      - advertise
+      - --mode
+      - zeroconf
+      - --service-type
+      - _rosy-fleet._tcp
+      - --name
+      - rosy-virtual-fleet
+      - --hostname
+      - "${ROSY_SITE_TLS_HOST:?set ROSY_SITE_TLS_HOST}"
+      - --port
+      - "${ROSY_VIRTUAL_FLEET_PORT:-18443}"
+      - --tls
+      - --tls-host
+      - "${ROSY_SITE_TLS_HOST:?set ROSY_SITE_TLS_HOST}"
+      - --health-url
+      - "https://127.0.0.1:${ROSY_VIRTUAL_FLEET_PORT:-18443}/healthz"
+      - --ca-file
+      - /run/secrets/site_ca
+    volumes:
+      - type: bind
+        source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
+        target: /world
+        read_only: true
+    secrets:
+      - site_ca
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      fleet:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  virtual_site:
+
+volumes:
+  virtual_fleet_state:
+
+secrets:
+  registry_token:
+    file: "${ROSY_REGISTRY_TOKEN_FILE:?set ROSY_REGISTRY_TOKEN_FILE}"
+  site_cert:
+    file: "${ROSY_SITE_CERT:?set ROSY_SITE_CERT}"
+  site_key:
+    file: "${ROSY_SITE_KEY:?set ROSY_SITE_KEY}"
+  site_ca:
+    file: "${ROSY_SITE_CA:?set ROSY_SITE_CA}"

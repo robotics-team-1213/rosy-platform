@@ -28,6 +28,7 @@
 /operations/prediction/ @livsbittt
 /operations/situation/ @livsbittt
 /applications/fleet/ @livsbittt
+/applications/world/ @livsbittt
 /applications/calibration/ @ddaokki @livsbittt
 /integrations/messaging/discord/ @livsbittt
 

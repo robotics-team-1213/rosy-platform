@@ -18,6 +18,63 @@ import numpy as np
 
 import cell_params as prm
 
+ROOM_PAD_PX = 48  # ~45 mm at typical ~1 px/mm top camera: covers scan_mm (~34 mm) past a tight site ROI
+
+
+def padded_roi(roi, shape, pad_px: int = ROOM_PAD_PX) -> tuple[int, int, int, int]:
+    """Expand `roi` by `pad_px` clamped to camera image bounds `(0, 0, W, H)`."""
+    h, w = int(shape[0]), int(shape[1])
+    x0, y0, x1, y1 = (int(v) for v in roi)
+    pad = max(0, int(pad_px))
+    return (max(0, x0 - pad), max(0, y0 - pad), min(w, x1 + pad), min(h, y1 + pad))
+
+
+def obstacle_mask(img, config: dict, site: str, mask_roi, *, surface_lab=None):
+    """Obstacle foreground + configured object colour mask inside `mask_roi`, excluding flat `markings_px`."""
+    import cv2
+    from cell_auto_safety import object_sized
+    import cell_objects
+
+    site_cfg = config["sites"][site]
+    lab = site_cfg.get("surface_lab") if surface_lab is None else surface_lab
+    obj = config.get("objects") or {}
+    near = cell_objects.foreground(img, mask_roi, params=config.get("params"), surface_lab=lab)
+    for p in site_cfg.get("markings_px", []):
+        cv2.fillPoly(near, [np.asarray(p, np.int32) - [mask_roi[0], mask_roi[1]]], 0)
+    mask = object_sized(near, config.get("params")) | cell_objects.colour_mask(img, mask_roi, obj.get("hsv"))
+    for p in site_cfg.get("markings_px", []):
+        cv2.fillPoly(mask, [np.asarray(p, np.int32) - [mask_roi[0], mask_roi[1]]], 0)
+    return mask
+
+
+def finger_room_view(img, config: dict, site: str, roi, mask=None):
+    """Build a padded obstacle `(mask, mask_roi)` clipped to the camera frame for `finger_room`, or None."""
+    if img is None or getattr(img, "ndim", 0) < 3:
+        return None
+    import cv2
+
+    x0, y0, x1, y1 = (int(v) for v in roi)
+    mroi = padded_roi((x0, y0, x1, y1), img.shape)
+    if mroi == (x0, y0, x1, y1):
+        return None
+    sites = config.get("sites") or {}
+    site_cfg = sites.get(site) or sites.get(str(site).rsplit("-l", 1)[0]) or {}
+    lab = site_cfg.get("surface_lab")
+    if lab is None:
+        # Compute surface colour strictly inside the unpadded site `roi` so outside background cannot skew it.
+        patch = img[max(0, y0):min(int(img.shape[0]), y1), max(0, x0):min(int(img.shape[1]), x1)]
+        if patch.size:
+            lab = np.median(cv2.cvtColor(patch, cv2.COLOR_BGR2LAB).reshape(-1, 3), axis=0).tolist()
+    rmask = obstacle_mask(img, config, site, mroi, surface_lab=lab)
+    if mask is not None and getattr(mask, "shape", None) == (y1 - y0, x1 - x0):
+        iy0, ix0 = max(y0, mroi[1]), max(x0, mroi[0])
+        iy1, ix1 = min(y1, mroi[3]), min(x1, mroi[2])
+        if iy1 > iy0 and ix1 > ix0:
+            rmask[iy0 - mroi[1]:iy1 - mroi[1], ix0 - mroi[0]:ix1 - mroi[0]] = (
+                mask[iy0 - y0:iy1 - y0, ix0 - x0:ix1 - x0]
+            )
+    return rmask, mroi
+
 
 def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: float, step_mm: float = 1.0,
             own_mm: float = 0.0, outside_blocks: bool = False) -> float:

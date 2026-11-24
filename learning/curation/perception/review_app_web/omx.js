@@ -2,6 +2,7 @@
 import {accountFetch} from '/account-session.js';
 import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
+import {startVisibilityPoll} from '/learning-poll.js';
 import {domEl as el, makeUuid as uuid} from '/learning-ui.js';
 import '/omx-review.js';
 import '/omx-native-train.js';
@@ -561,4 +562,4 @@ $('upload-form').onsubmit=async event=>{
 $('refresh').addEventListener('click',()=>{load();refreshCenter();loadLearningEntry();});
 load();refreshCenter();loadLearningEntry();
 initJourney(()=>refreshCenter());
-setInterval(()=>{if(!document.hidden)refreshCenter();},3000);
+startVisibilityPoll(()=>refreshCenter(),3000);

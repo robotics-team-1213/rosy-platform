@@ -212,3 +212,53 @@ def test_handoff_and_hf_upload_refuse_missing_or_black_top_video(tmp_path, monke
     assert ver["total_episodes"] == 1
     cam_ok = preflight.check_dataset_cameras(ds)
     assert cam_ok["checked"] is True and cam_ok["cameras"]["observation.images.top"]["max_luma"] == 148.2
+
+
+def test_probe_video_luma_uses_pyav_for_av1_and_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    import sys
+    import types
+    import numpy as np
+    import bench_record_preflight as preflight
+
+    class _FakeFrame:
+        def __init__(self, val: float) -> None:
+            self._val = val
+
+        def to_ndarray(self, format: str = "rgb24"):
+            assert format == "rgb24"
+            return np.full((4, 4, 3), self._val, dtype=np.uint8)
+
+    class _FakeStream:
+        frames = 2
+
+    class _FakeContainer:
+        streams = types.SimpleNamespace(video=[_FakeStream()])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def decode(self, video: int = 0):
+            return iter([_FakeFrame(0.0), _FakeFrame(148.0)])
+
+    class _BadCap:
+        def isOpened(self) -> bool:
+            return False
+
+        def release(self) -> None:
+            pass
+
+    monkeypatch.setitem(sys.modules, "cv2", types.SimpleNamespace(VideoCapture=lambda _p: _BadCap()))
+    monkeypatch.setitem(sys.modules, "av", types.SimpleNamespace(open=lambda _p: _FakeContainer()))
+    mp4 = tmp_path / "av1.mp4"
+    mp4.write_bytes(b"fake")
+    n, means = preflight._probe_video_luma(mp4)
+    assert n == 2 and means == [0.0, 148.0]
+
+    def _fail_av(_p):
+        raise RuntimeError("corrupt av1")
+
+    monkeypatch.setitem(sys.modules, "av", types.SimpleNamespace(open=_fail_av))
+    assert preflight._probe_video_luma(mp4) == (0, [])

@@ -912,6 +912,70 @@ def test_surface_step_gates_probe_z_to_m_against_low_zones(tmp_path, monkeypatch
         assert calls["probe"] == [] and calls["touch"] == 0 and error_fragment in out
 
 
+def test_check_reports_low_zone_gaps_for_mapped_low_site(tmp_path):
+    pytest.importorskip("cv2")
+    cal_path, ref_path = tmp_path / "cal.json", tmp_path / "ref.jpg"
+    # x_m = px / 1000, y_m = (200 - py) / 1000
+    h = [[0.001, 0.0, 0.0], [0.0, -0.001, 0.200], [0.0, 0.0, 1.0]]
+    cal_data = {"schema": cc.cal.SCHEMA, "sites": {"beltend": {"homography": h, "z_view": -0.0571}}}
+    plan_path = tmp_path / "plan.json"
+    plan = {
+        "limits": {
+            "workspace_min_m": [-0.28, -0.28, 0.005],
+            "low_zones": [{"x": [0.05, 0.25], "y": [0.05, 0.17], "z_min_m": -0.0601}],
+        }
+    }
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    frame = np.random.default_rng(0).integers(0, 255, (128, 128, 3), dtype=np.uint8)
+    config = {
+        "calibration_path": str(cal_path),
+        "plan_path": str(plan_path),
+        "preflight": {"reference_top": str(ref_path)},
+        "cameras": {"top": {"height_m": 0.596, "center_px": [303, 367]}},
+        "calibrate": {"map_sites": ["beltend"]},
+        "sites": {
+            "beltend": {
+                "surface_z": -0.0721,
+                "z": -0.0571,
+                "start": [0.135, 0.105],
+                "place": [0.135, 0.105],
+                "surface_px": [[100, 150], [180, 150], [180, 0], [100, 0]],
+            }
+        },
+    }
+    cc.save_bound_map_reference(cal_path, ref_path, cal_data, config, frame)
+    cal_data = json.loads(cal_path.read_text(encoding="utf-8"))
+    found = cc.check(config, cal_data, [], frame)
+    assert "low_zone_gaps" in found and len(found["low_zone_gaps"]) == 1
+    gap = found["low_zone_gaps"][0]
+    assert gap["site"] == "beltend" and gap["uncovered_y_m"][1] == pytest.approx(0.20, abs=0.002)
+    assert cc.stale(found) == []
+    plan["limits"]["low_zones"][0]["y"] = [0.05, 0.21]
+    plan_path.write_text(json.dumps(plan), encoding="utf-8")
+    found_ok = cc.check(config, cal_data, [], frame)
+    assert "low_zone_gaps" not in found_ok
+
+
+def test_low_zone_gaps_respects_first_match_z_min():
+    h = [[0.001, 0.0, 0.0], [0.0, -0.001, 0.200], [0.0, 0.0, 1.0]]
+    cal_data = {"sites": {"beltend": {"homography": h, "z_view": -0.0571}}}
+    config = {
+        "plan": {
+            "limits": {
+                "workspace_min_m": [-0.28, -0.28, 0.005],
+                "low_zones": [
+                    {"x": [0.05, 0.25], "y": [0.05, 0.25], "z_min_m": -0.030},
+                    {"x": [0.05, 0.25], "y": [0.05, 0.25], "z_min_m": -0.065},
+                ],
+            }
+        },
+        "cameras": {"top": {"height_m": 0.596, "center_px": [303, 367]}},
+        "sites": {"beltend": {"surface_z": -0.0721, "z": -0.0571, "start": [0.15, 0.15]}},
+    }
+    gaps = cc.low_zone_gaps(config, cal_data)
+    assert len(gaps) == 1 and gaps[0]["site"] == "beltend"
+
+
 def test_remap_persists_observations_for_offline_replay_on_scene_moved_and_tcp_marks(tmp_path, monkeypatch):
     import types
 

@@ -1,6 +1,7 @@
 import {accountFetch} from '/account-session.js';
 import {taskRow} from '/common/workspace.js';
 import '/commands.js';
+import {startVisibilityPoll} from '/learning-poll.js';
 import {domEl as node, makeUuid as uuid, fillSelectOptions as options} from '/learning-ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/tasks',CENTER='/api/learning/omx/center';
 const stages=[['prepare','준비'],['record','직접 조종·녹화'],['review','시연 확인'],['learn','학습'],['results','결과 확인']];
@@ -195,4 +196,4 @@ $('workflow-native-source').onchange=()=>{pending.delete('attach');selection();}
 for(const id of ['workflow-train-source','workflow-review-selection','workflow-steps','workflow-batch'])$(id).addEventListener('input',()=>{pending.delete('train');selection();});
 $('workflow-refresh').onclick=()=>{error('');refresh(true);};
 addEventListener('hashchange',()=>showStage(location.hash.replace('#workflow-','')));
-refresh(true);setInterval(()=>{if(!document.hidden&&!busy)refresh();},5000);
+refresh(true);startVisibilityPoll(()=>refresh(),5000,{shouldRun:()=>!busy});

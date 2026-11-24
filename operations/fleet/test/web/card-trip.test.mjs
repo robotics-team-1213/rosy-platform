@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { cancelScope, cardTripLine, endedTripText, tripReason } = await import("../../../../applications/fleet/web/card-trip.js");
+const { cancelScope, cardTripLine, defaultTripDriveMode, endedTripText, tripReason } = await import("../../../../applications/fleet/web/card-trip.js");
 const { createRoster, selectRobot } = await import("../../../../applications/fleet/web/roster.js");
 
 const robot = (estop = false, extra = {}) => ({ robot_id: "a", online: true, state: { safety: { estop } }, ...extra });
@@ -90,4 +90,12 @@ test("D-763 8: the card line shows Fleet's wait; past its bound a warn row, no �
   assert.deepEqual(attentionItems(robot()).map((item) => `${item.severity}${item.text}`),
     ["warn: 대기 상한 넘음 · 횡단보도"]);
   assert.equal(cardTripLine({ traffic, trafficTrips: [wait("signal", false)] }, "a"), "대기 상한 넘음 · 신호");
+});
+
+test("defaultTripDriveMode picks nav2 only when free is supported and junction_turn is false", () => {
+  const mk = (items) => ({ robot_id: "r1", capabilities: { controls: { items } } });
+  assert.equal(defaultTripDriveMode(mk([{ kind: "base_velocity", drive_modes: ["lane", "free"], junction_turn: false }])), "nav2");
+  assert.equal(defaultTripDriveMode(mk([{ kind: "base_velocity", drive_modes: ["lane", "free"], junction_turn: true }])), "");
+  assert.equal(defaultTripDriveMode(mk([{ kind: "base_velocity", drive_modes: ["lane"], junction_turn: false }])), "");
+  assert.equal(defaultTripDriveMode({ robot_id: "r1" }), "");
 });

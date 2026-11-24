@@ -35,7 +35,7 @@ def generate_launch_description():
         AnyLaunchDescriptionSource(
             os.path.join(gz_share, "launch", "launch_sim.launch.xml")),
         launch_arguments={
-            "world": world,
+            "world": LaunchConfiguration("world"),
             "bridge_image": "true",
             "cam_tilt_deg": "25",
             "camera_width": LaunchConfiguration("camera_width"),
@@ -53,6 +53,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument("world", default_value=world),
         DeclareLaunchArgument("gazebo_gui", default_value="false"),
         DeclareLaunchArgument("camera_width", default_value="320"),
         DeclareLaunchArgument("camera_height", default_value="180"),
@@ -63,6 +64,7 @@ def generate_launch_description():
         DeclareLaunchArgument("spawn_y", default_value="-0.13"),
         DeclareLaunchArgument("spawn_yaw", default_value="1.5708"),
         DeclareLaunchArgument("camera_lane_mode", default_value="keep"),
+        DeclareLaunchArgument("pink_tape_centerline", default_value="false"),
         DeclareLaunchArgument("debug_overlay", default_value="false"),
         # D-1013: the guide line as the virtual dock (dock/observation,
         # CAMERA_LINE) for CORE's approach="line" phases.
@@ -128,6 +130,8 @@ def _line_observer(context, *, line_config):
                 # mode consumes the pink HSV paint mask directly, so the white
                 # threshold below only matters if paint_source ever reverts.
                 "paint_source": "pink",
+                "simulation_pink_tape_centerline": ParameterValue(
+                    LaunchConfiguration("pink_tape_centerline"), value_type=bool),
                 "camera_bright_threshold": 180,
                 "camera_lane_mode": ParameterValue(
                     LaunchConfiguration("camera_lane_mode"), value_type=str),

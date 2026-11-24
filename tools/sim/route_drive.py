@@ -58,7 +58,8 @@ class OdomTrace:
         self.node.create_subscription(Odometry, f'/{ns}/odom', self._on, QoSProfile(
             depth=5, reliability=ReliabilityPolicy.BEST_EFFORT))
         self.stopping = threading.Event()
-        threading.Thread(target=self._spin, daemon=True).start()
+        self.thread = threading.Thread(target=self._spin, daemon=True)
+        self.thread.start()
 
     def _on(self, msg):
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
@@ -80,6 +81,7 @@ class OdomTrace:
 
     def close(self):
         self.stopping.set()
+        self.thread.join()
         self.node.destroy_node()
         self.rclpy.shutdown()
 

@@ -61,6 +61,7 @@
     "meshes/omx-link7.stl": "model/stl",
     "meshes/pinky-body.stl": "model/stl",
     "meshes/pinky-pro.urdf": "application/xml",
+    "meshes/pinky-tray.stl": "model/stl",
     "meshes/pinky-wheel.stl": "model/stl"
   }
 }

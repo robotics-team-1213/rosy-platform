@@ -5,6 +5,7 @@ from test_trip_runner import (
     TripError, RobotEndpoint, OPERATOR, VIEWER, BOTH, Ports, _free_map, _setup,
     _plan, _arc, run, _code, _ticks, _app,
 )
+from fleet.swarm.transport import RobotApiError
 
 
 class _TripOf:
@@ -616,3 +617,29 @@ def test_align_cancel_on_first_status_poll_keeps_unconfirmed_stop(tmp_path):
     assert exc_info.value.code == "TRIP_ALIGN_ABORTED"
     assert "rosy_60" in runner._unconfirmed_align_stops
     assert "rosy_60" in runner.aligning_robots()
+
+
+def test_map_pose_catches_429_rate_limit_and_reraises_non_429_robot_api_error(tmp_path, caplog):
+    ports = Ports()
+    client, _tasks, _store, _robot, _console = _app(tmp_path, ports)
+    runner = client.app.state.trip_runner
+
+    async def rate_limited(robot_id, force_rest=False):
+        raise RobotApiError(robot_id, 429, "RATE_LIMITED", "too fast")
+
+    runner._poses.refresh = rate_limited
+    with caplog.at_level(logging.WARNING):
+        pose = run(runner.map_pose("rosy_60"))
+    assert pose is not None and "rosy_60" in runner._unread
+    assert any("rate-limited" in r.message for r in caplog.records)
+
+    plan = client.post("/api/fleet/robots/rosy_60/trip", json={"to": "NW"}, headers=OPERATOR)
+    assert plan.status_code == 200, plan.text
+
+    async def server_error(robot_id, force_rest=False):
+        raise RobotApiError(robot_id, 500, "INTERNAL_ERROR", "boom")
+
+    runner._poses.refresh = server_error
+    with pytest.raises(RobotApiError) as err:
+        run(runner.map_pose("rosy_60"))
+    assert err.value.status == 500
