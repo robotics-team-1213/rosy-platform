@@ -211,7 +211,8 @@ class ControlSensorAdapter:
                  sensor_node_factory: Optional[Callable[..., Any]] = None,
                  policy_factory: Optional[Callable[..., Any]] = None,
                  calibration_loader: Optional[Callable[..., Any]] = None,
-                 namespace: str | None = None) -> None:
+                 namespace: str | None = None,
+                 tf_buffer: Any = None) -> None:
         self.config = ControlSensorConfig.from_mapping(raw_config)
         self.node = None
         self.policy = None
@@ -248,6 +249,8 @@ class ControlSensorAdapter:
         }
         if namespace is not None:
             kwargs["namespace"] = namespace
+        if tf_buffer is not None:
+            kwargs["tf_buffer"] = tf_buffer
         node = factory(**kwargs)
         try:
             refresh_profile = getattr(node, "refresh_profile", None)
@@ -374,7 +377,8 @@ def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: M
                           policy_required: bool = False,
                           sensor_node_factory: Optional[Callable[..., Any]] = None,
                           policy_factory: Optional[Callable[..., Any]] = None,
-                          namespace: str | None = None) -> tuple["ControlSensorAdapter", list[str]]:
+                          namespace: str | None = None,
+                          tf_buffer: Any = None) -> tuple["ControlSensorAdapter", list[str]]:
     """D-400 assembly: resolved parameters replace the overlay, the calibration
     block is retired, and a shadow that cannot start runs with the policy off.
     Config errors (bad mode, bad types, shadow + safety.control_policy_required,
@@ -395,7 +399,8 @@ def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: M
             notes.append(_CALIBRATION_IGNORED)
     try:
         return ControlSensorAdapter(raw, sensor_node_factory=sensor_node_factory,
-                                    policy_factory=policy_factory, namespace=namespace), notes
+                                    policy_factory=policy_factory, namespace=namespace,
+                                    tf_buffer=tf_buffer), notes
     except Exception as exc:
         if config.mode != "shadow":
             raise

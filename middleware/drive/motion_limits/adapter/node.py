@@ -45,7 +45,7 @@ from ..sensing.filt import IrMedian, MedianLp
 from ..sensing.lidar import NOSE_YAW, enable_simulation_scans
 from ..sensing.localization import lease_ready
 from ..sensing.pose import planar_pose  # noqa: F401 — re-exported
-from ..tf_buffer import RobotTransformBuffer
+from ..tf_buffer import RobotTransformBuffer, SharedRobotTransformBuffer
 from .bumper import Bumper
 from .evidence import Evidence
 from .gate import Gate
@@ -87,7 +87,7 @@ class SafetyNode(SafetyNodeHelpersMixin, RosEdges, Node, Bumper, Hazard, Gate, S
             node.destroy_node()
             raise
 
-    def __init__(self, *, parameter_overrides=None, sensor_only=False, namespace=None):
+    def __init__(self, *, parameter_overrides=None, sensor_only=False, namespace=None, tf_buffer=None):
         if type(sensor_only) is not bool:
             raise ValueError('sensor_only must be a boolean constructor choice')
         if namespace is not None and (not isinstance(namespace, str) or not namespace.strip()):
@@ -170,8 +170,12 @@ class SafetyNode(SafetyNodeHelpersMixin, RosEdges, Node, Bumper, Hazard, Gate, S
         self.us_clear = float(self.get_parameter('us_clear_distance').value)
         self.half_w = math.radians(float(self.get_parameter('front_half_width_deg').value))
         self.lidar_yaw = float(self.get_parameter('lidar_yaw_offset').value)
-        self.lidar_tf = RobotTransformBuffer(self)
-        self.lidar_tf_listener = TransformListener(self.lidar_tf, self)
+        if tf_buffer is not None:
+            self.lidar_tf = SharedRobotTransformBuffer(self, tf_buffer)
+            self.lidar_tf_listener = None
+        else:
+            self.lidar_tf = RobotTransformBuffer(self)
+            self.lidar_tf_listener = TransformListener(self.lidar_tf, self)
         self.lidar_yaw_source = 'waiting_tf'
         self.timeout = float(self.get_parameter('sensor_timeout').value)
         self.cmd_out = self.get_parameter('cmd_out').value

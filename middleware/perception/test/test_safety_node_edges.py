@@ -6,8 +6,10 @@ the moved topics are created (type, name, depth, order), without ROS: the node m
 are compiled from source against stand-in message types.
 """
 import ast
+import importlib
 import json
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -122,3 +124,54 @@ def test_goal_node_creates_the_escape_topics_where_the_mixin_did():
     methods(GOAL, 'GoalNode', 'publish_escape').publish_escape(SimpleNamespace(escape_pub=pub), {'id': 'e1'})
     methods(GOAL, 'GoalNode', 'publish_escape').publish_escape(SimpleNamespace(escape_pub=pub), None)
     assert pub.sent == [String(data='{"id": "e1"}'), String(data='null')]
+
+
+def test_shared_robot_transform_buffer_translates_frames_without_constructing_tf2_buffer(monkeypatch):
+    constructed = []
+
+    class FakeTf2Buffer:
+        def __init__(self, *args, **kwargs):
+            constructed.append((args, kwargs))
+
+    monkeypatch.setitem(sys.modules, 'tf2_ros', SimpleNamespace(Buffer=FakeTf2Buffer))
+    perception_root = Path(__file__).resolve().parents[1]
+    monkeypatch.syspath_prepend(str(perception_root))
+    monkeypatch.delitem(sys.modules, 'nodes.tf_buffer', raising=False)
+    tf_mod = importlib.import_module('nodes.tf_buffer')
+
+    calls = []
+
+    class FakeSharedBuffer:
+        def lookup_transform(self, target, source, t, *args, **kwargs):
+            calls.append(('lookup', target, source, t, args, kwargs))
+            return 'tx'
+
+        def lookup_transform_full(self, target, tt, source, st, fixed, *args, **kwargs):
+            calls.append(('full', target, tt, source, st, fixed, args, kwargs))
+            return 'tx_full'
+
+    params = {'frame_prefix': SimpleNamespace(value='rosy_01')}
+    fake_node = SimpleNamespace(
+        has_parameter=lambda name: name in params,
+        get_parameter=lambda name: params[name],
+        get_namespace=lambda: '/rosy_01',
+    )
+    shared = tf_mod.SharedRobotTransformBuffer(fake_node, FakeSharedBuffer())
+    assert constructed == []
+    assert shared.robot_frame('base_link') == 'rosy_01/base_link'
+    assert shared.robot_frame('map') == 'map'
+    assert shared.lookup_transform('odom', 'base_link', 't0', timeout=1.0) == 'tx'
+    assert shared.lookup_transform_full('odom', 't1', 'base_footprint', 't2', 'map') == 'tx_full'
+    assert calls == [
+        ('lookup', 'rosy_01/odom', 'rosy_01/base_link', 't0', (), {'timeout': 1.0}),
+        ('full', 'rosy_01/odom', 't1', 'rosy_01/base_footprint', 't2', 'map', (), {}),
+    ]
+
+
+def test_safety_node_uses_shared_tf_buffer_without_creating_transform_listener():
+    init = next(n for n in node_class(SAFETY, 'SafetyNode').body
+                if isinstance(n, ast.FunctionDef) and n.name == '__init__')
+    assert 'tf_buffer' in [kw.arg for kw in init.args.kwonlyargs]
+    src = ast.unparse(init)
+    assert 'SharedRobotTransformBuffer(self, tf_buffer)' in src
+    assert 'self.lidar_tf_listener = None' in src

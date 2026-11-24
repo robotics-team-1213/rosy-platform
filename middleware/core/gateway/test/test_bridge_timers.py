@@ -530,3 +530,12 @@ def test_face_publication_uses_injected_host_owner_and_recovers_after_write_fail
     assert len(attempts) == 4 and attempts[-1]["face"] == "happy"
     bridge._maybe_write_face_inputs(status, 100.0 + FACE_INPUTS_PERIOD_S * 1.5)
     assert len(attempts) == 5 and len(warnings) == 1
+
+
+def test_ros_bridge_reuses_injected_tf_buffer(registered):
+    from core.bridge.ros_bridge import RosBridge
+
+    shared = object()
+    bridge = RosBridge(RecordingNode(), registered.services, tf_buffer=shared)
+    assert bridge.tf_buffer is shared
+    assert bridge.tf_listener is not None
