@@ -637,6 +637,16 @@ def test_a_host_python_without_ensurepip_builds_the_env_with_uv(tmp_path, monkey
                         "-r", str(lock)]
 
 
+def test_uv_build_env_uses_unsafe_best_match_for_extra_index_lock(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: calls.append(args))
+    lock = tmp_path / "lock"
+    lock.write_text("--extra-index-url https://download.pytorch.org/whl/cpu\ncertifi==2026.7.22\n")
+    m.Host({"base_python": "/usr/bin/python3", "uv": "/opt/uv"}).build_env(lock, tmp_path / "env")
+    assert calls[1] == ["/opt/uv", "pip", "install", "-q", "--python", str(tmp_path / "env" / "bin" / "python"),
+                        "--index-strategy", "unsafe-best-match", "-r", str(lock)]
+
+
 def fake_systemctl(tmp_path, monkeypatch, failing=""):
     (tmp_path / "bin").mkdir()
     calls = tmp_path / "calls"
