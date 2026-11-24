@@ -240,35 +240,39 @@ class RosyCoreNode(Node):
         # overlaid device states) so the LCD, lamp and buzzer say what the dashboard says.
         self._status_inputs_failed = False
         self._status_inputs_timer = self.create_timer(STATUS_INPUTS_PERIOD_S, self._write_status_inputs)
-        self._write_status_inputs()
+        # Write the initial hand-over synchronously before exposing the HTTP/WS API.
+        self._write_status_inputs_sync()
         self.core.state.set_map_id(config.get("navigation", {}).get("map_id"))
         self.core.events.publish("system.boot", source="core",
                                  data={"version": SOFTWARE_VERSION})
         self._start_api()
 
+    def _on_status_inputs_ok(self) -> None:
+        self._status_inputs_failed = False
+
+    def _on_status_inputs_error(self, exc: Exception) -> None:
+        if not self._status_inputs_failed:
+            self.get_logger().warning(f"status inputs not written: {type(exc).__name__}: {exc}")
+        self._status_inputs_failed = True
+
+    def _write_status_inputs_sync(self) -> None:
+        try:
+            self.core.host_files.write_status_inputs(self.core)
+        except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the node
+            self._on_status_inputs_error(exc)
+            return
+        self._on_status_inputs_ok()
+
     def _write_status_inputs(self) -> None:
-        def _on_ok() -> None:
-            self._status_inputs_failed = False
-
-        def _on_error(exc: Exception) -> None:
-            if not self._status_inputs_failed:
-                self.get_logger().warning(f"status inputs not written: {type(exc).__name__}: {exc}")
-            self._status_inputs_failed = True
-
         writer = self._file_writer
         if writer is None:
-            try:
-                self.core.host_files.write_status_inputs(self.core)
-            except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the node
-                _on_error(exc)
-                return
-            _on_ok()
+            self._write_status_inputs_sync()
             return
         writer.submit(
             "status_inputs",
             lambda: self.core.host_files.write_status_inputs(self.core),
-            on_ok=_on_ok,
-            on_error=_on_error,
+            on_ok=self._on_status_inputs_ok,
+            on_error=self._on_status_inputs_error,
         )
 
     def _start_events(self) -> None:

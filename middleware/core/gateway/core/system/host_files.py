@@ -139,13 +139,15 @@ class AsyncHostFileWriter:
         self._wake.set()
 
     def close(self, timeout_s: float = 1.0) -> None:
-        thread = self._thread
-        self._stop_event.set()
-        self._wake.set()
+        with self._lock:
+            thread = self._thread
+            self._stop_event.set()
+            self._wake.set()
         if thread is not None and thread.is_alive():
             thread.join(timeout=timeout_s)
-        if thread is None or not thread.is_alive():
-            self._thread = None
+        with self._lock:
+            if self._thread is thread and (thread is None or not thread.is_alive()):
+                self._thread = None
 
     def _run(self) -> None:
         while not self._stop_event.is_set():
