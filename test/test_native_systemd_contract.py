@@ -1370,3 +1370,15 @@ def test_the_low_battery_halt_watches_the_file_core_really_writes():
     assert "[Install]" not in _read("rosy-lowbatt-shutdown.service")
     installer = _read("install-native-runtime.sh")
     assert 'cp "$SCRIPT_DIR/../rosy-lowbatt-shutdown.sh" "$DESTINATION/rosy-lowbatt-shutdown.sh"' in installer
+
+
+@pytest.mark.parametrize("unit_name", ("rosy-camera.service", "rosy-io.service", "rosy-navigation.service"))
+def test_pinky_units_enable_events_executor_before_runtime_env_override(unit_name):
+    raw = (NATIVE / unit_name).read_bytes()
+    assert b"\r" not in raw, f"{unit_name} must use LF line endings"
+    lines = raw.decode("utf-8").splitlines()
+    executor_idx = lines.index("Environment=ROSY_EXECUTOR=events")
+    env_file_idx = lines.index("EnvironmentFile=/etc/rosy/runtime.env")
+    assert executor_idx < env_file_idx, (
+        f"{unit_name} must set Environment=ROSY_EXECUTOR=events before /etc/rosy/runtime.env for rollback"
+    )
