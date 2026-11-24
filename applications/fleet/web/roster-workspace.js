@@ -44,19 +44,23 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   const armCamImg = document.createElement("img");
   armCamImg.className = "omx-inspector-main-cam omx-inspector-cam";
   armCamImg.alt = "선택한 팔 카메라 실시간 영상";
-  armCamImg.loading = "lazy";
+  const armCamStandby = node("span", "영상 대기", "omx-inspector-cam-standby");
+  armCamStandby.setAttribute("role", "status");
   const armCamBadge = node("small", "영상 대기 · 클릭하여 연결", "omx-inspector-cam-badge");
-  armCamFrame.append(armCamImg);
+  armCamFrame.append(armCamImg, armCamStandby);
   armCamBox.append(armCamToggleSlot, armCamFrame, armCamBadge);
   const armStatusBox = document.createElement("div");
   const armHealthBox = document.createElement("section");
   const armCommandsBox = document.createElement("div");
   armCommandsBox.className = "ui-control-stack";
   armCommandsBox.append(node("p", "로봇팔 작업 준비와 승인은 작업 화면(셀)에서 진행합니다.", "hint"));
+  const armObsLink = node("a", "팔 관측·사건 보기", "ui-action-link");
+  armObsLink.dataset.kind = "quiet";
+  armObsLink.href = "/console/cell#observation-heading";
   const armWorkLink = node("a", "팔레트 적재 화면 열기", "ui-action-link");
   armWorkLink.dataset.kind = "quiet";
   armWorkLink.href = "/console/cell";
-  armCommandsBox.append(armWorkLink);
+  armCommandsBox.append(armObsLink, armWorkLink);
   const settingsBox = document.createElement("div");
 
   let latestRecords = [];
@@ -380,8 +384,12 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         renderMotorHealth(armHealthBox, armHealthState.read(Date.now()));
         return armHealthBox;
       },
-      commands(profile) {
-        return profile.kind === "arm" ? armCommandsBox : null;
+      commands(profile, detail) {
+        if (profile.kind !== "arm") return null;
+        armObsLink.href = detail?.obsArm?.sourceId
+          ? `/console/cell?focus=arm:${encodeURIComponent(detail.obsArm.sourceId)}#observation-heading`
+          : "/console/cell#observation-heading";
+        return armCommandsBox;
       },
       manual(profile) {
         if (profile.kind !== "mobile") return null;

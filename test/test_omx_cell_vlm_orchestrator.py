@@ -263,6 +263,8 @@ def test_measured_facts_hold_vetoes_and_dry_pick_zero_veto(tmp_path, monkeypatch
 
 def test_client_and_orchestrator_end_to_end(tmp_path, monkeypatch):
     wd = _make_workdir(tmp_path)
+    (wd / "chunk-io-b").mkdir(exist_ok=True)
+    (wd / "chunk-io-b" / "live.json").write_text(json.dumps({"folded": True, "t": time.time()}), encoding="utf-8")
     procs = _install_fake_popen(
         monkeypatch,
         live_outputs={"cell_policy_drive.py": {"result": "released", "took_one": True}},

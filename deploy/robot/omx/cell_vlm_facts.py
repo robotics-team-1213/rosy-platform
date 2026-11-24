@@ -7,9 +7,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cell_choices  # noqa: E402
+import cell_decisions as cd  # noqa: E402
 import judge_seat  # noqa: E402
 from cell_job_client import CellJobClient, CellJobError  # noqa: E402
 from cell_job_spec import AB_ARMS  # noqa: E402
+from cell_vlm_fence import verify_context_fence, verify_job_outcome  # noqa: E402,F401
 
 AB_VIEWS = ("top", "side", "arm_a_wrist", "arm_b_wrist")
 _CLI_PROVIDERS = ("cli", "opencode", "codex", "claude")
@@ -172,3 +175,75 @@ def collect_frames(client: CellJobClient, views: tuple[str, ...] = AB_VIEWS) -> 
         images_b64.append(base64.b64encode(raw).decode("ascii"))
         captured.append(view)
     return images_b64, captured
+
+
+def fetch_readiness_and_failure(
+    client: CellJobClient,
+    *,
+    arm: str | None = None,
+    kind: str | None = None,
+) -> tuple[dict, dict | None]:
+    """Fetch `/readiness` and newest `/failures/latest` bundle (404 -> None)."""
+    readiness = client.readiness()
+    try:
+        bundle = client.latest_failure(arm=arm, kind=kind)
+    except CellJobError as exc:
+        if exc.status_code == 404:
+            bundle = None
+        else:
+            raise
+    return readiness, bundle
+
+
+def collect_failure_frames(
+    client: CellJobClient,
+    bundle: dict,
+    views: tuple[str, ...] = AB_VIEWS,
+) -> tuple[list[str], list[str]]:
+    """Collect JPEG assets declared in `bundle` followed by live `/frame/<view>.jpg` views."""
+    images_b64, captured = [], []
+    bid = bundle.get("bundle_id")
+    if isinstance(bid, str) and bid:
+        for entry in (bundle.get("visual") or {}).get("frames") or ():
+            if not isinstance(entry, dict):
+                continue
+            fname = entry.get("file")
+            if not isinstance(fname, str) or not fname.lower().endswith((".jpg", ".jpeg")):
+                continue
+            try:
+                raw = client.failure_asset(bid, fname)
+            except CellJobError:
+                continue
+            if raw:
+                images_b64.append(base64.b64encode(raw).decode("ascii"))
+                captured.append(str(entry.get("camera") or fname))
+    try:
+        live_imgs, live_views = collect_frames(client, views)
+        images_b64.extend(live_imgs)
+        captured.extend(live_views)
+    except CellJobError:
+        pass
+    return images_b64, captured
+
+
+def record_orchestrator_outcome(
+    proposal: dict,
+    status: str,
+    *,
+    note: str = "",
+    choices_path: Path | None = None,
+    decisions_path: Path | None = None,
+) -> None:
+    """Persist opt-in `cell_decisions` / `cell_choices` rows without writing unrequested files."""
+    ok = status == "completed"
+    action = str(proposal.get("action") or proposal.get("verb") or "idle")
+    arm = str(proposal.get("arm") or "arm_a")
+    if decisions_path is not None:
+        cd.emit("vlm_orchestrator", {"arm": arm, "status": status, "reason": note[:120]},
+                [action], action, "vlm", note[:120] or status, path=Path(decisions_path))
+    if choices_path is not None:
+        ch = cell_choices.Choices(Path(choices_path))
+        key = f"vlm.{arm}"
+        ch.offer(key, action, "vlm")
+        ch.outcome(key, action, ok, note[:200] or status)
+        ch.save()

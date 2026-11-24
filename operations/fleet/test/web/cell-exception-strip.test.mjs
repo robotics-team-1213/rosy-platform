@@ -168,3 +168,36 @@ test('clear() emits an empty summary at once', async t => {
   env.observations.clear();
   assert.deepEqual(env.summaries.at(-1), []);
 });
+
+test('idle arms hide until toggled or focused, and cleared incidents fold cleanly', async t => {
+  const clearedList = Array.from({length: 4}, (_, idx) => ({
+    incident_id: `c${idx}`, state: 'cleared', reported_at: 10 + idx,
+    decision: {hold: true, reason: `old-${idx}`}, frames: [], evidence: [],
+    cleared: {by: 'op-1', at: 20 + idx, note: 'checked', cause: 'blocked', basis: 'seen'},
+  }));
+  const env = setup(t, {
+    workcells: [{
+      workcell_id: 'cell_ab', label: 'S5 셀',
+      arms: [
+        arm({source_id: 'arm_a', label: '팔 A', fresh: false, positions: null, incidents: clearedList}),
+        arm({source_id: 'arm_b', label: '팔 B', incidents: [heldIncident, ...clearedList.slice(0, 2)]}),
+      ],
+      cameras: [{source_id: 'cam_1', label: '상단', role: 'overhead', stream: 'color', arm_id: null}],
+    }],
+  });
+  await env.observations.refresh();
+  const armACard = env.root.querySelector('[data-arm-source="arm_a"]');
+  const armBCard = env.root.querySelector('[data-arm-source="arm_b"]');
+  assert.equal(armACard.hidden, true);
+  assert.equal(armBCard.hidden, false);
+  assert.equal(armBCard.dataset.armHeld, 'true');
+
+  // arm B has 1 open + 2 cleared -> cleared fold renders 2 older items while keeping summary[0] first
+  const armBInc = armBCard.children.find(child => child.children[0]?.textContent.includes('팔 사건'));
+  assert.equal(armBInc.children.length, 3);
+  assert.match(armBInc.children[2].children[0].textContent, /해제된 이전 사건 2건 보기/);
+
+  // focusing an idle arm unhides it
+  assert.equal(env.observations.focusArm('arm_a'), true);
+  assert.equal(armACard.hidden, false);
+});

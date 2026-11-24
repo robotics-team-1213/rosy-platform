@@ -120,7 +120,7 @@ def distinct(results, minimum_fit=.9, keep_within=.05, limit=4):
 
 
 def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep_within=.05, limit=4,
-                      clear=None, fine_scan=None):
+                      clear=None, fine_scan=None, use_robust=True, diagnostics=None):
     """Every distinct global pose; [] when the scan or the map cannot support one.
 
     `clear` is an optional precomputed `field.clear_poses(radius)` mask.
@@ -129,27 +129,48 @@ def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep
     a 1 deg refinement on a strided scan left a candidate 2-3 deg off)."""
     if fine_scan is not None and clear is None:
         clear = field.clear_poses(radius)
-    results, _ = field.global_results(ranges, angles, radius, clear=clear)
+    supports_robust = hasattr(field, "robust_score")
+    if supports_robust:
+        results, reason = field.global_results(ranges, angles, radius, clear=clear, use_robust=use_robust)
+    else:
+        results, reason = field.global_results(ranges, angles, radius, clear=clear)
     picked = distinct(results, minimum_fit, keep_within, limit)
     if fine_scan is not None:
         fine_ranges, fine_angles = valid_beams(*fine_scan)
-        picked = [_fine(field, pose, fit, fine_ranges, fine_angles, clear) for pose, fit in picked]
+        picked = [_fine(field, pose, fit, fine_ranges, fine_angles, clear, use_robust=use_robust) for pose, fit in picked]
         # The fine stage moves each pick by up to 3 cm / 3 deg and never re-checks
-        # apart(): drop any pick it pulled onto an earlier one (guard, 2026-10-02 audit).
+        # apart(): drop any pick it pulled onto an earlier one (guard, 2026-10-02 audit)
+        # or whose full-scan fit dropped below minimum_fit.
         kept = []
         for pose, fit in picked:
-            if all(apart(pose, other) for other, _ in kept):
+            if fit >= minimum_fit and all(apart(pose, other) for other, _ in kept):
                 kept.append((pose, fit))
         picked = kept
+    if not picked and diagnostics is not None:
+        if results and hasattr(field, "explain"):
+            eval_r, eval_a = (valid_beams(*fine_scan) if fine_scan is not None else valid_beams(ranges, angles))
+            if len(eval_r) < 30:
+                eval_r, eval_a = valid_beams(ranges, angles)
+            b = field.explain(results[0][2], eval_r, eval_a)
+            diagnostics.append(
+                f"top_rejected raw={b.raw_score:.2f} robust={b.robust_score:.2f} "
+                f"reason={b.rejected_reason or 'below-min-fit'} hit={b.hit}/{b.total} "
+                f"pierce={b.miss_wall_pierced} fg={b.miss_foreground} unk={b.miss_unknown} sectors={b.sectors_hit}"
+            )
+        elif reason:
+            diagnostics.append(f"global_candidates_empty reason={reason}")
     return [PoseCandidate(*base_from_sensor(pose, mount), scan_fit=fit, origin='global')
             for pose, fit in picked]
 
 
-def _fine(field, pose, fit, ranges, angles, clear):
+def _fine(field, pose, fit, ranges, angles, clear, use_robust=True):
     """The best FINE_OFFSETS refinement of one sensor pose, or the pose itself when none qualifies."""
     if len(ranges) < 30:
         return pose, fit
-    refined = field.refine([pose], ranges, angles, clear, FINE_OFFSETS)
+    if hasattr(field, "robust_score"):
+        refined = field.refine([pose], ranges, angles, clear, FINE_OFFSETS, use_robust=use_robust)
+    else:
+        refined = field.refine([pose], ranges, angles, clear, FINE_OFFSETS)
     if not refined:
         return pose, fit
     _, agreement, best = max(refined, key=lambda item: item[0])

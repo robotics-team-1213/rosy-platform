@@ -78,6 +78,7 @@ CONFIG_REFRESH_S = 2.0
 #: How far back the LED ring reaches: a whole identify window (<= 6 s) plus the config read delay.
 RING_S = 6.0 + 2 * CONFIG_REFRESH_S + 1.0
 FAILURE_LOG_INTERVAL_S = 30.0
+_MISMATCH_REFRESH_COOLDOWN_S = 1.0
 _SEQ_MODULUS = 0x100000000
 
 
@@ -176,6 +177,7 @@ class TrackWorker:
         self._send_tuning = True
         self._sends: set[asyncio.Future] = set()
         self._clock = clock
+        self._last_409_refresh = -math.inf
         self.anchors = AnchorFeed(camera.source_id, camera.map_id, client, self.guard, clock)
         try:  # the preview route serves the tracker's ROI crops
             ingest.anchor_tracker = self.anchors.tracker
@@ -298,7 +300,14 @@ class TrackWorker:
                 payload = payload.model_copy(update={"tuning": None})
                 await self.guard.post(payload.captured_at, lambda: self.client.publish(payload))
         except TrackPublishError as exc:
-            self._publish_log.failed((("status", exc.status_code), ("code", exc.code)))
+            self._publish_log.failed((("status", exc.status_code), ("code", exc.code),
+                                      ("revision", payload.calibration_revision or "none")))
+            if (exc.status_code == 409 and exc.code == "CALIBRATION_MISMATCH"
+                    and payload.calibration_revision is not None):
+                now = self._clock()
+                if now - self._last_409_refresh >= _MISMATCH_REFRESH_COOLDOWN_S:
+                    self._last_409_refresh = now
+                    await self.refresh_config()
         except httpx.HTTPError as exc:
             self._publish_log.failed((("error_type", type(exc).__name__),))
         else:

@@ -173,6 +173,8 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         localization_service.set_overhead_pose(map_pose.arbitrated_pose)
         if callable(getattr(localization_service, "set_active_map_id", None)):
             localization_service.set_active_map_id(map_pose.active_map_id)
+        if site_maps is not None and callable(getattr(localization_service, "set_site_maps", None)):
+            localization_service.set_site_maps(site_maps)
         localization_service.set_wall_sync(WallMapSync(site_maps, console.clients, time.monotonic))
     app.state.map_pose = map_pose
     if tracking is not None:

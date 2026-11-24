@@ -192,7 +192,7 @@ class RosyAgentBridge:
                     parsed = json.loads(raw.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                     return {"ok": False, "status": 502, "error_code": "INVALID_UPSTREAM_JSON", "detail": self._scrub(str(exc))[:200]}
-                return {"ok": True, "status": resp.status, "data": parsed, "headers": safe_hdrs}
+                return {"ok": True, "status": resp.status, "data": parsed, "raw_sha256": hashlib.sha256(raw).hexdigest(), "headers": safe_hdrs}
         except urllib.error.HTTPError as exc:
             raw = exc.read(MAX_ERROR_BYTES)
             try:
@@ -267,8 +267,10 @@ class RosyAgentBridge:
             man = self._http("GET", f"{lu}/api/learning/canonical/runs/{rid}/bundle-manifest", token=lt)
             if not man["ok"]:
                 return man
-            return self._http("POST", f"{cu}/jobs/stage_policy_bundle", token=ct,
-                              body={"run_id": a["run_id"], "target_dir": a["target_dir"], "manifest": man["data"]})
+            return self._http(
+                "POST", f"{cu}/jobs/stage_policy_bundle", token=ct,
+                body={"run_id": a["run_id"], "target_dir": a["target_dir"], "expected_manifest_sha256": man["raw_sha256"]},
+            )
         return {"ok": False, "status": 400, "error_code": "UNKNOWN_TOOL", "detail": name}
 
 

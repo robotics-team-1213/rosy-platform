@@ -1473,3 +1473,27 @@ def test_the_control_unit_peer_runs_the_signed_proxy_image_and_needs_to_run_not_
     assert "control-unit-peer" in upd.containers_reason(
         rows(peer_image="caddy:latest"), NEW, accepted, inspect, companions=expected)
 
+
+def test_prune_6_services_fails_closed_before_rmtree_and_checks_rm_rc(host, monkeypatch):
+    stale, stale_dir, bad = "8" * 40, host.paths.candidates / ("8" * 40), host.paths.candidates / "bad-kept"
+    for p in (stale_dir, bad, host.paths.candidates / NEW):
+        p.mkdir(exist_ok=True)
+    os.utime(stale_dir, (1, 1))
+    for commit in (OLD, NEW):
+        imgs = {s: {"reference": f"rosy-site-{s}:{stale if commit == OLD and s == 'monitoring' else commit}"} for s in upd.ALL_IMAGE_SERVICES}
+        (host.paths.candidates / commit / "release.json").write_text(json.dumps({"source_commit": commit, "images": imgs}))
+    (bad / "release.json").write_text(json.dumps({"source_commit": OLD, "images": {"bad": {"reference": f"rosy-site-bad:{OLD}"}}}))
+    fake = FakeHost(host.paths)
+    fake.images = {f"rosy-site-{s}:{c}" for c in (OLD, NEW, stale, "7" * 40) for s in upd.ALL_IMAGE_SERVICES}
+    _updater(host, FakeHttp([], {}), fake).prune({host.paths.candidates / NEW, bad})
+    assert stale_dir.exists() and f"rosy-site-fleet:{stale}" in fake.images and not any(c[:3] == ["docker", "image", "rm"] for c in fake.calls)
+    shutil.rmtree(bad)
+    logs = []
+    monkeypatch.setattr(upd, "log", lambda ev, **kw: logs.append((ev, kw)))
+    def run(args, **kw):
+        return fake._ok(code=1) if args == ["docker", "image", "rm", f"rosy-site-account:{stale}"] else fake(args, **kw)
+    _updater(host, FakeHttp([], {}), run).prune({host.paths.candidates / NEW})
+    assert not stale_dir.exists() and f"rosy-site-fleet:{stale}" not in fake.images and f"rosy-site-monitoring:{'7' * 40}" not in fake.images
+    assert {f"rosy-site-monitoring:{NEW}", f"rosy-site-monitoring:{stale}", f"rosy-site-account:{stale}"} <= fake.images
+    assert ("prune-image-failed", {"image": f"rosy-site-account:{stale}", "returncode": 1}) in logs and ("pruned-image", {"image": f"rosy-site-account:{stale}"}) not in logs
+

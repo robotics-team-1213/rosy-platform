@@ -93,13 +93,72 @@ def hits(inside, roi=(0, 0), min_px: int = MIN_PX) -> list[dict]:
             for k in range(1, n) if stats[k][cv2.CC_STAT_AREA] >= min_px]
 
 
-def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params=None, surface_px=None) -> dict:
-    """The verdict for one planned leg (TCP points in metres): {"clear", "low", "high", "off_map", "off_surface"}.
-    `known`: 0/1 mask of catalogue objects, which may pass under high travel. `surface_px`: the polygon the mask
-    covers; corridor pixels beyond it are unseen, not clear (2026-11-01: polygons left from the camera before the
-    RealSense were slivers, the mask was empty and a leg over three containers read clear)."""
+def _fill_surfaces(shape, roi, surface_px) -> np.ndarray:
+    """Fill one polygon or a list of polygons into a 0/1 uint8 mask in ROI coordinates."""
     import cv2
 
+    seen = np.zeros(shape, np.uint8)
+    if not surface_px:
+        return seen
+    polys = surface_px if isinstance(surface_px[0][0], (list, tuple)) else [surface_px]
+    offset = np.asarray([roi[0], roi[1]], np.int32)
+    for poly in polys:
+        if isinstance(poly, (list, tuple)) and len(poly) >= 3:
+            cv2.fillPoly(seen, [np.asarray(poly, np.int32) - offset], 1)
+    return seen
+
+
+def calibrated_surface_polygons(config: dict | None, fallback_site: str | None = None) -> list:
+    """Collect unique valid `surface_px` polygons across calibrated cell sites."""
+    if not isinstance(config, dict):
+        return []
+    sites = config.get("sites")
+    if not isinstance(sites, dict):
+        return []
+    out, seen_keys = [], set()
+    for s in sites.values():
+        poly = s.get("surface_px") if isinstance(s, dict) else None
+        if isinstance(poly, (list, tuple)) and len(poly) >= 3:
+            pts = [[int(round(p[0])), int(round(p[1]))] for p in poly if isinstance(p, (list, tuple)) and len(p) >= 2]
+            if len(pts) >= 3:
+                key = tuple((x, y) for x, y in pts)
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    out.append(pts)
+    if not out and fallback_site and isinstance(sites.get(fallback_site), dict):
+        poly = sites[fallback_site].get("surface_px")
+        if isinstance(poly, (list, tuple)) and len(poly) >= 3:
+            out.append([[int(round(p[0])), int(round(p[1]))] for p in poly])
+    return out
+
+
+def transit_hull_polygon(polygons: list, extra_pts: list | None = None) -> list | None:
+    """Convex hull covering calibrated sites (and optional base point) for high-transit checks."""
+    pts = [
+        [int(round(p[0])), int(round(p[1]))]
+        for poly in (polygons or ())
+        if isinstance(poly, (list, tuple)) and len(poly) >= 3
+        for p in poly
+        if isinstance(p, (list, tuple)) and len(p) >= 2
+    ]
+    for p in extra_pts or ():
+        if p is not None and len(p) >= 2:
+            pts.append([int(round(p[0])), int(round(p[1]))])
+    if len(pts) < 3:
+        return None
+    if len(polygons or ()) == 1 and not extra_pts:
+        return polygons[0]
+    import cv2
+
+    return cv2.convexHull(np.asarray(pts, np.int32)).reshape(-1, 2).tolist()
+
+
+def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params=None,
+          surface_px=None, high_surface_px=None) -> dict:
+    """The verdict for one planned leg (TCP points in metres): {"clear", "low", "high", "off_map", "off_surface"}.
+    `known`: 0/1 mask of catalogue objects, which may pass under high travel. `surface_px`: the polygon(s) the mask
+    covers; corridor pixels beyond it are unseen, not clear (2026-11-01). Optional `high_surface_px` expands only
+    the above-clear_z transit surface check (e.g. convex hull across calibrated multi-arm sites)."""
     get = lambda k, d: prm.get(params, k, d)  # noqa: E731
     low, high = runs(tcp, get("corridor.clear_z_m", CLEAR_Z_M), get("corridor.base_m", BASE_M))
     off_map = sum(to_px(p) is None for run in low + high for p in run)
@@ -110,9 +169,9 @@ def check(tcp, mask, roi, to_px, pick_xy=None, known=None, stack_xy=None, params
     lanes = [corridor(path, to_px, mask.shape, roi, half) > 0 for path in (low, high)]
     off_surface = 0
     if surface_px:
-        seen = np.zeros(mask.shape, np.uint8)
-        cv2.fillPoly(seen, [np.asarray(surface_px, np.int32) - [roi[0], roi[1]]], 1)
-        off_surface = int(((lanes[0] | lanes[1]) & (seen == 0)).sum())
+        seen_low = _fill_surfaces(mask.shape, roi, surface_px)
+        seen_high = _fill_surfaces(mask.shape, roi, high_surface_px) if high_surface_px else seen_low
+        off_surface = int((lanes[0] & (seen_low == 0)).sum()) + int((lanes[1] & (seen_high == 0)).sum())
     found_low, found_high = hits(mask & lanes[0], roi, min_px), hits(unknown & lanes[1], roi, min_px)
     return {"clear": not (found_low or found_high or off_map or off_surface), "low": found_low, "high": found_high,
             "off_map": off_map, "off_surface": off_surface}

@@ -114,6 +114,10 @@
       "path": "shared/cell-cockpit-stage.js",
       "media_type": "application/javascript"
     },
+    "cell-context-panel.js": {
+      "path": "shared/cell-context-panel.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"

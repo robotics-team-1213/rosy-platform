@@ -156,3 +156,39 @@ def test_seal_refuses_zero_episodes_and_do_not_train_and_stamps_arm_id(seal, tmp
     manifest = json.loads((Path(out['collection']) / 'manifest.json').read_text())
     assert manifest['arm_id'] == 'arm_ab' and manifest['total_episodes'] == 2
     assert not (tmp_path/'collections'/'refused').exists()
+
+
+def test_seal_packages_leader_follower_offset_and_mount_and_passes_transfer(seal, transfer, tmp_path):
+    run, _ = recording(tmp_path, robot_type='omx_follower', arm='arm_a', teleop_stage=60)
+    f_cal = tmp_path / 'omx_follower_arm.json'
+    l_cal = tmp_path / 'arm_a_leader.json'
+    mount = tmp_path / 'arm_a_leader.mount.json'
+    f_cal.write_text(json.dumps({
+        'shoulder_pan': {'id': 11, 'drive_mode': 0, 'homing_offset': 10, 'range_min': 0, 'range_max': 4095},
+        'gripper': {'id': 16, 'drive_mode': 0, 'homing_offset': 0, 'range_min': 1900, 'range_max': 2700},
+    }), encoding='utf-8')
+    l_cal.write_text(json.dumps({
+        'shoulder_pan': {'id': 1, 'drive_mode': 1, 'homing_offset': -5, 'range_min': 100, 'range_max': 4000},
+        'gripper': {'id': 6, 'drive_mode': 1, 'homing_offset': 100, 'range_min': 1800, 'range_max': 2900},
+    }), encoding='utf-8')
+    mount.write_text(json.dumps({
+        'mount': {'shoulder_pan': 2048},
+        'gripper': {'leader_closed': 1909, 'leader_open': 2829, 'follower_closed': 2015, 'follower_open': 2620},
+    }), encoding='utf-8')
+    res = seal.seal(run, 'arm-a-cal-001', tmp_path / 'collections', rig_revision='bench-r1',
+                    calibrations=[f_cal, l_cal], mounts=[mount])
+    col = Path(res['collection'])
+    manifest = json.loads((col / 'manifest.json').read_text(encoding='utf-8'))
+    assert manifest['calibration_offset']['file'] == 'calibration/leader_follower_offset.json'
+    assert manifest['calibration_offset']['has_grip_map'] and manifest['calibration_offset']['has_mount_offset']
+    assert manifest['calibration_revision'] == seal.calibration_revision(manifest['files'])
+    offset = json.loads((col / 'calibration' / 'leader_follower_offset.json').read_text(encoding='utf-8'))
+    assert offset['teleop_stage_deg_s'] == 60
+    assert offset['joints']['shoulder_pan']['homing_offset_delta'] == 15
+    assert offset['joints']['shoulder_pan']['drive_mode_inverted'] is True
+    assert offset['joints']['shoulder_pan']['mount_offset_ticks'] == 2048
+    grip = offset['joints']['gripper']['grip_map']
+    assert grip['scale'] == round((2620 - 2015) / (2829 - 1909), 6)
+    assert grip['follower_closed_norm'] == round((2015 - 1900) / 800 * 100.0, 4)
+    assert grip['follower_open_norm'] == round((2620 - 1900) / 800 * 100.0, 4)
+    assert transfer.verify_tree(col)['file_count'] == res['file_count']

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI & atomic request-result helpers for `cell_auto_fold.py` (D-1048)."""
+"""CLI, fail-closed safety-fence, and folded-at-home helpers for `cell_auto_fold.py` (D-1048)."""
 from __future__ import annotations
 
 import argparse
@@ -10,6 +10,59 @@ from pathlib import Path
 import sys
 import time
 from typing import Any, Callable
+
+
+def _safety_fence_error(args) -> str | None:
+    if args.expires_at is not None and time.time() > float(args.expires_at):
+        return "SAFE_HOME_EXPIRED"
+    if args.safety_fence is None and args.stop_generation is None:
+        return None
+    fence_path = Path(args.safety_fence) if (args.safety_fence and args.safety_fence.strip()) else None
+    if fence_path is None or not fence_path.is_file():
+        return "SAFETY_FENCE_MISSING"
+    try:
+        fence = json.loads(fence_path.read_text(encoding="utf-8"))
+        upd = fence.get("updated_at") if isinstance(fence, dict) else None
+        sg = fence.get("stop_generation") if isinstance(fence, dict) else None
+        if not isinstance(fence, dict) or type(fence.get("human_hold")) is not bool:
+            return "SAFETY_FENCE_UNREADABLE"
+        if fence["human_hold"]:
+            return "HUMAN_HOLD_ACTIVE"
+        if isinstance(upd, bool) or not isinstance(upd, (int, float)) or not math.isfinite(upd) or not (-5.0 <= (time.time() - upd) <= 15.0):
+            return "SAFETY_FENCE_STALE"
+        if type(sg) is not int or args.stop_generation is None or sg != args.stop_generation:
+            return "STOP_GENERATION_PREEMPTED"
+    except Exception:
+        return "SAFETY_FENCE_UNREADABLE"
+    return None
+
+
+def resolve_folded_at_home(
+    cell, state: list, *, stage: str, latched: dict, is_holding: bool,
+    steps: list, note_fn, hold_fn, ensure_unlatch_fn, schema: str,
+) -> dict | None:
+    """Return outcome when arm is already folded at home, or None to continue into release-and-lift recovery."""
+    if stage == "park_only" and is_holding:
+        return hold_fn("STILL_HOLDING_BEFORE_PARK", is_holding=True)
+    if stage == "release_and_lift":
+        if is_holding:
+            return None
+        held = cell.act("human-hold")
+        if held.get("ok") is not True:
+            return {"schema": schema, "result": "held", "reason": "HOLD_AFTER_LIFT_FAILED",
+                    "candidate": "release_and_lift", "hold_ok": held.get("ok"), "steps": steps}
+        return {"schema": schema, "result": "risen_for_visual_verify", "candidate": "release_and_lift",
+                "state": state, "hold_ok": True, "steps": steps, "corridor": None}
+    if latched["active"]:
+        if is_holding:
+            return hold_fn("HOLDING_AT_HOME", is_holding=True)
+        ok_u, err_u = ensure_unlatch_fn(cell, latched, note_fn)
+        if not ok_u:
+            return hold_fn("UNLATCH_REFUSED", error=err_u)
+    elif is_holding:
+        return hold_fn("HOLDING_AT_HOME", is_holding=True)
+    return {"schema": schema, "result": "folded", "candidate": "already_home", "state": state, "steps": steps,
+            "corridor": None, **({"unlatched_live_hold": True} if latched["started"] else {})}
 
 
 def write_req_result(incidents_dir: Path, request_id: str | None, arm: str, stage: str, out: dict[str, Any]) -> None:
@@ -32,6 +85,7 @@ def write_req_result(incidents_dir: Path, request_id: str | None, arm: str, stag
 
 def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], recover_fn: Callable[..., dict],
                  candidate_names_fn: Callable[[], list[str]], choice_key: str, schema: str) -> int:
+    del candidate_names_fn, choice_key
     args_list = list(sys.argv[1:] if argv is None else argv)
     if args_list[:1] == ["launch"]:
         lp = argparse.ArgumentParser(prog="cell_auto_fold.py launch")
@@ -48,17 +102,7 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
                                    stop_generation=opts.stop_generation, safety_fence=opts.safety_fence), default=str))
         return 0
 
-    import cell_choices
-    import cell_corridor
-    import cell_objects
-    import cell_params as prm
-    import cell_pipeline as cp
-    import cell_pivot
-    import cell_place_fit
-    import cell_space
-    import cell_unwedge
-    from cell_observe import predicted_pixel
-    from omx_adapter.chunk_library import NAMES, park_path
+    from chunk_runner_recover import run_fold_session_cli
 
     ap = argparse.ArgumentParser(description="Fold a held arm home on its own (D-1048).")
     ap.add_argument("--arm", required=True)
@@ -72,100 +116,33 @@ def run_cli_main(argv: list[str] | None, *, launch_fn: Callable[..., dict], reco
     ap.add_argument("--stop-generation", type=int, default=None)
     ap.add_argument("--safety-fence", default=None)
     ap.add_argument("--supervised", action="store_true")
+    ap.add_argument("--unlatch-hold", action="store_true")
+    ap.add_argument("--vlm-url")
+    ap.add_argument("--vlm-model", default="qwen3-vl:8b-instruct")
+    ap.add_argument("--vlm-provider", default="ollama")
+    ap.add_argument("--vlm-config", type=Path)
+    ap.add_argument("--vlm-timeout", type=float, default=25.0)
     args = ap.parse_args(args_list)
     if not args.supervised and not os.environ.get("ROSY_RECOVERY_INCIDENT"):
         ap.error("ROSY_RECOVERY_INCIDENT is required: this tool only folds an arm a held incident names")
-    arm, cell, space, home, choices_path, moved_out = args.arm, None, None, [], None, []
-    try:
-        config = cell_place_fit.with_tiers(json.loads(args.config.read_text(encoding="utf-8")))[0]
-        params = config["params"] = prm.load(config.get("params_path"))["values"]
-        calibration = json.loads(Path(config["calibration_path"]).expanduser().read_text())
-        library = json.loads(args.library.read_text())
-        home = library["chunks"]["home"][-1]
-        closed = float(library["gripper_closed"])
-        transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None
-        site = config["sites"][args.site]
-        cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-        space = cell_space.Space(Path(config.get("space_dir", "~/rosy-omx/space")).expanduser())
-        to_px = lambda p: predicted_pixel(config, calibration, args.site, p)  # noqa: E731
-        booked = {}
-        choices_path = Path(config.get("work_dir") or ".") / f"auto-fold-choices-{arm}.json"
-        choices = cell_choices.Choices(choices_path)
-        for name in candidate_names_fn():
-            choices.offer(choice_key, name, "D-1048")
-        choices.save()
-        park_speed = library.get("transit_speed", 0.85)
-        plan = lambda s: park_path(list(s), home, closed, library["fps"], transit, park_speed)  # noqa: E731
-        low = lambda s: cell_pivot.joints_tcp(s)[2] < prm.get(params, "corridor.clear_z_m", cell_corridor.CLEAR_Z_M)  # noqa: E731
 
-        def look(frames):
-            img = cell.frame("top")
-            mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"),
-                                           surface_lab=site.get("surface_lab"))
-            return cell_corridor.check([cell_pivot.joints_tcp(f)[:3] for f in frames], mask, args.roi, to_px,
-                                       params=params, surface_px=site.get("surface_px"))
-
-        def reserve(frames):
-            r = cell_corridor.runs([cell_pivot.joints_tcp(f)[:3] for f in frames])
-            lane = cell_corridor.corridor(r[0] + r[1], to_px, (args.roi[3] - args.roi[1], args.roi[2] - args.roi[0]),
-                                          args.roi, prm.get(params, "corridor.half_width_mm", cell_corridor.HALF_WIDTH_MM))
-            booked["mask"] = lane
-            return space.reserve(arm, lane, ttl_s=300.0)
-
-        fence_bad = None
-        if args.expires_at is not None and time.time() > float(args.expires_at):
-            fence_bad = "SAFE_HOME_EXPIRED"
-        elif args.safety_fence is not None or args.stop_generation is not None:
-            fence_path = Path(args.safety_fence) if (args.safety_fence and args.safety_fence.strip()) else None
-            if fence_path is None or not fence_path.is_file():
-                fence_bad = "SAFETY_FENCE_MISSING"
-            else:
-                try:
-                    fence = json.loads(fence_path.read_text(encoding="utf-8"))
-                    upd = fence.get("updated_at") if isinstance(fence, dict) else None
-                    sg = fence.get("stop_generation") if isinstance(fence, dict) else None
-                    if not isinstance(fence, dict) or type(fence.get("human_hold")) is not bool:
-                        fence_bad = "SAFETY_FENCE_UNREADABLE"
-                    elif fence["human_hold"]:
-                        fence_bad = "HUMAN_HOLD_ACTIVE"
-                    elif (isinstance(upd, bool) or not isinstance(upd, (int, float))
-                          or not math.isfinite(upd) or not (-5.0 <= (time.time() - upd) <= 15.0)):
-                        fence_bad = "SAFETY_FENCE_STALE"
-                    elif type(sg) is not int or args.stop_generation is None or sg != args.stop_generation:
-                        fence_bad = "STOP_GENERATION_PREEMPTED"
-                except Exception:
-                    fence_bad = "SAFETY_FENCE_UNREADABLE"
-        if fence_bad:
-            stopped = cell.act("stop now") if args.supervised else {}
-            result = {"schema": schema, "result": "held", "reason": fence_bad,
-                      "hold_ok": None if stopped.get("ok") is True else cell.act("human-hold").get("ok"),
-                      **({"ended": "stop_now", "unmoved": True} if stopped.get("ok") is True else {}), "steps": []}
-        else:
-            result = recover_fn(cell, home, closed, plan=plan, look=look, reserve=reserve, release=lambda: space.release(arm),
-                                release_and_rise=cell_unwedge.release_and_rise, low=low,
-                                order=lambda names: choices.ranked(choice_key, names),
-                                release_unmoved=args.supervised, moved_out=moved_out, stage=args.stage)
-    except Exception as exc:
-        err = f"ERROR: {type(exc).__name__}: {str(exc)[:160]}"
-        if space is not None:
-            space.release(arm)
-        if cell is None:
-            result = {"schema": schema, "result": "held", "reason": err, "hold_ok": None,
-                      **({"unmoved": True} if args.supervised else {}), "steps": []}
-        else:
-            stopped = cell.act("stop now") if args.supervised and not moved_out else {}
+    def _guarded_recover(cell, home, closed, **kw):
+        fence_bad = _safety_fence_error(args)
+        if fence_bad is not None:
+            can_stop = bool(args.supervised and not args.unlatch_hold and not kw.get("moved_out") and not kw.get("latched_out"))
+            stopped = cell.act("stop now") if can_stop else {}
             if stopped.get("ok") is True:
-                result = {"schema": schema, "result": "held", "reason": err, "hold_ok": None, "ended": "stop_now",
-                          "unmoved": True, "steps": []}
-            else:
-                held = cell.act("human-hold")
-                result = {"schema": schema, "result": "held", "reason": err, "hold_ok": held.get("ok"), "steps": []}
-    result["incident_id"] = None if args.supervised else os.environ["ROSY_RECOVERY_INCIDENT"]
-    result["home"], result["supervised"] = list(home), bool(args.supervised)
-    if choices_path is not None:
-        result["choices_path"] = str(choices_path)
-    if result["result"] == "folded":
-        result["stop"] = cell.act("stop")
-    args.out.write_text(json.dumps(result, default=str, indent=1))
-    print(json.dumps({k: result.get(k) for k in ("result", "reason", "candidate")}))
-    return 0 if result["result"] in ("folded", "risen_for_visual_verify") else 3
+                return {"schema": schema, "result": "held", "reason": fence_bad, "hold_ok": None,
+                        "ended": "stop_now", "unmoved": True, "steps": []}
+            return {"schema": schema, "result": "held", "reason": fence_bad,
+                    "hold_ok": cell.act("human-hold").get("ok"), "steps": []}
+        return recover_fn(cell, home, closed, stage=args.stage, **kw)
+
+    rc = run_fold_session_cli(args, _guarded_recover, schema)
+    if rc == 3 and args.out.is_file():
+        try:
+            if json.loads(args.out.read_text(encoding="utf-8")).get("result") == "risen_for_visual_verify":
+                return 0
+        except Exception:
+            pass
+    return rc

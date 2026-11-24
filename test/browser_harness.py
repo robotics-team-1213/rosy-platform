@@ -182,7 +182,7 @@ BODY_FIT = """() => {
     overflow: document.documentElement.scrollWidth - innerWidth,
     body: Math.round(document.querySelector('main').getBoundingClientRect().width),
     nav: {column: getComputedStyle(nav).flexDirection === 'column', top: Math.round(box.top), bottom: Math.round(box.bottom)},
-    unreachable: [...nav.querySelectorAll('a')].filter((link) => !onTop(link)).map((link) => link.textContent),
+    unreachable: [...nav.querySelectorAll('a')].filter((link) => seen(link) && !onTop(link)).map((link) => link.textContent),
     grids, cut, outside, stop: onTop(stop),
   };
 }"""

@@ -11,6 +11,17 @@ export function createCellViews(ctx) {
   const runPinkyQuickAction = (...args) => ctx.runPinkyQuickAction(...args);
   const runStationZoneDispatch = (...args) => ctx.runStationZoneDispatch(...args);
 
+  function camFrame(img) {
+    const wrap = document.createElement('div');
+    wrap.className = 'omx-inspector-cam-frame';
+    const standby = document.createElement('span');
+    standby.className = 'omx-inspector-cam-standby';
+    standby.setAttribute('role', 'status');
+    standby.textContent = '영상 확인 중';
+    wrap.append(img, standby);
+    return wrap;
+  }
+
   function renderRightInspector(body) {
     const panel = $('omx-right-inspector');
     if (!panel) return;
@@ -35,7 +46,7 @@ export function createCellViews(ctx) {
     if (state.dualInspectorCamMode) dualBtn.setAttribute('kind', 'primary');
     dualBtn.setAttribute('type', 'button');
     dualBtn.dataset.dualCamToggle = 'true';
-    dualBtn.textContent = state.dualInspectorCamMode ? '📺 2채널(상단+손목) ON' : '📺 2채널 동시 보기';
+    dualBtn.textContent = state.dualInspectorCamMode ? '2채널(상단+손목) 켜짐' : '2채널 동시 보기';
     dualBtn.addEventListener('click', () => {
       state.dualInspectorCamMode = !state.dualInspectorCamMode;
       renderRightInspector(body);
@@ -69,12 +80,11 @@ export function createCellViews(ctx) {
         const dImg = document.createElement('img');
         dImg.className = 'omx-inspector-main-cam omx-inspector-cam';
         dImg.alt = dv.label;
-        dImg.loading = 'lazy';
         const dQual = document.createElement('span');
         dQual.className = 'cell-visual-badge';
-        dQual.textContent = `🎥 [${dv.label}]`;
-        frames()?.bind(dImg, dv, dQual, `🎥 [${dv.label}]`);
-        pane.append(dImg, dQual);
+        dQual.textContent = `[${dv.label}]`;
+        frames()?.bind(dImg, dv, dQual, `[${dv.label}]`);
+        pane.append(camFrame(dImg), dQual);
         dualGrid.append(pane);
       }
       stage.append(dualGrid);
@@ -83,7 +93,7 @@ export function createCellViews(ctx) {
       stageBar.className = 'omx-inspector-stage-bar';
       const qualLine = document.createElement('span');
       qualLine.className = 'cell-visual-badge';
-      qualLine.textContent = `🎥 [${activeCam.label}]`;
+      qualLine.textContent = `[${activeCam.label}]`;
       const mainCam = document.createElement('img');
       mainCam.className = 'omx-inspector-main-cam omx-inspector-cam';
       mainCam.alt = `${activeSpec.title} 메인 카메라`;
@@ -109,9 +119,9 @@ export function createCellViews(ctx) {
           zoomBtn.focus();
         }
       });
-      frames()?.bind(mainCam, activeCam, qualLine, `🎥 [${activeCam.label}]`);
+      frames()?.bind(mainCam, activeCam, qualLine, `[${activeCam.label}]`);
       stageBar.append(qualLine, zoomBtn);
-      stage.append(stageBar, mainCam);
+      stage.append(stageBar, camFrame(mainCam));
     }
 
     const pipGrid = document.createElement('div');
@@ -125,10 +135,9 @@ export function createCellViews(ctx) {
       const pImg = document.createElement('img');
       pImg.className = 'omx-inspector-cam';
       pImg.alt = v.label;
-      pImg.loading = 'lazy';
       frames()?.bind(pImg, v);
       const pLbl = document.createElement('small');
-      pLbl.textContent = `📷 ${v.label}`;
+      pLbl.textContent = v.label;
       pip.append(pImg, pLbl);
       pip.addEventListener('click', () => {
         state.selectedInspectorCamByTarget[activeSpec.id] = v.id;
@@ -182,7 +191,7 @@ export function createCellViews(ctx) {
     const runCustomBtn = document.createElement('ui-button');
     runCustomBtn.setAttribute('kind', 'primary');
     runCustomBtn.setAttribute('type', 'button');
-    runCustomBtn.textContent = `▶ ${targetArm} 즉시 실행`;
+    runCustomBtn.textContent = `${targetArm} 즉시 실행`;
     runCustomBtn.addEventListener('click', async () => {
       const current = ctx.bump();
       if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `우측 인스펙터 맞춤 태스크(${targetCell}/${targetArm})를 큐에 등록하는 중입니다.`;
@@ -248,7 +257,6 @@ export function createCellViews(ctx) {
       const thumb = document.createElement('img');
       thumb.className = 'cell-visual-thumb';
       thumb.alt = card.title;
-      thumb.loading = 'lazy';
       frames()?.bind(thumb, activeView);
       thumb.tabIndex = 0;
       thumb.addEventListener('click', () => {
@@ -268,18 +276,18 @@ export function createCellViews(ctx) {
       const camQualityBadge = document.createElement('span');
       camQualityBadge.className = 'cell-visual-badge';
       camQualityBadge.textContent = '영상 수신 대기';
-      frames()?.bind(thumb, activeView, camQualityBadge, '🎥 영상');
+      frames()?.bind(thumb, activeView, camQualityBadge, '영상');
       for (const v of (card.cameraViews || [])) {
         const pill = document.createElement('ui-button');
         pill.setAttribute('kind', 'quiet');
         if (v.id === activeViewId) pill.setAttribute('kind', 'primary');
         pill.setAttribute('type', 'button');
         pill.dataset.cameraView = v.id;
-        pill.textContent = `📷 ${v.label}`;
+        pill.textContent = v.label;
         pill.addEventListener('click', ev => {
           ev.stopPropagation();
           state.selectedCameraByCard[card.id] = v.id;
-          frames()?.bind(thumb, v, camQualityBadge, '🎥 영상');
+          frames()?.bind(thumb, v, camQualityBadge, '영상');
           for (const child of camSwitcher.children || []) {
             if (child.tagName === 'UI-BUTTON') {
               child.setAttribute('kind', 'quiet');
@@ -315,10 +323,10 @@ export function createCellViews(ctx) {
       const actions = document.createElement('div');
       actions.className = 'cell-visual-actions';
       const inspectTargets = card.id === 'cell_s'
-        ? [['arm_s', '🔍 우측 연동: arm_s']]
+        ? [['arm_s', 'arm_s 상세']]
         : card.id === 'cell_ab'
-        ? [['arm_a', '🔍 우측 연동: arm_a'], ['arm_b', '🔍 우측 연동: arm_b']]
-        : [['rosy_46', '🔍 우측 연동: rosy_46'], ['rosy_45', '🔍 rosy_45'], ['rosy_42', '🔍 rosy_42']];
+        ? [['arm_a', 'arm_a 상세'], ['arm_b', 'arm_b 상세']]
+        : [['rosy_46', 'rosy_46 상세'], ['rosy_45', 'rosy_45'], ['rosy_42', 'rosy_42']];
       for (const [tId, tLabel] of inspectTargets) {
         const iBtn = document.createElement('ui-button');
         iBtn.setAttribute('kind', 'quiet');
@@ -341,7 +349,7 @@ export function createCellViews(ctx) {
         actions.append(btn);
       }
 
-      article.append(thumb, camSwitcher, head, meta, actions);
+      article.append(camFrame(thumb), camSwitcher, head, meta, actions);
       return article;
     }));
   }
@@ -357,7 +365,6 @@ export function createCellViews(ctx) {
       h4.textContent = cam.label;
       const img = document.createElement('img');
       img.alt = cam.label;
-      img.loading = 'lazy';
       const meta = document.createElement('pre');
       meta.textContent = cam.roiTarget ? '천장 Cam ROI 확대' : `Vision 소스 ${cam.source}`;
       frames()?.bind(img, cam, meta, cam.roiTarget ? '천장 Cam ROI' : cam.source);
@@ -383,13 +390,13 @@ export function createCellViews(ctx) {
         }
       });
       const camQuickMap = {
-        arm_s_top: {label: '▶ S3 셔틀 실행', preset: 's3_shuttle'},
-        arm_s_wrist: {label: '▶ 자동 복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
-        top: {label: '▶ S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
-        side: {label: '▶ 3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
-        arm_a_wrist: {label: '▶ 1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
-        arm_b_wrist: {label: '▶ 2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
-        pinky_dock: {label: '▶ S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
+        arm_s_top: {label: 'S3 셔틀 실행', preset: 's3_shuttle'},
+        arm_s_wrist: {label: '자동 복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
+        top: {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
+        side: {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
+        arm_a_wrist: {label: '1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
+        arm_b_wrist: {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
+        pinky_dock: {label: 'S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
       };
       const qAct = camQuickMap[cam.id];
       if (qAct) {
@@ -403,9 +410,9 @@ export function createCellViews(ctx) {
           else if (qAct.pinkyAction) void runPinkyQuickAction('rosy_46', qAct.pinkyAction);
           else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, 'rosy_46');
         });
-        card.append(h4, img, meta, actBtn);
+        card.append(h4, camFrame(img), meta, actBtn);
       } else {
-        card.append(h4, img, meta);
+        card.append(h4, camFrame(img), meta);
       }
       return card;
     }));
