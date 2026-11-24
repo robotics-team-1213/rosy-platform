@@ -38,6 +38,12 @@
   word-break: keep-all;
   overflow-wrap: break-word;
 }
+.ui-stage a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--target-secondary);
+}
 .ui-stage::before {
   content: counter(ui-stage);
   flex: none;
@@ -105,10 +111,16 @@
   .ui-stage:last-child {
     padding-block-end: 0;
   }
+  .ui-stage a {
+    justify-content: flex-start;
+  }
   .ui-stage::after {
     inset-block-start: calc(var(--size-stage-mark) + var(--space-1));
     inset-inline-start: calc((var(--size-stage-mark) - var(--size-stage-line)) / 2);
     inline-size: var(--size-stage-line);
     block-size: calc(100% - var(--size-stage-mark) - 2 * var(--space-1));
+  }
+  .ui-stage:has(> a)::after {
+    inset-block-start: calc((var(--target-secondary) + var(--size-stage-mark)) / 2 + var(--space-1));
   }
 }

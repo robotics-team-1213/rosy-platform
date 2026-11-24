@@ -103,3 +103,95 @@ test("buildZoneBlueprintModel normalizes stops, bays, exports, arm zones, handof
   assert.ok(yardRows.some((r) => r.term === "활성 작업" && r.value.includes("ct-1")));
   for (const row of yardRows) assert.doesNotMatch(row.value, /초 전/);
 });
+
+function createMockDoc() {
+  const makeEl = (tag, ns = "") => {
+    const el = {
+      tagName: tag,
+      namespaceURI: ns,
+      attributes: {},
+      children: [],
+      textContent: "",
+      className: "",
+      hidden: false,
+      isConnected: false,
+      setAttribute(k, v) { this.attributes[k] = String(v); },
+      getAttribute(k) { return this.attributes[k] ?? null; },
+      append(...nodes) {
+        for (const n of nodes) {
+          if (n && typeof n === "object") { n.isConnected = true; this.children.push(n); }
+        }
+      },
+      replaceChildren(...nodes) {
+        for (const old of this.children) old.isConnected = false;
+        this.children = [];
+        this.append(...nodes);
+      },
+      addEventListener() {},
+      get firstElementChild() { return this.children[0] || null; },
+    };
+    return el;
+  };
+  return {
+    createElement: (tag) => makeEl(tag),
+    createElementNS: (ns, tag) => makeEl(tag, ns),
+  };
+}
+
+function findNodes(root, pred, out = []) {
+  if (!root || typeof root !== "object") return out;
+  if (pred(root)) out.push(root);
+  for (const child of root.children || []) findNodes(child, pred, out);
+  return out;
+}
+
+test("zone-blueprint 2D and 3D render honest empty state for 0-slot arm zones and 2D adds aria-label to nodes", async () => {
+  const prevDoc = globalThis.document;
+  globalThis.document = createMockDoc();
+  try {
+    const { createZoneBlueprint2d } = await import("../../../../applications/fleet/web/map/zone-blueprint-2d.js");
+    const { createZoneBlueprint3d } = await import("../../../../applications/fleet/web/map/zone-blueprint-3d.js");
+
+    const model = buildZoneBlueprintModel({
+      sitePoints: {
+        vehicle_stops: [{ id: "S1", name: "수령구 S1", pose: { x: 0, y: 0, yaw: 0 }, status: "verified" }],
+        arm_zones: {
+          zones: [
+            { id: "yard", label: "장치 야드", role: "보관", grid: { rows: 3, columns: 6, tiers: 3 }, slots: [] },
+          ],
+        },
+      },
+      stationZones: {
+        staging_bays: [{ id: "STG_1", name: "대기 1", x: 0.5, y: 0.2 }],
+        export_stations: [{ id: "EXP_1", name: "반출 1", x: -0.5, y: 0.2 }],
+      },
+    });
+
+    const host2d = globalThis.document.createElement("div");
+    const view2d = createZoneBlueprint2d(host2d);
+    view2d.render(model, "S1", "all");
+    const buttons = findNodes(host2d, (n) => n.tagName === "g" && n.attributes.role === "button");
+    assert.equal(buttons.length, 3);
+    assert.match(buttons[0].attributes["aria-label"], /정류장.*S1.*선택/);
+    assert.match(buttons[1].attributes["aria-label"], /임시 대기칸.*STG_1.*선택/);
+    assert.match(buttons[2].attributes["aria-label"], /반출대.*EXP_1.*선택/);
+
+    view2d.render(model, "yard", "arm_zone");
+    const empty2d = findNodes(host2d, (n) => n.className === "hint zb-empty");
+    assert.equal(empty2d.length, 1);
+    assert.equal(empty2d[0].textContent, "등록된 슬롯이 없습니다 · 실측 대기");
+    assert.equal(findNodes(host2d, (n) => (n.attributes.class || "").includes("zb-slot-rect")).length, 0);
+
+    const host3d = globalThis.document.createElement("div");
+    const view3d = createZoneBlueprint3d(host3d);
+    await view3d.render(model, "yard", "arm_zone");
+    const empty3d = findNodes(host3d, (n) => n.className === "hint zb-empty");
+    assert.equal(empty3d.length, 1);
+    assert.equal(empty3d[0].hidden, false);
+    assert.equal(empty3d[0].textContent, "등록된 슬롯이 없습니다 · 실측 대기");
+    const canvas3d = findNodes(host3d, (n) => n.tagName === "canvas")[0];
+    assert.equal(canvas3d.hidden, true);
+  } finally {
+    globalThis.document = prevDoc;
+  }
+});

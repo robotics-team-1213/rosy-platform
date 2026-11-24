@@ -22,6 +22,11 @@ export function createZoneBlueprint3d(host, { onSelect } = {}) {
   canvas.setAttribute("role", "img");
   canvas.setAttribute("aria-label", "구역 3D 도면 · 드래그 회전 · 휠 확대");
 
+  const emptyNote = document.createElement("p");
+  emptyNote.className = "hint zb-empty";
+  emptyNote.hidden = true;
+  emptyNote.textContent = "등록된 슬롯이 없습니다 · 실측 대기";
+
   const fallback = document.createElement("p");
   fallback.className = "hint zb-fallback";
   fallback.hidden = true;
@@ -254,8 +259,21 @@ export function createZoneBlueprint3d(host, { onSelect } = {}) {
       currentModel = model;
       currentSelectedId = selectedId;
       currentFilter = filterCategory;
-      if (!canvas.isConnected) host.replaceChildren(canvas, fallback);
-      if (await ensureInit()) rebuildGeometry();
+      if (!canvas.isConnected || !emptyNote.isConnected) host.replaceChildren(canvas, emptyNote, fallback);
+      const armZone = currentModel?.armZones?.find((z) => z.id === currentSelectedId)
+        || (currentFilter === "arm_zone" ? currentModel?.armZones?.[0] : null);
+      if (armZone && !(armZone.slots && armZone.slots.length)) {
+        clearSceneGroup();
+        canvas.hidden = true;
+        fallback.hidden = true;
+        emptyNote.hidden = false;
+        return;
+      }
+      emptyNote.hidden = true;
+      if (await ensureInit()) {
+        canvas.hidden = false;
+        rebuildGeometry();
+      }
     },
     setPreset(name) {
       const p = PRESETS[name];
