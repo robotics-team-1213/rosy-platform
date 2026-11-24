@@ -40,7 +40,7 @@ DRIFT_ROTATION_DEG = 3.0
 #: Default cadence of one comparison pass per source. Generous on purpose: each pass
 #: triggers one registration run on Vision's single low-priority worker (D-375), and
 #: the verdict only needs to notice a re-aimed camera within minutes, not seconds.
-DEFAULT_INTERVAL_S = 60.0
+DEFAULT_INTERVAL_S = 300.0
 
 _LOG = logging.getLogger(__name__)
 

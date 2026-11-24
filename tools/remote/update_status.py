@@ -560,7 +560,7 @@ def main() -> None:
         # bytes, not text: Windows text mode would send CRLF into bash
         topology = Path(__file__).with_name('host_topology.py').read_text(encoding='utf-8')
         probe = 'RETIRED=' + shlex.quote(' '.join(retired)) + '\n' + PROBE + update_drift.PROBE + "\npython3 - <<'ROSY_TOPOLOGY'\n" + topology + '\nROSY_TOPOLOGY\n'
-        done = subprocess.run([*SSH, '--', target, 'bash -s -- ' + ' '.join(copies)], input=probe.encode(),
+        done = subprocess.run([*SSH, '--', target, 'timeout -k 5 120 bash -s -- ' + ' '.join(copies)], input=probe.encode(),
                               capture_output=True, timeout=120)
         if done.returncode:
             print(f'\n{target}: UNREACHABLE ({done.stderr.decode(errors="replace").strip()[-120:]})')

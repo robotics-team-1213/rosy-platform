@@ -165,7 +165,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://fleet:${ROSY_FLEET_PORT:?set ROSY_FLEET_PORT}/healthz', timeout=2).read()"]
-      interval: 15s
+      interval: 60s
       timeout: 3s
       retries: 3
       start_period: 15s
@@ -233,7 +233,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD, python3, -c, "import urllib.request; urllib.request.urlopen('https://vision:${ROSY_VISION_PORT:?set ROSY_VISION_PORT}/healthz', timeout=2).read()"]
-      interval: 15s
+      interval: 60s
       timeout: 3s
       retries: 3
       start_period: 15s
@@ -275,7 +275,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U rosy -d rosy_context"]
-      interval: 15s
+      interval: 60s
       timeout: 5s
       retries: 5
       start_period: 20s
@@ -361,7 +361,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD, caddy, validate, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
-      interval: 30s
+      interval: 60s
       timeout: 5s
       retries: 3
       start_period: 10s

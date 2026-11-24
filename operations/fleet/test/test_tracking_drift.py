@@ -211,6 +211,15 @@ def test_watch_rejects_a_non_positive_interval():
         _watch(_Fetcher(), interval_s=0.0)
 
 
+def test_default_interval_allows_idle_phone_sleep():
+    from fleet.server.tracking_drift import DEFAULT_INTERVAL_S
+
+    assert DEFAULT_INTERVAL_S == 300.0
+    watch = CalibrationDriftWatch(sources=[_source()], calibrations=TrackingCalibrationStore(),
+                                  fetch_proposal=_Fetcher())
+    assert watch.interval_s == 300.0
+
+
 # -- Vision reader ------------------------------------------------------------
 
 SECRET = "drift-watch-test-secret-0123456789abcdef"
