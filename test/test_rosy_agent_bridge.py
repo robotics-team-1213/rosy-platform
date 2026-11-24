@@ -70,6 +70,7 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         ("GET", "/jobs"): (200, [{"id": "j-upkeep", "exit": 0}], {}),
         ("POST", "/jobs/upkeep_check"): (202, {"id": "j-upkeep"}, {}),
         ("POST", "/jobs/auto_pick_dry_run"): (202, {"id": "j-dry"}, {}),
+        ("POST", "/jobs/area_xyz_pick"): (202, {"id": "j-area"}, {}),
         ("GET", "/jobs/j-upkeep"): (200, {"id": "j-upkeep", "exit": 0}, {}),
         ("GET", "/jobs/j-nonjson"): (200, b"\x80rawbytes", {"Content-Type": "application/octet-stream"}),
         ("GET", "/jobs/j-redir"): (302, {"ok": True}, {"Location": "http://127.0.0.1:9/leak"}),
@@ -120,6 +121,15 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
             "config": "c.json", "catalog": "k.json", "roi": [0, 0, 10, 10],
             "source": "inbound", "dest": "outbound", "object": "box", "colour": "orange", "layers_below": 1,
         })["data"]["id"] == "j-dry"
+        assert bridge.call_tool("cell_area_dry_run", {
+            "arm": "arm_s", "config": "c.json", "pick_area": "belt", "pick_x": 0.12, "pick_y": -0.13, "pick_z": 0.05,
+            "place_area": "floor", "place_x": 0.08, "place_y": 0.14, "place_z": 0.04,
+        })["data"]["id"] == "j-area"
+        assert cell_log[-1][1] == "/jobs/area_xyz_pick" and cell_log[-1][3]["dry_run"] is True
+        assert bridge.call_tool("cell_area_dry_run", {
+            "arm": "arm_s", "config": "c.json", "pick_area": "belt", "pick_x": 0.12, "pick_y": -0.13, "pick_z": 0.05,
+            "place_area": "floor", "place_x": 0.08, "place_y": 0.14, "place_z": 0.04, "person_at_switch": True,
+        })["error_code"] == "INVALID_ARGS"
         assert bridge.call_tool("fleet_state")["data"]["robots"][0]["robot_id"] == "rosy_45"
         assert bridge.call_tool("fleet_cell_readiness", {"cell_id": "cell_s"})["data"]["dispatch_generation"] == 9
         assert bridge.call_tool("fleet_cell_tasks", {"cell_id": "cell_s", "status": "PROPOSED"})["data"]["tasks"][0]["task_id"] == "t1"
@@ -191,7 +201,7 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         replies = [json.loads(line) for line in stdout.getvalue().splitlines()]
         assert replies[0]["result"]["protocolVersion"] == "2025-03-26"
         assert replies[1]["result"] == {}
-        assert len(replies[2]["result"]["tools"]) == 17
+        assert len(replies[2]["result"]["tools"]) == 18
         assert json.loads(replies[3]["result"]["content"][0]["text"])["data"]["cell_state_gen"] == 5
         frame_content = replies[4]["result"]["content"]
         assert len(frame_content) == 2 and frame_content[1]["type"] == "image" and frame_content[1]["mimeType"] == "image/jpeg"
@@ -254,6 +264,11 @@ def test_bridge_schemas_match_cell_job_specs():
     stage = cmjs.MEDIA_JOBS["stage_policy_bundle"]
     st_props = set(br.TOOL_MAP["learning_stage_bundle"]["inputSchema"]["properties"].keys())
     assert set(stage["params"]) <= st_props
+
+    area = cjs.AREA_JOBS["area_xyz_pick"]
+    area_schema = br.TOOL_MAP["cell_area_dry_run"]["inputSchema"]
+    assert set(area_schema["required"]) == set(area["params"].keys())
+    assert set(area_schema["properties"].keys()) == (set(area["params"].keys()) | set(area["optional"].keys())) - {"dry_run", "operator", "proposer"}
 
 
 def test_bridge_is_stdlib_only_no_subprocess_and_d226_clean():

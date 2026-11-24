@@ -37,6 +37,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     _two_arm_task_sites,
     _workdir_rel_path,
 )
+from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
 from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 
@@ -250,9 +251,8 @@ JOBS = {
             "dry_run": _bool,
         },
     },
-    **MEDIA_JOBS,
+    **MEDIA_JOBS, **AREA_JOBS,
 }
-
 
 def job_arms(job: dict, params: dict) -> tuple[str, ...]:
     if job.get("arms"):
@@ -262,7 +262,8 @@ def job_arms(job: dict, params: dict) -> tuple[str, ...]:
 
 def moves_arm(job, params):
     return bool(job.get("moving")) and not (
-        job["script"] in ("cell_policy_drive.py", "cell_two_arm_policy_cli.py") and params.get("dry_run") is True
+        job["script"] in ("cell_policy_drive.py", "cell_two_arm_policy_cli.py", "cell_area_pick_cli.py")
+        and params.get("dry_run") is True
     )
 
 
@@ -336,7 +337,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
                 raise ValueError("missing param model_calibration")
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
     if moves_arm(job, params):
-        direct_sites = [checked.get(name, opt_checked.get(name, "")) for name in ("source", "dest", "site", "goal_site")]
+        direct_sites = [checked.get(name, opt_checked.get(name, "")) for name in ("source", "dest", "site", "goal_site", "pick_area", "place_area")]
         task_sites = _task_site_names(workdir / checked["task"], workdir / checked["config"] if "config" in checked else None) if "task" in checked else set()
         if any(_is_amr_bed_site(v) for v in (*direct_sites, *task_sites)):
             raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
@@ -356,7 +357,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks")):
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine")):
         if opt_checked.get(opt):
             args.append(flag)
     if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
@@ -371,7 +372,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
         "margin_m", "min_z_m", "jpeg_quality", "out", "out_dir", "fps", "images", "outcome", "expected_manifest_sha256",
-        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout",
+        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout", "pick_yaw_deg", "place_yaw_deg", "max_attempts",
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]

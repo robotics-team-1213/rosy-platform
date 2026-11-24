@@ -1511,6 +1511,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_readiness.py
   - deploy/robot/omx/cell_media_jobs.py
   - deploy/robot/omx/cell_media_job_spec.py
+  - deploy/robot/omx/cell_area_job_spec.py
+  - deploy/robot/omx/cell_area_pick_cli.py
   - deploy/robot/omx/cell_bundle_emit.py
   - deploy/robot/omx/cell_depth_lock.py
   - deploy/robot/omx/cell_recovery.py
