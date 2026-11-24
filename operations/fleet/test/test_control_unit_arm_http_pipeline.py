@@ -231,7 +231,7 @@ def test_relayed_missing_recheck_returns_arm_recheck_not_found_and_preserves_mis
         nodes, network, _store, _control = site(tmp_path, rig)
         def _missing(mission_id, recheck_key):
             raise KeyError(recheck_key)
-        nodes["ARM-CELL"].arm_jobs().observation = SimpleNamespace(rechecks=SimpleNamespace(read=_missing))
+        nodes["ARM-CELL"].arm_jobs().observation = SimpleNamespace(receipt=lambda _mission_id: None, rechecks=SimpleNamespace(read=_missing))
         async with network:
             created = await network.post(JOBS, headers=HARBOR, json=transfer(installation, "harbor:recheck-404"))
             assert created.status_code == 200, created.text
