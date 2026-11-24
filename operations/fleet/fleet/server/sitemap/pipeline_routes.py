@@ -165,6 +165,13 @@ def install_pipeline_routes(
             app.state.repark_requests = dict(saved.get("repark_requests") or {})
             app.state.repark_done = list(saved.get("repark_done") or [])
             app.state.pipeline_decisions = list(saved.get("pipeline_decisions") or [])[-100:]
+            app.state.pipeline_recovery_ledger = list(saved.get("pipeline_recovery_ledger") or [])[-100:]
+            app.state.pipeline_recovery_budgets = dict(saved.get("pipeline_recovery_budgets") or {})
+            app.state.pipeline_recovery_idempotency = dict(saved.get("pipeline_recovery_idempotency") or {})
+            app.state.pipeline_homing_sessions = dict(saved.get("pipeline_homing_sessions") or {})
+            app.state.pending_safe_home_arms = dict(saved.get("pending_safe_home_arms") or {})
+            app.state.safe_home_history = dict(saved.get("safe_home_history") or {})
+            app.state.pipeline_recovery_escalations = dict(saved.get("pipeline_recovery_escalations") or {})
             app.state.detected_displaced_site = saved.get("detected_displaced_site")
             if "cable_tangled" in saved:
                 app.state.cable_tangled = bool(saved["cable_tangled"])
@@ -188,6 +195,13 @@ def install_pipeline_routes(
                 "repark_requests": getattr(app.state, "repark_requests", {}),
                 "repark_done": getattr(app.state, "repark_done", []),
                 "pipeline_decisions": app.state.pipeline_decisions[-100:],
+                "pipeline_recovery_ledger": (getattr(app.state, "pipeline_recovery_ledger", None) or [])[-100:],
+                "pipeline_recovery_budgets": getattr(app.state, "pipeline_recovery_budgets", None) or {},
+                "pipeline_recovery_idempotency": getattr(app.state, "pipeline_recovery_idempotency", None) or {},
+                "pipeline_homing_sessions": getattr(app.state, "pipeline_homing_sessions", None) or {},
+                "pending_safe_home_arms": getattr(app.state, "pending_safe_home_arms", None) or {},
+                "safe_home_history": getattr(app.state, "safe_home_history", None) or {},
+                "pipeline_recovery_escalations": getattr(app.state, "pipeline_recovery_escalations", None) or {},
                 "detected_displaced_site": app.state.detected_displaced_site,
                 "cable_tangled": app.state.cable_tangled,
                 "human_detected": app.state.human_detected,
@@ -378,6 +392,7 @@ def install_pipeline_routes(
     from fleet.server.sitemap.pipeline_gate_routes import install_gates_routes
     from fleet.server.sitemap.pipeline_camera_routes import install_cameras_routes
     from fleet.server.sitemap.pipeline_evidence import install_evidence_routes
+    from fleet.server.sitemap.pipeline_recovery_tools import install_recovery_tool_routes
 
     ctx = SimpleNamespace(
         STATION_CAMERA_LINKS=STATION_CAMERA_LINKS, _arm_live_catalog=_arm_live_catalog,
@@ -391,3 +406,4 @@ def install_pipeline_routes(
     install_gates_routes(app, ctx)
     install_cameras_routes(app, ctx)
     install_evidence_routes(app, ctx)
+    install_recovery_tool_routes(app, ctx)

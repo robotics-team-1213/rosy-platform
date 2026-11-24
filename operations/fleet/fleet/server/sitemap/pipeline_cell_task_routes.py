@@ -26,6 +26,7 @@ from fleet.server.sitemap.pipeline_unload_release import (
     manifest_count,
     unload_release,
 )
+from fleet.server.sitemap.pipeline_recovery_tools import collect_unresolved_failures
 
 
 _LEGACY_VEHICLE_SITE = "pinky"
@@ -233,7 +234,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cable_guard_micro": bool(spec.get("cable_guard_micro", dec_row["cable_guard_micro"])),
             "decision": dec_row,
             "preset": spec.get("preset"),
-            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root", "zone_id", "col", "row", "tier_hint")
+            **{k: spec[k] for k in ("unload_batch_id", "unload_expected", "unload_index", "repark_root", "zone_id", "col", "row", "tier_hint", "fallback_from_task_id", "fallback_chain_depth", "requires_presence_confirm")
                if k in spec},
             **{k: spec[k] for k in ("execution_mode", "max_chunks") if spec.get(k) is not None},
             "pose": pose,
@@ -241,7 +242,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "created_at": round(time.time(), 3),
         })
 
-    def _enqueue_many(active, specs: list[dict], *, principal_id: str | None = None) -> list[dict]:
+    def _enqueue_many(active, specs: list[dict], *, principal_id: str | None = None, save: bool = True) -> list[dict]:
         seen_ids: set[str] = set()
         built = []
         for s in specs:
@@ -250,11 +251,12 @@ def install_cell_tasks_routes(app, ctx) -> None:
             built.append(task)
         for task in built:
             app.state.omx_cell_tasks[task["task_id"]] = task
-        _save_ledger()
+        if save:
+            _save_ledger()
         return built
 
-    def _enqueue_one_task(active, spec: dict, *, principal_id: str | None = None) -> dict:
-        return _enqueue_many(active, [spec], principal_id=principal_id)[0]
+    def _enqueue_one_task(active, spec: dict, *, principal_id: str | None = None, save: bool = True) -> dict:
+        return _enqueue_many(active, [spec], principal_id=principal_id, save=save)[0]
 
     @app.post("/api/fleet/pipeline/cell-tasks", dependencies=operator_guard)
     async def create_cell_task(request: Request):
@@ -359,6 +361,14 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "pinky_dispatch_enabled": pinky_dispatch_enabled(),
             "auto_events": list(getattr(app.state, "cell_auto_events", None) or [])[-30:],
             "repark_requests": dict(getattr(app.state, "repark_requests", None) or {}),
+            "recovery_handoff": {
+                "active_failures": collect_unresolved_failures(
+                    app.state, time.time(), human_detected=bool(_is_human_detected()),
+                    active=active, dispatch_enabled=pinky_dispatch_enabled(),
+                ),
+                "homing_sessions": dict(getattr(app.state, "pipeline_homing_sessions", None) or {}),
+                "recent_invocations": list((getattr(app.state, "pipeline_recovery_ledger", None) or [])[-10:]),
+            },
         }
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=operator_guard)

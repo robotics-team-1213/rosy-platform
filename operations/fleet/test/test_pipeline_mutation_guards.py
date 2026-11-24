@@ -23,6 +23,7 @@ SERVICE_MAY_POST = VIEWER_MAY_POST | {
     ("POST", "/api/fleet/pipeline/cell-tasks/{task_id}/complete"),
     ("POST", "/api/fleet/pipeline/cell-tasks/{task_id}/bed-observation"),
     ("POST", "/api/fleet/pipeline/cell-tasks/{task_id}/owner-evidence"),  # bed-confirm stays operator only
+    ("POST", "/api/fleet/pipeline/recovery-tools/invoke"),  # guarded tool dispatch admits authenticated proposers/agents
 }
 
 

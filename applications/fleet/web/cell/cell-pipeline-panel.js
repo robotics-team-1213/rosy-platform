@@ -3,6 +3,7 @@ import { setOffBy } from "/common/cause-line.js";
 
 export const PIPELINE_STATUS_PATH = '/api/fleet/pipeline/status';
 export const UNLOAD_RELEASE_PATH = '/api/fleet/pipeline/unload-release';
+export const RECOVERY_TOOLS_INVOKE_PATH = '/api/fleet/pipeline/recovery-tools/invoke';
 export const pinkyCancelPath = id => `/api/fleet/pipeline/pinky-tasks/${encodeURIComponent(id)}/cancel`;
 export const reparkClosePath = id => `/api/fleet/pipeline/repark/${encodeURIComponent(id)}`;
 
@@ -36,7 +37,7 @@ export function formatPinkyTaskRow(task) {
 }
 
 export function createPipelinePanel(ctx) {
-  const {$, state, namedReason, runPinkyQuickAction, runQuickPreset, cancelPinkyTask, closeRepark, cancelOrRetryTask, onRobotChange} = ctx;
+  const {$, state, namedReason, runPinkyQuickAction, runQuickPreset, cancelPinkyTask, closeRepark, cancelOrRetryTask, invokeRecoveryTool, onRobotChange} = ctx;
 
   function ensurePanel() {
     let panel = $('cell-pipeline-panel');
@@ -152,6 +153,71 @@ export function createPipelinePanel(ctx) {
         makeBtn('재주차 실패(FAILED)', 'quiet', '', () => void closeRepark?.(req.request_id, 'FAILED')),
       );
       step3Nodes.push(box);
+    }
+    const handoff = tasksBody?.recovery_handoff || {};
+    for (const f of handoff.active_failures || []) {
+      const hbox = document.createElement('div');
+      hbox.className = 'cell-pipeline-repark';
+      const vetoesTxt = Array.isArray(f.vetoes) && f.vetoes.length ? ` · veto: ${f.vetoes.join(', ')}` : '';
+      const camTxt = f.arm_id ? (f.cameras_fresh ? ' · 3cam 신선' : ' · 3cam 미확인') : '';
+      const stageTxt = f.homing_stage && f.homing_stage !== 'IDLE' ? ` · homing=${f.homing_stage}` : '';
+      const hinfo = document.createElement('span');
+      hinfo.textContent = `미해결(${f.trigger_code} · ${f.arm_id || f.robot_id || 'cell'} · ${f.state}${stageTxt}${camTxt}${vetoesTxt})`;
+      const callTool = (toolName, args, label) => void invokeRecoveryTool?.({
+        tool_name: toolName,
+        arguments: args,
+        caller_kind: 'operator',
+        request_id: ['ui', toolName, Date.now()].join('-'),
+        expected_context_sha256: f.context_sha256,
+        root_task_id: f.root_task_id,
+        rationale: `${label} (${f.trigger_code})`,
+      });
+      const elig = f.eligible_tools || {};
+      const strats = f.homing_strategies || {};
+      const camSeqs = f.camera_sequences || {};
+      const liftReason = strats.release_and_lift
+        ? (strats.release_and_lift.allowed ? '' : (strats.release_and_lift.reason || '그리퍼·상승 불가'))
+        : (elig.safe_fold_home?.allowed ? '' : (elig.safe_fold_home?.reason || '그리퍼·상승 불가'));
+      const parkReason = strats.guarded_slow_park
+        ? (strats.guarded_slow_park.allowed ? '' : (strats.guarded_slow_park.reason || '3카메라 확인 후 가드 복귀 가능'))
+        : (elig.safe_fold_home?.allowed ? '' : (elig.safe_fold_home?.reason || '가드 복귀 불가'));
+      const autoReason = strats.auto_fold
+        ? (strats.auto_fold.allowed ? '' : (strats.auto_fold.reason || '자동 폴드 불가'))
+        : (elig.safe_fold_home?.allowed ? '' : (elig.safe_fold_home?.reason || '자동 폴드 불가'));
+      const visReason = elig.record_visual_checkpoint?.allowed ? '' : (elig.record_visual_checkpoint?.reason || '3카메라 판정 불가');
+      hbox.append(
+        hinfo,
+        makeBtn('그리퍼 열기+상승', 'primary', liftReason,
+          () => callTool('safe_fold_home', {arm_id: f.arm_id || null, strategy: 'release_and_lift'}, '그리퍼 열기+상승')),
+        makeBtn('3카메라 이탈 확인', 'quiet', visReason,
+          () => callTool('record_visual_checkpoint', {
+            arm_id: f.arm_id || null, stage: 'after_lift', verdict: 'CLEAR',
+            cargo_detached: true, gripper_open: true, overhead_clear: true,
+            cameras_checked: camSeqs, observation_summary: 'Top/Side/Wrist 3카메라 컨테이너 이탈 및 상공 비어 있음 확인',
+          }, '3카메라 이탈 확인')),
+        makeBtn('가드 홈 복귀(park)', 'primary', parkReason,
+          () => callTool('safe_fold_home', {arm_id: f.arm_id || null, strategy: 'guarded_slow_park'}, '가드 홈 복귀')),
+        makeBtn('홈 접힘 확인', 'quiet', visReason,
+          () => callTool('record_visual_checkpoint', {
+            arm_id: f.arm_id || null, stage: 'after_park', verdict: 'FOLDED_HOME',
+            cargo_detached: true, gripper_open: true, overhead_clear: true,
+            cameras_checked: camSeqs, observation_summary: '3카메라 홈 접힘 완료 육안 확인',
+          }, '홈 접힘 확인')),
+        makeBtn('자동 폴드', 'quiet', autoReason,
+          () => callTool('safe_fold_home', {arm_id: f.arm_id || null, strategy: 'auto_fold'}, '자동 폴드')),
+        makeBtn('ACT 폴백(입회 필요)', 'quiet', elig.enqueue_vla_act_fallback?.allowed ? '' : (elig.enqueue_vla_act_fallback?.reason || 'ACT 폴백 불가'),
+          () => callTool('enqueue_vla_act_fallback', {mode: 'act', max_chunks: 2}, 'ACT 폴백')),
+        makeBtn('VLA Shadow 제안', 'quiet', elig.enqueue_vla_act_fallback?.allowed ? '' : (elig.enqueue_vla_act_fallback?.reason || 'VLA 제안 불가'),
+          () => callTool('enqueue_vla_act_fallback', {mode: 'vla_shadow', max_chunks: 2}, 'VLA Shadow 제안')),
+        makeBtn('사람 검토 요청', 'quiet', '', () => callTool('escalate_human', {summary: f.trigger_code}, '사람 검토 요청')),
+      );
+      step3Nodes.push(hbox);
+    }
+    for (const rec of (handoff.recent_invocations || []).slice(-3).reverse()) {
+      const rinfo = document.createElement('span');
+      rinfo.className = 'cell-pipeline-repark';
+      rinfo.textContent = `AI·복구 이력: ${rec.tool_name} (${rec.caller_kind}) -> ${rec.status}${rec.reason ? ` · ${rec.reason}` : ''}`;
+      step3Nodes.push(rinfo);
     }
     const step3 = makeStepCard('3단계 · 복구·재주차', step3Nodes);
 

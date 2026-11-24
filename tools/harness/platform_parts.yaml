@@ -1452,6 +1452,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_corridor.py
   - deploy/robot/omx/cell_unwedge.py
   - deploy/robot/omx/cell_auto_fold.py
+  - deploy/robot/omx/cell_auto_fold_stages.py
+  - deploy/robot/omx/cell_camera_telemetry_sync.py
   - deploy/robot/omx/cell_remap_jaws.py
   - deploy/robot/omx/cell_task_worker.py
   - deploy/robot/omx/cell_task_exec.py
@@ -1500,6 +1502,8 @@ safety_review_paths:
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
+  - operations/fleet/fleet/server/sitemap/pipeline_recovery_policy.py
+  - operations/fleet/fleet/server/sitemap/pipeline_recovery_tools.py
   - middleware/devices/omx/adapter/omx_adapter/chunk_library.py  # park_path, transit_path
   - tools/harness/safety_review.py  # the check itself
   - tools/harness/safety_review_exempt.json

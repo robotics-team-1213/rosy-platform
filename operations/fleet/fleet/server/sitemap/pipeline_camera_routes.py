@@ -119,11 +119,16 @@ def install_cameras_routes(app, ctx) -> None:
     @app.post("/api/fleet/pipeline/cell-quality", dependencies=proposer_guard)
     async def ingest_cell_quality(request: Request):
         body = await request.json()
+        from fleet.server.sitemap.pipeline_recovery_policy import (
+            ARM_CELL, CAM_CELL, cell_quality_key_allowed, cell_quality_recovery_sync,
+        )
+
         cams = body.get("cameras")
         if isinstance(cams, dict):
+            cam_recorded = round(time.time(), 3)
             for k, v in cams.items():
-                if isinstance(v, dict):
-                    app.state.cell_camera_quality[str(k)] = v
+                if isinstance(v, dict) and cell_quality_key_allowed(app, request, CAM_CELL.get(str(k))):
+                    app.state.cell_camera_quality[str(k)] = {**v, "recorded_at": cam_recorded}
         holds = body.get("arm_holds")
         if isinstance(holds, dict):
             for arm_id in ("arm_s", "arm_a", "arm_b"):
@@ -147,7 +152,7 @@ def install_cameras_routes(app, ctx) -> None:
         if isinstance(arm_states, dict):
             now_ts = round(time.time(), 3)
             for arm_id in ("arm_s", "arm_a", "arm_b"):
-                if isinstance(arm_states.get(arm_id), dict):
+                if isinstance(arm_states.get(arm_id), dict) and cell_quality_key_allowed(app, request, ARM_CELL[arm_id]):
                     s = arm_states[arm_id]
                     if "updated_at" in s:
                         raw_ts = s["updated_at"]
@@ -187,6 +192,12 @@ def install_cameras_routes(app, ctx) -> None:
             _save_ledger()  # what the cell did by itself, kept with the ledger (pipeline_auto_events)
         for ack_arm in body.get("clear_ack_arms") or ():
             app.state.pending_clear_arms.pop(str(ack_arm), None)
+        human_hold = bool(_is_human_detected() or any(
+            (s or {}).get("phase") == "HUMAN_HOLD" for s in app.state.omx_cell_states.values()
+        ))
+        pending_home_out = cell_quality_recovery_sync(
+            app, request, body, human_hold=human_hold, save_fn=_save_ledger, now=time.time(),
+        )
         pending = dict(app.state.pending_clear_arms)
         return {
             "ok": True,
@@ -195,6 +206,9 @@ def install_cameras_routes(app, ctx) -> None:
             "arm_holds": app.state.arm_holds,
             "arm_live_states": _arm_live_catalog(),
             "pending_clear_arms": pending,
+            "pending_safe_home_arms": pending_home_out,
+            "human_hold": human_hold,
+            "safety_stop_generation": int(getattr(app.state, "safety_stop_generation", 0)),
         }
 
     @app.post("/api/fleet/pipeline/arm-holds/clear", dependencies=operator_guard)
@@ -214,6 +228,9 @@ def install_cameras_routes(app, ctx) -> None:
             arms = ["arm_s", "arm_a", "arm_b"]
         else:
             raise HTTPException(422, detail={"code": "UNKNOWN_ARM_OR_CELL"})
+        from fleet.server.sitemap.pipeline_recovery_policy import ensure_clearable_after_homing, mark_homing_cleared
+
+        ensure_clearable_after_homing(app.state, arms)
         cause, basis = _clear_label(body, "cause"), _clear_label(body, "basis")
         principal = getattr(request.state, "site_principal", None)
         raw_principal_id = getattr(principal, "principal_id", None)
@@ -274,6 +291,7 @@ def install_cameras_routes(app, ctx) -> None:
                 for cid, old in prev_states.items():
                     app.state.omx_cell_states[cid] = old
                 raise
+        mark_homing_cleared(app.state, arms)
         _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis)
         return {"ok": True, "cleared_arms": arms, "cleared_cells": cleared_cells, "note": note,
                 "arm_holds": app.state.arm_holds}
@@ -344,7 +362,7 @@ def install_cameras_routes(app, ctx) -> None:
         from fleet.server.sitemap.pipeline_evidence import bind_bed, has_valid_presence, take_presence
 
         claim_now = time.time()
-        if task.get("execution_mode") == "act_policy" and not has_valid_presence(app, task, now=claim_now):
+        if (task.get("execution_mode") == "act_policy" or task.get("requires_presence_confirm")) and not has_valid_presence(app, task, now=claim_now):
             return {"claimed": False, "task": strip_task_for_claim(task), "reason": "PRESENCE_CONFIRMATION_REQUIRED"}
 
         # D-1057: binding the bed confirmation to the lease and going RUNNING are one step; if it lapsed meanwhile, nothing changes
@@ -504,7 +522,10 @@ def install_cameras_routes(app, ctx) -> None:
             app.state.arm_live_states[arm_id] = prev
         _enrich_task_health(task)
         if phase == "ABORTED":
-            pipeline_repark.on_abort(app.state, task, body.get("stage_result") or {}, time.time(), rules=rules())
+            hw_err = str(((task.get("hardware_telemetry") or {}).get("error") or ""))
+            rcpt_why = str(((task.get("receipt") or {}).get("reason") or ""))
+            if "FOLD_READBACK_MISSING" not in (hw_err, rcpt_why):
+                pipeline_repark.on_abort(app.state, task, body.get("stage_result") or {}, time.time(), rules=rules())
         elif phase == "RELEASED":
             pending_events = build_completion_events(
                 app, task, cell_phase=cell_phase, stage_result=body.get("stage_result") or {},

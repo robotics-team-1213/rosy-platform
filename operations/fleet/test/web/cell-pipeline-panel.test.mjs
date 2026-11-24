@@ -125,6 +125,72 @@ test("createPipelinePanel renders banner, depart gate, cancel and repark control
     const reparkDone = buttons.find(b => b.textContent === "재주차 완료(DONE)");
     reparkDone.click();
     assert.deepEqual(calls, [["cancel_pinky", "pt-1"], ["repark", "rp-1", "DONE"]]);
+
+    // Recovery handoff renders unresolved failures, blocks repick on FOLD_READBACK_MISSING, and passes CAS sha.
+    const invCalls = [];
+    const panel2 = createPipelinePanel({
+      $: id => byId[id] || null,
+      state,
+      namedReason: () => "",
+      invokeRecoveryTool: p => invCalls.push(p),
+    });
+    panel2.render(
+      {
+        pinky_tasks: [],
+        tasks: [],
+        recovery_handoff: {
+          active_failures: [{
+            root_task_id: "t-f1",
+            trigger_code: "FOLD_READBACK_MISSING",
+            arm_id: "arm_s",
+            state: "READY",
+            homing_stage: "IDLE",
+            cameras_fresh: true,
+            camera_sequences: {arm_s_top: 12, arm_s_wrist: 9},
+            vetoes: ["OUT_OF_HOME_POSE"],
+            context_sha256: "a".repeat(64),
+            homing_strategies: {
+              release_and_lift: {allowed: true, reason: null},
+              guarded_slow_park: {allowed: false, reason: "VISUAL_CLEAR_CHECKPOINT_REQUIRED"},
+              auto_fold: {allowed: true, reason: null},
+              finalize_home_verify: {allowed: false, reason: "FINALIZE_HOME_VISUAL_REQUIRED"},
+            },
+            eligible_tools: {
+              safe_fold_home: {allowed: true, reason: null},
+              record_visual_checkpoint: {allowed: true, reason: null},
+              enqueue_vla_act_fallback: {allowed: false, reason: "PLACEMENT_ALREADY_VERIFIED_HOME_ONLY"},
+            },
+          }],
+          recent_invocations: [],
+        },
+      },
+      {robot_layer: {robots: [{robot_id: "rosy_77"}]}},
+      {ready: false, reasons: ["UNLOAD_ABORTED"]},
+    );
+    const b2 = [];
+    const collectBtns = n => {
+      if (n?.tagName === "UI-BUTTON") b2.push(n);
+      for (const ch of n?.children || []) if (ch && typeof ch === "object") collectBtns(ch);
+    };
+    collectBtns(panelEl);
+    const actBtn = b2.find(b => b.textContent.includes("ACT 폴백"));
+    assert.equal(actBtn.disabled, true);
+    assert.equal(actBtn.getAttribute("reason"), "PLACEMENT_ALREADY_VERIFIED_HOME_ONLY");
+    const slowParkBtn = b2.find(b => b.textContent === "가드 홈 복귀(park)");
+    assert.equal(slowParkBtn.disabled, true);
+    assert.equal(slowParkBtn.getAttribute("reason"), "VISUAL_CLEAR_CHECKPOINT_REQUIRED");
+    const liftBtn = b2.find(b => b.textContent === "그리퍼 열기+상승");
+    assert.equal(liftBtn.disabled, false);
+    liftBtn.click();
+    const visBtn = b2.find(b => b.textContent === "3카메라 이탈 확인");
+    assert.equal(visBtn.disabled, false);
+    visBtn.click();
+    assert.equal(invCalls.length, 2);
+    assert.equal(invCalls[0].tool_name, "safe_fold_home");
+    assert.equal(invCalls[0].arguments.strategy, "release_and_lift");
+    assert.equal(invCalls[0].expected_context_sha256, "a".repeat(64));
+    assert.equal(invCalls[1].tool_name, "record_visual_checkpoint");
+    assert.deepEqual(invCalls[1].arguments.cameras_checked, {arm_s_top: 12, arm_s_wrist: 9});
   } finally {
     globalThis.document = prevDoc;
   }

@@ -239,6 +239,7 @@ def install_gates_routes(app, ctx) -> None:
         stations = resolve_omx_cells(active[1], active[2])
 
         if human_detected:
+            app.state.safety_stop_generation = int(getattr(app.state, "safety_stop_generation", 0)) + 1
             for cid in affected_cells:
                 app.state.human_detected[cid] = True
                 st = stations[cid]

@@ -1,6 +1,6 @@
 // Cell task action handlers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
 import { setOffBy } from "/common/cause-line.js";
-import { pinkyCancelPath, reparkClosePath } from './cell-pipeline-panel.js';
+import { pinkyCancelPath, reparkClosePath, RECOVERY_TOOLS_INVOKE_PATH } from './cell-pipeline-panel.js';
 import {
   CELL_TASKS_PATH,
   PINKY_TASKS_PATH,
@@ -325,6 +325,27 @@ export function createCellActions(ctx) {
     }
   }
 
+  async function invokeRecoveryTool(payload) {
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `복구 툴(${payload?.tool_name}) 실행 중입니다.`;
+    try {
+      const res = await request(RECOVERY_TOOLS_INVOKE_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const act = res?.result?.action || res?.status || 'EXECUTED';
+        $('cell-tasks-status').textContent = `복구 툴(${payload?.tool_name}) 완료: ${act}`;
+      }
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `복구 툴(${payload?.tool_name}) 거부: ${error.message}`;
+    }
+  }
+
   async function runQuickPreset(preset, robotId = null) {
     const current = ctx.bump();
     if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `카드 원클릭 프리셋(${preset})을 실행하는 중입니다.`;
@@ -414,5 +435,5 @@ export function createCellActions(ctx) {
     }
   }
 
-  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, cancelPinkyTask, closeRepark, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
+  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, cancelPinkyTask, closeRepark, invokeRecoveryTool, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
 }

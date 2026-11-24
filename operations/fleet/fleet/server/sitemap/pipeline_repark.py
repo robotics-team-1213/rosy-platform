@@ -18,6 +18,7 @@ class UnknownRequest(KeyError):
 ROOT_KEY = "repark_root"
 CARRY_FIELDS = ("preset", "cell_id", "arm_id", "robot_id", "robot_kind", "src_site", "dst_site", "tier",
                 "unload_batch_id", "unload_expected", "unload_index",
+                "fallback_from_task_id", "fallback_chain_depth", "execution_mode", "max_chunks", "requires_presence_confirm",
                 "object_ref", "identity", "identity_observation_ref", "identity_attested_by", "emit_release_permit")
 
 

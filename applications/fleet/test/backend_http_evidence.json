@@ -2058,6 +2058,14 @@
       ],
       "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
     },
+    "POST:/api/fleet/pipeline/recovery-tools/invoke": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_recovery_tools.py",
+        "test_recovery_tool_invoke_and_guards"
+      ],
+      "source_revision": "96602135d014e935ca87a04f984aa161a705ae12"
+    },
     "GET:/api/fleet/cell-app/real2sim-pipeline": {
       "status": 200,
       "test": [

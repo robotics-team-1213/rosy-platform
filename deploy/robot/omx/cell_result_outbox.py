@@ -32,8 +32,13 @@ def refusal_code(exc: HTTPError) -> str:
 
 def abort_reason(hw_tel: dict[str, Any]) -> str:
     """The receipt reason of an aborted run whose placement was not measured: held for review (the runner refused before any
-    motion, D-911) or the generic missing measurement."""
-    return "REVIEW_REQUIRED" if hw_tel.get("review_required") else "MEASURED_PLACEMENT_MISSING"
+    motion, D-911), preserve explicit fold/displaced failure codes, or fall back to generic missing measurement."""
+    if hw_tel.get("review_required"):
+        return "REVIEW_REQUIRED"
+    err = hw_tel.get("error")
+    if err in ("FOLD_READBACK_MISSING", "UNCALIBRATED_DISPLACED_SITE"):
+        return str(err)
+    return "MEASURED_PLACEMENT_MISSING"
 
 
 def remeasurer(prep_dir: Path):
