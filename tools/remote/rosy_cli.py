@@ -267,7 +267,7 @@ def cmd_schema(args: argparse.Namespace) -> tuple[Any, int]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0], allow_abbrev=False)
     ap.add_argument("--config", type=Path, default=None)
     ap.add_argument("--cell-url", default=None)
     ap.add_argument("--fleet-url", default=None)
