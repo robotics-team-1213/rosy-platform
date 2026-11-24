@@ -3,6 +3,7 @@ import '/common/ui.js';
 import '/commands.js';
 import {createDataTable,createSelectionBar} from '/common/collection-controls.js';
 import {createStatePanel} from '/common/workflow-controls.js';
+import {startVisibilityPoll} from '/learning-poll.js';
 import {domEl as node, makeUuid as uuid, fillSelectOptions as options} from '/learning-ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/tasks';
 const KINDS={omx:'OMX 팔',pinky:'Pinky 주행 로봇',manipulator:'팔',mobile:'주행 로봇',other:'기타',robot:'기타 로봇'};
@@ -293,4 +294,4 @@ $('tasks-context-reset').onclick=()=>{contextKeys.forEach(key=>contextQuery.dele
 $('task-next-setup').onclick=()=>{const robots=!state.robots.length,setup=$(robots?'robot-setup':'task-setup');setup.open=true;(robots?$('owner-robots').querySelector('input[data-select]')||$('robot-manual-toggle'):setup.querySelector('input')).focus();};
 $('robot-manual-toggle').onclick=()=>{const form=$('robot-form'),open=form.hidden;form.hidden=!open;$('robot-manual-toggle').setAttribute('aria-expanded',String(open));if(open)$('robot-name').focus();};
 $('tasks-refresh').onclick=()=>{error('');refresh();loadOwners();};
-participant();refresh();loadOwners();setInterval(()=>{if(!busy&&!document.hidden)refresh();},5000);
+participant();refresh();loadOwners();startVisibilityPoll(()=>refresh(),5000,{shouldRun:()=>!busy});

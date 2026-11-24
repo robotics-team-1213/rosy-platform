@@ -13,8 +13,11 @@ def test_review_static_serves_learning_ui_and_preauth_lists_it():
     static_text = (LEARNING_PERCEPTION / "review_static.py").read_text(encoding="utf-8")
     collab_text = (LEARNING_PERCEPTION / "learning_collaboration.py").read_text(encoding="utf-8")
     assert "'/learning-ui.js': 'learning-ui.js'" in static_text
+    assert "'/learning-poll.js': 'learning-poll.js'" in static_text
     assert "'/learning-ui.js'" in collab_text
+    assert "'/learning-poll.js'" in collab_text
     assert (WEB / "learning-ui.js").is_file()
+    assert (WEB / "learning-poll.js").is_file()
 
 
 def test_learning_ui_helpers_unit_checks(tmp_path):
@@ -32,6 +35,40 @@ assert.equal(mod.safeLocalUrl("/api/learning/recording/preview/cam0?t=1"), "/api
 assert.equal(mod.safeLocalUrl("//evil.test/x"), null);
 assert.equal(mod.safeLocalUrl("https://evil.test/x"), null);
 assert.equal(mod.safeLocalUrl("relative/path"), null);
+"""
+    proc = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+
+
+def test_learning_poll_respects_visibility_and_prevents_overlap(tmp_path):
+    mod_file = tmp_path / "learning-poll.mjs"
+    mod_file.write_text((WEB / "learning-poll.js").read_text(encoding="utf-8"), encoding="utf-8")
+    script = f"""
+import assert from "node:assert/strict";
+const {{ startVisibilityPoll }} = await import({json.dumps(mod_file.as_uri())});
+let calls = 0;
+let listeners = {{}};
+const doc = {{
+  hidden: true,
+  addEventListener(type, fn) {{ listeners[type] = fn; }},
+  removeEventListener(type) {{ delete listeners[type]; }},
+}};
+const poll = startVisibilityPoll(async () => {{ calls += 1; }}, 20, {{ doc }});
+await new Promise((r) => setTimeout(r, 50));
+assert.equal(calls, 0);
+doc.hidden = false;
+listeners.visibilitychange?.();
+await new Promise((r) => setTimeout(r, 35));
+assert.ok(calls >= 1);
+poll.stop();
+const afterStop = calls;
+await new Promise((r) => setTimeout(r, 40));
+assert.equal(calls, afterStop);
 """
     proc = subprocess.run(
         ["node", "--input-type=module", "-e", script],

@@ -1,14 +1,17 @@
 import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
+import {createCameraFrameHold, decodeImageUrl, paintCameraFrameHold} from '/common/camera-frame-hold.js';
+import {startVisibilityPoll} from '/learning-poll.js';
 import {domEl as node, makeUuid as uuid, fillSelectOptions as options, safeLocalUrl as safeLocalURL} from '/learning-ui.js';
 import {createRecordingReview} from '/record-review.js';
 const $=id=>document.getElementById(id),API='/api/learning/recording';
 const timingFields={'record-fps':'fps','record-camera-age':'max_camera_age_s','record-arm-age':'max_arm_age_s','record-camera-skew':'max_camera_skew_s','record-arm-skew':'max_arm_skew_s','record-gap':'max_gap_s'};
 const statusLabels={idle:'대기',arming:'입력 준비 중',recording:'녹화 중',exporting:'자료 변환 중',ready:'준비됨',failed:'실패',draft:'확인 대기',kept:'보관됨',discarded:'제외됨',invalid:'기록 무효'};
 let snapshot={},session=null,token='',project='',connected=false,polling=false,pending={},mutations=0,stopping=false,selectionGeneration=0,refreshQueued=false;
-let sessionId=new URL(location.href).searchParams.get('session')||'',loadedSession='',profileSignature='',sourceSignature='',initialProfile=new URL(location.href).searchParams.get('profile')||'';
+let sessionId=new URL(location.href).searchParams.get('session')||'',loadedSession='',profileSignature='',initialProfile=new URL(location.href).searchParams.get('profile')||'';
 const episodeNodes=new Map();
+const sourceCards=new Map();
 const savedReview=createRecordingReview({request,onChange:availability});
 function error(message){$('record-error').hidden=!message;$('record-error').textContent=message||'';}
 function storageKey(){return `rosy.recording.pending:${project}:${sessionId}`;}
@@ -55,13 +58,59 @@ function renderProfile(){
   const details=node('details');details.append(node('summary','구성 버전·물리 출처'),node('p',`저장 버전 ${p.revision}`,'record-note'));
   for(const c of doc.cameras)details.append(node('p',`${c.id} · 배치 ${c.placement} · 출처 ${c.source_identity} · 입력 ${c.input_key} · ${c.purposes.join(', ')} · ${c.shape.join(' × ')}`,'record-note'));$('record-profile-summary').append(details);
 }
-function renderSources(){
-  const sources=snapshot.sources||[],signature=JSON.stringify(sources);$('record-sources-empty').hidden=!!sources.length;if(signature===sourceSignature){for(const img of $('record-sources').querySelectorAll('img')){const url=new URL(img.src);url.searchParams.set('_record_preview',Date.now());img.src=url.pathname+url.search;}return;}sourceSignature=signature;$('record-sources').replaceChildren();
-  for(const s of sources){const section=node('article',null,'record-source');section.dataset.kind=s.kind;section.append(node('h3',s.label||s.id));
-    const preview=safeLocalURL(s.preview_url);if(preview){const img=node('img');img.src=preview;img.alt=`${s.label||s.id} 현재 미리보기`;img.loading='lazy';section.append(img);}
-    section.append(node('p',`${s.status==='ready'?'녹화 입력 준비됨':s.status==='preview_only'?'미리보기 전용':'사용 불가'}${s.reason?' · '+s.reason:''}`,'record-source-status'));
-    const details=node('details');details.append(node('summary','입력 출처·기록 범위'),node('p',`물리 출처 ${s.source_identity||'미확인'} · 팔 ${s.arm_id||'공유·미지정'} · ${s.purposes?.join(', ')||'용도 미지정'}`,'record-note'));if(s.joint_names)details.append(node('p',`${s.joint_names.join(', ')} · ${s.units||'단위 미확인'}`,'record-note'));if(s.shape)details.append(node('p',`입력 크기 ${s.shape.join(' × ')}`,'record-note'));section.append(details);$('record-sources').append(section);
+function paintSourceHold(card){
+  if(!card.hold)return;
+  paintCameraFrameHold(card.frameEl,card.img,card.overlayEl,card.hold.snapshot());
+}
+async function refreshSourcePreview(card){
+  if(!card.previewUrl||card.inFlight||document.hidden)return;
+  card.inFlight=true;const urlToFetch=card.previewUrl,ctrl=new AbortController();card.controller=ctrl;
+  try{
+    const response=await accountFetch(urlToFetch,{cache:'no-store',signal:AbortSignal.any([ctrl.signal,AbortSignal.timeout(4000)])});
+    if(card.previewUrl!==urlToFetch||!card.article.isConnected)return;
+    if(response.status===401||response.status===403){card.hold.disconnect({kind:'warn',label:'인증 필요',dropFrame:true});paintSourceHold(card);return;}
+    if(!response.ok){card.hold.disconnect({kind:'warn',label:`응답 ${response.status}`,dropFrame:false});paintSourceHold(card);return;}
+    const nextUrl=URL.createObjectURL(await response.blob());
+    const ok=await decodeImageUrl(nextUrl);
+    if(!ok||card.previewUrl!==urlToFetch||!card.article.isConnected){URL.revokeObjectURL(nextUrl);card.hold.disconnect({kind:'warn',label:'프레임 디코드 실패',dropFrame:false});}
+    else{card.hold.acceptFrame({url:nextUrl,label:'실시간'});}
+  }catch(exc){
+    if(exc?.name!=='AbortError'&&card.article.isConnected)card.hold.disconnect({kind:'warn',label:'영상 연결 끊김',dropFrame:false});
+  }finally{
+    if(card.controller===ctrl)card.controller=null;
+    card.inFlight=false;paintSourceHold(card);
   }
+}
+function createSourceCard(s){
+  const article=node('article',null,'record-source'),title=node('h3',s.label||s.id),statusP=node('p','','record-source-status'),details=node('details');
+  article.dataset.kind=s.kind;article.append(title);
+  const frameEl=node('div',null,'cam-frame-hold'),img=node('img'),overlayEl=node('span','','cam-frame-hold-pill');
+  img.alt=`${s.label||s.id} 현재 미리보기`;img.hidden=true;overlayEl.setAttribute('role','status');overlayEl.hidden=true;frameEl.append(img,overlayEl);frameEl.hidden=true;
+  article.append(frameEl,statusP,details);
+  return {article,title,frameEl,img,overlayEl,statusP,details,hold:createCameraFrameHold(),previewUrl:null,controller:null,inFlight:false,metaSig:''};
+}
+function renderSources(){
+  const sources=snapshot.sources||[],box=$('record-sources'),keys=new Set();
+  $('record-sources-empty').hidden=!!sources.length;
+  for(const s of sources){
+    const key=String(s.id||s.source_identity||s.label),preview=safeLocalURL(s.preview_url);
+    keys.add(key);let card=sourceCards.get(key);
+    if(!card){card=createSourceCard(s);sourceCards.set(key,card);box.append(card.article);}
+    card.article.dataset.kind=s.kind;
+    if(card.title.textContent!==(s.label||s.id))card.title.textContent=s.label||s.id;
+    const statusText=`${s.status==='ready'?'녹화 입력 준비됨':s.status==='preview_only'?'미리보기 전용':'사용 불가'}${s.reason?' · '+s.reason:''}`;
+    if(card.statusP.textContent!==statusText)card.statusP.textContent=statusText;
+    const metaSig=JSON.stringify([s.source_identity,s.arm_id,s.purposes,s.joint_names,s.units,s.shape]);
+    if(card.metaSig!==metaSig){
+      card.metaSig=metaSig;card.details.replaceChildren(node('summary','입력 출처·기록 범위'),node('p',`물리 출처 ${s.source_identity||'미확인'} · 팔 ${s.arm_id||'공유·미지정'} · ${s.purposes?.join(', ')||'용도 미지정'}`,'record-note'));
+      if(s.joint_names)card.details.append(node('p',`${s.joint_names.join(', ')} · ${s.units||'단위 미확인'}`,'record-note'));
+      if(s.shape)card.details.append(node('p',`입력 크기 ${s.shape.join(' × ')}`,'record-note'));
+    }
+    card.frameEl.hidden=!preview;
+    if(card.previewUrl!==preview){card.controller?.abort();card.previewUrl=preview;if(!preview)card.hold.dispose();}
+    if(preview){paintSourceHold(card);void refreshSourcePreview(card);}
+  }
+  for(const [key,card] of sourceCards)if(!keys.has(key)){card.controller?.abort();card.hold?.dispose();card.article.remove();sourceCards.delete(key);}
 }
 function renderEpisodes(){
   const episodes=session?.episodes||[],ids=new Set(episodes.map(e=>e.id));$('record-episodes-empty').hidden=!!episodes.length;
@@ -98,4 +147,6 @@ $('record-session').onchange=async()=>{if(active()){error('현재 회차를 먼�
 $('record-profile').onchange=()=>{renderProfile();availability();};for(const id of ['record-name',...Object.keys(timingFields)])$(id).oninput=availability;
 $('record-refresh').onclick=refresh;
 addEventListener('popstate',()=>{sessionId=new URL(location.href).searchParams.get('session')||'';reset();refresh();});
-readPending();refresh();setInterval(()=>{if(!document.hidden&&!polling&&!mutations)refresh();},3000);
+readPending();refresh();
+startVisibilityPoll(()=>refresh(),3000,{shouldRun:()=>!polling&&!mutations});
+startVisibilityPoll(()=>{for(const card of sourceCards.values())if(card.previewUrl&&card.hold?.snapshot().phase==='disconnected')paintSourceHold(card);},1000,{runOnVisible:true});
