@@ -127,7 +127,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         && active.closest("#robot-workspace article")?.dataset.robotId === robot.robot_id;
       if (!keptOther) {
         if (motorDetail.parentNode !== cached.article) query(".facts")?.after(motorDetail);
-        if (profileDetail.parentNode !== cached.article) query(".robot-actions")?.before(profileDetail);
+        if (profileDetail.parentNode !== cached.article) (motorDetail.parentNode === cached.article ? motorDetail : query(".facts"))?.after(profileDetail);
       }
       return cached.article;
     }
@@ -265,6 +265,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     });
     article.appendChild(facts);
     article.appendChild(motorDetail);
+    article.appendChild(profileDetail);
     const context = createRobotAppActions(robot.robot_id, view.robotPeers);
     const group = node('ui-button', '대형·대열 관리');
     group.setAttribute('kind', 'quiet'); group.type = 'button'; group.dataset.openFormation = '';
@@ -478,27 +479,23 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       move.addEventListener("click", scope.guard(() => moveAddress(robot.robot_id)));
       actions.append(move);
     }
-    if (laneOn) more.append(node("p", "목표를 지정하려면 운행을 취소해 차선 추종을 끄세요.", "hint"));
     if (more.childElementCount) {
-      const toggle = node("button", "자세히", "link");
-      toggle.type = "button";
+      const toggle = Object.assign(node("button", "자세히", "link"), { type: "button" });
       toggle.dataset.moreToggle = more.dataset.moreBody = "";
-      more.id = `workspace-more-${robot.robot_id}`;
-      toggle.setAttribute("aria-controls", more.id);
-      toggle.setAttribute("aria-expanded", String(moreOpen));
-      more.hidden = !moreOpen;
+      more.id = `workspace-more-${robot.robot_id}`; more.hidden = !moreOpen;
+      toggle.setAttribute("aria-controls", more.id); toggle.setAttribute("aria-expanded", String(moreOpen));
       toggle.addEventListener("click", scope.guard(() => {
         more.hidden = !more.hidden;
-        if (more.hidden) expandedMoreIds.delete(robot.robot_id);
-        else expandedMoreIds.add(robot.robot_id);
+        if (more.hidden) expandedMoreIds.delete(robot.robot_id); else expandedMoreIds.add(robot.robot_id);
         patchAttr(toggle, "aria-expanded", !more.hidden);
       }));
       article.append(toggle, more);
     }
-    article.append(profileDetail, actions);
+    article.appendChild(actions);
     const tripForm = view.stateUnavailable ? null : trip.section(robot);
     if (tripForm) article.appendChild(tripForm);
     if (goalSafetyReason) article.append(node("p", goalSafetyReason, "hint"));
+    if (laneOn) article.append(node("p", "차선 추종 중에는 목표를 받지 않습니다 · 운행 취소로 차선 추종을 끈 뒤 목표를 지정하세요.", "hint"));
     workspaceCards.set(robot.robot_id, { sig, article });
     return article;
   }
