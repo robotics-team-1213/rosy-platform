@@ -123,6 +123,7 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
         self._between_keeper = LaneBetweenKeeper(
             default_lane_width_fraction=float(self.get_parameter('camera_between_lane_width_fraction').value))
         self._keep_last_stamp, self._cmd_stale_frames = None, 0
+        self._idle_keep_cache, self._idle_keep_skipped = None, False
         self._lane_keeper = (OdomVetoLaneKeeper if self.get_parameter('lane_odom_veto_enabled').value else LaneKeeper)(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
@@ -256,6 +257,7 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
         if self._paint_worker is not None:
             self._paint_worker.reset()
         self._evidence_modes.reset()
+        self._idle_keep_cache, self._idle_keep_skipped = None, False
 
     def _paint_for(self, frame, ground, stamp=None):
         source = str(self.get_parameter('paint_source').value)
@@ -273,8 +275,11 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
                 reuse_n = 1
             compensate = bool(self.get_parameter('learned_paint_motion_compensation').value)
             motion = self._paint_motion(ground) if compensate and wz is not None else None
+            force_submit = getattr(self, '_idle_keep_skipped', False)
+            self._idle_keep_skipped = False
+            submit_n = 1 if force_submit else (every_n if motion is not None else reuse_n)
             mask = self._paint_worker.mask_for(
-                frame, every_n if motion is not None else reuse_n, stamp,
+                frame, submit_n, stamp,
                 clean=lambda m: clean_learned_mask(m, ground.horizon_row),
                 motion=motion, max_age_s=float(self.get_parameter('learned_paint_max_age_s').value),
                 reuse_n=reuse_n, clean_drivable=lambda way: clean_learned_mask(boundary_paint(
@@ -294,7 +299,7 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
         return denoise_white_mask(frame, ground.horizon_row), ('denoise' if source == 'denoise' else 'denoise_fallback')
 
     def _on_camera(self, msg: Image) -> None:
-        observation = frame = mode = ground = quality = route_context_seq = None
+        observation = frame = mode = ground = quality = route_context_seq = cmd = bundle = None
         tape_centerline = False
         if bool(self.get_parameter('require_camera_controls_stable').value) and not self._camera_controls_stable:
             self._publish('CAMERA_LINE', None, stamp=float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9)
@@ -341,8 +346,12 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
                         or _spinning_in_place(cmd)):
                     self._lane_keeper.reset()
+                    self._idle_keep_cache = None
                     if self._paint_worker is not None and self._drivable_steer is None:
                         self._drop_learned_paint()
+                if (reuse_fn := getattr(self, '_try_reuse_idle_keep', None)) is not None and reuse_fn(
+                        msg, frame, image_stamp, route_context_seq, cmd):
+                    return
                 self._keep_last_stamp = image_stamp
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
@@ -454,6 +463,8 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
         self._publish('CAMERA_LINE', observation, stamp=source_stamp,
                       quality=quality, containment=containment,
                       route_context_seq=route_context_seq)
+        if mode == 'keep' and bundle is not None and (save_fn := getattr(self, '_save_idle_keep', None)) is not None:
+            save_fn(frame, source_stamp, route_context_seq, cmd, observation, quality, containment, bundle)
         self._publish_debug(msg, frame, observation)
 
     def _publish_debug(self, msg, frame, observation) -> None:

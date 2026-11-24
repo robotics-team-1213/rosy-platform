@@ -471,3 +471,85 @@ def test_core_law_input_reuses_steer_and_detects_inplace_update_and_staleness(tm
     assert third is not None and third is not first
     expired = law.read(str(handover), "rosy_45", now=t0 + timedelta(seconds=MAX_AGE_S + 1.0), owner_uid=uid)
     assert expired is None
+
+
+def test_idle_keep_cache_reuses_when_still_and_invalidates_on_change(monkeypatch):
+    import importlib
+    import json as _json
+    import sys
+    from pathlib import Path
+    from types import ModuleType, SimpleNamespace
+    from control.lane_route_guide_input import LaneRouteGuideInput
+
+    for pkg, names in (("sensor_msgs", ("CompressedImage", "Image", "LaserScan")),
+                       ("std_msgs", ("String", "UInt16MultiArray"))):
+        root_mod = ModuleType(pkg)
+        msg_mod = ModuleType(f"{pkg}.msg")
+        for name in names:
+            setattr(msg_mod, name, type(name, (), {}))
+        monkeypatch.setitem(sys.modules, pkg, root_mod)
+        monkeypatch.setitem(sys.modules, f"{pkg}.msg", msg_mod)
+    monkeypatch.delitem(sys.modules, "control.line_observer_helpers", raising=False)
+    helpers_mod = importlib.import_module("control.line_observer_helpers")
+
+    params = {'learned_paint_motion_compensation': True, 'learned_paint_max_age_s': 0.9, 'learned_paint_stale_s': 0.6}
+    obs_pubs, debug_pubs = [], []
+    now_clk = [10.0]
+
+    def _guide_msg(seq: int, source_s: float = 11.0, valid_until: float = 11.5):
+        return _json.dumps({
+            "v": 1, "publisher_epoch": "core-1", "seq": seq,
+            "guide": {"leg_id": "t:1", "authority_seq": 1, "map_id": "m", "map_revision": 1,
+                      "source_stamp_s": source_s, "valid_until_s": valid_until, "heading_here_deg": 0.0,
+                      "heading_ahead_deg": 45.0, "ahead_m": 0.25, "s_m": 0.5, "off_route_m": 0.01, "pivot_ok": False},
+        })
+
+    class Node(helpers_mod.LineObserverHelpersMixin):
+        def __init__(self):
+            self._odom_stamp, self._odom_twist = 10.0, (0.0, 0.0)
+            self._wall_ahead = None
+            self._lane_guide = LaneRouteGuideInput(clock=lambda: now_clk[0])
+            self._drivable_steer = object()
+            self._idle_keep_cache = None
+            self._idle_keep_skipped = False
+            self._keep_last_stamp = None
+            self._keep_debug_pub = SimpleNamespace(publish=lambda m: debug_pubs.append(_json.loads(m.data)))
+            self.get_parameter = lambda k: SimpleNamespace(value=params[k])
+            self._ground_label = lambda: 'NOMINAL'
+            self._publish = lambda s, o, **kw: obs_pubs.append((s, o, kw))
+            self._publish_debug = lambda *_: None
+
+    helpers_mod.String = lambda **kw: SimpleNamespace(**kw)
+    node = Node()
+    frame = np.full((64, 64, 3), 80, dtype=np.uint8)
+    bundle = {'strategy': 'both', 'stamp': 10.0}
+    containment = {'valid': True, 'stamp': 10.0}
+    node._save_idle_keep(frame, 10.0, 1, (0.0, 0.0), 'OBS', None, containment, bundle)
+    assert node._try_reuse_idle_keep(None, frame.copy(), 10.2, 1, (0.0, 0.0)) is True
+    assert node._idle_keep_skipped is True
+    assert debug_pubs[-1]['stamp'] == 10.2 and obs_pubs[-1][2]['stamp'] == 10.2
+    assert obs_pubs[-1][2]['containment']['stamp'] == 10.2
+    # Pixel change, TTL expiry, movement, steer law swap, or new/updated/expired lane_guide misses cache
+    changed = frame.copy(); changed[::8, ::8] = 120
+    assert node._try_reuse_idle_keep(None, changed, 10.25, 1, (0.0, 0.0)) is False
+    steer_orig = node._drivable_steer
+    node._drivable_steer = object()
+    assert node._try_reuse_idle_keep(None, frame, 10.25, 1, (0.0, 0.0)) is False
+    node._drivable_steer = steer_orig
+    assert node._try_reuse_idle_keep(None, frame, 10.8, 1, (0.0, 0.0)) is False
+    node._odom_stamp, now_clk[0] = 11.0, 11.0
+    node._save_idle_keep(frame, 11.0, 1, (0.0, 0.0), 'OBS', None, containment, bundle)
+    node._lane_guide.receive(_guide_msg(1), 11.0)
+    assert node._try_reuse_idle_keep(None, frame, 11.1, 1, (0.0, 0.0)) is False
+    node._save_idle_keep(frame, 11.1, 1, (0.0, 0.0), 'OBS', None, containment, bundle)
+    node._lane_guide.receive(_guide_msg(2), 11.1)
+    assert node._try_reuse_idle_keep(None, frame, 11.2, 1, (0.0, 0.0)) is False
+    node._save_idle_keep(frame, 11.2, 1, (0.0, 0.0), 'OBS', None, containment, bundle)
+    now_clk[0] = 11.6
+    assert node._try_reuse_idle_keep(None, frame, 11.3, 1, (0.0, 0.0)) is False
+    node._odom_stamp = 11.35
+    node._odom_twist = (0.05, 0.0)
+    assert node._try_reuse_idle_keep(None, frame, 11.35, 1, (0.0, 0.0)) is False
+    src = (Path(__file__).resolve().parents[1] / "sensors/line_observation/line_observer_node.py").read_text(encoding="utf-8")
+    assert "self._lane_keeper.reset()\n                    self._idle_keep_cache = None" in src
+    assert "reuse_n = max(reuse_n, 2)" not in src
