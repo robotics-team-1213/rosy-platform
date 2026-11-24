@@ -200,6 +200,8 @@ class TripConfig:
     #: D-520 1: lane centre to the outer painted line's centre on a curve (260919 ring: line
     #: radii 0.155/0.345 m, half of 0.19); the site map has no paint, so it is site config.
     arc_outer_line_offset_m: float = 0.095
+    #: Extra lateral corridor margin for Nav2 RPP corner cutting on bay/junction turns.
+    nav2_off_lane_margin_m: float = 0.06
     #: Robots of trips open before a restart are stopped every this long, this many times at most.
     restart_retry_s: float = 10.0
     restart_attempts: int = 30
@@ -210,6 +212,11 @@ class TripConfig:
             if item.name in ("lane_camera_check", "auto_align", "map_binding_required"):
                 if not isinstance(value, bool):
                     raise ValueError(f"fleet.trip.{item.name} must be true or false")
+                continue
+            if item.name == "nav2_off_lane_margin_m":
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
+                        math.isfinite(value) and 0.0 <= value <= 0.12):
+                    raise ValueError("fleet.trip.nav2_off_lane_margin_m must be in [0.0, 0.12]")
                 continue
             if item.name == "named_stop_auto_corrections":  # 0 leaves every correction to an operator
                 if isinstance(value, bool) or not isinstance(value, int) or value < 0:

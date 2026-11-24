@@ -596,3 +596,65 @@ def test_nav2_replan_confirm_cancels_superseded_route_without_lease_loss():
     assert "rosy_42" in console.goal_leases and live.active_route["end_index"] == 0
 
 
+def test_nav2_off_lane_margin_and_two_tick_persistence():
+    from fleet.routing.execute import plan_body
+    from fleet.routing.trip import PlanRequest, plan_trip
+
+    robot = RouteFakeRobot("rosy_42")
+    _clock, _console, store, graph, pose, _canceled, runner = _console_runner(robot, _south_loop_map())
+    plan = plan_body(plan_trip(graph, PlanRequest(
+        map_version=store.active()[0], start_pose=(pose["v"].x, pose["v"].y, pose["v"].yaw),
+        goal="S4", stop_offset=False, ignore_start_heading=True,
+    ), store.routing_config))
+    store.record_plan(plan_id="p-tol", robot_id="rosy_42", principal_id="bob",
+                      map_version=plan["map_version"], request={"to": "S4", "drive_mode": "nav2"},
+                      result={"plan": plan})
+    store.record_plan(plan_id="p-lf-fail", robot_id="rosy_42", principal_id="bob",
+                      map_version=plan["map_version"], request={"to": "S4", "drive_mode": "line_follow"},
+                      result={"plan": plan})
+    # Nav2 start admission accepts (width_m/2, width_m/2 + nav2_off_lane_margin_m]; line_follow rejects.
+    pose["v"] = MapPose(0.50, -0.215 + 0.14, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    with pytest.raises(TripError) as lf_err:
+        run(runner.start("p-lf-fail", "bob"))
+    assert lf_err.value.code == "TRIP_START_OFF_LANE"
+    run(runner.start("p-tol", "bob"))
+    robot._state["navigation"] = "NAVIGATING"
+    run(runner.tick())
+    assert runner.view("p-tol")["state"] == "running"
+
+    # Inside width_m/2 + nav2_off_lane_margin_m (0.10 + 0.06 = 0.16): 0.14 m drift stays running across ticks.
+    run(runner.tick())
+    run(runner.tick())
+    assert runner.view("p-tol")["state"] == "running" and runner._live["rosy_42"].off_lane_ticks == 0
+
+    # Transient single tick at 0.18 m (> 0.16, <= 0.22) sets off_lane_ticks=1 without stopping, then clears on return.
+    pose["v"] = MapPose(0.50, -0.215 + 0.18, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    run(runner.tick())
+    assert runner.view("p-tol")["state"] == "running" and runner._live["rosy_42"].off_lane_ticks == 1
+
+    pose["v"] = MapPose(0.50, -0.215, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    run(runner.tick())
+    assert runner.view("p-tol")["state"] == "running" and runner._live["rosy_42"].off_lane_ticks == 0
+
+    # Two consecutive ticks at 0.18 m stop the trip with off_lane_m under reason=="pose".
+    pose["v"] = MapPose(0.50, -0.215 + 0.18, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    run(runner.tick())
+    assert runner.view("p-tol")["state"] == "running"
+    run(runner.tick())
+    stopped = runner.view("p-tol")
+    assert stopped["state"] == "stopped" and stopped["reason"] == "pose" and "off_lane_m" in stopped["detail"]
+
+    # Immediate severe deviation (> width_m/2 + 2*margin = 0.22 m) stops in 1 tick.
+    pose["v"] = MapPose(0.70, -0.215, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    store.record_plan(plan_id="p-sev", robot_id="rosy_42", principal_id="bob",
+                      map_version=plan["map_version"], request={"to": "S4", "drive_mode": "nav2"},
+                      result={"plan": plan})
+    run(runner.start("p-sev", "bob"))
+    robot._state["navigation"] = "NAVIGATING"
+    run(runner.tick())
+    pose["v"] = MapPose(0.50, -0.215 + 0.25, math.pi, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site-loop")
+    run(runner.tick())
+    sev = runner.view("p-sev")
+    assert sev["state"] == "stopped" and sev["reason"] == "pose" and "off_lane_m" in sev["detail"]
+
+

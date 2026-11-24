@@ -66,6 +66,12 @@ class TripProgress:
             if not (done or onto_next):
                 break
             index += 1
+        if live.nav2:
+            margin = float(getattr(self.config, "nav2_off_lane_margin_m", 0.06))
+            cand = [index] + ([index + 1] if index + 1 < len(live.segments) else []) + ([index - 1] if index > 0 else [])
+            if any(live.arc(i).project(pose.x, pose.y)[0] <= live.arc(i).width_m / 2 + margin for i in cand):
+                return index, s, None
+            return index, s, dist
         near = [dist] + ([live.arc(index + 1).project(pose.x, pose.y)[0]] if index + 1 < len(live.segments) else [])
         return index, s, (dist if min(near) > live.arc(index).width_m / 2 else None)
 

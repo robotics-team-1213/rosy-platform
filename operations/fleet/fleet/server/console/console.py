@@ -24,6 +24,7 @@ from hashlib import sha256
 import hmac
 import importlib
 import logging
+import math
 import time
 from typing import Any, Callable, Optional, Sequence
 from urllib.parse import urlsplit  # noqa: F401
@@ -75,6 +76,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         fleet_name: str = "rosy-site",
         clearance_m: float = traffic.DEFAULT_CLEARANCE_M,
         yield_keep_out_m: float = bays.YIELD_KEEP_OUT_M,
+        site_keep_out_m: float = 0.32,
         relay_factory=None,
         signal_console=None,
         event_store=None,
@@ -112,6 +114,10 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         self._task_queue_release_callback: Optional[Callable[[dict], Any]] = None
         self._clearance_m = clearance_m
         self._yield_keep_out_m = yield_keep_out_m
+        if (isinstance(site_keep_out_m, bool) or not isinstance(site_keep_out_m, (int, float))
+                or not math.isfinite(float(site_keep_out_m)) or float(site_keep_out_m) < 0.28):
+            raise ValueError("site_keep_out_m must be finite and >= 0.28")
+        self._site_keep_out_m = float(site_keep_out_m)
         #: 비켜서라고 한 뒤 "안 움직인다"고 판단하기까지 참아 주는 스냅샷 수. 목표를 막
         #: 받은 로봇은 아직 NAVIGATING 을 보고하지 않는다 - 한 틱만 보면 시작도 하기 전에
         #: 실패로 읽는다.

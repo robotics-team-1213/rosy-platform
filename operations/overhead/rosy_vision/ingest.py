@@ -122,6 +122,7 @@ class IngestServer:
             raise ValueError("preview_max_age_s must be positive")
         self.preview_max_age_s = float(preview_max_age_s)
         self._preview_last_sent: dict[tuple[str, ...], float] = {}
+        self._preview_frame_buckets: dict[tuple[str, ...], tuple[float, float]] = {}
         # Last detection per source, keyed by frame identity (a reconnect restarts seq);
         # dropped with the source.
         self._field_cache: dict[str, _FieldRun] = {}

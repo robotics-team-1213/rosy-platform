@@ -46,5 +46,5 @@ def test_plan_site_road_trip_annotates_waypoints():
     trip = plan_site_road_trip(policy, graph, (0.18, -0.312, 1.57), "C1")
     assert trip["site_id"] == "world_261026"
     assert trip["zones"] == ["charge_corridor", "charge_bay"]
-    assert {wp["speed_cap_mps"] for wp in trip["waypoints_site"] if wp["zone"] == "charge_bay"} == {0.05}
+    assert {wp["speed_cap_mps"] for wp in trip["waypoints_site"] if wp["zone"] == "charge_bay"} == {0.10}
     assert all("zone" in wp and "speed_cap_mps" in wp for wp in trip["waypoints_site"])

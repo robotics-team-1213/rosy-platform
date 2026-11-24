@@ -141,10 +141,10 @@ def resolve_site_policy(
                 "hold_s": float(r_meta.get("hold_s") or default_hold),
             }
     caps = {
-        "charge_bay": 0.05,
-        "charge_corridor": 0.08,
+        "charge_bay": 0.10,
+        "charge_corridor": 0.14,
         "main_loop": float(site_rules.formation.max_speed_mps)
-        if site_rules and site_rules.formation.max_speed_mps else 0.15,
+        if site_rules and site_rules.formation.max_speed_mps else 0.20,
     }
     exit_gate = rule.exit_place if rule else ("S1" if "S1" in places else None)
     return SiteZonePolicy(

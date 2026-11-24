@@ -276,7 +276,10 @@ class TripAdmission:
                 raise TripError(422, "TRIP_START_BODY_OUTSIDE_ROUTE",
                                 {"edge_id": first.edge_id, "body_margin_m": round(margin, 3)})
         if start:
-            check = start_check(graph, segments, pose.x, pose.y, pose.yaw, self.config.start_heading_tol_deg, nav2=nav2)
+            check = start_check(
+                graph, segments, pose.x, pose.y, pose.yaw, self.config.start_heading_tol_deg,
+                nav2=nav2, off_lane_margin_m=self.config.nav2_off_lane_margin_m,
+            )
             if check["code"] is not None:
                 raise TripError(422, check["code"], check)
         return pose, enable
