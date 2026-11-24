@@ -152,7 +152,7 @@ def test_raw_keys_role_cas_refusal_replay_and_rollback(tmp_path, monkeypatch):
     })
     assert ok.status_code == 200 and ok.json()["result"]["requires_presence_confirm"] is True
     tid = ok.json()["result"]["task"]["task_id"]
-    app2.state.omx_cell_states["cell_s"]["phase"] = "RELEASED"
+    app2.state.omx_cell_states["cell_s"] = {"phase": "RELEASED", "amr_motion_inhibited": False}
     monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_s=omx-svc-s")
     claim = client2.post("/api/fleet/pipeline/cell-tasks/claim", headers={"X-Test-Principal": "omx-svc-s:service"}, json={"cell_id": "cell_s", "task_id": tid}).json()
     assert claim["claimed"] is False and claim["reason"] == "PRESENCE_CONFIRMATION_REQUIRED"
