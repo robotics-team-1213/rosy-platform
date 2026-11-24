@@ -1195,3 +1195,142 @@ def test_arm_ab_ui_priority_layout_no_wrap_and_camera_health_contract():
     assert "$('hdr-cam-health').hidden=false;" in st_js
 
 
+def test_camera_badges_tell_standby_from_active_recording():
+    """D-omx-bench-rec-ui: setup/prepare/result/idle must never look like '● 녹화'.
+    Only phase 'recording' AND server status 'recording' is an active take."""
+    omx_dir = ROOT / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    app_js = (omx_dir / 'bench_record_app.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+    ui_js = (omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+
+    # 1) one truth source: standby phases (setup/prepare/result/idle) are never an active take
+    assert 'function isActivelyRecording()' in ui_js
+    assert "return currentBenchPhase()==='recording'&&lastStatus?.status==='recording';" in ui_js
+    # phase transitions re-render the badges through applyBenchPhase
+    assert "if(typeof updateCameraRecordingMask==='function')updateCameraRecordingMask();" in ui_js
+
+    # 2) camera boxes are created neutral (armed '녹화 대상'), never 'on' with '● 녹화'
+    assert "rec.className='cam-rec-badge armed';rec.textContent='녹화 대상';" in app_js
+    assert '● 녹화' not in app_js  # no badge or note may hardcode the old active-recording claim
+
+    # 3) the mask branches on the live state: only live shows '● 녹화 중', standby shows '녹화 대상'
+    assert "badge.textContent=isRec?'● 녹화 중':'미포함';" in cam_js
+    assert "badge.className='cam-rec-badge '+(isRec?'live':'off');" in cam_js
+    assert "badge.textContent=isRec?'녹화 대상':'미포함';" in cam_js
+    assert "badge.className='cam-rec-badge '+(isRec?'armed':'off');" in cam_js
+    assert "badge.title=isRec?'녹화 시작 시 이 카메라가 포함됩니다 (현재 미리보기 대기)':'';" in cam_js
+    assert "badge.title=isRec?'현재 에피소드 녹화 중':'';" in cam_js
+    # cam-note: standby prefix differs from the recording prefix and names the rec targets as '녹화 대상:'
+    assert "?'녹화 중 — '+(arm||'선택 암')" in cam_js
+    assert ":(currentBenchPhase()==='prepare'?'텔레옵 연동 (녹화 대기)':'실시간 미리보기 (녹화 대기)')+' — '+(arm||'선택 암')" in cam_js
+    assert "parts.push((live?'녹화: ':'녹화 대상: ')" in cam_js
+    # the pre-mask note text in pollCameras also stays standby-honest while no recording is live
+    assert "const recNow=typeof isActivelyRecording==='function'&&isActivelyRecording();" in app_js
+    assert "(recNow?'녹화 중 — ':'실시간 미리보기 (녹화 대기) — ')" in app_js
+
+    # 4) missing camera placeholders warn, never borrow the active classes
+    assert "rec.className='cam-rec-badge missing';rec.textContent='미수신';" in cam_js
+
+    # 5) the header action button is a verb: ready offers '● 녹화 시작', recording offers '■ 녹화 끝'
+    assert "recording?'■ 녹화 끝':legacyStarting?'■ 준비 취소':ready?'● 녹화 시작':'● 녹화'" in cam_js
+    assert '<span class="btn-lbl">● 녹화 시작</span>' in html
+
+    # 6) CSS carries the semantic badge classes; the old green 'on' rule and its writers are gone
+    for rule in ('.cam-rec-badge.live{border:1px solid var(--crit);color:#ff9497}',
+                 '.cam-rec-badge.armed{border:1px solid var(--bd);color:var(--ink)}',
+                 '.cam-rec-badge.off{border:1px solid var(--bd);color:var(--ink-q)}',
+                 '.cam-rec-badge.missing{border:1px solid var(--warn);color:var(--warn)}'):
+        assert rule in css, rule
+    assert '.cam-rec-badge.on{' not in css
+    for src in (app_js, cam_js, html):
+        assert 'cam-rec-badge on' not in src
+    assert "isRec?'● 녹화'" not in cam_js and "'미녹화'" not in cam_js
+
+
+def test_camera_badges_follow_phase_and_status_in_the_dom(tmp_path):
+    """Behavior: run the real ui.js/cam.js against a stub DOM and read the rendered badges."""
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node.js is unavailable; the source contract test above still runs')
+    harness = tmp_path / 'cam_badge_contract.js'
+    harness.write_text(_CAM_BADGE_HARNESS, encoding='utf-8')
+    run = subprocess.run([node, str(harness), str(ROOT / 'deploy/robot/omx')], capture_output=True, text=True)
+    assert run.returncode == 0, run.stdout + run.stderr
+
+
+_CAM_BADGE_HARNESS = r'''
+const fs=require('fs'),path=require('path'),vm=require('vm');
+const dir=process.argv[2];
+const fails=[];
+const ok=(c,m)=>{if(!c)fails.push(m);};
+const makeEl=()=>({className:'',textContent:'',title:'',hidden:false,dataset:{},style:{},open:false,
+  classList:{add(){},remove(){},toggle(){},contains(){return false}},
+  append(){},addEventListener(){},setAttribute(){},removeAttribute(){},
+  querySelector(){return null},querySelectorAll(){return []}});
+const form={arm:{value:'arm_a'},config:{value:'cfg'},caps:{value:''},name:{value:''},task:{value:''}};
+const note=makeEl();
+const boxes=['top','side','arm_a_wrist','front'].map(lbl=>{
+  const badge=makeEl();
+  return {lbl,badge,dataset:{camBox:lbl},classList:{toggle(){},contains(){return false}},
+    querySelector:sel=>sel==='.cam-rec-badge'?badge:null};
+});
+const grid=makeEl();
+grid.querySelectorAll=sel=>sel.indexOf('cam-box')>=0?boxes:[];
+const byId={'bench-form':form,'cam-grid':grid,'cam-note':note},generic={};
+const getEl=id=>byId[id]||(generic[id]||(generic[id]=makeEl()));
+const ctx={console,
+  document:{getElementById:getEl,querySelector:()=>null,querySelectorAll:()=>[],createElement:()=>makeEl(),addEventListener(){}},
+  localStorage:{getItem(){return null},setItem(){}},
+  setTimeout,clearTimeout,setInterval:()=>0,clearInterval,
+  ResizeObserver:class{observe(){}}};
+ctx.window=ctx;
+ctx.globalThis=ctx;
+vm.createContext(ctx);
+const load=f=>vm.runInContext(fs.readFileSync(path.join(dir,f),'utf8'),ctx,{filename:f});
+load('bench_record_ui.js');
+ctx.ARM_PREVIEW_CAMS={arm_a:['top','side','arm_a_wrist']};
+ctx.camLabels=['top','side','arm_a_wrist','front'];
+ctx.renderCamGuide=()=>{};
+ctx.updateGoalSummaryRows=()=>{};
+ctx.init=()=>{};
+ctx.pollArms=()=>{};
+load('bench_record_cam.js');
+const run=st=>vm.runInContext('lastStatus='+JSON.stringify(st)+';syncBenchPhase();',ctx);
+const badge=lbl=>boxes.find(b=>b.lbl===lbl).badge;
+const INCLUDED=['top','side','arm_a_wrist'];
+
+for(const [phase,st,prefix,live] of [
+  ['setup',{status:'idle',phase:'setup'},'실시간 미리보기 (녹화 대기) — arm_a · 녹화 대상: top, side, arm_a_wrist',false],
+  ['prepare',{status:'idle',phase:'prepare'},'텔레옵 연동 (녹화 대기) — arm_a · 녹화 대상: top, side, arm_a_wrist',false],
+  ['result',{status:'sealed',phase:'result'},'실시간 미리보기 (녹화 대기) — arm_a · 녹화 대상: top, side, arm_a_wrist',false],
+  ['recording',{status:'recording',phase:'recording'},'녹화 중 — arm_a · 녹화: top, side, arm_a_wrist',true],
+]){
+  run(st);
+  ok(vm.runInContext('isActivelyRecording()',ctx)===live,phase+': isActivelyRecording');
+  for(const lbl of INCLUDED){
+    const wantText=live?'● 녹화 중':'녹화 대상';
+    const wantClass='cam-rec-badge '+(live?'live':'armed');
+    ok(badge(lbl).textContent===wantText,phase+': '+lbl+' text='+badge(lbl).textContent);
+    ok(badge(lbl).className===wantClass,phase+': '+lbl+' class='+badge(lbl).className);
+    ok(badge(lbl).title===(live?'현재 에피소드 녹화 중':'녹화 시작 시 이 카메라가 포함됩니다 (현재 미리보기 대기)'),
+      phase+': '+lbl+' title='+badge(lbl).title);
+  }
+  ok(badge('front').textContent==='미포함',phase+': excluded text='+badge('front').textContent);
+  ok(badge('front').className==='cam-rec-badge off',phase+': excluded class='+badge('front').className);
+  ok(note.textContent===prefix+' · 미포함: front',phase+': note='+note.textContent);
+}
+
+run({status:'sealing',phase:'recording'});
+ok(vm.runInContext('isActivelyRecording()',ctx)===false,'recording phase + sealing status must be standby');
+ok(badge('top').textContent==='녹화 대상','sealing: text='+badge('top').textContent);
+ok(badge('top').className==='cam-rec-badge armed','sealing: class='+badge('top').className);
+
+if(fails.length){console.error('FAIL\n'+fails.join('\n'));process.exit(1);}
+console.log('PASS');
+'''
+
+
