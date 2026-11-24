@@ -167,6 +167,16 @@ def test_slow_speed_derivation_at_the_approved_speed():
     validate_nav2_parameters(out, limits)
 
 
+def test_cost_scaling_matches_local_inflation_and_lookahead():
+    data = _nav2()
+    controller = data["controller_server"]["ros__parameters"]
+    rpp = controller["FollowPath"]
+    inflation = data["local_costmap"]["local_costmap"]["ros__parameters"]["inflation_layer"]["inflation_radius"]
+    tol = controller["general_goal_checker"]["xy_goal_tolerance"]
+    assert rpp["cost_scaling_dist"] <= inflation + 0.05
+    assert rpp["min_lookahead_dist"] > tol
+
+
 def test_slow_speed_derivation_leaves_stock_speed_unchanged():
     assert derive_slow_speed_params(_nav2(), 0.20, 0.80) == _nav2()
 

@@ -241,10 +241,21 @@ class MapAgreement:
         hit_sectors = np.unique(sectors[hit])
         sectors_hit = int(len(hit_sectors))
         sector_mask = sum(1 << int(s) for s in hit_sectors)
+        pierce_sectors = {int(s) for s in sectors[obstructed]}
+        localized_pierce = len(pierce_sectors) <= 1 or (
+            len(pierce_sectors) == 2 and (max(pierce_sectors) - min(pierce_sectors)) in (1, 7)
+        )
+        # Allow up to 12% wall-piercing on >=5cm maps only when full 360° enclosure holds and
+        # piercing is confined to <=2 adjacent 45° sectors (single stale/unmapped bay prop).
+        effective_max_pierce = (
+            0.12 if (self._max_pierce_ratio >= 0.06 and sectors_hit >= 7
+                     and raw_score >= 0.65 and localized_pierce)
+            else self._max_pierce_ratio
+        )
         eval_denom = total - miss_foreground - unknown_count
         if total < 30:
             reason = "insufficient-scan"
-        elif pierce_count / total > self._max_pierce_ratio:
+        elif pierce_count / total > effective_max_pierce:
             reason = "wall-piercing"
         elif sectors_hit < 4:
             reason = "sparse-sectors"

@@ -220,16 +220,31 @@ class LocalizationTests(unittest.TestCase):
             for a in angles
         ], dtype=float)
 
-        for k in (7, 10):  # 3.9%..5.6% stale-prop pierce passes on 5 cm maps
+        for k in (7, 10, 18):  # 3.9%..10.0% localized in <=2 adjacent sectors passes on 5 cm maps (C3 stale-prop)
             ok = wall_ranges.copy()
             ok[:k] = 5.5
             b = m.explain(truth, ok, angles)
             self.assertIsNone(b.rejected_reason)
-            self.assertGreaterEqual(b.robust_score, 0.90)
+            self.assertGreaterEqual(b.robust_score, 0.85)
 
-        for k in (12, 15):  # >6% (6.7%, 8.3%) still rejected as wall-piercing
-            bad = wall_ranges.copy()
-            bad[:k] = 5.5
-            b = m.explain(truth, bad, angles)
-            self.assertEqual(b.rejected_reason, "wall-piercing")
-            self.assertEqual(b.robust_score, 0.0)
+        # Spread-out >6% piercing across >=3 sectors is still rejected as wall-piercing
+        spread = wall_ranges.copy()
+        spread[0::14][:12] = 5.5  # 6.7% across all 8 sectors
+        b_spread = m.explain(truth, spread, angles)
+        self.assertEqual(b_spread.rejected_reason, "wall-piercing")
+        self.assertEqual(b_spread.robust_score, 0.0)
+
+        # >6% across 2 non-adjacent (opposite) sectors is still rejected
+        opp = wall_ranges.copy()
+        opp[:7] = 5.5
+        opp[90:97] = 5.5
+        b_opp = m.explain(truth, opp, angles)
+        self.assertEqual(b_opp.rejected_reason, "wall-piercing")
+        self.assertEqual(b_opp.robust_score, 0.0)
+
+        # >12% localized piercing is still rejected even in 1 sector
+        over = wall_ranges.copy()
+        over[:24] = 5.5
+        b_over = m.explain(truth, over, angles)
+        self.assertEqual(b_over.rejected_reason, "wall-piercing")
+        self.assertEqual(b_over.robust_score, 0.0)
