@@ -216,6 +216,11 @@ def test_bridge_unit_targets_tls_host_and_loopback_only():
     assert "/etc/rosy/site/site.env" not in unit and "${" not in unit  # only the two public values
     assert "ROSY_SITE_DISCOVERY_URL" not in unit and "--url" not in unit
     assert "IPAddressDeny=any" in unit and "IPAddressAllow=localhost" in unit
+    for name in ("rosy-mdns-bridge.service", "rosy-fleet-advertise.service", "rosy-overhead-advertise.service"):
+        service = (ROOT / "deploy/site" / name).read_text(encoding="utf-8")
+        lines = dict(ln.split("=", 1) for ln in service.splitlines() if "=" in ln)
+        assert "rosy-site-firewall.service" in lines.get("Wants", "").split()
+        assert "rosy-site-firewall.service" in lines.get("After", "").split()
     for name in ("rosy-fleet-advertise.service", "rosy-overhead-advertise.service"):
         advertise = (ROOT / "deploy/site" / name).read_text(encoding="utf-8")
         assert "EnvironmentFile=/run/rosy-site/site-public.env" in advertise
