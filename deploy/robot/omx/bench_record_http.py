@@ -108,6 +108,12 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                 return self.reply(200, jpg, "image/jpeg")
             if path == "/api/arms":
                 return self.reply(200, bench.arms_status())
+            if path == "/api/leader_check":
+                qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    return self.reply(200, bench.check_leader_home_status((qs.get("arm") or ["all"])[0]))
+                except ValueError as exc:
+                    return self.reply(400, {"error": str(exc)})
             if path == "/api/grip_map":
                 return self.reply(200, bench.grip_maps())
             if path == "/api/telemetry":

@@ -510,11 +510,29 @@ async function loadChoices(){
   }
 }
 
+let lastLeaderCheck={};
+let leaderCheckInFlight=false;
+async function pollLeaderCheck(arm='all'){
+  if(leaderCheckInFlight||benchSessionActive()||poseInFlight||startInFlight)return;
+  leaderCheckInFlight=true;
+  try{
+    const res=await api('/api/leader_check?arm='+encodeURIComponent(arm||'all'));
+    if(res&&!res.skipped&&res.arms&&typeof res.arms==='object'){
+      lastLeaderCheck=Object.assign({},lastLeaderCheck,res.arms);
+      if(typeof renderArmCards==='function')renderArmCards();
+      if(typeof validateStart==='function')validateStart();
+    }
+  }catch(_){}
+  finally{leaderCheckInFlight=false;}
+}
+window.pollLeaderCheck=pollLeaderCheck;
+
 function init(){
   pollStatus();
   setInterval(pollStatus,2000);
   pollArms();
   setInterval(()=>{if(!benchSessionActive())pollArms();},5000);
+  pollLeaderCheck('all');
   if(typeof loadGripMaps==='function')loadGripMaps();
   if(typeof loadCellMap==='function')loadCellMap();
   pollCameras();

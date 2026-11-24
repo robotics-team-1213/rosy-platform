@@ -212,6 +212,14 @@ function validateStart(){
   }else{
     clearNotice('start-reasons');
   }
+  const lcMap=typeof lastLeaderCheck==='object'&&lastLeaderCheck?lastLeaderCheck:null;
+  const lcArms=f.arm.value==='arm_ab'?['arm_a','arm_b']:(f.arm.value?[f.arm.value]:[]);
+  const lcOver=lcMap?lcArms.map(a=>lcMap[a]).find(x=>x&&x.over_limit===true):null;
+  if(lcOver&&!busyNow){
+    setNotice('leader-check','warn',lcOver.message||('리더 편차 초과 ('+Math.round(Number(lcOver.max_deg)||0)+'°) — 손으로 홈 근처로 옮기세요'),{sig:'leader-check:'+f.arm.value+':'+lcOver.max_deg});
+  }else{
+    clearNotice('leader-check');
+  }
 
   const canStop=benchSessionActive();
   $('stop-note').hidden=!canStop;
