@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 import yaml
 
+from rosy_vision.detect import DetectedMarkers
 from rosy_vision.project import MARKER_HEIGHT_M, MARKER_MOUNT_XY_M, CameraMap
 from rosy_vision.publish import SightingPublishError
 from rosy_vision.track import geometry
@@ -133,6 +134,27 @@ def test_a_marker_far_from_the_sticker_size_or_outside_the_track_is_not_sent():
     assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.06)}) == ()     # 2x the sticker
     assert _sightings({40: _sticker(0.0, 0.0, 0.0, side=0.012)}) == ()    # also < 6 px
     assert _sightings({40: _sticker(1.6, 0.0, 0.0)}) == ()                 # beyond track bounds
+
+
+def test_qr_robot_marker_uses_qr_side_band_and_still_requires_yaw_offset():
+    cam = CameraMap(
+        source_id="ceiling_north", map_id="map_v2_fleet", calibration_revision="map_v2_fleet",
+        processor_revision="aruco-opencv-4.12", corner_marker_ids=None,
+        corner_world_m=((-1.405, -0.63), (1.405, -0.63), (1.405, 0.63), (-1.405, 0.63)),
+        robot_markers={"rosy_45": 45}, calibration_source="field_boundary",
+        marker_yaw_offset_deg={"rosy_45": 0.0},
+    )
+    markers = DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.10)}, qr_ids={45})
+    [sighting] = _sightings(markers, camera=cam)
+    assert sighting.robot_id == "rosy_45"
+    assert (sighting.x, sighting.y) == pytest.approx((0.2, -0.1), abs=1e-4)
+    assert math.remainder(sighting.yaw - 0.5, math.tau) == pytest.approx(0.0, abs=1e-3)
+
+    # Out-of-band QR sizes (too big / too small) are rejected, and D-587 yaw offset stays mandatory.
+    assert _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.20)}, qr_ids={45}), camera=cam) == ()
+    assert _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.025)}, qr_ids={45}), camera=cam) == ()
+    unset = CameraMap(**{**cam.__dict__, "marker_yaw_offset_deg": {}})
+    assert _sightings(markers, camera=unset) == ()
 
 
 class _Publisher:

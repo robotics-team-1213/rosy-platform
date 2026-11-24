@@ -25,6 +25,8 @@ MARKER_SIDE_M = 0.030
 #: D-587 6: corner geometry a robot marker must have to become a sighting.
 MIN_MARKER_SIDE_PX = 6.0
 MARKER_SIDE_BAND = (0.6, 1.4)
+#: QR robot sticker black-square size band on Pinky's top deck (45 mm..160 mm; Pinky diameter 165 mm).
+QR_SIDE_BAND_M = (0.045, 0.160)
 MAX_MARKER_SIDE_RATIO = 1.33
 
 
@@ -182,7 +184,12 @@ def robot_pose_from_marker(marker: tuple[float, float, float], yaw_offset_deg: f
             y - (mx * math.sin(yaw) + my * math.cos(yaw)), yaw)
 
 
-def marker_geometry_ok(pixels: Sequence[Point], mapped: Sequence[Point]) -> bool:
+def marker_geometry_ok(
+    pixels: Sequence[Point],
+    mapped: Sequence[Point],
+    *,
+    side_band_m: tuple[float, float] | None = None,
+) -> bool:
     """D-587 6: a convex quad, shortest image side >= MIN_MARKER_SIDE_PX, map sides near the
     sticker size and opposite side pairs of similar length. ``mapped`` is the quad on the map
     plane at the marker height."""
@@ -205,8 +212,12 @@ def marker_geometry_ok(pixels: Sequence[Point], mapped: Sequence[Point]) -> bool
         return False
     if min(pixel_sides) < MIN_MARKER_SIDE_PX or min(sides) <= 0.0:
         return False
-    low, high = MARKER_SIDE_BAND
-    if not low * MARKER_SIDE_M <= sum(sides) / 4 <= high * MARKER_SIDE_M:
+    if side_band_m is None:
+        low_m = MARKER_SIDE_BAND[0] * MARKER_SIDE_M
+        high_m = MARKER_SIDE_BAND[1] * MARKER_SIDE_M
+    else:
+        low_m, high_m = side_band_m
+    if not low_m <= sum(sides) / 4 <= high_m:
         return False
     ratio = (sides[0] + sides[2]) / (sides[1] + sides[3])
     return 1 / MAX_MARKER_SIDE_RATIO <= ratio <= MAX_MARKER_SIDE_RATIO

@@ -334,3 +334,59 @@ def test_matched_verdict_ignores_non_finite_or_bool_yaw(bad_yaw):
     _detections(tracking, clock, (1.05, 1.0))
     assert _verdict(identity, started["request_id"], yaw=bad_yaw)["state"] == "CONFIRMED"
     assert identity.confirmed_track_pose("rosy_60")["yaw"] is None
+
+
+def test_assigned_marker_detection_binds_without_anonymous_blobs_and_cancels_pending():
+    clock = Clock()
+    source = SightingSource(
+        source_id="ceiling_north", token="tok-north",
+        robot_ids=("rosy_45", "rosy_46"),
+        map_id="map_v2_fleet", calibration_revision="cal-1", corner_marker_ids=None,
+        robot_markers=(("rosy_45", 45), ("rosy_46", 46)),
+    )
+    tracking = TrackingService([source], calibrations=TrackingCalibrationStore(), clock=clock)
+    robots = {"rosy_45": Robot("blue"), "rosy_46": Robot("amber")}
+    identity = IdentityService(lambda: robots, tracking=tracking, clock=clock)
+    tracking.identity = identity
+    asyncio.run(identity.request("rosy_45"))
+    clock.now += 0.3
+    # Even with zero anonymous blobs (dark corner), assigned QR/ArUco detection confirms identity (no yaw).
+    tracking.accept(AUTH, OverheadDetectionsPayload(
+        source_id="ceiling_north", map_id="map_v2_fleet", calibration_revision="cal-1",
+        processor_revision="background-blob/1", captured_at=clock.now, seq=1, status="OK",
+        detections=(
+            OverheadDetection(x=-0.93, y=-0.34, footprint_m=0.165, score=1.0, marker_id=45),
+            OverheadDetection(x=0.5, y=0.2, footprint_m=0.165, score=1.0, marker_id=48),  # unassigned
+        ),
+    ))
+    pose = identity.confirmed_track_pose("rosy_45")
+    assert (pose["state"], pose["mode"], pose["x"], pose["y"], pose["yaw"]) == (
+        "CONFIRMED", "marker", -0.93, -0.34, None
+    )
+    assert identity.confirmed_track_pose("rosy_46")["state"] == "UNKNOWN"
+    assert identity.snapshot()["pendings"] == []
+
+
+def test_assigned_markers_within_overlap_refuse_to_bind():
+    clock = Clock()
+    source = SightingSource(
+        source_id="ceiling_north", token="tok-north",
+        robot_ids=("rosy_45", "rosy_46"),
+        map_id="map_v2_fleet", calibration_revision="cal-1", corner_marker_ids=None,
+        robot_markers=(("rosy_45", 45), ("rosy_46", 46)),
+    )
+    tracking = TrackingService([source], calibrations=TrackingCalibrationStore(), clock=clock)
+    robots = {"rosy_45": Robot("blue"), "rosy_46": Robot("amber")}
+    identity = IdentityService(lambda: robots, tracking=tracking, clock=clock)
+    tracking.identity = identity
+    clock.now += 0.3
+    tracking.accept(AUTH, OverheadDetectionsPayload(
+        source_id="ceiling_north", map_id="map_v2_fleet", calibration_revision="cal-1",
+        processor_revision="background-blob/1", captured_at=clock.now, seq=1, status="OK",
+        detections=(
+            OverheadDetection(x=0.0, y=0.0, footprint_m=0.165, score=1.0, marker_id=45),
+            OverheadDetection(x=0.1, y=0.0, footprint_m=0.165, score=1.0, marker_id=46),
+        ),
+    ))
+    assert identity.confirmed_track_pose("rosy_45")["state"] == "UNKNOWN"
+    assert identity.confirmed_track_pose("rosy_46")["state"] == "UNKNOWN"
