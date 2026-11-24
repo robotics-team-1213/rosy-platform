@@ -86,11 +86,11 @@ services:
       - "0.5"
     environment:
       SSL_CERT_FILE: /run/secrets/site_ca
-      ROSY_FLEET_TOKEN_FILE: /run/secrets/registry_token
+      ROSY_FLEET_TOKEN_FILE: /run/secrets/world_fleet_viewer_token
       ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
     secrets:
       - site_ca
-      - registry_token
+      - world_fleet_viewer_token
     volumes:
       - type: bind
         source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
@@ -118,3 +118,7 @@ services:
 
 volumes:
   world_state:
+
+secrets:
+  world_fleet_viewer_token:
+    file: "${ROSY_WORLD_FLEET_TOKEN_HOST_FILE:-${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/world_fleet_viewer.token}"
