@@ -1,7 +1,7 @@
 """Durable SQLite authority/idempotency/confirmation store & governance helpers for Fleet cell tasks."""
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import hashlib
 import json
 import sqlite3
@@ -273,7 +273,7 @@ class PipelineGovernanceStore:
         self._conn.execute("PRAGMA busy_timeout=5000")
         if self.db_path != ":memory:":
             self._conn.execute("PRAGMA journal_mode=WAL")
-            self._conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn.execute("PRAGMA synchronous=FULL")
         with self._write_tx():
             for ddl in (
                 """CREATE TABLE IF NOT EXISTS pipeline_authority_state (
@@ -325,12 +325,13 @@ class PipelineGovernanceStore:
             self._conn.execute("BEGIN IMMEDIATE")
             try:
                 yield
+                if self._conn.in_transaction:
+                    self._conn.execute("COMMIT")
             except BaseException:
                 if self._conn.in_transaction:
-                    self._conn.execute("ROLLBACK")
+                    with suppress(Exception):
+                        self._conn.execute("ROLLBACK")
                 raise
-            if self._conn.in_transaction:
-                self._conn.execute("COMMIT")
 
     def snapshot(self) -> dict[str, int]:
         with self._lock:
@@ -372,17 +373,66 @@ class PipelineGovernanceStore:
             return int(row["status_code"]), json.loads(row["response_json"])
 
     def record_idempotency(self, request_key: str, body_sha256: str, status_code: int, payload: dict) -> None:
-        encoded = json.dumps(payload, ensure_ascii=False, allow_nan=False, default=str)
-        with self._write_tx():
-            row = self._conn.execute(
-                "SELECT body_sha256 FROM pipeline_idempotency WHERE request_key = ?", (request_key,),
-            ).fetchone()
-            if row is not None and row["body_sha256"] != body_sha256:
-                raise HTTPException(409, detail={"code": "IDEMPOTENCY_CONFLICT"})
-            self._conn.execute(
-                "INSERT OR REPLACE INTO pipeline_idempotency (request_key, body_sha256, status_code, response_json, created_at) VALUES (?, ?, ?, ?, ?)",
-                (request_key, body_sha256, int(status_code), encoded, time.time()),
+        self.commit_enqueue(bump_dispatch=False, idempotency=(request_key, body_sha256, status_code, payload))
+
+    def commit_enqueue(
+        self,
+        *,
+        bump_dispatch: bool,
+        bump_stop: bool = False,
+        idempotency: tuple[str, str, int, dict] | None = None,
+        ledger_snapshot: dict | None = None,
+        delete_confirmation: tuple[str, str] | None = None,
+    ) -> int | None:
+        """Record idempotency, ledger commit marker, confirmation delete, and generation bumps in one SQLite tx."""
+        encoded = (
+            json.dumps(idempotency[3], ensure_ascii=False, allow_nan=False, default=str)
+            if idempotency is not None else None
+        )
+        ledger_encoded = (
+            json.dumps(
+                {"sha256": canonical_digest(ledger_snapshot), "payload": ledger_snapshot},
+                ensure_ascii=False, allow_nan=False, default=str,
             )
+            if ledger_snapshot is not None else None
+        )
+        now = time.time()
+        with self._write_tx():
+            if idempotency is not None:
+                req_key, body_sha256, status_code, _ = idempotency
+                row = self._conn.execute(
+                    "SELECT body_sha256 FROM pipeline_idempotency WHERE request_key = ?", (req_key,),
+                ).fetchone()
+                if row is not None and row["body_sha256"] != body_sha256:
+                    raise HTTPException(409, detail={"code": "IDEMPOTENCY_CONFLICT"})
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO pipeline_idempotency (request_key, body_sha256, status_code, response_json, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (req_key, body_sha256, int(status_code), encoded, now),
+                )
+            if delete_confirmation is not None:
+                self._conn.execute(
+                    "DELETE FROM pipeline_confirmations WHERE kind = ? AND task_id = ?", delete_confirmation,
+                )
+            if ledger_encoded is not None:
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO pipeline_confirmations (kind, task_id, record_json, updated_at) VALUES ('ledger_commit', 'current', ?, ?)",
+                    (ledger_encoded, now),
+                )
+            if bump_stop:
+                self._conn.execute(
+                    "UPDATE pipeline_authority_state SET stop_generation = stop_generation + 1, updated_at = ? WHERE id = 1",
+                    (now,),
+                )
+            if not bump_dispatch:
+                return None
+            self._conn.execute(
+                "UPDATE pipeline_authority_state SET dispatch_generation = dispatch_generation + 1, updated_at = ? WHERE id = 1",
+                (now,),
+            )
+            return int(self._conn.execute("SELECT dispatch_generation FROM pipeline_authority_state WHERE id = 1").fetchone()[0])
+
+    def load_committed_ledger(self) -> dict | None:
+        return self.load_confirmations("ledger_commit").get("current")
 
     def save_confirmation(self, kind: str, task_id: str, rec: dict) -> None:
         encoded = json.dumps(rec, ensure_ascii=False, allow_nan=False, default=str)
@@ -415,8 +465,16 @@ class PipelineGovernanceStore:
     def admit_cas(
         self, expected: dict[str, Any], actual: dict[str, Any], *,
         task_id: str | None = None, approved_by: str | None = None, require_all: bool = True,
+        ledger_snapshot: dict | None = None,
     ) -> tuple[bool, list[str], int]:
         """Single-transaction CAS checking context digest, readiness digest, and authority generations."""
+        ledger_encoded = (
+            json.dumps(
+                {"sha256": canonical_digest(ledger_snapshot), "payload": ledger_snapshot},
+                ensure_ascii=False, allow_nan=False, default=str,
+            )
+            if ledger_snapshot is not None else None
+        )
         with self._write_tx():
             if task_id is not None and self._conn.execute(
                 "SELECT 1 FROM pipeline_admitted_tasks WHERE task_id = ?", (task_id,),
@@ -444,6 +502,11 @@ class PipelineGovernanceStore:
                     "INSERT INTO pipeline_admitted_tasks (task_id, approved_by, admitted_at) VALUES (?, ?, ?)",
                     (task_id, approved_by or "", now),
                 )
+            if ledger_encoded is not None:
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO pipeline_confirmations (kind, task_id, record_json, updated_at) VALUES ('ledger_commit', 'current', ?, ?)",
+                    (ledger_encoded, now),
+                )
             return True, [], new_dg
 
     def rollback_admitted_task(self, task_id: str) -> None:
@@ -451,11 +514,23 @@ class PipelineGovernanceStore:
         with self._write_tx():
             self._conn.execute("DELETE FROM pipeline_admitted_tasks WHERE task_id = ?", (task_id,))
 
+    def reconcile_unpersisted_admissions(self, tasks: dict[str, dict]) -> list[str]:
+        """Clear orphan admission markers left by a crash between admit_cas() and ledger save."""
+        reconciled: list[str] = []
+        with self._write_tx():
+            for row in self._conn.execute("SELECT task_id FROM pipeline_admitted_tasks").fetchall():
+                tid = str(row["task_id"])
+                task = tasks.get(tid)
+                if task is not None and task.get("status") == "PROPOSED":
+                    self._conn.execute("DELETE FROM pipeline_admitted_tasks WHERE task_id = ?", (tid,))
+                    reconciled.append(tid)
+        return reconciled
+
 
 def admit_cell_task_guarded(
     app, task_id: str, raw_body: bytes, principal: Any, *,
     active_map_fn, resolve_cells_fn, is_human_detected_fn, arm_live_catalog_fn, enrich_fn, save_ledger_fn,
-    gov: PipelineGovernanceStore | None,
+    gov: PipelineGovernanceStore | None, ledger_payload_fn=None, write_ledger_fn=None,
 ) -> dict[str, Any]:
     """Fail-closed atomic PROPOSED -> QUEUED transition with human operator check and ledger rollback."""
     if gov is None or getattr(app.state, "_pipeline_ledger_fault", False):
@@ -480,25 +555,42 @@ def admit_cell_task_guarded(
             app, task["cell_id"], active_map_fn=active_map_fn, resolve_cells_fn=resolve_cells_fn,
             is_human_detected_fn=is_human_detected_fn, arm_live_catalog_fn=arm_live_catalog_fn, gov=gov,
         )
-        ok_cas, reasons, new_dg = gov.admit_cas(
-            body, {"context_sha256": task.get("failure_context_sha256"), "readiness_digest": rdy["readiness_digest"]},
-            task_id=task_id, approved_by=approver, require_all=True,
-        )
+        prev = {k: task.get(k) for k in ("status", "approved_by", "admitted_at", "health_summary")}
+        actual_cas = {"context_sha256": task.get("failure_context_sha256"), "readiness_digest": rdy["readiness_digest"]}
+        if callable(ledger_payload_fn) and callable(write_ledger_fn):
+            task["status"], task["approved_by"], task["admitted_at"] = "QUEUED", approver, round(time.time(), 3)
+            try:
+                enrich_fn(task)
+                payload = ledger_payload_fn()
+                write_ledger_fn(payload)
+                ok_cas, reasons, new_dg = gov.admit_cas(
+                    body, actual_cas, task_id=task_id, approved_by=approver, require_all=True, ledger_snapshot=payload,
+                )
+                if not ok_cas:
+                    raise HTTPException(409, detail={"code": "STALE_FAILURE_CONTEXT", "reasons": reasons})
+            except Exception:
+                for k, v in prev.items():
+                    task.pop(k, None) if v is None else task.__setitem__(k, v)
+                if not getattr(app.state, "_pipeline_ledger_fault", False):
+                    with suppress(Exception):
+                        write_ledger_fn(ledger_payload_fn())
+                raise
+            return {"ok": True, "task": task, "dispatch_generation": new_dg}
+        ok_cas, reasons, new_dg = gov.admit_cas(body, actual_cas, task_id=task_id, approved_by=approver, require_all=True)
         if not ok_cas:
             raise HTTPException(409, detail={"code": "STALE_FAILURE_CONTEXT", "reasons": reasons})
-        prev = {k: task.get(k) for k in ("status", "approved_by", "admitted_at", "health_summary")}
-        task["status"] = "QUEUED"
-        task["approved_by"] = approver
-        task["admitted_at"] = round(time.time(), 3)
+        task["status"], task["approved_by"], task["admitted_at"] = "QUEUED", approver, round(time.time(), 3)
         try:
             enrich_fn(task)
             save_ledger_fn()
         except Exception:
             for k, v in prev.items():
-                if v is None:
-                    task.pop(k, None)
-                else:
-                    task[k] = v
+                task.pop(k, None) if v is None else task.__setitem__(k, v)
             gov.rollback_admitted_task(task_id)
             raise
         return {"ok": True, "task": task, "dispatch_generation": new_dg}
+
+
+def deterministic_idempotency_id(prefix: str, scoped_key: str) -> str:
+    """Derive a collision-resistant deterministic task/batch ID from a scoped idempotency key."""
+    return f"{prefix}-idemp-{hashlib.sha256(scoped_key.encode('utf-8')).hexdigest()[:12]}"

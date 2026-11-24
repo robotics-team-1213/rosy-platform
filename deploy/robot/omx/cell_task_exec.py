@@ -260,6 +260,9 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
                 "stop_event": {"command": "stop", "ok": False, "folded": False}}
     wrapper, cfg, cat, default_roi, default_src = _arm_run_spec(arm_id, prep_dir)
     if handoff.get("execution_mode") == "act_policy":
+        if handoff.get("displaced_to") not in (None, ""):
+            return {"arm": arm_id, "error": "UNCALIBRATED_DISPLACED_SITE",
+                    "stop_event": {"command": "stop", "ok": False, "folded": False}}
         return execute_act_policy_task(
             handoff, arm_id=arm_id, prep_dir=prep_dir, wrapper=wrapper, cfg=cfg, cat=cat, default_roi=default_roi,
             lease_owner=f"{WORKER_LEASE_PREFIX}{os.getpid()}", tools_root_fn=tools_root, run_fn=subprocess.run,
@@ -275,6 +278,16 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     raw_src = str(handoff.get("src_site") or default_src).strip()
     raw_dst = str(handoff.get("dst_site") or ("pallet-l0" if arm_id != "arm_s" else "belt")).strip()
     cell_id = str(handoff.get("cell_id") or "").strip()
+    displaced = handoff.get("displaced_to")
+    if displaced not in (None, ""):
+        if not isinstance(displaced, str) or displaced.strip() not in ("belt_far", "floor_front"):
+            return {"arm": arm_id, "error": "UNCALIBRATED_DISPLACED_SITE",
+                    "stop_event": {"command": "stop", "ok": False, "folded": False}}
+        disp = displaced.strip()
+        if cell_id not in ("", "cell_s") or disp not in cfg_sites:
+            return {"arm": arm_id, "error": "UNCALIBRATED_DISPLACED_SITE",
+                    "stop_event": {"command": "stop", "ok": False, "folded": False}}
+        raw_src = disp
     htier = handoff.get("tier")
     src_res = cell_site_target.resolve_cell_ab_site(raw_src, None, allow_belt_temp=True, allow_pallet_src=True) if cell_id != "cell_s" else None
     dst_res = cell_site_target.resolve_cell_ab_site(raw_dst, htier, allow_belt_temp=False) if cell_id != "cell_s" else None
@@ -337,6 +350,8 @@ def execute_guarded_cell_task(handoff: dict[str, Any], *, prep_dir: Path) -> dic
     # main's telemetry reader: the arm's last runner state must also say folded and be fresh (2026-11-19 panel)
     live_fold = measured_fold(arm_id, prep_dir)
     clearance = source_clearance(cfg, cat_path, roi, src_site) if placed else None
+    if isinstance(clearance, dict) and src_site != "pinky" and "site" not in clearance:
+        clearance = {**clearance, "site": src_site}
     # D-1057: cell_auto_pick records top-frame placement (`verify`) and measures zone_verification for Fleet tasks;
     # without zone_verification from the attempt row, task_verified stays False and Fleet refuses completion.
     zone = attempt.get("zone_verification") if isinstance(attempt.get("zone_verification"), dict) else None

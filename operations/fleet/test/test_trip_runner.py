@@ -1087,6 +1087,7 @@ def _app(tmp_path, ports):
     robot = FakeRobot("rosy_60"); robot.power_health_value = fresh_power_health()  # deliberate: start gate needs fresh battery
     console = FleetConsole([RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [robot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
+    tasks.store.rearm_dispatch(expected_generation=tasks.store.dispatch_control()["generation"], actor_id="bob")
     store = SiteMapStore(tmp_path / "tasks.sqlite")
     store.import_if_empty(from_lane_graph(LANE_GRAPH), source="lane_graph.yaml")
     users = {sha256(b"operator-token").hexdigest(): {"principal_id": "bob", "role": "operator"},

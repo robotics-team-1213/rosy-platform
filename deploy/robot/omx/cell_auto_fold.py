@@ -78,13 +78,14 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             release_unmoved: bool = False, moved_out: list | None = None, latched_out: list | None = None,
             allow_live_unlatch: bool = False, advisor=None, load_check=None,
             bounds=None, tcp_x_m: float | None = None, clear_z_m: float = 0.10, extended_detours: bool = False,
-            held_plan=None, library_sha256=None, sleep=time.sleep) -> dict:
+            held_plan=None, library_sha256=None, sleep=time.sleep, stage: str = "full") -> dict:
     """Fold the held arm home or hold it where it is; never moves without a clear, reserved corridor. order(names)
     gives the candidates' try order (learned outcomes); the set of candidates is never changed by it."""
+    if stage not in ("full", "release_and_lift", "park_only"):
+        raise ValueError(f"unsupported stage: {stage}")
     from cell_pipeline_io import fold_from_hold, park_succeeded
     from cell_recovery_plan import build_candidates, classify_situation, run_detour_jogs
     from chunk_runner_recover import ensure_live_unlatch
-
     steps, known, moved = [], {"state": None}, {"yes": False}  # known: last state seen; moved: any release/jog/park sent
     latched = {"started": False, "active": False}
 
@@ -120,18 +121,27 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
         return hold("STATE_UNREADABLE")
     if latched["active"] and not allow_live_unlatch:
         return hold("LIVE_HOLD_LATCHED")
-    if folded(state, home):
-        if latched["active"]:
-            if status.get("holding") or holding(state, target, closed) or (target[5] <= closed + 1.0 and state[5] > target[5] + 2.0):
-                return hold("HOLDING_AT_HOME", is_holding=True)
-            ok_u, err_u = ensure_live_unlatch(cell, latched, note)
-            if not ok_u:
-                return hold("UNLATCH_REFUSED", error=err_u)
-        return {"schema": SCHEMA, "result": "folded", "candidate": "already_home", "state": state, "steps": steps,
-                "corridor": None, **({"unlatched_live_hold": True} if latched["started"] else {})}
+    at_home = folded(state, home)
+    is_holding = bool(
+        holding(state, target, closed)
+        or ((latched["started"] or at_home or stage in ("park_only", "release_and_lift")) and status.get("holding"))
+        or ((at_home or stage in ("park_only", "release_and_lift"))
+            and target[5] <= closed + 1.0 and state[5] > target[5] + 2.0)
+    )
+    if at_home:
+        from cell_auto_fold_stages import resolve_folded_at_home
+
+        if (home_out := resolve_folded_at_home(
+            cell, state, stage=stage, latched=latched, is_holding=is_holding, steps=steps,
+            note_fn=note, hold_fn=hold, ensure_unlatch_fn=ensure_live_unlatch, schema=SCHEMA,
+        )) is not None:
+            return home_out
     is_low = bool(low(state))
-    if (latched["started"] and status.get("holding")) or holding(state, target, closed):
-        if not is_low:
+    if stage == "park_only":
+        if is_holding:
+            return hold("STILL_HOLDING_BEFORE_PARK", is_holding=True)
+    elif is_holding or stage == "release_and_lift":
+        if is_holding and not is_low:
             return hold("HOLDING_HIGH", is_holding=True)
         rise_lane = [state, [state[0], state[1] - RISE_UNITS, *state[2:]]]
         if not look(rise_lane).get("clear") or not reserve(rise_lane).get("ok"):
@@ -154,6 +164,13 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
             return hold("STATE_UNREADABLE")
         target = status.get("target") if isinstance(status.get("target"), list) and len(status["target"]) >= 6 else state
         is_low = bool(low(state))
+        if stage == "release_and_lift":
+            held = cell.act("human-hold")  # keep torque ON until 3-camera visual verification approves park
+            if held.get("ok") is not True:
+                return {"schema": SCHEMA, "result": "held", "reason": "HOLD_AFTER_LIFT_FAILED",
+                        "candidate": "release_and_lift", "hold_ok": held.get("ok"), "steps": steps}
+            return {"schema": SCHEMA, "result": "risen_for_visual_verify", "candidate": "release_and_lift",
+                    "state": state, "hold_ok": True, "steps": steps, "corridor": None}
 
     park_fn = held_plan if (latched["started"] and held_plan is not None) else plan
     situation = classify_situation(state, target, home, closed, low_ok=is_low, is_holding=False)
@@ -268,57 +285,74 @@ def _learn(result: dict, ok: bool) -> None:
         pass
 
 
-def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=time.time, clear=None) -> dict:
+def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=time.time, clear=None,
+           stage: str = "full", request_id: str | None = None, expires_at: float | None = None,
+           stop_generation: int | None = None, safety_fence: str | None = None) -> dict:
     """omx_incident starts this after a held incident it could not clear: one try per incident. Opens the arm's session
     through its wrapper as a recovery session for that incident alone, folds (main), waits for the session's own end
     (torque OFF confirmed in session.json) and clears that incident with the evidence. Anything short leaves the hold."""
     import os
-    import subprocess
 
+    from cell_auto_fold_stages import (
+        expiry_error as _expiry_error, run_launch_command as _run_launch_command, write_req_result as _write_req_result,
+    )
     import omx_incident
     import omx_incident_auto
 
+    if stage not in ("full", "release_and_lift", "park_only"):
+        res = {"result": "skipped", "why": f"invalid stage: {stage}"}
+        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
+        return res
+    fleet_req = (stage != "full") or bool(request_id) or (safety_fence is not None) or (stop_generation is not None)
+    exp_err = _expiry_error(expires_at, required=fleet_req, now_t=now())
+    if exp_err is not None:
+        res = {"result": "skipped", "why": exp_err}
+        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
+        return res
     conf = json.loads(Path(conf_file).read_text(encoding="utf-8"))[arm]
     link = link or omx_incident.link_for(arm)
     ids = list(link.hold().incident_ids) if link is not None else []
     if len(ids) != 1:
-        return {"result": "skipped", "why": f"{len(ids)} open incidents (one is folded at a time)"}
+        res = {"result": "skipped", "why": f"{len(ids)} open incidents (one is folded at a time)"}
+        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
+        return res
     incident = ids[0]
-    marker = Path(omx_incident.INCIDENTS) / f"auto-fold-{incident}.json"
+    suffix = "" if stage == "full" else ("-lift" if stage == "release_and_lift" else "-park")
+    marker = Path(omx_incident.INCIDENTS) / f"auto-fold-{incident}{suffix}.json"
     if marker.exists():
-        return {"result": "skipped", "why": "already tried for this incident"}
+        res = {"result": "skipped", "why": "already tried for this incident"}
+        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
+        return res
     marker.parent.mkdir(parents=True, exist_ok=True)
-    try:  # one try per incident, claimed atomically
+    try:  # one try per incident stage, claimed atomically
         fd = os.open(marker, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError:
-        return {"result": "skipped", "why": "already tried for this incident"}
+        res = {"result": "skipped", "why": "already tried for this incident"}
+        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
+        return res
     with os.fdopen(fd, "w") as stream:
-        stream.write(json.dumps({"incident_id": incident, "arm": arm, "at": now()}))
-    out, cwd = marker.with_name(f"auto-fold-{incident}.result.json"), Path(conf["cwd"]).expanduser()
-    command = [conf["wrapper"], sys.executable, str(Path(__file__).resolve()), "--arm", arm, "--config", conf["config"],
-               "--library", conf["library"], "--site", conf["site"], "--roi", *map(str, conf["roi"]), "--out", str(out)]
-    env = {**os.environ, "ROSY_RECOVERY_INCIDENT": incident}
+        stream.write(json.dumps({"incident_id": incident, "arm": arm, "stage": stage, "at": now()}))
+    out, cwd = marker.with_name(f"auto-fold-{incident}{suffix}.result.json"), Path(conf["cwd"]).expanduser()
     started = now()
 
-    def done(out: dict, candidate=None) -> dict:
-        omx_incident_auto.note_event({"kind": "auto_fold", "arm": arm, "incident_id": incident, "result": out["result"],
-                                      "why": out.get("why"), "candidate": candidate})
-        return out
+    def done(out_row: dict, candidate=None) -> dict:
+        _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, out_row)
+        omx_incident_auto.note_event({"kind": "auto_fold", "arm": arm, "incident_id": incident, "result": out_row["result"],
+                                      "why": out_row.get("why"), "candidate": candidate})
+        return out_row
 
-    for _ in range(12):  # the session that held the arm may still be ending: its lock frees within a minute
-        # no short timeout: killing the wrapper mid-fold would leave the arm out on its reach
-        proc = (run or subprocess.run)(command, cwd=cwd, env=env, timeout=3600, capture_output=True, text=True)
-        if "session lock is held" not in (proc.stdout or "") + (proc.stderr or ""):
-            break
-        sleep(5)
-    if not out.is_file():
-        output = ((proc.stdout or "") + (proc.stderr or ""))
-        if "session lock is held" in output:
-            marker.unlink(missing_ok=True)
-        return done({"result": "failed", "why": output[-300:]})
+    early = _run_launch_command(
+        Path(__file__).resolve(), arm, conf, stage=stage, out=out, cwd=cwd, incident=incident, marker=marker,
+        expires_at=expires_at, stop_generation=stop_generation, safety_fence=safety_fence, run=run,
+        sleep=sleep, now=now, require_expiry=fleet_req,
+    )
+    if early is not None:
+        return done(early)
     result = json.loads(out.read_text())
     cand = result.get("candidate")
-    _learn(result, result.get("result") == "folded")
+    _learn(result, result.get("result") in ("folded", "risen_for_visual_verify"))
+    if result.get("result") == "risen_for_visual_verify":
+        return done({"result": "risen_for_visual_verify", "incident_id": incident, "state": result.get("state")}, cand)
     if result.get("result") != "folded":
         return done({"result": "held", "why": result.get("reason")}, cand)
     from cell_recovery_plan import wait_session_json
@@ -327,6 +361,9 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     if sess is None:
         return done({"result": "not_cleared", "why": why}, cand)
     torque = sess.get("torque_after") or {}
+    if stage == "park_only":
+        return done({"result": "parked_for_visual_verify", "incident_id": incident, "state": result.get("state"),
+                     "torque_after": torque}, cand)
     proof = evidence(result, result["home"], torque, incident, now())
     note = f"automatic fold (D-1048): {result.get('candidate')}, home within {SETTLE_TOL} units, torque OFF"
     try:
@@ -340,37 +377,10 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
 def main(argv=None) -> int:
     """Run inside the arm's session wrapper (ROSY_RECOVERY_INCIDENT names the one held incident it may open with);
     `launch --arm A --config-file F` is how omx_incident starts it."""
-    import argparse
-    import os
-    from chunk_runner_recover import run_fold_session_cli
+    from cell_auto_fold_stages import run_cli_main
 
-    argv = list(sys.argv[1:] if argv is None else argv)
-    if argv[:1] == ["launch"]:
-        lp = argparse.ArgumentParser(prog="cell_auto_fold.py launch")
-        lp.add_argument("--arm", required=True)
-        lp.add_argument("--config-file", type=Path, required=True)
-        opts = lp.parse_args(argv[1:])
-        print(json.dumps(launch(opts.arm, opts.config_file), default=str))
-        return 0
-
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--arm", required=True, help="the arm this session holds (its space reservation key)")
-    ap.add_argument("--config", type=Path, required=True, help="the arm's cell-auto config (io, cameras, sites)")
-    ap.add_argument("--library", type=Path, required=True, help="the arm's reviewed chunk library (home, transit)")
-    ap.add_argument("--site", required=True, help="the surface whose map the corridor is checked on")
-    ap.add_argument("--roi", nargs=4, type=int, required=True)
-    ap.add_argument("--out", type=Path, required=True, help="result JSON")
-    ap.add_argument("--supervised", action="store_true", help="bench operator recovery (no held incident id)")
-    ap.add_argument("--unlatch-hold", action="store_true", help="allow guarded torque-ON unlatch of an active human-hold")
-    ap.add_argument("--vlm-url", help="optional AI-PC vision endpoint URL for tier-2 recovery proposals")
-    ap.add_argument("--vlm-model", default="qwen3-vl:8b-instruct")
-    ap.add_argument("--vlm-provider", default="ollama")
-    ap.add_argument("--vlm-config", type=Path, help="optional JSON config for single VLM or multi-VLM/LLM panel")
-    ap.add_argument("--vlm-timeout", type=float, default=25.0)
-    args = ap.parse_args(argv)
-    if not args.supervised and not os.environ.get("ROSY_RECOVERY_INCIDENT"):
-        ap.error("ROSY_RECOVERY_INCIDENT is required: this tool only folds an arm a held incident names")
-    return run_fold_session_cli(args, recover, SCHEMA)
+    return run_cli_main(argv, launch_fn=launch, recover_fn=recover, candidate_names_fn=candidate_names,
+                        choice_key=CHOICE, schema=SCHEMA)
 
 
 if __name__ == "__main__":
