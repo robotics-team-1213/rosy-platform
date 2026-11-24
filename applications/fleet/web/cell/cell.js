@@ -64,7 +64,9 @@ const tokenAccess = bindTokenAccess({
   },
 });
 const request = createFleetClient({credential: () => tokenAccess.getToken(), origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => tokenAccess.getToken(), onSummary: renderExceptions});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => tokenAccess.getToken(),
+  onSummary: renderExceptions, quickClearSource: armFocusMatch?.[1],
+  canQuickClear: () => isOperator(role) && !principal?.startsWith('development-') && !namedOperatorReason(role, principal)});
 // B-3 — 관측 화면은 팔 관측·사건 단계(#observation-heading)에 선다. 화면이 바뀐 뒤에 카드로 옮겨야 초점이 살아 있다.
 function jumpToObservations(land) {
   if (location.hash === '#observation-heading') land();
