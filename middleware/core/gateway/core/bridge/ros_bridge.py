@@ -89,10 +89,19 @@ _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
 
 
 class RosBridge(RosBridgeHelpersMixin):
-    def __init__(self, node: Node, services, *, tf_buffer: Any = None, sensor_sink: Any = None) -> None:
+    def __init__(
+        self,
+        node: Node,
+        services,
+        *,
+        tf_buffer: Any = None,
+        sensor_sink: Any = None,
+        file_writer: Any = None,
+    ) -> None:
         self._node = node
         self._svc = services
         self._sensor_sink = sensor_sink
+        self._file_writer = file_writer
         self._mirror = SensorMirror()  # /sensors imu·odometry·wheels·motor·dock, converted on GET
         self._mirror.install(services.state)
         self._bounded_trial_guard = None

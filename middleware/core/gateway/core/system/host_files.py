@@ -112,6 +112,67 @@ class HostFileError(Exception):
         super().__init__(message)
 
 
+class AsyncHostFileWriter:
+    """Coalescing daemon writer that keeps blocking fsync calls off EventsExecutor."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._wake = threading.Event()
+        self._stop_event = threading.Event()
+        self._pending: dict[str, tuple[Any, Any, Any]] = {}
+        self._thread: Optional[threading.Thread] = None
+
+    def submit(
+        self,
+        key: str,
+        fn: Any,
+        *,
+        on_ok: Any = None,
+        on_error: Any = None,
+    ) -> None:
+        with self._lock:
+            self._pending[key] = (fn, on_ok, on_error)
+            if self._thread is None or not self._thread.is_alive():
+                self._stop_event.clear()
+                self._thread = threading.Thread(target=self._run, name="core-host-files", daemon=True)
+                self._thread.start()
+        self._wake.set()
+
+    def close(self, timeout_s: float = 1.0) -> None:
+        with self._lock:
+            thread = self._thread
+            self._stop_event.set()
+            self._wake.set()
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=timeout_s)
+        with self._lock:
+            if self._thread is thread and (thread is None or not thread.is_alive()):
+                self._thread = None
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            with self._lock:
+                item = next(iter(self._pending.items()), None)
+                if item is not None:
+                    key, work = item
+                    del self._pending[key]
+                else:
+                    work = None
+            if work is None:
+                self._wake.wait(timeout=0.5)
+                self._wake.clear()
+                continue
+            fn, on_ok, on_error = work
+            try:
+                fn()
+            except Exception as exc:  # noqa: BLE001 - writer errors surface via caller hook
+                if on_error is not None:
+                    on_error(exc)
+            else:
+                if on_ok is not None:
+                    on_ok()
+
+
 class HostFileExchange:
     Error = HostFileError
 

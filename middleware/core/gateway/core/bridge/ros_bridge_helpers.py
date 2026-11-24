@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -32,6 +33,7 @@ class RosBridgeHelpersMixin:
     """Sensor/status subscription adapters and display/power reconciliation helpers."""
 
     _sensor_sink = None
+    _file_writer = None
 
     def _init_bridge_state(self, node, services) -> None:
         self._last_odom_ts = 0.0
@@ -57,6 +59,8 @@ class RosBridgeHelpersMixin:
         self._face_inputs_last: Optional[dict] = None
         self._face_inputs_at: Optional[float] = None
         self._face_inputs_failed = False
+        self._face_inputs_lock = threading.Lock()
+        self._face_inputs_gen = 0
         self._info_last_pub = 0.0
         self._voltage_topic_seen = False
         self._api_address: Optional[str] = None
@@ -264,19 +268,52 @@ class RosBridgeHelpersMixin:
             **display.face_person_request(self._svc.person_request.view()))
         expressive = self._expression_intent.handover() is not None
         period = min(FACE_INPUTS_PERIOD_S, .15) if expressive else FACE_INPUTS_PERIOD_S
-        if not display.face_inputs_due(
-                content, self._face_inputs_last, now, self._face_inputs_at, period):
+        writer = self._file_writer
+        if writer is None:
+            if not display.face_inputs_due(
+                    content, self._face_inputs_last, now, self._face_inputs_at, period):
+                return
+            try:
+                self._svc.host_files.write_face_inputs(self._svc, content)
+            except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
+                if not self._face_inputs_failed:
+                    self._node.get_logger().warning(
+                        f"face inputs not written: {type(exc).__name__}: {exc}")
+                self._face_inputs_failed = True
+                return
+            self._face_inputs_failed = False
+            self._face_inputs_last, self._face_inputs_at = content, now
             return
-        try:
-            self._svc.host_files.write_face_inputs(self._svc, content)
-        except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the bridge
-            if not self._face_inputs_failed:
-                self._node.get_logger().warning(
-                    f"face inputs not written: {type(exc).__name__}: {exc}")
-            self._face_inputs_failed = True
-            return
-        self._face_inputs_failed = False
-        self._face_inputs_last, self._face_inputs_at = content, now
+
+        with self._face_inputs_lock:
+            if not display.face_inputs_due(
+                    content, self._face_inputs_last, now, self._face_inputs_at, period):
+                return
+            self._face_inputs_gen += 1
+            gen = self._face_inputs_gen
+            # Update cached snapshot before enqueueing so worker callbacks cannot race backwards.
+            self._face_inputs_last, self._face_inputs_at = content, now
+
+        def _on_ok(expected_gen: int = gen) -> None:
+            with self._face_inputs_lock:
+                if self._face_inputs_gen == expected_gen:
+                    self._face_inputs_failed = False
+
+        def _on_err(exc: Exception, expected_gen: int = gen) -> None:
+            with self._face_inputs_lock:
+                if not self._face_inputs_failed:
+                    self._node.get_logger().warning(
+                        f"face inputs not written: {type(exc).__name__}: {exc}")
+                self._face_inputs_failed = True
+                if self._face_inputs_gen == expected_gen:
+                    self._face_inputs_last = None
+
+        writer.submit(
+            "face_inputs",
+            lambda payload=content: self._svc.host_files.write_face_inputs(self._svc, payload),
+            on_ok=_on_ok,
+            on_error=_on_err,
+        )
 
     def _publish_display_info(self, status) -> None:
         payload = display.info_payload(
