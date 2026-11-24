@@ -128,11 +128,15 @@ test("createPipelinePanel renders banner, depart gate, cancel and repark control
 
     // Recovery handoff renders unresolved failures, blocks repick on FOLD_READBACK_MISSING, and passes CAS sha.
     const invCalls = [];
+    const admitCalls = [];
+    const cancelCalls = [];
     const panel2 = createPipelinePanel({
       $: id => byId[id] || null,
       state,
       namedReason: () => "",
       invokeRecoveryTool: p => invCalls.push(p),
+      admitCellPlan: p => admitCalls.push(p.plan_id),
+      cancelCellPlan: p => cancelCalls.push(p.plan_id),
     });
     panel2.render(
       {
@@ -166,6 +170,28 @@ test("createPipelinePanel renders banner, depart gate, cancel and repark control
       },
       {robot_layer: {robots: [{robot_id: "rosy_77"}]}},
       {ready: false, reasons: ["UNLOAD_ABORTED"]},
+      {
+        plans: [
+          {
+            plan_id: "plan-1",
+            mode: "harbor_plan",
+            order_source: "harbor",
+            status: "PROPOSED",
+            completed_steps: 0,
+            total_steps: 2,
+            hold_reason: null,
+          },
+          {
+            plan_id: "plan-2",
+            mode: "outbound",
+            order_source: "rosy_r",
+            status: "COMPLETED",
+            completed_steps: 2,
+            total_steps: 2,
+            hold_reason: null,
+          },
+        ],
+      },
     );
     const b2 = [];
     const collectBtns = n => {
@@ -185,6 +211,19 @@ test("createPipelinePanel renders banner, depart gate, cancel and repark control
     const visBtn = b2.find(b => b.textContent === "3카메라 이탈 확인");
     assert.equal(visBtn.disabled, false);
     visBtn.click();
+    const admitPlanBtns = b2.filter(b => b.textContent === "일괄 승인");
+    const cancelPlanBtns = b2.filter(b => b.textContent === "계획 취소");
+    assert.equal(admitPlanBtns.length, 2);
+    assert.equal(cancelPlanBtns.length, 2);
+    // Rendered in reverse chronological order: plan-2 (COMPLETED, disabled) then plan-1 (PROPOSED, enabled).
+    assert.equal(admitPlanBtns[0].disabled, true);
+    assert.equal(cancelPlanBtns[0].disabled, true);
+    assert.equal(admitPlanBtns[1].disabled, false);
+    assert.equal(cancelPlanBtns[1].disabled, false);
+    admitPlanBtns[1].click();
+    cancelPlanBtns[1].click();
+    assert.deepEqual(admitCalls, ["plan-1"]);
+    assert.deepEqual(cancelCalls, ["plan-1"]);
     assert.equal(invCalls.length, 2);
     assert.equal(invCalls[0].tool_name, "safe_fold_home");
     assert.equal(invCalls[0].arguments.strategy, "release_and_lift");

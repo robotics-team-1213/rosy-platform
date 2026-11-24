@@ -4,10 +4,16 @@ import { setOffBy } from "/common/cause-line.js";
 export const PIPELINE_STATUS_PATH = '/api/fleet/pipeline/status';
 export const UNLOAD_RELEASE_PATH = '/api/fleet/pipeline/unload-release';
 export const RECOVERY_TOOLS_INVOKE_PATH = '/api/fleet/pipeline/recovery-tools/invoke';
+export const CELL_PLANS_PATH = '/api/fleet/pipeline/cell-plans';
 export const pinkyCancelPath = id => `/api/fleet/pipeline/pinky-tasks/${encodeURIComponent(id)}/cancel`;
 export const reparkClosePath = id => `/api/fleet/pipeline/repark/${encodeURIComponent(id)}`;
+export const cellPlanAdmitPath = id => `/api/fleet/pipeline/cell-plans/${encodeURIComponent(id)}/admit`;
+export const cellPlanCancelPath = id => `/api/fleet/pipeline/cell-plans/${encodeURIComponent(id)}/cancel`;
+export const cellReadinessPath = id => `/api/fleet/pipeline/cells/${encodeURIComponent(id)}/readiness`;
 
 const PINKY_TERMINAL = new Set(['ARRIVED', 'FAILED', 'CANCELLED', 'REFUSED']);
+const PLAN_ADMITTABLE = new Set(['PROPOSED', 'PARTIALLY_ADMITTED']);
+const PLAN_CANCELLABLE = new Set(['PROPOSED', 'QUEUED', 'PARTIALLY_ADMITTED']);
 const FALLBACK_PINKYS = ['rosy_46', 'rosy_45', 'rosy_42'];
 
 export function discoverPinkyIds(tasksBody, statusBody) {
@@ -37,7 +43,7 @@ export function formatPinkyTaskRow(task) {
 }
 
 export function createPipelinePanel(ctx) {
-  const {$, state, namedReason, runPinkyQuickAction, runQuickPreset, cancelPinkyTask, closeRepark, cancelOrRetryTask, invokeRecoveryTool, onRobotChange} = ctx;
+  const {$, state, namedReason, runPinkyQuickAction, runQuickPreset, cancelPinkyTask, closeRepark, cancelOrRetryTask, invokeRecoveryTool, admitCellPlan, cancelCellPlan, onRobotChange} = ctx;
 
   function ensurePanel() {
     let panel = $('cell-pipeline-panel');
@@ -78,7 +84,7 @@ export function createPipelinePanel(ctx) {
     return step;
   }
 
-  function render(tasksBody, statusBody, unloadReleaseBody) {
+  function render(tasksBody, statusBody, unloadReleaseBody, plansBody) {
     const panel = ensurePanel();
     if (!panel) return;
     const opReason = typeof namedReason === 'function' ? namedReason() : '';
@@ -279,6 +285,53 @@ export function createPipelinePanel(ctx) {
       tbl.append(thead, tbody);
       wrap.append(tbl);
       nodes.push(wrap);
+    }
+
+    const recentPlans = [...(plansBody?.plans || [])].reverse().slice(0, 8);
+    if (recentPlans.length) {
+      const planWrap = document.createElement('div');
+      planWrap.className = 'cell-pipeline-ledger';
+      const tbl = document.createElement('table');
+      tbl.className = 'cell-pipeline-table';
+      const thead = document.createElement('thead');
+      const hr = document.createElement('tr');
+      for (const col of ['계획 ID', '모드', '출처', '상태', '진행', '사유', '승인·취소']) {
+        const th = document.createElement('th');
+        th.textContent = col;
+        hr.append(th);
+      }
+      thead.append(hr);
+      const tbody = document.createElement('tbody');
+      for (const plan of recentPlans) {
+        const tr = document.createElement('tr');
+        for (const val of [
+          plan.plan_id || '—',
+          plan.mode || '—',
+          plan.order_source || '—',
+          plan.status || 'PROPOSED',
+          `${plan.completed_steps ?? 0}/${plan.total_steps ?? 0}`,
+          plan.hold_reason || '—',
+        ]) {
+          const td = document.createElement('td');
+          td.textContent = val;
+          tr.append(td);
+        }
+        const ctrlTd = document.createElement('td');
+        const ctrlWrap = document.createElement('div');
+        ctrlWrap.className = 'cell-pipeline-actions';
+        const admitReason = opReason || (PLAN_ADMITTABLE.has(plan.status) ? '' : '승인 가능 상태가 아닙니다');
+        const cancelReason = opReason || (PLAN_CANCELLABLE.has(plan.status) ? '' : '이미 종료된 계획입니다');
+        ctrlWrap.append(
+          makeBtn('일괄 승인', 'primary', admitReason, () => void admitCellPlan?.(plan)),
+          makeBtn('계획 취소', 'quiet', cancelReason, () => void cancelCellPlan?.(plan)),
+        );
+        ctrlTd.append(ctrlWrap);
+        tr.append(ctrlTd);
+        tbody.append(tr);
+      }
+      tbl.append(thead, tbody);
+      planWrap.append(tbl);
+      nodes.push(planWrap);
     }
     panel.replaceChildren(...nodes);
   }

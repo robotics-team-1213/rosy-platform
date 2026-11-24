@@ -1,6 +1,13 @@
 // Cell task action handlers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
 import { setOffBy } from "/common/cause-line.js";
-import { pinkyCancelPath, reparkClosePath, RECOVERY_TOOLS_INVOKE_PATH } from './cell-pipeline-panel.js';
+import {
+  pinkyCancelPath,
+  reparkClosePath,
+  RECOVERY_TOOLS_INVOKE_PATH,
+  cellPlanAdmitPath,
+  cellPlanCancelPath,
+  cellReadinessPath,
+} from './cell-pipeline-panel.js';
 import {
   CELL_TASKS_PATH,
   PINKY_TASKS_PATH,
@@ -460,5 +467,51 @@ export function createCellActions(ctx) {
     }
   }
 
-  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, cancelPinkyTask, closeRepark, invokeRecoveryTool, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
+  async function admitCellPlan(plan) {
+    const current = ctx.bump();
+    const cellId = plan?.cell_id || 'cell_ab';
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획(${plan?.plan_id}) 일괄 승인 준비 중입니다.`;
+    try {
+      const rdy = await request(cellReadinessPath(cellId));
+      if (current !== ctx.gen()) return;
+      const body = {
+        expected_dispatch_generation: rdy.dispatch_generation,
+        expected_stop_generation: rdy.stop_generation,
+        expected_readiness_digest: rdy.readiness_digest,
+      };
+      if (plan?.request_digest) body.expected_request_digest = plan.request_digest;
+      if (plan?.context_sha256) body.expected_context_sha256 = plan.context_sha256;
+      await request(cellPlanAdmitPath(plan.plan_id), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획 일괄 승인 완료: ${plan.plan_id}`;
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획 일괄 승인 실패: ${error.message}`;
+    }
+  }
+
+  async function cancelCellPlan(plan) {
+    const current = ctx.bump();
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획(${plan?.plan_id}) 취소를 요청하는 중입니다.`;
+    try {
+      await request(cellPlanCancelPath(plan.plan_id), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reason: '운전자 계획 취소'}),
+      });
+      if (current !== ctx.gen()) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획 취소 완료: ${plan.plan_id}`;
+    } catch (error) {
+      if (current !== ctx.gen()) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `셀 계획 취소 실패: ${error.message}`;
+    }
+  }
+
+  return {bindActionButton, confirmBed, confirmPresence, runHumanSafetyGate, runStationZoneDispatch, runVisionAutoCheck, toggleCableGuard, runClearArmHold, loadStationZonesYaml, saveStationZonesYaml, runDecisionGate, cancelOrRetryTask, cancelPinkyTask, closeRepark, invokeRecoveryTool, admitCellPlan, cancelCellPlan, runQuickPreset, runPinkyQuickAction, runPresetTask, createCustomTask};
 }
