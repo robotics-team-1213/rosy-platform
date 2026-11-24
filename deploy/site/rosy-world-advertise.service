@@ -5,7 +5,8 @@ After=network-online.target avahi-daemon.service
 
 [Service]
 Type=oneshot
-EnvironmentFile=/run/rosy-site/world-public.env
+Environment=ROSY_WORLD_PORT=8140
+EnvironmentFile=-/run/rosy-site/world-public.env
 ExecStart=/usr/bin/python3 /opt/rosy/world/world_mdns.py publish --port ${ROSY_WORLD_PORT} --output /etc/avahi/services/rosy-world.service
 NoNewPrivileges=yes
 ProtectHome=yes
