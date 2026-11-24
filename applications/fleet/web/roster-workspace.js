@@ -14,11 +14,13 @@ import { node, patchHidden, patchText } from "/common/control-dom.js";
 import { cardTripLine } from "./card-trip.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { robotMapPose, robotPoseText, sitePoseText } from "./localization-badge.js";
+import { createLocalizationPanel } from "./localization-panel.js";
 import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
 import { powerHealthView } from "./power-health-view.js";
 import { staleAgeS } from "./state-age.js";
 
-export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl }) {
+export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator = () => false, namedReason = () => "" }) {
+  const locPanel = createLocalizationPanel({ scope, view, auth, call, log, render, confirmedAction, isOperator, namedReason });
   const stage = el("robot-stage");
   const frontCamera = createFrontCamera({ call, scope });
   const armFeed = createCellFrameFeed({ call, scope, intervalMs: 2000 });
@@ -82,6 +84,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   }
 
   function clearInspectorHosts() {
+    locPanel.clear();
     lastSampleStamp = "";
     lastArmStatusSig = "";
     lastSettingsSig = "";
@@ -385,7 +388,10 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         return armHealthBox;
       },
       commands(profile, detail) {
-        if (profile.kind !== "arm") return null;
+        if (profile.kind !== "arm") {
+          locPanel.sync(detail?.robot);
+          return locPanel.element();
+        }
         armObsLink.href = detail?.obsArm?.sourceId
           ? `/console/cell?focus=arm:${encodeURIComponent(detail.obsArm.sourceId)}#observation-heading`
           : "/console/cell#observation-heading";
