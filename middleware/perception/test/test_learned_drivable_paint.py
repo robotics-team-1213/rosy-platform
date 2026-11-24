@@ -424,3 +424,53 @@ def test_worker_keeps_revision_and_aux_masks_when_wall_less_model_hits_low_cover
     assert worker.last_error is None
     assert worker.used_model_revision == "lane-seg-20261114-test"
     assert not used.any() and worker.used_crosswalk is not None and worker.used_crosswalk[10:20, 120:200].all()
+
+
+def test_infer_drivable_cropped_matches_uncrop_logits_and_skips_empty_aux_warp(tmp_path):
+    from perception_runtime.perception.learned.manifest import ClassSpec
+    from perception_runtime.perception.learned.runner import LaneSegModel
+    import hashlib
+    import json
+
+    h, w, crop_from, crop_to = 240, 320, 112, 240
+    crop_h = crop_to - crop_from
+    classes = CLASSES
+    folder = tmp_path / "m_crop"
+    folder.mkdir()
+    (folder / "model.onnx").write_bytes(b"fake")
+    (folder / "model_manifest.json").write_text(json.dumps({
+        "schema": "rosy.perception.model/1", "model_revision": "lane-seg-crop-test", "task": "lane_seg",
+        "files": [{"name": "model.onnx", "sha256": hashlib.sha256(b"fake").hexdigest(), "precision": "fp32"}],
+        "input": {"shape": [1, 3, crop_h, w], "color": "rgb", "scale": 1 / 255,
+                  "mean": [0, 0, 0], "std": [1, 1, 1], "layout": "nchw",
+                  "crop": {"from_frame": [h, w], "rows": [crop_from, crop_to]}},
+        "output": {"layout": "nchw_logits", "classes": [
+            {"index": c.index, "name": c.name, "role": c.role} for c in classes]},
+        "dataset": {"repo": "org/d", "revision": "a" * 40},
+        "camera_profile_revision": "cam-1",
+    }))
+    labels_full = _road(h, w)
+    crop_labels = labels_full[crop_from:crop_to]
+    crop_logits = _logits(crop_labels)
+
+    class _Sess:
+        def run(self, _x):
+            return crop_logits
+
+    model = LaneSegModel.open(folder, session_factory=lambda *_: _Sess(), floor_gate=True, paint_target="drivable")
+    frame = np.zeros((h, w, 3), np.uint8)
+    mask, kind, info, _ = model.infer_drivable(frame)
+    ref_logits = uncrop_logits(crop_logits, model.manifest.input, classes)
+    ref_way, ref_info = drivable_target(ref_logits, classes, ignore_top=crop_from)
+    assert kind == "drivable" and info["branches"] == ref_info["branches"]
+    assert np.array_equal(mask, ref_way.astype(np.uint8))
+    assert not info["crosswalk_mask"].any() and not info["speed_bump_mask"].any()
+
+    # Empty crosswalk/speed_bump masks skip motion warp calls during active driving.
+    worker = LearnedPaintWorker(_Slot(model), stale_s=5.0, clock=lambda: 0.0, start=False, target="drivable")
+    worker.mask_for(frame, 1, 10.0)
+    worker.step()
+    motion_calls = []
+    worker.mask_for(frame, 1, 10.125, clean_drivable=lambda m: m, max_age_s=1.0,
+                    motion=lambda m, a, b: (motion_calls.append(int(m.sum())) or (m, 0.01, 0.0)))
+    assert len(motion_calls) == 1  # main drivable mask warped; 2 empty aux masks skipped

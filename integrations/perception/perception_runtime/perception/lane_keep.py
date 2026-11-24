@@ -297,7 +297,7 @@ class LaneKeeper:
             mask[:max(0, min(height, int(math.ceil(ground.horizon_row)) + HORIZON_MARGIN_PX))] = 0
         view = self._birds_eye(ground, width, height)
         grid = view.sample(mask)
-        observable = int(view.observable.sum())
+        observable = view.observable_count
         lit = int(grid.sum())
         if observable == 0 or lit > WASHED_FRACTION * observable:
             self.last["reason"] = "washed"

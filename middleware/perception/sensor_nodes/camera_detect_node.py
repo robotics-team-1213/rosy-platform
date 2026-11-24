@@ -38,7 +38,7 @@ from .sensing.perception.camera_evidence import observation_payload
 from perception_runtime.perception.camera_ground import ground_plane
 from .sensing.perception.camera_homography import CalibrationThresholds, load_homography_profile
 from .sensing.perception.camera_policy import CameraPolicy
-from .sensing.perception.camera_visibility import road_clip_stats, visibility_reason
+from .sensing.perception.camera_visibility import visibility_reason_and_clip_stats
 from .sensing.perception.camera_worker import CameraFrame, CameraPreprocessProfile, CameraPreprocessWorker
 from .sensing.perception.jpeg_frame import DEFAULT_QUALITY, encode_jpeg
 from .sensing.perception.v4l2_controls import (
@@ -402,8 +402,7 @@ class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node
         """Re-run settle -> lock when the frozen exposure leaves the road unusable."""
         if not self._line_controls_stable():
             return  # settling, or never frozen: nothing here to re-lock
-        reason = visibility_reason(bgr)
-        clip, median = road_clip_stats(bgr)
+        reason, clip, median = visibility_reason_and_clip_stats(bgr)
         if not self._relock_watch.update(reason, time.monotonic(), clip, median):
             return
         self.get_logger().warn(f'camera exposure {reason} clip={clip:.2f} median={median:.0f} '

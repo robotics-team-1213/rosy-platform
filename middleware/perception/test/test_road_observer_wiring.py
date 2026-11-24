@@ -102,3 +102,9 @@ def test_road_observer_overlays_recent_advisory_detections():
     assert "detections=self._preview_evidence.recent('detections', stamp, DETECTION_JOIN_S)" in source
     road = (ROOT / "front_camera/perception/road.py").read_text(encoding="utf-8")
     assert "detections=detections" in road
+
+
+def test_road_observer_skips_aruco_only_for_drivable_mode_and_non_camera_line_json():
+    source = (ROOT / "observers/road_observer_node.py").read_text(encoding="utf-8")
+    assert "_is_drivable_keep(keep)" in source
+    assert "if kind == 'line' and 'CAMERA_LINE' not in raw:" in source

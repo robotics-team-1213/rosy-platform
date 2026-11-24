@@ -10,7 +10,6 @@ the bounds allow, means no warp: the caller falls back.
 
 from __future__ import annotations
 
-import bisect
 import math
 from collections import deque
 
@@ -43,19 +42,32 @@ class OdomHistory:
 
     def pose_at(self, stamp: float):
         """(x, y, yaw) at `stamp`, or None when the history does not cover it."""
-        samples = list(self._samples)
-        if len(samples) < 2 or not math.isfinite(stamp):
+        n = len(self._samples)
+        if n < 2 or not math.isfinite(stamp):
             return None
-        stamps = [s[0] for s in samples]
-        i = bisect.bisect_left(stamps, stamp)
-        if i == 0:
-            return samples[0][1:] if stamp == stamps[0] else None
-        if i == len(samples):
-            a, b = samples[-2], samples[-1]
-            if stamp - b[0] > ODOM_HISTORY_MAX_LEAD_S:
+        last = self._samples[-1]
+        if stamp > last[0]:
+            if stamp - last[0] > ODOM_HISTORY_MAX_LEAD_S:
                 return None
+            a, b = self._samples[-2], last
+        elif stamp == last[0]:
+            a, b = self._samples[-2], last
         else:
-            a, b = samples[i - 1], samples[i]
+            first = self._samples[0]
+            if stamp < first[0]:
+                return None
+            if stamp == first[0]:
+                return first[1:]
+            a = b = None
+            idx = n - 1
+            while idx > 0:
+                cand_a, cand_b = self._samples[idx - 1], self._samples[idx]
+                if cand_a[0] < stamp <= cand_b[0]:
+                    a, b = cand_a, cand_b
+                    break
+                idx -= 1
+            if a is None:
+                return None
         if b[0] - a[0] > ODOM_HISTORY_MAX_GAP_S:
             return None
         f = (stamp - a[0]) / (b[0] - a[0])

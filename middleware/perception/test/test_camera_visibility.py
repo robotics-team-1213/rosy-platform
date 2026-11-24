@@ -23,3 +23,13 @@ def test_small_glare_does_not_reject_visible_road():
     frame = np.full((100, 100, 3), 100, np.uint8)
     frame[40:50, 40:50] = 255
     assert visibility_reason(frame) == 'usable'
+
+
+def test_single_pass_visibility_and_clip_stats_matches_separate_calls():
+    from control.sensing.perception.camera_visibility import (
+        road_clip_stats, visibility_reason_and_clip_stats)
+
+    for fill in (10, 90, 252):
+        frame = np.full((60, 80, 3), fill, np.uint8)
+        frame[5:15, :] = (255, 255, 255)  # outside road band ROI
+        assert visibility_reason_and_clip_stats(frame) == (visibility_reason(frame), *road_clip_stats(frame))

@@ -132,3 +132,23 @@ def test_floor_white_mask_slice_matches_full_frame_reference_across_horizons():
     for horizon in (-10.0, 0.0, 4.0, 80.0, 120.0, 238.0, 300.0):
         assert np.array_equal(floor_white_mask(img, horizon), _reference_full_frame_white_mask(img, horizon))
         assert np.array_equal(floor_white_mask(gray, horizon), _reference_full_frame_white_mask(gray, horizon))
+
+
+def _reference_denoise_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
+    import cv2
+    from perception_runtime.perception import lane_keep_lines as lk
+
+    img = cv2.medianBlur(bgr, lk.DENOISE_MEDIAN_PX) if lk.DENOISE_MEDIAN_PX > 1 else bgr
+    mask = _reference_full_frame_white_mask(img, horizon_row).astype(np.uint8)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (lk.DENOISE_OPEN_PX, lk.DENOISE_OPEN_PX))
+    return lk.drop_small_components(cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel))
+
+
+def test_denoise_white_mask_slice_matches_full_frame_reference_across_horizons():
+    from perception_runtime.perception.lane_keep_lines import denoise_white_mask
+
+    img = frame_with(WHITE)
+    img[:90, :] = (245, 245, 245)
+    img[140:200, 30:45] = WHITE
+    for horizon in (-10.0, 0.0, 4.0, 80.0, 120.0, 238.0, 300.0):
+        assert np.array_equal(denoise_white_mask(img, horizon), _reference_denoise_white_mask(img, horizon))
