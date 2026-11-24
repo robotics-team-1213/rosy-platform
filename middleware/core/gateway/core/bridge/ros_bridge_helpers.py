@@ -31,6 +31,8 @@ from core_features.command.manager import Twist as CoreTwist
 class RosBridgeHelpersMixin:
     """Sensor/status subscription adapters and display/power reconciliation helpers."""
 
+    _sensor_sink = None
+
     def _init_bridge_state(self, node, services) -> None:
         self._last_odom_ts = 0.0
         self._last_odom_pose = None
@@ -194,6 +196,8 @@ class RosBridgeHelpersMixin:
         observation.nav_costmap(self._svc, "global", msg, warn=self._node.get_logger().warning)
 
     def _on_scan(self, msg) -> None:
+        if self._sensor_sink is not None:
+            self._sensor_sink.forward_scan(msg)
         sample = translate.lidar_sample(msg, time.time())
         sample["source_now_ns"] = self._node.get_clock().now().nanoseconds
         self._svc.state.set_sensor("lidar", sample)
@@ -201,12 +205,16 @@ class RosBridgeHelpersMixin:
         observation.front_clearance(self._svc, sample, received_at=self._line_clock())
 
     def _on_imu(self, msg) -> None:
+        if self._sensor_sink is not None:
+            self._sensor_sink.forward_imu(msg)
         self._mirror.imu(msg)
 
     def _on_joint_states(self, msg) -> None:
         self._mirror.wheels(msg)
 
     def _on_us_range(self, msg) -> None:
+        if self._sensor_sink is not None:
+            self._sensor_sink.forward_us(msg)
         observation.us_range(self._svc, msg, received_at=time.time())
 
     def _on_batt_state(self, msg) -> None:

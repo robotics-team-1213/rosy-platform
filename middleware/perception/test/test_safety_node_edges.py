@@ -172,6 +172,62 @@ def test_safety_node_uses_shared_tf_buffer_without_creating_transform_listener()
     init = next(n for n in node_class(SAFETY, 'SafetyNode').body
                 if isinstance(n, ast.FunctionDef) and n.name == '__init__')
     assert 'tf_buffer' in [kw.arg for kw in init.args.kwonlyargs]
+    assert 'in_process_topics' in [kw.arg for kw in init.args.kwonlyargs]
     src = ast.unparse(init)
     assert 'SharedRobotTransformBuffer(self, tf_buffer)' in src
     assert 'self.lidar_tf_listener = None' in src
+    assert "'scan' not in self._in_process_topics" in src
+    assert "'us' not in self._in_process_topics" in src
+    assert "'imu' not in self._in_process_topics" in src
+
+
+def test_evidence_refresh_profile_publishes_only_when_profile_changes():
+    evidence_path = DRIVE / 'motion_limits/adapter/evidence.py'
+    tree = ast.parse(evidence_path.read_text(encoding='utf-8'))
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Evidence')
+    picked = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in ('refresh_profile', 'publish_calibration_applied')]
+    import hashlib
+    scope = {
+        'json': json, 'time': importlib.import_module('time'), 'math': importlib.import_module('math'),
+        'hashlib': hashlib, 'SimpleNamespace': SimpleNamespace, 'String': String,
+        'LIDAR_X': 0.0, 'rotation_radius': lambda r: r, 'RotationEnvelope': lambda *_a: None,
+    }
+    exec(compile(ast.Module(body=picked, type_ignores=[]), str(evidence_path), 'exec'), scope)
+    sent = []
+
+    class Holder:
+        def __init__(self):
+            self.robot_r, self.stop_d, self.clear_d = 0.08, 0.2, 0.3
+            self.rear_stop_d, self.rear_clear_d = 0.2, 0.3
+            self.lidar_yaw, self.cmd_linear_sign, self.half_w = 0.0, 1.0, 0.5
+            self.us_stop, self.us_clear, self.lidar_mount = 0.02, 0.03, None
+            self.calibration_lease = SimpleNamespace(active=None, report=lambda _t: {})
+            self.profile = SimpleNamespace(revision='boot')
+            self.profile_valid, self.profile_error = True, None
+            self._last_profile_key = None
+            self._sensor_only = True
+            self.profile_pub = Publisher()
+            self._params = {
+                'rotation_footprint_xy': [],
+                'safety_max_linear': 0.14, 'safety_max_angular': 0.10,
+                'footprint_guard_enabled': False, 'simulation_motion_sweep_enabled': False,
+                'imu_angular_velocity_unit': 'deg_s',
+            }
+
+        def get_parameter(self, name):
+            return SimpleNamespace(value=self._params[name])
+
+        def _refresh_distances(self):
+            pass
+
+        refresh_profile = scope['refresh_profile']
+        publish_calibration_applied = scope['publish_calibration_applied']
+
+    holder = Holder()
+    holder.refresh_profile()
+    holder.refresh_profile()
+    assert len(holder.profile_pub.sent) == 1
+    holder.stop_d = 0.25
+    holder.refresh_profile()
+    assert len(holder.profile_pub.sent) == 2
+    assert sent == []

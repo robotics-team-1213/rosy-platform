@@ -19,7 +19,8 @@ from .control.command_gate import CommandPolicy
 
 
 def make_node(*, parameter_overrides: Mapping[str, Any], sensor_only: bool,
-              namespace: str | None = None, tf_buffer: Any = None):
+              namespace: str | None = None, tf_buffer: Any = None,
+              in_process_topics: Any = None):
     """Create the absorbed ROS worker only after the profile opts in."""
     from rclpy.parameter import Parameter
 
@@ -32,6 +33,8 @@ def make_node(*, parameter_overrides: Mapping[str, Any], sensor_only: bool,
         kwargs["namespace"] = namespace
     if tf_buffer is not None:
         kwargs["tf_buffer"] = tf_buffer
+    if in_process_topics is not None:
+        kwargs["in_process_topics"] = in_process_topics
     return SafetyNode(**kwargs)
 
 
