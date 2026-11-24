@@ -216,6 +216,6 @@ def test_standalone_app_manifest_and_mime() -> None:
     assert "world-monitor.js" in build_bundle.WEB_FILES
     assert "omx-arm.js" in build_bundle.WEB_FILES
     manifest = json.loads((ROOT / "applications/world/web/manifest.webmanifest").read_text(encoding="utf-8"))
-    assert manifest["display"] == "standalone" and manifest["start_url"] == "/?view=factory"
+    assert manifest["display"] == "standalone" and manifest["start_url"] == "./?view=factory"
     assert serve.WorldHandler.extensions_map[".webmanifest"] == "application/manifest+json"
     assert (ROOT / "applications/world/open-app.ps1").is_file()

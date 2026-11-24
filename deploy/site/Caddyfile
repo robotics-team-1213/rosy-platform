@@ -24,6 +24,8 @@ import /etc/caddy/account/*.caddy
 		}
 		# The signed optional Monitoring overlay (D-936) mounts its routes here.
 		import /etc/caddy/monitoring/*.caddy
+		# Optional co-located Rosy World overlay (`/world/*`).
+		import /etc/caddy/world/*.caddy
 		reverse_proxy @lan_camera https://fleet:{$ROSY_FLEET_PORT} {
 			header_up X-Rosy-Lan-Camera 1
 			transport http {
