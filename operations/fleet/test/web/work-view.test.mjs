@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 const { register } = await import("node:module");
 register("./common-loader.mjs", import.meta.url);
 register("./resolve-console-assets.mjs", import.meta.url);
-const { workKey, workLine, workStatus, formatWorkTime, autoAdmitScope, policyScopeText, autoAdmitDetail, canAdmitWorkHere } = await import("../../../../applications/fleet/web/work/work-view.js");
+const { workKey, workLine, workStatus, formatWorkTime, autoAdmitScope, policyScopeText, autoAdmitDetail, canAdmitWorkHere, requestsNotice, requestsPause } = await import("../../../../applications/fleet/web/work/work-view.js");
 
 test("two ledgers can reuse the same ID without sharing selection", () => {
   assert.notEqual(workKey({source: "task", source_id: "same"}), workKey({source: "mission", source_id: "same"}));
@@ -26,6 +26,18 @@ test("D-763 8: a row reads the server's visible state, a wait first, the ledger 
   assert.equal(workLine({source: "task", device_id: "rosy_02", status: "RUNNING"}), "주행 · rosy_02 · 실행 중");
   assert.equal(workStatus("arrived"), "도착");
   assert.notEqual(workKey({source: "trip", source_id: "same"}), workKey({source: "cell_job", source_id: "same"}));
+});
+test("two same-device rows become distinguishable by the identifier tail and workspace/time tail when colliding", () => {
+  const id = "550e8400-e29b-41d4-a716-446655440000";
+  const base = {source: "trip", device_id: "rosy_45", status: "intervention", visible_state: "intervention"};
+  const a = workLine({...base, source_id: `${id}`}, true);
+  const b = workLine({...base, source_id: "TRIP-20261124-0042"}, true);
+  assert.notEqual(a, b);  // 운행 · rosy_45 · 개입 필요 꼬리가 겹치는 두 행을 갈라 놓는다
+  assert.match(a, /44665544/);
+  assert.match(b, /0042/);
+  assert.match(workLine({...base, source_id: id, workcell_id: "cell_ab"}, true), /cell_ab/);
+  assert.match(workLine({...base, source_id: id, updated_at: "2026-11-24T12:49:00+00:00"}, true), /\d{1,2}:\d{2}/);
+  assert.equal(workLine({...base, source_id: id}), "운행 · rosy_45 · 개입 필요");
 });
 
 // D-865 P3 — 승인 범위 판정·문구는 순수 함수다. 범위 밖·상한 소진·비활성은 배지 없음(사람 승인).
@@ -73,11 +85,21 @@ test("D-960: FleetR relays arm jobs without admitting them locally; owning cell 
 
 test("formatWorkTime handles Unix epoch seconds, ms, and ISO strings without 1970 dates", () => {
   for (const sample of [1795524570.123, 1795524570123, "2026-11-24T12:49:30.123+00:00"]) {
-    const out = formatWorkTime(sample);
-    assert.match(out, /2026/);
-    assert.doesNotMatch(out, /1970/);
+    assert.match(formatWorkTime(sample), /2026/);
+    assert.doesNotMatch(formatWorkTime(sample), /1970/);
   }
   for (const empty of [null, undefined, "", 0, -1, Number.NaN, "not-a-date"]) {
     assert.equal(formatWorkTime(empty), "미확인");
   }
+});
+
+test("a 403 on channel-requests says the permission line and pauses polling; 404 and server faults do not", () => {
+  assert.equal(requestsNotice(403), "대화 요청을 보려면 기명 운영자로 로그인해야 합니다.");
+  assert.equal(requestsNotice(404), "대화 요청 접수가 설정되지 않았습니다.");
+  assert.equal(requestsNotice(401), "기명 운영자 접속이 필요합니다.");
+  assert.equal(requestsNotice(500), "대화 요청 조회 실패");
+  assert.equal(requestsPause(403), true);
+  assert.equal(requestsPause(404), false);
+  assert.equal(requestsPause(401), false);
+  assert.equal(requestsPause(500), false);
 });

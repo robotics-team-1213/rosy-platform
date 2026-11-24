@@ -18,6 +18,7 @@ function buildSelectField(labelText, choices, selectedValue, onChange) {
   field.append(node("span", labelText));
   const select = node("select");
   select.className = "ui-field";
+  select.setAttribute("aria-label", labelText);
   select.setAttribute("data-work-read", "");
   for (const [val, lbl] of choices) {
     const opt = node("option", lbl);

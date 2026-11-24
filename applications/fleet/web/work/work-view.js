@@ -3,6 +3,7 @@ import { setOffBy } from "/common/cause-line.js";
 import { patchHidden, patchText } from "/common/control-dom.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
 import {owns, relays, unitScope} from "/console/assets/unit-scope.js";
+import { createPollGate } from "/console/assets/poll-gate.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
 import { createArmTransferView } from "/console/assets/arm-transfer-view.js";
 import { createTripProposalView } from "/console/assets/trip-proposal-view.js";
@@ -17,17 +18,17 @@ const approvals = {two_person: "두 사람 · 제안한 사람이 아닌 이름 
 const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
-export function formatWorkTime(value) {
-  if (value == null || value === "") return "미확인";
-  const ms = typeof value === "number"
-    ? (Number.isFinite(value) && value > 0 ? (value < 1e12 ? value * 1000 : value) : NaN)
-    : new Date(value).getTime();
-  return Number.isFinite(ms) ? new Date(ms).toLocaleString() : "미확인";
-}
+const workMs = v => (v == null || v === "") ? NaN : (typeof v === "number" ? (Number.isFinite(v) && v > 0 ? (v < 1e12 ? v * 1000 : v) : NaN) : new Date(v).getTime());
+export const formatWorkTime = v => { const ms = workMs(v); return Number.isFinite(ms) ? new Date(ms).toLocaleString() : "미확인"; };
 const workKind = row => ({task: "주행", trip: "운행", cell_job: "팔레트 적재"})[row.source] || "팔 작업";
 const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
 export const canAdmitWorkHere = (row, scope = unitScope()) => approvable(row) && owns("arms", scope) && !relays(scope);
-export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
+const idTail = v => String(v ?? "").split("-").pop().slice(0, 8);
+const shortStamp = v => { const ms = workMs(v); return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : ""; };
+export const workLine = (row, disambiguate = false) => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status),
+  ...(disambiguate ? [idTail(row.source_id), row.workcell_id || shortStamp(row.updated_at)] : [])].filter(Boolean).join(" · ");
+export const requestsNotice = s => s === 404 ? "대화 요청 접수가 설정되지 않았습니다." : s === 403 ? "대화 요청을 보려면 기명 운영자로 로그인해야 합니다." : s === 401 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
+export const requestsPause = status => status === 403;
 // D-865 P3 — 승인 범위 판정과 문구는 순수 함수다(node 시험 대상). 화면은 범위 사실을 읽어
 // 표시만 하고 승인 자체는 서버의 정책 principal이 한다: 사람 승인과 같은 검사를 전부 통과한
 // 제안만 범위 안에서 자동 승인된다. law(FL-*)·사람 점유·E-stop은 이 표시로 해제되지 않는다.
@@ -61,7 +62,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   // D-741 7 — 승인 대기와 끝난 작업은 같은 조회 결과를 화면에서 상태로 거른 것이다.
   const shown = {__proto__: null, pending: ["approval_pending"], done: ["ended"]}[query.get("show")];  // D-763 8: the server's visible state
   let rows = [], selected = null, inFlight = false, detailVersion = 0, busy = false, refusal = "";
-  let lastListSig = "", lastDetailSig = "", lastRequestsSig = "";
+  let lastListSig = "", lastDetailSig = "", lastRequestsSig = "", requestsPaused = false;  // 403 pause until reset()
   const newStatus = Object.assign(document.createElement("p"), {id: "work-new-status", role: "status",
     textContent: "만들 수 있는 작업을 확인하고 있습니다."});
   el("work-new").querySelector("ul").before(newStatus);
@@ -85,8 +86,11 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   el("work-overview").hidden = !active;
   // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다.
   if (active && !document.getElementById("work-policy-link")) {
-    el("work-overview").prepend(Object.assign(document.createElement("a"),
-      {id: "work-policy-link", href: "/console/policy", textContent: "학습 정책 승인 — 단계·승인 창·확인 요청"}));
+    const policyLink = Object.assign(document.createElement("a"),
+      {id: "work-policy-link", className: "ui-action-link", href: "/console/policy",
+        textContent: "학습 정책 승인 — 단계·승인 창·확인 요청"});
+    policyLink.dataset.kind = "quiet";
+    el("work-overview").prepend(policyLink);
   }
   // D-865 P3 — 승인 범위 readback과 운영자 전환. 범위 내용(로봇·종류·상한)은 사이트 설정이
   // 정하고 이 화면은 스위치만 보낸다(POST /api/fleet/policy-admission). 해제는 새 자동 승인만
@@ -105,9 +109,10 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   const policyBody = Object.assign(document.createElement("div"), {id: "work-policy-admission-body"});
   policyBody.append(policyStatus, policyToggle); policyPanel.append(policyBody);
   el("work-state").before(policyPanel);
-  let policy = null, policyBusy = false, policyAbsent = false, policyNotice = "";
+  let policy = null, policyBusy = false, policyNotice = "";
+  const policyGate = createPollGate();  // 404(이 Fleet에 기능 없음)면 reset 전까지 같은 404를 다시 두드리지 않는다
   function paintPolicy() {
-    if (policyAbsent) { patchHidden(policyPanel, true); return; }
+    if (policyGate.absent) { patchHidden(policyPanel, true); return; }
     patchHidden(policyPanel, false);
     patchText(policyStatus, policyNotice || policyScopeText(policy)
       || "자동 승인 범위를 확인하지 못했습니다.");
@@ -117,13 +122,15 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     setOffBy(policyToggle, reason);
   }
   async function refreshPolicy(life) {
-    try {
-      const read = await call("/api/fleet/policy-admission"); life.check();
-      policyAbsent = false; policy = read.status ?? null; policyNotice = "";
-    } catch (error) {
-      if (!life.current()) return;
-      if (error.status === 404) policyAbsent = true;
-      else policyNotice = "자동 승인 범위를 확인하지 못했습니다.";
+    if (policyGate.due()) {
+      try {
+        const read = await call("/api/fleet/policy-admission"); life.check();
+        policyGate.ok(); policy = read.status ?? null; policyNotice = "";
+      } catch (error) {
+        if (!life.current()) return;
+        if (error.status === 404) policyGate.fail(error.status, error.code);
+        else policyNotice = "자동 승인 범위를 확인하지 못했습니다.";
+      }
     }
     if (life.current()) paintPolicy();
   }
@@ -159,6 +166,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   function reset(message = "접속 후 작업을 확인할 수 있습니다.", preserveUnits = false) {
     if (!preserveUnits) { units.reset(); arms.reset(); trips.reset(); integrated.reset(); }
     channelRequestView.reset();
+    policyGate.reset(); requestsPaused = false;
     rows = []; selected = null; detailVersion++; lastListSig = "";
     showKinds();
     patchText(newStatus, message);
@@ -223,8 +231,11 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       patchText(el("work-evidence"), "필터에 맞는 작업을 선택하세요.");
     }
     const visibleRows = rows.filter(row => filter === "all" || row.source === filter);
+    const labelCounts = new Map();
+    for (const row of visibleRows) { const base = workLine(row); labelCounts.set(base, (labelCounts.get(base) || 0) + 1); }
+    const rowLabel = row => workLine(row, labelCounts.get(workLine(row)) > 1);
     const listSig = JSON.stringify(visibleRows.map(row => [
-      workKey(row), selected === workKey(row), row.status, workLine(row), autoAdmitScope(row, policy).member,
+      workKey(row), selected === workKey(row), row.status, rowLabel(row), autoAdmitScope(row, policy).member,
     ]));
     if (listSig !== lastListSig || (visibleRows.length > 0 && !list.firstElementChild)) {
       lastListSig = listSig;
@@ -237,7 +248,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
         button.setAttribute("data-work-read", "");
         button.setAttribute("aria-pressed", String(selected === workKey(row)));
         button.title = `${row.source} · ${row.source_id} · ${row.status}`;
-        button.textContent = workLine(row);
+        button.textContent = rowLabel(row);
         button.addEventListener("click", () => select(row));
         item.append(button);
         // D-865 P3 — 승인 대기 행의 자동 승인 범위 소속 표시(auto_admit 표기 규칙).
@@ -303,6 +314,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   }
   async function refreshRequests(life) {
     const requests = el("channel-requests"), state = el("channel-requests-state");
+    if (requestsPaused) return;  // 권한이 없으면 같은 403을 매 주기 두드리지 않는다
     try {
       const result = await call("/api/fleet/channel-requests"); life.check();
       const reqSig = JSON.stringify(result.rows.map(row => [row.request_id, row.received_at, row.content]));
@@ -330,8 +342,8 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     } catch (error) {
       if (!life.current()) return;
       channelRequestView.reset();
-      clearRequests(error.status === 404 ? "대화 요청 접수가 설정되지 않았습니다." :
-        error.status === 401 || error.status === 403 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패");
+      if (requestsPause(error.status)) requestsPaused = true;
+      clearRequests(requestsNotice(error.status));
     }
   }
   scope.listen(el("work-filter"), "change", paint);

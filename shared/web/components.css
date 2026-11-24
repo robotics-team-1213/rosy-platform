@@ -71,6 +71,9 @@ ui-button[reason]:not([reason=""]) > small[data-reason] { grid-column: 1 / -1; t
 ui-button[disabled][reason]:not([reason=""]) { color: var(--text-secondary); background: transparent; border-color: var(--surface-line); border-style: dashed; }
 ui-button > small[data-reason],
 ui-button[kind] > small[data-reason] { display: block; max-width: 100%; color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body); white-space: normal; }
+/* opt-in: 사유를 바깥 상태 줄이 대신 말하는 표면([data-reason-display="external"])은 버튼 안 사유 small을
+   시각에만 숨긴다(sr-only clip). 노드와 aria-describedby는 남아 화면 낭독기 계약(C1 reason)을 지킨다. */
+[data-reason-display="external"] ui-button[reason] > small[data-reason] { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 input.ui-field[type="file"]::file-selector-button { margin-inline-end: var(--gap-section); padding: var(--inset-chip); color: var(--button-secondary-ink); background: var(--button-secondary-bg); border: 1px solid var(--control-line); border-radius: var(--radius-control); font: inherit; cursor: pointer; }
 ui-button:focus-visible,
 ui-field:focus-visible,
