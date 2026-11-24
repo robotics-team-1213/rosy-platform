@@ -159,6 +159,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--work-dir", type=Path)
     parser.add_argument("--max-chunks", type=int, default=8)
     parser.add_argument("--timeout-s", type=float, default=0.8)
+    parser.add_argument("--jpeg-quality", type=int, default=cell_remote_policy.DEFAULT_JPEG_QUALITY)
     parser.add_argument("--margin-m", type=float, default=0.02)
     parser.add_argument("--min-z-m", type=float, default=-0.02)
     parser.add_argument("--proposer", required=True)
@@ -170,6 +171,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not args.proposer.strip() or not args.operator.strip() or args.proposer.strip() == args.operator.strip():
         raise SystemExit("--proposer and --operator must be distinct non-empty identities (D-1024)")
+    if not (50 <= args.jpeg_quality <= 100):
+        raise SystemExit(f"--jpeg-quality must be in 50..100, got {args.jpeg_quality}")
     if not args.dry_run and not (args.commissioning and args.person_at_switch):
         raise SystemExit("live two-arm policy execution requires --commissioning --person-at-switch (D-911)")
 
@@ -238,11 +241,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         shadows = {
             "a": cell_remote_policy.RemotePolicyShadow(
                 args.endpoint_url, "arm_a", args.revision_a,
-                token=token, timeout_s=args.timeout_s, policy_root=args.policy_root_a, config=configs["a"],
+                token=token, timeout_s=args.timeout_s, jpeg_quality=args.jpeg_quality,
+                policy_root=args.policy_root_a, config=configs["a"],
             ),
             "b": cell_remote_policy.RemotePolicyShadow(
                 args.endpoint_url, "arm_b", args.revision_b,
-                token=token, timeout_s=args.timeout_s, policy_root=args.policy_root_b, config=configs["b"],
+                token=token, timeout_s=args.timeout_s, jpeg_quality=args.jpeg_quality,
+                policy_root=args.policy_root_b, config=configs["b"],
             ),
         }
         offsets: dict[str, list[float]] = {}

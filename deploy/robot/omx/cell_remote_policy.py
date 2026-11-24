@@ -27,7 +27,7 @@ from cell_lerobot_shadow import CAMERA_ROLES, JOINT_NAMES, UNITS, read_sim_rule
 
 _HEX64_CHARS = frozenset("0123456789abcdef")
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
-MAX_TIMEOUT_S = 2.0
+MAX_TIMEOUT_S, DEFAULT_JPEG_QUALITY = 2.0, 85
 
 
 def _pos_int(val: Any) -> int | None:
@@ -62,7 +62,7 @@ def _rad_to_body_units(rad: float) -> float:
     return raw_tick * 200.0 / 4095.0 - 100.0
 
 
-def _encode_jpeg_bgr(image: Any, expected_hw: tuple[int, int]) -> bytes:
+def _encode_jpeg_bgr(image: Any, expected_hw: tuple[int, int], *, quality: int = DEFAULT_JPEG_QUALITY) -> bytes:
     import cv2
     import numpy as np
 
@@ -70,7 +70,7 @@ def _encode_jpeg_bgr(image: Any, expected_hw: tuple[int, int]) -> bytes:
     h, w = expected_hw
     if arr.ndim != 3 or arr.shape != (h, w, 3) or arr.dtype != np.uint8:
         raise ValueError(f"camera image shape/dtype {arr.shape}/{arr.dtype} != ({h}, {w}, 3)/uint8")
-    ok, encoded = cv2.imencode(".jpg", arr)
+    ok, encoded = cv2.imencode(".jpg", arr, [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)])
     if not ok:
         raise ValueError("cv2.imencode('.jpg', ...) failed")
     return bytes(encoded.tobytes())
@@ -85,7 +85,8 @@ class RemotePolicyShadow:
     def __init__(
         self, endpoint_url: str, arm_id: str, policy_revision: str, *,
         token: str | None = None, timeout_s: float = 0.8, expected_views: Mapping[str, tuple[int, int]] | None = None,
-        sim_rule: dict[str, Any] | None = None, policy_root: Path | None = None, config: dict[str, Any] | None = None, opener: Any = None,
+        sim_rule: dict[str, Any] | None = None, policy_root: Path | None = None, config: dict[str, Any] | None = None,
+        opener: Any = None, jpeg_quality: int = DEFAULT_JPEG_QUALITY,
     ) -> None:
         self._conn_lock = threading.Lock()
         self._conn: http.client.HTTPConnection | None = None
@@ -105,12 +106,15 @@ class RemotePolicyShadow:
             raise ValueError("bearer token cannot be blank")
         if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or not (0.0 < float(timeout_s) <= MAX_TIMEOUT_S):
             raise ValueError(f"timeout_s must be in (0, {MAX_TIMEOUT_S}], got {timeout_s!r}")
+        if type(jpeg_quality) is not int or not (50 <= jpeg_quality <= 100):
+            raise ValueError(f"jpeg_quality must be an int in [50, 100], got {jpeg_quality!r}")
 
         self.endpoint_url = endpoint_url.rstrip("/")
         self.arm_id = arm_id
         self.policy_revision = _validate_revision(policy_revision)
         self._token = token
         self.timeout_s = float(timeout_s)
+        self.jpeg_quality = jpeg_quality
         self._opener = opener
         self._scheme = parsed.scheme
         self._host = parsed.hostname or ""
@@ -324,7 +328,7 @@ class RemotePolicyShadow:
         encoded_frames: dict[str, str] = {}
         frame_hashes: dict[str, str] = {}
         for role, hw in self.image_views.items():
-            jpg = _encode_jpeg_bgr(frames[role], hw)
+            jpg = _encode_jpeg_bgr(frames[role], hw, quality=self.jpeg_quality)
             encoded_frames[role] = base64.b64encode(jpg).decode("ascii")
             frame_hashes[role] = sha256(jpg).hexdigest()
 

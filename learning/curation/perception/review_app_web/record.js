@@ -1,6 +1,7 @@
 import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
+import {domEl as node, makeUuid as uuid, fillSelectOptions as options, safeLocalUrl as safeLocalURL} from '/learning-ui.js';
 import {createRecordingReview} from '/record-review.js';
 const $=id=>document.getElementById(id),API='/api/learning/recording';
 const timingFields={'record-fps':'fps','record-camera-age':'max_camera_age_s','record-arm-age':'max_arm_age_s','record-camera-skew':'max_camera_skew_s','record-arm-skew':'max_arm_skew_s','record-gap':'max_gap_s'};
@@ -9,9 +10,7 @@ let snapshot={},session=null,token='',project='',connected=false,polling=false,p
 let sessionId=new URL(location.href).searchParams.get('session')||'',loadedSession='',profileSignature='',sourceSignature='',initialProfile=new URL(location.href).searchParams.get('profile')||'';
 const episodeNodes=new Map();
 const savedReview=createRecordingReview({request,onChange:availability});
-function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function error(message){$('record-error').hidden=!message;$('record-error').textContent=message||'';}
-function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 function storageKey(){return `rosy.recording.pending:${project}:${sessionId}`;}
 function readPending(){try{pending=JSON.parse(localStorage.getItem(storageKey())||'{}');}catch{pending={};}if(pending.create&&!session){$('record-name').value=pending.create.name;for(const [id,key] of Object.entries(timingFields))$(id).value=pending.create.timing[key]??'';initialProfile=pending.create.profile_id;}}
 function savePending(){localStorage.setItem(storageKey(),JSON.stringify(pending));}
@@ -49,7 +48,6 @@ function availability(){
   button('record-publish',base||busy||(!snapshot.import_available?'이 호스트에서는 ZIP을 내려받아 학습센터의 폴더 업로드를 사용하세요.':exp?.status!=='succeeded'?'자료 변환을 완료하세요.':''));$('record-publish').textContent=pending.publish?'같은 전달 요청 다시 확인':'학습센터로 자료 전달';
   for(const view of episodeNodes.values()){const e=view.episode,frozen=session?.export?'변환을 시작한 세션의 구성·회차는 고정됩니다. 새 녹화는 새 세션에서 시작하세요.':'',reason=base||busy||frozen||(live?'현재 회차를 먼저 정지하세요.':e.status!=='draft'?'확인 대기 회차만 판정할 수 있습니다.':!e.integrity_verified?'기록 무결성을 확인하지 못해 보관할 수 없습니다.':'');view.keep.disabled=!!reason;view.keep.reason=reason;view.discard.reason=base||busy||frozen||(live?'현재 회차를 정지하세요.':!['draft','invalid'].includes(e.status)?'확인 대기·무효 회차만 제외할 수 있습니다.':'');view.discard.disabled=!!view.discard.reason;view.outcome.disabled=!!mutations||!!frozen||!!live||e.status!=='draft'||!!pending['keep:'+e.id];view.review.reason=!connected?'연결을 다시 확인하세요.':busy||(live?'현재 회차를 정지한 뒤 저장 기록을 여세요.':!['draft','kept'].includes(e.status)||!e.integrity_verified?'무결성이 확인된 저장 회차를 선택하세요.':'');view.review.disabled=!!view.review.reason;}
 }
-function options(select,rows,placeholder){const signature=JSON.stringify(rows),previous=select.value;if(select.dataset.signature===signature)return;select.dataset.signature=signature;select.replaceChildren();for(const [value,label] of [['',placeholder],...rows]){const opt=node('option',label);opt.value=value;select.append(opt);}if(rows.some(([id])=>id===previous))select.value=previous;}
 function renderProfile(){
   const p=profile(),signature=JSON.stringify(p);if(signature===profileSignature)return;profileSignature=signature;$('record-profile-summary').replaceChildren();if(!p)return;
   const doc=p.profile,dl=node('dl',null,'record-facts');$('record-profile-summary').append(node('h3',doc.name));
@@ -57,7 +55,6 @@ function renderProfile(){
   const details=node('details');details.append(node('summary','구성 버전·물리 출처'),node('p',`저장 버전 ${p.revision}`,'record-note'));
   for(const c of doc.cameras)details.append(node('p',`${c.id} · 배치 ${c.placement} · 출처 ${c.source_identity} · 입력 ${c.input_key} · ${c.purposes.join(', ')} · ${c.shape.join(' × ')}`,'record-note'));$('record-profile-summary').append(details);
 }
-function safeLocalURL(value){if(typeof value!=='string'||!value.startsWith('/')||value.startsWith('//'))return null;try{const u=new URL(value,location.origin);return u.origin===location.origin?u.pathname+u.search:null;}catch{return null;}}
 function renderSources(){
   const sources=snapshot.sources||[],signature=JSON.stringify(sources);$('record-sources-empty').hidden=!!sources.length;if(signature===sourceSignature){for(const img of $('record-sources').querySelectorAll('img')){const url=new URL(img.src);url.searchParams.set('_record_preview',Date.now());img.src=url.pathname+url.search;}return;}sourceSignature=signature;$('record-sources').replaceChildren();
   for(const s of sources){const section=node('article',null,'record-source');section.dataset.kind=s.kind;section.append(node('h3',s.label||s.id));

@@ -216,31 +216,10 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     after = cell.frame("top")
     cv2.imwrite(str(frames / "after.jpg"), after)
     moved = cell_scene_guard.scene_moved(before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())])
+    rp.save_observations(frames, z_view=z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, scene_moved=moved)
     if moved:
         raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
-    if tcp_marks:  # each mark's arm point is the place of the jaw it is, so the map maps the TCP (jaws' middle)
-        import cell_jaw_side
-
-        why, marks, labels = cell_jaw_side.remap_marks(seen_jaws, config.get("params"))
-        (frames / "labels.json").write_text(json.dumps({"why": why, **(labels or {})}))
-        log({"jaw_labels": labels, "refused": why})
-        if why:
-            raise SystemExit(f"remap: {why}; no map saved; views in {frames}")
-    seen, marks = marks, consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
-    dropped = [{"pixel": list(p), "arm_m": list(a)} for p, a in seen if (p, a) not in marks]
-    if dropped:
-        log({"dropped_marks": dropped})
-    if not enough_agree(len(marks), len(seen)):
-        raise SystemExit(f"remap: only {len(marks)} marks agree of {len(seen)}")
-    return dict(fitted_map(config, marks, z_view), **{
-        "z_view": z_view,
-        "coarse": True,
-        "dropped_marks": dropped,
-        "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
-        "loo_error_mm": cal.loo_error_mm(marks),
-        "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        **({"marks": "tcp"} if tcp_marks else {}),
-    })
+    return rp.fit_remap_marks(config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
 
 
 def main(argv=None):
@@ -250,6 +229,7 @@ def main(argv=None):
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
     ap.add_argument("--plan-only", action="store_true", help="print each remap point's IK and verdict; opens no port or camera")
+    ap.add_argument("--replay-frames", type=Path, help="check: replay a saved remap-frames dir offline; opens no port or camera and writes no calibration")
     ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair", "post-eval", "depth-verify"], help="auto: run only these step kinds (remap, regions, pivot-near, "
                     "surface, consensus-repair, post-eval, depth-verify); a reviewed plan for one step must not run the others. 2026-11-15: a "
                     "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
@@ -271,6 +251,13 @@ def main(argv=None):
         lev = cell_map_fit.plan_leverage(points, config.get("sites") or {})
         print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config), "leverage": lev}), flush=True)
         return 2 if refused else 0
+    if args.replay_frames is not None:
+        if args.step != "check":
+            raise SystemExit("--replay-frames is offline read-only and only allowed with step 'check'")
+        record = rp.replay_observations(args.replay_frames, config, log=lambda row: None)
+        agrees = map_agrees(record, config["params"])
+        print(json.dumps({"replay": record["loo_error_mm"], "agrees": agrees, "record": record}, default=str), flush=True)
+        return 0 if agrees else 2
     cal_path = Path(config["calibration_path"]).expanduser()
     calibration = json.loads(cal_path.read_text()) if cal_path.exists() else {"schema": cal.SCHEMA, "sites": {}}
     targets = [(t.split(":")[0], tuple(float(v) for v in t.split(":")[1].split(","))) for t in args.targets]

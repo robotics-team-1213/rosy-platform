@@ -1,7 +1,15 @@
+import math
+
 import cv2
 import numpy as np
+import pytest
 
-from rosy_vision.detect import detect_markers, generate_marker_image
+from rosy_vision.detect import (
+    detect_markers,
+    generate_marker_image,
+    generate_qr_image,
+    parse_robot_qr_id,
+)
 
 
 def _jpeg_with_marker(marker_id=7):
@@ -53,3 +61,65 @@ def test_detect_markers_rereads_an_eight_pixel_sticker_the_full_frame_pass_rejec
     assert set(found) == {41}
     center = np.mean(found[41], axis=0)
     assert np.allclose(center, (604, 304), atol=1.0)
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("ROSY-42", 42),
+    ("ROSY-45", 45),
+    ("ROSY-46", 46),
+    ("ROSY-48", 48),
+    ("rosy_45", 45),
+    ("ROSY 42", 42),
+    ("BOX-123", None),
+    ("https://example.com/ROSY-45", None),
+    ("rosyov://host:8443/?t=abc&s=ceiling_north", None),
+    ("ROSY-100", None),
+    ("ROSY-45-X", None),
+])
+def test_parse_robot_qr_id(text, expected):
+    assert parse_robot_qr_id(text) == expected
+
+
+@pytest.mark.parametrize("angle_deg", [0, 30, 90, 180, 270])
+def test_detect_markers_decodes_rotated_robot_qr_and_preserves_top_edge(angle_deg):
+    frame = np.full((720, 1280, 3), 85, dtype=np.uint8)
+    qr = generate_qr_image("ROSY-45", 64, border_modules=2)
+    pad = 112
+    patch = np.full((pad, pad), 75, dtype=np.uint8)
+    off = (pad - 64) // 2
+    patch[off:off + 64, off:off + 64] = qr
+    mat = cv2.getRotationMatrix2D((pad / 2, pad / 2), angle_deg, 1.0)
+    rot = cv2.warpAffine(patch, mat, (pad, pad), borderValue=75, flags=cv2.INTER_LINEAR)
+    x0, y0 = 560, 280
+    frame[y0:y0 + pad, x0:x0 + pad] = cv2.cvtColor(rot, cv2.COLOR_GRAY2BGR)
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    assert ok
+
+    found = detect_markers(encoded.tobytes())
+    assert set(found) == {45}
+    assert 45 in found.qr_ids
+    quad = np.asarray(found[45], dtype=float)
+    center = quad.mean(axis=0)
+    assert np.allclose(center, (x0 + pad / 2, y0 + pad / 2), atol=2.5)
+    top_mid = (quad[0] + quad[1]) / 2
+    # In image coords (y down), getRotationMatrix2D(+angle) rotates top (-90 deg) CCW to (-90 - angle).
+    expected_rad = math.radians(-90.0 - angle_deg)
+    measured_rad = math.atan2(top_mid[1] - center[1], top_mid[0] - center[0])
+    assert abs(math.remainder(measured_rad - expected_rad, math.tau)) < math.radians(10.0)
+
+
+def test_detect_markers_ignores_non_robot_qr_and_keeps_aruco_together():
+    frame = np.full((720, 1280, 3), 85, dtype=np.uint8)
+    # Place non-robot QR + ArUco id 40 + robot QR ROSY-45
+    aruco_img = generate_marker_image(40, 48)
+    frame[100:148, 100:148] = cv2.cvtColor(aruco_img, cv2.COLOR_GRAY2BGR)
+    other_qr = generate_qr_image("BOX-123", 64, border_modules=2)
+    frame[100:164, 300:364] = cv2.cvtColor(other_qr, cv2.COLOR_GRAY2BGR)
+    robot_qr = generate_qr_image("ROSY-45", 64, border_modules=2)
+    frame[300:364, 500:564] = cv2.cvtColor(robot_qr, cv2.COLOR_GRAY2BGR)
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    assert ok
+
+    found = detect_markers(encoded.tobytes())
+    assert set(found) == {40, 45}
+    assert found.qr_ids == frozenset({45})

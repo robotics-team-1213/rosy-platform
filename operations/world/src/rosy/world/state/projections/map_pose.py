@@ -122,7 +122,7 @@ class MapPoseConfig:
     peer_after_camera_s: float = 10.0
     #: Robots whose confirmed camera track may anchor the pose (add_track); none by default, so main is unchanged.
     track_anchor_robots: tuple = ()
-    #: Identity binding modes ("led" lamp verdict | "motion" motion match) allowed to anchor.
+    #: Identity binding modes ("led" lamp verdict | "motion" motion match | "marker" QR/ArUco) allowed to anchor.
     track_modes: tuple = ("led",)
     #: A track moved less than this between two feeds gives no motion heading (camera noise is about 5 cm).
     track_heading_min_m: float = 0.15
@@ -137,8 +137,8 @@ class MapPoseConfig:
             if (not isinstance(getattr(self, name), tuple)
                     or not all(isinstance(r, str) and r for r in getattr(self, name))):
                 raise ValueError(f"fleet.map_pose.{name} must be a list of names")
-        if not set(self.track_modes) <= {"led", "motion"}:
-            raise ValueError("fleet.map_pose.track_modes may hold led and motion only")
+        if not set(self.track_modes) <= {"led", "motion", "marker"}:
+            raise ValueError("fleet.map_pose.track_modes may hold led, motion and marker only")
         for item in fields(self):
             if item.name in ("auto_locate_robots", "track_anchor_robots", "track_modes"):
                 continue

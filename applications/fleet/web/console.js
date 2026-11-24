@@ -43,6 +43,7 @@ import { createConsoleAuth } from "./console-auth.js";
 import { createConsoleGoal } from "./console-goal.js";
 import { createConsoleRefresh } from "./console-refresh.js";
 import { createAssistantPanel } from "/console/assets/assistant.js";
+import { createZoneBlueprintInspector } from "/console/assets/zone-blueprint-inspector.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -212,6 +213,8 @@ async function call(path, options = {}) {
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
 const assistant = createAssistantPanel({scope: pageScope, call, el, readSelection: () => view.focusRobot});
+const zoneBlueprint = createZoneBlueprintInspector({ scope: pageScope, call, el, log });
+if (el("zone-blueprint-open")) pageScope.listen(el("zone-blueprint-open"), "click", () => zoneBlueprint.open());
 
 // 발행 제어 띠·현장 경로·상태 폴링·전체 주행 취소는 console-refresh.js 팩토리가 가진다(D-798 3.2).
 // 목표 해제와 카드 열기는 아래에서 만들어지므로 부를 때 찾는다.
@@ -323,12 +326,13 @@ function resetRobotApps() { deviceDirectory.resetRobotApps(); }
 const { disarmGoal, focusGoalButton, commitWorldGoal, clearPinStart } = createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   render, confirmedAction, namedReason, selection,
   toWorld: (grid, col, row) => mapView.toWorld(grid, col, row),
-  refreshGuide: () => mapView.refreshGuide?.(),
+  refreshGuide: (opts) => mapView.refreshGuide?.(opts),
   queuedReason: (result) => roster.queuedReason(result),
   drawMap: () => mapView.draw(),
   scheduleDraw: () => mapView.scheduleDraw(),
   onSelectRobot: (robotId) => roster.openCard(robotId),
   onGoalFinished: (robotId) => rosterWorkspace.restoreAfterGoal(robotId),
+  onInspectZone: (placeId) => zoneBlueprint.open(placeId),
 });
 view.dispatchGoalToPoint = (point, placeLabel = "", placeId = "") => commitWorldGoal(point, placeLabel, placeId);
 
@@ -454,6 +458,7 @@ cellStage = createCellCockpitStage({
     pathSample.vision = sample;
     paintSitePath();
   },
+  onOpenBlueprint: (zoneId) => zoneBlueprint.open(zoneId),
 });
 layoutConsole();
 
@@ -465,7 +470,7 @@ const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = creat
   dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
   refreshRobotApps, refreshDispatchControl, refreshDiscovery: whenDiscovery(refreshDiscovery), inbox,
   refreshVision: whenDrive(() => visionView.refreshSources()),
-  onLock: () => { rosterWorkspace.close(); cellStage?.pause(); },
+  onLock: () => { rosterWorkspace.close(); cellStage?.pause(); zoneBlueprint.close(); },
   clearVisionSample: () => { pathSample.vision = null; paintSitePath(); } });
 
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가

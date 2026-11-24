@@ -81,6 +81,19 @@ function projectToPoly(poly, px, py) {
   return best;
 }
 
+export function nearestLaneHeading(siteMap, point) {
+  if (!Array.isArray(siteMap?.edges) || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+  let best = null;
+  for (const e of siteMap.edges) {
+    if (!Array.isArray(e.polyline) || e.polyline.length < 2) continue;
+    const sp = projectToPoly(e.polyline, point.x, point.y);
+    if (sp.dist > Math.max(Number(e.width_m) || 0.2, 0.25) || (best && sp.dist >= best.dist)) continue;
+    const [x0, y0] = e.polyline[sp.segIdx], [x1, y1] = e.polyline[sp.segIdx + 1];
+    if (Math.hypot(x1 - x0, y1 - y0) >= 1e-6) best = { yaw: Math.atan2(y1 - y0, x1 - x0), dist: sp.dist };
+  }
+  return best;
+}
+
 function slicePoly(poly, sFrom, sTo) {
   const forward = sTo >= sFrom;
   const pts = forward ? poly : [...poly].reverse();

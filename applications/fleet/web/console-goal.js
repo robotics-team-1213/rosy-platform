@@ -3,8 +3,8 @@ import { isOperator } from "/console/assets/authorization.js";
 import {randomUUID} from "/console/assets/uuid.js";
 // 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
 import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
-import { pinPrefill } from "./localization-badge.js";
-import { roadPolylineBetween } from "/console/assets/guide-layer.js";
+import { pinPrefill, robotMapPose } from "./localization-badge.js";
+import { nearestLaneHeading, roadPolylineBetween } from "/console/assets/guide-layer.js";
 import { planPolylines, planSummaryText, planTrip, startTrip, tripPoseReason, tripRefusalText, tripStartReason } from "/console/assets/site-map-model.js";
 import { gridCellOf } from "./map-datum.js";
 
@@ -25,11 +25,28 @@ const planMetrics = (plan) => ({
   ...(Number.isFinite(plan.length_m) ? { length_m: plan.length_m } : {}),
   ...(Number.isFinite(plan.eta_s) ? { eta_s: plan.eta_s } : {}),
 });
+const mkEl = (tag, cls, txt) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (txt != null) n.textContent = txt;
+  return n;
+};
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
   toWorld, refreshGuide, queuedReason, drawMap = () => {}, scheduleDraw = drawMap, onSelectRobot = () => {},
-  selection = null, onGoalFinished = () => {} }) {
+  selection = null, onGoalFinished = () => {}, onInspectZone = null }) {
   let goalPlanSeq = 0;
+  let suppressClickUntil = 0;
+
+  function applyPinnedPose(robotId, pose) {
+    if (!pose || !Number.isFinite(pose.x) || !Number.isFinite(pose.y)) return;
+    const rows = [...(view.guide?.robots || [])], idx = rows.findIndex((row) => row.robot_id === robotId);
+    const patchedPose = { ...(idx >= 0 ? rows[idx].pose : null), ...pose };
+    if (idx >= 0) rows[idx] = { ...rows[idx], pose: patchedPose };
+    else rows.push({ robot_id: robotId, online: true, pose: patchedPose, lane: null, findings: [] });
+    view.guide = { ...view.guide, map_version: view.activeSiteMap?.version ?? view.guide?.map_version ?? null, robots: rows };
+    drawMap(); render();
+  }
 
   const setGoal = (patch) => { view.selectedGoal = { ...view.selectedGoal, ...patch, at: Date.now() }; drawMap(); render(); };
   function disarmGoal(reason) {
@@ -126,13 +143,23 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
 
     let prePlanned = null;
     if (viaTrip) {
+      const corePose = robotMapPose(selectedRobot);
       const blocked = !siteMapId ? "현장 지도 활성화 필요: 활성 지도가 없어 보내지 않습니다"
-        : !placeId ? "차로 위 아님: 지도의 장소를 찍으세요"
         : !view.guide ? "위치 확인 중: 잠시 뒤 다시 찍으세요"
-        : tripPoseReason(view.guide, robotId, view.activeSiteMap);
+        : tripPoseReason(view.guide, robotId, view.activeSiteMap, corePose);
       if (blocked) { setGoal({ status: "BLOCKED", statusText: blocked }); log(`${robotId} 출발 보류 · ${blocked}`, "bad"); return; }
       setGoal({ status: "PLANNING", statusText: "서버 경로 계산 중…" });
-      try { prePlanned = await planTrip(call, robotId, { to: placeId }); life.check(); } catch (err) {
+      const tripTarget = placeId || { x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)) };
+      const canNav2 = (selectedRobot?.capabilities?.controls?.items || []).some(
+        (item) => item?.kind === "base_velocity" && Array.isArray(item.drive_modes) && item.drive_modes.includes("free"));
+      try {
+        try { prePlanned = await planTrip(call, robotId, { to: tripTarget }); } catch (err) {
+          if (canNav2 && (err?.code === "TRIP_LANE_CAMERA_UNAVAILABLE" || err?.code === "TRIP_MODE_UNSUPPORTED")) {
+            prePlanned = await planTrip(call, robotId, { to: tripTarget, drive_mode: "nav2" });
+          } else throw err;
+        }
+        life.check();
+      } catch (err) {
         if (err?.name === "AbortError" || seq !== goalPlanSeq) return;
         const refusal = tripRefusalText(err);
         setGoal({ status: "BLOCKED", statusText: refusal });
@@ -394,156 +421,120 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     const hoverSig = JSON.stringify([title, badge, badgeTone, lines, bars, footer]);
     if (hoverSig !== lastHoverSig || !card.firstElementChild) {
       lastHoverSig = hoverSig;
-      const headRow = document.createElement("div"); headRow.className = "hover-card-head";
-      const strong = document.createElement("strong"); strong.textContent = title;
-      headRow.append(strong, uiTag(badge, badgeTone, "inline"));
-      const dl = document.createElement("dl"); dl.className = "hover-card-grid";
-      for (const [k, v] of lines) { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); }
-      const barBox = document.createElement("div"); barBox.className = "hover-bars";
+      const headRow = mkEl("div", "hover-card-head"), dl = mkEl("dl", "hover-card-grid"), barBox = mkEl("div", "hover-bars");
+      headRow.append(mkEl("strong", "", title), uiTag(badge, badgeTone, "inline"));
+      for (const [k, v] of lines) dl.append(mkEl("dt", "", k), mkEl("dd", "", v));
       for (const [label, valText, pct, tone] of bars) {
-        const row = document.createElement("div"); row.className = "gauge-row-compact";
-        const meta = document.createElement("div"); meta.className = "gauge-meta-line";
-        const lSpan = document.createElement("span"); lSpan.textContent = label;
-        const vStrong = document.createElement("strong"); vStrong.textContent = valText;
-        meta.append(lSpan, vStrong);
+        const row = mkEl("div", "gauge-row-compact"), meta = mkEl("div", "gauge-meta-line");
+        meta.append(mkEl("span", "", label), mkEl("strong", "", valText));
         row.append(meta, makeSvgBar(pct, tone));
-        barBox.appendChild(row);
+        barBox.append(row);
       }
-
-      const foot = document.createElement("p"); foot.className = "hover-card-foot"; foot.textContent = footer;
-      card.replaceChildren(headRow, dl, ...(bars.length ? [barBox] : []), foot);
+      card.replaceChildren(headRow, dl, ...(bars.length ? [barBox] : []), mkEl("p", "hover-card-foot", footer));
     }
     patchHidden(card, false);
   }
 
   function clearMapHover() {
-    if (view.pointerWorld || view.hoverWorld || view.hoverEntity) {
-      view.pointerWorld = null; view.hoverWorld = null; view.hoverEntity = null;
-      const readout = el("map-cursor-readout");
-      if (readout) { readout.hidden = true; readout.textContent = ""; }
-      renderHoverCard(null);
-      scheduleDraw();
-    }
+    if (!view.pointerWorld && !view.hoverWorld && !view.hoverEntity) return;
+    view.pointerWorld = view.hoverWorld = view.hoverEntity = null;
+    const readout = el("map-cursor-readout");
+    if (readout) { readout.hidden = true; readout.textContent = ""; }
+    renderHoverCard(null);
+    scheduleDraw();
   }
 
   pageScope.listen(el("map-canvas"), "pointermove", (event) => {
     const world = (view.map || view.siteMap) && canvasWorld(event);
     if (!world) { clearMapHover(); return; }
-    const {x, y} = world;
-    view.pointerWorld = {x, y};
+    const { x, y } = world;
+    view.pointerWorld = { x, y };
     const readout = el("map-cursor-readout");
     if (readout) {
-      const signed = (value) => `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
-      const next = `X ${signed(x)} m · Y ${signed(y)} m · 칸 ${gridCellOf(x, y).label}`;
+      const s = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`, next = `X ${s(x)} m · Y ${s(y)} m · 칸 ${gridCellOf(x, y).label}`;
       if (readout.textContent !== next) readout.textContent = next;
       readout.hidden = false;
     }
-    const places = view.activeSiteMap?.map?.places || [];
     let bestPlace = null, bestDist = 0.13;
-    for (const place of places) {
-      const d = Math.hypot(place.x - world.x, place.y - world.y);
+    for (const place of view.activeSiteMap?.map?.places || []) {
+      const d = Math.hypot(place.x - x, place.y - y);
       if (d < bestDist) { bestDist = d; bestPlace = place; }
     }
     let hoverEntity = null;
     for (const r of view.guide?.robots || []) {
-      if (r.pose && Math.hypot(r.pose.x - world.x, r.pose.y - world.y) <= 0.11) {
-        hoverEntity = { kind: "pinky", id: r.robot_id, guideRow: r };
-        break;
-      }
+      if (r.pose && Math.hypot(r.pose.x - x, r.pose.y - y) <= 0.11) { hoverEntity = { kind: "pinky", id: r.robot_id, guideRow: r }; break; }
     }
     if (!hoverEntity && view.layers?.omx !== false) {
       for (const anc of view.anchors || []) {
-        if (anc.kind === "omx_ai") {
-          const hx = anc.head_x ?? anc.base_x, hy = anc.head_y ?? anc.base_y;
-          if (distToSegment(world.x, world.y, anc.base_x, anc.base_y, hx, hy) <= 0.12) {
-            hoverEntity = { kind: "omx_ai", id: anc.target_id, anchor: anc };
-            break;
-          }
+        if (anc.kind === "omx_ai" && distToSegment(x, y, anc.base_x, anc.base_y, anc.head_x ?? anc.base_x, anc.head_y ?? anc.base_y) <= 0.12) {
+          hoverEntity = { kind: "omx_ai", id: anc.target_id, anchor: anc }; break;
         }
       }
     }
     if (!hoverEntity && bestPlace) hoverEntity = { kind: "place", id: bestPlace.id, place: bestPlace };
     view.hoverEntity = hoverEntity;
-    view.hoverWorld = { x: bestPlace ? bestPlace.x : world.x, y: bestPlace ? bestPlace.y : world.y, place: bestPlace };
-    renderHoverCard(hoverEntity);
-    scheduleDraw();
+    view.hoverWorld = { x: bestPlace ? bestPlace.x : x, y: bestPlace ? bestPlace.y : y, place: bestPlace };
+    renderHoverCard(hoverEntity); scheduleDraw();
   });
   pageScope.listen(el("map-canvas"), "pointerleave", clearMapHover);
   pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
-    if (!view.pinning || (!view.map && !view.siteMap)) return;
-    pinStart = canvasWorld(event);
+    if (view.pinning && (view.map || view.siteMap)) pinStart = canvasWorld(event);
   });
   pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
-    const life = pageScope.capture();
-    const start = pinStart, end = canvasWorld(event);
+    const life = pageScope.capture(), start = pinStart, end = canvasWorld(event), robotId = view.pinning;
     pinStart = null;
-    const robotId = view.pinning;
     if (!robotId || !start) return;
+    suppressClickUntil = Date.now() + 250;
     const dragged = end && Math.hypot(end.px - start.px, end.py - start.py) >= 3;
-    const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robotId);
-    const current = guideRow?.pose;
-    const yaw = dragged ? Math.atan2(end.y - start.y, end.x - start.x) : (typeof current?.yaw === "number" ? current.yaw : 0);
-    view.pinning = null;
-    el("map-canvas").classList.add("idle");
-    render();
+    const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robotId), current = guideRow?.pose;
+    view.pinning = null; el("map-canvas").classList.add("idle"); render();
     let led = null;
-    try {
-      led = pinPrefill(await call("/api/fleet/tracking/identity", { signals: [life.signal] }), guideRow, robotId);
-    } catch (error) {
-      if (error.name === "AbortError") return;
-    }
+    try { led = pinPrefill(await call("/api/fleet/tracking/identity", { signals: [life.signal] }), guideRow, robotId); } catch (e) { if (e.name === "AbortError") return; }
     if (!life.current()) return;
     const place = led || start;
+    const yaw = dragged ? Math.atan2(end.y - start.y, end.x - start.x)
+      : typeof current?.yaw === "number" ? current.yaw : (nearestLaneHeading(view.activeSiteMap?.map, place)?.yaw ?? 0);
     const deg = (yaw * 180 / Math.PI).toFixed(0);
     try {
       const pose = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/map-pin`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ x: place.x, y: place.y, yaw }), signals: [life.signal] });
       if (!life.current()) return;
+      applyPinnedPose(robotId, pose);
       log(`${robotId} 운영자 핀 (${place.x.toFixed(2)}, ${place.y.toFixed(2)}) ${deg}° · ${{ LOCALIZED: "확정", DEGRADED: "추정" }[pose?.state] || "위치 모름"}`, "good");
-      refreshGuide();
+      refreshGuide({ force: true });
     } catch (err) {
       if (err.name !== "AbortError") log(`${robotId} 위치 찍기 거절 — ${err.message}`, "bad");
     }
   });
 
   pageScope.listen(el("map-canvas"), "click", async (event) => {
-    const life = pageScope.capture();
-    life.check();
-    if (view.pinning) return;
+    const life = pageScope.capture(); life.check();
+    if (view.pinning || Date.now() < suppressClickUntil) { suppressClickUntil = 0; return; }
     if (!view.map && view.siteMap) {
       const world = canvasWorld(event);
       if (!world) return;
+      const pickFocus = (id, msg) => { view.focusAnchorId = id; selection?.set?.(id, { source: "map" }); log(msg, "good"); render(); };
       for (const r of view.guide?.robots || []) {
         if (r.pose && Math.hypot(r.pose.x - world.x, r.pose.y - world.y) <= 0.10) {
-          view.focusAnchorId = r.robot_id;
-          selection?.set?.(r.robot_id, { source: "map" });
-          log(`${r.robot_id} 선택됨 · 우측 도크에서 패널을 열거나 선택한 로봇의 목적지를 지도에서 찍으세요`, "good");
-          render();
-          return;
+          return pickFocus(r.robot_id, `${r.robot_id} 선택됨 · 우측 도크에서 패널을 열거나 선택한 로봇의 목적지를 지도에서 찍으세요`);
         }
       }
       for (const anc of view.anchors || []) {
-        if (anc.kind === "omx_ai") {
-          const dBase = Math.hypot(anc.base_x - world.x, anc.base_y - world.y);
-          const dHead = Math.hypot((anc.head_x ?? anc.base_x) - world.x, (anc.head_y ?? anc.base_y) - world.y);
-          if (Math.min(dBase, dHead) <= 0.13) {
-            view.focusAnchorId = anc.target_id;
-            selection?.set?.(anc.target_id, { source: "map" });
-            log(`${anc.label} 선택됨 · 우측 인스펙터와 도크 선택이 갱신되었습니다`, "good");
-            render();
-            return;
-          }
+        if (anc.kind === "omx_ai" && Math.min(Math.hypot(anc.base_x - world.x, anc.base_y - world.y), Math.hypot((anc.head_x ?? anc.base_x) - world.x, (anc.head_y ?? anc.base_y) - world.y)) <= 0.13) {
+          return pickFocus(anc.target_id, `${anc.label} 선택됨 · 우측 인스펙터와 도크 선택이 갱신되었습니다`);
         }
       }
-      const activeRobotId = view.selected;
-      if (!activeRobotId) return;
-      const places = view.activeSiteMap?.map?.places || [];
       let bestPlace = null, bestDist = 0.14;
-      for (const place of places) {
+      for (const place of view.activeSiteMap?.map?.places || []) {
         const d = Math.hypot(place.x - world.x, place.y - world.y);
         if (d < bestDist) { bestDist = d; bestPlace = place; }
       }
+      let activeRobotId = view.selected;
+      if (!activeRobotId && view.focusRobot && isOperator(auth.role) && !namedReason() && (bestPlace || nearestLaneHeading(view.activeSiteMap?.map, world))) {
+        view.selected = activeRobotId = view.focusRobot;
+      }
+      if (!activeRobotId) { if (bestPlace) onInspectZone?.(String(bestPlace.id)); return; }
       const targetPoint = bestPlace ? { x: bestPlace.x, y: bestPlace.y } : { x: world.x, y: world.y };
       await commitWorldGoal(targetPoint, bestPlace ? `${bestPlace.name || bestPlace.id} (${bestPlace.id})` : "", bestPlace ? String(bestPlace.id) : "");
       life.check();

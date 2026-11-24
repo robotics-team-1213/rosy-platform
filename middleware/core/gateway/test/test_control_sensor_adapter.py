@@ -663,3 +663,20 @@ def test_policy_required_matching_the_mode_builds_and_binds(mode, required):
 
     assert adapter.bind_safety(safety) is True
     assert safety.calls == [(mode, adapter.policy)]
+
+
+def test_build_control_adapter_forwards_tf_buffer_only_when_provided():
+    seen_calls = []
+
+    def factory(**kwargs):
+        seen_calls.append(kwargs)
+        return FakeSensorNode(**kwargs)
+
+    build_control_adapter({"mode": "shadow"}, parameters={},
+                          sensor_node_factory=factory, **_policy_only())
+    assert "tf_buffer" not in seen_calls[-1]
+
+    shared = object()
+    build_control_adapter({"mode": "shadow"}, parameters={},
+                          sensor_node_factory=factory, tf_buffer=shared, **_policy_only())
+    assert seen_calls[-1]["tf_buffer"] is shared

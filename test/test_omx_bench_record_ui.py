@@ -1335,3 +1335,45 @@ console.log('PASS');
 '''
 
 
+def test_leader_check_renders_on_arm_cards_and_notice(tmp_path):
+    import shutil, subprocess
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node.js is unavailable')
+    harness = tmp_path / 'leader_check_ui.js'
+    harness.write_text(r'''
+const fs=require('fs'),path=require('path'),vm=require('vm');
+const dir=process.argv[2];
+const mk=(tag)=>({tagName:tag||'div',className:'',textContent:'',title:'',hidden:false,disabled:false,dataset:{},style:{},children:[],
+  classList:{add(){},remove(){},toggle(){},contains(){return false}},
+  setAttribute(){},append(...xs){this.children.push(...xs);},addEventListener(){},
+  querySelector(){return null},querySelectorAll(){return []},closest(){return {parentElement:{hidden:false}};}});
+const bar=mk('div'), notices=[];
+const byId={'arm-card-bar':bar,'bench-form':{arm:{value:'arm_a'},config:{value:'c',selectedOptions:[{}]},caps:{value:'k',selectedOptions:[{}]},name:{value:'live-a'},rig_revision:{value:'r1'},task:{value:''}},'cal-robot-list':mk(),'cal-leader-list':mk(),'binding-issues':Object.assign(mk(),{hidden:true}),'start-guard-note':mk(),'stop-note':mk()};
+const ctx={console,document:{getElementById:id=>byId[id]||(byId[id]=mk()),createElement:t=>mk(t),querySelectorAll:()=>[]},
+  choices:{arms:['arm_a','arm_s'],arm_connectivity:{arm_a:{connected:true,follower_connected:true,leader_connected:true},arm_s:{connected:true,follower_connected:true,leader_connected:true}},instances:{arm_a:'f1',arm_s:'f2'},arm_bindings:{arm_a:{},arm_s:{}}},
+  armContractValid:()=>true,armVerifiedBindings:()=>({}),lastStatus:{status:'idle',active_locks:[]},statusLoaded:true,benchSessionActive:()=>false,poseInFlight:false,startInFlight:false,stopInFlight:false,cameraRestartInFlight:false,NAME_RE:/^[a-z0-9-]+$/,poseFeedbackUntil:0,poseFeedbackMsg:'',
+  lastArmsStatus:{arm_a:{connected:true,follower_connected:true,leader_connected:true},arm_s:{connected:true,follower_connected:true,leader_connected:true}},
+  lastLeaderCheck:{arm_a:{over_limit:false,max_deg:2.8},arm_s:{over_limit:true,max_deg:347.9,message:'손으로 가깝게 옮기세요'}},
+  f:byId['bench-form'],$:id=>byId[id]||(byId[id]=mk()),
+  setTimeout,clearTimeout,setInterval:()=>0,clearInterval,cueInit:false,prevCueFault:false,lastTelemetry:null,lastCamState:null,
+  setNotice:(id,tone,msg)=>notices.push([id,tone,msg]),clearNotice:(id)=>notices.push([id,'clear','']),
+  updateCameraRecordingMaskHook(){},updateCameraRecordingMask(){},updateGoalSummaryRows(){},renderCapsEditor(){},renderParamsPanel(){}};
+ctx.window=ctx;ctx.globalThis=ctx;vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(path.join(dir,'bench_record_params.js'),'utf8'),ctx);
+vm.runInContext(fs.readFileSync(path.join(dir,'bench_record_status.js'),'utf8'),ctx);
+ctx.renderParamsPanel=()=>{};
+ctx.renderArmCards();
+const txt=(n)=>n.textContent+(n.children||[]).map(txt).join('|');
+const out=txt(bar);
+if(!out.includes('LΔ2.8°')||!out.includes('리더 348° 초과')||!out.includes('LΔ348°!')){console.error('BAD CARDS:',out);process.exit(1);}
+byId['bench-form'].arm.value='arm_s';
+ctx.validateStart();
+const w=notices.find(x=>x[0]==='leader-check'&&x[1]==='warn');
+if(!w||!w[2].includes('손으로 가깝게')){console.error('BAD NOTICE:',notices);process.exit(1);}
+console.log('PASS');
+''', encoding='utf-8')
+    run = subprocess.run([node, str(harness), str(ROOT / 'deploy/robot/omx')], capture_output=True, text=True)
+    assert run.returncode == 0, run.stdout + run.stderr
+
+

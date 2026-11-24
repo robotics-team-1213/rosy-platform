@@ -16,6 +16,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from bench_record_preflight import check_dataset_cameras
+
 DEFAULT_HF_TEAM_ORG = "robotteam"
 DEFAULT_HF_DATASET_REPO = "robotteam/rosy-omx-data"
 CONFIG_FILE = ".bench-handoff-config.json"
@@ -202,6 +204,7 @@ def verify_sealed_collection(collection_dir: Path) -> dict:
     ep_m, ep_i = manifest.get("total_episodes"), info.get("total_episodes")
     if type(ep_m) is not int or type(ep_i) is not int or ep_m < 1 or ep_i < 1 or not parquets:
         raise ValueError(f"에피소드(parquet >= 1)가 없는 빈 컬렉션은 전송할 수 없습니다: {collection_dir.name}")
+    check_dataset_cameras(collection_dir / "dataset")
     return {
         "collection": collection_dir.name,
         "manifest": manifest,

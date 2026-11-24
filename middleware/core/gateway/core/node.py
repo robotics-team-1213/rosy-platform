@@ -181,9 +181,14 @@ class RosyCoreNode(Node):
                       (limits.manual_linear, limits.manual_angular),
                       (limits.fleet_linear, limits.fleet_angular)),
                 overlay=sensor_cfg.get("parameters") or {}, simulation=simulation)
+        from rclpy.duration import Duration
+        from tf2_ros import Buffer
+
+        shared_tf_buffer = Buffer(cache_time=Duration(seconds=10.0))
         namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
         self.control_adapter, notes = build_control_adapter(
-            sensor_cfg, parameters={**(params.parameters if params else {}), "use_sim_time": use_sim_time}, namespace=namespace,
+            sensor_cfg, parameters={**(params.parameters if params else {}), "use_sim_time": use_sim_time},
+            namespace=namespace, tf_buffer=shared_tf_buffer,
             policy_required=self.core.safety.policy_required)
         for note in notes:
             self.get_logger().warning(note)
@@ -211,7 +216,7 @@ class RosyCoreNode(Node):
         )
 
         from core.bridge.ros_bridge import RosBridge
-        self.bridge = RosBridge(self, self.core)
+        self.bridge = RosBridge(self, self.core, tf_buffer=shared_tf_buffer)
 
         self.get_logger().info(
             f"core up: robot_id={self.core.identity.robot_id} model={profile.model}")

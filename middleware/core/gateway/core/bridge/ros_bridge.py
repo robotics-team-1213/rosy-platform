@@ -16,7 +16,7 @@ import threading
 import time
 import traceback
 from datetime import datetime, timezone  # noqa: F401 — re-exported
-from typing import Optional  # noqa: F401 — re-exported
+from typing import Any, Optional  # noqa: F401 — re-exported
 
 import rclpy
 from rclpy.action import ActionClient
@@ -89,7 +89,7 @@ _LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
 
 
 class RosBridge(RosBridgeHelpersMixin):
-    def __init__(self, node: Node, services) -> None:
+    def __init__(self, node: Node, services, *, tf_buffer: Any = None) -> None:
         self._node = node
         self._svc = services
         self._mirror = SensorMirror()  # /sensors imu·odometry·wheels·motor·dock, converted on GET
@@ -110,7 +110,7 @@ class RosBridge(RosBridgeHelpersMixin):
         self.route_client = ActionClient(node, NavigateThroughPoses, "navigate_through_poses")
         self.plan_client = ActionClient(node, ComputePathToPose, "compute_path_to_pose")
         self.path_client = ActionClient(node, FollowPath, "follow_path")
-        self.tf_buffer = Buffer(cache_time=Duration(seconds=10.0))
+        self.tf_buffer = tf_buffer if tf_buffer is not None else Buffer(cache_time=Duration(seconds=10.0))
         self.tf_listener = TransformListener(self.tf_buffer, node)
 
         node.create_subscription(Odometry, "odom", self._on_odom, 10)
