@@ -1,5 +1,8 @@
 """Subject: saved-map observation agreement and expiring localization authority."""
+from dataclasses import dataclass
 import math
+from typing import Optional
+
 import numpy as np
 #: Refinement around one global seed: +-5 cm in 1 cm steps, +-5 deg in 1 deg steps.
 GLOBAL_OFFSETS = np.array(np.meshgrid(
@@ -24,6 +27,60 @@ def valid_beams(ranges, angles):
     ranges, angles = np.asarray(ranges, dtype=float), np.asarray(angles, dtype=float)
     valid = np.isfinite(ranges) & (ranges > .05) & np.isfinite(angles)
     return ranges[valid], angles[valid]
+
+
+@dataclass(frozen=True)
+class AgreementBreakdown:
+    """Per-beam diagnostic breakdown and occlusion-robust score for one sensor pose."""
+
+    total: int
+    hit: int
+    miss_wall_pierced: int
+    miss_foreground: int
+    miss_unknown: int
+    raw_score: float
+    robust_score: float
+    sectors_hit: int
+    sector_mask: int
+    fg_cluster_count: int
+    rejected_reason: Optional[str]
+
+
+def _count_foreground_clusters(ranges, angles, short_free, min_cluster_beams: int) -> tuple[int, int]:
+    """Count short free-space stops forming contiguous angular foreground clusters."""
+    n = len(ranges)
+    if not n or not np.any(short_free):
+        return 0, 0
+    wrapped = ((angles + math.pi) % (2. * math.pi)) - math.pi
+    order = np.argsort(wrapped, kind='mergesort')
+    runs = []
+    current = []
+    for pos, idx in enumerate(order):
+        if not short_free[idx]:
+            if current:
+                runs.append(current)
+                current = []
+            continue
+        if not current:
+            current = [idx]
+            continue
+        prev = current[-1]
+        d_ang = abs(float(wrapped[idx] - wrapped[prev]))
+        d_rng = abs(float(ranges[idx] - ranges[prev]))
+        if d_ang <= 0.12 and d_rng <= 0.35:
+            current.append(idx)
+        else:
+            runs.append(current)
+            current = [idx]
+    if current:
+        runs.append(current)
+    if (len(runs) >= 2 and runs[0][0] == order[0] and runs[-1][-1] == order[-1]
+            and abs((float(wrapped[order[0]]) + 2. * math.pi) - float(wrapped[order[-1]])) <= 0.12
+            and abs(float(ranges[order[0]]) - float(ranges[order[-1]])) <= 0.35):
+        runs[0] = runs[-1] + runs[0]
+        runs.pop()
+    big = [len(run) for run in runs if len(run) >= min_cluster_beams]
+    return int(sum(big)), int(len(big))
 
 
 def planar_yaw(x, y, z, w):
@@ -134,6 +191,83 @@ class MapAgreement:
             hit &= ~obstructed
         return float(np.mean(hit))
 
+    def explain(self, sensor_pose, ranges, angles, *, min_cluster_beams: int = 3) -> "AgreementBreakdown":
+        """Classify beams into hit, wall-pierced, clustered foreground occlusion, and unknown/open."""
+        ranges, angles = valid_beams(ranges, angles)
+        total = int(len(ranges))
+        if total == 0 or not all(math.isfinite(v) for v in sensor_pose):
+            return AgreementBreakdown(0, 0, 0, 0, 0, 0.0, 0.0, 0, 0, 0, "no-beams")
+        world_angles = angles + sensor_pose[2]
+        xy = np.column_stack((np.cos(world_angles), np.sin(world_angles))) * ranges[:, None]
+        xy += sensor_pose[:2]
+        cells = np.floor((xy - self.origin) / self.resolution).astype(int)
+        h, w = self.near.shape
+        inside = (cells[:, 0] >= 0) & (cells[:, 0] < w) & (cells[:, 1] >= 0) & (cells[:, 1] < h)
+        hit = np.zeros(total, dtype=bool)
+        hit[inside] = self.near[cells[inside, 1], cells[inside, 0]]
+        obstructed = np.zeros(total, dtype=bool)
+        steps = np.arange(.05, max(ranges), self.resolution * .75)
+        if len(steps):
+            distances = np.minimum(steps[None, :], np.maximum(0., ranges[:, None] - self._ray_margin))
+            direction = np.column_stack((np.cos(world_angles), np.sin(world_angles)))
+            ray = np.asarray(sensor_pose[:2]) + direction[:, None, :] * distances[:, :, None]
+            ray_cells = np.floor((ray - self.origin) / self.resolution).astype(int)
+            rx, ry = ray_cells[:, :, 0], ray_cells[:, :, 1]
+            in_map = (rx >= 0) & (rx < w) & (ry >= 0) & (ry < h)
+            blocked = np.ones(rx.shape, dtype=bool)
+            blocked[in_map] = self.grid[ry[in_map], rx[in_map]] >= 65
+            obstructed = np.any(blocked, axis=1)
+            normal = np.column_stack((-np.sin(world_angles), np.cos(world_angles)))
+            for sign in (-1., 1.):
+                shifted = ray + sign * self.resolution * normal[:, None, :]
+                indices = np.floor((shifted - self.origin) / self.resolution).astype(int)
+                sx, sy = indices[:, :, 0], indices[:, :, 1]
+                valid = (sx >= 0) & (sx < w) & (sy >= 0) & (sy < h)
+                blocked = np.ones(sx.shape, dtype=bool)
+                blocked[valid] = self.grid[sy[valid], sx[valid]] >= 65
+                obstructed &= np.any(blocked, axis=1)
+            hit &= ~obstructed
+        unknown = ~hit & ~obstructed & ~inside
+        unknown[inside] |= (~hit[inside] & ~obstructed[inside]
+                            & (self.grid[cells[inside, 1], cells[inside, 0]] < 0))
+        short_free = ~hit & ~obstructed & ~unknown
+        miss_foreground, fg_cluster_count = _count_foreground_clusters(ranges, angles, short_free, min_cluster_beams)
+        hit_count = int(np.count_nonzero(hit))
+        pierce_count = int(np.count_nonzero(obstructed))
+        unknown_count = int(np.count_nonzero(unknown))
+        raw_score = 0.0 if total < 30 else float(hit_count / total)
+        sectors = (np.floor(((angles % (2. * math.pi)) / (2. * math.pi)) * 8.).astype(int)) % 8
+        hit_sectors = np.unique(sectors[hit])
+        sectors_hit = int(len(hit_sectors))
+        sector_mask = sum(1 << int(s) for s in hit_sectors)
+        eval_denom = total - miss_foreground - unknown_count
+        if total < 30:
+            reason = "insufficient-scan"
+        elif pierce_count / total > 0.03:
+            reason = "wall-piercing"
+        elif sectors_hit < 4:
+            reason = "sparse-sectors"
+        elif raw_score < 0.55:
+            reason = "low-raw-fit"
+        elif miss_foreground / total > 0.30:
+            reason = "excess-foreground"
+        elif eval_denom < max(16, int(0.45 * total)):
+            reason = "insufficient-wall-beams"
+        else:
+            reason = None
+        robust = 0.0 if reason is not None else min(1.0, float(hit_count) / float(eval_denom))
+        return AgreementBreakdown(
+            total=total, hit=hit_count, miss_wall_pierced=pierce_count,
+            miss_foreground=miss_foreground, miss_unknown=unknown_count,
+            raw_score=raw_score, robust_score=robust, sectors_hit=sectors_hit,
+            sector_mask=sector_mask, fg_cluster_count=fg_cluster_count,
+            rejected_reason=reason,
+        )
+
+    def robust_score(self, sensor_pose, ranges, angles) -> float:
+        """Occlusion-robust wall agreement score; 0.0 when safety gates reject."""
+        return self.explain(sensor_pose, ranges, angles).robust_score
+
     def _qualities(self, poses, ranges, angles):
         a = poses[:, 2, None] + angles[None, :]
         x = poses[:, 0, None] + np.cos(a)*ranges
@@ -179,13 +313,14 @@ class MapAgreement:
                     clear[y0:y1, x0:x1] &= ~blocked[y0-dy:y1-dy, x0-dx:x1-dx]
         return clear
 
-    def refine(self, seeds, ranges, angles, clear, offsets=None):
+    def refine(self, seeds, ranges, angles, clear, offsets=None, *, use_robust: bool = False):
         """Best three refinements per seed as (0.7*agreement + 0.3*quality, agreement, pose).
 
         Inputs are valid sensor-frame beams (see `valid_beams`); poses are sensor poses."""
         offsets = GLOBAL_OFFSETS if offsets is None else offsets
         h, w = self.grid.shape
         results = []
+        scorer = self.robust_score if use_robust else self.score
         for seed in seeds:
             poses = np.asarray(seed) + offsets
             indices = np.floor((poses[:, :2]-self.origin)/self.resolution).astype(int)
@@ -198,11 +333,11 @@ class MapAgreement:
             quality = self._qualities(poses, ranges, angles)
             for idx in np.argsort(quality)[-3:]:
                 pose = poses[idx]
-                agreement = self.score(pose, ranges, angles)
+                agreement = scorer(pose, ranges, angles)
                 results.append((agreement*.7 + float(quality[idx])*.3, agreement, pose))
         return results
 
-    def global_results(self, ranges, angles, radius, clear=None):
+    def global_results(self, ranges, angles, radius, clear=None, *, use_robust: bool = False):
         """Every refined sensor-pose candidate, best first, and a reason when there are none.
 
         Coarse-to-fine: 4 cm x 5 deg seeds, the 48 best distinct ones refined by
@@ -229,7 +364,7 @@ class MapAgreement:
                 seeds.append(pose)
             if len(seeds) >= 48:
                 break
-        results = self.refine(seeds, ranges, angles, clear)
+        results = self.refine(seeds, ranges, angles, clear, use_robust=use_robust)
         if not results:
             return [], 'no-refined-candidate'
         results.sort(key=lambda item: item[0], reverse=True)

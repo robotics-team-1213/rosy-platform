@@ -46,8 +46,8 @@ UNCONFIRMED_YAW_RAD = math.radians(5.0)
 #: No decision while a CORE mission moves the robot, nor this long after it ends: a pose
 #: decided mid-rotation failed its check at fit 0.18-0.39 (S1 re-run, F1 WSL run).
 MISSION_QUIET_S = 1.0
-def _tiebreak_eligible(state: Mapping, active_map: Optional[str]) -> bool:
-    """True while waiting on a first pose in slam_fallback wait or shared-site-map AMCL."""
+def _tiebreak_eligible(state: Mapping, active_map: Optional[str], *, binding_fit: Optional[object] = None) -> bool:
+    """True while waiting on a first pose in slam_fallback, shared site map, or bound robot grid."""
     status = trust.status_of(state)
     if status is not None and status.state is LocState.LOCALIZED:
         return False
@@ -56,7 +56,9 @@ def _tiebreak_eligible(state: Mapping, active_map: Optional[str]) -> bool:
         phase = fb.get("phase")
         if phase is not None:
             return phase == "WAITING_LOCALIZATION"
-    return bool(active_map) and state.get("map_id") == active_map
+    if bool(active_map) and state.get("map_id") == active_map:
+        return True
+    return binding_fit is not None
 
 
 def load_lane_rules(path: Optional[Path]) -> dict:
@@ -172,6 +174,7 @@ class LocalizationService:
         #: Optional ceiling-camera (x, y) tiebreaker when ArUco sightings are absent.
         self._tiebreak_camera: Optional[Callable[[str, Optional[str]], Optional[tuple[float, float]]]] = None
         self._active_map_id: Optional[Callable[[], Optional[str]]] = None
+        self._site_maps = None
 
     def set_wall_sync(self, sync) -> None:
         self._wall_sync = sync
@@ -186,6 +189,19 @@ class LocalizationService:
 
     def set_active_map_id(self, provider: Optional[Callable[[], Optional[str]]]) -> None:
         self._active_map_id = provider
+
+    def set_site_maps(self, site_maps) -> None:
+        self._site_maps = site_maps
+
+    def _binding_fit_for_state(self, rid: str, state: Mapping) -> Optional[object]:
+        if self._site_maps is None:
+            return None
+        active = self._site_maps.active()
+        if active is None:
+            return None
+        fit, _ = self._site_maps.map_bindings.binding_for_grid(
+            rid, state.get("map_grid_id"), (active[1].map_id, active[0]))
+        return fit
 
     def _current_active_map_id(self) -> Optional[str]:
         if self._active_map_id is None:
@@ -208,6 +224,25 @@ class LocalizationService:
         except Exception:  # noqa: BLE001
             logger.exception("tiebreak camera read failed: robot_id=%s", rid)
             return None
+
+    def _tiebreak_camera_in_robot_frame(
+        self, rid: str, state: Optional[Mapping], now: float,
+    ) -> Optional[tuple[float, float]]:
+        cam = self._tiebreak_camera_xy(rid, now)
+        if cam is None:
+            return None
+        if not state:
+            return cam
+        active_map = self._current_active_map_id()
+        if active_map and state.get("map_id") == active_map:
+            return cam
+        fit = self._binding_fit_for_state(rid, state)
+        if fit is not None:
+            return fit.inverse(cam)
+        fb = state.get("slam_fallback")
+        if isinstance(fb, Mapping) and fb.get("phase") == "WAITING_LOCALIZATION":
+            return cam
+        return None
 
     # --- console --------------------------------------------------------------------
 
@@ -271,7 +306,7 @@ class LocalizationService:
         active_map = self._current_active_map_id()
         self._fallback = {
             rid for rid, s in states.items()
-            if _tiebreak_eligible(s, active_map)
+            if _tiebreak_eligible(s, active_map, binding_fit=self._binding_fit_for_state(rid, s))
         }
         if self._wall_sync is not None:
             try:
@@ -294,7 +329,7 @@ class LocalizationService:
 
         observations: dict[str, list] = {}
         await asyncio.gather(*(
-            self._arbitrate(rid, clients[rid], localized, anchors, frames, observations, now)
+            self._arbitrate(rid, clients[rid], localized, anchors, frames, observations, now, state=state)
             for rid, state in states.items()
             if rid not in quiet
             and (status := trust.status_of(state)) is not None and status.state is LocState.CANDIDATES))
@@ -383,7 +418,7 @@ class LocalizationService:
 
     async def _arbitrate(self, rid: str, client: transport.RobotClient, localized: Mapping[str, cues.Pose],
                          anchors: Mapping[str, cues.Pose], frames: Mapping[str, MapFrame | None],
-                         observations: dict, now: float) -> None:
+                         observations: dict, now: float, *, state: Optional[Mapping] = None) -> None:
         try:
             report = await self._bounded(client.localization_candidates())
         except Exception as exc:
@@ -418,7 +453,7 @@ class LocalizationService:
                 observations.setdefault(peer, []).append(((rid, *key), seen))
         decision = self._arbiter.observe(report, context, now)
         if decision is None and rid in self._fallback:
-            tie = self._tiebreak.observe(report, self._tiebreak_camera_xy(rid, now), now)
+            tie = self._tiebreak.observe(report, self._tiebreak_camera_in_robot_frame(rid, state, now), now)
             if tie is not None:
                 await self._post_decision(rid, client, tie, (tie.pose.x, tie.pose.y, tie.pose.yaw), now, frame)
                 return
@@ -432,7 +467,7 @@ class LocalizationService:
         record = {"request_id": decision.request_id, "candidate_index": decision.candidate_index,
                   "cues": [c.value for c in decision.cues], "result": "sent"}
         evidence = getattr(decision, "evidence", None) or {}
-        twin_tiebreak = isinstance(evidence, Mapping) and evidence.get("tiebreak") == "twin"
+        twin_tiebreak = isinstance(evidence, Mapping) and evidence.get("tiebreak") in ("twin", "unique")
         # Context.peers holds anchors only, so `peers` or a laser-verified twin tiebreak is anchored too.
         anchoring = (
             decision.source is DecisionSource.HUMAN

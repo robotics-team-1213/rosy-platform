@@ -227,3 +227,28 @@ def test_the_180_degree_twin_always_survives_distinct(pose, twin):
     nudge = (pose[0] + .05, pose[1], pose[2] + .1)                  # the same hypothesis, blurred
     picked = [p for p, _ in distinct([(.99, .97, pose), (.985, .97, nudge), (.98, .96, other)])]
     assert picked == [pose, other]
+
+
+def test_fine_drop_below_minimum_fit_and_records_rejection_diagnostic():
+    class _DroppedFineField:
+        def clear_poses(self, radius):
+            return np.ones((1, 1), bool)
+
+        def global_results(self, ranges, angles, radius, clear=None):
+            return [(.95, .94, np.array([0.0, 0.0, 0.0]))], None
+
+        def refine(self, seeds, ranges, angles, clear, offsets=None):
+            return [(.85, .83, np.array([0.01, 0.0, 0.0]))]  # below minimum_fit=0.90
+
+    ranges, angles = np.full(40, 1.0), np.linspace(-1.0, 1.0, 40)
+    assert global_candidates(_DroppedFineField(), ranges, angles, RADIUS, Mount(0., 0., 0.),
+                             minimum_fit=.90, fine_scan=(ranges, angles)) == []
+
+    # Empty real-field search populates diagnostic breakdown reason
+    grid = np.zeros((40, 40), dtype=np.int8)
+    grid[20, :] = 100
+    diag = []
+    assert global_candidates(MapAgreement(grid, .05, (0., 0.)), np.full(40, 0.5),
+                             np.linspace(-0.3, 0.3, 40), RADIUS, Mount(0., 0., 0.),
+                             diagnostics=diag) == []
+    assert len(diag) == 1 and "reason=" in diag[0]

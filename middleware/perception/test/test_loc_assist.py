@@ -926,3 +926,44 @@ def test_wall_tiebreak_decision_threads_evidence_and_localizes():
     assert one(done, 'result') == {
         'request_id': req_id, 'accepted': True, 'reason': None, 'state': 'LOCALIZED',
     }
+
+
+def test_stationary_empty_searches_back_off_up_to_30s_and_reset_on_move_or_request():
+    a = core()
+    assert a.search_due(0.0, ODOM)
+    # 1st empty search at t=0.0 -> empty_streak=1 -> next retry waits 10.0 s
+    a.search_started(0.0, ODOM)
+    a.search_finished(0.5, ODOM, [])
+    assert not a.search_due(5.5, ODOM)
+    assert not a.search_due(10.4, ODOM)
+    assert a.search_due(10.5, ODOM)
+
+    # 2nd empty search -> streak=2 -> 20.0 s
+    a.search_started(10.5, ODOM)
+    a.search_finished(11.0, ODOM, [])
+    assert not a.search_due(30.9, ODOM)
+    assert a.search_due(31.0, ODOM)
+
+    # 3rd empty search -> streak=3 -> capped at 30.0 s
+    a.search_started(31.0, ODOM)
+    a.search_finished(31.5, ODOM, [])
+    assert not a.search_due(61.4, ODOM)
+    assert a.search_due(61.5, ODOM)
+
+    # 4th empty search -> still capped at 30.0 s
+    a.search_started(61.5, ODOM)
+    a.search_finished(62.0, ODOM, [])
+    assert not a.search_due(91.9, ODOM)
+    assert a.search_due(92.0, ODOM)
+
+    # Moving > moved_m resets backoff back to base 5.0 s
+    moved_odom = (ODOM[0] + 0.2, ODOM[1], ODOM[2])
+    a.search_started(92.0, ODOM)
+    a.search_finished(92.5, ODOM, [])
+    assert not a.search_due(98.0, ODOM)
+    assert a.search_due(98.0, moved_odom)
+
+    # Explicit pickup/mission end request also resets backoff immediately
+    a.on_mission(99.0, {'state': 'running'})
+    a.on_mission(100.0, {'state': 'done'})
+    assert a.search_due(100.0, ODOM)

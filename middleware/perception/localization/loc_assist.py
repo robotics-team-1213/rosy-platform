@@ -118,6 +118,7 @@ class LocAssist:
         self._wanted = True                 # power-on: search at once
         self._searching = None              # (odom, epoch, start s) of the running search
         self._searched_at, self._searched_odom = -math.inf, None
+        self._empty_streak = 0
         self._report, self._reported_s = None, -math.inf
         self._state_s, self._state_key = -math.inf, None
         self._pending = None                # request id whose 3 s check is running
@@ -146,6 +147,7 @@ class LocAssist:
             self._epoch += 1
             out = self._after(self.machine.picked_up(now_s), now_s)
             self._wanted = True
+            self._empty_streak = 0
         self.held = bool(active)
         return out
 
@@ -159,7 +161,7 @@ class LocAssist:
             self._mission = float(now_s)
             self.machine.request_id, self._report = None, None
         elif state in ('done', 'aborted'):
-            self._mission, self._wanted = None, True
+            self._mission, self._wanted, self._empty_streak = None, True, 0
 
     def on_twist(self, now_s, linear_mps, angular_radps):
         """Odom twist: speed in m/s and yaw rate in rad/s. Still means both under the limits."""
@@ -301,13 +303,17 @@ class LocAssist:
         if (self._searching is not None or self.held or self.machine.check is not None
                 or self._mission_running(now_s)):
             return False
-        waited = now_s - self._searched_at >= self.retry_s
+        moved = (odom is not None and self._searched_odom is not None
+                 and _moved(odom, self._searched_odom, self.moved_m, self.moved_rad))
+        if moved:
+            self._empty_streak = 0
+        retry_s = min(30.0, self.retry_s * (2 ** min(self._empty_streak, 3)))
+        waited = now_s - self._searched_at >= retry_s
         state = self.machine.state
         if state in (LocState.UNKNOWN, LocState.SUSPECT):
             return self._wanted or waited
         if state is LocState.CANDIDATES:
-            return self._wanted or (waited and odom is not None and self._searched_odom is not None
-                                    and _moved(odom, self._searched_odom, self.moved_m, self.moved_rad))
+            return self._wanted or (waited and moved)
         return False
 
     def _mission_running(self, now_s):
@@ -340,6 +346,7 @@ class LocAssist:
             sightings, paint_scores = (), None
         self._searched_at, self._searched_odom, self._wanted = now_s, tuple(odom), False
         candidates = list(candidates)[:MAX_CANDIDATES]
+        self._empty_streak = 0 if candidates else self._empty_streak + 1
         step = self.machine.offer(candidates, now_s)
         if 'report_candidates' not in step.actions:
             return self._state_if_changed(now_s)
@@ -366,6 +373,7 @@ class LocAssist:
             self._pending = None
         if state is LocState.SUSPECT and 'report_status' in step.actions:
             self._wanted = True             # a fresh SUSPECT searches at once
+            self._empty_streak = 0
         return out + self._state_if_changed(now_s)
 
     def _reason(self):
@@ -415,7 +423,8 @@ class LocAssist:
                           'state': self.machine.state.value}
 
 
-def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9, object_scan=None):
+def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9, object_scan=None,
+           diagnostics=None):
     """Slot then global candidates (at most 8) and the unmapped objects at the first one.
 
     `clear` is the cached `field.clear_poses(radius)` mask, or None to compute it;
@@ -426,7 +435,7 @@ def search(field, clear, squares, ranges, angles, radius, mount, minimum_fit=.9,
     clear = field.clear_poses(radius) if clear is None else clear
     found = merge(slot_candidates(field, squares, ranges, angles, radius, mount, minimum_fit, clear=clear),
                   global_candidates(field, ranges, angles, radius, mount, minimum_fit, clear=clear,
-                                    fine_scan=object_scan))
+                                    fine_scan=object_scan, diagnostics=diagnostics))
     found = found[:MAX_CANDIDATES]
     objects = []
     if found:

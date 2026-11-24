@@ -77,3 +77,44 @@ def test_a_holdout_that_repeats_a_fit_point_is_refused(bindings):
     with pytest.raises(BindingError) as err:
         bindings.approve("rosy_42", state(), ("world_261026", 7), pairs(SITE), pairs([SITE[0]]), "op")
     assert err.value.code == "BAD_POINTS"
+
+
+def test_place_only_site_map_bump_keeps_binding_while_wall_change_invalidates_and_grid_lookup_allows_pre_localized():
+    from fleet.site_map import SiteMap
+
+    base_body = {
+        "map_id": "site-frame",
+        "places": [
+            {"id": "A", "name": "Start", "x": 0.0, "y": 0.0, "yaw": 0.0, "kind": "start"},
+            {"id": "B", "name": "Goal", "x": 1.0, "y": 0.0, "yaw": 0.0, "kind": "stop"},
+        ],
+        "edges": [{"id": "ab", "from_place": "A", "to_place": "B", "direction": "one_way",
+                   "width_m": 0.4, "speed_mps": 0.3, "polyline": [[0.0, 0.0], [1.0, 0.0]]}],
+        "walls": [{"id": "w1", "face": [[-1.0, -1.0], [2.0, -1.0]]}],
+    }
+    store = SiteMapStore()
+    v1 = store.import_if_empty(SiteMap.model_validate(base_body), source="test")
+    assert v1 == 1
+    row = store.map_bindings.approve("rosy_42", state(), ("site-frame", v1), pairs(SITE), pairs([(0, 0)]), "op")
+    assert row["site_frame_sha256"]
+
+    # Place-only edit keeps identical walls & map_id -> binding survives v2 bump
+    place_only = {**base_body, "places": [base_body["places"][0], {**base_body["places"][1], "name": "Goal2"}]}
+    draft = store.save_draft(SiteMap.model_validate(place_only), expected_revision=None, principal_id="op")
+    v2_view = store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
+    v2 = v2_view["version"]
+    fit, reason = store.map_bindings.matching_fit("rosy_42", state(), ("site-frame", v2))
+    assert fit is not None and reason == ""
+
+    # Pre-LOCALIZED robot on same grid gets read-only frame transform, wrong grid stays rejected
+    g_fit, g_reason = store.map_bindings.binding_for_grid("rosy_42", GRID, ("site-frame", v2))
+    assert g_fit is not None and g_reason == ""
+    assert store.map_bindings.binding_for_grid("rosy_42", "occupancy:other", ("site-frame", v2)) == (
+        None, "MAP_BINDING_GRID_CHANGED")
+
+    # Wall change invalidates binding with MAP_BINDING_SITE_CHANGED
+    wall_changed = {**place_only, "walls": [{"id": "w1", "face": [[-1.0, -1.0], [2.5, -1.0]]}]}
+    draft2 = store.save_draft(SiteMap.model_validate(wall_changed), expected_revision=None, principal_id="op")
+    v3 = store.activate(expected_revision=draft2["revision"], principal_id="op", route_active=False)["version"]
+    assert store.map_bindings.matching_fit("rosy_42", state(), ("site-frame", v3)) == (None, "MAP_BINDING_SITE_CHANGED")
+    assert store.map_bindings.binding_for_grid("rosy_42", GRID, ("site-frame", v3)) == (None, "MAP_BINDING_SITE_CHANGED")

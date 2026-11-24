@@ -132,3 +132,68 @@ class LocalizationTests(unittest.TestCase):
         self.assertFalse(m.near[10, 13])
         self.assertAlmostEqual(m._ray_margin, .06)
         self.assertAlmostEqual(m.likelihood[10, 11], math.exp(-(.02**2) / (2 * .025**2)))
+
+    def test_robust_score_recovers_y8xs_occlusion_and_enforces_adversarial_safety_gates(self):
+        # 5x5 m closed room (2cm cells -> 250x250), robot at (1.5, 1.5, 0.0)
+        grid = np.zeros((250, 250), dtype=np.int8)
+        grid[25:225, 25] = 100
+        grid[25:225, 224] = 100
+        grid[25, 25:225] = 100
+        grid[224, 25:225] = 100
+        # Add unknown (-1) patch outside/along top wall window
+        grid[25, 110:150] = -1
+        m = MapAgreement(grid, .02, (0., 0.), tolerance=.04)
+        truth = (1.5, 1.5, 0.0)
+        angles = np.linspace(-math.pi, math.pi, 180, endpoint=False)
+        wall_ranges = []
+        for a in angles:
+            dx, dy = math.cos(a), math.sin(a)
+            dists = []
+            if dx > 1e-6:
+                dists.append((224 * .02 - truth[0]) / dx)
+            elif dx < -1e-6:
+                dists.append((25 * .02 - truth[0]) / dx)
+            if dy > 1e-6:
+                dists.append((224 * .02 - truth[1]) / dy)
+            elif dy < -1e-6:
+                dists.append((25 * .02 - truth[1]) / dy)
+            wall_ranges.append(min(dists) + .01)
+        wall_ranges = np.array(wall_ranges, dtype=float)
+
+        # Profile matching live y8xs: ~17% contiguous foreground cluster + ~9% unknown rays
+        y8xs_ranges = wall_ranges.copy()
+        fg_mask = (angles >= math.radians(45)) & (angles < math.radians(107))  # ~31 beams (~17%)
+        y8xs_ranges[fg_mask] = 0.55
+        unk_mask = (angles >= math.radians(130)) & (angles < math.radians(162))  # ends outside/unknown
+        y8xs_ranges[unk_mask] = 6.0  # shoots out of bounds -> unknown_open
+        b = m.explain(truth, y8xs_ranges, angles)
+        self.assertLess(m.score(truth, y8xs_ranges, angles), 0.80)
+        self.assertIsNone(b.rejected_reason)
+        self.assertGreaterEqual(b.robust_score, 0.90)
+        results, reason = m.global_results(y8xs_ranges, angles, .105, use_robust=True)
+        self.assertIsNone(reason)
+        self.assertLess(math.dist(results[0][2][:2], truth[:2]), .05)
+
+        # 1) >3% wall-piercing rejection (beams extend past wall through >=65 cells)
+        pierced = wall_ranges.copy()
+        pierced[:15] = 4.2
+        self.assertEqual(m.explain(truth, pierced, angles).rejected_reason, "wall-piercing")
+        self.assertEqual(m.robust_score(truth, pierced, angles), 0.0)
+
+        # 2) <4 hit sectors rejection
+        sparse_idx = np.arange(0, 36)  # ~72 deg arc -> <= 2 sectors
+        self.assertEqual(m.explain(truth, wall_ranges[sparse_idx], angles[sparse_idx]).rejected_reason, "sparse-sectors")
+
+        # 3) >30% foreground / low raw (<0.55) corner trap rejection
+        heavy_fg = wall_ranges.copy()
+        heavy_fg[:70] = 0.55
+        heavy_b = m.explain(truth, heavy_fg, angles)
+        self.assertIn(heavy_b.rejected_reason, ("low-raw-fit", "excess-foreground"))
+        self.assertEqual(heavy_b.robust_score, 0.0)
+
+        # 4) Isolated non-clustered short beams (<3 contiguous) are NOT discounted
+        iso = wall_ranges.copy()
+        iso[::10][:8] = 0.60  # spaced every 20 deg -> isolated singletons
+        iso_b = m.explain(truth, iso, angles)
+        self.assertEqual(iso_b.miss_foreground, 0)
+        self.assertEqual(iso_b.fg_cluster_count, 0)

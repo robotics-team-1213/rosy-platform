@@ -19,7 +19,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Mapping, Optional
 
 from core_common.text_encoding import double_encoded_paths
 from fleet.meet.place import Painted, painted_from
@@ -49,6 +49,16 @@ def _reject_double_encoded(site_map: SiteMap, **extra: str) -> None:
     if bad:
         raise SiteMapError(400, "TEXT_DOUBLE_ENCODED",
                            f"글자가 두 번 인코딩되어 깨졌습니다. UTF-8로 다시 보내세요: {', '.join(bad[:5])}")
+
+
+def site_frame_sha256(body: Mapping) -> str:
+    """Canonical hash of frame-defining geometry (map_id, walls, drawing projection)."""
+    payload = {
+        "map_id": body.get("map_id", ""),
+        "walls": body.get("walls") or [],
+        "drawing_projection_sha256": (body.get("drawing") or {}).get("projection_sha256", ""),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
 class SiteMapStore:
@@ -99,11 +109,19 @@ class SiteMapStore:
                                     lambda: {p.id for p in self._cached[1].places} if self._cached else None)
         from fleet.server.map_binding_store import MapBindingStore
         #: D-1022 robot map -> site frame bindings: same database and audit rows.
-        self.map_bindings = MapBindingStore(self._db, self._lock, self.clock, self._event)
+        self.map_bindings = MapBindingStore(
+            self._db, self._lock, self.clock, self._event, frame_for_version=self.frame_sha256)
 
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+    def frame_sha256(self, version: int) -> Optional[str]:
+        """Geometry frame digest of one stored site map version, or None when absent."""
+        with self._lock:
+            row = self._db.execute(
+                "SELECT body FROM site_map_versions WHERE version = ?", (int(version),)).fetchone()
+        return None if row is None else site_frame_sha256(json.loads(row[0]))
 
     def _init_frames(self) -> None:
         with self._lock, self._db:
