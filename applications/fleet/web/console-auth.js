@@ -1,8 +1,8 @@
 // 관제 접속: 잠금·해제, 세션 확인, 토큰 입력과 비밀번호 로그인, 개발 접속 모드(D-248·D-473·D-519).
 // 토큰은 셸(console.js)의 auth 에 살고, 이 팩토리는 그 상태를 바꾸는 길을 가진다(D-798 3.2).
 import { applyRoleToControls } from "/console/assets/authorization.js";
-import { createPasswordLogin } from "./password-login.js";
 import { showConnection, showSession, showSignedOut, stopNotice } from "/console/assets/fleet-header.js";
+import { bindTokenAccess, classifyAuthFailure, writeStoredToken } from "/console/assets/fleet-session.js";
 
 export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient, render, operatorControls, assistant,
   confirmedAction, connectionView, workView, incidents, visionView, trackingView, mapView, formation,
@@ -24,6 +24,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     incidents.reset();
     showSignedOut({refused: reason === "auth"});
     applyRoleToControls(null, operatorControls());
+    delete document.documentElement.dataset.readOnly;
     const pill = el("online-pill");
     pill.textContent = "접속 전";
     pill.setAttribute("status", "neutral");
@@ -47,7 +48,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     // Connection metadata changes the badge, never the authenticated identity.
     if (firstLock && reason === "auth") connectionMode();
     // Offer human login once per lock.
-    if (firstLock && reason === "auth") loginForm.refresh(true);
+    if (firstLock && reason === "auth") tokenAccess.refreshLogin(true);
   }
 
   function markUnlocked() {
@@ -82,7 +83,7 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
         pill.setAttribute("status", "neutral");
       }
       applyRoleToControls(auth.role, operatorControls());
-      loginForm.refresh(false);
+      tokenAccess.refreshLogin(false);
       render();
       // Independent panels refresh side by side; one slow source does not delay the rest.
       // The map too: a token issued after a lock must not wait for the next 5 s map poll (field check 2026-10-10).
@@ -102,14 +103,8 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
       inbox?.openPendingDeepLink?.();
     } catch (_err) {
       if (_err.name === "AbortError") return;
-      if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
+      if (!auth.locked) markLocked(classifyAuthFailure(_err).offerLogin ? "auth" : "connection");
     }
-  }
-
-  // 토큰 입력 — Enter 와 버튼 모두 저장한다 (form 이 아니라 keydown 이다).
-  el("console-token").value = auth.token;
-  function saveToken() {
-    useToken(el("console-token").value.trim(), true);
   }
 
   function useToken(token, credentialChange = false) {
@@ -122,26 +117,18 @@ export function createConsoleAuth({ pageScope, el, view, auth, call, fleetClient
     auth.role = null;
     applyRoleToControls(null, operatorControls());
     incidents.reset();
-    if (auth.token) {
-      sessionStorage.setItem("rosy-console-token", auth.token);
-    } else {
-      sessionStorage.removeItem("rosy-console-token");
-    }
+    writeStoredToken(auth.token);
     visionView.reset();
     clearVisionSample();
     trackingView.reset();
     trackingView.refresh();
     refreshAuthorization(credentialChange);
   }
-  pageScope.listen(el("token-save"), "click", saveToken);
-  // D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
-  const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
-    el("console-token").value = "";
-    useToken("", true);
-  }});
-  pageScope.listen(el("console-token"), "keydown", (event) => {
-    if (event.key === "Enter") saveToken();
+  const tokenAccess = bindTokenAccess({
+    scope: pageScope,
+    onCredential: (nextToken, credentialChange) => useToken(nextToken, credentialChange),
   });
+  if (auth.token) tokenAccess.setToken(auth.token, { persistValue: false });
 
   // D-473 — development connection mode. The badge is on only while the server says development;
   // paired, 404 (an older Fleet) or an error leaves the token field as the way in.

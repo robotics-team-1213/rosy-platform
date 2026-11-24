@@ -166,8 +166,20 @@
       "path": "shared/fleet-header.js",
       "media_type": "application/javascript"
     },
+    "fleet-session.js": {
+      "path": "shared/fleet-session.js",
+      "media_type": "application/javascript"
+    },
     "unit-scope.js": {
       "path": "shared/unit-scope.js",
+      "media_type": "application/javascript"
+    },
+    "unit-links.js": {
+      "path": "shared/unit-links.js",
+      "media_type": "application/javascript"
+    },
+    "disclosure-list.js": {
+      "path": "shared/disclosure-list.js",
       "media_type": "application/javascript"
     },
     "styles.css": {

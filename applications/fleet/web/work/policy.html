@@ -103,33 +103,51 @@
     <ui-section aria-labelledby="policy-incidents-heading">
       <ui-head><h2 class="ui-section-heading" id="policy-incidents-heading">사고 잠금</h2></ui-head>
       <ul id="policy-incidents" class="policy-list"></ul>
-      <form id="policy-incident-form" class="ui-form">
-        <label for="policy-incident-text" class="ui-field-label">사고·파손 신고 — 이 작업셀의 승인 창을 모두 닫습니다</label>
-        <textarea id="policy-incident-text" class="ui-field" maxlength="1000" required></textarea>
-        <ui-actions><ui-button id="policy-incident-report" kind="quiet">사고 신고…</ui-button></ui-actions>
-      </form>
+      <details id="policy-incidents-history" class="ui-disclosure history-fold" hidden>
+        <summary id="policy-incidents-history-summary" class="ui-disclosure-row"></summary>
+        <ul id="policy-incidents-past" class="policy-list"></ul>
+      </details>
+      <details id="policy-incident-fold" class="ui-disclosure write-fold" open>
+        <summary id="policy-incident-summary" class="ui-disclosure-row">사고·파손 신고</summary>
+        <form id="policy-incident-form" class="ui-form">
+          <label for="policy-incident-text" class="ui-field-label">사고·파손 신고 — 이 작업셀의 승인 창을 모두 닫습니다</label>
+          <textarea id="policy-incident-text" class="ui-field" maxlength="1000" required></textarea>
+          <ui-actions><ui-button id="policy-incident-report" kind="quiet">사고 신고…</ui-button></ui-actions>
+        </form>
+      </details>
     </ui-section>
 
     <ui-section aria-labelledby="policy-confirmations-heading">
       <ui-head><h2 class="ui-section-heading" id="policy-confirmations-heading">확인 요청</h2></ui-head>
       <ui-actions><ui-button id="policy-sync-owner" kind="quiet">팔 제어 보류 가져오기</ui-button></ui-actions>
       <ul id="policy-confirmations" class="policy-list"></ul>
+      <details id="policy-confirmations-history" class="ui-disclosure history-fold" hidden>
+        <summary id="policy-confirmations-history-summary" class="ui-disclosure-row"></summary>
+        <ul id="policy-confirmations-past" class="policy-list"></ul>
+      </details>
     </ui-section>
 
     <ui-section aria-labelledby="policy-windows-heading">
       <ui-head><h2 class="ui-section-heading" id="policy-windows-heading">승인 창</h2></ui-head>
       <ul id="policy-windows" class="policy-list"></ul>
-      <form id="policy-window-form" class="ui-form">
-        <label for="policy-window-policy" class="ui-field-label">정책 버전</label>
-        <select id="policy-window-policy" class="ui-field"></select>
-        <label for="policy-window-kind" class="ui-field-label">종류</label>
-        <select id="policy-window-kind" class="ui-field"></select>
-        <label for="policy-window-minutes" class="ui-field-label">길이(분) — 비우면 기본값</label>
-        <input id="policy-window-minutes" class="ui-field" type="number" min="1" max="480">
-        <label for="policy-window-scope" class="ui-field-label">허용 과제·범위</label>
-        <input id="policy-window-scope" class="ui-field" maxlength="500" required>
-        <ui-actions><ui-button id="policy-window-request" kind="quiet">승인 창 요청</ui-button></ui-actions>
-      </form>
+      <details id="policy-windows-history" class="ui-disclosure history-fold" hidden>
+        <summary id="policy-windows-history-summary" class="ui-disclosure-row"></summary>
+        <ul id="policy-windows-past" class="policy-list"></ul>
+      </details>
+      <details id="policy-window-fold" class="ui-disclosure write-fold" open>
+        <summary id="policy-window-summary" class="ui-disclosure-row">승인 창 요청</summary>
+        <form id="policy-window-form" class="ui-form">
+          <label for="policy-window-policy" class="ui-field-label">정책 버전</label>
+          <select id="policy-window-policy" class="ui-field"></select>
+          <label for="policy-window-kind" class="ui-field-label">종류</label>
+          <select id="policy-window-kind" class="ui-field"></select>
+          <label for="policy-window-minutes" class="ui-field-label">길이(분) — 비우면 기본값</label>
+          <input id="policy-window-minutes" class="ui-field" type="number" min="1" max="480">
+          <label for="policy-window-scope" class="ui-field-label">허용 과제·범위</label>
+          <input id="policy-window-scope" class="ui-field" maxlength="500" required>
+          <ui-actions><ui-button id="policy-window-request" kind="quiet">승인 창 요청</ui-button></ui-actions>
+        </form>
+      </details>
     </ui-section>
 
     <ui-section aria-labelledby="policy-stages-heading">
@@ -140,19 +158,29 @@
         <table class="ui-data-table" aria-label="단계 제안"><thead><tr><th scope="col">상태</th><th scope="col">정책</th><th scope="col">단계</th><th scope="col">제안</th><th scope="col">근거</th><th scope="col"><span class="sr-only">동작</span></th></tr></thead>
           <tbody id="policy-proposals"></tbody></table>
       </div>
-      <form id="policy-proposal-form" class="ui-form">
-        <label for="policy-proposal-revision" class="ui-field-label">정책 버전 (새 학습 결과는 0단계로 등록)</label>
-        <input id="policy-proposal-revision" class="ui-field" maxlength="128" required>
-        <label for="policy-proposal-rig" class="ui-field-label">작업대 버전</label>
-        <input id="policy-proposal-rig" class="ui-field" maxlength="128" required>
-        <label for="policy-proposal-cal" class="ui-field-label">보정 버전</label>
-        <input id="policy-proposal-cal" class="ui-field" maxlength="128" required>
-        <label for="policy-proposal-evidence" class="ui-field-label">근거 기록 식별값(64자리)</label>
-        <input id="policy-proposal-evidence" class="ui-field" pattern="[0-9a-f]{64}" required>
-        <label for="policy-proposal-note" class="ui-field-label">근거 설명</label>
-        <input id="policy-proposal-note" class="ui-field" maxlength="500" required>
-        <ui-actions><ui-button id="policy-proposal-submit" kind="quiet">다음 단계 제안</ui-button></ui-actions>
-      </form>
+      <details id="policy-proposals-history" class="ui-disclosure history-fold" hidden>
+        <summary id="policy-proposals-history-summary" class="ui-disclosure-row"></summary>
+        <div class="ui-table-scroll" role="region" aria-label="지난 단계 제안 표" tabindex="0">
+          <table class="ui-data-table" aria-label="지난 단계 제안"><thead><tr><th scope="col">상태</th><th scope="col">정책</th><th scope="col">단계</th><th scope="col">제안</th><th scope="col">근거</th><th scope="col"><span class="sr-only">동작</span></th></tr></thead>
+            <tbody id="policy-proposals-past"></tbody></table>
+        </div>
+      </details>
+      <details id="policy-proposal-fold" class="ui-disclosure write-fold" open>
+        <summary id="policy-proposal-summary" class="ui-disclosure-row">다음 단계 제안</summary>
+        <form id="policy-proposal-form" class="ui-form">
+          <label for="policy-proposal-revision" class="ui-field-label">정책 버전 (새 학습 결과는 0단계로 등록)</label>
+          <input id="policy-proposal-revision" class="ui-field" maxlength="128" required>
+          <label for="policy-proposal-rig" class="ui-field-label">작업대 버전</label>
+          <input id="policy-proposal-rig" class="ui-field" maxlength="128" required>
+          <label for="policy-proposal-cal" class="ui-field-label">보정 버전</label>
+          <input id="policy-proposal-cal" class="ui-field" maxlength="128" required>
+          <label for="policy-proposal-evidence" class="ui-field-label">근거 기록 식별값(64자리)</label>
+          <input id="policy-proposal-evidence" class="ui-field" pattern="[0-9a-f]{64}" required>
+          <label for="policy-proposal-note" class="ui-field-label">근거 설명</label>
+          <input id="policy-proposal-note" class="ui-field" maxlength="500" required>
+          <ui-actions><ui-button id="policy-proposal-submit" kind="quiet">다음 단계 제안</ui-button></ui-actions>
+        </form>
+      </details>
     </ui-section>
     </div>
   </main>

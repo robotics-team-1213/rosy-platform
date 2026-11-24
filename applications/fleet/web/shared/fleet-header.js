@@ -88,15 +88,18 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
   new MutationObserver(summarize).observe(entry, {subtree: true, childList: true,
     attributes: true, attributeFilter: ["hidden", "status"]});
   summarize();
+  const menu = $("topbar-extra");
   listen(document, "keydown", event => {
     if (event.key !== "Escape" || event.defaultPrevented || entry.getAttribute("aria-expanded") !== "true") return;
     const active = document.activeElement;
-    const restore = active === document.body || active === entry || $("topbar-extra").contains(active);
+    const restore = active === document.body || active === entry || menu.contains(active);
     setTopbarOpen(false);
     if (restore) entry.focus();
   });
   listen($("topbar-more"), "click", () => {
-    setTopbarOpen($("topbar-more").getAttribute("aria-expanded") !== "true");
+    const open = $("topbar-more").getAttribute("aria-expanded") !== "true";
+    setTopbarOpen(open);
+    if (open) menu.querySelector?.("a:not([hidden]), button:not([hidden]), ui-button:not([hidden]), summary")?.focus?.({preventScroll: true});
   });
 }
 
@@ -131,7 +134,8 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
   const changed = tag.title !== title;
   const active = document.activeElement, menu = $("topbar-extra");
   const returnFocus = menu.contains(active) || (active === document.body && menu.contains(focusOrigin));
-  setRoleAttr(isOperator(identity.role) ? "operator" : "viewer");
+  const roleAttr = identity.role === "policy-admin" ? "policy-admin" : isOperator(identity.role) ? "operator" : "viewer";
+  setRoleAttr(roleAttr);
   $('fleet-login').hidden = true;
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
@@ -144,7 +148,7 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
   }
   tag.textContent = roleLabel(identity.role);
   tag.title = title;
-  tag.setAttribute("status", isOperator(identity.role) ? "active" : "neutral");
+  tag.setAttribute("status", isOperator(identity.role) || identity.role === "policy-admin" ? "active" : "neutral");
   $("development-badge").hidden = !developmentConnection;
   gateEstop(identity);
 }
@@ -186,7 +190,8 @@ export function showFleet(fleet, robots = null) {
 
 // Pages without their own state poll (설치·보정, 현장 지도, Cell) read Fleet every 5 s for the site name
 // and the link word. They show no robot count.
-export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
+export function watchFleet(request, {every = 5000, scope = null, interval = scope ? (fn, ms) => scope.interval(fn, ms) : setInterval,
+  listen = scope ? (target, type, fn) => scope.listen(target, type, fn) : (target, type, fn) => target?.addEventListener?.(type, fn)} = {}) {
   request("/api/fleet/auth/connection").then(showConnection).catch(() => {});
   async function read() {
     if (globalThis.document?.hidden) return;  // a background tab does not keep reading /api/fleet/state
@@ -196,7 +201,7 @@ export function watchFleet(request, {every = 5000, interval = setInterval} = {})
     try { showFleet(state.fleet, state.robots); } catch { /* a paint error after an answer is not a lost link */ }
   }
   read();
-  globalThis.document?.addEventListener?.("visibilitychange", read);  // back in view: read now, not after up to 5 s
+  listen(globalThis.document, "visibilitychange", read);  // back in view: read now, not after up to 5 s
   return interval(read, every);
 }
 

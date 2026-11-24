@@ -31,7 +31,10 @@ SHARED = {
     "account-permissions.js",  # D-757: shared read-only session capability predicates
     "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
+    "fleet-session.js",  # Shared topbar token, cookie login and D-1043 auth failure classifier
     "unit-scope.js",  # D-960 §4: what this control unit's screen shows, read by the header and work views
+    "unit-links.js",  # D-977: verified child-unit cross-links shared by Cell and integrated control
+    "disclosure-list.js",  # Active-first collapsible history list shared across Fleet views
     "map-fit.js",
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
