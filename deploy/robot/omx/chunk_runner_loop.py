@@ -25,7 +25,8 @@ def publish_live(runner, *, state=None, best_effort: bool = False) -> None:
                 "human_hold_latched": runner.human_hold_latched,
                 "torque_hold_commanded": runner.torque_hold_commanded,
                 **({"hold_req": runner._human_hold_acked_req} if getattr(runner, "_human_hold_acked_req", None) else {}),
-                **({"interrupt": runner._interrupt["phase"], "pid": os.getpid()} if getattr(runner, "_interrupt", None) else {}),
+                "pid": os.getpid(),
+                **({"interrupt": runner._interrupt["phase"]} if getattr(runner, "_interrupt", None) else {}),
                 "health": runner.health,
                 **({"jitter": runner.jitter} if runner.jitter["shaking"] else {}),
             }

@@ -18,6 +18,8 @@ from pathlib import Path
 
 import numpy as np
 
+from cell_pipeline_liveness import drain_status, runner_liveness
+
 _DEFAULT_URLOPEN = urllib.request.urlopen
 
 
@@ -110,9 +112,9 @@ FIFO_WRITE_LOCK = threading.Lock()
 class FifoCell:
     """The running chunk_runner (command FIFO + status file) and the read-only camera viewer."""
 
-    def __init__(self, io: Path, cameras: dict, timeout_s: float = 300, *, operating_profile=None):
+    def __init__(self, io: Path, cameras: dict, timeout_s: float = 300, *, operating_profile=None, stall_timeout_s: float = 3.0):
         self.io, self.cameras, self.timeout_s = io, cameras, timeout_s
-        self.operating_profile = operating_profile
+        self.operating_profile, self.stall_timeout_s = operating_profile, stall_timeout_s
         self._http_conns: dict[tuple[str, int], http.client.HTTPConnection] = {}
         self._frame_cache: dict[str, tuple[str, np.ndarray]] = {}
         self._file_digest_cache: dict[tuple[str, int, int], str] = {}
@@ -204,46 +206,13 @@ class FifoCell:
         else:
             eff_timeout = timeout
         deadline = time.monotonic() + eff_timeout
+        last_live_t = last_live_mono = None
+        next_liveness = 0.0
         while time.monotonic() < deadline:
             if start is not None:
-                matched_hold = None
-                try:
-                    if status_path.exists():
-                        with status_path.open("rb") as stream:
-                            stream.seek(start)
-                            while line := stream.readline():
-                                if not line.endswith(b"\n"):
-                                    break
-                                start = stream.tell()
-                                try:
-                                    row = json.loads(line.decode("utf-8"))
-                                except (ValueError, RecursionError):
-                                    if not is_hold:
-                                        raise
-                                    continue
-                                if not isinstance(row, dict):
-                                    continue
-                                if is_hold:
-                                    if row.get("command") != "human-hold":
-                                        continue
-                                    rt = finite_stamp(row.get("t"))
-                                    if rt is None or not (sent_at < rt <= time.time() + 1.0):
-                                        continue
-                                    if row.get("hold_req") == hold_req:
-                                        matched_hold = row
-                                    continue
-                                matches = (command, expected, "run " + (verb if recovery else expected))
-                                if row.get("command") in matches or (not recovery and row.get("fault")):
-                                    if (row.get("ok") and not row.get("fault")
-                                            and row.get("operating_context") and row.get("library_sha256")):
-                                        self._cached_state = row
-                                        self._cached_state_mono = time.monotonic()
-                                    return row
-                except (OSError, ValueError, RecursionError):
-                    if not is_hold:
-                        raise
-                if matched_hold is not None:
-                    return matched_hold
+                row, start = drain_status(self, status_path, start, command, expected, verb, recovery, is_hold, hold_req, sent_at, finite_stamp)
+                if row is not None:
+                    return row
             if is_hold:
                 live = self.policy_state()
                 lt = finite_stamp(live.get("t")) if isinstance(live, dict) else None
@@ -255,6 +224,17 @@ class FifoCell:
                         and (pre_t is None or lt > pre_t)):
                     return {"command": "human-hold", "ok": True, "human_hold_latched": True,
                             "torque_hold_commanded": True, "hold_req": hold_req, "t": lt, "state": live.get("state")}
+            elif (now_mono := time.monotonic()) >= next_liveness:
+                next_liveness = now_mono + 0.05
+                issue, last_live_t, last_live_mono = runner_liveness(
+                    self.policy_state(), last_t=last_live_t, last_mono=last_live_mono,
+                    stall_timeout_s=self.stall_timeout_s, now_mono=now_mono, finite_stamp=finite_stamp, kill=os.kill)
+                if issue is not None:
+                    if issue[0] == "runner_dead" and start is not None:
+                        row, start = drain_status(self, status_path, start, command, expected, verb, recovery, False, None, sent_at, finite_stamp)
+                        if row is not None:
+                            return row
+                    return {"ok": False, "fault": issue[0], "error": issue[1]}
             time.sleep(0.005)
         return {"ok": False, **({"command": "human-hold"} if is_hold else {}), "error": f"no status within {eff_timeout} s"}
 
