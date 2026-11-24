@@ -277,7 +277,7 @@ def execute_directive(
                     grasp_dynamics = cell_arm_cal.evaluate_grasp_dynamics(r_grasp, r_lift=r_lift_step, closed=closed_pos, open_pos=open_pos)
                     if exec_cfg.get("grasp_deliberation", True) and r_step.get("ok"):
                         k_lift = cgd.kinesthetic_judge(r_grasp, r_lift=r_lift_step, grasp_dynamics=grasp_dynamics, params=params)
-                        v_lift = cgd.vision_judge(frame_fn("wrist"), dict(exec_cfg.get("wrist_hsv") or cell_fingers.GREEN_HSV), 36.0 if cal.get("finger_color") == "dark" else 44.0, float(plan["pick"].get("yaw_deg", -90.0)) + 90.0, sign=exec_cfg.get("wrist_sign"), params=params, color=exec_cfg.get("object_color")) if (frame_fn is not None and exec_cfg.get("vision_after_grasp", False)) else v_judge
+                        v_lift = cgd.vision_judge(frame_fn("wrist"), (exec_cfg.get("wrist_hsv") or ([5, 95, 110], [32, 255, 255])), 36.0 if cal.get("finger_color") == "dark" else 44.0, float(plan["pick"].get("yaw_deg", -90.0)) + 90.0, sign=exec_cfg.get("wrist_sign"), params=params, color=exec_cfg.get("object_color")) if (frame_fn is not None and exec_cfg.get("vision_after_grasp", False)) else v_judge
                         if k_lift.get("verdict") == "reinsert" or v_lift.get("verdict") == "reinsert":
                             d_lift_res = cgd.debate_and_decide(
                                 stage="run lift_pick", telemetry=t_judge, vision=v_lift, kinesthetic=k_lift,
@@ -311,7 +311,7 @@ def execute_directive(
             if chunk_cmd == "run descend_place":
                 tactile_eval = evaluate_tactile_place_compliance(
                     r_step, target_z_m=float(cur_directive["place"]["effective_xyz_m"][2]),
-                    current_z_m=r_step.get("z_m"), holding=held_at_above_place or True,
+                    current_z_m=r_step.get("z_m"), holding=held_at_above_place,
                 )
                 if r_step.get("ok") and tactile_eval["compliant"]:
                     tactile_or_full_place = True

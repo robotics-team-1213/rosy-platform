@@ -214,7 +214,7 @@ def absorb_telemetry_error(runner, present, reason: str, error: Exception) -> bo
     if getattr(runner, "human_hold_latched", False) or getattr(runner, "signals", None):
         return True
     if not (_has_jaw_gate(runner) or _is_holding(runner) or getattr(runner, "_stop_after_park", None)
-            or getattr(runner, "chunk", None) in RECOVERY_PARKS or runner_has_configured_rim(runner)
+            or getattr(runner, "chunk", None) in (*RECOVERY_PARKS, "park") or runner_has_configured_rim(runner)
             or getattr(runner, "trusted_grasp", None) is not None or getattr(runner, "_recovery_active", False)):
         return False
     play = getattr(runner, "policy_playback", None) if getattr(runner, "chunk", None) == "policy" else None
@@ -235,7 +235,7 @@ def read_present_or_hold(runner, reason: str):
         if getattr(runner, "human_hold_latched", False):
             return fallback, True
         if not (_has_jaw_gate(runner) or _is_holding(runner) or getattr(runner, "_stop_after_park", None)
-                or getattr(runner, "chunk", None) in RECOVERY_PARKS or getattr(runner, "_recovery_active", False)):
+                or getattr(runner, "chunk", None) in (*RECOVERY_PARKS, "park") or getattr(runner, "_recovery_active", False)):
             raise
         play = getattr(runner, "policy_playback", None) if getattr(runner, "chunk", None) == "policy" else None
         _hold_and_report(runner, fallback, f"{reason}: {error}", play.receipt() if play is not None else None)
@@ -302,7 +302,7 @@ def send_with_jaw_gate(runner, action: dict, gate, play, prev_target: list):
     from chunk_runner_guards import RECOVERY_PARKS
     from chunk_runner_settle import note_sent_grip
     protect = (gate is not None or runner.human_hold_latched or _is_holding(runner)
-               or bool(getattr(runner, "_stop_after_park", None)) or getattr(runner, "chunk", None) in RECOVERY_PARKS or getattr(runner, "_recovery_active", False))
+               or bool(getattr(runner, "_stop_after_park", None)) or getattr(runner, "chunk", None) in (*RECOVERY_PARKS, "park") or getattr(runner, "_recovery_active", False))
     if not protect or not callable(getattr(runner.robot, "send_action_checked", None)):
         sent = runner.robot.send_action(action)
         note_sent_grip(runner, sent)

@@ -12,11 +12,16 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import cell_area_xyz  # noqa: E402
+import cell_attempts  # noqa: E402
 import cell_auto_setup  # noqa: E402
+from cell_auto_safety import Aborted, Guarded  # noqa: E402
 import cell_bundle_emit  # noqa: E402
 import cell_control_core  # noqa: E402
+import cell_hooks  # noqa: E402
 import cell_pipeline as cp  # noqa: E402
+import cell_pivot  # noqa: E402
 import cell_preflight  # noqa: E402
+from cell_transfer import FOLDED, Gate  # noqa: E402
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -37,6 +42,7 @@ def _parser() -> argparse.ArgumentParser:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--stay-in-hover", action="store_true")
     ap.add_argument("--no-vision-refine", action="store_true")
+    ap.add_argument("--apply-site-bias", action="store_true")
     ap.add_argument("--commissioning", action="store_true")
     ap.add_argument("--person-at-switch", action="store_true")
     ap.add_argument("--operator", default=None)
@@ -84,6 +90,22 @@ def _build_directive(args: argparse.Namespace, config: dict, raw_config: dict | 
         "live_perceived": True,
         "wrist_passes": 2,
     }
+    if getattr(args, "apply_site_bias", False):
+        cal_p = config.get("calibration_path")
+        bp = cell_pivot.bias_path(Path(str(cal_p)).expanduser()) if cal_p else (
+            Path(config["work_dir"]).expanduser() / "bias.json" if config.get("work_dir") else None
+        )
+        if bp is not None and bp.is_file():
+            bias_data = cell_pivot.load_bias(bp, config.get("params"))
+            if (reg := cell_pivot.bias_at(bias_data, args.pick_area, pick_xyz[:2], params=config.get("params"))) and "bias_mm" in reg:
+                pick_xyz[0] = round(pick_xyz[0] - float(reg["bias_mm"][0]) / 1000.0, 5)
+                pick_xyz[1] = round(pick_xyz[1] - float(reg["bias_mm"][1]) / 1000.0, 5)
+                execution["site_bias_mm"] = [float(reg["bias_mm"][0]), float(reg["bias_mm"][1])]
+    plan_cfg = config.get("plan") if isinstance(config.get("plan"), dict) else {}
+    for key in ("joint_min", "joint_max", "keep_out"):
+        val = config.get(key) if config.get(key) is not None else plan_cfg.get(key)
+        if val is not None:
+            execution[key] = val
     if fc := _resolve_finger_color(args.arm, config, raw_config):
         execution["finger_color"] = fc
     if (tcp := _resolve_tcp_x_m(config)) is not None:
@@ -203,31 +225,81 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     max_attempts = max(1, min(3, int(args.max_attempts)))
+    cal_p = config.get("calibration_path")
+    site_cal = (
+        json.loads(Path(str(cal_p)).expanduser().read_text(encoding="utf-8"))
+        if cal_p and Path(str(cal_p)).expanduser().is_file() else {}
+    )
+    cfg_bundle = {**config, "arm_id": args.arm}
+    guarded = Guarded(cell, config)
+    stills = cell_hooks.stills(cell, config, always_ring=True)
     try:
-        res = cell_area_xyz.execute_directive(
-            directive,
-            base_plan=config["plan"],
-            work_dir=work_dir,
-            act_fn=cell.act,
-            frame_fn=frame_fn,
-            max_attempts=max_attempts,
-        )
-    except ValueError as exc:
-        print(json.dumps({"result": "refused", "error": str(exc)}))
-        return 1
-    if res.get("result") not in ("placed", "hover"):
-        bid = cell_bundle_emit.emit_pick_failure(
-            cell,
-            {**config, "arm_id": args.arm},
-            res.get("calibration") or {},
-            args.pick_area,
-            args.place_area,
-            work_dir,
-            res,
-            {"transfer": res, "fail": {"stage": res.get("at") or "area_xyz_pick", "class": res.get("result") or "unknown"}},
-        )
-        if bid:
-            res["failure_bundle_id"] = bid
+        gate = None
+        if config.get("operating_profile_path") or config.get("operating_envelope_path"):
+            try:
+                lib0, _, _ = cell_area_xyz.plan_library_from_directive(directive, config["plan"], work_dir=work_dir)
+            except Exception as exc:
+                print(json.dumps({"result": "refused", "error": str(exc)}, default=str))
+                return 1
+            gate_cfg = {**config, "_commissioning": {"person_at_switch": True}}
+            gate = Gate(guarded, gate_cfg, site_cal, sequence=FOLDED if args.arm == "arm_s" else cp.SEQUENCE)
+            held = gate.open(
+                lib0,
+                lambda a: cell_attempts.begin(gate_cfg, a),
+                lambda outcome, old, parked, hist: cp.write_receipt(
+                    work_dir / "receipts", f"area-replan-{outcome}",
+                    {"outcome": outcome, "assessment": old, "parked": parked, "steps": len(hist)},
+                ),
+            )
+            if held is not None:
+                res_held = {"result": f"held: {held['reason']}", "envelope": held}
+                if bid := cell_bundle_emit.emit_pick_failure(
+                    cell, cfg_bundle, site_cal, args.pick_area, args.place_area, work_dir,
+                    res_held, {"fail": {"stage": "gate_open", "class": held["reason"]}},
+                    stills=stills, executor_mode="recovery",
+                ):
+                    res_held["failure_bundle_id"] = bid
+                print(json.dumps(res_held, indent=1, default=str))
+                return 1
+        try:
+            res = cell_area_xyz.execute_directive(
+                directive,
+                base_plan=config["plan"],
+                work_dir=work_dir,
+                act_fn=gate.act if gate is not None else guarded.act,
+                frame_fn=frame_fn,
+                max_attempts=max_attempts,
+            )
+        except Aborted as exc:
+            res_abort = {"result": "aborted", "error": str(exc), "arm_id": args.arm}
+            if bid := cell_bundle_emit.emit_pick_failure(
+                cell, cfg_bundle, site_cal, args.pick_area, args.place_area, work_dir,
+                res_abort, {"fail": {"stage": "safety_guard", "class": str(exc)}},
+                stills=stills, executor_mode="recovery",
+            ):
+                res_abort["failure_bundle_id"] = bid
+            print(json.dumps(res_abort, indent=1, default=str))
+            return 1
+        except ValueError as exc:
+            print(json.dumps({"result": "refused", "error": str(exc)}))
+            return 1
+        if res.get("result") not in ("placed", "hover"):
+            bid = cell_bundle_emit.emit_pick_failure(
+                cell,
+                cfg_bundle,
+                site_cal or (res.get("calibration") or {}),
+                args.pick_area,
+                args.place_area,
+                work_dir,
+                res,
+                {"transfer": res, "fail": {"stage": res.get("at") or "area_xyz_pick", "class": res.get("result") or "unknown"}},
+                stills=stills,
+                executor_mode="recovery",
+            )
+            if bid:
+                res["failure_bundle_id"] = bid
+    finally:
+        stills.close()
     if args.operator:
         res["operator"] = args.operator
     if args.proposer:

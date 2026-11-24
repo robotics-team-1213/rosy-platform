@@ -501,3 +501,69 @@ def test_dry_run_map_pose_preflight_detects_moved_top_camera(tmp_path):
     assert out["map_pose_check"]["max_px"] > 6.0
 
 
+def test_pr2_cli_guarded_abort_gate_hold_and_apply_site_bias(tmp_path: Path, monkeypatch, capsys) -> None:
+    wd, cfg_path = _make_workdir(tmp_path)
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cal_file = wd / "cal.json"
+    cal_file.write_text(json.dumps({"site": "floor"}), encoding="utf-8")
+    (wd / "cal.bias.json").write_text(json.dumps({
+        "schema": "rosy.omx-cell-bias.v1",
+        "regions": [{"site": "floor", "point_m": [0.08, 0.14], "bias_mm": [2.0, -3.0]}],
+    }), encoding="utf-8")
+    cfg["calibration_path"] = str(cal_file)
+    cfg["plan"] = {"pick": {}, "place": {}}
+
+    class _FakeCell:
+        def __init__(self, io, cams):
+            self.cmds = []
+
+        def frame(self, view: str):
+            return np.full((32, 32, 3), 120, dtype=np.uint8)
+
+        def act(self, cmd: str):
+            self.cmds.append(cmd)
+            return {"ok": True}
+
+    monkeypatch.setattr(cli.cell_auto_setup, "load_config", lambda _p: cfg)
+    monkeypatch.setattr(cli.cp, "FifoCell", _FakeCell)
+    monkeypatch.setattr(cli.cell_preflight, "ready", lambda _f, _c: [])
+    emitted: list[dict] = []
+    monkeypatch.setattr(
+        cli.cell_bundle_emit, "emit_pick_failure",
+        lambda cell, config, calibration, src, dst, work, res, tried, **kw: emitted.append({
+            "calibration": calibration, "stills": kw.get("stills"), "mode": kw.get("executor_mode"),
+        }) or "20261125T000000Z-arm_s-stop-guard1",
+    )
+    argv = [
+        "--arm", "arm_s", "--config", str(cfg_path),
+        "--pick-area", "floor", "--pick-x", "0.08", "--pick-y", "0.14", "--pick-z", "0.021",
+        "--place-area", "floor", "--place-x", "-0.06", "--place-y", "0.14", "--place-z", "0.025",
+    ]
+
+    # 1) --apply-site-bias adjusts pick XY by -bias_mm / 1000
+    d_bias = cli._build_directive(cli._parser().parse_args([*argv, "--apply-site-bias"]), cfg)
+    assert d_bias["pick"]["x"] == pytest.approx(0.078) and d_bias["pick"]["y"] == pytest.approx(0.143)
+
+    # 2) Guarded Aborted emits failure bundle with site_cal, stills, and executor_mode="recovery"
+    monkeypatch.setattr(cli.cell_area_xyz, "execute_directive", lambda *_a, **_kw: (_ for _ in ()).throw(cli.Aborted("pwm stall")))
+    assert cli.main([*argv, "--commissioning", "--person-at-switch"]) == 1
+    out_abort = json.loads(capsys.readouterr().out)
+    assert out_abort["result"] == "aborted" and "pwm stall" in out_abort["error"]
+    assert emitted[-1]["mode"] == "recovery" and emitted[-1]["stills"] is not None and emitted[-1]["calibration"] == {"site": "floor"}
+
+    # 3) Gate.open refusal when operating_profile_path is configured blocks execute_directive and emits bundle
+    prof = wd / "robot-profile.json"
+    prof.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1", "device_id": "arm_s", "instance_id": "arm_s",
+        "robot_config_sha256": "c" * 64, "operating_envelope_path": "env.json", "work_dir": ".",
+    }), encoding="utf-8")
+    cfg_gated = {**cfg, "operating_profile_path": str(prof)}
+    monkeypatch.setattr(cli.cell_auto_setup, "load_config", lambda _p: cfg_gated)
+    monkeypatch.setattr(cli.cell_area_xyz, "plan_library_from_directive", lambda d, bp, work_dir=None: ({"chunks": {}}, {"pick": d["pick"], "place": d["place"]}, {}))
+    monkeypatch.setattr(cli.cell_area_xyz, "execute_directive", lambda *_a, **_kw: pytest.fail("should not execute when Gate.open holds"))
+    assert cli.main([*argv, "--commissioning", "--person-at-switch"]) == 1
+    out_held = json.loads(capsys.readouterr().out)
+    assert out_held["result"].startswith("held:") and "envelope" in out_held
+    assert emitted[-1]["mode"] == "recovery" and emitted[-1]["calibration"] == {"site": "floor"}
+
+

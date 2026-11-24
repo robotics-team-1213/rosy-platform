@@ -129,6 +129,8 @@ class Gate:
                     return {"ok": False, "error": "held: reviewed_scope_changed"}
                 if self.assessment["mode"] != "commissioning" or self.finish_attempt is None:
                     return {"ok": False, "error": "held: revised_library_requires_supervised_audit"}
+                if self.transitions >= 4:
+                    return {"ok": False, "error": "held: replan_limit_reached"}
                 fresh = self._assess(library, state=state)
                 if not fresh["allowed"] or fresh["mode"] != self.assessment["mode"]:
                     return {"ok": False, "error": f"held: {fresh['reason']}", "envelope": fresh}
@@ -142,17 +144,13 @@ class Gate:
                 except Exception:
                     self.blocked = True
                     return {"ok": False, "error": "held: audit_unavailable"}
-                self.finalized = True
-                self.history = []
-                fresh["session_id"] = old["session_id"]
+                self.finalized, self.history, fresh["session_id"] = True, [], old["session_id"]
                 try:
                     self.before_motion(fresh)
                 except Exception:
                     self.blocked = True
                     return {"ok": False, "error": "held: audit_unavailable"}
-                self.assessment = fresh
-                self.finalized = False
-                self.transitions += 1
+                self.assessment, self.finalized, self.transitions = fresh, False, self.transitions + 1
                 state = self.cell.act("state")
         if not same_session(state, self.assessment, recovering=recovering):
             faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)

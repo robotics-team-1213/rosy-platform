@@ -97,9 +97,9 @@ def build_plan_from_directive(
         else (float(plan["grip_release"]) if plan.get("grip_release") is not None else float(cal.get("grip_release_30mm", 57.5)))
     )
     plan["grip_release"] = min(float(plan["grip_open"]), raw_rel)
-    plan["hold_current_ma"] = int(
-        exec_cfg.get("hold_current_ma", max(140, int(cal.get("hold_current_ma", plan.get("hold_current_ma", 140)))))
-    )
+    base_hold = plan.get("hold_current_ma")
+    default_hold = int(base_hold if base_hold is not None else cal.get("hold_current_ma", 80))
+    plan["hold_current_ma"] = int(exec_cfg.get("hold_current_ma", default_hold))
     plan["approach_m"] = approach_m
     plan["lift_m"] = actual_lift_m
     default_rel_lift = max(0.042, place_approach_m + 0.014) if arm_id == "arm_s" else place_approach_m
@@ -120,14 +120,8 @@ def build_plan_from_directive(
             plan[key] = float(exec_cfg[key])
     if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
         plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
-    if "limits" in plan and float(pz) < float(plan["limits"]["workspace_min_m"][2]):
-        lz = list(plan["limits"].get("low_zones") or [])
-        lz.append({
-            "x": [round(px - 0.04, 4), round(px + 0.04, 4)],
-            "y": [round(py - 0.04, 4), round(py + 0.04, 4)],
-            "z_min_m": round(float(pz) - 0.003, 4),
-        })
-        plan["limits"]["low_zones"] = lz
+    if exec_cfg.get("keep_out"):
+        plan["keep_out"] = _clone(exec_cfg["keep_out"])
     rl_speed_scale = max(0.70, min(1.25, float(exec_cfg.get("rl_speed_scale", 1.0))))
     plan["rl_speed_scale"] = round(rl_speed_scale, 3)
     base_transit = float(exec_cfg.get("transit_speed", plan.get("transit_speed", 0.85)))
@@ -156,6 +150,7 @@ def plan_library_from_directive(
     """Build and solve the top-down chunk library for a middleware `AreaXYZ` directive, with anti-jitter settle tails
     and Sim-to-Real phase-lead + static deadband trajectory pre-compensation."""
     from omx_adapter.z_profile import SimRealTwin
+    import cell_pipeline_io
     import grasp_planner
 
     plan, cal = build_plan_from_directive(directive, base_plan, work_dir=work_dir)
@@ -199,6 +194,8 @@ def plan_library_from_directive(
             "place_compensated": comp_place.get("after_sim"),
             "place_terminal_offset_units": comp_place.get("terminal_offset_units"),
         }
+    if err := cell_pipeline_io.limit_error({**plan, **exec_cfg}, lib):
+        raise ValueError(f"joint limit check failed: {err}")
     return lib, plan, cal
 
 

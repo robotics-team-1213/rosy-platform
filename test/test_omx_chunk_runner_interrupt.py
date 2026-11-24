@@ -974,3 +974,64 @@ def test_fifo_human_hold_ignores_pre_dispatch_status_row_and_reads_post_dispatch
     r3.tick()
     ack2 = [row for row in status3 if row.get("command") == "human-hold"][-1]
     assert ack2["ok"] is False and ack2["hold_req"] == "req2" and ack2["person_needed"] is True and r3.torque_hold_commanded is False
+
+
+def test_pr2_guard_stopped_clears_port_and_retries_per_motor():
+    from types import SimpleNamespace
+
+    cleared = []
+
+    class _FlakyBus:
+        def __init__(self, mode: str):
+            self.mode = mode
+            self.sync_calls = 0
+            self.port_handler = SimpleNamespace(clearPort=lambda: cleared.append(True))
+
+        def sync_read(self, reg, normalize=False, num_retry=0):
+            self.sync_calls += 1
+            if self.mode == "retry_ok":
+                if self.sync_calls == 1:
+                    raise ConnectionError("stale rx")
+                return {mot: 0 for mot in ci.MOTORS}
+            raise ConnectionError("sync down")
+
+        def read(self, reg, motor, normalize=False, num_retry=0):
+            if self.mode == "per_motor_partial":
+                return 0 if motor != ci.MOTORS[0] else 1
+            if self.mode == "per_motor_all_off":
+                return 0
+            raise ConnectionError("bus down")
+
+    class _FakeRunner:
+        def __init__(self, mode: str):
+            self.robot = SimpleNamespace(motion=SimpleNamespace(failed=True), bus=_FlakyBus(mode))
+            self._interrupt = {"signal": None, "guard_kind": None, "phase": "park"}
+            self.last_present = list(HOME)
+            self.target = list(HOME)
+            self.human_hold_latched = False
+            self.signals = []
+            self.rows = []
+
+        def report(self, **kw):
+            self.rows.append(kw)
+
+        def hold(self, present, why, human=True):
+            self.human_hold_latched = True
+
+    r_retry = _FakeRunner("retry_ok")
+    t1 = ci._guard_stopped(r_retry)
+    assert len(cleared) == 1 and ci._torque_complete(t1)
+    assert ci._guard_verdict(r_retry, t1, "err") is True
+
+    r_part = _FakeRunner("per_motor_partial")
+    t2 = ci._guard_stopped(r_part)
+    assert ci._torque_complete(t2) and t2[ci.MOTORS[0]] == 1
+    assert ci._guard_verdict(r_part, t2, "err") is False and r_part.human_hold_latched is True
+
+    r_off = _FakeRunner("per_motor_all_off")
+    t3 = ci._guard_stopped(r_off)
+    assert ci._guard_verdict(r_off, t3, "err") is True
+
+    r_err = _FakeRunner("all_fail")
+    t4 = ci._guard_stopped(r_err)
+    assert "error" in t4 and ci._guard_verdict(r_err, t4, "err") is False and r_err.human_hold_latched is True

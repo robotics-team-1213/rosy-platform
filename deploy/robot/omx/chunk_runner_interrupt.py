@@ -45,8 +45,7 @@ def _home(runner):
 
 
 def folded(present, home) -> bool:
-    return home is not None and present is not None and max(
-        abs(a - b) for a, b in zip(present[:5], home[:5])) <= SETTLE_TOL
+    return home is not None and present is not None and max(abs(a - b) for a, b in zip(present[:5], home[:5])) <= SETTLE_TOL
 
 
 def _pose(runner):
@@ -87,29 +86,47 @@ def _approve(runner, reason: str) -> bool:
 
 def _hold(runner, present, why: str, label: str = "HOLD") -> bool:
     state = runner._interrupt
-    if not runner.human_hold_latched:
-        runner.hold(present, f"interrupt: {why}", human=True)
+    if not runner.human_hold_latched: runner.hold(present, f"interrupt: {why}", human=True)
     if state["phase"] != "hold":
         sigs = getattr(runner, "signals", None) or ()
         state["phase"], state["release_from"] = "hold", len(sigs)
         early = sigs.count(OPERATOR_RELEASE) if OPERATOR_RELEASE is not None else 0
-        if early:
-            _stderr({"command": "interrupt", "ignored_release": early, "reason": "SIGUSR2 before the HOLD"})
+        if early: _stderr({"command": "interrupt", "ignored_release": early, "reason": "SIGUSR2 before the HOLD"})
     error = f"{label}: {why}; a person must support the arm, then kill -USR2 the runner"
     _write_hold(runner, {"hold": True, "error": error, "label": label})
     _say(runner, present, ok=False, hold=True, person_needed=True, error=error, **({"partial_guard_stop": True} if label != "HOLD" else {}))
     return False
 
 
+def _torque_complete(torque) -> bool:
+    return isinstance(torque, dict) and all(
+        (p := [torque[k] for k in (m, n) if k in torque]) and all(type(v) is int and v in (0, 1) for v in p) and len(set(p)) == 1
+        for n, m in zip(NAMES, MOTORS)
+    )
+
+
 def _guard_stopped(runner):
-    """None while the guard runs; else the Torque_Enable readback after its own stop (or the read error)."""
-    robot = runner.robot
-    if not getattr(getattr(robot, "motion", None), "failed", False):
+    """None while guard runs; else Torque_Enable readback after its stop (port clear + sync/per-motor retry)."""
+    if not getattr(getattr(runner.robot, "motion", None), "failed", False):
         return None
-    try:
-        return dict(robot.bus.sync_read("Torque_Enable", normalize=False, num_retry=2))
-    except Exception as error:  # noqa: BLE001
-        return {"error": f"{type(error).__name__}: {error}"[:300]}
+    bus, data, last_err = runner.robot.bus, {}, None
+    for attempt in range(2):
+        try:
+            if attempt == 1 and callable(clear := getattr(getattr(bus, "port_handler", None), "clearPort", None)):
+                clear()
+            data = dict(bus.sync_read("Torque_Enable", normalize=False, num_retry=2))
+            if _torque_complete(data):
+                return data
+        except Exception as error:  # noqa: BLE001
+            last_err = error
+    if callable(getattr(bus, "read", None)):
+        for m in MOTORS:
+            try:
+                if type(val := bus.read("Torque_Enable", m, normalize=False, num_retry=2)) is int and val in (0, 1): data[m] = val
+            except Exception as error:  # noqa: BLE001
+                last_err = error
+    if any(k in data and type(data[k]) is int and data[k] in (0, 1) for k in (*MOTORS, *NAMES)): return data
+    return {"error": f"{type(last_err).__name__}: {last_err}"[:300] if last_err else "incomplete Torque_Enable readback"}
 
 
 def _guard_verdict(runner, torque: dict, cause: str) -> bool:
@@ -120,15 +137,13 @@ def _guard_verdict(runner, torque: dict, cause: str) -> bool:
     vals = [p[0] for p in pairs if p and all(type(v) is int and v in (0, 1) for v in p) and len(set(p)) == 1]
     all_read = len(vals) == len(NAMES)
     kind = "off" if all_read and all(v == 0 for v in vals) else "partial" if any(v == 0 for v in vals) else "on" if all_read else "unknown"
-    if state.get("guard_kind") == kind:
-        return False
+    if state.get("guard_kind") == kind: return False
     state["guard_kind"] = kind
-    present = list(getattr(runner, "last_present", None) or runner.target)  # no bus read: the guard has failed
+    present = list(getattr(runner, "last_present", None) or runner.target)
     if kind == "off":
         _say(runner, present, ok=False, guard_stopped=True, torque=torque, error=f"GUARD_STOPPED torque off: {cause}"[:500])
         return _approve(runner, "guard stopped, every motor reads torque 0")
-    label = "PARTIAL_GUARD_STOP" if kind == "partial" else "HOLD"
-    return _hold(runner, present, f"guard stopped, torque reads {torque}: {cause}"[:500], label=label)
+    return _hold(runner, present, f"guard stopped, torque reads {torque}: {cause}"[:500], label="PARTIAL_GUARD_STOP" if kind == "partial" else "HOLD")
 
 
 def _hold_tick(runner) -> bool:
@@ -139,15 +154,11 @@ def _hold_tick(runner) -> bool:
     if torque is None:
         try:
             sent = send_hold_action(runner.robot, runner.target)
-            try:
-                present, fresh = runner.present(), True  # refresh last_present for live.json; a failed read keeps the hold
-            except Exception:  # noqa: BLE001
-                present, fresh = getattr(runner, "last_present", None) or runner.target, False
+            try: present, fresh = runner.present(), True
+            except Exception: present, fresh = getattr(runner, "last_present", None) or runner.target, False  # noqa: E701
             shed_interrupt_hold(runner, sent, present, fresh=fresh)
-            if runner.ticks % max(1, round(getattr(runner, "fps", 30))) == 0:
-                check_hold_health(runner, MOTORS)
-            if runner._human_hold_ack_pending:
-                runner._human_hold_ack_pending, runner.torque_hold_commanded, runner._human_hold_acked_req = False, True, getattr(runner, "_human_hold_req", None)
+            if runner.ticks % max(1, round(getattr(runner, "fps", 30))) == 0: check_hold_health(runner, MOTORS)  # noqa: E701
+            if runner._human_hold_ack_pending: runner._human_hold_ack_pending, runner.torque_hold_commanded, runner._human_hold_acked_req = False, True, getattr(runner, "_human_hold_req", None)  # noqa: E701
         except Exception as error:  # noqa: BLE001
             runner.torque_hold_commanded, runner._human_hold_acked_req = False, None
             torque, cause = _guard_stopped(runner), f"{type(error).__name__}: {error}"
@@ -328,24 +339,20 @@ def emergency_hold(runner, error) -> bool:
 
 
 def last_resort_hold(runner, signals: list, error, sleep=time.sleep) -> None:
-    """The run loop itself raised after an interrupt: no loop is left to stream the hold, so nothing is sent; torque
-    stays as the motors hold it. Report HOLD and wait for a SIGUSR2 sent after this point, then return (torque OFF)."""
+    """Nothing is left to stream the hold; torque stays as the motors hold it until SIGUSR2."""
     row = {"hold": True, "last_resort": True, "error": f"HOLD: {type(error).__name__}: {error}"[:500]
            + "; nothing streams the pose, a person must support the arm, then kill -USR2 the runner"}
     _write_hold(runner, row)
     _stderr({"command": "interrupt", **row})
     mark = len(signals)
-    while OPERATOR_RELEASE is None or OPERATOR_RELEASE not in signals[mark:]:
-        sleep(0.5)
+    while OPERATOR_RELEASE is None or OPERATOR_RELEASE not in signals[mark:]: sleep(0.5)
     _stderr({"command": "interrupt", "released": True, "last_resort": True})
-    if runner is not None:
-        _approve(runner, "operator release (SIGUSR2) after a last-resort hold")
+    if runner is not None: _approve(runner, "operator release (SIGUSR2) after a last-resort hold")
 
 
 def gate_allows(runner, signals: list) -> bool:
     """No interrupt, latched hold, pending fold-stop, or unconfirmed guard stop on record, or an approved end."""
-    if bool(getattr(runner, "_off_approved", None)):
-        return True
+    if bool(getattr(runner, "_off_approved", None)): return True
     if (getattr(runner, "human_hold_latched", False) or getattr(runner, "_stop_after_park", None) or getattr(runner, "_release_until", None) is not None
             or getattr(runner, "_recovery_active", False) or getattr(getattr(getattr(runner, "robot", None), "motion", None), "failed", False)):
         return False
@@ -353,26 +360,18 @@ def gate_allows(runner, signals: list) -> bool:
 
 
 def final_gate(runner, signals: list, hold_file=None, sleep=time.sleep) -> None:
-    """An interrupt on record without an approved end -> last_resort_hold (nothing sent, torque as the motors hold it)
-    until a person's SIGUSR2, whichever path returned (idle stop, a judge's stop, the start alignment's stop, a
-    signal landing while a status row was written)."""
-    if gate_allows(runner, signals):
-        return
+    """An interrupt without an approved end -> last_resort_hold until SIGUSR2."""
+    if gate_allows(runner, signals): return
     holder = runner if runner is not None else type("Unstarted", (), {"hold_file": hold_file})()
-    last_resort_hold(holder, signals, RuntimeError("the run ended after an interrupt without a confirmed fold"),
-                     sleep=sleep)
+    last_resort_hold(holder, signals, RuntimeError("the run ended after an interrupt without a confirmed fold"), sleep=sleep)
 
 
 def _record_release(holder) -> None:
-    """After close() returned (it raises unless torque OFF was read back): an operator release leaves the proof the bench needs
-    to clear this runner's lease hold."""
+    """After close() returned: operator release proves to the bench that this runner's lease hold may clear."""
     reason, path = getattr(holder, "_off_approved", None) or "", getattr(holder, "hold_file", None)
     if path is not None and reason.startswith("operator release"):
-        try:
-            Path(path).with_name("released.json").write_text(json.dumps(
-                {"pid": os.getpid(), "t": time.time(), "reason": reason, "torque_off_confirmed": True}))
-        except OSError:
-            pass
+        try: Path(path).with_name("released.json").write_text(json.dumps({"pid": os.getpid(), "t": time.time(), "reason": reason, "torque_off_confirmed": True}))
+        except OSError: pass
 
 
 def gated_close(runner, signals: list, hold_file, close, sleep=time.sleep) -> None:
