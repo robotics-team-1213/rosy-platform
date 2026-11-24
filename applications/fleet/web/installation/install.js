@@ -28,6 +28,7 @@ import { createTaskChooser } from "/common/task-chooser.js";
 import {createDeviceCare} from '/console/assets/device-care.js';
 import { confirmIrreversible, openLiveDialog } from "/common/ui.js";
 import { bindEstop, bindTopbarToggle, showSession, showSignedOut, stopNotice, tickClock, watchFleet } from "/console/assets/fleet-header.js";
+import { bindTokenAccess, classifyAuthFailure, readStoredToken, writeStoredToken } from "/console/assets/fleet-session.js";
 import '/console/assets/file-picker.js';
 
 const pageScope = createPageScope();
@@ -49,7 +50,7 @@ let measuredCalibration = null;
 let deviceProfiles = null;
 
 const auth = {
-  token: sessionStorage.getItem("rosy-console-token") || "",
+  token: readStoredToken(),
   role: null,
   principal: null,
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다.
@@ -108,7 +109,7 @@ async function call(path, options = {}) {
     return body;
   } catch (error) {
     task.check();
-    if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
+    if (classifyAuthFailure(error).offerLogin && !cameraPreview) markLocked();
     throw error;
   }
 }
@@ -208,19 +209,14 @@ peerPicker = createPeerPicker({scope: pageScope, el, call,
 
 bindTopbarToggle((node, type, fn) => pageScope.listen(node, type, fn));
 
-el("console-token").value = auth.token;
 function saveToken() {
   stopNotice();
   pageScope.invalidate();
   peerPicker.reset();
-  auth.token = el("console-token").value.trim();
+  auth.token = tokenAccess.getToken();
   auth.role = null;
   applyRole();
-  if (auth.token) {
-    sessionStorage.setItem("rosy-console-token", auth.token);
-  } else {
-    sessionStorage.removeItem("rosy-console-token");
-  }
+  writeStoredToken(auth.token);
   visionView.reset();
   mapFit.reset();
   startPoints.reset();
@@ -228,15 +224,12 @@ function saveToken() {
   refreshAuthorization(false, true);
   visionView.refreshSources();
 }
-pageScope.listen(el("token-save"), "click", saveToken);
-// D-519 — login and logout change the cookie; drop any token so the cookie (or the lock) decides.
-const loginForm = createPasswordLogin(el("password-login"), {onChange: () => {
-  el("console-token").value = "";
-  saveToken();
-}});
-pageScope.listen(el("console-token"), "keydown", (event) => {
-  if (event.key === "Enter") saveToken();
+const tokenAccess = bindTokenAccess({
+  scope: pageScope,
+  createLogin: createPasswordLogin,
+  onCredential: () => saveToken(),
 });
+if (auth.token) tokenAccess.setToken(auth.token, { persistValue: false });
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-414 — 비상 정지는 확인 없는
 // 비상 출구다. D-371이 대화상자 위에서 살아 있게 했던 이유를 끝까지 밀었다).
@@ -317,7 +310,7 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
     life.check();
     auth.role = identity.role;
     auth.principal = identity.principal_id;
-    loginForm.refresh(false);
+    tokenAccess.refreshLogin(false);
     showSession(identity, {credentialChange});
     applyRole();
     await Promise.allSettled([
@@ -340,19 +333,19 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
         const token = await developmentToken(auth.token);
         if (token && token !== auth.token) {
           auth.token = token;
-          el("console-token").value = token;
+          tokenAccess.setToken(token, { persistValue: false });
           await refreshAuthorization(true, credentialChange);
           return;
         }
       } catch (_issueError) { /* Paired and unavailable consoles keep the token prompt. */ }
     }
-    if (!auth.locked) markLocked(_err.status === 401 || _err.code === 'PASSWORD_CHANGE_REQUIRED' ? "auth" : "connection");
+    if (!auth.locked) markLocked(classifyAuthFailure(_err).offerLogin ? "auth" : "connection");
   }
 }
 
 tickClock();
 pageScope.interval(tickClock, 1000);
-watchFleet(fleetClient, {interval: (fn, ms) => pageScope.interval(fn, ms)});
+watchFleet(fleetClient, {scope: pageScope});
 applyRole();
 refreshAuthorization();
 visionView.refreshSources();

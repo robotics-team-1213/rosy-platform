@@ -1,11 +1,13 @@
 import { setOff, setOffBy } from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
 import {NAMED_OPERATOR_REASON, OPERATOR_REASON, namedOperatorReason, isOperator} from "/console/assets/authorization.js";
+import {createPageScope} from '/common/scope.js';
 import {createFleetClient} from '/common/fleet-client.js';
 import {developmentToken} from '/console/assets/development-auth.js';
-import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
+import {bindTokenAccess, classifyAuthFailure} from '/console/assets/fleet-session.js';
+import {childUnitLinks, renderUnitLinks} from '/console/assets/unit-links.js';
 import {renderStructuredDocument} from '/console/assets/cell-document-editor.js';
 import {createCellObservation} from '/console/assets/cell-observation.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
@@ -47,11 +49,22 @@ function jobStatusLabel(status, reason) {
 function jobReasonLabel(reason) {
   return !reason ? '' : JOB_REASON_LABEL[reason] || '사유 확인 필요 · 진행 원장 상세를 확인하세요';
 }
-// Read once: a token typed while the page starts is the person's own 접속, not a stored session.
-const stored = sessionStorage.getItem('rosy-console-token') || '';
-$('console-token').value = stored;
-const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value, onSummary: renderExceptions});
+const pageScope = createPageScope();
+const tokenAccess = bindTokenAccess({
+  scope: pageScope,
+  persist: false,
+  onTokenInput: () => {
+    editEpoch++;
+    clearSession();
+    $('notice').textContent = '운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.';
+  },
+  onCredential: (nextToken) => {
+    if (!nextToken) { editEpoch++; clearSession(); }
+    void connect(true);
+  },
+});
+const request = createFleetClient({credential: () => tokenAccess.getToken(), origin: location.origin});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => tokenAccess.getToken(), onSummary: renderExceptions});
 // B-3 — 관측 화면은 팔 관측·사건 단계(#observation-heading)에 선다. 화면이 바뀐 뒤에 카드로 옮겨야 초점이 살아 있다.
 function jumpToObservations(land) {
   if (location.hash === '#observation-heading') land();
@@ -103,9 +116,12 @@ createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});
 window.addEventListener('pagehide', event => { catalog.clear(); real2sim.clear(); clearUnitLinks(); event.persisted ? observations.clear() : observations.dispose(); });
-window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
-bindEstop(request); bindTopbarToggle(); tickClock(); setInterval(tickClock, 1000); watchFleet(request);
-$('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
+pageScope.onResume(() => { void connect(); });
+bindEstop(request, {listen: (node, type, fn) => pageScope.listen(node, type, fn), life: () => pageScope.capture()});
+bindTopbarToggle((node, type, fn) => pageScope.listen(node, type, fn));
+tickClock();
+pageScope.interval(tickClock, 1000);
+watchFleet(request, {scope: pageScope});
 let editEpoch = 0;
 async function api(path, options) {
   const epoch = editEpoch, result = await request(path, options);
@@ -135,30 +151,12 @@ function clearSession() {
   $('saved-status').setAttribute('state', 'unavailable'); $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
 }
 const scopeFilled = () => $('workcell').value.trim() && $('instance').value.trim();
-// D-977 — 하위 셀 이동 링크는 검증된 https origin만 쓰고 토큰을 실어 보내지 않는다(각 origin이 Account 로그인 검증).
-const CELL_LINK_ORIGIN = /^https:\/\/[\w.:\[\]-]+$/;
-function clearUnitLinks() { $('cell-unit-links').replaceChildren(); }
-function paintUnitLinks(summary) {
-  const origins = summary?.child_origins && typeof summary.child_origins === 'object' ? summary.child_origins : {};
-  const arms = Array.isArray(summary?.child_arm_units) ? summary.child_arm_units : [];
-  const links = arms.flatMap(child => {
-    const origin = origins[child];
-    if (typeof origin !== 'string' || !CELL_LINK_ORIGIN.test(origin)) return [];
-    const link = document.createElement('a');
-    link.className = 'ui-action-link';
-    link.dataset.kind = 'quiet';
-    link.rel = 'noreferrer';
-    link.href = `${origin}/console/cell`;
-    link.textContent = `${child} 셀 관제 화면 열기`;
-    return [link];
-  });
-  $('cell-unit-links').replaceChildren(...links);
-}
+function clearUnitLinks() { renderUnitLinks($('cell-unit-links'), []); }
 async function refreshUnitLinks() {
   const epoch = editEpoch;
   try {
     const summary = await api('/api/fleet/control-unit');
-    if (epoch === editEpoch && role) paintUnitLinks(summary); else clearUnitLinks();
+    if (epoch === editEpoch && role) renderUnitLinks($('cell-unit-links'), childUnitLinks(summary, {includeCell: true})); else clearUnitLinks();
   } catch { clearUnitLinks(); }
 }
 for (const id of ['workcell', 'instance']) $(id).addEventListener('input', () => refreshControls());
@@ -198,9 +196,12 @@ async function action(fn) {
   busy = true; refreshControls(); $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
     if (error.code === 'CELL_APP_UNCONFIGURED') cellServiceUnavailable = true;
-    if (error.status === 401 || error.status === 403) clearSession();
-    if (error.status === 403 && error.code !== 'PASSWORD_CHANGE_REQUIRED') showSignedOut({refused: false});
-    if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') { showSignedOut(); loginForm.refresh(true); }
+    const failure = classifyAuthFailure(error);
+    if (failure.signOut) {
+      clearSession();
+      showSignedOut({refused: failure.refused});
+    }
+    if (failure.offerLogin) tokenAccess.refreshLogin(true);
     else if (error.status === 409) clearJobSnapshot();
     $('notice').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED' ? '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요.'
       : error.status === 403 ? '이 계정에는 팔레트 적재 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
@@ -378,10 +379,6 @@ for (const kind of ['recipe', 'cell']) {
     loaded(kind, revision); await list(); $('notice').textContent = '문서 저장 완료 · 실행 가능 여부는 미리보기에서 확인하세요.';
   }));
 }
-$('console-token').addEventListener('input', () => {
-  editEpoch++; clearSession();
-  $('notice').textContent = '운영자 계정으로 접속해 저장된 레시피와 셀을 준비하세요.';
-});
 function connect(credentialChange = false) {
   const focusOrigin = document.activeElement;
   return action(async () => {
@@ -389,7 +386,7 @@ function connect(credentialChange = false) {
   showSession(session, {credentialChange, focusOrigin});
   observations.clear(); void observations.refresh().then(focusArmFromLink); void catalog.refresh(); void real2sim.refresh();
   void refreshUnitLinks();
-  loginForm.refresh(false);
+  tokenAccess.refreshLogin(false);
   await list();
   if (channelRequested) {
     if (!/^[0-9a-f]{24}$/.test(channelId || '')) throw new Error('대화 요청 주소를 확인하세요.');
@@ -407,11 +404,6 @@ function connect(credentialChange = false) {
   $('notice').textContent = '접속 완료 · 문서를 준비하세요.';
   });
 }
-$('token-save').addEventListener('click', () => connect(true));
-// D-519 — login and logout change the cookie; drop any token so the cookie (or a 401) decides.
-const loginForm = createPasswordLogin($('password-login'), {onChange: () => {
-  $('console-token').value = ''; editEpoch++; clearSession(); connect(true);
-}});
 $('compile').addEventListener('click', () => action(async () => {
   invalidate();
   let refs, result;
@@ -567,11 +559,8 @@ for (const command of ['admit', 'resume', 'reconcile', 'cancel']) {
   });
 }
 refreshControls();
-developmentToken($('console-token').value).then(token => {
-  if (token) { $('console-token').value = token; connect(); }
-  // D-540 2 — a stored token (another Fleet tab) or a login cookie connects at once; neither means signed out.
-  else loginForm.refresh(true).then(cookie => {
-    if (cookie || stored) connect();
-    else if (!role && !busy) showSignedOut();  // not if someone connected meanwhile
-  });
-}).catch(() => {});
+void tokenAccess.bootstrap({
+  developmentToken,
+  connect: () => connect(),
+  onSignedOut: () => { if (!role && !busy) showSignedOut(); },
+});

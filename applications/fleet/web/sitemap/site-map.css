@@ -1,5 +1,6 @@
 /* D-741 2 — 본문은 칸이다. 아래 60rem 접힘은 뷰포트가 아니라 레일과 하위 탐색(304px)을 뺀 본문 폭에 답한다(D-359 §6.3). 값의 이유는 surfaces.yaml에 있다. */
 main { word-break: keep-all; overflow-wrap: break-word; }
+html[data-fleet-role="viewer"] .ui-subnav-nav[aria-label="현장 지도 작업"] :is(a[href="#survey-heading"], a[href="#camera-draft-heading"], a[href="#edit-heading"], a[href="#reality-heading"], a[href="#teach-heading"]):not([aria-current="step"]):not([aria-current="page"]) { display: none; }
 /* D-926 3: one sub-nav screen shows at a time, so trip, run and edit stack in one column. */
 .map-workflow { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .plane-tools { min-width: 0; }

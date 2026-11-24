@@ -2,7 +2,7 @@
 import { setOffBy } from "/common/cause-line.js";
 import { patchHidden, patchText } from "/common/control-dom.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
-import {owns, relays} from "/console/assets/unit-scope.js";
+import {owns, relays, unitScope} from "/console/assets/unit-scope.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
 import { createArmTransferView } from "/console/assets/arm-transfer-view.js";
 import { createTripProposalView } from "/console/assets/trip-proposal-view.js";
@@ -19,7 +19,7 @@ export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
 const workKind = row => ({task: "주행", trip: "운행", cell_job: "팔레트 적재"})[row.source] || "팔 작업";
 const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
-export const canAdmitWorkHere = (row, scope) => approvable(row) && owns("arms", scope) && !relays(scope);
+export const canAdmitWorkHere = (row, scope = unitScope()) => approvable(row) && owns("arms", scope) && !relays(scope);
 export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
 // D-865 P3 — 승인 범위 판정과 문구는 순수 함수다(node 시험 대상). 화면은 범위 사실을 읽어
 // 표시만 하고 승인 자체는 서버의 정책 principal이 한다: 사람 승인과 같은 검사를 전부 통과한

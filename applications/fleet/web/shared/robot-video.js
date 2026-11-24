@@ -8,6 +8,7 @@ import { setOffBy } from "/common/cause-line.js";
 
 import {createFleetClient} from "/common/fleet-client.js";
 import {openRobotCamera} from "/console/assets/app-runtime.js";
+import {readStoredToken} from "/console/assets/fleet-session.js";
 
 const MAX_TILES = 6;
 
@@ -115,7 +116,7 @@ function mountRobotVideoPanel({doc = document} = {}) {
   anchor.after(panel);
 
   // console.js와 같은 자격: 로그인 쿠키, 또는 이 탭의 고급 접속 토큰.
-  const call = createFleetClient({credential: () => sessionStorage.getItem("rosy-console-token") || ""});
+  const call = createFleetClient({credential: () => readStoredToken()});
   const video = createRobotVideo({doc, call});
   // 관찰자는 패널이 펼쳐진 동안만 둔다: 접힘·pagehide에서 세션과 관찰자를 모두 정리한다.
   let unbind = null;
