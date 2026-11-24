@@ -114,17 +114,18 @@ export function createCellObservation({request, root, credential = () => '', onS
 
     const activeArms = cellState.armEntries.filter(isArmEntryActive);
     const idleArms = cellState.armEntries.length - activeArms.length;
+    const hideIdleArms = !cellState.showAllArms && activeArms.length > 0;
     for (const armEntry of cellState.armEntries) {
-      patchHidden(armEntry.card, !cellState.showAllArms && !isArmEntryActive(armEntry));
+      patchHidden(armEntry.card, hideIdleArms && !isArmEntryActive(armEntry));
     }
-    patchHidden(cellState.armBar, cellState.armEntries.length === 0 || (idleArms === 0 && !cellState.showAllArms));
+    patchHidden(cellState.armBar, cellState.armEntries.length === 0 || activeArms.length === 0 || (idleArms === 0 && !cellState.showAllArms));
     patchText(cellState.armSummary, cellState.showAllArms
       ? `전체 팔 ${cellState.armEntries.length}대 표시 중`
       : activeArms.length
         ? `활성·주의 팔 ${activeArms.length}대 표시 · 대기 팔 ${idleArms}대 숨김`
         : `활성·주의 팔 없음 · 대기 팔 ${idleArms}대 숨김`);
     patchText(cellState.armToggle, cellState.showAllArms ? '활성·주의 팔만 보기' : `대기 팔 ${idleArms}대 보기`);
-    patchHidden(cellState.armEmpty, cellState.armEntries.length === 0 || cellState.showAllArms || activeArms.length > 0);
+    patchHidden(cellState.armEmpty, cellState.armEntries.length === 0 || activeArms.length > 0);
     patchText(cellState.armEmptyText, `활성·주의 팔 0/${cellState.armEntries.length}대 · 현재 대기 상태입니다.`);
   }
 
@@ -183,7 +184,8 @@ export function createCellObservation({request, root, credential = () => '', onS
   }
   function build(workcells) {
     const next = JSON.stringify(workcells.map(cell => [cell.workcell_id, cell.label,
-      cell.arms.map(arm => [arm.source_id, arm.arm_id, arm.label]), cell.cameras]));
+      cell.arms.map(arm => [arm.source_id, arm.arm_id, arm.label]),
+      cell.cameras.map(cam => [cam.source_id, cam.label, cam.role, cam.stream, cam.arm_id])]));
     if (next === layout) return;
     reset(); layout = next;
     empty.hidden = workcells.length > 0;
