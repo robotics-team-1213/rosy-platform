@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import importlib
+import os
 import rclpy
 import signal
 from rclpy.node import Node
@@ -440,12 +442,47 @@ class Rosy(Node):
             )
 
 
+_EXECUTOR_KINDS = ("events", "single")
+
+
+def _executor_kind(environ=None):
+    """Return 'events' or 'single' from ROSY_EXECUTOR (D-185 R3)."""
+    env = os.environ if environ is None else environ
+    kind = env.get("ROSY_EXECUTOR", "single").strip().lower() or "single"
+    if kind not in _EXECUTOR_KINDS:
+        raise ValueError(
+            f"ROSY_EXECUTOR must be one of {', '.join(repr(k) for k in _EXECUTOR_KINDS)}, not {kind!r}"
+        )
+    return kind
+
+
+def _spin_node(node, *, rclpy_mod=None, environ=None, import_module=importlib.import_module):
+    """Spin bringup under SingleThreadedExecutor or rclpy.experimental.EventsExecutor."""
+    mod = rclpy if rclpy_mod is None else rclpy_mod
+    if _executor_kind(environ) == "single":
+        mod.spin(node)
+        return
+    executor = import_module(f"{mod.__name__}.experimental").EventsExecutor()
+    external_shutdown = getattr(getattr(mod, "executors", None), "ExternalShutdownException", ())
+    executor.add_node(node)
+    try:
+        try:
+            executor.spin()
+        except external_shutdown:
+            pass
+    finally:
+        executor.remove_node(node)
+        shutdown = getattr(executor, "shutdown", None)
+        if callable(shutdown):
+            shutdown(timeout_sec=0)
+
+
 def main(args=None):
     rclpy.init(args=args)
     node = None
     try:
         node = Rosy()
-        rclpy.spin(node)
+        _spin_node(node)
     except KeyboardInterrupt:
         pass
     finally:

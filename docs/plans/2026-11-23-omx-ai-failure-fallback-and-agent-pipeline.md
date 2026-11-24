@@ -1,7 +1,7 @@
 # OMX AI 실패 폴백·컨텍스트 번들 및 에이전트 Tool/HTTP 파이프라인 구현 계획
 
 Date: 2026-11-23  
-Status: **In Progress — D-1072 구현 계획 (TODO 0 → TODO 7 순차 진행)**  
+Status: **Completed — D-1072 코드 구현 PR-0..PR-7 머지 완료 (`#563`, `#564`, `#565`, `#624`, `#629`, `#634`, `#572`, `#566`; §3 현장·후속 트랙 진행 중)**  
 근거 결정: [D-1072](../adr/D-1072-omx-ai-failure-fallback-context-and-agent-tool-pipeline.md) · [D-358](../adr/D-358-er2-feedback-outbox-and-replan-fencing.md) · [D-427](../adr/D-427-platform-three-parts-middleware-operations-learning.md) · [D-429](../adr/D-429-five-concerns-control-port-and-site-devices.md) · [D-430](../adr/D-430-safety-as-a-separate-concern.md) · [D-878](../adr/D-878-structured-model-output-schema-and-provider-wire.md) · [D-911](../adr/D-911-omx-native-reviewed-operating-envelope.md) · [D-1019](../adr/D-1019-omx-carry-redirects-to-declared-alternate-destinations.md) · [D-1024](../adr/D-1024-omx-learned-policy-supervised-real-trial-fast-track.md) · [D-1047](../adr/D-1047-cell-s-automatic-departure-and-link-failure-clear.md) · [D-1048](../adr/D-1048-automatic-fold-of-a-held-extended-arm.md) · [D-1057](../adr/D-1057-cell-task-admission-evidence.md) · [D-1061](../adr/D-1061-records-fragments-merge-queue.md)
 
 ---
@@ -63,7 +63,7 @@ Status: **In Progress — D-1072 구현 계획 (TODO 0 → TODO 7 순차 진행)
 
 ---
 
-### [-] TODO 1 — PR-1: `rosy.omx-failure-context.v1` 계약 및 셀 번들 수집·저장·펜스 모듈 (`feat/omx-failure-context-bundle`)
+### [x] TODO 1 — PR-1 (`#564`): `rosy.omx-failure-context.v1` 계약 및 셀 번들 수집·저장·펜스 모듈 (`feat/omx-failure-context-bundle`)
 - **대상 파일(모두 신규 파일, 줄 절벽 파일 0건 수정):**
   - `contracts/foundation/core_common/protocol/cell_failure_context.py` (`<= 350`줄)
   - `deploy/robot/omx/cell_failure_context.py` (`< 380`줄, stdlib 전용)
@@ -79,7 +79,7 @@ Status: **In Progress — D-1072 구현 계획 (TODO 0 → TODO 7 순차 진행)
 
 ---
 
-### [ ] TODO 2 — PR-2: D-430 안전 태그 보완 + `:8781` 토큰 분리·게이트 + `cell_task_worker` 오프라인 경화
+### [x] TODO 2 — PR-2 (`#565`): D-430 안전 태그 보완 + `:8781` 토큰 분리·게이트 + `cell_task_worker` 오프라인 경화
 - **안전 태그:** **YES — D-430 (`Safety-Review:` trailer + 독립 리뷰 필수)**
 - **대상 파일:**
   - `tools/harness/platform_parts.yaml`: `safety_review_paths`에 `cell_job_api.py`, `cell_job_spec.py`, `cell_recovery.py`, `cell_task_transport.py`, `cell_vlm_orchestrator.py`, `cell_envelope_review.py`, `pipeline_cell_task_routes.py`, `pipeline_camera_routes.py`, `pipeline_evidence.py` 추가.
@@ -96,7 +96,7 @@ Status: **In Progress — D-1072 구현 계획 (TODO 0 → TODO 7 순차 진행)
 
 ---
 
-### [ ] TODO 3 — PR-3: `:8781` 실패 컨텍스트·준비 상태 HTTP + 상시 `Ring` + 영상/데이터셋/스테이징 작업 + 스텁 제거
+### [x] TODO 3 — PR-3 (`#624`): `:8781` 실패 컨텍스트·준비 상태 HTTP + 상시 `Ring` + 영상/데이터셋/스테이징 작업 + 스텁 제거
 - **안전 태그:** **YES** (`cell_job_api.py`, `cell_job_spec.py`, `cell_policy_drive.py`, `cell_auto_pick.py` 포함 시 `Safety-Review:` 필수)
 - **대상 파일:**
   - `deploy/robot/omx/cell_evidence.py`, `cell_hooks.py`, `cell_transfer.py`: `FifoCell.frame_receipt()` 사용(무시된 `304` 캐시 제거), `cell_auto_pick` 모든 비-`placed` 종료에서 번들 저장, `omx_incident_fleet.py`(394줄 — 헬퍼 분리)에서 손목 카메라 포함·요약 `facts` 첨부 및 상대 `Path("incidents")` 버그 수정.
@@ -110,7 +110,7 @@ Status: **In Progress — D-1072 구현 계획 (TODO 0 → TODO 7 순차 진행)
 
 ---
 
-### [ ] TODO 4 — PR-4: AI 폴백 9동사 커널 + `cell_vlm_orchestrator` 수렴 + `policy -> IK` 무승인 교체 차단
+### [x] TODO 4 — PR-4 (`#629`): AI 폴백 9동사 커널 + `cell_vlm_orchestrator` 수렴 + `policy -> IK` 무승인 교체 차단
 - **안전 태그:** **YES — D-430 (`Safety-Review:` trailer + 독립 리뷰 필수)**
 - **대상 파일:**
   - `deploy/robot/omx/cell_diagnose.py`: 정책 실패/시간초과/엔벨로프/`z_gate` 원인 추가 및 `classify_failure()` 추가.
@@ -122,7 +122,7 @@ Status: **In Progress — D-1072 구현 계획 (TODO 0 → TODO 7 순차 진행)
 
 ---
 
-### [ ] TODO 5 — PR-5: Fleet-R 권한·인터록·Assistant 및 Intent 경화
+### [x] TODO 5 — PR-5 (`#634`): Fleet-R 권한·인터록·Assistant 및 Intent 경화
 - **안전 태그:** **YES — D-430 (`Safety-Review:` trailer + 독립 리뷰 필수)**
 - **대상 파일:**
   - `operations/fleet/fleet/server/sitemap/pipeline_evidence.py` (582줄 — 수정 전 반드시 헬퍼 분리해 `<= 600` 준수).
@@ -136,7 +136,7 @@ Status: **In Progress — D-1072 구현 계획 (TODO 0 → TODO 7 순차 진행)
 
 ---
 
-### [ ] TODO 6 — PR-6: Learning Center `:8768` 서비스 토큰 + ONNX 서빙 + D-358/D-878 외부 전송 관문
+### [x] TODO 6 — PR-6 (`#572`): Learning Center `:8768` 서비스 토큰 + ONNX 서빙 + D-358/D-878 외부 전송 관문
 - **안전 태그:** 없음 (`learning` + `operations/decision`, 비안전 경로)
 - **대상 파일:**
   - `learning/curation/perception/review_app.py` (599줄 — 헬퍼 모듈로 라우트/인증 위임해 `<= 599` 유지), `learning_collaboration.py`, `canonical_web.py`, `omx_center_web.py`, `ladder_web.py`:
@@ -148,7 +148,7 @@ Status: **In Progress — D-1072 구현 계획 (TODO 0 → TODO 7 순차 진행)
 
 ---
 
-### [ ] TODO 7 — PR-7: `agy` 12-Tool stdlib HTTP 브리지 + 통합 회귀 시험
+### [x] TODO 7 — PR-7 (`#566`): `agy` 12-Tool stdlib HTTP 브리지 + 통합 회귀 시험
 - **안전 태그:** 없음 (`tools/remote/` 또는 `tools/<subdir>/` 등록 시 `platform_parts.yaml` root 추가)
 - **대상 파일:**
   - `tools/remote/rosy_agent_bridge.py`: stdlib HTTP 전용 12개 도구(`cell_readiness`, `cell_failure_context`, `cell_frame`, `cell_upkeep_check`, `cell_dry_run`, `fleet_propose_cell_task`, `job_status`, `cell_open_human_request`, `cell_capture_clip`, `cell_dataset_pipeline`, `learning_run_job`, `learning_stage_bundle`) MCP stdio / CLI 어댑터. 타 파트 import·SSH 전송·실제 실험실 주소 기재 금지.

@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.457
+**Version:** v1.458
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.458 OMX /readiness per-cell isolation (Cell)
+
+Added additive `cells` (`cell_s` / `cell_ab`) per-cell readiness breakdown on `GET /readiness` (`rosy.cell-readiness.v1`, `CellReadiness` + `CellScopeReadiness`) and optional `?cell=cell_s|cell_ab` query filter. Unscoped `GET /readiness` retains strict top-level `allowed_tiers_now` behavior.
 
 ### v1.457 Fleet cell-task PROPOSE/admit CAS, interlock_scope, and cell readiness (Fleet)
 
@@ -5000,6 +5004,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.458 | 2026-11-24 | [Cell] Additive: GET /readiness cells breakdown and optional ?cell=cell_s\|cell_ab filter |
 | v1.457 | 2026-11-24 | [Fleet] Fleet cell-task PROPOSE/admit CAS, interlock_scope, and cell readiness |
 | v1.456 | 2026-11-24 | [Cell] GET /readiness, /failures*, /frame/{view}.jpg 헤더 보존, /jobs/{id} structured_result 및 5종 비-이동 작업 추가 |
 | v1.455 | 2026-11-23 | [Cell] Additive: POST /jobs/cell_two_arm_policy, 두 팔 직렬화·준비 게이트(409 TWO_ARM_NOT_READY), dual cell-state-dirty 기록 |
