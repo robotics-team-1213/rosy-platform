@@ -7,6 +7,7 @@ COPY applications/fleet/web/shared/fleet-document.css applications/fleet/web/sha
 COPY shared/web/shared-assets.json shared/web/tokens.css shared/web/app-shell.css shared/web/components.css shared/web/component-controls.css shared/web/theme.js shared/web/ui.js shared/web/ui-wiring.js shared/web/confirmation.js shared/web/live-dialog-geometry.js shared/web/cause-line.js shared/web/fleet-client.js shared/web/request.js shared/web/account-profile.js /source/shared/web/
 COPY shared/web/icons/console.svg /source/shared/web/icons/console.svg
 COPY shared/web/brand/mark.svg /source/shared/web/brand/mark.svg
+COPY shared/web/brand/platform.svg /source/shared/web/brand/platform.svg
 RUN PYTHONPATH=/source/operations/account python3 -m rosy_account.web_assets --repo /source --output /account-web
 
 FROM ubuntu:24.04
