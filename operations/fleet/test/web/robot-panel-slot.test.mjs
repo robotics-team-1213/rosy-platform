@@ -18,6 +18,18 @@ test("robot-panel keeps the jumps nav in a fixed slot between head and body, cle
   assert.ok(removals.length >= 2, `expected the nav removal in both reset paths, got ${removals.length}`);
 });
 
+test("robot-panel mounts common kind tag, persistent place bar, and onCameraCollapse cleanly", () => {
+  const source = read("applications/fleet/web/shared/robot-panel.js");
+  assert.match(source, /className\s*=\s*"robot-panel-kind"/);
+  assert.match(source, /className\s*=\s*"robot-panel-place"/);
+  assert.match(source, /className\s*=\s*"robot-panel-place-label"/);
+  assert.match(source, /className\s*=\s*"robot-panel-place-text"/);
+  assert.match(source, /className\s*=\s*"robot-panel-locate"/);
+  assert.match(source, /root\.append\(head,\s*placeBar,\s*body,\s*foot\)/);
+  assert.match(source, /onCameraCollapse\?\.\(\)/);
+  assert.doesNotMatch(source, /setAttribute\(\s*["']reason["']/);
+});
+
 test("roster.css renders the jumps slot as a fixed non-scrolling row with a clean bottom border", () => {
   const css = read("applications/fleet/web/shared/roster.css");
   const block = css.match(/\.robot-panel-jumps \{[^}]*\}/)?.[0] ?? "";

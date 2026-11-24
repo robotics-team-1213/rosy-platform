@@ -67,7 +67,7 @@ def panel_gallery():
           mainCol.className = 'robot-stage-main';
           mainCol.append(opener);
 
-          window.__panelEvents = { collapsed: 0, closed: 0, stopped: [] };
+          window.__panelEvents = { collapsed: 0, closed: 0, stopped: [], located: [] };
           const statusNode = document.createElement('p');
           statusNode.id = 'panel-status-node';
           const manualNode = document.createElement('div');
@@ -86,6 +86,10 @@ def panel_gallery():
             selection: createSelection(null),
             onManualCollapse: () => { window.__panelEvents.collapsed += 1; },
             onClose: () => { window.__panelEvents.closed += 1; },
+            locate: (p) => (p.kind === 'mobile' && p.place?.state !== 'unavailable'
+              ? () => window.__panelEvents.located.push(p.id)
+              : null),
+            sectionHeadings: (p) => (p.kind === 'arm' ? { commands: '셀 작업 · 관측' } : null),
             sections: {
               status: (p) => { statusNode.textContent = `${p.id}:${p.power?.text ?? '-'}`; return statusNode; },
               manual: (p) => (p.kind === 'mobile' ? manualNode : null),
@@ -115,13 +119,19 @@ def test_robot_panel_in_place_updates_collapse_and_focus_return(panel_gallery):
       const { panel, robotProfile } = window.__panelCtl;
       panel.setRobot(robotProfile({
         id: 'rosy_01', name: '1호기', kind: 'mobile', online: true, evidence: 'fresh',
-        battery: { percent: 82 },
+        battery: { percent: 82 }, place: '지도 1.20, -0.40',
       }));
     }""")
 
     panel = page.locator("#test-robot-panel")
     expect(panel).to_be_visible()
     expect(panel).to_have_attribute("data-robot-id", "rosy_01")
+    expect(panel.locator(".robot-panel-kind")).to_have_text("이동로봇")
+    expect(panel.locator(".robot-panel-place-text")).to_have_text("지도 1.20, -0.40")
+    locate_btn = panel.locator(".robot-panel-locate")
+    expect(locate_btn).to_be_visible()
+    locate_btn.click()
+    assert page.evaluate("() => window.__panelEvents.located").__eq__(["rosy_01"])
     manual_details = panel.locator('details[data-section="manual"]')
     settings_details = panel.locator('details[data-section="settings"]')
     assert manual_details.evaluate("node => !node.open")
@@ -137,10 +147,11 @@ def test_robot_panel_in_place_updates_collapse_and_focus_return(panel_gallery):
       const { panel, robotProfile } = window.__panelCtl;
       panel.setRobot(robotProfile({
         id: 'rosy_01', name: '1호기', kind: 'mobile', online: true, evidence: 'fresh',
-        battery: { percent: 81 },
+        battery: { percent: 81 }, place: '지도 1.25, -0.35',
       }));
     }""")
     expect(page.locator("#panel-status-node")).to_have_text("rosy_01:81%")
+    expect(panel.locator(".robot-panel-place-text")).to_have_text("지도 1.25, -0.35")
     assert page.evaluate("() => window.__keptManual === document.getElementById('panel-manual-node')")
     assert manual_details.evaluate("node => node.open")
     expect(page.locator("#panel-manual-select")).to_be_focused()
@@ -151,7 +162,7 @@ def test_robot_panel_in_place_updates_collapse_and_focus_return(panel_gallery):
     panel.locator('.robot-panel-foot ui-button, .robot-panel-foot button', has_text='주행 취소 · 이 로봇').click()
     assert page.evaluate("() => window.__panelEvents.stopped").__eq__(["rosy_01"])
 
-    # Switching to arm updates sections (no manual, has commands, displays footer note).
+    # Switching to arm updates kind tag, persistent place bar, headings, sections, and footer note.
     page.evaluate("""() => {
       const { panel, robotProfile } = window.__panelCtl;
       panel.setRobot(robotProfile({
@@ -159,7 +170,11 @@ def test_robot_panel_in_place_updates_collapse_and_focus_return(panel_gallery):
       }));
     }""")
     expect(panel).to_have_attribute("data-kind", "arm")
+    expect(panel.locator(".robot-panel-kind")).to_have_text("로봇암")
+    expect(panel.locator(".robot-panel-place-text")).to_have_text("정보 없음")
+    expect(locate_btn).to_be_hidden()
     assert panel.locator('details[data-section="manual"]').count() == 0
+    expect(panel.locator('section[data-section="commands"] > h3')).to_have_text("셀 작업 · 관측")
     assert panel.locator('#panel-commands-node').count() == 1
     expect(panel.locator('.robot-panel-foot')).to_contain_text('팔 단독 정지 없음')
 

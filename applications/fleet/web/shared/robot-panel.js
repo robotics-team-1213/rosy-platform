@@ -4,10 +4,13 @@
  * scrolling body of ordered sections (status, camera, commands, collapsible manual controls & settings),
  * and fixed stop footer (live stop button or note). No inline styling, no animation (D-220).
  *
- *   createRobotPanel({selection, onClose, onManualCollapse, sections = {}, stop = null, stopButton = null, resolve, links = {}} = {})
+ *   createRobotPanel({selection, onClose, onManualCollapse, onCameraCollapse, locate = null, sectionHeadings = null, sections = {}, stop = null, stopButton = null, resolve, links = {}} = {})
  *     -> {root, setRobot(profile | null, detail?, opts?), focus(), dispose()}
  *     sections        {status, camera, commands, manual, health, settings}, each (profile, detail) => Node | null
  *     onManualCollapse called when the manual <details> section collapses
+ *     onCameraCollapse called when the camera <details> section collapses
+ *     locate          (profile, detail) => fn | {label?, onLocate} | null, or static object/fn; drives the persistent place strip button
+ *     sectionHeadings {key: heading} or (profile, detail) => {key: heading}; overrides default section headings
  *     stop            {label, onStop} | {note} | null, or (profile) => obj | null
  *     stopButton      static HTML emergency-stop <ui-button> passed from the page (D-371)
  *     links           {taskRow(taskId) -> url}: link builders each screen supplies (deep link to its work-screen task row); sections get them as the 3rd argument. A link is navigation, never a call; approve/resume happen on the work screen.
@@ -64,7 +67,7 @@ const JUMP_SPECS = [
   ["settings", "설정"],
 ];
 
-export function createRobotPanel({selection, onClose, onManualCollapse, sections = {}, stop = null, stopButton = null, resolve, links = {}} = {}) {
+export function createRobotPanel({selection, onClose, onManualCollapse, onCameraCollapse, locate = null, sectionHeadings = null, sections = {}, stop = null, stopButton = null, resolve, links = {}} = {}) {
   const panelId = ++panelSerial;
   const root = document.createElement("aside");
   root.className = "robot-panel";
@@ -72,6 +75,12 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
 
   const head = document.createElement("header");
   head.className = "robot-panel-head";
+
+  const kindTag = document.createElement("ui-tag");
+  kindTag.className = "robot-panel-kind";
+  kindTag.setAttribute("status", "neutral");
+  kindTag.setAttribute("variant", "inline");
+  kindTag.hidden = true;
 
   const title = document.createElement("h2");
   title.className = "robot-panel-title";
@@ -89,7 +98,27 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
   closeBtn.setAttribute("type", "button");
   closeBtn.textContent = "닫기";
 
-  head.append(title, linkSlot, closeBtn);
+  head.append(kindTag, title, linkSlot, closeBtn);
+
+  const placeBar = document.createElement("div");
+  placeBar.className = "robot-panel-place";
+  placeBar.hidden = true;
+
+  const placeLabel = document.createElement("span");
+  placeLabel.className = "robot-panel-place-label";
+  placeLabel.textContent = "위치";
+
+  const placeText = document.createElement("span");
+  placeText.className = "robot-panel-place-text";
+
+  const locateBtn = document.createElement("ui-button");
+  locateBtn.setAttribute("kind", "quiet");
+  locateBtn.setAttribute("type", "button");
+  locateBtn.className = "robot-panel-locate";
+  locateBtn.textContent = "지도 보기";
+  locateBtn.hidden = true;
+
+  placeBar.append(placeLabel, placeText, locateBtn);
 
   const body = document.createElement("div");
   body.className = "robot-panel-body";
@@ -98,16 +127,18 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
   foot.className = "robot-panel-foot";
   foot.hidden = true;
 
-  root.append(head, body, foot);
+  root.append(head, placeBar, body, foot);
 
   let opener = null;
   let currentId = null;
+  let activeLocate = null;
   let activeStop = null;
   let closing = false;
   const sectionMap = new Map();
   let jumpsNav = null;
   let footerMode = null;
   let footerNoteEl = null;
+  locateBtn.addEventListener("click", () => activeLocate?.());
   const fallbackStopBtn = document.createElement("ui-button");
   fallbackStopBtn.className = "robot-panel-stop";
   fallbackStopBtn.setAttribute("kind", "quiet");
@@ -133,6 +164,9 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
       details.dataset.section = key;
       if (key === "camera") {
         details.open = typeof window !== "undefined" && window.innerHeight > 800;
+        details.addEventListener("toggle", () => {
+          if (!details.open) onCameraCollapse?.();
+        });
       }
       const summary = document.createElement("summary");
       summary.textContent = heading;
@@ -143,7 +177,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
           else onManualCollapse?.();
         });
       }
-      return details;
+      return {wrapper: details, headingEl: summary};
     }
     const section = document.createElement("section");
     section.className = "robot-panel-section";
@@ -153,7 +187,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
     h3.textContent = heading;
     section.setAttribute("aria-labelledby", h3.id);
     section.append(h3, content);
-    return section;
+    return {wrapper: section, headingEl: h3};
   }
 
   function syncJumps(presentSections) {
@@ -189,9 +223,15 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
       root.hidden = true;
       root.removeAttribute("data-kind");
       root.removeAttribute("data-robot-id");
+      patchText(kindTag, "");
+      patchHidden(kindTag, true);
       title.textContent = "";
       linkSlot.replaceChildren();
       linkSlot.hidden = true;
+      patchText(placeText, "");
+      patchHidden(placeBar, true);
+      activeLocate = null;
+      patchHidden(locateBtn, true);
       body.replaceChildren();
       sectionMap.clear();
       jumpsNav?.remove();
@@ -217,6 +257,9 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
     patchData(root, "kind", profile.kind || "");
     patchData(root, "robotId", nextId);
 
+    patchText(kindTag, profile.kindLabel || "");
+    patchHidden(kindTag, !profile.kindLabel);
+
     const displayName = profile.name || nextId;
     patchText(title, displayName);
     patchAttr(closeBtn, "aria-label", `${displayName} 패널 닫기`);
@@ -238,6 +281,24 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
       patchHidden(linkSlot, true);
     }
 
+    patchText(placeText, profile.place?.text || EVIDENCE_LABEL.unavailable);
+    patchHidden(placeBar, false);
+    const locateSpec = typeof locate === "function" ? locate(profile, detail) : locate;
+    if (typeof locateSpec === "function") {
+      activeLocate = () => locateSpec(profile, detail);
+      patchText(locateBtn, "지도 보기");
+      patchAttr(locateBtn, "aria-label", `${displayName} 지도에서 보기`);
+      patchHidden(locateBtn, false);
+    } else if (locateSpec && typeof locateSpec.onLocate === "function") {
+      activeLocate = () => locateSpec.onLocate(profile, detail);
+      patchText(locateBtn, locateSpec.label || "지도 보기");
+      patchAttr(locateBtn, "aria-label", `${displayName} 지도에서 보기`);
+      patchHidden(locateBtn, false);
+    } else {
+      activeLocate = null;
+      patchHidden(locateBtn, true);
+    }
+
     if (!sameId) {
       body.replaceChildren();
       sectionMap.clear();
@@ -246,9 +307,11 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
       body.scrollTop = 0;
     }
 
+    const headingsSpec = typeof sectionHeadings === "function" ? sectionHeadings(profile, detail) : sectionHeadings;
     const presentSections = new Set();
     const desiredNodes = [];
-    for (const [key, heading] of SECTION_SPECS) {
+    for (const [key, defaultHeading] of SECTION_SPECS) {
+      const heading = headingsSpec?.[key] || defaultHeading;
       const render = sections?.[key];
       const content = typeof render === "function" ? render(profile, detail, links) : null;
       const existing = sameId ? sectionMap.get(key) : null;
@@ -261,14 +324,15 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
       }
       presentSections.add(key);
       if (existing) {
+        patchText(existing.headingEl, heading);
         if (content !== existing.content) {
           existing.content.replaceWith(content);
           existing.content = content;
         }
         desiredNodes.push(existing.wrapper);
       } else {
-        const wrapper = makeSectionWrapper(key, heading, content);
-        sectionMap.set(key, {wrapper, content});
+        const {wrapper, headingEl} = makeSectionWrapper(key, heading, content);
+        sectionMap.set(key, {wrapper, content, headingEl});
         desiredNodes.push(wrapper);
       }
     }
