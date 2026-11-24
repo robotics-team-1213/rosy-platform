@@ -709,6 +709,14 @@
     "decision-slot.js": {
       "path": "decision-slot.js",
       "media_type": "application/javascript"
+    },
+    "localization-panel.js": {
+      "path": "localization-panel.js",
+      "media_type": "application/javascript"
+    },
+    "localization-panel-logic.js": {
+      "path": "localization-panel-logic.js",
+      "media_type": "application/javascript"
     }
   }
 }

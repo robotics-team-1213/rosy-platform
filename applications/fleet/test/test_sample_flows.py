@@ -355,3 +355,28 @@ def test_control_unit_sample_refuses_bad_candidates_and_cancels_the_bound_task()
     assert call(engine, 'GET', '/api/fleet/tasks/' + task_id)[1]['task']['status'] == 'CANCELED'
     assert call(engine, 'POST', path + '/cancel', {})[1] == canceled
 
+
+def test_pinky_localization_and_map_binding_flow():
+    engine = load_engine()
+    call(engine, 'POST', '/api/fleet/auth/login', {'login': 'sample', 'password': 'CHANGE_ME'})
+    assert call(engine, 'GET', '/api/fleet/robots/nope/localization')[0] == 404
+    status, loc = call(engine, 'GET', '/api/fleet/robots/sample-robot/localization')
+    assert status == 200 and loc['localization']['state'] == 'CANDIDATES'
+    assert call(engine, 'POST', '/api/fleet/robots/sample-robot/relocalize', {})[0] == 200
+    assert call(engine, 'POST', '/api/fleet/robots/sample-robot/localization/confirm', {'candidate_id': 9})[0] == 404
+    assert call(engine, 'POST', '/api/fleet/robots/sample-robot/localization/confirm', {'candidate_id': 0})[0] == 200
+    assert call(engine, 'POST', '/api/fleet/robots/sample-robot/relocalize', {})[0] == 409
+    assert call(engine, 'GET', '/api/fleet/tracking/identity')[0] == 200
+    assert call(engine, 'GET', '/api/fleet/robots/sample-robot/map-binding')[1]['matches'] is False
+    assert call(engine, 'POST', '/api/fleet/robots/sample-robot/map-binding', {
+        'pairs': [{'robot': [0, 0], 'site': [0, 0]}, {'robot': [1, 0], 'site': [1, 0]}, {'robot': [0, 1], 'site': [0, 1]}],
+        'holdout': [],
+    })[0] == 409
+    assert call(engine, 'POST', '/api/fleet/robots/sample-robot/map-binding', {
+        'pairs': [{'robot': [0, 0], 'site': [0, 0]}, {'robot': [1, 0], 'site': [1, 0]}, {'robot': [0, 1], 'site': [0, 1]}],
+        'holdout': [{'robot': [1, 1], 'site': [1, 1]}],
+    })[0] == 200
+    assert call(engine, 'GET', '/api/fleet/robots/sample-robot/map-binding')[1]['matches'] is True
+    assert call(engine, 'DELETE', '/api/fleet/robots/sample-robot/map-binding')[1] == {'revoked': True}
+    assert call(engine, 'GET', '/api/fleet/robots/sample-robot/map-binding')[1]['matches'] is False
+

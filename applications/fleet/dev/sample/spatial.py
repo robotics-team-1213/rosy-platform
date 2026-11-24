@@ -20,6 +20,15 @@ class Spatial:
         self.active = {'version': 1, 'map': deepcopy(INITIAL_MAP), 'activated_by': 'sample'}
         self.profiles = {}
         self.markers = []
+        self.localizations = {
+            'sample-robot': {
+                'localization': {'state': 'CANDIDATES', 'pose_frame': 'odom', 'request_id': 'q1', 'needs_human': False},
+                'candidates': {'robot_id': 'sample-robot', 'request_id': 'q1',
+                               'candidates': [{'x': -0.53, 'y': 0.2, 'yaw': -0.02, 'scan_fit': 0.99, 'paint_score': None}]},
+                'motion_allowed': False,
+            },
+        }
+        self.bindings = {}
 
     def handle(self, method, path, body):
         if (method, path) == ('GET', '/site-map/active'):
@@ -60,4 +69,54 @@ class Spatial:
             return reply({'markers': self.markers})
         if (method, path) == ('GET', '/site-points'):
             return reply({'detail': 'Not Found'}, status=404)
+        return self._handle_robot_loc(method, path, body)
+
+    def _robot_loc_state(self, robot_id):
+        if robot_id != 'sample-robot':
+            return None
+        return self.localizations.setdefault(robot_id, {
+            'localization': {'state': 'CANDIDATES', 'pose_frame': 'odom', 'request_id': 'q1', 'needs_human': False},
+            'candidates': {'robot_id': robot_id, 'request_id': 'q1', 'candidates': []},
+            'motion_allowed': False,
+        })
+
+    def _handle_robot_loc(self, method, path, body):
+        m = re.fullmatch(r'/robots/([^/]+)/(localization|localization/confirm|relocalize|map-binding)', path)
+        if not m:
+            return None
+        robot_id, sub = m[1], m[2]
+        entry = self._robot_loc_state(robot_id)
+        if entry is None:
+            return error(404, 'UNKNOWN_ROBOT')
+        if method == 'GET' and sub == 'localization':
+            return reply({'robot_id': robot_id, **entry})
+        if method == 'POST' and sub == 'relocalize':
+            if entry['localization']['state'] == 'LOCALIZED':
+                return error(409, 'ALREADY_LOCALIZED')
+            entry['motion_allowed'] = True
+            return reply({'robot_id': robot_id, 'requested_by': 'sample', 'motion_allowed': True, 'mission': {'kind': 'rotate_in_place', 'result': 'sent'}})
+        if method == 'POST' and sub == 'localization/confirm':
+            cands = entry['candidates']['candidates']
+            idx = body.get('candidate_id')
+            if not isinstance(idx, int) or isinstance(idx, bool) or not 0 <= idx < len(cands):
+                return error(404, 'CANDIDATE_NOT_REPORTED')
+            entry['localization'] = {'state': 'LOCALIZED', 'pose_frame': 'map', 'request_id': entry['candidates']['request_id'], 'needs_human': False}
+            return reply({'robot_id': robot_id, 'candidate_index': idx, 'core': {'request_id': entry['candidates']['request_id']}})
+        if method == 'GET' and sub == 'map-binding':
+            active = self.bindings.get(robot_id)
+            return reply({'active': active, 'history': [active] if active else [], 'matches': active is not None,
+                          'reason': None if active is not None else 'MAP_BINDING_REQUIRED', 'robot_grid_id': 'occupancy:sample',
+                          **({'slam_camera_gap_m': 0.02} if active is not None else {})})
+        if method == 'POST' and sub == 'map-binding':
+            pairs, holdout = body.get('pairs') or [], body.get('holdout') or []
+            if len(pairs) < 3:
+                return error(409, 'TOO_FEW_PAIRS')
+            if not holdout:
+                return error(409, 'HOLDOUT_REQUIRED')
+            record = {'binding_id': f'bind-{robot_id}', 'robot_grid_id': 'occupancy:sample', 'fit': {'yaw': 0.0, 'tx': 0.0, 'ty': 0.0}}
+            self.bindings[robot_id] = record
+            return reply(record)
+        if method == 'DELETE' and sub == 'map-binding':
+            revoked = self.bindings.pop(robot_id, None) is not None
+            return reply({'revoked': revoked})
         return None

@@ -110,6 +110,8 @@ OWN = {
         "motion-readiness.js",
         "link-tag.js",
         "localization-badge.js",
+        "localization-panel.js",
+        "localization-panel-logic.js",
         "power-health-view.js",
         "charge-bays-view.js",  # D-941: read-only charge bay plan
         "charge-bays-model.js",  # its DOM-free display model
