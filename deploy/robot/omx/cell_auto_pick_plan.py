@@ -17,7 +17,8 @@ import sys
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_auto_safety import finger_room, object_sized, square_entry  # noqa: E402
+from cell_auto_safety import finger_room, square_entry  # noqa: E402
+from cell_finger_room import finger_room_view, obstacle_mask  # noqa: E402,F401
 import cell_decisions as cd  # noqa: E402
 import cell_jaw_axis  # noqa: E402
 import cell_objects  # noqa: E402
@@ -52,8 +53,6 @@ def _parent_attr(name: str, default):
 
 
 def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list, *, image=None):
-    import cv2
-
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     record = cell_pivot.map_record(calibration, site)
     if record is None:
@@ -80,12 +79,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
             c / 1000 + d for c, d in zip(o["centre_mm"], config["sites"][site].get("grip_offset_m", (0.0, 0.0)))
         ]
         o["layers_below"] = config["sites"][site].get("layers_below", 0)  # the site is a stack's top: cell_finger_room
-    near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
-    for p in config["sites"][site].get("markings_px", []):
-        cv2.fillPoly(near, [np.asarray(p, np.int32) - [roi[0], roi[1]]], 0)
-    mask = object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv"))
-    for p in config["sites"][site].get("markings_px", []):
-        cv2.fillPoly(mask, [np.asarray(p, np.int32) - [roi[0], roi[1]]], 0)
+    mask = obstacle_mask(img, config, site, roi)
     return img, mask, objects, None
 
 
@@ -192,10 +186,12 @@ def choose(
     work,
     failed_yaws=(),
     dest_view=None,
+    room_view=None,
 ):
     """Ordered usable targets: [{object, plan...}], and why the others were refused."""
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
+    rmask, rroi = room_view if room_view is not None else (mask, roi)
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
     site_fp = {k: v for k, v in (config["sites"][site].get("finger_params") or {}).items() if k in prm.DEFAULTS}
@@ -211,7 +207,7 @@ def choose(
             why = "no catalogue match"
         elif w := cell_objects.want_reason(config.get("want"), o):
             why = w
-        elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
+        elif px is None or not (rroi[0] + 12 <= px[0] <= rroi[2] - 12 and rroi[1] + 12 <= px[1] <= rroi[3] - 12):
             why = "not inside the camera view"
         elif (pan := past_pan_limit(config, o["raw_m"])) is not None:
             why = f"out of reach: pan {pan} deg past the joint1 limit"
@@ -221,13 +217,13 @@ def choose(
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
-            room = finger_room(mask, roi, pixel_fn, o, ends, fp, opening_width_mm=across(entry))
+            room = finger_room(rmask, rroi, pixel_fn, o, ends, fp, opening_width_mm=across(entry))
             if room["margin_mm"] is None:
                 o, room = next(
                     (
                         (e, r)
                         for e in reachable_ends(o, entries[o["object"]], fp)
-                        if (r := finger_room(mask, roi, pixel_fn, e, None, fp, opening_width_mm=across(entry)))["margin_mm"] is not None
+                        if (r := finger_room(rmask, rroi, pixel_fn, e, None, fp, opening_width_mm=across(entry)))["margin_mm"] is not None
                     ),
                     (o, room),
                 )
@@ -261,7 +257,7 @@ def choose(
             fresh = [
                 y for y in (base_yaw, base_yaw + 90.0) if all(abs(wrap90(y - f)) > 5.0 for f in failed_yaws)
             ] or [base_yaw, base_yaw + 90.0]
-            rooms = [(y, finger_room(mask, roi, pixel_fn, o, y + closing, p, opening_width_mm=across(entry))) for y in fresh]
+            rooms = [(y, finger_room(rmask, rroi, pixel_fn, o, y + closing, p, opening_width_mm=across(entry))) for y in fresh]
             yaw, room = next(((y, r) for y, r in rooms if r["margin_mm"] is not None), (None, rooms[0][1]))
             if yaw is None:
                 reason = "neighbour clearance" if require_clearance else "no finger gap"

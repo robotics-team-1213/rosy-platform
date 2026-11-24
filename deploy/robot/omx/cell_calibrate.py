@@ -15,7 +15,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
-from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401
+from cell_calibrate_bound import low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
@@ -135,6 +135,9 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
         out["unverified_xy"] = not lat["lateral_xy_verified"]
     if cal_cfg.get("verify_depth") and not (Path(config.get("work_dir", ".")).expanduser() / "depth-verify.json").exists():
         out["missing_depth_verify"] = True
+    gaps = low_zone_gaps(config, calibration)
+    if gaps:
+        out["low_zone_gaps"] = gaps
     return out
 
 
