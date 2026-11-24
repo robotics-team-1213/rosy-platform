@@ -486,10 +486,50 @@ def test_pr3_b3_readiness_cell_ab_fleet_two_arm_and_session_lock(tmp_path, monke
     r = build_readiness(runner, whole_cell_lock_fn=lambda _l: False, session_lock_fn=api._session_lock_held, depth_lock_fn=lambda _l: False)
     CellReadiness.model_validate(r)
     assert r["allowed_tiers_now"] == [0]
+    assert r["cells"]["cell_ab"]["allowed_tiers_now"] == [0]
+    assert r["cells"]["cell_s"]["allowed_tiers_now"] == [0, 1]
     assert any(ref.startswith("fleet_safety:cell_ab:") for ref in r["blocking_refusals"])
     assert "session_lock:arm_s" in r["blocking_refusals"]
     assert r["arms"]["arm_a"]["active_job_id"] == "job-ab" and r["arms"]["arm_b"]["active_job_id"] == "job-ab"
     assert r["arms"]["arm_a"]["fleet_safety"]["blocked"] is True and r["arms"]["arm_s"]["fleet_safety"]["blocked"] is False
+
+    # Cell-scoped HTTP /readiness?cell=cell_ab isolates clean cell_ab from ABORTED cell_s.
+    monkeypatch.setattr(api, "_session_lock_held", lambda _arm, _ld=None: False)
+    runner_iso = api.Runner(
+        wd, lock_dir=wd, bundle_root=bundle_root,
+        incident_check_fn=lambda arm: "held_s" if arm == "arm_s" else None,
+        fleet_safety_check_fn=lambda arm: {"online": True, "blocked": True, "reason": "ABORTED"} if arm == "arm_s" else {"online": True, "blocked": False, "reason": None},
+    )
+    srv = api.make_server("127.0.0.1", 0, "h" * 32, runner_iso, machine_token="m" * 32)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        cli = client_mod.CellJobClient(f"http://127.0.0.1:{srv.server_port}", "m" * 32)
+        unscoped = cli.readiness()
+        CellReadiness.model_validate(unscoped)
+        assert unscoped["allowed_tiers_now"] == [0]
+        assert unscoped["cells"]["cell_s"]["allowed_tiers_now"] == [0]
+        assert unscoped["cells"]["cell_ab"]["allowed_tiers_now"] == [0, 1, 2]
+        assert unscoped["cells"]["cell_ab"]["blocking_refusals"] == []
+
+        ab_only = cli.readiness(cell="cell_ab")
+        CellReadiness.model_validate(ab_only)
+        assert ab_only["allowed_tiers_now"] == [0, 1, 2]
+        assert set(ab_only["arms"]) == {"arm_a", "arm_b"} and set(ab_only["cells"]) == {"cell_ab"}
+
+        s_only = cli.readiness(cell="cell_s")
+        CellReadiness.model_validate(s_only)
+        assert s_only["allowed_tiers_now"] == [0] and set(s_only["arms"]) == {"arm_s"}
+
+        with pytest.raises(client_mod.CellJobError) as exc_bad:
+            cli.readiness(cell="bogus")
+        assert exc_bad.value.status_code == 400
+        for bad_path in ("/readiness?cell=", "/readiness?cell=cell_ab&cell=bogus"):
+            with pytest.raises(client_mod.CellJobError) as exc_dup:
+                cli._request("GET", bad_path)
+            assert exc_dup.value.status_code == 400
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
 
 def test_pr3_b4_amr_bed_veto_and_wrist_fallback_preserved(tmp_path):
