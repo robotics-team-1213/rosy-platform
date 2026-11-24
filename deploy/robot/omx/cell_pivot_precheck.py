@@ -21,9 +21,12 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cell_attempts  # noqa: E402
+import cell_jaw_side  # noqa: E402
 import cell_pipeline_io as cio  # noqa: E402
 import cell_pivot  # noqa: E402
 import omx_tcp  # noqa: E402
+import cell_params as prm  # noqa: E402
 
 GEOMETRY_Z_TOL_M = 0.005
 PLANNED_ARC_TOL_DEG = 0.01
@@ -38,6 +41,48 @@ def geometry_height_problem(config: dict, site: str) -> str | None:
         return (f"pivot.geometry was measured at z_view {measured} m, this pivot is at {z_view} m: "
                 "re-measure the full circle at this height")
     return None
+
+
+def geometry_sanity_problems(config: dict, record: dict, site: str, z_view: float) -> list[str]:
+    """Validate `pivot.geometry` bounds and cross-check it against a fresh full-circle pivot in bias history."""
+    geometry = (config.get("pivot") or {}).get("geometry") or {}
+    if not geometry:
+        return []
+    p, issues = config.get("params"), []
+    r_cfg, ph_cfg = float(geometry["radius_mm"]), float(geometry["phase_deg"])
+    lo, hi = float(prm.get(p, "pivot.radius_lo_mm")), float(prm.get(p, "pivot.radius_hi_mm"))
+    if not (lo <= r_cfg <= hi):
+        issues.append(f"pivot.geometry radius {r_cfg:.1f} mm outside [{lo:.1f}, {hi:.1f}] mm")
+    cal_path = config.get("calibration_path")
+    if not cal_path:
+        return issues
+    bp = cell_pivot.bias_path(Path(cal_path).expanduser())
+    if not bp.is_file():
+        return issues
+    try:
+        regions = cell_pivot.load_bias(bp, p).get("regions") or []
+    except (OSError, ValueError, SystemExit):
+        return issues
+    map_sha = cell_attempts.digest(record)
+    cand = [
+        r for r in regions
+        if r.get("kind") == "pivot" and r.get("map_sha") == map_sha and "radius_mm" in r and "phase_deg" in r
+        and r.get("z_view") is not None and abs(float(r["z_view"]) - z_view) <= GEOMETRY_Z_TOL_M
+    ]
+    if not cand:
+        return issues
+    best = max(cand, key=lambda r: (r.get("site") == site, str(r.get("measured") or "")))
+    r_meas, ph_meas = float(best["radius_mm"]), float(best["phase_deg"])
+    diff_mm = math.hypot(
+        r_cfg * math.cos(math.radians(ph_cfg)) - r_meas * math.cos(math.radians(ph_meas)),
+        r_cfg * math.sin(math.radians(ph_cfg)) - r_meas * math.sin(math.radians(ph_meas)),
+    )
+    if diff_mm > float(prm.get(p, "pivot.max_rms_mm")):
+        issues.append(
+            f"pivot.geometry ({r_cfg:.1f} mm @ {ph_cfg:.1f} deg) disagrees by {diff_mm:.1f} mm with "
+            f"fresh full-circle pivot ({r_meas:.1f} mm @ {ph_meas:.1f} deg)"
+        )
+    return issues
 
 
 def pivot_precheck(config: dict, calibration: dict, site: str, target_xy, yaws, frame_wh=None) -> list[str]:
@@ -55,12 +100,15 @@ def pivot_precheck(config: dict, calibration: dict, site: str, target_xy, yaws, 
     record = cell_pivot.map_record(calibration, site)
     if record is None:
         return problems + ["no map for the site"]
+    z_view = cell_pivot.pivot_z_view(config, site)
+    if geometry and not geo_problem:
+        problems.extend(geometry_sanity_problems(config, record, site, z_view))
+    pre_cfg = {**config, "pivot": {k: v for k, v in pivot.items() if k != "geometry"}} if geo_problem else config
     top = (config.get("cameras") or {}).get("top") or {}
     size = top.get("frame_wh") or frame_wh
     if not size:
         problems.append("top frame size unknown: set cameras.top.frame_wh")
     margin = float(pivot.get("edge_margin_px", 40))
-    z_view = cell_pivot.pivot_z_view(config, site)
     view = {"x": target_xy[0], "y": target_xy[1], "z": round(z_view - config["plan"]["approach_m"], 4)}
     tcp_x_m = omx_tcp.config_tcp(config)
     fk_yaws, dropped = [], []
@@ -78,16 +126,11 @@ def pivot_precheck(config: dict, calibration: dict, site: str, target_xy, yaws, 
         state = library["chunks"]["above_pick"][-1]
         fk_yaw = cell_pivot.joints_tcp(state, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))[3]
         fk_yaws.append(fk_yaw)
-        raw = list(target_xy)
-        if geometry and not geo_problem:  # the mark circles the TCP at the measured radius and phase
-            angle = math.radians(fk_yaw + float(geometry["phase_deg"]))
-            raw = [raw[0] + geometry["radius_mm"] / 1000 * math.cos(angle),
-                   raw[1] + geometry["radius_mm"] / 1000 * math.sin(angle)]
-        # shortcut: without a geometry the TCP pixel stands for the mark (~19 mm away); the margin covers it
+        # Keep the edge-margin check strictly on the reference jaw (places[0]); checking places[1] risks false refusals.
         if size:
             try:
-                px, py = cell_pivot.mark_pixel(record, config, site, raw, z_view)
-            except (KeyError, TypeError, ValueError, ZeroDivisionError) as exc:
+                px, py = cell_jaw_side.jaw_places(record, pre_cfg, site, target_xy, fk_yaw, z_view)[0]
+            except cell_jaw_side._PLACE_ERRORS as exc:
                 problems.append(f"yaw {yaw}: jaw mark not predictable ({type(exc).__name__}: {exc})")
                 continue
             w, h = size

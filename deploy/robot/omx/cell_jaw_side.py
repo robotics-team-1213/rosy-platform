@@ -40,6 +40,15 @@ def near_tcp(record: dict, config: dict, site: str, point, z_view: float, radius
         return None
 
 
+def _other_deg(params, geometry: dict | None) -> float:
+    """Angle from ref jaw toward other jaw, flipping +180 deg when pivot.geometry sits on the +other_deg jaw."""
+    deg = float(prm.get(params, "jaw_side.other_deg"))
+    if geometry and float(geometry.get("radius_mm") or 0.0) > 0:
+        if math.cos(math.radians(float(geometry.get("phase_deg", 0.0)) - deg)) > 1e-9:
+            return deg + 180.0
+    return deg
+
+
 def jaw_places(record: dict, config: dict, site: str, tcp_xy, yaw_deg: float, z: float) -> list:
     """[reference jaw px, other jaw px] in the top view for the TCP at `tcp_xy` (map's raw frame) and FK yaw."""
     import cell_pivot
@@ -49,7 +58,7 @@ def jaw_places(record: dict, config: dict, site: str, tcp_xy, yaw_deg: float, z:
         geo = tcp_geometry(p)
     a = math.radians(yaw_deg + geo.get("phase_deg", 0.0))
     ref = (tcp_xy[0] + geo.get("radius_mm", 0.0) / 1000 * math.cos(a), tcp_xy[1] + geo.get("radius_mm", 0.0) / 1000 * math.sin(a))
-    b, r = math.radians(yaw_deg + prm.get(p, "jaw_side.other_deg")), prm.get(p, "jaw_side.other_mm") / 1000
+    b, r = math.radians(yaw_deg + _other_deg(p, geo)), prm.get(p, "jaw_side.other_mm") / 1000
     other = (ref[0] + r * math.cos(b), ref[1] + r * math.sin(b))
     return [tuple(float(v) for v in cell_pivot.mark_pixel(record, config, site, q, z)) for q in (ref, other)]
 
@@ -209,7 +218,7 @@ def label(marks: list, yaws: list, sides: list, params=None, geometry: dict | No
     singles = [i for i, s in enumerate(sides) if s != "pair"]
     if len(singles) > MAX_LABELLED:
         return f"jaw sides unlabelled: {len(singles)} single-jaw marks, at most {MAX_LABELLED}", None, None, None
-    other_m, other_deg = prm.get(params, "jaw_side.other_mm") / 1000, prm.get(params, "jaw_side.other_deg")
+    other_m, other_deg = prm.get(params, "jaw_side.other_mm") / 1000, _other_deg(params, geometry)
     offset = [(other_m * math.cos(math.radians(y + other_deg)), other_m * math.sin(math.radians(y + other_deg))) for y in yaws]
     fits = []
     for choice in product((0.0, 1.0), repeat=len(singles)):
@@ -304,3 +313,11 @@ def marks(closed, opened, params=None, colour: bool = False, jaws: dict | None =
         if k is not None:
             out.append((blob[0] - places[k][0] + to[0], blob[1] - places[k][1] + to[1], blob[2], ("ref", "other")[k]))
     return out
+
+
+from cell_jaw_side_replay import _replay_yaw_tries, replay_pivot  # noqa: E402,F401
+
+
+if __name__ == "__main__":
+    from cell_jaw_side_replay import main
+    main()
