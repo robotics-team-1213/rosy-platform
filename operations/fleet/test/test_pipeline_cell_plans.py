@@ -264,3 +264,33 @@ def test_mode2_rosy_directive_plans_outbound_rehandle_and_goal_autonomously(monk
         "destination": "stand",
     })
     assert no_stand.status_code == 422 and no_stand.json()["detail"]["code"] == "NO_FREE_OUTBOUND_LANE"
+
+
+def test_get_cell_plans_by_request_key_reconciles_and_isolates_service_principal(monkeypatch):
+    app, _ = _app(monkeypatch)
+    client = TestClient(app)
+    res = client.post("/api/fleet/pipeline/cell-plans", headers=SVC, json={
+        "request_key": "harbor-reconcile-key-1",
+        "mode": "harbor_plan",
+        "state": {"C1": "yard-r1-c1-l1"},
+        "steps": [{"cargo_id": "C1", "src_site": "yard-r1-c1-l1", "dst_site": "stand-r1-c1-l1", "arm_id": "arm_a"}],
+    })
+    assert res.status_code == 200, res.text
+    created = res.json()
+
+    # Same service principal recovers the exact plan + tasks via ?request_key=
+    found = client.get("/api/fleet/pipeline/cell-plans", params={"request_key": "harbor-reconcile-key-1"}, headers=SVC)
+    assert found.status_code == 200, found.text
+    assert found.json()["plan"]["plan_id"] == created["plan"]["plan_id"]
+    assert found.json()["plan"]["request_key"] == "harbor-reconcile-key-1"
+    assert [t["task_id"] for t in found.json()["tasks"]] == [t["task_id"] for t in created["tasks"]]
+
+    # Another service principal cannot see the first service's request_key (Rule 8 coded 404).
+    other_svc = client.get("/api/fleet/pipeline/cell-plans", params={"request_key": "harbor-reconcile-key-1"}, headers=OWNER)
+    assert other_svc.status_code == 404
+    assert other_svc.json()["detail"]["code"] == "UNKNOWN_CELL_PLAN"
+
+    # Non-existent request_key returns coded 404 for capability probe (Rule 8).
+    missing = client.get("/api/fleet/pipeline/cell-plans", params={"request_key": "missing-probe-key"}, headers=SVC)
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["code"] == "UNKNOWN_CELL_PLAN"

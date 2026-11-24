@@ -76,6 +76,7 @@ def install_cell_plan_routes(app, ctx) -> None:
             "total_steps": len(rec["task_ids"]),
             "completed_steps": completed,
             "proposer": rec.get("proposer"),
+            "request_key": rec.get("request_key"),
             "request_digest": rec.get("request_digest"),
             "task_ids": list(rec["task_ids"]),
             "moves": moves,
@@ -133,7 +134,7 @@ def install_cell_plan_routes(app, ctx) -> None:
                 raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
 
             robot_id = str(body.get("robot_id") or "rosy_01")
-            robot_kind = str(body.get("robot_kind") or "pinky")
+            robot_kind = str(body.get("robot_kind") or "")
             total_steps = len(planned["moves"])
             gov_passthrough = {
                 k: body[k] for k in (
@@ -167,7 +168,7 @@ def install_cell_plan_routes(app, ctx) -> None:
                     cell_id="cell_ab", src_site=targets["src_site"], dst_site=targets["dst_site"], gov=gov,
                     active_map_fn=active_map, resolve_cells_fn=resolve_omx_cells,
                     is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog,
-                    vehicle_sites=("pinky",),
+                    vehicle_sites=(),
                 )
                 validated_steps.append((move, targets, tier, pose, target_status, {**gov_meta, "task_id": task_id, "depends_on": prev_task_id}))
                 prev_task_id = task_id
@@ -217,6 +218,8 @@ def install_cell_plan_routes(app, ctx) -> None:
                 "order_source": planned["order_source"],
                 "cell_id": "cell_ab",
                 "proposer": built[0].get("proposer") if built else principal_id,
+                "request_key": req_key,
+                "scoped_request_key": scoped_key,
                 "request_digest": canonical_digest(body),
                 "task_ids": [t["task_id"] for t in built],
                 "moves": [{**m, "task_id": built[i]["task_id"]} for i, m in enumerate(planned["moves"])],
@@ -246,7 +249,30 @@ def install_cell_plan_routes(app, ctx) -> None:
             return out
 
     @app.get("/api/fleet/pipeline/cell-plans", dependencies=read_guard)
-    async def list_cell_plans(request: Request):
+    async def list_cell_plans(request: Request, request_key: str | None = None):
+        if request_key is not None:
+            req_key = validate_request_key(request_key)
+            principal = getattr(request.state, "site_principal", None)
+            principal_id = getattr(principal, "principal_id", None)
+            principal_role = getattr(principal, "role", None)
+            caller_scoped = scoped_idempotency_key(req_key, principal_id, principal_role)
+            matched_id = next(
+                (pid for pid, rec in app.state.omx_cell_plans.items() if rec.get("scoped_request_key") == caller_scoped),
+                None,
+            )
+            if matched_id is None and principal_role != "service":
+                matched_id = next(
+                    (pid for pid, rec in app.state.omx_cell_plans.items() if rec.get("request_key") == req_key),
+                    None,
+                )
+            if matched_id is None:
+                raise HTTPException(404, detail={"code": "UNKNOWN_CELL_PLAN"})
+            rec = app.state.omx_cell_plans[matched_id]
+            tasks = [
+                task_view_for_request(_enrich_task_health(app.state.omx_cell_tasks[tid]), request)
+                for tid in rec["task_ids"] if tid in app.state.omx_cell_tasks
+            ]
+            return {"ok": True, "schema": _SCHEMA, "plan": _plan_view(matched_id, request), "tasks": tasks}
         plans = [_plan_view(pid, request) for pid in app.state.omx_cell_plans]
         return {"ok": True, "schema": _SCHEMA, "plans": plans}
 
