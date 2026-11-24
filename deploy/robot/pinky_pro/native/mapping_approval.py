@@ -16,6 +16,7 @@ import math
 import os
 from pathlib import Path
 import re
+import stat
 import sys
 import tempfile
 
@@ -450,10 +451,18 @@ def _mirror_approvals(source_dir: Path, target_dir: Path, *, group_id: int | Non
     for stale in list(target_ev.iterdir()):
         if stale.name not in wanted:
             stale.unlink()
-    for name, raw in evidence:
-        _atomic_write(target_ev / name, raw, group_id=group_id)
-    for name, raw in files:
-        _atomic_write(target_dir / name, raw, group_id=group_id)
+
+    def _unchanged(dest: Path, raw: bytes) -> bool:
+        try:
+            st = dest.lstat()
+            return (stat.S_ISREG(st.st_mode) and st.st_size == len(raw) and dest.read_bytes() == raw
+                    and (group_id is None or (st.st_gid == group_id and stat.S_IMODE(st.st_mode) == 0o640)))
+        except OSError:
+            return False
+    for folder, entries in ((target_ev, evidence), (target_dir, files)):
+        for name, raw in entries:
+            if not _unchanged(folder / name, raw):
+                _atomic_write(folder / name, raw, group_id=group_id)
 
 
 def _validate_approvals_dir(root: Path, approvals: Path, *, runtime_mode=None) -> dict:

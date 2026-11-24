@@ -1119,3 +1119,52 @@ def test_the_piezo_is_stopped_even_when_the_beep_sleep_fails():
         module.Buzzer(gpio, 22, True, broken).announce("reverse")
     assert gpio.events[-2:] == [("start", module.BUZZER_DUTY), ("stop",)]
 
+
+def test_expressive_face_caches_quantized_frames_and_skips_redundant_lcd_writes(tmp_path):
+    import numpy as np
+
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, power_mode="active", face="basic", expression={"gaze_x": 0.0, "resting": True})
+    display, lcd, clock, _, _, _ = _face_loop(module, tmp_path)
+    calls = []
+    display._faces._render = lambda name, phase, gaze_x, resting: (
+        calls.append((name, round(phase, 2))) or np.zeros((4, 4, 3), dtype=np.uint8)
+    )
+    display.step()
+    assert display.tick() is True  # initial tick anchors _motion_at/_rest_at at rest=0.0
+    clock.now += 1.0  # let resting interpolation settle to 1.0 (8 s / 10 steps = 0.8 s/step)
+    assert display.tick() is True
+    assert len(calls) == 2
+    first_panel = lcd.panels[-1]
+    clock.now += 0.2  # same quantized step and settled gaze/rest: skips _render and SPI write
+    assert display.tick() is False
+    assert len(calls) == 2 and lcd.panels[-1] is first_panel
+    clock.now += 0.8
+    assert display.tick() is True
+    assert len(calls) == 3
+
+
+def test_face_converter_skips_resize_when_frame_already_matches_panel_size():
+    from PIL import Image
+    from rosy_face_inputs import FACE_SIZE, face_converter
+
+    resized = []
+    seen = []
+
+    class _Info:
+        @staticmethod
+        def compose_face(img):
+            seen.append(img.size)
+            return img
+
+        @staticmethod
+        def to_panel(img):
+            return img
+
+    img = Image.new("RGB", FACE_SIZE, (10, 20, 30))
+    orig_resize = Image.Image.resize
+    img.resize = lambda *a, **k: (resized.append(a), orig_resize(img, *a, **k))[1]
+    out = face_converter(_Info())(img)
+    assert out is img and seen == [FACE_SIZE] and resized == []
+
