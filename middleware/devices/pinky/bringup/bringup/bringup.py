@@ -432,33 +432,36 @@ class Rosy(Node):
         v_x = delta_distance / dt if dt > 0 else 0.0
         vth = delta_theta / dt if dt > 0 else 0.0
 
-        self._publish_tf(current_time)
-        self._publish_odometry(current_time, v_x, vth)
+        qz, qw = math.sin(self.theta * 0.5), math.cos(self.theta * 0.5)
+        self._publish_tf(current_time, qz, qw)
+        self._publish_odometry(current_time, v_x, vth, qz, qw)
         self._joint_cycle = (getattr(self, '_joint_cycle', 0) + 1) % JOINT_STATES_EVERY
         if self._joint_cycle == 0:  # wheel travel for the API; every message also costs one /tf wheel transform downstream
             self._publish_joint_states(current_time, rpm_l, rpm_r)
 
         self.last_time = current_time
 
-    def _publish_tf(self, current_time):
+    def _publish_tf(self, current_time, qz=None, qw=None):
         t = TransformStamped()
         t.header.stamp = current_time.to_msg()
         t.header.frame_id = self.odom_frame_id
         t.child_frame_id = self.odom_child_frame_id
         t.transform.translation.x = self.x
         t.transform.translation.y = self.y
-        q = quaternion_from_euler(0, 0, self.theta)
-        t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w = q
+        if qz is None or qw is None:
+            qz, qw = math.sin(self.theta * 0.5), math.cos(self.theta * 0.5)
+        t.transform.rotation.x, t.transform.rotation.y, t.transform.rotation.z, t.transform.rotation.w = 0.0, 0.0, qz, qw
         self.tf_broadcaster.sendTransform(t)
 
-    def _publish_odometry(self, current_time, v_x, vth):
+    def _publish_odometry(self, current_time, v_x, vth, qz=None, qw=None):
         odom_msg = Odometry()
         odom_msg.header.stamp = current_time.to_msg()
         odom_msg.header.frame_id = self.odom_frame_id
         odom_msg.child_frame_id = self.odom_child_frame_id
         odom_msg.pose.pose.position.x, odom_msg.pose.pose.position.y = self.x, self.y
-        q = quaternion_from_euler(0, 0, self.theta)
-        odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z, odom_msg.pose.pose.orientation.w = q
+        if qz is None or qw is None:
+            qz, qw = math.sin(self.theta * 0.5), math.cos(self.theta * 0.5)
+        odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z, odom_msg.pose.pose.orientation.w = 0.0, 0.0, qz, qw
         odom_msg.twist.twist.linear.x, odom_msg.twist.twist.angular.z = v_x, vth
         self.odom_pub.publish(odom_msg)
 

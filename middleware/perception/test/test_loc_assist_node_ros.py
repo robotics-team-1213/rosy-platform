@@ -38,7 +38,17 @@ def test_candidate_search_can_cross_the_budget_without_crashing(node):
         node.finish_search(node.now())
 
 
+def test_camera_subscription_is_skipped_when_ground_is_disabled(node):
+    assert camera_topics(node) == []
+
+
 def test_the_camera_subscription_exists_only_outside_localized(node):
+    from rclpy.parameter import Parameter
+    node.set_parameters([
+        Parameter('camera_ground_source', value='NOMINAL'),
+        Parameter('allow_nominal_ground', value=True),
+    ])
+    node.sync_camera()
     assert camera_topics(node) == ['/rosy_loc_test/camera/front']
     core = node.core
     core.search_started(0., ODOM)
