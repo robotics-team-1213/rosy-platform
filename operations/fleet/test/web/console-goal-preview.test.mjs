@@ -19,15 +19,18 @@ const SITE_MAP = {
   ],
 };
 
-function setup(t, { tripHandler, onConfirm } = {}) {
+function setup(t, { tripHandler, onConfirm, handlers = {}, refreshGuide = () => {}, view: viewOverrides = {}, auth: authOverrides = {} } = {}) {
   const beforeDocument = globalThis.document;
   globalThis.document = { activeElement: null, querySelectorAll: () => [] };
   t.after(() => { globalThis.document = beforeDocument; });
 
+  const canvasListeners = new Map();
   const canvas = {
     classList: { add() {}, toggle() {} },
     tabIndex: 0,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 400 }),
+    addEventListener(type, fn) { canvasListeners.set(type, fn); },
+    removeEventListener(type) { canvasListeners.delete(type); },
   };
   const elements = { "map-canvas": canvas };
   const calls = [];
@@ -54,10 +57,11 @@ function setup(t, { tripHandler, onConfirm } = {}) {
     stateUnavailable: false,
     anchors: [],
     layers: {},
+    ...viewOverrides,
   };
 
   const pageScope = {
-    listen() {},
+    listen(target, type, fn) { if (target === canvas) canvasListeners.set(type, fn); },
     capture() {
       return {
         signal: new AbortController().signal,
@@ -77,8 +81,12 @@ function setup(t, { tripHandler, onConfirm } = {}) {
   };
 
   const call = async (path, init = {}) => {
-    calls.push({ path, method: init.method || "GET", body: init.body ? JSON.parse(init.body) : null });
-    if (path.endsWith("/trip")) return tripHandler(path, JSON.parse(init.body));
+    const body = init.body ? JSON.parse(init.body) : null;
+    calls.push({ path, method: init.method || "GET", body });
+    for (const [suffix, fn] of Object.entries(handlers)) {
+      if (path.endsWith(suffix)) return fn(path, body);
+    }
+    if (path.endsWith("/trip")) return tripHandler(path, body);
     if (path.endsWith("/start")) return { trip_id: "trip-1", state: "running" };
     throw new Error(`unexpected call ${path}`);
   };
@@ -87,7 +95,7 @@ function setup(t, { tripHandler, onConfirm } = {}) {
     pageScope,
     el: (id) => elements[id] || null,
     view,
-    auth: { role: "operator", principal: "kim", locked: false, token: "t" },
+    auth: { role: "operator", principal: "kim", locked: false, token: "t", ...authOverrides },
     inbox: { select() {} },
     log: (text, tone) => logs.push({ text, tone }),
     call,
@@ -95,7 +103,7 @@ function setup(t, { tripHandler, onConfirm } = {}) {
     confirmedAction,
     namedReason: () => "",
     toWorld: () => ({ x: 0, y: 0 }),
-    refreshGuide: () => {},
+    refreshGuide,
     queuedReason: () => "",
     drawMap: () => { draws += 1; },
     onSelectRobot: () => {},
@@ -107,6 +115,7 @@ function setup(t, { tripHandler, onConfirm } = {}) {
     calls,
     logs,
     confirmSpecs,
+    canvasListeners,
     counts: () => ({ draws, renders }),
   };
 }
@@ -265,4 +274,91 @@ test("S2: eligible becomes false if plan expires or site-map version changes bef
   } finally {
     Date.now = origNow;
   }
+});
+
+test("Pinning UNKNOWN robot infers road tangent yaw, updates guide immediately, forces guide refresh, and suppresses trailing click", async (t) => {
+  const guideRefreshCalls = [];
+  const westMap = {
+    ...SITE_MAP,
+    edges: [{ id: "west_lane", from: "B", to: "A", direction: "one_way", polyline: [[1.2, 0.2], [0.2, 0.2]] }],
+  };
+  const env = setup(t, {
+    refreshGuide: (opts) => guideRefreshCalls.push(opts),
+    view: {
+      selected: null,
+      pinning: "rosy_01",
+      activeSiteMap: { version: 4, map: westMap },
+      siteToWorld: () => ({ x: 0.7, y: 0.2 }),
+      guide: { map_version: 4, robots: [{ robot_id: "rosy_01", online: true, pose: null }] },
+    },
+    handlers: {
+      "/tracking/identity": () => ({ robots: [] }),
+      "/map-pin": (_path, body) => ({ state: "LOCALIZED", x: body.x, y: body.y, yaw: body.yaw, anchor_source: "operator_pin", map_id: "site_a" }),
+    },
+    tripHandler: () => VALID_PLAN(),
+  });
+  const ev = { clientX: 100, clientY: 100 };
+  env.canvasListeners.get("pointerdown")(ev);
+  await env.canvasListeners.get("pointerup")(ev);
+  const pinCall = env.calls.find((c) => c.path.endsWith("/map-pin"));
+  assert.ok(pinCall);
+  assert.ok(Math.abs(Math.abs(pinCall.body.yaw) - Math.PI) < 1e-6);
+  const patched = env.view.guide.robots.find((r) => r.robot_id === "rosy_01")?.pose;
+  assert.equal(patched.state, "LOCALIZED");
+  assert.equal(patched.anchor_source, "operator_pin");
+  assert.equal(env.counts().draws >= 1 && env.counts().renders >= 1, true);
+  assert.deepEqual(guideRefreshCalls, [{ force: true }]);
+  // Trailing synthetic click right after pointerup must not arm or plan a trip.
+  await env.canvasListeners.get("click")(ev);
+  assert.equal(env.calls.some((c) => c.path.endsWith("/trip")), false);
+});
+
+test("Road-point click without placeId plans trip to coordinate and falls back to nav2 on camera unavailability", async (t) => {
+  const tripBodies = [];
+  const env = setup(t, {
+    view: {
+      robots: [{
+        robot_id: "rosy_01",
+        online: true,
+        capabilities: { controls: { items: [{ kind: "base_velocity", drive_modes: ["lane", "free"] }] } },
+        state: { map_id: "slam_local", safety: { estop: false }, pose: { x: 0.0, y: 0.0, yaw: 0.0 } },
+      }],
+    },
+    tripHandler: (_path, body) => {
+      tripBodies.push(body);
+      if (tripBodies.length === 1) {
+        const err = new Error("camera down");
+        err.code = "TRIP_LANE_CAMERA_UNAVAILABLE";
+        throw err;
+      }
+      return VALID_PLAN({ plan_id: "plan-nav2" });
+    },
+  });
+  await env.goal.commitWorldGoal({ x: 0.45, y: 0.0 }, "", "");
+  assert.deepEqual(tripBodies, [
+    { to: { x: 0.45, y: 0.0 } },
+    { to: { x: 0.45, y: 0.0 }, drive_mode: "nav2" },
+  ]);
+  assert.equal(env.confirmSpecs.length, 1);
+  assert.equal(env.view.selectedGoal.planId, "plan-nav2");
+});
+
+test("Clicking a road/place with focusRobot set and selected null plans trip, while off-road empty click does nothing", async (t) => {
+  let clickXY = { x: 5.0, y: 5.0 }; // off-road empty space
+  const env = setup(t, {
+    view: {
+      selected: null,
+      focusRobot: "rosy_01",
+      siteToWorld: () => clickXY,
+    },
+    tripHandler: () => VALID_PLAN({ plan_id: "plan-focus" }),
+  });
+  await env.canvasListeners.get("click")({ clientX: 10, clientY: 10 });
+  assert.equal(env.calls.length, 0);
+  assert.equal(env.view.selected, null);
+
+  clickXY = { x: 0.4, y: 0.0 }; // on edge e1
+  await env.canvasListeners.get("click")({ clientX: 50, clientY: 50 });
+  assert.equal(env.confirmSpecs.length, 1);
+  assert.deepEqual(env.calls[0].body, { to: { x: 0.4, y: 0.0 } });
 });
