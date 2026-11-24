@@ -1499,6 +1499,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_depth_lock.py
   - deploy/robot/omx/cell_recovery.py
   - deploy/robot/omx/cell_task_transport.py
+  - deploy/robot/omx/cell_vlm_facts.py
+  - deploy/robot/omx/cell_vlm_fence.py
   - deploy/robot/omx/cell_vlm_orchestrator.py
   - deploy/robot/omx/cell_envelope_review.py
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
