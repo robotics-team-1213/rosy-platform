@@ -496,3 +496,65 @@ def test_ik_chunk_picker_skips_non_chunk_files_override_normalizes_and_free_root
         if bench.status()["status"] not in ("handing_over", "recording", "restoring", "sealing"):
             break
         time.sleep(0.02)
+
+
+def test_observer_pose_reads_fresh_snapshot_and_arm_s_uses_chunk_home_fallback(tmp_path, monkeypatch):
+    import bench_record_pose as brp
+    import bench_record_replay as brr
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    work = bench.prep / "cell-auto-1028"
+    work.mkdir(parents=True)
+    (bench.prep / "arm-s-robot-profile.json").write_text(json.dumps({"work_dir": str(work)}), encoding="utf-8")
+    (bench.prep / "record-config-arm-s.json").write_text(json.dumps({"robot": {"id": "omx_follower_arm"}}), encoding="utf-8")
+    cal_dir = tmp_path / "home" / ".cache" / "huggingface" / "lerobot" / "calibration" / "robots" / "omx_follower"
+    cal_dir.mkdir(parents=True, exist_ok=True)
+    (cal_dir / "omx_follower_arm.json").write_text(json.dumps({
+        n: {"range_min": 0, "range_max": 4095}
+        for n in ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
+    }), encoding="utf-8")
+
+    # 1. Fresh active observer motor-health/<arm>.json provides live pose without calling leader_home subprocess.
+    mh_dir = tmp_path / "home" / ".local" / "state" / "rosy" / "motor-health"
+    mh_dir.mkdir(parents=True, exist_ok=True)
+    snap_ok = {
+        "schema_version": "rosy.motor-health.v1",
+        "owner_id": "arm_s",
+        "status": "active",
+        "observed_at": time.time(),
+        "motors": [
+            {"id": 11, "present_raw": 2048.0},
+            {"id": 12, "present_raw": 1000.0},
+            {"id": 13, "present_raw": 3000.0},
+            {"id": 14, "present_raw": 3000.0},
+            {"id": 15, "present_raw": 1951.0},  # ~ -4.7 norm
+            {"id": 16, "present_raw": 2000.0},
+        ],
+    }
+    (mh_dir / "arm_s.json").write_text(json.dumps(snap_ok), encoding="utf-8")
+    sub_called = []
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: sub_called.append(a))
+    pose = brp.read_live_norm_pose(bench.prep, "arm_s", python_exe="/py", hold=lambda: ([], None))
+    assert pose is not None and -5.5 <= pose[4] <= -4.0 and sub_called == []
+
+    # Rejects malformed observer snapshots (wrong motor count / bool / non-finite ticks) fail-closed.
+    assert brp._ticks_to_norm(bench.prep, "arm_s", [2048.0] * 5 + [float("nan")]) is None
+    (mh_dir / "arm_s.json").write_text(json.dumps({**snap_ok, "motors": snap_ok["motors"][:5]}), encoding="utf-8")
+    assert brp.read_observer_norm_pose(bench.prep, "arm_s") is None
+    (mh_dir / "arm_s.json").write_text(json.dumps({**snap_ok, "motors": [{**snap_ok["motors"][0], "present_raw": True}, *snap_ok["motors"][1:]]}), encoding="utf-8")
+    assert brp.read_observer_norm_pose(bench.prep, "arm_s") is None
+
+    # 2. Without live observer telemetry, arm_s build_ik_replay falls back to chunks-arm-s-inplace-live.json home[-1] (-5.0), not stale +45.01 surface-belt.
+    (mh_dir / "arm_s.json").unlink()
+    for site, pan in (("belt", 10.0), ("pinky", -10.0)):
+        (work / f"surface-{site}.json").write_text(json.dumps({"steps": [
+            {"command": "load x", "state": [0.85, -62.3, 53.0, 51.5, 45.01, 48.9]},
+            {"command": "goto above_probe", "state": [pan, -25.0, 20.0, 45.0, 0.0, 48.0]},
+            {"command": "run descend_probe", "state": [pan, -15.0, 15.0, 40.0, 0.0, 48.0]},
+        ]}), encoding="utf-8")
+    (bench.prep / "chunks-arm-s-inplace-live.json").write_text(
+        json.dumps({"chunks": {"home": [[0.0, -58.0, 50.0, 50.0, -5.0, 46.5]]}}),
+        encoding="utf-8",
+    )
+    traj = brr.build_ik_replay(bench.prep, "arm_s", origin="belt-in", target_slot="pinky", python_exe=None, hold=None)
+    assert traj["frames"][0][4] == pytest.approx(-5.0)
