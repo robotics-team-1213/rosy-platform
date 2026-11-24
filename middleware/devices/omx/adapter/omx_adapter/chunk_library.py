@@ -20,6 +20,8 @@ FOLDED_ROLL_LIFT = (10.0, -10.0)  # 11-20 arm_a: folded, the wrist camera hit th
 # guard stops at 5 (a rise from x 0.24 m did on 2026-10-27). 2 units/s is 3.6 deg/s: at 3 (5.4 deg/s) a rise
 # from the container reach lagged 1.8 units and set off the strain hold every time, at P 1200 and 1600 alike.
 RISE_SPEED = 2.0
+# Above closed + this threshold jaws are open (empty; box holds 51.6-54.1 vs open_max 56): rise before closing.
+OPEN_JAW_MARGIN = 8.0
 SCHEMA = "rosy.omx-chunk-library.v1"
 
 
@@ -30,33 +32,27 @@ def too_fast(frames: list, fps: int) -> bool:
 
 def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None,
                  speed: float = 0.85) -> list:
-    """From anywhere to `goal` without sweeping low: jaws to `grip_transit`, rise to the transit height,
-    turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
-    `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S).
-    `speed` is the fraction of the guard speed (a plan's transit_speed)."""
+    """Move anywhere -> `goal` without sweeping low: open jaws (> closed + OPEN_JAW_MARGIN) rise before closing at
+    transit; held boxes close first; then turn pan/roll, descend, and set final jaws at `speed * PARK_SPEED`."""
     if (start[1] >= -35.0 and goal[1] >= -35.0 and abs(start[0] - goal[0]) <= 15.0
             and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0 and abs(start[4] - goal[4]) <= 45.0):
         return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.25, rise_speed=RISE_SPEED)
     if transit is None:
         transit = {1: max(TRANSIT[1], min(start[1], goal[1], -16.0) - 5.0), 2: TRANSIT[2], 3: TRANSIT[3]} if (
             start[1] > -22.0 and goal[1] > -22.0 and abs(start[0] - goal[0]) <= 15.0) else TRANSIT
-    waypoints = [list(start)]
-    waypoints.append(waypoints[-1][:5] + [grip_transit])
+    rise_first = start[5] > grip_transit + OPEN_JAW_MARGIN
+    waypoints = [list(start)] + ([] if rise_first else [list(start[:5]) + [grip_transit]])
     waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])
+    if rise_first:
+        waypoints.append(list(waypoints[-1][:5]) + [grip_transit])
     turn = [goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])]
-    if goal[1] <= waypoints[-1][1] and max(abs(turn[i] - waypoints[-1][i]) for i in (0, 4)) <= 8.0:
-        waypoints.append(list(goal[:5]) + [grip_transit])
-        waypoints.append(list(goal[:6]))
-        return flow(waypoints, fps, speed * PARK_SPEED, blend=[False, False, True, False, False], blend_s=0.6,
-                    rise_speed=RISE_SPEED)
-    waypoints.append(turn)
-    waypoints.append(list(goal[:5]) + [grip_transit])
-    waypoints.append(list(goal[:6]))
-    # One flowing move, eased in and out (no jerk step), the lift rising no faster than RISE_SPEED: the turn
-    # starts as the rise ends and the descent as the turn ends (blended corners); the jaws' changes and the goal
-    # are reached at rest. The overlap is capped at 0.6 s: the rise has about 0.4 units left when the turn begins.
-    return flow(waypoints, fps, speed * PARK_SPEED, blend=[False, False, True, True, False, False], blend_s=0.6,
-                rise_speed=RISE_SPEED)
+    skip_turn = goal[1] <= waypoints[-1][1] and max(abs(turn[i] - waypoints[-1][i]) for i in (0, 4)) <= 8.0
+    if not skip_turn:
+        waypoints.append(turn)
+    waypoints.extend([list(goal[:5]) + [grip_transit], list(goal[:6])])
+    # Eased flow capped at RISE_SPEED, corners blended up to 0.6 s; open jaws skip blend before closing at transit.
+    blend = [False, False, not rise_first, not skip_turn, False] + ([] if skip_turn else [False])
+    return flow(waypoints, fps, speed * PARK_SPEED, blend=blend, blend_s=0.6, rise_speed=RISE_SPEED)
 
 
 def chain_path(steps: list[list], fps: int, blend_s: float = 0.25) -> list:

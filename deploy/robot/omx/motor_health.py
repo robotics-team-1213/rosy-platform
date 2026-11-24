@@ -9,9 +9,14 @@ from datetime import datetime, timezone
 import json
 import math
 import os
+import sys
 import time
 from pathlib import Path
 from uuid import uuid4
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from motor_health_async import AsyncSnapshotPublisher, snapshot_row
 
 
 def _safe_print(text: str) -> None:
@@ -25,7 +30,7 @@ class TelemetryReadError(ValueError): recoverable_telemetry = True
 
 
 class MotorHealth:
-    def __init__(self, log_path=None, *, max_records=100_000):
+    def __init__(self, log_path=None, *, max_records=100_000, async_publish=False):
         fallback = f"motor-health-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{uuid4().hex[:8]}.jsonl"
         self.path = Path(log_path or os.environ.get("ROSY_OMX_MONITOR_LOG") or fallback)
         self.path.touch(exist_ok=False)  # Never truncate an earlier session's evidence.
@@ -39,30 +44,17 @@ class MotorHealth:
             raise ValueError('invalid motor health session identity')
         self.status, self.stop_reasons = 'active', []
         self.terminal_at = None
+        self._async_pub = AsyncSnapshotPublisher(lambda p, r: atomic_snapshot(p, r)) if async_publish else None
 
     def publish(self):
-        motors, stamps = [], []
-        fields = ('joint', 'id', 'command_raw', 'present_raw', 'error_deg', 'pwm', 'pwm_limit', 'pwm_utilization',
-                  'temperature_c', 'temperature_limit_c', 'voltage_v', 'warnings', 'hardware_error', 'torque_enabled', 'fault')
-        for state in self.motions.values():
-            last = state['last']
-            if last is None:
-                continue
-            stamp = state['observed_at']
-            stamps.append(stamp)
-            for motor in last['motors']:
-                motors.append({**{key: motor[key] for key in fields}, 'group': last['arm'],
-                               'min_voltage_v': motor['min_voltage_raw'] / 10,
-                               'max_voltage_v': motor['max_voltage_raw'] / 10, 'observed_at': stamp})
-        row = dict(schema_version='rosy.motor-health.v1', owner_id=self.owner_id,
-            session_id=self.session_id, status=self.status, observed_at=max(stamps) if stamps else self.terminal_at or time.time(),
-            expected_motor_count=sum(len(state['limits']) for state in self.motions.values()),
-            motors=motors, stop_reasons=self.stop_reasons)
-        if self.terminal_at is not None:
-            row['terminal_at'] = self.terminal_at
+        row = snapshot_row(self.owner_id, self.session_id, self.status, self.stop_reasons, self.terminal_at, self.motions)
+        if self._async_pub is not None:
+            self._async_pub.flush()
         atomic_snapshot(self.state_path, row)
 
     def end(self):
+        if self._async_pub is not None:
+            self._async_pub.flush(close=True)
         if self.terminal_at is None:
             self.terminal_at = time.time()
         if self.status != 'fault':
@@ -270,7 +262,12 @@ class MotorHealth:
         try:
             self.emit(row)
             if due:
-                self.publish()
+                if self._async_pub is not None:
+                    if not allow_gap and (err := self._async_pub.pop_error()) is not None:
+                        raise err
+                    self._async_pub.submit(self.state_path, snapshot_row(self.owner_id, self.session_id, self.status, self.stop_reasons, self.terminal_at, self.motions))
+                else:
+                    self.publish()
         except OSError as exc:
             if not allow_gap:
                 raise
@@ -303,6 +300,8 @@ class MotorHealth:
         self.status = 'fault'
         self.stop_reasons = [public_reason(exc)]
         try:
+            if self._async_pub is not None:
+                self._async_pub.flush(close=True)
             self.emit(row)
         finally:
             self.publish()

@@ -14,11 +14,13 @@ import { node, patchHidden, patchText } from "/common/control-dom.js";
 import { cardTripLine } from "./card-trip.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { robotMapPose, robotPoseText, sitePoseText } from "./localization-badge.js";
+import { createLocalizationPanel } from "./localization-panel.js";
 import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
 import { powerHealthView } from "./power-health-view.js";
 import { staleAgeS } from "./state-age.js";
 
-export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl }) {
+export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator = () => false, namedReason = () => "" }) {
+  const locPanel = createLocalizationPanel({ scope, view, auth, call, log, render, confirmedAction, isOperator, namedReason });
   const stage = el("robot-stage");
   const frontCamera = createFrontCamera({ call, scope });
   const armFeed = createCellFrameFeed({ call, scope, intervalMs: 2000 });
@@ -44,19 +46,23 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   const armCamImg = document.createElement("img");
   armCamImg.className = "omx-inspector-main-cam omx-inspector-cam";
   armCamImg.alt = "선택한 팔 카메라 실시간 영상";
-  armCamImg.loading = "lazy";
+  const armCamStandby = node("span", "영상 대기", "omx-inspector-cam-standby");
+  armCamStandby.setAttribute("role", "status");
   const armCamBadge = node("small", "영상 대기 · 클릭하여 연결", "omx-inspector-cam-badge");
-  armCamFrame.append(armCamImg);
+  armCamFrame.append(armCamImg, armCamStandby);
   armCamBox.append(armCamToggleSlot, armCamFrame, armCamBadge);
   const armStatusBox = document.createElement("div");
   const armHealthBox = document.createElement("section");
   const armCommandsBox = document.createElement("div");
   armCommandsBox.className = "ui-control-stack";
   armCommandsBox.append(node("p", "로봇팔 작업 준비와 승인은 작업 화면(셀)에서 진행합니다.", "hint"));
+  const armObsLink = node("a", "팔 관측·사건 보기", "ui-action-link");
+  armObsLink.dataset.kind = "quiet";
+  armObsLink.href = "/console/cell#observation-heading";
   const armWorkLink = node("a", "팔레트 적재 화면 열기", "ui-action-link");
   armWorkLink.dataset.kind = "quiet";
   armWorkLink.href = "/console/cell";
-  armCommandsBox.append(armWorkLink);
+  armCommandsBox.append(armObsLink, armWorkLink);
   const settingsBox = document.createElement("div");
 
   let latestRecords = [];
@@ -78,6 +84,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
   }
 
   function clearInspectorHosts() {
+    locPanel.clear();
     lastSampleStamp = "";
     lastArmStatusSig = "";
     lastSettingsSig = "";
@@ -380,8 +387,15 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
         renderMotorHealth(armHealthBox, armHealthState.read(Date.now()));
         return armHealthBox;
       },
-      commands(profile) {
-        return profile.kind === "arm" ? armCommandsBox : null;
+      commands(profile, detail) {
+        if (profile.kind !== "arm") {
+          locPanel.sync(detail?.robot);
+          return locPanel.element();
+        }
+        armObsLink.href = detail?.obsArm?.sourceId
+          ? `/console/cell?focus=arm:${encodeURIComponent(detail.obsArm.sourceId)}#observation-heading`
+          : "/console/cell#observation-heading";
+        return armCommandsBox;
       },
       manual(profile) {
         if (profile.kind !== "mobile") return null;

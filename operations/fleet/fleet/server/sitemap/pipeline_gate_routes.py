@@ -20,6 +20,7 @@ def install_gates_routes(app, ctx) -> None:
     _is_human_detected = ctx._is_human_detected
     _evaluate_decision = ctx._evaluate_decision
     active_map = ctx.active_map
+    gov = getattr(ctx, "gov", None) or getattr(app.state, "pipeline_governance", None)
     def _aborted(cell_id: str) -> bool:
         state = app.state.omx_cell_states.get(cell_id) or {}
         return state.get("phase") == "ABORTED" or state.get("prev_phase") == "ABORTED"
@@ -101,6 +102,8 @@ def install_gates_routes(app, ctx) -> None:
                 "created_at": round(time.time(), 3),
             }
             app.state.pinky_tasks[pid] = pinky_estop
+            if gov is not None:
+                gov.bump_stop_generation()
         else:
             for t in app.state.omx_cell_tasks.values():
                 if t["cell_id"] in affected_cells and t["status"] == "PAUSED_HUMAN":
@@ -265,6 +268,8 @@ def install_gates_routes(app, ctx) -> None:
                     t["status"] = "PAUSED_HUMAN"
                     _enrich_task_health(t)
                     paused_tasks.append(t["task_id"])
+            if gov is not None:
+                gov.bump_stop_generation()
         elif was_detected:
             for cid in affected_cells:
                 app.state.human_detected[cid] = False

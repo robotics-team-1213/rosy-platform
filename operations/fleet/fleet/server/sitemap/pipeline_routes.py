@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from fastapi import Depends, HTTPException
 
 from fleet.charge_bays import bays_from_map
+from .pipeline_governance_store import PipelineGovernanceStore
 from .pipeline_ledger import write_ledger
 from .pipeline_task_input import finite_json_value
 
@@ -40,6 +41,8 @@ def _enrich_task_health(task: dict) -> dict:
         substage = "사람 감지 비상정지 대기 (이탈 시 자동 재개)"
     elif status in ("CANCELLED", "ABORTED"):
         substage = "작업 취소·중단 (인터락 해제)"
+    elif status == "PROPOSED":
+        substage = "승인 대기 (PROPOSED)"
     else:
         substage = "큐 대기 (Approach 준비)"
     task["health_summary"] = {
@@ -153,6 +156,11 @@ def install_pipeline_routes(
     storage_dir = _storage_dir()
     ledger_path = storage_dir / "rosy-pipeline-ledger.json"
     zones_override_path = storage_dir / "station_zones.yaml"
+    gov_db = getattr(app.state, "pipeline_governance_db_path", None)
+    if gov_db is None:
+        gov_db = ":memory:" if (os.environ.get("PYTEST_CURRENT_TEST") or storage_dir == Path("/tmp")) else (storage_dir / "rosy-pipeline-governance.sqlite3")
+    if getattr(app.state, "pipeline_governance", None) is None:
+        app.state.pipeline_governance = PipelineGovernanceStore(gov_db)
     app.state._pipeline_ledger_fault = storage_dir == Path("/tmp") and not os.environ.get("PYTEST_CURRENT_TEST")
     if not os.environ.get("PYTEST_CURRENT_TEST") and ledger_path.is_file():
         try:
@@ -385,7 +393,7 @@ def install_pipeline_routes(
         _is_human_detected=_is_human_detected, _evaluate_decision=_evaluate_decision,
         inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard,
         operator_guard=operator_guard, proposer_guard=proposer_guard,
-        _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn, console=console,
+        _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn, console=console, gov=app.state.pipeline_governance,
     )
     install_cell_tasks_routes(app, ctx)
     install_gates_routes(app, ctx)

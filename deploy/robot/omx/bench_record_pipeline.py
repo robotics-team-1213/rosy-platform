@@ -117,7 +117,7 @@ class BenchPipelineMixin:
                 "segments": {"A": [0, 14], "reset": [14, 16], "B": [16, 30]},
             }
         validate_replay_payload(base_traj)
-        base_traj["source"] = {"kind": src_type, "ref": src_ref or "default", "arm": arm, "ts": int(self.clock())}
+        base_traj["source"] = {**(base_traj.get("source") if isinstance(base_traj.get("source"), dict) else {}), "kind": src_type, "ref": src_ref or "default", "arm": arm, "ts": int(self.clock())}
         raw = json.dumps(base_traj, ensure_ascii=False).encode("utf-8")
         mode = str(body.get("replay_mode") or "none")
         raw = transform_replay(raw, mode=mode, invert_gripper=bool(body.get("invert_gripper")))

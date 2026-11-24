@@ -137,7 +137,7 @@ def apply_task_override(tc_data: dict, override: dict) -> dict:
         if override.get("swap_pick_place") and old_orig and old_tgt:
             new_task = _swap_tokens(cur_task, old_orig, old_tgt)
         elif cur_task and new_orig and new_tgt:
-            new_task = f"{cur_task} ({new_orig} -> {new_tgt})"
+            new_task = f"Pick container from belt to {new_tgt}." if new_orig == "belt" else f"Move container from {new_orig} to {new_tgt}."
     if new_task:
         out["single_task"] = new_task
         if isinstance(out.get("record"), dict) and "single_task" in out["record"]:
@@ -263,11 +263,23 @@ def _read_live_norm_pose_held(prep: Path, arm: str, python_exe: str) -> list[flo
         return None
 
 
+_REQ_CHUNKS = ("above_pick", "descend_pick", "grasp_pick", "lift_pick", "above_place", "descend_place", "release_place", "lift_place", "home")
+
+def _has_req_chunks(path: Path) -> bool:
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        chunks = d.get("chunks") if isinstance(d, dict) else None
+        return isinstance(chunks, dict) and all(isinstance(chunks.get(k), list) and chunks[k] and isinstance(chunks[k][0], (list, tuple)) and len(chunks[k][0]) >= 6 for k in _REQ_CHUNKS)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
 def _pick_chunk_library(prep: Path, arm: str, origin: str, target_slot: str) -> Path | None:
     cdir = Path(prep) / f"cell-arm-{arm.split('_')[-1] if '_' in arm else arm}"
-    files = sorted(cdir.glob("auto-*.json"), key=lambda p: p.stat().st_mtime, reverse=True) if cdir.is_dir() else []
+    files = [p for p in (sorted(cdir.glob("auto-*.json"), key=lambda p: p.stat().st_mtime, reverse=True) if cdir.is_dir() else []) if _has_req_chunks(p)]
     hints = f"{origin} {target_slot}".lower()
-    tokens = (["pallet"] if ("ship" in hints or "pallet" in hints) else []) + [t for t in re.split(r"[^a-z0-9]+", hints) if len(t) >= 3]
+    extra = [tok for key, tok in (("belt", "beltend"), ("temp", "temp_plate")) if key in hints] + (["pallet"] if ("ship" in hints or "pallet" in hints) else [])
+    tokens = extra + [t for t in re.split(r"[^a-z0-9]+", hints) if len(t) >= 3]
     return next((p for tok in tokens for p in files if tok in p.name.lower()), files[0] if files else None)
 
 
@@ -282,8 +294,7 @@ def _build_arm_chunk_replay(prep: Path, arm: str, origin: str, target_slot: str,
     if lib_p is None:
         return None
     chunks = (lib := json.loads(lib_p.read_text(encoding="utf-8"))).get("chunks") or {}
-    req = ("above_pick", "descend_pick", "grasp_pick", "lift_pick", "above_place", "descend_place", "release_place", "lift_place", "home")
-    if any(not chunks.get(k) for k in req):
+    if any(not chunks.get(k) for k in _REQ_CHUNKS):
         raise ValueError(f"chunk 파일({lib_p.name})에 필수 동작 단계가 없습니다")
     stack_p = Path(prep) / f"cell-arm-{arm.split('_')[-1] if '_' in arm else arm}-stack.json"
     stack = json.loads(stack_p.read_text(encoding="utf-8")) if stack_p.is_file() else {}
@@ -301,8 +312,8 @@ def _build_arm_chunk_replay(prep: Path, arm: str, origin: str, target_slot: str,
         [*chunks["release_place"][-1][:5], g_o], [*chunks["lift_place"][-1][:5], g_o], [*tpl, g_o], rise, [*home[:5], g_o],
     ]
     a_wps = [home, *[_clamp_wp(w, jmin, jmax, g_c) for w in raw_wps[1:]]]
-    motion_a = _interp_waypoints(a_wps, max_step=0.10)
-    seg_a, reset_n, seg_b = [list(motion_a[0])] * 60 + motion_a, 60, [list(motion_a[-1])] * 60 + list(reversed(motion_a))
+    motion_a = _interp_waypoints(a_wps, max_step=0.14)
+    seg_a, reset_n, seg_b = [list(motion_a[0])] * 30 + motion_a, 30, [list(motion_a[-1])] * 30 + list(reversed(motion_a))
     traj = {
         "schema": "rosy.omx-replay-trajectory.v1", "fps": 30, "frames": seg_a + [list(seg_a[-1])] * reset_n + seg_b,
         "names": ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"],
@@ -368,10 +379,10 @@ def build_ik_replay(prep: Path, arm: str, origin: str = "belt-in", target_slot: 
         # Keep arm_s wrist_roll above -5.0 norm (~1990 ticks) to avoid wrist camera cable stall at ~1946 ticks.
         for wp in a_wps[1:]:
             wp[4] = max(-5.0, wp[4])
-        motion_a = _interp_waypoints(a_wps, max_step=0.06)
-        seg_a = [list(motion_a[0])] * 90 + motion_a
-        reset_n = 60
-        seg_b = [list(motion_a[-1])] * 90 + list(reversed(motion_a))
+        motion_a = _interp_waypoints(a_wps, max_step=0.14)
+        seg_a = [list(motion_a[0])] * 30 + motion_a
+        reset_n = 30
+        seg_b = [list(motion_a[-1])] * 30 + list(reversed(motion_a))
         frames = seg_a + [list(seg_a[-1])] * reset_n + seg_b
         return {
             "schema": "rosy.omx-replay-trajectory.v1",

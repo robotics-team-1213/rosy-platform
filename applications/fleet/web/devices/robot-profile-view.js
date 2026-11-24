@@ -22,14 +22,26 @@ export function profileBindingMismatch(profile, expected) {
 
 export function paintProfile(root, profile, {elapsedS = 0, unavailable = false, historyOpen = false,
   bindingStatus = null, editDeviceId = null} = {}) {
-  root.replaceChildren(node('h4', '로봇 프로필 · 주의사항'));
   const changed = ['owner_changed', 'registration_changed', 'source_unregistered', 'unverified_link']
     .includes(bindingStatus || profile?.source_binding_status);
+  const link = node('a', '프로필·주의사항 편집');
+  const deviceId = profile?.device_id || editDeviceId;
+  link.href = `/console/install${deviceId ? '?profile=' + encodeURIComponent(deviceId) : ''}#device-profiles`;
+  link.className = 'ui-action-link';
+  link.dataset.kind = 'quiet';
+  if (!profile && !unavailable && !changed) {
+    const fold = node('details');
+    fold.className = 'profile-unbound-fold';
+    const summary = node('summary', '장치 주의사항 · 미연결');
+    summary.className = 'ui-disclosure-row';
+    fold.append(summary, node('p', '연결된 프로필이 없습니다. 장치 정보에서 연결하세요.'), link);
+    root.replaceChildren(fold);
+    return;
+  }
+  root.replaceChildren(node('h4', '로봇 프로필 · 주의사항'));
   if (changed) root.append(node('p', '관측원 등록이 달라졌거나 연결 근거가 없습니다. 프로필 연결을 다시 확인하세요.'));
   if (unavailable) root.append(node('p', '프로필을 읽지 못했습니다. 현재 상태는 실시간 관측에서 확인하세요.'));
-  if (!profile) {
-    if (!unavailable && !changed) root.append(node('p', '연결된 프로필이 없습니다. 장치 정보에서 연결하세요.'));
-  } else {
+  if (profile) {
     root.append(node('p', `${profile.display_name} · ${profile.model || '모델 미입력'}`),
       node('p', profile.caution || '저장된 주의사항 없음 · 고장 없음의 증거가 아닙니다.'));
     const diagnosis = node('p', analysisText(profile.latest_analysis, elapsedS));
@@ -68,11 +80,6 @@ export function paintProfile(root, profile, {elapsedS = 0, unavailable = false, 
       root.append(history);
     }
   }
-  const link = node('a', '프로필·주의사항 편집');
-  const deviceId = profile?.device_id || editDeviceId;
-  link.href = `/console/install${deviceId ? '?profile=' + encodeURIComponent(deviceId) : ''}#device-profiles`;
-  link.className = 'ui-action-link';
-  link.dataset.kind = 'quiet';
   root.append(link);
 }
 

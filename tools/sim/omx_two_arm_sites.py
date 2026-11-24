@@ -89,6 +89,8 @@ TOP_CAMERA_20261114 = dict(eye=[-.0050, .0869, .6973], focus=[.0469, .0401, .202
 # "surveyed" (the 11-03 FK frame, bases .104 / .116): two frames in one map, the ship and plates 26 (arm_b) and 44 mm (arm_a) too far toward -x of the arms.
 PRESETS = {"v24-20261114": dict(berth_kit="v24-docks", top_camera="2026-11-14", temp_lanes="photo-20261114", ship_stern_x_m=.1474, ship_centre_y_m=.0015,
                                 ship_pose="photo-20261114", arm_bases="docks-photo", belt_pose="photo-20261114")}
+# preset "v24-20261124": 11-23/24 scene without the ship house visual or cx_house collision mesh (matches live cell camera views; keeps docks-photo 189.8 mm).
+PRESETS["v24-20261124"] = dict(PRESETS["v24-20261114"], ship_house=False)
 # preset "v24-20261114-cad194" (11-14 evening): the same frame and parts, base plates set from the planned 194 mm between the two OMX-AI base plates (user, later that night: the real cell differs, see docks-photo)
 # (inner edge to inner edge: the 130 mm hull with its ~32 mm side docks fits only so; as a centre distance the plates would overlap the ship).
 PRESETS["v24-20261114-cad194"] = dict(PRESETS["v24-20261114"], arm_bases="cad-194", ship_house=False)
@@ -259,10 +261,13 @@ def lane_geometry(radius):
 
 
 def parse_choices(items):
-    """--choice key=value items into CHOICES overrides, numbers as numbers."""
+    """--choice key=value items into CHOICES overrides, numbers and booleans parsed."""
     out = {}
     for item in items or []:
         key, value = item.split("=", 1)
+        if value in ("true", "false"):
+            out[key] = value == "true"
+            continue
         try:
             out[key] = json.loads(value) if value[:1] in "0123456789-." else value
         except ValueError:  # a date such as 2026-11-14 is a name, not a number
@@ -343,7 +348,10 @@ class Layout:
             fit = snap_cam.get("camera_fit")  # None: the pad check passed and the camera had not moved, so the snapshot's pose stands
             if (fit and not fit.get("ok")) or (fit is None and (snap_cam.get("camera_motion") or {}).get("moved")) or not isinstance(snap_cam.get("camera", {}).get("top"), dict):
                 raise ValueError(f"snapshot {c['cell_snapshot']}: no accepted top camera fit ({(fit or {}).get('why', 'camera moved, not refitted')})")
-            f["real_cameras"] = dict(f["real_cameras"], top=dict(snap_cam["camera"]["top"]))
+            cams = dict(f["real_cameras"], top=dict(snap_cam["camera"]["top"]))
+            if isinstance(snap_cam.get("camera", {}).get("side"), dict):
+                cams["side"] = dict(snap_cam["camera"]["side"])
+            f["real_cameras"] = cams
         elif c["top_camera"] == "2026-11-14":
             f["real_cameras"] = dict(f["real_cameras"], top=dict(TOP_CAMERA_20261114))
         elif c["top_camera"] == "2026-11-12":

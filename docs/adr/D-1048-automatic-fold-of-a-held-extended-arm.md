@@ -30,3 +30,17 @@
 - 셀 S부터 `auto-fold.json`을 두기 전에 입회 실행 두 번으로 수용한다. 하나는 접촉 정지 뒤 자동 park, 다른 하나는 쥔 채 멈춤 뒤 release_and_rise → park다.
 - 관절 공간 경유점 탐색(어깨 회전 외의 우회)과 낮게 막혔을 때의 `cell_unwedge` 들어 올리기는 실물 결과를 본 뒤에 한다(unwedge의 마지막 park는 검사·예약이 없어 이번에는 뺐다).
 - 독립 안전 검토(2026-11-19)의 REQUEST CHANGES를 반영했다: transit 키, 검사 없는 움직임, 오류 시 보류, 증거 결속.
+
+### 추록 (2026-11-24): 토크 유지 가드 해제(`recover-unlatch`) · 저속 복귀 파크(`fold-from-hold` / `park-slow`) · 다중 VLM/LLM 복구 패널
+
+- **배경:** 2026-11-24 사용자 결정("물리지지 없이 하는 걸로 잡아볼래? agy 나 기타 llm ai vlm 다 사용해도 좋아") 및 `omx-return-home`(`91c88cef35`, `3e97f67bd8`, `e655b7bc97`) 핵심 안전 보강 병합. 기존 세션이 이미 `human_hold_latched` 상태에 들어가 있을 때 토크를 끊지 않고(`팔을 뻗은 채 토크를 끊지 않는다` 불변식 준수) 물리적 사람 손 지지 없이 안전하게 홈으로 복귀하는 경로를 통합한다.
+- **저속 복귀 파크 및 상승 우선 파크 (`chunk_library.py`, `chunk_runner_guards.py`, `chunk_runner_recover.py`, `chunk_runner_settle.py`):**
+  1. `OPEN_JAW_MARGIN = 8.0`: 열린 집게(`> grip_transit + 8.0`)는 저고도에서 닫지 않고 transit 높이까지 먼저 상승한 뒤 닫으며, 이미 물건을 쥔 집게(`<= closed + 8.0`)는 닫힘 우선 순서를 유지한다.
+  2. **`checked ... fold-from-hold <6축>` 및 `park-slow` (`RECOVERY_PARKS`):** transit speed `<= 0.3`의 저속 가드 파크다. 두 명령 모두 점유 그리퍼(`holding` 또는 미닫힘 오차) · 비가용 온도(`>= 65°C`) · 하드웨어 오류 · 토크 미인가를 거부하며, `fold-from-hold`는 `checked` 세션/라이브러리 바인딩 + `human_hold_latched` + `torque_hold_commanded` + 소수 둘째 자리 실측 6축 일치까지 요구한다. 실행 중 `stop` 등 다른 명령은 거부되고(`human-hold`·`state`만 허용), 접촉/집게 밀림/열·스톨/추종 오차(`FOLLOW_STOP` 1 s) 또는 정착 타임아웃(`error <= 3.0` 및 비진동 필수) 시 `RuntimeError`로 토크를 끄지 않고 **토크 ON 상태로 `human-hold`를 재래치**한다.
+  3. **`recover-unlatch` + `park-slow`:** 우회(`pan±5/±10`, `lift_first` 등)나 저고도 `release_and_rise` 또는 다중 VLM/LLM 제안이 필요한 경우, 먼저 `look` · `load_check` · `cell_space.reserve`(TTL 360 s)로 경로를 예약한 **뒤에만** `recover-unlatch`를 호출하고 `park-slow`로 복귀한다.
+  4. **공간 예약 보존:** `cell_auto_fold`는 이미 팔이 움직인 뒤 실패(`PARK_NOT_HOME`, `DETOUR_REFUSED`, `RELEASE_STUCK`)하면 다른 팔이 진입하지 못하도록 TTL 만료 전까지 `cell_space` 예약을 해제하지 않는다(이동 전 거부/성공 시에만 해제).
+- **다중 VLM/LLM 복구 패널 (`judge_seat.py` · `cell_recovery_advisor.py`):**
+  - 1차 결정론적 우회 후보가 모두 막히면 `judge_seat.cooperate` 기반 다중 VLM/LLM 패널(`--vlm-config` / `--vlm-url`, 문자열·딕셔너리 모두 타임아웃 상한 `30.0 s`)을 호출한다. 패널은 최소 1개의 비전 모델(`qwen3-vl:8b-instruct` 등)을 필수로 포함하고, 스키마 예약 메타 키(`role`/`model`/`deliberation`/`consensus`) 위조를 거부하며, 의견 충돌 시 중재자(`arbiter`) 또는 보수적 동률 규칙(`escalate_human` 최우선)으로 수렴한 뒤 `translate_proposal` + `cell_corridor` + `cell_space` 게이트를 통과해야만 실행한다.
+- **파이프라인 작업 통합 (`cell_job_spec.py` · `cell_job_api.py` · `cell_job_peer_health.py`):**
+  - `recover_hold` 작업은 `live.json`의 `human_hold_latched` · `torque_hold_commanded` · 생존 세션 락/생존 PID 및 `check_peer_ab_folded` · D435 잠금 · AMR 침대 게이트를 검증한다(`ROLE_MACHINE`은 하드웨어 입회 수용 전 403 차단).
+  - **운용 한계:** 본 패치 이전에 메모리상 구버전(`omx-tools-61f8d8919a`)으로 이미 떠 있는 레거시 세션(`recover-unlatch`/`fold-from-hold` 미탑재)은 실행 중 코드 교체 없이 해제할 수 없으며, 새 릴리스 배포 이후 시작된 세션부터 무지지 토크 유지 복구가 적용된다.

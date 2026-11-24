@@ -361,3 +361,39 @@ def test_site_points_accepts_raw_unsorted_site_rules_body_hash(tmp_path):
     bad_rules = client.get("/api/fleet/site-rules/active", headers=VIEWER)
     assert bad_rules.status_code == 422
     assert bad_rules.json()["detail"]["code"] == "SITE_RULES_BODY_HASH_MISMATCH"
+
+
+def test_site_points_requires_edges_in_for_outbound_exit_stop(tmp_path):
+    client, store = _client_and_store(tmp_path)
+    raw_map = _base_v348_map()
+    raw_map["places"].extend([
+        {"id": "J_stand", "kind": "junction", "name": "반출 분기", "x": 0.615, "y": -0.207},
+        {
+            "id": "S_OUT", "kind": "stop", "name": "S_OUT 반출대", "x": 0.614, "y": 0.001, "yaw": 1.570796,
+            "pinned": True, "stop_zone": [[0.55, -0.06], [0.68, -0.06], [0.68, 0.06], [0.55, 0.06]],
+            "approach_m": 0.10,
+        },
+        {"id": "S_EXIT", "kind": "stop", "name": "고립 반출 출구", "x": -0.80, "y": -0.48, "yaw": 0.0, "pinned": True},
+    ])
+    raw_map["edges"] = [e for e in raw_map["edges"] if e["id"] != "upper_east"] + [
+        {"id": "upper_east_a", "from": "S3", "to": "J_stand", "polyline": [[0.745, -0.207], [0.615, -0.207]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
+        {"id": "upper_east_b", "from": "J_stand", "to": "J_in", "polyline": [[0.615, -0.207], [0.32, -0.25]], "direction": "one_way", "width_m": 0.2, "speed_cap_mps": 0.15, "pinned": True},
+        {"id": "stand_spur", "from": "J_stand", "to": "S_OUT", "polyline": [[0.615, -0.207], [0.615, -0.103], [0.614, 0.001]], "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.08, "pinned": True},
+    ]
+    raw_rules = {
+        "return": {"exit_place": "S_EXIT"},
+        "stops": [
+            {"place": "S1", "role": "load"},
+            {"place": "S3", "role": "unload"},
+            {"place": "S_OUT", "role": "load"},
+        ],
+    }
+    _activate_map_and_rules(store, raw_map, raw_rules)
+    port = client.get("/api/fleet/site-points?view=port", headers=VIEWER).json()
+    port_places = {p["place_id"]: p for p in port["vehicle_places"]}
+    assert port_places["S_OUT"]["dispatchable"] is True
+    assert port_places["S_EXIT"]["port_role"] == "outbound_exit"
+    assert port_places["S_EXIT"]["status"] == "planned_unverified"
+    assert port_places["S_EXIT"]["dispatchable"] is False
+    assert port["outbound_handoffs"][0]["status"] == "planned_unverified"
+    assert port["outbound_handoffs"][0]["dispatchable"] is False

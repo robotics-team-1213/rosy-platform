@@ -43,7 +43,7 @@ def eval_sim_profile(policy, pre, post, spec: dict, arm: str, *, task_name: str,
     other = "arm_b" if arm == "arm_a" else "arm_a"
     arm_view = {"arm_a": "a_wrist", "arm_b": "b_wrist"}[arm]
 
-    layout = sites.Layout(preset="v24-20261114", wrist_camera="v21-b")
+    layout = sites.Layout(preset=spec.get("sim_preset", "v24-20261114"), wrist_camera="v21-b", **(spec.get("sim_choices") or {}))
     for a in ("arm_a", "arm_b"):
         layout.arms[a].wait = (canon_q[a] if a == arm else idle_q[a]).copy()
         layout.sim_arms[a].wait = (canon_q[a] if a == arm else idle_q[a]).copy()

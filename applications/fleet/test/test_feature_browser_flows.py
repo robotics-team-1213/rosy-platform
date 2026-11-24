@@ -33,6 +33,7 @@ CASES = {
     'incidents': (collaboration.test_formation_hold_resume_stop_and_incident_review, '/console'),
     'profile': (flows.test_profile_change_survives_logout_and_login, '/console/profile'),
     'accounts': (flows.test_account_changes_control_login_and_sample_authority, '/console/accounts'),
+    'pinky_localization_binding': (flows.test_pinky_localization_and_map_binding_flow, '/console'),
 }
 
 

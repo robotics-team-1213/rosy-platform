@@ -58,9 +58,10 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     liveStreamOn = !liveStreamOn;
     const btn = $('cell-live-stream-toggle');
     if (btn) {
-      btn.textContent = liveStreamOn ? '실시간 카메라 자동갱신 (ON · 2초)' : '실시간 카메라 자동갱신 (OFF · 일시정지)';
+      btn.textContent = liveStreamOn ? '영상 일시정지' : '영상 다시 보기';
+      btn.setAttribute('aria-pressed', String(liveStreamOn));
     }
-    cellFrames?.setRunning(liveStreamOn);
+    cellFrames?.setPaused(!liveStreamOn);
   }
 
   function renderSelect(selectEl, items, currentValue, labelFn) {

@@ -89,6 +89,21 @@ def fold(cell, sleep=time.sleep, wait_s: float = 2.0) -> dict:
     return cell.act("park")
 
 
+def park_succeeded(status) -> bool:
+    return (isinstance(status, dict) and status.get("ok") is True and status.get("settled") is True
+            and not any(status.get(key) for key in ("fault", "contact", "human_hold_latched")))
+
+
+def fold_from_hold(cell, status: dict) -> dict:
+    """Send the exact measured start and the session/library used to check its corridor."""
+    session = (status.get("operating_context") or {}).get("session_id")
+    revision = status.get("library_sha256")
+    if not session or not revision:
+        return {"ok": False, "error": "held runner has no session or library binding"}
+    command = "fold-from-hold " + " ".join(map(str, status["state"][:6]))
+    return cell.checked(command, {"session_id": session, "library_sha256": revision})
+
+
 FIFO_WRITE_LOCK = threading.Lock()
 
 
@@ -158,6 +173,8 @@ class FifoCell:
         hold_req = uuid.uuid4().hex[:12] if is_hold else None
         wire_cmd = f"human-hold {hold_req}" if hold_req else command
         expected = command.split(" ", 3)[-1] if command.startswith("checked ") else command
+        verb = expected.split(" ", 1)[0]
+        recovery = verb in ("fold-from-hold", "park-slow", "recover-unlatch")
         status_path = self.io / "chunk-status.jsonl"
         with FIFO_WRITE_LOCK:  # the hardware owner's cancel fold writes `park` from another thread (D-977 4)
             if is_hold:
@@ -215,7 +232,8 @@ class FifoCell:
                                     if row.get("hold_req") == hold_req:
                                         matched_hold = row
                                     continue
-                                if row.get("command") in (expected, "run " + expected) or row.get("fault"):
+                                matches = (command, expected, "run " + (verb if recovery else expected))
+                                if row.get("command") in matches or (not recovery and row.get("fault")):
                                     if (row.get("ok") and not row.get("fault")
                                             and row.get("operating_context") and row.get("library_sha256")):
                                         self._cached_state = row

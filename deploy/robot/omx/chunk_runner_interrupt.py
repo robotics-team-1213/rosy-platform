@@ -347,7 +347,7 @@ def gate_allows(runner, signals: list) -> bool:
     if bool(getattr(runner, "_off_approved", None)):
         return True
     if (getattr(runner, "human_hold_latched", False) or getattr(runner, "_stop_after_park", None) or getattr(runner, "_release_until", None) is not None
-            or getattr(getattr(getattr(runner, "robot", None), "motion", None), "failed", False)):
+            or getattr(runner, "_recovery_active", False) or getattr(getattr(getattr(runner, "robot", None), "motion", None), "failed", False)):
         return False
     return not [s for s in signals if s != OPERATOR_RELEASE]
 

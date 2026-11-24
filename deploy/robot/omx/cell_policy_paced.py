@@ -12,6 +12,7 @@ from cell_policy_entry import (  # noqa: F401
     check_idle_sample as _check_idle_sample, dry_no_runner_fallback, infer_chunk,
     live_idle_ok as _live_idle_ok, moved_snapshot as _moved_snapshot, stationary_idle as _stationary_idle,
 )
+from cell_policy_retreat import retreat_from_jaw_zone as _retreat_from_jaw_zone
 from cell_policy_timing import (
     FAULT_KEYS, ack_status as _ack_status, best_effort_hold as _best_effort_hold,
     empty_gripper_ok as _empty_gripper_ok, finite_stamp as _finite_num, max_diff as _max_diff, park_ack_ok,
@@ -111,19 +112,34 @@ def run_paced_chunks(cell, shadow, library: dict, work: Path, *, off, max_chunks
         if fault or hold_needed or (authorize is not None and not eff_prefix):
             _hold_and_log(*pre_logs)
             return False, None
+        extra_logs: tuple[dict, ...] = ()
+        retreat_ok = True
+        park_reply = None
         try:
-            park_reply = cell.act(eff_prefix + "park")
+            if moved and not held and jaw_spec is not None and kin is not None:
+                retreat_ok, eff_prefix, retreat_row = _retreat_from_jaw_zone(
+                    cell, library, work, cmd_prefix=eff_prefix, open_g=open_g, low=low, high=high,
+                    fastest=fastest, kin=kin, jaw_spec=jaw_spec, resolved_tcp=resolved_tcp,
+                    authorize=authorize, home_roll=home_roll,
+                )
+                if retreat_row is not None:
+                    extra_logs = (retreat_row,)
+            if retreat_ok:
+                park_reply = cell.act(eff_prefix + "park")
         except BaseException:
             park_safe, hold_needed = False, True
             safety_done = _best_effort_hold(cell, log=log) is not None
             raise
+        if not retreat_ok:
+            _hold_and_log(*pre_logs, *extra_logs)
+            return False, None
         park_row = {"command": "park", **_ack_status(park_reply)}
         if park_ack_ok(park_reply, require_command=True):
             safety_done = True
-            for r in (*pre_logs, park_row):
+            for r in (*pre_logs, *extra_logs, park_row):
                 log(r)
             return True, park_reply
-        _hold_and_log(*pre_logs, park_row)
+        _hold_and_log(*pre_logs, *extra_logs, park_row)
         return False, park_reply
 
     def _fail(res: str, at: int, reason, cmd_prefix: str = "", *, fault: bool = False, extra: dict | None = None,

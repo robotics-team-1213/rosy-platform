@@ -44,7 +44,14 @@ ASK = {"edge_of_view": "move the box, or aim the top camera, so the box and the 
        "neighbour_clearance": "separate the object from its neighbours to leave the measured finger clearance",
        "out_of_reach": "move the box inside the arm's reach",
        "camera_moved": "the top camera moved since the map's reference: remap (cell_calibrate auto, a person at the switch), then rerun",
-       "no_session": "start record_session.py --chunks for this arm, then rerun"}
+       "no_session": "start record_session.py --chunks for this arm, then rerun",
+       "policy_timing_late": "policy chunks arrived late or missed control cycle: inspect latency before retrying",
+       "policy_jaw_gate": "policy jaw gate blocked motion: verify jaw opening and calibration before moving",
+       "policy_chunk_refused": "policy chunk refused by safety gate: inspect failure bundle before any IK proposal",
+       "policy_zone_unverified": "policy finished without verified zone placement: inspect scene before clearing",
+       "policy_stalled": "policy motion stalled or lagged: fold safely under person supervision",
+       "policy_contact": "policy hit unexpected contact: inspect workspace and ask a person before moving",
+       "policy_missing_calibration": "model or cell calibration missing/invalid for policy: recalibrate before retrying"}
 # 2026-11-14 arm_s: run_auto's bare "refused" is its one no-session answer; its other refusals are prefixed and stay `other`
 ATTEMPT_CAUSES = (("stopped: contact at park", "park_contact"),
                   ("stopped: no usable object (neighbour clearance)", "neighbour_clearance"),
@@ -55,6 +62,13 @@ ATTEMPT_CAUSES = (("stopped: contact at park", "park_contact"),
                   ("stopped: pivot", "calibrate"), ("stopped: no clear pivot", "calibrate"),
                   ("stopped: unseated_cone", "s6_unseated_cone"), ("stopped: toppled", "s2_toppled_or_slumped"),
                   ("stopped: shallow_pinch", "s4_shallow_pinch"), ("stopped: packed_column", "s3_packed_no_clearance"),
+                  ("policy: timing_late", "policy_timing_late"), ("policy_timing_late", "policy_timing_late"),
+                  ("policy: jaw_gate", "policy_jaw_gate"), ("policy_jaw_gate", "policy_jaw_gate"),
+                  ("policy: chunk_refused", "policy_chunk_refused"), ("policy_chunk_refused", "policy_chunk_refused"),
+                  ("policy: zone_unverified", "policy_zone_unverified"), ("policy_zone_unverified", "policy_zone_unverified"),
+                  ("policy: stalled", "policy_stalled"), ("policy_stalled", "policy_stalled"),
+                  ("policy: contact", "policy_contact"), ("policy_contact", "policy_contact"),
+                  ("policy: missing_calibration", "policy_missing_calibration"), ("policy_missing_calibration", "policy_missing_calibration"),
                   *((f"stopped: {c} -> ", "contact") for c in STRATEGY))  # the strategy table already ended at a person
 RECOVERY = {
     # the order is the first guess; cell_recovery reorders by what really worked (cell_choices), never past this list
@@ -83,6 +97,13 @@ RECOVERY = {
     # 2026-11-14 arm_s: park from a far pick overloaded shoulder_lift and the arm sagged onto the box; a moved pile never re-plans it
     "park_contact": ["ask_person"],
     "contact": ["ask_person"],
+    "policy_timing_late": ["ask_person"],
+    "policy_jaw_gate": ["ask_person"],
+    "policy_chunk_refused": ["ask_person"],
+    "policy_zone_unverified": ["ask_person"],
+    "policy_stalled": ["ask_person"],
+    "policy_contact": ["ask_person"],
+    "policy_missing_calibration": ["ask_person"],
     "other": ["ask_person"],  # a fault, a refusal, an abort: never retried
 }
 
@@ -180,4 +201,53 @@ def compensation_feedback(
         "jaw_underopen": jaw_underopen,
         "suggested_offset_mm": [dx_mm, dy_mm],
         "actions": actions,
+    }
+
+
+def classify_failure(result_or_bundle: str | dict, reason: str = "", *, exec_mode: str = "") -> dict:
+    """Classify an IK/pick or ACT/SmolVLA policy failure string or bundle into a cause and human-gate stratum."""
+    if isinstance(result_or_bundle, dict):
+        outcome = (result_or_bundle.get("measurement") or {}).get("outcome") or {}
+        mode = str(result_or_bundle.get("executor_mode") or (result_or_bundle.get("executor") or {}).get("mode") or exec_mode or "")
+        result_text = str(outcome.get("result_text") or outcome.get("attempt_cause") or "")
+        raw_cause = str(outcome.get("attempt_cause") or "")
+    else:
+        mode = str(exec_mode or "")
+        result_text = f"{result_or_bundle} {reason}".strip()
+        raw_cause = str(result_or_bundle or "").strip()
+
+    is_policy = mode in ("act_paced", "act_timed", "hybrid") or mode.startswith(("act", "policy", "smolvla"))
+    low = f"{raw_cause} {result_text}".lower()
+    if raw_cause in RECOVERY and raw_cause != "other":
+        cause = raw_cause
+    else:
+        direct = attempt_cause(result_text)
+        if direct != "other":
+            cause = direct
+        elif is_policy or any(
+            k in low for k in ("policy", "chunk", "jaw", "calibration", "zone_verification", "act_", "subproc", "timing", "late")
+        ):
+            if "calibrat" in low:
+                cause = "policy_missing_calibration"
+            elif "jaw" in low:
+                cause = "policy_jaw_gate"
+            elif "late" in low or "action times passed" in low or "timing" in low or "timeout" in low:
+                cause = "policy_timing_late"
+            elif "zone" in low or "unverified" in low:
+                cause = "policy_zone_unverified"
+            elif "contact" in low:
+                cause = "policy_contact"
+            elif "stall" in low or "lag" in low:
+                cause = "policy_stalled"
+            else:
+                cause = "policy_chunk_refused"
+        else:
+            cause = "other"
+
+    human_only = True if is_policy else (RECOVERY.get(cause, ["ask_person"]) == ["ask_person"])
+    return {
+        "cause": cause,
+        "stratum": "human_only" if human_only else "recoverable",
+        "requires_human_operator": human_only,
+        **({"ask": ASK[cause]} if cause in ASK else {}),
     }

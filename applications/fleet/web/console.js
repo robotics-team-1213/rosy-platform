@@ -364,7 +364,7 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render, sel
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
-const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl });
+const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator: () => hasOperatorRole(auth.role), namedReason });
 view.focusRobotWorkspace = (robotId) => rosterWorkspace.open(robotId);
 view.openFormationWorkspace = () => {
   confirmedAction.cancel(); roster.closeTrip(); view.pinning = null; clearPinStart();
@@ -443,6 +443,9 @@ const trackingView = {
 };
 cellStage = createCellCockpitStage({
   scope: pageScope, call, view, auth, selection,
+  contextHost: el("cell-context-panel"),
+  isOperator: () => hasOperatorRole(auth.role) && !auth.locked,
+  namedReason,
   onChanged: () => render(),
   onVisionSample: (sample) => {
     if (auth.locked || !auth.role) return;

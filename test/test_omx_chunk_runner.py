@@ -274,7 +274,7 @@ def test_a_coordinated_jog_moves_its_joints_together_or_not_at_all():
 
 
 def test_park_closes_rises_turns_then_descends_slowly():
-    start = [35.0, -30.0, 29.0, 41.0, 71.0, 56.0]
+    start = [35.0, -30.0, 29.0, 41.0, 71.0, 52.0]  # a box held (52.0, under closed + OPEN_JAW_MARGIN): closes first
     path = m.park_path(start, HOME, 46.6, fps=30)
     step = m.PARK_SPEED / 30 + 1e-9
     assert all(max(abs(b - a) for a, b in zip(p, q)) <= step for p, q in zip([start] + path, path))

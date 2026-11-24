@@ -1,5 +1,6 @@
 // Right inspector, visual cards and camera matrix renderers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
-import {CELL_TASKS_PATH, CAMERA_WALL_VIEWS, inspectorSpecs, visualCardSpecs} from './cell-real2sim-specs.js';
+import { buildInspectorCamFrame, renderOmxInspector } from "/console/assets/omx-inspector.js";
+import { CELL_TASKS_PATH, CAMERA_WALL_VIEWS, inspectorSpecs, visualCardSpecs } from "./cell-real2sim-specs.js";
 
 export function createCellViews(ctx) {
   const {request, $, state} = ctx;
@@ -15,219 +16,61 @@ export function createCellViews(ctx) {
     const panel = $('omx-right-inspector');
     if (!panel) return;
     const specs = inspectorSpecs(body);
-    const activeSpec = specs.find(s => s.id === state.selectedInspectorTarget) || specs[0];
-    if (!activeSpec) return;
-
-    const tabs = document.createElement('div');
-    tabs.className = 'omx-inspector-tabs';
-    for (const s of specs) {
-      const tab = document.createElement('ui-button');
-      tab.setAttribute('kind', 'quiet');
-      if (s.id === activeSpec.id) tab.setAttribute('kind', 'primary');
-      tab.setAttribute('type', 'button');
-      tab.dataset.inspectTarget = s.id;
-      tab.textContent = s.shortTab;
-      tab.addEventListener('click', () => selectInspectorTarget(s.id));
-      tabs.append(tab);
-    }
-    const dualBtn = document.createElement('ui-button');
-    dualBtn.setAttribute('kind', 'quiet');
-    if (state.dualInspectorCamMode) dualBtn.setAttribute('kind', 'primary');
-    dualBtn.setAttribute('type', 'button');
-    dualBtn.dataset.dualCamToggle = 'true';
-    dualBtn.textContent = state.dualInspectorCamMode ? '📺 2채널(상단+손목) ON' : '📺 2채널 동시 보기';
-    dualBtn.addEventListener('click', () => {
-      state.dualInspectorCamMode = !state.dualInspectorCamMode;
-      renderRightInspector(body);
-    });
-    tabs.append(dualBtn);
-
-    const head = document.createElement('div');
-    head.className = 'omx-inspector-head';
-    const title = document.createElement('strong');
-    title.textContent = activeSpec.title;
-    const badge = document.createElement('span');
-    badge.className = 'cell-visual-badge';
-    badge.textContent = activeSpec.badge;
-    head.append(title, badge);
-
-    const camViews = activeSpec.cameraViews || [];
-    const activeCamId = state.selectedInspectorCamByTarget[activeSpec.id] || camViews[0]?.id || 'arm_s_top';
-    const activeCam = camViews.find(v => v.id === activeCamId) || camViews[0] || {id: activeCamId, label: activeCamId, source: activeCamId};
-
-    const stage = document.createElement('div');
-    stage.className = 'omx-inspector-stage';
-    if (state.dualInspectorCamMode && camViews.length >= 2) {
-      const dualGrid = document.createElement('div');
-      dualGrid.className = 'omx-inspector-dual-grid';
-      const [idA, idB] = activeSpec.dualPair || [camViews[0].id, camViews[1].id];
-      const viewA = camViews.find(v => v.id === idA) || camViews[0];
-      const viewB = camViews.find(v => v.id === idB && v.id !== viewA.id) || camViews.find(v => v.id !== viewA.id) || camViews[1];
-      for (const dv of [viewA, viewB]) {
-        const pane = document.createElement('div');
-        pane.className = 'omx-inspector-dual-pane';
-        const dImg = document.createElement('img');
-        dImg.className = 'omx-inspector-main-cam omx-inspector-cam';
-        dImg.alt = dv.label;
-        dImg.loading = 'lazy';
-        const dQual = document.createElement('span');
-        dQual.className = 'cell-visual-badge';
-        dQual.textContent = `🎥 [${dv.label}]`;
-        frames()?.bind(dImg, dv, dQual, `🎥 [${dv.label}]`);
-        pane.append(dImg, dQual);
-        dualGrid.append(pane);
-      }
-      stage.append(dualGrid);
-    } else {
-      const stageBar = document.createElement('div');
-      stageBar.className = 'omx-inspector-stage-bar';
-      const qualLine = document.createElement('span');
-      qualLine.className = 'cell-visual-badge';
-      qualLine.textContent = `🎥 [${activeCam.label}]`;
-      const mainCam = document.createElement('img');
-      mainCam.className = 'omx-inspector-main-cam omx-inspector-cam';
-      mainCam.alt = `${activeSpec.title} 메인 카메라`;
-      const zoomBtn = document.createElement('ui-button');
-      zoomBtn.className = 'omx-inspector-zoom';
-      zoomBtn.setAttribute('kind', 'quiet');
-      zoomBtn.setAttribute('type', 'button');
-      zoomBtn.setAttribute('aria-expanded', 'false');
-      zoomBtn.setAttribute('aria-label', `${activeCam.label} 크게 보기`);
-      zoomBtn.textContent = '확대 보기';
-      const setCamZoom = (zoomed) => {
-        mainCam.classList.toggle('focused', zoomed);
-        zoomBtn.setAttribute('aria-expanded', String(zoomed));
-        zoomBtn.setAttribute('aria-label', `${activeCam.label} ${zoomed ? '원래 크기' : '확대 보기'}`);
-        zoomBtn.textContent = zoomed ? '원래 크기' : '확대 보기';
-      };
-      zoomBtn.addEventListener('click', () => setCamZoom(!mainCam.classList.contains('focused')));
-      mainCam.addEventListener('click', () => setCamZoom(!mainCam.classList.contains('focused')));
-      stage.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Escape' && mainCam.classList.contains('focused')) {
-          ev.stopPropagation();
-          setCamZoom(false);
-          zoomBtn.focus();
-        }
-      });
-      frames()?.bind(mainCam, activeCam, qualLine, `🎥 [${activeCam.label}]`);
-      stageBar.append(qualLine, zoomBtn);
-      stage.append(stageBar, mainCam);
-    }
-
-    const pipGrid = document.createElement('div');
-    pipGrid.className = 'omx-inspector-pip-grid';
-    for (const v of camViews) {
-      const pip = document.createElement('button');
-      pip.type = 'button';
-      const isActiveCam = v.id === activeCam.id;
-      pip.className = `omx-inspector-pip${isActiveCam ? ' active' : ''}`;
-      pip.setAttribute('aria-pressed', String(isActiveCam));
-      const pImg = document.createElement('img');
-      pImg.className = 'omx-inspector-cam';
-      pImg.alt = v.label;
-      pImg.loading = 'lazy';
-      frames()?.bind(pImg, v);
-      const pLbl = document.createElement('small');
-      pLbl.textContent = `📷 ${v.label}`;
-      pip.append(pImg, pLbl);
-      pip.addEventListener('click', () => {
-        state.selectedInspectorCamByTarget[activeSpec.id] = v.id;
+    if (!specs.length) return;
+    state.draftChoicesByTarget ??= new Map();
+    renderOmxInspector(panel, {
+      targets: specs,
+      activeId: state.selectedInspectorTarget,
+      dualCamMode: Boolean(state.dualInspectorCamMode),
+      selectedCamByTarget: state.selectedInspectorCamByTarget,
+      draftChoices: state.draftChoicesByTarget,
+      frames: frames(),
+      framesActive: true,
+      runButtonLabel: undefined,
+      actionsClass: 'omx-inspector-actions',
+      onSelectTarget: (id) => selectInspectorTarget(id),
+      onToggleDual: () => {
+        state.dualInspectorCamMode = !state.dualInspectorCamMode;
         renderRightInspector(body);
-      });
-      pipGrid.append(pip);
-    }
-    stage.append(pipGrid);
-
-    const readout = document.createElement('dl');
-    readout.className = 'omx-inspector-readout';
-    for (const [k, v] of (activeSpec.telemetryRows || [])) {
-      const dt = document.createElement('dt');
-      dt.textContent = k;
-      const dd = document.createElement('dd');
-      dd.textContent = v;
-      readout.append(dt, dd);
-    }
-
-    const quickDispatchBar = document.createElement('div');
-    quickDispatchBar.className = 'omx-inspector-quick-dispatch';
-    const tierField = document.createElement('label');
-    tierField.className = 'omx-inspector-field';
-    const tierLbl = document.createElement('span');
-    tierLbl.textContent = '적재 층';
-    const tierSel = document.createElement('select');
-    tierSel.className = 'ui-field';
-    for (const [val, lbl] of [['1', 'T1 (1층·벨트)'], ['2', 'T2 (2층)'], ['3', 'T3 (3층)']]) {
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = lbl;
-      if (activeSpec.id === 'arm_b' && val === '2') opt.selected = true;
-      tierSel.append(opt);
-    }
-    tierField.append(tierLbl, tierSel);
-    const dispField = document.createElement('label');
-    dispField.className = 'omx-inspector-field';
-    const dispLbl = document.createElement('span');
-    dispLbl.textContent = '복구 위치';
-    const dispSel = document.createElement('select');
-    dispSel.className = 'ui-field';
-    for (const [val, lbl] of [['', '정위치 (Nominal)'], ['auto', 'Auto ROI 감지'], ['belt_far', 'Belt-Far 복구'], ['floor_front', 'Floor-Front 복구']]) {
-      const opt = document.createElement('option');
-      opt.value = val;
-      opt.textContent = lbl;
-      dispSel.append(opt);
-    }
-    dispField.append(dispLbl, dispSel);
-    const targetArm = activeSpec.id.startsWith('arm_') ? activeSpec.id : (activeSpec.id === 'cell_ab' ? 'arm_a' : 'arm_s');
-    const targetCell = targetArm === 'arm_s' ? 'cell_s' : 'cell_ab';
-    const runCustomBtn = document.createElement('ui-button');
-    runCustomBtn.setAttribute('kind', 'primary');
-    runCustomBtn.setAttribute('type', 'button');
-    runCustomBtn.textContent = `▶ ${targetArm} 즉시 실행`;
-    runCustomBtn.addEventListener('click', async () => {
-      const current = ctx.bump();
-      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `우측 인스펙터 맞춤 태스크(${targetCell}/${targetArm})를 큐에 등록하는 중입니다.`;
-      try {
-        const res = await request(CELL_TASKS_PATH, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            cell_id: targetCell,
-            arm_id: targetArm,
-            tier: Number(tierSel.value || 1),
-            displaced_to: dispSel.value || null,
-            robot_id: activeSpec.robot_id || 'rosy_46',
-          }),
-        });
-        if (current !== ctx.gen()) return;
-        await refreshCellTasks(current);
-        if ($('cell-tasks-status')) {
-          $('cell-tasks-status').textContent = `인스펙터 맞춤 태스크 등록 완료: ${res.task?.task_id || '—'} (${targetCell}/${targetArm})`;
+      },
+      onSelectCam: (targetId, camId) => {
+        state.selectedInspectorCamByTarget[targetId] = camId;
+        renderRightInspector(body);
+      },
+      onQuickDispatch: async ({ targetCell, targetArm, tier, displacedTo, robotId }) => {
+        const current = ctx.bump();
+        if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `우측 인스펙터 맞춤 태스크(${targetCell}/${targetArm})를 큐에 등록하는 중입니다.`;
+        try {
+          const res = await request(CELL_TASKS_PATH, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              cell_id: targetCell,
+              arm_id: targetArm,
+              tier,
+              displaced_to: displacedTo,
+              robot_id: robotId || undefined,
+            }),
+          });
+          if (current !== ctx.gen()) return;
+          await refreshCellTasks(current);
+          if ($('cell-tasks-status')) {
+            $('cell-tasks-status').textContent = `인스펙터 맞춤 태스크 등록 완료: ${res.task?.task_id || '—'} (${targetCell}/${targetArm})`;
+          }
+        } catch (error) {
+          if (current !== ctx.gen()) return;
+          if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `인스펙터 맞춤 태스크 등록 실패: ${error.message}`;
         }
-      } catch (error) {
-        if (current !== ctx.gen()) return;
-        if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `인스펙터 맞춤 태스크 등록 실패: ${error.message}`;
-      }
+      },
+      onRenderAction: (btn, choice, active) => bindActionButton(btn, choice, active.robot_id || undefined),
     });
-    quickDispatchBar.append(tierField, dispField, runCustomBtn);
-
-    const actions = document.createElement('div');
-    actions.className = 'omx-inspector-actions';
-    for (const b of (activeSpec.buttons || [])) {
-      const btn = document.createElement('ui-button');
-      btn.setAttribute('kind', 'quiet');
-      btn.setAttribute('type', 'button');
-      btn.textContent = b.label;
-      bindActionButton(btn, b, activeSpec.robot_id || 'rosy_46');
-      actions.append(btn);
-    }
-
-    panel.replaceChildren(tabs, head, stage, readout, quickDispatchBar, actions);
   }
 
   function renderVisualCards(body) {
     const wrap = $('cell-visual-cards');
     if (!wrap) return;
     const cards = visualCardSpecs(body);
+    const pendingBinds = [];
     wrap.replaceChildren(...cards.map(card => {
       const article = document.createElement('article');
       const isSelected = state.selectedInspectorTarget === card.id
@@ -237,8 +80,8 @@ export function createCellViews(ctx) {
       article.className = `cell-visual-card${isSelected ? ' selected-inspector' : ''}`;
       article.dataset.cardId = card.id;
       article.addEventListener('click', () => {
-        const defaultTarget = card.id === 'cell_s' ? 'arm_s' : (card.id === 'cell_ab' ? 'arm_a' : (card.robot_id || 'rosy_46'));
-        selectInspectorTarget(defaultTarget, state.selectedCameraByCard[card.id] || null);
+        const defaultTarget = card.id === 'cell_s' ? 'arm_s' : (card.id === 'cell_ab' ? 'arm_a' : (card.robot_id || undefined));
+        if (defaultTarget) selectInspectorTarget(defaultTarget, state.selectedCameraByCard[card.id] || null);
       });
 
       const activeViewId = state.selectedCameraByCard[card.id] || card.cameraViews?.[0]?.id || card.id;
@@ -248,8 +91,6 @@ export function createCellViews(ctx) {
       const thumb = document.createElement('img');
       thumb.className = 'cell-visual-thumb';
       thumb.alt = card.title;
-      thumb.loading = 'lazy';
-      frames()?.bind(thumb, activeView);
       thumb.tabIndex = 0;
       thumb.addEventListener('click', () => {
         thumb.classList.toggle('focused');
@@ -268,18 +109,18 @@ export function createCellViews(ctx) {
       const camQualityBadge = document.createElement('span');
       camQualityBadge.className = 'cell-visual-badge';
       camQualityBadge.textContent = '영상 수신 대기';
-      frames()?.bind(thumb, activeView, camQualityBadge, '🎥 영상');
+      pendingBinds.push([thumb, activeView, camQualityBadge, '영상']);
       for (const v of (card.cameraViews || [])) {
         const pill = document.createElement('ui-button');
         pill.setAttribute('kind', 'quiet');
         if (v.id === activeViewId) pill.setAttribute('kind', 'primary');
         pill.setAttribute('type', 'button');
         pill.dataset.cameraView = v.id;
-        pill.textContent = `📷 ${v.label}`;
+        pill.textContent = v.label;
         pill.addEventListener('click', ev => {
           ev.stopPropagation();
           state.selectedCameraByCard[card.id] = v.id;
-          frames()?.bind(thumb, v, camQualityBadge, '🎥 영상');
+          frames()?.bind(thumb, v, camQualityBadge, '영상');
           for (const child of camSwitcher.children || []) {
             if (child.tagName === 'UI-BUTTON') {
               child.setAttribute('kind', 'quiet');
@@ -290,8 +131,8 @@ export function createCellViews(ctx) {
             : v.id.startsWith('arm_b') ? 'arm_b'
             : (v.id.startsWith('arm_s') || card.id === 'cell_s') ? 'arm_s'
             : card.id === 'cell_ab' ? 'cell_ab'
-            : (card.robot_id || 'rosy_46');
-          selectInspectorTarget(targetForView, v.id);
+            : (card.robot_id || undefined);
+          if (targetForView) selectInspectorTarget(targetForView, v.id);
         });
         camSwitcher.append(pill);
       }
@@ -315,10 +156,10 @@ export function createCellViews(ctx) {
       const actions = document.createElement('div');
       actions.className = 'cell-visual-actions';
       const inspectTargets = card.id === 'cell_s'
-        ? [['arm_s', '🔍 우측 연동: arm_s']]
+        ? [['arm_s', 'arm_s 상세']]
         : card.id === 'cell_ab'
-        ? [['arm_a', '🔍 우측 연동: arm_a'], ['arm_b', '🔍 우측 연동: arm_b']]
-        : [['rosy_46', '🔍 우측 연동: rosy_46'], ['rosy_45', '🔍 rosy_45'], ['rosy_42', '🔍 rosy_42']];
+        ? [['arm_a', 'arm_a 상세'], ['arm_b', 'arm_b 상세']]
+        : [['rosy_46', 'rosy_46 상세'], ['rosy_45', 'rosy_45'], ['rosy_42', 'rosy_42']];
       for (const [tId, tLabel] of inspectTargets) {
         const iBtn = document.createElement('ui-button');
         iBtn.setAttribute('kind', 'quiet');
@@ -337,18 +178,20 @@ export function createCellViews(ctx) {
         btn.setAttribute('kind', 'quiet');
         btn.setAttribute('type', 'button');
         btn.textContent = b.label;
-        bindActionButton(btn, b, card.robot_id || 'rosy_46');
+        bindActionButton(btn, b, card.robot_id || undefined);
         actions.append(btn);
       }
 
-      article.append(thumb, camSwitcher, head, meta, actions);
+      article.append(buildInspectorCamFrame(thumb), camSwitcher, head, meta, actions);
       return article;
     }));
+    for (const args of pendingBinds) frames()?.bind(...args);
   }
 
   function renderCameraMatrix() {
     const wall = $('cell-camera-matrix');
-    if (!wall) return;
+    if (!wall || wall.childElementCount) return;
+    const pendingBinds = [];
     wall.replaceChildren(...CAMERA_WALL_VIEWS.map(cam => {
       const card = document.createElement('article');
       card.className = 'cell-observation-card';
@@ -357,10 +200,9 @@ export function createCellViews(ctx) {
       h4.textContent = cam.label;
       const img = document.createElement('img');
       img.alt = cam.label;
-      img.loading = 'lazy';
       const meta = document.createElement('pre');
       meta.textContent = cam.roiTarget ? '천장 Cam ROI 확대' : `Vision 소스 ${cam.source}`;
-      frames()?.bind(img, cam, meta, cam.roiTarget ? '천장 Cam ROI' : cam.source);
+      pendingBinds.push([img, cam, meta, cam.roiTarget ? '천장 Cam ROI' : cam.source]);
       card.addEventListener('click', () => {
         card.classList.toggle('focused');
         const camTargetMap = {
@@ -370,7 +212,7 @@ export function createCellViews(ctx) {
           side: 'cell_ab',
           arm_a_wrist: 'arm_a',
           arm_b_wrist: 'arm_b',
-          pinky_dock: 'rosy_46',
+          pinky_dock: cam.roiTarget || 'rosy_46',
         };
         selectInspectorTarget(camTargetMap[cam.id] || 'arm_s', cam.id);
       });
@@ -383,13 +225,13 @@ export function createCellViews(ctx) {
         }
       });
       const camQuickMap = {
-        arm_s_top: {label: '▶ S3 셔틀 실행', preset: 's3_shuttle'},
-        arm_s_wrist: {label: '▶ 자동 복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
-        top: {label: '▶ S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
-        side: {label: '▶ 3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
-        arm_a_wrist: {label: '▶ 1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
-        arm_b_wrist: {label: '▶ 2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
-        pinky_dock: {label: '▶ S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
+        arm_s_top: {label: 'S3 셔틀 실행', preset: 's3_shuttle'},
+        arm_s_wrist: {label: '자동 복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
+        top: {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
+        side: {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
+        arm_a_wrist: {label: '1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
+        arm_b_wrist: {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
+        pinky_dock: {label: 'S3 도킹+하역', pinkyAction: 'dock_and_unload_s3', robotId: cam.roiTarget},
       };
       const qAct = camQuickMap[cam.id];
       if (qAct) {
@@ -400,15 +242,16 @@ export function createCellViews(ctx) {
         actBtn.addEventListener('click', ev => {
           ev.stopPropagation();
           if (qAct.preset) void runQuickPreset(qAct.preset);
-          else if (qAct.pinkyAction) void runPinkyQuickAction('rosy_46', qAct.pinkyAction);
-          else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, 'rosy_46');
+          else if (qAct.pinkyAction) void runPinkyQuickAction(qAct.robotId || undefined, qAct.pinkyAction);
+          else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, qAct.robotId || undefined);
         });
-        card.append(h4, img, meta, actBtn);
+        card.append(h4, buildInspectorCamFrame(img), meta, actBtn);
       } else {
-        card.append(h4, img, meta);
+        card.append(h4, buildInspectorCamFrame(img), meta);
       }
       return card;
     }));
+    for (const args of pendingBinds) frames()?.bind(...args);
   }
 
   return {renderRightInspector, renderVisualCards, renderCameraMatrix};

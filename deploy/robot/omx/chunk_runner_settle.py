@@ -19,7 +19,7 @@ if _HERE not in sys.path:
 import cell_params as prm  # noqa: E402
 from chunk_policy_playback import absorb_telemetry_error  # noqa: E402
 from chunk_runner_commands import EMPTY_MARGIN  # noqa: E402
-from chunk_runner_guards import SETTLE_TOL, library_gripper_closed, safe_stderr  # noqa: E402
+from chunk_runner_guards import RECOVERY_PARKS, SETTLE_TOL, library_gripper_closed, safe_stderr  # noqa: E402
 from chunk_runner_interrupt import folded, interrupt_step, interrupt_tick  # noqa: E402
 
 SETTLE_S = 3.0
@@ -173,6 +173,11 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         settled = error <= settle_tol * 1.15 or body_still
     else:
         settled = (error <= settle_tol or body_still) and not runner.jitter["shaking"]
+    recovery = runner.chunk in RECOVERY_PARKS
+    if recovery:
+        settled = error <= settle_tol and not runner.jitter["shaking"]
+        if not settled and now - runner.settle_since >= settle_s:
+            return runner.hold(present, f"{runner.chunk} did not settle at home")
     jaws_ready = (
         gripper_still if grasp or policy_closed else
         (abs(present[5] - runner.target[5]) <= 0.25 or (gripper_still and now - runner.settle_since >= 0.4)) if release
@@ -188,8 +193,8 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         )
         runner.sway_peak, runner.speed_low = {}, 1.0
         runner.paced_ticks, runner.pace_floor, runner.peak_lag, runner.over_ticks, runner.damped_ticks = 0, 0.0, 0.0, 0, 0
-        if (runner.chunk == "park" or runner.chunk.endswith("; park")) and settled and getattr(runner, "_release_until", None) is None:
-            runner.home_since = now
+        if (recovery or runner.chunk == "park" or runner.chunk.endswith("; park")) and settled and getattr(runner, "_release_until", None) is None:
+            runner.home_since, runner._recovery_active = now, False
         backed_out = runner.chunk == "retreat" and settled
         if (runner.chunk == "park" or runner.chunk.endswith("; park") or backed_out) and (runner.fault or "").startswith("contact"):
             runner.fault = None
@@ -207,12 +212,13 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
                     fields["holding"] = by_position and current >= threshold
             runner.holding = bool(fields["holding"])
         elif runner.holding and (
-            runner.chunk in ("lift_pick", "park", "goto above_place", "descend_place")
+            runner.chunk in ("lift_pick", "park", "goto above_place", "descend_place", *RECOVERY_PARKS)
             or runner.chunk.startswith(("lift_pick", "goto above_place", "descend_place"))
         ):
             runner.holding = present[5] > grip_floor + empty_margin
             fields["holding"] = runner.holding
         runner.chunk, runner.last_grip, runner.last_body = None, None, None
+        runner.last_input = now
         unconfirmed_release = getattr(runner, "_release_until", None) is not None
         if unconfirmed_release:
             fields.update(ok=False, holding=True, error="release not confirmed by jaw feedback")
@@ -237,7 +243,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
                     try:
                         runner.report(**row, present=present)
                     except OSError as error:
-                        safe_stderr({"command": row["command"], "status_write_failed": str(error)[:300]})
+                        safe_stderr({**row, "status_write_failed": str(error)[:300]})
             return
         runner.report(**fields, present=present)
         if stop_cmd:
@@ -249,15 +255,14 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
 
 def check_runner_idle(runner, cr_attr) -> bool:
     """Fold home, then end the session (True), when no command has come for a while."""
-    if runner.chunk is not None or runner.queue or runner.pending or getattr(runner, "_release_until", None) is not None:
+    if runner.chunk is not None or runner.queue or runner.pending or getattr(runner, "_release_until", None) is not None or getattr(runner, "_recovery_active", False):
+        if runner.chunk is not None or runner.queue or runner.pending:
+            runner.last_input = runner.clock()
         return False
     quiet = runner.clock() - runner.last_input
-    idle_retry_s = cr_attr("IDLE_RETRY_S", IDLE_RETRY_S)
-    idle_park_s = cr_attr("IDLE_PARK_S", IDLE_PARK_S)
-    idle_stop_s = cr_attr("IDLE_STOP_S", IDLE_STOP_S)
+    idle_retry_s, idle_park_s, idle_stop_s = cr_attr("IDLE_RETRY_S", IDLE_RETRY_S), cr_attr("IDLE_PARK_S", IDLE_PARK_S), cr_attr("IDLE_STOP_S", IDLE_STOP_S)
     if runner.home_since is None:
         from chunk_runner_commands import _is_policy_lib
-
         if getattr(runner, "_policy_session", False) or _is_policy_lib(runner.library):
             return False
         if runner.idle_parks >= 2:
@@ -267,8 +272,7 @@ def check_runner_idle(runner, cr_attr) -> bool:
             return False
         wait = prm.get(runner.params, "runner.idle_retry_s", idle_retry_s) if runner.idle_parks else prm.get(runner.params, "runner.idle_park_s", idle_park_s)
         if quiet >= wait:
-            runner.last_input = runner.clock()
-            runner.idle_parks += 1
+            runner.last_input, runner.idle_parks = runner.clock(), runner.idle_parks + 1
             runner.command("park")
         return False
     pushed = (runner.fault or "").startswith("pushing at rest")
@@ -370,25 +374,21 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
                             ) + ")"
                         )
                         hold_pose = present if present is not None else getattr(runner, "last_present", None) or runner.target
-                        if hold_pose is not None and hasattr(runner, "hold"):
+                        if hasattr(runner, "hold"):
                             runner.hold(hold_pose, why, human=True)
                         else:
                             runner.human_hold_latched, runner.fault = True, why
-                        row = dict(command=raw_stop, ok=False, folded=False, hold=True,
-                                   person_needed=True, error=f"{why}; torque stays ON")
-                        if hold_pose is not None:
-                            try:
-                                runner.report(**row, present=hold_pose)
-                            except OSError as error:
-                                safe_stderr({**row, "status_write_failed": str(error)[:300]})
-                        else:
-                            safe_stderr(row)
+                        row = dict(command=raw_stop, ok=False, folded=False, hold=True, person_needed=True, error=f"{why}; torque stays ON")
+                        try:
+                            runner.report(**row, present=hold_pose) if hold_pose is not None else safe_stderr(row)
+                        except OSError as error:
+                            safe_stderr({**row, "status_write_failed": str(error)[:300]})
         if interrupt_tick(runner, "start", tick_or_report):
             return False
         if runner.human_hold_latched or runner.fault or getattr(motion, "held", None):
             try:
-                runner.report(command="start", ok=False, present=runner.target,
-                              error=runner.fault or ("human hold latched" if runner.human_hold_latched else "guard hold active"))
+                err_msg = runner.fault or ("human hold latched" if runner.human_hold_latched else "guard hold active")
+                runner.report(command="start", ok=False, present=runner.target, error=err_msg)
             except OSError as error:
                 if not runner.human_hold_latched:
                     raise

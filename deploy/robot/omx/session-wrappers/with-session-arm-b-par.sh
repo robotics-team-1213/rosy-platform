@@ -12,7 +12,7 @@ if [ "$mine" = "0" ]; then
   flock -n ~/rosy-omx/session-arm_b.lock true || { echo "REFUSED: the arm session lock is held"; exit 2; }
   export ROSY_CHUNK_TRACE=$HOME/rosy-test/omx-record-prep-20261019/trace-arm_b-$(date +%Y%m%d-%H%M%S).jsonl  # jitter_replay.py reads it (2026-11-04)
   n0=$(wc -l < chunk-io-b/chunk-status.jsonl 2>/dev/null || echo 0)
-  ~/rosy-omx/current-env/bin/python $OMX/record_session.py --config record-config-arm-b.json --caps caps-arm-b-wrist400-20261103.json --arm arm_b --chunks chunks-topdown-guard-armb-v21.json --io chunk-io-b --params cell-params-floor-1028.json --operating-profile arm-b-robot-profile.json > session-$ARM-$(date +%H%M%S).log 2>&1 &
+  ~/rosy-omx/current-env/bin/python $OMX/record_session.py --config record-config-arm-b.json --caps caps-arm-b-wrist400-20261103.json --arm arm_b --chunks "${ROSY_SESSION_CHUNKS:-chunks-topdown-guard-armb-v21.json}" --io chunk-io-b --params cell-params-floor-1028.json --operating-profile arm-b-robot-profile.json > session-$ARM-$(date +%H%M%S).log 2>&1 &
   for i in $(seq 1 90); do sleep 2; tail -n +$((n0+1)) chunk-io-b/chunk-status.jsonl 2>/dev/null | grep -q '"command": "start", "ok": true' && break; done
   tail -n +$((n0+1)) chunk-io-b/chunk-status.jsonl 2>/dev/null | grep -q '"command": "start", "ok": true' || { echo "REFUSED: the arm session did not start"; exit 2; }
 fi

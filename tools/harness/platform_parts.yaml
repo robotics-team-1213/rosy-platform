@@ -1423,6 +1423,7 @@ safety_modules:
 safety_review_paths:
   - deploy/robot/omx/chunk_runner.py
   - deploy/robot/omx/chunk_runner_commands.py
+  - deploy/robot/omx/chunk_runner_recover.py
   - deploy/robot/omx/chunk_runner_guards.py
   - deploy/robot/omx/chunk_runner_run.py
   - deploy/robot/omx/chunk_runner_loop.py
@@ -1452,6 +1453,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_corridor.py
   - deploy/robot/omx/cell_unwedge.py
   - deploy/robot/omx/cell_auto_fold.py
+  - deploy/robot/omx/cell_recovery_plan.py
+  - deploy/robot/omx/cell_recovery_advisor.py
   - deploy/robot/omx/cell_remap_jaws.py
   - deploy/robot/omx/cell_task_worker.py
   - deploy/robot/omx/cell_task_exec.py
@@ -1470,6 +1473,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_policy_drive.py
   - deploy/robot/omx/cell_policy_shape.py
   - deploy/robot/omx/cell_policy_timing.py
+  - deploy/robot/omx/cell_policy_retreat.py
   - deploy/robot/omx/cell_policy_handoff.py
   - deploy/robot/omx/cell_policy_paced.py
   - deploy/robot/omx/cell_policy_entry.py
@@ -1492,11 +1496,19 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_validators.py
   - deploy/robot/omx/cell_job_guards.py
   - deploy/robot/omx/cell_job_peer_health.py
+  - deploy/robot/omx/cell_job_readiness.py
+  - deploy/robot/omx/cell_media_jobs.py
+  - deploy/robot/omx/cell_media_job_spec.py
+  - deploy/robot/omx/cell_bundle_emit.py
   - deploy/robot/omx/cell_depth_lock.py
   - deploy/robot/omx/cell_recovery.py
   - deploy/robot/omx/cell_task_transport.py
+  - deploy/robot/omx/cell_vlm_facts.py
+  - deploy/robot/omx/cell_vlm_fence.py
   - deploy/robot/omx/cell_vlm_orchestrator.py
   - deploy/robot/omx/cell_envelope_review.py
+  - operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
+  - operations/fleet/fleet/server/sitemap/pipeline_governance_store.py
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py

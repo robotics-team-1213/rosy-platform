@@ -60,6 +60,7 @@ PG_BACKUP_FILES = ("compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-
 MONITORING_DEPLOYMENT_FILES = ("compose.monitoring.yaml", "Caddyfile.monitoring")  # D-936
 SERVICES = ("fleet", "vision", "proxy", "postgres")
 ACCOUNT_SERVICES = (*SERVICES, "account")
+ALL_IMAGE_SERVICES = (*ACCOUNT_SERVICES, "monitoring")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 Runner = Callable[..., subprocess.CompletedProcess]
 

@@ -51,8 +51,9 @@ def _serve_mock(routes: dict[tuple[str, str], tuple[int, Any, dict[str, str]]]):
 
 
 def test_all_12_tools_mcp_stdio_and_error_handling(tmp_path: Path):
+    import hashlib
     jpg = b"\xff\xd8\xff\xd9"
-    cell_srv, cell_url, _ = _serve_mock({
+    cell_srv, cell_url, cell_log = _serve_mock({
         ("GET", "/readiness"): (200, {"schema": "rosy.cell-readiness.v1", "cell_state_gen": 5}, {"Set-Cookie": "sid=top-secret"}),
         ("GET", "/failures/latest"): (200, {"bundle_id": "b1", "context_sha256": "a" * 64}, {}),
         ("GET", "/frame/top.jpg"): (200, jpg, {"X-Frame-Seq": "42", "ETag": '"et42"'}),
@@ -105,6 +106,9 @@ def test_all_12_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         assert bridge.call_tool("cell_dataset_pipeline", {"stage": "transfer", "collection": "c"})["data"]["id"] == "j-xfer"
         assert bridge.call_tool("learning_run_job", {"kind": "collect_dart", "arm_id": "arm_a"})["data"]["id"] == "run-1"
         assert bridge.call_tool("learning_stage_bundle", {"run_id": "run-1", "target_dir": "models/s"})["data"]["id"] == "j-stage"
+        stage_req = next(b for m, p, _, b in cell_log if m == "POST" and p == "/jobs/stage_policy_bundle")
+        exp_mf_sha = hashlib.sha256(json.dumps({"schema": "rosy.canonical-bundle-manifest.v1", "files": []}).encode("utf-8")).hexdigest()
+        assert stage_req == {"run_id": "run-1", "target_dir": "models/s", "expected_manifest_sha256": exp_mf_sha}
         assert any(path == "/api/learning/canonical/runs/run-1/bundle-manifest" for _, path, _, _ in learn_log)
 
         # Schema & safety hardening through call_tool().

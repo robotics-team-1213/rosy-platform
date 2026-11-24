@@ -11,6 +11,15 @@ const LEASE_MARGIN_MS = 8000;
 const REQUEST_TIMEOUT_MS = 1500;
 const MAX_IN_FLIGHT = 4;
 
+// what stopped the arm, as cell_why names it, and how the person knows it
+export const INCIDENT_CAUSES = [
+  ['unknown', '원인: 판단 불가'], ['blocked', '막힘 (닿음)'], ['wrong_position', '위치가 어긋나 닿음'], ['snagged', '걸림'],
+  ['too_fast', '속도 초과'], ['no_room', '공간 부족으로 거부'], ['software_or_config', '코드·설정'], ['camera_or_map', '카메라·지도'], ['other', '기타'],
+];
+export const INCIDENT_BASES = [
+  ['unknown', '근거: 없음'], ['repeat', '같은 동작을 다시 해 봄'], ['measured', '측정값'], ['seen', '사진·눈으로'],
+];
+
 function frameAge(headers, isRoi) {
   const age = headers.get('X-Frame-Age-Ms');
   if (age !== null || !isRoi) return age;
@@ -24,17 +33,76 @@ function frameAge(headers, isRoi) {
   return ageUpperBound > 0 ? ageUpperBound : null;
 }
 
-export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now = Date.now}) {
+export async function issueVisionLease(callFn, source, {
+  signal,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+  strictFramePath = false,
+  now = Date.now,
+} = {}) {
+  const issued = await callFn('/api/fleet/vision/lease', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({source_id: source}), signal, timeoutMs,
+  });
+  const target = new URL(issued?.frame_path || '', location.origin);
+  if (target.origin !== location.origin || target.username || target.password
+      || (strictFramePath && target.pathname !== `/api/vision/sources/${encodeURIComponent(source)}/frame`)) {
+    throw Error(strictFramePath ? '영상 주소 확인 필요' : '영상 주소를 확인하세요.');
+  }
+  return {
+    token: issued?.lease || '',
+    lease: issued?.lease || '',
+    framePath: target.href,
+    frame_path: target.href,
+    expiresAt: now() + Math.max(1, (issued?.expires_in_s || 60)) * 1000 - LEASE_MARGIN_MS,
+    expires: now() + 45000,
+  };
+}
+
+export function bindFocusZoom(target, { trigger = target, onToggle = null } = {}) {
+  const setZoom = (on) => {
+    if (!target?.classList) return;
+    target.classList.toggle('focused', Boolean(on));
+    onToggle?.(Boolean(on));
+  };
+  trigger?.addEventListener('click', (ev) => {
+    ev.stopPropagation?.();
+    setZoom(!target.classList.contains('focused'));
+  });
+  trigger?.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      setZoom(!target.classList.contains('focused'));
+    } else if (ev.key === 'Escape') {
+      setZoom(false);
+    }
+  });
+  return setZoom;
+}
+
+export function createCellFrameFeed({
+  call, scope = null, intervalMs = 2000, now = Date.now, onStateChange = null, onSourcesSample = null,
+}) {
   const watchers = new Map();
   const seen = new WeakSet();  // nodes painted while connected
-  let sources = null, sourcesAt = -Infinity, listing = null;
-  let running = true, disposed = false, active = null, timer = null;
+  let sources = null, sourcesAt = -Infinity, sourcesError = '', listing = null;
+  let running = true, paused = false, disposed = false, active = null, timer = null, tickQueued = false, rerun = false;
 
   const stateText = (label, detail) => [label, detail].filter(Boolean).join(' · ');
+  const patchField = (obj, prop, val) => { if (obj && obj[prop] !== val) obj[prop] = val; };
   const isCurrent = (watcher, signal) => !signal.aborted && watchers.get(watcher.key) === watcher;
+  const keyOf = view => (view.roiTarget ? `roi:${view.roiTarget}` : `source:${view.source}`);
+
+  function notifyState(watcher) {
+    onStateChange?.(watcher.key, {
+      source: watcher.view.roiTarget ? CEILING_SOURCE : watcher.view.source,
+      roiTarget: watcher.view.roiTarget || null,
+      live: Boolean(watcher.url) && watcher.state.kind === 'good',
+      ...watcher.state,
+    });
+  }
 
   function watcherOf(view) {
-    const key = view.roiTarget ? `roi:${view.roiTarget}` : `source:${view.source}`;
+    const key = keyOf(view);
     let watcher = watchers.get(key);
     if (!watcher) {
       watcher = {key, view, imgs: new Set(), badges: new Set(), badgeLabel: '', lease: null,
@@ -45,29 +113,37 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
   }
 
   function paint(watcher) {
+    const showStandby = paused || !watcher.url;
+    const standbyText = paused ? '영상 일시정지' : watcher.state.text;
     for (const img of watcher.imgs) {
       // A node bound before it is attached stays until it has been seen connected once.
       if (!img.isConnected) { if (seen.has(img)) watcher.imgs.delete(img); continue; }
       seen.add(img);
-      img.hidden = !watcher.url;
-      if (img.dataset) img.dataset.frameStateText = watcher.state.text;
-      if (watcher.url) img.src = watcher.url;
-      else img.removeAttribute?.('src');
+      patchField(img, 'hidden', paused || !watcher.url);
+      if (img.dataset && img.dataset.frameStateText !== watcher.state.text) img.dataset.frameStateText = watcher.state.text;
+      if (watcher.url) {
+        patchField(img, 'src', watcher.url);
+      } else if (img.src !== '') {
+        img.removeAttribute?.('src');
+      }
       const sibling = img.nextElementSibling;
-      if (sibling?.classList?.contains('omx-inspector-cam-standby') && !watcher.url) {
-        sibling.hidden = false;
-        sibling.textContent = watcher.state.text;
+      if (sibling?.classList?.contains('omx-inspector-cam-standby')) {
+        patchField(sibling, 'hidden', !showStandby);
+        if (showStandby) patchField(sibling, 'textContent', standbyText);
       }
     }
+    const badgeText = [watcher.badgeLabel, standbyText].filter(Boolean).join(' · ');
     for (const badge of watcher.badges) {
       if (!badge.isConnected) { if (seen.has(badge)) watcher.badges.delete(badge); continue; }
       seen.add(badge);
-      badge.textContent = [watcher.badgeLabel, watcher.state.text].filter(Boolean).join(' · ');
+      patchField(badge, 'textContent', badgeText);
     }
     if (!watcher.imgs.size && !watcher.badges.size) {
       if (watcher.url) URL.revokeObjectURL(watcher.url);
       watchers.delete(watcher.key);
+      return;
     }
+    notifyState(watcher);
   }
 
   function unavailable(watcher, kind, label, detail = '') {
@@ -82,25 +158,26 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     listing ??= call('/api/fleet/vision/sources', {signal, timeoutMs: REQUEST_TIMEOUT_MS})
       .then(res => {
         if (signal.aborted) return;
-        sources = new Set(res?.sources || []);
+        const names = (res?.sources || []).filter(item => typeof item === 'string');
+        sources = new Set(names);
+        sourcesError = '';
         sourcesAt = now();
+        onSourcesSample?.({finished: true, status: 200, names});
       })
-      .catch(() => {})
+      .catch(error => {
+        if (signal.aborted) return;
+        if (error?.status === 401 || error?.status === 403) sourcesError = 'unauthorized';
+        else if (typeof error?.status === 'number') sourcesError = 'http';
+        onSourcesSample?.(typeof error?.status === 'number'
+          ? {finished: true, status: error.status}
+          : {finished: false});
+      })
       .finally(() => { listing = null; });
     return listing;
   }
 
   async function leaseFor(source, signal) {
-    const issued = await call('/api/fleet/vision/lease', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({source_id: source}), signal, timeoutMs: REQUEST_TIMEOUT_MS,
-    });
-    const target = new URL(issued?.frame_path || '', location.origin);
-    if (target.origin !== location.origin || target.username || target.password) {
-      throw Error('영상 주소를 확인하세요.');
-    }
-    return {token: issued?.lease || '', framePath: target.href,
-      expiresAt: now() + Math.max(1, (issued?.expires_in_s || 60)) * 1000 - LEASE_MARGIN_MS};
+    return issueVisionLease(call, source, {signal, timeoutMs: REQUEST_TIMEOUT_MS, now});
   }
 
   async function refreshOne(watcher, signal) {
@@ -112,6 +189,9 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
         return unavailable(watcher, 'unregistered', UNREGISTERED_TEXT, `Vision 카메라 목록에 ${source} 없음 — 등록 확인`);
       }
       if (sources === null) {
+        if (sourcesError === 'unauthorized') {
+          return unavailable(watcher, 'warn', '영상 권한 확인 필요', '접속 후 다시 확인하세요');
+        }
         return unavailable(watcher, 'warn', '영상 연결 확인 중', 'Vision 카메라 목록을 확인하는 중입니다');
       }
     }
@@ -128,6 +208,9 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     if (!isCurrent(watcher, signal)) return;
     if (response.status === 401 || response.status === 403) watcher.lease = null;
     if (response.status === 429) return unavailable(watcher, 'warn', '영상 요청 한도 도달');
+    if (response.status === 404 && response.headers.get('X-Frame-State') !== 'stale') {
+      return unavailable(watcher, 'warn', '카메라 송신기 미연결', 'Vision 404 — 현장 카메라 전송 확인');
+    }
     const seq = response.headers.get('X-Frame-Seq');
     const badge = frameBadge({ok: response.ok, status: response.status,
       ageMs: frameAge(response.headers, Boolean(watcher.view.roiTarget)),
@@ -148,30 +231,44 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
   }
 
   async function tick() {
-    if (active || !running || !watchers.size) return;
+    if (disposed || !running || paused || !watchers.size) return;
+    if (active) { rerun = true; return; }
     if (typeof document !== 'undefined' && document.hidden) return;
-    const queue = [...watchers.values()];
-    const pending = queue.values();
-    active = new AbortController();
-    const {signal} = active;
-    async function drain() {
-      for (const watcher of pending) {
-        if (!isCurrent(watcher, signal)) continue;
-        try {
-          await refreshOne(watcher, signal);
-        } catch (error) {
+    do {
+      rerun = false;
+      const queue = [...watchers.values()];
+      if (!queue.length) break;
+      const pending = queue.values();
+      active = new AbortController();
+      const {signal} = active;
+      async function drain() {
+        for (const watcher of pending) {
           if (!isCurrent(watcher, signal)) continue;
-          const label = error?.status === 401 || error?.status === 403 ? '영상 권한 없음' : '영상 연결 끊김 — Vision 확인';
-          unavailable(watcher, 'warn', label);
+          try {
+            await refreshOne(watcher, signal);
+          } catch (error) {
+            if (!isCurrent(watcher, signal)) continue;
+            const label = error?.status === 401 || error?.status === 403 ? '영상 권한 없음' : '영상 연결 끊김 — Vision 확인';
+            unavailable(watcher, 'warn', label);
+          }
         }
       }
-    }
-    try {
-      await Promise.all(Array.from({length: Math.min(queue.length, MAX_IN_FLIGHT)}, drain));
-    } finally {
-      active = null;
-      if (!watchers.size) stopTimer();
-    }
+      try {
+        await Promise.all(Array.from({length: Math.min(queue.length, MAX_IN_FLIGHT)}, drain));
+      } finally {
+        active = null;
+        if (!watchers.size) stopTimer();
+      }
+    } while (rerun && running && !paused && !disposed && watchers.size && !(typeof document !== 'undefined' && document.hidden));
+  }
+
+  function scheduleTick() {
+    if (tickQueued || disposed || !running || paused) return;
+    tickQueued = true;
+    queueMicrotask(() => {
+      tickQueued = false;
+      void tick();
+    });
   }
 
   function stopTimer() {
@@ -182,7 +279,7 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
   }
 
   function startTimer() {
-    if (!watchers.size || timer !== null || typeof window === 'undefined' || typeof window.setInterval !== 'function') return;
+    if (!watchers.size || paused || timer !== null || typeof window === 'undefined' || typeof window.setInterval !== 'function') return;
     timer = window.setInterval(() => { void tick(); }, intervalMs);
   }
 
@@ -207,14 +304,36 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     }
     paint(watcher);
     startTimer();
-    void tick();
+    scheduleTick();
+  }
+
+  function repaint(view) {
+    if (disposed || !view) return;
+    const watcher = watchers.get(keyOf(view));
+    if (watcher) paint(watcher);
   }
 
   function setRunning(next) {
     if (disposed) return;
     running = Boolean(next);
-    if (running) { startTimer(); void tick(); }
+    if (running && !paused) { startTimer(); scheduleTick(); }
     else { stopTimer(); active?.abort(); }
+  }
+
+  function setPaused(next) {
+    if (disposed) return;
+    const value = Boolean(next);
+    if (paused === value) return;
+    paused = value;
+    for (const watcher of watchers.values()) paint(watcher);
+    if (!paused && running) { startTimer(); scheduleTick(); }
+    else if (paused) { stopTimer(); active?.abort(); }
+  }
+
+  function checkSources(signal) {
+    if (disposed) return Promise.resolve();
+    const sig = signal || AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    return ensureSources(sig);
   }
 
   function dispose() {
@@ -225,5 +344,5 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
   }
 
   scope?.onDispose?.(dispose);
-  return {bind, setRunning, dispose};
+  return {bind, setRunning, setPaused, repaint, checkSources, dispose};
 }

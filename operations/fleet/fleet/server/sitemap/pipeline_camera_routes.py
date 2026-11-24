@@ -80,6 +80,7 @@ def install_cameras_routes(app, ctx) -> None:
     operator_guard = ctx.operator_guard
     proposer_guard = getattr(ctx, "proposer_guard", operator_guard)
     _arm_live_catalog = ctx._arm_live_catalog
+    gov = getattr(ctx, "gov", None) or getattr(app.state, "pipeline_governance", None)
     _save_ledger = ctx._save_ledger
     _is_human_detected = ctx._is_human_detected
     rules = ctx.rules
@@ -142,6 +143,8 @@ def install_cameras_routes(app, ctx) -> None:
                         "reason": h.get("local_reason") or h.get("fleet_reason") or h.get("reason"),
                         "incident_ids": list(h.get("incident_ids") or []),
                     }
+                    if new_held and not prev_held and gov is not None:
+                        gov.bump_stop_generation()
         arm_states = body.get("arm_states")
         if isinstance(arm_states, dict):
             now_ts = round(time.time(), 3)
@@ -255,6 +258,8 @@ def install_cameras_routes(app, ctx) -> None:
                     app.state.omx_cell_states[cid] = old
                 raise
         _clear_open_arm_incidents(app, arms, note, principal_id, cause, basis)
+        if gov is not None:
+            gov.bump_stop_generation()
         return {"ok": True, "cleared_arms": arms, "cleared_cells": cleared_cells, "note": note,
                 "arm_holds": app.state.arm_holds}
 
@@ -338,6 +343,8 @@ def install_cameras_routes(app, ctx) -> None:
         task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
         task["claimed_at"] = round(time.time(), 3)
         _enrich_task_health(task)
+        if gov is not None:
+            gov.bump_dispatch_generation()
         _save_ledger()
         handoff = {
             **res["handoff"],
@@ -347,6 +354,7 @@ def install_cameras_routes(app, ctx) -> None:
             "directive": task.get("directive"),
             "src_site": task["src_site"],
             "dst_site": task["dst_site"],
+            "interlock_scope": task.get("interlock_scope"),
             **{k: task[k] for k in ("src_site_id", "dst_site_id", "dst_area", "dst_slot", "execution_mode", "max_chunks")
                if task.get(k) is not None},
             "displaced_to": task.get("displaced_to"),
@@ -480,7 +488,11 @@ def install_cameras_routes(app, ctx) -> None:
         _enrich_task_health(task)
         if phase == "ABORTED":
             pipeline_repark.on_abort(app.state, task, body.get("stage_result") or {}, time.time(), rules=rules())
+            if gov is not None:
+                gov.bump_stop_generation()
         elif phase == "RELEASED":
+            if gov is not None:
+                gov.bump_dispatch_generation()
             pending_events = build_completion_events(
                 app, task, cell_phase=cell_phase, stage_result=body.get("stage_result") or {},
                 human_detected=bool(_is_human_detected(cell_id)),

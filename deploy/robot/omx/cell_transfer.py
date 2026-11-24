@@ -28,7 +28,7 @@ class Gate:
         self._lib_cache: dict[tuple[str, int, int], tuple[dict, str]] = {}
         # two arms, one pallet (cell_zones): a reach claims its zone before it moves and frees it once folded home
         self.zones = Zones(config, calibration) if config.get("zone_side") else None
-
+        if callable(getattr(cell, "frame_receipt", None)): self.frame_receipt = cell.frame_receipt
     def _load_library(self, library) -> tuple[dict, str]:
         if isinstance(library, dict):
             return library, digest(library)
