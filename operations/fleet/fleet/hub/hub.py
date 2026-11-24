@@ -90,6 +90,7 @@ class SiteHub:
             if event_store is not None and hasattr(event_store, "get_projection_cursor")
             else 0
         )
+        self._persisted_projection_cursor = self._event_projection_cursor
         # Heartbeats read only this flag; SQLite is touched only while the projection is behind.
         self._projection_dirty = True
         self._projection_lock = threading.Lock()
@@ -383,6 +384,15 @@ class SiteHub:
     def _persist_projection_cursor(self, cursor: int) -> None:
         if cursor > 0 and self.event_store is not None and hasattr(self.event_store, "set_projection_cursor"):
             self.event_store.set_projection_cursor(cursor)
+        self._persisted_projection_cursor = max(self._persisted_projection_cursor, int(cursor))
+
+    def _safe_persist_projection_cursor(self, cursor: int) -> bool:
+        try:
+            self._persist_projection_cursor(cursor)
+            return True
+        except Exception:
+            _LOGGER.warning("Could not persist CORE event projection cursor %s", cursor, exc_info=True)
+            return False
 
     def _recover_event_projections(self) -> bool:
         """Replay durable CORE events after transient task projection failures."""
@@ -392,7 +402,6 @@ class SiteHub:
         if not hasattr(self.event_store, "read_events"):
             return False
         with self._projection_lock:
-            start_cursor = self._event_projection_cursor
             try:
                 while True:
                     rows = self.event_store.read_events(
@@ -403,14 +412,16 @@ class SiteHub:
                         self._event_projection_cursor = row["audit_id"]
                     if len(rows) < 100:
                         break
-                self._persist_projection_cursor(self._event_projection_cursor)
-                self._projection_dirty = False
-                return True
             except Exception:
-                if self._event_projection_cursor > start_cursor:
-                    self._persist_projection_cursor(self._event_projection_cursor)
+                if self._event_projection_cursor > self._persisted_projection_cursor:
+                    self._safe_persist_projection_cursor(self._event_projection_cursor)
                 _LOGGER.exception("Could not project durable CORE event into Fleet task history")
                 return False
+            if self._event_projection_cursor > self._persisted_projection_cursor:
+                if not self._safe_persist_projection_cursor(self._event_projection_cursor):
+                    return False
+            self._projection_dirty = False
+            return True
 
     async def _project_batch_async(self) -> tuple[bool, bool]:
         """Project at most one 100-row batch on the loop, persisting cursor progress. Caller holds io lock."""
@@ -419,7 +430,6 @@ class SiteHub:
             return True, False
         if not hasattr(self.event_store, "read_events"):
             return False, False
-        start_cursor = self._event_projection_cursor
         try:
             rows = await asyncio.to_thread(
                 self.event_store.read_events, after_id=self._event_projection_cursor, limit=100)
@@ -427,17 +437,18 @@ class SiteHub:
                 self.event_callback(row["event"])
                 self._event_projection_cursor = row["audit_id"]
                 await asyncio.sleep(0)
-            if self._event_projection_cursor > start_cursor:
-                await asyncio.to_thread(self._persist_projection_cursor, self._event_projection_cursor)
-            if len(rows) < 100:
-                self._projection_dirty = False
-                return True, False
-            return True, True
         except Exception:
-            if self._event_projection_cursor > start_cursor:
-                await asyncio.to_thread(self._persist_projection_cursor, self._event_projection_cursor)
+            if self._event_projection_cursor > self._persisted_projection_cursor:
+                await asyncio.to_thread(self._safe_persist_projection_cursor, self._event_projection_cursor)
             _LOGGER.exception("Could not project durable CORE event into Fleet task history")
             return False, False
+        if self._event_projection_cursor > self._persisted_projection_cursor:
+            if not await asyncio.to_thread(self._safe_persist_projection_cursor, self._event_projection_cursor):
+                return False, False
+        if len(rows) < 100:
+            self._projection_dirty = False
+            return True, False
+        return True, True
 
     async def _project_async(self) -> bool:
         """Same replay as the sync one, but only read_events runs in a thread; the callback

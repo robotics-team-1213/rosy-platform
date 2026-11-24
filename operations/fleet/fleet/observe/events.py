@@ -78,8 +78,8 @@ class CoreEventStore:
         return int(row[0]) if row is not None else 0
 
     def set_projection_cursor(self, audit_id: int, consumer: str = "site_hub") -> None:
-        if audit_id < 0:
-            raise ValueError("projection cursor must be nonnegative")
+        if isinstance(audit_id, bool) or not isinstance(audit_id, int) or audit_id < 0:
+            raise ValueError("projection cursor must be a nonnegative integer")
         updated_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
         with closing(self._connect()) as connection, connection:
             connection.execute(
