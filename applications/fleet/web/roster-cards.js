@@ -12,24 +12,24 @@ export function lastSeenText(robot, nowMs = Date.now()) {
   return `마지막 응답: ${evidenceAgeText(calm).slice(3)}`;
 }
 
-/** Deterministic key over every field rendered in roster.card() (excluding calm sub-second clocks). */
+/** Structural key for workspace cards. Live facts update in place. */
 export function workspaceCardKey({
   robot, slot, displayName, view, state, power, nav, tripLine, stateStale,
   loc, sitePose, address, evidence, operator, named, goalMotion, openTripId, tripKey, moveBlocked,
 }) {
-  const pose = state.pose;
   return JSON.stringify({
     id: robot.robot_id, slot, displayName, online: robot.online, link: robot.link,
     linkReason: robot.link_reason || null, ruleM: robot.rule_m || null, error: robot.error || null,
     calibration: robot.calibration || null, queued: robot.queued || null, yielding: robot.yielding || null,
-    pose: pose ? [pose.x?.toFixed?.(2), pose.y?.toFixed?.(2), pose.yaw?.toFixed?.(2), state.pose_frame, state.map_id] : null,
-    sitePose, mode: state.mode, lineFollow: state.line_follow || null, powerMode: state.power || null,
+    pose: Boolean(state.pose), pose_frame: state.pose_frame, map_id: state.map_id,
+    sitePose: Boolean(sitePose), mode: state.mode, lineFollow: state.line_follow || null,
+    powerMode: state.power?.mode, motionReady: state.power?.motion_ready,
     dock: state.docking?.state || null, diag: stateStale ? null : (state.diagnostics_summary || null),
     safety: state.safety || null, caps: robot.capabilities || null, locState: robot.localization || null,
     chargeState: robot.power_health?.battery?.charging_state || null,
     power: {
-      battery: power.battery, charging: power.charging, note: power.note, safetyRelease: power.safetyRelease,
-      voltage: typeof power.voltage === "number" ? power.voltage.toFixed(2) : null,
+      hasBatteryProblem: Boolean(power.problem), hasNote: Boolean(power.note), safetyRelease: power.safetyRelease,
+      chargingKind: power.chargingConfirmed ? "confirmed" : power.charging ? "hint" : "none",
     },
     nav, tripLine, stateStale, evidence, loc, address,
     addressStatus: view.addresses?.[robot.robot_id]?.status || null,
@@ -58,11 +58,12 @@ export function selectRobot(view, robotId) {
   return true;
 }
 
-// A focused picker or motor table keeps its card across polling updates.
 export function placeRosterCards(box, cards) {
   const focus = document.activeElement;
-  const focused = focus?.matches("select, .motor-health-scroll") ? focus.closest("#robot-workspace article") : null;
-  const keep = focused?.parentElement === box ? focused : null;
+  const focused = focus?.matches("select, .motor-health-scroll, summary, details[data-more], [data-more-toggle]")
+    ? focus.closest("article") : null;
+  const keep = focused?.parentElement === box && focus.matches("select, .motor-health-scroll") ? focused : null;
+  const disclosure = focused?.parentElement === box && !keep ? focus : null;
   if (keep) {
     const current = cards.find(node => node.dataset.robotId === keep.dataset.robotId);
     const motor = current && current !== keep ? current.querySelector("[data-motor-robot]") : null;
@@ -89,6 +90,10 @@ export function placeRosterCards(box, cards) {
   const wanted = new Set(nodes);
   for (const node of [...box.children]) if (!wanted.has(node)) node.remove();
   nodes.forEach((node, i) => { if (box.children[i] !== node) box.insertBefore(node, box.children[i] || null); });
+  if (disclosure && document.activeElement !== disclosure) {
+    const card = nodes.find(node => node.dataset.robotId === focused.dataset.robotId);
+    (card?.querySelector(disclosure.matches("[data-more-toggle]") ? "[data-more-toggle]" : disclosure.localName) || card)?.focus({preventScroll: true});
+  }
 }
 
 export const OMX_CELL_DEFS = [

@@ -16,7 +16,7 @@ import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 import { robotMapPose, robotPoseText, sitePoseText } from "./localization-badge.js";
 import { createLocalizationPanel } from "./localization-panel.js";
 import { OMX_CELL_DEFS, createFrontCamera } from "./roster-cards.js";
-import { powerHealthView } from "./power-health-view.js";
+import { rosterPower } from "./roster-presentation.js";
 import { staleAgeS } from "./state-age.js";
 
 export function createRosterWorkspace({ scope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator = () => false, namedReason = () => "" }) {
@@ -109,7 +109,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       return { id: `arm:${profile.id}`, title: "SERVO · LOAD", readout: "—", value: null, unit: "mA", minBound: null, maxBound: null, tone };
     }
     const robot = detail?.robot || {};
-    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
+    const power = rosterPower(view, robot, Date.now());
     const pct = robot.online && !view.stateUnavailable ? power.percent : null;
     const readout = pct !== null
       ? `${pct}%${typeof power.voltage === "number" ? ` · ${power.voltage.toFixed(1)}V` : ""}`
@@ -120,6 +120,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
       title: "POWER · BATT",
       readout,
       value: pct,
+      battery: { percent: pct, charging: power.chargingConfirmed, online: robot.online && !view.stateUnavailable },
       unit: "%",
       minBound: 0,
       maxBound: 100,
@@ -159,7 +160,7 @@ export function createRosterWorkspace({ scope, el, view, auth, selection, call, 
     const now = Date.now();
     const mobile = view.robots.map((robot) => {
       const state = view.stateUnavailable ? {} : (robot.state || {});
-      const power = powerHealthView(robot, view.receivedAtMs, now);
+      const power = rosterPower(view, robot, now);
       const staleS = staleAgeS(robot, view.receivedAtMs, now);
       const ageS = typeof robot.state_age_s === "number" && Number.isFinite(robot.state_age_s)
         ? robot.state_age_s + Math.max(0, (now - (view.receivedAtMs ?? now)) / 1000)
