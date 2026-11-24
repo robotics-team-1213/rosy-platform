@@ -183,8 +183,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if not args.dry_run and not has_sites:
             raise SystemExit("calibration site maps required for live rigid_of registration (D-911)")
+        top_camera = cell_coordinate.shared_top_camera(configs["a"], configs["b"])
+        if has_sites and not args.dry_run and top_camera is None:
+            z_a = cal_a["sites"][args.model_site_a].get("z_view")
+            z_b = cal_b["sites"][args.model_site_b].get("z_view")
+            if (z_a is None) != (z_b is None) or (z_a is not None and abs(float(z_a) - float(z_b)) > 1e-6):
+                raise SystemExit(
+                    "differing or asymmetric z_view site maps require shared top camera height_m and center_px (D-911)"
+                )
         rigid_ab = (
-            cell_coordinate.rigid_of(cal_a, cal_b, args.model_site_a, args.model_site_b)
+            cell_coordinate.rigid_of(cal_a, cal_b, args.model_site_a, args.model_site_b, camera=top_camera)
             if has_sites
             else (0.0, 0.0, -0.34)
         )

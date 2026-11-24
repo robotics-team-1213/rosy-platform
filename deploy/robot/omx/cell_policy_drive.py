@@ -367,11 +367,20 @@ def main(argv=None) -> int:
                 res["zone_verification"] = czv.measure(cell, before_top, config, args.dest_site, args.site or "pinky", dst_roi)
             return res
 
-        if not args.dry_run and config.get("episodes"):
-            import cell_collect_plan
-            result = cell_collect_plan.run_recorded(cell, config, args.site or "belt", args.goal_site or "goal", source_kind, _execute)
-        else:
-            result = _execute()
+        import cell_bundle_emit
+
+        with cell_bundle_emit.PolicyCapture(
+            cell, config, work=work, mode=args.mode, paced_chunks=args.paced_chunks,
+            dry_run=args.dry_run, log_path=log_path,
+            site=args.site, goal_site=args.goal_site, dest_site=args.dest_site,
+        ) as capture:
+            if not args.dry_run and config.get("episodes"):
+                import cell_collect_plan
+                result = cell_collect_plan.run_recorded(cell, config, args.site or "belt", args.goal_site or "goal", source_kind, _execute)
+            else:
+                result = _execute()
+            if bid := capture.emit_if_failed(result):
+                result["failure_bundle_id"] = bid
         return _finish(result)
     finally:
         if shadow is not None and hasattr(shadow, "close"):

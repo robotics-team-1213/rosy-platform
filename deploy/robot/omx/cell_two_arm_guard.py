@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import numbers
 from pathlib import Path
 import sys
 import threading
@@ -140,6 +141,12 @@ def validate_two_arm_task_pair(task_a: Mapping[str, Any], task_b: Mapping[str, A
     }
 
 
+def _num(v: Any, name: str) -> float:
+    if isinstance(v, bool) or not isinstance(v, numbers.Real) or not math.isfinite(float(v)):
+        raise ValueError(f"{name} must be finite, got {v!r}")
+    return float(v)
+
+
 def _finite_pose6(pose: Sequence[float]) -> tuple[float, ...]:
     if not isinstance(pose, Sequence) or isinstance(pose, (str, bytes)) or len(pose) != 6:
         raise ValueError(f"pose must have length 6, got {pose!r}")
@@ -169,22 +176,28 @@ def _caps_touch_mid(
     rigids: Mapping[str, tuple[float, float, float]],
     band_m: float,
 ) -> bool:
+    if not math.isfinite(float(band_m)):
+        return True
     if band_m <= 0.0:
         return False
     ax, ay = float(rigids["a"][1]), float(rigids["a"][2])
     bx, by = float(rigids["b"][1]), float(rigids["b"][2])
     dx, dy = bx - ax, by - ay
     dist = math.hypot(dx, dy)
-    if dist < 1e-6:
+    if not math.isfinite(dist) or dist < 1e-6:
         return True
     mx, my = (ax + bx) * 0.5, (ay + by) * 0.5
     ux, uy = dx / dist, dy / dist
     for frame in raw_poses:
-        for i, (p0, p1, _r) in enumerate(frame):
-            pts = (p1,) if i == 0 else (p0, p1)
-            for p in pts:
-                if abs((float(p[0]) - mx) * ux + (float(p[1]) - my) * uy) <= band_m:
-                    return True
+        for p0, p1, r in frame:
+            rad = float(r)
+            s0 = (float(p0[0]) - mx) * ux + (float(p0[1]) - my) * uy
+            s1 = (float(p1[0]) - mx) * ux + (float(p1[1]) - my) * uy
+            if not (math.isfinite(rad) and math.isfinite(s0) and math.isfinite(s1)):
+                return True
+            reach = float(band_m) + max(0.0, rad)
+            if min(s0, s1) <= reach and max(s0, s1) >= -reach:
+                return True
     return False
 
 
@@ -216,16 +229,21 @@ class TwoArmChunkGuard:
     ) -> None:
         if set(kin_by_arm) != set(ARMS) or set(rigids) != set(ARMS) or set(tips) != set(ARMS):
             raise ValueError("kin_by_arm, rigids, and tips must define keys 'a' and 'b'")
-        if margin_m < 0.0 or thin_step_m <= 0.0 or wait_timeout_s <= 0.0:
-            raise ValueError("guard margin, thin_step_m, and wait_timeout_s must be positive")
+        for arm in ARMS:
+            rg = rigids[arm]
+            if isinstance(rg, (str, bytes, Mapping)) or not hasattr(rg, "__len__") or len(rg) != 3:
+                raise ValueError(f"rigids[{arm!r}] must have length 3")
+            [_num(x, f"rigids[{arm!r}]") for x in rg]
         self._kin = dict(kin_by_arm)
-        self._rigids = dict(rigids)
-        self._tips = {k: float(v) for k, v in tips.items()}
-        self._margin_m = float(margin_m)
-        self._min_z_m = float(min_z_m)
-        self._thin_step_m = float(thin_step_m)
-        self._mid_y_band = float(mid_y_band)
-        self._wait_timeout_s = float(wait_timeout_s)
+        self._rigids = {k: tuple(float(x) for x in rigids[k]) for k in ARMS}
+        self._tips = {k: _num(v, f"tips[{k!r}]") for k, v in tips.items()}
+        self._margin_m = _num(margin_m, "margin_m")
+        self._min_z_m = _num(min_z_m, "min_z_m")
+        self._thin_step_m = _num(thin_step_m, "thin_step_m")
+        self._mid_y_band = _num(mid_y_band, "mid_y_band")
+        self._wait_timeout_s = _num(wait_timeout_s, "wait_timeout_s")
+        if self._margin_m < 0.0 or self._mid_y_band < 0.0 or self._thin_step_m <= 0.0 or self._wait_timeout_s <= 0.0:
+            raise ValueError("guard margin/mid_y_band must be >= 0 and thin_step_m/wait_timeout_s > 0")
         self._item = item
         self._cond = threading.Condition()
         self._arms = {arm: _ArmGuardState() for arm in ARMS}
@@ -278,12 +296,14 @@ class TwoArmChunkGuard:
         raw_poses = [self._frame_capsules(arm, row, holding) for row in chunk]
 
         floor_z = _caps_min_z(raw_poses)
-        if floor_z < self._min_z_m:
-            return {"admitted": False, "reason": "floor_violation", "min_z_m": round(floor_z, 5)}
+        if not math.isfinite(floor_z) or floor_z < self._min_z_m:
+            return {"admitted": False, "reason": "floor_violation", "min_z_m": round(floor_z, 5) if math.isfinite(floor_z) else None}
 
         my_poses = coordination.thinned(raw_poses, self._thin_step_m) or [raw_poses[0]]
         uses_mid = bool(need_mid) or _caps_touch_mid(raw_poses, self._rigids, self._mid_y_band)
-        timeout = float(wait_timeout_s if wait_timeout_s is not None else self._wait_timeout_s)
+        timeout = _num(self._wait_timeout_s if wait_timeout_s is None else wait_timeout_s, "wait_timeout_s")
+        if timeout <= 0.0:
+            raise ValueError("wait_timeout_s must be positive")
         t_start = time.monotonic()
         deadline = t_start + timeout
         peer = "b" if arm == "a" else "a"
@@ -304,7 +324,8 @@ class TwoArmChunkGuard:
                 )
                 mid_blocked = uses_mid and self._mid_owner not in (None, arm)
                 clr = float(coordination.clearance(my_poses, peer_poses))
-                colliding = clr < self._margin_m
+                clr_ok = math.isfinite(clr)
+                colliding = (not clr_ok) or clr < self._margin_m
 
                 if not mid_blocked and not colliding:
                     mst.executing = True
@@ -328,20 +349,20 @@ class TwoArmChunkGuard:
                     return {
                         "admitted": False,
                         "reason": "stationary_collision",
-                        "clearance_m": round(clr, 5),
+                        "clearance_m": round(clr, 5) if clr_ok else None,
                     }
                 if pst.waiting:
                     return {
                         "admitted": False,
                         "reason": "deadlock",
-                        "clearance_m": round(clr, 5),
+                        "clearance_m": round(clr, 5) if clr_ok else None,
                     }
                 remaining = deadline - time.monotonic()
                 if remaining <= 0.0:
                     return {
                         "admitted": False,
                         "reason": "wait_timeout",
-                        "clearance_m": round(clr, 5),
+                        "clearance_m": round(clr, 5) if clr_ok else None,
                     }
                 mst.waiting = True
                 self._cond.wait(timeout=remaining)

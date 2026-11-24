@@ -18,15 +18,41 @@ from typing import Any
 
 from cell_policy_timing import finite_stamp, park_ack_ok
 from cell_presence import presence_ok, zone_acceptance
+import cell_diagnose
+import cell_executor
 
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _TASK_ID_RE = re.compile(r"[A-Za-z0-9._:@-]{1,128}")
 
 
-def _fail(arm_id: str, error: str, *, directive_id: Any = None, extra_stop: dict | None = None) -> dict[str, Any]:
-    out = {"arm": arm_id, "error": error, "stop_event": {"command": "stop", "ok": False, "folded": False, **(extra_stop or {})}}
+def _fail(
+    arm_id: str,
+    error: str,
+    *,
+    directive_id: Any = None,
+    extra_stop: dict | None = None,
+    failure_class: str | None = None,
+    failure_stratum: str | None = None,
+) -> dict[str, Any]:
+    fclass = failure_class or cell_diagnose.classify_failure(f"policy: {error}")["cause"]
+    fstrat = failure_stratum or "human_only"
+    out = {
+        "arm": arm_id,
+        "error": error,
+        "failure_class": fclass,
+        "failure_stratum": fstrat,
+        "requires_named_approval": True,
+        "stop_event": {"command": "stop", "ok": False, "folded": False, **(extra_stop or {})},
+    }
     if directive_id is not None:
-        out["stage_result"] = {"directive_id": directive_id, "arm_id": arm_id, "task_verified": False}
+        out["stage_result"] = {
+            "directive_id": directive_id,
+            "arm_id": arm_id,
+            "task_verified": False,
+            "failure_class": fclass,
+            "failure_stratum": fstrat,
+            "requires_named_approval": True,
+        }
     return out
 
 
@@ -158,6 +184,7 @@ def execute_act_policy_task(
     plan_home_fn,
     write_context_fn,
     timeout_exc,
+    choices=None,
 ) -> dict[str, Any]:
     """Execute one supervised Cell S ACT policy task via `cell_policy_drive.py --paced-chunks`."""
     task_id = handoff.get("task_id")
@@ -244,6 +271,7 @@ def execute_act_policy_task(
         extra = {"timeout_hold": acks, "timeout_hold_latched": latched} if acks else None
         return _fail(arm_id, "SUBPROCESS_TIMEOUT", directive_id=task_id, extra_stop=extra)
     parsed = last_json_fn(proc.stdout)
+    parsed = parsed if isinstance(parsed, dict) else {}
     measured_at = time.time()
     raw_park = parsed.get("park") if isinstance(parsed.get("park"), dict) else {}
     park_valid = park_ack_ok(raw_park, require_command=True)
@@ -270,6 +298,29 @@ def execute_act_policy_task(
     else:
         verification = {"verified": False, "basis": f"unverified: act policy {parsed.get('result') or 'failed'}",
                         "placement": placement, "policy_revision": rev, **src_meta}
+    episode_ref = parsed.get("episode_ref") or parsed.get("recording_dir")
+    failure_bundle_id = parsed.get("failure_bundle_id")
+    res_str = str(parsed.get("result") or f"act_exit_{proc.returncode}")
+    why_str = str(parsed.get("reason") or "")
+    if not verified and res_str in ("released", "chunks_done") and not zone_ok and not any(
+        k in f"{res_str} {why_str}".lower() for k in ("calibrat", "jaw", "late", "timing", "timeout", "contact", "stall", "lag")
+    ):
+        why_str = f"{why_str} zone_unverified".strip()
+    failure_info = (
+        None
+        if verified
+        else {**cell_diagnose.classify_failure(res_str, why_str, exec_mode="act_paced"),
+              "stratum": "human_only", "requires_human_operator": True}
+    )
+    is_hold_or_fault = res_str in ("fault", "held") or res_str.startswith(("held:", "held_", "fault:", "fault_"))
+    if choices is not None and not is_hold_or_fault:
+        cell_executor.record_act_outcome(
+            choices,
+            str(task_id) if task_id is not None else None,
+            verified,
+            res_str,
+            failure_class=failure_info["cause"] if failure_info else None,
+        )
     stage_result = {
         "handoff_lease_id": handoff.get("handoff_lease_id"),
         "directive_id": task_id,
@@ -279,6 +330,13 @@ def execute_act_policy_task(
         "verification": verification,
         "raw": parsed,
         **({"source_clearance": clearance} if clearance is not None else {}),
+        **({"episode_ref": episode_ref} if episode_ref else {}),
+        **({"failure_bundle_id": failure_bundle_id} if failure_bundle_id else {}),
+        **({
+            "failure_class": failure_info["cause"],
+            "failure_stratum": failure_info["stratum"],
+            "requires_named_approval": True,
+        } if failure_info else {}),
     }
     state_val = fold.get("state") or live_fold.get("state")
     return {
@@ -289,5 +347,12 @@ def execute_act_policy_task(
         "stop_event": {"command": "stop", "ok": folded, "folded": folded, "readback": fold, "live": live_fold,
                        **({"state": state_val} if state_val else {})},
         "commissioning": True,
-        **({} if verified else {"error": parsed.get("result") or f"act_exit_{proc.returncode}"}),
+        **({"episode_ref": episode_ref} if episode_ref else {}),
+        **({"failure_bundle_id": failure_bundle_id} if failure_bundle_id else {}),
+        **({} if verified else {
+            "error": parsed.get("result") or f"act_exit_{proc.returncode}",
+            "failure_class": failure_info["cause"],
+            "failure_stratum": failure_info["stratum"],
+            "requires_named_approval": True,
+        }),
     }

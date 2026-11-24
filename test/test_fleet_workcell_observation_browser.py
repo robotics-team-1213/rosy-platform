@@ -350,7 +350,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
         try:
             state, _ = observation_feed(page)
             page.route("**/api/fleet/cell-app/object-catalog", lambda route: route.fulfill(json=body))
-            page.goto(cell_url)
+            page.goto(cell_url + "#saved-heading")
             page.evaluate("theme => window.RosyTheme.set(theme)", theme)
             table = page.locator("#catalog-table")
             expect(table).to_be_visible()
@@ -380,7 +380,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
             if os.environ.get("ROSY_CAPTURE_INLINE") == "1":
                 shot = page.screenshot(type="jpeg", quality=35)
                 print(f"ROSY_SCREENSHOT cell-catalog-{theme}-{width} " + base64.b64encode(shot).decode())
-            page.locator('.ui-subnav-nav a[href="#recipe-heading"]').click()
+            page.locator('.ui-subnav-nav a[href="#observation-heading"]').click()
             expect(page.locator('ui-section[aria-labelledby="catalog-heading"]')).to_be_hidden()
             page.locator('.ui-subnav-nav a[href="#saved-heading"]').click()
             expect(table).to_be_visible()
@@ -406,7 +406,7 @@ def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pend
                     route.fulfill(json=body)
             page.route("**/api/fleet/cell-app/object-catalog", catalog)
             with page.expect_request("**/api/fleet/cell-app/object-catalog"):
-                page.goto(cell_url)
+                page.goto(cell_url + "#saved-heading")
             if not pending:
                 expect(page.locator("#catalog-table")).to_contain_text("previous-account-object")
             page.locator("#topbar-more").click()

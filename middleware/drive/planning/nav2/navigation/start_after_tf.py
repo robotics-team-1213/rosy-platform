@@ -3,8 +3,13 @@
 
 from pathlib import Path
 import sys
+import time
 
 import yaml
+
+MAX_STARTUP_ATTEMPTS = 3
+STARTUP_RETRY_S = 5.0
+WAIT_LOG_INTERVAL_S = 10.0
 
 
 def costmap_frames(params_path, namespace):
@@ -28,6 +33,64 @@ def request_startup(buffer, client, request, frames, latest):
     return None
 
 
+def missing_requirements(buffer, client, frames, latest):
+    missing = []
+    if not client.service_is_ready():
+        missing.append("lifecycle_manager")
+    for target, base in frames:
+        if not buffer.can_transform(target, base, latest):
+            missing.append(f"{target}->{base}")
+    return missing
+
+
+def run_startup_loop(
+    node,
+    buffer,
+    client,
+    request,
+    frames,
+    latest,
+    *,
+    spin_once,
+    spin_until_future_complete,
+    ok,
+    sleep=time.sleep,
+    monotonic=time.monotonic,
+    max_attempts=MAX_STARTUP_ATTEMPTS,
+    retry_s=STARTUP_RETRY_S,
+    log_interval_s=WAIT_LOG_INTERVAL_S,
+):
+    last_log = monotonic() - log_interval_s
+    attempts = 0
+    while ok():
+        result = request_startup(buffer, client, request, frames, latest)
+        if result is None:
+            now = monotonic()
+            if now - last_log >= log_interval_s:
+                missing = missing_requirements(buffer, client, frames, latest)
+                node.get_logger().info(f"Still waiting for Nav2 startup prerequisites: {missing}")
+                last_log = now
+            spin_once(node, timeout_sec=0.5)
+            continue
+        spin_until_future_complete(node, result, timeout_sec=120.0)
+        if not ok():
+            return 0
+        try:
+            response = result.result() if result.done() else None
+        except Exception:
+            response = None
+        if response is not None and response.success:
+            return 0
+        attempts += 1
+        node.get_logger().error(
+            f"Nav2 lifecycle manager STARTUP attempt {attempts}/{max_attempts} failed"
+        )
+        if attempts >= max_attempts:
+            return 1
+        sleep(retry_s)
+    return 0
+
+
 def main():
     import rclpy
     from nav2_msgs.srv import ManageLifecycleNodes
@@ -45,17 +108,12 @@ def main():
         request = ManageLifecycleNodes.Request(command=ManageLifecycleNodes.Request.STARTUP)
         latest = Time()
         node.get_logger().info(f"Waiting for Nav2 costmap transforms: {frames}")
-        while rclpy.ok():
-            result = request_startup(buffer, client, request, frames, latest)
-            if result is not None:
-                rclpy.spin_until_future_complete(node, result, timeout_sec=120.0)
-                if not rclpy.ok():
-                    return 0
-                if not result.done() or not result.result().success:
-                    node.get_logger().error("Nav2 lifecycle manager did not complete STARTUP")
-                    return 1
-                return 0
-            rclpy.spin_once(node, timeout_sec=0.5)
+        return run_startup_loop(
+            node, buffer, client, request, frames, latest,
+            spin_once=rclpy.spin_once,
+            spin_until_future_complete=rclpy.spin_until_future_complete,
+            ok=rclpy.ok,
+        )
     except (ExternalShutdownException, KeyboardInterrupt):
         return 0
     finally:

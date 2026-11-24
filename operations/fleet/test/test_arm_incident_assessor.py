@@ -267,3 +267,28 @@ def test_an_extended_contact_stop_clears_only_with_measured_auto_fold_evidence_f
     assert row(client, incident_id)["recovery"]["auto_fold"]["kind"] == "auto_fold"
     latched = report(client, 81, {**stopped, "latched": {"13": {"hw_error": 32, "bits": ["overload"]}}})
     assert code(clear(client, latched, recovery=fold(latched))) == (403, "AI_CLEAR_KIND_REFUSED")
+
+
+def test_assessor_clears_clean_stale_effort_only_with_matching_fresh_remeasure(client):
+    rec = "omx_follower_arm-20261123T052904-126e8b.json"
+    stale = {
+        **SAFE, "flagged_total": 1, "fault_records_total": 1,
+        "flagged": [{"command": "run goto above_pick", "error": None,
+                     "fault": "session ended: ValueError: stale effort sample (>0.5 seconds)",
+                     "caught": None, "person_needed": None}],
+        "fault_records": [rec],
+        "fault_record_kinds": [{"fault": "stale effort sample (>0.5 seconds)", "stop_reasons": []}],
+    }
+    incident_id = report(client, 90, stale)
+    assert code(clear(client, incident_id)) == (403, "AI_CLEAR_KIND_REFUSED")
+    bad_rec = {"name": rec, "fault_type": "OverloadError", "fault": "hardware error: overload"}
+    assert code(clear(client, incident_id, remeasured=read(incident_id, fault_records=[bad_rec]))) == (
+        403, "AI_CLEAR_KIND_REFUSED")
+    assert code(clear(client, incident_id, remeasured=read(incident_id, folded=False))) == (
+        403, "AI_CLEAR_KIND_REFUSED")
+    good = read(incident_id, fault_records=[{"name": rec, "fault_type": "ValueError",
+                                             "fault": "stale effort sample (>0.5 seconds)"}])
+    ans = clear(client, incident_id, remeasured=good)
+    assert ans.status_code == 200 and ans.json()["held"] is False
+    cleared = row(client, incident_id)["cleared"]
+    assert cleared["kind"] == "machine" and cleared["remeasured"] == good

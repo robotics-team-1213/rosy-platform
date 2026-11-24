@@ -180,6 +180,7 @@ def decide(
     now: float | None = None,
     last_approved_at: float | None = None,
     force: bool = False,
+    sync_map: bool = False,
     window_size: int = STABILITY_WINDOW,
     stable_spread_m: float = STABLE_SPREAD_M,
     drift_threshold_m: float = DRIFT_THRESHOLD_M,
@@ -222,8 +223,8 @@ def decide(
         }
 
     needs_cal = (not has_current_cal) or (drift > drift_threshold_m)
-    needs_map = needs_cal or (place_diff_m > place_threshold_m)
-    if not needs_map:
+    needs_map = bool(sync_map) and (needs_cal or (place_diff_m > place_threshold_m))
+    if not (needs_cal or needs_map):
         return {
             "decision": "hold",
             "reason": "within_threshold",
@@ -435,6 +436,7 @@ def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     force = "--force" in args
     dry_run = "--dry-run" in args
+    sync_map = "--sync-map" in args
 
     token = read_token()
     if token is None:
@@ -493,6 +495,7 @@ def main(argv: list[str] | None = None) -> int:
         now=now,
         last_approved_at=last_approved_at,
         force=force,
+        sync_map=sync_map,
         spread_m=places_spread_m([h["places"] for h in history]) if all(h.get("places") for h in history) else None,
     )
     if not force and bool((cur_map or {}).get("route_active")) and outcome["decision"] == "approve":
@@ -539,7 +542,8 @@ def main(argv: list[str] | None = None) -> int:
         "edges": solved["edges"],
     }
     needs_cal = force or (old_m2i is None) or (outcome["drift"] > DRIFT_THRESHOLD_M)
-    needs_map = force or needs_cal or (place_diff_m > MAP_PLACE_THRESHOLD_M)
+    # Keep site_map_versions (and D-1022 robot_map_bindings) stable unless --sync-map is explicitly requested.
+    needs_map = bool(sync_map and (force or needs_cal or (place_diff_m > MAP_PLACE_THRESHOLD_M)))
     res = apply_fleet_update(token, approved_solve, needs_cal=needs_cal, needs_map=needs_map)
     map_sync = {k: res[k] for k in ("map_sync", "map_sync_status") if k in res}
     if map_sync and not res.get("route_active"):

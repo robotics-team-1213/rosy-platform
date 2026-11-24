@@ -12,11 +12,15 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     FILE,
     FILTER_COL,
     FILTER_OBJ,
+    IMAGES_SPEC,
+    MANIFEST_FILE,
     METRE,
     NAME,
+    REPO_ID,
     SAFE_PATH,
     SHA256,
     TASK_FILE,
+    VIEW,
     _actor,
     _bool,
     _http_url,
@@ -24,12 +28,15 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     _is_amr_bed_site,
     _match,
     _num,
+    _repo_id,
     _roi,
     _safe_path,
     _task_site_names,
     _two_arm_task,
     _two_arm_task_sites,
+    _workdir_rel_path,
 )
+from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 
 SESSION = {
@@ -185,18 +192,13 @@ JOBS = {
         },
     },
     "recover_hold": {
-        "script": "cell_auto_fold.py",
-        "moving": True,
-        "camera": True,
-        "attach_live_hold": True,
-        "commissioning": False,
+        "script": "cell_auto_fold.py", "moving": True, "camera": True, "attach_live_hold": True, "commissioning": False,
         "argv": ["--supervised", "--unlatch-hold", "--arm", "{arm}", "--config", "{config}", "--library", "{library}",
                  "--site", "{site}", "--roi", "{roi}", "--out", "cell-job-api/recover-hold-{arm}.json"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "library": _match(FILE), "site": _match(NAME), "roi": _roi},
-        "optional": {"operator": _actor, "proposer": _actor, "vlm_url": _http_url,
+        "optional": {"operator": _actor, "proposer": _actor, "vlm_url": _http_url, "vlm_config": _safe_path,
                      "vlm_model": _match(re.compile(r"[A-Za-z0-9._:/-]{1,80}")),
-                     "vlm_provider": _match(re.compile(r"[A-Za-z0-9_-]{1,32}")),
-                     "vlm_config": _safe_path, "vlm_timeout": _num(1.0, 30.0)},
+                     "vlm_provider": _match(re.compile(r"[A-Za-z0-9_-]{1,32}")), "vlm_timeout": _num(1.0, 30.0)},
     },
     "cell_two_arm_policy": {
         "script": "cell_two_arm_policy_cli.py",
@@ -250,6 +252,7 @@ JOBS = {
             "dry_run": _bool,
         },
     },
+    **MEDIA_JOBS,
 }
 
 
@@ -279,7 +282,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         except ValueError as exc:
             raise ValueError(f"{name}: {exc}") from None
         if (check.__qualname__.startswith("_match")
-                and (FILE.fullmatch(str(checked[name])) or TASK_FILE.fullmatch(str(checked[name])))
+                and (FILE.fullmatch(str(checked[name])) or MANIFEST_FILE.fullmatch(str(checked[name])) or TASK_FILE.fullmatch(str(checked[name])))
                 and not (workdir / checked[name]).is_file()):
             raise ValueError(f"{name}: no such file in the workdir")
     opt_checked = {}
@@ -367,10 +370,13 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
         "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
-        "margin_m", "min_z_m", "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout",
+        "margin_m", "min_z_m", "out", "out_dir", "fps", "images", "outcome", "expected_manifest_sha256",
+        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout",
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    if job["script"] == "cell_media_jobs.py":
+        args = ["--workdir", str(workdir), *args]
     if job["script"] == "cell_policy_drive.py" and "endpoint_url" in opt_checked:
         args += ["--arm-id", checked["arm"]]
     if moves_arm(job, params):

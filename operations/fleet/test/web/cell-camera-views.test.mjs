@@ -206,3 +206,45 @@ test("waiting, unregistered, and disconnected camera states give clear next-acti
   await flush();
   assert.match(badgeErr.textContent, /영상 연결 끊김 — Vision 확인/);
 });
+
+test("synchronous multi-tile bind burst fetches all tiles, hides standby on frame, and reports 404 state", async (t) => {
+  const sources = ['c1', 'c2', 'c3', 'c4', 'c5', 'c6'];
+  const fetched = [];
+  const states = new Map();
+  const priorLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: new URL('https://site.test') });
+  t.after(() => {
+    if (priorLocation) Object.defineProperty(globalThis, 'location', priorLocation);
+    else delete globalThis.location;
+  });
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    fetched.push(String(url));
+    if (String(url).includes('/c6/')) return new Response(null, {status: 404});
+    return jpeg();
+  });
+  const feed = createCellFrameFeed({
+    call: async (path, options) => {
+      if (path.endsWith('/sources')) return {sources};
+      const source = JSON.parse(options.body).source_id;
+      return {lease: 'test-lease', frame_path: `/api/vision/sources/${source}/frame`};
+    },
+    onStateChange: (key, state) => states.set(key, state),
+  });
+  t.after(() => feed.dispose());
+
+  const standbys = sources.map(() => ({ hidden: false, textContent: '', classList: { contains: (c) => c === 'omx-inspector-cam-standby' } }));
+  const imgs = sources.map((_, i) => ({
+    isConnected: true, hidden: false, src: '', dataset: {},
+    nextElementSibling: standbys[i],
+    removeAttribute(name) { if (name === 'src') this.src = ''; },
+  }));
+  sources.forEach((source, i) => feed.bind(imgs[i], {source}));
+  await new Promise(resolve => setTimeout(resolve, 25));
+
+  assert.equal(fetched.length, 6);
+  assert.equal(standbys[0].hidden, true);
+  assert.equal(states.get('source:c1')?.live, true);
+  assert.equal(standbys[5].hidden, false);
+  assert.match(standbys[5].textContent, /카메라 송신기 미연결/);
+  assert.equal(states.get('source:c6')?.live, false);
+});

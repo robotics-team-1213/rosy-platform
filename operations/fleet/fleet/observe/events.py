@@ -59,10 +59,37 @@ class CoreEventStore:
                     ON core_event_audit(robot_id, audit_id);
                 CREATE INDEX IF NOT EXISTS core_event_audit_received
                     ON core_event_audit(received_at);
+                CREATE TABLE IF NOT EXISTS core_event_projection_state (
+                    consumer TEXT PRIMARY KEY,
+                    last_audit_id INTEGER NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
         if os.name != "nt":
             self.path.chmod(0o600)
+
+    def get_projection_cursor(self, consumer: str = "site_hub") -> int:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT last_audit_id FROM core_event_projection_state WHERE consumer = ?",
+                (consumer,),
+            ).fetchone()
+        return int(row[0]) if row is not None else 0
+
+    def set_projection_cursor(self, audit_id: int, consumer: str = "site_hub") -> None:
+        if isinstance(audit_id, bool) or not isinstance(audit_id, int) or audit_id < 0:
+            raise ValueError("projection cursor must be a nonnegative integer")
+        updated_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+        with closing(self._connect()) as connection, connection:
+            connection.execute(
+                """INSERT INTO core_event_projection_state (consumer, last_audit_id, updated_at)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(consumer) DO UPDATE SET
+                       last_audit_id = MAX(core_event_projection_state.last_audit_id, excluded.last_audit_id),
+                       updated_at = excluded.updated_at""",
+                (consumer, int(audit_id), updated_at),
+            )
 
     def append_event(self, event: Mapping[str, object]) -> bool:
         if _contains_sensitive_field(event):

@@ -443,6 +443,9 @@ const trackingView = {
 };
 cellStage = createCellCockpitStage({
   scope: pageScope, call, view, auth, selection,
+  contextHost: el("cell-context-panel"),
+  isOperator: () => hasOperatorRole(auth.role) && !auth.locked,
+  namedReason,
   onChanged: () => render(),
   onVisionSample: (sample) => {
     if (auth.locked || !auth.role) return;

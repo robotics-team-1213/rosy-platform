@@ -5,7 +5,7 @@ The cell_choices ledger picks among executors approved for the real arm; a model
 fault or lock stop leaves the execution record "stopped" and the ledger untouched (no retry pressure)."""
 from __future__ import annotations
 
-EXECUTOR_CANDIDATES = ("ik_chunk", "smolvla")
+EXECUTOR_CANDIDATES = ("ik_chunk", "smolvla", "act_policy")
 APPROVED_REAL_EXECUTORS = frozenset({"ik_chunk"})  # D-911: new motion paths need a person's approval.
 PURPOSE = "pick_place"
 
@@ -25,3 +25,15 @@ def outcome(choices, record: dict, choice: dict, ok: bool, note: str) -> None:
     record["outcome"] = "succeeded" if ok else "failed"
     choices.outcome_contextual(f"exec.{PURPOSE}", choice["value"], ok, propensity=choice["propensity"], note=note)
     choices.save()
+
+
+def record_act_outcome(choices, task_id: str | None, ok: bool, note: str, *, failure_class: str | None = None) -> dict:
+    """Record a supervised `act_policy` execution outcome without altering approved real IK selection."""
+    rec = {"task_id": task_id, "executor": "act_policy", "outcome": "succeeded" if ok else "failed",
+           **({"failure_class": failure_class} if failure_class else {})}
+    if choices is not None:
+        key = "exec.act_policy"
+        choices.offer(key, "act_policy", "supervised_act")
+        choices.outcome_contextual(key, "act_policy", ok, propensity=1.0, note=str(note or failure_class or "")[:200])
+        choices.save()
+    return rec

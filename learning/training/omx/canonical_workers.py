@@ -237,7 +237,7 @@ def run_collect_dart(req: dict, out: Path) -> dict:
             video_backend="pyav", vcodec="h264", streaming_encoding=True,
             encoder_threads=2, encoder_queue_maxsize=512, metadata_buffer_size=1,
         )
-        layout = sites.Layout(preset="v24-20261114", wrist_camera="v21-b")
+        layout = sites.Layout(preset=spec.get("sim_preset", "v24-20261114"), wrist_camera="v21-b", **(spec.get("sim_choices") or {}))
         world = sim.World(layout)
         set_camera_angles = camera_angle_sampler(world, arm_view, camera_deg, 0) if camera_deg else None
         rng = np.random.default_rng([int(params["seed"]), 31415])

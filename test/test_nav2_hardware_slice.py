@@ -542,3 +542,52 @@ def test_map_bundle_occupancy_grid_id_matches_core_features(monkeypatch, tmp_pat
         }
     )
     assert mb.occupancy_grid_id(site_yaml) == occupancy_map_id(frame.to_dict())
+
+
+def test_start_after_tf_reports_missing_requirements_and_retries_bounded():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from navigation.start_after_tf import missing_requirements, run_startup_loop
+
+    buf = Mock()
+    cli = Mock()
+    frames = [("map", "pinky1/base_footprint"), ("pinky1/odom", "pinky1/base_footprint")]
+    cli.service_is_ready.return_value = False
+    buf.can_transform.side_effect = [True, False]
+    assert missing_requirements(buf, cli, frames, object()) == ["lifecycle_manager", "pinky1/odom->pinky1/base_footprint"]
+
+    # Attempt 1 fails, attempt 2 succeeds -> returns 0
+    buf2 = Mock()
+    buf2.can_transform.return_value = True
+    cli2 = Mock()
+    cli2.service_is_ready.return_value = True
+    f_fail = SimpleNamespace(done=lambda: True, result=lambda: SimpleNamespace(success=False))
+    f_ok = SimpleNamespace(done=lambda: True, result=lambda: SimpleNamespace(success=True))
+    cli2.call_async.side_effect = [f_fail, f_ok]
+    node = SimpleNamespace(get_logger=lambda: Mock())
+    sleeps = []
+    rc = run_startup_loop(
+        node, buf2, cli2, object(), frames, object(),
+        spin_once=lambda *a, **k: None,
+        spin_until_future_complete=lambda *a, **k: None,
+        ok=lambda: True,
+        sleep=lambda s: sleeps.append(s),
+        monotonic=lambda: 0.0,
+    )
+    assert rc == 0 and cli2.call_async.call_count == 2 and sleeps == [5.0]
+
+    # 3 consecutive failures -> returns 1
+    cli3 = Mock()
+    cli3.service_is_ready.return_value = True
+    cli3.call_async.side_effect = [f_fail, f_fail, f_fail]
+    sleeps3 = []
+    rc3 = run_startup_loop(
+        node, buf2, cli3, object(), frames, object(),
+        spin_once=lambda *a, **k: None,
+        spin_until_future_complete=lambda *a, **k: None,
+        ok=lambda: True,
+        sleep=lambda s: sleeps3.append(s),
+        monotonic=lambda: 0.0,
+    )
+    assert rc3 == 1 and cli3.call_async.call_count == 3 and sleeps3 == [5.0, 5.0]

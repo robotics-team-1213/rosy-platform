@@ -61,3 +61,19 @@ def test_bases_hung_on_the_measured_ship_agree_with_the_bridge_in_an_older_snaps
     bridge = [c["value_mm"] for c in result["checks"] if c["name"].startswith("bridge v7")]
     assert bridge == pytest.approx([200., 200.], abs=4.)
     assert layout.arms["arm_b"].base[0] == pytest.approx(layout.choices["ship_stern_x_m"] - .0704)
+
+
+def test_parse_choices_booleans_and_v24_20261124_omits_ship_house():
+    parsed = sites.parse_choices(["ship_house=false", "temp_radius_m=0.2", "top_camera=2026-11-14"])
+    assert parsed["ship_house"] is False and parsed["temp_radius_m"] == 0.2 and parsed["top_camera"] == "2026-11-14"
+    assert sites.parse_choices(["ship_house=true"])["ship_house"] is True
+    preset = sites.PRESETS["v24-20261124"]
+    assert preset["ship_house"] is False and preset["arm_bases"] == "docks-photo"
+    try:
+        import mujoco  # noqa: F401
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+    world = tw.World(sites.Layout(preset="v24-20261124"))
+    names = {world.model.geom(i).name for i in range(world.model.ngeom)}
+    assert "ship_house" not in names and "cx_house" not in names and "cx_bow" in names
