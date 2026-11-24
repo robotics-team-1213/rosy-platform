@@ -84,7 +84,7 @@ class FakeCell:
                 "t": time.time(),
             }
         if cmd == "human-hold":
-            return {"ok": True, "command": "human-hold", "state": list(self.pose)}
+            return {"ok": True, "command": "human-hold", "human_hold_latched": True, "torque_hold_commanded": True, "state": list(self.pose)}
         if " load " in cmd:
             if self.fail_load:
                 return {"ok": False, "error": "load_rejected"}
@@ -761,18 +761,20 @@ def test_review_regressions_playback_offsets_real_kin_mid_and_fault_isolation(tm
     )
     assert res_chh["result"] == "refused"
 
-    # Post-guard-wait stale observation aborts cleanly before load/run policy on whichever arm waited for mid.
+    # Post-guard-wait stale observation triggers bounded re-observation with fresh frames so both arms finish cleanly.
     g_wait = guard_mod.TwoArmChunkGuard(kins_real, rigids_x, tips_zero, margin_m=0.02, min_z_m=-0.05, mid_y_band=0.0)
     c_wa, c_wb = FakeCell(home_real, delay_s=0.08), FakeCell(home_real, delay_s=0.08)
-    res_stale = pol_mod.run_two_arm_policy(
-        {"a": c_wa, "b": c_wb}, {"a": RecShadow(home_real), "b": RecShadow(home_real)},
+    sh_wa, sh_wb = RecShadow(home_real), RecShadow(home_real)
+    res_wait = pol_mod.run_two_arm_policy(
+        {"a": c_wa, "b": c_wb}, {"a": sh_wa, "b": sh_wb},
         {"a": _base_lib(home_real), "b": _base_lib(home_real)},
         g_wait, {"src": "belt", "dst": "temp_a:r1-s1-t1"}, {"src": "belt", "dst": "temp_b:r1-s1-t1"},
         tmp_path / "stale_wait", max_chunks=1, dry_run=False, max_obs_age_s=0.04, authorizers=auths,
     )
-    assert res_stale["result"] == "refused"
-    assert "stale policy observation after guard wait" in (res_stale["stopped_reason"] or "")
-    assert sum(" load " in f" {c}" for c in c_wa.commands + c_wb.commands) == 1
+    assert res_wait["result"] == "chunks_done"
+    assert any(ev.get("event") == "reobserve_after_wait" for ev in res_wait["events"])
+    assert sum(" load " in f" {c}" for c in c_wa.commands + c_wb.commands) == 2
+    assert len(sh_wa.saw_in) + len(sh_wb.saw_in) == 3
 
     # CLI live preflight: binds profile into Authorization, pops static _commissioning, validates normalized cal, goal slot, tips==0.0.
     srv_goal, url_goal, revs_goal = _make_remote_server(
@@ -1058,3 +1060,162 @@ def test_two_arm_single_row_library_and_worker_setup_exception(tmp_path):
         tmp_path / "bad_setup", max_chunks=1, dry_run=False, authorizers=auths,
     )
     assert res_bad["result"] == "refused" and "b" in res_bad["arms"] and "b:setup:" in (res_bad["stopped_reason"] or "")
+
+
+def test_pr1_wait_exhaustion_hold_retries_fault_pose_and_released_completion(tmp_path, monkeypatch):
+    home_a = [-40.0, -40.0, 40.0, 40.0, 0.0, 50.0]
+    home_b = [40.0, -40.0, 40.0, 40.0, 0.0, 50.0]
+    kins = {"a": PlanarKin(0.10), "b": PlanarKin(0.10)}
+    rigids = {"a": (0.0, 0.0, -0.25), "b": (0.0, 0.0, 0.25)}
+    tips = {"a": 0.074, "b": 0.074}
+    libs = {"a": _base_lib(home_a), "b": _base_lib(home_b)}
+    task_a = {"src": "temp_a:r1-s1-t1", "dst": "temp_a:r2-s1-t1"}
+    task_b = {"src": "temp_b:r1-s1-t1", "dst": "temp_b:r2-s1-t1"}
+    auths = {k: (lambda _lib, _st, _seq, _k=k: {"session_id": f"s-{_k}", "library_sha256": "f" * 64}) for k in ("a", "b")}
+
+    class _Shadow:
+        image_views = {"top": (24, 32)}
+        sim_rule = None
+
+        def __init__(self, out_fn):
+            self.out_fn = out_fn
+            self.calls = 0
+
+        def inputs(self, state, frames, goal=None):
+            return {"state": list(state)}, {"frame_count": 1}
+
+        def infer(self, obs, state=None):
+            idx = self.calls
+            self.calls += 1
+            return SimpleNamespace(chunk=self.out_fn(idx), rtt_s=0.002)
+
+    # 1. Default wait_timeout_s covers real chunk durations (4.0s).
+    g_def = guard_mod.TwoArmChunkGuard(kins, rigids, tips)
+    assert g_def._wait_timeout_s == pytest.approx(4.0)
+
+    # 2. _hold_arm retries unconfirmed replies via send_hold and logs failures cleanly.
+    attempts_ok = [0]
+
+    class _FlakyHoldCell:
+        def act(self, cmd):
+            assert cmd == "human-hold"
+            attempts_ok[0] += 1
+            ok_latched = attempts_ok[0] >= 3
+            return {"ok": True, "command": "human-hold", "human_hold_latched": True, "torque_hold_commanded": ok_latched}
+
+    assert pol_mod._hold_arm(_FlakyHoldCell()) is True and attempts_ok[0] == 3
+    logged_holds = []
+
+    class _NeverConfirmHoldCell:
+        def act(self, _cmd):
+            return {"ok": True, "command": "human-hold", "human_hold_latched": True, "torque_hold_commanded": False}
+
+    assert pol_mod._hold_arm(_NeverConfirmHoldCell(), log=logged_holds.append) is False
+    assert logged_holds and logged_holds[0]["unconfirmed"] is True
+
+    # 3. Exhausting post-wait re-observe retries fails closed before any stale load/run policy.
+    g_exhaust = guard_mod.TwoArmChunkGuard(kins, rigids, tips, margin_m=0.02, min_z_m=-0.05)
+    orig_admit = g_exhaust.admit_chunk
+
+    def slow_admit(arm, chunk, **kw):
+        res = orig_admit(arm, chunk, **kw)
+        if arm == "a" and res.get("admitted"):
+            time.sleep(0.05)
+        return res
+
+    g_exhaust.admit_chunk = slow_admit
+    ca_ex, cb_ex = FakeCell(home_a), FakeCell(home_b)
+    sh_ex_a = _Shadow(lambda _i: [home_a] * 2)
+    res_ex = pol_mod.run_two_arm_policy(
+        {"a": ca_ex, "b": cb_ex}, {"a": sh_ex_a, "b": _Shadow(lambda _i: [home_b] * 2)},
+        libs, g_exhaust, task_a, task_b, tmp_path / "exhaust",
+        max_chunks=1, dry_run=False, max_obs_age_s=0.03, authorizers=auths,
+    )
+    assert res_ex["result"] == "refused"
+    assert "stale policy observation after guard wait" in (res_ex["stopped_reason"] or "")
+    assert sum(1 for ev in res_ex["events"] if ev.get("event") == "reobserve_after_wait" and ev.get("arm") == "a") == pol_mod.MAX_WAIT_REOBSERVE
+    assert not any(" load " in f" {c}" or c.endswith("run policy") for c in ca_ex.commands)
+
+    # 4. Mid-chunk fault/contact captures actual stopped state into guard instead of pre-chunk pose; malformed state falls back safely.
+    stopped_b = [44.0, -35.0, 38.0, 40.0, 0.0, 53.0]
+    for mode, reply_extra in (
+        ("contact", {"ok": False, "contact": True, "holding": True, "state": stopped_b}),
+        ("fault", {"ok": False, "fault": "overload", "settled": False, "holding": True, "state": stopped_b}),
+        ("unsettled", {"ok": True, "settled": False, "holding": True, "state": stopped_b}),
+        ("bad_state", {"ok": False, "fault": "overload", "state": ["nan-str"]}),
+    ):
+        g_pose = guard_mod.TwoArmChunkGuard(kins, rigids, tips, margin_m=0.02, min_z_m=-0.05)
+        ca_p, cb_p = FakeCell(home_a), FakeCell(home_b)
+        orig_act_b = cb_p.act
+        cb_p.act = lambda cmd, _ex=reply_extra, _o=orig_act_b: ({"command": cmd, **_ex} if cmd.endswith("run policy") else _o(cmd))
+        res_p = pol_mod.run_two_arm_policy(
+            {"a": ca_p, "b": cb_p}, {"a": _Shadow(lambda _i: [home_a] * 2), "b": _Shadow(lambda _i: [home_b] * 2)},
+            libs, g_pose, task_a, task_b, tmp_path / f"pose_{mode}",
+            max_chunks=1, dry_run=False, authorizers=auths,
+        )
+        assert res_p["result"] == ("fault" if "fault" in reply_extra else "refused")
+        if mode == "bad_state":
+            assert g_pose._arms["b"].pose == tuple(home_b)
+        else:
+            assert g_pose._arms["b"].pose == pytest.approx(tuple(stopped_b))
+            assert g_pose._arms["b"].holding is True
+
+    # 5. Single-arm parity released exit: holding True -> False with open gripper stops cleanly before max_chunks & CLI exits 0.
+    ca_rel, cb_rel = FakeCell(home_a), FakeCell(home_b)
+
+    class _ReleaseCell(FakeCell):
+        def __init__(self, pose):
+            super().__init__(pose)
+            self._runs = 0
+
+        def act(self, cmd):
+            if cmd.endswith("run policy"):
+                self._runs += 1
+                self.commands.append(cmd)
+                return {"ok": True, "settled": True, "holding": (self._runs == 1), "state": list(self.pose)}
+            return super().act(cmd)
+
+    ca_rel, cb_rel = _ReleaseCell(home_a), _ReleaseCell(home_b)
+    rel_pose_a = [*home_a[:5], 60.0]
+    rel_pose_b = [*home_b[:5], 60.0]
+    res_rel = pol_mod.run_two_arm_policy(
+        {"a": ca_rel, "b": cb_rel},
+        {"a": _Shadow(lambda i: [home_a] * 2 if i == 0 else [rel_pose_a] * 3),
+         "b": _Shadow(lambda i: [home_b] * 2 if i == 0 else [rel_pose_b] * 3)},
+        libs, guard_mod.TwoArmChunkGuard(kins, rigids, tips, margin_m=0.02, min_z_m=-0.05),
+        task_a, task_b, tmp_path / "released", max_chunks=4, dry_run=False, authorizers=auths,
+    )
+    assert res_rel["result"] == "released"
+    assert res_rel["arms"]["a"]["outcome"] == "released" and res_rel["arms"]["a"]["chunks_done"] == 2
+    assert res_rel["arms"]["b"]["outcome"] == "released" and res_rel["arms"]["b"]["chunks_done"] == 2
+
+    srv_cli, url_cli, revs_cli = _make_remote_server(tmp_path / "srv_rel", {"arm_a": lambda _o: [home_a] * 2, "arm_b": lambda _o: [home_b] * 2})
+    try:
+        rdir = tmp_path / "cli_rel"
+        rdir.mkdir()
+        (rdir / "lib.json").write_text(json.dumps(_base_lib(home_a)), encoding="utf-8")
+        (rdir / "plan.json").write_text((OMX / "grasp-plan.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+        jcal = {n: {"range_min": 0, "range_max": 4095, "homing_offset": 0, "drive_mode": 0} for n in remote_mod.JOINT_NAMES}
+        (rdir / "jcal.json").write_text(json.dumps(jcal), encoding="utf-8")
+        (rdir / "cal_a.json").write_text(json.dumps({"sites": {"belt": {"homography": [[0.001, 0, 0], [0, 0.001, -0.17], [0, 0, 1]]}}}), encoding="utf-8")
+        (rdir / "cal_b.json").write_text(json.dumps({"sites": {"belt": {"homography": [[0.001, 0, 0], [0, 0.001, 0.17], [0, 0, 1]]}}}), encoding="utf-8")
+        (rdir / "prof.json").write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "d", "instance_id": "a", "robot_config_sha256": "a" * 64, "operating_envelope_path": "e.json", "work_dir": "."}), encoding="utf-8")
+        for s_arm in ("a", "b"):
+            (rdir / f"cfg_{s_arm}.json").write_text(json.dumps({"io": str(rdir), "cameras": {}, "operating_profile_path": str(rdir / "prof.json"), "calibration_path": str(rdir / f"cal_{s_arm}.json"), "plan_path": str(rdir / "plan.json")}), encoding="utf-8")
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: {"a": FakeCell(home_a), "b": FakeCell(home_b)})
+        monkeypatch.setattr(cli_mod.cell_two_arm, "kinematics_for", lambda *_a, **_kw: kins)
+        monkeypatch.setattr(cli_mod.cell_two_arm, "away_from_home", lambda *_a: [])
+        monkeypatch.setattr(cli_mod.cell_policy_handoff, "Authorization", lambda _cfg: (lambda *_a: {"session_id": "s", "library_sha256": "e" * 64}))
+        monkeypatch.setattr(cli_mod, "run_two_arm_policy", lambda *_a, **_kw: {"result": "released", "task_id": "T1_CONCURRENT_ZONE_SPLIT"})
+        assert cli_mod.main([
+            "--config-a", str(rdir / "cfg_a.json"), "--config-b", str(rdir / "cfg_b.json"),
+            "--endpoint-url", url_cli, "--revision-a", revs_cli["arm_a"], "--revision-b", revs_cli["arm_b"],
+            "--library-a", str(rdir / "lib.json"), "--library-b", str(rdir / "lib.json"),
+            "--model-cal-a", str(rdir / "jcal.json"), "--cell-cal-a", str(rdir / "jcal.json"),
+            "--model-cal-b", str(rdir / "jcal.json"), "--cell-cal-b", str(rdir / "jcal.json"),
+            "--task-a", "belt->temp_a:r1-s1-t1", "--task-b", "temp_b:r1-s1-t1->temp_b:r2-s1-t1",
+            "--work-dir", str(rdir / "out"), "--proposer", "alice", "--operator", "bob", "--commissioning", "--person-at-switch",
+        ]) == 0
+    finally:
+        srv_cli.shutdown()
+        srv_cli.server_close()

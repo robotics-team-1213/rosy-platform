@@ -16,15 +16,16 @@ import threading
 import time
 from typing import Any, Callable, Mapping, Sequence
 
-from cell_policy_entry import build_two_arm_chunk_library as _build_chunk_library, check_obs_stamp as _check_stamp, two_arm_roll_bounds
+from cell_policy_entry import build_two_arm_chunk_library as _build_chunk_library, check_obs_stamp as _check_stamp, pose6, two_arm_roll_bounds
 import cell_policy_shape
-from cell_policy_timing import MAX_OBSERVATION_AGE_S
+from cell_policy_timing import MAX_OBSERVATION_AGE_S, send_hold
 import cell_two_arm
 from cell_two_arm_guard import ARMS, TwoArmChunkGuard, validate_two_arm_task_pair
 import numpy as np
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S
 
 SCHEMA = "rosy.omx-two-arm-policy-run.v1"
+MAX_WAIT_REOBSERVE = 3
 
 
 def _checked_act(cell: Any, auth: Mapping[str, Any], command: str) -> dict[str, Any]:
@@ -33,18 +34,24 @@ def _checked_act(cell: Any, auth: Mapping[str, Any], command: str) -> dict[str, 
     return cell.act(f"checked {auth['session_id']} {auth['library_sha256']} {command}")
 
 
-def _hold_arm(cell: Any) -> bool:
+def _hold_arm(cell: Any, *, log: Callable[[dict[str, Any]], Any] | None = None) -> bool:
     try:
-        res = cell.act("human-hold")
-        return bool(isinstance(res, Mapping) and res.get("ok", True))
+        send_hold(cell, log=log)
+        return True
     except Exception:
         return False
 
 
-def _hold_both(cells: Mapping[str, Any], faulted: Mapping[str, bool], *, dry_run: bool) -> dict[str, bool]:
+def _hold_both(
+    cells: Mapping[str, Any], faulted: Mapping[str, bool], *, dry_run: bool,
+    log: Callable[[dict[str, Any]], Any] | None = None,
+) -> dict[str, bool]:
     if dry_run:
         return {arm: False for arm in ARMS}
-    return {arm: (False if faulted.get(arm) else _hold_arm(cells[arm])) for arm in ARMS}
+    return {
+        arm: (False if faulted.get(arm) else _hold_arm(cells[arm], log=(lambda row, _a=arm: log({"arm": _a, **row})) if log else None))
+        for arm in ARMS
+    }
 
 
 def _read_state(cell: Any, *, dry_run: bool, max_age_s: float, label: str = "state") -> tuple[dict[str, Any], list[float], float]:
@@ -160,7 +167,7 @@ def run_two_arm_policy(
     def hold_both_safe() -> dict[str, bool]:
         with state_lock:
             flt = dict(faulted)
-        holds = _hold_both(cells, flt, dry_run=dry_run)
+        holds = _hold_both(cells, flt, dry_run=dry_run, log=lambda row: emit({"event": "hold", **row}))
         with state_lock:
             for k, sent in holds.items():
                 if sent:
@@ -203,6 +210,7 @@ def run_two_arm_policy(
             sim_units = sim_rule is not None
             prev_receipts: dict[str, dict[str, Any]] = {}
             home_roll, roll_range = two_arm_roll_bounds(arm, lib, demo_rng, sim_units)
+            closed, ever_held = cell_policy_shape.closed_gripper(dict(lib)), False
         except Exception as exc:
             outcome = "refused"
             reason = f"{arm}:setup:{exc}"
@@ -214,64 +222,63 @@ def run_two_arm_policy(
             return
 
         for idx in range(max_chunks):
-            if guard.stopped_reason is not None:
-                outcome, reason = "refused", guard.stopped_reason
-                break
-            try:
-                st, vec, st_mono = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:pre")
-                guard.update_pose(arm, vec, holding=bool(st.get("holding", False)))
-                frames, obs_mono = _capture_frames(
-                    cell, shadow.image_views, dry_run=dry_run, max_age_s=max_obs_age_s,
-                    state_mono=st_mono, prev_receipts=prev_receipts,
-                )
-                model_state = vec if sim_units else [vec[i] + float(offset[i]) for i in range(6)]
-                obs, meta = shadow.inputs(model_state, frames, goal=goal)
-                inferred = shadow.infer(obs, state=vec)
-                raw_actions = (
-                    inferred.chunk if sim_units
-                    else [[float(r[i]) - float(offset[i]) for i in range(6)] for r in inferred.chunk]
-                )
-                refreshed, cur_vec, _ = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:auth")
-                cur_holding = bool(refreshed.get("holding", False))
-                guard.update_pose(arm, cur_vec, holding=cur_holding)
-                shaped, fastest = _shape_candidate(
-                    raw_actions, cur_vec, lib, demo_rng, sim_units=sim_units, sim_rule=sim_rule, holding=cur_holding,
-                )
-                if jaw_spec is not None:
-                    jaw_warn = (
-                        cell_policy_shape.jaw_zone_error([cur_vec], arm_kin, dict(jaw_spec))
-                        or cell_policy_shape.jaw_zone_error(shaped, arm_kin, dict(jaw_spec))
+            admitted: dict[str, Any] | None = None
+            for attempt in range(MAX_WAIT_REOBSERVE + 1):
+                if guard.stopped_reason is not None:
+                    outcome, reason = "refused", guard.stopped_reason
+                    break
+                try:
+                    st, vec, st_mono = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:pre")
+                    guard.update_pose(arm, vec, holding=bool(st.get("holding", False)))
+                    frames, obs_mono = _capture_frames(
+                        cell, shadow.image_views, dry_run=dry_run, max_age_s=max_obs_age_s,
+                        state_mono=st_mono, prev_receipts=prev_receipts,
                     )
-                    if jaw_warn:
+                    model_state = vec if sim_units else [vec[i] + float(offset[i]) for i in range(6)]
+                    obs, meta = shadow.inputs(model_state, frames, goal=goal)
+                    inferred = shadow.infer(obs, state=vec)
+                    raw_actions = inferred.chunk if sim_units else [[float(r[i]) - float(offset[i]) for i in range(6)] for r in inferred.chunk]
+                    refreshed, cur_vec, _ = _read_state(cell, dry_run=dry_run, max_age_s=max_obs_age_s, label=f"{arm}:auth")
+                    cur_holding = bool(refreshed.get("holding", False))
+                    guard.update_pose(arm, cur_vec, holding=cur_holding)
+                    shaped, fastest = _shape_candidate(
+                        raw_actions, cur_vec, lib, demo_rng, sim_units=sim_units, sim_rule=sim_rule, holding=cur_holding,
+                    )
+                    if jaw_spec is not None and (jaw_warn := cell_policy_shape.jaw_zone_error([cur_vec], arm_kin, dict(jaw_spec)) or cell_policy_shape.jaw_zone_error(shaped, arm_kin, dict(jaw_spec))):
                         emit({"arm": arm, "chunk_index": idx, "event": "jaw_warning", "reason": jaw_warn})
                         if not dry_run:
                             raise ValueError(jaw_warn)
-                roll_warn = (
-                    cell_policy_shape.wrist_roll_warning(np.asarray(shaped, dtype=float), home_roll, roll_range=roll_range)
-                    if arm == "b" else None
-                )
-                if roll_warn and sim_units and not dry_run:
-                    emit({"arm": arm, "chunk_index": idx, "event": "wrist_roll_warning", "reason": roll_warn})
-                    raise ValueError(roll_warn)
-                if not dry_run and (time.monotonic() - obs_mono) > max_obs_age_s:
-                    raise ValueError("stale policy observation")
-                admitted = guard.admit_chunk(arm, shaped, holding=cur_holding, need_mid=need_mid)
-            except Exception as exc:
-                if "fault:" in str(exc) and not _is_coupled_hold(exc):
-                    mark_fault(arm)
-                with state_lock:
-                    outcome = "fault" if faulted[arm] else "refused"
-                reason = f"{arm}:{type(exc).__name__}:{exc}"
-                guard.latch_stop(reason)
-                hold_both_safe()
-                emit({"arm": arm, "chunk_index": idx, "event": "error", "reason": reason})
+                    roll_warn = cell_policy_shape.wrist_roll_warning(np.asarray(shaped, dtype=float), home_roll, roll_range=roll_range) if arm == "b" else None
+                    if roll_warn and sim_units and not dry_run:
+                        emit({"arm": arm, "chunk_index": idx, "event": "wrist_roll_warning", "reason": roll_warn})
+                        raise ValueError(roll_warn)
+                    if not dry_run and (time.monotonic() - obs_mono) > max_obs_age_s:
+                        raise ValueError("stale policy observation")
+                    admitted = guard.admit_chunk(arm, shaped, holding=cur_holding, need_mid=need_mid)
+                except Exception as exc:
+                    if "fault:" in str(exc) and not _is_coupled_hold(exc):
+                        mark_fault(arm)
+                    with state_lock:
+                        outcome = "fault" if faulted[arm] else "refused"
+                    reason = f"{arm}:{type(exc).__name__}:{exc}"
+                    guard.latch_stop(reason)
+                    hold_both_safe()
+                    emit({"arm": arm, "chunk_index": idx, "event": "error", "reason": reason})
+                    admitted = None
+                    break
+                if not admitted.get("admitted"):
+                    outcome, reason = "refused", f"{arm}:guard:{admitted.get('reason', 'refused')}"
+                    guard.latch_stop(reason)
+                    hold_both_safe()
+                    emit({"arm": arm, "chunk_index": idx, "event": "guard_refused", **admitted})
+                    break
+                if not dry_run and guard.stopped_reason is None and (time.monotonic() - obs_mono) > max_obs_age_s and attempt < MAX_WAIT_REOBSERVE:
+                    guard.release_chunk(arm, final_pose=cur_vec, holding=cur_holding)
+                    emit({"arm": arm, "chunk_index": idx, "event": "reobserve_after_wait", "attempt": attempt + 1, "waited_s": admitted.get("waited_s")})
+                    admitted = None
+                    continue
                 break
-
-            if not admitted.get("admitted"):
-                outcome, reason = "refused", f"{arm}:guard:{admitted.get('reason', 'refused')}"
-                guard.latch_stop(reason)
-                hold_both_safe()
-                emit({"arm": arm, "chunk_index": idx, "event": "guard_refused", **admitted})
+            if not admitted or not admitted.get("admitted"):
                 break
 
             final_pose: Sequence[float] = cur_vec
@@ -317,6 +324,12 @@ def run_two_arm_policy(
                 with state_lock:
                     moved_arms[arm] = True
                 run_reply = _checked_act(cell, auth, "run policy")
+                if not isinstance(run_reply, Mapping):
+                    raise RuntimeError("invalid run policy reply")
+                if (end_pose := pose6(run_reply.get("state"))) is not None:
+                    final_pose = end_pose
+                if isinstance(run_reply.get("holding"), bool):
+                    final_holding = bool(run_reply["holding"])
                 if run_reply.get("fault"):
                     raise RuntimeError(f"fault:{run_reply['fault']}")
                 if not run_reply.get("ok") or run_reply.get("contact"):
@@ -324,14 +337,17 @@ def run_two_arm_policy(
                 if run_reply.get("settled") is False:
                     raise RuntimeError("chunk did not settle")
 
-                final_pose = run_reply.get("state") or shaped[-1]
-                final_holding = bool(run_reply.get("holding", final_holding))
+                final_pose = end_pose or shaped[-1]
                 chunks_done += 1
                 emit({
                     "arm": arm, "chunk_index": idx, "event": "chunk_done", "admitted": admitted,
                     "meta": meta, "rtt_s": getattr(inferred, "rtt_s", None),
                     **({"wrist_roll_warning": roll_warn} if roll_warn else {}),
                 })
+                ever_held = ever_held or final_holding
+                if ever_held and not final_holding and shaped[-1][5] > closed + 10.0:
+                    outcome = "released"
+                    break
             except Exception as exc:
                 if "fault:" in str(exc) and not _is_coupled_hold(exc):
                     mark_fault(arm)
@@ -370,7 +386,8 @@ def run_two_arm_policy(
             if not park_report.get("folded"):
                 stopped = str(park_report.get("person_needed") or "safe_fold_failed")
 
-    overall = "fault" if any_faulted else ("refused" if stopped is not None else ("dry_run" if dry_run else "chunks_done"))
+    all_released = not dry_run and len(arm_reports) == len(ARMS) and all(r.get("outcome") == "released" for r in arm_reports.values())
+    overall = "fault" if any_faulted else ("refused" if stopped is not None else ("dry_run" if dry_run else ("released" if all_released else "chunks_done")))
     return {
         "schema": SCHEMA, "task_id": plan["task_id"], "plan": plan, "result": overall,
         "stopped_reason": stopped, "dry_run": dry_run, "arms": arm_reports, "park": park_report, "events": events,

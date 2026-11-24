@@ -245,7 +245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         receipt_path = work_dir / "receipt.json"
         receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
         print(json.dumps({"result": receipt["result"], "task_id": receipt["task_id"], "receipt": str(receipt_path)}))
-        return 0 if receipt["result"] in ("dry_run", "chunks_done") else 1
+        return 0 if receipt["result"] in ("dry_run", "chunks_done", "released") else 1
     finally:
         for cell in cells.values():
             close = getattr(cell, "close", None)

@@ -224,7 +224,7 @@ class TwoArmChunkGuard:
         min_z_m: float = -0.02,
         thin_step_m: float = 0.005,
         mid_y_band: float = 0.05,
-        wait_timeout_s: float = 1.5,
+        wait_timeout_s: float = 4.0,
         item: tuple[float, float] | None = cell_coordinate.ITEM,
     ) -> None:
         if set(kin_by_arm) != set(ARMS) or set(rigids) != set(ARMS) or set(tips) != set(ARMS):
