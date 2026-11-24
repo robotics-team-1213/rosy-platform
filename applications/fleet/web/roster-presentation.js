@@ -171,10 +171,12 @@ function summarizeRobot(robot, view, attentionItems) {
   const evidence = [];
   if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
   else {
+    const attention = attentionItems(robot);
+    for (const item of attention) if (item.severity === "crit") evidence.push(item.text.replace(/^:\s*/, ""));
     if (robot.link_reason) evidence.push(`${robot.link_reason.message} ${robot.link_reason.action || ""}`.trim());
     else if (!robot.online && robot.error) evidence.push(offlineWhy(robot));
     if (robot.calibration) evidence.push(`보정 진행 중 · ${robot.calibration.label || "보정"}${robot.calibration.holder ? ` · ${robot.calibration.holder}` : ""}`);
-    evidence.push(...attentionItems(robot).map((item) => item.text.replace(/^:\s*/, "")));
+    for (const item of attention) if (item.severity !== "crit") evidence.push(item.text.replace(/^:\s*/, ""));
   }
   const dedupedEvidence = [...new Set(evidence)];
   return {
@@ -200,6 +202,7 @@ function summarizeRobot(robot, view, attentionItems) {
 }
 
 function RosterSummaryBody({ robotId, model, motorNode }) {
+  const [firstEvidence, ...otherEvidence] = model.dedupedEvidence;
   return html`
     <div class="robot-line" title=${model.name !== robotId ? `Fleet ID ${robotId}` : undefined}>
       <b class="ui-disclosure-name">${model.name}</b>
@@ -218,7 +221,7 @@ function RosterSummaryBody({ robotId, model, motorNode }) {
     </div>
     ${model.trip !== "—" ? html`<p class="trip-line">${model.trip}</p>` : null}
     ${model.addressText ? html`<p class="robot-summary-evidence" data-address-reason=${model.addressStatus}>${model.addressText}</p>` : null}
-    ${model.dedupedEvidence.length ? html`<p class="robot-summary-evidence">${model.dedupedEvidence.join(" · ")}</p>` : null}
+    ${firstEvidence ? html`<p class="robot-summary-evidence" title=${model.dedupedEvidence.join(" · ")}><span>${firstEvidence}</span>${otherEvidence.length ? ` 외 ${otherEvidence.length}건` : ""}</p>` : null}
   `;
 }
 

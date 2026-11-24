@@ -4,10 +4,10 @@ import { register } from "node:module";
 
 register("./resolve-console-assets.mjs", import.meta.url);
 
-const { createVisionView } = await import("../../../../applications/fleet/web/shared/vision-view.js");
+const { createVisionView, FRAME_LATE_MS } = await import("../../../../applications/fleet/web/shared/vision-view.js");
 
 // Model the select's browser behavior: replacing options selects the first option.
-function harness() {
+function harness(isActive = () => false) {
   const elements = new Map();
   const listeners = new Map();
   const el = (id) => {
@@ -24,9 +24,10 @@ function harness() {
     capture: () => ({ check() {}, current: () => true, signal: new AbortController().signal }),
     listen: (target, type, fn) => listeners.set(`${type}:${[...elements].find(([, node]) => node === target)?.[0]}`, fn),
     onDispose() {}, subscribe() {},
+    timeout(fn, delay) { const id = setTimeout(fn, delay); return () => clearTimeout(id); },
   };
-  const view = createVisionView({ scope, el, isActive: () => false,
-    call: async () => ({ sources }) });
+  const view = createVisionView({ scope, el, isActive,
+    call: async (path) => path.endsWith("/sources") ? { sources } : { frame_path: "/frame", lease: "lease" } });
   return { view, el, refresh: async (names) => { sources = names; await view.refreshSources(); },
     choose: (source) => { el("vision-source").value = source; listeners.get("change:vision-source")(); } };
 }
@@ -34,6 +35,28 @@ function harness() {
 globalThis.window = {};
 globalThis.document = { createElement: () => ({}) };
 globalThis.localStorage = { getItem: () => null };
+
+test("a 429 delays frame requests and reports stale video before a long retry", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 60000 });
+  const fetch = t.mock.method(globalThis, "fetch", async () =>
+    new Response(null, { status: 429, headers: { "Retry-After": "8" } }));
+  const h = harness(() => true);
+  const frames = [];
+  h.view.onFrame((frame) => frames.push(frame.state));
+  await h.refresh(["north"]);
+  await h.view.refreshFrame();
+  assert.equal(fetch.mock.callCount(), 1);
+  assert.match(h.el("vision-state").textContent, /요청 제한/);
+  t.mock.timers.tick(FRAME_LATE_MS);
+  assert.equal(h.el("vision-frame").dataset.state, "warn");
+  assert.equal(frames.at(-1), "stale");
+  t.mock.timers.tick(7999 - FRAME_LATE_MS);
+  await h.view.refreshFrame();
+  assert.equal(fetch.mock.callCount(), 1);
+  t.mock.timers.tick(1);
+  await h.view.refreshFrame();
+  assert.equal(fetch.mock.callCount(), 2);
+});
 
 test("selected camera stays selected through disconnect, empty list, reorder and reconnect", async () => {
   const h = harness();

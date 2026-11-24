@@ -209,12 +209,12 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       .map((item) => `${item.text.replace(/\d+/g, "#")}${item.foldedDetails ? `:${item.foldedDetails.join(",")}` : ""}`)
       .join("|");
   }
-  // D-252 ui-triage head: category + robot count. D-540 3: names only in the rows (title keeps them).
+  // D-252 ui-triage head: queue row count and affected robot count (D-540 3).
   function setTriageHead(id, label, rows) {
     const head = el(id);
     if (!head) return;
     const names = new Set(rows.flatMap((row) => row.group || [row.robotId]));
-    patchText(head.querySelector("b"), `${label} ${names.size}`);
+    patchText(head.querySelector("b"), `${label} ${rows.length}건 · ${names.size}대`);
     const small = head.querySelector("small");
     patchText(small, "");
     const title = [...names].join(" · ");
@@ -347,8 +347,8 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     const summary = el("queues-summary");
     if (summary) {
       const parts = [];
-      if (rows.crit.length) parts.push(`최우선 ${rows.crit.length}`);
-      if (rows.warn.length) parts.push(`주의 ${rows.warn.length}`);
+      if (rows.crit.length) parts.push(`최우선 ${rows.crit.length}건`);
+      if (rows.warn.length) parts.push(`주의 ${rows.warn.length}건`);
       patchText(summary, parts.join(" · "));
     }
   }
