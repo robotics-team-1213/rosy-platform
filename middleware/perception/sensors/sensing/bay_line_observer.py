@@ -84,23 +84,25 @@ def _consensus(pts: np.ndarray, *, axial: bool):
     near y (the corridor line across the bay), or None."""
     n = len(pts)
     rng = np.random.default_rng(7)
-    best = None
-    for _ in range(300):
-        i, j = rng.integers(0, n, 2)
-        d = pts[j] - pts[i]
-        length = float(np.hypot(*d))
-        if length < 0.04:
-            continue
-        off_x = math.atan2(abs(d[1]), abs(d[0]))
-        if (off_x if axial else math.pi / 2 - off_x) > AXIAL_MAX_RAD:
-            continue
-        normal = np.array([-d[1], d[0]]) / length
-        inliers = np.abs((pts - pts[i]) @ normal) <= INLIER_M
-        if best is None or inliers.sum() > best.sum():
-            best = inliers
-    if best is None or best.sum() < MIN_MASK_PIXELS:
+    pairs = rng.integers(0, n, size=(300, 2))
+    delta = pts[pairs[:, 1]] - pts[pairs[:, 0]]
+    length = np.hypot(delta[:, 0], delta[:, 1])
+    off_x = np.arctan2(np.abs(delta[:, 1]), np.abs(delta[:, 0]))
+    angle_off = off_x if axial else (math.pi / 2.0 - off_x)
+    keep = (length >= 0.04) & (angle_off <= AXIAL_MAX_RAD)
+    if not np.any(keep):
         return None
-    return pts[best]
+    valid_delta = delta[keep]
+    valid_length = length[keep]
+    normals = np.column_stack((-valid_delta[:, 1], valid_delta[:, 0])) / valid_length[:, None]
+    anchors = pts[pairs[keep, 0]]
+    offsets = np.einsum("ij,ij->i", anchors, normals)
+    dist = np.abs(pts @ normals.T - offsets[None, :]) <= INLIER_M
+    counts = np.count_nonzero(dist, axis=0)
+    best_idx = int(np.argmax(counts))
+    if int(counts[best_idx]) < MIN_MASK_PIXELS:
+        return None
+    return pts[dist[:, best_idx]]
 
 
 def axial_line(pts: np.ndarray):
@@ -171,27 +173,27 @@ class BayLineObserver:
     def observe(self, frame: np.ndarray, stamp: float) -> dict:
         hrow = horizon_row(self._w, self._h, self._hfov, self._mount.pitch_rad,
                            self._mount.height_m)
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        cut = max(0, min(frame.shape[0], int(math.ceil(hrow)) + HORIZON_MARGIN_PX))
+        if cut >= frame.shape[0]:
+            return self._payload(stamp, False)
+        hsv = cv2.cvtColor(frame[cut:], cv2.COLOR_BGR2HSV)
         raw = cv2.inRange(hsv, *self._pink_gate)
-        raw[:max(0, min(raw.shape[0], int(math.ceil(hrow)) + HORIZON_MARGIN_PX))] = 0
         count, labels, stats, _ = cv2.connectedComponentsWithStats(raw, connectivity=8)
         keep = np.zeros(count, bool)
         keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= MIN_COMPONENT_AREA_PX
         ys, xs = np.nonzero(keep[labels])
         if len(xs) < MIN_MASK_PIXELS:
             return self._payload(stamp, False)
-        points = []
-        for u, v in zip(xs, ys):
-            g = pixel_to_ground(float(u), float(v), width=self._w, height=self._h,
-                                hfov_rad=self._hfov, pitch_rad=self._mount.pitch_rad,
-                                height_m=self._mount.height_m)
-            if g is not None:
-                # pixel_to_ground is camera-relative; the camera sits x_offset
-                # ahead of base_link, so a point is that much farther from base.
-                points.append((g[0] + self._mount.x_offset_m, g[1]))
-        if len(points) < MIN_MASK_PIXELS:
+        ys = ys + cut
+        f, u0, v0 = _project(self._w, self._h, self._hfov, self._mount.pitch_rad,
+                             self._mount.height_m)
+        delta = self._mount.pitch_rad + np.arctan((ys.astype(np.float64) - v0) / f)
+        valid = delta > 1e-4
+        if int(np.count_nonzero(valid)) < MIN_MASK_PIXELS:
             return self._payload(stamp, False)
-        cloud = np.asarray(points, dtype=np.float64)
+        ahead = self._mount.height_m / np.tan(delta[valid])
+        y_left = ahead * (u0 - xs[valid].astype(np.float64)) / f
+        cloud = np.column_stack((ahead + self._mount.x_offset_m, y_left))
         pts = axial_line(cloud)
         direction = None
         if pts is not None:
