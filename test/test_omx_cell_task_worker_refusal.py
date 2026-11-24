@@ -77,6 +77,8 @@ def _run(tmp_path: Path, handoff: dict, tier: int = 1):
     "handoff,reason",
     [
         ({"cell_id": "cell_s"}, "AMR_NOT_LOCKED_AT_HANDOFF"),  # interlock keys missing
+        ({"cell_id": "cell_s", "interlock_scope": "cell_internal"}, "AMR_NOT_LOCKED_AT_HANDOFF"),
+        ({"cell_id": "cell_ab"}, "AMR_NOT_LOCKED_AT_HANDOFF"),
         ({**LOCKED, "cell_id": "cell_s", "wheel_brake_locked": False}, "AMR_NOT_LOCKED_AT_HANDOFF"),
         ({**LOCKED, "cell_id": "cell_s", "v_cmd_mps": float("nan")}, "AMR_NOT_LOCKED_AT_HANDOFF"),
         ({**LOCKED, "cell_id": "cell_s", "dst_site": "bellt"}, "UNKNOWN_SITE"),
@@ -89,6 +91,12 @@ def test_refused_handoff_never_calls_the_arm(tmp_path: Path, handoff: dict, reas
     assert hw_calls == []
     assert body["phase"] == "ABORTED" and body["reason"] == reason
     assert body["hardware_telemetry"] == {"error": reason}
+
+
+def test_cell_ab_internal_handoff_bypasses_amr_interlock_only(tmp_path: Path) -> None:
+    hw_calls, body = _run(tmp_path, {"cell_id": "cell_ab", "interlock_scope": "cell_internal"})
+    assert len(hw_calls) == 1
+    assert body.get("reason") != "AMR_NOT_LOCKED_AT_HANDOFF"
 
 
 @pytest.mark.parametrize("cell_id", ["cell_s", "cell_ab"])

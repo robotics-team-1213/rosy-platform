@@ -187,7 +187,8 @@ def poll_and_execute_once(
             and handoff.get("arm_id") in {"cell_s": {"arm_s"}, "cell_ab": {"arm_a", "arm_b"}}.get(cell_id, set())
         )
         speed = handoff.get("v_cmd_mps")
-        interlock_ok = (
+        internal_ab = cell_id == "cell_ab" and handoff.get("interlock_scope") == "cell_internal"
+        interlock_ok = internal_ab or (
             handoff.get("wheel_brake_locked") is True
             and handoff.get("bed_ready") is True
             and isinstance(speed, (int, float)) and not isinstance(speed, bool)
