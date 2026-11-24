@@ -21,6 +21,13 @@ export function cardTripLine(view, robotId) {
   return tripWaitText(openTrip(view, robotId)) || trafficCardLine(view.traffic, robotId) || endedTripText(view, robotId);
 }
 
+/** Default ``drive_mode`` for ``운행…``: prefer ``nav2`` when the robot has ``free`` without ``junction_turn``. */
+export function defaultTripDriveMode(robot) {
+  const base = (robot?.capabilities?.controls?.items || []).find((item) => item?.kind === "base_velocity");
+  const canNav2 = Array.isArray(base?.drive_modes) && base.drive_modes.includes("free");
+  return canNav2 && base.junction_turn === false ? "nav2" : "";
+}
+
 /** '' when this robot may be sent on a trip from here; otherwise the first reason that holds (D-359 §5.3). */
 export function tripReason(robot, { view, operator, named }) {
   const estop = robot?.state?.safety?.estop;
@@ -123,7 +130,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     button.setAttribute("aria-expanded", String(open));
     setOffBy(button, open ? "" : tripGate(robot));
     button.addEventListener("click", scope.guard(() => {
-      form = open ? null : { robotId: robot.robot_id, kind: "route", driveMode: "", to: "", start: "", lapStart: "", via: "", plan: null,
+      form = open ? null : { robotId: robot.robot_id, kind: "route", driveMode: defaultTripDriveMode(robot), to: "", start: "", lapStart: "", via: "", plan: null,
         lapPlan: null, busy: false, note: null };
       render();
     }));
@@ -341,8 +348,9 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
   }
 
   function focus(robotId) {
+    const robot = (view.robots || []).find((row) => row.robot_id === robotId);
     form = {
-      robotId, kind: "route", driveMode: "", to: "", start: "", lapStart: "", via: "", plan: null, lapPlan: null, busy: false, note: null,
+      robotId, kind: "route", driveMode: defaultTripDriveMode(robot), to: "", start: "", lapStart: "", via: "", plan: null, lapPlan: null, busy: false, note: null,
     };
   }
 
