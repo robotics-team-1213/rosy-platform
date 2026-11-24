@@ -874,3 +874,33 @@ def test_a_watch_clears_the_not_started_verdict_before_it_runs(tmp_path, monkeyp
     coordinator, _, _ = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
     assert coordinator.tick() == "rollout_pending"
     assert coordinator.state["canary_not_started"] is False
+
+
+def test_canary_not_started_withdraws_when_all_online_robots_run_newer_release(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a", "canary_not_started": True}
+
+    def ssh(argv):
+        if "readlink -f /opt/rosy/current" in " ".join(argv):
+            return 0, "/opt/rosy/releases/2026.11.24-565\n", ""
+        return 0, '{"eligible": false}\n', ""
+
+    coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, ssh, 1)
+    assert coordinator.tick() == "superseded_on_robots"
+    assert coordinator.state["phase"] == "failed"
+    assert "newer release" in coordinator.state["reason"]
+    assert len(uploads) == 1 and uploads[0]["withdrawn"] is True
+    assert calls == []
+
+
+def test_canary_not_started_ignores_prefixed_release_names(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a", "canary_not_started": True}
+
+    def ssh(argv):
+        if "readlink -f /opt/rosy/current" in " ".join(argv):
+            return 0, "/opt/rosy/releases/payload-2020.01.01-001\n", ""
+        return 0, '{"eligible": false}\n', ""
+
+    coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, ssh, 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert coordinator.state["phase"] == "publishing"
+    assert uploads == [] and len(calls) == 1

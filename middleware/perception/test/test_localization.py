@@ -248,3 +248,28 @@ class LocalizationTests(unittest.TestCase):
         b_over = m.explain(truth, over, angles)
         self.assertEqual(b_over.rejected_reason, "wall-piercing")
         self.assertEqual(b_over.robust_score, 0.0)
+
+    def test_score_and_explain_ray_obstruction_modes(self):
+        # 4x4 m room (5 cm cells -> 80x80), outer walls + thin grazing wall + blocking pillar
+        grid = np.zeros((80, 80), dtype=np.int8)
+        grid[5:75, 5] = grid[5:75, 74] = grid[5, 5:75] = grid[74, 5:75] = 100
+        # Thin 1-cell grazing wall along y=40 (x=42..55) and a 3-cell wide blocking pillar around x=52..55, y=38..42
+        grid[38:43, 52:56] = 100
+        m = MapAgreement(grid, .05, (0., 0.), tolerance=.04)
+        angles = np.linspace(-math.pi, math.pi, 72, endpoint=False)
+        pose = (1.5, 2.0, 0.0)
+        # Clear scan hitting outer wall without crossing the central pillar
+        ranges = np.full(len(angles), 1.2)
+        ranges[(np.abs(angles) < .4)] = 3.0  # shoots past pillar (x=2.6..2.8) to right wall
+        b = m.explain(pose, ranges, angles)
+        self.assertGreater(b.miss_wall_pierced, 0)
+        s_pierced = m.score(pose, ranges, angles)
+        self.assertLess(s_pierced, 1.0)
+        # Open-grid beams firing outside map bounds: OOB blocks in score() (0 hit), not wall-pierced in explain()
+        open_grid = np.zeros((40, 40), dtype=np.int8)
+        m_open = MapAgreement(open_grid, .05, (0., 0.), tolerance=.04)
+        oob = np.full(len(angles), 6.0)
+        self.assertEqual(m_open.score((1.0, 1.0, 0.0), oob, angles), 0.0)
+        b_oob = m_open.explain((1.0, 1.0, 0.0), oob, angles)
+        self.assertEqual(b_oob.miss_wall_pierced, 0)
+        self.assertEqual(b_oob.miss_unknown, len(angles))

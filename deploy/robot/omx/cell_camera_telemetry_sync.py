@@ -13,33 +13,111 @@ frames through Vision preview leases only.
 """
 from __future__ import annotations
 
-import hashlib
-import inspect
-import json
-import math
-import os
+import hashlib, inspect, json, math, os, ssl, threading, time
 from pathlib import Path
-import ssl
-import time
 from typing import Any
 from urllib.request import Request, urlopen
 
 DEFAULT_PREP_DIR = Path("/home/robttt/rosy-test/omx-record-prep-20261019")
 CAMERA_KEYS: tuple[str, ...] = ("top", "side", "arm_a_wrist", "arm_b_wrist", "arm_s_top", "arm_s_wrist")
 ARM_SUFFIXES: dict[str, str] = {"arm_s": "s", "arm_a": "a", "arm_b": "b"}
-SHADOW_TAIL = 200
-AUTO_EVENT_TAIL = 30
+SHADOW_TAIL, AUTO_EVENT_TAIL, _TAIL_CHUNK_BYTES = 200, 30, 65536
+_CACHE_LOCK, _FILE_CACHE, _SSL_CACHE, _MISS = threading.Lock(), {}, {}, object()
 BLOCK_REASON = "학습 정책 실물 실행은 사용자 승인 전(D-1024 L3 arm_b 한정, cell_executor 승인 목록 ik_chunk)"
+
+
+def _file_sig(path: Path) -> tuple[str, int, int, int] | None:
+    try:
+        st = path.stat()
+        return (str(path), st.st_ino, st.st_mtime_ns, st.st_size)
+    except OSError:
+        return None
+
+
+def _read_tail_lines(path: Path, max_lines: int, chunk_bytes: int = _TAIL_CHUNK_BYTES) -> list[str]:
+    """Read up to ``max_lines`` trailing lines without loading multi-megabyte JSONL files."""
+    if max_lines <= 0:
+        return []
+    try:
+        with path.open("rb") as fh:
+            size = fh.seek(0, os.SEEK_END)
+            if size <= 0:
+                return []
+            span, offset = max(chunk_bytes, 1024), 0
+            while True:
+                offset = max(0, size - span)
+                fh.seek(offset, os.SEEK_SET)
+                buf = fh.read(size - offset)
+                if offset == 0 or buf.count(b"\n") > max_lines:
+                    break
+                span *= 2
+            if offset > 0:
+                nl = buf.find(b"\n")
+                buf = b"" if nl < 0 else buf[nl + 1:]
+    except OSError:
+        return []
+    return buf.decode("utf-8", errors="replace").splitlines()[-max_lines:]
+
+
+def _tail_json_lines(path: Path, max_lines: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for line in _read_tail_lines(path, max_lines):
+        if line.lstrip().startswith("{"):
+            try:
+                if isinstance(row := json.loads(line), dict):
+                    rows.append(row)
+            except ValueError:
+                continue
+    return rows
+
+
+def _cached(key: tuple[Any, ...], compute: Any, *, store: dict[Any, Any] = _FILE_CACHE, cap: int = 256) -> Any:
+    with _CACHE_LOCK:
+        if (hit := store.get(key, _MISS)) is not _MISS:
+            return hit
+    val = compute()
+    with _CACHE_LOCK:
+        if len(store) > cap:
+            store.clear()
+        store[key] = val
+    return val
+
+
+def _ssl_context(ca_file: str | Path | None, verified: bool, is_https: bool) -> ssl.SSLContext:
+    ca_path = Path(ca_file).expanduser() if ca_file else None
+    key = (_file_sig(ca_path) or str(ca_path) if ca_path else None, bool(verified), bool(is_https))
+    return _cached(key, lambda: (
+        ssl.create_default_context(cafile=str(ca_path)) if ca_path else
+        (ssl.create_default_context() if (verified and is_https) else ssl._create_unverified_context())
+    ), store=_SSL_CACHE, cap=32)
 
 
 def _fetch_local_state_json(urlopen_fn: Any = urlopen) -> dict[str, Any]:
     try:
         sreq = Request("http://127.0.0.1:8767/state.json", headers={"Host": "127.0.0.1:8767"})
         with urlopen_fn(sreq, timeout=1.5) as sresp:
-            data = json.load(sresp)
-            return data if isinstance(data, dict) else {}
+            return data if isinstance(data := json.load(sresp), dict) else {}
     except Exception:
         return {}
+
+
+def _parse_arm_state_tail(st_file: Path, mtime_ns: int) -> dict[str, Any] | None:
+    for ev in reversed(_tail_json_lines(st_file, 25)):
+        try:
+            st_arr = ev.get("state")
+            if isinstance(st_arr, list) and len(st_arr) >= 6:
+                health = ev.get("health") or {}
+                temps, curs = health.get("temp_c") or [], health.get("current_ma") or []
+                return {
+                    "joints_deg": [round(float(x), 1) for x in st_arr[:6]],
+                    "folded": bool(ev.get("folded", float(st_arr[1]) <= -50.0 and float(st_arr[2]) >= 45.0)),
+                    "temp_c": round(float(max(temps)), 1) if temps else None,
+                    "current_ma": round(float(max(curs)), 1) if curs else None,
+                    "updated_at": round(mtime_ns / 1e9, 3), "source": "chunk_status_live",
+                }
+        except Exception:
+            continue
+    return None
 
 
 def _collect_live_arm_states(prep_dir: Path) -> dict[str, Any]:
@@ -47,30 +125,22 @@ def _collect_live_arm_states(prep_dir: Path) -> dict[str, Any]:
     for arm_id, suffix in ARM_SUFFIXES.items():
         for io_name in (f"chunk-io-{suffix}", f"chunk-io-{suffix}-r2s"):
             st_file = prep_dir / io_name / "chunk-status.jsonl"
-            if st_file.is_file():
-                try:
-                    lines = [l.strip() for l in st_file.read_text(errors="replace").splitlines()[-25:] if l.strip().startswith("{")]
-                    for raw_line in reversed(lines):
-                        ev = json.loads(raw_line)
-                        st_arr = ev.get("state")
-                        if isinstance(st_arr, list) and len(st_arr) >= 6:
-                            health = ev.get("health") or {}
-                            temps = health.get("temp_c") or []
-                            curs = health.get("current_ma") or []
-                            arm_states[arm_id] = {
-                                "joints_deg": [round(float(x), 1) for x in st_arr[:6]],
-                                "folded": bool(ev.get("folded", float(st_arr[1]) <= -50.0 and float(st_arr[2]) >= 45.0)),
-                                "temp_c": round(float(max(temps)), 1) if temps else None,
-                                "current_ma": round(float(max(curs)), 1) if curs else None,
-                                "updated_at": round(st_file.stat().st_mtime, 3),
-                                "source": "chunk_status_live",
-                            }
-                            break
-                except Exception:
-                    pass
-            if arm_id in arm_states:
-                break
+            if (sig := _file_sig(st_file)) is not None:
+                if (parsed := _cached(("arm_state", *sig), lambda p=st_file, m=sig[2]: _parse_arm_state_tail(p, m))) is not None:
+                    arm_states[arm_id] = {**parsed, "joints_deg": list(parsed["joints_deg"])}
+                    break
     return arm_states
+
+
+def _read_shadow_summary(log: Path, mtime_ns: int, policy_rev: Any) -> dict[str, Any]:
+    rows = [r for r in _tail_json_lines(log, SHADOW_TAIL) if r.get("policy_id") == policy_rev]
+    errors, last = [r for r in rows if r.get("error")], (rows[-1] if rows else {})
+    return {
+        "rows": len(rows), "errors": len(errors),
+        "last_at": round(mtime_ns / 1e9, 3) if rows else None,
+        "last_ik_outcome": (last.get("ik") or {}).get("outcome"),
+        "last_error": str(errors[-1]["error"])[:120] if errors else None,
+    }
 
 
 def _collect_arm_models(prep_dir: Path) -> dict[str, Any]:
@@ -82,32 +152,28 @@ def _collect_arm_models(prep_dir: Path) -> dict[str, Any]:
         candidates.extend(p for p in sorted(prep_dir.glob(f"cell-arm-{suffix}-*.json")) if p not in seen)
         for path in candidates:
             try:
-                config = json.loads(path.read_text(encoding="utf-8"))
+                if (cfg_sig := _file_sig(path)) is None:
+                    continue
+                config = _cached(("cfg", *cfg_sig), lambda p=path: json.loads(p.read_text(encoding="utf-8")))
                 spec = config.get("act_shadow")
                 if not isinstance(spec, dict) or not spec.get("policy_root"):
                     continue
-                root = Path(str(spec["policy_root"])).expanduser()
+                root, rev = Path(str(spec["policy_root"])).expanduser(), spec.get("policy_revision")
                 warp = root / "cam_warp.json"
+                warp_sha = (_cached(("warp", *wsig), lambda w=warp: hashlib.sha256(w.read_bytes()).hexdigest())
+                            if (wsig := _file_sig(warp)) is not None else None)
                 entry: dict[str, Any] = {
-                    "name": root.name, "policy_revision": spec.get("policy_revision"), "kind": "shadow",
-                    "binding": spec.get("kind") or "act_inference", "config": path.name,
-                    "warp_sha256": hashlib.sha256(warp.read_bytes()).hexdigest() if warp.is_file() else None,
+                    "name": root.name, "policy_revision": rev, "kind": "shadow",
+                    "binding": spec.get("kind") or "act_inference", "config": path.name, "warp_sha256": warp_sha,
                     "execution_allowed": False, "block_reason": BLOCK_REASON,
                     "shadow": {"rows": 0, "errors": 0, "last_at": None, "last_ik_outcome": None, "last_error": None},
                 }
                 log = Path(str(config.get("work_dir") or path.parent)).expanduser() / "act-shadow.jsonl"
-                if log.is_file():
-                    rows = [json.loads(line) for line in log.read_text(errors="replace").splitlines()[-SHADOW_TAIL:]
-                            if line.strip().startswith("{")]
-                    rows = [r for r in rows if r.get("policy_id") == spec.get("policy_revision")]
-                    errors = [r for r in rows if r.get("error")]
-                    last = rows[-1] if rows else {}
-                    entry["shadow"] = {
-                        "rows": len(rows), "errors": len(errors),
-                        "last_at": round(log.stat().st_mtime, 3) if rows else None,
-                        "last_ik_outcome": (last.get("ik") or {}).get("outcome"),
-                        "last_error": str(errors[-1]["error"])[:120] if errors else None,
-                    }
+                if (lsig := _file_sig(log)) is not None:
+                    rev_key = rev if isinstance(rev, (str, int, float, bool, type(None))) else json.dumps(rev, sort_keys=True)
+                    entry["shadow"] = dict(_cached(
+                        ("shadow", *lsig, rev_key), lambda l=log, m=lsig[2], r=rev: _read_shadow_summary(l, m, r),
+                    ))
                 models[arm_id] = entry
                 break
             except Exception:
@@ -116,19 +182,10 @@ def _collect_arm_models(prep_dir: Path) -> dict[str, Any]:
 
 
 def _collect_auto_events(prep_dir: Path) -> list[dict[str, Any]]:
-    try:
-        lines = (prep_dir / "incidents" / "auto-events.jsonl").read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
+    path = prep_dir / "incidents" / "auto-events.jsonl"
+    if (sig := _file_sig(path)) is None:
         return []
-    rows: list[dict[str, Any]] = []
-    for line in lines[-AUTO_EVENT_TAIL:]:
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(row, dict):
-            rows.append(row)
-    return rows
+    return [dict(r) for r in _cached(("events", *sig), lambda p=path: _tail_json_lines(p, AUTO_EVENT_TAIL))]
 
 
 def _read_ack_map(ack_file: Path) -> dict[str, dict[str, Any]]:
@@ -161,9 +218,7 @@ def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_P
     ack_file = prep_dir / ".safe-home-acks.json"
     fence_file = prep_dir / ".safety-fence.json"
     try:
-        ctx = ssl.create_default_context(cafile=str(Path(ca_file).expanduser())) if ca_file else (
-            ssl.create_default_context() if (verified and is_https) else ssl._create_unverified_context()
-        )
+        ctx = _ssl_context(ca_file, verified, is_https)
         state_json = _fetch_local_state_json(urlopen_fn)
         ack_map = _read_ack_map(ack_file)
         cams_quality: dict[str, Any] = {}

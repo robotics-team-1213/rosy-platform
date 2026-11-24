@@ -10,13 +10,18 @@ from .events import CoreEventStore, _contains_sensitive_field
 
 
 class RuleSelectionStore(CoreEventStore):
-    def __init__(self, path, *, max_rows=100_000, retention_s=30 * 86400):
+    def __init__(self, path, *, max_rows=100_000, retention_s=30 * 86400,
+                 debounce_s=0.0, prune_interval_s=0.0):
         if (type(max_rows) is not int or not 1 <= max_rows <= 100_000
                 or type(retention_s) not in (int, float) or not math.isfinite(retention_s)
                 or not 0 < retention_s <= 30 * 86400):
             raise ValueError('INVALID_RULE_RETENTION')
         super().__init__(path)
         self.max_rows, self.retention_s = max_rows, retention_s
+        self.debounce_s, self.prune_interval_s = debounce_s, prune_interval_s
+        self._last_signature = None
+        self._last_written_at = None
+        self._last_pruned_at = None
         with closing(self._connect()) as db, db:
             db.execute('''CREATE TABLE IF NOT EXISTS fleet_rule_selections (
                 selection_id INTEGER PRIMARY KEY AUTOINCREMENT, robot_id TEXT NOT NULL,
@@ -38,14 +43,33 @@ class RuleSelectionStore(CoreEventStore):
             ids.add(rid)
             values.append((rid, now, json.dumps(checked, sort_keys=True, ensure_ascii=False,
                                               separators=(',', ':'), allow_nan=False)))
+        parsed = [json.loads(item[2]) for item in values]
+        signature = tuple(
+            (r['assessment']['request']['subject_id'], r['assessment']['request']['case_id'],
+             r['assessment']['request']['owner'], r['assessment']['request']['condition'],
+             r['assessment']['request']['conflicted'], r['assessment']['necessity'],
+             r['assessment']['reason'], r['assessment']['policy_revision'],
+             r['selection'], r['config_sha256'], r['strategy'])
+            for r in parsed
+        )
+        if (self.debounce_s > 0 and self._last_signature == signature
+                and self._last_written_at is not None
+                and 0 <= now - self._last_written_at < self.debounce_s):
+            return parsed
+        prune_due = (self.prune_interval_s <= 0 or self._last_pruned_at is None
+                     or now - self._last_pruned_at >= self.prune_interval_s or now < self._last_pruned_at)
         with closing(self._connect()) as db, db:
             db.executemany('INSERT INTO fleet_rule_selections(robot_id,received_at,payload_json) VALUES(?,?,?)', values)
-            db.execute('DELETE FROM fleet_rule_selections WHERE received_at < ?', (now - self.retention_s,))
-            # AUTOINCREMENT ids never repeat, so MAX(id) bounds the cap without walking 100k payload rows.
-            db.execute('''DELETE FROM fleet_rule_selections WHERE selection_id <=
-                (SELECT COALESCE(MAX(selection_id), 0) FROM fleet_rule_selections) - ?''',
-                       (self.max_rows,))
-        return [json.loads(item[2]) for item in values]
+            if prune_due:
+                db.execute('DELETE FROM fleet_rule_selections WHERE received_at < ?', (now - self.retention_s,))
+                # AUTOINCREMENT ids never repeat, so MAX(id) bounds the cap without walking 100k payload rows.
+                db.execute('''DELETE FROM fleet_rule_selections WHERE selection_id <=
+                    (SELECT COALESCE(MAX(selection_id), 0) FROM fleet_rule_selections) - ?''',
+                           (self.max_rows,))
+                self._last_pruned_at = now
+        self._last_signature = signature
+        self._last_written_at = now
+        return parsed
 
     def read(self, *, after_id=0, limit=100, robot_id=None):
         if type(after_id) is not int or after_id < 0 or type(limit) is not int or not 1 <= limit <= 200:

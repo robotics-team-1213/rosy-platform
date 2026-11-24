@@ -153,3 +153,50 @@ def test_task_dispatch_skips_robot_with_fresh_or_in_flight_goal(monkeypatch, ext
         now=11.0,
     )
     assert available == set()
+
+
+def test_idle_dispatch_loop_throttles_housekeeping_to_one_second(monkeypatch):
+    now = [10.0]
+    queued = []
+    events = []
+    times = iter([10.25, 10.50, 10.75, 11.00, 11.25])
+
+    async def fake_reconcile(_service, _console):
+        events.append(("reconcile", now[0]))
+
+    async def dispatch_next(available, dispatch=None):
+        events.append(("dispatch", now[0], set(available)))
+        return None
+
+    async def step_sleep(_seconds):
+        try:
+            now[0] = next(times)
+        except StopIteration:
+            raise asyncio.CancelledError
+        if now[0] == 11.25:
+            queued.append("t-1")
+
+    async def snapshot():
+        return {"robots": [_ready_row()]}
+
+    monkeypatch.setattr("fleet.server.channel.execution.outcomes.reconcile.reconcile_tasks", fake_reconcile)
+    monkeypatch.setattr(background_workers.asyncio, "sleep", step_sleep)
+    console = SimpleNamespace(
+        snapshot=snapshot,
+        prune_task_queue_entries=lambda _ids: None,
+        trip_busy=lambda _rid: False,
+    )
+    task_service = SimpleNamespace(
+        robot_ids=frozenset({"rosy_01"}),
+        scheduler=SimpleNamespace(expire_queued=lambda: events.append(("expire", now[0]))),
+        store=SimpleNamespace(queued_task_ids=lambda: list(queued)),
+        dispatch_next=dispatch_next,
+    )
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(background_workers._task_dispatch_loop(console, task_service, None, clock=lambda: now[0]))
+    assert [e for e in events if e[0] in ("expire", "reconcile")] == [
+        ("expire", 10.0), ("reconcile", 10.0),
+        ("expire", 11.0), ("reconcile", 11.0),
+        ("expire", 11.25), ("reconcile", 11.25),
+    ]
+    assert sum(1 for e in events if e[0] == "dispatch") == 6

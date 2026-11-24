@@ -27,6 +27,7 @@ import argparse
 import json
 import math
 import os
+import signal
 import ssl
 import threading
 import time
@@ -107,6 +108,14 @@ class Latest:  # newest sample for one mirror worker; SourceWorker reads .latest
         return self.sample
 
 
+def _stat_sig(path: Path):
+    try:
+        st = path.stat()
+        return st.st_mtime_ns, st.st_size
+    except OSError:
+        return None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--live", type=Path, required=True)
@@ -115,7 +124,7 @@ def main(argv=None):
     parser.add_argument("--token-env", required=True)
     parser.add_argument("--ca-file", type=Path)
     parser.add_argument("--calibration", type=Path)
-    parser.add_argument("--period", type=float, default=0.1)
+    parser.add_argument("--period", type=float, default=0.25)
     parser.add_argument("--arm-id", help="registered arm_id: the motor-health owner and group Fleet expects")
     parser.add_argument("--health-file", type=Path, help="absolute motor-health snapshot of the runner's guard")
     parser.add_argument("--mirror-fleet", action="append", metavar="https://URL,/abs/ca.pem",
@@ -131,6 +140,7 @@ def main(argv=None):
     from workcell_observation_bridge import ArmSender
 
     stop, mirrors = threading.Event(), []
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
     for binding in args.mirror_fleet:
         from workcell_observation_bridge import SourceWorker, secure_url  # only a mirror needs these
         url, separator, ca_file = binding.partition(",")
@@ -143,27 +153,40 @@ def main(argv=None):
                          name=f"{args.source_id}@fleet").start()
         mirrors.append(buffer)
     sender = ArmSender(args.fleet_url, args.source_id, token, context=ssl.create_default_context(cafile=args.ca_file))
-    last_t = None
-    while True:
-        sample = None
+    last_t, backoff = None, 0.5
+    live_sig, row = None, {}
+    health_sig, health = None, (None, None)
+    while not stop.is_set():
+        sample, wait_s = None, args.period
         try:
             now = time.time()
-            health = arm_health(args.health_file, args.arm_id, now) if args.health_file else (None, None)
-            try:
-                row = json.loads(args.live.read_text())
-            except (OSError, ValueError):
-                row = {}  # the runner exited; its terminal health can still go
+            if args.health_file:
+                sig = _stat_sig(args.health_file)
+                if sig is None:
+                    health_sig, health = None, (None, None)
+                elif sig != health_sig:
+                    health_sig, health = sig, arm_health(args.health_file, args.arm_id, now)
+            sig = _stat_sig(args.live)
+            if sig is None:
+                live_sig, row = None, {}
+            elif sig != live_sig:
+                try:
+                    live_sig, row = sig, json.loads(args.live.read_text())
+                except (OSError, ValueError):
+                    live_sig, row = None, {}
             sample = next_sample(row, health, last_t, now, calibration)
             if sample is not None:
                 for buffer in mirrors:
                     buffer.put(Sample(sample.captured_at, sample.value, sample.motor_health))
                 sender.send(sample)
                 last_t = sample.captured_at
+            backoff = 0.5
         except (OSError, ValueError) as error:  # a refused post never stops the bridge
             if getattr(error, "code", None) == 409 and sample is not None:
                 last_t = sample.captured_at
             print(json.dumps({"error": str(error)[:200], "t": round(time.time(), 3)}), flush=True)
-        time.sleep(args.period)
+            wait_s, backoff = backoff, min(5.0, backoff * 2)
+        time.sleep(wait_s)
 
 
 if __name__ == "__main__":

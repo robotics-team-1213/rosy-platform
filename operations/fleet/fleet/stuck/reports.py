@@ -96,28 +96,42 @@ class LineStuckAnswerLog:
                 robot_id TEXT PRIMARY KEY, recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
         self.handoff = IncidentHandoff(self)
         self.notifications = NotificationOutbox(self)
+        self._last_judgment: dict[str, tuple[float, tuple]] = {}
+        self._last_judgment_pruned_at: float | None = None
 
     def record_judgment(self, receipt: dict) -> None:
         receipt = FleetJudgmentReceipt.model_validate(receipt).model_dump(mode="json")
         robot_id, now = receipt['request']['subject_id'], receipt['evaluated_at']
-        body = json.dumps(receipt, allow_nan=False, sort_keys=True)
         def signature(value):
             return (value['necessity'], value['reason'], value['policy_revision'],
                     value['request'].get('case_id'), value['request'].get('owner'))
+        sig = signature(receipt)
+        prev = self._last_judgment.get(robot_id)
+        if (prev is not None and prev[1] == sig and 0 <= now - prev[0] < 10.0
+                and receipt['necessity'] == 'DO_NOT_INTERVENE'
+                and receipt['request'].get('case_id') is None
+                and self.notifications._prepare_receipt is None):
+            return
+        body = json.dumps(receipt, allow_nan=False, sort_keys=True)
+        prune_due = (self._last_judgment_pruned_at is None
+                     or now - self._last_judgment_pruned_at >= 60.0
+                     or now < self._last_judgment_pruned_at)
         with closing(self._connect()) as connection, connection:
             previous = connection.execute("SELECT recorded_at, assessment FROM fleet_judgment_records WHERE robot_id=? ORDER BY judgment_id DESC LIMIT 1", (robot_id,)).fetchone()
             record_due = (
                 previous is None
-                or signature(json.loads(previous['assessment'])) != signature(receipt)
+                or signature(json.loads(previous['assessment'])) != sig
                 or now - previous['recorded_at'] >= 60
             )
             if record_due:
                 connection.execute("INSERT INTO fleet_judgment_records(robot_id, recorded_at, assessment) VALUES (?, ?, ?)", (robot_id, now, body))
             connection.execute("INSERT INTO fleet_judgment_current VALUES (?, ?, ?) ON CONFLICT(robot_id) DO UPDATE SET recorded_at=excluded.recorded_at, assessment=excluded.assessment", (robot_id, now, body))
             self.notifications.enqueue(connection, receipt)
-            if record_due:
+            if record_due and prune_due:
                 connection.execute("DELETE FROM fleet_judgment_records WHERE recorded_at < ?", (now - 7 * 86400,))
                 connection.execute("DELETE FROM fleet_judgment_current WHERE recorded_at < ?", (now - 7 * 86400,))
+                self._last_judgment_pruned_at = now
+        self._last_judgment[robot_id] = (now, sig)
 
     def judgments(self, limit: int = 100) -> list[dict]:
         if type(limit) is not int or not 1 <= limit <= 1000:

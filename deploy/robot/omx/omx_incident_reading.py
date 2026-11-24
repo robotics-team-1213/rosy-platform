@@ -7,14 +7,31 @@ from pathlib import Path
 
 def rows(path, since=0.0):
     out = []
-    if path and Path(path).is_file():
-        for line in Path(path).read_text(errors="replace").splitlines():
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            if row.get("t", since) >= since:
+    p = Path(path) if path else None
+    if not p or not p.is_file():
+        return out
+    with p.open("rb") as f:
+        pos = f.seek(0, 2)
+        carry, done = b"", False
+        while pos > 0 and not done:
+            start = max(0, pos - 65536)
+            f.seek(start)
+            buf = f.read(pos - start) + carry
+            pos = start
+            lines = buf.split(b"\n")
+            carry = lines[0] if pos > 0 else b""
+            for raw in reversed(lines[1:] if pos > 0 else lines):
+                if not raw.strip():
+                    continue
+                try:
+                    row = json.loads(raw.decode("utf-8", errors="replace"))
+                except ValueError:
+                    continue
+                if row.get("t", since) < since:
+                    done = True
+                    break
                 out.append(row)
+    out.reverse()
     return out
 
 

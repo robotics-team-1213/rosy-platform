@@ -187,7 +187,7 @@ def test_settings_restoration_still_runs_when_receipt_storage_fails(monkeypatch,
     runtime = load('camera_readiness')
     restored = []
     monkeypatch.setattr(runtime, 'prepare', lambda *a: {'cameras': {}})
-    monkeypatch.setattr(runtime, 'save', lambda *a: (_ for _ in ()).throw(OSError('disk full')))
+    monkeypatch.setattr(runtime, 'save', lambda *a, **kw: (_ for _ in ()).throw(OSError('disk full')))
     monkeypatch.setattr(runtime, 'restore', lambda root: restored.append(root))
     with pytest.raises(OSError):
         runtime.run({'cameras': {}}, tmp_path, 'digest', .000000001)
@@ -212,12 +212,17 @@ def test_manual_exposure_is_enabled_before_dependent_controls():
 
 
 def test_durable_baseline_includes_directory_fsync(monkeypatch, tmp_path):
+    import json
     import stat
     runtime = load('camera_readiness')
     modes = []
     monkeypatch.setattr(runtime.os, 'fsync', lambda fd: modes.append(runtime.os.fstat(fd).st_mode))
     runtime.save(tmp_path/'baseline.json', {'original': 1}, exclusive=True)
     assert any(stat.S_ISDIR(mode) for mode in modes)
+    modes.clear()
+    runtime.save(tmp_path/'readiness.json', {'state': 'READY'}, durable=False)
+    assert modes == []
+    assert json.loads((tmp_path/'readiness.json').read_text()) == {'state': 'READY'}
 
 
 def test_sensor_noise_cannot_be_promoted_to_useful_scene_structure():
@@ -253,6 +258,8 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     assert 'rosy-omx-cameras-bind.service' in unit['Unit']['Wants'] and 'rosy-omx-cameras-bind.service' in unit['Unit']['After']
     # A boot-time refusal restores the originals in ExecStopPost; only a bounded retry reaches READY.
     assert unit['Service']['Restart'] == 'on-failure'
+    assert unit['Service']['RestartSec'] == '30'
+    assert unit['Unit']['StartLimitIntervalSec'] == '0'
     assert int(unit['Unit']['StartLimitBurst']) <= 3
     # systemd permits repeated EnvironmentFile entries; ConfigParser defaults do not.
     view = configparser.ConfigParser(interpolation=None, strict=False)

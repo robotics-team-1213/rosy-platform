@@ -99,3 +99,46 @@ def test_the_rewritten_file_launch_actually_uses_keeps_the_rates(tmp_path):
     assert (
         _costmap(rewritten, "local_costmap")["voxel_layer"]["publish_voxel_map"] is False
     )
+
+
+BOND_LIFECYCLE_NODES = (
+    "amcl",
+    "map_server",
+    "bt_navigator",
+    "controller_server",
+    "planner_server",
+    "smoother_server",
+    "behavior_server",
+    "waypoint_follower",
+    "velocity_smoother",
+)
+
+
+@pytest.mark.parametrize("node_name", BOND_LIFECYCLE_NODES)
+def test_nav2_bond_heartbeat_disabled_in_params_and_rewrite(tmp_path, node_name):
+    from navigation.params_rewrite import write_prefixed_nav2_params
+
+    raw = _params()
+    assert raw[node_name]["ros__parameters"]["bond_heartbeat_period"] == 0.0
+    written = write_prefixed_nav2_params(NAV_PARAMS, "rosy_02", directory=str(tmp_path))
+    rewritten = _params(Path(written))
+    assert rewritten[f"/rosy_02/{node_name}"]["ros__parameters"]["bond_heartbeat_period"] == 0.0
+
+
+@pytest.mark.parametrize("launch_name", ("navigation_launch.xml", "localization_launch.xml"))
+def test_nav2_lifecycle_manager_disables_bond_timeout_by_default(launch_name):
+    import xml.etree.ElementTree as ET
+
+    xml = ROOT / "middleware" / "drive" / "planning" / "nav2" / "launch" / launch_name
+    tree = ET.parse(xml).getroot()
+    arg = next(a for a in tree.findall("arg") if a.attrib.get("name") == "bond_timeout")
+    assert arg.attrib.get("default") == "0.0"
+    mgr_elems = [
+        el for el in tree.iter()
+        if el.tag in ("composable_node", "node")
+        and (el.attrib.get("name") or "").startswith("lifecycle_manager_")
+    ]
+    assert len(mgr_elems) == 2
+    for mgr in mgr_elems:
+        params = {p.attrib["name"]: p.attrib["value"] for p in mgr.findall("param") if "name" in p.attrib}
+        assert params.get("bond_timeout") == "$(var bond_timeout)"

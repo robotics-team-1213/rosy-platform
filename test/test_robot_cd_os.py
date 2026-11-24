@@ -196,7 +196,8 @@ def test_real_coordinator_routes_opted_in_os_without_robot_contact(tmp_path, mon
     ({"phase": "done", "os_published_sha": SHA}, ["deploy/robot/pinky_pro/image/a.sh"], {}),  # already published
     ({"phase": "done"}, ["deploy/robot/pinky_pro/image/a.sh"], {"os_engineering": False}),
 ])
-def test_os_publication_waits_for_its_own_reason(tmp_path, state, paths, config):
+def test_os_publication_waits_for_its_own_reason(tmp_path, monkeypatch, state, paths, config):
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
     from robot_cd import Coordinator as RealCoordinator, write_json
     write_json(tmp_path / "state.json", {"sha": SHA, "deployed_sha": SHA, "delivery_base_sha": SHA,
                                          "os_published_sha": "b" * 40, **state})
@@ -206,7 +207,8 @@ def test_os_publication_waits_for_its_own_reason(tmp_path, state, paths, config)
     assert c.os_publication_due(SHA) is False
 
 
-def test_an_unchanged_source_is_compared_once(tmp_path):
+def test_an_unchanged_source_is_compared_once(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
     from robot_cd import Coordinator as RealCoordinator, write_json
     write_json(tmp_path / "state.json", {"sha": SHA, "phase": "done", "deployed_sha": SHA, "delivery_base_sha": SHA,
                                          "os_published_sha": "b" * 40})
@@ -220,6 +222,7 @@ def test_an_unchanged_source_is_compared_once(tmp_path):
 
 def test_os_auto_rollout_uses_7200s_timeout_fleet_canary_and_open_release(tmp_path, monkeypatch):
     import hashlib
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
     import tools.release.prepare_os_release as prep_mod
     import tools.release.publish_os_release as pub_mod
     import robot_cd as cd_mod

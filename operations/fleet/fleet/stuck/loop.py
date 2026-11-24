@@ -34,7 +34,8 @@ class StuckResolverLoop:
         self.incident_worker = incident_worker
         self.operating_state, self.operating_grant = None, None
         from fleet.observe.rules import RuleSelectionStore
-        self.rule_selections = RuleSelectionStore(board._log.path) if board is not None and board._log is not None else None
+        self.rule_selections = (RuleSelectionStore(board._log.path, debounce_s=10.0, prune_interval_s=60.0)
+                                if board is not None and board._log is not None else None)
         self._rule_selections = {}
         #: D-517 5 (M4): a robot on a running trip gets stopping answers only (app.py sets it).
         self.trip_busy: Callable[[str], bool] = lambda _robot_id: False

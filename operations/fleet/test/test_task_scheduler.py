@@ -44,3 +44,17 @@ def test_scheduler_uses_monotonic_time_for_observed_queue_wait(tmp_path):
 
     assert claimed["task_id"] == "task-1"
     assert claimed["queue_wait_seconds"] == 3.25
+
+
+def test_empty_queue_skips_write_lock_for_expire_and_empty_claim(tmp_path, monkeypatch):
+    store = FleetTaskStore(tmp_path / "fleet.sqlite3")
+    scheduler = FleetTaskScheduler(store, worker_id="worker-a")
+    original_claim = store.claim_next
+    monkeypatch.setattr(store, "claim_next", lambda **_kw: (_ for _ in ()).throw(AssertionError("must not write")))
+
+    scheduler.expire_queued()
+    assert scheduler.claim_next(set()) is None
+
+    monkeypatch.setattr(store, "claim_next", original_claim)
+    _queue(store)
+    assert scheduler.claim_next({"rosy_01"})["task_id"] == "task-1"
