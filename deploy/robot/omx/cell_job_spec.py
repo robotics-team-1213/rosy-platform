@@ -32,6 +32,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     _roi,
     _safe_path,
     _surface_amr_bed_sites,
+    _targets,
     _task_site_names,
     _two_arm_task,
     _two_arm_task_sites,
@@ -67,7 +68,7 @@ JOBS = {
     },
     "calibrate_check": {
         "script": "cell_calibrate.py", "camera": True,
-        "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)},
+        "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)}, "optional": {"targets": _targets},
     },
     "auto_pick_dry_run": {
         "script": "cell_auto_pick.py",
@@ -363,6 +364,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         args += ["--catalog", opt_checked["catalog"]]
     if "roi" in opt_checked:
         args += ["--roi", *opt_checked["roi"]]
+    if "targets" in opt_checked:
+        args += ["--targets", *opt_checked["targets"]]
     for option in (
         "site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
         "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
