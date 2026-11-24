@@ -134,7 +134,7 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         assert bridge.call_tool("cell_capture_clip", {"view": "top", "duration_s": 5, "fps": 10, "out_dir": "clips"})["data"]["id"] == "j-clip"
         assert bridge.call_tool("cell_dataset_pipeline", {"stage": "convert", "episodes": "e", "fps": 15, "outcome": "success"})["data"]["id"] == "j-conv"
         assert bridge.call_tool("cell_dataset_pipeline", {"stage": "transfer", "collection": "c"})["data"]["id"] == "j-xfer"
-        assert bridge.call_tool("learning_run_job", {"kind": "collect_dart", "arm_id": "arm_a", "request_id": "req-learn-1"})["data"]["id"] == "run-1"
+        assert bridge.call_tool("learning_run_job", {"kind": "collect_dart", "arm_id": "arm_a", "request_id": "req-learn-1", "params": {"source_id": "s1"}})["data"]["id"] == "run-1"
         assert bridge.call_tool("learning_stage_bundle", {"run_id": "run-1", "target_dir": "models/s"})["data"]["id"] == "j-stage"
         stage_req = next(b for m, p, _, b in cell_log if m == "POST" and p == "/jobs/stage_policy_bundle")
         exp_mf_sha = hashlib.sha256(json.dumps({"schema": "rosy.canonical-bundle-manifest.v1", "files": []}).encode("utf-8")).hexdigest()
@@ -146,6 +146,7 @@ def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
         assert bridge.call_tool("cell_capture_clip", {"view": "top"})["error_code"] == "INVALID_ARGS"
         assert bridge.call_tool("cell_capture_clip", {"view": "top", "duration_s": 5.5})["error_code"] == "INVALID_ARGS"
         assert bridge.call_tool("learning_run_job", {"kind": "collect_dart", "arm_id": "arm_a"})["error_code"] == "INVALID_ARGS"
+        assert bridge.call_tool("learning_run_job", {"kind": "collect_dart", "arm_id": "arm_a", "request_id": "req-learn-2"})["error_code"] == "INVALID_ARGS"
         assert bridge.call_tool("cell_dry_run", {"config": "c.json", "catalog": "k.json", "roi": [0], "source": "a", "dest": "b", "person_at_switch": True})["error_code"] == "INVALID_ARGS"
         assert bridge.call_tool("fleet_propose_cell_task", {"cell_id": "cell_s", "propose": False})["error_code"] == "INVALID_ARGS"
         assert bridge.call_tool("job_status", {"job_id": "j-nonjson"})["error_code"] == "INVALID_UPSTREAM_RESPONSE"

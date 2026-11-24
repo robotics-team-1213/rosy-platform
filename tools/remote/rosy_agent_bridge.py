@@ -120,7 +120,7 @@ def _obj_schema(props: dict[str, Any], required: list[str] | None = None) -> dic
 
 
 def _safe_segment(val: str) -> bool:
-    return bool(val) and ".." not in val and "/" not in val and "\\" not in val
+    return bool(val) and val not in (".", "..") and ".." not in val and "/" not in val and "\\" not in val and "\x00" not in val
 
 
 TOOL_SPECS: tuple[dict[str, Any], ...] = (
@@ -152,14 +152,14 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
      "inputSchema": _obj_schema({"cell_id": {"type": "string", "enum": _CELLS}, "status": {"type": "string"}})},
     {"name": "fleet_propose_cell_task", "description": "Propose a Fleet-R cell task (PROPOSED only; carries CAS & request_key).",
      "inputSchema": _obj_schema({
-         "cell_id": {"type": "string"}, "arm_id": {"type": "string"}, "src_site": {"type": "string"}, "dst_site": {"type": "string"},
+         "cell_id": {"type": "string", "enum": _CELLS}, "arm_id": {"type": "string"}, "src_site": {"type": "string"}, "dst_site": {"type": "string"},
          "preset": {"type": "string"}, "robot_id": {"type": "string"}, "tier": {"type": "integer"},
          "execution_mode": {"type": "string", "enum": ["guarded_pick", "act_policy"]}, "max_chunks": {"type": "integer"},
          "displaced_to": {"type": "string"}, "zone_id": {"type": "string"},
          "task_id": {"type": "string"}, "request_key": {"type": "string"}, "fallback_from_task_id": {"type": "string"},
          "fallback_verb": {"type": "string"}, "failure_bundle_id": {"type": "string"}, "failure_context_sha256": {"type": "string"},
          "expected_context_sha256": {"type": "string"}, "expected_readiness_digest": {"type": "string"},
-         "expected_dispatch_generation": {"type": "integer"}, "expected_stop_generation": {"type": "integer"},
+         "expected_authority_epoch": {"type": "integer"}, "expected_dispatch_generation": {"type": "integer"}, "expected_stop_generation": {"type": "integer"},
      }, ["cell_id"])},
     {"name": "job_status", "description": "Poll cell :8781 job or learning :8768 canonical run status.",
      "inputSchema": _obj_schema({"job_id": {"type": "string"}, "plane": {"type": "string", "enum": ["cell", "learning"]}}, ["job_id"])},
@@ -184,7 +184,7 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
     {"name": "learning_run_job", "description": "Start a canonical offline learning job on :8768.",
      "inputSchema": _obj_schema({
          "kind": {"type": "string"}, "arm_id": {"type": "string"}, "request_id": {"type": "string"}, "params": {"type": "object"},
-     }, ["kind", "arm_id", "request_id"])},
+     }, ["kind", "arm_id", "request_id", "params"])},
     {"name": "learning_stage_bundle", "description": "Fetch canonical bundle-manifest from :8768 and stage policy bundle onto :8781.",
      "inputSchema": _obj_schema({"run_id": {"type": "string"}, "target_dir": {"type": "string"}}, ["run_id", "target_dir"])},
 )
@@ -506,7 +506,8 @@ def build_config(args: argparse.Namespace) -> BridgeConfig:
     cfg_env = os.environ.get("ROSY_AGENT_BRIDGE_CONFIG", "").strip()
     cfg_path = args.config if args.config is not None else (Path(cfg_env) if cfg_env else None)
     cfg_data = _load_config_file(cfg_path)
-    raw_timeout = args.timeout_s if args.timeout_s is not None else cfg_data.get("timeout_s", 15.0)
+    raw_timeout = args.timeout_s if args.timeout_s is not None else cfg_data.get("timeout_s")
+    timeout_s = 15.0 if raw_timeout is None else float(raw_timeout)
     cookie_path = None if (args.fleet_cookie_file is None and os.environ.get("ROSY_FLEET_COOKIE", "").strip()) else _pick_path(
         args.fleet_cookie_file, "ROSY_FLEET_COOKIE_FILE", cfg_data, "fleet_cookie_file",
     )
@@ -519,7 +520,7 @@ def build_config(args: argparse.Namespace) -> BridgeConfig:
         fleet_ca_file=_pick_str(args.fleet_ca_file, "ROSY_FLEET_CA_FILE", cfg_data, "fleet_ca_file"),
         learning_url=_pick_str(args.learning_url, "ROSY_LEARNING_URL", cfg_data, "learning_url", "http://127.0.0.1:8768"),
         learning_token=_read_tok(None, args.learning_token_file or (None if os.environ.get("ROSY_LEARNING_TOKEN", "").strip() else _pick_path(None, "", cfg_data, "learning_token_file")), "ROSY_LEARNING_TOKEN"),
-        timeout_s=float(raw_timeout),
+        timeout_s=timeout_s,
     )
 
 
