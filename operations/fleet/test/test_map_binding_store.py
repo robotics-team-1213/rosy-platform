@@ -88,8 +88,8 @@ def test_place_only_site_map_bump_keeps_binding_while_wall_change_invalidates_an
             {"id": "A", "name": "Start", "x": 0.0, "y": 0.0, "yaw": 0.0, "kind": "start"},
             {"id": "B", "name": "Goal", "x": 1.0, "y": 0.0, "yaw": 0.0, "kind": "stop"},
         ],
-        "edges": [{"id": "ab", "from_place": "A", "to_place": "B", "direction": "one_way",
-                   "width_m": 0.4, "speed_mps": 0.3, "polyline": [[0.0, 0.0], [1.0, 0.0]]}],
+        "edges": [{"id": "ab", "from": "A", "to": "B", "direction": "one_way",
+                   "width_m": 0.4, "speed_cap_mps": 0.3, "polyline": [[0.0, 0.0], [1.0, 0.0]]}],
         "walls": [{"id": "w1", "face": [[-1.0, -1.0], [2.0, -1.0]]}],
     }
     store = SiteMapStore()

@@ -140,8 +140,8 @@ class LocalizationTests(unittest.TestCase):
         grid[25:225, 224] = 100
         grid[25, 25:225] = 100
         grid[224, 25:225] = 100
-        # Add unknown (-1) patch outside/along top wall window
-        grid[25, 110:150] = -1
+        # Open unknown (-1) doorway on left wall covering 130..162 deg from (1.5, 1.5)
+        grid[88:139, 25] = -1
         m = MapAgreement(grid, .02, (0., 0.), tolerance=.04)
         truth = (1.5, 1.5, 0.0)
         angles = np.linspace(-math.pi, math.pi, 180, endpoint=False)

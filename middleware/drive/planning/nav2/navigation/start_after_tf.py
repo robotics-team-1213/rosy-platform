@@ -75,7 +75,10 @@ def run_startup_loop(
         spin_until_future_complete(node, result, timeout_sec=120.0)
         if not ok():
             return 0
-        response = result.result() if result.done() else None
+        try:
+            response = result.result() if result.done() else None
+        except Exception:
+            response = None
         if response is not None and response.success:
             return 0
         attempts += 1

@@ -48,6 +48,19 @@ def _localized(state: Mapping) -> tuple[str, str]:
     return str(state.get("map_id") or grid), grid
 
 
+def _site_matches(binding: Mapping, site: Optional[tuple[str, int]],
+                  frame_for_version: Optional[Callable[[int], Optional[str]]] = None) -> bool:
+    if site is None or binding["site_map_id"] != site[0]:
+        return False
+    if binding["site_map_version"] == int(site[1]):
+        return True
+    if frame_for_version is None:
+        return False
+    bound_frame = binding.get("site_frame_sha256") or frame_for_version(int(binding["site_map_version"]))
+    cur_frame = frame_for_version(int(site[1]))
+    return bool(bound_frame and cur_frame and bound_frame == cur_frame)
+
+
 class MapBindingStore:
     def __init__(self, db: sqlite3.Connection, lock: threading.RLock, clock: Callable[[], float],
                  event: Callable[[str, str, dict], None],
@@ -119,24 +132,13 @@ class MapBindingStore:
                 "revoked_at", "revoke_reason")
         return [dict(zip(keys, row)) for row in rows]
 
-    def _site_matches(self, binding: Mapping, site: Optional[tuple[str, int]]) -> bool:
-        if site is None or binding["site_map_id"] != site[0]:
-            return False
-        if binding["site_map_version"] == int(site[1]):
-            return True
-        if self._frame_for_version is None:
-            return False
-        bound_frame = binding.get("site_frame_sha256") or self._frame_for_version(int(binding["site_map_version"]))
-        cur_frame = self._frame_for_version(int(site[1]))
-        return bool(bound_frame and cur_frame and bound_frame == cur_frame)
-
     def binding_for_grid(self, robot_id: str, robot_grid_id: Optional[str],
                          site: Optional[tuple[str, int]]) -> tuple[Optional[Fit], str]:
         """Read-only frame transform for a bound robot grid, even before the robot is LOCALIZED."""
         binding = self.active(robot_id)
         if binding is None:
             return None, "MAP_BINDING_REQUIRED"
-        if not self._site_matches(binding, site):
+        if not _site_matches(binding, site, getattr(self, "_frame_for_version", None)):
             return None, "MAP_BINDING_SITE_CHANGED"
         if robot_grid_id != binding["robot_grid_id"]:
             return None, "MAP_BINDING_GRID_CHANGED"
@@ -148,7 +150,7 @@ class MapBindingStore:
         binding = self.active(robot_id)
         if binding is None:
             return None, "MAP_BINDING_REQUIRED"
-        if not self._site_matches(binding, site):
+        if not _site_matches(binding, site, getattr(self, "_frame_for_version", None)):
             return None, "MAP_BINDING_SITE_CHANGED"
         loc = state.get("localization") or {}
         if loc.get("state") != "LOCALIZED" or loc.get("pose_frame") != "map":

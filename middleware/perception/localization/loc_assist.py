@@ -307,7 +307,7 @@ class LocAssist:
                  and _moved(odom, self._searched_odom, self.moved_m, self.moved_rad))
         if moved:
             self._empty_streak = 0
-        retry_s = min(30.0, self.retry_s * (2 ** min(self._empty_streak, 3)))
+        retry_s = min(30.0, self.retry_s * (2 ** min(max(0, self._empty_streak - 1), 3)))
         waited = now_s - self._searched_at >= retry_s
         state = self.machine.state
         if state in (LocState.UNKNOWN, LocState.SUSPECT):
@@ -323,6 +323,10 @@ class LocAssist:
     def camera_wanted(self):
         """Square and paint evidence only matter outside LOCALIZED; the node drops the camera there."""
         return self.machine.state is not LocState.LOCALIZED
+
+    def on_map_changed(self):
+        """Reset empty-search backoff when a new map arrives."""
+        self._empty_streak = 0
 
     def search_started(self, now_s, odom):
         self._searching = (tuple(odom), self._epoch, float(now_s))

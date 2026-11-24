@@ -214,7 +214,7 @@ class MapAgreement:
             ray_cells = np.floor((ray - self.origin) / self.resolution).astype(int)
             rx, ry = ray_cells[:, :, 0], ray_cells[:, :, 1]
             in_map = (rx >= 0) & (rx < w) & (ry >= 0) & (ry < h)
-            blocked = np.ones(rx.shape, dtype=bool)
+            blocked = np.zeros(rx.shape, dtype=bool)
             blocked[in_map] = self.grid[ry[in_map], rx[in_map]] >= 65
             obstructed = np.any(blocked, axis=1)
             normal = np.column_stack((-np.sin(world_angles), np.cos(world_angles)))
@@ -223,7 +223,7 @@ class MapAgreement:
                 indices = np.floor((shifted - self.origin) / self.resolution).astype(int)
                 sx, sy = indices[:, :, 0], indices[:, :, 1]
                 valid = (sx >= 0) & (sx < w) & (sy >= 0) & (sy < h)
-                blocked = np.ones(sx.shape, dtype=bool)
+                blocked = np.zeros(sx.shape, dtype=bool)
                 blocked[valid] = self.grid[sy[valid], sx[valid]] >= 65
                 obstructed &= np.any(blocked, axis=1)
             hit &= ~obstructed

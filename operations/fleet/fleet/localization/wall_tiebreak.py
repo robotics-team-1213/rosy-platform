@@ -63,7 +63,7 @@ def choose_unique(report: CandidateReport, camera_xy: Optional[Sequence[float]])
     if not math.isfinite(c.scan_fit) or c.scan_fit < MIN_FIT:
         return None
     d_near = math.dist((c.x, c.y), camera_xy)
-    if d_near > UNIQUE_NEAR_M:
+    if not (d_near <= UNIQUE_NEAR_M):
         return None
     return c, {"camera_to_chosen_m": round(d_near, 3)}
 

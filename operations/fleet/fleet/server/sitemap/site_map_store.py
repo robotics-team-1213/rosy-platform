@@ -102,6 +102,7 @@ class SiteMapStore:
                 self._db.execute("ALTER TABLE site_map_profiles ADD COLUMN info TEXT NOT NULL DEFAULT '{}'")
         self._init_frames()
         self._cached: Optional[tuple[int, SiteMap, Graph, Painted]] = None
+        self._frame_digests: dict[int, str] = {}
         self._publish()
         from fleet.server.site_rules_store import SiteRulesStore  # imports SiteMapError from here
         #: D-982 per-site operating rules: their own versions, the same database and audit rows.
@@ -118,10 +119,18 @@ class SiteMapStore:
 
     def frame_sha256(self, version: int) -> Optional[str]:
         """Geometry frame digest of one stored site map version, or None when absent."""
+        ver = int(version)
         with self._lock:
+            cached = self._frame_digests.get(ver)
+            if cached is not None:
+                return cached
             row = self._db.execute(
-                "SELECT body FROM site_map_versions WHERE version = ?", (int(version),)).fetchone()
-        return None if row is None else site_frame_sha256(json.loads(row[0]))
+                "SELECT body FROM site_map_versions WHERE version = ?", (ver,)).fetchone()
+            if row is None:
+                return None
+            digest = site_frame_sha256(json.loads(row[0]))
+            self._frame_digests[ver] = digest
+            return digest
 
     def _init_frames(self) -> None:
         with self._lock, self._db:

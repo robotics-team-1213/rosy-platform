@@ -233,12 +233,12 @@ class LocalizationService:
             return None
         if not state:
             return cam
-        active_map = self._current_active_map_id()
-        if active_map and state.get("map_id") == active_map:
-            return cam
         fit = self._binding_fit_for_state(rid, state)
         if fit is not None:
             return fit.inverse(cam)
+        active_map = self._current_active_map_id()
+        if active_map and state.get("map_id") == active_map:
+            return cam
         fb = state.get("slam_fallback")
         if isinstance(fb, Mapping) and fb.get("phase") == "WAITING_LOCALIZATION":
             return cam

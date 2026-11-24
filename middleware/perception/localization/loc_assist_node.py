@@ -163,6 +163,7 @@ class LocAssistNode(Node):
     def on_map(self, msg):
         self.field = self.clear = None
         self.generation += 1
+        self.core.on_map_changed()
         info = msg.info
         try:
             rotation = yaw(info.origin.orientation)

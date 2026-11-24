@@ -931,39 +931,40 @@ def test_wall_tiebreak_decision_threads_evidence_and_localizes():
 def test_stationary_empty_searches_back_off_up_to_30s_and_reset_on_move_or_request():
     a = core()
     assert a.search_due(0.0, ODOM)
-    # 1st empty search at t=0.0 -> empty_streak=1 -> next retry waits 10.0 s
+    # 1st empty search at t=0.0 -> empty_streak=1 -> next retry stays at base 5.0 s
     a.search_started(0.0, ODOM)
     a.search_finished(0.5, ODOM, [])
-    assert not a.search_due(5.5, ODOM)
-    assert not a.search_due(10.4, ODOM)
-    assert a.search_due(10.5, ODOM)
+    assert not a.search_due(5.4, ODOM)
+    assert a.search_due(5.5, ODOM)
 
-    # 2nd empty search -> streak=2 -> 20.0 s
-    a.search_started(10.5, ODOM)
-    a.search_finished(11.0, ODOM, [])
-    assert not a.search_due(30.9, ODOM)
-    assert a.search_due(31.0, ODOM)
+    # 2nd empty search -> streak=2 -> backs off to 10.0 s
+    a.search_started(5.5, ODOM)
+    a.search_finished(6.0, ODOM, [])
+    assert not a.search_due(15.9, ODOM)
+    assert a.search_due(16.0, ODOM)
 
-    # 3rd empty search -> streak=3 -> capped at 30.0 s
-    a.search_started(31.0, ODOM)
-    a.search_finished(31.5, ODOM, [])
-    assert not a.search_due(61.4, ODOM)
-    assert a.search_due(61.5, ODOM)
+    # 3rd empty search -> streak=3 -> backs off to 20.0 s
+    a.search_started(16.0, ODOM)
+    a.search_finished(16.5, ODOM, [])
+    assert not a.search_due(36.4, ODOM)
+    assert a.search_due(36.5, ODOM)
 
-    # 4th empty search -> still capped at 30.0 s
-    a.search_started(61.5, ODOM)
-    a.search_finished(62.0, ODOM, [])
-    assert not a.search_due(91.9, ODOM)
-    assert a.search_due(92.0, ODOM)
+    # 4th empty search -> streak=4 -> capped at 30.0 s
+    a.search_started(36.5, ODOM)
+    a.search_finished(37.0, ODOM, [])
+    assert not a.search_due(66.9, ODOM)
+    assert a.search_due(67.0, ODOM)
 
     # Moving > moved_m resets backoff back to base 5.0 s
     moved_odom = (ODOM[0] + 0.2, ODOM[1], ODOM[2])
-    a.search_started(92.0, ODOM)
-    a.search_finished(92.5, ODOM, [])
-    assert not a.search_due(98.0, ODOM)
-    assert a.search_due(98.0, moved_odom)
+    a.search_started(67.0, ODOM)
+    a.search_finished(67.5, ODOM, [])
+    assert not a.search_due(72.0, ODOM)
+    assert a.search_due(72.5, moved_odom)
 
-    # Explicit pickup/mission end request also resets backoff immediately
-    a.on_mission(99.0, {'state': 'running'})
-    a.on_mission(100.0, {'state': 'done'})
-    assert a.search_due(100.0, ODOM)
+    # Map change or mission end resets backoff immediately
+    a.on_map_changed()
+    assert a._empty_streak == 0
+    a.on_mission(73.0, {'state': 'running'})
+    a.on_mission(74.0, {'state': 'done'})
+    assert a.search_due(74.0, ODOM)
