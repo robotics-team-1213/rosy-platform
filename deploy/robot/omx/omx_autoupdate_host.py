@@ -185,7 +185,8 @@ class Host:
         system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
         if uv:  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
             sp.run([uv, "venv", "-q", "--python", self.cfg["base_python"], *system, str(target)], check=True, timeout=300)
-            sp.run([uv, "pip", "install", "-q", "--python", str(target / "bin" / "python"), "-r", str(lock)], check=True, timeout=3000)
+            strategy = ["--index-strategy", "unsafe-best-match"] if "--extra-index-url" in lock.read_text(encoding="utf-8") else []
+            sp.run([uv, "pip", "install", "-q", "--python", str(target / "bin" / "python"), *strategy, "-r", str(lock)], check=True, timeout=3000)
             return
         sp.run([self.cfg["base_python"], "-m", "venv", *system, str(target)], check=True, timeout=300)
         sp.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)], check=True, timeout=3000)
