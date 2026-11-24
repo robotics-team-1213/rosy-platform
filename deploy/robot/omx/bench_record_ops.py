@@ -8,7 +8,7 @@ from pathlib import Path
 from bench_record_inspect import ARMS, BI_ARM, HERE, active_handover_units
 from bench_record_guard import FOLLOWER_TORQUE_ON, follower_torque_on, hold_other_arm_locks, release, resolve_record_config
 from bench_record_leader import library_home_ticks
-from bench_record_step import at_home, finish_home_child, resolve_home_failure, stop_home_runner_now
+from bench_record_step import at_home, finish_home_child, home_session_extras, resolve_home_failure, stop_home_runner_now
 
 
 HOME_UNFOLDED = "home requires an empty, folded arm"  # cell_unwedge.return_home's refusal, written to the receipt
@@ -177,7 +177,7 @@ class BenchOpsMixin:
                     rec_cmd = [self.python, str(HERE / "record_session.py"),
                                "--config", str(tmp_cfg_p), "--caps", str(caps_p),
                                "--arm", a, "--chunks", str(lib_p),
-                               "--io", str(io_dir), "--operating-profile", str(rprof)]
+                               "--io", str(io_dir), "--operating-profile", str(rprof), *home_session_extras(self.prep, stack)]
                     if leader_task is not None:
                         rec_cmd.append("--skip-leader-finish")
                     live_p = io_dir / "live.json"
