@@ -1,5 +1,6 @@
 import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
+import {domEl as node} from '/learning-ui.js';
 const $=id=>document.getElementById(id);
 const LIMIT=256*1024;  // each uploaded object stays under the server's 256 KiB bound
 const STATES={unreviewed:'미검수',review_candidate:'검수 후보',disputed:'이견'};
@@ -7,7 +8,6 @@ const FIELDS=[['incident_id','사건'],['robot_id','로봇'],['review_state','�
   ['core_cause','CORE 원인'],['ai_cause_draft','AI 초안 원인'],['reviewed_root_cause','확정 원인']];
 let token='';
 function fail(message){$('incident-error').hidden=!message;$('incident-error').textContent=message||'';}
-function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 async function read(input,name){
   const file=input.files[0];
   if(!file)throw new Error(`${name} 파일을 선택하세요.`);
