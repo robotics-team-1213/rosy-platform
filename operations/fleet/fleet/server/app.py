@@ -17,7 +17,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import sqlite3
+import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 from functools import partial
 from pathlib import Path
@@ -263,6 +265,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         console.set_task_queue_release_callback(release_traffic_task)
 
     install_mutation_audit(app, task_service)
+
+    @app.middleware("http")
+    async def _attach_request_id(request: Request, call_next):
+        incoming = (request.headers.get("X-Request-Id") or "").strip()
+        req_id = incoming if re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", incoming) else uuid.uuid4().hex
+        request.state.request_id = req_id
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = req_id
+        return response
     if hub is not None:
         from fleet.hub.server import install_hub_routes
         install_hub_routes(app, hub, hub_token=console_token)
