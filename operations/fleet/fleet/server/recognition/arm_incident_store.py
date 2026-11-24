@@ -227,6 +227,7 @@ class ArmIncidentStore:
                                   (incident_id,)).fetchall()
         out = {"incident_id": incident_id, "source_id": source_id, "session_id": session_id,
                "state": "cleared" if cleared_at is not None else "explained" if explained_at is not None else "open",
+               "held": cleared_at is None and _holds(decision) and not software_stop(_facts(facts)),
                "reported_at": reported_at, "facts": json.loads(facts), "decision": json.loads(decision),
                "recovery": json.loads(recovery) if recovery else None,
                "explanation": None if explained_at is None else {

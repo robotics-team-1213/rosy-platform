@@ -335,3 +335,29 @@ def test_site_points_stage_b_rejects_dangling_s_out_and_ambiguous_or_corrupt_rul
         con.execute("UPDATE site_rules_versions SET sha256='0' WHERE version=(SELECT MAX(version) FROM site_rules_versions)")
         con.commit()
     assert client.get("/api/fleet/site-points", headers=VIEWER).status_code == 422
+
+
+def test_site_points_accepts_raw_unsorted_site_rules_body_hash(tmp_path):
+    client, store = _client_and_store(tmp_path)
+    _activate_map_and_rules(store, _base_v348_map(), {"return": {"exit_place": "S1"}, "stops": [{"place": "S3", "role": "unload"}]})
+    raw_body = '{"stops": [{"place": "S3", "role": "unload"}], "return": {"exit_place": "S1"}}'
+    raw_sha = sha256(raw_body.encode("utf-8")).hexdigest()
+    with sqlite3.connect(store.path) as con:
+        con.execute(
+            "UPDATE site_rules_versions SET body=?, sha256=? WHERE version=(SELECT MAX(version) FROM site_rules_versions)",
+            (raw_body, raw_sha),
+        )
+        con.commit()
+    ok = client.get("/api/fleet/site-points?view=port", headers=VIEWER)
+    assert ok.status_code == 200
+    assert client.get("/api/fleet/site-rules/active", headers=VIEWER).status_code == 200
+
+    with sqlite3.connect(store.path) as con:
+        con.execute("UPDATE site_rules_versions SET sha256='0' WHERE version=(SELECT MAX(version) FROM site_rules_versions)")
+        con.commit()
+    bad = client.get("/api/fleet/site-points?view=port", headers=VIEWER)
+    assert bad.status_code == 422
+    assert bad.json()["detail"]["code"] == "SITE_RULES_BODY_HASH_MISMATCH"
+    bad_rules = client.get("/api/fleet/site-rules/active", headers=VIEWER)
+    assert bad_rules.status_code == 422
+    assert bad_rules.json()["detail"]["code"] == "SITE_RULES_BODY_HASH_MISMATCH"

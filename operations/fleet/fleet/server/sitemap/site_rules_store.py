@@ -59,6 +59,9 @@ class SiteRulesStore:
             row = self._row()
         if row is None:
             return None
+        if hashlib.sha256(row[1].encode("utf-8")).hexdigest() != row[2]:
+            raise SiteMapError(422, "SITE_RULES_BODY_HASH_MISMATCH",
+                               "active site rules body does not match recorded sha256")
         return {"version": row[0], "sha256": row[2], "activated_by": row[3], "activated_at": row[4],
                 "rules": json.loads(row[1])}
 

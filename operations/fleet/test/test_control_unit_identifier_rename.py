@@ -35,6 +35,34 @@ def test_topology_and_scope_resolution_accept_the_pre_rename_id():
         raise AssertionError("an unrelated unit id must stay unknown")
 
 
+def test_topology_manifest_canonicalizes_pre_rename_unit_and_parent():
+    legacy = ControlUnitTopology.from_mapping({"revision": "v1", "units": [
+        {"id": "R", "resources": ["robot:p1"]},
+        {"id": "CELL-A", "parent": "R", "resources": ["workcell:arm_a"]},
+        {"id": "SUB-CELL", "parent": "CELL-A", "resources": []},
+    ]})
+    renamed = ControlUnitTopology.from_mapping({"revision": "v1", "units": [
+        {"id": "R", "resources": ["robot:p1"]},
+        {"id": "ARM-CELL", "parent": "R", "resources": ["workcell:arm_a"]},
+        {"id": "SUB-CELL", "parent": "ARM-CELL", "resources": []},
+    ]})
+    assert legacy.digest == renamed.digest
+    assert legacy.unit("CELL-A").unit_id == "ARM-CELL"
+    assert legacy.unit("ARM-CELL").unit_id == "ARM-CELL"
+    assert legacy.next_hop("R", "CELL-A") == "ARM-CELL"
+    assert legacy.next_hop("CELL-A", "SUB-CELL") == "SUB-CELL"
+    try:
+        ControlUnitTopology.from_mapping({"revision": "v1", "units": [
+            {"id": "R", "resources": ["robot:p1"]},
+            {"id": "CELL-A", "parent": "R", "resources": ["workcell:arm_a"]},
+            {"id": "ARM-CELL", "parent": "R", "resources": []},
+        ]})
+    except ValueError as exc:
+        assert str(exc) == "DUPLICATE_CONTROL_UNIT_OWNERSHIP"
+    else:
+        raise AssertionError("both the alias and the renamed unit id must not be accepted together")
+
+
 def test_peer_configuration_accepts_a_pre_rename_neighbor_key(tmp_path):
     directory = tmp_path / "unit"
     directory.mkdir()
