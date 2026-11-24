@@ -80,7 +80,7 @@ function applyRole() {
 function markLocked(reason = "auth") {
   stopNotice();
   // D-519 6 — paired consoles offer 아이디·비밀번호 once per lock.
-  if (!auth.locked) loginForm.refresh(true);
+  if (!auth.locked) tokenAccess?.refreshLogin(true);
   auth.locked = true;
   auth.role = null;
   peerPicker?.reset();
