@@ -19,6 +19,9 @@ from .lane_keep_lines import MAX_GAP_M
 #: A transverse line across the path this close ahead of a lone, diverging
 #: boundary is a junction mouth.
 JUNCTION_AHEAD_M = 0.45
+# The narrow bay guide can give a T sighting from the spawn. Wait until the
+# crossing enters the measured approach range of the simulated front camera.
+TAPE_JUNCTION_AHEAD_M = 0.30
 #: Two boundaries on the followed side split by more than this are a fork.
 FORK_MIN_ANGLE_RAD = math.radians(30.0)
 #: A boundary bending away out of the lane by more than this opens a mouth.
@@ -47,6 +50,23 @@ def _across_path(ends, half):
     (x0, y0), (x1, y1) = ((float(p[0]), float(p[1])) for p in ends)
     ahead = x0 if y1 == y0 else x0 + (x1 - x0) * (0.0 - y0) / (y1 - y0)
     return ahead if 0.0 < ahead <= JUNCTION_AHEAD_M else None
+
+
+def _tape_junction(transverse, boundaries, half):
+    """Recognize a T where a centered simulator guide ends at a crossing."""
+    stems = [
+        sorted(point[0] for point in record["ends_m"])
+        for record in boundaries
+        if abs(math.radians(record["heading_deg"])) <= DIVERGE_MIN_RAD
+        and all(abs(point[1]) <= half / 2 for point in record["ends_m"])
+    ]
+    crossings = [a for _, _, ends, steep in transverse
+                 if not steep and (a := _across_path(ends, half)) is not None and a <= TAPE_JUNCTION_AHEAD_M]
+    for ahead in sorted(crossings):
+        if (any(0 < ahead - far <= CONTINUITY_M for _, far in stems)
+                and not any(near <= ahead + CONTINUITY_M < far for near, far in stems)):
+            return "junction_transverse", ahead
+    return None, None
 
 
 def _junction(strategy, transverse, left, right, half, corner_turning, max_lateral_m, continuity=False):
@@ -81,3 +101,12 @@ def _junction(strategy, transverse, left, right, half, corner_turning, max_later
         branch = max(split, key=lambda r: outward * r["heading_deg"])
         return "junction_fork", min(p[0] for p in branch["ends_m"])
     return None, None
+
+
+def _choose_tape_target(left, right, half, as_array):
+    """Select the nearest centered tape boundary and pursuit target."""
+    nearby = [r for r in left + right if abs(r["y_at_side_x_m"]) < half]
+    chosen = min(nearby, key=lambda r: abs(r["y_at_side_x_m"]), default=None)
+    if chosen:
+        chosen["selected"] = True
+    return (as_array(chosen["pursuit_m"]), f"{chosen['side']}_only") if chosen else (None, "none")

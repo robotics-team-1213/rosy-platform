@@ -1,4 +1,4 @@
 {
-  "source": "pinklab-art/pinky_pro (pinky_description, rev 014a09f289e6, Apache-2.0); 9 collision STL and 4 visual DAE match upstream SHA-256, 6 visual DAE (base_link, camera_assy, front_camera_mount, main_wheel, rplidar_c1, screen_assy) modified locally",
+  "source": "pinklab-art/pinky_pro (pinky_description, rev 014a09f289e6, Apache-2.0); 9 collision STL and 4 visual DAE match upstream SHA-256, 6 visual DAE (base_link, camera_assy, front_camera_mount, main_wheel, rplidar_c1, screen_assy) modified locally; cargo_tray.dae and cargo_tray.stl derived from ROSY J-v3 rear tray (Rosy/docs/research/pinky-usb-dock-guide-2026-11-01/make_pogo_v3.py via rosy-modeling/parts/pinky-tray-j-v3/build_pinky_with_tray.py)",
   "note": "See middleware/devices/pinky/description/meshes/AGENTS.md and learning/envs/isaac/assets/README.md."
 }

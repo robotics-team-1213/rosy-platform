@@ -10,6 +10,7 @@ import yaml
 from perception_runtime.perception.camera_ground import nominal_ground_plane
 from perception_runtime.perception.lane_keep import CORNER_MAX_ERROR as CORNER_CAP, FLIP_WINDOW_FRAMES as FLIP_WINDOW, LaneKeeper
 from perception_runtime.perception.lane_keep import SIDE_X_M
+from perception_runtime.perception.lane_keep_junction import _tape_junction
 from perception_runtime.perception.lane_keep_pairs import is_pair, pair_conflicts
 
 PKG = Path(__file__).resolve().parents[1]
@@ -19,6 +20,18 @@ GROUND = nominal_ground_plane(source="NOMINAL", allowed=True, width_px=320, heig
 X_OFFSET = float(PROFILE["x_offset_m"])
 HALF = 0.0925
 TAPE_HALF = 0.015
+
+
+def test_sim_guide_requires_a_centered_stem_ending_at_the_crossing():
+    bar = (None, None, ((.22, -.13), (.22, .13)), False)
+    stem = {"heading_deg": 0.3, "ends_m": [[.121, -.002], [.181, 0.0]]}
+    assert _tape_junction([bar], [stem], HALF) == ("junction_transverse", .22)
+    assert _tape_junction([bar], [], HALF) == (None, None)
+    assert _tape_junction([bar], [{**stem, "ends_m": [[.05, 0], [.145, 0]]}], HALF) == (None, None)
+    far_bar = (None, None, ((.42, -.13), (.42, .13)), False)
+    assert _tape_junction([far_bar], [{**stem, "ends_m": [[.121, 0], [.381, 0]]}], HALF) == (None, None)
+    straight_ahead = {**stem, "ends_m": [[.25, 0], [.33, 0]]}
+    assert _tape_junction([bar], [stem, straight_ahead], HALF) == (None, None)
 
 
 def _floor_xy():
@@ -68,6 +81,21 @@ def test_centred_lane_reads_near_zero_with_both_boundaries():
     sides = sorted(b["side"] for b in last["boundaries"])
     assert sides == ["left", "right"]
     assert last["target_px"] is not None
+
+
+def test_single_tape_centerline_has_no_lane_boundary_offset():
+    image = _render([(0.0, 0.0)])
+    lane, _ = _keep(image)
+    tape, last = _keep(image, tape_centerline=True)
+    assert lane is not None and abs(lane.error) > 0.5
+    assert tape is not None and abs(tape.error) < 0.1
+    assert abs(last["target_m"][1]) < 0.01
+    assert sum(bool(line.get("selected")) for line in last["boundaries"]) == 1
+    assert _keep(_render(), tape_centerline=True)[0] is None
+
+    keeper = LaneKeeper(camera_x_offset_m=X_OFFSET, smoothing=0.5)
+    for frame in (image, _render([(0.01, 0.0)])):
+        assert keeper.update(frame, GROUND, lane_half_width_m=HALF, tape_centerline=True) is not None
 
 
 def test_follow_explanation_marks_only_the_chosen_pair_and_records_lane_width():

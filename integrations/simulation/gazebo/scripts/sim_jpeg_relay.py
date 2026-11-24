@@ -9,14 +9,30 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import CompressedImage, Image
-from cv_bridge import CvBridge
 import cv2
+import numpy as np
+
+
+def bgr_frame(msg):
+    layouts = {
+        "bgr8": (3, None), "rgb8": (3, cv2.COLOR_RGB2BGR),
+        "mono8": (1, cv2.COLOR_GRAY2BGR), "bgra8": (4, cv2.COLOR_BGRA2BGR),
+        "rgba8": (4, cv2.COLOR_RGBA2BGR),
+    }
+    if msg.encoding not in layouts:
+        raise ValueError(f"unsupported Gazebo image encoding {msg.encoding!r}")
+    channels, conversion = layouts[msg.encoding]
+    packed = msg.width * channels
+    pixels = np.frombuffer(msg.data, dtype=np.uint8)
+    if msg.width <= 0 or msg.height <= 0 or msg.step < packed or pixels.size != msg.height * msg.step:
+        raise ValueError("invalid Gazebo image dimensions or stride")
+    frame = pixels.reshape(msg.height, msg.step)[:, :packed].reshape(msg.height, msg.width, channels)
+    return frame if conversion is None else cv2.cvtColor(frame, conversion)
 
 
 class SimJpegRelay(Node):
     def __init__(self):
         super().__init__("pilot_sim_jpeg_relay")
-        self.bridge = CvBridge()
         self.pub = self.create_publisher(CompressedImage, "camera/preview/compressed", 10)
         latest = QoSProfile(depth=1, history=HistoryPolicy.KEEP_LAST,
                             reliability=ReliabilityPolicy.RELIABLE)
@@ -26,7 +42,7 @@ class SimJpegRelay(Node):
 
     def on_image(self, msg):
         try:
-            frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+            frame = bgr_frame(msg)
             max_width = int(self.get_parameter("max_width").value)
             if frame.shape[1] > max_width:
                 scale = max_width / frame.shape[1]

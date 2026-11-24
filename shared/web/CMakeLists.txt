@@ -87,6 +87,7 @@ install(FILES
   meshes/omx-link7.stl
   meshes/pinky-body.stl
   meshes/pinky-pro.urdf
+  meshes/pinky-tray.stl
   meshes/pinky-wheel.stl
   DESTINATION share/${PROJECT_NAME}/meshes
 )

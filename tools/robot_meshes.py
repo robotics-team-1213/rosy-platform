@@ -42,6 +42,7 @@ PINKY_BODY = [
     ("caster_wheel", (-0.0585 - 0.011, 0, 0.028 - 0.007 - 0.0035 - 0.011), (0, 0, 0), 160),
 ]
 WHEEL_TARGET, WHEEL_Y, WHEEL_Z = 520, 0.04055, 0.028
+TRAY_TARGET = 900
 Tri = tuple  # (ax, ay, az, bx, by, bz, cx, cy, cz)
 
 
@@ -209,16 +210,19 @@ def pinky_files() -> dict[str, bytes]:
     for name, xyz, rpy, target in PINKY_BODY:
         body += transform(decimate(read_dae(visual / f"{name}.dae"), target), rpy_matrix(xyz, rpy))
     wheel = decimate(read_dae(visual / "main_wheel.dae"), WHEEL_TARGET)  # drawn mirrored: the left wheel's yaw (+90) is in the URDF
+    tray = transform(decimate(read_dae(visual / "cargo_tray.dae"), TRAY_TARGET), rpy_matrix((0, 0, 0.028), (0, 0, 0)))
     lines = ['<robot name="pinky_pro">', '  <link name="base_footprint"/>',
-             '  <link name="body"><visual><geometry><mesh filename="pinky-body.stl"/></geometry></visual></link>']
+             '  <link name="body"><visual><geometry><mesh filename="pinky-body.stl"/></geometry></visual></link>',
+             '  <link name="cargo_tray"><visual><geometry><mesh filename="pinky-tray.stl"/></geometry></visual></link>']
     for side, direction in (("l", 1), ("r", -1)):
         lines.append(f'  <link name="{side}_wheel"><visual><origin xyz="0 0 0" rpy="0 0 {num(direction * math.pi / 2)}"/>'
                      '<geometry><mesh filename="pinky-wheel.stl"/></geometry></visual></link>')
     lines.append('  <joint name="body_fixed" type="fixed"><parent link="base_footprint"/><child link="body"/><origin xyz="0 0 0" rpy="0 0 0"/></joint>')
+    lines.append('  <joint name="cargo_tray_fixed" type="fixed"><parent link="base_footprint"/><child link="cargo_tray"/><origin xyz="0 0 0" rpy="0 0 0"/></joint>')
     for side, direction in (("l", 1), ("r", -1)):
         lines.append(f'  <joint name="{side}_wheel_joint" type="continuous"><parent link="base_footprint"/><child link="{side}_wheel"/>'
                      f'<origin xyz="0 {num(direction * WHEEL_Y)} {num(WHEEL_Z)}" rpy="0 0 0"/><axis xyz="0 1 0"/></joint>')
-    return {"pinky-body.stl": stl_bytes(body), "pinky-wheel.stl": stl_bytes(wheel),
+    return {"pinky-body.stl": stl_bytes(body), "pinky-tray.stl": stl_bytes(tray), "pinky-wheel.stl": stl_bytes(wheel),
             "pinky-pro.urdf": ("\n".join(lines) + "\n</robot>\n").encode()}
 
 

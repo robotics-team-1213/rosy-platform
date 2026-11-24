@@ -109,13 +109,8 @@ from .lane_keep_pairs import (  # noqa: F401 — re-exported; patch constants on
     pair_conflicts,
 )
 from .lane_keep_junction import (  # noqa: F401 — re-exported; patch constants on lane_keep_junction
-    DIVERGE_MIN_RAD,
-    FORK_MIN_ANGLE_RAD,
-    FORK_MIN_LENGTH_M,
-    JUNCTION_AHEAD_M,
-    _across_path,
-    _continues,
-    _junction,
+    DIVERGE_MIN_RAD, FORK_MIN_ANGLE_RAD, FORK_MIN_LENGTH_M, JUNCTION_AHEAD_M,
+    _across_path, _choose_tape_target, _continues, _junction, _tape_junction,
 )
 from .lane_keep_bend import as_transverse, bend_side, bend_target, near_run, nearest_first, parallel_spans, runs_past, stop_short
 from .lane_keep_paint import extract_paint_points
@@ -274,7 +269,8 @@ class LaneKeeper:
         return (round(column, 1), round(row, 1))
 
     def update(self, bgr: np.ndarray, ground, *, lane_half_width_m: float = 0.0925,
-               paint_mask: np.ndarray | None = None, bend_expected: bool = False, crosswalk_mask=None, **_ignored) -> LaneObservation | None:
+               paint_mask: np.ndarray | None = None, bend_expected: bool = False,
+               crosswalk_mask=None, tape_centerline: bool = False, **_ignored) -> LaneObservation | None:
         """paint_mask (D-408): an HxW 0/1 paint mask from another source (learned model,
         OpenCV glare filter) used in place of floor_white_mask; rows above the horizon
         margin are dropped from it. bend_expected (D-507 B9, default off: the pre-B9 keeper): the route
@@ -389,7 +385,8 @@ class LaneKeeper:
                     side = tracked_side
             inward = (np.array([direction[1], -direction[0]]) if side == "left"
                       else np.array([-direction[1], direction[0]]))
-            point, along = _pursuit_point(centre + inward * half, direction, self._lookahead)
+            track_center = centre if tape_centerline else centre + inward * half
+            point, along = _pursuit_point(track_center, direction, self._lookahead)
             if not (line["along"][0] - MAX_EXTRAPOLATION_M <= along
                     <= line["along"][1] + MAX_EXTRAPOLATION_M):
                 self.last["candidates"].append(dict(record, side=side, y_at_side_x_m=round(lateral, 3),
@@ -410,13 +407,14 @@ class LaneKeeper:
                 dict({k: v for k, v in record.items()
                       if k not in ("centre", "direction", "_wrong_side")},
                      rejected=True, reason="pair_conflict"))
-        target, strategy = self._choose(left, right, half, bend_expected and bool(bends))
+        target, strategy = (_choose_tape_target(left, right, half, np.asarray) if tape_centerline
+                            else self._choose(left, right, half, bend_expected and bool(bends)))
         # A lane seen on both sides is followed; a corner is only looked for when it is not (a line across
         # between two lane lines is a stop line, a crosswalk or a junction mouth, not an L-corner). Corner and
         # junction rules see the fitted lines only, not near runs.
         fitted, chords = ([r for r in group if "near_run" not in r] for group in (left + right, conflicts))
         corner = None
-        if self._corner_turning and strategy != "both":
+        if self._corner_turning and strategy != "both" and not tape_centerline:
             corner = self._corner(transverse, half, fitted + chords, fitted + [r for f in self._seeds for r in f])
         self._seeds.append([r for r in fitted if r["length_m"] >= half])  # corner seeds (closed side)
         if corner is not None and (target is None or corner[1] != "corner_ahead"):
@@ -426,6 +424,7 @@ class LaneKeeper:
                            else _junction(strategy, transverse + as_transverse(bends, TRANSVERSE_MIN_ANGLE_RAD), seen_left,
                                           seen_right, half, self._corner_turning, ONE_MAX_DISTANCE_FRACTION * 2.0 * half,
                                           continuity=bend_expected))
+        if tape_centerline and junction is None: junction, ahead = _tape_junction(transverse, fitted, half)
         target, strategy, room = (bend_target(bends, half, CORNER_LOOKAHEAD_M, target, strategy)  # junctions first
                                   if corner is None and junction is None and strategy != "both" and bends else (target, strategy, math.inf))
         if junction is not None:

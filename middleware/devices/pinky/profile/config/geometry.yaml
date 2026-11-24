@@ -61,3 +61,11 @@ footprint:
   half_width_m: 0.05655
   front_x_m: 0.04205
   rotation_radius_sim_box_m: 0.08826
+cargo_tray:
+  rear_x_m: -0.134
+  half_width_m: 0.05655
+  pocket_x_m: -0.104988
+  pocket_y_m: 0.0
+  pocket_z_m: 0.04425
+  rotation_radius_m: 0.137217
+  rotation_radius_sim_box_m: 0.142004

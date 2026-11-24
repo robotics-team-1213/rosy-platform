@@ -12,6 +12,7 @@
     <xacro:arg name="camera_update_rate" default="10"/>
     <xacro:arg name="camera_hfov" default="1.1519"/>
     <xacro:arg name="cam_mount_z" default="0.0495"/>
+    <xacro:arg name="has_cargo_tray" default="true"/>
 
     <xacro:insert_robot namespace="$(arg namespace)"
                         is_sim="$(arg is_sim)"
@@ -22,5 +23,6 @@
                         camera_height="$(arg camera_height)"
                         camera_update_rate="$(arg camera_update_rate)"
                         camera_hfov="$(arg camera_hfov)"
-                        cam_mount_z="$(arg cam_mount_z)"/>
+                        cam_mount_z="$(arg cam_mount_z)"
+                        has_cargo_tray="$(arg has_cargo_tray)"/>
 </robot>

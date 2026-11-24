@@ -29,6 +29,7 @@ CHOICES = dict(
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
     temp_source="scad-v12",  # two-color plate v12 CAD STLs ("navy"+"sky"); "scad-v11" keeps monochrome v11 STL; "procedural" shows collision walls
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
+    ship_holds=2,            # 2 = printed 2-hold r08 ship (18 slots); 3 = 9x3x3 three_hold modular ship (27 slots)
     ship_house=True,
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=0.0,     # r08: hull centreline y centred symmetrically between the 194 mm base plates (modular berth locks port/starboard)   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
@@ -222,11 +223,19 @@ def r08_sites(layout):
     """1x3 sites of the berthed r08 ship from its slot map: one per hold, row and tier, the mean of the three 1x1 cells.
     Rows are numbered by fixture y (r0 nearest arm_a, as the stud plate's rows); layer 0, 1, 2 are tiers 82, 84 and 86 (R08_TIERS)."""
     out = {}
-    for h, row, mean_x_mm, y, z0_mm, layered_slot_ids in _r08_slot_groups():
+    base_groups = list(_r08_slot_groups())
+    max_h = max(g[0] for g in base_groups)
+    h_last = [g for g in base_groups if g[0] == max_h]
+    extra = [
+        (max_h + k, row, mx + k * HOLD["length"], y, z0,
+         tuple(tuple(f"h{max_h + k}{s[2:]}" if s.startswith(f"h{max_h}") else f"h{max_h + k}-{s}" for s in t) for t in ids))
+        for k in range(1, max(0, int(layout.choices.get("ship_holds", 2)) - 2) + 1)
+        for _, row, mx, y, z0, ids in h_last
+    ]
+    for h, row, mean_x_mm, y, z0_mm, layered_slot_ids in (*base_groups, *extra):
         x, cy, z = ship_cell(layout, mean_x_mm, y, z0_mm)
         for layer in range(R08_TIERS):
-            out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] * (layer + .5), yaw=0., row=row, layer=layer,
-                                                    stack=f"h{h}r{row}", slots=list(layered_slot_ids[layer]))
+            out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] * (layer + .5), yaw=0., row=row, layer=layer, stack=f"h{h}r{row}", slots=list(layered_slot_ids[layer]))
     # The stern bay is not a place (site map decision 2026-11-17); STERN_BAY stays as berth geometry. Outbound is the separate stand
     # (r05 chute, arm_a only), which has no sim place until it is measured.
     return out
@@ -352,12 +361,10 @@ class Layout:
             if isinstance(snap_cam.get("camera", {}).get("side"), dict):
                 cams["side"] = dict(snap_cam["camera"]["side"])
             f["real_cameras"] = cams
-        elif c["top_camera"] == "2026-11-14":
-            f["real_cameras"] = dict(f["real_cameras"], top=dict(TOP_CAMERA_20261114))
-        elif c["top_camera"] == "2026-11-12":
-            f["real_cameras"] = dict(f["real_cameras"], top=dict(TOP_CAMERA_20261112))
-        elif c["top_camera"] == "2026-11-10" and ("top_camera" in choices or c["temp_lanes"] != "photo-20261107"):
-            f["real_cameras"] = dict(f["real_cameras"], top=dict(TOP_CAMERA_20261110))
+        elif c["top_camera"] in ("2026-11-14", "2026-11-12") or (
+                c["top_camera"] == "2026-11-10" and ("top_camera" in choices or c["temp_lanes"] != "photo-20261107")):
+            cams_by_tag = {"2026-11-14": TOP_CAMERA_20261114, "2026-11-12": TOP_CAMERA_20261112, "2026-11-10": TOP_CAMERA_20261110}
+            f["real_cameras"] = dict(f["real_cameras"], top=dict(cams_by_tag[c["top_camera"]]))
         self.table_z = f["workplate_center_m"][2] + f["workplate_size_m"][2] / 2
         self.deck_z = ship_plate.top_z(f)
         self.arms, self.sim_arms, self.plates = {}, {}, {}
@@ -372,21 +379,18 @@ class Layout:
         for k, name in enumerate(ARMS):
             z = self.table_z + .012 if c["base_z"] == "measured" else f["arm_bases_m"][k][2]
             xy, yaw_rad = f["arm_bases_m"][k][:2], f["arm_base_yaws_rad"][k]
-            if c["arm_bases"] == "plate-centre":
-                xy, yaw_deg = ARM_BASES_PLATE_CENTRE[name]
+            if c["arm_bases"] in ("plate-centre", "measured-194", "photo-20261114"):
+                tables = {"plate-centre": ARM_BASES_PLATE_CENTRE, "measured-194": ARM_BASES_MEASURED_194, "photo-20261114": ARM_BASES_PHOTO_1114}
+                xy, yaw_deg = tables[c["arm_bases"]][name]
                 yaw_rad = math.radians(yaw_deg)
             elif c["arm_bases"] in DOCKS:
                 d = DOCKS[c["arm_bases"]]
                 sign = -1. if name == "arm_a" else 1.
                 xy, yaw_rad = (c["ship_stern_x_m"] - d["axis_behind_stern_m"], c["ship_centre_y_m"] + sign * d["axis_from_centreline_m"]), -sign * math.pi / 2
-            elif c["arm_bases"] in ("measured-194", "photo-20261114"):
-                xy, yaw_deg = dict({"measured-194": ARM_BASES_MEASURED_194, "photo-20261114": ARM_BASES_PHOTO_1114})[c["arm_bases"]][name]
-                yaw_rad = math.radians(yaw_deg)
             elif str(c["arm_bases"]).startswith("span-"):
                 span_mm = float(str(c["arm_bases"]).split("-", 1)[1])
-                y_arm_m = (span_mm / 2.0 + BERTH_V16_SPEC["base_inner_from_axis_mm"]) / 1000.0
-                sgn = -1.0 if name == "arm_a" else +1.0
-                xy = (.091, sgn * y_arm_m)
+                sgn = -1.0 if name == "arm_a" else 1.0
+                xy = (.091, sgn * (span_mm / 2.0 + BERTH_V16_SPEC["base_inner_from_axis_mm"]) / 1000.0)
                 yaw_rad = math.radians(90.0 if name == "arm_a" else -90.0)
             elif c["arm_bases"] == "snapshot":
                 ab = (load_snapshot(c["cell_snapshot"])["items"].get("arm_bases") or {}).get("plate_centre", {}).get(name)
@@ -491,6 +495,5 @@ class Layout:
             stern_hook_mm=float(c.get("ship_stern_hook_mm", 0.0)), arm_a_gap_dy_mm=gap_a, arm_b_gap_dy_mm=gap_b,
             nearest_spacer_step_mm=dict(arm_a=min(steps, key=lambda s: abs(s - gap_a)), arm_b=min(steps, key=lambda s: abs(s - gap_b))),
             hull_yaw_deg=round(float(ship_yaw_deg), 2), within_v16_yaw_budget=abs(float(ship_yaw_deg)) <= spec["max_hull_yaw_deg"] + 0.5,
-            stopper_flat_x_m=flat_x, stopper_tip_x_m=tip_x, belt_to_stopper_flat_mm=round((self.belt_stop_x - flat_x) * 1000.0, 1),
-            repeatability_rss_mm=spec["repeatability_rss_mm"],
-        )
+            stopper_flat_x_m=flat_x, stopper_tip_x_m=tip_x,
+            belt_to_stopper_flat_mm=round((self.belt_stop_x - flat_x) * 1000.0, 1), repeatability_rss_mm=spec["repeatability_rss_mm"])

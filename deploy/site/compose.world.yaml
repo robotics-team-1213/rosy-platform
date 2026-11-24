@@ -1,0 +1,120 @@
+# Co-located Rosy World + read-only Real Fleet bridge overlay for deploy/site/compose.yaml.
+# Both sides resolve each other over mDNS (<host>.local) using /run/avahi-daemon (never hardcoded IPs).
+x-world-logging: &world-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  fleet:
+    environment:
+      ROSY_WORLD_MDNS_HOST: "${ROSY_WORLD_MDNS_HOST:-${ROSY_SITE_TLS_HOST:-rosy-world.local}}"
+      ROSY_WORLD_MDNS_PORT: "${ROSY_WORLD_PORT:-8140}"
+      ROSY_WORLD_MDNS_SCHEME: "${ROSY_WORLD_MDNS_SCHEME:-http}"
+      ROSY_WORLD_URL: "${ROSY_WORLD_URL:-}"
+
+  world:
+    image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
+    mem_limit: 256m
+    build:
+      context: ../..
+      dockerfile: applications/world/Dockerfile
+    user: "10001:10001"
+    command:
+      - python
+      - -B
+      - /world/serve.py
+      - --bundle
+      - /world
+      - --worlds-dir
+      - /var/lib/rosy-world/worlds
+      - --host
+      - 0.0.0.0
+      - --port
+      - "${ROSY_WORLD_PORT:-8140}"
+    environment:
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
+      ROSY_WORLD_MDNS_HOST: "${ROSY_WORLD_MDNS_HOST:-${ROSY_SITE_TLS_HOST:-}}"
+      ROSY_FLEET_MDNS_HOST: "${ROSY_SITE_TLS_HOST:-}"
+    ports:
+      - "${ROSY_WORLD_BIND:-0.0.0.0}:${ROSY_WORLD_PORT:-8140}:${ROSY_WORLD_PORT:-8140}"
+    volumes:
+      - type: bind
+        source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
+        target: /world
+        read_only: true
+      - world_state:/var/lib/rosy-world/worlds:rw
+      - type: bind
+        source: /run/avahi-daemon
+        target: /run/avahi-daemon
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${ROSY_WORLD_PORT:-8140}/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks: [site_backend]
+    logging: *world-logging
+
+  world-real-bridge:
+    image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
+    mem_limit: 128m
+    user: "10001:10001"
+    command:
+      - python
+      - -B
+      - /world/bridge_real_fleet.py
+      - --fleet-mdns-host
+      - "${ROSY_SITE_TLS_HOST:?set ROSY_SITE_TLS_HOST}"
+      - --fleet-port
+      - "${ROSY_SITE_HTTPS_PORT:?set ROSY_SITE_HTTPS_PORT}"
+      - --world-url
+      - "http://world:${ROSY_WORLD_PORT:-8140}"
+      - --bundle
+      - /world
+      - --interval
+      - "0.5"
+    environment:
+      SSL_CERT_FILE: /run/secrets/site_ca
+      ROSY_FLEET_TOKEN_FILE: /run/secrets/registry_token
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
+    secrets:
+      - site_ca
+      - registry_token
+    volumes:
+      - type: bind
+        source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
+        target: /world
+        read_only: true
+      - type: bind
+        source: /run/avahi-daemon
+        target: /run/avahi-daemon
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      fleet:
+        condition: service_healthy
+      world:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [site_backend]
+    logging: *world-logging
+
+volumes:
+  world_state:
