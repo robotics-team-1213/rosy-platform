@@ -380,7 +380,8 @@ export function createCellObservation({request, root, credential = () => '', onS
           const note = '현장에서 정지 원인을 확인하고 조치했습니다. 팔과 집게, 이동 경로에 걸림이 없음을 확인했습니다.';
           const check = element('input'); check.type = 'checkbox';
           const confirmation = element('label'); confirmation.append(check, document.createTextNode(' ' + note));
-          const button = element('ui-button', '사고 해제'); button.setAttribute('type', 'button'); button.disabled = true;
+          const button = element('ui-button', '사고 해제'); button.setAttribute('type', 'button');
+          button.setAttribute('kind', 'irreversible'); button.disabled = true;
           const message = element('ui-text'); message.setAttribute('role', 'status');
           check.addEventListener('change', () => { button.disabled = !check.checked; });
           button.addEventListener('click', async () => {
