@@ -58,8 +58,12 @@ def crosswalk_extent(grid: np.ndarray, x_rows: np.ndarray,
     grid is the BirdsEye 0/1 floor grid (row i at x_rows[i], column j at y_cols[j]).
     """
     lane = grid[:, np.abs(y_cols) <= CORRIDOR_HALF_M]
-    # Cheap pre-filter (Pi CPU, D-185): a stripe row has at least MIN_STRIPES narrow bars lit.
-    enough = lane.sum(axis=1) >= MIN_STRIPES * int(STRIPE_WIDTH_M[0] / BEV_CELL_M)
+    if not lane.shape[1]:
+        return None
+    # Cheap pre-filter (Pi CPU, D-185): a stripe row has >= MIN_STRIPES separate lit runs and enough lit cells.
+    lit = lane > 0
+    runs = np.count_nonzero(lit[:, 1:] & ~lit[:, :-1], axis=1) + lit[:, 0]
+    enough = (runs >= MIN_STRIPES) & (lit.sum(axis=1) >= MIN_STRIPES * int(STRIPE_WIDTH_M[0] / BEV_CELL_M))
     return _longest_block([i for i in np.flatnonzero(enough) if _stripes(lane[i])], x_rows)
 
 
