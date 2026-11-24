@@ -1,0 +1,118 @@
+# Standalone Rosy World + read-only Real Fleet bridge stack for systemd (rosy-world-stack.service).
+# Runs outside the signed rosy-site Compose project so ROSY site autoupdate stays decoupled while
+# attaching to rosy-site's internal backend and edge networks.
+x-world-logging: &world-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  world:
+    image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
+    mem_limit: 256m
+    user: "10001:10001"
+    command:
+      - python
+      - -B
+      - /world/serve.py
+      - --bundle
+      - /world
+      - --worlds-dir
+      - /var/lib/rosy-world/worlds
+      - --host
+      - 0.0.0.0
+      - --port
+      - "${ROSY_WORLD_PORT:-8140}"
+    environment:
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
+      ROSY_WORLD_MDNS_HOST: "${ROSY_WORLD_MDNS_HOST:-${ROSY_SITE_TLS_HOST:-}}"
+      ROSY_FLEET_MDNS_HOST: "${ROSY_SITE_TLS_HOST:-}"
+    ports:
+      - "${ROSY_WORLD_BIND:-0.0.0.0}:${ROSY_WORLD_PORT:-8140}:${ROSY_WORLD_PORT:-8140}"
+    volumes:
+      - type: bind
+        source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
+        target: /world
+        read_only: true
+      - type: bind
+        source: /run/avahi-daemon
+        target: /run/avahi-daemon
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+      - /var/lib/rosy-world/worlds:rw,noexec,nosuid,size=32m,uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${ROSY_WORLD_PORT:-8140}/healthz', timeout=2).read()"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks: [site_backend, site_edge]
+    logging: *world-logging
+
+  world-real-bridge:
+    image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
+    mem_limit: 128m
+    user: "10001:10001"
+    command:
+      - python
+      - -B
+      - /world/bridge_real_fleet.py
+      - --fleet-url
+      - "https://fleet:${ROSY_FLEET_PORT:-8080}"
+      - --world-url
+      - "http://world:${ROSY_WORLD_PORT:-8140}"
+      - --bundle
+      - /world
+      - --interval
+      - "0.5"
+    environment:
+      SSL_CERT_FILE: /run/secrets/site_ca
+      ROSY_FLEET_TOKEN_FILE: /run/secrets/world_fleet_viewer_token
+      ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
+    secrets:
+      - site_ca
+      - world_fleet_viewer_token
+    volumes:
+      - type: bind
+        source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
+        target: /world
+        read_only: true
+      - type: bind
+        source: /run/avahi-daemon
+        target: /run/avahi-daemon
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      world:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [site_backend]
+    logging: *world-logging
+
+networks:
+  site_backend:
+    external: true
+    name: rosy-site_site_backend
+  site_edge:
+    external: true
+    name: rosy-site_site_edge
+
+secrets:
+  site_ca:
+    file: "${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/site-ca.crt"
+  world_fleet_viewer_token:
+    file: "${ROSY_WORLD_FLEET_TOKEN_HOST_FILE:-${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/world_fleet_viewer.token}"

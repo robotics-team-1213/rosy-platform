@@ -183,6 +183,25 @@ def test_two_sided_docker_compose_and_mdns_contracts() -> None:
     mdns_cmd = virtual_compose["services"]["fleet-mdns"]["command"]
     assert mdns_cmd[3] == "advertise" and "--service-type" in mdns_cmd and "_rosy-fleet._tcp" in mdns_cmd
 
+    base_compose = yaml.safe_load((ROOT / "deploy/site/compose.yaml").read_text(encoding="utf-8"))
+    fleet_env = base_compose["services"]["fleet"]["environment"]
+    assert fleet_env["ROSY_WORLD_MDNS_HOST"] == "${ROSY_WORLD_MDNS_HOST:-}"
+    assert fleet_env["ROSY_WORLD_MDNS_PORT"] == "${ROSY_WORLD_PORT:-}"
+    assert fleet_env["ROSY_WORLD_MDNS_SCHEME"] == "${ROSY_WORLD_MDNS_SCHEME:-}"
+    assert fleet_env["ROSY_WORLD_URL"] == "${ROSY_WORLD_URL:-}"
+
+    standalone = yaml.safe_load((ROOT / "deploy/site/compose.world-standalone.yaml").read_text(encoding="utf-8"))
+    assert set(standalone["services"]) == {"world", "world-real-bridge"}
+    assert standalone["networks"]["site_backend"] == {"external": True, "name": "rosy-site_site_backend"}
+    assert standalone["networks"]["site_edge"] == {"external": True, "name": "rosy-site_site_edge"}
+    assert set(standalone["secrets"]) == {"site_ca", "world_fleet_viewer_token"}
+    assert standalone["services"]["world-real-bridge"]["depends_on"] == {"world": {"condition": "service_healthy"}}
+
+    world_stack_unit = (ROOT / "deploy/site/rosy-world-stack.service").read_text(encoding="utf-8")
+    assert "BindsTo=rosy-site-stack.service" in world_stack_unit
+    assert "--project-name rosy-world" in world_stack_unit
+    assert "/etc/rosy/site/compose.world-standalone.yaml" in world_stack_unit
+
 
 def test_probe_fleet_health_verifies_dot_local_san_when_dialing_ip(tmp_path: Path) -> None:
     """Regression test: dialing resolved IPv4 must still verify the TLS cert against the .local DNS SAN."""
