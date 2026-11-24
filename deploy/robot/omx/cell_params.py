@@ -69,7 +69,7 @@ DEFAULTS = {
     "reach.max_mm": (20.0, "mm", 2, 50), "reach.gain": (1.0, "ratio", 0.2, 1.0), "reach.samples": (1, "count", 1, 5),
     "wrist.enabled": (0, "flag", 0, 1), "wrist.finger_servo": (0, "flag", 0, 1), "wrist.neutral_ring_chroma": (20.0, "lab", 2, 60),
     "wrist.min_blob_px": (3000, "px", 100, 200000), "wrist.servo_gain": (0.5, "ratio", 0.1, 1.0), "wrist.servo_across": (0, "flag", 0, 1), "wrist.ref_servo": (1, "flag", 0, 1),
-    "wrist.probe_mm": (6.0, "mm", 2, 15), "wrist.ref_tol_px": (12.0, "px", 3, 60), "wrist.ref_estimate": (1, "flag", 0, 1),
+    "wrist.probe_mm": (6.0, "mm", 2, 15), "wrist.ref_tol_px": (12.0, "px", 3, 60), "wrist.ref_estimate": (0, "flag", 0, 1),
     "wrist.z_probe_mm": (10.0, "mm", 3, 30), "wrist.tip_to_top_mm": (25.0, "mm", 0, 80),
     "wrist.servo_iter": (4, "count", 1, 8), "wrist.servo_total_mm": (60.0, "mm", 5, 100), "wrist.tol_mm": (3.0, "mm", 0.5, 20), "wrist.max_step_mm": (25.0, "mm", 1, 60),
     "wrist.max_total_mm": (30.0, "mm", 1, 80), "wrist.max_iter": (2, "count", 0, 5),

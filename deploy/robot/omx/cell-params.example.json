@@ -782,10 +782,10 @@
    "evidence": "about 2 mm at the 0.16-0.20 mm/px seen at the hover"
   },
   "wrist.ref_estimate": {
-   "value": 1,
+   "value": 0,
    "unit": "flag",
-   "source": "theory",
-   "evidence": "2026-10-29: no confirmed place yet to record a reference; estimate from the fingertip point and a 10 mm height probe until the first confirmed place"
+   "source": "tuned",
+   "evidence": "2026-11-25: off by default (must opt in per calibrated cell); blind z-probe estimation triggered 13-replan park storms when uncalibrated"
   },
   "wrist.z_probe_mm": {
    "value": 10.0,

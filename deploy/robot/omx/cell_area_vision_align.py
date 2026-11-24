@@ -94,6 +94,10 @@ def _persist_wrist_signs(work_dir: Path, arm_id: str, cal: dict[str, Any], obs: 
         pass
 
 
+def _wrist_err(obs: dict[str, Any], gain_across: float) -> float:
+    return math.hypot(float(obs.get("along_mm", 0.0)), float(obs.get("across_mm", 0.0)) if gain_across > 0.0 else 0.0)
+
+
 def refine_pick_pose_at_hover(
     *,
     cur_directive: dict[str, Any],
@@ -118,6 +122,8 @@ def refine_pick_pose_at_hover(
     if not (exec_cfg.get("vision_refine", False) and frame_fn is not None):
         return lib, plan, cal, last_wrist_obs, vision_refined_xy
 
+    default_across = 0.0 if str(arm_id) == "arm_s" else 0.60
+    gain_across = float(exec_cfg.get("wrist_gain_across", 0.60 if exec_cfg.get("wrist_servo_across") else default_across))
     col = int(cur_directive["pick"].get("col") or 3)
     p_xyz_cur = list(cur_directive["pick"]["effective_xyz_m"])
     canonical_col_x = {1: 0.1280, 2: 0.1580, 3: 0.1935}.get(col, 0.1580)
@@ -160,11 +166,12 @@ def refine_pick_pose_at_hover(
         last_wrist_obs = obs
         wrist_log.append(obs)
         max_wrist_mm = float(exec_cfg.get("max_wrist_shift_mm", 24.0 if obs.get("clipped_border") else 8.5))
-        if obs.get("found") and 1.5 < max(abs(float(obs.get("along_mm", 0.0))), abs(float(obs.get("across_mm", 0.0)))) <= max_wrist_mm:
+        obs_active_mm = max(abs(float(obs.get("along_mm", 0.0))), abs(float(obs.get("across_mm", 0.0))) if gain_across > 0.0 else 0.0)
+        if obs.get("found") and 1.5 < obs_active_mm <= max_wrist_mm:
             first_obs = obs
-            err0 = math.hypot(float(obs.get("along_mm", 0.0)), float(obs.get("across_mm", 0.0)))
+            err0 = _wrist_err(obs, gain_across)
             p_xyz = apply_wrist_xy_step(
-                p_xyz, obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=0.60,
+                p_xyz, obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=gain_across,
             )
             need_replan = True
             wrist_shifted = True
@@ -187,19 +194,19 @@ def refine_pick_pose_at_hover(
         obs = cell_fingers.resolve_wrist_servo_offset(w_img, cal, prefer_structural=bool(exec_cfg.get("structural_wrist")))
         last_wrist_obs = obs
         wrist_log.append(obs)
-        err1 = math.hypot(float(obs.get("along_mm", 0.0)), float(obs.get("across_mm", 0.0))) if obs.get("found") else None
+        err1 = _wrist_err(obs, gain_across) if obs.get("found") else None
         if pass_idx == 1 and first_obs is not None and err0 is not None:
             if err1 is not None and err1 > err0 + 1.0:
                 flipped = dict(cal.get("finger_sign") or {"along": 1.0, "across": 1.0})
                 flip_a = abs(float(obs.get("along_mm", 0.0))) > abs(float(first_obs.get("along_mm", 0.0))) + 0.5
-                flip_c = abs(float(obs.get("across_mm", 0.0))) > abs(float(first_obs.get("across_mm", 0.0))) + 0.5
+                flip_c = gain_across > 0.0 and abs(float(obs.get("across_mm", 0.0))) > abs(float(first_obs.get("across_mm", 0.0))) + 0.5
                 if flip_a or not flip_c:
                     flipped["along"] = -float(flipped.get("along", 1.0))
                 if flip_c:
                     flipped["across"] = -float(flipped.get("across", 1.0))
                 cal = dict(cal, finger_sign=flipped)
                 flipped_xyz = apply_wrist_xy_step(
-                    pre_wrist_xyz, first_obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=0.60,
+                    pre_wrist_xyz, first_obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=gain_across,
                 )
                 lib, plan, new_cal, _ = _replan_and_hover(
                     cur_directive, flipped_xyz, base_plan, work_dir, kinematics_root, lib_path, run_cmd, "refined",
@@ -207,7 +214,7 @@ def refine_pick_pose_at_hover(
                 cal = dict(new_cal, finger_sign=flipped)
                 w_flip = frame_fn("wrist")
                 obs_flip = cell_fingers.resolve_wrist_servo_offset(w_flip, cal, prefer_structural=bool(exec_cfg.get("structural_wrist"))) if w_flip is not None else None
-                err_flip = math.hypot(float(obs_flip.get("along_mm", 0.0)), float(obs_flip.get("across_mm", 0.0))) if (obs_flip and obs_flip.get("found")) else None
+                err_flip = _wrist_err(obs_flip, gain_across) if (obs_flip and obs_flip.get("found")) else None
                 if obs_flip and err_flip is not None and err_flip < err0:
                     p_xyz = flipped_xyz
                     tagged = {**obs_flip, "sign_flipped": True, "finger_sign": dict(flipped)}
@@ -227,9 +234,10 @@ def refine_pick_pose_at_hover(
             if err1 is not None and err1 < err0 - 1.0 and int(cal.get("samples", 0)) == 0:
                 _persist_wrist_signs(work_dir, arm_id, cal, obs)
         max_wrist_mm = float(exec_cfg.get("max_wrist_shift_mm", 24.0 if obs.get("clipped_border") else 8.5))
-        if not obs.get("found") or not 1.5 < max(abs(float(obs.get("along_mm", 0.0))), abs(float(obs.get("across_mm", 0.0)))) <= max_wrist_mm:
+        obs_active_mm = max(abs(float(obs.get("along_mm", 0.0))), abs(float(obs.get("across_mm", 0.0))) if gain_across > 0.0 else 0.0)
+        if not obs.get("found") or not 1.5 < obs_active_mm <= max_wrist_mm:
             break
-        p_xyz = apply_wrist_xy_step(p_xyz, obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=0.60)
+        p_xyz = apply_wrist_xy_step(p_xyz, obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=gain_across)
         lib, plan, cal, _ = _replan_and_hover(
             cur_directive, p_xyz, base_plan, work_dir, kinematics_root, lib_path, run_cmd, "refined",
         )

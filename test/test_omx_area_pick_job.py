@@ -445,3 +445,59 @@ def test_arm_s_compiler_v21_open_hover_divergence_guard_and_empty_wrist_logs(tmp
         frame_fn=None, max_attempts=1,
     )
     assert out_contact["result"] == "contact" and "wrist" in out_contact and "grasp_debate" in out_contact
+
+
+def test_arm_s_hover_refine_ignores_uncalibrated_across_mm(tmp_path: Path, monkeypatch) -> None:
+    import cell_area_vision_align as cva
+    import cell_arm_cal
+    import cell_directive_compiler as cdc
+
+    wd = tmp_path / "work"
+    wd.mkdir()
+    directive = {
+        "schema": "rosy.omx-area-xyz.v1",
+        "directive_id": "test-arm-s-along-only",
+        "arm_id": "arm_s",
+        "pick": {"area": "floor", "x": 0.041, "y": 0.175, "z": 0.021, "effective_xyz_m": [0.041, 0.175, 0.021], "yaw_deg": -90.0},
+        "place": {"area": "floor", "x": -0.06, "y": 0.17, "z": 0.021, "effective_xyz_m": [-0.06, 0.17, 0.021], "yaw_deg": -90.0},
+        "execution": {"vision_refine": True, "wrist_passes": 1, "side_zone_snap": False},
+    }
+    base_plan = {"grip_open": 58.15, "grip_release": 57.5, "tcp_x_m": 0.074, "limits": {"workspace_min_m": [-0.28, -0.28, 0.005]}}
+    plan, cal = cdc.build_plan_from_directive(directive, base_plan, work_dir=wd)
+    monkeypatch.setattr(cva, "plan_library_from_directive", lambda cur_d, bp, **_kw: ({"chunks": {"above_pick": [[0] * 6]}}, *cdc.build_plan_from_directive(cur_d, bp, work_dir=wd)))
+    monkeypatch.setattr(cva.cell_fingers, "resolve_wrist_servo_offset", lambda *_a, **_kw: {"found": True, "along_mm": 4.0, "across_mm": -38.0, "finger_color": "white"})
+
+    cur_d = json.loads(json.dumps(directive))
+    _, _, _, last_obs, refined = cva.refine_pick_pose_at_hover(
+        cur_directive=cur_d, base_plan=base_plan, lib={"chunks": {"above_pick": [[0] * 6]}}, plan=plan, cal=cal,
+        lib_path=wd / "lib.json", work_dir=wd, kinematics_root=None, arm_id="arm_s",
+        exec_cfg=cur_d["execution"], frame_fn=lambda _v: np.zeros((8, 8, 3), dtype=np.uint8),
+        before_side=None, above_shaking=False, run_cmd=lambda _c: {"ok": True, "state": [0, 0, 0, 0, 0, 58.15]}, wrist_log=[],
+    )
+    assert refined is True and last_obs["across_mm"] == -38.0
+    # At yaw=-90, closing_rad=0 -> along steps X only and uncalibrated across (-38mm) does NOT move Y
+    assert cur_d["pick"]["x"] != 0.041 and cur_d["pick"]["y"] == pytest.approx(0.175, abs=1e-6)
+    assert cell_arm_cal.load(wd, "arm_s")["finger_sign"] == {"along": 1.0, "across": 1.0}
+
+
+def test_dry_run_map_pose_preflight_detects_moved_top_camera(tmp_path):
+    from unittest.mock import Mock
+    import cell_auto_evidence as evidence
+
+    ref = np.zeros((120, 160, 3), dtype=np.uint8)
+    for y in range(20, 100, 16):
+        for x in range(20, 140, 20):
+            import cv2
+            cv2.rectangle(ref, (x, y), (x + 10, y + 8), (255, 255, 255), -1)
+    ref_p = tmp_path / "ref.jpg"
+    import cv2
+    assert cv2.imwrite(str(ref_p), ref)
+    moved = np.roll(ref, 28, axis=0)
+    cell = Mock()
+    cell.frame.return_value = moved
+    out: dict = {}
+    err = evidence.map_pose_preflight(cell, {"preflight": {"reference_top": str(ref_p)}, "params": {"calibrate.max_shift_px": 6.0}}, {}, tmp_path / "cal.json", tmp_path, True, out)
+    assert err == "top camera moved since map reference"
+    assert out["map_pose_check"]["max_px"] > 6.0
+
+
