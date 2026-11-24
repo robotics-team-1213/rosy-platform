@@ -351,7 +351,8 @@ def test_only_main_shuts_rclpy_down_in_core_production_code():
     roles["sensing"] = repo / "middleware" / "perception"
     layout = runpy.run_path(str(roles["sensing"] / "control/_source_layout.py"))
     node_roots = (roles["sensing"] / "control", *layout["CONTROL_ROOTS"],
-                  *layout["PACKAGE_DIRS"].values(), *layout["FLAT_ROOTS"])
+                  *layout["PACKAGE_DIRS"].values(), *layout["FLAT_ROOTS"],
+                  roles["navigation"] / "navigation")
     pattern = re.compile(
         r"rclpy\.(try_)?shutdown\b|\btry_shutdown\(|from rclpy(\.utilities)? import[^\n]*\bshutdown\b")
     offenders = []

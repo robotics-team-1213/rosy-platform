@@ -14,6 +14,8 @@ Type=simple
 User=rosy-camera
 Group=rosy-camera
 SupplementaryGroups=video
+# D-185 R3: native C++ EventsExecutor cuts idle perception CPU; runtime.env can roll back with ROSY_EXECUTOR=single.
+Environment=ROSY_EXECUTOR=events
 EnvironmentFile=/etc/rosy/runtime.env
 # D-373: ROSY_LEARNED_SHADOW / ROSY_CAPTURE for camera_preview.launch.py; absent = both off.
 EnvironmentFile=-/etc/rosy/learned-perception.env
