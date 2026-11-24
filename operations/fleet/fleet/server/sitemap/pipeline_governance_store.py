@@ -13,7 +13,7 @@ from typing import Any
 from core_common.protocol.cell_failure_context import FALLBACK_VERBS
 from fastapi import HTTPException
 
-_AMR_BED_SITES = frozenset({"pinky", "tray", "vehicle_tray"})
+_AMR_BED_SITES = frozenset({"tray", "vehicle_tray"})
 
 
 def canonical_digest(value: Any) -> str:
@@ -70,11 +70,15 @@ def resolve_task_proposer(spec: dict[str, Any], *, principal_id: str | None, pri
     return target_status, proposer_val
 
 
-def derive_interlock_scope(cell_id: str, src_site: str, dst_site: str) -> str:
+def derive_interlock_scope(
+    cell_id: str, src_site: str, dst_site: str, *, vehicle_sites: tuple[str, ...] | frozenset[str] = (),
+) -> str:
     """Server-derived interlock scope; ignores client-supplied scope claims."""
+    bed_names = _AMR_BED_SITES | {str(s).strip().lower() for s in vehicle_sites if s}
+    bed_prefixes = ("bed", *(str(s).strip().lower() for s in vehicle_sites if s))
     for site in (src_site or "", dst_site or ""):
         low = str(site).strip().lower()
-        if any(seg in _AMR_BED_SITES or seg.startswith(("pinky", "bed")) for seg in low.split(":")):
+        if any(seg in bed_names or seg.startswith(bed_prefixes) for seg in low.split(":")):
             return "amr_bed"
     return "cell_internal"
 
@@ -92,6 +96,8 @@ def check_fallback_limits(tasks: dict[str, dict], spec: dict[str, Any]) -> int:
         if raw_depth is not None and raw_depth != 0:
             raise HTTPException(409, detail={"code": "FALLBACK_RETRY_LIMIT_EXCEEDED"})
         return 0
+    if not isinstance(parent_id, str):
+        raise HTTPException(422, detail={"code": "INVALID_CELL_TASK_INPUT"})
     parent = tasks.get(parent_id)
     if parent is None:
         raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
@@ -114,7 +120,7 @@ def check_policy_fallback_guard(
     new_mode = spec.get("execution_mode") or "guarded_pick"
     if not (parent.get("execution_mode") == "act_policy" and new_mode != "act_policy"):
         return False
-    if parent.get("status") in ("PROPOSED", "QUEUED", "RUNNING"):
+    if parent.get("status") not in ("COMPLETED", "CANCELLED", "ABORTED"):
         raise HTTPException(409, detail={"code": "POLICY_PARENT_NOT_TERMINAL"})
     if spec.get("auto_admit") is True:
         raise HTTPException(403, detail={"code": "POLICY_FALLBACK_REQUIRES_NAMED_APPROVAL"})
@@ -188,6 +194,7 @@ def prepare_task_governance(
     app, spec: dict[str, Any], *, principal_id: str | None, principal_role: str | None,
     cell_id: str, src_site: str, dst_site: str, gov: "PipelineGovernanceStore | None",
     active_map_fn, resolve_cells_fn, is_human_detected_fn, arm_live_catalog_fn,
+    vehicle_sites: tuple[str, ...] | frozenset[str] = (),
 ) -> tuple[str, dict[str, Any]]:
     """Run all governance, depth, policy-swap, and read-only CAS checks before task construction."""
     target_status, proposer_val = resolve_task_proposer(spec, principal_id=principal_id, principal_role=principal_role)
@@ -211,7 +218,7 @@ def prepare_task_governance(
         if not ok_cas:
             raise HTTPException(409, detail={"code": "STALE_FAILURE_CONTEXT", "reasons": reasons})
     meta = {
-        "interlock_scope": derive_interlock_scope(cell_id, src_site, dst_site),
+        "interlock_scope": derive_interlock_scope(cell_id, src_site, dst_site, vehicle_sites=vehicle_sites),
         "fallback_chain_depth": depth_val,
         "proposer": proposer_val,
         "approved_by": principal_id.strip() if (target_status == "QUEUED" and is_named_operator(principal_id)) else None,

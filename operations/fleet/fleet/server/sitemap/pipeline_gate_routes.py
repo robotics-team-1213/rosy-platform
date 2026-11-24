@@ -86,8 +86,6 @@ def install_gates_routes(app, ctx) -> None:
                     t["status"] = "PAUSED_HUMAN"
                     _enrich_task_health(t)
                     paused_tasks.append(t["task_id"])
-            if gov is not None:
-                gov.bump_stop_generation()
             pid = f"pinky-estop-{uuid.uuid4().hex[:6]}"
             pinky_estop = {
                 "task_id": pid,

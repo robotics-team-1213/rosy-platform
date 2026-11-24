@@ -208,6 +208,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             cell_id=cell_id, src_site=targets["src_site"], dst_site=targets["dst_site"], gov=gov,
             active_map_fn=active_map, resolve_cells_fn=resolve_omx_cells,
             is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog,
+            vehicle_sites=(_LEGACY_VEHICLE_SITE,),
         )
         if execution_mode != "act_policy" and (raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site)):
             resolved_disp = app.state.detected_displaced_site or "belt_far"
