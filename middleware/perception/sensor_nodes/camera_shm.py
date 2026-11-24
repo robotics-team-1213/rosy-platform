@@ -1,4 +1,4 @@
-"""2-slot POSIX mmap transport for Pinky camera/front frames (zero ROS imports: D-171)."""
+"""2-slot POSIX mmap transport for robot camera/front frames (zero ROS imports: D-171)."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
