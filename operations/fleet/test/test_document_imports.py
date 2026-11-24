@@ -84,6 +84,7 @@ OWN = {
         "selection.js",
         "cockpit-telemetry.js",
         "cockpit-hosts.js",
+        "calm-power.js",
         "cell-cockpit-stage.js",
         "cell-context-panel.js",
         "manual-control.js",
