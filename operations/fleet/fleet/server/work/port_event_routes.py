@@ -54,30 +54,41 @@ def workcell_children(control) -> list[str]:
     return direct_child_unit_ids(control, resource_prefix="workcell:")
 
 
+async def _fetch_source_rows(store, control, source: str, after: int, budget: int) -> list[dict]:
+    if source == LOCAL:
+        return await asyncio.to_thread(store.after, after, budget)
+    page = PortEventLedgerPage.model_validate(await control.peer.port_events(source, after, budget))
+    return [{"seq": r.seq, "event": r.event} for r in page.rows]
+
+
 async def read_page(store, control, cursor: str | None, limit: int) -> dict:
     positions, events, complete = decode_cursor(cursor), [], True
     sources = ([LOCAL] if store is not None else []) + (workcell_children(control) if control is not None else [])
-    # shortcut: sources are read in a fixed order, so a busy first cell can fill the page; rotate if one starves
-    for source in sources:
-        budget = limit - len(events)
-        if budget <= 0:
-            complete = False  # this source was not reached on this page
-            break
-        after = positions.get(source, 0)
-        try:
-            if source == LOCAL:
-                rows = await asyncio.to_thread(store.after, after, budget)
-            else:
-                page = PortEventLedgerPage.model_validate(await control.peer.port_events(source, after, budget))
-                rows = [{"seq": r.seq, "event": r.event} for r in page.rows]
-        except (OSError, sqlite3.Error, httpx.HTTPError, asyncio.TimeoutError, ValueError, ValidationError):
-            complete = False  # this cell keeps its position; the next read asks again
-            continue
-        kept, gap = contiguous(rows[:budget], after)
-        complete = complete and not gap
-        events += [row["event"] for row in kept]
-        if kept:
-            positions[source] = kept[-1]["seq"]
+    more = set(sources)
+    while len(events) < limit and more:
+        pending = [s for s in sources if s in more]
+        more.clear()
+        for idx, source in enumerate(pending):
+            remaining = limit - len(events)
+            if remaining <= 0:
+                more.update(pending[idx:])
+                break
+            share = max(1, (remaining + len(pending) - idx - 1) // (len(pending) - idx))
+            after = positions.get(source, 0)
+            try:
+                rows = await _fetch_source_rows(store, control, source, after, share)
+            except (OSError, sqlite3.Error, httpx.HTTPError, asyncio.TimeoutError, ValueError, ValidationError):
+                complete = False  # this cell keeps its position; the next read asks again
+                continue
+            kept, gap = contiguous(rows[:share], after)
+            complete = complete and not gap
+            events += [row["event"] for row in kept]
+            if kept:
+                positions[source] = kept[-1]["seq"]
+            if not gap and len(rows) >= share:
+                more.add(source)
+    if more:
+        complete = False
     return PortEventPage(events=events, cursor=encode_cursor(positions), complete=complete).model_dump(mode="json")
 
 

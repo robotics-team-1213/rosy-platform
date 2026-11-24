@@ -148,13 +148,32 @@ class IngestServer:
         self._demand = StreamDemand()
         self._demand_tasks: set[asyncio.Task] = set()
 
+    def _max_bytes_for_width(self, width: int | None) -> int:
+        base = self.config["max_bytes"]
+        default_w = protocol.DEFAULT_CONFIG["width"]
+        if width is None or width <= default_w:
+            return base
+        return min(1_500_000, max(base, int(base * (width / default_w) ** 2)))
+
+    def _source_stream_config(self, source_name: str) -> dict:
+        cfg = dict(self.config)
+        width = self._source_widths.get(source_name)
+        if width is not None:
+            cfg["width"] = width
+            if width > protocol.DEFAULT_CONFIG["width"]:
+                cfg["max_bytes"] = self._max_bytes_for_width(width)
+                cfg["jpeg_quality"] = max(cfg["jpeg_quality"], 82)
+        return cfg
+
     async def start(self, host: str, port: int, *, ssl_context: ssl.SSLContext | None = None) -> Server:
+        max_frame_bytes = max([self.config["max_bytes"],
+                               *(self._max_bytes_for_width(w) for w in self._source_widths.values())])
         return await serve(
             self._handler,
             host,
             port,
             process_request=self._process_request,
-            max_size=self.config["max_bytes"] + protocol.HEADER_SIZE + _MAX_SIZE_MARGIN,
+            max_size=max_frame_bytes + protocol.HEADER_SIZE + _MAX_SIZE_MARGIN,
             max_queue=RECEIVE_QUEUE_FRAMES,
             ssl=ssl_context,
             logger=_WS_LOGGER,
@@ -300,8 +319,7 @@ class IngestServer:
             task.add_done_callback(self._closing.discard)
 
         try:
-            source_config = self.config | ({'width': self._source_widths[source_name]}
-                if source_name in self._source_widths else {})
+            source_config = self._source_stream_config(source_name)
             await connection.send(json.dumps(protocol.make_config(**source_config)))
             await self._send_demand(src, force=True)
         except websockets.exceptions.ConnectionClosed:
@@ -442,7 +460,7 @@ class IngestServer:
             src.stats.dropped_bad_header += 1
             return
         jpeg = message[protocol.HEADER_SIZE:]
-        if len(jpeg) > self.config["max_bytes"]:
+        if len(jpeg) > self._max_bytes_for_width(self._source_widths.get(src.name)):
             src.stats.oversize += 1
             return
         captured_at = now - header.age_ms / 1000.0

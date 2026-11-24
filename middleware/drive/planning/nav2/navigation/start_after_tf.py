@@ -2,6 +2,7 @@
 """Start the Nav2 navigation manager once the costmap transforms exist."""
 
 from pathlib import Path
+import os
 import sys
 import time
 
@@ -59,10 +60,19 @@ def run_startup_loop(
     max_attempts=MAX_STARTUP_ATTEMPTS,
     retry_s=STARTUP_RETRY_S,
     log_interval_s=WAIT_LOG_INTERVAL_S,
+    check_interval_s=0.5,
 ):
     last_log = monotonic() - log_interval_s
+    next_check = monotonic()
     attempts = 0
     while ok():
+        now = monotonic()
+        if now < next_check:
+            spin_once(node, timeout_sec=max(0.01, min(check_interval_s, next_check - now)))
+            # Keep progressing if a test injects a non-advancing fake clock.
+            if monotonic() <= now:
+                next_check = now
+            continue
         result = request_startup(buffer, client, request, frames, latest)
         if result is None:
             now = monotonic()
@@ -70,7 +80,8 @@ def run_startup_loop(
                 missing = missing_requirements(buffer, client, frames, latest)
                 node.get_logger().info(f"Still waiting for Nav2 startup prerequisites: {missing}")
                 last_log = now
-            spin_once(node, timeout_sec=0.5)
+            next_check = now + check_interval_s
+            spin_once(node, timeout_sec=check_interval_s)
             continue
         spin_until_future_complete(node, result, timeout_sec=120.0)
         if not ok():
@@ -88,7 +99,20 @@ def run_startup_loop(
         if attempts >= max_attempts:
             return 1
         sleep(retry_s)
+        next_check = monotonic()
     return 0
+
+
+def _make_executor():
+    from rclpy.executors import SingleThreadedExecutor
+
+    if os.environ.get("ROSY_EXECUTOR", "events").strip().lower() == "single":
+        return SingleThreadedExecutor()
+    try:
+        from rclpy.experimental.events_executor import EventsExecutor
+        return EventsExecutor()
+    except ImportError:
+        return SingleThreadedExecutor()
 
 
 def main():
@@ -100,6 +124,8 @@ def main():
 
     rclpy.init()
     node = rclpy.create_node("nav2_start_after_tf")
+    executor = _make_executor()
+    executor.add_node(node)
     try:
         frames = costmap_frames(sys.argv[1], node.get_namespace())
         buffer = Buffer(node=node)
@@ -110,13 +136,17 @@ def main():
         node.get_logger().info(f"Waiting for Nav2 costmap transforms: {frames}")
         return run_startup_loop(
             node, buffer, client, request, frames, latest,
-            spin_once=rclpy.spin_once,
-            spin_until_future_complete=rclpy.spin_until_future_complete,
+            spin_once=lambda _node, timeout_sec=0.5: executor.spin_once(timeout_sec=timeout_sec),
+            spin_until_future_complete=(
+                lambda _node, future, timeout_sec=120.0:
+                    executor.spin_until_future_complete(future, timeout_sec=timeout_sec)
+            ),
             ok=rclpy.ok,
         )
     except (ExternalShutdownException, KeyboardInterrupt):
         return 0
     finally:
+        executor.shutdown()
         node.destroy_node()
         rclpy.try_shutdown()
     return 0

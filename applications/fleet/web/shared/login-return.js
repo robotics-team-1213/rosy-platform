@@ -1,5 +1,5 @@
 const ANCHORS = {'/console/site-map': ['#teach-heading'], '/console/install': ['#robots', '#device-profiles', '#cameras', '#calibration', '#robot-enrollment', '#peer-picker', '#camera-link', '#camera-peer-panel', '#usb-camera-panel', '#camera-calibration', '#measured-calibration']};
-const DOCUMENTS = new Set(['/console', '/console/install', '/console/maintenance', '/console/site-map', '/console/cell', '/console/profile', '/console/accounts', '/console/policy']);
+const DOCUMENTS = new Set(['/console', '/console/install', '/console/maintenance', '/console/site-map', '/console/cell', '/console/profile', '/console/accounts', '/console/policy', '/console/world']);
 
 // Login can only return to a Fleet document on this origin, never to credentials or another service.
 export function loginReturn(value, origin) {

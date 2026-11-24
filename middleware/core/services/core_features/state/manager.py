@@ -138,6 +138,11 @@ class StateManager:
         with self._lock:
             self._mode = mode
 
+    @property
+    def mode(self) -> RobotMode:
+        with self._lock:
+            return self._mode
+
     def set_navigation(self, state: NavigationState) -> None:
         with self._lock:
             self._navigation = state

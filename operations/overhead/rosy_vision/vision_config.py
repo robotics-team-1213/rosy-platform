@@ -34,6 +34,8 @@ class VisionSourceConfig:
     #: D-589 6: Vision tunes this camera's exposure for recognition (needs --track); false
     #: sends no camera messages and the phone follows its own D-544 settings.
     auto_tune: bool = True
+    #: Optional requested stream width (px) sent to the phone camera in config (default: protocol 1280).
+    stream_width: int | None = None
 
 
 def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None = None
@@ -119,10 +121,13 @@ def load_vision_sources(path: Path | str, *, environ: Mapping[str, str] | None =
         auto_tune = row.get("auto_tune", True)
         if type(auto_tune) is not bool:
             raise ValueError(f"sources[{index}].auto_tune must be true or false")
+        stream_width = row.get("stream_width")
+        if stream_width is not None and (type(stream_width) is not int or not 320 <= stream_width <= 4096):
+            raise ValueError(f"sources[{index}].stream_width must be an integer between 320 and 4096")
         if camera.source_id in source_ids:
             raise ValueError("vision source ids must be unique")
         source_ids.add(camera.source_id)
         phone_token = secrets[0] if credential == "static" else None
         configs.append(VisionSourceConfig(camera, phone_token, secrets[-1], row["fleet_base_url"],
-                                          credential, auto_tune))
+                                          credential, auto_tune, stream_width))
     return configs

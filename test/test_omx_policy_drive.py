@@ -338,6 +338,12 @@ def test_demonstrated_range_widens_only_where_a_person_went(tmp_path):
     assert result["result"] == "dry_run" and "refused" not in rows[0]
 
 
+def test_demonstrated_range_refuses_sim_units_checkpoint(tmp_path):
+    (tmp_path / "UNITS.json").write_text(json.dumps({"state": "sim_rad", "gripper": "sim_jaw", "arm": "arm_b"}))
+    with pytest.raises(ValueError, match="sim-unit checkpoint"):
+        drive.demonstrated_range(tmp_path, [0.0] * 6)
+
+
 LIB_GRASP = {
     **LIB,
     "chunks": {

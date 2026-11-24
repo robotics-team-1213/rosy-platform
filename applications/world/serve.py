@@ -33,6 +33,7 @@ from world_state import (  # noqa: E402
     _lerp_vec,
     _lerp_yaw,
     _live_state,
+    _live_stream_mode,
     _read_fresh_json,
     _read_json_strict,
     _reject_constant,
@@ -165,7 +166,8 @@ class WorldHandler(SimpleHTTPRequestHandler):
                     return
 
         speed = _clamp(query.get("speed"), 1.0, 0.25, 8.0)
-        hz = _clamp(query.get("hz"), 25.0, 5.0, 30.0)
+        real = world_id == "real-site" or adapter == "real"
+        hz = _clamp(query.get("hz"), 5.0 if real else 25.0, 5.0, 30.0)
         start_s = _clamp(query.get("start_s"), 0.0, 0.0, 3600.0)
         max_events = None
         if "max_events" in query:
@@ -197,15 +199,19 @@ class WorldHandler(SimpleHTTPRequestHandler):
                 payload = None
                 event_name = "state"
 
-                if world_id == "real-site" or adapter == "real":
+                if real:
                     # Anti-faking guardrail: real mode never falls back to simulation replay.
-                    live_real = _read_fresh_json(world_file, now_ms) if world_file else None
-                    if live_real is None and worlds_dir.is_dir():
-                        for cand_path in sorted(worlds_dir.glob("*.json")):
-                            cand = _read_fresh_json(cand_path, now_ms)
-                            if cand and cand.get("adapter") == "real":
-                                live_real = cand
-                                break
+                    if world_id:
+                        candidates = [world_file or (worlds_dir / "real-site.json")]
+                    else:
+                        candidates = sorted(worlds_dir.glob("*.json"))
+                    live_real = None
+                    for path in candidates:
+                        cand = _read_fresh_json(path, now_ms)
+                        if (cand and cand.get("adapter") == "real"
+                                and cand.get("stream_mode") in (None, "live")):
+                            live_real = cand
+                            break
                     if live_real is not None:
                         payload = {**live_real, "stream_mode": "live", "adapter": "real", "parity": verify_world_parity(canonical, live_real)}
                     else:
@@ -215,7 +221,7 @@ class WorldHandler(SimpleHTTPRequestHandler):
                             "stream_mode": "waiting",
                             "state": "waiting",
                             "adapter": "real",
-                            "world_id": "real-site",
+                            "world_id": world_id or "real-site",
                             "reason": "실물 현장 미연결",
                             "observed_at_ms": now_ms,
                         }
@@ -227,7 +233,7 @@ class WorldHandler(SimpleHTTPRequestHandler):
                             **snap,
                             "world_id": world_id,
                             "adapter": snap_adapter,
-                            "stream_mode": "live",
+                            "stream_mode": _live_stream_mode(snap),
                             "parity": verify_world_parity(canonical, snap),
                         }
                     else:
