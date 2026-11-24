@@ -39,7 +39,11 @@ INPUT_FILES = {
     "isaac/isaac-overview.png": "cell-render.png",
     "isaac/calibration/frames/top.jpg": "cell-photo.jpg",
 }
-WEB_FILES = ("index.html", "styles.css", "app.js", "scene.js", "play.js", "factory-live.js", "world-monitor.js", "studio-look.js", "omx-arm.js", "manifest.webmanifest")
+WEB_FILES = (
+    "index.html", "styles.css", "app.js", "live-feeds.js", "scene.js", "scene-geometry.js",
+    "play.js", "factory-live.js", "factory-actors.js", "world-monitor.js", "studio-look.js",
+    "omx-arm.js", "manifest.webmanifest",
+)
 FACTORY_STAGES = (
     "c2_departure", "s1_yield", "s3_stop", "cell_claim",
     "arm_s_to_belt", "belt_transit", "ab_stack",
@@ -335,8 +339,9 @@ def build(
     files.update({f"common/{name}": read_within(SHARED, name) for name in COMMON_FILES})
     files.update({f"data/{name}": content for name, content in data.items()})
     for name in (
-        "README.md", "serve.py", "compose.yaml", "Dockerfile", "install-windows.ps1", "open-app.ps1",
-        "observe_isaac.py", "observe_pinky.py", "bridge_real_fleet.py", "world_mdns.py",
+        "README.md", "serve.py", "world_state.py", "compose.yaml", "Dockerfile",
+        "install-windows.ps1", "open-app.ps1", "observe_isaac.py", "observe_pinky.py",
+        "bridge_real_fleet.py", "world_mdns.py", "world_mdns_probe.py",
     ):
         files[name] = (HERE / name).read_bytes()
     sim_dir = HERE.parents[1] / "tools" / "sim"

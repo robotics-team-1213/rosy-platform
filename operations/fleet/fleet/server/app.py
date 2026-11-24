@@ -425,7 +425,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         local_stop_fanout=partial(fanout_local_omx_stops, configured_omx, stop_transport, targets=stop_targets),
         cancel_pending=partial(cancel_pending_task_queue, task_service, console))
 
-    install_static_routes(app)
+    install_static_routes(app, read_guard=read_guard)
     from fleet.server.charge_bootstrap import install_charge_runtime
     install_charge_runtime(
         app, factory=charge_runtime_factory, runner=trip_runner, plans=site_maps,

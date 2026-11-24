@@ -4,6 +4,7 @@
 services:
   virtual-core-fleet:
     image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
+    mem_limit: 256m
     user: "10001:10001"
     command:
       - python
@@ -120,6 +121,7 @@ services:
 
   fleet-mdns:
     image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
+    mem_limit: 128m
     network_mode: host
     user: "10001:10001"
     command:

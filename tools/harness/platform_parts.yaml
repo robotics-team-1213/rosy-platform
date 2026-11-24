@@ -100,6 +100,7 @@ app_subtrees:
   tools/drivable_branch_replay.py: vision  # only middleware/perception + integrations/perception (and core foundation)
   tools/development_link.py: site-fleet  # sys.path = operations/fleet + core foundation; issues Fleet pairing and TLS material
   tools/sim/omx_*: omx-cell
+  tools/sim/world_*: site-fleet
   test/test_omx_*: omx-cell
   tools/land*.py: tooling
   tools/publish*.py: tooling

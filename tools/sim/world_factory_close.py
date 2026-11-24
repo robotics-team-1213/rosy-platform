@@ -14,10 +14,6 @@ from factory_flow_receipts import SCHEMA, STAGES, verify  # noqa: E402
 from factory_isaac_handoff import prepare as prepare_isaac_handoff  # noqa: E402
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def close_factory_flow(
     prefix_dir: Path,
     arm_s_evidence: Path,
@@ -49,7 +45,7 @@ def close_factory_flow(
             rel = f"ev/{row['stage']}-{idx}{src.suffix or '.json'}"
             dst = out_dir / rel
             shutil.copyfile(src, dst)
-            copied.append({"path": rel, "sha256": _sha256(dst)})
+            copied.append({"path": rel, "sha256": hashlib.sha256(dst.read_bytes()).hexdigest()})
         receipts.append({**row, "evidence": copied})
 
     downstream = (
@@ -67,7 +63,7 @@ def close_factory_flow(
         shutil.copyfile(src, dst)
         receipts.append({
             "schema": SCHEMA, **bindings, "stage": stage, "status": "pass",
-            "evidence": [{"path": rel, "sha256": _sha256(dst)}],
+            "evidence": [{"path": rel, "sha256": hashlib.sha256(dst.read_bytes()).hexdigest()}],
         })
 
     (out_dir / "site-map.json").write_bytes(site_map_path.read_bytes())

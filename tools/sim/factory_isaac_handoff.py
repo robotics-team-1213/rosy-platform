@@ -26,10 +26,6 @@ LINEAR_STOP_M_S = 0.001
 ANGULAR_STOP_RAD_S = 0.01
 
 
-def digest(data):
-    return hashlib.sha256(data).hexdigest()
-
-
 def number(value):
     if type(value) not in (float, int) or not math.isfinite(value):
         raise ValueError("expected a finite measurement")
@@ -48,9 +44,10 @@ def evidence(receipt, base):
     if not path.is_relative_to(base) or not path.is_file():
         raise ValueError("evidence must be a file inside the run directory")
     content = path.read_bytes()
-    if digest(content) != entry["sha256"].lower():
+    actual_sha = hashlib.sha256(content).hexdigest()
+    if actual_sha != entry["sha256"].lower():
         raise ValueError("evidence changed after receipt verification")
-    return json.loads(content), digest(content)
+    return json.loads(content), actual_sha
 
 
 def prepare(receipt_path, map_path):
@@ -59,7 +56,7 @@ def prepare(receipt_path, map_path):
         raise ValueError("; ".join(errors))
     binding = report["bindings"]
     source = map_path.read_bytes()
-    if digest(source) != binding["site_map_sha256"].lower():
+    if hashlib.sha256(source).hexdigest() != binding["site_map_sha256"].lower():
         raise ValueError("site map does not match the run")
     envelope = json.loads(source)
     site = envelope["map"]

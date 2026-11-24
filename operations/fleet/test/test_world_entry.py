@@ -135,3 +135,17 @@ def test_invalid_world_url_fails_startup(monkeypatch, bad_url) -> None:
 def test_fleet_console_exposes_world_link() -> None:
     assert 'href="/console/world"' in (WEB_ROOT / "index.html").read_text(encoding="utf-8")
     assert 'href="/console/world"' in (WEB_ROOT / "learning.html").read_text(encoding="utf-8")
+
+
+def test_world_entry_enforces_read_guard(monkeypatch) -> None:
+    from fastapi import Depends, HTTPException
+
+    def deny():
+        raise HTTPException(status_code=401, detail="unauthorized")
+
+    app = FastAPI()
+    app.state.web_common = None
+    monkeypatch.delenv("ROSY_WORLD_URL", raising=False)
+    monkeypatch.delenv("ROSY_WORLD_MDNS_HOST", raising=False)
+    install_world_routes(app, WEB_ROOT, CONSOLE_CSP, read_guard=[Depends(deny)])
+    assert TestClient(app).get("/api/fleet/world-entry").status_code == 401

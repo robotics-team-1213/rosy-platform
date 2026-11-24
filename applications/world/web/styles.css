@@ -78,7 +78,6 @@
   height: 100%;
   object-fit: contain;
   pointer-events: none;
-  transition: opacity 160ms ease;
 }
 .world-cell-r2s-overlay[data-r2s-alpha="0"] { opacity: 0; }
 .world-cell-r2s-overlay[data-r2s-alpha="50"] { opacity: var(--disabled-opacity); }

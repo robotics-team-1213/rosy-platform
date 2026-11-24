@@ -13,7 +13,7 @@ from xml.etree import ElementTree
 
 MAP = Path(__file__).resolve().parents[2] / "middleware/perception/map/map_world_261026"
 WORLD = MAP / "worlds/map_world_261026.world"
-AB_CANDIDATE_SHA = "32377e7ba62a645eec56ef561f12bc529365e9cb4c7c4372ee401694e058e779"
+AB_CANDIDATE_SHA256 = "32377e7ba62a645eec56ef561f12bc529365e9cb4c7c4372ee401694e058e779"
 
 
 def write_materials(output):
@@ -173,7 +173,7 @@ def build(bundle, out, dynamic_cell=None, site_scene=None):
         raise ValueError("site CAD registration or R08 asset does not match this bundle")
     transform = registration["site_from_cell"]
     cell_pose = vector([*transform["translation_m"], 0, 0, transform["yaw_rad"]], 6)
-    if dynamic_cell is not None and digest(dynamic_cell) != AB_CANDIDATE_SHA:
+    if dynamic_cell is not None and digest(dynamic_cell) != AB_CANDIDATE_SHA256:
         raise ValueError("only the audited R08 A/B cargo-pose candidate can share this placement")
     out.mkdir(parents=True, exist_ok=False)
     layer = out / "r08-visual.usda"

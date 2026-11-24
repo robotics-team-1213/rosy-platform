@@ -17,7 +17,7 @@ from route_drive import OdomTrace, nav2_active, nav_state
 ROBOT = "rosy_01"
 C2 = (-0.190, 0.470, -math.pi / 2)
 P2 = (-0.190, 0.022)
-CAD_SHA = "dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc"
+CAD_SHA256 = "dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc"
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -78,7 +78,7 @@ def main():
             binding = out / "pinky-binding.json"
             binding.write_text(json.dumps({
                 "run_id": run_id, "robot_id": ROBOT, "odom_topic": f"/{ROBOT}/odom",
-                "odom_frame_id": f"{ROBOT}/odom", "site_cad_sha256": CAD_SHA, "site_from_odom": [0, 0, 0],
+                "odom_frame_id": f"{ROBOT}/odom", "site_cad_sha256": CAD_SHA256, "site_from_odom": [0, 0, 0],
             }), encoding="utf-8")
             snapshot = out / "data" / "pinky-sim.json"
             snapshot.parent.mkdir()

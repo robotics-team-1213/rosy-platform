@@ -203,7 +203,7 @@ class _MdnsWorldLocator:
         return self._cached_origin
 
 
-def install_world_routes(app, web_root, csp, *, mdns_discover_fn=None):
+def install_world_routes(app, web_root, csp, *, mdns_discover_fn=None, read_guard=None):
     static_origin = _configured_world_origin()
     mdns_target = _configured_mdns_target()
     locator = (
@@ -244,7 +244,7 @@ def install_world_routes(app, web_root, csp, *, mdns_discover_fn=None):
             "reachable": False,
         }, None
 
-    @app.get("/api/fleet/world-entry", include_in_schema=False)
+    @app.get("/api/fleet/world-entry", include_in_schema=False, dependencies=list(read_guard or ()))
     def world_entry_status():
         body, _ = _current_status()
         return JSONResponse(body, headers=headers)

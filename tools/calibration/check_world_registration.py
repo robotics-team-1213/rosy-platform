@@ -10,10 +10,6 @@ from pathlib import Path
 from slam_map_align import AlignError, fit_rigid, flipped_fit, mirror_fit
 
 
-def digest(content):
-    return hashlib.sha256(content).hexdigest()
-
-
 def bundle_identity(bundle):
     site_map = (bundle / "data/site-map.json").read_bytes()
     cell_model = (bundle / "data/cell-equipment.json.gz").read_bytes()
@@ -26,20 +22,18 @@ def bundle_identity(bundle):
     return {
         "site_map_id": site["map"]["map_id"],
         "site_map_version": site["version"],
-        "site_map_sha256": digest(site_map),
+        "site_map_sha256": hashlib.sha256(site_map).hexdigest(),
         "site_cad_sha256": manifest.get("site_cad", {}).get("source_sha256"),
         "cell_layout_sha256": cell["layout_sha256"],
-        "cell_model_sha256": digest(cell_model),
+        "cell_model_sha256": hashlib.sha256(cell_model).hexdigest(),
     }
-
-
-def number(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def coordinates(row, key):
     point = row[key]
-    if not isinstance(point, list) or len(point) != 3 or not all(map(number, point)):
+    if not isinstance(point, list) or len(point) != 3 or not all(
+        type(v) in (int, float) and math.isfinite(v) for v in point
+    ):
         raise ValueError(f"{row['id']} needs three finite {key} coordinates")
     return point
 
@@ -58,7 +52,7 @@ def evaluate(bundle, measurements):
             datetime.fromisoformat(measurements["captured_at"]).utcoffset() is None):
         raise ValueError("record the measurement source and timezone-aware capture time")
     limits = {"fit": measurements["max_fit_error_m"], "check": measurements["max_check_error_m"]}
-    if not all(number(limit) and limit > 0 for limit in limits.values()):
+    if not all(type(limit) in (int, float) and math.isfinite(limit) and limit > 0 for limit in limits.values()):
         raise ValueError("record both positive error limits in metres before measuring")
 
     marks = measurements["points"]
