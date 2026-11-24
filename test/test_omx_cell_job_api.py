@@ -610,3 +610,65 @@ def test_cell_job_api_is_managed_by_omx_devices_autoupdate():
     entry = yaml.safe_load((root / "deploy" / "hosts" / "services.yaml").read_text(encoding="utf-8"))["roles"]["omx"]["rosy-omx-cell-job-api.service"]
     assert entry["channel"] == "autoupdate"
     assert entry["source"] == ".local/share/rosy/omx-devices/current"
+
+
+def test_check_arm_incident_hold_syncs_stale_local_hold_only_when_fleet_confirmed_clear(monkeypatch):
+    from types import SimpleNamespace
+    import cell_job_guards as guards
+
+    def _run_case(statuses, *, sync_result):
+        calls = []
+        seq = list(statuses)
+
+        def _status(_arm):
+            return seq.pop(0) if len(seq) > 1 else seq[0]
+
+        def _sync(arm):
+            calls.append(arm)
+            return sync_result
+
+        fake_mod = SimpleNamespace(
+            status=_status,
+            sync_hold_from_fleet=_sync,
+            hold_file=lambda _arm: None,
+        )
+        monkeypatch.setitem(sys.modules, "omx_incident", fake_mod)
+        return guards.check_arm_incident_hold("arm_b"), calls
+
+    # (a) Fleet confirms clear and outbox is empty -> sync lifts stale local hold and re-check passes
+    res_a, calls_a = _run_case(
+        [
+            {"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 0},
+            {"local_held": False, "local_reason": None, "fleet_held": False, "unsent_outbox": 0},
+        ],
+        sync_result=True,
+    )
+    assert res_a is None and calls_a == ["arm_b"]
+
+    # (b) Sync race (Fleet became held or unreachable during sync) -> stays held fail-closed
+    res_b, calls_b = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 0}],
+        sync_result=False,
+    )
+    assert res_b == "runner: human hold" and calls_b == ["arm_b"]
+
+    # (c) Fleet unreachable (fleet_held=None) -> never calls sync, stays held fail-closed
+    res_c, calls_c = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": None, "unsent_outbox": 0}],
+        sync_result=True,
+    )
+    assert res_c == "runner: human hold" and calls_c == []
+
+    # (d) Unsent outbox pending -> never calls sync, stays held fail-closed
+    res_d, calls_d = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 1}],
+        sync_result=True,
+    )
+    assert res_d == "runner: human hold" and calls_d == []
+
+    # (e) Fleet also holds the arm -> never calls sync, stays held fail-closed
+    res_e, calls_e = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": True, "unsent_outbox": 0}],
+        sync_result=True,
+    )
+    assert res_e == "runner: human hold" and calls_e == []
