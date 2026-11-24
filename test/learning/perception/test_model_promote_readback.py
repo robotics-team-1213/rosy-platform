@@ -193,3 +193,127 @@ def test_paint_readback_keeps_delivery_exit_and_records_actual_consumer(tmp_path
     [row] = _records(tmp_path)
     assert (row["slot"], row["readback"], row["node_revision"], row["signed"]) == (
         "paint", "match", "lane-9", None)
+
+
+def test_read_back_api_models_match_mismatch_stale_and_no_node():
+    runner = RobotRunner(f"{OBJ_ROOT}/det-7", "")
+    seen_urls = []
+
+    def fake_fetch(url):
+        seen_urls.append(url)
+        return {"tasks": [
+            {"task": "object_det", "slot": "active", "model_revision": "det-7", "signed": True, "stale": False},
+            {"task": "lane_seg", "slot": "shadow", "model_revision": "lane-4", "signed": False, "stale": True},
+        ]}
+
+    res = promote_readback.read_back_api(
+        "https://robot:8080/", "tok", ["ssh"], "rosy@robot", OBJ_ROOT, "object_det", "active",
+        runner, timeout=5, attempts=1, fetch_json=fake_fetch)
+    assert res == {"pointer_revision": "det-7", "node_revision": "det-7", "signed": True, "readback": "match"}
+    assert seen_urls == ["https://robot:8080/api/v1/vision/models"]
+    assert not any("ros2 topic echo" in c[-1] for c in runner.calls)
+
+    # Mismatch retries `attempts` times and stays mismatch while exit code stays unchanged.
+    sleeps = []
+    mismatch = promote_readback.read_back_api(
+        "https://robot:8080", "tok", ["ssh"], "rosy@robot", OBJ_ROOT, "object_det", "active",
+        RobotRunner(f"{OBJ_ROOT}/det-8", ""), timeout=5, attempts=3, wait_s=1.0,
+        sleep=sleeps.append, fetch_json=fake_fetch)
+    assert mismatch == {"pointer_revision": "det-8", "node_revision": "det-7", "signed": True, "readback": "mismatch"}
+    assert sleeps == [1.0, 1.0]
+
+    stale = promote_readback.read_back_api(
+        "https://robot:8080", "tok", ["ssh"], "rosy@robot", "/var/lib/rosy/models", "lane_seg", "shadow",
+        RobotRunner("/var/lib/rosy/models/lane-4", ""), timeout=5, attempts=1, fetch_json=fake_fetch)
+    assert stale["readback"] == "unavailable" and stale["node_revision"] is None
+
+    no_node = promote_readback.read_back_api(
+        "https://robot:8080", "tok", ["ssh"], "rosy@robot", OBJ_ROOT, "object_det", "shadow",
+        runner, timeout=5, attempts=1, fetch_json=fake_fetch)
+    assert no_node["readback"] == "no_node"
+
+
+def test_read_back_api_paint_edge_cases():
+    assert promote_readback.parse_api_paint({"applied_paint_source": "denoise_fallback", "applied_model_revision": "lane-9"}) is None
+    assert promote_readback.parse_api_paint({"applied_paint_source": "learned", "applied_model_revision": ""}) is None
+    runner = PaintRunner("", pointers=("lane-9", "lane-10"))
+    moved = promote_readback.read_back_api(
+        "https://robot:8080", "tok", ["ssh"], "rosy@robot", "/var/lib/rosy/models", "lane_seg", "paint",
+        runner, timeout=5, attempts=1,
+        fetch_json=lambda _u: {"applied_paint_source": "learned", "applied_model_revision": "lane-9"})
+    assert moved["readback"] == "unavailable"
+
+
+def test_http_get_json_hardening_and_error_handling():
+    import http.client
+    import io
+    import urllib.request
+
+    with pytest.raises(ValueError, match="https://"):
+        promote_readback._http_get_json("http://robot:8080/api/v1/vision/models", token="tok")
+
+    assert promote_readback._NoRedirect().redirect_request(None, None, 302, "Found", {}, "") is None
+
+    seen = []
+
+    class FakeResp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def ok_opener(*handlers):
+        seen.append(handlers)
+        class Opener:
+            def open(self, req, timeout=None):
+                assert req.get_header("Authorization") == "Bearer env-tok"
+                return FakeResp(b'{"tasks": []}')
+        return Opener()
+
+    doc = promote_readback._http_get_json(
+        "HTTPS://robot:8080/api/v1/vision/models", token="env-tok", insecure=True, opener_factory=ok_opener)
+    assert doc == {"tasks": []}
+    assert isinstance(seen[0][0], urllib.request.ProxyHandler) and seen[0][0].proxies == {}
+    assert isinstance(seen[0][2], promote_readback._NoRedirect)
+
+    def err_opener(*_handlers):
+        class Opener:
+            def open(self, _req, timeout=None):
+                raise http.client.RemoteDisconnected("closed")
+        return Opener()
+
+    assert promote_readback._http_get_json("https://robot:8080/api/v1/vision/models", opener_factory=err_opener) is None
+
+
+def test_read_back_api_paint_and_deliver_cli(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_API_TOKEN", "env-secret")
+    token_file = tmp_path / "tok"
+    token_file.write_text("secret-token\n", encoding="utf-8")
+    runner = PaintRunner("")
+    calls = []
+
+    def fake_get(url, *, token=None, **_kw):
+        calls.append((url, token))
+        return {"applied_paint_source": "learned_drivable", "applied_model_revision": "lane-9"}
+
+    monkeypatch.setattr(promote_readback, "_http_get_json", fake_get)
+    assert deliver.main([
+        "rollback", "robot", "--slot", "paint", "--readback",
+        "--core-url", "https://robot:8080", "--token-file", str(token_file),
+        "--journal-dir", str(tmp_path / "delivery-journal"), *SSH,
+    ], runner=runner) == 0
+    assert calls[-1] == ("https://robot:8080/api/v1/line-follow/perception", "secret-token")
+    assert not any("ros2 topic echo" in c[-1] for c in runner.calls)
+    [row] = _records(tmp_path)
+    assert (row["slot"], row["readback"], row["node_revision"]) == ("paint", "match", "lane-9")
+
+    # Omitting --token-file reads ROSY_API_TOKEN; mismatch leaves delivery exit code 0.
+    assert deliver.main([
+        "promote", "robot", "--task", "object_det", "--readback", "--core-url", "https://robot:8080",
+        "--journal-dir", str(tmp_path / "delivery-journal"), *SSH,
+    ], runner=RobotRunner(f"{OBJ_ROOT}/det-99", "")) == 0
+    assert calls[-1] == ("https://robot:8080/api/v1/vision/models", "env-secret")
+
+    with pytest.raises(SystemExit):
+        deliver.main(["promote", "robot", "--ca-file", "/tmp/c", "--insecure", *SSH], runner=runner)
