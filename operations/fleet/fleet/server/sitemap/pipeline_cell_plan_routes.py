@@ -129,11 +129,20 @@ def install_cell_plan_routes(app, ctx) -> None:
             station = resolve_omx_cells(active[1], active[2]).get("cell_ab")
             if station is None:
                 raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
+            if getattr(app.state, "_pipeline_ledger_fault", False):
+                raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
 
             robot_id = str(body.get("robot_id") or "rosy_01")
             robot_kind = str(body.get("robot_kind") or "pinky")
             total_steps = len(planned["moves"])
-            built: list[dict[str, Any]] = []
+            gov_passthrough = {
+                k: body[k] for k in (
+                    "propose", "proposer", "expected_context_sha256", "expected_readiness_digest",
+                    "expected_dispatch_generation", "expected_authority_epoch", "expected_stop_generation",
+                    "failure_bundle_id", "failure_context_sha256",
+                ) if k in body
+            }
+            validated_steps: list[tuple[dict[str, Any], dict[str, Any], int, dict[str, float], str, dict[str, Any]]] = []
             prev_task_id: str | None = body.get("depends_on")
 
             for idx, move in enumerate(planned["moves"]):
@@ -149,11 +158,10 @@ def install_cell_plan_routes(app, ctx) -> None:
                     "tier": move["tier"],
                     "robot_id": robot_id,
                     "robot_kind": robot_kind,
-                    **({"propose": body["propose"]} if "propose" in body else {}),
+                    **gov_passthrough,
                 }
                 targets = resolve_cell_task_targets("cell_ab", step_spec, web_common=web_common, legacy_sites=("belt", "vehicle"))
                 tier, pose = checked_task_pose(step_spec, station)
-                dec_row = _evaluate_decision("cell_ab", "arm_target", {})
                 target_status, gov_meta = prepare_task_governance(
                     app, step_spec, principal_id=principal_id, principal_role=principal_role,
                     cell_id="cell_ab", src_site=targets["src_site"], dst_site=targets["dst_site"], gov=gov,
@@ -161,6 +169,14 @@ def install_cell_plan_routes(app, ctx) -> None:
                     is_human_detected_fn=_is_human_detected, arm_live_catalog_fn=_arm_live_catalog,
                     vehicle_sites=("pinky",),
                 )
+                validated_steps.append((move, targets, tier, pose, target_status, {**gov_meta, "task_id": task_id, "depends_on": prev_task_id}))
+                prev_task_id = task_id
+
+            dec_row = _evaluate_decision("cell_ab", "arm_target", {})
+            built: list[dict[str, Any]] = []
+            for idx, (move, targets, tier, pose, target_status, meta) in enumerate(validated_steps):
+                task_id = meta.pop("task_id")
+                dep_id = meta.pop("depends_on")
                 task = _enrich_task_health({
                     "task_id": task_id,
                     "cell_id": "cell_ab",
@@ -175,9 +191,9 @@ def install_cell_plan_routes(app, ctx) -> None:
                     "dst_wire_ref": targets["dst_wire_ref"],
                     "dst_area": targets["dst_area"],
                     "dst_slot": targets["dst_slot"],
-                    **gov_meta,
+                    **meta,
                     "tier": tier,
-                    "depends_on": prev_task_id,
+                    "depends_on": dep_id,
                     "plan_id": plan_id,
                     "plan_mode": planned["mode"],
                     "order_source": planned["order_source"],
@@ -193,7 +209,6 @@ def install_cell_plan_routes(app, ctx) -> None:
                     "created_at": round(time.time(), 3),
                 })
                 built.append(task)
-                prev_task_id = task_id
 
             plan_record = {
                 "plan_id": plan_id,

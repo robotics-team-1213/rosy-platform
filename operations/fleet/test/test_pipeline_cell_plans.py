@@ -163,12 +163,49 @@ def test_mode1_harbor_plan_executes_exact_sequence_and_enforces_admit_and_depend
         "cargo_id": "C1",
         "steps": [{"src_site": "yard-r1-c1-l1", "dst_site": "stand-r1-c1-l1"}],
     }, "AMBIGUOUS_PLAN_MODE"),
+    ({
+        "mode": "harbor_plan",
+        "steps": [{"src_site": "belt", "dst_site": "belt"}],
+    }, "INVALID_CELL_SITE"),
+    ({
+        "mode": "goal",
+        "state": {"C1": "yard-r1-c1-l1"},
+        "goal": {"yard:r1-s1": ["C1"], "yard:r1-s2": ["C1"]},
+    }, "DUPLICATE_GOAL_CARGO"),
+    ({
+        "mode": "goal",
+        "state": {"C1": "yard-r1-c1-l1"},
+        "goal": {"yard:r1-s1": ["C1"]},
+    }, "GOAL_ALREADY_SATISFIED"),
+    ({
+        "mode": "harbor_plan",
+        "steps": [{"src_site": "yard-r1-c1-l1", "dst_site": "stand-r1-c1-l1"}],
+        "proposer": "spoofed-user",
+    }, "CLIENT_PROPOSER_FORBIDDEN"),
 ])
 def test_mode1_and_ambiguous_invalid_plans_reject_with_422_and_write_nothing(monkeypatch, payload, code):
     app, _ = _app(monkeypatch)
     client = TestClient(app)
+    before_decisions = len(app.state.pipeline_decisions)
     res = client.post("/api/fleet/pipeline/cell-plans", headers=SVC, json=payload)
     assert res.status_code == 422 and res.json()["detail"]["code"] == code
+    assert not app.state.omx_cell_plans and not app.state.omx_cell_tasks
+    assert len(app.state.pipeline_decisions) == before_decisions
+
+
+def test_create_cell_plan_does_not_mutate_decisions_when_later_validation_fails(monkeypatch):
+    app, _ = _app(monkeypatch)
+    client = TestClient(app)
+    res = client.post("/api/fleet/pipeline/cell-plans", headers=SVC, json={
+        "mode": "harbor_plan",
+        "propose": "yes",
+        "steps": [
+            {"src_site": "yard-r1-c1-l2", "dst_site": "temp_a-r1-c1-l1"},
+            {"src_site": "yard-r1-c1-l1", "dst_site": "stand-r1-c1-l1"},
+        ],
+    })
+    assert res.status_code == 422 and res.json()["detail"]["code"] == "INVALID_CELL_TASK_INPUT"
+    assert not app.state.pipeline_decisions
     assert not app.state.omx_cell_plans and not app.state.omx_cell_tasks
 
 

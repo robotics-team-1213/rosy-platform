@@ -257,8 +257,14 @@ def _plan_goal_stacks(
             return None, "UNKNOWN_SITE"
         goal[key] = [str(c) for c in cargos]
     order = [(cargo, layout.stack_at[(k, t)]) for k, cargos in goal.items() for t, cargo in enumerate(cargos)]
+    if not order:
+        return None, "EMPTY_GOAL"
+    if len({cargo for cargo, _ in order}) != len(order):
+        return None, "DUPLICATE_GOAL_CARGO"
     if any(cargo not in state for cargo, _ in order):
         return None, "UNKNOWN_CARGO"
+    if all(state[cargo] == dst_id for cargo, dst_id in order):
+        return None, "GOAL_ALREADY_SATISFIED"
 
     goal_keys = set(goal)
     failures: list[str] = []
@@ -349,6 +355,8 @@ def _validate_harbor_steps(
         raw_dst = raw.get("dst_site") if "dst_site" in raw else raw.get("destination")
         src_id = _resolve_site_id(raw_src, layout, allow_belt=True)
         dst_id = _resolve_site_id(raw_dst, layout, allow_belt=True)
+        if src_id == dst_id:
+            raise ValueError("INVALID_CELL_SITE")
         req_arm = _normalize_arm(raw.get("arm_id") or raw.get("arm") or raw.get("primary_arm"), raw.get("arms"))
         spec = {
             "src_site": src_id,
