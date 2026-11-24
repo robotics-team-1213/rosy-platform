@@ -696,3 +696,43 @@ def test_post_eval_job_guards_amr_bed_and_requires_person_at_switch(tmp_path, mo
         res = api.Runner(wd, lock_dir=wd).start("post_eval", {**base, "site": bad_site})
         assert res["code"] == 400 and "R cell-task -> cell_task_worker -> Gate" in res["error"]
     popen.assert_not_called()
+
+
+def test_job_client_wait_timeout_and_cli_get_wait_run(monkeypatch, capsys):
+    import inspect
+    import cell_job_client as jc
+
+    assert inspect.signature(jc.CellJobClient.wait).parameters["timeout_s"].default == 600.0
+    calls = []
+
+    def fake_start(self, job, params, *, idempotency_key=None):
+        calls.append(("start", job, params, idempotency_key))
+        return {"id": "job-42", "running": True}
+
+    def fake_get(self, job_id):
+        calls.append(("get", job_id))
+        return {"id": job_id, "running": False, "exit": 0}
+
+    def fake_wait(self, job_id, *, poll_s=1.0, timeout_s=600.0):
+        calls.append(("wait", job_id, timeout_s))
+        return {"id": job_id, "running": False, "exit": 0 if job_id == "job-42" else 2}
+
+    monkeypatch.setattr(jc.CellJobClient, "start", fake_start)
+    monkeypatch.setattr(jc.CellJobClient, "get", fake_get)
+    monkeypatch.setattr(jc.CellJobClient, "wait", fake_wait)
+
+    assert jc.main(["--url", "http://127.0.0.1:8781", "get", "job-42"]) == 0
+    assert json.loads(capsys.readouterr().out)["id"] == "job-42"
+    assert jc.main(["--url", "http://127.0.0.1:8781", "wait", "job-42", "--timeout", "30"]) == 0
+    assert json.loads(capsys.readouterr().out)["exit"] == 0
+    assert jc.main(["--url", "http://127.0.0.1:8781", "wait", "job-99", "--timeout", "15"]) == 1
+    capsys.readouterr()
+    assert jc.main(["--url", "http://127.0.0.1:8781", "run", "pivot_near", "--params-json", '{"site":"floor"}', "--timeout", "45", "--idempotency-key", "k1", "--wait"]) == 0
+    capsys.readouterr()
+    assert calls == [
+        ("get", "job-42"),
+        ("wait", "job-42", 30.0),
+        ("wait", "job-99", 15.0),
+        ("start", "pivot_near", {"site": "floor"}, "k1"),
+        ("wait", "job-42", 45.0),
+    ]

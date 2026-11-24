@@ -8,6 +8,7 @@ Single Responsibility:
 """
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 import sys
@@ -18,6 +19,10 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
+
+
+def log_json(row) -> None:
+    print(json.dumps(row, default=str), flush=True)
 
 
 def _parent_attr(name: str, default):
@@ -177,10 +182,17 @@ def pivot_near(cell, config, calibration, cal_path, step: str, work) -> dict:
     problems = cell_pivot_precheck.pivot_precheck(config, calibration, site, point, yaws, frame_wh)
     if problems:
         return {step: "precheck refused: " + "; ".join(problems), "at": point}
-    result = cell_pivot.pivot_calibrate(cell, config, point, yaws, calibration, site, work, time.sleep, lambda row: None)
+    result = cell_pivot.pivot_calibrate(cell, config, point, yaws, calibration, site, work, time.sleep, log_json)
     if result["result"] == "calibrated":
         cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"], config.get("params"))
-    return {step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")}
+        return {step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")}
+    out = {step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")}
+    src = result.get("bias") or {}
+    for k in ("rms_mm", "radius_mm", "phase_deg", "yaws_fk_deg", "jaw_sides", "dropped", "error"):
+        val = src.get(k, result.get(k))
+        if val is not None:
+            out[k] = val
+    return out
 
 
 def clear_first(config) -> bool:
@@ -211,8 +223,9 @@ def self_calibrate(
         if 1000 * math.dist(q, target_xy) <= 0.9 * prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM)
         and all(1000 * math.dist(q, o["raw_m"]) >= clear_mm for o in objects)
     ]
+    over_used = False
     if cell is not None and not clear_first(config) and _parent_attr("over_target", over_target)(config, site):
-        points = [tuple(target_xy)]  # the reviewed order until pivot.clear_first is turned on (see pivot_point)
+        points, over_used = [tuple(target_xy)], True  # the reviewed order until pivot.clear_first is turned on (see pivot_point)
     if not points and cell is not None:
         ap_fn = _parent_attr("auto_pivot_point", auto_pivot_point)
         found = ap_fn(cell, config, calibration, site, target_xy)
@@ -221,7 +234,7 @@ def self_calibrate(
             return bias_data, None
         points = [found] if found else []
     if not points and cell is not None and _parent_attr("over_target", over_target)(config, site):
-        points = [tuple(target_xy)]  # 2026-11-17: over the box only when no clear point serves it (see pivot_point)
+        points, over_used = [tuple(target_xy)], True  # 2026-11-17: over the box only when no clear point serves it (see pivot_point)
     if not points:
         if cell_pivot.bias_at(bias_data, site, target_xy, params=p):
             return bias_data, None
@@ -231,7 +244,12 @@ def self_calibrate(
         return bias_data, None
     if cell is None:
         return bias_data, f"needs a pivot at {chosen}"
-    yaws = pivot.get("yaws", [base + d for d in (-80, -40, 0, 40, 80, 120)])
+    if "yaws" in pivot:
+        yaws = pivot["yaws"]
+    elif over_used:
+        yaws = _parent_attr("pivot_near_yaws", pivot_near_yaws)(config, site, over=True)
+    else:
+        yaws = [base + d for d in (-80, -40, 0, 40, 80, 120)]
     result = cell_pivot.pivot_calibrate(cell, config, chosen, yaws, calibration, site, work, sleep, log)
     if result["result"] != "calibrated":
         return bias_data, f"pivot: {result['result']}"
