@@ -49,8 +49,7 @@ from bench_record_ops import BenchOpsMixin  # noqa: E402
 from bench_live_preview import open_preview, recorder_env  # noqa: E402
 from bench_record_leader import BenchLeaderMixin  # noqa: E402
 from bench_record_manual import BenchManualMixin  # noqa: E402
-from bench_record_link import BenchLinkMixin  # noqa: E402
-from bench_record_link import link_zero_episodes  # noqa: E402
+from bench_record_link import BenchLinkMixin, _seal_calibration_args, link_zero_episodes  # noqa: E402
 from bench_record_http import PAGE, make_server  # noqa: E402,F401
 from bench_record_replay import apply_task_override, transform_replay  # noqa: E402
 from bench_record_pipeline import BenchPipelineMixin  # noqa: E402
@@ -298,7 +297,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
             self.state["claim"] = self._claim_bench()  # the session's own claim: its stop intent and its auto-home record are keyed by it
         self._log_event("session", "info", f"{body['arm']} 세션 시작: {body['name']} ({eff_task_id or '자유'})")
         seal = [self.python, str(HERE / "record_seal.py"), "--session-dir", str(folder), "--name", body["name"],
-                "--rig-revision", body["rig_revision"], *[a for c in calibrations for a in ("--calibration", c)]]
+                "--rig-revision", body["rig_revision"], *_seal_calibration_args(body["arm"], calibrations)]
         try:
             threading.Thread(target=self._session, args=(command, seal, folder, handles, cfg_data["robot"]),
                              daemon=True).start()

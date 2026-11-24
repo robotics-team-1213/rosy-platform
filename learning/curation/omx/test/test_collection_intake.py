@@ -511,3 +511,42 @@ def test_pinned_real_scripted_teacher_collection_becomes_a_prepared_intake(tmp_p
     assert proof['leaked'] == [] and proof['redactions']
     assert [row['episode_index'] for row in proof['static']] == [1]
     assert 'DO_NOT_TRAIN' in proof['refused'] and proof['stopped_output'] is False
+
+
+def test_prepared_intake_surfaces_leader_follower_offsets_and_mount(module, tmp_path):
+    pytest.importorskip('lerobot', reason='real LeRobot 0.4.4 roundtrip requires export environment')
+    import numpy as np
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
+    names = ['shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos', 'wrist_flex.pos', 'wrist_roll.pos', 'gripper.pos']
+    features = {k: dict(dtype='float32', shape=(6,), names=names) for k in ('observation.state', 'action')}
+    features['observation.images.top'] = dict(dtype='video', shape=(32, 32, 3), names=['height', 'width', 'channels'])
+    ds_root = tmp_path / 'recordings' / 'arm-a-offset-001'
+    dataset = LeRobotDataset.create(repo_id='local/arm-a', fps=10, root=ds_root, robot_type='omx_follower',
+                                    features=features, use_videos=True, video_backend='pyav', vcodec='h264', batch_encoding_size=1)
+    try:
+        for frame in range(3):
+            dataset.add_frame({'observation.state': np.zeros(6, np.float32), 'action': np.ones(6, np.float32),
+                               'observation.images.top': np.full((32, 32, 3), 20 * frame, np.uint8), 'task': 'Pick'})
+        dataset.save_episode(parallel_encoding=False)
+    finally:
+        dataset.finalize()
+    run = tmp_path / 'run-offset'
+    run.mkdir()
+    (run / 'record.json').write_text(json.dumps(dict(dataset=dict(root=str(ds_root)))))
+    (run / 'session.json').write_text(json.dumps(dict(config='record.json', teleop_only=False, exit_code=0, safe_end=True, arm='arm_a')))
+    f_cal, l_cal, mount = tmp_path / 'omx_follower_arm.json', tmp_path / 'arm_a_leader.json', tmp_path / 'arm_a_leader.mount.json'
+    f_cal.write_text(json.dumps({'gripper': {'id': 16, 'drive_mode': 0, 'homing_offset': 0, 'range_min': 1900, 'range_max': 2700}}))
+    l_cal.write_text(json.dumps({'gripper': {'id': 6, 'drive_mode': 1, 'homing_offset': 100, 'range_min': 1800, 'range_max': 2900}}))
+    mount.write_text(json.dumps({'gripper': {'leader_closed': 1909, 'leader_open': 2829, 'follower_closed': 2015, 'follower_open': 2620}}))
+    spec = importlib.util.spec_from_file_location('record_seal', Path(__file__).resolve().parents[4] / 'deploy/robot/omx/record_seal.py')
+    seal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(seal)
+    seal.seal(run, 'arm-a-offset-001', tmp_path / 'collections', rig_revision='bench-r1', calibrations=[f_cal, l_cal], mounts=[mount])
+    output = tmp_path / 'prepared-offset'
+    module.prepare_native([tmp_path / 'collections' / 'arm-a-offset-001'], output, 'local/arm-a')
+    assert (output / 'rosy_provenance/session-000000/calibration/arm_a_leader.mount.json').is_file()
+    assert (output / 'rosy_provenance/session-000000/calibration/leader_follower_offset.json').is_file()
+    capture = json.loads((output / 'capture.json').read_text())
+    assert len(capture['leader_follower_offsets']) == 1
+    assert capture['leader_follower_offsets'][0]['offset']['grip_map']['follower_closed'] == 2015
