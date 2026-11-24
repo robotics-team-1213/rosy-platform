@@ -24,7 +24,7 @@ DEFAULT_S3_PINKY = {
     "id": "rosy_45",
     "pose_m": [0.745, -0.207, 0.0],
     "yaw_rad": 3.141592,
-    "has_cargo": True,
+    "has_cargo": False,  # no Pinky cargo-tray observation exists in these sim/train sources
     "s3_in_bounds": True,
 }
 
@@ -148,6 +148,7 @@ def make_mujoco_two_arm_hook(
             phase=f"mujoco_{task_name}",
             pinky=dict(DEFAULT_S3_PINKY),
             arms=arms,
+            arms_observed={"arm_s": False, "arm_a": "arm_a" in arms, "arm_b": "arm_b" in arms},
             cargo=active_cargo or {"zone": "s3", "pose_m": list(DEFAULT_S3_PINKY["pose_m"]), "yaw_rad": DEFAULT_S3_PINKY["yaw_rad"], "observed": False},
             cell_ab=cell_ab,
             episode=episode_ref[0],
@@ -177,18 +178,16 @@ def make_experiment_train_progress(
         sim_fps = round(step / elapsed, 1) if step > 0 else 0.0
         loss_val = event.get("loss")
         finite_loss = round(float(loss_val), 5) if isinstance(loss_val, (int, float)) and math.isfinite(loss_val) else None
-        phase_angle = step * 0.2
-        arms = {
-            "arm_s": list(DEFAULT_REST_ARMS["arm_s"]),
-            "arm_a": [round(DEFAULT_REST_ARMS["arm_a"][0] + (0.18 * math.sin(phase_angle) if arm_id in (None, "arm_a") else 0.0), 4), *DEFAULT_REST_ARMS["arm_a"][1:]],
-            "arm_b": [round(DEFAULT_REST_ARMS["arm_b"][0] + (-0.18 * math.sin(phase_angle) if arm_id in (None, "arm_b") else 0.0), 4), *DEFAULT_REST_ARMS["arm_b"][1:]],
-        }
+        # Static rest poses only: training progress has no arm observation to stream.
+        arms = {key: list(values) for key, values in DEFAULT_REST_ARMS.items()}
         hook.publish_step(
             sim_time_s=round(elapsed, 3),
             stage="ab_stack",
             phase=f"{method}_train",
             pinky=dict(DEFAULT_S3_PINKY),
             arms=arms,
+            arms_observed={"arm_s": False, "arm_a": False, "arm_b": False},
+            cargo={"zone": "unknown", "pose_m": list(DEFAULT_S3_PINKY["pose_m"]), "yaw_rad": DEFAULT_S3_PINKY["yaw_rad"], "observed": False},
             cell_ab={"active_arm": arm_id or "arm_a", "active_step": f"{method}:step-{step}", "stacked": []},
             episode=1,
             step=step,
@@ -253,7 +252,7 @@ def publish_isaac_map_rl_step(
             "id": "rosy_45",
             "pose_m": [round(float(pose[0]), 5), round(float(pose[1]), 5), 0.0],
             "yaw_rad": round(float(pose[2]), 5),
-            "has_cargo": True,
+            "has_cargo": False,  # unknown without a cargo sensor on the RL Pinky
             "s3_in_bounds": False,
         },
         episode=epoch,
