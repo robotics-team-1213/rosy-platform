@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 import time
 from typing import Any, Callable
@@ -259,3 +260,53 @@ def publish_isaac_map_rl_step(
         step=step,
         reward=round(float(reward), 3),
     )
+
+
+def add_world_telemetry_args(parser: Any) -> None:
+    """Register optional Rosy World live telemetry CLI arguments on a teacher/runner parser."""
+    parser.add_argument("--world-id", help="optional Rosy World parallel world_id for live 3D telemetry")
+    parser.add_argument("--world-url", help="optional Rosy World HTTP base URL")
+    parser.add_argument("--world-mdns-host", help="optional Rosy World .local mDNS hostname")
+    parser.add_argument("--world-port", type=int, default=8140, help="Rosy World port for --world-mdns-host")
+    parser.add_argument("--worlds-dir", type=Path, help="optional directory for worlds/<world_id>.json")
+    parser.add_argument("--site-map-sha256", help="canonical 64-hex site map SHA-256")
+    parser.add_argument("--world-token-env", default="ROSY_WORLD_INGEST_TOKEN")
+    parser.add_argument("--episode", type=int, default=1, help="starting episode number reported to Rosy World")
+    parser.add_argument("--repeat", type=int, default=1, help="repeat the MuJoCo task this many episodes")
+
+
+def attach_mujoco_two_arm_hook(
+    args: Any,
+    world: Any,
+    writer: Callable[[Any, str], None] | None,
+    episode_ref: list[int],
+) -> tuple[TrainingWorldHook | None, Callable[[Any, str], None] | None]:
+    """Wire a MuJoCo two-arm teacher run into Rosy World telemetry if configured."""
+    if not (args.world_id and (args.world_url or args.world_mdns_host or args.worlds_dir)):
+        return None, writer
+    repo_root = Path(__file__).resolve().parents[2]
+    parity_in = canonical_parity_inputs(repo_root, site_map_sha256=args.site_map_sha256)
+    world_hook = TrainingWorldHook(
+        world_id=args.world_id,
+        backend="mujoco",
+        run_id=f"{args.world_id}-{args.task}",
+        site_map_sha256=parity_in["site_map_sha256"],
+        worlds_dir=args.worlds_dir,
+        world_url=args.world_url,
+        world_mdns_host=args.world_mdns_host,
+        world_mdns_port=args.world_port,
+        token=os.environ.get(args.world_token_env, "").strip() or None,
+        physics_profile=f"mujoco-{args.cone}",
+        cargo_tray=parity_in["cargo_tray"],
+    )
+    live_hook = make_mujoco_two_arm_hook(
+        world, world_hook, reg=parity_in["site_from_cell"], task_name=args.task, episode_ref=episode_ref,
+    )
+    if writer is None:
+        return world_hook, live_hook
+
+    def _chained(data: Any, label: str) -> None:
+        writer(data, label)
+        live_hook(data, label)
+
+    return world_hook, _chained
