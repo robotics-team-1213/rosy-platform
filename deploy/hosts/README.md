@@ -158,6 +158,19 @@ python3 deploy/hosts/common/watchdog_update.py pack --key <private-key> --sequen
 셀 PC의 `MAX_REBOOTS=0`은 `/etc/default/rosy-ssh-watchdog`에서 관리한다.
 갱신은 이 파일을 수정하지 않는다.
 
+등록된 PC에서 `/var/lib/rosy-watchdog-update/active`가 실행 가능하면 워치독은 그 파일만 실행한다.
+`/usr/local/sbin/rosy-ssh-watchdog`는 그때 실행되지 않는다. `--approve recovery`로 다시 설치하면 이 파일이
+바뀌지만 등록된 PC에서는 실행되지 않는다. `rosy-host-state check`는 이 차이를 알리지 않는다.
+`deploy/hosts/common/rosy-ssh-watchdog`를 고쳤으면 더 높은 순번으로 서명해서 다시 게시한다.
+등록된 PC는 그 경로로만 수정을 받는다.
+
+서명 갱신을 끝내려면 `sudo rm /etc/systemd/system/rosy-ssh-watchdog.service.d/20-signed-update.conf`를 실행한다.
+그 다음 `sudo systemctl daemon-reload`와 `sudo systemctl disable --now rosy-watchdog-update.timer`를 실행한다.
+워치독은 `/usr/local/sbin/rosy-ssh-watchdog`로 돌아간다. `rosy-host-state check`는 drop-in과
+`rosy-watchdog-update.timer`를 `awaiting_approval`로 보인다.
+`/var/lib/rosy-watchdog-update/active`는 남는다. 다시 `--approve watchdog-update`로 등록하면 첫 갱신 전에
+그 파일이 실행된다. 원하지 않으면 등록 전에 `sudo rm /var/lib/rosy-watchdog-update/active`로 지운다.
+
 ## 업데이트 상태 확인과 새 PC 연결 (D-805)
 
 모든 PC의 업데이트 경로와 사용자 유닛은 개발 PC에서 한 번에 확인한다. 읽기만 하며, 멈춘 경로나 선언과 다른 유닛이 있으면 exit 1이다. 역할별 사용자 유닛의 기준은 [`services.yaml`](services.yaml)(D-852)이다.
