@@ -365,7 +365,7 @@ formation.bind();
 
 // Fleet 분해 4: 현장 지도 뷰는 map-view.js 팩토리가 그린다.
 const mapView = createMapView({ scope: pageScope, el, view, auth, call,
-  onMapChanged: schedulePollRender, onTrafficChanged: schedulePollRender,
+  onMapChanged: render, onTrafficChanged: schedulePollRender,
   onMapUnavailable: () => { const s = view.selected; if (s) disarmGoal("지도를 확인할 수 없어 목표 지정 취소"); render(); if (s) focusGoalButton(s); },
 });
 

@@ -160,7 +160,7 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       paintSitePath();
       const wasLoaded = view.stateLoaded, wasUnavail = view.stateUnavailable, prevAt = view.receivedAtMs;
       const motorHealthReceivedAtMs = Date.now();
-      const prev = new Map(view.robots.map((r) => [r.robot_id, [Boolean(r.online), view.calmPower?.read(r, { receivedAtMs: prevAt, nowMs: motorHealthReceivedAtMs, stateUnavailable: wasUnavail }).percent ?? null]]));
+      const prev = new Map(view.robots.map((r) => [r.robot_id, [Boolean(r.online), view.calmPower?.read(r, { receivedAtMs: prevAt, nowMs: motorHealthReceivedAtMs, stateUnavailable: wasUnavail }).percent ?? null, r.state?.safety?.estop]]));
       view.robots = snapshot.robots.map(robot => ({...robot, motorHealthRequestedAtMs, motorHealthReceivedAtMs}));
       view.receivedAtMs = Date.now();  // D-493: 큐 신선도는 받은 뒤 흐른 시간을 더한다
       const nowMs = view.receivedAtMs;
@@ -176,7 +176,7 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       view.signals = snapshot.signals || {};
       showFleet(snapshot.fleet, snapshot.robots);
       const urgent = !wasLoaded || wasUnavail || Boolean(requestedRobotFocus) || view.robots.length !== prev.size
-        || view.robots.some((r) => Boolean(r.online) !== prev.get(r.robot_id)?.[0] || r.state?.safety?.estop === true
+        || view.robots.some((r) => Boolean(r.online) !== prev.get(r.robot_id)?.[0] || r.state?.safety?.estop !== prev.get(r.robot_id)?.[2]
           || (view.calmPower && view.calmPower.read(r, { receivedAtMs: nowMs, nowMs, stateUnavailable: false }).percent !== prev.get(r.robot_id)?.[1]));
       (urgent ? render : renderPoll)();
       if (requestedRobotFocus) {
