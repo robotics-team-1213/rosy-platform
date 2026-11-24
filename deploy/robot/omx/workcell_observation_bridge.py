@@ -91,7 +91,7 @@ def post_arm(fleet_url, source_id, token, observation, *, context):
     import socket as _socket
 
     parsed = urlsplit(base)
-    key = (parsed.hostname, parsed.port or 443, id(verified))
+    key = (parsed.hostname, parsed.port or 443, id(verified), source_id)
     for attempt in range(2):
         with _ARM_CONN_LOCK:
             conn = _ARM_CONNECTIONS.pop(key, None)
@@ -160,7 +160,7 @@ class SourceWorker:
         while not stop.is_set():
             sample = self.source.latest()
             if sample is None or sample.sequence == last:
-                stop.wait(0.02)
+                stop.wait(0.05)
                 continue
             try:
                 self.send(sample)
@@ -264,18 +264,18 @@ def main(argv=None):
 
     try:
         for arm in cell.arms:
+            joints = NativeSource(arm.joint_topic, joint_names=arm.joint_names)
             deliver(
                 arm,
-                NativeSource(arm.joint_topic, joint_names=arm.joint_names),
+                joints,
                 ArmSender(args.fleet_url, arm.source_id, tokens[arm.source_id], context=context),
                 health_file=health_files.get(arm.source_id),
             )
-            # Own buffer/worker/epoch per mirror: a slow R never delays the cell Fleet. Arm S is not here:
-            # arm_status_bridge is its only sender (no ROS snapshot); two senders would 409 each other's epochs.
+            # Share snapshot reader; own health wrapper/worker/epoch per mirror so a slow R never delays the cell Fleet.
             for index, (url, mirror_context) in enumerate(fleet_mirrors, 1):
                 deliver(
                     arm,
-                    NativeSource(arm.joint_topic, joint_names=arm.joint_names),
+                    joints,
                     ArmSender(url, arm.source_id, tokens[arm.source_id], context=mirror_context),
                     health_file=health_files.get(arm.source_id),
                     name=f"{arm.source_id}@fleet{index}",

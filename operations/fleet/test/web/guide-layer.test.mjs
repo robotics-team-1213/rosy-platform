@@ -65,7 +65,7 @@ test('an offline robot says so in its label', () => {
   assert.doesNotMatch(poseLabel({robot_id: 'rosy_1', online: true, pose: {u_m: 0.02, state: 'LOCALIZED'}}), /연결 끊김/);
 });
 
-function drawArm(anchor) {
+function drawArm(anchor, viewOverrides = {}) {
   const calls = [], chips = [];
   const ctx = new Proxy({}, {
     get: (t, k) => (k in t ? t[k] : (...args) => calls.push([k, ...args])),
@@ -73,7 +73,7 @@ function drawArm(anchor) {
   });
   drawGuide(ctx, (x, y) => ({x: x * 100, y: y * 100}), {guide: {robots: []}, css: (name) => name,
     colorOf: () => '#000', drawChip: (_c, _r, x, y, text) => chips.push({x, y, text}), on: false,
-    view: {anchors: [anchor], layers: {}}});
+    view: {anchors: [anchor], layers: {}, ...viewOverrides}});
   return {calls, chips, ctx};
 }
 
@@ -88,4 +88,24 @@ test('an arm without a live head draws only its base, quietly, and says its posi
   assert.ok(live.calls.filter(([k]) => k === 'lineTo').length >= 2);
   assert.equal(live.calls.filter(([k]) => k === 'arc').length, 2);
   assert.match(live.chips[0].text, /^ARM_A/);
+});
+
+test('focused mobile robot and selected omx arms draw coordinate chips even with labels off', () => {
+  const chips = [];
+  const ctx = new Proxy({}, {
+    get: (t, k) => (k in t ? t[k] : () => {}),
+    set: (t, k, v) => { t[k] = v; return true; },
+  });
+  drawGuide(ctx, (x, y) => ({x: x * 100, y: y * 100}), {
+    guide: GUIDE, css: (n) => n, colorOf: () => '#000',
+    drawChip: (_c, _r, x, y, text) => chips.push({x, y, text}),
+    on: true, focusedRobotId: 'rosy_01', view: {layers: {labels: false}},
+  });
+  assert.deepEqual(chips.map(c => c.text), ['rosy_01 (2.00, 0.60 m · HEAD 90°)']);
+
+  const arm = {target_id: 'arm_a', kind: 'omx_ai', base_x: 0.5, base_y: 0.4, head_x: 0.5, head_y: 0.1, head_yaw: -Math.PI / 2, reach_m: 0.28};
+  const focusedLive = drawArm({...arm, live: true}, {focusAnchorId: 'arm_a', layers: {labels: false}});
+  assert.deepEqual(focusedLive.chips.map(c => c.text), ['ARM_A · (0.50, 0.10 m) -90°']);
+  const focusedStale = drawArm({...arm, live: false}, {focusAnchorId: 'arm_a', layers: {labels: false}});
+  assert.deepEqual(focusedStale.chips.map(c => c.text), ['ARM_A (0.50, 0.40 m) · 위치 모름']);
 });

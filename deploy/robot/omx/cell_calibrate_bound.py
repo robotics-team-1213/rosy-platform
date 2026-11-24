@@ -32,11 +32,30 @@ def _valid_pair(pair) -> tuple[float, float] | None:
     return (x, y) if x is not None and y is not None else None
 
 
-def low_zone_gaps(config: dict, calibration: dict) -> list[dict]:
-    """Report mapped low sites (`z < workspace_min_m[2]`) whose coordinates fall outside `plan.limits.low_zones`."""
+def _site_mapped_points(config: dict, calibration: dict, name: str, site: dict, req_z: float) -> list[tuple[float, float]]:
     import cell_objects
     import cell_pivot
 
+    pts: list[tuple[float, float]] = []
+    rec = cell_pivot.map_record(calibration, name)
+    if rec is None and isinstance(site.get("map_from"), str):
+        rec = cell_pivot.map_record(calibration, site["map_from"])
+    top_cam, spx = (config.get("cameras") or {}).get("top"), site.get("surface_px")
+    if rec is not None and isinstance(top_cam, dict) and isinstance(spx, (list, tuple)) and len(spx) >= 3:
+        poly_px = [p for p in (_valid_pair(q) for q in spx) if p is not None]
+        if len(poly_px) >= 3:
+            edges = [((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0) for a, b in zip(poly_px, poly_px[1:] + poly_px[:1])]
+            centre = (sum(p[0] for p in poly_px) / len(poly_px), sum(p[1] for p in poly_px) / len(poly_px))
+            arr_m = cell_objects.to_mm(np.asarray([*poly_px, *edges, centre], float), rec, top_cam, req_z) / 1000.0
+            pts.extend((float(q[0]), float(q[1])) for q in arr_m)
+    for key in ("start", "place"):
+        if (xy := _valid_pair(site.get(key))) is not None:
+            pts.append(xy)
+    return pts
+
+
+def low_zone_gaps(config: dict, calibration: dict) -> list[dict]:
+    """Report mapped low sites (`z < workspace_min_m[2]`) whose coordinates fall outside `plan.limits.low_zones`."""
     plan = config.get("plan")
     if not isinstance(plan, dict) and config.get("plan_path"):
         try:
@@ -64,7 +83,6 @@ def low_zone_gaps(config: dict, calibration: dict) -> list[dict]:
                 return min(z_min, floor_z) <= z
         return False
 
-    top_cam = (config.get("cameras") or {}).get("top")
     gaps = []
     for name, site in (config.get("sites") or {}).items():
         if not isinstance(site, dict) or site.get("tier_of"):
@@ -74,21 +92,7 @@ def low_zone_gaps(config: dict, calibration: dict) -> list[dict]:
             req_z = sz + 0.015
         if req_z is None or req_z >= floor_z:
             continue
-        pts: list[tuple[float, float]] = []
-        rec = cell_pivot.map_record(calibration, name)
-        if rec is None and isinstance(site.get("map_from"), str):
-            rec = cell_pivot.map_record(calibration, site["map_from"])
-        spx = site.get("surface_px")
-        if rec is not None and isinstance(top_cam, dict) and isinstance(spx, (list, tuple)) and len(spx) >= 3:
-            poly_px = [p for p in (_valid_pair(q) for q in spx) if p is not None]
-            if len(poly_px) >= 3:
-                edges = [((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0) for a, b in zip(poly_px, poly_px[1:] + poly_px[:1])]
-                centre = (sum(p[0] for p in poly_px) / len(poly_px), sum(p[1] for p in poly_px) / len(poly_px))
-                arr_m = cell_objects.to_mm(np.asarray([*poly_px, *edges, centre], float), rec, top_cam, req_z) / 1000.0
-                pts.extend((float(q[0]), float(q[1])) for q in arr_m)
-        for key in ("start", "place"):
-            if (xy := _valid_pair(site.get(key))) is not None:
-                pts.append(xy)
+        pts = _site_mapped_points(config, calibration, name, site, req_z)
         if not pts:
             continue
         missed = [(x, y) for x, y in pts if not covered(x, y, req_z)]
@@ -105,6 +109,58 @@ def low_zone_gaps(config: dict, calibration: dict) -> list[dict]:
                 "uncovered_y_m": [round(min(p[1] for p in missed), 4), round(max(p[1] for p in missed), 4)],
             })
     return gaps
+
+
+def coverage_advisories(config: dict, calibration: dict, bias: dict | None, params=None) -> dict:
+    """Strictly advisory bias-reach gaps (never alters `stale()`) and per-site map extrapolation warnings."""
+    import cell_calibrate_auto as auto
+    import cell_map_fit
+    import cell_params as prm
+    import cell_pivot
+
+    top_cam = (config.get("cameras") or {}).get("top") or {}
+    reach_mm = float(prm.get(params, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM))
+    sigma_limit = float(prm.get(params, "verify.map_sigma_max_mm"))
+    bias_gaps, lev_warns = [], []
+    regions = (bias or {}).get("regions") if isinstance(bias, dict) else None
+    for name, site in (config.get("sites") or {}).items():
+        if not isinstance(site, dict) or site.get("tier_of"):
+            continue
+        rec = cell_pivot.map_record(calibration, name)
+        if rec is None and isinstance(site.get("map_from"), str):
+            rec = cell_pivot.map_record(calibration, site["map_from"])
+        if rec is None:
+            continue
+        anchors = [xy for k in ("start", "place") if (xy := _valid_pair(site.get(k))) is not None]
+        if isinstance(regions, list):
+            cov_pts = list(anchors)
+            if not cov_pts:
+                tz = _finite_float(site.get("z")) or _finite_float(site.get("surface_z")) or 0.0
+                if mapped := _site_mapped_points(config, calibration, name, site, tz):
+                    cov_pts = [(sum(p[0] for p in mapped) / len(mapped), sum(p[1] for p in mapped) / len(mapped))]
+            if cov_pts:
+                map_sha = cell_attempts.digest(rec)
+                fresh = [
+                    r for r in regions
+                    if r.get("site") == name and not auto.carried(r) and (r.get("map_sha") is None or r.get("map_sha") == map_sha)
+                ]
+                missed = [pt for pt in cov_pts if not any(1000.0 * math.dist(r["point_m"], pt) <= reach_mm for r in fresh)]
+                if missed:
+                    bias_gaps.append({
+                        "site": name, "uncovered": len(missed), "total": len(cov_pts),
+                        "suggested_pivot": [round(missed[0][0], 4), round(missed[0][1], 4)],
+                    })
+        if anchors:
+            tz = _finite_float(site.get("z"))
+            summary = cell_map_fit.site_sigma_summary(rec, anchors, top_cam, tz)
+            if summary and summary["max_mm"] > sigma_limit:
+                lev_warns.append({"site": name, **summary, "limit_mm": sigma_limit})
+    out: dict = {}
+    if bias_gaps:
+        out["bias_coverage_gaps"] = bias_gaps
+    if lev_warns:
+        out["map_leverage_warn"] = lev_warns
+    return out
 
 
 def move_regions(config: dict, reference, current) -> dict:

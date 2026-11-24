@@ -185,7 +185,31 @@
   overflow-wrap: anywhere;
 }
 .robot-panel-title:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
-.robot-panel-link, .robot-panel-close { flex: none; }
+.robot-panel-link, .robot-panel-close, .robot-panel-kind, .robot-panel-locate { flex: none; }
+.robot-panel-place {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-block-end: 1px solid var(--line-06);
+  background: var(--surface-chrome);
+  min-width: 0;
+}
+.robot-panel-place-label {
+  flex: none;
+  color: var(--text-secondary);
+  font: var(--weight-label) var(--text-micro)/var(--leading-compact) var(--mono);
+  letter-spacing: var(--track-label);
+}
+.robot-panel-place-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-primary);
+  font: var(--weight-medium) var(--text-label)/var(--leading-compact) var(--mono);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
 
 .robot-panel-body {
   flex: 1 1 auto;
@@ -223,6 +247,7 @@
 }
 @media (width >= 64rem) and (hover: hover) and (pointer: fine) {
   ui-button.robot-panel-close { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-3); }
+  ui-button.robot-panel-locate { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-2); }
   .robot-panel-jump { min-height: var(--target-tool); }
   details.robot-panel-section > summary { min-height: var(--target-tool); }
 }

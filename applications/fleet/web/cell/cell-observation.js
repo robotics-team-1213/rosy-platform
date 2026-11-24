@@ -1,10 +1,11 @@
 import {createCameraFrameHold, decodeImageUrl, paintCameraFrameHold} from '/common/camera-frame-hold.js';
 import {action, node, patchAttr, patchHidden, patchText} from '/common/control-dom.js';
+import {setOff} from '/common/cause-line.js';
 import {createScope} from '/common/scope.js';
 import {frameBadge} from '/console/assets/vision-view.js';
 import {createRobotProfiles} from '/console/assets/robot-profile-view.js';
 import {INCIDENT_BASES, INCIDENT_CAUSES, bindFocusZoom, issueVisionLease} from '/console/assets/cell-frames.js';
-import {OBS_BASE, compareCameras, formatIncidentCountSummary, partitionIncidents} from '/console/assets/cell-obs-model.js';
+import {OBS_BASE, compareCameras, formatIncidentCountSummary, incidentLines, partitionIncidents} from '/console/assets/cell-obs-model.js';
 import {createMotorHealthState, jointLabel, renderMotorHealth, renderMotorHealthSummary} from '/common/motor-health.js';
 
 // A second joint lagging with the stopped one points at an outside restraint, not that motor (arm_a, 2026-11-01).
@@ -43,33 +44,10 @@ const staleCamera = (entry, detail = '', {dropFrame = false} = {}) => {
 const STATE_LABEL = {open: '열림 · 사람 확인 필요', explained: '열림 · AI 설명 있음', cleared: '해제됨'};
 const when = seconds => new Date(seconds * 1000).toLocaleString('ko-KR');
 
-// D-971: what the control PC measured, as plain lines (text only, never markup)
-export const incidentLines = incident => {
-  const {facts = {}, decision = {}, recovery = null} = incident;
-  const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-  const latched = facts.latched === undefined ? {} : facts.latched, flagged = facts.flagged === undefined ? [] : facts.flagged;
-  const measured = ['latched', 'flagged', 'folded', 'torque_after', 'windup_hits'].some(key => key in facts)
-    && record(latched) && Object.values(latched).every(latch => record(latch)
-      && typeof latch.hw_error === 'number'
-      && (latch.bits === undefined || (Array.isArray(latch.bits) && latch.bits.every(bit => typeof bit === 'string'))))
-    && Array.isArray(flagged) && flagged.every(row => record(row) && typeof row.command === 'string'
-      && ['error', 'fault'].every(key => row[key] == null || typeof row[key] === 'string'))
-    && (facts.folded === undefined || typeof facts.folded === 'boolean')
-    && (facts.windup_hits === undefined || Array.isArray(facts.windup_hits));
-  const measurements = measured ? [
-    Object.entries(facts.latched || {}).map(([id, latch]) => `ID ${id} 오류 ${latch.hw_error} (${(latch.bits || []).join('/')})`).join(', '),
-    facts.folded === undefined ? '' : `홈 접힘 ${facts.folded ? '예' : '아니오'} · 종료 후 토크 ${JSON.stringify(facts.torque_after || {})}`,
-    (facts.windup_hits || []).length ? `출력 상승 감지 ${facts.windup_hits.length}건` : '',
-    (facts.flagged || []).map(row => `실행기: ${row.command} ${row.error || row.fault || ''}`).join(' · '),
-  ].filter(Boolean) : [];
-  return [
-    typeof decision.reason === 'string' ? decision.reason : JSON.stringify(decision.reason),
-    ...(measurements.length ? measurements : [Object.keys(facts).length ? JSON.stringify(facts) : '']),
-    recovery ? `장치 안전 재부팅: ${JSON.stringify(recovery).slice(0, 300)}` : '',
-  ].filter(Boolean);
-};
+export {incidentLines};
 
-export function createCellObservation({request, root, credential = () => '', onSummary = null}) {
+export function createCellObservation({request, root, credential = () => '', onSummary = null,
+  quickClearSource = null, canQuickClear = () => false}) {
   const empty = node('ui-empty', '접속하면 작업 셀의 실제 관측을 확인할 수 있습니다.');
   let life = null, pending = false, layout = '', disposed = false;
   let profiles = null;
@@ -389,7 +367,7 @@ export function createCellObservation({request, root, credential = () => '', onS
   }
 
   async function clearIncident(source, incident, note, button, message, label = {}) {
-    const text = note.value.trim();
+    const text = (typeof note === 'string' ? note : note.value).trim();
     if (!text) { message.textContent = '확인한 내용을 적어야 해제할 수 있습니다.'; return; }
     button.disabled = true;
     try {
@@ -453,6 +431,31 @@ export function createCellObservation({request, root, credential = () => '', onS
       if (incident.cleared) {
         const label = incident.cleared.cause ? ` · 원인 ${incident.cleared.cause} (근거 ${incident.cleared.basis})` : '';
         item.append(node('p', `해제: ${incident.cleared.by} · ${when(incident.cleared.at)}${label} · ${incident.cleared.note}`));
+      } else if (source === quickClearSource && incident.decision?.hold !== false) {
+        if (!canQuickClear()) {
+          item.append(node('ui-text', '해제하려면 Fleet 운영자 계정으로 로그인하세요.'));
+        } else {
+          const note = '현장에서 정지 원인을 확인하고 조치했습니다. 팔과 집게, 이동 경로에 걸림이 없음을 확인했습니다.';
+          const QUICK_CLEAR_REASON = '현장 확인 체크박스를 먼저 선택하세요.';
+          const confirmation = node('label', '', 'ui-check');
+          const check = node('input'); check.type = 'checkbox'; check.className = 'ui-field';
+          confirmation.append(check, document.createTextNode(' ' + note));
+          const button = node('ui-button', '사고 해제'); button.setAttribute('type', 'button');
+          button.setAttribute('kind', 'irreversible'); setOff(button, true, QUICK_CLEAR_REASON);
+          const message = node('ui-text'); message.setAttribute('role', 'status');
+          check.addEventListener('change', () => { setOff(button, !check.checked, QUICK_CLEAR_REASON); });
+          button.addEventListener('click', async () => {
+            if (!check.checked || button.disabled || !canQuickClear()) return;
+            setOff(check, true, '사고 해제 요청을 처리하는 중입니다.');
+            await clearIncident(source, incident, note, button, message);
+            if (!button.disabled) {
+              check.checked = false;
+              setOff(check, false);
+              setOff(button, true, QUICK_CLEAR_REASON);
+            }
+          });
+          item.append(confirmation, button, message);
+        }
       } else {
         // the cause and how the person knows it are kept with the clear: the labels learning scores rules and models against
         const cause = choice('원인', INCIDENT_CAUSES), basis = choice('근거', INCIDENT_BASES);

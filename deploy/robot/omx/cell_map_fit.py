@@ -236,14 +236,14 @@ def site_sigma_summary(record: dict | None, points_arm: list, cam_top: dict, tar
     return {"max_mm": round(max(sigmas), 2), "mean_mm": round(sum(sigmas) / len(sigmas), 2)}
 
 
-def plan_leverage(points: list, sites: dict, sigma_mark_mm: float = 3.0) -> dict:
+def plan_leverage(points: list, sites: dict, sigma_mark_mm: float = 3.0, limit_mm: float = 5.0) -> dict:
     """Estimate noise-only 1-sigma extrapolation (`sigma_mark_mm * sqrt(h0)`) across nominal `map_points`."""
     pts = [[float(p[0]), float(p[1])] for p in (points or []) if isinstance(p, (list, tuple)) and len(p) >= 2]
     if len(pts) < 4:
-        return {"sigma_mark_mm": float(sigma_mark_mm), "sites": {}, "max_sigma_mm": None}
+        return {"sigma_mark_mm": float(sigma_mark_mm), "sites": {}, "max_sigma_mm": None, "warnings": []}
     xy = np.array(pts, float)
     if not np.all(np.isfinite(xy)):
-        return {"sigma_mark_mm": float(sigma_mark_mm), "sites": {}, "max_sigma_mm": None}
+        return {"sigma_mark_mm": float(sigma_mark_mm), "sites": {}, "max_sigma_mm": None, "warnings": []}
     x0, y0 = xy[:, 0].mean(), xy[:, 1].mean()
     sx, sy = max(1e-4, float(xy[:, 0].std())), max(1e-4, float(xy[:, 1].std()))
     Z = np.column_stack([(xy[:, 0] - x0) / sx, (xy[:, 1] - y0) / sy, np.ones(len(xy))])
@@ -263,4 +263,8 @@ def plan_leverage(points: list, sites: dict, sigma_mark_mm: float = 3.0) -> dict
             vals["max_sigma_mm"] = max(vals.values())
             out[name] = vals
     max_all = max((v["max_sigma_mm"] for v in out.values()), default=None)
-    return {"sigma_mark_mm": float(sigma_mark_mm), "sites": out, "max_sigma_mm": max_all}
+    warnings = [
+        {"site": name, "max_sigma_mm": v["max_sigma_mm"], "limit_mm": float(limit_mm)}
+        for name, v in out.items() if v["max_sigma_mm"] > float(limit_mm)
+    ]
+    return {"sigma_mark_mm": float(sigma_mark_mm), "sites": out, "max_sigma_mm": max_all, "warnings": warnings}

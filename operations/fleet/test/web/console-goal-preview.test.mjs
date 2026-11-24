@@ -362,3 +362,76 @@ test("Clicking a road/place with focusRobot set and selected null plans trip, wh
   assert.equal(env.confirmSpecs.length, 1);
   assert.deepEqual(env.calls[0].body, { to: { x: 0.4, y: 0.0 } });
 });
+
+test("Hover card uses S3/S5 handoffMap, 2-decimal coords, omits fabricated fallbacks, and arm segment click focuses arm", async (t) => {
+  const mkNode = (tag) => ({
+    tag, className: "", textContent: "", hidden: false, children: [],
+    get childElementCount() { return this.children.length; },
+    setAttribute() {},
+    append(...kids) { this.children.push(...kids); },
+    replaceChildren(...kids) { this.children = kids; },
+  });
+  const textOf = (n) => (typeof n === "string" ? n : [n.textContent, ...(n.children || []).map(textOf)].filter(Boolean).join(" | "));
+  const hoverCard = mkNode("div");
+  hoverCard.hidden = true;
+  const origDoc = globalThis.document;
+  let hoverWorld = { x: 0.504, y: 0.204 };
+  const selectedIds = [];
+  const env = setup(t, {
+    view: {
+      selected: null,
+      focusRobot: null,
+      siteToWorld: () => hoverWorld,
+      guide: { map_version: 4, robots: [{ robot_id: "rosy_42", online: true, pose: { state: "LOCALIZED", x: 0.504, y: 0.204, yaw: 0 } }] },
+      robots: [{ robot_id: "rosy_42", online: true, state: { safety: { estop: false } } }],
+      anchors: [
+        { target_id: "arm_a", kind: "omx_ai", label: "Arm A", base_x: 1.0, base_y: 0.4, head_x: 1.0, head_y: 0.1, live: false },
+        { target_id: "arm_s", kind: "omx_ai", label: "Arm S", base_x: 2.0, base_y: 0.0, head_x: 1.7, head_y: 0.0, live: true },
+      ],
+    },
+  });
+  globalThis.document = { ...origDoc, createElement: mkNode, createElementNS: (_ns, tag) => mkNode(tag) };
+  // Inject hover card into setup's closure via siteToWorld pointermove while testing el() lookup?
+  // Note: setup's elements only has map-canvas; exercise hover/click cleanly via arm segment click + separate el() call.
+  const origCanvasClick = env.canvasListeners.get("click");
+  hoverWorld = { x: 1.85, y: 0.02 }; // midpoint of arm_s segment (0.15m from both endpoints > 0.13m, 0.02m from segment)
+  await origCanvasClick({ clientX: 60, clientY: 60 });
+  assert.equal(env.view.focusAnchorId, "arm_s");
+
+  const { createConsoleGoal } = await import("../../../../applications/fleet/web/console-goal.js");
+  const canvasListeners2 = new Map();
+  const canvas2 = { classList: { add() {}, toggle() {} }, tabIndex: 0, getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 400 }) };
+  const els = { "map-canvas": canvas2, "map-hover-card": hoverCard };
+  const view2 = {
+    selected: null, focusRobot: null, map: null,
+    siteMap: { maps: [{ map_id: "site_a" }] }, activeSiteMap: { version: 4, map: SITE_MAP },
+    guide: { robots: [{ robot_id: "rosy_42", online: true, pose: { state: "LOCALIZED", x: 0.504, y: 0.204, yaw: 0 } }] },
+    robots: [{ robot_id: "rosy_42", online: true, state: { safety: { estop: false } } }],
+    anchors: [
+      { target_id: "arm_a", kind: "omx_ai", label: "Arm A", base_x: 1.0, base_y: 0.4, head_x: 1.0, head_y: 0.1, live: false },
+      { target_id: "arm_s", kind: "omx_ai", label: "Arm S", base_x: 2.0, base_y: 0.0, head_x: 1.7, head_y: 0.0, live: true },
+    ],
+    siteToWorld: () => hoverWorld,
+  };
+  createConsoleGoal({
+    pageScope: { listen(tgt, type, fn) { if (tgt === canvas2) canvasListeners2.set(type, fn); }, capture: () => ({ signal: new AbortController().signal, current: () => true, check() {} }) },
+    el: (id) => els[id] || null, view: view2, auth: { role: "operator" }, inbox: { select() {} }, log() {}, call: async () => ({}),
+    render() {}, confirmedAction: { async run() { return false; } }, namedReason: () => "", toWorld: () => ({ x: 0, y: 0 }),
+    refreshGuide() {}, queuedReason: () => "", selection: { set(id) { selectedIds.push(id); } },
+  });
+  hoverWorld = { x: 0.504, y: 0.204 };
+  canvasListeners2.get("pointermove")({ clientX: 10, clientY: 10 });
+  const pinkyText = textOf(hoverCard);
+  assert.match(pinkyText, /\(0\.50, 0\.20\) m/);
+  for (const fake of ["8.76V", "10.4cm", "5.0Hz", "4/4 정상", "±0.02m", "0.504"]) assert.doesNotMatch(pinkyText, new RegExp(fake.replace(".", "\\.")));
+
+  hoverWorld = { x: 1.0, y: 0.4 };
+  canvasListeners2.get("pointermove")({ clientX: 20, clientY: 20 });
+  const armAText = textOf(hoverCard);
+  assert.match(armAText, /S5 \(1·3층 적재\)/);
+  for (const fake of ["12.0V", "31°C", "98%", "6축 정상", "S2 (상차)"]) assert.doesNotMatch(armAText, new RegExp(fake.replace(/[().]/g, "\\$&")));
+
+  hoverWorld = { x: 1.85, y: 0.0 };
+  canvasListeners2.get("pointermove")({ clientX: 30, clientY: 30 });
+  assert.match(textOf(hoverCard), /S3 \(하역 셔틀\)/);
+});

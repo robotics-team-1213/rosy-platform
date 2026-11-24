@@ -16,6 +16,8 @@ export function guideAttention(guide, robotId) {
     .map((f) => ({ severity: f.severity, text: `: ${f.text}`, code: f.code, target: f.target || null }));
 }
 
+const fmtCoord = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
+
 function compactPoseLabel(row) {
   if (!row.pose) return `${row.robot_id} · 위치 모름`;
   if (row.online === false) return `${row.robot_id} · 연결 끊김`;
@@ -299,11 +301,14 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
     ctx.restore();
     if (!live) {
-      drawChip(ctx, null, baseP.x, baseP.y - 12, `${anc.target_id} · 위치 모름`, "");
-    } else if (labelsOn || isHoveredOmx) {
+      const chipText = isSelectedOmx
+        ? `${anc.target_id.toUpperCase()} (${fmtCoord(anc.base_x)}, ${fmtCoord(anc.base_y)} m) · 위치 모름`
+        : `${anc.target_id} · 위치 모름`;
+      drawChip(ctx, null, baseP.x, baseP.y - 12, chipText, isSelectedOmx ? "warn" : "");
+    } else if (labelsOn || isSelectedOmx) {
       const deg = typeof anc.head_yaw === "number" ? ` ${Math.round((anc.head_yaw * 180) / Math.PI)}°` : "";
-      const shortText = isHoveredOmx
-        ? `${anc.target_id.toUpperCase()} · (${(anc.head_x ?? anc.base_x).toFixed(2)}, ${(anc.head_y ?? anc.base_y).toFixed(2)}m)${deg}`
+      const shortText = isSelectedOmx
+        ? `${anc.target_id.toUpperCase()} · (${fmtCoord(anc.head_x ?? anc.base_x)}, ${fmtCoord(anc.head_y ?? anc.base_y)} m)${deg}`
         : `${anc.target_id.toUpperCase()}${deg}`;
       drawChip(ctx, null, headP.x, headP.y - 12, shortText, isSelectedOmx ? "warn" : "");
     }
@@ -545,13 +550,12 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
     ctx.restore();
 
-    if (labelsOn || isHoveredRobot) {
-      const fmtHover = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
-      const labelText = isHoveredRobot && row.pose
-        ? `${row.robot_id} (${fmtHover(row.pose.x)}, ${fmtHover(row.pose.y)}m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
+    if (labelsOn || isFocused) {
+      const labelText = (isHoveredRobot || isFocused) && row.pose
+        ? `${row.robot_id} (${fmtCoord(row.pose.x)}, ${fmtCoord(row.pose.y)} m · HEAD ${Math.round(((row.pose.yaw || 0) * 180) / Math.PI)}°)`
         : isFocused ? poseLabel(row) : compactPoseLabel(row);
       drawChip(ctx, null, p.x, p.y - ring - 16, labelText, worst);
     }
   }
-  window.__guideLayer = { robots: marks.length, findings: guide.robots.reduce((n, r) => n + (r.findings || []).length, 0) };
+  if (typeof window !== "undefined") window.__guideLayer = { robots: marks.length, findings: guide.robots.reduce((n, r) => n + (r.findings || []).length, 0) };
 }

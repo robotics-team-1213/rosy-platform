@@ -41,7 +41,7 @@ def cell_url():
         listener.close()
 
 
-def observation_feed(page):
+def observation_feed(page, *, role="viewer"):
     from PIL import Image
     state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], limited=set(), failed_assets=[], incidents=[], cleared=[],
                             evidence_reads=[])
@@ -93,7 +93,8 @@ def observation_feed(page):
         if path in ("/api/fleet/session", "/api/fleet/auth/session"):
             if route.request.headers.get("authorization") != "Bearer viewer-token":
                 return route.fulfill(status=401, json={"detail": "signed out"})
-            return route.fulfill(json={"role": "viewer", "principal_id": "reader", "via": "bearer"})
+            principal = "op-7" if role == "operator" else "reader"
+            return route.fulfill(json={"role": role, "principal_id": principal, "via": "bearer"})
         if path == "/api/fleet/auth/connection":
             return route.fulfill(json={"mode": "paired", "password_login": False})
         if "/cell-app/" in path:
@@ -313,6 +314,45 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
         expect(card.locator("summary").filter(has_text="모두 해제됨")).to_be_visible()
         assert not errors, errors
         page.unroute_all(behavior="ignoreErrors")
+        browser.close()
+
+
+@pytest.mark.parametrize("role", ["operator", "viewer"])
+def test_arm_focus_clearance_requires_confirmation_and_named_operator(cell_url, role):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, url=cell_url)
+        state, _ = observation_feed(page, role=role)
+        state.incidents.append({
+            "incident_id": "a" * 32, "source_id": "feedback_b", "session_id": "s", "state": "open",
+            "reported_at": time.time(), "facts": {}, "decision": {"hold": True, "reason": "blocked"},
+            "frames": [], "explanation": None, "cleared": None,
+        })
+        page.goto(cell_url + "?focus=arm:feedback_b")
+        card = page.locator('[data-arm-source="feedback_b"]')
+        expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
+        button = card.locator("ui-button", has_text="사고 해제")
+        if role == "operator":
+            expect(button).to_be_disabled()
+            expect(button).to_have_attribute("reason", "현장 확인 체크박스를 먼저 선택하세요.")
+            assert state.cleared == []
+            check = card.get_by_role("checkbox", name=re.compile("현장에서 정지 원인"))
+            check.check()
+            expect(button).to_be_enabled()
+            check.uncheck()
+            expect(button).to_be_disabled()
+            expect(button).to_have_attribute("reason", "현장 확인 체크박스를 먼저 선택하세요.")
+            check.check()
+            button.click()
+            expect(card.get_by_text("해제: op-7", exact=False)).to_be_visible()
+            assert len(state.cleared) == 1
+            assert set(state.cleared[0]) == {"note"} and "이동 경로" in state.cleared[0]["note"]
+        else:
+            expect(button).to_have_count(0)
+            expect(card.get_by_text("해제하려면 Fleet 운영자 계정으로 로그인하세요.")).to_be_visible()
+            assert state.cleared == []
+        assert not errors, errors
         browser.close()
 
 

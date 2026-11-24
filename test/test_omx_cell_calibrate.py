@@ -1204,3 +1204,88 @@ def test_pivot_near_does_not_overwrite_concurrent_config_edits(tmp_path, monkeyp
     assert cc.main(["--config", str(cfg_path), "auto", "--only", "pivot-near", "--targets", "floor:-0.06,0.15", "--commissioning", "--person-at-switch"]) == 0
     after = json.loads(cfg_path.read_text(encoding="utf-8"))
     assert after["pivot"]["geometry"] == {"radius_mm": 31.8, "phase_deg": 75.6}
+
+
+def test_pivot_near_logs_json_and_returns_refusal_diagnostics(tmp_path, monkeypatch, capsys):
+    import cell_pivot, cell_pivot_precheck
+
+    cfg = {
+        "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240], "frame_wh": [640, 480]}},
+        "coarse": {"z_view": 0.118}, "plan": {"approach_m": 0.04},
+        "sites": {"belt": {"yaw_deg": -14.4, "surface_z": 0.028}},
+    }
+    monkeypatch.setattr(cc, "pivot_point", lambda *a: ([0.115, -0.05], False))
+    monkeypatch.setattr(cell_pivot_precheck, "pivot_precheck", lambda *a: [])
+
+    def fake_piv(cell, config, point, yaws, cal, site, work, sleep, log):
+        log({"pivot": yaws[0], "mark_px": None})
+        return {
+            "result": "marks disagree: 11.3 mm from their centre",
+            "bias": {"bias_mm": [-10.0, -20.0], "rms_mm": 11.3, "radius_mm": 26.3, "phase_deg": 80.1,
+                     "yaws_fk_deg": [45.0, 65.0], "jaw_sides": ["ref", "other"], "dropped": 1},
+        }
+
+    monkeypatch.setattr(cell_pivot, "pivot_calibrate", fake_piv)
+    out = cc.pivot_near(object(), cfg, {}, tmp_path / "cal.json", "pivot-near belt:0.115,-0.05", tmp_path)
+    logged = json.loads(capsys.readouterr().out.strip())
+    assert logged["pivot"] == -94.4 and logged["mark_px"] is None
+    assert out["pivot-near belt:0.115,-0.05"].startswith("marks disagree")
+    assert out["bias"] == [-10.0, -20.0] and out["rms_mm"] == 11.3 and out["radius_mm"] == 26.3
+    assert out["phase_deg"] == 80.1 and out["yaws_fk_deg"] == [45.0, 65.0] and out["jaw_sides"] == ["ref", "other"] and out["dropped"] == 1
+
+
+def test_self_calibrate_uses_site_pivot_yaws_only_when_over_target(tmp_path, monkeypatch):
+    import cell_pivot
+
+    seen_yaws = []
+    monkeypatch.setattr(cell_pivot, "pivot_calibrate", lambda c, cfg, pt, yaws, *a: seen_yaws.append(list(yaws)) or {"result": "stopped"})
+    monkeypatch.setattr(cc, "auto_pivot_point", lambda *a: None)
+    cfg = {"params": {"pivot.over_target": 1}, "pivot": {"z_view": 0.08}, "coarse": {"z_view": 0.118},
+           "sites": {"belt": {"yaw_deg": -14.4, "surface_z": 0.028, "pivot_yaws": [35, 45, 55, 65, 75]}}}
+    cc.self_calibrate(object(), cfg, {}, tmp_path / "cal.json", "belt", (0.115, -0.05), [], tmp_path, {"regions": []}, None, None)
+    assert seen_yaws == [[35, 45, 55, 65, 75]]
+    seen_yaws.clear()
+    cfg["pivot"]["yaws"] = [20, 40]
+    cc.self_calibrate(object(), cfg, {}, tmp_path / "cal.json", "belt", (0.115, -0.05), [], tmp_path, {"regions": []}, None, None)
+    assert seen_yaws == [[20, 40]]
+    seen_yaws.clear()
+    del cfg["pivot"]["yaws"]
+    cfg["params"]["pivot.over_target"] = 0
+    cfg["pivot"]["points"] = [(0.115, -0.05)]
+    cc.self_calibrate(object(), cfg, {}, tmp_path / "cal.json", "belt", (0.115, -0.05), [], tmp_path, {"regions": []}, None, None)
+    assert seen_yaws == [[-94.4, -54.4, -14.4, 25.6, 65.6, 105.6]]
+
+
+def test_check_emits_advisory_bias_coverage_and_leverage_without_changing_stale(tmp_path, monkeypatch):
+    cv2 = pytest.importorskip("cv2")
+    import cell_map_fit, cell_preflight, cell_pivot
+
+    ref_path, cal_path = tmp_path / "ref.jpg", tmp_path / "cal.json"
+    assert cv2.imwrite(str(ref_path), np.full((32, 32, 3), 80, np.uint8))
+    ref_sha = hashlib.sha256(ref_path.read_bytes()).hexdigest()
+    pts = [{"pixel": [100 + 200 * x, 100 + 200 * y], "arm_m": [x, y]} for x, y in ((0.0, 0.1), (0.04, 0.1), (0.0, 0.14), (0.04, 0.14))]
+    rec = {"homography": [[0.005, 0.0, -0.5], [0.0, 0.005, -0.5], [0.0, 0.0, 1.0]], "z_view": 0.1,
+           "loo_error_mm": {"mean": 2.0, "max": 3.0}, "points": pts}
+    sites_cal = {"floor": rec, "belt": dict(rec)}
+    cfg = {
+        "preflight": {"reference_top": str(ref_path)}, "calibration_path": str(cal_path), "work_dir": str(tmp_path),
+        "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240]}}, "coarse": {"z_view": 0.1},
+        "calibrate": {"map_sites": ["floor", "belt"]}, "params": {"verify.map_sigma_max_mm": 5.0},
+        "sites": {
+            "floor": {"yaw_deg": 0.0, "surface_z": 0.006, "start": [0.02, 0.12]},
+            "belt": {"yaw_deg": 0.0, "surface_z": 0.028, "start": [0.40, 0.40]},
+        },
+    }
+    cal = {"schema": cc.cal.SCHEMA, "sites": sites_cal, "reference_top_sha256": ref_sha,
+           "reference_map_sha": cell_attempts.digest(sites_cal),
+           "reference_geometry_sha": cell_attempts.digest({n: {k: s.get(k) for k in ("auto_roi", "surface_px", "map_from")} for n, s in cfg["sites"].items()})}
+    bias_file = cell_pivot.bias_path(cal_path)
+    cell_pivot.save_bias(bias_file, {"site": "floor", "point_m": [0.02, 0.12], "bias_mm": [1.0, 1.0],
+                                     "map_sha": cell_attempts.digest(rec), "carried_from": "old"})
+    monkeypatch.setattr(cell_preflight, "camera_shift_px", lambda *_: {"ok": True, "max_px": 0.0})
+    found = cc.check(cfg, cal, [], np.full((32, 32, 3), 80, np.uint8), params=cfg["params"])
+    assert {g["site"] for g in found["bias_coverage_gaps"]} == {"floor", "belt"}
+    assert [w["site"] for w in found["map_leverage_warn"]] == ["belt"]
+    assert cc.stale(found) == []
+    lev = cell_map_fit.plan_leverage([[0.0, 0.1], [0.04, 0.1], [0.0, 0.14], [0.04, 0.14]], cfg["sites"], limit_mm=5.0)
+    assert [w["site"] for w in lev["warnings"]] == ["belt"]

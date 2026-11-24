@@ -13,12 +13,13 @@ from hashlib import sha256
 import hmac
 import json
 import math
+import os
 import threading
 import time
 
 from core_common.motor_health import read_motor_health_snapshot as _default_read_motor_health_snapshot
 from core_common.observation_snapshot import SnapshotChannel
-from core_common.protocol.motor_health import MotorHealthResponse
+from core_common.protocol.motor_health import MotorHealthResponse, age_motor_health
 from core_common.protocol.arm_incident.workcell_observations import ArmObservation
 
 
@@ -31,16 +32,19 @@ def _REGISTER_WOB_GLOBALS(g: dict) -> None:
         _WOB_GLOBALS_LIST.append(g)
 
 
-def _read_health(path, owner, *, now):
+def _resolve_read_health():
     import sys
 
     for g in _WOB_GLOBALS_LIST:
         fn = g.get("read_motor_health_snapshot")
         if fn is not None and fn is not _default_read_motor_health_snapshot:
-            return fn(path, owner, now=now)
+            return fn
     mod = sys.modules.get("workcell_observation_bridge")
-    fn = getattr(mod, "read_motor_health_snapshot", _default_read_motor_health_snapshot)
-    return fn(path, owner, now=now)
+    return getattr(mod, "read_motor_health_snapshot", _default_read_motor_health_snapshot)
+
+
+def _read_health(path, owner, *, now):
+    return _resolve_read_health()(path, owner, now=now)
 
 
 
@@ -132,11 +136,14 @@ class NativeSource(LatestSource):
         self.channel, self.joint_names = SnapshotChannel(channel), joint_names
         self._joint_name_set = set(joint_names) if joint_names is not None else None
         self._camera_poll_lock = threading.Lock() if joint_names is None else None
+        self._poll_lock = threading.Lock()
         self._camera_poll_at = -math.inf
+        self._snapshot_stat = None
 
     def latest(self):
         if self._camera_poll_lock is None:
-            self._read_snapshot()
+            with self._poll_lock:
+                self._read_snapshot()
         else:
             # Share the local read across destinations. Each worker still sends independently.
             with self._camera_poll_lock:
@@ -147,7 +154,20 @@ class NativeSource(LatestSource):
         return super().latest()
 
     def _read_snapshot(self):
+        path = getattr(self.channel, "path", None)
+        stat_key = None
+        if path is not None:
+            try:
+                st = os.stat(path)
+            except OSError:
+                self._snapshot_stat = None
+                return
+            stat_key = (st.st_ino, st.st_mtime_ns)
+            if stat_key == self._snapshot_stat:
+                return
         sample = self.channel.read()
+        if stat_key is not None:
+            self._snapshot_stat = stat_key
         if sample is not None:
             try:
                 if self.joint_names is None:
@@ -174,13 +194,44 @@ class ArmHealthSource:
     def __init__(self, source, path, owner):
         self.source, self.path, self.owner = source, path, owner
         self.last, self.position_sequence, self.terminal_key = None, None, None
+        self._health_stat = None
+        self._cached_health, self._cached_captured, self._cached_wall = None, None, None
+
+    def _poll_health(self, wall):
+        fn = _resolve_read_health()
+        try:
+            st = os.stat(self.path)
+        except OSError:
+            self._health_stat = None
+            self._cached_health = self._cached_captured = self._cached_wall = None
+            if fn is _default_read_motor_health_snapshot:
+                return None, None
+            return fn(self.path, self.owner, now=wall)
+        stat_key = (st.st_ino, st.st_mtime_ns)
+        if stat_key == self._health_stat:
+            if self._cached_health is None:
+                return None, None
+            return age_motor_health(self._cached_health, wall - self._cached_wall), self._cached_captured
+        try:
+            health, captured = fn(self.path, self.owner, now=wall)
+        except OSError:
+            self._health_stat = None
+            self._cached_health = self._cached_captured = self._cached_wall = None
+            raise
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+            self._health_stat = stat_key
+            self._cached_health = self._cached_captured = self._cached_wall = None
+            raise
+        self._health_stat = stat_key
+        self._cached_health, self._cached_captured, self._cached_wall = health, captured, wall
+        return health, captured
 
     def latest(self):
         position = self.source.latest()
         wall, mono = self.source.wall(), self.source.monotonic()
         health, captured = None, None
         try:
-            health, captured = _read_health(self.path, self.owner, now=wall)
+            health, captured = self._poll_health(wall)
         except (OSError, ValueError, TypeError, KeyError, OverflowError, RecursionError):
             pass
         terminal = health is not None and health.status in ("fault", "ended")

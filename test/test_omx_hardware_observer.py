@@ -275,3 +275,27 @@ def test_observer_unit_writes_its_instances_health_file_into_a_folder_it_creates
     # D-871: no sha-named drop-in; the auto-updater reads this file as the torque-OFF evidence
     assert 'ExecStartPre=/bin/mkdir -p -m 0700 %h/.local/state/rosy/motor-health\n' in text
     assert '--health-file "%h/.local/state/rosy/motor-health/%i.json" --health-owner %i' in text
+
+
+def test_persistent_mode_paces_250ms_and_suppresses_per_sample_stdout(monkeypatch, capsys):
+    import json
+    module = observer()
+    sleeps = []
+
+    @contextmanager
+    def port(device):
+        yield object()
+
+    def sleep(delay):
+        sleeps.append(delay)
+        if len(sleeps) >= 2:
+            raise KeyboardInterrupt()
+
+    monkeypatch.setitem(sys.modules, "register_probe", SimpleNamespace(open_readonly_port=port, read_motors=lambda p: rows()))
+    monkeypatch.setattr(module, "time", SimpleNamespace(monotonic=lambda: 100.0, time=lambda: 1700000000.0, sleep=sleep))
+    native_channel(monkeypatch, module, lambda *a: None)
+    assert module.main(["--device", "/test/follower", "--persistent"]) == 0
+    assert sleeps == [pytest.approx(0.25), pytest.approx(0.25)]
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert lines[0]["event"] == "observer_start" and lines[-1]["exit_code"] == 0
+    assert not any("sample" in line for line in lines)
