@@ -8,8 +8,10 @@ from contextlib import contextmanager
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 
 import numpy as np
 
@@ -306,10 +308,19 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--request', type=Path, required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--world-id', default=os.environ.get('ROSY_WORLD_ID', '').strip() or None)
+    parser.add_argument('--world-url', default=os.environ.get('ROSY_WORLD_URL', '').strip() or None)
+    parser.add_argument('--world-mdns-host', default=os.environ.get('ROSY_WORLD_MDNS_HOST', '').strip() or None)
+    parser.add_argument('--world-port', type=int, default=int(os.environ.get('ROSY_WORLD_PORT', '8140')))
+    parser.add_argument('--worlds-dir', type=Path, default=None)
+    parser.add_argument('--world-backend', default='mujoco', choices=('isaac', 'gazebo', 'mujoco'))
+    parser.add_argument('--site-map-sha256', default=os.environ.get('ROSY_WORLD_SITE_MAP_SHA256', '').strip() or None)
+    parser.add_argument('--world-token-env', default='ROSY_WORLD_INGEST_TOKEN')
     args = parser.parse_args(argv)
     # An existing directory belongs to a prior run and must never be modified.
     if args.out.exists():
         raise ValueError('new run-owned output directory required')
+    world_hook = None
     try:
         request = json.loads(args.request.read_text(encoding='utf-8'))
         if (not isinstance(request, dict)
@@ -317,13 +328,42 @@ def main(argv=None):
             raise ValueError('training request fields differ from schema')
         if 'learning_task' in request:
             check_learning_task(request['learning_task'])
+        progress_cb = None
+        if args.world_id and (args.world_url or args.world_mdns_host or args.worlds_dir):
+            repo_root = Path(__file__).resolve().parents[3]
+            sim_dir = repo_root / 'tools' / 'sim'
+            if str(sim_dir) not in sys.path:
+                sys.path.insert(0, str(sim_dir))
+            from world_env_adapter import TrainingWorldHook
+            from world_training_hooks import canonical_parity_inputs, make_experiment_train_progress
+
+            parity_in = canonical_parity_inputs(repo_root, site_map_sha256=args.site_map_sha256)
+            world_hook = TrainingWorldHook(
+                world_id=args.world_id,
+                backend=args.world_backend,
+                run_id=f"{args.world_id}-{request['method']}",
+                site_map_sha256=parity_in['site_map_sha256'],
+                worlds_dir=args.worlds_dir,
+                world_url=args.world_url,
+                world_mdns_host=args.world_mdns_host,
+                world_mdns_port=args.world_port,
+                token=os.environ.get(args.world_token_env, '').strip() or None,
+                physics_profile=f"lerobot-{request['method']}-{request['device']}",
+                cargo_tray=parity_in['cargo_tray'],
+            )
+            progress_cb = make_experiment_train_progress(
+                world_hook, method=request['method'], total_steps=request['steps'], arm_id=request.get('arm_id'),
+            )
         with gpu_lease(request['device']):
-            train(output=args.out, **request)
+            train(output=args.out, progress=progress_cb, **request)
     except Exception as error:
         args.out.mkdir(parents=True, exist_ok=True)
         # Server-visible diagnostics never expose arbitrary host paths or credentials.
         write_json(args.out / 'error.json', {'error': type(error).__name__, 'status': 'failed'})
         raise
+    finally:
+        if world_hook is not None:
+            world_hook.close()
     return 0
 
 

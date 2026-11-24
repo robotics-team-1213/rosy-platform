@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from fleet._source_layout import console_root
 from fleet.server.learning_entry import install_learning_routes
+from fleet.server.world_entry import install_world_routes
 
 WEB_ROOT = console_root()
 
@@ -57,6 +58,7 @@ def file_response(request: Request, path, media_type: str, headers: dict) -> Res
 
 def install_static_routes(app: FastAPI) -> None:
     install_learning_routes(app, WEB_ROOT, CONSOLE_CSP)
+    install_world_routes(app, WEB_ROOT, CONSOLE_CSP)
     # Fleet has no compressing proxy; the console's ~900 KB of JS/CSS and the polled state JSON shrink ~3x.
     app.add_middleware(GZipMiddleware, minimum_size=1024)
 

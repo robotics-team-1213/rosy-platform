@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-    <xacro:macro name="insert_gz_sim" params="namespace camera_width camera_height camera_update_rate camera_hfov:=1.1519">
+    <xacro:macro name="insert_gz_sim" params="namespace camera_width camera_height camera_update_rate camera_hfov:=1.1519 has_cargo_tray:=true">
         <gazebo>
             <plugin filename="gz-sim-diff-drive-system" name="gz::sim::systems::DiffDrive">
                 <left_joint>${namespace}l_wheel_joint</left_joint>
@@ -200,5 +200,18 @@
         <xacro:ir_floor_ray link="ir_l_link" name="left" ns="${namespace}"/>
         <xacro:ir_floor_ray link="ir_mid_link" name="mid" ns="${namespace}"/>
         <xacro:ir_floor_ray link="ir_r_link" name="right" ns="${namespace}"/>
+
+        <xacro:if value="${has_cargo_tray}">
+            <gazebo reference="cargo_tray_link">
+                <self_collide>0</self_collide>
+                <mu1>0.45</mu1>
+                <mu2>0.45</mu2>
+                <kp>1000000.0</kp>
+                <kd>100.0</kd>
+            </gazebo>
+            <gazebo reference="${namespace}cargo_tray_fixed_joint">
+                <disableFixedJointLumping>true</disableFixedJointLumping>
+            </gazebo>
+        </xacro:if>
     </xacro:macro>
 </robot>

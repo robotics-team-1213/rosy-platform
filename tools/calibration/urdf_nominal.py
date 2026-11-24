@@ -236,7 +236,9 @@ def _link(el, env):
 
 
 def _collision_elements(link, env):
-    for col in link.findall("collision"):
+    flat = ET.Element("link")
+    _flatten(link, env, flat)
+    for col in flat.findall("collision"):
         holder = ET.Element("collision")
         _flatten(col, env, holder)
         if holder.find("geometry") is not None:
@@ -383,11 +385,25 @@ def _invert(m):
 
 # --- the nominal table -------------------------------------------------------------
 
+def rear_x(links, poses, link_name="cargo_tray_link"):
+    """Smallest x from base_link's z axis of any collision point on `link_name`."""
+    base_inv = _invert(poses["base_link"])
+    best = math.inf
+    for link in links:
+        if link["name"] != link_name:
+            continue
+        for spec in link["collisions"]:
+            m = _mul(base_inv, _mul(poses[link["name"]], _matrix(spec["xyz"], spec["rpy"])))
+            for point in _shape_points(spec):
+                best = min(best, _apply(m, point)[0])
+    return best
+
+
 def nominal(args=None):
     """The NOMINAL geometry as a nested dict of floats (metres, radians, degrees)."""
     args = dict(arg_defaults() if args is None else args)
-    links, joints = expand(args=args, is_sim=False)
-    sim_links, _ = expand(args=args, is_sim=True)
+    links, joints = expand(args={**args, "has_cargo_tray": False}, is_sim=False)
+    sim_links, _ = expand(args={**args, "has_cargo_tray": False}, is_sim=True)
     poses = frames(joints)
     base = poses["base_link"]
 
@@ -414,7 +430,7 @@ def nominal(args=None):
     ir = {key: pos(f"ir_{link}_link") for key, link in (("left", "l"), ("mid", "mid"), ("right", "r"))}
     imu = pos("imu_link")
     imu_base = _apply(_invert(base), imu)
-    return {
+    out = {
         "base_link_z_m": base[2][3],
         "lidar": {"frame": "rplidar_link", "x_m": lidar_xyz[0], "y_m": lidar_xyz[1], "height_m": lidar_xyz[2],
                   "yaw_rad": _yaw(lidar) % (2 * math.pi), "forward_deg": math.degrees(-_yaw(lidar)) % 360.0},
@@ -433,6 +449,21 @@ def nominal(args=None):
                       "front_x_m": front_x(links, poses),
                       "rotation_radius_sim_box_m": rotation_radius(sim_links, poses)},
     }
+    if _truthy(args.get("has_cargo_tray", True)):
+        t_links, t_joints = expand(args={**args, "has_cargo_tray": True}, is_sim=False)
+        t_sim_links, _ = expand(args={**args, "has_cargo_tray": True}, is_sim=True)
+        t_poses = frames(t_joints)
+        pocket = _apply(t_poses["cargo_tray_pocket"], (0.0, 0.0, 0.0))
+        out["cargo_tray"] = {
+            "rear_x_m": rear_x(t_links, t_poses),
+            "half_width_m": half_width(t_links, t_poses),
+            "pocket_x_m": pocket[0],
+            "pocket_y_m": pocket[1],
+            "pocket_z_m": pocket[2],
+            "rotation_radius_m": rotation_radius(t_links, t_poses),
+            "rotation_radius_sim_box_m": rotation_radius(t_sim_links, t_poses),
+        }
+    return out
 
 
 def _fmt(value):

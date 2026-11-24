@@ -838,6 +838,16 @@ roots:
     concern: other
     capability: fleet
     app: site-fleet
+  - path: applications/world
+    layout_target: applications/world
+    part: operations
+    d427_target: operations/ui/world
+    wave: none
+    import_prefix: []
+    note: D-1075 Rosy World offline/live studio and read-only Fleet/training observation surface; no CORE/Fleet command authority.
+    concern: other
+    capability: fleet
+    app: site-fleet
   - path: applications/calibration
     layout_target: applications/calibration
     part: operations

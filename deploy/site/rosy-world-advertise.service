@@ -1,0 +1,16 @@
+[Unit]
+Description=Advertise ROSY World 3D service (_rosy-world._tcp) through Avahi DNS-SD
+Wants=network-online.target avahi-daemon.service
+After=network-online.target avahi-daemon.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/run/rosy-site/world-public.env
+ExecStart=/usr/bin/python3 /opt/rosy/world/world_mdns.py publish --port ${ROSY_WORLD_PORT} --output /etc/avahi/services/rosy-world.service
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,8 @@
+# Non-World site-stack overlay: lets Fleet discover a separate World Docker host via mDNS (<name>.local).
+services:
+  fleet:
+    environment:
+      ROSY_WORLD_MDNS_HOST: "${ROSY_WORLD_MDNS_HOST:-rosy-world.local}"
+      ROSY_WORLD_MDNS_PORT: "${ROSY_WORLD_MDNS_PORT:-8140}"
+      ROSY_WORLD_MDNS_SCHEME: "${ROSY_WORLD_MDNS_SCHEME:-http}"
+      ROSY_WORLD_URL: "${ROSY_WORLD_URL:-}"

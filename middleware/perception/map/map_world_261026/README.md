@@ -13,6 +13,14 @@
 
 원본 CAD 보관 위치: 작업 공간 `Rosy/docs/research/map-world-261026/`(Git 밖).
 
+## Fleet 지도에서 새 월드 만들기
+
+`python middleware/perception/map/map_world_261026/scripts/build_world.py --site-map <활성 지도 JSON> --out <새 폴더>`로 별도의 Gazebo 월드를 만든다. 주차 유도선과 칸 선은 Fleet의 주차 폴리라인을 사용한다. 바닥·벽·레일의 충돌체는 기존 형상을 사용한다. 생성물에는 지도 버전과 월드·메시·지도의 해시가 들어 있다.
+
+프로젝트 시뮬레이션 패키지가 설치된 격리 ROS 2 환경에서 `ros2 launch gz_sim map_261026_bay_lane.launch.py world:=<새 폴더>/worlds/map_world_261026.world gazebo_gui:=true`로 연다. C2 출발 위치와 제품 CORE의 무승인 교차점 대기는 격리 실행 도구 `tools/sim/world_pinky_camera_drive.py --world-bundle <새 폴더> --pink-centerline --expect-p2-hold`를 사용해 검증한다.
+
+같은 트랙을 Isaac 장면에 넣을 때는 `tools/sim/build_isaac_site_scene.py --site-scene <새 폴더>`에 전달한다. R08 A/B는 기존 CAD 정합을 사용하므로 S3 짐칸과 팔의 인계는 현장 기준 검증이 필요하다.
+
 ## 2026-10-31 천장 카메라 대조
 
 `ceiling_north` 프레임에 페인트 정합(`rosy_vision.map_register`)을 돌렸다.

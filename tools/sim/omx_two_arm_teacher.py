@@ -11,6 +11,7 @@ numbers here are not results. A step the geometry cannot do is reported, never m
 import argparse
 import json
 import math
+import os
 from pathlib import Path
 import sys
 
@@ -425,6 +426,15 @@ def main(argv=None):
     p.add_argument("--zero-error-deg", type=float, default=0.0, help="inject +-deg joint-zero calibration error per arm and compensate online (G-20)")
     p.add_argument("--isaac-handoff", help="write Stage-1 MuJoCo -> Stage-2 Isaac Sim handoff spec JSON to this path")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
+    p.add_argument("--world-id", help="optional Rosy World parallel world_id for live 3D telemetry")
+    p.add_argument("--world-url", help="optional Rosy World HTTP base URL")
+    p.add_argument("--world-mdns-host", help="optional Rosy World .local mDNS hostname")
+    p.add_argument("--world-port", type=int, default=8140, help="Rosy World port for --world-mdns-host")
+    p.add_argument("--worlds-dir", type=Path, help="optional directory for worlds/<world_id>.json")
+    p.add_argument("--site-map-sha256", help="canonical 64-hex site map SHA-256")
+    p.add_argument("--world-token-env", default="ROSY_WORLD_INGEST_TOKEN")
+    p.add_argument("--episode", type=int, default=1, help="starting episode number reported to Rosy World")
+    p.add_argument("--repeat", type=int, default=1, help="repeat the MuJoCo task this many episodes")
     a = p.parse_args(argv)
     choices = parse_choices(a.choice)
     if a.pick_vision or a.belt_skew or a.cam_jitter:
@@ -448,7 +458,39 @@ def main(argv=None):
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     writer, close_video = open_video_writer(world, out, a.task, a.video_skip) if a.video else (None, None)
-    teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper, pick_vision=a.pick_vision, belt_skew=a.belt_skew, cam_jitter=a.cam_jitter)
+    world_hook = None
+    episode_ref = [a.episode]
+    frame_hook = writer
+    if a.world_id and (a.world_url or a.world_mdns_host or a.worlds_dir):
+        from world_env_adapter import TrainingWorldHook
+        from world_training_hooks import canonical_parity_inputs, make_mujoco_two_arm_hook
+
+        repo_root = Path(__file__).resolve().parents[2]
+        parity_in = canonical_parity_inputs(repo_root, site_map_sha256=a.site_map_sha256)
+        world_hook = TrainingWorldHook(
+            world_id=a.world_id,
+            backend="mujoco",
+            run_id=f"{a.world_id}-{a.task}",
+            site_map_sha256=parity_in["site_map_sha256"],
+            worlds_dir=a.worlds_dir,
+            world_url=a.world_url,
+            world_mdns_host=a.world_mdns_host,
+            world_mdns_port=a.world_port,
+            token=os.environ.get(a.world_token_env, "").strip() or None,
+            physics_profile=f"mujoco-{a.cone}",
+            cargo_tray=parity_in["cargo_tray"],
+        )
+        live_hook = make_mujoco_two_arm_hook(
+            world, world_hook, reg=parity_in["site_from_cell"], task_name=a.task, episode_ref=episode_ref,
+        )
+        if writer is None:
+            frame_hook = live_hook
+        else:
+            def frame_hook(data, label):
+                writer(data, label)
+                live_hook(data, label)
+
+    teacher = Teacher(world, frame_hook=frame_hook, seed=a.seed, drop_upper=a.drop_upper, pick_vision=a.pick_vision, belt_skew=a.belt_skew, cam_jitter=a.cam_jitter)
     if a.zero_error_deg > 0:
         import omx_two_arm_skill as skill_mod
         teacher.zero_error = skill_mod.draw_zero_error(a.seed or 1003, a.zero_error_deg)
@@ -457,14 +499,15 @@ def main(argv=None):
     if not 0 <= a.belt_unknown <= 1 or any(arm not in PREFIX or f < 1 for arm, f in slow.items()):
         p.error("--belt-unknown takes 0..1 and --slow ARM:FACTOR an arm_a/arm_b with FACTOR >= 1")  # a typo must not run a fault-free test
     faults = Faults(unknown_p=a.belt_unknown, miss=a.belt_miss, fail_at=a.fail_at, seed=a.seed, slow=slow)
-    result = teacher.run_task(task, a.isolated, a.concurrent, faults=faults)
-    if a.frames:
-        from PIL import Image
-        Path(a.frames).mkdir(parents=True, exist_ok=True)
-        for view in RECORDED:
-            Image.fromarray(world.render(teacher.data, view)).save(Path(a.frames) / f"{view}.png")
-    if close_video:
-        close_video()
+    try:
+        for rep in range(max(1, a.repeat)):
+            episode_ref[0] = a.episode + rep
+            result = teacher.run_task(task, a.isolated, a.concurrent, faults=faults)
+    finally:
+        if world_hook is not None:
+            world_hook.close()
+        if close_video:
+            close_video()
     roll = {r["step"]: r["roll_below_floor"] for r in records}
     result.update(choices=layout.choices, cone=a.cone, seed=a.seed, drop_m=[teacher.drop, teacher.drop_upper], roll_below_floor_steps=[s for s, v in roll.items() if v],
                   note="geometry only (D-947): contact numbers are not results; " + ("both arms at once by zones" if a.concurrent else "one arm moves at a time") + "; true container pose, no perception")

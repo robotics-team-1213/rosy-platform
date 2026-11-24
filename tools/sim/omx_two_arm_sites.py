@@ -29,6 +29,7 @@ CHOICES = dict(
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
     temp_source="scad-v12",  # two-color plate v12 CAD STLs ("navy"+"sky"); "scad-v11" keeps monochrome v11 STL; "procedural" shows collision walls
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
+    ship_holds=2,            # 2 = printed 2-hold r08 ship (18 slots); 3 = 9x3x3 three_hold modular ship (27 slots)
     ship_house=True,
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=0.0,     # r08: hull centreline y centred symmetrically between the 194 mm base plates (modular berth locks port/starboard)   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
@@ -222,7 +223,21 @@ def r08_sites(layout):
     """1x3 sites of the berthed r08 ship from its slot map: one per hold, row and tier, the mean of the three 1x1 cells.
     Rows are numbered by fixture y (r0 nearest arm_a, as the stud plate's rows); layer 0, 1, 2 are tiers 82, 84 and 86 (R08_TIERS)."""
     out = {}
-    for h, row, mean_x_mm, y, z0_mm, layered_slot_ids in _r08_slot_groups():
+    extra_holds = max(0, int(layout.choices.get("ship_holds", 2)) - 2)
+    base_groups = list(_r08_slot_groups())
+    all_groups = list(base_groups)
+    if extra_holds > 0:
+        max_h = max(g[0] for g in base_groups)
+        h_last = [g for g in base_groups if g[0] == max_h]
+        for k in range(1, extra_holds + 1):
+            new_h = max_h + k
+            for _, row, mean_x_mm, y, z0_mm, layered_slot_ids in h_last:
+                shifted_ids = tuple(
+                    tuple(f"h{new_h}{sid[2:]}" if sid.startswith(f"h{max_h}") else f"h{new_h}-{sid}" for sid in tier_ids)
+                    for tier_ids in layered_slot_ids
+                )
+                all_groups.append((new_h, row, mean_x_mm + k * HOLD["length"], y, z0_mm, shifted_ids))
+    for h, row, mean_x_mm, y, z0_mm, layered_slot_ids in all_groups:
         x, cy, z = ship_cell(layout, mean_x_mm, y, z0_mm)
         for layer in range(R08_TIERS):
             out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] * (layer + .5), yaw=0., row=row, layer=layer,
