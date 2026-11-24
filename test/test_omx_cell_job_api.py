@@ -564,3 +564,14 @@ def test_goal_site_import_error_returns_http_400(tmp_path, monkeypatch):
         },
     )
     assert res["code"] == 400 and "cannot read Cell site map" in res["error"]
+
+
+def test_cell_job_api_service_unit_preserves_detached_arm_sessions():
+    unit_path = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx" / "rosy-omx-cell-job-api.service"
+    text = unit_path.read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
+    assert "KillMode=process" in lines
+    assert "KillMode=control-group" not in lines
+    assert "NoNewPrivileges=true" in lines
+    assert "UMask=0077" in lines
+    assert any(line.startswith("ExecStart=") and "exec /usr/bin/python3" in line for line in lines)

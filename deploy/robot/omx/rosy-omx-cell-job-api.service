@@ -1,0 +1,21 @@
+[Unit]
+Description=ROSY OMX cell job API (fixed, guarded cell commands over HTTP with a bearer token; SSH stays the escape hatch)
+After=network-online.target
+
+[Service]
+Type=simple
+# ROSY_CELL_JOB_API_ROOT: the omx tools folder; ROSY_CELL_JOB_API_ARGS: --workdir <prep dir> --bind <tailnet ip>
+EnvironmentFile=%h/.config/rosy/omx-cell-job-api.env
+ExecStart=:/bin/bash -c 'exec /usr/bin/python3 "$ROSY_CELL_JOB_API_ROOT/cell_job_api.py" $ROSY_CELL_JOB_API_ARGS'
+# Detached job children (with-session-arm-*.sh -> record_session -> chunk_runner) hold physical arm torque and
+# human-hold latches (D-911). KillMode=process signals only cell_job_api.py on restart instead of SIGKILLing
+# a held runner after TimeoutStopSec=5.
+KillMode=process
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=5
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target
