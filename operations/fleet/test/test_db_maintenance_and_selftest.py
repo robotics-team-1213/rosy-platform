@@ -159,3 +159,25 @@ def test_self_test_with_concurrent_wal_reader_and_writer(tmp_path):
     finally:
         release.set()
         thread.join(5)
+
+
+def test_prune_expired_online_prunes_fleet_ai_facts(tmp_path):
+    import time
+    from fleet.stuck.ai_facts import AiFactLog
+
+    path = tmp_path / "fleet.sqlite3"
+    log = AiFactLog(path)
+    old_ts = time.time() - 120 * 86400.0
+    new_ts = time.time()
+    log.append([
+        {"received_at": old_ts, "principal_id": "ai-1", "kind": "stalled", "robot_ids": ["rosy_01"],
+         "value": {"s": 1}, "confidence": 0.9, "evidence": {}, "source": "s", "observed_at": old_ts,
+         "ttl_s": 5.0, "stage": "shadow"},
+        {"received_at": new_ts, "principal_id": "ai-1", "kind": "stalled", "robot_ids": ["rosy_01"],
+         "value": {"s": 2}, "confidence": 0.9, "evidence": {}, "source": "s", "observed_at": new_ts,
+         "ttl_s": 5.0, "stage": "shadow"},
+    ])
+    deleted = prune_expired_online(path, read_db_settings(path))
+    assert deleted["fleet_ai_facts"] == 1
+    with closing(sqlite3.connect(path)) as db:
+        assert db.execute("SELECT COUNT(*) FROM fleet_ai_facts").fetchone()[0] == 1

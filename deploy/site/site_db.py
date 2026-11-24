@@ -103,6 +103,11 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
                 if sighting_cutoff is not None and "sighting_audit" in tables:
                     removed["sighting_audit"] = db.execute(
                         "DELETE FROM sighting_audit WHERE received_at < ?", (sighting_cutoff,)).rowcount
+                if "fleet_ai_facts" in tables:
+                    removed["fleet_ai_facts"] = (
+                        db.execute("DELETE FROM fleet_ai_facts WHERE received_at < ?", (audit_cutoff,)).rowcount
+                        if audit_cutoff is not None else 0
+                    )
                 db.commit()
             except sqlite3.Error:
                 db.rollback()
@@ -245,7 +250,6 @@ def backup_database(source: Path | str, destination: Path | str) -> DatabaseResu
         raise DatabaseError("backup source and destination must differ")
     if not source_path.is_file():
         raise DatabaseError("source database is missing")
-    verify_database(source_path)
     destination_path.parent.mkdir(parents=True, exist_ok=True)
     if destination_path.exists():
         raise DatabaseError("backup destination already exists")

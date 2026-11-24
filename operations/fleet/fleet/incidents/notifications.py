@@ -71,6 +71,7 @@ class NotificationOutbox:
         self._log = log
         self.config: NotificationConfig | None = None
         self._prepare_receipt = None
+        self._last_pruned_at: float | None = None
         with closing(log._connect()) as connection, connection:
             connection.execute('''CREATE TABLE IF NOT EXISTS fleet_notification_outbox (
                 event_id INTEGER PRIMARY KEY, robot_id TEXT NOT NULL, stuck_id TEXT NOT NULL,
@@ -96,9 +97,14 @@ class NotificationOutbox:
             self._insert(connection, scope.subject_id, scope.case_id, revision, 'FINAL_REVIEW', now, facts)
             return True
 
+    def _prune_old(self, connection, now: float) -> None:
+        if self._last_pruned_at is None or now - self._last_pruned_at >= 60.0 or now < self._last_pruned_at:
+            connection.execute('DELETE FROM fleet_notification_outbox WHERE created_at < ?', (now - 7 * 86400,))
+            self._last_pruned_at = now
+
     def enqueue(self, connection, receipt):
         now = receipt['evaluated_at']
-        connection.execute('DELETE FROM fleet_notification_outbox WHERE created_at < ?', (now - 7 * 86400,))
+        self._prune_old(connection, now)
         request = receipt['request']
         rid, sid = request.get('subject_id'), request.get('case_id')
         if not all(isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9_.:-]{1,64}', value) for value in (rid, sid)):
@@ -134,7 +140,7 @@ class NotificationOutbox:
                 robot_id, stuck_id, judgment_revision, kind, channel, route_hash, payload,
                 created_at, expires_at, next_attempt_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (rid, sid, revision, kind, channel.kind, self.config.route_revision(channel), payload, now, now + 600, now))
-        connection.execute('DELETE FROM fleet_notification_outbox WHERE created_at < ?', (now - 7 * 86400,))
+        self._prune_old(connection, now)
 
     def rows(self, limit=100, *, robot_id=None, stuck_id=None):
         if type(limit) is not int or not 1 <= limit <= 1000:

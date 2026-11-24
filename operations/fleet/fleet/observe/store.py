@@ -12,10 +12,15 @@ from .events import CoreEventStore, EventRejected, MAX_EVENT_BYTES, _contains_se
 
 
 class ObservationStore(CoreEventStore):
-    def __init__(self, path, *, max_rows=100_000, retention_s=30 * 86400):
+    def __init__(self, path, *, max_rows=100_000, retention_s=30 * 86400,
+                 debounce_s=0.0, prune_interval_s=0.0):
         self._run_id, self._sequence, self._capture_lock = uuid4().hex, 0, Lock()
         super().__init__(path)
         self.max_rows, self.retention_s = max_rows, retention_s
+        self.debounce_s, self.prune_interval_s = debounce_s, prune_interval_s
+        self._last_signature = None
+        self._last_written_mono = None
+        self._last_pruned_at = None
         with closing(self._connect()) as connection, connection:
             connection.executescript("""
                 CREATE TABLE IF NOT EXISTS fleet_observations (
@@ -46,7 +51,7 @@ class ObservationStore(CoreEventStore):
         if len(set(identifiers)) != len(identifiers): raise EventRejected('duplicate capture robot identity')
         capture = dict(run_id=self._run_id, sequence=self._sequence,
                        monotonic_at=monotonic_now, robot_ids=sorted(identifiers))
-        values = []
+        values, sig_items = [], ([] if self.debounce_s <= 0 else [])
         for row in rows:
             rid = row.get("robot_id")
             if not isinstance(rid, str) or not rid or type(row.get("online")) is not bool:
@@ -56,6 +61,8 @@ class ObservationStore(CoreEventStore):
                    and not isinstance(stamp, bool) and math.isfinite(stamp) and stamp <= monotonic_now else None)
             body = {key: row.get(key) for key in ("robot_id", "online", "state", "gather_source",
                                                  "goal", "queued", "capabilities", "link", "link_reason")}
+            sig_source = ({**body, "state": {k: v for k, v in body["state"].items() if k not in ("timestamp", "ts", "seq")}}
+                          if self.debounce_s > 0 and isinstance(body["state"], dict) else body)
             body.update(received_at=received_at, observed_at=None if age is None else received_at - age,
                         state_age_s=age, clock="fleet_receive_epoch", source_monotonic=stamp,
                         verification="observed_not_labeled")
@@ -64,19 +71,35 @@ class ObservationStore(CoreEventStore):
                 raise EventRejected("observation contains a forbidden credential field")
             try:
                 payload = json.dumps(body, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+                if self.debounce_s > 0:
+                    sig_items.append(json.dumps(sig_source, ensure_ascii=False,
+                                                sort_keys=True, separators=(",", ":"), allow_nan=False))
             except (TypeError, ValueError) as exc:
                 raise EventRejected("observation is not finite JSON") from exc
             if len(payload.encode("utf-8")) > MAX_EVENT_BYTES:
                 raise EventRejected("observation exceeds the 64 KiB limit; media belongs in device recordings")
             values.append((rid, received_at, payload))
+        signature = tuple(sig_items)
+        if (self.debounce_s > 0 and self._last_signature == signature
+                and self._last_written_mono is not None
+                and 0 <= monotonic_now - self._last_written_mono < self.debounce_s):
+            self._sequence -= 1
+            return
+        prune_due = (self.prune_interval_s <= 0 or self._last_pruned_at is None
+                     or received_at - self._last_pruned_at >= self.prune_interval_s
+                     or received_at < self._last_pruned_at)
         with closing(self._connect()) as connection, connection:
             connection.executemany(
                 "INSERT INTO fleet_observations(robot_id, received_at, payload_json) VALUES (?, ?, ?)", values)
-            connection.execute("DELETE FROM fleet_observations WHERE received_at < ?",
-                               (received_at - self.retention_s,))
-            # AUTOINCREMENT ids never repeat, so MAX(id) bounds the cap without walking 100k payload rows.
-            connection.execute("""DELETE FROM fleet_observations WHERE observation_id <=
-                (SELECT COALESCE(MAX(observation_id), 0) FROM fleet_observations) - ?""", (self.max_rows,))
+            if prune_due:
+                connection.execute("DELETE FROM fleet_observations WHERE received_at < ?",
+                                   (received_at - self.retention_s,))
+                # AUTOINCREMENT ids never repeat, so MAX(id) bounds the cap without walking 100k payload rows.
+                connection.execute("""DELETE FROM fleet_observations WHERE observation_id <=
+                    (SELECT COALESCE(MAX(observation_id), 0) FROM fleet_observations) - ?""", (self.max_rows,))
+                self._last_pruned_at = received_at
+        self._last_signature = signature
+        self._last_written_mono = monotonic_now
 
     def read_observations(self, *, after_id=0, limit=100, robot_id=None):
         if after_id < 0 or not 1 <= limit <= 200:

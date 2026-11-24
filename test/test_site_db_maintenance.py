@@ -780,3 +780,25 @@ def test_cli_prune_uses_stored_retention_and_archive_watermark(tmp_path):
     assert removed["fleet_api_audit"] == 1
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT rowid FROM fleet_api_audit").fetchall() == [(2,)]
+
+
+def test_prune_ledger_prunes_fleet_ai_facts_under_audit_days(tmp_path):
+    from fleet.stuck.ai_facts import AiFactLog
+
+    database = tmp_path / "fleet.sqlite3"
+    log = AiFactLog(database)
+    old_ts = time.time() - 120 * 86400.0
+    new_ts = time.time()
+    log.append([
+        {"received_at": old_ts, "principal_id": "ai-1", "kind": "stalled", "robot_ids": ["rosy_01"],
+         "value": {"s": 1}, "confidence": 0.9, "evidence": {}, "source": "s", "observed_at": old_ts,
+         "ttl_s": 5.0, "stage": "shadow"},
+        {"received_at": new_ts, "principal_id": "ai-1", "kind": "stalled", "robot_ids": ["rosy_01"],
+         "value": {"s": 2}, "confidence": 0.9, "evidence": {}, "source": "s", "observed_at": new_ts,
+         "ttl_s": 5.0, "stage": "shadow"},
+    ])
+    assert prune_ledger(database, history_days=0, audit_days=0)["fleet_ai_facts"] == 0
+    removed = prune_ledger(database, history_days=0, audit_days=90)
+    assert removed["fleet_ai_facts"] == 1
+    with closing(sqlite3.connect(database)) as db:
+        assert db.execute("SELECT COUNT(*) FROM fleet_ai_facts").fetchone()[0] == 1
