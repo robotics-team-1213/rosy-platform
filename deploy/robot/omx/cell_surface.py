@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -56,6 +57,80 @@ def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None) -> di
             return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps}
     steps.append({"command": "park", "ok": cell.act("park").get("ok")})
     return {"result": "no contact", "steps": steps}
+
+
+def _finite_num(value) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    f = float(value)
+    return f if math.isfinite(f) else None
+
+
+def _valid_xy(pair) -> tuple[float, float] | None:
+    if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+        return None
+    x, y = _finite_num(pair[0]), _finite_num(pair[1])
+    return (x, y) if x is not None and y is not None else None
+
+
+def validated_probe_z_to(config: dict, site_cfg: dict) -> tuple[float | None, str | None]:
+    """Return ``(probe_z_to, error)``; negative probes match ``grasp_planner.limits_at`` first-match ``low_zones``."""
+    raw_z_to = site_cfg.get("probe_z_to_m", 0.010)
+    probe_z_to = _finite_num(raw_z_to)
+    if probe_z_to is None or not (-0.05 <= probe_z_to < 0.10):
+        return None, f"invalid probe_z_to_m: {raw_z_to!r}"
+    if probe_z_to < 0.010:
+        xy = _valid_xy(site_cfg.get("place"))
+        if xy is None:
+            return None, f"invalid place: {site_cfg.get('place')!r}"
+        plan = config.get("plan")
+        limits = plan.get("limits") if isinstance(plan, dict) else None
+        low_zones = limits.get("low_zones") if isinstance(limits, dict) else None
+        if not isinstance(low_zones, (list, tuple)):
+            return None, "invalid low_zones"
+        px, py = xy
+        for zone in low_zones:
+            if not isinstance(zone, dict):
+                return None, "invalid low_zones entry"
+            xr, yr, z_min = _valid_xy(zone.get("x")), _valid_xy(zone.get("y")), _finite_num(zone.get("z_min_m"))
+            if xr is None or yr is None or z_min is None:
+                return None, "invalid low_zones entry"
+            if xr[0] <= px <= xr[1] and yr[0] <= py <= yr[1]:
+                return (probe_z_to, None) if z_min <= probe_z_to else (None, f"probe_z_to_m {probe_z_to} outside low_zones")
+        return None, f"probe_z_to_m {probe_z_to} outside low_zones"
+    return probe_z_to, None
+
+
+def run_surface_step(cell, config: dict, step: str, work: Path) -> dict:
+    """Execute one ``surface <site>`` calibration step with low-zone Z gating."""
+    site = step.split()[1]
+    s = config["sites"].get(site)
+    if not isinstance(s, dict) or not s.get("place"):
+        return {step: "no place point to touch"}
+    xy = _valid_xy(s.get("place"))
+    if xy is None:
+        return {step: f"invalid place: {s.get('place')!r}"}
+    yaw = _finite_num(s.get("yaw_deg"))
+    if yaw is None:
+        return {step: f"invalid yaw_deg: {s.get('yaw_deg')!r}"}
+    probe_z_to, z_err = validated_probe_z_to(config, s)
+    if z_err:
+        return {step: z_err}
+    tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else config["plan"].get("tcp_x_m")
+    lib = work / f"surface-{site}.library.json"
+    lib.write_text(json.dumps(probe_library(
+        config["plan"], xy[0], xy[1], yaw, 0.10, probe_z_to, tcp_x_m=tcp_x_m)))
+    touched = touch(cell, lib, tcp_x_m=tcp_x_m)
+    if touched["result"] == "touched":
+        s["surface_z"] = touched["surface_z"]
+    if config.get("work_dir"):
+        rcp = Path(config["work_dir"]).expanduser() / f"surface-{site}.json"
+        rtmp = rcp.with_suffix(".tmp")
+        rtmp.write_text(json.dumps({"result": touched["result"], "surface_z": touched.get("surface_z"), "site": site,
+                                    "xy": [xy[0], xy[1]], "measured": time.strftime("%Y-%m-%d %H:%M"),
+                                    "sets_surface_z": touched["result"] == "touched"}, indent=1), encoding="utf-8")
+        rtmp.replace(rcp)
+    return {step: touched["result"], "surface_z": touched.get("surface_z")}
 
 
 def main(argv=None):

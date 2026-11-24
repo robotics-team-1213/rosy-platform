@@ -9,7 +9,7 @@ Description=Rosy Calibration screen (cell real-measurement requests)
 After=network-online.target
 
 [Service]
-ExecStart=%h/.local/share/rosy/calibration/venv/bin/python %h/rosy-test/omx-tools-current/applications/calibration/calibration_web.py --store %h/.local/state/rosy/cell-requests --account-config %h/.config/rosy/calibration/receiver.json --port 8776
+ExecStart=%h/.local/share/rosy/calibration/venv/bin/python %h/rosy-test/omx-tools-current/applications/calibration/calibration_web.py --store %h/.local/state/rosy/cell-requests --account-config %h/.config/rosy/calibration/receiver.json --cells %h/.config/rosy/calibration/cells.json --port 8776
 Restart=on-failure
 RestartSec=10
 

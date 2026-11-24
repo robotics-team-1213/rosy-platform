@@ -18,8 +18,8 @@ from pathlib import Path
 
 OPERATE = "calibration.operate"
 STEPS = {"check": [], "depth-verify": ["--only", "depth-verify", "--verify"], "pivot-near": ["--only", "pivot-near"],
-         "remap": ["--only", "remap"]}
-MOVING = {"pivot-near", "remap"}  # D-911: a person at the power switch
+         "remap": ["--only", "remap"], "surface": ["--only", "surface"]}
+MOVING = {"pivot-near", "remap", "surface"}  # D-911: a person at the power switch
 TARGET = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]{0,63}:-?\d+(\.\d+)?,-?\d+(\.\d+)?")  # never starts with '-'
 ARM = re.compile(r"[A-Za-z0-9_-]{1,32}")
 JOB_ID = re.compile(r"[0-9]{8}T[0-9]{6}-[0-9a-f]{6}")

@@ -809,3 +809,57 @@ def test_moving_rects_includes_belt_and_moves_sites():
         }
     }
     assert sg.moving_rects(cfg) == [[300, 20, 400, 120], [100, 0, 310, 200]]
+
+
+@pytest.mark.parametrize(
+    ("site_extra", "low_zones", "expected_z_to", "error_fragment"),
+    [
+        ({}, (), 0.010, None),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.030}], -0.020, None),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.30, 0.40], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.040}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.015}, {"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": -0.040}], None, "outside low_zones"),
+        ({"probe_z_to_m": -0.020}, [{"x": [0.10, 0.20], "y": [-0.05, 0.05], "z_min_m": False}], None, "invalid low_zones entry"),
+        ({"probe_z_to_m": -0.020}, [{"x": [float("-inf"), float("inf")], "y": [-0.05, 0.05], "z_min_m": -0.030}], None, "invalid low_zones entry"),
+        ({"probe_z_to_m": True}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": "-0.02"}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": float("nan")}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": 0.10}, (), None, "invalid probe_z_to_m"),
+        ({"probe_z_to_m": -0.051}, (), None, "invalid probe_z_to_m"),
+        ({"place": [0.15]}, (), None, "invalid place"),
+        ({"place": {"a": 1, "b": 2}}, (), None, "invalid place"),
+        ({"place": [True, 0.0]}, (), None, "invalid place"),
+        ({"yaw_deg": True}, (), None, "invalid yaw_deg"),
+    ],
+)
+def test_surface_step_gates_probe_z_to_m_against_low_zones(tmp_path, monkeypatch, capsys, site_extra, low_zones, expected_z_to, error_fragment):
+    pytest.importorskip("cv2")
+    import cell_pipeline as cp
+    import cell_surface
+
+    cal_path = tmp_path / "cal.json"
+    cal_path.write_text(json.dumps({"schema": cc.cal.SCHEMA, "sites": {}}), encoding="utf-8")
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text(json.dumps({"limits": {"low_zones": low_zones}}), encoding="utf-8")
+    config = {
+        "calibration_path": str(cal_path),
+        "plan_path": str(plan_path),
+        "work_dir": str(tmp_path),
+        "io": str(tmp_path),
+        "cameras": {"top": "http://unused"},
+        "sites": {"pallet": {"place": [0.15, 0.0], "yaw_deg": 0.0, **site_extra}},
+    }
+    cfg_path = tmp_path / "config.json"
+    cfg_path.write_text(json.dumps(config), encoding="utf-8")
+    calls = {"probe": [], "touch": 0}
+    monkeypatch.setattr(cp, "FifoCell", lambda *a: type("Cell", (), {"frame": lambda self, _: np.zeros((32, 32, 3), np.uint8)})())
+    monkeypatch.setattr(cc, "check", lambda *a: {})
+    monkeypatch.setattr(cc, "stale", lambda *a: ["surface pallet"])
+    monkeypatch.setattr(cell_surface, "probe_library", lambda plan, x, y, yaw, z_from, z_to, tcp_x_m=None: calls["probe"].append(z_to) or {"chunks": {}})
+    monkeypatch.setattr(cell_surface, "touch", lambda *a, **kw: calls.__setitem__("touch", calls["touch"] + 1) or {"result": "touched", "surface_z": -0.01})
+    assert cc.main(["--config", str(cfg_path), "auto", "--only", "surface", "--commissioning", "--person-at-switch"]) == 0
+    out = capsys.readouterr().out
+    if error_fragment is None:
+        assert calls["probe"] == [expected_z_to] and calls["touch"] == 1
+    else:
+        assert calls["probe"] == [] and calls["touch"] == 0 and error_fragment in out
