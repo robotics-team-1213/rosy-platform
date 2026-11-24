@@ -1,7 +1,10 @@
 // Multi-world environment monitor and single-contract parity controller for Rosy World.
 
+import { realMapMismatch } from "./factory-live-ui.js";
+
 const STATUS_LABEL = {
   live: "실시간",
+  synthetic_demo: "합성 데모",
   replay: "검증 재생",
   waiting: "미연결",
   stalled: "중단됨",
@@ -25,13 +28,14 @@ export function createWorldMonitor({
   adaptersBarEl,
   worldsStripEl,
   parityEl,
+  initialAdapter,
   onSelectWorld,
 }) {
   const adapterBtns = adaptersBarEl
     ? [...adaptersBarEl.querySelectorAll("[data-adapter]")]
     : [];
-  let selectedAdapter = "all";
-  let activeWorldId = null;
+  let selectedAdapter = Object.hasOwn(ADAPTER_TITLE, initialAdapter) ? initialAdapter : "all";
+  let activeWorldId = selectedAdapter === "real" ? "real-site" : null;
   let lastRegistry = null;
   let pollTimer;
   let inflight;
@@ -58,7 +62,13 @@ export function createWorldMonitor({
       parityEl.textContent = `비상정지(E-STOP) 활성 · ${robots}`;
       return;
     }
-    if (world.adapter === "real" && world.status === "waiting") {
+    const mapWarning = realMapMismatch(world);
+    if (mapWarning) {
+      parityEl.setAttribute("state", "warning");
+      parityEl.textContent = mapWarning;
+      return;
+    }
+    if (world.adapter === "real" && ["waiting", "stalled"].includes(world.status)) {
       parityEl.setAttribute("state", "empty");
       parityEl.textContent = "실물 현장 미연결 · 맵/URDF/짐칸(J-v3) 기준 대기";
       return;
@@ -84,8 +94,9 @@ export function createWorldMonitor({
       ? allWorlds
       : allWorlds.filter((w) => w.adapter === selectedAdapter);
     if (!visibleWorlds.length) {
-      worldsStripEl.hidden = allWorlds.length <= 1;
-      worldsStripEl.replaceChildren();
+      worldsStripEl.hidden = selectedAdapter === "all";
+      worldsStripEl.replaceChildren(...(worldsStripEl.hidden ? [] : [makeNode("span", "", "연결된 월드가 없습니다")]));
+      updateParityStatus(null);
       return;
     }
     worldsStripEl.hidden = allWorlds.length <= 1 && selectedAdapter === "all";
@@ -166,11 +177,27 @@ export function createWorldMonitor({
       const reg = await res.json();
       if (ctrl.signal.aborted || reg?.schema !== "rosy.world.registry.v1") return;
       lastRegistry = reg;
+      if (selectedAdapter !== "all" && selectedAdapter !== "real"
+          && !reg.worlds.some((w) => w.world_id === activeWorldId && w.adapter === selectedAdapter)) {
+        selectAdapterWorld();
+        return;
+      }
       renderStrip();
     } catch {
       // Offline bundle fallback: keep baseline parity badge quietly.
       if (!lastRegistry) updateParityStatus(null);
     }
+  }
+
+  function selectAdapterWorld(notify = false) {
+    const matches = (lastRegistry?.worlds ?? []).filter((w) => w.adapter === selectedAdapter);
+    const world = selectedAdapter === "real" ? matches.find((w) => w.world_id === "real-site") ?? matches[0]
+      : matches.find((w) => ["live", "synthetic_demo"].includes(w.status)) ?? matches[0];
+    const worldId = world?.world_id ?? (selectedAdapter === "real" ? "real-site" : null);
+    notify ||= activeWorldId !== worldId;
+    activeWorldId = worldId;
+    renderStrip();
+    if (notify) onSelectWorld?.({ worldId, adapter: selectedAdapter });
   }
 
   for (const btn of adapterBtns) {
@@ -179,29 +206,7 @@ export function createWorldMonitor({
       if (selectedAdapter === next) return;
       selectedAdapter = next;
       syncAdapterButtons();
-      const worlds = lastRegistry?.worlds ?? [];
-      if (next === "real") {
-        const realWorld = worlds.find((w) => w.adapter === "real");
-        activeWorldId = realWorld?.world_id ?? "real-site";
-        renderStrip();
-        onSelectWorld?.({ worldId: activeWorldId, adapter: "real", world: realWorld });
-        return;
-      }
-      if (next === "all") {
-        activeWorldId = null;
-        renderStrip();
-        onSelectWorld?.({ worldId: null, adapter: "all", world: null });
-        return;
-      }
-      const match = worlds.find((w) => w.adapter === next && w.status === "live")
-        ?? worlds.find((w) => w.adapter === next);
-      if (match) {
-        activeWorldId = match.world_id;
-        renderStrip();
-        onSelectWorld?.({ worldId: match.world_id, adapter: match.adapter, world: match });
-      } else {
-        renderStrip();
-      }
+      selectAdapterWorld(true);
     });
   }
 
@@ -230,7 +235,7 @@ export function createWorldMonitor({
         ?? {
           world_id: frame.world_id ?? "verified-replay",
           adapter: frame.adapter ?? frame.simulator ?? "mujoco",
-          status: frame.stream_mode === "live" ? "live" : "replay",
+          status: frame.stream_mode === "verified_replay" ? "replay" : frame.stream_mode,
           parity: frame.parity,
         };
       if (frame.parity) worldObj.parity = frame.parity;

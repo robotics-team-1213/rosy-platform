@@ -41,7 +41,7 @@ INPUT_FILES = {
 }
 WEB_FILES = (
     "index.html", "styles.css", "app.js", "live-feeds.js", "scene.js", "scene-geometry.js",
-    "play.js", "factory-live.js", "factory-actors.js", "world-monitor.js", "studio-look.js",
+    "play.js", "factory-live.js", "factory-live-ui.js", "factory-actors.js", "world-monitor.js", "studio-look.js",
     "omx-arm.js", "manifest.webmanifest",
 )
 FACTORY_STAGES = (
