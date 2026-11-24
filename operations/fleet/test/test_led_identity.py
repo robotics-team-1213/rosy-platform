@@ -346,14 +346,24 @@ def test_assigned_marker_detection_binds_without_anonymous_blobs_and_cancels_pen
     )
     tracking = TrackingService([source], calibrations=TrackingCalibrationStore(), clock=clock)
     robots = {"rosy_45": Robot("blue"), "rosy_46": Robot("amber")}
-    identity = IdentityService(lambda: robots, tracking=tracking, clock=clock)
+    # Default IdentityConfig() leaves marker_match off unless the site opts in.
+    default_identity = IdentityService(lambda: robots, tracking=tracking, clock=clock)
+    tracking.identity = default_identity
+    tracking.accept(AUTH, OverheadDetectionsPayload(
+        source_id="ceiling_north", map_id="map_v2_fleet", calibration_revision="cal-1",
+        processor_revision="background-blob/1", captured_at=clock.now, seq=1, status="OK",
+        detections=(OverheadDetection(x=-0.93, y=-0.34, footprint_m=0.165, score=1.0, marker_id=45),),
+    ))
+    assert default_identity.confirmed_track_pose("rosy_45")["state"] == "UNKNOWN"
+
+    identity = IdentityService(lambda: robots, tracking=tracking, config=IdentityConfig(marker_match=True), clock=clock)
     tracking.identity = identity
     asyncio.run(identity.request("rosy_45"))
     clock.now += 0.3
     # Even with zero anonymous blobs (dark corner), assigned QR/ArUco detection confirms identity (no yaw).
     tracking.accept(AUTH, OverheadDetectionsPayload(
         source_id="ceiling_north", map_id="map_v2_fleet", calibration_revision="cal-1",
-        processor_revision="background-blob/1", captured_at=clock.now, seq=1, status="OK",
+        processor_revision="background-blob/1", captured_at=clock.now, seq=2, status="OK",
         detections=(
             OverheadDetection(x=-0.93, y=-0.34, footprint_m=0.165, score=1.0, marker_id=45),
             OverheadDetection(x=0.5, y=0.2, footprint_m=0.165, score=1.0, marker_id=48),  # unassigned
@@ -377,7 +387,7 @@ def test_assigned_markers_within_overlap_refuse_to_bind():
     )
     tracking = TrackingService([source], calibrations=TrackingCalibrationStore(), clock=clock)
     robots = {"rosy_45": Robot("blue"), "rosy_46": Robot("amber")}
-    identity = IdentityService(lambda: robots, tracking=tracking, clock=clock)
+    identity = IdentityService(lambda: robots, tracking=tracking, config=IdentityConfig(marker_match=True), clock=clock)
     tracking.identity = identity
     clock.now += 0.3
     tracking.accept(AUTH, OverheadDetectionsPayload(

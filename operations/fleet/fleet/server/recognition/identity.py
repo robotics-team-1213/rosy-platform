@@ -65,6 +65,7 @@ class IdentityConfig:
     auto_marker_missing_s: float = 3.0
     auto_near_m: float = 0.5
     motion_match: bool = False       # 2026-11-21: also name a robot by its motion (motion_match.py), no lamp; the site opts in
+    marker_match: bool = False       # also confirm a robot directly from its assigned QR/ArUco marker_id detection; the site opts in
     motion_min_move_m: float = 0.15  # the robot's own pose must have moved this far
     motion_tol_m: float = 0.06       # camera and robot distances agree within this (camera error about 5 cm, 2026-11-21)
     motion_still_m: float = 0.04     # anything that moved less stood still
@@ -81,8 +82,10 @@ class IdentityConfig:
             raise ValueError("identity settings must be positive numbers")
         if self.window_s > 6.0:
             raise ValueError("identity window_s must be at most 6 s (D-472 4)")
-        if not isinstance(self.auto_request, bool) or not isinstance(self.motion_match, bool):
-            raise ValueError("identity auto_request and motion_match must be true or false")
+        if (not isinstance(self.auto_request, bool)
+                or not isinstance(self.motion_match, bool)
+                or not isinstance(self.marker_match, bool)):
+            raise ValueError("identity auto_request, motion_match, and marker_match must be true or false")
 
     @classmethod
     def from_mapping(cls, raw: Optional[Mapping]) -> "IdentityConfig":
@@ -384,7 +387,7 @@ class IdentityService:
         Never invents yaw (D-587 4) and refuses any ambiguous or overlapping detection within ``overlap_m``.
         """
         source = next((s for s in getattr(self.tracking, "sources", ()) if s.source_id == source_id), None)
-        if source is None or payload.status != "OK" or not source.robot_markers:
+        if not self.config.marker_match or source is None or payload.status != "OK" or not source.robot_markers:
             return
         assignments = {marker_id: robot_id for robot_id, marker_id in source.robot_markers}
         seen_by_marker: dict[int, list] = {}
