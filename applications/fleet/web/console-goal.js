@@ -150,11 +150,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       if (blocked) { setGoal({ status: "BLOCKED", statusText: blocked }); log(`${robotId} 출발 보류 · ${blocked}`, "bad"); return; }
       setGoal({ status: "PLANNING", statusText: "서버 경로 계산 중…" });
       const tripTarget = placeId || { x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)) };
-      const canNav2 = (selectedRobot?.capabilities?.controls?.items || []).some(
-        (item) => item?.kind === "base_velocity" && Array.isArray(item.drive_modes) && item.drive_modes.includes("free"));
+      const baseCtrl = (selectedRobot?.capabilities?.controls?.items || []).find((item) => item?.kind === "base_velocity");
+      const canNav2 = Array.isArray(baseCtrl?.drive_modes) && baseCtrl.drive_modes.includes("free");
+      const preferNav2 = canNav2 && baseCtrl?.junction_turn === false;
       try {
-        try { prePlanned = await planTrip(call, robotId, { to: tripTarget }); } catch (err) {
-          if (canNav2 && (err?.code === "TRIP_LANE_CAMERA_UNAVAILABLE" || err?.code === "TRIP_MODE_UNSUPPORTED")) {
+        const body = preferNav2 ? { to: tripTarget, drive_mode: "nav2" } : { to: tripTarget };
+        try { prePlanned = await planTrip(call, robotId, body); } catch (err) {
+          if (!preferNav2 && canNav2 && (err?.code === "TRIP_LANE_CAMERA_UNAVAILABLE" || err?.code === "TRIP_MODE_UNSUPPORTED")) {
             prePlanned = await planTrip(call, robotId, { to: tripTarget, drive_mode: "nav2" });
           } else throw err;
         }
