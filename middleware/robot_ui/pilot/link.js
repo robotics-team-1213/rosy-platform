@@ -14,10 +14,10 @@
 
 export const SEND_INTERVAL_MS = 100;   // hold-to-drive 명령 주기(하한)
 export const IDLE_ZERO_REPEATS = 3;    // 놓은 뒤 0 을 몇 번 보내고 조용해지나(늦게 도착한 움직임을 덮는다)
-// teleop 한 건의 시한. CORE 워치독(500ms)보다 짧아야 한 요청이 멈춰도 다음 명령이
-// 워치독 전에 나간다. 끊긴 요청은 다음 틱이 최신 명령으로 대신한다. 시한 + 왕복이
-// 500ms 를 넘으면 로봇이 잠깐 서는 쪽으로 실패한다(의도된 안전 방향).
-export const POST_TIMEOUT_MS = 400;
+// teleop 한 건의 시한. Pinky CORE 워치독(300ms, D-311 G4 0.65s 정지 한계)보다 짧아야
+// 한 요청이 멈춰도 다음 명령이 워치독 전에 나간다. 끊긴 요청은 다음 틱이 최신 명령으로
+// 대신한다. 시한 + 왕복이 300ms 를 넘으면 로봇이 잠깐 서는 쪽으로 실패한다(의도된 안전 방향).
+export const POST_TIMEOUT_MS = 200;
 // 조종 WS: 이 시간 넘게 ack 가 없으면 죽은 소켓으로 보고 닫은 뒤 REST 로 보낸다.
 export const WS_ACK_STALE_MS = 1000;
 export const TELEOP_WS_RETRY_MS = 2000;
