@@ -255,12 +255,17 @@ test("C25: the bell badge counts active alerts while open and clears on lock", (
   document.listeners.keydown({ key: "Escape", defaultPrevented: false, preventDefault() {} });
   assert.equal(el("queues-panel").dataset.open, "false");
 
-  view.robots = [{ robot_id: "a", online: false, state: null, line_stuck: { stuck_id: "s" } }];
+  view.robots = [{ ...STALE_ROBOT(0), line_stuck: { stuck_id: "s" } }];
   fillQueues();
   inbox.refresh();
-  assert.equal(el("header-unread").textContent, "2");
+  assert.equal(el("header-unread").textContent, "5");
+  assert.equal(el("queues-summary").textContent, "최우선 1건 · 주의 4건");
+  assert.equal(el("warning-head").querySelector("b").textContent, "주의 요망 4건 · 1대");
+  assert.equal(el("critical-head").querySelector("b").textContent, "최우선 개입 요망 1건 · 1대");
   assert.equal(el("fleet-inbox").dataset.crit, "true");
   assert.match(el("fleet-inbox").getAttribute("aria-label"), /최우선 1건/);
+  assert.equal(el("fleet-inbox").getAttribute("data-ui-tooltip"), "활성 알림 5건");
+  assert.equal(el("fleet-inbox").getAttribute("title"), null);
 
   locked = true;
   inbox.clear();

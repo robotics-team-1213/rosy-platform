@@ -344,7 +344,7 @@ export function actionIcon(button, name) {
   button.replaceChildren(...children, ...quiet, ...details);
   const label = button.getAttribute("aria-label") || visible || quiet.map(node => node.textContent).join(" ").trim();
   if (button.hasAttribute("data-icon-only") && !label) throw new TypeError("아이콘 단독 조작에는 접근성 이름이 필요합니다");
-  if (!button.hasAttribute("data-ui-tooltip")) {
+  if (!button.hasAttribute("data-ui-tooltip") && !button.parentElement?.closest("button, ui-button, a")) {
     const explanation = button.getAttribute("title") || ((button.hasAttribute("data-icon-only") || !visible) ? label : "");
     if (explanation) button.setAttribute("data-ui-tooltip", explanation);
   }
@@ -367,7 +367,8 @@ function hideTooltip() {
 }
 function tooltipTarget(node) { return node instanceof Element ? node.closest("[data-ui-tooltip]") : null; }
 function tooltipOwnerVisible(owner) {
-  return owner?.isConnected && !owner.closest("[hidden], [inert], [aria-hidden='true']") && owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
+  return owner?.isConnected && owner.getAttribute("aria-expanded") !== "true"
+    && !owner.closest("[hidden], [inert], [aria-hidden='true']") && owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
 }
 function overTooltip(event) {
   if (!tooltip || tooltip.hidden) return false;
@@ -410,7 +411,7 @@ document.addEventListener("click", event => { const owner = tooltipTarget(event.
 document.addEventListener("keydown", event => { if (event.key === "Escape" && tooltip && !tooltip.hidden) { tooltipDismissed = tooltipOwner; hideTooltip(); } });
 window.addEventListener("resize", placeTooltip);
 document.addEventListener("scroll", placeTooltip, true);
-new MutationObserver(placeTooltip).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "inert", "class", "aria-hidden"] });
+new MutationObserver(placeTooltip).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "inert", "class", "aria-hidden", "aria-expanded"] });
 for (const button of document.querySelectorAll("[data-action-icon]")) {
   if (!button.querySelector(":scope > .ui-icon")) actionIcon(button, button.getAttribute("data-action-icon"));
 }

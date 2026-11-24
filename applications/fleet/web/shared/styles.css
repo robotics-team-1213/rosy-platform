@@ -710,6 +710,7 @@ main {
 .map-readouts, .map-options { flex: none; min-width: 0; margin-top: var(--space-2); }
 .map-readouts-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); block-size: 16rem; overflow: auto; padding-block: var(--space-3); }
 .map-options-content { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding-block: var(--space-2); }
+.map-options[open] > .map-options-content { max-block-size: 16rem; overflow-y: auto; }
 .map-context { min-width: 0; }
 .map-context > h3 { margin-block: var(--space-3) var(--space-2); }
 .map-place-list { margin: 0; padding-inline-start: var(--space-5); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -731,25 +732,27 @@ main {
 .tracking-state[data-state="warn"] { color: var(--status-warn); }
 .sw.tracking { background: transparent; border: 2px solid var(--series-primary); border-radius: 50%; }
 
-/* D-493 — 오른쪽 열을 한 화면에 담는다(D-201). 카메라 칸: 썸네일 왼쪽, 고르기·기록 오른쪽.
+/* D-493 — 오른쪽 열을 한 화면에 담는다(D-201). 카메라 선택은 칸 전체 너비를 쓴다.
    대형 칸: 대형 왼쪽, 신호등·진단·기록 오른쪽. 지도 칸 아래: 범례와 배경 학습 한 줄, 접힌 도구 한 줄. */
 @media (width >= 64rem) {
   .console-secondary .vision-preview {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas: "frame head" "frame controls" "frame meta";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "head head" "controls controls" "frame meta" "hint hint" "compare compare";
     align-content: start;
     align-items: start;
     column-gap: var(--space-3);
   }
   .console-secondary .vision-preview > .map-head { grid-area: head; margin-bottom: var(--space-2); }
   .console-secondary .vision-preview > .vision-controls { grid-area: controls; margin: 0; }
-  .console-secondary .vision-preview > .vision-frame { grid-area: frame; height: 8.5rem; }
+  .console-secondary .vision-preview > .vision-frame { grid-area: frame; height: 8.5rem; max-inline-size: 100%; }
   .console-secondary .vision-preview > #vision-meta { grid-area: meta; margin: var(--space-2) 0 0; }
+  .console-secondary .vision-preview > .hint:not(#vision-meta) { grid-area: hint; }
+  .console-secondary .vision-preview > #camera-comparison { grid-area: compare; }
   .console-secondary .vision-preview:has(> .vision-frame:is([data-state="waiting"], [data-state="warn"])) { display: block; }
   #fleet-main:has(.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"], [data-view="camera"]) > .map-birdseye:not([hidden])) .console-secondary .vision-preview {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "head" "controls" "meta";
+    grid-template-areas: "head" "controls" "hint" "meta" "compare";
   }
   .panel[aria-labelledby="map-heading"] > :is(.legend, .tracking-bar, .note:not([open])) { margin-top: var(--space-2); }
 }

@@ -118,6 +118,34 @@ def test_hover_description_is_hoverable_dismissible_and_preserves_other_evidence
     assert rejected
 
 
+def test_nested_bell_uses_the_outer_tooltip_and_dismisses_it_when_opened(page):
+    page.goto(f"{HOST}/styleguide")
+    page.evaluate("""async () => {
+      const {actionIcon} = await import('/common/ui.js');
+      const bell = document.createElement('ui-button');
+      bell.id = 'nested-bell';
+      bell.setAttribute('kind', 'quiet');
+      bell.setAttribute('aria-label', '알림 창');
+      bell.setAttribute('aria-expanded', 'false');
+      bell.dataset.uiTooltip = '활성 알림 5건';
+      const inner = document.createElement('span');
+      inner.dataset.iconOnly = '';
+      inner.setAttribute('aria-label', '알림');
+      bell.append(inner);
+      document.body.prepend(bell);
+      actionIcon(inner, 'notification');
+    }""")
+    bell = page.locator("#nested-bell")
+    icon = bell.locator("[data-icon-only]")
+    assert icon.get_attribute("data-ui-tooltip") is None
+    icon.hover()
+    tooltip = page.get_by_role("tooltip")
+    assert tooltip.inner_text() == "활성 알림 5건"
+    bell.evaluate("node => node.setAttribute('aria-expanded', 'true')")
+    tooltip.wait_for(state="hidden")
+    assert bell.get_attribute("aria-describedby") is None
+
+
 def test_focused_description_does_not_block_another_control(page):
     page.goto(f"{HOST}/styleguide")
     page.wait_for_function("() => document.querySelector('.icon-inventory .ui-icon')")

@@ -1,7 +1,7 @@
 // D-632: view-only notification and drawer owner; transport and polling stay in the console shell.
 import { CAUSE_LABEL, DECISION_LABEL, aiProposalText, fleetAnswerText, stuckSummary } from "./line-stuck.js";
 import { appendLogEntry } from "/console/assets/activity-log.js";
-import { patchAttr, patchData, patchHidden, patchText } from "/common/control-dom.js";
+import { patchAttr, patchData, patchText } from "/common/control-dom.js";
 import { setTopbarOpen, showInboxCount } from "/console/assets/fleet-header.js";
 
 const LOG_MAX = 120;
@@ -31,20 +31,16 @@ export function createInboxPanel({ scope, el, readView, isLocked = () => false }
     const warnCount = locked ? 0
       : [...document.querySelectorAll("#warning-list > li")].filter((node) => node.dataset?.key).length;
     const total = critCount + warnCount;
-    if (bell && unread && typeof document.getElementById === "function"
-        && document.getElementById("fleet-inbox") === bell && document.getElementById("header-unread") === unread) {
-      showInboxCount(locked ? 0 : total);
-    } else if (unread) {
-      patchText(unread, !locked && total ? String(total) : "");
-      patchHidden(unread, locked || total === 0);
-    }
+    const countText = total ? String(total) : "";
+    if (unread && (unread.textContent !== countText || unread.hidden !== (total === 0))) showInboxCount(total);
     if (!bell) return;
+    // The shared badge painter also sets legacy message copy. The console drawer owns its description.
+    patchAttr(bell, "title", null);
     if (locked) {
       patchData(bell, "crit", null);
       patchData(bell, "hasAlerts", null);
       patchAttr(bell, "aria-label", "알림 창");
       patchAttr(bell, "data-ui-tooltip", "알림 창");
-      if (bell.title !== "관제 알림") bell.title = "관제 알림";
       return;
     }
     patchData(bell, "crit", critCount > 0 ? "true" : null);
@@ -55,10 +51,7 @@ export function createInboxPanel({ scope, el, readView, isLocked = () => false }
         ? `알림 창 · 활성 알림 ${total}건 (최우선 ${critCount}건)`
         : `알림 창 · 활성 알림 ${total}건`;
     patchAttr(bell, "aria-label", label);
-    patchAttr(bell, "data-ui-tooltip", `${label} · 해결할 때까지 표시됩니다`);
-    if (bell.title !== "확인이나 읽음으로 알림이 사라지지 않습니다") {
-      bell.title = "확인이나 읽음으로 알림이 사라지지 않습니다";
-    }
+    patchAttr(bell, "data-ui-tooltip", total ? `활성 알림 ${total}건` : "활성 알림 없음");
   }
 
   function setDrawerOpen(open, { focus = false, restoreFocus = false } = {}) {
