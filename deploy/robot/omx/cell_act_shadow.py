@@ -43,7 +43,7 @@ def load(config: dict, work: Path):
         if spec.get("kind") == "lerobot":
             import cell_lerobot_shadow
 
-            binding = cell_lerobot_shadow.LeRobotShadow(spec["policy_root"], spec["policy_revision"])
+            binding = cell_lerobot_shadow.LeRobotShadow(spec["policy_root"], spec["policy_revision"], cell_config=config)
             offset = None
             if spec.get("model_calibration") and spec.get("cell_calibration"):
                 import cell_policy_drive
@@ -105,13 +105,23 @@ class Shadow:
         row["proposed"] = [list(map(float, q)) for q in self._binding.infer(taken).chunk]
         return row
 
-    def _lerobot_row(self, row, cell, obs_img):
+    def _lerobot_row(self, row, cell, obs_img, dest=None):
         """The trained cameras by name: `top` is the frame the IK plan came from, any other is read once from the cell."""
         row["observation"].pop("camera_identity", None)
         frames = {view: obs_img if view == "top" else cell.frame(view) for view in self._binding.image_views}
         state = cell.act("state")["state"]
+        goal_kw = {}
+        if getattr(self._binding, "goal_size", None) is not None:
+            import cell_policy_goals
+
+            goal_kw["goal"] = cell_policy_goals.resolve_goal_site(dest)[1]
+        if getattr(self._binding, "sim_rule", None) is not None:
+            taken, meta = self._binding.inputs(state, frames, **goal_kw)
+            row["observation"].update(meta, positions=list(state), unit="lerobot_norm", calibration_offset=None)
+            row["proposed"] = [list(map(float, frame)) for frame in self._binding.infer(taken, state=state).chunk]
+            return row
         off = self._offset or [0.0] * len(state)
-        taken, meta = self._binding.inputs([s + o for s, o in zip(state, off)], frames)
+        taken, meta = self._binding.inputs([s + o for s, o in zip(state, off)], frames, **goal_kw)
         row["observation"].update(meta, positions=list(state), unit="lerobot_norm", calibration_offset=self._offset)
         row["proposed"] = [[q - o for q, o in zip(frame, off)] for frame in self._binding.infer(taken).chunk]  # cell units
         return row
@@ -129,7 +139,7 @@ class Shadow:
             if self._error:
                 raise ValueError(self._error)
             if self._lerobot:
-                return self._lerobot_row(row, cell, obs_img)
+                return self._lerobot_row(row, cell, obs_img, dest=dest)
             if self._spec is not None:
                 return self._two_arm(row, cell, config, source, dest)
             state = cell.act("state")["state"]
