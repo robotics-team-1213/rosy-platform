@@ -112,7 +112,7 @@ async function preview(automatic=false){
   const ticket=++generation,source=current;
   const episode=Number($('review-episode').value),frame=Number($('review-frame').value),camera=Number($('review-camera').value),keys=source.inspection.camera_keys;
   const view=$('review-view').value,context=[source.prepared_id,source.source_revision,episode,view,view==='group'?Math.floor(camera/8):camera].join('/');
-  clearMedia();$('review-viewer').setAttribute('aria-busy','true');
+  if(automatic!==true||activeContext!==context)clearMedia();$('review-viewer').setAttribute('aria-busy','true');
   $('review-frame-label').textContent=`시도 ${episode} · 프레임 ${frame} / ${$('review-frame').max} · ${keys[camera]}`;
   $('review-frame-status').textContent='선택한 실제 프레임을 읽는 중입니다.';
   // An aborted client cannot cancel native decoding: finish this view's read before its latest cursor.
