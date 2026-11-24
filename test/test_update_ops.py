@@ -227,7 +227,7 @@ def test_status_filters_the_probe_to_the_hosts_updaters(tmp_path):
     assert 'rosy-situation-autoupdate.service' in text and 'OFF' in text
     assert 'rosy-ollama.service' not in text  # not an updater channel of this target
     assert 'held (gpu bench' in text
-    assert run.calls[0][0][-1] == 'bash -s' and run.calls[0][1] == ops.PROBE.encode()
+    assert 'timeout -k 5 180 bash -s' == run.calls[0][0][-1] and run.calls[0][1] == ops.PROBE.encode()
 
 
 def test_status_uses_the_native_cli_for_robot_and_site():

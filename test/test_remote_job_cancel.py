@@ -152,3 +152,12 @@ def test_ship_skips_origin_fetch_when_bundle_verifies():
     import remote_pytest as rp
 
     assert "if ! git bundle verify" in rp.SHIP and rp.SHIP.index("git bundle verify") < rp.SHIP.index("git fetch -q \"$3\"")
+
+
+def test_ssh_call_bounds_remote_bash_with_timeout(monkeypatch):
+    seen = []
+    monkeypatch.setattr(rj.subprocess, "run", lambda argv, **kw: seen.append((argv, kw)) or
+                        subprocess.CompletedProcess(argv, 0, b"", b""))
+    assert rj.ssh_call(["ssh"], "h", "true").returncode == 0
+    assert seen[0][0] == ["ssh", "h", f"timeout -k 5 {rj.CALL_TIMEOUT} bash -s"]
+    assert seen[0][1]["timeout"] == rj.CALL_TIMEOUT

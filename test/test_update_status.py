@@ -149,6 +149,7 @@ def test_status_main_collects_an_independent_production_host(monkeypatch):
     monkeypatch.setattr(status.sys, 'argv', ['update_status.py'])
     targets = []
     def run(argv, **kwargs):
+        assert argv[-1].startswith('timeout -k 5 120 bash -s')
         targets.append(argv[-2])
         return subprocess.CompletedProcess(argv, 0, stdout=f'gate open\nguard active {int(time.time())}\n'.encode(), stderr=b'')
     monkeypatch.setattr(status.subprocess, 'run', run)

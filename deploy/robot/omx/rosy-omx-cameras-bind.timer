@@ -1,9 +1,9 @@
 [Unit]
-Description=ROSY OMX cameras: bind registered roles every 20 s
+Description=ROSY OMX cameras: bind registered roles every 60 s
 
 [Timer]
 OnBootSec=20s
-OnUnitInactiveSec=20s
+OnUnitInactiveSec=60s
 AccuracySec=2s
 
 [Install]
