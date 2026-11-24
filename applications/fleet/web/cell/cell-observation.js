@@ -98,15 +98,16 @@ export function createCellObservation({request, root, credential = () => '', onS
     const liveCams = cellState.camEntries.filter(cam => cam.live);
     const idleCams = cellState.camEntries.length - liveCams.length;
     const firstReason = cellState.camEntries.map(cam => cam.reason).find(Boolean) || '';
+    const hideIdleCams = !cellState.showAllCameras && liveCams.length > 0;
     for (const camEntry of cellState.camEntries) {
-      patchHidden(camEntry.card, !cellState.showAllCameras && !camEntry.live);
+      patchHidden(camEntry.card, hideIdleCams && !camEntry.live);
     }
-    patchHidden(cellState.camBar, cellState.camEntries.length === 0 || (idleCams === 0 && !cellState.showAllCameras));
+    patchHidden(cellState.camBar, cellState.camEntries.length === 0 || liveCams.length === 0 || (idleCams === 0 && !cellState.showAllCameras));
     patchText(cellState.camSummary, cellState.showAllCameras
       ? `전체 셀 카메라 ${cellState.camEntries.length}대 표시 중`
       : `실시간 카메라 ${liveCams.length}/${cellState.camEntries.length}대 · 대기 ${idleCams}대 숨김`);
     patchText(cellState.camToggle, cellState.showAllCameras ? '실시간 카메라만 보기' : `대기 카메라 ${idleCams}대 보기`);
-    patchHidden(cellState.camEmpty, cellState.camEntries.length === 0 || cellState.showAllCameras || liveCams.length > 0);
+    patchHidden(cellState.camEmpty, cellState.camEntries.length === 0 || liveCams.length > 0);
     patchText(cellState.camEmptyText, firstReason
       ? `실시간 카메라 0/${cellState.camEntries.length}대 · ${firstReason}`
       : `실시간 카메라 0/${cellState.camEntries.length}대 · 영상 연결 확인 중`);

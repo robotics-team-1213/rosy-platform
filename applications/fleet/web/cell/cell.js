@@ -54,7 +54,7 @@ const request = createFleetClient({credential: () => $('console-token').value, o
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value, onSummary: renderExceptions});
 // B-3 — 관측 화면은 팔 관측·사건 단계(#observation-heading)에 선다. 화면이 바뀐 뒤에 카드로 옮겨야 초점이 살아 있다.
 function jumpToObservations(land) {
-  if (!location.hash || location.hash === '#observation-heading') land();
+  if (location.hash === '#observation-heading') land();
   else { location.hash = '#observation-heading'; addEventListener('hashchange', land, {once: true}); }
 }
 if (SUBNAV_HEADINGS.includes(focusParam)) {
@@ -64,7 +64,7 @@ if (SUBNAV_HEADINGS.includes(focusParam)) {
 function focusArmFromLink() {
   if (!armFocusMatch || pendingFocusHandled) return;
   if (location.hash && location.hash !== '#observation-heading') return;
-  jumpToObservations(() => { pendingFocusHandled = observations.focusArm(armFocusMatch[1]); });
+  jumpToObservations(() => { if (!pendingFocusHandled) pendingFocusHandled = observations.focusArm(armFocusMatch[1]); });
 }
 // 요약이 바뀔 때만 다시 그린다(관측 모듈이 서명으로 지켜 준다). 접속 끊김·해제는 빈 목록으로 줄을 지운다.
 function renderExceptions(items) {
