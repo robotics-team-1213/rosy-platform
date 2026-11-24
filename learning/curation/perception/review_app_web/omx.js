@@ -2,6 +2,7 @@
 import {accountFetch} from '/account-session.js';
 import {confirmIrreversible} from '/common/ui.js';
 import '/commands.js';
+import {domEl as el, makeUuid as uuid} from '/learning-ui.js';
 import '/omx-review.js';
 import '/omx-native-train.js';
 import {profileDocumentKey} from '/omx-profiles.js';
@@ -25,7 +26,6 @@ const pendingEdits=()=>[...editors].some(editor=>editor());
 window.addEventListener('beforeunload',event=>{if(pendingEdits()){event.preventDefault();event.returnValue='';}});
 
 
-function el(tag,text,cls){const node=document.createElement(tag);if(text!=null)node.textContent=text;if(cls)node.className=cls;return node;}
 function button(text,kind='quiet'){
   const node=el('ui-button',text);
   if(kind==='primary')node.setAttribute('kind','primary');
@@ -455,11 +455,6 @@ async function refreshCenter(){
     $('center-status').setAttribute('state','ready');$('center-status').textContent=`데이터 ${snapshot.datasets.length}개 · 작업 ${snapshot.runs.length}개 · ${new Date().toLocaleTimeString('ko-KR')} 확인`;
   }catch(exc){centerReady=false;updateJourney();ownerRequest++;clearOwner('학습센터 연결을 확인한 뒤 현장 상태를 다시 조회하세요.');$('center-status').setAttribute('state','error');$('center-status').textContent='실행기 연결을 확인하세요. 아래 목록은 이전 확인 결과일 수 있습니다.';$('start').disabled=true;$('center-read-error').hidden=false;$('center-read-error').textContent=exc.message;}
   finally{loading=false;}
-}
-function uuid(){
-  const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
-  const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
-  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 initHub({request,uuid});
 initCollect({request});

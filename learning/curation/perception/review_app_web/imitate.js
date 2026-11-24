@@ -1,6 +1,7 @@
 import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
+import {domEl as node, makeUuid as uuid} from '/learning-ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/omx/center';
 const active=new Set(['launching','running','stopping']);
 const labels={launching:'시작 준비 중',running:'실행 중',stopping:'중지 처리 중',failed:'실패',interrupted:'중단됨',cancelled:'취소됨',succeeded:'완료'};
@@ -9,9 +10,7 @@ const panels=['upload','inspect','learn','results'];
 let study=null,listing={},token='',project='',connected=false,working=false,polling=false,resourceGeneration=0,refreshQueued=false;
 let studyId=new URL(location.href).searchParams.get('study')||'',selected=[],manifest=[],matched=false;
 let pending=null,inspectionKey='',splitSaved='',dirty=false,resultSignature='',selectionGeneration=0;
-function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function error(message){$('imitate-error').hidden=!message;$('imitate-error').textContent=message||'';}
-function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,v=>v.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 function storageKey(){return `rosy.imitation.pending:${project}:${studyId}`;}
 const TRAIN_FIELDS=[['train-steps','steps'],['train-batch','batch_size'],['train-seed','seed'],['train-lr','optimizer_lr'],['train-chunk','chunk_size']];
 function readPending(){try{pending=JSON.parse(localStorage.getItem(storageKey())||'null');}catch{pending=null;}if(pending?.kind==='train'){for(const [id,key] of TRAIN_FIELDS)if(key in pending.body)$(id).value=pending.body[key];}}

@@ -1,6 +1,7 @@
 // Guided input declarations; saved versions never acquire device authority.
 import {accountFetch} from '/account-session.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {domEl as el, makeUuid as uuid} from '/learning-ui.js';
 const $=id=>document.getElementById(id),recordingStore=new URL(location.href).searchParams.get('profile-store')==='recording';
 const API=recordingStore?'/api/learning/recording':'/api/learning/omx/center';
 const PURPOSES=['policy','record','reward','evaluation','monitor'];
@@ -60,8 +61,6 @@ async function replaceDraft(value,source=null){
   }
   parent=copy(source);draft=copy(value);edited();render();return true;
 }
-function el(tag,text){const node=document.createElement(tag);if(text!=null)node.textContent=text;return node;}
-function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 async function request(path,body){
   const options={cache:'no-store'};
   if(body!==undefined){
