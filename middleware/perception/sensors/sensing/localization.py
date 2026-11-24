@@ -151,45 +151,52 @@ class MapAgreement:
                 dest = self.likelihood[y0:y1, x0:x1]
                 np.maximum(dest, occupied[y0-dy:y1-dy, x0-dx:x1-dx] * value, out=dest)
 
+    def _obstructed_rays(self, origin_xy, ranges, cos_a, sin_a, *, oob_blocks: bool) -> np.ndarray:
+        obstructed = np.zeros(len(ranges), dtype=bool)
+        steps = np.arange(.05, float(ranges.max()), self.resolution * .75)
+        if not len(steps):
+            return obstructed
+        h, w = self.near.shape
+
+        def _any_blocked(pts):
+            cells = np.floor((pts - self.origin) / self.resolution).astype(int)
+            cx, cy = cells[:, :, 0], cells[:, :, 1]
+            in_map = (cx >= 0) & (cx < w) & (cy >= 0) & (cy < h)
+            blk = np.full(cx.shape, oob_blocks, dtype=bool)
+            blk[in_map] = self.grid[cy[in_map], cx[in_map]] >= 65
+            return np.any(blk, axis=1)
+
+        distances = np.minimum(steps[None, :], np.maximum(0., ranges[:, None] - self._ray_margin))
+        direction = np.column_stack((cos_a, sin_a))
+        ray = np.asarray(origin_xy) + direction[:, None, :] * distances[:, :, None]
+        obstructed = _any_blocked(ray)
+        idx = np.flatnonzero(obstructed)
+        if not len(idx):
+            return obstructed
+        # Grid rasterization moves a grazing wall by up to one cell. Check
+        # parallel rays only for candidate piercing beams; non-obstructed stay False.
+        for sign in (-1., 1.):
+            normal = np.column_stack((-sin_a[idx], cos_a[idx]))
+            obstructed[idx] &= _any_blocked(ray[idx] + sign * self.resolution * normal[:, None, :])
+            idx = np.flatnonzero(obstructed)
+            if not len(idx):
+                break
+        return obstructed
+
     def score(self, sensor_pose, ranges, angles):
         ranges, angles = np.asarray(ranges), np.asarray(angles)
         valid = np.isfinite(ranges) & (ranges > .05) & np.isfinite(angles)
         if np.count_nonzero(valid) < 30 or not all(map(math.isfinite, sensor_pose)):
             return 0.
         ranges, angles = ranges[valid], angles[valid] + sensor_pose[2]
-        xy = np.column_stack((np.cos(angles), np.sin(angles))) * ranges[:, None]
-        xy += sensor_pose[:2]
+        cos_a, sin_a = np.cos(angles), np.sin(angles)
+        xy = np.column_stack((cos_a, sin_a)) * ranges[:, None] + sensor_pose[:2]
         cells = np.floor((xy - self.origin) / self.resolution).astype(int)
         h, w = self.near.shape
         inside = (cells[:, 0] >= 0) & (cells[:, 0] < w) & (cells[:, 1] >= 0) & (cells[:, 1] < h)
         hit = np.zeros(len(cells), dtype=bool)
         hit[inside] = self.near[cells[inside, 1], cells[inside, 0]]
-        # An endpoint behind an intervening wall is a false match, common in
-        # repeated maze corridors. Check the observed free ray as well.
-        steps = np.arange(.05, max(ranges), self.resolution * .75)
-        if len(steps):
-            distances = np.minimum(steps[None, :], np.maximum(0., ranges[:, None] - self._ray_margin))
-            direction = np.column_stack((np.cos(angles), np.sin(angles)))
-            ray = np.asarray(sensor_pose[:2]) + direction[:, None, :] * distances[:, :, None]
-            ray_cells = np.floor((ray-self.origin) / self.resolution).astype(int)
-            rx, ry = ray_cells[:, :, 0], ray_cells[:, :, 1]
-            in_map = (rx >= 0) & (rx < w) & (ry >= 0) & (ry < h)
-            blocked = np.ones(rx.shape, dtype=bool)
-            blocked[in_map] = self.grid[ry[in_map], rx[in_map]] >= 65
-            obstructed = np.any(blocked, axis=1)
-            # Grid rasterization moves a grazing wall by up to one cell. A
-            # parallel ray on either side handles that uncertainty; an actual
-            # intervening wall still blocks all three rays.
-            normal = np.column_stack((-np.sin(angles), np.cos(angles)))
-            for sign in (-1., 1.):
-                shifted = ray + sign*self.resolution*normal[:, None, :]
-                indices = np.floor((shifted-self.origin)/self.resolution).astype(int)
-                sx, sy = indices[:, :, 0], indices[:, :, 1]
-                valid = (sx >= 0) & (sx < w) & (sy >= 0) & (sy < h)
-                blocked = np.ones(sx.shape, dtype=bool)
-                blocked[valid] = self.grid[sy[valid], sx[valid]] >= 65
-                obstructed &= np.any(blocked, axis=1)
-            hit &= ~obstructed
+        hit &= ~self._obstructed_rays(sensor_pose[:2], ranges, cos_a, sin_a, oob_blocks=True)
         return float(np.mean(hit))
 
     def explain(self, sensor_pose, ranges, angles, *, min_cluster_beams: int = 3) -> "AgreementBreakdown":
@@ -199,35 +206,15 @@ class MapAgreement:
         if total == 0 or not all(math.isfinite(v) for v in sensor_pose):
             return AgreementBreakdown(0, 0, 0, 0, 0, 0.0, 0.0, 0, 0, 0, "no-beams")
         world_angles = angles + sensor_pose[2]
-        xy = np.column_stack((np.cos(world_angles), np.sin(world_angles))) * ranges[:, None]
-        xy += sensor_pose[:2]
+        cos_a, sin_a = np.cos(world_angles), np.sin(world_angles)
+        xy = np.column_stack((cos_a, sin_a)) * ranges[:, None] + sensor_pose[:2]
         cells = np.floor((xy - self.origin) / self.resolution).astype(int)
         h, w = self.near.shape
         inside = (cells[:, 0] >= 0) & (cells[:, 0] < w) & (cells[:, 1] >= 0) & (cells[:, 1] < h)
         hit = np.zeros(total, dtype=bool)
         hit[inside] = self.near[cells[inside, 1], cells[inside, 0]]
-        obstructed = np.zeros(total, dtype=bool)
-        steps = np.arange(.05, max(ranges), self.resolution * .75)
-        if len(steps):
-            distances = np.minimum(steps[None, :], np.maximum(0., ranges[:, None] - self._ray_margin))
-            direction = np.column_stack((np.cos(world_angles), np.sin(world_angles)))
-            ray = np.asarray(sensor_pose[:2]) + direction[:, None, :] * distances[:, :, None]
-            ray_cells = np.floor((ray - self.origin) / self.resolution).astype(int)
-            rx, ry = ray_cells[:, :, 0], ray_cells[:, :, 1]
-            in_map = (rx >= 0) & (rx < w) & (ry >= 0) & (ry < h)
-            blocked = np.zeros(rx.shape, dtype=bool)
-            blocked[in_map] = self.grid[ry[in_map], rx[in_map]] >= 65
-            obstructed = np.any(blocked, axis=1)
-            normal = np.column_stack((-np.sin(world_angles), np.cos(world_angles)))
-            for sign in (-1., 1.):
-                shifted = ray + sign * self.resolution * normal[:, None, :]
-                indices = np.floor((shifted - self.origin) / self.resolution).astype(int)
-                sx, sy = indices[:, :, 0], indices[:, :, 1]
-                valid = (sx >= 0) & (sx < w) & (sy >= 0) & (sy < h)
-                blocked = np.zeros(sx.shape, dtype=bool)
-                blocked[valid] = self.grid[sy[valid], sx[valid]] >= 65
-                obstructed &= np.any(blocked, axis=1)
-            hit &= ~obstructed
+        obstructed = self._obstructed_rays(sensor_pose[:2], ranges, cos_a, sin_a, oob_blocks=False)
+        hit &= ~obstructed
         unknown = ~hit & ~obstructed & ~inside
         unknown[inside] |= (~hit[inside] & ~obstructed[inside]
                             & (self.grid[cells[inside, 1], cells[inside, 0]] < 0))

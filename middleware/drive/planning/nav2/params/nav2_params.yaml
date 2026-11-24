@@ -1,5 +1,6 @@
 amcl:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
@@ -47,6 +48,7 @@ amcl:
 
 bt_navigator:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     global_frame: map
     robot_base_frame: base_link
     odom_topic: odom
@@ -138,7 +140,7 @@ controller_server:
     controller_frequency: 20.0                   # [Hz] 제어 명령(cmd_vel)을 1초에 20번 내보냄
     action_server_result_timeout: 10.0           # [s] 액션 서버 결과 대기 최대 시간
     autostart_node: false                        # 노드 켤 때 자동 활성화 여부
-    bond_heartbeat_period: 0.1                   # [s] 시스템 상태 체크(하트비트) 주기
+    bond_heartbeat_period: 0.0                   # [s] 시스템 상태 체크(하트비트) 주기 (0 = idle DDS 스톰 차단)
     costmap_update_timeout: 0.3                  # [s] 코스트맵 업데이트가 이 시간 지연되면 멈춤
     enable_stamped_cmd_vel: false                # TwistStamped 메시지 대신 일반 Twist 메시지 사용
     failure_tolerance: 0.3                       # [s] 제어 계산 실패를 허용하는 시간
@@ -308,6 +310,10 @@ global_costmap:
 #   ros__parameters:
 #     yaml_filename: ""
 
+map_server:
+  ros__parameters:
+    bond_heartbeat_period: 0.0
+
 map_saver:
   ros__parameters:
     save_map_timeout: 5.0
@@ -317,6 +323,7 @@ map_saver:
 
 planner_server:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     expected_planner_frequency: 20.0
     planner_plugins: ["GridBased"]
     costmap_update_timeout: 1.0
@@ -346,6 +353,7 @@ planner_server:
 
 smoother_server:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     smoother_plugins: ["simple_smoother"]
     simple_smoother:
       plugin: "nav2_smoother::SimpleSmoother"
@@ -355,6 +363,7 @@ smoother_server:
 
 behavior_server:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     local_costmap_topic: local_costmap/costmap_raw
     global_costmap_topic: global_costmap/costmap_raw
     local_footprint_topic: local_costmap/published_footprint
@@ -383,6 +392,7 @@ behavior_server:
 
 waypoint_follower:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     loop_rate: 20
     stop_on_failure: false
     action_server_result_timeout: 900.0
@@ -394,6 +404,7 @@ waypoint_follower:
 
 velocity_smoother:
   ros__parameters:
+    bond_heartbeat_period: 0.0
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
