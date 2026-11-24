@@ -186,9 +186,11 @@ class RosyCoreNode(Node):
 
         shared_tf_buffer = Buffer(cache_time=Duration(seconds=10.0))
         namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
+        in_process_topics = ("scan", "imu", "us") if core_executor_kind() == "events" else ()
         self.control_adapter, notes = build_control_adapter(
             sensor_cfg, parameters={**(params.parameters if params else {}), "use_sim_time": use_sim_time},
             namespace=namespace, tf_buffer=shared_tf_buffer,
+            in_process_topics=in_process_topics,
             policy_required=self.core.safety.policy_required)
         for note in notes:
             self.get_logger().warning(note)
@@ -216,7 +218,8 @@ class RosyCoreNode(Node):
         )
 
         from core.bridge.ros_bridge import RosBridge
-        self.bridge = RosBridge(self, self.core, tf_buffer=shared_tf_buffer)
+        self.bridge = RosBridge(self, self.core, tf_buffer=shared_tf_buffer,
+                                sensor_sink=self.control_adapter if in_process_topics else None)
 
         self.get_logger().info(
             f"core up: robot_id={self.core.identity.robot_id} model={profile.model}")
