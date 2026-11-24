@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Iterable
 
 import cv2
@@ -99,7 +100,8 @@ _QR_ROI_MIN_PX = 12
 _QR_ROI_MAX_PX = 95
 _QR_ROI_PAD_PX = 8
 _QR_ROI_SCALE = 4
-_QR_ROI_MAX = 8
+_QR_ROI_MAX = 4
+_QR_ROI_BUDGET_S = 0.04
 _QR_WARP_SIZE = 270
 _QR_WARP_MARGIN = 30
 _QR_WARP_DST = np.array([
@@ -217,9 +219,16 @@ def _reread_small_qr(
             x1, y1 = int(np.ceil(high[0])), int(np.ceil(high[1]))
             boxes.append((max(1, (x1 - x0) * (y1 - y0)), x0, y0, x1, y1))
 
+    found_boxes = [
+        (min(p[0] for p in pts) - 4.0, min(p[1] for p in pts) - 4.0,
+         max(p[0] for p in pts) + 4.0, max(p[1] for p in pts) + 4.0)
+        for pts in found.values()
+    ]
     deduped: list[tuple[int, int, int, int]] = []
     for _, x0, y0, x1, y1 in sorted(boxes, reverse=True):
         cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        if any(fx0 <= cx <= fx1 and fy0 <= cy <= fy1 for fx0, fy0, fx1, fy1 in found_boxes):
+            continue
         if any(abs(cx - (a + c) / 2.0) < 12.0 and abs(cy - (b + d) / 2.0) < 12.0 for a, b, c, d in deduped):
             continue
         deduped.append((x0, y0, x1, y1))
@@ -227,28 +236,29 @@ def _reread_small_qr(
             break
 
     scale, pad = _QR_ROI_SCALE, _QR_ROI_PAD_PX
+    deadline = time.monotonic() + _QR_ROI_BUDGET_S
     for bx0, by0, bx1, by1 in deduped:
+        if time.monotonic() >= deadline:
+            break
         x0, y0 = max(0, bx0 - pad), max(0, by0 - pad)
         x1, y1 = min(width, bx1 + pad), min(height, by1 + pad)
         if x1 <= x0 or y1 <= y0:
             continue
-        up = cv2.resize(gray[y0:y1, x0:x1], None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        crop = gray[y0:y1, x0:x1]
+        if int(crop.max()) - int(crop.min()) < 40:
+            continue
+        up = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         blur = cv2.GaussianBlur(up, (0, 0), 1.5)
         sharp = cv2.addWeighted(up, 1.7, blur, -0.7, 0)
         _, otsu = cv2.threshold(up, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         decoded_text, decoded_pts = "", None
-        for view in (up, sharp, otsu):
-            for detector in (_QR_ARUCO, _QR_STD):
-                if detector is None:
-                    continue
-                try:
-                    text, w_pts, _ = detector.detectAndDecode(view)
-                except cv2.error:
-                    text, w_pts = "", None
-                if text:
-                    decoded_text, decoded_pts = str(text), w_pts
-                    break
-            if decoded_text:
+        for view in (sharp, up, otsu):
+            try:
+                text, w_pts, _ = _QR_DETECTOR.detectAndDecode(view)
+            except cv2.error:
+                text, w_pts = "", None
+            if text:
+                decoded_text, decoded_pts = str(text), w_pts
                 break
         if not decoded_text or decoded_pts is None:
             continue
