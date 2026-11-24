@@ -38,6 +38,7 @@ def test_by_default_no_robot_and_only_led_tracks_may_anchor():
     on.add_odom(OdomSample(0.1, 0.0, 0.0, T0 + 0.25), T0 + 0.25)
     assert on.add_track((0.1, 0.0), None, T0 + 0.25, T0 + 0.25, "m", "m", "motion") == "DISABLED"
     assert MapPoseConfig.from_mapping({"track_anchor_robots": ["r1"], "track_modes": ["led", "motion"]}).track_modes == ("led", "motion")
+    assert MapPoseConfig.from_mapping({"track_anchor_robots": ["r1"], "track_modes": ["led", "motion", "marker"]}).track_modes == ("led", "motion", "marker")
     with pytest.raises(ValueError):
         MapPoseConfig.from_mapping({"track_modes": ["blob"]})
 

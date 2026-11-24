@@ -263,10 +263,11 @@ class TrackWorker:
         if self._relearn_due is not None:  # the lock is confirmed and settled: learn once
             event, self._relearn_due = (self._relearn_due or None, False), None
         self._measurement = None
+        effective_camera = camera or self.camera
         step = await asyncio.get_running_loop().run_in_executor(
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
-                lens, relearn, event, suspend, hold))
+                lens, relearn, event, suspend, hold, effective_camera.robot_markers))
         if step is not None and step[0] is not None:
             self._latest_calibration = step[0]
         # D-589 x D-596: no tune step or retune is judged while an LED identify window is open
@@ -429,7 +430,7 @@ class TrackWorker:
 
     def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens,
                 relearn: int | None, camera: tuple[str, bool] | None = None, suspend: bool = False,
-                hold: float | None = None) -> tuple[Calibration | None, DetectorResult] | None:
+                hold: float | None = None, robot_markers: Mapping[str, int] | None = None) -> tuple[Calibration | None, DetectorResult] | None:
         """Detection-thread half of a step: relearn, hold, decode, choose the calibration, detect,
         and measure the frame for tuning (``self._measurement``). ``camera`` is a D-589 camera
         change (fingerprint, first); ``suspend`` (a tune runs) skips detection: LEARNING;
@@ -463,7 +464,8 @@ class TrackWorker:
         self._approved = approved if by_markers is None else None
         if calibration is None:
             return None, DetectorResult((), "CALIBRATION_REQUIRED")
-        robot_ids = set(self.camera.robot_markers.values()).union(ROBOT_MARKER_IDS)
+        active_markers = self.camera.robot_markers if robot_markers is None else robot_markers
+        robot_ids = set(active_markers.values()).union(ROBOT_MARKER_IDS)
         rate = self._presence.rate(captured_at, robot_ids.intersection(markers))
         try:
             self._measurement = self.scorer.measure(image, calibration, rate)
@@ -478,7 +480,7 @@ class TrackWorker:
         matrix = geometry.as_matrix(calibration.image_to_map)
         camera = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
         measured = []
-        for marker_id in sorted(set(self.camera.robot_markers.values()).union(ROBOT_MARKER_IDS)):
+        for marker_id in sorted(robot_ids):
             quad = markers.get(marker_id)
             if quad is None:
                 continue
