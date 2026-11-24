@@ -1,6 +1,6 @@
 [Unit]
 Description=Publish ROSY LAN mDNS observations to site Fleet
-Wants=avahi-daemon.service
+Wants=avahi-daemon.service rosy-site-firewall.service
 After=network-online.target avahi-daemon.service rosy-site-firewall.service
 
 [Service]
