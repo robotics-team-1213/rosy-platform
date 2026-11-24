@@ -324,11 +324,25 @@ DENOISE_MIN_AREA_PX = 40
 def denoise_white_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
     """floor_white_mask with glare suppression: a median blur before the threshold, a small
     opening after it, and blobs smaller than a tape fragment dropped."""
-    img = cv2.medianBlur(bgr, DENOISE_MEDIAN_PX) if DENOISE_MEDIAN_PX > 1 else bgr
-    mask = floor_white_mask(img, horizon_row).astype(np.uint8)
+    height, width = bgr.shape[:2]
+    top = max(0, min(height, int(math.ceil(horizon_row)) + HORIZON_MARGIN_PX))
+    out = np.zeros((height, width), np.uint8)
+    if top >= height:
+        return out
+    start = max(0, int(math.floor(horizon_row)) - WALL_START_ABOVE_HORIZON_PX)
+    slice_start = min(top, max(0, start - 1))
+    med_start = max(0, slice_start - DENOISE_MEDIAN_PX // 2) if DENOISE_MEDIAN_PX > 1 else slice_start
+    roi = bgr[med_start:]
+    img = cv2.medianBlur(roi, DENOISE_MEDIAN_PX) if DENOISE_MEDIAN_PX > 1 else roi
+    floor_mask = floor_white_mask(img, horizon_row - med_start).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (DENOISE_OPEN_PX, DENOISE_OPEN_PX))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    return drop_small_components(mask)
+    # When top > 0, row top-1 is guaranteed 0, so slicing at top-1 preserves default OpenCV borders on left/right/bottom.
+    if top > 0:
+        sub = cv2.morphologyEx(floor_mask[top - 1 - med_start:], cv2.MORPH_OPEN, kernel)[1:]
+    else:
+        sub = cv2.morphologyEx(floor_mask, cv2.MORPH_OPEN, kernel)
+    out[top:] = drop_small_components(sub)
+    return out
 
 
 def drop_small_components(mask: np.ndarray) -> np.ndarray:

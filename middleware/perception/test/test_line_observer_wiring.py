@@ -437,3 +437,37 @@ def test_paint_motion_skips_warp_mask_on_zero_pose_delta(monkeypatch):
 
     moved_mask, dxy2, _ = motion(mask, 1.0, 1.5)
     assert dxy2 == 0.05 and len(warp_calls) == 1 and moved_mask is mask
+
+
+def test_core_law_input_reuses_steer_and_detects_inplace_update_and_staleness(tmp_path):
+    import json as _json
+    import os as _os
+    from datetime import datetime, timedelta, timezone
+    from control.core_law_input import CoreLawInput, MAX_AGE_S
+
+    handover = tmp_path / "status-inputs.json"
+    t0 = datetime(2026, 11, 24, 16, 0, 0, tzinfo=timezone.utc)
+    payload = {
+        "schema": 2,
+        "robot_id": "rosy_45",
+        "core_process_id": 123,
+        "written_at": t0.isoformat(),
+        "line_follow_steering_law": {
+            "cruise_speed": 0.08,
+            "max_linear": 0.09,
+            "steering_gain": 0.8,
+            "min_confidence": 0.35,
+        },
+    }
+    handover.write_text(_json.dumps(payload), encoding="utf-8")
+    _os.chmod(handover, 0o640)
+    uid = _os.stat(handover).st_uid
+    law = CoreLawInput()
+    first = law.read(str(handover), "rosy_45", now=t0 + timedelta(seconds=1), owner_uid=uid)
+    second = law.read(str(handover), "rosy_45", now=t0 + timedelta(seconds=1.5), owner_uid=uid)
+    assert first is not None and second is first
+    handover.write_text(_json.dumps({**payload, "core_process_id": 124}), encoding="utf-8")
+    third = law.read(str(handover), "rosy_45", now=t0 + timedelta(seconds=1.6), owner_uid=uid)
+    assert third is not None and third is not first
+    expired = law.read(str(handover), "rosy_45", now=t0 + timedelta(seconds=MAX_AGE_S + 1.0), owner_uid=uid)
+    assert expired is None

@@ -26,6 +26,7 @@ from .sensing.perception.camera_homography import (
 )
 from perception_runtime.perception.camera_ground import simulation_ground_plane
 from .object_detector import TOPIC as DETECTIONS_TOPIC
+from .sensing.perception.drivable.drivable_preview import drivable as _is_drivable_keep
 from .sensing.perception.follow_preview import FrameEvidence
 from .sensing.perception.camera_visibility import visibility_reason
 from core_common.protocol.recording import RAW_PREVIEW_TOPIC
@@ -209,8 +210,11 @@ class RoadObserverNode(Node):
         super().destroy_node()
 
     def _add_preview_evidence(self, kind, msg):
+        raw = str(msg.data)
+        if kind == 'line' and 'CAMERA_LINE' not in raw:
+            return
         try:
-            document = json.loads(msg.data)
+            document = json.loads(raw)
         except (ValueError, TypeError):
             return
         if kind == 'line' and (not isinstance(document, dict) or document.get('source') != 'CAMERA_LINE'):
@@ -349,17 +353,24 @@ class RoadObserverNode(Node):
         if not self._preview_rate.allow(time.monotonic()):
             return
         try:
+            keep = self._preview_evidence.for_frame('keep', stamp)
+            # draw_drivable never reads ArUco tags; skip full-frame marker detection in drivable mode.
+            frame_size = [int(frame.shape[1]), int(frame.shape[0])]
+            skip_tags = (isinstance(keep, dict)
+                         and keep.get('image_size', frame_size) == frame_size
+                         and _is_drivable_keep(keep))
+            tags = None if skip_tags else detect_visual_tags(frame)
             preview = render_road_preview(
                 frame,
                 observation,
                 source=self._preview_config.source,
                 max_width=self._preview_config.max_width,
-                keep=self._preview_evidence.for_frame('keep', stamp),
+                keep=keep,
                 objects=self._preview_evidence.for_frame('objects', stamp),
                 road_state=self._preview_evidence.for_frame('road_state', stamp),
                 line=self._preview_evidence.for_frame('line', stamp),
                 detections=self._preview_evidence.recent('detections', stamp, DETECTION_JOIN_S),
-                tags=detect_visual_tags(frame),
+                tags=tags,
             )
             ok, encoded = cv2.imencode('.jpg', preview, [
                 cv2.IMWRITE_JPEG_QUALITY,
@@ -391,7 +402,8 @@ class RoadObserverNode(Node):
         # A separate raw stream shares the capture header. The consumer joins
         # stamps, never independently substitutes the latest annotated frame.
         try:
-            raw = cv2.resize(frame, (preview.shape[1], preview.shape[0]), interpolation=cv2.INTER_AREA)
+            raw = (frame if (preview.shape[1], preview.shape[0]) == (frame.shape[1], frame.shape[0])
+                   else cv2.resize(frame, (preview.shape[1], preview.shape[0]), interpolation=cv2.INTER_AREA))
             ok, raw_encoded = cv2.imencode('.jpg', raw, [
                 cv2.IMWRITE_JPEG_QUALITY, self._preview_config.jpeg_quality])
         except (ValueError, cv2.error) as exc:

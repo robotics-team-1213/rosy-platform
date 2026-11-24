@@ -233,3 +233,14 @@ def test_simulated_cadence_old_vs_new():
     assert new_straight[0] == 1 and new_turn[0] == 1
     assert new_straight[1] > 0.8 > new_straight[3] and new_turn[1] > 0.8 > new_turn[3]   # warp aligns
     assert new_turn[2] <= old_turn[2]                        # and costs no more inference
+
+
+def test_odom_history_tail_scan_matches_exact_stamps_and_bounds():
+    hist = OdomHistory(maxlen=10)
+    for i in range(10):
+        hist.add(1.0 + i * 0.05, i * 0.01, 0.0, 0.0)
+    assert hist.pose_at(0.99) is None
+    assert hist.pose_at(1.0) == (0.0, 0.0, 0.0)
+    assert hist.pose_at(1.45)[0] == pytest.approx(0.09)
+    assert hist.pose_at(1.225)[0] == pytest.approx(0.045)
+    assert hist.pose_at(1.45 + ODOM_HISTORY_MAX_LEAD_S - 0.01)[0] == pytest.approx(0.09 + 0.018)

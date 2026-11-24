@@ -347,19 +347,8 @@ def on_floor(labels: np.ndarray, wall_index, lane_index, background_index,
     return rows > np.where(has_body, end, -1)[None, :]
 
 
-def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None = None, *,
-                      floor_gate: bool = False) -> np.ndarray:
-    """uint8 0/1 mask of pixels whose argmax class has the lane_marking role (D-408).
-
-    size (width, height) resizes it with nearest neighbour to the camera frame, so the
-    lane keeper reads the same pixel grid as its ground plane. floor_gate drops lane
-    pixels that are not floor paint (on_floor, D-588); it raises NoWallClass when the
-    model has no wall role, so the caller falls back instead of trusting ungated paint."""
-    if logits.ndim != 4 or logits.shape[0] != 1 or logits.shape[1] != len(classes):
-        raise ValueError(f"logits shape {logits.shape} does not match {len(classes)} classes")
-    if not np.isfinite(logits).all():
-        raise NonFiniteLogits("non-finite logits")
-    labels = logits[0].argmax(axis=0)
+def _lane_marking_mask_from_labels(labels: np.ndarray, classes, size: tuple[int, int] | None = None, *,
+                                   floor_gate: bool = False) -> np.ndarray:
     lane_index = [c.index for c in classes if c.role == "lane_marking"]
     mask = np.isin(labels, lane_index)
     if floor_gate:
@@ -373,3 +362,18 @@ def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None 
     if size is not None and (mask.shape[1], mask.shape[0]) != tuple(size):
         mask = cv2.resize(mask, tuple(size), interpolation=cv2.INTER_NEAREST)
     return mask
+
+
+def lane_marking_mask(logits: np.ndarray, classes, size: tuple[int, int] | None = None, *,
+                      floor_gate: bool = False) -> np.ndarray:
+    """uint8 0/1 mask of pixels whose argmax class has the lane_marking role (D-408).
+
+    size (width, height) resizes it with nearest neighbour to the camera frame, so the
+    lane keeper reads the same pixel grid as its ground plane. floor_gate drops lane
+    pixels that are not floor paint (on_floor, D-588); it raises NoWallClass when the
+    model has no wall role, so the caller falls back instead of trusting ungated paint."""
+    if logits.ndim != 4 or logits.shape[0] != 1 or logits.shape[1] != len(classes):
+        raise ValueError(f"logits shape {logits.shape} does not match {len(classes)} classes")
+    if not np.isfinite(logits).all():
+        raise NonFiniteLogits("non-finite logits")
+    return _lane_marking_mask_from_labels(logits[0].argmax(axis=0), classes, size=size, floor_gate=floor_gate)

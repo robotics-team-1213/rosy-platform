@@ -167,3 +167,25 @@ def test_odometry_gap_discards_memory_before_the_stream_returns():
     ways.way = None
     assert keep_step(steer, ways, last, G, XO, HALF, lambda _stamp: None, .3, None)[0] is None
     assert _step(steer, ways, last, .4)[0] is None
+
+
+def test_vectorized_scan_summary_matches_robot_body_scan_view():
+    import math
+    from core_common.robot_body import NOMINAL_BODY
+    from control.sensing.perception.drivable.drivable_keep import scan_summary
+
+    ranges = [float("nan"), 0.01, 0.14, 0.25, 0.26, 0.27, 0.45, float("inf"), 2.0, 0.22, 0.30] * 10
+    angle_min, angle_inc = -math.pi, math.tau / len(ranges)
+    ahead, side, front = scan_summary(ranges, angle_min, angle_inc, 0.08, 3.5, NOMINAL_BODY)
+
+    view = NOMINAL_BODY.scan_view(dict(ranges=list(ranges), angle_min=angle_min, angle_increment=angle_inc,
+                                       range_min=0.08, range_max=3.5))
+    strip = sorted(x for x, y in view.points if x > NOMINAL_BODY.front_x_m and abs(y) <= NOMINAL_BODY.half_width_m)
+    ref_ahead = next((x for i, x in enumerate(strip) if i + 2 < len(strip) and strip[i + 2] - x <= 0.02), None)
+    assert ahead == pytest.approx(ref_ahead) if ref_ahead is not None else ahead is None
+    assert side == scan_summary([None if not math.isfinite(r) else r for r in ranges],
+                                angle_min, angle_inc, 0.08, 3.5, NOMINAL_BODY)[1]
+    lx, ly = NOMINAL_BODY.lidar_x_m, NOMINAL_BODY.lidar_y_m
+    ref_front = min((math.hypot(x - lx, y - ly) for x, y in view.points
+                     if x > lx and abs(math.atan2(y - ly, x - lx)) <= math.pi / 4), default=None)
+    assert front == pytest.approx(ref_front)

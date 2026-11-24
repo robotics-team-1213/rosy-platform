@@ -24,8 +24,15 @@ def _rotate(image: np.ndarray, degrees: int) -> np.ndarray:
     """Rotate a frame clockwise in quarter turns and make it contiguous."""
 
     turns = (degrees // 90) % 4
-    if turns:
-        image = np.rot90(image, turns)
+    if turns == 2:
+        import cv2
+        return cv2.rotate(image, cv2.ROTATE_180)
+    if turns == 1:
+        import cv2
+        return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    if turns == 3:
+        import cv2
+        return cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
     return np.ascontiguousarray(image)
 
 

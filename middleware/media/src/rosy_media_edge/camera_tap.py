@@ -27,15 +27,15 @@ class CameraMediaTap:
         self._epoch, self._sequence = int(clock()) & 0xFFFFFFFF, 0
 
     def offer(self, bgr):
-        import numpy as np
+        import cv2
         if getattr(bgr, 'shape', None) != (MEDIA_SIZE[1], MEDIA_SIZE[0], 3):
             return False  # never scale up a smaller frame into the 640x480 profile
         # libcamera RGB888 is BGR in memory; reversing both image axes is the 180 degree turn.
-        rgb = bgr[::-1, ::-1, ::-1] if self._flip else bgr[:, :, ::-1]
+        rgb = cv2.cvtColor(cv2.rotate(bgr, cv2.ROTATE_180) if self._flip else bgr, cv2.COLOR_BGR2RGB)
         self._sequence = (self._sequence + 1) & 0xFFFFFFFF
         try:
             # Nonblocking: a busy or dead consumer drops this frame, never the capture tick.
-            return self._writer.offer(np.ascontiguousarray(rgb).tobytes(), epoch=self._epoch,
+            return self._writer.offer(rgb.tobytes(), epoch=self._epoch,
                                       sequence=self._sequence, captured_ms=int(self._clock() * 1000))
         except (OSError, ValueError):
             return False
