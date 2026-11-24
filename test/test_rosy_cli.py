@@ -47,7 +47,7 @@ def _serve_mock(routes: dict[tuple[str, str], tuple[int, Any, dict[str, str]]]):
     return srv, f"http://127.0.0.1:{srv.server_address[1]}", recorded
 
 
-def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path, capsys):
+def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path, capsys, monkeypatch):
     jpg = b"\xff\xd8\xff\xe0\x00\x10JFIF\xff\xd9"
     bundle = {
         "bundle_id": "20261124T090000Z-arm_b-fault-112233",
@@ -135,12 +135,34 @@ def test_rosy_cli_composite_workflow_and_partial_fault_tolerance(tmp_path: Path,
         assert cli.main(["--config", str(cfg_path), "propose", "--from", str(diag_dir), "--verb", "propose_ik_fallback_for_policy", "--dry-run"]) == 0
         dry = json.loads(capsys.readouterr().out)
         assert dry["dry_run"] and dry["payload"]["expected_readiness_digest"] == "d-ab"
+        assert cli.main(["--config", str(cfg_path), "propose", "--from", str(diag_dir), "--verb", "propose_ik_fallback_for_policy", "--tier", "2", "--dry-run"]) == 0
+        dry_t2 = json.loads(capsys.readouterr().out)
+        assert dry_t2["payload"]["request_key"] != dry["payload"]["request_key"]
 
         assert cli.main(["--config", str(cfg_path), "propose", "--from", str(diag_dir), "--verb", "propose_ik_fallback_for_policy", "--preset", "s5_tier2_arm_b"]) == 0
         prop = json.loads(capsys.readouterr().out)
         assert prop["ok"]
         sent = fleet_log[-1][2]
         assert sent["propose"] is True and sent["expected_dispatch_generation"] == 8 and sent["expected_context_sha256"] == "b" * 64
+
+        # 6b. diagnose ROSY_SCRATCH fallback & unset fail-closed + unsafe bundle_id guard
+        monkeypatch.delenv("ROSY_SCRATCH", raising=False)
+        assert cli.main(["--config", str(cfg_path), "diagnose", "--arm", "arm_b"]) == 1
+        assert json.loads(capsys.readouterr().out)["error_code"] == "INVALID_ARGS"
+        scratch_dir = tmp_path / "scratch"
+        monkeypatch.setenv("ROSY_SCRATCH", str(scratch_dir))
+        assert cli.main(["--config", str(cfg_path), "diagnose", "--arm", "arm_b"]) == 0
+        capsys.readouterr()
+        assert (scratch_dir / "rosy-diagnose" / bundle["bundle_id"] / "cas_context.json").is_file()
+
+        bad_srv, bad_url, _ = _serve_mock({("GET", "/failures/latest"): (200, {"bundle_id": "../../evil"}, {})})
+        try:
+            bad_b_cfg = tmp_path / "bad_bundle.json"
+            bad_b_cfg.write_text(json.dumps({"cell_url": bad_url, "fleet_url": fleet_url}), encoding="utf-8")
+            assert cli.main(["--config", str(bad_b_cfg), "diagnose"]) == 1
+            assert json.loads(capsys.readouterr().out)["error_code"] == "INVALID_UPSTREAM_RESPONSE"
+        finally:
+            bad_srv.shutdown(); bad_srv.server_close()
 
         # 7. call passthrough
         assert cli.main(["--config", str(cfg_path), "call", "cell_readiness"]) == 0

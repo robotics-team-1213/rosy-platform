@@ -121,8 +121,11 @@ def cmd_diagnose(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[s
     fc = bridge.call_tool("cell_failure_context", fc_args)
     if not fc.get("ok"):
         return fc
-    bundle = fc["data"]
-    bid = str(bundle["bundle_id"])
+    bundle = fc.get("data")
+    if not isinstance(bundle, dict) or not isinstance(bundle.get("bundle_id"), str) or not br._safe_segment(bundle["bundle_id"]):
+        return {"ok": False, "status": 502, "error_code": "INVALID_UPSTREAM_RESPONSE",
+                "detail": "unsafe or malformed bundle_id"}
+    bid = bundle["bundle_id"]
     out_dir = _resolve_diagnose_dir(args.out_dir, bid)
     if out_dir is None:
         return {"ok": False, "status": 400, "error_code": "INVALID_ARGS",
@@ -246,8 +249,7 @@ def cmd_propose(bridge: br.RosyAgentBridge, args: argparse.Namespace) -> dict[st
     if args.request_key:
         payload["request_key"] = args.request_key
     else:
-        seed = json.dumps({"b": cas.get("failure_bundle_id"), "v": args.verb, "p": args.preset,
-                           "s": args.src_site, "d": args.dst_site, "c": payload["cell_id"]}, sort_keys=True)
+        seed = json.dumps(payload, sort_keys=True, ensure_ascii=False)
         payload["request_key"] = "rosy-cli-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
 
     if args.dry_run:
