@@ -203,3 +203,39 @@ def test_incident_risk_clear_job_spec_is_non_motion_and_enforces_95_floor(tmp_pa
     assert argv[argv.index("--min-score") + 1] == "95"
     with pytest.raises(ValueError, match="min_score"):
         spec.build_argv(job, {**params, "min_score": 94}, tmp_path)
+
+
+def test_omx_incident_pipeline_runs_cleanly_in_cold_subprocess(tmp_path):
+    import os
+    import subprocess
+
+    root = Path(__file__).resolve().parents[1]
+    script = root / "deploy" / "robot" / "omx" / "omx_incident_pipeline.py"
+    inc = tmp_path / "incident.json"
+    inc.write_text(json.dumps({"arm": "arm_s", "facts": REAL}), encoding="utf-8")
+    mh_dir = tmp_path / "mh"
+    mh_dir.mkdir()
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ROSY_")}
+    env.update({
+        "HOME": str(tmp_path),
+        "ROSY_OMX_HOME": str(tmp_path / "arm-home"),
+        "ROSY_OMX_MOTOR_HEALTH_DIR": str(mh_dir),
+        "ROSY_OBSERVATION_BRIDGE_ENV": str(tmp_path / "absent-bridge.env"),
+        "PYTHONPATH": os.pathsep.join([
+            str(root / "deploy" / "robot" / "omx"),
+            str(root / "contracts" / "foundation"),
+            str(root / "operations" / "overhead"),
+        ]),
+    })
+    proc = subprocess.run(
+        [sys.executable, str(script), "--arm", "arm_s", "--incident-file", str(inc)],
+        cwd=str(tmp_path),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["schema"] == "rosy.omx-incident-risk-pipeline.v1"
+    assert payload["safety_score"] == 95 and payload["decision"] == "auto_clear"

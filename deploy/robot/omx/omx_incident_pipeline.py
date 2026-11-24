@@ -147,7 +147,7 @@ def run_pipeline(
 ) -> tuple[dict, int]:
     """Run the 5-stage deterministic safety evaluation and only apply AI assessor clear when score >= 95."""
     _ensure_core_common()
-    from core_common.protocol.arm_incident.arm_incident_risk import AUTO_CLEAR_MIN_SCORE, evaluate_clear_safety
+    from core_common.protocol.arm_incident.arm_incidents import AUTO_CLEAR_MIN_SCORE, evaluate_clear_safety
 
     if isinstance(min_score, bool) or not isinstance(min_score, int) or not (AUTO_CLEAR_MIN_SCORE <= min_score <= 100):
         raise ValueError("min_score must be an integer in [95, 100]")
