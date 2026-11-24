@@ -120,7 +120,9 @@ def test_navigation_is_disabled_until_both_hardware_approvals_exist():
     for directive in (
         "ConditionPathExists=/etc/rosy/approvals/hardware.approved",
         "ConditionPathExists=/etc/rosy/approvals/navigation.approved",
-        "Conflicts=rosy-io.service", "DevicePolicy=closed",
+        "After=rosy-core.service rosy-io.service",
+        "Conflicts=rosy-io.service", "Restart=always", "StartLimitBurst=5",
+        "DevicePolicy=closed",
         "ros2 launch navigation hardware.launch.py",
         "cmd_vel_timeout_s:=${ROSY_CMD_VEL_TIMEOUT_S}",
     ):
