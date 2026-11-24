@@ -92,22 +92,14 @@ def classify_container_orientation(xs: np.ndarray, ys: np.ndarray) -> dict[str, 
 
 def normalize_pick_yaw_deg(yaw_deg: float, x_m: float = 0.15, y_m: float = 0.0) -> float:
     """Resolve 180-degree parallel-jaw symmetry so wrist_roll stays safely inside [10.0, 85.0] units."""
-    pan_deg = float(np.degrees(np.arctan2(y_m, max(0.04, x_m))))
-    candidates = [float(yaw_deg), float(yaw_deg) - 180.0, float(yaw_deg) + 180.0]
-    best_yaw = float(yaw_deg)
-    best_cost = 1e9
-    for cand in candidates:
-        rel_deg = pan_deg - cand
-        while rel_deg > 180.0:
-            rel_deg -= 360.0
-        while rel_deg < -180.0:
-            rel_deg += 360.0
+    pan_deg = 0.0 if (abs(x_m) < 1e-6 and abs(y_m) < 1e-6) else float(np.degrees(np.arctan2(y_m, x_m)))
+    best_yaw, best_key = float(yaw_deg), (True, 1e9)
+    for cand in (float(yaw_deg), float(yaw_deg) - 180.0, float(yaw_deg) + 180.0):
+        rel_deg = ((pan_deg - cand + 180.0) % 360.0) - 180.0
         est_wrist_roll = rel_deg * (100.0 / 180.0)
-        if 8.0 <= est_wrist_roll <= 88.0:
-            cost = abs(est_wrist_roll - 48.1)
-            if cost < best_cost:
-                best_cost = cost
-                best_yaw = cand
+        key = (not (8.0 <= est_wrist_roll <= 88.0), abs(est_wrist_roll - 48.1))
+        if key < best_key:
+            best_key, best_yaw = key, cand
     while best_yaw > 180.0:
         best_yaw -= 360.0
     while best_yaw <= -180.0:
@@ -217,8 +209,8 @@ def verify_stack_outcome(
 
     if after_side is None:
         return {
-            "verified": True, "recovery_mode": None, "basis": "telemetry_only",
-            "reason": "no side camera frame provided; verified by runner grasp/release telemetry",
+            "verified": False, "recovery_mode": None, "basis": "unverified_no_side_camera",
+            "reason": "no side camera frame provided; placement not visually verified",
         }
     pick_area = str(pick.get("area") or pick.get("area_id") or "pallet").strip().lower()
     place_area = str(place.get("area") or place.get("area_id") or "pallet").strip().lower()

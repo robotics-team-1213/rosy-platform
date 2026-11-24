@@ -467,3 +467,36 @@ def test_publish_live_always_includes_pid_and_fifo_cell_fast_fails_dead_or_stall
     live_path.write_text(json.dumps({"t": 100.0, "pid": 999999}), encoding="utf-8")
     hold_res = cpio.FifoCell(io_dir, {}, timeout_s=0.05, stall_timeout_s=0.02).act("human-hold")
     assert hold_res["ok"] is False and hold_res.get("command") == "human-hold" and "no status within" in hold_res["error"]
+
+
+def test_pr2_park_chunk_absorbs_transient_bus_errors() -> None:
+    import chunk_policy_playback as cpp
+
+    class _ParkRobot(_Robot):
+        def get_observation(self):
+            raise ConnectionError("transient sync_read timeout")
+
+        def send_action_checked(self, action, _check=None, *, hold_on_read_error=False, allow_stale_hold=False):
+            from guarded_native import GoalRejected
+
+            raise GoalRejected("transient goal readback mismatch")
+
+    rows = []
+
+    def _new_park_runner():
+        r_inst = m.Runner(_ParkRobot(REACH), _lib(), fps=30, status=rows.append, clock=lambda: 1.0)
+        r_inst.chunk, r_inst.target, r_inst.last_present = "park", list(REACH), list(REACH)
+        return r_inst
+
+    r1 = _new_park_runner()
+    assert cpp.absorb_telemetry_error(r1, list(REACH), "telemetry read", OSError("bus glitch")) is True
+    assert r1.human_hold_latched is True
+    assert any("bus glitch" in row.get("policy_stop", "") for row in rows)
+
+    r2 = _new_park_runner()
+    pose, fresh = cpp.read_present_or_hold(r2, "present read")
+    assert fresh is False and pose == list(REACH) and r2.human_hold_latched is True
+
+    r3 = _new_park_runner()
+    sent, ok = cpp.send_with_jaw_gate(r3, dict(zip(m.NAMES, REACH)), None, None, list(REACH))
+    assert sent is None and ok is False and r3.human_hold_latched is True

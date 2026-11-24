@@ -77,9 +77,9 @@ def diagnose_and_recover_pick(
     area_name = str(cur_directive["pick"].get("area_id") or cur_directive["pick"].get("area") or "pallet")
     is_live = bool((cur_directive.get("execution") or {}).get("live_perceived"))
     min_grasp_z = (
-        -0.0585
-        if area_name in ("belt", "beltend")
-        else (-0.0300 if area_name in ("ship", "pinky") else ({1: 0.0062 if is_live else 0.0051, 2: 0.0275, 3: 0.0560}.get(tier, 0.0051)))
+        -0.0585 if area_name in ("belt", "beltend")
+        else (-0.0300 if area_name in ("ship", "pinky") else (0.005 if area_name == "floor"
+              else {1: 0.0062 if is_live else 0.0051, 2: 0.0275, 3: 0.0560}.get(tier, 0.0051)))
     )
     new_x, new_y, new_z = cur_x, cur_y, cur_z
     pick_yaw = float(cur_directive["pick"].get("yaw_deg", -90.0))
@@ -134,8 +134,9 @@ def diagnose_and_recover_pick(
         new_x = round(0.5 * (tried_xs[-1] + tried_xs[-2]), 5)
         reason = f"bracket_midpoint_recovery: midpoint({tried_xs[-2]}, {tried_xs[-1]}) -> x={new_x}"
     elif is_live:
-        step_x = 0.0050 if cur_x < 0.120 else (0.0180 if cur_x < 0.205 else -0.0040)
-        new_x = round(cur_x + (step_x if attempt % 2 == 0 else -step_x), 5)
+        step_x = 0.0050 if cur_x < 0.205 else -0.0040
+        ws_x_lo, ws_x_hi, _ = arm_workspace_xy_bounds(str(cur_directive.get("arm_id") or "arm_b"))
+        new_x = round(max(ws_x_lo, min(ws_x_hi, cur_x + (step_x if attempt % 2 == 0 else -step_x))), 5)
         reason = f"live_local_recovery: x {cur_x} -> {new_x}"
     else:
         col = int(cur_directive["pick"].get("col") or 3)
