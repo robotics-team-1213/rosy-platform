@@ -910,3 +910,120 @@ def test_surface_step_gates_probe_z_to_m_against_low_zones(tmp_path, monkeypatch
         assert calls["probe"] == [expected_z_to] and calls["touch"] == 1
     else:
         assert calls["probe"] == [] and calls["touch"] == 0 and error_fragment in out
+
+
+def test_remap_persists_observations_for_offline_replay_on_scene_moved_and_tcp_marks(tmp_path, monkeypatch):
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+
+    class MovedCell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            view = np.zeros((480, 640, 3), np.uint8)
+            if self.i >= 0:
+                view[100:200, 100:160] = (20, 90, 220)
+            return view
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: to_px(points[cell.i]))
+    cfg = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04},
+           "sites": {"pallet": {"yaw_deg": 0.0}}, "calibrate": {"map_sites": ["pallet"]}}
+    work_a = tmp_path / "run_a"
+    with pytest.raises(SystemExit, match="scene changed"):
+        cc.remap(MovedCell(), cfg, [list(p) for p in points], work_a, log=lambda row: None)
+
+    frames_dir = next((work_a / "remap-frames").iterdir())
+    obs = json.loads((frames_dir / "observations.json").read_text(encoding="utf-8"))
+    assert obs["schema"] == cc.rp.OBSERVATIONS_SCHEMA and len(obs["marks"]) == len(points) and obs["scene_moved"]
+
+    with pytest.raises(SystemExit, match="scene changed"):
+        cc.rp.replay_observations(frames_dir, cfg, log=lambda row: None)
+
+    cfg_ignored = {**cfg, "scene_ignore_px": [[90, 90, 170, 210]]}
+    obs_before = (frames_dir / "observations.json").read_bytes()
+    rec = cc.rp.replay_observations(frames_dir, cfg_ignored, log=lambda row: None)
+    assert (frames_dir / "observations.json").read_bytes() == obs_before
+    assert len(rec["points"]) == len(points) and cc.map_agrees(rec, None)
+
+    # tcp_marks=True saves seen_jaws and replays offline without touching labels.json.
+    shows = ["ref", "ref", "other", "ref", "ref", "other", "ref", "ref"]
+    work_tcp = tmp_path / "run_tcp"
+    live_tcp, tcp_pts = _tcp_remap(work_tcp, monkeypatch, shows, pairs={4, 6})
+    frames_tcp = next((work_tcp / "remap-frames").iterdir())
+    labels_path = frames_tcp / "labels.json"
+    labels_bytes = labels_path.read_bytes()
+    labels_path.unlink()
+    cfg_tcp = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04},
+               "sites": {"pallet": {"yaw_deg": 0.0}}, "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}}
+    replay_tcp = cc.rp.replay_observations(frames_tcp, cfg_tcp, log=lambda row: None)
+    assert not labels_path.exists() and replay_tcp["marks"] == "tcp"
+    assert np.allclose(replay_tcp["homography"], live_tcp["homography"])
+    assert len(replay_tcp["points"]) == len(tcp_pts) and len(labels_bytes) > 0
+
+
+def test_replay_observations_fail_closed_and_cli_check_offline_only(tmp_path, monkeypatch, capsys):
+    import cell_pipeline as cp
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+
+    class BoxCell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            view = np.zeros((480, 640, 3), np.uint8)
+            if self.i >= 0:
+                view[100:200, 100:160] = (20, 90, 220)
+            return view
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None, **kw: to_px(points[cell.i]))
+    cfg_orig = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04},
+                "sites": {"pallet": {"yaw_deg": 0.0}}, "calibrate": {"map_sites": ["pallet"]}}
+    with pytest.raises(SystemExit, match="scene changed"):
+        cc.remap(BoxCell(), cfg_orig, [list(p) for p in points], tmp_path, log=lambda row: None)
+    frames_dir = next((tmp_path / "remap-frames").iterdir())
+
+    # Mismatched tcp_marks config fails closed.
+    with pytest.raises(SystemExit, match="tcp_marks mismatch"):
+        cc.rp.replay_observations(frames_dir, {**cfg_orig, "scene_ignore_px": [[90, 90, 170, 210]], "calibrate": {"map_sites": ["pallet"], "tcp_marks": True}})
+
+    # CLI check --replay-frames works completely offline without FifoCell or touching cal.json.
+    plan_path, cal_path, cfg_path = tmp_path / "plan.json", tmp_path / "cal.json", tmp_path / "config.json"
+    plan_path.write_text("{}", encoding="utf-8")
+    cal_raw = json.dumps({"schema": cc.cal.SCHEMA, "sites": {}})
+    cal_path.write_text(cal_raw, encoding="utf-8")
+    cfg_cli = {**cfg_orig, "scene_ignore_px": [[90, 90, 170, 210]], "plan_path": str(plan_path), "calibration_path": str(cal_path)}
+    cfg_path.write_text(json.dumps(cfg_cli), encoding="utf-8")
+
+    monkeypatch.setattr(cp, "FifoCell", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("must not open FifoCell")))
+    capsys.readouterr()
+    assert cc.main(["--config", str(cfg_path), "check", "--replay-frames", str(frames_dir)]) == 0
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out["agrees"] is True and len(out["record"]["points"]) == len(points)
+    assert cal_path.read_text(encoding="utf-8") == cal_raw
+
+    with pytest.raises(SystemExit, match="offline read-only"):
+        cc.main(["--config", str(cfg_path), "auto", "--replay-frames", str(frames_dir)])
+
+    # Missing artifact & wrong schema fail closed.
+    (frames_dir / "after.jpg").unlink()
+    with pytest.raises(SystemExit, match="missing required artifact"):
+        cc.rp.replay_observations(frames_dir, cfg_cli)
+    obs = json.loads((frames_dir / "observations.json").read_text(encoding="utf-8"))
+    (frames_dir / "observations.json").write_text(json.dumps({**obs, "schema": "wrong.v0"}), encoding="utf-8")
+    (frames_dir / "after.jpg").write_bytes(b"")
+    with pytest.raises(SystemExit, match="schema"):
+        cc.rp.replay_observations(frames_dir, cfg_cli)

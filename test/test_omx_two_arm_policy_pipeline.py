@@ -1335,3 +1335,73 @@ def test_pr2_cli_dry_run_passive_fallback_and_live_failure_bundle_emission(tmp_p
     finally:
         srv_obj.shutdown()
         srv_obj.server_close()
+
+
+def test_remote_policy_jpeg_quality_validation_compression_and_cli(tmp_path, monkeypatch):
+    import base64
+
+    assert remote_mod.DEFAULT_JPEG_QUALITY == 85
+    home = [0.0, -40.0, 40.0, 40.0, 0.0, 50.0]
+    srv_obj, url, revs = _make_remote_server(
+        tmp_path,
+        {"arm_a": lambda _obs: [home] * 4, "arm_b": lambda _obs: [home] * 4},
+    )
+    try:
+        sh85 = remote_mod.RemotePolicyShadow(url, "arm_a", revs["arm_a"])
+        assert sh85.jpeg_quality == 85
+        for bad in (True, False, 49, 101, 85.5, "85"):
+            with pytest.raises(ValueError, match="jpeg_quality"):
+                remote_mod.RemotePolicyShadow(url, "arm_a", revs["arm_a"], jpeg_quality=bad)
+
+        rng = np.random.default_rng(7)
+        textured = rng.integers(0, 256, size=(24, 32, 3), dtype=np.uint8)
+        j85 = remote_mod._encode_jpeg_bgr(textured, (24, 32), quality=85)
+        j95 = remote_mod._encode_jpeg_bgr(textured, (24, 32), quality=95)
+        assert len(j85) < len(j95)
+
+        sh95 = remote_mod.RemotePolicyShadow(url, "arm_a", revs["arm_a"], jpeg_quality=95)
+        obs85, _ = sh85.inputs([0.0] * 6, {"top": textured, "wrist": textured})
+        obs95, _ = sh95.inputs([0.0] * 6, {"top": textured, "wrist": textured})
+        assert len(base64.b64decode(obs85["frames"]["top"])) < len(base64.b64decode(obs95["frames"]["top"]))
+
+        lib_p, cfg_a, cfg_b, prof, plan_p = (
+            tmp_path / "lib.json", tmp_path / "cfg_a.json", tmp_path / "cfg_b.json",
+            tmp_path / "profile.json", tmp_path / "plan.json",
+        )
+        lib_p.write_text(json.dumps(_base_lib(home)), encoding="utf-8")
+        prof.write_text(json.dumps({
+            "schema": "rosy.omx-cell-robot-profile.v1", "device_id": "dev-1", "instance_id": "arm",
+            "robot_config_sha256": "a" * 64, "operating_envelope_path": "rev.json", "work_dir": ".",
+        }), encoding="utf-8")
+        plan_p.write_text((OMX / "grasp-plan.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+        for cfg in (cfg_a, cfg_b):
+            cfg.write_text(json.dumps({"io": str(tmp_path), "cameras": {}, "operating_profile_path": str(prof), "plan_path": str(plan_p)}), encoding="utf-8")
+
+        base_args = [
+            "--config-a", str(cfg_a), "--config-b", str(cfg_b), "--endpoint-url", url,
+            "--revision-a", revs["arm_a"], "--revision-b", revs["arm_b"],
+            "--library-a", str(lib_p), "--library-b", str(lib_p),
+            "--task-a", "belt->temp_a:r1-s1-t1", "--task-b", "temp_b:r1-s1-t1->temp_b:r2-s1-t1",
+            "--work-dir", str(tmp_path / "w"), "--max-chunks", "1", "--proposer", "alice", "--operator", "bob", "--dry-run",
+        ]
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: (_ for _ in ()).throw(AssertionError("must not open cells")))
+        for bad_q in ("49", "101"):
+            with pytest.raises(SystemExit, match="jpeg-quality"):
+                cli_mod.main([*base_args, "--jpeg-quality", bad_q])
+
+        seen_q = []
+        orig_cls = remote_mod.RemotePolicyShadow
+
+        def _spy_shadow(*a, **kw):
+            inst = orig_cls(*a, **kw)
+            seen_q.append((inst.arm_id, inst.jpeg_quality))
+            return inst
+
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: {"a": FakeCell(home), "b": FakeCell(home)})
+        monkeypatch.setattr(cli_mod.cell_two_arm, "kinematics_for", lambda *_a, **_kw: {"a": PlanarKin(0.10), "b": PlanarKin(0.10)})
+        monkeypatch.setattr(cli_mod.cell_remote_policy, "RemotePolicyShadow", _spy_shadow)
+        assert cli_mod.main([*base_args, "--jpeg-quality", "90"]) == 0
+        assert seen_q == [("arm_a", 90), ("arm_b", 90)]
+    finally:
+        srv_obj.shutdown()
+        srv_obj.server_close()
