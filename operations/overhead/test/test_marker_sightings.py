@@ -150,9 +150,13 @@ def test_qr_robot_marker_uses_qr_side_band_and_still_requires_yaw_offset():
     assert (sighting.x, sighting.y) == pytest.approx((0.2, -0.1), abs=1e-4)
     assert math.remainder(sighting.yaw - 0.5, math.tau) == pytest.approx(0.0, abs=1e-3)
 
+    # Small LiDAR-puck QR sticker (28 mm) is inside the updated QR_SIDE_BAND_M.
+    [small_sighting] = _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.028)}, qr_ids={45}), camera=cam)
+    assert small_sighting.robot_id == "rosy_45"
+
     # Out-of-band QR sizes (too big / too small) are rejected, and D-587 yaw offset stays mandatory.
     assert _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.20)}, qr_ids={45}), camera=cam) == ()
-    assert _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.025)}, qr_ids={45}), camera=cam) == ()
+    assert _sightings(DetectedMarkers({45: _sticker(0.2, -0.1, 0.5, side=0.012)}, qr_ids={45}), camera=cam) == ()
     unset = CameraMap(**{**cam.__dict__, "marker_yaw_offset_deg": {}})
     assert _sightings(markers, camera=unset) == ()
 

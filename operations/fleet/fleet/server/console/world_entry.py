@@ -89,6 +89,60 @@ def _configured_mdns_target():
     return host, int(raw_port), scheme
 
 
+# Same-origin mode (PR-W2): Caddy serves /world/ behind Fleet forward_auth, so the
+# entry URL is a site-relative path, not an origin.
+SAME_ORIGIN_PATH = "/world/?view=factory&adapter=real"
+
+
+def _same_origin_enabled():
+    return os.environ.get("ROSY_WORLD_SAME_ORIGIN", "").strip().lower() in ("1", "true", "yes")
+
+
+def _same_origin_health_url():
+    raw = (os.environ.get("ROSY_WORLD_HEALTH_URL") or "http://world:8140/healthz").strip()
+    try:
+        parts = urlsplit(raw)
+        host = (parts.hostname or "").lower()
+        port = parts.port
+    except ValueError:
+        raise ValueError("Invalid ROSY_WORLD_HEALTH_URL") from None
+    if (
+        parts.scheme != "http"
+        or parts.username is not None
+        or parts.password is not None
+        or parts.netloc.endswith(":")
+        or port == 0
+        or host not in ("world", "127.0.0.1", "localhost")
+        or parts.query
+        or parts.fragment
+        or parts.path not in ("", "/healthz")
+    ):
+        raise ValueError("ROSY_WORLD_HEALTH_URL must be an internal http://world/healthz URL")
+    return f"http://{parts.netloc}/healthz"
+
+
+def _probe_same_origin_health(health_url):
+    parts = urlsplit(health_url)
+    try:
+        conn = http.client.HTTPConnection(parts.hostname, parts.port or 80, timeout=1.5)
+        try:
+            conn.request("GET", parts.path or "/healthz", headers={"Connection": "close"})
+            resp = conn.getresponse()
+            body = resp.read(1024)
+        finally:
+            conn.close()
+        if resp.status != 200:
+            return False
+        payload = json.loads(body.decode("utf-8"))
+    except (OSError, http.client.HTTPException, ValueError):
+        return False
+    return (
+        isinstance(payload, dict)
+        and payload.get("application") == "rosy-world"
+        and payload.get("status") == "ready"
+    )
+
+
 def discover_world_via_mdns(host: str, port: int, scheme: str) -> str | None:
     """Resolve `host` (.local) via Zeroconf ServiceBrowser or container NSS and confirm `/healthz`."""
     target_port = port
@@ -203,9 +257,33 @@ class _MdnsWorldLocator:
         return self._cached_origin
 
 
-def install_world_routes(app, web_root, csp, *, mdns_discover_fn=None, read_guard=None):
+class _SameOriginWorldProbe:
+    def __init__(self, health_url: str, *, ttl_s: float = 10.0, probe_fn=None) -> None:
+        self.health_url = health_url
+        self.ttl_s = ttl_s
+        self.probe_fn = probe_fn or _probe_same_origin_health
+        self._reachable = False
+        self._checked_at: float = -1e9
+
+    def reachable(self) -> bool:
+        now = time.monotonic()
+        if (now - self._checked_at) < self.ttl_s:
+            return self._reachable
+        self._reachable = self.probe_fn(self.health_url)
+        self._checked_at = now
+        return self._reachable
+
+
+def install_world_routes(app, web_root, csp, *, mdns_discover_fn=None, read_guard=None,
+                         same_origin_probe_fn=None):
     static_origin = _configured_world_origin()
-    mdns_target = _configured_mdns_target()
+    same_origin = (
+        _SameOriginWorldProbe(_same_origin_health_url(), probe_fn=same_origin_probe_fn)
+        if static_origin is None and _same_origin_enabled()
+        else None
+    )
+    # Precedence: an explicit ROSY_WORLD_URL wins, then same-origin, then mDNS.
+    mdns_target = None if same_origin is not None else _configured_mdns_target()
     locator = (
         _MdnsWorldLocator(*mdns_target, discover_fn=mdns_discover_fn)
         if mdns_target is not None
@@ -226,16 +304,26 @@ def install_world_routes(app, web_root, csp, *, mdns_discover_fn=None, read_guar
                 "mdns_host": None,
                 "url": f"{static_origin}/?view=factory",
                 "reachable": True,
-            }, static_origin
+            }, f"{static_origin}/?view=factory"
+        if same_origin is not None:
+            reachable = same_origin.reachable()
+            return {
+                "configured": True,
+                "mode": "same_origin",
+                "mdns_host": None,
+                "url": SAME_ORIGIN_PATH if reachable else None,
+                "reachable": reachable,
+            }, (SAME_ORIGIN_PATH if reachable else None)
         if locator is not None:
             resolved = locator.resolve()
+            target = f"{resolved}/?view=factory" if resolved else None
             return {
                 "configured": True,
                 "mode": "mdns",
                 "mdns_host": locator.host,
-                "url": f"{resolved}/?view=factory" if resolved else None,
+                "url": target,
                 "reachable": resolved is not None,
-            }, resolved
+            }, target
         return {
             "configured": False,
             "mode": "unconfigured",
@@ -253,12 +341,34 @@ def install_world_routes(app, web_root, csp, *, mdns_discover_fn=None, read_guar
     def open_world(request: Request):
         if request.url.query:
             raise HTTPException(status_code=400, detail="World entry does not accept query parameters")
-        body, origin = _current_status()
-        if not origin:
-            hint = (
-                f"mDNS 호스트 {body['mdns_host']}의 Rosy World 3D에 아직 연결할 수 없습니다."
-                if body["mode"] == "mdns"
-                else "Rosy World 3D 연결 주소(ROSY_WORLD_URL 또는 ROSY_WORLD_MDNS_HOST)가 아직 등록되지 않았습니다."
+        # Anonymous browsers log in first: the World shell behind Caddy has no login UI
+        # of its own. Bearer clients are left to the proxy's forward_auth gate.
+        sessions = getattr(app.state, "password_sessions", None)
+        if (
+            sessions is not None
+            and not request.headers.get("authorization", "").startswith("Bearer ")
+            and sessions.authenticate(request) is None
+        ):
+            if "text/html" in request.headers.get("accept", ""):
+                return RedirectResponse(
+                    "/console/login?return=/console/world", status_code=303, headers=headers
+                )
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "UNAUTHORIZED", "message": "valid site credential required"},
+                headers={"Cache-Control": "no-store"},
+            )
+        body, target = _current_status()
+        if not target:
+            hints = {
+                "mdns": f"mDNS 호스트 {body['mdns_host']}의 Rosy World 3D에 아직 연결할 수 없습니다.",
+                "same_origin": (
+                    "같은 자리(same-origin) Rosy World 3D가 아직 준비되지 않았습니다."
+                    " world 서비스가 살아나면 이 주소는 곧바로 3D 화면으로 이동합니다."
+                ),
+            }
+            hint = hints.get(body["mode"]) or (
+                "Rosy World 3D 연결 주소(ROSY_WORLD_URL 또는 ROSY_WORLD_MDNS_HOST)가 아직 등록되지 않았습니다."
             )
             doc = template.replace('data-host-focus="{{focus}}"', 'data-host-focus="world"')
             doc = doc.replace("로봇 학습 센터", "Rosy World 3D")
@@ -267,4 +377,4 @@ def install_world_routes(app, web_root, csp, *, mdns_discover_fn=None, read_guar
                 hint,
             )
             return HTMLResponse(doc, status_code=503, headers=headers)
-        return RedirectResponse(f"{origin}/?view=factory", status_code=303, headers=headers)
+        return RedirectResponse(target, status_code=303, headers=headers)

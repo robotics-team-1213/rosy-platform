@@ -404,11 +404,18 @@ class LocAssistNode(Node):
         self.publish(self.core.search_finished(now, odom, found, objects, self.sightings if recent else [],
                                                scores, evidence_s=self.sighted_at if recent else None))
 
+    def _ground_configured(self):
+        source = str(self.p('camera_ground_source')).strip().upper()
+        if source == 'NOMINAL':
+            return bool(self.p('allow_nominal_ground'))
+        return bool(self.p('allow_simulation_ground')) and bool(self.p('use_sim_time'))
+
     def sync_camera(self):
-        """Hold camera/front only while square/paint evidence can matter (not LOCALIZED)."""
-        if self.core.camera_wanted and self.camera is None:
+        """Hold camera/front only while square/paint evidence can matter and ground is enabled."""
+        wanted = self.core.camera_wanted and self._ground_configured()
+        if wanted and self.camera is None:
             self.camera = self.create_subscription(Image, 'camera/front', self.on_camera, qos_profile_sensor_data)
-        elif not self.core.camera_wanted and self.camera is not None:
+        elif not wanted and self.camera is not None:
             self.destroy_subscription(self.camera)
             self.camera = None
 
@@ -418,7 +425,7 @@ class LocAssistNode(Node):
             self.finish_search(now)
         self.publish(self.core.tick(now))
         self.sync_camera()
-        if self.search is None and self.field is not None and self.scan is not None:
+        if self.search is None and self.field is not None and self.scan is not None and self.core.camera_wanted:
             odom = self.odom()
             if odom is not None and self.core.search_due(now, odom):
                 if self.core.settle_timed_out:

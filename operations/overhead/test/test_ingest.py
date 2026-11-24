@@ -494,3 +494,28 @@ async def test_send_camera_reaches_the_phone_as_one_text_message():
                 break
         assert received == example
         await conn.close()
+
+
+@run_async
+async def test_source_widths_scale_config_and_allow_larger_frames():
+    tokens = {"overhead-1": TOKEN}
+    server = IngestServer(tokens, source_widths={"overhead-1": 2560})
+    ws_server = await server.start("127.0.0.1", 0)
+    try:
+        port = ws_server.sockets[0].getsockname()[1]
+        url = f"ws://127.0.0.1:{port}{protocol.WS_PATH}"
+        conn = await websockets.connect(url, additional_headers={"Authorization": f"Bearer {TOKEN}"})
+        await conn.send(json.dumps(_hello()))
+        cfg = json.loads(await conn.recv())
+        assert cfg["width"] == 2560
+        assert cfg["max_bytes"] > protocol.DEFAULT_CONFIG["max_bytes"]
+        assert cfg["jpeg_quality"] >= 82
+        big_jpeg = b"\xff\xd8" + b"\x00" * 300_000 + b"\xff\xd9"
+        header = protocol.FrameHeader(seq=1, age_ms=5, width=2560, height=1440, rotation_deg=90)
+        await conn.send(protocol.pack_header(header) + big_jpeg)
+        await _wait_for(lambda: server.latest_frame("overhead-1") is not None)
+        assert server.stats("overhead-1")["oversize"] == 0
+        await conn.close()
+    finally:
+        ws_server.close()
+        await ws_server.wait_closed()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ _SIM_AREA_PREFIXES = ("ship-", "tmp-a-", "tmp-b-", "yard:", "temp_a:", "temp_b:"
 
 
 @functools.lru_cache(maxsize=4)
-def _index(map_path_str: str) -> dict[str, Any]:
+def _index_cached(map_path_str: str, mtime_ns: int, size: int) -> dict[str, Any]:
     doc = json.loads(Path(map_path_str).read_text(encoding="utf-8"))
     by_tier_id: dict[str, dict[str, Any]] = {}
     by_sim: dict[str, dict[str, Any]] = {}
@@ -65,6 +66,19 @@ def _index(map_path_str: str) -> dict[str, Any]:
         "doc": doc, "by_tier_id": by_tier_id, "by_sim": by_sim, "by_wire": by_wire,
         "slots_by_id": slots_by_id, "layout_aliases": layout_aliases, "sites": canonical_list,
     }
+
+
+def _index(map_path_str: str) -> dict[str, Any]:
+    """Return cached canonical cell-site index, automatically reloading when file mtime or size changes."""
+    try:
+        st = os.stat(map_path_str)
+        sig = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        sig = (0, 0)
+    return _index_cached(map_path_str, sig[0], sig[1])
+
+
+_index.cache_clear = _index_cached.cache_clear
 
 
 def _map_path(web_common: Path | None = None) -> Path:

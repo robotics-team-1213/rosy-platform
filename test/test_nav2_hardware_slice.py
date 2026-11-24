@@ -591,3 +591,43 @@ def test_start_after_tf_reports_missing_requirements_and_retries_bounded():
         monotonic=lambda: 0.0,
     )
     assert rc3 == 1 and cli3.call_async.call_count == 3 and sleeps3 == [5.0, 5.0]
+
+
+def test_start_after_tf_throttles_checks_across_fast_tf_wakeups_and_guards_container():
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from navigation.start_after_tf import run_startup_loop
+
+    xml = (NAV_LAUNCH / "bringup_launch.xml").read_text(encoding="utf-8")
+    assert '<group if="$(var use_composition)">' in xml
+
+    buf = Mock()
+    buf.can_transform.return_value = False
+    cli = Mock()
+    cli.service_is_ready.return_value = False
+    clock = [0.0]
+
+    def fake_spin(_node, timeout_sec=0.5):
+        clock[0] += 0.025  # 40 Hz /tf wakeups
+
+    f_ok = SimpleNamespace(done=lambda: True, result=lambda: SimpleNamespace(success=True))
+
+    def ready_after_600ms(*_a):
+        if clock[0] >= 0.6:
+            buf.can_transform.return_value = True
+            return True
+        return False
+
+    cli.service_is_ready.side_effect = ready_after_600ms
+    cli.call_async.return_value = f_ok
+    rc = run_startup_loop(
+        SimpleNamespace(get_logger=lambda: Mock()), buf, cli, object(),
+        [("map", "pinky1/base_footprint")], object(),
+        spin_once=fake_spin,
+        spin_until_future_complete=lambda *a, **k: None,
+        ok=lambda: clock[0] < 5.0,
+        monotonic=lambda: clock[0],
+        check_interval_s=0.5,
+    )
+    assert rc == 0 and cli.service_is_ready.call_count <= 4  # throttled vs ~24 wakeups
