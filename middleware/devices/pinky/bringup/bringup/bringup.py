@@ -21,6 +21,7 @@ from rcl_interfaces.msg import ParameterDescriptor
 from .command_deadman import CommandDeadman
 from .dynamixel_driver import (
     DynamixelDriver,
+    bus_watchdog_units,
     validate_motor_ids,
     validate_profile_acceleration,
     wrapped_encoder_delta,
@@ -102,11 +103,18 @@ class Rosy(Node):
             read_only=True,
             description='true = spin wheels briefly at start to detect a stalled motor',
         ))
+        self.declare_parameter('bus_watchdog_ms', 300.0, ParameterDescriptor(
+            read_only=True,
+            description='Dynamixel Addr 98 Bus Watchdog timeout in ms (0 disables)',
+        ))
         self.motor_motion_check = self.get_parameter('motor_motion_check').value is True
         drive_enabled = self.get_parameter('drive_enabled').value
         if not isinstance(drive_enabled, bool):
             raise ValueError('drive_enabled must be a boolean')
         self.drive_enabled = drive_enabled
+        raw_watchdog_ms = self.get_parameter('bus_watchdog_ms').value
+        bus_watchdog_units(raw_watchdog_ms)
+        self.bus_watchdog_ms = float(raw_watchdog_ms)
 
         # Keep the board-specific boundary explicit.  This validates the
         # complete ROS parameter set before any SDK object opens a UART; the
@@ -247,6 +255,10 @@ class Rosy(Node):
                 self.get_logger().error(message + '. Exiting non-zero for systemd restart.')
                 raise RuntimeError(message)
 
+            if self.drive_enabled and not self.driver.arm_bus_watchdog(self.bus_watchdog_ms):
+                self.get_logger().error('Failed to arm Dynamixel Bus Watchdog! Shutting down.')
+                raise RuntimeError('failed to arm Dynamixel Bus Watchdog')
+
             self.get_logger().info('4. Reading initial encoder values...')
             _, _, self.last_encoder_l, self.last_encoder_r = self.driver.get_feedback()
             if self.last_encoder_l is None:
@@ -269,9 +281,15 @@ class Rosy(Node):
                 )
             self.tf_broadcaster = TransformBroadcaster(self)
             self.timer = self.create_timer(1.0 / 30.0, self.update_and_publish)
-            # Same single-threaded executor as the 30 Hz loop, so the two never share the bus at once.
+            # Stagger health reads (one motor per 1 s tick) under the single executor so
+            # synchronous UART polling stays below half its former worst-case blocking time.
             self.motor_health_pub = self.create_publisher(String, MOTOR_HEALTH_TOPIC, 10)
-            self.health_timer = self.create_timer(MOTOR_HEALTH_PERIOD_S, self.publish_motor_health)
+            self._health_rows = {}
+            self._health_idx = 0
+            self.health_timer = self.create_timer(
+                MOTOR_HEALTH_PERIOD_S / max(1, len(self.driver.DXL_IDS)),
+                self.publish_motor_health,
+            )
 
             self.battery_sub = self.create_subscription(
                 Float32,
@@ -429,7 +447,13 @@ class Rosy(Node):
         self.joint_pub.publish(joint_msg)
 
     def publish_motor_health(self):
-        self.motor_health_pub.publish(String(data=json.dumps({"motors": self.driver.read_health()})))
+        dxl_id = self.driver.DXL_IDS[self._health_idx]
+        self._health_rows[dxl_id] = self.driver.read_health_one(dxl_id)
+        self._health_idx = (self._health_idx + 1) % len(self.driver.DXL_IDS)
+        if self._health_idx == 0:
+            self.motor_health_pub.publish(String(data=json.dumps({
+                "motors": [self._health_rows[i] for i in self.driver.DXL_IDS],
+            })))
 
     def battery_voltage_callback(self, msg):
         self.current_voltage = msg.data
