@@ -47,6 +47,10 @@ PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation
          "learning/envs/isaac/assets/omx_f_palletizing_description")
 LINK = "omx-tools-current"  # the cell tools only; a bench page deploys with --link omx-bench-current
 LINK_NAME = re.compile(r"omx-[a-z0-9-]+-current")
+TREE_NAME = re.compile(r"^omx-(?:bench|tools)-[0-9a-f]{7,40}$")
+STORAGE_LOCK = "storage-maintenance.lock"
+STORAGE_LOCK_WAIT = 180
+_HOST_RE = re.compile(r"^[A-Za-z0-9._@-]+$")
 SHA_FILE = "omx-hotfix-sha"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15"]
 # Last pytest summary line, -q or full form: "3 passed, 1 skipped in 2.10s" / "=== 1 failed ... ===".
@@ -60,8 +64,14 @@ def _git(*args: str, env: dict | None = None) -> str:
     return done.stdout.strip()
 
 
+def _host_ok(host: str) -> str:
+    if not host or host.startswith("-") or host.startswith("@") or not _HOST_RE.fullmatch(host):
+        raise SystemExit(f"[omx-hotfix] invalid ssh host: {host!r}")
+    return host
+
+
 def _ssh(host: str, script: str, data: bytes | None = None) -> str:
-    done = subprocess.run([*SSH, host, script], input=data, capture_output=True, check=False)
+    done = subprocess.run([*SSH, "--", _host_ok(host), script], input=data, capture_output=True, check=False)
     if done.returncode:
         raise SystemExit(f"[omx-hotfix] ssh {host} failed (exit {done.returncode}): "
                          f"{done.stderr.decode(errors='replace').strip()}")
@@ -122,23 +132,54 @@ def log_problem(log: Path, sha: str) -> str | None:
 
 
 def host_of(value: str | None) -> str:
-    host = value or os.environ.get(HOST_ENV, "").strip()
+    host = (value or os.environ.get(HOST_ENV, "")).strip()
     if not host:
         raise SystemExit(f"[omx-hotfix] no host: pass --host user@host or set {HOST_ENV}"
                          " (the address stays out of tracked files, D-226)")
-    return host
+    return _host_ok(host)
+
+
+def _tree_ok(name: str) -> None:
+    if not TREE_NAME.fullmatch(name):
+        raise SystemExit(f"[omx-hotfix] invalid release tree name: {name!r}")
+
+
+def _with_storage_lock(inner: str) -> str:
+    # Serialize tree reuse/unpack/switch against host_storage.py (never nest update.lock inside this).
+    return (
+        f"set -e; [ ! -L rosy-test ] && mkdir -p rosy-test && cd rosy-test"
+        f" && [ ! -L {STORAGE_LOCK} ] && {{ [ ! -e {STORAGE_LOCK} ] || [ -f {STORAGE_LOCK} ]; }}"
+        f" && exec 9>>{STORAGE_LOCK} && flock -w {STORAGE_LOCK_WAIT} 9 && {{ {inner}; }}"
+    )
+
+
+def reuse_script(name: str) -> str:
+    _tree_ok(name)
+    return _with_storage_lock(
+        f"if [ -d {name} ] && [ ! -L {name} ] && [ ! -L {name}/REVISION ] && [ -f {name}/REVISION ]; then"
+        f" rev=$(cat {name}/REVISION 2>/dev/null || true); touch -c -- {name}; printf '%s' \"$rev\"; fi"
+    )
 
 
 def switch_script(name: str, link: str = LINK) -> str:
+    _tree_ok(name)
+    _link_ok(link)
     # ln -sfn on the live name is unlink+symlink (a gap); rename over it with mv -T is atomic.
-    return (f"cd rosy-test && prev=$(readlink {link} || true) && ln -sfn {name} .{link}.tmp"
-            f" && mv -T .{link}.tmp {link} && echo \"$prev\"")
+    return _with_storage_lock(
+        f"[ -d {name} ] && [ ! -L {name} ]"
+        f" && prev=$(readlink {link} || true) && ln -sfn {name} .{link}.tmp"
+        f" && mv -T .{link}.tmp {link} && echo \"$prev\""
+    )
 
 
 def unpack_script(name: str) -> str:
+    _tree_ok(name)
     part = f".{name}.part"
-    return (f"set -e; mkdir -p rosy-test; cd rosy-test; rm -rf {part}; mkdir {part};"
-            f" tar -xzf - -C {part}; rm -rf {name}; mv {part}/{name} {name}; rmdir {part}")
+    return _with_storage_lock(
+        f"rm -rf {part} && mkdir {part}"
+        f" && {{ tar -xzf - -C {part} || {{ rm -rf {part}; exit 1; }}; }}"
+        f" && rm -rf {name} && mv {part}/{name} {name} && rmdir {part} && touch -c -- {name}"
+    )
 
 
 # Runs on the cell (python3 - <floor> <config> <root> <state> <lock>): the updater's root from its config, then
@@ -186,7 +227,7 @@ def deploy(sha: str, host: str, tested_log: Path, link: str = LINK) -> tuple[str
     floor = _git("merge-base", full, "main")  # before any copy: no common base, no deploy
     short = full[:10]
     name = f"omx-tools-{short}"
-    if _ssh(host, f"cat rosy-test/{name}/REVISION 2>/dev/null || true") == short:
+    if _ssh(host, reuse_script(name)) == short:
         print(f"[omx-hotfix] {name} already on {host}; not copied again", flush=True)
     else:
         archive = subprocess.run(
