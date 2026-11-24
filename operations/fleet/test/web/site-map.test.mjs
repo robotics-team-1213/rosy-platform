@@ -581,3 +581,84 @@ test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor
   assert.equal(panelEl.hidden, true);
   assert.equal(bodyEl.children.length, 0);
 });
+
+test('placeHitRadius clamps 14..18 and placeLabel/drawSitePointsOverlay deconflict dense place and overlay labels', async () => {
+  const {drawSitePointsOverlay, placeHitRadius, placeLabel} = await import('/console/assets/map-editor.js');
+
+  assert.equal(placeHitRadius(0, [[100, 100]]), 18);
+  assert.equal(placeHitRadius(0, [[100, 100], [200, 100]]), 18);
+  // Dense charge bays 11/12/13 spaced 32 px apart -> r=16 (16+16=32, no overlap)
+  const denseBays = [[200, 300], [232, 300], [264, 300]];
+  for (let i = 0; i < denseBays.length; i++) assert.equal(placeHitRadius(i, denseBays), 16);
+  // Ultra-dense (<28 px) clamps at floor 14
+  assert.equal(placeHitRadius(0, [[100, 100], [120, 100]]), 14);
+
+  const makeNode = (tag, ns = '') => ({
+    tagName: tag, namespaceURI: ns, attributes: {}, children: [], textContent: '', _parent: null,
+    setAttribute(k, v) { this.attributes[k] = String(v); },
+    append(...nodes) { for (const n of nodes) { if (n && typeof n === 'object') n._parent = this; this.children.push(n); } },
+    remove() { if (this._parent) this._parent.children = this._parent.children.filter(c => c !== this); },
+    querySelector(sel) { return sel === '#site-points-layer' ? this.children.find(c => c.attributes.id === 'site-points-layer') || null : null; },
+  });
+  const ownerDocument = {createElementNS: (ns, tag) => ({...makeNode(tag, ns), ownerDocument})};
+  const svg = {...makeNode('svg', 'http://www.w3.org/2000/svg'), ownerDocument};
+  svg.setAttribute('viewBox', '0 0 800 480');
+
+  const view = {toPx: (x, y) => [100 + x * 100, 100 - y * 100]};
+  const placed = [];
+  const densePlaces = [
+    {id: 'B11', label: '11 충전 칸', px: view.toPx(0.0, 0.0)},
+    {id: 'B12', label: '12 충전 칸', px: view.toPx(0.32, 0.0)},
+    {id: 'B13', label: '13 충전 칸', px: view.toPx(0.64, 0.0)},
+    {id: 'P6', label: '6 주차장 입구', px: view.toPx(0.615, -0.207)},
+    {id: 'S3', label: 'S3', px: view.toPx(0.745, -0.207)},
+  ];
+  for (const p of densePlaces) placed.push({x: p.px[0] - 10, y: p.px[1] - 10, width: 20, height: 20});
+  for (const p of densePlaces) {
+    const dot = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('cx', p.px[0]); dot.setAttribute('cy', p.px[1]); dot.setAttribute('r', 9); dot.setAttribute('class', 'place');
+    svg.append(dot);
+    const pos = placeLabel(p.px[0], p.px[1], p.label, placed);
+    const txt = ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'text');
+    txt.setAttribute('x', pos.x); txt.setAttribute('y', pos.y); txt.setAttribute('class', 'label');
+    if (pos.anchor !== 'start') txt.setAttribute('text-anchor', pos.anchor);
+    txt.textContent = p.label;
+    svg.append(txt);
+  }
+
+  drawSitePointsOverlay(svg, {
+    vehicle_stops: [{id: 'S3', in_active_map: true, pose: {x: 0.745, y: -0.207}, berth: {nav2_berth_ready: false}}],
+    coordinate_frames: {
+      vehicle_world: {waypoints: {
+        S3_intake: {pose: {x: 0.745, y: -0.207}, planned_approach_ref_m: {x: 0.9238, y: -0.207}},
+        J_stand_branch: {pose: {x: 0.615, y: -0.207}, planned: true},
+        S_OUT_outbound: {in_active_map: false, pose: {x: 0.614, y: 0.001}},
+      }},
+    },
+  }, view);
+
+  const boxOf = (node) => {
+    const x = Number(node.attributes.x), y = Number(node.attributes.y);
+    const anchor = node.attributes['text-anchor'] || 'start';
+    let w = 0;
+    for (const ch of node.textContent) w += ch.charCodeAt(0) > 127 ? 12 : 7.5;
+    w = Math.max(16, w);
+    const left = anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x;
+    return {text: node.textContent, x: left, y: y - 12, width: w, height: 15};
+  };
+  const layer = svg.querySelector('#site-points-layer');
+  const allTexts = [
+    ...svg.children.filter(c => c.tagName === 'text'),
+    ...layer.children.filter(c => c.tagName === 'text'),
+  ].map(boxOf);
+  assert.ok(allTexts.some(b => b.text === 'S3_app(예정)'));
+  assert.ok(allTexts.some(b => b.text === 'J_stand'));
+  assert.ok(allTexts.some(b => b.text === '[하역(존미등록)]'));
+  for (let i = 0; i < allTexts.length; i++) {
+    for (let j = i + 1; j < allTexts.length; j++) {
+      const a = allTexts[i], b = allTexts[j];
+      const overlaps = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+      assert.equal(overlaps, false, `labels overlap: ${a.text} vs ${b.text}`);
+    }
+  }
+});

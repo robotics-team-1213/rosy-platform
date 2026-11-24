@@ -22,7 +22,7 @@ import {createRealityPanel} from '/console/assets/site-map-reality.js';
 import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
 import {installBandEditing, installZoneEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
-import {drawFacilities, drawSitePointsOverlay, loadSitePointsOverlay, svgElement as el} from '/console/assets/map-editor.js';
+import {drawFacilities, drawPlaces, drawSitePointsOverlay, loadSitePointsOverlay, svgElement as el} from '/console/assets/map-editor.js';
 
 const $ = id => document.getElementById(id);
 const W = 800, H = 480;
@@ -102,18 +102,7 @@ function render() {
   }
   if ($('map-source').value !== 'profile')
     for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
-  for (const [index, place] of map.places.entries()) {
-    const [px, py] = view.toPx(place.x, place.y);
-    const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id, tabindex: 0, role: 'button',
-      'aria-label': `장소 ${place.name} 선택`, class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
-    el('title', {}, dot).textContent = `${place.name} (${PLACE_KIND_LABEL[place.kind] || place.kind})`;
-    if (place.kind === 'start') {
-      el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
-        transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
-    }
-    // Name, not just an ordinal: the map is where the operator picks a destination, and touch has no <title>.
-    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = `${index + 1} ${place.name.length > 8 ? `${place.name.slice(0, 8)}…` : place.name}`;
-  }
+  drawPlaces(svg, map, view, {selectedPlace: state.selected?.place, kindLabels: PLACE_KIND_LABEL});
   drawFacilities(svg, map, view);
   if ($('map-source').value === 'active') drawSitePointsOverlay(svg, state.sitePoints, view);
   if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);

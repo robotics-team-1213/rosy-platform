@@ -26,9 +26,10 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
   const wrap = document.createElement("div");
   wrap.className = "zb-svg-wrap";
 
-  function bindSelect(target, zoneId) {
+  function bindSelect(target, zoneId, label = zoneId) {
     target.setAttribute("tabindex", "0");
     target.setAttribute("role", "button");
+    target.setAttribute("aria-label", label);
     target.addEventListener("click", () => onSelect?.(zoneId));
     target.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -57,6 +58,14 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
 
     const gridWrap = document.createElement("div");
     gridWrap.className = "zb-arm-grid";
+    if (!(activeZone.slots && activeZone.slots.length)) {
+      const empty = document.createElement("p");
+      empty.className = "hint zb-empty";
+      empty.textContent = "등록된 슬롯이 없습니다 · 실측 대기";
+      gridWrap.append(empty);
+      wrap.replaceChildren(toolbar, gridWrap);
+      return;
+    }
     const cols = Math.max(1, activeZone.grid?.columns || 3);
     const rows = Math.max(1, activeZone.grid?.rows || 1);
     const cellW = 110;
@@ -167,7 +176,7 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
         const g = svgNode("g", { class: "zb-node zb-node-stop", "data-zone-id": s.id, "data-selected": String(s.id === selectedId) });
         g.append(svgNode("circle", { cx: px(s.x), cy: py(s.y), r: 11 }));
         g.append(svgNode("text", { x: px(s.x) + 14, y: py(s.y) + 4, class: "zb-label" }, s.id));
-        bindSelect(g, s.id);
+        bindSelect(g, s.id, s.name && s.name !== s.id ? `정류장 ${s.name} (${s.id}) 선택` : `정류장 ${s.id} 선택`);
         svg.append(g);
       }
     }
@@ -179,7 +188,7 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
         const g = svgNode("g", { class: "zb-node zb-node-staging", "data-zone-id": bay.id, "data-selected": String(bay.id === selectedId) });
         g.append(svgNode("rect", { x: cx - 12, y: cy - 9, width: 24, height: 18, rx: 3 }));
         g.append(svgNode("text", { x: cx + 16, y: cy + 4, class: "zb-label" }, bay.id));
-        bindSelect(g, bay.id);
+        bindSelect(g, bay.id, bay.name && bay.name !== bay.id ? `임시 대기칸 ${bay.name} (${bay.id}) 선택` : `임시 대기칸 ${bay.id} 선택`);
         svg.append(g);
       }
     }
@@ -191,7 +200,7 @@ export function createZoneBlueprint2d(host, { onSelect } = {}) {
         const g = svgNode("g", { class: "zb-node zb-node-export", "data-zone-id": st.id, "data-selected": String(st.id === selectedId) });
         g.append(svgNode("polygon", { points: `${cx},${cy - 12} ${cx + 12},${cy} ${cx},${cy + 12} ${cx - 12},${cy}` }));
         g.append(svgNode("text", { x: cx + 15, y: cy + 4, class: "zb-label" }, st.id));
-        bindSelect(g, st.id);
+        bindSelect(g, st.id, st.name && st.name !== st.id ? `반출대 ${st.name} (${st.id}) 선택` : `반출대 ${st.id} 선택`);
         svg.append(g);
       }
     }
