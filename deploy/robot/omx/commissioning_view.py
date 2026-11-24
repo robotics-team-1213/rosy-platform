@@ -12,6 +12,7 @@ import copy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import math
+import os
 from pathlib import Path
 import signal
 import sys
@@ -57,6 +58,11 @@ class ObservationStore:
             self._sources.add("joints")
         self._lock = threading.Lock()
         self._samples = {}
+        self._stream_clients = 0
+
+    def stream_active(self):
+        with self._lock:
+            return self._stream_clients > 0
 
     def put(self, source, stamp, value, *, received=None, wall=None, quality=None):
         if source not in self._sources:
@@ -234,29 +240,35 @@ def make_server(store, *, port=8766):
                 self.send_header("Connection", "close")
                 self.end_headers()
                 last_seq = None
-                while True:
-                    snap = store.snapshot()
-                    cam = snap["cameras"].get(label, {})
-                    frame = store.image(label)
-                    if not frame or not cam.get("fresh"):
-                        break
-                    if cam.get("sequence") != last_seq:
-                        last_seq = cam.get("sequence")
-                        part = (
-                            b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
-                            + str(len(frame)).encode()
-                            + b"\r\n\r\n"
-                            + frame
-                            + b"\r\n"
-                        )
-                        try:
-                            self.wfile.write(part)
-                            self.wfile.flush()
-                        except OSError:
+                with store._lock:
+                    store._stream_clients += 1
+                try:
+                    while True:
+                        snap = store.snapshot()
+                        cam = snap["cameras"].get(label, {})
+                        frame = store.image(label)
+                        if not frame or not cam.get("fresh"):
                             break
-                    if self.headers.get("X-Max-Frames") == "1":
-                        break
-                    time.sleep(0.05)
+                        if cam.get("sequence") != last_seq:
+                            last_seq = cam.get("sequence")
+                            part = (
+                                b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                                + str(len(frame)).encode()
+                                + b"\r\n\r\n"
+                                + frame
+                                + b"\r\n"
+                            )
+                            try:
+                                self.wfile.write(part)
+                                self.wfile.flush()
+                            except OSError:
+                                break
+                        if self.headers.get("X-Max-Frames") == "1":
+                            break
+                        time.sleep(0.05)
+                finally:
+                    with store._lock:
+                        store._stream_clients -= 1
             else:
                 self.reply(404)
 
@@ -265,14 +277,28 @@ def make_server(store, *, port=8766):
 
 def consume_native(store):
     """Read only selected local channels without making repeated reads fresh."""
-    from core_common.observation_snapshot import SnapshotChannel
+    channels = getattr(store, "_native_channels", None)
+    if channels is None:
+        from core_common.observation_snapshot import SnapshotChannel
 
-    channels = [(label, key, "jpeg") for label, key in store.cameras.items()]
-    channels += [(f"arm:{label}", key, "joints") for label, key in store.arms.items()]
-    if not store.arms:
-        channels.append(("joints", "/omx_commissioning/joint_states", "joints"))
-    for label, key, kind in channels:
-        sample = SnapshotChannel(key).read()
+        channels = [(label, SnapshotChannel(key), "jpeg") for label, key in store.cameras.items()]
+        channels += [(f"arm:{label}", SnapshotChannel(key), "joints") for label, key in store.arms.items()]
+        if not store.arms:
+            channels.append(("joints", SnapshotChannel("/omx_commissioning/joint_states"), "joints"))
+        store._native_channels = channels
+        store._native_stats = {}
+    stats = store._native_stats
+    for label, channel, kind in channels:
+        try:
+            st = os.stat(channel.path)
+        except OSError:
+            stats.pop(label, None)
+            continue
+        stat_key = (st.st_ino, st.st_mtime_ns)
+        if stats.get(label) == stat_key:
+            continue
+        sample = channel.read()
+        stats[label] = stat_key
         if sample is None or sample["kind"] != kind:
             continue
         try:
@@ -315,7 +341,7 @@ def main():
     try:
         while True:
             consume_native(store)
-            time.sleep(0.025)
+            time.sleep(0.025 if store.stream_active() else 0.10)
     except KeyboardInterrupt:
         pass
     finally:

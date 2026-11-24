@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import select
 import subprocess
 
 
@@ -25,6 +26,24 @@ def readonly_writer(write):
             raise ValueError("Only unicast PING and READ(0,147) for IDs 11..16 are allowed")
         return write(packet)
     return guarded
+
+
+def select_reader(ser, read_port):
+    """Wait briefly via select when the input buffer is empty to avoid busy-spin polling."""
+    def guarded_read(length):
+        try:
+            waiting = ser.in_waiting
+        except (OSError, AttributeError):
+            waiting = None
+        if waiting == 0:
+            try:
+                fd = ser.fileno()
+                if isinstance(fd, int) and fd >= 0:
+                    select.select([fd], [], [], 0.002)
+            except (OSError, ValueError, TypeError, AttributeError):
+                pass
+        return read_port(length)
+    return guarded_read
 
 
 def decode_registers(model, data):
@@ -81,6 +100,7 @@ def open_readonly_port(device):
     port.ser.dtr = False
     port.ser.rts = False
     port.writePort = readonly_writer(port.ser.write)
+    port.readPort = select_reader(port.ser, port.readPort)
     try:
         port.ser.open()
         fcntl.ioctl(port.ser.fileno(), termios.TIOCEXCL)

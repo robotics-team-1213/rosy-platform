@@ -132,3 +132,28 @@ def test_post_lock_ownership_must_be_exclusively_this_process(monkeypatch, statu
     else:
         with pytest.raises(RuntimeError):
             module.check_exclusive_owner("/dev/test", 123)
+
+
+def test_select_reader_waits_only_when_empty_and_falls_back_cleanly(monkeypatch):
+    module = probe()
+    select_calls = []
+
+    def fake_select(rlist, wlist, xlist, timeout):
+        select_calls.append((rlist, wlist, xlist, timeout))
+        return (rlist, [], [])
+
+    monkeypatch.setattr(module.select, "select", fake_select)
+    ser = SimpleNamespace(in_waiting=0, fileno=lambda: 42)
+    reader = module.select_reader(ser, lambda n: f"read-{n}")
+    assert reader(8) == "read-8"
+    assert select_calls == [([42], [], [], 0.002)]
+
+    ser.in_waiting = 4
+    assert reader(4) == "read-4"
+    assert len(select_calls) == 1
+
+    ser.in_waiting = 0
+    monkeypatch.setattr(module.select, "select", lambda *a: (_ for _ in ()).throw(InterruptedError()))
+    assert reader(2) == "read-2"
+    ser.fileno = lambda: (_ for _ in ()).throw(OSError("no fd"))
+    assert reader(1) == "read-1"

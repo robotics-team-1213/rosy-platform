@@ -429,3 +429,31 @@ def test_frame_endpoint_etag_304_and_fifo_cell_keepalive_decode_cache(tmp_path):
         worker.join()
 
 
+def test_consume_native_caches_channels_and_skips_unchanged_snapshots(tmp_path, monkeypatch):
+    from core_common.observation_snapshot import SnapshotChannel
+
+    monkeypatch.setenv("ROSY_OBSERVATION_DIR", str(tmp_path))
+    ch = SnapshotChannel("/top_camera/image_raw")
+    ch.write("jpeg", b"jpeg1", captured_at=time.time())
+    store = ObservationStore(cameras={"top": "/top_camera/image_raw"})
+    assert not store.stream_active()
+
+    _viewer.consume_native(store)
+    assert store.image("top") == b"jpeg1"
+    reads = []
+    cached_ch = store._native_channels[0][1]
+    orig_read = cached_ch.read
+    cached_ch.read = lambda **kw: reads.append(1) or orig_read(**kw)
+
+    _viewer.consume_native(store)
+    assert reads == []
+
+    ch.write("jpeg", b"jpeg2", captured_at=time.time())
+    _viewer.consume_native(store)
+    assert reads == [1] and store.image("top") == b"jpeg2"
+
+    ch.path.unlink()
+    _viewer.consume_native(store)
+    assert len(reads) == 1 and "top" not in store._native_stats
+
+
