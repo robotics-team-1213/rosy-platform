@@ -1,3 +1,4 @@
+import {createCameraFrameHold, decodeImageUrl, paintCameraFrameHold} from '/common/camera-frame-hold.js';
 import {action, node, patchAttr, patchHidden, patchText} from '/common/control-dom.js';
 import {createScope} from '/common/scope.js';
 import {frameBadge} from '/console/assets/vision-view.js';
@@ -26,11 +27,15 @@ const staleArm = entry => {
   patchAttr(entry.status, 'state', 'unavailable');
   entry.updateVisibility?.();
 };
-const staleCamera = (entry, detail = '') => {
+const staleCamera = (entry, detail = '', {dropFrame = false} = {}) => {
+  entry.hold.disconnect({kind: 'warn', label: detail || '영상 연결 끊김', dropFrame});
+  const snap = entry.hold.snapshot();
   entry.live = false;
+  entry.hasFrame = snap.hasFrame;
   entry.reason = detail;
-  patchHidden(entry.image, true);
-  patchText(entry.status, detail ? `최신 영상 없음 · ${detail}` : '최신 영상 없음');
+  entry.lastTickSec = Math.floor(snap.disconnectedMs / 1000);
+  paintCameraFrameHold(entry.frameWrap, entry.image, entry.overlay, snap);
+  patchText(entry.status, snap.hasFrame ? snap.overlayText : (detail ? `최신 영상 없음 · ${detail}` : '최신 영상 없음'));
   patchAttr(entry.status, 'state', 'unavailable');
   entry.updateVisibility?.();
 };
@@ -93,18 +98,19 @@ export function createCellObservation({request, root, credential = () => '', onS
   function updateCellVisibility(cellState) {
     if (!cellState) return;
     const liveCams = cellState.camEntries.filter(cam => cam.live);
-    const idleCams = cellState.camEntries.length - liveCams.length;
+    const visibleCams = cellState.camEntries.filter(cam => cam.live || cam.hasFrame);
+    const idleCams = cellState.camEntries.length - visibleCams.length;
     const firstReason = cellState.camEntries.map(cam => cam.reason).find(Boolean) || '';
-    const hideIdleCams = !cellState.showAllCameras && liveCams.length > 0;
+    const hideIdleCams = !cellState.showAllCameras && visibleCams.length > 0;
     for (const camEntry of cellState.camEntries) {
-      patchHidden(camEntry.card, hideIdleCams && !camEntry.live);
+      patchHidden(camEntry.card, hideIdleCams && !(camEntry.live || camEntry.hasFrame));
     }
-    patchHidden(cellState.camBar, cellState.camEntries.length === 0 || liveCams.length === 0 || (idleCams === 0 && !cellState.showAllCameras));
+    patchHidden(cellState.camBar, cellState.camEntries.length === 0 || visibleCams.length === 0 || (idleCams === 0 && !cellState.showAllCameras));
     patchText(cellState.camSummary, cellState.showAllCameras
       ? `전체 셀 카메라 ${cellState.camEntries.length}대 표시 중`
       : `실시간 카메라 ${liveCams.length}/${cellState.camEntries.length}대 · 대기 ${idleCams}대 숨김`);
     patchText(cellState.camToggle, cellState.showAllCameras ? '실시간 카메라만 보기' : `대기 카메라 ${idleCams}대 보기`);
-    patchHidden(cellState.camEmpty, cellState.camEntries.length === 0 || liveCams.length > 0);
+    patchHidden(cellState.camEmpty, cellState.camEntries.length === 0 || visibleCams.length > 0);
     patchText(cellState.camEmptyText, firstReason
       ? `실시간 카메라 0/${cellState.camEntries.length}대 · ${firstReason}`
       : `실시간 카메라 0/${cellState.camEntries.length}대 · 영상 연결 확인 중`);
@@ -164,7 +170,7 @@ export function createCellObservation({request, root, credential = () => '', onS
   }
 
   function reset() {
-    for (const entry of cameras.values()) if (entry.url) URL.revokeObjectURL(entry.url);
+    for (const entry of cameras.values()) entry.hold?.dispose();
     for (const frames of faultFrames.values()) for (const frame of frames) URL.revokeObjectURL(frame.url);
     faultFrames.clear(); seenFaults = null;
     for (const url of incidentFrames.values()) URL.revokeObjectURL(url);
@@ -239,9 +245,13 @@ export function createCellObservation({request, root, credential = () => '', onS
       for (const camera of [...cell.cameras].sort(compareCameras)) {
         const card = node('article', '', 'cell-observation-card'); card.dataset.cameraSource = camera.source_id;
         const status = node('ui-status'); status.setAttribute('state', 'unavailable');
+        const frameWrap = node('div', '', 'cam-frame-hold');
         const image = node('img'); image.alt = `${camera.label} 현재 영상`; image.hidden = true;
-        const entry = {card, image, status, expires: 0, pending: false, lease: null, identity: null, url: null,
-          live: false, reason: '', updateVisibility: refreshCell};
+        const overlay = node('span', '', 'cam-frame-overlay'); overlay.setAttribute('role', 'status'); overlay.hidden = true;
+        frameWrap.append(image, overlay);
+        const entry = {card, frameWrap, image, overlay, status, hold: createCameraFrameHold(),
+          expires: 0, pending: false, lease: null, identity: null, live: false, hasFrame: false, lastTickSec: -1,
+          reason: '', updateVisibility: refreshCell};
         image.onerror = () => staleCamera(entry);
         card.title = '눌러서 크게 보기'; card.tabIndex = 0; card.setAttribute('role', 'button');
         card.setAttribute('aria-pressed', 'false'); card.setAttribute('aria-label', `${camera.label} 크게 보기`);
@@ -249,7 +259,7 @@ export function createCellObservation({request, root, credential = () => '', onS
         entry.label = camera.label;
         staleCamera(entry); cameras.set(camera.source_id, entry); cellState.camEntries.push(entry);
         card.append(node('h4', camera.stream === 'depth' ? `${camera.label} · 깊이` : camera.label), node('ui-text', camera.role === 'overhead'
-          ? '공용 상단 카메라' : camera.role === 'side' ? '공용 측면 카메라' : `설정된 팔: ${camera.arm_id}`), status, image); wall.append(card);
+          ? '공용 상단 카메라' : camera.role === 'side' ? '공용 측면 카메라' : `설정된 팔: ${camera.arm_id}`), status, frameWrap); wall.append(card);
       }
       refreshCell();
       section.append(wall, cellState.armBar, cellState.armEmpty, grid); root.append(section);
@@ -285,20 +295,31 @@ export function createCellObservation({request, root, credential = () => '', onS
       }
       if (badge.state !== 'live' || age > 2000 || !sequence || !/^\d+$/.test(sequence)) {
         if (badge.state === 'unauthorized') entry.lease = null;
-        staleCamera(entry, badge.label); return;
+        staleCamera(entry, badge.label, {dropFrame: badge.state === 'unauthorized'}); return;
       }
       const identity = `${sequence}:${response.headers.get('X-Frame-Captured-At') || ''}`;
-      if (entry.identity === identity) return;
+      if (entry.identity === identity) {
+        entry.expires = observedAt + 2000 - age;
+        if (!entry.live && entry.hasFrame) {
+          entry.live = true;
+          entry.hold.markLive({label: `원본 최신 영상 · #${sequence}`});
+          paintCameraFrameHold(entry.frameWrap, entry.image, entry.overlay, entry.hold.snapshot());
+          patchAttr(entry.status, 'state', 'ready');
+          patchText(entry.status, `원본 최신 영상 · #${sequence}`);
+          entry.updateVisibility?.();
+        }
+        return;
+      }
       const expires = observedAt + 2000 - age;
       const blob = await response.blob();
       url = URL.createObjectURL(blob);
-      const decoded = new Image(); decoded.src = url; await decoded.decode();
-      if (!current()) return;
+      const decoded = await decodeImageUrl(url);
+      if (!current() || !decoded) return;
       if (performance.now() >= expires) { staleCamera(entry); return; }
-      if (entry.url) URL.revokeObjectURL(entry.url);
-      entry.image.src = url; entry.url = url; entry.blob = blob; url = null;
-      entry.identity = identity; entry.expires = expires; entry.live = true; entry.reason = '';
-      patchHidden(entry.image, false);
+      entry.hold.acceptFrame({url, seq: sequence, label: `원본 최신 영상 · #${sequence}`});
+      entry.blob = blob; url = null;
+      entry.identity = identity; entry.expires = expires; entry.live = true; entry.hasFrame = true; entry.reason = '';
+      paintCameraFrameHold(entry.frameWrap, entry.image, entry.overlay, entry.hold.snapshot());
       patchAttr(entry.status, 'state', 'ready');
       patchText(entry.status, `원본 최신 영상 · #${sequence}`);
       entry.updateVisibility?.();
@@ -315,7 +336,7 @@ export function createCellObservation({request, root, credential = () => '', onS
 
   function holdFrames(session) {
     // the tile's own JPEG: the page CSP (connect-src 'self') refuses fetch() of a blob: URL
-    faultFrames.set(session, [...cameras.values()].filter(camera => !camera.image.hidden && camera.blob)
+    faultFrames.set(session, [...cameras.values()].filter(camera => camera.live && camera.blob)
       .map(camera => ({label: camera.label, url: URL.createObjectURL(camera.blob)})));
   }
 
@@ -472,7 +493,18 @@ export function createCellObservation({request, root, credential = () => '', onS
           if (performance.now() >= entry.expires) staleArm(entry);
           if (performance.now() - entry.healthPaintedAt >= 1000) paintHealth(entry);
         }
-        for (const entry of cameras.values()) if (entry.live && performance.now() >= entry.expires) staleCamera(entry);
+        for (const entry of cameras.values()) {
+          if (entry.live && performance.now() >= entry.expires) staleCamera(entry);
+          else if (!entry.live && entry.hasFrame) {
+            const snap = entry.hold.snapshot();
+            const sec = Math.floor(snap.disconnectedMs / 1000);
+            if (sec !== entry.lastTickSec) {
+              entry.lastTickSec = sec;
+              paintCameraFrameHold(entry.frameWrap, entry.image, entry.overlay, snap);
+              patchText(entry.status, snap.overlayText);
+            }
+          }
+        }
         // 연결이 끊긴 동안 만료 판정이 옛 팔 목록으로 요약을 되살리지 않는다(번쩍임 없음).
         if (!observedDisconnected) summarize(lastWorkcells);
       }, 100);

@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createVisionView } from "../../../../applications/fleet/web/shared/vision-view.js";
+import { register } from "node:module";
+
+register("./resolve-console-assets.mjs", import.meta.url);
+
+const { createVisionView } = await import("../../../../applications/fleet/web/shared/vision-view.js");
 
 // Model the select's browser behavior: replacing options selects the first option.
 function harness() {

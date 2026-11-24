@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { register } from 'node:module';
+
+register('./resolve-console-assets.mjs', import.meta.url);
 
 // B-3 — 셀 팔 예외 줄: createCellObservation의 onSummary 우선순위, 같은 폴링 무음,
 // focusArm의 카드 초점, clear()의 즉시 숨김을 지킨다. 가짜 DOM만 쓴다.
-import {createCellObservation} from '../../../../applications/fleet/web/cell/cell-observation.js';
+const {createCellObservation} = await import('../../../../applications/fleet/web/cell/cell-observation.js');
 
 function node(tag = '') {
   const element = {
