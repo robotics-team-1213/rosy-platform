@@ -40,7 +40,14 @@ def hold_runner(runner, present, reason, *, human: bool, empty_margin: float) ->
         runner.target[5], runner.holding = saved
     chunk, jogging = runner.chunk, bool(runner.jog_path)
     runner.queue, runner.retreat_frames = [], (runner.played or runner.jog_path[:-1])[::-1]
-    runner.target = list(present[:5]) + [runner.target[5]]
+    # Freeze unheld obstructed jaws at the measured angle so human-hold does not squeeze and heat the gripper motor.
+    grip_target = (
+        float(present[5])
+        if human and not runner.holding and getattr(runner, "_release_until", None) is None
+        and float(present[5]) > float(runner.target[5]) + empty_margin
+        else runner.target[5]
+    )
+    runner.target = list(present[:5]) + [grip_target]
     runner.fault, runner.holding = reason, bool(runner.holding and present[5] > runner.target[5] + empty_margin)
     runner.chunk, runner.played, runner.jog_path = None, [], []
     runner.pace_floor, runner.paced, runner.pace_last, runner.trend = 0.0, 0, None, []
@@ -194,39 +201,24 @@ def read_motor_health(robot) -> dict[str, list[int]] | None:
 
         enforce_temperatures(getattr(robot, "motion", None), temp)
     return {
-        "pwm": [signed(pwm[m]) for m in MOTORS],
-        "current_ma": [signed(current[m]) for m in MOTORS],
+        "pwm": [signed(pwm[m]) for m in MOTORS], "current_ma": [signed(current[m]) for m in MOTORS],
         "temp_c": [int(temp[m]) for m in MOTORS],
     }
 
 
 def check_motor_thermal_and_stall(
-    health: dict[str, Any],
-    target: list[float],
-    present: list[float],
-    health_present: list[float] | None,
-    overload_since: float | None,
-    now: float,
+    health: dict[str, Any], target: list[float], present: list[float],
+    health_present: list[float] | None, overload_since: float | None, now: float,
 ) -> tuple[str | None, list[float], float | None]:
     """Check motor temperatures and load-bearing joint PWM stall windows."""
-    hot = max(health["temp_c"])
-    moved = health_present or present
-    stalled = [
-        i
-        for i in range(4)
-        if abs(health["pwm"][i]) >= PWM_STOP
-        and abs(target[i] - present[i]) > STALL_GAP
-        and abs(present[i] - moved[i]) < STALL_MOVE
-    ]
+    hot, moved = max(health["temp_c"]), health_present or present
+    stalled = [i for i in range(4) if abs(health["pwm"][i]) >= PWM_STOP
+               and abs(target[i] - present[i]) > STALL_GAP and abs(present[i] - moved[i]) < STALL_MOVE]
     new_overload_since = None if not stalled else (now if overload_since is None else overload_since)
     pushing = max((abs(health["pwm"][i]) for i in stalled), default=0)
-    reason = (
-        f"temperature {hot} C"
-        if hot >= TEMP_STOP
-        else f"load-bearing joint stalled at PWM {pushing} for {PWM_STOP_S} s"
-        if new_overload_since is not None and now - new_overload_since >= PWM_STOP_S
-        else None
-    )
+    reason = (f"temperature {hot} C" if hot >= TEMP_STOP
+              else f"load-bearing joint stalled at PWM {pushing} for {PWM_STOP_S} s"
+              if new_overload_since is not None and now - new_overload_since >= PWM_STOP_S else None)
     return reason, present, new_overload_since
 
 

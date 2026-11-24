@@ -322,3 +322,6 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
             except BaseException:
                 pass
         pool.shutdown(wait=False, cancel_futures=True)
+
+
+from cell_policy_retreat import retreat_from_jaw_zone, retreat_from_jaw_zone_frames  # noqa: E402,F401

@@ -1452,6 +1452,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_corridor.py
   - deploy/robot/omx/cell_unwedge.py
   - deploy/robot/omx/cell_auto_fold.py
+  - deploy/robot/omx/cell_recovery_plan.py
+  - deploy/robot/omx/cell_recovery_advisor.py
   - deploy/robot/omx/cell_remap_jaws.py
   - deploy/robot/omx/cell_task_worker.py
   - deploy/robot/omx/cell_task_exec.py
@@ -1470,6 +1472,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_policy_drive.py
   - deploy/robot/omx/cell_policy_shape.py
   - deploy/robot/omx/cell_policy_timing.py
+  - deploy/robot/omx/cell_policy_retreat.py
   - deploy/robot/omx/cell_policy_handoff.py
   - deploy/robot/omx/cell_policy_paced.py
   - deploy/robot/omx/cell_policy_entry.py
