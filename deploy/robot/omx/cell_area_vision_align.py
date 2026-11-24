@@ -83,7 +83,7 @@ def _replan_and_hover(
 
 def _persist_wrist_signs(work_dir: Path, arm_id: str, cal: dict[str, Any], obs: dict[str, Any]) -> None:
     try:
-        fc = obs.get("finger_color")
+        fc = obs.get("finger_color") or cal.get("finger_color")
         cell_arm_cal.record_wrist_observation(
             work_dir,
             arm_id=arm_id,
@@ -220,7 +220,7 @@ def refine_pick_pose_at_hover(
                     cur_directive, p_xyz, base_plan, work_dir, kinematics_root, lib_path, run_cmd, "refined",
                 )
                 vision_refined_xy = False
-                rev_obs = {**obs, "reverted": True}
+                rev_obs = {**obs, "found": False, "reverted": True}
                 wrist_log[-1] = rev_obs
                 last_wrist_obs = rev_obs
                 break
