@@ -5,9 +5,25 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.458
+**Version:** v1.460
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.460 Fleet 파이프라인 호밍·VLA/LLM 복구 툴 계약 (Fleet)
+
+`GET /api/fleet/pipeline/recovery-tools` 와 `POST /api/fleet/pipeline/recovery-tools/invoke` 는 결정론적 OMX/Pinky 파이프라인이 실패해 `ABORTED`, `FOLD_READBACK_MISSING`, `REVIEW_REQUIRED`, `REPARK_LIMIT`, `REPARK_FAILED`, `PINKY_FAILED`/`REFUSED` 상태일 때 LLM/VLA 및 운영자에게 허용된 8종 복구 툴 스키마·D-1048 세션 통합 단계적 호밍·실행 게이트(`rosy.pipeline.recovery-tools.v1`)를 제공한다(v1.460).
+
+* `inspect_failure_context`, `safe_fold_home`(`auto_fold` · `release_and_lift` · `guarded_slow_park` · `finalize_home_verify`, 전부 `cell_auto_fold` 세션 래퍼 경유 · `expires_at`/`stop_generation` 바인딩), `record_visual_checkpoint`(카메라 `recorded_at <= 15s` 신선도·모션 이후 엄격 단조 프레임 시퀀스 검증), `enqueue_displaced_recovery`(운영자 승인 · 루트당 1회 · D-911 입회 필수), `request_repark`(`MAX_REPARK=2`), `enqueue_vla_act_fallback`(`vla_shadow` 또는 운영자 승인 + D-911 입회 필수 `act`), `dispatch_pinky_reroute`(기존 dispatch 게이트 · 동일 루트당 1회), `escalate_human`(활성 실패+CAS 필수, 루트당 단일 티켓) 만 허용하며 원시 명령·우회 키(`FORBIDDEN_RAW_COMMAND_KEY`)를 `422`로 거부한다(v1.460).
+* 모든 변이 툴은 `expected_context_sha256` CAS 검증(`409 STALE_FAILURE_CONTEXT`), principal 바인딩 `request_id` 멱등성(거부 상태 코드 포함 재생), `HUMAN_HOLD` 차단(`409 HUMAN_HOLD_ACTIVE`), `caller_kind` 역할 일치(`403`), `TARGET_MISMATCH_AFTER_CAS`, `fallback_chain_depth < 1` 상한을 적용하고 저장 실패 시 인메모리 상태를 롤백한다(v1.460).
+* `POST /api/fleet/pipeline/cell-quality` 는 `ROSY_FLEET_CELL_OWNERS`/운영자 한정 `safe_home_acks` 로 `cell_camera_telemetry_sync.py` 및 `cell_auto_fold.py` (`--stage release_and_lift | park_only | full`) 를 검증된 HTTPS · `guarded-pick` 모드에서만 안전 기동하며 `park_only` 는 `after_park` 검증 전 보류 해제를 건너뛴다(v1.460).
+
+### v1.459 Fleet 파이프라인 E2E 배차·depart_s3·재주차 복구 계약 (Fleet)
+
+`GET /api/fleet/pipeline/cell-tasks` 와 `GET /api/fleet/pipeline/pinky-tasks` 는 D-1060 디스패처 활성 여부를 나타내는 불리언 `pinky_dispatch_enabled` 를 반환한다(v1.459).
+
+* `POST /api/fleet/pipeline/pinky-tasks` 의 `depart_s3` 액션은 `site_rules.return_.exit_place` 를 `place_id` 와 `target_place` 로 설정하고 `unload_batch_id` 를 기록한다. 출구 장소가 없으면 `unload_releases` 를 예약하지 않고 `409 NO_EXIT_PLACE` 를 반환하며, 디스패치/트립 시작 직전 `unload_release` 를 재검증해 트립 시작 전 실패·거부·취소 시 `OPERATOR` 예약을 해제한다(v1.459).
+* `POST /api/fleet/pipeline/cell-tasks` 및 `POST /api/fleet/pipeline/decision-gate`(`arm_target`)는 `robot_id` 를 명시 입력(공백·비문자열은 `422 INVALID_ROBOT_ID`) -> 셀 도킹 로봇 -> `"rosy_01"` 순으로 해석한다(v1.459).
+* `POST /api/fleet/pipeline/repark/{request_id}` (`DONE`)는 완료된 재시도 태스크가 동일 `(unload_batch_id, robot_id, unload_index, repark_root)` 의 `ABORTED` 행을 대체해 `unload-release` / `continue_unload` 진행을 허용하고, 안전 조건(사람 미감지·팔 홀드 없음·실행 태스크 없음·신선한 `folded: true`) 충족 시에만 `ABORTED` 셀 상태를 복귀한다(v1.459).
 
 ### v1.458 OMX /readiness per-cell isolation (Cell)
 
@@ -5004,6 +5020,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.460 | 2026-11-24 | [Fleet] Additive: GET /pipeline/recovery-tools, POST /pipeline/recovery-tools/invoke 및 D-1048 단계적 호밍·시각 체크포인트 |
+| v1.459 | 2026-11-24 | [Fleet] Additive: pinky_dispatch_enabled, depart_s3 출구 배차, cell robot_id 해석, repark ABORTED 대체 |
 | v1.458 | 2026-11-24 | [Cell] Additive: GET /readiness cells breakdown and optional ?cell=cell_s\|cell_ab filter |
 | v1.457 | 2026-11-24 | [Fleet] Fleet cell-task PROPOSE/admit CAS, interlock_scope, and cell readiness |
 | v1.456 | 2026-11-24 | [Cell] GET /readiness, /failures*, /frame/{view}.jpg 헤더 보존, /jobs/{id} structured_result 및 5종 비-이동 작업 추가 |
