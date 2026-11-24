@@ -25,6 +25,7 @@ const planMetrics = (plan) => ({
   ...(Number.isFinite(plan.length_m) ? { length_m: plan.length_m } : {}),
   ...(Number.isFinite(plan.eta_s) ? { eta_s: plan.eta_s } : {}),
 });
+const fmtCoord = (v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
 const mkEl = (tag, cls, txt) => {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -353,52 +354,54 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       if (card.childElementCount) card.replaceChildren();
       return;
     }
+    const clampPct = (v) => Math.max(0, Math.min(100, Math.round(v)));
     const lines = [], bars = [];
     let title = "", badge = "", badgeTone = "neutral", footer = "";
     if (entity.kind === "pinky") {
-      const r = entity.guideRow;
-      const robotObj = (view.robots || []).find((item) => item.robot_id === r.robot_id);
+      const r = entity.guideRow, robotObj = (view.robots || []).find((item) => item.robot_id === r.robot_id);
       const host = view.robotNames?.[r.robot_id] || robotObj?.hostname || r.robot_id;
       const p = r.pose || {}, deg = typeof p.yaw === "number" ? `${((p.yaw * 180) / Math.PI).toFixed(1)}°` : "—";
-      const lane = r.lane, bat = robotObj?.state?.battery;
-      const rawPct = typeof bat?.percent === "number" ? bat.percent
-        : typeof bat?.percentage === "number" ? (bat.percentage <= 1 ? bat.percentage * 100 : bat.percentage)
-        : typeof robotObj?.state?.battery_status?.shown_percent === "number" ? robotObj.state.battery_status.shown_percent
-        : typeof robotObj?.power_health?.battery?.percent === "number" ? robotObj.power_health.battery.percent : 100;
-      const pctNum = Math.max(0, Math.min(100, Math.round(rawPct)));
-      const voltVal = bat?.voltage ?? robotObj?.state?.battery_status?.filtered_voltage ?? robotObj?.power_health?.battery?.filtered_voltage;
-      const volt = typeof voltVal === "number" ? `${voltVal.toFixed(2)}V` : "8.76V";
-      const latM = Math.abs(lane?.lateral_m ?? lane?.offset_m ?? 0.004);
-      const halfW = Math.max(0.05, (lane?.width_m ?? 0.18) / 2);
-      const alignPct = Math.max(0, Math.min(100, Math.round((1 - Math.min(1, latM / halfW)) * 100)));
-      const devices = robotObj?.state?.power?.devices || [];
-      const readyCount = devices.length ? devices.filter((d) => d.ready !== false).length : 4;
-      const totalSensors = devices.length || 4, sensorPct = Math.round((readyCount / totalSensors) * 100);
+      const lane = r.lane, bat = robotObj?.state?.battery, bs = robotObj?.state?.battery_status, ph = robotObj?.power_health?.battery;
+      const rawPct = typeof bat?.percent === "number" ? bat.percent : typeof bat?.percentage === "number" ? (bat.percentage <= 1 ? bat.percentage * 100 : bat.percentage) : typeof bs?.shown_percent === "number" ? bs.shown_percent : typeof ph?.percent === "number" ? ph.percent : null;
+      const pctNum = typeof rawPct === "number" && Number.isFinite(rawPct) ? clampPct(rawPct) : null;
+      const voltVal = bat?.voltage ?? bs?.filtered_voltage ?? ph?.filtered_voltage;
+      const volt = typeof voltVal === "number" ? `${voltVal.toFixed(2)}V` : null;
+      const rawLat = lane ? (lane.lateral_m ?? lane.offset_m) : null;
+      const latM = typeof rawLat === "number" && Number.isFinite(rawLat) ? Math.abs(rawLat) : null;
+      const alignPct = latM !== null ? clampPct((1 - Math.min(1, latM / Math.max(0.05, (lane?.width_m ?? 0.18) / 2))) * 100) : null;
+      const devices = robotObj?.state?.power?.devices || [], readyCount = devices.filter((d) => d.ready !== false).length;
+      const sensorPct = devices.length ? Math.round((readyCount / devices.length) * 100) : null;
       title = `🤖 ${host} (${r.robot_id})`;
-      badge = r.online !== false ? "온라인 · 실측 10.4cm" : "오프라인";
+      badge = r.online !== false ? (p.state || "온라인") : "오프라인";
       badgeTone = r.online !== false ? "good" : "warn";
-      const cell = Number.isFinite(p.x) && Number.isFinite(p.y) ? ` · 칸 ${gridCellOf(p.x, p.y).label}` : "";
-      lines.push(["정밀 좌표 · 방위", `(${(p.x ?? 0).toFixed(3)}, ${(p.y ?? 0).toFixed(3)}) m · HEAD ${deg} (±${(p.u_m ?? 0.02).toFixed(2)}m)${cell}`]);
-      lines.push(["차로 · 센서", `${lane ? lane.edge_id : "자유구역"} · LiDAR/Cam/IMU/Odom ${readyCount}/${totalSensors} 정상`]);
-      bars.push(["🔋 배터리", `${pctNum}% · ${volt}`, pctNum, pctNum >= 50 ? "good" : pctNum >= 25 ? "warn" : "crit"]);
-      bars.push(["🛰️ 차로 정렬", `${alignPct}% (오차 ${(latM * 100).toFixed(1)}cm)`, alignPct, alignPct >= 75 ? "info" : "warn"]);
-      bars.push(["📡 센서 준비", `${sensorPct}% (5.0Hz)`, sensorPct, "good"]);
+      const hasXY = Number.isFinite(p.x) && Number.isFinite(p.y), cell = hasXY ? ` · 칸 ${gridCellOf(p.x, p.y).label}` : "";
+      const unc = typeof p.u_m === "number" ? ` (±${p.u_m.toFixed(2)}m)` : "";
+      lines.push(["정밀 좌표 · 방위", `${hasXY ? `(${fmtCoord(p.x)}, ${fmtCoord(p.y)}) m` : "위치 모름"} · HEAD ${deg}${unc}${cell}`]);
+      lines.push(["차로 · 센서", `${lane ? lane.edge_id : "자유구역"} · ${devices.length ? `장치 ${readyCount}/${devices.length} 정상` : "장치 미수신"}`]);
+      if (pctNum !== null) bars.push(["🔋 배터리", `${pctNum}%${volt ? ` · ${volt}` : ""}`, pctNum, pctNum >= 50 ? "good" : pctNum >= 25 ? "warn" : "crit"]);
+      else if (volt) lines.push(["배터리", volt]);
+      if (alignPct !== null) bars.push(["🛰️ 차로 정렬", `${alignPct}% (오차 ${(latM * 100).toFixed(1)}cm)`, alignPct, alignPct >= 75 ? "info" : "warn"]);
+      if (sensorPct !== null) bars.push(["📡 센서 준비", `${sensorPct}% (${readyCount}/${devices.length})`, sensorPct, "good"]);
       footer = "클릭하여 선택 · 선택 후 지도 좌표/장소 클릭 시 🎯 핀 고정 및 도로 주행";
     } else if (entity.kind === "omx_ai") {
       const anc = entity.anchor, cell = view.omxCells?.[anc.target_id];
+      const obsArm = (view.workcellObs?.arms || []).find((o) => o.id === anc.target_id) || null;
       const deg = typeof anc.head_yaw === "number" ? `${((anc.head_yaw * 180) / Math.PI).toFixed(1)}°` : "—";
-      const extM = anc.extension_m ?? 0.20, reachM = anc.reach_m || 0.28;
-      const reachPct = Math.max(0, Math.min(100, Math.round((extM / reachM) * 100)));
-      const confPct = Math.max(0, Math.min(100, Math.round((anc.confidence ?? 0.98) * 100)));
-      const handoffMap = { arm_a: "S2 (상차)", arm_b: "S3 (하차)", arm_s: "S5 (분류)" };
+      const hasHead = anc.live === true && Number.isFinite(anc.head_x) && Number.isFinite(anc.head_y);
+      const extM = typeof anc.extension_m === "number" ? anc.extension_m : hasHead ? Math.hypot(anc.head_x - anc.base_x, anc.head_y - anc.base_y) : null;
+      const reachM = anc.reach_m || 0.28, reachPct = extM !== null ? clampPct((extM / reachM) * 100) : null;
+      const confPct = typeof anc.confidence === "number" ? clampPct(anc.confidence * 100) : null;
+      const handoffMap = { arm_a: "S5 (1·3층 적재)", arm_b: "S5 (2층 적재)", arm_s: "S3 (하역 셔틀)" };
       title = `🦾 ${anc.label || anc.target_id.toUpperCase()}`;
-      badge = anc.cell_status || (cell?.reachable ? "ARM-CELL ONLINE" : "VISION 4X");
-      badgeTone = "good";
-      lines.push(["베이스 → 헤드", `(${anc.base_x.toFixed(2)}, ${anc.base_y.toFixed(2)}) → (${(anc.head_x ?? anc.base_x).toFixed(2)}, ${(anc.head_y ?? anc.base_y).toFixed(2)}) m · ${deg}`]);
-      lines.push(["관절 · 연계역", `${anc.joints_summary || "6축 정상"} · Fleet 연계: ${handoffMap[anc.target_id] || "S2"}`]);
-      bars.push(["📐 팔 뻗음", `${extM.toFixed(2)}/${reachM.toFixed(2)}m (${reachPct}%)`, reachPct, "info"]);
-      bars.push(["⚙️ 서보 버스", anc.motor_summary || "12.0V · 31°C (100%)", 100, "good"]);
-      bars.push(["🔍 4x 추적", `신뢰도 ${confPct}%`, confPct, "good"]);
+      badge = anc.cell_status || (cell?.reachable ? "ARM-CELL ONLINE" : anc.live ? "VISION 4X" : "대기");
+      badgeTone = anc.live || anc.cell_status ? "good" : "neutral";
+      lines.push(["베이스 → 헤드", `(${fmtCoord(anc.base_x)}, ${fmtCoord(anc.base_y)}) → ${hasHead ? `(${fmtCoord(anc.head_x)}, ${fmtCoord(anc.head_y)}) m` : "미수신"} · ${deg}`]);
+      lines.push(["관절 · 연계역", `${anc.joints_summary || (anc.live ? "관절 위치 수신" : "위치 미수신")} · Fleet 연계: ${handoffMap[anc.target_id] || "미배정"}`]);
+      if (reachPct !== null) bars.push(["📐 팔 뻗음", `${extM.toFixed(2)}/${reachM.toFixed(2)}m (${reachPct}%)`, reachPct, "info"]);
+      const mParts = [typeof obsArm?.maxCurrentMa === "number" && `${obsArm.maxCurrentMa} mA`, typeof obsArm?.maxTempC === "number" && `${obsArm.maxTempC} °C`].filter(Boolean);
+      if (anc.motor_summary) bars.push(["⚙️ 서보 버스", anc.motor_summary, 100, "good"]);
+      else if (mParts.length) lines.push(["서보 버스", mParts.join(" · ")]);
+      if (confPct !== null) bars.push(["🔍 4x 추적", `신뢰도 ${confPct}%`, confPct, "good"]);
       footer = `클릭 시 우측 셀 상세 카드 열기 · ${view.selected || view.focusRobot || "선택한 로봇"} 연계 정류장 즉시 호출 가능`;
     } else if (entity.kind === "place") {
       const pl = entity.place, siteMapObj = view.activeSiteMap?.map;
@@ -523,7 +526,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         }
       }
       for (const anc of view.anchors || []) {
-        if (anc.kind === "omx_ai" && Math.min(Math.hypot(anc.base_x - world.x, anc.base_y - world.y), Math.hypot((anc.head_x ?? anc.base_x) - world.x, (anc.head_y ?? anc.base_y) - world.y)) <= 0.13) {
+        if (anc.kind === "omx_ai" && distToSegment(world.x, world.y, anc.base_x, anc.base_y, anc.head_x ?? anc.base_x, anc.head_y ?? anc.base_y) <= 0.13) {
           return pickFocus(anc.target_id, `${anc.label} 선택됨 · 우측 인스펙터와 도크 선택이 갱신되었습니다`);
         }
       }

@@ -31,6 +31,13 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const workspaceCards = new Map();
   function openCard(robotId, opts = {}) {
     if (!robotId) view.focusAnchorId = null;
+    else {
+      const stage = el("map-stage");
+      if (stage?.dataset.view === "camera") {
+        stage.dataset.view = "map";
+        el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
+      }
+    }
     if (typeof robotId === "string" && (robotId.startsWith("arm_") || robotId.startsWith("cell_"))) {
       view.focusAnchorId = robotId === "cell_s" ? "arm_s" : (robotId === "cell_ab" ? "arm_a" : robotId);
       view.focusRobot = null;
@@ -53,12 +60,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       // D-651: 로봇을 고르는 것은 읽기다. 목표 받기는 '목표 지정' 단추로만 켜진다.
       view.focusAnchorId = view.focusRobot || null;
       if (!opts?.fromSelection) selection?.set?.(view.focusRobot || null, { source: "roster" });
-      const stage = el("map-stage");
-      const birdseyeToggle = el("birdseye-toggle");
-      if (stage && stage.dataset.view === "camera") {
-        stage.dataset.view = "map";
-        birdseyeToggle?.setAttribute("aria-pressed", "false");
-      }
       const canvas = el("map-canvas");
       canvas.classList.toggle("idle", !view.selected && !view.pinning);
       canvas.tabIndex = view.selected ? 0 : -1;
