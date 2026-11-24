@@ -14,9 +14,19 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sys
 import time
 from pathlib import Path
+
+import cell_failure_context as cfc
+from cell_failure_vetoes import (
+    FALLBACK_VERBS,
+    MAX_CHAIN_DEPTH,
+    build_allowed_fallback_menu,
+    compute_measured_vetoes,
+)
+import cell_requests
 
 import cell_align
 import cell_auto_pick as auto
@@ -35,6 +45,8 @@ NEAR_PX, ROUNDS = 60, 5  # about 1 mm per px in the 650 mm top view; a long box 
 # cell_why reads too_fast only where the same chunk ran on, as fast, lagging as much (its free-run baseline)
 PREFER = {"too_fast": "slow_down", "blocked": "push_clear"}
 SLOWER, SLOWEST = 0.7, 0.25  # lift_guard_frac: each slow_down, and its floor
+MAX_AI_FALLBACK_PER_TASK = MAX_CHAIN_DEPTH
+FALLBACK_PREFER = {"too_fast": "retry_ik_slower", "blocked": "align_push"}
 
 
 def away_from(blobs: list, points: list, near_px: int = NEAR_PX) -> list:
@@ -212,6 +224,168 @@ def main(argv=None) -> int:
                 camera=moved_camera, ignore=moving_rects(config))
     print(json.dumps({**out, "unsolved": unsolved(choices), "open_questions": cell_why.open_questions(why_path)}, indent=1, default=str))
     return 0 if out["result"] == "placed" else 1
+
+
+def _escalate_selection(reason: str) -> dict:
+    return {
+        "verb": "escalate_human",
+        "tier": 0,
+        "stratum": "human_only",
+        "target_surface": "human_request",
+        "requires_human_operator": True,
+        "requires_person_at_switch": False,
+        "escalate": True,
+        "reason": reason,
+    }
+
+
+def _verified_menu(bundle: dict, fallback_chain_depth: int) -> tuple[list[dict], str | None]:
+    if not isinstance(bundle, dict):
+        return [], "missing failure bundle"
+    if isinstance(fallback_chain_depth, bool) or not isinstance(fallback_chain_depth, int) or fallback_chain_depth < 0:
+        return [], f"invalid fallback_chain_depth {fallback_chain_depth!r}"
+    if fallback_chain_depth >= MAX_AI_FALLBACK_PER_TASK:
+        return [], f"fallback chain depth {fallback_chain_depth} >= {MAX_AI_FALLBACK_PER_TASK}"
+    exp_sha = bundle.get("context_sha256")
+    if not isinstance(exp_sha, str) or exp_sha != cfc.canonical_sha256(bundle):
+        return [], "bundle context_sha256 missing or tampered"
+    history = bundle.get("history_and_constraints") or {}
+    if history.get("repeat_unknown_tripped"):
+        return [], "repeat_unknown tripped: escalating to human"
+    meas = bundle.get("measurement") or {}
+    spatial = bundle.get("spatial") or {}
+    visual = bundle.get("visual") or {}
+    cause = str((meas.get("outcome") or {}).get("attempt_cause") or "other")
+    exec_mode = str(bundle.get("executor_mode") or (bundle.get("executor") or {}).get("mode") or "")
+    orig_menu = history.get("allowed_fallback_menu") or ()
+    has_redir = any(isinstance(m, dict) and m.get("verb") == "redirect_alt_dest" for m in orig_menu)
+    auto_fold = any(isinstance(m, dict) and m.get("verb") == "home_unwedge" and m.get("tier") == 2 for m in orig_menu)
+    pending = bool(history.get("pending_intent_present") or any(
+        isinstance(v, dict) and v.get("code") == "PENDING_INTENT_PRESENT" for v in (history.get("measured_vetoes") or ())
+    ))
+    vetoes = compute_measured_vetoes(meas, spatial, visual, pending_intent_present=pending, repeat_unknown_tripped=False)
+    menu = build_allowed_fallback_menu(
+        exec_mode, cause, vetoes, fallback_chain_depth=fallback_chain_depth,
+        has_declared_alternates=has_redir, dest_full_pre_motion=has_redir, auto_fold_armed=auto_fold,
+    )
+    return [item for item in menu if isinstance(item, dict) and item.get("verb") in FALLBACK_VERBS], None
+
+
+def permitted_fallback_verbs(bundle: dict, *, fallback_chain_depth: int = 0) -> list[str]:
+    """Return permitted fallback verbs recomputed from verified bundle measurements."""
+    menu, err = _verified_menu(bundle, fallback_chain_depth)
+    if err:
+        return ["escalate_human"]
+    return [m["verb"] for m in menu if m.get("preconditions_met") is True and not m.get("blocked_by")] or ["escalate_human"]
+
+
+def select_fallback(
+    bundle: dict,
+    *,
+    proposed_verb: str | None = None,
+    fallback_chain_depth: int = 0,
+    choices=None,
+    why_row: dict | None = None,
+) -> dict:
+    """Pure selection over closed `FALLBACK_VERBS` & bundle vetoes; enforces depth<=2 and Tier-1 policy->IK gate."""
+    menu, err = _verified_menu(bundle, fallback_chain_depth)
+    if err:
+        return _escalate_selection(err)
+    permitted = {
+        item["verb"]: item
+        for item in menu
+        if item.get("preconditions_met") is True and not item.get("blocked_by")
+    }
+    if proposed_verb is not None:
+        if proposed_verb not in FALLBACK_VERBS:
+            return _escalate_selection(f"unknown fallback verb {proposed_verb!r}")
+        item = permitted.get(proposed_verb)
+        if item is None:
+            return _escalate_selection(f"verb {proposed_verb!r} blocked or absent in allowed_fallback_menu")
+        if item.get("tier") == 1 and item.get("requires_human_operator") is not True:
+            return _escalate_selection(f"Tier-1 verb {proposed_verb!r} requires human operator approval")
+        if proposed_verb == "escalate_human":
+            return _escalate_selection("selected escalate_human")
+        return {
+            "verb": proposed_verb,
+            "tier": int(item.get("tier", 1)),
+            "stratum": str(item.get("stratum") or "tier1_propose"),
+            "target_surface": str(item.get("target_surface") or "cell_job_api"),
+            "requires_human_operator": bool(item.get("requires_human_operator", True)),
+            "requires_person_at_switch": bool(item.get("requires_person_at_switch", True)),
+            "escalate": bool(item.get("requires_human_operator", True)),
+            "reason": f"permitted {proposed_verb}",
+            "menu_item": item,
+        }
+
+    outcome = (bundle.get("measurement") or {}).get("outcome") or {}
+    cause = str(outcome.get("attempt_cause") or "other")
+    exec_mode = str(bundle.get("executor_mode") or (bundle.get("executor") or {}).get("mode") or "")
+    if exec_mode in ("act_paced", "act_timed", "hybrid") or exec_mode.startswith(("act", "policy", "smolvla")):
+        if "propose_ik_fallback_for_policy" in permitted:
+            return select_fallback(bundle, proposed_verb="propose_ik_fallback_for_policy", fallback_chain_depth=fallback_chain_depth)
+    non_esc = [v for v in permitted if v != "escalate_human"]
+    if not non_esc:
+        return _escalate_selection(f"no permitted automated/proposed verb for {cause}")
+    ranked = choices.ranked(f"fallback.{cause}", non_esc) if choices else non_esc
+    prefer = FALLBACK_PREFER.get((why_row or {}).get("hypothesis")) if (why_row or {}).get("by") == "measurement" else None
+    if prefer in ranked:
+        chosen = prefer
+    else:
+        chosen = ranked[0]
+    return select_fallback(bundle, proposed_verb=chosen, fallback_chain_depth=fallback_chain_depth)
+
+
+def escalate_to_request(
+    bundle: dict,
+    *,
+    selection: dict | None = None,
+    reason: str = "",
+    image: Path | None = None,
+    root: Path | None = None,
+) -> dict:
+    """Persist an actionable `cell_requests` check item from a `CellFailureContext` bundle."""
+    bid = str(bundle.get("bundle_id") or "cell-failure")
+    req_id = re.sub(r"[^A-Za-z0-9_-]", "-", f"esc-{bid}")[:64].strip("-") or "esc-cell-failure"
+    arm_id = str(bundle.get("arm_id") or "arm_s")
+    outcome = (bundle.get("measurement") or {}).get("outcome") or {}
+    cause = str(outcome.get("attempt_cause") or "other")
+    hist = bundle.get("history_and_constraints") or {}
+    raw_vetoes = hist.get("measured_vetoes") or ()
+    vetoes = [v.get("code") for v in raw_vetoes if isinstance(v, dict) and v.get("code")]
+    sel_verb = (selection or {}).get("verb") or "escalate_human"
+    why_text = reason or (selection or {}).get("reason") or cell_diagnose.ASK.get(cause) or str(outcome.get("result_text") or cause)
+    req = {
+        "id": req_id,
+        "kind": "check",
+        "item": f"{arm_id}-{cause}",
+        "question": f"Approve or resolve {arm_id} failure ({cause}; verb={sel_verb})? [{why_text[:120]}]",
+        "how": f"Inspect failure bundle {bid} and physical workspace on {arm_id}, then answer pass/fail.",
+        "steps": [
+            f"Inspect {arm_id} physical state and clear any incident/hold",
+            f"Review bundle {bid} vetoes={vetoes} proposed={sel_verb}",
+            f"Confirm resolution or next operator action for {cause}",
+        ],
+        "why": why_text[:200],
+        "arm_id": arm_id,
+        "bundle_id": bid,
+        "attempt_cause": cause,
+        "context_sha256": bundle.get("context_sha256"),
+        "selected_verb": sel_verb,
+        "vetoes": vetoes,
+    }
+    rdir = Path(root) if root is not None else cell_requests.store()
+    existing = rdir / f"{req_id}.json"
+    if existing.is_file():
+        loaded = json.loads(existing.read_text(encoding="utf-8"))
+        if loaded.get("bundle_id") == bid and loaded.get("context_sha256") == bundle.get("context_sha256") and loaded.get("status") == "open":
+            return loaded
+        for i in range(1, 100):
+            cand = f"{req_id[:58]}-{i}"
+            if not (rdir / f"{cand}.json").exists():
+                req["id"] = cand
+                break
+    return cell_requests.open_request(req, image=image, root=root)
 
 
 if __name__ == "__main__":
