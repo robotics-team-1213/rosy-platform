@@ -20,6 +20,7 @@ VIEWER_MAY_POST = {
 SERVICE_MAY_POST = VIEWER_MAY_POST | {
     ("POST", "/api/fleet/pipeline/cell-tasks"),  # service creates PROPOSED only; /admit stays operator-only
     ("POST", "/api/fleet/pipeline/cell-plans"),
+    ("POST", "/api/fleet/pipeline/cell-plans/{plan_id}/cancel"),
     ("POST", "/api/fleet/pipeline/cell-quality"),
     ("POST", "/api/fleet/pipeline/cell-handoff"),
     ("POST", "/api/fleet/pipeline/cell-tasks/claim"),

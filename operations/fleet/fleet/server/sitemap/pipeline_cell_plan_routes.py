@@ -7,7 +7,16 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException, Request
+from pydantic import ValidationError as PydanticValidationError
 
+from core_common.protocol.cell_plans import (
+    CELL_PLAN_SCHEMA,
+    CellPlanCancelRequest,
+    CellPlanCancelResponse,
+    CellPlanDryRunResponse,
+    CellPlanResponse,
+    CellPlanSummaryOut,
+)
 from fleet.pipeline import resolve_omx_cells
 from fleet.pipeline.cell_plan_planner import plan_cell_moves
 from fleet.pipeline.cell_site_targets import resolve_cell_task_targets
@@ -18,7 +27,7 @@ from .pipeline_governance_store import (
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_json_value, checked_task_pose
 
-_SCHEMA = "rosy.cell-plan.v1"
+_SCHEMA = CELL_PLAN_SCHEMA
 
 
 def _aggregate_plan_status(tasks: list[dict[str, Any]]) -> str:
@@ -53,35 +62,66 @@ def install_cell_plan_routes(app, ctx) -> None:
     _evaluate_decision = ctx._evaluate_decision
     app.state.omx_cell_plans = getattr(app.state, "omx_cell_plans", None) or {}
 
+    def _enriched_plan_task(tid: str, request: Request | None = None) -> dict[str, Any]:
+        raw_task = _enrich_task_health(app.state.omx_cell_tasks[tid])
+        refusals = getattr(app.state, "cell_task_refusals", None) or {}
+        if tid in refusals and refusals[tid] is not None:
+            raw_task = {**raw_task, "last_refusal": refusals[tid]}
+        return task_view_for_request(raw_task, request) if request is not None else raw_task
+
     def _plan_view(plan_id: str, request: Request | None = None) -> dict[str, Any]:
         rec = app.state.omx_cell_plans[plan_id]
-        tasks = [
+        raw_tasks = [
             _enrich_task_health(app.state.omx_cell_tasks[tid])
             for tid in rec["task_ids"] if tid in app.state.omx_cell_tasks
         ]
-        completed = sum(1 for t in tasks if t.get("status") == "COMPLETED")
+        completed = sum(1 for t in raw_tasks if t.get("status") == "COMPLETED")
+        status = _aggregate_plan_status(raw_tasks)
+        refusals = getattr(app.state, "cell_task_refusals", None) or {}
+        cell_state = (getattr(app.state, "omx_cell_states", None) or {}).get(rec["cell_id"])
+        cell_phase = cell_state.get("cell_phase") if isinstance(cell_state, dict) else None
+        hold_reason: str | None = None
+        for t in raw_tasks:
+            for field in ("cancel_reason", "abort_reason"):
+                if isinstance(t.get(field), str) and t[field].strip():
+                    hold_reason = t[field].strip()
+                    break
+            if hold_reason:
+                break
+            refusal = refusals.get(t["task_id"])
+            if isinstance(refusal, dict) and refusal.get("code"):
+                hold_reason = str(refusal["code"])
+                break
+            if isinstance(refusal, str) and refusal.strip():
+                hold_reason = refusal.strip()
+                break
+        if hold_reason is None and status in ("PAUSED_HUMAN", "ABORTED", "CANCELLED") and isinstance(cell_state, dict):
+            if isinstance(cell_state.get("reason"), str) and cell_state["reason"].strip():
+                hold_reason = cell_state["reason"].strip()
         principal = getattr(getattr(request, "state", None), "site_principal", None)
         is_service = getattr(principal, "role", None) == "service"
         moves = [
             {k: v for k, v in m.items() if (not is_service or k != "cargo_id")}
             for m in rec["moves"]
         ]
-        return {
-            "plan_id": rec["plan_id"],
-            "schema": rec["schema"],
-            "mode": rec["mode"],
-            "order_source": rec["order_source"],
-            "cell_id": rec["cell_id"],
-            "status": _aggregate_plan_status(tasks),
-            "total_steps": len(rec["task_ids"]),
-            "completed_steps": completed,
-            "proposer": rec.get("proposer"),
-            "request_key": rec.get("request_key"),
-            "request_digest": rec.get("request_digest"),
-            "task_ids": list(rec["task_ids"]),
-            "moves": moves,
-            "created_at": rec["created_at"],
-        }
+        return CellPlanSummaryOut(
+            plan_id=rec["plan_id"],
+            schema=_SCHEMA,
+            mode=rec["mode"],
+            order_source=rec["order_source"],
+            cell_id=rec["cell_id"],
+            status=status,
+            total_steps=len(rec["task_ids"]),
+            completed_steps=completed,
+            proposer=rec.get("proposer"),
+            request_key=rec.get("request_key"),
+            request_digest=rec.get("request_digest"),
+            hold_reason=hold_reason,
+            cell_phase=cell_phase,
+            task_ids=list(rec["task_ids"]),
+            moves=moves,
+            created_at=rec["created_at"],
+        ).model_dump(by_alias=True)
 
     @app.post("/api/fleet/pipeline/cell-plans/dry-run", dependencies=read_guard)
     async def preview_cell_plan(request: Request):
@@ -95,7 +135,14 @@ def install_cell_plan_routes(app, ctx) -> None:
             raise HTTPException(422, detail={"code": str(exc) or "INVALID_CELL_PLAN_INPUT"}) from None
         if not planned["ok"]:
             raise HTTPException(422, detail={"code": planned["why"] or "NO_LEGAL_PLAN"})
-        return {"ok": True, "schema": _SCHEMA, **planned}
+        return CellPlanDryRunResponse(
+            schema=_SCHEMA,
+            mode=planned["mode"],
+            order_source=planned["order_source"],
+            moves=planned["moves"],
+            final_state=planned.get("final_state"),
+            why=planned.get("why"),
+        ).model_dump(by_alias=True)
 
     @app.post("/api/fleet/pipeline/cell-plans", dependencies=proposer_guard)
     async def create_cell_plan(request: Request):
@@ -238,12 +285,11 @@ def install_cell_plan_routes(app, ctx) -> None:
             if gov is not None and any(task["status"] == "QUEUED" for task in built):
                 gov.bump_dispatch_generation()
 
-            out = {
-                "ok": True,
-                "schema": _SCHEMA,
-                "plan": _plan_view(plan_id, request),
-                "tasks": [task_view_for_request(t, request) for t in built],
-            }
+            out = CellPlanResponse(
+                schema=_SCHEMA,
+                plan=_plan_view(plan_id, request),
+                tasks=[_enriched_plan_task(t["task_id"], request) for t in built],
+            ).model_dump(by_alias=True)
             if scoped_key and gov is not None:
                 gov.record_idempotency(scoped_key, body_hash, 200, out)
             return out
@@ -269,10 +315,10 @@ def install_cell_plan_routes(app, ctx) -> None:
                 raise HTTPException(404, detail={"code": "UNKNOWN_CELL_PLAN"})
             rec = app.state.omx_cell_plans[matched_id]
             tasks = [
-                task_view_for_request(_enrich_task_health(app.state.omx_cell_tasks[tid]), request)
+                _enriched_plan_task(tid, request)
                 for tid in rec["task_ids"] if tid in app.state.omx_cell_tasks
             ]
-            return {"ok": True, "schema": _SCHEMA, "plan": _plan_view(matched_id, request), "tasks": tasks}
+            return CellPlanResponse(schema=_SCHEMA, plan=_plan_view(matched_id, request), tasks=tasks).model_dump(by_alias=True)
         plans = [_plan_view(pid, request) for pid in app.state.omx_cell_plans]
         return {"ok": True, "schema": _SCHEMA, "plans": plans}
 
@@ -282,7 +328,66 @@ def install_cell_plan_routes(app, ctx) -> None:
             raise HTTPException(404, detail={"code": "UNKNOWN_CELL_PLAN"})
         rec = app.state.omx_cell_plans[plan_id]
         tasks = [
-            task_view_for_request(_enrich_task_health(app.state.omx_cell_tasks[tid]), request)
+            _enriched_plan_task(tid, request)
             for tid in rec["task_ids"] if tid in app.state.omx_cell_tasks
         ]
-        return {"ok": True, "schema": _SCHEMA, "plan": _plan_view(plan_id, request), "tasks": tasks}
+        return CellPlanResponse(schema=_SCHEMA, plan=_plan_view(plan_id, request), tasks=tasks).model_dump(by_alias=True)
+
+    @app.post("/api/fleet/pipeline/cell-plans/{plan_id}/cancel", dependencies=proposer_guard)
+    async def cancel_cell_plan(plan_id: str, request: Request):
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, detail={"code": "INVALID_CANCEL_REASON"})
+        checked_json_value(body)
+        try:
+            cancel_req = CellPlanCancelRequest.model_validate(body)
+        except PydanticValidationError:
+            raise HTTPException(422, detail={"code": "INVALID_CANCEL_REASON"}) from None
+
+        principal = getattr(request.state, "site_principal", None)
+        principal_id = getattr(principal, "principal_id", None)
+        principal_role = getattr(principal, "role", None)
+
+        with (gov._lock if gov is not None else nullcontext()):
+            rec = app.state.omx_cell_plans.get(plan_id)
+            if rec is None:
+                raise HTTPException(404, detail={"code": "UNKNOWN_CELL_PLAN"})
+            if principal_role == "service" and rec.get("proposer") != principal_id:
+                raise HTTPException(403, detail={"code": "CELL_PLAN_CANCEL_FORBIDDEN"})
+            if getattr(app.state, "_pipeline_ledger_fault", False):
+                raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
+
+            previous: list[tuple[str, dict[str, Any]]] = []
+            cancelled_ids: list[str] = []
+            now = round(time.time(), 3)
+            for tid in rec["task_ids"]:
+                task = app.state.omx_cell_tasks.get(tid)
+                if task is None:
+                    continue
+                if task.get("status") in ("PROPOSED", "QUEUED"):
+                    previous.append((tid, dict(task)))
+                    task["status"] = "CANCELLED"
+                    task["cancel_reason"] = cancel_req.reason
+                    task["cancelled_by"] = principal_id
+                    task["cancelled_at"] = now
+                    cancelled_ids.append(tid)
+            if not cancelled_ids:
+                raise HTTPException(409, detail={"code": "CELL_PLAN_NOT_CANCELLABLE"})
+            try:
+                _save_ledger()
+            except Exception:
+                for tid, prev in previous:
+                    app.state.omx_cell_tasks[tid] = prev
+                raise
+            if gov is not None:
+                gov.bump_dispatch_generation()
+            tasks = [
+                _enriched_plan_task(tid, request)
+                for tid in rec["task_ids"] if tid in app.state.omx_cell_tasks
+            ]
+            return CellPlanCancelResponse(
+                schema=_SCHEMA,
+                plan=_plan_view(plan_id, request),
+                tasks=tasks,
+                cancelled_task_ids=cancelled_ids,
+            ).model_dump(by_alias=True)

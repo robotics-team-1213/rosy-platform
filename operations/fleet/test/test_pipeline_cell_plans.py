@@ -294,3 +294,72 @@ def test_get_cell_plans_by_request_key_reconciles_and_isolates_service_principal
     missing = client.get("/api/fleet/pipeline/cell-plans", params={"request_key": "missing-probe-key"}, headers=SVC)
     assert missing.status_code == 404
     assert missing.json()["detail"]["code"] == "UNKNOWN_CELL_PLAN"
+
+
+def test_cancel_cell_plan_and_refusal_visibility_and_pydantic_contracts(monkeypatch):
+    from pydantic import ValidationError as PydanticValidationError
+    from core_common.protocol.cell_plans import CellPlanCancelRequest, CellPlanStepInput
+
+    with pytest.raises(PydanticValidationError):
+        CellPlanStepInput(src_site="yard-r1-c1-l1", dst_site="stand-r1-c1-l1", extra_bad="x")  # type: ignore[call-arg]
+    with pytest.raises(PydanticValidationError):
+        CellPlanCancelRequest(reason="   ")
+
+    app, owner_ev = _app(monkeypatch)
+    client = TestClient(app)
+
+    res = client.post("/api/fleet/pipeline/cell-plans", headers=SVC, json={
+        "request_key": "cancel-test-1",
+        "mode": "harbor_plan",
+        "state": {"C1": "yard-r1-c1-l1", "C2": "yard-r1-c1-l2"},
+        "steps": [
+            {"cargo_id": "C2", "src_site": "yard-r1-c1-l2", "dst_site": "temp_a-r1-c1-l1", "arm_id": "arm_a"},
+            {"cargo_id": "C1", "src_site": "yard-r1-c1-l1", "dst_site": "stand-r1-c1-l1", "arm_id": "arm_a"},
+        ],
+    })
+    assert res.status_code == 200
+    body = res.json()
+    plan_id = body["plan"]["plan_id"]
+    tasks = body["tasks"]
+
+    # Another service principal cannot cancel a plan it did not propose.
+    forbidden = client.post(f"/api/fleet/pipeline/cell-plans/{plan_id}/cancel", headers=OWNER, json={"reason": "hijack"})
+    assert forbidden.status_code == 403
+    assert forbidden.json()["detail"]["code"] == "CELL_PLAN_CANCEL_FORBIDDEN"
+
+    # Invalid empty reason is rejected with 422 INVALID_CANCEL_REASON.
+    bad_reason = client.post(f"/api/fleet/pipeline/cell-plans/{plan_id}/cancel", headers=SVC, json={"reason": "  "})
+    assert bad_reason.status_code == 422
+    assert bad_reason.json()["detail"]["code"] == "INVALID_CANCEL_REASON"
+
+    # Per-step refusal is surfaced on plan.hold_reason and task.last_refusal.
+    app.state.cell_task_refusals = {tasks[0]["task_id"]: {"code": "ARM_BUSY_RETRY"}}
+    with_refusal = client.get(f"/api/fleet/pipeline/cell-plans/{plan_id}", headers=VIEW).json()
+    assert with_refusal["plan"]["hold_reason"] == "ARM_BUSY_RETRY"
+    assert with_refusal["tasks"][0]["last_refusal"] == {"code": "ARM_BUSY_RETRY"}
+
+    # Owning service cancels pending steps atomically; plan transitions to CANCELLED with hold_reason.
+    cancelled = client.post(f"/api/fleet/pipeline/cell-plans/{plan_id}/cancel", headers=SVC, json={"reason": "operator aborted order"})
+    assert cancelled.status_code == 200, cancelled.text
+    cbody = cancelled.json()
+    assert cbody["cancelled_task_ids"] == [t["task_id"] for t in tasks]
+    assert cbody["plan"]["status"] == "CANCELLED"
+    assert cbody["plan"]["hold_reason"] == "operator aborted order"
+
+    # Re-cancelling already-cancelled plan returns 409 CELL_PLAN_NOT_CANCELLABLE.
+    again = client.post(f"/api/fleet/pipeline/cell-plans/{plan_id}/cancel", headers=SVC, json={"reason": "retry"})
+    assert again.status_code == 409
+    assert again.json()["detail"]["code"] == "CELL_PLAN_NOT_CANCELLABLE"
+
+    # Completed plan also cannot be cancelled.
+    res2 = client.post("/api/fleet/pipeline/cell-plans", headers=SVC, json={
+        "request_key": "cancel-done-1",
+        "mode": "harbor_plan",
+        "state": {"C1": "yard-r1-c1-l1"},
+        "steps": [{"cargo_id": "C1", "src_site": "yard-r1-c1-l1", "dst_site": "stand-r1-c1-l1", "arm_id": "arm_a"}],
+    }).json()
+    _admit_all(client, res2["tasks"])
+    _complete_one(client, owner_ev, res2["tasks"][0]["task_id"])
+    completed_cancel = client.post(f"/api/fleet/pipeline/cell-plans/{res2['plan']['plan_id']}/cancel", headers=OP, json={"reason": "late cancel"})
+    assert completed_cancel.status_code == 409
+    assert completed_cancel.json()["detail"]["code"] == "CELL_PLAN_NOT_CANCELLABLE"
