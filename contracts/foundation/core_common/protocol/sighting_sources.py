@@ -8,7 +8,7 @@ REQUIRED = {"source_id", "token_env", "robot_ids", "map_id", "calibration_revisi
 ALLOWED = REQUIRED | {
     "phone_token_env", "fleet_base_url", "processor_revision", "corner_marker_ids",
     "corner_world_m", "robot_markers", "heading_edge", "credential", "calibration_source",
-    "place_markers", "marker_yaw_offset_deg", "auto_tune",
+    "place_markers", "marker_yaw_offset_deg", "auto_tune", "stream_width",
 }
 CREDENTIAL_KINDS = ("static", "paired")
 CALIBRATION_SOURCES = ("corner_markers", "field_boundary")
@@ -79,3 +79,6 @@ def validate_sighting_config(config: object) -> None:
             raise ValueError(f"sources[{index}].robot_markers must give each robot a distinct marker id")
         if corner_ids is not None and set(markers.values()) & set(corner_ids):
             raise ValueError(f"sources[{index}].robot_markers must not reuse corner_marker_ids")
+        stream_width = row.get("stream_width")
+        if stream_width is not None and (type(stream_width) is not int or not 320 <= stream_width <= 4096):
+            raise ValueError(f"sources[{index}].stream_width must be an integer between 320 and 4096")
