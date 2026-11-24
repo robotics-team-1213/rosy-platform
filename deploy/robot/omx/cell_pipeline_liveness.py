@@ -26,6 +26,31 @@ def runner_liveness(live, *, last_t, last_mono, stall_timeout_s, now_mono, finit
     return None, last_t, last_mono
 
 
+def cache_state_row(cell, row):
+    if (isinstance(row, dict) and row.get("ok") and not row.get("fault")
+            and row.get("operating_context") and row.get("library_sha256")):
+        cell._cached_state = row
+        cell._cached_state_mono = time.monotonic()
+
+
+def status_row_outcome(row, *, command, expected, verb, recovery, is_hold, hold_req, sent_at, finite_stamp, now=None):
+    """Classify one parsed status row for FIFO drain or Unix socket wait ('hold', 'match', or None)."""
+    if not isinstance(row, dict):
+        return None
+    if is_hold:
+        if row.get("command") != "human-hold":
+            return None
+        rt = finite_stamp(row.get("t"))
+        ceiling = (time.time() if now is None else now) + 1.0
+        if rt is None or rt > ceiling or (rt < sent_at if hold_req else rt <= sent_at):
+            return None
+        return "hold" if row.get("hold_req") == hold_req else None
+    matches = (command, expected, "run " + (verb if recovery else expected))
+    if row.get("command") in matches or (not recovery and row.get("fault")):
+        return "match"
+    return None
+
+
 def drain_status(cell, status_path, start, command, expected, verb, recovery, is_hold, hold_req, sent_at, finite_stamp):
     matched_hold = None
     try:
@@ -42,23 +67,14 @@ def drain_status(cell, status_path, start, command, expected, verb, recovery, is
                         if not is_hold:
                             raise
                         continue
-                    if not isinstance(row, dict):
-                        continue
-                    if is_hold:
-                        if row.get("command") != "human-hold":
-                            continue
-                        rt = finite_stamp(row.get("t"))
-                        if rt is None or not (sent_at < rt <= time.time() + 1.0):
-                            continue
-                        if row.get("hold_req") == hold_req:
-                            matched_hold = row
-                        continue
-                    matches = (command, expected, "run " + (verb if recovery else expected))
-                    if row.get("command") in matches or (not recovery and row.get("fault")):
-                        if (row.get("ok") and not row.get("fault")
-                                and row.get("operating_context") and row.get("library_sha256")):
-                            cell._cached_state = row
-                            cell._cached_state_mono = time.monotonic()
+                    outcome = status_row_outcome(
+                        row, command=command, expected=expected, verb=verb, recovery=recovery,
+                        is_hold=is_hold, hold_req=hold_req, sent_at=sent_at, finite_stamp=finite_stamp,
+                    )
+                    if outcome == "hold":
+                        matched_hold = row
+                    elif outcome == "match":
+                        cache_state_row(cell, row)
                         return row, start
     except (OSError, ValueError, RecursionError):
         if not is_hold:
