@@ -1,8 +1,12 @@
 """Bounded native character frames with cached GIF compatibility."""
 from __future__ import annotations
 
+from collections import OrderedDict
 from pathlib import Path
 from typing import Callable
+
+
+_RENDER_CACHE_MAX = 64
 
 
 class FaceFrames:
@@ -13,6 +17,7 @@ class FaceFrames:
         self._directory, self._open, self._convert = directory, opener, convert
         self._log, self._skip, self._render = log, skip, render
         self._faces: dict[str, dict] = {}
+        self._render_cache: OrderedDict[tuple, object] = OrderedDict()
         self._motion_at = None
         self._gaze = self._gaze_start = self._gaze_target = 0.0
         self._rest = self._rest_start = self._rest_target = 0.0
@@ -36,8 +41,20 @@ class FaceFrames:
                 self._rest_start, self._rest_target, self._rest_at = self._rest, rest, now
             self._gaze = self._gaze_start + (gaze - self._gaze_start) * min(1., max(0., (now - self._gaze_at) / .4))
             self._rest = self._rest_start + (rest - self._rest_start) * min(1., max(0., now - self._rest_at))
-            phase = ((now - self._motion_at) / (8 if rest else 2) % 1) * 20
-            return self._render(name, phase, self._gaze, self._rest)
+            steps = 10 if rest >= 0.5 else 20
+            step = int(((now - self._motion_at) / (8 if rest else 2) % 1) * steps) % steps
+            phase = step * (20.0 / steps)
+            q_gaze, q_rest = round(self._gaze, 2), round(self._rest, 2)
+            key = (name, step, steps, q_gaze, q_rest)
+            cached = self._render_cache.get(key)
+            if cached is not None:
+                self._render_cache.move_to_end(key)
+                return cached
+            rendered = self._render(name, phase, self._gaze, self._rest)
+            self._render_cache[key] = rendered
+            if len(self._render_cache) > _RENDER_CACHE_MAX:
+                self._render_cache.popitem(last=False)
+            return rendered
         entry = self._faces.get(name)
         if entry is None:
             entry = {"frames": [], "image": None, "done": False, "source": 0, "position": -1}

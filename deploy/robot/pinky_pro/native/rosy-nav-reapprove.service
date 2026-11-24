@@ -9,6 +9,8 @@ After=rosy-core.service rosy-auto-update.service
 
 [Service]
 Type=oneshot
+Nice=19
+IOSchedulingClass=idle
 ExecStart=/usr/bin/python3 -I -B /opt/rosy/native-runtime/navigation_reapprove.py run
 # begin (CORE restart) + five trials + seal (CORE restart) + navigation start.
 TimeoutStartSec=15min

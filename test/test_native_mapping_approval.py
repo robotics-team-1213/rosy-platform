@@ -542,3 +542,28 @@ def test_packages_left_out_of_the_fingerprint_stay_out_of_motion_code():
     started = [path.name for path in units.iterdir()
                if path.suffix in (".service", ".target") and launched.search(path.read_text(encoding="utf-8"))]
     assert started == []
+
+
+def test_sync_approvals_skips_unchanged_shared_files_and_refreshes_stale_ones(tmp_path, monkeypatch):
+    approval = _module()
+    root = _device(tmp_path)
+    (root / "var/lib/rosy-device").mkdir(parents=True)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    shared = root / approval.SHARED_APPROVALS
+    writes = []
+    real_write = approval._atomic_write
+
+    def spy_write(path, content, *, group_id=None):
+        writes.append(Path(path).name)
+        return real_write(path, content, group_id=group_id)
+
+    monkeypatch.setattr(approval, "_atomic_write", spy_write)
+    assert approval.sync_approvals_to_shared(root) is True
+    assert writes == []
+
+    (shared / "g4-evidence/extra-stale.json").write_text("{}", encoding="ascii")
+    (shared / "g4-evidence/forward-command_loss.json").write_text("{tampered}", encoding="ascii")
+    assert approval.sync_approvals_to_shared(root) is True
+    assert writes == ["forward-command_loss.json"]
+    assert not (shared / "g4-evidence/extra-stale.json").exists()

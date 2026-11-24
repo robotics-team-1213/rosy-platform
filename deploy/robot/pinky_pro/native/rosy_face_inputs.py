@@ -205,7 +205,9 @@ def face_converter(info_screen) -> Callable[[object], object]:
     from PIL import Image
 
     def convert(frame):
-        landscape = frame.convert("RGB").resize(FACE_SIZE, Image.LANCZOS, reducing_gap=3.0)
+        rgb = frame if frame.mode == "RGB" else frame.convert("RGB")
+        landscape = rgb if rgb.size == FACE_SIZE else rgb.resize(
+            FACE_SIZE, Image.LANCZOS, reducing_gap=3.0)
         return info_screen.to_panel(info_screen.compose_face(landscape))
 
     return convert
