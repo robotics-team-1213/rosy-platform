@@ -674,3 +674,54 @@ def test_gripper_squeeze_reuses_monitor_pwm_and_cached_limit(guard, tmp_path):
     pwm_reads = [e for e in follower.events if e[0] == 'read' and e[2] == 'gripper']
     assert pwm_reads == [('read', 'Present_PWM', 'gripper')]
     monitor.end()
+
+
+def test_sync_hardware_error_desync_impossible_bits_drains_rx_and_is_recoverable(guard):
+    import guarded_native_probe as probe
+
+    motion, follower, _leader, _clock = pair(guard)
+    follower.model_ctrl_table = {}
+    cleared = []
+    follower.port_handler = SimpleNamespace(clearPort=lambda: cleared.append("clear"))
+    orig_sync = follower.sync_read
+    follower.sync_read = lambda reg, motors=None, **kw: (
+        dict(zip(NAMES, (145, 250, 129, 9, 114, 89)))
+        if reg == "Hardware_Error_Status" else orig_sync(reg, motors=motors, **kw)
+    )
+    assert probe.is_valid_hw_status(145) is False and probe.is_hardware_fault(145) is False
+    with pytest.raises(probe.TelemetryReadError, match="desynced"):
+        motion._check_hardware_errors()
+    assert cleared == ["clear"]
+
+
+def test_sync_hardware_error_bit_rechecks_unicast_after_rx_drain(guard):
+    import guarded_native_probe as probe
+
+    cleared = []
+    unicast = [0]
+
+    class SyncBus(Bus):
+        model_ctrl_table = {}
+        port_handler = SimpleNamespace(clearPort=lambda: cleared.append("clear"))
+
+        def sync_read(self, reg, motors=None, *, normalize=True, num_retry=0):
+            if reg == "Hardware_Error_Status":
+                return {"shoulder_pan": 32, **{n: 0 for n in NAMES if n != "shoulder_pan"}}
+            return super().sync_read(reg, motors=motors, normalize=normalize, num_retry=num_retry)
+
+        def read(self, reg, motor, **kw):
+            if reg == "Hardware_Error_Status" and motor == "shoulder_pan":
+                return unicast[0]
+            return super().read(reg, motor, **kw)
+
+    motion = guard.NativeJointMotion(SyncBus(), None, teacher=True, clock=lambda: 10.0)
+
+    with pytest.raises(probe.TelemetryReadError, match="transient desynced"):
+        motion._check_hardware_errors()
+    assert cleared == ["clear"]
+
+    unicast[0] = 32
+    with pytest.raises(ValueError, match=r"shoulder_pan: hardware error \(32") as exc_info:
+        motion._check_hardware_errors()
+    assert not isinstance(exc_info.value, probe.TelemetryReadError)
+    assert cleared == ["clear", "clear"]

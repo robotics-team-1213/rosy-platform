@@ -24,6 +24,7 @@ if _HERE not in sys.path:
 from chunk_runner_guards import MOTORS, NAMES, SETTLE_TOL, safe_stderr as _stderr, shed_interrupt_hold  # noqa: E402  D-1048's "within 3 units of home"
 from chunk_policy_playback import halt_policy_gate, send_hold_action  # noqa: E402
 from guarded_native_effort import check_hold_health  # noqa: E402
+from guarded_native_probe import drain_rx, sync_read_torque_enable  # noqa: E402
 
 INTERRUPT_PARK_S = 120.0  # a park from full reach at PARK_SPEED with pacing holds takes well under a minute
 VERIFY_TICKS, VERIFY_S = 5, 2.0  # "already folded" needs this many still readings in a row, within this time
@@ -112,9 +113,9 @@ def _guard_stopped(runner):
     bus, data, last_err = runner.robot.bus, {}, None
     for attempt in range(2):
         try:
-            if attempt == 1 and callable(clear := getattr(getattr(bus, "port_handler", None), "clearPort", None)):
-                clear()
-            data = dict(bus.sync_read("Torque_Enable", normalize=False, num_retry=2))
+            if attempt == 1:
+                drain_rx(bus)
+            data = sync_read_torque_enable(bus)
             if _torque_complete(data):
                 return data
         except Exception as error:  # noqa: BLE001

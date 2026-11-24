@@ -705,3 +705,22 @@ def test_bg_hues_match_the_sim_albedos():
     hue = lambda k: colorsys.rgb_to_hsv(*world.COLOURS[k][:3])[0] * 180
     for k, (centre, half) in zip(("table", "ship"), helpers.BG_HUES):
         assert abs(hue(k) - centre) <= 1 and abs(hue("container") - centre) > half
+
+
+def test_calibrate_top_camera_skips_6dof_fit_with_single_anchor():
+    import omx_real2sim_comp as r2s_comp
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", top_camera="2026-11-10")
+    moved_dict = r2s_comp.perturbed_camera_dict(layout.fixture["real_cameras"]["top"], **r2s_comp.DEFAULT_CAM_JITTER)
+    cam_moved = r2s.Camera(moved_dict, (480, 640))
+    img = np.full((480, 640, 3), (27, 132, 180), np.uint8)
+    bx, by = layout.belt_stop_x + .005, layout.belt_y
+    belt_poly = [cam_moved.project((x, yy, layout.belt_top))
+                 for x, yy in ((bx, by - .0425), (bx + .295, by - .0425), (bx + .295, by + .0425), (bx, by + .0425))]
+    cv2.fillPoly(img, [np.round(belt_poly).astype(np.int32)], (35, 35, 35))
+
+    _, comp = r2s_comp.calibrate_top_camera(img, layout)
+    assert comp["anchors_used"] == 1
+    assert comp["moved"] is False
+    assert "eye_shift_mm" not in comp

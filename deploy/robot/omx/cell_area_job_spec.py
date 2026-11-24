@@ -11,6 +11,7 @@ from cell_job_validators import (
     _int_range,
     _match,
     _num,
+    _roi,
 )
 
 Z_METRE = _num(-0.15, 0.35)
@@ -56,5 +57,28 @@ AREA_JOBS = {
             "operator": _actor,
             "proposer": _actor,
         },
+    },
+    "safe_home": {
+        "script": "cell_safe_home.py",
+        "moving": True,
+        "camera": True,
+        "recovery_home": True,
+        "commissioning": False,
+        "argv": [
+            "--arm", "{arm}",
+            "--config", "{config}",
+            "--library", "{library}",
+            "--site", "{site}",
+            "--roi", "{roi}",
+            "--out", "cell-job-api/safe-home-{arm}.json",
+        ],
+        "params": {
+            "arm": _match(ARM),
+            "config": _match(FILE),
+            "library": _match(FILE),
+            "site": _match(NAME),
+            "roi": _roi,
+        },
+        "optional": {"operator": _actor, "proposer": _actor},
     },
 }

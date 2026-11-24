@@ -381,7 +381,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         arm_list = list(job_arms(job, params))
         if not arm_list or any(a not in SESSION for a in arm_list):
             raise ValueError(f"no session wrapper for {params.get('arm') or arm_list}")
-        if job.get("attach_live_hold"):
+        if job.get("attach_live_hold") or job.get("recovery_home"):
             return ["bash", "-c", ENV + PY, job["script"], *args]
         reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
         prefix = [SESSION[a] for a in arm_list]

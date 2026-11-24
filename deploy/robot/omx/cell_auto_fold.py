@@ -259,15 +259,21 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     return hold("ALL_PATHS_BLOCKED")
 
 
-def evidence(result: dict, home, torque_after: dict, incident_id: str, taken_at: float) -> dict:
+def evidence(result: dict, home, torque_after: dict, incident_id: str, taken_at: float, *,
+             hardware_error_after: dict | None = None, caps_restored_after: bool | None = None) -> dict:
     """What core_common.clearable_after_fold reads: the measured fold, home, torque after the session, the check, and
     the incident it was taken for (Fleet refuses it for any other)."""
     corridor = result.get("corridor") or {}
-    return {"kind": "auto_fold", "schema": SCHEMA, "incident_id": incident_id, "taken_at": round(taken_at, 3),
-            "candidate": result.get("candidate"), "folded_state": result["state"], "home": list(home),
-            "torque_after": torque_after,
-            "corridor_clear": corridor.get("clear") if corridor else result.get("candidate") == "already_home",
-            "steps": len(result.get("steps") or [])}
+    out = {"kind": "auto_fold", "schema": SCHEMA, "incident_id": incident_id, "taken_at": round(taken_at, 3),
+           "candidate": result.get("candidate"), "folded_state": result["state"], "home": list(home),
+           "torque_after": torque_after,
+           "corridor_clear": corridor.get("clear") if corridor else result.get("candidate") == "already_home",
+           "steps": len(result.get("steps") or [])}
+    if hardware_error_after is not None:
+        out["hardware_error_after"] = hardware_error_after
+    if caps_restored_after is not None:
+        out["caps_restored_after"] = caps_restored_after
+    return out
 
 
 def _learn(result: dict, ok: bool) -> None:
@@ -287,7 +293,7 @@ def _learn(result: dict, ok: bool) -> None:
 
 def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=time.time, clear=None,
            stage: str = "full", request_id: str | None = None, expires_at: float | None = None,
-           stop_generation: int | None = None, safety_fence: str | None = None) -> dict:
+           stop_generation: int | None = None, safety_fence: str | None = None, allow_multi: bool = False) -> dict:
     """omx_incident starts this after a held incident it could not clear: one try per incident. Opens the arm's session
     through its wrapper as a recovery session for that incident alone, folds (main), waits for the session's own end
     (torque OFF confirmed in session.json) and clears that incident with the evidence. Anything short leaves the hold."""
@@ -312,11 +318,11 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     conf = json.loads(Path(conf_file).read_text(encoding="utf-8"))[arm]
     link = link or omx_incident.link_for(arm)
     ids = list(link.hold().incident_ids) if link is not None else []
-    if len(ids) != 1:
+    if not ids or (not allow_multi and len(ids) != 1) or len(ids) > 3:
         res = {"result": "skipped", "why": f"{len(ids)} open incidents (one is folded at a time)"}
         _write_req_result(Path(omx_incident.INCIDENTS), request_id, arm, stage, res)
         return res
-    incident = ids[0]
+    incident, incident_arg = ids[0], ",".join(ids)
     suffix = "" if stage == "full" else ("-lift" if stage == "release_and_lift" else "-park")
     marker = Path(omx_incident.INCIDENTS) / f"auto-fold-{incident}{suffix}.json"
     if marker.exists():
@@ -342,7 +348,7 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
         return out_row
 
     early = _run_launch_command(
-        Path(__file__).resolve(), arm, conf, stage=stage, out=out, cwd=cwd, incident=incident, marker=marker,
+        Path(__file__).resolve(), arm, conf, stage=stage, out=out, cwd=cwd, incident=incident_arg, marker=marker,
         expires_at=expires_at, stop_generation=stop_generation, safety_fence=safety_fence, run=run,
         sleep=sleep, now=now, require_expiry=fleet_req,
     )
@@ -364,14 +370,18 @@ def launch(arm: str, conf_file, *, link=None, run=None, sleep=time.sleep, now=ti
     if stage == "park_only":
         return done({"result": "parked_for_visual_verify", "incident_id": incident, "state": result.get("state"),
                      "torque_after": torque}, cand)
-    proof = evidence(result, result["home"], torque, incident, now())
+    hw_ok = {str(k): 0 for k in torque} if sess.get("hardware_faults") == {} and len(torque) >= 6 else None
+    caps_ok = sess.get("caps_restored") if isinstance(sess.get("caps_restored"), bool) else None
     note = f"automatic fold (D-1048): {result.get('candidate')}, home within {SETTLE_TOL} units, torque OFF"
-    try:
-        (clear or omx_incident.clear)(arm, note, omx_incident_auto.assessor_token_file(), link, cause="unknown",
-                                      basis="measured", recovery=proof, only=incident)
-        return done({"result": "cleared", "incident_id": incident, "evidence": proof}, cand)
-    except (SystemExit, Exception) as exc:  # Fleet refused or unreachable: the hold stays
-        return done({"result": "not_cleared", "why": f"{type(exc).__name__}: {str(exc)[:200]}", "evidence": proof}, cand)
+    proof = None
+    for inc_id in ids:
+        proof = evidence(result, result["home"], torque, inc_id, now(), hardware_error_after=hw_ok, caps_restored_after=caps_ok)
+        try:
+            (clear or omx_incident.clear)(arm, note, omx_incident_auto.assessor_token_file(), link, cause="unknown",
+                                          basis="measured", recovery=proof, only=inc_id)
+        except (SystemExit, Exception) as exc:  # Fleet refused or unreachable: the hold stays
+            return done({"result": "not_cleared", "why": f"{type(exc).__name__}: {str(exc)[:200]}", "evidence": proof}, cand)
+    return done({"result": "cleared", "incident_id": incident, **({"incident_ids": ids} if len(ids) > 1 else {}), "evidence": proof}, cand)
 
 
 def main(argv=None) -> int:

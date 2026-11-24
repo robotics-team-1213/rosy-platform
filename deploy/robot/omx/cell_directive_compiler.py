@@ -47,7 +47,8 @@ def build_plan_from_directive(
 
     plan = _clone(base_plan)
     plan["tcp_x_m"], plan["tcp_source"] = resolve_tcp(exec_cfg.get("tcp_x_m"), plan.get("tcp_x_m"))
-    if int(cal.get("samples", 0)) == 0 and arm_id == "arm_s" and float(plan["tcp_x_m"]) >= 0.073:
+    v21_arm_s = int(cal.get("samples", 0)) == 0 and arm_id == "arm_s" and float(plan["tcp_x_m"]) >= 0.073
+    if v21_arm_s:
         if exec_cfg.get("finger_color") not in ("dark", "white", "auto"):
             cal["finger_color"] = "white"
         cal.update(
@@ -88,14 +89,17 @@ def build_plan_from_directive(
         raw_open = float(exec_cfg["grip_open_override"])
     elif int(cal.get("samples", 0)) > 0:
         raw_open = float(cal.get("grip_open_30mm", plan.get("grip_open", 57.9)))
+    elif v21_arm_s:
+        raw_open = max(float(cal["grip_open_30mm"]), float(plan["grip_open"]) if plan.get("grip_open") is not None else 0.0)
     else:
         raw_open = float(plan["grip_open"]) if plan.get("grip_open") is not None else float(cal.get("grip_open_30mm", 57.9))
     plan["grip_open"] = min(58.15, raw_open)
-    raw_rel = (
-        float(cal.get("grip_release_30mm", plan.get("grip_release", 57.5)))
-        if int(cal.get("samples", 0)) > 0
-        else (float(plan["grip_release"]) if plan.get("grip_release") is not None else float(cal.get("grip_release_30mm", 57.5)))
-    )
+    if int(cal.get("samples", 0)) > 0:
+        raw_rel = float(cal.get("grip_release_30mm", plan.get("grip_release", 57.5)))
+    elif v21_arm_s:
+        raw_rel = max(float(cal["grip_release_30mm"]), float(plan["grip_release"]) if plan.get("grip_release") is not None else 0.0)
+    else:
+        raw_rel = float(plan["grip_release"]) if plan.get("grip_release") is not None else float(cal.get("grip_release_30mm", 57.5))
     plan["grip_release"] = min(float(plan["grip_open"]), raw_rel)
     base_hold = plan.get("hold_current_ma")
     default_hold = int(base_hold if base_hold is not None else cal.get("hold_current_ma", 80))

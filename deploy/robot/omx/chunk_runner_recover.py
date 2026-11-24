@@ -38,9 +38,10 @@ def _finite_list(vals: Any, length: int) -> bool:
 
 
 def is_recoverable_fault(fault: Any, *, allow_unsettled: bool = True) -> bool:
-    """Allow recovery only cleanly after contact/human-hold (or unsettled recovery park when retrying from hold)."""
+    """Allow guarded Torque-ON recovery after hold/contact/pushing-at-rest (or unsettled recovery park from hold)."""
     return (not fault or fault == "human hold"
-            or (isinstance(fault, str) and (fault.startswith("contact") or (allow_unsettled and fault in UNSETTLED_FAULTS))))
+            or (isinstance(fault, str) and (fault.startswith(("contact", "pushing at rest"))
+                                            or (allow_unsettled and fault in UNSETTLED_FAULTS))))
 
 
 def _read_bus_motors(bus, reg: str, motors: list[str]) -> dict[str, Any]:

@@ -1035,3 +1035,26 @@ def test_pr2_guard_stopped_clears_port_and_retries_per_motor():
     r_err = _FakeRunner("all_fail")
     t4 = ci._guard_stopped(r_err)
     assert "error" in t4 and ci._guard_verdict(r_err, t4, "err") is False and r_err.human_hold_latched is True
+
+
+def test_guard_stopped_drains_rx_and_retries_when_torque_read_has_write_ack_bytes():
+    robot = GuardRobot(fail_after=30)
+    cleared, calls = [], []
+    robot.bus.port_handler = type("P", (), {"clearPort": lambda self: cleared.append("clear")})()
+    orig_sync = robot.bus.sync_read
+
+    def flaky_sync(name, normalize=True, num_retry=0):
+        if name == "Torque_Enable":
+            calls.append(len(calls) + 1)
+            if len(calls) == 1:
+                return dict(zip(m.MOTORS, (145, 250, 129, 9, 114, 89)))
+            return dict.fromkeys(m.MOTORS, 0)
+        return orig_sync(name, normalize=normalize, num_retry=num_retry)
+
+    robot.bus.sync_read = flaky_sync
+    robot.motion.failed = True
+    r = m.Runner(robot, library(), fps=30, status=lambda _row: None, clock=lambda: 0.0, sleep=lambda _s: None)
+    res = ci._guard_stopped(r)
+    assert cleared == ["clear"]
+    assert calls == [1, 2]
+    assert set(res.values()) == {0}

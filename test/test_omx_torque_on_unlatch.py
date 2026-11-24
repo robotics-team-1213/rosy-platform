@@ -108,6 +108,14 @@ def test_recover_unlatch_preconditions_checked_context_and_zero_jump_sync():
     assert robot.motion.stop_calls > stop0 and len(robot.checked_calls) == chk0
     r.command("jog shoulder_lift.pos -2.0")
     assert status[-1]["ok"] is True
+    r.fault = "pushing at rest: elbow_flex still 1.2 units short"
+    r.command("human-hold")
+    r.tick()
+    assert r.human_hold_latched is True and r.fault.startswith("pushing at rest")
+    assert r.command("recover-unlatch") is True
+    assert status[-1]["ok"] is True and r.human_hold_latched is False and r.fault is None
+    assert r.target[:5] == pytest.approx(robot.pos[:5])
+
     r.fault = "contact in jog"
     r.command("human-hold")
     r.tick()
@@ -390,3 +398,28 @@ def test_cell_job_api_recover_hold_admission_and_safety_guards(tmp_path, monkeyp
 
     (tmp_path / "chunk-io-a" / "live.json").write_text(json.dumps({"chunk": None, "state": [0, -60, 50, 0, 0, 0], "t": time.time()}), encoding="utf-8")
     assert r.start("recover_hold", base)["code"] == 202 and len(procs) == 1
+
+
+def test_fifo_cell_act_allows_recover_unlatch_while_human_hold_latched(tmp_path, monkeypatch):
+    import cell_pipeline_io as pio
+
+    prof = {"device_id": "arm_s", "profile_sha256": "p" * 64}
+    cell = pio.FifoCell(tmp_path / "io", {}, operating_profile=prof)
+    sent_cmds = []
+
+    def fake_send(_self, _sock, *, wire_cmd, command, expected, **_kw):
+        sent_cmds.append(command)
+        if expected == "state":
+            return {
+                "ok": True, "t": time.time(), "fault": "contact in park",
+                "human_hold_latched": True, "torque_hold_commanded": True,
+                "operating_context": {"session_id": "s1", "operating_profile": prof},
+                "library_sha256": "lib1",
+            }, None
+        return {"ok": True, "human_hold_latched": False, "unlatched_from_hold": True}, None
+
+    monkeypatch.setattr(pio, "send_unix_command", fake_send)
+    res = cell.act("recover-unlatch")
+    assert res["ok"] is True and sent_cmds[-1] == "checked s1 lib1 recover-unlatch"
+    bad_jog = cell.act("jog elbow_flex.pos 1.0")
+    assert bad_jog["ok"] is False and bad_jog["fault"] == "profile_mismatch"

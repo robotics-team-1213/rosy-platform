@@ -149,7 +149,13 @@ class FifoCell:
                      and time.monotonic() - self._cached_state_mono <= self.state_cache_ttl_s
                      else self.act("state", timeout=min(timeout or self.timeout_s, 5.0)))
             context = state.get("operating_context") or {}
-            if not _state_current(state, time.time()) or context.get("operating_profile") != self.operating_profile:
+            verb = command.split(" ", 1)[0]
+            if verb in ("recover-unlatch", "park-slow", "fold-from-hold"):
+                t_val = finite_stamp(state.get("t"))
+                state_ok = t_val is not None and abs(time.time() - t_val) <= 15.0 and state.get("ok") is True and isinstance(context.get("session_id"), str)
+            else:
+                state_ok = _state_current(state, time.time())
+            if not state_ok or context.get("operating_profile") != self.operating_profile:
                 self._cached_state = None
                 return {"ok": False, "fault": "profile_mismatch", "error": "live follower differs from selected profile"}
             try:

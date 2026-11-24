@@ -61,6 +61,19 @@ def validate_pick_args(args) -> None:
         raise SystemExit("--task-id and --handoff-lease-id require each other and a real single carry")
 
 
+def fifo_cell(config: dict, cameras: dict) -> tuple[dict, cp.FifoCell]:
+    """Bind operating_profile when configured and construct FifoCell with checked-command support."""
+    config = dict(config)
+    config.pop("_operating_profile_binding", None)
+    if config.get("operating_profile_path"):
+        import cell_robot_profile
+
+        config = cell_robot_profile.bind_pipeline(config)
+    binding = config.get("_operating_profile_binding")
+    kwargs = {"operating_profile": binding} if binding is not None else {}
+    return config, cp.FifoCell(Path(config["io"]).expanduser(), cameras, **kwargs)
+
+
 def open_cell(args, commissioning=False):
     """-> (config, cell, calibration path, work dir), with the attempts (and unless dry, decisions) logs started."""
     config = load_config(args.config)
@@ -78,6 +91,7 @@ def open_cell(args, commissioning=False):
         print("warning: _commissioning in the config file is ignored; only --commissioning --person-at-switch sets it", file=sys.stderr)
     if commissioning:
         config["_commissioning"] = {"person_at_switch": True}
+    config, cell = fifo_cell(config, config["cameras"])
     work = Path(config["work_dir"]).expanduser()
     cp.KEEP["dir"] = work / "frames"
     cell_attempts.start(work / "attempts.jsonl", knowledge=config.get("knowledge"), params=config.get("params_path"),
@@ -85,7 +99,6 @@ def open_cell(args, commissioning=False):
                         handoff_lease_id=getattr(args, "handoff_lease_id", None))
     if not args.dry_run:
         cd.start(work / "decisions.jsonl", knowledge=config.get("knowledge"))
-    cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     return config, cell, Path(config["calibration_path"]).expanduser(), work
 
 
