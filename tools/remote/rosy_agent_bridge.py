@@ -294,7 +294,7 @@ class RosyAgentBridge:
                 safe_hdrs = {k: str(v) for k, v in resp.headers.items() if k.lower() in _SAFE_RESP_HEADERS}
                 ctype = resp.headers.get("Content-Type", "")
                 mime = ctype.split(";", 1)[0].strip().lower()
-                looks_json = "application/json" in mime or raw.lstrip().startswith((b"{", b"["))
+                looks_json = "application/json" in mime or (not allow_raw and raw.lstrip().startswith((b"{", b"[")))
                 if expect_binary:
                     if not raw or looks_json:
                         return {"ok": False, "status": 502, "error_code": "INVALID_FRAME_RESPONSE", "detail": "expected non-empty binary image"}

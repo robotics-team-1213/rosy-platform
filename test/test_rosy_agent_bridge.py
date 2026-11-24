@@ -57,7 +57,7 @@ def _serve_mock(routes: dict[tuple[str, str], tuple[int, Any, dict[str, str]]]):
 
 def test_all_17_tools_mcp_stdio_and_error_handling(tmp_path: Path):
     jpg = b"\xff\xd8\xff\xd9"
-    trace_line = '{"event":"stop"}\n'
+    trace_line = '{"event":"start"}\n{"event":"stop"}\n'
     cell_srv, cell_url, cell_log = _serve_mock({
         ("GET", "/readiness"): (200, {"schema": "rosy.cell-readiness.v1", "cell_state_gen": 5}, {"Set-Cookie": "sid=top-secret"}),
         ("GET", "/failures"): (200, {"bundles": [{"bundle_id": "b1"}], "cell_state_gen": 5}, {}),
