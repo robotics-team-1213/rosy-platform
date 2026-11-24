@@ -324,3 +324,82 @@ def test_native_fault_clock_and_reason_survive_end_and_parent_cleanup(unsampled_
     assert terminal == fault
     assert event == fault["terminal_at"] and health.stop_reasons == ["following error"]
     assert health.status == "fault" and health.evidence == "disconnected"
+
+
+def test_stat_cache_skips_reread_until_files_change(tmp_path, monkeypatch):
+    import types
+
+    live = tmp_path / "live.json"
+    live.write_text(json.dumps({"t": NOW, "state": [0, 0, 0, 0, 0, 50]}))
+    health_path = _snapshot(tmp_path)
+    sent, sleeps, health_reads = [], [], []
+
+    class Sender:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def send(self, sample):
+            sent.append(sample)
+
+    orig_arm_health = m.arm_health
+
+    def spy_arm_health(*args):
+        health_reads.append(args)
+        return orig_arm_health(*args)
+
+    def sleep(dt):
+        sleeps.append(dt)
+        if len(sleeps) == 2:
+            live.write_text(json.dumps({"t": NOW + 0.1, "state": [10.0, 0, 0, 0, 0, 50]}))
+        elif len(sleeps) >= 3:
+            raise InterruptedError
+
+    monkeypatch.setitem(sys.modules, "workcell_observation_bridge", types.SimpleNamespace(ArmSender=Sender))
+    monkeypatch.setenv("EXAMPLE_TOKEN", "example-token")
+    monkeypatch.setattr(m, "arm_health", spy_arm_health)
+    monkeypatch.setattr(m.time, "time", lambda: NOW + 0.2)
+    monkeypatch.setattr(m.time, "sleep", sleep)
+    with pytest.raises(InterruptedError):
+        m.main(["--live", str(live), "--fleet-url", "https://fleet.example.invalid",
+                "--source-id", "omx_arm_s", "--token-env", "EXAMPLE_TOKEN",
+                "--arm-id", ARM_ID, "--health-file", str(health_path)])
+    assert len(health_reads) == 1
+    assert len(sent) == 2
+    assert sleeps == [0.25, 0.25, 0.25]
+
+
+def test_backoff_bounds_reset_and_sigterm_exits(tmp_path, monkeypatch):
+    import signal
+    import types
+
+    live = tmp_path / "live.json"
+    live.write_text(json.dumps({"t": NOW, "state": [0, 0, 0, 0, 0, 50]}))
+    sleeps, handlers = [], {}
+    outcomes = [OSError("down")] * 6 + [None, OSError("again")]
+
+    class Sender:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def send(self, sample):
+            item = outcomes.pop(0)
+            if isinstance(item, Exception):
+                raise item
+
+    def sleep(dt):
+        sleeps.append(dt)
+        if len(sleeps) == 6:
+            live.write_text(json.dumps({"t": NOW + 0.1, "state": [10.0, 0, 0, 0, 0, 50]}))
+        elif len(sleeps) == 7:
+            live.write_text(json.dumps({"t": NOW + 0.2, "state": [100.0, 0, 0, 0, 0, 50]}))
+        elif len(sleeps) == 8:
+            handlers[signal.SIGTERM](signal.SIGTERM, None)
+
+    monkeypatch.setitem(sys.modules, "workcell_observation_bridge", types.SimpleNamespace(ArmSender=Sender))
+    monkeypatch.setenv("EXAMPLE_TOKEN", "example-token")
+    monkeypatch.setattr(m.signal, "signal", lambda sig, fn: handlers.__setitem__(sig, fn))
+    monkeypatch.setattr(m.time, "time", lambda: NOW + 0.3)
+    monkeypatch.setattr(m.time, "sleep", sleep)
+    m.main(["--live", str(live), "--fleet-url", "https://fleet.example.invalid",
+            "--source-id", "omx_arm_s", "--token-env", "EXAMPLE_TOKEN"])
+    assert sleeps == [0.5, 1.0, 2.0, 4.0, 5.0, 5.0, 0.25, 0.5]

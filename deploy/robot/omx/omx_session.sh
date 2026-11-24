@@ -26,7 +26,9 @@ fi
 if ! running; then
   : "${OMX_SESSION_ARGS:?set OMX_SESSION_ARGS to the record_session.py arguments for this site}"
   mkdir -p "$IO"
-  before=$(wc -l < "$IO/chunk-status.jsonl" 2>/dev/null || echo 0)
+  STATUS="$IO/chunk-status.jsonl"
+  if [ -f "$STATUS" ] && [ "$(stat -c %s "$STATUS" 2>/dev/null || echo 0)" -gt 5242880 ]; then mv -f "$STATUS" "${STATUS}.1"; fi
+  before=$(wc -l < "$STATUS" 2>/dev/null || echo 0)
   # shellcheck disable=SC2086  # the site's argument list is word-split on purpose
   setsid nohup "$PY" "$OMX/record_session.py" $OMX_SESSION_ARGS \
     > "session-$(date +%Y%m%d-%H%M%S).log" 2>&1 < /dev/null &

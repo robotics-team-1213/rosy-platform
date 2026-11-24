@@ -229,3 +229,34 @@ def test_monitor_reads_viewer_observation_keyed_by_unit_when_role_alias_differs(
     events = [json.loads(line) for line in (tmp_path/'environment.jsonl').read_text().splitlines()]
     assert events[-1]['state'] == 'READY' and events[-1]['photometric_ready'] is True
     assert events[-1]['environment']['front']['state'] == 'NORMAL'
+
+
+def test_monitor_saves_readiness_non_durable_while_control_state_stays_durable(monkeypatch, tmp_path):
+    import io
+    import json
+    from types import SimpleNamespace
+    env, runtime, quality = load('camera_environment'), load('camera_readiness'), load('camera_quality')
+    monkeypatch.setitem(sys.modules, 'camera_quality', quality)
+    clock = [0.]
+    monkeypatch.setattr(env, 'time', SimpleNamespace(monotonic=lambda: clock[0],
+        time=lambda: 1000+clock[0], time_ns=lambda: int((1000+clock[0])*1e9),
+        sleep=lambda dt: clock.__setitem__(0, clock[0]+dt)))
+    cameras = {'top': dict(device='top', candidates=[dict(auto_exposure=1, exposure_time_absolute=166)]),
+               'front': dict(device='front', candidates=[dict(auto_exposure=1, exposure_time_absolute=156)])}
+    original = dict(auto_exposure=3, exposure_time_absolute=166)
+    baseline = {'cameras': {role: dict(original=dict(original), identity=role, unit=role, producer={}) for role in cameras}}
+    monkeypatch.setattr(env.urllib.request, 'urlopen', lambda *a, **kw: io.BytesIO(json.dumps({'read_only': True}).encode()))
+    saves = []
+    def tracked_save(path, value, **kw):
+        saves.append((path.name, kw.get('durable', True)))
+        return runtime.save(path, value, **kw)
+    backend = SimpleNamespace(prepare=lambda *a: baseline, identity=lambda d: d,
+        producer=lambda u, d: {}, get_controls=lambda d, n: dict(original),
+        write_control=lambda *a: None, restore_controls=runtime.restore_controls,
+        apply_candidate=runtime.apply_candidate, save=tracked_save, append_event=runtime.append_event,
+        restore=lambda root: None, control_intent=runtime.control_intent,
+        validate_device_controls=lambda *a: None, reserve_budget=lambda root: None,
+        BudgetExhausted=runtime.BudgetExhausted)
+    env.monitor(dict(viewer_url='http://127.0.0.1:8767', cameras=cameras), tmp_path, 'test-profile', 0.1, backend)
+    assert ('control-run.json', True) in saves
+    assert [d for name, d in saves if name == 'readiness.json'] == [False, False]
