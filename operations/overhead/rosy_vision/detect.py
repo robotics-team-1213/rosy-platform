@@ -77,7 +77,7 @@ def detect_markers(jpeg: bytes) -> DetectedMarkers:
         points = tuple((float(point[0]), float(point[1])) for point in quad.reshape(4, 2))
         found[int(marker_id)] = points  # type: ignore[assignment]
     _reread_small(image, rejected, found)
-    qr_ids = _detect_qr_robot_markers(image, found)
+    qr_ids = _detect_qr_robot_markers(image, found, rejected)
     return DetectedMarkers(found, qr_ids=qr_ids)
 
 
@@ -95,6 +95,11 @@ _QR_ARUCO = cv2.QRCodeDetectorAruco() if hasattr(cv2, "QRCodeDetectorAruco") els
 _QR_DETECTOR = _QR_ARUCO or _QR_STD
 _QR_MIN_SIDE_PX = 12.0
 _QR_MAX_CANDIDATES = 8
+_QR_ROI_MIN_PX = 12
+_QR_ROI_MAX_PX = 95
+_QR_ROI_PAD_PX = 8
+_QR_ROI_SCALE = 4
+_QR_ROI_MAX = 8
 _QR_WARP_SIZE = 270
 _QR_WARP_MARGIN = 30
 _QR_WARP_DST = np.array([
@@ -183,26 +188,103 @@ def _decode_qr_quad(gray: np.ndarray, pts: np.ndarray) -> tuple[str, np.ndarray]
     return "", pts
 
 
-def _detect_qr_robot_markers(image: np.ndarray, found: dict[int, MarkerQuad]) -> set[int]:
+def _reread_small_qr(
+    gray: np.ndarray, rejected, found: dict[int, MarkerQuad], qr_ids: set[int]
+) -> None:
+    """Decode small top-mounted robot QR stickers from 4x upscaled ROIs (mirrors D-575).
+
+    Reads compact bright sticker patches and rejected small marker quads without upscaling
+    the full frame, mapping corners back to full-frame pixel coordinates.
+    """
+    height, width = gray.shape[:2]
+    boxes: list[tuple[int, int, int, int, int]] = []
+    # Bright white label patches (circular or square sticker on robot top deck)
+    _, bright = cv2.threshold(gray, 175, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(bright, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        bx, by, bw, bh = cv2.boundingRect(contour)
+        if not (_QR_ROI_MIN_PX <= bw <= _QR_ROI_MAX_PX and _QR_ROI_MIN_PX <= bh <= _QR_ROI_MAX_PX):
+            continue
+        if max(bw / bh, bh / bw) > 2.5 or cv2.contourArea(contour) < 80:
+            continue
+        boxes.append((bw * bh, bx, by, bx + bw, by + bh))
+    for candidate in rejected:
+        pts = np.asarray(candidate, dtype=float).reshape(4, 2)
+        low, high = pts.min(axis=0), pts.max(axis=0)
+        bw, bh = high[0] - low[0], high[1] - low[1]
+        if _QR_ROI_MIN_PX <= max(bw, bh) <= _QR_ROI_MAX_PX:
+            x0, y0 = int(np.floor(low[0])), int(np.floor(low[1]))
+            x1, y1 = int(np.ceil(high[0])), int(np.ceil(high[1]))
+            boxes.append((max(1, (x1 - x0) * (y1 - y0)), x0, y0, x1, y1))
+
+    deduped: list[tuple[int, int, int, int]] = []
+    for _, x0, y0, x1, y1 in sorted(boxes, reverse=True):
+        cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        if any(abs(cx - (a + c) / 2.0) < 12.0 and abs(cy - (b + d) / 2.0) < 12.0 for a, b, c, d in deduped):
+            continue
+        deduped.append((x0, y0, x1, y1))
+        if len(deduped) >= _QR_ROI_MAX:
+            break
+
+    scale, pad = _QR_ROI_SCALE, _QR_ROI_PAD_PX
+    for bx0, by0, bx1, by1 in deduped:
+        x0, y0 = max(0, bx0 - pad), max(0, by0 - pad)
+        x1, y1 = min(width, bx1 + pad), min(height, by1 + pad)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        up = cv2.resize(gray[y0:y1, x0:x1], None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        blur = cv2.GaussianBlur(up, (0, 0), 1.5)
+        sharp = cv2.addWeighted(up, 1.7, blur, -0.7, 0)
+        _, otsu = cv2.threshold(up, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        decoded_text, decoded_pts = "", None
+        for view in (up, sharp, otsu):
+            for detector in (_QR_ARUCO, _QR_STD):
+                if detector is None:
+                    continue
+                try:
+                    text, w_pts, _ = detector.detectAndDecode(view)
+                except cv2.error:
+                    text, w_pts = "", None
+                if text:
+                    decoded_text, decoded_pts = str(text), w_pts
+                    break
+            if decoded_text:
+                break
+        if not decoded_text or decoded_pts is None:
+            continue
+        marker_id = parse_robot_qr_id(decoded_text)
+        if marker_id is None or marker_id in found:
+            continue
+        w_arr = np.asarray(decoded_pts, dtype=np.float32).reshape(-1, 2)
+        if not _quad_ok(w_arr, min_side=8.0 * scale):
+            continue
+        mapped = (w_arr + 0.5) / scale - 0.5 + np.array([x0, y0], dtype=np.float32)
+        if not _quad_ok(mapped, min_side=8.0):
+            continue
+        found[marker_id] = tuple((float(px), float(py)) for px, py in mapped)  # type: ignore[assignment]
+        qr_ids.add(marker_id)
+
+
+def _detect_qr_robot_markers(image: np.ndarray, found: dict[int, MarkerQuad], rejected=()) -> set[int]:
     """Detect robot QR stickers on ``image`` without colliding with already-decoded ArUco ids."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    qr_ids: set[int] = set()
     try:
         ok, quads = _QR_DETECTOR.detectMulti(gray)
     except cv2.error:
-        return set()
-    if not ok or quads is None:
-        return set()
-    qr_ids: set[int] = set()
-    for raw_quad in quads[:_QR_MAX_CANDIDATES]:
-        pts = np.asarray(raw_quad, dtype=np.float32).reshape(-1, 2)
-        if not _quad_ok(pts):
-            continue
-        text, canonical = _decode_qr_quad(gray, pts)
-        marker_id = parse_robot_qr_id(text)
-        if marker_id is None or marker_id in found:
-            continue
-        found[marker_id] = tuple((float(x), float(y)) for x, y in canonical)  # type: ignore[assignment]
-        qr_ids.add(marker_id)
+        ok, quads = False, None
+    if ok and quads is not None:
+        for raw_quad in quads[:_QR_MAX_CANDIDATES]:
+            pts = np.asarray(raw_quad, dtype=np.float32).reshape(-1, 2)
+            if not _quad_ok(pts):
+                continue
+            text, canonical = _decode_qr_quad(gray, pts)
+            marker_id = parse_robot_qr_id(text)
+            if marker_id is None or marker_id in found:
+                continue
+            found[marker_id] = tuple((float(x), float(y)) for x, y in canonical)  # type: ignore[assignment]
+            qr_ids.add(marker_id)
+    _reread_small_qr(gray, rejected, found, qr_ids)
     return qr_ids
 
 

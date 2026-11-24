@@ -123,3 +123,22 @@ def test_detect_markers_ignores_non_robot_qr_and_keeps_aruco_together():
     found = detect_markers(encoded.tobytes())
     assert set(found) == {40, 45}
     assert found.qr_ids == frozenset({45})
+
+
+def test_detect_markers_roi_zoom_decodes_small_top_sticker_and_ignores_unreadable_blur():
+    frame = np.full((720, 1280, 3), 85, dtype=np.uint8)
+    # Place a small 40 px QR sticker inside a dark robot silhouette (raw detectMulti misses <=40 px).
+    frame[575:635, 295:355] = 35
+    small_qr = generate_qr_image("ROSY-46", 40, border_modules=2)
+    frame[585:625, 305:345] = cv2.cvtColor(small_qr, cv2.COLOR_GRAY2BGR)
+    # Also place an unreadable tiny blurred patch elsewhere to ensure clean fallback without crash.
+    frame[200:220, 420:440] = 230
+    frame[204:216, 424:436] = 140
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    assert ok
+
+    found = detect_markers(encoded.tobytes())
+    assert 46 in found
+    assert 46 in found.qr_ids
+    quad = np.asarray(found[46], dtype=float)
+    assert np.allclose(quad.mean(axis=0), (325.0, 605.0), atol=3.0)
