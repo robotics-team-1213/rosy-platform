@@ -96,3 +96,8 @@ shared/web/shared-assets.json
 shared/web/meshes/pinky-pro.urdf
 # (b) provenance only: SOURCE.json names the upstream repo pinklab-art/pinky_pro (3D asset boundary, 2026-11-19); the upstream name is the record, not a robot configuration value.
 middleware/devices/pinky/description/SOURCE.json
+# 2026-11-24: functional "pinky" cell/site/reroute-tool ids in pipeline recovery/unload-release; shrink with the de-Pinky plan.
+contracts/foundation/core_common/protocol/pipeline_recovery_tools.py
+operations/fleet/fleet/server/sitemap/pipeline_recovery_policy.py
+operations/fleet/fleet/server/sitemap/pipeline_recovery_tools.py
+operations/fleet/fleet/server/sitemap/pipeline_unload_release.py

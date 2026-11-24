@@ -91,6 +91,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_ROBOT_UNREACHABLE: '로봇에 지시를 보내지 못했습니다',
   TRIP_CANCELED: '운행이 취소됐습니다',
   TRIP_PATH_UNAVAILABLE: '운행 경로를 실행할 수 없습니다 · 관제 운행 상태를 확인하세요',
+  TRIP_STOP_NOT_DISPATCHABLE: '이 정차 지점으로는 자동 배차할 수 없습니다 · 목적지와 경로를 확인하세요',
 };
 /** D-541 5/7: why CORE ended the trip lease (``detail.lease_reason``). */
 const LEASE_END_LABEL = {
