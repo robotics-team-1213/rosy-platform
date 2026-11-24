@@ -27,17 +27,17 @@ test("D-763 8: a row reads the server's visible state, a wait first, the ledger 
   assert.equal(workStatus("arrived"), "도착");
   assert.notEqual(workKey({source: "trip", source_id: "same"}), workKey({source: "cell_job", source_id: "same"}));
 });
-test("two same-device rows become distinguishable by the identifier tail and workspace/time tail", () => {
+test("two same-device rows become distinguishable by the identifier tail and workspace/time tail when colliding", () => {
   const id = "550e8400-e29b-41d4-a716-446655440000";
   const base = {source: "trip", device_id: "rosy_45", status: "intervention", visible_state: "intervention"};
-  const a = workLine({...base, source_id: `${id}`});
-  const b = workLine({...base, source_id: "TRIP-20261124-0042"});
-  assert.notEqual(a, b);  // 운행 · rosy_45 · 개입 필요 꼬리가 두 행을 갈라 놓는다
+  const a = workLine({...base, source_id: `${id}`}, true);
+  const b = workLine({...base, source_id: "TRIP-20261124-0042"}, true);
+  assert.notEqual(a, b);  // 운행 · rosy_45 · 개입 필요 꼬리가 겹치는 두 행을 갈라 놓는다
   assert.match(a, /44665544/);
   assert.match(b, /0042/);
-  assert.match(workLine({...base, source_id: id, workcell_id: "cell_ab"}), /cell_ab/);
-  assert.match(workLine({...base, source_id: id, updated_at: "2026-11-24T12:49:00+00:00"}), /\d{1,2}:\d{2}/);
-  assert.equal(workLine({...base}), workLine({...base}));  // 꼬리 재료가 없으면 옛 한 줄을 지킨다
+  assert.match(workLine({...base, source_id: id, workcell_id: "cell_ab"}, true), /cell_ab/);
+  assert.match(workLine({...base, source_id: id, updated_at: "2026-11-24T12:49:00+00:00"}, true), /\d{1,2}:\d{2}/);
+  assert.equal(workLine({...base, source_id: id}), "운행 · rosy_45 · 개입 필요");
 });
 
 // D-865 P3 — 승인 범위 판정·문구는 순수 함수다. 범위 밖·상한 소진·비활성은 배지 없음(사람 승인).
@@ -94,7 +94,7 @@ test("formatWorkTime handles Unix epoch seconds, ms, and ISO strings without 197
 });
 
 test("a 403 on channel-requests says the permission line and pauses polling; 404 and server faults do not", () => {
-  assert.equal(requestsNotice(403), "대화 요청을 보려면 운영자 권한 또는 기명 로그인이 필요합니다.");
+  assert.equal(requestsNotice(403), "대화 요청을 보려면 기명 운영자로 로그인해야 합니다.");
   assert.equal(requestsNotice(404), "대화 요청 접수가 설정되지 않았습니다.");
   assert.equal(requestsNotice(401), "기명 운영자 접속이 필요합니다.");
   assert.equal(requestsNotice(500), "대화 요청 조회 실패");

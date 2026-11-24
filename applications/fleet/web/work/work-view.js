@@ -25,8 +25,9 @@ const approvable = row => (row.source === "mission" || row.source === "cell_job"
 export const canAdmitWorkHere = (row, scope = unitScope()) => approvable(row) && owns("arms", scope) && !relays(scope);
 const idTail = v => String(v ?? "").split("-").pop().slice(0, 8);
 const shortStamp = v => { const ms = workMs(v); return Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}) : ""; };
-export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status), idTail(row.source_id), row.workcell_id || shortStamp(row.updated_at)].filter(Boolean).join(" · ");
-export const requestsNotice = s => s === 404 ? "대화 요청 접수가 설정되지 않았습니다." : s === 403 ? "대화 요청을 보려면 운영자 권한 또는 기명 로그인이 필요합니다." : s === 401 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
+export const workLine = (row, disambiguate = false) => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status),
+  ...(disambiguate ? [idTail(row.source_id), row.workcell_id || shortStamp(row.updated_at)] : [])].filter(Boolean).join(" · ");
+export const requestsNotice = s => s === 404 ? "대화 요청 접수가 설정되지 않았습니다." : s === 403 ? "대화 요청을 보려면 기명 운영자로 로그인해야 합니다." : s === 401 ? "기명 운영자 접속이 필요합니다." : "대화 요청 조회 실패";
 export const requestsPause = status => status === 403;
 // D-865 P3 — 승인 범위 판정과 문구는 순수 함수다(node 시험 대상). 화면은 범위 사실을 읽어
 // 표시만 하고 승인 자체는 서버의 정책 principal이 한다: 사람 승인과 같은 검사를 전부 통과한
@@ -230,8 +231,11 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       patchText(el("work-evidence"), "필터에 맞는 작업을 선택하세요.");
     }
     const visibleRows = rows.filter(row => filter === "all" || row.source === filter);
+    const labelCounts = new Map();
+    for (const row of visibleRows) { const base = workLine(row); labelCounts.set(base, (labelCounts.get(base) || 0) + 1); }
+    const rowLabel = row => workLine(row, labelCounts.get(workLine(row)) > 1);
     const listSig = JSON.stringify(visibleRows.map(row => [
-      workKey(row), selected === workKey(row), row.status, workLine(row), autoAdmitScope(row, policy).member,
+      workKey(row), selected === workKey(row), row.status, rowLabel(row), autoAdmitScope(row, policy).member,
     ]));
     if (listSig !== lastListSig || (visibleRows.length > 0 && !list.firstElementChild)) {
       lastListSig = listSig;
@@ -244,7 +248,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
         button.setAttribute("data-work-read", "");
         button.setAttribute("aria-pressed", String(selected === workKey(row)));
         button.title = `${row.source} · ${row.source_id} · ${row.status}`;
-        button.textContent = workLine(row);
+        button.textContent = rowLabel(row);
         button.addEventListener("click", () => select(row));
         item.append(button);
         // D-865 P3 — 승인 대기 행의 자동 승인 범위 소속 표시(auto_admit 표기 규칙).
