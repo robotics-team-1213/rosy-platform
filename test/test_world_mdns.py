@@ -159,12 +159,18 @@ def test_two_sided_docker_compose_and_mdns_contracts() -> None:
     # Co-located overlay uses Dockerfile + /run/avahi-daemon + mDNS host targets without overriding fleet logging.
     site_world = yaml.safe_load((ROOT / "deploy/site/compose.world.yaml").read_text(encoding="utf-8"))
     assert "logging" not in site_world["services"]["fleet"]
-    assert "--fleet-mdns-host" in " ".join(site_world["services"]["world-real-bridge"]["command"])
+    bridge = site_world["services"]["world-real-bridge"]
+    assert "--fleet-mdns-host" in " ".join(bridge["command"])
+    assert bridge["environment"]["ROSY_FLEET_TOKEN_FILE"] == "/run/secrets/world_fleet_viewer_token"
+    assert "world_fleet_viewer_token" in bridge["secrets"]
+    assert "registry_token" not in bridge["secrets"]
+    assert "world_fleet_viewer_token" in site_world["secrets"]
     for name in ("world", "world-real-bridge"):
         assert any(isinstance(v, dict) and v.get("source") == "/run/avahi-daemon" and v.get("read_only") is True for v in site_world["services"][name]["volumes"])
 
     unit = (ROOT / "deploy/site/rosy-world-advertise.service").read_text(encoding="utf-8")
     assert "world_mdns.py publish" in unit and "RestrictAddressFamilies=AF_UNIX" in unit
+    assert "Environment=ROSY_WORLD_PORT=8140" in unit and "EnvironmentFile=-/run/rosy-site/world-public.env" in unit
 
     virtual_compose = yaml.safe_load((ROOT / "deploy/site/compose.virtual-closed-loop.yaml").read_text(encoding="utf-8"))
     assert "virtual-core-fleet" in virtual_compose["services"]

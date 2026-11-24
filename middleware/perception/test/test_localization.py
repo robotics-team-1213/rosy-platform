@@ -174,11 +174,12 @@ class LocalizationTests(unittest.TestCase):
         self.assertIsNone(reason)
         self.assertLess(math.dist(results[0][2][:2], truth[:2]), .05)
 
-        # 1) >3% wall-piercing rejection (beams extend past wall through >=65 cells)
-        pierced = wall_ranges.copy()
-        pierced[:15] = 4.2
-        self.assertEqual(m.explain(truth, pierced, angles).rejected_reason, "wall-piercing")
-        self.assertEqual(m.robust_score(truth, pierced, angles), 0.0)
+        # 1) >3% wall-piercing rejection on 2 cm grids (beams extend past wall through >=65 cells)
+        for k in (7, 15):
+            pierced = wall_ranges.copy()
+            pierced[:k] = 4.2
+            self.assertEqual(m.explain(truth, pierced, angles).rejected_reason, "wall-piercing")
+            self.assertEqual(m.robust_score(truth, pierced, angles), 0.0)
 
         # 2) <4 hit sectors rejection
         sparse_idx = np.arange(0, 36)  # ~72 deg arc -> <= 2 sectors
@@ -197,3 +198,38 @@ class LocalizationTests(unittest.TestCase):
         iso_b = m.explain(truth, iso, angles)
         self.assertEqual(iso_b.miss_foreground, 0)
         self.assertEqual(iso_b.fg_cluster_count, 0)
+
+    def test_coarse_5cm_map_wall_piercing_boundary(self):
+        # 5x5 m closed room (5 cm cells -> 100x100), walls at indices 10..89
+        res = .05
+        grid = np.zeros((100, 100), dtype=np.int8)
+        grid[10:90, 10] = 100
+        grid[10:90, 89] = 100
+        grid[10, 10:90] = 100
+        grid[89, 10:90] = 100
+        m = MapAgreement(grid, res, (0., 0.), tolerance=.04)
+        truth = (1.5, 1.5, 0.0)
+        angles = np.linspace(-math.pi, math.pi, 180, endpoint=False)
+        wall_ranges = np.array([
+            min(d for d in (
+                (89 * res - truth[0]) / math.cos(a) if math.cos(a) > 1e-6 else None,
+                (10 * res - truth[0]) / math.cos(a) if math.cos(a) < -1e-6 else None,
+                (89 * res - truth[1]) / math.sin(a) if math.sin(a) > 1e-6 else None,
+                (10 * res - truth[1]) / math.sin(a) if math.sin(a) < -1e-6 else None,
+            ) if d is not None) + .01
+            for a in angles
+        ], dtype=float)
+
+        for k in (7, 10):  # 3.9%..5.6% stale-prop pierce passes on 5 cm maps
+            ok = wall_ranges.copy()
+            ok[:k] = 5.5
+            b = m.explain(truth, ok, angles)
+            self.assertIsNone(b.rejected_reason)
+            self.assertGreaterEqual(b.robust_score, 0.90)
+
+        for k in (12, 15):  # >6% (6.7%, 8.3%) still rejected as wall-piercing
+            bad = wall_ranges.copy()
+            bad[:k] = 5.5
+            b = m.explain(truth, bad, angles)
+            self.assertEqual(b.rejected_reason, "wall-piercing")
+            self.assertEqual(b.robust_score, 0.0)

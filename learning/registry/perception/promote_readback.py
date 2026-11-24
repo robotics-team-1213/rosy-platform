@@ -16,11 +16,16 @@ A robot whose learned node is off (ROSY_LEARNED_SHADOW / ROSY_OBJECT_DET default
 from __future__ import annotations
 
 import datetime as dt
+import http.client
 import json
 import math
 import os
 import shlex
+import ssl
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 #: (task, moved slot) -> the status topic of the node that runs that slot (CORE models.py).
@@ -31,6 +36,78 @@ STATUS_TOPICS = {
 POINTER_ACTIONS = ("push", "rollback", "promote")
 RECORD_NAME = "pointer-changes/pointer_changes.jsonl"  # outside the one-file-per-attempt folder
 STATUS_SCHEMA = "rosy.perception.learned_status/1"
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never forward Authorization: Bearer across HTTP redirects."""
+
+    def redirect_request(self, *_args, **_kwargs):
+        return None
+
+
+def _tls_context(*, ca_file: str | None = None, insecure: bool = False) -> ssl.SSLContext:
+    if ca_file and insecure:
+        raise ValueError("pass either ca_file or insecure, not both")
+    if insecure:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    ctx = ssl.create_default_context(cafile=ca_file) if ca_file else ssl.create_default_context()
+    if ca_file:
+        # Robot CORE certs are per-host self-signed or site-CA leaves reached by LAN IP/mDNS.
+        ctx.check_hostname = False
+        ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+    return ctx
+
+
+def _http_get_json(url: str, *, token: str | None = None, timeout: float = 5.0,
+                   ca_file: str | None = None, insecure: bool = False,
+                   opener_factory=urllib.request.build_opener) -> dict | None:
+    if urllib.parse.urlsplit(url).scheme.lower() != "https":
+        raise ValueError("core_url must use https://")
+    ctx = _tls_context(ca_file=ca_file, insecure=insecure)
+    opener = opener_factory(
+        urllib.request.ProxyHandler({}),
+        urllib.request.HTTPSHandler(context=ctx),
+        _NoRedirect(),
+    )
+    headers = {"Accept": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with opener.open(req, timeout=timeout) as resp:
+            doc = json.loads(resp.read().decode("utf-8"))
+        return doc if isinstance(doc, dict) else None
+    except (OSError, urllib.error.URLError, http.client.HTTPException, ValueError):
+        return None
+
+
+def parse_api_models(doc: dict | None, task: str, slot: str) -> dict | None:
+    """Extract matching non-stale model status entry from CORE `GET /api/v1/vision/models`."""
+    if not isinstance(doc, dict) or not isinstance(doc.get("tasks"), list):
+        return None
+    for entry in doc["tasks"]:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("task") == task and entry.get("slot") == slot and entry.get("stale") is False:
+            rev = entry.get("model_revision")
+            if isinstance(rev, str) and rev.strip():
+                return {"model_revision": rev, "signed": entry.get("signed")}
+    return None
+
+
+def parse_api_paint(doc: dict | None) -> dict | None:
+    """Extract active learned paint model revision from CORE `GET /api/v1/line-follow/perception`."""
+    if not isinstance(doc, dict):
+        return None
+    if doc.get("applied_paint_source") not in ("learned", "learned_drivable"):
+        return None
+    rev = doc.get("applied_model_revision")
+    if not isinstance(rev, str) or not rev.strip():
+        return None
+    return {"model_revision": rev}
 
 
 def moved_slot(args) -> str | None:
@@ -102,6 +179,51 @@ def verdict(pointer_revision: str | None, status: dict | None, topic: str | None
     return "match" if status.get("model_revision") == pointer_revision else "mismatch"
 
 
+def _paint_pointer_unchanged(ssh, target: str, root: str, slot: str, runner, *,
+                             timeout: float, pointer_revision: str | None) -> bool:
+    after = runner([*ssh, target, pointer_command(root, slot)], capture_output=True, text=True,
+                   timeout=timeout, check=False)
+    return after.returncode == 0 and revision_of(after.stdout) == pointer_revision
+
+
+def _api_token(args) -> str | None:
+    token_file = getattr(args, "token_file", None)
+    if token_file is not None:
+        return Path(token_file).read_text(encoding="utf-8").strip() or None
+    return os.environ.get("ROSY_API_TOKEN") or None
+
+
+def read_back_api(core_url: str, token: str | None, ssh, target: str, root: str, task: str, slot: str, runner, *,
+                  timeout: float, attempts: int = 3, wait_s: float = 2.0, sleep=None,
+                  ca_file: str | None = None, insecure: bool = False, fetch_json=None) -> dict:
+    """Read loaded model revision via CORE HTTPS API (no `ros2 topic echo` over SSH)."""
+    sleep = sleep or time.sleep
+    fetch = fetch_json or (lambda url: _http_get_json(
+        url, token=token, timeout=timeout, ca_file=ca_file, insecure=insecure))
+    pointer = runner([*ssh, target, pointer_command(root, slot)], capture_output=True, text=True,
+                     timeout=timeout, check=False)
+    pointer_revision = revision_of(pointer.stdout) if pointer.returncode == 0 else None
+    paint = (task, slot) == ("lane_seg", "paint")
+    topic = "line/keep_debug" if paint else STATUS_TOPICS.get((task, slot))
+    base = core_url.rstrip("/")
+    url = f"{base}/api/v1/line-follow/perception" if paint else f"{base}/api/v1/vision/models"
+    result = {"pointer_revision": pointer_revision, "node_revision": None, "signed": None}
+    status = None
+    for attempt in range(max(1, attempts) if topic else 0):
+        doc = fetch(url)
+        status = parse_api_paint(doc) if paint else parse_api_models(doc, task, slot)
+        if status is not None and status.get("model_revision") == pointer_revision:
+            break
+        if attempt + 1 < attempts:
+            sleep(wait_s)
+    result.update(readback=verdict(pointer_revision, status, topic),
+                  node_revision=(status or {}).get("model_revision"),
+                  signed=(status or {}).get("signed") if isinstance((status or {}).get("signed"), bool) else None)
+    if paint and not _paint_pointer_unchanged(ssh, target, root, slot, runner, timeout=timeout, pointer_revision=pointer_revision):
+        result["readback"] = "unavailable"
+    return result
+
+
 def read_back(ssh, target: str, root: str, task: str, slot: str, runner, *,
               timeout: float, attempts: int = 3, wait_s: float = 2.0, sleep=None) -> dict:
     sleep = sleep or time.sleep
@@ -124,11 +246,8 @@ def read_back(ssh, target: str, root: str, task: str, slot: str, runner, *,
     result.update(readback=verdict(pointer_revision, status, topic),
                   node_revision=(status or {}).get("model_revision"),
                   signed=(status or {}).get("signed") if isinstance((status or {}).get("signed"), bool) else None)
-    if paint:
-        after = runner([*ssh, target, pointer_command(root, slot)], capture_output=True, text=True,
-                       timeout=timeout, check=False)
-        if after.returncode != 0 or revision_of(after.stdout) != pointer_revision:
-            result["readback"] = "unavailable"
+    if paint and not _paint_pointer_unchanged(ssh, target, root, slot, runner, timeout=timeout, pointer_revision=pointer_revision):
+        result["readback"] = "unavailable"
     return result
 
 
@@ -156,8 +275,15 @@ def after_change(args, ssh, runner, code: int, audit, err) -> None:
             "node_revision": None, "signed": None}  # no extra network step: what the command names
     if getattr(args, "readback", False):
         try:
-            seen = read_back(ssh, f"{args.user}@{args.host}", args.root, args.task, slot, runner,
-                             timeout=args.timeout)
+            core_url = getattr(args, "core_url", None)
+            if core_url:
+                seen = read_back_api(
+                    core_url, _api_token(args), ssh, f"{args.user}@{args.host}", args.root,
+                    args.task, slot, runner, timeout=args.timeout,
+                    ca_file=getattr(args, "ca_file", None), insecure=bool(getattr(args, "insecure", False)))
+            else:
+                seen = read_back(ssh, f"{args.user}@{args.host}", args.root, args.task, slot, runner,
+                                 timeout=args.timeout)
         except Exception as exc:  # a failed readback still leaves the pointer change on record
             seen = {**seen, "readback": "unavailable", "readback_error": type(exc).__name__}
     try:

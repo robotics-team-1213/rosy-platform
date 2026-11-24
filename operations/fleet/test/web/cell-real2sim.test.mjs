@@ -279,6 +279,24 @@ test("cell task refresh renders across the main/views module split", async () =>
   }
 });
 
+test("decisions list lookup, QUEUED-only cancel, dead-button removal, and dynamic pinky list", () => {
+  const cards = visualCardSpecs({
+    decisions: [{subject_id: "cell_s", choice: "USE_BELT_FAR", reason: "vision"}],
+    tasks: [
+      {task_id: "q-1", cell_id: "cell_s", arm_id: "arm_s", status: "QUEUED"},
+      {task_id: "r-1", cell_id: "cell_ab", arm_id: "arm_a", status: "RUNNING"},
+    ],
+  });
+  assert.match(cards[0].folded_state, /Decision: USE_BELT_FAR/);
+  assert.ok(cards[0].buttons.some(b => b.cancelTaskId === "q-1"));
+  assert.ok(!cards[1].buttons.some(b => b.cancelTaskId));
+  for (const dead of ["micro_forward_2cm", "micro_reverse_2cm", "stop_now"]) {
+    assert.ok(!cards[2].buttons.some(b => b.pinkyAction === dead), dead);
+  }
+  const dynSpecs = inspectorSpecs({pinky_robots: ["rosy_99"]});
+  assert.deepEqual(dynSpecs.map(s => s.id), ["arm_s", "arm_a", "arm_b", "cell_s", "cell_ab", "rosy_99"]);
+});
+
 test("inspector mounts before frame bind, preserves matrix and draft choices, and avoids hardcoded robot_id", async () => {
   const mkNode = (tag = 'DIV') => {
     const el = {
@@ -355,5 +373,158 @@ test("inspector mounts before frame bind, preserves matrix and draft choices, an
     assert.equal(els['omx-right-inspector'].children[4].children[0].children[1].children.find(o => o.value === '3').selected, true);
   } finally {
     globalThis.document = previous;
+  }
+});
+
+test("unconfirmed stop warning stays visible across 3s polling and overlapping actions, and retry sends human_detected=true", async () => {
+  const mkNode = (tag = 'DIV') => {
+    const el = {
+      tagName: String(tag).toUpperCase(), dataset: {}, style: {}, attributes: {}, listeners: {}, children: [],
+      hidden: false, value: '', textContent: '', className: '', open: false, selected: false,
+      classList: {add() {}, remove() {}, toggle() {}, contains: () => false},
+      append(...nodes) { for (const n of nodes) if (typeof n !== 'string') { n.parentNode = el; el.children.push(n); } },
+      replaceChildren(...nodes) { el.children = []; el.append(...nodes); },
+      addEventListener(type, cb) { (el.listeners[type] ??= []).push(cb); },
+      setAttribute(k, v) { el.attributes[k] = String(v); },
+      getAttribute(k) { return el.attributes[k] ?? null; },
+      hasAttribute(k) { return k in el.attributes; },
+      removeAttribute(k) { delete el.attributes[k]; },
+      querySelector: () => null, querySelectorAll: () => [],
+    };
+    return el;
+  };
+  const prevDoc = globalThis.document;
+  const prevWin = globalThis.window;
+  let pollCb = null;
+  globalThis.document = {createElement: mkNode, querySelectorAll: () => [], hidden: false};
+  globalThis.window = {
+    setInterval(cb) { pollCb = cb; return 1; },
+    clearInterval() { pollCb = null; },
+  };
+  try {
+    const els = {};
+    els['cell-visual-cards'] = mkNode('DIV');
+    const rootWrap = mkNode('DIV');
+    rootWrap.append(els['cell-visual-cards']);
+    let stopMode = 'unconfirmed';
+    let cellHeld = false;
+    const stopPayloads = [];
+    const visionPayloads = [];
+    let releaseDeferredStop = null;
+    const pipeline = createReal2SimPipeline({
+      request: async (path, opts) => {
+        if (path.includes('human-safety-gate') && opts?.method === 'POST') {
+          const payload = JSON.parse(opts.body);
+          stopPayloads.push(payload);
+          if (stopMode === 'throw503') {
+            throw new Error('HTTP 503 SERVICE_UNAVAILABLE');
+          }
+          cellHeld = true;
+          if (stopMode === 'unconfirmed' && !releaseDeferredStop) {
+            await new Promise(resolve => { releaseDeferredStop = resolve; });
+          }
+          if (stopMode === 'missing_ack') {
+            return {ok: true, paused_tasks: [], resumed_tasks: []};
+          }
+          return stopMode === 'confirmed'
+            ? {ok: true, stop_confirmed: true, unconfirmed_pinky_stops: [], paused_tasks: [], resumed_tasks: []}
+            : {ok: false, stop_confirmed: false, unconfirmed_pinky_stops: ['t-live']};
+        }
+        if (path.includes('vision-auto-check') && opts?.method === 'POST') {
+          const payload = JSON.parse(opts.body);
+          visionPayloads.push(payload);
+          cellHeld = true;
+          if (stopMode === 'vision_missing_ack') {
+            return {ok: true, vision: {human_detected: true, displaced_to: null, snapshot_bytes: 120}};
+          }
+          if (stopMode === 'vision_confirmed') {
+            return {ok: true, stop_confirmed: true, unconfirmed_pinky_stops: [], vision: {human_detected: true, displaced_to: null, snapshot_bytes: 120}};
+          }
+          throw new Error('HTTP 503 VISION_TIMEOUT');
+        }
+        if (path.includes('pipeline/status')) return {cells: {}, pinky_tasks: []};
+        return {
+          tasks: [], cameras: [], summary: {total: 2, queued: 1, running: 1, completed: 0},
+          human_safety: {human_detected: {cell_s: cellHeld, cell_ab: false}},
+          cells: {cell_s: {gate: {phase: cellHeld ? 'HUMAN_HOLD' : 'IDLE'}}},
+        };
+      },
+      $: id => (els[id] ??= mkNode('DIV')),
+      isOperator: () => true,
+    });
+    await pipeline.refreshCellTasks();
+    assert.ok(typeof pollCb === 'function', '3s poll registered');
+    const findButtons = (node, attr) => {
+      const out = [];
+      for (const c of node.children || []) {
+        if (c.dataset?.[attr]) out.push(c);
+        out.push(...findButtons(c, attr));
+      }
+      return out;
+    };
+    const flush = () => new Promise(r => setTimeout(r, 15));
+    const btn = findButtons(els['cell-visual-cards'], 'humanSafetyCell')[0];
+    const vBtn = findButtons(els['cell-visual-cards'], 'visionCheckCell')[0];
+    assert.ok(btn && vBtn, 'humanSafetyCell and visionCheckCell buttons rendered');
+    // Vision button sends explicit intrusion evidence and keeps warning on missing stop_confirmed
+    stopMode = 'vision_missing_ack';
+    vBtn.listeners.click[0]({stopPropagation() {}});
+    await flush();
+    assert.equal(visionPayloads[0].human_detected, true);
+    assert.ok(visionPayloads[0].intrusion_score >= 0.35);
+    assert.match(els['cell-tasks-status'].textContent, /Pinky 정지 미확인/);
+    await pollCb();
+    await flush();
+    assert.match(els['cell-tasks-status'].textContent, /Pinky 정지 미확인/);
+    // Manual {ok: true} without stop_confirmed=true also cannot clear the warning
+    stopMode = 'missing_ack';
+    btn.listeners.click[0]({stopPropagation() {}});
+    await flush();
+    assert.match(els['cell-tasks-status'].textContent, /Pinky 정지 미확인/);
+    // Rejected HTTP 503 POST keeps unconfirmed warning across 3s polling
+    stopMode = 'throw503';
+    btn.listeners.click[0]({stopPropagation() {}});
+    await flush();
+    assert.match(els['cell-tasks-status'].textContent, /정지 미확인/);
+    await pollCb();
+    await flush();
+    assert.match(els['cell-tasks-status'].textContent, /정지 미확인/);
+    // Start unconfirmed stop request, then run an overlapping refreshCellTasks while POST is in-flight
+    stopMode = 'unconfirmed';
+    btn.listeners.click[0]({stopPropagation() {}});
+    await flush();
+    await pipeline.refreshCellTasks();
+    releaseDeferredStop();
+    await flush();
+    assert.match(els['cell-tasks-status'].textContent, /Pinky 정지 미확인\(t-live\)/);
+    // Simulate real 3-second poll tick while cell_s is HUMAN_HOLD
+    await pollCb();
+    await flush();
+    assert.match(els['cell-tasks-status'].textContent, /Pinky 정지 미확인\(t-live\)/);
+    // Held cell still exposes retry-stop button that sends human_detected: true (never false -> 409)
+    const retryBtn = findButtons(els['cell-visual-cards'], 'humanSafetyCell')[0];
+    assert.ok(retryBtn && retryBtn.textContent.includes('재전송'), 'retry button remains available during HUMAN_HOLD');
+    stopMode = 'confirmed';
+    retryBtn.listeners.click[0]({stopPropagation() {}});
+    await flush();
+    assert.equal(stopPayloads.at(-1).human_detected, true);
+    assert.match(els['cell-tasks-status'].textContent, /완료/);
+    await pollCb();
+    await flush();
+    assert.match(els['cell-tasks-status'].textContent, /OMX 셀 태스크 원장/);
+    // Vision confirmed stop also clears any warning cleanly
+    stopMode = 'throw503';
+    btn.listeners.click[0]({stopPropagation() {}});
+    await flush();
+    stopMode = 'vision_confirmed';
+    vBtn.listeners.click[0]({stopPropagation() {}});
+    await flush();
+    await pollCb();
+    await flush();
+    assert.match(els['cell-tasks-status'].textContent, /OMX 셀 태스크 원장/);
+    pipeline.clear();
+  } finally {
+    globalThis.document = prevDoc;
+    globalThis.window = prevWin;
   }
 });

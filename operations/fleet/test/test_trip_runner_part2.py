@@ -578,6 +578,47 @@ def test_create_app_wires_the_real_trip_providers(tmp_path):
     assert isinstance(runner._junction, HttpLaneJunction)
 
 
+def test_align_cancel_on_first_status_poll_keeps_unconfirmed_stop(tmp_path):
+    import asyncio
+
+    runner, store, ports = _setup(path=tmp_path / "fleet.sqlite3", period_s=0.001)
+    ports.rotate_to = lambda *_a: asyncio.sleep(0, result={"started": True})
+
+    async def cancel_status(_rid):
+        raise asyncio.CancelledError
+
+    ports.rotate_status = cancel_status
+    _plan(store, ports, "ring_s:fwd", 0.1, "NW")
+
+    with pytest.raises(asyncio.CancelledError):
+        run(runner._align("rosy_60", 45.0, "op"))
+    assert "rosy_60" not in runner._aligning
+    assert "rosy_60" in runner._unconfirmed_align_stops
+    assert "rosy_60" in runner.aligning_robots()
+
+    # Nonterminal receipts from halt_aligning must keep the robot fenced; only terminal readback clears it.
+    ports.rotate_stop = lambda _rid: asyncio.sleep(0, result={})
+    assert run(runner.halt_aligning(["rosy_60"])) == ["rosy_60"]
+    assert "rosy_60" in runner._unconfirmed_align_stops
+
+    ports.rotate_stop = lambda _rid: asyncio.sleep(0, result={"state": "running"})
+    assert run(runner.halt_aligning(["rosy_60"])) == ["rosy_60"]
+    assert "rosy_60" in runner._unconfirmed_align_stops
+
+    ports.rotate_stop = lambda _rid: asyncio.sleep(0, result={"state": "aborted"})
+    assert run(runner.halt_aligning(["rosy_60"])) == []
+    assert "rosy_60" not in runner._unconfirmed_align_stops
+
+    # Empty/unrecognized rotate_status must also attempt rotate_stop and keep unconfirmed fence if stop is unconfirmed.
+    ports.rotate_status = lambda _rid: asyncio.sleep(0, result={})
+    ports.rotate_stop = lambda _rid: asyncio.sleep(0, result={})
+    with pytest.raises(TripError) as exc_info:
+        run(runner._align("rosy_60", 45.0, "op"))
+    assert exc_info.value.code == "TRIP_ALIGN_ABORTED"
+    assert "rosy_60" in runner._unconfirmed_align_stops
+    assert "rosy_60" in runner.aligning_robots()
+
+
 def test_map_pose_catches_429_rate_limit_and_reraises_non_429_robot_api_error(tmp_path, caplog):
     ports = Ports()
     client, _tasks, _store, _robot, _console = _app(tmp_path, ports)

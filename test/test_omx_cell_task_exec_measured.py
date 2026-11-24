@@ -844,3 +844,40 @@ def test_act_policy_park_receipt_requires_owner_park_command_label(tmp_path, mon
         out, _ = _act_setup(tmp_path, monkeypatch, subprocess_res={**base_res, "park": park_val})
         assert out["stop_event"]["folded"] is expect_ok
         assert out["stage_result"]["task_verified"] is expect_ok
+
+
+def test_guarded_exec_honors_calibrated_displaced_to_or_fails_closed(tmp_path, monkeypatch):
+    (tmp_path / "with-session-arm-s-live.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    (tmp_path / "grasp-plan.json").write_text(json.dumps({"home": HOME}), encoding="utf-8")
+    monkeypatch.setattr(cte, "check_arm_hold", lambda arm: {"held": False})
+    monkeypatch.setattr(cte, "measured_fold", lambda arm, prep, now=None: {"folded": True, "state": None, "fresh": True})
+    monkeypatch.setattr(cte, "source_clearance", lambda *a, **k: {"objects": 0, "site": "belt_far"})
+    cmds = []
+    monkeypatch.setattr(cte.subprocess, "run", lambda *a, **k: (cmds.append(a[0]) or subprocess.CompletedProcess(
+        a, 0, stdout=json.dumps({"result": "placed", "attempts": [_attempt()]}) + "\n", stderr="")))
+
+    # Without displaced site in cfg.sites, fail closed before running subprocess.
+    (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({
+        "plan_path": str(tmp_path / "grasp-plan.json"),
+        "sites": {"pinky": {"auto_roi": [1, 2, 3, 4]}, "belt": {"auto_roi": [5, 6, 7, 8]}},
+    }), encoding="utf-8")
+    uncal = cte.execute_guarded_cell_task({**HANDOFF, "displaced_to": "belt_far"}, prep_dir=tmp_path)
+    assert uncal["error"] == "UNCALIBRATED_DISPLACED_SITE" and cmds == []
+    bad_site = cte.execute_guarded_cell_task({**HANDOFF, "displaced_to": "unknown_zone"}, prep_dir=tmp_path)
+    assert bad_site["error"] == "UNCALIBRATED_DISPLACED_SITE" and cmds == []
+
+    # With calibrated belt_far in cfg.sites, run --from belt_far with belt_far auto_roi.
+    (tmp_path / "cell-auto-arm-s-live.json").write_text(json.dumps({
+        "plan_path": str(tmp_path / "grasp-plan.json"),
+        "sites": {"pinky": {"auto_roi": [1, 2, 3, 4]}, "belt": {"auto_roi": [5, 6, 7, 8]},
+                  "belt_far": {"auto_roi": [10, 20, 30, 40]}},
+    }), encoding="utf-8")
+    ok = cte.execute_guarded_cell_task({**HANDOFF, "displaced_to": "belt_far"}, prep_dir=tmp_path)
+    assert "error" not in ok and len(cmds) == 1
+    cmd = cmds[0]
+    assert cmd[cmd.index("--from") + 1] == "belt_far"
+    assert cmd[cmd.index("--roi") + 1 : cmd.index("--roi") + 5] == ["10", "20", "30", "40"]
+
+    # ACT mode rejects non-empty displaced_to before subprocess launch.
+    act_bad, act_cmds = _act_setup(tmp_path, monkeypatch, handoff={"displaced_to": "bogus"})
+    assert act_bad["error"] == "UNCALIBRATED_DISPLACED_SITE" and act_cmds == []

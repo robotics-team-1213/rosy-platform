@@ -269,6 +269,11 @@ def main(argv=None, runner=subprocess.run) -> int:
             p.add_argument("--operator", default=getpass.getuser(),
                            help="who is recorded in the robot's history.jsonl")
             p.add_argument("--readback", action="store_true", help="check the node's loaded revision")
+            p.add_argument("--core-url", help="read loaded model status from CORE HTTPS API instead of ros2 topic echo")
+            p.add_argument("--token-file", help="CORE bearer token file for --core-url (or ROSY_API_TOKEN)")
+            tls = p.add_mutually_exclusive_group()
+            tls.add_argument("--ca-file", help="CA certificate for --core-url TLS verification")
+            tls.add_argument("--insecure", action="store_true", help="skip TLS verification for --core-url")
         else:
             p.add_argument("--history", type=int, default=5, help="history lines to show")
         p.add_argument("--timeout", type=float,

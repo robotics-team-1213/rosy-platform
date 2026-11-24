@@ -113,6 +113,8 @@ services:
       # D-1057 cell pipeline: owner principals and the cell_ab release switch; empty keeps both off.
       ROSY_FLEET_CELL_OWNERS: "${ROSY_FLEET_CELL_OWNERS:-}"
       ROSY_FLEET_CELL_AB_RELEASE_ENABLED: "${ROSY_FLEET_CELL_AB_RELEASE_ENABLED:-}"
+      # D-1060 Pinky task dispatcher: 1 enables QUEUED pinky-tasks -> Fleet trips; empty keeps off.
+      ROSY_FLEET_PINKY_TASK_DISPATCH: "${ROSY_FLEET_PINKY_TASK_DISPATCH:-}"
     volumes:
       - "${ROSY_SITE_CONFIG_DIR:?set ROSY_SITE_CONFIG_DIR}:/run/rosy-config:ro"
       - sighting_data:/var/lib/rosy

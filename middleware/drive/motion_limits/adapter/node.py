@@ -87,11 +87,18 @@ class SafetyNode(SafetyNodeHelpersMixin, RosEdges, Node, Bumper, Hazard, Gate, S
             node.destroy_node()
             raise
 
-    def __init__(self, *, parameter_overrides=None, sensor_only=False, namespace=None, tf_buffer=None):
+    def __init__(self, *, parameter_overrides=None, sensor_only=False, namespace=None, tf_buffer=None, in_process_topics=None):
         if type(sensor_only) is not bool:
             raise ValueError('sensor_only must be a boolean constructor choice')
         if namespace is not None and (not isinstance(namespace, str) or not namespace.strip()):
             raise ValueError('namespace must be a non-empty string when provided')
+        in_proc = frozenset() if in_process_topics is None else frozenset(in_process_topics)
+        unknown_topics = in_proc - frozenset(('scan', 'imu', 'us'))
+        if unknown_topics:
+            raise ValueError('unsupported in_process_topics: ' + ', '.join(sorted(unknown_topics)))
+        if in_proc and not sensor_only:
+            raise ValueError('in_process_topics requires sensor_only=True')
+        self._in_process_topics = in_proc
         self._sensor_only = sensor_only
         self.sensor_state = None
         self._policy_producer = None
@@ -236,12 +243,14 @@ class SafetyNode(SafetyNodeHelpersMixin, RosEdges, Node, Bumper, Hazard, Gate, S
             self.create_subscription(Twist, self.get_parameter('cmd_in').value, self.on_cmd, 10)
             self.create_subscription(Bool, 'estop', self.on_estop, latched)
             self.create_subscription(String, 'estop/cmd', self.on_estop_cmd, 10)
-        self.create_subscription(
-            LaserScan, self.get_parameter('scan_topic').value, self.on_scan, qos_profile_sensor_data
-        )
-        self.create_subscription(
-            Range, self.get_parameter('us_topic').value, self.on_us, qos_profile_sensor_data
-        )
+        if 'scan' not in self._in_process_topics:
+            self.create_subscription(
+                LaserScan, self.get_parameter('scan_topic').value, self.on_scan, qos_profile_sensor_data
+            )
+        if 'us' not in self._in_process_topics:
+            self.create_subscription(
+                Range, self.get_parameter('us_topic').value, self.on_us, qos_profile_sensor_data
+            )
         self.create_subscription(
             UInt16MultiArray, self.get_parameter('ir_topic').value, self.on_ir, qos_profile_sensor_data
         )
@@ -251,9 +260,10 @@ class SafetyNode(SafetyNodeHelpersMixin, RosEdges, Node, Bumper, Hazard, Gate, S
         self.create_subscription(
             Bool, self.get_parameter('camera_block_topic').value, self.on_cam_block, 10
         )
-        self.create_subscription(
-            Imu, self.get_parameter('imu_topic').value, self.on_imu, qos_profile_sensor_data
-        )
+        if 'imu' not in self._in_process_topics:
+            self.create_subscription(
+                Imu, self.get_parameter('imu_topic').value, self.on_imu, qos_profile_sensor_data
+            )
         self.create_timer(0.05, self.tick)
         self._init_runtime_state()
         if sensor_only:

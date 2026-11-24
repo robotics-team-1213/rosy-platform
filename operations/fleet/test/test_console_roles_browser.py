@@ -72,6 +72,7 @@ def fleet_site(tmp_path):
                            list(robots.values()),
                            relay_factory=lambda leader, followers, **kw: FakeRelay(leader, followers))
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=console.robot_ids)
+    tasks.store.rearm_dispatch(expected_generation=tasks.store.dispatch_control()["generation"], actor_id="kim")
     app = create_app(console, task_service=tasks, site_users={}, start_task_dispatcher=False,
                      site_logins={"kim": {"principal_id": "kim", "role": "operator",
                                           "password_scrypt": hash_password("pw-1234")}},
@@ -351,6 +352,7 @@ def test_a_hundred_robots_stay_usable(tmp_path):
     console = FleetConsole([RobotEndpoint(r.robot_id, f"http://127.0.0.1:{9000 + i}", "t") for i, r in enumerate(robots)],
                            robots, relay_factory=lambda leader, followers, **kw: FakeRelay(leader, followers))
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=console.robot_ids)
+    tasks.store.rearm_dispatch(expected_generation=tasks.store.dispatch_control()["generation"], actor_id="kim")
     app = create_app(console, task_service=tasks, site_users={}, start_task_dispatcher=False,
                      site_logins={"kim": {"principal_id": "kim", "role": "operator",
                                           "password_scrypt": hash_password("pw-1234")}},
@@ -439,6 +441,7 @@ def test_map_labels_declutter_and_one_cause_is_one_queue_row(tmp_path):
     console = FleetConsole([RobotEndpoint(r.robot_id, f"http://127.0.0.1:{9100 + i}", "t") for i, r in enumerate(robots)],
                            robots, relay_factory=lambda leader, followers, **kw: FakeRelay(leader, followers))
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids=console.robot_ids)
+    tasks.store.rearm_dispatch(expected_generation=tasks.store.dispatch_control()["generation"], actor_id="kim")
     app = create_app(console, task_service=tasks, site_users={}, start_task_dispatcher=False,
                      site_logins={"kim": {"principal_id": "kim", "role": "operator",
                                           "password_scrypt": hash_password("pw-1234")}},

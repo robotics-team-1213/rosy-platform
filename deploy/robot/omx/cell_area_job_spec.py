@@ -1,0 +1,60 @@
+"""Guarded AreaXYZ closed-loop fallback job specs for `cell_job_spec`."""
+from __future__ import annotations
+
+from cell_job_validators import (
+    ARM,
+    FILE,
+    METRE,
+    NAME,
+    _actor,
+    _bool,
+    _int_range,
+    _match,
+    _num,
+)
+
+Z_METRE = _num(-0.15, 0.35)
+YAW_DEG = _num(-180, 180)
+
+AREA_JOBS = {
+    "area_xyz_pick": {
+        "script": "cell_area_pick_cli.py",
+        "moving": True,
+        "camera": True,
+        "commissioning": True,
+        "argv": [
+            "--arm", "{arm}",
+            "--config", "{config}",
+            "--pick-area", "{pick_area}",
+            "--pick-x", "{pick_x}",
+            "--pick-y", "{pick_y}",
+            "--pick-z", "{pick_z}",
+            "--place-area", "{place_area}",
+            "--place-x", "{place_x}",
+            "--place-y", "{place_y}",
+            "--place-z", "{place_z}",
+        ],
+        "params": {
+            "arm": _match(ARM),
+            "config": _match(FILE),
+            "pick_area": _match(NAME),
+            "pick_x": METRE,
+            "pick_y": METRE,
+            "pick_z": Z_METRE,
+            "place_area": _match(NAME),
+            "place_x": METRE,
+            "place_y": METRE,
+            "place_z": Z_METRE,
+        },
+        "optional": {
+            "pick_yaw_deg": YAW_DEG,
+            "place_yaw_deg": YAW_DEG,
+            "max_attempts": _int_range(1, 3),
+            "dry_run": _bool,
+            "stay_in_hover": _bool,
+            "no_vision_refine": _bool,
+            "operator": _actor,
+            "proposer": _actor,
+        },
+    },
+}

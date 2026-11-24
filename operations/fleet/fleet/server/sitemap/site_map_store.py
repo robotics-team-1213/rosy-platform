@@ -395,6 +395,9 @@ class SiteMapStore:
                               trip["state"], self.clock()))
             self._db.execute("DELETE FROM site_trips WHERE "
                              "json_extract(body, '$.detail.named_stop_handoff_pending') IS NULL "
+                             "AND COALESCE(json_extract(body, '$.detail.stop_sent'), 1) != 0 "
+                             "AND (json_extract(body, '$.detail.error') IS NULL "
+                             "OR json_extract(body, '$.detail.error') = 'TRIP_NOT_RUNNING') "
                              "AND trip_id NOT IN "  # the D-490 plan bound
                              "(SELECT trip_id FROM site_trips ORDER BY rowid DESC LIMIT ?)", (PLAN_KEEP,))
 
@@ -402,6 +405,16 @@ class SiteMapStore:
         with self._lock:
             rows = self._db.execute(
                 "SELECT body FROM site_trips WHERE json_type(body, '$.detail.named_stop_handoff_pending') = 'object'"
+            ).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
+    def unconfirmed_trip_stops(self) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT body FROM site_trips WHERE state IN ('canceled', 'stopped') AND ("
+                "json_extract(body, '$.detail.stop_sent') = 0 OR ("
+                "json_extract(body, '$.detail.error') IS NOT NULL "
+                "AND json_extract(body, '$.detail.error') != 'TRIP_NOT_RUNNING'))"
             ).fetchall()
         return [json.loads(row[0]) for row in rows]
 
