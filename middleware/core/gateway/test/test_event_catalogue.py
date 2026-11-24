@@ -712,6 +712,7 @@ def test_a_literal_that_looks_like_an_event_is_either_emitted_or_declared():
         "container.stored": "D-996 항만 사건 kind (core_common.protocol.port_events, Fleet 원장, 로봇 emit 아님)",
         "container.handling_failed": "D-996 항만 사건 kind (core_common.protocol.port_events, Fleet 원장, 로봇 emit 아님)",
         "vehicle.release_permitted": "D-996 항만 사건 kind (core_common.protocol.port_events, Fleet 원장, 로봇 emit 아님)",
+        "container.loaded_for_outbound": "D-996 항만 사건 kind (core_common.protocol.port_events, Fleet 원장, 로봇 emit 아님)",
     }
     names = {site.name for site in emitted()}
 
