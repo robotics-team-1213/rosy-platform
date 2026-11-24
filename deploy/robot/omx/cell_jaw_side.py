@@ -275,10 +275,9 @@ def frames_dir(work, site: str, params=None) -> Path:
 
 
 def _side(blob, places, radius_px):
-    """0 inside the reference jaw's disc, else 1 inside the other's, else None. The reference wins where the discs
-    meet: without pivot.geometry its place is the TCP, up to its own radius (about 20 mm) off, and nearest-place
-    put 2 of 6 simulated pivot marks on the other jaw."""
-    return next((k for k, c in enumerate(places) if math.dist(blob[:2], c) <= radius_px), None)
+    """Index of the nearest disc containing `blob[:2]`, or None."""
+    hits = [(math.dist(blob[:2], c), k) for k, c in enumerate(places) if math.dist(blob[:2], c) <= radius_px]
+    return min(hits)[1] if hits else None
 
 
 def marks(closed, opened, params=None, colour: bool = False, jaws: dict | None = None) -> list:

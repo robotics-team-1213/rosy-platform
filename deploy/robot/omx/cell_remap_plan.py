@@ -72,6 +72,30 @@ def planned_yaw(library: Path, config: dict) -> float | None:
         return None
 
 
+def measured_tcp_yaw(cell, config: dict, lib: Path | None, planned_xy) -> tuple[float, float, float | None, float | None]:
+    """Measured (fk_x, fk_y, fk_z, fk_yaw) from live joint state, else planned fallback."""
+    import cell_pivot, omx_tcp
+
+    try:
+        res = cell.act("state") if cell is not None else None
+        state = res.get("state") if isinstance(res, dict) and res.get("ok") else None
+        if isinstance(state, (list, tuple)) and len(state) >= 5:
+            tcp_x_m = omx_tcp.config_tcp(config, config.get("plan"))
+            fk = cell_pivot.joints_tcp(state, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
+            if len(fk) >= 4 and all(isinstance(v, (int, float)) and math.isfinite(float(v)) for v in fk[:4]):
+                return float(fk[0]), float(fk[1]), float(fk[2]), float(fk[3])
+    except (ImportError, OSError, KeyError, IndexError, TypeError, ValueError, RuntimeError, SystemExit):
+        pass
+    yaw = planned_yaw(lib, config) if lib is not None else None
+    return float(planned_xy[0]), float(planned_xy[1]), None, yaw
+
+
+def live_fk_yaw(cell, config: dict, fallback_yaw: float) -> float:
+    """Live FK yaw from `cell.act("state")` when available, else `fallback_yaw`."""
+    yaw = measured_tcp_yaw(cell, config, None, (0.0, 0.0))[3]
+    return float(fallback_yaw) if yaw is None else yaw
+
+
 def missing_maps(config: dict, calibration: dict, sites) -> list:
     """Sites to remap: no map, or a one-jaw map while the config asks for a TCP map (calibrate.tcp_marks).
     2026-11-17 arm_a: its 11-15 map followed one jaw, so every TCP pivot carried ~28 mm and failed max_bias_mm."""
@@ -141,7 +165,6 @@ def fit_remap_marks(
 ) -> dict:
     """Label TCP jaws if requested, filter consensus marks, and fit the coarse calibration record."""
     import time
-    import cell_calibration as cal
     import cell_params as prm
     from cell_intrinsics_frames import fitted_map
     from cell_map_fit import consensus, enough_agree
@@ -160,6 +183,17 @@ def fit_remap_marks(
     dropped = [{"pixel": list(p), "arm_m": list(a)} for p, a in seen if (p, a) not in marks]
     if dropped:
         log({"dropped_marks": dropped})
+        if tcp_marks and len(seen_jaws) == len(seen):
+            kept_set = set(marks)
+            surviving_jaws = [j for m, j in zip(seen, seen_jaws) if m in kept_set]
+            if len(surviving_jaws) >= 4:
+                why, marks, labels = cell_jaw_side.remap_marks(surviving_jaws, config.get("params"))
+                if write_labels and frames_dir is not None:
+                    (Path(frames_dir) / "labels.json").write_text(json.dumps({"why": why, **(labels or {})}), encoding="utf-8")
+                log({"jaw_labels": labels, "refused": why})
+                if why:
+                    where = f"; views in {frames_dir}" if frames_dir is not None else ""
+                    raise SystemExit(f"remap: {why}; no map saved{where}")
     if not enough_agree(len(marks), len(seen)):
         raise SystemExit(f"remap: only {len(marks)} marks agree of {len(seen)}")
     return dict(fitted_map(config, marks, z_view), **{
@@ -167,7 +201,6 @@ def fit_remap_marks(
         "coarse": True,
         "dropped_marks": dropped,
         "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
-        "loo_error_mm": cal.loo_error_mm(marks),
         "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
         **({"marks": "tcp"} if tcp_marks else {}),
     })

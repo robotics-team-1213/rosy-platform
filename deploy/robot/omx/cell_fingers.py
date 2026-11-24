@@ -335,12 +335,15 @@ def finger_hook(config: dict, cell, target: dict, write_library, gap_mm: float):
         return write_library(config, pick, target["place"], work / "finger-replan.json")
 
     camera = spec.get("camera", "wrist")
-    closing = target["pick"]["yaw_deg"] + prm.get(params, "auto.closing_theory_deg")
     signs_path = work / f"wrist-signs-{config.get('arm_id', 'arm_s')}.json"  # the camera mounting stays: keep what was learned
     finger_color = resolve_finger_color(params, spec)
 
     def run():
+        import cell_remap_plan as rp
+
         base_pick = dict(target["pick"])
+        closing_off = next((v for v in (target.get("closing_offset_deg"), target.get("offset"), prm.get(params, "auto.closing_theory_deg")) if v is not None), 90.0)
+        closing = rp.live_fk_yaw(cell, config, base_pick["yaw_deg"]) + closing_off
 
         def replan_from_base(dx_mm, dy_mm):
             pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))

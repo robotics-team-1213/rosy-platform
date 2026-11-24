@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cell_calibration as cal  # noqa: E402
 import cell_params as prm  # noqa: E402
 
 MIN_PX = prm.default("objects.min_px")
@@ -23,10 +24,10 @@ def to_mm(pixels, record: dict, camera: dict, top_z: float):
     """Pixels of points at height top_z (m) -> arm mm: parallax down/up to the map's z_view, then the map."""
     z_view = record.get("z_view", top_z)
     pts = np.asarray(pixels, float)
-    if top_z != z_view and "center_px" in camera and "height_m" in camera:
-        c = np.asarray(camera["center_px"], float)
-        scale = (camera["height_m"] - top_z) / (camera["height_m"] - z_view)
-        pts = c + (pts - c) * scale
+    if top_z != z_view and "height_m" in camera and (
+        "center_px" in camera or ("K" in camera and "normal" in camera)
+    ):
+        pts = np.asarray(cal.parallax(pts, top_z, z_view, camera), float)
     h = np.asarray(record["homography"], float)
     a = pts @ h[:, :2].T + h[:, 2]
     return a[:, :2] / a[:, 2:] * 1000.0

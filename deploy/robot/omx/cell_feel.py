@@ -10,7 +10,7 @@ from pathlib import Path
 import cell_params as prm
 
 
-def feel_hook(config: dict, cell, target: dict, write_library):
+def feel_hook(config: dict, cell, target: dict, write_library, source: str | None = None):
     """Feel instead of look (feel.enabled): an empty grasp tries again shifted along the closing axis by +s, -s, +2s,
     -2s (feel.step_mm, feel.tries), each a lift, a re-plan, a descent and a grasp; the gripper's own holding verdict
     decides, for any box size. 2026-10-29: the floor 1-cell came up empty with the box 1-2 cm outside one finger while
@@ -19,6 +19,7 @@ def feel_hook(config: dict, cell, target: dict, write_library):
     descent lag of 1.6-1.7 read as a contact six times in a row, where the first descent peaked at 1.9 untouched
     (2026-10-29). Returns run -> last status, or None when off."""
     import cell_reach
+    import cell_remap_plan as rp
 
     params = config.get("params")
     if not prm.get(params, "feel.enabled"):
@@ -26,8 +27,12 @@ def feel_hook(config: dict, cell, target: dict, write_library):
     work = Path(config["work_dir"]).expanduser()
     step = prm.get(params, "feel.step_mm")
     z_step = prm.get(params, "feel.z_step_mm")
-    site_z = float(((config.get("sites") or {}).get(target["pick"].get("site"), {}) or {}).get("surface_z", -0.030))
-    z_min = float((config.get("plan") or {}).get("workspace_min_m", [0.0, 0.0, site_z + 0.005])[2])
+    source_site = source or target.get("site") or (target.get("bias_region") or {}).get("site") or target["pick"].get("site")
+    site_cfg = (config.get("sites") or {}).get(source_site) if source_site else None
+    fallback_z = float(site_cfg["surface_z"]) + 0.005 if isinstance(site_cfg, dict) and "surface_z" in site_cfg else float(target["pick"]["z"])
+    plan_cfg = config.get("plan") or {}
+    ws_min = (plan_cfg.get("limits") or {}).get("workspace_min_m") or plan_cfg.get("workspace_min_m")
+    z_min = float((ws_min if ws_min is not None else [0.0, 0.0, fallback_z])[2])
     offsets = [k * step * sgn for k in (1, 2, 3) for sgn in (1, -1)][:int(prm.get(params, "feel.tries"))]
     candidates = ([(0.0, -z_step), (0.0, -round(1.6 * z_step, 1))] + [(off, -z_step) for off in offsets]
                   if z_step > 0 else [(off, 0.0) for off in offsets])[:max(int(prm.get(params, "feel.tries")), 1 if z_step > 0 else 0)]
@@ -37,7 +42,7 @@ def feel_hook(config: dict, cell, target: dict, write_library):
 
         base_pick = dict(target["pick"])
         closing_off = next((v for v in (target.get("closing_offset_deg"), target.get("offset"), prm.get(params, "auto.closing_theory_deg")) if v is not None), 90.0)
-        c = math.radians(base_pick["yaw_deg"] + closing_off)
+        c = math.radians(rp.live_fk_yaw(cell, config, base_pick["yaw_deg"]) + closing_off)
         status = {"ok": True, "holding": False}
         for k, (off, dz_mm) in enumerate(candidates):
             pick = dict(base_pick, x=round(base_pick["x"] + off * math.cos(c) / 1000, 4),
@@ -46,11 +51,13 @@ def feel_hook(config: dict, cell, target: dict, write_library):
             library = write_library(config, pick, target["place"], work / f"feel-{k}.json")
             reach_target = dict(target, pick=pick)
             reach = cell_reach.hook(config, cell, reach_target, write_library)
+            skipped = False
             for command in ("run lift_pick", f"load {library}", "goto above_pick", "reach", "run descend_pick", "run grasp_pick"):
                 if command == "reach":
                     if reach is not None and reach()["verdict"] == "refuse":
                         if z_step > 0:
-                            continue
+                            skipped = True
+                            break
                         return {"ok": False, "error": "reach correction refused", "feel_mm": off, "feel_dz_mm": dz_mm}
                     pick = dict(reach_target["pick"])
                     continue
@@ -74,6 +81,8 @@ def feel_hook(config: dict, cell, target: dict, write_library):
                             break
                 if status.get("contact") or not status.get("ok"):
                     return {**status, "feel_mm": off, "feel_dz_mm": dz_mm}
+            if skipped:
+                continue
             if not status.get("holding") and "plan" in config:
                 cell_arm_cal.infer_holding(status, closed=config["plan"]["grip_closed"])
             if status.get("holding"):

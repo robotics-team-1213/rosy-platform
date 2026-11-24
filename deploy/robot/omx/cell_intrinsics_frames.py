@@ -262,7 +262,7 @@ def _upright(points, rays, up, height=None) -> tuple:
         return float(np.sum(np.cross(D, X / np.linalg.norm(X, axis=1, keepdims=True)) ** 2)), R, t
 
     best = min(np.radians(np.arange(0, 360, 1.0)), key=lambda th: at(th)[0])
-    for step in np.radians([0.5, 0.1, 0.02, 0.004]):
+    for step in np.radians([0.5, 0.25, 0.1, 0.02, 0.004]):
         best = min((best - step, best, best + step), key=lambda th: at(th)[0])
     cost, R, t = at(best)
     if not np.isfinite(cost):
@@ -308,6 +308,27 @@ def plane_pose_map(marks, z: float, K, dist, up=None, height=None) -> dict:
             "loo_error_mm": {"max": round(max(errors), 2), "mean": round(sum(errors) / len(errors), 2)}}
 
 
+def fit_pose_for_marks(marks: list, z_view: float, K, dist, up, cam_h: float | None = None) -> dict:
+    """Fit `plane_pose_map`, allowing bounded free height on wide non-collinear mark grids."""
+    fixed_h = (float(cam_h) - float(z_view)) if cam_h is not None and float(cam_h) > float(z_view) else None
+    xs = [float(a[0]) for _, a in marks]
+    ys = [float(a[1]) for _, a in marks]
+    dx, dy = max(xs) - min(xs), max(ys) - min(ys)
+    wide = len(marks) >= 6 and max(dx, dy) >= 0.10 and min(dx, dy) >= 0.05
+    pose = None
+    if wide or fixed_h is None:
+        pose = plane_pose_map(marks, z_view, K, dist, up, None)
+        fitted_cz = float(pose["camera_in_base"]["t"][2])
+        if fixed_h is not None and abs((fitted_cz - float(z_view)) - fixed_h) > 0.06:
+            pose = None
+    if pose is None:
+        pose = plane_pose_map(marks, z_view, K, dist, up, fixed_h)
+    fitted_cz = float(pose["camera_in_base"]["t"][2])
+    pose["fitted_cz_m"] = round(fitted_cz, 4)
+    pose["implied_blob_dz_mm"] = round((float(cam_h) - fitted_cz) * 1000.0, 1) if cam_h is not None else None
+    return pose
+
+
 def fitted_map(config: dict, marks: list, z_view: float) -> dict:
     """The affine map, or the camera pose upright on the depth-measured table normal (config calibrate.intrinsics,
     a cell_device_intrinsics record, and calibrate.up from cell_depth_pose) when its leave-one-out is within
@@ -321,8 +342,7 @@ def fitted_map(config: dict, marks: list, z_view: float) -> dict:
     lens = json.loads(Path(c["intrinsics"]).expanduser().read_text())
     try:
         cam_h = ((config.get("cameras") or {}).get("top") or {}).get("height_m")
-        height = (float(cam_h) - float(z_view)) if cam_h is not None and float(cam_h) > float(z_view) else None
-        pose = plane_pose_map(marks, z_view, lens["K"], lens.get("dist", [0.0] * 5), c["up"], height)
+        pose = fit_pose_for_marks(marks, z_view, lens["K"], lens.get("dist", [0.0] * 5), c["up"], cam_h)
     except ValueError as exc:
         return dict(affine, pose_refused=str(exc)[:120])
     if pose["loo_error_mm"]["max"] > affine["loo_error_mm"]["max"] + POSE_LOO_SLACK_MM:

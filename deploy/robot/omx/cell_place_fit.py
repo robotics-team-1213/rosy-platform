@@ -57,7 +57,7 @@ def with_tiers(config: dict, calibration: dict | None = None, catalog: list | No
 def with_tier_biases(config: dict, bias_data: dict) -> dict:
     """Share saved bias regions between a base site and its `-l0/-l1/-l2` tier sites (`tier_of` / `map_from`)."""
     regions = list(bias_data.get("regions") or [])
-    have = {(r.get("site"), tuple(r.get("point_m") or ())) for r in regions}
+    have = {(r.get("site"), tuple(r.get("point_m") or ()), r.get("kind")) for r in regions}
     for name, site in (config.get("sites") or {}).items():
         base = site.get("tier_of") or site.get("map_from")
         if not base:
@@ -65,7 +65,7 @@ def with_tier_biases(config: dict, bias_data: dict) -> dict:
         for r in list(regions):
             if r.get("site") in (base, name):
                 for target in (base, name):
-                    key = (target, tuple(r.get("point_m") or ()))
+                    key = (target, tuple(r.get("point_m") or ()), r.get("kind"))
                     if key not in have:
                         regions.append({**r, "site": target})
                         have.add(key)
