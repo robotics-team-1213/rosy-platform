@@ -16,6 +16,7 @@ from datetime import datetime
 from fastapi import HTTPException, Request
 
 from fleet.pipeline import resolve_omx_cells
+from .pipeline_governance_store import is_named_operator
 
 # Same value as fleet.server.console.charge_bay_routes.CELL_CLAIM_RADIUS_M (not imported: import cycle); a test pins it.
 STOP_ZONE_RADIUS_M = 0.18
@@ -242,6 +243,8 @@ def check_beds(app, robot_id: str | None = None) -> None:
                  and math.hypot(pose.x - rec["pose"]["x"], pose.y - rec["pose"]["y"]) > BED_MOVE_LIMIT_M)
         if moved or _map_state(app) != (rec["map_id"], rec["map_version"]):
             rec["invalid"] = True
+            if (gov := getattr(app.state, "pipeline_governance", None)) is not None:
+                gov.delete_confirmation("bed", rec["task_id"])
 
 
 def watch_pose_updates(app) -> None:
@@ -285,9 +288,7 @@ def _valid_presence_operator(rec: dict | None, now: float | None = None) -> str 
     if rec is None or not _presence_valid(rec, now=now):
         return None
     op = rec.get("principal_id")
-    if not isinstance(op, str) or not op.strip() or op == "site-console" or op.startswith("development-"):
-        return None
-    return op.strip()
+    return op.strip() if is_named_operator(op) else None
 
 
 def has_valid_presence(app, task: dict, now: float | None = None) -> bool:
@@ -299,6 +300,8 @@ def has_valid_presence(app, task: dict, now: float | None = None) -> bool:
 def take_presence(app, task: dict, now: float | None = None) -> dict | None:
     """The valid presence confirmation of this task as {"operator", "at"}, used up by the claim that reads it; else None."""
     rec = (getattr(app.state, "cell_presence", None) or {}).pop(task["task_id"], None)
+    if (gov := getattr(app.state, "pipeline_governance", None)) is not None:
+        gov.delete_confirmation("presence", task["task_id"])
     op = _valid_presence_operator(rec, now=now)
     return None if op is None else {"operator": op, "at": rec["confirmed_at"]}
 
@@ -307,15 +310,15 @@ def prune_evidence(app) -> None:
     """Drop stored confirmations and owner evidence of finished tasks and of expired records."""
     tasks = getattr(app.state, "omx_cell_tasks", None) or {}
     now = time.time()
-    for store, dead in ((getattr(app.state, "cell_bed_confirmations", None) or {},
-                         lambda r: not _bed_valid(r)),
-                        (getattr(app.state, "cell_presence", None) or {}, lambda r: not _presence_valid(r)),
-                        (getattr(app.state, "cell_bed_camera", None) or {}, lambda r: now - r["at"] > BED_CAMERA_VERDICT_S),
-                        (getattr(app.state, "cell_owner_evidence", None) or {},
-                         lambda r: now - r["measured_at"] > OWNER_EVIDENCE_MAX_AGE_S)):
-        for task_id in [k for k, r in store.items()
-                        if (tasks.get(k) or {}).get("status") in _TERMINAL or k not in tasks or dead(r)]:
+    gov = getattr(app.state, "pipeline_governance", None)
+    for kind, store, dead in (("bed", getattr(app.state, "cell_bed_confirmations", None) or {}, lambda r: not _bed_valid(r)),
+                              ("presence", getattr(app.state, "cell_presence", None) or {}, lambda r: not _presence_valid(r)),
+                              (None, getattr(app.state, "cell_bed_camera", None) or {}, lambda r: now - r["at"] > BED_CAMERA_VERDICT_S),
+                              (None, getattr(app.state, "cell_owner_evidence", None) or {}, lambda r: now - r["measured_at"] > OWNER_EVIDENCE_MAX_AGE_S)):
+        for task_id in [k for k, r in store.items() if (tasks.get(k) or {}).get("status") in _TERMINAL or k not in tasks or dead(r)]:
             store.pop(task_id, None)
+            if gov is not None and kind is not None:
+                gov.delete_confirmation(kind, task_id)
 
 
 def cell_owner_principals(cell_id: str) -> frozenset:
@@ -419,9 +422,12 @@ def _error(status: int, code: str) -> HTTPException:
 
 def install_evidence_routes(app, ctx) -> None:
     operator_guard, proposer_guard = ctx.operator_guard, ctx.proposer_guard
+    gov = getattr(ctx, "gov", None) or getattr(app.state, "pipeline_governance", None)
     app.state.cell_bed_confirmations = getattr(app.state, "cell_bed_confirmations", None) or {}
     app.state.cell_owner_evidence = getattr(app.state, "cell_owner_evidence", None) or {}
-    app.state.cell_presence = getattr(app.state, "cell_presence", None) or {}
+    app.state.cell_presence = getattr(app.state, "cell_presence", None) or (
+        {k: v for k, v in gov.load_confirmations("presence").items() if _presence_valid(v)} if gov else {}
+    )
     app.state.cell_bed_camera = getattr(app.state, "cell_bed_camera", None) or {}
 
     async def read_body(request: Request):
@@ -469,6 +475,8 @@ def install_evidence_routes(app, ctx) -> None:
                "confirmed_at": time.time(), "pose": located[0], "map_id": _map_state(app)[0], "map_version": _map_state(app)[1]}
         watch_pose_updates(app)
         app.state.cell_bed_confirmations[task_id] = rec
+        if gov is not None:
+            gov.save_confirmation("bed", task_id, rec)
         if lost:  # same lease, confirmed again under it
             rec["lease"] = task.get("handoff_lease_id")
             task["bed_confirmation"] = {"operator": principal_id, "confirmed_at": rec["confirmed_at"], "pose": dict(rec["pose"]),
@@ -523,6 +531,8 @@ def install_evidence_routes(app, ctx) -> None:
                                         "config_sha256": body.get("config_sha256")})}
         watch_pose_updates(app)
         app.state.cell_bed_confirmations[task_id] = rec
+        if gov is not None:
+            gov.save_confirmation("bed", task_id, rec)
         return {"ok": True, "recorded": True, "verdict": verdict, "expires_in_s": BED_CAMERA_TTL_S}
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/presence-confirm", dependencies=operator_guard)
@@ -531,7 +541,7 @@ def install_evidence_routes(app, ctx) -> None:
         task = task_of(task_id)
         await read_body(request)
         principal_id = getattr(getattr(request.state, "site_principal", None), "principal_id", None)
-        if not principal_id or principal_id == "site-console" or principal_id.startswith("development-"):
+        if not is_named_operator(principal_id):
             raise _error(403, "NAMED_OPERATOR_REQUIRED")
         if task.get("status") != "QUEUED":
             raise _error(409, "CELL_TASK_NOT_QUEUED")
@@ -540,6 +550,8 @@ def install_evidence_routes(app, ctx) -> None:
             return {"ok": True, "renewed": False, "presence": {"operator": old["principal_id"], "at": old["confirmed_at"]}}
         rec = {"task_id": task_id, "principal_id": principal_id, "confirmed_at": time.time()}
         app.state.cell_presence[task_id] = rec
+        if gov is not None:
+            gov.save_confirmation("presence", task_id, rec)
         return {"ok": True, "renewed": True, "presence": {"operator": principal_id, "at": rec["confirmed_at"]},
                 "expires_in_s": PRESENCE_TTL_S}
 

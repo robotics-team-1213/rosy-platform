@@ -40,4 +40,22 @@ async def build_context(app, principal, selected_robot_id, locale='ko-KR'):
             facts.append(AssistantFact(ref='incident:'+robot, observed_at=time.time(), text=text))
         if len(facts) > 64:
             raise ValueError('ASSISTANT_CONTEXT_LIMIT')
+    cell_states = getattr(app.state, 'omx_cell_states', None)
+    arm_holds = getattr(app.state, 'arm_holds', None)
+    if isinstance(cell_states, dict) and cell_states:
+        now_s = time.time()
+        tasks = list((getattr(app.state, 'omx_cell_tasks', None) or {}).values())
+        for cid in sorted(cell_states):
+            cstate = cell_states[cid] or {}
+            safe_cid = code(cid, locale)
+            arms = ('arm_s',) if cid == 'cell_s' else ('arm_a', 'arm_b')
+            held = [a for a in arms if isinstance(arm_holds, dict) and (arm_holds.get(a) or {}).get('held')]
+            prop = sum(1 for t in tasks if t.get('cell_id') == cid and t.get('status') == 'PROPOSED')
+            run = sum(1 for t in tasks if t.get('cell_id') == cid and t.get('status') == 'RUNNING')
+            phase = code(cstate.get('phase'), locale)
+            text = (f'{safe_cid}: phase={phase}, held={len(held)}, proposed={prop}, running={run}'
+                    if locale == 'en-US' else f'{safe_cid}: 단계 {phase}, 보류 {len(held)}, 제안 {prop}, 실행 {run}')
+            facts.append(AssistantFact(ref=f'cell:{safe_cid}', observed_at=now_s, text=text))
+            if len(facts) > 64:
+                raise ValueError('ASSISTANT_CONTEXT_LIMIT')
     return facts
