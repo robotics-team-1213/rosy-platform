@@ -81,24 +81,24 @@ def _dark_pads(img, dark: int = 60):
 def _white_pads(img):
     import cv2
 
+    try:
+        from cell_camera_invariant_wrist import detect_wrist_fingers_anchor
+
+        anchor = detect_wrist_fingers_anchor(img, finger_color="white")
+        if anchor.get("found"):
+            return (
+                np.array(anchor["left_inner_px"], dtype=float),
+                np.array(anchor["right_inner_px"], dtype=float),
+                float(anchor["gap_px"]),
+            )
+    except Exception:
+        pass
+
     h, w = img.shape[:2]
     y0 = 2 * h // 3
     band_bgr = img[y0:]
     band_hsv = cv2.cvtColor(band_bgr, cv2.COLOR_BGR2HSV)
-    # 1. Wide-open v2.1 white fingers at bottom quarter (y >= 0.78*h): cool white under cell LED (H 95..138, S <= 170, V >= 135)
-    bot_off = max(0, int(h * 0.78) - y0)
-    bot = band_hsv[bot_off:]
-    bot_bgr = band_bgr[bot_off:]
-    not_orange = (bot_bgr[..., 2].astype(np.int16) - bot_bgr[..., 1].astype(np.int16)) <= 8
-    cool_white = (bot[..., 0] >= 95) & (bot[..., 0] <= 138) & (bot[..., 1] <= 170) & (bot[..., 2] >= 135) & not_orange
-    left_xs = np.where(cool_white[:, int(w * 0.08):int(w * 0.36)].mean(axis=0) > 0.25)[0] + int(w * 0.08)
-    right_xs = np.where(cool_white[:, int(w * 0.72):int(w * 0.96)].mean(axis=0) > 0.25)[0] + int(w * 0.72)
-    if len(left_xs) and len(right_xs):
-        xl, xr = float(left_xs.max()), float(right_xs.min())
-        yp = float(int(h * 0.88))
-        return np.array([xl, yp]), np.array([xr, yp]), float(max(xr - xl, 1.0))
-
-    # 2. Neutral bright white or narrow/partially open white fingers (e.g. arm_a / arm_b) in bottom third
+    # Neutral bright white or narrow/partially open white fingers (e.g. arm_a / arm_b) in bottom third
     not_cyan = (band_bgr[..., 0].astype(np.int16) - band_bgr[..., 2].astype(np.int16)) <= 45
     mask = (
         (
@@ -120,10 +120,11 @@ def _white_pads(img):
     )[:2]
     if len(blobs) >= 2:
         left, right = sorted(blobs, key=lambda i: cents[i][0])
-        gap = stats[right, cv2.CC_STAT_LEFT] - (stats[left, cv2.CC_STAT_LEFT] + stats[left, cv2.CC_STAT_WIDTH])
+        xl = float(stats[left, cv2.CC_STAT_LEFT] + stats[left, cv2.CC_STAT_WIDTH])
+        xr = float(stats[right, cv2.CC_STAT_LEFT])
+        gap = xr - xl
         if gap >= 4:
-            a, b = sorted((cents[i] + (0, y0) for i in blobs), key=lambda c: c[0])
-            return a, b, float(max(gap, 1))
+            return np.array([xl, float(cents[left][1] + y0)]), np.array([xr, float(cents[right][1] + y0)]), float(gap)
     return None
 
 

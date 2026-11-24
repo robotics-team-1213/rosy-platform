@@ -113,17 +113,8 @@ def shadow_of(lab, bg, params=None):
 
 
 from cell_object_pose import (  # noqa: E402, F401
-    _colour_set,
-    _px_mm2,
-    colour_name,
-    colour_tag,
-    container_structure,
-    decision_ai_verify,
-    measure,
-    outline,
-    to_mm,
-    top_face,
-    want_reason,
+    _colour_set, _px_mm2, colour_name, colour_tag, container_structure, decision_ai_verify,
+    measure, outline, to_mm, top_face, want_reason,
 )
 
 
@@ -288,13 +279,16 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     mask = _hsv_mask(hsv_img, hsv)
     frac = prm.get(params, "objects.top_v_frac")
     if frac and mask.any():  # top faces only: a side face is the same green, darker by the same ratio in any light
+        min_px = prm.get(params, "objects.min_px", MIN_PX)
         n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)  # (day: top V 186, side 137; at night, V capped by the exposure limit: 59 / ~40)
         v = hsv_img[..., 2]
         for i in range(1, n):
             bx, by, bw, bh = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
             blob = labels[by:by + bh, bx:bx + bw] == i
             sub_v = v[by:by + bh, bx:bx + bw]
-            mask[by:by + bh, bx:bx + bw][blob & (sub_v < frac * np.percentile(sub_v[blob], 90))] = 0
+            cut = sub_v < frac * np.percentile(sub_v[blob], 90)
+            if int((blob & ~cut).sum()) >= min_px:
+                mask[by:by + bh, bx:bx + bw][blob & cut] = 0
     if surface_px:
         keep = np.zeros_like(mask)
         cv2.fillPoly(keep, [np.asarray(surface_px, np.int32) - [x0, y0]], 255)
@@ -304,21 +298,17 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
 
 
-def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
-           surface_px=None, surface_lab=None, object_hsv=None) -> list:
-    """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
-    is judged on its own, and the pieces replace the blob when at least one matches the catalogue (2026-10-29: the
-    1-cell matched, the 2-cell beside it read 63 x 47 mm with its side faces and stays an unmatched neighbour). Each
-    object carries `hull_px`, the outline of its own pixels, so a finger check sees a touching neighbour as one."""
-    import cell_split
+def _is_neutral_surface(surface_lab) -> bool:
+    return surface_lab is not None and all(
+        math.hypot(float(bg[1]) - 128.0, float(bg[2]) - 128.0) <= 12.0
+        for bg in np.atleast_2d(np.asarray(surface_lab, float))
+    )
 
+
+def _detect_from_mask(seen, img, roi, record, camera, catalog, surface_z, params, object_hsv, cell_split) -> list:
     x0, y0, _, _ = roi
-    # objects by their own colour when the cell names it; else anything far from the surface (any colour)
-    seen = (object_mask(img, roi, object_hsv, surface_px, params) if object_hsv is not None
-            else foreground(img, roi, params=params, surface_px=surface_px, surface_lab=surface_lab))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(seen)
-    out = []
-    v_roi = None
+    out, v_roi = [], None
     for i in range(1, n):
         if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "objects.min_px", MIN_PX):
             continue
@@ -357,6 +347,26 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             out += [{**r, "hull_px": hull.tolist()} for r in found]
     return out
 
+
+def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,
+           surface_px=None, surface_lab=None, object_hsv=None) -> list:
+    """All objects in the ROI. A blob that matches nothing is tried as boxes that only touch (cell_split); each piece
+    is judged on its own, and the pieces replace the blob when at least one matches the catalogue (2026-10-29: the
+    1-cell matched, the 2-cell beside it read 63 x 47 mm with its side faces and stays an unmatched neighbour). Each
+    object carries `hull_px`, the outline of its own pixels, so a finger check sees a touching neighbour as one."""
+    import cell_split
+
+    seen = (object_mask(img, roi, object_hsv, surface_px, params) if object_hsv is not None
+            else foreground(img, roi, params=params, surface_px=surface_px, surface_lab=surface_lab))
+    out = _detect_from_mask(seen, img, roi, record, camera, catalog, surface_z, params, object_hsv, cell_split)
+    if object_hsv is not None and not any(r["matched"] for r in out) and _is_neutral_surface(surface_lab):
+        fg_out = _detect_from_mask(
+            foreground(img, roi, params=params, surface_px=surface_px, surface_lab=surface_lab),
+            img, roi, record, camera, catalog, surface_z, params, None, cell_split)
+        if any(r["matched"] for r in fg_out):
+            return fg_out
+    return out
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("image")
@@ -371,22 +381,15 @@ def main(argv=None) -> int:
     ap.add_argument("--write-catalog", action="store_true", help="with --enroll: write the entry into --catalog")
     a = ap.parse_args(argv)
     img = cv2.imread(a.image)
-    if img is None:
-        print(f"cannot read {a.image}", file=sys.stderr)
-        return 2
-    rec = json.loads(Path(a.map).read_text())
-    rec = rec.get("record", rec)
-    cam = json.loads(Path(a.camera).read_text())
+    if img is None: return print(f"cannot read {a.image}", file=sys.stderr) or 2
+    rec = json.loads(Path(a.map).read_text()); rec = rec.get("record", rec); cam = json.loads(Path(a.camera).read_text())
     if a.enroll:
         entry = enroll(img, a.roi, rec, cam, a.enroll, a.surface_z, a.top_height_mm, mass_kg=a.mass_kg)
-        if a.write_catalog:
-            save_catalog_entry(a.catalog, entry)
-        print(json.dumps({"enrolled": entry, "written": bool(a.write_catalog)}, indent=1))
-        return 0
+        if a.write_catalog: save_catalog_entry(a.catalog, entry)
+        print(json.dumps({"enrolled": entry, "written": bool(a.write_catalog)}, indent=1)); return 0
     found = detect(img, a.roi, rec, cam, load_catalog(a.catalog), a.surface_z)
     print(json.dumps({"objects": found, "grasp_targets": [o for o in found if o["matched"]]}, indent=1))
     return 0
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+if __name__ == "__main__": sys.exit(main())
