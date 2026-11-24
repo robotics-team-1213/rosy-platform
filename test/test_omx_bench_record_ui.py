@@ -619,6 +619,7 @@ def test_go_home_stop_before_the_home_stage_starts_no_motion(tmp_path, monkeypat
 
 def test_ik_live_pose_read_needs_the_arm_session_lock(tmp_path, monkeypatch):
     import bench_record_replay as brr
+    monkeypatch.setattr(Path, 'home', lambda: tmp_path / 'home')
     (tmp_path / 'record-config-arm-a.json').write_text('{}')
     ran, closed = [], []
     monkeypatch.setattr('subprocess.run', lambda *a, **kw: (ran.append(a), SimpleNamespace(returncode=1, stdout='', stderr=''))[1])
