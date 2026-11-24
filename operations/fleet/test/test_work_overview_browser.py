@@ -416,7 +416,7 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
     work = {"rows": rows, "observed_at": "2026-10-15T00:00:01+00:00", "tasks_available": True,
             "missions_available": True, "cell_jobs_available": True, "truncated_sources": [], "kinds": ["trip"]}
     api = {**API, "/api/fleet/session": {"principal_id": "operator-1", "role": "operator"}, "/api/fleet/work": work,
-           "/api/fleet/trips/t-done": {**rows[2], "trip_id": "t-done", "state": "arrived"},
+           "/api/fleet/trips/t-done": {**rows[2], "trip_id": "t-done", "state": "arrived", "updated_at": 1792022400.0},
            "/api/fleet/cell-jobs/job-1": {"proposal_id": "job-1", "proposal_state": "RESOLVED",
                                           "job": {"status": "PROPOSED", "workcell_id": "packing"}}}
     browser, page, errors = _open(None, site, api, [], size=size, initial_path=None)
@@ -439,7 +439,9 @@ def test_trip_and_cell_job_rows_read_their_visible_state_and_filters(site, size)
         assert page.locator("#work-list ui-button").count() == 3
         page.locator("#work-list ui-button").filter(has_text="rosy_03").click()
         page.wait_for_function("() => document.getElementById('work-evidence').textContent.includes('도착')")
-        assert "CORE" in page.locator("#work-detail").inner_text()
+        detail_text = page.locator("#work-detail").inner_text()
+        assert "CORE" in detail_text
+        assert "2026" in detail_text and "1970" not in detail_text, detail_text
         # The chosen row is drawn as chosen, with the toggle's existing pressed fill.
         fills = page.locator("#work-list ui-button").evaluate_all(
             "nodes => nodes.map(node => [node.getAttribute('aria-pressed'), getComputedStyle(node).backgroundColor])")
