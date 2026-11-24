@@ -106,6 +106,18 @@
       "path": "shared/cell-frames.js",
       "media_type": "application/javascript"
     },
+    "cell-obs-model.js": {
+      "path": "shared/cell-obs-model.js",
+      "media_type": "application/javascript"
+    },
+    "omx-inspector.js": {
+      "path": "shared/omx-inspector.js",
+      "media_type": "application/javascript"
+    },
+    "omx-inspector.css": {
+      "path": "shared/omx-inspector.css",
+      "media_type": "text/css"
+    },
     "cell-cockpit-stage.js": {
       "path": "shared/cell-cockpit-stage.js",
       "media_type": "application/javascript"

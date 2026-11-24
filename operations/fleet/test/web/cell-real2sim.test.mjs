@@ -278,3 +278,82 @@ test("cell task refresh renders across the main/views module split", async () =>
     globalThis.document = previous;
   }
 });
+
+test("inspector mounts before frame bind, preserves matrix and draft choices, and avoids hardcoded robot_id", async () => {
+  const mkNode = (tag = 'DIV') => {
+    const el = {
+      tagName: String(tag).toUpperCase(), dataset: {}, style: {}, attributes: {}, listeners: {}, children: [],
+      hidden: false, value: '', textContent: '', className: '', open: false, selected: false,
+      get firstElementChild() { return el.children[0] || null; },
+      get childElementCount() { return el.children.length; },
+      get isConnected() {
+        let cur = el;
+        while (cur) { if (cur.rootConnected) return true; cur = cur.parentNode; }
+        return false;
+      },
+      classList: {
+        add(...n) { n.forEach(c => { el.className = `${el.className} ${c}`.trim(); }); },
+        remove() {},
+        toggle() {},
+        contains: c => el.className.split(/\s+/).includes(c),
+      },
+      append(...nodes) {
+        for (const n of nodes) {
+          if (typeof n === 'string') continue;
+          n.parentNode = el; el.children.push(n);
+        }
+      },
+      replaceChildren(...nodes) {
+        el.children = [];
+        el.append(...nodes);
+      },
+      addEventListener(type, cb) { (el.listeners[type] ??= []).push(cb); },
+      setAttribute(k, v) { el.attributes[k] = String(v); },
+      getAttribute(k) { return el.attributes[k] ?? null; },
+      hasAttribute(k) { return k in el.attributes; },
+      removeAttribute(k) { delete el.attributes[k]; },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    };
+    return el;
+  };
+  const previous = globalThis.document;
+  globalThis.document = {createElement: mkNode, querySelectorAll: () => []};
+  try {
+    const els = {};
+    const getEl = id => (els[id] ??= Object.assign(mkNode('DIV'), { rootConnected: true }));
+    const boundStates = [];
+    const requests = [];
+    const pipeline = createReal2SimPipeline({
+      request: async (path, opts) => {
+        requests.push({path, body: opts?.body ? JSON.parse(opts.body) : null});
+        if (opts?.method === 'POST') return {task: {task_id: 't-new'}};
+        return {tasks: [], cameras: [], summary: {}};
+      },
+      $: getEl,
+      isOperator: () => true,
+      cellFrames: {
+        bind(img) { boundStates.push(img.isConnected); },
+        setPaused() {},
+      },
+    });
+    await pipeline.refreshCellTasks();
+    assert.ok(boundStates.length > 0 && boundStates.every(Boolean));
+    const wall = els['cell-camera-matrix'];
+    const firstChild = wall.children[0];
+    const insp = els['omx-right-inspector'];
+    const quickBar = insp.children[4];
+    const tierSelect = quickBar.children[0].children[1];
+    const dispatchBtn = quickBar.children[2];
+    tierSelect.value = '3';
+    tierSelect.listeners.change[0]();
+    await dispatchBtn.listeners.click[0]();
+    assert.equal(els['cell-camera-matrix'].children[0], firstChild);
+    const post = requests.find(r => r.path === CELL_TASKS_PATH && r.body);
+    assert.equal(post.body.tier, 3);
+    assert.equal('robot_id' in post.body, false);
+    assert.equal(els['omx-right-inspector'].children[4].children[0].children[1].children.find(o => o.value === '3').selected, true);
+  } finally {
+    globalThis.document = previous;
+  }
+});

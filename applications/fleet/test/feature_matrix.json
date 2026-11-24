@@ -7441,6 +7441,7 @@
         "applications/fleet/web/cell/cell-observation.js",
         "applications/fleet/web/shared/cell-frames.js",
         "applications/fleet/web/shared/cell-cockpit-stage.js",
+        "applications/fleet/web/shared/cell-obs-model.js",
         "applications/fleet/web/roster-cards.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
@@ -7561,6 +7562,14 @@
         },
         {
           "consumer": "applications/fleet/web/shared/cell-cockpit-stage.js",
+          "expression": "/api/fleet/workcell-observations",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/workcell-observations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-obs-model.js",
           "expression": "/api/fleet/workcell-observations",
           "resolution": "literal-or-template",
           "request_ids": [
