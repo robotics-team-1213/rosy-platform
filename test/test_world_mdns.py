@@ -176,7 +176,9 @@ def test_two_sided_docker_compose_and_mdns_contracts() -> None:
     assert bridge["command"][bridge["command"].index("--interval") + 1] == "1.0"
     assert not any(isinstance(v, dict) and v.get("source") == "/run/avahi-daemon"
                    for v in bridge["volumes"])
-    assert bridge["environment"]["ROSY_FLEET_TOKEN_FILE"] == "/run/secrets/world_fleet_viewer_token"
+    assert json.loads(bridge["environment"]["ROSY_CREDENTIAL_PATHS"]) == {
+        "ROSY_FLEET_TOKEN": "/run/secrets/world_fleet_viewer_token",
+    }
     assert "world_fleet_viewer_token" in bridge["secrets"]
     assert "registry_token" not in bridge["secrets"]
     assert "world_fleet_viewer_token" in site_world["secrets"]

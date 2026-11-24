@@ -13,13 +13,29 @@ import pytest
 from deploy.site import build_candidate as builder
 from deploy.site import verify_candidate as verifier
 from test_site_candidate_verifier import (
-    COMMIT, TEST_KEY_ID, _image_blobs, _sha, _verify_with, candidate, _add_account, _add_monitoring,
+    COMMIT, TEST_KEY_ID, _image_blobs, _sha, _verify_with, _write_images_tar, candidate, _add_account, _add_monitoring,
 )
 import test_site_autoupdate as site_tests
 from test_site_autoupdate import host
 
 NEW = "b" * 40
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _add_world(candidate):
+    root, _, image_ids, _ = candidate
+    manifest = json.loads((root / "release.json").read_text())
+    ids = _write_images_tar(root / "images.tar", services=(*manifest["images"], "world"))
+    sbom = root / "sbom/world.spdx"
+    sbom.write_text("World SPDX fixture")
+    image_ids["world"] = ids["world"][0]
+    manifest["images"]["world"] = {
+        "reference": f"rosy-site-world:{COMMIT}", "image_id": image_ids["world"], "platform": "linux/amd64",
+        "sbom": "sbom/world.spdx", "sbom_sha256": hashlib.sha256(sbom.read_bytes()).hexdigest(),
+    }
+    manifest["image_archive_sha256"] = hashlib.sha256((root / "images.tar").read_bytes()).hexdigest()
+    (root / "release.json").write_text(json.dumps(manifest))
+    return candidate
 
 
 def thin_candidate(candidate, reused=("vision", "proxy", "postgres")):
@@ -91,13 +107,15 @@ def test_invalid_reuse_proof_is_rejected(candidate, value):
     (["deploy/site/requirements-account.txt"], {"account"}),
     (["deploy/site/requirements-monitoring.txt"], {"monitoring"}),
     (["applications/monitoring/web/monitoring.js"], {"monitoring"}),
-    (["shared/web/theme.js"], {"fleet", "account", "monitoring"}),
+    (["applications/world/serve.py"], {"world"}),
+    (["shared/web/theme.js"], {"fleet", "account", "monitoring", "world"}),
     (["deploy/site/site_db.py"], {"fleet", "account"}),
     (["contracts/foundation/core_common/protocol/account_access.py"], {"fleet", "vision", "account", "monitoring"}),
 ])
 @pytest.mark.parametrize('independent_base', [False, True])
 @pytest.mark.parametrize('monitoring_base', [False, True])
-def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, changed, expected, independent_base, monitoring_base):
+@pytest.mark.parametrize('world_base', [False, True])
+def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, changed, expected, independent_base, monitoring_base, world_base):
     if independent_base:
         _add_account(candidate)
     else:
@@ -106,10 +124,14 @@ def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, chan
         _add_monitoring(candidate)
     else:
         expected = expected | {'monitoring'}  # D-1001: the first own-image release must build it
+    if world_base:
+        _add_world(candidate)
+    else:
+        expected = expected | {'world'}
     repo = tmp_path / "repo"
     site = repo / "deploy/site"
     site.mkdir(parents=True)
-    for name in (*builder.DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring"):
+    for name in (*builder.DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring", "Dockerfile.world"):
         shutil.copyfile(ROOT / "deploy/site" / name, site / name)
     for name in builder.DOC_FILES:
         path = repo / name
@@ -146,7 +168,8 @@ def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, chan
     assert not any(c[:2] == ["docker", "pull"] for c in calls)
     for s in set(candidate[2]) - expected:
         compose = (output / {'account': 'deploy/site/compose.account.yaml',
-                             'monitoring': 'deploy/site/compose.monitoring.yaml'}.get(s, 'deploy/site/compose.yaml')).read_text()
+                             'monitoring': 'deploy/site/compose.monitoring.yaml',
+                             'world': 'deploy/site/compose.world.yaml'}.get(s, 'deploy/site/compose.yaml')).read_text()
         assert f"rosy-site-{s}:{COMMIT}" in compose
         if s == 'account':
             maintenance = (output / 'deploy/site/compose.account-backup.yaml').read_text()

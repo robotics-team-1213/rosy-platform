@@ -29,6 +29,7 @@ DEPLOY_FILES = (
     "compose.control-unit-remote.yaml",
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
+    "compose.world.yaml", "Caddyfile.world",
     "compose.account.yaml", "Caddyfile.account",
     "compose.account-lan.yaml", "Caddyfile.account-lan", "rosy-mdns-alias@.service", "account-lan-cert.sh",  # D-1068 LAN login alias
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
@@ -52,7 +53,7 @@ MIRRORED_IMAGES = {
 # sources are copied whole, so ignored files under any of them could reach the
 # Docker daemon or an image. Python caches and egg-info carry no secrets.
 _HARMLESS_IGNORED = ("__pycache__/", ".pytest_cache/", ".egg-info/")
-_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account", "Dockerfile.monitoring")
+_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account", "Dockerfile.monitoring", "Dockerfile.world")
 _PARSED_COPY_FLAGS = ("--chown=", "--chmod=")
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -242,6 +243,7 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
         "fleet": (site / "Dockerfile.fleet", root),
         "account": (site / "Dockerfile.account", root),
         "monitoring": (site / "Dockerfile.monitoring", root),  # D-1001
+        "world": (site / "Dockerfile.world", root),
         "vision": (site / "Dockerfile.vision", root),
         "proxy": (site / "Dockerfile.proxy", site),
     }
@@ -348,7 +350,8 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
             ("compose.yaml", "Caddyfile", "org.rosy.site-caddy-sha256"),
             ("compose.account.yaml", "Caddyfile.account", "org.rosy.site-account-caddy-sha256"),
             ("compose.account-lan.yaml", "Caddyfile.account-lan", "org.rosy.site-account-lan-caddy-sha256"),
-            ("compose.monitoring.yaml", "Caddyfile.monitoring", "org.rosy.site-monitoring-caddy-sha256")):
+            ("compose.monitoring.yaml", "Caddyfile.monitoring", "org.rosy.site-monitoring-caddy-sha256"),
+            ("compose.world.yaml", "Caddyfile.world", "org.rosy.site-world-caddy-sha256")):
         path = deploy_dir / name
         text = path.read_text(encoding="utf-8")
         text = text.replace(f"{label}: unbuilt", f'{label}: "{_sha256(deploy_dir / config)}"')

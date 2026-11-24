@@ -25,10 +25,12 @@ SERVICES = ("fleet", "vision", "proxy", "postgres")
 PROJECT = "rosy-site"
 STACK_UNIT = "rosy-site-stack.service"
 MONITORING_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.monitoring.yaml"]
+WORLD_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.world.yaml"]
 ACCOUNT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
 CONTROL_UNIT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit.yaml"]
 CONTROL_UNIT_REMOTE_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit-remote.yaml"]
-COMPANIONS = {'monitoring': 'fleet', 'account': 'fleet', 'control-unit-peer': 'proxy'}
+COMPANIONS = {'monitoring': 'fleet', 'account': 'fleet', 'control-unit-peer': 'proxy', 'world-real-bridge': 'world'}
+IMAGE_OVERLAYS = {'account': ACCOUNT_OVERLAY, 'monitoring': MONITORING_OVERLAY, 'world': WORLD_OVERLAY}
 SIGNATURE = "release.json.sig"
 EXIT_OK = 0
 EXIT_FAILED = 1
@@ -50,18 +52,18 @@ _FUNCTIONAL_PATHS = {'/api/fleet/state': ('robots', 'robot_id'),
 def allowed_overlays(env: dict[str, str]) -> list[str]:
     """Allow only canonical configured overlay names before candidate rebasing."""
     pairing, omx = (["-f", f"/opt/rosy/candidate/deploy/site/compose.{name}.yaml"] for name in ("pairing", "omx"))
-    account = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
     account_lan = ["-f", "/opt/rosy/candidate/deploy/site/compose.account-lan.yaml"]  # D-1068, only after Account
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
     workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
     allowed += [base + workcell for base in allowed]
     allowed += [base + CONTROL_UNIT_OVERLAY + remote for base in allowed  # D-960; remote peer D-994
                 for remote in ([], CONTROL_UNIT_REMOTE_OVERLAY)]
-    allowed += [base + MONITORING_OVERLAY for base in allowed]  # D-936
-    if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account + lan for base in allowed
-                                                                         for lan in ([], account_lan)]:
+    for overlay in (MONITORING_OVERLAY, WORLD_OVERLAY):
+        allowed += [base + overlay for base in allowed]
+    if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [
+            base + ACCOUNT_OVERLAY + lan for base in allowed for lan in ([], account_lan)]:
         raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
-                      "the candidate's pairing, omx, workcell, control-unit(-remote), monitoring, Account and Account LAN overlays")
+                      "the candidate's pairing, omx, workcell, control-unit(-remote), monitoring, world, Account and Account LAN overlays")
     if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
         raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
     return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))
@@ -69,8 +71,7 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
 
 def active_services(inventory, overlays):
     """Optional-overlay services (own signed image) count only when their overlay is configured."""
-    return tuple(s for s in inventory if (s != 'account' or ACCOUNT_OVERLAY[1] in overlays)
-                 and (s != 'monitoring' or MONITORING_OVERLAY[1] in overlays))
+    return tuple(s for s in inventory if s not in IMAGE_OVERLAYS or IMAGE_OVERLAYS[s][1] in overlays)
 
 
 def companion_services(overlays, services, configured):
@@ -83,6 +84,8 @@ def companion_services(overlays, services, configured):
         companions.add('account')
     if CONTROL_UNIT_OVERLAY[1] in overlays and 'proxy' in services:
         companions.add('control-unit-peer')
+    if WORLD_OVERLAY[1] in overlays and 'world' in services:
+        companions.add('world-real-bridge')
     return companions
 
 
