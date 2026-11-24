@@ -253,15 +253,13 @@ test("policy-admin gets its own data-fleet-role and active role tag", () => {
   assert.equal(document.documentElement.dataset.fleetRole, undefined);
 });
 
-test("outside pointerdown closes topbar-extra and watchFleet registers onto scope", async () => {
+test("Escape closes topbar-extra and watchFleet registers onto scope", async () => {
   const nodes = fakeHeader();
   globalThis.MutationObserver = class { observe() {} };
   bindTopbarToggle();
   nodes["topbar-more"].listeners.click();
   assert.equal(nodes["topbar-extra"].dataset.open, "true");
-  document.listeners.pointerdown({target: nodes["topbar-extra"]});
-  assert.equal(nodes["topbar-extra"].dataset.open, "true");
-  document.listeners.pointerdown({target: fakeNode("outside")});
+  document.listeners.keydown({key: "Escape", defaultPrevented: false});
   assert.equal(nodes["topbar-extra"].dataset.open, "false");
   assert.equal(nodes["topbar-more"].getAttribute("aria-expanded"), "false");
 

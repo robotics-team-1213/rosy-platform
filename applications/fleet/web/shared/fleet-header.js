@@ -96,10 +96,6 @@ export function bindTopbarToggle(listen = (node, type, fn) => node.addEventListe
     setTopbarOpen(false);
     if (restore) entry.focus();
   });
-  listen(document, "pointerdown", event => {
-    if (entry.getAttribute("aria-expanded") !== "true") return;
-    if (!entry.contains(event.target) && !menu.contains(event.target)) setTopbarOpen(false);
-  });
   listen($("topbar-more"), "click", () => {
     const open = $("topbar-more").getAttribute("aria-expanded") !== "true";
     setTopbarOpen(open);
