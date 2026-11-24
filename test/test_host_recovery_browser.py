@@ -220,3 +220,44 @@ def test_every_reported_pc_shows_its_update_channels_and_a_viewer_sees_only_the_
         expect(viewer).not_to_contain_text("follower_torque_not_off")
         assert not errors
         browser.close()
+
+
+def test_host_services_offers_root_maintenance_button_only_when_advertised(console_url):
+    from playwright.sync_api import sync_playwright, expect
+
+    body = {
+        "hosts": [
+            {"host": "site", "actions": ["reboot", "cancel-reboot", "root-maintenance"], "units": []},
+            {"host": "model", "actions": ["reboot", "cancel-reboot"], "units": []},
+        ],
+        "guard": {},
+    }
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.goto(console_url, wait_until="networkidle")
+        page.evaluate("""async body => {
+            const {createHostServices} = await import('/console/assets/host-services.js');
+            const root = document.createElement('section');
+            root.id = 'root-maint-test';
+            root.innerHTML = '<p id="host-services-status"></p><div id="host-services-report"></div>' +
+                '<div id="host-services-commands"></div><p id="host-services-note"></p>';
+            document.body.append(root);
+            window.rootMaintCalls = [];
+            const view = createHostServices({root, call: async (url, options) => {
+                if (options) { window.rootMaintCalls.push({url, ...options}); return {code: 'ACCEPTED'}; }
+                return body;
+            }, confirmIrreversible: async () => true});
+            await view.refresh();
+        }""", body)
+        root = page.locator("#root-maint-test")
+        buttons = root.locator("#host-services-commands ui-button", has_text="루트 저장소 정리")
+        expect(buttons).to_have_count(1)
+        buttons.first.click()
+        expect(root.locator("#host-services-note")).to_contain_text("root-maintenance 접수 (ACCEPTED)")
+        assert page.evaluate("window.rootMaintCalls") == [{
+            "url": "/api/fleet/hosts/site/control",
+            "method": "POST",
+            "body": {"action": "root-maintenance", "unit": None, "operator_confirmed": True},
+        }]
+        assert not errors
+        browser.close()
