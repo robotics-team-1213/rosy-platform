@@ -8,7 +8,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_evidence as ev  # noqa: E402
@@ -364,3 +364,35 @@ class PolicyCapture:
     def __exit__(self, *_exc) -> None:
         if self.ring is not None:
             self.ring.close()
+
+
+def emit_two_arm_policy_failure(
+    cells: Mapping[str, Any], configs: Mapping[str, dict[str, Any]], work: Path,
+    receipt: Mapping[str, Any], tasks: Mapping[str, Mapping[str, Any]], revisions: Mapping[str, str],
+) -> str | None:
+    """Emit a `rosy.omx-failure-context.v1` bundle for a non-dry-run two-arm policy refusal or fault."""
+    if receipt.get("dry_run") or receipt.get("result") in ("dry_run", "chunks_done", "released"):
+        return None
+    stopped = str(receipt.get("stopped_reason") or "")
+    arms_rep = receipt.get("arms") if isinstance(receipt.get("arms"), Mapping) else {}
+    arm_key = next((k for k in ("a", "b") if stopped.startswith((f"{k}:", f"{k} "))), None) or next(
+        (k for k in ("a", "b") if isinstance(arms_rep.get(k), Mapping) and arms_rep[k].get("outcome") in ("fault", "refused")),
+        "a",
+    )
+    site_vals = [tasks[k].get(f) for k in ("a", "b") if isinstance(tasks.get(k), Mapping) for f in ("src", "dst")]
+    return _emit_common(
+        cell=cells.get(arm_key), config={**configs[arm_key], "arm_id": f"arm_{arm_key}"}, work=work,
+        kind="fault" if receipt.get("result") == "fault" else "policy_fail", executor_mode="act_timed",
+        attempt_cause=stopped or str(receipt.get("result") or "policy_fail"),
+        stage=str(receipt.get("task_id") or "two_arm_policy"), result_text=f"{receipt.get('result')}: {stopped}",
+        correlation={
+            "task_id": receipt.get("task_id"), "policy_revision": revisions.get(arm_key),
+            "peer_revision": revisions.get("b" if arm_key == "a" else "a"),
+            "proposer": receipt.get("proposer"), "operator": receipt.get("operator"),
+        },
+        spatial={"sites": {
+            "source": (tasks.get(arm_key) or {}).get("src"), "dest": (tasks.get(arm_key) or {}).get("dst"),
+            "is_amr_bed": any(_is_amr_bed_site(str(v)) for v in site_vals if v),
+        }},
+        extra_meas={"arms": dict(arms_rep), "park": receipt.get("park")},
+    )

@@ -1219,3 +1219,119 @@ def test_pr1_wait_exhaustion_hold_retries_fault_pose_and_released_completion(tmp
     finally:
         srv_cli.shutdown()
         srv_cli.server_close()
+
+
+def test_pr2_cli_dry_run_passive_fallback_and_live_failure_bundle_emission(tmp_path, monkeypatch, capsys):
+    sys.path.insert(0, str(ROOT / "contracts/foundation"))
+    sys.path.insert(0, str(OMX))
+    try:
+        import cell_failure_context as cfc  # noqa: E402
+        import cell_job_readiness as readiness_mod  # noqa: E402
+        from core_common.protocol.cell_failure_context import CellFailureContext  # noqa: E402
+    finally:
+        for p in (str(OMX), str(ROOT / "contracts/foundation")):
+            if p in sys.path:
+                sys.path.remove(p)
+
+    home = [0.0, -40.0, 40.0, 40.0, 0.0, 50.0]
+    kins = {"a": PlanarKin(0.10), "b": PlanarKin(0.10)}
+    srv_obj, url, revs = _make_remote_server(tmp_path / "srv", {"arm_a": lambda _o: [home] * 4, "arm_b": lambda _o: [home] * 4})
+    bundle_root = tmp_path / "bundles"
+    try:
+        lib_p = tmp_path / "lib.json"
+        lib_no_home = tmp_path / "lib_no_home.json"
+        base_lib = _base_lib(home)
+        lib_p.write_text(json.dumps(base_lib), encoding="utf-8")
+        no_home_lib = {**base_lib, "chunks": {"reach": base_lib["chunks"]["reach"]}}
+        lib_no_home.write_text(json.dumps(no_home_lib), encoding="utf-8")
+        jcal = {n: {"range_min": 0, "range_max": 4095, "homing_offset": 0, "drive_mode": 0} for n in remote_mod.JOINT_NAMES}
+        jcal_p = tmp_path / "jcal.json"
+        jcal_p.write_text(json.dumps(jcal), encoding="utf-8")
+        cal_a = tmp_path / "cal_a.json"
+        cal_b = tmp_path / "cal_b.json"
+        cal_a.write_text(json.dumps({"sites": {"belt": {"homography": [[0.001, 0, 0], [0, 0.001, -0.17], [0, 0, 1]]}}}), encoding="utf-8")
+        cal_b.write_text(json.dumps({"sites": {"belt": {"homography": [[0.001, 0, 0], [0, 0.001, 0.17], [0, 0, 1]]}}}), encoding="utf-8")
+        prof = tmp_path / "prof.json"
+        prof.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "d", "instance_id": "a", "robot_config_sha256": "a" * 64, "operating_envelope_path": "e.json", "work_dir": "."}), encoding="utf-8")
+        plan_p = tmp_path / "plan.json"
+        plan_p.write_text((OMX / "grasp-plan.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+        cfg_a, cfg_b = tmp_path / "cfg_a.json", tmp_path / "cfg_b.json"
+        for cfg_p, cal_p in ((cfg_a, cal_a), (cfg_b, cal_b)):
+            cfg_p.write_text(json.dumps({
+                "io": str(tmp_path), "cameras": {}, "failure_bundle_root": str(bundle_root),
+                "operating_profile_path": str(prof), "calibration_path": str(cal_p), "plan_path": str(plan_p),
+            }), encoding="utf-8")
+
+        class _NoRunnerCell(FakeCell):
+            def __init__(self):
+                super().__init__(home, fault="no runner")
+
+        monkeypatch.setattr(cli_mod.cell_two_arm, "kinematics_for", lambda *_a, **_kw: kins)
+        monkeypatch.setattr(cli_mod.cell_two_arm, "away_from_home", lambda *_a: [])
+        monkeypatch.setattr(cli_mod.cell_policy_handoff, "Authorization", lambda _cfg: (lambda *_a: {"session_id": "s", "library_sha256": "f" * 64}))
+
+        # _PassiveDryRunCell wrapper fails closed on non-state act/checked and forwards frame_receipt cleanly.
+        wrapped = cli_mod._PassiveDryRunCell(_NoRunnerCell(), home)
+        assert wrapped.act("state")["passive_source"] == "library_home"
+        assert wrapped.act("human-hold")["fault"] == "dry_run_passive_cell"
+        assert wrapped.checked("run policy", {"session_id": "s", "library_sha256": "f" * 64})["fault"] == "dry_run_passive_cell"
+        assert wrapped.frame_receipt("top")["camera"] == "top"
+
+        common_args = [
+            "--config-a", str(cfg_a), "--config-b", str(cfg_b), "--endpoint-url", url,
+            "--revision-a", revs["arm_a"], "--revision-b", revs["arm_b"],
+            "--task-a", "belt->temp_a:r1-s1-t1", "--task-b", "temp_b:r1-s1-t1->temp_b:r2-s1-t1",
+            "--max-chunks", "1", "--proposer", "alice", "--operator", "bob",
+        ]
+
+        # 1. --dry-run succeeds passively when FifoCell reports fault='no runner'.
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: {"a": _NoRunnerCell(), "b": _NoRunnerCell()})
+        capsys.readouterr()
+        rc_dry = cli_mod.main([*common_args, "--library-a", str(lib_p), "--library-b", str(lib_p), "--work-dir", str(tmp_path / "w_dry"), "--dry-run"])
+        assert rc_dry == 0
+        out_dry = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        rec_dry = json.loads(Path(out_dry["receipt"]).read_text(encoding="utf-8"))
+        assert out_dry["result"] == "dry_run" and out_dry["passive_dry_run_arms"] == ["a", "b"]
+        assert rec_dry["passive_dry_run_arms"] == ["a", "b"] and "failure_bundle_id" not in rec_dry
+
+        # 2. --dry-run fails closed if library has no valid chunks.home, and emits no failure bundle.
+        rc_no_home = cli_mod.main([*common_args, "--library-a", str(lib_no_home), "--library-b", str(lib_p), "--work-dir", str(tmp_path / "w_nohome"), "--dry-run"])
+        assert rc_no_home == 1
+        assert not bundle_root.exists() or list(bundle_root.iterdir()) == []
+
+        # 3. Live run NEVER enables passive fallback on no_runner (fails closed & emits failure bundle).
+        live_args = [
+            *common_args, "--library-a", str(lib_p), "--library-b", str(lib_p),
+            "--model-cal-a", str(jcal_p), "--cell-cal-a", str(jcal_p),
+            "--model-cal-b", str(jcal_p), "--cell-cal-b", str(jcal_p),
+            "--commissioning", "--person-at-switch",
+        ]
+        capsys.readouterr()
+        rc_live_nr = cli_mod.main([*live_args, "--work-dir", str(tmp_path / "w_livenr")])
+        assert rc_live_nr == 1
+        out_nr = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert out_nr["result"] == "fault" and "passive_dry_run_arms" not in out_nr and out_nr.get("failure_bundle_id")
+
+        # 4. Live mid-run fault on arm_b emits D-1072 CellFailureContext bundle and surfaces failure_bundle_id via parse_structured_result.
+        ca_live, cb_live = FakeCell(home), FakeCell(home)
+        orig_cb = cb_live.act
+        cb_live.act = lambda cmd: ({"ok": False, "fault": "overload", "settled": False, "state": list(home)} if cmd.endswith("run policy") else orig_cb(cmd))
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: {"a": ca_live, "b": cb_live})
+        capsys.readouterr()
+        rc_flt = cli_mod.main([*live_args, "--work-dir", str(tmp_path / "w_flt")])
+        assert rc_flt == 1
+        stdout_line = capsys.readouterr().out.strip().splitlines()[-1]
+        out_flt = json.loads(stdout_line)
+        rec_flt = json.loads(Path(out_flt["receipt"]).read_text(encoding="utf-8"))
+        bid = out_flt["failure_bundle_id"]
+        assert bid and rec_flt["failure_bundle_id"] == bid
+        fake_log = tmp_path / "job.log"
+        fake_log.write_text(("noise\n" * 50) + stdout_line + "\n", encoding="utf-8")
+        _, parsed_bid = readiness_mod.parse_structured_result(fake_log)
+        assert parsed_bid == bid
+        bundle = cfc.load_bundle(bundle_root, bid)
+        CellFailureContext.model_validate(bundle)
+        assert bundle["arm_id"] == "arm_b" and bundle["cell_id"] == "cell_ab" and bundle["kind"] == "fault"
+    finally:
+        srv_obj.shutdown()
+        srv_obj.server_close()
