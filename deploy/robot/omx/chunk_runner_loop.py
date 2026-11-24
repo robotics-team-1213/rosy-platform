@@ -2,7 +2,7 @@
 import os
 import time
 
-from chunk_policy_playback import absorb_telemetry_error
+from chunk_policy_playback import _is_holding, absorb_telemetry_error
 from chunk_runner_interrupt import interrupt_tick
 from chunk_runner_settle import tick_or_report, wait_aligned_before_start
 
@@ -22,6 +22,7 @@ def publish_live(runner, *, state=None, best_effort: bool = False) -> None:
                 "policy_start": runner.policy_playback.spec["start"] if runner.chunk == "policy" and runner.policy_playback else None,
                 "lag": round(runner.lag, 2),
                 "fault": runner.fault,
+                "holding": _is_holding(runner),
                 "human_hold_latched": runner.human_hold_latched,
                 "torque_hold_commanded": runner.torque_hold_commanded,
                 **({"hold_req": runner._human_hold_acked_req} if getattr(runner, "_human_hold_acked_req", None) else {}),
