@@ -4,8 +4,6 @@ import { node, patchAttr, patchData, patchHidden, patchText } from "/common/cont
 import { owns } from "/console/assets/unit-scope.js";
 import { powerHealthView } from "/console/assets/power-health-view.js";
 
-const HUD_ICONS = { online: "robot", mission: "next", battery: null, arms: "arm", alerts: "notification" };
-
 export function batteryMeterState({ percent = null, charging = false, online = true, stale = false } = {}) {
   const valid = online && !stale && typeof percent === "number" && Number.isFinite(percent);
   const clamped = valid ? Math.max(0, Math.min(100, Math.round(percent))) : null;
@@ -19,12 +17,9 @@ function BatteryMeter(props) {
 }
 
 function createBatteryMeter(props) {
-  const wrap = document.createElement("span");
-  wrap.className = "batt-meter";
+  const wrap = node("span", "", "batt-meter");
   wrap.setAttribute("aria-hidden", "true");
-  const fill = document.createElement("span");
-  fill.className = "batt-fill";
-  wrap.append(fill);
+  wrap.append(node("span", "", "batt-fill"));
   patchBatteryMeter(wrap, props);
   return wrap;
 }
@@ -48,24 +43,15 @@ function loadUPlot() {
 function HudIcon({ name }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
-    const host = ref.current;
-    if (!host) return;
     const svg = name ? iconSvg(name) : null;
-    if (svg) host.replaceChildren(svg);
-    else if (host.childNodes.length) host.replaceChildren();
+    ref.current?.replaceChildren(...(svg ? [svg] : []));
   }, [name]);
   return name ? html`<span class="hud-icon" aria-hidden="true" ref=${ref} />` : null;
 }
 
 function CockpitHudCells({ items }) {
   return html`${items.map((item) => html`
-    <div
-      class="cockpit-hud-cell"
-      key=${item.key}
-      data-hud-key=${item.key}
-      data-tone=${item.tone}
-      title=${item.title || undefined}
-    >
+    <div class="cockpit-hud-cell" key=${item.key} data-hud-key=${item.key} data-tone=${item.tone} title=${item.title || undefined}>
       <span class="cockpit-hud-label"><${HudIcon} name=${item.icon} />${item.label}</span>
       ${item.battery ? html`<${BatteryMeter} ...${item.battery} />` : null}
       <strong class="cockpit-hud-val">${item.text}</strong>
@@ -126,47 +112,27 @@ export function createCockpitHud({ el }) {
     ).length;
 
     const nowMs = Date.now();
-    const readPwr = (r) => (view.calmPower
-      ? view.calmPower.read(r, { receivedAtMs: view.receivedAtMs, nowMs, stateUnavailable: view.stateUnavailable })
-      : powerHealthView(r, view.receivedAtMs, nowMs));
-    const validPcts = view.stateUnavailable ? [] : onlineRobots
-      .map((r) => readPwr(r).percent)
-      .filter((n) => n !== null);
+    const readPwr = (r) => (view.calmPower ? view.calmPower.read(r, { receivedAtMs: view.receivedAtMs, nowMs, stateUnavailable: view.stateUnavailable }) : powerHealthView(r, view.receivedAtMs, nowMs));
+    const validPcts = view.stateUnavailable ? [] : onlineRobots.map((r) => readPwr(r).percent).filter((n) => n !== null);
     const minBatt = validPcts.length ? Math.min(...validPcts) : null;
-    const battText = online === 0 || view.stateUnavailable ? "—"
-      : minBatt === null ? "확인 불가"
-      : validPcts.length < online ? `${minBatt}% (${validPcts.length}/${online})`
-      : `${minBatt}%`;
-    const battTone = online === 0 || view.stateUnavailable ? "neutral"
-      : minBatt === null ? (view.stateLoaded ? "warn" : "neutral")
-      : minBatt <= 15 ? "crit" : minBatt <= 30 ? "warn" : "neutral";
-    const battTitle = online === 0 || view.stateUnavailable ? ""
-      : minBatt === null ? "유효 배터리 근거 없음"
-      : validPcts.length < online ? `유효 배터리 근거 ${validPcts.length}/${online}대 기준 최저값`
-      : "";
+    const battText = online === 0 || view.stateUnavailable ? "—" : minBatt === null ? "확인 불가" : validPcts.length < online ? `${minBatt}% (${validPcts.length}/${online})` : `${minBatt}%`;
+    const battTone = online === 0 || view.stateUnavailable ? "neutral" : minBatt === null ? (view.stateLoaded ? "warn" : "neutral") : minBatt <= 15 ? "crit" : minBatt <= 30 ? "warn" : "neutral";
+    const battTitle = online === 0 || view.stateUnavailable ? "" : minBatt === null ? "유효 배터리 근거 없음" : validPcts.length < online ? `유효 배터리 근거 ${validPcts.length}/${online}대 기준 최저값` : "";
 
     const anchors = view.anchors || [];
-    const anchorHeld = anchors.filter(
-      (a) => a.held === true || a.cell_status === "HOLD" || a.cell_status === "PAUSED_HUMAN",
-    ).length;
+    const anchorHeld = anchors.filter((a) => a.held === true || a.cell_status === "HOLD" || a.cell_status === "PAUSED_HUMAN").length;
     const anchorLive = anchors.filter((a) => a.live === true).length;
     const armTotal = sum?.armsTotal > 0 ? sum.armsTotal : anchors.length;
     const armHeld = sum?.armsTotal > 0 ? sum.heldCount : anchorHeld;
     const armReady = sum?.armsTotal > 0 ? sum.armsFresh : anchorLive;
-    const armsText = armTotal === 0
-      ? "—"
-      : armHeld > 0
-        ? `${armHeld}/${armTotal} HOLD`
-        : armReady === 0
-          ? `0/${armTotal} NO FEED`
-          : `${armReady}/${armTotal} LIVE`;
+    const armsText = armTotal === 0 ? "—" : armHeld > 0 ? `${armHeld}/${armTotal} HOLD` : armReady === 0 ? `0/${armTotal} NO FEED` : `${armReady}/${armTotal} LIVE`;
 
     renderItems([
-      { key: "online", icon: HUD_ICONS.online, label: "로봇", text: view.stateUnavailable ? "연결 끊김" : `${online}/${total} ON`, tone: view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral" },
-      { key: "mission", icon: HUD_ICONS.mission, label: "운행", text: activeCount > 0 ? `${activeCount} RUN` : "0 STBY", tone: activeCount > 0 ? "active" : "neutral" },
-      { key: "battery", icon: HUD_ICONS.battery, label: "최저 배터리", text: battText, tone: battTone, title: battTitle, battery: { percent: minBatt, online: online > 0 && !view.stateUnavailable, charging: false } },
-      { key: "arms", icon: HUD_ICONS.arms, label: "셀 팔", text: armsText, tone: armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
-      { key: "alerts", icon: HUD_ICONS.alerts, label: "경보", text: estopActive ? "E-STOP" : totalAlerts > 0 ? `위험 ${critCount} · 주의 ${warnCount}` : "이상 없음", tone: estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral" },
+      { key: "online", icon: "robot", label: "로봇", text: view.stateUnavailable ? "연결 끊김" : `${online}/${total} ON`, tone: view.stateUnavailable ? "crit" : online < total ? "warn" : "neutral" },
+      { key: "mission", icon: "next", label: "운행", text: activeCount > 0 ? `${activeCount} RUN` : "0 STBY", tone: activeCount > 0 ? "active" : "neutral" },
+      { key: "battery", icon: null, label: "최저 배터리", text: battText, tone: battTone, title: battTitle, battery: { percent: minBatt, online: online > 0 && !view.stateUnavailable, charging: false } },
+      { key: "arms", icon: "arm", label: "셀 팔", text: armsText, tone: armHeld > 0 ? "crit" : (armTotal > 0 && armReady < armTotal) ? "warn" : "neutral" },
+      { key: "alerts", icon: "notification", label: "경보", text: estopActive ? "E-STOP" : totalAlerts > 0 ? `위험 ${critCount} · 주의 ${warnCount}` : "이상 없음", tone: estopActive || critCount > 0 ? "crit" : warnCount > 0 ? "warn" : "neutral" },
     ]);
   }
 

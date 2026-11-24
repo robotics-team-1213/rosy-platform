@@ -499,8 +499,7 @@ details.robot-panel-section > summary {
 .batt-meter[data-tone="unknown"]::after { background: var(--border-default); }
 .batt-meter[data-tone="unknown"] .batt-fill { width: 0%; }
 .batt-meter[data-charging="true"] { border-color: var(--series-primary); }
-.batt-meter[data-charging="true"]::after { background: var(--series-primary); }
-.batt-meter[data-charging="true"] .batt-fill { background: repeating-linear-gradient(-45deg, var(--series-primary) 0 3px, color-mix(in oklab, var(--series-primary) 45%, var(--surface-recessed)) 3px 6px); }
+.batt-meter[data-charging="true"]::after, .batt-meter[data-charging="true"] .batt-fill { background: var(--series-primary); }
 .cockpit-hud-val { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; }
 .cockpit-hud-cell[data-tone="active"] .cockpit-hud-val { color: var(--series-primary); }
 .cockpit-hud-cell[data-tone="warn"] .cockpit-hud-val { color: var(--status-warn); }
