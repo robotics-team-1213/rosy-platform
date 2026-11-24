@@ -299,3 +299,59 @@ def test_openvino_and_norm_additional_guards(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="regular file"):
         lrs._load_lerobot(root, "cpu")
 
+
+def test_lerobot_shadow_skips_duplicate_onnx_hashing_via_precomputed_digest(tmp_path, monkeypatch):
+    root, sha = _ckpt(tmp_path)
+    _write_norm_processors(root, monkeypatch)
+    onnx_bytes = b"onnx-graph-dedup"
+    (root / lrs.ONNX_MODEL).write_bytes(onnx_bytes)
+    meta = {
+        "schema": ov_backend.ONNX_SCHEMA,
+        "policy_revision": sha,
+        "onnx_sha256": hashlib.sha256(onnx_bytes).hexdigest(),
+        "opset": 17,
+        "inputs": {
+            "observation.state": [1, 6],
+            "observation.images.top": [1, 3, 8, 12],
+            "observation.images.wrist": [1, 3, 8, 12],
+        },
+        "output_name": "action",
+    }
+    (root / lrs.ONNX_META).write_text(json.dumps(meta), encoding="utf-8")
+
+    class _FakeOutPort:
+        def get_index(self):
+            return 0
+
+    class _FakeCompiled:
+        inputs = [type("_In", (), {"any_name": k})() for k in meta["inputs"]]
+        outputs = [_FakeOutPort()]
+
+        def output(self, idx):
+            return _FakeOutPort()
+
+        def create_infer_request(self):
+            return object()
+
+    class _FakeCore:
+        def compile_model(self, model_path, device, config):
+            return _FakeCompiled()
+
+    digest_calls = []
+    orig_file_digest = ov_backend.hashlib.file_digest
+
+    def tracking_file_digest(stream, alg):
+        digest_calls.append(alg)
+        return orig_file_digest(stream, alg)
+
+    monkeypatch.setattr(ov_backend.hashlib, "file_digest", tracking_file_digest)
+    monkeypatch.setitem(sys.modules, "openvino", type("_FakeOV", (), {"Core": _FakeCore})())
+    monkeypatch.setenv("ROSY_ACT_BACKEND", "auto")
+
+    lrs.LeRobotShadow(root, sha, device="cpu")
+    assert digest_calls == []
+
+    ov_backend.validate_onnx_export(root, sha)
+    assert digest_calls == ["sha256"]
+
+

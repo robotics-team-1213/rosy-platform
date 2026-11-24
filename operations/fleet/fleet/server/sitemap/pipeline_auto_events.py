@@ -10,11 +10,12 @@ from __future__ import annotations
 import math
 
 MAX_EVENTS = 100
-KINDS = ("auto_clear", "auto_fold", "auto_depart", "auto_repark", "auto_observe")
+KINDS = ("auto_clear", "auto_fold", "auto_depart", "auto_repark", "auto_observe", "recovery_escalation")
 TEXT_MAX = 200
 FIELDS = ("kind", "arm", "robot_id", "incident_id", "batch_id", "result", "why", "candidate", "t", "person_needed", "source")
 NEEDS_PERSON = {("auto_clear", False), ("auto_fold", "held"), ("auto_fold", "not_cleared"), ("auto_fold", "failed"),
-                ("auto_depart", "HELD"), ("auto_repark", "held"), ("auto_repark", "failed")}
+                ("auto_depart", "HELD"), ("auto_repark", "held"), ("auto_repark", "failed"),
+                ("recovery_escalation", "escalated")}
 
 
 def clean(row) -> dict | None:

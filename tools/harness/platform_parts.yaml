@@ -689,6 +689,7 @@ roots:
       fleet/server/tracking: fleet.server
       fleet/server/evidence: fleet.server
       fleet/server/sitemap: fleet.server
+      fleet/server/pipeline: fleet.server
       fleet/server/pose: fleet.server
       fleet/server/recognition: fleet.server
       fleet/server/rightofway: fleet.server
@@ -1464,6 +1465,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_corridor.py
   - deploy/robot/omx/cell_unwedge.py
   - deploy/robot/omx/cell_auto_fold.py
+  - deploy/robot/omx/cell_auto_fold_stages.py
+  - deploy/robot/omx/cell_camera_telemetry_sync.py
   - deploy/robot/omx/cell_recovery_plan.py
   - deploy/robot/omx/cell_recovery_advisor.py
   - deploy/robot/omx/cell_remap_jaws.py
@@ -1511,6 +1514,8 @@ safety_review_paths:
   - deploy/robot/omx/cell_job_readiness.py
   - deploy/robot/omx/cell_media_jobs.py
   - deploy/robot/omx/cell_media_job_spec.py
+  - deploy/robot/omx/cell_area_job_spec.py
+  - deploy/robot/omx/cell_area_pick_cli.py
   - deploy/robot/omx/cell_bundle_emit.py
   - deploy/robot/omx/cell_depth_lock.py
   - deploy/robot/omx/cell_recovery.py
@@ -1524,6 +1529,8 @@ safety_review_paths:
   - operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
   - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
+  - operations/fleet/fleet/server/pipeline/pipeline_recovery_policy.py
+  - operations/fleet/fleet/server/pipeline/pipeline_recovery_tools.py
   - middleware/devices/omx/adapter/omx_adapter/chunk_library.py  # park_path, transit_path
   - tools/harness/safety_review.py  # the check itself
   - tools/harness/safety_review_exempt.json
@@ -1540,6 +1547,7 @@ safety_anchors:
   - {symbol: fleet.server.observe.observe_states}  # Internal admission observation helper
   - {symbol: fleet.server.goal_admission.QueueDecision}  # D-430 frozen hold shapes (console helper)
   - {symbol: fleet.server.goal_admission.response_of}
+  - {symbol: fleet.server.goal_admission.cancel_confirmed, public: true}  # D-430 pure cancel-receipt check shared with trip/pipeline halt paths
   - {symbol: fleet.server.degraded_reroute.reroute_degraded}  # ADR-1000 MSN-004 stop-then-reroute (console helper)
   - {symbol: fleet.server.estop_fanout.stop_robots}  # E-stop delivery to every robot (console helper)
   - {symbol: fleet.server.traffic_arbitration.TrafficArbitration}  # moved from console.py: yield/hold/cancel (FleetConsole mixin)

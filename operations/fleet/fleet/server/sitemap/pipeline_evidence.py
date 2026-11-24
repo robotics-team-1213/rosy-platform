@@ -297,10 +297,10 @@ def has_valid_presence(app, task: dict, now: float | None = None) -> bool:
     return _valid_presence_operator(rec, now=now) is not None
 
 
-def take_presence(app, task: dict, now: float | None = None) -> dict | None:
+def take_presence(app, task: dict, now: float | None = None, *, delete_gov: bool = True) -> dict | None:
     """The valid presence confirmation of this task as {"operator", "at"}, used up by the claim that reads it; else None."""
     rec = (getattr(app.state, "cell_presence", None) or {}).pop(task["task_id"], None)
-    if (gov := getattr(app.state, "pipeline_governance", None)) is not None:
+    if delete_gov and (gov := getattr(app.state, "pipeline_governance", None)) is not None:
         gov.delete_confirmation("presence", task["task_id"])
     op = _valid_presence_operator(rec, now=now)
     return None if op is None else {"operator": op, "at": rec["confirmed_at"]}

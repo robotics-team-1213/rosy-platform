@@ -212,7 +212,8 @@ class ControlSensorAdapter:
                  policy_factory: Optional[Callable[..., Any]] = None,
                  calibration_loader: Optional[Callable[..., Any]] = None,
                  namespace: str | None = None,
-                 tf_buffer: Any = None) -> None:
+                 tf_buffer: Any = None,
+                 in_process_topics: Any = None) -> None:
         self.config = ControlSensorConfig.from_mapping(raw_config)
         self.node = None
         self.policy = None
@@ -251,6 +252,8 @@ class ControlSensorAdapter:
             kwargs["namespace"] = namespace
         if tf_buffer is not None:
             kwargs["tf_buffer"] = tf_buffer
+        if in_process_topics is not None:
+            kwargs["in_process_topics"] = in_process_topics
         node = factory(**kwargs)
         try:
             refresh_profile = getattr(node, "refresh_profile", None)
@@ -355,6 +358,24 @@ class ControlSensorAdapter:
         self._executor = None
         return True
 
+    def forward_scan(self, msg: Any) -> bool:
+        if self.node is None or self._closed:
+            return False
+        self.node.on_scan(msg)
+        return True
+
+    def forward_imu(self, msg: Any) -> bool:
+        if self.node is None or self._closed:
+            return False
+        self.node.on_imu(msg)
+        return True
+
+    def forward_us(self, msg: Any) -> bool:
+        if self.node is None or self._closed:
+            return False
+        self.node.on_us(msg)
+        return True
+
     def close(self) -> bool:
         if self.node is None or self._closed:
             return False
@@ -378,7 +399,8 @@ def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: M
                           sensor_node_factory: Optional[Callable[..., Any]] = None,
                           policy_factory: Optional[Callable[..., Any]] = None,
                           namespace: str | None = None,
-                          tf_buffer: Any = None) -> tuple["ControlSensorAdapter", list[str]]:
+                          tf_buffer: Any = None,
+                          in_process_topics: Any = None) -> tuple["ControlSensorAdapter", list[str]]:
     """D-400 assembly: resolved parameters replace the overlay, the calibration
     block is retired, and a shadow that cannot start runs with the policy off.
     Config errors (bad mode, bad types, shadow + safety.control_policy_required,
@@ -400,7 +422,8 @@ def build_control_adapter(raw_config: Mapping[str, Any] | None, *, parameters: M
     try:
         return ControlSensorAdapter(raw, sensor_node_factory=sensor_node_factory,
                                     policy_factory=policy_factory, namespace=namespace,
-                                    tf_buffer=tf_buffer), notes
+                                    tf_buffer=tf_buffer,
+                                    in_process_topics=in_process_topics), notes
     except Exception as exc:
         if config.mode != "shadow":
             raise

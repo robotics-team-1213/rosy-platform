@@ -9,10 +9,8 @@ import { renderOmxInspector } from "/console/assets/omx-inspector.js";
 
 export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from "/console/assets/charge-bays-model.js";
 
-/** Choices that act on a robot need the server's occupant; the console never substitutes one. */
-// The human-safety gate is cell-wide and must never be disabled for want of a robot.
-const needsRobot = (choice) => Boolean(choice.visionCheckCell || choice.cableGuardToggle
-  || choice.zoneId);
+/** Choices that target a docked vehicle need the server's occupant; cell-wide emergency stops are always enabled. */
+const needsRobot = (choice) => Boolean(choice.cableGuardToggle || choice.zoneId);
 
 function markNoRobot(button, choice, card) {
   if (!needsRobot(choice) || card.robot_id) return;
@@ -44,6 +42,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   let lastRows = null;
   let lastInspectorSig = "";
   let lastListSig = "";
+  let unconfirmedStopWarning = "";
+  let stopGen = 0;
   const draftChoices = new Map();
 
   scope.listen(document, "visibilitychange", () => {
@@ -70,18 +70,27 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       return confirmedAction.run({message: `태스크(${choice.cancelTaskId})를 즉시 취소하고 셀 인터락을 해제할까요?`, opener: button,
         eligible: () => !auth.locked, request: () => executeChoice(choice, card, button, true)});
     }
+    const isStop = Boolean(choice.humanSafetyCell || choice.visionCheckCell);
+    const myStopGen = isStop ? ++stopGen : 0;
     const origLabel = button.textContent;
     setOffBy(button, "요청 처리 중");
     button.textContent = `${origLabel} (처리 중…)`;
+    let stopRes = null;
     try {
       if (choice.cancelTaskId) {
         await call(`/api/fleet/pipeline/cell-tasks/${choice.cancelTaskId}/cancel`, {method: "POST"});
       } else if (choice.retryTaskId) {
         await call(`/api/fleet/pipeline/cell-tasks/${choice.retryTaskId}/retry`, {method: "POST"});
       } else if (choice.visionCheckCell) {
-        await call("/api/fleet/pipeline/vision-auto-check", {
+        stopRes = await call("/api/fleet/pipeline/vision-auto-check", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({cell_id: choice.visionCheckCell, robot_id: card.robot_id}),
+          body: JSON.stringify({
+            cell_id: choice.visionCheckCell,
+            robot_id: card.robot_id || undefined,
+            human_detected: true,
+            intrusion_score: 1.0,
+            evidence_source: "operator_camera_inspection",
+          }),
         });
       } else if (choice.cableGuardToggle) {
         await call("/api/fleet/pipeline/cable-guard", {
@@ -97,7 +106,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
           }),
         });
       } else if (choice.humanSafetyCell) {
-        await call("/api/fleet/pipeline/human-safety-gate", {
+        stopRes = await call("/api/fleet/pipeline/human-safety-gate", {
           method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
             cell_id: choice.humanSafetyCell,
@@ -118,17 +127,35 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       } else {
         await call("/api/fleet/pipeline/cell-tasks", {
           method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({preset: choice.preset}),
+          body: JSON.stringify({preset: choice.preset, ...(card.robot_id ? {robot_id: card.robot_id} : {})}),
         });
       }
+      if (isStop && myStopGen === stopGen) {
+        const unconfirmed = Array.isArray(stopRes?.unconfirmed_pinky_stops) ? stopRes.unconfirmed_pinky_stops : [];
+        const stopConfirmed = stopRes?.stop_confirmed === true && stopRes?.ok !== false && unconfirmed.length === 0;
+        if (!stopConfirmed) {
+          unconfirmedStopWarning = `비상정지 경고(${choice.humanSafetyCell || choice.visionCheckCell}): 정지 미확인(${unconfirmed.join(", ") || "확인 필요"}) — 수동 확인 필요`;
+        } else {
+          unconfirmedStopWarning = "";
+        }
+      }
       await refresh();
-      if (choice.requiresPresence) {
-        patchText(hint, "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.");
+      if (isStop && myStopGen === stopGen && unconfirmedStopWarning) {
+        patchText(hint, unconfirmedStopWarning);
+        patchHidden(hint, false);
+      } else if (choice.requiresPresence) {
+        patchText(hint, "ACT 정책 작업이 대기열에 등록되었습니다. 셀 워크스페이스(/console/cell#real2sim-heading)에서 이름 있는 운영자의 입회 표시(D-911)를 눌러 실행을 시작하세요.");
         patchHidden(hint, false);
       }
     } catch (error) {
-      patchText(hint, `작업 요청 실패: ${error.message}`);
-      patchHidden(hint, false);
+      if (isStop && myStopGen === stopGen) {
+        unconfirmedStopWarning = `비상정지 요청 실패 (정지 미확인 — 수동 확인 필요): ${error.message}`;
+        patchText(hint, unconfirmedStopWarning);
+        patchHidden(hint, false);
+      } else {
+        patchText(hint, `작업 요청 실패: ${error.message}`);
+        patchHidden(hint, false);
+      }
     } finally {
       button.textContent = origLabel;
       setOffBy(button, "");
@@ -267,8 +294,9 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       }
       list.replaceChildren(...items);
     }
-    patchText(hint, note);
-    patchHidden(hint, !note);
+    const displayNote = unconfirmedStopWarning || note;
+    patchText(hint, displayNote);
+    patchHidden(hint, !displayNote);
   }
 
   async function refresh() {

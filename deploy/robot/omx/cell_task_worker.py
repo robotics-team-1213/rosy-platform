@@ -42,9 +42,13 @@ ensure_omx_paths()
 
 
 def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR,
-                        *, ca_file: str | Path | None = None) -> dict[str, Any]:
+                        *, ca_file: str | Path | None = None, allow_safe_home: bool = False) -> dict[str, Any]:
     opener = make_ca_urlopen(ca_file) if ca_file else urlopen
-    return _sync_cell_telemetry(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=opener)
+    tls_verified = not (fleet_r_url.rstrip("/").startswith("https://") and not ca_file)
+    return _sync_cell_telemetry(
+        fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=opener,
+        ca_file=ca_file, tls_verified=tls_verified, allow_safe_home=allow_safe_home,
+    )
 
 
 ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {"arm_s": ("s", "with-session-arm-s-live.sh", -1.0), "arm_a": ("a", "with-session-arm-a-par.sh", -1.0), "arm_b": ("b", "with-session-arm-b-par.sh", -1.0)}
@@ -309,7 +313,11 @@ def main(argv: list[str] | None = None) -> None:
     def _trigger_bg_cam_upload() -> None:
         nonlocal bg_cam_fut
         if bg_cam_fut is None or bg_cam_fut.done():
-            bg_cam_fut = bg_cam_pool.submit(sync_cell_telemetry, args.fleet_r_url, token, prep_dir, ca_file=args.ca_file)
+            bg_cam_fut = bg_cam_pool.submit(
+                sync_cell_telemetry, args.fleet_r_url, token, prep_dir,
+                ca_file=args.ca_file,
+                allow_safe_home=(args.execute_mode == "guarded-pick" and not args.dry_run_hw),
+            )
 
     def _hw_act(handoff: dict[str, Any]) -> dict[str, Any]:
         arm_id = resolve_task_arm(handoff)

@@ -191,6 +191,12 @@ def install_task_dispatch_routes(
             body: DispatchRearmRequest,
             principal: SitePrincipal = Depends(require_named_operator),
         ) -> dict:
+            if getattr(app.state, "_fleet_estop_latch_unresolved", False):
+                raise HTTPException(409, detail={
+                    "code": "DISPATCH_REARM_REFUSED",
+                    "message": "unresolved stop latch must be closed before rearm",
+                })
+            rearm_stop_gen = int(getattr(app.state, "safety_stop_generation", 0))
             try:
                 control = task_service.store.rearm_dispatch(
                     expected_generation=body.expected_generation,
@@ -219,12 +225,25 @@ def install_task_dispatch_routes(
                         result = {"state": "UNKNOWN", "reason": type(exc).__name__}
                     local_rearm.append({"workcell_id": workcell_id,
                                         "instance_id": instance_id, **dict(result)})
-                if any(item["state"] != "OPEN" for item in local_rearm):
+                superseded = (
+                    int(getattr(app.state, "safety_stop_generation", 0)) != rearm_stop_gen
+                    or bool(getattr(app.state, "_fleet_estop_latch_unresolved", False))
+                )
+                if superseded or any(item["state"] != "OPEN" for item in local_rearm):
+                    rollback_gen = int(getattr(app.state, "safety_stop_generation", 0))
+                    app.state._fleet_estop_latch_unresolved = True
+                    reason = "DISPATCH_REARM_SUPERSEDED" if superseded else "OMX_LOCAL_REARM_FAILED"
                     try:
                         stopped = task_service.store.trip_stop_latch(
                             actor_id=principal.principal_id,
-                            reason="OMX_LOCAL_REARM_FAILED",
+                            reason=reason,
                         )
+                        if (
+                            isinstance(stopped, dict)
+                            and stopped.get("dispatch_enabled") is False
+                            and int(getattr(app.state, "safety_stop_generation", 0)) == rollback_gen
+                        ):
+                            app.state._fleet_estop_latch_unresolved = False
                     except Exception:
                         _LOG.exception("failed to close Fleet dispatch after OMX rearm refusal")
                         try:
@@ -236,11 +255,20 @@ def install_task_dispatch_routes(
                         reason="OMX_REARM_ROLLBACK", targets=stop_targets,
                     )
                     raise HTTPException(status_code=409, detail={
-                        "code": "LOCAL_WORKCELL_REARM_FAILED",
+                        "code": "DISPATCH_REARM_SUPERSEDED" if superseded else "LOCAL_WORKCELL_REARM_FAILED",
                         "fleet_dispatch": stopped,
                         "omx_local_rearm": local_rearm,
                     })
                 control["omx_local_rearm"] = local_rearm
+            if (
+                int(getattr(app.state, "safety_stop_generation", 0)) != rearm_stop_gen
+                or getattr(app.state, "_fleet_estop_latch_unresolved", False)
+            ):
+                app.state._fleet_estop_latch_unresolved = True
+                raise HTTPException(409, detail={
+                    "code": "DISPATCH_REARM_SUPERSEDED",
+                    "message": "stop occurred while dispatch rearm was in flight",
+                })
             return control
 
     @app.post("/api/fleet/robots/{robot_id}/goal", tags=["fleet"])
@@ -351,28 +379,36 @@ def install_task_dispatch_routes(
     # D-1043: an operator, or a human in an interactive Account session (cookie, or an Account-signed identity), may press
     # the stop. A bearer token without a named human (Monitoring, token-only viewer, service, machine) still gets 403.
     # Pressing only stops: release, rearm and clear stay operator-only.
-    @app.post("/api/fleet/estop", tags=["fleet"])
-    async def fleet_estop(request: Request, principal: SitePrincipal = Depends(authorize or require_viewer)) -> dict:
-        if not may_press_estop(request, principal):
-            raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "operator role or a signed-in human session required"})
-        # 이쪽은 한 대가 거절해도 200 이다 — 어느 대가 섰고 어느 대가 못 섰는지는 본문에
-        # 다 들어 있고, 화면은 그 목록을 보여 줘야 한다.
+    async def _trip_site_estop(actor_id: str) -> dict:
+        my_gen = int(getattr(app.state, "safety_stop_generation", 0)) + 1
+        app.state.safety_stop_generation = my_gen
+        app.state._fleet_estop_latch_unresolved = True
         stop_control = None
         if task_service is not None:
             try:
-                stop_control = task_service.store.trip_stop_latch(
-                    actor_id=principal.principal_id,
-                )
+                stop_control = task_service.store.trip_stop_latch(actor_id=actor_id)
+                if (
+                    isinstance(stop_control, dict)
+                    and stop_control.get("dispatch_enabled") is False
+                    and int(getattr(app.state, "safety_stop_generation", 0)) == my_gen
+                ):
+                    app.state._fleet_estop_latch_unresolved = False
             except Exception:
-                _LOG.exception(
-                    "emergency stop dispatch latch unavailable; continuing stop fanout "
-                    "principal=%s",
-                    principal.principal_id,
-                )
+                _LOG.exception("emergency stop dispatch latch unavailable; continuing stop fanout principal=%s", actor_id)
                 try:
                     stop_control = task_service.store.dispatch_control()
                 except Exception:
                     _LOG.exception("emergency stop dispatch readback unavailable")
         return await execute_local_fleet_stop(
             console=console, task_service=task_service, configured_omx=configured_omx,
-            stop_transport=stop_transport, stop_control=stop_control, actor_id=principal.principal_id, stop_targets=stop_targets)
+            stop_transport=stop_transport, stop_control=stop_control, actor_id=actor_id, stop_targets=stop_targets)
+
+    app.state.execute_site_estop = _trip_site_estop
+
+    @app.post("/api/fleet/estop", tags=["fleet"])
+    async def fleet_estop(request: Request, principal: SitePrincipal = Depends(authorize or require_viewer)) -> dict:
+        if not may_press_estop(request, principal):
+            raise HTTPException(status_code=403, detail={"code": "FORBIDDEN", "message": "operator role or a signed-in human session required"})
+        # 이쪽은 한 대가 거절해도 200 이다 — 어느 대가 섰고 어느 대가 못 섰는지는 본문에
+        # 다 들어 있고, 화면은 그 목록을 보여 줘야 한다.
+        return await _trip_site_estop(principal.principal_id)

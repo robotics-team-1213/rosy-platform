@@ -158,6 +158,7 @@ OWN = {
         "cell-real2sim-specs.js",  # split from cell-real2sim.js
         "cell-real2sim-actions.js",  # split from cell-real2sim.js
         "cell-real2sim-views.js",  # split from cell-real2sim.js
+        "cell-pipeline-panel.js",  # fleet E2E pipeline panel mounted above visual cards
         "cell-line.js",  # D-975: 준비 노선(응답이 채운 요소만 읽음)
     },
     "site-map.js": {
