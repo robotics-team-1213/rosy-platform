@@ -207,6 +207,12 @@ class TrackWorker:
             self.ingest.report_calibration(self.camera.source_id,
                                            (self._config or {}).get("calibration"),
                                            self.camera.map_id)
+            if hasattr(self.ingest, "report_overlay_context"):
+                self.ingest.report_overlay_context(
+                    self.camera.source_id,
+                    places=(self._config or {}).get("places") or (),
+                    robots=(self._config or {}).get("occupied") or (),
+                )
             if (self._config or {}).get("stream_wanted") is True:  # D-989: a bounded locate session only
                 self.ingest.hold_stream(self.camera.source_id)
             from rosy_vision.measured_preview import synchronize_preview
