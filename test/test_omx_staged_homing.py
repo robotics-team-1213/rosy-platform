@@ -166,6 +166,7 @@ def test_omx_sync_tls_expiry_inflight_and_park_only_preserves_hold(tmp_path, mon
         assert res_move["ok"] is False and res_move["error"] == "STOP_GENERATION_PREEMPTED"
         return {"schema": "rosy.omx-auto-fold.v1", "result": "folded", "steps": []}
 
+    monkeypatch.setattr(cell_pipeline, "FifoCell", lambda *_a: _RuntimeCell())
     rc3 = run_cli_main(
         ["--arm", "arm_b", "--config", str(arm_cfg), "--library", str(lib_p), "--site", "s", "--roi", "0", "0", "10", "10",
          "--out", str(out_p), "--stop-generation", "0", "--safety-fence", str(rt_fence),

@@ -186,7 +186,10 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
 
     # Non-owner & cross-cell owner (cell_s) cannot submit arm_b acks or cell_ab telemetry; cell_ab owner succeeds.
     app_no, client_no = _app(tmp_path, monkeypatch, role_principal=SimpleNamespace(principal_id="omx-owner-s", role="service"))
-    app_no.state.pending_safe_home_arms["arm_b"] = {"request_id": "req-x", "root_task_id": "t-armb", "strategy": "release_and_lift"}
+    app_no.state.pending_safe_home_arms["arm_b"] = {
+        "request_id": "req-x", "root_task_id": "t-armb", "strategy": "release_and_lift",
+        "stop_generation": 0, "expires_at": time.time() + 60,
+    }
     app_no.state.arm_live_states["arm_b"] = {"folded": False}
     client_no.post("/api/fleet/pipeline/cell-quality", json={
         "cameras": {"top": {"fresh": True, "sequence": 99}},
@@ -198,7 +201,10 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
     assert "top" not in app_no.state.cell_camera_quality
 
     app_own, client_own = _app(tmp_path, monkeypatch, role_principal=SimpleNamespace(principal_id="omx-owner-ab", role="service"))
-    app_own.state.pending_safe_home_arms["arm_b"] = {"request_id": "req-x", "root_task_id": "t-armb", "strategy": "release_and_lift"}
+    app_own.state.pending_safe_home_arms["arm_b"] = {
+        "request_id": "req-x", "root_task_id": "t-armb", "strategy": "release_and_lift",
+        "stop_generation": 0, "expires_at": time.time() + 60,
+    }
     client_own.post("/api/fleet/pipeline/cell-quality", json={
         "safe_home_acks": [{"arm_id": "arm_b", "request_id": "req-x", "outcome": "risen_for_visual_verify"}]
     })
@@ -273,6 +279,7 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
     for out_str, rid in (("risen_for_visual_verify", "sk-bad"), ("done", "sk-unk")):
         app_sk.state.pending_safe_home_arms["arm_b"] = {
             "request_id": rid, "root_task_id": "t-sk", "arm_id": "arm_b", "strategy": "guarded_slow_park",
+            "stop_generation": 0, "expires_at": time.time() + 60,
         }
         client_sk.post("/api/fleet/pipeline/cell-quality", json={
             "safe_home_acks": [{"arm_id": "arm_b", "request_id": rid, "outcome": out_str}]

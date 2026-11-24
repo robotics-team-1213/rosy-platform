@@ -406,7 +406,7 @@ async def _cancel_native_goal(console, robot_id: str | None) -> dict:
         res = await console.cancel(robot_id)
     except Exception as exc:
         return {"error": _code(exc)}
-    from fleet.server.console.goal_admission import cancel_confirmed as _native_cancel_confirmed
+    from fleet.server.goal_admission import cancel_confirmed as _native_cancel_confirmed
 
     confirmed = (
         isinstance(res, dict)

@@ -22,7 +22,7 @@ def halt_unconfirmed(detail: dict | None) -> bool:
 
 
 def _cancel_ack(receipt) -> bool:
-    from fleet.server.console.goal_admission import cancel_confirmed as _cancel_confirmed
+    from fleet.server.goal_admission import cancel_confirmed as _cancel_confirmed
 
     return (
         isinstance(receipt, dict)

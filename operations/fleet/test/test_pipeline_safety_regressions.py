@@ -155,7 +155,7 @@ def test_fleet_estop_and_restart_revoke_staged_omx_homing_fence(tmp_path, monkey
     install_task_dispatch_routes(
         app_latch, console=fake_console, task_service=fake_svc, configured_omx={}, stop_transport=None,
         require_viewer=lambda: op_principal, require_operator=lambda: op_principal,
-        require_named_operator=None, read_guard=(), operator_guard=(), authorize=lambda: op_principal,
+        require_named_operator=lambda: op_principal, read_guard=(), operator_guard=(), authorize=lambda: op_principal,
     )
     app_latch.state.task_service = fake_svc
     install_pipeline_routes(app_latch, site_maps=maps)
@@ -282,7 +282,7 @@ def test_unresolved_fleet_estop_latch_blocks_pinky_dispatch_and_runner_start(tmp
     install_task_dispatch_routes(
         app, console=fake_console, task_service=svc, configured_omx={}, stop_transport=None,
         require_viewer=lambda: op, require_operator=lambda: op,
-        require_named_operator=None, read_guard=(), operator_guard=(), authorize=lambda: op,
+        require_named_operator=lambda: op, read_guard=(), operator_guard=(), authorize=lambda: op,
     )
     install_pipeline_routes(app, site_maps=maps, console=fake_console)
 

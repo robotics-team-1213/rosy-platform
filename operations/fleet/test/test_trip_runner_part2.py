@@ -590,29 +590,29 @@ def test_align_cancel_on_first_status_poll_keeps_unconfirmed_stop(tmp_path):
     _plan(store, ports, "ring_s:fwd", 0.1, "NW")
 
     with pytest.raises(asyncio.CancelledError):
-        run(runner._admission._align("rosy_60", 45.0, "op"))
-    assert "rosy_60" not in runner._admission._aligning
-    assert "rosy_60" in runner._admission._unconfirmed_align_stops
+        run(runner._align("rosy_60", 45.0, "op"))
+    assert "rosy_60" not in runner._aligning
+    assert "rosy_60" in runner._unconfirmed_align_stops
     assert "rosy_60" in runner.aligning_robots()
 
     # Nonterminal receipts from halt_aligning must keep the robot fenced; only terminal readback clears it.
     ports.rotate_stop = lambda _rid: asyncio.sleep(0, result={})
     assert run(runner.halt_aligning(["rosy_60"])) == ["rosy_60"]
-    assert "rosy_60" in runner._admission._unconfirmed_align_stops
+    assert "rosy_60" in runner._unconfirmed_align_stops
 
     ports.rotate_stop = lambda _rid: asyncio.sleep(0, result={"state": "running"})
     assert run(runner.halt_aligning(["rosy_60"])) == ["rosy_60"]
-    assert "rosy_60" in runner._admission._unconfirmed_align_stops
+    assert "rosy_60" in runner._unconfirmed_align_stops
 
     ports.rotate_stop = lambda _rid: asyncio.sleep(0, result={"state": "aborted"})
     assert run(runner.halt_aligning(["rosy_60"])) == []
-    assert "rosy_60" not in runner._admission._unconfirmed_align_stops
+    assert "rosy_60" not in runner._unconfirmed_align_stops
 
     # Empty/unrecognized rotate_status must also attempt rotate_stop and keep unconfirmed fence if stop is unconfirmed.
     ports.rotate_status = lambda _rid: asyncio.sleep(0, result={})
     ports.rotate_stop = lambda _rid: asyncio.sleep(0, result={})
     with pytest.raises(TripError) as exc_info:
-        run(runner._admission._align("rosy_60", 45.0, "op"))
+        run(runner._align("rosy_60", 45.0, "op"))
     assert exc_info.value.code == "TRIP_ALIGN_ABORTED"
-    assert "rosy_60" in runner._admission._unconfirmed_align_stops
+    assert "rosy_60" in runner._unconfirmed_align_stops
     assert "rosy_60" in runner.aligning_robots()
