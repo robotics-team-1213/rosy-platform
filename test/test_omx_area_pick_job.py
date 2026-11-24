@@ -344,3 +344,104 @@ def test_real_load_config_white_jaw_rear_floor_and_recovery(tmp_path: Path, monk
     assert rec["recovered_pick_xyz_m"][0] < -0.05
     # Unused cell_area_xyz import ensures module compatibility with workspace change
     assert cell_area_xyz.coerce_area_xyz(directive["pick"])["effective_xyz_m"][0] == -0.11
+
+
+def test_arm_s_compiler_v21_open_hover_divergence_guard_and_empty_wrist_logs(tmp_path: Path, monkeypatch) -> None:
+    import cell_area_vision_align as cva
+    import cell_area_xyz
+    import cell_arm_cal
+    import cell_directive_compiler as cdc
+
+    wd = tmp_path / "work"
+    wd.mkdir()
+    directive = {
+        "schema": "rosy.omx-area-xyz.v1",
+        "directive_id": "test-arm-s-v21",
+        "arm_id": "arm_s",
+        "pick": {"area": "floor", "x": 0.041, "y": 0.175, "z": 0.021, "effective_xyz_m": [0.041, 0.175, 0.021], "yaw_deg": -97.4},
+        "place": {"area": "floor", "x": -0.06, "y": 0.17, "z": 0.021, "effective_xyz_m": [-0.06, 0.17, 0.021], "yaw_deg": -67.8},
+        "execution": {"vision_refine": True, "wrist_passes": 2, "side_zone_snap": False, "live_perceived": True},
+    }
+    base_plan = {"grip_open": 58.5, "grip_release": 57.5, "tcp_x_m": 0.074, "hold_current_ma": 25, "limits": {"workspace_min_m": [-0.28, -0.28, 0.005]}}
+
+    # 1) Uncalibrated arm_s with v2.1 jaws gets v2.1 defaults and keeps wide base grip_open (clamped 58.15)
+    plan, cal = cdc.build_plan_from_directive(directive, base_plan, work_dir=wd)
+    assert plan["grip_open"] == pytest.approx(58.15, abs=1e-4)
+    assert cal["finger_color"] == "white" and cal["held_30mm"] == 54.3
+
+    # 2a) Hover wrist servo divergence -> flips along sign, verifies improvement, and persists arm-cal-arm_s.json
+    saved_cmds: list[str] = []
+    lib_stub = {"chunks": {"above_pick": [[0] * 6]}}
+
+    def _plan_fn(cur_d, bp, work_dir=None, kinematics_root=None):
+        p, c = cdc.build_plan_from_directive(cur_d, bp, work_dir=work_dir)
+        return lib_stub, p, c
+
+    monkeypatch.setattr(cva, "plan_library_from_directive", _plan_fn)
+
+    def _run_cmd(cmd: str) -> dict:
+        saved_cmds.append(cmd)
+        return {"ok": True, "state": [0, 0, 0, 0, 0, 58.15]}
+
+    obs_seq = iter([
+        {"found": True, "along_mm": 4.0, "across_mm": 0.0, "finger_color": "white"},
+        {"found": True, "along_mm": 6.4, "across_mm": 0.0, "finger_color": "white"},
+        {"found": True, "along_mm": 1.4, "across_mm": 0.0, "finger_color": "white"},
+    ])
+    monkeypatch.setattr(cva.cell_fingers, "resolve_wrist_servo_offset", lambda *_a, **_kw: next(obs_seq))
+
+    w_log: list[dict] = []
+    cur_d = json.loads(json.dumps(directive))
+    _, _, _, last_obs, refined = cva.refine_pick_pose_at_hover(
+        cur_directive=cur_d, base_plan=base_plan, lib=lib_stub, plan=plan, cal=cal,
+        lib_path=wd / "lib.json", work_dir=wd, kinematics_root=None, arm_id="arm_s",
+        exec_cfg=cur_d["execution"], frame_fn=lambda _v: np.zeros((8, 8, 3), dtype=np.uint8),
+        before_side=None, above_shaking=False, run_cmd=_run_cmd, wrist_log=w_log,
+    )
+    assert refined is True and last_obs["sign_flipped"] is True
+    assert cur_d["pick"]["x"] < 0.041  # flipped opposite of initial +x shift at yaw=-97.4 deg
+    persisted = cell_arm_cal.load(wd, "arm_s")
+    assert persisted["finger_sign"]["along"] == -1.0
+
+    # 2b) When even the flipped move stays worse, revert back to pre_wrist_xyz
+    wd2 = tmp_path / "work_revert"
+    wd2.mkdir()
+    cur_d2 = json.loads(json.dumps(directive))
+    obs_bad = iter([
+        {"found": True, "along_mm": 4.0, "across_mm": 0.0, "finger_color": "white"},
+        {"found": True, "along_mm": 6.4, "across_mm": 0.0, "finger_color": "white"},
+        {"found": True, "along_mm": 6.0, "across_mm": 0.0, "finger_color": "white"},
+    ])
+    monkeypatch.setattr(cva.cell_fingers, "resolve_wrist_servo_offset", lambda *_a, **_kw: next(obs_bad))
+    w_log2: list[dict] = []
+    _, _, _, last_bad, refined2 = cva.refine_pick_pose_at_hover(
+        cur_directive=cur_d2, base_plan=base_plan, lib=lib_stub, plan=plan, cal=cell_arm_cal.load(wd2, "arm_s"),
+        lib_path=wd2 / "lib.json", work_dir=wd2, kinematics_root=None, arm_id="arm_s",
+        exec_cfg=cur_d2["execution"], frame_fn=lambda _v: np.zeros((8, 8, 3), dtype=np.uint8),
+        before_side=None, above_shaking=False, run_cmd=_run_cmd, wrist_log=w_log2,
+    )
+    assert refined2 is False and last_bad["reverted"] is True
+    assert cur_d2["pick"]["effective_xyz_m"][:2] == [0.041, 0.175]
+
+    # 3) Non-placed (empty & descend contact) exits retain wrist & grasp_debate logs
+    monkeypatch.setattr(cell_area_xyz, "plan_library_from_directive", _plan_fn)
+    monkeypatch.setattr(cell_area_xyz, "settle_above_pick_jaws", lambda *_a: False)
+    monkeypatch.setattr(
+        cell_area_xyz, "refine_pick_pose_at_hover",
+        lambda **kw: (kw["lib"], kw["plan"], kw["cal"], kw["wrist_log"].append({"found": True, "along_mm": 2.0}) or kw["wrist_log"][-1], False),
+    )
+    monkeypatch.setattr(cell_area_xyz.cpp, "capture_from_attempt", lambda *_a, **_kw: None)
+
+    out_empty = cell_area_xyz.execute_directive(
+        json.loads(json.dumps(directive)), base_plan=base_plan, work_dir=wd,
+        act_fn=lambda cmd: {"ok": True, "holding": False, "state": [0, 0, 0, 0, 0, 49.0], "gripper_current_ma": 12},
+        frame_fn=None, max_attempts=1,
+    )
+    assert out_empty["result"] == "empty" and "wrist" in out_empty and "grasp_debate" in out_empty
+
+    out_contact = cell_area_xyz.execute_directive(
+        json.loads(json.dumps(directive)), base_plan=base_plan, work_dir=wd,
+        act_fn=lambda cmd: {"ok": cmd != "run descend_pick", "state": [0, 0, 0, 0, 0, 58.0]},
+        frame_fn=None, max_attempts=1,
+    )
+    assert out_contact["result"] == "contact" and "wrist" in out_contact and "grasp_debate" in out_contact

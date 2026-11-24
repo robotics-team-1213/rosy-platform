@@ -140,9 +140,23 @@ class Host:
         ).stdout.split()
         return out[0]
 
+    def _github_headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/vnd.github+json"}
+        tok = ""
+        if tok_path := self.cfg.get("github_token_file"):
+            try:
+                tok = Path(os.path.expanduser(str(tok_path))).read_text(encoding="utf-8").strip()
+            except OSError:
+                tok = ""
+        if not tok:
+            tok = os.environ.get("GITHUB_TOKEN", "").strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        return headers
+
     def checks(self, sha: str) -> dict:
         url = f"https://api.github.com/repos/{self.cfg['github_repo']}/commits/{sha}/check-runs?per_page=100"
-        request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+        request = urllib.request.Request(url, headers=self._github_headers())
         runs = json.load(urllib.request.urlopen(request, timeout=30))["check_runs"]
         return {
             run["name"]: (run["status"], run["conclusion"], (run.get("app") or {}).get("slug")) for run in runs
@@ -151,7 +165,7 @@ class Host:
     def _api(self, path: str) -> dict:
         request = urllib.request.Request(
             f"https://api.github.com/repos/{self.cfg['github_repo']}/{path}",
-            headers={"Accept": "application/vnd.github+json"},
+            headers=self._github_headers(),
         )
         return json.load(urllib.request.urlopen(request, timeout=30))
 
@@ -163,50 +177,18 @@ class Host:
 
     def build_env(self, lock: Path | None, target: Path) -> None:
         sp = _sp()
+        uv = os.path.expanduser(self.cfg["uv"]) if self.cfg.get("uv") else ""
         if lock is None:  # a service on the host's own packages
-            make = (
-                [os.path.expanduser(self.cfg["uv"]), "venv", "-q", "--python", self.cfg["base_python"]]
-                if self.cfg.get("uv")
-                else [self.cfg["base_python"], "-m", "venv"]
-            )
+            make = [uv, "venv", "-q", "--python", self.cfg["base_python"]] if uv else [self.cfg["base_python"], "-m", "venv"]
             sp.run([*make, "--system-site-packages", str(target)], check=True, timeout=300)
             return
         system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
-        if self.cfg.get("uv"):  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
-            sp.run(
-                [
-                    os.path.expanduser(self.cfg["uv"]),
-                    "venv",
-                    "-q",
-                    "--python",
-                    self.cfg["base_python"],
-                    *system,
-                    str(target),
-                ],
-                check=True,
-                timeout=300,
-            )
-            sp.run(
-                [
-                    os.path.expanduser(self.cfg["uv"]),
-                    "pip",
-                    "install",
-                    "-q",
-                    "--python",
-                    str(target / "bin" / "python"),
-                    "-r",
-                    str(lock),
-                ],
-                check=True,
-                timeout=3000,
-            )
+        if uv:  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
+            sp.run([uv, "venv", "-q", "--python", self.cfg["base_python"], *system, str(target)], check=True, timeout=300)
+            sp.run([uv, "pip", "install", "-q", "--python", str(target / "bin" / "python"), "-r", str(lock)], check=True, timeout=3000)
             return
         sp.run([self.cfg["base_python"], "-m", "venv", *system, str(target)], check=True, timeout=300)
-        sp.run(
-            [str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)],
-            check=True,
-            timeout=3000,
-        )
+        sp.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)], check=True, timeout=3000)
 
     def running(self, units) -> list:
         """The units to restart: all, or with `restart_running_only` the active ones, so a unit stopped by

@@ -115,24 +115,27 @@ class Updater:
             return self.host.follower_idle_reason(release, self.python(env))
         return None if self.host.follower_torque_off(release, self.python(env)) else "follower_torque_not_off"
 
-    def trusted(self, sha: str, state: dict) -> str | None:
-        checks = self.host.checks(sha)
-        for required in self.cfg["required_checks"]:
-            status = checks.get(required)
-            if status is None or status[0] != "completed":
-                return "waiting_ci"
-            if status[1] != "success" or status[2] != "github-actions":
-                return "ci_failed"
+    def trusted(self, sha: str, state: dict, *, release_verified: bool = False) -> str | None:
+        if not release_verified:
+            checks = self.host.checks(sha)
+            for required in self.cfg["required_checks"]:
+                status = checks.get(required)
+                if status is None or status[0] != "completed":
+                    return "waiting_ci"
+                if status[1] != "success" or status[2] != "github-actions":
+                    return "ci_failed"
         # floor_sha: the main commit under the last hand hotfix (omx_hotfix.py deploy); never go back below it
         if state.get("floor_sha") and not self.descends(state["floor_sha"], sha):
             return "below_hotfix_floor"
         if state.get("current_sha") and not self.descends(state["current_sha"], sha):
             return "not_descendant"
-        if self.cfg.get("require_verified_commit") and not self.host.verified(sha):
+        if not release_verified and self.cfg.get("require_verified_commit") and not self.host.verified(sha):
             return "unverified_commit"
         return None
 
     def descends(self, base: str, head: str) -> bool:
+        if base == head:
+            return True
         try:
             return self.host.descends(base, head)
         except urllib.error.HTTPError as error:
@@ -156,11 +159,23 @@ class Updater:
         if name == state.get("failed"):
             log(step="known_bad", release=name)
             return "known_bad"
-        refused = self.trusted(sha, state)
+        release = self.releases / name
+        already_verified = (
+            release.is_dir()
+            and (release / "RELEASE").is_file()
+            and (release / "RELEASE").read_text(encoding="utf-8").strip() == sha
+            and state.get("prepared_verified_sha") == sha
+        )
+        try:
+            refused = self.trusted(sha, state, release_verified=already_verified)
+        except urllib.error.HTTPError as exc:
+            if exc.code in (403, 429):
+                log(step="rate_limited", release=name, code=exc.code)
+                return "rate_limited"
+            raise
         if refused:
             log(step=refused, release=name)
             return refused
-        release = self.releases / name
         if not release.exists():
             if dry_run:
                 log(step="would_prepare", release=name)
@@ -185,6 +200,8 @@ class Updater:
                 log(step="smoke_failed", release=name)
                 return "smoke_failed"
             os.replace(staging, release)
+            state["prepared_verified_sha"] = sha
+            self.save(state)
             log(step="prepared", release=name)
         env = self.env_for(release)
         session = self.host.hold_session()
@@ -295,26 +312,17 @@ class Updater:
             session.close()
         if self.cfg.get("idle_gate") == "cell":
             self.host.restart(units)
-        cur, cur_env = state.get("current"), state.get("env")
-        keep_cur = self._usable_release(cur, cur_env, paths)
-        state.update(
-            current=prev,
-            previous=cur if keep_cur else None,
-            env=prev_env,
-            previous_env=cur_env if keep_cur else None,
-            current_sha=None,
-        )
+        cur_cur = state.get("current")
+        cur_env = state.get("env")
+        keep_cur = self._usable_release(cur_cur, cur_env, paths)
+        state.update(current=prev, previous=cur_cur if keep_cur else None, env=prev_env, previous_env=cur_env if keep_cur else None, current_sha=None)
         self.save(state)
         log(step="rolled_back_manually", release=state["current"])
         return "rolled_back"
 
     def cleanup(self, state: dict) -> None:
         keep = {state["current"], state["previous"]}
-        names = sorted(
-            (p for p in self.releases.iterdir() if p.is_dir() and not p.name.endswith(".tmp")),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
+        names = sorted((p for p in self.releases.iterdir() if p.is_dir() and not p.name.endswith(".tmp")), key=lambda p: p.stat().st_mtime, reverse=True)
         for path in names[self.cfg["keep"] :]:
             if path.name not in keep:
                 shutil.rmtree(path, ignore_errors=True)
@@ -333,11 +341,7 @@ def _release_paths(paths: list[str]) -> list[str]:
 
 def _incomplete_release(release: Path, paths: list[str]) -> bool:
     """True when an older updater archived deploy/robot/omx without contracts/learning/src."""
-    return (
-        "deploy/robot/omx" in paths
-        and (release / "deploy/robot/omx/cell_collect_plan.py").is_file()
-        and not (release / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").is_file()
-    )
+    return "deploy/robot/omx" in paths and (release / "deploy/robot/omx/cell_collect_plan.py").is_file() and not (release / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").is_file()
 
 
 def load_config(path: Path) -> dict:
@@ -348,11 +352,7 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("keep", 3)
     cfg["root"] = os.path.expanduser(cfg.get("root", DEFAULT_ROOT))
     if cfg.get("kind") == "service":
-        missing = [
-            k
-            for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root")
-            if not cfg.get(k)
-        ]
+        missing = [k for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root") if not cfg.get(k)]
         cfg.setdefault("lock", None)
         if cfg.get("idle_gate") == "cell":
             missing += [k for k in ("devices",) if not cfg.get(k)]
