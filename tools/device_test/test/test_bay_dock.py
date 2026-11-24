@@ -148,6 +148,16 @@ class Core:
             return 200, {}
         if key in (("POST", "/docking/cancel"), ("POST", "/mode")):
             return 200, {}
+        if key == ("GET", "/sensors/dock_observation"):
+            if r.obs_http_status != 200:
+                return r.obs_http_status, {"error": "unavailable"}
+            if r.obs_idx < len(r.obs):
+                row = dict(r.obs[r.obs_idx])
+                r.obs_idx += 1
+                row.setdefault("evidence", "fresh")
+                row.setdefault("received_at", r.now())
+                return 200, row
+            return 200, {"received_at": None, "sample_age_s": None, "stale_after_s": 5.0, "evidence": "missing"}
         raise AssertionError(f"unexpected call {method} {path}")
 
 
@@ -160,6 +170,7 @@ class Robot:
         self.active = self.last = None
         self.last_hold, self.starts, self.registered = 0.0, [], []
         self.envelope_fails, self.fatal, self.obs = 0, None, obs()
+        self.obs_idx, self.obs_http_status = 0, 200
         self.pose, self.front_gap, self.os_stops, self.timer = {"x": 1.0, "y": 2.0, "yaw": 0.0}, None, False, True
         self.events, self.cmds, self.teleops, self.timer_stop_rc = [], [], [], 0
         self.held, self.docking, self.dock_t, self.dock_end, self.dock_never_ends = False, False, 0.0, "DOCKED", False
@@ -200,8 +211,6 @@ class Robot:
             return 0, b""
         if command == "hostname":
             return 0, (ROBOT + "\n").encode()
-        if "ros2 topic echo" in command:
-            return 0, "".join(json.dumps(json.dumps(o)) + "\n---\n" for o in self.obs).encode()
         if " hold " in command:
             self.held = True
             self.events.append("hold")
@@ -381,11 +390,33 @@ def test_os_update_timer_stop_failure_aborts_and_restores(tmp_path):
     cleaned(r)
 
 
-def test_observation_read_loads_the_runtime_environment(tmp_path):
+def test_observation_read_uses_core_api_without_ros2_topic_echo(tmp_path):
     r = Robot(approval={"valid": True, "measured_release_id": "rel2"})
-    run(tmp_path, r)
-    cmd = next(c for c in r.cmds if "ros2 topic echo" in c)
-    assert cmd.startswith("sudo -n bash -c '") and "/etc/rosy/runtime.env" in cmd and "jazzy" in cmd and cmd.endswith("'")
+    code, _ = run(tmp_path, r)
+    assert code == 0 and "GET /sensors/dock_observation" in r.log
+    assert not any("ros2 topic echo" in c for c in r.cmds)
+
+
+def test_observation_read_skips_stale_and_duplicate_received_at(tmp_path):
+    rows = (obs(2, evidence="stale", received_at=999.0)
+            + obs(5, evidence="fresh", received_at=1001.0)
+            + [{**obs(1)[0], "evidence": "fresh", "received_at": 1002.0 + i} for i in range(13)])
+    r = Robot(obs=rows, approval={"valid": True, "measured_release_id": "rel2"})
+    code, s = run(tmp_path, r)
+    assert code == 0 and s["observation"]["frames"] == 14
+
+    dup = Robot(obs=obs(14, evidence="fresh", received_at=1000.0),
+                approval={"valid": True, "measured_release_id": "rel2"})
+    code2, s2 = run(tmp_path / "dup", dup)
+    assert code2 == 2 and "aborted at line_view" in s2["outcome"] and "only 1 visible" in s2["outcome"]
+    cleaned(dup)
+
+
+def test_observation_read_aborts_on_http_error(tmp_path):
+    r = Robot(obs_http_status=503, approval={"valid": True, "measured_release_id": "rel2"})
+    code, s = run(tmp_path, r)
+    assert code == 2 and "aborted at line_view" in s["outcome"] and "503" in s["outcome"]
+    cleaned(r)
 
 
 def test_a_missing_lateral_measured_key_reads_as_measured():
