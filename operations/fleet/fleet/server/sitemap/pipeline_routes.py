@@ -74,6 +74,7 @@ def install_pipeline_routes(
     proposer_guard = resolved_proposer if resolved_proposer is not None else operator_guard
     app.state.omx_cell_states = getattr(app.state, "omx_cell_states", None) or {}
     app.state.omx_cell_tasks = getattr(app.state, "omx_cell_tasks", None) or {}
+    app.state.omx_cell_plans = getattr(app.state, "omx_cell_plans", None) or {}
     app.state.pinky_tasks = getattr(app.state, "pinky_tasks", None) or {}
     app.state.pipeline_decisions = getattr(app.state, "pipeline_decisions", None) or []
     app.state.detected_displaced_site = getattr(app.state, "detected_displaced_site", None)
@@ -167,6 +168,7 @@ def install_pipeline_routes(
             saved = json.loads(ledger_path.read_text(encoding="utf-8"))
             app.state.omx_cell_states.update(saved.get("omx_cell_states") or {})
             app.state.omx_cell_tasks.update(saved.get("omx_cell_tasks") or {})
+            app.state.omx_cell_plans.update(saved.get("omx_cell_plans") or {})
             app.state.pinky_tasks.update(saved.get("pinky_tasks") or {})
             app.state.unload_releases = dict(saved.get("unload_releases") or {})
             app.state.cell_auto_events = list(saved.get("cell_auto_events") or [])[-100:]
@@ -190,6 +192,7 @@ def install_pipeline_routes(
             write_ledger(ledger_path, {
                 "omx_cell_states": app.state.omx_cell_states,
                 "omx_cell_tasks": app.state.omx_cell_tasks,
+                "omx_cell_plans": app.state.omx_cell_plans,
                 "pinky_tasks": app.state.pinky_tasks,
                 "unload_releases": getattr(app.state, "unload_releases", {}),
                 "cell_auto_events": getattr(app.state, "cell_auto_events", None) or [],
@@ -383,6 +386,7 @@ def install_pipeline_routes(
         return active
 
     from fleet.server.sitemap.pipeline_cell_task_routes import install_cell_tasks_routes
+    from fleet.server.sitemap.pipeline_cell_plan_routes import install_cell_plan_routes
     from fleet.server.sitemap.pipeline_gate_routes import install_gates_routes
     from fleet.server.sitemap.pipeline_camera_routes import install_cameras_routes
     from fleet.server.sitemap.pipeline_evidence import install_evidence_routes
@@ -396,6 +400,7 @@ def install_pipeline_routes(
         _ready_amr=_ready_amr, omx_evidence_fn=omx_evidence_fn, console=console, gov=app.state.pipeline_governance,
     )
     install_cell_tasks_routes(app, ctx)
+    install_cell_plan_routes(app, ctx)
     install_gates_routes(app, ctx)
     install_cameras_routes(app, ctx)
     install_evidence_routes(app, ctx)
