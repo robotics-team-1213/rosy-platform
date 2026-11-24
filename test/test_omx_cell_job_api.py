@@ -672,3 +672,27 @@ def test_check_arm_incident_hold_syncs_stale_local_hold_only_when_fleet_confirme
         sync_result=True,
     )
     assert res_e == "runner: human hold" and calls_e == []
+
+
+def test_post_eval_job_guards_amr_bed_and_requires_person_at_switch(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    base = {"arm": "arm_s", "config": "cell-s.json", "site": "floor", "x": -0.06, "y": 0.15, "person_at_switch": True}
+    argv = api.build_argv(api.JOBS["post_eval"], base, wd)
+    assert argv[0] == "./with-session-arm-s-live.sh"
+    assert "cell_post_eval.py" in argv
+    assert argv[argv.index("--targets") + 1] == "floor:-0.06,0.15"
+    assert "--apply" not in argv
+    assert "--commissioning" in argv and "--person-at-switch" in argv
+
+    argv_apply = api.build_argv(api.JOBS["post_eval"], {**base, "apply": True}, wd)
+    assert "--apply" in argv_apply
+
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(api.JOBS["post_eval"], {**base, "person_at_switch": False}, wd)
+
+    popen = Mock()
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    for bad_site in ("pinky", "bed-1"):
+        res = api.Runner(wd, lock_dir=wd).start("post_eval", {**base, "site": bad_site})
+        assert res["code"] == 400 and "R cell-task -> cell_task_worker -> Gate" in res["error"]
+    popen.assert_not_called()

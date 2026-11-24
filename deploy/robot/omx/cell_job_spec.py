@@ -91,6 +91,11 @@ JOBS = {
         "argv": ["--config", "{config}", "auto", "--only", "surface"],
         "params": {"arm": _match(ARM), "config": _match(FILE)},
     },
+    "post_eval": {
+        "script": "cell_post_eval.py", "moving": True, "camera": True,
+        "argv": ["--config", "{config}", "--targets", "{site}:{x},{y}"],
+        "params": {"arm": _match(ARM), "config": _match(FILE), "site": _match(NAME), "x": METRE, "y": METRE}, "optional": {"apply": _bool},
+    },
     "home": {
         "script": "cell_pipeline.py",
         "moving": True,
@@ -155,22 +160,14 @@ JOBS = {
             "paced_chunks": _bool,
         },
     },
-    "stack_plan": {
-        "script": "cell_stack_plan.py",
-        "argv": ["--plan-json", "{plan}"],
-        "params": {"plan": _match(TASK_FILE)},
-    },
+    "stack_plan": {"script": "cell_stack_plan.py", "argv": ["--plan-json", "{plan}"], "params": {"plan": _match(TASK_FILE)}},
     "task_runner_dry_run": {
-        "script": "cell_task_runner.py",
-        "camera": True,
+        "script": "cell_task_runner.py", "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--task", "{task}", "--dry-run"],
         "params": {"config": _match(FILE), "catalog": _match(FILE), "task": _match(TASK_FILE)},
     },
     "task_runner": {
-        "script": "cell_task_runner.py",
-        "moving": True,
-        "camera": True,
-        "reviewed_only": True,
+        "script": "cell_task_runner.py", "moving": True, "camera": True, "reviewed_only": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--task", "{task}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "task": _match(TASK_FILE)},
         "optional": {"operator": _match(NAME), "proposer": _match(NAME)},
@@ -357,7 +354,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine")):
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply")):
         if opt_checked.get(opt):
             args.append(flag)
     if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
