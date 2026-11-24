@@ -40,10 +40,17 @@ def _app(tmp_path, monkeypatch, *, role_principal=None, named_requester=True):
         app.state.trip_requester_guards = [_deny]
     else:
         app.state.trip_requester_guards = [lambda p: None]
-    routes.install_pipeline_routes(app, site_maps=SimpleNamespace(
-        active=lambda: (1, site, graph, None),
-        rules=SimpleNamespace(active_rules=lambda: None),
-    ))
+    routes.install_pipeline_routes(
+        app,
+        site_maps=SimpleNamespace(
+            active=lambda: (1, site, graph, None),
+            rules=SimpleNamespace(active_rules=lambda: None),
+        ),
+        amr_evidence_fn=lambda task: (
+            app.state._test_amr_evidence(task)
+            if getattr(app.state, "_test_amr_evidence", None) is not None else None
+        ),
+    )
     return app, TestClient(app)
 
 
@@ -71,18 +78,17 @@ def _seed_abort(app, task_id="t-ab-1", *, cell_id="cell_s", arm_id="arm_s", robo
 
 
 def _seed_ready_amr(app, robot_id="rosy_46"):
-    from fleet.server.sitemap.pipeline_evidence import BED_CAMERA_SOURCE
-    app.state.cell_bed_snapshots["cell_s"] = {
-        "cell_id": "cell_s", "robot_id": robot_id, "recorded_at": time.time(),
-        "evidence": {"source_id": BED_CAMERA_SOURCE, "robot_id": robot_id, "captured_at": time.time(), "frame_ok": True},
-    }
-    app.state.workcell_observations_service = SimpleNamespace(snapshot=lambda: {
-        "amr_telemetry": [{"robot_id": robot_id, "v_mps": 0.0, "brake_engaged": True, "measured_at": time.time()}]
-    })
-    app.state.bay_inputs = lambda: (None, [{
-        "robot_id": robot_id, "online": True,
-        "state": {"safety": {"estop": False}, "speed_mps": 0.0, "brake_engaged": True},
-    }], [])
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
+    from fleet.pipeline import resolve_omx_cells
+    site, graph, _ = build_world_261026_site_map()
+    xy = resolve_omx_cells(site, graph)["cell_s"].station_xy
+    app.state._test_amr_evidence = lambda task: (
+        None if task.get("robot_id") != robot_id else {
+            "robot_id": task["robot_id"], "cell_id": task["cell_id"],
+            "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0,
+            "observed_at": time.time(), "pose": {"x": xy[0], "y": xy[1], "yaw": 0.0},
+        }
+    )
 
 
 def test_raw_keys_role_cas_refusal_replay_and_rollback(tmp_path, monkeypatch):
@@ -169,6 +175,7 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
 
     app.state.omx_cell_tasks["t-complete-fold"] = {
         "task_id": "t-complete-fold", "cell_id": "cell_ab", "arm_id": "arm_b", "robot_id": "rosy_46",
+        "robot_kind": "pinky", "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
         "src_site": "belt", "dst_site": "pallet", "tier": 1, "status": "RUNNING", "handoff_lease_id": "L1",
     }
     client.post("/api/fleet/pipeline/cell-tasks/t-complete-fold/complete", json={
@@ -366,7 +373,7 @@ def test_omx_sync_tls_expiry_inflight_and_park_only_preserves_hold(tmp_path, mon
     lib_p = tmp_path / "lib.json"
     lib_p.write_text(json.dumps({"chunks": {"home": [[0]*6]}, "gripper_closed": 5.0, "fps": 30}), encoding="utf-8")
     prm_p = tmp_path / "params.json"
-    prm_p.write_text(json.dumps({"values": {}}), encoding="utf-8")
+    prm_p.write_text(json.dumps({"schema": "rosy.omx-cell-params.v1", "params": {}}), encoding="utf-8")
     cal_p = tmp_path / "cal.json"
     cal_p.write_text("{}", encoding="utf-8")
     arm_cfg = tmp_path / "arm_cfg.json"
