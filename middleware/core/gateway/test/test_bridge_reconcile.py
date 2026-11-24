@@ -150,3 +150,13 @@ def test_an_unknown_mode_keeps_whatever_the_face_is_showing():
     shown = emotion(None, None, shown, lambda face: calls.append(face) or True)
 
     assert shown == "happy" and calls == []
+
+
+def test_state_manager_mode_property_matches_snapshot_mode():
+    from core_features.state.manager import StateManager
+    from core_common.protocol.schemas import RobotMode
+
+    state = StateManager("rosy_01")
+    assert state.mode == state.snapshot().mode
+    state.set_mode(RobotMode.NAVIGATION)
+    assert state.mode == RobotMode.NAVIGATION == state.snapshot().mode

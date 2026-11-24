@@ -357,8 +357,7 @@ class RosBridge(RosBridgeHelpersMixin):
         map_pose.receive_map_pose(self, lambda: self.tf_buffer.lookup_transform(
             self._map_frame, self._base_frame, rclpy.time.Time()))
         self._svc.localization.tick(odometry.odom_owns_pose(self._map_pose_ts, self._line_clock()))
-        snapshot = self._svc.state.snapshot()
-        self._svc.power.on_robot_mode(snapshot.mode)
+        self._svc.power.on_robot_mode(self._svc.state.mode)
 
     def _on_map(self, msg: OccupancyGrid) -> None:
         map_observation.receive_map(self, msg, warn=self._node.get_logger().warning)

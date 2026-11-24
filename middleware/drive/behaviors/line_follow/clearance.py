@@ -22,6 +22,11 @@ from core_features.line_follow.model import SOURCE_FUTURE_TOLERANCE_S
 from core_common.robot_body import inside_body as _inside_body
 from core_common.robot_body import masked as _masked
 
+try:
+    import numpy as _np
+except ImportError:  # pragma: no cover - optional fallback for pure-stdlib hosts
+    _np = None
+
 Point = tuple[float, float]
 #: (from_deg, to_deg, max_range_m) in the robot frame (0 = forward, + = left): returns of the
 #: robot's own body. A mask only reaches SELF_MASK_MAX_RANGE_M, so it never hides a real
@@ -110,10 +115,55 @@ def front_sector(sample: Mapping[str, Any], *, forward_deg: float = 0.0, half_an
     return best, valid, beams
 
 
+def _returns_arrays(sample: Mapping[str, Any], forward_deg: float,
+                    self_mask: SelfMask = ()):
+    """Vectorized (angles_rad, distances_m) matching _returns; None when numpy unavailable or mixed input."""
+    if _np is None:
+        return None
+    ranges = sample.get("ranges")
+    if ranges is None:
+        return _np.empty(0, _np.float64), _np.empty(0, _np.float64)
+    count = len(ranges)
+    if count < 2:
+        return _np.empty(0, _np.float64), _np.empty(0, _np.float64)
+    try:
+        dist = _np.asarray(ranges, dtype=_np.float64)
+    except (TypeError, ValueError):
+        return None
+    if dist.ndim != 1 or dist.size != count:
+        return None
+    angle_min = float(sample["angle_min"])
+    angle_max = float(sample["angle_max"])
+    low = float(sample.get("range_min") or 0.0)
+    high = float(sample.get("range_max") or math.inf)
+    step = (angle_max - angle_min) / (count - 1)
+    forward = math.radians(float(forward_deg))
+    valid = _np.isfinite(dist) & (dist >= low) & (dist <= high)
+    if not valid.any():
+        return _np.empty(0, _np.float64), _np.empty(0, _np.float64)
+    idx = _np.flatnonzero(valid)
+    raw = (angle_min - forward) + idx.astype(_np.float64) * step
+    angles = _np.arctan2(_np.sin(raw), _np.cos(raw))
+    dists = dist[idx]
+    if self_mask:
+        deg = _np.degrees(angles)
+        keep = _np.ones(angles.shape, dtype=bool)
+        for lo, hi, reach in self_mask:
+            keep &= ~((deg >= lo) & (deg <= hi) & (dists <= reach))
+        angles = angles[keep]
+        dists = dists[keep]
+    return angles, dists
+
+
 def front_clearance(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
                     half_angle_deg: float = 20.0, self_mask: SelfMask = ()) -> Optional[float]:
     """정면 ±half_angle_deg 안 유효 거리의 최솟값. 유효 표본이 없으면 None(= 아무것도 안 보임)."""
     half = math.radians(float(half_angle_deg))
+    arrays = _returns_arrays(sample, forward_deg, self_mask)
+    if arrays is not None:
+        angles, dists = arrays
+        sector = dists[_np.abs(angles) <= half]
+        return float(sector.min()) if sector.size else None
     best: Optional[float] = None
     for offset, distance in _returns(sample, forward_deg, self_mask):
         if abs(offset) <= half and (best is None or distance < best):
@@ -124,6 +174,18 @@ def front_clearance(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
 def scan_points(sample: Mapping[str, Any], *, forward_deg: float = 0.0,
                 max_range: float = math.inf, self_mask: SelfMask = ()) -> tuple[Point, ...]:
     """유효 표본을 로봇 좌표(x 앞, y 왼쪽, REP-103) 점으로. max_range 밖은 버린다."""
+    arrays = _returns_arrays(sample, forward_deg, self_mask)
+    if arrays is not None:
+        angles, dists = arrays
+        if math.isfinite(max_range):
+            mask = dists <= max_range
+            angles = angles[mask]
+            dists = dists[mask]
+        if not dists.size:
+            return ()
+        xs = (dists * _np.cos(angles)).tolist()
+        ys = (dists * _np.sin(angles)).tolist()
+        return tuple(zip(xs, ys))
     return tuple((distance * math.cos(offset), distance * math.sin(offset))
                  for offset, distance in _returns(sample, forward_deg, self_mask)
                  if distance <= max_range)
