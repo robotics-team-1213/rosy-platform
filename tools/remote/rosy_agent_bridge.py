@@ -1,4 +1,4 @@
-"""Stdlib-only 17-tool HTTP CLI & MCP stdio bridge across OMX Cell (:8781), Fleet-R, and Learning (:8768)."""
+"""Stdlib-only 18-tool HTTP CLI & MCP stdio bridge across OMX Cell (:8781), Fleet-R, and Learning (:8768)."""
 from __future__ import annotations
 
 import argparse
@@ -187,6 +187,15 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
      }, ["kind", "arm_id", "request_id", "params"])},
     {"name": "learning_stage_bundle", "description": "Fetch canonical bundle-manifest from :8768 and stage policy bundle onto :8781.",
      "inputSchema": _obj_schema({"run_id": {"type": "string"}, "target_dir": {"type": "string"}}, ["run_id", "target_dir"])},
+    {"name": "cell_area_dry_run", "description": "Run observe/IK-plan only area_xyz_pick dry_run on :8781.",
+     "inputSchema": _obj_schema({
+         "arm": {"type": "string", "enum": ["arm_s", "arm_a", "arm_b"]},
+         "config": {"type": "string"},
+         "pick_area": {"type": "string"}, "pick_x": {"type": "number"}, "pick_y": {"type": "number"}, "pick_z": {"type": "number"},
+         "place_area": {"type": "string"}, "place_x": {"type": "number"}, "place_y": {"type": "number"}, "place_z": {"type": "number"},
+         "pick_yaw_deg": {"type": "number"}, "place_yaw_deg": {"type": "number"}, "max_attempts": {"type": "integer"},
+         "stay_in_hover": {"type": "boolean"}, "no_vision_refine": {"type": "boolean"},
+     }, ["arm", "config", "pick_area", "pick_x", "pick_y", "pick_z", "place_area", "place_x", "place_y", "place_z"])},
 )
 TOOL_MAP = {t["name"]: t for t in TOOL_SPECS}
 
@@ -238,7 +247,7 @@ def _validate_args(spec: dict[str, Any], args: Any) -> str | None:
 
 
 class RosyAgentBridge:
-    """Pure stdlib HTTP dispatcher implementing the 17 ROSY tools across 3 control planes."""
+    """Pure stdlib HTTP dispatcher implementing the 18 ROSY tools across 3 control planes."""
 
     def __init__(self, cfg: BridgeConfig) -> None:
         self.cfg = cfg
@@ -382,6 +391,8 @@ class RosyAgentBridge:
             return self._http("POST", f"{cu}/jobs/upkeep_check", token=ct, body=a)
         if name == "cell_dry_run":
             return self._http("POST", f"{cu}/jobs/auto_pick_dry_run", token=ct, body=a)
+        if name == "cell_area_dry_run":
+            return self._http("POST", f"{cu}/jobs/area_xyz_pick", token=ct, body={**a, "dry_run": True})
         if name == "fleet_state":
             return self._http("GET", f"{fu}/api/fleet/state", token=ft, cookie=fc)
         if name == "fleet_cell_readiness":
