@@ -18,7 +18,6 @@ export function createFactoryLiveUi({ statusEl, canvas, playbackControls }) {
     },
     dim(reason) {
       canvas.dataset.streamState = reason;
-      canvas.style.opacity = reason ? "0.35" : "";
     },
     idle(frame) {
       const robotAge = frame?.pinky?.state_age_s;
