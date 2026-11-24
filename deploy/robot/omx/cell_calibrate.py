@@ -191,8 +191,9 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             log({"point": [x, y], "stopped": failed, "error": status.get("error"), "state": status.get("state")})
             break
-        kept = consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
+        # tcp_marks holds unlabelled single-jaw pixels (~70 px apart > follow_px) until remap_marks labels them
+        kept = [] if tcp_marks else consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         near = predicted(kept, (x, y)) if len(kept) >= 4 else None
         report = {}
         mark = cell_pivot.mark_jaws(
