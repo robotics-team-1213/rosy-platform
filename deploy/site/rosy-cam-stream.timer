@@ -1,9 +1,9 @@
 [Unit]
-Description=Restart the Rosy Cam stream within a minute after it stops
+Description=Restart the Rosy Cam stream within 3 minutes after it stops
 
 [Timer]
 OnBootSec=60s
-OnUnitInactiveSec=60s
+OnUnitInactiveSec=180s
 Unit=rosy-cam-stream.service
 
 [Install]
