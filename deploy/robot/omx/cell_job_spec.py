@@ -31,6 +31,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     _repo_id,
     _roi,
     _safe_path,
+    _surface_amr_bed_sites,
     _task_site_names,
     _two_arm_task,
     _two_arm_task_sites,
@@ -61,15 +62,11 @@ def _goal_site(v):
 
 JOBS = {
     "incident_status": {
-        "script": "omx_incident.py",
-        "argv": ["status", "--arm", "{arm}"],
-        "params": {"arm": _match(ARM)},
+        "script": "omx_incident.py", "argv": ["status", "--arm", "{arm}"], "params": {"arm": _match(ARM)},
     },
     "calibrate_check": {
-        "script": "cell_calibrate.py",
-        "camera": True,
-        "argv": ["--config", "{config}", "check"],
-        "params": {"config": _match(FILE)},
+        "script": "cell_calibrate.py", "camera": True,
+        "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)},
     },
     "auto_pick_dry_run": {
         "script": "cell_auto_pick.py",
@@ -79,17 +76,18 @@ JOBS = {
         "optional": {"object": _match(FILTER_OBJ), "colour": _match(FILTER_COL), "layers_below": _int_range(0, 5)},
     },
     "pivot_near": {
-        "script": "cell_calibrate.py",
-        "moving": True,
-        "camera": True,
+        "script": "cell_calibrate.py", "moving": True, "camera": True,
         "argv": ["--config", "{config}", "auto", "--only", "pivot-near", "--targets", "{site}:{x},{y}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "site": _match(NAME), "x": METRE, "y": METRE},
     },
     "remap": {
-        "script": "cell_calibrate.py",
-        "moving": True,
-        "camera": True,
+        "script": "cell_calibrate.py", "moving": True, "camera": True,
         "argv": ["--config", "{config}", "auto", "--only", "remap", "regions"],
+        "params": {"arm": _match(ARM), "config": _match(FILE)},
+    },
+    "surface": {
+        "script": "cell_calibrate.py", "moving": True, "camera": True,
+        "argv": ["--config", "{config}", "auto", "--only", "surface"],
         "params": {"arm": _match(ARM), "config": _match(FILE)},
     },
     "home": {
@@ -341,6 +339,8 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         direct_sites = [checked.get(name, opt_checked.get(name, "")) for name in ("source", "dest", "site", "goal_site")]
         task_sites = _task_site_names(workdir / checked["task"], workdir / checked["config"] if "config" in checked else None) if "task" in checked else set()
         if any(_is_amr_bed_site(v) for v in (*direct_sites, *task_sites)):
+            raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
+        if job["script"] == "cell_calibrate.py" and "surface" in job["argv"] and _surface_amr_bed_sites(workdir / checked["config"]):
             raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
         if "goal_slot" in opt_checked:
             from cell_policy_goals import GOALS

@@ -205,3 +205,31 @@ def test_clear_needs_fresh_clear_assessment_and_measured_conditions(screen):
     rows[-1]["at"] = time.time() - 700
     old.write_text("".join(json.dumps(r) + "\n" for r in rows))
     assert post(url, path, {})[0] == 409  # stale
+
+
+def test_surface_step_requires_person_at_switch_and_service_passes_cells(screen):
+    url, _, calls, jobs, _ = screen
+    assert post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "surface", "person_at_switch": False})[0] == 422
+    status, job = post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "surface", "person_at_switch": True})
+    assert status == 202
+    for t in jobs.threads:
+        t.join(5)
+    argv, _, _ = calls["spawn"][0]
+    assert argv[argv.index("--only") + 1] == "surface" and "--commissioning" in argv and "--person-at-switch" in argv
+    unit = (ROOT / "applications/calibration/rosy-calibration-web.service").read_text(encoding="utf-8")
+    assert "--cells %h/.config/rosy/calibration/cells.json" in unit
+
+
+def test_missing_or_malformed_cells_keeps_requests_online_and_status_404(tmp_path):
+    bad = tmp_path / "bad-cells.json"
+    bad.write_text("{not json", encoding="utf-8")
+    for cells in (tmp_path / "missing-cells.json", bad):
+        server = web.make_server(tmp_path / "store", 0, Account(), cells=cells)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            url = f"http://127.0.0.1:{server.server_port}"
+            assert call(url, web.API, cookie="valid")[0] == 200
+            assert call(url, "/api/calibration/status", cookie="valid")[0] == 404
+        finally:
+            server.shutdown()
+            server.server_close()

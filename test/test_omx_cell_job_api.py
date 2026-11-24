@@ -575,3 +575,23 @@ def test_cell_job_api_service_unit_preserves_detached_arm_sessions():
     assert "NoNewPrivileges=true" in lines
     assert "UMask=0077" in lines
     assert any(line.startswith("ExecStart=") and "exec /usr/bin/python3" in line for line in lines)
+
+
+def test_surface_job_argv_requires_person_at_switch(tmp_path):
+    wd = _make_workdir(tmp_path)
+    (wd / "cell-b.json").write_text(json.dumps({"sites": {"pallet": {}}}), encoding="utf-8")
+    argv = api.build_argv(api.JOBS["surface"], {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True}, wd)
+    assert argv[0] == "./with-session-arm-b-par.sh"
+    assert "cell_calibrate.py" in argv
+    assert argv[argv.index("--only") + 1] == "surface"
+    assert "--commissioning" in argv and "--person-at-switch" in argv
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": False}, wd)
+    (wd / "cell-s.json").write_text(json.dumps({"sites": {"pinky": {"place": [0.1, 0.2]}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="R cell-task -> cell_task_worker -> Gate"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)
+    (wd / "cell-s.json").write_text("{bad json", encoding="utf-8")
+    with pytest.raises(ValueError, match="surface calibration config"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)
+    (wd / "cell-s.json").write_text(json.dumps({"sites": {"pinky": {"surface_z": 0.031}, "belt": {}}}), encoding="utf-8")
+    assert api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)[0] == "./with-session-arm-s-live.sh"

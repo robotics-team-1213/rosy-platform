@@ -219,3 +219,18 @@ def _task_site_names(task_path: Path, config_path: Path | None) -> set[str]:
         except (OSError, ValueError):
             pass
     return names
+
+
+def _surface_amr_bed_sites(config_path: Path) -> set[str]:
+    """AMR-bed sites lacking numeric ``surface_z`` in a calibration config (fail closed on bad JSON)."""
+    try:
+        cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"cannot read surface calibration config: {exc}") from exc
+    sites = cfg.get("sites") if isinstance(cfg, dict) else None
+    if not isinstance(sites, dict):
+        raise ValueError("surface calibration config requires a sites object")
+    return {
+        name for name, entry in sites.items()
+        if _is_amr_bed_site(name) and (not isinstance(entry, dict) or isinstance(entry.get("surface_z"), bool) or not isinstance(entry.get("surface_z"), (int, float)))
+    }
