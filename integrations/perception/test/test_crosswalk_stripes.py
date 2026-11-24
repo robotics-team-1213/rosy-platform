@@ -96,3 +96,13 @@ def test_class_extent_counts_only_the_cells_the_camera_sees():
     assert crosswalk_class_extent(grid, x, y) is None
     near, far = crosswalk_class_extent(grid, x, y, seen)
     assert 0.14 <= near <= 0.16 and 0.24 <= far <= 0.26
+
+
+def test_crosswalk_extent_run_count_prefilter_matches_exhaustive_stripe_scan():
+    from perception_runtime.perception.crosswalk_stripes import CORRIDOR_HALF_M, _longest_block, _stripes
+
+    assert crosswalk_extent(np.zeros((10, 0), np.uint8), X[:10], np.zeros(0)) is None
+    for grid in (lane(), crosswalk(lane(), 0.15), crosswalk(lane(0.02), 0.18, -0.01)):
+        corridor = grid[:, np.abs(Y) <= CORRIDOR_HALF_M]
+        expected = _longest_block([i for i in range(corridor.shape[0]) if _stripes(corridor[i])], X)
+        assert crosswalk_extent(grid, X, Y) == expected
