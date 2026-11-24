@@ -141,18 +141,18 @@ def test_web_icons_are_on_the_common_allowlist_and_linked_as_favicons():
     assets = json.loads((WEB / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
     for ident in GLYPH_TOKEN:
         assert assets.get(f"icons/{ident}.svg") == "image/svg+xml"
-    pages = {
-        "applications/fleet/web/index.html": "console",
-        "applications/fleet/web/installation/install.html": "console",
-        "applications/fleet/web/cell/cell.html": "console",
-        "middleware/robot_ui/robot/index.html": "robot",
-        "middleware/robot_ui/robot/surface.html": "robot",
-        "middleware/robot_ui/pilot/index.html": "pilot",
-    }
-    for page, ident in pages.items():
+    assert assets.get("brand/platform.svg") == "image/svg+xml"
+    pages = (
+        "applications/fleet/web/index.html",
+        "applications/fleet/web/installation/install.html",
+        "applications/fleet/web/cell/cell.html",
+        "middleware/robot_ui/robot/index.html",
+        "middleware/robot_ui/robot/surface.html",
+        "middleware/robot_ui/pilot/index.html",
+    )
+    for page in pages:
         text = (registry.REPO / page).read_text(encoding="utf-8")
-        assert (f'<link rel="icon" type="image/svg+xml" href="/common/icons/{ident}.svg">'
-                in text), page
+        assert '<link rel="icon" type="image/svg+xml" href="/common/brand/platform.svg">' in text, page
 
 
 def test_android_launcher_label_is_the_registered_app_name():
