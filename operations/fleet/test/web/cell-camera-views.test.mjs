@@ -248,3 +248,57 @@ test("synchronous multi-tile bind burst fetches all tiles, hides standby on fram
   assert.match(standbys[5].textContent, /카메라 송신기 미연결/);
   assert.equal(states.get('source:c6')?.live, false);
 });
+
+test("setPaused freezes display without tearing down streams and checkSources shares the source sample", async (t) => {
+  const priorLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: new URL('https://site.test') });
+  t.after(() => {
+    if (priorLocation) Object.defineProperty(globalThis, 'location', priorLocation);
+    else delete globalThis.location;
+  });
+  let fetches = 0;
+  t.mock.method(globalThis, 'fetch', async () => { fetches += 1; return jpeg(); });
+  let sourceCalls = 0;
+  const samples = [];
+  const feed = createCellFrameFeed({
+    call: async (path, options) => {
+      if (path.endsWith('/sources')) { sourceCalls += 1; return {sources: ['c1']}; }
+      const source = JSON.parse(options.body).source_id;
+      return {lease: 'test-lease', frame_path: `/api/vision/sources/${source}/frame`};
+    },
+    onSourcesSample: (sample) => samples.push(sample),
+  });
+  t.after(() => feed.dispose());
+
+  let srcWrites = 0;
+  let _src = '';
+  const standby = { hidden: false, textContent: '', classList: { contains: (c) => c === 'omx-inspector-cam-standby' } };
+  const img = {
+    isConnected: true, hidden: false, dataset: {}, nextElementSibling: standby,
+    get src() { return _src; },
+    set src(v) { srcWrites += 1; _src = v; },
+    removeAttribute(name) { if (name === 'src') _src = ''; },
+  };
+  feed.bind(img, {source: 'c1'});
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(srcWrites, 1);
+  assert.equal(standby.hidden, true);
+
+  feed.repaint({source: 'c1'});
+  assert.equal(srcWrites, 1);  // paint() !== guard skips redundant img.src writes
+
+  feed.setPaused(true);
+  assert.equal(img.hidden, true);
+  assert.equal(standby.hidden, false);
+  assert.equal(standby.textContent, '영상 일시정지');
+
+  await feed.checkSources();
+  assert.equal(sourceCalls, 1);
+  assert.deepEqual(samples, [{finished: true, status: 200, names: ['c1']}]);
+
+  const fetchesBeforeResume = fetches;
+  feed.setPaused(false);
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.ok(fetches > fetchesBeforeResume);
+  assert.equal(standby.hidden, true);
+});

@@ -23,7 +23,7 @@ import { axisOrientation, drawMapDatum, gridCellOf } from "./map-datum.js";
 const shortId = (robotId) => String(robotId).replace(/^rosy_/, "");
 
 export function createMapView({ scope, el, view, auth, call, onMapChanged, onMapUnavailable, onTrafficChanged = () => {} }) {
-  if (!view.displayMode) view.displayMode = "coordinates";
+  if (!view.displayMode) view.displayMode = "overlay";
   const camera = createCameraBackdrop({ scope, el, view, draw: scheduleDraw });
   // D-359 §4 — 색·글꼴은 ui.js(window.RosyPalette)가 어떤 CSS 색이든 풀어 캐시한다.
   const css = (name) => window.RosyPalette.cssColor(name);
@@ -450,7 +450,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       if (view.siteMap) {
         drawSiteView();
         const b = siteBounds(view.siteMap, 0);
-        const virtualOnly = view.displayMode === "coordinates" && !layerOn("sightings");
+        const virtualOnly = (view.displayMode === "coordinates" || (view.displayMode === "overlay" && !camera.calibration())) && !layerOn("sightings");
         el("map-tag").textContent =
           `사이트 ${(b.max_x - b.min_x).toFixed(1)}×${(b.max_y - b.min_y).toFixed(1)} m · ${describeSightings()}`
           + (camera.calibration() && view.displayMode === "overlay"

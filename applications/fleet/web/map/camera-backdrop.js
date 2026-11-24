@@ -239,7 +239,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     // (#map-birdseye) when there is no map or the operator asks for the large view. CSS picks the place.
     const birdseye = el("map-birdseye"), toggle = el("birdseye-toggle"), stage = el("map-stage");
     const mode = el("map-display-mode");
-    view.displayMode = mode.value || "coordinates";
+    view.displayMode = mode.value || "overlay";
     const setLive = (url) => {
       birdseye.hidden = !url;
       if (url) birdseye.src = url;
@@ -279,7 +279,7 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
     };
     scope.interval(updateStamp, 1000);
     scope.listen(toggle, "click", () => {
-      setMode(view.displayMode === "camera" ? "coordinates" : "camera");
+      setMode(view.displayMode === "camera" ? "overlay" : "camera");
       showFrame();
     });
     let cancelMapCameraExpiry = () => {};

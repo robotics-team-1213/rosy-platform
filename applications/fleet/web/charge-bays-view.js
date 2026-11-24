@@ -5,6 +5,7 @@ import { isRouteAbsent } from "/console/assets/poll-gate.js";
 import { owns } from "/console/assets/unit-scope.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
+import { renderOmxInspector } from "/console/assets/omx-inspector.js";
 
 export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from "/console/assets/charge-bays-model.js";
 
@@ -25,10 +26,6 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   const inspector = typeof el === "function" ? el("omx-right-inspector") : null;
   // 셀 카메라는 Vision 임대 프레임으로만 본다(D-136). Fleet은 바이트를 중계하지 않는다.
   const frames = createCellFrameFeed({ call, scope });
-  for (const box of [list, inspector]) if (box) scope.listen(box, "click", () => {
-    framesOn = true;
-    for (const s of inspector?.querySelectorAll(".omx-inspector-cam-standby") || []) s.hidden = true;
-  }, true);
   let inFlight = false;
   let unavailable = false;
   const liveStreamOn = true;
@@ -36,6 +33,12 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   let activeInspectorId = null;
   // Choosing a robot only inspects it (no Vision lease); frames start after a click inside the cards or inspector.
   let framesOn = false;
+  let bindCurrentCameras = null;
+  for (const box of [list, inspector]) if (box) scope.listen(box, "click", () => {
+    const activating = !framesOn;
+    framesOn = true;
+    if (activating && inspectorOpen) bindCurrentCameras?.();
+  }, true);
   const selectedInspectorCam = {};
   let dualCamMode = false;
   let lastRows = null;
@@ -137,6 +140,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     // No choice yet still shows the first cell's tabs (frames stay off until a click, framesOn).
     if (!rows?.cards?.length) {
       lastInspectorSig = "";
+      bindCurrentCameras = null;
       if (inspector.childElementCount) inspector.replaceChildren();
       return;
     }
@@ -146,8 +150,6 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
     const camViews = active.cameraViews || [];
     const activeCamId = selectedInspectorCam[active.id] || camViews[0]?.id || "arm_s_top";
-    const activeCam = camViews.find((v) => v.id === activeCamId) || camViews[0]
-      || {id: activeCamId, label: activeCamId, source: activeCamId};
     const nextSig = JSON.stringify([
       active.id,
       active.robot_id || null,
@@ -168,262 +170,77 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     if (nextSig === lastInspectorSig && inspector.firstElementChild) return;
     lastInspectorSig = nextSig;
 
-    const tabs = document.createElement("div");
-    tabs.className = "omx-inspector-tabs";
-    for (const t of targets) {
-      const btn = document.createElement("ui-button");
-      btn.setAttribute("kind", "segment");
-      btn.setAttribute("aria-pressed", String(t.id === active.id));
-      btn.setAttribute("aria-selected", String(t.id === active.id));
-      btn.setAttribute("type", "button");
-      btn.setAttribute("data-work-read", "");
-      btn.dataset.inspectTarget = t.id;
-      btn.textContent = t.shortTab;
-      btn.addEventListener("click", () => {
-        activeInspectorId = t.id;
+    const rendered = renderOmxInspector(inspector, {
+      targets,
+      activeId: active.id,
+      dualCamMode,
+      selectedCamByTarget: selectedInspectorCam,
+      draftChoices,
+      frames,
+      framesActive: framesOn && inspectorOpen,
+      standbyText: "영상 대기 · 클릭하여 연결",
+      tagText: active.text || "대기 중",
+      tagStatus: active.status || "neutral",
+      actionsClass: "omx-card-actions",
+      actionChoices: [...(active.buttons || []), ...(active.quickControls || [])],
+      disclosure: {
+        open: inspectorOpen,
+        summaryText: `셀 파이프라인 제어 · ${active.title || active.id} (${active.text || "대기 중"})`,
+      },
+      onSelectTarget: (targetId) => {
+        activeInspectorId = targetId;
         lastInspectorSig = "";
-        selection?.set?.(t.id, { source: "inspector" });
+        selection?.set?.(targetId, { source: "inspector" });
         renderInspector(rows);
-      });
-      tabs.append(btn);
-    }
-    const dualBtn = document.createElement("ui-button");
-    dualBtn.setAttribute("kind", "segment");
-    dualBtn.setAttribute("aria-pressed", String(dualCamMode));
-    dualBtn.setAttribute("type", "button");
-    dualBtn.setAttribute("data-work-read", "");
-    dualBtn.dataset.dualCamToggle = "true";
-    dualBtn.textContent = dualCamMode ? "2CH ON" : "2CH";
-    dualBtn.title = "상단+손목 2채널 동시 보기";
-    dualBtn.addEventListener("click", () => {
-      dualCamMode = !dualCamMode;
-      lastInspectorSig = "";
-      renderInspector(rows);
-    });
-    tabs.append(dualBtn);
-
-    const head = document.createElement("div");
-    head.className = "omx-inspector-head";
-    const titleEl = document.createElement("strong");
-    titleEl.textContent = active.title;
-    head.append(titleEl, uiTag(active.text || "대기 중", active.status || "neutral"));
-
-    const cameraBindings = [];
-    let camStageNode;
-    if (dualCamMode && camViews.length >= 2) {
-      camStageNode = document.createElement("div");
-      camStageNode.className = "omx-inspector-dual-grid";
-      const [idA, idB] = active.dualPair || [camViews[0].id, camViews[1].id];
-      const viewA = camViews.find((v) => v.id === idA) || camViews[0];
-      const viewB = camViews.find((v) => v.id === idB && v.id !== viewA.id) || camViews.find((v) => v.id !== viewA.id) || camViews[1];
-      for (const dv of [viewA, viewB]) {
-        const pane = document.createElement("div");
-        pane.className = "omx-inspector-dual-pane";
-        const dFrame = document.createElement("div");
-        dFrame.className = "omx-inspector-cam-frame";
-        const dImg = document.createElement("img");
-        dImg.className = "omx-inspector-main-cam omx-inspector-cam";
-        dImg.alt = `${dv.label} 실시간 카메라`;
-        dImg.loading = "lazy";
-        dFrame.append(dImg);
-        if (!framesOn) {
-          const standby = document.createElement("span");
-          standby.className = "omx-inspector-cam-standby";
-          standby.setAttribute("role", "status");
-          standby.textContent = "영상 대기 · 클릭하여 연결";
-          dFrame.append(standby);
-        }
-        const dCap = document.createElement("small");
-        dCap.className = "omx-inspector-cam-badge";
-        dCap.textContent = dv.label;
-        cameraBindings.push([dImg, dv, dCap, dv.label]);
-        pane.append(dFrame, dCap);
-        camStageNode.append(pane);
-      }
-    } else {
-      camStageNode = document.createElement("div");
-      camStageNode.className = "omx-inspector-single-wrap";
-      const mainFrame = document.createElement("div");
-      mainFrame.className = "omx-inspector-cam-frame";
-      const mainImg = document.createElement("img");
-      mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
-      mainImg.alt = `${active.title} 실시간 메인 카메라`;
-      mainImg.loading = "lazy";
-      mainFrame.append(mainImg);
-      if (!framesOn) {
-        const standby = document.createElement("span");
-        standby.className = "omx-inspector-cam-standby";
-        standby.setAttribute("role", "status");
-        standby.textContent = "영상 대기 · 클릭하여 연결";
-        mainFrame.append(standby);
-      }
-      const stageBar = document.createElement("div");
-      stageBar.className = "omx-inspector-stage-bar";
-      const mainCap = document.createElement("small");
-      mainCap.className = "omx-inspector-cam-badge";
-      mainCap.textContent = `[${activeCam.label}]`;
-      const zoomBtn = document.createElement("ui-button");
-      zoomBtn.className = "omx-inspector-zoom";
-      zoomBtn.setAttribute("kind", "quiet");
-      zoomBtn.setAttribute("type", "button");
-      zoomBtn.setAttribute("data-work-read", "");
-      zoomBtn.setAttribute("aria-expanded", "false");
-      zoomBtn.textContent = "크게 보기";
-      zoomBtn.setAttribute("aria-label", `${activeCam.label} 크게 보기`);
-      const applyZoom = (zoomed) => {
-        mainImg.classList.toggle("focused", zoomed);
-        zoomBtn.setAttribute("aria-expanded", String(zoomed));
-        zoomBtn.textContent = zoomed ? "원래 크기" : "크게 보기";
-        zoomBtn.setAttribute("aria-label", `${activeCam.label} ${zoomed ? "원래 크기" : "크게 보기"}`);
-      };
-      zoomBtn.addEventListener("click", () => applyZoom(!mainImg.classList.contains("focused")));
-      mainImg.addEventListener("click", () => applyZoom(!mainImg.classList.contains("focused")));
-      camStageNode.addEventListener("keydown", (ev) => {
-        if (ev.key === "Escape" && mainImg.classList.contains("focused")) {
-          ev.stopPropagation();
-          applyZoom(false);
-        }
-      });
-      stageBar.append(mainCap, zoomBtn);
-      cameraBindings.push([mainImg, activeCam, mainCap, `[${activeCam.label}]`]);
-      camStageNode.append(mainFrame, stageBar);
-    }
-
-    const pipGrid = document.createElement("div");
-    pipGrid.className = "omx-inspector-pip-grid";
-    for (const v of camViews) {
-      const pip = document.createElement("button");
-      pip.type = "button";
-      pip.setAttribute("data-work-read", "");
-      pip.className = `omx-inspector-pip${v.id === activeCam.id ? " active" : ""}`;
-      pip.setAttribute("aria-pressed", String(v.id === activeCam.id));
-      pip.setAttribute("aria-label", `${v.label} 카메라 선택`);
-      const pFrame = document.createElement("div");
-      pFrame.className = "omx-inspector-cam-frame";
-      const pImg = document.createElement("img");
-      pImg.className = "omx-inspector-cam";
-      pImg.alt = "";
-      pImg.setAttribute("aria-hidden", "true");
-      pImg.loading = "lazy";
-      pFrame.append(pImg);
-      if (!framesOn) {
-        const standby = document.createElement("span");
-        standby.className = "omx-inspector-cam-standby";
-        standby.textContent = "대기";
-        pFrame.append(standby);
-      }
-      cameraBindings.push([pImg, v]);
-      const pLbl = document.createElement("small");
-      pLbl.textContent = v.label;
-      pip.append(pFrame, pLbl);
-      pip.addEventListener("click", () => {
-        selectedInspectorCam[active.id] = v.id;
+      },
+      onToggleDual: () => {
+        dualCamMode = !dualCamMode;
         lastInspectorSig = "";
         renderInspector(rows);
-      });
-      pipGrid.append(pip);
-    }
-
-    const meta = document.createElement("p");
-    meta.className = "omx-inspector-meta";
-    const taskBase = active.task ? `${active.task.task_id} · ${active.task.status} · ${active.task.arm_id || "—"}` : "";
-    meta.textContent = [taskBase, active.jointLiveText || active.healthText || ""].filter(Boolean).join(" | ");
-
-    const draft = draftChoices.get(active.id) || {};
-    const quickDispatchBar = document.createElement("div");
-    quickDispatchBar.className = "omx-inspector-quick-dispatch";
-    const tierField = document.createElement("label");
-    tierField.className = "omx-inspector-field";
-    const tierText = document.createElement("span");
-    tierText.textContent = "적재 층";
-    const tierSel = document.createElement("select"); tierSel.className = "ui-field";
-    tierSel.setAttribute("data-work-read", "");
-    const initialTier = draft.tier ?? (active.id === "arm_b" ? "2" : "1");
-    for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]] ) {
-      const opt = document.createElement("option");
-      opt.value = val;
-      opt.textContent = lbl;
-      if (val === initialTier) opt.selected = true;
-      tierSel.append(opt);
-    }
-    tierSel.addEventListener("change", () => draftChoices.set(active.id, { ...draftChoices.get(active.id), tier: tierSel.value }));
-    tierField.append(tierText, tierSel);
-    const dispField = document.createElement("label");
-    dispField.className = "omx-inspector-field";
-    const dispText = document.createElement("span");
-    dispText.textContent = "복구 위치";
-    const dispSel = document.createElement("select"); dispSel.className = "ui-field";
-    dispSel.setAttribute("data-work-read", "");
-    const initialDisp = draft.disp ?? "";
-    for (const [val, lbl] of [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]]) {
-      const opt = document.createElement("option");
-      opt.value = val;
-      opt.textContent = lbl;
-      if (val === initialDisp) opt.selected = true;
-      dispSel.append(opt);
-    }
-    dispSel.addEventListener("change", () => draftChoices.set(active.id, { ...draftChoices.get(active.id), disp: dispSel.value }));
-    dispField.append(dispText, dispSel);
-    const runCustomBtn = document.createElement("ui-button");
-    runCustomBtn.setAttribute("kind", "primary");
-    runCustomBtn.setAttribute("type", "button");
-    runCustomBtn.setAttribute("data-work-read", "");
-    const targetArm = active.id.startsWith("arm_") ? active.id : (active.id === "cell_ab" ? "arm_a" : "arm_s");
-    const targetCell = targetArm === "arm_s" ? "cell_s" : "cell_ab";
-    runCustomBtn.textContent = `${targetArm} 맞춤 실행`;
-    runCustomBtn.addEventListener("click", async () => {
-      if (auth.locked || runCustomBtn.hasAttribute("disabled")) return;
-      setOffBy(runCustomBtn, "요청 처리 중");
-      const orig = runCustomBtn.textContent;
-      runCustomBtn.textContent = "등록 중…";
-      try {
-        await call("/api/fleet/pipeline/cell-tasks", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({
-            cell_id: targetCell,
-            arm_id: targetArm,
-            tier: Number(tierSel.value || 1),
-            displaced_to: dispSel.value || null,
-            robot_id: active.robot_id || undefined,  // absent: the server picks, the console never guesses
-          }),
-        });
-        await refresh();
-      } catch (err) {
-        patchText(hint, `맞춤 실행 실패: ${err.message}`);
-        patchHidden(hint, false);
-      } finally {
-        runCustomBtn.textContent = orig;
-        setOffBy(runCustomBtn, "");
-      }
+      },
+      onSelectCam: (targetId, camId) => {
+        selectedInspectorCam[targetId] = camId;
+        lastInspectorSig = "";
+        renderInspector(rows);
+      },
+      onQuickDispatch: async ({ targetCell, targetArm, tier, displacedTo, robotId, button }) => {
+        if (auth.locked || button.hasAttribute("disabled")) return;
+        setOffBy(button, "요청 처리 중");
+        const orig = button.textContent;
+        button.textContent = "등록 중…";
+        try {
+          await call("/api/fleet/pipeline/cell-tasks", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              cell_id: targetCell,
+              arm_id: targetArm,
+              tier,
+              displaced_to: displacedTo,
+              robot_id: robotId,
+            }),
+          });
+          await refresh();
+        } catch (err) {
+          patchText(hint, `맞춤 실행 실패: ${err.message}`);
+          patchHidden(hint, false);
+        } finally {
+          button.textContent = orig;
+          setOffBy(button, "");
+        }
+      },
+      onRenderAction: (button, choice, item) => {
+        markNoRobot(button, choice, item);
+        button.addEventListener("click", () => executeChoice(choice, item, button));
+      },
+      onDisclosureToggle: (open, bindCameras) => {
+        inspectorOpen = open;
+        if (open) framesOn = true;
+        frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive"));
+        if (open && framesOn) bindCameras?.();
+      },
     });
-    quickDispatchBar.append(tierField, dispField, runCustomBtn);
-
-    const actions = document.createElement("div");
-    actions.className = "omx-card-actions";
-    for (const choice of [...(active.buttons || []), ...(active.quickControls || [])]) {
-      const button = document.createElement("ui-button");
-      button.setAttribute("kind", "quiet");
-      button.setAttribute("type", "button");
-      button.setAttribute("data-work-read", "");
-      button.textContent = choice.label;
-      markNoRobot(button, choice, active);
-      button.addEventListener("click", () => executeChoice(choice, active, button));
-      actions.append(button);
-    }
-
-    const disclosure = document.createElement("details");
-    disclosure.className = "omx-pipeline-disclosure";
-    disclosure.open = inspectorOpen;
-    const summary = document.createElement("summary");
-    summary.textContent = `셀 파이프라인 제어 · ${active.title || active.id} (${active.text || "대기 중"})`;
-    disclosure.addEventListener("toggle", () => {
-      inspectorOpen = disclosure.open;
-      frames.setRunning(!document.hidden && liveStreamOn && inspectorOpen && owns("drive"));
-    });
-    disclosure.append(summary, tabs, head, camStageNode, pipGrid, meta, quickDispatchBar, actions);
-    inspector.replaceChildren(disclosure);
-    if (framesOn && inspectorOpen) for (const binding of cameraBindings) frames.bind(...binding);
+    bindCurrentCameras = rendered?.bindCameras || null;
   }
 
   function show(rows, note) {

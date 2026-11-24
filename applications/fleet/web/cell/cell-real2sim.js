@@ -59,8 +59,9 @@ export function createReal2SimPipeline({request, $, isOperator = () => false, na
     const btn = $('cell-live-stream-toggle');
     if (btn) {
       btn.textContent = liveStreamOn ? '영상 일시정지' : '영상 다시 보기';
+      btn.setAttribute('aria-pressed', String(liveStreamOn));
     }
-    cellFrames?.setRunning(liveStreamOn);
+    cellFrames?.setPaused(!liveStreamOn);
   }
 
   function renderSelect(selectEl, items, currentValue, labelFn) {

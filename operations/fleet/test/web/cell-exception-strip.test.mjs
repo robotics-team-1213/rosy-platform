@@ -201,3 +201,40 @@ test('idle arms hide until toggled or focused, and cleared incidents fold cleanl
   assert.equal(env.observations.focusArm('arm_a'), true);
   assert.equal(armACard.hidden, false);
 });
+
+test('clearIncident encodes special characters in incident_id', async t => {
+  const saved = {document: globalThis.document, CSS: globalThis.CSS, fetch: globalThis.fetch};
+  const calls = [];
+  const nodeWithClick = (tag = '') => {
+    const el = node(tag);
+    el.addEventListener = (type, cb) => { (el.listeners[type] ??= []).push(cb); };
+    return el;
+  };
+  globalThis.document = {createElement: nodeWithClick, hidden: false, visibilityState: 'visible',
+    addEventListener() {}, removeEventListener() {}};
+  globalThis.CSS = {escape: v => v};
+  globalThis.fetch = async (url) => { calls.push(String(url)); return new Response(new Blob()); };
+  const root = nodeWithClick('div');
+  const obs = createCellObservation({
+    request: async (path, opts) => {
+      if (opts?.method === 'POST') { calls.push(String(path)); return {}; }
+      return body([arm({incidents: [{
+        incident_id: 'inc/1?x=2', state: 'open', reported_at: 60,
+        decision: {hold: true, reason: 'hold'}, frames: [{role: 'top'}], evidence: [],
+      }]})]);
+    },
+    root,
+    credential: () => '',
+  });
+  t.after(() => { obs.dispose(); Object.assign(globalThis, saved); });
+
+  await obs.refresh();
+  const card = root.querySelector('[data-arm-source="arm_a"]');
+  const li = card.querySelector('ol').children.at(-1);
+  const input = li.children.find(c => c.tagName === 'INPUT');
+  const btn = li.children.find(c => c.tagName === 'UI-BUTTON');
+  input.value = 'inspected';
+  await btn.listeners.click[0]();
+  assert.ok(calls.some(u => u.includes('/incidents/inc%2F1%3Fx%3D2/clear')));
+  assert.ok(calls.some(u => u.includes('/incidents/inc%2F1%3Fx%3D2/frames/top')));
+});
