@@ -141,7 +141,7 @@ def load_numpy_norm(root: Path, *, action_width: int = 6):
     return pre, post
 
 
-def validate_onnx_export(root: Path, policy_revision: str | None = None) -> dict:
+def validate_onnx_export(root: Path, policy_revision: str | None = None, *, onnx_sha256: str | None = None) -> dict:
     """Validate model.onnx + ONNX_EXPORT.json integrity, revision pin, and feature schema."""
     import cell_lerobot_shadow as shadow
 
@@ -159,8 +159,11 @@ def validate_onnx_export(root: Path, policy_revision: str | None = None) -> dict
     if meta.get("policy_revision") != revision:
         raise ValueError(f"{ONNX_META} policy_revision differs from pinned weights revision {revision}")
 
-    with onnx_path.open("rb") as stream:
-        actual_onnx_sha = hashlib.file_digest(stream, "sha256").hexdigest()
+    if onnx_sha256 is not None:
+        actual_onnx_sha = onnx_sha256
+    else:
+        with onnx_path.open("rb") as stream:
+            actual_onnx_sha = hashlib.file_digest(stream, "sha256").hexdigest()
     if meta.get("onnx_sha256") != actual_onnx_sha:
         raise ValueError(f"{ONNX_MODEL} sha256 {actual_onnx_sha} differs from {ONNX_META}")
 
@@ -181,9 +184,10 @@ def validate_onnx_export(root: Path, policy_revision: str | None = None) -> dict
     return meta
 
 
-def load_openvino(root: Path, policy_revision: str | None = None, *, num_threads: int = 4, action_width: int = 6):
+def load_openvino(root: Path, policy_revision: str | None = None, *, onnx_sha256: str | None = None,
+                  num_threads: int = 4, action_width: int = 6):
     """Pure-NumPy pre/post + OpenVINO CPU backend (never imports torch)."""
-    meta = validate_onnx_export(root, policy_revision)
+    meta = validate_onnx_export(root, policy_revision, onnx_sha256=onnx_sha256)
     pre, post = load_numpy_norm(root, action_width=action_width)
     import openvino as ov
 

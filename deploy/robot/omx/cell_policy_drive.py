@@ -83,7 +83,8 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
             library = {**library, "source": {**(library.get("source") or {}), "rim_z_m": float(jaw_spec["rim_z_m"])}}
     validate_entry_chunk(library, kin, jaw_spec)
     if jaw_spec is not None and demonstrated is not None and not sim_units:
-        if mismatch := trained_grasp_mismatch(demonstrated[0], demonstrated[1], jaw_spec["grasp_roll"]):
+        if mismatch := trained_grasp_mismatch(demonstrated[0], demonstrated[1], jaw_spec["grasp_roll"],
+                                               square=jaw_spec.get("square") is True):
             row = {"preflight": "jaw_roll", "jaw_warning": mismatch, "dry_run": dry_run}
             if not dry_run:
                 log({**row, "refused": mismatch})
