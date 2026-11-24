@@ -51,7 +51,9 @@ function jobReasonLabel(reason) {
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value, onSummary: renderExceptions});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value,
+  onSummary: renderExceptions, quickClearSource: armFocusMatch?.[1],
+  canQuickClear: () => isOperator(role) && !principal?.startsWith('development-') && !namedOperatorReason(role, principal)});
 // B-3 — 관측 화면은 저장된 문서 단계에 속한다(D-926 groups). 화면이 바뀐 뒤에 카드로 옮겨야 초점이 살아 있다.
 function jumpToObservations(land) {
   if (location.hash === '#saved-heading') land();

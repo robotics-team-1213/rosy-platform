@@ -61,7 +61,8 @@ export const incidentLines = incident => {
   ].filter(Boolean);
 };
 
-export function createCellObservation({request, root, credential = () => '', onSummary = null}) {
+export function createCellObservation({request, root, credential = () => '', onSummary = null,
+  quickClearSource = null, canQuickClear = () => false}) {
   const empty = element('ui-empty', '접속하면 작업 셀의 실제 관측을 확인할 수 있습니다.');
   let life = null, pending = false, layout = '', disposed = false;
   let profiles = null;
@@ -307,7 +308,7 @@ export function createCellObservation({request, root, credential = () => '', onS
   }
 
   async function clearIncident(source, incident, note, button, message, label = {}) {
-    const text = note.value.trim();
+    const text = note.trim();
     if (!text) { message.textContent = '확인한 내용을 적어야 해제할 수 있습니다.'; return; }
     button.disabled = true;
     try {
@@ -372,6 +373,28 @@ export function createCellObservation({request, root, credential = () => '', onS
       if (incident.cleared) {
         const label = incident.cleared.cause ? ` · 원인 ${incident.cleared.cause} (근거 ${incident.cleared.basis})` : '';
         item.append(element('p', `해제: ${incident.cleared.by} · ${when(incident.cleared.at)}${label} · ${incident.cleared.note}`));
+      } else if (source === quickClearSource && incident.decision?.hold !== false) {
+        if (!canQuickClear()) {
+          item.append(element('ui-text', '해제하려면 Fleet 운영자 계정으로 로그인하세요.'));
+        } else {
+          const note = '현장에서 정지 원인을 확인하고 조치했습니다. 팔과 집게, 이동 경로에 걸림이 없음을 확인했습니다.';
+          const check = element('input'); check.type = 'checkbox';
+          const confirmation = element('label'); confirmation.append(check, document.createTextNode(' ' + note));
+          const button = element('ui-button', '사고 해제'); button.setAttribute('type', 'button'); button.disabled = true;
+          const message = element('ui-text'); message.setAttribute('role', 'status');
+          check.addEventListener('change', () => { button.disabled = !check.checked; });
+          button.addEventListener('click', async () => {
+            if (!check.checked || button.disabled || !canQuickClear()) return;
+            check.disabled = true;
+            await clearIncident(source, incident, note, button, message);
+            if (!button.disabled) {
+              check.checked = false;
+              check.disabled = false;
+              button.disabled = true;
+            }
+          });
+          item.append(confirmation, button, message);
+        }
       } else {
         // the cause and how the person knows it are kept with the clear: the labels learning scores rules and models against
         const cause = choice('원인', CAUSES), basis = choice('근거', BASES);
@@ -379,7 +402,7 @@ export function createCellObservation({request, root, credential = () => '', onS
         note.setAttribute('aria-label', '확인한 내용'); note.placeholder = '팔과 집게를 확인한 내용 (필수) · 같은 동작을 다시 해 봤다면 그 결과';
         const button = element('ui-button', '확인했습니다 · 해제'); button.setAttribute('type', 'button');
         const message = element('ui-text');
-        button.addEventListener('click', () => clearIncident(source, incident, note, button, message,
+        button.addEventListener('click', () => clearIncident(source, incident, note.value, button, message,
           {cause: cause.value, basis: basis.value}));
         item.append(cause, basis, note, button, message);
       }
