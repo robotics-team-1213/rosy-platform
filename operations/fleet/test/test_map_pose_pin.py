@@ -286,3 +286,50 @@ def test_offline_parked_pin_clears_on_state_and_never_localizes_driving_pose(tmp
 
     events = [e for e in app.state.site_maps.events() if e["action"] == "map_pin" and e["detail"].get("offline_parked")]
     assert len(events) == 1 and events[0]["detail"]["robot_id"] == "r2"
+
+
+def test_offline_parked_pin_persists_across_restarts_and_clears_from_db(tmp_path):
+    from test_trip_runner import _free_map
+    from fleet.server.offline_pin import obstacle_site_pose
+    from fleet.server.site_map_store import SiteMapStore
+
+    class OfflineRobot(FakeRobot):
+        async def state(self):
+            raise OSError("robot powered off")
+
+    db_path = tmp_path / "site.sqlite3"
+    users = {sha256(NAMED.encode()).hexdigest(): {"principal_id": "kim", "role": "operator"}}
+
+    def _build_app():
+        console = FleetConsole(
+            [RobotEndpoint("r1", "http://127.0.0.1:8080", "t1"),
+             RobotEndpoint("r2", "http://127.0.0.1:8081", "t2")],
+            [FakeRobot("r1", state=_odom_state(time.time())), OfflineRobot("r2", state={})],
+        )
+        task_service = FleetTaskService(FleetTaskStore(db_path), robot_ids={"r1", "r2"})
+        site_maps = SiteMapStore(db_path)
+        app = create_app(console, console_token=OPERATOR, task_service=task_service,
+                         site_maps=site_maps, start_task_dispatcher=False, site_users=users)
+        fresh_reads(app)
+        return app, site_maps
+
+    app1, sm1 = _build_app()
+    sm1.import_if_empty(_free_map(), source="test")
+    with TestClient(app1) as client1:
+        reply = client1.post("/api/fleet/robots/r2/map-pin",
+                             json={"x": -0.418, "y": 0.47, "yaw": -1.57, "offline_parked": True},
+                             headers={"Authorization": f"Bearer {NAMED}"})
+        assert reply.status_code == 200, reply.text
+    sm1.close()
+
+    # Simulated Fleet restart reading the same SQLite database
+    app2, sm2 = _build_app()
+    assert obstacle_site_pose(app2.state.map_pose, "r2") == ("site", -0.418, 0.47, -1.57)
+    app2.state.map_pose.observe_state("r2", _odom_state(time.time()))
+    assert obstacle_site_pose(app2.state.map_pose, "r2") is None
+    sm2.close()
+
+    # After live state cleared it, another restart does not resurrect the pin
+    app3, sm3 = _build_app()
+    assert obstacle_site_pose(app3.state.map_pose, "r2") is None
+    sm3.close()
