@@ -115,11 +115,13 @@ SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
 MONITORING = ["test/test_monitoring_browser.py"]
 RECOVERY = ["test/test_network_recovery_browser.py"]
-EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY
+WORLD = ["test/test_world_live_ui_browser.py"]
+EVERYTHING = FLEET + ROBOT + API_WEB + PILOT + GAMES + REVIEW + LEARNING + GAZEBO + SHARED + COMMISSIONING + MONITORING + RECOVERY + WORLD
 
 SERVER = "operations/fleet/fleet/server/"
 WEB = "applications/fleet/web/"
 SCOPE: dict[str, list[str]] = {
+    "applications/world/": WORLD,
     "applications/monitoring/": MONITORING,
     "operations/monitoring/": MONITORING,
     "applications/fleet/dev/": FLEET_SAMPLE + ["operations/fleet/test/test_app_connected_browser.py"],
