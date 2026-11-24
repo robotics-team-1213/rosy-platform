@@ -2,11 +2,13 @@ import "/common/ui.js";
 import { renderTopView, renderArmGrid } from "./grid.js";
 import { initRequests } from "./requests.js";
 import { loadJobStatus } from "./job-status.js";
+import { mergeIncident, classifyHold, classifyFrameBinding, classifyDrift } from "./status-logic.js";
 
 export const $ = (id) => document.getElementById(id);
 
 const state = {
   bundle: null,
+  jobStatus: null,
   profileId: null,
   siteName: null,
   zPlane: "z_view",
@@ -129,6 +131,10 @@ function renderProfileBar() {
   }
 }
 
+function effectiveIncident(profile) {
+  return mergeIncident(profile?.robot_status?.incident, state.jobStatus?.arms?.[profile?.arm_id || profile?.id]?.incident);
+}
+
 function renderHygiene(profile) {
   const panel = $("hygienePanel");
   const summary = $("hygieneSummary");
@@ -136,11 +142,16 @@ function renderHygiene(profile) {
   const toggleLabel = $("hygieneToggleLabel");
   list.replaceChildren();
 
+  const hold = classifyHold(effectiveIncident(profile));
   const items = profile?.hygiene || [];
   const errs = items.filter((i) => i.level === "error");
   const warns = items.filter((i) => i.level === "warning");
 
-  if (errs.length > 0) {
+  if (hold.state === "held") {
+    panel.setAttribute("data-level", "error");
+    summary.setAttribute("state", "error");
+    summary.textContent = `${profile.arm_id}: ${hold.badge} — 실행 보류 중`;
+  } else if (errs.length > 0) {
     panel.setAttribute("data-level", "error");
     summary.setAttribute("state", "error");
     summary.textContent = `${profile.arm_id}: 오류 ${errs.length}건 · 경고 ${warns.length}건 — ${errs[0].message}`;
@@ -148,10 +159,15 @@ function renderHygiene(profile) {
     panel.setAttribute("data-level", "warn");
     summary.setAttribute("state", "warning");
     summary.textContent = `${profile.arm_id}: 경고 ${warns.length}건 — ${warns[0].message}`;
+  } else if (hold.state === "error" || hold.state === "partial") {
+    panel.setAttribute("data-level", "warn");
+    summary.setAttribute("state", "warning");
+    summary.textContent = `${profile.arm_id}: ${hold.badge} (${hold.detail})`;
   } else {
     panel.setAttribute("data-level", "ok");
     summary.setAttribute("state", "ready");
-    summary.textContent = `${profile.arm_id}: 프로파일 및 지도 정합 이상 없음`;
+    const extras = [!profile.camera_top?.shift?.ok ? "카메라 이동 미확인" : "", hold.state === "unknown" ? "보류 미확인" : ""].filter(Boolean);
+    summary.textContent = extras.length ? `${profile.arm_id}: 프로파일·지도 결속 (${extras.join(" · ")})` : `${profile.arm_id}: 프로파일 및 지도 정합 이상 없음`;
   }
   toggleLabel.textContent = `점검 세부 항목 (${items.length}건)`;
 
@@ -164,14 +180,9 @@ function renderHygiene(profile) {
   }
 
   const holdTag = $("holdBadge");
-  const inc = profile?.robot_status?.incident || {};
-  if (inc.local_held || inc.fleet_held) {
-    holdTag.setAttribute("status", "crit");
-    holdTag.textContent = `HELD (${(inc.incident_ids || []).join(",") || "hold"})`;
-  } else {
-    holdTag.setAttribute("status", "neutral");
-    holdTag.textContent = "HOLD CLEAR";
-  }
+  holdTag.setAttribute("status", hold.status);
+  holdTag.textContent = hold.badge;
+  holdTag.title = hold.detail;
 
   const srcTag = $("profileSourceTag");
   srcTag.setAttribute("status", state.bundle?.configured ? "active" : "neutral");
@@ -252,12 +263,12 @@ function renderRobotAndBias(profile) {
   const dl = $("robotStatusDl");
   dl.replaceChildren();
   const live = profile?.robot_status?.live || {};
-  const inc = profile?.robot_status?.incident || {};
+  const hold = classifyHold(effectiveIncident(profile));
   const op = profile?.operating_profile || {};
   const envTag = $("envTag");
 
   addDtDd(dl, "arm_id / zone", `${profile.arm_id} (${profile.zone_side || "-"} ↔ ${profile.zone_peer || "-"})`);
-  addDtDd(dl, "hold 상태", inc.local_held || inc.fleet_held ? `HELD (${(inc.incident_ids || []).join(",")})` : "clear");
+  addDtDd(dl, "hold 상태", hold.detail);
   if (live.tcp) {
     addDtDd(dl, "Live TCP", `[${live.tcp.x}, ${live.tcp.y}, ${live.tcp.z}] m · yaw ${live.tcp.yaw_deg}°`);
     addDtDd(dl, "수집 시각 / Chunk", `${live.stale ? "STALE" : "FRESH"} (${live.age_s ?? "?"}s) · ${live.chunk || "-"}`);
@@ -287,7 +298,8 @@ function renderRobotAndBias(profile) {
   }
 
   const cv = profile?.cross_verify || {};
-  const drift = profile?.drift || {};
+  const driftInfo = classifyDrift(profile);
+  const drift = driftInfo.drift;
   const verdictStatus = (v) => (v === "fail" || v === "hold" ? "crit" : v === "warn" || v === "advisory" ? "warn" : v === "pass" ? "active" : "neutral");
   const verdictLabel = (v) => (v === "pass" ? "OK" : v === "warn" ? "WARN" : v === "fail" ? "FAIL" : v === "hold" ? "HOLD" : v === "advisory" ? "ADVISORY" : "미측정");
   const setCv = (id, name, v, detail = "") => {
@@ -296,7 +308,8 @@ function renderRobotAndBias(profile) {
     el.setAttribute("status", verdictStatus(v));
     el.textContent = `${name}: ${verdictLabel(v)}${detail}`;
   };
-  setCv("cvEvalTag", "Eval", cv.eval_verdict || "unknown");
+  const evDate = typeof cv.measured === "string" && cv.measured.length >= 10 ? ` (${cv.measured.slice(0, 10)})` : "";
+  setCv("cvEvalTag", "Eval", cv.eval_verdict || "unknown", evDate);
   const dCam = cv.depth || {};
   const dInfo = Number.isFinite(dCam.cam_to_table_mm) ? ` (${dCam.cam_to_table_mm}mm)` : "";
   setCv("cvDepthTag", "Depth", dCam.verdict, dInfo);
@@ -312,10 +325,7 @@ function renderRobotAndBias(profile) {
   setCv("cvXyTag", "XY", xyVerdict, maxLatMm >= 0 ? ` (max ${maxLatMm}mm)` : "");
   const fInfo = Number.isFinite(cv.fk?.tcp_z_m) ? ` (z=${cv.fk.tcp_z_m}m)` : "";
   setCv("cvFkTag", "FK", cv.fk?.verdict, fInfo);
-  const driftAlarm = (drift.alarmed_sites || []).length;
-  const driftVerdict = driftAlarm > 0 ? "advisory" : "pass";
-  const driftDetail = driftAlarm > 0 ? ` (${drift.pattern || "drift"}: ${driftAlarm})` : "";
-  setCv("cvDriftTag", "Drift", driftVerdict, driftDetail);
+  setCv("cvDriftTag", "Drift", driftInfo.verdict, driftInfo.detail);
   const parts = [];
   if (Number.isFinite(dCam.cam_to_table_mm)) parts.push(`cam→table=${dCam.cam_to_table_mm}mm (cfg ${dCam.config_height_m ?? "-"}m)`);
   if (Number.isFinite(dCam.cam_to_plate_mm)) parts.push(`cam→plate=${dCam.cam_to_plate_mm}mm`);
@@ -386,7 +396,7 @@ function renderSitesTable(profile) {
     const lmax = m?.loo_error_mm?.max;
     const sigmaMax = s.map_sigma_mm?.max_mm;
     const looTxt = (Number.isFinite(lmax) ? `${lmax.toFixed(1)}mm` : "-") + (Number.isFinite(sigmaMax) ? ` · ±${sigmaMax.toFixed(1)}` : "");
-    const alarmed = (profile.drift?.alarmed_sites || []).includes(name);
+    const alarmed = classifyDrift(profile).alarmed.includes(name);
 
     const tdName = document.createElement("td"); tdName.textContent = name;
     if (s.extra) tdName.setAttribute("data-level", "warn");
@@ -418,17 +428,16 @@ function renderCanvases() {
   const profile = currentProfile();
   if (!profile) return;
   const siteObj = profile.sites?.[state.siteName] || null;
-  const shift = profile.camera_top?.shift;
-  const shiftTxt = shift?.ok ? `shift max ${shift.max_px}px` : "shift n/a";
-  $("topCardSub").textContent = `${profile.arm_id} · site=${state.siteName || "-"} · z=${state.zPlane} (z_view=${siteObj?.map?.z_view ?? "-"}, surf_z=${siteObj?.surface_z ?? "-"}) · center=${JSON.stringify(profile.camera_top?.center_px || [])} · ${shiftTxt}`;
+  const fb = classifyFrameBinding(profile);
+  $("topCardSub").textContent = `${profile.arm_id} · site=${state.siteName || "-"} · z=${state.zPlane} (z_view=${siteObj?.map?.z_view ?? "-"}, surf_z=${siteObj?.surface_z ?? "-"}) · center=${JSON.stringify(profile.camera_top?.center_px || [])} · ${fb.shiftText}`;
   const maxReach = profile.limits?.max_reach_m != null ? `${profile.limits.max_reach_m}m` : "n/a";
   const parkReach = profile.limits?.park_reach_m != null ? `${profile.limits.park_reach_m}m` : "n/a";
   $("armCardSub").textContent = `${profile.arm_id} · max_reach=${maxReach} · park=${parkReach} · LOO scale ${state.errorScale}x`;
 
-  const bindErr = profile.hygiene?.find((h) => h.code === "map_binding")?.message;
   const bindTag = $("frameBindTag");
-  bindTag.setAttribute("status", bindErr ? "warn" : "active");
-  bindTag.textContent = bindErr ? "MAP UNBOUND" : "MAP BOUND";
+  bindTag.setAttribute("status", fb.status);
+  bindTag.textContent = fb.badge;
+  bindTag.title = fb.title;
 
   const img = loadFrameImage(profile.id, state.frameSource);
   const topRes = renderTopView($("topCanvas"), {
@@ -471,6 +480,10 @@ function renderAll() {
     summary.textContent = "등록된 캘리브레이션 프로파일이 없습니다 (--profiles 또는 ROSY_CALIBRATION_PROFILES 미설정).";
     $("profileSourceTag").setAttribute("status", "neutral");
     $("profileSourceTag").textContent = "NO PROFILES";
+    const holdTag = $("holdBadge");
+    holdTag.setAttribute("status", "neutral");
+    holdTag.textContent = "HOLD 미확인";
+    holdTag.title = "미확인 (보류 정보 없음)";
     return;
   }
   if (!state.siteName || !profile.sites?.[state.siteName]) {
@@ -487,7 +500,13 @@ function renderAll() {
 }
 
 async function loadSnapshot() {
-  loadJobStatus();  // independent of the profile registry: --cells alone turns the section on
+  loadJobStatus({  // independent of the profile registry: --cells alone turns the section on
+    onStatus: (st) => {
+      state.jobStatus = st;
+      const p = currentProfile();
+      if (p) { renderHygiene(p); renderRobotAndBias(p); }
+    },
+  });
   try {
     const data = await fetchJson("/api/calibration/v1/profiles");
     state.bundle = data;
