@@ -34,7 +34,7 @@ const mkEl = (tag, cls, txt) => {
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
   toWorld, refreshGuide, queuedReason, drawMap = () => {}, scheduleDraw = drawMap, onSelectRobot = () => {},
-  selection = null, onGoalFinished = () => {} }) {
+  selection = null, onGoalFinished = () => {}, onInspectZone = null }) {
   let goalPlanSeq = 0;
   let suppressClickUntil = 0;
 
@@ -534,7 +534,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       if (!activeRobotId && view.focusRobot && isOperator(auth.role) && !namedReason() && (bestPlace || nearestLaneHeading(view.activeSiteMap?.map, world))) {
         view.selected = activeRobotId = view.focusRobot;
       }
-      if (!activeRobotId) return;
+      if (!activeRobotId) { if (bestPlace) onInspectZone?.(String(bestPlace.id)); return; }
       const targetPoint = bestPlace ? { x: bestPlace.x, y: bestPlace.y } : { x: world.x, y: world.y };
       await commitWorldGoal(targetPoint, bestPlace ? `${bestPlace.name || bestPlace.id} (${bestPlace.id})` : "", bestPlace ? String(bestPlace.id) : "");
       life.check();

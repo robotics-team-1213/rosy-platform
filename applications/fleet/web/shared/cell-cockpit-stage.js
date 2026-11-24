@@ -99,6 +99,7 @@ export function createCellCockpitStage({
   namedReason = () => "",
   onChanged,
   onVisionSample,
+  onOpenBlueprint = null,
 }) {
   const gate = createPollGate({ slowCodes: { WORKCELL_OBSERVATIONS_UNAVAILABLE: 30000 } });
   const camStates = new Map();
@@ -281,6 +282,7 @@ export function createCellCockpitStage({
             <ui-tag status=${liveStatus}>${liveText}</ui-tag>
             <${UiButton} kind="segment" type="button" data-work-read="" aria-pressed=${liveOn ? "true" : "false"} onClick=${onToggleLive}
             >${liveOn ? "영상 일시정지" : "영상 다시 보기"}</${UiButton}>
+            ${onOpenBlueprint ? html`<${UiButton} kind="quiet" type="button" data-work-read="" onClick=${() => onOpenBlueprint("yard")}>구역 도면</${UiButton}>` : null}
             <a class="ui-action-link" data-kind="quiet" href="/console/cell">셀 작업 화면</a>
           </div>
         </div>

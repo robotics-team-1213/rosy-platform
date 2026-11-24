@@ -729,6 +729,26 @@
     "localization-panel-logic.js": {
       "path": "localization-panel-logic.js",
       "media_type": "application/javascript"
+    },
+    "zone-blueprint-model.js": {
+      "path": "map/zone-blueprint-model.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint-2d.js": {
+      "path": "map/zone-blueprint-2d.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint-3d.js": {
+      "path": "map/zone-blueprint-3d.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint-inspector.js": {
+      "path": "map/zone-blueprint-inspector.js",
+      "media_type": "application/javascript"
+    },
+    "zone-blueprint.css": {
+      "path": "map/zone-blueprint.css",
+      "media_type": "text/css"
     }
   }
 }
