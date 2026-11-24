@@ -399,7 +399,7 @@ def test_arm_s_compiler_v21_open_hover_divergence_guard_and_empty_wrist_logs(tmp
         before_side=None, above_shaking=False, run_cmd=_run_cmd, wrist_log=w_log,
     )
     assert refined is True and last_obs["sign_flipped"] is True
-    assert cur_d["pick"]["y"] < 0.175  # opposite of initial wrong +y shift
+    assert cur_d["pick"]["x"] < 0.041  # flipped opposite of initial +x shift at yaw=-97.4 deg
     persisted = cell_arm_cal.load(wd, "arm_s")
     assert persisted["finger_sign"]["along"] == -1.0
 

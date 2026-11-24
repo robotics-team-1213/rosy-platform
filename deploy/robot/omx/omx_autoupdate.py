@@ -312,26 +312,17 @@ class Updater:
             session.close()
         if self.cfg.get("idle_gate") == "cell":
             self.host.restart(units)
-        cur, cur_env = state.get("current"), state.get("env")
-        keep_cur = self._usable_release(cur, cur_env, paths)
-        state.update(
-            current=prev,
-            previous=cur if keep_cur else None,
-            env=prev_env,
-            previous_env=cur_env if keep_cur else None,
-            current_sha=None,
-        )
+        cur_cur = state.get("current")
+        cur_env = state.get("env")
+        keep_cur = self._usable_release(cur_cur, cur_env, paths)
+        state.update(current=prev, previous=cur_cur if keep_cur else None, env=prev_env, previous_env=cur_env if keep_cur else None, current_sha=None)
         self.save(state)
         log(step="rolled_back_manually", release=state["current"])
         return "rolled_back"
 
     def cleanup(self, state: dict) -> None:
         keep = {state["current"], state["previous"]}
-        names = sorted(
-            (p for p in self.releases.iterdir() if p.is_dir() and not p.name.endswith(".tmp")),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
+        names = sorted((p for p in self.releases.iterdir() if p.is_dir() and not p.name.endswith(".tmp")), key=lambda p: p.stat().st_mtime, reverse=True)
         for path in names[self.cfg["keep"] :]:
             if path.name not in keep:
                 shutil.rmtree(path, ignore_errors=True)
@@ -350,11 +341,7 @@ def _release_paths(paths: list[str]) -> list[str]:
 
 def _incomplete_release(release: Path, paths: list[str]) -> bool:
     """True when an older updater archived deploy/robot/omx without contracts/learning/src."""
-    return (
-        "deploy/robot/omx" in paths
-        and (release / "deploy/robot/omx/cell_collect_plan.py").is_file()
-        and not (release / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").is_file()
-    )
+    return "deploy/robot/omx" in paths and (release / "deploy/robot/omx/cell_collect_plan.py").is_file() and not (release / "contracts/learning/src/rosy/contracts/learning/omx_collect_plan.py").is_file()
 
 
 def load_config(path: Path) -> dict:
@@ -365,11 +352,7 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("keep", 3)
     cfg["root"] = os.path.expanduser(cfg.get("root", DEFAULT_ROOT))
     if cfg.get("kind") == "service":
-        missing = [
-            k
-            for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root")
-            if not cfg.get(k)
-        ]
+        missing = [k for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root") if not cfg.get(k)]
         cfg.setdefault("lock", None)
         if cfg.get("idle_gate") == "cell":
             missing += [k for k in ("devices",) if not cfg.get(k)]
