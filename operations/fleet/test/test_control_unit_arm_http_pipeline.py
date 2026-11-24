@@ -224,3 +224,25 @@ def test_cancel_after_admit_before_prepare_durably_blocks_a_later_dispatch(tmp_p
             with pytest.raises(KeyError):
                 PhysicalTransferExecution(store).snapshot(mission_id)
     asyncio.run(exercise())
+
+
+def test_relayed_missing_recheck_returns_arm_recheck_not_found_and_preserves_missing_delegation(tmp_path, rig, installation):
+    async def exercise():
+        nodes, network, _store, _control = site(tmp_path, rig)
+        def _missing(mission_id, recheck_key):
+            raise KeyError(recheck_key)
+        nodes["ARM-CELL"].arm_jobs().observation = SimpleNamespace(receipt=lambda _mission_id: None, rechecks=SimpleNamespace(read=_missing))
+        async with network:
+            created = await network.post(JOBS, headers=HARBOR, json=transfer(installation, "harbor:recheck-404"))
+            assert created.status_code == 200, created.text
+            mission_id = created.json()["job"]["mission_id"]
+            missing_recheck = await network.get(JOBS + "/" + mission_id + "/rechecks/absent", headers=HARBOR)
+            assert missing_recheck.status_code == 404
+            assert missing_recheck.json()["detail"]["code"] == "ARM_TRANSFER_RECHECK_NOT_FOUND"
+            missing_delegation = await network.get(
+                "http://ARM-CELL/api/fleet/control-unit/delegations/R/ARM_TRANSFER_RECHECK_NOT_FOUND/arm/rechecks/absent",
+                headers={"Authorization": "Bearer peer-R"},
+            )
+            assert missing_delegation.status_code == 404
+            assert missing_delegation.json()["detail"]["code"] == "CONTROL_UNIT_DELEGATION_NOT_FOUND"
+    asyncio.run(exercise())

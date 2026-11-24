@@ -47,7 +47,10 @@ def install_site_rules_routes(app, *, site_maps, route_active, read_guard, requi
 
     @app.get("/api/fleet/site-rules/active", dependencies=read_guard, tags=["site-rules"])
     def site_rules_active() -> dict:
-        view = rules.active_view()
+        try:
+            view = rules.active_view()
+        except SiteMapError as exc:
+            raise fail(exc) from exc
         return view if view is not None else {"version": None, "rules": SiteRules().body()}
 
     @app.get("/api/fleet/site-rules/draft", dependencies=read_guard, tags=["site-rules"])
