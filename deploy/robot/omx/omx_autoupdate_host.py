@@ -140,9 +140,23 @@ class Host:
         ).stdout.split()
         return out[0]
 
+    def _github_headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/vnd.github+json"}
+        tok = ""
+        if tok_path := self.cfg.get("github_token_file"):
+            try:
+                tok = Path(os.path.expanduser(str(tok_path))).read_text(encoding="utf-8").strip()
+            except OSError:
+                tok = ""
+        if not tok:
+            tok = os.environ.get("GITHUB_TOKEN", "").strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        return headers
+
     def checks(self, sha: str) -> dict:
         url = f"https://api.github.com/repos/{self.cfg['github_repo']}/commits/{sha}/check-runs?per_page=100"
-        request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+        request = urllib.request.Request(url, headers=self._github_headers())
         runs = json.load(urllib.request.urlopen(request, timeout=30))["check_runs"]
         return {
             run["name"]: (run["status"], run["conclusion"], (run.get("app") or {}).get("slug")) for run in runs
@@ -151,7 +165,7 @@ class Host:
     def _api(self, path: str) -> dict:
         request = urllib.request.Request(
             f"https://api.github.com/repos/{self.cfg['github_repo']}/{path}",
-            headers={"Accept": "application/vnd.github+json"},
+            headers=self._github_headers(),
         )
         return json.load(urllib.request.urlopen(request, timeout=30))
 

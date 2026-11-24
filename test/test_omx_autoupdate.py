@@ -1044,3 +1044,74 @@ def test_observer_defer_reasons_distinguish_missing_stale_invalid_hw_error_and_t
     assert host.follower_idle_reason(tmp_path, tmp_path) is None
     assert host.follower_torque_off(tmp_path, tmp_path) is True
     assert u.run() == "switched"
+
+
+def test_deferred_prepared_release_skips_github_checks_and_handles_rate_limit(tmp_path, monkeypatch, capsys):
+    import io
+    import urllib.error
+
+    # 1) Prepared + deferred release skips checks() on subsequent runs while still enforcing new floor_sha;
+    #    descends short-circuits without calling host.descends when floor_sha == head.
+    host = FakeHost()
+    host.in_use = True
+    checks_calls = 0
+    orig_checks = host.checks
+
+    def _counting_checks(sha):
+        nonlocal checks_calls
+        checks_calls += 1
+        return orig_checks(sha)
+
+    host.checks = _counting_checks
+    descend_calls: list[tuple[str, str]] = []
+    orig_desc = host.descends
+
+    def _counting_desc(base, head):
+        descend_calls.append((base, head))
+        return orig_desc(base, head)
+
+    host.descends = _counting_desc
+    u = updater(tmp_path / "cache", host)
+    assert u.run() == "deferred"
+    assert checks_calls == 1 and u.state().get("prepared_verified_sha") == host.head
+
+    # On deferred retry, checks() is NOT called again even across multiple retries
+    assert u.run() == "deferred"
+    assert checks_calls == 1
+
+    # Raising floor_sha to sha itself short-circuits without hitting GitHub compare API
+    st = u.state()
+    st["floor_sha"] = host.head
+    u.save(st)
+    assert u.run() == "deferred"
+    assert checks_calls == 1 and descend_calls == []
+
+    # Raising floor_sha to an incompatible commit still blocks even with prepared_verified_sha
+    st["floor_sha"] = "f" * 40
+    u.save(st)
+    host.descendant = False
+    assert u.run() == "below_hotfix_floor"
+    assert descend_calls == [("f" * 40, host.head)]
+
+    # 2) HTTP 403/429 during trusted() returns "rate_limited" and logs step="rate_limited" without exception
+    for err_code in (403, 429):
+        host_rl = FakeHost()
+        host_rl.checks = lambda _sha, c=err_code: (_ for _ in ()).throw(
+            urllib.error.HTTPError("https://api.github.com/x", c, "rate limit", {}, io.BytesIO(b""))
+        )
+        u_rl = updater(tmp_path / f"rl_{err_code}", host_rl)
+        capsys.readouterr()
+        assert u_rl.run() == "rate_limited"
+        assert '"step": "rate_limited"' in capsys.readouterr().out
+
+    # 3) Host._github_headers attaches Authorization Bearer token from github_token_file or GITHUB_TOKEN
+    import omx_autoupdate_host as autohost
+
+    tok_file = tmp_path / "gh.token"
+    tok_file.write_text("ghp_test_token_123\n", encoding="utf-8")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    h_file = autohost.Host({"github_token_file": str(tok_file)})
+    assert h_file._github_headers()["Authorization"] == "Bearer ghp_test_token_123"
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_env_token_456")
+    h_env = autohost.Host({"github_token_file": str(tmp_path / "missing.token")})
+    assert h_env._github_headers()["Authorization"] == "Bearer ghp_env_token_456"

@@ -115,24 +115,27 @@ class Updater:
             return self.host.follower_idle_reason(release, self.python(env))
         return None if self.host.follower_torque_off(release, self.python(env)) else "follower_torque_not_off"
 
-    def trusted(self, sha: str, state: dict) -> str | None:
-        checks = self.host.checks(sha)
-        for required in self.cfg["required_checks"]:
-            status = checks.get(required)
-            if status is None or status[0] != "completed":
-                return "waiting_ci"
-            if status[1] != "success" or status[2] != "github-actions":
-                return "ci_failed"
+    def trusted(self, sha: str, state: dict, *, release_verified: bool = False) -> str | None:
+        if not release_verified:
+            checks = self.host.checks(sha)
+            for required in self.cfg["required_checks"]:
+                status = checks.get(required)
+                if status is None or status[0] != "completed":
+                    return "waiting_ci"
+                if status[1] != "success" or status[2] != "github-actions":
+                    return "ci_failed"
         # floor_sha: the main commit under the last hand hotfix (omx_hotfix.py deploy); never go back below it
         if state.get("floor_sha") and not self.descends(state["floor_sha"], sha):
             return "below_hotfix_floor"
         if state.get("current_sha") and not self.descends(state["current_sha"], sha):
             return "not_descendant"
-        if self.cfg.get("require_verified_commit") and not self.host.verified(sha):
+        if not release_verified and self.cfg.get("require_verified_commit") and not self.host.verified(sha):
             return "unverified_commit"
         return None
 
     def descends(self, base: str, head: str) -> bool:
+        if base == head:
+            return True
         try:
             return self.host.descends(base, head)
         except urllib.error.HTTPError as error:
@@ -156,11 +159,23 @@ class Updater:
         if name == state.get("failed"):
             log(step="known_bad", release=name)
             return "known_bad"
-        refused = self.trusted(sha, state)
+        release = self.releases / name
+        already_verified = (
+            release.is_dir()
+            and (release / "RELEASE").is_file()
+            and (release / "RELEASE").read_text(encoding="utf-8").strip() == sha
+            and state.get("prepared_verified_sha") == sha
+        )
+        try:
+            refused = self.trusted(sha, state, release_verified=already_verified)
+        except urllib.error.HTTPError as exc:
+            if exc.code in (403, 429):
+                log(step="rate_limited", release=name, code=exc.code)
+                return "rate_limited"
+            raise
         if refused:
             log(step=refused, release=name)
             return refused
-        release = self.releases / name
         if not release.exists():
             if dry_run:
                 log(step="would_prepare", release=name)
@@ -185,6 +200,8 @@ class Updater:
                 log(step="smoke_failed", release=name)
                 return "smoke_failed"
             os.replace(staging, release)
+            state["prepared_verified_sha"] = sha
+            self.save(state)
             log(step="prepared", release=name)
         env = self.env_for(release)
         session = self.host.hold_session()

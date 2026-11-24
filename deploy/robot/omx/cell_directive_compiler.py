@@ -46,6 +46,17 @@ def build_plan_from_directive(
         cal["finger_color"] = str(exec_cfg["finger_color"])
 
     plan = _clone(base_plan)
+    plan["tcp_x_m"], plan["tcp_source"] = resolve_tcp(exec_cfg.get("tcp_x_m"), plan.get("tcp_x_m"))
+    if int(cal.get("samples", 0)) == 0 and arm_id == "arm_s" and float(plan["tcp_x_m"]) >= 0.073:
+        if exec_cfg.get("finger_color") not in ("dark", "white", "auto"):
+            cal["finger_color"] = "white"
+        cal.update(
+            held_30mm=54.3,
+            jaw_margin_mm=9.5,
+            grip_open_30mm=58.1,
+            grip_release_30mm=57.5,
+            hold_current_ma=80,
+        )
     px, py, pz = pick["effective_xyz_m"]
     qx, qy, qz = place["effective_xyz_m"]
     approach_m = float(exec_cfg.get("approach_m", 0.032 if float(pz) < 0.020 else 0.028))
@@ -73,16 +84,22 @@ def build_plan_from_directive(
         "lift_m": place_approach_m,
     }
     plan["grip_closed"] = float(cal.get("grip_closed", plan.get("grip_closed", 48.8)))
-    plan["grip_open"] = min(
-        58.15, float(exec_cfg.get("grip_open_override") or cal.get("grip_open_30mm", plan.get("grip_open", 57.9)))
+    if exec_cfg.get("grip_open_override") is not None:
+        raw_open = float(exec_cfg["grip_open_override"])
+    elif int(cal.get("samples", 0)) > 0:
+        raw_open = float(cal.get("grip_open_30mm", plan.get("grip_open", 57.9)))
+    else:
+        raw_open = float(plan["grip_open"]) if plan.get("grip_open") is not None else float(cal.get("grip_open_30mm", 57.9))
+    plan["grip_open"] = min(58.15, raw_open)
+    raw_rel = (
+        float(cal.get("grip_release_30mm", plan.get("grip_release", 57.5)))
+        if int(cal.get("samples", 0)) > 0
+        else (float(plan["grip_release"]) if plan.get("grip_release") is not None else float(cal.get("grip_release_30mm", 57.5)))
     )
-    plan["grip_release"] = min(
-        float(plan["grip_open"]), float(cal.get("grip_release_30mm", plan.get("grip_release", 57.5)))
-    )
+    plan["grip_release"] = min(float(plan["grip_open"]), raw_rel)
     plan["hold_current_ma"] = int(
         exec_cfg.get("hold_current_ma", max(140, int(cal.get("hold_current_ma", plan.get("hold_current_ma", 140)))))
     )
-    plan["tcp_x_m"], plan["tcp_source"] = resolve_tcp(exec_cfg.get("tcp_x_m"), plan.get("tcp_x_m"))
     plan["approach_m"] = approach_m
     plan["lift_m"] = actual_lift_m
     default_rel_lift = max(0.042, place_approach_m + 0.014) if arm_id == "arm_s" else place_approach_m
