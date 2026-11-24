@@ -407,3 +407,109 @@ def test_optional_camera_offline_leaves_upkeep_ok_without_usb_cycle():
         "wrist": {"url": "http://v/frame/arm_s_wrist.jpg"},
     }, io, fix=True, bus_free=True, usb_recover_fn=lambda *a: (_ for _ in ()).throw(AssertionError("must not cycle optional")))
     assert top is None and rows[0]["status"] == "ok" and "optional top offline" in rows[0]["detail"]
+
+
+def test_check_map_warns_needs_person_on_low_zone_gaps(tmp_path):
+    gap = {
+        "site": "beltend", "z_m": -0.0571, "floor_z_m": 0.005, "uncovered": 3, "total": 9,
+        "mapped_x_m": [0.10, 0.19], "mapped_y_m": [0.09, 0.25],
+        "uncovered_x_m": [0.11, 0.19], "uncovered_y_m": [0.174, 0.25],
+    }
+    io, _ = make_io()
+    io.calibrate = lambda c, cal, f, p: {"check": {"missing_map": [], "low_zone_gaps": [gap]}, "todo": []}
+    out = cu.run(arms_setup(tmp_path), io=io, out_dir=tmp_path / "upkeep", incidents=tmp_path / "incidents", stamp="G")["arm_a"]
+    checks = {c["check"]: c for c in out["checks"]}
+    assert checks["map"]["status"] == "warn"
+    assert "low_zones gap" in checks["map"]["detail"] and "beltend" in checks["map"]["detail"]
+    assert not checks["map"].get("motion")
+    assert out["verdict"] == "needs_person"
+
+
+def test_usb_recovery_reauthorizes_isolated_camera_leaf_when_root_port_carries_openrb(tmp_path, monkeypatch):
+    usb_tree(tmp_path, monkeypatch, board_root="3-4")
+    camera = tmp_path / "sys/devices/platform/usb3/3-4/3-4.2"
+    (camera / "authorized").write_text("1")
+    (camera / "bDeviceClass").write_text("ef")
+    port_info = cu.usb_port("/dev/cam")
+    assert port_info["leaf"].endswith("3-4.2") and port_info["leaf_authorized"] == "1" and port_info["leaf_boards"] == []
+    assert port_info["boards"] == [DEV]
+    state, log = {"reauth": False}, []
+
+    def frames(device):
+        log.append("read")
+        return state["reauth"]
+
+    def leaf_auth(leaf, enabled):
+        log.append(f"auth {1 if enabled else 0}")
+        if enabled:
+            state["reauth"] = True
+
+    io = cu.Io(
+        fetch=lambda url: (200, JPEG) if state["reauth"] else (503, b""),
+        labels=lambda: LABELS,
+        roles=lambda: ROLES,
+        unit_tail=lambda role: "watchdog",
+        unit_restart=lambda role: None,
+        device=lambda role: "/dev/cam",
+        usb_port=cu.usb_port,
+        frames=frames,
+        ports=lambda *a: (_ for _ in ()).throw(AssertionError("root port must not cycle")),
+        leaf_auth=leaf_auth,
+        rebind=lambda: log.append("rebind"),
+        units=lambda role, up: log.append("units up" if up else "units down"),
+        sleep=lambda s: log.append(f"sleep {s}"),
+    )
+    rows, _ = cu.check_cameras("arm_a", CAMS, io, fix=True, bus_free=True)
+    assert rows[0]["status"] == "fixed" and "re-authorized USB leaf 3-4.2" in rows[0]["detail"]
+    assert log == ["units down", "read", "auth 0", "sleep 2", "auth 1", "sleep 2", "rebind", "sleep 2", "read", "units up"]
+
+
+def test_usb_recovery_refuses_leaf_reset_on_hub_or_composite_serial_leaf(tmp_path, monkeypatch):
+    usb_tree(tmp_path, monkeypatch, board_root="3-4")
+    camera = tmp_path / "sys/devices/platform/usb3/3-4/3-4.2"
+    (camera / "authorized").write_text("1")
+    (camera / "bDeviceClass").write_text("09")
+    assert "leaf" not in cu.usb_port("/dev/cam")
+    usb = Usb(boards=[DEV])
+    io = usb.io()
+    io.usb_port = cu.usb_port
+    io.leaf_auth = lambda *a: (_ for _ in ()).throw(AssertionError("must never toggle hub authorized"))
+    assert "refused" in cu.usb_recover("arm_a_wrist", io)
+    assert usb.log == []
+    with pytest.raises(OSError, match="USB hub"):
+        cu.leaf_authorize(str(camera), False)
+
+    # Composite device carrying an OpenRB interface on the same leaf must also refuse leaf reset.
+    io2 = usb.io()
+    io2.usb_port = lambda _d: {"ports": ["root"], "speed": 480, "boards": [DEV], "leaf": str(camera), "leaf_authorized": "1", "leaf_boards": [DEV]}
+    io2.leaf_auth = lambda *a: (_ for _ in ()).throw(AssertionError("must never toggle composite leaf with OpenRB"))
+    assert "refused" in cu.usb_recover("arm_a_wrist", io2)
+    assert usb.log == []
+
+
+def test_usb_recovery_restores_leaf_authorized_on_interruption():
+    auth, log = [True], []
+
+    def leaf_auth(leaf, enabled):
+        auth[0] = enabled
+        log.append(f"auth {1 if enabled else 0}")
+
+    def sleep(s):
+        if s == 2 and not auth[0]:
+            raise KeyboardInterrupt("interrupted during de-authorize")
+
+    io = cu.Io(
+        device=lambda role: "/dev/cam",
+        usb_port=lambda d: {"ports": ["root"], "speed": 480, "boards": [DEV], "leaf": "/sys/bus/usb/devices/3-4.2.1",
+                            "leaf_authorized": "1", "leaf_boards": []},
+        frames=lambda d: False,
+        ports=lambda *a: (_ for _ in ()).throw(AssertionError("root port must not cycle")),
+        leaf_auth=leaf_auth,
+        rebind=lambda: log.append("rebind"),
+        units=lambda role, up: log.append("units up" if up else "units down"),
+        sleep=sleep,
+    )
+    with pytest.raises(KeyboardInterrupt):
+        cu.usb_recover("arm_b_wrist", io)
+    assert auth[0] is True
+    assert log == ["units down", "auth 0", "auth 1", "units up"]

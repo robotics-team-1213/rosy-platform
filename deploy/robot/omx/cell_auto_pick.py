@@ -11,7 +11,9 @@ import cell_act_shadow  # noqa: E402
 import cell_attempts, cell_auto_record  # noqa: E402,E401
 import cell_auto_evidence  # noqa: E402
 import cell_bundle_emit  # noqa: E402
-from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, reach_fix_of, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
+from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
+    CLOSING, choose, finger_room_view, observe, plan_pick, reach_fix_of, save_frame_receipt, verify_placed,
+)
 import cell_executor  # noqa: E402
 import cell_release_evidence  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
@@ -108,10 +110,12 @@ def _run_auto_core(
                 return {**out, "result": f"held: destination observation: {derr}"}
             img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog,
                                                 image=source_image)
+            room_view = None if error else finger_room_view(img, config, source, roi, mask)
             usable, refused = (
                 choose(
                     cell, config, calibration, source, dest_site, place_xy, roi,
                     objects, mask, catalog, bias_data, choices, work, failed_yaws, dest_view,
+                    room_view=room_view,
                 )
                 if not error
                 else ([], [])
@@ -172,7 +176,7 @@ def _run_auto_core(
             ):
                 usable, refused = choose(
                     cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
-                    bias_data, choices, work, failed_yaws, dest_view,
+                    bias_data, choices, work, failed_yaws, dest_view, room_view=room_view,
                 )
                 if not usable:
                     row.update(refused=refused, error=cell_diagnose.no_usable_object(refused, after_pivot=True))

@@ -285,20 +285,38 @@ def check_map(config, params, top, io):
 
         calibration = {"schema": cell_calibration.SCHEMA, "sites": {}}
     result = io.calibrate(config, calibration, io.decode(top), params)
-    if not result["todo"]:
+    gaps = (result.get("check") or {}).get("low_zone_gaps") or []
+    gap_text = "; ".join(
+        f"{g['site']} z={g['z_m']} m ({g['uncovered']}/{g['total']} pts outside low_zones, "
+        f"y={g['uncovered_y_m'][0]}..{g['uncovered_y_m'][1]} m)"
+        for g in gaps
+    )
+    if not result["todo"] and not gaps:
         return row("map", "ok", "map, camera pose and surfaces agree")
+    if not result["todo"]:
+        return row(
+            "map",
+            "warn",
+            f"low_zones gap: {gap_text}; review and update plan limits.low_zones with operator approval",
+            low_zone_gaps=gaps,
+        )
+    detail = (
+        "stale: "
+        + ", ".join(result["todo"])
+        + "; a person at the power switch runs: cell_calibrate.py --config <cell> auto --commissioning --person-at-switch"
+    )
+    if gaps:
+        detail += f"; low_zones gap: {gap_text}"
     return row(
         "map",
         "warn",
-        "stale: "
-        + ", ".join(result["todo"])
-        + "; a person at the power switch runs: cell_calibrate.py --config <cell> auto --commissioning --person-at-switch",
-        motion=True,
+        detail,
+        motion=not gaps,
         steps=result["todo"],
         found={
             k: v
             for k, v in result["check"].items()
-            if k in ("camera_moved", "missing_map", "missing_surface", "camera_shift")
+            if k in ("camera_moved", "missing_map", "missing_surface", "camera_shift", "low_zone_gaps")
         },
     )
 
@@ -337,3 +355,32 @@ def check_tcp(config, env=None):
         return row("tcp", "warn" if clash else "ok",
                    clash or f"plans with {config['tcp_x_m']} m: {config.get('tcp_x_m_evidence', 'no evidence recorded')}")
     return row("tcp", "warn", f"stock {TCP_STOCK}, unmeasured (ROSY_OMX_TCP_X_M in the run script decides)")
+
+
+def leaf_recover(role, device, port, boards, io):
+    """Reset only a blocked USB camera's isolated leaf (`authorized` 0 -> 1) when an OpenRB shares its root port."""
+    leaf, shared = port["leaf"], ", ".join(boards)
+    io.units(role, False)
+    try:
+        if io.frames(device):
+            return f"{role} streams when read directly (not a USB fault)"
+        try:
+            io.leaf_auth(leaf, False)
+            io.sleep(2)
+        finally:
+            io.leaf_auth(leaf, True)
+        io.sleep(2)
+        io.rebind()
+        for _ in range(4):
+            io.sleep(2)
+            if io.frames(device):
+                break
+        else:
+            return f"re-authorized USB leaf {Path(leaf).name} of {role} (root port shared with {shared} untouched) but it still gives no frames"
+    finally:
+        io.units(role, True)
+    try:
+        speed = io.usb_port(device)["speed"]
+    except OSError:
+        speed = port["speed"]
+    return f"re-authorized USB leaf {Path(leaf).name} of {role} (root port shared with {shared} untouched), frames flow at {speed} Mbit/s"
