@@ -35,6 +35,8 @@ TWIN_OPPOSITE_TOL_RAD = math.radians(25.0)
 TWIN_FIT_GAP = 0.10
 TWIN_POSE_TOL_M = 0.05
 TWIN_POSE_TOL_RAD = 0.05
+UNIQUE_MIN_FIT = 0.90
+UNIQUE_MIN_MARGIN = 0.15
 
 
 @dataclass(frozen=True)
@@ -153,6 +155,24 @@ class LocalizationStateMachine:
         if not all(math.isfinite(v) for v in pose):
             return self._reject('bad_pose')
         self.pose, self.source = tuple(float(v) for v in pose), source
+        self.check = InjectionCheck(now_s, **self._check_args)
+        return Step(self.state, ('inject_pose',), pose=self.pose)
+
+    def auto_lock_unique(self, now_s, *, min_fit=UNIQUE_MIN_FIT, min_margin=UNIQUE_MIN_MARGIN):
+        """Auto-inject a single candidate whose geometric unique_margin satisfies thresholds."""
+        if self.state is not LocState.CANDIDATES or self.check is not None or len(self.candidates) != 1:
+            return Step(self.state)
+        c = self.candidates[0]
+        margin = getattr(c, 'unique_margin', None)
+        if (not isinstance(c.scan_fit, (int, float)) or isinstance(c.scan_fit, bool)
+                or not math.isfinite(c.scan_fit) or c.scan_fit < max(self.min_fit, min_fit)):
+            return Step(self.state)
+        if (not isinstance(margin, (int, float)) or isinstance(margin, bool)
+                or not math.isfinite(margin) or margin < min_margin):
+            return Step(self.state)
+        if not all(math.isfinite(v) for v in (c.x, c.y, c.yaw)):
+            return Step(self.state)
+        self.pose, self.source = (float(c.x), float(c.y), float(c.yaw)), 'unique_map'
         self.check = InjectionCheck(now_s, **self._check_args)
         return Step(self.state, ('inject_pose',), pose=self.pose)
 

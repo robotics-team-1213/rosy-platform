@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
@@ -36,6 +37,10 @@ SLOT_OFFSETS = np.array(np.meshgrid(
 FINE_OFFSETS = np.array(np.meshgrid(
     np.arange(-.03, .031, .01), np.arange(-.03, .031, .01), np.radians(np.arange(-3., 3.1, .5)),
     indexing='ij')).reshape(3, -1).T
+UNIQUE_MIN_FIT = 0.90
+UNIQUE_FIT_GAP = 0.15
+UNIQUE_COMBINED_GAP = 0.10
+UNIQUE_MAX_COMPETITOR_FIT = 0.78
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,7 @@ class PoseCandidate:
     yaw: float
     scan_fit: float
     origin: str  # 'global' or 'slot:<square id>'
+    unique_margin: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -119,6 +125,46 @@ def distinct(results, minimum_fit=.9, keep_within=.05, limit=4):
     return picked
 
 
+def _rival_score(field, pose, eval_ranges, eval_angles) -> float:
+    """High-water agreement for a rival pose; wall-piercing poses score 0.0."""
+    if hasattr(field, "explain"):
+        b = field.explain(pose, eval_ranges, eval_angles)
+        if b.rejected_reason == "wall-piercing":
+            return 0.0
+        return max(float(b.robust_score), float(b.raw_score))
+    return float(field.score(pose, eval_ranges, eval_angles))
+
+
+def _unique_margin(field, results, picked, eval_ranges, eval_angles, minimum_fit):
+    """Strict proof that one global candidate has no plausible rival or 180-deg map mirror."""
+    if len(picked) != 1 or not results or len(eval_ranges) < 30:
+        return None
+    if not all(hasattr(field, attr) for attr in ("grid", "score", "origin", "resolution")):
+        return None
+    best_pose, best_fit = picked[0]
+    if not math.isfinite(best_fit) or best_fit < max(minimum_fit, UNIQUE_MIN_FIT):
+        return None
+    best_combined = max((float(r[0]) for r in results if not apart(r[2], best_pose)), default=float(results[0][0]))
+    competitors = [r for r in results if apart(r[2], best_pose)]
+    comp_combined = max((float(r[0]) for r in competitors), default=0.0)
+    if best_combined - comp_combined < UNIQUE_COMBINED_GAP:
+        return None
+    comp_agree = max((float(r[1]) for r in competitors), default=0.0)
+    comp_rival = max((_rival_score(field, r[2], eval_ranges, eval_angles) for r in competitors[:8]), default=0.0)
+    ys, xs = np.nonzero(field.grid >= 65)
+    if not len(xs):
+        return None
+    cx = float(field.origin[0]) + (float(xs.min()) + float(xs.max()) + 1.0) * 0.5 * float(field.resolution)
+    cy = float(field.origin[1]) + (float(ys.min()) + float(ys.max()) + 1.0) * 0.5 * float(field.resolution)
+    mirror_pose = (2.0 * cx - float(best_pose[0]), 2.0 * cy - float(best_pose[1]), wrap(float(best_pose[2]) + math.pi))
+    mirror_rival = _rival_score(field, mirror_pose, eval_ranges, eval_angles)
+    worst_other = max(comp_agree, comp_rival, mirror_rival)
+    margin = float(best_fit) - worst_other
+    if not math.isfinite(worst_other) or worst_other > UNIQUE_MAX_COMPETITOR_FIT or margin < UNIQUE_FIT_GAP:
+        return None
+    return round(margin, 3)
+
+
 def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep_within=.05, limit=4,
                       clear=None, fine_scan=None, use_robust=True, diagnostics=None):
     """Every distinct global pose; [] when the scan or the map cannot support one.
@@ -135,9 +181,11 @@ def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep
     else:
         results, reason = field.global_results(ranges, angles, radius, clear=clear)
     picked = distinct(results, minimum_fit, keep_within, limit)
+    eval_r, eval_a = (valid_beams(*fine_scan) if fine_scan is not None else valid_beams(ranges, angles))
+    if fine_scan is not None and len(eval_r) < 30:
+        eval_r, eval_a = valid_beams(ranges, angles)
     if fine_scan is not None:
-        fine_ranges, fine_angles = valid_beams(*fine_scan)
-        picked = [_fine(field, pose, fit, fine_ranges, fine_angles, clear, use_robust=use_robust) for pose, fit in picked]
+        picked = [_fine(field, pose, fit, eval_r, eval_a, clear, use_robust=use_robust) for pose, fit in picked]
         # The fine stage moves each pick by up to 3 cm / 3 deg and never re-checks
         # apart(): drop any pick it pulled onto an earlier one (guard, 2026-10-02 audit)
         # or whose full-scan fit dropped below minimum_fit.
@@ -148,9 +196,6 @@ def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep
         picked = kept
     if not picked and diagnostics is not None:
         if results and hasattr(field, "explain"):
-            eval_r, eval_a = (valid_beams(*fine_scan) if fine_scan is not None else valid_beams(ranges, angles))
-            if len(eval_r) < 30:
-                eval_r, eval_a = valid_beams(ranges, angles)
             b = field.explain(results[0][2], eval_r, eval_a)
             diagnostics.append(
                 f"top_rejected raw={b.raw_score:.2f} robust={b.robust_score:.2f} "
@@ -159,7 +204,9 @@ def global_candidates(field, ranges, angles, radius, mount, minimum_fit=.9, keep
             )
         elif reason:
             diagnostics.append(f"global_candidates_empty reason={reason}")
-    return [PoseCandidate(*base_from_sensor(pose, mount), scan_fit=fit, origin='global')
+    margin = _unique_margin(field, results, picked, eval_r, eval_a, minimum_fit) if len(picked) == 1 else None
+    return [PoseCandidate(*base_from_sensor(pose, mount), scan_fit=fit, origin='global',
+                          unique_margin=margin if len(picked) == 1 else None)
             for pose, fit in picked]
 
 

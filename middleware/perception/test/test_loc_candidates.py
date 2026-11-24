@@ -252,3 +252,53 @@ def test_fine_drop_below_minimum_fit_and_records_rejection_diagnostic():
                              np.linspace(-0.3, 0.3, 40), RADIUS, Mount(0., 0., 0.),
                              diagnostics=diag) == []
     assert len(diag) == 1 and "reason=" in diag[0]
+
+
+def test_asymmetric_gazebo_and_l_room_yield_unique_margin_while_symmetric_rooms_do_not():
+    d = np.load(Path(__file__).parent / "fixtures/gazebo_localization_corner.npz")
+    asym = MapAgreement(d["grid"], float(d["resolution"]), d["origin"])
+    found = global_candidates(asym, d["ranges"], d["angles"], RADIUS, Mount(0., 0., 0.))
+    assert len(found) == 1
+    assert found[0].unique_margin is not None and found[0].unique_margin >= 0.15
+
+    # Symmetric map_v2_fleet track never earns a unique_margin (even with occluded beams)
+    ranges, angles = scan((0., -.51, 0.), beams=640)
+    sym_found = global_candidates(field(), ranges[::4], angles[::4], RADIUS, MOUNT, fine_scan=(ranges, angles))
+    assert all(c.unique_margin is None for c in sym_found)
+    occ_ranges = np.where((angles > 0.2) & (angles < 1.8), 0.35, ranges)
+    occ_found = global_candidates(field(), occ_ranges[::4], angles[::4], RADIUS, MOUNT)
+    assert all(c.unique_margin is None for c in occ_found)
+
+    # Synthetic L-shaped asymmetric room vs symmetric rectangular room
+    def _synth_scan(ag, pose):
+        angs = np.linspace(-math.pi, math.pi, 360, endpoint=False)
+        rs = np.full_like(angs, 6.0)
+        h, w = ag.grid.shape
+        for k, a in enumerate(angs):
+            ang = pose[2] + a
+            for dist in np.arange(0.1, 6.0, ag.resolution * 0.5):
+                ix = int(math.floor((pose[0] + dist * math.cos(ang) - ag.origin[0]) / ag.resolution))
+                iy = int(math.floor((pose[1] + dist * math.sin(ang) - ag.origin[1]) / ag.resolution))
+                if ix < 0 or ix >= w or iy < 0 or iy >= h:
+                    break
+                if ag.grid[iy, ix] >= 65:
+                    rs[k] = dist
+                    break
+        return rs, angs
+
+    l_grid = np.zeros((44, 52), dtype=np.int8)
+    l_grid[[0, -1], :] = 100
+    l_grid[:, [0, -1]] = 100
+    l_grid[20:, 28:] = 100
+    l_field = MapAgreement(l_grid, 0.05, (0.0, 0.0))
+    lr, la = _synth_scan(l_field, (0.7, 0.55, 0.25))
+    l_found = global_candidates(l_field, lr[::2], la[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(lr, la))
+    assert len(l_found) == 1 and l_found[0].unique_margin is not None and l_found[0].unique_margin >= 0.15
+
+    rect_grid = np.zeros((40, 52), dtype=np.int8)
+    rect_grid[[0, -1], :] = 100
+    rect_grid[:, [0, -1]] = 100
+    rect_field = MapAgreement(rect_grid, 0.05, (0.0, 0.0))
+    rr, ra = _synth_scan(rect_field, (0.7, 0.55, 0.25))
+    rect_found = global_candidates(rect_field, rr[::2], ra[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(rr, ra))
+    assert all(c.unique_margin is None for c in rect_found)
