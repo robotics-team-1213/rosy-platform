@@ -32,7 +32,12 @@ def _app(tmp_path, monkeypatch, *, role_principal=None, named_requester=True):
     if role_principal is not None:
         @app.middleware("http")
         async def _inject_principal(request, call_next):
-            request.state.site_principal = role_principal
+            ov = request.headers.get("X-Test-Principal")
+            if ov:
+                pid, _, role = ov.partition(":")
+                request.state.site_principal = SimpleNamespace(principal_id=pid, role=role)
+            else:
+                request.state.site_principal = role_principal
             return await call_next(request)
     if not named_requester:
         from fastapi import HTTPException
@@ -148,7 +153,8 @@ def test_raw_keys_role_cas_refusal_replay_and_rollback(tmp_path, monkeypatch):
     assert ok.status_code == 200 and ok.json()["result"]["requires_presence_confirm"] is True
     tid = ok.json()["result"]["task"]["task_id"]
     app2.state.omx_cell_states["cell_s"]["phase"] = "RELEASED"
-    claim = client2.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s", "task_id": tid}).json()
+    monkeypatch.setenv("ROSY_FLEET_CELL_OWNERS", "cell_s=omx-svc-s")
+    claim = client2.post("/api/fleet/pipeline/cell-tasks/claim", headers={"X-Test-Principal": "omx-svc-s:service"}, json={"cell_id": "cell_s", "task_id": tid}).json()
     assert claim["claimed"] is False and claim["reason"] == "PRESENCE_CONFIRMATION_REQUIRED"
 
     # Depth>=1 block and ledger save rollback on disk fault.
@@ -224,12 +230,13 @@ def test_situational_d1048_staged_homing_owner_auth_and_3cam_guards(tmp_path, mo
     assert f2["homing_strategies"]["auto_fold"]["reason"] == "HOMING_LOCKED:AWAITING_LIFT_VISUAL_VERIFY"
 
     _seed_cams(app, arm_id="arm_b", seq=15)
+    sha2b = next(x for x in client.get("/api/fleet/pipeline/recovery-tools").json()["active_failures"] if x["root_task_id"] == "t-armb")["context_sha256"]
     assert client.post("/api/fleet/pipeline/recovery-tools/invoke", json={
         "tool_name": "record_visual_checkpoint",
         "arguments": {"arm_id": "arm_b", "stage": "after_lift", "verdict": "CLEAR", "cargo_detached": True,
                       "gripper_open": True, "overhead_clear": True, "cameras_checked": {"top": 15, "side": 15, "arm_b_wrist": 15},
                       "observation_summary": "3 cams clear"},
-        "caller_kind": "operator", "request_id": "v-ok-lift", "expected_context_sha256": f2["context_sha256"],
+        "caller_kind": "operator", "request_id": "v-ok-lift", "expected_context_sha256": sha2b,
         "root_task_id": "t-armb", "rationale": "3cam ok",
     }).status_code == 200
     sha3 = next(x for x in client.get("/api/fleet/pipeline/recovery-tools").json()["active_failures"] if x["root_task_id"] == "t-armb")["context_sha256"]
