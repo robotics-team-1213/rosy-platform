@@ -448,3 +448,51 @@ def test_auto_recover_and_manual_clear_support_return_home_and_activating_observ
     monkeypatch.setattr(bench, "go_home", lambda req: (_ for _ in ()).throw(ValueError("HOLD: torque kept")))
     clr_fail = bench.clear_manual_hold({"confirmed": True, "return_home": True})
     assert clr_fail["recovered"] is True and clr_fail["home_failed"] is True and "SIGUSR2" in clr_fail["next_action"]
+
+
+def test_ik_chunk_picker_skips_non_chunk_files_override_normalizes_and_free_root_rotates(tmp_path, monkeypatch):
+    import bench_record_replay as brr
+
+    bench, body, _, _ = _setup(tmp_path, monkeypatch)
+    cdir = bench.prep / "cell-arm-a"
+    cdir.mkdir(parents=True)
+    # Newer non-chunk auto-fold-choices file must be ignored in favor of valid beltend chunk library.
+    (cdir / "auto-fold-choices-arm_a.json").write_text(json.dumps({"arm": "arm_a", "choices": []}), encoding="utf-8")
+    os.utime(cdir / "auto-fold-choices-arm_a.json", (time.time() + 60, time.time() + 60))
+    (cdir / "auto-beltend-0-100.json").write_text(json.dumps({
+        "gripper_closed": 49.0,
+        "chunks": {k: [[1.0, -20.0, 20.0, 10.0, 0.0, 55.0]] for k in (
+            "above_pick", "descend_pick", "grasp_pick", "lift_pick",
+            "above_place", "descend_place", "release_place", "lift_place", "home",
+        )},
+    }), encoding="utf-8")
+    res = bench.pipeline_generate_replay({
+        "source_type": "ik_planner", "arm": "arm_a", "origin": "belt", "target_slot": "ship-h1r0-l0",
+    })
+    traj = json.loads((bench.prep / res["replay_id"]).read_text(encoding="utf-8"))
+    assert traj["source"]["library"] == "auto-beltend-0-100.json"
+
+    ov = brr.apply_task_override({
+        "task_id": "belt-to-ship-h2r0-l0",
+        "single_task": "Take container from belt to ship hold h2.",
+        "layout": {"origin": "belt", "target_slot": "ship-h2r0-l0"},
+    }, {"origin": "belt", "target_slot": "ship-h1r0-l0"})
+    assert ov["single_task"] == "Pick container from belt to ship-h1r0-l0."
+
+    # Free-mode start derives a fresh dataset root when configured dataset.root already exists on disk.
+    existing_root = tmp_path / "data" / "existing-ds"
+    existing_root.mkdir(parents=True)
+    cfg_p = bench.prep / body["config"]
+    cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+    cfg.setdefault("dataset", {})["root"] = str(existing_root)
+    cfg_p.write_text(json.dumps(cfg), encoding="utf-8")
+    monkeypatch.setattr(bench_record, "hold_other_arm_locks", lambda *a, **kw: ([], None))
+    started = bench.start({**body, "task": "", "name": "free-mode-check"})
+    assert started["status"] != "failed"
+    snap_cfg = json.loads((Path(started["snapshot"]) / "record-config.json").read_text(encoding="utf-8"))
+    assert snap_cfg["dataset"]["root"] != str(existing_root)
+    assert Path(snap_cfg["dataset"]["root"]).parent == existing_root.parent
+    for _ in range(50):
+        if bench.status()["status"] not in ("handing_over", "recording", "restoring", "sealing"):
+            break
+        time.sleep(0.02)

@@ -124,8 +124,10 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
 
         def send_action(self, action):
             if "motion" not in shared:
+                import inspect
                 from motor_health import MotorHealth
 
+                mon = MotorHealth(async_publish=True) if "async_publish" in inspect.signature(MotorHealth).parameters else MotorHealth()
                 motion_cls = _gn_attr("NativeJointMotion", NativeJointMotion)
                 shared["motion"] = motion_cls(
                     self.bus,
@@ -133,7 +135,7 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
                     body_only=body_only,
                     teacher=teacher,
                     stage=None if teacher or body_only else stage_from_env(),
-                    monitor=MotorHealth(),
+                    monitor=mon,
                     **({} if teacher else (lambda m: {"grip_map": m.pop("gripper", None), "follower_floor": m.pop("follower_floor", None), "mount": m})(
                         leader_mount(shared["leader"]))),
                 )
