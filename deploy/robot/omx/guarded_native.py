@@ -205,7 +205,7 @@ class NativeJointMotion:
         started = self.clock()
         if self.boundary:  # set by run_native at a record loop start, used by that loop's first command only
             self.boundary = False
-            if not self.teacher and self.last_time is not None and started - self.last_time > MAX_GAP_S:
+            if self.last_time is not None and started - self.last_time > MAX_GAP_S:
                 if boundary_over(self.last_time, started):  # never the stale cut after a declared boundary: failed, torque kept, session ends
                     raise BoundaryExpired("record loop pause longer than the bound: ending the session")
                 restart_after_pause(self, started)
