@@ -16,7 +16,7 @@ from datetime import datetime
 from fastapi import HTTPException, Request
 
 from fleet.pipeline import resolve_omx_cells
-from fleet.server.sitemap.pipeline_governance_store import is_named_operator
+from .pipeline_governance_store import is_named_operator
 
 # Same value as fleet.server.console.charge_bay_routes.CELL_CLAIM_RADIUS_M (not imported: import cycle); a test pins it.
 STOP_ZONE_RADIUS_M = 0.18

@@ -20,7 +20,7 @@ from fleet.server.pipeline_port_events import (
     task_view_for_request,
     validate_task_identity,
 )
-from fleet.server.sitemap.pipeline_governance_store import (
+from .pipeline_governance_store import (
     admit_cell_task_guarded, build_cell_readiness, is_named_operator, prepare_task_governance,
     safe_canonical_digest, scoped_idempotency_key, validate_request_key,
 )
