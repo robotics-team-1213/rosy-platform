@@ -632,3 +632,36 @@ def test_pr3_b4_amr_bed_veto_and_wrist_fallback_preserved(tmp_path):
     lp = cfc.load_bundle(bundle_root, bid_p)
     assert lp["spatial"]["sites"]["is_amr_bed"] is True
     assert any(v["code"] == "AMR_BED_REQUIRES_FLEET_R" for v in lp["history_and_constraints"]["measured_vetoes"])
+
+
+def test_bundle_emit_parent_state_gen_executor_mode_and_extended_fold_vetoes(tmp_path):
+    import cell_bundle_emit as emit
+
+    prep_dir = tmp_path / "prep"
+    child_work = prep_dir / "cell-auto-1028"
+    child_work.mkdir(parents=True)
+    (prep_dir / "cell-job-api").mkdir()
+    (prep_dir / "cell-job-api" / "cell-state-gen.json").write_text(json.dumps({"cell_state_gen": 42}), encoding="utf-8")
+    bundle_root = tmp_path / "bundles"
+    cfg = {
+        "arm_id": "arm_s", "work_dir": str(child_work), "failure_bundle_root": str(bundle_root),
+        "cameras": {}, "plan": {"home": [0.0, -58.0, 50.0, 50.0, -5.0]},
+    }
+    ext_state = [25.1, -5.4, 20.0, 48.0, -5.0, 49.0]
+    bid = emit.emit_pick_failure(
+        None, cfg, {"sites": {"floor": {}}}, "floor", "floor", child_work,
+        {"result": "stopped: empty"},
+        {"transfer": {"result": "empty", "at": "run grasp_pick", "steps": [{"command": "run grasp_pick", "state": ext_state}]}, "fail": {"stage": "grasp", "class": "empty"}},
+        executor_mode="recovery",
+    )
+    assert bid
+    loaded = cfc.load_bundle(bundle_root, bid, current_cell_state_gen=42)
+    CellFailureContext.model_validate(loaded)
+    assert loaded["generation"]["cell_state_gen"] == 42
+    assert loaded["freshness"]["still_valid_for_action"] is True
+    assert loaded["executor_mode"] == "recovery"
+    assert loaded["measurement"]["holding_and_fold"]["live_fold"]["folded"] is False
+    assert loaded["measurement"]["kinematics_and_health"]["max_home_err_units"] > 8.0
+    vetoes = {v["code"] for v in loaded["history_and_constraints"]["measured_vetoes"]}
+    assert {"OUT_OF_HOME_POSE", "EXTENDED_TORQUE_DROP_FORBIDDEN"}.issubset(vetoes)
+

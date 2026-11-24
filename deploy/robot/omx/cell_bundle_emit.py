@@ -30,7 +30,8 @@ def arm_and_cell(config: dict[str, Any]) -> tuple[str, str]:
 
 
 def _read_state_gen(work: Path, config: dict[str, Any]) -> int:
-    for base in (work, Path(str(config.get("work_dir") or work)).expanduser()):
+    cfg_work = Path(str(config.get("work_dir") or work)).expanduser()
+    for base in dict.fromkeys((work, work.parent, cfg_work, cfg_work.parent)):
         p = base / "cell-job-api" / "cell-state-gen.json"
         if p.is_file():
             try:
@@ -242,10 +243,14 @@ def _emit_common(
         if tail:
             assets["trace-tail.jsonl"] = tail
             trace_ref = {"id": "trace-tail", "file": "trace-tail.jsonl", "kind": "trace", "bytes": 1, "sha256": "0" * 64}
+        home = (config.get("plan") or {}).get("home") or config.get("home")
+        home_err = (round(max(abs(float(a) - float(b)) for a, b in zip(state_vec[:5], home[:5])), 2)
+                    if isinstance(state_vec, list) and len(state_vec) >= 5 and isinstance(home, list) and len(home) >= 5 else None)
+        folded = live.get("folded") if live.get("folded") is not None else (None if home_err is None else home_err <= cfc.HOME_POSE_TOL_UNITS)
         meas: dict[str, Any] = {
             "outcome": {"result": result_text[:200], "attempt_cause": attempt_cause[:80], "stage": stage[:60]},
-            "kinematics_and_health": {"last_state": state_vec[:6] if isinstance(state_vec, list) else None},
-            "holding_and_fold": {"live_fold": {"folded": live.get("folded")}},
+            "kinematics_and_health": {"last_state": state_vec[:6] if isinstance(state_vec, list) else None, **({"max_home_err_units": home_err} if home_err is not None else {})},
+            "holding_and_fold": {"live_fold": {"folded": folded}},
         }
         if trace_ref is not None:
             meas["trace_ref"] = trace_ref
@@ -257,21 +262,11 @@ def _emit_common(
         why_tail = [_clamp_depth(r, 1) for r in _read_jsonl_tail(work / "why.jsonl", 3)]
         bid = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime(at_s))}-{arm_id_val}-{kind}-{uuid.uuid4().hex[:6]}"
         bundle = cfc.build_bundle(
-            kind=kind,
-            arm_id=arm_id_val,
-            cell_id=cell_id,
-            executor_mode=executor_mode,
-            bundle_id=bid,
-            created_at_s=at_s,
-            correlation=_clamp_depth(correlation or {}, 1),
-            generation=gen,
-            measurement=_clamp_depth(meas, 4),
-            spatial=_clamp_depth(spatial or {}, 4),
-            visual=visual,
+            kind=kind, arm_id=arm_id_val, cell_id=cell_id, executor_mode=executor_mode, bundle_id=bid, created_at_s=at_s,
+            correlation=_clamp_depth(correlation or {}, 1), generation=gen, measurement=_clamp_depth(meas, 4),
+            spatial=_clamp_depth(spatial or {}, 4), visual=visual,
             history={
-                "recent_attempts": attempts_tail,
-                "recent_decisions": decisions_tail,
-                "recent_why": why_tail,
+                "recent_attempts": attempts_tail, "recent_decisions": decisions_tail, "recent_why": why_tail,
                 "repeat_unknown_tripped": any(bool(w.get("repeat_unknown")) for w in why_tail if isinstance(w, dict)),
             },
         )
@@ -295,12 +290,11 @@ def _emit_common(
 
 
 def emit_pick_failure(cell, config: dict[str, Any], calibration: dict[str, Any], source: str, dest: str,
-                      work: Path, result: dict[str, Any], tried: dict[str, Any], *, stills=None, gate=None) -> str | None:
+                      work: Path, result: dict[str, Any], tried: dict[str, Any], *, stills=None, gate=None,
+                      executor_mode: str = "ik_auto_pick") -> str | None:
     if stills is not None:
         stills.close()
-    res_str = str(result.get("result") or "stopped")
-    moved = (tried.get("transfer") or {})
-    fail = tried.get("fail") or {}
+    res_str, moved, fail = str(result.get("result") or "stopped"), (tried.get("transfer") or {}), (tried.get("fail") or {})
     kind = "fault" if moved.get("result") == "fault" else "refusal" if res_str.startswith(("held:", "refused")) else "verify_fail" if "verify" in str(fail.get("stage") or "") or res_str.endswith("unverified") else "stop"
     cause = str(moved.get("result") or (tried.get("diagnosis") or {}).get("cause") or fail.get("class") or "unknown")
     steps = moved.get("steps") or []
@@ -311,8 +305,9 @@ def emit_pick_failure(cell, config: dict[str, Any], calibration: dict[str, Any],
         "calibration": {"missing_map": [s for s in (source, dest) if s not in ((calibration or {}).get("sites") or {})]},
         "perception": {"verify": _clamp_depth(tried.get("verify"), 1), "zone_verification": _clamp_depth(tried.get("zone_verification"), 1)},
     }
+    mode = executor_mode if executor_mode in ("ik_auto_pick", "recovery") else "ik_auto_pick"
     return _emit_common(
-        cell=cell, config=config, work=work, kind=kind, executor_mode="ik_auto_pick",
+        cell=cell, config=config, work=work, kind=kind, executor_mode=mode,
         attempt_cause=cause, stage=str(fail.get("stage") or moved.get("at") or "auto_pick"),
         result_text=res_str, ring=getattr(stills, "ring", None), tips=getattr(stills, "last_tips", None),
         state_vec=last_state, correlation=corr, spatial=spat,

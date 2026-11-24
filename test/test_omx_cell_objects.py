@@ -342,5 +342,25 @@ def test_skewed_non_square_objects_at_varied_positions_are_picked_and_placed_seq
         assert math.dist((cell.objects[1]["x"], cell.objects[1]["y"]), (tx, ty)) < 0.006
 
 
+def test_neutral_surface_foreground_fallback_finds_yellow_box_even_with_orange_hsv_and_top_v_frac():
+    # Bright highlight top face (yellow) + shaded yellow side inside an orange-tuned HSV mask:
+    # 1) top_v_frac must not wipe a valid blob into < min_px fragments;
+    # 2) detect() on a neutral grey surface falls back to foreground() when object_hsv matches nothing.
+    top_bright = (85, 225, 232)
+    shaded_side = (35, 145, 162)
+    neutral_floor = (130, 128, 128)
+    img = scene([(20, -10, 60, 30, 0)], colour=shaded_side, surface=neutral_floor,
+                patches=[((20, -10, 20, 14, 0), top_bright)])
+    orange_hsv = [[4, 95, 110], [28, 255, 255]]
+    found = co.detect(img, ROI, RECORD, CAMERA, CATALOG, surface_lab=[[130, 128, 128]], object_hsv=orange_hsv)
+    assert any(o["matched"] and o["object"] == "container-2" for o in found), found
+    # Also verify object_mask keeps >= min_px pixels under specular top_v_frac
+    blob_img = scene([(0, 0, 60, 30, 0)], colour=(40, 120, 210), surface=neutral_floor,
+                      patches=[((0, 0, 14, 10, 0), (140, 235, 250))])
+    m = co.object_mask(blob_img, ROI, [[0, 40, 80], [35, 255, 255]], params={"objects.top_v_frac": 0.9})
+    assert int((m > 0).sum()) >= co.MIN_PX
+
+
+
 
 

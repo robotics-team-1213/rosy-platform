@@ -148,9 +148,6 @@ def structural_container_between_fingers(img, a=None, b=None) -> dict | None:
     b_top_mean = float(strip_lab[int(h * 0.05):int(h * 0.35), :, 2].mean()) - 128.0
     l_top_mean = float(row_l[int(h * 0.08):int(h * 0.28)].mean())
     l_bot_mean = float(row_l[int(h * 0.62):int(h * 0.86)].mean())
-    yellow_housing = bool(b_top_mean > 14.0 and a_top_mean < 4.0)
-    empty_recessed_tray = bool(chroma < 8.5 or yellow_housing or (chroma < 12.0 and (l_bot_mean - l_top_mean) > 15.0))
-
     wall_strength = float(
         0.5
         * (
@@ -158,6 +155,17 @@ def structural_container_between_fingers(img, a=None, b=None) -> dict | None:
             + gx_full[max(0, right_seam - 4):min(w, right_seam + 5)].max(initial=0.0)
         )
     )
+    def _is_neutral_band(arr: np.ndarray) -> bool:
+        if len(arr) < 6:
+            return False
+        med = _median3(arr)
+        return float(med[0]) >= 50.0 and math.hypot(float(med[1]) - 128.0, float(med[2]) - 128.0) <= 14.0
+
+    out_L = prof[max(2, left_seam - 60):max(4, left_seam - 8)]
+    out_R = prof[min(w - 4, right_seam + 8):min(w - 2, right_seam + 60)]
+    neutral_exterior = _is_neutral_band(out_L) and _is_neutral_band(out_R) and w_px <= 0.55 * w and wall_strength >= 12.0
+    yellow_housing = bool(b_top_mean > 14.0 and a_top_mean < 4.0 and not neutral_exterior)
+    empty_recessed_tray = bool(chroma < 8.5 or yellow_housing or (chroma < 12.0 and (l_bot_mean - l_top_mean) > 15.0))
     rib_strength = float(gy[:, inner_x0:inner_x1].mean())
     mm_per_px = 30.0 / max(eff_w_px, 1.0)
     open_mid_x = 0.5 * (float(a[0]) + float(b[0])) if (a is not None and b is not None) else 325.0
@@ -206,7 +214,7 @@ def top_face_between_fingers(img, a, b):
     search = col_ratio[s0:s1]
     if len(search) == 0 or float(search.max()) < 0.5:
         struct = structural_container_between_fingers(img, a, b)
-        return (struct["cx"], struct["y_front"], struct["w_px"]) if struct else None
+        return (struct["cx"], struct["y_front"], struct["w_px"]) if struct and struct.get("is_container_shape") else None
     c0 = int(np.argmax(search) + s0)
     left_seam = x_min
     for x in range(c0, x_min, -1):
@@ -221,7 +229,7 @@ def top_face_between_fingers(img, a, b):
     w_px = float(right_seam - left_seam)
     if not (120.0 <= w_px <= 440.0):
         struct = structural_container_between_fingers(img, a, b)
-        return (struct["cx"], struct["y_front"], struct["w_px"]) if struct else None
+        return (struct["cx"], struct["y_front"], struct["w_px"]) if struct and struct.get("is_container_shape") else None
     cx = 0.5 * (left_seam + right_seam)
     v_prof = img[:, max(left_seam + 10, 0):min(right_seam - 10, w)].max(axis=2).mean(axis=1)
     v_top = float(np.median(v_prof[int(h * 0.40):int(h * 0.68)]))
@@ -238,19 +246,24 @@ def on_surface_blob(img, hsv, params=None):
     neighbour surface (the orange board): the ring just outside each green blob decides."""
     import cv2
 
-    if hsv is None or not isinstance(hsv, (list, tuple)) or len(hsv) != 2 or hsv[0] is None:
+    if hsv is None or not isinstance(hsv, (list, tuple)) or len(hsv) == 0 or hsv[0] is None:
         struct = structural_container_between_fingers(img)
-        if struct is not None:
+        if struct is not None and struct.get("is_container_shape"):
             return (float(struct["cx"]), float(0.5 * struct["y_front"]), int(struct["w_px"] * struct["y_front"]))
         return None
     h, w = img.shape[:2]
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    mask = cv2.morphologyEx(cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1])), cv2.MORPH_OPEN, _KERNEL_3)
+    hsv_ranges = [hsv] if (len(hsv) == 2 and len(hsv[0]) == 3 and isinstance(hsv[0][0], (int, float))) else hsv
+    raw_mask = np.zeros((h, w), np.uint8)
+    for lo, hi in hsv_ranges:
+        raw_mask |= cv2.inRange(hsv_img, np.array(lo), np.array(hi))
+    mask = cv2.morphologyEx(raw_mask, cv2.MORPH_OPEN, _KERNEL_3)
     n, labels, stats, cents = cv2.connectedComponentsWithStats(mask)
     min_blob = prm.get(params, "wrist.min_blob_px")
+    max_blob = min(45000, int(0.30 * h * w))
     max_chroma = prm.get(params, "wrist.neutral_ring_chroma")
     candidates = sorted(
-        (i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= min_blob),
+        (i for i in range(1, n) if min_blob <= stats[i, cv2.CC_STAT_AREA] <= max_blob),
         key=lambda i: -int(stats[i, cv2.CC_STAT_AREA]),
     )
     for i in candidates:
