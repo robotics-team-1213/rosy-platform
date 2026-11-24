@@ -145,16 +145,77 @@ def test_http_readiness_failures_frame_headers_structured_result_and_client(tmp_
         lower = {k.lower(): v for k, v in fhdrs.items()}
         assert lower["x-frame-seq"] == "123" and lower["x-source-stamp"] == "1000.5" and lower["etag"] == '"seq-123"'
 
-        # Job get extracts structured result beyond 4000-byte log tail
+        # Job get extracts structured result beyond 4000-byte log tail; non-moving exit must not bump cell_state_gen.
         jinfo = cli.get("20261123-000001-abcdef")
         assert jinfo["structured_result"]["result"] == "stopped: empty"
         assert jinfo["failure_bundle_id"] == bundle["bundle_id"]
-        assert cli.readiness()["cell_state_gen"] >= r["cell_state_gen"] + 1
+        assert cli.readiness()["cell_state_gen"] == r["cell_state_gen"]
     finally:
         server.shutdown()
         server.server_close()
         viewer.shutdown()
         viewer.server_close()
+
+
+def test_cell_state_gen_invariants_and_nested_recent_attempts(tmp_path, monkeypatch):
+    import cell_bundle_emit as emit
+
+    wd = _make_workdir(tmp_path)
+    bundle_root = tmp_path / "bundles"
+    monkeypatch.setattr(api, "_check_arm_incident", lambda _arm: None)
+    monkeypatch.setattr(api, "_session_lock_held", lambda _arm, _ld=None: False)
+    monkeypatch.setattr(api, "_whole_cell_lock_held", lambda _ld=None: False)
+    monkeypatch.setattr(api, "_check_depth_lock_held", lambda _ld=None: False)
+    runner = api.Runner(wd, lock_dir=wd, bundle_root=bundle_root, incident_check_fn=lambda _a: None, fleet_safety_check_fn=lambda _a: {"online": False, "blocked": False, "reason": None})
+
+    gen0 = runner.state_gen()
+    # 1. Non-moving job start + exit keeps cell_state_gen unchanged.
+    runner.runs["nm-1"] = {
+        "job": "upkeep_check", "params": {}, "argv": ["python"], "proc": type("P", (), {"poll": lambda _s: 0})(), "log": wd / "nm.log",
+        "moving": False, "camera": False, "arm": None, "purpose": "p", "holder": "h", "start": time.time(), "expires_at": time.time() + 60, "audited": False,
+    }
+    assert runner.queue()["active"] == []
+    assert runner.state_gen() == gen0
+
+    # 2. Moving job start bumps +1; failed exit (code != 0) leaves cell_state_gen unchanged so its failure bundle passes fence.
+    pick_params = {
+        "arm": "arm_s", "config": "cell-s.json", "catalog": "catalog-live.json",
+        "roi": [0, 0, 10, 10], "source": "inbound", "dest": "outbound", "person_at_switch": True,
+    }
+    procs = []
+    monkeypatch.setattr(api.subprocess, "Popen", lambda argv, **kw: procs.append(argv) or type("P", (), {"poll": lambda _s: None})())
+    res_fail = runner.start("auto_pick", pick_params)
+    assert res_fail["code"] == 202, res_fail
+    gen_during_fail = runner.state_gen()
+    assert gen_during_fail == gen0 + 1
+    b_fail, _ = _write_sample_bundle(bundle_root, arm="arm_s", kind="stop", gen=gen_during_fail)
+    runner.runs[res_fail["id"]]["proc"] = type("P", (), {"poll": lambda _s: 1})()
+    assert runner.queue()["active"] == []
+    assert runner.state_gen() == gen_during_fail
+    reloaded = cfc.load_bundle(bundle_root, b_fail["bundle_id"], current_cell_state_gen=runner.state_gen())
+    assert reloaded["freshness"]["gen_matches"] is True
+    assert cfc.check_fence(reloaded, expected_context_sha256=reloaded["context_sha256"], expected_cell_state_gen=gen_during_fail, current_cell_state_gen=runner.state_gen())[0] is True
+
+    # 3. Succeeded moving job (code == 0) bumps +1 on exit.
+    res_ok = runner.start("auto_pick", pick_params)
+    assert res_ok["code"] == 202, res_ok
+    assert runner.state_gen() == gen_during_fail + 1
+    runner.runs[res_ok["id"]]["proc"] = type("P", (), {"poll": lambda _s: 0})()
+    assert runner.queue()["active"] == []
+    assert runner.state_gen() == gen_during_fail + 2
+
+    # 4. cell_bundle_emit preserves nested dicts in recent_attempts (e.g. auto.object) while respecting MAX_DEPTH <= 6.
+    (wd / "attempts.jsonl").write_text(
+        json.dumps({"attempt": 0, "auto": {"object": "container-3", "colour": "red", "bias_region": {"side": "left"}}}) + "\n",
+        encoding="utf-8",
+    )
+    cfg = {"arm_id": "arm_s", "work_dir": str(wd), "failure_bundle_root": str(bundle_root), "cameras": {}}
+    bid = emit._emit_common(cell=None, config=cfg, work=wd, kind="stop", executor_mode="ik_auto_pick", attempt_cause="empty", stage="pick", result_text="stopped: empty")
+    assert bid
+    emitted = cfc.load_bundle(bundle_root, bid)
+    CellFailureContext.model_validate(emitted)
+    rec = emitted["history_and_constraints"]["recent_attempts"]
+    assert isinstance(rec[0]["auto"], dict) and rec[0]["auto"]["object"] == "container-3"
 
 
 def test_five_non_motion_jobs_machine_authorized_and_argv(tmp_path, monkeypatch):
