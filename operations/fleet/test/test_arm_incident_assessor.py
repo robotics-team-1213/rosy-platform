@@ -292,3 +292,33 @@ def test_assessor_clears_clean_stale_effort_only_with_matching_fresh_remeasure(c
     assert ans.status_code == 200 and ans.json()["held"] is False
     cleared = row(client, incident_id)["cleared"]
     assert cleared["kind"] == "machine" and cleared["remeasured"] == good
+
+
+def test_assessor_refuses_when_risk_score_is_below_95_and_stores_risk_on_pass(client):
+    # Third park strain incident in 24h scores 100 - 2 (park) - 4 (2 recent) == 94 < 95 -> server blocks with risk code
+    for idx in (100, 101):
+        iid = report(client, idx, TONIGHT)
+        assert clear(client, iid, cause="too_fast").status_code == 200
+        risk = row(client, iid)["cleared"]["risk"]
+        assert risk["schema"] == "rosy.arm-incident-risk.v1" and risk["threshold"] == 95
+        assert risk["decision"] == "auto_clear" and risk["safety_score"] >= 95
+
+    third = report(client, 102, TONIGHT)
+    assert code(clear(client, third, cause="too_fast")) == (403, "AI_CLEAR_RISK_SCORE_BELOW_THRESHOLD")
+    assert row(client, third)["state"] == "open"
+
+    # Also test auto_fold borderline pose margin: 2.5 units off home scores 94 -> server refuses, operator still clears
+    stopped = {**SAFE, "folded": False, "home": HOME6,
+               "stops": [{"command": "place", "error": "contact in place: wrist lag", "t": 1.0}]}
+    store = ArmIncidentStore(wall=lambda: 1000.0)
+    b_id = store.report(ArmIncidentReport.model_validate(body(104, stopped)))
+    with pytest.raises(MachineClearRefused) as refused:
+        store.clear("arm_b", b_id, "auto folded near limit", "cell-a-ai-assessor", "blocked", "measured", True,
+                    recovery=fold(b_id, folded_state=[0.0, -58.0, 52.5, 50.0, -5.0, 48.8]))
+    assert refused.value.code == "AI_CLEAR_RISK_SCORE_BELOW_THRESHOLD"
+    assert "94/95" in str(refused.value)
+
+    # Human operator can still clear the escalated incident on HTTP API
+    human = client.post(f"{PATH}/arms/arm_b/incidents/{third}/clear", json={"note": "checked third park stop"},
+                        headers=OPERATOR)
+    assert human.status_code == 200 and row(client, third)["cleared"]["kind"] == "person"
