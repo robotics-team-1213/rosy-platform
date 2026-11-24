@@ -111,6 +111,7 @@ class DynamixelDriver:
 
         self.groupSyncWrite = GroupSyncWrite(self.portHandler, self.packetHandler, self.ADDR_GOAL_VELOCITY, self.LEN_GOAL_VELOCITY)
         self.groupBulkRead = GroupBulkRead(self.portHandler, self.packetHandler)
+        self._temp_limit_cache = {}
 
     def begin(self):
         if not self.portHandler.openPort(): return False
@@ -240,10 +241,15 @@ class DynamixelDriver:
         rows = []
         for dxl_id in self.DXL_IDS:
             voltage = self._read_register(read2, dxl_id, self.ADDR_PRESENT_INPUT_VOLTAGE)
+            temp_limit = self._temp_limit_cache.get(dxl_id)
+            if temp_limit is None:
+                temp_limit = self._read_register(read1, dxl_id, self.ADDR_TEMPERATURE_LIMIT)
+                if temp_limit is not None:
+                    self._temp_limit_cache[dxl_id] = temp_limit
             rows.append({
                 'id': dxl_id,
                 'temperature_c': self._read_register(read1, dxl_id, self.ADDR_PRESENT_TEMPERATURE),
-                'temperature_limit_c': self._read_register(read1, dxl_id, self.ADDR_TEMPERATURE_LIMIT),
+                'temperature_limit_c': temp_limit,
                 'input_voltage_v': None if voltage is None else voltage / 10.0,
                 'hardware_error': self._read_register(read1, dxl_id, self.ADDR_HARDWARE_ERROR),
             })

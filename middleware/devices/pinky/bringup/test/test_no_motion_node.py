@@ -154,3 +154,30 @@ def test_motor_health_is_published_every_two_seconds_as_json(world, monkeypatch)
     motors = json.loads(message.data)["motors"]
     assert [m["id"] for m in motors] == [1, 2]
     assert set(motors[0]) == {"id", "temperature_c", "temperature_limit_c", "input_voltage_v", "hardware_error"}
+
+
+@pytest.mark.parametrize("prefix,expected", [("", ["l_wheel_joint", "r_wheel_joint"]), ("rosy_01", ["rosy_01/l_wheel_joint", "rosy_01/r_wheel_joint"])])
+def test_joint_states_match_urdf_wheel_joint_names(world, monkeypatch, prefix, expected):
+    node = _node(world, monkeypatch, drive_enabled=False, frame_prefix=prefix)
+    for _ in range(3):
+        node.update_and_publish()
+    assert world.publishers["joint_states"].messages[-1].name == expected
+
+
+def test_motor_ready_clears_after_three_feedback_failures_and_recovers(world, monkeypatch):
+    node = _node(world, monkeypatch, drive_enabled=True)
+    assert _ready(world)[-1] is True
+    feedback = [(None, None, None, None)]
+    monkeypatch.setattr(node.driver, "get_feedback", lambda: feedback[0])
+    odom_before = len(world.publishers["odom"].messages)
+    for _ in range(2):
+        node.update_and_publish()
+    assert _ready(world)[-1] is True
+    node.update_and_publish()
+    assert _ready(world)[-1] is False
+    assert len(world.publishers["odom"].messages) == odom_before
+
+    feedback[0] = (0.0, 0.0, 1000, 2000)
+    node.update_and_publish()
+    assert _ready(world)[-1] is True
+    assert len(world.publishers["odom"].messages) == odom_before + 1
