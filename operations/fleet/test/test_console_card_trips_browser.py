@@ -741,7 +741,8 @@ def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noq
         cell.click()
         page.wait_for_url("**/console/cell")
         screens = page.get_by_role("navigation", name="작업 화면", exact=True)
-        assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["새 작업"]
+        expect(screens.locator('a[aria-current="step"]')).to_have_text("팔 관측·사건")
+        assert screens.locator('a[aria-current="page"]').all_inner_texts() == []
         assert not errors
     finally:
         browser.close()

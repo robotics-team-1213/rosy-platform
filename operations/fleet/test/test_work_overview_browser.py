@@ -325,7 +325,8 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
                  {**rows[1], "source_id": "wait-1", "visible_state": "approval_pending", "status": "PROPOSED", "device_id": "omx_wait",
                   "visible_state": "approval_pending"}]
         api["/api/fleet/work"] = {**api["/api/fleet/work"], "rows": rows + extra, "truncated_sources": ["task"]}
-        for show, label, device in (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)):
+        checks = (("done", "끝난 작업", "rosy_09"), ("pending", "승인 대기", "omx_wait"), ("nonsense", "전체 작업", None)) if role == "operator" else (("done", "끝난 작업", "rosy_09"), ("nonsense", "전체 작업", None))
+        for show, label, device in checks:
             page.goto(site + "/console?view=work&show=" + show)
             _settle(page, '#work-list ui-button')
             page.wait_for_function("count => document.querySelectorAll('#work-list ui-button').length === count", arg=1 if device else 4)
@@ -345,10 +346,16 @@ def test_mixed_work_selection_filter_refresh_failure_and_accessibility(site, siz
         assert page.locator('.doc-tabs a[href="/console?view=work"]').get_attribute("aria-current") == "page"
         assert page.locator('.doc-tabs a[aria-current="page"]').count() == 1
         screens = page.get_by_role("navigation", name="작업 화면", exact=True)
-        assert screens.locator("a").all_inner_texts() == ["전체 작업", "승인 대기", "끝난 작업", "새 작업", "학습"]
+        expected_links = ["전체 작업", "승인 대기", "끝난 작업", "새 작업", "학습"] if role == "operator" else ["전체 작업", "끝난 작업"]
+        assert screens.locator("a:visible").all_inner_texts() == expected_links
         assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["전체 작업"]
-        assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console?view=work&show=new"
-        assert screens.get_by_role("link", name="학습", exact=True).get_attribute("href") == "/console/learning"
+        if role == "operator":
+            assert screens.get_by_role("link", name="새 작업", exact=True).get_attribute("href") == "/console?view=work&show=new"
+            assert screens.get_by_role("link", name="학습", exact=True).get_attribute("href") == "/console/learning"
+        else:
+            expect(screens.locator('a[href="/console?view=work&show=pending"]')).to_be_hidden()
+            expect(screens.locator('a[href="/console?view=work&show=new"]')).to_be_hidden()
+            expect(screens.locator('a[href="/console/learning"]')).to_be_hidden()
         seat, work = page.locator('.ui-subnav[data-area="work"]').bounding_box(), page.locator("#work-overview").bounding_box()
         if size[0] >= 1024:
             assert seat["width"] == 232 and seat["x"] + seat["width"] <= work["x"], (seat, work)

@@ -118,12 +118,20 @@ function showApps(force) {
     .catch(() => {});  // The menu is navigation only; a failed read leaves the rest of the header alone.
 }
 
+function setRoleAttr(role) {
+  const root = globalThis.document?.documentElement;
+  if (!root) return;
+  if (role) root.dataset.fleetRole = role;
+  else delete root.dataset.fleetRole;
+}
+
 // English role names and principal ids stay in title (D-540 2).
 export function showSession(identity, {credentialChange = false, focusOrigin = document.activeElement} = {}) {
   const tag = $("user-role"), title = `${identity.principal_id} · ${identity.role}`;
   const changed = tag.title !== title;
   const active = document.activeElement, menu = $("topbar-extra");
   const returnFocus = menu.contains(active) || (active === document.body && menu.contains(focusOrigin));
+  setRoleAttr(isOperator(identity.role) ? "operator" : "viewer");
   $('fleet-login').hidden = true;
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
@@ -144,6 +152,7 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
 // `refused` is false when the session probe failed for another reason (Fleet down): the words change,
 // the E-stop stays live. A lock never opens the account row (D-741 3): the guide strip's 관제 접속 does.
 export function showSignedOut({refused = true} = {}) {
+  setRoleAttr(null);
   $("development-badge").hidden = true;
   $('fleet-account').hidden = true;
   appsRead = 0;

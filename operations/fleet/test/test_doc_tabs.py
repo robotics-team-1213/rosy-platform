@@ -14,7 +14,7 @@ LABELS = ["관제", "작업", "기록", "지도", "설치"]
 NAMES = [None, None, None, "현장 지도", "설치·보정"]
 # D-741 6: 화면 안 이동은 공용 하위 탐색 자리에 선다. 가로 앵커 줄은 없다.
 SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "survey", "profile", "camera-draft", "trip", "run", "edit", "reality", "teach"]),
-          "cell.html": ("작업 화면", ["saved", "recipe", "cell", "preview", "proposal", "mission"])}
+          "cell.html": ("작업 화면", ["observation", "real2sim", "saved", "recipe", "cell", "preview", "proposal", "mission"])}
 
 
 def _page(name):
@@ -68,7 +68,7 @@ def test_work_area_screens_are_the_same_subnav_in_the_console_and_cell():
                ("/console?view=work&amp;show=done", "끝난 작업"), ("/console?view=work&amp;show=new", "새 작업"),
                ("/console/learning", "학습")]
     for name, opening, current in (("index.html", '<div class="ui-subnav" data-area="work" hidden>', []),
-                                    ("cell.html", '<div class="ui-subnav">', ["/console?view=work&amp;show=new"]),
+                                    ("cell.html", '<div class="ui-subnav">', []),
                                     ("policy.html", '<div class="ui-subnav">', ["/console/learning"])):
         page = _page(name).read_text(encoding="utf-8")
         seat = re.search(re.escape(opening) + r'<nav class="ui-subnav-nav" aria-label="작업 화면">(.*?)</nav></div>', page, re.S)
@@ -121,7 +121,7 @@ def test_every_area_document_heads_the_workspace_with_one_pathbar():
     docs = {"index.html": ("사이트 관제", '<strong id="console-screen" hidden></strong>'),
             "install.html": ("설치·보정", '<strong id="install-screen">장비 찾기</strong>'),
             "site-map.html": ("현장 지도", '<strong id="site-map-screen">지도 보기</strong>'),
-            "cell.html": ("팔레트 적재 작업 준비", '<strong id="cell-screen">저장된 문서</strong>'),
+            "cell.html": ("팔레트 적재 작업 준비", '<strong id="cell-screen">팔 관측·사건</strong>'),
             "policy.html": ("학습 정책 승인", "<strong>학습</strong>")}
     for name, (title, screen) in docs.items():
         page = re.sub(r'<!--.*?-->', '', _page(name).read_text(encoding="utf-8"), flags=re.S)
