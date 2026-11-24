@@ -233,7 +233,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                               via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
                               blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
                               body_front_m=body_front_m(bounds.get("robot_kind")),
-                              stop_offset=not (nav2 and body.repeat), **bounds)
+                              stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2, **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
         except PlanError as exc:
@@ -259,7 +259,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse(exc.code, exc.detail) from exc
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
         plan_data["start_check"] = start_check(
-            active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2)
+            active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2,
+            off_lane_margin_m=runner.config.nav2_off_lane_margin_m)
         if (precision is None and runner.config.auto_align
                 and plan_data["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
                 and plan_data["start_check"]["heading_err_deg"] is not None):

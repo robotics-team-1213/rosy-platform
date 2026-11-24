@@ -333,3 +333,74 @@ def test_offline_parked_pin_persists_across_restarts_and_clears_from_db(tmp_path
     app3, sm3 = _build_app()
     assert obstacle_site_pose(app3.state.map_pose, "r2") is None
     sm3.close()
+
+
+def test_stationary_online_pin_survives_anchor_expiry_for_obstacle_only():
+    from fleet.server.offline_pin import mover_site_pose, obstacle_site_pose
+    from fleet.server.pose.map_pose_service import MapPoseService
+
+    now = {"t": T0}
+    svc = MapPoseService(
+        lambda: ["r1"],
+        config=MapPoseConfig(max_anchor_age_s=2.0, max_odom_age_s=10.0),
+        map_id=lambda: "m",
+        wall=lambda: now["t"],
+    )
+    svc.observe_state("r1", {"robot_id": "r1", "mode": "IDLE", "navigation": "IDLE",
+                             "odom_pose": {"x": 0.0, "y": 0.0, "yaw": 0.0, "stamp": now["t"]}})
+    refused, _ = run(svc.pin("r1", (0.035, 0.47, -1.57)))
+    assert refused is None
+
+    now["t"] = T0 + 5.0
+    svc.observe_state("r1", {"robot_id": "r1", "mode": "IDLE", "navigation": "IDLE",
+                             "odom_pose": {"x": 0.005, "y": 0.0, "yaw": 0.0, "stamp": now["t"]}})
+    assert svc.arbitrated_pose("r1").state == DEGRADED
+    assert mover_site_pose(svc, "r1") is None
+    assert obstacle_site_pose(svc, "r1") == ("m", 0.035, 0.47, -1.57)
+
+    # Moving odom beyond STILL_PATH_M or leaving IDLE clears the obstacle fallback.
+    now["t"] += 0.5
+    svc.observe_state("r1", {"robot_id": "r1", "mode": "IDLE", "navigation": "NAVIGATING",
+                             "odom_pose": {"x": 0.005, "y": 0.0, "yaw": 0.0, "stamp": now["t"]}})
+    assert obstacle_site_pose(svc, "r1") is None
+
+    now["t"] += 0.5
+    svc.observe_state("r1", {"robot_id": "r1", "mode": "IDLE", "navigation": "IDLE",
+                             "odom_pose": {"x": 0.05, "y": 0.0, "yaw": 0.0, "stamp": now["t"]}})
+    assert obstacle_site_pose(svc, "r1") is None
+
+
+def test_dock_anchor_lidar_reference_serves_bay_obstacle_pose_when_idle():
+    from types import SimpleNamespace
+    from fleet.server.offline_pin import mover_site_pose, obstacle_site_pose
+    from fleet.server.pose.map_pose_service import MapPoseService
+
+    now = {"t": T0}
+    svc = MapPoseService(
+        lambda: ["r1"],
+        config=MapPoseConfig(max_odom_age_s=10.0),
+        map_id=lambda: "site",
+        wall=lambda: now["t"],
+        site_bays=lambda: [SimpleNamespace(id="C3", x=0.035, y=0.47, yaw=-1.57)],
+    )
+    anchor_state = {
+        "robot_id": "r1", "mode": "IDLE", "navigation": "IDLE",
+        "odom_pose": {"x": 0.1, "y": 0.0, "yaw": 0.0, "epoch": 2, "stamp": now["t"]},
+        "docking": {
+            "state": "DOCKED",
+            "anchor": {"dock_id": "bay_c3", "confirmation": "lidar_reference",
+                       "odom_pose": {"x": 0.1, "y": 0.0, "yaw": 0.0, "epoch": 2}},
+        },
+    }
+    svc.observe_state("r1", anchor_state)
+    assert svc.arbitrated_pose("r1").state == UNKNOWN and mover_site_pose(svc, "r1") is None
+    assert obstacle_site_pose(svc, "r1") == ("site", 0.035, 0.47, -1.57)
+
+    # Non-lidar confirmation or epoch mismatch must not produce an obstacle pose.
+    bad_epoch = {**anchor_state, "odom_pose": {"x": 0.1, "y": 0.0, "yaw": 0.0, "epoch": 3, "stamp": now["t"]}}
+    svc.observe_state("r1", bad_epoch)
+    assert obstacle_site_pose(svc, "r1") is None
+
+    no_lidar = {**anchor_state, "docking": {"state": "CHARGING", "anchor": {**anchor_state["docking"]["anchor"], "confirmation": "charge_contact"}}}
+    svc.observe_state("r1", no_lidar)
+    assert obstacle_site_pose(svc, "r1") is None

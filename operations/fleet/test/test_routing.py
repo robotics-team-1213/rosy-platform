@@ -519,3 +519,12 @@ def test_snap_start_picks_heading_compatible_segment_inside_tight_uturn():
     with pytest.raises(PlanError) as err:
         _plan(site, (-0.9323, -0.10, -1.618), "S4")
     assert err.value.code == "TRIP_START_OFF_MAP"
+
+
+def test_snap_start_ignore_heading_accepts_reversed_bay_pose_for_nav2():
+    site = _map({"A": (0.0, 0.0, "stop"), "B": (1.0, 0.0, "stop")}, [("ab", "A", "B", False)])
+    with pytest.raises(PlanError) as err:
+        _plan(site, (0.2, 0.0, math.pi), "B", ignore_start_heading=False)
+    assert err.value.code == "TRIP_HEADING_CONFLICT"
+    plan = _plan(site, (0.2, 0.0, math.pi), "B", ignore_start_heading=True)
+    assert _edges(plan) == ["ab"]

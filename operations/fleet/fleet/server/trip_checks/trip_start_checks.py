@@ -39,7 +39,8 @@ def signals_on(traffic, segments: list) -> list:
     return sorted({zones[span.unit] for span in spans if span.unit in zones})
 
 
-def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float, *, nav2: bool = False) -> dict:
+def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float, *,
+                nav2: bool = False, off_lane_margin_m: float = 0.0) -> dict:
     """D-601 D: the robot against its plan's first lane (``code`` None: it may start). Off the lane is
     the trip loop's own rule (more than half the lane width, ``_locate``); the heading is compared
     with the lane's direction at the robot's projection (one-way or the planned way). Nav2 trips
@@ -49,7 +50,8 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float, 
         return {"code": None}
     dist, _s, tangent = arc.project(x, y)
     err = None if yaw is None else round(math.degrees(wrap(yaw - tangent)), 1)
-    code = ("TRIP_START_OFF_LANE" if dist > arc.width_m / 2
+    limit = arc.width_m / 2 + (off_lane_margin_m if nav2 else 0.0)
+    code = ("TRIP_START_OFF_LANE" if dist > limit
             else None if nav2
             else "TRIP_START_HEADING_MISMATCH" if err is None or abs(err) > tol_deg else None)
     return {"code": code, "edge_id": arc.edge_id, "heading_err_deg": err, "tol_deg": tol_deg,

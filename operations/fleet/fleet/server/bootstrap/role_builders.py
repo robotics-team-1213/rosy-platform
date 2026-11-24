@@ -156,7 +156,8 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         map_id=lambda: (active := site_maps.active()) and active[1].map_id,
         source_map_ids=[source.map_id for source in (sightings.sources if sightings is not None else ())],
         gather=_gather_state, gather_rest=_rest_state, client_identity=console._client,
-        offline_pins=offline_pins)
+        offline_pins=offline_pins,
+        site_bays=lambda: ([p for p in active[1].places if p.kind == "charge"] if (active := site_maps.active()) is not None else ()))
     map_pose.active_map_id()
     execution_pose = map_pose_port if simulation_pose else map_pose
     if simulation_pose:

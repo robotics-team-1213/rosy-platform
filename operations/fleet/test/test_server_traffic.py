@@ -776,3 +776,24 @@ def test_site_frame_clear_skips_foreign_map_standing_robot_far_from_route_but_ho
     assert held["queued"] is True and held["reason"] == "NO_YIELD_SPACE"
     assert held["blocked_by"] == "rosy_02" and _goal_calls(near_other) == 0
     assert ("navigation_cancel",) in mover.calls
+
+
+def test_site_keep_out_default_032_allows_distant_c3_and_blocks_adjacent_c2():
+    # Mover route lies along y=-0.2; 0.443 m offset clears with default 0.32 m (was blocked at 0.45 m),
+    # while 0.232 m offset stays blocked as an adjacent bay obstacle.
+    clear_console, mover_clear, _other1 = _rotated_site_console(
+        _standing("rosy_02", (0.0, 0.0), _loc("UNKNOWN", "odom")),
+        ("world_261026", -0.5, 0.243, -1.57),
+    )
+    ok = run(clear_console.goal("rosy_01", 2.0, 0.0))
+    assert "queued" not in ok and ("navigation_cancel",) not in mover_clear.calls
+
+    blocked_console, mover_blocked, _other2 = _rotated_site_console(
+        _standing("rosy_02", (0.0, 0.0), _loc("UNKNOWN", "odom")),
+        ("world_261026", -0.5, 0.032, -1.57),
+    )
+    held = run(blocked_console.goal("rosy_01", 2.0, 0.0))
+    assert held["reason"] == "LOCALIZATION_UNTRUSTED" and ("navigation_cancel",) in mover_blocked.calls
+
+    with pytest.raises(ValueError, match="site_keep_out_m"):
+        FleetConsole([], [], site_keep_out_m=0.25)

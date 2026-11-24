@@ -40,6 +40,8 @@ class PlanRequest:
     body_front_m: float = FALLBACK_FRONT_M
     #: When False (continuous Nav2 repeat loops), "stop" places end at their centre without front-bumper pullback.
     stop_offset: bool = True
+    #: When True (Nav2 road-following), allow any start yaw on the lane (Nav2 rotates in place).
+    ignore_start_heading: bool = False
 
 
 @dataclass(frozen=True)
@@ -87,7 +89,7 @@ def plan_trip(graph: Graph, request: PlanRequest, config: RoutingConfig) -> Plan
     def arc_speed(arc: Arc) -> float:
         return speed(arc.speed_cap_mps, request.max_speed_mps, request.speed_cap)
 
-    at = snap_start(graph, *request.start_pose, config, allowed)
+    at = snap_start(graph, *request.start_pose, config, allowed, ignore_heading=request.ignore_start_heading)
     eta, segments, done = 0.0, [], 0
     legs = _legs(graph, request)
     for index, (via, target) in enumerate(legs):

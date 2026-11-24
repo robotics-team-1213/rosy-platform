@@ -125,8 +125,14 @@ def mover_site_pose(service, robot_id: str) -> Optional[SitePose]:
 
 
 def obstacle_site_pose(service, robot_id: str) -> Optional[SitePose]:
-    """Measured site pose (online LOCALIZED or offline-parked pin) on the active site map."""
+    """Measured site pose (online LOCALIZED, stationary pin, lidar dock seat, or offline pin) on active map."""
     live = mover_site_pose(service, robot_id)
     if live is not None:
         return live
+    stationary = service.stationary_pin_pose(robot_id) if hasattr(service, "stationary_pin_pose") else None
+    if stationary is not None:
+        return stationary
+    docked = service.dock_anchor_site_pose(robot_id) if hasattr(service, "dock_anchor_site_pose") else None
+    if docked is not None:
+        return docked
     return service._offline_pins.pose_on(robot_id, service.active_map_id())
