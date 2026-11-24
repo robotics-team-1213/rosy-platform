@@ -41,3 +41,11 @@ temp를 대상 파일 옆 디렉터리에 둔다. 두 CLI 경로(타이머 백�
   spill·대용량 임시 파일)을 돌리는 도구는 temp 경로를 컨테이너 제약과 함께 확인한다.
 - "실물 크기에서만 실패하는" 경로는 fixture 크기로는 검증되지 않는다 — temp·용량
   의존 변경은 실물 급 크기로 한 번은 확인하거나, 계약을 시험로 고정한다.
+
+## 후속 보강 (2026-11-25)
+
+실제 사이트 호스트(`rosy-fleet-r`)에서 `1.2 GB` 원장에 대해 2026-11-24·25 이틀 연속 `site_db.py: error: vacuum failed`가 재발해 백업이 `17`개(`3.0 GB`)까지 쌓이고 원장 정리가 건너뛰어지는 현상이 확인되었다.
+
+- **백업/원장 정리 순서 교정 (`deploy/site/site_db.py`):** `main()`에서 `_prune_backups` · `prune_ledger` · `checkpoint_wal`을 먼저 수행한 뒤 `vacuum_database`를 실행하도록 변경해, `VACUUM`이 실패하더라도 오래된 백업과 만료 원장 행이 누락되지 않게 했다.
+- **SQLite 오류 원인 노출 (`deploy/site/site_db.py`):** `vacuum_database`가 `DatabaseError(f"vacuum failed: {exc}")`로 실제 SQLite 오류 메시지를 포함하도록 수정했다.
+- **컨테이너 시작 환경 지정 (`deploy/site/compose.yaml`):** `fleet-backup` 서비스에 `SQLITE_TMPDIR: /backup`, `TMPDIR: /backup`을 명시해 `32 MB` `/tmp` tmpfs로의 누출을 차단했다.

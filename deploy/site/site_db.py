@@ -137,7 +137,7 @@ def vacuum_database(path: Path | str) -> dict:
             db.execute("PRAGMA auto_vacuum=INCREMENTAL")
             db.execute("VACUUM")
     except sqlite3.Error as exc:
-        raise DatabaseError("vacuum failed") from exc
+        raise DatabaseError(f"vacuum failed: {exc}") from exc
     return {"bytes_before": before, "bytes_after": target.stat().st_size}
 
 
@@ -464,10 +464,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.destination = args.dest_dir / f"{BACKUP_PREFIX}{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.sqlite3"
             result = backup_database(args.source, args.destination)
             if args.dest_dir is not None:
-                vacuumed, pruned = vacuum_database(args.destination), _prune_backups(args.dest_dir, args.prune)
+                pruned = _prune_backups(args.dest_dir, args.prune)
             pruned_ledger = prune_ledger(args.source, history_days=args.prune_history, audit_days=args.prune_audit,
                                          api_audit_days=args.prune_api_audit, sighting_days=args.prune_sightings)
             checkpointed = checkpoint_wal(args.source)
+            if args.dest_dir is not None:
+                vacuumed = vacuum_database(args.destination)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
             return 0
