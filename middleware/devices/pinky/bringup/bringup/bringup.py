@@ -26,6 +26,7 @@ from .dynamixel_driver import (
     validate_profile_acceleration,
     wrapped_encoder_delta,
 )
+from .motor_bus_worker import MotorBusWorker
 from .motor_control import (
     CommandStatus,
     DriveGeometry,
@@ -184,6 +185,7 @@ class Rosy(Node):
         )
         
         self.circumference = 2 * math.pi * self.wheel_radius
+        self._io_worker = None
         self.driver = DynamixelDriver(
             self.motor_device,
             self.motor_baudrate,
@@ -200,7 +202,7 @@ class Rosy(Node):
                 max_angular_rps=self.max_angular_rps,
                 max_wheel_rpm=self.max_wheel_rpm,
             ),
-            self.driver.set_double_rpm,
+            self._write_double_rpm,
         )
         self.motor_ready_pub = self.create_publisher(Bool, MOTOR_READY_TOPIC, _MOTOR_READY_QOS)
         # Publish a latched false before opening the transport.  CORE can then
@@ -313,6 +315,31 @@ class Rosy(Node):
             self.driver.terminate()
             raise
 
+    def _write_double_rpm(self, rpm_l, rpm_r):
+        if self._io_worker is not None:
+            return self._io_worker.set_double_rpm(rpm_l, rpm_r)
+        return self.driver.set_double_rpm(rpm_l, rpm_r)
+
+    def start_io_worker(self):
+        if self._io_worker is None:
+            worker = MotorBusWorker(
+                self.driver,
+                drive_enabled=self.drive_enabled,
+                feedback_period_s=1.0 / 30.0,
+                health_step_period_s=MOTOR_HEALTH_PERIOD_S / max(1, len(self.driver.DXL_IDS)),
+            )
+            worker.start()
+            self._io_worker = worker
+
+    def stop_io_worker(self, timeout_s: float = 2.0):
+        worker = self._io_worker
+        if worker is None:
+            return True
+        stopped = worker.stop(timeout_s=timeout_s)
+        if stopped:
+            self._io_worker = None
+        return stopped
+
     def twist_callback(self, msg: Twist):
         outcome = self.motor_controller.command_twist(msg.linear.x, msg.angular.z)
         if not outcome.accepted:
@@ -340,6 +367,8 @@ class Rosy(Node):
             self.command_deadman.mark_command()
 
     def update_and_publish(self):
+        if self._io_worker is not None and not self._io_worker.last_stop_ok:
+            self.command_deadman.mark_stop_required()
         stop_result = self.command_deadman.attempt_stop(
             lambda: self.motor_controller.stop().accepted
         )
@@ -356,7 +385,7 @@ class Rosy(Node):
         dt = (current_time - self.last_time).nanoseconds / 1e9
         if dt <= 0: return
 
-        feedback = self.driver.get_feedback()
+        feedback = self._io_worker.read_feedback() if self._io_worker is not None else self.driver.get_feedback()
         if feedback[0] is None:
             self._feedback_failures = getattr(self, '_feedback_failures', 0) + 1
             if (self.is_initialized and self.drive_enabled
@@ -447,6 +476,11 @@ class Rosy(Node):
         self.joint_pub.publish(joint_msg)
 
     def publish_motor_health(self):
+        if self._io_worker is not None:
+            motors = self._io_worker.consume_health()
+            if motors is not None:
+                self.motor_health_pub.publish(String(data=json.dumps({"motors": motors})))
+            return
         dxl_id = self.driver.DXL_IDS[self._health_idx]
         self._health_rows[dxl_id] = self.driver.read_health_one(dxl_id)
         self._health_idx = (self._health_idx + 1) % len(self.driver.DXL_IDS)
@@ -483,22 +517,30 @@ def _executor_kind(environ=None):
 def _spin_node(node, *, rclpy_mod=None, environ=None, import_module=importlib.import_module):
     """Spin bringup under SingleThreadedExecutor or rclpy.experimental.EventsExecutor."""
     mod = rclpy if rclpy_mod is None else rclpy_mod
-    if _executor_kind(environ) == "single":
-        mod.spin(node)
-        return
-    executor = import_module(f"{mod.__name__}.experimental").EventsExecutor()
-    external_shutdown = getattr(getattr(mod, "executors", None), "ExternalShutdownException", ())
-    executor.add_node(node)
+    start_io = getattr(node, "start_io_worker", None)
+    stop_io = getattr(node, "stop_io_worker", None)
+    if callable(start_io):
+        start_io()
     try:
+        if _executor_kind(environ) == "single":
+            mod.spin(node)
+            return
+        executor = import_module(f"{mod.__name__}.experimental").EventsExecutor()
+        external_shutdown = getattr(getattr(mod, "executors", None), "ExternalShutdownException", ())
+        executor.add_node(node)
         try:
-            executor.spin()
-        except external_shutdown:
-            pass
+            try:
+                executor.spin()
+            except external_shutdown:
+                pass
+        finally:
+            executor.remove_node(node)
+            shutdown = getattr(executor, "shutdown", None)
+            if callable(shutdown):
+                shutdown(timeout_sec=0)
     finally:
-        executor.remove_node(node)
-        shutdown = getattr(executor, "shutdown", None)
-        if callable(shutdown):
-            shutdown(timeout_sec=0)
+        if callable(stop_io):
+            stop_io()
 
 
 def main(args=None):
@@ -514,6 +556,8 @@ def main(args=None):
         for signum in (signal.SIGINT, signal.SIGTERM):
             signal.signal(signum, signal.SIG_IGN)
         if node is not None:
+            if not node.stop_io_worker():
+                node.get_logger().error("bringup UART worker did not exit cleanly before driver terminate")
             if getattr(node, 'motor_ready_pub', None) is not None:
                 try:
                     node.motor_ready_pub.publish(Bool(data=False))
