@@ -114,7 +114,7 @@ def run_native(module, follower_type, leader_type, *, body_only=False, teacher=F
 
     def start_watch():  # the pause after a record loop: nothing calls the guard until the next one
         motion = shared.get("motion")
-        if motion is not None and not motion.teacher and not motion.failed:
+        if motion is not None and not motion.failed:
             shared["watch"] = BoundaryWatch(motion, on_expire=request_stop)
             shared["watch"].start()
 
