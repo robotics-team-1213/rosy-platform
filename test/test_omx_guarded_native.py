@@ -643,3 +643,34 @@ def test_teacher_replay_holds_frame_index_until_tracking_latches(guard, monkeypa
     module.main = main
     guard.run_native(module, Follower, SimpleNamespace, teacher=True)
     assert calls_at_send == [(0, 0.0), (0, 0.0), (1, 0.0), (2, 10.0)]
+
+
+def test_gripper_squeeze_reuses_monitor_pwm_and_cached_limit(guard, tmp_path):
+    import motor_health
+
+    follower, leader, clock = Bus(), Bus(leader=True), [10.0]
+    follower.raw['gripper'] = 2000
+    leader.raw['gripper'] = 2500
+    orig_read = follower.read
+
+    def read_with_limits(register, motor, **kwargs):
+        if register == 'Temperature_Limit':
+            return 70
+        if register == 'Min_Voltage_Limit':
+            return 60
+        if register == 'Max_Voltage_Limit':
+            return 140
+        if register == 'Present_Input_Voltage':
+            return 120
+        return orig_read(register, motor, **kwargs)
+
+    follower.read = read_with_limits
+    monitor = motor_health.MotorHealth(tmp_path / 'squeeze.jsonl', async_publish=True)
+    motion = guard.NativeJointMotion(follower, leader, monitor=monitor, clock=lambda: clock[0])
+    motion.send(action(leader))
+    follower.events.clear()
+    clock[0] += 0.25
+    motion.send(action(leader))
+    pwm_reads = [e for e in follower.events if e[0] == 'read' and e[2] == 'gripper']
+    assert pwm_reads == [('read', 'Present_PWM', 'gripper')]
+    monitor.end()
