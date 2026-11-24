@@ -210,6 +210,7 @@ SCOPE: dict[str, list[str]] = {
        ("learning_accounts.py", "learning_collaboration.py", "learning_oauth.py", "learning_rosy_accounts.py",
         "review_app_web/accounts.html", "review_app_web/accounts.js")},
     "integrations/simulation/gazebo/scripts/": GAZEBO,
+    "applications/world/": WORLD,
     "deploy/robot/omx/commissioning_view.py": COMMISSIONING,
     **{f"deploy/robot/pinky_pro/native/{name}": RECOVERY for name in
        ("network_recovery.py", "network_recovery_http.py", "recovery_launcher.py", "install-native-runtime.sh")},
