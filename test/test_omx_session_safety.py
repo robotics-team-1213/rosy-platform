@@ -57,3 +57,38 @@ def test_the_session_starts_in_its_own_process_session_and_is_reused(tmp_path):
         pid = tmp_path / "chunk-io/session.pid"
         if pid.exists():
             subprocess.run(["kill", pid.read_text().strip()], check=False)
+
+
+@pytest.mark.skipif(shutil.which("setsid") is None or os.name != "posix", reason="needs setsid (Linux)")
+def test_session_wrappers_syntax_and_status_rotation(tmp_path):
+    scripts = [
+        OMX / "omx_session.sh",
+        OMX / "session-wrappers/with-session-arm-s-live.sh",
+        OMX / "session-wrappers/with-session-arm-a-par.sh",
+        OMX / "session-wrappers/with-session-arm-b-par.sh",
+    ]
+    for path in scripts:
+        subprocess.run(["bash", "-n", str(path)], check=True)
+    omx = tmp_path / "omx"
+    omx.mkdir()
+    (omx / "record_session.py").write_text(
+        "import json, pathlib, time\n"
+        "io = pathlib.Path('chunk-io'); io.mkdir(exist_ok=True)\n"
+        "with (io / 'chunk-status.jsonl').open('a') as f:\n"
+        "    f.write(json.dumps({'command': 'start', 'ok': True}) + '\\n')\n"
+        "time.sleep(30)\n")
+    io = tmp_path / "chunk-io"
+    io.mkdir()
+    status = io / "chunk-status.jsonl"
+    status.write_bytes(b"x" * 5242881)
+    env = {**os.environ, "OMX": str(omx), "OMX_PYTHON": sys.executable, "OMX_SESSION_ARGS": "--io chunk-io", "OMX_SESSION_WAIT_S": "20"}
+    try:
+        res = subprocess.run(["bash", str(OMX / "omx_session.sh"), "true"], cwd=tmp_path, env=env,
+                             capture_output=True, text=True, timeout=60)
+        assert res.returncode == 0, res.stderr
+        assert (io / "chunk-status.jsonl.1").stat().st_size == 5242881
+        assert status.stat().st_size < 1024
+    finally:
+        pid = io / "session.pid"
+        if pid.exists():
+            subprocess.run(["kill", pid.read_text().strip()], check=False)

@@ -197,7 +197,7 @@ def monitor(profile, root, digest, duration, io):
                         if actual is None:
                             unavailable(role, assessment)
                             continue
-                        checks[role] = now+5
+                        checks[role] = now+15
                         if actual != current[role]:
                             if actual != baseline['cameras'][role]['original']:
                                 raise RuntimeError('unowned camera controls changed during recovery')
@@ -267,7 +267,7 @@ def monitor(profile, root, digest, duration, io):
                 changes.append(entry)
                 io.save(root/'changes.json', changes)
                 io.save(root/'readiness.json', dict(state='ADJUSTING', photometric_ready=False,
-                                                    motion_admitted=False, expires_ns=0))
+                                                    motion_admitted=False, expires_ns=0), durable=False)
                 if action['kind'] == 'finish':
                     errors = io.restore_controls(selected, lambda n, v: io.write_control(device, n, v))
                     if errors:
@@ -296,11 +296,11 @@ def monitor(profile, root, digest, duration, io):
             if changed != signature:
                 io.append_event(root/'environment.jsonl', assessment)
                 signature = changed
-            io.save(root/'readiness.json', assessment)
+            io.save(root/'readiness.json', assessment, durable=False)
             time.sleep(.2)
     finally:
         try:
             io.save(root/'readiness.json', dict(state='STOPPED', photometric_ready=False,
-                                               motion_admitted=False, expires_ns=0))
+                                               motion_admitted=False, expires_ns=0), durable=False)
         finally:
             io.restore(root)

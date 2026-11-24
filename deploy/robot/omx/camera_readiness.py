@@ -170,16 +170,18 @@ def restore_controls(original, write):
     return errors
 
 
-def save(path, value, *, exclusive=False):
+def save(path, value, *, exclusive=False, durable=True):
     raw = json.dumps(value, indent=2, allow_nan=False)+'\n'
     temporary = path if exclusive else path.with_suffix('.tmp')
     with temporary.open('x' if exclusive else 'w') as stream:
         stream.write(raw)
         stream.flush()
-        os.fsync(stream.fileno())
+        if durable:
+            os.fsync(stream.fileno())
     if not exclusive:
         temporary.replace(path)
-    sync_directory(path.parent)
+    if durable:
+        sync_directory(path.parent)
 
 
 def sync_directory(path):

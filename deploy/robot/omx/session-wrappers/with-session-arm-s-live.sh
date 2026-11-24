@@ -7,9 +7,11 @@ if ! { [ -p chunk-io-s/chunk-cmd ] && ~/rosy-omx/current-env/bin/python -c 'impo
   for _ in $(seq 1 25); do systemctl --user is-active --quiet rosy-omx-observer@arm_s.service || break; sleep 0.2; done
   sleep 0.2
   flock -n ~/rosy-omx/session-arm_s.lock true || { echo "REFUSED: the arm session lock is held"; exit 2; }
+  STATUS=chunk-io-s/chunk-status.jsonl
   for attempt in 1 2 3; do
     export ROSY_CHUNK_TRACE=$HOME/rosy-test/omx-record-prep-20261019/trace-arm_s-$(date +%Y%m%d-%H%M%S).jsonl
-    n0=$(wc -l < chunk-io-s/chunk-status.jsonl 2>/dev/null || echo 0)
+    if [ -f "$STATUS" ] && [ "$(stat -c %s "$STATUS" 2>/dev/null || echo 0)" -gt 5242880 ]; then mv -f "$STATUS" "${STATUS}.1"; fi
+    n0=$(wc -l < "$STATUS" 2>/dev/null || echo 0)
     (
       ~/rosy-omx/current-env/bin/python "$OMX/record_session.py" --config record-config-arm-s-live.json --caps caps-arm-s-nowindup.json --arm arm_s --chunks chunks-arm-s-inplace-live.json --io chunk-io-s --params cell-params-floor-1028.json --operating-profile arm-s-robot-profile-live.json </dev/null
       rc=$?
