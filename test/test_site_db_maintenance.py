@@ -225,6 +225,50 @@ def test_vacuum_keeps_its_temp_copy_beside_the_target(tmp_path, monkeypatch):
     os.environ.pop("SQLITE_TMPDIR", None)  # vacuum이 건 환경을 다음 시험에 흘리지 않는다
 
 
+def test_vacuum_database_includes_sqlite_error_detail(tmp_path):
+    bad = tmp_path / "corrupt.sqlite3"
+    bad.write_bytes(b"not a sqlite file")
+    with pytest.raises(DatabaseError, match=r"vacuum failed: .+"):
+        site_db.vacuum_database(bad)
+
+
+def test_cli_backup_prunes_backups_and_ledger_before_vacuum_failure(tmp_path, monkeypatch, capsys):
+    from datetime import datetime, timedelta, timezone
+
+    source = tmp_path / "fleet.sqlite3"
+    old_iso = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat(timespec="milliseconds")
+    new_iso = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("""CREATE TABLE fleet_api_audit (
+            request_id TEXT, event_type TEXT, principal_id TEXT, role TEXT,
+            method TEXT, path TEXT, status_code INTEGER, created_at TEXT)""")
+        connection.execute("INSERT INTO fleet_api_audit VALUES ('old','INTENT','p','operator','POST','/api/fleet/x',NULL,?)", (old_iso,))
+        connection.execute("INSERT INTO fleet_api_audit VALUES ('new','INTENT','p','operator','POST','/api/fleet/x',NULL,?)", (new_iso,))
+
+    dest_dir = tmp_path / "nightly"
+    dest_dir.mkdir(parents=True)
+    stale = dest_dir / "fleet-backup-20260101-000000.sqlite3"
+    newer = dest_dir / "fleet-backup-20260102-000000.sqlite3"
+    stale.write_bytes(b"old")
+    newer.write_bytes(b"recent")
+
+    def _fail_vacuum(_path):
+        raise DatabaseError("vacuum failed: database or disk is full")
+
+    monkeypatch.setattr(site_db, "vacuum_database", _fail_vacuum)
+    with pytest.raises(SystemExit) as exc_info:
+        site_db.main(["backup", "--source", str(source), "--dest-dir", str(dest_dir), "--prune", "2", "--prune-api-audit", "90"])
+
+    assert exc_info.value.code != 0
+    assert "database or disk is full" in capsys.readouterr().err
+    assert not stale.exists()
+    assert newer.exists()
+    kept_backups = sorted(dest_dir.glob("fleet-backup-*.sqlite3"))
+    assert len(kept_backups) == 2 and verify_database(kept_backups[-1]) == "ok"
+    with closing(sqlite3.connect(source)) as connection:
+        assert connection.execute("SELECT count(*) FROM fleet_api_audit").fetchone()[0] == 1
+
+
 def test_cli_check_accepts_a_fresh_intact_backup(tmp_path, capsys):
     source = tmp_path / "fleet.sqlite3"
     _database(source, "check")
