@@ -258,10 +258,11 @@ def test_failed_lookup_is_cached_for_failure_ttl_to_prevent_avahi_head_of_line_b
         with pytest.raises(ValueError, match='not_discovered'):
             first.result(timeout=1)
         assert finished.wait(1)
-        now[0] = 5.0
+        assert pool.failure_ttl_s < 5.0
+        now[0] = 2.0
         assert pool.get('offline.local', 8443) is first
         assert len(calls) == 1
-        now[0] = 10.01
+        now[0] = 3.01
         assert pool.get('offline.local', 8443).result(timeout=1) == '192.168.1.50'
         assert len(calls) == 2
     finally:
