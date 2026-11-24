@@ -323,7 +323,7 @@ function resetRobotApps() { deviceDirectory.resetRobotApps(); }
 const { disarmGoal, focusGoalButton, commitWorldGoal, clearPinStart } = createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   render, confirmedAction, namedReason, selection,
   toWorld: (grid, col, row) => mapView.toWorld(grid, col, row),
-  refreshGuide: () => mapView.refreshGuide?.(),
+  refreshGuide: (opts) => mapView.refreshGuide?.(opts),
   queuedReason: (result) => roster.queuedReason(result),
   drawMap: () => mapView.draw(),
   scheduleDraw: () => mapView.scheduleDraw(),
