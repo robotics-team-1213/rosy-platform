@@ -13,7 +13,7 @@ function hostNames(guard) {
 }
 
 function hostLabel(name) {
-  return HOST_LABEL[name] || name;
+  return HOST_LABEL[name] || (name === "cell" ? "셀 PC" : name);
 }
 
 function reportRows(body) {
@@ -94,24 +94,32 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
   function paintCommands(hosts) {
     commands.replaceChildren();
     for (const host of hosts) {
+      const label = hostLabel(host.host);
       const block = node("section", "", "install-step");
-      block.append(node("h3", HOST_LABEL[host.host] || host.host));
+      block.append(node("h3", label));
       const actions = node("ui-actions");
       const reboot = node("ui-button", "10분 뒤 재부팅");
       reboot.setAttribute("kind", "quiet");
       reboot.type = "button";
-      reboot.addEventListener("click", () => send(host.host, "reboot", null, `${HOST_LABEL[host.host] || host.host}를 10분 뒤에 재부팅합니다. 그 전에 취소할 수 있습니다.`));
+      reboot.addEventListener("click", () => send(host.host, "reboot", null, `${label}를 10분 뒤에 재부팅합니다. 그 전에 취소할 수 있습니다.`));
       const cancel = node("ui-button", "재부팅 취소");
       cancel.setAttribute("kind", "quiet");
       cancel.type = "button";
-      cancel.addEventListener("click", () => send(host.host, "cancel-reboot", null, `${HOST_LABEL[host.host] || host.host}에 예약된 이 재부팅만 취소합니다.`));
+      cancel.addEventListener("click", () => send(host.host, "cancel-reboot", null, `${label}에 예약된 이 재부팅만 취소합니다.`));
       actions.append(reboot, cancel);
       if ((host.actions || []).includes("clean-storage")) {
         const clean = node("ui-button", "시험 저장소 정리");
         clean.setAttribute("kind", "quiet");
         clean.type = "button";
-        clean.addEventListener("click", () => send(host.host, "clean-storage", null, `${HOST_LABEL[host.host] || host.host}의 시험 저장소 정리 서비스를 한 번 실행합니다. 모델·데이터·사용 중 환경은 지우지 않으며, 결과는 다음 점검(최대 10분)의 디스크 여유로 확인합니다.`));
+        clean.addEventListener("click", () => send(host.host, "clean-storage", null, `${label}의 시험 저장소 정리 서비스를 한 번 실행합니다. 모델·데이터·사용 중 환경은 지우지 않으며, 결과는 다음 점검(최대 10분)의 디스크 여유로 확인합니다.`));
         actions.append(clean);
+      }
+      if ((host.actions || []).includes("root-maintenance")) {
+        const rootMaint = node("ui-button", "루트 저장소 정리");
+        rootMaint.setAttribute("kind", "quiet");
+        rootMaint.type = "button";
+        rootMaint.addEventListener("click", () => send(host.host, "root-maintenance", null, `${label}의 루트 저장소 유지보수(Docker·저널·비활성 Snap 정리)를 한 번 실행합니다.`));
+        actions.append(rootMaint);
       }
       block.append(actions);
       for (const unit of host.units || []) {
@@ -131,21 +139,22 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
     const confirmed = await confirmIrreversible({message, action: "실행"});
     if (!confirmed) return "declined";
     setStatus(note, "");
+    const label = hostLabel(host);
     try {
       const answer = await call("/api/fleet/hosts/" + encodeURIComponent(host) + "/control", {
         method: "POST",
         body: {action, unit, operator_confirmed: true},
       });
-      setStatus(note, `${HOST_LABEL[host] || host} ${action} 접수 (${answer.code || "ACCEPTED"})`, "ok");
+      setStatus(note, `${label} ${action} 접수 (${answer.code || "ACCEPTED"})`, "ok");
     } catch (error) {
       const code = error.detail?.code || error.code || "";
       if (code === "HOST_JOBS_ACTIVE") {
-        const answer = await send(host, "reboot-over-jobs", null, `${HOST_LABEL[host] || host}에서 학습이나 시험이 돌고 있습니다. 재부팅하면 그 작업이 끊깁니다. 그래도 10분 뒤에 재부팅합니까?`);
-        if (answer === "declined") setStatus(note, `${HOST_LABEL[host] || host}에서 작업이 돌고 있어 재부팅하지 않았습니다.`, "error");
+        const answer = await send(host, "reboot-over-jobs", null, `${label}에서 학습이나 시험이 돌고 있습니다. 재부팅하면 그 작업이 끊깁니다. 그래도 10분 뒤에 재부팅합니까?`);
+        if (answer === "declined") setStatus(note, `${label}에서 작업이 돌고 있어 재부팅하지 않았습니다.`, "error");
         return;
       }
       if (code === "ARM_SESSION_ACTIVE") {
-        setStatus(note, `${HOST_LABEL[host] || host}에서 팔 세션이 돌고 있어 ${unit ? `${unit}을 다시 시작` : "재부팅"}하지 않았습니다. 세션이 끝난 뒤 다시 요청하세요.`, "error");
+        setStatus(note, `${label}에서 팔 세션이 돌고 있어 ${unit ? `${unit}을 다시 시작` : "재부팅"}하지 않았습니다. 세션이 끝난 뒤 다시 요청하세요.`, "error");
         return;
       }
       setStatus(note, code === "OPERATOR_IDENTITY_REQUIRED"
