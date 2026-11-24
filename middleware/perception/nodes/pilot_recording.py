@@ -204,21 +204,9 @@ class PilotRecorder:
         self._stop_reason = ""
         self._killed = False
         self._last_stop_reason = ""
-        self._preview_mode = 'raw'
+        self._preview_mode, self._used_cache = 'raw', None
         self._boot_id = uuid.uuid4().hex
         self._seqs = itertools.count(1)   # next() is atomic: any thread may build a status
-        self._used_bytes_cache: tuple[float, int] | None = None
-
-    def _cached_used_bytes(self, *, busy: bool) -> int:
-        cache = self._used_bytes_cache
-        if not busy and cache is not None:
-            cached_at, cached_bytes = cache
-            if 0.0 <= self._clock() - cached_at < 60.0:
-                return cached_bytes
-        used = _total_bytes(self._root)
-        if not busy:
-            self._used_bytes_cache = (self._clock(), used)
-        return used
 
     # ------------------------------------------------------------------ state
     def _busy(self) -> bool:
@@ -266,9 +254,8 @@ class PilotRecorder:
             self._log(f"pilot recording: writer pid not kept: {exc}")
         self._proc, self._folder, self._killed = proc, folder, False
         self._started, self._stopping_since, self._stop_reason = self._clock(), None, ""
-        self._recording_since = None
+        self._recording_since = self._used_cache = None
         self._preview_mode = preview_mode
-        self._used_bytes_cache = None
         return True, folder.name
 
     def poll_start(self) -> bool:
@@ -378,14 +365,19 @@ class PilotRecorder:
             (folder / WRITER_PID_NAME).unlink(missing_ok=True)
         except (OSError, ValueError) as exc:
             self._log(f"pilot recording: session {folder.name} not ended cleanly: {exc}")
-        self._used_bytes_cache = None
+        self._used_cache = None
 
     def status(self) -> dict:
         busy = self._busy()
         stopping = self._finalizing is not None or self._stopping_since is not None
         since = self._recording_since
         try:
-            used = self._cached_used_bytes(busy=busy)
+            now, cache = self._clock(), self._used_cache
+            if not busy and cache is not None and 0.0 <= now - cache[0] < 60.0:
+                used = cache[1]
+            else:
+                used = _total_bytes(self._root)
+                self._used_cache = None if busy else (now, used)
             folder_bytes = _total_bytes(self._folder) if busy else 0
         except OSError:
             used, folder_bytes = self._quota, 0
@@ -420,7 +412,7 @@ class PilotRecorder:
                     and folder != self._folder and (folder / FETCHED_NAME).is_file():
                 total -= _total_bytes(folder)
                 shutil.rmtree(folder)
-                self._used_bytes_cache = None
+                self._used_cache = None
 
     def recover(self) -> list[str]:
         """Finish every pilot session without a manifest (crash, kill, interrupted hashing)."""
@@ -446,8 +438,7 @@ class PilotRecorder:
                 recovered.append(folder.name)
             except (OSError, ValueError, KeyError) as exc:
                 self._log(f"pilot recording {folder.name} not recovered: {exc}")
-        if recovered:
-            self._used_bytes_cache = None
+        self._used_cache = None
         return recovered
 
     def _stop_orphan_writer(self, folder: Path) -> bool:
@@ -484,7 +475,7 @@ class PilotRecorder:
         except OSError as exc:
             self._log(f"pilot recording {recording_id}: fetched mark not written: {exc}")
             return False
-        self._used_bytes_cache = None
+        self._used_cache = None
         return True
 
     def shutdown(self) -> None:
