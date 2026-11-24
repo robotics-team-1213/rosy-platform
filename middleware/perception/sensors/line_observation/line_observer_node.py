@@ -19,6 +19,7 @@ from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
 from .calibrated_values import calibrated
+from .camera_shm import attach_camera_front_source
 from .core_law_input import configure_drivable_law, refresh_drivable_law
 from .lane_route_guide_input import LaneRouteGuideInput, subscribe_route_guide
 from .line_observer_helpers import LineObserverHelpersMixin, build_ir_calibration, encode_debug_overlay_msg, load_nominal_camera_profile
@@ -148,7 +149,12 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
         self.observation_pub = self.create_publisher(String, 'line/observation', 10)
         self._keep_debug_pub = self.create_publisher(String, 'line/keep_debug', 10)
         self.create_subscription(UInt16MultiArray, 'ir_sensor/range', self._on_ir, qos_profile_sensor_data)
-        self.create_subscription(Image, 'camera/front', self._on_camera, qos_profile_sensor_data)
+        self._camera_front_source = attach_camera_front_source(
+            self,
+            self._on_camera,
+            lambda: self.create_subscription(Image, 'camera/front', self._on_camera, qos_profile_sensor_data),
+            image_cls=Image,
+        )
         controls_qos = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(String, 'camera/controls', self._on_camera_controls, controls_qos)
@@ -165,6 +171,11 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
             self.create_subscription(String, 'line/route_context', self._on_route_context, route_qos)
         if self._ir_calibration is None:
             self.get_logger().warning('IR line calibration disabled; IR_LINE will remain fail-closed')
+
+    def destroy_node(self):
+        if getattr(self, '_camera_front_source', None) is not None:
+            self._camera_front_source.close()
+        super().destroy_node()
 
     def _camera_mode_uses_ground(self) -> bool:
         return str(self.get_parameter('camera_lane_mode').value) in (
