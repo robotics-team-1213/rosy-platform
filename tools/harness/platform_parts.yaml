@@ -1472,6 +1472,11 @@ safety_review_paths:
   - deploy/robot/omx/cell_policy_timing.py
   - deploy/robot/omx/cell_policy_handoff.py
   - deploy/robot/omx/cell_policy_paced.py
+  - deploy/robot/omx/cell_policy_entry.py
+  - deploy/robot/omx/cell_remote_policy.py
+  - deploy/robot/omx/cell_two_arm_guard.py
+  - deploy/robot/omx/cell_two_arm_policy.py
+  - deploy/robot/omx/cell_two_arm_policy_cli.py
   - deploy/robot/omx/cell_stack_guard.py
   - deploy/robot/omx/cell_arm_lease.py
   - deploy/robot/omx/commissioning_stop.py
@@ -1482,6 +1487,19 @@ safety_review_paths:
   - deploy/robot/omx/cell_auto_carry.py
   - deploy/robot/omx/cell_auto_pick_plan.py
   - deploy/robot/omx/cell_executor.py
+  - deploy/robot/omx/cell_job_api.py
+  - deploy/robot/omx/cell_job_spec.py
+  - deploy/robot/omx/cell_job_validators.py
+  - deploy/robot/omx/cell_job_guards.py
+  - deploy/robot/omx/cell_job_peer_health.py
+  - deploy/robot/omx/cell_depth_lock.py
+  - deploy/robot/omx/cell_recovery.py
+  - deploy/robot/omx/cell_task_transport.py
+  - deploy/robot/omx/cell_vlm_orchestrator.py
+  - deploy/robot/omx/cell_envelope_review.py
+  - operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
+  - operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
+  - operations/fleet/fleet/server/sitemap/pipeline_evidence.py
   - middleware/devices/omx/adapter/omx_adapter/chunk_library.py  # park_path, transit_path
   - tools/harness/safety_review.py  # the check itself
   - tools/harness/safety_review_exempt.json

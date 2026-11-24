@@ -218,7 +218,7 @@ body[data-pilot-screen="preview"] [data-screen="connect"] {
   font-size: var(--text-label);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-flag);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--line-10);
   color: var(--nominal-quiet);
   min-width: 7.5em;
   text-align: center;
@@ -253,7 +253,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   width: min(25rem, calc(100% - var(--space-3) * 2));
   padding: var(--space-4);
   background: var(--ground-raise);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-14);
   border-radius: var(--radius-panel);
 }
 [data-drive-tools-panel] ui-actions { margin-top: var(--space-3); flex-wrap: wrap; }
@@ -305,7 +305,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   display: flex;
   gap: var(--space-1);
   align-items: center;
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-button);
 }
 [data-drive-presets] ui-actions { flex-wrap: nowrap; gap: 0; }
@@ -397,7 +397,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   display: grid;
   gap: var(--space-2);
   background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-14);
   border-radius: var(--radius-panel);
   z-index: 25;
   backdrop-filter: blur(6px);
@@ -423,7 +423,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   display: grid;
   gap: var(--space-2);
   background: color-mix(in srgb, var(--ground-raise) 94%, transparent);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-14);
   border-radius: var(--radius-panel);
   z-index: 25;
   backdrop-filter: blur(6px);
@@ -435,7 +435,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   justify-content: space-between;
   gap: var(--space-2);
   padding-block: var(--space-1);
-  border-top: 1px solid var(--border-default);
+  border-top: 1px solid var(--line-06);
 }
 [data-recording-facts] { display: grid; gap: var(--space-1); min-width: 0; }
 [data-recording-status] { color: var(--status-warn); }

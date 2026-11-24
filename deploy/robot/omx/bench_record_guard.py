@@ -169,7 +169,7 @@ def write_restore_list(path, units):
 
 
 # Dependents first: camera-view's Requires= pulls readiness down with it (record_session note, 2026-10-24).
-HANDOVER = (r"rosy-omx-cameras-bind\.timer",
+HANDOVER = (r"rosy-omx-cameras-bind\.timer", r"rosy-omx-cell-task-worker\.service",
             r"rosy-omx-camera-view\.service", r"rosy-omx-camera-readiness\.service",
             r"rosy-omx-camera@[\w-]+\.service", r"rosy-omx-observer@[\w-]+\.service")
 
@@ -273,3 +273,17 @@ def resolve_start_config(config_bytes, arm):
     if issues:
         raise ValueError(f"카메라 확인 실패: {'; '.join(issues)}")
     return resolved, rebinds
+
+
+def resolve_config_arm(name, robot, cfg_owner, inv_inst):
+    """Resolve which arm owns a record-config JSON (profile binding > filename > instance_id)."""
+    if isinstance(robot, dict) and robot.get("type") == "bi_omx_follower":
+        return "arm_ab"
+    if name in cfg_owner:
+        return cfg_owner[name]
+    low = str(name or "").lower()
+    for arm, letter in _ARM_LETTERS.items():
+        if f"arm-{letter}" in low or f"arm_{letter}" in low:
+            return arm
+    rid = robot.get("id") if isinstance(robot, dict) else ""
+    return inv_inst.get(rid, "")

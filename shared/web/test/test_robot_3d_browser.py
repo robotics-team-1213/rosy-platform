@@ -10,6 +10,7 @@ from browser_harness import browser_tests_enabled, launch_options
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chromium scenario")
 WEB = Path(__file__).resolve().parents[1]
+FLEET_WEB = Path(__file__).resolve().parents[3] / "applications/fleet/web"
 HOST = "http://rosy.test"
 
 
@@ -18,9 +19,17 @@ def view_gallery():
     from playwright.sync_api import sync_playwright, expect
 
     assets = json.loads((WEB / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
+    fleet_assets = json.loads((FLEET_WEB / "assets.json").read_text(encoding="utf-8"))["assets"]
 
     def serve(route):
-        name = route.request.url.split("/common/", 1)[-1].split("?", 1)[0]
+        url = route.request.url.split("?", 1)[0]
+        if "/console/assets/" in url:
+            name = url.split("/console/assets/", 1)[-1]
+            if name not in fleet_assets:
+                return route.fulfill(status=404, body="not registered")
+            entry = fleet_assets[name]
+            return route.fulfill(path=str(FLEET_WEB / entry["path"]), content_type=entry["media_type"])
+        name = url.split("/common/", 1)[-1]
         if name not in assets:
             return route.fulfill(status=404, body="not registered")
         route.fulfill(path=str(WEB / name), content_type=assets[name])
@@ -54,7 +63,7 @@ def test_robot_3d_view_mounts_mobile_and_arm_updates_presets_and_disposes(view_g
       const host = document.createElement('div');
       host.id = 'test-3d-host';
       document.querySelector('main').prepend(host);
-      const { createRobotView } = await import('/common/robot-3d.js');
+      const { createRobotView } = await import('/console/assets/robot-3d.js');
       const v = createRobotView(host, {
         kind: 'mobile',
         robotId: 'rosy_01',
@@ -75,7 +84,7 @@ def test_robot_3d_view_mounts_mobile_and_arm_updates_presets_and_disposes(view_g
     ready_arm = page.evaluate("""async () => {
       window.__v3d.dispose();
       const host = document.getElementById('test-3d-host');
-      const { createRobotView } = await import('/common/robot-3d.js');
+      const { createRobotView } = await import('/console/assets/robot-3d.js');
       const arm = createRobotView(host, {
         kind: 'arm',
         robotId: 'arm_a',

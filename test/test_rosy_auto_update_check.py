@@ -517,3 +517,22 @@ def test_staging_progress_writes_download_unpack_verify_and_clears_marker(device
     hub.publish(keys, NEWER, sha="0" * 64)
     assert updater(host, hub).run()["phase"] == "error"
     assert not (device / upd.UPDATE_DISPLAY).exists()
+
+
+@pytest.mark.parametrize("changes", [
+    {"robot_mode": "NAVIGATION"},
+    {"robot_mode": "MANUAL", "manual_quiet_s": 900.0},
+    {"nav_state": "NAVIGATING"},
+    {"trip_lease_active": True},
+    {"calibration_active": True},
+], ids=lambda c: ",".join(f"{k}={v}" for k, v in c.items()))
+def test_busy_or_non_idle_robot_defers_before_staging_download(device, host, hub, keys, changes):
+    hub.publish(keys, NEXT)
+    host.inputs_changes = changes
+    host.write_inputs()
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "ineligible"
+    assert not any(path.endswith(".tar.gz") for path, _ in hub.requests)
+    assert "unpack" not in kinds(host) and "verify" not in kinds(host) and "activate" not in kinds(host)

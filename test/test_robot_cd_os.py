@@ -216,3 +216,72 @@ def test_an_unchanged_source_is_compared_once(tmp_path):
     c.source_changes = lambda base, head: calls.append(head) or [{"filename": "docs/a.md"}]
     assert c.os_publication_due(SHA) is False and c.os_publication_due(SHA) is False
     assert calls == [SHA]
+
+
+def test_os_auto_rollout_uses_7200s_timeout_fleet_canary_and_open_release(tmp_path, monkeypatch):
+    import hashlib
+    import tools.release.prepare_os_release as prep_mod
+    import tools.release.publish_os_release as pub_mod
+    import robot_cd as cd_mod
+    import sys
+    from types import SimpleNamespace
+    mod = module()
+    pub_calls = []
+    prep_calls = []
+    class FakeCoordinator(Coordinator):
+        def __init__(self):
+            super().__init__(tmp_path)
+            self.candidate["head_branch"] = "payload-reserved-2026.11.23-001"
+            self.config.update({
+                "os_auto_rollout": True,
+                "robots": ["rosy-pinky-b8xy", "rosy-pinky-y8xs"],
+                "key_name": "release-key",
+                "os_cms_private_key": str(tmp_path / "cms.key"),
+                "source_repository": str(tmp_path),
+            })
+            self.state.update({
+                "phase": "os_preparing", "sha": SHA, "release_id": "2026.11.23-001",
+                "os_build_ref": "payload-reserved-2026.11.23-001", "os_workflow_id": 9,
+                "build_run": 11, "os_run_attempt": 1, "os_publication": {"nonce": "a" * 32},
+                "os_artifact": {"id": 5, "name": f"rosy-pinky-image-unsigned-2026.11.23-001-{SHA}",
+                                "size_in_bytes": 10, "digest": "sha256:" + hashlib.sha256(b"zipbytes01").hexdigest()},
+            })
+
+        def api(self, path):
+            if path.startswith("actions/runs/11/artifacts"):
+                return {"total_count": 1, "artifacts": [{
+                    **self.state["os_artifact"], "expired": False,
+                    "workflow_run": {"id": 11, "head_sha": SHA, "head_branch": self.state["os_build_ref"],
+                                     "repository_id": 7, "head_repository_id": 7},
+                }]}
+            return super().api(path)
+    c = FakeCoordinator()
+    monkeypatch.setattr(pub_mod, "publish",
+                        lambda *a, **kw: pub_calls.append(kw) or {"applied": kw.get("apply", False), "prerelease": not kw.get("open_release")})
+    monkeypatch.setattr(pub_mod, "open_rollout",
+                        lambda *a, **kw: {"rollout": {"canary": kw.get("canary"), "canary_ok": True}})
+    monkeypatch.setattr(prep_mod, "prepare_release", lambda *a, **kw: prep_calls.append(kw))
+    fake_dl = SimpleNamespace(
+        GitHub=lambda *a: SimpleNamespace(artifact=lambda *_: c.state["os_artifact"]),
+        github_token=lambda: "tok", check_archive=lambda *a: None,
+        safe_extract=lambda arc, dst: Path(dst).mkdir(parents=True, exist_ok=True),
+        __file__="dl.py",
+    )
+    monkeypatch.setitem(sys.modules, "download_artifact", fake_dl)
+    monkeypatch.setitem(sys.modules, "sign_image_release", SimpleNamespace(sign_image_release=lambda *a: None))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    monkeypatch.setattr(mod, "_unsigned_identity", lambda *a: None)
+    (tmp_path / "trusted-snapshot.json").write_text(json.dumps({"source_revision": SHA, "files": {}}), encoding="utf-8")
+    key_dir = tmp_path / "deploy/robot/pinky_pro/release/public-keys"
+    key_dir.mkdir(parents=True)
+    (key_dir / "release-key.pem").write_text("pub", encoding="utf-8")
+    monkeypatch.setattr(cd_mod, "ROOT", tmp_path)
+    archive = tmp_path / "os-2026.11.23-001/unsigned.zip"
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(b"zipbytes01")
+    assert mod.advance(c, SHA, "success") == "os_prepared"
+    assert prep_calls[-1]["canary"] == ["rosy-pinky-b8xy", "rosy-pinky-y8xs"]
+    assert prep_calls[-1]["stage_timeout"] == 7200
+    assert pub_calls[-1]["publication_only"] is False and pub_calls[-1]["open_release"] is True
+    assert mod.advance(c, SHA, "success") == "os_published"
+    assert pub_calls[-1]["apply"] is True and pub_calls[-1]["open_release"] is True and pub_calls[-1]["publication_only"] is False

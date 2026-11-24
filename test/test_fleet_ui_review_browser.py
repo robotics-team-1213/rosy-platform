@@ -50,9 +50,12 @@ def test_mobile_robot_status_precedes_map_and_critical_text_is_readable(console_
                 page.screenshot(path=str(Path(output) / f"fleet-status-{theme}-{width}.png"), full_page=True)
             assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             select_robot(page, 'rosy_01')
+            panel_box = page.locator('#robot-panel').bounding_box()
+            twin_box = page.locator('#robot-panel .robot-panel-twin').bounding_box()
             selected = page.locator('#robot-workspace').bounding_box()
-            assert selected['y'] < page.locator('.robot-list-details').bounding_box()['y']
-            assert selected['y'] < 844
+            assert panel_box and twin_box and selected
+            assert panel_box['y'] < page.locator('.robot-list-details').bounding_box()['y']
+            assert twin_box['y'] < selected['y'] < 844
             assert not errors
         finally:
             browser.close()

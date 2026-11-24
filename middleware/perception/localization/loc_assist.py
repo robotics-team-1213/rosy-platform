@@ -217,7 +217,8 @@ class LocAssist:
         step = self.machine.decide(decision.request_id, now_s, candidate_index=decision.candidate_index,
                                    pose=pose, source=decision.source.value,
                                    cues=[c.value for c in decision.cues],
-                                   received_s=received_s, ttl_s=decision.ttl_s)
+                                   received_s=received_s, ttl_s=decision.ttl_s,
+                                   evidence=decision.evidence)
         if 'reject_decision' in step.actions:
             return [self._result(decision.request_id, False, step.reason)]
         self._pending = decision.request_id

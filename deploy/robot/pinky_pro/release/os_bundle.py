@@ -134,8 +134,35 @@ def prepare_root(work, value, dist, public, certificate):
     prepare(work, value, dist, public, certificate)
 
 
+def _plain_nt(path: Path, *, directory: bool) -> Path:
+    path = Path(path).absolute()
+    if path == Path(path.anchor) or ".." in path.parts:
+        raise ValueError("a direct plain local path is required")
+    for candidate in (*reversed(path.parents), path):
+        info = candidate.lstat()
+        reparse = getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        if candidate.is_symlink() or reparse:
+            raise ValueError("symlinks and junctions are refused for offline OS paths")
+    info = path.lstat()
+    if not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)):
+        raise ValueError("offline OS path type differs")
+    if not directory and info.st_nlink != 1:
+        raise ValueError("private signing key must have a single link")
+    return path
+
+
 def _private(key: Path, forbidden):
     key = Path(key).absolute()
+    if os.name == "nt":
+        _plain_nt(key, directory=False)
+        if any(key.is_relative_to(p) for p in forbidden):
+            raise ValueError("private signing key must be owner-only and outside all release/work directories")
+        tools_dir = str(BASE.parents[2] / "tools/release")
+        if tools_dir not in sys.path:
+            sys.path.insert(0, tools_dir)
+        from os_tools_vm import _windows_private
+        _windows_private(key)
+        return key
     ab._offline_directory(key.parent)
     info = key.lstat()
     if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_nlink != 1
@@ -244,24 +271,36 @@ def sign(dist, output, private, public, cms_private, certificate, *, canary, rau
             shutil.rmtree(work)
 
 
-def update_rollout(directory, private, public, *, promote=False, withdraw=False):
+def update_rollout(directory, private, public, *, promote=False, withdraw=False, canary=None):
     if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
         raise ValueError("product rollout signing must not run in hosted CI")
-    if type(promote) is not bool or type(withdraw) is not bool or promote == withdraw:
+    if type(promote) is not bool or type(withdraw) is not bool:
         raise ValueError("select exactly one rollout operation")
-    directory = ab._offline_directory(directory)
+    if withdraw and (promote or canary is not None):
+        raise ValueError("select exactly one rollout operation")
+    if not promote and not withdraw and canary is None:
+        raise ValueError("select exactly one rollout operation")
+    if os.name == "nt":
+        directory = _plain_nt(directory, directory=True)
+        uid = None
+    else:
+        directory = ab._offline_directory(directory)
+        uid = directory.stat().st_uid
     private = _private(private, (directory,))
     def data(name, limit):
-        return _read(_path(directory, name), limit, directory.stat().st_uid)
+        return _read(_path(directory, name), limit, uid)
     metadata = verify_metadata(data("os-update.json", 16384), data("os-update.json.sig", 512).decode().strip(), public)
     raw, signature = data("os-rollout.json", 16384), data("os-rollout.json.sig", 512)
     value = verify_rollout(raw, signature.decode().strip(), public, metadata)
-    if promote:
+    if withdraw:
+        value["withdrawn"] = True
+    else:
         if value["withdrawn"]:
             raise ValueError("a withdrawn OS release cannot be promoted again")
-        value["canary_ok"] = True
-    else:
-        value["withdrawn"] = True
+        if canary is not None:
+            value["canary"] = list(canary)
+        if promote:
+            value["canary_ok"] = True
     validate_rollout(value)
     try:
         _signed(directory / "os-rollout.json", value, private, public)
@@ -283,12 +322,14 @@ def main(argv=None):
     policy = commands.add_parser("rollout")
     for name in ("directory", "private-key", "public-key"):
         policy.add_argument("--" + name, type=Path, required=True)
-    operation = policy.add_mutually_exclusive_group(required=True)
+    policy.add_argument("--canary", action="append", default=None)
+    operation = policy.add_mutually_exclusive_group(required=False)
     operation.add_argument("--promote", action="store_true")
     operation.add_argument("--withdraw", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "rollout":
-        update_rollout(args.directory, args.private_key, args.public_key, promote=args.promote, withdraw=args.withdraw)
+        update_rollout(args.directory, args.private_key, args.public_key,
+                       promote=args.promote, withdraw=args.withdraw, canary=args.canary)
         print("OS_ROLLOUT_SIGNED")
         return 0
     import yaml

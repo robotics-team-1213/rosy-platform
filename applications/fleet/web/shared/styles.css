@@ -38,11 +38,19 @@
 
 .console-primary, .console-secondary { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .console-context, .context-panel { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-3); align-content: start; }
-.context-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); }
+.context-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-button);
+  background: var(--surface-recessed);
+  border: 1px solid var(--line-06);
+}
 /* D-926: tabs read like the rail — icon above a visible name that never breaks mid-word; two rows on phones */
 .context-tabs ui-button { min-width: 0; flex-direction: column; gap: var(--gap-rail); padding-inline: var(--space-1); white-space: nowrap; }
 .context-panel > .panel { min-width: 0; padding: var(--space-3) 0; border: 0; border-radius: 0; background: transparent; }
-.context-panel > .panel + .panel { border-top: 1px solid var(--border-subtle); }
+.context-panel > .panel + .panel { border-top: 1px solid var(--line-06); }
 .context-panel .panel h2 { font-size: var(--text-body); font-weight: var(--weight-label); }
 .context-panel .formation { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .context-panel .ops-block { grid-template-columns: minmax(0, 1fr); }
@@ -186,7 +194,9 @@ main {
   #fleet-main > .console-secondary { overflow-x: hidden; grid-auto-rows: max-content; }  /* rows fit their panel: a shrunk camera panel never runs under the next */
   #fleet-main > .console-primary { min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; }
   /* 지도 칸: 머리, 남는 높이를 다 쓰는 지도, 그 아래 범례·배경 학습·접힘 한 줄(넘치면 다음 줄). */
-  #fleet-main > .console-primary > .panel { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
+  #fleet-main > .console-primary > .panel:not([hidden]) { flex: 1 0 auto; min-height: 0; display: flex; flex-direction: column; align-items: stretch; }
+  html[data-unit-scope-ready]:not([data-unit-drive]) #fleet-main > .console-primary > .panel[data-unit-scope="drive"],
+  html[data-unit-scope-ready]:not([data-unit-arms]) #fleet-main > .console-primary > .panel[data-unit-scope="arms"] { display: none; }
   /* 지도와 큰 영상은 칸을 채울 뿐 칸 높이를 정하지 않는다(그림 고유 크기가 문서를 밀지 않게). */
   #fleet-main .map-stage { flex: none; min-height: max(28rem, calc(100dvh - 18rem)); }
   #fleet-main .field-mismatch { position: relative; z-index: 1; }
@@ -194,7 +204,8 @@ main {
   .ops-block > h2 { margin: 0; }
   /* D-501 — 탭 줄 높이만큼 오른쪽 열을 줄인다. 대형 칸 간격은 ops-block의 gap이 맡는다. */
   .ops-block > .formation { margin-top: 0; }
-  .console-secondary > .panel { padding: var(--space-3); }
+  .console-secondary > .panel,
+  .console-secondary .context-panel > .panel { background: transparent; border: 0; border-radius: 0; padding: var(--space-2) 0; }
   .ops-block .log { min-height: calc(var(--text-micro) * var(--leading-copy) * 2); max-height: calc(var(--text-micro) * var(--leading-copy) * 8); }
   /* 오른쪽 열의 카메라는 썸네일이다. 크게 보려면 지도 칸으로 보낸다(#birdseye-toggle). */
   .console-secondary .vision-frame { max-height: 8.5rem; }
@@ -210,7 +221,7 @@ main {
 }
 .panel {
   background: var(--panel-fill);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--line-06);
   border-radius: var(--radius-panel);
   padding: var(--space-4) var(--space-4) var(--space-4);
 }
@@ -220,7 +231,7 @@ main {
   .formation .diag-readout { margin: 0; }
 }
 
-.panel h2 { font-weight: var(--weight-emphasis); font-size: var(--text-title); margin: 0 0 var(--space-3); }
+.panel h2 { font-weight: var(--weight-strong); font-size: var(--text-title); margin: 0 0 var(--space-3); }
 
 .map-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); min-width: 0; }
 .map-head > div:first-child, .map-head > ui-button { flex: 0 1 auto; max-width: 100%; min-width: 0; }
@@ -313,7 +324,7 @@ main {
   /* 격자 한 칸은 5 cm 다. 보간하면 벽이 번져 어디가 통로인지 읽을 수 없다. */
   image-rendering: pixelated;
   border-radius: var(--radius-button);
-  border: 1px solid var(--border-default);
+  border: 0;
   background: var(--raster-unknown);
   cursor: crosshair;
 }

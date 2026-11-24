@@ -1,6 +1,7 @@
 """Native cell FIFO/camera transport and stage receipts; never opens the actuator bus."""
 from __future__ import annotations
 
+import errno
 import http.client
 import hashlib
 import json
@@ -11,12 +12,24 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
 
 _DEFAULT_URLOPEN = urllib.request.urlopen
+
+
+def finite_stamp(val) -> float | None:
+    """Return `val` as a finite float, safely rejecting bools, NaN/inf, and huge overflowing ints."""
+    if not isinstance(val, (int, float)) or isinstance(val, bool):
+        return None
+    try:
+        num = float(val)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return num if math.isfinite(num) else None
 
 
 def case(work: Path, row: dict) -> None:
@@ -141,34 +154,91 @@ class FifoCell:
         return self._send(command, timeout)
 
     def _send(self, command: str, timeout: float | None = None) -> dict:
+        is_hold = command == "human-hold"
+        hold_req = uuid.uuid4().hex[:12] if is_hold else None
+        wire_cmd = f"human-hold {hold_req}" if hold_req else command
         expected = command.split(" ", 3)[-1] if command.startswith("checked ") else command
         status_path = self.io / "chunk-status.jsonl"
-        start = status_path.stat().st_size if status_path.exists() else 0
         with FIFO_WRITE_LOCK:  # the hardware owner's cancel fold writes `park` from another thread (D-977 4)
+            if is_hold:
+                try:
+                    start: int | None = status_path.stat().st_size if status_path.exists() else 0
+                except OSError:
+                    start = None
+                pre_live = self.policy_state()
+                pre_t = finite_stamp(pre_live.get("t")) if isinstance(pre_live, dict) else None
+            else:
+                start = status_path.stat().st_size if status_path.exists() else 0
+                pre_t = None
             try:  # non-blocking: never hand a command to a later runner
                 fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
-            except OSError:
-                return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
-            os.write(fd, (command + "\n").encode())
-            os.close(fd)
-        deadline = time.monotonic() + (self.timeout_s if timeout is None else timeout)
+            except OSError as exc:
+                if exc.errno in (errno.ENOENT, errno.ENXIO):
+                    return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
+                return {"ok": False, "error": f"chunk-cmd open failed: {exc.strerror or type(exc).__name__}", "fault": "fifo io error"}
+            try:
+                os.write(fd, (wire_cmd + "\n").encode())
+                sent_at = time.time()
+            finally:
+                os.close(fd)
+        if timeout is None:
+            cap = 1.0 if is_hold else (3.0 if expected == "state" or expected.startswith("load ") else self.timeout_s)
+            eff_timeout = min(self.timeout_s, cap)
+        else:
+            eff_timeout = timeout
+        deadline = time.monotonic() + eff_timeout
         while time.monotonic() < deadline:
-            if status_path.exists():
-                with status_path.open() as stream:
-                    stream.seek(start)
-                    while line := stream.readline():
-                        if not line.endswith("\n"):
-                            break
-                        start = stream.tell()
-                        row = json.loads(line)
-                        if row.get("command") in (expected, "run " + expected) or row.get("fault"):
-                            if (row.get("ok") and not row.get("fault")
-                                    and row.get("operating_context") and row.get("library_sha256")):
-                                self._cached_state = row
-                                self._cached_state_mono = time.monotonic()
-                            return row
+            if start is not None:
+                matched_hold = None
+                try:
+                    if status_path.exists():
+                        with status_path.open("rb") as stream:
+                            stream.seek(start)
+                            while line := stream.readline():
+                                if not line.endswith(b"\n"):
+                                    break
+                                start = stream.tell()
+                                try:
+                                    row = json.loads(line.decode("utf-8"))
+                                except (ValueError, RecursionError):
+                                    if not is_hold:
+                                        raise
+                                    continue
+                                if not isinstance(row, dict):
+                                    continue
+                                if is_hold:
+                                    if row.get("command") != "human-hold":
+                                        continue
+                                    rt = finite_stamp(row.get("t"))
+                                    if rt is None or not (sent_at < rt <= time.time() + 1.0):
+                                        continue
+                                    if row.get("hold_req") == hold_req:
+                                        matched_hold = row
+                                    continue
+                                if row.get("command") in (expected, "run " + expected) or row.get("fault"):
+                                    if (row.get("ok") and not row.get("fault")
+                                            and row.get("operating_context") and row.get("library_sha256")):
+                                        self._cached_state = row
+                                        self._cached_state_mono = time.monotonic()
+                                    return row
+                except (OSError, ValueError, RecursionError):
+                    if not is_hold:
+                        raise
+                if matched_hold is not None:
+                    return matched_hold
+            if is_hold:
+                live = self.policy_state()
+                lt = finite_stamp(live.get("t")) if isinstance(live, dict) else None
+                if (isinstance(live, dict) and live.get("human_hold_latched") is True
+                        and live.get("torque_hold_commanded") is True
+                        and live.get("hold_req") == hold_req
+                        and lt is not None
+                        and sent_at + 0.001 <= lt <= time.time() + 1.0
+                        and (pre_t is None or lt > pre_t)):
+                    return {"command": "human-hold", "ok": True, "human_hold_latched": True,
+                            "torque_hold_commanded": True, "hold_req": hold_req, "t": lt, "state": live.get("state")}
             time.sleep(0.005)
-        return {"ok": False, "error": f"no status within {self.timeout_s} s"}
+        return {"ok": False, **({"command": "human-hold"} if is_hold else {}), "error": f"no status within {eff_timeout} s"}
 
     def frame(self, camera: str):
         import cv2
@@ -219,7 +289,7 @@ class FifoCell:
         """Read the latest encoder sample without sending a FIFO command during playback."""
         try:
             return json.loads((self.io / "live.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):
             return None
 
     def frame_receipt(self, camera: str, *, previous: dict | None = None,

@@ -11,7 +11,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
-    HANDOVER, active_handover_units, arm_connectivity, check_proc_visible, hold_other_arm_locks, inspect_config_cameras, load_registry, proc_cmdlines, proc_mounts, recorder_running, release, systemctl, write_restore_list, write_snapshot)
+    HANDOVER, active_handover_units, arm_connectivity, check_proc_visible, hold_other_arm_locks, inspect_config_cameras, load_registry, proc_cmdlines, proc_mounts, recorder_running, release, resolve_config_arm, systemctl, write_restore_list, write_snapshot)
 from bench_record_replay import recording_progress  # noqa: E402
 from bench_record_step import starting_step  # noqa: E402
 from bench_record_safety import end_verdict  # noqa: E402
@@ -55,15 +55,10 @@ class BenchInspectMixin:
         root = self.prep / "sessions"
         if not root.is_dir():
             return []
+        from bench_record_handoff import load_json_value
         rows = []
         for d in sorted((p for p in root.iterdir() if p.is_dir()), reverse=True)[:limit]:
-            sess_f = d / "session.json"
-            sess = {}
-            if sess_f.is_file():
-                try:
-                    sess = json.loads(sess_f.read_text(encoding="utf-8"))
-                except (OSError, ValueError):
-                    pass
+            sess = load_json_value(d / "session.json", {})
             sealed = (d / "seal.json").is_file() or (d / "manifest.json").is_file() or any(d.glob("*.seal.json"))
             hf = (d / "hub-receipt.json").is_file() or (d / "hf-upload.json").is_file()
             rows.append({"folder": d.name, "safe_end": sess.get("safe_end"), "interrupted": sess.get("interrupted"),
@@ -75,19 +70,26 @@ class BenchInspectMixin:
         if not ds_root.is_dir():
             return []
         rows = []
-        for d in sorted((p for p in ds_root.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
+        dirs = [p for p in ds_root.iterdir() if p.is_dir() and not p.name.startswith(".")]
+        for d in sorted(dirs, key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
             parquets = len(list(d.glob("data/**/*.parquet")))
             videos = len(list(d.glob("videos/**/*.mp4")))
+            ep_cnt = parquets
+            info_p = d / "meta" / "info.json"
+            if parquets > 0 and info_p.is_file():
+                try:
+                    te = json.loads(info_p.read_text(encoding="utf-8")).get("total_episodes")
+                    if type(te) is int and te > 0:
+                        ep_cnt = te
+                except (OSError, ValueError):
+                    pass
             size_bytes = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
             rc_p = self.prep / ".hf-receipts" / f"{d.name}.json"
-            item = {
-                "name": d.name,
-                "episodes": parquets,
-                "videos": videos,
-                "size_bytes": size_bytes,
-                "empty": parquets == 0,
-                "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file(),
-            }
+            item = {"name": d.name, "episodes": ep_cnt, "videos": videos, "size_bytes": size_bytes,
+                    "empty": ep_cnt == 0, "do_not_train": (d / "DO_NOT_TRAIN.txt").is_file()}
+            rev = self.dataset_review_summary(d.name) if hasattr(self, "dataset_review_summary") else {}
+            if any(rev.values()):
+                item["review_summary"] = rev
             if rc_p.is_file():
                 rc = json.loads(rc_p.read_text(encoding="utf-8"))
                 item.update(hf_uploaded=bool(rc.get("repo_id")), hf_repo_id=rc.get("repo_id", ""), hf_repo_url=rc.get("url", ""))
@@ -100,11 +102,18 @@ class BenchInspectMixin:
             return {}
         counts = {}
         for d in ds_root.iterdir():
-            if not d.is_dir() or (d / "DO_NOT_TRAIN.txt").is_file():
+            if not d.is_dir() or d.name.startswith(".") or (d / "DO_NOT_TRAIN.txt").is_file():
                 continue
             m = re.match(r"^(.+?)-r\d+-\d{8}-\d{6}$", d.name)
             tid = m.group(1) if m else d.name
             ep = len(list(d.glob("data/**/*.parquet")))
+            if ep > 0 and (d / "meta" / "info.json").is_file():
+                try:
+                    te = json.loads((d / "meta" / "info.json").read_text(encoding="utf-8")).get("total_episodes")
+                    if type(te) is int and te > 0:
+                        ep = te
+                except (OSError, ValueError):
+                    pass
             vid = len(list(d.glob("videos/**/*.mp4")))
             cur = counts.setdefault(tid, {"episodes": 0, "videos": 0, "datasets": 0})
             cur["episodes"] += ep
@@ -228,15 +237,12 @@ class BenchInspectMixin:
             if live_p.is_file() and (self.clock() - live_p.stat().st_mtime) <= 10.0:
                 cand = live_p
         if cand is None:
-            out = {"active": False, "status": state_snap.get("status")}
-            out.update(recording_progress(state_snap, self.clock))
+            out = {"active": False, "status": state_snap.get("status"), **recording_progress(state_snap, self.clock)}
             return out
         try:
             data = json.loads(cand.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            out = {"active": False, "status": state_snap.get("status")}
-            out.update(recording_progress(state_snap, self.clock))
-            return out
+            return {"active": False, "status": state_snap.get("status"), **recording_progress(state_snap, self.clock)}
         if isinstance(data, dict):
             data.setdefault("active", True)
             data.update(recording_progress(state_snap, self.clock))
@@ -255,9 +261,10 @@ class BenchInspectMixin:
         except (OSError, ValueError):
             base = {}
         base_cams = base.get("cameras") if isinstance(base.get("cameras"), dict) else {}
+        allow = {"arm_a": {"top", "side", "arm_a_wrist"}, "arm_b": {"top", "side", "arm_b_wrist"}, "arm_ab": {"top", "side", "arm_a_wrist", "arm_b_wrist"}, "arm_s": {"arm_s_top", "arm_s_wrist"}}.get(arm_key)
         out = {}
         for lbl, info in raw.items():
-            if not re.fullmatch(r"[a-zA-Z0-9_-]+", str(lbl)) or not isinstance(info, dict) or "quality" not in info:
+            if not re.fullmatch(r"[a-zA-Z0-9_-]+", str(lbl)) or (allow and lbl not in allow) or not isinstance(info, dict) or "quality" not in info:
                 continue
             q = info.get("quality") or {}
             if info.get("fresh") is False:
@@ -299,14 +306,17 @@ class BenchInspectMixin:
         out.update(recording_progress(out, self.clock))
         out.update(starting_step(out, self.__dict__.setdefault("_step_memory", {})))
         out.update(self.issue_fields(out), **self.speed_fields(), **self.link_fields(out))
+        mh = self.manual_hold_info() if hasattr(self, "manual_hold_info") else None
+        out["manual_hold"] = mh if (mh and mh.get("active")) else None
+        rec = self.diagnose_bench_recovery(out) if hasattr(self, "diagnose_bench_recovery") else None
+        out["recovery"] = rec if (rec and rec.get("has_issues")) else None
         if out.get("folder") and out.get("status") in ("unsafe_or_failed", "failed", "seal_failed"):
             log_p = Path(out["folder"]) / "bench.log"
-            if log_p.is_file():
-                try:
-                    lines = log_p.read_text(encoding="utf-8", errors="replace").splitlines()
-                    out["log_tail"] = "\n".join(lines[-12:])
-                except OSError:
-                    pass
+            try:
+                if log_p.is_file():
+                    out["log_tail"] = "\n".join(log_p.read_text(encoding="utf-8", errors="replace").splitlines()[-12:])
+            except OSError:
+                pass
         return out
 
     def choices(self):
@@ -327,33 +337,31 @@ class BenchInspectMixin:
         except ValueError as exc:
             reg, reg_err = None, str(exc)
         configs = pick("record-config*.json")
-        robots = {}  # config file -> its robot.id, so the page can mark which files belong to the chosen arm
-        config_meta = {}
+        caps = pick("caps*.json")
+        calibrations = sorted(str(p) for p in (Path.home() / ".cache/huggingface/lerobot/calibration").glob("*/*/*.json"))
+        arm_bindings = {arm: self._arm_binding(arm, configs, caps, calibrations) for arm in (*ARMS, BI_ARM)}
+        cfg_owner = {c: a for a in ARMS for c in arm_bindings[a]["configs"]}
+        robots, config_meta = {}, {}  # config file -> robot.id / camera inspection, mapped via cfg_owner first
         for name in configs:
             try:
                 cfg_j = json.loads((self.prep / name).read_text(encoding="utf-8-sig"))
                 r = cfg_j["robot"]
                 robots[name] = r["id"]
                 ds = cfg_j.get("dataset") if isinstance(cfg_j.get("dataset"), dict) else {}
-                cfg_arm = BI_ARM if r.get("type") == "bi_omx_follower" else inv_inst.get(r["id"], "arm_s" if "arm-s" in name else "")
+                cfg_arm = resolve_config_arm(name, r, cfg_owner, inv_inst)
                 cams, rebinds, cam_issues, _ = inspect_config_cameras(cfg_j, cfg_arm, reg, reg_err=reg_err)
-                config_meta[name] = {"fps": ds.get("fps"), "use_degrees": r.get("use_degrees"),
-                                     "max_relative_target": r.get("max_relative_target"), "cameras": cams,
-                                     "camera_rebinds": rebinds, "camera_issues": cam_issues,
-                                     "episode_time_s": ds.get("episode_time_s"),
-                                     "reset_time_s": ds.get("reset_time_s"),
-                                     "num_episodes": ds.get("num_episodes")}
+                config_meta[name] = {
+                    "fps": ds.get("fps"), "use_degrees": r.get("use_degrees"), "max_relative_target": r.get("max_relative_target"),
+                    "cameras": cams, "camera_rebinds": rebinds, "camera_issues": cam_issues,
+                    "episode_time_s": ds.get("episode_time_s"), "reset_time_s": ds.get("reset_time_s"), "num_episodes": ds.get("num_episodes")}
             except (OSError, ValueError, KeyError, TypeError):
                 pass
-        caps = pick("caps*.json")
         caps_data = {}
         for cname in caps:
             try:
                 caps_data[cname] = json.loads((self.prep / cname).read_text(encoding="utf-8-sig"))
             except (OSError, ValueError):
                 pass
-        calibrations = sorted(str(p) for p in (Path.home() / ".cache/huggingface/lerobot/calibration")
-                              .glob("*/*/*.json"))
         cal_meta = {}
         for cp in calibrations:
             try:
@@ -368,7 +376,6 @@ class BenchInspectMixin:
         tasks = ["tasks/" + p.name for p in task_paths]
         task_cards = {name: _read_task_card(p) for name, p in zip(tasks, task_paths)}
         replays = sorted("replays/" + p.name for p in (self.prep / "replays").glob("*.json")) if (self.prep / "replays").is_dir() else []
-        arm_bindings = {arm: self._arm_binding(arm, configs, caps, calibrations) for arm in (*ARMS, BI_ARM)}
         recommended = {arm: self._recommend(arm, arm_bindings[arm]) for arm in (*ARMS, BI_ARM)}
         return {"configs": configs, "config_meta": config_meta, "robots": robots, "caps": caps, "caps_data": caps_data,
                 "arms": [*ARMS, BI_ARM], "instances": instances, "arm_bindings": arm_bindings,
@@ -379,7 +386,8 @@ class BenchInspectMixin:
     def _recommend(self, arm, binding):
         cfgs, caps_list, cals = binding.get("configs", []), binding.get("caps", []), binding.get("calibrations", [])
         pick_cfg = next((c for c in cfgs if f"arm-{ARMS.get(arm, 'bi')}" in c or c.endswith("-bi-ab.json")), cfgs[0] if cfgs else "")
-        pick_cap = max(caps_list, key=lambda n: (self.prep / n).stat().st_mtime) if caps_list else ""
+        base_caps = [c for c in caps_list if "-custom-" not in c] or caps_list
+        pick_cap = max(base_caps, key=lambda n: (self.prep / n).stat().st_mtime) if base_caps else ""
         robots = [c for c in cals if Path(c).parent.parent.name == "robots"]
         leaders = [c for c in cals if Path(c).parent.parent.name == "teleoperators"]
         want_l = {"arm_a": ("arm_a_leader", "omx_leader_arm"), "arm_b": ("arm_b_leader",),

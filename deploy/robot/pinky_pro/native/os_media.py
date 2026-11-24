@@ -77,7 +77,8 @@ def _capture(root: Path) -> dict:
     if devices[4 if slot == "a" else 5] != current_device:
         raise ValueError("current root device differs from kernel partition topology")
     disk_device = _device(disk / "dev", root)
-    if disk_device in devices.values() or _number(disk / "size", root) * 512 < layout["raw_size_bytes"]:
+    disk_bytes = _number(disk / "size", root) * 512
+    if disk_device in devices.values() or disk_bytes < layout["raw_size_bytes"]:
         raise ValueError("physical disk identity or capacity differs")
     host, local = _mount_table(root, "proc/1/mountinfo"), _mount_table(root, "proc/self/mountinfo")
     active_boot = devices[2 if slot == "a" else 3]
@@ -99,7 +100,17 @@ def _capture(root: Path) -> dict:
         def read_at(offset, count):
             handle.seek(offset)
             return handle.read(count)
-        if parse_gpt(read_at, layout["raw_size_bytes"], "bootstrap") != layout:
+        try:
+            matched = parse_gpt(read_at, layout["raw_size_bytes"], "bootstrap") == layout
+        except ValueError:
+            if disk_bytes <= layout["raw_size_bytes"]:
+                raise
+            # A larger SD card with its backup GPT relocated to disk end must still match every partition and GUID.
+            candidate = parse_gpt(read_at, disk_bytes, "bootstrap")
+            matched = {k: v for k, v in candidate.items() if k != "raw_size_bytes"} == {
+                k: v for k, v in layout.items() if k != "raw_size_bytes"
+            }
+        if not matched:
             raise ValueError("physical GPT differs from the factory media snapshot")
     return dict(schema_version=1, slot=slot, layout=layout, disk_device=disk_device,
                 partitions={part["role"]: dict(number=part["number"], device=devices[part["number"]],

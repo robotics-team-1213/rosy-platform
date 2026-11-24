@@ -43,7 +43,7 @@ def test_fleet_links_only_its_own_sheet_and_the_single_tokens_file():
         # D-926 C7: file-picker.css is Fleet's own Korean file picker, shared by install, Cell and site map.
         "index.html": [*shared_sheets, "/common/motor-health.css", "/common/app-shell.css", "/console/assets/styles.css",
                        "/console/assets/roster.css",
-                       "/common/component-controls.css", "/common/robot-dock.css", "/console/assets/doc-tabs.css",
+                       "/common/component-controls.css", "/console/assets/doc-tabs.css",
                        "/console/assets/assistant.css",
                        "/console/assets/fleet-header.css", "/console/assets/password-login.css",
                        "/console/assets/device-watch.css", "/console/assets/work.css"],
@@ -76,3 +76,70 @@ def test_closed_sheet_list_still_rejects_another_surface(tmp_path, monkeypatch):
     monkeypatch.setitem(globals(), "WEB", tmp_path)
     with pytest.raises(AssertionError):
         test_fleet_links_only_its_own_sheet_and_the_single_tokens_file()
+
+
+_ROOT = WEB.parents[2]
+_JS_NOISE = re.compile(r"""//[^\n]*|/\*.*?\*/|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`""", re.S)
+_JS_STRINGS_KEPT = re.compile(r"""("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|//[^\n]*|/\*.*?\*/""", re.S)
+FORBID_SUPERVISED_ROUTES = (
+    "pipeline/decision-gate", "human-safety-gate", "vision-auto-check", "station-zones/dispatch",
+    "arm-holds/clear", "pipeline/cell-tasks/*/resume", "human-safety-gate/clear", "decision-gate/execute",
+)
+COCKPIT_BYPASS_SUBJECTS = (
+    WEB / "shared" / "robot-dock.js",
+    WEB / "shared" / "robot-panel.js",
+    WEB / "shared" / "cockpit-hosts.js",
+    WEB / "roster-workspace.js",
+)
+
+
+def _js_without_comments(text: str) -> str:
+    return _JS_STRINGS_KEPT.sub(lambda match: match.group(1) or "", text)
+
+
+def _forbidden_hits(text: str, forbidden=FORBID_SUPERVISED_ROUTES) -> list[str]:
+    code = _js_without_comments(text)
+    gap = r"""[^"'`\s]*"""
+    return [name for name in forbidden if re.search(gap.join(re.escape(part) for part in name.split("*")), code)]
+
+
+def _imports_and_calls(text: str, name: str) -> tuple[bool, bool]:
+    code = _JS_NOISE.sub(lambda match: '""' if match.group(0)[0] in "\"'`" else "", text)
+    word = "(?<![A-Za-z0-9_])" + re.escape(name) + "(?![A-Za-z0-9_])"
+    statement = r'^[ \t]*import\b.*?""'
+    imported = any(re.search(word, m.group(0)) for m in re.finditer(statement, code, re.M | re.S))
+    body = re.sub(statement, "", code, flags=re.M | re.S)
+    return imported, bool(re.search(word + "[(]", body))
+
+
+def test_dock_and_panel_never_call_supervised_pipeline_bypass_routes():
+    for path in COCKPIT_BYPASS_SUBJECTS:
+        assert path.is_file(), f"missing cockpit module: {path}"
+        hits = _forbidden_hits(path.read_text(encoding="utf-8"))
+        assert not hits, f"{path.name} names a forbidden supervised route: {hits}"
+
+
+def test_the_forbid_gate_sees_strings_and_ignores_comments():
+    bad = 'await fetch("/api/fleet/pipeline/arm-holds/clear", {method: "POST"});'
+    assert _forbidden_hits(bad, ["arm-holds/clear"]) == ["arm-holds/clear"]
+    assert _forbidden_hits("const path = `/api/fleet/pipeline/${'human-safety-gate'}`;", ["human-safety-gate"]) == ["human-safety-gate"]
+    assert _forbidden_hits("// never call arm-holds/clear\n/* human-safety-gate */ const ok = 1;", ["arm-holds/clear", "human-safety-gate"]) == []
+    assert _forbidden_hits("post(`/api/fleet/pipeline/cell-tasks/${id}/resume`)", ["pipeline/cell-tasks/*/resume"]) == ["pipeline/cell-tasks/*/resume"]
+    assert _forbidden_hits('"/api/fleet/pipeline/cell-tasks/7/resume"', ["pipeline/cell-tasks/*/resume"]) == ["pipeline/cell-tasks/*/resume"]
+
+
+def test_cockpit_components_are_adopted_by_fleet_console():
+    roster_workspace = (WEB / "roster-workspace.js").read_text(encoding="utf-8")
+    cockpit_hosts = (WEB / "shared" / "cockpit-hosts.js").read_text(encoding="utf-8")
+    for fn in ("createRobotDock", "createRobotPanel"):
+        imported, called = _imports_and_calls(roster_workspace, fn)
+        assert imported and called, f"roster-workspace.js must import and call {fn}"
+    host_imported, _ = _imports_and_calls(roster_workspace, "Robot3dHost")
+    assert host_imported and re.search(r"<\$\{Robot3dHost\}", _js_without_comments(roster_workspace)), (
+        "roster-workspace.js must import and render Robot3dHost"
+    )
+    view_imported, view_called = _imports_and_calls(cockpit_hosts, "createRobotView")
+    assert view_imported and view_called, "cockpit-hosts.js must import and call createRobotView"
+    console = (WEB / "console.js").read_text(encoding="utf-8")
+    imported, called = _imports_and_calls(console, "createSelection")
+    assert imported and called, "console.js must import and call createSelection"

@@ -245,7 +245,10 @@ function syncHeaderAndSlimBar(){
   }
   const degrees=Number.isFinite(st?.starting_deg_left)?' · '+st.starting_deg_left.toFixed(1)+'도 남음':'';
   const stepName=STARTING_STEP_MAP[curStep];
-  const prepLabel=ready?'연동됨':stepName?stepName+degrees:st?.step==='camera_restart'?'카메라 재시작 중':'';
+  const tRows=Array.isArray(lastTelemetry?.motors)?lastTelemetry.motors:[];
+  const tMaxLag=tRows.reduce((m,r)=>Math.max(m,(r.leader_raw!=null&&r.present_raw!=null)?Math.abs((r.leader_raw-r.present_raw)*360/4096):Math.abs(Number(r.error_deg)||0)),0);
+  const tStat=ready&&lastTelemetry?.active&&Number.isFinite(lastTelemetry.loop_latency_ms)?(' · '+Math.round(lastTelemetry.loop_latency_ms)+'ms · Δ'+tMaxLag.toFixed(1)+'°'):'';
+  const prepLabel=ready?('텔레옵 연동됨'+tStat):stepName?stepName+degrees:st?.step==='camera_restart'?'카메라 재시작 중':'';
   const stepBox=$('starting-step-box');
   stepBox.textContent=phase==='prepare'&&prepLabel?'· '+prepLabel:'';
   stepBox.title=stepBox.textContent;
@@ -375,41 +378,61 @@ if($('toggle-reverse-btn')){
 }
 initPhaseControls();
 
-async function checkCameraDrift(){
+const camAutoHealAt={};
+let camAutoHealInFlight=false;
+async function saveCameraBaselineNow(silent){
+  const btn=$('save-cam-base-btn'), arm=f&&f.arm?f.arm.value:'';
+  if(btn){btn.disabled=true;btn.textContent='저장 중...';}
+  if(!silent&&typeof setActivity==='function')setActivity('기준 카메라 저장 중...','live',arm||'');
+  try{
+    setReqError('');
+    await api('/api/camera_baseline',{arm});
+    await checkCameraDrift(true);
+    if(typeof setActivity==='function')setActivity(silent?'기준 카메라 자동 갱신':'기준 카메라 저장 완료','good',arm||'');
+  }catch(err){
+    if(!silent){
+      setReqError(err.message);
+      if(typeof setActivity==='function')setActivity('기준 카메라 저장 실패','crit',err.message);
+    }
+  }finally{if(btn){btn.disabled=false;btn.textContent='기준 카메라 저장';}}
+}
+async function checkCameraDrift(skipAuto){
   if(typeof benchSessionActive==='function'&&benchSessionActive())return;
   try{
     const arm=f&&f.arm?f.arm.value:'';
     const d=await api('/api/camera_check?arm='+encodeURIComponent(arm));
     if(!d||!d.cameras){clearNotice('cam-drift');return;}
-    const bad=Object.entries(d.cameras).filter(([,v])=>v.status!=='ok'&&v.status!=='no_baseline');
-    const noBase=Object.entries(d.cameras).filter(([,v])=>v.status==='no_baseline');
-    if(bad.length){
-      setNotice('cam-drift','warn','카메라 변화 감지: '+bad.map(([k,v])=>k+'('+v.status+(v.max_px!=null?' '+v.max_px+'px':'')+(v.delta_mean!=null?' Δ밝기'+v.delta_mean:'')+')').join(', ')+' — 각도/조명을 맞추거나 기준 재저장하세요.');
-    }else if(noBase.length){
-      setNotice('cam-drift','muted','카메라 기준 미저장 ('+noBase.map(([k])=>k).join(', ')+') — 현재 구도·조명이 맞으면 "기준 카메라 저장"을 누르세요.');
-    }else{
-      clearNotice('cam-drift');
-    }
+    const allow=(typeof ARM_PREVIEW_CAMS!=='undefined'&&ARM_PREVIEW_CAMS[arm])?ARM_PREVIEW_CAMS[arm]:null;
+    const ents=Object.entries(d.cameras).filter(([k])=>!allow||allow.has(k));
+    const hard=ents.filter(([,v])=>v.status==='stale'||v.status==='unusable_lighting');
+    const soft=ents.filter(([,v])=>v.status==='lighting_mismatch'||v.status==='no_baseline');
+    if(!hard.length&&soft.length){
+      const now=Date.now();
+      if(!skipAuto&&arm&&!camAutoHealInFlight&&now-(camAutoHealAt[arm]||0)>=60000){
+        camAutoHealInFlight=true;camAutoHealAt[arm]=now;
+        try{
+          await api('/api/camera_baseline',{arm});
+          clearNotice('cam-drift');
+          if(typeof window.pushBenchLog==='function')window.pushBenchLog('bench','good',arm+' 카메라 조명·구도 기준 자동 갱신 ('+soft.map(([k])=>k).join(', ')+')');
+          return;
+        }catch(_){}
+        finally{camAutoHealInFlight=false;}
+      }
+      const isNoBase=soft.every(([,v])=>v.status==='no_baseline');
+      const sig='cam-soft:'+arm+':'+soft.map(([k,v])=>k+':'+v.status).join(',');
+      const msg=isNoBase
+        ?('카메라 기준 미저장 ('+soft.map(([k])=>k).join(', ')+') — 현재 구도·조명이 맞으면 기준 저장을 누르세요.')
+        :('카메라 변화 감지: '+soft.map(([k,v])=>k+'('+v.status+(v.max_px!=null?' '+v.max_px+'px':'')+(v.delta_mean!=null?' Δ밝기'+v.delta_mean:'')+')').join(', ')+' — 각도/조명을 맞추거나 기준 재저장하세요.');
+      setNotice('cam-drift',isNoBase?'muted':'warn',msg,{sig,action:{label:'기준 카메라 지금 저장',run:()=>saveCameraBaselineNow(false)}});
+    }else if(hard.length){
+      const hasStale=hard.some(([,v])=>v.status==='stale');
+      const action=hasStale?{label:'카메라 재시작',run:()=>$('hdr-camera-restart-btn')?.click()}:{label:'다시 확인',run:()=>checkCameraDrift(true)};
+      const sig='cam-hard:'+arm+':'+hard.map(([k,v])=>k+':'+v.status).join(',');
+      setNotice('cam-drift','warn','카메라 점검 필요: '+hard.map(([k,v])=>k+'('+(v.condition||v.status)+')').join(', '),{sig,action});
+    }else{clearNotice('cam-drift');}
   }catch(_){}
 }
-if($('save-cam-base-btn')){
-  $('save-cam-base-btn').addEventListener('click',async()=>{
-    const btn=$('save-cam-base-btn');
-    btn.disabled=true;btn.textContent='저장 중...';
-    if(typeof setActivity==='function')setActivity('기준 카메라 저장 중...','live',f?.arm?.value||'');
-    try{
-      setReqError('');
-      await api('/api/camera_baseline',{arm:f.arm.value});
-      await checkCameraDrift();
-      if(typeof setActivity==='function')setActivity('기준 카메라 저장 완료','good',f?.arm?.value||'');
-    }
-    catch(err){
-      setReqError(err.message);
-      if(typeof setActivity==='function')setActivity('기준 카메라 저장 실패','crit',err.message);
-    }
-    finally{btn.disabled=false;btn.textContent='기준 카메라 저장';}
-  });
-}
+if($('save-cam-base-btn'))$('save-cam-base-btn').addEventListener('click',()=>saveCameraBaselineNow(false));
 setInterval(checkCameraDrift,8000);
 setTimeout(checkCameraDrift,800);
 
@@ -427,9 +450,8 @@ function syncReplayUI(){
 setInterval(syncReplayUI,1000);
 setTimeout(syncReplayUI,600);
 
-const HF_AUTO_KEY='omx_hf_auto_upload';
-const HF_STATE_MAP={idle:['대기','warn'],encoding:['인코딩 중','live'],uploading:['업로드 중','live'],done:['업로드 완료','good'],failed:['업로드 실패','crit']};
-let hfUploadInFlight=false, lastHfAutoSealKey='';
+const HF_STATE_MAP={idle:['대기','warn'],encoding:['검증 중','live'],uploading:['팀 업로드 중','live'],done:['업로드 완료','good'],failed:['업로드 실패','crit']};
+let hfUploadInFlight=false;
 
 async function triggerHfUpload(datasetName){
   if(hfUploadInFlight)return;
@@ -446,6 +468,7 @@ function renderLeRobotPanel(st){
   const hb=$('hf-login-badge');
   if(hb){hb.textContent=hfOk?'HF 로그인됨':'HF 미로그인';hb.dataset.tone=hfOk?'good':'warn';}
   const up=(st&&st.hf_upload)||{};
+  if($('hf-auto-upload')&&document.activeElement!==$('hf-auto-upload')){$('hf-auto-upload').checked=Boolean(up.auto_upload);}
   let state=String(up.state||'idle').toLowerCase();
   if(state==='idle'&&st&&st.status==='sealing')state='encoding';
   const [sTxt,sTone]=HF_STATE_MAP[state]||[state,'warn'];
@@ -487,18 +510,13 @@ function renderLeRobotPanel(st){
         bulkBtn.disabled=true;setReqError('');
         let done=0, latest=null;
         try{
-          for(const row of curEmpty){
-            latest=await api('/api/dataset/delete',{dataset:row.name||''});
-            done++;
-          }
+          for(const row of curEmpty){latest=await api('/api/dataset/delete',{dataset:row.name||''});done++;}
           if(latest&&latest.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=latest.lerobot_datasets;}
           if(typeof setActivity==='function')setActivity('빈 데이터셋 정리 완료','good',done+'개 삭제');
           if(typeof pollStatus==='function')await pollStatus();
           else if(lastStatus)renderLeRobotPanel(lastStatus);
-        }catch(e){
-          setReqError('빈 데이터셋 정리: '+(e.message||String(e)));
-          if(typeof pollStatus==='function')await pollStatus();
-        }finally{bulkBtn.disabled=false;}
+        }catch(e){setReqError('빈 데이터셋 정리: '+(e.message||String(e)));if(typeof pollStatus==='function')await pollStatus();}
+        finally{bulkBtn.disabled=false;}
       });
     }
   }
@@ -507,14 +525,26 @@ function renderLeRobotPanel(st){
     $('sum-recent-drawer').textContent='최근 '+recN+'건 · LeRobot '+rows.length+'개'+(emptyRows.length?' (빈 '+emptyRows.length+')':'');
   }
   if(!ul||!empty)return;
-  if(!rows.length){ul.innerHTML='';empty.hidden=false;return;}
-  empty.hidden=true;ul.innerHTML='';
+  if(!rows.length){ul.dataset.sig='';ul.innerHTML='';empty.hidden=false;return;}
+  empty.hidden=true;
+  const dsSig=JSON.stringify(rows.map(r=>[r.name,r.episodes,r.videos,r.size_bytes,r.do_not_train,r.hf_uploaded,r.review_summary]))+'|'+hfOk+'|'+busyAll+'|'+(busyAll?(up.dataset+':'+state):'');
+  if(ul.dataset.sig===dsSig)return;
+  ul.dataset.sig=dsSig;
+  const savedTrays=new Map();
+  for(const ex of ul.querySelectorAll('li.hf-ds-row')){const tr=ex.querySelector('.ep-review-tray');if(tr&&ex.dataset.dsName)savedTrays.set(ex.dataset.dsName,tr);}
+  ul.innerHTML='';
   for(const r of rows){
-    const li=document.createElement('li');li.className='sess-item hf-ds-row';
+    const li=document.createElement('li');li.className='sess-item hf-ds-row';li.dataset.dsName=r.name||'';
     const top=document.createElement('div');top.className='hf-ds-top';
     const left=document.createElement('span');left.className='mono';left.textContent=r.name||'';
-    const act=document.createElement('div');act.style.cssText='display:flex;align-items:center;gap:6px';
+    const act=document.createElement('div');act.style.cssText='display:flex;align-items:center;gap:6px;flex-wrap:wrap';
     if(r.hf_uploaded){const tag=document.createElement('span');tag.className='ui-tag';tag.dataset.tone='good';tag.textContent='업로드 완료';act.append(tag);}
+    if((r.episodes||0)>0){
+      const revBtn=document.createElement('button');revBtn.type='button';revBtn.className='btn-tool btn-xs';
+      revBtn.textContent='평가·에피소드';revBtn.title='에피소드 재생·평가 및 불량 삭제';
+      revBtn.addEventListener('click',()=>window.toggleDatasetReviewTray?.(li,r.name||''));
+      act.append(revBtn);
+    }
     const btn=document.createElement('button');btn.type='button';btn.className='btn-tool btn-xs';
     btn.textContent=(busyAll&&up.dataset===r.name)?sTxt:'HF(LeRobot) 업로드';
     btn.disabled=Boolean(!hfOk||busyAll||r.do_not_train||(r.episodes||0)<1);
@@ -538,32 +568,27 @@ function renderLeRobotPanel(st){
     const meta=document.createElement('div');meta.className='hf-ds-meta quiet';
     const info=document.createElement('span');
     const sz=typeof r.size_bytes==='number'?(r.size_bytes>=1048576?(r.size_bytes/1048576).toFixed(1)+' MB':Math.max(1,Math.round(r.size_bytes/1024))+' KB'):'';
-    info.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(sz?' · '+sz:'')+(r.episodes===0?' · 빈 데이터셋':'')+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'');
+    const rs=r.review_summary||{};
+    const rTxt=(rs.good||rs.bad||rs.retry)?(' · 평가 합격 '+(rs.good||0)+'/불량 '+(rs.bad||0)):'';
+    info.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(sz?' · '+sz:'')+(r.episodes===0?' · 빈 데이터셋':'')+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'')+rTxt;
     meta.append(info);
     if(r.hf_repo_url){const a=document.createElement('a');a.href=r.hf_repo_url;a.target='_blank';a.rel='noopener';a.className='mono';a.textContent=r.hf_repo_id||'Repo';meta.append(a);}
-    li.append(top,meta);ul.append(li);
+    li.append(top,meta);
+    if(savedTrays.has(r.name))li.append(savedTrays.get(r.name));
+    ul.append(li);
   }
 }
 window.renderLeRobotPanel=renderLeRobotPanel;
 
-if($('hf-auto-upload')){
-  const saved=localStorage.getItem(HF_AUTO_KEY)==='1';
-  $('hf-auto-upload').checked=saved;
-  if(saved){api('/api/hf/config',{auto_upload:true}).catch(()=>{});}
+if($('hf-auto-upload')&&!$('hf-auto-upload').dataset.bound){
+  $('hf-auto-upload').dataset.bound='1';
   $('hf-auto-upload').addEventListener('change',async()=>{
-    const on=$('hf-auto-upload').checked;
-    try{localStorage.setItem(HF_AUTO_KEY,on?'1':'0');}catch(_){}
-    try{await api('/api/hf/config',{auto_upload:on});}catch(_){}
+    try{
+      const out=await api('/api/hf/config',{auto_upload:$('hf-auto-upload').checked});
+      if(out&&lastStatus){lastStatus.hf_upload=out;renderLeRobotPanel(lastStatus);}
+    }catch(err){setReqError('HF 설정 오류: '+err.message);}
   });
 }
-setInterval(()=>{
-  const cur=typeof lastStatus!=='undefined'&&lastStatus?lastStatus.status:'';
-  const sk=typeof sessionKey==='function'&&lastStatus?sessionKey(lastStatus):'';
-  if(cur==='sealed'&&sk&&sk!==lastHfAutoSealKey&&$('hf-auto-upload')?.checked){
-    lastHfAutoSealKey=sk;
-    triggerHfUpload(lastStatus.name||lastStatus.folder||'');
-  }
-},1000);
 init();
 if(typeof applyBenchPhase==='function')applyBenchPhase('setup');
 setInterval(pollArms,10000);

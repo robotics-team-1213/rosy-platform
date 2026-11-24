@@ -2,7 +2,7 @@
 Description=Re-measure navigation approval after a release change, every 2 minutes (D-986)
 
 [Timer]
-OnBootSec=4min
+OnBootSec=30s
 OnUnitActiveSec=2min
 
 [Install]

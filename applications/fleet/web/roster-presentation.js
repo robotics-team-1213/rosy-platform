@@ -1,4 +1,4 @@
-import { node } from "/common/control-dom.js";
+import { html, render as renderDom, useLayoutEffect, useRef } from "/common/vendor/htm-preact.esm.min.js";
 // Robot list presentation and the labels shared with its selected workspace.
 import { NAVIGATION_LABEL, LINE_FOLLOW_MODE_LABEL, LINE_STATE_LABEL, enumLabel } from "/common/core_ui_logic.js";
 import { linkTag } from "./link-tag.js";
@@ -102,80 +102,152 @@ export function queuedReason(queued) {
   return `${who} 경로와 겹쳐 대기 중 — 앞이 비면 자동 출발합니다`;
 }
 
-export function createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth}) {
-  return function summary(robot, index) {
-    const article = node("article", "", `robot-summary s${index % view.colors.length}`);
-    article.dataset.robotId = robot.robot_id;
-    article.tabIndex = -1;
-    if (view.focusRobot === robot.robot_id) article.classList.add("selected");
-    const name = view.robotNames?.[robot.robot_id] || robot.robot_id;
-    const line = node("div", "", "robot-line");
-    line.append(node("b", name, "ui-disclosure-name"));
-    if (name !== robot.robot_id) line.title = `Fleet ID ${robot.robot_id}`;
-    article.append(line);
-    const state = view.stateUnavailable ? {} : robot.state || {};
-    const link = linkTag(robot.link);
-    const status = view.stateUnavailable ? "Fleet 상태 확인 불가" : !robot.online ? (link?.word || "오프라인")
-      : !robot.state ? "상태 확인 불가" : link?.word || "연결됨";
-    const estop = state.safety?.estop;
-    const stateCurrent = !view.stateUnavailable && robot.online && robot.state
-      && staleAgeS(robot, view.receivedAtMs, Date.now()) === null;
-    const safety = !stateCurrent ? "안전 확인 불가"
-      : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
-    const facts = node("div", "", "robot-summary-status");
-    const calmOffline = !view.stateUnavailable && !robot.online;
-    const addFact = (text, cls, { keepPill = false } = {}) => {
-      const t = tag(text, cls);
-      if (!cls || cls === "nav" || cls === "ok" || (calmOffline && !keepPill)) {
-        t.setAttribute("variant", "inline");
-      }
-      facts.append(t);
-      return t;
-    };
-    addFact(status, view.stateUnavailable || !robot.online ? "warn" : "", { keepPill: true });
-    addFact(safety, estop === true ? "crit" : safety === "안전 정상" ? "" : "warn");
-    // D-926: nominal/active facts render inline via ui-tag[variant="inline"] (Dark-Cockpit); warnings/crits stay pill-framed.
-    const power = powerHealthView(robot, view.receivedAtMs, Date.now());
-    const battery = addFact(`배터리 ${power.battery}`, power.problem ? "warn" : "");
-    battery.dataset.fact = "battery";
-    facts.append(motorHealth.summary(robot));
-    const heat = stateCurrent ? heatChip(state) : null;
-    if (heat) addFact(...heat, { keepPill: true });
-    const guideRow = (view.guide?.robots || []).find(row => row.robot_id === robot.robot_id);
-    const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
-    const position = addFact(loc?.text || "위치 미확인", loc ? loc.cls : "warn");
-    position.dataset.localization = "";
-    if (loc) position.title = [loc.title, sitePoseText(guideRow)].filter(Boolean).join(" · ");
-    const formation = !view.stateUnavailable && view.formation?.active ? view.formation : null;
-    const role = formation?.leader === robot.robot_id ? "대형 리더"
-      : formation && Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "";
-    if (role) addFact(role, "nav");
-    const source = motionSource(robot, view);
-    const sourceTag = addFact(source.text, source.cls, { keepPill: source.attention });
-    sourceTag.dataset.motionSource = source.key;
-    sourceTag.title = source.title;
-    article.append(facts);
-    const lane = state.line_follow;
-    const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
-      ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state, robot.robot_id).text;
-    const trip = view.stateUnavailable ? "운행 확인 불가"
-      : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode);
-    if (trip !== "—") article.append(node("p", trip, "trip-line")); // no navigation state: no placeholder line
-    const evidence = [];
-    if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
-    else {
-      if (robot.link_reason) evidence.push(`${robot.link_reason.message} ${robot.link_reason.action || ""}`.trim());
-      else if (!robot.online && robot.error) evidence.push(offlineWhy(robot));
-      if (robot.calibration) evidence.push(`보정 진행 중 · ${robot.calibration.label || "보정"}${robot.calibration.holder ? ` · ${robot.calibration.holder}` : ""}`);
-      const address = !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
-      if (address) {
-        const why = node("p", address.text, "robot-summary-evidence");
-        why.dataset.addressReason = view.addresses[robot.robot_id].status;
-        article.append(why);
-      }
-      evidence.push(...attentionItems(robot).map(item => item.text.replace(/^:\s*/, "")));
+const ROUTINE_INLINE = new Set([
+  "위치 미확인",
+  "출처 확인 불가",
+  "안전 확인 불가",
+  "오프라인",
+  "Fleet 상태 확인 불가",
+  "상태 확인 불가",
+]);
+
+// keepPill wins over the routine set: the offline connection chip and an estop-unknown
+// card must keep their pill even when their text is a routine phrase (requirement 33/35).
+function isInlineTag(text, cls, { calmOffline = false, keepPill = false } = {}) {
+  const nominal = !cls || cls === "nav" || cls === "ok" || (calmOffline && !keepPill);
+  return keepPill ? nominal : nominal || ROUTINE_INLINE.has(text);
+}
+
+function MotorSummaryHost({ node }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const host = ref.current;
+    if (!host) return;
+    if (node) {
+      if (host.firstChild !== node || host.childNodes.length !== 1) host.replaceChildren(node);
+    } else if (host.childNodes.length) {
+      host.replaceChildren();
     }
-    if (evidence.length) article.append(node("p", [...new Set(evidence)].join(" · "), "robot-summary-evidence"));
+  }, [node]);
+  return html`<span ref=${ref} />`;
+}
+
+function FactTag({ text, cls, calmOffline, keepPill = false, ...rest }) {
+  const inline = isInlineTag(text, cls, { calmOffline, keepPill });
+  return html`<ui-tag status=${TAG_STATUS[cls] || "neutral"} variant=${inline ? "inline" : undefined} ...${rest}>${text}</ui-tag>`;
+}
+
+function summarizeRobot(robot, view, attentionItems) {
+  const name = view.robotNames?.[robot.robot_id] || robot.robot_id;
+  const state = view.stateUnavailable ? {} : robot.state || {};
+  const link = linkTag(robot.link);
+  const status = view.stateUnavailable ? "Fleet 상태 확인 불가" : !robot.online ? (link?.word || "오프라인")
+    : !robot.state ? "상태 확인 불가" : link?.word || "연결됨";
+  const estop = state.safety?.estop;
+  const now = Date.now();
+  const stateCurrent = !view.stateUnavailable && robot.online && robot.state
+    && staleAgeS(robot, view.receivedAtMs, now) === null;
+  const safety = !stateCurrent ? "안전 확인 불가"
+    : estop === true ? estopText(state, "비상 정지") : estop === false ? "안전 정상" : "안전 확인 불가";
+  const calmOffline = !view.stateUnavailable && !robot.online;
+  const power = powerHealthView(robot, view.receivedAtMs, now);
+  const heat = stateCurrent ? heatChip(state) : null;
+  const guideRow = (view.guide?.robots || []).find((row) => row.robot_id === robot.robot_id);
+  const loc = view.stateUnavailable ? null : positionTag(robot.localization, guideRow);
+  const locTitle = loc ? [loc.title, sitePoseText(guideRow)].filter(Boolean).join(" · ") : undefined;
+  const formation = !view.stateUnavailable && view.formation?.active ? view.formation : null;
+  const role = formation?.leader === robot.robot_id ? "대형 리더"
+    : formation && Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "";
+  const source = motionSource(robot, view);
+  const showSource = !(calmOffline && !source.attention && source.key === "unknown");
+
+  const lane = state.line_follow;
+  const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
+    ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state, robot.robot_id, now).text;
+  const trip = view.stateUnavailable ? "운행 확인 불가"
+    : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode);
+
+  const address = !view.stateUnavailable && !robot.online ? addressReason(view.addresses?.[robot.robot_id]) : null;
+  const evidence = [];
+  if (view.stateUnavailable) evidence.push("Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요.");
+  else {
+    if (robot.link_reason) evidence.push(`${robot.link_reason.message} ${robot.link_reason.action || ""}`.trim());
+    else if (!robot.online && robot.error) evidence.push(offlineWhy(robot));
+    if (robot.calibration) evidence.push(`보정 진행 중 · ${robot.calibration.label || "보정"}${robot.calibration.holder ? ` · ${robot.calibration.holder}` : ""}`);
+    evidence.push(...attentionItems(robot).map((item) => item.text.replace(/^:\s*/, "")));
+  }
+  const dedupedEvidence = [...new Set(evidence)];
+  return {
+    name,
+    status,
+    statusWarn: Boolean(view.stateUnavailable || !robot.online),
+    battery: power.battery,
+    batteryProblem: Boolean(power.problem),
+    safety,
+    estopTrue: estop === true,
+    heat,
+    loc,
+    locTitle,
+    role,
+    source,
+    showSource,
+    trip,
+    addressStatus: address ? view.addresses[robot.robot_id].status : null,
+    addressText: address ? address.text : null,
+    dedupedEvidence,
+    calmOffline,
+  };
+}
+
+function RosterSummaryBody({ robotId, model, motorNode }) {
+  return html`
+    <div class="robot-line" title=${model.name !== robotId ? `Fleet ID ${robotId}` : undefined}>
+      <b class="ui-disclosure-name">${model.name}</b>
+      <span class="robot-summary-head-meta">
+        <${FactTag} text=${model.status} cls=${model.statusWarn ? "warn" : ""} calmOffline=${model.calmOffline} keepPill=${true} />
+        <${FactTag} text=${`배터리 ${model.battery}`} cls=${model.batteryProblem ? "warn" : ""} calmOffline=${model.calmOffline} data-fact="battery" />
+      </span>
+    </div>
+    <div class="robot-summary-status">
+      <${FactTag} text=${model.safety} cls=${model.estopTrue ? "crit" : model.safety === "안전 정상" ? "" : "warn"} calmOffline=${model.calmOffline} keepPill=${model.estopTrue} />
+      <${MotorSummaryHost} node=${motorNode} />
+      ${model.heat ? html`<${FactTag} text=${model.heat[0]} cls=${model.heat[1]} calmOffline=${model.calmOffline} keepPill=${true} />` : null}
+      <${FactTag} text=${model.loc?.text || "위치 미확인"} cls=${model.loc ? model.loc.cls : "warn"} calmOffline=${model.calmOffline} data-localization="" title=${model.locTitle} />
+      ${model.role ? html`<${FactTag} text=${model.role} cls="nav" calmOffline=${model.calmOffline} />` : null}
+      ${model.showSource ? html`<${FactTag} text=${model.source.text} cls=${model.source.cls} calmOffline=${model.calmOffline} keepPill=${model.source.attention} data-motion-source=${model.source.key} title=${model.source.title} />` : null}
+    </div>
+    ${model.trip !== "—" ? html`<p class="trip-line">${model.trip}</p>` : null}
+    ${model.addressText ? html`<p class="robot-summary-evidence" data-address-reason=${model.addressStatus}>${model.addressText}</p>` : null}
+    ${model.dedupedEvidence.length ? html`<p class="robot-summary-evidence">${model.dedupedEvidence.join(" · ")}</p>` : null}
+  `;
+}
+
+export function createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth}) {
+  const cards = new Map();
+  return function summary(robot, index) {
+    let entry = cards.get(robot.robot_id);
+    if (!entry) {
+      const article = document.createElement("article");
+      article.dataset.robotId = robot.robot_id;
+      article.tabIndex = -1;
+      entry = { article, sig: "", motorNode: null };
+      cards.set(robot.robot_id, entry);
+    }
+    const { article } = entry;
+    const nextClass = `robot-summary s${index % view.colors.length}${view.focusRobot === robot.robot_id ? " selected" : ""}`;
+    if (article.className !== nextClass) article.className = nextClass;
+    if (article.dataset.robotId !== robot.robot_id) article.dataset.robotId = robot.robot_id;
+    const model = summarizeRobot(robot, view, attentionItems);
+    const motorNode = motorHealth.summary(robot);
+    const sig = JSON.stringify(model);
+    if (entry.sig !== sig || entry.motorNode !== motorNode) {
+      entry.sig = sig;
+      entry.motorNode = motorNode;
+      renderDom(
+        html`<${RosterSummaryBody} robotId=${robot.robot_id} model=${model} motorNode=${motorNode} />`,
+        article,
+      );
+    }
     return article;
   };
 }

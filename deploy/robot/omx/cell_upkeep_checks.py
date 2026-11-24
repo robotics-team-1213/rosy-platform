@@ -48,15 +48,22 @@ def check_hold(arm, incidents=None):
     return row("hold", "fail", f"HOLD-{arm}.json: {reason}")
 
 
-def check_boards(record):
+def check_boards(record, mode: str = "teleop"):
+    if mode not in ("autonomous", "teleop"):
+        raise ValueError(f"unsupported upkeep mode {mode!r}; expected 'autonomous' or 'teleop'")
+    required = ("robot",) if mode == "autonomous" else ("robot", "teleop")
     out = []
-    for side in ("robot", "teleop"):
+    for side in required:
         port = (record.get(side) or {}).get("port")
         if not port or not Path(port).exists():
             out.append(
                 f"{side}.port {port or '(empty)'} is not connected: ping the boards (IDs 1-6 leader, 11-16 follower) and point the config at the one that answers"
             )
-    return row("boards", "fail", "; ".join(out)) if out else row("boards", "ok", "robot and teleop ports exist")
+    if out:
+        return row("boards", "fail", "; ".join(out))
+    if mode == "autonomous" and not ((record.get("teleop") or {}).get("port") and Path(record["teleop"]["port"]).exists()):
+        return row("boards", "ok", "robot port exists (teleop not required in autonomous mode)")
+    return row("boards", "ok", "robot and teleop ports exist")
 
 
 def bus_owner(arm, io):

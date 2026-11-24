@@ -111,10 +111,28 @@ def observe(root: Path = Path("/"), *, run=_run) -> dict:
                 or properties["RebootWatchdogUSec"] != "10s" or properties["WatchdogDevice"] != "/dev/watchdog0"
                 or not re.fullmatch(r"255(?:[. -].*)?", properties["Version"])):
             raise ValueError("effective PID1 watchdog configuration or supported version differs")
-        journal = _call(run, ["/usr/bin/journalctl", "--boot=" + facts["boot_id"].replace("-", ""),
+        boot_hex = facts["boot_id"].replace("-", "")
+        result = run(["/usr/bin/journalctl", "--boot=" + boot_hex,
             "--output=json", "--no-pager", "--grep=watchdog|Watchdog", "_PID=1", "+",
-            "_TRANSPORT=kernel", "SYSLOG_PID=1", "SYSLOG_IDENTIFIER=systemd"], 262144)
-        _journal(journal, facts["boot_id"])
+            "_TRANSPORT=kernel", "SYSLOG_PID=1", "SYSLOG_IDENTIFIER=systemd"], timeout=10)
+        if len(result.stdout.encode("utf-8")) > 262144 or len(result.stderr) > 16384:
+            raise ValueError("watchdog observation command failed or exceeded its limit")
+        if result.returncode == 0 and result.stdout.strip():
+            _journal(result.stdout, facts["boot_id"])
+        elif result.returncode in (0, 1) and not result.stdout.strip() and not result.stderr.strip():
+            # Early-boot logs may rotate off /var/log/journal; confirm PID1 journal is retained post-init while live hw state holds.
+            head = _call(run, ["/usr/bin/journalctl", "--boot=" + boot_hex,
+                "--output=json", "--no-pager", "--lines=+1", "_PID=1"], 65536)
+            rows = [json.loads(line, object_pairs_hook=_pairs) for line in head.splitlines() if line.strip()]
+            if not rows:
+                raise ValueError("PID1 hardware open/enable evidence is missing or superseded")
+            first = rows[0]
+            stamp = first.get("__MONOTONIC_TIMESTAMP")
+            if (not isinstance(first, dict) or first.get("_BOOT_ID") != boot_hex or not _is_pid1(first)
+                    or not isinstance(stamp, str) or not re.fullmatch(r"[0-9]{1,20}", stamp) or int(stamp) <= 10_000_000):
+                raise ValueError("PID1 hardware open/enable evidence is missing or superseded")
+        else:
+            raise ValueError("watchdog observation command failed or exceeded its limit")
         return dict(schema_version=1, boot_id=facts["boot_id"], device="/dev/watchdog0",
                     identity=IDENTITY, timeout_seconds=10, kernel_open_timeout_seconds=180)
     except (OSError, ValueError, TypeError, KeyError, UnicodeError, subprocess.SubprocessError) as exc:

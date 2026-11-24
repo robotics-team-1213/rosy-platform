@@ -80,6 +80,7 @@ function applyCameraLayout(){
   }else if(stack){
     stack.remove();
   }
+  if(typeof window.renderCamGoalOverlay==='function')window.renderCamGoalOverlay();
 }
 function switchPrimaryCam(lbl){
   if(!lbl||!camLabels.includes(lbl)||lbl===primaryCam)return;
@@ -162,6 +163,8 @@ async function pollCameras(){
         const {missingReq}=renderCamHealthHeader(lastCamState,[],curArm);
         grid.innerHTML='';camLabels=[];
         if(missingReq.length)syncMissingCamPlaceholders(missingReq);
+        if(typeof renderArmCards==='function')renderArmCards();
+        if(typeof window.syncHardwareReadiness==='function')window.syncHardwareReadiness();
       }
       return;
     }
@@ -203,6 +206,7 @@ async function pollCameras(){
     syncMissingCamPlaceholders(missingReq);
     updateCameraRecordingMask();
     if(typeof renderArmCards==='function')renderArmCards();
+    if(typeof window.syncHardwareReadiness==='function')window.syncHardwareReadiness();
   }catch(_){
     note.textContent='카메라 미리보기를 불러오지 못했습니다.';
   }
@@ -213,12 +217,12 @@ async function pollStatus(){
   try{
     const st=await api('/status.json');
     if(seq!==latestStatusSeq)return;
-    clearNotice('conn-error');
     renderStatus(st);
+    clearNotice('conn-error');
   }catch(err){
     if(seq!==latestStatusSeq)return;
     const inActive=benchSessionActive();
-    setNotice('conn-error',inActive?'warn':'crit','상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':''),{persistent:!inActive});
+    setNotice('conn-error',inActive?'warn':'crit','상태 조회 오류: '+(err.message||'네트워크 오류')+(inActive?' (중지 버튼 접근은 유지됩니다)':''),{persistent:!inActive,sig:'conn-error:'+(err.message||'net'),action:{label:'지금 다시 조회',run:()=>pollStatus()}});
     if(!inActive){
       statusLoaded=false;
     }
@@ -244,9 +248,9 @@ function autoCollectionName(){
   if(nameManuallyEdited&&f.name.value.trim())return;
   const arm=f.arm.value;
   if(!arm)return;
-  const t=f.task.value;
+  const t=(window.goalMode==='custom')?'':f.task.value;
   const c=choices&&choices.task_cards&&t?choices.task_cards[t]:null;
-  const tid=(c&&c.valid&&c.task_id)?String(c.task_id):'teleop';
+  const tid=(c&&c.valid&&c.task_id)?String(c.task_id):((window.goalMode==='custom'&&window.customGoal?.origin&&window.customGoal?.target_slot)?(window.customGoal.origin+'-to-'+window.customGoal.target_slot):'teleop');
   const d=new Date();
   const mm=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
   const hh=String(d.getHours()).padStart(2,'0'), mi=String(d.getMinutes()).padStart(2,'0');
@@ -293,12 +297,6 @@ function applyPresetOrRecommended(preferRec){
 }
 
 function syncArmPillsUI(){
-  const cur=f.arm.value;
-  for(const btn of document.querySelectorAll('#rail-arm-pills button[data-arm]')){
-    const on=btn.dataset.arm===cur;
-    btn.classList.toggle('active',on);
-    btn.setAttribute('aria-pressed',on?'true':'false');
-  }
   if(typeof renderArmCards==='function')renderArmCards();
 }
 
@@ -346,6 +344,9 @@ function selectArm(arm){
 
 function selectTask(val,opts){
   window.zoneSwapped=false;
+  if(typeof window.setGoalMode==='function'&&window.goalMode==='custom'&&!(opts&&opts.keepCustom)){
+    window.setGoalMode('card');
+  }
   if(!(opts&&opts.keepMapZone)){
     window.shipHold=null;
     window.mapZone=null;
@@ -464,13 +465,6 @@ async function loadChoices(){
         const sp=document.createElement('span');sp.className='mono';sp.textContent=a;
         lbl.append(cb,sp);$('arm-checks').append(lbl);
       }
-      $('rail-arm-pills').innerHTML='';
-      for(const a of choices.arms){
-        const btn=document.createElement('button');btn.type='button';btn.className='pill-btn mono';btn.dataset.arm=a;
-        btn.textContent=a==='arm_ab'?'arm_a+b':a;
-        btn.addEventListener('click',()=>selectArm(a));
-        $('rail-arm-pills').append(btn);
-      }
       if(defaultArm)f.arm.value=defaultArm;
       syncArmPillsUI();
       if(typeof renderArmCards==='function')renderArmCards();
@@ -519,7 +513,9 @@ function init(){
   pollStatus();
   setInterval(pollStatus,2000);
   pollArms();
+  setInterval(()=>{if(!benchSessionActive())pollArms();},5000);
   if(typeof loadGripMaps==='function')loadGripMaps();
+  if(typeof loadCellMap==='function')loadCellMap();
   pollCameras();
   setInterval(pollCameras,1500);
   setInterval(tickCameraFrames,150);

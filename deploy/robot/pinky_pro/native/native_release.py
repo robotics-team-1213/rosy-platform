@@ -128,6 +128,8 @@ class NativeReleaseManager:
         units: Callable[[str, tuple[str, ...]], None] | None = None,
         io_active: Callable[[], bool] | None = None,
         io_settle_s: float = IO_SETTLE_S,
+        nav_active: Callable[[], bool] | None = None,
+        start_nav: Callable[[], None] | None = None,
     ) -> None:
         self.root = Path(root).resolve()
         self.public_key = Path(public_key)
@@ -147,6 +149,25 @@ class NativeReleaseManager:
         # opened the motors. Real runs probe systemd; injected runtimes opt out.
         self.io_active = io_active or (self._io_is_active if runtime is None else (lambda: False))
         self.io_settle_s = io_settle_s
+        self.nav_active = nav_active or (self._nav_is_active if runtime is None else (lambda: False))
+        self._start_nav = start_nav or (self._systemctl_start_nav if runtime is None else (lambda: None))
+
+    @staticmethod
+    def _nav_is_active() -> bool:
+        probe = subprocess.run(
+            ["systemctl", "is-active", "--quiet", "rosy-navigation.service"],
+            capture_output=True,
+            timeout=10,
+        )
+        return probe.returncode == 0
+
+    @staticmethod
+    def _systemctl_start_nav() -> None:
+        subprocess.run(
+            ["systemctl", "start", "rosy-navigation.service"],
+            check=True,
+            timeout=120,
+        )
 
     @staticmethod
     def _systemctl(action: str) -> None:
@@ -382,6 +403,7 @@ class NativeReleaseManager:
                 old_current=old_current, old_previous=old_previous, phase="prepared",
             )
             expect_io = not restart_units and self.io_active()
+            expect_nav = not restart_units and self.nav_active()
             runtime("stop")
             self._set_link(self.previous, old_current)
             self._set_link(self.current, release_id)
@@ -391,7 +413,12 @@ class NativeReleaseManager:
             )
             try:
                 runtime("start")
-                if expect_io:
+                if expect_nav:
+                    self._start_nav()
+                    time.sleep(self.io_settle_s)
+                    if not self.nav_active():
+                        raise RuntimeError("NATIVE_NAV_NOT_ACTIVE: rosy-navigation.service is not active after start")
+                elif expect_io:
                     # 2026.10.10-100 on 8kcn: bringup died 7 s after start and
                     # nothing noticed. Wait past that window, then require I/O.
                     time.sleep(self.io_settle_s)

@@ -801,13 +801,15 @@ def test_human_hold_masking_park_marks_parked_false_and_fails_episode(tmp_path, 
             if command.endswith("park"):
                 return dict(HOLD_ACK)
             if command == "run policy":
-                return {"ok": True, "command": "run policy", "holding": True, "state": pose}
+                return {"ok": True, "command": "run policy", "holding": True, "settled": True, "state": pose}
             if command.startswith("episode fail "):
                 ep_dir = next(ep_root.iterdir())
                 (ep_dir / "result.json").write_text(json.dumps({"kept": False, "outcome": "failed"}))
                 return {"ok": True, "command": command, "kept": False, "outcome": "failed"}
             if command == "episode save":
                 raise AssertionError("episode save must not run when park is preempted by human-hold")
+            if command == "human-hold":
+                return {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "state": pose}
             return {"ok": True, "state": pose, "target": pose}
 
         def frame(self, _view):
@@ -959,13 +961,15 @@ def test_unsettled_act_park_rejects_verdict_and_exits_nonzero(tmp_path, monkeypa
             if command.endswith("park"):
                 return dict(TIMEOUT_PARK)
             if command == "run policy":
-                return {"ok": True, "command": "run policy", "holding": True, "state": pose}
+                return {"ok": True, "command": "run policy", "holding": True, "settled": True, "state": pose}
             if command.startswith("episode fail "):
                 ep_dir = next(ep_root.iterdir())
                 (ep_dir / "result.json").write_text(json.dumps({"kept": False, "outcome": "failed"}))
                 return {"ok": True, "command": command, "kept": False, "outcome": "failed"}
             if command == "episode save":
                 raise AssertionError("episode save must not run when park is unsettled")
+            if command == "human-hold":
+                return {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True, "state": pose}
             return {"ok": True, "state": pose, "target": pose}
 
         def frame(self, _view):
@@ -1035,9 +1039,11 @@ def test_taught_and_hybrid_carries_reject_masked_or_unsettled_final_park(tmp_pat
                 if self.released:
                     return dict(bad_park)
                 return {"ok": True, "command": "run park", "settled": True, "holding": True, "state": [0.0] * 5 + [52.6]}
+            if command == "human-hold":
+                return {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True}
             if command in ("run grasp_pick", "run lift_pick", "goto above_place", "run descend_place"):
-                return {"ok": True, "holding": True, "settled": True, "state": [0.0] * 5 + [52.6]}
-            return {"ok": True, "holding": False, "settled": True, "state": [0.0] * 5 + [46.6]}
+                return {"command": command, "ok": True, "holding": True, "settled": True, "state": [0.0] * 5 + [52.6]}
+            return {"command": command, "ok": True, "holding": False, "settled": True, "state": [0.0] * 5 + [46.6]}
 
     taught_cell = CarryCell()
     counts = iter([2, 1])

@@ -17,6 +17,7 @@ import numpy as np
 from typing import Any
 
 from cell_area_zones import evaluate_zone, verify_stack_outcome, verify_stack_outcome_z_mm
+import cell_depth_lock
 import cell_site_target
 
 BASIS = "predefined_side_and_top_target_zones"
@@ -83,6 +84,11 @@ def _stamp(receipt: dict) -> dict:
     return {k: receipt.get(k) for k in ("camera", "source_seq", "source_stamp", "captured_at", "jpeg_sha256")}
 
 
+def zone_check_enabled(config: dict) -> bool:
+    """True when placement zone verification is required (Fleet task or direct `--verify-zones`)."""
+    return bool(config.get("_fleet_task") or config.get("_verify_zones"))
+
+
 def _depth_after(config: dict, after: float):
     """(depth map, receipt, None) of the pallet depth after `after`, else (None, None, reason).
 
@@ -101,16 +107,19 @@ def _depth_after(config: dict, after: float):
     if type(n) is not int or not 1 <= n <= 9:
         return None, None, "depth_frames must be an integer from 1 to 9"
     try:
-        with tempfile.TemporaryDirectory(prefix="zone-depth-") as scratch:  # raw frames, receipt and lock go with the directory
-            if n == 1:
-                got = cell_depth.capture_top_depth_z16_receipt(device, Path(scratch) / "depth.raw", timeout_s=DEPTH_WAIT_S)
-                got = None if got is None else (np.array(got[0]), dict(got[1]))
-            else:
-                frames, receipt = cell_depth_slots.capture_depth_frames(device, n, Path(scratch) / "depth.raw")
-                if frames is None:
-                    return None, None, receipt
-                depth, valid = cell_depth_slots.median_depth(frames)
-                got = (depth, {**receipt, "valid_depth_ratio": valid, "source_seq": receipt["source_seq_last"], "reduction": "median"})
+        with cell_depth_lock.hold_depth_lock(timeout_s=DEPTH_WAIT_S):
+            with tempfile.TemporaryDirectory(prefix="zone-depth-") as scratch:  # raw frames, receipt and lock go with the directory
+                if n == 1:
+                    got = cell_depth.capture_top_depth_z16_receipt(device, Path(scratch) / "depth.raw", timeout_s=DEPTH_WAIT_S)
+                    got = None if got is None else (np.array(got[0]), dict(got[1]))
+                else:
+                    frames, receipt = cell_depth_slots.capture_depth_frames(device, n, Path(scratch) / "depth.raw")
+                    if frames is None:
+                        return None, None, receipt
+                    depth, valid = cell_depth_slots.median_depth(frames)
+                    got = (depth, {**receipt, "valid_depth_ratio": valid, "source_seq": receipt["source_seq_last"], "reduction": "median"})
+    except TimeoutError:
+        return None, None, "depth-d435.lock busy"
     except (OSError, ValueError) as exc:
         return None, None, f"depth capture failed: {exc}"
     if got is None:
@@ -134,6 +143,8 @@ def _save_before(config: dict, before_frame: dict | None) -> dict | None:
     import cv2
 
     task = config.get("_fleet_task")
+    if (not isinstance(task, str) or not task) and config.get("_verify_zones"):
+        task = "direct"
     if not isinstance(task, str) or not task or before_frame is None or not config.get("work_dir"):
         return None
     folder = Path(config["work_dir"]).expanduser() / "zone-before"
@@ -151,8 +162,8 @@ def _save_before(config: dict, before_frame: dict | None) -> dict | None:
 def record(row: dict, tried: dict, cell, before_frame, config, dest_site, source_site, roi) -> None:
     """Measure, then put verify, transfer and zone_verification on the attempt row: cell_task_exec reads that row, which
     kept none of them before (they went only to the attempts ledger)."""
-    # Only a Fleet task needs this evidence (cell_auto_setup sets _fleet_task from --task-id); other carries skip the extra reads.
-    tried["zone_verification"] = (measure(cell, before_frame, config, dest_site, source_site, roi) if config.get("_fleet_task")
+    # Fleet tasks and `--verify-zones` `:8781` runs record zone verification; other carries skip the extra reads.
+    tried["zone_verification"] = (measure(cell, before_frame, config, dest_site, source_site, roi) if zone_check_enabled(config)
                                   else {"basis": "unverified: not a Fleet task", "verified": False})
     row.update(verify=tried["verify"], zone_verification=tried["zone_verification"], transfer=tried["transfer"])
 

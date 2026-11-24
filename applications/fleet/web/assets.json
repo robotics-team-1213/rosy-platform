@@ -403,7 +403,7 @@
       "media_type": "application/javascript"
     },
     "roster.css": {
-      "path": "roster.css",
+      "path": "shared/roster.css",
       "media_type": "text/css"
     },
     "roster-presentation.js": {
@@ -653,6 +653,46 @@
     "cockpit-telemetry.js": {
       "path": "shared/cockpit-telemetry.js",
       "media_type": "text/javascript"
+    },
+    "cockpit-hosts.js": {
+      "path": "shared/cockpit-hosts.js",
+      "media_type": "text/javascript"
+    },
+    "robot-dock.js": {
+      "path": "shared/robot-dock.js",
+      "media_type": "text/javascript"
+    },
+    "robot-dock-model.js": {
+      "path": "shared/robot-dock-model.js",
+      "media_type": "text/javascript"
+    },
+    "robot-panel.js": {
+      "path": "shared/robot-panel.js",
+      "media_type": "text/javascript"
+    },
+    "robot-profile.js": {
+      "path": "shared/robot-profile.js",
+      "media_type": "text/javascript"
+    },
+    "robot-3d.js": {
+      "path": "shared/robot-3d.js",
+      "media_type": "text/javascript"
+    },
+    "robot-3d-model.js": {
+      "path": "shared/robot-3d-model.js",
+      "media_type": "text/javascript"
+    },
+    "robot-3d-assets.js": {
+      "path": "shared/robot-3d-assets.js",
+      "media_type": "text/javascript"
+    },
+    "selection.js": {
+      "path": "shared/selection.js",
+      "media_type": "text/javascript"
+    },
+    "decision-slot.js": {
+      "path": "decision-slot.js",
+      "media_type": "application/javascript"
     }
   }
 }

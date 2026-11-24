@@ -19,24 +19,16 @@ _CONTRACTS_SRC = Path(__file__).resolve().parents[3] / "contracts" / "learning" 
 if str(_CONTRACTS_SRC) not in sys.path:
     sys.path.insert(0, str(_CONTRACTS_SRC))
 
+import canonical_bundle_store  # noqa: E402
+from canonical_intake import handle_intake_request, scan_transferred_collections  # noqa: E402
 from canonical_telemetry import HostTelemetry, external_gpu_locks, load_peer_token  # noqa: E402
+from canonical_recording_todo import build_service_todo  # noqa: E402
 from canonical_watch import (  # noqa: E402
-    BusyConflict,
-    PeerClient,
-    read_bounded_json,
-    scan_watch_dir,
-    scrub_text,
-    strip_paths,
-    tail_log,
-    validate_peer_url,
+    BusyConflict, PeerClient, read_bounded_json, scan_watch_dir, scrub_text, strip_paths, tail_log, validate_peer_url,
 )
 from experiment_io import identifier, write_json  # noqa: E402
 from experiment_process import process_stamp  # noqa: E402
-from rosy.contracts.learning.omx_canonical import (  # noqa: E402
-    AUTHORITY_STAMP,
-    ARM_IDS,
-    load_canonical_spec,
-)
+from rosy.contracts.learning.omx_canonical import AUTHORITY_STAMP, ARM_IDS, load_canonical_spec  # noqa: E402
 
 CONFIG_SCHEMA = "rosy.omx.canonical-config/1"
 REQUEST_SCHEMA = "rosy.omx.canonical-job-request/1"
@@ -110,13 +102,16 @@ class CanonicalService:
         self.python: dict[str, Path] = {}
         self.named_sources: dict[str, dict] = {}
         self.watch_roots: dict[str, dict] = {}
+        self.recording_manifest_path: Path | None = None
         self.peers = PeerClient({})
         self.jobs_dir = Path.home() / "rosy-jobs"
         self.peer_token_file: Path | None = None
+        self.collections_dir: Path | None = None
         self.telemetry = HostTelemetry(self._disk_probe_path)
         if config is None:
             return
-        allowed = {"schema", "spec_path", "python", "named_sources", "watch_roots", "peers", "jobs_dir", "peer_token_file"}
+        allowed = {"schema", "spec_path", "python", "named_sources", "watch_roots", "peers",
+                   "jobs_dir", "peer_token_file", "collections_dir", "recording_manifest_path"}
         if not isinstance(config, dict) or config.get("schema") != CONFIG_SCHEMA or set(config) - allowed:
             raise ValueError(f"invalid canonical config (requires {CONFIG_SCHEMA})")
         if root is None:
@@ -163,6 +158,10 @@ class CanonicalService:
             self.jobs_dir = _abs_path(config["jobs_dir"], "jobs_dir")
         if config.get("peer_token_file") is not None:
             self.peer_token_file = _abs_path(config["peer_token_file"], "peer_token_file")
+        if config.get("collections_dir") is not None:
+            self.collections_dir = _abs_path(config["collections_dir"], "collections_dir")
+        if config.get("recording_manifest_path") is not None:
+            self.recording_manifest_path = _abs_path(config["recording_manifest_path"], "recording_manifest_path")
 
         self.db = self.root / "canonical.sqlite"
         with self.connect() as db:
@@ -186,6 +185,9 @@ class CanonicalService:
     def spec_payload(self) -> dict:
         return {"schema": self.spec["schema"], "spec_sha256": self.spec_sha256,
                 "source": self.spec_source, "spec": self.spec, **AUTHORITY_STAMP}
+
+    def recording_todo(self) -> dict:
+        return build_service_todo(self.recording_manifest_path, self.watch_roots)
 
     def verify_peer_bearer(self, header_value: str | None) -> bool:
         if self.peer_token_file is None or not isinstance(header_value, str) or not header_value.startswith("Bearer "):
@@ -277,11 +279,12 @@ class CanonicalService:
             gpu_rows = [json.loads(r[0]) for r in db.execute("SELECT document FROM runs WHERE gpu_required=1")]
         holders = [r["id"] for r in gpu_rows if r["status"] in ("launching", "running", "stopping")]
         holders.extend(external_gpu_locks(self.jobs_dir))
+        merged_sources = {**scan_transferred_collections(self.collections_dir), **self.named_sources}
         return {
             "configured": True, "writable": self.writable, "host_id": self.host_id,
             "spec_sha256": self.spec_sha256, "spec": self.spec, "spec_source": self.spec_source,
             "named_sources": {k: {"id": v["id"], "kind": v["kind"], "arm_id": v["arm_id"], "label": v["label"]}
-                              for k, v in self.named_sources.items()},
+                              for k, v in merged_sources.items()},
             "gpu_lock": {"busy": bool(holders), "holders": holders}, "runs": rows,
             "watched": {wid: scan_watch_dir(m["path"], m) for wid, m in self.watch_roots.items()},
             "peers": self.peers.snapshot() if include_peers else {},
@@ -319,17 +322,29 @@ class CanonicalService:
             raise KeyError("unknown peer")
         return self.peers.get(peer_id)
 
+    def bundle_manifest(self, rid: str) -> dict:
+        return canonical_bundle_store.bundle_manifest(self.root, self.get_run(rid))
+
+    def bundle_file(self, rid: str, relpath: str) -> bytes:
+        return canonical_bundle_store.bundle_file(self.root, self.get_run(rid), relpath)
+
     def refresh_peer(self, peer_id: str) -> dict:
         if not self.configured:
             raise KeyError("canonical service not configured")
         return self.peers.refresh(peer_id)
 
+    def intake_collection(self, body: dict) -> dict:
+        if not self.configured:
+            raise ValueError("canonical service not configured")
+        return handle_intake_request(self, body)
+
     def _resolve_ref(self, db, ref: str, *, expected_kinds: set[str], arm_id: str) -> dict:
         if not isinstance(ref, str) or not ref:
             raise ValueError("reference ID required")
-        if ref in self.named_sources:
-            src = self.named_sources[ref]
-            if src["kind"] not in expected_kinds or (src["arm_id"] and src["arm_id"] != arm_id):
+        sources = {**scan_transferred_collections(self.collections_dir), **self.named_sources}
+        if ref in sources:
+            src = sources[ref]
+            if src["kind"] not in expected_kinds or (src["arm_id"] and src["arm_id"] not in (arm_id, "arm_ab")):
                 raise ValueError(f"source {ref} incompatible with kind/arm")
             return {"ref_type": "named_source", "path": str(src["path"])}
         rid = identifier(ref)

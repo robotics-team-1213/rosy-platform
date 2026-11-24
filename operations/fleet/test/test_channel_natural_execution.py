@@ -228,7 +228,8 @@ def test_navigation_origin_fence_runs_after_actual_transport_await(tmp_path,monk
     else:
         binding=SimpleNamespace(context=lambda:None)
         transport=EnrollmentIdentityTransport(ep,SimpleNamespace(binding=lambda rid:binding),inner=inner)
-        async def identity(*args):
+        async def identity(target, extensions, *, skip_backoff=False):
+            assert not skip_backoff
             await asyncio.sleep(0)
             mutate()
         transport.identity=identity

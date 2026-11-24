@@ -1,4 +1,4 @@
-import { node } from "/common/control-dom.js";
+import { node, patchAttr, patchHidden, patchText } from "/common/control-dom.js";
 import { setOffBy } from "/common/cause-line.js";
 // 예외 큐 (Fleet 분해 3에서 roster.js로부터 옮김, D-540 단계 (d) 크기 재판정). 주의/개입 큐의
 // 규칙(attentionItems, D-493 한 규칙)과 행 채우기, 큐 펼침의 버튼 헬퍼를 가진다. 카드는 roster.js다.
@@ -214,8 +214,11 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     const head = el(id);
     if (!head) return;
     const names = new Set(rows.flatMap((row) => row.group || [row.robotId]));
-    head.querySelector("b").textContent = `${label} ${names.size}`;
-    Object.assign(head.querySelector("small"), { textContent: "", title: [...names].join(" · ") });
+    patchText(head.querySelector("b"), `${label} ${names.size}`);
+    const small = head.querySelector("small");
+    patchText(small, "");
+    const title = [...names].join(" · ");
+    if (small && small.title !== title) small.title = title;
   }
 
   // D-540 3 — a row with a decision opens in place, one at a time: the operator's pick, else the most
@@ -246,14 +249,14 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
       }
       const line = row.decision ? li.firstElementChild : li;
       const name = line.querySelector("b");
-      name.textContent = row.robotId;
-      name.className = named ? "" : "sr-only";
+      patchText(name, row.robotId);
+      const cls = named ? "" : "sr-only";
+      if (name.className !== cls) name.className = cls;
       const text = line.querySelector(".queue-text");
-      const shown = queueRowText(row.text, named);
-      if (text.textContent !== shown) text.textContent = shown;
+      patchText(text, queueRowText(row.text, named));
       if (row.decision) {
-        line.setAttribute("aria-expanded", String(open === row.key));
-        li.lastElementChild.hidden = open !== row.key;
+        patchAttr(line, "aria-expanded", String(open === row.key));
+        patchHidden(li.lastElementChild, open !== row.key);
       }
       return li;
     });
@@ -335,18 +338,18 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
 
     // ADR-1000 & UX Law 1: Hide empty queues inside the drawer without closing the drawer itself.
     const total = rows.warn.length + rows.crit.length;
-    warnList.parentElement.hidden = rows.warn.length === 0;
-    critList.parentElement.hidden = rows.crit.length === 0;
+    if (warnList.parentElement.hidden !== (rows.warn.length === 0)) warnList.parentElement.hidden = rows.warn.length === 0;
+    if (critList.parentElement.hidden !== (rows.crit.length === 0)) critList.parentElement.hidden = rows.crit.length === 0;
     const container = document.querySelector(".queues-container");
-    if (container) container.hidden = total === 0;
+    if (container) patchHidden(container, total === 0);
     const empty = el("queues-empty");
-    if (empty) empty.hidden = total > 0;
+    if (empty) patchHidden(empty, total > 0);
     const summary = el("queues-summary");
     if (summary) {
       const parts = [];
       if (rows.crit.length) parts.push(`최우선 ${rows.crit.length}`);
       if (rows.warn.length) parts.push(`주의 ${rows.warn.length}`);
-      summary.textContent = parts.join(" · ");
+      patchText(summary, parts.join(" · "));
     }
   }
 

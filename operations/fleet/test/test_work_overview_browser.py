@@ -54,11 +54,20 @@ def test_channel_request_poll_preserves_current_keyboard_target(site, size, them
         elif change == 'move-outside':
             outside.focus()
         remaining = [] if change == 'empty' else receipts[1:] if change == 'removed' else list(reversed(receipts)) if change == 'reorder' else receipts
+        unchanged = change in ['same', 'move-row', 'move-outside', 'no-focus']
         if change.startswith('request-') or change == 'work-503':
             held[0].fulfill(status=int(change.rsplit('-', 1)[1]), json={'detail': 'fixture read failure'})
+            page.wait_for_function('() => !window.oldRequestButton.isConnected')
+        elif unchanged:
+            with page.expect_response(lambda response: response.url.endswith('/api/fleet/channel-requests')) as response_info:
+                held[0].fulfill(json={'rows': remaining})
+            response_info.value.finished()
+            # Drain fetch/json/refreshRequests microtasks without reaching the next 5 s poll.
+            page.clock.run_for(50)
+            assert page.evaluate('() => window.oldRequestButton.isConnected')
         else:
             held[0].fulfill(json={'rows': remaining})
-        page.wait_for_function('() => !window.oldRequestButton.isConnected')
+            page.wait_for_function('() => !window.oldRequestButton.isConnected')
         if change in ['move-outside', 'no-focus']:
             expect(outside).to_be_focused()
         elif change in ['removed', 'empty', 'request-404', 'request-403', 'request-503', 'work-503']:

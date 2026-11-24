@@ -301,7 +301,21 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     import canonical_workers as cw
 
     spec = oc.default_canonical_spec()
+    spec["camera_angle_jitter_deg"] = .3
     calls = {"pose_random_passed": False, "tasks_called": [], "cmds": [], "eval_results": []}
+
+    def camera_sampler(_world, arm_view, bound, namespace):
+        assert arm_view == "a_wrist" and bound == .3
+
+        def set_angles(seed):
+            calls.setdefault("camera_seeds", []).append((namespace, seed))
+            return {role: {"rx": .1, "ry": -.2, "rz": .05} for role in ("top", "side", "wrist")}
+
+        return set_angles
+
+    cameras = types.ModuleType("omx_camera_pose")
+    cameras.camera_angle_sampler = camera_sampler
+    monkeypatch.setitem(sys.modules, "omx_camera_pose", cameras)
 
     class _FakeDs:
         @classmethod
@@ -324,7 +338,7 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
 
     dg_mod = types.ModuleType("data_gate")
     dg_mod.gate = lambda dst, **k: {"counts": {"pass": 2, "review": 0, "reject": 0}}
-    dg_mod.check_receipt = lambda dst: [0, 2]
+    dg_mod.check_receipt = lambda dst, *, expected_scope=None: [0, 2]
     monkeypatch.setitem(sys.modules, "data_gate", dg_mod)
 
     class _FakeArm:
@@ -400,6 +414,10 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     }, out_c)
     assert res_c["episodes"] == 2 and calls["pose_random_passed"] is False and calls["tasks_called"] == ["stack"]
     assert calls["frames"] == 62  # settle frame ignored
+    views = json.loads((out_c / "dataset" / "meta" / "camera_views.json").read_text())
+    assert views["episodes"][0]["episode_index"] == 0
+    assert views["episodes"][0]["scenario_seed"] == 5201
+    assert views["episodes"][0]["angles_deg"]["wrist"]["ry"] == -.2
 
     # train_stage passes admitted --dataset.episodes and writes immutable out/train on resume
     ds_root = tmp_path / "ds"; ds_root.mkdir()
@@ -446,14 +464,99 @@ def test_canonical_workers_wiring_contracts(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "torch", torch_m)
     seen_obs_keys = []
     fake_policy = SimpleNamespace(
-        config=SimpleNamespace(n_action_steps=4, input_features={"observation.images.top": {}}),
+        config=SimpleNamespace(n_action_steps=4, input_features={
+            "observation.images.top": {},
+            "observation.environment_state": SimpleNamespace(shape=(10,)),
+        }),
         reset=lambda: None,
         select_action=lambda b: (seen_obs_keys.append(set(b)), SimpleNamespace(cpu=lambda: SimpleNamespace(numpy=lambda: [np.zeros(6, dtype=np.float32)])))[1],
     )
-    prof, _ = cw._eval_sim_profile(fake_policy, lambda b: b, lambda x: x, spec, "arm_a", task_name="ship-h1", episodes=1, delay_frames=0, seed_base=700)
+    camera_cases = []
+    prof, _ = cw.eval_sim_profile(fake_policy, lambda b: b, lambda x: x, spec, "arm_a", task_name="ship-h1", episodes=1,
+                                 delay_frames=0, seed_base=700, camera_cases=camera_cases)
     assert prof["arm_link_contacts"] == 0 and prof["neighbour_disturbed"] == 1
     assert prof["policy_successes"] == 1 and calls["teacher_seeds"] == [5201, 700, 700]
-    assert "observation.images.top" in seen_obs_keys[0]
+    assert "observation.images.top" in seen_obs_keys[0] and "observation.environment_state" in seen_obs_keys[0]
+    assert calls["camera_seeds"] == [(0, 5201), (1, 700)]
+    assert camera_cases[0]["angles_deg"]["top"]["rx"] == .1
+
+
+def test_recording_todo_uses_watched_inventory_and_real_receipts(tmp_path):
+    from rosy.contracts.learning import omx_recording_todo as rt
+
+    cfg = _make_config(tmp_path)
+    watch = Path(cfg["watch_roots"]["ai_canon"]["path"])
+    bad_link = watch / "recording-inventory.json"
+    bad_target = tmp_path / "outside-inv.json"
+    bad_target.write_text("{}", encoding="utf-8")
+    try:
+        bad_link.symlink_to(bad_target)
+        svc_link = cp.CanonicalService(tmp_path / "canon_todo_link", cfg)
+        assert svc_link.recording_todo()["inventory_status"] == "invalid"
+        bad_link.unlink()
+    except OSError:
+        pass
+    inv_doc = rt.derive_inventory_from_manifest({
+        "schema": rt.CURATED_MANIFEST_SCHEMA,
+        "curated_version": "omx-real-v1",
+        "datasets": [],
+    })
+    (watch / "recording-inventory.json").write_text(json.dumps(inv_doc), encoding="utf-8")
+    (watch / "real_aligned" / "real" / "arm_a").mkdir(parents=True, exist_ok=True)
+    (watch / "real_aligned" / "real" / "arm_a" / "gate-receipt.json").write_text(json.dumps({
+        "arm": "arm_a", "source": {"kind": "real"}, "counts": {"pass": 5, "review": 0, "reject": 0}, "dataset_reject": [],
+        "episodes": [None, {"verdict": "pass", "goal": []},
+                     *[{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(5)]],
+    }), encoding="utf-8")
+    (watch / "sim").mkdir()
+    (watch / "sim" / "gate-receipt.json").write_text(json.dumps({
+        "arm": "arm_a", "source": {"kind": "sim"},
+        "episodes": [{"verdict": "pass", "goal": "ship-h1r0-l0"} for _ in range(7)],
+    }), encoding="utf-8")
+    svc = cp.CanonicalService(tmp_path / "canon_todo", cfg)
+    todo_res = svc.recording_todo()
+    assert todo_res["inventory_status"] == "ready"
+    assert str(tmp_path) not in json.dumps(todo_res)
+    l0_a = next(c for c in todo_res["cards"] if c["card_id"] == "arm_a-ship-h1-l0")
+    assert any(s["slot_id"] == "ship-h1r0-l0" and s["local_gate_passed"] == 5 for s in l0_a["slots"])
+    b_first_tier = next(c for c in todo_res["cards"] if c["card_id"] == "arm_b-ship-h1-l0")
+    assert b_first_tier["bench_card_ids"] == ["belt-to-ship-h1r2-l0", "belt-to-ship-h1r1-l0"]
+
+
+def test_h1_train_worker_refuses_h2_gate_receipt(tmp_path):
+    import canonical_workers as workers
+    import data_gate as dg
+
+    (tmp_path / dg.RECEIPT).write_text(json.dumps({
+        "schema": dg.SCHEMA, "goal_scope": "h2", "files": dg.dataset_files(tmp_path),
+        "dataset_reject": [], "episodes": [{"episode_index": 0, "verdict": "pass"}],
+    }), encoding="utf-8")
+    with pytest.raises(ValueError, match="goal_scope 'h2'"):
+        workers.run_train_stage({"arm_id": "arm_a", "params": {"dataset_root": str(tmp_path)}}, tmp_path)
+
+
+def test_recording_todo_rejects_malformed_inventory_and_manifest(tmp_path):
+    import canonical_recording_todo as todo
+    from rosy.contracts.learning import omx_recording_todo as rt
+
+    path = tmp_path / "recording-inventory.json"
+    slot = {"arm": "arm_a", "slot_id": "ship-h1r0-l0"}
+    invalid_inventory = {"schema": rt.COLLECTION_INVENTORY_SCHEMA,
+                         "slots": [{**slot, "holdout_episodes": "bogus"}]}
+    invalid_manifest = {"schema": rt.CURATED_MANIFEST_SCHEMA, "datasets": [
+        {**slot, "bay": "ship-h1", "direction": "load", "split_role": "train", "data_gate": "bogus"},
+    ]}
+    for document in (invalid_inventory, invalid_manifest):
+        path.write_text(json.dumps(document), encoding="utf-8")
+        assert todo.build_service_todo(path, {})["inventory_status"] == "invalid"
+
+    minimal_inventory = {"schema": rt.COLLECTION_INVENTORY_SCHEMA,
+                         "slots": [{**slot, "target_episodes": 30, "remaining_episodes": 30}]}
+    path.write_text(json.dumps(minimal_inventory), encoding="utf-8")
+    result = todo.build_service_todo(path, {})
+    assert result["inventory_status"] == "ready"
+    assert result["cards"][0]["bench_card_ids"] == ["belt-to-ship-h1r0-l0"]
+    assert result["cards"][0]["slots"][0]["row"] == 0
 
 
 def test_canonical_watch_and_token_hardening(tmp_path):
@@ -510,3 +613,113 @@ def test_canonical_watch_and_token_hardening(tmp_path):
     summary = scanned["eval_ladder"][0]["summary"]
     assert "/home/" not in json.dumps(scanned)
     assert summary["checkpoint"] == "<path>" and summary["step_id"] == "002500"
+
+
+def test_canonical_intake_normalizes_bench_data_and_enqueues_idempotent_align(tmp_path, monkeypatch):
+    import numpy as np
+    import canonical_intake as ci
+    import data_gate
+
+    spec = oc.default_canonical_spec()
+    card_txt = "Take the container from the belt pickup end and place it on ship hold h1, A side row (r0), tier 1 (floor) (l0)."
+    norm_txt = ci.normalize_bench_task(card_txt)
+    assert norm_txt == "Pick container from belt to ship-h1r0-l0."
+    assert data_gate.GOAL_RE.search(norm_txt)
+    for valid_raw, expected in (
+        ("Move ship-h1r1-l0 to tray", "Move container from ship-h1r1-l0 to tray."),
+        ("Take the container ... (ship-h1r0-l0 -> tray)", "Move container from ship-h1r0-l0 to tray."),
+        ("Take the container ... (ship-h1r0-l0 -> stand)", "Move container from ship-h1r0-l0 to stand."),
+    ):
+        out_txt = ci.normalize_bench_task(valid_raw)
+        assert out_txt == expected and data_gate.GOAL_RE.search(out_txt)
+    for unsupported in (
+        "Take the container from the belt pickup end and place it on ship hold h2, A side row (r0), tier 1 (floor) (l0).",
+        "Take the container ... (ship-h1r0-l0 -> belt)",
+    ):
+        with pytest.raises(ValueError, match="data_gate"):
+            ci.normalize_bench_task(unsupported)
+
+    # 12-DOF bi_omx_follower normalized [-100..100] at 30fps -> 6-DOF sim rad + linear gripper + 15fps.
+    g0_b = spec["idle_park"]["arm_b"]["gripper_units"]
+    g1_b = spec["canonical_start"]["arm_b"]["gripper_units"]
+    raw_b0 = list(spec["idle_park"]["arm_b"]["norm"]) + [g0_b]
+    raw_b1 = list(spec["canonical_start"]["arm_b"]["norm"]) + [g1_b]
+    row0 = [0.0] * 6 + raw_b0
+    row1 = [0.0] * 6 + raw_b1
+    arr = np.asarray([row0, row0, row1, row1], dtype=np.float64)
+    st_out, ac_out, stride, out_fps = ci.prepare_episode_arrays(
+        arr, arr, spec=spec, arm_id="arm_b", robot_type="bi_omx_follower", src_fps=30, target_fps=15,
+    )
+    assert stride == 2 and out_fps == 15 and st_out.shape == (2, 6) and ac_out.shape == (2, 6)
+    assert abs(st_out[0, 5] - spec["sim_jaw_closed"]) < 1e-4
+    assert abs(st_out[1, 5] - spec["sim_jaw_open"]) < 1e-4
+    assert abs(st_out[0, 1] - (spec["idle_park"]["arm_b"]["norm"][1] * 3.141592653589793 / 100.0)) < 1e-4
+
+    # Explicit record-config.json use_degrees=True converts <= 105 deg with pi/180 (never pi/100).
+    deg_col = tmp_path / "deg_col"
+    (deg_col / "dataset").mkdir(parents=True)
+    (deg_col / "record-config.json").write_text(json.dumps({"robot": {"arm_b": {"use_degrees": True}}}), encoding="utf-8")
+    assert ci.detect_source_units(deg_col / "dataset", "arm_b", {}) == "deg"
+    deg_arr = np.asarray([[45.0, -45.0, 0.0, 0.0, 0.0, g0_b]], dtype=np.float64)
+    deg_out, _, _, _ = ci.prepare_episode_arrays(deg_arr, deg_arr, spec=spec, arm_id="arm_b", src_fps=15, target_fps=15, units="deg")
+    assert abs(deg_out[0, 0] - (45.0 * 3.141592653589793 / 180.0)) < 1e-5
+
+    # Collection discovery + full sha256 verification + idempotent intake enqueueing arm_a + arm_b.
+    import hashlib
+    cols = tmp_path / "collections"
+    valid = cols / "bi-sess-01"
+    (valid / "dataset" / "meta").mkdir(parents=True)
+    (valid / "dataset" / "data" / "chunk-000").mkdir(parents=True)
+    p_info = valid / "dataset" / "meta" / "info.json"
+    p_pq = valid / "dataset" / "data" / "chunk-000" / "file-000.parquet"
+    p_info.write_text(json.dumps({"codebase_version": "v3.0", "robot_type": "bi_omx_follower", "total_episodes": 2}))
+    p_pq.write_bytes(b"PAR1")
+    files_map = {
+        "dataset/meta/info.json": hashlib.sha256(p_info.read_bytes()).hexdigest(),
+        "dataset/data/chunk-000/file-000.parquet": hashlib.sha256(p_pq.read_bytes()).hexdigest(),
+    }
+    mf_bytes = json.dumps({
+        "schema": "rosy.omx-collection-session.v1", "state": "CLOSED", "mode": "hardware",
+        "source_mode": "leader_native", "robot_type": "bi_omx_follower", "arm_id": "arm_ab", "total_episodes": 2,
+        "files": files_map,
+    }).encode("utf-8")
+    (valid / "manifest.json").write_bytes(mf_bytes)
+
+    dnt = cols / "dnt-sess"
+    (dnt / "dataset" / "meta").mkdir(parents=True)
+    (dnt / "dataset" / "data" / "chunk-000").mkdir(parents=True)
+    (dnt / "dataset" / "meta" / "info.json").write_text("{}")
+    (dnt / "dataset" / "data" / "chunk-000" / "ep.parquet").write_bytes(b"x")
+    (dnt / "manifest.json").write_bytes(mf_bytes)
+    (dnt / "DO_NOT_TRAIN.txt").write_text("stop")
+
+    cfg = _make_config(tmp_path)
+    cfg["collections_dir"] = str(cols)
+    svc = cp.CanonicalService(tmp_path / "canon_intake_root", cfg)
+    snap = svc.snapshot()
+    assert "bi-sess-01" in snap["named_sources"] and "dnt-sess" not in snap["named_sources"]
+
+    started = []
+    monkeypatch.setattr(svc, "start_job", lambda b: (started.append(b), {"id": b["request_id"], "arm_id": b["arm_id"], "kind": b["kind"]})[1])
+    with pytest.raises(ValueError, match="valid collection request fields"):
+        svc.intake_collection({"collection": "bi-sess-01", "extra_bad": 1})
+    with pytest.raises(ValueError, match="auto_align must be bool"):
+        svc.intake_collection({"collection": "bi-sess-01", "auto_align": "yes"})
+    with pytest.raises(ValueError, match="disagrees with sealed manifest"):
+        svc.intake_collection({"collection": "bi-sess-01", "arm_id": "arm_a"})
+    res = svc.intake_collection({"collection": "bi-sess-01"})
+    assert res["ok"] is True and res["arms"] == ["arm_a", "arm_b"]
+    assert [s["arm_id"] for s in started] == ["arm_a", "arm_b"]
+    assert started[0]["params"]["wrist_flip"] is False and started[1]["params"]["wrist_flip"] is True
+    assert (svc.root / "intakes" / "bi-sess-01.json").is_file()
+
+    # Bimanual arm feature selection filters opposing arm cameras and maps <arm>_wrist -> wrist.
+    bi_feats = {
+        "observation.images.top": {}, "observation.images.side": {},
+        "observation.images.arm_a_wrist": {}, "observation.images.arm_b_wrist": {},
+    }
+    f_b, leg_b = ci.select_arm_features(bi_feats, "arm_b")
+    assert "observation.images.arm_a_wrist" not in f_b and leg_b["arm_b_wrist"] == "wrist"
+    assert data_gate.camera_map(f_b, leg_b) == {
+        "observation.images.top": "top", "observation.images.side": "side", "observation.images.arm_b_wrist": "wrist",
+    }

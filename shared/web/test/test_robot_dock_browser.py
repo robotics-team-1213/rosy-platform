@@ -10,6 +10,7 @@ from browser_harness import browser_tests_enabled
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chromium scenario")
 WEB = Path(__file__).resolve().parents[1]
+FLEET_WEB = Path(__file__).resolve().parents[3] / "applications/fleet/web"
 HOST = "http://rosy.test"
 
 
@@ -18,9 +19,17 @@ def dock_gallery():
     from playwright.sync_api import sync_playwright, expect
 
     assets = json.loads((WEB / "shared-assets.json").read_text(encoding="utf-8"))["shared_assets"]
+    fleet_assets = json.loads((FLEET_WEB / "assets.json").read_text(encoding="utf-8"))["assets"]
 
     def serve(route):
-        name = route.request.url.split("/common/", 1)[-1].split("?", 1)[0]
+        url = route.request.url.split("?", 1)[0]
+        if "/console/assets/" in url:
+            name = url.split("/console/assets/", 1)[-1]
+            if name not in fleet_assets:
+                return route.fulfill(status=404, body="not registered")
+            entry = fleet_assets[name]
+            return route.fulfill(path=str(FLEET_WEB / entry["path"]), content_type=entry["media_type"])
+        name = url.split("/common/", 1)[-1]
         if name not in assets:
             return route.fulfill(status=404, body="not registered")
         route.fulfill(path=str(WEB / name), content_type=assets[name])
@@ -35,7 +44,7 @@ def dock_gallery():
         assert response.status == 200
         expect(page.locator("#kit-ready")).to_have_text("견본 준비 완료")
         page.evaluate("""async () => {
-          for (const href of ['/common/choice-controls.css', '/common/robot-dock.css']) {
+          for (const href of ['/console/assets/roster.css']) {
             if (!document.querySelector(`link[href="${href}"]`)) {
               const link = document.createElement('link');
               link.rel = 'stylesheet';
@@ -48,10 +57,10 @@ def dock_gallery():
           host.id = 'dock-test-stage';
           host.className = 'robot-stage';
           document.querySelector('main').prepend(host);
-          const { createSelection } = await import('/common/selection.js');
-          const { createRobotDock } = await import('/common/robot-dock.js');
-          const { createRobotPanel } = await import('/common/robot-panel.js');
-          const { robotProfile } = await import('/common/robot-profile.js');
+          const { createSelection } = await import('/console/assets/selection.js');
+          const { createRobotDock } = await import('/console/assets/robot-dock.js');
+          const { createRobotPanel } = await import('/console/assets/robot-panel.js');
+          const { robotProfile } = await import('/console/assets/robot-profile.js');
           const profiles = [
             robotProfile({ id: 'rosy_01', name: '1호기', kind: 'mobile', online: true, evidence: 'fresh', battery: { percent: 82 }, alarm: { level: 'caution', text: '주의' } }),
             robotProfile({ id: 'rosy_02', name: '2호기', kind: 'mobile', online: true, evidence: 'fresh', battery: { percent: 65 } }),
@@ -160,6 +169,11 @@ def test_robot_dock_mobile_horizontal_bar_and_no_overflow(dock_gallery, width):
     buttons.first.click()
     expect(panel).to_be_visible()
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+    assert page.evaluate("() => { const t = document.getElementById('rosy-shared-tooltip'); return !t || t.hidden || getComputedStyle(t).display === 'none' || !t.textContent.trim(); }")
+    dock_box = dock.bounding_box()
+    panel_box = panel.bounding_box()
+    assert dock_box and panel_box
+    assert dock_box["y"] + dock_box["height"] <= panel_box["y"] + 1
 
     # Arm profile shows OMX commands and hides mobile manual section.
     arm_btn = dock.locator('.robot-dock-btn[data-kind="arm"]').first

@@ -1,6 +1,7 @@
 """Nav2 hardware-slice contracts (D-2, D-4, composition, packaging)."""
 
 import sys
+from xml.etree import ElementTree
 from pathlib import Path
 
 import pytest
@@ -122,6 +123,64 @@ def test_hardware_launch_composes_bringup_and_imports_nav_policy():
     assert "sys.path.insert" not in launch
     assert "mapping_bringup_launch.xml" in launch
     assert "nav2_web_server" not in launch
+
+
+def test_localization_hardware_defers_only_navigation_lifecycle():
+    hardware = (NAV_LAUNCH / "hardware.launch.py").read_text(encoding="utf-8")
+    localization, slam = hardware.split('launch_file = "mapping_bringup_launch.xml"', 1)
+    assert '"navigation_autostart": "False"' in localization
+    assert '"navigation_autostart": "False"' not in slam
+    assert 'executable="start_after_tf"' in hardware
+    root = ElementTree.parse(NAV_LAUNCH / "bringup_launch.xml")
+    assert root.find("./arg[@name='navigation_autostart']").get("default") == "$(var autostart)"
+    for launch_file, expected in (("localization_launch.xml", "$(var autostart)"),
+                                  ("navigation_launch.xml", "$(var navigation_autostart)")):
+        include = next(node for node in root.findall(".//include") if node.get("file").endswith(launch_file))
+        assert include.find("arg[@name='autostart']").get("value") == expected
+
+
+def test_navigation_startup_waits_for_both_costmaps_and_manager():
+    from unittest.mock import Mock
+
+    from navigation.start_after_tf import request_startup
+
+    buffer = Mock()
+    client = Mock()
+    request, latest = object(), object()
+    frames = [("map", "rosy_09/base_footprint"), ("rosy_09/odom", "rosy_09/base_footprint")]
+    client.service_is_ready.return_value = False
+    assert request_startup(buffer, client, request, frames, latest) is None
+    client.service_is_ready.return_value = True
+    buffer.can_transform.side_effect = [True, False]
+    assert request_startup(buffer, client, request, frames, latest) is None
+    client.call_async.assert_not_called()
+    buffer.can_transform.side_effect = [True, True]
+    assert request_startup(buffer, client, request, frames, latest) is client.call_async.return_value
+    client.call_async.assert_called_once_with(request)
+
+
+@pytest.mark.parametrize("namespace", ["", "rosy_09"])
+def test_startup_frames_match_hardware_costmap_parameters(tmp_path, namespace):
+    from navigation.params_rewrite import write_prefixed_nav2_params
+    from navigation.start_after_tf import costmap_frames
+
+    params = write_prefixed_nav2_params(NAV_PARAMS, namespace, directory=tmp_path)
+    prefix = f"{namespace}/" if namespace else ""
+    assert costmap_frames(params, f"/{namespace}") == [
+        ("map", prefix + "base_footprint"),
+        (prefix + "odom", prefix + "base_footprint"),
+    ]
+
+
+def test_startup_frames_read_flat_fully_qualified_costmap_parameters(tmp_path):
+    from navigation.start_after_tf import costmap_frames
+
+    params = tmp_path / "nav2.yaml"
+    params.write_text(yaml.safe_dump({
+        f"/pinky/{name}/{name}": {"ros__parameters": {"global_frame": frame, "robot_base_frame": "pinky/base"}}
+        for name, frame in (("global_costmap", "map"), ("local_costmap", "pinky/odom"))
+    }), encoding="utf-8")
+    assert costmap_frames(params, "/pinky") == [("map", "pinky/base"), ("pinky/odom", "pinky/base")]
 
 
 def test_hardware_io_mounts_a_host_site_map_directory():
@@ -299,3 +358,187 @@ def test_hardware_nav2_shares_the_global_tf_bus():
         text = (NAV_LAUNCH / name).read_text(encoding="utf-8")
         assert '<remap from="/tf" to="tf"/>' not in text, name
         assert '<remap from="/tf_static" to="tf_static"/>' not in text, name
+
+
+def test_hardware_launch_executes_without_name_error_and_gates_loc_assist_to_localization(
+    monkeypatch, tmp_path
+):
+    import importlib.util
+    import tempfile
+    import types
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    class _LaunchCfg:
+        def __init__(self, name):
+            self.name = name
+
+        def perform(self, ctx):
+            return ctx[self.name]
+
+    class _IfCond:
+        def __init__(self, predicate):
+            self.predicate = predicate
+
+    class _Source:
+        def __init__(self, path):
+            self.path = path
+
+    class _DeclareArg:
+        def __init__(self, name, *args, **kwargs):
+            self.name = name
+            self.default_value = kwargs.get("default_value")
+
+    class _Include:
+        def __init__(self, source, launch_arguments=None, condition=None, **kwargs):
+            self.source = source
+            self.launch_arguments = dict(launch_arguments or ())
+            self.condition = condition
+
+    class _Opaque:
+        def __init__(self, *, function, **kwargs):
+            self.function = function
+
+    class _LaunchDesc:
+        def __init__(self, entities):
+            self.entities = list(entities)
+
+    ament = types.ModuleType("ament_index_python")
+    ament_pkgs = types.ModuleType("ament_index_python.packages")
+    shares = {
+        "navigation": str(ROOT / "middleware" / "drive" / "planning" / "nav2"),
+        "bringup": str(tmp_path / "bringup"),
+        "control": str(tmp_path / "control"),
+    }
+    ament_pkgs.get_package_share_directory = shares.__getitem__
+
+    launch = types.ModuleType("launch")
+    launch.LaunchDescription = _LaunchDesc
+    launch_actions = types.ModuleType("launch.actions")
+    launch_actions.DeclareLaunchArgument = _DeclareArg
+    launch_actions.IncludeLaunchDescription = _Include
+    launch_actions.OpaqueFunction = _Opaque
+    launch_conds = types.ModuleType("launch.conditions")
+    launch_conds.IfCondition = _IfCond
+    launch_srcs = types.ModuleType("launch.launch_description_sources")
+    launch_srcs.AnyLaunchDescriptionSource = _Source
+    launch_srcs.PythonLaunchDescriptionSource = _Source
+    launch_subs = types.ModuleType("launch.substitutions")
+    launch_subs.LaunchConfiguration = _LaunchCfg
+    launch_ros = types.ModuleType("launch_ros")
+    ros_actions = types.ModuleType("launch_ros.actions")
+    ros_actions.Node = types.SimpleNamespace
+
+    for name, mod in {
+        "ament_index_python": ament,
+        "ament_index_python.packages": ament_pkgs,
+        "launch": launch,
+        "launch.actions": launch_actions,
+        "launch.conditions": launch_conds,
+        "launch.launch_description_sources": launch_srcs,
+        "launch.substitutions": launch_subs,
+        "launch_ros": launch_ros,
+        "launch_ros.actions": ros_actions,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+
+    pkg_dir = ROOT / "middleware" / "drive" / "planning" / "nav2"
+    monkeypatch.syspath_prepend(str(pkg_dir))
+    profile = tmp_path / "profile.yaml"
+    profile.write_text(
+        "profile:\n  max_linear_velocity: 2.0\n  max_angular_velocity: 5.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ROSY_PROFILE", str(profile))
+
+    (tmp_path / "site.pgm").write_bytes(b"P5\n2 2\n255\n" + bytes([254, 254, 254, 254]))
+    site_yaml = tmp_path / "site.yaml"
+    site_yaml.write_text(
+        "image: site.pgm\nresolution: 0.05\norigin: [0.0, 0.0, 0.0]\n"
+        "negate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n",
+        encoding="utf-8",
+    )
+
+    spec = importlib.util.spec_from_file_location(
+        "_test_hardware_launch", NAV_LAUNCH / "hardware.launch.py"
+    )
+    assert spec and spec.loader
+    hw = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, hw)
+    spec.loader.exec_module(hw)
+
+    ld = hw.generate_launch_description()
+    declared = {
+        e.name: e.default_value for e in ld.entities if isinstance(e, _DeclareArg)
+    }
+    assert declared["enable_loc_assist"] == "true"
+
+    base_ctx = {
+        "namespace": "pinky1",
+        "params_file": str(NAV_PARAMS),
+        "profile_file": str(profile),
+        "footprint_profile_file": "",
+        "footprint_state": "unknown",
+        "require_measured_footprint": "false",
+        "max_linear_mps": "0.20",
+        "max_angular_rps": "0.80",
+        "use_sim_time": "false",
+        "allow_demo_map": "false",
+        "map": str(site_yaml),
+        "mapper_params_file": str(pkg_dir / "params" / "mapper_params.yaml"),
+    }
+    loc_actions = hw._include_nav2({**base_ctx, "navigation_backend": "localization"})
+    bringup, startup, loc_assist = loc_actions
+    assert Path(bringup.source.path).name == "bringup_launch.xml"
+    assert bringup.launch_arguments["navigation_autostart"] == "False"
+    assert (startup.package, startup.executable, startup.namespace) == ("navigation", "start_after_tf", "pinky1")
+    assert startup.arguments == [bringup.launch_arguments["params_file"]]
+    assert Path(loc_assist.source.path).name == "loc_assist.launch.py"
+    assert isinstance(loc_assist.condition, _IfCond)
+    assert loc_assist.condition.predicate.name == "enable_loc_assist"
+
+    slam_actions = hw._include_nav2({**base_ctx, "navigation_backend": "slam"})
+    assert [Path(a.source.path).name for a in slam_actions] == [
+        "mapping_bringup_launch.xml",
+    ]
+
+
+def test_map_bundle_occupancy_grid_id_matches_core_features(monkeypatch, tmp_path):
+    import importlib.util
+
+    monkeypatch.syspath_prepend(str(ROOT / "middleware" / "core" / "services"))
+    from core_features.maps import GridFrame, occupancy_map_id
+
+    spec = importlib.util.spec_from_file_location(
+        "_test_map_bundle", ROOT / "middleware" / "perception" / "map" / "map_bundle.py"
+    )
+    assert spec and spec.loader
+    mb = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, mb)
+    spec.loader.exec_module(mb)
+
+    pixels = bytearray()
+    data = []
+    for r in range(6):
+        for c in range(6):
+            occ = r in (0, 5) or c in (0, 5)
+            pixels.append(0 if occ else 254)
+            data.append(100 if occ else 0)
+    (tmp_path / "site.pgm").write_bytes(b"P5\n6 6\n255\n" + bytes(pixels))
+    site_yaml = tmp_path / "site.yaml"
+    site_yaml.write_text(
+        "image: site.pgm\nresolution: 0.05\norigin: [0.0, 0.0, 0.0]\n"
+        "negate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.196\n",
+        encoding="utf-8",
+    )
+
+    frame = GridFrame.from_dict(
+        {
+            "width": 6,
+            "height": 6,
+            "resolution": 0.05,
+            "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+            "data": data,
+        }
+    )
+    assert mb.occupancy_grid_id(site_yaml) == occupancy_map_id(frame.to_dict())

@@ -172,6 +172,8 @@ function validateStart(){
   const busyNow=benchSessionActive()||poseInFlight||startInFlight||cameraRestartInFlight;
   const armOk=Boolean(f.arm.value&&armContractValid()&&choices.instances[f.arm.value]&&armVerifiedBindings(f.arm.value));
   const armInfo=lastArmsStatus&&f.arm.value?lastArmsStatus[f.arm.value]:null;
+  if(armInfo?.follower_connected===false)reasons.push('팔로워 USB 미연결');
+  if(armInfo?.leader_connected===false&&!$('replay')?.value)reasons.push('리더 USB 미연결 (텔레옵 녹화 불가)');
   const hil=$('home-include-leader');
   const hasLP=Boolean(armInfo&&armInfo.has_leader_pose);
   const canLeaderAlign=Boolean(armOk&&armInfo&&(armInfo.leader_connected===true||(armInfo.leader_connected!==false&&hasLP)));
@@ -199,7 +201,12 @@ function validateStart(){
     $('start-guard-note').textContent=(reasons.length?'시작 대기 조건: '+reasons.join(' · '):'녹화 시작 가능 상태입니다.')+poseHint;
   }
   if(reasons.length&&!busyNow){
-    setNotice('start-reasons','warn','시작 대기: '+reasons.join(' · '));
+    const act=(lastStatus?.manual_hold?.active||lastStatus?.recovery?.has_issues)
+      ?{label:'복구 센터 보기',run:()=>$('manual-hold-card')?.scrollIntoView({block:'center'})}
+      :(reasons.some(r=>r.includes('카메라'))
+        ?{label:'카메라 재시작',run:()=>$('hdr-camera-restart-btn')?.click()}
+        :{label:'설정 열기',run:()=>{if(typeof openDrawer==='function')openDrawer('setup');}});
+    setNotice('start-reasons','warn','시작 대기: '+reasons.join(' · '),{sig:'start-reasons:'+reasons.join('|'),action:act});
   }else if(warnText&&!busyNow){
     setNotice('start-reasons','muted',warnText);
   }else{
@@ -226,13 +233,13 @@ function validateStart(){
   if(sfs)sfs.disabled=busyNow;
   const rfs=$('records-fieldset');
   if(rfs)rfs.disabled=busyNow;
-  for(const b of document.querySelectorAll('#rail-arm-pills button[data-arm]'))b.disabled=busyNow;
   for(const b of document.querySelectorAll('[data-drawer-btn]'))b.disabled=busyNow&&(b.dataset.drawerBtn!=='records');
   for(const b of document.querySelectorAll('#sec-goal button,#sec-guide button'))b.disabled=busyNow;
   updateGoalSummaryRows();
   renderStatusKv();
   if(typeof syncHeaderAndSlimBar==='function')syncHeaderAndSlimBar();
   if(typeof renderArmCards==='function')renderArmCards();
+  if(typeof window.syncHardwareReadiness==='function')window.syncHardwareReadiness();
   if(typeof renderParamsPanel==='function')renderParamsPanel();
   return reasons.length===0;
 }
@@ -259,7 +266,8 @@ function renderStatus(st){
   lastStatus=st;
   statusLoaded=true;
   const code=st.status;
-  const [label]=STATUS_MAP[code]||[code,'warn'];
+  let [label]=STATUS_MAP[code]||[code,'warn'];
+  if(code==='homing'&&(st.error||st.manual_hold?.active))label='수동 확인 보류 (홈 중단)';
   if(benchSessionActive(st)&&st.arm&&f&&f.arm&&f.arm.value!==st.arm&&[...f.arm.options].some(o=>o.value===st.arm)){
     f.arm.value=st.arm;
     applyArmRules(false);
@@ -285,7 +293,7 @@ function renderStatus(st){
     if(sig!==lastActivitySig){
       lastActivitySig=sig;
       const stepTxt=curStep==='ready'?'연동됨 (녹화 대기)':curStep==='camera_restart'?'카메라 재시작 중':(STARTING_STEP_MAP[curStep]||'');
-      const actTone=st.error_kind==='needs_person'||st.restore_errors?.length?'crit':STATUS_MAP[code]?.[1]||'muted';
+      const actTone=(st.error_kind==='needs_person'||st.restore_errors?.length||st.manual_hold?.active)?'crit':STATUS_MAP[code]?.[1]||'muted';
       const detailParts=[activeArm||(f&&f.arm?f.arm.value:'')];
       if(st.episodes_done!=null&&code!=='idle')detailParts.push('에피소드 '+st.episodes_done+'회');
       if(st.error||st.stop_cause)detailParts.push(st.error||st.stop_cause);
@@ -421,20 +429,12 @@ function renderStatus(st){
   const postAct=$('post-actions');
   if(code==='sealed'){
     sealEl.textContent='봉인 완료: '+[activeArm,activeTask,st.name,st.folder].filter(Boolean).join(' · ')+' — 아래 버튼으로 다음 회차를 이어서 찍거나 모델 PC로 반입하세요.';
-    sealEl.className='alert good';
-    sealEl.hidden=false;
-    postAct.hidden=false;
+    sealEl.className='alert good';sealEl.hidden=false;postAct.hidden=false;
   }else if(code==='stopped_not_sealed'){
-    sealEl.textContent=st.safe_end===true
-      ?'중단됨 · 안전 종료(safe_end) 확인 후 자동 봉인 없이 원본 폴더에 보관했습니다.'
-      :'중단됨 · 자동 봉인 안 함 (safe_end 미확인 — 원본만 보관)';
-    sealEl.className='alert warn';
-    sealEl.hidden=false;
-    postAct.hidden=false;
+    sealEl.textContent=st.safe_end===true?'중단됨 · 안전 종료(safe_end) 확인 후 자동 봉인 없이 원본 폴더에 보관했습니다.':'중단됨 · 자동 봉인 안 함 (safe_end 미확인 — 원본만 보관)';
+    sealEl.className='alert warn';sealEl.hidden=false;postAct.hidden=false;
   }else{
-    sealEl.hidden=true;
-    sealEl.className='alert good';
-    postAct.hidden=true;
+    sealEl.hidden=true;sealEl.className='alert good';postAct.hidden=true;
   }
   const delEmptyBtn=$('ev-delete-empty-btn');
   if(delEmptyBtn){
@@ -445,7 +445,8 @@ function renderStatus(st){
     const keepPost=!postAct.hidden;
     if($('next-ep-btn'))$('next-ep-btn').hidden=!keepPost;
     if($('copy-transfer-btn'))$('copy-transfer-btn').hidden=!keepPost;
-    if(!keepPost&&match&&ended)postAct.hidden=false;
+    if($('ev-open-records-btn'))$('ev-open-records-btn').hidden=!ended;
+    if((!keepPost&&match&&ended)||ended)postAct.hidden=false;
     delEmptyBtn.hidden=!match||!ended;
     delEmptyBtn.dataset.dataset=match?match.name:'';
     if(!delEmptyBtn.dataset.bound){
@@ -453,27 +454,22 @@ function renderStatus(st){
       delEmptyBtn.addEventListener('click',async()=>{
         const ds=delEmptyBtn.dataset.dataset;if(!ds)return;
         delEmptyBtn.disabled=true;setReqError('');
-        try{
-          await api('/api/dataset/delete',{dataset:ds});
-          if(typeof setActivity==='function')setActivity('빈 데이터셋 삭제','good',ds);
-          delEmptyBtn.hidden=true;
-          if(typeof pollStatus==='function')await pollStatus();
-        }catch(e){setReqError(e.message||String(e));}finally{delEmptyBtn.disabled=false;}
+        try{await api('/api/dataset/delete',{dataset:ds});if(typeof setActivity==='function')setActivity('빈 데이터셋 삭제','good',ds);delEmptyBtn.hidden=true;if(typeof pollStatus==='function')await pollStatus();}
+        catch(e){setReqError(e.message||String(e));}finally{delEmptyBtn.disabled=false;}
       });
     }
   }
+  const orBtn=$('ev-open-records-btn');
+  if(orBtn&&!orBtn.dataset.bound){orBtn.dataset.bound='1';orBtn.addEventListener('click',()=>{if(typeof openDrawer==='function')openDrawer('records',orBtn);});}
   const logEl=$('ev-log-tail');
-  if(st.log_tail){logEl.textContent=st.log_tail;logEl.hidden=false;}
-  else{logEl.hidden=true;logEl.textContent='';}
+  if(st.log_tail){logEl.textContent=st.log_tail;logEl.hidden=false;}else{logEl.hidden=true;logEl.textContent='';}
   renderRecent(st.recent_sessions);
   if(typeof renderLeRobotPanel==='function')renderLeRobotPanel(st);
   const scSig=JSON.stringify(st.scenario_counts||{});
-  if($('task-listbox')&&$('task-listbox').dataset.scSig!==scSig){
-    $('task-listbox').dataset.scSig=scSig;
-    renderTaskListbox();
-    updateTaskSummary();
-  }
+  if($('task-listbox')&&$('task-listbox').dataset.scSig!==scSig){$('task-listbox').dataset.scSig=scSig;renderTaskListbox();updateTaskSummary();}
   syncBenchPhase();
+  if(typeof window.renderManualHoldCard==='function')window.renderManualHoldCard(st);
+  if(typeof window.syncResultEpisodeReview==='function')window.syncResultEpisodeReview(st);
   validateStart();
 }
 

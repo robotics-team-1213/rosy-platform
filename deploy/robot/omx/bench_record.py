@@ -29,9 +29,15 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 if not (HERE / "omx_adapter").is_dir():
+    _in_repo = HERE.parents[2] / "middleware" / "devices" / "omx" / "adapter" if len(HERE.parents) > 2 else None
     _rel = sorted((Path.home() / "rosy-omx" / "releases").glob("*/omx_adapter"), key=lambda p: p.stat().st_mtime, reverse=True)
-    if _rel:
-        os.environ["PYTHONPATH"] = f"{_rel[0].parent}:{os.environ['PYTHONPATH']}" if os.environ.get("PYTHONPATH") else str(_rel[0].parent)
+    _adapter_root = _in_repo if (_in_repo is not None and (_in_repo / "omx_adapter").is_dir()) else (_rel[0].parent if _rel else None)
+    if _adapter_root is not None:
+        if str(_adapter_root) not in sys.path:
+            sys.path.insert(0, str(_adapter_root))
+        _pp = os.environ.get("PYTHONPATH", "")
+        if str(_adapter_root) not in _pp.split(os.pathsep):
+            os.environ["PYTHONPATH"] = f"{_adapter_root}{os.pathsep}{_pp}" if _pp else str(_adapter_root)
 import cell_robot_profile  # noqa: E402  (established rosy.omx-cell-robot-profile.v1 loader)
 from teleop_speed import read_stage, summary as speed_summary  # noqa: E402
 from bench_record_guard import (  # noqa: E402,F401  (proc_* are re-exported for tests)
@@ -44,16 +50,21 @@ from bench_live_preview import open_preview, recorder_env  # noqa: E402
 from bench_record_leader import BenchLeaderMixin  # noqa: E402
 from bench_record_manual import BenchManualMixin  # noqa: E402
 from bench_record_link import BenchLinkMixin  # noqa: E402
+from bench_record_link import link_zero_episodes  # noqa: E402
 from bench_record_http import PAGE, make_server  # noqa: E402,F401
 from bench_record_replay import apply_task_override, transform_replay  # noqa: E402
 from bench_record_pipeline import BenchPipelineMixin  # noqa: E402
 from bench_record_safety import end_verdict  # noqa: E402
+from bench_record_workspace import BenchWorkspaceMixin, prepare_session_task_card  # noqa: E402
+from bench_record_review import BenchReviewMixin  # noqa: E402
+from bench_record_recover import BenchRecoverMixin  # noqa: E402
+from bench_record_auto_recover import BenchAutoRecoverMixin  # noqa: E402
 
 
-class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin, BenchLinkMixin, BenchPipelineMixin):
+class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin, BenchLinkMixin, BenchPipelineMixin, BenchWorkspaceMixin, BenchReviewMixin, BenchRecoverMixin, BenchAutoRecoverMixin):
     def __init__(self, config, *, run=systemctl, popen=subprocess.Popen, clock=time.time, procs=proc_cmdlines,
                  mounts=proc_mounts):
-        self.python, self.prep = config["python"], Path(config["prep_root"]).expanduser()
+        self.python, self.prep, self._config = config["python"], Path(config["prep_root"]).expanduser(), dict(config)
         self.run, self.popen, self.clock, self.procs, self.mounts = run, popen, clock, procs, mounts
         self.lock, self.child, self.abort, self.state = threading.Lock(), None, False, {"status": "idle"}
         self._auto_homes, self._pre_cancel = {}, set()  # per-session ownership: auto-home records and stop intents, keyed by the session's claim
@@ -221,7 +232,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
         if task_override is not None:
             if not isinstance(task_override, dict):
                 raise ValueError("task_override는 JSON 객체여야 합니다")
-            if task_override and not task:
+            if task_override and not task and task_override.get("custom") is not True:
                 raise ValueError("집기/놓기 스왑 또는 목표 변경은 작업 카드 선택이 필요합니다")
         homed = self._pre_start_home(body, replay_path)
         if body.get("align_leader") is True:
@@ -249,31 +260,10 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 effective_cfg = config_bytes
                 effective_task = task
                 snap_files = [("caps.json", caps_bytes)]
-                ds_cfg = cfg_data.get("dataset") if isinstance(cfg_data.get("dataset"), dict) else {}
-                eff_task_id, eff_root_prefix, eff_target_eps = None, ds_cfg.get("root"), overrides.get("num_episodes") or ds_cfg.get("num_episodes")
-                if effective_task and (overrides or task_override):
-                    import yaml
-                    tc_data = yaml.safe_load(Path(effective_task).read_text(encoding="utf-8"))
-                    if not isinstance(tc_data, dict):
-                        raise ValueError("과제 카드 YAML 형식이 올바르지 않습니다")
-                    if overrides:
-                        tc_data.setdefault("record", {}).update(overrides)
-                    if task_override:
-                        tc_data = apply_task_override(tc_data, task_override)
-                    rec_blk = tc_data.get("record") or {}
-                    eff_task_id = tc_data.get("task_id")
-                    eff_root_prefix = rec_blk.get("root_prefix") or eff_root_prefix
-                    eff_target_eps = rec_blk.get("num_episodes") or eff_target_eps
-                    snap_files.append(("effective-task-card.yaml", json.dumps(tc_data, indent=2, ensure_ascii=False).encode("utf-8")))
-                    effective_task = str(snap / "effective-task-card.yaml")
-                elif effective_task and task_card:
-                    eff_task_id = task_card.get("task_id")
-                    eff_target_eps = task_card.get("num_episodes") or eff_target_eps
-                    try:
-                        import yaml
-                        eff_root_prefix = (yaml.safe_load(task_card.get("raw") or "") or {}).get("record", {}).get("root_prefix") or eff_root_prefix
-                    except Exception:
-                        pass
+                eff_task_id, eff_root_prefix, eff_target_eps, effective_task, tc_snap = prepare_session_task_card(
+                    effective_task, task_card, task_override, body["arm"], cfg_data, overrides, snap)
+                if tc_snap is not None:
+                    snap_files.append(tc_snap)
                 if overrides or cam_rebinds:
                     if overrides:
                         cfg_data.setdefault("dataset", {}).update(overrides)
@@ -306,6 +296,7 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                           "link": body.get("link_only") is True}
             self.child, self.abort = None, False
             self.state["claim"] = self._claim_bench()  # the session's own claim: its stop intent and its auto-home record are keyed by it
+        self._log_event("session", "info", f"{body['arm']} 세션 시작: {body['name']} ({eff_task_id or '자유'})")
         seal = [self.python, str(HERE / "record_seal.py"), "--session-dir", str(folder), "--name", body["name"],
                 "--rig-revision", body["rig_revision"], *[a for c in calibrations for a in ("--calibration", c)]]
         try:
@@ -374,12 +365,19 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 if self._publish_end(verdict=end_verdict) == "stopped_safe":
                     self._auto_home_after_session()
                 return
+            if self.state.get("link") and link_zero_episodes(folder, record):
+                self._publish_end(status="stopped_safe")
+                self._log_event("session", "info", f"연동 종료 (녹화 0회, 봉인 생략): {folder.name}")
+                self._auto_home_after_session()
+                return
             self._set(status="sealing")
             with (folder / "bench.log").open("ab") as log:
                 sealed = self.popen(seal, cwd=folder, stdout=log, stderr=subprocess.STDOUT).wait()
             self._publish_end(status="sealed" if sealed == 0 else "seal_failed", seal_exit=sealed)
+            self._log_event("session", "good" if sealed == 0 else "crit", f"세션 종료: {'sealed' if sealed == 0 else 'seal_failed'} ({folder.name})")
             if sealed == 0:
                 self._auto_home_after_session()
+                self._on_session_sealed(folder)
         except Exception as exc:
             self._set(status="failed", error=f"{type(exc).__name__}: {exc}")
 

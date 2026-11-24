@@ -81,10 +81,22 @@ def install_relocalize_routes(app, *, service, clients: Callable[[], Mapping],
             raise refuse(409, "ROBOT_OFFLINE",
                          f"the robot's state is unreadable ({type(exc).__name__})") from exc
 
-    async def _candidates(robot_id: str):
+    def _rate_limit(exc: RobotApiError, robot_id: str) -> HTTPException:
+        refusal = refuse(429, exc.code, exc.message, robot_id=robot_id)
+        wait = (exc.detail or {}).get("retry_after_s")
+        if type(wait) is int and wait > 0:
+            refusal.headers = {"Retry-After": str(wait)}
+            refusal.detail["retry_after_s"] = wait
+        return refusal
+
+    async def _candidates(robot_id: str, *, report_rate_limit: bool = False):
         try:
             return await asyncio.wait_for(clients()[robot_id].localization_candidates(),
                                           CALL_TIMEOUT_S)
+        except RobotApiError as exc:
+            if report_rate_limit and exc.status == 429:
+                raise _rate_limit(exc, robot_id) from exc
+            return None
         except Exception:
             return None
 
@@ -132,7 +144,7 @@ def install_relocalize_routes(app, *, service, clients: Callable[[], Mapping],
                                          principal=Depends(require_named_operator)) -> dict:
         if robot_id not in clients():
             raise refuse(404, "UNKNOWN_ROBOT", "robot is not on the roster")
-        report = await _candidates(robot_id)
+        report = await _candidates(robot_id, report_rate_limit=True)
         if report is None or report.robot_id != robot_id:
             raise refuse(409, "NO_CANDIDATES", "the robot is not reporting candidates")
         index = _match(report, body)
@@ -147,9 +159,14 @@ def install_relocalize_routes(app, *, service, clients: Callable[[], Mapping],
             evidence={"candidate_index": index, "scan_fit": candidate.scan_fit},
             ttl_s=5.0)
         try:
-            answer = await asyncio.wait_for(clients()[robot_id].localization_decision(decision),
-                                            CALL_TIMEOUT_S)
+            client = clients()[robot_id]
+            if service is None:
+                answer = await asyncio.wait_for(client.localization_decision(decision), CALL_TIMEOUT_S)
+            else:
+                answer = await service.confirm_operator_pose(robot_id, client, decision)
         except RobotApiError as exc:
+            if exc.status == 429:
+                raise _rate_limit(exc, robot_id) from exc
             raise refuse(exc.status if 400 <= exc.status < 500 else 502, exc.code, exc.message,
                          robot_id=robot_id) from exc
         except Exception as exc:

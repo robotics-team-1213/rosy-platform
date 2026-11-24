@@ -407,11 +407,26 @@ def test_release_hold_waits_for_no_run(device, host, hub, keys, capsys, monkeypa
 
 
 @pytest.mark.parametrize("quiet", [600.0, 86400.0])
-def test_manual_left_behind_with_no_recent_command_is_idle(device, host, hub, quiet):
-    # D-985: 11-07 b8xy and geg6 sat in MANUAL, stopped, with nobody driving, and never updated.
+def test_manual_is_never_eligible_even_when_quiet(device, host, hub, quiet):
     host.inputs_changes = {"robot_mode": "MANUAL", "manual_quiet_s": quiet}
     host.write_inputs()
-    assert updater(host, hub).eligibility()["eligible"] is True
+    assert updater(host, hub).eligibility()["eligible"] is False
+
+
+@pytest.mark.parametrize("key,value,expected", [
+    ("trip_lease_active", False, True),
+    ("trip_lease_active", True, False),
+    ("trip_lease_active", None, False),
+    ("trip_lease_active", "yes", False),
+    ("calibration_active", False, True),
+    ("calibration_active", True, False),
+    ("calibration_active", None, False),
+    ("calibration_active", "yes", False),
+])
+def test_trip_lease_and_calibration_block_eligibility(device, host, hub, key, value, expected):
+    host.inputs_changes = {key: value}
+    host.write_inputs()
+    assert updater(host, hub).eligibility()["eligible"] is expected
 
 
 @pytest.mark.parametrize("changes", [

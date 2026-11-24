@@ -41,7 +41,7 @@ PRODUCT_ROOTS = (REPO / "applications" / "fleet" / "web", WEB)
 CONSUMERS = {".js", ".mjs", ".html", ".inc", ".py", ".ts"}
 #: 시험만 쓰는 export 중 시험 이음매(지우면 시험이 제품을 못 건드림). 이유 필수, 늘리지 않는다.
 TEST_SEAMS: dict[str, str] = {}
-UNUSED_CEILING = {"exports": 35, "test_only_exports": 5, "css_classes": 1, "html_ids": 9}
+UNUSED_CEILING = {"exports": 0, "test_only_exports": 5, "css_classes": 1, "html_ids": 0}
 _IDENT = re.compile(r"[A-Za-z_$][\w$]*")
 _HYPHEN_WORD = re.compile(r"[A-Za-z_][\w-]*")
 _EXPORT = re.compile(r"^export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)", re.M)
@@ -101,7 +101,15 @@ def unused_names():
     css_text = "\n".join(p.read_text(encoding="utf-8", errors="ignore") for p in _sources({".css"}))
     for path in [*_product(".html"), *_product(".inc")]:
         html = texts.get(path, "")
+        # role-lock-note IDs are read dynamically via element.id by authorization.js for aria-describedby.
+        dynamic_role_lock_ids = {
+            m.group(1)
+            for tag in re.findall(r"<[^>]+>", html)
+            if "role-lock-note" in tag and (m := re.search(r'\bid="([A-Za-z][\w-]*)"', tag))
+        }
         for name in sorted(set(re.findall(r"\bid=\"([A-Za-z][\w-]*)\"", html))):
+            if name in dynamic_role_lock_ids or any(name.startswith(x) for x in prefixes):
+                continue
             here = len(re.findall(rf"(?<![\w-]){re.escape(name)}(?![\w-])", html))
             elsewhere = f"#{name}" in css_text or any(q != path and name in t for q, t in texts.items())
             if here <= 1 and not elsewhere:
@@ -115,3 +123,96 @@ def test_names_nobody_uses_only_go_down():
         count = len(found[kind])
         assert count <= ceiling, f"{kind}: {count} > {ceiling}; delete or use them: {found[kind][:20]}"
         assert count == ceiling, f"{kind} fell to {count}; lower UNUSED_CEILING[{kind!r}] to {count} in the same change"
+
+
+# 정본 밖 재정의·본문 복제·직접 쓰기 래칫 (구 patterns.yaml helpers/direct/duplicate_bodies 통합)
+HELPERS = (
+    {"name": "node", "module": "shared/web/control-dom.js", "aliases": ["nodeWithText"], "ceiling": 1},
+    {"name": "setOff", "module": "shared/web/cause-line.js", "aliases": ["setOffBy", "guard", "gate", "blockWith", "setReason"], "ceiling": 0},
+    {"name": "iconSvg", "module": "shared/web/ui.js", "aliases": ["iconNode"], "ceiling": 0},
+)
+DIRECT = (
+    {"what": "reason 속성 직접 쓰기", "pattern": r"""(?:set|remove)Attribute\(\s*["']reason["']""", "owners": ["shared/web/ui.js", "shared/web/cause-line.js"], "ceiling": 4},
+    {"what": "운영자 역할 직접 비교", "pattern": r"""role\s*[!=]==?\s*["']operator["']""", "owners": ["applications/fleet/web/shared/authorization.js"], "ceiling": 0},
+    {"what": "권한 문구 직접 쓰기", "pattern": "운영자 권한이 필요합니다", "owners": ["applications/fleet/web/shared/authorization.js"], "ceiling": 0},
+    {"what": "'초 전' 손 포맷", "pattern": "초 전", "owners": ["shared/web/core_ui_logic.js", "shared/web/component-gallery.js"], "ceiling": 0},
+)
+DUPLICATE_BODIES_CEILING = 0
+_JS_NOISE = re.compile(r"""//[^\n]*|/\*.*?\*/|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`""", re.S)
+_JS_STRINGS_KEPT = re.compile(r"""("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)|//[^\n]*|/\*.*?\*/""", re.S)
+_FUNCTION_HEAD = re.compile(r"\bfunction\s+[\w$]+\s*\([^)]*\)\s*\{|\b(?:const|let)\s+[\w$]+\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{")
+
+
+def js_code(text):
+    """Source with comments dropped and string literals emptied: what is left can really execute."""
+    return _JS_NOISE.sub(lambda match: '""' if match.group(0)[0] in "\"'`" else "", text)
+
+
+def js_without_comments(text):
+    """Source with comments dropped; strings stay."""
+    return _JS_STRINGS_KEPT.sub(lambda match: match.group(1) or "", text)
+
+
+def product_scripts():
+    for root in PRODUCT_ROOTS:
+        for path in sorted(root.rglob("*.js")):
+            if not ({"test", "vendor", "node_modules"} & set(path.relative_to(REPO).parts)):
+                yield path.relative_to(REPO).as_posix(), path.read_text(encoding="utf-8", errors="ignore")
+
+
+def helper_redefinitions(scripts, row):
+    """Places outside the helper's own module that define its name or an alias with function/const/let."""
+    names = "|".join(re.escape(n) for n in [row["name"], *row.get("aliases", [])])
+    pattern = re.compile(rf"(?:\bfunction\s+(?:{names})\s*\(|\b(?:const|let|var)\s+(?:{names})\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|[\w$]+\s*=>))")
+    return [f"{rel}:{js_code(text)[:m.start()].count(chr(10)) + 1}" for rel, text in scripts if rel != row["module"]
+            for m in pattern.finditer(js_code(text))]
+
+
+def direct_uses(scripts, row):
+    """Lines outside the owners that write the pattern directly (comments ignored, strings kept)."""
+    pattern = re.compile(row["pattern"])
+    return [f"{rel}:{n}" for rel, text in scripts if rel not in row["owners"]
+            for n, line in enumerate(js_without_comments(text).splitlines(), 1) if pattern.search(line)]
+
+
+def duplicate_bodies(scripts, minimum=35):
+    """Groups of function bodies (strings emptied, whitespace dropped) that appear in two or more files."""
+    seen = {}
+    for rel, text in scripts:
+        code = js_code(text)
+        for head in _FUNCTION_HEAD.finditer(code):
+            depth, start = 0, head.end() - 1
+            for end in range(start, len(code)):
+                depth += {"{": 1, "}": -1}.get(code[end], 0)
+                if depth == 0:
+                    break
+            body = re.sub(r"\s+", "", code[start:end + 1])
+            if len(body) >= minimum:
+                seen.setdefault(body, set()).add(rel)
+    return sorted(sorted(files) for files in seen.values() if len(files) > 1)
+
+
+def _ratchet(label, found, ceiling):
+    assert len(found) <= ceiling, f"{label}: {len(found)} > ceiling {ceiling}; use the shared one instead: {found[:15]}"
+    assert len(found) == ceiling, f"{label} fell to {len(found)}; lower its ceiling in test_shared_dedupe.py to {len(found)}"
+
+
+def test_helpers_are_defined_once_and_direct_writes_only_go_down():
+    scripts = list(product_scripts())
+    for row in HELPERS:
+        assert (REPO / row["module"]).is_file() and re.search(rf"\b{re.escape(row['name'])}\b", (REPO / row["module"]).read_text(encoding="utf-8")), row
+        _ratchet(f"redefined {row['name']}", helper_redefinitions(scripts, row), row["ceiling"])
+    for row in DIRECT:
+        assert row["owners"] and all((REPO / owner).is_file() for owner in row["owners"]), row
+        _ratchet(f"direct {row['what']}", direct_uses(scripts, row), row["ceiling"])
+    _ratchet("duplicate function bodies", duplicate_bodies(scripts), DUPLICATE_BODIES_CEILING)
+
+
+def test_the_helper_gate_sees_copies_and_ignores_comments():
+    row = {"name": "setOff", "module": "shared/web/cause-line.js", "aliases": ["guard"]}
+    copy = ("a.js", "// function guard(x) {}\nfunction guard(control, reason) { control.disabled = Boolean(reason); }\nconst guard = 1;\nconst guard = (c) => c;")
+    assert helper_redefinitions([copy], row) == ["a.js:2", "a.js:4"]
+    direct = {"pattern": r"role\s*[!=]==?\s*[\"']operator", "owners": ["auth.js"]}
+    assert direct_uses([("b.js", 'if (role === "operator") go();\n// role === "operator"'), ("auth.js", 'role === "operator"')], direct) == ["b.js:1"]
+    body = "function a(n) { const el = document.createElement(n); el.hidden = true; return el; }"
+    assert duplicate_bodies([("x.js", body), ("y.js", body.replace("a(", "b("))]) == [["x.js", "y.js"]]

@@ -170,7 +170,7 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
     aerial = (runner.chunk.startswith("goto ") or runner.chunk in ("above_pick", "above_place", "standby"))
     no_contact = not getattr(runner, "contact", False) and not (runner.fault or "").startswith("contact")
     if aerial and no_contact and not runner.jitter.get("shaking"):
-        settled = error <= settle_tol * 1.15 or body_still or now - runner.settle_since >= settle_s
+        settled = error <= settle_tol * 1.15 or body_still
     else:
         settled = (error <= settle_tol or body_still) and not runner.jitter["shaking"]
     jaws_ready = (
@@ -256,6 +256,10 @@ def check_runner_idle(runner, cr_attr) -> bool:
     idle_park_s = cr_attr("IDLE_PARK_S", IDLE_PARK_S)
     idle_stop_s = cr_attr("IDLE_STOP_S", IDLE_STOP_S)
     if runner.home_since is None:
+        from chunk_runner_commands import _is_policy_lib
+
+        if getattr(runner, "_policy_session", False) or _is_policy_lib(runner.library):
+            return False
         if runner.idle_parks >= 2:
             if runner.idle_parks == 2:
                 runner.idle_parks, runner.fault = 3, f"idle fold held twice ({runner.fault}): a person must free the arm"
@@ -300,15 +304,18 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
             if not absorb_telemetry_error(runner, getattr(runner, "last_present", None), "command intake failed", error):
                 raise
             arrived = []
-        if arrived and not getattr(runner, "signals", None):  # an interrupt (checked first) drops FIFO commands
+        hold_arr = [c.strip() for c in arrived if c.strip().split()[:1] == ["human-hold"]]
+        if arrived and getattr(runner, "signals", None):
+            if hold_arr:
+                runner._fifo_hold_seen = hold_arr[-1]
+                runner._human_hold_req = hold_arr[-1].split()[1] if len(hold_arr[-1].split()) == 2 else None
+        elif arrived or (getattr(runner, "_fifo_hold_seen", False) and not getattr(runner, "signals", None) and not runner.human_hold_latched):
             runner.pending += arrived
-            if "human-hold" in runner.pending:
+            hold_pend = [c.strip() for c in runner.pending if c.strip().split()[:1] == ["human-hold"]]
+            if hold_pend or getattr(runner, "_fifo_hold_seen", False):
                 runner.pending.clear()
-                runner.command("human-hold")
-            stop = next(
-                (i for i, cmd in enumerate(runner.pending) if cmd.strip() in ("stop", "stop now", "stop fold")),
-                None,
-            )
+                runner.command(hold_pend[-1] if hold_pend else (runner._fifo_hold_seen if isinstance(runner._fifo_hold_seen, str) else "human-hold"))
+            stop = next((i for i, cmd in enumerate(runner.pending) if cmd.strip() in ("stop", "stop now", "stop fold")), None)
             if stop is not None and all(cmd.strip() == "state" for cmd in runner.pending[:stop]) and not getattr(
                     runner, "signals", None):
                 prefix, raw_stop = list(runner.pending[:stop]), runner.pending[stop]
@@ -380,10 +387,8 @@ def wait_aligned_before_start(runner, lines, period: float) -> bool:
             return False
         if runner.human_hold_latched or runner.fault or getattr(motion, "held", None):
             try:
-                runner.report(
-                    command="start", ok=False, present=runner.target,
-                    error=runner.fault or ("human hold latched" if runner.human_hold_latched else "guard hold active"),
-                )
+                runner.report(command="start", ok=False, present=runner.target,
+                              error=runner.fault or ("human hold latched" if runner.human_hold_latched else "guard hold active"))
             except OSError as error:
                 if not runner.human_hold_latched:
                     raise

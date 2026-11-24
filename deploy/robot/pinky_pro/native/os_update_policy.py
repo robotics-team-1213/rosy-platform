@@ -40,7 +40,7 @@ class _Policy(UpdaterRecords):
         current = self.host.current_release()
         if current is None:
             reasons.append("current native release is unknown")
-        reasons += self._sealed(current) + self._network_problems()
+        reasons += self._network_problems()
         claim = rosy_claim.check(self.root, now=self.host.now())
         if claim is None or claim.get("holder") != "os-update:" + transaction_id:
             reasons.append("OS transaction does not hold the live claim")

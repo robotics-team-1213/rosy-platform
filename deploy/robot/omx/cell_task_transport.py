@@ -24,6 +24,9 @@ from joint_tune_lock import lock_root
 _REUSE_DROP = (http.client.RemoteDisconnected, BrokenPipeError, ConnectionResetError, ConnectionAbortedError)
 WORKER_LEASE_PREFIX = "cell-task-worker:"
 LIVE_MAX_AGE_S = 15.0
+SAFETY_OK = "OK"
+SAFETY_EXPLICIT_STOP = "EXPLICIT_STOP"
+SAFETY_FEED_UNAVAILABLE = "FEED_UNAVAILABLE"
 
 
 def make_keepalive_https_request(base_url: str, token: str, ctx: ssl.SSLContext, *, timeout_s: float = 20.0):
@@ -161,3 +164,97 @@ def peer_ab_session_locked(
                 ):
                     return True
     return False
+
+
+def classify_safety_listing(
+    listing: Any,
+    *,
+    cell_id: str | None = None,
+    task_id: str | None = None,
+) -> tuple[str, dict[str, Any] | None]:
+    """Classify Fleet safety poll into OK, EXPLICIT_STOP, or FEED_UNAVAILABLE."""
+    if not isinstance(listing, dict) or not isinstance(listing.get("human_safety"), dict):
+        return SAFETY_FEED_UNAVAILABLE, None
+    safety = listing["human_safety"]
+    if safety.get("active_estop") is True:
+        return SAFETY_EXPLICIT_STOP, None
+    if safety.get("active_estop") is not False or not isinstance(safety.get("human_detected"), dict):
+        return SAFETY_FEED_UNAVAILABLE, None
+    if cell_id is not None:
+        if safety["human_detected"].get("all") or safety["human_detected"].get(cell_id):
+            return SAFETY_EXPLICIT_STOP, None
+        cells = listing.get("cells")
+        if not isinstance(cells, dict) or not isinstance(cells.get(cell_id), dict):
+            return SAFETY_FEED_UNAVAILABLE, None
+        cell = cells[cell_id]
+        if cell.get("phase") != "ARM_IN_BED_ZONE" or cell.get("active_task_id") != task_id:
+            return SAFETY_EXPLICIT_STOP, None
+    return SAFETY_OK, listing
+
+
+def select_arms_for_feed_loss(
+    prep_dir: Path,
+    arm_wrappers: dict[str, tuple[str, str, float]],
+    *,
+    lease_dir: Path | None = None,
+) -> set[str]:
+    """Select only worker-leased or unleased active-chunk arms when Fleet safety feed is lost."""
+    root = cell_arm_lease.lease_root(lease_dir)
+    selected: set[str] = set()
+    for arm_id, (suffix, _, _) in arm_wrappers.items():
+        lease = cell_arm_lease._read(arm_id, root)
+        if lease is None and (root / f"{arm_id}.json").is_file():
+            selected.add(arm_id)
+            continue
+        if isinstance(lease, dict) and cell_arm_lease.live(lease):
+            if str(lease.get("owner") or "").startswith(WORKER_LEASE_PREFIX):
+                selected.add(arm_id)
+            continue
+        for io_name in (f"chunk-io-{suffix}", f"chunk-io-{suffix}-r2s"):
+            live = _read_json_dict(prep_dir / io_name / "live.json")
+            if isinstance(live, dict) and live.get("chunk") is not None:
+                selected.add(arm_id)
+                break
+    return selected
+
+
+def send_human_hold_to_arms(
+    prep_dir: Path,
+    arm_wrappers: dict[str, tuple[str, str, float]],
+    poll_ack_fn,
+    *,
+    arms: set[str] | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Send `human-hold\\n` to selected (or all) active arm chunk FIFOs and await ack."""
+    acknowledgements: dict[str, dict[str, Any]] = {}
+    pending: list[tuple[str, Path, int]] = []
+    for arm_id, (suffix, _, _) in arm_wrappers.items():
+        if arms is not None and arm_id not in arms:
+            continue
+        for io_name in (f"chunk-io-{suffix}", f"chunk-io-{suffix}-r2s"):
+            io_dir = prep_dir / io_name
+            cmd_fifo = io_dir / "chunk-cmd"
+            if cmd_fifo.exists():
+                status_file = io_dir / "chunk-status.jsonl"
+                try:
+                    cursor = len(status_file.read_text(errors="replace").splitlines()) if status_file.exists() else 0
+                    fd = os.open(str(cmd_fifo), os.O_WRONLY | os.O_NONBLOCK)
+                    try:
+                        os.write(fd, b"human-hold\n")
+                    finally:
+                        os.close(fd)
+                    pending.append((io_name, status_file, cursor))
+                except (OSError, ValueError):
+                    acknowledgements[io_name] = {"ok": False, "error": "human_hold_command_failed"}
+    for io_name, status_file, cursor in pending:
+        try:
+            ack, _ = poll_ack_fn(status_file, cursor, "human-hold", 2.0)
+            acknowledgements[io_name] = ack if (
+                ack.get("command") == "human-hold"
+                and ack.get("ok") is True
+                and ack.get("human_hold_latched") is True
+                and ack.get("torque_hold_commanded") is True
+            ) else {"ok": False, "error": "human_hold_ack_missing"}
+        except (OSError, ValueError):
+            acknowledgements[io_name] = {"ok": False, "error": "human_hold_ack_missing"}
+    return acknowledgements

@@ -21,6 +21,7 @@ from launch.launch_description_sources import (
     PythonLaunchDescriptionSource,
 )
 from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 
 from navigation.footprint_profile import load_footprint_profile
 from navigation.params_rewrite import write_prefixed_nav2_params
@@ -99,6 +100,7 @@ def _include_nav2(context, *args, **kwargs):
             "use_sim_time": LaunchConfiguration("use_sim_time").perform(context),
             "map": map_yaml,
             "params_file": rewritten_nav,
+            "navigation_autostart": "False",
             # Standalone nodes are the device-verified path: on this Jazzy build
             # load_composable_node entries are silently skipped / lose the
             # namespace (2026-11-03 solution doc), so composed Nav2 never runs.
@@ -117,14 +119,38 @@ def _include_nav2(context, *args, **kwargs):
             # Standalone nodes are the device-verified path (see above).
             "use_composition": "False",
         }
-    return [
-        IncludeLaunchDescription(
-            AnyLaunchDescriptionSource(
-                os.path.join(nav_share, "launch", launch_file)
+    nav2_include = IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+            os.path.join(nav_share, "launch", launch_file)
+        ),
+        launch_arguments=launch_arguments.items(),
+    )
+    if backend == "localization":
+        # Only localization backend runs loc_assist; under slam, an unlocalized loc_assist masks slam_tf.
+        control_share = get_package_share_directory("control")
+        return [
+            nav2_include,
+            Node(
+                package="navigation",
+                executable="start_after_tf",
+                namespace=namespace,
+                output="screen",
+                parameters=[{"use_sim_time": LaunchConfiguration("use_sim_time")}],
+                arguments=[rewritten_nav],
             ),
-            launch_arguments=launch_arguments.items(),
-        )
-    ]
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(control_share, "launch", "loc_assist.launch.py")
+                ),
+                condition=IfCondition(LaunchConfiguration("enable_loc_assist")),
+                launch_arguments={
+                    "namespace": namespace,
+                    "use_sim_time": LaunchConfiguration("use_sim_time").perform(context),
+                    "map_yaml": map_yaml,
+                }.items(),
+            ),
+        ]
+    return [nav2_include]
 
 
 def generate_launch_description():
@@ -166,10 +192,8 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_battery", default_value="true"),
         DeclareLaunchArgument("enable_lidar", default_value="true"),
         DeclareLaunchArgument("enable_line_follow", default_value="false"),
-        # D-395 P2-3: off on the device until the candidate search is measured on
-        # the Pi with the site map (loc_candidates.py cost note) and CORE relays
-        # decisions (lane B). Gazebo turns it on in gz_multi.
-        DeclareLaunchArgument("enable_loc_assist", default_value="false"),
+        # D-1046 (2026-11-18 user decision): on by default for localization backend (gated in _include_nav2).
+        DeclareLaunchArgument("enable_loc_assist", default_value="true"),
         DeclareLaunchArgument("line_camera_enabled", default_value="true"),
         DeclareLaunchArgument("line_ir_enabled", default_value="true"),
         DeclareLaunchArgument("camera_backend", default_value="auto"),
@@ -231,17 +255,6 @@ def generate_launch_description():
                 "camera_device": LaunchConfiguration("camera_device"),
                 "ir_interface": LaunchConfiguration("ir_interface"),
                 "line_follow_config": LaunchConfiguration("line_follow_config"),
-            }.items(),
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(control_share, "launch", "loc_assist.launch.py")
-            ),
-            condition=IfCondition(LaunchConfiguration("enable_loc_assist")),
-            launch_arguments={
-                "namespace": namespace,
-                "use_sim_time": use_sim_time,
-                "map_yaml": LaunchConfiguration("map"),
             }.items(),
         ),
         OpaqueFunction(function=_include_nav2),

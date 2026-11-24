@@ -166,12 +166,11 @@ def test_closed_loop_pipeline_api_and_guards(tmp_path, monkeypatch):
     import time as _t
     for _ in range(30):
         cur = bench.pipeline_status()
-        if cur['state'] in ('done', 'failed'):
+        if cur['state'] in ('done', 'blocked', 'failed'):
             break
         _t.sleep(0.05)
-    assert cur['state'] == 'done'
-    assert cur['loop_count'] >= 1
-    assert cur['next_checkpoint'].startswith('ckpt://h1-demo-01-aug')
+    assert cur['state'] == 'failed' and cur['stages']['seal'] == 'failed'
+    assert cur['loop_count'] == 0 and 'next_checkpoint' not in cur
 
 
 def test_audit_hardening_replay_validation_and_collection_name(tmp_path, monkeypatch):
@@ -222,7 +221,7 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
     ds_dir = fake_home / 'rosy-data' / 'omx-leader' / 'h1-demo-01'
     (ds_dir / 'meta').mkdir(parents=True)
     (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
+    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0", "total_episodes": 1}', encoding='utf-8')
     (ds_dir / 'data' / 'chunk-000' / 'ep0.parquet').write_bytes(b'pq')
     # 1. Refuses without HF token
     with pytest.raises(ValueError):
@@ -233,14 +232,25 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
     with pytest.raises(ValueError):
         bench.hf_upload_start({'dataset': 'h1-demo-01'})
     (ds_dir / 'DO_NOT_TRAIN.txt').unlink()
-    # 3. Mock HfApi and run async upload
+    # 3. Personal HF account without robotteam org membership is refused
     import sys, types, time as _t
     calls = []
-    class FakeHfApi:
-        def whoami(self): return {'name': 'livsb3'}
+    class FakePersonalHfApi:
+        def whoami(self): return {'name': 'livsb3', 'orgs': []}
         def create_repo(self, **kw): calls.append(('create', kw['repo_id']))
-        def upload_folder(self, **kw): calls.append(('upload', kw['repo_id']))
-    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
+        def upload_folder(self, **kw): calls.append(('upload', kw['repo_id'], kw.get('path_in_repo')))
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakePersonalHfApi))
+    bench.hf_upload_start({'dataset': 'h1-demo-01'})
+    for _ in range(40):
+        st = bench.hf_upload_status()
+        if st['state'] in ('done', 'failed'):
+            break
+        _t.sleep(0.05)
+    assert st['state'] == 'failed' and 'robotteam' in st['error'] and not calls
+    # 4. robotteam member uploads privately to robotteam/rosy-omx-data under dataset subpath
+    class FakeTeamHfApi(FakePersonalHfApi):
+        def whoami(self): return {'name': 'livsb3', 'orgs': [{'name': 'robotteam'}]}
+    monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeTeamHfApi))
     res = bench.hf_upload_start({'dataset': 'h1-demo-01'})
     assert res['hf_upload']['state'] in ('encoding', 'uploading', 'done')
     for _ in range(40):
@@ -249,10 +259,10 @@ def test_hf_async_upload_and_do_not_train_guard(tmp_path, monkeypatch):
             break
         _t.sleep(0.05)
     assert st['state'] == 'done'
-    assert st['repo_id'] == 'livsb3/h1-demo-01'
-    assert ('upload', 'livsb3/h1-demo-01') in calls
+    assert st['repo_id'] == 'robotteam/rosy-omx-data'
+    assert ('upload', 'robotteam/rosy-omx-data', 'h1-demo-01') in calls
     ds_rows = bench.lerobot_datasets()
-    assert ds_rows[0]['hf_uploaded'] is True and ds_rows[0]['hf_repo_id'] == 'livsb3/h1-demo-01'
+    assert ds_rows[0]['hf_uploaded'] is True and ds_rows[0]['hf_repo_id'] == 'robotteam/rosy-omx-data'
 
 
 def test_ik_planner_belt_in_to_pinky_arm_s(tmp_path, monkeypatch):
@@ -344,10 +354,10 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
     assert pipe['last_dataset'] == 'arm-s-ik-e2e'
     for _ in range(40):
         pipe_cur = bench.pipeline_status()
-        if pipe_cur['state'] in ('done', 'failed'):
+        if pipe_cur['state'] in ('done', 'blocked', 'failed'):
             break
         time.sleep(0.05)
-    assert pipe_cur['state'] == 'done' and pipe_cur['loop_count'] >= 1
+    assert pipe_cur['state'] == 'failed' and 'next_checkpoint' not in pipe_cur
 
     hf_cache = tmp_path / 'home' / '.cache' / 'huggingface'
     hf_cache.mkdir(parents=True, exist_ok=True)
@@ -355,14 +365,14 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
     ds_dir = tmp_path / 'home' / 'rosy-data' / 'omx-leader' / 'arm-s-ik-e2e'
     (ds_dir / 'meta').mkdir(parents=True)
     (ds_dir / 'data' / 'chunk-000').mkdir(parents=True)
-    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0"}', encoding='utf-8')
+    (ds_dir / 'meta' / 'info.json').write_text('{"codebase_version": "v3.0", "total_episodes": 1}', encoding='utf-8')
     (ds_dir / 'data' / 'chunk-000' / 'episode_000000.parquet').write_bytes(b'PAR1')
 
     hf_calls = []
     class FakeHfApi:
-        def whoami(self): return {'name': 'tester'}
+        def whoami(self): return {'name': 'tester', 'orgs': [{'name': 'robotteam'}]}
         def create_repo(self, **kw): hf_calls.append(('create', kw['repo_id']))
-        def upload_folder(self, **kw): hf_calls.append(('upload', kw['repo_id']))
+        def upload_folder(self, **kw): hf_calls.append(('upload', kw['repo_id'], kw.get('path_in_repo')))
     monkeypatch.setitem(sys.modules, 'huggingface_hub', types.SimpleNamespace(HfApi=FakeHfApi))
     bench.hf_upload_start({'dataset': 'arm-s-ik-e2e'})
     for _ in range(40):
@@ -370,8 +380,8 @@ def test_arm_s_ik_full_pipeline_e2e(tmp_path, monkeypatch):
         if hf_st['state'] in ('done', 'failed'):
             break
         time.sleep(0.05)
-    assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'tester/arm-s-ik-e2e'
-    assert ('upload', 'tester/arm-s-ik-e2e') in hf_calls
+    assert hf_st['state'] == 'done' and hf_st['repo_id'] == 'robotteam/rosy-omx-data'
+    assert ('upload', 'robotteam/rosy-omx-data', 'arm-s-ik-e2e') in hf_calls
     assert (Path(state['folder']) / 'hf-upload.json').is_file()
 
 
@@ -818,12 +828,13 @@ def test_bench_ribbon_camera_first_drawers_and_no_motion():
     html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
     css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
 
-    # 1) topbar has one set of arm pills, start with aria-describedby, home, drawer buttons, and estop as last element
+    # 1) topbar removes duplicate arm pills (single selector stays in #arm-card-bar), keeps start, home, drawers, and estop as last element
     topbar_m = re.search(r'<header class="app-topbar"[^>]*>(.*?)</header>', html, re.S)
     assert topbar_m
     topbar = topbar_m.group(1)
-    assert 'id="hdr-arm-pill"' not in topbar
-    for marker in ('id="rail-arm-pills"', 'id="phase-tabs"', 'id="hdr-record-btn"',
+    assert 'id="hdr-arm-pill"' not in topbar and 'id="rail-arm-pills"' not in topbar
+    assert 'id="arm-card-bar"' in html
+    for marker in ('id="phase-tabs"', 'id="hdr-record-btn"',
                    'aria-describedby="hdr-start-reasons"', 'id="hdr-home-btn"',
                    'data-drawer-btn="setup"', 'data-drawer-btn="bindings"',
                    'data-drawer-btn="start"', 'data-drawer-btn="records"', 'id="hdr-estop-btn"'):
@@ -916,10 +927,10 @@ def test_bench_v3_always_visible_goal_records_live_map_note_and_topbar_menu():
     assert '이 조합의 과제 카드 없음' in ui_js
     assert 'nEl.hidden=!lastMapNote' in ui_js
 
-    # 4) Topbar nowrap, single-row arm pills, and collapsible drawer menu
+    # 4) Topbar nowrap, single arm-card-bar selector, and collapsible drawer menu
     assert 'id="btn-drawer-menu"' in html and 'id="drawer-menu-pop"' in html
     assert '.drawer-menu-wrap.open .drawer-menu-pop' in css
-    assert '.arm-pills{display:inline-flex;flex-wrap:nowrap;' in css
+    assert '.arm-card-grid{' in css and 'id="rail-arm-pills"' not in html
     assert 'white-space:nowrap' in css
     assert not re.search(r'\b(?:transition|animation)\b|@keyframes', css)
 
@@ -1126,7 +1137,8 @@ def test_ui_audio_cues_and_quick_restart_after_result_contract():
     last_btn = list(re.finditer(r'<button\b[^>]*\bid="([^"]+)"', ops_m.group(1)))
     assert last_btn and last_btn[-1].group(1) == 'hdr-estop-btn'
     context = re.search(r'<div id="hdr-row-menu"[^>]*>(.*?)<section id="hdr-row-ops"', html, re.S).group(1)
-    context_order = ('h1', 'rail-arm-pills', 'hdr-task-summary', 'goal-name-btn', 'ftr-server',
+    assert 'id="rail-arm-pills"' not in context
+    context_order = ('h1', 'hdr-task-summary', 'goal-name-btn', 'ftr-server',
                      'hdr-cam-health', 'hdr-help-btn', 'btn-drawer-menu', 'hdr-refresh-btn')
     positions = [context.index('<h1>' if m == 'h1' else f'id="{m}"') for m in context_order]
     assert positions == sorted(positions)

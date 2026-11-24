@@ -265,22 +265,23 @@ class MotorHealth:
         state['observed_at'] = time.time() - max(0, motion.clock() - now)
         if violations:
             raise ValueError("; ".join(violations))  # The owner turns OFF before fault() persists this sample.
+        warnings = tuple((m["id"], tuple(m["warnings"])) for m in motors if m["warnings"])
+        due = state["report"] is None or now - state["report"] >= 0.5 or warnings != state["warnings"]
         try:
             self.emit(row)
-            self.publish()
+            if due:
+                self.publish()
         except OSError as exc:
             if not allow_gap:
                 raise
             _safe_print(f"motor-health {motion.label}: diagnostic write failed ({exc})")
-        warnings = tuple((m["id"], tuple(m["warnings"])) for m in motors if m["warnings"])
-        if state["report"] is None or now - state["report"] >= 1 or warnings != state["warnings"]:
-            detail = " | ".join(f"ID{m['id']} {m['joint']} error={m['error_deg']:.2f}deg "
-                                f"PWM={m['pwm']}/{m['pwm_limit']}({100*m['pwm_utilization']:.0f}%) "
-                                f"T={m['temperature_c']}C V={m['voltage_v']:.1f} "
-                                f"{','.join(m['warnings'])}" for m in motors)
-            _safe_print(f"motor-health {motion.label}: {detail}")
-            state["report"] = now
-        state["warnings"] = warnings
+        else:
+            if due:
+                detail = " | ".join(f"ID{m['id']} {m['joint']} error={m['error_deg']:.2f}deg PWM={m['pwm']}/{m['pwm_limit']}({100*m['pwm_utilization']:.0f}%) "
+                                    f"T={m['temperature_c']}C V={m['voltage_v']:.1f} {','.join(m['warnings'])}" for m in motors)
+                _safe_print(f"motor-health {motion.label}: {detail}")
+                state["report"] = now
+            state["warnings"] = warnings
 
     def fault(self, motion, exc):
         if self.terminal_at is None:

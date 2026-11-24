@@ -443,3 +443,59 @@ def test_stale_frame_beyond_cap_refused():
 def test_odd_source_rates_never_widen_the_pair_limit_past_the_cap(fps, limit):
     from fleet.localization.auto_locate import pair_fresh_s
     assert pair_fresh_s(fps) == pytest.approx(limit)
+
+
+def test_tiebreak_camera_xy_enforces_confirmed_mode_map_and_freshness():
+    current_track = {
+        "state": "CONFIRMED", "mode": "led", "x": 1.25, "y": -0.75, "yaw": 0.1,
+        "age_s": 0.55, "source_id": "cam-1", "map_id": "site-a",
+    }
+    identity = SimpleNamespace(confirmed_track_pose=lambda rid: dict(current_track))
+    tracking = SimpleNamespace(identity=identity, sources=[], source_fps=lambda sid: 3.0)
+    map_pose = SimpleNamespace(
+        config=SimpleNamespace(track_modes=("led",)),
+        active_map_id=lambda: "site-a",
+    )
+    svc = AutoLocateService(tracking, map_pose=map_pose, clock=lambda: 10.0)
+
+    assert svc.tiebreak_camera_xy("r1") == (1.25, -0.75)
+
+    current_track["mode"] = None
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["mode"] = "motion"
+    assert svc.tiebreak_camera_xy("r1") is None
+    map_pose.config.track_modes = ("led", "motion")
+    assert svc.tiebreak_camera_xy("r1") == (1.25, -0.75)
+
+    current_track["map_id"] = "site-b"
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["map_id"] = "site-a"
+    assert svc.tiebreak_camera_xy("r1", expected_map_id="site-c") is None
+
+    current_track["age_s"] = 0.8
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["age_s"] = 0.3
+
+    current_track["state"] = "UNKNOWN"
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["state"] = "CONFIRMED"
+    current_track["x"] = float("nan")
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["x"] = 1.25
+    current_track["y"] = float("inf")
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["y"] = -0.75
+    current_track["age_s"] = -0.1
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["age_s"] = float("nan")
+    assert svc.tiebreak_camera_xy("r1") is None
+    current_track["age_s"] = 0.3
+
+    no_map_svc = AutoLocateService(tracking, map_pose=None, clock=lambda: 10.0)
+    assert no_map_svc.tiebreak_camera_xy("r1", expected_map_id="site-a") is None  # mode="motion" refused under default track_modes
+    current_track["mode"] = "led"
+    assert no_map_svc.tiebreak_camera_xy("r1") is None
+    assert no_map_svc.tiebreak_camera_xy("r1", expected_map_id="site-a") == (1.25, -0.75)
+
+    tracking.identity = None
+    assert svc.tiebreak_camera_xy("r1") is None

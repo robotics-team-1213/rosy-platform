@@ -61,6 +61,68 @@ def log(**row):
     print(json.dumps(row, default=str), flush=True)
 
 
+def _walk_fail(err: OSError) -> None:
+    raise err
+
+
+def _clear_ephemeral_mirror(mirror: Path) -> None:
+    """Remove an autoupdate bare mirror only when it owns zero named refs or working state.
+
+    Host.archive() initializes mirror.git solely as scratch storage for `git fetch --depth 1`
+    and `git archive`. Keeping it between releases accumulates another ~100 MB shallow pack per
+    poll without adding refs or cache hits for distinct commit fetches.
+    """
+    sp = _sp()
+    try:
+        if (
+            mirror.is_symlink()
+            or not mirror.is_dir()
+            or not (mirror / "HEAD").is_file()
+            or not (mirror / "config").is_file()
+            or not (mirror / "objects").is_dir()
+            or (mirror / "index").exists()
+            or (mirror / "worktrees").exists()
+        ):
+            return
+        head = (mirror / "HEAD").read_text(encoding="utf-8", errors="replace").strip()
+        if not head.startswith("ref: "):
+            return
+        refs_dir = mirror / "refs"
+        if refs_dir.is_dir():
+            for root_dir, dirs, files in os.walk(refs_dir, onerror=_walk_fail, followlinks=False):
+                if files or any(os.path.islink(os.path.join(root_dir, d)) for d in dirs):
+                    return
+        packed = mirror / "packed-refs"
+        if packed.is_file():
+            for line in packed.read_text(encoding="utf-8", errors="replace").splitlines():
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#"):
+                    return
+        clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        clean_env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
+        bare = sp.run(
+            ["git", "--no-optional-locks", "config", "--file", str(mirror / "config"), "--bool", "--get", "core.bare"],
+            capture_output=True, text=True, env=clean_env, timeout=10,
+        )
+        if bare.returncode != 0 or bare.stdout.strip() != "true":
+            return
+        wt = sp.run(
+            ["git", "--no-optional-locks", "config", "--file", str(mirror / "config"), "--get", "core.worktree"],
+            capture_output=True, text=True, env=clean_env, timeout=10,
+        )
+        if wt.returncode != 1:
+            return
+        refs = sp.run(
+            ["git", "--no-optional-locks", "--git-dir", str(mirror), "for-each-ref"],
+            capture_output=True, text=True, env=clean_env, timeout=10,
+        )
+        if refs.returncode != 0 or refs.stdout.strip() != "":
+            return
+    except (OSError, subprocess.SubprocessError):
+        return
+    shutil.rmtree(mirror, ignore_errors=True)
+
+
 class Host:
     """Everything that touches git, GitHub, processes and devices; replaced by fakes in tests."""
 
@@ -195,23 +257,27 @@ class Host:
     def archive(self, sha: str, paths, target: Path) -> None:
         sp = _sp()
         mirror = Path(self.cfg["root"]) / "mirror.git"
+        _clear_ephemeral_mirror(mirror)
         if not mirror.exists():
             sp.run(["git", "init", "--bare", "-q", str(mirror)], check=True)
-        for stale in mirror.glob("*.lock"):
-            stale.unlink()
-        sp.run(
-            ["git", "-C", str(mirror), "fetch", "-q", "--depth", "1", self.cfg["repo_url"], sha],
-            check=True,
-            timeout=600,
-        )
-        data = sp.run(
-            ["git", "-C", str(mirror), "archive", "--format=tar", sha, *paths],
-            capture_output=True,
-            check=True,
-            timeout=600,
-        ).stdout
-        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
-            tar.extractall(target, filter="data")
+        try:
+            for stale in mirror.glob("*.lock"):
+                stale.unlink()
+            sp.run(
+                ["git", "-C", str(mirror), "fetch", "-q", "--depth", "1", self.cfg["repo_url"], sha],
+                check=True,
+                timeout=600,
+            )
+            data = sp.run(
+                ["git", "-C", str(mirror), "archive", "--format=tar", sha, *paths],
+                capture_output=True,
+                check=True,
+                timeout=600,
+            ).stdout
+            with tarfile.open(fileobj=io.BytesIO(data)) as tar:
+                tar.extractall(target, filter="data")
+        finally:
+            _clear_ephemeral_mirror(mirror)
 
     def smoke(self, release: Path, python: Path) -> bool:
         try:

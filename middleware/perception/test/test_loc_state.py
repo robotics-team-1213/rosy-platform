@@ -141,3 +141,56 @@ def test_a_decision_without_an_open_request_is_stale():
     """Review M5: in UNKNOWN or SUSPECT there is no request id; None must not match it."""
     m = machine()
     assert m.decide(None, 1., pose=(0., 0., 0.), source="human").reason == "stale_request"
+
+
+def test_verified_overhead_twin_tiebreak_is_accepted():
+    Cand = type(TRUE)
+    c0 = Cand(x=-1.0, y=0.5, yaw=3.1, scan_fit=0.92, origin="global")
+    c1 = Cand(x=1.0, y=-0.5, yaw=-0.1, scan_fit=0.85, origin="global")
+    m = machine()
+    m.offer([c0, c1], 0.)
+    step = m.decide("r1-1", 1., pose=(-0.97, 0.52, 3.12), source="overhead",
+                    cues=("overhead",), evidence={"tiebreak": "twin"})
+    assert step.actions == ("inject_pose",) and m.source == "overhead"
+    step = feed(m, 1.5, 4.5, .95)
+    assert step.state is LocState.LOCALIZED
+
+    m_c1 = machine()
+    m_c1.offer([c0, c1], 0.)
+    step_c1 = m_c1.decide("r1-1", 1., pose=(1.0, -0.5, -0.1), source="overhead",
+                          cues=("overhead",), evidence={"tiebreak": "twin"})
+    assert step_c1.actions == ("inject_pose",) and step_c1.pose == (1.0, -0.5, -0.1)
+
+
+def test_unverified_overhead_twin_tiebreak_is_rejected():
+    Cand = type(TRUE)
+    c0 = Cand(x=-1.0, y=0.5, yaw=0.0, scan_fit=0.92, origin="global")
+    c1 = Cand(x=1.0, y=-0.5, yaw=math.pi, scan_fit=0.90, origin="global")
+
+    def reject(candidates, **kwargs):
+        m = machine()
+        m.offer(candidates, 0.)
+        step = m.decide("r1-1", 1., **kwargs)
+        assert (step.actions, step.reason) == (("reject_decision",), "no_asymmetric_cue")
+
+    reject([c0, c1], pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",))
+    reject([c0, c1], pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "other"})
+    reject([c0, c1], pose=(-1.0, 0.5, 0.0), source="candidate", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([c0, c1], pose=(0.0, 0.0, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([c0, c1], pose=(1.0, None, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([c0, c1], pose=123, source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([c0, Cand(x=-0.5, y=0.5, yaw=math.pi, scan_fit=0.90, origin="global")],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([Cand(x=-1.0, y=0.5, yaw=0.0, scan_fit=0.84, origin="global"), c1],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([c0, Cand(x=1.0, y=-0.5, yaw=math.pi, scan_fit=0.84, origin="global")],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([c0, Cand(x=1.0, y=-0.5, yaw=math.pi, scan_fit=math.nan, origin="global")],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([Cand(x=-1.0, y=0.5, yaw=0.0, scan_fit=0.98, origin="global"),
+            Cand(x=1.0, y=-0.5, yaw=math.pi, scan_fit=0.86, origin="global")],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([c0, Cand(x=1.0, y=-0.5, yaw=0.7, scan_fit=0.90, origin="global")],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})
+    reject([c0, c1, Cand(x=0.0, y=2.0, yaw=1.0, scan_fit=0.90, origin="global")],
+           pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",), evidence={"tiebreak": "twin"})

@@ -35,6 +35,7 @@ LEARNING_REQUIRED = ("learning/registry/perception/watch.py", PREFIX + "rosy_ml.
                        ("native_review.py", "native_capture.py", "native_environment.py", "native_segments.py",
                         "collection_intake.py", "collection_pipeline.py", "camera_reference.py")),
                      "learning/training/omx/native_cycle.py",
+                     "learning/training/omx/canonical_intake.py",
                      "learning/training/omx/canonical_watch.py",
                      "learning/training/omx/canonical_telemetry.py",
                      "learning/training/omx/canonical_pipeline.py",

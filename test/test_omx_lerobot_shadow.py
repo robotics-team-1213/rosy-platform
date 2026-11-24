@@ -58,6 +58,15 @@ def test_goal_feature_requires_a_valid_slot_or_one_hot(tmp_path):
         obs, meta = shadow.inputs([0] * 6, frames, goal=goal)
         np.testing.assert_array_equal(obs[lrs.GOAL], [0] * 9 + [1])
         assert obs[lrs.GOAL].dtype == np.float32 and meta["goal_slot"] == 9
+    with pytest.raises(ValueError, match="one-hot"):
+        shadow.inputs([0] * 6, frames, goal=[0] * 10)
+    goal = np.asarray([0] * 9 + [1], dtype=np.float32)
+    obs, meta = shadow.inputs([0] * 6, frames, goal=goal, mask_goal=True)
+    np.testing.assert_array_equal(obs[lrs.GOAL], [0] * 10)
+    np.testing.assert_array_equal(goal, [0] * 9 + [1])
+    assert meta["goal_slot"] == 9 and meta["goal_masked"] is True
+    with pytest.raises(ValueError, match="goal slot"):
+        shadow.inputs([0] * 6, frames, goal=10, mask_goal=True)
 
 
 @pytest.mark.parametrize("arm,roll,gripper,held", [
@@ -248,3 +257,35 @@ def test_checkpoint_camera_names_must_be_cell_roles():
     config["input_features"] = {"observation.state": {"shape": [6]}, "observation.images.side": {"shape": [3, 480, 640]},
                                 "observation.images.wrist": {"shape": [3, 480, 640]}}
     assert lrs.read_features(config)[0] == {"side": (480, 640), "wrist": (480, 640)}
+
+
+def test_load_torch_caps_cpu_threads_and_preserves_caller_env(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import os
+
+    root, _ = checkpoint(tmp_path)
+    calls = []
+    fake_torch = SimpleNamespace(
+        set_num_threads=lambda n: calls.append(("threads", n)),
+        set_num_interop_threads=lambda n: (_ for _ in ()).throw(RuntimeError("already started")),
+    )
+    fake_policy = SimpleNamespace(config=SimpleNamespace(device="cuda"), to=lambda _d: SimpleNamespace(eval=lambda: None))
+    fake_act = SimpleNamespace(ACTPolicy=SimpleNamespace(from_pretrained=lambda _p: fake_policy))
+    fake_factory = SimpleNamespace(make_pre_post_processors=lambda *a, **kw: (lambda x: x, lambda x: x))
+    for name, mod in (
+        ("torch", fake_torch),
+        ("lerobot", SimpleNamespace()),
+        ("lerobot.policies", SimpleNamespace()),
+        ("lerobot.policies.act", SimpleNamespace()),
+        ("lerobot.policies.act.modeling_act", fake_act),
+        ("lerobot.policies.factory", fake_factory),
+    ):
+        monkeypatch.setitem(sys.modules, name, mod)
+    monkeypatch.setenv("OMP_NUM_THREADS", "3")
+    monkeypatch.delenv("MKL_NUM_THREADS", raising=False)
+    monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
+
+    lrs._load_torch(root, "cpu")
+    assert os.environ["OMP_NUM_THREADS"] == "3"
+    assert os.environ["MKL_NUM_THREADS"] == "2" and os.environ["OPENBLAS_NUM_THREADS"] == "2"
+    assert calls == [("threads", min(2, os.cpu_count() or 1))]

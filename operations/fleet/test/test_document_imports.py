@@ -69,7 +69,16 @@ OWN = {
         "console-refresh.js",  # D-798 3.2: console.js dispatch, site path, state poll, cancel-all
         "roster.js",
         "roster-workspace.js",
+        "robot-dock.js",
+        "robot-dock-model.js",
+        "robot-panel.js",
+        "robot-profile.js",
+        "robot-3d.js",
+        "robot-3d-model.js",
+        "robot-3d-assets.js",
+        "selection.js",
         "cockpit-telemetry.js",
+        "cockpit-hosts.js",
         "cell-cockpit-stage.js",
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
@@ -83,6 +92,7 @@ OWN = {
         "line-stuck.js",
         "stuck-evidence.js",  # network load: the stuck picture as raw JPEG (line-stuck.js)
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame
+        "decision-slot.js",  # shared calm decision-slot builder & filler
         "trip-replan.js",  # D-540 3: the replan confirm in its queue row
         "signals.js",
         "tracking-view.js",

@@ -52,7 +52,7 @@ main {
 }
 
 .entry {
-  border-top: 1px solid var(--border-default);
+  border-top: 1px solid var(--line-06);
   padding-top: var(--space-4);
 }
 

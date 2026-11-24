@@ -33,6 +33,26 @@ python tools/sim/omx_loop.py all --run --run-sweep --run-dir RUN --capture CAPTU
 
 상단 보정을 통과한 스냅샷이 카메라와 임시판·선박·벨트 배치를 결정한다. 운반 시험과 후보에는 스냅샷 해시가 붙는다. 시험을 재사용하려면 같은 스냅샷의 해시가 필요하다. 층 검증 근거가 없는 안착 시도는 미확인으로 기록한다. 재생에서 얻은 시야·관절 추종 차이는 다음 측정 스냅샷에 보정 후보로 남는다.
 
+## 카메라의 작은 픽셀 변화 확인
+
+- R2S의 반복 측정에는 같은 프리셋으로 만든 직전 스냅샷을 `measure RUN --prev SNAPSHOT` 또는 `pipeline RUN --prev SNAPSHOT`에 지정한다. `frames.top`은 현재 촬영본의 해시다. `camera_reference_top`은 현재 카메라 자세와 짝을 이루는 기준 촬영본의 해시다. 원본 프레임은 `ROSY_REAL2SIM_FRAMES`에 보관한다.
+- 기준 대비 3 px, 0.3°, 배율 0.5% 중 하나를 넘으면 기존 패드 기준점 PnP를 다시 맞춘다. PnP에는 기준 때 고정한 `camera_reference_lanes` 좌표를 쓴다. 보정이 통과하면 자세와 기준 프레임을 함께 갱신한다. 기준 프레임이 없거나 비교점이 부족하면 자세를 다시 맞춘다. 해상도가 달라지면 촬영 프로필을 먼저 확인한다. `pipeline` 출력의 `previous`는 차이 비교용이고, 실제 카메라 비교 기준은 `camera_motion.reference_top`에 기록한다.
+- S2R은 학습 프레임과 현재 녹화 프레임에서 동일한 고정점을 원본 픽셀 좌표로 측정한다. 위·측면 카메라별로 적합에 쓸 점 두 개와 검증에 쓸 점 두 개 이상을 고른다. 검증점은 벨트와 상판처럼 위치와 높이가 다른 작업 구역에서 고른다. 두 프레임의 촬영 프로필과 해상도를 확인한다.
+
+```text
+python tools/sim/omx_policy_camera_drift.py TRAIN.jpg LIVE.jpg ANCHORS.json --max-shift-px SHIFT_LIMIT --max-residual-px RESIDUAL_LIMIT
+```
+
+`ANCHORS.json`에 `camera`(`top` 또는 `side`), `training_profile`, `live_profile`, `reference_xy`, `live_xy`를 넣는다. 두 좌표 배열의 순서를 맞춘다. 각 좌표를 잰 원본 파일의 해시를 `reference_sha256`과 `live_sha256`에 `sha256:<64자리 hex>` 형식으로 적는다. 허용 이동과 잔차는 검증할 정책의 기준에 맞춰 지정한다. 보고서에는 원본 해시, 좌우·상하 편차, 검증점별 보정 전후 오차, 통과한 이동 보정 행렬이 담긴다. 여러 녹화 쌍에서 확인한 뒤 같은 보류 에피소드로 원본과 보정 후보의 정책 결과를 비교한다. 이 명령은 후보 보고서를 출력한다.
+
+### ACT가 견뎌야 할 시점 변화
+
+실물 시연을 정리할 때 위·옆 영상의 촬영 각도를 유지한다. 소각도 차이가 있는 정상 시연도 같은 카메라 역할·해상도·시각 정렬과 동작 라벨 검사를 거쳐 학습에 쓸 수 있다. 녹화 세션 단위로 학습과 검증 자료를 먼저 나눈다. 변환본의 `meta/camera_views.json`에는 원본 자료 ID와 에피소드 인덱스를 남긴다. 실측 각도가 없으면 각도는 미상으로 기록한다.
+
+Canonical spec에 `camera_angle_jitter_deg`를 추가하면 `collect_dart`에서 시뮬 top·side·손목 카메라의 각 축 회전량을 지정 범위 안에서 뽑는다. 한 시나리오 동안 같은 각도를 사용하며 네 번째 시나리오마다 기본 자세로 촬영한다. 에피소드마다 적용한 각도와 시드를 `meta/camera_views.json`에 남긴다. 이 파일도 데이터 게이트가 영상과 함께 해시로 묶는다. 예를 들어 `0.3`은 축별 ±0.3° 실험이며, 각 카메라의 실측 증거에 맞춰 범위를 선택한다.
+
+`eval_ladder`는 기본 시야 평가와 동일한 과제 시드에서 각도만 바꿔 한 번 더 평가한다. 각도 난수는 학습과 다른 계열을 사용한다. `camera_robustness.json`으로 기본과 변형 시야의 성공, 접촉, 층별 결과를 비교한다. 실물 시점 수용은 별도 녹화 세션에서 확인한다.
+
 ## CAD194 손목 후보 비교
 
 보관 영상에서는 양쪽 집게 끝을 표시한다.

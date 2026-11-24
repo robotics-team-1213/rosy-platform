@@ -1,0 +1,689 @@
+/* Robot roster, selected workspace and trip controls; Fleet Console feature styles. */
+
+.roster-block { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2) var(--space-3); }
+.roster-block > h2 { margin: 0; }
+.roster-block > #roster, .roster-block > .address-drift, .roster-block > #site-path, .roster-block > #discovery-pending { grid-column: 1 / -1; }
+#discovery-pending { margin: 0; }
+/* 알릴 발행 상태가 있으면 띠가 머리 아래 한 줄을 다 쓴다. 없으면 전체 주행 취소 버튼만 머리 줄에 선다. */
+.roster-block > .dispatch-control { grid-column: 1 / -1; grid-row: 2; }
+.roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 2; grid-row: 1; }
+.roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; }
+
+.roster { display: flex; flex-direction: column; gap: var(--space-2); }
+.omx-card-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.omx-card-actions ui-button { min-width: 0; }
+.omx-right-inspector:not(:empty) { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
+.omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); }
+.omx-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.omx-inspector-head strong { font-family: var(--mono); font-size: var(--text-label); color: var(--series-primary); overflow-wrap: anywhere; }
+.omx-inspector-main-cam { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--border-default); background: var(--surface-recessed); cursor: zoom-in; }
+.omx-inspector-main-cam.focused { aspect-ratio: auto; max-height: 60vh; object-fit: contain; cursor: zoom-out; }
+.omx-inspector-cam-frame { position: relative; min-width: 0; aspect-ratio: 16 / 9; min-height: 7.5rem; overflow: hidden; border-radius: var(--radius-control); background: var(--surface-recessed); }
+.omx-inspector-cam-frame:has(> .omx-inspector-main-cam.focused) { aspect-ratio: auto; max-height: 60vh; }
+.omx-inspector-cam-frame > .omx-inspector-main-cam { width: 100%; height: 100%; border: 0; border-radius: 0; }
+.omx-inspector-cam:not([src]) { opacity: 0; }
+.omx-inspector-cam-standby { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-3); border: 1px dashed var(--line-14); border-radius: var(--radius-control); background: var(--surface-recessed); color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-copy) var(--mono); pointer-events: none; text-align: center; overflow: hidden; }
+.omx-inspector-single-wrap { display: grid; gap: var(--space-1); min-width: 0; }
+.omx-inspector-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); min-width: 0; }
+@media (width < 30rem) {
+  .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-dual-pane { display: grid; gap: var(--space-1); min-width: 0; }
+.omx-inspector-stage-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1); min-width: 0; }
+.omx-inspector-cam-badge { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: end; min-width: 0; }
+@media (width < 30rem) {
+  .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-field { display: grid; gap: var(--space-1); min-width: 0; font-size: var(--text-micro); color: var(--text-secondary); }
+.omx-inspector-quick-dispatch select { width: 100%; min-width: 0; font-size: var(--text-micro); }
+.omx-inspector-pip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.8rem, 1fr)); gap: var(--space-1); min-width: 0; }
+.omx-inspector-pip { display: grid; gap: var(--space-1); width: 100%; padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); color: var(--text-primary); font-family: inherit; font-size: inherit; text-align: start; cursor: pointer; min-width: 0; }
+.omx-inspector-pip:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }
+.omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); }
+.omx-inspector-pip small { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omx-inspector-meta { margin: 0; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow-wrap: anywhere; }
+/* 카드는 내용 높이를 지킨다 — 스크롤 칸 안에서 줄어들면 까닭 줄과 버튼이 잘린다. */
+.roster > * { flex-shrink: 0; }
+
+.robot {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* D-409 — 컴팩트 카드 요약: 위치·방향은 지도가 말하고 카드는 모드·배터리·안전만.
+   D-417: 칸 질의로 확장 — 뷰포트가 넓어도 칸이 좁으면 접는다(태블릿 세로 768px). */
+@media (width < 30rem) {
+  .facts > div[data-fact="pose"], .facts > div[data-fact="yaw"] { display: none; }
+  .robot { padding: var(--space-2) var(--space-3); }
+  .robot .hint { font-size: var(--text-micro); margin: var(--space-1) 0 0; }
+}
+.robot.s0 { border-left-color: var(--robot-1); }
+.robot.s1 { border-left-color: var(--robot-2); }
+.robot.s2 { border-left-color: var(--robot-3); }
+/* 로봇 정체색은 클래스로 돈다 — CSP 아래에서 style 속성은 적용되지 않는다. 지도의
+   삼각형도 같은 순서로 색을 고르므로 카드의 띠와 지도의 로봇이 맞물린다. */
+.robot.selected { background: var(--surface-canvas); border-color: var(--border-strong); }
+/* 오프라인은 흐림이 아니라 조용한 글자와 점선 테다(D-359 §5.5). */
+.robot.offline { color: var(--text-secondary); border-style: dashed; }
+
+/* D-517 10 — 운행 상태 한 줄. 이름 줄 바로 아래, 값과 같은 mono 글자. */
+.robot .trip-line { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-label); color: var(--text-primary); overflow-wrap: anywhere; }
+/* D-540 3 — 정상 로봇은 한 줄: 이름 · 운행 한 줄 · 배터리. 줄 전체가 펼침 단추다. */
+.robot[data-collapsed] { padding: 0; }
+.robot-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); width: 100%; }
+.robot-line b { font-family: var(--mono); letter-spacing: var(--track-wide); }
+.robot-line .trip-line { flex: 1 1 8rem; margin: 0; min-width: 0; color: var(--text-secondary); }
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
+}
+/* D-417 — 넓은 칸에서 팩트는 한 줄로: 위치·방향이 넓게, 배터리·안전은 좁게. */
+@media (width >= 64rem) {
+  .facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; }
+  .facts div { flex: 0 1 auto; min-width: 0; }
+  .facts div[data-fact="pose"] { flex: 1 1 140px; }
+  /* 값 크기대로 차지한다. 고정 폭이면 "비상 정지" 칩이 카드 밖으로 잘린다. 모자라면 줄을 바꾼다. */
+  .facts div:is([data-fact="yaw"], [data-fact="battery"], [data-fact="safety"]) { flex: 0 0 auto; }
+}
+.facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--text-secondary); }
+/* D-457 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
+.facts .ui-icon { width: var(--text-label); height: var(--text-label); }
+.facts strong { font-family: var(--mono); font-size: var(--text-label); font-weight: var(--weight-medium); }
+.facts .fact-detail { display: block; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }
+
+/* D-540 (d) — the card's 운행 form: labelled pickers over their action rows, under a hairline. */
+.card-trip { display: grid; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--border-subtle); }
+.card-trip label { display: grid; gap: var(--space-1); font-size: var(--text-label); color: var(--text-secondary); }
+.card-trip select { width: 100%; min-width: 0; }
+.trip-rule { display: grid; gap: var(--space-2); }
+.card-trip p { margin: 0; }
+
+/* 한 열 단: 로봇 목록 머리는 제목 한 줄, 그 아래 전체 주행 취소 한 줄이다(제목이 글자 단위로 접히지 않게). */
+@media (width < 64rem) {
+  .context-panel > .panel[aria-labelledby="roster-heading"] { display: flex; flex-direction: column; }
+  .robot-list-details { order: 1; }
+  .charge-bays { order: 2; }
+  .roster-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .roster-block > h2 { grid-column: 1 / -1; }
+  .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 1; grid-row: 2; justify-content: flex-start; }
+  .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]):not(:has(#cancel-all-result:not([hidden]))) > div { display: none; }
+  .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]):not(:has(#cancel-all-result:not([hidden]))) #cancel-all { width: 100%; }
+  .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) > div { margin-right: 0; }
+  .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) #cancel-all { width: 100%; }
+  .roster-block > .dispatch-control { grid-row: 3; }
+}
+
+/* C23 robot dock + C24 robot panel + stage push/sheet layout (D-220 still, tokens only). */
+.robot-stage { display: grid; grid-template-columns: minmax(0, 1fr) 56px; min-width: 0; min-height: 0; }
+.robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: clamp(18rem, 24vw, 22rem) minmax(0, 1fr) 56px; }
+.robot-stage-main { min-width: 0; min-height: 0; display: grid; gap: var(--space-3); align-content: start; }
+
+/* C23 dock: vertical strip on >=64rem, horizontal row above main on <64rem */
+.robot-dock { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: var(--space-2) 0; border-inline-start: 1px solid var(--border-default); background: var(--surface-chrome); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.robot-dock-group { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); width: 100%; min-width: 0; }
+.robot-dock-group + .robot-dock-group { padding-block-start: var(--space-2); border-block-start: 1px solid var(--border-default); }
+.robot-dock-label { color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--body); }
+
+.robot-dock-btn {
+  position: relative;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0;
+  width: var(--target-secondary);
+  min-width: 44px;
+  min-height: var(--target-secondary);
+  padding: var(--space-1);
+  border: 0;
+  border-inline-start: var(--selection-edge) solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-primary);
+  font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono);
+  cursor: pointer;
+}
+.robot-dock-btn:hover { background: var(--surface-sheen); }
+.robot-dock-btn:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+/* --selection requires --surface-flat or lighter for 3:1 contrast in both themes */
+.robot-dock-btn[aria-pressed="true"] { background: var(--surface-flat); }
+.robot-dock-btn[data-selected] { border-inline-start-color: var(--selection); }
+.robot-dock-btn[data-link="unavailable"] .robot-dock-icon { opacity: var(--disabled-opacity); }
+.robot-dock-icon { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.robot-dock-icon > .ui-icon { width: var(--text-title); height: var(--text-title); }
+.robot-dock-id { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; line-height: var(--leading-flat); }
+
+.robot-dock-mark {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px;
+  border-radius: var(--radius-flag);
+  background: var(--surface-canvas);
+  pointer-events: none;
+}
+.robot-dock-mark > .ui-icon { width: var(--text-micro); height: var(--text-micro); }
+.robot-dock-mark[data-mark-kind="alarm"] { top: 2px; inset-inline-end: 2px; }
+.robot-dock-mark[data-mark-kind="link"] { bottom: 2px; inset-inline-end: 2px; }
+.robot-dock-mark:is([data-state="delayed"], [data-state="disconnected"], [data-state="caution"]) { color: var(--status-warn); }
+.robot-dock-mark[data-state="unknown"] { border: 1px dashed var(--border-strong); color: var(--text-secondary); }
+.robot-dock-mark[data-state="danger"] { background: var(--status-crit); color: var(--text-on-danger); }
+
+/* C24 panel: push column on >=64rem, full-screen sheet below header on <64rem */
+.robot-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-inline-end: 1px solid var(--border-default);
+  background: var(--surface-chrome);
+}
+@media (width >= 64rem) {
+  .robot-panel {
+    position: sticky;
+    top: var(--appbar-height);
+    align-self: start;
+    max-height: calc(100dvh - var(--appbar-height));
+  }
+}
+.robot-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-block-end: 1px solid var(--line-06);
+}
+.robot-panel-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font: var(--weight-strong) var(--text-body)/var(--leading-label) var(--body);
+  overflow-wrap: anywhere;
+}
+.robot-panel-title:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.robot-panel-link, .robot-panel-close { flex: none; }
+
+.robot-panel-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  align-content: start;
+}
+.robot-panel-jumps {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--line-06);
+  border-radius: var(--radius-button);
+  background: var(--surface-recessed);
+}
+.robot-panel-jump {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body);
+  cursor: pointer;
+}
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  ui-button.robot-panel-close { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-3); }
+  .robot-panel-jump { min-height: var(--target-tool); }
+  details.robot-panel-section > summary { min-height: var(--target-tool); }
+}
+.robot-panel-jump:hover { color: var(--text-primary); border-color: transparent; background: var(--surface-flat); }
+.robot-panel-jump:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.robot-panel-section { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); scroll-margin-top: calc(var(--target-secondary) + var(--space-3)); }
+.robot-panel-section + .robot-panel-section { padding-block-start: var(--space-2); border-block-start: 1px solid var(--line-06); }
+.robot-panel-section > h3 { margin: 0; color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-label) var(--mono); letter-spacing: var(--track-label); }
+.robot-panel-section dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); align-items: baseline; }
+.robot-panel-section dt { color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-compact) var(--mono); letter-spacing: var(--track-label); }
+.robot-panel-section dd { margin: 0; color: var(--text-primary); font: var(--weight-medium) var(--text-label)/var(--leading-compact) var(--mono); font-variant-numeric: tabular-nums; text-align: end; overflow-wrap: anywhere; }
+details.robot-panel-section > summary {
+  min-height: var(--target-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font: var(--weight-label) var(--text-label)/var(--leading-label) var(--body);
+  cursor: pointer;
+}
+
+.robot-panel-foot {
+  flex: none;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-block-end: 0;
+  border-block-start: 1px solid var(--line-06);
+  background: var(--surface-chrome);
+  display: grid;
+  gap: var(--space-1);
+}
+.robot-panel-stop { width: 100%; border-color: var(--status-crit); color: var(--text-primary); background: var(--status-crit-a10); }
+.robot-panel-stop:hover:not([disabled]) { border-color: var(--status-crit); background: var(--status-crit-a07); }
+.robot-panel-stop-note { margin: 0; color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--body); }
+
+
+@media (width < 64rem) {
+  .robot-stage, .robot-stage:has(> .robot-panel:not([hidden])) { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .robot-dock {
+    position: sticky;
+    top: var(--appbar-height);
+    z-index: 5;
+    order: -1;
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    height: calc(var(--target-secondary) + var(--space-3));
+    box-sizing: border-box;
+    border-inline-start: 0;
+    border-block-end: 1px solid var(--border-subtle);
+    background: var(--surface-chrome);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .robot-stage:has(> .robot-panel:not([hidden])) > .robot-dock {
+    position: fixed;
+    top: var(--appbar-height);
+    inset-inline: 0;
+    z-index: 5;
+  }
+  .robot-dock-group { flex-direction: row; flex: 1 1 auto; width: auto; align-items: stretch; }
+  .robot-dock-group + .robot-dock-group { padding-block-start: 0; border-block-start: 0; padding-inline-start: var(--space-2); border-inline-start: 1px solid var(--border-default); }
+  .robot-dock-label { display: none; }
+  .robot-dock-btn { flex: 1 1 0; width: auto; min-width: 44px; scroll-margin-top: calc(var(--appbar-height) + var(--space-2)); border-inline-start: 0; border-block-end: var(--selection-edge) solid transparent; }
+  .robot-dock-btn[data-selected] { border-block-end-color: var(--selection); }
+  .robot-panel {
+    position: fixed;
+    inset: calc(var(--appbar-height) + var(--target-secondary) + var(--space-3)) 0 0 0;
+    z-index: 4;
+    border-inline-end: 0;
+    background: var(--surface-canvas);
+  }
+}
+
+/* C18 + C23 + C24 cockpit stage and read-only roster summary. */
+#robot-stage { flex: 1 1 auto; min-height: 0; }
+#robot-stage > .robot-stage-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+}
+@media (width >= 64rem) {
+  .fleet-workspace:has(#robot-stage > .robot-dock) > #estop-feedback {
+    inline-size: calc(100% - 56px - 2 * var(--inset-task-page));
+    margin-inline: var(--inset-task-page) auto;
+  }
+  #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] {
+    grid-template-columns: minmax(0, 2fr) minmax(15rem, 1fr);
+  }
+  @media (width < 95rem) {
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "stage" "now";
+      grid-template-rows: auto auto;
+    }
+  }
+  #robot-stage > .robot-panel { position: relative; top: auto; align-self: stretch; min-height: 0; max-height: 100%; overflow: hidden; }
+  #robot-stage > .robot-dock { align-self: stretch; min-height: 0; max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+}
+@media (width >= 64rem) and (height >= 40rem) {
+  #robot-stage { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+  #robot-stage > .robot-stage-main { overflow: hidden; }
+  #fleet-main .map-stage { flex: 1 1 auto; min-height: 0; }
+  #fleet-main .map-stage #map-canvas { height: 100%; }
+  #fleet-main .legend { margin-top: var(--space-1); gap: var(--space-1) var(--space-3); }
+  #robot-panel .robot-panel-body { gap: var(--space-2); }
+  @media (width < 95rem) {
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] {
+      grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+    }
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"]:has(#cell-cockpit-stage:not([hidden])) {
+      grid-template-rows: minmax(0, auto) minmax(0, 1fr);
+    }
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] > .console-primary {
+      min-height: 0;
+    }
+    #robot-stage:has(> .robot-panel:not([hidden])) #fleet-main[data-layout="watch"] > .console-secondary {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+  }
+}
+#robot-panel .robot-workspace-card .robot-head { gap: var(--space-1) var(--space-3); }
+#robot-panel .robot-workspace-card .robot-head > :is(b, .spacer) { display: none; }
+#robot-panel .robot-workspace-card .robot-head > .hint { flex: 1 0 100%; margin: 0; font-family: var(--mono); font-size: var(--text-micro); line-height: var(--leading-compact); }
+#robot-panel .robot-workspace-card .facts { margin: var(--space-1) 0; }
+#robot-panel section[data-robot-profile] { display: grid; gap: var(--space-1); margin-top: var(--space-1); }
+#robot-panel section[data-robot-profile] :is(h4, p) { margin: 0; font-size: var(--text-micro); line-height: var(--leading-compact); }
+.robot-panel .robot-workspace-card { padding: var(--space-2) 0 0; background: transparent; border: 0; border-block-start: 1px solid var(--line-10); border-radius: 0; }
+.robot-panel-camera-box { display: grid; gap: var(--space-2); min-width: 0; }
+.robot-summary { min-width: 0; max-width: 100%; min-height: var(--row-dense); padding: var(--space-3); border: 1px solid var(--line-06); border-inline-start: var(--selection-edge) solid var(--border-default); border-radius: var(--radius-button); background: var(--surface-chrome); }
+.robot-summary:hover { background: var(--surface-flat); }
+.robot-summary .robot-line { width: 100%; min-width: 0; }
+.robot-summary-head-meta { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.robot-summary-evidence { display: block; min-width: 0; margin: var(--space-2) 0 0; padding: var(--space-1) var(--space-2); border: 0; border-inline-start: var(--selection-edge) solid var(--status-warn); border-radius: var(--radius-control); background: var(--surface-recessed); color: var(--text-primary); font-size: var(--text-micro); line-height: var(--leading-compact); overflow-wrap: anywhere; }
+#robot-workspace { min-width: 0; }
+.manual-control { margin-top: var(--space-1); }
+.manual-control [data-manual-direction] { touch-action: none; }
+.manual-control [data-manual-pose] { margin: var(--space-2) 0; font-size: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
+/* 방향 넷은 언제나 2×2다. 폭에 맡기면 1366에서 3+1로 갈린다. */
+.manual-control .robot-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.manual-control [data-manual-mode] { grid-column: 1 / -1; }
+.trip-mode { display: grid; gap: var(--space-2); }
+
+.robot-summary.s0 { border-inline-start-color: var(--robot-1); }
+.robot-summary.s1 { border-inline-start-color: var(--robot-2); }
+.robot-summary.s2 { border-inline-start-color: var(--robot-3); }
+.robot-summary.selected { background: var(--surface-raised); border-color: var(--selection); border-inline-start-color: var(--selection); }
+.robot-summary .robot-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1) var(--space-2); }
+.robot-summary .trip-line { margin: var(--space-1) 0 0; font-size: var(--text-micro); color: var(--text-secondary); overflow-wrap: anywhere; }
+.robot-summary-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); margin-top: var(--space-2); min-width: 0; }
+.robot-summary-status ui-tag:not([variant="inline"]) { max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: var(--leading-compact); padding-block: var(--space-1); }
+.robot-list-details { min-width: 0; margin-top: var(--space-2); }
+.robot-list-details > h3 { margin: 0 0 var(--space-2); }
+
+.robot-line:focus-visible, .robot-fold:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+
+.robot-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.gauge-meta-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.gauge-meta-line span {
+  font-size: var(--text-micro);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.gauge-meta-line strong {
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.gauge-svg {
+  width: 100%;
+  height: 7px;
+  display: block;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.gauge-bg { fill: var(--gauge-track); }
+.gauge-fill.good { fill: var(--series-goal); }
+.gauge-fill.info { fill: var(--series-primary); }
+.gauge-fill.warn { fill: var(--status-warn); }
+.gauge-fill.crit { fill: var(--status-crit); }
+
+.hover-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.gauge-row-compact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+/* EICAS Top HUD telemetry strip + PFD 3D/uPlot wraps + single-row ND bezel */
+.cockpit-hud {
+  margin-inline-start: auto;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-recessed);
+  overflow: hidden;
+  min-width: 0;
+}
+.fleet-workspace > .ui-pathbar { flex-wrap: wrap; }
+.cockpit-hud-cell { display: flex; align-items: baseline; gap: var(--space-1); padding: var(--space-1) var(--space-2); min-width: 0; }
+.cockpit-hud-cell + .cockpit-hud-cell { border-inline-start: 1px solid var(--border-subtle); }
+.cockpit-hud-label { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); white-space: nowrap; }
+.cockpit-hud-val { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; }
+.cockpit-hud-cell[data-tone="active"] .cockpit-hud-val { color: var(--series-primary); }
+.cockpit-hud-cell[data-tone="warn"] .cockpit-hud-val { color: var(--status-warn); }
+.cockpit-hud-cell[data-tone="crit"] { background: var(--status-crit-a10); box-shadow: inset 0 0 0 1px var(--status-crit-a45); }
+.cockpit-hud-cell[data-tone="crit"] :is(.cockpit-hud-label, .cockpit-hud-val) { color: var(--text-primary); }
+.cockpit-hud-cell[data-tone="crit"] .cockpit-hud-val { display: inline-flex; align-items: center; gap: var(--space-1); }
+.cockpit-hud-cell[data-tone="crit"] .cockpit-hud-val::before { content: ""; flex: none; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: var(--status-crit); }
+@media (width < 64rem) {
+  .cockpit-hud { margin-inline-start: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .cockpit-hud-cell { justify-content: space-between; }
+  .cockpit-hud-cell:nth-child(odd) { border-inline-start: 0; }
+  .cockpit-hud-cell:nth-child(n + 3) { border-block-start: 1px solid var(--border-subtle); }
+  .cockpit-hud-cell[data-hud-key="alerts"] { grid-column: 1 / -1; border-inline-start: 0; }
+}
+
+.robot-panel-status-wrap { display: grid; gap: var(--space-2); min-width: 0; }
+.robot-panel-twin { min-width: 0; }
+#robot-panel .robot-view[data-selected] .robot-view-stage { border-color: var(--border-default); box-shadow: none; }
+.cockpit-disclosure-row {
+  box-sizing: border-box;
+  display: list-item;
+  align-content: center;
+  min-height: var(--target-secondary);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-block: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body);
+  text-align: start;
+  cursor: pointer;
+}
+.cockpit-disclosure-row:hover { color: var(--text-primary); }
+.cockpit-disclosure-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.telemetry-chart { display: grid; gap: var(--space-1); padding: var(--space-1) var(--space-2); border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-recessed); min-width: 0; }
+.telemetry-chart-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-1) var(--space-2); min-width: 0; }
+.telemetry-chart-title { font: var(--weight-label) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); color: var(--text-secondary); white-space: nowrap; flex: none; }
+.telemetry-chart-value { font: var(--weight-strong) var(--text-label)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; flex: none; }
+.telemetry-chart-meta { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; flex: none; }
+.telemetry-chart-plot { min-width: 0; height: 44px; overflow: hidden; }
+.telemetry-chart-plot:empty { display: none; }
+.telemetry-chart-plot > div { width: 100%; height: 100%; }
+.telemetry-chart-plot > div > div { position: relative; width: 100%; height: 100%; user-select: none; }
+.telemetry-chart-plot > div > div > div { position: absolute; inset: 0; pointer-events: none; }
+.telemetry-chart-plot canvas { position: relative; display: block; width: 100%; height: 100%; }
+
+/* 지도 오버레이 표시 켜기·끄기 툴바 */
+.map-overlay-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  overflow: visible;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  border-bottom: 0;
+  margin-bottom: 0;
+  flex: 1 1 100%;
+}
+.map-overlay-toggles [data-layer-toggle][aria-pressed="true"] {
+  border-color: var(--series-primary);
+  color: var(--text-primary);
+  background: var(--surface-flat);
+}
+.map-overlay-toggles [data-layer-toggle][aria-pressed="false"] {
+  opacity: var(--disabled-opacity);
+}
+@media (width >= 64rem) and (hover: hover) and (pointer: fine) {
+  .fleet-workspace > .ui-pathbar { min-block-size: 0; padding-block: var(--space-1); row-gap: var(--space-1); }
+  #fleet-main > .console-primary { padding-block: var(--space-2); }
+  .omx-inspector-tabs ui-button { min-width: 0; min-height: var(--target-tool); padding: 0 var(--space-2); }
+  .map-overlay-toggles [data-layer-toggle] {
+    min-width: 0;
+    min-height: var(--target-tool);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-control);
+    font-size: var(--text-micro);
+    font-family: var(--mono);
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+  #fleet-main .panel[aria-labelledby="map-heading"] { padding: var(--space-1) var(--space-2); }
+  #fleet-main .panel[aria-labelledby="map-heading"] .map-head { flex-wrap: nowrap; gap: var(--space-1) var(--space-2); margin-bottom: var(--space-1); }
+  #fleet-main .panel[aria-labelledby="map-heading"] .map-head > div:first-child { flex: none; }
+  #fleet-main .panel[aria-labelledby="map-heading"] .map-head h2 { margin: 0; white-space: nowrap; }
+  #fleet-main .panel[aria-labelledby="map-heading"] .map-head label[for="map-display-mode"] { font-size: var(--text-micro); white-space: nowrap; }
+  #fleet-main .map-overlay-toggles { padding: 0; margin-bottom: 0; }
+  #fleet-main :is(.map-options, .map-readouts) { margin-top: var(--space-1); }
+  .cockpit-disclosure-row { min-height: var(--target-tool); }
+  #cancel-all, .cell-stage-actions :is(ui-button, .ui-action-link) { min-height: var(--target-tool); }
+}
+
+/* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
+.map-stage { position: relative; container-type: inline-size; border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-recessed); overflow: hidden; }
+.map-axis-badge,
+.map-cursor-readout {
+  position: absolute;
+  top: var(--space-2);
+  z-index: 2;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-button);
+  background: var(--scrim-solid);
+  color: var(--text-primary);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  pointer-events: none;
+}
+.map-axis-badge { left: var(--space-2); }
+.map-cursor-readout { top: auto; bottom: var(--space-2); right: var(--space-2); }
+.map-stage:is([data-view="camera"], :not([data-map-state="site"], [data-map-state="ready"]))
+  > :is(.map-axis-badge, .map-cursor-readout) { display: none; }
+
+.map-hover-card {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 12;
+  max-width: min(430px, calc(100% - 1.5rem));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-button);
+  border: 1px solid var(--series-primary);
+  background: var(--scrim-solid);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-label);
+}
+.hover-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-1);
+}
+.hover-card-head strong {
+  font-family: var(--mono);
+  font-size: var(--text-body);
+  color: var(--series-primary);
+}
+.hover-card-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+}
+.hover-card-grid dt {
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  white-space: nowrap;
+}
+.hover-card-grid dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: var(--text-micro);
+  color: var(--text-primary);
+}
+.hover-card-foot {
+  margin: var(--space-1) 0 0;
+  padding-top: var(--space-1);
+  border-top: 1px dashed var(--border-subtle);
+  font-size: var(--text-micro);
+  color: var(--series-goal);
+}
+
+html[data-unit-scope-ready]:not([data-unit-drive]) :is(#dispatch-control, .charge-bays, .panel[aria-labelledby="roster-heading"]) { display: none; }
+
+.cell-cockpit-stage { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+#fleet-main > .console-primary > #cell-cockpit-stage { flex: 0 0 auto; }
+.cell-stage-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.cell-stage-head h2 { margin: 0; }
+.cell-stage-meta { margin: var(--space-1) 0 0; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); }
+.cell-stage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.cell-stage-cameras { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: var(--space-2); min-width: 0; }
+.cell-stage-cameras .omx-inspector-cam-frame:not(:has(> .omx-inspector-main-cam.focused)) { min-height: 5.5rem; max-height: 8.5rem; }
+.cell-stage-cam { display: grid; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-canvas); min-width: 0; }
+.cell-stage-cam-head { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.cell-stage-cam-head strong { font-size: var(--text-label); white-space: nowrap; flex: none; }
+.cell-stage-cam-head .omx-inspector-cam-badge { min-width: 0; flex: 1 1 auto; text-align: end; }
+.cell-stage-arms { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-2); min-width: 0; }
+.cell-stage-arm { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--line-10); border-inline-start: var(--selection-edge) solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); color: var(--text-primary); font-family: inherit; font-size: inherit; text-align: start; cursor: pointer; min-width: 0; }
+.cell-stage-arm:hover { background: var(--surface-flat); }
+.cell-stage-arm.selected { border-color: var(--selection); border-inline-start-color: var(--selection); background: var(--surface-raised); }
+.cell-stage-arm:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+.cell-stage-arm-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
+.cell-stage-arm-head strong { font-family: var(--mono); font-size: var(--text-body); }
+.cell-stage-arm > p:not(.cell-stage-joints) { margin: 0; font-size: var(--text-label); line-height: var(--leading-compact); }
+.cell-stage-joints { margin: 0; padding-top: var(--space-1); border-top: 1px solid var(--line-06); font-family: var(--mono); font-size: var(--text-micro); font-variant-numeric: tabular-nums; color: var(--text-secondary); overflow-wrap: anywhere; }
+.cell-stage-joints-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1) var(--space-3); margin: 0; padding-block-start: var(--space-1); border-block-start: 1px solid var(--line-06); }
+.cell-stage-joint { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-1); min-width: 0; font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; }
+.cell-stage-joint dt { color: var(--text-secondary); }
+.cell-stage-joint dd { margin: 0; color: var(--text-primary); }
+.omx-pipeline-disclosure { margin-top: var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); padding: var(--space-1) var(--space-2); }
+.omx-pipeline-disclosure > summary { cursor: pointer; font-family: var(--mono); font-size: var(--text-label); color: var(--text-secondary); padding: var(--space-1) 0; }

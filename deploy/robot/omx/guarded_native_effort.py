@@ -103,12 +103,15 @@ def check_effort(motion, current: dict, started: float, *, allow_stale_hold: boo
     pwm = motion._read_body_pwm()
     finite_values(pwm, BODY)
     monitor_io_error = None
+    monitor_started = None
     if motion.monitor is not None:
         try:
             if allow_stale_hold and getattr(motion.monitor, "supports_hold_gap", False):
-                motion.monitor.sample(motion, current, pwm, motion.clock(), allow_gap=True)
+                monitor_started = motion.clock()
+                motion.monitor.sample(motion, current, pwm, monitor_started, allow_gap=True)
             else:
-                motion.monitor.sample(motion, current, pwm, motion.clock())
+                monitor_started = motion.clock()
+                motion.monitor.sample(motion, current, pwm, monitor_started)
         except (OSError, ValueError) as exc:
             if not allow_stale_hold or (isinstance(exc, ValueError) and not getattr(exc, "recoverable_telemetry", False)):
                 raise
@@ -120,7 +123,18 @@ def check_effort(motion, current: dict, started: float, *, allow_stale_hold: boo
         or not 0 <= now - motion.last_time <= max_gap
         or (motion.last_effort_time is not None and not 0 <= now - motion.last_effort_time <= max_gap)
     ):
-        raise ValueError("stale effort sample (>0.5 seconds)")
+        def ms(seconds):
+            return "n/a" if seconds is None else f"{seconds * 1000:.1f}"
+
+        last_tick_age = None if motion.last_time is None else now - motion.last_time
+        last_effort_age = None if motion.last_effort_time is None else now - motion.last_effort_time
+        pwm_age = (now if monitor_started is None else monitor_started) - before
+        monitor_age = None if monitor_started is None else now - monitor_started
+        raise ValueError(
+            "stale effort sample (>0.5 seconds): "
+            f"tick_ms={ms(now - started)} last_tick_ms={ms(last_tick_age)} "
+            f"last_effort_ms={ms(last_effort_age)} pwm_ms={ms(pwm_age)} monitor_ms={ms(monitor_age)}"
+        )
     staged = {}
     for name in BODY:
         saturated = abs(pwm[name]) >= 0.9 * motion.pwm_limits[name]

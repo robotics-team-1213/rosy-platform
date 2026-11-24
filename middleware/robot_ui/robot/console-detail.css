@@ -10,7 +10,7 @@
   display: flex;
   align-items: stretch;
   padding: 0 var(--space-5);
-  border-bottom: 1px solid var(--surface-line);
+  border-bottom: 1px solid var(--line-06);
   background: var(--surface-recessed);
 }
 .hero-strip > div { padding: var(--space-3) var(--space-4); }
@@ -39,7 +39,7 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  border-left: 1px solid var(--surface-line);
+  border-left: 1px solid var(--line-06);
 }
 .hero-label { flex: none; }
 .hero-state strong, .hero-safety strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: var(--track-wide); }
@@ -104,7 +104,7 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  border-left: 1px solid var(--surface-line);
+  border-left: 1px solid var(--line-06);
 }
 .hero-formation strong { font-size: var(--text-value); font-weight: var(--weight-label); letter-spacing: var(--track-wide); }
 .hero-formation > span:last-child { color: var(--text-secondary); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); }
@@ -135,13 +135,13 @@
 .control-panel > * { flex: none; }
 /* 보고하는 것은 평평하고, 세상을 바꾸는 것은 솟아 있다(Law 2).
    관측은 창이므로 가장 어둡다 — 지도 래스터가 그 위에 뜬다. */
-.region-sense { background: var(--surface-flat); border-right: 1px solid var(--surface-line); overflow-y: auto; }
+.region-sense { background: var(--surface-flat); border-right: 1px solid var(--line-06); overflow-y: auto; }
 .region-observe { background: var(--surface-recessed); }
 .region-act {
   gap: var(--space-3);
   padding-bottom: var(--space-3);
   background: var(--surface-raised);
-  border-left: 1px solid var(--surface-line);
+  border-left: 1px solid var(--line-06);
   overflow-y: auto;
 }
 
@@ -153,7 +153,7 @@
   align-items: baseline;
   gap: var(--space-2);
   padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--surface-line);
+  border-bottom: 1px solid var(--line-06);
 }
 .region-head h2 { margin: 0; color: var(--text-primary); font-size: var(--text-label); letter-spacing: var(--track-label); }
 .region-head span {
@@ -172,9 +172,9 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-control);
-  background: var(--surface-line);
+  background: var(--line-10);
   overflow: hidden;
 }
 .telemetry-grid article { min-width: 0; padding: var(--space-2); background: var(--surface-canvas); }
@@ -197,7 +197,7 @@
   align-items: baseline;
   gap: var(--space-2);
   padding-top: var(--space-2);
-  border-top: 1px solid var(--surface-line);
+  border-top: 1px solid var(--line-06);
 }
 .navigation-line b { color: var(--series-primary); font-size: var(--text-body); text-align: right; }
 .navigation-line small { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); }
@@ -210,7 +210,7 @@
   gap: 0 var(--space-3);
   min-height: var(--target-secondary);
   padding: var(--space-1) 0;
-  border-bottom: 1px solid var(--surface-line);
+  border-bottom: 1px solid var(--line-06);
 }
 .capability-item span { min-width: 0; overflow: hidden; font-size: var(--text-label); text-overflow: ellipsis; white-space: nowrap; }
 .capability-item b { font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-state); }
@@ -230,7 +230,7 @@
 .vision-stage {
   position: relative;
   height: clamp(190px, 31dvh, 290px);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-control);
   background: var(--surface-recessed);
   overflow: hidden;
@@ -260,7 +260,7 @@
 .vision-reticle i { position: absolute; display: block; background: var(--ink-quiet); }
 .vision-reticle i:first-child { left: 50%; top: 42%; width: 1px; height: 16%; }
 .vision-reticle i:last-child { left: 46%; top: 50%; width: 8%; height: 1px; }
-.vision-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 0; background: var(--surface-line); }
+.vision-meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 0; background: var(--line-10); }
 .vision-meta div { min-width: 0; padding: var(--space-1) var(--space-2); background: var(--surface-canvas); }
 .vision-meta dt { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
 .vision-meta dd { margin: var(--space-1) 0 0; overflow: hidden; color: var(--text-primary); font: var(--weight-strong) var(--text-micro)/var(--leading-control) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
@@ -268,7 +268,7 @@
   position: relative;
   flex: 1;
   min-height: 0;
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-control);
   background: var(--surface-recessed);
   overflow: hidden;
@@ -301,7 +301,7 @@
   font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono);
 }
 .map-legend li { display: flex; align-items: center; gap: var(--space-2); }
-.map-legend li::before { content: ""; width: 10px; height: 10px; border: 1px solid var(--surface-line); }
+.map-legend li::before { content: ""; width: 10px; height: 10px; border: 1px solid var(--line-06); }
 
 /* ---- 조작 — 크기가 위험도다(Law 3) ----------------------------------------
    되돌릴 수 없는 것이 가장 크고 맨 위이며 언제나 같은 자리에 있다.
@@ -354,7 +354,7 @@
 /* 사실 격자는 감지 영역(272px)에 산다 — 두 단으로 좁힌다(D-201). 칸 규칙은
    운용·점검 어디서든 같은 모양이다. */
 .line-follow-facts, .traffic-policy-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); margin: 0; }
-.line-follow-facts div, .traffic-policy-facts div { min-width: 0; padding: var(--space-1); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
+.line-follow-facts div, .traffic-policy-facts div { min-width: 0; padding: var(--space-1); border: 1px solid var(--line-06); border-radius: var(--radius-control); background: var(--surface-canvas); }
 .line-follow-facts dt, .traffic-policy-facts dt { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-control) var(--mono); }
 .line-follow-facts dd, .traffic-policy-facts dd { overflow: hidden; margin: var(--space-1) 0 0; font: var(--weight-strong) var(--text-label)/var(--leading-control) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 
@@ -371,7 +371,7 @@
    하나 더 생긴 것이다. */
 .teleop-copy { display: flex; align-items: center; gap: var(--space-2); }
 .teleop-copy > div { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-2); }
-.teleop-copy > div::after { content: ""; flex: 1; height: 1px; background: var(--surface-line); }
+.teleop-copy > div::after { content: ""; flex: 1; height: 1px; background: var(--line-06); }
 .teleop-copy h3 { flex: none; margin: 0; }
 .teleop-copy > span { flex: none; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-label) var(--mono); text-align: right; }
 .bench-confirmation {
@@ -417,22 +417,22 @@
 .inspect .panel {
   gap: var(--space-4);
   padding: var(--space-5);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-06);
   border-radius: var(--radius-panel);
-  background: var(--surface-flat);
+  background: var(--surface-chrome);
   scroll-margin-top: calc(var(--topbar-height) + var(--space-3));
 }
 .inspect .panel h2 { font-size: var(--text-title); letter-spacing: 0; text-transform: none; color: var(--text-primary); }
 .inspect .panel h3 { font-size: var(--text-body); letter-spacing: 0; text-transform: none; color: var(--text-primary); }
 
 .system-identity { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3) var(--space-5); }
-.system-identity div { min-width: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--surface-line); }
+.system-identity div { min-width: 0; padding-bottom: var(--space-2); border-bottom: 1px solid var(--line-06); }
 .system-identity span, .system-identity strong { display: block; }
 .system-identity span { margin-bottom: var(--space-1); }
 .system-identity strong { overflow: hidden; font: var(--weight-regular) var(--text-body)/var(--leading-label) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
 
 .meter-stack { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
-.meter { padding: var(--space-3); border: 1px solid var(--surface-line); border-radius: var(--radius-control); }
+.meter { padding: var(--space-3); border: 1px solid var(--line-06); border-radius: var(--radius-control); background: var(--surface-canvas); }
 .meter header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
 .meter header b { font-size: var(--text-title); }
 /* 게이지는 여유로 읽힌다 — 임계를 넘기 전까지 중립이다(D-82). */
@@ -444,8 +444,9 @@
   flex-direction: column;
   justify-content: center;
   padding: var(--space-3);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-06);
   border-radius: var(--radius-control);
+  background: var(--surface-canvas);
 }
 .temperature-card span, .temperature-card small { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); }
 .temperature-card strong { margin: var(--space-1) 0; font-size: var(--text-title); }
@@ -462,7 +463,7 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-06);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
 }
@@ -494,7 +495,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-1) var(--space-3);
   padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--surface-line);
+  border-bottom: 1px solid var(--line-06);
   font-size: var(--text-label);
 }
 .device-name { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); }
@@ -510,9 +511,9 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1px;
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-10);
   border-radius: var(--radius-control);
-  background: var(--surface-line);
+  background: var(--line-10);
   overflow: hidden;
 }
 .ros-network-facts article { min-width: 0; padding: var(--space-3); background: var(--surface-canvas); }
@@ -524,8 +525,9 @@
   position: relative;
   min-height: 106px;
   padding: var(--space-3);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-06);
   border-radius: var(--radius-control);
+  background: var(--surface-canvas);
   overflow: hidden;
 }
 .traffic-card header { position: relative; z-index: 1; display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
@@ -538,10 +540,10 @@
 .traffic-tx .network-sparkline polyline { stroke: var(--series-secondary); }
 
 .ros-graph-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(230px, 0.72fr); gap: var(--space-3); }
-.graph-stage, .risk-tape { border: 1px solid var(--surface-line); border-radius: var(--radius-control); background: var(--surface-canvas); }
+.graph-stage, .risk-tape { border: 1px solid var(--line-10); border-radius: var(--radius-control); background: var(--surface-canvas); }
 .graph-stage { position: relative; min-height: 330px; padding: var(--space-5) var(--space-2) var(--space-2); }
 .graph-legend { position: absolute; top: var(--space-2); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
-.graph-legend i { width: 32px; height: 1px; background: var(--surface-line); }
+.graph-legend i { width: 32px; height: 1px; background: var(--line-06); }
 .ros-graph-map { width: 100%; height: 300px; }
 .graph-edge { stroke: var(--line-quiet); stroke-width: 1; }
 .graph-edge.publishes { stroke: var(--series-primary); }
@@ -561,8 +563,8 @@
 .risk-tape li strong { color: var(--status-crit); font: var(--weight-regular) var(--text-micro)/var(--leading-flat) var(--mono); letter-spacing: var(--track-label); }
 .risk-tape li span { margin-top: var(--space-1); color: var(--text-primary); font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 /* 위험이 없을 때는 색도 테두리도 쓰지 않는다 — 정상에는 색이 없다. */
-.risk-tape li.risk-clear { color: var(--nominal); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
-.risk-tape li.risk-unavailable { color: var(--nominal-quiet); border-left-color: var(--surface-line); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
+.risk-tape li.risk-clear { color: var(--nominal); border-left-color: var(--line-06); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
+.risk-tape li.risk-unavailable { color: var(--nominal-quiet); border-left-color: var(--line-06); background: transparent; font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--mono); }
 .risk-tape > p { margin: var(--space-4) 0 0; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-copy) var(--mono); }
 
 .settings-grid { display: grid; align-items: start; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); }
@@ -571,7 +573,7 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--surface-line);
+  border: 1px solid var(--line-06);
   border-radius: var(--radius-control);
   background: var(--surface-canvas);
 }
@@ -585,7 +587,7 @@
   grid-template-columns: 1fr auto;
   gap: var(--space-1) var(--space-3);
   padding: var(--space-2) 0;
-  border-top: 1px solid var(--surface-line);
+  border-top: 1px solid var(--line-06);
 }
 .waypoint-list strong { font: var(--weight-regular) var(--text-body)/var(--leading-label) var(--mono); }
 .waypoint-list span { grid-column: 1; color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); }
@@ -599,7 +601,7 @@
   gap: var(--space-3);
   min-width: 0;
   padding: var(--space-3) 0;
-  border-top: 1px solid var(--surface-line);
+  border-top: 1px solid var(--line-06);
 }
 .event-time, .event-severity { color: var(--nominal-quiet); font: var(--weight-regular) var(--text-micro)/var(--leading-body) var(--mono); }
 .event-type { overflow: hidden; font: var(--weight-regular) var(--text-label)/var(--leading-body) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
@@ -627,7 +629,7 @@
 @media (width < 64rem) {
   .regions { grid-template-columns: 1fr; grid-template-rows: none; }
   .region { grid-column: auto; grid-row: auto; }
-  .region-act { border-top: 1px solid var(--surface-line); }
+  .region-act { border-top: 1px solid var(--line-06); }
 }
 
 @media (width < 64rem) {

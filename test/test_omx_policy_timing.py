@@ -95,7 +95,8 @@ def test_precomputes_during_current_playback_or_stops_when_late(tmp_path, late):
             if command == "run policy" and not started.is_set():
                 started.set()
                 assert inferred.wait(1)
-            return {"ok": True, "state": state}
+            extra = {"human_hold_latched": True, "torque_hold_commanded": True} if command == "human-hold" else {}
+            return {"command": command, "ok": True, "settled": True, "state": state, **extra}
 
         def policy_state(self):
             if started.is_set():
@@ -148,7 +149,8 @@ def test_hybrid_holds_at_act_budget_without_a_verified_handoff(tmp_path):
 
     def act(command):
         calls.append(command)
-        return {"ok": True, "holding": True, "state": [0] * 6, "handoff": {"triggered": False}}
+        extra = {"command": "human-hold", "human_hold_latched": True, "torque_hold_commanded": True} if command == "human-hold" else {}
+        return {"command": command, "ok": True, "settled": True, "holding": True, "state": [0] * 6, "handoff": {"triggered": False}, **extra}
 
     cell = SimpleNamespace(act=act)
     shadow = SimpleNamespace(image_views=(), sim_rule={}, chunk_size=16)
@@ -175,7 +177,7 @@ def test_taught_fallback_runs_the_existing_folded_sequence(tmp_path):
 
     def act(command):
         calls.append(command)
-        return {"ok": True, "settled": True, "holding": "run release_place" not in calls, "state": [0] * 5 + [49]}
+        return {"command": command, "ok": True, "settled": True, "holding": "run release_place" not in calls, "state": [0] * 5 + [49]}
 
     cell = SimpleNamespace(act=act)
     assert run_taught(cell, path, dry_run=True, authorize=None, log=lambda _: None)["result"] == "dry_run"
@@ -212,7 +214,7 @@ def test_hybrid_lifts_then_runs_only_the_taught_carry(tmp_path, monkeypatch):
     def act(command):
         calls.append(command)
         released = command in RETURN_HELD[2:] and command != "park" or calls.count("park") > 1
-        return {"ok": True, "holding": not released, "settled": True,
+        return {"command": command, "ok": True, "holding": not released, "settled": True,
                 "state": [0] * 5 + [49] if released else state, "target": target}
 
     handoff = CellHandoff(config, "belt", path, library, 51, tmp_path)
@@ -1259,7 +1261,8 @@ def test_park_ack_ok_requires_settled_and_run_timed_stops_when_unsettled(tmp_pat
 
     calls, rows = [], []
     cell = SimpleNamespace(act=lambda cmd: (calls.append(cmd) or {
-        "ok": True, "settled": False if cmd == "run policy" else True, "state": [0] * 6,
+        "command": cmd, "ok": True, "settled": False if cmd == "run policy" else True, "state": [0] * 6,
+        **({"human_hold_latched": True, "torque_hold_commanded": True} if cmd == "human-hold" else {}),
     }))
     shadow = SimpleNamespace(image_views=(), sim_rule={}, chunk_size=16)
     res = run_timed(cell, shadow, {"fps": 30, "chunks": {}, "gripper_closed": 0}, tmp_path,
@@ -1268,3 +1271,119 @@ def test_park_ack_ok_requires_settled_and_run_timed_stops_when_unsettled(tmp_pat
                     max_obs_age_s=0.6, max_chunks=2, dry_run=False, log=rows.append, clock=lambda: 1.0)
     assert res["result"] == "refused" and "did not settle" in res["reason"]
     assert calls.count("run policy") == 1 and calls[-1] == "human-hold"
+
+
+def test_post_shape_wrist_roll_warning_and_finiteness_guards(tmp_path):
+    from cell_policy_drive import run_episode
+    from cell_policy_shape import envelope, wrist_roll_warning
+
+    assert envelope({"fps": 30, "chunks": {"home": [[0, -60, 50, 49, 45.2, 48.8]]}})[2] == pytest.approx(5.0 / 30.0)
+    for bad in ([[0, -60, 50, 49, float("nan"), 48.8]], [[0, -60, 50, 49, True, 48.8]]):
+        with pytest.raises(ValueError):
+            envelope({"fps": 30, "chunks": {"home": bad}})
+    with pytest.raises(ValueError):
+        wrist_roll_warning([[0, -20, 20, 45, 17, 55]], 45.2, roll_range=(45.2, -35.0))
+    with pytest.raises(ValueError):
+        wrist_roll_warning([[0, -20, 20, 45, float("nan"), 55]], 45.2, roll_range=(-35.0, 45.2))
+
+    home = [0.0, -51.0, 46.0, 49.0, 45.2, 48.8]
+    unfolded = [0.0, -49.0, 44.0, 49.0, -20.0, 48.8]
+    lib_p = tmp_path / "lib.json"
+    lib_p.write_text(json.dumps({"fps": 30, "gripper_closed": 48.8, "chunks": {"home": [home, unfolded]}}), encoding="utf-8")
+
+    class Pol:
+        image_views, sim_rule, chunk_size, arm_id = {}, {"held_30mm": 53.4, "gap_mm_per_unit": 5.0}, 16, "arm_b"
+        inputs = staticmethod(lambda *_a, **_kw: ({}, {}))
+        infer = staticmethod(lambda *_a, **_kw: SimpleNamespace(chunk=[home] * 16))
+
+    for paced in (False, True):
+        cmds, rows = [], []
+        cell = SimpleNamespace(
+            act=lambda c: cmds.append(c) or (
+                {"ok": True, "settled": True, "holding": False, "state": list(unfolded), "target": list(unfolded), "health": {"current_ma": [0] * 6}}
+                if c == "state" else {"command": c, "ok": True, "settled": True, "human_hold_latched": True, "torque_hold_commanded": True}
+            ),
+            frame=lambda _v: np.zeros((4, 4, 3), np.uint8),
+        )
+        res = run_episode(cell, Pol(), lib_p, tmp_path, offset=[0] * 6, max_chunks=1, dry_run=False, log=rows.append, paced_chunks=paced)
+        assert res["result"] == "refused" and "wrist_roll" in rows[0].get("wrist_roll_warning", "") and "human-hold" in cmds and not any("run policy" in c for c in cmds)
+
+
+def test_entry_post_state_jaw_gate_lag_and_drain_and_fifo_errno(tmp_path, monkeypatch):
+    import errno
+    import os
+    from cell_pipeline_io import FifoCell
+    import cell_remote_policy as crp
+    from chunk_runner import Guarded
+    from chunk_runner_run import Runner
+    from guarded_device import NAMES as DEV_NAMES, normalized
+    from guarded_native import NativeJointMotion
+    from omx_adapter.chunk_library import NAMES, SCHEMA
+
+    p_above, p_enter = [38.8, -10.15, 2.0, 55.0, -13.85, 49.0], [38.8, -10.0, 2.0, 55.0, -14.0, 49.0]
+    now, reports = [10.0], []
+    bus = _make_guard_bus(p_above)
+    motion = NativeJointMotion(bus, None, teacher=True, clock=lambda: now[0])
+    motion.send(dict(zip(NAMES, [bus._normalize({bus.motors[n].id: bus.raw[n]})[bus.motors[n].id] for n in DEV_NAMES])))
+    motion.tracking, motion.aligned_since = True, 0.0
+    motion.velocity["shoulder_lift"] = 112.0
+    gate_spec = {"x": 0.0495, "y": 0.1608, "z_m": 0.1566, "xy_radius_m": 0.08, "yaw_deg": 115.0, "tol_deg": 20.0, "max_tilt_rad": 0.45, "square": False, "tcp_x_m": 0.0741}
+    base_entry_lib = {"schema": SCHEMA, "names": NAMES, "fps": 30, "gripper_closed": 49.0, "tcp_x_m": 0.0741, "source": {"pick": {"x": 0.0495, "y": 0.1608, "z": 0.1, "yaw_deg": 115.0, "rim_z_m": 0.11}}, "chunks": {"home": [p_above], "entry": [p_enter]}}
+    runner = Runner(Guarded(SimpleNamespace(bus=bus, get_observation=lambda: normalized(bus, bus.raw)), motion), base_entry_lib, fps=30, status=reports.append, clock=lambda: now[0])
+    runner.target = runner.present()
+    assert runner.command("run entry") is True and reports[-1]["ok"] is False and "requires jaw_gate" in reports[-1]["error"]
+    gated_lib = {"schema": SCHEMA, "names": NAMES, "fps": 30, "gripper_closed": 49.0, "tcp_x_m": 0.0741, "chunks": {"home": [p_above], "entry": [p_enter]}, "jaw_gate": gate_spec}
+    gated_p = tmp_path / "entry-gated.json"
+    gated_p.write_text(json.dumps(gated_lib), encoding="utf-8")
+    assert runner.command(f"load {gated_p}") and reports[-1]["ok"] is True
+    assert runner.command("run entry") and reports[-1]["ok"] is True
+    now[0] += 1 / 30
+    runner.tick()
+    now[0] += 1 / 30
+    runner.tick()
+    assert runner.human_hold_latched is True and any(r.get("command") == "run entry" and "jaw yaw" in r.get("policy_stop", "") for r in reports)
+
+    # Timed & paced pre_home=False both reject off-entry post-entry state before check_home=False.
+    home, canon = [0.8, -62.2, 53.1, 51.6, 45.2, 48.8], [6.0, -55.0, 46.5, 49.0, 40.0, 55.78]
+    for mode_paced in (False, True):
+        cmds = []
+        bad_cell = SimpleNamespace(
+            act=lambda c: cmds.append(c) or (
+                {"command": "run entry", "ok": True, "settled": True, "holding": False, "state": list(canon)} if c == "run entry"
+                else {"command": "human-hold", "ok": True, "human_hold_latched": True, "torque_hold_commanded": True} if c == "human-hold"
+                else {"command": "state", "ok": True, "settled": True, "holding": False, "state": list(home if cmds.count("state") > 1 else home), "target": list(home), "health": {"current_ma": [0] * 6}}
+            ),
+            frame=lambda _v: np.zeros((4, 4, 3), np.uint8),
+        )
+        lib = {"fps": 30, "gripper_closed": 48.8, "chunks": {"home": [home], "entry": [home, canon]}}
+        if mode_paced:
+            from cell_policy_paced import run_paced_chunks
+            r = run_paced_chunks(bad_cell, SimpleNamespace(image_views=(), sim_rule=None, chunk_size=16, n_action_steps=4, inputs=lambda *_a: ({}, {}), infer=lambda *_a: SimpleNamespace(chunk=[canon] * 4)), lib, tmp_path, off=[0] * 6, max_chunks=1, dry_run=False, log=[].append, goal={}, sim_units=False, open_g=56.0, model_closed=48.8, closed=48.8, low=[-90] * 6, high=[90] * 6, fastest=0.16, kin=None, jaw_spec=None, resolved_tcp=None, authorize=None, pre_home=False)
+            assert r["result"] == "refused" and "START_POSE_OFF_HOME" in r["reason"]
+        else:
+            r = run_timed(bad_cell, SimpleNamespace(image_views=(), sim_rule={}, chunk_size=16), lib, tmp_path, infer=lambda *_a: (np.asarray([canon] * 8), {}), shape=lambda a, *_: a.tolist(), max_step=0.16, n_action=4, max_obs_age_s=0.6, max_chunks=1, dry_run=False, log=[].append, clock=lambda: 1.0)
+            assert r["result"] == "refused" and "POST_ENTRY_STATE_MISMATCH" in r["reason"] and cmds[-1] == "human-hold"
+
+    # run_timed drains in-flight worker before shadow.close(); RemotePolicyShadow stays closed & rejects bad URLs.
+    from io import BytesIO
+    import time as _time
+    order = []
+    sh = crp.RemotePolicyShadow("http://127.0.0.1:8790", "arm_b", "a" * 64, opener=lambda *_a, **_kw: BytesIO(json.dumps({"ok": True, "arms": {"arm_b": {"revision": "a" * 64, "views": {"top": [4, 4]}, "n_action_steps": 4, "chunk_size": 16}}}).encode()))
+    def slow_frame(_v):
+        if len(order) >= 1:
+            _time.sleep(0.15)
+            order.append("worker_done")
+        return np.zeros((4, 4, 3), np.uint8)
+    try:
+        run_timed(SimpleNamespace(frame=slow_frame, act=lambda _c: {"ok": True, "state": list(canon)}), sh, {"fps": 30, "chunks": {"home": [home], "entry": [home, canon]}, "gripper_closed": 48.8}, tmp_path, infer=lambda *_a: (order.append("infer0") or np.asarray([canon] * 8), {}), shape=lambda a, *_: a.tolist(), max_step=0.16, n_action=4, max_obs_age_s=0.1, max_chunks=2, dry_run=True, log=[].append)
+    finally:
+        sh.close()
+        order.append("closed")
+    assert "worker_done" in order and order.index("worker_done") < order.index("closed")
+    with pytest.raises(crp.RemotePolicyError, match="closed"):
+        sh._request_json("GET", "/health")
+    with pytest.raises(ValueError, match="credentials"):
+        crp.RemotePolicyShadow("http://user:pw@127.0.0.1:8790?x=1", "arm_b", "a" * 64)
+
+    monkeypatch.setattr(os, "open", lambda *_a, **_kw: (_ for _ in ()).throw(PermissionError(errno.EACCES, "denied")))
+    assert FifoCell(tmp_path, {}).act("state")["fault"] == "fifo io error"

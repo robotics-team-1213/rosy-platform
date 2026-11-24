@@ -77,6 +77,26 @@ def seed_site_map(tasks_db, lap=False, nav=False, depart=0):
                                                  source=GRAPH.name)
 
 
+def _ensure_fleet_paths() -> None:
+    for rel in reversed(FLEET_PATHS):
+        path_str = str(REPO / rel)
+        if path_str not in sys.path:
+            sys.path.insert(0, path_str)
+
+
+def load_lane_site_map() -> dict:
+    _ensure_fleet_paths()
+    from fleet.site_map import from_lane_graph
+    return from_lane_graph(GRAPH, map_id=GRAPH.parent.name).model_dump(by_alias=True)
+
+
+def import_site_map(tasks_db: Path, data: dict, *, source: str = GRAPH.name) -> None:
+    _ensure_fleet_paths()
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.site_map import SiteMap
+    SiteMapStore(Path(tasks_db)).import_if_empty(SiteMap.model_validate(data), source=source)
+
+
 def call(url, token, method='GET', body=None, log=None):
     request = urllib.request.Request(url, method=method, data=None if body is None else json.dumps(body).encode(),
                                      headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})

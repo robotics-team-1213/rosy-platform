@@ -14,7 +14,6 @@
   <link rel="stylesheet" href="/console/assets/styles.css">
   <link rel="stylesheet" href="/console/assets/roster.css">
   <link rel="stylesheet" href="/common/component-controls.css">
-  <link rel="stylesheet" href="/common/robot-dock.css">
   <link rel="stylesheet" href="/console/assets/doc-tabs.css">
   <link rel="stylesheet" href="/console/assets/assistant.css">
   <link rel="stylesheet" href="/console/assets/fleet-header.css">
@@ -222,18 +221,18 @@
           <option value="camera">원본 영상만</option>
         </select>
       </div>
-      <div class="map-overlay-toggles" id="map-overlay-toggles" role="group" aria-label="지도 오버레이 표시 켜기·끄기">
-        <ui-button kind="quiet" type="button" data-layer-toggle="all" aria-pressed="true" title="모든 지도 오버레이를 한 번에 끄거나 켭니다">전체 표시 켬</ui-button>
-        <ui-button kind="quiet" type="button" data-layer-toggle="poses" aria-pressed="true" title="핑키 로봇 몸체·방향·도로 주행 경로 표시">로봇·경로</ui-button>
-        <ui-button kind="quiet" type="button" data-layer-toggle="omx" aria-pressed="true" title="OMX-AI 로봇팔 베이스·헤드 추적 표시">OMX-AI</ui-button>
-        <ui-button kind="quiet" type="button" data-layer-toggle="lanes" aria-pressed="true" title="도로 중심선과 충전소·정류장 장소 표시">도로·장소</ui-button>
-        <ui-button kind="quiet" type="button" data-layer-toggle="traffic" aria-pressed="true" title="차로 점유·신호·구역 테두리 표시">교통·점유</ui-button>
-        <ui-button kind="quiet" type="button" data-layer-toggle="labels" aria-pressed="true" title="지도 위 이름·상태 텍스트 칩 표시 (꺼도 마우스 호버 시 상세 카드가 표시됩니다)">라벨</ui-button>
-        <ui-button kind="quiet" type="button" data-layer-toggle="grid" aria-pressed="true" title="0.5 m 좌표 격자와 칸 표시">격자·칸</ui-button>
-      </div>
       <details id="map-options" class="map-options">
-        <summary class="ui-disclosure-row">지도 표시·경로 옵션</summary>
+        <summary class="cockpit-disclosure-row">지도 레이어·표시 옵션</summary>
         <div class="map-options-content">
+        <div class="map-overlay-toggles" id="map-overlay-toggles" role="group" aria-label="지도 오버레이 표시 켜기·끄기">
+          <ui-button kind="quiet" type="button" data-layer-toggle="all" aria-pressed="true" title="모든 지도 오버레이를 한 번에 끄거나 켭니다">전체 표시 켬</ui-button>
+          <ui-button kind="quiet" type="button" data-layer-toggle="poses" aria-pressed="true" title="핑키 로봇 몸체·방향·도로 주행 경로 표시">로봇·경로</ui-button>
+          <ui-button kind="quiet" type="button" data-layer-toggle="omx" aria-pressed="true" title="OMX-AI 로봇팔 베이스·헤드 추적 표시">OMX-AI</ui-button>
+          <ui-button kind="quiet" type="button" data-layer-toggle="lanes" aria-pressed="true" title="도로 중심선과 충전소·정류장 장소 표시">도로·장소</ui-button>
+          <ui-button kind="quiet" type="button" data-layer-toggle="traffic" aria-pressed="true" title="차로 점유·신호·구역 테두리 표시">교통·점유</ui-button>
+          <ui-button kind="quiet" type="button" data-layer-toggle="labels" aria-pressed="true" title="지도 위 이름·상태 텍스트 칩 표시 (꺼도 마우스 호버 시 상세 카드가 표시됩니다)">라벨</ui-button>
+          <ui-button kind="quiet" type="button" data-layer-toggle="grid" aria-pressed="true" title="0.5 m 좌표 격자와 칸 표시">격자·칸</ui-button>
+        </div>
         <a class="ui-action-link" data-kind="quiet" href="/console/site-map#profile-heading">지도 설정</a>
         <span class="hint" id="map-display-status" role="status">공유 map 좌표 · m</span>
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
@@ -279,7 +278,7 @@
       </div>
       </div>
       <details id="map-readouts" class="map-readouts">
-      <summary class="ui-disclosure-row">장소·교통·관측 좌표</summary>
+      <summary class="cockpit-disclosure-row">장소·교통·관측 좌표</summary>
       <div class="map-readouts-content">
       <div class="map-context">
       <h3 class="ui-section-heading">장소</h3>
@@ -349,7 +348,7 @@
         <div id="work-move-form"></div>
       </section>
       <section class="panel" aria-labelledby="roster-heading">
-        <div class="roster-block">
+        <div class="roster-block" data-unit-scope="drive">
           <h2 id="roster-heading">등록 로봇</h2>
           <p id="discovery-pending" class="hint" role="status" hidden><span></span> · <a href="/console/install">설치·보정에서 등록</a></p>
           <!-- D-493 — 발행 상태와 전체 주행 취소는 모든 로봇에 대한 일이라 로봇 목록 머리에 선다. -->
@@ -359,11 +358,11 @@
             <ul id="address-movable" class="address-movable" aria-label="새 주소로 옮길 수 있는 로봇"></ul>
           </div>
           <details id="site-path" class="site-path">
-            <summary class="ui-disclosure-row" id="site-path-heading">관제 경로 · <span id="site-path-summary" role="status" aria-live="polite">확인 중</span></summary>
+            <summary class="cockpit-disclosure-row">관제 경로 · <span id="site-path-summary" role="status" aria-live="polite">확인 중</span></summary>
             <ul id="site-path-list"></ul>
           </details>
         </div>
-        <div class="robot-list-details">
+        <div class="robot-list-details" data-unit-scope="drive">
           <h3 class="ui-section-heading">연결·안전 요약</h3>
           <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
         </div>
@@ -448,7 +447,7 @@
             <ui-button kind="quiet" id="formation-resume" type="button">대형 재개</ui-button>
             <ui-button kind="quiet" id="formation-stop" type="button">대형 해제</ui-button>
           </div>
-          <p class="hint" id="formation-help">리더는 같은 진행 방향에서 가장 앞인 로봇이고, 팔로워는 나머지가 따라갑니다. 대형을 시작한 뒤 리더에게 길을 주면 팔로워가 움직입니다.</p>
+          <p class="hint">리더는 같은 진행 방향에서 가장 앞인 로봇이고, 팔로워는 나머지가 따라갑니다. 대형을 시작한 뒤 리더에게 길을 주면 팔로워가 움직입니다.</p>
           <details class="hint-more"><summary class="ui-disclosure-row">대형 조작 규칙</summary>
               <p class="hint">방향이 없거나 앞이 겹치면 번호가 앞선 로봇이 리더입니다. 변경은 모양·간격만 바꾸고, 재개는 멈춘 대형을 다시 움직이며, 해제는 추종을 끕니다.</p>
             </details>

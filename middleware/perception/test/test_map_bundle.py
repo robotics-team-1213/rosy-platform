@@ -55,3 +55,76 @@ def test_unreadable_images_are_reported_not_raised(tmp_path, bad):
     (tmp_path / "m.yaml").write_text("image: m.pgm\nresolution: 0.05\norigin: [0, 0, 0]\n"
                                      "occupied_thresh: 0.65\nfree_thresh: 0.196\n", encoding="utf-8")
     assert mb.problems(tmp_path / "m.yaml")
+
+
+def test_occupancy_grid_id_canonical_schema_and_clean_zero(tmp_path):
+    import hashlib
+
+    saved = write_saved(tmp_path / "m", ROOM, res=0.05, origin=(0.15, 0.15, -0.0))
+    ros_data = [
+        100 if px < 90 else (0 if px > 205 else -1)
+        for row in reversed(ROOM)
+        for px in row
+    ]
+    expected_payload = json.dumps({
+        "width": 6,
+        "height": 6,
+        "resolution": 0.05,
+        "origin": {"x": 0.15, "y": 0.15, "yaw": 0.0},
+        "data": ros_data,
+    }, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    assert mb.occupancy_grid_id(saved) == f"occupancy:{hashlib.sha256(expected_payload).hexdigest()[:12]}"
+
+    # Shifting origin by margin 0.15 -> exact 0.0 must not serialize "-0.000000" or "-0.0".
+    bundle = tmp_path / "zero_bundle"
+    out = mb.import_saved(saved, bundle, "zero", margin_m=0.15, require_zero_yaw=True)
+    assert "-0.0" not in out.read_text(encoding="utf-8")
+    manifest = json.loads((bundle / "maps" / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["origin"] == [0.0, 0.0, 0.0]
+    assert not str(manifest["origin"]).startswith("[-0.0")
+
+
+def test_import_seals_site_aligned_manifest_and_verify_bundle_catches_tampering(tmp_path):
+    rot_saved = write_saved(tmp_path / "rot", ROOM, origin=(0.0, 0.0, 0.25))
+    with pytest.raises(ValueError, match="origin yaw must be 0.0"):
+        mb.import_saved(rot_saved, tmp_path / "bad_bundle", "site", site_map_id="site_a")
+    assert not (tmp_path / "bad_bundle" / "maps" / "site.yaml").exists()
+
+    nan_saved = write_saved(tmp_path / "nan", ROOM, origin=(0.0, 0.0, float("nan")))
+    with pytest.raises(ValueError, match="source map is not usable"):
+        mb.import_saved(nan_saved, tmp_path / "nan_bundle", "site")
+    assert not (tmp_path / "nan_bundle").exists()
+
+    saved = write_saved(tmp_path / "ok", ROOM, origin=(-0.5, -0.5, 0.0))
+    out = mb.import_saved(
+        saved, tmp_path / "bundle", "master", margin_m=0.10,
+        source="pinky/2026-11-23", site_map_id="site_a",
+        alignment={"tool": "slam_map_align", "rms_residual_m": 0.012},
+        require_zero_yaw=True,
+    )
+    assert mb.verify_bundle(out, require_zero_yaw=True, require_manifest=True) == []
+    assert mb.main(["check", "--verify-manifest", "--require-zero-yaw", str(out)]) == 0
+    manifest_path = out.parent / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["site_map_id"] == "site_a"
+    assert manifest["grid_id"] == mb.occupancy_grid_id(out)
+    assert manifest["origin"] == pytest.approx([-0.6, -0.6, 0.0])
+    assert manifest["alignment"]["tool"] == "slam_map_align"
+
+    # Stripping required manifest keys fails closed under require_manifest=True.
+    stripped = {k: v for k, v in manifest.items() if k not in ("grid_id", "name")}
+    manifest_path.write_text(json.dumps(stripped), encoding="utf-8")
+    errs_stripped = mb.verify_bundle(out, require_zero_yaw=True, require_manifest=True)
+    assert any("manifest name mismatch" in e for e in errs_stripped)
+    assert any("grid_id mismatch" in e for e in errs_stripped)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    # Flip one pixel in PGM: verify_bundle and CLI check must fail closed on hash/grid_id mismatch.
+    pgm_path = out.parent / "master.pgm"
+    raw = bytearray(pgm_path.read_bytes())
+    raw[-15] = 254 if raw[-15] != 254 else 0
+    pgm_path.write_bytes(bytes(raw))
+    errs = mb.verify_bundle(out, require_zero_yaw=True, require_manifest=True)
+    assert any("pgm_sha256 mismatch" in e for e in errs)
+    assert any("grid_id mismatch" in e for e in errs)
+    assert mb.main(["check", "--verify-manifest", "--require-zero-yaw", str(out)]) == 1

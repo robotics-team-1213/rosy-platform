@@ -38,7 +38,7 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     let watcher = watchers.get(key);
     if (!watcher) {
       watcher = {key, view, imgs: new Set(), badges: new Set(), badgeLabel: '', lease: null,
-        url: null, state: {kind: 'neutral', label: '영상 수신 대기', text: '영상 수신 대기'}};
+        url: null, state: {kind: 'neutral', label: '첫 프레임 대기', text: '첫 프레임 대기 — 스트림 연결 확인'}};
       watchers.set(key, watcher);
     }
     return watcher;
@@ -50,8 +50,14 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
       if (!img.isConnected) { if (seen.has(img)) watcher.imgs.delete(img); continue; }
       seen.add(img);
       img.hidden = !watcher.url;
+      if (img.dataset) img.dataset.frameStateText = watcher.state.text;
       if (watcher.url) img.src = watcher.url;
       else img.removeAttribute?.('src');
+      const sibling = img.nextElementSibling;
+      if (sibling?.classList?.contains('omx-inspector-cam-standby') && !watcher.url) {
+        sibling.hidden = false;
+        sibling.textContent = watcher.state.text;
+      }
     }
     for (const badge of watcher.badges) {
       if (!badge.isConnected) { if (seen.has(badge)) watcher.badges.delete(badge); continue; }
@@ -103,7 +109,7 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
       await ensureSources(signal);
       if (!isCurrent(watcher, signal)) return;
       if (sources !== null && !sources.has(source)) {
-        return unavailable(watcher, 'unregistered', UNREGISTERED_TEXT, `Vision 카메라 목록에 ${source}가 없습니다`);
+        return unavailable(watcher, 'unregistered', UNREGISTERED_TEXT, `Vision 카메라 목록에 ${source} 없음 — 등록 확인`);
       }
       if (sources === null) {
         return unavailable(watcher, 'warn', '영상 연결 확인 중', 'Vision 카메라 목록을 확인하는 중입니다');
@@ -131,7 +137,7 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
     }
     const blob = await response.blob();
     if (!isCurrent(watcher, signal)) return;
-    if (!blob.size) return unavailable(watcher, 'warn', '영상 수신 대기');
+    if (!blob.size) return unavailable(watcher, 'warn', '첫 프레임 대기', '스트림 연결 확인');
     const next = URL.createObjectURL(blob);
     if (watcher.url) URL.revokeObjectURL(watcher.url);
     watcher.url = next;
@@ -155,7 +161,7 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
           await refreshOne(watcher, signal);
         } catch (error) {
           if (!isCurrent(watcher, signal)) continue;
-          const label = error?.status === 401 || error?.status === 403 ? '영상 권한 없음' : '영상 연결 확인 중';
+          const label = error?.status === 401 || error?.status === 403 ? '영상 권한 없음' : '영상 연결 끊김 — Vision 확인';
           unavailable(watcher, 'warn', label);
         }
       }

@@ -245,3 +245,32 @@ def test_early_boot_kmsg_pid1_watchdog_journal_and_chronological_grep_flags(tmp_
     logs[1]["SYSLOG_PID"] = "2"
     with pytest.raises(ValueError, match="OS_WATCHDOG_HOLD"):
         module.admit(root, run=run)
+
+
+def test_rotated_early_boot_journal_uses_live_hw_and_post_init_pid1_entry(tmp_path, monkeypatch):
+    module, root, properties, _, _, _ = _watchdog(tmp_path, monkeypatch)
+    boot_hex = SOURCE_BOOT.replace("-", "")
+    calls = []
+    def rotated_run(argv, **kwargs):
+        calls.append(argv)
+        if argv[0] == "/usr/bin/systemctl":
+            return subprocess.CompletedProcess(argv, 0, "\n".join(k + "=" + v for k, v in properties.items()), "")
+        if "--lines=+1" in argv:
+            row = dict(_BOOT_ID=boot_hex, _PID="1", _UID="0", _COMM="systemd",
+                       __MONOTONIC_TIMESTAMP="22394695", MESSAGE="Started user@1001.service")
+            return subprocess.CompletedProcess(argv, 0, json.dumps(row), "")
+        return subprocess.CompletedProcess(argv, 1, "", "")
+    result = module.admit(root, run=rotated_run)
+    assert result["boot_id"] == SOURCE_BOOT
+    assert any("--lines=+1" in argv for argv in calls)
+
+    def unrotated_missing_run(argv, **kwargs):
+        if argv[0] == "/usr/bin/systemctl":
+            return subprocess.CompletedProcess(argv, 0, "\n".join(k + "=" + v for k, v in properties.items()), "")
+        if "--lines=+1" in argv:
+            row = dict(_BOOT_ID=boot_hex, _PID="1", _UID="0", _COMM="systemd",
+                       __MONOTONIC_TIMESTAMP="5000000", MESSAGE="Early boot without watchdog")
+            return subprocess.CompletedProcess(argv, 0, json.dumps(row), "")
+        return subprocess.CompletedProcess(argv, 1, "", "")
+    with pytest.raises(ValueError, match="OS_WATCHDOG_HOLD"):
+        module.admit(root, run=unrotated_missing_run)

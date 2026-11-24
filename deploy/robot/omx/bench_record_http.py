@@ -38,7 +38,25 @@ def camera_frame(bench, label):
         return stream.read()
 
 
-def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_control=False):
+def fleet_clear_target(origin, source_id):
+    """Link to Fleet's authenticated operator workflow, without passing credentials."""
+    if not isinstance(origin, str) or not isinstance(source_id, str) or not re.fullmatch(r"[A-Za-z0-9._:-]{1,64}", source_id):
+        return None
+    try:
+        url = urllib.parse.urlsplit(origin)
+        host = url.hostname
+        port = url.port
+    except ValueError:
+        return None
+    if (url.scheme != "https" or not host or not re.fullmatch(r"[a-zA-Z0-9.-]+", host)
+            or url.username is not None or url.password is not None or url.path not in ("", "/")
+            or url.query or url.fragment or port == 0 or any(c.isspace() for c in origin)):
+        return None
+    authority = f"{host}:{port}" if port is not None else host
+    return f"https://{authority}/console/cell?focus=arm:{source_id}"
+
+
+def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_control=False, fleet_console_origin=None):
     class Handler(BaseHTTPRequestHandler):
         def reply(self, code, value, kind="application/json"):
             body = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
@@ -61,6 +79,22 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
             if not self.readonly_allowed():
                 return self.reply(403, {"error": "local bench or allowed mDNS host only"})
             path = self.path.split("?", 1)[0]
+            if path == "/api/recover/fleet_clear":
+                params = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query, keep_blank_values=True)
+                arms = params.get("arm", [])
+                if set(params) != {"arm"} or len(arms) != 1 or arms[0] not in ("arm_a", "arm_b", "arm_s"):
+                    return self.reply(400, {"error": "Select one arm for Fleet incident clearance"})
+                from omx_incident_fleet import link_for
+                link = link_for(arms[0]) if fleet_console_origin else None
+                target = fleet_clear_target(fleet_console_origin, link.source_id if link else None)
+                if target is None:
+                    return self.reply(503, {"error": "Fleet operator console is not configured"})
+                self.send_response(303)
+                self.send_header("Location", target)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.end_headers()
+                return
             if path == "/cameras.json":
                 return self.reply(200, camera_state(bench))
             if path.startswith("/camera/") and path.endswith(".jpg"):
@@ -85,6 +119,60 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                 return self.reply(200, bench.pipeline_status())
             if path == "/api/hf/status":
                 return self.reply(200, bench.hf_upload_status())
+            if path == "/api/cell_map":
+                return self.reply(200, bench.cell_map())
+            if path == "/api/logs":
+                qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    lim = int((qs.get("limit") or ["80"])[0])
+                except ValueError:
+                    lim = 80
+                return self.reply(200, bench.live_logs(lim))
+            if path == "/api/defaults":
+                return self.reply(200, bench.defaults_summary())
+            if path == "/api/dataset/episodes":
+                qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    return self.reply(200, bench.dataset_episodes((qs.get("dataset") or [""])[0]))
+                except (ValueError, OSError) as exc:
+                    return self.reply(400, {"error": str(exc)})
+            if path == "/api/dataset/video":
+                qs = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    vp = bench.resolve_dataset_video(
+                        (qs.get("dataset") or [""])[0], (qs.get("cam") or [""])[0],
+                        int((qs.get("chunk") or ["0"])[0]), int((qs.get("file") or ["0"])[0]))
+                    sz = vp.stat().st_size
+                    rng = self.headers.get("Range") or ""
+                    m = re.match(r"bytes=(\d+)-(\d*)$", rng.strip())
+                    if m:
+                        s_i, e_i = int(m.group(1)), int(m.group(2)) if m.group(2) else sz - 1
+                        if s_i >= sz or s_i > e_i:
+                            return self.reply(416, b"", "video/mp4")
+                        e_i = min(e_i, sz - 1)
+                        with vp.open("rb") as fh:
+                            fh.seek(s_i)
+                            chunk_b = fh.read(e_i - s_i + 1)
+                        self.send_response(206)
+                        self.send_header("Content-Type", "video/mp4")
+                        self.send_header("Accept-Ranges", "bytes")
+                        self.send_header("Content-Range", f"bytes {s_i}-{e_i}/{sz}")
+                        self.send_header("Content-Length", str(len(chunk_b)))
+                        self.send_header("Cache-Control", "no-store")
+                        self.end_headers()
+                        self.wfile.write(chunk_b)
+                        return
+                    data = vp.read_bytes()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                except (ValueError, OSError) as exc:
+                    return self.reply(400, {"error": str(exc)})
             routes = {"/": lambda: (PAGE.encode(), "text/html; charset=utf-8"),
                       "/bench_record.css": lambda: ((HERE / "bench_record.css").read_bytes(), "text/css; charset=utf-8"),
                       "/bench_record_ui.js": lambda: ((HERE / "bench_record_ui.js").read_bytes(), "application/javascript; charset=utf-8"),
@@ -95,6 +183,9 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                       "/bench_record_drawers.js": lambda: ((HERE / "bench_record_drawers.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_cam.js": lambda: ((HERE / "bench_record_cam.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/bench_record_pipeline.js": lambda: ((HERE / "bench_record_pipeline.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_log_reset.js": lambda: ((HERE / "bench_record_log_reset.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_overlay.js": lambda: ((HERE / "bench_record_overlay.js").read_bytes(), "application/javascript; charset=utf-8"),
+                      "/bench_record_review.js": lambda: ((HERE / "bench_record_review.js").read_bytes(), "application/javascript; charset=utf-8"),
                       "/choices.json": lambda: (bench.choices(), "application/json"),
                       "/status.json": lambda: (bench.status(), "application/json")}
             if path not in routes:
@@ -157,6 +248,28 @@ def make_server(bench, port, *, bind="127.0.0.1", mdns_hosts=(), allow_mdns_cont
                     return self.reply(200, bench.hf_upload_config(body))
                 if self.path == "/api/dataset/delete":
                     return self.reply(200, bench.dataset_delete(body))
+                if self.path == "/api/dataset/episode/rate":
+                    return self.reply(200, bench.rate_episode(body))
+                if self.path == "/api/dataset/episode/delete":
+                    return self.reply(200, bench.delete_dataset_episodes(body))
+                if self.path == "/api/dataset/do_not_train":
+                    return self.reply(200, bench.set_dataset_do_not_train(body))
+                if self.path == "/api/manual_hold/release_runner":
+                    return self.reply(200, bench.release_held_runner(body))
+                if self.path == "/api/manual_hold/clear":
+                    return self.reply(200, bench.clear_manual_hold(body))
+                if self.path == "/api/recover/baseline":
+                    return self.reply(200, bench.recover_baseline(body))
+                if self.path == "/api/recover/restore_units":
+                    return self.reply(200, bench.recover_restore_units(body))
+                if self.path == "/api/recover/ack_error":
+                    return self.reply(200, bench.ack_bench_error(body))
+                if self.path == "/api/recover/sync_incident":
+                    return self.reply(200, bench.recover_sync_incident(body))
+                if self.path == "/api/recover/auto":
+                    return self.reply(200, bench.auto_recover(body))
+                if self.path == "/api/defaults/reset":
+                    return self.reply(200, bench.reset_defaults(body))
                 m_arm = re.fullmatch(r"/api/arms/(arm_[abs]+)/(start|stop|home|initial_pose|leader_pose|release_lease|prepare|record_episode|finish)", self.path)
                 if m_arm:
                     arm_id, act = m_arm.group(1), m_arm.group(2)
@@ -205,7 +318,8 @@ def main(argv=None, *, bench_cls=None):
     host_local = f"{socket.gethostname().split('.')[0].lower()}.local"
     mdns_hosts = tuple(cfg.get("mdns_hosts") or ((host_local,) if allow_mdns else ()))
     make_server(bench, args.port, bind="0.0.0.0" if allow_mdns else "127.0.0.1",
-                mdns_hosts=mdns_hosts, allow_mdns_control=allow_ctrl).serve_forever()
+                mdns_hosts=mdns_hosts, allow_mdns_control=allow_ctrl,
+                fleet_console_origin=cfg.get("fleet_console_origin")).serve_forever()
 
 
 if __name__ == "__main__":

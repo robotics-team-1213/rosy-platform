@@ -2,9 +2,9 @@
 // Fleet approves an actionable request by itself (approved_by "fleet:auto"); an operator may approve first.
 // Approval is only recorded. S1 sends no motion, and this file says so on the row.
 // No import from queues.js: queues.js imports the text helper below.
-import { setOffBy } from "/common/cause-line.js";
 import { OPERATOR_REASON } from "/console/assets/authorization.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
+import { buildDecisionBox, createDecisionSlotFiller } from "./decision-slot.js";
 
 const REASON = Object.freeze({
   no_station: "지도에 충전 스테이션이 없습니다",
@@ -47,7 +47,8 @@ export function recoveryView(request, { operator, named = "", busy = false }) {
 }
 
 export function createStationRecovery({ scope, view, call, log, isOperator, namedReason = () => "" }) {
-  const busy = new Set(), results = new Map(), signatures = new Map();
+  const busy = new Set(), results = new Map();
+  const fill = createDecisionSlotFiller({ focusAttr: "recovery" });
   let inFlight = false, unavailable = false;
 
   async function refresh() {
@@ -94,44 +95,21 @@ export function createStationRecovery({ scope, view, call, log, isOperator, name
     const operator = isOperator(), named = namedReason();
     for (const request of view.stateUnavailable ? [] : (view.stationRecovery?.requests || []).filter((r) => r.request)) {
       const key = `${request.robot_id}|recovery`;
-      const slot = document.querySelector(`[data-decision-slot="${CSS.escape(key)}"]`);
       const spec = recoveryView(request, { operator, named, busy: busy.has(request.robot_id) });
-      const signature = JSON.stringify([request, spec, results.get(request.robot_id) || null]);
-      if (!slot || (slot.firstElementChild && signatures.get(key) === signature)) continue;
-      const box = document.createElement("div");
-      box.className = "stuck-item";
-      for (const text of spec.lines) {
-        const line = document.createElement("p");
-        line.className = "stuck-resolver";
-        line.textContent = text;
-        box.append(line);
-      }
-      if (spec.approve) {
-        const button = document.createElement("ui-button");
-        button.setAttribute("kind", "primary");
-        button.type = "button";
-        button.textContent = "복구 승인 (기록만)";
-        button.dataset.recovery = "approve";
-        setOffBy(button, spec.approveReason);
-        button.addEventListener("click", scope.guard(() => approve(request.robot_id)));
-        const actions = document.createElement("div");
-        actions.className = "stuck-actions ui-action-bar";
-        actions.setAttribute("role", "group");
-        actions.setAttribute("aria-label", `${request.robot_id} 스테이션 복구`);
-        actions.append(button);
-        box.append(actions);
-      }
-      const last = results.get(request.robot_id);
-      if (last) {
-        const line = document.createElement("p");
-        line.className = "stuck-result";
-        line.dataset.kind = last.kind;
-        line.setAttribute("role", last.kind === "bad" ? "alert" : "status");
-        line.textContent = last.text;
-        box.append(line);
-      }
-      slot.replaceChildren(box);
-      signatures.set(key, signature);
+      const result = results.get(request.robot_id) || null;
+      fill(key, JSON.stringify([request, spec, result]), () => buildDecisionBox({
+        scope,
+        lines: spec.lines,
+        groupLabel: `${request.robot_id} 스테이션 복구`,
+        buttons: spec.approve ? [{
+          label: "복구 승인 (기록만)",
+          primary: true,
+          reason: spec.approveReason,
+          dataset: { recovery: "approve" },
+          onClick: () => approve(request.robot_id),
+        }] : [],
+        result,
+      }));
     }
   }
 

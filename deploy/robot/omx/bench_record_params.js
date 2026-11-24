@@ -24,17 +24,14 @@ function renderArmCards(){
   const connArms=arms.filter(a=>armConnectivity(a).connected===true);
   const offArms=arms.filter(a=>armConnectivity(a).connected===false);
   const visible=(connArms.length>0&&!showOfflineArms)?arms.filter(a=>armConnectivity(a).connected===true||a===curArm):arms;
-  for(const btn of document.querySelectorAll('#rail-arm-pills button[data-arm]')){
-    const a=btn.dataset.arm;
-    btn.hidden=(connArms.length>0&&!showOfflineArms&&armConnectivity(a).connected!==true&&a!==curArm);
-  }
-  const camTok=a=>{
+  const camCounts=a=>{
     const req=typeof window.expectedCamsForArm==='function'?window.expectedCamsForArm(a):[];
-    if(!req.length||typeof lastCamState!=='object'||!lastCamState)return '';
+    if(!req.length||typeof lastCamState!=='object'||!lastCamState)return null;
     const ok=req.filter(l=>Object.hasOwn(lastCamState,l)&&lastCamState[l]?.fresh!==false).length;
-    return 'C'+ok+'/'+req.length+(ok<req.length?'!':'');
+    const miss=ok<req.length&&!(a==='arm_s'&&req.length-ok===1&&!Object.hasOwn(lastCamState,'arm_s_top'));
+    return {req,ok,miss,tok:'C'+ok+'/'+req.length+(ok<req.length?'!':'')};
   };
-  const sig=JSON.stringify([visible,curArm,showOfflineArms,busy,arms.map(a=>armConnectivity(a)),arms.map(camTok),lastStatus?.teleop_speed_declared]);
+  const sig=JSON.stringify([visible,curArm,showOfflineArms,busy,arms.map(a=>armConnectivity(a)),arms.map(a=>camCounts(a)?.tok||''),lastStatus?.teleop_speed_declared]);
   if(bar.dataset.sig===sig)return;
   bar.dataset.sig=sig;
   bar.innerHTML='';
@@ -42,6 +39,7 @@ function renderArmCards(){
   grid.className='arm-card-grid';
   for(const a of visible){
     const c=armConnectivity(a), meta=ARM_META[a]||{title:a,role:''};
+    const cc=camCounts(a);
     const spd=lastStatus?.teleop_speed_declared?.[a];
     const spdTxt=spd&&Number.isFinite(spd.track_deg_s)?(spd.track_deg_s+'°/s'):'';
     const card=document.createElement('button');
@@ -53,13 +51,17 @@ function renderArmCards(){
     const head=document.createElement('div');head.className='arm-card-head';
     const title=document.createElement('strong');title.textContent=meta.title;
     const dot=document.createElement('span');dot.className='arm-dot';
-    dot.dataset.conn=c.connected===true?'on':(c.connected===false?'off':'unk');
-    dot.textContent=c.connected===true?'● 연결됨':(c.connected===false?'미연결':'확인 중');
+    if(c.follower_connected===false){dot.dataset.conn='err';dot.textContent='● 팔로워 미연결';}
+    else if(c.leader_connected===false){dot.dataset.conn='warn';dot.textContent='● 리더 미연결';}
+    else if(cc&&cc.miss){dot.dataset.conn='warn';dot.textContent='● 카메라 '+cc.ok+'/'+cc.req.length;}
+    else if(c.connected===true){dot.dataset.conn='on';dot.textContent='● 준비됨';}
+    else if(c.connected===false){dot.dataset.conn='off';dot.textContent='미연결';}
+    else{dot.dataset.conn='unk';dot.textContent='확인 중';}
     head.append(title,dot);
     const sub=document.createElement('div');sub.className='arm-card-meta mono';
     const fMark=c.follower_connected===true?'F✓':(c.follower_connected===false?'F✗':'F?');
     const lMark=c.leader_connected===true?'L✓':(c.leader_connected===false?'L✗':'L?');
-    sub.textContent=[meta.role,fMark+' '+lMark,camTok(a),spdTxt].filter(Boolean).join(' · ');
+    sub.textContent=[meta.role,fMark+' '+lMark,cc?cc.tok:'',spdTxt].filter(Boolean).join(' · ');
     card.append(head,sub);
     card.addEventListener('click',()=>{if(!benchSessionActive())selectArm(a);});
     grid.append(card);

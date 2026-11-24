@@ -1,10 +1,35 @@
 """Job definitions and strict parameter/argv validation for `cell_job_api`."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 
+from cell_job_validators import (  # noqa: E402,F401  (re-exported)
+    ACTOR,
+    ARM,
+    FIELD,
+    FILE,
+    FILTER_COL,
+    FILTER_OBJ,
+    METRE,
+    NAME,
+    SAFE_PATH,
+    SHA256,
+    TASK_FILE,
+    _actor,
+    _bool,
+    _http_url,
+    _int_range,
+    _is_amr_bed_site,
+    _match,
+    _num,
+    _roi,
+    _safe_path,
+    _task_site_names,
+    _two_arm_task,
+    _two_arm_task_sites,
+)
 from cell_policy_goals import resolve_goal_site
 
 SESSION = {
@@ -13,63 +38,10 @@ SESSION = {
     "arm_s": "./with-session-arm-s-live.sh",
 }
 AB_ARMS = {"arm_a", "arm_b"}
-ARM = re.compile(r"arm_[abs]")
-ACTOR = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}")
-NAME = re.compile(r"[a-z0-9_][a-z0-9_.-]{0,62}")
-FILE = re.compile(r"(?:object-)?(cell|catalog|chunks)-[a-z0-9_.-]{1,60}\.json")
-TASK_FILE = re.compile(r"(?:task|plan)-[a-z0-9_.-]{1,60}\.json")
-FILTER_OBJ = re.compile(r"[a-z0-9_,-]{1,120}")
-FILTER_COL = re.compile(r"[a-z0-9_,-]{1,64}")
-SHA256 = re.compile(r"[0-9a-f]{64}")
-SAFE_PATH = re.compile(r"[A-Za-z0-9_./~:-]{1,240}")
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+_BELT_SITES = frozenset({"belt", "not_places:belt"})
 PY = 'exec ~/rosy-omx/current-env/bin/python "$OMX/$0" "$@"'
 ENV = "set -a; . ~/.config/rosy/omx-observation-bridge.env; set +a; . ./tools-env-current.sh; "
-FIELD = re.compile(r"\{(\w+)\}")
-
-
-def _num(lo, hi):
-    def check(v):
-        if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
-            raise ValueError(f"a number in [{lo}, {hi}]")
-        return str(v)
-
-    return check
-
-
-def _int_range(lo: int, hi: int):
-    def check(v):
-        if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:
-            raise ValueError(f"an integer in [{lo}, {hi}]")
-        return str(v)
-
-    return check
-
-
-def _bool(v):
-    if not isinstance(v, bool):
-        raise ValueError("a boolean")
-    return v
-
-
-def _match(rx):
-    def check(v):
-        if not isinstance(v, str) or not rx.fullmatch(v):
-            raise ValueError(f"must match {rx.pattern}")
-        return v
-
-    return check
-
-
-def _safe_path(v):
-    if not isinstance(v, str) or not SAFE_PATH.fullmatch(v) or ".." in Path(v).parts:
-        raise ValueError("must be a safe path without '..'")
-    return v
-
-
-def _actor(v):
-    if not isinstance(v, str) or not ACTOR.fullmatch(v) or ".." in str(v).replace("\\", "/").split("/"):
-        raise ValueError(f"must match {ACTOR.pattern}")
-    return v
 
 
 def _goal_site(v):
@@ -80,13 +52,6 @@ def _goal_site(v):
     return v
 
 
-def _roi(v):
-    if not (isinstance(v, list) and len(v) == 4 and all(not isinstance(i, bool) and isinstance(i, int) and 0 <= i <= 1280 for i in v)):
-        raise ValueError("four integer pixels")
-    return [str(i) for i in v]
-
-
-METRE = _num(-0.5, 0.5)
 JOBS = {
     "incident_status": {
         "script": "omx_incident.py",
@@ -137,6 +102,7 @@ JOBS = {
             "operator": _match(NAME),
             "proposer": _match(NAME),
             "reviewed_auto": _bool,
+            "verify_zones": _bool,
             "object": _match(FILTER_OBJ),
             "colour": _match(FILTER_COL),
             "layers_below": _int_range(0, 5),
@@ -157,7 +123,7 @@ JOBS = {
             "arm": _match(ARM),
             "config": _match(FILE),
             "library": _match(FILE),
-            "max_chunks": _int_range(1, 6),
+            "max_chunks": _int_range(1, 60),
             "operator": _actor,
         },
         "optional": {
@@ -170,6 +136,11 @@ JOBS = {
             "dry_run": _bool,
             "proposer": _actor,
             "goal_site": _goal_site,
+            "goal_slot": _int_range(0, 31),
+            "act_backend": _match(re.compile(r"auto|torch|openvino")),
+            "endpoint_url": _http_url,
+            "token_file": _safe_path,
+            "timeout_s": _num(0.05, 2.0),
             "model_calibration": _safe_path,
             "catalog": _match(FILE),
             "roi": _roi,
@@ -213,87 +184,71 @@ JOBS = {
             "layers_below": _int_range(0, 5),
         },
     },
+    "cell_two_arm_policy": {
+        "script": "cell_two_arm_policy_cli.py",
+        "moving": True,
+        "camera": True,
+        "commissioning": True,
+        "arms": ("arm_a", "arm_b"),
+        "argv": [
+            "--config-a", "{config_a}",
+            "--config-b", "{config_b}",
+            "--endpoint-url", "{endpoint_url}",
+            "--revision-a", "{revision_a}",
+            "--revision-b", "{revision_b}",
+            "--library-a", "{library_a}",
+            "--library-b", "{library_b}",
+            "--task-a", "{task_a}",
+            "--task-b", "{task_b}",
+            "--proposer", "{proposer}",
+            "--operator", "{operator}",
+        ],
+        "params": {
+            "config_a": _match(FILE),
+            "config_b": _match(FILE),
+            "library_a": _match(FILE),
+            "library_b": _match(FILE),
+            "endpoint_url": _http_url,
+            "revision_a": _match(SHA256),
+            "revision_b": _match(SHA256),
+            "task_a": _two_arm_task,
+            "task_b": _two_arm_task,
+            "proposer": _actor,
+            "operator": _actor,
+        },
+        "optional": {
+            "token_file": _safe_path,
+            "policy_root_a": _safe_path,
+            "policy_root_b": _safe_path,
+            "model_cal_a": _safe_path,
+            "model_cal_b": _safe_path,
+            "cell_cal_a": _safe_path,
+            "cell_cal_b": _safe_path,
+            "work_dir": _safe_path,
+            "goal_a": _int_range(0, 31),
+            "goal_b": _int_range(0, 31),
+            "model_site_a": _match(NAME),
+            "model_site_b": _match(NAME),
+            "max_chunks": _int_range(1, 16),
+            "timeout_s": _num(0.05, 2.0),
+            "margin_m": _num(0.005, 0.2),
+            "min_z_m": _num(-0.1, 0.2),
+            "dry_run": _bool,
+        },
+    },
 }
 
 
+def job_arms(job: dict, params: dict) -> tuple[str, ...]:
+    if job.get("arms"):
+        return tuple(job["arms"])
+    return (params["arm"],) if params.get("arm") else ()
+
+
 def moves_arm(job, params):
-    return bool(job.get("moving")) and not (job["script"] == "cell_policy_drive.py" and params.get("dry_run") is True)
-
-
-def _is_amr_bed_site(v: str) -> bool:
-    if not isinstance(v, str) or not v:
-        return False
-    s = v.strip().lower()
-    if s.startswith("not_places:"):
-        s = s[len("not_places:"):]
-    base = re.sub(r"-l[0-9]+$", "", s.split(":", 1)[0])
-    return base.startswith(("pinky", "bed")) or base in ("tray", "vehicle_tray")
-
-
-def _task_site_names(task_path: Path, config_path: Path | None) -> set[str]:
-    try:
-        task = json.loads(task_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise ValueError("task: invalid JSON object") from exc
-    if not isinstance(task, dict):
-        raise ValueError("task: invalid JSON object")
-    names: set[str] = set()
-
-    def _add(val):
-        if isinstance(val, str):
-            names.add(val)
-
-    for k in ("from", "to", "a", "b", "buffer"):
-        _add(task.get(k))
-    for k in ("columns", "sources", "destinations"):
-        seq = task.get(k)
-        if isinstance(seq, list):
-            for v in seq:
-                _add(v)
-    for k in ("layout", "initial", "goal"):
-        mp = task.get(k)
-        if isinstance(mp, dict):
-            for s in mp:
-                _add(s)
-    smap = task.get("site_map")
-    if isinstance(smap, dict):
-        for sk, sv in smap.items():
-            _add(sk)
-            _add(sv)
-    steps = task.get("steps")
-    if isinstance(steps, list):
-        for st in steps:
-            if isinstance(st, dict):
-                _add(st.get("from"))
-                _add(st.get("to"))
-    if config_path is not None and config_path.is_file():
-        try:
-            cfg = json.loads(config_path.read_text(encoding="utf-8"))
-            sites = cfg.get("sites") if isinstance(cfg, dict) else None
-            if isinstance(sites, dict):
-                if task.get("kind") in ("goal_stack", "outbound", "rehandle"):
-                    if not task.get("layout"):
-                        for k, v in sites.items():
-                            if isinstance(v, dict) and "layer" not in v and v.get("kind", "temp") == "temp" and _is_amr_bed_site(k):
-                                _add(k)
-                    try:
-                        import cell_task_runner
-
-                        for st in cell_task_runner.plan_steps(task, sites):
-                            _add(st.get("from"))
-                            _add(st.get("to"))
-                    except (ValueError, KeyError):
-                        pass
-                for s in list(names):
-                    base = s.rsplit("-l", 1)[0]
-                    for key in (s, base, f"{base}-l0", f"{base}-l1", f"{base}-l2"):
-                        alts = (sites.get(key) or {}).get("alternates") if isinstance(sites.get(key), dict) else None
-                        if isinstance(alts, list):
-                            for a in alts:
-                                _add(a)
-        except (OSError, ValueError):
-            pass
-    return names
+    return bool(job.get("moving")) and not (
+        job["script"] in ("cell_policy_drive.py", "cell_two_arm_policy_cli.py") and params.get("dry_run") is True
+    )
 
 
 def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
@@ -323,12 +278,33 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             if name == "catalog" and not (workdir / opt_checked[name]).is_file():
                 raise ValueError(f"{name}: no such file in the workdir")
     operator = checked.get("operator") or opt_checked.get("operator")
-    if "proposer" in opt_checked and (not operator or opt_checked["proposer"].casefold() == operator.casefold()):
+    proposer = checked.get("proposer") or opt_checked.get("proposer")
+    if proposer and (not operator or proposer.casefold() == operator.casefold()):
         raise ValueError("operator must differ from proposer (D-1024)")
+    if job["script"] == "cell_two_arm_policy_cli.py":
+        host = (urlsplit(checked["endpoint_url"]).hostname or "").lower()
+        if host not in _LOOPBACK_HOSTS and "token_file" not in opt_checked:
+            raise ValueError("non-loopback endpoint_url requires token_file")
+        src_a, dst_a = _two_arm_task_sites(checked["task_a"])
+        src_b, dst_b = _two_arm_task_sites(checked["task_b"])
+        na = ("belt" if src_a in _BELT_SITES else src_a, "belt" if dst_a in _BELT_SITES else dst_a)
+        nb = ("belt" if src_b in _BELT_SITES else src_b, "belt" if dst_b in _BELT_SITES else dst_b)
+        if na[1] == nb[1] or (na[0] == nb[0] and na[0] != "belt") or na[0] == nb[1] or na[1] == nb[0]:
+            raise ValueError("task_a and task_b overlap on non-belt site")
+        if moves_arm(job, params) and any(_is_amr_bed_site(v) for v in (src_a, dst_a, src_b, dst_b)):
+            raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")
-        if opt_checked.get("paced_chunks") and (mode != "act" or "n_action" in opt_checked):
-            raise ValueError("paced_chunks requires mode='act' without n_action")
+        if opt_checked.get("paced_chunks") and mode != "act":
+            raise ValueError("paced_chunks requires mode='act'")
+        if "token_file" in opt_checked and "endpoint_url" not in opt_checked:
+            raise ValueError("token_file requires endpoint_url")
+        if "endpoint_url" in opt_checked:
+            if mode == "taught":
+                raise ValueError("taught mode cannot use endpoint_url")
+            host = (urlsplit(opt_checked["endpoint_url"]).hostname or "").lower()
+            if host not in _LOOPBACK_HOSTS and "token_file" not in opt_checked:
+                raise ValueError("non-loopback endpoint_url requires token_file")
         if "source_kind" in opt_checked:
             sk = opt_checked["source_kind"]
             if mode != "taught" and sk != "policy":
@@ -341,7 +317,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             for required in ("policy_root", "policy_revision", "cell_calibration"):
                 if required not in opt_checked:
                     raise ValueError(f"missing param {required}")
-            if "goal_site" not in opt_checked and "model_calibration" not in opt_checked:
+            if "goal_site" not in opt_checked and "goal_slot" not in opt_checked and "model_calibration" not in opt_checked:
                 raise ValueError("missing param model_calibration")
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
     if moves_arm(job, params):
@@ -349,6 +325,13 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         task_sites = _task_site_names(workdir / checked["task"], workdir / checked["config"] if "config" in checked else None) if "task" in checked else set()
         if any(_is_amr_bed_site(v) for v in (*direct_sites, *task_sites)):
             raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
+        if "goal_slot" in opt_checked:
+            from cell_policy_goals import GOALS
+            slot = int(opt_checked["goal_slot"])
+            if slot < 0 or slot >= len(GOALS):
+                raise ValueError("goal_slot outside mapped GOALS")
+            if _is_amr_bed_site(GOALS[slot]):
+                raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
     args = []
     for item in job["argv"]:
         whole = FIELD.fullmatch(item)
@@ -359,25 +342,35 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks")):
         if opt_checked.get(opt):
             args.append(flag)
+    if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
+        args.append("--verify-zones")
     if "catalog" in opt_checked:
         args += ["--catalog", opt_checked["catalog"]]
     if "roi" in opt_checked:
         args += ["--roi", *opt_checked["roi"]]
-    for option in ("site", "goal_site", "model_calibration", "mode", "policy_root", "policy_revision", "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind"):
+    for option in (
+        "site", "goal_site", "goal_slot", "model_calibration", "mode", "policy_root", "policy_revision",
+        "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
+        "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
+        "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
+        "margin_m", "min_z_m",
+    ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    if job["script"] == "cell_policy_drive.py" and "endpoint_url" in opt_checked:
+        args += ["--arm-id", checked["arm"]]
     if moves_arm(job, params):
         reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
+        arm_list = list(job_arms(job, params))
+        if not arm_list or any(a not in SESSION for a in arm_list):
+            raise ValueError(f"no session wrapper for {params.get('arm') or arm_list}")
+        prefix = [SESSION[a] for a in arm_list]
         if reviewed_run:
             if params.get("person_at_switch") is True:
                 raise ValueError("reviewed automatic jobs cannot be combined with person_at_switch (D-911)")
-            if params["arm"] not in SESSION:
-                raise ValueError(f"no session wrapper for {params['arm']}")
-            return [SESSION[params["arm"]], "bash", "-c", PY, job["script"], *args]
+            return [*prefix, "bash", "-c", PY, job["script"], *args]
         if params.get("person_at_switch") is not True:
             raise ValueError("a moving job needs person_at_switch: true")
-        if params["arm"] not in SESSION:
-            raise ValueError(f"no session wrapper for {params['arm']}")
         tail = ["--commissioning", "--person-at-switch"] if job.get("commissioning", True) else ["--person-at-switch"]
-        return [SESSION[params["arm"]], "bash", "-c", PY, job["script"], *args, *tail]
+        return [*prefix, "bash", "-c", PY, job["script"], *args, *tail]
     return ["bash", "-c", ENV + PY, job["script"], *args]

@@ -246,3 +246,21 @@ def test_completed_bundle_readonly_mode_is_fsynced_before_cache_publication(feed
     monkeypatch.setattr(os, "fsync", observe)
     assert m.Feed(root, host=host).poll(apply=False)["outcome"] == "staged"
     assert modes[-1] == 0o400
+
+
+@pytest.mark.parametrize("changes", [
+    {"robot_mode": "NAVIGATION"},
+    {"trip_lease_active": True},
+    {"calibration_active": True},
+])
+def test_os_feed_poll_defers_before_downloading_bundle_when_busy(feed, monkeypatch, changes):
+    m, hub, host, root, _, journal, private, _ = feed
+    value, _, _ = publish(hub, private)
+    host.inputs_changes = changes
+    host.write_inputs()
+    monkeypatch.setattr(m.lifecycle, "start", lambda *a, **k: (_ for _ in ()).throw(AssertionError("unsafe apply")))
+    before = journal.read_bytes()
+    result = m.Feed(root, host=host).poll(apply=True)
+    assert result["outcome"] == "deferred-busy" and result["reasons"]
+    assert journal.read_bytes() == before
+    assert not any(path.endswith(value["bundle"]["filename"]) for path, _ in hub.requests)

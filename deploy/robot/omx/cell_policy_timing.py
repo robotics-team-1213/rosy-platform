@@ -1,16 +1,23 @@
 """A single outstanding ACT inference and a guarded, time-stamped playback window."""
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import json
 import math
+from pathlib import Path
 import time
 
 import numpy as np
 
+from cell_policy_entry import (  # noqa: F401
+    ENTRY_START_TOL, FAULT_KEYS, ack_status, cmd_ack_ok, empty_gripper_ok, entry_ready as _entry_ready,
+    finite_stamp, hold_ack_ok, max_diff, park_ack_ok, pose6, retreat_ack_ok, run_entry_chunk,
+    valid_state, validate_entry_chunk,
+)
 from chunk_policy_playback import Playback
 
-SIM_FPS = 15
-MAX_OBSERVATION_AGE_S = 0.6
+SIM_FPS, MAX_OBSERVATION_AGE_S = 15, 0.6
 
 
 @dataclass
@@ -23,21 +30,37 @@ class Prediction:
     state: list
 
 
-def park_ack_ok(reply) -> bool:
-    """True only on a settled, fault-free park ack, never on a preempting human-hold or timeout row."""
-    if not isinstance(reply, dict) or reply.get("ok") is not True:
-        return False
-    if reply.get("fault") or reply.get("hold") or reply.get("human_hold_latched"):
-        return False
-    if reply.get("settled") is not True:
-        return False
-    if "command" in reply:
-        cmd = str(reply["command"])
-        if cmd.startswith("checked "):
-            cmd = cmd.split(" ", 3)[-1]
-        if cmd not in ("park", "run park"):
-            return False
-    return True
+def send_hold(cell, *, attempts: int = 3, delay_s: float = 0.01, log=None) -> dict:
+    last_err, last_reply = "human-hold failed", None
+    for i in range(attempts):
+        try:
+            reply = cell.act("human-hold")
+            if hold_ack_ok(reply):
+                return reply
+            last_reply = reply if isinstance(reply, dict) else None
+            last_err = ((reply.get("error") or reply.get("fault")) if isinstance(reply, dict) else None) or "human-hold unconfirmed"
+        except OSError as exc:
+            if i + 1 >= attempts:
+                raise
+            last_err = str(exc) or type(exc).__name__
+        if i + 1 < attempts:
+            time.sleep(delay_s)
+    if isinstance(last_reply, dict):
+        if log is not None:
+            try:
+                log({"command": "human-hold", "unconfirmed": True, **ack_status(last_reply)})
+            except Exception:
+                pass
+        if last_reply.get("human_hold_latched") is True:
+            last_err = f"{last_err} (human_hold_latched=True, execution unconfirmed)"
+    raise OSError(last_err)
+
+
+def best_effort_hold(cell, *, attempts: int = 3, delay_s: float = 0.01, log=None) -> dict | None:
+    try:
+        return {"command": "human-hold", **ack_status(send_hold(cell, attempts=attempts, delay_s=delay_s, log=log))}
+    except Exception:
+        return None
 
 
 def action_window(chunk, observed, start, fps, steps, max_age):
@@ -63,9 +86,11 @@ def _fresh_snapshot(cell, previous, deadline, clock, sleep, dry_run):
     raise ValueError("policy observation unavailable during playback")
 
 
-def _observe(cell, shadow, infer, age, previous, previous_end, clock, sleep, dry_run):
+def _observe(cell, shadow, infer, age, previous, previous_end, clock, sleep, dry_run, *, seed_state=None):
     state = _fresh_snapshot(cell, previous, previous_end, clock, sleep, dry_run)
     observed = clock()
+    if dry_run and seed_state is not None and isinstance(state, dict) and state.get("fault") == "no runner":
+        state = {"ok": True, "state": list(seed_state), "holding": False}
     if state.get("fault") or state.get("ok") is False or not state.get("state"):
         raise ValueError("policy encoder state unavailable")
     if "t" in state:
@@ -78,10 +103,11 @@ def _observe(cell, shadow, infer, age, previous, previous_end, clock, sleep, dry
             images[name] = frame["image"]
         else:
             images[name] = cell.frame(name)
+    infer_state = list(seed_state) if (dry_run and seed_state is not None) else state["state"]
     started = clock()
-    chunk, meta = infer(state["state"], images)
+    chunk, meta = infer(infer_state, images)
     done = clock()
-    return Prediction(observed, done - started, done, chunk, meta, state["state"])
+    return Prediction(observed, done - started, done, chunk, meta, infer_state)
 
 
 def _dry_play(spec, frames, target, fps, clock, sleep):
@@ -110,48 +136,92 @@ def step_count(shadow, n_action):
 
 def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, max_obs_age_s,
               max_chunks, dry_run, log, handoff=None, authorize=None, clock=time.monotonic, sleep=time.sleep,
-              jaw_gate: dict | None = None):
+              jaw_gate: dict | None = None, kin=None, jaw_spec: dict | None = None):
     fps = library.get("fps", 30)
     model_fps = SIM_FPS if getattr(shadow, "sim_rule", None) is not None else fps
     steps = step_count(shadow, n_action)
     if not math.isfinite(max_obs_age_s) or not 0 < max_obs_age_s <= 5:
         raise ValueError("max observation age must be in (0, 5] seconds")
+    entry_frames = validate_entry_chunk(library, kin, jaw_spec)
+    entry_pose = entry_frames[-1] if entry_frames else None
     pool = ThreadPoolExecutor(max_workers=1)
-    pending = None
-    previous_end = previous_command = None
-    held = False
+    pending = previous_end = previous_command = None
+    held = moved = park_safe = hold_needed = safety_done = entry_ran = False
+    dry_seed_state = list(entry_pose) if (dry_run and entry_pose is not None) else None
     prefix = ""
 
-    def observe(previous, deadline):
+    def observe(previous, deadline, seed_state=None):
         if previous is not None:
             # Take a newer sample within the window, keeping time for the next inference.
             sleep(max(0.0, previous + 2 / fps - clock()))
-        return _observe(cell, shadow, infer, max_obs_age_s, previous, deadline, clock, sleep, dry_run)
+        return _observe(cell, shadow, infer, max_obs_age_s, previous, deadline, clock, sleep, dry_run, seed_state=seed_state)
 
     def stopped(n, reason, row, status=None):
-        stop = None if dry_run else cell.act("human-hold")
-        log({**row, "policy_stop": reason})
-        if stop is not None:
-            log({"command": "human-hold", **stop})
+        nonlocal park_safe, hold_needed, safety_done
+        park_safe, hold_needed = False, hold_needed or not dry_run
+        stop = None if dry_run else send_hold(cell, log=log)
+        safety_done = safety_done or not dry_run
+        for entry in ({**row, "policy_stop": reason}, *([{"command": "human-hold", **ack_status(stop)}] if stop is not None else ())):
+            log(entry)
         return {"result": "refused", "at": n, "reason": reason, **({"status": status} if status else {})}
 
+    def finish_park(result_name: str, *, log_hold: bool = True) -> dict:
+        nonlocal park_safe, hold_needed, safety_done
+        park_safe = False
+        try:
+            parked = cell.act(prefix + "park")
+        except BaseException:
+            hold_needed, safety_done = True, best_effort_hold(cell, log=log) is not None
+            raise
+        if park_ack_ok(parked, require_command=True):
+            safety_done = True
+            return {"result": result_name, "held": held, "parked": True}
+        hold_needed = True
+        hold = send_hold(cell, log=log)
+        safety_done = True
+        if log_hold:
+            log({"command": "human-hold", **ack_status(hold)})
+        return {"result": result_name, "held": held, "parked": False}
+
     try:
+        if entry_frames is not None and not dry_run:
+            hold_needed = True
+            init_state = cell.act("state")
+            ok, _, err_msg = valid_state(init_state)
+            if not ok:
+                return stopped(0, err_msg or "policy start state unavailable", {"chunk": 0, "dry_run": False})
+            home_pose = pose6(library["chunks"]["home"][-1])
+            if (max_diff(init_state["state"], home_pose, 5) > ENTRY_START_TOL
+                    or not empty_gripper_ok(init_state, now=time.time())):
+                return stopped(0, "START_POSE_OFF_HOME: arm off home; run home stage first", {"chunk": 0, "dry_run": False})
+            _ran_e, entry_prefix, entry_err = run_entry_chunk(cell, library, work, init_state, authorize, log, jaw_gate=jaw_gate)
+            if entry_err is not None:
+                safety_done = True
+                return entry_err
+            prefix, moved, park_safe, entry_ran = entry_prefix, True, True, True
+            post_entry = cell.act("state")
+            if not _entry_ready(post_entry, entry_pose):
+                return stopped(0, "POST_ENTRY_STATE_MISMATCH: arm not settled at entry pose with empty gripper",
+                               {"chunk": 0, "dry_run": False}, post_entry if isinstance(post_entry, dict) else None)
+            hold_needed = False
         for n in range(max_chunks):
             row = {"chunk": n, "dry_run": dry_run, "model_fps": model_fps, "library_fps": fps}
             try:
-                if pending is None:
-                    pending = pool.submit(observe, None, None)
-                    prediction = pending.result(timeout=max_obs_age_s)
-                else:
-                    try:
-                        prediction = pending.result(timeout=max(0.0, previous_end - clock()))
-                    except TimeoutError:
-                        return stopped(n, "next policy chunk missed its playback deadline", row)
-                    if prediction.ready_at > previous_end:
-                        return stopped(n, "next policy chunk missed its playback deadline", row)
+                if not dry_run:
+                    hold_needed = True
+                first_chunk = pending is None
+                pending = pool.submit(observe, None, None, dry_seed_state) if first_chunk else pending
+                try:
+                    prediction = pending.result(timeout=max_obs_age_s if first_chunk else max(0.0, previous_end - clock()))
+                except TimeoutError as exc:
+                    return stopped(n, (str(exc) or "policy inference timed out") if first_chunk else "next policy chunk missed its playback deadline", row)
+                if not first_chunk and prediction.ready_at > previous_end:
+                    return stopped(n, "next policy chunk missed its playback deadline", row)
                 state = {"state": prediction.state, "ok": True} if dry_run else cell.act("state")
                 if not state.get("ok") or state.get("fault"):
                     raise ValueError("policy start state unavailable")
+                if n == 0 and entry_ran and not dry_run and not _entry_ready(state, entry_pose):
+                    return stopped(n, "POST_ENTRY_STATE_MISMATCH: arm not at entry pose before chunk 0", row, state)
                 target = state["state"] if dry_run else (state.get("target") or state["state"])
                 # Budget two FIFO ticks for load and run. The runner trims any overrun.
                 dispatch_at = clock() + 2 / fps
@@ -159,6 +229,8 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
                            observation_age_s=dispatch_at - prediction.observed)
                 if dry_run:
                     row["converted_chunk"] = prediction.frames.tolist()
+                    if n == 0 and entry_pose is not None:
+                        row["entry_pose"] = list(entry_pose)
                 actions, dropped = action_window(prediction.frames, prediction.observed, dispatch_at, model_fps, steps, max_obs_age_s)
                 row.update(action_steps=len(actions), dropped_actions=dropped,
                            proposed_first=actions[0].tolist(), proposed_last=actions[-1].tolist())
@@ -177,52 +249,76 @@ def run_timed(cell, shadow, library, work, *, infer, shape, max_step, n_action, 
                     path = work / f"policy-lib-{time.time_ns()}-{n}.json"
                     path.write_text(json.dumps(generated), encoding="utf-8")
                     sequence = ("run policy",) if handoff is not None else ("run policy", "park")
-                    assessment = authorize(generated, state, sequence) if authorize else None
-                    if assessment is not None:
-                        prefix = f"checked {assessment['session_id']} {assessment['library_sha256']} "
-                    load = cell.act(f"{prefix}load {path}")
-                    if not load.get("ok"):
-                        return stopped(n, load.get("error") or "policy load refused", row, load)
+                    auth_kw = {"check_home": False} if (entry_ran and getattr(authorize, "supports_check_home", False)) else {}
+                    next_prefix = (f"checked {a['session_id']} {a['library_sha256']} "
+                                   if authorize and (a := authorize(generated, state, sequence, **auth_kw)) else prefix)
+                    park_safe, hold_needed = False, True
+                    load = cell.act(f"{next_prefix}load {path}")
+                    if not isinstance(load, dict) or not load.get("ok") or any(load.get(k) for k in FAULT_KEYS):
+                        reason = ((load.get("error") or load.get("fault")) if isinstance(load, dict) else None) or "policy load refused"
+                        return stopped(n, reason, row, load if isinstance(load, dict) else None)
+                    prefix = next_prefix
                     if clock() - prediction.observed > max_obs_age_s:
                         return stopped(n, "stale policy observation after load", row)
                 sample_window = max(start, dispatch_at) if dry_run else start
-                pending = pool.submit(observe, sample_window, previous_end) if n + 1 < max_chunks else None
+                next_seed = list(frames[-1]) if (dry_run and entry_frames is not None) else None
+                pending = pool.submit(observe, sample_window, previous_end, next_seed) if n + 1 < max_chunks else None
                 if dry_run:
                     sleep(max(0.0, dispatch_at - clock()))
                     ran = _dry_play(spec, frames, target, fps, clock, sleep)
                 else:
+                    moved, park_safe = True, False
                     ran = cell.act(f"{prefix}run policy")
             except (OSError, ValueError, RuntimeError, TimeoutError, KeyError) as error:
                 if dry_run:
                     row["envelope"] = {"ok": False, "reason": str(error)}
                 return stopped(n, str(error) or "policy inference timed out", row)
-            timing = ran.get("timing") or {}
+            if not isinstance(ran, dict):
+                return stopped(n, "unexpected policy reply command", row)
+            cmd = raw_cmd.split(" ", 3)[-1] if (raw_cmd := str(ran.get("command") or "")).startswith("checked ") else raw_cmd
+            wrong_cmd = False if dry_run else cmd != "run policy"
+            unsettled = (ran.get("settled") is False) if dry_run else (ran.get("settled") is not True)
+            if not ran.get("ok") or ran.get("fault") or ran.get("hold") or ran.get("human_hold_latched") or unsettled or wrong_cmd:
+                reason = (ran.get("policy_stop") or ran.get("error") or ran.get("fault")
+                          or ("unexpected policy reply command" if wrong_cmd else "policy chunk did not settle" if unsettled else "policy playback refused"))
+                return stopped(n, reason, row, ran)
+            timing = raw_t if isinstance(raw_t := ran.get("timing"), dict) else {}
             first = timing.get("first_command_mono")
             row.update({k: v for k, v in timing.items() if v is not None},
                        gap_since_previous_chunk_s=first - previous_command if first is not None and previous_command is not None else None,
                        handoff=ran.get("handoff"), frames=len(frames), command="run policy", ok=ran.get("ok"),
                        state=prediction.state, end_state=ran.get("state"))
             previous_command = timing.get("last_command_mono")
-            if not ran.get("ok") or ran.get("fault") or ran.get("settled") is False:
-                reason = ran.get("policy_stop") or ran.get("error") or ran.get("fault") or (
-                    "policy chunk did not settle" if ran.get("settled") is False else "policy playback refused"
-                )
-                return stopped(n, reason, row, ran)
             if dry_run:
                 row["envelope"] = {"ok": True}
+            park_safe, hold_needed = not dry_run, False
             log(row)
             if handoff is not None and (ran.get("handoff") or {}).get("triggered"):
                 if pending is not None:
                     pending.cancel()
+                park_safe, hold_needed = False, True
                 return handoff.carry(cell, ran, authorize, log)
             held = held or bool(ran.get("holding"))
             if not dry_run and handoff is None and held and frames[-1][5] > library["gripper_closed"] + 10:
-                parked = cell.act(prefix + "park")
-                return {"result": "released", "held": held, "parked": park_ack_ok(parked)}
+                return finish_park("released")
+        if dry_run:
+            return {"result": "dry_run", "chunks": max_chunks}
+        return stopped(max_chunks, "ACT ended before a verified handoff", {"chunk": max_chunks}) if handoff is not None else finish_park("chunks_done")
+    except BaseException as exc:
+        if not dry_run and (moved or hold_needed or not isinstance(exc, Exception)) and not safety_done:
+            try:
+                if isinstance(exc, Exception) and park_safe and not hold_needed and handoff is None:
+                    finish_park("chunks_done", log_hold=False)
+                else:
+                    safety_done = best_effort_hold(cell, log=log) is not None
+            except BaseException:
+                if not safety_done:
+                    safety_done = best_effort_hold(cell, log=log) is not None
+        raise
     finally:
+        if pending is not None and not pending.cancel():
+            try:
+                pending.result(timeout=max(max_obs_age_s, 1.0))
+            except BaseException:
+                pass
         pool.shutdown(wait=False, cancel_futures=True)
-    if dry_run:
-        return {"result": "dry_run", "chunks": max_chunks}
-    if handoff is not None:
-        return stopped(max_chunks, "ACT ended before a verified handoff", {"chunk": max_chunks})
-    return {"result": "chunks_done", "held": held, "parked": park_ack_ok(cell.act(prefix + "park"))}

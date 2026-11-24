@@ -30,13 +30,30 @@ def envelope(library: dict) -> tuple[list[float], list[float], float]:
     chunks = library.get("chunks")
     if not isinstance(chunks, dict) or any(not isinstance(c, (list, tuple, np.ndarray)) for c in chunks.values()):
         raise ValueError("reviewed library chunks must be frame lists")
-    frames = [f for chunk in chunks.values() for f in chunk if len(f) == JOINTS]
+    raw_fps = library.get("fps", 30)
+    fps = finite_float(raw_fps)
+    if fps is None or fps <= 0.0:
+        raise ValueError("reviewed library fps must be finite and positive")
+    frames = []
+    for chunk in chunks.values():
+        for f in chunk:
+            if len(f) == JOINTS:
+                vals = [finite_float(v) for v in f]
+                if any(v is None for v in vals):
+                    raise ValueError("reviewed library frames must contain finite numbers")
+                frames.append(vals)
     if not frames:
         raise ValueError("reviewed library has no 6-joint frames")
     arr = np.asarray(frames, dtype=float)
     steps = [np.abs(np.diff(np.asarray(c, dtype=float)[:, :5], axis=0)).max()
              for c in chunks.values() if len(c) > 1]
-    return arr.min(axis=0).tolist(), arr.max(axis=0).tolist(), float(max(steps))
+    if steps:
+        fastest = float(max(steps))
+    else:
+        from omx_adapter.chunk_library import GUARD_UNITS_PER_S
+
+        fastest = float(GUARD_UNITS_PER_S / fps)
+    return arr.min(axis=0).tolist(), arr.max(axis=0).tolist(), fastest
 
 
 def demonstrated_range(policy_root: Path, offset) -> tuple[list[float], list[float]]:
@@ -83,33 +100,6 @@ def resample_chunk(chunk, start, library_fps: float) -> np.ndarray:
     return np.column_stack([np.interp(times, np.arange(len(path)), joint) for joint in path.T])
 
 
-def wrist_roll_warning(chunk, home_roll: float) -> str | None:
-    from arm_status_bridge import TICKS
-
-    # The two trained orientations are a half-turn apart. Accept within 45 degrees of either.
-    half_turn = SCALE["wrist_roll"] * TICKS / (TICKS - 1) / 2
-    distance = np.abs((chunk[:, 4] - home_roll + half_turn / 2) % half_turn - half_turn / 2)
-    between = np.flatnonzero(distance > half_turn / 4)
-    if len(between):
-        i = between[0]
-        return f"arm_b frame {i} wrist_roll={chunk[i, 4]:.2f} lies between trained branches (home={home_roll:.2f})"
-    return None
-
-
-def trained_grasp_mismatch(demo_low, demo_high, grasp_roll: float, *, margin: float = MARGIN) -> str | None:
-    """Refuse when no 180-deg twin of the library grasp_roll falls inside the trained q01..q99 wrist_roll interval."""
-    from arm_status_bridge import TICKS
-
-    half_turn = SCALE["wrist_roll"] * TICKS / (TICKS - 1) / 2
-    lo, hi = float(demo_low[4]) - margin, float(demo_high[4]) + margin
-    if any(lo <= grasp_roll + k * half_turn <= hi for k in (-2, -1, 0, 1, 2)):
-        return None
-    return (
-        f"trained wrist_roll {demo_low[4]:.1f}..{demo_high[4]:.1f} misses reviewed grasp_pick "
-        f"({grasp_roll:.1f} mod {half_turn:.1f} +- {margin:.1f})"
-    )
-
-
 def finite_float(raw) -> float | None:
     if isinstance(raw, bool) or not isinstance(raw, (int, float)):
         return None
@@ -118,6 +108,9 @@ def finite_float(raw) -> float | None:
     except OverflowError:
         return None
     return val if math.isfinite(val) else None
+
+
+from cell_policy_entry import trained_grasp_mismatch, wrist_roll_warning  # noqa: E402,F401
 
 
 def _params_rim_z(params) -> float | None:

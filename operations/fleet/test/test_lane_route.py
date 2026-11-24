@@ -273,3 +273,17 @@ def test_route_contract_is_in_the_api_reference_and_goal_stays_a_point():
     assert "ROUTE_POSE_UNTRUSTED" in reference
     assert "D-463" in reference
     assert "D-726" in reference and "body_inside" in reference and "TRIP_UNKNOWN_EDGE" in reference
+
+
+def test_create_app_registers_single_road_nav2_routes_without_shadowed_duplicates():
+    client, _ = _client(_localized(0.0, 0.0))
+    road_routes = [
+        (r.path, tuple(sorted(r.methods or ())), r.endpoint.__module__)
+        for r in client.app.routes
+        if hasattr(r, "path") and "road-nav2" in r.path
+    ]
+    assert len(road_routes) == 2
+    assert set(road_routes) == {
+        ("/api/fleet/robots/{robot_id}/road-nav2/plan", ("GET",), "fleet.server.berth_parking_routes"),
+        ("/api/fleet/robots/{robot_id}/road-nav2", ("POST",), "fleet.server.berth_parking_routes"),
+    }

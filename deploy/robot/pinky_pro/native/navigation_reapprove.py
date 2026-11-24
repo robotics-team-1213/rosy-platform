@@ -23,8 +23,11 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
+import math
+import os
 import re
 import ssl
+import stat
 import subprocess
 import sys
 import time
@@ -60,6 +63,11 @@ def approval_needs_remeasure(root: Path = Path("/")) -> str | None:
     return "approved"
 
 
+_NAV_IDLE = frozenset({"IDLE", "ARRIVED", "CANCELED", "FAILED"})
+_DOCKING_IDLE = frozenset({"UNDOCKED", "DOCKED", "CHARGING"})
+_MAX_STATUS_INPUTS_BYTES = 16 * 1024
+
+
 def decide(approval: dict, robot: dict, still: dict, health: dict, attempts: int) -> str:
     """'run' or the reason to skip; pure so the tests pin every gate."""
     if approval.get("phase") != "IDLE":
@@ -70,6 +78,24 @@ def decide(approval: dict, robot: dict, still: dict, health: dict, attempts: int
         velocity = sample.get("velocity") or {}
         if sample.get("mode") != "IDLE":
             return f"robot mode {sample.get('mode')}"
+        nav = sample.get("navigation")
+        if nav is not None and nav not in _NAV_IDLE:
+            return f"navigation {nav}"
+        if sample.get("trip_lease") is not None:
+            return "trip lease active"
+        line_follow = sample.get("line_follow") or {}
+        if line_follow.get("mode") not in (None, "OFF") or line_follow.get("state") not in (None, "OFF"):
+            return "line follow active"
+        dock = (sample.get("docking") or {}).get("state")
+        if dock is not None and dock not in _DOCKING_IDLE:
+            return f"docking {dock}"
+        swarm = sample.get("swarm") or {}
+        if swarm.get("active") is True or swarm.get("role") not in (None, "none"):
+            return "swarm active"
+        if sample.get("activity") is not None:
+            return "activity active"
+        if (sample.get("safety") or {}).get("estop") is True:
+            return "estop engaged"
         if abs(velocity.get("linear", 1.0)) > 1e-3 or abs(velocity.get("angular", 1.0)) > 1e-3:
             return "robot moving"
     battery = health.get("battery") or {}
@@ -80,6 +106,59 @@ def decide(approval: dict, robot: dict, still: dict, health: dict, attempts: int
     if attempts >= MAX_ATTEMPTS:
         return f"gave up after {attempts} attempts on this release"
     return "run"
+
+
+def _status_inputs_busy(root: Path) -> str | None:
+    """Fail-closed check of CORE's local status-inputs handover before pairing."""
+    path = root / "run/rosy/status-inputs.json"
+    if path.is_symlink():
+        return "status-inputs unreadable"
+    if not path.exists():
+        return None
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_size > _MAX_STATUS_INPUTS_BYTES:
+                return "status-inputs unreadable"
+            raw = os.read(fd, _MAX_STATUS_INPUTS_BYTES + 1)
+        finally:
+            os.close(fd)
+        if len(raw) > _MAX_STATUS_INPUTS_BYTES:
+            return "status-inputs unreadable"
+        data = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return "status-inputs unreadable"
+    if not isinstance(data, dict):
+        return "status-inputs unreadable"
+    if data.get("robot_mode") != "IDLE":
+        return f"robot mode {data.get('robot_mode')}"
+    if data.get("nav_state") not in _NAV_IDLE:
+        return f"navigation {data.get('nav_state')}"
+    if "trip_lease_active" in data and data["trip_lease_active"] is not False:
+        return "trip lease active"
+    if "calibration_active" in data and data["calibration_active"] is not False:
+        return "calibration active"
+    if (("line_follow_mode" in data and data["line_follow_mode"] != "OFF")
+            or ("line_follow_state" in data and data["line_follow_state"] != "OFF")):
+        return "line follow active"
+    if data.get("docking_state") not in (None, *_DOCKING_IDLE):
+        return f"docking {data.get('docking_state')}"
+    if (("swarm_active" in data and data["swarm_active"] is not False)
+            or data.get("swarm_role") not in (None, "none")):
+        return "swarm active"
+    if data.get("activity_kind") is not None:
+        return "activity active"
+    if "estop" in data and data["estop"] is not False:
+        return "estop engaged"
+    if "velocity_linear" in data or "velocity_angular" in data:
+        lin, ang = data.get("velocity_linear", 0.0), data.get("velocity_angular", 0.0)
+        ok = (isinstance(lin, (int, float)) and not isinstance(lin, bool) and math.isfinite(lin)
+              and isinstance(ang, (int, float)) and not isinstance(ang, bool) and math.isfinite(ang))
+        if not ok or abs(lin) >= 0.01 or abs(ang) >= 0.02:
+            return "robot moving"
+    return None
 
 
 class Core:
@@ -245,17 +324,92 @@ def _save_state(state: dict, path: Path = STATE) -> None:
     tmp.replace(path)
 
 
+def _navigation_guard_blocks(root: Path) -> bool:
+    if (root / "run/rosy-os-update/motion.env").exists() or (root / "run/rosy-os-update/motion.env").is_symlink():
+        return True
+    if (root / "etc/rosy/os-slot.json").is_file():
+        import os_motion_guard  # noqa: PLC0415
+        try:
+            os_motion_guard.allow_navigation(root)
+        except (OSError, ValueError):
+            return True
+    return False
+
+
+def _maybe_auto_start_navigation(root: Path, *, log, runner=subprocess.run) -> str:
+    """Start rosy-navigation once per boot when valid G4 approval exists and the robot is IDLE."""
+    boot_path = root / "proc/sys/kernel/random/boot_id"
+    if not boot_path.is_file() or boot_path.is_symlink():
+        return "approved"
+    if not (root / "run/rosy/status-inputs.json").is_file():
+        return "approved"
+    if rosy_claim.check(root) is not None or _navigation_guard_blocks(root) or _status_inputs_busy(root) is not None:
+        return "approved"
+    try:
+        boot_id = boot_path.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeDecodeError):
+        return "approved"
+    if not boot_id:
+        return "approved"
+    marker = root / "run/rosy/nav-auto-started"
+    if marker.is_file() and not marker.is_symlink():
+        try:
+            if marker.read_text(encoding="utf-8").strip() == boot_id:
+                return "approved"
+        except OSError:
+            pass
+    probe = runner(["/usr/bin/systemctl", "is-active", "--quiet", "rosy-navigation.service"],
+                   capture_output=True, text=True, timeout=15)
+    if probe.returncode == 0:
+        _save_boot_marker(marker, boot_id)
+        return "approved"
+    started = runner(["/usr/bin/systemctl", "start", "rosy-navigation.service"],
+                     capture_output=True, text=True, timeout=60)
+    if started.returncode != 0:
+        log(f"navigation auto-start exited {started.returncode}: {(started.stderr or '').strip()}")
+        return "approved"
+    confirm = runner(["/usr/bin/systemctl", "is-active", "--quiet", "rosy-navigation.service"],
+                     capture_output=True, text=True, timeout=15)
+    if confirm.returncode != 0:
+        log("navigation auto-start did not stay active")
+        return "approved"
+    _save_boot_marker(marker, boot_id)
+    log("navigation auto-started from valid G4 approval")
+    return "navigation auto-started"
+
+
+def _save_boot_marker(marker: Path, boot_id: str) -> None:
+    if marker.is_symlink():
+        marker.unlink()
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    tmp = marker.with_suffix(".tmp")
+    tmp.write_text(boot_id + "\n", encoding="utf-8")
+    tmp.replace(marker)
+
+
 def run(root: Path = Path("/"), core: Core | None = None, sleep=time.sleep, *,
-        reapprove_fn=reapprove, pair_fn=pair) -> str:
+        reapprove_fn=reapprove, pair_fn=pair, runner=subprocess.run) -> str:
     def log(message: str) -> None:
         print(f"nav-reapprove: {message}", flush=True)
 
     if (root / str(DISABLED).lstrip("/")).exists():
         return "disabled"
+    try:
+        if (root / "etc/rosy/approvals/g4.bundle.json").is_file():
+            mapping_approval.sync_approvals_to_shared(root)
+        elif (root / mapping_approval.SHARED_APPROVALS / "g4.bundle.json").is_file():
+            if mapping_approval.restore_approvals_from_shared(root):
+                log("restored pre-update G4 approvals from shared storage")
+    except (OSError, ValueError) as exc:
+        log(f"shared approval sync/restore skipped: {exc}")
     if (why := approval_needs_remeasure(root)) is not None:
+        if why == "approved":
+            return _maybe_auto_start_navigation(root, log=log, runner=runner)
         return why
     if rosy_claim.check(root) is not None:
         return "claimed"
+    if (busy := _status_inputs_busy(root)) is not None:
+        return busy
     release = (root / "opt/rosy/current").resolve().name
     state_path = root / str(STATE).lstrip("/")
     attempts = _load_state(state_path).get(release, 0)

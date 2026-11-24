@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import threading
 import time
 import traceback
 from datetime import datetime, timezone  # noqa: F401 — re-exported
@@ -143,7 +144,8 @@ class RosBridge(RosBridgeHelpersMixin):
         node.create_subscription(JointState, "joint_states", self._on_joint_states, qos_profile_sensor_data)
         node.create_subscription(Range, "us_sensor/range", self._on_us_range, qos_profile_sensor_data)
         node.create_subscription(BatteryState, "batt_state", self._on_batt_state, 10)
-        node.create_subscription(OccupancyGrid, "map", self._on_map, _LATCHED)
+        self._map_sub_lock = threading.Lock()
+        self._map_sub = node.create_subscription(OccupancyGrid, "map", self._on_map, _LATCHED)
         node.create_subscription(Path, "plan", self._on_plan, 10)
         node.create_subscription(Costmap, "local_costmap/costmap_raw", self._on_local_costmap, 10)
         node.create_subscription(Costmap, "global_costmap/costmap_raw", self._on_global_costmap, 10)
@@ -306,10 +308,22 @@ class RosBridge(RosBridgeHelpersMixin):
                 pass
         return str(getattr(goal, "label", "")).strip().lower() == "active"
 
+    def _refresh_map_subscription(self) -> None:
+        # map_server emits latched /map during on_activate before ACTIVE transition_event clears _map_grid_id.
+        with self._map_sub_lock:
+            if self._map_sub is not None:
+                self._node.destroy_subscription(self._map_sub)
+            self._map_sub = self._node.create_subscription(
+                OccupancyGrid, "map", self._on_map, _LATCHED
+            )
+
     def _on_map_server_transition(self, msg: TransitionEvent) -> None:
-        map_observation.lifecycle(self, self._lifecycle_active(msg))
+        active = self._lifecycle_active(msg)
+        map_observation.lifecycle(self, active)
+        if active:
+            self._refresh_map_subscription()
         if self._readiness is not None:
-            self._readiness.observe("map_server", self._lifecycle_active(msg))
+            self._readiness.observe("map_server", active)
 
     def _on_slam_transition(self, msg: TransitionEvent) -> None:
         map_observation.lifecycle(self, self._lifecycle_active(msg))

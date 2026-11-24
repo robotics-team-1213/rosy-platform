@@ -21,12 +21,14 @@ from rosy.contracts.learning.omx_canonical import (  # noqa: E402
     canonical_spec_sha256,
     default_canonical_spec,
 )
+from rosy.contracts.learning.omx_recording_todo import build_recording_todo  # noqa: E402
 
 STATIC = Path(__file__).with_name('review_app_web')
 PAGES = {
     '/learning/canonical': ('canonical.html', 'text/html'),
     '/canonical.js': ('canonical.js', 'text/javascript'),
     '/canonical-monitor.js': ('canonical-monitor.js', 'text/javascript'),
+    '/canonical-todo.js': ('canonical-todo.js', 'text/javascript'),
     '/canonical.css': ('canonical.css', 'text/css'),
 }
 PREFIX = '/api/learning/canonical'
@@ -68,6 +70,13 @@ def _service(center):
     return getattr(center, 'canonical', None) if center is not None else None
 
 
+def peer_intake_ok(handler, path: str, center) -> bool:
+    if path != PREFIX + '/intake':
+        return False
+    service = _service(center)
+    return bool(service is not None and service.configured and service.verify_peer_bearer(handler.headers.get('Authorization')))
+
+
 def get(handler, path: str, center, accounts=None) -> bool:
     if path in PAGES:
         name, mime = PAGES[path]
@@ -83,13 +92,20 @@ def get(handler, path: str, center, accounts=None) -> bool:
     if path == PREFIX + '/spec':
         handler.send(service.spec_payload() if service is not None else _default_spec_payload())
         return True
-    if path == PREFIX + '/peer-summary':
-        if accounts is not None:
+    if path == PREFIX + '/recording-todo':
+        if accounts is not None and getattr(handler, 'service_principal', None) is None:
             accounts.require(handler.learning_principal, 'view')
-        elif getattr(handler, 'learning_principal', None) is None:
-            if service is None or not service.verify_peer_bearer(handler.headers.get('Authorization')):
-                handler.send({'error': '피어 인증 토큰을 확인하세요.'}, 403)
-                return True
+        handler.send(service.recording_todo() if service is not None else build_recording_todo(None, source_state='unconfigured'))
+        return True
+    if path == PREFIX + '/peer-summary':
+        peer_ok = getattr(handler, 'peer_bearer_ok', False) or (
+            service is not None and getattr(service, 'configured', False) and service.verify_peer_bearer(handler.headers.get('Authorization'))
+        )
+        if accounts is not None and not peer_ok and getattr(handler, 'service_principal', None) is None:
+            accounts.require(handler.learning_principal, 'view')
+        elif not peer_ok and getattr(handler, 'learning_principal', None) is None and getattr(handler, 'service_principal', None) is None:
+            handler.send({'error': '피어 인증 토큰을 확인하세요.'}, 403)
+            return True
         handler.send(_default_snapshot() if service is None else service.peer_summary())
         return True
 
@@ -102,6 +118,18 @@ def get(handler, path: str, center, accounts=None) -> bool:
             handler.send(service.get_run(match[1]))
         except KeyError:
             handler.send({'error': '실행 기록을 찾을 수 없습니다.'}, 404)
+        return True
+    if match := re.fullmatch(PREFIX + r'/runs/(' + _UUID_RE + r'|' + _ID_RE + r')/bundle-manifest', path):
+        try:
+            handler.send(service.bundle_manifest(match[1]))
+        except KeyError:
+            handler.send({'error': '실행 번들을 찾을 수 없습니다.'}, 404)
+        return True
+    if match := re.fullmatch(PREFIX + r'/runs/(' + _UUID_RE + r'|' + _ID_RE + r')/file/(.{1,256})', path):
+        try:
+            handler.send(service.bundle_file(match[1], match[2]), mime='application/octet-stream')
+        except (KeyError, FileNotFoundError):
+            handler.send({'error': '번들 파일을 찾을 수 없습니다.'}, 404)
         return True
     if match := re.fullmatch(PREFIX + r'/watched/(' + _ID_RE + r')', path):
         try:
@@ -122,14 +150,18 @@ def get(handler, path: str, center, accounts=None) -> bool:
 def post(handler, path: str, body: dict, center, accounts=None) -> bool:
     if not path.startswith(PREFIX + '/'):
         return False
-    if accounts is not None:
-        accounts.require(handler.learning_principal, 'manage')
     service = _service(center)
+    peer_ok = path == PREFIX + '/intake' and service is not None and service.configured and service.verify_peer_bearer(handler.headers.get('Authorization'))
+    if accounts is not None and not peer_ok and getattr(handler, 'service_principal', None) is None:
+        accounts.require(handler.learning_principal, 'manage')
     if service is None or not service.configured:
         handler.send({'error': '표준 시작 자세 파이프라인이 설정되지 않았습니다.'}, 503)
         return True
 
     try:
+        if path == PREFIX + '/intake':
+            handler.send(service.intake_collection(body))
+            return True
         if path == PREFIX + '/jobs':
             handler.send(service.start_job(body))
             return True

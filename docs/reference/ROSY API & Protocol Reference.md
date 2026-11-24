@@ -5,9 +5,24 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.453
+**Version:** v1.455
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.455 OMX Cell Job API (v1.455) 두 팔 원격 정책 작업(`cell_two_arm_policy`) 통합 (Cell)
+
+- `:8781` `cell_job_api.py` / `cell_job_spec.py`에 D-1073 두 팔 원격 GPU 정책 실행 잡(`cell_two_arm_policy` → `cell_two_arm_policy_cli.py`)을 추가합니다.
+- **실행·인증 게이트:**
+  - `dry_run: true`는 무동작(`moves_arm = False`)으로 `cell-job-human`·`cell-job-machine` 모두 허용되며, 라이브 모션은 `cell-job-human` + `person_at_switch: true` + distinct `proposer != operator` (D-1024) + `./with-session-arm-a-par.sh`·`./with-session-arm-b-par.sh` 이중 래퍼가 필수입니다 (`cell-job-machine`의 라이브 시도는 `403 MACHINE_COMMISSIONING_FORBIDDEN`).
+  - 비루프백 `endpoint_url`은 `token_file` 필수이며 `task_a`·`task_b`의 비-`belt` 사이트 중복과 AMR 적재함 사이트(`pinky`/`bed`/`tray`) 라이브 모션은 400으로 거부됩니다.
+- **두 팔 상태·잠금 직렬화:** 라이브 `cell_two_arm_policy`는 `arm_a`·`arm_b` 양쪽 `incident`·`fleet` 안전·`session-arm_{a,b}.lock`·`check_two_arm_ab_ready`(`409 TWO_ARM_NOT_READY`)를 함께 검사하고, 진행 중 `arm_a`/`arm_b` 단일 팔 이동 잡과 상호 배타로 잠기며 시작·종료 시 양팔 `cell-state-dirty-arm_{a,b}.json`을 함께 기록합니다.
+
+### v1.454 OMX Cell Job API (v1.454) 토큰 분리·안전 게이트·멱등성 (Cell)
+
+- `GET /readiness` 및 실패 컨텍스트 HTTP 경로 전 단계로 `:8781` `cell_job_api.py` 인증 분리 및 실행 전 안전 게이트를 추가합니다 (D-1072 PR-2).
+- 이중 토큰(`--human-token-file` vs `--machine-token-file`): `cell-job-machine`은 `person_at_switch: true`·비검토 이동 작업 시 `403 MACHINE_COMMISSIONING_FORBIDDEN` 반환 및 서버 바인딩 `proposer` 강제(`403 PROPOSER_MISMATCH`), `audit.jsonl`에 `principal_role`·`principal_id` 기록.
+- `Runner.start`·warm 재사용 게이트: `omx_incident.status(arm)`(`409 ARM_INCIDENT_HELD`), 피어 A/B 접힘(`409 PEER_ARM_NOT_FOLDED`), 온라인 Fleet 안전(`409 FLEET_SAFETY_STOP`), `depth-d435.lock`(`409 DEPTH_LOCK_HELD`), 오프라인 이동 시 `cell-state-dirty-<arm>.json` 기록, `Idempotency-Key` 헤더(`409 IDEMPOTENCY_KEY_CONFLICT`).
+- `cell_policy_drive` `act_backend`(`ROSY_ACT_BACKEND`)·`goal_slot`(`--goal-slot`) 및 `auto_pick` `verify_zones`(`--verify-zones`) 옵션 추가.
 
 ### v1.453 Fleet trip pause/resume controls and autonomous Nav2 failure recovery (Fleet)
 
@@ -4968,6 +4983,8 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.455 | 2026-11-23 | [Cell] Additive: POST /jobs/cell_two_arm_policy, 두 팔 직렬화·준비 게이트(409 TWO_ARM_NOT_READY), dual cell-state-dirty 기록 |
+| v1.454 | 2026-11-22 | [Cell] cell-job-human/machine 토큰 분리, Idempotency-Key, warm 재사용 안전 게이트, depth-d435.lock, act_backend/goal_slot/verify_zones 추가 |
 | v1.453 | 2026-11-22 | [Fleet] Additive: POST /api/fleet/trips/{trip_id}/pause and /resume, Nav2 traffic holds, and autonomous Nav2 failure reroute/retry/hold recovery |
 | v1.452 | 2026-11-22 | [Fleet] Additive: optional drive_mode nav2 on POST /api/fleet/robots/{robot_id}/trip via CORE D-1009 /api/v1/navigation/route |
 | v1.451 | 2026-11-22 | [Fleet] Additive (D-1071): named-operator POST /api/fleet/tasks/{task_id}/reconcile releasing UNKNOWN task claims only after live CORE cancel and D-732 quiescence proof |

@@ -14,7 +14,7 @@ INCIDENTS = Path("incidents")
 
 def incidents_dir() -> Path:
     """The one place holds and the outbox live (under the cell's lock root, not the recording directory)."""
-    from joint_tune import lock_root
+    from joint_tune_lock import lock_root
 
     return lock_root() / "incidents"
 
@@ -83,9 +83,10 @@ def _bridge_environ() -> dict[str, str]:
 def link_for(arm: str):
     """The Fleet channel of this arm from the environment, or None (not configured or not usable here)."""
     here = Path(__file__).resolve()
-    for extra in (here.parents[3] / "contracts/foundation", here.parents[3] / "operations/overhead"):
-        if extra.is_dir() and str(extra) not in sys.path:
-            sys.path.append(str(extra))
+    if len(here.parents) > 3:
+        for extra in (here.parents[3] / "contracts/foundation", here.parents[3] / "operations/overhead"):
+            if extra.is_dir() and str(extra) not in sys.path:
+                sys.path.append(str(extra))
     env = _bridge_environ()
     try:
         from workcell_observation_bridge import ArmIncidentLink

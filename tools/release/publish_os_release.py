@@ -23,9 +23,11 @@ import uuid
 ROOT = Path(__file__).resolve().parents[2]
 for relative in ("deploy/robot/pinky_pro/release", "deploy/robot/pinky_pro/native"):
     sys.path.insert(0, str(ROOT / relative))
+from os_state_io import _write_atomic
 from os_update_manifest import verify_metadata
-from os_update_rollout import verify as verify_rollout
+from os_update_rollout import _shape as validate_rollout, verify as verify_rollout
 from os_update_transport import bundle_assets
+from signing import sign_checksums, verify_signature
 
 REPO = "robotics-team-1213/rosy-platform"
 SIDECARS = ("os-update.json", "os-update.json.sig", "os-rollout.json", "os-rollout.json.sig")
@@ -91,12 +93,14 @@ def _split_bundle(source, assets, expected_sha256):
 
 
 def publish(directory, public_key, *, release_id, source_revision, apply=False, gh=None,
-            publication_only=False, transaction=None, journal=None):
+            publication_only=False, open_release=False, transaction=None, journal=None):
     """Publish verified assets; only an explicitly closed rollout is publication-only.
 
     A supplied durable transaction owns one draft by nonce and numeric ID. The
     journal callback must persist each checkpoint before GitHub is mutated.
     """
+    if publication_only and open_release:
+        raise ValueError("OS publication-only rollout cannot open a release")
     directory = Path(directory).absolute()
     for parent in (*reversed(directory.parents), directory):
         _plain(parent, directory=True)
@@ -139,7 +143,7 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
             (staged / "os-rollout.json.sig").read_text(encoding="ascii").strip(), work / "authority.pem", metadata)
         if metadata["release_id"] != release_id or metadata["source_revision"] != source_revision:
             raise ValueError("OS release or source differs from the operator's expected identity")
-        if policy["canary_ok"] or policy["withdrawn"]:
+        if policy["withdrawn"] or (not open_release and policy["canary_ok"]):
             raise ValueError("OS engineering publication requires an initial unpromoted rollout")
         if publication_only and policy["canary"]:
             raise ValueError("OS publication-only rollout must authorize no canary")
@@ -157,7 +161,8 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
             expected.update(_split_bundle(staged / bundle["filename"], assets, bundle["sha256"]))
         names = set(expected)
         tag = "os-pinky-pro-" + release_id
-        result = dict(tag=tag, source_revision=source_revision, assets=sorted(names), prerelease=True, applied=False)
+        result = dict(tag=tag, source_revision=source_revision, assets=sorted(names),
+                      prerelease=not open_release, applied=False)
         if not apply:
             return result
 
@@ -192,10 +197,14 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
         if identity is not None and (type(identity) is not int or identity < 1):
             raise ValueError("OS resume has an invalid numeric release identity")
 
-        def validate(remote, *, draft=None):
+        def validate(remote, *, draft=None, prerelease=None):
+            if prerelease is None:
+                allowed_pre = (True,) if (remote.get("draft") is True or not open_release) else (True, False)
+            else:
+                allowed_pre = (prerelease,)
             if (not isinstance(remote, dict) or type(remote.get("id")) is not int or remote["id"] != identity
                     or remote.get("tag_name") != tag or remote.get("target_commitish") != source_revision
-                    or type(remote.get("draft")) is not bool or remote.get("prerelease") is not True
+                    or type(remote.get("draft")) is not bool or remote.get("prerelease") not in allowed_pre
                     or draft is not None and remote["draft"] is not draft
                     or marker not in remote.get("body", "")):
                 raise ValueError("OS draft identity, source or publication state differs")
@@ -254,11 +263,12 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
             obj = ref.get("object", {})
             if not isinstance(obj, dict) or obj.get("type") != "commit" or obj.get("sha") != source_revision:
                 raise ValueError("OS draft tag no longer points to the signed source")
-        if remote["draft"]:
-            api(endpoint, "--method", "PATCH", "-F", "draft=false", "-F", "prerelease=true")
+        if remote["draft"] or (open_release and remote.get("prerelease") is not False):
+            api(endpoint, "--method", "PATCH", "-F", "draft=false",
+                "-F", "prerelease=" + ("false" if open_release else "true"))
         # A successful PATCH response is insufficient (it can be lost or stale).
         final = api(endpoint)
-        validate(final, draft=False)
+        validate(final, draft=False, prerelease=not open_release)
         assets = checked_assets(final, complete=True)
         refs = tag_refs()
         if len(refs) != 1 or refs[0].get("object", {}).get("type") != "commit" or refs[0]["object"].get("sha") != source_revision:
@@ -278,7 +288,138 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
         if publication_only and (closed["canary"] or closed["canary_ok"] or closed["withdrawn"]):
             raise ValueError("OS public rollout authorizes a device")
         record(published=True)
-        return dict(result, applied=True, github_release_id=checkpoint["release_id"])
+        return dict(result, applied=True, prerelease=final["prerelease"], github_release_id=checkpoint["release_id"])
+
+
+def open_rollout(directory, private_key, public_key, *, release_id, canary=None,
+                 promote=False, open_release=False, apply=False, gh=None):
+    """Re-sign os-rollout.json locally and optionally update an existing GitHub release rollout."""
+    if os.environ.get("GITHUB_ACTIONS", "").lower() == "true":
+        raise ValueError("OS rollout signing must not run in hosted CI")
+    directory = Path(directory).absolute()
+    private_key = Path(private_key).absolute()
+    for parent in (*reversed(directory.parents), directory):
+        _plain(parent, directory=True)
+    for parent in (*reversed(private_key.parents), private_key):
+        info = _plain(parent, directory=(parent != private_key))
+    if info.st_nlink != 1 or any(private_key.is_relative_to(p) for p in (directory,)):
+        raise ValueError("private signing key must remain single-link and outside release directories")
+    if os.name == "nt":
+        try:
+            from tools.release.os_tools_vm import _windows_private
+        except ImportError:
+            from os_tools_vm import _windows_private
+        _windows_private(private_key)
+    elif info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600:
+        raise ValueError("private signing key permissions or owner differ")
+    gh = run_gh if gh is None else gh
+
+    with tempfile.TemporaryDirectory(prefix="rosy-os-rollout-", dir=os.environ.get("ROSY_SCRATCH") or None) as temporary:
+        work = Path(temporary)
+        _capture(Path(public_key), work / "authority.pem", 16384)
+        old_raw = (directory / "os-rollout.json").read_bytes()
+        old_sig = (directory / "os-rollout.json.sig").read_bytes()
+        meta_raw = (directory / "os-update.json").read_bytes()
+        meta_sig = (directory / "os-update.json.sig").read_text(encoding="ascii").strip()
+        metadata = verify_metadata(meta_raw, meta_sig, work / "authority.pem")
+        if metadata["release_id"] != release_id:
+            raise ValueError("OS rollout release identity differs")
+        policy = verify_rollout(old_raw, old_sig.decode("ascii").strip(), work / "authority.pem", metadata)
+        if policy["withdrawn"]:
+            raise ValueError("a withdrawn OS release cannot be opened again")
+        if canary is not None:
+            policy["canary"] = list(canary)
+        if promote:
+            policy["canary_ok"] = True
+        validate_rollout(policy)
+        new_raw = (json.dumps(policy, sort_keys=True, indent=2) + "\n").encode("utf-8")
+        new_sig = (sign_checksums(new_raw, private_key) + "\n").encode("ascii")
+        if verify_signature(new_raw, new_sig.decode("ascii").strip(), work / "authority.pem"):
+            raise ValueError("offline Ed25519 signing key does not match distribution authority")
+        verify_rollout(new_raw, new_sig.decode("ascii").strip(), work / "authority.pem", metadata)
+        try:
+            _write_atomic(directory / "os-rollout.json", new_raw, 0o644)
+            _write_atomic(directory / "os-rollout.json.sig", new_sig, 0o644)
+        except BaseException:
+            _write_atomic(directory / "os-rollout.json", old_raw, 0o644)
+            _write_atomic(directory / "os-rollout.json.sig", old_sig, 0o644)
+            raise
+        if not apply:
+            return dict(tag="os-pinky-pro-" + release_id, rollout=policy, applied=False)
+
+        def command(*args):
+            code, output, _ = gh(["gh", *args])
+            if code:
+                raise ValueError("OS rollout GitHub operation failed")
+            return output
+
+        def api(endpoint, *args):
+            try:
+                return json.loads(command("api", f"repos/{REPO}/{endpoint}", "--hostname", "github.com", *args))
+            except (json.JSONDecodeError, UnicodeError):
+                raise ValueError("OS rollout received invalid GitHub JSON") from None
+
+        tag = "os-pinky-pro-" + release_id
+        remote = api("releases/tags/" + tag)
+        identity = remote.get("id")
+        source_revision = metadata["source_revision"]
+        if (not isinstance(remote, dict) or type(identity) is not int or identity < 1
+                or remote.get("tag_name") != tag or remote.get("target_commitish") != source_revision):
+            raise ValueError("OS remote release identity or source differs")
+        refs = api("git/matching-refs/tags/" + tag)
+        exact_refs = [r for r in refs if isinstance(r, dict) and r.get("ref") == "refs/tags/" + tag] if isinstance(refs, list) else []
+        if len(exact_refs) != 1 or exact_refs[0].get("object", {}).get("type") != "commit" or exact_refs[0]["object"].get("sha") != source_revision:
+            raise ValueError("OS remote tag does not resolve to the signed source")
+        by_name = {item.get("name"): item for item in remote.get("assets", []) if isinstance(item, dict)}
+        bundle = metadata["bundle"]
+        bundle_parts = dict(bundle_assets(bundle))
+        required_assets = {"os-update.json", "os-update.json.sig", *bundle_parts}
+        if not required_assets <= set(by_name):
+            raise ValueError("OS remote release is missing verified non-rollout assets")
+        for req_name in sorted(required_assets):
+            item = by_name[req_name]
+            if type(item.get("size")) is not int or item["size"] < 1 or not isinstance(item.get("digest"), str) or not item["digest"].startswith("sha256:"):
+                raise ValueError("OS remote non-rollout asset lacks size or digest")
+            if req_name in bundle_parts and item["size"] != bundle_parts[req_name]:
+                raise ValueError("OS remote bundle asset size differs")
+            if len(bundle_parts) == 1 and req_name == bundle["filename"] and item["digest"] != "sha256:" + bundle["sha256"]:
+                raise ValueError("OS remote bundle digest differs")
+        meta_remote = by_name["os-update.json"]
+        if meta_remote["digest"] != "sha256:" + hashlib.sha256(meta_raw).hexdigest() or meta_remote["size"] != len(meta_raw):
+            raise ValueError("OS remote metadata differs from local signed metadata")
+        endpoint = f"releases/{identity}"
+        staged = {"os-rollout.json": new_raw, "os-rollout.json.sig": new_sig}
+        for name, raw in staged.items():
+            existing_asset = by_name.get(name)
+            if existing_asset and type(existing_asset.get("id")) is int:
+                command("api", f"repos/{REPO}/releases/assets/{existing_asset['id']}",
+                        "--hostname", "github.com", "--method", "DELETE")
+            file_path = work / name
+            file_path.write_bytes(raw)
+            command("api", f"https://uploads.github.com/repos/{REPO}/{endpoint}/assets?name={name}",
+                "--hostname", "github.com", "--method", "POST", "--input", str(file_path),
+                "-H", "Content-Type: application/octet-stream", "-H", "Content-Length: " + str(len(raw)))
+        if open_release and remote.get("prerelease") is not False:
+            api(endpoint, "--method", "PATCH", "-F", "draft=false", "-F", "prerelease=false")
+        final = api(endpoint)
+        if open_release and final.get("prerelease") is not False:
+            raise ValueError("OS remote release remained prerelease")
+        assets = {item.get("name"): item for item in final.get("assets", []) if isinstance(item, dict)}
+        readback = {}
+        for name, expected_raw in staged.items():
+            item = assets.get(name) or {}
+            asset_id = item.get("id")
+            if (type(asset_id) is not int or asset_id < 1 or item.get("size") != len(expected_raw)
+                    or item.get("digest") != "sha256:" + hashlib.sha256(expected_raw).hexdigest()):
+                raise ValueError("OS remote rollout asset differs after upload")
+            fetched = command("api", f"repos/{REPO}/releases/assets/{asset_id}", "--hostname", "github.com",
+                              "-H", "Accept: application/octet-stream").encode("utf-8")
+            if fetched != expected_raw:
+                raise ValueError("OS remote rollout bytes differ after upload")
+            readback[name] = fetched
+        verified = verify_rollout(readback["os-rollout.json"], readback["os-rollout.json.sig"].decode("ascii").strip(),
+                                  work / "authority.pem", metadata)
+        return dict(tag=tag, rollout=verified, prerelease=final.get("prerelease"), applied=True)
 
 
 def main(argv=None):

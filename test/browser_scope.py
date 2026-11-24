@@ -190,8 +190,11 @@ SCOPE: dict[str, list[str]] = {
     **{f"learning/curation/perception/{name}": LADDER for name in
        ("ladder_web.py", "review_app_web/ladder.html", "review_app_web/ladder.js", "review_app_web/ladder.css")},
     **{f"learning/curation/perception/{name}": CANONICAL for name in
-       ("canonical_web.py", "review_app_web/canonical.html", "review_app_web/canonical.js", "review_app_web/canonical-monitor.js", "review_app_web/canonical.css")},
+       ("canonical_web.py", "review_app_web/canonical.html", "review_app_web/canonical.js",
+        "review_app_web/canonical-monitor.js", "review_app_web/canonical-todo.js", "review_app_web/canonical.css")},
     "contracts/learning/src/rosy/contracts/learning/omx_canonical.py": CANONICAL,
+    "contracts/learning/src/rosy/contracts/learning/omx_recording_todo.py": CANONICAL,
+    "learning/training/omx/canonical_recording_todo.py": CANONICAL,
     **{f"learning/curation/perception/{name}": PIPELINE for name in
        ("learning_control.py", "learning_pipeline.py")},
     **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + LADDER + CANONICAL + ACCOUNTS + TASKS + STORAGE
