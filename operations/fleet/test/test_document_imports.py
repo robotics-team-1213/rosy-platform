@@ -124,6 +124,10 @@ OWN = {
         "state-age.js",
         "motion-source.js",  # why a robot moves, from proving facts only
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
+        "zone-blueprint-inspector.js",
+        "zone-blueprint-model.js",
+        "zone-blueprint-2d.js",
+        "zone-blueprint-3d.js",
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.

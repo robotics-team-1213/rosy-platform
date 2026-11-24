@@ -4161,7 +4161,8 @@
       ],
       "consumers": [
         "applications/fleet/web/cell/cell.js",
-        "applications/fleet/web/cell/cell-real2sim-specs.js"
+        "applications/fleet/web/cell/cell-real2sim-specs.js",
+        "applications/fleet/web/map/zone-blueprint-inspector.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4287,6 +4288,22 @@
           "request_ids": [
             "GET:/api/fleet/pipeline/station-zones",
             "PUT:/api/fleet/pipeline/station-zones"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
+          "expression": "/api/fleet/pipeline/station-zones",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/station-zones"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
+          "expression": "/api/fleet/pipeline/cell-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-tasks"
           ]
         }
       ],
@@ -4735,7 +4752,8 @@
         "applications/fleet/web/sitemap/drawing-import.js",
         "applications/fleet/web/sitemap/extraction-review.js",
         "applications/fleet/web/sitemap/map-authoring.js",
-        "applications/fleet/web/sitemap/map-editor.js"
+        "applications/fleet/web/sitemap/map-editor.js",
+        "applications/fleet/web/map/zone-blueprint-inspector.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -5098,6 +5116,14 @@
         },
         {
           "consumer": "applications/fleet/web/sitemap/map-editor.js",
+          "expression": "/api/fleet/site-points",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-points"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/map/zone-blueprint-inspector.js",
           "expression": "/api/fleet/site-points",
           "resolution": "literal-or-template",
           "request_ids": [

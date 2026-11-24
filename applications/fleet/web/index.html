@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="/console/assets/password-login.css">
   <link rel="stylesheet" href="/console/assets/device-watch.css">
   <link rel="stylesheet" href="/console/assets/work.css">
+  <link rel="stylesheet" href="/console/assets/zone-blueprint.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/console/assets/console.js"></script>
   <script type="module" src="/console/assets/robot-video.js"></script>
@@ -215,6 +216,7 @@
         <!-- D-741 3 — 로봇 연결 수는 앱 바가 아니라 관제 화면의 내용이다. -->
         <span class="map-robots"><span data-action-icon="connect" data-icon-only="" aria-label="로봇 연결"></span><ui-tag id="online-pill" variant="inline" status="neutral">연결 대기</ui-tag></span>
         <div class="spacer"></div>
+        <ui-button kind="quiet" id="zone-blueprint-open" type="button" data-work-read="">구역 도면 2D/3D</ui-button>
         <label for="map-display-mode">표시</label>
         <select class="ui-field" id="map-display-mode" aria-label="지도 표시 방식">
           <option value="overlay">실제 환경 + 좌표</option>
