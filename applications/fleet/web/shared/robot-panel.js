@@ -1,7 +1,8 @@
 /**
  * C24 robot panel: non-modal left push column (>=64rem) or below-header sheet (<64rem) for one robot.
- * Shell only: head (name, abnormal link statusTag, close), ordered sections (status, camera, commands,
- * collapsible manual controls & settings), and fixed stop footer (live stop button or note). No inline styling, no animation (D-220).
+ * Shell only: head (name, abnormal link statusTag, close), fixed jumps slot (section shortcuts, never scrolls),
+ * scrolling body of ordered sections (status, camera, commands, collapsible manual controls & settings),
+ * and fixed stop footer (live stop button or note). No inline styling, no animation (D-220).
  *
  *   createRobotPanel({selection, onClose, onManualCollapse, sections = {}, stop = null, stopButton = null, resolve, links = {}} = {})
  *     -> {root, setRobot(profile | null, detail?, opts?), focus(), dispose()}
@@ -180,7 +181,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
       });
       jumpsNav.append(btn);
     }
-    body.prepend(jumpsNav);
+    root.insertBefore(jumpsNav, body);  // fixed slot between head and body: the body scrolls under it, not behind it
   }
 
   function setRobot(profile, detail, {force = false} = {}) {
@@ -193,6 +194,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
       linkSlot.hidden = true;
       body.replaceChildren();
       sectionMap.clear();
+      jumpsNav?.remove();
       jumpsNav = null;
       foot.replaceChildren();
       foot.hidden = true;
@@ -239,6 +241,7 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
     if (!sameId) {
       body.replaceChildren();
       sectionMap.clear();
+      jumpsNav?.remove();
       jumpsNav = null;
       body.scrollTop = 0;
     }
@@ -271,9 +274,8 @@ export function createRobotPanel({selection, onClose, onManualCollapse, sections
     }
 
     syncJumps(presentSections);
-    const startOffset = jumpsNav ? 1 : 0;
     desiredNodes.forEach((node, index) => {
-      const at = body.children[index + startOffset];
+      const at = body.children[index];
       if (at !== node) body.insertBefore(node, at || null);
     });
 

@@ -53,34 +53,21 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
   const actions = document.createElement("div");
   actions.className = "robot-actions";
   actions.setAttribute("aria-label", "누르는 동안만 움직이는 저속 조종");
-  const mode = document.createElement("ui-button");
-  mode.type = "button";
-  mode.setAttribute("kind", "quiet");
-  mode.textContent = "수동 모드로 전환…";
-  mode.dataset.manualMode = "";
-  mode.setAttribute("aria-describedby", reason.id);
-  actions.append(mode);
-  const adjust = [["slower", "속도 −", -1], ["faster", "속도 +", 1]].map(([key, label, sign]) => {
-    const button = document.createElement("ui-button");
-    button.type = "button";
-    button.setAttribute("kind", "quiet");
-    button.textContent = label;
-    button.dataset.manualSpeed = key;
-    button.setAttribute("aria-describedby", reason.id);
-    actions.append(button);
-    return {button, sign};
+  actions.dataset.reasonDisplay = "external";  // reasons render in #fleet-manual-reason above (components.css opt-in)
+  const wire = (button, label, aria) => {
+    button.type = "button"; button.textContent = label;
+    button.setAttribute("aria-label", aria); button.setAttribute("aria-describedby", reason.id);
+    actions.append(button); return button;
+  };
+  const mode = wire(document.createElement("ui-button"), "수동 모드로 전환…", "수동 모드로 전환");
+  mode.setAttribute("kind", "quiet"); mode.dataset.manualMode = "";
+  const adjust = [["slower", "속도 −", "수동 속도 감소", -1], ["faster", "속도 +", "수동 속도 증가", 1]].map(([key, label, name, sign]) => {
+    const button = wire(document.createElement("ui-button"), label, name);
+    button.setAttribute("kind", "quiet"); button.dataset.manualSpeed = key; return {button, sign};
   });
   const buttons = COMMANDS.map(([direction, label, linear, angular]) => {
-    const button = document.createElement("ui-button");
-    button.type = "button";
-    button.setAttribute("kind", "toggle");
-    button.setAttribute("aria-pressed", "false");
-    button.setAttribute("aria-describedby", reason.id);
-    button.setAttribute("aria-label", `${label}. 누르는 동안만 저속으로 움직입니다.`);
-    button.textContent = label;
-    button.dataset.manualDirection = direction;
-    actions.append(button);
-    return {button, linear, angular};
+    const button = wire(document.createElement("ui-button"), label, `${label}. 누르는 동안만 저속으로 움직입니다.`);
+    button.setAttribute("kind", "toggle"); button.setAttribute("aria-pressed", "false"); button.dataset.manualDirection = direction; return {button, linear, angular};
   });
   root.append(heading, pose, reason, actions);
   let active = null, pending = null, stopping = null, cancelTimeout = null;

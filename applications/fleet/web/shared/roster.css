@@ -199,17 +199,15 @@
   gap: var(--space-2);
   align-content: start;
 }
+/* 머리와 몸통 사이 고정 바로가기 칸 — 몸통이 굴러도 제자리이고 내용이 뒤로 비치지 않는다. */
 .robot-panel-jumps {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  flex: none;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   gap: var(--space-1);
-  padding: var(--space-1);
-  border: 1px solid var(--line-06);
-  border-radius: var(--radius-button);
-  background: var(--surface-recessed);
+  padding: var(--space-1) var(--space-3);
+  border-block-end: 1px solid var(--line-06);
+  background: var(--surface-chrome);
 }
 .robot-panel-jump {
   box-sizing: border-box;
@@ -230,7 +228,7 @@
 }
 .robot-panel-jump:hover { color: var(--text-primary); border-color: transparent; background: var(--surface-flat); }
 .robot-panel-jump:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
-.robot-panel-section { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); scroll-margin-top: calc(var(--target-secondary) + var(--space-3)); }
+.robot-panel-section { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); scroll-margin-top: var(--space-3); }
 .robot-panel-section + .robot-panel-section { padding-block-start: var(--space-2); border-block-start: 1px solid var(--line-06); }
 .robot-panel-section > h3 { margin: 0; color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-label) var(--mono); letter-spacing: var(--track-label); }
 .robot-panel-section dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-3); align-items: baseline; }

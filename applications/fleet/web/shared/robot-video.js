@@ -139,11 +139,11 @@ function mountRobotVideoPanel({doc = document} = {}) {
   doc.head.append(link);
   // 접힌 채 시작한다: 펼치기 전에는 Fleet에 아무것도 묻지 않고(상태 폴링에 요청을 더하지 않는다) 영상도 열지 않는다.
   const panel = el(doc, "details", null, {class: "panel robot-video", id: "robot-video"});
-  const heading = el(doc, "summary", "로봇 실시간 영상", {id: "robot-video-heading"});
+  const heading = el(doc, "summary", "로봇 실시간 영상", {id: "robot-video-heading", class: "ui-disclosure-row"});
   const picker = el(doc, "fieldset", null, {"data-robot-video-picker": ""});
   picker.append(el(doc, "legend", `로봇 선택(최대 ${MAX_TILES}대)`));
-  const show = el(doc, "button", "영상 보기", {type: "button", "data-robot-video-start": ""});
-  const stopButton = el(doc, "button", "중지", {type: "button", "data-robot-video-stop": ""});
+  const show = el(doc, "ui-button", "영상 보기", {kind: "quiet", type: "button", "data-robot-video-start": ""});
+  const stopButton = el(doc, "ui-button", "중지", {kind: "quiet", type: "button", "data-robot-video-stop": ""});
   const status = el(doc, "p", "로봇을 고르고 영상 보기를 누르세요.", {class: "hint", role: "status"});
   const stage = el(doc, "div", null, {class: "robot-video-stage", "data-robot-video-stage": ""});
   panel.append(heading, picker, show, stopButton, status, stage);
@@ -164,8 +164,8 @@ function mountRobotVideoPanel({doc = document} = {}) {
       const rows = active.length ? active : all;
       picker.replaceChildren(picker.firstChild, ...rows.map((robot, idx) => {
         const id = robot.robot_id;
-        const label = el(doc, "label", null);
-        const input = el(doc, "input", null, {type: "checkbox", value: id, "data-robot-video-choice": id});
+        const label = el(doc, "label", null, {class: "ui-check"});
+        const input = el(doc, "input", null, {type: "checkbox", class: "ui-field", value: id, "data-robot-video-choice": id});
         if (active.length === 1 && idx === 0) input.checked = true;
         label.append(input, ` ${id}`);
         return label;
