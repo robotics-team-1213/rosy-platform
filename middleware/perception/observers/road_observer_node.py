@@ -19,6 +19,7 @@ from sensor_msgs.msg import CompressedImage, Image
 from std_msgs.msg import String
 
 from . import executor_choice
+from .camera_shm import attach_camera_front_source
 from .sensing.perception.camera_homography import (
     CalibrationThresholds,
     load_homography_profile,
@@ -178,8 +179,13 @@ class RoadObserverNode(Node):
         self.preview_pub = self.create_publisher(
             CompressedImage, 'camera/preview/compressed', preview_qos)
         self.raw_preview_pub = self.create_publisher(CompressedImage, RAW_PREVIEW_TOPIC, preview_qos)
-        self.create_subscription(
-            Image, 'camera/front', self._on_camera, qos_profile_sensor_data)
+        self._camera_front_source = attach_camera_front_source(
+            self,
+            self._on_camera,
+            lambda: self.create_subscription(
+                Image, 'camera/front', self._on_camera, qos_profile_sensor_data),
+            image_cls=Image,
+        )
         latched = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -196,6 +202,11 @@ class RoadObserverNode(Node):
         # Rendering on a bounded timer lets independent callbacks deliver evidence
         # first. Only exact capture-stamp matches may annotate the latest frame.
         self.create_timer(1.0 / self._preview_config.fps, self._flush_preview)
+
+    def destroy_node(self):
+        if getattr(self, '_camera_front_source', None) is not None:
+            self._camera_front_source.close()
+        super().destroy_node()
 
     def _add_preview_evidence(self, kind, msg):
         try:

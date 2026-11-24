@@ -424,6 +424,8 @@ DECLARED_WRITES = {
         "/var/lib/rosy/pilot-recordings",
         # D-789 T3: rosy_media_edge.camera_tap FrameWriter mailbox (and its .owner lock).
         "/run/rosy-media/front.rgb", "/run/rosy-media/front.rgb.owner",
+        # D-1065: 2-slot POSIX mmap front camera mailbox (and its .owner lock).
+        "/run/rosy-media/front.bgr", "/run/rosy-media/front.bgr.owner",
     },
     # D-789 T5: the optional media publisher writes nothing on disk (journal only).
     "rosy-media.service": set(),
