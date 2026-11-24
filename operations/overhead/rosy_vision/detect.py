@@ -52,6 +52,8 @@ _REREAD_MAX_PX = 16
 _REREAD_SCALE = 4
 _REREAD_PAD_PX = 6
 _REREAD_BORDER_PX = 20
+_REREAD_MAX_CROPS = 6
+_REREAD_BUDGET_S = 0.04
 
 
 def generate_marker_image(marker_id: int, side_pixels: int):
@@ -64,7 +66,12 @@ def generate_marker_image(marker_id: int, side_pixels: int):
     return cv2.aruco.drawMarker(_DICTIONARY, marker_id, side_pixels)
 
 
-def detect_markers(jpeg: bytes) -> DetectedMarkers:
+def detect_markers(
+    jpeg: bytes,
+    *,
+    reread_qr: bool = True,
+    expected_marker_ids: Iterable[int] | None = None,
+) -> DetectedMarkers:
     """Decode one JPEG and return marker corners; malformed frames are empty."""
 
     if not isinstance(jpeg, bytes) or not jpeg:
@@ -78,16 +85,19 @@ def detect_markers(jpeg: bytes) -> DetectedMarkers:
         points = tuple((float(point[0]), float(point[1])) for point in quad.reshape(4, 2))
         found[int(marker_id)] = points  # type: ignore[assignment]
     _reread_small(image, rejected, found)
-    qr_ids = _detect_qr_robot_markers(image, found, rejected)
-    return DetectedMarkers(found, qr_ids=qr_ids)
+    qr_ids = _detect_qr_robot_markers(
+        image, found, rejected, reread_qr=reread_qr, expected_marker_ids=expected_marker_ids,
+    )
+    return DetectedMarkers(found, qr_ids=qr_ids, image=image)
 
 
 class DetectedMarkers(dict):
     """Marker id -> 4 pixel corners; ``qr_ids`` names ids decoded from robot QR codes."""
 
-    def __init__(self, *args, qr_ids: Iterable[int] = (), **kwargs) -> None:
+    def __init__(self, *args, qr_ids: Iterable[int] = (), image: np.ndarray | None = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.qr_ids: frozenset[int] = frozenset(qr_ids)
+        self.image: np.ndarray | None = image
 
 
 _QR_ROBOT_LABEL = re.compile(r"^\s*rosy[-_\s]?(\d{1,2})\s*$", re.IGNORECASE)
@@ -275,7 +285,14 @@ def _reread_small_qr(
         qr_ids.add(marker_id)
 
 
-def _detect_qr_robot_markers(image: np.ndarray, found: dict[int, MarkerQuad], rejected=()) -> set[int]:
+def _detect_qr_robot_markers(
+    image: np.ndarray,
+    found: dict[int, MarkerQuad],
+    rejected=(),
+    *,
+    reread_qr: bool = True,
+    expected_marker_ids: Iterable[int] | None = None,
+) -> set[int]:
     """Detect robot QR stickers on ``image`` without colliding with already-decoded ArUco ids."""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     qr_ids: set[int] = set()
@@ -294,7 +311,9 @@ def _detect_qr_robot_markers(image: np.ndarray, found: dict[int, MarkerQuad], re
                 continue
             found[marker_id] = tuple((float(x), float(y)) for x, y in canonical)  # type: ignore[assignment]
             qr_ids.add(marker_id)
-    _reread_small_qr(gray, rejected, found, qr_ids)
+    expected = frozenset(expected_marker_ids) if expected_marker_ids is not None else frozenset()
+    if reread_qr and not (expected and expected.issubset(found)):
+        _reread_small_qr(gray, rejected, found, qr_ids)
     return qr_ids
 
 
@@ -302,7 +321,11 @@ def _reread_small(image, rejected, found: dict[int, MarkerQuad]) -> None:
     """D-575: decode small rejected candidates from an enlarged crop; first id wins."""
     height, width = image.shape[:2]
     pad, scale, border = _REREAD_PAD_PX, _REREAD_SCALE, _REREAD_BORDER_PX
+    crops = 0
+    deadline = time.monotonic() + _REREAD_BUDGET_S
     for candidate in rejected:
+        if crops >= _REREAD_MAX_CROPS or time.monotonic() >= deadline:
+            break
         points = np.asarray(candidate, dtype=float).reshape(4, 2)
         low, high = points.min(axis=0), points.max(axis=0)
         if (high - low).max() > _REREAD_MAX_PX:
@@ -311,6 +334,7 @@ def _reread_small(image, rejected, found: dict[int, MarkerQuad]) -> None:
         x1, y1 = min(width, int(np.ceil(high[0])) + pad), min(height, int(np.ceil(high[1])) + pad)
         if x1 <= x0 or y1 <= y0:
             continue
+        crops += 1
         crop = cv2.resize(image[y0:y1, x0:x1], None, fx=scale, fy=scale,
                           interpolation=cv2.INTER_CUBIC)
         crop = cv2.copyMakeBorder(crop, border, border, border, border, cv2.BORDER_REPLICATE)
