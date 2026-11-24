@@ -197,11 +197,14 @@ def main():
         parser.error("explicit image topic and frame id are required")
 
     import cv2
+    if hasattr(cv2, "setNumThreads"):
+        cv2.setNumThreads(1)
     import numpy as np
     from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
     from core_common.camera_quality import frame_quality
 
     channel, camera = SnapshotChannel(args.topic), None
+    last_quality, quality_at = None, 0.0
     previous = signal.signal(signal.SIGTERM, interrupt_on_termination)
     try:
         while True:
@@ -212,7 +215,9 @@ def main():
                     camera = RgbExposureCapture(selected_device(args.device), fourcc)
                 frame, exposure = read_exposure_frame(cv2, np, camera, fourcc)
                 captured_at = time.time() - (time.monotonic() - exposure["exposure_monotonic_s"])
-                quality = dict(frame_quality(frame), **exposure)
+                if last_quality is None or started - quality_at >= 0.5:
+                    last_quality, quality_at = frame_quality(frame), started
+                quality = dict(last_quality, **exposure)
                 ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 if not ok:
                     raise OSError("camera JPEG encoding failed")
@@ -221,6 +226,7 @@ def main():
                 if camera is not None:
                     camera.release()
                 camera = None
+                last_quality = None
                 print(str(error), flush=True)
                 time.sleep(1)
             time.sleep(max(0, 1 / args.max_fps - (time.monotonic() - started)))

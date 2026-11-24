@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -185,17 +186,21 @@ def validate_onnx_export(root: Path, policy_revision: str | None = None, *, onnx
 
 
 def load_openvino(root: Path, policy_revision: str | None = None, *, onnx_sha256: str | None = None,
-                  num_threads: int = 4, action_width: int = 6):
+                  num_threads: int | None = None, action_width: int = 6):
     """Pure-NumPy pre/post + OpenVINO CPU backend (never imports torch)."""
     meta = validate_onnx_export(root, policy_revision, onnx_sha256=onnx_sha256)
     pre, post = load_numpy_norm(root, action_width=action_width)
     import openvino as ov
 
+    threads = max(
+        1,
+        int(num_threads if num_threads is not None else (os.environ.get("ROSY_OV_NUM_THREADS") or (os.cpu_count() or 4))),
+    )
     core = ov.Core()
     compiled = core.compile_model(
         str(root / ONNX_MODEL),
         "CPU",
-        {"PERFORMANCE_HINT": "LATENCY", "INFERENCE_NUM_THREADS": int(num_threads)},
+        {"PERFORMANCE_HINT": "LATENCY", "INFERENCE_NUM_THREADS": threads},
     )
     if len(compiled.outputs) != 1:
         raise ValueError(f"compiled OpenVINO model must have exactly 1 output, got {len(compiled.outputs)}")

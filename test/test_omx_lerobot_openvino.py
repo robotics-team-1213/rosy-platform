@@ -1,6 +1,7 @@
 """Tests for pure-NumPy normalization, ONNX integrity validation, and OpenVINO routing."""
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -217,12 +218,15 @@ def test_load_lerobot_backend_routing_and_pure_numpy_openvino_mock(tmp_path, mon
 
     class _FakeCore:
         def compile_model(self, model_path, device, config):
-            assert device == "CPU" and config["PERFORMANCE_HINT"] == "LATENCY" and config["INFERENCE_NUM_THREADS"] == 4
+            expected_threads = os.cpu_count() or 4
+            assert (device == "CPU" and config["PERFORMANCE_HINT"] == "LATENCY"
+                    and config["INFERENCE_NUM_THREADS"] == expected_threads)
             return _FakeCompiled()
 
     monkeypatch.setitem(sys.modules, "openvino", type("_FakeOV", (), {"Core": _FakeCore})())
     monkeypatch.delitem(sys.modules, "torch", raising=False)
     monkeypatch.delenv("ROSY_ACT_BACKEND", raising=False)
+    monkeypatch.delenv("ROSY_OV_NUM_THREADS", raising=False)
 
     sh = lrs.LeRobotShadow(root, sha, device="cpu")
     frames = {v: _bgr() for v in sh.image_views}
@@ -353,5 +357,57 @@ def test_lerobot_shadow_skips_duplicate_onnx_hashing_via_precomputed_digest(tmp_
 
     ov_backend.validate_onnx_export(root, sha)
     assert digest_calls == ["sha256"]
+
+
+def test_load_openvino_thread_resolution(tmp_path, monkeypatch):
+    root, sha = _ckpt(tmp_path)
+    _write_norm_processors(root, monkeypatch)
+    onnx_bytes = b"onnx-threads"
+    (root / lrs.ONNX_MODEL).write_bytes(onnx_bytes)
+    meta = {
+        "schema": ov_backend.ONNX_SCHEMA,
+        "policy_revision": sha,
+        "onnx_sha256": hashlib.sha256(onnx_bytes).hexdigest(),
+        "opset": 17,
+        "inputs": {
+            "observation.state": [1, 6],
+            "observation.images.top": [1, 3, 8, 12],
+            "observation.images.wrist": [1, 3, 8, 12],
+        },
+        "output_name": "action",
+    }
+    (root / lrs.ONNX_META).write_text(json.dumps(meta), encoding="utf-8")
+
+    seen_threads = []
+
+    class _FakeOutPort:
+        def get_index(self):
+            return 0
+
+    class _FakeCompiled:
+        inputs = [type("_In", (), {"any_name": k})() for k in meta["inputs"]]
+        outputs = [_FakeOutPort()]
+
+        def output(self, idx):
+            return _FakeOutPort()
+
+        def create_infer_request(self):
+            return object()
+
+    class _FakeCore:
+        def compile_model(self, model_path, device, config):
+            seen_threads.append(config["INFERENCE_NUM_THREADS"])
+            return _FakeCompiled()
+
+    monkeypatch.setitem(sys.modules, "openvino", type("_FakeOV", (), {"Core": _FakeCore})())
+    monkeypatch.delenv("ROSY_OV_NUM_THREADS", raising=False)
+    ov_backend.load_openvino(root, sha)
+    monkeypatch.setenv("ROSY_OV_NUM_THREADS", "2")
+    ov_backend.load_openvino(root, sha)
+    monkeypatch.setenv("ROSY_OV_NUM_THREADS", "0")
+    ov_backend.load_openvino(root, sha)
+    monkeypatch.setenv("ROSY_OV_NUM_THREADS", "6")
+    ov_backend.load_openvino(root, sha, num_threads=3)
+    assert seen_threads == [max(1, os.cpu_count() or 4), 2, 1, 3]
 
 

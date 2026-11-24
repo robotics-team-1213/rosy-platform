@@ -150,3 +150,63 @@ def test_ioctl_layout_matches_the_installed_kernel_headers(tmp_path):
 def test_camera_unit_passes_systemd_verification():
     subprocess.run(["systemd-analyze", "verify", str(OMX / "rosy-omx-camera@.service")],
                    check=True, timeout=20)
+
+
+def test_camera_source_and_exposure_throttle_quality_and_pin_cv_threads(monkeypatch, tmp_path):
+    import time as real_time
+    import camera_exposure as app
+    import camera_source
+    from core_common.observation_snapshot import SnapshotChannel
+
+    monkeypatch.setenv("ROSY_OBSERVATION_DIR", str(tmp_path))
+    threads, qcalls = [], []
+    base_wall, clock = real_time.time(), [0.0]
+
+    class FakeTime:
+        @staticmethod
+        def monotonic():
+            return clock[0]
+
+        @staticmethod
+        def time():
+            return base_wall + clock[0]
+
+        @staticmethod
+        def sleep(_):
+            clock[0] += (0.1 if len(qcalls) == 1 and clock[0] == 0.0 else 0.5)
+            if clock[0] > 0.65:
+                raise KeyboardInterrupt
+
+    monkeypatch.setitem(sys.modules, "cv2", SimpleNamespace(
+        setNumThreads=lambda n: threads.append(n),
+        imencode=lambda *_: (True, SimpleNamespace(tobytes=lambda: b"jpeg")),
+        IMWRITE_JPEG_QUALITY=1, error=RuntimeError,
+    ))
+    monkeypatch.setitem(sys.modules, "core_common.camera_quality",
+                        SimpleNamespace(frame_quality=lambda _: qcalls.append(clock[0]) or {"score": len(qcalls)}))
+
+    # camera_exposure: 3 frames at t=0.0, 0.1, 0.6 -> 2 frame_quality calls, advancing source_seq each frame
+    seqs = [1, 2, 3]
+    monkeypatch.setattr(sys, "argv", ["camera_exposure", "--device", "/dev/v4l/by-id/cam", "--topic", "/exp", "--frame-id", "top"])
+    monkeypatch.setattr(camera_source, "selected_device", lambda name: name)
+    monkeypatch.setattr(camera_source, "notify_watchdog", lambda: None)
+    monkeypatch.setattr(app, "RgbExposureCapture", lambda *_: SimpleNamespace(release=lambda: None))
+    monkeypatch.setattr(app, "read_exposure_frame", lambda *_: (object(), {
+        "boot_id": "b", "clock_semantics": "v4l2_monotonic_start_of_exposure",
+        "exposure_monotonic_s": clock[0], "source_seq": seqs.pop(0),
+    }))
+    monkeypatch.setattr(app, "time", FakeTime)
+    app.main()
+    assert threads == [1] and len(qcalls) == 2
+    assert SnapshotChannel("/exp").read(wall=FakeTime.time())["quality"]["source_seq"] == 3
+
+    # camera_source: 3 frames at t=0.0, 0.1, 0.6 -> 2 frame_quality calls
+    threads.clear()
+    qcalls.clear()
+    clock[0] = 0.0
+    monkeypatch.setattr(sys, "argv", ["camera_source", "--device", "/dev/v4l/by-id/cam", "--topic", "/src", "--frame-id", "top"])
+    monkeypatch.setattr(camera_source, "open_capture", lambda *_: SimpleNamespace(release=lambda: None))
+    monkeypatch.setattr(camera_source, "read_frame", lambda *_: object())
+    monkeypatch.setattr(camera_source, "time", FakeTime)
+    camera_source.main()
+    assert threads == [1] and len(qcalls) == 2

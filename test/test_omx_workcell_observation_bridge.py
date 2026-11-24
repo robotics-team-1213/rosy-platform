@@ -725,3 +725,114 @@ def test_the_incident_link_is_built_from_the_manifest_and_a_fingerprint_matched_
             bridge.ArmIncidentLink.from_environment("arm_a", bad)
     with pytest.raises(ValueError, match="credential"):
         bridge.ArmIncidentLink.from_environment("arm_z", env)
+
+
+def test_native_source_caches_unchanged_snapshot_and_preserves_dynamic_sample_age(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_OBSERVATION_DIR", str(tmp_path))
+    channel = SnapshotChannel("/test/arm")
+    t0, m0 = time.time(), time.monotonic()
+    channel.write("joints", json.dumps({"joint1": 0.25}).encode(), captured_at=t0)
+    source = bridge.NativeSource("/test/arm", joint_names=["joint1"])
+    clock = SimpleNamespace(wall=t0 + 0.1, mono=m0 + 0.1)
+    source.wall = lambda: clock.wall
+    source.monotonic = lambda: clock.mono
+    orig_read = source.channel.read
+    reads = []
+    source.channel.read = lambda **kw: reads.append(1) or orig_read(**kw)
+
+    first = source.latest()
+    assert first.value == {"joint1": 0.25} and len(reads) == 1
+    clock.wall, clock.mono = t0 + 0.5, m0 + 0.5
+    assert source.latest().sequence == first.sequence and len(reads) == 1
+    clock.wall, clock.mono = t0 + 2.5, m0 + 2.5
+    assert source.latest() is None and len(reads) == 1
+
+    t1, m1 = time.time(), time.monotonic()
+    channel.write("joints", json.dumps({"joint1": 0.75}).encode(), captured_at=t1)
+    clock.wall, clock.mono = t1 + 0.05, m1 + 0.05
+    assert source.latest().value == {"joint1": 0.75} and len(reads) == 2
+
+    channel.path.unlink()
+    clock.wall, clock.mono = t1 + 2.5, m1 + 2.5
+    assert source.latest() is None and source._snapshot_stat is None
+
+
+def test_arm_health_source_caches_unchanged_file_and_ages_dynamically(tmp_path, monkeypatch):
+    import core_common.motor_health as mh_mod
+
+    health_path = (tmp_path / "health.json").resolve()
+    t0 = 100.0
+    row = {
+        "schema_version": "rosy.motor-health.v1",
+        "owner_id": "arm_a",
+        "session_id": "11111111-1111-4111-8111-111111111111",
+        "status": "active",
+        "observed_at": t0,
+        "expected_motor_count": 1,
+        "stop_reasons": [],
+        "motors": [{
+            "group": "arm_a", "joint": "joint1", "id": 11, "observed_at": t0,
+            "command_raw": 2028.0, "present_raw": 2028.0, "error_deg": 0.0,
+            "pwm": 0.0, "pwm_limit": 330.0, "pwm_utilization": 0.0,
+            "temperature_c": 35.0, "temperature_limit_c": 70.0,
+            "voltage_v": 12.0, "min_voltage_v": 6.0, "max_voltage_v": 14.0,
+            "hardware_error": 0, "fault": False, "torque_enabled": False,
+        }],
+    }
+    mh_mod.write_motor_health_snapshot(health_path, row)
+    parses = []
+    orig_loads = mh_mod.json.loads
+    monkeypatch.setattr(mh_mod.json, "loads", lambda raw: parses.append(1) or orig_loads(raw))
+
+    clock = SimpleNamespace(wall=100.1, mono=10.1)
+    pos = bridge.LatestSource(wall=lambda: clock.wall, monotonic=lambda: clock.mono)
+    pos.put(100.1, {"joint1": 0.2})
+    combined = bridge.ArmHealthSource(pos, health_path, "arm_a")
+
+    s1 = combined.latest()
+    assert len(parses) == 1 and s1.motor_health.evidence == "fresh"
+    assert s1.motor_health.sample_age_s == pytest.approx(0.1)
+
+    clock.wall, clock.mono = 101.6, 11.6
+    pos.put(101.6, {"joint1": 0.3})
+    s2 = combined.latest()
+    assert len(parses) == 1 and s2.motor_health.evidence == "fresh"
+    assert s2.motor_health.sample_age_s == pytest.approx(1.6)
+
+    clock.wall, clock.mono = 102.2, 12.2
+    pos.put(102.2, {"joint1": 0.4})
+    s3 = combined.latest()
+    assert len(parses) == 1 and s3.motor_health.evidence == "delayed"
+    assert s3.motor_health.sample_age_s == pytest.approx(2.2)
+
+    health_path.unlink()
+    clock.wall, clock.mono = 102.5, 12.5
+    pos.put(102.5, {"joint1": 0.5})
+    assert combined.latest().motor_health is None
+
+
+def test_post_arm_caches_tls_connections_per_source_id(monkeypatch):
+    import http.client
+
+    conns = []
+
+    class FakeConn:
+        def __init__(self, host, port, *, context, timeout):
+            self.sock = None
+            conns.append((host, port))
+
+        def connect(self): pass
+        def request(self, *a, **kw): pass
+        def getresponse(self):
+            return SimpleNamespace(status=202, reason="Accepted", headers={}, read=lambda: b"")
+        def close(self): pass
+
+    monkeypatch.setattr(bridge, "_ARM_CONNECTIONS", {})
+    monkeypatch.setattr(http.client, "HTTPSConnection", FakeConn)
+    obs = ArmObservation(epoch="a" * 32, sequence=1, captured_at=100, positions={"joint1": 0.25})
+    ctx = ssl.create_default_context()
+    bridge.post_arm("https://fleet.example", "arm_a", "tok-a", obs, context=ctx)
+    bridge.post_arm("https://fleet.example", "arm_b", "tok-b", obs, context=ctx)
+    bridge.post_arm("https://fleet.example", "arm_a", "tok-a", obs, context=ctx)
+    assert len(conns) == 2
+    assert {key[3] for key in bridge._ARM_CONNECTIONS} == {"arm_a", "arm_b"}
