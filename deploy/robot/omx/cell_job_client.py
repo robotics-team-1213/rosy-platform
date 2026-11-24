@@ -138,7 +138,7 @@ class CellJobClient:
     def get(self, job_id: str) -> dict:
         return json.loads(self._request("GET", f"/jobs/{job_id}"))
 
-    def wait(self, job_id: str, *, poll_s: float = 1.0, timeout_s: float = 300.0) -> dict:
+    def wait(self, job_id: str, *, poll_s: float = 1.0, timeout_s: float = 600.0) -> dict:
         deadline = time.monotonic() + timeout_s
         while True:
             state = self.get(job_id)
@@ -164,12 +164,19 @@ def main(argv=None) -> int:
     p_latest.add_argument("--arm")
     p_latest.add_argument("--kind")
     sub.add_parser("queue")
+    p_get = sub.add_parser("get")
+    p_get.add_argument("job_id")
+    p_wait = sub.add_parser("wait")
+    p_wait.add_argument("job_id")
+    p_wait.add_argument("--timeout", type=float, default=600.0)
     p_frame = sub.add_parser("frame")
     p_frame.add_argument("view")
     p_frame.add_argument("--out", type=Path, required=True)
     p_run = sub.add_parser("run")
     p_run.add_argument("job")
     p_run.add_argument("--params-json", default="{}")
+    p_run.add_argument("--timeout", type=float, default=600.0)
+    p_run.add_argument("--idempotency-key")
     p_run.add_argument("--wait", action="store_true")
     args = ap.parse_args(argv)
 
@@ -189,16 +196,23 @@ def main(argv=None) -> int:
     if args.cmd == "queue":
         print(json.dumps(client.queue()))
         return 0
+    if args.cmd == "get":
+        print(json.dumps(client.get(args.job_id)))
+        return 0
+    if args.cmd == "wait":
+        done = client.wait(args.job_id, timeout_s=args.timeout)
+        print(json.dumps(done))
+        return 0 if done.get("exit") == 0 else 1
     if args.cmd == "frame":
         args.out.write_bytes(client.frame(args.view))
         print(json.dumps({"view": args.view, "out": str(args.out)}))
         return 0
     params = json.loads(args.params_json)
-    started = client.start(args.job, params)
+    started = client.start(args.job, params, idempotency_key=args.idempotency_key)
     if not args.wait:
         print(json.dumps(started))
         return 0
-    done = client.wait(started["id"])
+    done = client.wait(started["id"], timeout_s=args.timeout)
     print(json.dumps(done))
     return 0 if done.get("exit") == 0 else 1
 

@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
-from cell_calibrate_bound import low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
+from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, log_json, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
+from cell_calibrate_bound import coverage_advisories, low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
@@ -105,7 +105,7 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
             if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
                 out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
     except ValueError as exc:
-        out["bias_error"] = str(exc)
+        bias, out["bias_error"] = None, str(exc)
         out["missing_bias"].extend(f"{site}:{xy[0]},{xy[1]}" for site, xy in targets)
     out["missing_map"] = rp.missing_maps(config, calibration, map_sites(config))
     cal_sites = calibration.get("sites") or {}
@@ -146,6 +146,7 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     gaps = low_zone_gaps(config, calibration)
     if gaps:
         out["low_zone_gaps"] = gaps
+    out.update(coverage_advisories(config, calibration, bias, params))
     return out
 
 
@@ -167,7 +168,7 @@ def _map_write_sites(config: dict) -> list:
     return sites
 
 
-def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None) -> dict:
+def remap(cell, config: dict, points: list, work: Path, log=log_json, at_stop=None) -> dict:
     """Hover the empty jaws at each point (z_view), mark them, fit the map; None marks are skipped.
 
     at_stop(state, status) runs when a move is refused, before the fold hides what the arm met: the carry path's
@@ -299,10 +300,10 @@ def main(argv=None):
         return 0
     refused = rp.refusal(rp.plan(config, points)) if "remap" in todo else None  # before any move: one bad point refuses the run
     if refused:
-        print(json.dumps({"refused": refused, "todo": todo}))
+        print(json.dumps({"refused": refused, "todo": todo}), flush=True)
         return 2
     if not (args.commissioning and args.person_at_switch):
-        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}))
+        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}), flush=True)
         return 2
     done, config_dirty = [], False
     for step in todo:
