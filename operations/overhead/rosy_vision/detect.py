@@ -123,8 +123,10 @@ def generate_qr_image(text: str, side_pixels: int, *, border_modules: int = 2) -
     if border_modules > 0:
         raw = cv2.copyMakeBorder(raw, border_modules, border_modules, border_modules, border_modules,
                                  cv2.BORDER_CONSTANT, value=255)
-    interp = cv2.INTER_AREA if side_pixels < raw.shape[0] else cv2.INTER_NEAREST
-    return cv2.resize(raw, (side_pixels, side_pixels), interpolation=interp)
+    # Integer module scale first so module edges stay crisp before camera-like downsampling.
+    uniform = cv2.resize(raw, None, fx=10, fy=10, interpolation=cv2.INTER_NEAREST)
+    interp = cv2.INTER_AREA if side_pixels < uniform.shape[0] else cv2.INTER_NEAREST
+    return cv2.resize(uniform, (side_pixels, side_pixels), interpolation=interp)
 
 
 def _decode_qr_points(detector, image: np.ndarray, pts: np.ndarray) -> str:
@@ -149,9 +151,12 @@ def _decode_qr_quad(gray: np.ndarray, pts: np.ndarray) -> tuple[str, np.ndarray]
     direct = _decode_qr_points(_QR_DETECTOR, gray, pts)
     if direct:
         return direct, pts
-    h_mat = cv2.getPerspectiveTransform(pts.astype(np.float32), _QR_WARP_DST)
-    warped = cv2.warpPerspective(gray, h_mat, (_QR_WARP_SIZE, _QR_WARP_SIZE),
-                                 flags=cv2.INTER_CUBIC, borderValue=255)
+    try:
+        h_mat = cv2.getPerspectiveTransform(pts.astype(np.float32), _QR_WARP_DST)
+        warped = cv2.warpPerspective(gray, h_mat, (_QR_WARP_SIZE, _QR_WARP_SIZE),
+                                     flags=cv2.INTER_CUBIC, borderValue=255)
+    except cv2.error:
+        return "", pts
     _, otsu = cv2.threshold(warped, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     for candidate in (warped, otsu):
         for detector in (_QR_STD, _QR_ARUCO):
