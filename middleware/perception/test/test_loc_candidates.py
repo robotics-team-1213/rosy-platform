@@ -302,3 +302,30 @@ def test_asymmetric_gazebo_and_l_room_yield_unique_margin_while_symmetric_rooms_
     rr, ra = _synth_scan(rect_field, (0.7, 0.55, 0.25))
     rect_found = global_candidates(rect_field, rr[::2], ra[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(rr, ra))
     assert all(c.unique_margin is None for c in rect_found)
+
+    # Shifted-bbox symmetric room: an outer wall shifts (cx, cy) >= 0.4 m so bbox mirror clips a wall;
+    # both global_candidates and isolated _unique_margin (with truncated coarse results) must still reject.
+    from control.sensing.loc_candidates import _unique_margin
+    from control.sensing.localization import valid_beams
+
+    shifted_grid = np.zeros((40, 80), dtype=np.int8)
+    shifted_grid[[0, -1], :52] = 100
+    shifted_grid[:, [0, 51]] = 100
+    shifted_grid[:, 78] = 100  # outer wall outside closed inner room shifts bbox center +0.675 m in x
+    shifted_field = MapAgreement(shifted_grid, 0.05, (0.0, 0.0))
+    sr, sa = _synth_scan(shifted_field, (0.7, 0.55, 0.25))
+    shifted_found = global_candidates(shifted_field, sr[::2], sa[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(sr, sa))
+    assert all(c.unique_margin is None for c in shifted_found)
+    er, ea = valid_beams(sr, sa)
+    clear_shifted = shifted_field.clear_poses(RADIUS)
+    assert _unique_margin(shifted_field, [(1.0, 1.0, np.array([0.7, 0.55, 0.25]))],
+                          [(np.array([0.7, 0.55, 0.25]), 1.0)], er, ea, 0.9, clear=clear_shifted) is None
+
+    # 90-degree (4-fold) symmetric square room never earns a unique_margin
+    sq_grid = np.zeros((44, 44), dtype=np.int8)
+    sq_grid[[0, -1], :] = 100
+    sq_grid[:, [0, -1]] = 100
+    sq_field = MapAgreement(sq_grid, 0.05, (0.0, 0.0))
+    sqr, sqa = _synth_scan(sq_field, (0.65, 0.80, 0.20))
+    sq_found = global_candidates(sq_field, sqr[::2], sqa[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(sqr, sqa))
+    assert all(c.unique_margin is None for c in sq_found)
