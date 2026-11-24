@@ -725,3 +725,16 @@ def test_sync_hardware_error_bit_rechecks_unicast_after_rx_drain(guard):
         motion._check_hardware_errors()
     assert not isinstance(exc_info.value, probe.TelemetryReadError)
     assert cleared == ["clear", "clear"]
+
+    # Partial dict with a real fault bit on another joint still raises hard ValueError (never masked as missing-key desync).
+    mixed_bus = Bus()
+    mixed_bus.model_ctrl_table = {}
+    orig_mixed_sync = mixed_bus.sync_read
+    mixed_bus.sync_read = lambda reg, motors=None, **kw: (
+        {"shoulder_lift": 0, "elbow_flex": 0, "wrist_flex": 0, "wrist_roll": 0, "gripper": 1}
+        if reg == "Hardware_Error_Status" else orig_mixed_sync(reg, motors=motors, **kw)
+    )
+    mixed_motion = guard.NativeJointMotion(mixed_bus, None, teacher=True, clock=lambda: 10.0)
+    with pytest.raises(ValueError, match=r"gripper: hardware error \(1") as exc_mixed:
+        mixed_motion._check_hardware_errors()
+    assert not isinstance(exc_mixed.value, probe.TelemetryReadError)

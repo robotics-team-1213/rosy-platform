@@ -58,11 +58,12 @@ def check_sync_hw_status(follower, errors, read_retry: int) -> None:
     """Validate sync_read Hardware_Error_Status dict, draining RX and confirming real fault bits via unicast."""
     if not isinstance(errors, dict):
         raise TelemetryReadError("missing or non-finite joint sample")
+    if any(name in errors and not is_valid_hw_status(errors.get(name)) for name in NAMES):
+        drain_rx(follower)
+        raise TelemetryReadError(f"desynced hardware status {errors}")
     for name in NAMES:
-        if name not in errors or not is_valid_hw_status(errors.get(name)):
-            drain_rx(follower)
-            raise TelemetryReadError(f"desynced hardware status {errors}")
-    for name in NAMES:
+        if name not in errors:
+            continue
         val = errors[name]
         if not is_hardware_fault(val):
             continue
@@ -76,6 +77,9 @@ def check_sync_hw_status(follower, errors, read_retry: int) -> None:
                 raise TelemetryReadError(f"{name}: invalid hardware status {confirm}")
             val = confirm
         raise ValueError(f"{name}: hardware error ({val}; all={errors})")
+    if any(name not in errors for name in NAMES):
+        drain_rx(follower)
+        raise TelemetryReadError(f"desynced hardware status {errors}")
 
 
 def is_valid_hw_status(val) -> bool:
