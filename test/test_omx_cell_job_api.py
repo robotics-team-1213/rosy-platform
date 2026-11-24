@@ -595,3 +595,18 @@ def test_surface_job_argv_requires_person_at_switch(tmp_path):
         api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)
     (wd / "cell-s.json").write_text(json.dumps({"sites": {"pinky": {"surface_z": 0.031}, "belt": {}}}), encoding="utf-8")
     assert api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)[0] == "./with-session-arm-s-live.sh"
+
+
+def test_cell_job_api_is_managed_by_omx_devices_autoupdate():
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    unit = (root / "deploy" / "robot" / "omx" / "rosy-omx-cell-job-api.service").read_text(encoding="utf-8")
+    assert "Environment=ROSY_CELL_JOB_API_ROOT=%h/.local/share/rosy/omx-devices/current/deploy/robot/omx" in unit
+    example = json.loads((root / "deploy" / "robot" / "omx" / "omx-devices-autoupdate.json.example").read_text(encoding="utf-8"))
+    assert "rosy-omx-cell-job-api.service" in example["units"]
+    assert "deploy/robot/omx/rosy-omx-cell-job-api.service" in example["unit_files"]
+    assert "cell_job_api" in example["smoke"]
+    entry = yaml.safe_load((root / "deploy" / "hosts" / "services.yaml").read_text(encoding="utf-8"))["roles"]["omx"]["rosy-omx-cell-job-api.service"]
+    assert entry["channel"] == "autoupdate"
+    assert entry["source"] == ".local/share/rosy/omx-devices/current"
