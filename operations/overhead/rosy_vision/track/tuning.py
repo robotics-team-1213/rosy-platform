@@ -138,6 +138,9 @@ def _robust(values: np.ndarray) -> tuple[float, float]:
     return median, 1.4826 * float(np.median(np.abs(values - median)))
 
 
+DEFAULT_LOCKED_MEASURE_INTERVAL_S = 1.0
+
+
 class Scorer:
     """Measures frames for one source; caches the track and paint masks per calibration."""
 
@@ -145,10 +148,20 @@ class Scorer:
         self.paint = paint  # rosy_vision.map_register.MapPaint or None
         self._key: tuple | None = None
         self._masks: tuple[np.ndarray, np.ndarray | None, np.ndarray | None] | None = None
+        self._last_locked_measure_at: float | None = None
 
     def measure(self, image: np.ndarray, calib: Calibration,
-                marker_rate: float | None = None) -> Measurement | None:
-        """None when the track is not in this frame."""
+                marker_rate: float | None = None, *,
+                locked: bool = False, now: float | None = None) -> Measurement | None:
+        """None when the track is not in this frame (or throttled while locked)."""
+        if locked:
+            ts = time.monotonic() if now is None else now
+            if (self._last_locked_measure_at is not None
+                    and 0.0 <= ts - self._last_locked_measure_at < DEFAULT_LOCKED_MEASURE_INTERVAL_S):
+                return None
+            self._last_locked_measure_at = ts
+        else:
+            self._last_locked_measure_at = None
         gray = cv2.cvtColor(_work_image(image), cv2.COLOR_BGR2GRAY)
         track, paint, carpet = self._masks_for(calib, gray.shape)
         inside = gray[track]
@@ -328,6 +341,10 @@ class Tuner:
     def active(self) -> bool:
         """A tune is running: its intermediate settings are not backgrounds to learn."""
         return self._phase == "tuning" or (self._phase == "settle" and not self._relearn_sent)
+
+    @property
+    def locked(self) -> bool:
+        return self._phase == "locked"
 
     def take_relearn(self) -> bool:
         """True once after a lock is confirmed and settled."""

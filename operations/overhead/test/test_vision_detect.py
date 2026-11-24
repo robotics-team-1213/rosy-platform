@@ -142,3 +142,32 @@ def test_detect_markers_roi_zoom_decodes_small_top_sticker_and_ignores_unreadabl
     assert 46 in found.qr_ids
     quad = np.asarray(found[46], dtype=float)
     assert np.allclose(quad.mean(axis=0), (325.0, 605.0), atol=3.0)
+
+
+def test_detect_markers_reread_small_caps_crops_and_qr_reread_can_be_skipped(monkeypatch):
+    from rosy_vision import detect as detect_mod
+
+    image = np.full((200, 200, 3), 120, dtype=np.uint8)
+    rejected = [
+        np.array([[10 + i * 15, 10], [18 + i * 15, 10], [18 + i * 15, 18], [10 + i * 15, 18]], dtype=float)
+        for i in range(12)
+    ]
+    calls = []
+    orig_detect = detect_mod._DETECT_MARKERS
+    monkeypatch.setattr(detect_mod, "_DETECT_MARKERS", lambda _crop: (calls.append(1), ((), None, ()))[1])
+    detect_mod._reread_small(image, rejected, {})
+    assert len(calls) == detect_mod._REREAD_MAX_CROPS == 6
+    monkeypatch.setattr(detect_mod, "_DETECT_MARKERS", orig_detect)
+
+    qr_calls = []
+    monkeypatch.setattr(detect_mod, "_reread_small_qr", lambda *args: qr_calls.append(1))
+    frame = np.full((320, 320, 3), 255, dtype=np.uint8)
+    marker = generate_marker_image(7, 140)
+    frame[90:230, 90:230] = cv2.cvtColor(marker, cv2.COLOR_GRAY2BGR)
+    ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 100])
+    assert ok
+    assert set(detect_markers(encoded.tobytes(), reread_qr=False)) == {7}
+    assert set(detect_markers(encoded.tobytes(), expected_marker_ids={7})) == {7}
+    assert qr_calls == []
+    assert set(detect_markers(encoded.tobytes(), expected_marker_ids={7, 45})) == {7}
+    assert len(qr_calls) == 1

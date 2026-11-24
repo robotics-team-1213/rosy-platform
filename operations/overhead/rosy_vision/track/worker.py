@@ -223,7 +223,8 @@ class TrackWorker:
 
     async def process(self, frame, markers: Mapping[int, Sequence[Point]],
                       sighted: frozenset[str] = frozenset(),
-                      camera: CameraMap | None = None) -> OverheadDetectionsPayload | None:
+                      camera: CameraMap | None = None,
+                      image: np.ndarray | None = None) -> OverheadDetectionsPayload | None:
         """Track one frame and publish the result; None when skipped (undecodable, or busy).
 
         D-587 1: ``sighted`` are robots this frame already produced a sighting for; ``camera``
@@ -232,12 +233,13 @@ class TrackWorker:
             return None
         self._busy = True
         try:
-            return await self._process(frame, markers, sighted, camera or self.camera)
+            return await self._process(frame, markers, sighted, camera or self.camera, image=image)
         finally:
             self._busy = False
 
     async def _process(self, frame, markers, sighted=frozenset(),
-                       camera: CameraMap | None = None) -> OverheadDetectionsPayload | None:
+                       camera: CameraMap | None = None,
+                       image: np.ndarray | None = None) -> OverheadDetectionsPayload | None:
         config = self._config or {}
         relearn = config.get("relearn_seq")
         if type(relearn) is not int:
@@ -264,10 +266,13 @@ class TrackWorker:
             event, self._relearn_due = (self._relearn_due or None, False), None
         self._measurement = None
         effective_camera = camera or self.camera
+        tuner_locked = self.tuner.locked
+        score_now = self._clock()
         step = await asyncio.get_running_loop().run_in_executor(
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
-                lens, relearn, event, suspend, hold, effective_camera.robot_markers))
+                lens, relearn, event, suspend, hold, effective_camera.robot_markers,
+                image, tuner_locked, score_now))
         if step is not None and step[0] is not None:
             self._latest_calibration = step[0]
         # D-589 x D-596: no tune step or retune is judged while an LED identify window is open
@@ -430,7 +435,9 @@ class TrackWorker:
 
     def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens,
                 relearn: int | None, camera: tuple[str, bool] | None = None, suspend: bool = False,
-                hold: float | None = None, robot_markers: Mapping[str, int] | None = None) -> tuple[Calibration | None, DetectorResult] | None:
+                hold: float | None = None, robot_markers: Mapping[str, int] | None = None,
+                image: np.ndarray | None = None, tuner_locked: bool = False,
+                score_now: float | None = None) -> tuple[Calibration | None, DetectorResult] | None:
         """Detection-thread half of a step: relearn, hold, decode, choose the calibration, detect,
         and measure the frame for tuning (``self._measurement``). ``camera`` is a D-589 camera
         change (fingerprint, first); ``suspend`` (a tune runs) skips detection: LEARNING;
@@ -449,7 +456,8 @@ class TrackWorker:
             self._relearn_seen = relearn
         if hold is not None and hasattr(self.detector, "hold"):
             self.detector.hold(hold)
-        image = self.decode(jpeg)
+        if image is None:
+            image = self.decode(jpeg)
         if image is None:
             return None
         size = (int(image.shape[1]), int(image.shape[0]))
@@ -468,7 +476,11 @@ class TrackWorker:
         robot_ids = set(active_markers.values()).union(ROBOT_MARKER_IDS)
         rate = self._presence.rate(captured_at, robot_ids.intersection(markers))
         try:
-            self._measurement = self.scorer.measure(image, calibration, rate)
+            if tuner_locked:
+                self._measurement = self.scorer.measure(
+                    image, calibration, rate, locked=True, now=score_now)
+            else:
+                self._measurement = self.scorer.measure(image, calibration, rate)
         except (cv2.error, ValueError, np.linalg.LinAlgError) as exc:  # tracking goes on unscored
             logger.warning("tuning score failed source=%s error=%s",
                            self.camera.source_id, type(exc).__name__)

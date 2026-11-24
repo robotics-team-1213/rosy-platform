@@ -1,7 +1,7 @@
 """The site stack runs Fleet's calibration-drift watch against Vision by default.
 
 Fleet reads Vision's existing D-375 map-proposal endpoint server-side
-(`--vision-url`, 60 s cadence) so a re-aimed camera is caught with no robot in view.
+(`--vision-url`, 300 s cadence) so a re-aimed camera is caught with no robot in view.
 The vision origin uses the internal compose network, the site leaf's ``vision`` SAN,
 and the site CA the fleet container already trusts through ``SSL_CERT_FILE``.
 """
@@ -21,7 +21,7 @@ def test_fleet_watches_calibration_drift_against_the_vision_map_proposal():
     fleet = _fleet_service()
     assert "--vision-preview-secret-env\n      - ROSY_VISION_PREVIEW_SECRET" in fleet
     assert "--vision-url\n      - https://vision:${ROSY_VISION_PORT:?set ROSY_VISION_PORT}" in fleet
-    # No explicit interval: the 60 s default (calibration drift stays on unless asked off).
+    # No explicit interval: the 300 s default (calibration drift stays on unless asked off).
     assert "--calibration-drift-interval-s" not in fleet
 
 
@@ -35,4 +35,4 @@ def test_the_drift_watch_flags_exist_on_the_console_command():
     assert args.vision_url == "https://vision:8095"
     assert args.calibration_drift_interval_s == 30.0
     default = parse_args(["console"])
-    assert default.vision_url is None and default.calibration_drift_interval_s == 60.0
+    assert default.vision_url is None and default.calibration_drift_interval_s == 300.0
