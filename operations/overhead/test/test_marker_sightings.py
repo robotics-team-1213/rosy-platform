@@ -45,11 +45,12 @@ def _calibration(lens=LENS):
                        frame_size=(1280, 720), lens=lens)
 
 
-def _sticker(x, y, robot_yaw, *, sticker_turn=0.0, side=SIDE_M):
+def _sticker(x, y, robot_yaw, *, sticker_turn=0.0, side=SIDE_M, calibration=None):
     """Image corners (ArUco order, top edge first) of a sticker on a robot at (x, y, yaw)."""
-    calibration = _calibration()
+    calibration = calibration or _calibration()
     matrix = geometry.as_matrix(calibration.image_to_map)
-    cx, cy, height = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
+    cx, cy, height = geometry.camera_from_homography(
+        matrix, calibration.image_size, calibration.hfov_deg, lens_profile=calibration.lens_profile)
     mx, my = MARKER_MOUNT_XY_M
     centre = (x + mx * math.cos(robot_yaw) - my * math.sin(robot_yaw),
               y + mx * math.sin(robot_yaw) + my * math.cos(robot_yaw))
@@ -338,7 +339,7 @@ def test_distorted_marker_sighting_with_lens_profile_and_parallax():
     rec = {**RECORD, "lens_profile": lp}
     cal = from_record(rec, source_id="ceiling_north", map_id="map_v2_fleet", frame_size=(1280, 720), lens=LENS)
     assert cal is not None and cal.lens_profile is not None
-    undist_quad = _sticker(0.8, 0.4, 0.4)
+    undist_quad = _sticker(0.8, 0.4, 0.4, calibration=cal)
     dist_quad = tuple(distort_point(u, v, lp) for u, v in undist_quad)
     [sighting] = robot_sightings(CAMERA, cal, {40: dist_quad}, captured_at=1_790_000_000.25, seq=8)
     assert (sighting.x, sighting.y) == pytest.approx((0.8, 0.4), abs=1e-3)

@@ -291,10 +291,7 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
         if len(src_seed) < 4:
             return None
         s_arr, d_arr = np.array(src_seed, np.float64), np.array(dst_seed, np.float64)
-        method = cv2.RANSAC if len(src_seed) >= 5 else 0
-        map_to_image, _ = cv2.findHomography(s_arr, d_arr, method, 8.0) if method else cv2.findHomography(s_arr, d_arr, 0)
-        if map_to_image is None and method:
-            map_to_image, _ = cv2.findHomography(s_arr, d_arr, 0)
+        map_to_image, _ = cv2.findHomography(s_arr, d_arr, 0)
         if map_to_image is None or not np.all(np.isfinite(map_to_image)):
             return None
         map_to_image /= map_to_image[2, 2]
@@ -309,24 +306,31 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
     model_name = lp["model"]
     fixed_lens = lens_profile is not None
 
-    rt = _decompose_m2i(map_to_image, K)
-    if rt is None:
+    try:
+        image_to_map = np.linalg.inv(map_to_image)
+        image_to_map /= image_to_map[2, 2]
+    except np.linalg.LinAlgError:
         return None
-    rvec, tvec = rt
-    pair = _h_from_rt(rvec, tvec, K)
-    if pair is None:
-        return None
-    map_to_image, image_to_map = pair
+    rvec = tvec = None
+    if fixed_lens:
+        rt = _decompose_m2i(map_to_image, K)
+        if rt is None:
+            return None
+        rvec, tvec = rt
+        pair = _h_from_rt(rvec, tvec, K)
+        if pair is None:
+            return None
+        map_to_image, image_to_map = pair
     final_r = np.zeros(0, np.float64)
     pts_pb1 = pts_pb3 = pts_bot = pts_div = pts_top = np.zeros((0, 2), np.float64)
 
     for stage_idx, pad in enumerate((0.055, 0.028, 0.016)):
-        pts_bot = _sample_strip_centroids(white_mask, (-1.12, -0.588 - pad, 1.12, -0.588 + pad), map_to_image, "x", 30)
+        pts_bot = _sample_strip_centroids(white_mask, (-1.08, -0.588 - pad, 1.08, -0.588 + pad), map_to_image, "x", 30)
         pts_div = _sample_strip_centroids(white_mask, (-0.88, -0.364 - pad, 0.88, -0.364 + pad), map_to_image, "x", 30)
         pts_top = _stack([
-            _sample_strip_centroids(white_mask, (-1.14, -0.140 - pad, -0.80, -0.140 + pad), map_to_image, "x", 8),
+            _sample_strip_centroids(white_mask, (-1.10, -0.140 - pad, -0.80, -0.140 + pad), map_to_image, "x", 8),
             _sample_strip_centroids(white_mask, (-0.54, -0.140 - pad, 0.16, -0.140 + pad), map_to_image, "x", 15),
-            _sample_strip_centroids(white_mask, (0.44, -0.140 - pad, 1.14, -0.140 + pad), map_to_image, "x", 16),
+            _sample_strip_centroids(white_mask, (0.44, -0.140 - pad, 1.10, -0.140 + pad), map_to_image, "x", 15),
         ])
         pts_stubs = _stack([
             _sample_strip_centroids(white_mask, (-0.69, 0.260 - pad, -0.53, 0.260 + pad), map_to_image, "x", 5),
@@ -336,8 +340,8 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
             _sample_strip_centroids(green_mask, (-0.51, 0.597 - pad, -0.21, 0.597 + pad), map_to_image, "x", 8),
             _sample_strip_centroids(green_mask, (-0.05, 0.597 - pad, 0.14, 0.597 + pad), map_to_image, "x", 8),
         ])
-        pts_left = _sample_strip_centroids(white_mask, (-1.188 - pad, -0.52, -1.188 + pad, -0.20), map_to_image, "y", 14)
-        pts_right = _sample_strip_centroids(white_mask, (1.188 - pad, -0.55, 1.188 + pad, 0.15), map_to_image, "y", 18)
+        pts_left = _sample_strip_centroids(white_mask, (-1.188 - pad, -0.50, -1.188 + pad, -0.22), map_to_image, "y", 12)
+        pts_right = _sample_strip_centroids(white_mask, (1.188 - pad, -0.50, 1.188 + pad, -0.22), map_to_image, "y", 12)
         pts_pb1 = _sample_strip_centroids(pink_mask, (-0.414 - pad, 0.08, -0.414 + pad, 0.32), map_to_image, "y", 10)
         pts_pb2 = _sample_strip_centroids(pink_mask, (-0.190 - pad, 0.08, -0.190 + pad, 0.32), map_to_image, "y", 10)
         pts_pb3 = _sample_strip_centroids(pink_mask, (0.032 - pad, 0.08, 0.032 + pad, 0.48), map_to_image, "y", 15)
@@ -352,34 +356,42 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
             x_groups = [(_undistort_cv(p, K, D, model_name), t) for p, t in x_groups]
 
         def residuals(vec: np.ndarray, *, include_reg: bool = True) -> np.ndarray:
-            pair_v = _h_from_rt(vec[:3], vec[3:6], K)
-            if pair_v is None:
-                return np.zeros(0, np.float64)
-            _, i2m_v = pair_v
-            d_vec = np.array([vec[6], 0.0, 0.0, 0.0, 0.0], np.float64) if len(vec) == 7 else D
+            if fixed_lens:
+                pair_v = _h_from_rt(vec[:3], vec[3:6], K)
+                if pair_v is None:
+                    return np.zeros(0, np.float64)
+                i2m_v, d_vec = pair_v[1], D
+            else:
+                i2m_v = np.append(vec[:8], 1.0).reshape(3, 3)
+                d_vec = np.array([vec[8], 0.0, 0.0, 0.0, 0.0], np.float64) if joint_lens else D
             res = []
             for pts, y_target in y_groups:
                 if len(pts):
-                    u_pts = _undistort_cv(pts, K, d_vec, model_name) if len(vec) == 7 else pts
+                    u_pts = _undistort_cv(pts, K, d_vec, model_name) if joint_lens else pts
                     res.append(_proj(i2m_v, u_pts)[:, 1] - y_target)
             for pts, x_target in x_groups:
                 if len(pts):
-                    u_pts = _undistort_cv(pts, K, d_vec, model_name) if len(vec) == 7 else pts
+                    u_pts = _undistort_cv(pts, K, d_vec, model_name) if joint_lens else pts
                     res.append(_proj(i2m_v, u_pts)[:, 0] - x_target)
-            if len(vec) == 7 and include_reg:
-                res.append(np.array([vec[6] * 0.020]))
+            if joint_lens and include_reg:
+                res.append(np.array([vec[8] * 0.020]))
             return np.concatenate(res) if res else np.zeros(0, np.float64)
 
-        n_dof = 7 if joint_lens else 6
-        params = np.concatenate([rvec, tvec, [D[0]]]) if joint_lens else np.concatenate([rvec, tvec])
-        eps = np.array([1e-5, 1e-5, 1e-5, 1e-4, 1e-4, 1e-4, 1e-4][:n_dof], np.float64)
-        lam = 1e-3
+        if fixed_lens:
+            n_dof, params = 6, np.concatenate([rvec, tvec])
+            eps = np.array([1e-5, 1e-5, 1e-5, 1e-4, 1e-4, 1e-4], np.float64)
+            lam, max_iter, max_lam = 1e-3, 18, 1e4
+        else:
+            n_dof = 9 if joint_lens else 8
+            params = np.append(image_to_map.ravel()[:8], D[0]) if joint_lens else image_to_map.ravel()[:8].copy()
+            eps = np.full(n_dof, 1e-6, np.float64)
+            lam, max_iter, max_lam = 1e-4, 16, 1e2
 
         def _huber_cost(r: np.ndarray) -> float:
             abs_r = np.abs(r)
             return float(np.sum(np.where(abs_r <= 0.015, 0.5 * r * r, 0.015 * (abs_r - 0.5 * 0.015))))
 
-        for _ in range(18):
+        for _ in range(max_iter):
             r0 = residuals(params)
             if len(r0) < 25 or not np.all(np.isfinite(r0)):
                 return None
@@ -395,29 +407,37 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
                 J[:, j] = (rj - r0) / eps[j]
             Jw = J * weights[:, None]
             jtwj = Jw.T @ Jw
-            diag = np.maximum(1e-8, np.diag(jtwj))
-            step, _, _, _ = np.linalg.lstsq(jtwj + lam * np.diag(diag), -Jw.T @ (r0 * weights), rcond=None)
+            reg = np.diag(np.maximum(1e-8, np.diag(jtwj))) if fixed_lens else np.eye(n_dof)
+            step, _, _, _ = np.linalg.lstsq(jtwj + lam * reg, -Jw.T @ (r0 * weights), rcond=None)
             cand = params + step
             if joint_lens:
-                cand[6] = float(np.clip(cand[6], -0.30, 0.30))
+                cand[8] = float(np.clip(cand[8], -0.25, 0.25))
             r1 = residuals(cand)
             if len(r1) == len(r0) and np.all(np.isfinite(r1)) and _huber_cost(r1) < _huber_cost(r0):
                 params = cand
-                lam = max(1e-6, lam * 0.4)
+                lam = max(1e-6, lam * 0.5)
                 if np.max(np.abs(step)) < 1e-7:
                     break
             else:
-                lam = min(1e4, lam * 5.0)
-                if lam >= 1e4:
+                lam = min(max_lam, lam * 4.0)
+                if lam >= max_lam:
                     break
 
-        rvec, tvec = params[:3], params[3:6]
-        if joint_lens:
-            D = np.array([float(np.clip(params[6], -0.30, 0.30)), 0.0, 0.0, 0.0, 0.0], np.float64)
-        pair = _h_from_rt(rvec, tvec, K)
-        if pair is None:
-            return None
-        map_to_image, image_to_map = pair
+        if fixed_lens:
+            rvec, tvec = params[:3], params[3:6]
+            pair = _h_from_rt(rvec, tvec, K)
+            if pair is None:
+                return None
+            map_to_image, image_to_map = pair
+        else:
+            image_to_map = np.append(params[:8], 1.0).reshape(3, 3)
+            if joint_lens:
+                D = np.array([float(np.clip(params[8], -0.25, 0.25)), 0.0, 0.0, 0.0, 0.0], np.float64)
+            try:
+                map_to_image = np.linalg.inv(image_to_map)
+                map_to_image /= map_to_image[2, 2]
+            except np.linalg.LinAlgError:
+                return None
         final_r = residuals(params, include_reg=False)
 
     if (len(final_r) < 25 or len(pts_pb1) < 4 or len(pts_pb3) < 4
@@ -426,10 +446,11 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray, *, revision: str | No
     rms_m = float(np.sqrt(np.mean(final_r ** 2)))
     if not math.isfinite(rms_m) or rms_m > 0.015:
         return None
-    rot_m, _ = cv2.Rodrigues(rvec.reshape(3, 1))
-    cam_h = abs(float((-rot_m.T @ tvec)[2]))
-    if not 0.5 <= cam_h <= 6.0:
-        return None
+    if fixed_lens and rvec is not None and tvec is not None:
+        rot_m, _ = cv2.Rodrigues(rvec.reshape(3, 1))
+        cam_h = abs(float((-rot_m.T @ tvec)[2]))
+        if not 0.5 <= cam_h <= 6.0:
+            return None
     corners = np.array([[-1.22, -0.61], [1.22, -0.61], [1.22, 0.61], [-1.22, 0.61]], np.float64)
     w_c = (np.column_stack([corners, np.ones(4)]) @ map_to_image.T)[:, 2]
     if np.any(w_c <= 0.1):
