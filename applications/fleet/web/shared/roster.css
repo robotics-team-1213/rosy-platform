@@ -424,7 +424,10 @@ details.robot-panel-section > summary {
   gap: var(--space-1);
   min-width: 0;
 }
-.gauge-meta-line span {
+.gauge-meta-line > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-size: var(--text-micro);
   color: var(--text-secondary);
   overflow: hidden;
@@ -442,32 +445,16 @@ details.robot-panel-section > summary {
   white-space: nowrap;
   min-width: 0;
 }
-.gauge-svg {
-  width: 100%;
-  height: 7px;
-  display: block;
-  border-radius: var(--radius-control);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.gauge-bg { fill: var(--gauge-track); }
-.gauge-fill.good { fill: var(--series-goal); }
-.gauge-fill.info { fill: var(--series-primary); }
-.gauge-fill.warn { fill: var(--status-warn); }
-.gauge-fill.crit { fill: var(--status-crit); }
-
-.hover-bars {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-.gauge-row-compact {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
+.gauge-bar { display: block; width: 100%; height: 6px; border-radius: var(--radius-control); background: var(--gauge-track); overflow: hidden; }
+.gauge-bar-fill { display: block; height: 100%; width: attr(data-meter type(<percentage>), 0%); max-width: 100%; border-radius: var(--radius-control); background: var(--series-goal); }
+.gauge-bar-fill[data-tone="warn"] { background: var(--status-warn); }
+.gauge-bar-fill[data-tone="crit"] { background: var(--status-crit); }
+.robot-panel-sec-title, .hover-card-head strong { display: inline-flex; align-items: center; gap: var(--space-1); }
+.robot-panel-sec-title > .ui-icon, .map-hover-card .ui-icon { width: var(--text-label); height: var(--text-label); }
+details[data-more], [data-more-body] { display: grid; gap: var(--space-1); padding-top: var(--space-1); }
+details[data-more] { margin-top: var(--space-1); border-top: 1px solid var(--line-06); }
+details[data-more] > summary { cursor: pointer; font-size: var(--text-micro); color: var(--text-secondary); }
+.hover-bars, .gauge-row-compact { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
 /* EICAS Top HUD telemetry strip + PFD 3D/uPlot wraps + single-row ND bezel */
 .cockpit-hud {
   margin-inline-start: auto;
