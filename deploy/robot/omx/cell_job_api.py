@@ -26,6 +26,7 @@ from cell_job_guards import (  # noqa: E402
     check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
+from cell_job_peer_health import live_hold_attach_err  # noqa: E402
 from cell_job_readiness import CellStateGen, handle_get_route, parse_structured_result, proxy_frame  # noqa: E402
 from cell_job_spec import AB_ARMS, JOBS, SESSION, build_argv, job_arms, moves_arm  # noqa: E402,F401
 
@@ -196,9 +197,12 @@ class Runner:
                         return {"code": 409, "error_code": "FLEET_SAFETY_STOP", "error": fleet_st.get("reason") or "Fleet safety stop"}
                 if _whole_cell_lock_held(self.lock_dir):
                     return {"code": 409, "error": "whole-cell session.lock is held by another process"}
+                attach_hold = bool(job.get("attach_live_hold"))
+                if attach_hold and (attach_err := live_hold_attach_err(arm, self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, pid_alive_fn=_pid_alive)):
+                    return {"code": 409, "error_code": "NO_LIVE_HOLD_TO_RECOVER", "error": attach_err}
                 lock_arms = sorted(AB_ARMS) if (target_arms & AB_ARMS) else list(arms)
                 for check_arm in lock_arms:
-                    if _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
+                    if not (attach_hold and check_arm == arm) and _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
                         return {"code": 409, "error": f"session lock for {check_arm} is held by another process"}
                 if target_arms == AB_ARMS:
                     if ready_err := check_two_arm_ab_ready(

@@ -200,16 +200,12 @@ def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None, gr
             not isinstance(lift, tuple) or len(lift) != 2 or lift[0] not in BODY
             or type(lift[1]) not in (int, float) or not math.isfinite(lift[1]) or not round(lift[1], 2)):
         raise ValueError("lift needs a body joint and a finite delta that rounds to a nonzero jog")
-
-    receipt = {"home": home, "plan": [], "jogs": [], "start": None, "end": None}
-    started = False
+    receipt, started = {"home": home, "plan": [], "jogs": [], "start": None, "end": None}, False
     try:
         status = receipt["start"] = receipt["end"] = cell.act("state")
-        context = status.get("operating_context")
-        profile = getattr(cell, "operating_profile", None)
+        context, profile = status.get("operating_context"), getattr(cell, "operating_profile", None)
         if assessment is not None:
             from cell_envelope import same_session
-
             if not same_session(status, assessment):
                 return {**receipt, "result": "session_changed", "error": "initial runner session refused"}
         if not _home_state(status, context) or (profile is not None and (context or {}).get("operating_profile") != profile):
@@ -224,7 +220,6 @@ def return_home(cell, home, limits, *, lift=None, sleep=time.sleep, log=None, gr
         result, error = _home_jogs(cell, home, bounds, status, receipt, sleep, log, grip)
     except (Exception, KeyboardInterrupt) as exc:
         result, error = "stopped", repr(exc)
-
     receipt.update(result=result, error=error)
     if started and result != "home":
         try:
@@ -271,7 +266,10 @@ def decide(last: str | None, blocked: str | None, lifted: float) -> str:
     return choice
 
 
-def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None) -> dict:
+def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None,
+            clear_z_m: float | None = None, tcp_x_m: float | None = None) -> dict:
+    from cell_recovery_plan import fk_z, unwedge_pull_dips
+
     status = cell.act("state")
     if status.get("ok") is not True or lags(status) is None:
         return {"result": "stopped", "error": status.get("error") or "body measurements unavailable"}
@@ -283,6 +281,9 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None) -> dic
     for step in range(round(MAX_STEPS * STEP / size)):
         lifted = lift_direction * (status["state"][1] - initial_lift)
         action = decide(last, blocked, lifted)
+        if clear_z_m is not None and action == "pull" and blocked != "lift" and unwedge_pull_dips(
+                status["state"], status["target"], home, size, clear_z_m, tcp_x_m):
+            action = "lift"
         joint = ACTIONS[action]
         index = BODY.index(joint)
         remaining = home[index] - status["target"][index]  # jog changes the held target, not the measured pose
@@ -321,7 +322,7 @@ def unwedge(cell, home: list, *, sleep=time.sleep, frames=None, log=None) -> dic
             continue
         misses, blocked, last = 0, None, action
         lifted = lift_direction * (status["state"][1] - initial_lift)
-        if lifted >= CLEAR:
+        if lifted >= CLEAR and (clear_z_m is None or fk_z(status["state"], tcp_x_m=tcp_x_m) >= clear_z_m):
             parked = cell.act("park")
             recovered = (parked.get("ok") is True and parked.get("settled") is True and lags(parked) is not None
                          and max(abs(a - b) for a, b in zip(parked["state"][:5], home)) <= SETTLE_TOL)
@@ -385,14 +386,11 @@ def main(argv=None) -> int:
             except Exception as exc:  # a missing camera must not stop the recovery
                 out[camera] = f"no frame: {exc}"[:80]
         return out
-
     decisions = field.dir / f"{field.stamp}-unwedge-decisions.jsonl"
     with decisions.open("a") as fh:
-        out = unwedge(field.cell, HOME, frames=frames, log=lambda row: fh.write(json.dumps(row) + "\n") or fh.flush())
-    print(json.dumps(field.report("unwedge", {k: v for k, v in out.items() if k != "rows"} | {"steps": len(out.get("rows", [])),
-                                                                                         "decisions": str(decisions)}), indent=1))
+        out = unwedge(field.cell, HOME, frames=frames, log=lambda r: fh.write(json.dumps(r) + "\n") or fh.flush())
+    summary = {k: v for k, v in out.items() if k != "rows"} | {"steps": len(out.get("rows", [])), "decisions": str(decisions)}
+    print(json.dumps(field.report("unwedge", summary), indent=1))
     return 0 if out["result"] == "recovered" else 1
-
-
 if __name__ == "__main__":
     sys.exit(main())

@@ -209,12 +209,13 @@ def _is_holding(runner) -> bool:
 
 
 def absorb_telemetry_error(runner, present, reason: str, error: Exception) -> bool:
-    """Keep torque ON on telemetry/status OSError while jaw-gated, holding, latched, or interrupted."""
-    from chunk_runner_guards import runner_has_configured_rim
+    """Keep torque ON on telemetry/status OSError while jaw-gated, holding, latched, recovery-parking, or interrupted."""
+    from chunk_runner_guards import RECOVERY_PARKS, runner_has_configured_rim
     if getattr(runner, "human_hold_latched", False) or getattr(runner, "signals", None):
         return True
     if not (_has_jaw_gate(runner) or _is_holding(runner) or getattr(runner, "_stop_after_park", None)
-            or runner_has_configured_rim(runner) or getattr(runner, "trusted_grasp", None) is not None):
+            or getattr(runner, "chunk", None) in RECOVERY_PARKS or runner_has_configured_rim(runner)
+            or getattr(runner, "trusted_grasp", None) is not None or getattr(runner, "_recovery_active", False)):
         return False
     play = getattr(runner, "policy_playback", None) if getattr(runner, "chunk", None) == "policy" else None
     _hold_and_report(runner, present, f"{reason}: {error}", play.receipt() if play is not None else None)
@@ -222,7 +223,8 @@ def absorb_telemetry_error(runner, present, reason: str, error: Exception) -> bo
 
 
 def read_present_or_hold(runner, reason: str):
-    """Read encoders; when jaw-gated, holding, latched, or interrupted, keep torque ON on read failure."""
+    """Read encoders; when jaw-gated, holding, latched, recovery-parking, or interrupted, keep torque ON on read failure."""
+    from chunk_runner_guards import RECOVERY_PARKS
     try:
         return runner.present(), True
     except Exception as error:  # noqa: BLE001
@@ -232,7 +234,8 @@ def read_present_or_hold(runner, reason: str):
         fallback = list(fallback)
         if getattr(runner, "human_hold_latched", False):
             return fallback, True
-        if not (_has_jaw_gate(runner) or _is_holding(runner) or getattr(runner, "_stop_after_park", None)):
+        if not (_has_jaw_gate(runner) or _is_holding(runner) or getattr(runner, "_stop_after_park", None)
+                or getattr(runner, "chunk", None) in RECOVERY_PARKS or getattr(runner, "_recovery_active", False)):
             raise
         play = getattr(runner, "policy_playback", None) if getattr(runner, "chunk", None) == "policy" else None
         _hold_and_report(runner, fallback, f"{reason}: {error}", play.receipt() if play is not None else None)
@@ -248,7 +251,7 @@ def _hold_and_report(runner, present, reason: str, timing=None, **extra) -> bool
     chunk_name = getattr(runner, "chunk", None)
     runner.policy_playback = runner.jaw_gate = runner._trailing_jaw_gate = None
     runner.hold(present, "human hold", human=True)
-    cmd = f"run {chunk_name}" if chunk_name in ("policy", "entry") else "run policy"
+    cmd = f"run {chunk_name}" if chunk_name in ("policy", "entry", "park-slow", "fold-from-hold") else "run policy"
     try:
         runner.report(command=cmd, ok=False, policy_stop=reason,
                       **({"timing": timing} if timing is not None else {}), present=present, **extra)
@@ -296,8 +299,10 @@ def send_hold_action(robot, target):
 
 def send_with_jaw_gate(runner, action: dict, gate, play, prev_target: list):
     """Validate guard-retimed Goal_Position before sync_write when `Guarded`; HOLD with torque ON if rejected."""
+    from chunk_runner_guards import RECOVERY_PARKS
     from chunk_runner_settle import note_sent_grip
-    protect = gate is not None or runner.human_hold_latched or _is_holding(runner) or bool(getattr(runner, "_stop_after_park", None))
+    protect = (gate is not None or runner.human_hold_latched or _is_holding(runner)
+               or bool(getattr(runner, "_stop_after_park", None)) or getattr(runner, "chunk", None) in RECOVERY_PARKS or getattr(runner, "_recovery_active", False))
     if not protect or not callable(getattr(runner.robot, "send_action_checked", None)):
         sent = runner.robot.send_action(action)
         note_sent_grip(runner, sent)

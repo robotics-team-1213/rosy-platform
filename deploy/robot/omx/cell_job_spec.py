@@ -191,6 +191,15 @@ JOBS = {
             "layers_below": _int_range(0, 5),
         },
     },
+    "recover_hold": {
+        "script": "cell_auto_fold.py", "moving": True, "camera": True, "attach_live_hold": True, "commissioning": False,
+        "argv": ["--supervised", "--unlatch-hold", "--arm", "{arm}", "--config", "{config}", "--library", "{library}",
+                 "--site", "{site}", "--roi", "{roi}", "--out", "cell-job-api/recover-hold-{arm}.json"],
+        "params": {"arm": _match(ARM), "config": _match(FILE), "library": _match(FILE), "site": _match(NAME), "roi": _roi},
+        "optional": {"operator": _actor, "proposer": _actor, "vlm_url": _http_url, "vlm_config": _safe_path,
+                     "vlm_model": _match(re.compile(r"[A-Za-z0-9._:/-]{1,80}")),
+                     "vlm_provider": _match(re.compile(r"[A-Za-z0-9_-]{1,32}")), "vlm_timeout": _num(1.0, 30.0)},
+    },
     "cell_two_arm_policy": {
         "script": "cell_two_arm_policy_cli.py",
         "moving": True,
@@ -362,6 +371,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
         "margin_m", "min_z_m", "out", "out_dir", "fps", "images", "outcome", "expected_manifest_sha256",
+        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout",
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
@@ -370,10 +380,12 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
     if job["script"] == "cell_policy_drive.py" and "endpoint_url" in opt_checked:
         args += ["--arm-id", checked["arm"]]
     if moves_arm(job, params):
-        reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
         arm_list = list(job_arms(job, params))
         if not arm_list or any(a not in SESSION for a in arm_list):
             raise ValueError(f"no session wrapper for {params.get('arm') or arm_list}")
+        if job.get("attach_live_hold"):
+            return ["bash", "-c", ENV + PY, job["script"], *args]
+        reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
         prefix = [SESSION[a] for a in arm_list]
         if reviewed_run:
             if params.get("person_at_switch") is True:
