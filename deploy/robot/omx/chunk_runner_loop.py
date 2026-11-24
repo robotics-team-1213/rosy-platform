@@ -7,6 +7,42 @@ from chunk_runner_interrupt import interrupt_tick
 from chunk_runner_settle import tick_or_report, wait_aligned_before_start
 
 
+def publish_live(runner, *, state=None, best_effort: bool = False) -> None:
+    """Atomically emit the latest runner snapshot for `cell_job_api` and observer handoff."""
+    if not getattr(runner, "live", None) or getattr(runner, "target", None) is None:
+        return
+    try:
+        pose = state if state is not None else (getattr(runner, "last_present", None) or runner.present())
+        runner.live(
+            {
+                "t": round(time.time(), 3),
+                "state": [round(v, 2) for v in pose],
+                "target": [round(v, 2) for v in runner.target],
+                "chunk": runner.chunk,
+                "policy_start": runner.policy_playback.spec["start"] if runner.chunk == "policy" and runner.policy_playback else None,
+                "lag": round(runner.lag, 2),
+                "fault": runner.fault,
+                "human_hold_latched": runner.human_hold_latched,
+                "torque_hold_commanded": runner.torque_hold_commanded,
+                **({"hold_req": runner._human_hold_acked_req} if getattr(runner, "_human_hold_acked_req", None) else {}),
+                **({"interrupt": runner._interrupt["phase"], "pid": os.getpid()} if getattr(runner, "_interrupt", None) else {}),
+                "health": runner.health,
+                **({"jitter": runner.jitter} if runner.jitter["shaking"] else {}),
+            }
+        )
+    except OSError as error:
+        if not best_effort and not absorb_telemetry_error(runner, getattr(runner, "last_present", None), "live write failed", error):
+            raise
+
+
+def finish_recovery_stop(runner, *, state=None) -> None:
+    """Clear recovery flags on clean `stop` and flush `live.json` when exiting a recovery flow."""
+    flush = bool(getattr(runner, "_recovery_active", False) or getattr(runner, "_recovery_live_flush", False))
+    runner._recovery_active = runner._recovery_live_flush = False
+    if flush:
+        publish_live(runner, state=state, best_effort=True)
+
+
 def run(runner, lines) -> None:
     """`lines()` returns the commands that arrived since the last call."""
     runner.target = runner.present()
@@ -59,27 +95,8 @@ def run(runner, lines) -> None:
             and not runner.human_hold_latched
             and ((getattr(runner, "_stopped", False) and getattr(runner, "_park_settled", False)) or runner.idle())
         ):
+            publish_live(runner, best_effort=True)
             return  # interrupted: idle stop and a judge's stop fold give way to interrupt_tick's verdict
-        if runner.live and (runner.chunk == "policy" or runner.ticks % max(1, runner.fps // 10) == 0):
-            try:
-                runner.live(
-                    {
-                        "t": round(time.time(), 3),
-                        "state": [round(v, 2) for v in (getattr(runner, "last_present", None) or runner.present())],
-                        "target": [round(v, 2) for v in runner.target],
-                        "chunk": runner.chunk,
-                        "policy_start": runner.policy_playback.spec["start"] if runner.chunk == "policy" and runner.policy_playback else None,
-                        "lag": round(runner.lag, 2),
-                        "fault": runner.fault,
-                        "human_hold_latched": runner.human_hold_latched,
-                        "torque_hold_commanded": runner.torque_hold_commanded,
-                        **({"hold_req": runner._human_hold_acked_req} if getattr(runner, "_human_hold_acked_req", None) else {}),
-                        **({"interrupt": runner._interrupt["phase"], "pid": os.getpid()} if getattr(runner, "_interrupt", None) else {}),
-                        "health": runner.health,
-                        **({"jitter": runner.jitter} if runner.jitter["shaking"] else {}),
-                    }
-                )
-            except OSError as error:
-                if not absorb_telemetry_error(runner, getattr(runner, "last_present", None), "live write failed", error):
-                    raise
+        if runner.chunk == "policy" or runner.ticks % max(1, runner.fps // 10) == 0:
+            publish_live(runner)
         runner.sleep(max(0.0, period - (runner.clock() - started)))
