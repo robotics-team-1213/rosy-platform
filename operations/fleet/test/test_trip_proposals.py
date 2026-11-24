@@ -210,3 +210,63 @@ def test_object_ref_is_carried_opaquely_bound_by_the_digest_and_survives_admissi
     assert admitted.status_code == 200
     assert admitted.json()["proposal"]["object_ref"] == "CNTR-0001"
     assert admitted.json()["proposal"]["status"] == "ADMITTED"
+
+
+def test_s_out_proposal_requires_verified_dispatchable_stop(tmp_path):
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.site_map import SiteMap
+    from fleet.site_rules import SiteRules
+
+    path = tmp_path / "fleet.sqlite3"
+    site_maps = SiteMapStore(path)
+    tasks = FleetTaskService(FleetTaskStore(path), robot_ids=(ROBOT,))
+    users = {sha256(t.encode()).hexdigest(): {"principal_id": p, "role": r} for t, (p, r) in USERS.items()}
+    app = create_app(
+        FleetConsole([RobotEndpoint(ROBOT, "http://127.0.0.1:8080", "robot-token")], [FakeRobot(ROBOT)]),
+        task_service=tasks, site_users=users, deployment_profile="simulation", site_maps=site_maps,
+        mission_service=MissionService(MissionStore(path)), proposal_store=ProposalStore(path))
+    tasks.store.rearm_dispatch(expected_generation=tasks.store.dispatch_control()["generation"], actor_id="operator-1")
+    client = TestClient(app)
+
+    unverified_map = SiteMap.model_validate({
+        "schema": "rosy.site_map/1",
+        "map_id": "test",
+        "places": [
+            {"id": "J_stand", "kind": "junction", "name": "분기", "x": 0.0, "y": 0.0},
+            {"id": "S_OUT", "kind": "stop", "name": "반출대", "x": 0.5, "y": 0.0, "yaw": 0.0, "pinned": True},
+        ],
+        "edges": [
+            {"id": "e1", "from": "J_stand", "to": "S_OUT", "polyline": [[0.0, 0.0], [0.5, 0.0]],
+             "direction": "two_way", "width_m": 0.2, "speed_cap_mps": 0.1, "drive_mode": "free", "pinned": True},
+        ],
+    })
+    draft = site_maps.save_draft(unverified_map, expected_revision=site_maps.draft_view()["revision"], principal_id="operator-1")
+    site_maps.activate(expected_revision=draft["revision"], principal_id="operator-1", route_active=False)
+
+    blocked = client.post(PATH, headers=headers("harbor"), json={
+        "candidate_robot_ids": [ROBOT], "request_key": "harbor/sout-unverified",
+        "steps": [{"to": "S_OUT", "via": []}],
+    })
+    assert blocked.status_code == 422 and blocked.json()["detail"]["code"] == "TRIP_STOP_NOT_DISPATCHABLE"
+
+    verified_map = SiteMap.model_validate({
+        **unverified_map.model_dump(by_alias=True),
+        "places": [
+            {"id": "J_stand", "kind": "junction", "name": "분기", "x": 0.0, "y": 0.0},
+            {
+                "id": "S_OUT", "kind": "stop", "name": "반출대", "x": 0.5, "y": 0.0, "yaw": 0.0, "pinned": True,
+                "stop_zone": [[0.4, -0.1], [0.6, -0.1], [0.6, 0.1], [0.4, 0.1]], "approach_m": 0.15,
+            },
+        ],
+    })
+    draft2 = site_maps.save_draft(verified_map, expected_revision=site_maps.draft_view()["revision"], principal_id="operator-1")
+    site_maps.activate(expected_revision=draft2["revision"], principal_id="operator-1", route_active=False)
+    rules = SiteRules.model_validate({"return": {"exit_place": "J_stand"}, "stops": [{"place": "S_OUT", "role": "load"}]})
+    rdraft = site_maps.rules.save_draft(rules, expected_revision=site_maps.rules.draft_view()["revision"], principal_id="operator-1")
+    site_maps.rules.activate(expected_revision=rdraft["revision"], principal_id="operator-1", route_active=False)
+
+    ok = client.post(PATH, headers=headers("harbor"), json={
+        "candidate_robot_ids": [ROBOT], "request_key": "harbor/sout-verified",
+        "steps": [{"to": "S_OUT", "via": []}],
+    })
+    assert ok.status_code == 200 and ok.json()["proposal"]["status"] == "PROPOSED"
