@@ -170,16 +170,17 @@ async function pollCameras(){
     }
     emptyCamPolls=0;
     const {liveReq,missingReq}=renderCamHealthHeader(lastCamState,labels,curArm);
+    const recNow=typeof isActivelyRecording==='function'&&isActivelyRecording();
     note.textContent=missingReq.length
-      ? ('미리보기 ('+(liveReq.join(', ')||'없음')+') · 미수신: '+missingReq.join(', '))
-      : ('실시간 미리보기 ('+labels.join(', ')+')');
+      ? ((recNow?'녹화 중':'미리보기 (녹화 대기)')+' — 수신: '+(liveReq.join(', ')||'없음')+' · 미수신: '+missingReq.join(', '))
+      : ((recNow?'녹화 중 — ':'실시간 미리보기 (녹화 대기) — ')+labels.join(', '));
     if(labels.join(',')!==camLabels.join(',')){
       camLabels=labels;
       grid.innerHTML='';
       for(const lbl of labels){
         const box=document.createElement('div');box.className='cam-box';box.dataset.camBox=lbl;
         const title=document.createElement('span');title.className='cam-title-pill';title.textContent=lbl+' ('+(st[lbl]?.quality?.condition||'확인 중')+')';
-        const rec=document.createElement('span');rec.className='cam-rec-badge on';rec.textContent='● 녹화';
+        const rec=document.createElement('span');rec.className='cam-rec-badge armed';rec.textContent='녹화 대상';
         const tag=document.createElement('span');tag.className='cam-tag';tag.hidden=true;
         const img=document.createElement('img');img.alt=lbl+' 카메라 (프레임 대기 중)';img.dataset.cam=lbl;
         img.style.display='none';
