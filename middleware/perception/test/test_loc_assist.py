@@ -968,3 +968,46 @@ def test_stationary_empty_searches_back_off_up_to_30s_and_reset_on_move_or_reque
     a.on_mission(73.0, {'state': 'running'})
     a.on_mission(74.0, {'state': 'done'})
     assert a.search_due(74.0, ODOM)
+
+
+def test_auto_unique_locks_settled_asymmetric_candidate_and_stops_after_reject_cap():
+    a = core()
+    uniq = PoseCandidate(-0.5, 0.2, 0.0, 0.98, 'global', unique_margin=0.30)
+    assert a.search_due(1.0, ODOM)
+    a.search_started(1.0, ODOM)
+    out = a.search_finished(1.0, ODOM, [uniq])
+    inject = one(out, 'inject')
+    assert inject.source == 'unique_map' and inject.pose == (-0.5, 0.2, 0.0)
+    assert inject.xy_std == COVARIANCE['candidate'][0] and inject.yaw_std == COVARIANCE['candidate'][1]
+    assert one(out, 'state')['status']['reason'] == 'checking'
+    done = hold(a, 1.2, 4.7, fit=0.96)
+    assert one(done, 'result') == {'request_id': 'r-1', 'accepted': True, 'reason': None, 'state': 'LOCALIZED'}
+
+    # Unsettled robot (moving or stale twist) or no unique_margin must not auto-inject
+    unsettled = LocAssist(lambda: 'u-1')
+    unsettled.search_started(0.0, ODOM)
+    assert kinds(unsettled.search_finished(0.5, ODOM, [uniq]), 'inject') == []
+
+    no_margin = core()
+    no_margin.search_started(0.0, ODOM)
+    assert kinds(no_margin.search_finished(0.5, ODOM, [PoseCandidate(-0.5, 0.2, 0.0, 0.98, 'global')]), 'inject') == []
+
+    # After 2 failed checks, auto-unique pauses until robot moves or map changes
+    capped = core()
+    for t_start in (1.0, 10.0):
+        assert capped.search_due(t_start, ODOM)
+        capped.search_started(t_start, ODOM)
+        assert len(kinds(capped.search_finished(t_start, ODOM, [uniq]), 'inject')) == 1
+        hold(capped, t_start + 0.5, t_start + 1.0, fit=0.40)
+    assert capped.search_due(20.0, ODOM)
+    capped.search_started(20.0, ODOM)
+    assert kinds(capped.search_finished(20.0, ODOM, [uniq]), 'inject') == []
+    assert capped.search_due(26.0, (0.2, 0.0, 0.0))
+    capped.search_started(26.0, (0.2, 0.0, 0.0))
+    assert len(kinds(capped.search_finished(26.0, (0.2, 0.0, 0.0), [uniq]), 'inject')) == 1
+
+    # Mission starting while a search is in flight must suppress candidates and auto-inject
+    busy = core()
+    busy.search_started(0.0, ODOM)
+    busy.on_mission(0.2, {'state': 'running'})
+    assert busy.search_finished(0.5, ODOM, [uniq]) == []

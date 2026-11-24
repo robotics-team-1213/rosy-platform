@@ -222,3 +222,30 @@ def test_unique_overhead_corroboration_accepts_strong_single_candidate_and_rejec
     reject([Cand(x=-1.0, y=0.5, yaw=0.0, scan_fit=0.84, origin="global")],
            pose=(-1.0, 0.5, 0.0), source="overhead", cues=("overhead",),
            evidence={"tiebreak": "unique", "camera_to_chosen_m": 0.10})
+
+
+def test_auto_lock_unique_injects_verifies_and_enforces_guards():
+    Cand = type(TRUE)
+    unique = Cand(x=-1.0, y=0.5, yaw=0.1, scan_fit=0.96, origin="global", unique_margin=0.25)
+
+    m = machine()
+    m.offer([unique], 0.0)
+    step = m.auto_lock_unique(1.0)
+    assert step.actions == ("inject_pose",) and m.source == "unique_map"
+    assert feed(m, 1.5, 4.5, 0.95).state is LocState.LOCALIZED
+
+    m_fail = machine()
+    m_fail.offer([unique], 0.0)
+    assert m_fail.auto_lock_unique(1.0).actions == ("inject_pose",)
+    bad = feed(m_fail, 1.25, 1.5, 0.40)
+    assert (bad.state, bad.reason) == (LocState.SUSPECT, "inject_rejected")
+
+    for cands in (
+        [Cand(-1.0, 0.5, 0.1, 0.96, "global", unique_margin=None)],
+        [Cand(-1.0, 0.5, 0.1, 0.96, "global", unique_margin=0.14)],
+        [Cand(-1.0, 0.5, 0.1, 0.89, "global", unique_margin=0.30)],
+        [unique, MIRROR],
+    ):
+        g = machine()
+        g.offer(cands, 0.0)
+        assert g.auto_lock_unique(1.0).actions == () and g.check is None
