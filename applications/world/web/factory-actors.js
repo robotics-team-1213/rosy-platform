@@ -95,7 +95,32 @@ function createPinkyActor(three, id, extractedPinky, addLabel, trayGeometry) {
   }
   group.add(halo);
   const label = addLabel?.(group, id, new three.Vector3(0, 0, 0.17));
-  return { group, haloMat, label };
+  return { group, halo, haloMat, label, ghost: ghostActor(group, 0.30, halo) };
+}
+
+function ghostActor(group, opacity, excluded) {
+  const meshes = [];
+  const ghosts = new Map();
+  function ghostMaterial(material) {
+    if (!ghosts.has(material)) {
+      const ghost = material.clone();
+      Object.assign(ghost, { opacity, transparent: true, depthWrite: false });
+      ghosts.set(material, ghost);
+    }
+    return ghosts.get(material);
+  }
+  group.traverse((mesh) => {
+    if (mesh.isMesh && mesh !== excluded) meshes.push([mesh, mesh.material, mesh.castShadow]);
+  });
+  let dimmed = false;
+  return (dim) => {
+    if (dimmed === dim) return;
+    dimmed = dim;
+    for (const [mesh, material, castShadow] of meshes) {
+      mesh.material = !dim ? material : Array.isArray(material) ? material.map(ghostMaterial) : ghostMaterial(material);
+      mesh.castShadow = !dim && castShadow;
+    }
+  };
 }
 
 export function createFactoryLayer({ three, scene, redraw, addLabel, extractedPinky, armMeshes, trayGeometry, armBases }) {
@@ -145,7 +170,7 @@ export function createFactoryLayer({ three, scene, redraw, addLabel, extractedPi
       const arm = createArticulatedOmxArm(three, armMeshes, {
         name: key, baseSite, baseYaw, accentHex: spec.accent, addLabel,
       });
-      arms.set(key, arm);
+      arms.set(key, { ...arm, ghost: ghostActor(arm.root, 0.35) });
       root.add(arm.root);
     }
   }
@@ -154,6 +179,7 @@ export function createFactoryLayer({ three, scene, redraw, addLabel, extractedPi
   const cargoMats = CONTAINER_PALETTE.map((hex) => createCorrugatedContainerMaterial(three, hex));
   const cargoGeom = new three.BoxGeometry(0.09, 0.03, 0.0324);
   const activeCargo = new three.Mesh(cargoGeom, cargoMats[0]);
+  activeCargo.name = "factory-active-cargo";
   activeCargo.castShadow = activeCargo.receiveShadow = true;
   root.add(activeCargo);
   const secondaryCargo = new three.Mesh(cargoGeom, cargoMats[1]);
@@ -200,25 +226,28 @@ export function createFactoryLayer({ three, scene, redraw, addLabel, extractedPi
     const list = Array.isArray(state.pinkys) && state.pinkys.length ? state.pinkys : (
       state.pinky?.pose_m ? [{ id: state.pinky.id ?? "rosy_45", ...state.pinky }] : []
     );
+    const c = state.cargo;
+    const cargoVisible = Boolean(c?.pose_m && c.observed !== false && c.zone !== "unknown");
     for (const p of list) {
       const actor = pinkys.get(p.id);
       if (!actor || !p?.pose_m) continue;
       actor.group.position.set(p.pose_m[0], p.pose_m[1], Math.max(p.pose_m[2], 0.002));
       actor.group.rotation.z = p.yaw_rad ?? 0;
-      const color = p.s3_in_bounds ? 0x3dd68c : p.has_cargo ? 0xd96b27 : 0x58a6ff;
+      actor.ghost(p.observed === false);
+      const hasObservedCargo = cargoVisible && c.observed === true && p.has_cargo;
+      actor.halo.visible = p.observed !== false && (hasObservedCargo || p.s3_in_bounds || p.observed === undefined);
+      const color = p.s3_in_bounds ? 0x3dd68c : hasObservedCargo ? 0xd96b27 : 0x58a6ff;
       actor.haloMat.color.setHex(color);
-      actor.haloMat.opacity = p.s3_in_bounds || p.has_cargo ? pulse : 0.28;
+      actor.haloMat.opacity = p.s3_in_bounds || hasObservedCargo ? pulse : 0.28;
     }
 
-    if (state.arms) {
-      for (const [key, q] of Object.entries(state.arms)) {
-        arms.get(key)?.setJoints(q);
-      }
+    for (const [key, arm] of arms) {
+      arm.setJoints(state.arms?.[key]);
+      arm.ghost(state.arms_observed?.[key] === false || state.arms_fresh?.[key] === false);
     }
 
-    const c = state.cargo;
     const stacked = state.cell_ab?.stacked ?? [];
-    if (c?.pose_m && (c.zone !== "ship" || stacked.length === 0)) {
+    if (cargoVisible && (c.zone !== "ship" || stacked.length === 0)) {
       const zLift = c.zone === "belt" ? 0.008 : 0.0;
       const cidx = Number.isInteger(c.color_idx) ? c.color_idx : 0;
       activeCargo.material = cargoMats[((cidx % cargoMats.length) + cargoMats.length) % cargoMats.length];

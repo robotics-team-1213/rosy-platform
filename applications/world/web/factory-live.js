@@ -1,5 +1,6 @@
 import { loadBinaryStl, loadOmxArmMeshes } from "./omx-arm.js";
 import { createWorldMonitor } from "./world-monitor.js";
+import { createFactoryLiveUi, factoryMetaText, factoryStreamLabel } from "./factory-live-ui.js";
 import {
   SIM_NAMES,
   STAGES,
@@ -44,6 +45,10 @@ export function initFactoryTab({
   const scrubber = byId("factory-scrubber");
   const metaEl = byId("factory-meta");
   const canvas = byId("factory-canvas");
+  const ui = createFactoryLiveUi({
+    statusEl, canvas, playbackControls: [playBtn, restartBtn, ...speedBtns.map(([, btn]) => btn), scrubber, ...stageBtns],
+  });
+  const { setStatus } = ui;
 
   let cadPromise;
   let cadView;
@@ -69,24 +74,41 @@ export function initFactoryTab({
   let localStartMs = 0;
   let activeWorldId = null;
   let activeAdapter = "all";
+  let selectionRevision = 0;
+  const realSelected = () => activeAdapter === "real" || activeWorldId === "real-site";
+  const realMode = () => realSelected() || latest?.adapter === "real";
+  const canReplay = () => !realMode() && (activeAdapter === "all" || activeWorldId === "verified-replay");
   const stageStartMap = Object.fromEntries(STAGES.map(([id, , start]) => [id, start]));
   const monitor = createWorldMonitor({
     adaptersBarEl: byId("factory-adapters"),
     worldsStripEl: byId("factory-worlds"),
     parityEl: byId("factory-parity"),
+    initialAdapter: new URLSearchParams(location.search).get("adapter"),
     onSelectWorld({ worldId, adapter }) {
+      selectionRevision += 1;
+      closeTransport();
       activeWorldId = worldId;
-      activeAdapter = adapter || "all";
+      activeAdapter = adapter;
       previous = undefined;
+      latest = undefined;
       localTimeline = undefined;
+      scrubbing = false;
+      startTimeS = 0;
+      lastStageCam = undefined;
+      metaEl.textContent = "";
+      layer?.apply(null);
+      ui.dim("");
+      ui.lockPlayback(realMode());
+      if (realMode()) {
+        playing = true;
+        playBtn.setAttribute("aria-pressed", "true");
+        playBtn.textContent = "일시 정지";
+      }
       if (active && playing) openStream();
     },
   });
-
-  function setStatus(state, text) {
-    if (statusEl.getAttribute("state") !== state) statusEl.setAttribute("state", state);
-    if (statusEl.textContent !== text) statusEl.textContent = text;
-  }
+  ({ worldId: activeWorldId, adapter: activeAdapter } = monitor.getSelection());
+  ui.lockPlayback(realMode());
 
   function applyCam(focusKey, instant = false) {
     if (!cadView) return;
@@ -122,7 +144,15 @@ export function initFactoryTab({
   }
 
   function syncStagesMeta(frame) {
-    if (!frame?.stage) return;
+    const modeLabel = factoryStreamLabel(frame);
+    const estopActive = frame.safety?.estop === true;
+    const stageName = STAGE_LABELS[frame.stage] ?? frame.stage;
+    const simName = SIM_NAMES[frame.adapter ?? frame.simulator] ?? frame.adapter ?? frame.simulator ?? "";
+    const details = stageName ? ` · ${stageName} (${simName})` : "";
+    setStatus(estopActive ? "warning" : "ready",
+      `${estopActive ? "비상정지(E-STOP) 활성 · " : ""}${modeLabel}${details}`);
+    monitor.updateFromFrame(frame);
+    if (!frame.stage) return;
     if (Array.isArray(frame.stages) && frame.stages.length) {
       const avail = new Set();
       for (const s of frame.stages) {
@@ -143,38 +173,7 @@ export function initFactoryTab({
       const targetCam = STAGE_DEFAULTS[frame.stage]?.cam ?? "factory_all";
       if (targetCam !== currentCam) applyCam(targetCam);
     }
-    const simName = SIM_NAMES[frame.adapter ?? frame.simulator] ?? frame.adapter ?? frame.simulator ?? "";
-    const stageName = STAGE_LABELS[frame.stage] ?? frame.stage;
-    const stacked = frame.cell_ab?.stacked?.length ?? 0;
-    const totalSlots = Number.isInteger(frame.cell_ab?.total_slots) && frame.cell_ab.total_slots > 0
-      ? frame.cell_ab.total_slots
-      : (stacked > 18 ? 27 : stacked > 9 ? 18 : 9);
-    const timeText = Number.isFinite(frame.duration_s)
-      ? `${frame.sim_time_s.toFixed(1)} / ${frame.duration_s.toFixed(1)}초`
-      : `${frame.sim_time_s.toFixed(1)}초`;
-    const worldTag = frame.world_id ? `${frame.world_id} · ` : "";
-    let trainText = "";
-    if (frame.training) {
-      let score = "";
-      if (Number.isFinite(frame.training.reward)) {
-        score = ` R ${frame.training.reward.toFixed(2)}`;
-      } else if (Number.isFinite(frame.training.loss)) {
-        score = ` Loss ${frame.training.loss.toFixed(3)}`;
-      }
-      trainText = ` · Ep ${frame.training.episode} Step ${frame.training.step}${score}`;
-    }
-    const fleetTag = frame.fleet_summary && Number.isFinite(frame.fleet_summary.online)
-      ? `ROSY Fleet ${frame.fleet_summary.online}/${frame.fleet_summary.total}대 (rosy_42/45/46 · arm_s/a/b)`
-      : "ROSY Fleet 6대 (rosy_42/45/46 · arm_s/a/b)";
-    const estopActive = frame.safety?.estop === true;
-    const estopTag = estopActive ? " · 비상정지(E-STOP)" : "";
-    metaEl.textContent = `${worldTag}${stageName} · ${simName} · ${timeText} · 적재 ${stacked}/${totalSlots}${trainText} · ${fleetTag} · ${frame.run_id}${estopTag}`;
-    const modeLabel = frame.stream_mode === "live" ? "실시간 SIM" : "검증 재생";
-    setStatus(
-      estopActive ? "warning" : "ready",
-      estopActive ? `비상정지(E-STOP) 활성 · ${stageName} (${simName})` : `${modeLabel} · ${stageName} (${simName})`,
-    );
-    monitor.updateFromFrame(frame);
+    metaEl.textContent = factoryMetaText(frame, stageName, simName);
   }
 
   function interpolateFrame(nowMs) {
@@ -184,7 +183,8 @@ export function initFactoryTab({
       return sample;
     }
     if (!latest) return null;
-    if (!previous || previous === latest || !playing || previous.stage !== latest.stage) return latest;
+    if (realMode() || !previous || previous === latest || !playing || previous.stage !== latest.stage
+        || !previous.pinky?.pose_m || !latest.pinky?.pose_m || !previous.cargo?.pose_m || !latest.cargo?.pose_m) return latest;
     const interval = Math.max(16, Math.min(200, (latestAtMs || nowMs) - (previous.receivedAtMs || nowMs)));
     const u = Math.max(0, Math.min(1, (nowMs - latestAtMs) / interval));
     return {
@@ -205,13 +205,14 @@ export function initFactoryTab({
   }
 
   function frameLoop(nowMs) {
+    rafId = undefined;
     if (!active || !layer) return;
     const state = interpolateFrame(nowMs);
     if (state) {
       layer.apply(state, nowMs, true);
-      syncStagesMeta(state);
+      if (localTimeline) syncStagesMeta(state);
     }
-    if (playing || localTimeline) rafId = requestAnimationFrame(frameLoop);
+    if (playing && !realMode()) rafId = requestAnimationFrame(frameLoop);
   }
 
   function closeTransport() {
@@ -234,28 +235,38 @@ export function initFactoryTab({
   }
 
   async function fallbackTimeline() {
+    if (!canReplay()) return;
+    const revision = selectionRevision;
     try {
       const tl = await readLocalTimeline();
-      if (!tl || !active) return setStatus("unavailable", "공장 라이브 스트림 또는 검증 타임라인이 없습니다.");
+      if (!active || !canReplay() || revision !== selectionRevision || source) return;
+      if (!tl) return setStatus("unavailable", "공장 라이브 스트림 또는 검증 타임라인이 없습니다.");
       localTimeline = tl;
       localStartMs = performance.now();
       setStatus("ready", `오프라인 검증 재생 · ${localTimeline.run_id}`);
       rafId = requestAnimationFrame(frameLoop);
     } catch {
-      setStatus("unavailable", "공장 라이브 스트림을 열 수 없습니다.");
+      if (active && revision === selectionRevision && canReplay()) {
+        setStatus("unavailable", "공장 라이브 스트림을 열 수 없습니다.");
+      }
     }
   }
 
   function openStream() {
     closeTransport();
-    if (!active || document.hidden || !layer) return;
+    if (!active || document.hidden) return;
+    if (activeAdapter !== "all" && !activeWorldId) {
+      setStatus("empty", "연결된 월드가 없습니다");
+      return;
+    }
     localTimeline = undefined;
+    if (realMode()) ui.dim("connecting");
     let receivedAny = false;
     setStatus("pending", "공장 스트림 연결 중…");
     const params = new URLSearchParams({
       mode: "auto",
       speed: String(speed),
-      hz: "25",
+      hz: realMode() ? "5" : "25",
       start_s: startTimeS.toFixed(2),
     });
     if (activeWorldId) params.set("world", activeWorldId);
@@ -265,31 +276,52 @@ export function initFactoryTab({
     source = es;
     firstFrameTimer = setTimeout(() => {
       if (source !== es || receivedAny) return;
-      if (activeAdapter === "real" || activeWorldId === "real-site") {
-        setStatus("empty", "실물 현장 미연결 (Real 어댑터 대기 중)");
+      if (realMode()) {
+        ui.dim("idle");
+        ui.idle(latest);
         return;
       }
       closeTransport();
-      void fallbackTimeline();
+      if (canReplay()) void fallbackTimeline();
+      else setStatus("empty", "실시간 관측 대기 중…");
     }, 3500);
     es.addEventListener("state", (event) => {
       if (source !== es) return;
       try {
         const frame = JSON.parse(event.data);
         if (frame?.schema !== "rosy.world.factory-state.v1") return;
+        if (realSelected() && (frame.adapter !== "real" || frame.stream_mode !== "live")) return;
         receivedAny = true;
         clearTimeout(firstFrameTimer);
         firstFrameTimer = undefined;
         if (latest) previous = { ...latest, receivedAtMs: latestAtMs };
         latest = frame;
         latestAtMs = performance.now();
-        if (!rafId) rafId = requestAnimationFrame(frameLoop);
+        ui.dim("");
+        ui.lockPlayback(realMode());
+        syncStagesMeta(frame);
+        if (layer && !rafId) rafId = requestAnimationFrame(frameLoop);
       } catch {
         // Ignore single malformed SSE payload.
       }
     });
     es.addEventListener("idle", (event) => {
       if (source !== es) return;
+      clearTimeout(firstFrameTimer);
+      cancelAnimationFrame(rafId);
+      rafId = undefined;
+      if (realMode()) {
+        ui.dim("idle");
+        ui.idle(latest);
+        return;
+      }
+      if (!receivedAny && canReplay()) {
+        closeTransport();
+        void fallbackTimeline();
+        return;
+      }
+      latest = previous = undefined;
+      layer?.apply(null);
       try {
         const info = JSON.parse(event.data || "{}");
         const reason = info.reason || (info.adapter === "real" ? "실물 현장 미연결" : "실시간 관측 또는 검증 타임라인 대기 중…");
@@ -300,13 +332,19 @@ export function initFactoryTab({
     });
     es.onerror = () => {
       if (source !== es) return;
+      if (realMode()) {
+        clearTimeout(firstFrameTimer);
+        cancelAnimationFrame(rafId);
+        rafId = undefined;
+        ui.dim("disconnected");
+        setStatus("warning", "연결 끊김 · 다시 로그인", true);
+        return;
+      }
       if (!receivedAny) {
-        if (activeAdapter === "real" || activeWorldId === "real-site") {
-          setStatus("empty", "실물 현장 미연결 (Real 어댑터 대기 중)");
-          return;
-        }
-        closeTransport();
-        void fallbackTimeline();
+        if (canReplay()) {
+          closeTransport();
+          void fallbackTimeline();
+        } else setStatus("warning", "스트림 재연결 중…");
       } else {
         setStatus("warning", "스트림 재연결 중…");
       }
@@ -362,7 +400,7 @@ export function initFactoryTab({
       const [armMeshes, trayGeometry] = await Promise.all([armPromise, trayPromise]);
       cadView = view;
       layer = createFactoryLayer({ ...ctx, armMeshes, trayGeometry, armBases: r2sCal?.arm_bases_site ?? null });
-      applyCam("factory_all", true);
+      applyCam(autoCam ? STAGE_DEFAULTS[latest?.stage]?.cam ?? "factory_all" : currentCam, true);
       if (!r2sCal?.ground_photos?.birdview) r2sSource = "off";
       applyR2sOverlay();
       cadStatusEl.hidden = true;
@@ -372,23 +410,24 @@ export function initFactoryTab({
       cadStatusEl.hidden = false;
       cadStatusEl.setAttribute("state", "unavailable");
       cadStatusEl.textContent = `공장 3D 모델을 열 수 없습니다 (${err?.message || "WebGL 오류"}).`;
-      setStatus("unavailable", "공장 3D 초기화 실패");
       return null;
     });
     return cadPromise;
   }
 
   async function seekTime(tSec) {
+    if (realMode() || (activeAdapter !== "all" && !activeWorldId)) return;
+    const revision = selectionRevision;
     startTimeS = Math.max(0, tSec);
     previous = undefined;
     localStartMs = performance.now();
     if (!cadView) {
       const view = await ensureCad();
-      if (!view || !active) return;
+      if (!view || !active || realMode() || revision !== selectionRevision) return;
     }
     if (playing && !localTimeline) return openStream();
     const tl = localTimeline ?? await readLocalTimeline();
-    if (tl && layer) {
+    if (tl && layer && active && !realMode() && revision === selectionRevision) {
       const sample = sampleLocalTimeline(tl, startTimeS);
       latest = sample;
       layer.apply(sample, performance.now(), true);
@@ -437,11 +476,7 @@ export function initFactoryTab({
   });
 
   playBtn.addEventListener("click", () => {
-    if (!active) return;
-    if (!cadView) {
-      void ensureCad().then((view) => { if (view && active && playing) openStream(); });
-      return;
-    }
+    if (!active || realMode()) return;
     playing = !playing;
     playBtn.setAttribute("aria-pressed", String(playing));
     playBtn.textContent = playing ? "일시 정지" : "계속 재생";
@@ -459,6 +494,7 @@ export function initFactoryTab({
   });
 
   restartBtn.addEventListener("click", () => {
+    if (realMode()) return;
     playing = true;
     playBtn.setAttribute("aria-pressed", "true");
     playBtn.textContent = "일시 정지";
@@ -468,7 +504,7 @@ export function initFactoryTab({
 
   for (const [value, btn] of speedBtns) {
     btn.addEventListener("click", () => {
-      if (speed === value) return;
+      if (realMode() || speed === value) return;
       speed = value;
       for (const [opt, optBtn] of speedBtns) optBtn.setAttribute("aria-pressed", String(opt === value));
       startTimeS = latest?.sim_time_s ?? startTimeS;
@@ -487,10 +523,12 @@ export function initFactoryTab({
 
   scrubber?.addEventListener("pointerdown", () => { scrubbing = true; });
   scrubber?.addEventListener("input", async () => {
+    if (realMode() || (activeAdapter !== "all" && !activeWorldId)) return;
+    const revision = selectionRevision;
     scrubbing = true;
     const t = Number(scrubber.value);
     const tl = localTimeline ?? await readLocalTimeline();
-    if (tl && layer) {
+    if (tl && layer && active && !realMode() && revision === selectionRevision) {
       const sample = sampleLocalTimeline(tl, t);
       latest = sample;
       lastStageCam = undefined;
@@ -505,7 +543,7 @@ export function initFactoryTab({
   });
 
   window.addEventListener("keydown", (event) => {
-    if (!active || document.hidden || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!active || realMode() || document.hidden || event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.target?.matches?.("input, textarea, select, button, ui-button, [contenteditable]")) return;
     if (event.key === " ") {
       event.preventDefault();
@@ -524,10 +562,13 @@ export function initFactoryTab({
     async activate() {
       active = true;
       monitor.start();
+      if (playing) openStream();
       const view = await ensureCad();
       if (!active || !view) return;
-      if (latest) layer?.apply(latest);
-      if (playing) openStream();
+      if (latest) layer.apply(latest);
+      if (playing && !realMode() && !rafId && (latest || localTimeline)) {
+        rafId = requestAnimationFrame(frameLoop);
+      }
     },
     deactivate() {
       active = false;

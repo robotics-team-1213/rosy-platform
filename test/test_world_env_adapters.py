@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import io
 import json
+import math
 import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -24,6 +28,7 @@ import observe_pinky  # noqa: E402
 import serve  # noqa: E402
 import world_env_adapter as adapter  # noqa: E402
 import world_swarm  # noqa: E402
+from world_state import LIVE_FRESH_MS, REAL_FRESH_MS  # noqa: E402
 from test_world_factory_stream import _make_closed_fixture  # noqa: E402
 from world_factory_timeline import compile_timeline  # noqa: E402
 
@@ -77,6 +82,42 @@ def test_real_adapter_is_read_only_and_never_fakes_replay(tmp_path: Path) -> Non
     replay_file.write_text(json.dumps({"stream_mode": "verified_replay", "observed_at_ms": time.time_ns() // 1_000_000}), encoding="utf-8")
     real2 = adapter.create_adapter("real", world_id="real-site", snapshot_path=replay_file, parity=parity, run_id="real")
     assert real2.poll_state() is None
+
+
+def test_world_registry_and_stream_distinguish_real_freshness_and_synthetic_demo(tmp_path: Path) -> None:
+    bundle = _make_bundle(tmp_path)
+    now = time.time_ns() // 1_000_000
+    worlds = bundle / "data" / "worlds"
+    base = {"schema": "rosy.world.factory-state.v1", "stream_mode": "live"}
+    for world_id, adapter_id, mode, age in (
+        ("real-site", "real", "live", 5_000),
+        ("old-sim", "mujoco", "live", 5_000),
+        ("demo", "isaac", "synthetic_demo", 0),
+    ):
+        serve._atomic_write_json(worlds / f"{world_id}.json", {
+            **base, "world_id": world_id, "adapter": adapter_id, "stream_mode": mode, "observed_at_ms": now - age,
+        })
+    assert (LIVE_FRESH_MS, REAL_FRESH_MS) == (3_000, 10_000)
+    for offset, expected in ((0, "live"), (5_001, "stalled")):
+        reg = serve.discover_worlds(bundle, now + offset)
+        real_entries = [w for w in reg["worlds"] if w["world_id"] == "real-site"]
+        assert [w["status"] for w in real_entries] == [expected]
+    by_id = {w["world_id"]: w for w in serve.discover_worlds(bundle, now)["worlds"]}
+    assert by_id["old-sim"]["status"] == "stalled"
+    assert by_id["demo"]["status"] == "synthetic_demo"
+
+    with serve.make_server(bundle, "127.0.0.1", 0) as server:
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for world_id, mode in (("real-site", "live"), ("demo", "synthetic_demo")):
+                url = f"http://127.0.0.1:{server.server_port}/sim/stream?world={world_id}&max_events=1"
+                with urllib.request.urlopen(url, timeout=5) as res:
+                    assert res.readline() == b"event: state\n"
+                    assert json.loads(res.readline()[6:])["stream_mode"] == mode
+        finally:
+            server.shutdown()
+            thread.join()
 
 
 def test_parallel_worlds_discovery_stream_security_and_control_guards(tmp_path: Path) -> None:
@@ -308,7 +349,94 @@ def test_observers_and_real_fleet_bridge_translations_and_fail_closed() -> None:
     assert real_state is not None
     assert real_state["adapter"] == "real" and real_state["stream_mode"] == "live"
     assert real_state["pinky"]["id"] == "rosy_45" and real_state["stage"] == "s3_stop"
+    assert real_state["pinky"]["observed"] is True and real_state["pinky"]["has_cargo"] is False
     assert serve.verify_world_parity(canonical, real_state)["ok"]
+
+
+def test_real_bridge_keeps_unlocalized_pinky_and_accepts_arm_only_observations() -> None:
+    site_sha = "ab" * 32
+    fleet = {"gathered_at": 1_710_000_000.125, "robots": [{
+        "robot_id": "rosy_42", "online": True, "state_age_s": 3.5,
+        "state": {"pose": {"x": 0, "y": 0, "yaw": 0}},
+        "localization": {"pose_frame": "odom", "trusted": True},
+    }]}
+    observed_arm = {"joints_deg": [180, -90, 45, 0, 10, 0], "observed": True, "fresh": False, "age_s": 4.5}
+    arms = {"arm_s": {**observed_arm, "source": "boot_default"}, "arm_a": observed_arm}
+    snapshot = bridge_real_fleet.fleet_state_to_world_state(fleet, site_map_sha256=site_sha, arm_live_states=arms)
+    pinky = snapshot["pinky"]
+    assert pinky["id"] == "rosy_42" and pinky["online"] is True
+    assert pinky["pose_m"] == [0, 0, 0] and pinky["yaw_rad"] == 0
+    assert pinky["observed"] is pinky["localized"] is pinky["has_cargo"] is False
+    assert pinky["loc_label"] == "위치 모름" and pinky["state_age_s"] == 3.5
+    assert snapshot["fleet_gathered_at_ms"] == 1_710_000_000_125
+    assert snapshot["arms_observed"] == {"arm_s": False, "arm_a": True, "arm_b": False}
+    assert snapshot["arms_fresh"] == {"arm_s": False, "arm_a": False, "arm_b": False}
+    assert snapshot["arms_age_s"]["arm_a"] == 4.5
+    assert snapshot["arms"]["arm_a"] == pytest.approx([math.pi, -math.pi / 2, math.pi / 4, 0, math.pi / 18, 0])
+
+    fleet["robots"][0]["localization"] = {"pose_frame": "map", "trusted": False, "label": "미확인"}
+    only_pinky = bridge_real_fleet.fleet_state_to_world_state(fleet, site_map_sha256=site_sha)
+    assert only_pinky["pinky"]["observed"] is False and only_pinky["pinky"]["loc_label"] == "미확인"
+    assert bridge_real_fleet.fleet_state_to_world_state({"robots": []}, site_map_sha256=site_sha, arm_live_states=arms)
+    assert bridge_real_fleet.fleet_state_to_world_state(
+        {"robots": []}, site_map_sha256=site_sha, arm_live_states={"arm_s": arms["arm_s"]},
+    ) is None
+
+
+def test_world_map_parity_prefers_body_hash_and_reports_versions(tmp_path: Path) -> None:
+    bundle = _make_bundle(tmp_path)
+    site_map = bundle / "data" / "site-map.json"
+    body = {"label": "현장", "id": "test"}
+    sha = hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    site_map.write_text(json.dumps({"map": body, "version": 7}), encoding="utf-8")
+    canonical = serve._canonical_reference(bundle)
+    assert canonical["site_map_body_sha256"] == sha
+    site_map.write_text(json.dumps({"sha256": sha.upper(), "map": {}, "version": 7}), encoding="utf-8")
+    assert serve._canonical_reference(bundle) == canonical
+
+    fleet = {"robots": [{"robot_id": "rosy_45", "online": True}]}
+    snapshot = bridge_real_fleet.fleet_state_to_world_state(
+        fleet, site_map_sha256="fe" * 32, active_map={"sha256": sha.upper(), "version": 8},
+    )
+    assert snapshot["site_map_body_sha256"] == sha and snapshot["site_map_sha256"] == "fe" * 32
+    parity = serve.verify_world_parity(canonical, snapshot)
+    assert parity["map_match"] and parity["bundle_map_version"] == 7 and parity["live_map_version"] == 8
+    assert not serve.verify_world_parity(canonical, {
+        **snapshot, "site_map_body_sha256": "12" * 32, "parity": canonical,
+    })["map_match"]
+    assert serve.verify_world_parity(canonical, {**snapshot, "site_map_body_sha256": "invalid", "parity": canonical})["map_match"]
+
+
+@pytest.mark.parametrize(("args", "timeout"), [([], 10.0), (["--fleet-timeout", "4.5"], 4.5),
+                                                (["--fleet-timeout", "99"], 30.0), (["--fleet-timeout", "0"], 1.0)])
+def test_real_bridge_cli_timeout_and_optional_fleet_reads(tmp_path: Path, monkeypatch, args, timeout) -> None:
+    fleet = {"robots": [{"robot_id": "rosy_45", "online": True}]}
+    calls = []
+
+    def urlopen(req, *, timeout, context):
+        path = urllib.parse.urlsplit(req.full_url).path
+        calls.append((path, timeout, req.get_header("Authorization"), context))
+        if path == "/api/fleet/state":
+            return io.BytesIO(json.dumps(fleet).encode("utf-8"))
+        raise urllib.error.HTTPError(req.full_url, 404, "Not found", {}, None)
+
+    monkeypatch.setenv("TEST_FLEET_TOKEN", "viewer-token")
+    monkeypatch.setattr(sys, "argv", [
+        "bridge_real_fleet", "--once", "--fleet-url", "https://fleet.test", "--worlds-dir", str(tmp_path),
+        "--fleet-token-env", "TEST_FLEET_TOKEN", "--ca-file", "test-ca.pem", *args,
+    ])
+    monkeypatch.setattr(bridge_real_fleet.ssl, "create_default_context", lambda *, cafile: cafile)
+    monkeypatch.setattr(bridge_real_fleet.urllib.request, "urlopen", urlopen)
+    bridge_real_fleet.main()
+    assert calls == [
+        (path, limit, "Bearer viewer-token", "test-ca.pem")
+        for path, limit in (
+            ("/api/fleet/state", timeout), ("/api/fleet/pipeline/cell-tasks", 2.0), ("/api/fleet/site-map/active", 2.0),
+        )
+    ]
+    snapshot = json.loads((tmp_path / "real-site.json").read_bytes())
+    assert snapshot["site_map_body_sha256"] is None
+    assert not any(snapshot["arms_observed"].values())
 
 
 def test_world_docker_compose_hardening_and_bounded_logs() -> None:

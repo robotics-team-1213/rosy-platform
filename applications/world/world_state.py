@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from bisect import bisect_right
+import hashlib
 import json
 import math
 import os
@@ -11,7 +12,8 @@ import re
 import tempfile
 import time
 
-LIVE_FRESH_MS = 3000
+LIVE_FRESH_MS = 3_000
+REAL_FRESH_MS = 10_000
 BACKENDS = ("real", "isaac", "gazebo", "mujoco")
 ADAPTER_LABELS = {
     "real": "Real 현장",
@@ -130,10 +132,21 @@ def _read_fresh_json(path: Path, now_ms: int) -> dict | None:
     data = _read_json_strict(path)
     if data is None:
         return None
+    return data if _is_fresh(data, path.stem, now_ms) else None
+
+
+def _is_fresh(data: dict, world_id: str, now_ms: int) -> bool:
     obs = data.get("observed_at_ms")
-    if not isinstance(obs, int) or abs(now_ms - obs) > LIVE_FRESH_MS:
-        return None
-    return data
+    real = data.get("adapter") == "real" or world_id == "real-site" or data.get("world_id") == "real-site"
+    return type(obs) is int and abs(now_ms - obs) <= (REAL_FRESH_MS if real else LIVE_FRESH_MS)
+
+
+def _valid_sha256(value: object) -> str | None:
+    return value.lower() if isinstance(value, str) and SHA256_RE.fullmatch(value.lower()) else None
+
+
+def _live_stream_mode(data: dict) -> str:
+    return "synthetic_demo" if data.get("stream_mode") == "synthetic_demo" else "live"
 
 
 def _canonical_reference(bundle_dir: Path) -> dict:
@@ -151,8 +164,15 @@ def _canonical_reference(bundle_dir: Path) -> dict:
     if not site_map_sha and timeline:
         site_map_sha = str(timeline.get("site_map_sha256") or "").lower()
     fleet_robots = (timeline.get("fleet_robots") if timeline else None) or CANONICAL_FLEET_ROBOTS
+    site_map = _read_json_strict(bundle_dir / "data" / "site-map.json") or {}
+    body_sha = _valid_sha256(site_map.get("sha256"))
+    if body_sha is None and isinstance(site_map.get("map"), dict):
+        raw = json.dumps(site_map["map"], sort_keys=True, ensure_ascii=False).encode("utf-8")
+        body_sha = hashlib.sha256(raw).hexdigest()
     return {
         "site_map_sha256": site_map_sha,
+        "site_map_body_sha256": body_sha,
+        "site_map_version": site_map.get("version"),
         "registration_sha256": reg_sha,
         "fleet_robots": fleet_robots,
         "has_cargo_tray": True,
@@ -167,7 +187,14 @@ def verify_world_parity(canonical: dict, payload: dict | None) -> dict:
     p_src = payload.get("parity") if isinstance(payload.get("parity"), dict) else {}
     ref_map = str(canonical.get("site_map_sha256") or "").lower()
     cand_map = str(p_src.get("site_map_sha256") or payload.get("site_map_sha256") or "").lower()
-    map_match = bool(SHA256_RE.fullmatch(ref_map) and cand_map == ref_map)
+    ref_body = _valid_sha256(canonical.get("site_map_body_sha256"))
+    cand_body = _valid_sha256(payload.get("site_map_body_sha256"))
+    versions = {}
+    if ref_body and cand_body:
+        map_match = ref_body == cand_body
+        versions = {"bundle_map_version": canonical.get("site_map_version"), "live_map_version": payload.get("site_map_version")}
+    else:
+        map_match = bool(SHA256_RE.fullmatch(ref_map) and cand_map == ref_map)
     if not map_match:
         reasons.append("site_map_sha256_mismatch")
 
@@ -197,6 +224,7 @@ def verify_world_parity(canonical: dict, payload: dict | None) -> dict:
         reasons.append("missing_pinky_cargo_tray")
 
     return {
+        **versions,
         "ok": map_match and robot_match and has_tray and not reasons,
         "map_match": map_match,
         "robot_match": robot_match,
@@ -250,7 +278,6 @@ def discover_worlds(
     data_dir = bundle_dir / "data"
     canonical = _canonical_reference(bundle_dir)
     worlds: list[dict] = []
-    has_live_real = False
 
     worlds_dir = worlds_dir if worlds_dir is not None else (data_dir / "worlds")
     if worlds_dir.is_dir():
@@ -266,21 +293,23 @@ def discover_worlds(
             data = _read_json_strict(path)
             if data is None:
                 worlds.append({
-                    "world_id": path.stem, "adapter": "mujoco", "status": "stalled",
+                    "world_id": path.stem, "adapter": "real" if path.stem == "real-site" else "mujoco", "status": "stalled",
                     "run_id": path.stem, "observed_at_ms": None, "age_ms": None,
                     "parity": {"ok": False, "map_match": False, "robot_match": False, "tray_match": False, "reasons": ["invalid_json"]},
                     "training": None,
                 })
                 continue
-            adapter = str(data.get("adapter") or (data.get("env") or {}).get("backend") or data.get("simulator") or "mujoco")
+            adapter = "real" if path.stem == "real-site" else str(
+                data.get("adapter") or (data.get("env") or {}).get("backend") or data.get("simulator") or "mujoco"
+            )
             if adapter not in BACKENDS:
                 adapter = "mujoco"
             obs = data.get("observed_at_ms")
             age_ms = max(0, now_ms - obs) if isinstance(obs, int) else None
-            fresh = age_ms is not None and age_ms <= LIVE_FRESH_MS
-            status = "live" if fresh else "stalled"
-            if adapter == "real" and fresh:
-                has_live_real = True
+            fresh = _is_fresh(data, path.stem, now_ms)
+            if adapter == "real" and data.get("stream_mode") not in (None, "live"):
+                fresh = False
+            status = _live_stream_mode(data) if fresh else "stalled"
             stages = data.get("stages") or []
             stage_ids = [s.get("id") for s in stages if isinstance(s, dict)]
             stage = data.get("stage")
@@ -328,7 +357,7 @@ def discover_worlds(
             }),
         })
 
-    if not has_live_real:
+    if not any(w["world_id"] == "real-site" or (w["adapter"] == "real" and w["status"] == "live") for w in worlds):
         worlds.append({
             "world_id": "real-site",
             "adapter": "real",
@@ -355,7 +384,7 @@ def discover_worlds(
     adapters = []
     for aid in BACKENDS:
         matched = [w for w in worlds if w["adapter"] == aid]
-        live_n = sum(1 for w in matched if w["status"] in ("live", "replay"))
+        live_n = sum(1 for w in matched if w["status"] in ("live", "replay", "synthetic_demo"))
         adapters.append({"id": aid, "label": ADAPTER_LABELS[aid], "count": len(matched), "live_count": live_n})
 
     filtered = [w for w in worlds if w["adapter"] == adapter_filter] if adapter_filter in BACKENDS else worlds
@@ -371,7 +400,7 @@ def discover_worlds(
 def _live_state(data_dir: Path, now_ms: int) -> dict | None:
     factory_live = _read_fresh_json(data_dir / "factory-live.json", now_ms)
     if factory_live and factory_live.get("schema") == "rosy.world.factory-state.v1":
-        return {**factory_live, "stream_mode": "live"}
+        return {**factory_live, "stream_mode": _live_stream_mode(factory_live)}
     pinky = _read_fresh_json(data_dir / "pinky-sim.json", now_ms)
     if pinky and pinky.get("schema") == "rosy.world.pinky-sim.v1":
         isaac = _read_fresh_json(data_dir / "isaac-live.json", now_ms)
