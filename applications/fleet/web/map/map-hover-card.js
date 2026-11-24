@@ -26,7 +26,7 @@ function makeBattMeter(props) {
 function makeGaugeBar(pct, tone = "good") {
   const clamped = Math.max(0, Math.min(100, Math.round(Number.isFinite(pct) ? pct : 0)));
   const bar = mkEl("span", "gauge-bar"), fill = mkEl("span", "gauge-bar-fill");
-  fill.setAttribute("data-tone", tone); fill.setAttribute("data-meter", `${clamped}%`);
+  fill.setAttribute("data-tone", tone === "info" ? "good" : tone); fill.setAttribute("data-meter", `${clamped}%`);
   bar.append(fill); return bar;
 }
 
@@ -67,7 +67,7 @@ export function renderHoverCard(entity, { el, view }) {
     const unc = typeof p.u_m === "number" ? ` (±${p.u_m.toFixed(2)}m)` : "";
     lines.push(["정밀 좌표 · 방위", `${hasXY ? `(${fmtCoord(p.x)}, ${fmtCoord(p.y)}) m` : "위치 모름"} · HEAD ${deg}${unc}${cell}`]);
     lines.push(["차로 · 센서", `${lane ? lane.edge_id : "자유구역"} · ${devices.length ? `장치 ${readyCount}/${devices.length} 정상` : "장치 미수신"}`]);
-    if (pctNum !== null) bars.push(["battery", "배터리", `${pctNum}%${volt ? ` · ${volt}` : ""}`, pctNum, pctNum >= 50 ? "good" : pctNum >= 25 ? "warn" : "crit", { percent: pctNum, charging, online: r.online !== false }]);
+    if (pctNum !== null) bars.push(["battery", "배터리", `${pctNum}%${volt ? ` · ${volt}` : ""}`, null, null, { percent: pctNum, charging, online: r.online !== false }]);
     else if (volt) lines.push(["배터리", volt]);
     if (alignPct !== null) bars.push(["pose", "차로 정렬", `${alignPct}% (오차 ${(latM * 100).toFixed(1)}cm)`, alignPct, alignPct >= 75 ? "info" : "warn", null]);
     if (sensorPct !== null) bars.push(["notification", "센서 준비", `${sensorPct}% (${readyCount}/${devices.length})`, sensorPct, "good", null]);
@@ -125,10 +125,8 @@ export function renderHoverCard(entity, { el, view }) {
     for (const [k, v] of lines) dl.append(mkEl("dt", "", k), mkEl("dd", "", v));
     for (const [icon, label, valText, pct, tone, battery] of bars) {
       const row = mkEl("div", "gauge-row-compact"), meta = mkEl("div", "gauge-meta-line");
-      const valNode = battery ? mkEl("span", "batt-readout") : mkEl("strong", "", valText);
-      if (battery) valNode.append(makeBattMeter(battery), mkEl("strong", "", valText));
-      meta.append(iconLabel(icon, label), valNode);
-      row.append(meta, makeGaugeBar(pct, tone));
+      meta.append(iconLabel(icon, label), mkEl("strong", "", valText));
+      row.append(meta, battery ? makeBattMeter(battery) : makeGaugeBar(pct, tone));
       barBox.append(row);
     }
     card.replaceChildren(headRow, dl, ...(bars.length ? [barBox] : []), mkEl("p", "hover-card-foot", footer));
