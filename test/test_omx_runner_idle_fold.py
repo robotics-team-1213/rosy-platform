@@ -48,3 +48,68 @@ def test_a_command_after_a_held_fold_gives_the_idle_folds_back():
     r.run(lines)
     parks = [s["clock"] for s in status if s["command"] == "run park"]
     assert len(parks) == 4 and parks[2] > 40  # two before the operator's command, two after
+
+
+def test_a_chunk_longer_than_the_idle_window_is_not_idle_time():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    lib["chunks"]["long_move"] = [[k * 0.1, *HOME[1:]] for k in range(240)]  # ~8.0 s at 30 fps (> idle_park_s 5.0 s)
+    status, clock = [], [0.0]
+    sent, next_cmd = [], []
+    r = m.Runner(
+        Robot(),
+        lib,
+        fps=30,
+        status=lambda row: status.append(dict(row, clock=clock[0])),
+        clock=lambda: clock[0],
+        sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
+        params={"runner.idle_park_s": 5.0, "runner.idle_stop_s": 5.0},
+    )
+
+    def lines():
+        if not sent:
+            sent.append(1)
+            return ["run long_move"]
+        if len(sent) == 1 and r.chunk is None and not r.queue and clock[0] >= 7.0:
+            sent.append(2)
+            next_cmd.extend(["state", "stop"])
+        return [next_cmd.pop(0)] if next_cmd else []
+
+    r.run(lines)
+    long_done = [s for s in status if s["command"] == "run long_move"][0]
+    assert long_done["ok"] is True and long_done["settled"] is True and long_done["clock"] >= 7.0
+    assert not [s for s in status if s["command"] == "run park"]
+    state_rows = [s for s in status if s["command"] == "state"]
+    assert state_rows and state_rows[0]["ok"] is True
+    assert status[-1]["command"] == "stop" and "no command" not in status[-1].get("reason", "")
+
+
+def test_idle_park_still_fires_after_a_long_chunk_when_caller_goes_silent():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    lib["chunks"]["long_move"] = [[k * 0.1, *HOME[1:]] for k in range(240)]  # ~8.0 s at 30 fps (> idle_park_s 5.0 s)
+    status, clock, sent = [], [0.0], []
+    r = m.Runner(
+        Robot(),
+        lib,
+        fps=30,
+        status=lambda row: status.append(dict(row, clock=clock[0])),
+        clock=lambda: clock[0],
+        sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
+        params={"runner.idle_park_s": 5.0, "runner.idle_stop_s": 5.0},
+    )
+
+    def lines():
+        if not sent:
+            sent.append(1)
+            return ["run long_move"]
+        return []
+
+    r.run(lines)
+    long_done = [s for s in status if s["command"] == "run long_move"][0]
+    park_done = [s for s in status if s["command"] == "run park"]
+    assert long_done["ok"] is True and long_done["clock"] >= 7.0
+    assert len(park_done) == 1 and park_done[0]["ok"] is True
+    assert park_done[0]["clock"] > long_done["clock"] + 5.0
+    assert status[-1]["command"] == "stop" and "no command" in status[-1]["reason"]
+    assert clock[0] >= long_done["clock"] + 10.0
