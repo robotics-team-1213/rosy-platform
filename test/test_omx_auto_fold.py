@@ -365,3 +365,48 @@ def test_supervised_recover_releases_torque_only_when_unmoved_and_runs_without_i
                       "--site", "pinky", "--roi", "0", "0", "10", "10", "--out", str(out)])
     written_err = json.loads(out.read_text())
     assert rc_err == 3 and written_err["ended"] == "stop_now" and written_err["unmoved"] is True and "stop now" in err_cell.commands
+
+
+def test_fk_lift_plan_gentle_step_and_latched_prefers_fold_from_hold(monkeypatch):
+    import cell_recovery_plan as crp
+
+    monkeypatch.setattr(crp, "fk_z", lambda pose, tcp_x_m=None: 0.08 + (20.0 - float(pose[1])) * 0.003)
+    lift = crp.fk_lift_plan([10.0, 20.0, -10.0, 30.0, -20.0, 57.0], clear_z_m=0.10, home=HOME)
+    assert lift is not None
+    lift_cmds = [c for c in lift[0] if c.startswith("jog shoulder_lift.pos ")]
+    assert lift_cmds and all(abs(float(c.split()[-1])) <= 2.0 + 1e-9 for c in lift_cmds)
+
+    class _LatchedCell:
+        def __init__(self):
+            self.commands = []
+        def checked(self, cmd, _check=None):
+            return self.act(cmd)
+        def act(self, cmd):
+            self.commands.append(cmd)
+            if cmd == "state":
+                return {
+                    "ok": True, "state": [20.0, 22.0, -16.0, 31.0, -30.0, 57.0],
+                    "target": [20.0, 22.0, -16.0, 31.0, -30.0, 57.0],
+                    "human_hold_latched": True, "torque_hold_commanded": True,
+                    "holding": False, "library_sha256": "lib-sha",
+                    "operating_context": {"session_id": "s1"},
+                }
+            if "fold-from-hold" in cmd:
+                return {"ok": True, "settled": True, "state": list(HOME)}
+            return {"ok": True}
+
+    cell = _LatchedCell()
+    tried = []
+    res = af.recover(
+        cell, HOME, CLOSED,
+        plan=lambda s: [s, HOME],
+        look=lambda f: (tried.append(len(f)), {"clear": True, "low": [], "high": []})[1],
+        reserve=lambda f: {"ok": True}, release=lambda: None,
+        release_and_rise=lambda c: {"result": "risen"},
+        low=lambda s: True, allow_live_unlatch=True, extended_detours=True,
+        held_plan=lambda s: [s, HOME], library_sha256="lib-sha",
+    )
+    # Must try fold-from-hold BEFORE jog-based lift_then_park when latched without holding
+    assert res["result"] == "folded" and res["candidate"] == "fold-from-hold"
+    assert not any(c.startswith("jog ") for c in cell.commands)
+

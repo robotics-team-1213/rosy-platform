@@ -1429,6 +1429,7 @@ def test_leader_home_exact_caps_rate_applies_exact_gains_and_names_lag_joint(tmp
                                        follower=list(present.values()), rate_deg_s=20.0, exact=True)
     assert out['ok'] is True
     assert seen_act[0]['rate_deg_s'] == leader_home.EXACT_HOME_RATE_DEG_S
+    assert seen_act[0]['accel_deg_s2'] == leader_home.EXACT_HOME_ACCEL_DEG_S2
     assert seen_admit[0]['pwm'] == leader_home.EXACT_HOME_PWM
     assert seen_admit[0]['current'] == leader_home.EXACT_HOME_CURRENT
     assert seen_admit[0]['gains'] == leader_home.EXACT_HOME_GAINS
@@ -1437,3 +1438,20 @@ def test_leader_home_exact_caps_rate_applies_exact_gains_and_names_lag_joint(tmp
     with pytest.raises(RuntimeError, match='shoulder_lift.*추종 오차'):
         leader_home.move_leader_home(cfg_p, 'arm_a', cfg_p, 'hands-off:test:1',
                                      follower=list(present.values()), rate_deg_s=20.0, exact=True)
+
+    # Read-only --check-home CLI reports >100 deg with rc=2 without needing --attest or touching Torque_Enable
+    bus_writes = []
+    leader.bus = SimpleNamespace(write=lambda *a, **k: bus_writes.append((a, k)))
+    act_before = len(seen_act)
+    far = {n: 2048 for n in leader_home.BODY}
+    far['shoulder_pan'] = 3500
+    monkeypatch.setattr(leader_home, '_present_ticks', lambda _l: far)
+    monkeypatch.setattr(leader_home, 'read_follower_pose', lambda *_a: list(present.values()))
+    rc_over = leader_home.main(['--config', str(cfg_p), '--arm', 'arm_a', '--match-follower', '--check-home'])
+    assert rc_over == 2
+    chk = leader_home.check_leader_home(cfg_p, 'arm_a', follower=list(present.values()))
+    assert chk['ok'] is False and chk['over_limit'] is True and chk['worst_joint'] == 'shoulder_pan' and chk['max_deg'] > 100.0
+    monkeypatch.setattr(leader_home, '_present_ticks', lambda _l: present)
+    assert leader_home.main(['--config', str(cfg_p), '--arm', 'arm_a', '--match-follower', '--check-home']) == 0
+    assert bus_writes == [] and len(seen_act) == act_before
+

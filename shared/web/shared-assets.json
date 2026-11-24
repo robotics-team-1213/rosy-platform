@@ -9,6 +9,7 @@
     "template.css": "text/css",
     "app-shell.css": "text/css",
     "core_ui_logic.js": "text/javascript",
+    "camera-frame-hold.js": "text/javascript",
     "hold-ticker.js": "text/javascript",
     "ui.js": "text/javascript",
     "workspace.js": "text/javascript",

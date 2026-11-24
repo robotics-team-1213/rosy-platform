@@ -957,3 +957,29 @@ def test_s3_act_policy_preset_validation_presence_gate_and_retry():
     assert retried["ok"] is True
     assert retried["task"]["execution_mode"] == "act_policy" and retried["task"]["max_chunks"] == 4
     assert retried["task"]["preset"] == "s3_act_policy"
+
+
+def test_evaluate_fleet_pipeline_handles_offline_docked_robot_without_pose():
+    site_map = _map()
+    graph = build_graph(site_map)
+    offline_robot = SimpleNamespace(robot_id="rosy_42", kind="pinky", online=False, pose=None, yaw=None)
+
+    out_station = evaluate_fleet_pipeline(
+        site_map, graph, [offline_robot], [],
+        cell_states={"cell_s": {"robot_id": "rosy_42", "phase": "CLAIMED"}},
+    )
+    cell_s = out_station["omx_cell_layer"]["cells"]["cell_s"]
+    assert cell_s["handoff"]["robot_id"] == "rosy_42"
+    assert cell_s["gate"]["cell_can_claim"] is False
+
+    out_state_pose = evaluate_fleet_pipeline(
+        site_map, graph, [offline_robot], [],
+        cell_states={"cell_s": {
+            "robot_id": "rosy_42",
+            "phase": "CLAIMED",
+            "docked_robot": {"pose": {"x": 1.25, "y": -0.5}},
+        }},
+    )
+    cell_s2 = out_state_pose["omx_cell_layer"]["cells"]["cell_s"]
+    assert cell_s2["handoff"]["station_pose_xy_yaw"] == (1.25, -0.5, 0.0)
+    assert cell_s2["gate"]["cell_can_claim"] is False

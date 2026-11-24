@@ -408,7 +408,11 @@ def test_publish_live_always_includes_pid_and_fifo_cell_fast_fails_dead_or_stall
     r._crl_publish = True
     from chunk_runner_loop import publish_live
     publish_live(r)
-    assert lives and lives[-1]["pid"] == os.getpid() and "interrupt" not in lives[-1]
+    assert lives and lives[-1]["pid"] == os.getpid() and lives[-1]["holding"] is False and "interrupt" not in lives[-1]
+    r.holding = True
+    publish_live(r)
+    assert lives[-1]["holding"] is True
+    r.holding = False
 
     io_dir = tmp_path / "io_liveness"
     io_dir.mkdir()

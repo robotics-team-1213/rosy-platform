@@ -2,6 +2,7 @@
 // A view is {source} for a registered Vision camera or {roiTarget} for the ceiling ROI zoom
 // on one target. Views whose source is not in Vision's source list show the honest
 // "영상 원본 미등록" state instead of a placeholder stream.
+import {createCameraFrameHold, decodeImageUrl, paintCameraFrameHold} from '/common/camera-frame-hold.js';
 import {frameBadge} from './vision-view.js';
 
 const CEILING_SOURCE = 'ceiling_north';
@@ -85,19 +86,22 @@ export function createCellFrameFeed({
   const watchers = new Map();
   const seen = new WeakSet();  // nodes painted while connected
   let sources = null, sourcesAt = -Infinity, sourcesError = '', listing = null;
-  let running = true, paused = false, disposed = false, active = null, timer = null, tickQueued = false, rerun = false;
+  let running = true, paused = false, disposed = false, active = null, timer = null, disconnectTimer = null, tickQueued = false, rerun = false;
 
-  const stateText = (label, detail) => [label, detail].filter(Boolean).join(' · ');
   const patchField = (obj, prop, val) => { if (obj && obj[prop] !== val) obj[prop] = val; };
   const isCurrent = (watcher, signal) => !signal.aborted && watchers.get(watcher.key) === watcher;
   const keyOf = view => (view.roiTarget ? `roi:${view.roiTarget}` : `source:${view.source}`);
 
-  function notifyState(watcher) {
+  function notifyState(watcher, snap) {
     onStateChange?.(watcher.key, {
       source: watcher.view.roiTarget ? CEILING_SOURCE : watcher.view.source,
       roiTarget: watcher.view.roiTarget || null,
-      live: Boolean(watcher.url) && watcher.state.kind === 'good',
-      ...watcher.state,
+      live: snap.phase === 'live',
+      hasFrame: snap.hasFrame,
+      phase: snap.phase,
+      kind: snap.kind,
+      label: snap.label,
+      text: snap.text,
     });
   }
 
@@ -106,51 +110,65 @@ export function createCellFrameFeed({
     let watcher = watchers.get(key);
     if (!watcher) {
       watcher = {key, view, imgs: new Set(), badges: new Set(), badgeLabel: '', lease: null,
-        url: null, state: {kind: 'neutral', label: '첫 프레임 대기', text: '첫 프레임 대기 — 스트림 연결 확인'}};
+        hold: createCameraFrameHold({now})};
       watchers.set(key, watcher);
     }
     return watcher;
   }
 
-  function paint(watcher) {
-    const showStandby = paused || !watcher.url;
-    const standbyText = paused ? '영상 일시정지' : watcher.state.text;
+  function stopDisconnectTimer() {
+    if (disconnectTimer !== null && typeof window !== 'undefined' && typeof window.clearInterval === 'function') {
+      window.clearInterval(disconnectTimer);
+    }
+    disconnectTimer = null;
+  }
+
+  function syncDisconnectTimer() {
+    const at = now();
+    const hasDisconnected = running && !paused && !disposed
+      && [...watchers.values()].some(w => w.hold.snapshot(at).phase === 'disconnected');
+    if (!hasDisconnected) {
+      stopDisconnectTimer();
+      return;
+    }
+    if (disconnectTimer !== null || typeof window === 'undefined' || typeof window.setInterval !== 'function') return;
+    disconnectTimer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      for (const watcher of watchers.values()) {
+        if (watcher.hold.snapshot(now()).phase === 'disconnected') paint(watcher, {notify: false});
+      }
+    }, 1000);
+  }
+
+  function paint(watcher, {notify = true} = {}) {
+    const snap = watcher.hold.snapshot(now());
     for (const img of watcher.imgs) {
       // A node bound before it is attached stays until it has been seen connected once.
       if (!img.isConnected) { if (seen.has(img)) watcher.imgs.delete(img); continue; }
       seen.add(img);
-      patchField(img, 'hidden', paused || !watcher.url);
-      if (img.dataset && img.dataset.frameStateText !== watcher.state.text) img.dataset.frameStateText = watcher.state.text;
-      if (watcher.url) {
-        patchField(img, 'src', watcher.url);
-      } else if (img.src !== '') {
-        img.removeAttribute?.('src');
-      }
-      const sibling = img.nextElementSibling;
-      if (sibling?.classList?.contains('omx-inspector-cam-standby')) {
-        patchField(sibling, 'hidden', !showStandby);
-        if (showStandby) patchField(sibling, 'textContent', standbyText);
-      }
+      const sibling = img.nextElementSibling?.classList?.contains('omx-inspector-cam-standby') ? img.nextElementSibling : null;
+      paintCameraFrameHold(img.parentElement, img, sibling, snap);
+      if (img.dataset && img.dataset.frameStateText !== snap.text) img.dataset.frameStateText = snap.text;
     }
-    const badgeText = [watcher.badgeLabel, standbyText].filter(Boolean).join(' · ');
+    const badgeText = [watcher.badgeLabel, snap.text].filter(Boolean).join(' · ');
     for (const badge of watcher.badges) {
       if (!badge.isConnected) { if (seen.has(badge)) watcher.badges.delete(badge); continue; }
       seen.add(badge);
       patchField(badge, 'textContent', badgeText);
     }
     if (!watcher.imgs.size && !watcher.badges.size) {
-      if (watcher.url) URL.revokeObjectURL(watcher.url);
+      watcher.hold.dispose();
       watchers.delete(watcher.key);
+      syncDisconnectTimer();
       return;
     }
-    notifyState(watcher);
+    if (notify) notifyState(watcher, snap);
   }
 
-  function unavailable(watcher, kind, label, detail = '') {
-    if (watcher.url) URL.revokeObjectURL(watcher.url);
-    watcher.url = null;
-    watcher.state = {kind, label, text: stateText(label, detail)};
+  function unavailable(watcher, kind, label, detail = '', {dropFrame = false} = {}) {
+    watcher.hold.disconnect({kind, label, detail, dropFrame});
     paint(watcher);
+    syncDisconnectTimer();
   }
 
   async function ensureSources(signal) {
@@ -190,7 +208,7 @@ export function createCellFrameFeed({
       }
       if (sources === null) {
         if (sourcesError === 'unauthorized') {
-          return unavailable(watcher, 'warn', '영상 권한 확인 필요', '접속 후 다시 확인하세요');
+          return unavailable(watcher, 'warn', '영상 권한 확인 필요', '접속 후 다시 확인하세요', {dropFrame: true});
         }
         return unavailable(watcher, 'warn', '영상 연결 확인 중', 'Vision 카메라 목록을 확인하는 중입니다');
       }
@@ -216,18 +234,30 @@ export function createCellFrameFeed({
       ageMs: frameAge(response.headers, Boolean(watcher.view.roiTarget)),
       frameState: response.headers.get('X-Frame-State'), rectified: false});
     if (!response.ok || badge.state !== 'live') {
-      return unavailable(watcher, badge.kind, badge.label, badge.detail);
+      return unavailable(watcher, badge.kind, badge.label, badge.detail, {dropFrame: badge.state === 'unauthorized'});
+    }
+    const label = watcher.view.roiTarget ? '천장 Cam 확대 추적' : '원본 최신 프레임';
+    const detail = watcher.view.roiTarget ? CEILING_SOURCE : seq && `#${seq}`;
+    const currentSnap = watcher.hold.snapshot(now());
+    if (seq && currentSnap.hasFrame && currentSnap.seq === seq) {
+      watcher.hold.markLive({label, detail});
+      paint(watcher);
+      syncDisconnectTimer();
+      return;
     }
     const blob = await response.blob();
     if (!isCurrent(watcher, signal)) return;
     if (!blob.size) return unavailable(watcher, 'warn', '첫 프레임 대기', '스트림 연결 확인');
     const next = URL.createObjectURL(blob);
-    if (watcher.url) URL.revokeObjectURL(watcher.url);
-    watcher.url = next;
-    const label = watcher.view.roiTarget ? '천장 Cam 확대 추적' : '원본 최신 프레임';
-    const detail = watcher.view.roiTarget ? CEILING_SOURCE : seq && `#${seq}`;
-    watcher.state = {kind: 'good', label, text: stateText(label, detail)};
+    const decoded = await decodeImageUrl(next);
+    if (!isCurrent(watcher, signal) || !decoded) {
+      URL.revokeObjectURL(next);
+      if (isCurrent(watcher, signal) && !decoded) unavailable(watcher, 'warn', '영상 디코딩 실패');
+      return;
+    }
+    watcher.hold.acceptFrame({url: next, seq, label, detail});
     paint(watcher);
+    syncDisconnectTimer();
   }
 
   async function tick() {
@@ -248,8 +278,9 @@ export function createCellFrameFeed({
             await refreshOne(watcher, signal);
           } catch (error) {
             if (!isCurrent(watcher, signal)) continue;
-            const label = error?.status === 401 || error?.status === 403 ? '영상 권한 없음' : '영상 연결 끊김 — Vision 확인';
-            unavailable(watcher, 'warn', label);
+            const isAuth = error?.status === 401 || error?.status === 403;
+            const label = isAuth ? '영상 권한 없음' : '영상 연결 끊김 — Vision 확인';
+            unavailable(watcher, 'warn', label, '', {dropFrame: isAuth});
           }
         }
       }
@@ -293,7 +324,7 @@ export function createCellFrameFeed({
       if (img) other.imgs.delete(img);
       if (badge) other.badges.delete(badge);
       if (!other.imgs.size && !other.badges.size) {
-        if (other.url) URL.revokeObjectURL(other.url);
+        other.hold.dispose();
         watchers.delete(other.key);
       }
     }
@@ -304,6 +335,7 @@ export function createCellFrameFeed({
     }
     paint(watcher);
     startTimer();
+    syncDisconnectTimer();
     scheduleTick();
   }
 
@@ -316,8 +348,8 @@ export function createCellFrameFeed({
   function setRunning(next) {
     if (disposed) return;
     running = Boolean(next);
-    if (running && !paused) { startTimer(); scheduleTick(); }
-    else { stopTimer(); active?.abort(); }
+    if (running && !paused) { startTimer(); syncDisconnectTimer(); scheduleTick(); }
+    else { stopTimer(); stopDisconnectTimer(); active?.abort(); }
   }
 
   function setPaused(next) {
@@ -325,9 +357,12 @@ export function createCellFrameFeed({
     const value = Boolean(next);
     if (paused === value) return;
     paused = value;
-    for (const watcher of watchers.values()) paint(watcher);
-    if (!paused && running) { startTimer(); scheduleTick(); }
-    else if (paused) { stopTimer(); active?.abort(); }
+    for (const watcher of watchers.values()) {
+      watcher.hold.setPaused(value);
+      paint(watcher);
+    }
+    if (!paused && running) { startTimer(); syncDisconnectTimer(); scheduleTick(); }
+    else if (paused) { stopTimer(); stopDisconnectTimer(); active?.abort(); }
   }
 
   function checkSources(signal) {
@@ -339,8 +374,13 @@ export function createCellFrameFeed({
   function dispose() {
     setRunning(false);
     disposed = true;
-    for (const watcher of watchers.values()) unavailable(watcher, 'neutral', '영상 수신 대기');
+    for (const watcher of watchers.values()) {
+      watcher.hold.disconnect({kind: 'neutral', label: '영상 수신 대기', dropFrame: true});
+      paint(watcher);
+      watcher.hold.dispose();
+    }
     watchers.clear();
+    stopDisconnectTimer();
   }
 
   scope?.onDispose?.(dispose);

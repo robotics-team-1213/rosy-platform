@@ -113,6 +113,9 @@ def main(argv=None, *, _globals: dict | None = None):
         "--params", type=Path, help="--chunks: cell-params.json for the runner (default: built-in values)"
     )
     parser.add_argument(
+        "--load-model", type=Path, help="--chunks: load-model JSON for startup/chunk gravity checks"
+    )
+    parser.add_argument(
         "--io", type=Path, default=Path("chunk-io"), help="--chunks: command FIFO and status directory"
     )
     parser.add_argument("--teleop-stage", type=int, choices=sorted(STAGES), help="full-arm Leader session only: teleop_speed stage (tracking limit, servo profile)")
@@ -130,8 +133,8 @@ def main(argv=None, *, _globals: dict | None = None):
     args = parser.parse_args(argv)
     if args.skip_leader_finish and not args.chunks:
         parser.error("--skip-leader-finish requires --chunks")
-    if (args.rim_z_m is not None or args.cell_config is not None or args.site is not None) and not args.chunks:
-        parser.error("--rim-z-m, --cell-config and --site require --chunks")
+    if (args.rim_z_m is not None or args.cell_config is not None or args.site is not None or args.load_model is not None) and not args.chunks:
+        parser.error("--rim-z-m, --cell-config, --site and --load-model require --chunks")
     if args.site is not None and args.cell_config is None:
         parser.error("--site requires --cell-config")
     if args.operating_profile:
@@ -274,7 +277,7 @@ def main(argv=None, *, _globals: dict | None = None):
             "io": str(args.io.resolve()),
             "sha256": hashlib.sha256(args.chunks.read_bytes()).hexdigest(),
             **({"params": str(args.params.resolve())} if args.params else {}),
-            **({"load_model": os.environ["ROSY_LOAD_MODEL"]} if os.environ.get("ROSY_LOAD_MODEL") else {}),
+            **({"load_model": str(args.load_model.resolve())} if args.load_model else ({"load_model": os.environ["ROSY_LOAD_MODEL"]} if os.environ.get("ROSY_LOAD_MODEL") else {})),
             **({"rim_z_m": rim_z_m} if rim_z_m is not None else {}),
         }
     import omx_incident

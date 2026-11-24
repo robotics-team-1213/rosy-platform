@@ -111,9 +111,9 @@ class Updater:
             return "device_in_use"
         if getattr(self.host, "follower_missing", lambda: False)():
             return "follower_device_missing"
-        if not self.host.follower_torque_off(release, self.python(env)):
-            return "follower_torque_not_off"
-        return None
+        if hasattr(self.host, "follower_idle_reason"):
+            return self.host.follower_idle_reason(release, self.python(env))
+        return None if self.host.follower_torque_off(release, self.python(env)) else "follower_torque_not_off"
 
     def trusted(self, sha: str, state: dict) -> str | None:
         checks = self.host.checks(sha)

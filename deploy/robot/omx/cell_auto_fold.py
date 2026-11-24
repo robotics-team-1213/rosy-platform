@@ -160,16 +160,22 @@ def recover(cell, home, closed, *, plan, look, reserve, release, release_and_ris
     tries = (build_candidates(list(target[:6]), home, closed, park_fn, bounds=bounds, tcp_x_m=tcp_x_m,
                               clear_z_m=clear_z_m, situation=situation, extended=True)
              if extended_detours else list(candidates(list(target[:6]), park_fn)))  # the runner parks from its held target
-    if order is not None:
-        rank = {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
-        tries.sort(key=lambda c: (0 if situation == "low_open_jaws" and c[0].startswith("lift_") else 1, rank.get(c[0], len(rank))))
+    prefer_direct = bool(
+        latched["active"] and held_plan is not None and library_sha256
+        and status.get("library_sha256") == library_sha256
+        and status.get("torque_hold_commanded") is True and not status.get("holding")
+    )
+    rank = (
+        {name: i for i, name in enumerate(order([name for name, _, _ in tries]))}
+        if order is not None else {name: i for i, (name, _, _) in enumerate(tries)}
+    )
+    tries.sort(key=lambda c: (
+        0 if (prefer_direct and c[0] == "park") else (1 if situation == "low_open_jaws" and c[0].startswith("lift_") else 2),
+        rank.get(c[0], len(rank)),
+    ))
 
     def _try_candidate(name, before, frames):
-        can_fold_direct = (
-            latched["active"] and not before and held_plan is not None and library_sha256
-            and status.get("library_sha256") == library_sha256 and status.get("torque_hold_commanded") is True
-            and not status.get("holding")
-        )
+        can_fold_direct = prefer_direct and not before
         cand_frames = [state, *held_plan(state)] if can_fold_direct else frames
         cand_name = "fold-from-hold" if can_fold_direct else name
         verdict = look(cand_frames)

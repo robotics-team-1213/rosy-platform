@@ -29,7 +29,7 @@ from fleet.server.lane_compliance_service import LaneComplianceMonitor, install_
 from fleet.server.lane_route_routes import install_lane_route_routes
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.map_pose_service import MapPoseService, install_map_pin_route, install_map_pose_routes
-from fleet.server.offline_pin import mover_site_pose, obstacle_site_pose
+from fleet.server.offline_pin import OfflinePinStore, mover_site_pose, obstacle_site_pose
 from fleet.server.wall_map_sync import WallMapSync  # SLAM fallback (2026-11-18)
 from fleet.server.nudge_routes import install_nudge_step_route
 from fleet.server.mission_dispatcher import MissionDispatcher
@@ -150,11 +150,13 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
     map_pose_config = map_pose_config or MapPoseConfig()
     if sightings is not None and map_pose_config.sighting_lease_s > sightings.lease_s:
         raise ValueError("fleet.map_pose.sighting_lease_s must not exceed the sighting ingest lease")
+    offline_pins = OfflinePinStore(db=getattr(site_maps, "_db", None), lock=getattr(site_maps, "_lock", None))
     map_pose = MapPoseService(
         lambda: console.robot_ids, config=map_pose_config,
         map_id=lambda: (active := site_maps.active()) and active[1].map_id,
         source_map_ids=[source.map_id for source in (sightings.sources if sightings is not None else ())],
-        gather=_gather_state, gather_rest=_rest_state, client_identity=console._client)
+        gather=_gather_state, gather_rest=_rest_state, client_identity=console._client,
+        offline_pins=offline_pins)
     map_pose.active_map_id()
     execution_pose = map_pose_port if simulation_pose else map_pose
     if simulation_pose:
