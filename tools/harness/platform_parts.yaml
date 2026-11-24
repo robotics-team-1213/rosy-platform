@@ -1481,6 +1481,7 @@ safety_review_paths:
   - deploy/robot/omx/cell_pipeline_stages.py
   - deploy/robot/omx/cell_pipeline_io.py
   - deploy/robot/omx/cell_pipeline_liveness.py
+  - deploy/robot/omx/chunk_ctl_socket.py
   - deploy/robot/omx/hardware_owner_goals.py
   - deploy/robot/omx/cell_policy_drive.py
   - deploy/robot/omx/cell_policy_shape.py
