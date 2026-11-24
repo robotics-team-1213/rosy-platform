@@ -276,7 +276,7 @@ def send_unix_command(
     Returns ``(result_dict, None)`` when handled on the Unix socket, or
     ``(None, "fallback")`` when the socket does not exist / is not listening yet.
     """
-    if not hasattr(socket, "AF_UNIX") or not Path(sock_path).is_socket():
+    if not hasattr(socket, "AF_UNIX") or os.environ.get("ROSY_OMX_FORCE_FIFO") or not Path(sock_path).is_socket():
         return None, "fallback"
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:

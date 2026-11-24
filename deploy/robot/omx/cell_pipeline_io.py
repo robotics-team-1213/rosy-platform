@@ -183,15 +183,14 @@ class FifoCell:
             eff_timeout = min(self.timeout_s, cap)
         else:
             eff_timeout = timeout
-        if not os.environ.get("ROSY_OMX_FORCE_FIFO"):
-            unix_row, unix_err = send_unix_command(
-                self, self.io / CTL_SOCKET_NAME, wire_cmd=wire_cmd, command=command,
-                expected=expected, verb=verb, recovery=recovery, is_hold=is_hold,
-                hold_req=hold_req, eff_timeout=eff_timeout, finite_stamp=finite_stamp,
-                stall_timeout_s=self.stall_timeout_s,
-            )
-            if unix_err != "fallback":
-                return unix_row
+        unix_row, unix_err = send_unix_command(
+            self, self.io / CTL_SOCKET_NAME, wire_cmd=wire_cmd, command=command,
+            expected=expected, verb=verb, recovery=recovery, is_hold=is_hold,
+            hold_req=hold_req, eff_timeout=eff_timeout, finite_stamp=finite_stamp,
+            stall_timeout_s=self.stall_timeout_s,
+        )
+        if unix_err != "fallback":
+            return unix_row
         status_path = self.io / "chunk-status.jsonl"
         with FIFO_WRITE_LOCK:  # the hardware owner's cancel fold writes `park` from another thread (D-977 4)
             if is_hold:
