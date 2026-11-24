@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cell_calibration import _inv3x3  # noqa: E402
+from cell_calibration import _inv3x3, parallax  # noqa: E402
 from grasp_planner import load_kinematics, norm_to_rad  # noqa: E402
 from omx_adapter.chunk_library import NAMES, park_path, transit_path  # noqa: E402
 from omx_adapter.coordination import Segment, clearance, moved, plan, rendezvous, rigid_between, thinned  # noqa: E402
@@ -62,18 +63,76 @@ def segments_of(library: dict, kin, rigid: tuple, piece_s: float = 0.0, home_pan
 _GRID_PTS_A = tuple((x, y, 1.0) for x in (0.05, 0.1, 0.15, 0.2) for y in (-0.05, 0.05, 0.1, 0.15))
 
 
-def rigid_of(cal_a: dict, cal_b: dict, site_a: str, site_b: str) -> tuple:
-    """arm_a's frame to arm_b's, through the top camera both maps share (a homography maps a pixel to the arm's x, y)."""
+def _finite_num(value, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        raise ValueError(f"{name} must be a finite number, got {value!r}")
+    return float(value)
+
+
+def _validated_camera(camera: dict, name: str = "camera") -> dict:
+    if not isinstance(camera, dict):
+        raise ValueError(f"{name} metadata must be a mapping")
+    height_m = _finite_num(camera.get("height_m"), f"{name}.height_m")
+    center = camera.get("center_px")
+    if not isinstance(center, (list, tuple)) or len(center) != 2:
+        raise ValueError(f"{name}.center_px must be a 2-element sequence, got {center!r}")
+    cx = _finite_num(center[0], f"{name}.center_px[0]")
+    cy = _finite_num(center[1], f"{name}.center_px[1]")
+    return {"height_m": height_m, "center_px": (cx, cy)}
+
+
+def shared_top_camera(cfg_a: dict, cfg_b: dict) -> dict | None:
+    """Return validated top camera geometry shared by arm_a and arm_b, or None when absent on both.
+    Raises ValueError if either defines partial/non-finite geometry or if arm_a and arm_b disagree."""
+    raw_a = (cfg_a.get("cameras") or {}).get("top")
+    raw_b = (cfg_b.get("cameras") or {}).get("top")
+    has_a = isinstance(raw_a, dict) and (raw_a.get("height_m") is not None or raw_a.get("center_px") is not None)
+    has_b = isinstance(raw_b, dict) and (raw_b.get("height_m") is not None or raw_b.get("center_px") is not None)
+    if not has_a and not has_b:
+        return None
+    cam_a = _validated_camera(raw_a, "arm_a.cameras.top") if has_a else None
+    cam_b = _validated_camera(raw_b, "arm_b.cameras.top") if has_b else None
+    if cam_a is not None and cam_b is not None:
+        if abs(cam_a["height_m"] - cam_b["height_m"]) > 0.005:
+            raise ValueError(
+                f"arm_a and arm_b top camera height_m disagree: {cam_a['height_m']} vs {cam_b['height_m']}"
+            )
+        if math.hypot(cam_a["center_px"][0] - cam_b["center_px"][0], cam_a["center_px"][1] - cam_b["center_px"][1]) > 2.0:
+            raise ValueError(
+                f"arm_a and arm_b top camera center_px disagree: {cam_a['center_px']} vs {cam_b['center_px']}"
+            )
+    return cam_a or cam_b
+
+
+def rigid_of(cal_a: dict, cal_b: dict, site_a: str, site_b: str, camera: dict | None = None) -> tuple:
+    """arm_a's frame to arm_b's, through the top camera both maps share (compensating z_view parallax when camera metadata is given)."""
     import numpy as np
 
-    to_pixel_a = np.array(_inv3x3(cal_a["sites"][site_a]["homography"]))
-    h_b = np.array(cal_b["sites"][site_b]["homography"])
+    rec_a, rec_b = cal_a["sites"][site_a], cal_b["sites"][site_b]
+    to_pixel_a = np.array(_inv3x3(rec_a["homography"]))
+    h_b = np.array(rec_b["homography"])
     pts_a = np.asarray(_GRID_PTS_A, dtype=float)
     pixels = pts_a @ to_pixel_a.T
     pixels /= pixels[:, 2:3]
+    z_a = _finite_num(rec_a["z_view"], "cal_a.z_view") if rec_a.get("z_view") is not None else None
+    z_b = _finite_num(rec_b["z_view"], "cal_b.z_view") if rec_b.get("z_view") is not None else None
+    if camera is not None:
+        if (z_a is None) != (z_b is None):
+            raise ValueError("asymmetric z_view between arm_a and arm_b site maps")
+        if z_a is not None and z_b is not None and abs(z_a - z_b) > 1e-6:
+            cam = _validated_camera(camera)
+            if cam["height_m"] <= max(z_a, z_b) + 1e-6:
+                raise ValueError(f"camera.height_m {cam['height_m']} must exceed max(z_view) {max(z_a, z_b)}")
+            for idx in range(len(pixels)):
+                pixels[idx, 0], pixels[idx, 1] = parallax(
+                    (float(pixels[idx, 0]), float(pixels[idx, 1])), z_a, z_b, cam
+                )
     pts_b = pixels @ h_b.T
     pts_b = pts_b[:, :2] / pts_b[:, 2:3]
-    return rigid_between(pts_a[:, :2], pts_b)
+    res = rigid_between(pts_a[:, :2], pts_b)
+    if not all(math.isfinite(float(v)) for v in res):
+        raise ValueError(f"non-finite rigid_of transform: {res!r}")
+    return res
 
 
 def main(argv=None):
@@ -89,7 +148,7 @@ def main(argv=None):
     libraries = [json.loads(Path(p).read_text()) for p in (args.a[1], args.b[1])]
     calibrations = [json.loads(Path(c["calibration_path"]).read_text()) for c in cells]
     kin, _, _ = load_kinematics(None)
-    rigid = rigid_of(calibrations[0], calibrations[1], "pallet", "pallet")
+    rigid = rigid_of(calibrations[0], calibrations[1], "pallet", "pallet", camera=shared_top_camera(cells[0], cells[1]))
     a = segments_of(libraries[0], kin, rigid, args.piece_s, args.home_pan_a)
     b = segments_of(libraries[1], kin, (0.0, 0.0, 0.0), args.piece_s, args.home_pan_b)
     schedule, meets = plan(a, b, args.margin), rendezvous(a, b, args.margin)
