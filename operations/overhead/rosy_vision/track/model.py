@@ -8,6 +8,8 @@ from typing import Literal, Protocol
 
 import numpy as np
 
+from core_common.calibration_math import validate_lens_profile
+
 Status = Literal["OK", "LEARNING", "CALIBRATION_REQUIRED", "SCENE_CHANGED"]
 
 #: Commissioned URDF nominal geometry (D-397; the drift
@@ -44,6 +46,7 @@ class Calibration:
     image_size: tuple[int, int]                        # (width, height) of the frames it is for
     track_bounds_m: tuple[float, float, float, float]  # min_x, min_y, max_x, max_y
     hfov_deg: float | None = None                      # lens FOV across the long side; None = no parallax
+    lens_profile: dict | None = None                   # optional calibrated intrinsics {model, K, D, image_size}
 
     def __post_init__(self) -> None:
         if len(self.image_to_map) != 9 or not all(math.isfinite(v) for v in self.image_to_map):
@@ -64,6 +67,10 @@ class Calibration:
         if self.hfov_deg is not None and not (
                 isinstance(self.hfov_deg, (int, float)) and 0.0 < self.hfov_deg < 180.0):
             raise ValueError("hfov_deg must be None or between 0 and 180 degrees")
+        if self.lens_profile is not None:
+            validated = validate_lens_profile(self.lens_profile)
+            if tuple(validated["image_size"]) != self.image_size:
+                raise ValueError("lens_profile image_size must match calibration image_size")
 
 
 @dataclass(frozen=True)

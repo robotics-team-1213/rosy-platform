@@ -16,16 +16,19 @@ import math
 import os
 import sqlite3
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Mapping, Optional, Sequence
 
+from core_common.calibration_math import scale_lens_profile
 from .sqlite_policy import configure_connection, enable_wal
 
 REVISION_PREFIX = "paint-"
 MAX_IMAGE_SIDE = 8192
+MAX_HISTORY_PER_SOURCE = 20
 _LOG = logging.getLogger(__name__)
 _LENS_KEYS = ("kind", "focal_mm", "hfov_deg")
+_METHODS = ("paint", "manual_points", "measured", "rollback")
 
 
 @dataclass(frozen=True)
@@ -42,10 +45,14 @@ class CalibrationRecord:
     frame_seq: Optional[int]
     approved_by: str
     approved_at: float
+    lens_profile: Optional[dict] = None
+    frozen: bool = False
+    method: str = "paint"
+    metrics: Optional[dict] = None
 
     def to_dict(self) -> dict:
         min_x, min_y, max_x, max_y = self.track_bounds_m
-        return {
+        payload = {
             "source_id": self.source_id,
             "map_id": self.map_id,
             "calibration_revision": self.calibration_revision,
@@ -59,6 +66,15 @@ class CalibrationRecord:
             "approved_at": self.approved_at,
             "use": "display-only",
         }
+        if self.lens_profile is not None:
+            payload["lens_profile"] = self.lens_profile
+        if self.frozen:
+            payload["frozen"] = True
+        if self.method != "paint":
+            payload["method"] = self.method
+        if self.metrics is not None:
+            payload["metrics"] = self.metrics
+        return payload
 
     @classmethod
     def from_dict(cls, row: Mapping) -> "CalibrationRecord":
@@ -79,13 +95,39 @@ class CalibrationRecord:
             frame_seq=row.get("frame_seq"),
             approved_by=row["approved_by"],
             approved_at=float(row["approved_at"]),
+            lens_profile=row.get("lens_profile"),
+            frozen=bool(row.get("frozen", False)),
+            method=str(row.get("method") or "paint"),
+            metrics=row.get("metrics"),
         )
+
+
+def _clean_metrics(metrics: Optional[Mapping]) -> Optional[dict]:
+    if metrics is None:
+        return None
+    if not isinstance(metrics, Mapping):
+        raise ValueError("metrics must be a mapping")
+    cleaned = {}
+    for key, val in metrics.items():
+        if not isinstance(key, str) or len(key) > 64:
+            raise ValueError("invalid metric key")
+        if isinstance(val, bool) or isinstance(val, (int, str)):
+            cleaned[key] = val
+        elif isinstance(val, float):
+            if not math.isfinite(val):
+                raise ValueError("metric values must be finite")
+            cleaned[key] = val
+        else:
+            raise ValueError("unsupported metric value type")
+    return cleaned
 
 
 def build_record(*, source_id: str, map_id: str, map_to_image: Sequence[float], image_width: int,
                  image_height: int, track_bounds_m: Sequence[float], lens: Optional[Mapping],
                  fit_score: float, frame_seq: Optional[int], approved_by: str,
-                 approved_at: float) -> CalibrationRecord:
+                 approved_at: float, lens_profile: Optional[Mapping] = None,
+                 frozen: bool = False, method: str = "paint",
+                 metrics: Optional[Mapping] = None) -> CalibrationRecord:
     """Validate one operator-approved fit and derive its revision. Raises ``ValueError``."""
     matrix = tuple(float(value) for value in map_to_image)
     if len(matrix) != 9 or not all(math.isfinite(value) for value in matrix):
@@ -109,6 +151,10 @@ def build_record(*, source_id: str, map_id: str, map_to_image: Sequence[float], 
     if not 0.0 <= score <= 1.0:
         raise ValueError("fit_score must be in [0, 1]")
     lens_value = None if lens is None else _lens(lens)
+    lp_value = None if lens_profile is None else scale_lens_profile(lens_profile, (image_width, image_height))
+    if method not in _METHODS:
+        raise ValueError(f"method must be one of {_METHODS}")
+    cleaned_metrics = _clean_metrics(metrics)
     if frame_seq is not None and (type(frame_seq) is not int or frame_seq < 0):
         raise ValueError("frame_seq must be a non-negative integer")
     if not source_id or not map_id or not approved_by:
@@ -120,10 +166,14 @@ def build_record(*, source_id: str, map_id: str, map_to_image: Sequence[float], 
         "image": [image_width, image_height], "track_bounds_m": list(bounds),
         "lens": None if lens_value is None else list(lens_value), "approved_at": float(approved_at),
     }
+    if lp_value is not None:
+        revision_fields["lens_profile"] = lp_value
     canonical = json.dumps(revision_fields, sort_keys=True, separators=(",", ":"), allow_nan=False)
     revision = REVISION_PREFIX + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
     return CalibrationRecord(source_id, map_id, revision, matrix, image_width, image_height,
-                             bounds, lens_value, score, frame_seq, approved_by, float(approved_at))
+                             bounds, lens_value, score, frame_seq, approved_by, float(approved_at),
+                             lens_profile=lp_value, frozen=bool(frozen), method=method,
+                             metrics=cleaned_metrics)
 
 
 def _lens(lens: Mapping) -> tuple[str, float, float]:
@@ -150,6 +200,7 @@ class TrackingCalibrationStore:
         self.preview = MeasuredCalibrationStore(path)
         self.path = Path(path) if path is not None else None
         self._records: dict[str, CalibrationRecord] = {}
+        self._history: dict[str, list[CalibrationRecord]] = {}
         if self.path is None:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,6 +220,13 @@ class TrackingCalibrationStore:
                     principal_id TEXT,
                     at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS tracking_calibration_history (
+                    history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    source_id TEXT NOT NULL,
+                    calibration_revision TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    saved_at REAL NOT NULL
+                );
                 """
             )
             rows = connection.execute(
@@ -184,7 +242,9 @@ class TrackingCalibrationStore:
                     track_bounds_m=stored.track_bounds_m,
                     lens=None if stored.lens is None else dict(zip(_LENS_KEYS, stored.lens)),
                     fit_score=stored.fit_score, frame_seq=stored.frame_seq,
-                    approved_by=stored.approved_by, approved_at=stored.approved_at)
+                    approved_by=stored.approved_by, approved_at=stored.approved_at,
+                    lens_profile=stored.lens_profile, frozen=stored.frozen,
+                    method=stored.method, metrics=stored.metrics)
                 if record.calibration_revision != stored.calibration_revision:
                     raise ValueError("revision does not match the stored fit")
             except (ValueError, KeyError, TypeError) as exc:
@@ -209,13 +269,91 @@ class TrackingCalibrationStore:
                         (record.source_id, payload),
                     )
                     connection.execute(
+                        """INSERT INTO tracking_calibration_history
+                           (source_id, calibration_revision, payload_json, saved_at) VALUES (?, ?, ?, ?)""",
+                        (record.source_id, record.calibration_revision, payload, record.approved_at),
+                    )
+                    connection.execute(
+                        """DELETE FROM tracking_calibration_history WHERE source_id = ? AND history_id NOT IN (
+                           SELECT history_id FROM tracking_calibration_history WHERE source_id = ?
+                           ORDER BY history_id DESC LIMIT ?)""",
+                        (record.source_id, record.source_id, MAX_HISTORY_PER_SOURCE),
+                    )
+                    connection.execute(
                         """INSERT INTO tracking_calibration_audit
                            (event, source_id, calibration_revision, principal_id, at)
                            VALUES ('calibration.approved', ?, ?, ?, ?)""",
                         (record.source_id, record.calibration_revision, record.approved_by,
                          record.approved_at),
                     )
+        items = [r for r in self._history.get(record.source_id, ()) if r.calibration_revision != record.calibration_revision]
+        items.insert(0, record)
+        self._history[record.source_id] = items[:MAX_HISTORY_PER_SOURCE]
         self._records[record.source_id] = record
+
+    def set_frozen(self, source_id: str, frozen: bool, *, principal_id: str, at: float) -> Optional[CalibrationRecord]:
+        if not math.isfinite(at):
+            raise ValueError("at must be finite")
+        cur = self._records.get(source_id)
+        if cur is None:
+            return None
+        updated = replace(cur, frozen=bool(frozen))
+        if self.path is not None:
+            payload = json.dumps(updated.to_dict(), separators=(",", ":"), allow_nan=False)
+            event = "calibration.frozen" if updated.frozen else "calibration.unfrozen"
+            with closing(self._connect()) as connection:
+                with connection:
+                    connection.execute(
+                        "UPDATE tracking_calibrations SET payload_json = ? WHERE source_id = ?",
+                        (payload, source_id),
+                    )
+                    connection.execute(
+                        """INSERT INTO tracking_calibration_audit
+                           (event, source_id, calibration_revision, principal_id, at)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (event, source_id, updated.calibration_revision, principal_id, at),
+                    )
+        self._records[source_id] = updated
+        return updated
+
+    def history(self, source_id: str, limit: int = 10) -> list[dict]:
+        records = self._load_history(source_id)[:max(1, limit)]
+        return [
+            {
+                "calibration_revision": r.calibration_revision,
+                "map_id": r.map_id,
+                "method": r.method,
+                "fit_score": r.fit_score,
+                "approved_by": r.approved_by,
+                "approved_at": r.approved_at,
+                "has_lens_profile": r.lens_profile is not None,
+                "metrics": r.metrics,
+            }
+            for r in records
+        ]
+
+    def get_revision(self, source_id: str, revision: str) -> Optional[CalibrationRecord]:
+        return next((r for r in self._load_history(source_id) if r.calibration_revision == revision), None)
+
+    def _load_history(self, source_id: str) -> list[CalibrationRecord]:
+        if self.path is None:
+            return list(self._history.get(source_id, ()))
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                """SELECT payload_json FROM tracking_calibration_history
+                   WHERE source_id = ? ORDER BY history_id DESC LIMIT ?""",
+                (source_id, MAX_HISTORY_PER_SOURCE),
+            ).fetchall()
+        out, seen = [], set()
+        for row in rows:
+            try:
+                rec = CalibrationRecord.from_dict(json.loads(row["payload_json"]))
+            except (ValueError, KeyError, TypeError):
+                continue
+            if rec.calibration_revision not in seen:
+                seen.add(rec.calibration_revision)
+                out.append(rec)
+        return out
 
     def delete(self, source_id: str, *, principal_id: str, at: float) -> bool:
         if not math.isfinite(at):

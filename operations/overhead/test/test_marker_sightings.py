@@ -323,3 +323,23 @@ def test_track_worker_skips_robots_already_sighted_and_only_logs_a_rejection(cap
         payload, _ = _run(failing)
     assert payload is not None and len(failing.sent) == 1
     assert "marker sighting not accepted" in caplog.text and "CALIBRATION_MISMATCH" in caplog.text
+
+
+def test_distorted_marker_sighting_with_lens_profile_and_parallax():
+    from core_common.calibration_math import distort_point
+
+    lp = {
+        "model": "pinhole",
+        "K": [[920.0, 0.0, 640.0], [0.0, 920.0, 360.0], [0.0, 0.0, 1.0]],
+        "D": [-0.28, 0.08, 0.002, -0.001, -0.01],
+        "image_size": [1280, 720],
+        "source": "measured",
+    }
+    rec = {**RECORD, "lens_profile": lp}
+    cal = from_record(rec, source_id="ceiling_north", map_id="map_v2_fleet", frame_size=(1280, 720), lens=LENS)
+    assert cal is not None and cal.lens_profile is not None
+    undist_quad = _sticker(0.8, 0.4, 0.4)
+    dist_quad = tuple(distort_point(u, v, lp) for u, v in undist_quad)
+    [sighting] = robot_sightings(CAMERA, cal, {40: dist_quad}, captured_at=1_790_000_000.25, seq=8)
+    assert (sighting.x, sighting.y) == pytest.approx((0.8, 0.4), abs=1e-3)
+    assert math.remainder(sighting.yaw - 0.4, math.tau) == pytest.approx(0.0, abs=5e-3)

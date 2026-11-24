@@ -247,7 +247,7 @@ class BackgroundBlobDetector:
                 self._ready = self._kept = True
                 self._learn_background(mask)
                 self._find_baked(mask, work_to_map, camera)
-        shapes, shape_px = self._shapes(image, mask, work_to_map, camera)
+        shapes, shape_px = self._shapes(image, mask, work_to_map, camera, calib)
         # Panel 2026-11-18: robots seen by shape are reported while learning (status OK, as worker
         # does for ArUco markers); an empty learn frame stays LEARNING.
         learning = DetectorResult(tuple(shapes[:MAX_DETECTIONS]), "OK") if shapes else DetectorResult((), "LEARNING")
@@ -309,7 +309,7 @@ class BackgroundBlobDetector:
             if label in skip:
                 continue
             pixels = int(stats[label, cv2.CC_STAT_AREA])
-            detection = self._measure(pixels, centroids[label], work_to_map, camera)
+            detection = self._measure(pixels, centroids[label], work_to_map, camera, calib=calib)
             ghost = self._unsuspected_ghost(label, labels, stats[label], centroids[label], image, mask,
                                             work_to_map, camera)
             if ghost is not None:
@@ -359,11 +359,13 @@ class BackgroundBlobDetector:
         found.sort(key=lambda item: item.score, reverse=True)
         return DetectorResult(tuple(found[:MAX_DETECTIONS]), "OK")
 
-    def _measure(self, pixels: int, centroid, work_to_map, camera, window=None) -> Detection | None:
+    def _measure(self, pixels: int, centroid, work_to_map, camera, window=None, *,
+                 calib: Calibration | None = None) -> Detection | None:
         """A blob of ``pixels`` work pixels at ``centroid`` as a detection; None outside the window
         (the footprint window unless ``window`` is given)."""
         u, v = float(centroid[0]), float(centroid[1])
-        points = geometry.apply(work_to_map, [[u, v], [u + 1.0, v], [u, v + 1.0]])
+        points = self._work_to_floor(calib, [[u, v], [u + 1.0, v], [u, v + 1.0]], work_to_map,
+                                     self._shape[:2] if self._shape else calib.image_size[::-1])
         if not np.all(np.isfinite(points)):
             return None  # on or beyond the horizon
         (ax, ay), (bx, by) = points[1] - points[0], points[2] - points[0]
@@ -378,12 +380,12 @@ class BackgroundBlobDetector:
             x, y = geometry.parallax_correct((x, y), camera, self._robot_height_m)
         return Detection(x=float(x), y=float(y), footprint_m=diameter, score=self._score(diameter))
 
-    def _shapes(self, image: np.ndarray, mask: np.ndarray, work_to_map, camera):
+    def _shapes(self, image: np.ndarray, mask: np.ndarray, work_to_map, camera, calib: Calibration | None = None):
         """Shape-cue robots (shape_cue.py) as detections, and their keep-out work pixels."""
         keep_out = np.zeros(mask.shape, bool)
         found = []
         for robot in shape_cue.find_robots(image, mask):
-            point = geometry.apply(work_to_map, [[robot.u, robot.v]])[0]
+            point = self._work_to_floor(calib, [[robot.u, robot.v]], work_to_map, mask.shape)[0]
             if not np.all(np.isfinite(point)):
                 continue
             x, y = float(point[0]), float(point[1])
@@ -436,9 +438,20 @@ class BackgroundBlobDetector:
             return 1.0
         return max(0.0, 1.0 - (diameter - _NOMINAL_M) / (high - _NOMINAL_M))
 
+    def _work_to_floor(self, calib: Calibration | None, pts, work_to_map, shape: tuple[int, int]) -> np.ndarray:
+        if calib is None or calib.lens_profile is None:
+            return geometry.apply(work_to_map, pts)
+        height, width = shape
+        sx, sy = calib.image_size[0] / width, calib.image_size[1] / height
+        scaled = (np.asarray(pts, dtype=float) + 0.5) * np.array([sx, sy]) - 0.5
+        undist = geometry.undistort_points(scaled, calib.lens_profile)
+        return geometry.apply(geometry.as_matrix(calib.image_to_map), undist)
+
     def _view_for(self, calib: Calibration, shape: tuple[int, int]) -> tuple:
         """Work-to-map homography, track mask (255 inside), its pixel count and camera (cached)."""
-        key = (calib.image_to_map, calib.image_size, calib.track_bounds_m, calib.hfov_deg, shape)
+        lp = calib.lens_profile
+        lp_key = None if lp is None else (lp["model"], tuple(v for row in lp["K"] for v in row), tuple(lp["D"]))
+        key = (calib.image_to_map, calib.image_size, calib.track_bounds_m, calib.hfov_deg, lp_key, shape)
         if key != self._view_key:
             had_view = self._view_key is not None
             height, width = shape
@@ -451,7 +464,8 @@ class BackgroundBlobDetector:
                 inside = ((floor[:, 0] >= min_x) & (floor[:, 0] <= max_x)
                           & (floor[:, 1] >= min_y) & (floor[:, 1] <= max_y))
             mask = np.where(inside, 255, 0).astype(np.uint8).reshape(height, width)
-            camera = geometry.camera_from_homography(calib.image_to_map, calib.image_size, calib.hfov_deg)
+            camera = geometry.camera_from_homography(
+                calib.image_to_map, calib.image_size, calib.hfov_deg, lens_profile=calib.lens_profile)
             if camera is not None and camera[2] <= self._robot_height_m:
                 camera = None
             track_px = int(np.count_nonzero(mask))

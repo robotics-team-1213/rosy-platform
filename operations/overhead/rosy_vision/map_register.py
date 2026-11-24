@@ -149,6 +149,7 @@ class MapRegistration:
     mirrored: bool
     orientation_margin: float | None  # relative score gap to the best other orientation
     image_size: tuple[int, int]
+    lens_profile: dict | None = None
 
     @property
     def map_to_image(self) -> np.ndarray:
@@ -158,7 +159,7 @@ class MapRegistration:
     def to_dict(self) -> dict:
         def rows(matrix):
             return [[float(f"{value:.8g}") for value in row] for row in matrix]
-        return {
+        payload = {
             "image_to_map": rows(self.image_to_map),
             "map_to_image": rows(self.map_to_image),
             "score": round(self.score, 3),
@@ -172,6 +173,9 @@ class MapRegistration:
             "orientation_margin": (None if self.orientation_margin is None
                                    else round(self.orientation_margin, 3)),
         }
+        if self.lens_profile is not None:
+            payload["lens_profile"] = self.lens_profile
+        return payload
 
 
 @dataclass(frozen=True)
@@ -213,28 +217,41 @@ def register_map(image: np.ndarray, paint: MapPaint) -> RegistrationResult:
 
 def _register_world_261026(image: np.ndarray,
                            paint: MapPaint) -> tuple[MapRegistration, bool, str] | None:
-    """Multi-colour OpenCV full-track calibration fallback for ``world_261026``."""
+    """Multi-colour full-track candidate verified against ``road_lines.stl``."""
     from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
     fit = auto_calibrate_and_trace_world_261026(image)
     if fit is None:
         return None
-    height, width = image.shape[:2]
-    image_to_map = fit["image_to_map"]
-    coverage, side_outside = _coverage(paint, image_to_map, (width, height))
-    cut = _cut_sides(side_outside)
-    rotation, mirrored = _orientation(image_to_map, (width, height))
-    if mirrored or coverage < MIN_COVERAGE:
+    h, w = image.shape[:2]
+    i2m, lp = fit["image_to_map"], fit.get("lens_profile")
+    work = image
+    if lp is not None and any(abs(float(c)) > 1e-12 for c in lp["D"]):
+        k, d = np.asarray(lp["K"], dtype=np.float64), np.asarray(lp["D"], dtype=np.float64)
+        work = cv2.undistort(image, k, d) if lp["model"] != "fisheye" else cv2.remap(
+            image, *cv2.fisheye.initUndistortRectifyMap(k, d[:4], np.eye(3), k, (w, h), cv2.CV_32FC1), cv2.INTER_LINEAR)
+    scale = min(1.0, _FINE_LONG_SIDE / max(w, h))
+    lines = _line_mask(cv2.resize(work, (round(w * scale), round(h * scale)), interpolation=cv2.INTER_AREA))
+    if cv2.countNonZero(lines) < 0.002 * lines.size:
         return None
-    score = max(0.95, min(0.995, 1.0 - float(fit["rms_m"]) * 8.0))
-    precision = 0.965
-    margin = 0.5
-    registration = MapRegistration(
-        image_to_map=image_to_map, score=score, precision=precision,
-        coverage=coverage, cut_sides=cut, side_outside=side_outside,
-        rotation_deg=rotation, mirrored=mirrored, orientation_margin=margin,
-        image_size=(width, height),
-    )
-    return registration, True, "ok"
+    fh, fw = lines.shape
+    sx, sy = fw / w, fh / h
+    fine_from_full = np.array([[sx, 0.0, (sx - 1) / 2], [0.0, sy, (sy - 1) / 2], [0.0, 0.0, 1.0]])
+    to_raster = np.vstack([paint.raster_matrix, [0.0, 0.0, 1.0]])
+    base = to_raster @ i2m @ np.linalg.inv(fine_from_full)
+    recall, precision, _ = _score(lines, paint, base / base[2, 2])
+    f_rec, f_prec, _ = _score(lines, paint, to_raster @ np.diag([-1.0, -1.0, 1.0]) @ i2m @ np.linalg.inv(fine_from_full))
+    rank = recall * precision
+    margin = (rank - f_rec * f_prec) / rank if rank > 0 else None
+    coverage, side_outside = _coverage(paint, i2m, (w, h))
+    rotation, mirrored = _orientation(i2m, (w, h))
+    accepted, _ = _verdict(coverage, recall, precision, margin, mirrored)
+    if not accepted:
+        return None
+    return MapRegistration(
+        image_to_map=i2m, score=recall, precision=precision, coverage=coverage,
+        cut_sides=_cut_sides(side_outside), side_outside=side_outside, rotation_deg=rotation,
+        mirrored=mirrored, orientation_margin=margin, image_size=(w, h), lens_profile=lp,
+    ), True, "ok"
 
 
 # -- pipeline ---------------------------------------------------------------
@@ -553,9 +570,13 @@ def _cut_sides(side_outside: dict) -> tuple[str, ...]:
 def _in_frame(map_to_image: np.ndarray, points: np.ndarray, width: int, height: int) -> np.ndarray:
     homogeneous = np.hstack([points, np.ones((len(points), 1))]) @ map_to_image.T
     w = homogeneous[:, 2]
+    centre = points.mean(axis=0)
+    ref_w = float((map_to_image @ np.array([centre[0], centre[1], 1.0]))[2])
+    if abs(ref_w) <= 1e-12:
+        ref_w = 1.0
     with np.errstate(divide="ignore", invalid="ignore"):
         u, v = homogeneous[:, 0] / w, homogeneous[:, 1] / w
-    return (w > 0) & (u >= 0) & (u <= width - 1) & (v >= 0) & (v <= height - 1)
+    return (w * ref_w > 1e-12) & (u >= 0) & (u <= width - 1) & (v >= 0) & (v <= height - 1)
 
 
 def _orientation(image_to_map: np.ndarray, size: tuple[int, int]) -> tuple[float, bool]:

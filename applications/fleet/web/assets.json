@@ -414,6 +414,18 @@
       "path": "calibration/map-fit-view.js",
       "media_type": "application/javascript"
     },
+    "manual-fit-math.js": {
+      "path": "calibration/manual-fit-math.js",
+      "media_type": "application/javascript"
+    },
+    "manual-fit-view.js": {
+      "path": "calibration/manual-fit-view.js",
+      "media_type": "application/javascript"
+    },
+    "manual-fit.css": {
+      "path": "calibration/manual-fit.css",
+      "media_type": "text/css"
+    },
     "map-view.js": {
       "path": "map/map-view.js",
       "media_type": "application/javascript"

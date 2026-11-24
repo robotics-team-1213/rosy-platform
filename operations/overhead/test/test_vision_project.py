@@ -154,3 +154,30 @@ def test_project_frame_applies_the_robot_marker_yaw_offset():
     assert (sighting.x, sighting.y) == pytest.approx((2.0, 1.0 - 0.017))
     with pytest.raises(ValueError, match="marker yaw offsets"):
         CameraMap(**{**_camera().__dict__, "marker_yaw_offset_deg": {"rosy_01": float("inf")}})
+
+
+def test_project_frame_applies_lens_undistortion_and_height_parallax():
+    from core_common.calibration_math import distort_point
+
+    lp = {
+        "model": "pinhole",
+        "K": [[600.0, 0.0, 300.0], [0.0, 600.0, 200.0], [0.0, 0.0, 1.0]],
+        "D": [-0.25, 0.05, 0.0, 0.0, 0.0],
+        "image_size": [600, 400],
+    }
+    # Floor homography: 100 px/m, (300, 200) -> (2.0, 1.0), camera nadir (2.0, 1.0), H = 2.0 m
+    camera_pose = (2.0, 1.0, 2.0)
+    # Robot marker at true floor (3.0, 1.5), yaw=0, height=0.125 m -> projected ray hits floor further from nadir
+    scale = 2.0 / (2.0 - 0.125)
+    fx_floor, fy_floor = 2.0 + (3.0 - 2.0) * scale, 1.0 + (1.5 - 1.0) * scale
+    cu, cv = 300.0 + (fx_floor - 2.0) * 100.0, 200.0 + (fy_floor - 1.0) * 100.0
+    du = 10.0 * scale
+    raw_quad = tuple(distort_point(u, v, lp) for u, v in ((cu - du, cv - du), (cu + du, cv - du),
+                                                          (cu + du, cv + du), (cu - du, cv + du)))
+    markers = _markers()
+    markers[7] = raw_quad
+    [sighting] = project_frame(_camera(), source_id="ceiling_north", seq=30,
+                               captured_at=1_790_000_000.5, markers=markers,
+                               lens_profile=lp, camera_pose=camera_pose)
+    assert (sighting.x, sighting.y) == pytest.approx((3.017, 1.5), abs=1e-3)
+    assert math.isclose(sighting.yaw, 0.0, abs_tol=1e-3)

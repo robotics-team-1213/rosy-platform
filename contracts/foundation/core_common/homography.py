@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from core_common.calibration_math import fit_homography_dlt
+
 Point = tuple[float, float]
 
 
@@ -30,32 +32,7 @@ class Homography:
 def fit(src_px: tuple[Point, ...] | list[Point], dst_m: tuple[Point, ...] | list[Point]) -> Homography:
     if len(src_px) != 4 or len(dst_m) != 4:
         raise ValueError("homography needs four corner pairs")
-    rows: list[list[float]] = []
-    rhs: list[float] = []
-    for (u, v), (x, y) in zip(src_px, dst_m):
-        rows.append([u, v, 1.0, 0.0, 0.0, 0.0, -x * u, -x * v])
-        rhs.append(x)
-        rows.append([0.0, 0.0, 0.0, u, v, 1.0, -y * u, -y * v])
-        rhs.append(y)
-    solved = _gauss(rows, rhs)
-    return Homography(h=tuple(solved + [1.0]))
-
-
-def _gauss(matrix: list[list[float]], vector: list[float]) -> list[float]:
-    n = len(vector)
-    aug = [row[:] + [vector[i]] for i, row in enumerate(matrix)]
-    for col in range(n):
-        pivot = max(range(col, n), key=lambda r: abs(aug[r][col]))
-        if abs(aug[pivot][col]) < 1e-12:
-            raise ValueError("degenerate homography")
-        aug[col], aug[pivot] = aug[pivot], aug[col]
-        scale = aug[col][col]
-        for j in range(col, n + 1):
-            aug[col][j] /= scale
-        for row in range(n):
-            if row == col:
-                continue
-            factor = aug[row][col]
-            for j in range(col, n + 1):
-                aug[row][j] -= factor * aug[col][j]
-    return [aug[i][n] for i in range(n)]
+    try:
+        return Homography(h=tuple(fit_homography_dlt(src_px, dst_m)))
+    except ValueError as exc:
+        raise ValueError("degenerate homography") from exc

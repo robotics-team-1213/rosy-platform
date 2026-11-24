@@ -574,3 +574,17 @@ def test_apply_fleet_update_clears_cal_when_site_map_returns_route_active(monkey
     mod.apply_fleet_update("t", {"places": [], "edges": []}, needs_cal=True, needs_map=True)
     compile(sent["code"], "apply", "exec")
     assert "SITE_MAP_ROUTE_ACTIVE" in sent["code"] and "needs_cal = False" in sent["code"]
+
+
+def test_frozen_calibration_and_large_drift_are_held():
+    mod = _load_module()
+    small = [_shifted_corners(mod, 0.04) for _ in range(5)]
+    frozen = mod.decide(small, cur_frozen=True, now=100_000.0)
+    assert frozen["decision"] == "hold" and frozen["reason"] == "calibration_frozen"
+
+    huge = [_shifted_corners(mod, 0.40) for _ in range(5)]
+    capped = mod.decide(huge, has_current_cal=True, now=100_000.0)
+    assert capped["decision"] == "hold" and capped["reason"] == "drift_exceeds_auto_cap"
+
+    forced = mod.decide(huge, has_current_cal=True, cur_frozen=True, force=True, now=100_000.0)
+    assert forced["decision"] == "approve" and forced["reason"] == "forced"

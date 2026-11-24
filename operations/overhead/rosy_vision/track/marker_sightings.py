@@ -37,7 +37,8 @@ def marker_pose(calibration: Calibration, quad, heading_edge: tuple[int, int],
         return None
     if pixels.shape != (4, 2) or not np.all(np.isfinite(pixels)):
         return None
-    mapped = geometry.apply(geometry.as_matrix(calibration.image_to_map), pixels)
+    undistorted = geometry.undistort_points(pixels, calibration.lens_profile)
+    mapped = geometry.apply(geometry.as_matrix(calibration.image_to_map), undistorted)
     if not np.all(np.isfinite(mapped)):
         return None
     try:
@@ -59,7 +60,8 @@ def marker_pose(calibration: Calibration, quad, heading_edge: tuple[int, int],
 def solved_camera(calibration: Calibration) -> tuple[float, float, float] | None:
     """Camera nadir and height from the calibration and lens FOV; None means no parallax step."""
     return geometry.camera_from_homography(geometry.as_matrix(calibration.image_to_map),
-                                           calibration.image_size, calibration.hfov_deg)
+                                           calibration.image_size, calibration.hfov_deg,
+                                           lens_profile=calibration.lens_profile)
 
 
 def robot_sightings(camera: CameraMap, approved: Calibration | None,
