@@ -164,6 +164,13 @@ class ControlUnitPeers:
         path = f"/api/fleet/control-unit/port-events?after_seq={after_seq}&limit={limit}"
         return (await self._send(unit_id, "GET", path, None, 1_048_576))[1]
 
+    async def execution_profile(self, unit_id):
+        """A direct child cell's arm execution profile; read only, feeds the parent's relayed answer (D-797)."""
+        self.config.topology.child(self.config.unit_id, unit_id)
+        if unit_id not in self.config.peers:
+            raise ValueError("CONTROL_UNIT_PEER_OUTSIDE_SCOPE")
+        return (await self._send(unit_id, "GET", "/api/fleet/control-unit/execution-profile", None, 65_536))[1]
+
     async def arm_job(self, unit_id, method, origin, delegation_id, tail, body=None):
         """D-965 relay: a delegated ARM job's evidence or rechecks, through the child's control-unit API.
 

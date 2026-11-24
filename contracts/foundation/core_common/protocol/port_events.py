@@ -30,7 +30,7 @@ class PortEvent(BaseModel):
     observation_ref: _Ref
     object_ref: _Ref | None = None
     intake_point: _Ref | None = None
-    slot_ref: Annotated[str, Field(pattern=r"^[A-Za-z0-9_]+-r\d+-c\d+-l\d+$", max_length=128)] | None = None
+    slot_ref: Annotated[str, Field(pattern=r"^[A-Za-z0-9_]+-r[1-9]\d*-c[1-9]\d*-l[1-9]\d*$", max_length=128)] | None = None
     vehicle_id: _Ref | None = None
     reason: Literal["MISMATCH", "UNREADABLE", "LOST", "DAMAGED"] | None = None
     identity: Literal["observed", "attested"] | None = None

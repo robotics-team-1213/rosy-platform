@@ -325,10 +325,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_arm_transfer_preflight_routes(
         app, instances=configured_omx, deployment_profile=deployment_profile, transport=action_transport,
         socket_root=omx_socket_root, require_proposer=require_proposer)
+    control_unit_service = app.state.control_unit
+    relay_profile_fn = None
+    if control_unit_service is not None and getattr(control_unit_service, "peer", None) is not None:
+        from fleet.server.control_unit_arm_coordinator import direct_child_unit_ids
+
+        async def relay_profile_fn():
+            # Child cell execution profiles for the relayed arm answer; an unreachable child reports nothing
+            # and the parent stays closed (D-797: closed unless proven).
+            rows = []
+            for unit_id in direct_child_unit_ids(control_unit_service):
+                try:
+                    rows.append(await control_unit_service.peer.execution_profile(unit_id))
+                except Exception:
+                    pass
+            return rows
+
     install_execution_profile_routes(
         app, deployment_profile=deployment_profile, instances=configured_omx,
         grant_revisions=omx_cell_grant_revisions, transport=action_transport, require_viewer=require_viewer,
-        workcell_observations=workcell_observations, arm_transfer_observer=arm_transfer_observer)
+        workcell_observations=workcell_observations, arm_transfer_observer=arm_transfer_observer,
+        relay_profile_fn=relay_profile_fn)
     install_arm_transfer_job_routes(
         policy_admission_core=policy_admission_core, app=app, installation=arm_transfer_installation,
         deployment_profile=deployment_profile, intake=intake_supply,

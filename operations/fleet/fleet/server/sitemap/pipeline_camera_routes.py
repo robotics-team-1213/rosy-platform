@@ -307,18 +307,29 @@ def install_cameras_routes(app, ctx) -> None:
         # D-1057: cell A/B release stays off until the depth acceptance; refused here, before anything in the ledger changes.
         if cell_id == "cell_ab" and os.environ.get("ROSY_FLEET_CELL_AB_RELEASE_ENABLED", "").strip().lower() not in ("1", "true", "yes", "on"):
             return {"claimed": False, "task": strip_task_for_claim(task), "reason": "CELL_AB_EVIDENCE_NOT_ENABLED"}
+        if cell_id == "cell_ab":
+            store = getattr(app.state, "arm_transfer_job_store", None)
+            if callable(getattr(store, "has_active_transfer", None)) and store.has_active_transfer():
+                return {"claimed": False, "task": strip_task_for_claim(task), "reason": "CELL_WORK_CONFLICT"}
+        # D-1072: cell_internal on cell_ab allows claim without docked AMR once all gates above pass.
+        internal = cell_id == "cell_ab" and task.get("interlock_scope") == "cell_internal"
         amr = _ready_amr(task)
-        if amr is None:
-            return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
-        station = resolve_omx_cells(active[1], active[2]).get(cell_id)
-        if station is None:
-            raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
-        robot = {"robot_id": task["robot_id"], "robot_kind": task["robot_kind"], "pose": dict(amr["pose"]),
-                 "wheel_brake_locked": amr["wheel_brake_locked"], "bed_ready": amr["bed_ready"], "v_cmd_mps": amr["v_cmd_mps"]}
+        robot = None
         state = {"phase": "ARM_IN_BED_ZONE", "tier": task["tier"], "robot_id": task["robot_id"], "stage_id": task["task_id"]}
-        res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state, map_version=getattr(active[2], "version", None))
-        if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
-            return {"claimed": False, "task": strip_task_for_claim(task), "gate": res["gate"]}
+        if amr is None:
+            if not internal:
+                return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
+            res = {"gate": {"cell_can_claim": True, "interlock_scope": "cell_internal"},
+                   "handoff": {"handoff_lease_id": f"cell_ab:cell_internal:{task['task_id']}", "cell_id": cell_id}}
+        else:
+            station = resolve_omx_cells(active[1], active[2]).get(cell_id)
+            if station is None:
+                raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
+            robot = {"robot_id": task["robot_id"], "robot_kind": task["robot_kind"], "pose": dict(amr["pose"]),
+                     "wheel_brake_locked": amr["wheel_brake_locked"], "bed_ready": amr["bed_ready"], "v_cmd_mps": amr["v_cmd_mps"]}
+            res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state, map_version=getattr(active[2], "version", None))
+            if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
+                return {"claimed": False, "task": strip_task_for_claim(task), "gate": res["gate"]}
         from fleet.server.sitemap.pipeline_evidence import bind_bed, has_valid_presence, take_presence
 
         claim_now, tid, _missing = time.time(), task["task_id"], object()
@@ -330,13 +341,13 @@ def install_cameras_routes(app, ctx) -> None:
         prev_task = copy.deepcopy(task)
         prev_pres = copy.deepcopy(pres_map[tid]) if tid in pres_map else _missing
         prev_bed = copy.deepcopy(bed_map[tid]) if tid in bed_map else _missing
-        # D-1057: binding the bed confirmation to the lease and going RUNNING are one step; if it lapsed meanwhile, nothing changes
-        if not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
+        # D-1057: bind bed confirmation atomically with going RUNNING (skipped only for AMR-less cell_internal claims).
+        if amr is not None and not bind_bed(app, task, res["handoff"].get("handoff_lease_id")):
             return {"claimed": False, "task": strip_task_for_claim(task), "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
         try:
             app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
             task["presence"] = take_presence(app, task, now=claim_now, delete_gov=not callable(_commit_ledger))  # D-1057/D-911
-            task["status"], task["amr_claim_evidence"] = "RUNNING", dict(amr)
+            task["status"], task["amr_claim_evidence"] = "RUNNING", (dict(amr) if amr is not None else None)
             task["handoff_lease_id"], task["claimed_at"] = res["handoff"].get("handoff_lease_id"), round(time.time(), 3)
             _enrich_task_health(task)
             _commit_ledger(bump_dispatch=True, delete_confirmation=("presence", tid)) if callable(_commit_ledger) else (_save_ledger(), gov and gov.bump_dispatch_generation())
@@ -392,12 +403,18 @@ def install_cameras_routes(app, ctx) -> None:
             if stored is not None and stored["principal_id"] != getattr(
                     getattr(request.state, "site_principal", None), "principal_id", None):
                 raise HTTPException(403, detail={"code": "OWNER_PRINCIPAL_NOT_REGISTERED"})
-        amr = _ready_amr(task) if phase == "RELEASED" else task.get("amr_claim_evidence")
-        if phase == "RELEASED" and amr is None:
-            from fleet.server.sitemap.pipeline_evidence import bed_confirmation_lost
+        # P0-1/D-1072: AMR-less cell_internal claims skip AMR re-check on release; owner/hold/receipt checks still run.
+        internal_release = cell_id == "cell_ab" and task.get("interlock_scope") == "cell_internal" and task.get("amr_claim_evidence") is None
+        amr = None
+        if phase == "RELEASED" and not internal_release:
+            amr = _ready_amr(task)
+            if amr is None:
+                from fleet.server.sitemap.pipeline_evidence import bed_confirmation_lost
 
-            raise HTTPException(422, detail={"code": "BED_CONFIRMATION_INVALID" if bed_confirmation_lost(app, task)
-                                             else "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
+                raise HTTPException(422, detail={"code": "BED_CONFIRMATION_INVALID" if bed_confirmation_lost(app, task)
+                                                 else "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
+        elif phase != "RELEASED":
+            amr = task.get("amr_claim_evidence")
         if phase == "RELEASED":
             trusted = omx_evidence_fn(task) if callable(omx_evidence_fn) else None
             if not isinstance(trusted, dict):
@@ -442,9 +459,11 @@ def install_cameras_routes(app, ctx) -> None:
                 raise HTTPException(422, detail={"code": "UNVERIFIED_CELL_COMPLETION"})
             if objects > 0:
                 cell_phase = "CLAIMED"
-        robot = {"robot_id": task["robot_id"], "robot_kind": task["robot_kind"], "pose": dict((amr or {}).get("pose") or task["pose"]),
-                 "wheel_brake_locked": bool((amr or {}).get("wheel_brake_locked")), "bed_ready": bool((amr or {}).get("bed_ready")),
-                 "v_cmd_mps": float((amr or {}).get("v_cmd_mps", 1.0))}
+        robot = None if internal_release else {
+            "robot_id": task["robot_id"], "robot_kind": task["robot_kind"], "pose": dict((amr or {}).get("pose") or task["pose"]),
+            "wheel_brake_locked": bool((amr or {}).get("wheel_brake_locked")), "bed_ready": bool((amr or {}).get("bed_ready")),
+            "v_cmd_mps": float((amr or {}).get("v_cmd_mps", 1.0)),
+        }
         state = {"phase": cell_phase, "tier": task["tier"], "robot_id": task["robot_id"], "stage_id": task_id,
                  **({"unload_batch_id": task["unload_batch_id"]} if task.get("unload_batch_id") else {}),
                  "goal_evidence_digest": body.get("goal_evidence_digest"),

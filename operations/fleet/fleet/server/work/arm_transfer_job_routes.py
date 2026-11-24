@@ -200,6 +200,13 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
             raise HTTPException(503, detail={"code": "ARM_TRANSFER_JOB_UNAVAILABLE"})
         return store
 
+    def cell_task_conflict() -> bool:
+        """P0-2: an active cell_ab cell-plan task (proposed, queued, running, or paused_human) owns the arms; a new
+        ARM transfer proposal or admit must not start beside it."""
+        tasks = list((getattr(app.state, "omx_cell_tasks", None) or {}).values())
+        return any(isinstance(t, dict) and t.get("cell_id") == "cell_ab"
+                   and t.get("status") in ("PROPOSED", "QUEUED", "RUNNING", "PAUSED_HUMAN") for t in tasks)
+
     async def call(function, *, parent_mission_id=None):
         async def _run():
             if parent_mission_id is None:
@@ -229,6 +236,8 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
     @app.post(path, response_model=ArmTransferJobResponse, tags=["fleet-work"], dependencies=[Depends(write_origin)])
     async def create(body: ArmTransferJobCreate, principal=Depends(require_proposer)):
         rows = installed_store()
+        if cell_task_conflict():
+            raise HTTPException(409, detail={"code": "CELL_WORK_CONFLICT"})
         request = ArmTransferRequest.model_validate(body.model_dump(exclude={"request_key"}))
         return await call(lambda: _view(rows.create(principal=principal, request_key=body.request_key, request=request)))
 
@@ -256,6 +265,8 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
               dependencies=[Depends(write_origin)])
     async def admit(mission_id: ArmActionId, body: ArmTransferJobAdmit, principal=Depends(require_named_operator)):
         rows = installed_store()
+        if cell_task_conflict():
+            raise HTTPException(409, detail={"code": "CELL_WORK_CONFLICT"})
         def approve(checked_at):
             job = rows.get(mission_id, principal=principal)
             if job is None:

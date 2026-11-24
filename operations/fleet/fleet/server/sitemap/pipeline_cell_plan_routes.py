@@ -79,7 +79,7 @@ def install_cell_plan_routes(app, ctx) -> None:
         status = _aggregate_plan_status(raw_tasks)
         refusals = getattr(app.state, "cell_task_refusals", None) or {}
         cell_state = (getattr(app.state, "omx_cell_states", None) or {}).get(rec["cell_id"])
-        cell_phase = cell_state.get("cell_phase") if isinstance(cell_state, dict) else None
+        cell_phase = (cell_state.get("phase") or cell_state.get("cell_phase")) if isinstance(cell_state, dict) else None
         hold_reason: str | None = None
         for t in raw_tasks:
             for field in ("cancel_reason", "abort_reason"):
@@ -179,6 +179,10 @@ def install_cell_plan_routes(app, ctx) -> None:
                 raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
             if getattr(app.state, "_pipeline_ledger_fault", False):
                 raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
+            # P0-2: a live ARM transfer job owns the cell_ab arms; a new cell plan must not start beside it.
+            store = getattr(app.state, "arm_transfer_job_store", None)
+            if callable(getattr(store, "has_active_transfer", None)) and store.has_active_transfer():
+                raise HTTPException(409, detail={"code": "CELL_WORK_CONFLICT"})
 
             robot_id = str(body.get("robot_id") or "rosy_01")
             robot_kind = str(body.get("robot_kind") or "")
