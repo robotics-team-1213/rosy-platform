@@ -38,6 +38,21 @@ def validate_motor_ids(dxl_ids):
     return values
 
 
+BUS_WATCHDOG_UNIT_MS = 20
+
+
+def bus_watchdog_units(ms):
+    """Return Dynamixel X Bus Watchdog register units (20 ms steps, 0=off, 1..127)."""
+    if isinstance(ms, bool) or not isinstance(ms, (int, float)):
+        raise ValueError('bus_watchdog_ms must be a non-negative finite number')
+    val = float(ms)
+    if not math.isfinite(val) or val < 0:
+        raise ValueError('bus_watchdog_ms must be a non-negative finite number')
+    if val == 0.0:
+        return 0
+    return max(1, min(127, round(val / BUS_WATCHDOG_UNIT_MS)))
+
+
 def validate_profile_acceleration(profile_acceleration):
     """Return a valid raw DYNAMIXEL Profile Acceleration value."""
     if (
@@ -76,6 +91,7 @@ class DynamixelDriver:
         self.ADDR_OPERATING_MODE    = 11
         self.ADDR_TORQUE_ENABLE     = 64
         self.ADDR_LED_RED           = 65
+        self.ADDR_BUS_WATCHDOG      = 98
         self.ADDR_GOAL_VELOCITY     = 104
         self.ADDR_PROFILE_ACCEL     = 108
         self.ADDR_HARDWARE_ERROR    = 70
@@ -140,7 +156,7 @@ class DynamixelDriver:
 
     def _disable_all(self):
         for dxl_id in self.DXL_IDS:
-            for address in (self.ADDR_TORQUE_ENABLE, self.ADDR_LED_RED):
+            for address in (self.ADDR_TORQUE_ENABLE, self.ADDR_LED_RED, self.ADDR_BUS_WATCHDOG):
                 try:
                     self.packetHandler.write1ByteTxRx(
                         self.portHandler, dxl_id, address, 0
@@ -149,7 +165,7 @@ class DynamixelDriver:
                     pass
 
     def initialize_motors(self, profile_accel=200, enable_torque=True):
-        """Reboot, velocity mode, zero goal confirmed, then torque on.
+        """Reboot, velocity mode, clear Bus Watchdog, zero goal confirmed, then torque on.
 
         enable_torque=False (D-192 no-motion mode) stops after the zero goal is
         confirmed: torque stays off, so the wheels cannot be driven whatever is
@@ -181,6 +197,9 @@ class DynamixelDriver:
                 ),
                 self.packetHandler.write4ByteTxRx(
                     self.portHandler, dxl_id, self.ADDR_PROFILE_ACCEL, profile_accel
+                ),
+                self.packetHandler.write1ByteTxRx(
+                    self.portHandler, dxl_id, self.ADDR_BUS_WATCHDOG, 0
                 ),
             )
             if not all(self._packet_ok(result) for result in steps):
@@ -221,6 +240,25 @@ class DynamixelDriver:
                 return False
         return True
 
+    def arm_bus_watchdog(self, bus_watchdog_ms):
+        """Clear and arm Dynamixel X Addr 98 Bus Watchdog after startup sleeps complete."""
+        watchdog_units = bus_watchdog_units(bus_watchdog_ms)
+        if watchdog_units == 0:
+            return True
+        for dxl_id in self.DXL_IDS:
+            for value in (0, watchdog_units):
+                try:
+                    result = self.packetHandler.write1ByteTxRx(
+                        self.portHandler, dxl_id, self.ADDR_BUS_WATCHDOG, value
+                    )
+                except Exception:
+                    self._disable_all()
+                    return False
+                if not self._packet_ok(result):
+                    self._disable_all()
+                    return False
+        return True
+
     def _read_register(self, reader, dxl_id, address):
         """Value of one register, or None without a clean reply (alert bit 0x80 is data, not failure)."""
         try:
@@ -231,29 +269,30 @@ class DynamixelDriver:
             return None
         return value
 
+    def read_health_one(self, dxl_id):
+        """Health dict for one motor (voltage, temp/limit, hardware_error)."""
+        read1, read2 = self.packetHandler.read1ByteTxRx, self.packetHandler.read2ByteTxRx
+        voltage = self._read_register(read2, dxl_id, self.ADDR_PRESENT_INPUT_VOLTAGE)
+        temp_limit = self._temp_limit_cache.get(dxl_id)
+        if temp_limit is None:
+            temp_limit = self._read_register(read1, dxl_id, self.ADDR_TEMPERATURE_LIMIT)
+            if temp_limit is not None:
+                self._temp_limit_cache[dxl_id] = temp_limit
+        return {
+            'id': dxl_id,
+            'temperature_c': self._read_register(read1, dxl_id, self.ADDR_PRESENT_TEMPERATURE),
+            'temperature_limit_c': temp_limit,
+            'input_voltage_v': None if voltage is None else voltage / 10.0,
+            'hardware_error': self._read_register(read1, dxl_id, self.ADDR_HARDWARE_ERROR),
+        }
+
     def read_health(self):
         """Per motor: temperature, its own limit, input voltage and hardware error; None where unread.
 
         The motor cuts its own torque at the limit (hardware error 0x04), so CORE needs the
         temperature before that, not the error after it.
         """
-        read1, read2 = self.packetHandler.read1ByteTxRx, self.packetHandler.read2ByteTxRx
-        rows = []
-        for dxl_id in self.DXL_IDS:
-            voltage = self._read_register(read2, dxl_id, self.ADDR_PRESENT_INPUT_VOLTAGE)
-            temp_limit = self._temp_limit_cache.get(dxl_id)
-            if temp_limit is None:
-                temp_limit = self._read_register(read1, dxl_id, self.ADDR_TEMPERATURE_LIMIT)
-                if temp_limit is not None:
-                    self._temp_limit_cache[dxl_id] = temp_limit
-            rows.append({
-                'id': dxl_id,
-                'temperature_c': self._read_register(read1, dxl_id, self.ADDR_PRESENT_TEMPERATURE),
-                'temperature_limit_c': temp_limit,
-                'input_voltage_v': None if voltage is None else voltage / 10.0,
-                'hardware_error': self._read_register(read1, dxl_id, self.ADDR_HARDWARE_ERROR),
-            })
-        return rows
+        return [self.read_health_one(dxl_id) for dxl_id in self.DXL_IDS]
 
     def verify_motors(self, expect_torque, check_motion):
         """Return fault strings for motors that are not really ready; [] means healthy.
