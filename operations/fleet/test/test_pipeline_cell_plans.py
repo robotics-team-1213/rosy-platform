@@ -243,7 +243,7 @@ def test_mode2_rosy_directive_plans_outbound_rehandle_and_goal_autonomously(monk
         "state": {"C1": "yard-r1-c1-l1", "C2": "yard-r1-c1-l2", "C3": "yard-r1-c1-l3"},
         "cargo_id": "C1",
     }
-    r2 = client.post("/api/fleet/pipeline/cell-plans/preview", headers=VIEW, json=rehandle)
+    r2 = client.post("/api/fleet/pipeline/cell-plans/dry-run", headers=VIEW, json=rehandle)
     assert r2.status_code == 200, r2.text
     assert r2.json()["order_source"] == "rosy_r"
     assert r2.json()["final_state"] == {"C1": "yard:r1-s1-t1", "C3": "yard:r1-s1-t2", "C2": "yard:r1-s1-t3"}
@@ -253,7 +253,7 @@ def test_mode2_rosy_directive_plans_outbound_rehandle_and_goal_autonomously(monk
         "state": {"C1": "yard-r1-c1-l1", "C2": "yard-r1-c1-l2"},
         "goal": {"yard:r1-s2": ["C1", "C2"]},
     }
-    r3 = client.post("/api/fleet/pipeline/cell-plans/preview", headers=VIEW, json=goal)
+    r3 = client.post("/api/fleet/pipeline/cell-plans/dry-run", headers=VIEW, json=goal)
     assert r3.status_code == 200, r3.text
     assert r3.json()["final_state"] == {"C1": "yard:r1-s2-t1", "C2": "yard:r1-s2-t2"}
 

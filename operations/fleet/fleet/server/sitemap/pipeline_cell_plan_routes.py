@@ -83,7 +83,7 @@ def install_cell_plan_routes(app, ctx) -> None:
             "created_at": rec["created_at"],
         }
 
-    @app.post("/api/fleet/pipeline/cell-plans/preview", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cell-plans/dry-run", dependencies=read_guard)
     async def preview_cell_plan(request: Request):
         body = await request.json()
         if not isinstance(body, dict):
