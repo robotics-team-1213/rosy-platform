@@ -33,14 +33,27 @@ class Stills:
     for the carry and, at the stop, one hashed bundle of the seconds around it; a finished pick descent is kept once per
     carry the same way, as a control (cell_evidence). close() ends the ring and waits for the bundles. Reads only."""
 
-    def __init__(self, cell, config: dict):
+    def __init__(self, cell, config: dict, *, always_ring: bool = False):
         self.cell, self.config, self.arm, self.writers, self.controlled = cell, config, config.get("arm_id", "arm_s"), [], False
-        self.ring = None
-        if config.get("evidence") is not None:
+        self.ring, self.last_tips = None, {}
+        ev_cfg = config.get("evidence")
+        want_ring = (ev_cfg is not None and ev_cfg is not False) or (always_ring and ev_cfg is not False and bool(config.get("cameras")))
+        if want_ring:
             import cell_evidence as ev
+            from cell_pipeline_io import FifoCell
 
-            spec = config["evidence"]
-            self.ring = ev.Ring(cell.frame, config["cameras"], spec.get("period_s", ev.PERIOD_S), spec.get("keep_s", ev.KEEP_S))
+            spec = ev_cfg if isinstance(ev_cfg, dict) else {}
+            raw_cell = cell
+            for _ in range(4):
+                nxt = getattr(raw_cell, "cell", None)
+                if nxt is None:
+                    break
+                raw_cell = nxt
+            receipt_for_ring = cell.frame_receipt if isinstance(raw_cell, FifoCell) and callable(getattr(cell, "frame_receipt", None)) else getattr(cell, "ring_frame_receipt", None)
+            self.ring = ev.Ring(
+                cell.frame, config["cameras"], spec.get("period_s", ev.PERIOD_S), spec.get("keep_s", ev.KEEP_S),
+                frame_receipt=receipt_for_ring,
+            )
 
     def __call__(self, state=None, status=None):
         import cv2
@@ -49,10 +62,20 @@ class Stills:
 
         folder, frames, tips = Path(omx_incident.STILLS), {}, {}
         folder.mkdir(parents=True, exist_ok=True)
+        receipt_fn = getattr(self.cell, "frame_receipt", None)
         for camera in self.config["cameras"]:
             try:
-                frames[camera] = self.cell.frame(camera)
-                cv2.imwrite(str(folder / f"{self.arm}-{camera}.jpg"), frames[camera])
+                if callable(receipt_fn):
+                    rec = receipt_fn(camera)
+                    frames[camera] = rec["image"]
+                    raw = rec.get("jpeg_bytes")
+                    if raw is not None:
+                        (folder / f"{self.arm}-{camera}.jpg").write_bytes(raw)
+                    else:
+                        cv2.imwrite(str(folder / f"{self.arm}-{camera}.jpg"), frames[camera])
+                else:
+                    frames[camera] = self.cell.frame(camera)
+                    cv2.imwrite(str(folder / f"{self.arm}-{camera}.jpg"), frames[camera])
             except Exception:  # a missing frame must not stop the recovery
                 pass
         if self.config.get("tip_view") and state:
@@ -64,6 +87,7 @@ class Stills:
                     cv2.imwrite(str(folder / f"{self.arm}-{camera}-tip.jpg"), image)
             except Exception:  # nor a crop
                 pass
+        self.last_tips = dict(tips)
         self.bundle("stop", state, status or {}, tips)
 
     def control(self, status: dict) -> None:
@@ -84,6 +108,8 @@ class Stills:
         import omx_incident
 
         at = time.time()
+        inc_base = Path(omx_incident.INCIDENTS)
+        ev_dir = (inc_base if inc_base.is_absolute() else omx_incident.incidents_dir()) / "evidence"
 
         def write():  # after AFTER_S, while the retreat runs: the arm is never held for a picture
             try:
@@ -92,7 +118,7 @@ class Stills:
                 files = {f"{camera}-tip.jpg": cv2.imencode(".jpg", image)[1].tobytes() for camera, image in tips.items()}
                 files["trace-tail.jsonl"] = ev.trace_tail(self.arm)
                 kept = {k: status.get(k) for k in ("command", "ok", "error", "contact", "fault", "state", "target")}
-                ev.write(Path(omx_incident.INCIDENTS) / "evidence", kind, self.arm, at, frames, gaps, {"stop": kept, "state": state}, files)
+                ev.write(ev_dir, kind, self.arm, at, frames, gaps, {"stop": kept, "state": state}, files)
             except Exception:  # evidence is never worth a failed carry
                 pass
         self.writers.append(threading.Thread(target=write, daemon=True))
@@ -105,8 +131,8 @@ class Stills:
             self.ring.close()
 
 
-def stills(cell, config: dict) -> Stills:
-    return Stills(cell, config)
+def stills(cell, config: dict, *, always_ring: bool = False) -> Stills:
+    return Stills(cell, config, always_ring=always_ring)
 
 
 def lift_stall(cell, config: dict, sleep):

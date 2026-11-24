@@ -173,7 +173,10 @@ def test_nav_run_raises_the_cyclone_participant_limit_only_for_nav(tmp_path):
     m = _module()
     assert m.cyclone_profile(tmp_path).name == 'cyclonedds_localhost.xml'
     nav = m.cyclone_profile(tmp_path, nav=True).read_text(encoding='utf-8')
-    assert '<MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>' in nav and '<NetworkInterface name="lo"/>' in nav
+    assert ('<MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>' in nav
+            and '<NetworkInterface name="lo"/>' in nav
+            and nav.count('<Discovery>') == 1
+            and '<Peer address="127.0.0.1"/>' in nav)
 
 
 def test_depart_adds_stops_onward_along_the_same_stretch():

@@ -185,6 +185,7 @@ def test_only_a_named_operator_clears_with_a_note_and_nothing_is_deleted(client)
     [row] = [a for a in client.get(PATH, headers=bearer("viewer-token")).json()["workcells"][0]["arms"]
              if a["source_id"] == "arm_b"][0]["incidents"]
     assert row["state"] == "cleared" and row["cleared"]["by"] == "op-7" and row["cleared"]["note"] == note["note"]
+    assert row["held"] is False
 
 
 def test_only_the_ai_observer_reads_open_incidents_and_posts_an_explanation_that_changes_nothing(client):
@@ -377,6 +378,10 @@ def test_an_open_software_stop_reported_as_held_stops_holding_by_the_shared_rule
     lagging = {**facts, "flagged": [{"command": "tick", "fault": fault.replace("2105.79", "2200.0")}]}
     held = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b", facts=lagging)).json()
     assert held["hold"]["incident_ids"] == [held["incident_id"]]
+    rows = {r["incident_id"]: r for r in [a for a in client.get(PATH, headers=bearer("viewer-token")).json()["workcells"][0]["arms"]
+                                           if a["source_id"] == "arm_b"][0]["incidents"]}
+    assert rows[stop["incident_id"]]["held"] is False
+    assert rows[held["incident_id"]]["held"] is True
 
 
 def test_old_whole_frames_go_on_a_report_too_not_only_on_a_clear():

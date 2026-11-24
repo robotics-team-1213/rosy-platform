@@ -23,6 +23,7 @@ from sensor_msgs.msg import Image, LaserScan
 from std_msgs.msg import String
 
 from . import executor_choice
+from .camera_shm import attach_camera_front_source
 from .calibrated_values import finite_overrides, lidar_nose_rad, nominal_camera_profile
 from .object_detector import STATUS_TOPIC, TOPIC, BoxRanger, ObjectDetectorCore
 from .sensing.body import LIDAR_X
@@ -57,9 +58,20 @@ class ObjectDetectorNode(Node):
         self._status_pub = self.create_publisher(String, STATUS_TOPIC, QoSProfile(
             depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE))
         self.create_timer(1.0, self._publish_status)
-        self.create_subscription(Image, 'camera/front', self._on_camera,
-                                 QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+        self._camera_front_source = attach_camera_front_source(
+            self,
+            self._on_camera,
+            lambda: self.create_subscription(
+                Image, 'camera/front', self._on_camera,
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)),
+            image_cls=Image,
+        )
         self._publish_status()
+
+    def destroy_node(self):
+        if getattr(self, '_camera_front_source', None) is not None:
+            self._camera_front_source.close()
+        super().destroy_node()
 
     def _ranger(self, p):
         """BoxRanger from the NOMINAL plane (as camera_detect_node mode 'nominal'), or None."""

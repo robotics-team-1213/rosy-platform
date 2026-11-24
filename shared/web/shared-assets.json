@@ -9,6 +9,7 @@
     "template.css": "text/css",
     "app-shell.css": "text/css",
     "core_ui_logic.js": "text/javascript",
+    "camera-frame-hold.js": "text/javascript",
     "hold-ticker.js": "text/javascript",
     "ui.js": "text/javascript",
     "workspace.js": "text/javascript",
@@ -60,6 +61,7 @@
     "meshes/omx-link7.stl": "model/stl",
     "meshes/pinky-body.stl": "model/stl",
     "meshes/pinky-pro.urdf": "application/xml",
+    "meshes/pinky-tray.stl": "model/stl",
     "meshes/pinky-wheel.stl": "model/stl"
   }
 }

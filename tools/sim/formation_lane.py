@@ -357,10 +357,15 @@ async def main_async(args) -> int:
     (out / 'tmp').mkdir()
     # run 5 (2026-11-09): two Nav2 stacks exceed Cyclone's default 9 auto participant indexes on unicast loopback
     # (amcl, controller, map_server died "no free participant index"); same widening as fleet_trips --nav (D-1003)
+    import re
     xml = (REPO / 'middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml').read_text(encoding='utf-8')
-    xml = xml.replace('    </General>\n', '    </General>\n    <Discovery>\n      <ParticipantIndex>auto</ParticipantIndex>\n'
-                      '      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>\n    </Discovery>\n', 1)
-    assert '<MaxAutoParticipantIndex>' in xml
+    if '<MaxAutoParticipantIndex>' in xml:
+        xml = re.sub(r'<MaxAutoParticipantIndex>\d+</MaxAutoParticipantIndex>',
+                     '<MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>', xml, count=1)
+    else:
+        xml = xml.replace('    </General>\n', '    </General>\n    <Discovery>\n      <ParticipantIndex>auto</ParticipantIndex>\n'
+                          '      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>\n    </Discovery>\n', 1)
+    assert '<MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>' in xml and xml.count('<Discovery>') == 1
     (out / 'cyclonedds_formation.xml').write_text(xml, encoding='utf-8')
     launch = ['ros2', 'launch', 'gz_sim', 'gz_multi.launch.py', f'robots:={args.robots}', 'mode:=nav', 'core:=true',
               'headless:=true', 'world_name:=map_v2_fleet_real.world', 'nav_composition:=false', 'loc_assist:=false',

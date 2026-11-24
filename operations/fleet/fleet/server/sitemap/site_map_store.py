@@ -19,7 +19,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Mapping, Optional
 
 from core_common.text_encoding import double_encoded_paths
 from fleet.meet.place import Painted, painted_from
@@ -49,6 +49,16 @@ def _reject_double_encoded(site_map: SiteMap, **extra: str) -> None:
     if bad:
         raise SiteMapError(400, "TEXT_DOUBLE_ENCODED",
                            f"글자가 두 번 인코딩되어 깨졌습니다. UTF-8로 다시 보내세요: {', '.join(bad[:5])}")
+
+
+def site_frame_sha256(body: Mapping) -> str:
+    """Canonical hash of frame-defining geometry (map_id, walls, drawing projection)."""
+    payload = {
+        "map_id": body.get("map_id", ""),
+        "walls": body.get("walls") or [],
+        "drawing_projection_sha256": (body.get("drawing") or {}).get("projection_sha256", ""),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
 class SiteMapStore:
@@ -92,6 +102,7 @@ class SiteMapStore:
                 self._db.execute("ALTER TABLE site_map_profiles ADD COLUMN info TEXT NOT NULL DEFAULT '{}'")
         self._init_frames()
         self._cached: Optional[tuple[int, SiteMap, Graph, Painted]] = None
+        self._frame_digests: dict[int, str] = {}
         self._publish()
         from fleet.server.site_rules_store import SiteRulesStore  # imports SiteMapError from here
         #: D-982 per-site operating rules: their own versions, the same database and audit rows.
@@ -99,11 +110,27 @@ class SiteMapStore:
                                     lambda: {p.id for p in self._cached[1].places} if self._cached else None)
         from fleet.server.map_binding_store import MapBindingStore
         #: D-1022 robot map -> site frame bindings: same database and audit rows.
-        self.map_bindings = MapBindingStore(self._db, self._lock, self.clock, self._event)
+        self.map_bindings = MapBindingStore(
+            self._db, self._lock, self.clock, self._event, frame_for_version=self.frame_sha256)
 
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+    def frame_sha256(self, version: int) -> Optional[str]:
+        """Geometry frame digest of one stored site map version, or None when absent."""
+        ver = int(version)
+        with self._lock:
+            cached = self._frame_digests.get(ver)
+            if cached is not None:
+                return cached
+            row = self._db.execute(
+                "SELECT body FROM site_map_versions WHERE version = ?", (ver,)).fetchone()
+            if row is None:
+                return None
+            digest = site_frame_sha256(json.loads(row[0]))
+            self._frame_digests[ver] = digest
+            return digest
 
     def _init_frames(self) -> None:
         with self._lock, self._db:
@@ -368,6 +395,9 @@ class SiteMapStore:
                               trip["state"], self.clock()))
             self._db.execute("DELETE FROM site_trips WHERE "
                              "json_extract(body, '$.detail.named_stop_handoff_pending') IS NULL "
+                             "AND COALESCE(json_extract(body, '$.detail.stop_sent'), 1) != 0 "
+                             "AND (json_extract(body, '$.detail.error') IS NULL "
+                             "OR json_extract(body, '$.detail.error') = 'TRIP_NOT_RUNNING') "
                              "AND trip_id NOT IN "  # the D-490 plan bound
                              "(SELECT trip_id FROM site_trips ORDER BY rowid DESC LIMIT ?)", (PLAN_KEEP,))
 
@@ -375,6 +405,16 @@ class SiteMapStore:
         with self._lock:
             rows = self._db.execute(
                 "SELECT body FROM site_trips WHERE json_type(body, '$.detail.named_stop_handoff_pending') = 'object'"
+            ).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
+    def unconfirmed_trip_stops(self) -> list[dict]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT body FROM site_trips WHERE state IN ('canceled', 'stopped') AND ("
+                "json_extract(body, '$.detail.stop_sent') = 0 OR ("
+                "json_extract(body, '$.detail.error') IS NOT NULL "
+                "AND json_extract(body, '$.detail.error') != 'TRIP_NOT_RUNNING'))"
             ).fetchall()
         return [json.loads(row[0]) for row in rows]
 

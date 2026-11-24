@@ -20,7 +20,9 @@ checks everything again, for at most DEPART_QUEUE_WAIT_S from the first queue (q
 A named operator may still send it early with depart_s3; a release is used once per batch."""
 from __future__ import annotations
 
+import asyncio
 import logging
+import math
 
 from fastapi import HTTPException
 
@@ -47,7 +49,33 @@ def batch_tasks(tasks: dict, robot_id: str) -> list[dict]:
 def _objects(task: dict):
     stage = task.get("stage_result")
     clearance = stage.get("source_clearance") if isinstance(stage, dict) else None
-    return clearance, (clearance.get("objects") if isinstance(clearance, dict) else None)
+    if not isinstance(clearance, dict):
+        return clearance, None
+    if clearance.get("site") not in (None, "pinky"):
+        return clearance, None  # D-1047: displaced-site clearance is not a Pinky cargo-bed check
+    return clearance, clearance.get("objects")
+
+
+def _fresh(ts, now: float, max_age_s: float) -> bool:
+    return (isinstance(ts, (int, float)) and not isinstance(ts, bool)
+            and math.isfinite(ts) and (-5.0 <= (now - ts) <= max_age_s))
+
+
+def _effective_batch_rows(rows: list[dict]) -> list[dict]:
+    """Exclude ABORTED rows that were explicitly superseded by a COMPLETED repark retry."""
+    superseded = {
+        (t.get("unload_batch_id"), t.get("robot_id"), t.get("unload_index"), t.get("repark_root"))
+        for t in rows
+        if t.get("status") == "COMPLETED" and t.get("repark_root")
+    }
+    return [
+        t for t in rows
+        if not (
+            t.get("status") == "ABORTED"
+            and (t.get("unload_batch_id"), t.get("robot_id"), t.get("unload_index"), t.get("repark_root") or t.get("task_id"))
+            in superseded
+        )
+    ]
 
 
 def unload_release(state, robot_id: str, *, now: float, human_detected: bool, fold_max_age_s: float = FOLD_MAX_AGE_S,
@@ -57,18 +85,19 @@ def unload_release(state, robot_id: str, *, now: float, human_detected: bool, fo
     out = {"robot_id": robot_id, "ready": False, "batch_id": None, "expected": 0, "completed": 0, "reasons": []}
     if not rows:
         return {**out, "reasons": ["NO_UNLOAD_BATCH"]}
+    eff = _effective_batch_rows(rows)
     batch, expected = rows[0]["unload_batch_id"], rows[0].get("unload_expected")
-    done = [t for t in rows if t.get("status") == "COMPLETED"]
+    done = [t for t in eff if t.get("status") == "COMPLETED"]
     reasons = []
-    if any(t.get("status") in ("ABORTED", "CANCELLED") for t in rows):
+    if any(t.get("status") in ("ABORTED", "CANCELLED") for t in eff):
         reasons.append("UNLOAD_ABORTED")
-    if any(t.get("status") in OPEN_STATUSES for t in rows):
+    if any(t.get("status") in OPEN_STATUSES for t in eff):
         reasons.append("UNLOAD_IN_PROGRESS")
     if type(expected) is int and len(done) != expected:
         reasons.append("COUNT_MISMATCH")
     last = max(done, key=lambda t: t.get("completed_at") or 0) if done else {}
     clearance, objects = _objects(last)
-    if type(objects) is not int or now - float(last.get("completed_at") or 0) > BED_MAX_AGE_S:
+    if type(objects) is not int or not _fresh(last.get("completed_at"), now, BED_MAX_AGE_S):
         reasons.append("BED_NOT_OBSERVED")
     elif objects != 0:
         reasons.append("CARGO_NOT_EMPTY")
@@ -76,8 +105,8 @@ def unload_release(state, robot_id: str, *, now: float, human_detected: bool, fo
     if cell.get("phase") != "RELEASED" or cell.get("amr_motion_inhibited"):
         reasons.append("CELL_NOT_RELEASED")
     arm = state.arm_live_states.get("arm_s") or {}
-    updated = arm.get("updated_at")
-    if arm.get("folded") is not True or not isinstance(updated, (int, float)) or now - updated > fold_max_age_s:
+    updated = arm["folded_updated_at"] if "folded_updated_at" in arm else arm.get("updated_at")
+    if arm.get("folded") is not True or not _fresh(updated, now, fold_max_age_s):
         reasons.append("ARM_NOT_HOME")
     if (state.arm_holds.get("arm_s") or {}).get("held"):
         reasons.append("ARM_HELD")
@@ -108,17 +137,21 @@ def continue_unload(state, enqueue) -> list[str]:
             batches.setdefault(task["unload_batch_id"], []).append(task)
     made = []
     for batch_id, rows in batches.items():
-        rows.sort(key=lambda t: t.get("unload_index", 0))
-        last = rows[-1]
-        if (batch_id in state.unload_releases or len(rows) >= MAX_CONTAINERS
-                or any(t.get("status") != "COMPLETED" for t in rows)):
+        eff = _effective_batch_rows(rows)
+        if not eff:
+            continue
+        eff.sort(key=lambda t: (t.get("unload_index", 0), t.get("created_at") or 0))
+        last = eff[-1]
+        if (batch_id in state.unload_releases or len(eff) >= MAX_CONTAINERS
+                or any(t.get("status") != "COMPLETED" for t in eff)):
             continue
         _clearance, objects = _objects(last)
         if type(objects) is int and objects > 0:
+            next_idx = (last.get("unload_index") or 0) + 1
             spec = {
-                "robot_id": last["robot_id"], "task_id": f"{batch_id}-{len(rows) + 1}",
+                "robot_id": last["robot_id"], "task_id": f"{batch_id}-{next_idx + 1}",
                 "depends_on": last["task_id"], "unload_batch_id": batch_id,
-                "unload_expected": last.get("unload_expected"), "unload_index": len(rows),
+                "unload_expected": last.get("unload_expected"), "unload_index": next_idx,
             }
             if last.get("emit_release_permit") is True:
                 spec["emit_release_permit"] = True
@@ -142,9 +175,76 @@ def exit_target(rules, site) -> tuple[str, float, float, float] | None:
     return place_id, float(place.x), float(place.y), float(getattr(place, "yaw", 0.0) or 0.0)
 
 
+def _fence_ambiguous_depart(state, *, batch: str, robot_id: str, target_place: str, record: dict, now: float,
+                            reason: str, cancelled_by: str, err_code: str, cancel_receipt: dict | None = None,
+                            last_error: str | None = None, task_log=None) -> None:
+    if task_log is not None:
+        task_log(robot_id, batch, target_place, now)
+    tasks = getattr(state, "pinky_tasks", None)
+    if isinstance(tasks, dict):
+        depart_task = tasks.setdefault(f"depart-{batch}", {})
+        for _k, _v in (
+            ("task_id", f"depart-{batch}"), ("robot_id", robot_id), ("action", "depart_s3"),
+            ("target_place", target_place), ("status", "SENT"), ("auto", True), ("created_at", round(now, 3)),
+        ):
+            depart_task.setdefault(_k, _v)
+        depart_task.update(cancel_requested=True, cancelled_by=cancelled_by,
+                           cancel_receipt=cancel_receipt or {"error": err_code})
+    record.update(state="HELD", reason=reason, **({"last_error": last_error} if last_error is not None else {}))
+    _event(state, robot_id, batch, "HELD", reason, now)
+
+
 async def depart_tick(state, *, console, rules, site, enqueue, human_detected, save, now: float, task_log=None,
-                      flush_port_events=None) -> list[dict]:
+                      flush_port_events=None, dispatch_open=None) -> list[dict]:
     """One pass: continue camera-driven unloads, then send each vehicle whose check held on two ticks to the exit."""
+    human_now = (lambda: bool(human_detected())) if callable(human_detected) else (lambda: bool(human_detected))
+
+    def _live_stop_blocked() -> bool:
+        try:
+            if getattr(state, "_pipeline_ledger_fault", False) or getattr(state, "_fleet_estop_latch_unresolved", False):
+                return True
+            if human_now():
+                return True
+            if any((s or {}).get("phase") == "HUMAN_HOLD" for s in (getattr(state, "omx_cell_states", None) or {}).values()):
+                return True
+            if any(bool(v) for v in (getattr(state, "human_detected", None) or {}).values()):
+                return True
+            if callable(dispatch_open) and not bool(dispatch_open()):
+                return True
+            return False
+        except Exception:
+            return True
+
+    def _save_settled(rec: dict, *, clear_marker: bool = True) -> None:
+        had_marker = bool(rec.get("submit_in_flight"))
+        if clear_marker:
+            rec.pop("submit_in_flight", None)
+        try:
+            save()
+        except Exception:
+            if had_marker:
+                rec["submit_in_flight"] = True
+            raise
+
+    for _bid, _rec in list((getattr(state, "unload_releases", None) or {}).items()):
+        if isinstance(_rec, dict) and _rec.get("submit_in_flight") and _rec.get("state") in ("SENDING", "SENT"):
+            _fence_ambiguous_depart(
+                state, batch=_bid, robot_id=_rec.get("robot_id") or "", target_place=_rec.get("target") or "S1",
+                record=_rec, now=now, reason="DEPART_SEND_AMBIGUOUS", cancelled_by="depart_ambiguous_recovery",
+                err_code="DEPART_SUBMIT_AMBIGUOUS", task_log=task_log,
+            )
+            try:
+                _save_settled(_rec, clear_marker=False)
+            except Exception:
+                _LOG.exception("depart recovery save failed batch=%s", _bid)
+
+    if console is not None and any(
+        t.get("status") == "SENT" and "plan_id" not in t and t.get("cancel_requested")
+        for t in (getattr(state, "pinky_tasks", None) or {}).values()
+    ):
+        from fleet.server.pipeline_pinky_dispatch import retry_native_cancels
+
+        await retry_native_cancels(state, console=console, save=save, now=now)
     if flush_port_events is not None and any(t.get("pending_port_events") for t in state.omx_cell_tasks.values()):
         try:
             if await flush_port_events():
@@ -158,12 +258,15 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
     seen = state.depart_ready
     robots = {t["robot_id"] for t in state.omx_cell_tasks.values() if t.get("unload_batch_id")}
     for robot_id in sorted(robots):
-        release = unload_release(state, robot_id, now=now, human_detected=human_detected,
+        release = unload_release(state, robot_id, now=now, human_detected=_live_stop_blocked(),
                                  fold_max_age_s=DEPART_FOLD_AGE_S, allow_used=True)
         batch = release.get("batch_id")
         record = state.unload_releases.get(batch) if batch else None
         if record is not None and record.get("state") != "SENDING":
             continue  # sent, held or taken by an operator's depart_s3
+        depart_task = (getattr(state, "pinky_tasks", None) or {}).get(f"depart-{batch}") if batch else None
+        if isinstance(depart_task, dict) and depart_task.get("status") == "SENT" and depart_task.get("cancel_requested"):
+            continue  # fenced until native cancel confirmation clears depart-<batch>
         if record is not None and record.get("queued_since") is not None and now - record["queued_since"] > DEPART_QUEUE_WAIT_S:
             record.update(state="HELD", reason="DEPART_WAIT_EXPIRED")
             _event(state, robot_id, batch, "HELD", "DEPART_WAIT_EXPIRED", now)
@@ -175,37 +278,112 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
         seen[batch] = seen.get(batch, 0) + 1
         if seen[batch] < 2:
             continue  # the same answer on two ticks, not one lucky sample
+        if _live_stop_blocked():
+            seen.pop(batch, None)
+            continue
         target = exit_target(rules, site)
         if record is None:
-            record = state.unload_releases[batch] = {"robot_id": robot_id, "state": "SENDING", "attempts": 0,
-                                                     "at": round(now, 3), "operator": None, "release": release}
+            candidate = {"robot_id": robot_id, "state": "SENDING", "attempts": 0,
+                         "at": round(now, 3), "operator": None, "release": release}
             if target is None:
-                record.update(state="HELD", reason="NO_EXIT_PLACE")
+                candidate.update(state="HELD", reason="NO_EXIT_PLACE")
                 _event(state, robot_id, batch, "HELD", "NO_EXIT_PLACE", now)
-            save()  # the claim is on disk before anything moves
+            else:
+                candidate["target"] = target[0]
+                candidate["submit_in_flight"] = True
+            state.unload_releases[batch] = candidate
+            try:
+                save()  # the claim is on disk before anything moves
+            except Exception:
+                state.unload_releases.pop(batch, None)
+                raise
+            record = candidate
+        elif target is not None:
+            record["target"] = target[0]
+            record["submit_in_flight"] = True
+            try:
+                save()
+            except Exception:
+                record.pop("submit_in_flight", None)
+                raise
         if target is None:
             continue
-        record["target"] = target[0]
+        stop_gen = int(getattr(state, "safety_stop_generation", 0))
+        submitting = getattr(state, "_depart_submitting", None)
+        if submitting is None:
+            submitting = state._depart_submitting = set()
+        submitting.add(batch)
         try:
             result = await console.goal(robot_id, target[1], target[2], target[3])
-        except Exception as exc:  # one failed send is data; the next tick retries up to MAX_SEND_ATTEMPTS
-            result = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+        except asyncio.CancelledError:
+            _fence_ambiguous_depart(
+                state, batch=batch, robot_id=robot_id, target_place=target[0], record=record, now=now,
+                reason="DEPART_SEND_AMBIGUOUS", cancelled_by="depart_submit_cancelled",
+                err_code="DEPART_SUBMIT_CANCELLED", task_log=task_log,
+            )
+            try:
+                save()
+            except Exception:
+                pass
+            raise
+        except Exception as exc:  # one failed send may still have landed in CORE; re-check stop_landed below
+            result = {"error": f"{type(exc).__name__}: {exc}"[:200], "_ambiguous_send": True}
+        finally:
+            submitting.discard(batch)
         if result.get("queued") is True and not result.get("accepted"):
             # Queued is not sent: the traffic loop would release it later without the fold, person, hold and bed checks.
             console.discard_queued_goal(robot_id)
             if result.get("dispatch_attempted") is True and result.get("cancel_confirmed") is not True:
-                try:  # a CORE goal may be live (cancel_all.py rule): cancel it too
-                    await console.cancel(robot_id)
-                except Exception:
-                    pass  # the Fleet queue entry is already gone; CORE's goal lease expires unrenewed
+                from fleet.server.pipeline_pinky_dispatch import _cancel_native_goal, _unconfirmed
+
+                cancel_receipt = await _cancel_native_goal(console, robot_id)
+                if _unconfirmed(cancel_receipt):
+                    _fence_ambiguous_depart(
+                        state, batch=batch, robot_id=robot_id, target_place=target[0], record=record, now=now,
+                        reason="DEPART_CANCEL_UNCONFIRMED", cancelled_by="depart_queue_cleanup",
+                        err_code="DEPART_CANCEL_UNCONFIRMED", cancel_receipt=cancel_receipt, task_log=task_log,
+                    )
+                    record["queue_reason"] = result.get("reason")
+                    _save_settled(record, clear_marker=False)
+                    continue
             if record.get("reason") != "GOAL_QUEUED_NOT_ACCEPTED":
                 _event(state, robot_id, batch, "WAITING", result.get("reason") or "GOAL_QUEUED", now)
             record.update(reason="GOAL_QUEUED_NOT_ACCEPTED", queue_reason=result.get("reason"))
             record.setdefault("queued_since", round(now, 3))
-            save()
+            _save_settled(record, clear_marker=True)
             continue  # still SENDING: the next tick checks every release condition again
         record["attempts"] += 1
         accepted = bool(result.get("accepted"))
+        stop_landed = int(getattr(state, "safety_stop_generation", 0)) != stop_gen or _live_stop_blocked()
+        if stop_landed and (accepted or result.get("_ambiguous_send")):
+            from fleet.server.pipeline_pinky_dispatch import _cancel_native_goal, _unconfirmed
+
+            cancel_receipt = await _cancel_native_goal(console, robot_id)
+            if _unconfirmed(cancel_receipt):
+                _fence_ambiguous_depart(
+                    state, batch=batch, robot_id=robot_id, target_place=target[0], record=record, now=now,
+                    reason="HUMAN_HOLD_AFTER_SEND", cancelled_by="human_estop",
+                    err_code="HUMAN_HOLD_AFTER_SEND", cancel_receipt=cancel_receipt, task_log=task_log,
+                )
+                _save_settled(record, clear_marker=False)
+            else:
+                record.update(state="HELD", reason="HUMAN_HOLD_AFTER_SEND")
+                _event(state, robot_id, batch, "HELD", "HUMAN_HOLD_AFTER_SEND", now)
+                _save_settled(record, clear_marker=True)
+            continue
+        if result.get("_ambiguous_send"):
+            from fleet.server.pipeline_pinky_dispatch import _cancel_native_goal, _unconfirmed
+
+            cancel_receipt = await _cancel_native_goal(console, robot_id)
+            if _unconfirmed(cancel_receipt):
+                _fence_ambiguous_depart(
+                    state, batch=batch, robot_id=robot_id, target_place=target[0], record=record, now=now,
+                    reason="DEPART_SEND_AMBIGUOUS", cancelled_by="depart_ambiguous_send",
+                    err_code="DEPART_SEND_AMBIGUOUS", cancel_receipt=cancel_receipt,
+                    last_error=result.get("error"), task_log=task_log,
+                )
+                _save_settled(record, clear_marker=False)
+                continue
         if accepted:
             for key in ("reason", "queue_reason", "queued_since"):  # an earlier tick's queue wait is over
                 record.pop(key, None)
@@ -213,11 +391,14 @@ async def depart_tick(state, *, console, rules, site, enqueue, human_detected, s
             _event(state, robot_id, batch, "SENT", target[0], now)
             if task_log is not None:  # the robot task ledger is the caller's (pipeline_cell_task_routes)
                 task_log(robot_id, batch, target[0], now)
+            _save_settled(record, clear_marker=True)
             sent.append(record)
         elif record["attempts"] >= MAX_SEND_ATTEMPTS:
             record.update(state="HELD", reason="DEPART_SEND_FAILED", last_error=result.get("error"))
             _event(state, robot_id, batch, "HELD", "DEPART_SEND_FAILED", now)
-        save()
+            _save_settled(record, clear_marker=True)
+        else:
+            _save_settled(record, clear_marker=True)
     return sent
 
 
@@ -233,6 +414,17 @@ def install_unload_release_routes(app, ctx) -> None:
     async def read_unload_release(robot_id: str):
         out = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(ctx._is_human_detected()))
         return {**out, "departure": app.state.unload_releases.get(out.get("batch_id"))}
+
+    def _dispatch_open() -> bool:
+        if getattr(app.state, "_fleet_estop_latch_unresolved", False):
+            return False
+        tsvc = getattr(app.state, "task_service", None)
+        if tsvc is None:
+            return True
+        try:
+            return tsvc.store.dispatch_control().get("dispatch_enabled") is True
+        except Exception:
+            return False
 
     async def _depart_tick():
         if not any(t.get("unload_batch_id") for t in app.state.omx_cell_tasks.values()):
@@ -251,11 +443,12 @@ def install_unload_release_routes(app, ctx) -> None:
             rules=ctx.rules(),
             site=active[1],
             enqueue=lambda spec: ctx._enqueue_one_task(active, {**ctx.CELL_TASK_PRESETS["s3_shuttle"], **spec}),
-            human_detected=bool(ctx._is_human_detected()),
+            human_detected=ctx._is_human_detected,
             save=ctx._save_ledger,
             now=time.time(),
             task_log=getattr(ctx, "record_depart_task", None),
             flush_port_events=lambda: flush_pending_port_events_async(app),
+            dispatch_open=_dispatch_open,
         )
 
     app.state.depart_tick = _depart_tick

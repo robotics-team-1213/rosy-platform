@@ -340,3 +340,51 @@ def test_no_active_site_map_or_no_walls_pushes_nothing():
     empty = SimpleNamespace(active=lambda: (1, SimpleNamespace(map_id="m", walls=[])))
     run(WallMapSync(empty, lambda: {"a": c}, lambda: 0.0).sync({"a": fallback_state()}))
     assert c.pushed == []
+
+
+def test_unique_candidate_corroboration_and_cross_frame_bound_tiebreak():
+    from fleet.localization.map_binding import Fit
+    from fleet.server.site_map_store import SiteMapStore
+
+    single = report(poses=(A,), fits=(0.91,))
+    assert decide(single, (-0.9, 0.4)) is not None
+    assert decide(single, (-0.9, 0.4)).evidence.get("tiebreak") == "unique"
+    # Too far from overhead camera (> 0.35 m) -> rejected
+    assert decide(single, (-0.55, 0.5)) is None
+    # Below MIN_FIT -> rejected
+    assert decide(report(poses=(A,), fits=(0.84,)), A[:2]) is None
+    # Three candidates remain rejected
+    assert decide(report(poses=(A, MIRROR, (0.0, 2.0, 1.0)), fits=(0.99, 0.99, 0.90)), (-0.9, 0.4)) is None
+
+    # Cross-frame tiebreak: robot holds its own occupancy grid while overhead sees active site coords
+    fit_truth = Fit(math.radians(90.0), 1.5, -0.5, ())
+    store = SiteMapStore()
+    site_map = SimpleNamespace(active=lambda: (4, SimpleNamespace(map_id="site-a")), map_bindings=store.map_bindings)
+    site_pts = [(-1.0, -0.5), (1.0, -0.5), (0.9, 0.45), (-0.6, 0.4)]
+    pairs = [{"site": list(p), "robot": list(fit_truth.inverse(p))} for p in site_pts]
+    holdout = [{"site": list((0.0, 0.0)), "robot": list(fit_truth.inverse((0.0, 0.0)))}]
+    grid_id = "occupancy:crossframe1"
+    store.map_bindings.approve(
+        "r1", {"map_id": "robot_map", "map_grid_id": grid_id,
+               "localization": {"state": "LOCALIZED", "pose_frame": "map"}},
+        ("site-a", 4), pairs, holdout, "op",
+    )
+
+    clock = FakeClock()
+    r = FakeRobot("r1", state={"robot_id": "r1", "map_id": "robot_map", "map_grid_id": grid_id,
+                               "pose": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+                               "localization": {"state": "CANDIDATES", "pose_frame": "odom"}})
+    r.candidates = report(poses=(A, MIRROR), fits=(0.99, 0.99))
+    svc = LocalizationService(lambda: {"r1": r}, slots=[], squares=[], sightings=None, clock=clock, wall=clock)
+    svc.set_active_map_id(lambda: "site-a")
+    svc.set_site_maps(site_map)
+    cam_site = fit_truth.apply((-0.9, 0.4))
+    svc.set_tiebreak_camera(lambda rid, m: cam_site if (rid == "r1" and m == "site-a") else None)
+    ticks(svc, clock, 3.0)
+    assert len(r.decisions) == 1
+    assert (r.decisions[0].pose.x, r.decisions[0].pose.y, r.decisions[0].pose.yaw) == A
+    r._state = {"robot_id": "r1", "map_id": "robot_map", "map_grid_id": grid_id,
+                "pose": {"x": A[0], "y": A[1], "yaw": A[2]},
+                "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
+    ticks(svc, clock, 0.5)
+    assert svc.anchors() == {"r1"}

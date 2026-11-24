@@ -425,6 +425,8 @@ def main(argv=None):
     p.add_argument("--zero-error-deg", type=float, default=0.0, help="inject +-deg joint-zero calibration error per arm and compensate online (G-20)")
     p.add_argument("--isaac-handoff", help="write Stage-1 MuJoCo -> Stage-2 Isaac Sim handoff spec JSON to this path")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
+    from world_training_hooks import add_world_telemetry_args, attach_mujoco_two_arm_hook
+    add_world_telemetry_args(p)
     a = p.parse_args(argv)
     choices = parse_choices(a.choice)
     if a.pick_vision or a.belt_skew or a.cam_jitter:
@@ -448,7 +450,9 @@ def main(argv=None):
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     writer, close_video = open_video_writer(world, out, a.task, a.video_skip) if a.video else (None, None)
-    teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper, pick_vision=a.pick_vision, belt_skew=a.belt_skew, cam_jitter=a.cam_jitter)
+    episode_ref = [a.episode]
+    world_hook, frame_hook = attach_mujoco_two_arm_hook(a, world, writer, episode_ref)
+    teacher = Teacher(world, frame_hook=frame_hook, seed=a.seed, drop_upper=a.drop_upper, pick_vision=a.pick_vision, belt_skew=a.belt_skew, cam_jitter=a.cam_jitter)
     if a.zero_error_deg > 0:
         import omx_two_arm_skill as skill_mod
         teacher.zero_error = skill_mod.draw_zero_error(a.seed or 1003, a.zero_error_deg)
@@ -457,14 +461,20 @@ def main(argv=None):
     if not 0 <= a.belt_unknown <= 1 or any(arm not in PREFIX or f < 1 for arm, f in slow.items()):
         p.error("--belt-unknown takes 0..1 and --slow ARM:FACTOR an arm_a/arm_b with FACTOR >= 1")  # a typo must not run a fault-free test
     faults = Faults(unknown_p=a.belt_unknown, miss=a.belt_miss, fail_at=a.fail_at, seed=a.seed, slow=slow)
-    result = teacher.run_task(task, a.isolated, a.concurrent, faults=faults)
-    if a.frames:
-        from PIL import Image
-        Path(a.frames).mkdir(parents=True, exist_ok=True)
-        for view in RECORDED:
-            Image.fromarray(world.render(teacher.data, view)).save(Path(a.frames) / f"{view}.png")
-    if close_video:
-        close_video()
+    try:
+        for rep in range(max(1, a.repeat)):
+            episode_ref[0] = a.episode + rep
+            result = teacher.run_task(task, a.isolated, a.concurrent, faults=faults)
+        if a.frames:
+            from PIL import Image
+            Path(a.frames).mkdir(parents=True, exist_ok=True)
+            for view in RECORDED:
+                Image.fromarray(world.render(teacher.data, view)).save(Path(a.frames) / f"{view}.png")
+    finally:
+        if world_hook is not None:
+            world_hook.close()
+        if close_video:
+            close_video()
     roll = {r["step"]: r["roll_below_floor"] for r in records}
     result.update(choices=layout.choices, cone=a.cone, seed=a.seed, drop_m=[teacher.drop, teacher.drop_upper], roll_below_floor_steps=[s for s, v in roll.items() if v],
                   note="geometry only (D-947): contact numbers are not results; " + ("both arms at once by zones" if a.concurrent else "one arm moves at a time") + "; true container pose, no perception")

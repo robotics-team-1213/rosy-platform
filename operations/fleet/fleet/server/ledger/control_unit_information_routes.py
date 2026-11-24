@@ -53,3 +53,11 @@ def install_control_information_routes(app, collection, *, authorize, require_vi
         if result is None:
             raise HTTPException(404, detail={"code": "CONTROL_UNIT_NO_ACTIVE_MAP"})
         return result
+
+    @app.get(prefix + "/execution-profile")
+    async def relayed_execution_profile(principal=Depends(reader)):
+        """This unit's own execution-profile answer, for the direct parent's relayed arm signal (D-797)."""
+        answer = getattr(app.state, "execution_profile_answer", None)
+        if answer is None:
+            raise HTTPException(503, detail={"code": "CONTROL_UNIT_INFORMATION_UNAVAILABLE"})
+        return await execute(answer())

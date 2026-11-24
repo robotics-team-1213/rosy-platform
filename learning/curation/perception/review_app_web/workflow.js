@@ -1,31 +1,25 @@
 import {accountFetch} from '/account-session.js';
 import {taskRow} from '/common/workspace.js';
 import '/commands.js';
+import {startVisibilityPoll} from '/learning-poll.js';
+import {domEl as node, makeUuid as uuid, fillSelectOptions as options} from '/learning-ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/tasks',CENTER='/api/learning/omx/center';
 const stages=[['prepare','준비'],['record','직접 조종·녹화'],['review','시연 확인'],['learn','학습'],['results','결과 확인']];
 const statuses={queued:'접수됨',launching:'시작 준비 중',running:'학습 중',stopping:'중지 처리 중',succeeded:'학습 완료',failed:'실패',cancelled:'취소됨'};
 let state={tasks:[],native_inputs:[],workflows:{}},connected=false,busy=false,loading=false;
 const pending=new Map();
-function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;}
 function sourceId(row){return row?.prepared_id||row?.id;}
 function current(){return state.tasks.find(t=>t.id===new URL(location.href).searchParams.get('task'));}
 function flow(){return state.workflows?.[current()?.id];}
 function sources(){return flow()?.inputs||[];}
 function selectedSource(){return sources().find(row=>sourceId(row)===$('workflow-train-source').value);}
 function error(message){$('workflow-error').hidden=!message;$('workflow-error').textContent=message||'';}
-function uuid(){const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;const h=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 async function request(path,body){
   const options={cache:'no-store'};
   if(body!==undefined){options.method='POST';options.headers={'Content-Type':'application/json','X-Pinky-Token':state.token};options.body=JSON.stringify(body);}
   const response=await accountFetch(path,options),value=await response.json();
   if(!response.ok)throw new Error(response.status===401?'로그인·계정에서 접속한 뒤 다시 확인하세요.':response.status===403?'이 작업에 필요한 프로젝트 권한을 확인하세요.':value.error||`요청 실패 (${response.status})`);
   return value;
-}
-function options(select,rows,label){
-  const old=select.value,signature=JSON.stringify(rows);
-  if(select.dataset.options===signature)return;
-  select.dataset.options=signature;select.replaceChildren(...[['',label],...rows].map(([value,text])=>{const option=node('option',text);option.value=value;return option;}));
-  if(rows.some(([value])=>value===old))select.value=old;
 }
 function linkHref(href){try{const url=new URL(href,location.href);return url.origin===location.origin?url.pathname+url.search+url.hash:'#';}catch{return '#';}}
 function showStage(key,write=false,focus=false){
@@ -202,4 +196,4 @@ $('workflow-native-source').onchange=()=>{pending.delete('attach');selection();}
 for(const id of ['workflow-train-source','workflow-review-selection','workflow-steps','workflow-batch'])$(id).addEventListener('input',()=>{pending.delete('train');selection();});
 $('workflow-refresh').onclick=()=>{error('');refresh(true);};
 addEventListener('hashchange',()=>showStage(location.hash.replace('#workflow-','')));
-refresh(true);setInterval(()=>{if(!document.hidden&&!busy)refresh();},5000);
+refresh(true);startVisibilityPoll(()=>refresh(),5000,{shouldRun:()=>!busy});

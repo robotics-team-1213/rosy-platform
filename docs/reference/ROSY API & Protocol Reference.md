@@ -5,9 +5,46 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.455
+**Version:** v1.460
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.460 Fleet 파이프라인 호밍·VLA/LLM 복구 툴 계약 (Fleet)
+
+`GET /api/fleet/pipeline/recovery-tools` 와 `POST /api/fleet/pipeline/recovery-tools/invoke` 는 결정론적 OMX/Pinky 파이프라인이 실패해 `ABORTED`, `FOLD_READBACK_MISSING`, `REVIEW_REQUIRED`, `REPARK_LIMIT`, `REPARK_FAILED`, `PINKY_FAILED`/`REFUSED` 상태일 때 LLM/VLA 및 운영자에게 허용된 8종 복구 툴 스키마·D-1048 세션 통합 단계적 호밍·실행 게이트(`rosy.pipeline.recovery-tools.v1`)를 제공한다(v1.460).
+
+* `inspect_failure_context`, `safe_fold_home`(`auto_fold` · `release_and_lift` · `guarded_slow_park` · `finalize_home_verify`, 전부 `cell_auto_fold` 세션 래퍼 경유 · `expires_at`/`stop_generation` 바인딩), `record_visual_checkpoint`(카메라 `recorded_at <= 15s` 신선도·모션 이후 엄격 단조 프레임 시퀀스 검증), `enqueue_displaced_recovery`(운영자 승인 · 루트당 1회 · D-911 입회 필수), `request_repark`(`MAX_REPARK=2`), `enqueue_vla_act_fallback`(`vla_shadow` 또는 운영자 승인 + D-911 입회 필수 `act`), `dispatch_pinky_reroute`(기존 dispatch 게이트 · 동일 루트당 1회), `escalate_human`(활성 실패+CAS 필수, 루트당 단일 티켓) 만 허용하며 원시 명령·우회 키(`FORBIDDEN_RAW_COMMAND_KEY`)를 `422`로 거부한다(v1.460).
+* 모든 변이 툴은 `expected_context_sha256` CAS 검증(`409 STALE_FAILURE_CONTEXT`), principal 바인딩 `request_id` 멱등성(거부 상태 코드 포함 재생), `HUMAN_HOLD` 차단(`409 HUMAN_HOLD_ACTIVE`), `caller_kind` 역할 일치(`403`), `TARGET_MISMATCH_AFTER_CAS`, `fallback_chain_depth < 1` 상한을 적용하고 저장 실패 시 인메모리 상태를 롤백한다(v1.460).
+* `POST /api/fleet/pipeline/cell-quality` 는 `ROSY_FLEET_CELL_OWNERS`/운영자 한정 `safe_home_acks` 로 `cell_camera_telemetry_sync.py` 및 `cell_auto_fold.py` (`--stage release_and_lift | park_only | full`) 를 검증된 HTTPS · `guarded-pick` 모드에서만 안전 기동하며 `park_only` 는 `after_park` 검증 전 보류 해제를 건너뛴다(v1.460).
+
+### v1.459 Fleet 파이프라인 E2E 배차·depart_s3·재주차 복구 계약 (Fleet)
+
+`GET /api/fleet/pipeline/cell-tasks` 와 `GET /api/fleet/pipeline/pinky-tasks` 는 D-1060 디스패처 활성 여부를 나타내는 불리언 `pinky_dispatch_enabled` 를 반환한다(v1.459).
+
+* `POST /api/fleet/pipeline/pinky-tasks` 의 `depart_s3` 액션은 `site_rules.return_.exit_place` 를 `place_id` 와 `target_place` 로 설정하고 `unload_batch_id` 를 기록한다. 출구 장소가 없으면 `unload_releases` 를 예약하지 않고 `409 NO_EXIT_PLACE` 를 반환하며, 디스패치/트립 시작 직전 `unload_release` 를 재검증해 트립 시작 전 실패·거부·취소 시 `OPERATOR` 예약을 해제한다(v1.459).
+* `POST /api/fleet/pipeline/cell-tasks` 및 `POST /api/fleet/pipeline/decision-gate`(`arm_target`)는 `robot_id` 를 명시 입력(공백·비문자열은 `422 INVALID_ROBOT_ID`) -> 셀 도킹 로봇 -> `"rosy_01"` 순으로 해석한다(v1.459).
+* `POST /api/fleet/pipeline/repark/{request_id}` (`DONE`)는 완료된 재시도 태스크가 동일 `(unload_batch_id, robot_id, unload_index, repark_root)` 의 `ABORTED` 행을 대체해 `unload-release` / `continue_unload` 진행을 허용하고, 안전 조건(사람 미감지·팔 홀드 없음·실행 태스크 없음·신선한 `folded: true`) 충족 시에만 `ABORTED` 셀 상태를 복귀한다(v1.459).
+
+### v1.458 OMX /readiness per-cell isolation (Cell)
+
+Added additive `cells` (`cell_s` / `cell_ab`) per-cell readiness breakdown on `GET /readiness` (`rosy.cell-readiness.v1`, `CellReadiness` + `CellScopeReadiness`) and optional `?cell=cell_s|cell_ab` query filter. Unscoped `GET /readiness` retains strict top-level `allowed_tiers_now` behavior.
+
+### v1.457 Fleet cell-task PROPOSE/admit CAS, interlock_scope, and cell readiness (Fleet)
+
+- `POST /api/fleet/pipeline/cell-tasks`: opened to `proposer_guard` (`service` creates `PROPOSED` tasks; `operator` creates `QUEUED` or `PROPOSED`), supports `request_key` / `Idempotency-Key` replay scoped per principal (`409 IDEMPOTENCY_CONFLICT` on body mismatch), server-derives `interlock_scope` (`"amr_bed"` or `"cell_internal"`; `_ready_amr` currently stays fail-closed across scopes), rejects client-spoofed `proposer` (`422`), enforces single retry + chain depth `<= 2` (`409 FALLBACK_RETRY_LIMIT_EXCEEDED`), and rejects automatic/non-terminal `act_policy` -> `guarded_pick` swaps (`403`/`409`).
+- `POST /api/fleet/pipeline/cell-tasks/{task_id}/admit`: human-operator-guarded single-transaction SQLite `BEGIN IMMEDIATE` CAS transition from `PROPOSED` to `QUEUED` requiring named human operator (`403 NAMED_OPERATOR_REQUIRED`), distinct proposer != approver (`403 SELF_APPROVAL_FORBIDDEN`), and required matching `expected_readiness_digest` / `expected_dispatch_generation` / `expected_stop_generation` (plus `expected_context_sha256` when bound to a failure bundle; `409 STALE_FAILURE_CONTEXT`).
+- `POST /api/fleet/pipeline/cell-tasks/{task_id}/cancel`: allows cancelling `PROPOSED` as well as `QUEUED` tasks and bumps `dispatch_generation`.
+- `GET /api/fleet/pipeline/cells/{cell_id}/readiness`: `read_guard` endpoint returning `rosy.fleet-cell-readiness.v1` with `authority_epoch`, `dispatch_generation`, `stop_generation`, per-arm holds, task counts, and `readiness_digest`.
+- `operations/decision/src/rosy/decision/model_tool_catalog.py`: adds `scope="cell"` closed schemas (`get_cell_readiness`, `get_cell_failure_context`, `propose_cell_fallback` aligned to canonical `FALLBACK_VERBS` + CAS fields); `contracts/foundation/core_common/intent.py` extends `FORBIDDEN_KEYS` with low-level arm and PLC actuator keys.
+
+### v1.456 OMX Cell API (:8781) 실패 컨텍스트·준비 상태·프레임 메타 및 비-이동 미디어/스테이징 작업 (Cell)
+
+- `cell_job_api.py` (`:8781`)에 읽기 전용 상태/증거 엔드포인트를 추가합니다 (D-1072 PR-3).
+- `GET /readiness`: `rosy.cell-readiness.v1`(`max_age_s <= 5.0`, `cell_state_gen`, 3개 팔 잠금/보류/폴드/오염 상태, `blocking_refusals`, `allowed_tiers_now`, `readiness_digest`) 및 `X-Cell-State-Gen` 헤더 반환.
+- `GET /failures`, `GET /failures/latest`, `GET /failures/{bundle_id}`, `GET /failures/{bundle_id}/assets/{filename}`: `rosy.omx-failure-context.v1` 번들 및 SHA-256 검증 사이드카 자산 서빙(`ETag`, `X-Cell-State-Gen`, 경로 탈출·심볼릭 링크·변조 `400` 차단).
+- `GET /frame/{view}.jpg`: `:8767` 원본 헤더(`X-Frame-Seq`, `X-Source-Stamp`, `ETag`, `Cache-Control`) 보존.
+- `GET /jobs/{id}`: 4000B 로그 tail 밖 JSON까지 파싱해 `structured_result`와 `failure_bundle_id` 제공.
+- 비-이동 작업 5종(`cell-job-machine` 허용): `upkeep_check`(`--mode autonomous`), `capture_clip`(1..15s MP4 `<= 16 MiB`, D435/팔 잠금 미사용), `convert_episodes`(`DO_NOT_TRAIN` 차단), `transfer_dataset`(봉인 `CLOSED` 하드웨어 컬렉션 전용), `stage_policy_bundle`(`:8768` SHA-256 검증 원자 스테이징).
 
 ### v1.455 OMX Cell Job API (v1.455) 두 팔 원격 정책 작업(`cell_two_arm_policy`) 통합 (Cell)
 
@@ -248,7 +285,7 @@ Fleet의 기존 상세 본문을 대체하는 전환 계약은 별도다. 원본
 ### v1.376 항만 사건과 이송 제안의 `object_ref` (D-996)
 
 - `POST /api/fleet/trip-proposals`: 선택 필드 `object_ref`(앞뒤 공백·제어 문자 없는 1~128자)를 받는다. 업무 앱의 화물 코드이고 ROSY는 해석하지 않는다. 같은 `request_key`로 다른 `object_ref`(또는 없음)를 보내면 409다. 값이 있으면 `TripProposalSnapshot.object_ref`로 돌려주고 `request_digest`와 `proposal_digest`에 들어간다. `request_digest` = sha256(UTF-8(JSON `{"candidates":[...],"steps":[{"to":..,"via":[...]}]}`에 값이 있을 때만 `"object_ref"` 키를 더한 것, 키 정렬, 구분자 `,`·`:`, 공백 없음, ASCII 이스케이프)). 승인된 이송 job의 `request_digest`도 같은 값이다. 없으면 응답 바이트와 두 digest는 전과 같다. additive다.
-- `POST /api/fleet/workcell-observations/{workcell_id}/port-events`: 셀 PC가 `X-Workcell-Observation-Token`(그 workcell 팔 토큰 중 하나, D-807 기계 자격)으로 `PortEvent`(`core_common.protocol.port_events`, 닫힌 모델) 하나를 보낸다. kind별 필수·금지 필드는 모델이 강제한다(`received_at_intake`: `object_ref`·`intake_point`·`identity`, `stored`: `object_ref`·`slot_ref` `{area}-r{row}-c{col}-l{level}`·`identity`, `handling_failed`: `reason` `MISMATCH|UNREADABLE|LOST|DAMAGED`(+선택 `object_ref`), `release_permitted`: `vehicle_id`). `event_id`는 `sha256(workcell_id|observation_ref|kind)`이어야 한다(아니면 422 `PORT_EVENT_ID_MISMATCH`). 200 `{event_id, seq}`. 같은 사건 재전송은 같은 seq, 같은 `event_id`의 다른 사건은 409 `PORT_EVENT_CONFLICT`, 토큰 오류 401, 4 KiB 초과 413. 원장 `fleet_port_events`는 append-only이고 seq는 이 Fleet 안에서 단조 증가한다.
+- `POST /api/fleet/workcell-observations/{workcell_id}/port-events`: 셀 PC가 `X-Workcell-Observation-Token`(그 workcell 팔 토큰 중 하나, D-807 기계 자격)으로 `PortEvent`(`core_common.protocol.port_events`, 닫힌 모델) 하나를 보낸다. kind별 필수·금지 필드는 모델이 강제한다(`received_at_intake`: `object_ref`·`intake_point`·`identity`, `stored`: `object_ref`·`slot_ref` `{area}-r{row≥1}-c{col≥1}-l{level≥1}`(1-based, Harbor `SLOT_REF_RE`와 같음)·`identity`, `handling_failed`: `reason` `MISMATCH|UNREADABLE|LOST|DAMAGED`(+선택 `object_ref`), `release_permitted`: `vehicle_id`). `event_id`는 `sha256(workcell_id|observation_ref|kind)`이어야 한다(아니면 422 `PORT_EVENT_ID_MISMATCH`). 200 `{event_id, seq}`. 같은 사건 재전송은 같은 seq, 같은 `event_id`의 다른 사건은 409 `PORT_EVENT_CONFLICT`, 토큰 오류 401, 4 KiB 초과 413. 원장 `fleet_port_events`는 append-only이고 seq는 이 Fleet 안에서 단조 증가한다.
 - `POST /api/fleet/workcell-observations/{workcell_id}/intake-readings`: 같은 셀 토큰으로 `IntakeReading`(`observation_ref`, `point` `conveyor_end|wrist`, `state` `read|unreadable|mismatch`, `read`일 때만 `tag`, wrist만 선택 `arm_mission_id`, UTC `observed_at`)을 보낸다. 셀 PC는 태그 번호만 보내고, 셀 Fleet이 태그→`object_ref` 표와 이송 선언으로 사건을 만든다(D4). 컨베이어 끝: 공급 작업이 끝났고 아직 받지 않은 선언값과 같으면 `received_at_intake(observed)`, 다른 태그·표에 없는 태그·두 태그·두 면 불일치는 `handling_failed(MISMATCH)`, 못 읽으면 `UNREADABLE`. wrist: 불일치는 바로 `MISMATCH`, 읽은 태그는 그 A/B 작업이 슬롯 앵커 target에서 `GOAL_CONFIRMED`가 되면 `container.stored(observed)`. 같은 `observation_ref`는 한 번만 번역하고(재전송은 같은 seq), 다른 내용이면 409 `INTAKE_READING_CONFLICT`. 200 `{observation_ref, seqs}`. intake 설정이 없으면 503. 셀 토큰으로 `vehicle.release_permitted`를 보내면 422 `PORT_EVENT_KIND_NOT_ALLOWED`.
 - `GET /api/fleet/control-unit/port-events?after_seq=&limit=1..200`: 직계 부모 관제 단위의 서비스 principal(`control-unit:<parent>`)만 읽는다. 200 `PortEventLedgerPage{rows:[{seq, event}]}`. 다른 principal은 403 `CONTROL_UNIT_PARENT_ONLY`.
 - `GET /api/fleet/port-events?after=<cursor>&limit=1..200`: viewer 인증(업무 앱 service principal). 200 `PortEventPage{events, cursor, complete}`. 이 Fleet의 원장과 workcell을 가진 **직계 자식** 셀만 읽는다(손자 셀은 범위 밖). `cursor`는 불투명 문자열로, 첫 조회에서는 생략하고 받은 값을 그대로 돌려보낸다. 닿지 않은 셀이 있거나 셀 안 seq에 빈 곳이 있으면 `complete:false`이고 그 셀 위치는 빈 곳 앞에 머문다. 잘못된 cursor는 400 `PORT_EVENT_CURSOR_INVALID`.
@@ -4983,6 +5020,11 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.460 | 2026-11-24 | [Fleet] Additive: GET /pipeline/recovery-tools, POST /pipeline/recovery-tools/invoke 및 D-1048 단계적 호밍·시각 체크포인트 |
+| v1.459 | 2026-11-24 | [Fleet] Additive: pinky_dispatch_enabled, depart_s3 출구 배차, cell robot_id 해석, repark ABORTED 대체 |
+| v1.458 | 2026-11-24 | [Cell] Additive: GET /readiness cells breakdown and optional ?cell=cell_s\|cell_ab filter |
+| v1.457 | 2026-11-24 | [Fleet] Fleet cell-task PROPOSE/admit CAS, interlock_scope, and cell readiness |
+| v1.456 | 2026-11-24 | [Cell] GET /readiness, /failures*, /frame/{view}.jpg 헤더 보존, /jobs/{id} structured_result 및 5종 비-이동 작업 추가 |
 | v1.455 | 2026-11-23 | [Cell] Additive: POST /jobs/cell_two_arm_policy, 두 팔 직렬화·준비 게이트(409 TWO_ARM_NOT_READY), dual cell-state-dirty 기록 |
 | v1.454 | 2026-11-22 | [Cell] cell-job-human/machine 토큰 분리, Idempotency-Key, warm 재사용 안전 게이트, depth-d435.lock, act_backend/goal_slot/verify_zones 추가 |
 | v1.453 | 2026-11-22 | [Fleet] Additive: POST /api/fleet/trips/{trip_id}/pause and /resume, Nav2 traffic holds, and autonomous Nav2 failure reroute/retry/hold recovery |

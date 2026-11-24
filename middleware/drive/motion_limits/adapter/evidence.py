@@ -34,6 +34,7 @@ class Evidence:
         self._ir_filtered = ()
         self.last_decision = {'action': 'stop', 'reason': 'startup'}
         self.observation_session = uuid.uuid4().hex
+        self._last_profile_key = None
         self.profile_pub = self.create_publisher(String, 'safety/profile', latched)
         self.observation_pub = self.create_publisher(String, 'safety/observation', 10)
         self.decision_pub = (None if getattr(self, '_sensor_only', False) else
@@ -100,9 +101,12 @@ class Evidence:
         except (ValueError, TypeError, OverflowError) as error:
             self.profile_valid, self.profile_error = False, str(error)
             effective = {}
-        report = {'schema_version': 1, 'revision': self.profile.revision,
-                  'effective': effective, 'valid': self.profile_valid, 'error': self.profile_error}
-        self.profile_pub.publish(String(data=json.dumps(report, allow_nan=False)))
+        report_key = (self.profile.revision, self.profile_valid, self.profile_error)
+        if report_key != getattr(self, '_last_profile_key', None):
+            report = {'schema_version': 1, 'revision': self.profile.revision,
+                      'effective': effective, 'valid': self.profile_valid, 'error': self.profile_error}
+            self.profile_pub.publish(String(data=json.dumps(report, allow_nan=False)))
+            self._last_profile_key = report_key
         self.publish_calibration_applied()
 
     def required_observation_failure(self):

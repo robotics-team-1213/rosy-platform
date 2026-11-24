@@ -154,7 +154,7 @@ def execute_directive(
                 return _recovery_hold()
             return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "run descend_pick",
                     "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace,
-                    "recovery": recovery_log, "steps": steps_log}
+                    "recovery": recovery_log, "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log}
 
         r_grasp = _run_cmd("run grasp_pick")
         state = r_grasp.get("state") or []
@@ -242,7 +242,7 @@ def execute_directive(
                     return _recovery_hold("empty_park")
             out_empty = {"directive_id": cur_directive.get("directive_id"), "result": "empty", "task_verified": False,
                          "at": "run grasp_pick", "pick": cur_directive["pick"], "place": cur_directive["place"],
-                         "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
+                         "gate_trace": gate_trace, "recovery": recovery_log, "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log}
             cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_empty)
             return out_empty
 
@@ -327,7 +327,7 @@ def execute_directive(
                         return _recovery_hold()
                 out_err = {"directive_id": cur_directive.get("directive_id"), "result": "contact", "task_verified": False,
                            "at": chunk_cmd, "error": r_step.get("error"), "pick": cur_directive["pick"],
-                           "place": cur_directive["place"], "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
+                           "place": cur_directive["place"], "gate_trace": gate_trace, "recovery": recovery_log, "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log}
                 cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_err)
                 return out_err
 
@@ -396,4 +396,4 @@ def execute_directive(
         return out_final
 
     return {"directive_id": cur_directive.get("directive_id"), "result": "stopped", "task_verified": False,
-            "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
+            "gate_trace": gate_trace, "recovery": recovery_log, "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log}

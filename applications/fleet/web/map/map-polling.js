@@ -90,11 +90,14 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
   // D-536: 로봇 상황(1 s, 교통 표와 같은 주기). 모르는 라우트(404)면 다음 로그인까지 묻지 않는다.
   const guideGate = createPollGate();
   let guideInFlight = false;
-  scope.onDispose(() => { guideInFlight = false; });
-  async function refreshGuide() {
+  let guidePending = false;
+  scope.onDispose(() => { guideInFlight = false; guidePending = false; });
+  async function refreshGuide({ force = false } = {}) {
     const life = scope.capture();
     life.check();
-    if (auth.locked || guideInFlight || !guideGate.due()) return;
+    if (auth.locked) return;
+    if (guideInFlight) { if (force) guidePending = true; return; }
+    if (!force && !guideGate.due()) return;
     guideInFlight = true;
     try {
       view.guide = await call("/api/fleet/guide", { signals: [life.signal] });
@@ -106,7 +109,10 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       view.guide = null;
       view.guideUnavailable = guideGate.fail(err.status, err.code) !== "absent";
     } finally {
-      if (life.current()) guideInFlight = false;
+      if (life.current()) {
+        guideInFlight = false;
+        if (guidePending) { guidePending = false; void refreshGuide({ force: true }); }
+      }
     }
     onTrafficChanged();  // the roster's exception queue reads view.guide too
   }

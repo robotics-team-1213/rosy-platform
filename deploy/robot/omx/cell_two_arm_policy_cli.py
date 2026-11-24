@@ -6,14 +6,17 @@ import argparse
 import json
 import os
 from pathlib import Path
+import time
 from typing import Any, Mapping, Sequence
 
 import cell_auto_setup
+import cell_bundle_emit
 import cell_coordinate
 import cell_job_api
 import cell_params
 import cell_pipeline_io
 import cell_pivot
+from cell_policy_entry import dry_no_runner_fallback
 import cell_policy_handoff
 import cell_policy_shape
 import cell_remote_policy
@@ -105,6 +108,32 @@ def _build_jaw_spec(
     return spec
 
 
+class _PassiveDryRunCell:
+    """Read-only `--dry-run` wrapper supplying library home pose for `state` when `no runner`."""
+
+    def __init__(self, inner: Any, pose: Sequence[float]):
+        self._inner = inner
+        self._pose = [float(x) for x in pose]
+
+    def act(self, command: str, timeout: float | None = None) -> dict[str, Any]:
+        if command == "state":
+            return {"ok": True, "state": list(self._pose), "holding": False, "t": time.time(), "passive_source": "library_home"}
+        return {"ok": False, "fault": "dry_run_passive_cell", "error": f"passive dry-run cell refuses {command!r}"}
+
+    def checked(self, command: str, assessment: Mapping[str, Any], timeout: float | None = None) -> dict[str, Any]:
+        return {"ok": False, "fault": "dry_run_passive_cell", "error": f"passive dry-run cell refuses checked {command!r}"}
+
+    def __getattr__(self, name: str) -> Any:
+        if name in ("frame", "frame_receipt"):
+            return getattr(self._inner, name)
+        raise AttributeError(name)
+
+    def close(self) -> None:
+        close = getattr(self._inner, "close", None)
+        if callable(close):
+            close()
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config-a", type=Path, required=True)
@@ -130,6 +159,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--work-dir", type=Path)
     parser.add_argument("--max-chunks", type=int, default=8)
     parser.add_argument("--timeout-s", type=float, default=0.8)
+    parser.add_argument("--jpeg-quality", type=int, default=cell_remote_policy.DEFAULT_JPEG_QUALITY)
     parser.add_argument("--margin-m", type=float, default=0.02)
     parser.add_argument("--min-z-m", type=float, default=-0.02)
     parser.add_argument("--proposer", required=True)
@@ -141,6 +171,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if not args.proposer.strip() or not args.operator.strip() or args.proposer.strip() == args.operator.strip():
         raise SystemExit("--proposer and --operator must be distinct non-empty identities (D-1024)")
+    if not (50 <= args.jpeg_quality <= 100):
+        raise SystemExit(f"--jpeg-quality must be in 50..100, got {args.jpeg_quality}")
     if not args.dry_run and not (args.commissioning and args.person_at_switch):
         raise SystemExit("live two-arm policy execution requires --commissioning --person-at-switch (D-911)")
 
@@ -167,8 +199,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     work_dir.mkdir(parents=True, exist_ok=True)
 
     cells = cell_two_arm.open_cells(configs, cell_pipeline_io.FifoCell)
+    passive_arms: list[str] = []
     try:
-        if not args.dry_run and cell_two_arm.away_from_home(cells, libs):
+        if args.dry_run:
+            for arm in ARMS:
+                if callable(act_fn := getattr(cells[arm], "act", None)):
+                    st = act_fn("state")
+                    if (fallback := dry_no_runner_fallback(st, True, None, libs[arm])) is not None:
+                        cells[arm] = _PassiveDryRunCell(cells[arm], fallback)
+                        passive_arms.append(arm)
+        elif cell_two_arm.away_from_home(cells, libs):
             raise SystemExit("one or both arms are away from home before live start; return home first")
 
         kins = cell_two_arm.kinematics_for(
@@ -183,8 +223,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if not args.dry_run and not has_sites:
             raise SystemExit("calibration site maps required for live rigid_of registration (D-911)")
+        top_camera = cell_coordinate.shared_top_camera(configs["a"], configs["b"])
+        if has_sites and not args.dry_run and top_camera is None:
+            z_a = cal_a["sites"][args.model_site_a].get("z_view")
+            z_b = cal_b["sites"][args.model_site_b].get("z_view")
+            if (z_a is None) != (z_b is None) or (z_a is not None and abs(float(z_a) - float(z_b)) > 1e-6):
+                raise SystemExit(
+                    "differing or asymmetric z_view site maps require shared top camera height_m and center_px (D-911)"
+                )
         rigid_ab = (
-            cell_coordinate.rigid_of(cal_a, cal_b, args.model_site_a, args.model_site_b)
+            cell_coordinate.rigid_of(cal_a, cal_b, args.model_site_a, args.model_site_b, camera=top_camera)
             if has_sites
             else (0.0, 0.0, -0.34)
         )
@@ -193,11 +241,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         shadows = {
             "a": cell_remote_policy.RemotePolicyShadow(
                 args.endpoint_url, "arm_a", args.revision_a,
-                token=token, timeout_s=args.timeout_s, policy_root=args.policy_root_a, config=configs["a"],
+                token=token, timeout_s=args.timeout_s, jpeg_quality=args.jpeg_quality,
+                policy_root=args.policy_root_a, config=configs["a"],
             ),
             "b": cell_remote_policy.RemotePolicyShadow(
                 args.endpoint_url, "arm_b", args.revision_b,
-                token=token, timeout_s=args.timeout_s, policy_root=args.policy_root_b, config=configs["b"],
+                token=token, timeout_s=args.timeout_s, jpeg_quality=args.jpeg_quality,
+                policy_root=args.policy_root_b, config=configs["b"],
             ),
         }
         offsets: dict[str, list[float]] = {}
@@ -234,10 +284,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         receipt["proposer"] = args.proposer.strip()
         receipt["operator"] = args.operator.strip()
+        if passive_arms:
+            receipt["passive_dry_run_arms"] = passive_arms
+        if not args.dry_run and receipt.get("result") not in ("dry_run", "chunks_done", "released"):
+            if bid := cell_bundle_emit.emit_two_arm_policy_failure(
+                cells, configs, work_dir, receipt, tasks, {"a": args.revision_a, "b": args.revision_b},
+            ):
+                receipt["failure_bundle_id"] = bid
         receipt_path = work_dir / "receipt.json"
         receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
-        print(json.dumps({"result": receipt["result"], "task_id": receipt["task_id"], "receipt": str(receipt_path)}))
-        return 0 if receipt["result"] in ("dry_run", "chunks_done") else 1
+        summary: dict[str, Any] = {"result": receipt["result"], "task_id": receipt["task_id"], "receipt": str(receipt_path)}
+        if receipt.get("failure_bundle_id"):
+            summary["failure_bundle_id"] = receipt["failure_bundle_id"]
+        if passive_arms:
+            summary["passive_dry_run_arms"] = passive_arms
+        print(json.dumps(summary))
+        return 0 if receipt["result"] in ("dry_run", "chunks_done", "released") else 1
     finally:
         for cell in cells.values():
             close = getattr(cell, "close", None)

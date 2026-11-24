@@ -244,9 +244,12 @@ export function visualCardSpecs(body = {}) {
     const matches = tasks.filter(t => t.cell_id === cellId);
     return matches.length ? matches[matches.length - 1] : null;
   };
-  const decisions = body?.decisions || {};
+  const decisions = body?.decisions;
+  const lastDecision = subjectId => Array.isArray(decisions)
+    ? [...decisions].reverse().find(d => d?.subject_id === subjectId) || null
+    : decisions?.[subjectId] || null;
   const formatTaskMeta = (task, subjectId) => {
-    const dec = decisions[subjectId] || task?.decision || null;
+    const dec = lastDecision(subjectId) || task?.decision || null;
     const decTxt = dec ? `Decision: ${dec.choice} (${dec.reason})` : '';
     if (!task) {
       return {
@@ -275,10 +278,13 @@ export function visualCardSpecs(body = {}) {
   };
   const taskControlButtons = meta => {
     if (!meta?.task_id) return [];
-    if (meta.status === 'QUEUED' || meta.status === 'RUNNING' || meta.status === 'PAUSED_HUMAN') {
+    if (meta.status === 'QUEUED') {
       return [{label: '작업 취소', cancelTaskId: meta.task_id}];
     }
-    return [{label: '재실행', retryTaskId: meta.task_id}];
+    if (['COMPLETED', 'CANCELLED', 'ABORTED'].includes(meta.status)) {
+      return [{label: '재실행', retryTaskId: meta.task_id}];
+    }
+    return [];
   };
   // The claim takes a cell's first QUEUED task, so the bed confirmation goes to that one.
   const bedConfirmButtons = cellId => {
@@ -308,8 +314,8 @@ export function visualCardSpecs(body = {}) {
   s3Meta.folded_state = [s3Meta.folded_state, refusalFor('cell_s'), abortText(lastForCell('cell_s'))].filter(Boolean).join(' · ');
   s5Meta.folded_state = [s5Meta.folded_state, refusalFor('cell_ab'), abortText(lastForCell('cell_ab'))].filter(Boolean).join(' · ');
   const lastPinky = pinkyTasks.length ? pinkyTasks[pinkyTasks.length - 1] : null;
-  const pinkyId = lastPinky?.robot_id || 'rosy_46';
-  const pinkyDec = decisions[pinkyId] || lastPinky?.decision || null;
+  const pinkyId = body?.selected_robot_id || lastPinky?.robot_id || 'rosy_46';
+  const pinkyDec = lastDecision(pinkyId) || lastPinky?.decision || null;
   const hs = body?.human_safety || {};
   const s3Human = Boolean(hs.human_detected?.cell_s || hs.active_estop || s3Gate.phase === 'HUMAN_HOLD');
   const s5Human = Boolean(hs.human_detected?.cell_ab || hs.active_estop || s5Gate.phase === 'HUMAN_HOLD');
@@ -343,7 +349,7 @@ export function visualCardSpecs(body = {}) {
       buttons: [
         {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_s'},
-        {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_s'},
+        {label: '비전 안전 비상정지 (카메라 확인)', visionCheckCell: 'cell_s'},
         {label: 'S3 ACT 정책 구동 (arm_s)', preset: 's3_act_policy'},
         {label: '자동 감지·복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
@@ -351,9 +357,9 @@ export function visualCardSpecs(body = {}) {
         {label: '반출대3 반출 (YAML: EXP_S3_BELT)', zoneId: 'EXP_S3_BELT'},
         ...extraExportForCell('cell_s', ['EXP_S3_BELT']),
         {
-          label: s3Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: s3Human ? '비상정지 재전송 (정지 재확인)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'cell_s',
-          humanDetected: !s3Human,
+          humanDetected: true,
         },
         {label: s3Hold ? '팔 홀드 해제 (arm_s · 확인됨)' : '팔 홀드 점검·해제 (arm_s)', clearArmHold: 'cell_s'},
         ...bedConfirmButtons('cell_s'),
@@ -370,16 +376,16 @@ export function visualCardSpecs(body = {}) {
       buttons: [
         {label: '1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_ab'},
-        {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_ab'},
+        {label: '비전 안전 비상정지 (카메라 확인)', visionCheckCell: 'cell_ab'},
         {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
         {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
         {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
         {label: '반출대2 반출 (YAML: EXP_S5_PALLET)', zoneId: 'EXP_S5_PALLET'},
         ...extraExportForCell('cell_ab', ['EXP_S5_PALLET']),
         {
-          label: s5Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: s5Human ? '비상정지 재전송 (정지 재확인)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'cell_ab',
-          humanDetected: !s5Human,
+          humanDetected: true,
         },
         {label: s5Hold ? '팔 홀드 해제 (arm_a/b · 확인됨)' : '팔 홀드 점검·해제 (arm_a/b)', clearArmHold: 'cell_ab'},
         ...bedConfirmButtons('cell_ab'),
@@ -414,15 +420,12 @@ export function visualCardSpecs(body = {}) {
           cableGuardToggle: true,
         },
         {label: 'S3 도킹', pinkyAction: 'dock_s3'},
-        {label: '미세 전진 1.5cm', pinkyAction: 'micro_forward_2cm'},
-        {label: '미세 후진 1.5cm', pinkyAction: 'micro_reverse_2cm'},
-        {label: '즉시 정지', pinkyAction: 'stop_now'},
         {label: '충전소(C1)', pinkyAction: 'charge_c1'},
         {label: '출구(S1) 출발', pinkyAction: 'depart_s1'},
         {
-          label: anyHuman ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          label: anyHuman ? '비상정지 재전송 (정지 재확인)' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'all',
-          humanDetected: !anyHuman,
+          humanDetected: true,
         },
       ],
     },
@@ -568,7 +571,16 @@ export function inspectorSpecs(body = {}) {
       ],
       buttons: s5Card.buttons || [],
     },
-    ...['rosy_46', 'rosy_45', 'rosy_42'].map(rid => ({
+    ...((() => {
+      const dyn = Array.isArray(body?.pinky_robots) && body.pinky_robots.length
+        ? body.pinky_robots
+        : [...new Set([
+          ...(Array.isArray(body?.pinky_tasks) ? body.pinky_tasks : []).map(t => t.robot_id),
+          body?.cells?.cell_s?.gate?.docked_robot?.robot_id,
+          body?.cells?.cell_ab?.gate?.docked_robot?.robot_id,
+        ].filter(Boolean))];
+      return dyn.length ? dyn : ['rosy_46', 'rosy_45', 'rosy_42'];
+    })()).map(rid => ({
       id: rid,
       robot_id: rid,
       shortTab: `🤖 ${rid}`,

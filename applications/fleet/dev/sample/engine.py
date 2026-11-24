@@ -102,6 +102,14 @@ class SampleEngine:
             return response
         if (method, path) == ('GET', '/pipeline/cell-tasks'):
             return reply({'tasks': [], 'summary': {'total': 0, 'queued': 0, 'running': 0, 'completed': 0}})
+        if (method, path) == ('GET', '/pipeline/status'):
+            return reply({'cell_states': {}, 'arm_holds': {}, 'arm_live_states': {}, 'pinky_tasks': [],
+                          'repark_requests': {}, 'auto_events': []})
+        if (method, path) == ('GET', '/pipeline/unload-release'):
+            rid = (parse_qs(urlsplit(target).query).get('robot_id') or ['sample-robot'])[0]
+            return reply({'ready': False, 'reasons': ['BED_NOT_OBSERVED'], 'robot_id': rid})
+        if (method, path) == ('GET', '/pipeline/recovery-tools'):
+            return reply({'tools': [], 'active_failures': [], 'audit': []})
         if method == 'GET' and path.startswith('/pipeline/cell-camera/'):
             # The sample site has no cell camera; Fleet answers with a placeholder picture too.
             return DevResponse(200, [('Content-Type', 'image/svg+xml'), ('Cache-Control', 'no-store')],
@@ -139,6 +147,8 @@ class SampleEngine:
                 return response
         if (method, path) == ('GET', '/state'):
             return reply(self._state())
+        if (method, path) == ('GET', '/world-entry'):
+            return reply({'configured': False, 'url': None})
         if (method, path) == ('GET', '/workcell-observations'):
             # The sample site registers no observed workcell (D-837): an empty read-only snapshot.
             return reply({'read_only': True, 'physical_acceptance': False, 'workcells': []})

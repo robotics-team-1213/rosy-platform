@@ -70,7 +70,7 @@ class TrafficArbitration:
                 # 출발점과 같은 보고는 길을 막은 로봇이 아니라 측위가 안 된 겹침이다 (D-116).
                 continue
             if self._map_mismatch(mover, robot_id):
-                if site_frame_clear(self, robot_id, site_route, self._yield_keep_out_m, trust_mod=trust) is True:
+                if site_frame_clear(self, robot_id, site_route, getattr(self, "_site_keep_out_m", 0.32), trust_mod=trust) is True:
                     continue
                 # D-1010: its pose is another frame's numbers, so this route-versus-pose
                 # verdict would be fiction. It stays a blocker for a human, never moved.
@@ -229,7 +229,7 @@ class TrafficArbitration:
         if self._verdict(robot_id) != trust.UNTRUSTED:
             return False
         clear = site_frame_clear(
-            self, robot_id, site_route, max(trust.UNTRUSTED_KEEP_OUT_M, self._yield_keep_out_m), trust_mod=trust)
+            self, robot_id, site_route, getattr(self, "_site_keep_out_m", 0.32), trust_mod=trust)
         if clear is not None:
             return not clear
         return trust.blocks(route, self._trusted.get(robot_id))

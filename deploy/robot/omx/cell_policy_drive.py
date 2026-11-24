@@ -83,7 +83,8 @@ def run_episode(cell, shadow, library_path: Path, work: Path, *, offset, max_chu
             library = {**library, "source": {**(library.get("source") or {}), "rim_z_m": float(jaw_spec["rim_z_m"])}}
     validate_entry_chunk(library, kin, jaw_spec)
     if jaw_spec is not None and demonstrated is not None and not sim_units:
-        if mismatch := trained_grasp_mismatch(demonstrated[0], demonstrated[1], jaw_spec["grasp_roll"]):
+        if mismatch := trained_grasp_mismatch(demonstrated[0], demonstrated[1], jaw_spec["grasp_roll"],
+                                               square=jaw_spec.get("square") is True):
             row = {"preflight": "jaw_roll", "jaw_warning": mismatch, "dry_run": dry_run}
             if not dry_run:
                 log({**row, "refused": mismatch})
@@ -367,11 +368,20 @@ def main(argv=None) -> int:
                 res["zone_verification"] = czv.measure(cell, before_top, config, args.dest_site, args.site or "pinky", dst_roi)
             return res
 
-        if not args.dry_run and config.get("episodes"):
-            import cell_collect_plan
-            result = cell_collect_plan.run_recorded(cell, config, args.site or "belt", args.goal_site or "goal", source_kind, _execute)
-        else:
-            result = _execute()
+        import cell_bundle_emit
+
+        with cell_bundle_emit.PolicyCapture(
+            cell, config, work=work, mode=args.mode, paced_chunks=args.paced_chunks,
+            dry_run=args.dry_run, log_path=log_path,
+            site=args.site, goal_site=args.goal_site, dest_site=args.dest_site,
+        ) as capture:
+            if not args.dry_run and config.get("episodes"):
+                import cell_collect_plan
+                result = cell_collect_plan.run_recorded(cell, config, args.site or "belt", args.goal_site or "goal", source_kind, _execute)
+            else:
+                result = _execute()
+            if bid := capture.emit_if_failed(result):
+                result["failure_bundle_id"] = bid
         return _finish(result)
     finally:
         if shadow is not None and hasattr(shadow, "close"):

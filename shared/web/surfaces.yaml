@@ -35,6 +35,22 @@
 # 표면만 가진다. {file: 표면 폴더 상대 파일, block: 최상위 선택자(없으면 파일 전체), reason: 한 줄}.
 # 가리는 원시 색이 없는 항목은 적지 않는다. 테마를 따르는 표면의 색은 tokens.css에서만 온다.
 surfaces:
+  - id: world
+    title_prefix: Rosy World
+    api_owners: []
+    path: applications/world/web
+    themes: [dark, light]
+    surface: site
+    medium: web
+    grammar: spatial
+    ports:
+      - {port: 8140, source: applications/world/build_bundle.py}
+    audience: 지도와 OMX 셀의 보관 자료를 확인하는 현장 관제자
+    role: 보관 지도와 셀, 지도 좌표계가 일치하는 위치 기록을 표시한다.
+    owns: []
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline_reason: 독립 오프라인 번들의 브라우저 기준선은 첫 시연에서 확보한다.
+
   - id: monitoring
     title_prefix: Rosy Monitoring
     api_owners: []

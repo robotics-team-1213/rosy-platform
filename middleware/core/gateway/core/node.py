@@ -133,6 +133,8 @@ def _load_robot_settings(config: dict[str, Any]):
 
 
 class RosyCoreNode(Node):
+    _file_writer: Any = None
+
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__("core")
         self._config = config
@@ -181,9 +183,16 @@ class RosyCoreNode(Node):
                       (limits.manual_linear, limits.manual_angular),
                       (limits.fleet_linear, limits.fleet_angular)),
                 overlay=sensor_cfg.get("parameters") or {}, simulation=simulation)
+        from rclpy.duration import Duration
+        from tf2_ros import Buffer
+
+        shared_tf_buffer = Buffer(cache_time=Duration(seconds=10.0))
         namespace = self.get_namespace() if callable(getattr(self, "get_namespace", None)) else None
+        in_process_topics = ("scan", "imu", "us") if core_executor_kind() == "events" else ()
         self.control_adapter, notes = build_control_adapter(
-            sensor_cfg, parameters={**(params.parameters if params else {}), "use_sim_time": use_sim_time}, namespace=namespace,
+            sensor_cfg, parameters={**(params.parameters if params else {}), "use_sim_time": use_sim_time},
+            namespace=namespace, tf_buffer=shared_tf_buffer,
+            in_process_topics=in_process_topics,
             policy_required=self.core.safety.policy_required)
         for note in notes:
             self.get_logger().warning(note)
@@ -205,13 +214,22 @@ class RosyCoreNode(Node):
             self.core.safety.shadow_record_errors, self.core.safety))
 
         from core.system.ros_graph import RosGraphMonitor
-        self.ros_graph_monitor = RosGraphMonitor(self)
+        self.ros_graph_monitor = RosGraphMonitor(self, cache_seconds=5.0)
         self.core.runtime_probe.attach_ros_graph_provider(
             self.ros_graph_monitor.snapshot
         )
 
+        from core.system.host_files import AsyncHostFileWriter, STATUS_INPUTS_PERIOD_S
+        self._file_writer = AsyncHostFileWriter()
+
         from core.bridge.ros_bridge import RosBridge
-        self.bridge = RosBridge(self, self.core)
+        self.bridge = RosBridge(
+            self,
+            self.core,
+            tf_buffer=shared_tf_buffer,
+            sensor_sink=self.control_adapter if in_process_topics else None,
+            file_writer=self._file_writer,
+        )
 
         self.get_logger().info(
             f"core up: robot_id={self.core.identity.robot_id} model={profile.model}")
@@ -220,24 +238,42 @@ class RosyCoreNode(Node):
             self.core.slam_fallback.start()  # own thread; a no-op unless the backend is slam
         # D-260: hand the boot display the inputs only CORE knows (SAF-005 warning,
         # overlaid device states) so the LCD, lamp and buzzer say what the dashboard says.
-        from core.system.host_files import STATUS_INPUTS_PERIOD_S
         self._status_inputs_failed = False
         self._status_inputs_timer = self.create_timer(STATUS_INPUTS_PERIOD_S, self._write_status_inputs)
-        self._write_status_inputs()
+        # Write the initial hand-over synchronously before exposing the HTTP/WS API.
+        self._write_status_inputs_sync()
         self.core.state.set_map_id(config.get("navigation", {}).get("map_id"))
         self.core.events.publish("system.boot", source="core",
                                  data={"version": SOFTWARE_VERSION})
         self._start_api()
 
-    def _write_status_inputs(self) -> None:
+    def _on_status_inputs_ok(self) -> None:
+        self._status_inputs_failed = False
+
+    def _on_status_inputs_error(self, exc: Exception) -> None:
+        if not self._status_inputs_failed:
+            self.get_logger().warning(f"status inputs not written: {type(exc).__name__}: {exc}")
+        self._status_inputs_failed = True
+
+    def _write_status_inputs_sync(self) -> None:
         try:
             self.core.host_files.write_status_inputs(self.core)
         except Exception as exc:  # noqa: BLE001 - an indicator input must never stop the node
-            if not self._status_inputs_failed:
-                self.get_logger().warning(f"status inputs not written: {type(exc).__name__}: {exc}")
-            self._status_inputs_failed = True
+            self._on_status_inputs_error(exc)
             return
-        self._status_inputs_failed = False
+        self._on_status_inputs_ok()
+
+    def _write_status_inputs(self) -> None:
+        writer = self._file_writer
+        if writer is None:
+            self._write_status_inputs_sync()
+            return
+        writer.submit(
+            "status_inputs",
+            lambda: self.core.host_files.write_status_inputs(self.core),
+            on_ok=self._on_status_inputs_ok,
+            on_error=self._on_status_inputs_error,
+        )
 
     def _start_events(self) -> None:
         def _on_event(event) -> None:
@@ -319,6 +355,8 @@ class RosyCoreNode(Node):
         if fallback is not None:
             fallback.stop()  # joins its thread (bounded) before the adapter that carries its halt is closed
         self.control_adapter.close()
+        if self._file_writer is not None:
+            self._file_writer.close()
         self.get_logger().info("core shutting down")
         if self._api_thread is not None:
             self._api_thread.join(API_JOIN_TIMEOUT_S)

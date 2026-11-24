@@ -24,7 +24,11 @@ export function bindScreens({nav, home, stage = null, groups = {}, mark = 'page'
   };
   addEventListener('hashchange', show);
   // The same link again changes no hash; it still reopens a step the operator folded.
-  for (const link of links) link.addEventListener('click', () => { if (link.hash === location.hash) show(); });
+  for (const link of links) link.addEventListener('click', () => {
+    if (link.hash === location.hash) show();
+    const heading = document.getElementById(link.hash.slice(1));
+    if (heading) { if (heading.tabIndex < 0) heading.tabIndex = -1; heading.focus({preventScroll: true}); }
+  });
   show();
   return {current};
 }

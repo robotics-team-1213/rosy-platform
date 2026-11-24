@@ -19,6 +19,7 @@ from std_msgs.msg import String, UInt16MultiArray
 
 from . import executor_choice
 from .calibrated_values import calibrated
+from .camera_shm import attach_camera_front_source
 from .core_law_input import configure_drivable_law, refresh_drivable_law
 from .lane_route_guide_input import LaneRouteGuideInput, subscribe_route_guide
 from .line_observer_helpers import LineObserverHelpersMixin, build_ir_calibration, encode_debug_overlay_msg, load_nominal_camera_profile
@@ -81,6 +82,7 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
         self.declare_parameter('learned_paint_floor_gate', True, _READ_ONLY)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
+        self.declare_parameter('simulation_pink_tape_centerline', False, _READ_ONLY)
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
         self.declare_parameter('camera_between_roi_top_fraction', 0.6)
@@ -147,7 +149,12 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
         self.observation_pub = self.create_publisher(String, 'line/observation', 10)
         self._keep_debug_pub = self.create_publisher(String, 'line/keep_debug', 10)
         self.create_subscription(UInt16MultiArray, 'ir_sensor/range', self._on_ir, qos_profile_sensor_data)
-        self.create_subscription(Image, 'camera/front', self._on_camera, qos_profile_sensor_data)
+        self._camera_front_source = attach_camera_front_source(
+            self,
+            self._on_camera,
+            lambda: self.create_subscription(Image, 'camera/front', self._on_camera, qos_profile_sensor_data),
+            image_cls=Image,
+        )
         controls_qos = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(String, 'camera/controls', self._on_camera_controls, controls_qos)
@@ -164,6 +171,11 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
             self.create_subscription(String, 'line/route_context', self._on_route_context, route_qos)
         if self._ir_calibration is None:
             self.get_logger().warning('IR line calibration disabled; IR_LINE will remain fail-closed')
+
+    def destroy_node(self):
+        if getattr(self, '_camera_front_source', None) is not None:
+            self._camera_front_source.close()
+        super().destroy_node()
 
     def _camera_mode_uses_ground(self) -> bool:
         return str(self.get_parameter('camera_lane_mode').value) in (
@@ -283,6 +295,7 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
 
     def _on_camera(self, msg: Image) -> None:
         observation = frame = mode = ground = quality = route_context_seq = None
+        tape_centerline = False
         if bool(self.get_parameter('require_camera_controls_stable').value) and not self._camera_controls_stable:
             self._publish('CAMERA_LINE', None, stamp=float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9)
             self._keep_last_stamp = None
@@ -333,12 +346,18 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
                 self._keep_last_stamp = image_stamp
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
+                tape_centerline = paint_used == 'pink' and self.get_parameter('simulation_pink_tape_centerline').value and (
+                    simulation_ground_allowed(
+                        source=self.get_parameter('camera_ground_source').value,
+                        simulation_enabled=self.get_parameter('allow_simulation_ground').value,
+                        use_sim_time=self.get_parameter('use_sim_time').value))
                 observation = self._lane_keeper.update(
                     frame, ground, paint_mask=paint,
                     crosswalk_mask=(self._paint_worker.used_crosswalk if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     pose=pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
-                    bend_expected=bend_rules)
+                    bend_expected=bend_rules,
+                    tape_centerline=tape_centerline)
                 if self._drivable_required and self._drivable_steer is None:
                     observation = None
                     self._lane_keeper.last.update(strategy='none', reason='core_steering_law_unavailable')
@@ -424,7 +443,8 @@ class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
             self.get_logger().warning(f'invalid camera line frame: {exc}')
         source_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
         containment = None
-        if mode == 'keep' and observation is not None:
+        # A single guide tape gives steering but cannot locate a lane boundary.
+        if mode == 'keep' and observation is not None and not tape_centerline:
             containment = containment_payload(
                 self._lane_keeper.last, ground, stamp=source_stamp,
                 source=str(self.get_parameter('camera_ground_source').value).upper(),

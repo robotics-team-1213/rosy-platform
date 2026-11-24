@@ -36,12 +36,14 @@ import { createPageScope } from "/common/scope.js";
 import { patchText } from "/common/control-dom.js";
 import { area, areaNav } from "/console/assets/area-nav.js";
 import { bindEstop, noteLink, tickClock } from "/console/assets/fleet-header.js";
+import { classifyAuthFailure, readStoredToken } from "/console/assets/fleet-session.js";
 import { owns, unitScope } from "/console/assets/unit-scope.js";
 // D-798 3.2 — 접속·잠금, 목표 지정, 읽기 갱신은 각자의 팩토리 파일이 가진다.
 import { createConsoleAuth } from "./console-auth.js";
 import { createConsoleGoal } from "./console-goal.js";
 import { createConsoleRefresh } from "./console-refresh.js";
 import { createAssistantPanel } from "/console/assets/assistant.js";
+import { createZoneBlueprintInspector } from "/console/assets/zone-blueprint-inspector.js";
 const pageScope = createPageScope();
 // 좌표계: 로봇 pose 는 CORE 가 TF `map → <ns>base_footprint` 로 읽어 주는 map 프레임
 // 값이다(ros_bridge `_map_frame = "map"`). 그래서 N대를 한 격자 위에 그대로 겹쳐
@@ -58,7 +60,7 @@ const MAP_PANEL = 1;
 // (cli.run_console 강제, app.authorize). 토큰은 세션 스토리지에만 둔다 —
 // localStorage 에 두면 공유 관제PC 의 다음 근무자가 그대로 물려받는다.
 const auth = {
-  token: sessionStorage.getItem("rosy-console-token") || "",
+  token: readStoredToken(),
   role: null,
   // D-248: 잠기면 폴링이 401 을 두드리지 않는다. 수동 저장·새로고침은 막지 않는다.
   locked: false,
@@ -204,13 +206,15 @@ async function call(path, options = {}) {
     return body;
   } catch (error) {
     task.check();
-    if ((error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') && !cameraPreview) markLocked();
+    if (classifyAuthFailure(error).offerLogin && !cameraPreview) markLocked();
     throw error;
   }
 }
 
 const incidents = createIncidentView({scope: pageScope, el, view, call, log, auth, onReports: channelRequestView.setIncidents});
 const assistant = createAssistantPanel({scope: pageScope, call, el, readSelection: () => view.focusRobot});
+const zoneBlueprint = createZoneBlueprintInspector({ scope: pageScope, call, el, log });
+if (el("zone-blueprint-open")) pageScope.listen(el("zone-blueprint-open"), "click", () => zoneBlueprint.open());
 
 // 발행 제어 띠·현장 경로·상태 폴링·전체 주행 취소는 console-refresh.js 팩토리가 가진다(D-798 3.2).
 // 목표 해제와 카드 열기는 아래에서 만들어지므로 부를 때 찾는다.
@@ -295,6 +299,7 @@ function render() {
   view.attention = new Set(view.robots.filter((r) => roster.attentionItems(r).some((i) => i.severity === "crit")).map((r) => r.robot_id));
   mapView.draw();
   applyRoleToControls(auth.role, operatorControls());
+  document.documentElement.toggleAttribute("data-read-only", Boolean(auth.role && !hasOperatorRole(auth.role)));
   const hint = el("hint");
   const point = view.selected && view.cursor && view.map
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
@@ -321,12 +326,13 @@ function resetRobotApps() { deviceDirectory.resetRobotApps(); }
 const { disarmGoal, focusGoalButton, commitWorldGoal, clearPinStart } = createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   render, confirmedAction, namedReason, selection,
   toWorld: (grid, col, row) => mapView.toWorld(grid, col, row),
-  refreshGuide: () => mapView.refreshGuide?.(),
+  refreshGuide: (opts) => mapView.refreshGuide?.(opts),
   queuedReason: (result) => roster.queuedReason(result),
   drawMap: () => mapView.draw(),
   scheduleDraw: () => mapView.scheduleDraw(),
   onSelectRobot: (robotId) => roster.openCard(robotId),
   onGoalFinished: (robotId) => rosterWorkspace.restoreAfterGoal(robotId),
+  onInspectZone: (placeId) => zoneBlueprint.open(placeId),
 });
 view.dispatchGoalToPoint = (point, placeLabel = "", placeId = "") => commitWorldGoal(point, placeLabel, placeId);
 
@@ -364,7 +370,7 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render, sel
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : !hasOperatorRole(auth.role) ? OPERATOR_REASON : namedReason()});
-const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl });
+const rosterWorkspace = createRosterWorkspace({ scope: pageScope, el, view, auth, selection, call, render, roster, manualControl, log, confirmedAction, isOperator: () => hasOperatorRole(auth.role), namedReason });
 view.focusRobotWorkspace = (robotId) => rosterWorkspace.open(robotId);
 view.openFormationWorkspace = () => {
   confirmedAction.cancel(); roster.closeTrip(); view.pinning = null; clearPinStart();
@@ -443,12 +449,16 @@ const trackingView = {
 };
 cellStage = createCellCockpitStage({
   scope: pageScope, call, view, auth, selection,
+  contextHost: el("cell-context-panel"),
+  isOperator: () => hasOperatorRole(auth.role) && !auth.locked,
+  namedReason,
   onChanged: () => render(),
   onVisionSample: (sample) => {
     if (auth.locked || !auth.role) return;
     pathSample.vision = sample;
     paintSitePath();
   },
+  onOpenBlueprint: (zoneId) => zoneBlueprint.open(zoneId),
 });
 layoutConsole();
 
@@ -460,7 +470,7 @@ const { markLocked, markUnlocked, refreshAuthorization, connectionMode } = creat
   dispatchGate, discoveryGate, cancelAllNotice, resetRobotApps, refreshState,
   refreshRobotApps, refreshDispatchControl, refreshDiscovery: whenDiscovery(refreshDiscovery), inbox,
   refreshVision: whenDrive(() => visionView.refreshSources()),
-  onLock: () => { rosterWorkspace.close(); cellStage?.pause(); },
+  onLock: () => { rosterWorkspace.close(); cellStage?.pause(); zoneBlueprint.close(); },
   clearVisionSample: () => { pathSample.vision = null; paintSitePath(); } });
 
 // D-359 §4 — 로봇 계열 색은 ui.js(window.RosyPalette)가 캔버스용으로 푼다. 테마가

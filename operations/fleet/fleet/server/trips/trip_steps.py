@@ -126,9 +126,20 @@ class TripSteps:
                 await self._stop(live, "stopped", *failed)
                 return
             if off is not None:
-                await self._stop(live, "stopped", "pose", {"off_lane_m": round(off, 3),
-                                                           **pose_diagnostics(pose)})
-                return
+                if live.nav2:
+                    live.off_lane_ticks += 1
+                    margin = float(getattr(self.config, "nav2_off_lane_margin_m", 0.06))
+                    severe = off > live.arc(index).width_m / 2 + 2.0 * margin
+                    if severe or live.off_lane_ticks >= 2:
+                        await self._stop(live, "stopped", "pose", {"off_lane_m": round(off, 3),
+                                                                   **pose_diagnostics(pose)})
+                        return
+                else:
+                    await self._stop(live, "stopped", "pose", {"off_lane_m": round(off, 3),
+                                                               **pose_diagnostics(pose)})
+                    return
+            else:
+                live.off_lane_ticks = 0
             if live.view["state"] == "started":
                 live.view["state"] = "running"
             if index != live.view["segment_index"]:

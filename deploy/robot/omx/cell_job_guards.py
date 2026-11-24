@@ -102,6 +102,10 @@ def check_arm_incident_hold(arm: str | None) -> str | None:
 
     try:
         st = omx_incident.status(arm)
+        if st.get("local_held") and st.get("fleet_held") is False and (st.get("unsent_outbox") or 0) == 0:
+            sync = getattr(omx_incident, "sync_hold_from_fleet", None)
+            if callable(sync) and sync(arm):
+                st = omx_incident.status(arm)
         if st.get("local_held") or st.get("fleet_held") or (st.get("unsent_outbox") or 0) > 0:
             return str(st.get("local_reason") or st.get("fleet_reason") or "arm incident hold or unsent outbox")
         return None

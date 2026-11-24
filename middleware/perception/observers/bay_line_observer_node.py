@@ -22,6 +22,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
 from . import executor_choice
+from .camera_shm import attach_camera_front_source
 from .calibrated_values import nominal_camera_profile
 from .sensing.bay_line_observer import BayLineObserver, nominal_geometry
 from .sensing.dock_tag import CameraMount
@@ -46,8 +47,18 @@ class BayLineObserverNode(Node):
         self._ground = None
         self._observer = self._build_observer()
         self.observation_pub = self.create_publisher(String, 'dock/observation', 10)
-        self.create_subscription(Image, 'camera/front', self._on_camera,
-                                 qos_profile_sensor_data)
+        self._camera_front_source = attach_camera_front_source(
+            self,
+            self._on_camera,
+            lambda: self.create_subscription(Image, 'camera/front', self._on_camera,
+                                             qos_profile_sensor_data),
+            image_cls=Image,
+        )
+
+    def destroy_node(self):
+        if getattr(self, '_camera_front_source', None) is not None:
+            self._camera_front_source.close()
+        super().destroy_node()
 
     def _build_observer(self):
         source = str(self.get_parameter('camera_geometry_source').value).strip().upper()

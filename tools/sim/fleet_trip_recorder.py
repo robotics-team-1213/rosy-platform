@@ -14,10 +14,16 @@ def cyclone_profile(root, nav=False):
     base = Path(__file__).resolve().parents[2] / 'middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml'
     if not nav:
         return base
-    discovery = ('    <Discovery>\n      <ParticipantIndex>auto</ParticipantIndex>\n'
-                 '      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>\n    </Discovery>\n')
-    xml = base.read_text(encoding='utf-8').replace('    </General>\n', '    </General>\n' + discovery, 1)
-    assert '<MaxAutoParticipantIndex>' in xml
+    import re
+    xml = base.read_text(encoding='utf-8')
+    if '<MaxAutoParticipantIndex>' in xml:
+        xml = re.sub(r'<MaxAutoParticipantIndex>\d+</MaxAutoParticipantIndex>',
+                     '<MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>', xml, count=1)
+    else:
+        discovery = ('    <Discovery>\n      <ParticipantIndex>auto</ParticipantIndex>\n'
+                     '      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>\n    </Discovery>\n')
+        xml = xml.replace('    </General>\n', '    </General>\n' + discovery, 1)
+    assert '<MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>' in xml and xml.count('<Discovery>') == 1
     (root / 'cyclonedds_nav.xml').write_text(xml, encoding='utf-8')
     return root / 'cyclonedds_nav.xml'
 

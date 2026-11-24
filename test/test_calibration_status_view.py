@@ -54,3 +54,17 @@ def test_jobs_newest_first_with_kind_result_time(screen):
     assert rows[0]["id"] == "20261119T000100-000002"  # newest first: the screen takes the first three
     for row in rows:  # 팔 · 종류 · 결과 · 시각
         assert {"arm", "step", "status", "started"} <= set(row)
+
+
+def test_calibration_status_logic_node_unit_tests(tmp_path):
+    import shutil
+    import subprocess
+    import pytest
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    result = subprocess.run(
+        [node, "--test", "--test-reporter=spec", str(ROOT / "applications/calibration/test/status-logic.test.mjs")],
+        cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

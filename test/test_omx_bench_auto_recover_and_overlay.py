@@ -73,10 +73,16 @@ def test_safe_folded_hold_blocks_unfolded_stale_holding_and_partial_stop(tmp_pat
     ok_unf, why_unf = safe_folded_hold(bench.prep, "arm_a", bench.manual_hold_info())
     assert ok_unf is False and ("홈 자세" in why_unf or "접히지" in why_unf)
 
-    # Holding gripper MUST fail closed
+    # Holding gripper MUST fail closed; missing holding key MUST give an explicit unknown-holding message
     _seed_live_hold(bench, monkeypatch, holding=True)
     ok_h, why_h = safe_folded_hold(bench.prep, "arm_a", bench.manual_hold_info())
-    assert ok_h is False and "파지" in why_h
+    assert ok_h is False and "파지 중(holding=true)" in why_h
+    live_p = bench.prep / "chunk-io-a" / "live.json"
+    live_d = json.loads(live_p.read_text(encoding="utf-8"))
+    live_d.pop("holding")
+    live_p.write_text(json.dumps(live_d), encoding="utf-8")
+    ok_u, why_u = safe_folded_hold(bench.prep, "arm_a", bench.manual_hold_info())
+    assert ok_u is False and "확인되지 않아" in why_u and "holding=true" not in why_u
 
     # PARTIAL_GUARD_STOP MUST fail closed
     _seed_live_hold(bench, monkeypatch, label="PARTIAL_GUARD_STOP")
@@ -326,3 +332,360 @@ def test_arm_a_ik_planner_builds_joint_bounded_pallet_replay(tmp_path, monkeypat
     tt = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tt)
     assert tt.load(rp, fps=30)["sha256"]
+
+
+def _seed_incident_hold(bench, tmp_path, monkeypatch, *, fault_text, latched=None, folded=True, stops=None, extra_facts=None):
+    import omx_incident
+
+    inc_root = tmp_path / "omxhome" / "incidents"
+    inc_root.mkdir(parents=True, exist_ok=True)
+    hold_p = inc_root / "HOLD-arm_a.json"
+    hold_p.write_text(json.dumps({"reason": f"1 open arm incident(s): {fault_text}", "incident_ids": ["f" * 32]}), encoding="utf-8")
+    inc_dir = bench.prep / "incidents" / "20261123T142906-arm_a"
+    inc_dir.mkdir(parents=True, exist_ok=True)
+    rec = bench.prep / "faults" / "omx_follower_arm-20261123T052904-126e8b.json"
+    facts = {
+        "safe_end": True, "latched": latched or {}, "folded": folded, "caps_restored": True,
+        "torque_after": {str(i): 0 for i in range(11, 17)}, "windup_hits": [], "stops": stops or [],
+        "flagged": [{"command": "run goto above_pick", "error": None, "fault": fault_text, "caught": None, "person_needed": None}],
+        "flagged_total": 1, "fault_records": [str(rec)], "fault_records_total": 1,
+        "fault_record_kinds": [{"fault": "stale effort sample (>0.5 seconds)", "stop_reasons": []}],
+        **(extra_facts or {}),
+    }
+    (inc_dir / "incident.json").write_text(json.dumps({"schema": "rosy.omx-incident.v1", "arm": "arm_a", "facts": facts}), encoding="utf-8")
+    (bench.prep / "cell-arm-a-stack.json").write_text(json.dumps({"arm_id": "arm_a", "plan_path": "plan.json"}), encoding="utf-8")
+    tok = tmp_path / "home" / ".config" / "rosy" / "cell-a-ai-assessor.token"
+    tok.parent.mkdir(parents=True, exist_ok=True)
+    tok.write_text("assessor-secret", encoding="utf-8")
+    os.chmod(tok, 0o600)
+    monkeypatch.setattr(omx_incident, "held", lambda arm: json.loads(hold_p.read_text())["reason"] if arm == "arm_a" and hold_p.is_file() else None)
+    monkeypatch.setattr(omx_incident, "outbox", lambda arm: [])
+    return hold_p, tok
+
+
+def test_auto_recover_clears_clean_stale_effort_incident_via_reassess(tmp_path, monkeypatch):
+    import omx_incident
+
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    hold_p, tok = _seed_incident_hold(bench, tmp_path, monkeypatch, fault_text="session ended: ValueError: stale effort sample (>0.5 seconds)")
+    monkeypatch.setattr(omx_incident, "sync_hold_from_fleet", lambda arm: not hold_p.is_file())
+    clear_cmds = []
+
+    def fake_clear(cmd, *, cwd, env, timeout=60):
+        clear_cmds.append((cmd, cwd, env))
+        hold_p.unlink(missing_ok=True)
+        return SimpleNamespace(returncode=0, stdout='{"arm": "arm_a", "cleared": ["' + ("f" * 32) + '"], "held": false}\n', stderr="")
+
+    monkeypatch.setattr(bench, "_run_incident_clear", fake_clear)
+    diag = bench.status()["recovery"]
+    assert diag["auto_recover"]["eligible"] is True
+    assert "clear_fleet_incident" in diag["auto_recover"]["steps"]
+
+    res = bench.auto_recover({"arm": "arm_a"})
+    assert res["ok"] is True and "incident_cleared:arm_a" in res["steps"]
+    assert res["status"]["recovery"] is None
+    assert len(clear_cmds) == 1 and "--reassess" in clear_cmds[0][0] and str(tok) in clear_cmds[0][0]
+    assert ("stop", "rosy-omx-observer@arm_a.service") in calls and ("start", "rosy-omx-observer@arm_a.service") in calls
+
+
+def test_auto_recover_restarts_observer_on_reassess_refusal_and_blocks_unsafe_incidents(tmp_path, monkeypatch):
+    import omx_incident
+
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    hold_p, _ = _seed_incident_hold(bench, tmp_path, monkeypatch, fault_text="session ended: ValueError: stale effort sample (>0.5 seconds)")
+    monkeypatch.setattr(omx_incident, "sync_hold_from_fleet", lambda arm: False)
+    monkeypatch.setattr(bench, "_run_incident_clear", lambda cmd, **kw: SimpleNamespace(returncode=1, stdout="", stderr="AI_CLEAR_REPEAT_LIMIT"))
+    with pytest.raises(ValueError, match="AI_CLEAR_REPEAT_LIMIT"):
+        bench.auto_recover({"arm": "arm_a"})
+    assert ("stop", "rosy-omx-observer@arm_a.service") in calls
+    assert ("start", "rosy-omx-observer@arm_a.service") in calls
+    assert hold_p.is_file()
+
+    for kwargs in (
+        {"latched": {"13": {"hw_error": 32, "bits": ["overload"]}}},
+        {"folded": False},
+        {"stops": [{"command": "place", "error": "contact in place: wrist lag", "t": 1.0}]},
+        {"extra_facts": {"fault_record_kinds": [{"fault": "stale effort sample (>0.5 seconds)", "stop_reasons": ["overload"]}]}},
+    ):
+        hp, _ = _seed_incident_hold(bench, tmp_path, monkeypatch, fault_text="session ended: ValueError: stale effort sample (>0.5 seconds)", **kwargs)
+        ar = bench.status()["recovery"]["auto_recover"]
+        assert ar["eligible"] is False
+        with pytest.raises(ValueError):
+            bench.auto_recover({"arm": "arm_a"})
+        assert hp.is_file()
+
+
+def test_auto_recover_and_manual_clear_support_return_home_and_activating_observer(tmp_path, monkeypatch):
+    import omx_incident
+
+    bench, _, calls, _ = _setup(tmp_path, monkeypatch)
+    orig_run = bench.run
+
+    def act_run(*args):
+        if args == ("is-active", "rosy-omx-observer@arm_a.service"):
+            return SimpleNamespace(returncode=3, stdout="activating\n", stderr="")
+        return orig_run(*args)
+
+    bench.run = act_run
+    hold_p, _ = _seed_incident_hold(bench, tmp_path, monkeypatch, fault_text="session ended: ValueError: stale effort sample (>0.5 seconds)")
+    monkeypatch.setattr(omx_incident, "sync_hold_from_fleet", lambda arm: not hold_p.is_file())
+    monkeypatch.setattr(bench, "_run_incident_clear", lambda cmd, **kw: (hold_p.unlink(missing_ok=True), SimpleNamespace(returncode=0, stdout="", stderr=""))[1])
+    home_calls = []
+    monkeypatch.setattr(bench, "go_home", lambda req: (home_calls.append(req), {**bench.status(), "home_moved": [req["arm"]]})[1])
+    res = bench.auto_recover({"arm": "arm_a", "return_home": True, "include_leader": True})
+    assert res["ok"] is True and res["returned_home"] is True and "returned_home" in res["steps"]
+    assert home_calls == [{"arm": "arm_a", "include_leader": True, "fold_unfolded": True}]
+    assert ("stop", "rosy-omx-observer@arm_a.service") in calls and ("start", "rosy-omx-observer@arm_a.service") in calls
+
+    hold_p2, _ = _seed_incident_hold(bench, tmp_path, monkeypatch, fault_text="session ended: ValueError: stale effort sample (>0.5 seconds)")
+    monkeypatch.setattr(omx_incident, "sync_hold_from_fleet", lambda arm: not hold_p2.is_file())
+    monkeypatch.setattr(bench, "go_home", lambda req: (_ for _ in ()).throw(ValueError("경로 차단: 상단 카메라 장애물")))
+    fail_res = bench.auto_recover({"arm": "arm_a", "return_home": True})
+    assert fail_res["ok"] is False and fail_res["recovered"] is True and fail_res["home_failed"] is True
+    assert "장애물" in fail_res["next_action"]
+
+    bench.manual.write_text(json.dumps({"arm": "arm_a", "reason": "manual check"}), encoding="utf-8")
+    monkeypatch.setattr(bench, "go_home", lambda req: (home_calls.append(req), {**bench.status(), "home_moved": [req["arm"]]})[1])
+    clr_ok = bench.clear_manual_hold({"confirmed": True, "return_home": True})
+    assert clr_ok["recovered"] is True and clr_ok["returned_home"] is True
+    assert home_calls[-1] == {"arm": "arm_a", "include_leader": True, "fold_unfolded": True}
+
+    bench.manual.write_text(json.dumps({"arm": "arm_a", "reason": "manual check"}), encoding="utf-8")
+    monkeypatch.setattr(bench, "go_home", lambda req: (_ for _ in ()).throw(ValueError("HOLD: torque kept")))
+    clr_fail = bench.clear_manual_hold({"confirmed": True, "return_home": True})
+    assert clr_fail["recovered"] is True and clr_fail["home_failed"] is True and "SIGUSR2" in clr_fail["next_action"]
+
+
+def test_ik_chunk_picker_skips_non_chunk_files_override_normalizes_and_free_root_rotates(tmp_path, monkeypatch):
+    import bench_record_replay as brr
+
+    bench, body, _, _ = _setup(tmp_path, monkeypatch)
+    cdir = bench.prep / "cell-arm-a"
+    cdir.mkdir(parents=True)
+    # Newer non-chunk auto-fold-choices file must be ignored in favor of valid beltend chunk library.
+    (cdir / "auto-fold-choices-arm_a.json").write_text(json.dumps({"arm": "arm_a", "choices": []}), encoding="utf-8")
+    os.utime(cdir / "auto-fold-choices-arm_a.json", (time.time() + 60, time.time() + 60))
+    (cdir / "auto-beltend-0-100.json").write_text(json.dumps({
+        "gripper_closed": 49.0,
+        "chunks": {k: [[1.0, -20.0, 20.0, 10.0, 0.0, 55.0]] for k in (
+            "above_pick", "descend_pick", "grasp_pick", "lift_pick",
+            "above_place", "descend_place", "release_place", "lift_place", "home",
+        )},
+    }), encoding="utf-8")
+    res = bench.pipeline_generate_replay({
+        "source_type": "ik_planner", "arm": "arm_a", "origin": "belt", "target_slot": "ship-h1r0-l0",
+    })
+    traj = json.loads((bench.prep / res["replay_id"]).read_text(encoding="utf-8"))
+    assert traj["source"]["library"] == "auto-beltend-0-100.json"
+
+    ov = brr.apply_task_override({
+        "task_id": "belt-to-ship-h2r0-l0",
+        "single_task": "Take container from belt to ship hold h2.",
+        "layout": {"origin": "belt", "target_slot": "ship-h2r0-l0"},
+    }, {"origin": "belt", "target_slot": "ship-h1r0-l0"})
+    assert ov["single_task"] == "Pick container from belt to ship-h1r0-l0."
+
+    # Free-mode start derives a fresh dataset root when configured dataset.root already exists on disk.
+    existing_root = tmp_path / "data" / "existing-ds"
+    existing_root.mkdir(parents=True)
+    cfg_p = bench.prep / body["config"]
+    cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+    cfg.setdefault("dataset", {})["root"] = str(existing_root)
+    cfg_p.write_text(json.dumps(cfg), encoding="utf-8")
+    monkeypatch.setattr(bench_record, "hold_other_arm_locks", lambda *a, **kw: ([], None))
+    started = bench.start({**body, "task": "", "name": "free-mode-check"})
+    assert started["status"] != "failed"
+    snap_cfg = json.loads((Path(started["snapshot"]) / "record-config.json").read_text(encoding="utf-8"))
+    assert snap_cfg["dataset"]["root"] != str(existing_root)
+    assert Path(snap_cfg["dataset"]["root"]).parent == existing_root.parent
+    for _ in range(50):
+        if bench.status()["status"] not in ("handing_over", "recording", "restoring", "sealing"):
+            break
+        time.sleep(0.02)
+
+
+def test_observer_pose_reads_fresh_snapshot_and_arm_s_uses_chunk_home_fallback(tmp_path, monkeypatch):
+    import bench_record_pose as brp
+    import bench_record_replay as brr
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    work = bench.prep / "cell-auto-1028"
+    work.mkdir(parents=True)
+    (bench.prep / "arm-s-robot-profile.json").write_text(json.dumps({"work_dir": str(work)}), encoding="utf-8")
+    (bench.prep / "record-config-arm-s.json").write_text(json.dumps({"robot": {"id": "omx_follower_arm"}}), encoding="utf-8")
+    cal_dir = tmp_path / "home" / ".cache" / "huggingface" / "lerobot" / "calibration" / "robots" / "omx_follower"
+    cal_dir.mkdir(parents=True, exist_ok=True)
+    (cal_dir / "omx_follower_arm.json").write_text(json.dumps({
+        n: {"range_min": 0, "range_max": 4095}
+        for n in ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
+    }), encoding="utf-8")
+
+    # 1. Fresh active observer motor-health/<arm>.json provides live pose without calling leader_home subprocess.
+    mh_dir = tmp_path / "home" / ".local" / "state" / "rosy" / "motor-health"
+    mh_dir.mkdir(parents=True, exist_ok=True)
+    snap_ok = {
+        "schema_version": "rosy.motor-health.v1",
+        "owner_id": "arm_s",
+        "status": "active",
+        "observed_at": time.time(),
+        "motors": [
+            {"id": 11, "present_raw": 2048.0},
+            {"id": 12, "present_raw": 1000.0},
+            {"id": 13, "present_raw": 3000.0},
+            {"id": 14, "present_raw": 3000.0},
+            {"id": 15, "present_raw": 1951.0},  # ~ -4.7 norm
+            {"id": 16, "present_raw": 2000.0},
+        ],
+    }
+    (mh_dir / "arm_s.json").write_text(json.dumps(snap_ok), encoding="utf-8")
+    sub_called = []
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: sub_called.append(a))
+    pose = brp.read_live_norm_pose(bench.prep, "arm_s", python_exe="/py", hold=lambda: ([], None))
+    assert pose is not None and -5.5 <= pose[4] <= -4.0 and sub_called == []
+
+    # Rejects malformed observer snapshots (wrong motor count / bool / non-finite ticks) fail-closed.
+    assert brp._ticks_to_norm(bench.prep, "arm_s", [2048.0] * 5 + [float("nan")]) is None
+    (mh_dir / "arm_s.json").write_text(json.dumps({**snap_ok, "motors": snap_ok["motors"][:5]}), encoding="utf-8")
+    assert brp.read_observer_norm_pose(bench.prep, "arm_s") is None
+    (mh_dir / "arm_s.json").write_text(json.dumps({**snap_ok, "motors": [{**snap_ok["motors"][0], "present_raw": True}, *snap_ok["motors"][1:]]}), encoding="utf-8")
+    assert brp.read_observer_norm_pose(bench.prep, "arm_s") is None
+
+    # 2. Without live observer telemetry, arm_s build_ik_replay falls back to chunks-arm-s-inplace-live.json home[-1] (-5.0), not stale +45.01 surface-belt.
+    (mh_dir / "arm_s.json").unlink()
+    for site, pan in (("belt", 10.0), ("pinky", -10.0)):
+        (work / f"surface-{site}.json").write_text(json.dumps({"steps": [
+            {"command": "load x", "state": [0.85, -62.3, 53.0, 51.5, 45.01, 48.9]},
+            {"command": "goto above_probe", "state": [pan, -25.0, 20.0, 45.0, 0.0, 48.0]},
+            {"command": "run descend_probe", "state": [pan, -15.0, 15.0, 40.0, 0.0, 48.0]},
+        ]}), encoding="utf-8")
+    (bench.prep / "chunks-arm-s-inplace-live.json").write_text(
+        json.dumps({"chunks": {"home": [[0.0, -58.0, 50.0, 50.0, -5.0, 46.5]]}}),
+        encoding="utf-8",
+    )
+    traj = brr.build_ik_replay(bench.prep, "arm_s", origin="belt-in", target_slot="pinky", python_exe=None, hold=None)
+    assert traj["frames"][0][4] == pytest.approx(-5.0)
+
+
+def test_home_session_extras_and_replay_corridor_preflight(tmp_path, monkeypatch):
+    import bench_record_preflight as pre
+    from bench_record_step import home_session_extras
+    import cell_corridor
+    import cell_objects
+    import cell_observe
+    import cv2
+    import numpy as np
+
+    bench, _, _, _ = _setup(tmp_path, monkeypatch)
+    (bench.prep / "cell-params-stack.json").write_text(json.dumps({"schema": "rosy.omx-cell-params.v1", "params": {}}), encoding="utf-8")
+    (bench.prep / "load-model-20261116.json").write_text(json.dumps({"schema": "rosy.omx-load-model.v1", "arms": {}}), encoding="utf-8")
+    stack = bench.prep / "cell-arm-b-stack.json"
+    cal_p = bench.prep / "cal-b.json"
+    cal_p.write_text(json.dumps({"sites": {"temp_plate_b": {}}}), encoding="utf-8")
+    stack.write_text(json.dumps({
+        "arm_id": "arm_b",
+        "params_path": "cell-params-stack.json",
+        "calibration_path": "cal-b.json",
+        "cameras": {"top": {"url": "http://127.0.0.1:8767/frame/top.jpg"}},
+        "sites": {"temp_plate_b": {"surface_px": [[0, 0], [64, 0], [64, 64], [0, 64]]}},
+    }), encoding="utf-8")
+    extras = home_session_extras(bench.prep, stack)
+    assert "--params" in extras and "--load-model" in extras
+
+    # Verify record_session_cli actually accepts the flags emitted by home_session_extras (no argparse error)
+    import omx_incident
+    import record_session_cli as rsc
+    seen_chunks = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(omx_incident, "refuse_if_held", lambda *a, **k: None)
+    monkeypatch.setattr(omx_incident, "after_session", lambda *a, **k: {"incident": False})
+    cap_p = bench.prep / "caps.json"
+    cfg_p = bench.prep / "cfg.json"
+    lib_p = bench.prep / "lib.json"
+    cap_p.write_text(json.dumps({}), encoding="utf-8")
+    cfg_p.write_text(json.dumps({
+        "robot": {"type": "omx_follower", "id": "arm_b_follower", "port": "/dev/ttyUSB0", "max_relative_target": 5},
+        "teleop": {"port": "/dev/ttyUSB1"},
+        "dataset": {"fps": 30, "root": str(tmp_path / "ds"), "repo_id": "local/x"},
+    }), encoding="utf-8")
+    lib_p.write_text(json.dumps({
+        "schema": "rosy.omx-chunk-library.v1",
+        "fps": 30,
+        "gripper_closed": 49.0,
+        "names": ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"],
+        "chunks": {"home": [[0.0] * 6]},
+    }), encoding="utf-8")
+    monkeypatch.setattr(rsc, "load_caps", lambda *a, **k: {})
+    monkeypatch.setattr(rsc, "model_tuning", lambda: {})
+    monkeypatch.setattr(rsc, "robot_tuning", lambda *a: {})
+    monkeypatch.setattr(rsc, "protect_signals", lambda: None)
+    monkeypatch.setattr(rsc, "claim_arm_lease", lambda *a: ({}, True, None))
+    monkeypatch.setattr(rsc, "session_lock", lambda *a: SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(rsc, "_parent_attr", lambda n, d, g: (lambda **kw: (seen_chunks.append(kw.get("chunks")), SimpleNamespace(execute=lambda *a, **k: {"safe_end": True}))[1]) if n == "Session" else d)
+    with pytest.raises(SystemExit) as cli_exc:
+        rsc.main(["--config", str(cfg_p), "--caps", str(cap_p), "--arm", "arm_b", "--chunks", str(lib_p), "--io", str(bench.prep / "io"), *extras])
+    assert cli_exc.value.code == 0 and seen_chunks and "load_model" in seen_chunks[0] and "params" in seen_chunks[0]
+
+    traj = {
+        "frames": [[0.0, -20.0, 20.0, 40.0, 0.0, 50.0]] * 20,
+        "segments": {"A": [0, 20]},
+        "source": {"library": "auto-beltend-test.json"},
+    }
+    cdir = bench.prep / "cell-arm-b"
+    cdir.mkdir(parents=True, exist_ok=True)
+    (cdir / "auto-beltend-test.json").write_text(json.dumps({"source": {"pick": {"x": 0.1, "y": 0.0}}}), encoding="utf-8")
+
+    # 1. Camera HTTP 503 fails closed
+    def err_503(*_a, **_kw):
+        raise urllib.error.HTTPError("http://x", 503, "Service Unavailable", {}, None)
+
+    v503 = pre.check_replay_corridor(bench.prep, "arm_b", traj, opener=err_503)
+    assert v503["checked"] is True and v503["clear"] is False and "HTTP 503" in v503["reason"]
+
+    # 1b. Camera viewer offline (URLError) cleanly skips; empty/corrupt JPEG fails closed
+    voff = pre.check_replay_corridor(bench.prep, "arm_b", traj, opener=lambda *a, **k: (_ for _ in ()).throw(urllib.error.URLError("down")))
+    assert voff["checked"] is False and voff["clear"] is True
+
+    class _BadResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b""
+
+    vbad = pre.check_replay_corridor(bench.prep, "arm_b", traj, opener=lambda *a, **k: _BadResp())
+    assert vbad["checked"] is True and vbad["clear"] is False and vbad["camera_error"] == "invalid_image"
+
+    # 2. Live image with occupied low obstacle fails closed while forwarding pick_xy
+    ok_img = np.zeros((64, 64, 3), dtype=np.uint8)
+    _, enc = cv2.imencode(".jpg", ok_img)
+    jpg_bytes = enc.tobytes()
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return jpg_bytes
+
+    monkeypatch.setattr(cell_objects, "foreground", lambda *a, **k: np.zeros((64, 64), dtype=np.uint8))
+    monkeypatch.setattr(cell_observe, "predicted_pixel", lambda *a, **k: [10.0, 10.0])
+    seen_pick = []
+    monkeypatch.setattr(
+        cell_corridor, "check",
+        lambda pts, mask, roi, to_px, pick_xy=None, **kw: (seen_pick.append((roi, pick_xy)), {
+            "clear": False, "low": [{"centre_px": [322.1, 244.2], "area_px": 900}], "high": [], "off_map": 0, "off_surface": 0,
+        })[1],
+    )
+    vblk = pre.check_replay_corridor(bench.prep, "arm_b", traj, opener=lambda *a, **k: _Resp())
+    assert vblk["clear"] is False and seen_pick == [((0, 0, 64, 64), (0.1, 0.0))]
+
+    # 3. pipeline_generate_replay surfaces corridor block as ValueError
+    (cdir / "auto-beltend-0-100.json").write_text(json.dumps({
+        "gripper_closed": 49.0,
+        "chunks": {k: [[1.0, -20.0, 20.0, 10.0, 0.0, 55.0]] for k in (
+            "above_pick", "descend_pick", "grasp_pick", "lift_pick",
+            "above_place", "descend_place", "release_place", "lift_place", "home",
+        )},
+    }), encoding="utf-8")
+    monkeypatch.setattr("bench_record_pipeline.check_replay_corridor", lambda *a, **k: {
+        "checked": True, "clear": False, "reason": "arm_b 하강/적재 경로 차단",
+    })
+    with pytest.raises(ValueError, match="차단"):
+        bench.pipeline_generate_replay({"source_type": "ik_planner", "arm": "arm_b", "origin": "belt", "target_slot": "ship-h1r0-l0"})
+

@@ -203,6 +203,7 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
     setup = references and camera_reference.bind(references, json.loads((output/'meta'/'info.json').read_text(encoding='utf-8')))
     if thresholds:
         write_json(output/'static_episodes.json', dict(episodes=len(expected), static=static, threshold=max(thresholds)))
+    offsets = []
     for i, (collection, manifest, digest) in enumerate(sealed):
         provenance = output/'rosy_provenance'/f'session-{i:06d}'
         provenance.mkdir(parents=True)
@@ -216,6 +217,14 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
             **{'manifest.json': dict(redacted_from_sha256=digest)}))
         if (collection/'calibration').is_dir():
             shutil.copytree(collection/'calibration', provenance/'calibration')
+        offset_path = collection / 'calibration' / 'leader_follower_offset.json'
+        if offset_path.is_file():
+            offsets.append({
+                'session_id': manifest['session_id'],
+                'file': f'rosy_provenance/session-{i:06d}/calibration/leader_follower_offset.json',
+                'sha256': manifest['files']['calibration/leader_follower_offset.json'],
+                'offset': _redacted(_json(offset_path.read_bytes())),
+            })
     files = dataset_files(output)
     digests = [d for _, _, d in sealed]
     lineage = (dict(collection_manifest_sha256=digests[0] if len(digests) == 1
@@ -229,6 +238,7 @@ def prepare_native(collections, output, repo_id, *, rig_revision=None, calibrati
                    body_units='normalized_-100_100', gripper_units='normalized_0_100',
                    rig_revision=first['rig_revision'], calibration_revision=first['calibration_revision'],
                    **lineage, **(dict(camera_setup=setup) if setup else {}),
+                   **(dict(leader_follower_offsets=offsets) if offsets else {}),
                    collection_manifests=[dict(session_id=m['session_id'], manifest_sha256=d,
                                               **{k: m[k] for k in ('session_id_origin', 'revision_origin') if k in m})
                                          for _, m, d in sealed],

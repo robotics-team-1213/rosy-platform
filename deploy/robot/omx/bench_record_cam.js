@@ -96,7 +96,7 @@ function syncMissingCamPlaceholders(missingReq){
     if(grid.querySelector('.cam-box[data-cam-box="'+lbl+'"]'))continue;
     const box=document.createElement('div');box.className='cam-box cam-pip cam-missing';box.dataset.missingCam=lbl;box.tabIndex=0;
     const pill=document.createElement('span');pill.className='cam-title-pill';pill.textContent=lbl;
-    const rec=document.createElement('span');rec.className='cam-rec-badge on';rec.textContent='● 미수신';
+    const rec=document.createElement('span');rec.className='cam-rec-badge missing';rec.textContent='미수신';
     const body=document.createElement('div');body.className='cam-missing-body';
     const stEl=document.createElement('strong');stEl.textContent=lbl+' 미수신';
     const spEl=document.createElement('span');spEl.textContent='⇧C 카메라 재시작';
@@ -114,14 +114,22 @@ function updateCameraRecordingMask(){
   const arm=f.arm?f.arm.value:'';
   const cfg=f.config?f.config.value:'';
   const recSet=resolveRecordingCams(arm,cfg);
+  const live=isActivelyRecording();
   for(const box of $('cam-grid').querySelectorAll('.cam-box[data-cam-box]')){
     const lbl=box.dataset.camBox;
     const isRec=!recSet||recSet.has(lbl);
     box.classList.toggle('cam-unrecorded',!isRec);
     const badge=box.querySelector('.cam-rec-badge');
     if(badge){
-      badge.textContent=isRec?'● 녹화':'미녹화';
-      badge.className='cam-rec-badge '+(isRec?'on':'off');
+      if(live){
+        badge.textContent=isRec?'● 녹화 중':'미포함';
+        badge.className='cam-rec-badge '+(isRec?'live':'off');
+        badge.title=isRec?'현재 에피소드 녹화 중':'';
+      }else{
+        badge.textContent=isRec?'녹화 대상':'미포함';
+        badge.className='cam-rec-badge '+(isRec?'armed':'off');
+        badge.title=isRec?'녹화 시작 시 이 카메라가 포함됩니다 (현재 미리보기 대기)':'';
+      }
     }
   }
   const note=$('cam-note');
@@ -129,9 +137,12 @@ function updateCameraRecordingMask(){
     const recList=camLabels.filter(l=>recSet.has(l));
     const unrecList=camLabels.filter(l=>!recSet.has(l));
     const missing=[...recSet].filter(l=>!camLabels.includes(l));
-    const parts=['실시간 미리보기 — '+(arm||'선택 암')];
-    parts.push('녹화: '+(recList.length?recList.join(', '):'없음'));
-    if(unrecList.length)parts.push('미녹화: '+unrecList.join(', '));
+    const head=live
+      ?'녹화 중 — '+(arm||'선택 암')
+      :(currentBenchPhase()==='prepare'?'텔레옵 연동 (녹화 대기)':'실시간 미리보기 (녹화 대기)')+' — '+(arm||'선택 암');
+    const parts=[head];
+    parts.push((live?'녹화: ':'녹화 대상: ')+(recList.length?recList.join(', '):'없음'));
+    if(unrecList.length)parts.push('미포함: '+unrecList.join(', '));
     if(missing.length)parts.push('미수신: '+missing.join(', '));
     note.textContent=parts.join(' · ');
   }
@@ -209,7 +220,7 @@ function syncHeaderAndSlimBar(){
   record.hidden=!(stopping||ready);
   record.disabled=record.hidden||pending||(!stopping&&!statusLoaded);
   record.classList.toggle('is-recording',stopping);
-  record.querySelector('.btn-lbl').textContent=recording?'■ 녹화 끝':legacyStarting?'■ 준비 취소':'● 녹화';
+  record.querySelector('.btn-lbl').textContent=recording?'■ 녹화 끝':legacyStarting?'■ 준비 취소':ready?'● 녹화 시작':'● 녹화';
   $('hdr-finish-btn').hidden=!ready;
   $('hdr-finish-btn').disabled=!ready||pending||!statusLoaded;
   $('hdr-next-ep-btn').disabled=!recording||pending||!statusLoaded;
@@ -499,8 +510,7 @@ function renderLeRobotPanel(st){
   const bulkBtn=$('cleanup-empty-ds-btn');
   const busyAll=hfUploadInFlight||state==='encoding'||state==='uploading';
   if(bulkBtn){
-    bulkBtn.hidden=!emptyRows.length;
-    bulkBtn.textContent='빈 데이터셋 '+emptyRows.length+'개 정리';
+    bulkBtn.hidden=!emptyRows.length;bulkBtn.textContent='빈 데이터셋 '+emptyRows.length+'개 정리';
     bulkBtn.disabled=Boolean((typeof benchSessionActive==='function'&&benchSessionActive())||busyAll);
     if(!bulkBtn.dataset.bound){
       bulkBtn.dataset.bound='1';
@@ -508,15 +518,13 @@ function renderLeRobotPanel(st){
         const curEmpty=(lastStatus&&Array.isArray(lastStatus.lerobot_datasets)?lastStatus.lerobot_datasets:[]).filter(r=>(r.episodes||0)===0);
         if(!curEmpty.length)return;
         bulkBtn.disabled=true;setReqError('');
-        let done=0, latest=null;
+        let done=0,latest=null;
         try{
           for(const row of curEmpty){latest=await api('/api/dataset/delete',{dataset:row.name||''});done++;}
-          if(latest&&latest.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=latest.lerobot_datasets;}
+          if(latest?.lerobot_datasets&&lastStatus)lastStatus.lerobot_datasets=latest.lerobot_datasets;
           if(typeof setActivity==='function')setActivity('빈 데이터셋 정리 완료','good',done+'개 삭제');
-          if(typeof pollStatus==='function')await pollStatus();
-          else if(lastStatus)renderLeRobotPanel(lastStatus);
-        }catch(e){setReqError('빈 데이터셋 정리: '+(e.message||String(e)));if(typeof pollStatus==='function')await pollStatus();}
-        finally{bulkBtn.disabled=false;}
+          if(typeof pollStatus==='function')await pollStatus();else if(lastStatus)renderLeRobotPanel(lastStatus);
+        }catch(e){setReqError('빈 데이터셋 정리: '+(e.message||String(e)));if(typeof pollStatus==='function')await pollStatus();}finally{bulkBtn.disabled=false;}
       });
     }
   }
@@ -559,7 +567,7 @@ function renderLeRobotPanel(st){
         try{
           const out=await api('/api/dataset/delete',{dataset:r.name||''});
           if(typeof setActivity==='function')setActivity('빈 데이터셋 삭제','good',r.name||'');
-          if(out&&out.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=out.lerobot_datasets;renderLeRobotPanel(lastStatus);}
+          if(out?.lerobot_datasets&&lastStatus){lastStatus.lerobot_datasets=out.lerobot_datasets;renderLeRobotPanel(lastStatus);}
         }catch(e){setReqError(e.message||String(e));del.disabled=false;}
       });
       act.append(del);
@@ -573,22 +581,14 @@ function renderLeRobotPanel(st){
     info.textContent=r.episodes+'회(parquet) · '+r.videos+'개(MP4)'+(sz?' · '+sz:'')+(r.episodes===0?' · 빈 데이터셋':'')+(r.do_not_train?' · 정지회차(DO_NOT_TRAIN)':'')+rTxt;
     meta.append(info);
     if(r.hf_repo_url){const a=document.createElement('a');a.href=r.hf_repo_url;a.target='_blank';a.rel='noopener';a.className='mono';a.textContent=r.hf_repo_id||'Repo';meta.append(a);}
-    li.append(top,meta);
-    if(savedTrays.has(r.name))li.append(savedTrays.get(r.name));
-    ul.append(li);
+    li.append(top,meta);if(savedTrays.has(r.name))li.append(savedTrays.get(r.name));ul.append(li);
   }
 }
 window.renderLeRobotPanel=renderLeRobotPanel;
-
 if($('hf-auto-upload')&&!$('hf-auto-upload').dataset.bound){
   $('hf-auto-upload').dataset.bound='1';
   $('hf-auto-upload').addEventListener('change',async()=>{
-    try{
-      const out=await api('/api/hf/config',{auto_upload:$('hf-auto-upload').checked});
-      if(out&&lastStatus){lastStatus.hf_upload=out;renderLeRobotPanel(lastStatus);}
-    }catch(err){setReqError('HF 설정 오류: '+err.message);}
+    try{const out=await api('/api/hf/config',{auto_upload:$('hf-auto-upload').checked});if(out&&lastStatus){lastStatus.hf_upload=out;renderLeRobotPanel(lastStatus);}}catch(err){setReqError('HF 설정 오류: '+err.message);}
   });
 }
-init();
-if(typeof applyBenchPhase==='function')applyBenchPhase('setup');
-setInterval(pollArms,10000);
+init();if(typeof applyBenchPhase==='function')applyBenchPhase('setup');setInterval(pollArms,10000);

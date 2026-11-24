@@ -28,7 +28,7 @@ AREA_DEFAULTS_XY_M: dict[str, tuple[float, float]] = {
     "pallet": (0.1580, -0.0130), "ship_hold": (0.1580, -0.0130), "beltend": (0.0150, 0.1750),
     "temp_plate_a": (-0.0109, 0.1729), "temp_plate_b": (0.0584, -0.1567),
 }
-WORKSPACE_MIN_M = (-0.095, -0.24, 0.005)
+WORKSPACE_MIN_M = (-0.150, -0.24, 0.005)
 WORKSPACE_MAX_M = (0.26, 0.24, 0.145)
 
 

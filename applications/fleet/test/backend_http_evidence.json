@@ -2026,6 +2026,46 @@
       ],
       "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
     },
+    "GET:/api/fleet/pipeline/status": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_pipeline_http_status_and_evaluate"
+      ],
+      "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
+    },
+    "GET:/api/fleet/pipeline/unload-release": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_unload_release.py",
+        "test_dock_and_unload_needs_no_count_and_an_operator_depart_is_gated"
+      ],
+      "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
+    },
+    "POST:/api/fleet/pipeline/pinky-tasks/{task_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pinky_task_dispatch.py",
+        "test_real_trip_runner_and_pipeline_routes_e2e"
+      ],
+      "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
+    },
+    "POST:/api/fleet/pipeline/repark/{request_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_repark.py",
+        "test_route_404_409_and_done_through_the_ledger"
+      ],
+      "source_revision": "14b369b7a3de16cc34175f67c28cab08d1cdf12d"
+    },
+    "POST:/api/fleet/pipeline/recovery-tools/invoke": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_recovery_tools.py",
+        "test_recovery_tool_invoke_and_guards"
+      ],
+      "source_revision": "96602135d014e935ca87a04f984aa161a705ae12"
+    },
     "GET:/api/fleet/cell-app/real2sim-pipeline": {
       "status": 200,
       "test": [
@@ -2081,6 +2121,54 @@
         "test_site_points_full_and_port_views_stage_a_fail_closed"
       ],
       "source_revision": "d882c3d42bd2583f7894e488c955ad194045bcce"
+    },
+    "GET:/api/fleet/robots/{robot_id}/localization": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_relocalize_routes.py",
+        "test_localization_view_passes_through_what_fleet_reads"
+      ],
+      "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+    },
+    "POST:/api/fleet/robots/{robot_id}/localization/confirm": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_relocalize_routes.py",
+        "test_confirm_posts_the_reported_candidate_by_index_and_pose"
+      ],
+      "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+    },
+    "POST:/api/fleet/robots/{robot_id}/relocalize": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_relocalize_routes.py",
+        "test_a_press_allows_motion_starts_the_ladder_and_is_audited"
+      ],
+      "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+    },
+    "GET:/api/fleet/robots/{robot_id}/map-binding": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_map_binding_routes.py",
+        "test_approve_read_and_revoke"
+      ],
+      "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+    },
+    "POST:/api/fleet/robots/{robot_id}/map-binding": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_map_binding_routes.py",
+        "test_approve_read_and_revoke"
+      ],
+      "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
+    },
+    "DELETE:/api/fleet/robots/{robot_id}/map-binding": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_map_binding_routes.py",
+        "test_approve_read_and_revoke"
+      ],
+      "source_revision": "2bf71ed1630d11da3bbf21f1055e307cd2ad439b"
     }
   }
 }

@@ -63,7 +63,7 @@ export function createCockpitHud({ el }) {
       renderItems([
         { key: "online", label: "관제 단위", text: view.stateUnavailable ? "연결 끊김" : unitId, tone: view.stateUnavailable ? "crit" : "neutral" },
         { key: "mission", label: "팔 피드백", text: !sum ? "확인 중" : `${sum.armsFresh}/${sum.armsTotal} 실시간`, tone: !sum ? "neutral" : sum.armsFresh > 0 ? "active" : "warn" },
-        { key: "battery", label: "셀 카메라", text: !sum ? "—" : `${sum.camsTotal}대`, tone: sum?.camsTotal ? "neutral" : "warn" },
+        { key: "battery", label: "셀 카메라", text: !sum ? "—" : view.cellCamChecked ? `${view.cellLiveCamCount ?? 0}/${sum.camsTotal} 실시간` : `${sum.camsTotal}대`, tone: view.cellCamChecked ? ((view.cellLiveCamCount ?? 0) > 0 ? "active" : "warn") : (sum?.camsTotal ? "neutral" : "warn") },
         { key: "arms", label: "보류 · 사건", text: !sum ? "—" : sum.heldCount > 0 ? `보류 ${sum.heldCount}` : sum.openIncidentCount > 0 ? `사건 ${sum.openIncidentCount}` : "이상 없음", tone: sum?.heldCount > 0 ? "crit" : sum?.openIncidentCount > 0 ? "warn" : "neutral" },
         { key: "alerts", label: "경보", text: critTotal + warnTotal > 0 ? `위험 ${critTotal} · 주의 ${warnTotal}` : "없음", tone: critTotal > 0 ? "crit" : warnTotal > 0 ? "warn" : "neutral" },
       ]);

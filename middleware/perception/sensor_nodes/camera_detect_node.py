@@ -30,6 +30,7 @@ from . import executor_choice
 from .camera_lock import CameraLockMixin
 from .camera_power import CameraPowerMixin
 from .camera_region_range import RegionRangeMixin
+from .camera_shm import open_camera_shm_writer, publish_camera_front_frame
 from .sensing.perception.camera import classify_frame
 from .sensing.perception.camera_controls import (
     RELOCK_BRIGHT_MEDIAN, RELOCK_CLIP_FRACTION, RelockWatch, static_controls)
@@ -169,6 +170,7 @@ class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node
         self.side_pub = self.create_publisher(Float32, 'camera/side', 10)
         self.dbg_pub = self.create_publisher(String, 'camera/debug', 10)
         self.img_pub = self.create_publisher(Image, 'camera/front', qos_profile_sensor_data)
+        self._shm_writer = open_camera_shm_writer(self)
         self._jpeg_quality = int(self.get_parameter('compressed_quality').value)
         self._publish_compressed = bool(self.get_parameter('publish_compressed').value)
         self._recorder_active = False
@@ -507,33 +509,10 @@ class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node
         return summary.startswith('exposure=') or summary.startswith('v4l2 exposure=')
 
     def _publish_front(self, bgr, capture_stamp=None):
-        msg = Image()
-        if capture_stamp is None:
-            capture_stamp = self.get_clock().now().nanoseconds * 1e-9
-        stamp_sec = int(capture_stamp)
-        msg.header.stamp.sec = stamp_sec
-        msg.header.stamp.nanosec = int((capture_stamp - stamp_sec) * 1_000_000_000)
-        msg.header.frame_id = str(self.get_parameter('camera_frame').value)
-        msg.height = int(bgr.shape[0])
-        msg.width = int(bgr.shape[1])
-        msg.encoding = 'bgr8'
-        msg.is_bigendian = 0
-        msg.step = msg.width * 3
-        msg.data = np.ascontiguousarray(bgr).tobytes()
-        self.img_pub.publish(msg)
-        pub = self.jpeg_pub  # read once: the recorder callback may switch it
-        if pub is not None:
-            try:
-                data, fmt = encode_jpeg(bgr, self._jpeg_quality)
-            except (ValueError, RuntimeError) as exc:
-                self.get_logger().warn(f'compressed frame skipped: {exc}',
-                                       throttle_duration_sec=5.0)
-                return
-            jpeg = CompressedImage()
-            jpeg.header = msg.header
-            jpeg.format = fmt
-            jpeg.data = data
-            pub.publish(jpeg)
+        publish_camera_front_frame(
+            self, bgr, capture_stamp,
+            image_cls=Image, compressed_cls=CompressedImage, encode_jpeg_fn=encode_jpeg,
+        )
 
     def _compressed_publisher(self):
         if self._jpeg_pub_created is None:
@@ -561,6 +540,8 @@ class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node
 
     def destroy_node(self):
         self._stop_cam()
+        if getattr(self, '_shm_writer', None) is not None:
+            self._shm_writer.close()
         super().destroy_node()
 
 

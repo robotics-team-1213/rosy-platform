@@ -42,9 +42,13 @@ ensure_omx_paths()
 
 
 def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR,
-                        *, ca_file: str | Path | None = None) -> dict[str, Any]:
+                        *, ca_file: str | Path | None = None, allow_safe_home: bool = False) -> dict[str, Any]:
     opener = make_ca_urlopen(ca_file) if ca_file else urlopen
-    return _sync_cell_telemetry(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=opener)
+    tls_verified = not (fleet_r_url.rstrip("/").startswith("https://") and not ca_file)
+    return _sync_cell_telemetry(
+        fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=opener,
+        ca_file=ca_file, tls_verified=tls_verified, allow_safe_home=allow_safe_home,
+    )
 
 
 ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {"arm_s": ("s", "with-session-arm-s-live.sh", -1.0), "arm_a": ("a", "with-session-arm-a-par.sh", -1.0), "arm_b": ("b", "with-session-arm-b-par.sh", -1.0)}
@@ -183,7 +187,8 @@ def poll_and_execute_once(
             and handoff.get("arm_id") in {"cell_s": {"arm_s"}, "cell_ab": {"arm_a", "arm_b"}}.get(cell_id, set())
         )
         speed = handoff.get("v_cmd_mps")
-        interlock_ok = (
+        internal_ab = cell_id == "cell_ab" and handoff.get("interlock_scope") == "cell_internal"
+        interlock_ok = internal_ab or (
             handoff.get("wheel_brake_locked") is True
             and handoff.get("bed_ready") is True
             and isinstance(speed, (int, float)) and not isinstance(speed, bool)
@@ -309,7 +314,11 @@ def main(argv: list[str] | None = None) -> None:
     def _trigger_bg_cam_upload() -> None:
         nonlocal bg_cam_fut
         if bg_cam_fut is None or bg_cam_fut.done():
-            bg_cam_fut = bg_cam_pool.submit(sync_cell_telemetry, args.fleet_r_url, token, prep_dir, ca_file=args.ca_file)
+            bg_cam_fut = bg_cam_pool.submit(
+                sync_cell_telemetry, args.fleet_r_url, token, prep_dir,
+                ca_file=args.ca_file,
+                allow_safe_home=(args.execute_mode == "guarded-pick" and not args.dry_run_hw),
+            )
 
     def _hw_act(handoff: dict[str, Any]) -> dict[str, Any]:
         arm_id = resolve_task_arm(handoff)

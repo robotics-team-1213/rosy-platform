@@ -123,6 +123,8 @@ class Guarded:
 
     def __init__(self, cell, config: dict):
         self.cell, self.monitor, self._last_state = cell, Monitor(cell, config), None
+        if callable(getattr(cell, "frame_receipt", None)):
+            self.frame_receipt = cell.frame_receipt
 
     def act(self, command: str) -> dict:
         if command == "state":

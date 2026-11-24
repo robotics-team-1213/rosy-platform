@@ -131,6 +131,10 @@ def _refuse(code: str, detail: Optional[dict] = None, status: int = 422) -> HTTP
 def install_trip_routes(app, *, console, site_maps, routing_config, require_operator, require_named_operator,
                         caps_for, runner, read_guard) -> None:
     app.state.trip_runner = runner
+    if getattr(runner, "human_hold_fn", None) is None:
+        runner.human_hold_fn = lambda: bool(
+            callable(getattr(app.state, "pipeline_human_hold_fn", None)) and app.state.pipeline_human_hold_fn()
+        )
     not_open = _refuse("TRIP_EXECUTION_NOT_AVAILABLE",
                        {"message": "start the plan with POST /api/fleet/trips/{plan_id}/start"}, 501)
     failed_versions: set = set()  # an unexpected planner failure is logged once per map version
@@ -186,7 +190,11 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse("TRIP_POSE_UNTRUSTED", detail, 409)
             map_pose, binding_id = bound
         else:
-            map_pose = await runner.map_pose(robot_id)
+            try:
+                map_pose = await runner.map_pose(robot_id)
+            except (HubError, RobotApiError, OSError) as exc:
+                record({"error": "ROBOT_POSE_UNAVAILABLE", "detail": {"kind": type(exc).__name__}})
+                raise http_error(exc) from exc
         pose_state = map_pose.state if map_pose is not None else None
         if pose_state == LOCALIZED and map_pose.yaw is not None:
             pose = (map_pose.x, map_pose.y, map_pose.yaw)
@@ -225,7 +233,7 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                               via=tuple(body.via), arrive_yaw=body.arrive_yaw, speed_cap=body.speed_cap,
                               blocked_edges=frozenset(body.blocked_edges), extra_cost=dict(body.extra_cost),
                               body_front_m=body_front_m(bounds.get("robot_kind")),
-                              stop_offset=not (nav2 and body.repeat), **bounds)
+                              stop_offset=not (nav2 and body.repeat), ignore_start_heading=nav2, **bounds)
         try:
             plan = plan_trip(active[2], request, routing_config)
         except PlanError as exc:
@@ -251,7 +259,8 @@ def install_trip_routes(app, *, console, site_maps, routing_config, require_oper
                 raise _refuse(exc.code, exc.detail) from exc
         # D-601 D: the start's alignment check on this pose, shown before 출발 (the start checks again)
         plan_data["start_check"] = start_check(
-            active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2)
+            active[2], plan_data["segments"], *pose, runner.config.start_heading_tol_deg, nav2=nav2,
+            off_lane_margin_m=runner.config.nav2_off_lane_margin_m)
         if (precision is None and runner.config.auto_align
                 and plan_data["start_check"]["code"] == "TRIP_START_HEADING_MISMATCH"
                 and plan_data["start_check"]["heading_err_deg"] is not None):

@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Judge Command Parser & Queue Dispatcher for `chunk_runner` (`chunk_runner_commands.py`).
-
-Single Responsibility:
-  - Parses and validates judge commands (`checked`, `stop`, `episode`, `splice`, `run [rel]`,
-    `jog`, `goto`, `park`, `chain`, `grip`, `retreat`, `load`, `state`) and mutates `Runner`'s
-    queue/target/library state atomically.
-"""
+"""Judge Command Parser & Queue Dispatcher for `chunk_runner` (`chunk_runner_commands.py`)."""
 from __future__ import annotations
 
 import math
@@ -14,12 +8,9 @@ import sys
 import time
 import uuid
 
-_HERE = str(Path(__file__).resolve().parent)
-if _HERE not in sys.path:
-    sys.path.insert(0, _HERE)
-_ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter")
-if _ADAPTER_SRC not in sys.path:
-    sys.path.insert(0, _ADAPTER_SRC)
+for _p in (str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter")):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S, NAMES, load_library, park_path, transit_path  # noqa: E402
 from omx_adapter.motion_profile import retime  # noqa: E402
@@ -27,16 +18,16 @@ from cell_envelope import digest  # noqa: E402
 import cell_params as prm  # noqa: E402
 from chunk_policy_playback import active_jaw_gate, check_runner_jaw_gate, halt_policy_gate, read_present_or_hold  # noqa: E402
 from chunk_runner_guards import (  # noqa: E402
-    JOG_MAX, REL_MAX, SETTLE_TOL, build_chain_segments, build_jog_target, build_splice_frames,
-    library_gripper_closed, library_transit_speed, parse_transit, policy_requires_jaw_gate, safe_stderr,
+    JOG_MAX, RECOVERY_PARKS, REL_MAX, SETTLE_TOL, build_chain_segments, build_jog_target,
+    build_splice_frames, library_gripper_closed, library_transit_speed, parse_transit, policy_requires_jaw_gate, safe_stderr,
 )
 
 EMPTY_MARGIN = 2.0
 
 
 def _is_policy_lib(lib) -> bool:
-    return isinstance(lib, dict) and (any(k in lib for k in ("policy_playback", "jaw_gate"))
-        or any(k in (lib.get("chunks") or {}) for k in ("policy", "presettle", "lift_pick_policy_handoff")))
+    chunks = lib.get("chunks") or {} if isinstance(lib, dict) else {}
+    return isinstance(lib, dict) and (any(k in lib for k in ("policy_playback", "jaw_gate")) or any(k in chunks for k in ("policy", "presettle", "lift_pick_policy_handoff")))
 
 
 def _clear_trailing_gate(runner, *, stop_motion: bool = True) -> None:
@@ -51,13 +42,11 @@ def _clear_trailing_gate(runner, *, stop_motion: bool = True) -> None:
 
 def _begin_release(runner, target_grip: float | None, present=None) -> None:
     from chunk_runner_settle import begin_grip_release
-
     begin_grip_release(runner, target_grip, EMPTY_MARGIN, present)
 
 
 def _arm_release(runner, frames, *, force: bool = False) -> bool:
     from chunk_runner_settle import arm_queue_release
-
     return arm_queue_release(runner, frames, force=force, empty_margin=EMPTY_MARGIN)
 
 
@@ -83,13 +72,18 @@ def dispatch_runner_command(runner, line: str) -> bool:
         return True
     verb = words[0]
     expected_library = None
-    if verb not in ("state", "stop", "park"):
-        runner.home_since = None
+    prev_state = (runner.operating_context, runner.home_since, runner.grip_from, runner.jog_path)
     try:
         ep_words = words[3:] if verb == "checked" and len(words) >= 4 else words
-        is_episode_close = ep_words[:1] == ["episode"] and ep_words[1:2] in (["fail"], ["drop"])
-        if runner.human_hold_latched and verb not in ("state", "human-hold") and not is_episode_close:
-            raise ValueError("human hold latched: only state or human-hold")
+        hold_allowed = ep_words[:1] == ["recover-unlatch"] or (verb == "checked" and ep_words[:1] == ["fold-from-hold"]) or (
+            ep_words[:1] == ["episode"] and ep_words[1:2] in (["fail"], ["drop"])
+        )
+        if runner.human_hold_latched and verb not in ("state", "human-hold") and not hold_allowed:
+            raise ValueError("human hold latched: only state, human-hold, recover-unlatch or checked fold-from-hold")
+        if ep_words[:1] == ["recover-unlatch"] and not runner.human_hold_latched:
+            raise ValueError("recover-unlatch requires an active human hold")
+        if getattr(runner, "chunk", None) in RECOVERY_PARKS and verb not in ("state", "human-hold"):
+            raise ValueError(f"{runner.chunk} is still running")
         if verb == "human-hold":
             if len(words) > 2:
                 raise ValueError("human-hold takes at most one request id")
@@ -98,7 +92,7 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 pose = runner.present()
             except Exception:  # noqa: BLE001  an unread pose holds the last known one, never ends in torque OFF
                 pose = list(getattr(runner, "last_present", None) or runner.target)
-            runner.hold(pose, "human hold", human=True)
+            runner.hold(pose, runner.fault or "human hold", human=True)
             return True
         if verb not in ("checked", "state", "stop") and runner.operating_context:
             runner.operating_context = {**runner.operating_context, "session_id": uuid.uuid4().hex}
@@ -112,9 +106,13 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 raise ValueError("checked command targets another session")
             if verb != "load" and runner._library_digest() != expected_library:
                 raise ValueError("checked command targets another library")
+        if verb not in ("state", "stop", "park", "episode", "load", *RECOVERY_PARKS):
+            runner.home_since = None
         runner.grip_from = runner.grip_from if verb in ("state", "grip", "episode") else None
         runner.jog_path = runner.jog_path if verb in ("jog", "state", "episode") else []
         if verb == "stop":
+            if words[1:] == ["now"] and getattr(runner, "_recovery_active", False):
+                raise ValueError("stop now refused during recovery")
             fold_on_stop = words[1:] == ["fold"] or (
                 words[1:] != ["now"]
                 and prm.get(runner.params, "runner.fold_on_stop", bool(runner.operating_context and runner.operating_context.get("scope") == "hardware"))
@@ -180,15 +178,27 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 runner.report(command=line, ok=True, **({"present": present} if fold_on_stop else {}))
             except OSError as write_error:
                 _latch_status_write_error(runner, present if fold_on_stop else None, line, None, write_error)
+            if not runner.human_hold_latched:
+                from chunk_runner_loop import finish_recovery_stop
+                finish_recovery_stop(runner, state=present if fold_on_stop else None)
             return bool(runner.human_hold_latched)
         if verb == "episode":
             from episode_recorder import dispatch_episode_command
             dispatch_episode_command(runner, words, line, _latch_status_write_error)
             return True
-        if runner.chunk is not None and verb != "splice":
+        if verb == "recover-unlatch":
+            from chunk_runner_recover import dispatch_recover_unlatch
+            return dispatch_recover_unlatch(runner, words, line, _latch_status_write_error, empty_margin=EMPTY_MARGIN)
+        if runner.chunk is not None and verb != "splice" and not (runner.chunk in RECOVERY_PARKS and verb == "state"):
             raise ValueError(f"chunk {runner.chunk} is still running")
         if getattr(getattr(runner.robot, "motion", None), "held", None) and verb != "state":
             raise ValueError("the guard holds an overloaded joint: the runner is shedding its load first")
+        if verb in RECOVERY_PARKS:
+            from chunk_runner_recover import queue_recovery_park
+            queue_recovery_park(runner, words, checked=checked, empty_margin=EMPTY_MARGIN)
+            return True
+        if verb in ("run", "splice", "goto") and words[1:2] and words[1] in RECOVERY_PARKS:
+            raise ValueError(f"{words[1]} is a reserved recovery command")
         fault = runner.fault or ""
         soft = fault.startswith("contact") and "overload-hold" not in fault
         policy_lib = bool(getattr(runner, "_policy_session", False)) or _is_policy_lib(runner.library)
@@ -200,8 +210,7 @@ def dispatch_runner_command(runner, line: str) -> bool:
             runner._damp_cooldown = 0
         if verb == "splice" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
             if (runner.policy_playback is not None or getattr(runner, "jaw_gate", None) is not None
-                    or (words[1] == "policy" and ("policy_playback" in runner.library or "jaw_gate" in runner.library
-                                                  or policy_requires_jaw_gate(runner)))):
+                    or (words[1] == "policy" and ("policy_playback" in runner.library or "jaw_gate" in runner.library or policy_requires_jaw_gate(runner)))):
                 raise ValueError("cannot splice a timed or jaw-gated policy chunk")
             spliced = build_splice_frames(runner.library, words[1], words[2:] == ["rel"], runner.queue, runner.target, runner.fps)
             if not _arm_release(runner, spliced, force=words[1].startswith("release")):
@@ -227,14 +236,12 @@ def dispatch_runner_command(runner, line: str) -> bool:
             new_play, new_gate = None, None
             if words[1] == "policy" and "policy_playback" in runner.library:
                 from chunk_policy_playback import start
-
                 if len(words) != 2:
                     raise ValueError("timed policy frames cannot be shifted")
                 new_play = start(runner)
                 new_gate = new_play.jaw_gate
             elif words[1] in ("policy", "entry") and "jaw_gate" in runner.library:
                 from chunk_policy_playback import start_jaw_gate
-
                 if len(words) != 2:
                     raise ValueError(f"jaw-gated {words[1]} frames cannot be shifted")
                 new_gate = start_jaw_gate(runner, runner.library["jaw_gate"])
@@ -270,37 +277,26 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 _begin_release(runner, moved[5], present)
             runner.jog_path, runner.target = (runner.jog_path or [list(runner.target)]) + [list(moved)], moved
         elif verb == "goto" and len(words) == 2:
-            if words[1] == "policy" and ("policy_playback" in runner.library or "jaw_gate" in runner.library
-                                          or policy_requires_jaw_gate(runner)):
+            if words[1] == "policy" and ("policy_playback" in runner.library or "jaw_gate" in runner.library or policy_requires_jaw_gate(runner)):
                 raise ValueError("cannot goto a timed or jaw-gated policy chunk")
             frames = runner.library["chunks"].get(words[1])
             if frames is None:
                 raise ValueError(f"unknown chunk {words[1]}")
-            path = transit_path(
-                runner.target, frames[0], library_gripper_closed(runner.library),
-                runner.fps, parse_transit(runner.library), library_transit_speed(runner.library),
-            )
+            path = transit_path(runner.target, frames[0], library_gripper_closed(runner.library), runner.fps, parse_transit(runner.library), library_transit_speed(runner.library))
             if not _arm_release(runner, path):
                 return True
             halt_policy_gate(runner)
-            runner.queue = path
-            runner.chunk, runner.settle_since, runner.played = f"goto {words[1]}", None, []
-            runner.trend, runner.pace_floor = [], 0.0
+            runner.queue, runner.chunk, runner.settle_since, runner.played, runner.trend, runner.pace_floor = path, f"goto {words[1]}", None, [], [], 0.0
             return True
         elif verb == "park" and len(words) == 1:
             home = runner.library["chunks"].get("home")
             if not home:
                 raise ValueError("park needs a home chunk in the library")
-            path = park_path(
-                runner.target, home[-1], library_gripper_closed(runner.library),
-                runner.fps, parse_transit(runner.library), library_transit_speed(runner.library),
-            )
+            path = park_path(runner.target, home[-1], library_gripper_closed(runner.library), runner.fps, parse_transit(runner.library), library_transit_speed(runner.library))
             if not _arm_release(runner, path):
                 return True
             halt_policy_gate(runner)
-            runner.queue = path
-            runner.chunk, runner.settle_since, runner.played = "park", None, []
-            runner.trend, runner.pace_floor = [], 0.0
+            runner.queue, runner.chunk, runner.settle_since, runner.played, runner.trend, runner.pace_floor = path, "park", None, [], [], 0.0
             return True
         elif verb == "chain" and len(words) >= 2:
             path, label, release = build_chain_segments(
@@ -392,6 +388,7 @@ def dispatch_runner_command(runner, line: str) -> bool:
         except OSError as write_error:
             _latch_status_write_error(runner, locals().get("present"), line, None, write_error)
     except ValueError as error:
+        runner.operating_context, runner.home_since, runner.grip_from, runner.jog_path = prev_state
         try:
             runner.report(command=line, ok=False, error=str(error), present=locals().get("present"))
         except OSError as write_error:

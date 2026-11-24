@@ -132,7 +132,7 @@ def test_real2sim_camera_and_arm_inspector_views_render(browser_site):
     page.route("**/api/fleet/vision/sources**", lambda route: route.fulfill(json={"sources": []}))
     page.route("**/api/fleet/pipeline/cell-camera/**", lambda route: (relay_hits.append(route.request.url), route.abort()))
     _prepare(page)
-    show_screen(page, "saved-heading")
+    show_screen(page, "real2sim-heading")
 
     expect(page.locator("#cell-tasks-status")).to_contain_text("태스크 원장")
     assert {"real2sim", "cell-tasks"} <= seen, (seen, errors, page.locator("#real2sim-status").inner_text())
@@ -205,7 +205,7 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     page, _, origin = browser_site
     page.set_viewport_size({"width": 390, "height": 844})
     expect(page.locator(f"#{field}")).to_be_hidden()
-    expect(page.locator('.ui-subnav a[href="#saved-heading"]')).to_have_attribute("aria-current", "step")
+    expect(page.locator('.ui-subnav a[href="#observation-heading"]')).to_have_attribute("aria-current", "step")
     page.goto(origin + "/console/cell#" + heading)
     page.reload()
     expect(page.locator(f"#{field}")).to_be_visible()
@@ -216,7 +216,7 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     page.locator(f'.ui-subnav a[href="#{heading}"]').click()
     expect(page.locator(f"#{field}")).to_be_visible()
     expect(page.locator(f'.ui-subnav a[href="#{heading}"]')).to_have_attribute("aria-current", "step")
-    expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).to_have_attribute("aria-current", "page")
+    expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).not_to_have_attribute("aria-current", "page")
 
 
 def test_cell_exception_strip_surfaces_held_arm_and_jumps_even_from_other_step(browser_site):
@@ -266,7 +266,7 @@ def test_cell_exception_strip_surfaces_held_arm_and_jumps_even_from_other_step(b
     open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
-    expect(page).to_have_url(re.compile(r"#saved-heading$"))
+    expect(page).to_have_url(re.compile(r"#observation-heading$"))
     expect(page.locator("#workcell-observations")).to_be_visible()
     expect(page.locator('[data-arm-source="arm_a"]')).to_be_visible()
     assert page.evaluate("document.activeElement && document.activeElement.getAttribute('data-arm-source')") == "arm_a"
@@ -345,6 +345,7 @@ def test_cell_saved_documents_explains_first_and_empty_states(browser_site, widt
 
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
+    show_screen(page, "saved-heading")
     status = page.locator("#saved-status")
     expect(status).to_contain_text("접속하면 저장된 문서를 확인할 수 있습니다")
     open_token_access(page)
@@ -469,6 +470,7 @@ def test_cell_saved_documents_failure_retry_and_credential_change(browser_site, 
     page, _, _ = browser_site
     page.set_viewport_size({"width": width, "height": height})
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(status=503, body="unavailable"))
+    show_screen(page, "saved-heading")
     open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()
@@ -510,6 +512,7 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
     expect(page.locator("#cell-purpose")).to_contain_text("승인·진행")
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(
         status=503, json={"detail": {"code": "CELL_APP_UNCONFIGURED"}}))
+    show_screen(page, "saved-heading")
     open_token_access(page)
     page.locator("#console-token").fill("operator-secret")
     page.locator("#token-save").click()

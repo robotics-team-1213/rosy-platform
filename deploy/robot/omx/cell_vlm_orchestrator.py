@@ -23,13 +23,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import judge_seat  # noqa: E402,F401
 from cell_job_client import CellJobClient  # noqa: E402
 from cell_job_spec import AB_ARMS  # noqa: E402
+import cell_recovery  # noqa: E402
 from cell_vlm_facts import (  # noqa: E402
     AB_VIEWS,
+    collect_failure_frames as _collect_failure_frames,
     collect_frames as _collect_frames,
     collect_measured_facts,
+    fetch_readiness_and_failure as _fetch_readiness_and_failure,
     parse_last_json as _parse_last_json,
     query_incident as _query_incident,
+    record_orchestrator_outcome as _record_outcome,
     select_vision_backend,
+    verify_context_fence as _verify_context_fence,
+    verify_job_outcome as _verify_job_outcome,
 )
 
 ACTIONS = ("idle", "auto_pick", "cell_policy_drive", "home")
@@ -225,6 +231,8 @@ def run_once(
     context: str = "",
     collect_facts: bool = True,
     poll_s: float = 0.2,
+    choices_path: Path | None = None,
+    decisions_path: Path | None = None,
 ) -> dict:
     """Run one observe -> VLM propose -> (optional) validate, per-proposal approve & execute cycle."""
     backend = select_vision_backend(backend_spec)
@@ -260,16 +268,69 @@ def run_once(
     out = {"status": "submitted", "job": job_name, "id": started["id"], "proposal": proposal}
     if wait:
         out["result"] = client.wait(started["id"], poll_s=poll_s)
-        out["status"] = "completed" if out["result"].get("exit") == 0 else "failed"
-        summary = _parse_last_json(out["result"].get("log", ""))
-        verification: dict = {
-            "job_summary": {k: summary[k] for k in ("result", "attempt_id", "source", "took_one") if k in summary}
-            if summary
-            else None
-        }
-        if collect_facts and not effective_dry_run:
-            verification["post_incident"] = _query_incident(client, proposal["arm"], poll_s=poll_s)
+        status, verification = _verify_job_outcome(
+            client, job_name, proposal["arm"], out["result"],
+            collect_facts=collect_facts, dry_run=effective_dry_run, poll_s=poll_s,
+        )
+        out["status"] = status
         out["verification"] = verification
+        _record_outcome(
+            proposal, status, note=str((verification.get("job_summary") or {}).get("result") or ""),
+            choices_path=choices_path, decisions_path=decisions_path,
+        )
+    return out
+
+
+def propose_fallback(
+    client: CellJobClient, backend_spec, *, arm: str | None = None, views: tuple[str, ...] = AB_VIEWS,
+    max_age_s: float = 5.0, request_root: Path | None = None, fallback_chain_depth: int = 0,
+) -> dict:
+    """Propose or escalate a post-failure fallback over `:8781` `/readiness` + `/failures/latest` with TOCTOU fencing."""
+    readiness, bundle = _fetch_readiness_and_failure(client, arm=arm)
+    if bundle is None:
+        return {"status": "idle", "reason": "no failure bundle"}
+    exp_sha = bundle.get("context_sha256")
+    exp_gen = (bundle.get("generation") or {}).get("cell_state_gen")
+    ok, err_code, reasons = _verify_context_fence(
+        bundle, readiness, expected_sha256=exp_sha, expected_state_gen=exp_gen, max_age_s=max_age_s)
+    if not ok:
+        return {"status": "stale", "reason": err_code, "reasons": reasons, "bundle_id": bundle.get("bundle_id")}
+    permitted = cell_recovery.permitted_fallback_verbs(bundle, fallback_chain_depth=fallback_chain_depth)
+    sel_auto = cell_recovery.select_fallback(bundle, fallback_chain_depth=fallback_chain_depth)
+    if sel_auto["verb"] == "escalate_human" or permitted == ["escalate_human"]:
+        req = cell_recovery.escalate_to_request(bundle, selection=sel_auto, root=request_root)
+        return {"status": "escalated", "verb": "escalate_human", "selection": sel_auto,
+                "bundle_id": bundle.get("bundle_id"), "context_sha256": exp_sha, "request": req}
+    backend = select_vision_backend(backend_spec)
+    images_b64, captured = _collect_failure_frames(client, bundle, views)
+    schema = {"type": "object", "required": ["verb", "reason"], "additionalProperties": False, "strict": True,
+              "properties": {"verb": {"type": "string", "enum": permitted}, "reason": {"type": "string"}}}
+    outcome = (bundle.get("measurement") or {}).get("outcome") or {}
+    hist = bundle.get("history_and_constraints") or {}
+    veto_codes = [v.get("code") for v in (hist.get("measured_vetoes") or ())]
+    prompt = (
+        f"Failure bundle {bundle.get('bundle_id')} arm={bundle.get('arm_id')} cause={outcome.get('attempt_cause')}.\n"
+        f"Vetoes: {veto_codes}.\nAttached camera views: {captured}. Choose ONLY from permitted fallback verbs: {permitted}."
+    )
+    try:
+        reply = backend(prompt, images_b64, schema)
+    except Exception as exc:
+        reply = {"verb": "escalate_human", "reason": f"VLM fallback error: {exc}"}
+    if not isinstance(reply, dict) or reply.get("verb") not in permitted:
+        reply = {"verb": "escalate_human", "reason": f"invalid VLM fallback reply: {reply!r}"}
+    readiness2, latest2 = _fetch_readiness_and_failure(client, arm=arm)
+    ok2, err_code2, reasons2 = _verify_context_fence(
+        bundle, readiness2, expected_sha256=exp_sha, expected_state_gen=exp_gen, max_age_s=max_age_s)
+    if not ok2 or latest2 is None or latest2.get("bundle_id") != bundle.get("bundle_id") or latest2.get("context_sha256") != exp_sha:
+        return {"status": "stale", "reason": err_code2 or "STALE_FAILURE_CONTEXT",
+                "reasons": reasons2 or ["failure bundle changed during VLM call"], "bundle_id": bundle.get("bundle_id")}
+    sel = cell_recovery.select_fallback(bundle, proposed_verb=reply["verb"], fallback_chain_depth=fallback_chain_depth)
+    out = {"status": "escalated" if sel["escalate"] else "proposed", "verb": sel["verb"], "selection": sel,
+           "proposal": {"verb": sel["verb"], "reason": str(reply.get("reason") or ""), "views": captured},
+           "bundle_id": bundle.get("bundle_id"), "context_sha256": exp_sha}
+    if sel["escalate"]:
+        out["request"] = cell_recovery.escalate_to_request(
+            bundle, selection=sel, reason=str(reply.get("reason") or ""), root=request_root)
     return out
 
 
@@ -302,20 +363,12 @@ def main(argv=None) -> int:
     spec = {"provider": args.vlm_provider, "url": args.vlm_url, "model": args.vlm_model, "vision": True}
     approve_cb = (
         (lambda p: _prompt_approval(p, operator=args.operator, proposer=args.proposer))
-        if (args.execute and not args.dry_run)
-        else None
+        if (args.execute and not args.dry_run) else None
     )
     out = run_once(
-        client,
-        spec,
-        arm_configs,
-        operator=args.operator,
-        proposer=args.proposer,
-        execute=args.execute,
-        person_at_switch=args.person_at_switch,
-        dry_run=args.dry_run,
-        approve=approve_cb,
-        context=args.context,
+        client, spec, arm_configs, operator=args.operator, proposer=args.proposer,
+        execute=args.execute, person_at_switch=args.person_at_switch,
+        dry_run=args.dry_run, approve=approve_cb, context=args.context,
     )
     print(json.dumps(out))
     return 0 if out["status"] in ("idle", "proposed", "dry_run_skipped", "submitted", "completed") else 1

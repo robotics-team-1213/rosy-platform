@@ -10,14 +10,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_act_shadow  # noqa: E402
 import cell_attempts, cell_auto_record  # noqa: E402,E401
 import cell_auto_evidence  # noqa: E402
-from cell_auto_pick_plan import CLOSING, choose, observe, plan_pick, reach_fix_of, save_frame_receipt, verify_placed  # noqa: E402,F401  (re-exported)
+import cell_bundle_emit  # noqa: E402
+from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
+    CLOSING, choose, finger_room_view, observe, plan_pick, reach_fix_of, save_frame_receipt, verify_placed,
+)
 import cell_executor  # noqa: E402
 import cell_release_evidence  # noqa: E402
 from cell_auto_safety import (  # noqa: E402, F401
     PWM_FRACTION, TEMP_STOP_C, Aborted, Guarded, Monitor, after_failure, close_episode,
     finger_room, object_sized, open_episode, score_pick_candidate, session_caps, square_entry,
 )
-from cell_auto_setup import load_config  # noqa: E402,F401
+from cell_auto_setup import load_config, pick_main  # noqa: E402,F401
 from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401
 import cell_calibration as cal  # noqa: E402
 import cell_carry_choices  # noqa: E402
@@ -38,24 +41,22 @@ import cell_zone_verification  # noqa: E402
 
 
 def run_auto(
-    cell,
-    config,
-    calibration,
-    calibration_path,
-    catalog,
-    roi,
-    source,
-    dest,
-    work: Path,
-    choices,
-    dry_run=False,
-    sleep=time.sleep,
-    log=print,
-    attempts=None,
-    scenario_id=None,
-    goal=None,
+    cell, config, calibration, calibration_path, catalog, roi, source, dest,
+    work: Path, choices, dry_run=False, sleep=time.sleep, log=print, attempts=None, scenario_id=None, goal=None,
 ) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
+    cap: dict = {"stills": None, "tried": None, "gate": None}
+    res = _run_auto_core(cell, config, calibration, calibration_path, catalog, roi, source, dest, work, choices, dry_run, sleep, log, attempts, scenario_id, goal, cap)
+    if not dry_run and res.get("result") not in ("placed", "planned"):
+        if bid := cell_bundle_emit.emit_pick_failure(cell, config, calibration, source, dest, Path(work), res, cap.get("tried") or {}, stills=cap.get("stills"), gate=cap.get("gate")):
+            res["failure_bundle_id"] = bid
+    return res
+
+
+def _run_auto_core(
+    cell, config, calibration, calibration_path, catalog, roi, source, dest,
+    work: Path, choices, dry_run, sleep, log, attempts, scenario_id, goal, cap: dict,
+) -> dict:
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
     config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     if source not in config["sites"]:
@@ -85,7 +86,9 @@ def run_auto(
     shadow = None if dry_run else cell_act_shadow.load(config, work)
     try:
         for attempt in range(attempts):
+            cap["stills"] = None
             t0, tried = time.time(), {"locate": {"found": False}, "scenario_id": scenario_id}
+            cap["tried"] = tried
             if carry_shadow:
                 tried["carry_shadowed"] = carry_shadow  # a site value won over the offer: ingest must not credit it
             capture_id = uuid.uuid4().hex
@@ -107,10 +110,12 @@ def run_auto(
                 return {**out, "result": f"held: destination observation: {derr}"}
             img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog,
                                                 image=source_image)
+            room_view = None if error else finger_room_view(img, config, source, roi, mask)
             usable, refused = (
                 choose(
                     cell, config, calibration, source, dest_site, place_xy, roi,
                     objects, mask, catalog, bias_data, choices, work, failed_yaws, dest_view,
+                    room_view=room_view,
                 )
                 if not error
                 else ([], [])
@@ -171,7 +176,7 @@ def run_auto(
             ):
                 usable, refused = choose(
                     cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
-                    bias_data, choices, work, failed_yaws, dest_view,
+                    bias_data, choices, work, failed_yaws, dest_view, room_view=room_view,
                 )
                 if not usable:
                     row.update(refused=refused, error=cell_diagnose.no_usable_object(refused, after_pivot=True))
@@ -218,6 +223,7 @@ def run_auto(
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
             choice, tried["execution"] = cell_executor.choose(choices, attempt)
             gate = Gate(guarded, config, calibration, sequence=sequence)
+            cap["gate"] = gate
             ledger = cell_attempts.ReplanLedger(config, calibration, source, dest, attempt, tried, t0, choices)
             shadow_row = shadow.capture(cell, config, attempt, img, source=source, dest=dest) if shadow else None
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a), ledger.finish)
@@ -234,6 +240,7 @@ def run_auto(
                 same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration, guard
             )
             grasp_check = cell_hooks.grasp_debate(same, gate, target, cp.write_library)
+            cap["stills"] = cell_hooks.stills(cell, config, always_ring=not dry_run)
             moved = transfer_folded(
                 gate,
                 target["library"],
@@ -243,7 +250,7 @@ def run_auto(
                 feel=feel,
                 sequence=sequence,
                 lift_stall=cell_hooks.lift_stall(cell, config, sleep),
-                at_stop=cell_hooks.stills(cell, config),
+                at_stop=cap["stills"],
                 grasp_check=grasp_check,
             )
             tried["envelope"] = gate.assessment
@@ -360,27 +367,7 @@ def run_auto(
 
 
 def main(argv=None):
-    import cell_choices
-    import cell_preflight
-    from cell_auto_setup import open_cell, pick_parser, validate_pick_args
-
-    args = pick_parser(__doc__).parse_args(argv)
-    validate_pick_args(args)
-    config, cell, calibration_path, work = open_cell(args, args.commissioning)
-    dark = cell_preflight.ready(cell.frame, config)
-    if dark:
-        print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
-        return 1
-    cal_data = cell_pivot.with_site_maps(config, cal.load(calibration_path))
-    cat = cell_objects.load_catalog(args.catalog)
-    result = (
-        run_return_held(cell, config, cal_data, calibration_path, cat, args.roi, args.dest, work, args.dry_run)
-        if args.return_held else
-        run_auto(cell, config, cal_data, calibration_path, cat, args.roi, args.source, args.dest, work,
-                 cell_choices.Choices(work / "choices.json"), args.dry_run, scenario_id=args.scenario_id, goal=args.goal)
-    )
-    print(json.dumps(result, indent=1, default=str))
-    return 0 if result["result"] in ("placed", "planned") else 1
+    return pick_main(argv, doc=__doc__, run_auto_fn=run_auto, run_held_fn=run_return_held)
 
 
 if __name__ == "__main__":

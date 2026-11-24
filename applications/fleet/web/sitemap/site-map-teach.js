@@ -89,7 +89,7 @@ export function createTeachPanel(host) {
   }
 
   async function poll() {
-    if (host.role()) {
+    if (!document.hidden && host.role()) {
       await pollMarkers();
       try {
         const next = await host.request('/api/fleet/teach');
@@ -109,7 +109,6 @@ export function createTeachPanel(host) {
       }
     }
     sync();
-    setTimeout(poll, POLL_MS);
   }
 
   async function act(work, done) {
@@ -164,7 +163,10 @@ export function createTeachPanel(host) {
     return `초안에 마커 자리 주소 ${out.place_id}를 더했습니다. 활성화는 따로 합니다.`;
   }));
   for (const id of ['teach-robot', 'teach-place-name', 'teach-marker', 'teach-frame', 'teach-origin-confirm']) $(id).addEventListener('input', sync);
-  poll();
+  void poll();
+  if (host.scope?.interval) host.scope.interval(poll, POLL_MS);
+  else setInterval(poll, POLL_MS);
+  host.scope?.listen?.(document, 'visibilitychange', () => { if (!document.hidden) void poll(); });
 
   return {
     sync,

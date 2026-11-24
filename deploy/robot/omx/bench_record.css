@@ -171,8 +171,10 @@ select option:disabled{color:#767b82}
 .cam-box.cam-pip .cam-rec-badge{right:5px}
 .cam-title-pill{position:absolute;top:8px;left:8px;padding:2px 8px;border-radius:999px;font-size:.74rem;font-family:ui-monospace,monospace;pointer-events:none;background:rgba(17,17,19,.84);border:1px solid var(--bd);color:var(--ink)}
 .cam-rec-badge{position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:999px;font-size:.72rem;font-family:ui-monospace,monospace;pointer-events:none;background:rgba(17,17,19,.84)}
-.cam-rec-badge.on{border:1px solid var(--good);color:var(--good)}
+.cam-rec-badge.live{border:1px solid var(--crit);color:#ff9497}
+.cam-rec-badge.armed{border:1px solid var(--bd);color:var(--ink)}
 .cam-rec-badge.off{border:1px solid var(--bd);color:var(--ink-q)}
+.cam-rec-badge.missing{border:1px solid var(--warn);color:var(--warn)}
 .cam-tag{position:absolute;bottom:8px;right:8px;padding:2px 8px;border-radius:999px;background:rgba(17,17,19,.82);border:1px solid var(--good);color:var(--good);font-size:.72rem;font-family:ui-monospace,monospace;pointer-events:none}
 
 .live-log-panel{flex:0 0 158px;min-height:0;padding:8px 10px;display:flex;flex-direction:column;gap:6px}

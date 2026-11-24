@@ -75,7 +75,7 @@
           <label class="check-row topbar-check" id="home-include-leader-wrap"><input type="checkbox" id="home-include-leader" checked><span>리더도 함께</span></label>
         </div>
         <div class="ops-cluster ops-session" role="group" aria-label="세션 제어">
-          <button type="button" id="hdr-record-btn" class="btn-rec topbar-rec-btn" disabled hidden><span class="btn-lbl">● 녹화</span><kbd class="kbd-hint">Space</kbd></button>
+          <button type="button" id="hdr-record-btn" class="btn-rec topbar-rec-btn" disabled hidden><span class="btn-lbl">● 녹화 시작</span><kbd class="kbd-hint">Space</kbd></button>
           <button type="button" id="hdr-finish-btn" class="btn-tool topbar-op-btn" disabled hidden>연동 끝</button>
         </div>
         <div id="hdr-live-metrics" class="ops-cluster live-ops" data-tabs="recording" hidden role="group" aria-label="에피소드 조작">
@@ -125,10 +125,11 @@
               <label class="check-row"><input type="checkbox" id="mh-dead-lease-check"><span>팔이 접혀 있고 토크 OFF 상태임을 직접 확인했습니다 (죽은 러너 임대 해제)</span></label>
             </div>
             <div id="mh-clear-box" class="mh-step">
-              <button type="button" id="mh-clear-btn" class="btn-primary">팔 확인 완료 · 보류 해제</button>
+              <button type="button" id="mh-clear-btn" class="btn-primary">팔 확인 완료 · 복구 후 홈 복귀</button>
               <div id="mh-clear-confirm" class="reset-confirm-bar" hidden>
-                <span class="quiet">보류 표식(.bench-manual-check)을 지우고 멈춘 유닛을 복원할까요?</span>
-                <button type="button" id="mh-clear-yes" class="btn-primary btn-xs">복원 확인</button>
+                <span class="quiet">보류를 해제하고 멈춘 유닛을 복원한 뒤, 팔과 리더를 안전하게 홈으로 복귀시킬까요?</span>
+                <button type="button" id="mh-clear-yes" class="btn-primary btn-xs">확인 · 복구 후 홈 복귀</button>
+                <button type="button" id="mh-clear-only-yes" class="btn-tool btn-xs">보류만 해제</button>
                 <button type="button" id="mh-clear-no" class="btn-tool btn-xs">취소</button>
               </div>
               <div id="mh-quick-actions" class="mh-quick-actions"></div>

@@ -65,6 +65,7 @@ from fleet.traffic.config import (  # noqa: F401
     _traffic_authority,
     _traffic_signal_advice,
     _traffic_signals,
+    _traffic_site_keep_out_m,
     _traffic_zones,
     _trip_lease,
 )
@@ -183,7 +184,8 @@ def run_console(args: argparse.Namespace) -> None:
         sys.exit("--token or --token-env is required to protect the CORE registry endpoint")
     console = FleetConsole(endpoints, [HttpRobotClient(ep) for ep in endpoints],
                            signal_console=signal_console, event_store=event_store,
-                           goal_lease_ttl_s=_goal_lease_ttl_s(args))
+                           goal_lease_ttl_s=_goal_lease_ttl_s(args),
+                           site_keep_out_m=_traffic_site_keep_out_m(args))
     sightings_db = getattr(args, "sightings_db", None)
     sightings_config = getattr(args, "sightings_config", None)
     if sightings_db is not None and sightings_config is None:

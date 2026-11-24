@@ -564,3 +564,135 @@ def test_goal_site_import_error_returns_http_400(tmp_path, monkeypatch):
         },
     )
     assert res["code"] == 400 and "cannot read Cell site map" in res["error"]
+
+
+def test_cell_job_api_service_unit_preserves_detached_arm_sessions():
+    unit_path = Path(__file__).resolve().parents[1] / "deploy" / "robot" / "omx" / "rosy-omx-cell-job-api.service"
+    text = unit_path.read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
+    assert "KillMode=process" in lines
+    assert "KillMode=control-group" not in lines
+    assert "NoNewPrivileges=true" in lines
+    assert "UMask=0077" in lines
+    assert any(line.startswith("ExecStart=") and "exec /usr/bin/python3" in line for line in lines)
+
+
+def test_surface_job_argv_requires_person_at_switch(tmp_path):
+    wd = _make_workdir(tmp_path)
+    (wd / "cell-b.json").write_text(json.dumps({"sites": {"pallet": {}}}), encoding="utf-8")
+    argv = api.build_argv(api.JOBS["surface"], {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": True}, wd)
+    assert argv[0] == "./with-session-arm-b-par.sh"
+    assert "cell_calibrate.py" in argv
+    assert argv[argv.index("--only") + 1] == "surface"
+    assert "--commissioning" in argv and "--person-at-switch" in argv
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_b", "config": "cell-b.json", "person_at_switch": False}, wd)
+    (wd / "cell-s.json").write_text(json.dumps({"sites": {"pinky": {"place": [0.1, 0.2]}}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="R cell-task -> cell_task_worker -> Gate"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)
+    (wd / "cell-s.json").write_text("{bad json", encoding="utf-8")
+    with pytest.raises(ValueError, match="surface calibration config"):
+        api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)
+    (wd / "cell-s.json").write_text(json.dumps({"sites": {"pinky": {"surface_z": 0.031}, "belt": {}}}), encoding="utf-8")
+    assert api.build_argv(api.JOBS["surface"], {"arm": "arm_s", "config": "cell-s.json", "person_at_switch": True}, wd)[0] == "./with-session-arm-s-live.sh"
+
+
+def test_cell_job_api_is_managed_by_omx_devices_autoupdate():
+    import yaml
+
+    root = Path(__file__).resolve().parents[1]
+    unit = (root / "deploy" / "robot" / "omx" / "rosy-omx-cell-job-api.service").read_text(encoding="utf-8")
+    assert "Environment=ROSY_CELL_JOB_API_ROOT=%h/.local/share/rosy/omx-devices/current/deploy/robot/omx" in unit
+    example = json.loads((root / "deploy" / "robot" / "omx" / "omx-devices-autoupdate.json.example").read_text(encoding="utf-8"))
+    assert "rosy-omx-cell-job-api.service" in example["units"]
+    assert "deploy/robot/omx/rosy-omx-cell-job-api.service" in example["unit_files"]
+    assert "cell_job_api" in example["smoke"]
+    entry = yaml.safe_load((root / "deploy" / "hosts" / "services.yaml").read_text(encoding="utf-8"))["roles"]["omx"]["rosy-omx-cell-job-api.service"]
+    assert entry["channel"] == "autoupdate"
+    assert entry["source"] == ".local/share/rosy/omx-devices/current"
+
+
+def test_check_arm_incident_hold_syncs_stale_local_hold_only_when_fleet_confirmed_clear(monkeypatch):
+    from types import SimpleNamespace
+    import cell_job_guards as guards
+
+    def _run_case(statuses, *, sync_result):
+        calls = []
+        seq = list(statuses)
+
+        def _status(_arm):
+            return seq.pop(0) if len(seq) > 1 else seq[0]
+
+        def _sync(arm):
+            calls.append(arm)
+            return sync_result
+
+        fake_mod = SimpleNamespace(
+            status=_status,
+            sync_hold_from_fleet=_sync,
+            hold_file=lambda _arm: None,
+        )
+        monkeypatch.setitem(sys.modules, "omx_incident", fake_mod)
+        return guards.check_arm_incident_hold("arm_b"), calls
+
+    # (a) Fleet confirms clear and outbox is empty -> sync lifts stale local hold and re-check passes
+    res_a, calls_a = _run_case(
+        [
+            {"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 0},
+            {"local_held": False, "local_reason": None, "fleet_held": False, "unsent_outbox": 0},
+        ],
+        sync_result=True,
+    )
+    assert res_a is None and calls_a == ["arm_b"]
+
+    # (b) Sync race (Fleet became held or unreachable during sync) -> stays held fail-closed
+    res_b, calls_b = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 0}],
+        sync_result=False,
+    )
+    assert res_b == "runner: human hold" and calls_b == ["arm_b"]
+
+    # (c) Fleet unreachable (fleet_held=None) -> never calls sync, stays held fail-closed
+    res_c, calls_c = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": None, "unsent_outbox": 0}],
+        sync_result=True,
+    )
+    assert res_c == "runner: human hold" and calls_c == []
+
+    # (d) Unsent outbox pending -> never calls sync, stays held fail-closed
+    res_d, calls_d = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": False, "unsent_outbox": 1}],
+        sync_result=True,
+    )
+    assert res_d == "runner: human hold" and calls_d == []
+
+    # (e) Fleet also holds the arm -> never calls sync, stays held fail-closed
+    res_e, calls_e = _run_case(
+        [{"local_held": True, "local_reason": "runner: human hold", "fleet_held": True, "unsent_outbox": 0}],
+        sync_result=True,
+    )
+    assert res_e == "runner: human hold" and calls_e == []
+
+
+def test_post_eval_job_guards_amr_bed_and_requires_person_at_switch(tmp_path, monkeypatch):
+    wd = _make_workdir(tmp_path)
+    base = {"arm": "arm_s", "config": "cell-s.json", "site": "floor", "x": -0.06, "y": 0.15, "person_at_switch": True}
+    argv = api.build_argv(api.JOBS["post_eval"], base, wd)
+    assert argv[0] == "./with-session-arm-s-live.sh"
+    assert "cell_post_eval.py" in argv
+    assert argv[argv.index("--targets") + 1] == "floor:-0.06,0.15"
+    assert "--apply" not in argv
+    assert "--commissioning" in argv and "--person-at-switch" in argv
+
+    argv_apply = api.build_argv(api.JOBS["post_eval"], {**base, "apply": True}, wd)
+    assert "--apply" in argv_apply
+
+    with pytest.raises(ValueError, match="person_at_switch"):
+        api.build_argv(api.JOBS["post_eval"], {**base, "person_at_switch": False}, wd)
+
+    popen = Mock()
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+    for bad_site in ("pinky", "bed-1"):
+        res = api.Runner(wd, lock_dir=wd).start("post_eval", {**base, "site": bad_site})
+        assert res["code"] == 400 and "R cell-task -> cell_task_worker -> Gate" in res["error"]
+    popen.assert_not_called()

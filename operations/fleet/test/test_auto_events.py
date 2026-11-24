@@ -98,6 +98,9 @@ class Console:
             raise RuntimeError("robot offline")
         return {"accepted": True}
 
+    async def cancel(self, robot_id):
+        return {"canceled": True}
+
 
 def tick(state, console, rules=RULES, human=False):
     asyncio.run(ur.depart_tick(state, console=console, rules=rules, site=SITE,

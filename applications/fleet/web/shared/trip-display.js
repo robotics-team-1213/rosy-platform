@@ -68,6 +68,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_SIGNAL_START_IN_ZONE: '신호 교차로 안에서는 출발할 수 없습니다 · 교차로 밖으로 옮긴 뒤 다시 하세요',
   // D-517 3: 구역 안에서는 서지 않는다
   TRIP_STOP_IN_ZONE: '경로 위에 구역(교차로) 밖에 설 장소가 없습니다 · 다른 목적지를 고르세요',
+  TRIP_STOP_NOT_DISPATCHABLE: '검증되지 않거나 연결 차로가 없는 정차 자리에는 출발할 수 없습니다 · 현장 지도와 정차 규칙을 확인하세요',
   TRIP_REGULATION_CAPS_MISSING: '경로가 횡단보도나 신호 교차로를 지나는데 이 로봇의 CORE에 그 규칙(횡단보도 게이트·교차로 신호)이 꺼져 있다고 알립니다',
   TRIP_SIGNAL_NEEDS_AUTHORITY: '경로가 신호 교차로를 지나는데 이 로봇은 통행권(CORE)을 받지 않습니다 · 적색에서 선다는 보장이 없습니다',
   TRIP_ROBOT_BUSY: '이 로봇은 운행 중입니다 · 운행을 먼저 취소하세요',

@@ -17,7 +17,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import sqlite3
+import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 from functools import partial
 from pathlib import Path
@@ -263,6 +265,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         console.set_task_queue_release_callback(release_traffic_task)
 
     install_mutation_audit(app, task_service)
+
+    @app.middleware("http")
+    async def _attach_request_id(request: Request, call_next):
+        incoming = (request.headers.get("X-Request-Id") or "").strip()
+        req_id = incoming if re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", incoming) else uuid.uuid4().hex
+        request.state.request_id = req_id
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = req_id
+        return response
     if hub is not None:
         from fleet.hub.server import install_hub_routes
         install_hub_routes(app, hub, hub_token=console_token)
@@ -325,10 +336,27 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     install_arm_transfer_preflight_routes(
         app, instances=configured_omx, deployment_profile=deployment_profile, transport=action_transport,
         socket_root=omx_socket_root, require_proposer=require_proposer)
+    control_unit_service = app.state.control_unit
+    relay_profile_fn = None
+    if control_unit_service is not None and getattr(control_unit_service, "peer", None) is not None:
+        from fleet.server.control_unit_arm_coordinator import direct_child_unit_ids
+
+        async def relay_profile_fn():
+            # Child cell execution profiles for the relayed arm answer; an unreachable child reports nothing
+            # and the parent stays closed (D-797: closed unless proven).
+            rows = []
+            for unit_id in direct_child_unit_ids(control_unit_service):
+                try:
+                    rows.append(await control_unit_service.peer.execution_profile(unit_id))
+                except Exception:
+                    pass
+            return rows
+
     install_execution_profile_routes(
         app, deployment_profile=deployment_profile, instances=configured_omx,
         grant_revisions=omx_cell_grant_revisions, transport=action_transport, require_viewer=require_viewer,
-        workcell_observations=workcell_observations, arm_transfer_observer=arm_transfer_observer)
+        workcell_observations=workcell_observations, arm_transfer_observer=arm_transfer_observer,
+        relay_profile_fn=relay_profile_fn)
     install_arm_transfer_job_routes(
         policy_admission_core=policy_admission_core, app=app, installation=arm_transfer_installation,
         deployment_profile=deployment_profile, intake=intake_supply,
@@ -425,7 +453,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         local_stop_fanout=partial(fanout_local_omx_stops, configured_omx, stop_transport, targets=stop_targets),
         cancel_pending=partial(cancel_pending_task_queue, task_service, console))
 
-    install_static_routes(app)
+    install_static_routes(app, read_guard=read_guard)
     from fleet.server.charge_bootstrap import install_charge_runtime
     install_charge_runtime(
         app, factory=charge_runtime_factory, runner=trip_runner, plans=site_maps,

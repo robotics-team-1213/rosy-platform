@@ -15,6 +15,7 @@ except ImportError:
     fcntl = None  # type: ignore[assignment]
 import io
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -139,9 +140,23 @@ class Host:
         ).stdout.split()
         return out[0]
 
+    def _github_headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/vnd.github+json"}
+        tok = ""
+        if tok_path := self.cfg.get("github_token_file"):
+            try:
+                tok = Path(os.path.expanduser(str(tok_path))).read_text(encoding="utf-8").strip()
+            except OSError:
+                tok = ""
+        if not tok:
+            tok = os.environ.get("GITHUB_TOKEN", "").strip()
+        if tok:
+            headers["Authorization"] = f"Bearer {tok}"
+        return headers
+
     def checks(self, sha: str) -> dict:
         url = f"https://api.github.com/repos/{self.cfg['github_repo']}/commits/{sha}/check-runs?per_page=100"
-        request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+        request = urllib.request.Request(url, headers=self._github_headers())
         runs = json.load(urllib.request.urlopen(request, timeout=30))["check_runs"]
         return {
             run["name"]: (run["status"], run["conclusion"], (run.get("app") or {}).get("slug")) for run in runs
@@ -150,7 +165,7 @@ class Host:
     def _api(self, path: str) -> dict:
         request = urllib.request.Request(
             f"https://api.github.com/repos/{self.cfg['github_repo']}/{path}",
-            headers={"Accept": "application/vnd.github+json"},
+            headers=self._github_headers(),
         )
         return json.load(urllib.request.urlopen(request, timeout=30))
 
@@ -162,50 +177,18 @@ class Host:
 
     def build_env(self, lock: Path | None, target: Path) -> None:
         sp = _sp()
+        uv = os.path.expanduser(self.cfg["uv"]) if self.cfg.get("uv") else ""
         if lock is None:  # a service on the host's own packages
-            make = (
-                [os.path.expanduser(self.cfg["uv"]), "venv", "-q", "--python", self.cfg["base_python"]]
-                if self.cfg.get("uv")
-                else [self.cfg["base_python"], "-m", "venv"]
-            )
+            make = [uv, "venv", "-q", "--python", self.cfg["base_python"]] if uv else [self.cfg["base_python"], "-m", "venv"]
             sp.run([*make, "--system-site-packages", str(target)], check=True, timeout=300)
             return
         system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
-        if self.cfg.get("uv"):  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
-            sp.run(
-                [
-                    os.path.expanduser(self.cfg["uv"]),
-                    "venv",
-                    "-q",
-                    "--python",
-                    self.cfg["base_python"],
-                    *system,
-                    str(target),
-                ],
-                check=True,
-                timeout=300,
-            )
-            sp.run(
-                [
-                    os.path.expanduser(self.cfg["uv"]),
-                    "pip",
-                    "install",
-                    "-q",
-                    "--python",
-                    str(target / "bin" / "python"),
-                    "-r",
-                    str(lock),
-                ],
-                check=True,
-                timeout=3000,
-            )
+        if uv:  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
+            sp.run([uv, "venv", "-q", "--python", self.cfg["base_python"], *system, str(target)], check=True, timeout=300)
+            sp.run([uv, "pip", "install", "-q", "--python", str(target / "bin" / "python"), "-r", str(lock)], check=True, timeout=3000)
             return
         sp.run([self.cfg["base_python"], "-m", "venv", *system, str(target)], check=True, timeout=300)
-        sp.run(
-            [str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)],
-            check=True,
-            timeout=3000,
-        )
+        sp.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)], check=True, timeout=3000)
 
     def running(self, units) -> list:
         """The units to restart: all, or with `restart_running_only` the active ones, so a unit stopped by
@@ -339,9 +322,11 @@ class Host:
         return False
 
     def follower_torque_off(self, release: Path, python: Path) -> bool:
-        observers = self.cfg.get("observers")
-        if observers:
-            return all(self._observed_torque_off(o) for o in observers)
+        return self.follower_idle_reason(release, python) is None
+
+    def follower_idle_reason(self, release: Path, python: Path) -> str | None:
+        if observers := self.cfg.get("observers"):
+            return next((r for o in observers if (r := self._observer_defer_reason(o)) is not None), None)
         code = (
             "import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
             f"bus = SerialBus({self.cfg['follower_device']!r}, 0)\n"
@@ -349,22 +334,42 @@ class Host:
             "finally:\n    bus.close()\nprint('torque', sum(on))"
         )
         done = _sp().run([str(python), "-c", code], cwd=release, capture_output=True, text=True, timeout=60)
-        return done.returncode == 0 and done.stdout.strip() == "torque 0"
+        return None if done.returncode == 0 and done.stdout.strip() == "torque 0" else "follower_torque_not_off"
+
+    def _observer_defer_reason(self, observer: dict) -> str | None:
+        """Classify an observer snapshot: missing, stale, invalid, hardware_error, or torque_not_off."""
+        try:
+            raw_bytes = Path(observer["health"]).read_bytes()
+        except (OSError, KeyError, TypeError):
+            return "observer_missing"
+        try:
+            health = json.loads(raw_bytes.decode("utf-8"))
+            if not isinstance(health, dict):
+                return "observer_invalid"
+            motors, expected, obs_at = health["motors"], health["expected_motor_count"], health["observed_at"]
+            obs_f = float("nan") if isinstance(obs_at, bool) or not isinstance(obs_at, (int, float)) else float(obs_at)
+            if (not isinstance(motors, list) or type(expected) is not int or expected <= 0
+                    or len(motors) != expected or not math.isfinite(obs_f)):
+                return "observer_invalid"
+        except (UnicodeDecodeError, ValueError, KeyError, TypeError, OverflowError):
+            return "observer_invalid"
+        now = _tm().time()
+        if now - obs_f > float(self.cfg.get("observer_max_age_s", 10)) or obs_f - now > 2.0:
+            return "observer_stale"
+        if any(not isinstance(m, dict) for m in motors):
+            return "observer_invalid"
+        status = health.get("status")
+        if status == "fault" or any(
+            m.get("fault") is True or ("hardware_error" in m and (type(m["hardware_error"]) is not int or m["hardware_error"] != 0))
+            for m in motors
+        ):
+            return "follower_hardware_error"
+        if "status" in health and status != "active":
+            return "observer_stale"
+        return None if all(m.get("torque_enabled") is False for m in motors) else "follower_torque_not_off"
 
     def _observed_torque_off(self, observer: dict) -> bool:
-        """The observer's own fresh motor-health snapshot: every expected motor reports torque OFF."""
-        try:
-            health = json.loads(Path(observer["health"]).read_text(encoding="utf-8"))
-            motors = health["motors"]
-            fresh = _tm().time() - float(health["observed_at"]) <= float(self.cfg.get("observer_max_age_s", 10))
-            return (
-                fresh
-                and isinstance(motors, list)
-                and len(motors) == health["expected_motor_count"] > 0
-                and all(m.get("torque_enabled") is False for m in motors)
-            )
-        except (OSError, ValueError, KeyError, TypeError):
-            return False
+        return self._observer_defer_reason(observer) is None
 
     def follower_missing(self) -> bool:
         return not self.cfg.get("observers") and not os.path.exists(self.cfg["follower_device"])

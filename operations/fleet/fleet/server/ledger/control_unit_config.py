@@ -50,10 +50,10 @@ class ControlUnitTopology:
             if (not isinstance(entry, Mapping) or "id" not in entry
                     or set(entry) - {"id", "parent", "resources"}):
                 raise ValueError("INVALID_CONTROL_UNIT")
-            unit_id = _identifier(entry["id"])
+            unit_id = canonical_unit_id(_identifier(entry["id"]))
             parent = entry.get("parent")
             if parent is not None:
-                parent = _identifier(parent)
+                parent = canonical_unit_id(_identifier(parent))
             resources = entry.get("resources", [])
             if not isinstance(resources, list) or len(resources) > 256:
                 raise ValueError("INVALID_CONTROL_UNIT_RESOURCES")
@@ -93,10 +93,10 @@ class ControlUnitTopology:
         return child
 
     def next_hop(self, parent_id, target_id):
-        self.unit(parent_id)
+        parent = self.unit(parent_id)
         current = self.unit(target_id)
         while current.parent is not None:
-            if current.parent == parent_id:
+            if current.parent == parent.unit_id:
                 return current.unit_id
             current = self.unit(current.parent)
         raise ValueError("CONTROL_UNIT_OUTSIDE_SCOPE")

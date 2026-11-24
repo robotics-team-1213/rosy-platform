@@ -77,6 +77,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/sitemap/site-map-reality.js": 1,  # apply the rigid reality correction to the draft (v1.384)
     "applications/fleet/web/sitemap/site-map-survey.js": 2,  # replace draft with empty survey; delete selected draft element
     "applications/fleet/web/installation/tracking-relearn.js": 1,
+    "applications/fleet/web/localization-panel.js": 1,  # Pinky confirm, relocalize, map-binding approve/revoke share confirmedAction via onAction
 }
 CONFIRM_CALL = re.compile(
     r"\bconfirmIrreversible\s*\(|\bconfirmedAction\.run\s*\(|"

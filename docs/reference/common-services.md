@@ -43,6 +43,10 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | `pg-backup-check` | postgres 백업의 신선도·무결성 검사다 |
 | `vision` | 천장 영상에서 현장 관측을 만드는 업무 생산자다 |
 | `control-unit-peer` | 관제 계층 연결에만 쓰는 peer 프록시다(D-850, D-960) |
+| `world` | 현장 3D 가시화·멀티월드 번들 웹 서버다(명령 권한 없음) |
+| `world-real-bridge` | Fleet 상태를 읽기 전용으로 Rosy World에 투영하는 브리지다 |
+| `virtual-core-fleet` | 가상 폐루프 검증용 6로봇 CORE HTTP 에뮬레이터다 |
+| `fleet-mdns` | 가상 폐루프 검증 스택의 Fleet mDNS 광고 보조 컨테이너다 |
 
 ## 배치와 장애 격리
 

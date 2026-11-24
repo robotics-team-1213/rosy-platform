@@ -311,23 +311,24 @@ def main(argv=None):
     robot_cfg["max_relative_target"] = float(robot_cfg["max_relative_target"])
     robot = OmxFollower(OmxFollowerConfig(**robot_cfg, cameras={}))  # the camera services keep the cameras
     args.io.mkdir(parents=True, exist_ok=True)
-    status_path = args.io / "chunk-status.jsonl"
+    from chunk_ctl_socket import RunnerCtlSession
     from chunk_runner_guards import safe_stderr
-    def status(row):
-        protect = bool(signals or getattr(runner, "human_hold_latched", False)
-                       or getattr(runner, "_stop_after_park", None))
-        write_status_row(status_path, row, protect=protect)
-
+    from inspect import signature
     from guarded_native import NativeJointMotion, close_device, connect_passive
     from motor_health import MotorHealth
-    lines = fifo_lines(args.io / "chunk-cmd")
+    runner = None
+    io_session = RunnerCtlSession(
+        args.io, args.io / "chunk-status.jsonl", write_status_row, fifo_lines(args.io / "chunk-cmd"),
+        lambda: bool(signals or getattr(runner, "human_hold_latched", False)
+                     or getattr(runner, "_stop_after_park", None) or getattr(runner, "_recovery_active", False)),
+    )
     # The guard owns the hardware lifecycle and every goal (D-872): passive connect (no vendor
     # configure), seeded torque ON, 10 deg/s streaming, following-error, effort and fault stops.
     connect_passive(robot, follower=True)
-    motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
+    monitor = MotorHealth(async_publish=True) if "async_publish" in signature(MotorHealth).parameters else MotorHealth()
+    motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=monitor)
     motion.shed_load = True  # a guard hold freezes only the held joint: runner_strain.shed moves lift and elbow
     guarded = Guarded(robot, motion)
-    runner = None
     try:
         caps = (robot.bus.sync_read("PWM_Limit", list(load_predict.BODY[1:]), normalize=False, num_retry=2)
                 if "read" not in vars(robot.bus) and hasattr(robot.bus, "model_ctrl_table")
@@ -335,22 +336,12 @@ def main(argv=None):
         check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, caps) if args.load_model else None
         import bus_watchdog  # the motors stop by themselves if this PC goes silent (off unless the params set it)
         print(json.dumps({"bus_watchdog": bus_watchdog.arm(robot.bus, prm.get(params, "safety.bus_watchdog_ms"))}), flush=True)
-        live_path = args.io / "live.json"
-
-        def live(row):  # replaced atomically so a reader never sees half a file
-            tmp = live_path.with_suffix(".tmp")
-            try:
-                tmp.write_text(json.dumps(row))
-                os.replace(tmp, live_path)
-            except OSError:
-                if not signals and not getattr(runner, "human_hold_latched", False):
-                    raise
-
+        live = io_session.live
         if args.joint_topic:
             live = handoff_live(live, args.joint_topic, robot.calibration)
         context = runtime_context(config["robot"], robot.bus, config["dataset"]["fps"],
                                   operating_profile=profile, params=params)
-        runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
+        runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=io_session.status, live=live,
                         operating_context=context, params=params, plan_check=check, rim_z_m=rim_z_m)
         runner.trusted_grasp, runner.trusted_tcp = trusted_grasp, trusted_tcp
         runner.signals, runner.hold_file = signals, args.io / "hold.json"  # hold.json: record_session reads it
@@ -365,11 +356,12 @@ def main(argv=None):
             runner.trace = __import__("cell_why").flushing_trace(trace_file)
             bind_trace_source(runner, trace_path, trace_file, args.io)
         try:
-            runner.run(lines)
+            runner.run(io_session.lines)
         except Exception as error:
             if (not signals and not getattr(runner, "human_hold_latched", False)
                     and not getattr(runner, "_stop_after_park", None)
                     and getattr(runner, "_release_until", None) is None
+                    and not getattr(runner, "_recovery_active", False)
                     and not getattr(motion, "failed", False)):
                 raise  # no interrupt, no latched HOLD, no pending fold, no unconfirmed release, and no failed guard: torque OFF in finally
             __import__("chunk_runner_interrupt").last_resort_hold(runner, signals, error)  # returns on SIGUSR2 only
@@ -380,7 +372,7 @@ def main(argv=None):
                 except OSError:
                     pass
     finally:
-        lines.close()
+        io_session.close()
         try:
             # the single place torque goes OFF: interrupts blocked from the gate's verdict until close_device returns;
             # after an interrupt, no torque OFF without a confirmed fold or an approved exception (else SIGUSR2 first)

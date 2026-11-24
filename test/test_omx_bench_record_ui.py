@@ -619,6 +619,7 @@ def test_go_home_stop_before_the_home_stage_starts_no_motion(tmp_path, monkeypat
 
 def test_ik_live_pose_read_needs_the_arm_session_lock(tmp_path, monkeypatch):
     import bench_record_replay as brr
+    monkeypatch.setattr(Path, 'home', lambda: tmp_path / 'home')
     (tmp_path / 'record-config-arm-a.json').write_text('{}')
     ran, closed = [], []
     monkeypatch.setattr('subprocess.run', lambda *a, **kw: (ran.append(a), SimpleNamespace(returncode=1, stdout='', stderr=''))[1])
@@ -1193,5 +1194,186 @@ def test_arm_ab_ui_priority_layout_no_wrap_and_camera_health_contract():
     assert "if(role==='left_wrist')return ['arm_a_wrist'];" in cam_js and "if(role==='right_wrist')return ['arm_b_wrist'];" in cam_js
     assert 'function syncMissingCamPlaceholders(' in cam_js and "LAST_ARM_KEY='omx_bench_last_arm'" in app_js
     assert "$('hdr-cam-health').hidden=false;" in st_js
+
+
+def test_camera_badges_tell_standby_from_active_recording():
+    """D-omx-bench-rec-ui: setup/prepare/result/idle must never look like '● 녹화'.
+    Only phase 'recording' AND server status 'recording' is an active take."""
+    omx_dir = ROOT / 'deploy/robot/omx'
+    html = (omx_dir / 'bench_record.html').read_text(encoding='utf-8')
+    css = (omx_dir / 'bench_record.css').read_text(encoding='utf-8')
+    app_js = (omx_dir / 'bench_record_app.js').read_text(encoding='utf-8')
+    cam_js = (omx_dir / 'bench_record_cam.js').read_text(encoding='utf-8')
+    ui_js = (omx_dir / 'bench_record_ui.js').read_text(encoding='utf-8')
+
+    # 1) one truth source: standby phases (setup/prepare/result/idle) are never an active take
+    assert 'function isActivelyRecording()' in ui_js
+    assert "return currentBenchPhase()==='recording'&&lastStatus?.status==='recording';" in ui_js
+    # phase transitions re-render the badges through applyBenchPhase
+    assert "if(typeof updateCameraRecordingMask==='function')updateCameraRecordingMask();" in ui_js
+
+    # 2) camera boxes are created neutral (armed '녹화 대상'), never 'on' with '● 녹화'
+    assert "rec.className='cam-rec-badge armed';rec.textContent='녹화 대상';" in app_js
+    assert '● 녹화' not in app_js  # no badge or note may hardcode the old active-recording claim
+
+    # 3) the mask branches on the live state: only live shows '● 녹화 중', standby shows '녹화 대상'
+    assert "badge.textContent=isRec?'● 녹화 중':'미포함';" in cam_js
+    assert "badge.className='cam-rec-badge '+(isRec?'live':'off');" in cam_js
+    assert "badge.textContent=isRec?'녹화 대상':'미포함';" in cam_js
+    assert "badge.className='cam-rec-badge '+(isRec?'armed':'off');" in cam_js
+    assert "badge.title=isRec?'녹화 시작 시 이 카메라가 포함됩니다 (현재 미리보기 대기)':'';" in cam_js
+    assert "badge.title=isRec?'현재 에피소드 녹화 중':'';" in cam_js
+    # cam-note: standby prefix differs from the recording prefix and names the rec targets as '녹화 대상:'
+    assert "?'녹화 중 — '+(arm||'선택 암')" in cam_js
+    assert ":(currentBenchPhase()==='prepare'?'텔레옵 연동 (녹화 대기)':'실시간 미리보기 (녹화 대기)')+' — '+(arm||'선택 암')" in cam_js
+    assert "parts.push((live?'녹화: ':'녹화 대상: ')" in cam_js
+    # the pre-mask note text in pollCameras also stays standby-honest while no recording is live
+    assert "const recNow=typeof isActivelyRecording==='function'&&isActivelyRecording();" in app_js
+    assert "(recNow?'녹화 중 — ':'실시간 미리보기 (녹화 대기) — ')" in app_js
+
+    # 4) missing camera placeholders warn, never borrow the active classes
+    assert "rec.className='cam-rec-badge missing';rec.textContent='미수신';" in cam_js
+
+    # 5) the header action button is a verb: ready offers '● 녹화 시작', recording offers '■ 녹화 끝'
+    assert "recording?'■ 녹화 끝':legacyStarting?'■ 준비 취소':ready?'● 녹화 시작':'● 녹화'" in cam_js
+    assert '<span class="btn-lbl">● 녹화 시작</span>' in html
+
+    # 6) CSS carries the semantic badge classes; the old green 'on' rule and its writers are gone
+    for rule in ('.cam-rec-badge.live{border:1px solid var(--crit);color:#ff9497}',
+                 '.cam-rec-badge.armed{border:1px solid var(--bd);color:var(--ink)}',
+                 '.cam-rec-badge.off{border:1px solid var(--bd);color:var(--ink-q)}',
+                 '.cam-rec-badge.missing{border:1px solid var(--warn);color:var(--warn)}'):
+        assert rule in css, rule
+    assert '.cam-rec-badge.on{' not in css
+    for src in (app_js, cam_js, html):
+        assert 'cam-rec-badge on' not in src
+    assert "isRec?'● 녹화'" not in cam_js and "'미녹화'" not in cam_js
+
+
+def test_camera_badges_follow_phase_and_status_in_the_dom(tmp_path):
+    """Behavior: run the real ui.js/cam.js against a stub DOM and read the rendered badges."""
+    import shutil
+    import subprocess
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node.js is unavailable; the source contract test above still runs')
+    harness = tmp_path / 'cam_badge_contract.js'
+    harness.write_text(_CAM_BADGE_HARNESS, encoding='utf-8')
+    run = subprocess.run([node, str(harness), str(ROOT / 'deploy/robot/omx')], capture_output=True, text=True)
+    assert run.returncode == 0, run.stdout + run.stderr
+
+
+_CAM_BADGE_HARNESS = r'''
+const fs=require('fs'),path=require('path'),vm=require('vm');
+const dir=process.argv[2];
+const fails=[];
+const ok=(c,m)=>{if(!c)fails.push(m);};
+const makeEl=()=>({className:'',textContent:'',title:'',hidden:false,dataset:{},style:{},open:false,
+  classList:{add(){},remove(){},toggle(){},contains(){return false}},
+  append(){},addEventListener(){},setAttribute(){},removeAttribute(){},
+  querySelector(){return null},querySelectorAll(){return []}});
+const form={arm:{value:'arm_a'},config:{value:'cfg'},caps:{value:''},name:{value:''},task:{value:''}};
+const note=makeEl();
+const boxes=['top','side','arm_a_wrist','front'].map(lbl=>{
+  const badge=makeEl();
+  return {lbl,badge,dataset:{camBox:lbl},classList:{toggle(){},contains(){return false}},
+    querySelector:sel=>sel==='.cam-rec-badge'?badge:null};
+});
+const grid=makeEl();
+grid.querySelectorAll=sel=>sel.indexOf('cam-box')>=0?boxes:[];
+const byId={'bench-form':form,'cam-grid':grid,'cam-note':note},generic={};
+const getEl=id=>byId[id]||(generic[id]||(generic[id]=makeEl()));
+const ctx={console,
+  document:{getElementById:getEl,querySelector:()=>null,querySelectorAll:()=>[],createElement:()=>makeEl(),addEventListener(){}},
+  localStorage:{getItem(){return null},setItem(){}},
+  setTimeout,clearTimeout,setInterval:()=>0,clearInterval,
+  ResizeObserver:class{observe(){}}};
+ctx.window=ctx;
+ctx.globalThis=ctx;
+vm.createContext(ctx);
+const load=f=>vm.runInContext(fs.readFileSync(path.join(dir,f),'utf8'),ctx,{filename:f});
+load('bench_record_ui.js');
+ctx.ARM_PREVIEW_CAMS={arm_a:['top','side','arm_a_wrist']};
+ctx.camLabels=['top','side','arm_a_wrist','front'];
+ctx.renderCamGuide=()=>{};
+ctx.updateGoalSummaryRows=()=>{};
+ctx.init=()=>{};
+ctx.pollArms=()=>{};
+load('bench_record_cam.js');
+const run=st=>vm.runInContext('lastStatus='+JSON.stringify(st)+';syncBenchPhase();',ctx);
+const badge=lbl=>boxes.find(b=>b.lbl===lbl).badge;
+const INCLUDED=['top','side','arm_a_wrist'];
+
+for(const [phase,st,prefix,live] of [
+  ['setup',{status:'idle',phase:'setup'},'실시간 미리보기 (녹화 대기) — arm_a · 녹화 대상: top, side, arm_a_wrist',false],
+  ['prepare',{status:'idle',phase:'prepare'},'텔레옵 연동 (녹화 대기) — arm_a · 녹화 대상: top, side, arm_a_wrist',false],
+  ['result',{status:'sealed',phase:'result'},'실시간 미리보기 (녹화 대기) — arm_a · 녹화 대상: top, side, arm_a_wrist',false],
+  ['recording',{status:'recording',phase:'recording'},'녹화 중 — arm_a · 녹화: top, side, arm_a_wrist',true],
+]){
+  run(st);
+  ok(vm.runInContext('isActivelyRecording()',ctx)===live,phase+': isActivelyRecording');
+  for(const lbl of INCLUDED){
+    const wantText=live?'● 녹화 중':'녹화 대상';
+    const wantClass='cam-rec-badge '+(live?'live':'armed');
+    ok(badge(lbl).textContent===wantText,phase+': '+lbl+' text='+badge(lbl).textContent);
+    ok(badge(lbl).className===wantClass,phase+': '+lbl+' class='+badge(lbl).className);
+    ok(badge(lbl).title===(live?'현재 에피소드 녹화 중':'녹화 시작 시 이 카메라가 포함됩니다 (현재 미리보기 대기)'),
+      phase+': '+lbl+' title='+badge(lbl).title);
+  }
+  ok(badge('front').textContent==='미포함',phase+': excluded text='+badge('front').textContent);
+  ok(badge('front').className==='cam-rec-badge off',phase+': excluded class='+badge('front').className);
+  ok(note.textContent===prefix+' · 미포함: front',phase+': note='+note.textContent);
+}
+
+run({status:'sealing',phase:'recording'});
+ok(vm.runInContext('isActivelyRecording()',ctx)===false,'recording phase + sealing status must be standby');
+ok(badge('top').textContent==='녹화 대상','sealing: text='+badge('top').textContent);
+ok(badge('top').className==='cam-rec-badge armed','sealing: class='+badge('top').className);
+
+if(fails.length){console.error('FAIL\n'+fails.join('\n'));process.exit(1);}
+console.log('PASS');
+'''
+
+
+def test_leader_check_renders_on_arm_cards_and_notice(tmp_path):
+    import shutil, subprocess
+    node = shutil.which('node')
+    if node is None:
+        pytest.skip('Node.js is unavailable')
+    harness = tmp_path / 'leader_check_ui.js'
+    harness.write_text(r'''
+const fs=require('fs'),path=require('path'),vm=require('vm');
+const dir=process.argv[2];
+const mk=(tag)=>({tagName:tag||'div',className:'',textContent:'',title:'',hidden:false,disabled:false,dataset:{},style:{},children:[],
+  classList:{add(){},remove(){},toggle(){},contains(){return false}},
+  setAttribute(){},append(...xs){this.children.push(...xs);},addEventListener(){},
+  querySelector(){return null},querySelectorAll(){return []},closest(){return {parentElement:{hidden:false}};}});
+const bar=mk('div'), notices=[];
+const byId={'arm-card-bar':bar,'bench-form':{arm:{value:'arm_a'},config:{value:'c',selectedOptions:[{}]},caps:{value:'k',selectedOptions:[{}]},name:{value:'live-a'},rig_revision:{value:'r1'},task:{value:''}},'cal-robot-list':mk(),'cal-leader-list':mk(),'binding-issues':Object.assign(mk(),{hidden:true}),'start-guard-note':mk(),'stop-note':mk()};
+const ctx={console,document:{getElementById:id=>byId[id]||(byId[id]=mk()),createElement:t=>mk(t),querySelectorAll:()=>[]},
+  choices:{arms:['arm_a','arm_s'],arm_connectivity:{arm_a:{connected:true,follower_connected:true,leader_connected:true},arm_s:{connected:true,follower_connected:true,leader_connected:true}},instances:{arm_a:'f1',arm_s:'f2'},arm_bindings:{arm_a:{},arm_s:{}}},
+  armContractValid:()=>true,armVerifiedBindings:()=>({}),lastStatus:{status:'idle',active_locks:[]},statusLoaded:true,benchSessionActive:()=>false,poseInFlight:false,startInFlight:false,stopInFlight:false,cameraRestartInFlight:false,NAME_RE:/^[a-z0-9-]+$/,poseFeedbackUntil:0,poseFeedbackMsg:'',
+  lastArmsStatus:{arm_a:{connected:true,follower_connected:true,leader_connected:true},arm_s:{connected:true,follower_connected:true,leader_connected:true}},
+  lastLeaderCheck:{arm_a:{over_limit:false,max_deg:2.8},arm_s:{over_limit:true,max_deg:347.9,message:'손으로 가깝게 옮기세요'}},
+  f:byId['bench-form'],$:id=>byId[id]||(byId[id]=mk()),
+  setTimeout,clearTimeout,setInterval:()=>0,clearInterval,cueInit:false,prevCueFault:false,lastTelemetry:null,lastCamState:null,
+  setNotice:(id,tone,msg)=>notices.push([id,tone,msg]),clearNotice:(id)=>notices.push([id,'clear','']),
+  updateCameraRecordingMaskHook(){},updateCameraRecordingMask(){},updateGoalSummaryRows(){},renderCapsEditor(){},renderParamsPanel(){}};
+ctx.window=ctx;ctx.globalThis=ctx;vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(path.join(dir,'bench_record_params.js'),'utf8'),ctx);
+vm.runInContext(fs.readFileSync(path.join(dir,'bench_record_status.js'),'utf8'),ctx);
+ctx.renderParamsPanel=()=>{};
+ctx.renderArmCards();
+const txt=(n)=>n.textContent+(n.children||[]).map(txt).join('|');
+const out=txt(bar);
+if(!out.includes('LΔ2.8°')||!out.includes('리더 348° 초과')||!out.includes('LΔ348°!')){console.error('BAD CARDS:',out);process.exit(1);}
+byId['bench-form'].arm.value='arm_s';
+ctx.validateStart();
+const w=notices.find(x=>x[0]==='leader-check'&&x[1]==='warn');
+if(!w||!w[2].includes('손으로 가깝게')){console.error('BAD NOTICE:',notices);process.exit(1);}
+console.log('PASS');
+''', encoding='utf-8')
+    run = subprocess.run([node, str(harness), str(ROOT / 'deploy/robot/omx')], capture_output=True, text=True)
+    assert run.returncode == 0, run.stdout + run.stderr
 
 

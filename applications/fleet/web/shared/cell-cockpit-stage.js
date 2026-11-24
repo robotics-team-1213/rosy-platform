@@ -6,174 +6,55 @@ import { html, render as renderDom, useLayoutEffect, useRef } from "/common/vend
 import { UiButton } from "/common/preact-ui.js";
 import { patchHidden } from "/common/control-dom.js";
 import { createMotorHealthState, renderMotorHealthSummary } from "/common/motor-health.js";
+import { createCellContextPanel } from "/console/assets/cell-context-panel.js";
 import { createCellFrameFeed } from "/console/assets/cell-frames.js";
+import {
+  OBS_BASE,
+  JOINT_SHORT,
+  canonicalArmId,
+  isArmAttentionOrLive,
+  normalizeWorkcellObservations,
+  obsSignature,
+} from "/console/assets/cell-obs-model.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { owns } from "/console/assets/unit-scope.js";
 
-const JOINT_ORDER = ["joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1"];
-const JOINT_SHORT = ["J1", "J2", "J3", "J4", "J5", "G"];
-const RAD_TO_DEG = 180 / Math.PI;
-const CAMERA_RANK = { overhead: 0, side: 1, wrist: 2 };
-const VISION_REFRESH_MS = 15000;
-
-export function canonicalArmId(raw) {
-  return String(raw || "").trim().toLowerCase().replace(/^omx_/, "").replace(/_follower$/, "");
-}
-
-function readArmMetrics(arm, fresh, positions) {
-  const health = arm?.motor_health?.schema_version === "rosy.motor-health.v1" ? arm.motor_health : null;
-  const motors = Array.isArray(health?.motors) ? health.motors : [];
-  let maxTempC = null;
-  let maxPwmPct = null;
-  let maxCurrentMa = null;
-  let hwFaultMotors = 0;
-  let warnMotors = 0;
-  for (const m of motors) {
-    if (Number.isInteger(m?.hardware_error) && m.hardware_error > 0) hwFaultMotors += 1;
-    if (Array.isArray(m?.warnings) && m.warnings.length > 0) warnMotors += 1;
-    if (typeof m?.temperature_c === "number" && Number.isFinite(m.temperature_c)) {
-      maxTempC = maxTempC === null ? m.temperature_c : Math.max(maxTempC, m.temperature_c);
-    }
-    const util = typeof m?.pwm_utilization === "number" && Number.isFinite(m.pwm_utilization)
-      ? Math.round(m.pwm_utilization * 100)
-      : (typeof m?.pwm === "number" && Number.isFinite(m.pwm) && typeof m?.pwm_limit === "number" && m.pwm_limit > 0
-          ? Math.round((Math.abs(m.pwm) / m.pwm_limit) * 100)
-          : null);
-    if (util !== null) maxPwmPct = maxPwmPct === null ? util : Math.max(maxPwmPct, util);
-    if (typeof m?.current_ma === "number" && Number.isFinite(m.current_ma)) {
-      const ma = Math.round(Math.abs(m.current_ma));
-      maxCurrentMa = maxCurrentMa === null ? ma : Math.max(maxCurrentMa, ma);
-    }
-  }
-  const jointsDeg = positions
-    ? JOINT_ORDER.map((k) => (typeof positions[k] === "number" && Number.isFinite(positions[k]) ? positions[k] * RAD_TO_DEG : null))
-    : null;
-  const jointsText = jointsDeg && jointsDeg.some((v) => v !== null)
-    ? jointsDeg.map((deg, idx) => (deg === null ? `${JOINT_SHORT[idx]}:—` : `${JOINT_SHORT[idx]}:${deg.toFixed(1)}°`)).join(" ")
-    : null;
-  return { health, motors, maxTempC, maxPwmPct, maxCurrentMa, hwFaultMotors, warnMotors, jointsDeg, jointsText, fresh };
-}
-
-export function normalizeWorkcellObservations(payload, receivedAtMs = Date.now()) {
-  const workcells = Array.isArray(payload?.workcells) ? payload.workcells : [];
-  const arms = [];
-  const cameras = [];
-
-  for (const cell of workcells) {
-    for (const arm of Array.isArray(cell?.arms) ? cell.arms : []) {
-      const id = canonicalArmId(arm?.arm_id || arm?.source_id);
-      if (!id) continue;
-      const rawPos = arm?.positions && typeof arm.positions === "object" ? arm.positions : null;
-      const cleanEntries = rawPos
-        ? Object.entries(rawPos).filter(([, v]) => typeof v === "number" && Number.isFinite(v))
-        : [];
-      const fresh = Boolean(arm?.fresh) && cleanEntries.length > 0;
-      const positions = fresh ? Object.fromEntries(cleanEntries) : null;
-      const metrics = readArmMetrics(arm, fresh, positions);
-      const incidents = Array.isArray(arm?.incidents) ? arm.incidents : [];
-      const openIncidents = incidents.filter((inc) => inc?.state !== "cleared");
-      const heldIncidents = openIncidents.filter((inc) => inc?.decision?.hold !== false);
-      const ageS = typeof arm?.source_age_s === "number" && Number.isFinite(arm.source_age_s)
-        ? arm.source_age_s
-        : (typeof arm?.receipt_age_s === "number" && Number.isFinite(arm.receipt_age_s) ? arm.receipt_age_s : null);
-      arms.push({
-        id,
-        sourceId: String(arm?.source_id || id),
-        armId: String(arm?.arm_id || id),
-        label: String(arm?.label || id),
-        fresh,
-        positions,
-        jointsDeg: metrics.jointsDeg,
-        jointsText: metrics.jointsText,
-        motorHealth: metrics.health,
-        maxTempC: metrics.maxTempC,
-        maxPwmPct: metrics.maxPwmPct,
-        maxCurrentMa: metrics.maxCurrentMa,
-        hwFaultMotors: metrics.hwFaultMotors,
-        warnMotors: metrics.warnMotors,
-        incidents,
-        openIncidents,
-        heldIncidents,
-        held: heldIncidents.length > 0,
-        faults: Array.isArray(arm?.faults) ? arm.faults : [],
-        ageS,
-        sequence: typeof arm?.sequence === "number" ? arm.sequence : 0,
-      });
-    }
-    for (const cam of Array.isArray(cell?.cameras) ? cell.cameras : []) {
-      if (!cam?.source_id) continue;
-      cameras.push({
-        source_id: String(cam.source_id),
-        label: String(cam.label || cam.source_id),
-        role: String(cam.role || "wrist"),
-        stream: cam.stream ? String(cam.stream) : "color",
-        arm_id: cam.arm_id ? canonicalArmId(cam.arm_id) : null,
-        fresh: Boolean(cam.fresh),
-        frame_seq: typeof cam.frame_seq === "number" ? cam.frame_seq : null,
-        age_s: typeof cam.age_s === "number" && Number.isFinite(cam.age_s) ? cam.age_s : null,
-      });
-    }
-  }
-
-  cameras.sort((a, b) => {
-    const ra = (CAMERA_RANK[a.role] ?? 2) + (a.stream === "depth" ? 0.5 : 0);
-    const rb = (CAMERA_RANK[b.role] ?? 2) + (b.stream === "depth" ? 0.5 : 0);
-    return ra - rb;
-  });
-
-  const summary = {
-    armsTotal: arms.length,
-    armsFresh: arms.filter((a) => a.fresh).length,
-    camsTotal: cameras.length,
-    camsLive: cameras.filter((c) => c.fresh).length,
-    heldCount: arms.filter((a) => a.held).length,
-    openIncidentCount: arms.reduce((n, a) => n + a.openIncidents.length, 0),
-    faultArmCount: arms.filter((a) => a.hwFaultMotors > 0 || a.motorHealth?.status === "fault").length,
-    warnArmCount: arms.filter((a) => a.warnMotors > 0).length,
-    receivedAtMs,
-  };
-  return { receivedAtMs, arms, cameras, summary };
-}
+export { isArmAttentionOrLive, canonicalArmId, normalizeWorkcellObservations };
 
 /** One camera tile. frames.bind runs once per camera identity; the feed keeps painting between polls. */
-function CameraTile({ cam, frames, liveOn }) {
+function CameraTile({ cam, frames, liveOn, hidden }) {
   const imgRef = useRef(null);
   const statusRef = useRef(null);
   const standbyRef = useRef(null);
   useLayoutEffect(() => {
     frames.bind(imgRef.current, { source: cam.source_id }, statusRef.current, cam.label);
   }, [cam.source_id, cam.label, frames]);
-  // No dep list: sync the standby text after every poll render like the pre-preact version did.
   useLayoutEffect(() => {
+    frames.repaint?.({ source: cam.source_id });
+  }, [liveOn, cam.source_id, frames]);
+  const toggleZoom = (ev) => {
     const img = imgRef.current;
-    const standby = standbyRef.current;
-    if (!img || !standby) return;
-    if (!liveOn) {
-      standby.hidden = false;
-      standby.textContent = "영상 일시정지";
-    } else if (!img.getAttribute("src")) {
-      standby.hidden = false;
-      standby.textContent = img.dataset.frameStateText || "첫 프레임 대기 — 스트림 연결 확인";
-    }
-  });
-  const toggleZoom = () => imgRef.current?.classList.toggle("focused");
+    if (!img?.getAttribute("src")) return;
+    ev.stopPropagation();
+    img.classList.toggle("focused");
+  };
   const onKeyDown = (ev) => {
     if (ev.key === "Enter" || ev.key === " ") {
       ev.preventDefault();
-      toggleZoom();
+      toggleZoom(ev);
     } else if (ev.key === "Escape") {
       imgRef.current?.classList.remove("focused");
     }
   };
-  return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} tabIndex=${0} onKeyDown=${onKeyDown}>
+  return html`<article class="cell-stage-cam" data-camera-source=${cam.source_id} hidden=${hidden} tabIndex=${0} onKeyDown=${onKeyDown}>
     <div class="cell-stage-cam-head">
       <strong>${cam.stream === "depth" ? `${cam.label} · 깊이` : cam.label}</strong>
-      <small ref=${statusRef} class="omx-inspector-cam-badge">영상 확인 중</small>
+      <small ref=${statusRef} class="omx-inspector-cam-badge" />
     </div>
     <div class="omx-inspector-cam-frame">
-      <img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`} loading="lazy"
-        onClick=${toggleZoom} onLoad=${() => { if (standbyRef.current) standbyRef.current.hidden = true; }} />
-      <span ref=${standbyRef} class="omx-inspector-cam-standby" role="status">영상 대기</span>
+      <img ref=${imgRef} class="omx-inspector-main-cam omx-inspector-cam" alt=${`${cam.label} 실시간 카메라`}
+        onClick=${toggleZoom} />
+      <span ref=${standbyRef} class="omx-inspector-cam-standby" role="status" />
     </div>
   </article>`;
 }
@@ -207,32 +88,63 @@ function ArmCard({ arm, selected, mhState, selection, receivedAtMs }) {
   </button>`;
 }
 
-function obsSignature(obs) {
-  if (!obs) return "";
-  return JSON.stringify({
-    arms: (obs.arms || []).map((a) => ({
-      id: a.id,
-      label: a.label,
-      fresh: a.fresh,
-      held: a.heldIncidents.length,
-      open: a.openIncidents.length,
-      faults: a.faults,
-      hw: a.hwFaultMotors,
-      warn: a.warnMotors,
-      temp: a.maxTempC,
-      pwm: a.maxPwmPct,
-      ma: a.maxCurrentMa,
-      mhStatus: a.motorHealth?.status || "",
-      mhEv: a.motorHealth?.evidence || "",
-      joints: a.jointsDeg ? a.jointsDeg.map((d) => (d === null ? null : d.toFixed(1))) : null,
-    })),
-    cams: (obs.cameras || []).map((c) => [c.source_id, c.label, c.role, c.stream, c.arm_id, c.fresh]),
-  });
-}
-
-export function createCellCockpitStage({ scope, call, view, auth, selection, onChanged, onVisionSample }) {
+export function createCellCockpitStage({
+  scope,
+  call,
+  view,
+  auth,
+  selection,
+  contextHost = null,
+  isOperator = () => false,
+  namedReason = () => "",
+  onChanged,
+  onVisionSample,
+  onOpenBlueprint = null,
+}) {
   const gate = createPollGate({ slowCodes: { WORKCELL_OBSERVATIONS_UNAVAILABLE: 30000 } });
-  const frames = createCellFrameFeed({ call, scope, intervalMs: 2000 });
+  const camStates = new Map();
+  let renderingStage = false;
+  let notifyQueued = false;
+  const frames = createCellFrameFeed({
+    call,
+    scope,
+    intervalMs: 2000,
+    onSourcesSample,
+    onStateChange(_key, state) {
+      if (!state || state.roiTarget) return;
+      const prev = camStates.get(state.source);
+      if (prev && prev.live === state.live && prev.hasFrame === state.hasFrame
+          && prev.phase === state.phase && prev.kind === state.kind
+          && (state.hasFrame || prev.label === state.label)) return;
+      camStates.set(state.source, state);
+      const obsCams = view.workcellObs?.cameras || [];
+      const liveCount = obsCams.filter((c) => camStates.get(c.source_id)?.live).length;
+      const checked = obsCams.some((c) => {
+        const st = camStates.get(c.source_id);
+        return st && st.kind !== "neutral";
+      });
+      const summaryChanged = view.cellLiveCamCount !== liveCount || Boolean(view.cellCamChecked) !== checked;
+      view.cellLiveCamCount = liveCount;
+      view.cellCamChecked = checked;
+      if (state.kind === "neutral" && !prev) return;
+      if (summaryChanged || prev?.live !== state.live || prev?.hasFrame !== state.hasFrame
+          || prev?.phase !== state.phase || (!state.hasFrame && prev?.label !== state.label)) {
+        if (renderingStage) {
+          if (!notifyQueued) {
+            notifyQueued = true;
+            queueMicrotask(() => {
+              notifyQueued = false;
+              render();
+              onChanged?.();
+            });
+          }
+          return;
+        }
+        render();
+        onChanged?.();
+      }
+    },
+  });
   const section = document.createElement("section");
   section.className = "panel cell-cockpit-stage";
   section.id = "cell-cockpit-stage";
@@ -250,16 +162,46 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   let areaHidden = false;
   let inFlight = false;
   let liveOn = true;
+  let showAllCams = false;
+  let showAllArms = false;
   let controlUnitFetched = false;
-  let visionCheckedAt = 0;
   let lastStageSig = "";
   let lastObsSig = "";
   let notifiedOnce = false;
 
   const isStageActive = () => !areaHidden && !owns("drive") && owns("arms");
+  const isCamActive = (cam) => Boolean(camStates.get(cam.source_id)?.live || camStates.get(cam.source_id)?.hasFrame || cam.fresh);
+
+  function onSourcesSample(sample) {
+    if (!owns("drive") && owns("arms")) onVisionSample?.(sample);
+  }
+
+  async function clearIncident(sourceId, incidentId, payload) {
+    await call(`${OBS_BASE}/arms/${encodeURIComponent(sourceId)}/incidents/${encodeURIComponent(incidentId)}/clear`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      timeoutMs: 3000,
+    });
+    gate.reset();
+    await refresh();
+  }
+
+  const contextPanel = contextHost ? createCellContextPanel({
+    scope,
+    call,
+    view,
+    auth,
+    host: contextHost,
+    isStageActive,
+    isOperator,
+    namedReason,
+    onClearIncident: clearIncident,
+  }) : null;
 
   const syncFeedState = () => {
-    frames.setRunning(liveOn && isStageActive() && !auth.locked && !document.hidden);
+    frames.setRunning(isStageActive() && !auth.locked && !document.hidden);
+    frames.setPaused(!liveOn);
   };
 
   const onToggleLive = () => {
@@ -280,6 +222,7 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
   function render() {
     const show = isStageActive();
     patchHidden(section, !show);
+    contextPanel?.render();
     syncFeedState();
     if (!show) {
       lastStageSig = "";
@@ -291,7 +234,10 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
     const unitId = cu?.unit_id || "ARM-CELL";
     const parentText = cu?.parent ? `상위 관제: ${cu.parent}` : "독립 셀 관제";
     const revText = cu?.config_revision ? `구성 ${cu.config_revision}` : "";
-    const statText = sum ? `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간 · 카메라 ${sum.camsTotal}대` : "관측 대기";
+    const camStat = sum
+      ? (view.cellCamChecked ? `카메라 ${view.cellLiveCamCount ?? 0}/${sum.camsTotal} 실시간` : `카메라 ${sum.camsTotal}대`)
+      : "";
+    const statText = sum ? `팔 ${sum.armsFresh}/${sum.armsTotal} 실시간 · ${camStat}` : "관측 대기";
     let liveStatus = "neutral";
     let liveText = "수신 대기";
     if (sum?.armsTotal) {
@@ -307,39 +253,85 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
       }
     }
     const cams = obs?.cameras || [];
+    const activeCams = cams.filter(isCamActive);
+    const hiddenCamCount = cams.length - activeCams.length;
+    const camDiag = cams.map((c) => camStates.get(c.source_id)?.label).find(Boolean) || "영상 연결 확인 중";
     const arms = obs?.arms || [];
     const selectedId = selection?.get?.() ?? null;
+    const alertArms = arms.filter((arm) => arm.held || arm.openIncidents.length > 0 || arm.hwFaultMotors > 0 || arm.motorHealth?.status === "fault");
+    const activeArms = arms.filter((arm) => isArmAttentionOrLive(arm, selectedId));
+    const idleArmCount = arms.length - activeArms.length;
+    const visibleArms = showAllArms ? arms : activeArms;
     const stageSig = JSON.stringify([
       unitId, parentText, revText, statText, liveStatus, liveText,
-      view.fleet?.name === "샘플 현장", liveOn, selectedId, Boolean(auth.locked), obsSignature(obs),
+      view.fleet?.name === "샘플 현장", liveOn, selectedId, Boolean(auth.locked),
+      showAllCams, showAllArms, activeCams.map((c) => c.source_id), camDiag, obsSignature(obs),
     ]);
     if (stageSig === lastStageSig) return;
     lastStageSig = stageSig;
-    renderDom(html`
-      <div class="cell-stage-head">
-        <div>
-          <h2 id="cell-stage-heading">${unitId} 작업 셀 관제</h2>
-          <p class="cell-stage-meta">${[parentText, revText, statText].filter(Boolean).join(" · ")}</p>
+    renderingStage = true;
+    try {
+      renderDom(html`
+        <div class="cell-stage-head">
+          <div>
+            <h2 id="cell-stage-heading">${unitId} 작업 셀 관제</h2>
+            <p class="cell-stage-meta">${[parentText, revText, statText].filter(Boolean).join(" · ")}</p>
+          </div>
+          <div class="cell-stage-actions">
+            <ui-tag class="cell-stage-sample-tag" status="warn" hidden=${view.fleet?.name !== "샘플 현장"}>샘플 데이터</ui-tag>
+            <ui-tag status=${liveStatus}>${liveText}</ui-tag>
+            <${UiButton} kind="segment" type="button" data-work-read="" aria-pressed=${liveOn ? "true" : "false"} onClick=${onToggleLive}
+            >${liveOn ? "영상 일시정지" : "영상 다시 보기"}</${UiButton}>
+            ${onOpenBlueprint ? html`<${UiButton} kind="quiet" type="button" data-work-read="" onClick=${() => onOpenBlueprint("yard")}>구역 도면</${UiButton}>` : null}
+            <a class="ui-action-link" data-kind="quiet" href="/console/cell">셀 작업 화면</a>
+          </div>
         </div>
-        <div class="cell-stage-actions">
-          <ui-tag class="cell-stage-sample-tag" status="warn" hidden=${view.fleet?.name !== "샘플 현장"}>샘플 데이터</ui-tag>
-          <ui-tag status=${liveStatus}>${liveText}</ui-tag>
-          <${UiButton} kind="segment" type="button" data-work-read="" aria-pressed=${liveOn ? "true" : "false"} onClick=${onToggleLive}
-          >${liveOn ? "영상 자동갱신 ON" : "영상 일시정지"}</${UiButton}>
-          <a class="ui-action-link" data-kind="quiet" href="/console/cell">셀 작업 화면</a>
+        ${alertArms.length
+          ? html`<div class="cell-stage-alert" role="status">
+              <p><strong>${alertArms.map((a) => a.label).join(", ")}</strong> · 확인이 필요한 정지·고장 상태입니다. 오른쪽 ‘셀 작업 · 열린 사건’에서 원인을 적고 해제하세요.</p>
+              <a class="ui-action-link" data-kind="quiet" href=${`/console/cell?focus=arm:${encodeURIComponent(alertArms[0].sourceId)}#observation-heading`}>팔 관측 상세</a>
+            </div>`
+          : null}
+        ${cams.length && (hiddenCamCount > 0 || showAllCams)
+          ? html`<div class="cell-stage-cam-banner">
+              <p class="hint">
+                ${showAllCams
+                  ? `전체 셀 카메라 ${cams.length}대 표시 중`
+                  : `실시간 카메라 ${activeCams.length}/${cams.length}대${!activeCams.length ? ` · ${camDiag}` : ` · 대기 ${hiddenCamCount}대 숨김`}`}
+              </p>
+              <${UiButton} kind="quiet" type="button" data-work-read="" onClick=${() => { showAllCams = !showAllCams; render(); }}>
+                ${showAllCams ? "실시간 카메라만 보기" : `대기 카메라 ${hiddenCamCount}대 보기`}
+              </${UiButton}>
+            </div>`
+          : null}
+        <div class="cell-stage-cameras" role="region" aria-label="셀 실시간 카메라">
+          ${cams.length
+            ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn} hidden=${!showAllCams && !isCamActive(cam)} />`)
+            : html`<p class="hint">등록된 셀 카메라가 없습니다.</p>`}
         </div>
-      </div>
-      <div class="cell-stage-cameras" role="region" aria-label="셀 실시간 카메라">
-        ${cams.length
-          ? cams.map((cam) => html`<${CameraTile} key=${cam.source_id} cam=${cam} frames=${frames} liveOn=${liveOn} />`)
-          : html`<p class="hint">등록된 셀 카메라가 없습니다.</p>`}
-      </div>
-      <div class="cell-stage-arms" role="region" aria-label="셀 팔 상태 요약">
-        ${arms.length
-          ? arms.map((arm) => html`<${ArmCard} key=${arm.id} arm=${arm} selected=${selectedId === arm.id} mhState=${mhStateFor(arm.id)} selection=${selection} receivedAtMs=${obs.receivedAtMs} />`)
-          : html`<p class="hint">${auth.locked ? "접속 후 팔 관측을 표시합니다." : "관측 중인 팔이 없습니다."}</p>`}
-      </div>
-    `, section);
+        ${arms.length && idleArmCount > 0
+          ? html`<div class="cell-stage-standby">
+              <p class="hint">
+                ${showAllArms
+                  ? `전체 팔 ${arms.length}대 표시 중`
+                  : activeArms.length
+                    ? `활성·주의 팔 ${activeArms.length}대 표시 · 대기 팔 ${idleArmCount}대 숨김`
+                    : `활성·주의 팔 없음 · 대기 팔 ${idleArmCount}대`}
+              </p>
+              <${UiButton} kind="quiet" type="button" data-work-read="" onClick=${() => { showAllArms = !showAllArms; render(); }}>
+                ${showAllArms ? "활성·주의 팔만 보기" : `대기 팔 ${idleArmCount}대 보기`}
+              </${UiButton}>
+            </div>`
+          : null}
+        <div class="cell-stage-arms" role="region" aria-label="셀 팔 상태 요약">
+          ${arms.length
+            ? visibleArms.map((arm) => html`<${ArmCard} key=${arm.id} arm=${arm} selected=${selectedId === arm.id} mhState=${mhStateFor(arm.id)} selection=${selection} receivedAtMs=${obs.receivedAtMs} />`)
+            : html`<p class="hint">${auth.locked ? "접속 후 팔 관측을 표시합니다." : "관측 중인 팔이 없습니다."}</p>`}
+        </div>
+      `, section);
+    } finally {
+      renderingStage = false;
+    }
   }
 
   async function refreshControlUnit(signal) {
@@ -352,23 +344,6 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
     }
   }
 
-  async function refreshVisionSummary(signal) {
-    if (owns("drive") || !owns("arms")) return;
-    const now = Date.now();
-    if (now - visionCheckedAt < VISION_REFRESH_MS) return;
-    visionCheckedAt = now;
-    try {
-      const res = await call("/api/fleet/vision/sources", { signal });
-      const sources = Array.isArray(res?.sources) ? res.sources : [];
-      onVisionSample?.({ finished: true, status: 200, names: sources });
-    } catch (err) {
-      if (err?.name === "AbortError") return;
-      onVisionSample?.(typeof err?.status === "number"
-        ? { finished: true, status: err.status }
-        : { finished: false });
-    }
-  }
-
   async function refresh() {
     if (auth.locked || inFlight || !gate.due() || !owns("arms")) return;
     const life = scope.capture();
@@ -377,7 +352,8 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
       const [payload] = await Promise.all([
         call("/api/fleet/workcell-observations", { signal: life.signal }),
         refreshControlUnit(life.signal),
-        isStageActive() ? refreshVisionSummary(life.signal) : Promise.resolve(),
+        isStageActive() ? frames.checkSources(life.signal) : Promise.resolve(),
+        isStageActive() && contextPanel ? contextPanel.refresh(life.signal) : Promise.resolve(),
       ]);
       life.check();
       gate.ok();
@@ -419,6 +395,7 @@ export function createCellCockpitStage({ scope, call, view, auth, selection, onC
       notifiedOnce = false;
       gate.reset();
       syncFeedState();
+      contextPanel?.pause();
     },
   };
 }

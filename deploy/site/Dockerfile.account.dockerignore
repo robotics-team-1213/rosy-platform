@@ -31,6 +31,7 @@
 !shared/web/account-profile.js
 !shared/web/icons/console.svg
 !shared/web/brand/mark.svg
+!shared/web/brand/platform.svg
 !deploy/site/requirements-account.txt
 !deploy/site/site_db.py
 **/__pycache__

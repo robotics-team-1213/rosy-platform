@@ -65,6 +65,7 @@ class IdentityConfig:
     auto_marker_missing_s: float = 3.0
     auto_near_m: float = 0.5
     motion_match: bool = False       # 2026-11-21: also name a robot by its motion (motion_match.py), no lamp; the site opts in
+    marker_match: bool = False       # also confirm a robot directly from its assigned QR/ArUco marker_id detection; the site opts in
     motion_min_move_m: float = 0.15  # the robot's own pose must have moved this far
     motion_tol_m: float = 0.06       # camera and robot distances agree within this (camera error about 5 cm, 2026-11-21)
     motion_still_m: float = 0.04     # anything that moved less stood still
@@ -81,8 +82,10 @@ class IdentityConfig:
             raise ValueError("identity settings must be positive numbers")
         if self.window_s > 6.0:
             raise ValueError("identity window_s must be at most 6 s (D-472 4)")
-        if not isinstance(self.auto_request, bool) or not isinstance(self.motion_match, bool):
-            raise ValueError("identity auto_request and motion_match must be true or false")
+        if (not isinstance(self.auto_request, bool)
+                or not isinstance(self.motion_match, bool)
+                or not isinstance(self.marker_match, bool)):
+            raise ValueError("identity auto_request, motion_match, and marker_match must be true or false")
 
     @classmethod
     def from_mapping(cls, raw: Optional[Mapping]) -> "IdentityConfig":
@@ -124,7 +127,7 @@ class _Binding:
     confirmed_at: float
     evidence: dict = field(default_factory=dict)
     yaw: Optional[float] = None
-    mode: str = "led"    # how it was named: "led" (lamp verdict) | "motion" (motion_match.py)
+    mode: str = "led"    # how it was named: "led" (lamp verdict) | "motion" (motion_match.py) | "marker" (QR/ArUco)
 
 
 class IdentityService:
@@ -375,7 +378,48 @@ class IdentityService:
                     crowded |= {first.robot_id, second.robot_id}
         for robot_id in sorted(crowded):
             self._drop(robot_id, "overlap")
+        self._bind_from_markers(source_id, payload)
         self._match_by_motion(source_id, payload)
+
+    def _bind_from_markers(self, source_id: str, payload) -> None:
+        """Confirm a robot identity from an assigned overhead marker/QR detection on ``source_id``.
+
+        Never invents yaw (D-587 4) and refuses any ambiguous or overlapping detection within ``overlap_m``.
+        """
+        source = next((s for s in getattr(self.tracking, "sources", ()) if s.source_id == source_id), None)
+        if not self.config.marker_match or source is None or payload.status != "OK" or not source.robot_markers:
+            return
+        assignments = {marker_id: robot_id for robot_id, marker_id in source.robot_markers}
+        seen_by_marker: dict[int, list] = {}
+        for d in payload.detections:
+            if d.marker_id is not None and d.marker_id in assignments:
+                seen_by_marker.setdefault(d.marker_id, []).append(d)
+        candidates: list[tuple[str, object]] = []
+        for marker_id, dets in seen_by_marker.items():
+            if len(dets) != 1:
+                continue  # duplicate decoded marker in one frame is ambiguous
+            robot_id = assignments[marker_id]
+            if robot_id in source.robot_ids:
+                candidates.append((robot_id, dets[0]))
+        if not candidates:
+            return
+        overlap_m = self.config.overlap_m
+        now = self._clock()
+        for robot_id, det in candidates:
+            if any(other_rid != robot_id and math.hypot(other_det.x - det.x, other_det.y - det.y) <= overlap_m
+                   for other_rid, other_det in candidates):
+                continue
+            if any(other.robot_id != robot_id and other.source_id == source_id
+                   and math.hypot(other.x - det.x, other.y - det.y) <= overlap_m
+                   for other in self._bindings.values()):
+                continue
+            self._bindings[robot_id] = _Binding(
+                robot_id, source_id, payload.map_id, payload.calibration_revision,
+                det.x, det.y, payload.captured_at, now,
+                {"marker_id": det.marker_id}, yaw=None, mode="marker",
+            )
+            self._last[robot_id] = {"state": "CONFIRMED", "reason": None, "at": now, "source_id": source_id}
+            self._pending.pop(robot_id, None)
 
     def _match_by_motion(self, source_id: str, payload) -> None:
         """Bind the robot whose own pose and exactly one detection moved alike (motion_match.py). The binding is
@@ -440,7 +484,7 @@ class IdentityService:
         """Map-frame pose of the robot's confirmed track, or UNKNOWN with the reason.
 
         Observation only (addendum 3) unless the site opts a robot into the track anchor (map_pose.track_*).
-        ``mode`` is "led" or "motion" (None when UNKNOWN). ``yaw`` is None unless the detection has one:
+        ``mode`` is "led", "motion", or "marker" (None when UNKNOWN). ``yaw`` is None unless the detection has one:
         the blob tracker reports no heading. ``age_s`` is not clamped: a negative age is a
         future-stamped detection, which the consumer refuses like a future map pose sighting.
         """

@@ -35,6 +35,8 @@ TWIN_OPPOSITE_TOL_RAD = math.radians(25.0)
 TWIN_FIT_GAP = 0.10
 TWIN_POSE_TOL_M = 0.05
 TWIN_POSE_TOL_RAD = 0.05
+UNIQUE_MIN_FIT = 0.90
+UNIQUE_MIN_MARGIN = 0.15
 
 
 @dataclass(frozen=True)
@@ -74,23 +76,37 @@ class LocalizationStateMachine:
         return Step(self.state, ('report_candidates',))
 
     def _is_verified_overhead_twin_tiebreak(self, candidate_index, pose, source, cue_set, evidence) -> bool:
-        """Accept overhead-only twin tiebreak iff local laser candidates form a mirror pair."""
-        if (source != 'overhead' or 'overhead' not in cue_set
-                or not isinstance(evidence, dict) or evidence.get('tiebreak') != 'twin'):
+        """Accept overhead-only twin tiebreak (2 mirrors) or unique corroboration (1 strong laser candidate)."""
+        if source != 'overhead' or 'overhead' not in cue_set or not isinstance(evidence, dict):
             return False
-        if len(self.candidates) != 2:
-            return False
-        a, b = self.candidates
-        if not (isinstance(a.scan_fit, (int, float)) and isinstance(b.scan_fit, (int, float))
-                and math.isfinite(a.scan_fit) and math.isfinite(b.scan_fit)):
-            return False
-        if a.scan_fit < self.min_fit or b.scan_fit < self.min_fit:
-            return False
-        if abs(a.scan_fit - b.scan_fit) > TWIN_FIT_GAP:
-            return False
-        if math.hypot(a.x - b.x, a.y - b.y) < TWIN_SEPARATION_M:
-            return False
-        if abs(abs(wrap(a.yaw - b.yaw)) - math.pi) > TWIN_OPPOSITE_TOL_RAD:
+        mode = evidence.get('tiebreak')
+        if mode == 'twin':
+            if len(self.candidates) != 2:
+                return False
+            a, b = self.candidates
+            if not (isinstance(a.scan_fit, (int, float)) and isinstance(b.scan_fit, (int, float))
+                    and math.isfinite(a.scan_fit) and math.isfinite(b.scan_fit)):
+                return False
+            if a.scan_fit < self.min_fit or b.scan_fit < self.min_fit:
+                return False
+            if abs(a.scan_fit - b.scan_fit) > TWIN_FIT_GAP:
+                return False
+            if math.hypot(a.x - b.x, a.y - b.y) < TWIN_SEPARATION_M:
+                return False
+            if abs(abs(wrap(a.yaw - b.yaw)) - math.pi) > TWIN_OPPOSITE_TOL_RAD:
+                return False
+        elif mode == 'unique':
+            if len(self.candidates) != 1:
+                return False
+            c = self.candidates[0]
+            if (not isinstance(c.scan_fit, (int, float)) or isinstance(c.scan_fit, bool)
+                    or not math.isfinite(c.scan_fit) or c.scan_fit < max(self.min_fit, 0.85)):
+                return False
+            cam_dist = evidence.get('camera_to_chosen_m')
+            if (not isinstance(cam_dist, (int, float)) or isinstance(cam_dist, bool)
+                    or not math.isfinite(cam_dist) or not 0.0 <= cam_dist <= 0.35):
+                return False
+        else:
             return False
         if candidate_index is not None:
             if not 0 <= candidate_index < len(self.candidates):
@@ -139,6 +155,24 @@ class LocalizationStateMachine:
         if not all(math.isfinite(v) for v in pose):
             return self._reject('bad_pose')
         self.pose, self.source = tuple(float(v) for v in pose), source
+        self.check = InjectionCheck(now_s, **self._check_args)
+        return Step(self.state, ('inject_pose',), pose=self.pose)
+
+    def auto_lock_unique(self, now_s, *, min_fit=UNIQUE_MIN_FIT, min_margin=UNIQUE_MIN_MARGIN):
+        """Auto-inject a single candidate whose geometric unique_margin satisfies thresholds."""
+        if self.state is not LocState.CANDIDATES or self.check is not None or len(self.candidates) != 1:
+            return Step(self.state)
+        c = self.candidates[0]
+        margin = getattr(c, 'unique_margin', None)
+        if (not isinstance(c.scan_fit, (int, float)) or isinstance(c.scan_fit, bool)
+                or not math.isfinite(c.scan_fit) or c.scan_fit < max(self.min_fit, min_fit)):
+            return Step(self.state)
+        if (not isinstance(margin, (int, float)) or isinstance(margin, bool)
+                or not math.isfinite(margin) or margin < min_margin):
+            return Step(self.state)
+        if not all(math.isfinite(v) for v in (c.x, c.y, c.yaw)):
+            return Step(self.state)
+        self.pose, self.source = (float(c.x), float(c.y), float(c.yaw)), 'unique_map'
         self.check = InjectionCheck(now_s, **self._check_args)
         return Step(self.state, ('inject_pose',), pose=self.pose)
 

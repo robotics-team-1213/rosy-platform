@@ -227,3 +227,105 @@ def test_the_180_degree_twin_always_survives_distinct(pose, twin):
     nudge = (pose[0] + .05, pose[1], pose[2] + .1)                  # the same hypothesis, blurred
     picked = [p for p, _ in distinct([(.99, .97, pose), (.985, .97, nudge), (.98, .96, other)])]
     assert picked == [pose, other]
+
+
+def test_fine_drop_below_minimum_fit_and_records_rejection_diagnostic():
+    class _DroppedFineField:
+        def clear_poses(self, radius):
+            return np.ones((1, 1), bool)
+
+        def global_results(self, ranges, angles, radius, clear=None):
+            return [(.95, .94, np.array([0.0, 0.0, 0.0]))], None
+
+        def refine(self, seeds, ranges, angles, clear, offsets=None):
+            return [(.85, .83, np.array([0.01, 0.0, 0.0]))]  # below minimum_fit=0.90
+
+    ranges, angles = np.full(40, 1.0), np.linspace(-1.0, 1.0, 40)
+    assert global_candidates(_DroppedFineField(), ranges, angles, RADIUS, Mount(0., 0., 0.),
+                             minimum_fit=.90, fine_scan=(ranges, angles)) == []
+
+    # Empty real-field search populates diagnostic breakdown reason
+    grid = np.zeros((40, 40), dtype=np.int8)
+    grid[20, :] = 100
+    diag = []
+    assert global_candidates(MapAgreement(grid, .05, (0., 0.)), np.full(40, 0.5),
+                             np.linspace(-0.3, 0.3, 40), RADIUS, Mount(0., 0., 0.),
+                             diagnostics=diag) == []
+    assert len(diag) == 1 and "reason=" in diag[0]
+
+
+def test_asymmetric_gazebo_and_l_room_yield_unique_margin_while_symmetric_rooms_do_not():
+    d = np.load(Path(__file__).parent / "fixtures/gazebo_localization_corner.npz")
+    asym = MapAgreement(d["grid"], float(d["resolution"]), d["origin"])
+    found = global_candidates(asym, d["ranges"], d["angles"], RADIUS, Mount(0., 0., 0.))
+    assert len(found) == 1
+    assert found[0].unique_margin is not None and found[0].unique_margin >= 0.15
+
+    # Symmetric map_v2_fleet track never earns a unique_margin (even with occluded beams)
+    ranges, angles = scan((0., -.51, 0.), beams=640)
+    sym_found = global_candidates(field(), ranges[::4], angles[::4], RADIUS, MOUNT, fine_scan=(ranges, angles))
+    assert all(c.unique_margin is None for c in sym_found)
+    occ_ranges = np.where((angles > 0.2) & (angles < 1.8), 0.35, ranges)
+    occ_found = global_candidates(field(), occ_ranges[::4], angles[::4], RADIUS, MOUNT)
+    assert all(c.unique_margin is None for c in occ_found)
+
+    # Synthetic L-shaped asymmetric room vs symmetric rectangular room
+    def _synth_scan(ag, pose):
+        angs = np.linspace(-math.pi, math.pi, 360, endpoint=False)
+        rs = np.full_like(angs, 6.0)
+        h, w = ag.grid.shape
+        for k, a in enumerate(angs):
+            ang = pose[2] + a
+            for dist in np.arange(0.1, 6.0, ag.resolution * 0.5):
+                ix = int(math.floor((pose[0] + dist * math.cos(ang) - ag.origin[0]) / ag.resolution))
+                iy = int(math.floor((pose[1] + dist * math.sin(ang) - ag.origin[1]) / ag.resolution))
+                if ix < 0 or ix >= w or iy < 0 or iy >= h:
+                    break
+                if ag.grid[iy, ix] >= 65:
+                    rs[k] = dist
+                    break
+        return rs, angs
+
+    l_grid = np.zeros((44, 52), dtype=np.int8)
+    l_grid[[0, -1], :] = 100
+    l_grid[:, [0, -1]] = 100
+    l_grid[20:, 28:] = 100
+    l_field = MapAgreement(l_grid, 0.05, (0.0, 0.0))
+    lr, la = _synth_scan(l_field, (0.7, 0.55, 0.25))
+    l_found = global_candidates(l_field, lr[::2], la[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(lr, la))
+    assert len(l_found) == 1 and l_found[0].unique_margin is not None and l_found[0].unique_margin >= 0.15
+
+    rect_grid = np.zeros((40, 52), dtype=np.int8)
+    rect_grid[[0, -1], :] = 100
+    rect_grid[:, [0, -1]] = 100
+    rect_field = MapAgreement(rect_grid, 0.05, (0.0, 0.0))
+    rr, ra = _synth_scan(rect_field, (0.7, 0.55, 0.25))
+    rect_found = global_candidates(rect_field, rr[::2], ra[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(rr, ra))
+    assert all(c.unique_margin is None for c in rect_found)
+
+    # Shifted-bbox symmetric room: an outer wall shifts (cx, cy) >= 0.4 m so bbox mirror clips a wall;
+    # both global_candidates and isolated _unique_margin (with truncated coarse results) must still reject.
+    from control.sensing.loc_candidates import _unique_margin
+    from control.sensing.localization import valid_beams
+
+    shifted_grid = np.zeros((40, 80), dtype=np.int8)
+    shifted_grid[[0, -1], :52] = 100
+    shifted_grid[:, [0, 51]] = 100
+    shifted_grid[:, 78] = 100  # outer wall outside closed inner room shifts bbox center +0.675 m in x
+    shifted_field = MapAgreement(shifted_grid, 0.05, (0.0, 0.0))
+    sr, sa = _synth_scan(shifted_field, (0.7, 0.55, 0.25))
+    shifted_found = global_candidates(shifted_field, sr[::2], sa[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(sr, sa))
+    assert all(c.unique_margin is None for c in shifted_found)
+    er, ea = valid_beams(sr, sa)
+    clear_shifted = shifted_field.clear_poses(RADIUS)
+    assert _unique_margin(shifted_field, [(1.0, 1.0, np.array([0.7, 0.55, 0.25]))],
+                          [(np.array([0.7, 0.55, 0.25]), 1.0)], er, ea, 0.9, clear=clear_shifted) is None
+
+    # 90-degree (4-fold) symmetric square room never earns a unique_margin
+    sq_grid = np.zeros((44, 44), dtype=np.int8)
+    sq_grid[[0, -1], :] = 100
+    sq_grid[:, [0, -1]] = 100
+    sq_field = MapAgreement(sq_grid, 0.05, (0.0, 0.0))
+    sqr, sqa = _synth_scan(sq_field, (0.65, 0.80, 0.20))
+    sq_found = global_candidates(sq_field, sqr[::2], sqa[::2], RADIUS, Mount(0., 0., 0.), fine_scan=(sqr, sqa))
+    assert all(c.unique_margin is None for c in sq_found)

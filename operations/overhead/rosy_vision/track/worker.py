@@ -78,6 +78,7 @@ CONFIG_REFRESH_S = 2.0
 #: How far back the LED ring reaches: a whole identify window (<= 6 s) plus the config read delay.
 RING_S = 6.0 + 2 * CONFIG_REFRESH_S + 1.0
 FAILURE_LOG_INTERVAL_S = 30.0
+_MISMATCH_REFRESH_COOLDOWN_S = 1.0
 _SEQ_MODULUS = 0x100000000
 
 
@@ -176,6 +177,7 @@ class TrackWorker:
         self._send_tuning = True
         self._sends: set[asyncio.Future] = set()
         self._clock = clock
+        self._last_409_refresh = -math.inf
         self.anchors = AnchorFeed(camera.source_id, camera.map_id, client, self.guard, clock)
         try:  # the preview route serves the tracker's ROI crops
             ingest.anchor_tracker = self.anchors.tracker
@@ -261,10 +263,11 @@ class TrackWorker:
         if self._relearn_due is not None:  # the lock is confirmed and settled: learn once
             event, self._relearn_due = (self._relearn_due or None, False), None
         self._measurement = None
+        effective_camera = camera or self.camera
         step = await asyncio.get_running_loop().run_in_executor(
             self._executor, functools.partial(
                 self._detect, frame.jpeg, frame.captured_at, markers, config.get("calibration"),
-                lens, relearn, event, suspend, hold))
+                lens, relearn, event, suspend, hold, effective_camera.robot_markers))
         if step is not None and step[0] is not None:
             self._latest_calibration = step[0]
         # D-589 x D-596: no tune step or retune is judged while an LED identify window is open
@@ -298,7 +301,14 @@ class TrackWorker:
                 payload = payload.model_copy(update={"tuning": None})
                 await self.guard.post(payload.captured_at, lambda: self.client.publish(payload))
         except TrackPublishError as exc:
-            self._publish_log.failed((("status", exc.status_code), ("code", exc.code)))
+            self._publish_log.failed((("status", exc.status_code), ("code", exc.code),
+                                      ("revision", payload.calibration_revision or "none")))
+            if (exc.status_code == 409 and exc.code == "CALIBRATION_MISMATCH"
+                    and payload.calibration_revision is not None):
+                now = self._clock()
+                if now - self._last_409_refresh >= _MISMATCH_REFRESH_COOLDOWN_S:
+                    self._last_409_refresh = now
+                    await self.refresh_config()
         except httpx.HTTPError as exc:
             self._publish_log.failed((("error_type", type(exc).__name__),))
         else:
@@ -420,7 +430,7 @@ class TrackWorker:
 
     def _detect(self, jpeg: bytes, captured_at: float, markers, record, lens,
                 relearn: int | None, camera: tuple[str, bool] | None = None, suspend: bool = False,
-                hold: float | None = None) -> tuple[Calibration | None, DetectorResult] | None:
+                hold: float | None = None, robot_markers: Mapping[str, int] | None = None) -> tuple[Calibration | None, DetectorResult] | None:
         """Detection-thread half of a step: relearn, hold, decode, choose the calibration, detect,
         and measure the frame for tuning (``self._measurement``). ``camera`` is a D-589 camera
         change (fingerprint, first); ``suspend`` (a tune runs) skips detection: LEARNING;
@@ -454,7 +464,8 @@ class TrackWorker:
         self._approved = approved if by_markers is None else None
         if calibration is None:
             return None, DetectorResult((), "CALIBRATION_REQUIRED")
-        robot_ids = set(self.camera.robot_markers.values()).union(ROBOT_MARKER_IDS)
+        active_markers = self.camera.robot_markers if robot_markers is None else robot_markers
+        robot_ids = set(active_markers.values()).union(ROBOT_MARKER_IDS)
         rate = self._presence.rate(captured_at, robot_ids.intersection(markers))
         try:
             self._measurement = self.scorer.measure(image, calibration, rate)
@@ -469,7 +480,7 @@ class TrackWorker:
         matrix = geometry.as_matrix(calibration.image_to_map)
         camera = geometry.camera_from_homography(matrix, calibration.image_size, calibration.hfov_deg)
         measured = []
-        for marker_id in sorted(set(self.camera.robot_markers.values()).union(ROBOT_MARKER_IDS)):
+        for marker_id in sorted(robot_ids):
             quad = markers.get(marker_id)
             if quad is None:
                 continue

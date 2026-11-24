@@ -2,7 +2,7 @@
 import { setOffBy } from "/common/cause-line.js";
 import { patchHidden, patchText } from "/common/control-dom.js";
 import {tripWaitText} from "/console/assets/trip-display.js";
-import {owns, relays} from "/console/assets/unit-scope.js";
+import {owns, relays, unitScope} from "/console/assets/unit-scope.js";
 import { createControlUnitView } from "/console/assets/control-unit-view.js";
 import { createArmTransferView } from "/console/assets/arm-transfer-view.js";
 import { createTripProposalView } from "/console/assets/trip-proposal-view.js";
@@ -17,9 +17,16 @@ const approvals = {two_person: "두 사람 · 제안한 사람이 아닌 이름 
 const visible = {approval_pending: "승인 대기", in_progress: "진행 중", waiting: "기다림", intervention: "개입 필요", ended: "끝남"};
 export const workKey = row => JSON.stringify([row.source, row.source_id]);
 export const workStatus = status => states[status] || "상태 확인 필요";
+export function formatWorkTime(value) {
+  if (value == null || value === "") return "미확인";
+  const ms = typeof value === "number"
+    ? (Number.isFinite(value) && value > 0 ? (value < 1e12 ? value * 1000 : value) : NaN)
+    : new Date(value).getTime();
+  return Number.isFinite(ms) ? new Date(ms).toLocaleString() : "미확인";
+}
 const workKind = row => ({task: "주행", trip: "운행", cell_job: "팔레트 적재"})[row.source] || "팔 작업";
 const approvable = row => (row.source === "mission" || row.source === "cell_job") && row.status === "PROPOSED";  // one admit route takes both (mission_routes.py)
-export const canAdmitWorkHere = (row, scope) => approvable(row) && owns("arms", scope) && !relays(scope);
+export const canAdmitWorkHere = (row, scope = unitScope()) => approvable(row) && owns("arms", scope) && !relays(scope);
 export const workLine = row => [workKind(row), row.device_id, tripWaitText(row) || visible[row.visible_state] || workStatus(row.status)].join(" · ");
 // D-865 P3 — 승인 범위 판정과 문구는 순수 함수다(node 시험 대상). 화면은 범위 사실을 읽어
 // 표시만 하고 승인 자체는 서버의 정책 principal이 한다: 사람 승인과 같은 검사를 전부 통과한
@@ -173,7 +180,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       ["상태", workStatus(row.status)],
       ...(row.approval ? [["승인 조건", approvals[row.approval] || "승인 조건 확인 필요"]] : []),
       ...(autoText ? [["자동 승인", autoText]] : []),
-      ["최근 원장 갱신", new Date(row.updated_at).toLocaleString()],
+      ["최근 원장 갱신", formatWorkTime(row.updated_at)],
       ["사유", row.reason || "기록된 사유 없음"],
       ["작업 식별자", row.source_id],
       ...(approvable(row) && !canAdmitHere ? [["승인 위치", "이 팔을 맡은 셀 관제 화면에서 승인"]] : []),
@@ -308,7 +315,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
           const item = document.createElement("li"), text = document.createElement("p"), info = document.createElement("p");
           text.textContent = row.content;
           info.className = "hint";
-          info.textContent = `접수 · ${new Date(row.received_at).toLocaleString()} · ${row.request_id}`;
+          info.textContent = `접수 · ${formatWorkTime(row.received_at)} · ${row.request_id}`;
           item.append(text, info); requests.append(item);
           const button = document.createElement("ui-button");
           button.dataset.requestId = row.request_id;

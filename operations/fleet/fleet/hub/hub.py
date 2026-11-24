@@ -84,9 +84,13 @@ class SiteHub:
         self.event_store = event_store
         self.event_callback = event_callback
         self.junction_signal = None  # D-620: synchronous cached signal lookup, no robot control
-        # Cursor is in memory: a Fleet restart replays the audit table once, in batches.
-        # shortcut: persisting it needs a schema change in the audit DB, do it if replay gets slow.
-        self._event_projection_cursor = 0
+        # Cursor is persisted when event_store supports it so restarts only replay new rows.
+        self._event_projection_cursor = (
+            int(event_store.get_projection_cursor())
+            if event_store is not None and hasattr(event_store, "get_projection_cursor")
+            else 0
+        )
+        self._persisted_projection_cursor = self._event_projection_cursor
         # Heartbeats read only this flag; SQLite is touched only while the projection is behind.
         self._projection_dirty = True
         self._projection_lock = threading.Lock()
@@ -175,8 +179,12 @@ class SiteHub:
 
     async def _recover_in_background(self) -> None:
         try:
-            async with self._lock():
-                await self._project_async()
+            while self._projection_dirty:
+                async with self._lock():
+                    ok, has_more = await self._project_batch_async()
+                if not ok or not has_more:
+                    break
+                await asyncio.sleep(0)
         finally:
             self._recovery_task = None
 
@@ -373,6 +381,19 @@ class SiteHub:
         row.last_event_seq = max(row.last_event_seq, event.seq)
         return Envelope(type=EnvelopeType.EVENT, payload={"accepted": True})
 
+    def _persist_projection_cursor(self, cursor: int) -> None:
+        if cursor > 0 and self.event_store is not None and hasattr(self.event_store, "set_projection_cursor"):
+            self.event_store.set_projection_cursor(cursor)
+        self._persisted_projection_cursor = max(self._persisted_projection_cursor, int(cursor))
+
+    def _safe_persist_projection_cursor(self, cursor: int) -> bool:
+        try:
+            self._persist_projection_cursor(cursor)
+            return True
+        except Exception:
+            _LOGGER.warning("Could not persist CORE event projection cursor %s", cursor, exc_info=True)
+            return False
+
     def _recover_event_projections(self) -> bool:
         """Replay durable CORE events after transient task projection failures."""
         if self.event_callback is None or self.event_store is None:
@@ -391,32 +412,50 @@ class SiteHub:
                         self._event_projection_cursor = row["audit_id"]
                     if len(rows) < 100:
                         break
-                self._projection_dirty = False
-                return True
             except Exception:
+                if self._event_projection_cursor > self._persisted_projection_cursor:
+                    self._safe_persist_projection_cursor(self._event_projection_cursor)
                 _LOGGER.exception("Could not project durable CORE event into Fleet task history")
                 return False
+            if self._event_projection_cursor > self._persisted_projection_cursor:
+                if not self._safe_persist_projection_cursor(self._event_projection_cursor):
+                    return False
+            self._projection_dirty = False
+            return True
+
+    async def _project_batch_async(self) -> tuple[bool, bool]:
+        """Project at most one 100-row batch on the loop, persisting cursor progress. Caller holds io lock."""
+        if self.event_callback is None or self.event_store is None:
+            self._projection_dirty = False
+            return True, False
+        if not hasattr(self.event_store, "read_events"):
+            return False, False
+        try:
+            rows = await asyncio.to_thread(
+                self.event_store.read_events, after_id=self._event_projection_cursor, limit=100)
+            for row in rows[:100]:
+                self.event_callback(row["event"])
+                self._event_projection_cursor = row["audit_id"]
+                await asyncio.sleep(0)
+        except Exception:
+            if self._event_projection_cursor > self._persisted_projection_cursor:
+                await asyncio.to_thread(self._safe_persist_projection_cursor, self._event_projection_cursor)
+            _LOGGER.exception("Could not project durable CORE event into Fleet task history")
+            return False, False
+        if self._event_projection_cursor > self._persisted_projection_cursor:
+            if not await asyncio.to_thread(self._safe_persist_projection_cursor, self._event_projection_cursor):
+                return False, False
+        if len(rows) < 100:
+            self._projection_dirty = False
+            return True, False
+        return True, True
 
     async def _project_async(self) -> bool:
         """Same replay as the sync one, but only read_events runs in a thread; the callback
         runs on the event loop. Caller holds the io lock."""
-        if self.event_callback is None or self.event_store is None:
-            self._projection_dirty = False
-            return True
-        if not hasattr(self.event_store, "read_events"):
-            return False
-        try:
-            while True:
-                rows = await asyncio.to_thread(
-                    self.event_store.read_events, after_id=self._event_projection_cursor, limit=100)
-                for row in rows[:100]:
-                    self.event_callback(row["event"])
-                    self._event_projection_cursor = row["audit_id"]
-                    await asyncio.sleep(0)
-                if len(rows) < 100:
-                    break
-            self._projection_dirty = False
-            return True
-        except Exception:
-            _LOGGER.exception("Could not project durable CORE event into Fleet task history")
-            return False
+        while True:
+            ok, has_more = await self._project_batch_async()
+            if not ok:
+                return False
+            if not has_more:
+                return True

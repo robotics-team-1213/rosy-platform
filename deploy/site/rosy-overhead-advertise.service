@@ -1,6 +1,6 @@
 [Unit]
 Description=Advertise the ROSY overhead camera ingress through Avahi DNS-SD
-Wants=network-online.target avahi-daemon.service
+Wants=network-online.target avahi-daemon.service rosy-site-firewall.service
 After=network-online.target avahi-daemon.service rosy-site-firewall.service
 
 [Service]

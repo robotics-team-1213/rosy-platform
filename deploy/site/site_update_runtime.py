@@ -123,12 +123,16 @@ def site_busy_reasons(config: dict, http, *, root: Path = Path('/')) -> list[str
         for row in state['robots']:
             reasons.extend(_robot_busy_reasons(row))
         trips = http.functional(f'{base}/api/fleet/trips', ca, token_file)
-        if not isinstance(trips, dict) or not isinstance(trips.get('open'), list) or not isinstance(trips.get('running'), list):
+        running = trips.get('running') if isinstance(trips, dict) else None
+        if (not isinstance(trips, dict) or not isinstance(trips.get('open'), list)
+                or 'running' not in trips
+                or (running is not None and not isinstance(running, (dict, list)))):
             raise ValueError('invalid trips payload')
         if trips['open']:
             reasons.append(f"open trips ({len(trips['open'])})")
-        if trips['running']:
-            reasons.append(f"running trips ({len(trips['running'])})")
+        if isinstance(running, dict) or running:
+            count = len(running) if isinstance(running, list) else 1
+            reasons.append(f'running trips ({count})')
         control = http.functional(f'{base}/api/fleet/dispatch-control', ca, token_file)
         if (not isinstance(control, dict) or type(control.get('queued_tasks')) is not int
                 or type(control.get('unresolved_actions')) is not int):

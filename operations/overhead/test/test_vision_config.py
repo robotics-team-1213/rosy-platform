@@ -199,3 +199,13 @@ def test_vision_rejects_invalid_world_corners(tmp_path, corners):
     path = _write(tmp_path / "s.yaml", [_source(corner_world_m=corners)])
     with pytest.raises(ValueError, match="corner_world_m"):
         load_vision_sources(path, environ=ENV)
+
+
+def test_stream_width_defaults_to_none_and_validates_bounds(tmp_path):
+    assert load_vision_sources(_write(tmp_path / "a.yaml", [_source()]), environ=_ENV)[0].stream_width is None
+    for width in (1920, 2560, 3840):
+        cfg = load_vision_sources(_write(tmp_path / "ok.yaml", [_source(stream_width=width)]), environ=_ENV)[0]
+        assert cfg.stream_width == width
+    for bad in (True, 0, 319, 4097, "1920"):
+        with pytest.raises(ValueError, match="stream_width"):
+            load_vision_sources(_write(tmp_path / "bad.yaml", [_source(stream_width=bad)]), environ=_ENV)

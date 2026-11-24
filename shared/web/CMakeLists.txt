@@ -14,6 +14,7 @@ install(FILES
   template.css
   app-shell.css
   core_ui_logic.js
+  camera-frame-hold.js
   hold-ticker.js
   ui.js
   workspace.js
@@ -86,6 +87,7 @@ install(FILES
   meshes/omx-link7.stl
   meshes/pinky-body.stl
   meshes/pinky-pro.urdf
+  meshes/pinky-tray.stl
   meshes/pinky-wheel.stl
   DESTINATION share/${PROJECT_NAME}/meshes
 )

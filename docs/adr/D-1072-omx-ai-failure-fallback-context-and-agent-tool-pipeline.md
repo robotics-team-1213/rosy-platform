@@ -1,6 +1,6 @@
 ## D-1072 OMX AI 실패 폴백 제어·풍부한 컨텍스트 번들 및 에이전트 Tool·HTTP 파이프라인
 
-**Status:** Proposed (2026-11-23, 4인 병렬 패널 합의; 코드 구현·D-430 독립 안전 리뷰·현장 수용은 [구현 계획](../plans/2026-11-23-omx-ai-failure-fallback-and-agent-pipeline.md) TODO 슬라이스별 진행).
+**Status:** Accepted (2026-11-24 — 4인 병렬 패널 합의 및 PR-0~PR-7 코드·D-430 독립 안전 리뷰 반영: `#563`, `#564`, `#565`, `#624`, `#629`, `#634`, `#572`, `#566` 머지 완료; 현장 수용 및 후속 트랙은 [구현 계획](../plans/2026-11-23-omx-ai-failure-fallback-and-agent-pipeline.md) §3 참고).
 
 관련 결정: [D-358](D-358-er2-feedback-outbox-and-replan-fencing.md) · [D-427](D-427-platform-three-parts-middleware-operations-learning.md) · [D-429](D-429-five-concerns-control-port-and-site-devices.md) · [D-430](D-430-safety-as-a-separate-concern.md) · [D-516](D-516-offline-decision-model-replay-boundary.md) · [D-793](D-793-omx-learned-policy-execution-approval-gate.md) · [D-878](D-878-structured-model-output-schema-and-provider-wire.md) · [D-911](D-911-omx-native-reviewed-operating-envelope.md) · [D-935](D-935-arm-s-payload-bound-amends-d911.md) · [D-1019](D-1019-omx-carry-redirects-to-declared-alternate-destinations.md) · [D-1024](D-1024-omx-learned-policy-supervised-real-trial-fast-track.md) · [D-1039](D-1039-ai-assessor-kind-limited-incident-clear.md) · [D-1047](D-1047-cell-s-automatic-departure-and-link-failure-clear.md) · [D-1048](D-1048-automatic-fold-of-a-held-extended-arm.md) · [D-1057](D-1057-cell-task-admission-evidence.md) · [D-1061](D-1061-records-fragments-merge-queue.md) · [D-1065](D-1065-omx-camera-role-names.md).
 

@@ -112,9 +112,46 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
         if any(robot not in console.robot_ids for robot in candidates):
             raise HTTPException(404, detail={"code": "UNKNOWN_ROBOT", "detail": {}})
         active = runner._store.active()
-        unknown = sorted({p for s in steps for p in (s["to"], *s["via"])} - set(active[2].places if active else ()))
+        place_ids = {p for s in steps for p in (s["to"], *s["via"])}
+        unknown = sorted(place_ids - set(active[2].places if active else ()))
         if unknown:
             raise HTTPException(422, detail={"code": "TRIP_UNKNOWN_PLACE", "detail": {"places": unknown}})
+        if active and len(active) > 1 and active[1] is not None:
+            from fleet.site_points import _edge_links, _is_verified_stop, _stop_rules_by_place
+
+            site_map = active[1]
+            places_by_id = {p.id: p for p in site_map.places}
+            rules_store = getattr(runner._store, "rules", None)
+            site_rules = rules_store.active_rules() if rules_store is not None else None
+            exit_place = site_rules.return_.exit_place if site_rules is not None else None
+            edges_in, edges_out = _edge_links(site_map)
+            stop_rules, ambiguous = _stop_rules_by_place(site_rules)
+            destinations = {s["to"] for s in steps}
+            checked_stops = destinations | ({"S_OUT"} & place_ids)
+            blocked_stops: list[str] = []
+            for pid in sorted(checked_stops):
+                place = places_by_id.get(pid)
+                if place is None:
+                    blocked_stops.append(pid)
+                    continue
+                if place.kind not in ("stop", "charge") and pid != "S_OUT":
+                    continue
+                is_exit = exit_place is not None and pid == exit_place and pid != "S1"
+                _, dispatchable = _is_verified_stop(
+                    place,
+                    stop_rules.get(pid),
+                    has_edges_in=bool(edges_in.get(pid)),
+                    has_edges_out=bool(edges_out.get(pid)),
+                    ambiguous_rule=pid in ambiguous,
+                    is_outbound_exit=is_exit,
+                )
+                if not dispatchable:
+                    blocked_stops.append(pid)
+            if blocked_stops:
+                raise HTTPException(
+                    422,
+                    detail={"code": "TRIP_STOP_NOT_DISPATCHABLE", "detail": {"places": blocked_stops}},
+                )
 
     install_trip_proposal_routes(app, cell_job_store=store, jobs=jobs, check=check, **proposals)
 

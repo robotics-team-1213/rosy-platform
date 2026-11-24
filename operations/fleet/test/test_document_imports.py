@@ -31,11 +31,16 @@ SHARED = {
     "account-permissions.js",  # D-757: shared read-only session capability predicates
     "login-return.js",
     "fleet-header.js",  # D-540 2: the one header of the four documents
+    "fleet-session.js",  # Shared topbar token, cookie login and D-1043 auth failure classifier
     "unit-scope.js",  # D-960 §4: what this control unit's screen shows, read by the header and work views
+    "unit-links.js",  # D-977: verified child-unit cross-links shared by Cell and integrated control
+    "disclosure-list.js",  # Active-first collapsible history list shared across Fleet views
     "map-fit.js",
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
     "cell-frames.js",  # D-136: Vision-lease cell camera frames shared by Console and Cell.
+    "cell-obs-model.js",  # Pure workcell observation & camera normalization shared by Console and Cell.
+    "omx-inspector.js",  # Shared OMX right-inspector DOM builder used by Console and Cell.
     "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
     "area-first.js",
     "area-nav.js",  # D-741 6·7: the address view picks the area (rail and sub-nav state)
@@ -80,6 +85,7 @@ OWN = {
         "cockpit-telemetry.js",
         "cockpit-hosts.js",
         "cell-cockpit-stage.js",
+        "cell-context-panel.js",
         "manual-control.js",
         "roster-cards.js",  # Retains focused cards only within the robot workspace.
         "robot-video.js",  # D-801: the robot card's front camera reuses the console video tiles
@@ -107,6 +113,8 @@ OWN = {
         "motion-readiness.js",
         "link-tag.js",
         "localization-badge.js",
+        "localization-panel.js",
+        "localization-panel-logic.js",
         "power-health-view.js",
         "charge-bays-view.js",  # D-941: read-only charge bay plan
         "charge-bays-model.js",  # its DOM-free display model
@@ -116,6 +124,10 @@ OWN = {
         "state-age.js",
         "motion-source.js",  # why a robot moves, from proving facts only
         "planning-stall.js",  # a plan that never ends: Nav2 did not answer
+        "zone-blueprint-inspector.js",
+        "zone-blueprint-model.js",
+        "zone-blueprint-2d.js",
+        "zone-blueprint-3d.js",
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.
@@ -146,6 +158,7 @@ OWN = {
         "cell-real2sim-specs.js",  # split from cell-real2sim.js
         "cell-real2sim-actions.js",  # split from cell-real2sim.js
         "cell-real2sim-views.js",  # split from cell-real2sim.js
+        "cell-pipeline-panel.js",  # fleet E2E pipeline panel mounted above visual cards
         "cell-line.js",  # D-975: 준비 노선(응답이 채운 요소만 읽음)
     },
     "site-map.js": {

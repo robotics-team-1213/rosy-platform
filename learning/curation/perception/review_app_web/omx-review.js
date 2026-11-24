@@ -1,17 +1,12 @@
 // Explicit human labels and source-bound frame reads; source recordings stay immutable.
 import {accountFetch} from '/account-session.js';
 import {confirmIrreversible} from '/common/ui.js';
+import {domEl as el, makeUuid as uuid} from '/learning-ui.js';
 const $=id=>document.getElementById(id),API='/api/learning/omx/center';
 const OBJECT={moved_as_intended:'의도대로 이동',grasp_missed:'집기 실패',dropped:'낙하',displaced:'의도와 다르게 이동',untouched:'변화 없음',unknown:'미정'};
 let current=null,pending=null,token='',saving=false,loading=false,stale=false;
 let modified=false,editVersion=0,confirming=false;
 let generation=0,controller=null,playing=false,playTimer=null,frameBusy=false,shownFrame=-1,activeContext='',pendingPreview=false;
-function el(tag,text){const node=document.createElement(tag);if(text!=null)node.textContent=text;return node;}
-function uuid(){
-  const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;
-  const h=Array.from(b,x=>x.toString(16).padStart(2,'0')).join('');
-  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
-}
 async function request(path,body,signal){
   const options={cache:'no-store',signal};
   if(body!==undefined){
@@ -117,7 +112,7 @@ async function preview(automatic=false){
   const ticket=++generation,source=current;
   const episode=Number($('review-episode').value),frame=Number($('review-frame').value),camera=Number($('review-camera').value),keys=source.inspection.camera_keys;
   const view=$('review-view').value,context=[source.prepared_id,source.source_revision,episode,view,view==='group'?Math.floor(camera/8):camera].join('/');
-  clearMedia();$('review-viewer').setAttribute('aria-busy','true');
+  if(automatic!==true||activeContext!==context)clearMedia();$('review-viewer').setAttribute('aria-busy','true');
   $('review-frame-label').textContent=`시도 ${episode} · 프레임 ${frame} / ${$('review-frame').max} · ${keys[camera]}`;
   $('review-frame-status').textContent='선택한 실제 프레임을 읽는 중입니다.';
   // An aborted client cannot cancel native decoding: finish this view's read before its latest cursor.

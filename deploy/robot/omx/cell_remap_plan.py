@@ -78,3 +78,160 @@ def missing_maps(config: dict, calibration: dict, sites) -> list:
     tcp = bool((config.get("calibrate") or {}).get("tcp_marks"))
     have = calibration.get("sites", {})
     return [s for s in sites if s not in have or (tcp and have[s].get("marks") != "tcp")]
+
+
+OBSERVATIONS_SCHEMA = "rosy.omx-remap-observations.v1"
+
+
+def _finite_num(raw, label: str) -> float:
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or not math.isfinite(float(raw)):
+        raise SystemExit(f"replay: invalid {label}")
+    return float(raw)
+
+
+def _finite_pair(raw, label: str) -> tuple[float, float]:
+    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
+        raise SystemExit(f"replay: invalid {label}")
+    return (_finite_num(raw[0], label), _finite_num(raw[1], label))
+
+
+def save_observations(
+    frames_dir: Path,
+    *,
+    z_view: float,
+    tcp_marks: bool,
+    marks: list,
+    seen_jaws: list,
+    scene_moved=None,
+) -> Path:
+    """Persist raw remap marks and jaw observations before any scene/jaw gate aborts, for offline replay."""
+    out = Path(frames_dir) / "observations.json"
+    payload = {
+        "schema": OBSERVATIONS_SCHEMA,
+        "z_view": float(z_view),
+        "tcp_marks": bool(tcp_marks),
+        "scene_moved": scene_moved,
+        "marks": [{"pixel": [float(p[0]), float(p[1])], "arm_m": [float(a[0]), float(a[1])]} for p, a in marks],
+        "seen_jaws": [
+            {
+                "tcp": [float(j["tcp"][0]), float(j["tcp"][1])],
+                "yaw": float(j["yaw"]),
+                "pixel": [float(j["pixel"][0]), float(j["pixel"][1])],
+                "blobs": [[float(v) for v in b] for b in (j.get("blobs") or [])],
+            }
+            for j in seen_jaws
+        ],
+    }
+    tmp = out.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    tmp.replace(out)
+    return out
+
+
+def fit_remap_marks(
+    config: dict,
+    z_view: float,
+    *,
+    tcp_marks: bool,
+    marks: list,
+    seen_jaws: list,
+    frames_dir: Path | None = None,
+    write_labels: bool = True,
+    log=print,
+) -> dict:
+    """Label TCP jaws if requested, filter consensus marks, and fit the coarse calibration record."""
+    import time
+    import cell_calibration as cal
+    import cell_params as prm
+    from cell_intrinsics_frames import fitted_map
+    from cell_map_fit import consensus, enough_agree
+
+    if tcp_marks:  # each mark's arm point is the place of the jaw it is, so the map maps the TCP (jaws' middle)
+        import cell_jaw_side
+
+        why, marks, labels = cell_jaw_side.remap_marks(seen_jaws, config.get("params"))
+        if write_labels and frames_dir is not None:
+            (Path(frames_dir) / "labels.json").write_text(json.dumps({"why": why, **(labels or {})}), encoding="utf-8")
+        log({"jaw_labels": labels, "refused": why})
+        if why:
+            where = f"; views in {frames_dir}" if frames_dir is not None else ""
+            raise SystemExit(f"remap: {why}; no map saved{where}")
+    seen, marks = list(marks), consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
+    dropped = [{"pixel": list(p), "arm_m": list(a)} for p, a in seen if (p, a) not in marks]
+    if dropped:
+        log({"dropped_marks": dropped})
+    if not enough_agree(len(marks), len(seen)):
+        raise SystemExit(f"remap: only {len(marks)} marks agree of {len(seen)}")
+    return dict(fitted_map(config, marks, z_view), **{
+        "z_view": z_view,
+        "coarse": True,
+        "dropped_marks": dropped,
+        "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
+        "loo_error_mm": cal.loo_error_mm(marks),
+        "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        **({"marks": "tcp"} if tcp_marks else {}),
+    })
+
+
+def replay_observations(frames_dir: Path, config: dict, *, log=print) -> dict:
+    """Offline, read-only, fail-closed replay of a saved remap-frames directory under current config guards."""
+    import cv2
+    import cell_scene_guard
+
+    frames = Path(frames_dir).expanduser()
+    obs_path, before_path, after_path = frames / "observations.json", frames / "before.jpg", frames / "after.jpg"
+    for p in (obs_path, before_path, after_path):
+        if not p.is_file():
+            raise SystemExit(f"replay: missing required artifact {p}")
+    try:
+        obs = json.loads(obs_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"replay: unreadable {obs_path}: {exc}") from exc
+    if not isinstance(obs, dict) or obs.get("schema") != OBSERVATIONS_SCHEMA:
+        raise SystemExit(f"replay: {obs_path} schema {obs.get('schema') if isinstance(obs, dict) else None!r} != {OBSERVATIONS_SCHEMA!r}")
+    z_view = _finite_num(obs.get("z_view"), "z_view")
+    tcp_marks = obs.get("tcp_marks")
+    if type(tcp_marks) is not bool:
+        raise SystemExit("replay: invalid tcp_marks")
+    if bool((config.get("calibrate") or {}).get("tcp_marks")) != tcp_marks:
+        raise SystemExit(f"replay: config tcp_marks mismatch (saved={tcp_marks})")
+    raw_marks, raw_jaws = obs.get("marks"), obs.get("seen_jaws")
+    if not isinstance(raw_marks, list) or not isinstance(raw_jaws, list):
+        raise SystemExit("replay: marks and seen_jaws must be lists")
+    before, after = cv2.imread(str(before_path)), cv2.imread(str(after_path))
+    if before is None or after is None:
+        raise SystemExit(f"replay: unreadable before/after images in {frames}")
+    moved = cell_scene_guard.scene_moved(
+        before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())],
+    )
+    if moved:
+        raise SystemExit(f"replay: the scene changed during it, no map saved: {moved}; views in {frames}")
+    marks = []
+    for item in raw_marks:
+        if not isinstance(item, dict):
+            raise SystemExit("replay: invalid mark entry")
+        marks.append((_finite_pair(item.get("pixel"), "mark.pixel"), _finite_pair(item.get("arm_m"), "mark.arm_m")))
+    seen_jaws = []
+    for jaw in raw_jaws:
+        if not isinstance(jaw, dict):
+            raise SystemExit("replay: invalid seen_jaws entry")
+        raw_blobs = jaw.get("blobs") if jaw.get("blobs") is not None else []
+        if not isinstance(raw_blobs, list):
+            raise SystemExit("replay: invalid seen_jaws.blobs")
+        blobs = []
+        for blob in raw_blobs:
+            if not isinstance(blob, list) or len(blob) < 2:
+                raise SystemExit("replay: invalid blob entry")
+            blobs.append([_finite_num(v, "blob") for v in blob])
+        seen_jaws.append({
+            "tcp": _finite_pair(jaw.get("tcp"), "jaw.tcp"),
+            "yaw": _finite_num(jaw.get("yaw"), "jaw.yaw"),
+            "pixel": _finite_pair(jaw.get("pixel"), "jaw.pixel"),
+            "blobs": blobs,
+        })
+    if tcp_marks and not seen_jaws:
+        raise SystemExit("replay: tcp_marks=True observation has no seen_jaws")
+    return fit_remap_marks(
+        config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws,
+        frames_dir=frames, write_labels=False, log=log,
+    )

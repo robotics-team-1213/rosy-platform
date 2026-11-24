@@ -12,7 +12,10 @@ from copy import deepcopy
 from dataclasses import dataclass
 from uuid import UUID
 
-FORBIDDEN_KEYS = frozenset({"cmd_vel", "image", "twist"})
+FORBIDDEN_KEYS = frozenset({
+    "cmd_vel", "image", "twist", "joints", "joint_positions", "joint_angles",
+    "gripper", "pwm", "torque", "servo", "motor_id", "coil", "plc_register", "chunk_cmd", "fifo", "raw_action",
+})
 MAX_STEPS = 8
 
 
@@ -183,7 +186,7 @@ def _one(step: object) -> Call:
     if not isinstance(step, dict):
         raise IntentError("NOT_A_STEP", "each step is an object")
     if FORBIDDEN_KEYS & {str(key).lower() for key in step}:
-        raise IntentError("FORBIDDEN", "cmd_vel, image, and twist are not a request")
+        raise IntentError("FORBIDDEN", "raw actuator, PLC, or camera keys are forbidden in intents")
     verb = step.get("do")
     spec = _VERBS.get(verb) if isinstance(verb, str) else None
     if spec is None:

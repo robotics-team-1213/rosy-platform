@@ -107,6 +107,20 @@ SCENARIOS = [
      "actions": ["ask_person"]},
     {"name": "park overloaded at a far pick: a person, even when the pile moved", "rounds": [(PARK, True, True)],
      "result": "ask a person: park_contact", "actions": ["ask_person"]},
+    {"name": "policy timing late: human gate, never auto retry", "rounds": [("policy: timing_late", False, True)],
+     "result": "ask a person: policy_timing_late", "actions": ["ask_person"]},
+    {"name": "policy jaw gate: human gate, never auto retry", "rounds": [("policy: jaw_gate", False, True)],
+     "result": "ask a person: policy_jaw_gate", "actions": ["ask_person"]},
+    {"name": "policy chunk refused: human gate, never auto retry", "rounds": [("policy: chunk_refused", False, True)],
+     "result": "ask a person: policy_chunk_refused", "actions": ["ask_person"]},
+    {"name": "policy zone unverified: human gate, never auto retry", "rounds": [("policy: zone_unverified", False, True)],
+     "result": "ask a person: policy_zone_unverified", "actions": ["ask_person"]},
+    {"name": "policy stalled: human gate, never auto retry", "rounds": [("policy: stalled", False, True)],
+     "result": "ask a person: policy_stalled", "actions": ["ask_person"]},
+    {"name": "policy contact: human gate, never auto retry", "rounds": [("policy: contact", False, True)],
+     "result": "ask a person: policy_contact", "actions": ["ask_person"]},
+    {"name": "policy missing calibration: human gate, never auto retry", "rounds": [("policy: missing_calibration", False, True)],
+     "result": "ask a person: policy_missing_calibration", "actions": ["ask_person"]},
 ]
 BELT = [500, 0, 640, 200]  # the belt's rect, far from PICK_PX
 

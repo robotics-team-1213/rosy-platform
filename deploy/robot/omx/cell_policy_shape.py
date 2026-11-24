@@ -58,11 +58,14 @@ def envelope(library: dict) -> tuple[list[float], list[float], float]:
 
 def demonstrated_range(policy_root: Path, offset) -> tuple[list[float], list[float]]:
     """Per-joint q01..q99 of the actions the model was trained on (recorded by a person on this arm), in cell units."""
-    from safetensors.numpy import load_file
-
-    files = sorted(Path(policy_root).glob("policy_preprocessor_step_*_normalizer_processor.safetensors"))
+    policy_root = Path(policy_root)
+    if (policy_root / lrs.UNITS).is_file():
+        raise ValueError("sim-unit checkpoint action quantiles are not cell-unit envelope limits")
+    files = sorted(policy_root.glob("policy_preprocessor_step_*_normalizer_processor.safetensors"))
     if not files:
         raise ValueError("checkpoint has no normalizer statistics")
+    from safetensors.numpy import load_file
+
     stats = load_file(str(files[0]))
     off = np.asarray(offset, dtype=float)
     return (np.asarray(stats["action.q01"], dtype=float) - off).tolist(), (np.asarray(stats["action.q99"], dtype=float) - off).tolist()

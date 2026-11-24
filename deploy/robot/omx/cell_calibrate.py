@@ -15,7 +15,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_calibrate_auto import auto_pivot_point, carried, clear_point, learn_bias, map_agrees, over_target, pivot_near, pivot_near_yaws, pivot_point, self_calibrate  # noqa: E402,F401
-from cell_calibrate_bound import move_regions, save_bound_map_reference  # noqa: E402,F401
+from cell_calibrate_bound import low_zone_gaps, move_regions, save_bound_map_reference  # noqa: E402,F401
 import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan as rp  # noqa: E402
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
@@ -108,6 +108,14 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
         out["bias_error"] = str(exc)
         out["missing_bias"].extend(f"{site}:{xy[0]},{xy[1]}" for site, xy in targets)
     out["missing_map"] = rp.missing_maps(config, calibration, map_sites(config))
+    cal_sites = calibration.get("sites") or {}
+    for name, site in (config.get("sites") or {}).items():
+        if not isinstance(site, dict) or site.get("tier_of"):
+            continue
+        parent = site.get("map_from")
+        if isinstance(parent, str) and name in cal_sites and parent in cal_sites:
+            if cal_sites[name].get("homography") != cal_sites[parent].get("homography") and name not in out["missing_map"]:
+                out["missing_map"].append(name)
     for s in map_sites(config):
         rec = (calibration.get("sites") or {}).get(s) or {}
         if rec.get("loo_error_mm") and not map_agrees(rec, params) and len(rec.get("points") or []) >= 5:
@@ -135,6 +143,9 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
         out["unverified_xy"] = not lat["lateral_xy_verified"]
     if cal_cfg.get("verify_depth") and not (Path(config.get("work_dir", ".")).expanduser() / "depth-verify.json").exists():
         out["missing_depth_verify"] = True
+    gaps = low_zone_gaps(config, calibration)
+    if gaps:
+        out["low_zone_gaps"] = gaps
     return out
 
 
@@ -143,6 +154,17 @@ def map_sites(config: dict) -> list:
     return config.get("calibrate", {}).get("map_sites") or [
         s for s in ("floor", "pinky", "belt") if s in config["sites"]
     ]
+
+
+def _map_write_sites(config: dict) -> list:
+    """Configured map_sites plus any site whose `map_from` mirrors one of them (so followers never go stale)."""
+    sites = list(map_sites(config))
+    seen = set(sites)
+    for name, site in (config.get("sites") or {}).items():
+        if isinstance(site, dict) and not site.get("tier_of") and site.get("map_from") in seen and name not in seen:
+            sites.append(name)
+            seen.add(name)
+    return sites
 
 
 def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None) -> dict:
@@ -191,8 +213,9 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             log({"point": [x, y], "stopped": failed, "error": status.get("error"), "state": status.get("state")})
             break
-        kept = consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
+        # tcp_marks holds unlabelled single-jaw pixels (~70 px apart > follow_px) until remap_marks labels them
+        kept = [] if tcp_marks else consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         near = predicted(kept, (x, y)) if len(kept) >= 4 else None
         report = {}
         mark = cell_pivot.mark_jaws(
@@ -215,31 +238,10 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
     after = cell.frame("top")
     cv2.imwrite(str(frames / "after.jpg"), after)
     moved = cell_scene_guard.scene_moved(before, after, ignore=[*cell_scene_guard.moving_rects(config), *(config.get("scene_ignore_px") or ())])
+    rp.save_observations(frames, z_view=z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, scene_moved=moved)
     if moved:
         raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
-    if tcp_marks:  # each mark's arm point is the place of the jaw it is, so the map maps the TCP (jaws' middle)
-        import cell_jaw_side
-
-        why, marks, labels = cell_jaw_side.remap_marks(seen_jaws, config.get("params"))
-        (frames / "labels.json").write_text(json.dumps({"why": why, **(labels or {})}))
-        log({"jaw_labels": labels, "refused": why})
-        if why:
-            raise SystemExit(f"remap: {why}; no map saved; views in {frames}")
-    seen, marks = marks, consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
-    dropped = [{"pixel": list(p), "arm_m": list(a)} for p, a in seen if (p, a) not in marks]
-    if dropped:
-        log({"dropped_marks": dropped})
-    if not enough_agree(len(marks), len(seen)):
-        raise SystemExit(f"remap: only {len(marks)} marks agree of {len(seen)}")
-    return dict(fitted_map(config, marks, z_view), **{
-        "z_view": z_view,
-        "coarse": True,
-        "dropped_marks": dropped,
-        "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
-        "loo_error_mm": cal.loo_error_mm(marks),
-        "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        **({"marks": "tcp"} if tcp_marks else {}),
-    })
+    return rp.fit_remap_marks(config, z_view, tcp_marks=tcp_marks, marks=marks, seen_jaws=seen_jaws, frames_dir=frames, log=log)
 
 
 def main(argv=None):
@@ -249,6 +251,7 @@ def main(argv=None):
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
     ap.add_argument("--plan-only", action="store_true", help="print each remap point's IK and verdict; opens no port or camera")
+    ap.add_argument("--replay-frames", type=Path, help="check: replay a saved remap-frames dir offline; opens no port or camera and writes no calibration")
     ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair", "post-eval", "depth-verify"], help="auto: run only these step kinds (remap, regions, pivot-near, "
                     "surface, consensus-repair, post-eval, depth-verify); a reviewed plan for one step must not run the others. 2026-11-15: a "
                     "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
@@ -270,6 +273,13 @@ def main(argv=None):
         lev = cell_map_fit.plan_leverage(points, config.get("sites") or {})
         print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config), "leverage": lev}), flush=True)
         return 2 if refused else 0
+    if args.replay_frames is not None:
+        if args.step != "check":
+            raise SystemExit("--replay-frames is offline read-only and only allowed with step 'check'")
+        record = rp.replay_observations(args.replay_frames, config, log=lambda row: None)
+        agrees = map_agrees(record, config["params"])
+        print(json.dumps({"replay": record["loo_error_mm"], "agrees": agrees, "record": record}, default=str), flush=True)
+        return 0 if agrees else 2
     cal_path = Path(config["calibration_path"]).expanduser()
     calibration = json.loads(cal_path.read_text()) if cal_path.exists() else {"schema": cal.SCHEMA, "sites": {}}
     targets = [(t.split(":")[0], tuple(float(v) for v in t.split(":")[1].split(","))) for t in args.targets]
@@ -294,7 +304,7 @@ def main(argv=None):
     if not (args.commissioning and args.person_at_switch):
         print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}))
         return 2
-    done = []
+    done, config_dirty = [], False
     for step in todo:
         if step == "remap":
             ref_path = Path(config["preflight"]["reference_top"]).expanduser()
@@ -309,7 +319,7 @@ def main(argv=None):
                 done.append({"remap": record["loo_error_mm"], "refused": "marks disagree; map not saved"})
                 break
             current = cell.frame("top")
-            for site in map_sites(config):
+            for site in _map_write_sites(config):
                 calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
             if ref_path.exists():
                 move_regions(
@@ -317,6 +327,7 @@ def main(argv=None):
                     cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE),
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
+                config_dirty = True
             save_bound_map_reference(cal_path, ref_path, calibration, config, current)
             bp = cell_pivot.bias_path(cal_path)
             if bp.exists():
@@ -344,6 +355,9 @@ def main(argv=None):
                     kept = consensus(pts, prm.get(config.get("params"), "calibrate.consensus_px"))
                     if enough_agree(len(kept), len(pts)):
                         calibration["sites"][s] = repair_record(config, rec, kept)
+            for name, site in (config.get("sites") or {}).items():
+                if isinstance(site, dict) and not site.get("tier_of") and (p := site.get("map_from")) in (calibration.get("sites") or {}):
+                    calibration["sites"][name] = dict(calibration["sites"][p])
             save_bound_map_reference(cal_path, ref_path, calibration, config, reference)
             done.append({"consensus-repair": calibration["sites"][map_sites(config)[0]]["loo_error_mm"]})
         elif step.startswith("pivot-near"):
@@ -351,26 +365,10 @@ def main(argv=None):
         elif step.startswith("surface"):
             import cell_surface
 
-            site = step.split()[1]
-            s = config["sites"][site]
-            if not s.get("place"):
-                done.append({step: "no place point to touch"})
-                continue
-            tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else config["plan"].get("tcp_x_m")
-            lib = work / f"surface-{site}.library.json"
-            lib.write_text(json.dumps(cell_surface.probe_library(
-                config["plan"], *s["place"], s["yaw_deg"], 0.10, 0.010, tcp_x_m=tcp_x_m)))
-            touched = cell_surface.touch(cell, lib, tcp_x_m=tcp_x_m)
-            if touched["result"] == "touched":
-                s["surface_z"] = touched["surface_z"]
-            if config.get("work_dir"):
-                rcp = Path(config["work_dir"]).expanduser() / f"surface-{site}.json"
-                rtmp = rcp.with_suffix(".tmp")
-                rtmp.write_text(json.dumps({"result": touched["result"], "surface_z": touched.get("surface_z"), "site": site,
-                                            "xy": list(s["place"]), "measured": time.strftime("%Y-%m-%d %H:%M"),
-                                            "sets_surface_z": touched["result"] == "touched"}, indent=1), encoding="utf-8")
-                rtmp.replace(rcp)
-            done.append({step: touched["result"], "surface_z": touched.get("surface_z")})
+            res = cell_surface.run_surface_step(cell, config, step, work)
+            done.append(res)
+            if res.get(step) == "touched":
+                config_dirty = True
         elif step == "post-eval":
             import cell_post_eval
             rep = cell_post_eval.run_post_eval(
@@ -387,9 +385,10 @@ def main(argv=None):
             if config.get("work_dir"):
                 (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
             done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
-    cfg_tmp = args.config.with_suffix(".tmp")
-    cfg_tmp.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1), encoding="utf-8")
-    cfg_tmp.replace(args.config)
+    if config_dirty:
+        cfg_tmp = args.config.with_suffix(".tmp")
+        cfg_tmp.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1), encoding="utf-8")
+        cfg_tmp.replace(args.config)
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
 

@@ -12,11 +12,15 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     FILE,
     FILTER_COL,
     FILTER_OBJ,
+    IMAGES_SPEC,
+    MANIFEST_FILE,
     METRE,
     NAME,
+    REPO_ID,
     SAFE_PATH,
     SHA256,
     TASK_FILE,
+    VIEW,
     _actor,
     _bool,
     _http_url,
@@ -24,12 +28,17 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     _is_amr_bed_site,
     _match,
     _num,
+    _repo_id,
     _roi,
     _safe_path,
+    _surface_amr_bed_sites,
     _task_site_names,
     _two_arm_task,
     _two_arm_task_sites,
+    _workdir_rel_path,
 )
+from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
+from cell_media_job_spec import MEDIA_JOBS  # noqa: E402,F401
 from cell_policy_goals import resolve_goal_site
 
 SESSION = {
@@ -54,15 +63,11 @@ def _goal_site(v):
 
 JOBS = {
     "incident_status": {
-        "script": "omx_incident.py",
-        "argv": ["status", "--arm", "{arm}"],
-        "params": {"arm": _match(ARM)},
+        "script": "omx_incident.py", "argv": ["status", "--arm", "{arm}"], "params": {"arm": _match(ARM)},
     },
     "calibrate_check": {
-        "script": "cell_calibrate.py",
-        "camera": True,
-        "argv": ["--config", "{config}", "check"],
-        "params": {"config": _match(FILE)},
+        "script": "cell_calibrate.py", "camera": True,
+        "argv": ["--config", "{config}", "check"], "params": {"config": _match(FILE)},
     },
     "auto_pick_dry_run": {
         "script": "cell_auto_pick.py",
@@ -72,18 +77,24 @@ JOBS = {
         "optional": {"object": _match(FILTER_OBJ), "colour": _match(FILTER_COL), "layers_below": _int_range(0, 5)},
     },
     "pivot_near": {
-        "script": "cell_calibrate.py",
-        "moving": True,
-        "camera": True,
+        "script": "cell_calibrate.py", "moving": True, "camera": True,
         "argv": ["--config", "{config}", "auto", "--only", "pivot-near", "--targets", "{site}:{x},{y}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "site": _match(NAME), "x": METRE, "y": METRE},
     },
     "remap": {
-        "script": "cell_calibrate.py",
-        "moving": True,
-        "camera": True,
+        "script": "cell_calibrate.py", "moving": True, "camera": True,
         "argv": ["--config", "{config}", "auto", "--only", "remap", "regions"],
         "params": {"arm": _match(ARM), "config": _match(FILE)},
+    },
+    "surface": {
+        "script": "cell_calibrate.py", "moving": True, "camera": True,
+        "argv": ["--config", "{config}", "auto", "--only", "surface"],
+        "params": {"arm": _match(ARM), "config": _match(FILE)},
+    },
+    "post_eval": {
+        "script": "cell_post_eval.py", "moving": True, "camera": True,
+        "argv": ["--config", "{config}", "--targets", "{site}:{x},{y}"],
+        "params": {"arm": _match(ARM), "config": _match(FILE), "site": _match(NAME), "x": METRE, "y": METRE}, "optional": {"apply": _bool},
     },
     "home": {
         "script": "cell_pipeline.py",
@@ -149,22 +160,14 @@ JOBS = {
             "paced_chunks": _bool,
         },
     },
-    "stack_plan": {
-        "script": "cell_stack_plan.py",
-        "argv": ["--plan-json", "{plan}"],
-        "params": {"plan": _match(TASK_FILE)},
-    },
+    "stack_plan": {"script": "cell_stack_plan.py", "argv": ["--plan-json", "{plan}"], "params": {"plan": _match(TASK_FILE)}},
     "task_runner_dry_run": {
-        "script": "cell_task_runner.py",
-        "camera": True,
+        "script": "cell_task_runner.py", "camera": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--task", "{task}", "--dry-run"],
         "params": {"config": _match(FILE), "catalog": _match(FILE), "task": _match(TASK_FILE)},
     },
     "task_runner": {
-        "script": "cell_task_runner.py",
-        "moving": True,
-        "camera": True,
-        "reviewed_only": True,
+        "script": "cell_task_runner.py", "moving": True, "camera": True, "reviewed_only": True,
         "argv": ["--config", "{config}", "--catalog", "{catalog}", "--task", "{task}"],
         "params": {"arm": _match(ARM), "config": _match(FILE), "catalog": _match(FILE), "task": _match(TASK_FILE)},
         "optional": {"operator": _match(NAME), "proposer": _match(NAME)},
@@ -183,6 +186,15 @@ JOBS = {
             "colour": _match(FILTER_COL),
             "layers_below": _int_range(0, 5),
         },
+    },
+    "recover_hold": {
+        "script": "cell_auto_fold.py", "moving": True, "camera": True, "attach_live_hold": True, "commissioning": False,
+        "argv": ["--supervised", "--unlatch-hold", "--arm", "{arm}", "--config", "{config}", "--library", "{library}",
+                 "--site", "{site}", "--roi", "{roi}", "--out", "cell-job-api/recover-hold-{arm}.json"],
+        "params": {"arm": _match(ARM), "config": _match(FILE), "library": _match(FILE), "site": _match(NAME), "roi": _roi},
+        "optional": {"operator": _actor, "proposer": _actor, "vlm_url": _http_url, "vlm_config": _safe_path,
+                     "vlm_model": _match(re.compile(r"[A-Za-z0-9._:/-]{1,80}")),
+                     "vlm_provider": _match(re.compile(r"[A-Za-z0-9_-]{1,32}")), "vlm_timeout": _num(1.0, 30.0)},
     },
     "cell_two_arm_policy": {
         "script": "cell_two_arm_policy_cli.py",
@@ -231,13 +243,13 @@ JOBS = {
             "model_site_b": _match(NAME),
             "max_chunks": _int_range(1, 16),
             "timeout_s": _num(0.05, 2.0),
-            "margin_m": _num(0.005, 0.2),
-            "min_z_m": _num(-0.1, 0.2),
+            "margin_m": _num(0.005, 0.2), "min_z_m": _num(-0.1, 0.2),
+            "jpeg_quality": _int_range(50, 100),
             "dry_run": _bool,
         },
     },
+    **MEDIA_JOBS, **AREA_JOBS,
 }
-
 
 def job_arms(job: dict, params: dict) -> tuple[str, ...]:
     if job.get("arms"):
@@ -247,7 +259,8 @@ def job_arms(job: dict, params: dict) -> tuple[str, ...]:
 
 def moves_arm(job, params):
     return bool(job.get("moving")) and not (
-        job["script"] in ("cell_policy_drive.py", "cell_two_arm_policy_cli.py") and params.get("dry_run") is True
+        job["script"] in ("cell_policy_drive.py", "cell_two_arm_policy_cli.py", "cell_area_pick_cli.py")
+        and params.get("dry_run") is True
     )
 
 
@@ -265,7 +278,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         except ValueError as exc:
             raise ValueError(f"{name}: {exc}") from None
         if (check.__qualname__.startswith("_match")
-                and (FILE.fullmatch(str(checked[name])) or TASK_FILE.fullmatch(str(checked[name])))
+                and (FILE.fullmatch(str(checked[name])) or MANIFEST_FILE.fullmatch(str(checked[name])) or TASK_FILE.fullmatch(str(checked[name])))
                 and not (workdir / checked[name]).is_file()):
             raise ValueError(f"{name}: no such file in the workdir")
     opt_checked = {}
@@ -321,9 +334,11 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
                 raise ValueError("missing param model_calibration")
     # Until D-1057 reaches R, jobs that can move at an AMR bed need the R claim path.
     if moves_arm(job, params):
-        direct_sites = [checked.get(name, opt_checked.get(name, "")) for name in ("source", "dest", "site", "goal_site")]
+        direct_sites = [checked.get(name, opt_checked.get(name, "")) for name in ("source", "dest", "site", "goal_site", "pick_area", "place_area")]
         task_sites = _task_site_names(workdir / checked["task"], workdir / checked["config"] if "config" in checked else None) if "task" in checked else set()
         if any(_is_amr_bed_site(v) for v in (*direct_sites, *task_sites)):
+            raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
+        if job["script"] == "cell_calibrate.py" and "surface" in job["argv"] and _surface_amr_bed_sites(workdir / checked["config"]):
             raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
         if "goal_slot" in opt_checked:
             from cell_policy_goals import GOALS
@@ -339,7 +354,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
             args += checked[whole.group(1)]
         else:
             args.append(FIELD.sub(lambda m: checked[m.group(1)], item))
-    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks")):
+    for flag, opt in (("--dry-run", "dry_run"), ("--paced-chunks", "paced_chunks"), ("--stay-in-hover", "stay_in_hover"), ("--no-vision-refine", "no_vision_refine"), ("--apply", "apply")):
         if opt_checked.get(opt):
             args.append(flag)
     if job["script"] == "cell_auto_pick.py" and moves_arm(job, params) and opt_checked.get("verify_zones", True):
@@ -353,17 +368,22 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         "cell_calibration", "n_action", "max_obs_age_s", "object", "colour", "layers_below", "source_kind",
         "endpoint_url", "token_file", "policy_root_a", "policy_root_b", "goal_a", "goal_b", "model_cal_a", "model_cal_b",
         "cell_cal_a", "cell_cal_b", "model_site_a", "model_site_b", "work_dir", "max_chunks", "timeout_s",
-        "margin_m", "min_z_m",
+        "margin_m", "min_z_m", "jpeg_quality", "out", "out_dir", "fps", "images", "outcome", "expected_manifest_sha256",
+        "vlm_url", "vlm_model", "vlm_provider", "vlm_config", "vlm_timeout", "pick_yaw_deg", "place_yaw_deg", "max_attempts",
     ):
         if option in opt_checked:
             args += ["--" + option.replace("_", "-"), opt_checked[option]]
+    if job["script"] == "cell_media_jobs.py":
+        args = ["--workdir", str(workdir), *args]
     if job["script"] == "cell_policy_drive.py" and "endpoint_url" in opt_checked:
         args += ["--arm-id", checked["arm"]]
     if moves_arm(job, params):
-        reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
         arm_list = list(job_arms(job, params))
         if not arm_list or any(a not in SESSION for a in arm_list):
             raise ValueError(f"no session wrapper for {params.get('arm') or arm_list}")
+        if job.get("attach_live_hold"):
+            return ["bash", "-c", ENV + PY, job["script"], *args]
+        reviewed_run = bool(job.get("reviewed_only")) or opt_checked.get("reviewed_auto") is True
         prefix = [SESSION[a] for a in arm_list]
         if reviewed_run:
             if params.get("person_at_switch") is True:

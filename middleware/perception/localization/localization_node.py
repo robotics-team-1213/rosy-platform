@@ -135,7 +135,8 @@ class LocalizationNode(Node):
                                                rclpy.time.Time.from_msg(self.scan.header.stamp))
                 tr, q = tf.transform.translation, tf.transform.rotation
                 ranges, angles = self.scan_arrays()
-                score = self.field.score((tr.x, tr.y, yaw(q)), ranges, angles)
+                scorer = self.field.robust_score if hasattr(self.field, 'robust_score') else self.field.score
+                score = scorer((tr.x, tr.y, yaw(q)), ranges, angles)
                 good = (self.confirmed_at is not None and not self.picked_up and covariance_ok and
                         0 <= now-pose_t <= self.p('pose_timeout') and pose_t > self.confirmed_at and
                         score >= self.p('minimum_agreement'))

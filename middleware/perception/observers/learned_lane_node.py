@@ -22,6 +22,7 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
 from . import executor_choice
+from .camera_shm import attach_camera_front_source
 from perception_runtime.perception.image_frame import image_msg_to_frame
 from perception_runtime.perception.learned.lane_mask import VisibleHysteresis
 from perception_runtime.perception.learned.runner import LaneSegModel, ModelSlot
@@ -69,10 +70,21 @@ class LearnedLaneNode(Node):
         # camera_detect_node publishes best effort (sensor data); a reliable
         # subscriber is QoS-incompatible and never receives a frame (seen in the
         # D-373 WSL run). Depth 1: only the newest frame is worth inferring (D-185).
-        self.create_subscription(Image, 'camera/front', self._on_camera,
-                                 QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT))
+        self._camera_front_source = attach_camera_front_source(
+            self,
+            self._on_camera,
+            lambda: self.create_subscription(
+                Image, 'camera/front', self._on_camera,
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.BEST_EFFORT)),
+            image_cls=Image,
+        )
         self.create_subscription(String, 'line/observation', self._on_rule, 10)
         self._publish_status()
+
+    def destroy_node(self):
+        if getattr(self, '_camera_front_source', None) is not None:
+            self._camera_front_source.close()
+        super().destroy_node()
 
     def _on_rule(self, msg: String) -> None:
         try:

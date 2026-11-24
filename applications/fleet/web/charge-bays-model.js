@@ -99,7 +99,9 @@ export function chargeBayRows(plan) {
       const maxTemp = hs.max_temp_c ?? (Array.isArray(stopHealth.temp_c) && stopHealth.temp_c.length ? Math.max(...stopHealth.temp_c) : null);
       const maxCur = hs.max_current_ma ?? (Array.isArray(stopHealth.current_ma) && stopHealth.current_ma.length ? Math.max(...stopHealth.current_ma) : null);
       const substage = hs.substage || (task?.status === "RUNNING" ? "Grasp → Lift → Place 실행 중" : (task?.status === "COMPLETED" ? "Fold Home 완료" : "대기"));
-      const dec = plan?.decisions?.[id] || task?.decision || null;
+      const dec = Array.isArray(plan?.decisions)
+        ? [...plan.decisions].reverse().find((d) => d?.subject_id === id) || task?.decision || null
+        : plan?.decisions?.[id] || task?.decision || null;
       const armHolds = plan?.arm_holds || {};
       const cellHeldArms = (id === "cell_s" ? ["arm_s"] : ["arm_a", "arm_b"]).filter((a) => armHolds[a]?.held);
       const holdTxt = cellHeldArms.length ? `홀드(${cellHeldArms.join("/")})` : "";
@@ -116,18 +118,18 @@ export function chargeBayRows(plan) {
       const quickControls = [
         {label: "상황 판단·자동 실행 (Decision)", decisionSubject: id},
         {
-          label: humanEstop ? "사람 이탈 · 작업 자동 재개" : "사람 감지 비상정지 (E-Stop)",
+          label: humanEstop ? "비상정지 재전송 (정지 재확인)" : "사람 감지 비상정지 (E-Stop)",
           humanSafetyCell: id,
-          humanDetected: !humanEstop,
+          humanDetected: true,
         },
         {
           label: id === "cell_s" ? "반출대3 반출(YAML)" : "반출대2 반출(YAML)",
           zoneId: id === "cell_s" ? "EXP_S3_BELT" : "EXP_S5_PALLET",
         },
-        {label: "비전 자동 점검", visionCheckCell: id},
+        {label: "비전 안전 비상정지 (카메라 확인)", visionCheckCell: id},
         {label: cellHeldArms.length ? "팔 홀드 해제(확인됨)" : "팔 홀드 점검·해제", clearArmHold: id},
         ...(id === "cell_s" ? [{label: "자동 감지·복구 셔틀", preset: "s3_auto_recover_or_shuttle"}] : []),
-        ...(task && (task.status === "QUEUED" || task.status === "RUNNING" || task.status === "PAUSED_HUMAN")
+        ...(task && task.status === "QUEUED"
           ? [{label: "작업 취소", cancelTaskId: task.task_id}]
           : []),
         ...(task && (task.status === "COMPLETED" || task.status === "CANCELLED" || task.status === "ABORTED")

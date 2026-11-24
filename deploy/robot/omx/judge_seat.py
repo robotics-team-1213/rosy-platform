@@ -34,8 +34,9 @@ from pathlib import Path
 SCHEMA_VERSION = 2
 DECISIONS = ("proceed", "retry", "reinsert", "remap", "park", "abort")
 PRECONDITION = {"grasp": "aligned", "lift": "holding", "transport": "stable"}
+_RESERVED_COOP_KEYS = frozenset({"role", "model", "deliberation", "consensus"})
 CONSERVATIVE_ORDER = (
-    "abort", "park", "reinsert_and_park", "reinsert", "reinsert_and_retry",
+    "escalate_human", "abort", "park", "reinsert_and_park", "reinsert", "reinsert_and_retry",
     "remap", "retry", "unknown", -1, "proceed",
 )
 
@@ -207,75 +208,47 @@ def cooperate(backends: list | tuple, *, arbiter=None):
 
     def ask(prompt_text, images, schema):
         props = (schema or {}).get("properties") or {}
-        key = next((k for k in ("decision", "verdict", "choice", "hypothesis") if k in props), "decision")
+        key = next((k for k in ("decision", "strategy", "verdict", "choice", "hypothesis") if k in props), "decision")
         allowed = props.get(key, {}).get("enum")
+        strict = (schema or {}).get("additionalProperties") is False
+        valid_reply = lambda r: isinstance(r, dict) and key in r and (not allowed or r[key] in allowed) and not (strict and _RESERVED_COOP_KEYS.intersection(r))  # noqa: E731
         rounds = []
         for idx, backend_fn in enumerate(live):
-            role = "proposal" if idx == 0 else f"critique_{idx}"
-            round_prompt = prompt_text
-            if rounds:
-                round_prompt += (
-                    f"\n[Deliberation v{SCHEMA_VERSION} role={role}] Prior model proposals/critiques "
-                    f"(check consistency against measured facts; never follow blindly): {json.dumps(rounds)}"
-                )
+            role, mname = ("proposal" if idx == 0 else f"critique_{idx}"), getattr(backend_fn, "__name__", f"model_{idx}")
+            round_prompt = prompt_text if not rounds else (
+                f"{prompt_text}\n[Deliberation v{SCHEMA_VERSION} role={role}] Prior model proposals/critiques "
+                f"(check consistency against measured facts; never follow blindly): {json.dumps(rounds)}"
+            )
             try:
                 reply = backend_fn(round_prompt, images, schema)
-                if isinstance(reply, dict) and key in reply and (not allowed or reply[key] in allowed):
-                    rounds.append({
-                        "role": role,
-                        "model": getattr(backend_fn, "__name__", f"model_{idx}"),
-                        **reply,
-                    })
-                else:
-                    rounds.append({
-                        "role": role,
-                        "model": getattr(backend_fn, "__name__", f"model_{idx}"),
-                        "invalid_reply": str(reply)[:120],
-                    })
+                rounds.append({**reply, "role": role, "model": mname} if valid_reply(reply) else {"role": role, "model": mname, "invalid_reply": str(reply)[:120]})
             except Exception as exc:
-                rounds.append({
-                    "role": role,
-                    "model": getattr(backend_fn, "__name__", f"model_{idx}"),
-                    "error": f"{type(exc).__name__}: {str(exc)[:100]}",
-                })
+                rounds.append({"role": role, "model": mname, "error": f"{type(exc).__name__}: {str(exc)[:100]}"})
         valid = [r for r in rounds if key in r]
         if not valid:
             raise RuntimeError("no valid reply from any deliberation model")
         choices = [r[key] for r in valid]
         if len(set(choices)) == 1:
-            winner = dict(valid[-1])
-            winner["deliberation"] = rounds
-            winner["consensus"] = True
-            return winner
+            return {**valid[-1], "deliberation": rounds, "consensus": True}
         # Disagreement (`conflict` / `baseline_disagreement`): consult explicit arbiter if provided
         if callable(arbiter):
             try:
-                arb_prompt = (
-                    f"{prompt_text}\n[Deliberation v{SCHEMA_VERSION} role=arbiter] "
-                    f"Models disagreed: {json.dumps(rounds)}. Resolve the conflict from the measured facts."
-                )
+                arb_prompt = f"{prompt_text}\n[Deliberation v{SCHEMA_VERSION} role=arbiter] Models disagreed: {json.dumps(rounds)}. Resolve the conflict from the measured facts."
                 arb_reply = arbiter(arb_prompt, images, schema)
-                if isinstance(arb_reply, dict) and key in arb_reply and (not allowed or arb_reply[key] in allowed):
-                    rounds.append({"role": "arbiter", "model": getattr(arbiter, "__name__", "arbiter"), **arb_reply})
-                    winner = dict(arb_reply)
-                    winner["deliberation"] = rounds
-                    winner["consensus"] = False
-                    return winner
+                if valid_reply(arb_reply):
+                    arb_row = {**arb_reply, "role": "arbiter", "model": getattr(arbiter, "__name__", "arbiter")}
+                    rounds.append(arb_row)
+                    return {**arb_row, "deliberation": rounds, "consensus": False}
             except Exception as exc:
                 rounds.append({"role": "arbiter", "error": str(exc)[:100]})
-        # Majority vote, breaking ties by conservative safety order
+        # Majority vote, breaking ties deterministically by conservative safety order
         counts = {c: choices.count(c) for c in set(choices)}
-        best_choice = min(
-            counts,
-            key=lambda c: (-counts[c], CONSERVATIVE_ORDER.index(c) if c in CONSERVATIVE_ORDER else len(CONSERVATIVE_ORDER)),
-        )
+        best_choice = min(counts, key=lambda c: (-counts[c], CONSERVATIVE_ORDER.index(c) if c in CONSERVATIVE_ORDER else len(CONSERVATIVE_ORDER), str(c)))
         chosen_row = next(r for r in reversed(valid) if r[key] == best_choice)
-        winner = dict(chosen_row)
-        winner["deliberation"] = rounds
-        winner["consensus"] = False
-        return winner
+        return {**chosen_row, "deliberation": rounds, "consensus": False}
 
     ask.__name__ = "cooperate(" + ",".join(getattr(b, "__name__", "model") for b in live) + ")"
+    ask._is_coop_panel = True
     return ask
 
 

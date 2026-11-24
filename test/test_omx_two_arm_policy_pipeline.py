@@ -84,7 +84,7 @@ class FakeCell:
                 "t": time.time(),
             }
         if cmd == "human-hold":
-            return {"ok": True, "command": "human-hold", "state": list(self.pose)}
+            return {"ok": True, "command": "human-hold", "human_hold_latched": True, "torque_hold_commanded": True, "state": list(self.pose)}
         if " load " in cmd:
             if self.fail_load:
                 return {"ok": False, "error": "load_rejected"}
@@ -761,18 +761,20 @@ def test_review_regressions_playback_offsets_real_kin_mid_and_fault_isolation(tm
     )
     assert res_chh["result"] == "refused"
 
-    # Post-guard-wait stale observation aborts cleanly before load/run policy on whichever arm waited for mid.
+    # Post-guard-wait stale observation triggers bounded re-observation with fresh frames so both arms finish cleanly.
     g_wait = guard_mod.TwoArmChunkGuard(kins_real, rigids_x, tips_zero, margin_m=0.02, min_z_m=-0.05, mid_y_band=0.0)
     c_wa, c_wb = FakeCell(home_real, delay_s=0.08), FakeCell(home_real, delay_s=0.08)
-    res_stale = pol_mod.run_two_arm_policy(
-        {"a": c_wa, "b": c_wb}, {"a": RecShadow(home_real), "b": RecShadow(home_real)},
+    sh_wa, sh_wb = RecShadow(home_real), RecShadow(home_real)
+    res_wait = pol_mod.run_two_arm_policy(
+        {"a": c_wa, "b": c_wb}, {"a": sh_wa, "b": sh_wb},
         {"a": _base_lib(home_real), "b": _base_lib(home_real)},
         g_wait, {"src": "belt", "dst": "temp_a:r1-s1-t1"}, {"src": "belt", "dst": "temp_b:r1-s1-t1"},
         tmp_path / "stale_wait", max_chunks=1, dry_run=False, max_obs_age_s=0.04, authorizers=auths,
     )
-    assert res_stale["result"] == "refused"
-    assert "stale policy observation after guard wait" in (res_stale["stopped_reason"] or "")
-    assert sum(" load " in f" {c}" for c in c_wa.commands + c_wb.commands) == 1
+    assert res_wait["result"] == "chunks_done"
+    assert any(ev.get("event") == "reobserve_after_wait" for ev in res_wait["events"])
+    assert sum(" load " in f" {c}" for c in c_wa.commands + c_wb.commands) == 2
+    assert len(sh_wa.saw_in) + len(sh_wb.saw_in) == 3
 
     # CLI live preflight: binds profile into Authorization, pops static _commissioning, validates normalized cal, goal slot, tips==0.0.
     srv_goal, url_goal, revs_goal = _make_remote_server(
@@ -1058,3 +1060,348 @@ def test_two_arm_single_row_library_and_worker_setup_exception(tmp_path):
         tmp_path / "bad_setup", max_chunks=1, dry_run=False, authorizers=auths,
     )
     assert res_bad["result"] == "refused" and "b" in res_bad["arms"] and "b:setup:" in (res_bad["stopped_reason"] or "")
+
+
+def test_pr1_wait_exhaustion_hold_retries_fault_pose_and_released_completion(tmp_path, monkeypatch):
+    home_a = [-40.0, -40.0, 40.0, 40.0, 0.0, 50.0]
+    home_b = [40.0, -40.0, 40.0, 40.0, 0.0, 50.0]
+    kins = {"a": PlanarKin(0.10), "b": PlanarKin(0.10)}
+    rigids = {"a": (0.0, 0.0, -0.25), "b": (0.0, 0.0, 0.25)}
+    tips = {"a": 0.074, "b": 0.074}
+    libs = {"a": _base_lib(home_a), "b": _base_lib(home_b)}
+    task_a = {"src": "temp_a:r1-s1-t1", "dst": "temp_a:r2-s1-t1"}
+    task_b = {"src": "temp_b:r1-s1-t1", "dst": "temp_b:r2-s1-t1"}
+    auths = {k: (lambda _lib, _st, _seq, _k=k: {"session_id": f"s-{_k}", "library_sha256": "f" * 64}) for k in ("a", "b")}
+
+    class _Shadow:
+        image_views = {"top": (24, 32)}
+        sim_rule = None
+
+        def __init__(self, out_fn):
+            self.out_fn = out_fn
+            self.calls = 0
+
+        def inputs(self, state, frames, goal=None):
+            return {"state": list(state)}, {"frame_count": 1}
+
+        def infer(self, obs, state=None):
+            idx = self.calls
+            self.calls += 1
+            return SimpleNamespace(chunk=self.out_fn(idx), rtt_s=0.002)
+
+    # 1. Default wait_timeout_s covers real chunk durations (4.0s).
+    g_def = guard_mod.TwoArmChunkGuard(kins, rigids, tips)
+    assert g_def._wait_timeout_s == pytest.approx(4.0)
+
+    # 2. _hold_arm retries unconfirmed replies via send_hold and logs failures cleanly.
+    attempts_ok = [0]
+
+    class _FlakyHoldCell:
+        def act(self, cmd):
+            assert cmd == "human-hold"
+            attempts_ok[0] += 1
+            ok_latched = attempts_ok[0] >= 3
+            return {"ok": True, "command": "human-hold", "human_hold_latched": True, "torque_hold_commanded": ok_latched}
+
+    assert pol_mod._hold_arm(_FlakyHoldCell()) is True and attempts_ok[0] == 3
+    logged_holds = []
+
+    class _NeverConfirmHoldCell:
+        def act(self, _cmd):
+            return {"ok": True, "command": "human-hold", "human_hold_latched": True, "torque_hold_commanded": False}
+
+    assert pol_mod._hold_arm(_NeverConfirmHoldCell(), log=logged_holds.append) is False
+    assert logged_holds and logged_holds[0]["unconfirmed"] is True
+
+    # 3. Exhausting post-wait re-observe retries fails closed before any stale load/run policy.
+    g_exhaust = guard_mod.TwoArmChunkGuard(kins, rigids, tips, margin_m=0.02, min_z_m=-0.05)
+    orig_admit = g_exhaust.admit_chunk
+
+    def slow_admit(arm, chunk, **kw):
+        res = orig_admit(arm, chunk, **kw)
+        if arm == "a" and res.get("admitted"):
+            time.sleep(0.05)
+        return res
+
+    g_exhaust.admit_chunk = slow_admit
+    ca_ex, cb_ex = FakeCell(home_a), FakeCell(home_b)
+    sh_ex_a = _Shadow(lambda _i: [home_a] * 2)
+    res_ex = pol_mod.run_two_arm_policy(
+        {"a": ca_ex, "b": cb_ex}, {"a": sh_ex_a, "b": _Shadow(lambda _i: [home_b] * 2)},
+        libs, g_exhaust, task_a, task_b, tmp_path / "exhaust",
+        max_chunks=1, dry_run=False, max_obs_age_s=0.03, authorizers=auths,
+    )
+    assert res_ex["result"] == "refused"
+    assert "stale policy observation after guard wait" in (res_ex["stopped_reason"] or "")
+    assert sum(1 for ev in res_ex["events"] if ev.get("event") == "reobserve_after_wait" and ev.get("arm") == "a") == pol_mod.MAX_WAIT_REOBSERVE
+    assert not any(" load " in f" {c}" or c.endswith("run policy") for c in ca_ex.commands)
+
+    # 4. Mid-chunk fault/contact captures actual stopped state into guard instead of pre-chunk pose; malformed state falls back safely.
+    stopped_b = [44.0, -35.0, 38.0, 40.0, 0.0, 53.0]
+    for mode, reply_extra in (
+        ("contact", {"ok": False, "contact": True, "holding": True, "state": stopped_b}),
+        ("fault", {"ok": False, "fault": "overload", "settled": False, "holding": True, "state": stopped_b}),
+        ("unsettled", {"ok": True, "settled": False, "holding": True, "state": stopped_b}),
+        ("bad_state", {"ok": False, "fault": "overload", "state": ["nan-str"]}),
+    ):
+        g_pose = guard_mod.TwoArmChunkGuard(kins, rigids, tips, margin_m=0.02, min_z_m=-0.05)
+        ca_p, cb_p = FakeCell(home_a), FakeCell(home_b)
+        orig_act_b = cb_p.act
+        cb_p.act = lambda cmd, _ex=reply_extra, _o=orig_act_b: ({"command": cmd, **_ex} if cmd.endswith("run policy") else _o(cmd))
+        res_p = pol_mod.run_two_arm_policy(
+            {"a": ca_p, "b": cb_p}, {"a": _Shadow(lambda _i: [home_a] * 2), "b": _Shadow(lambda _i: [home_b] * 2)},
+            libs, g_pose, task_a, task_b, tmp_path / f"pose_{mode}",
+            max_chunks=1, dry_run=False, authorizers=auths,
+        )
+        assert res_p["result"] == ("fault" if "fault" in reply_extra else "refused")
+        if mode == "bad_state":
+            assert g_pose._arms["b"].pose == tuple(home_b)
+        else:
+            assert g_pose._arms["b"].pose == pytest.approx(tuple(stopped_b))
+            assert g_pose._arms["b"].holding is True
+
+    # 5. Single-arm parity released exit: holding True -> False with open gripper stops cleanly before max_chunks & CLI exits 0.
+    ca_rel, cb_rel = FakeCell(home_a), FakeCell(home_b)
+
+    class _ReleaseCell(FakeCell):
+        def __init__(self, pose):
+            super().__init__(pose)
+            self._runs = 0
+
+        def act(self, cmd):
+            if cmd.endswith("run policy"):
+                self._runs += 1
+                self.commands.append(cmd)
+                return {"ok": True, "settled": True, "holding": (self._runs == 1), "state": list(self.pose)}
+            return super().act(cmd)
+
+    ca_rel, cb_rel = _ReleaseCell(home_a), _ReleaseCell(home_b)
+    rel_pose_a = [*home_a[:5], 60.0]
+    rel_pose_b = [*home_b[:5], 60.0]
+    res_rel = pol_mod.run_two_arm_policy(
+        {"a": ca_rel, "b": cb_rel},
+        {"a": _Shadow(lambda i: [home_a] * 2 if i == 0 else [rel_pose_a] * 3),
+         "b": _Shadow(lambda i: [home_b] * 2 if i == 0 else [rel_pose_b] * 3)},
+        libs, guard_mod.TwoArmChunkGuard(kins, rigids, tips, margin_m=0.02, min_z_m=-0.05),
+        task_a, task_b, tmp_path / "released", max_chunks=4, dry_run=False, authorizers=auths,
+    )
+    assert res_rel["result"] == "released"
+    assert res_rel["arms"]["a"]["outcome"] == "released" and res_rel["arms"]["a"]["chunks_done"] == 2
+    assert res_rel["arms"]["b"]["outcome"] == "released" and res_rel["arms"]["b"]["chunks_done"] == 2
+
+    srv_cli, url_cli, revs_cli = _make_remote_server(tmp_path / "srv_rel", {"arm_a": lambda _o: [home_a] * 2, "arm_b": lambda _o: [home_b] * 2})
+    try:
+        rdir = tmp_path / "cli_rel"
+        rdir.mkdir()
+        (rdir / "lib.json").write_text(json.dumps(_base_lib(home_a)), encoding="utf-8")
+        (rdir / "plan.json").write_text((OMX / "grasp-plan.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+        jcal = {n: {"range_min": 0, "range_max": 4095, "homing_offset": 0, "drive_mode": 0} for n in remote_mod.JOINT_NAMES}
+        (rdir / "jcal.json").write_text(json.dumps(jcal), encoding="utf-8")
+        (rdir / "cal_a.json").write_text(json.dumps({"sites": {"belt": {"homography": [[0.001, 0, 0], [0, 0.001, -0.17], [0, 0, 1]]}}}), encoding="utf-8")
+        (rdir / "cal_b.json").write_text(json.dumps({"sites": {"belt": {"homography": [[0.001, 0, 0], [0, 0.001, 0.17], [0, 0, 1]]}}}), encoding="utf-8")
+        (rdir / "prof.json").write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "d", "instance_id": "a", "robot_config_sha256": "a" * 64, "operating_envelope_path": "e.json", "work_dir": "."}), encoding="utf-8")
+        for s_arm in ("a", "b"):
+            (rdir / f"cfg_{s_arm}.json").write_text(json.dumps({"io": str(rdir), "cameras": {}, "operating_profile_path": str(rdir / "prof.json"), "calibration_path": str(rdir / f"cal_{s_arm}.json"), "plan_path": str(rdir / "plan.json")}), encoding="utf-8")
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: {"a": FakeCell(home_a), "b": FakeCell(home_b)})
+        monkeypatch.setattr(cli_mod.cell_two_arm, "kinematics_for", lambda *_a, **_kw: kins)
+        monkeypatch.setattr(cli_mod.cell_two_arm, "away_from_home", lambda *_a: [])
+        monkeypatch.setattr(cli_mod.cell_policy_handoff, "Authorization", lambda _cfg: (lambda *_a: {"session_id": "s", "library_sha256": "e" * 64}))
+        monkeypatch.setattr(cli_mod, "run_two_arm_policy", lambda *_a, **_kw: {"result": "released", "task_id": "T1_CONCURRENT_ZONE_SPLIT"})
+        assert cli_mod.main([
+            "--config-a", str(rdir / "cfg_a.json"), "--config-b", str(rdir / "cfg_b.json"),
+            "--endpoint-url", url_cli, "--revision-a", revs_cli["arm_a"], "--revision-b", revs_cli["arm_b"],
+            "--library-a", str(rdir / "lib.json"), "--library-b", str(rdir / "lib.json"),
+            "--model-cal-a", str(rdir / "jcal.json"), "--cell-cal-a", str(rdir / "jcal.json"),
+            "--model-cal-b", str(rdir / "jcal.json"), "--cell-cal-b", str(rdir / "jcal.json"),
+            "--task-a", "belt->temp_a:r1-s1-t1", "--task-b", "temp_b:r1-s1-t1->temp_b:r2-s1-t1",
+            "--work-dir", str(rdir / "out"), "--proposer", "alice", "--operator", "bob", "--commissioning", "--person-at-switch",
+        ]) == 0
+    finally:
+        srv_cli.shutdown()
+        srv_cli.server_close()
+
+
+def test_pr2_cli_dry_run_passive_fallback_and_live_failure_bundle_emission(tmp_path, monkeypatch, capsys):
+    sys.path.insert(0, str(ROOT / "contracts/foundation"))
+    sys.path.insert(0, str(OMX))
+    try:
+        import cell_failure_context as cfc  # noqa: E402
+        import cell_job_readiness as readiness_mod  # noqa: E402
+        from core_common.protocol.cell_failure_context import CellFailureContext  # noqa: E402
+    finally:
+        for p in (str(OMX), str(ROOT / "contracts/foundation")):
+            if p in sys.path:
+                sys.path.remove(p)
+
+    home = [0.0, -40.0, 40.0, 40.0, 0.0, 50.0]
+    kins = {"a": PlanarKin(0.10), "b": PlanarKin(0.10)}
+    srv_obj, url, revs = _make_remote_server(tmp_path / "srv", {"arm_a": lambda _o: [home] * 4, "arm_b": lambda _o: [home] * 4})
+    bundle_root = tmp_path / "bundles"
+    try:
+        lib_p = tmp_path / "lib.json"
+        lib_no_home = tmp_path / "lib_no_home.json"
+        base_lib = _base_lib(home)
+        lib_p.write_text(json.dumps(base_lib), encoding="utf-8")
+        no_home_lib = {**base_lib, "chunks": {"reach": base_lib["chunks"]["reach"]}}
+        lib_no_home.write_text(json.dumps(no_home_lib), encoding="utf-8")
+        jcal = {n: {"range_min": 0, "range_max": 4095, "homing_offset": 0, "drive_mode": 0} for n in remote_mod.JOINT_NAMES}
+        jcal_p = tmp_path / "jcal.json"
+        jcal_p.write_text(json.dumps(jcal), encoding="utf-8")
+        cal_a = tmp_path / "cal_a.json"
+        cal_b = tmp_path / "cal_b.json"
+        cal_a.write_text(json.dumps({"sites": {"belt": {"homography": [[0.001, 0, 0], [0, 0.001, -0.17], [0, 0, 1]]}}}), encoding="utf-8")
+        cal_b.write_text(json.dumps({"sites": {"belt": {"homography": [[0.001, 0, 0], [0, 0.001, 0.17], [0, 0, 1]]}}}), encoding="utf-8")
+        prof = tmp_path / "prof.json"
+        prof.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "d", "instance_id": "a", "robot_config_sha256": "a" * 64, "operating_envelope_path": "e.json", "work_dir": "."}), encoding="utf-8")
+        plan_p = tmp_path / "plan.json"
+        plan_p.write_text((OMX / "grasp-plan.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+        cfg_a, cfg_b = tmp_path / "cfg_a.json", tmp_path / "cfg_b.json"
+        for cfg_p, cal_p in ((cfg_a, cal_a), (cfg_b, cal_b)):
+            cfg_p.write_text(json.dumps({
+                "io": str(tmp_path), "cameras": {}, "failure_bundle_root": str(bundle_root),
+                "operating_profile_path": str(prof), "calibration_path": str(cal_p), "plan_path": str(plan_p),
+            }), encoding="utf-8")
+
+        class _NoRunnerCell(FakeCell):
+            def __init__(self):
+                super().__init__(home, fault="no runner")
+
+        monkeypatch.setattr(cli_mod.cell_two_arm, "kinematics_for", lambda *_a, **_kw: kins)
+        monkeypatch.setattr(cli_mod.cell_two_arm, "away_from_home", lambda *_a: [])
+        monkeypatch.setattr(cli_mod.cell_policy_handoff, "Authorization", lambda _cfg: (lambda *_a: {"session_id": "s", "library_sha256": "f" * 64}))
+
+        # _PassiveDryRunCell wrapper fails closed on non-state act/checked and forwards frame_receipt cleanly.
+        wrapped = cli_mod._PassiveDryRunCell(_NoRunnerCell(), home)
+        assert wrapped.act("state")["passive_source"] == "library_home"
+        assert wrapped.act("human-hold")["fault"] == "dry_run_passive_cell"
+        assert wrapped.checked("run policy", {"session_id": "s", "library_sha256": "f" * 64})["fault"] == "dry_run_passive_cell"
+        assert wrapped.frame_receipt("top")["camera"] == "top"
+
+        common_args = [
+            "--config-a", str(cfg_a), "--config-b", str(cfg_b), "--endpoint-url", url,
+            "--revision-a", revs["arm_a"], "--revision-b", revs["arm_b"],
+            "--task-a", "belt->temp_a:r1-s1-t1", "--task-b", "temp_b:r1-s1-t1->temp_b:r2-s1-t1",
+            "--max-chunks", "1", "--proposer", "alice", "--operator", "bob",
+        ]
+
+        # 1. --dry-run succeeds passively when FifoCell reports fault='no runner'.
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: {"a": _NoRunnerCell(), "b": _NoRunnerCell()})
+        capsys.readouterr()
+        rc_dry = cli_mod.main([*common_args, "--library-a", str(lib_p), "--library-b", str(lib_p), "--work-dir", str(tmp_path / "w_dry"), "--dry-run"])
+        assert rc_dry == 0
+        out_dry = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        rec_dry = json.loads(Path(out_dry["receipt"]).read_text(encoding="utf-8"))
+        assert out_dry["result"] == "dry_run" and out_dry["passive_dry_run_arms"] == ["a", "b"]
+        assert rec_dry["passive_dry_run_arms"] == ["a", "b"] and "failure_bundle_id" not in rec_dry
+
+        # 2. --dry-run fails closed if library has no valid chunks.home, and emits no failure bundle.
+        rc_no_home = cli_mod.main([*common_args, "--library-a", str(lib_no_home), "--library-b", str(lib_p), "--work-dir", str(tmp_path / "w_nohome"), "--dry-run"])
+        assert rc_no_home == 1
+        assert not bundle_root.exists() or list(bundle_root.iterdir()) == []
+
+        # 3. Live run NEVER enables passive fallback on no_runner (fails closed & emits failure bundle).
+        live_args = [
+            *common_args, "--library-a", str(lib_p), "--library-b", str(lib_p),
+            "--model-cal-a", str(jcal_p), "--cell-cal-a", str(jcal_p),
+            "--model-cal-b", str(jcal_p), "--cell-cal-b", str(jcal_p),
+            "--commissioning", "--person-at-switch",
+        ]
+        capsys.readouterr()
+        rc_live_nr = cli_mod.main([*live_args, "--work-dir", str(tmp_path / "w_livenr")])
+        assert rc_live_nr == 1
+        out_nr = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+        assert out_nr["result"] == "fault" and "passive_dry_run_arms" not in out_nr and out_nr.get("failure_bundle_id")
+
+        # 4. Live mid-run fault on arm_b emits D-1072 CellFailureContext bundle and surfaces failure_bundle_id via parse_structured_result.
+        ca_live, cb_live = FakeCell(home), FakeCell(home)
+        orig_cb = cb_live.act
+        cb_live.act = lambda cmd: ({"ok": False, "fault": "overload", "settled": False, "state": list(home)} if cmd.endswith("run policy") else orig_cb(cmd))
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: {"a": ca_live, "b": cb_live})
+        capsys.readouterr()
+        rc_flt = cli_mod.main([*live_args, "--work-dir", str(tmp_path / "w_flt")])
+        assert rc_flt == 1
+        stdout_line = capsys.readouterr().out.strip().splitlines()[-1]
+        out_flt = json.loads(stdout_line)
+        rec_flt = json.loads(Path(out_flt["receipt"]).read_text(encoding="utf-8"))
+        bid = out_flt["failure_bundle_id"]
+        assert bid and rec_flt["failure_bundle_id"] == bid
+        fake_log = tmp_path / "job.log"
+        fake_log.write_text(("noise\n" * 50) + stdout_line + "\n", encoding="utf-8")
+        _, parsed_bid = readiness_mod.parse_structured_result(fake_log)
+        assert parsed_bid == bid
+        bundle = cfc.load_bundle(bundle_root, bid)
+        CellFailureContext.model_validate(bundle)
+        assert bundle["arm_id"] == "arm_b" and bundle["cell_id"] == "cell_ab" and bundle["kind"] == "fault"
+    finally:
+        srv_obj.shutdown()
+        srv_obj.server_close()
+
+
+def test_remote_policy_jpeg_quality_validation_compression_and_cli(tmp_path, monkeypatch):
+    import base64
+
+    assert remote_mod.DEFAULT_JPEG_QUALITY == 85
+    home = [0.0, -40.0, 40.0, 40.0, 0.0, 50.0]
+    srv_obj, url, revs = _make_remote_server(
+        tmp_path,
+        {"arm_a": lambda _obs: [home] * 4, "arm_b": lambda _obs: [home] * 4},
+    )
+    try:
+        sh85 = remote_mod.RemotePolicyShadow(url, "arm_a", revs["arm_a"])
+        assert sh85.jpeg_quality == 85
+        for bad in (True, False, 49, 101, 85.5, "85"):
+            with pytest.raises(ValueError, match="jpeg_quality"):
+                remote_mod.RemotePolicyShadow(url, "arm_a", revs["arm_a"], jpeg_quality=bad)
+
+        rng = np.random.default_rng(7)
+        textured = rng.integers(0, 256, size=(24, 32, 3), dtype=np.uint8)
+        j85 = remote_mod._encode_jpeg_bgr(textured, (24, 32), quality=85)
+        j95 = remote_mod._encode_jpeg_bgr(textured, (24, 32), quality=95)
+        assert len(j85) < len(j95)
+
+        sh95 = remote_mod.RemotePolicyShadow(url, "arm_a", revs["arm_a"], jpeg_quality=95)
+        obs85, _ = sh85.inputs([0.0] * 6, {"top": textured, "wrist": textured})
+        obs95, _ = sh95.inputs([0.0] * 6, {"top": textured, "wrist": textured})
+        assert len(base64.b64decode(obs85["frames"]["top"])) < len(base64.b64decode(obs95["frames"]["top"]))
+
+        lib_p, cfg_a, cfg_b, prof, plan_p = (
+            tmp_path / "lib.json", tmp_path / "cfg_a.json", tmp_path / "cfg_b.json",
+            tmp_path / "profile.json", tmp_path / "plan.json",
+        )
+        lib_p.write_text(json.dumps(_base_lib(home)), encoding="utf-8")
+        prof.write_text(json.dumps({
+            "schema": "rosy.omx-cell-robot-profile.v1", "device_id": "dev-1", "instance_id": "arm",
+            "robot_config_sha256": "a" * 64, "operating_envelope_path": "rev.json", "work_dir": ".",
+        }), encoding="utf-8")
+        plan_p.write_text((OMX / "grasp-plan.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+        for cfg in (cfg_a, cfg_b):
+            cfg.write_text(json.dumps({"io": str(tmp_path), "cameras": {}, "operating_profile_path": str(prof), "plan_path": str(plan_p)}), encoding="utf-8")
+
+        base_args = [
+            "--config-a", str(cfg_a), "--config-b", str(cfg_b), "--endpoint-url", url,
+            "--revision-a", revs["arm_a"], "--revision-b", revs["arm_b"],
+            "--library-a", str(lib_p), "--library-b", str(lib_p),
+            "--task-a", "belt->temp_a:r1-s1-t1", "--task-b", "temp_b:r1-s1-t1->temp_b:r2-s1-t1",
+            "--work-dir", str(tmp_path / "w"), "--max-chunks", "1", "--proposer", "alice", "--operator", "bob", "--dry-run",
+        ]
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: (_ for _ in ()).throw(AssertionError("must not open cells")))
+        for bad_q in ("49", "101"):
+            with pytest.raises(SystemExit, match="jpeg-quality"):
+                cli_mod.main([*base_args, "--jpeg-quality", bad_q])
+
+        seen_q = []
+        orig_cls = remote_mod.RemotePolicyShadow
+
+        def _spy_shadow(*a, **kw):
+            inst = orig_cls(*a, **kw)
+            seen_q.append((inst.arm_id, inst.jpeg_quality))
+            return inst
+
+        monkeypatch.setattr(cli_mod.cell_two_arm, "open_cells", lambda *_a, **_kw: {"a": FakeCell(home), "b": FakeCell(home)})
+        monkeypatch.setattr(cli_mod.cell_two_arm, "kinematics_for", lambda *_a, **_kw: {"a": PlanarKin(0.10), "b": PlanarKin(0.10)})
+        monkeypatch.setattr(cli_mod.cell_remote_policy, "RemotePolicyShadow", _spy_shadow)
+        assert cli_mod.main([*base_args, "--jpeg-quality", "90"]) == 0
+        assert seen_q == [("arm_a", 90), ("arm_b", 90)]
+    finally:
+        srv_obj.shutdown()
+        srv_obj.server_close()

@@ -18,6 +18,7 @@ async function triggerHomePose(btn,opts){
     setNotice('pose-feedback','good',poseFeedbackMsg,{ttlMs:6000});
     if(typeof setActivity==='function')setActivity('홈 이동 완료','good',((st.home_moved||[]).join(', ')||arm)+(incL?' (리더 포함)':''));
     if(typeof benchBeep==='function')benchBeep('done');
+    if(typeof pollLeaderCheck==='function')pollLeaderCheck(arm);
   }catch(err){
     setReqError(err.message);
     if(typeof setActivity==='function')setActivity('홈 이동 실패','crit',err.message);
@@ -42,6 +43,7 @@ if($('save-leader-pose-btn')){
       setNotice('pose-feedback','good',poseFeedbackMsg,{ttlMs:6000});
       if(typeof setActivity==='function')setActivity('리더 포즈 저장 완료','good',Object.keys(st.leader_pose_saved||{}).join(', ')||f.arm.value);
       pollArms();
+      if(typeof pollLeaderCheck==='function')pollLeaderCheck(f.arm.value);
     }catch(err){
       setReqError(err.message);
       if(typeof setActivity==='function')setActivity('리더 포즈 저장 실패','crit',err.message);
@@ -168,6 +170,7 @@ if($('hdr-refresh-btn'))$('hdr-refresh-btn').addEventListener('click',()=>{
   if(typeof setActivity==='function')setActivity('상태·카메라 새로고침 중...','muted',f?.arm?.value||'');
   pollStatus();
   pollCameras();
+  if(typeof pollLeaderCheck==='function')pollLeaderCheck('all');
 });
 if($('hdr-help-btn'))$('hdr-help-btn').addEventListener('click',()=>{
   const sec=$('sec-shortcuts');

@@ -240,3 +240,147 @@ def test_hotfix_paths_include_policy_site_map_and_gripper_assets():
         "learning/envs/isaac/assets/omx_f_palletizing_description",
     ):
         assert required in oh.PATHS
+
+
+def test_storage_lock_wraps_reuse_unpack_and_switch_but_never_floor(fake, tmp_path):
+    name = f"omx-tools-{SHORT}"
+    expected_lock = (
+        f"[ ! -L {oh.STORAGE_LOCK} ] && {{ [ ! -e {oh.STORAGE_LOCK} ] || [ -f {oh.STORAGE_LOCK} ]; }}"
+        f" && exec 9>>{oh.STORAGE_LOCK} && flock -w {oh.STORAGE_LOCK_WAIT} 9"
+    )
+    for script in (oh.reuse_script(name), oh.unpack_script(name), oh.switch_script(name)):
+        assert "[ ! -L rosy-test ]" in script
+        assert expected_lock in script
+    assert f"touch -c -- {name}" in oh.reuse_script(name)
+    assert f"touch -c -- {name}" in oh.unpack_script(name)
+    assert f"[ -d {name} ] && [ ! -L {name} ]" in oh.switch_script(name)
+    assert oh.STORAGE_LOCK not in oh.FLOOR_SCRIPT
+    assert oh.STORAGE_LOCK not in oh.floor_command("0" * 40)
+
+    oh.deploy("HEAD", "user@host", passing_log(tmp_path))
+    ssh_cmds = [cmd for cmd, _ in fake.calls if cmd[0] == "ssh"]
+    assert all("--" in cmd and cmd[cmd.index("--") + 1] == "user@host" for cmd in ssh_cmds)
+
+
+def test_rejects_invalid_tree_names_and_hosts(fake, monkeypatch, tmp_path):
+    monkeypatch.delenv(oh.HOST_ENV, raising=False)
+    for bad_tree in ("omx-tools-current", "../escape", "omx-tools-short", "omx-tools-1234567;rm"):
+        for fn in (oh.reuse_script, oh.unpack_script, oh.switch_script):
+            with pytest.raises(SystemExit, match="release tree"):
+                fn(bad_tree)
+    with pytest.raises(SystemExit, match="no host"):
+        oh.host_of(None)
+    log = passing_log(tmp_path)
+    for bad_host in ("", "   ", "-oProxyCommand=id", "@host", "user@host;id", "user@host x"):
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh._ssh(bad_host, "true")
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh.host_of(bad_host)
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh.deploy("HEAD", bad_host, log)
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh.status(bad_host)
+        monkeypatch.setenv(oh.HOST_ENV, bad_host)
+        with pytest.raises(SystemExit, match="invalid ssh host|no host"):
+            oh.host_of(None)
+    assert not fake.ssh_scripts()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX shell and flock check")
+def test_reuse_and_switch_guards_run_in_bash(tmp_path, monkeypatch):
+    import fcntl
+    import io
+    import os
+    import tarfile
+
+    rt = tmp_path / "rosy-test"
+    rt.mkdir()
+    tree = rt / f"omx-tools-{SHORT}"
+    tree.mkdir()
+    (tree / "REVISION").write_text(SHORT, encoding="utf-8")
+    os.utime(tree, (1000, 1000))
+    res = subprocess.run(["bash", "-c", oh.reuse_script(tree.name)], cwd=tmp_path, capture_output=True, text=True)
+    assert res.returncode == 0 and res.stdout == SHORT
+    assert tree.stat().st_mtime > 1000 and (rt / oh.STORAGE_LOCK).is_file()
+
+    miss_reuse = subprocess.run(
+        ["bash", "-c", oh.reuse_script("omx-tools-" + "0" * 10)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert miss_reuse.returncode == 0 and miss_reuse.stdout == ""
+
+    sym_tree = rt / ("omx-tools-" + "b" * 10)
+    sym_tree.symlink_to(tree)
+    sym_reuse = subprocess.run(
+        ["bash", "-c", oh.reuse_script(sym_tree.name)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert sym_reuse.returncode == 0 and sym_reuse.stdout == ""
+    assert subprocess.run(["bash", "-c", oh.switch_script(sym_tree.name)], cwd=tmp_path).returncode != 0
+    sym_tree.unlink()
+
+    rev_target = rt / "rev-target"
+    rev_target.write_text(SHORT, encoding="utf-8")
+    (tree / "REVISION").unlink()
+    (tree / "REVISION").symlink_to(rev_target)
+    rev_sym = subprocess.run(["bash", "-c", oh.reuse_script(tree.name)], cwd=tmp_path, capture_output=True, text=True)
+    assert rev_sym.returncode == 0 and rev_sym.stdout == ""
+    (tree / "REVISION").unlink()
+    (tree / "REVISION").write_text(SHORT, encoding="utf-8")
+
+    sym_rt_cwd = tmp_path / "sym-root"
+    sym_rt_cwd.mkdir()
+    (sym_rt_cwd / "rosy-test").symlink_to(rt)
+    assert subprocess.run(["bash", "-c", oh.switch_script(tree.name)], cwd=sym_rt_cwd).returncode != 0
+
+    (rt / oh.STORAGE_LOCK).unlink()
+    (rt / oh.STORAGE_LOCK).symlink_to(tree / "REVISION")
+    sym_res = subprocess.run(["bash", "-c", oh.switch_script(tree.name)], cwd=tmp_path, capture_output=True, text=True)
+    assert sym_res.returncode != 0
+
+    (rt / oh.STORAGE_LOCK).unlink()
+    os.mkfifo(rt / oh.STORAGE_LOCK)
+    fifo_res = subprocess.run(
+        ["bash", "-c", oh.switch_script(tree.name)], cwd=tmp_path, capture_output=True, text=True, timeout=5
+    )
+    assert fifo_res.returncode != 0
+
+    (rt / oh.STORAGE_LOCK).unlink()
+    monkeypatch.setattr(oh, "STORAGE_LOCK_WAIT", 1)
+    with (rt / oh.STORAGE_LOCK).open("a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        busy_res = subprocess.run(
+            ["bash", "-c", oh.switch_script(tree.name)], cwd=tmp_path, capture_output=True, text=True, timeout=5
+        )
+        assert busy_res.returncode != 0
+    miss_res = subprocess.run(
+        ["bash", "-c", oh.switch_script("omx-tools-" + "0" * 10)], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert miss_res.returncode != 0
+
+    bad_name = "omx-tools-" + ("c" * 10)
+    bad_unp = subprocess.run(
+        ["bash", "-c", oh.unpack_script(bad_name)], cwd=tmp_path, input=b"not-a-gzip-archive", capture_output=True
+    )
+    assert bad_unp.returncode != 0 and not (rt / f".{bad_name}.part").exists()
+
+    new_name = "omx-tools-" + ("a" * 10)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        dir_info = tarfile.TarInfo(new_name)
+        dir_info.type = tarfile.DIRTYPE
+        dir_info.mode = 0o755
+        dir_info.mtime = 1000
+        tf.addfile(dir_info)
+        payload = b"aaaaaaaaaa\n"
+        info = tarfile.TarInfo(f"{new_name}/REVISION")
+        info.size = len(payload)
+        tf.addfile(info, io.BytesIO(payload))
+    unp = subprocess.run(
+        ["bash", "-c", oh.unpack_script(new_name)], cwd=tmp_path, input=buf.getvalue(), capture_output=True, timeout=10
+    )
+    assert unp.returncode == 0, unp.stderr
+    assert (rt / new_name).stat().st_mtime > 1000
+    assert (rt / new_name / "REVISION").read_text() == "aaaaaaaaaa\n"
+    assert not (rt / f".{new_name}.part").exists()
+    sw = subprocess.run(["bash", "-c", oh.switch_script(new_name)], cwd=tmp_path, capture_output=True, text=True)
+    assert sw.returncode == 0, sw.stderr
+    assert os.readlink(rt / oh.LINK) == new_name

@@ -37,23 +37,35 @@ def _fault_kind(path) -> dict:
         return {"fault": None, "stop_reasons": None}
 
 
-def launch_auto_fold(arm: str, popen=None) -> dict:
+def launch_auto_fold(arm: str, popen=None, *, stage: str = "full", request_id: str | None = None,
+                     expires_at: float | None = None, stop_generation: int | None = None,
+                     safety_fence: str | None = None) -> dict:
     """D-1048: start cell_auto_fold for this arm in its own process once this session has let go of the arm. Off unless
     ~/.config/rosy/auto-fold.json names the arm (its wrapper, config, library, site and roi)."""
     import os
     import subprocess
 
+    if stage not in ("full", "release_and_lift", "park_only"):
+        return {"started": False, "why": f"invalid stage: {stage}"}
     conf = Path(os.environ.get("ROSY_AUTO_FOLD_CONFIG", str(Path.home() / ".config" / "rosy" / "auto-fold.json")))
     try:
         if arm not in json.loads(conf.read_text(encoding="utf-8")):
             return {"started": False, "why": f"{arm} not in {conf.name}"}
     except (OSError, ValueError):
         return {"started": False, "why": f"no {conf.name}"}
-    command = [sys.executable, str(Path(__file__).resolve().parent / "cell_auto_fold.py"), "launch", "--arm", arm,
-               "--config-file", str(conf)]
+    command = [sys.executable, str(Path(__file__).resolve().parent / "cell_auto_fold.py"), "launch",
+               "--arm", arm, "--config-file", str(conf), "--stage", stage]
+    if request_id:
+        command += ["--request-id", str(request_id)]
+    if expires_at is not None:
+        command += ["--expires-at", f"{float(expires_at):.3f}"]
+    if stop_generation is not None:
+        command += ["--stop-generation", str(int(stop_generation))]
+    if safety_fence:
+        command += ["--safety-fence", str(safety_fence)]
     try:
         (popen or subprocess.Popen)(command, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"started": True}
+        return {"started": True, "stage": stage}
     except OSError as exc:
         return {"started": False, "why": f"{type(exc).__name__}: {exc}"[:160]}
 

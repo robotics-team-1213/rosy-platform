@@ -23,30 +23,36 @@ def heading_ok(yaw: float, tangent: float, config: RoutingConfig) -> bool:
 
 
 def snap_start(graph: Graph, x: float, y: float, yaw: float, config: RoutingConfig,
-               allowed: Callable[[Arc], bool] | None = None) -> tuple[str, float]:
+               allowed: Callable[[Arc], bool] | None = None,
+               *, ignore_heading: bool = False) -> tuple[str, float]:
     """Closest arc within half its lane width whose direction matches ``yaw``: ``(arc id, s)``.
 
     An ``allowed`` arc wins over a closer excluded one (blocked, wrong kind or mode): at a place
     every arc out of it is as close, and a closed one must not become the plan's first arc
     (2026-10-09 signal SIM: a lap from SE began on blocked ``ring_e``). A robot standing part-way
-    along an excluded arc still starts on it.
+    along an excluded arc still starts on it. When ``ignore_heading`` is true (Nav2 trips that
+    rotate in place onto the route), any yaw on the lane is admitted.
     """
-    best: tuple[bool, float, str, float] | None = None
+    best: tuple[bool, float, float, str, float] | None = None
     near, off = None, math.inf  # D-601 D: the best heading error on a lane here, else the distance off
     for arc in graph.arcs.values():
-        dist, s_m, tangent = arc.project(x, y)
-        if dist > arc.width_m / 2:
-            off = min(off, dist - arc.width_m / 2)
-            continue
-        err = math.degrees(wrap(yaw - tangent))
-        near = err if near is None or abs(err) < abs(near) else near
-        key = (allowed is not None and not allowed(arc), dist, arc.id)
-        if heading_ok(yaw, tangent, config) and (best is None or key < best[:3]):
-            best = (*key, s_m)
+        arc_min = math.inf
+        for dist, s_m, tangent in arc.project_segments(x, y):
+            if dist < arc_min:
+                arc_min = dist
+            if dist > arc.width_m / 2:
+                continue
+            err = math.degrees(wrap(yaw - tangent))
+            near = err if near is None or abs(err) < abs(near) else near
+            key = (allowed is not None and not allowed(arc), dist, abs(err) if ignore_heading else 0.0, arc.id)
+            if (ignore_heading or heading_ok(yaw, tangent, config)) and (best is None or key < best[:4]):
+                best = (*key, s_m)
+        if arc_min > arc.width_m / 2:
+            off = min(off, arc_min - arc.width_m / 2)
     if best is None:
         raise (PlanError("TRIP_HEADING_CONFLICT", {"heading_err_deg": round(near, 1)}) if near is not None
                else PlanError("TRIP_START_OFF_MAP", {"off_lane_m": round(off, 3) if off < math.inf else None}))
-    return best[2], best[3]
+    return best[3], best[4]
 
 
 def snap_goal(graph: Graph, x: float, y: float, yaw: float | None,

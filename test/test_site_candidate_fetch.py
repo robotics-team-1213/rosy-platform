@@ -115,8 +115,26 @@ def test_fetch_reassembles_parts_and_adds_the_signature(tmp_path):
     assert not list((tmp_path / "staging" / TAG / "download").glob("*.part*"))
     assert "--signature-only" in result.stdout
     out = result.stdout
-    assert out.index("--signature-only") < out.index("docker image load") < out.index(
+    for needle in (
+        "/etc/rosy/update-freeze",
+        "CREATED_FREEZE",
+        "ActiveState",
+        "rosy-root-maintenance.service",
+        "rosy-site-autoupdate.service",
+        "flock -w 300 9",
+        "/run/lock/rosy-site-autoupdate.lock",
+        "/opt/rosy/candidates/",
+        "[ ! -L /opt/rosy/candidate ]",
+        "already the active candidate",
+        "mv -Tf /opt/rosy/.candidate.tmp /opt/rosy/candidate",
+        f'"{COMMIT}"',
+    ):
+        assert needle in out, needle
+    assert out.index("--signature-only") < out.index("flock -w 300 9") < out.index("docker image load") < out.index(
         "systemctl restart")
+    body = out.split("sudo bash -euo pipefail -c '\n", 1)[1].rsplit("\n  ' _ ", 1)[0]
+    syntax = subprocess.run([BASH, "-n"], input=body, text=True, capture_output=True)
+    assert syntax.returncode == 0, syntax.stderr
 
 
 def test_fetch_refuses_an_unsigned_release(tmp_path):

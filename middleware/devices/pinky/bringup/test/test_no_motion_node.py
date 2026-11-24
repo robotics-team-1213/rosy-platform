@@ -54,6 +54,7 @@ def test_no_motion_node_never_enables_torque_or_listens_to_cmd_vel(world, monkey
 
     assert node.is_initialized
     assert _torque_on(world) == []
+    assert [event for event in world.sdk_events if event[0] == "write1" and event[2] == 98 and event[3] != 0] == []
     assert [topic for topic, _cb in world.subscriptions] == ["battery/voltage"]
     assert _ready(world) and set(_ready(world)) == {False}
     # Exactly one goal write: the zero the driver confirms before torque would come on.
@@ -148,9 +149,186 @@ def test_stall_without_probe_is_not_detected_but_idle_current_is(world, monkeypa
 def test_motor_health_is_published_every_two_seconds_as_json(world, monkeypatch):
     import json
     _node(world, monkeypatch, drive_enabled=False)
-    [callback] = [cb for period, cb in world.timers if period == 2.0]
+    [callback] = [cb for period, cb in world.timers if period == 1.0]
+    world.sdk_events.clear()
+    callback()
+    assert world.publishers["motor/health"].messages == []
+    assert {motor_id for ev in world.sdk_events if ev[0] in ("read1", "read2") for motor_id in (ev[1],)} == {1}
     callback()
     [message] = world.publishers["motor/health"].messages
     motors = json.loads(message.data)["motors"]
     assert [m["id"] for m in motors] == [1, 2]
     assert set(motors[0]) == {"id", "temperature_c", "temperature_limit_c", "input_voltage_v", "hardware_error"}
+
+
+def test_bus_watchdog_arms_after_startup_sleeps_and_clears_on_terminate(world, monkeypatch):
+    sleeps = []
+    module = importlib.import_module("bringup.bringup")
+    driver = importlib.import_module("bringup.dynamixel_driver")
+    monkeypatch.setattr(module.time, "sleep", lambda s: sleeps.append(s))
+    monkeypatch.setattr(driver.time, "sleep", lambda s: sleeps.append(s))
+    world.parameters["bus_watchdog_ms"] = 300.0
+    world.parameters["motor_motion_check"] = True
+    node = module.Rosy()
+    # Non-zero Addr 98 arming must happen strictly AFTER all startup sleeps (1.0 s settle and 0.4 s motion probe).
+    sleeps.clear()
+    arm_events = [(i, ev) for i, ev in enumerate(world.sdk_events) if ev[0] == "write1" and ev[2] == 98]
+    nonzero_arm_idx = [i for i, ev in arm_events if ev[3] == 15]
+    probe_goal_idx = [i for i, ev in enumerate(world.sdk_events) if ev[0] == "goal"]
+    assert len(nonzero_arm_idx) == 2
+    assert arm_events == [
+        (arm_events[0][0], ("write1", 1, 98, 0)),
+        (arm_events[1][0], ("write1", 2, 98, 0)),
+        (arm_events[2][0], ("write1", 1, 98, 0)),
+        (arm_events[3][0], ("write1", 1, 98, 15)),
+        (arm_events[4][0], ("write1", 2, 98, 0)),
+        (arm_events[5][0], ("write1", 2, 98, 15)),
+    ]
+    assert nonzero_arm_idx[0] > probe_goal_idx[-1]
+    assert node.is_initialized
+    world.sdk_events.clear()
+    node.driver.terminate()
+    assert ("write1", 1, 98, 0) in world.sdk_events and ("write1", 2, 98, 0) in world.sdk_events
+
+
+def test_bus_watchdog_arms_after_retry_sleep(world, monkeypatch):
+    original = importlib.import_module("dynamixel_sdk").PacketHandler.reboot
+    calls = {"n": 0}
+
+    def reboot_then_relatch(self, port, motor_id):
+        calls["n"] += 1
+        result = original(self, port, motor_id)
+        if calls["n"] <= 2 and motor_id == 1:
+            world.hw_error[1] = 0x20
+        return result
+
+    monkeypatch.setattr(importlib.import_module("dynamixel_sdk").PacketHandler, "reboot", reboot_then_relatch)
+    node = _node(world, monkeypatch, drive_enabled=True, bus_watchdog_ms=300.0)
+    assert node.is_initialized
+    last_reboot_idx = max(i for i, ev in enumerate(world.sdk_events) if ev[0] == "reboot")
+    arm_nonzero_idx = [i for i, ev in enumerate(world.sdk_events) if ev == ("write1", 1, 98, 15) or ev == ("write1", 2, 98, 15)]
+    assert len(arm_nonzero_idx) == 2 and arm_nonzero_idx[0] > last_reboot_idx
+
+
+def test_bus_watchdog_write_failure_disables_torque_and_fails_init(world, monkeypatch):
+    packet_cls = importlib.import_module("dynamixel_sdk").PacketHandler
+    orig_write = packet_cls.write1ByteTxRx
+
+    def fail_watchdog(self, port, motor_id, address, value):
+        if address == 98 and value > 0:
+            return 1, 0
+        return orig_write(self, port, motor_id, address, value)
+
+    monkeypatch.setattr(packet_cls, "write1ByteTxRx", fail_watchdog)
+    with pytest.raises(RuntimeError, match="failed to arm Dynamixel Bus Watchdog"):
+        _node(world, monkeypatch, drive_enabled=True, bus_watchdog_ms=300.0)
+    assert world.torque.get(1) == 0 and world.torque.get(2) == 0
+
+
+@pytest.mark.parametrize("bad", [True, -10.0, float("nan"), "fast"])
+def test_invalid_bus_watchdog_ms_is_rejected(world, monkeypatch, bad):
+    with pytest.raises(ValueError, match="bus_watchdog_ms"):
+        _node(world, monkeypatch, bus_watchdog_ms=bad)
+
+
+@pytest.mark.parametrize("prefix,expected", [("", ["l_wheel_joint", "r_wheel_joint"]), ("rosy_01", ["rosy_01/l_wheel_joint", "rosy_01/r_wheel_joint"])])
+def test_joint_states_match_urdf_wheel_joint_names(world, monkeypatch, prefix, expected):
+    node = _node(world, monkeypatch, drive_enabled=False, frame_prefix=prefix)
+    for _ in range(3):
+        node.update_and_publish()
+    assert world.publishers["joint_states"].messages[-1].name == expected
+
+
+def test_motor_ready_clears_after_three_feedback_failures_and_recovers(world, monkeypatch):
+    node = _node(world, monkeypatch, drive_enabled=True)
+    assert _ready(world)[-1] is True
+    feedback = [(None, None, None, None)]
+    monkeypatch.setattr(node.driver, "get_feedback", lambda: feedback[0])
+    odom_before = len(world.publishers["odom"].messages)
+    for _ in range(2):
+        node.update_and_publish()
+    assert _ready(world)[-1] is True
+    node.update_and_publish()
+    assert _ready(world)[-1] is False
+    assert len(world.publishers["odom"].messages) == odom_before
+
+    feedback[0] = (0.0, 0.0, 1000, 2000)
+    node.update_and_publish()
+    assert _ready(world)[-1] is True
+    assert len(world.publishers["odom"].messages) == odom_before + 1
+
+
+def test_bringup_executor_kind_defaults_to_single_and_rejects_unknown(world):
+    bringup_mod = importlib.import_module("bringup.bringup")
+    assert bringup_mod._executor_kind({}) == "single"
+    assert bringup_mod._executor_kind({"ROSY_EXECUTOR": "  "}) == "single"
+    assert bringup_mod._executor_kind({"ROSY_EXECUTOR": "SINGLE"}) == "single"
+    assert bringup_mod._executor_kind({"ROSY_EXECUTOR": " events "}) == "events"
+    with pytest.raises(ValueError, match="ROSY_EXECUTOR must be one of 'events', 'single'"):
+        bringup_mod._executor_kind({"ROSY_EXECUTOR": "multi"})
+
+
+def test_bringup_spin_node_supports_single_and_events_executors(world):
+    from types import SimpleNamespace
+    bringup_mod = importlib.import_module("bringup.bringup")
+
+    class ExternalShutdown(Exception):
+        pass
+
+    single_calls = []
+    fake_rclpy = SimpleNamespace(
+        __name__="rclpy",
+        spin=lambda node: single_calls.append(node),
+        executors=SimpleNamespace(ExternalShutdownException=ExternalShutdown),
+    )
+    bringup_mod._spin_node("node", rclpy_mod=fake_rclpy, environ={"ROSY_EXECUTOR": "single"})
+    assert single_calls == ["node"]
+
+    events_log = []
+
+    class FakeEventsExecutor:
+        def __init__(self, *, raise_exc=None):
+            self._raise_exc = raise_exc
+
+        def add_node(self, node):
+            events_log.append(("add", node))
+
+        def spin(self):
+            events_log.append(("spin",))
+            if self._raise_exc is not None:
+                raise self._raise_exc
+
+        def remove_node(self, node):
+            events_log.append(("remove", node))
+
+        def shutdown(self, timeout_sec=0):
+            events_log.append(("shutdown", timeout_sec))
+
+    bringup_mod._spin_node(
+        "node",
+        rclpy_mod=fake_rclpy,
+        environ={"ROSY_EXECUTOR": "events"},
+        import_module=lambda name: SimpleNamespace(EventsExecutor=lambda: FakeEventsExecutor()),
+    )
+    assert events_log == [("add", "node"), ("spin",), ("remove", "node"), ("shutdown", 0)]
+
+    events_log.clear()
+    bringup_mod._spin_node(
+        "node",
+        rclpy_mod=fake_rclpy,
+        environ={"ROSY_EXECUTOR": "events"},
+        import_module=lambda name: SimpleNamespace(
+            EventsExecutor=lambda: FakeEventsExecutor(raise_exc=ExternalShutdown())),
+    )
+    assert events_log == [("add", "node"), ("spin",), ("remove", "node"), ("shutdown", 0)]
+
+    events_log.clear()
+    with pytest.raises(KeyboardInterrupt):
+        bringup_mod._spin_node(
+            "node",
+            rclpy_mod=fake_rclpy,
+            environ={"ROSY_EXECUTOR": "events"},
+            import_module=lambda name: SimpleNamespace(
+                EventsExecutor=lambda: FakeEventsExecutor(raise_exc=KeyboardInterrupt())),
+        )
+    assert events_log == [("add", "node"), ("spin",), ("remove", "node"), ("shutdown", 0)]

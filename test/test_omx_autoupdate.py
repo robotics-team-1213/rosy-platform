@@ -971,3 +971,147 @@ def test_manual_rollback_never_reactivates_incomplete_or_unsmoked_release(tmp_pa
         out = capsys.readouterr().out
         assert '"rollback_refused"' in out and '"smoke_failed"' in out
         assert current(r_smk) == str(Path("releases") / ("b" * 12)) and h_smk.restarts == restarts_smk
+
+
+def test_observer_defer_reasons_distinguish_missing_stale_invalid_hw_error_and_torque(tmp_path, monkeypatch, capsys):
+    import json
+
+    health = tmp_path / "arm_b.json"
+    device = tmp_path / "follower_b"
+    device.write_text("", encoding="utf-8")
+    now = 2000.0
+    monkeypatch.setattr(m.time, "time", lambda: now)
+    monkeypatch.setattr(m.subprocess, "run", lambda args, **kw: real_run(args, **kw) if args[0] not in ("fuser", "systemctl") else None)
+
+    class _NoBusHost(m.Host):
+        def device_in_use(self):
+            return False
+
+    cfg = {
+        "devices": [str(device)],
+        "follower_device": str(device),
+        "observers": [{"unit": "rosy-omx-observer@arm_b.service", "device": str(device), "health": str(health)}],
+    }
+    host = _NoBusHost(cfg)
+
+    # Missing file -> observer_missing
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_missing"
+    assert host.follower_torque_off(tmp_path, tmp_path) is False
+
+    # Corrupt JSON / non-UTF-8 bytes / huge int overflow / partial motor count -> observer_invalid
+    health.write_text("{bad json", encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_bytes(b"\xff\xfe\xfd")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": 10**400, "motors": [{"torque_enabled": False}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False}] * 5}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_invalid"
+
+    # Stale, future-skewed, or ended snapshot -> observer_stale
+    for stale_payload in (
+        {"expected_motor_count": 6, "observed_at": now - 30.0, "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now + 60.0, "motors": [{"torque_enabled": False}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "status": "ended", "motors": [{"torque_enabled": False}] * 6},
+    ):
+        health.write_text(json.dumps(stale_payload), encoding="utf-8")
+        assert host.follower_idle_reason(tmp_path, tmp_path) == "observer_stale"
+
+    # Hardware errors fail closed with follower_hardware_error (including None / fault / top-level status fault)
+    for payload in (
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 128}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": None}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "fault": True}] * 6},
+        {"expected_motor_count": 6, "observed_at": now - 1.0, "status": "fault", "motors": [{"torque_enabled": False}] * 6},
+    ):
+        health.write_text(json.dumps(payload), encoding="utf-8")
+        assert host.follower_idle_reason(tmp_path, tmp_path) == "follower_hardware_error"
+        assert host.follower_torque_off(tmp_path, tmp_path) is False
+
+    # Torque ON -> follower_torque_not_off
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": True, "hardware_error": 0}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) == "follower_torque_not_off"
+
+    # Healthy idle -> None + True; also verify Updater.run() surfaces specific reason in deferred log
+    fh = FakeHost()
+    fh.follower_idle_reason = host.follower_idle_reason
+    fh.follower_torque_off = host.follower_torque_off
+    u = updater(tmp_path / "u_reason", fh)
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 128}] * 6}), encoding="utf-8")
+    assert u.run() == "deferred"
+    assert '"reason": "follower_hardware_error"' in capsys.readouterr().out
+    health.write_text(json.dumps({"expected_motor_count": 6, "observed_at": now - 1.0, "motors": [{"torque_enabled": False, "hardware_error": 0}] * 6}), encoding="utf-8")
+    assert host.follower_idle_reason(tmp_path, tmp_path) is None
+    assert host.follower_torque_off(tmp_path, tmp_path) is True
+    assert u.run() == "switched"
+
+
+def test_deferred_prepared_release_skips_github_checks_and_handles_rate_limit(tmp_path, monkeypatch, capsys):
+    import io
+    import urllib.error
+
+    # 1) Prepared + deferred release skips checks() on subsequent runs while still enforcing new floor_sha;
+    #    descends short-circuits without calling host.descends when floor_sha == head.
+    host = FakeHost()
+    host.in_use = True
+    checks_calls = 0
+    orig_checks = host.checks
+
+    def _counting_checks(sha):
+        nonlocal checks_calls
+        checks_calls += 1
+        return orig_checks(sha)
+
+    host.checks = _counting_checks
+    descend_calls: list[tuple[str, str]] = []
+    orig_desc = host.descends
+
+    def _counting_desc(base, head):
+        descend_calls.append((base, head))
+        return orig_desc(base, head)
+
+    host.descends = _counting_desc
+    u = updater(tmp_path / "cache", host)
+    assert u.run() == "deferred"
+    assert checks_calls == 1 and u.state().get("prepared_verified_sha") == host.head
+
+    # On deferred retry, checks() is NOT called again even across multiple retries
+    assert u.run() == "deferred"
+    assert checks_calls == 1
+
+    # Raising floor_sha to sha itself short-circuits without hitting GitHub compare API
+    st = u.state()
+    st["floor_sha"] = host.head
+    u.save(st)
+    assert u.run() == "deferred"
+    assert checks_calls == 1 and descend_calls == []
+
+    # Raising floor_sha to an incompatible commit still blocks even with prepared_verified_sha
+    st["floor_sha"] = "f" * 40
+    u.save(st)
+    host.descendant = False
+    assert u.run() == "below_hotfix_floor"
+    assert descend_calls == [("f" * 40, host.head)]
+
+    # 2) HTTP 403/429 during trusted() returns "rate_limited" and logs step="rate_limited" without exception
+    for err_code in (403, 429):
+        host_rl = FakeHost()
+        host_rl.checks = lambda _sha, c=err_code: (_ for _ in ()).throw(
+            urllib.error.HTTPError("https://api.github.com/x", c, "rate limit", {}, io.BytesIO(b""))
+        )
+        u_rl = updater(tmp_path / f"rl_{err_code}", host_rl)
+        capsys.readouterr()
+        assert u_rl.run() == "rate_limited"
+        assert '"step": "rate_limited"' in capsys.readouterr().out
+
+    # 3) Host._github_headers attaches Authorization Bearer token from github_token_file or GITHUB_TOKEN
+    import omx_autoupdate_host as autohost
+
+    tok_file = tmp_path / "gh.token"
+    tok_file.write_text("ghp_test_token_123\n", encoding="utf-8")
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    h_file = autohost.Host({"github_token_file": str(tok_file)})
+    assert h_file._github_headers()["Authorization"] == "Bearer ghp_test_token_123"
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_env_token_456")
+    h_env = autohost.Host({"github_token_file": str(tmp_path / "missing.token")})
+    assert h_env._github_headers()["Authorization"] == "Bearer ghp_env_token_456"

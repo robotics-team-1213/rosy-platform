@@ -15,7 +15,7 @@ from .port_event_store import PortEventConflict
 
 _READINGS = """CREATE TABLE IF NOT EXISTS fleet_intake_readings (
     observation_ref TEXT PRIMARY KEY, workcell_id TEXT NOT NULL, reading_json TEXT NOT NULL)"""
-SLOT = re.compile(r"^[A-Za-z0-9_]+-r\d+-c\d+-l\d+$")
+SLOT = re.compile(r"^[A-Za-z0-9_]+-r[1-9]\d*-c[1-9]\d*-l[1-9]\d*$")  # 1-based, same as Harbor's SLOT_REF_RE
 
 
 def _event(source, reading, kind, **fields) -> PortEvent:

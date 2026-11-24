@@ -86,6 +86,7 @@ def _is_verified_stop(
     has_edges_in: bool,
     has_edges_out: bool,
     ambiguous_rule: bool = False,
+    is_outbound_exit: bool = False,
 ) -> tuple[str, bool]:
     if place.id == "S_OUT":
         ok = (
@@ -103,6 +104,8 @@ def _is_verified_stop(
     if place.kind == "charge":
         return "verified", False
     if place.kind == "stop":
+        if is_outbound_exit and (ambiguous_rule or not has_edges_in):
+            return "planned_unverified", False
         return ("planned_unverified", False) if ambiguous_rule else ("verified", True)
     return "junction", False
 
@@ -229,14 +232,15 @@ def build_site_points(
         rule = stop_rules.get(place.id)
         p_edges_in = edges_in.get(place.id, [])
         p_edges_out = edges_out.get(place.id, [])
+        port_role = _port_role_for(place.id, place.kind, rule["role"] if rule else None, exit_place)
         status, dispatchable = _is_verified_stop(
             place,
             rule,
             has_edges_in=bool(p_edges_in),
             has_edges_out=bool(p_edges_out),
             ambiguous_rule=place.id in ambiguous_rules,
+            is_outbound_exit=(port_role == "outbound_exit"),
         )
-        port_role = _port_role_for(place.id, place.kind, rule["role"] if rule else None, exit_place)
         app_pose = approach_pose(place) if place.kind == "stop" else None
         berth = _berth_profile(
             place_id=place.id,
@@ -422,6 +426,7 @@ def build_site_points(
                 and v_stop is not None
                 and v_stop["status"] == "verified"
                 and v_stop["dispatchable"]
+                and v_stop["port_role"] == "outbound_pickup"
                 and exit_stop is not None
                 and exit_stop["status"] == "verified"
                 and exit_stop["dispatchable"]

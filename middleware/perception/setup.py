@@ -66,6 +66,7 @@ package_name = 'control'
 map_bundles = (
     os.path.join('map', 'map_260905_update_v2'),
     os.path.join('map', 'map_v2_fleet'),
+    os.path.join('map', 'map_world_261026'),
 )
 map_data_files = [
     (

@@ -9,9 +9,14 @@ from datetime import datetime, timezone
 import json
 import math
 import os
+import sys
 import time
 from pathlib import Path
 from uuid import uuid4
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+from motor_health_async import AsyncJsonlWriter, AsyncSnapshotPublisher, public_reason, snapshot_row
 
 
 def _safe_print(text: str) -> None:
@@ -25,7 +30,7 @@ class TelemetryReadError(ValueError): recoverable_telemetry = True
 
 
 class MotorHealth:
-    def __init__(self, log_path=None, *, max_records=100_000):
+    def __init__(self, log_path=None, *, max_records=100_000, async_publish=False):
         fallback = f"motor-health-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}-{uuid4().hex[:8]}.jsonl"
         self.path = Path(log_path or os.environ.get("ROSY_OMX_MONITOR_LOG") or fallback)
         self.path.touch(exist_ok=False)  # Never truncate an earlier session's evidence.
@@ -39,30 +44,19 @@ class MotorHealth:
             raise ValueError('invalid motor health session identity')
         self.status, self.stop_reasons = 'active', []
         self.terminal_at = None
+        self._async_pub = AsyncSnapshotPublisher(lambda p, r: atomic_snapshot(p, r)) if async_publish else None
+        self._async_emit = AsyncJsonlWriter() if async_publish else None
 
     def publish(self):
-        motors, stamps = [], []
-        fields = ('joint', 'id', 'command_raw', 'present_raw', 'error_deg', 'pwm', 'pwm_limit', 'pwm_utilization',
-                  'temperature_c', 'temperature_limit_c', 'voltage_v', 'warnings', 'hardware_error', 'torque_enabled', 'fault')
-        for state in self.motions.values():
-            last = state['last']
-            if last is None:
-                continue
-            stamp = state['observed_at']
-            stamps.append(stamp)
-            for motor in last['motors']:
-                motors.append({**{key: motor[key] for key in fields}, 'group': last['arm'],
-                               'min_voltage_v': motor['min_voltage_raw'] / 10,
-                               'max_voltage_v': motor['max_voltage_raw'] / 10, 'observed_at': stamp})
-        row = dict(schema_version='rosy.motor-health.v1', owner_id=self.owner_id,
-            session_id=self.session_id, status=self.status, observed_at=max(stamps) if stamps else self.terminal_at or time.time(),
-            expected_motor_count=sum(len(state['limits']) for state in self.motions.values()),
-            motors=motors, stop_reasons=self.stop_reasons)
-        if self.terminal_at is not None:
-            row['terminal_at'] = self.terminal_at
+        row = snapshot_row(self.owner_id, self.session_id, self.status, self.stop_reasons, self.terminal_at, self.motions)
+        if self._async_pub is not None:
+            self._async_pub.flush()
         atomic_snapshot(self.state_path, row)
 
     def end(self):
+        for async_w in (self._async_pub, self._async_emit):
+            if async_w is not None:
+                async_w.flush(close=True)
         if self.terminal_at is None:
             self.terminal_at = time.time()
         if self.status != 'fault':
@@ -81,9 +75,12 @@ class MotorHealth:
             raise RuntimeError("motor health log record budget exhausted; stop and start a new session")
         row = {**row, "recorded_at_utc": datetime.now(timezone.utc).isoformat()}
         text = json.dumps(row, allow_nan=False)
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(text + "\n")
-            handle.flush()
+        if self._async_emit is not None:
+            self._async_emit.submit(self.path, text + "\n")
+        else:
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(text + "\n")
+                handle.flush()
         self.records += 1
 
     @staticmethod
@@ -268,9 +265,16 @@ class MotorHealth:
         warnings = tuple((m["id"], tuple(m["warnings"])) for m in motors if m["warnings"])
         due = state["report"] is None or now - state["report"] >= 0.5 or warnings != state["warnings"]
         try:
+            if not allow_gap:
+                for async_w in (self._async_emit, self._async_pub):
+                    if async_w is not None and (err := async_w.pop_error()) is not None:
+                        raise err
             self.emit(row)
             if due:
-                self.publish()
+                if self._async_pub is not None:
+                    self._async_pub.submit(self.state_path, snapshot_row(self.owner_id, self.session_id, self.status, self.stop_reasons, self.terminal_at, self.motions))
+                else:
+                    self.publish()
         except OSError as exc:
             if not allow_gap:
                 raise
@@ -303,6 +307,11 @@ class MotorHealth:
         self.status = 'fault'
         self.stop_reasons = [public_reason(exc)]
         try:
+            if self._async_pub is not None:
+                self._async_pub.flush(close=True)
+            if self._async_emit is not None:
+                self._async_emit.flush(close=True)
+                self._async_emit = None
             self.emit(row)
         finally:
             self.publish()
@@ -345,24 +354,6 @@ def keep_fault(directory, owner_id, session_id, row, frames=None):
     worker = threading.Thread(target=fetch, name='fault-frames')  # not a daemon: the frames outlive a crashing runner
     worker.start()
     return worker
-
-
-def public_reason(exc):
-    if isinstance(exc, KeyboardInterrupt):
-        return 'operator interruption'
-    if not isinstance(exc, ValueError):
-        return 'control failure'
-    text = str(exc).lower()
-    if 'temperature' in text and '>= configured limit' in text:
-        return 'temperature limit'
-    if 'voltage' in text and 'outside configured limits' in text:
-        return 'voltage limit'
-    for needle, reason in (('hardware error', 'hardware error'), ('following error', 'following error'),
-                           ('overload risk', 'overload risk'), ('stale', 'stale telemetry'),
-                           ('alignment deadline', 'alignment deadline')):
-        if needle in text:
-            return reason
-    return 'control failure'
 
 
 def atomic_snapshot(path, row):

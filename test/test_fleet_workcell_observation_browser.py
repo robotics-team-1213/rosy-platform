@@ -137,14 +137,18 @@ def test_cell_displays_two_arms_three_cameras_and_expires_each_disconnected_sour
             expect(root.locator(f'[data-camera-source="{source}"] img')).to_be_visible()
         state.freeze_b = time.time()
         expect(root.locator('[data-arm-source="feedback_b"] pre')).not_to_contain_text("0.75", timeout=4000)
-        expect(root.locator('[data-camera-source="wrist_b"] img')).to_be_hidden(timeout=4000)
+        expect(root.locator('[data-camera-source="wrist_b"] .cam-frame-hold')).to_have_attribute("data-cam-phase", "disconnected", timeout=4000)
+        expect(root.locator('[data-camera-source="wrist_b"] img')).to_be_visible()
+        expect(root.locator('[data-camera-source="wrist_b"] ui-status')).to_contain_text("끊어짐")
         expect(root.locator('[data-arm-source="feedback_a"] pre')).to_contain_text("0.25")
         expect(root.locator('[data-camera-source="wrist_a"] img')).to_be_visible()
         expect(root.locator('[data-camera-source="top"] img')).to_be_visible()
         state.stall = True
         expect(root.locator('[data-arm-source="feedback_a"] pre')).not_to_contain_text("0.25", timeout=3000)
         for source in ("top", "wrist_a"):
-            expect(root.locator(f'[data-camera-source="{source}"] img')).to_be_hidden(timeout=3000)
+            expect(root.locator(f'[data-camera-source="{source}"] .cam-frame-hold')).to_have_attribute("data-cam-phase", "disconnected", timeout=3000)
+            expect(root.locator(f'[data-camera-source="{source}"] img')).to_be_visible()
+            expect(root.locator(f'[data-camera-source="{source}"] ui-status')).to_contain_text("끊어짐")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert page.locator("iframe").count() == 0
         assert urlsplit(page.url).path == "/console/cell"
@@ -165,11 +169,13 @@ def test_rate_limited_frame_keeps_the_fresh_image_until_it_expires(cell_url):
         state.limited.add("wrist_a")
         page.wait_for_timeout(1000)  # two polls get 429 while the last frame is under 2 s old
         expect(card.locator("img")).to_be_visible()
-        expect(card.locator("ui-status")).not_to_contain_text("최신 영상 없음")
-        expect(card.locator("img")).to_be_hidden(timeout=4000)  # expired is still stale
-        expect(card.locator("ui-status")).to_contain_text("최신 영상 없음")
+        expect(card.locator("ui-status")).not_to_contain_text("끊어짐")
+        expect(card.locator(".cam-frame-hold")).to_have_attribute("data-cam-phase", "disconnected", timeout=4000)
+        expect(card.locator("img")).to_be_visible()  # anti-flicker holds last live frame visible
+        expect(card.locator("ui-status")).to_contain_text("끊어짐")
         state.limited.clear()
-        expect(card.locator("img")).to_be_visible(timeout=4000)
+        expect(card.locator(".cam-frame-hold")).to_have_attribute("data-cam-phase", "live", timeout=4000)
+        expect(card.locator("img")).to_be_visible()
         page.unroute_all(behavior="ignoreErrors")
         browser.close()
 
@@ -326,15 +332,17 @@ def test_arm_focus_clearance_requires_confirmation_and_named_operator(cell_url, 
         page.goto(cell_url + "?focus=arm:feedback_b")
         card = page.locator('[data-arm-source="feedback_b"]')
         expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
-        button = card.get_by_text("사고 해제", exact=True)
+        button = card.locator("ui-button", has_text="사고 해제")
         if role == "operator":
             expect(button).to_be_disabled()
+            expect(button).to_have_attribute("reason", "현장 확인 체크박스를 먼저 선택하세요.")
             assert state.cleared == []
             check = card.get_by_role("checkbox", name=re.compile("현장에서 정지 원인"))
             check.check()
             expect(button).to_be_enabled()
             check.uncheck()
             expect(button).to_be_disabled()
+            expect(button).to_have_attribute("reason", "현장 확인 체크박스를 먼저 선택하세요.")
             check.check()
             button.click()
             expect(card.get_by_text("해제: op-7", exact=False)).to_be_visible()
@@ -388,7 +396,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
         try:
             state, _ = observation_feed(page)
             page.route("**/api/fleet/cell-app/object-catalog", lambda route: route.fulfill(json=body))
-            page.goto(cell_url)
+            page.goto(cell_url + "#saved-heading")
             page.evaluate("theme => window.RosyTheme.set(theme)", theme)
             table = page.locator("#catalog-table")
             expect(table).to_be_visible()
@@ -418,7 +426,7 @@ def test_cell_catalog_fits_the_full_page_and_belongs_to_saved_documents(cell_url
             if os.environ.get("ROSY_CAPTURE_INLINE") == "1":
                 shot = page.screenshot(type="jpeg", quality=35)
                 print(f"ROSY_SCREENSHOT cell-catalog-{theme}-{width} " + base64.b64encode(shot).decode())
-            page.locator('.ui-subnav-nav a[href="#recipe-heading"]').click()
+            page.locator('.ui-subnav-nav a[href="#observation-heading"]').click()
             expect(page.locator('ui-section[aria-labelledby="catalog-heading"]')).to_be_hidden()
             page.locator('.ui-subnav-nav a[href="#saved-heading"]').click()
             expect(table).to_be_visible()
@@ -444,7 +452,7 @@ def test_cell_logout_clears_catalog_and_ignores_its_late_response(cell_url, pend
                     route.fulfill(json=body)
             page.route("**/api/fleet/cell-app/object-catalog", catalog)
             with page.expect_request("**/api/fleet/cell-app/object-catalog"):
-                page.goto(cell_url)
+                page.goto(cell_url + "#saved-heading")
             if not pending:
                 expect(page.locator("#catalog-table")).to_contain_text("previous-account-object")
             page.locator("#topbar-more").click()

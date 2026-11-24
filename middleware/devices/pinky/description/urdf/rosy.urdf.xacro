@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-    <xacro:macro name="insert_robot" params="namespace is_sim:=false sim_backend:=gz cam_tilt_deg screen_tilt_deg camera_width:=1280 camera_height:=720 camera_update_rate:=10 camera_hfov:=1.1519 cam_mount_z:=0.0495">
+    <xacro:macro name="insert_robot" params="namespace is_sim:=false sim_backend:=gz cam_tilt_deg screen_tilt_deg camera_width:=1280 camera_height:=720 camera_update_rate:=10 camera_hfov:=1.1519 cam_mount_z:=0.0495 has_cargo_tray:=true">
         <xacro:include filename="$(find description)/urdf/common/insert_inertia.urdf.xacro"/>
 
         <link name="base_footprint"/>
@@ -359,6 +359,82 @@
             <origin xyz="-0.044 0 0.0525" rpy="0 0 0"/>
         </joint>
 
+        <xacro:if value="${has_cargo_tray}">
+            <link name="cargo_tray_link">
+                <visual>
+                    <origin xyz="0 0 0" rpy="0 0 0"/>
+                    <geometry>
+                        <mesh filename="package://description/meshes/visual/cargo_tray.dae" scale="1 1 1"/>
+                    </geometry>
+                </visual>
+                <xacro:if value="${is_sim}">
+                    <collision>
+                        <origin xyz="-0.1059 0.0 0.014975" rpy="0 0 0"/>
+                        <geometry>
+                            <box size="0.0562 0.094 0.00255"/>
+                        </geometry>
+                    </collision>
+                    <collision>
+                        <origin xyz="-0.079138 0.0 0.0431" rpy="0 0 0"/>
+                        <geometry>
+                            <box size="0.002675 0.09 0.0588"/>
+                        </geometry>
+                    </collision>
+                    <collision>
+                        <origin xyz="-0.06595 0.0 0.068" rpy="0 0 0"/>
+                        <geometry>
+                            <box size="0.0239 0.09 0.009"/>
+                        </geometry>
+                    </collision>
+                    <collision>
+                        <origin xyz="-0.105238 0.04775 0.018725" rpy="0 0 0"/>
+                        <geometry>
+                            <box size="0.049525 0.0045 0.00495"/>
+                        </geometry>
+                    </collision>
+                    <collision>
+                        <origin xyz="-0.105238 -0.04775 0.018725" rpy="0 0 0"/>
+                        <geometry>
+                            <box size="0.049525 0.0045 0.00495"/>
+                        </geometry>
+                    </collision>
+                    <collision>
+                        <origin xyz="-0.132 0.0 0.017225" rpy="0 0 0"/>
+                        <geometry>
+                            <box size="0.004 0.058 0.00195"/>
+                        </geometry>
+                    </collision>
+                </xacro:if>
+                <xacro:unless value="${is_sim}">
+                    <collision>
+                        <origin xyz="0 0 0" rpy="0 0 0"/>
+                        <geometry>
+                            <mesh filename="package://description/meshes/collision/cargo_tray.stl" scale="1 1 1"/>
+                        </geometry>
+                    </collision>
+                </xacro:unless>
+                <inertial>
+                    <origin xyz="-0.088576 0.000244 0.035029" rpy="0 0 0"/>
+                    <mass value="0.04074"/>
+                    <inertia ixx="0.000054496" ixy="0.00000003" ixz="-0.000011558"
+                             iyy="0.000033643" iyz="0.000000225" izz="0.000047811"/>
+                </inertial>
+            </link>
+
+            <joint name="${namespace}cargo_tray_fixed_joint" type="fixed">
+                <parent link="base_link"/>
+                <child link="cargo_tray_link"/>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+            </joint>
+
+            <link name="cargo_tray_pocket"/>
+            <joint name="${namespace}cargo_tray_pocket_fixed_joint" type="fixed">
+                <parent link="cargo_tray_link"/>
+                <child link="cargo_tray_pocket"/>
+                <origin xyz="-0.104988 0.0 0.01625" rpy="0 0 0"/>
+            </joint>
+        </xacro:if>
+
         <xacro:if value="${is_sim}">
             <xacro:if value="${sim_backend == 'gz'}">
                 <xacro:include filename="$(find description)/urdf/rosy_gz.urdf.xacro"/>
@@ -366,7 +442,8 @@
                                      camera_width="${camera_width}"
                                      camera_height="${camera_height}"
                                      camera_update_rate="${camera_update_rate}"
-                                     camera_hfov="${camera_hfov}"/>
+                                     camera_hfov="${camera_hfov}"
+                                     has_cargo_tray="${has_cargo_tray}"/>
             </xacro:if>
         </xacro:if>
     </xacro:macro>

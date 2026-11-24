@@ -14,6 +14,19 @@ function armConnectivity(arm){
   return {connected:null,follower_connected:null,leader_connected:null};
 }
 
+function leaderCheckForArm(a){
+  const map=typeof lastLeaderCheck==='object'&&lastLeaderCheck?lastLeaderCheck:null;
+  if(!map)return null;
+  if(a==='arm_ab'){
+    const list=['arm_a','arm_b'].map(x=>map[x]).filter(Boolean);
+    const over=list.filter(x=>x.over_limit===true).sort((x,y)=>(Number(y.max_deg)||0)-(Number(x.max_deg)||0));
+    if(over.length)return over[0];
+    const fin=list.filter(x=>Number.isFinite(Number(x.max_deg))).sort((x,y)=>Number(y.max_deg)-Number(x.max_deg));
+    return fin[0]||null;
+  }
+  return map[a]||null;
+}
+
 function renderArmCards(){
   const bar=$('arm-card-bar');
   if(!bar||!armContractValid())return;
@@ -31,7 +44,7 @@ function renderArmCards(){
     const miss=ok<req.length&&!(a==='arm_s'&&req.length-ok===1&&!Object.hasOwn(lastCamState,'arm_s_top'));
     return {req,ok,miss,tok:'C'+ok+'/'+req.length+(ok<req.length?'!':'')};
   };
-  const sig=JSON.stringify([visible,curArm,showOfflineArms,busy,arms.map(a=>armConnectivity(a)),arms.map(a=>camCounts(a)?.tok||''),lastStatus?.teleop_speed_declared]);
+  const sig=JSON.stringify([visible,curArm,showOfflineArms,busy,arms.map(a=>armConnectivity(a)),arms.map(a=>camCounts(a)?.tok||''),arms.map(a=>{const lc=leaderCheckForArm(a);return lc?[lc.over_limit,lc.max_deg]:null;}),lastStatus?.teleop_speed_declared]);
   if(bar.dataset.sig===sig)return;
   bar.dataset.sig=sig;
   bar.innerHTML='';
@@ -40,6 +53,7 @@ function renderArmCards(){
   for(const a of visible){
     const c=armConnectivity(a), meta=ARM_META[a]||{title:a,role:''};
     const cc=camCounts(a);
+    const lc=leaderCheckForArm(a);
     const spd=lastStatus?.teleop_speed_declared?.[a];
     const spdTxt=spd&&Number.isFinite(spd.track_deg_s)?(spd.track_deg_s+'°/s'):'';
     const card=document.createElement('button');
@@ -48,11 +62,13 @@ function renderArmCards(){
     card.dataset.armCard=a;
     card.setAttribute('aria-pressed',a===curArm?'true':'false');
     card.disabled=busy;
+    if(lc?.message)card.title=lc.message;
     const head=document.createElement('div');head.className='arm-card-head';
     const title=document.createElement('strong');title.textContent=meta.title;
     const dot=document.createElement('span');dot.className='arm-dot';
     if(c.follower_connected===false){dot.dataset.conn='err';dot.textContent='● 팔로워 미연결';}
     else if(c.leader_connected===false){dot.dataset.conn='warn';dot.textContent='● 리더 미연결';}
+    else if(lc&&lc.over_limit===true){dot.dataset.conn='warn';dot.textContent='● 리더 '+Math.round(Number(lc.max_deg)||0)+'° 초과';}
     else if(cc&&cc.miss){dot.dataset.conn='warn';dot.textContent='● 카메라 '+cc.ok+'/'+cc.req.length;}
     else if(c.connected===true){dot.dataset.conn='on';dot.textContent='● 준비됨';}
     else if(c.connected===false){dot.dataset.conn='off';dot.textContent='미연결';}
@@ -61,7 +77,8 @@ function renderArmCards(){
     const sub=document.createElement('div');sub.className='arm-card-meta mono';
     const fMark=c.follower_connected===true?'F✓':(c.follower_connected===false?'F✗':'F?');
     const lMark=c.leader_connected===true?'L✓':(c.leader_connected===false?'L✗':'L?');
-    sub.textContent=[meta.role,fMark+' '+lMark,cc?cc.tok:'',spdTxt].filter(Boolean).join(' · ');
+    const lcTok=(lc&&lc.over_limit===true)?('LΔ'+Math.round(Number(lc.max_deg)||0)+'°!'):(lc&&lc.over_limit===false&&Number.isFinite(Number(lc.max_deg))?('LΔ'+Number(lc.max_deg).toFixed(1)+'°'):'');
+    sub.textContent=[meta.role,fMark+' '+lMark,cc?cc.tok:'',lcTok,spdTxt].filter(Boolean).join(' · ');
     card.append(head,sub);
     card.addEventListener('click',()=>{if(!benchSessionActive())selectArm(a);});
     grid.append(card);

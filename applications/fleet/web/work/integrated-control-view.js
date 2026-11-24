@@ -1,6 +1,7 @@
 import {node, patchHidden, patchText} from "/common/control-dom.js";
 import {setOffBy} from "/common/cause-line.js";
 import {randomUUID} from "/console/assets/uuid.js";
+import {childUnitLinks, renderUnitLinks} from "/console/assets/unit-links.js";
 // Read projections and explicit stop requests share the Work area's existing authentication and lifetime.
 import {fitView} from "/console/assets/site-map-model.js";
 import {EVIDENCE_LABEL, MODE_LABEL, evidenceAgeText} from "/common/core_ui_logic.js";
@@ -34,13 +35,13 @@ export function stopControls(overview, target, elapsed = 0) {
 
 // D-977: only verified https origins from the server summary become links — never a token.
 export function childLinks(summary, target) {
-  const origin = summary?.child_origins?.[target];
-  if (typeof origin !== "string" || !/^https:\/\/[\w.:\[\]-]+$/.test(origin)) return [];
-  const arms = Array.isArray(summary.child_arm_units) && summary.child_arm_units.includes(target);
-  return [
-    {href: `${origin}/console`, label: "관제 화면 열기"},
-    ...(arms ? [{href: `${origin}/console/cell`, label: "셀 화면 열기"}] : []),
-  ];
+  return childUnitLinks(summary, {
+    target,
+    includeConsole: true,
+    includeCell: true,
+    consoleLabel: "관제 화면 열기",
+    cellLabel: () => "셀 화면 열기",
+  });
 }
 
 function drawMap(holder, snapshot) {
@@ -154,18 +155,13 @@ export function createIntegratedControlView({scope, call, anchor, active, approv
   scope.onDispose(reset);
   function paintUnitLinks() {
     const links = unitSummary ? childLinks(unitSummary, target) : [];
-    const linksSig = JSON.stringify(links);
-    if (linksSig !== lastUnitLinksSig) {
-      lastUnitLinksSig = linksSig;
-      unitLinks.replaceChildren(...links.map(link => {
-        const anchor = node("a", link.label, "ui-action-link");
-        anchor.dataset.kind = "quiet";
-        anchor.rel = "noreferrer";
-        anchor.href = link.href;
-        return anchor;
-      }));
+    const sig = JSON.stringify(links);
+    if (sig !== lastUnitLinksSig) {
+      lastUnitLinksSig = sig;
+      renderUnitLinks(unitLinks, links, {hideWhenEmpty: true});
+    } else {
+      patchHidden(unitLinks, !links.length);
     }
-    patchHidden(unitLinks, !links.length);
   }
   async function readUnitLinks(version) {
     if (unitSummary !== null) return;

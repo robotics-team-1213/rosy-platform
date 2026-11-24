@@ -230,14 +230,34 @@ def test_a_short_pause_is_unchanged_and_other_gaps_stay_stale(guard):
     with pytest.raises(ValueError, match='stale control loop'):
         motion.send(action(leader))
     assert not any(follower.torque.values())
-    motion, follower, clock, here = teacher(guard)  # teacher/replay has no declared pause
+    motion, follower, clock, here = teacher(guard)  # teacher/replay pauses across save_episode() on declared record_loop boundaries
     motion.send(here)
     clock[0] += 0.1
     motion.send(here)
+    prev_goal = _goals(follower)[-1]['shoulder_pan']
     motion.boundary = True
     clock[0] += 29.0
+    moved = {**here, 'shoulder_pan.pos': here['shoulder_pan.pos'] + 20.0}
+    motion.send(moved)  # declared boundary resumes without stale control loop and holds previous command
+    assert _goals(follower)[-1]['shoulder_pan'] == prev_goal and motion.boundary is False and not motion.tracking and not motion.resuming
+    motion_u, follower_u, clock_u, here_u = teacher(guard)
+    motion_u.send(here_u)
+    clock_u[0] += 0.1
+    motion_u.send(here_u)
+    motion_u.boundary = False  # undeclared stall in teacher mode still cuts torque
+    clock_u[0] += 29.0
     with pytest.raises(ValueError, match='stale control loop'):
-        motion.send(here)
+        motion_u.send(here_u)
+    assert not any(follower_u.torque.values())
+    motion_o, follower_o, clock_o, here_o = teacher(guard)
+    motion_o.send(here_o)
+    clock_o[0] += 0.1
+    motion_o.send(here_o)
+    motion_o.boundary = True
+    clock_o[0] += guard.BOUNDARY_MAX_S + 1.0  # over-bound declared pause still expires fail-closed keeping torque
+    with pytest.raises(guard.BoundaryExpired):
+        motion_o.send(here_o)
+    assert any(follower_o.torque.values()) and motion_o.failed
 
 
 def test_run_native_marks_the_loop_start_for_its_first_command_only_and_restores_the_loop_first(guard, monkeypatch):
@@ -272,6 +292,59 @@ def test_run_native_marks_the_loop_start_for_its_first_command_only_and_restores
     with pytest.raises(KeyboardInterrupt):
         guard.run_native(module, Follower, Leader)
     assert module.record_loop is original_loop
+
+
+def test_teacher_mode_starts_boundary_watch_across_episode_pauses(guard, monkeypatch):
+    events = []
+
+    class RecordingWatch:
+        expired = False
+        fault_exc = None
+
+        def __init__(self, motion, on_expire=None):
+            events.append(('init', motion.teacher))
+
+        def start(self):
+            events.append(('start',))
+
+        def stop(self):
+            events.append(('stop',))
+            return True
+
+    import guarded_native_cli
+    monkeypatch.setattr(guarded_native_cli, 'BoundaryWatch', RecordingWatch)
+    monitor = Monitor()
+    monkeypatch.setitem(sys.modules, 'motor_health', SimpleNamespace(MotorHealth=lambda: monitor))
+
+    class Follower:
+        def __init__(self):
+            self.bus, self.cameras = Bus(), {}
+
+    class DummyTeleop:
+        pass
+
+    follower = Follower()
+    loops = []
+    module = SimpleNamespace(
+        record=None,
+        make_robot_from_config=lambda config: follower,
+        make_teleoperator_from_config=lambda config: DummyTeleop(),
+        ACTION='action',
+        build_dataset_frame=lambda features, values, prefix: values,
+        record_loop=lambda *a, **kw: loops.append(len(events)),
+    )
+
+    def main():
+        robot = module.make_robot_from_config(SimpleNamespace(use_degrees=False))
+        module.make_teleoperator_from_config(None)
+        robot.connect()
+        robot.send_action(action(follower.bus))
+        module.record_loop()
+        module.record_loop()
+
+    module.main = main
+    guard.run_native(module, Follower, Bus, teacher=True)
+    assert events == [('init', True), ('start',), ('stop',), ('init', True), ('start',), ('stop',)] and len(loops) == 2
 
 
 def _full(guard):

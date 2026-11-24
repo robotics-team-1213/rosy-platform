@@ -24,7 +24,7 @@ from cell_envelope import digest  # noqa: E402
 import cell_params as prm  # noqa: E402
 from chunk_runner_commands import EMPTY_MARGIN, dispatch_runner_command  # noqa: E402
 from chunk_runner_guards import (  # noqa: E402, F401
-    CONTACT_LAG, CONTACT_TICKS, JOG_MAX, MOTORS, PWM_STOP, PWM_STOP_S, REL_MAX, SETTLE_TOL,
+    CONTACT_LAG, CONTACT_TICKS, JOG_MAX, MOTORS, PWM_STOP, PWM_STOP_S, RECOVERY_PARKS, REL_MAX, SETTLE_TOL,
     STALL_GAP, STALL_MOVE, TEMP_STOP, build_chain_segments, build_jog_target, build_splice_frames,
     check_motor_thermal_and_stall, contact_limits, evaluate_adaptive_contact_guard, halt_thermal_or_stall, hold_runner,
     human_hold_ack, human_hold_overload, read_motor_health, shed_interrupt_hold,
@@ -288,12 +288,7 @@ class Runner:
             self.retreat_frames = []
             shed_interrupt_hold(self, sent, present, fresh=bool(committed and self._fresh_present))
             return
-        if (
-            isinstance(sent, dict)
-            and not self.fault
-            and self.chunk is not None
-            and self.chunk.startswith(CONTACT_CHUNKS)
-        ):
+        if isinstance(sent, dict) and not self.fault and self.chunk is not None and self.chunk.startswith(CONTACT_CHUNKS):
             lags = [abs(present[i] - sent[name]) if name in sent else 0.0 for i, name in enumerate(_BODY_NAMES)]
             prev_sent = (self.jitter_buf[-2].get("sent") or self.jitter_buf[-2].get("target")) if len(self.jitter_buf) >= 2 else None
             step_delta_fps = (
@@ -306,11 +301,7 @@ class Runner:
             )
             if tripped:
                 self.hold(present, f"contact in {self.chunk}: a joint lagged the command by {lag:.1f} units")
-        elif (
-            isinstance(sent, dict)
-            and (not self.fault or self.chunk == "park")
-            and (self.chunk is not None or self.jog_path)
-        ):
+        elif isinstance(sent, dict) and (not self.fault or self.chunk in ("park", *RECOVERY_PARKS)) and (self.chunk is not None or self.jog_path):
             strain = self.strained(sent, present)
             if strain:
                 motor, lag, pwm, limit = strain
@@ -335,12 +326,14 @@ class Runner:
                 self.health = self.load_new = self.read_health()
             except Exception as read_error:  # noqa: BLE001
                 motion = getattr(self.robot, "motion", None)
-                keep_hold = bool(_is_holding(self) or play is not None or gate is not None or getattr(self, "_stop_after_park", None))
+                keep_hold = bool(_is_holding(self) or play is not None or gate is not None or getattr(self, "_stop_after_park", None) or self.chunk in RECOVERY_PARKS or getattr(self, "_recovery_active", False))
                 if getattr(motion, "failed", False) or not (self.human_hold_latched or keep_hold):
                     raise
                 probe_runner_limits(motion)
                 if self.human_hold_latched:
                     fresh = False
+                elif self.chunk in RECOVERY_PARKS or getattr(self, "_recovery_active", False):
+                    return self.hold(present, f"motor health unavailable: {read_error}")
                 else:
                     _hold_and_report(self, present, f"motor health unavailable: {read_error}", play.receipt() if play else None)
                     return
@@ -362,7 +355,7 @@ class Runner:
                     push = joint_push.pushing(
                         self.samples,
                         getattr(getattr(self.robot, "motion", None), "pwm_limits", None),
-                        (self.chunk == "park" and not _is_holding(self)) or self.grip_from is not None,
+                        (self.chunk in ("park", *RECOVERY_PARKS) and not _is_holding(self)) or self.grip_from is not None,
                         self.params,
                     )
                     if push and push[0] == "gripper" and self.chunk is None:
@@ -377,9 +370,12 @@ class Runner:
         if loaded > FOLLOW_STOP:
             self.far_since = self.far_since if self.far_since is not None else now
             if now - self.far_since >= FOLLOW_STOP_S:
+                msg = f"following error {loaded:.1f} for {FOLLOW_STOP_S} s: blocked or colliding"
+                if self.chunk in RECOVERY_PARKS or getattr(self, "_recovery_active", False):
+                    return self.hold(present, msg)
                 if getattr(self, "_stop_after_park", None):
-                    return _hold_and_report(self, present, f"following error {loaded:.1f} for {FOLLOW_STOP_S} s: blocked or colliding")
-                raise RuntimeError(f"following error {loaded:.1f} for {FOLLOW_STOP_S} s: blocked or colliding")
+                    return _hold_and_report(self, present, msg)
+                raise RuntimeError(msg)
         else:
             self.far_since = None
         if play and self.chunk == "policy":

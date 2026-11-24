@@ -18,6 +18,9 @@ from pathlib import Path
 
 import numpy as np
 
+from cell_pipeline_liveness import drain_status, runner_liveness
+from chunk_ctl_socket import CTL_SOCKET_NAME, send_unix_command
+
 _DEFAULT_URLOPEN = urllib.request.urlopen
 
 
@@ -89,15 +92,30 @@ def fold(cell, sleep=time.sleep, wait_s: float = 2.0) -> dict:
     return cell.act("park")
 
 
+def park_succeeded(status) -> bool:
+    return (isinstance(status, dict) and status.get("ok") is True and status.get("settled") is True
+            and not any(status.get(key) for key in ("fault", "contact", "human_hold_latched")))
+
+
+def fold_from_hold(cell, status: dict) -> dict:
+    """Send the exact measured start and the session/library used to check its corridor."""
+    session = (status.get("operating_context") or {}).get("session_id")
+    revision = status.get("library_sha256")
+    if not session or not revision:
+        return {"ok": False, "error": "held runner has no session or library binding"}
+    command = "fold-from-hold " + " ".join(map(str, status["state"][:6]))
+    return cell.checked(command, {"session_id": session, "library_sha256": revision})
+
+
 FIFO_WRITE_LOCK = threading.Lock()
 
 
 class FifoCell:
     """The running chunk_runner (command FIFO + status file) and the read-only camera viewer."""
 
-    def __init__(self, io: Path, cameras: dict, timeout_s: float = 300, *, operating_profile=None):
+    def __init__(self, io: Path, cameras: dict, timeout_s: float = 300, *, operating_profile=None, stall_timeout_s: float = 3.0):
         self.io, self.cameras, self.timeout_s = io, cameras, timeout_s
-        self.operating_profile = operating_profile
+        self.operating_profile, self.stall_timeout_s = operating_profile, stall_timeout_s
         self._http_conns: dict[tuple[str, int], http.client.HTTPConnection] = {}
         self._frame_cache: dict[str, tuple[str, np.ndarray]] = {}
         self._file_digest_cache: dict[tuple[str, int, int], str] = {}
@@ -158,6 +176,21 @@ class FifoCell:
         hold_req = uuid.uuid4().hex[:12] if is_hold else None
         wire_cmd = f"human-hold {hold_req}" if hold_req else command
         expected = command.split(" ", 3)[-1] if command.startswith("checked ") else command
+        verb = expected.split(" ", 1)[0]
+        recovery = verb in ("fold-from-hold", "park-slow", "recover-unlatch")
+        if timeout is None:
+            cap = 1.0 if is_hold else (3.0 if expected == "state" or expected.startswith("load ") else self.timeout_s)
+            eff_timeout = min(self.timeout_s, cap)
+        else:
+            eff_timeout = timeout
+        unix_row, unix_err = send_unix_command(
+            self, self.io / CTL_SOCKET_NAME, wire_cmd=wire_cmd, command=command,
+            expected=expected, verb=verb, recovery=recovery, is_hold=is_hold,
+            hold_req=hold_req, eff_timeout=eff_timeout, finite_stamp=finite_stamp,
+            stall_timeout_s=self.stall_timeout_s,
+        )
+        if unix_err != "fallback":
+            return unix_row
         status_path = self.io / "chunk-status.jsonl"
         with FIFO_WRITE_LOCK:  # the hardware owner's cancel fold writes `park` from another thread (D-977 4)
             if is_hold:
@@ -181,51 +214,14 @@ class FifoCell:
                 sent_at = time.time()
             finally:
                 os.close(fd)
-        if timeout is None:
-            cap = 1.0 if is_hold else (3.0 if expected == "state" or expected.startswith("load ") else self.timeout_s)
-            eff_timeout = min(self.timeout_s, cap)
-        else:
-            eff_timeout = timeout
         deadline = time.monotonic() + eff_timeout
+        last_live_t = last_live_mono = None
+        next_liveness = 0.0
         while time.monotonic() < deadline:
             if start is not None:
-                matched_hold = None
-                try:
-                    if status_path.exists():
-                        with status_path.open("rb") as stream:
-                            stream.seek(start)
-                            while line := stream.readline():
-                                if not line.endswith(b"\n"):
-                                    break
-                                start = stream.tell()
-                                try:
-                                    row = json.loads(line.decode("utf-8"))
-                                except (ValueError, RecursionError):
-                                    if not is_hold:
-                                        raise
-                                    continue
-                                if not isinstance(row, dict):
-                                    continue
-                                if is_hold:
-                                    if row.get("command") != "human-hold":
-                                        continue
-                                    rt = finite_stamp(row.get("t"))
-                                    if rt is None or not (sent_at < rt <= time.time() + 1.0):
-                                        continue
-                                    if row.get("hold_req") == hold_req:
-                                        matched_hold = row
-                                    continue
-                                if row.get("command") in (expected, "run " + expected) or row.get("fault"):
-                                    if (row.get("ok") and not row.get("fault")
-                                            and row.get("operating_context") and row.get("library_sha256")):
-                                        self._cached_state = row
-                                        self._cached_state_mono = time.monotonic()
-                                    return row
-                except (OSError, ValueError, RecursionError):
-                    if not is_hold:
-                        raise
-                if matched_hold is not None:
-                    return matched_hold
+                row, start = drain_status(self, status_path, start, command, expected, verb, recovery, is_hold, hold_req, sent_at, finite_stamp)
+                if row is not None:
+                    return row
             if is_hold:
                 live = self.policy_state()
                 lt = finite_stamp(live.get("t")) if isinstance(live, dict) else None
@@ -237,6 +233,17 @@ class FifoCell:
                         and (pre_t is None or lt > pre_t)):
                     return {"command": "human-hold", "ok": True, "human_hold_latched": True,
                             "torque_hold_commanded": True, "hold_req": hold_req, "t": lt, "state": live.get("state")}
+            elif (now_mono := time.monotonic()) >= next_liveness:
+                next_liveness = now_mono + 0.05
+                issue, last_live_t, last_live_mono = runner_liveness(
+                    self.policy_state(), last_t=last_live_t, last_mono=last_live_mono,
+                    stall_timeout_s=self.stall_timeout_s, now_mono=now_mono, finite_stamp=finite_stamp, kill=os.kill)
+                if issue is not None:
+                    if issue[0] == "runner_dead" and start is not None:
+                        row, start = drain_status(self, status_path, start, command, expected, verb, recovery, False, None, sent_at, finite_stamp)
+                        if row is not None:
+                            return row
+                    return {"ok": False, "fault": issue[0], "error": issue[1]}
             time.sleep(0.005)
         return {"ok": False, **({"command": "human-hold"} if is_hold else {}), "error": f"no status within {eff_timeout} s"}
 

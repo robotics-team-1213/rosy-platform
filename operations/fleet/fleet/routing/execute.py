@@ -192,7 +192,7 @@ def plan_again(active, start_pose, request: dict, caps: dict, blocked: frozenset
             speed_cap=request.get("speed_cap"),
             blocked_edges=frozenset(blocked) | frozenset(request.get("blocked_edges") or ()),
             extra_cost=request.get("extra_cost") or {}, body_front_m=caps.get("body_front_m", FALLBACK_FRONT_M),
-            stop_offset=not (nav2 and bool(request.get("repeat")))), config)
+            stop_offset=not (nav2 and bool(request.get("repeat"))), ignore_start_heading=nav2), config)
     except PlanError as exc:
         return None, {"reason": "replan", "plan": None, "code": exc.code, "detail": exc.detail}
     body = plan_body(plan)

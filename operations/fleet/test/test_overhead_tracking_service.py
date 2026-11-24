@@ -543,3 +543,40 @@ def test_source_row_carries_tuning_and_unknown_floor_together():
     service.accept(AUTH, _payload(calibration_revision="cal-v3", tuning=tuning, unknown_floor=[area]))
     row = service.snapshot()["sources"][0]
     assert row["tuning"] == tuning and row["unknown_floor"] == [area]
+
+
+def test_previous_calibration_revision_grace_window_and_revoke():
+    service, clock = _service()
+    first = service.approve(dict(APPROVAL), approved_by="operator-1")
+    clock.now += 5.0
+    second = service.approve(
+        {**APPROVAL, "map_to_image": [101.0, 0.0, 0.0, 0.0, -100.0, 360.0, 0.0, 0.0, 1.0]},
+        approved_by="operator-1",
+    )
+    assert first["calibration_revision"] != second["calibration_revision"]
+    # Strict sighting approval always uses ONLY the latest approved revision.
+    assert service.approved_revision(service.sources[0]) == second["calibration_revision"]
+    # Detection accept grants a short grace window for the previous revision, then expires.
+    assert service.accept(
+        AUTH, _payload(calibration_revision=first["calibration_revision"], captured_at=clock.now - 0.1)
+    )["accepted"] is True
+    clock.now += 10.5
+    with pytest.raises(TrackingError) as err:
+        service.accept(
+            AUTH, _payload(calibration_revision=first["calibration_revision"], captured_at=clock.now - 0.1)
+        )
+    assert err.value.code == "CALIBRATION_MISMATCH"
+    # Revoking immediately invalidates any grace revision as well.
+    clock.now += 1.0
+    third = service.approve(
+        {**APPROVAL, "map_to_image": [102.0, 0.0, 0.0, 0.0, -100.0, 360.0, 0.0, 0.0, 1.0]},
+        approved_by="operator-1",
+    )
+    service.revoke("ceiling_north", principal_id="operator-1")
+    with pytest.raises(TrackingError) as revoked_err:
+        service.accept(
+            AUTH, _payload(calibration_revision=second["calibration_revision"], captured_at=clock.now - 0.1)
+        )
+    assert revoked_err.value.code == "CALIBRATION_MISMATCH"
+    assert service.approved_revision(service.sources[0]) is None
+    assert third["calibration_revision"] != second["calibration_revision"]
