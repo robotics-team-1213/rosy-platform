@@ -122,7 +122,7 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
 
                     snapshot.unlink()
                     expect(page.locator("#factory-stream-status")).to_contain_text("데이터 지연")
-                    expect(page.locator("#factory-canvas")).to_have_css("opacity", "0.35")
+                    expect(page.locator("#factory-canvas")).to_have_css("opacity", "0.45")
                     expect(page.locator("#factory-canvas")).to_have_attribute("data-stream-state", "idle")
 
                     page.locator("#factory-adapters [data-adapter=isaac]").click()

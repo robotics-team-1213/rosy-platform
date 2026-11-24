@@ -42,6 +42,7 @@
 }
 
 .world-stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.world-stage > canvas[data-stream-state]:not([data-stream-state=""]) { opacity: var(--disabled-opacity); }
 .world-stage > ui-empty { position: absolute; inset: var(--space-4); }
 .world-stage > figure { padding: var(--space-3); }
 .world-stage > figure img { max-block-size: 30rem; object-fit: contain; }
