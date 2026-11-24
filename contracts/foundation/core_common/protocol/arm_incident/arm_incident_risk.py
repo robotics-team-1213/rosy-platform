@@ -4,17 +4,6 @@ from __future__ import annotations
 import math
 
 from .arm_incident_models import BODY_JOINTS, ArmIncidentRemeasure
-from .arm_incidents import (
-    REMEASURE_HOME_TOL,
-    REMEASURE_MAX_AGE_S,
-    REMEASURE_SKEW_S,
-    clearable_after_fold,
-    held_facts,
-    machine_clearable,
-    remeasure_kind,
-    sag_ok,
-    sag_stable,
-)
 
 RISK_SCHEMA = "rosy.arm-incident-risk.v1"
 AUTO_CLEAR_MIN_SCORE = 95
@@ -156,6 +145,8 @@ def _check_remeasured(remeasured, *, since, now, incident_id, binding, vetoes: l
     """Enforce live register/pose/binding/freshness safety whenever a remeasured read is present (any incident kind)."""
     if remeasured is None:
         return
+    from .arm_incidents import REMEASURE_HOME_TOL, REMEASURE_MAX_AGE_S, REMEASURE_SKEW_S, sag_ok
+
     try:
         read = ArmIncidentRemeasure.model_validate(remeasured)
     except (TypeError, ValueError) as exc:
@@ -177,6 +168,8 @@ def _check_remeasured(remeasured, *, since, now, incident_id, binding, vetoes: l
 
 
 def _deduct_kind_and_pose(facts: dict, clear_path: str, policy_reason: str, remeasured, recovery, deductions: list[dict]) -> None:
+    from .arm_incidents import REMEASURE_HOME_TOL, held_facts, remeasure_kind, sag_stable
+
     if clear_path == "clearable_after_fold":
         _deduct(deductions, "KIND_AUTO_FOLD", 3, "incident cleared via autonomous fold")
         state, home = recovery["folded_state"], recovery["home"]
@@ -235,6 +228,8 @@ def evaluate_clear_safety(
     """Evaluate hard vetoes and deterministic 0..100 safety score (threshold >= 95) before machine auto-clear."""
     if isinstance(min_score, bool) or not isinstance(min_score, int) or not (AUTO_CLEAR_MIN_SCORE <= min_score <= 100):
         raise ValueError("min_score must be an integer in [95, 100]")
+
+    from .arm_incidents import clearable_after_fold, machine_clearable
 
     vetoes: list[dict] = []
     deductions: list[dict] = []

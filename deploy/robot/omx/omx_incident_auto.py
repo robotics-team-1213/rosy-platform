@@ -96,7 +96,7 @@ def auto_clear(arm: str, f: dict, link, clear_fn=None, *, remeasured=None, recov
     AI assessor to clear. Refuses and escalates to a human when any hard veto hits or safety_score < 95."""
     try:
         _ensure_core_common()
-        from core_common.protocol.arm_incident.arm_incident_risk import evaluate_clear_safety
+        from core_common.protocol.arm_incident.arm_incidents import evaluate_clear_safety
 
         risk = evaluate_clear_safety(
             f, remeasured=remeasured, recovery=recovery, camera_check=camera_check,

@@ -180,3 +180,24 @@ def test_motor_health_and_camera_deductions_and_hard_vetoes():
         assert out["safety_score"] == 0 and out["risk_score"] == 100
         assert out["allowed"] is False and out["decision"] == "escalate_human"
         assert out["hard_vetoes"]
+
+
+def test_cold_subprocess_import_of_arm_incident_risk_has_no_cycle():
+    import os
+    import subprocess
+    import sys
+
+    root = str(Path(__file__).resolve().parents[1])
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    out = subprocess.check_output(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.path.insert(0, %r); "
+            "from core_common.protocol.arm_incident.arm_incident_risk import AUTO_CLEAR_MIN_SCORE, evaluate_clear_safety; "
+            "print(AUTO_CLEAR_MIN_SCORE, callable(evaluate_clear_safety))" % root,
+        ],
+        env=env,
+        text=True,
+    )
+    assert out.strip() == "95 True"
