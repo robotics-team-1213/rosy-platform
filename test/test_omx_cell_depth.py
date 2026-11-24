@@ -169,3 +169,32 @@ def test_a_short_capture_timeout_is_raised_to_the_frames_it_must_wait_for(tmp_pa
     assert cd.capture_top_depth_z16(str(dev), raw, timeout_s=1.8) is not None
     assert seen == [cd.MIN_CAPTURE_S] and cd.MIN_CAPTURE_S > 13 / 6
     assert cd.capture_top_depth_z16(str(dev), raw, timeout_s=12.0) is not None and seen[-1] == 12.0
+
+
+def test_capture_top_depth_z16_uses_lock_and_unique_tempdir_when_out_raw_none(tmp_path, monkeypatch):
+    import subprocess
+    from contextlib import contextmanager
+    import cell_depth_lock
+
+    dev = tmp_path / "depth"
+    dev.touch()
+    locked, paths = [], []
+
+    @contextmanager
+    def fake_lock(timeout_s=5.0, lock_dir=None):
+        locked.append("enter")
+        yield
+        locked.append("exit")
+
+    def run(cmd, timeout, **kwargs):
+        out_arg = next(p for p in cmd if p.startswith("--stream-to=")).split("=", 1)[1]
+        paths.append(out_arg)
+        np.full((480, 640), 610, np.uint16).tofile(out_arg)
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(cell_depth_lock, "hold_depth_lock", fake_lock)
+    monkeypatch.setattr(cd.subprocess, "run", run)
+    arr = cd.capture_top_depth_z16(str(dev), None, timeout_s=6.0)
+    assert arr is not None and arr.shape == (480, 640)
+    assert locked == ["enter", "exit"]
+    assert len(paths) == 1 and "rosy-top-depth-z16.raw" not in paths[0] and not Path(paths[0]).exists()

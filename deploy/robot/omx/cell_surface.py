@@ -22,13 +22,14 @@ import cell_pipeline as cp  # noqa: E402
 def probe_library(plan: dict, x: float, y: float, yaw: float, z_from: float, z_to: float, tcp_x_m: float | None = None) -> dict:
     from grasp_planner import NAMES, Planner, norm_to_rad
 
-    p = dict(plan, approach_m=z_from - z_to, descend_m_s=0.010, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
+    z_from = max(z_to + 0.05, min(z_from, z_to + 0.08))
+    p = dict(plan, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
     planner = Planner(p)
-    chunks, _ = planner.site("probe", {"x": x, "y": y, "z": z_to, "yaw_deg": yaw}, p["grip_closed"],
-                             p["grip_closed"], norm_to_rad(p["home"][4]))
+    q5 = norm_to_rad(p["home"][4])
+    frames, _ = planner.line((x, y, z_from), (x, y, z_to), 0.003, yaw, p["grip_closed"], q5)
     home = [round(v, 3) for v in p["home"]] + [p["grip_closed"]]
     return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": p["fps"],
-            "chunks": {"above_probe": chunks["above_probe"], "descend_probe": chunks["descend_probe"], "home": [home]},
+            "chunks": {"above_probe": [frames[0]], "descend_probe": frames, "home": [home]},
             "gripper_closed": p["grip_closed"], "transit": p.get("transit", {}),
             "transit_speed": p.get("transit_speed", 0.85)}
 
@@ -40,10 +41,10 @@ def fk_z(state: list, tcp_x_m: float | None = None) -> float:
     return kin.fk([norm_to_rad(v) for v in state[:5]]).z
 
 
-def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None) -> dict:
-    """goto above, descend; a contact hold is the surface. Always ends folded home (or reports why not)."""
-    steps = []
-    for command in (f"load {library_path}", "goto above_probe", "run descend_probe"):
+def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None, repeat: int = 1) -> dict:
+    """goto above, descend (repeated `repeat` times); a contact hold is the surface. Always ends folded home."""
+    steps, touches, last_err = [], [], None
+    for command in (f"load {library_path}", "goto above_probe"):
         status = cell.act(command)
         steps.append({"command": command, **{k: status.get(k) for k in cp.STEP_KEYS}})
         if status.get("contact"):
@@ -55,8 +56,35 @@ def touch(cell, library_path: Path, fk=fk_z, tcp_x_m: float | None = None) -> di
             if not status.get("fault") and not command.startswith("load"):
                 steps.append({"command": "park", "ok": cell.act("park").get("ok")})
             return {"result": "fault" if status.get("fault") else "refused", "at": command, "steps": steps}
+    n_rep = max(1, int(repeat))
+    for idx in range(n_rep):
+        status = cell.act("run descend_probe")
+        steps.append({"command": "run descend_probe", **{k: status.get(k) for k in cp.STEP_KEYS}})
+        if status.get("contact"):
+            z = fk(status["state"], tcp_x_m) if fk is fk_z else fk(status["state"])
+            touches.append(z)
+            last_err = status.get("error")
+            ret = cell.act("retreat")
+            steps.append({"command": "retreat", "ok": ret.get("ok")})
+            if not ret.get("ok") and idx + 1 < n_rep:
+                steps.append({"command": "park", "ok": cell.act("park").get("ok")})
+                return {"result": "fault" if ret.get("fault") else "refused", "at": "retreat", "steps": steps}
+            continue
+        if not status.get("ok"):
+            if not status.get("fault"):
+                steps.append({"command": "park", "ok": cell.act("park").get("ok")})
+            return {"result": "fault" if status.get("fault") else "refused", "at": "run descend_probe", "steps": steps}
+        steps.append({"command": "park", "ok": cell.act("park").get("ok")})
+        return {"result": "no contact", "steps": steps}
     steps.append({"command": "park", "ok": cell.act("park").get("ok")})
-    return {"result": "no contact", "steps": steps}
+    if n_rep == 1:
+        return {"result": "touched", "surface_z": round(touches[0], 4), "error": last_err, "steps": steps}
+    spread_mm = round((max(touches) - min(touches)) * 1000.0, 2)
+    touches_r = [round(t, 4) for t in touches]
+    if max(touches) - min(touches) > 0.0015:
+        return {"result": "unrepeatable", "touches_m": touches_r, "spread_mm": spread_mm, "steps": steps}
+    return {"result": "touched", "surface_z": round(sum(touches) / len(touches), 4),
+            "touches_m": touches_r, "spread_mm": spread_mm, "error": last_err, "steps": steps}
 
 
 def _finite_num(value) -> float | None:
@@ -77,7 +105,7 @@ def validated_probe_z_to(config: dict, site_cfg: dict) -> tuple[float | None, st
     """Return ``(probe_z_to, error)``; negative probes match ``grasp_planner.limits_at`` first-match ``low_zones``."""
     raw_z_to = site_cfg.get("probe_z_to_m", 0.010)
     probe_z_to = _finite_num(raw_z_to)
-    if probe_z_to is None or not (-0.05 <= probe_z_to < 0.10):
+    if probe_z_to is None or not (-0.12 <= probe_z_to < 0.12):
         return None, f"invalid probe_z_to_m: {raw_z_to!r}"
     if probe_z_to < 0.010:
         xy = _valid_xy(site_cfg.get("place"))
@@ -101,8 +129,10 @@ def validated_probe_z_to(config: dict, site_cfg: dict) -> tuple[float | None, st
     return probe_z_to, None
 
 
-def run_surface_step(cell, config: dict, step: str, work: Path) -> dict:
+def run_surface_step(cell, config: dict, step: str, work: Path, *, repeat: int = 2) -> dict:
     """Execute one ``surface <site>`` calibration step with low-zone Z gating."""
+    import omx_tcp
+
     site = step.split()[1]
     s = config["sites"].get(site)
     if not isinstance(s, dict) or not s.get("place"):
@@ -116,11 +146,11 @@ def run_surface_step(cell, config: dict, step: str, work: Path) -> dict:
     probe_z_to, z_err = validated_probe_z_to(config, s)
     if z_err:
         return {step: z_err}
-    tcp_x_m = config["tcp_x_m"] if config.get("tcp_x_m") is not None else config["plan"].get("tcp_x_m")
+    tcp_x_m = omx_tcp.config_tcp(config, config["plan"])
     lib = work / f"surface-{site}.library.json"
     lib.write_text(json.dumps(probe_library(
         config["plan"], xy[0], xy[1], yaw, 0.10, probe_z_to, tcp_x_m=tcp_x_m)))
-    touched = touch(cell, lib, tcp_x_m=tcp_x_m)
+    touched = touch(cell, lib, tcp_x_m=tcp_x_m, repeat=repeat)
     if touched["result"] == "touched":
         s["surface_z"] = touched["surface_z"]
     if config.get("work_dir"):
@@ -128,6 +158,8 @@ def run_surface_step(cell, config: dict, step: str, work: Path) -> dict:
         rtmp = rcp.with_suffix(".tmp")
         rtmp.write_text(json.dumps({"result": touched["result"], "surface_z": touched.get("surface_z"), "site": site,
                                     "xy": [xy[0], xy[1]], "measured": time.strftime("%Y-%m-%d %H:%M"),
+                                    **({"touches_m": touched["touches_m"], "spread_mm": touched["spread_mm"]}
+                                       if "touches_m" in touched else {}),
                                     "sets_surface_z": touched["result"] == "touched"}, indent=1), encoding="utf-8")
         rtmp.replace(rcp)
     return {step: touched["result"], "surface_z": touched.get("surface_z")}
@@ -138,7 +170,8 @@ def main(argv=None):
     ap.add_argument("--config", required=True, type=Path)
     ap.add_argument("--site", required=True)
     ap.add_argument("--z-from", type=float, default=0.10)
-    ap.add_argument("--z-to", type=float, default=0.010)
+    ap.add_argument("--z-to", type=float, default=None)
+    ap.add_argument("--repeat", type=int, default=2)
     ap.add_argument("--write", action="store_true", help="store the measured surface_z in the config's site")
     ap.add_argument("--commissioning", action="store_true", help="arm moves near fixtures during calibration")
     ap.add_argument("--person-at-switch", action="store_true", help="operator at the e-stop switch (D-911)")
@@ -152,12 +185,17 @@ def main(argv=None):
 
     tcp_x_m = omx_tcp.config_tcp(config, plan)
     site = config["sites"][args.site]
+    site_copy = {**site, **({"probe_z_to_m": args.z_to} if args.z_to is not None else {})}
+    z_to, z_err = validated_probe_z_to({**config, "plan": plan}, site_copy)
+    if z_err:
+        print(json.dumps({"result": "refused", "error": z_err, "site": args.site}))
+        return 1
     x, y = site["place"]
     work = Path(config["work_dir"]).expanduser()
     path = work / f"surface-{args.site}.library.json"
-    path.write_text(json.dumps(probe_library(plan, x, y, site["yaw_deg"], args.z_from, args.z_to, tcp_x_m=tcp_x_m)))
+    path.write_text(json.dumps(probe_library(plan, x, y, site["yaw_deg"], args.z_from, z_to, tcp_x_m=tcp_x_m)))
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
-    out = dict(touch(cell, path, tcp_x_m=tcp_x_m), site=args.site, xy=[x, y], measured=time.strftime("%Y-%m-%d %H:%M"))
+    out = dict(touch(cell, path, tcp_x_m=tcp_x_m, repeat=args.repeat), site=args.site, xy=[x, y], measured=time.strftime("%Y-%m-%d %H:%M"))
     (work / f"surface-{args.site}.json").write_text(json.dumps(out, indent=1))
     if args.write and out["result"] == "touched":
         site["surface_z"] = out["surface_z"]
