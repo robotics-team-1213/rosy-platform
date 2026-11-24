@@ -1,5 +1,7 @@
-# Co-located Rosy World + read-only Real Fleet bridge overlay for deploy/site/compose.yaml.
-# Both sides resolve each other over mDNS (<host>.local) using /run/avahi-daemon (never hardcoded IPs).
+# Co-located Rosy World overlay for deploy/site/compose.yaml: Caddy serves /world/
+# behind Fleet forward_auth (same origin, ROSY_WORLD_SAME_ORIGIN), the world service
+# stays on site_backend only, and the read-only bridge pushes real Fleet state over
+# that network (Docker DNS, no mDNS). Off-host pairs keep compose.world-link.yaml.
 x-world-logging: &world-logging
   driver: json-file
   options:
@@ -9,10 +11,8 @@ x-world-logging: &world-logging
 services:
   fleet:
     environment:
-      ROSY_WORLD_MDNS_HOST: "${ROSY_WORLD_MDNS_HOST:-${ROSY_SITE_TLS_HOST:-rosy-world.local}}"
-      ROSY_WORLD_MDNS_PORT: "${ROSY_WORLD_PORT:-8140}"
-      ROSY_WORLD_MDNS_SCHEME: "${ROSY_WORLD_MDNS_SCHEME:-http}"
-      ROSY_WORLD_URL: "${ROSY_WORLD_URL:-}"
+      ROSY_WORLD_SAME_ORIGIN: "${ROSY_WORLD_SAME_ORIGIN:-1}"
+      ROSY_WORLD_HEALTH_URL: "http://world:${ROSY_WORLD_PORT:-8140}/healthz"
 
   world:
     image: rosy-world:${ROSY_WORLD_IMAGE_TAG:-local}
@@ -35,18 +35,10 @@ services:
       - "${ROSY_WORLD_PORT:-8140}"
     environment:
       ROSY_WORLD_INGEST_TOKEN: "${ROSY_WORLD_INGEST_TOKEN:-}"
-      ROSY_WORLD_MDNS_HOST: "${ROSY_WORLD_MDNS_HOST:-${ROSY_SITE_TLS_HOST:-}}"
-      ROSY_FLEET_MDNS_HOST: "${ROSY_SITE_TLS_HOST:-}"
-    ports:
-      - "${ROSY_WORLD_BIND:-0.0.0.0}:${ROSY_WORLD_PORT:-8140}:${ROSY_WORLD_PORT:-8140}"
     volumes:
       - type: bind
         source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
         target: /world
-        read_only: true
-      - type: bind
-        source: /run/avahi-daemon
-        target: /run/avahi-daemon
         read_only: true
         bind:
           create_host_path: false
@@ -63,7 +55,7 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
-    networks: [site_backend, site_edge]
+    networks: [site_backend]
     logging: *world-logging
 
   world-real-bridge:
@@ -81,7 +73,7 @@ services:
       - --bundle
       - /world
       - --interval
-      - "0.5"
+      - "1.0"
     environment:
       SSL_CERT_FILE: /run/secrets/site_ca
       ROSY_FLEET_TOKEN_FILE: /run/secrets/world_fleet_viewer_token
@@ -93,10 +85,6 @@ services:
       - type: bind
         source: "${ROSY_WORLD_BUNDLE_DIR:?set ROSY_WORLD_BUNDLE_DIR}"
         target: /world
-        read_only: true
-      - type: bind
-        source: /run/avahi-daemon
-        target: /run/avahi-daemon
         read_only: true
         bind:
           create_host_path: false
@@ -113,6 +101,15 @@ services:
     restart: unless-stopped
     networks: [site_backend]
     logging: *world-logging
+
+  proxy:
+    volumes:
+      - type: bind
+        source: ./Caddyfile.world
+        target: /etc/caddy/world/routes.caddy
+        read_only: true
+        bind:
+          create_host_path: false
 
 secrets:
   world_fleet_viewer_token:
