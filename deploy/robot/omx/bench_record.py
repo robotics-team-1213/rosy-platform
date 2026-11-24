@@ -261,6 +261,11 @@ class Bench(BenchInspectMixin, BenchOpsMixin, BenchLeaderMixin, BenchManualMixin
                 snap_files = [("caps.json", caps_bytes)]
                 eff_task_id, eff_root_prefix, eff_target_eps, effective_task, tc_snap = prepare_session_task_card(
                     effective_task, task_card, task_override, body["arm"], cfg_data, overrides, snap)
+                if not effective_task:
+                    ds_root = (cfg_data.get("dataset") or {}).get("root") if isinstance(cfg_data.get("dataset"), dict) else None
+                    if isinstance(ds_root, str) and ds_root and Path(ds_root).exists():
+                        overrides.setdefault("root", str(Path(ds_root).parent / stamp))
+                        eff_root_prefix = overrides["root"]
                 if tc_snap is not None:
                     snap_files.append(tc_snap)
                 if overrides or cam_rebinds:
