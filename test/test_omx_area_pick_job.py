@@ -32,7 +32,13 @@ def _make_workdir(tmp_path: Path) -> tuple[Path, Path]:
             "wrist": {"profile_path": str(wd / "prof.json")},
         },
     }), encoding="utf-8")
-    (wd / "prof.json").write_text("{}", encoding="utf-8")
+    (wd / "prof.json").write_text(json.dumps({
+        "schema": "rosy.omx-cell-profile.v1",
+        "top_box": {"roi": [0, 0, 100, 100]},
+        "wrist_box": {},
+        "reference": {},
+        "home": [0, 0, 0, 0, 0],
+    }), encoding="utf-8")
     (wd / "plan.json").write_text("{}", encoding="utf-8")
     return wd, wd / "cell-auto-arm-s-live.json"
 
@@ -188,3 +194,153 @@ def test_cell_area_pick_cli_dry_run_refusals_and_live_closed_loop(
     assert cli.main([*base_argv, "--commissioning", "--person-at-switch"]) == 1
     out_z_err = json.loads(capsys.readouterr().out)
     assert out_z_err["result"] == "refused" and "0.3" in out_z_err["error"]
+
+
+def test_arm_s_negative_x_white_jaw_and_failure_bundle(
+    tmp_path: Path, monkeypatch, capsys,
+) -> None:
+    import cell_arm_cal
+    import cell_directive_compiler as cdc
+
+    wd, cfg_path = _make_workdir(tmp_path)
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["tcp_x_m"] = 0.074
+    cfg["plan"] = {"pick": {}, "place": {}, "limits": {"workspace_min_m": [-0.28, -0.28, 0.005]}}
+
+    class _FakeCell:
+        def __init__(self, io, cams):
+            pass
+
+        def frame(self, view: str):
+            return np.full((32, 32, 3), 120, dtype=np.uint8)
+
+        def act(self, cmd: str):
+            return {"ok": True}
+
+    monkeypatch.setattr(cli.cell_auto_setup, "load_config", lambda _p: cfg)
+    monkeypatch.setattr(cli.cp, "FifoCell", _FakeCell)
+    monkeypatch.setattr(cli.cell_preflight, "ready", lambda _f, _c: [])
+
+    # 1) Negative-x rear floor coordinates accepted for arm_s, rejected for extreme arm_s (-0.20) and arm_b (-0.06)
+    floor_argv = [
+        "--arm", "arm_s", "--config", str(cfg_path),
+        "--pick-area", "floor", "--pick-x", "0.044", "--pick-y", "0.156", "--pick-z", "0.021",
+        "--place-area", "floor", "--place-x", "-0.06", "--place-y", "0.17", "--place-z", "0.025",
+    ]
+    monkeypatch.setattr(
+        cli.cell_area_xyz, "plan_library_from_directive",
+        lambda d, bp, work_dir=None: ({"chunks": {"above_pick": {}}}, {"pick": d["pick"], "place": d["place"]}, {"finger_color": d["execution"].get("finger_color")}),
+    )
+    assert cli.main([*floor_argv, "--dry-run"]) == 0
+    planned = json.loads(capsys.readouterr().out)
+    assert planned["result"] == "planned" and planned["finger_color"] == "white"
+
+    too_far_back = [*floor_argv[:15], "-0.20", *floor_argv[16:], "--dry-run"]
+    assert cli.main(too_far_back) == 1
+    assert json.loads(capsys.readouterr().out)["result"] == "refused"
+
+    arm_b_neg_x = ["--arm", "arm_b", *floor_argv[2:], "--dry-run"]
+    assert cli.main(arm_b_neg_x) == 1
+    assert json.loads(capsys.readouterr().out)["result"] == "refused"
+
+    # 2) Directive compiler honors execution.finger_color='white' without altering ARM_DEFAULTS['arm_s']
+    ns = cli._parser().parse_args(floor_argv)
+    directive = cli._build_directive(ns, cfg)
+    assert directive["execution"]["finger_color"] == "white"
+    _, cal = cdc.build_plan_from_directive(directive, cfg["plan"], work_dir=wd)
+    assert cal["finger_color"] == "white"
+    assert cell_arm_cal.default_profile("arm_s")["finger_color"] == "dark"
+
+    # 3) Live non-placed exit emits a failure bundle for rosy diagnose; placed exit does not
+    emitted: list[dict] = []
+    monkeypatch.setattr(
+        cli.cell_bundle_emit, "emit_pick_failure",
+        lambda cell, config, calibration, src, dst, work, res, tried, **kw: emitted.append({"arm": config.get("arm_id"), "src": src, "dst": dst, "res": res}) or "20261124T000000Z-arm_s-stop-abc123",
+    )
+    monkeypatch.setattr(
+        cli.cell_area_xyz, "execute_directive",
+        lambda *_a, **_kw: {"result": "empty", "at": "run grasp_pick"},
+    )
+    assert cli.main([*floor_argv, "--commissioning", "--person-at-switch"]) == 1
+    out_fail = json.loads(capsys.readouterr().out)
+    assert out_fail["failure_bundle_id"] == "20261124T000000Z-arm_s-stop-abc123"
+    assert len(emitted) == 1 and emitted[0]["arm"] == "arm_s" and emitted[0]["src"] == "floor"
+
+    monkeypatch.setattr(
+        cli.cell_area_xyz, "execute_directive",
+        lambda *_a, **_kw: {"result": "placed", "task_verified": True},
+    )
+    assert cli.main([*floor_argv, "--commissioning", "--person-at-switch"]) == 0
+    out_ok = json.loads(capsys.readouterr().out)
+    assert "failure_bundle_id" not in out_ok and len(emitted) == 1
+
+
+def test_real_load_config_white_jaw_rear_floor_and_recovery(tmp_path: Path, monkeypatch, capsys) -> None:
+    import cell_area_recovery as car
+    import cell_area_xyz
+    import cell_auto_setup
+    import cell_directive_compiler as cdc
+    from omx_adapter.area_xyz import coerce_area_xyz
+
+    wd = tmp_path / "real_work"
+    wd.mkdir()
+    (wd / "prof.json").write_text(json.dumps({
+        "schema": "rosy.omx-cell-profile.v1",
+        "top_box": {"roi": [0, 0, 100, 100]},
+        "wrist_box": {},
+        "reference": {},
+        "home": [0, 0, 0, 0, 0],
+    }), encoding="utf-8")
+    (wd / "plan.json").write_text(json.dumps({
+        "pick": {}, "place": {}, "limits": {"workspace_min_m": [-0.28, -0.28, 0.005]},
+    }), encoding="utf-8")
+    cfg_path = wd / "cell-auto-arm-s-live.json"
+    cfg_path.write_text(json.dumps({
+        "arm_id": "arm_s",
+        "work_dir": str(wd),
+        "io": str(wd / "chunk-io-s"),
+        "profile_path": str(wd / "prof.json"),
+        "plan_path": str(wd / "plan.json"),
+        "tcp_x_m": 0.074,
+        "cameras": {"top": {}, "wrist": {}},
+    }), encoding="utf-8")
+
+    # Real load_config injects ARM_DEFAULTS['arm_s']['finger_color'] == 'dark' into config['wrist'],
+    # yet raw_config + tcp_x_m >= 0.073 still resolves 'white' and coerce_area_xyz accepts x=-0.11.
+    raw_cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    loaded_cfg = cell_auto_setup.load_config(cfg_path)
+    assert loaded_cfg["wrist"]["finger_color"] == "dark"
+
+    rear_argv = [
+        "--arm", "arm_s", "--config", str(cfg_path),
+        "--pick-area", "floor", "--pick-x", "-0.11", "--pick-y", "0.13", "--pick-z", "0.021",
+        "--place-area", "floor", "--place-x", "0.044", "--place-y", "0.156", "--place-z", "0.025",
+        "--dry-run",
+    ]
+    args = cli._parser().parse_args(rear_argv)
+    assert cli._check_workspace(args) is None
+    directive = cli._build_directive(args, loaded_cfg, raw_config=raw_cfg)
+    assert directive["execution"]["finger_color"] == "white"
+    assert coerce_area_xyz(directive["pick"])["effective_xyz_m"][0] == -0.11
+    _, cal = cdc.build_plan_from_directive(directive, loaded_cfg["plan"], work_dir=wd)
+    assert cal["finger_color"] == "white"
+
+    # Explicit wrist.finger_color in raw JSON file takes precedence over tcp_x_m fallback
+    explicit_raw = {**raw_cfg, "wrist": {"finger_color": "dark"}}
+    assert cli._resolve_finger_color("arm_s", loaded_cfg, explicit_raw) == "dark"
+
+    # Recovery clamp preserves negative-x floor coordinates for arm_s instead of jumping to +0.055
+    rec = car.diagnose_and_recover_pick(
+        attempt=0,
+        cur_directive={
+            "arm_id": "arm_s",
+            "pick": {"area": "floor", "effective_xyz_m": [-0.08, 0.13, 0.021], "col": 1, "yaw_deg": -90.0},
+        },
+        r_desc={"ok": False},
+        r_grasp={},
+        cal={"held_30mm": 54.3},
+        tried_xs=[],
+    )
+    assert rec["recovered_pick_xyz_m"][0] < -0.05
+    # Unused cell_area_xyz import ensures module compatibility with workspace change
+    assert cell_area_xyz.coerce_area_xyz(directive["pick"])["effective_xyz_m"][0] == -0.11

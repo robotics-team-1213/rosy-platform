@@ -13,6 +13,7 @@ if str(HERE) not in sys.path:
 
 import cell_area_xyz  # noqa: E402
 import cell_auto_setup  # noqa: E402
+import cell_bundle_emit  # noqa: E402
 import cell_control_core  # noqa: E402
 import cell_pipeline as cp  # noqa: E402
 import cell_preflight  # noqa: E402
@@ -43,10 +44,50 @@ def _parser() -> argparse.ArgumentParser:
     return ap
 
 
-def _build_directive(args: argparse.Namespace, config: dict) -> dict:
+def _resolve_tcp_x_m(config: dict) -> float | None:
+    plan = config.get("plan") if isinstance(config.get("plan"), dict) else {}
+    for cand in (config.get("tcp_x_m"), plan.get("tcp_x_m")):
+        if cand is not None:
+            return float(cand)
+    return None
+
+
+def _resolve_finger_color(arm: str, config: dict, raw_config: dict | None = None) -> str | None:
+    """Resolve jaw color for wrist vision (`white` when v2.1 jaws are mounted via `tcp_x_m >= 0.073`)."""
+    raw_wrist = raw_config.get("wrist") if isinstance(raw_config, dict) and isinstance(raw_config.get("wrist"), dict) else {}
+    explicit = (
+        raw_config.get("finger_color") if isinstance(raw_config, dict) else None,
+        raw_wrist.get("finger_color"),
+        config.get("finger_color"),
+    )
+    for cand in explicit:
+        if cand in ("dark", "white", "auto"):
+            return str(cand)
+    tcp = _resolve_tcp_x_m(config)
+    if arm == "arm_s" and tcp is not None and tcp >= 0.073:
+        return "white"
+    wrist = config.get("wrist") if isinstance(config.get("wrist"), dict) else {}
+    if wrist.get("finger_color") in ("dark", "white", "auto"):
+        return str(wrist["finger_color"])
+    return None
+
+
+def _build_directive(args: argparse.Namespace, config: dict, raw_config: dict | None = None) -> dict:
     cameras = config.get("cameras") or {}
     pick_xyz = [float(args.pick_x), float(args.pick_y), float(args.pick_z)]
     place_xyz = [float(args.place_x), float(args.place_y), float(args.place_z)]
+    execution = {
+        "vision_refine": not bool(args.no_vision_refine),
+        "side_zone_snap": "side" in cameras,
+        "stay_in_hover": bool(args.stay_in_hover),
+        "grasp_deliberation": True,
+        "live_perceived": True,
+        "wrist_passes": 2,
+    }
+    if fc := _resolve_finger_color(args.arm, config, raw_config):
+        execution["finger_color"] = fc
+    if (tcp := _resolve_tcp_x_m(config)) is not None:
+        execution["tcp_x_m"] = tcp
     return {
         "schema": cell_area_xyz.DIRECTIVE_SCHEMA,
         "directive_id": f"area-{args.arm}-{args.pick_area}-to-{args.place_area}",
@@ -67,14 +108,7 @@ def _build_directive(args: argparse.Namespace, config: dict) -> dict:
             "effective_xyz_m": place_xyz,
             "yaw_deg": float(args.place_yaw_deg),
         },
-        "execution": {
-            "vision_refine": not bool(args.no_vision_refine),
-            "side_zone_snap": "side" in cameras,
-            "stay_in_hover": bool(args.stay_in_hover),
-            "grasp_deliberation": True,
-            "live_perceived": True,
-            "wrist_passes": 2,
-        },
+        "execution": execution,
     }
 
 
@@ -126,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"result": "refused", "error": err}))
         return 1
 
+    raw_config = json.loads(args.config.read_text(encoding="utf-8")) if args.config.is_file() else {}
     config = cell_auto_setup.load_config(args.config)
     if err := _check_config_arm(args.arm, config):
         print(json.dumps({"result": "refused", "error": err}))
@@ -139,12 +174,12 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"result": "refused", "error": "; ".join(dark)}))
         return 1
 
-    directive = _build_directive(args, config)
+    directive = _build_directive(args, config, raw_config=raw_config)
     frame_fn = lambda view: None if view not in cameras else cell.frame(view)
 
     if args.dry_run:
         try:
-            lib, plan, _ = cell_area_xyz.plan_library_from_directive(directive, config["plan"], work_dir=work_dir)
+            lib, plan, cal = cell_area_xyz.plan_library_from_directive(directive, config["plan"], work_dir=work_dir)
         except Exception as exc:
             print(json.dumps({"result": "refused", "dry_run": True, "error": str(exc)}, default=str))
             return 1
@@ -157,6 +192,7 @@ def main(argv: list[str] | None = None) -> int:
             "plan_pick": plan["pick"],
             "plan_place": plan["place"],
             "chunks": sorted((lib.get("chunks") or {}).keys()),
+            "finger_color": cal.get("finger_color"),
             "vision_refine": directive["execution"]["vision_refine"],
             "side_zone_snap": directive["execution"]["side_zone_snap"],
         }, indent=1, default=str))
@@ -179,6 +215,19 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(json.dumps({"result": "refused", "error": str(exc)}))
         return 1
+    if res.get("result") not in ("placed", "hover"):
+        bid = cell_bundle_emit.emit_pick_failure(
+            cell,
+            {**config, "arm_id": args.arm},
+            res.get("calibration") or {},
+            args.pick_area,
+            args.place_area,
+            work_dir,
+            res,
+            {"transfer": res, "fail": {"stage": res.get("at") or "area_xyz_pick", "class": res.get("result") or "unknown"}},
+        )
+        if bid:
+            res["failure_bundle_id"] = bid
     if args.operator:
         res["operator"] = args.operator
     if args.proposer:

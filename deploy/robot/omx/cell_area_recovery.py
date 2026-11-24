@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from cell_control_core import apply_wrist_xy_step
+from cell_control_core import apply_wrist_xy_step, arm_workspace_xy_bounds
 
 
 def recover_hover(run_cmd, grip_open_val: float, steps_log: list[dict], *, park_after: bool = False) -> bool:
@@ -95,6 +95,7 @@ def diagnose_and_recover_pick(
             or ((debate_decision.get("kinesthetic") or {}).get("verdict") == "reinsert")
         )
     )
+    x_lo = arm_workspace_xy_bounds(str(cur_directive.get("arm_id") or "arm_b"))[0]
     if has_debate_shift and not desc_contact:
         from cell_control_core import clamp_workspace_xy
 
@@ -114,7 +115,7 @@ def diagnose_and_recover_pick(
         reason = f"belt_centered_recovery: x {cur_x} -> {new_x}, z {cur_z} -> {new_z}"
     elif desc_contact:
         col = int(cur_directive["pick"].get("col") or 1)
-        new_x = round(max(0.055, min(0.234, cur_x + (-0.0012 if col == 1 else -0.0018))), 5)
+        new_x = round(max(x_lo, min(0.234, cur_x + (-0.0012 if col == 1 else -0.0018))), 5)
         contact_z = r_desc.get("contact_z") if r_desc else None
         new_z_val = float(contact_z) + 0.0040 if contact_z is not None else cur_z + 0.0018
         new_y, new_z = round(cur_y, 5), round(max(min_grasp_z, new_z_val), 5)
@@ -140,7 +141,7 @@ def diagnose_and_recover_pick(
         col = int(cur_directive["pick"].get("col") or 3)
         canonical_x = {1: 0.1335, 2: 0.1580, 3: 0.1988}.get(col, cur_x)
         if cur_x < 0.115:
-            new_x = round(max(0.055, cur_x + 0.0025), 5)
+            new_x = round(max(x_lo, cur_x + 0.0025), 5)
         elif 0.002 <= abs(cur_x - canonical_x) <= 0.012:
             new_x = round(canonical_x, 5)
         elif cur_x > 0.210:
