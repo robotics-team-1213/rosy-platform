@@ -397,11 +397,13 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const guide = (ctx, toPoint) => {
     // Guide chips start with the robot id ("rosy_01 · ±0.05 m"): keep active robots/live arms visible on
     // normal sites (<= 6 robots), while offline arm placeholders yield priority unless focused.
-    const focusedRobotId = view.focusRobot || view.selected || null;
+    const focusedRobotId = view.focusRobot || view.selected || view.focusAnchorId || null;
+    const focusIds = new Set([view.focusRobot, view.selected, view.focusAnchorId].filter(Boolean).map((id) => String(id).toLowerCase()));
     const smallFleet = (view.guide?.robots?.length || 0) <= 6;
     const chip = (c, g, x, y, text, tone) => {
       const s = String(text);
-      const isFocused = Boolean(focusedRobotId && s.includes(focusedRobotId));
+      const chipId = s.split(" · ")[0].split(" (")[0].trim().toLowerCase();
+      const isFocused = focusIds.has(chipId);
       const isOfflineArm = /^arm_[a-z]+\s*·\s*위치 모름/.test(s);
       return drawChip(c, g, x, y, text, tone, isFocused || (smallFleet && !isOfflineArm) || labelImportant(s.split(" · ")[0]));
     };
