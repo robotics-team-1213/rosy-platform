@@ -130,6 +130,7 @@ class MapAgreement:
         eff_tol = max(float(tolerance), float(resolution) * math.sqrt(2))
         sigma = max(.025, .75 * float(resolution))
         self._ray_margin = max(.06, 2.0 * float(resolution))
+        self._max_pierce_ratio = 0.06 if float(resolution) >= 0.05 else 0.03
         radius = int(math.ceil(eff_tol / resolution))
         h, w = occupied.shape
         for dy in range(-radius, radius + 1):
@@ -243,7 +244,7 @@ class MapAgreement:
         eval_denom = total - miss_foreground - unknown_count
         if total < 30:
             reason = "insufficient-scan"
-        elif pierce_count / total > 0.03:
+        elif pierce_count / total > self._max_pierce_ratio:
             reason = "wall-piercing"
         elif sectors_hit < 4:
             reason = "sparse-sectors"
