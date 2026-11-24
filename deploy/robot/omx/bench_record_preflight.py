@@ -119,6 +119,26 @@ def check_replay_corridor(prep: Path, arm: str, traj: dict, *, opener=None) -> d
 
 
 def _probe_video_luma(mp4_path: Path) -> tuple[int, list[float]]:
+    try:  # PyAV (libdav1d) decodes LeRobot AV1 mp4s when pip opencv-python lacks AV1 support.
+        import av
+
+        with av.open(str(mp4_path)) as c:
+            if c.streams.video:
+                n = int(c.streams.video[0].frames or 0)
+                targets = {0, min(n // 2, 150), min(max(0, n - 1), 300)} if n > 0 else {0, 15, 30}
+                limit = max(targets)
+                means, seen = [], 0
+                for idx, fr in enumerate(c.decode(video=0)):
+                    seen = idx + 1
+                    if idx in targets:
+                        means.append(float(fr.to_ndarray(format="rgb24").mean()))
+                    if idx >= limit:
+                        break
+                if means:
+                    return (n or seen), means
+    except Exception:
+        pass
+
     import cv2
 
     cap = cv2.VideoCapture(str(mp4_path))
