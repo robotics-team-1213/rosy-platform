@@ -6,3 +6,4 @@
 .robot-video-stage video { width: 100%; height: 100%; object-fit: contain; display: block; }
 .robot-video-stage figcaption { position: absolute; left: 0; bottom: 0; padding: var(--space-1); color: var(--text-primary); background: var(--surface-raised); }
 .robot-video-stage figure:is([data-state="stale"], [data-state="hidden"], [data-state="lost"]) figcaption { color: var(--flag-danger-ink); background: var(--flag-danger-bg); }
+.robot-video-stage figure[data-state="hidden"] video { opacity: var(--disabled-opacity); filter: grayscale(0.45); }

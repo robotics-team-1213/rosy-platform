@@ -14,6 +14,7 @@ install(FILES
   template.css
   app-shell.css
   core_ui_logic.js
+  camera-frame-hold.js
   hold-ticker.js
   ui.js
   workspace.js
