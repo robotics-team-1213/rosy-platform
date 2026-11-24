@@ -77,8 +77,7 @@ record for the failed intermediate runs and separate PPO outcome.
 
 ## Reopening a flattened scene
 
-A moved ROSY World A/B scene with SHA-256
-`3a051564d5e28f5f028d838a0f00bd4f822c673cd82a97e08f84aa05eae3b80e`
+A moved ROSY World A/B scene (SHA-256 `3a051564d5e28f5f028d838a0f00bd4f822c673cd82a97e08f84aa05eae3b80e`)
 showed the two `Physics/world_fixed` roots in standalone OpenUSD 26.8.
 After Isaac Sim 6.2 started, both its USD context and an in-process
 `Usd.Stage.Open` also showed `Geometry/world/link0` roots for both arms.
