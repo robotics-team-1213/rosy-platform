@@ -19,12 +19,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_depth_lock import is_depth_lock_held  # noqa: E402
+from cell_failure_context import default_bundle_root  # noqa: E402
 from cell_job_guards import (  # noqa: E402
     IDEMPOTENCY_KEY_RE, ROLE_HUMAN, ROLE_MACHINE, IdempotencyStore, Principal,
     authenticate_bearer, authorize_principal, check_arm_incident_hold, check_fleet_safety_online,
     check_peer_ab_folded, check_two_arm_ab_ready, pid_alive as _pid_alive, read_json_dict as _read_json_dict,
     read_token_file as read_token, session_reuse_live_ok, tools_tree_name, write_cell_state_dirty,
 )
+from cell_job_readiness import CellStateGen, handle_get_route, parse_structured_result, proxy_frame  # noqa: E402
 from cell_job_spec import AB_ARMS, JOBS, SESSION, build_argv, job_arms, moves_arm  # noqa: E402,F401
 
 try:
@@ -77,18 +79,24 @@ class Runner:
     def __init__(self, workdir: Path, jobs: dict = JOBS, lock_dir: Path | None = None, lease_dir: Path | None = None,
                  *, incident_check_fn=None, fleet_safety_check_fn=None, fleet_r_url: str | None = None,
                  fleet_token_file: Path | None = None, ca_file: Path | None = None,
-                 motor_health_dir: Path | None = None, calibration_dir: Path | None = None):
+                 motor_health_dir: Path | None = None, calibration_dir: Path | None = None,
+                 bundle_root: Path | None = None):
         self.workdir, self.jobs, self.out = workdir, jobs, workdir / "cell-job-api"
         self.lock_dir = lock_dir
         self.lease_dir = lease_dir or (Path.home() / ".local" / "state" / "rosy" / "arm-leases")
         self.motor_health_dir = motor_health_dir
         self.calibration_dir = calibration_dir
+        self.bundle_root = Path(bundle_root) if bundle_root is not None else default_bundle_root()
         self._lease_owner = f"cell-job-api:{os.getpid()}"
         self._incident_check_fn, self._fleet_safety_check_fn = incident_check_fn, fleet_safety_check_fn
         self._fleet_r_url, self._fleet_token_file, self._ca_file = fleet_r_url, fleet_token_file, ca_file
         self.out.mkdir(exist_ok=True)
         self._idempotency = IdempotencyStore(self.out / "idempotency.json")
+        self._state_gen = CellStateGen(self.out / "cell-state-gen.json")
         self.lock, self.runs = threading.Lock(), {}
+
+    def state_gen(self) -> int:
+        return self._state_gen.current()
 
     def _check_incident(self, arm: str | None) -> str | None:
         return self._incident_check_fn(arm) if self._incident_check_fn is not None else _check_arm_incident(arm)
@@ -126,6 +134,7 @@ class Runner:
                     fleet_online=bool(run.get("fleet_online")),
                     principal=Principal(row["principal_role"], row["principal_id"]),
                 )
+        self._state_gen.bump()
         run["audited"] = True
 
     def _can_reuse_arm_session_locked(self, arm: str) -> bool:
@@ -240,6 +249,7 @@ class Runner:
                         self.workdir, dirty_arm, job_id=jid, job=name, start=now, end=None, exit_code=None,
                         fleet_online=fleet_online, principal=principal,
                     )
+                self._state_gen.bump()
             if idempotency_key and idem_digest is not None:
                 self._idempotency.record(idempotency_key, idem_digest, jid, name)
             if isinstance(proc, _REAL_POPEN):
@@ -273,7 +283,18 @@ class Runner:
             if code is not None:
                 self._audit_locked(jid, run, code)
         data = run["log"].read_bytes()[-tail:].decode("utf-8", "replace") if tail > 0 else ""
-        return {"id": jid, "job": run["job"], "argv": run["argv"], "running": code is None, "exit": code, "log": data}
+        if code is not None and "_parsed_result" in run:
+            structured_result, failure_bundle_id = run["_parsed_result"]
+        elif code is not None or tail > 0:
+            structured_result, failure_bundle_id = parse_structured_result(run["log"])
+            if code is not None:
+                run["_parsed_result"] = (structured_result, failure_bundle_id)
+        else:
+            structured_result, failure_bundle_id = None, None
+        return {
+            "id": jid, "job": run["job"], "argv": run["argv"], "running": code is None, "exit": code,
+            "log": data, "structured_result": structured_result, "failure_bundle_id": failure_bundle_id,
+        }
 
 
 def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = "http://127.0.0.1:8767",
@@ -286,11 +307,13 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
         def log_message(self, fmt, *args):
             pass
 
-        def _send(self, code: int, body, ctype="application/json"):
+        def _send(self, code: int, body, ctype="application/json", extra_headers: dict[str, str] | None = None):
             raw = body if isinstance(body, bytes) else json.dumps(body).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(raw)))
+            for k, v in (extra_headers or {}).items():
+                self.send_header(k, v)
             self.end_headers()
             self.wfile.write(raw)
 
@@ -312,13 +335,14 @@ def make_server(bind: str, port: int, token: str, runner: Runner, viewer: str = 
             if self._auth_principal() is None:
                 return
             if m := re.fullmatch(r"/frame/(top|side|arm_s_top|arm_s_wrist|arm_a_wrist|arm_b_wrist)\.jpg", self.path):
-                try:
-                    with urllib.request.urlopen(f"{viewer}/frame/{m.group(1)}.jpg", timeout=5) as resp:
-                        return self._send(200, resp.read(), "image/jpeg")
-                except urllib.error.HTTPError as exc:
-                    return self._send(exc.code, {"error": f"viewer returned HTTP {exc.code}"})
-                except OSError as exc:
-                    return self._send(502, {"error": f"viewer unreachable: {exc}"})
+                code, body, ctype, hdrs = proxy_frame(viewer, m.group(1), urlopen_fn=urllib.request.urlopen)
+                return self._send(code, body, ctype, extra_headers=hdrs)
+            if routed := handle_get_route(
+                self.path, runner,
+                whole_cell_lock_fn=_whole_cell_lock_held, session_lock_fn=_session_lock_held, depth_lock_fn=_check_depth_lock_held,
+            ):
+                code, body, ctype, hdrs = routed
+                return self._send(code, body, ctype, extra_headers=hdrs)
             if self.path == "/queue":
                 return self._send(200, runner.queue())
             if self.path == "/jobs":

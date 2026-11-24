@@ -87,3 +87,29 @@ def open_cell(args, commissioning=False):
         cd.start(work / "decisions.jsonl", knowledge=config.get("knowledge"))
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     return config, cell, Path(config["calibration_path"]).expanduser(), work
+
+
+def pick_main(argv=None, *, doc: str = "", run_auto_fn=None, run_held_fn=None):
+    import cell_choices
+    import cell_objects
+    import cell_pivot
+    import cell_preflight
+    import cell_calibration as cal
+
+    args = pick_parser(doc).parse_args(argv)
+    validate_pick_args(args)
+    config, cell, calibration_path, work = open_cell(args, args.commissioning)
+    dark = cell_preflight.ready(cell.frame, config)
+    if dark:
+        print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
+        return 1
+    cal_data = cell_pivot.with_site_maps(config, cal.load(calibration_path))
+    cat = cell_objects.load_catalog(args.catalog)
+    result = (
+        run_held_fn(cell, config, cal_data, calibration_path, cat, args.roi, args.dest, work, args.dry_run)
+        if args.return_held else
+        run_auto_fn(cell, config, cal_data, calibration_path, cat, args.roi, args.source, args.dest, work,
+                    cell_choices.Choices(work / "choices.json"), args.dry_run, scenario_id=args.scenario_id, goal=args.goal)
+    )
+    print(json.dumps(result, indent=1, default=str))
+    return 0 if result["result"] in ("placed", "planned") else 1
