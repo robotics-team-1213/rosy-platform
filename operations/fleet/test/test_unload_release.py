@@ -228,7 +228,7 @@ def test_a_queued_goal_after_a_dispatch_without_confirmed_cancel_is_cancelled_to
     assert console.queued == {} and console.cancels == ["rosy_46"]
 
 
-def _client(tmp_path, monkeypatch):
+def _client(tmp_path, monkeypatch, *, rules=RULES):
     from tools.sim.bay_departure_sim import build_world_261026_site_map
     from fleet.server.sitemap import pipeline_routes as routes
 
@@ -236,7 +236,10 @@ def _client(tmp_path, monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.setattr(routes, "_storage_dir", lambda: tmp_path)
     app = FastAPI()
-    routes.install_pipeline_routes(app, site_maps=SimpleNamespace(active=lambda: (1, site, graph, None)))
+    routes.install_pipeline_routes(app, site_maps=SimpleNamespace(
+        active=lambda: (1, site, graph, None),
+        rules=SimpleNamespace(active_rules=lambda: rules),
+    ))
     return app, TestClient(app)
 
 
@@ -259,9 +262,53 @@ def test_dock_and_unload_needs_no_count_and_an_operator_depart_is_gated(tmp_path
     assert read["ready"] is True and read["departure"] is None
     go = client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "depart_s3", "robot_id": "rosy_46"})
     assert go.status_code == 200
+    assert go.json()["pinky_task"]["place_id"] == "S1"
+    assert go.json()["pinky_task"]["target_place"] == "S1"
+    assert go.json()["pinky_task"]["unload_batch_id"] == read["batch_id"]
     again = client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "depart_s3", "robot_id": "rosy_46"})
     assert again.status_code == 409 and "RELEASE_ALREADY_USED" in again.json()["detail"]["reasons"]
     console = Console()
     asyncio.run(ur.depart_tick(app.state, console=console, rules=RULES, site=SITE, enqueue=lambda s: s,
                                human_detected=False, save=lambda: None, now=time.time()))
     assert console.goals == []  # an operator's departure is not sent again by the loop
+
+
+def test_operator_depart_s3_requires_exit_place_without_reserving(tmp_path, monkeypatch):
+    app, client = _client(tmp_path, monkeypatch, rules=SimpleNamespace(return_=SimpleNamespace(exit_place=None)))
+    made = client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "dock_and_unload_s3", "robot_id": "rosy_46"})
+    assert made.status_code == 200
+    now = time.time()
+    batch = next(iter(app.state.omx_cell_tasks.values()))
+    batch.update(status="COMPLETED", completed_at=now, stage_result={"source_clearance": {"objects": 0}})
+    app.state.omx_cell_states["cell_s"] = {"phase": "RELEASED", "amr_motion_inhibited": False}
+    app.state.arm_live_states["arm_s"] = {"folded": True, "updated_at": now}
+    res = client.post("/api/fleet/pipeline/pinky-tasks", json={"action": "depart_s3", "robot_id": "rosy_46"})
+    assert res.status_code == 409 and res.json()["detail"]["code"] == "NO_EXIT_PLACE"
+    assert app.state.unload_releases == {}
+
+
+def test_repark_completed_retry_supersedes_aborted_ancestor_only():
+    now = time.time()
+    aborted = _task(0, status="ABORTED", objects=None, done_at=now - 10)
+    retry = {**_task(0, status="COMPLETED", objects=1, done_at=now - 4), "task_id": "u-1-rp1", "repark_root": "u-1"}
+    state = _state([aborted, retry])
+    made = []
+    assert ur.continue_unload(state, lambda spec: made.append(spec) or {"task_id": spec["task_id"]}) == ["u-2"]
+    assert made[0]["depends_on"] == "u-1-rp1" and made[0]["unload_index"] == 1
+
+    state_done = _state([aborted, {**retry, "stage_result": {"source_clearance": {"objects": 0}}}])
+    assert reasons(state_done) == []
+
+    # Unresolved ABORTED and CANCELLED must still block release.
+    assert "UNLOAD_ABORTED" in reasons(_state([aborted, {**retry, "status": "QUEUED"}]))
+    cancelled = _task(0, status="CANCELLED", objects=None)
+    assert "UNLOAD_ABORTED" in reasons(_state([cancelled, {**retry, "repark_root": "u-1"}]))
+
+    # Displaced-site clearance never satisfies Pinky cargo-bed inspection (D-1047), and invalid fold timestamps fail closed.
+    displaced_task = _task(0)
+    displaced_task["stage_result"]["source_clearance"] = {"objects": 0, "site": "belt_far"}
+    assert "BED_NOT_OBSERVED" in reasons(_state([displaced_task]))
+    for bad_ts in (float("nan"), float("inf"), now + 300.0, True):
+        bad_arm = _state([_task(0)])
+        bad_arm.arm_live_states["arm_s"]["updated_at"] = bad_ts
+        assert "ARM_NOT_HOME" in reasons(bad_arm)

@@ -957,3 +957,29 @@ def test_s3_act_policy_preset_validation_presence_gate_and_retry():
     assert retried["ok"] is True
     assert retried["task"]["execution_mode"] == "act_policy" and retried["task"]["max_chunks"] == 4
     assert retried["task"]["preset"] == "s3_act_policy"
+
+
+def test_cell_task_resolves_robot_id_explicit_docked_and_fallback():
+    site_map = _map()
+    graph = build_graph(site_map)
+    maps = SimpleNamespace(active=lambda: (1, site_map, graph, None),
+                           rules=SimpleNamespace(active_rules=lambda: None))
+    app = FastAPI()
+    install_pipeline_routes(app, site_maps=maps)
+    client = TestClient(app)
+
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"cell_id": "cell_s"}).json()["task"]["robot_id"] == "rosy_01"
+
+    app.state.omx_cell_states["cell_s"] = {"phase": "CLAIMED", "docked_robot": {"robot_id": "rosy_45"}}
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle"}).json()["task"]["robot_id"] == "rosy_45"
+    assert client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle", "robot_id": "rosy_42"}).json()["task"]["robot_id"] == "rosy_42"
+
+    app.state.detected_displaced_site = "belt_far"
+    bad_blank = client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle", "robot_id": "  "})
+    assert bad_blank.status_code == 422 and bad_blank.json()["detail"]["code"] == "INVALID_ROBOT_ID"
+    bad_null = client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle", "robot_id": None})
+    assert bad_null.status_code == 422 and bad_null.json()["detail"]["code"] == "INVALID_ROBOT_ID"
+    bad_type = client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_shuttle", "robot_id": 46})
+    assert bad_type.status_code == 422 and bad_type.json()["detail"]["code"] == "INVALID_ROBOT_ID"
+    assert app.state.detected_displaced_site == "belt_far"
+    app.state.detected_displaced_site = None

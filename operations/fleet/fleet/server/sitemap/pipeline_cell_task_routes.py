@@ -10,7 +10,7 @@ from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boun
 from fleet.pipeline.cell_site_targets import expand_multi_tier_specs, list_canonical_sites, resolve_cell_task_targets
 from fleet.pipeline.station_zones import load_station_zones
 
-from fleet.server.pipeline_pinky_dispatch import dispatch_fields, install_pinky_dispatch
+from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pinky_dispatch_enabled, install_pinky_dispatch
 from fleet.server.pipeline_port_events import (
     IDENTITY_INPUT_FIELDS,
     TASK_IDENTITY_FIELDS,
@@ -20,7 +20,12 @@ from fleet.server.pipeline_port_events import (
 )
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
-from fleet.server.sitemap.pipeline_unload_release import install_unload_release_routes, manifest_count, unload_release
+from fleet.server.sitemap.pipeline_unload_release import (
+    exit_target,
+    install_unload_release_routes,
+    manifest_count,
+    unload_release,
+)
 
 
 _LEGACY_VEHICLE_SITE = "pinky"
@@ -46,6 +51,17 @@ def install_cell_tasks_routes(app, ctx) -> None:
     def _aborted(cell_id: str) -> bool:
         state = app.state.omx_cell_states.get(cell_id) or {}
         return state.get("phase") == "ABORTED" or state.get("prev_phase") == "ABORTED"
+
+    def _resolve_cell_robot_id(cell_id: str, spec: dict) -> str:
+        if "robot_id" in spec:
+            raw_robot_id = spec["robot_id"]
+            if not isinstance(raw_robot_id, str) or not raw_robot_id.strip():
+                raise HTTPException(422, detail={"code": "INVALID_ROBOT_ID"})
+            return raw_robot_id.strip()
+        docked = (app.state.omx_cell_states.get(cell_id) or {}).get("docked_robot") or {}
+        if isinstance(docked.get("robot_id"), str) and docked["robot_id"].strip():
+            return docked["robot_id"].strip()
+        return "rosy_01"
     @app.get("/api/fleet/pipeline/status", dependencies=read_guard)
     async def pipeline_status(request: Request):
         active = active_map()
@@ -185,6 +201,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         raw_disp = spec.get("displaced_to")
         if execution_mode == "act_policy" and raw_disp is not None:
             raise HTTPException(422, detail={"code": "INVALID_EXECUTION_MODE"})
+        resolved_robot_id = _resolve_cell_robot_id(cell_id, spec)
         dec_ov = {"displaced_to": raw_disp} if raw_disp in ("belt_far", "floor_front") else {}
         dec_row = _evaluate_decision(cell_id, "arm_target", dec_ov)
         if execution_mode != "act_policy" and (raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site)):
@@ -203,7 +220,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "cell_id": cell_id,
             "arm_id": arm_id,
             "directive": directive,
-            "robot_id": str(spec.get("robot_id") or "rosy_01"),
+            "robot_id": resolved_robot_id,
             "robot_kind": str(spec.get("robot_kind") or "pinky"),
             "src_site": targets["src_site"],
             "dst_site": targets["dst_site"],
@@ -270,13 +287,14 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 for idx, step in enumerate(preset["steps"]):
                     sid = f"{base_id}-{idx+1}-{step}"
                     step_specs.append({
-                        **CELL_TASK_PRESETS[step], "robot_id": body.get("robot_id", "rosy_01"),
+                        **CELL_TASK_PRESETS[step],
+                        **({"robot_id": body["robot_id"]} if "robot_id" in body else {}),
                         "task_id": sid, "depends_on": step_specs[-1]["task_id"] if step_specs else None,
                     })
                 created_tasks = _enqueue_many(active, step_specs, principal_id=principal_id)
                 return {"ok": True, "task": created_tasks[0], "tasks": created_tasks}
             merged = {**preset, **{k: v for k, v in body.items()
-                                   if k in (*IDENTITY_INPUT_FIELDS, "emit_release_permit") or v is not None}}
+                                   if k in (*IDENTITY_INPUT_FIELDS, "emit_release_permit", "robot_id") or v is not None}}
             task = _enqueue_one_task(active, merged, principal_id=principal_id)
             return {"ok": True, "task": task, "tasks": [task]}
         task = _enqueue_one_task(active, body, principal_id=principal_id)
@@ -338,6 +356,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "station_camera_links": STATION_CAMERA_LINKS,
             "decisions": list(app.state.pipeline_decisions[-20:]),
             "pinky_tasks": list(app.state.pinky_tasks.values()),
+            "pinky_dispatch_enabled": pinky_dispatch_enabled(),
             "auto_events": list(getattr(app.state, "cell_auto_events", None) or [])[-30:],
             "repark_requests": dict(getattr(app.state, "repark_requests", None) or {}),
         }
@@ -408,6 +427,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         if cable_guard:
             max_step_m, max_speed_mps = min(0.02, max_step_m), min(0.02, max_speed_mps)
         spawned_cell_task = None
+        unload_batch_id = None
         v_cmd = 0.0
         duration_s = 0.0
         place_id = PLACE_OF_ACTION.get(action)  # None: not a place goal, the dispatcher refuses it
@@ -427,11 +447,16 @@ def install_cell_tasks_routes(app, ctx) -> None:
             release = unload_release(app.state, robot_id, now=time.time(), human_detected=bool(_is_human_detected()))
             if not release["ready"]:
                 raise HTTPException(409, detail={"code": "DEPART_NOT_PERMITTED", "reasons": release["reasons"]})
+            target = exit_target(rules(), active[1])
+            if target is None:
+                raise HTTPException(409, detail={"code": "NO_EXIT_PLACE"})
             principal = getattr(request.state, "site_principal", None)
-            app.state.unload_releases[release["batch_id"]] = {
+            unload_batch_id = release["batch_id"]
+            app.state.unload_releases[unload_batch_id] = {
                 "robot_id": robot_id, "task_id": task_id, "at": round(time.time(), 3), "state": "OPERATOR",
-                "operator": getattr(principal, "principal_id", None), "release": release}
-            target_place = "S3_DEPART"
+                "operator": getattr(principal, "principal_id", None), "target": target[0], "release": release}
+            place_id = target[0]
+            target_place = target[0]
             v_cmd = max_speed_mps
             duration_s = 0.35
         elif action == "dock_s5":
@@ -494,6 +519,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "duration_s": duration_s,
             "decision": dec_row,
             "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
+            **({"unload_batch_id": unload_batch_id} if unload_batch_id else {}),
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
             **dispatch_fields(active, request, place_id),

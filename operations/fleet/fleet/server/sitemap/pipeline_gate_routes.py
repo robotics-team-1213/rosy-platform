@@ -7,7 +7,7 @@ from fastapi import HTTPException, Request
 from fleet.pipeline import resolve_omx_cells
 from fleet.pipeline.station_zones import load_station_zones, save_station_zones_yaml
 
-from fleet.server.pipeline_pinky_dispatch import dispatch_fields
+from fleet.server.pipeline_pinky_dispatch import dispatch_fields, enabled as pinky_dispatch_enabled
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health, _storage_dir
 from fleet.server.sitemap.pipeline_task_input import checked_finite_float
 
@@ -344,7 +344,11 @@ def install_gates_routes(app, ctx) -> None:
         if auto_execute:
             if dec["domain"] == "arm_target" and dec.get("auto_preset"):
                 preset_spec = CELL_TASK_PRESETS[dec["auto_preset"]]
-                spawned_cell_task = _enqueue_one_task(active, {**preset_spec, "cable_guard_micro": dec["cable_guard_micro"]})
+                spawned_cell_task = _enqueue_one_task(active, {
+                    **preset_spec,
+                    **({"robot_id": body["robot_id"]} if "robot_id" in body else {}),
+                    "cable_guard_micro": dec["cable_guard_micro"],
+                })
             elif dec["domain"] == "line_follow" and dec.get("auto_pinky_action"):
                 act = dec["auto_pinky_action"]
                 rid = subject_id if subject_id.startswith("rosy_") else "rosy_46"
@@ -395,4 +399,4 @@ def install_gates_routes(app, ctx) -> None:
             tasks = [t for t in tasks if t["robot_id"] == robot_id]
         if status is not None:
             tasks = [t for t in tasks if t["status"] == status]
-        return {"tasks": tasks}
+        return {"tasks": tasks, "pinky_dispatch_enabled": pinky_dispatch_enabled()}

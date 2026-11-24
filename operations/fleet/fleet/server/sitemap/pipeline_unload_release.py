@@ -21,6 +21,7 @@ A named operator may still send it early with depart_s3; a release is used once 
 from __future__ import annotations
 
 import logging
+import math
 
 from fastapi import HTTPException
 
@@ -47,7 +48,33 @@ def batch_tasks(tasks: dict, robot_id: str) -> list[dict]:
 def _objects(task: dict):
     stage = task.get("stage_result")
     clearance = stage.get("source_clearance") if isinstance(stage, dict) else None
-    return clearance, (clearance.get("objects") if isinstance(clearance, dict) else None)
+    if not isinstance(clearance, dict):
+        return clearance, None
+    if clearance.get("site") not in (None, "pinky"):
+        return clearance, None  # D-1047: displaced-site clearance is not a Pinky cargo-bed check
+    return clearance, clearance.get("objects")
+
+
+def _fresh(ts, now: float, max_age_s: float) -> bool:
+    return (isinstance(ts, (int, float)) and not isinstance(ts, bool)
+            and math.isfinite(ts) and (-5.0 <= (now - ts) <= max_age_s))
+
+
+def _effective_batch_rows(rows: list[dict]) -> list[dict]:
+    """Exclude ABORTED rows that were explicitly superseded by a COMPLETED repark retry."""
+    superseded = {
+        (t.get("unload_batch_id"), t.get("robot_id"), t.get("unload_index"), t.get("repark_root"))
+        for t in rows
+        if t.get("status") == "COMPLETED" and t.get("repark_root")
+    }
+    return [
+        t for t in rows
+        if not (
+            t.get("status") == "ABORTED"
+            and (t.get("unload_batch_id"), t.get("robot_id"), t.get("unload_index"), t.get("repark_root") or t.get("task_id"))
+            in superseded
+        )
+    ]
 
 
 def unload_release(state, robot_id: str, *, now: float, human_detected: bool, fold_max_age_s: float = FOLD_MAX_AGE_S,
@@ -57,18 +84,19 @@ def unload_release(state, robot_id: str, *, now: float, human_detected: bool, fo
     out = {"robot_id": robot_id, "ready": False, "batch_id": None, "expected": 0, "completed": 0, "reasons": []}
     if not rows:
         return {**out, "reasons": ["NO_UNLOAD_BATCH"]}
+    eff = _effective_batch_rows(rows)
     batch, expected = rows[0]["unload_batch_id"], rows[0].get("unload_expected")
-    done = [t for t in rows if t.get("status") == "COMPLETED"]
+    done = [t for t in eff if t.get("status") == "COMPLETED"]
     reasons = []
-    if any(t.get("status") in ("ABORTED", "CANCELLED") for t in rows):
+    if any(t.get("status") in ("ABORTED", "CANCELLED") for t in eff):
         reasons.append("UNLOAD_ABORTED")
-    if any(t.get("status") in OPEN_STATUSES for t in rows):
+    if any(t.get("status") in OPEN_STATUSES for t in eff):
         reasons.append("UNLOAD_IN_PROGRESS")
     if type(expected) is int and len(done) != expected:
         reasons.append("COUNT_MISMATCH")
     last = max(done, key=lambda t: t.get("completed_at") or 0) if done else {}
     clearance, objects = _objects(last)
-    if type(objects) is not int or now - float(last.get("completed_at") or 0) > BED_MAX_AGE_S:
+    if type(objects) is not int or not _fresh(last.get("completed_at"), now, BED_MAX_AGE_S):
         reasons.append("BED_NOT_OBSERVED")
     elif objects != 0:
         reasons.append("CARGO_NOT_EMPTY")
@@ -76,8 +104,8 @@ def unload_release(state, robot_id: str, *, now: float, human_detected: bool, fo
     if cell.get("phase") != "RELEASED" or cell.get("amr_motion_inhibited"):
         reasons.append("CELL_NOT_RELEASED")
     arm = state.arm_live_states.get("arm_s") or {}
-    updated = arm.get("updated_at")
-    if arm.get("folded") is not True or not isinstance(updated, (int, float)) or now - updated > fold_max_age_s:
+    updated = arm["folded_updated_at"] if "folded_updated_at" in arm else arm.get("updated_at")
+    if arm.get("folded") is not True or not _fresh(updated, now, fold_max_age_s):
         reasons.append("ARM_NOT_HOME")
     if (state.arm_holds.get("arm_s") or {}).get("held"):
         reasons.append("ARM_HELD")
@@ -108,17 +136,21 @@ def continue_unload(state, enqueue) -> list[str]:
             batches.setdefault(task["unload_batch_id"], []).append(task)
     made = []
     for batch_id, rows in batches.items():
-        rows.sort(key=lambda t: t.get("unload_index", 0))
-        last = rows[-1]
-        if (batch_id in state.unload_releases or len(rows) >= MAX_CONTAINERS
-                or any(t.get("status") != "COMPLETED" for t in rows)):
+        eff = _effective_batch_rows(rows)
+        if not eff:
+            continue
+        eff.sort(key=lambda t: (t.get("unload_index", 0), t.get("created_at") or 0))
+        last = eff[-1]
+        if (batch_id in state.unload_releases or len(eff) >= MAX_CONTAINERS
+                or any(t.get("status") != "COMPLETED" for t in eff)):
             continue
         _clearance, objects = _objects(last)
         if type(objects) is int and objects > 0:
+            next_idx = (last.get("unload_index") or 0) + 1
             spec = {
-                "robot_id": last["robot_id"], "task_id": f"{batch_id}-{len(rows) + 1}",
+                "robot_id": last["robot_id"], "task_id": f"{batch_id}-{next_idx + 1}",
                 "depends_on": last["task_id"], "unload_batch_id": batch_id,
-                "unload_expected": last.get("unload_expected"), "unload_index": len(rows),
+                "unload_expected": last.get("unload_expected"), "unload_index": next_idx,
             }
             if last.get("emit_release_permit") is True:
                 spec["emit_release_permit"] = True

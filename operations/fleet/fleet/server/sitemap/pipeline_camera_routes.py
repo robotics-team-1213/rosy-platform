@@ -4,6 +4,7 @@ import copy
 import functools
 import hashlib
 import json
+import math
 import os
 import time
 from fastapi import HTTPException, Request
@@ -148,19 +149,38 @@ def install_cameras_routes(app, ctx) -> None:
             for arm_id in ("arm_s", "arm_a", "arm_b"):
                 if isinstance(arm_states.get(arm_id), dict):
                     s = arm_states[arm_id]
+                    if "updated_at" in s:
+                        raw_ts = s["updated_at"]
+                        if isinstance(raw_ts, bool) or not isinstance(raw_ts, (int, float)):
+                            raise HTTPException(422, detail={"code": "INVALID_PIPELINE_NUMBER"})
+                        try:
+                            ts = float(raw_ts)
+                        except OverflowError:
+                            raise HTTPException(422, detail={"code": "INVALID_PIPELINE_NUMBER"}) from None
+                        if not math.isfinite(ts):
+                            raise HTTPException(422, detail={"code": "INVALID_PIPELINE_NUMBER"})
+                    else:
+                        ts = now_ts
+                    if "folded" in s and s["folded"] is not None and not isinstance(s["folded"], bool):
+                        raise HTTPException(422, detail={"code": "INVALID_PIPELINE_NUMBER"})
                     prev = dict(app.state.arm_live_states.get(arm_id) or {})
                     joints = s.get("joints_deg") or s.get("state")
                     if isinstance(joints, list) and len(joints) >= 6:
                         prev["joints_deg"] = [round(float(x), 1) for x in joints[:6]]
                     if "folded" in s and s["folded"] is not None:
-                        prev["folded"] = bool(s["folded"])
+                        prev["folded"] = s["folded"]
+                        prev["folded_updated_at"] = ts
+                    else:
+                        if prev.get("source") == "boot_default":
+                            prev["folded"] = None
+                        prev.setdefault("folded_updated_at", None)
                     if s.get("temp_c") is not None:
                         prev["temp_c"] = round(float(s["temp_c"]), 1)
                     if s.get("current_ma") is not None:
                         prev["current_ma"] = round(float(s["current_ma"]), 1)
                     if s.get("voltage_v") is not None:
                         prev["voltage_v"] = round(float(s["voltage_v"]), 2)
-                    prev["updated_at"] = float(s.get("updated_at") or now_ts)
+                    prev["updated_at"] = ts
                     prev["source"] = str(s.get("source") or "live_stream")
                     app.state.arm_live_states[arm_id] = prev
         if auto_events.add(app.state, body.get("auto_events"), "cell") and not app.state._pipeline_ledger_fault:
@@ -468,7 +488,12 @@ def install_cameras_routes(app, ctx) -> None:
             temps = health.get("temp_c") or []
             curs = health.get("current_ma") or []
             prev["joints_deg"] = [round(float(x), 1) for x in stop_ev["state"][:6]]
-            prev["folded"] = bool(stop_ev.get("folded", False))
+            if isinstance(stop_ev.get("folded"), bool):
+                prev["folded"] = stop_ev["folded"]
+                prev["folded_updated_at"] = task["completed_at"]
+            else:
+                prev["folded"] = False
+                prev["folded_updated_at"] = None
             if temps:
                 prev["temp_c"] = round(float(max(temps)), 1)
             if curs:
