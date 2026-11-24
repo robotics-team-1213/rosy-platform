@@ -331,11 +331,14 @@ class Rosy(Node):
             worker.start()
             self._io_worker = worker
 
-    def stop_io_worker(self):
+    def stop_io_worker(self, timeout_s: float = 2.0):
         worker = self._io_worker
-        self._io_worker = None
-        if worker is not None:
-            worker.stop()
+        if worker is None:
+            return True
+        stopped = worker.stop(timeout_s=timeout_s)
+        if stopped:
+            self._io_worker = None
+        return stopped
 
     def twist_callback(self, msg: Twist):
         outcome = self.motor_controller.command_twist(msg.linear.x, msg.angular.z)
@@ -364,6 +367,8 @@ class Rosy(Node):
             self.command_deadman.mark_command()
 
     def update_and_publish(self):
+        if self._io_worker is not None and not self._io_worker.last_stop_ok:
+            self.command_deadman.mark_stop_required()
         stop_result = self.command_deadman.attempt_stop(
             lambda: self.motor_controller.stop().accepted
         )
@@ -551,7 +556,8 @@ def main(args=None):
         for signum in (signal.SIGINT, signal.SIGTERM):
             signal.signal(signum, signal.SIG_IGN)
         if node is not None:
-            node.stop_io_worker()
+            if not node.stop_io_worker():
+                node.get_logger().error("bringup UART worker did not exit cleanly before driver terminate")
             if getattr(node, 'motor_ready_pub', None) is not None:
                 try:
                     node.motor_ready_pub.publish(Bool(data=False))

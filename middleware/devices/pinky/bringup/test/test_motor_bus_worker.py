@@ -134,3 +134,47 @@ def test_no_motion_mode_refuses_writes_and_collects_health():
     finally:
         worker.stop()
         assert worker._thread is None
+
+
+def test_transient_nonzero_write_failure_recovers_after_stop():
+    driver = _FakeDriver()
+    worker = MotorBusWorker(driver, drive_enabled=True, feedback_period_s=0.01, health_step_period_s=0.1)
+    orig_write = driver.set_double_rpm
+    fail_once = [True]
+
+    def flaky_write(rpm_l, rpm_r):
+        if fail_once[0] and (rpm_l != 0.0 or rpm_r != 0.0):
+            fail_once[0] = False
+            driver.commands.append((float(rpm_l), float(rpm_r)))
+            return False
+        return orig_write(rpm_l, rpm_r)
+
+    driver.set_double_rpm = flaky_write
+    worker.start()
+    try:
+        assert worker.set_double_rpm(15.0, 15.0) is True
+        deadline = time.monotonic() + 0.5
+        while time.monotonic() < deadline and not driver.commands:
+            time.sleep(0.005)
+        time.sleep(0.02)
+        # First call surfaces the failure once; simulating twist_callback stop recovery clears the latch.
+        assert worker.set_double_rpm(15.0, 15.0) is False
+        assert worker.set_double_rpm(0.0, 0.0) is True
+        deadline = time.monotonic() + 0.5
+        while time.monotonic() < deadline and (0.0, 0.0) not in driver.commands:
+            time.sleep(0.005)
+        time.sleep(0.02)
+        assert worker.set_double_rpm(20.0, 20.0) is True
+    finally:
+        assert worker.stop() is True
+
+
+def test_stop_returns_false_when_worker_still_blocked_then_allows_retry():
+    driver = _FakeDriver(feedback_delay_s=0.2)
+    worker = MotorBusWorker(driver, drive_enabled=True, feedback_period_s=0.01)
+    worker.start()
+    time.sleep(0.03)
+    assert worker.stop(timeout_s=0.01) is False
+    assert worker._thread is not None
+    assert worker.stop(timeout_s=1.0) is True
+    assert worker._thread is None

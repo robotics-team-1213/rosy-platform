@@ -61,14 +61,21 @@ class MotorBusWorker:
         self._thread = threading.Thread(target=self._run, name="bringup-uart-io", daemon=True)
         self._thread.start()
 
-    def stop(self, timeout_s: float = 1.0) -> None:
+    def stop(self, timeout_s: float = 2.0) -> bool:
         thread = self._thread
         self._stop_event.set()
         self._wake.set()
         if thread is not None and thread.is_alive():
             thread.join(timeout=timeout_s)
-        if thread is None or not thread.is_alive():
+        stopped = thread is None or not thread.is_alive()
+        if stopped:
             self._thread = None
+        return stopped
+
+    @property
+    def last_stop_ok(self) -> bool:
+        with self._lock:
+            return self._last_stop_ok
 
     def set_double_rpm(self, rpm_l: float, rpm_r: float) -> bool:
         try:
@@ -89,7 +96,10 @@ class MotorBusWorker:
                 ok = self._last_stop_ok
             else:
                 self._stop_pending = False
+                # Surface a prior write failure once so twist_callback issues stop() without permanent lockout.
                 ok = self._last_cmd_ok
+                if not ok:
+                    self._last_cmd_ok = True
         self._wake.set()
         return ok
 
@@ -126,8 +136,10 @@ class MotorBusWorker:
                 self._handled_seq = seq
                 if is_stop:
                     self._last_stop_ok = ok
-                    if ok and self._pending_cmd is not None and self._pending_cmd[2] == seq:
-                        self._stop_pending = False
+                    if ok:
+                        self._last_cmd_ok = True
+                        if self._pending_cmd is not None and self._pending_cmd[2] == seq:
+                            self._stop_pending = False
                 else:
                     self._last_cmd_ok = ok
                 # Loop again only if a newer command arrived during the write.
