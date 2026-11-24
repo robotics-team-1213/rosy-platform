@@ -11,12 +11,17 @@ ACTOR = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}")
 NAME = re.compile(r"[a-z0-9_][a-z0-9_.-]{0,62}")
 TWO_ARM_SITE = re.compile(r"[a-z0-9_:-]{1,48}")
 FILE = re.compile(r"(?:object-)?(cell|catalog|chunks)-[a-z0-9_.-]{1,60}\.json")
+MANIFEST_FILE = re.compile(r"(?:upkeep|cell-upkeep)-[a-z0-9_.-]{1,60}\.json")
 TASK_FILE = re.compile(r"(?:task|plan)-[a-z0-9_.-]{1,60}\.json")
 FILTER_OBJ = re.compile(r"[a-z0-9_,-]{1,120}")
 FILTER_COL = re.compile(r"[a-z0-9_,-]{1,64}")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 SAFE_PATH = re.compile(r"[A-Za-z0-9_./~:-]{1,240}")
+WORK_REL_PATH = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]{0,200}")
 HTTP_URL = re.compile(r"^https?://[A-Za-z0-9._:\[\]-]+(?:/[A-Za-z0-9_./-]*)?$")
+VIEW = re.compile(r"top|side|arm_s_top|arm_s_wrist|arm_a_wrist|arm_b_wrist")
+REPO_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")
+IMAGES_SPEC = re.compile(r"[a-z0-9_]+=[a-z0-9_]+(?:,[a-z0-9_]+=[a-z0-9_]+)*")
 FIELD = re.compile(r"\{(\w+)\}")
 
 
@@ -57,6 +62,40 @@ def _safe_path(v):
     if not isinstance(v, str) or not SAFE_PATH.fullmatch(v) or ".." in Path(v).parts:
         raise ValueError("must be a safe path without '..'")
     return v
+
+
+def _workdir_rel_path(v):
+    if not isinstance(v, str) or not WORK_REL_PATH.fullmatch(v):
+        raise ValueError("must be a safe relative path inside workdir")
+    if v.startswith(("/", "\\", "~", "-")) or "\\" in v or ":" in v or "\x00" in v:
+        raise ValueError("must be a safe relative path inside workdir")
+    if any(part in ("", ".", "..") for part in Path(v).parts):
+        raise ValueError("must be a safe relative path inside workdir")
+    return v
+
+
+def _repo_id(v):
+    if not isinstance(v, str) or ".." in v or not REPO_ID.fullmatch(v):
+        raise ValueError("must be a safe org/repo identifier without '..'")
+    return v
+
+
+def resolve_under_workdir(workdir: Path, rel: str | Path) -> Path:
+    """Resolve a safe relative path strictly inside `workdir`, rejecting traversal and symlinks."""
+    rel_str = rel.as_posix() if isinstance(rel, Path) else rel
+    _workdir_rel_path(rel_str)
+    base = Path(workdir)
+    if base.is_symlink():
+        raise ValueError("workdir cannot be a symlink")
+    base_res = base.resolve()
+    cur = base
+    for part in Path(rel_str).parts:
+        cur = cur / part
+        if cur.is_symlink():
+            raise ValueError(f"symlink path component forbidden: {rel_str}")
+    if not cur.resolve().is_relative_to(base_res):
+        raise ValueError(f"path escapes workdir: {rel_str}")
+    return cur
 
 
 def _actor(v):
