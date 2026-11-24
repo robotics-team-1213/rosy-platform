@@ -112,9 +112,35 @@ def install_trip_job_routes(app, *, store, runner, console, deployment_profile: 
         if any(robot not in console.robot_ids for robot in candidates):
             raise HTTPException(404, detail={"code": "UNKNOWN_ROBOT", "detail": {}})
         active = runner._store.active()
-        unknown = sorted({p for s in steps for p in (s["to"], *s["via"])} - set(active[2].places if active else ()))
+        place_ids = {p for s in steps for p in (s["to"], *s["via"])}
+        unknown = sorted(place_ids - set(active[2].places if active else ()))
         if unknown:
             raise HTTPException(422, detail={"code": "TRIP_UNKNOWN_PLACE", "detail": {"places": unknown}})
+        if active and len(active) > 1 and active[1] is not None and "S_OUT" in place_ids:
+            from fleet.site_points import _edge_links, _is_verified_stop, _stop_rules_by_place
+
+            site_map = active[1]
+            place = next((p for p in site_map.places if p.id == "S_OUT"), None)
+            rules_store = getattr(runner._store, "rules", None)
+            site_rules = rules_store.active_rules() if rules_store is not None else None
+            edges_in, edges_out = _edge_links(site_map)
+            stop_rules, ambiguous = _stop_rules_by_place(site_rules)
+            _, dispatchable = (
+                _is_verified_stop(
+                    place,
+                    stop_rules.get("S_OUT"),
+                    has_edges_in=bool(edges_in.get("S_OUT")),
+                    has_edges_out=bool(edges_out.get("S_OUT")),
+                    ambiguous_rule="S_OUT" in ambiguous,
+                )
+                if place is not None
+                else ("planned_unverified", False)
+            )
+            if not dispatchable:
+                raise HTTPException(
+                    422,
+                    detail={"code": "TRIP_STOP_NOT_DISPATCHABLE", "detail": {"places": ["S_OUT"]}},
+                )
 
     install_trip_proposal_routes(app, cell_job_store=store, jobs=jobs, check=check, **proposals)
 
