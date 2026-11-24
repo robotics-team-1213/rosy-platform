@@ -108,6 +108,14 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
         out["bias_error"] = str(exc)
         out["missing_bias"].extend(f"{site}:{xy[0]},{xy[1]}" for site, xy in targets)
     out["missing_map"] = rp.missing_maps(config, calibration, map_sites(config))
+    cal_sites = calibration.get("sites") or {}
+    for name, site in (config.get("sites") or {}).items():
+        if not isinstance(site, dict) or site.get("tier_of"):
+            continue
+        parent = site.get("map_from")
+        if isinstance(parent, str) and name in cal_sites and parent in cal_sites:
+            if cal_sites[name].get("homography") != cal_sites[parent].get("homography") and name not in out["missing_map"]:
+                out["missing_map"].append(name)
     for s in map_sites(config):
         rec = (calibration.get("sites") or {}).get(s) or {}
         if rec.get("loo_error_mm") and not map_agrees(rec, params) and len(rec.get("points") or []) >= 5:
@@ -146,6 +154,17 @@ def map_sites(config: dict) -> list:
     return config.get("calibrate", {}).get("map_sites") or [
         s for s in ("floor", "pinky", "belt") if s in config["sites"]
     ]
+
+
+def _map_write_sites(config: dict) -> list:
+    """Configured map_sites plus any site whose `map_from` mirrors one of them (so followers never go stale)."""
+    sites = list(map_sites(config))
+    seen = set(sites)
+    for name, site in (config.get("sites") or {}).items():
+        if isinstance(site, dict) and not site.get("tier_of") and site.get("map_from") in seen and name not in seen:
+            sites.append(name)
+            seen.add(name)
+    return sites
 
 
 def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None) -> dict:
@@ -285,7 +304,7 @@ def main(argv=None):
     if not (args.commissioning and args.person_at_switch):
         print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}))
         return 2
-    done = []
+    done, config_dirty = [], False
     for step in todo:
         if step == "remap":
             ref_path = Path(config["preflight"]["reference_top"]).expanduser()
@@ -300,7 +319,7 @@ def main(argv=None):
                 done.append({"remap": record["loo_error_mm"], "refused": "marks disagree; map not saved"})
                 break
             current = cell.frame("top")
-            for site in map_sites(config):
+            for site in _map_write_sites(config):
                 calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
             if ref_path.exists():
                 move_regions(
@@ -308,6 +327,7 @@ def main(argv=None):
                     cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE),
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
+                config_dirty = True
             save_bound_map_reference(cal_path, ref_path, calibration, config, current)
             bp = cell_pivot.bias_path(cal_path)
             if bp.exists():
@@ -335,6 +355,9 @@ def main(argv=None):
                     kept = consensus(pts, prm.get(config.get("params"), "calibrate.consensus_px"))
                     if enough_agree(len(kept), len(pts)):
                         calibration["sites"][s] = repair_record(config, rec, kept)
+            for name, site in (config.get("sites") or {}).items():
+                if isinstance(site, dict) and not site.get("tier_of") and (p := site.get("map_from")) in (calibration.get("sites") or {}):
+                    calibration["sites"][name] = dict(calibration["sites"][p])
             save_bound_map_reference(cal_path, ref_path, calibration, config, reference)
             done.append({"consensus-repair": calibration["sites"][map_sites(config)[0]]["loo_error_mm"]})
         elif step.startswith("pivot-near"):
@@ -342,7 +365,10 @@ def main(argv=None):
         elif step.startswith("surface"):
             import cell_surface
 
-            done.append(cell_surface.run_surface_step(cell, config, step, work))
+            res = cell_surface.run_surface_step(cell, config, step, work)
+            done.append(res)
+            if res.get(step) == "touched":
+                config_dirty = True
         elif step == "post-eval":
             import cell_post_eval
             rep = cell_post_eval.run_post_eval(
@@ -359,9 +385,10 @@ def main(argv=None):
             if config.get("work_dir"):
                 (Path(config["work_dir"]).expanduser() / "depth-verify.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
             done.append({"depth-verify": rep.get("verdict"), "eval_verdict": rep.get("eval_verdict")})
-    cfg_tmp = args.config.with_suffix(".tmp")
-    cfg_tmp.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1), encoding="utf-8")
-    cfg_tmp.replace(args.config)
+    if config_dirty:
+        cfg_tmp = args.config.with_suffix(".tmp")
+        cfg_tmp.write_text(json.dumps({k: v for k, v in config.items() if k not in ("params", "plan")}, indent=1), encoding="utf-8")
+        cfg_tmp.replace(args.config)
     print(json.dumps({"done": done}, default=str), flush=True)
     return 0
 
