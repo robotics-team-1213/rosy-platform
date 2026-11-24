@@ -1,7 +1,7 @@
 {
   "name": "Rosy World",
   "short_name": "Rosy World",
-  "start_url": "/?view=factory",
+  "start_url": "./?view=factory",
   "display": "standalone",
   "icons": [
     {

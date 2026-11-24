@@ -1,0 +1,19 @@
+# Optional co-located Rosy World overlay, imported inside the site route before the
+# Fleet catch-all. Caddy owns TLS; Fleet owns the session (forward_auth on
+# /api/fleet/session); World never publishes a port. The read-only real bridge
+# pushes state internally on site_backend, so external writes are refused here.
+redir /world /world/ 308
+handle_path /world/* {
+	@world_write not method GET HEAD
+	respond @world_write 405
+	forward_auth https://fleet:{$ROSY_FLEET_PORT} {
+		uri /api/fleet/session
+		transport http {
+			tls_trust_pool file /run/secrets/site_ca
+			tls_server_name fleet
+		}
+	}
+	reverse_proxy world:8140 {
+		flush_interval -1
+	}
+}

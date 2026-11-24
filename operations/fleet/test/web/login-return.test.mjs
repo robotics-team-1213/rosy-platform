@@ -21,7 +21,7 @@ test('Account authorization returns preserve only bounded protocol fields on thi
   assert.equal(loginReturn('https://evil.test' + target, origin), '/console');
 });
 test('return restores Fleet documents and existing work/inbox readers', () => {
-  for (const path of ['/console', '/console/install', '/console/site-map', '/console/cell']) {
+  for (const path of ['/console', '/console/install', '/console/site-map', '/console/cell', '/console/world']) {
     assert.equal(loginReturn(path, origin), path);
   }
   assert.equal(loginReturn('/console?view=work&inbox=1', origin), '/console?view=work&inbox=1');

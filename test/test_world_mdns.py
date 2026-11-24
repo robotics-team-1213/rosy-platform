@@ -156,20 +156,46 @@ def test_two_sided_docker_compose_and_mdns_contracts() -> None:
     assert "ROSY_WORLD_MDNS_HOST" in link_compose["services"]["fleet"]["environment"]
     assert "logging" not in link_compose["services"]["fleet"]
 
-    # Co-located overlay uses Dockerfile + /run/avahi-daemon + internal site_backend fleet URL without overriding fleet logging.
+    # Co-located overlay: same-origin /world/ behind the TLS proxy, no published port, no mDNS.
     site_world = yaml.safe_load((ROOT / "deploy/site/compose.world.yaml").read_text(encoding="utf-8"))
     assert "logging" not in site_world["services"]["fleet"]
-    assert set(site_world["services"]["world"]["networks"]) == {"site_backend", "site_edge"}
-    assert any("/var/lib/rosy-world/worlds:" in t and "uid=10001" in t for t in site_world["services"]["world"]["tmpfs"])
+    fleet_world_env = site_world["services"]["fleet"]["environment"]
+    assert fleet_world_env["ROSY_WORLD_SAME_ORIGIN"] == "${ROSY_WORLD_SAME_ORIGIN:-1}"
+    assert fleet_world_env["ROSY_WORLD_HEALTH_URL"] == "http://world:${ROSY_WORLD_PORT:-8140}/healthz"
+    assert "ROSY_WORLD_MDNS_HOST" not in fleet_world_env  # the base compose keeps mDNS opt-in
+    world = site_world["services"]["world"]
+    assert "ports" not in world
+    assert world["networks"] == ["site_backend"]
+    assert not any(isinstance(v, dict) and v.get("source") == "/run/avahi-daemon"
+                   for v in world["volumes"])
+    assert any("/var/lib/rosy-world/worlds:" in t and "uid=10001" in t for t in world["tmpfs"])
     bridge = site_world["services"]["world-real-bridge"]
     assert bridge["networks"] == ["site_backend"]
     assert "--fleet-url" in bridge["command"] and "https://fleet:${ROSY_FLEET_PORT:-8080}" in bridge["command"]
+    assert "http://world:${ROSY_WORLD_PORT:-8140}" in bridge["command"]
+    assert bridge["command"][bridge["command"].index("--interval") + 1] == "1.0"
+    assert not any(isinstance(v, dict) and v.get("source") == "/run/avahi-daemon"
+                   for v in bridge["volumes"])
     assert bridge["environment"]["ROSY_FLEET_TOKEN_FILE"] == "/run/secrets/world_fleet_viewer_token"
     assert "world_fleet_viewer_token" in bridge["secrets"]
     assert "registry_token" not in bridge["secrets"]
     assert "world_fleet_viewer_token" in site_world["secrets"]
-    for name in ("world", "world-real-bridge"):
-        assert any(isinstance(v, dict) and v.get("source") == "/run/avahi-daemon" and v.get("read_only") is True for v in site_world["services"][name]["volumes"])
+    [proxy_mount] = site_world["services"]["proxy"]["volumes"]
+    assert proxy_mount["source"] == "./Caddyfile.world"
+    assert proxy_mount["target"] == "/etc/caddy/world/routes.caddy"
+    assert proxy_mount["read_only"] is True and not proxy_mount["bind"]["create_host_path"]
+
+    # The site Caddyfile imports the overlay inside the route, before the Fleet catch-all.
+    caddy = (ROOT / "deploy/site/Caddyfile").read_text(encoding="utf-8")
+    assert caddy.index("import /etc/caddy/monitoring/*.caddy") < caddy.index("import /etc/caddy/world/*.caddy") \
+        < caddy.index("reverse_proxy https://fleet:")
+    world_routes = (ROOT / "deploy/site/Caddyfile.world").read_text(encoding="utf-8")
+    for token in ("redir /world /world/ 308", "handle_path /world/* {", "respond @world_write 405",
+                  "forward_auth https://fleet:{$ROSY_FLEET_PORT}", "uri /api/fleet/session",
+                  "tls_trust_pool file /run/secrets/site_ca", "tls_server_name fleet",
+                  "reverse_proxy world:8140", "flush_interval -1"):
+        assert token in world_routes
+    assert "/api/fleet/auth/session" not in world_routes  # forward_auth must not 404 in receiver mode
 
     unit = (ROOT / "deploy/site/rosy-world-advertise.service").read_text(encoding="utf-8")
     assert "world_mdns.py publish" in unit and "RestrictAddressFamilies=AF_UNIX" in unit
