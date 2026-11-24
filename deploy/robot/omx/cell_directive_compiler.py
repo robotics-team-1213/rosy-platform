@@ -42,6 +42,8 @@ def build_plan_from_directive(
     pick = coerce_area_xyz(directive["pick"])
     place = coerce_area_xyz(directive["place"])
     exec_cfg = dict(directive.get("execution") or {})
+    if exec_cfg.get("finger_color") in ("dark", "white", "auto"):
+        cal["finger_color"] = str(exec_cfg["finger_color"])
 
     plan = _clone(base_plan)
     px, py, pz = pick["effective_xyz_m"]

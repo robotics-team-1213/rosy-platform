@@ -87,9 +87,9 @@ def clamp_lerobot_norm_action(
 
 
 def arm_workspace_xy_bounds(arm_id: str = "arm_b") -> tuple[float, float, float]:
-    """Return `(x_lo_m, x_hi_m, y_abs_limit_m)` for `arm_s` (includes Pinky AMR tray) vs `arm_a`/`arm_b`."""
+    """Return `(x_lo_m, x_hi_m, y_abs_limit_m)` for `arm_s` (includes Pinky AMR tray & rear floor) vs `arm_a`/`arm_b`."""
     if str(arm_id) == "arm_s":
-        return 0.025, 0.232, 0.220
+        return -0.150, 0.232, 0.220
     return 0.055, 0.232, 0.155
 
 
