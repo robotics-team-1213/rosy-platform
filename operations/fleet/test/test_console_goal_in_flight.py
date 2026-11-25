@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from fakes import FakeClock, FakeRobot, run
+from fastapi.testclient import TestClient
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
@@ -13,7 +14,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from core_common.protocol.localization import LocalizationStatus  # noqa: E402
 from core_common.protocol.schemas import DockState, DockingStatus, NavigationState, RobotMode, StateSnapshot  # noqa: E402
-from deploy.site.site_update_runtime import _robot_busy_reasons  # noqa: E402
+from deploy.site.site_update_runtime import _robot_busy_reasons, site_busy_reasons  # noqa: E402
+from fleet.server.app import create_app  # noqa: E402
 from fleet.server.console import FleetConsole  # noqa: E402
 from fleet.swarm.robots import RobotEndpoint  # noqa: E402
 
@@ -91,3 +93,68 @@ def test_goal_in_flight_stays_true_across_cached_heartbeat_and_settle_window():
     row = run(console.snapshot())["robots"][0]
     assert row["goal_in_flight"] is False
     assert _robot_busy_reasons(row) == []
+
+
+def test_state_route_cached_gather_defers_immediately_after_redispatch(tmp_path):
+    clock = FakeClock()
+    clock.now = 10.0
+    robot = FakeRobot("rosy_45")
+    console = FleetConsole(
+        [RobotEndpoint(robot_id="rosy_45", base_url="http://127.0.0.1:8080", token="t")],
+        [robot],
+        clock=clock,
+        hub_state_max_age_s=3.0,
+        goal_lease_ttl_s=0.0,
+    )
+    hub_row = console.hub.registry.record("rosy_45")
+    hub_row.online = True
+    hub_row.snapshot = _terminal_snapshot("rosy_45", NavigationState.CANCELED)
+    hub_row.last_heartbeat_monotonic = 10.0
+
+    clock.now = 11.0
+    assert run(console.goal("rosy_45", 0.45, 0.22, 0.01))["accepted"] is True
+
+    clock.now = 16.5
+    hub_row.snapshot = _terminal_snapshot("rosy_45", NavigationState.CANCELED)
+    hub_row.last_heartbeat_monotonic = 16.5
+
+    client = TestClient(create_app(console, console_token="viewer", start_task_dispatcher=False))
+    client.app.state.fleet_gather._clock = clock
+    headers = {"Authorization": "Bearer viewer"}
+
+    first_res = client.get("/api/fleet/state", headers=headers)
+    assert first_res.status_code == 200
+    first_body = first_res.json()
+    assert first_body["robots"][0]["goal_in_flight"] is False
+    assert _robot_busy_reasons(first_body["robots"][0]) == []
+
+    # Re-dispatch identical coordinates while SharedGather's 1.0 s snapshot cache is still hot.
+    clock.now = 16.8
+    assert run(console.goal("rosy_45", 0.45, 0.22, 0.01))["accepted"] is True
+
+    clock.now = 16.9
+    second_res = client.get("/api/fleet/state", headers=headers)
+    assert second_res.status_code == 200
+    second_body = second_res.json()
+    assert second_body["gathered_at"] == first_body["gathered_at"]
+    assert second_body["robots"][0]["goal_in_flight"] is True
+
+    token_file = tmp_path / "etc/rosy/site-secrets/site-update-viewer.token"
+    token_file.parent.mkdir(parents=True, exist_ok=True)
+    token_file.write_text("viewer", encoding="utf-8")
+
+    class _SiteHttp:
+        def functional(self, url, ca, tok):
+            if url.endswith("/api/fleet/state"):
+                return second_body
+            if url.endswith("/api/fleet/trips"):
+                return {"open": [], "running": None, "trips": []}
+            if url.endswith("/api/fleet/dispatch-control"):
+                return {"queued_tasks": 0, "unresolved_actions": 0}
+            if url.endswith("/api/fleet/formation"):
+                return {"active": False, "state": "IDLE"}
+            raise AssertionError(f"unexpected endpoint: {url}")
+
+    assert site_busy_reasons({"health_url": "https://fleet.local:8443/healthz"}, _SiteHttp(), root=tmp_path) == [
+        "rosy_45: goal active"
+    ]

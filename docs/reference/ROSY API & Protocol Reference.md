@@ -3888,6 +3888,16 @@ Fleet `GET /api/fleet/state` robot rows also carry `rule_m` (D-550 8, D-760 3 st
 nothing is refused): `{state: bounded|unbounded|idle, motion: lane_trip|goal|null, reason}`. It is
 Fleet's verdict on the motion Fleet itself started for that robot, counting only the TTL bounds Fleet
 holds: CORE traffic authority or a held trip lease for a trip, a goal lease for a navigation goal.
+
+Fleet `GET /api/fleet/state` robot rows also emit `goal_in_flight` (`bool`) whenever `goal` is non-null
+(omitted when `goal` is `null` and absent on older Fleet versions). Even when `SharedGather` returns a
+cached snapshot, `GET /api/fleet/state` recomputes `goal`, `goal_in_flight`, `queued`,
+`named_stop_custody`, `yielding`, and `held` per response from live console dispatch state. `false`
+means Fleet proved the reported goal is retained terminal display (`_goal_busy` and `goal_leases`
+clear, `state.mode == "IDLE"`, `state.navigation` in `ARRIVED|CANCELED|FAILED`, and
+`_state_mono - _goal_sent_at >= max(5.0, hub_state_max_age_s + 2.0)`). `rosy-site-autoupdate` fails
+closed on any non-null `goal` whose row omits `goal_in_flight` (older Fleet) or sets `goal_in_flight: true`,
+blocking as `<robot>: goal active`.
 The robot's link and SAF-003 policy are not counted. `reason` is null unless `state` is `unbounded`:
 `hold_back` (lane trip with neither), `no_goal_lease`, `leg_unknown`. A row with `online: false` has
 no `rule_m`. Stage 1 covers two of the three D-550 item 7 violations: a line follow Fleet opens
