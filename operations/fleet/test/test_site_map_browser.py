@@ -500,6 +500,42 @@ def test_world_charge_bay_overlay_joins_both_place_markers_with_a_straight_line(
     assert store.active_view() == active
 
 
+def test_site_points_summary_follows_the_displayed_map_source(page_site):
+    from playwright.sync_api import expect
+
+    page, store, _ = page_site
+    active = store.active_view()
+    site_map_source = {
+        "map_id": active["map"]["map_id"],
+        "version": active["version"],
+        "sha256": active["sha256"],
+    }
+    site_points = {
+        "sources": {"site_map": site_map_source},
+        "coordinate_frames": {"cell_s_arm_base": {"world_origin_hint_m": [0.1, 0.2]}},
+    }
+    page.route("**/api/fleet/site-points", lambda route: route.fulfill(json=site_points))
+    open_token_access(page)
+    page.locator("#console-token").fill("operator-token")
+    page.locator("#token-save").click()
+
+    source = page.locator("#map-source")
+    panel = page.locator("#site-points-panel")
+    layer = page.locator("#site-points-layer")
+    expect(panel).to_be_visible()
+    expect(layer).to_be_attached()
+    panel.locator("summary").click()
+
+    for value in ("draft", "profile"):
+        source.select_option(value)
+        expect(panel).to_be_hidden()
+        expect(layer).to_have_count(0)
+    source.select_option("active")
+    expect(panel).to_be_visible()
+    expect(panel).to_have_attribute("open", "")
+    expect(layer).to_be_attached()
+
+
 def test_requested_recording_robot_never_falls_back_to_another_robot(page_site):
     from playwright.sync_api import expect
 

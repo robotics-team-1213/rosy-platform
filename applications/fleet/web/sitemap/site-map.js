@@ -23,7 +23,7 @@ import {createRealityPanel} from '/console/assets/site-map-reality.js';
 import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
 import {installBandEditing, installZoneEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
-import {drawFacilities, drawPlaces, drawSitePointsOverlay, loadSitePointsOverlay, svgElement as el} from '/console/assets/map-editor.js';
+import {drawFacilities, drawPlaces, drawSitePointsOverlay, loadSitePointsOverlay, renderSitePointsSummary, sitePointsForActiveMap, svgElement as el} from '/console/assets/map-editor.js';
 
 const $ = id => document.getElementById(id);
 const W = 800, H = 480;
@@ -34,6 +34,7 @@ const request = createFleetClient({credential: () => tokenAccess.getToken(), ori
 const state = {role: null, loadState: 'idle', active: null, draft: null, working: null, dirty: false, selected: null, plan: null, planEpoch: 0, point: null, robotsError: false, robots: [], open: [], guide: null, guideUnavailable: false, band: null, sitePoints: null};
 const ROBOT_POLL_MS = 1000;
 let calibrations = [];
+let displayedSitePoints = null;
 const teach = createTeachPanel({request, scope: pageScope, role: () => state.role, draft: () => state.draft, dirty: () => state.dirty,
   map: () => shown(),
   places: () => shown()?.places || [], render: () => render(),
@@ -74,6 +75,11 @@ function render() {
   const svg = $('site-map-svg');
   svg.replaceChildren();
   const map = shown();
+  const sitePoints = sitePointsForActiveMap(state.sitePoints, state.active, $('map-source').value);
+  if (sitePoints !== displayedSitePoints) {
+    renderSitePointsSummary($('site-points-panel'), $('site-points-body'), sitePoints);
+    displayedSitePoints = sitePoints;
+  }
   if (!sourcePanel.renderStatus(map)) return;
   const {view, point: backgroundPoint} = sourcePanel.drawBackground(svg, map, () => fitView(map, W, H, LABEL_PAD, viewTurnOf(map), authoring.discs()));
   state.view = view;
@@ -106,7 +112,7 @@ function render() {
     for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
   drawPlaces(svg, map, view, {selectedPlace: state.selected?.place, kindLabels: PLACE_KIND_LABEL});
   drawFacilities(svg, map, view);
-  if ($('map-source').value === 'active') drawSitePointsOverlay(svg, state.sitePoints, view);
+  drawSitePointsOverlay(svg, sitePoints, view);
   if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
   svg.classList.toggle('picking', survey.picking() || $('trip-pick').checked);
   if (state.point && $('map-source').value === 'active') {
@@ -309,7 +315,7 @@ async function load() {
   state.loadState = 'ready';
   try { calibrations = (await request('/api/fleet/calibrations')).calibrations || []; }
   catch { calibrations = []; }
-  state.sitePoints = await loadSitePointsOverlay(request, active, $('site-points-panel'), $('site-points-body'));
+  state.sitePoints = await loadSitePointsOverlay(request, active);
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));

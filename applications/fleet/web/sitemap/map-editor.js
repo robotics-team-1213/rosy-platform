@@ -231,14 +231,14 @@ export function drawSitePointsOverlay(svg, sitePoints, view) {
     }
   }
 
-  // Workcell reference marker (arm_s_base 180° / cell_ab_fixture -90° separated mm frames)
+  // Only the S-cell frame supplies a world reference point.
   const hint = sitePoints.coordinate_frames?.cell_s_arm_base?.world_origin_hint_m;
   if (Array.isArray(hint) && hint.length === 2 && Number.isFinite(hint[0]) && Number.isFinite(hint[1])) {
     const [cx, cy] = view.toPx(hint[0], hint[1]);
     const refDot = svgElement('polygon', {class: 'sp-cell-ref', points: `${cx},${cy - 6} ${cx + 6},${cy} ${cx},${cy + 6} ${cx - 6},${cy}`}, layer);
-    svgElement('title', {}, refDot).textContent = 'arm_s(180°)·cell_ab(-90°) 독립 mm 원점 · vehicle_tray는 arm_s_top 호모그래피 보정(+12.85 cm 오차) 필요';
+    svgElement('title', {}, refDot).textContent = 'S 셀 팔 원점의 참고 위치';
     addMarker(cx, cy, 7);
-    pendingLabels.push({px: cx, py: cy, className: 'sp-label', text: 'arm_s 180°·cell_ab -90°', preferred: {dx: 8, dy: -6, anchor: 'start'}});
+    pendingLabels.push({px: cx, py: cy, className: 'sp-label', text: 'S 셀 기준점(참고)', preferred: {dx: 8, dy: -6, anchor: 'start'}});
   }
 
   for (const entry of pendingLabels) {
@@ -286,11 +286,17 @@ export function renderSitePointsSummary(panelEl, bodyEl, sitePoints) {
   bodyEl.replaceChildren(dl, ul);
 }
 
-export async function loadSitePointsOverlay(request, active, panelEl, bodyEl) {
-  let data = null;
-  try { data = active ? await request('/api/fleet/site-points') : null; } catch { data = null; }
-  renderSitePointsSummary(panelEl, bodyEl, data);
-  return data;
+export function sitePointsForActiveMap(sitePoints, active, mapSource) {
+  const source = sitePoints?.sources?.site_map;
+  if (mapSource !== 'active' || !source?.map_id || !Number.isInteger(source.version) || !source.sha256) return null;
+  return source.map_id === active?.map?.map_id && source.version === active.version && source.sha256 === active.sha256
+    ? sitePoints
+    : null;
+}
+
+export async function loadSitePointsOverlay(request, active) {
+  if (!active) return null;
+  try { return await request('/api/fleet/site-points'); } catch { return null; }
 }
 
 export function drawFacilities(svg, map, view) {
