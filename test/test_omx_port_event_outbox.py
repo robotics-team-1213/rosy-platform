@@ -45,3 +45,17 @@ def test_a_reading_stays_until_fleet_records_it_and_is_resent_unchanged(tmp_path
     link = Link()
     assert po.send(link, tmp_path) is True
     assert link.sent == [item] and not list(tmp_path.glob("*.json"))
+
+
+def test_concurrent_drain_does_not_fail_after_fleet_acknowledges(tmp_path):
+    item = po.reading("rfid_intake", {"state": "read", "epc": "432D3100"}, observed_at=T)
+    path = po.queue(item, tmp_path)
+
+    class OtherDrain(Link):
+        def post_intake_reading(self, reading):
+            super().post_intake_reading(reading)
+            path.unlink()
+
+    link = OtherDrain()
+    assert po.send(link, tmp_path)
+    assert link.sent == [item]

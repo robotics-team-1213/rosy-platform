@@ -52,14 +52,24 @@ def queue(item: IntakeReading, directory: Path | None = None) -> Path:
 def send(link, directory: Path | None = None) -> bool:
     """Resend every unsent reading; a file leaves the outbox only once Fleet recorded it. False if any stays."""
     ok = True
-    for path in sorted((directory or outbox_dir()).glob("*.json"), key=lambda p: p.stat().st_mtime):
+    pending = []
+    for path in (directory or outbox_dir()).glob("*.json"):
         try:
-            link.post_intake_reading(IntakeReading.model_validate_json(path.read_text(encoding="utf-8")))
+            pending.append((path.stat().st_mtime_ns, path))
+        except FileNotFoundError:
+            continue
+    for _, path in sorted(pending):
+        try:
+            body = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue  # Another sender already received Fleet's acknowledgement.
+        try:
+            link.post_intake_reading(IntakeReading.model_validate_json(body))
         except Exception as exc:  # unreachable, refused or a bad file: it stays for the next send
             print(f"intake reading {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
             ok = False
             continue
-        path.unlink()
+        path.unlink(missing_ok=True)
     return ok
 
 
