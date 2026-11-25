@@ -180,7 +180,7 @@ test('invalid draft errors list the fields', async () => {
 });
 
 test('D-494 trip panel text and button reasons', async () => {
-  const {tripStartReason} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
+  const {planSummaryText, tripStartReason} = await import('../../../../applications/fleet/web/shared/site-map-model.js');
   const {tripStatusText} = await import('../../../../applications/fleet/web/shared/trip-display.js');
   assert.equal(tripStatusText(null, MAP), '진행 중인 운행 없음');
   const trip = {state: 'running', robot_id: 'r1', current_edge: 'ab', next_place: 'B', next_action: 'stop',
@@ -205,6 +205,12 @@ test('D-494 trip panel text and button reasons', async () => {
   assert.match(tripStartReason({role: 'operator', plan, active: {version: 2}, running: null, now: 99}), /지도가 바뀌었습니다/);
   assert.match(tripStartReason({role: 'viewer', plan, active, running: null, now: 99}), /운영자/);
   assert.match(tripStartReason({role: 'operator', plan: null, active, running: null}), /경로를 계산/);
+  const nav2 = {...plan, segments: [], length_m: 0, eta_s: 0,
+    nav2_preflight: {code: 'MAP_BINDING_REQUIRED', binding_required: true, binding_status: 'MAP_BINDING_REQUIRED'}};
+  assert.match(tripStartReason({role: 'operator', plan: nav2, active, running: null, now: 99}), /지도 결속/);
+  nav2.nav2_preflight = {...nav2.nav2_preflight, code: null, binding_required: false};
+  assert.equal(tripStartReason({role: 'operator', plan: nav2, active, running: null, now: 99}), '');
+  assert.match(planSummaryText(nav2), /Nav2.*지도 결속 미확인/);
 });
 
 test('D-541 7 trip lease: held shown, a lost lease names the CORE reason and who', async () => {

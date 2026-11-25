@@ -166,7 +166,6 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
 
     const canNav2 = (robot.capabilities?.controls?.items || []).some(
       (item) => item?.kind === "base_velocity" && Array.isArray(item.drive_modes) && item.drive_modes.includes("free"));
-    if (!canNav2 && mine.driveMode === "nav2") mine.driveMode = "";
     const driveModeBody = () => (mine.driveMode === "nav2" ? { drive_mode: "nav2" } : {});
 
     // A card whose picker has focus is kept across polls (roster.place), so a new destination also
@@ -269,7 +268,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
     lapSummary.setAttribute("role", "status");
 
     box.append(kind.wrap);
-    if (canNav2) {
+    if (canNav2 || mine.driveMode === "nav2") {
       const modePick = pick("주행 방식", (value) => {
         mine.driveMode = value; mine.plan = null; mine.lapPlan = null; render();
       });

@@ -15,6 +15,18 @@ const BINDING_REASONS = {
   MAP_BINDING_SITE_CHANGED: "현장 지도 변경됨 · 재결속 필요",
 };
 
+export function nav2FrameReason(code, fallback) {
+  if (!code) return "";
+  return code === "ROBOT_POSE_UNTRUSTED" ? "로봇 CORE의 지도 위치가 확정되어야 Nav2로 출발할 수 있습니다"
+    : (BINDING_REASONS[code] || fallback(code));
+}
+
+export function nav2FrameSummary(frame) {
+  if (!frame) return "";
+  return !frame.binding_required && frame.binding_status !== "MATCHED"
+    ? " · Nav2 · 승인 지도 결속 미확인 (현장 설정상 선택)" : " · Nav2";
+}
+
 const finite = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const candidatesOf = (locPayload) => (Array.isArray(locPayload?.candidates?.candidates) ? locPayload.candidates.candidates : []);
 
