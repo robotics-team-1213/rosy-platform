@@ -106,6 +106,20 @@ def _apply_wrist_sanity(wo: dict[str, Any]) -> dict[str, Any]:
     return wo
 
 
+def _clamped_wrist_obs(
+    obs: dict[str, Any], p_xyz: list[float], pre_xyz: list[float], *, gain_along: float = 0.60,
+) -> dict[str, Any] | None:
+    """Bound per-pass XY move to 18 mm (clipped) or 12 mm (interior) and total shift from pre_xyz to 35 mm."""
+    shifted = math.hypot(p_xyz[0] - pre_xyz[0], p_xyz[1] - pre_xyz[1]) * 1000.0
+    remain = max(0.0, 35.0 - shifted)
+    max_step = min(18.0 if obs.get("clipped_border") else 12.0, remain)
+    if max_step <= 0.5:
+        return None
+    along = float(obs.get("along_mm") or 0.0)
+    cap_along = max_step / max(gain_along, 1e-6)
+    return {**obs, "along_mm": math.copysign(round(cap_along, 2), along)} if abs(along) > cap_along else obs
+
+
 def refine_pick_pose_at_hover(
     *,
     cur_directive: dict[str, Any],
@@ -173,16 +187,18 @@ def refine_pick_pose_at_hover(
         )
         last_wrist_obs = obs
         wrist_log.append(obs)
-        max_wrist_mm = float(exec_cfg.get("max_wrist_shift_mm", 24.0 if obs.get("clipped_border") else 8.5))
+        max_wrist_mm = float(exec_cfg.get("max_wrist_shift_mm", 35.0 if obs.get("clipped_border") else 18.0))
         obs_active_mm = max(abs(float(obs.get("along_mm", 0.0))), abs(float(obs.get("across_mm", 0.0))) if gain_across > 0.0 else 0.0)
         if obs.get("found") and 1.5 < obs_active_mm <= max_wrist_mm:
-            first_obs = obs
-            err0 = _wrist_err(obs, gain_across)
-            p_xyz = apply_wrist_xy_step(
-                p_xyz, obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=gain_across,
-            )
-            need_replan = True
-            wrist_shifted = True
+            step_obs = _clamped_wrist_obs(obs, p_xyz, pre_wrist_xyz)
+            if step_obs is not None:
+                first_obs = step_obs
+                err0 = _wrist_err(obs, gain_across)
+                p_xyz = apply_wrist_xy_step(
+                    p_xyz, step_obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=gain_across,
+                )
+                need_replan = True
+                wrist_shifted = True
     if need_replan:
         vision_refined_xy = True
         lib, plan, cal, r_above2 = _replan_and_hover(
@@ -195,7 +211,10 @@ def refine_pick_pose_at_hover(
             if not run_cmd(f"grip {float(plan['grip_open']):.2f}").get("ok"):
                 raise RefinementCommandFailed("refined_grip_failed")
             _time.sleep(0.22)
-    for pass_idx in range(1, max(1, int(exec_cfg.get("wrist_passes", 1))) if wrist_shifted else 1):
+    req_passes = int(exec_cfg.get("wrist_passes", 1))
+    if first_obs is not None and (first_obs.get("clipped_border") or abs(float(first_obs.get("along_mm", 0.0))) > 12.0):
+        req_passes = max(3, req_passes)
+    for pass_idx in range(1, max(1, req_passes) if wrist_shifted else 1):
         w_img = frame_fn("wrist")
         if w_img is None:
             break
@@ -241,11 +260,14 @@ def refine_pick_pose_at_hover(
                 break
             if err1 is not None and err1 < err0 - 1.0 and int(cal.get("samples", 0)) == 0:
                 _persist_wrist_signs(work_dir, arm_id, cal, obs)
-        max_wrist_mm = float(exec_cfg.get("max_wrist_shift_mm", 24.0 if obs.get("clipped_border") else 8.5))
+        max_wrist_mm = float(exec_cfg.get("max_wrist_shift_mm", 35.0 if obs.get("clipped_border") else 24.0))
         obs_active_mm = max(abs(float(obs.get("along_mm", 0.0))), abs(float(obs.get("across_mm", 0.0))) if gain_across > 0.0 else 0.0)
         if not obs.get("found") or not 1.5 < obs_active_mm <= max_wrist_mm:
             break
-        p_xyz = apply_wrist_xy_step(p_xyz, obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=gain_across)
+        step_obs = _clamped_wrist_obs(obs, p_xyz, pre_wrist_xyz)
+        if step_obs is None:
+            break
+        p_xyz = apply_wrist_xy_step(p_xyz, step_obs, arm_id=arm_id, cal=cal, yaw_deg=float(plan["pick"].get("yaw_deg", -90.0)), gain_along=0.60, gain_across=gain_across)
         lib, plan, cal, _ = _replan_and_hover(
             cur_directive, p_xyz, base_plan, work_dir, kinematics_root, lib_path, run_cmd, "refined",
         )

@@ -45,7 +45,7 @@ def test_failed_hover_recovery_does_not_retry_descend(tmp_path, monkeypatch, max
         directive, base_plan={}, work_dir=tmp_path, act_fn=act, max_attempts=max_attempts,
     )
     assert result["result"] == "held" and result["at"] == "recovery"
-    assert commands.count("run descend_pick") == 1 and commands[-1] == "retreat"
+    assert commands.count("run descend_pick") == 1 and commands[-2:] == ["retreat", "human-hold"]
 
 
 @pytest.mark.parametrize("failed", ["grip 57.60", "retreat", "park"])

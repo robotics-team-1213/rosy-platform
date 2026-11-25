@@ -222,3 +222,28 @@ def test_check_clearance_and_shift_removes_own_blob_and_uses_width_for_short_axi
     )
     assert clear_bad is False and free_cm == [2.6, 1.6] and shift_cm == 0.0
 
+
+def test_plan_site_grasp_emits_bias_dist_and_extrapolation_warnings(tmp_path: Path):
+    cfg = {
+        "work_dir": str(tmp_path), "tcp_x_m": 0.077, "closing_axis_offset_deg": 90.0,
+        "params": {}, "plan": _arm_s_plan(), "operating_conditions": {"payload_max_kg": 0.15},
+        "sites": {
+            "floor": {"surface_z": 0.004, "grasp_depth_m": 0.008, "detect_roi": [0, 0, 640, 480]},
+            "belt": {"surface_z": 0.032, "grasp_depth_m": 0.008, "place": [0.095, -0.130], "yaw_deg": -96.5},
+        },
+    }
+    cal = {
+        "schema": "rosy.cell-pivot.v1",
+        "sites": {
+            "floor": {"model": "homography", "H": np.eye(3).tolist(), "points": [{"arm_m": [-0.05, 0.12]}, {"arm_m": [0.05, 0.15]}]},
+            "belt": {"model": "homography", "H": np.eye(3).tolist()},
+        },
+    }
+    bias = {"regions": [{"site": "floor", "point_m": [0.0235, 0.1402], "bias_mm": [11.3, -18.0]}]}
+    catalog = [{"id": "container-2", "width_mm": 30.7, "length_mm": 67.6, "top_height_mm": 32.0, "tolerance_mm": 6.0, "grasp": {"jaw_axis_deg_from_long": 90.0}, "mass_kg": 0.04}]
+    obb = {"matched": True, "object": "container-2", "colour": "yellow", "raw_m": [0.0809, 0.1249], "long_axis_deg": -87.8, "width_mm": 30.7, "length_mm": 67.6}
+    out = tool.plan_site_grasp(arm_id="arm_s", config=cfg, config_name="c.json", catalog=catalog, catalog_name="cat.json",
+                               cal=cal, source="floor", dest="belt", colour="yellow", bias_data=bias, obb_override=obb)
+    assert out["metrics"]["bias_dist_mm"] > 50.0 and out["metrics"]["map_outside_mm"] > 20.0
+    assert "bias_extrapolated" in out["warnings"] and "map_extrapolated" in out["warnings"]
+

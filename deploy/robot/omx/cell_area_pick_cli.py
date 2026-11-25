@@ -172,6 +172,15 @@ def _check_config_arm(arm: str, config: dict) -> str | None:
     return None
 
 
+def _ensure_human_hold(cell) -> None:
+    try:
+        st = cell.act("state")
+        if isinstance(st, dict) and not st.get("human_hold_latched") and (st.get("fault") or st.get("settled") is False):
+            cell.act("human-hold")
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.commissioning != args.person_at_switch:
@@ -298,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_attempts=max_attempts,
             )
         except Aborted as exc:
+            _ensure_human_hold(cell)
             res_abort = {"result": "aborted", "error": str(exc), "arm_id": args.arm}
             if bid := cell_bundle_emit.emit_pick_failure(
                 cell, cfg_bundle, site_cal, args.pick_area, args.place_area, work_dir,
@@ -310,6 +320,8 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(json.dumps({"result": "refused", "error": str(exc)}))
             return 1
+        if res.get("result") in ("held", "aborted"):
+            _ensure_human_hold(cell)
         if res.get("result") not in ("placed", "hover"):
             bid = cell_bundle_emit.emit_pick_failure(
                 cell,

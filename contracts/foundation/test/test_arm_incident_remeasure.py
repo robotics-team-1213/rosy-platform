@@ -238,3 +238,27 @@ def test_clean_stale_effort_clears_only_with_matching_quiet_fresh_remeasure():
     }
     read_diag = {**read_a, "fault_records": [{**STALE_FAULT, "fault": diag}]}
     assert clearable(stale_diag, read_diag, binding=("arm_a", "2B162C9B50323952582E3120FF06202D"))[0] is True
+
+
+def test_park_body_windup_clears_only_with_clean_remeasure_and_refuses_jaw_or_other_commands():
+    park_windup = {
+        "safe_end": True, "latched": {}, "caps_restored": True, "folded": True,
+        "torque_after": dict(ZERO), "stops": [], "fault_records": [], "fault_record_kinds": [],
+        "windup_hits": [{"reason": "elbow_flex still 1.8 units short, PWM winding up 151 -> 249 of 600: pushing against something"}],
+        "flagged": [
+            {"command": "run park", "error": "contact in park: elbow_flex still 1.0 units short, PWM winding up 156 -> 243 of 600: pushing against something",
+             "fault": "contact in park: elbow_flex still 1.0 units short, PWM winding up 156 -> 243 of 600: pushing against something", "caught": None, "person_needed": None},
+        ],
+        "flagged_total": 1, "fault_records_total": 0,
+    }
+    clean_read = {**READ, "fault_records": []}
+    assert clearable(park_windup, None)[0] is False
+    assert clearable(park_windup, clean_read)[0] is True
+    for bad in (
+        {**park_windup, "flagged": [{**park_windup["flagged"][0], "person_needed": True}]},
+        {**park_windup, "flagged": [{**park_windup["flagged"][0], "caught": True}]},
+        {**park_windup, "flagged": [{**park_windup["flagged"][0], "command": "run descend_pick"}]},
+        {**park_windup, "flagged": [{"command": "run park", "error": "contact in park: the jaws stopped 5.0 units short at PWM -248 of 300: something is in them", "fault": "contact in park: the jaws stopped 5.0 units short at PWM -248 of 300: something is in them"}]},
+        {**park_windup, "latched": {"13": {"hw_error": 32}}},
+    ):
+        assert clearable(bad, clean_read)[0] is False
