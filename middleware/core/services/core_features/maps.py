@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from core_common.occupancy_grid import occupancy_map_id as occupancy_map_id
+from core_common.protocol.map_grid import occupancy_map_id as occupancy_map_id
 
 _COSTMAP_SCOPES = frozenset({"global", "local"})
 

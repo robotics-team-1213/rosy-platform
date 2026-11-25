@@ -43,7 +43,7 @@ from tf2_ros import TransformListener
 
 from . import executor_choice
 from .calibrated_values import calibrated
-from core_common.occupancy_grid import occupancy_map_id
+from core_common.protocol.map_grid import occupancy_map_id
 from core_common.protocol.localization import LocalizationSearchWindow
 
 from .loc_assist import SETTLE_S, LocAssist, lane_rules_near, localized_objects, pooled_grid, search
