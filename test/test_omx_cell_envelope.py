@@ -67,6 +67,52 @@ def approve(tmp_path, envelope, task, outcomes=("placed", "placed"), *, sequence
     return attempts, document
 
 
+def test_held_placement_records_exact_trial_and_revokes_review_after_automatic_failure(tmp_path, task, envelope, monkeypatch):
+    import cell_attempts
+    from cell_recovery_placement_live import SEQUENCE
+    from cell_recovery_placement_trial import record_placement
+
+    config, calibration, library, state = task
+    monkeypatch.setattr(envelope.time, "time", lambda: 100.01)
+    monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
+    config["_commissioning"] = {"person_at_switch": True}
+    original = "a" * 64
+    sequence = (*SEQUENCE, "restore-library " + original)
+    gate = envelope.assess(*task, sequence=sequence, check_home=False)
+    assert gate["status"] == "commissioning"
+    args = SimpleNamespace(arm="arm_s", expected_incident_id="1" * 32)
+    backend = SimpleNamespace(args=args, config=config, calibration=calibration, cargo={"object_id": "cargo"},
+                              lib_sha=original, _state=lambda *_: state)
+    candidate = {"assessment": gate, "target": "board", "library": library}
+    pending = tmp_path / "attempts.pending.json"
+    def placed(_):
+        assert json.loads(pending.read_text())["envelope"]["task_sha256"] == gate["task_sha256"]
+        return {"verification": {"verified": True, "inside": True, "object_id": "cargo"},
+                "supported": True, "released": True, "verified": True, "retreated": True}
+    success = record_placement(backend, candidate, placed)
+    ledger = tmp_path / "attempts.jsonl"
+    trial = json.loads(ledger.read_text())
+    assert not pending.exists() and success["attempt_id"] == trial["attempt_id"] and trial["outcome"] == "placed"
+    assert trial["placement_receipt"]["verification"]["object_id"] == "cargo"
+    del config["_commissioning"]
+    assert envelope.assess(*task, sequence=sequence)["allowed"] is False
+    binding = state["operating_context"]["operating_profile"]
+    review = {"task_sha256": gate["task_sha256"], "scope": "hardware", "min_attempts": 1, "min_success_rate": 1.,
+              "home_tolerance_units": 1., "reviewed_by": "reviewer", "evidence_ref": "trial",
+              "attempts_sha256": envelope.digest([trial])}
+    (tmp_path / "review.json").write_text(json.dumps({**binding, "schema": envelope.SCHEMA,
+                                                       "attempts_path": str(ledger), "reviews": [review]}))
+    candidate["assessment"] = envelope.assess(*task, sequence=sequence, check_home=False)
+    assert candidate["assessment"]["status"] == "verified"
+    def interrupted(_):
+        raise TimeoutError("owner disconnected after touchdown")
+    with pytest.raises(TimeoutError):
+        record_placement(backend, candidate, interrupted)
+    failed = json.loads(ledger.read_text().splitlines()[-1])
+    assert failed["envelope"]["mode"] == "automatic" and failed["outcome"] == "failed"
+    assert envelope.assess(*task, sequence=sequence, check_home=False)["reason"] == "runtime_failure"
+
+
 def test_no_evidence_holds_even_when_a_library_exists(task, envelope):
     result = envelope.assess(*task, now=100.01)
     assert result["status"] == "unverified" and not result["allowed"]

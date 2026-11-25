@@ -7,13 +7,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy/robot/omx")
 from cell_bound_home_request import HOME_RECOVERY_REASON, request_current_homes
 
 
-def test_commissioned_worker_requests_only_its_current_usb_record():
+def test_commissioned_worker_requests_only_its_current_usb_record(monkeypatch):
     arm, incident = "arm_a", "a" * 32
     root = f"home-recovery:{arm}:{incident}"
     item = {"root_task_id": root, "arm_id": arm, "trigger_code": "HOME_RECOVERY_REQUIRED",
             "context_sha256": "a" * 64, "homing_strategies": {"auto_fold": {"allowed": True}}}
     holds = {arm: {"fleet_held": True, "incident_ids": [incident], "unsent_outbox": 0, "fleet_reason": HOME_RECOVERY_REASON}}
     calls = []
+    monkeypatch.setattr("cell_bound_home_request.bound_request_due", lambda *_: False)
 
     def exchange(req, **kwargs):
         calls.append(req)
@@ -24,7 +25,9 @@ def test_commissioned_worker_requests_only_its_current_usb_record():
 
     run([], {})
     run([arm], {arm: {}})
+    run([arm], {})
     assert not calls
+    monkeypatch.setattr("cell_bound_home_request.bound_request_due", lambda *_: True)
     run([arm], {})
     run([arm], {})
     assert [r.get_method() for r in calls] == ["GET", "POST", "GET", "POST"]
