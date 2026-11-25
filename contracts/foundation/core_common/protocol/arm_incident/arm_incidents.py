@@ -373,10 +373,20 @@ def clearable_after_fold(facts, recovery, incident_id=None, reported_at=None) ->
         return False, "latched hardware error"
     if windup:
         return False, "wind-up or snag hit"
-    if faults and not _link_faults_only(faults, facts.get("fault_record_kinds")):
-        return False, "motor fault record"
     if not isinstance(recovery, dict) or recovery.get("kind") != "auto_fold":
+        if faults and not _link_faults_only(faults, facts.get("fault_record_kinds")):
+            return False, "motor fault record"
         return False, "no auto-fold evidence"
+    hw_after = recovery.get("hardware_error_after")
+    if isinstance(hw_after, dict) and any(type(v) is not int or v != 0 for v in hw_after.values()):
+        return False, "hardware error after fold"
+    hw_clean = (
+        isinstance(hw_after, dict) and len(hw_after) >= 6
+        and all(type(v) is int and v == 0 for v in hw_after.values())
+        and recovery.get("caps_restored_after") is True
+    )
+    if faults and not _link_faults_only(faults, facts.get("fault_record_kinds")) and not hw_clean:
+        return False, "motor fault record"
     if incident_id is not None and recovery.get("incident_id") != incident_id:
         return False, "auto-fold evidence is for another incident"
     taken = recovery.get("taken_at")

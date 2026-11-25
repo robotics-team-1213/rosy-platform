@@ -997,3 +997,19 @@ def test_pr2_area_xyz_safety_fences_and_vision_after_grasp(tmp_path: Path, monke
     )
     assert len(seen_hsv) == 2 and all(isinstance(h, (tuple, list)) for h in seen_hsv)
     assert seen_holding == [True]
+
+
+def test_arm_s_v21_white_jaws_keeps_30mm_open_over_narrow_base_plan(tmp_path):
+    import cell_directive_compiler as cdc
+
+    directive = build_directive(
+        arm_id="arm_s",
+        pick={"area": "floor", "x": 0.1103, "y": 0.119, "z": 0.021},
+        place={"area": "floor", "x": -0.02, "y": 0.15, "z": 0.024},
+        vision_refine=False,
+    )
+    narrow_base = {**SAMPLE_BASE_PLAN, "tcp_x_m": 0.074, "grip_open": 54.7, "grip_release": 53.5}
+    plan, cal = cdc.build_plan_from_directive(directive, narrow_base, work_dir=tmp_path)
+    assert cal["finger_color"] == "white"
+    assert plan["grip_open"] == pytest.approx(58.1)
+    assert plan["grip_release"] == pytest.approx(57.5)

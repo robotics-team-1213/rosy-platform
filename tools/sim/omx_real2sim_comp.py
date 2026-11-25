@@ -52,9 +52,11 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
         if math.hypot(belt_nom["dx"] - p_dx, belt_nom["dy"] - p_dy) > 0.018:
             w_belt = 0.0
     n_anchors = len(pads) + int(belt_nom is not None)
-    if n_anchors < 1:
-        return cam_nom, dict(moved=False, anchors_used=0, raw_err_mm=0.0, cal_err_mm=0.0,
-                             belt_residual=dict(dx=0.0, dy=0.0, dyaw=0.0), plate_residuals={})
+    # Require >= 2 anchors (>= 6 scalar residuals) before fitting 6-DoF extrinsics; 1 anchor is underdetermined.
+    if n_anchors < 2:
+        b_res = dict(dx=belt_nom["dx"], dy=belt_nom["dy"], dyaw=belt_nom["dyaw"]) if belt_nom is not None else dict(dx=0.0, dy=0.0, dyaw=0.0)
+        return cam_nom, dict(moved=False, anchors_used=n_anchors, raw_err_mm=0.0, cal_err_mm=0.0,
+                             belt_residual=b_res, plate_residuals={})
 
     pad_uv_pairs = [np.vstack((pad["uv_plus"], pad["uv_in"])) for pad in pads]
 

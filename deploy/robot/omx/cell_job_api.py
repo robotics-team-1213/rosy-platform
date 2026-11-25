@@ -188,9 +188,10 @@ class Runner:
                         return {"code": 409, "error": f"a moving job already runs on {sorted(overlap)[0]}"}
                     if (target_arms & AB_ARMS) and (r_arms & AB_ARMS):
                         return {"code": 409, "error": f"A/B cell space is held by {r['arm']} ({r['job']})"}
-                for a in arms:
-                    if inc_reason := self._check_incident(a):
-                        return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{a} held: {inc_reason}"}
+                if not job.get("recovery_home"):
+                    for a in arms:
+                        if inc_reason := self._check_incident(a):
+                            return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{a} held: {inc_reason}"}
                 for a in arms or (None,):
                     fleet_st = self._check_fleet_safety(a)
                     fleet_online = fleet_online or bool(fleet_st.get("online"))
@@ -198,20 +199,15 @@ class Runner:
                         return {"code": 409, "error_code": "FLEET_SAFETY_STOP", "error": fleet_st.get("reason") or "Fleet safety stop"}
                 if _whole_cell_lock_held(self.lock_dir):
                     return {"code": 409, "error": "whole-cell session.lock is held by another process"}
-                attach_hold = bool(job.get("attach_live_hold"))
-                if attach_hold and (attach_err := live_hold_attach_err(arm, self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, pid_alive_fn=_pid_alive)):
-                    return {"code": 409, "error_code": "NO_LIVE_HOLD_TO_RECOVER", "error": attach_err}
+                attach_hold, rec_home = bool(job.get("attach_live_hold")), bool(job.get("recovery_home"))
+                attach_err = live_hold_attach_err(arm, self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, pid_alive_fn=_pid_alive) if (attach_hold or rec_home) else None
+                if attach_hold and attach_err: return {"code": 409, "error_code": "NO_LIVE_HOLD_TO_RECOVER", "error": attach_err}
                 lock_arms = sorted(AB_ARMS) if (target_arms & AB_ARMS) else list(arms)
                 for check_arm in lock_arms:
-                    if not (attach_hold and check_arm == arm) and _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
+                    if not ((attach_hold or (rec_home and attach_err is None)) and check_arm == arm) and _session_lock_held(check_arm, self.lock_dir) and not self._can_reuse_arm_session_locked(check_arm):
                         return {"code": 409, "error": f"session lock for {check_arm} is held by another process"}
                 if target_arms == AB_ARMS:
-                    if ready_err := check_two_arm_ab_ready(
-                        self.workdir, self.lease_dir, self.lock_dir,
-                        session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict,
-                        live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident,
-                        motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir,
-                    ):
+                    if ready_err := check_two_arm_ab_ready(self.workdir, self.lease_dir, self.lock_dir, session_lock_held_fn=_session_lock_held, read_json_fn=_read_json_dict, live_max_age_s=LIVE_MAX_AGE_S, incident_check_fn=self._check_incident, motor_health_dir=self.motor_health_dir, calibration_dir=self.calibration_dir):
                         return {"code": 409, "error_code": "TWO_ARM_NOT_READY", "error": ready_err}
                 elif arm in AB_ARMS:
                     if peer_err := check_peer_ab_folded(

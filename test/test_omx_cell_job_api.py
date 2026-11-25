@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import threading
+from types import SimpleNamespace
 import urllib.request
 from unittest.mock import Mock
 
@@ -701,6 +702,108 @@ def test_post_eval_job_guards_amr_bed_and_requires_person_at_switch(tmp_path, mo
         res = api.Runner(wd, lock_dir=wd).start("post_eval", {**base, "site": bad_site})
         assert res["code"] == 400 and "R cell-task -> cell_task_worker -> Gate" in res["error"]
     popen.assert_not_called()
+
+
+def test_safe_home_job_admits_incident_held_blocks_fleet_stop_and_machine_token(tmp_path, monkeypatch):
+    import cell_job_guards as guards
+
+    wd = _make_workdir(tmp_path)
+    for fn in ("cell-s.json", "chunks-s.json"):
+        (wd / fn).write_text("{}", encoding="utf-8")
+    (wd / "tools-env-current.sh").write_text("export OMX=~/rosy-test/omx-tools-abc/deploy/robot/omx\n", encoding="utf-8")
+    params = {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "site": "floor", "roi": [0, 0, 10, 10]}
+
+    monkeypatch.setattr(api, "_check_depth_lock_held", lambda _ld=None: False)
+    lock_held = [False]
+    monkeypatch.setattr(api, "_session_lock_held", lambda arm, _ld=None: arm == "arm_s" and lock_held[0])
+    popen = Mock(return_value=Mock(poll=Mock(return_value=0)))
+    monkeypatch.setattr(api.subprocess, "Popen", popen)
+
+    runner = api.Runner(
+        wd, lock_dir=wd,
+        incident_check_fn=lambda arm: f"{arm}: 2 open incidents",
+        fleet_safety_check_fn=lambda _arm: {"online": True, "blocked": False},
+    )
+    home_res = runner.start("home", {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "operating_profile": "prof.json", "person_at_switch": True})
+    assert home_res["code"] == 409 and home_res["error_code"] == "ARM_INCIDENT_HELD"
+
+    mach_res = runner.start("safe_home", params, principal=guards.Principal(guards.ROLE_MACHINE, "bot"))
+    assert mach_res["code"] == 403 and mach_res["error_code"] == "MACHINE_COMMISSIONING_FORBIDDEN"
+
+    # External non-hold session lock refuses safe_home (409), while live human-hold attaches (202), and cold arm admits (202).
+    lock_held[0] = True
+    busy_res = runner.start("safe_home", params)
+    assert busy_res["code"] == 409 and "session lock" in busy_res["error"]
+
+    import time as _time
+    (wd / "chunk-io-s").mkdir(exist_ok=True)
+    (wd / "chunk-io-s" / "live.json").write_text(json.dumps({"t": _time.time(), "chunk": None, "human_hold_latched": True, "torque_hold_commanded": True}), encoding="utf-8")
+    hold_res = runner.start("safe_home", params)
+    assert hold_res["code"] == 202 and popen.call_count == 1
+
+    lock_held[0] = False
+    ok_res = runner.start("safe_home", params)
+    assert ok_res["code"] == 202 and popen.call_count == 2
+
+    blocked = api.Runner(
+        wd, lock_dir=wd,
+        incident_check_fn=lambda arm: f"{arm}: open",
+        fleet_safety_check_fn=lambda _arm: {"online": True, "blocked": True, "reason": "E-stop"},
+    )
+    estop_res = blocked.start("safe_home", params)
+    assert estop_res["code"] == 409 and estop_res["error_code"] == "FLEET_SAFETY_STOP"
+
+
+def test_cell_safe_home_guards_hw_error_incident_cap_and_clears_multi(tmp_path, monkeypatch):
+    import cell_safe_home as csh
+
+    cfg_p, lib_p, out_p = tmp_path / "cell.json", tmp_path / "lib.json", tmp_path / "out.json"
+    cfg_p.write_text(json.dumps({"arm_id": "arm_s", "io": str(tmp_path / "io")}), encoding="utf-8")
+    lib_p.write_text("{}", encoding="utf-8")
+    args = SimpleNamespace(arm="arm_s", config=cfg_p, library=lib_p, site="floor", roi=[0, 0, 10, 10],
+                           out=out_p, device="/dev/null", max_incidents=3, no_clear=False)
+
+    args_missing = SimpleNamespace(arm="arm_s", config=cfg_p, library=lib_p, site="floor", roi=[0, 0, 10, 10],
+                                 out=out_p, device=None, max_incidents=3, no_clear=False)
+    monkeypatch.setenv("ROSY_OMX_ARM_BOARDS", str(tmp_path / "missing-boards.json"))
+    rc_unavail, res_unavail = csh.run_safe_home(args_missing, live_fn=lambda _c: False)
+    assert rc_unavail == 2 and res_unavail["result"] == "refused_hw_probe_unavailable"
+
+    rc_alert, res_alert = csh.run_safe_home(
+        args, live_fn=lambda _c: False,
+        read_fn=lambda _d: (_ for _ in ()).throw(RuntimeError("Motor 11: ping failed (0, 128)")),
+    )
+    assert rc_alert == 2 and res_alert["result"] == "refused_hw_error"
+
+    rc_hw, res_hw = csh.run_safe_home(
+        args, live_fn=lambda _c: False, read_fn=lambda _d: [{"id": 11, "hardware_error": 32}],
+    )
+    assert rc_hw == 2 and res_hw["result"] == "refused_hw_error"
+
+    rc_cap, res_cap = csh.run_safe_home(
+        args, live_fn=lambda _c: False, read_fn=lambda _d: [{"id": 11, "hardware_error": 0}],
+        status_fn=lambda _a: {"incident_ids": ["1", "2", "3", "4"]},
+    )
+    assert rc_cap == 2 and res_cap["result"] == "refused_too_many_incidents"
+
+    cleared = []
+    monkeypatch.chdir(tmp_path)
+    def fake_run(cmd, env=None, timeout=None):
+        assert env and env["ROSY_RECOVERY_INCIDENT"] == "inc-1,inc-2"
+        out_p.write_text(json.dumps({"result": "folded", "candidate": "park", "state": [0, -58, 50, 50, -5, 46.5], "home": [0, -58, 50, 50, -5, 46.5], "corridor": {"clear": True}}))
+        return SimpleNamespace(returncode=0)
+
+    tok_p = tmp_path / "assessor.token"
+    tok_p.write_text("tok", encoding="utf-8")
+    rc_ok, res_ok = csh.run_safe_home(
+        args, live_fn=lambda _c: False, read_fn=lambda _d: [{"id": 11, "hardware_error": 0}],
+        status_fn=lambda _a: {"incident_ids": ["inc-1", "inc-2"]}, run_fn=fake_run,
+        wait_sess_fn=lambda *_a: ({"torque_after": {str(i): 0 for i in range(11, 17)}, "hardware_faults": {}, "caps_restored": True}, None),
+        token_fn=lambda: tok_p,
+        clear_fn=lambda *a, **kw: cleared.append((kw["only"], kw["recovery"])),
+    )
+    assert rc_ok == 0 and res_ok["cleared_ids"] == ["inc-1", "inc-2"]
+    assert [c[0] for c in cleared] == ["inc-1", "inc-2"] and cleared[0][1]["caps_restored_after"] is True
 
 
 def test_job_client_wait_timeout_and_cli_get_wait_run(monkeypatch, capsys):

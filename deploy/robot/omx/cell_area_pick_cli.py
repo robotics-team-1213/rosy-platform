@@ -189,10 +189,10 @@ def main(argv: list[str] | None = None) -> int:
     if err := _check_config_arm(args.arm, config):
         print(json.dumps({"result": "refused", "error": err}))
         return 1
+    cameras = config.get("cameras") or {}
+    config, cell = cell_auto_setup.fifo_cell(config, cameras)
     work_dir = Path(config["work_dir"]).expanduser()
     cp.KEEP["dir"] = work_dir / "frames"
-    cameras = config.get("cameras") or {}
-    cell = cp.FifoCell(Path(config["io"]).expanduser(), cameras)
     dark = cell_preflight.ready(cell.frame, config)
     if dark:
         print(json.dumps({"result": "refused", "error": "; ".join(dark)}))

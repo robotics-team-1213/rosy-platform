@@ -31,7 +31,9 @@ from guarded_native_probe import (  # noqa: E402,F401
     TelemetryReadError,
     check_hold_deadlines,
     check_hold_health,
+    check_sync_hw_status,
     check_temp_limit,
+    drain_rx,
     enforce_temperatures,
     is_hardware_fault,
     is_valid_hw_status,
@@ -45,21 +47,15 @@ from guarded_native_probe import (  # noqa: E402,F401
 def check_hardware_errors(motion) -> None:
     if "read" not in vars(motion.follower) and hasattr(motion.follower, "model_ctrl_table"):
         errors = motion.follower.sync_read("Hardware_Error_Status", list(NAMES), normalize=False, num_retry=READ_RETRY)
-        if not isinstance(errors, dict):
-            raise TelemetryReadError("missing or non-finite joint sample")
-        for name in NAMES:
-            if is_hardware_fault(errors.get(name)):
-                raise ValueError(f"{name}: hardware error")
-        for name in NAMES:
-            if name not in errors or not is_valid_hw_status(errors.get(name)):
-                raise TelemetryReadError("missing or non-finite joint sample")
+        check_sync_hw_status(motion.follower, errors, READ_RETRY)
         return
     first_err = None
     for name in NAMES:
         val = motion.follower.read("Hardware_Error_Status", name, num_retry=READ_RETRY)
         if is_hardware_fault(val):
-            raise ValueError(f"{name}: hardware error")
+            raise ValueError(f"{name}: hardware error ({val})")
         if not is_valid_hw_status(val):
+            drain_rx(motion.follower)
             first_err = first_err or TelemetryReadError(f"{name}: invalid hardware status {val}")
     if first_err is not None:
         raise first_err

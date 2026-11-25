@@ -410,3 +410,87 @@ def test_fk_lift_plan_gentle_step_and_latched_prefers_fold_from_hold(monkeypatch
     assert res["result"] == "folded" and res["candidate"] == "fold-from-hold"
     assert not any(c.startswith("jog ") for c in cell.commands)
 
+
+def test_tucked_park_path_stays_folded_above_base_and_within_speed_limit():
+    from omx_adapter.chunk_library import park_path, too_fast
+
+    tucked = [9.69, -27.67, 49.45, 43.44, -23.57, 49.13]
+    home = [0.0, -58.0, 50.0, 50.0, -5.0, 46.5]
+    frames = park_path(tucked, home, 49.0, 30, transit={"shoulder_lift.pos": -27.0, "elbow_flex.pos": 18.0, "wrist_flex.pos": 46.0}, speed=0.3)
+    assert frames and not too_fast(frames, 30)
+    assert min(f[2] for f in frames) >= 42.5  # never unfolds to transit elbow=18
+    sh_mid = next(i for i, f in enumerate(frames) if f[1] <= -41.5)
+    assert max(abs(f[2] - 43.0) for f in frames[sh_mid - 1:sh_mid + 1]) <= 1.0  # lifts clear of plate before folding elbow with gravity
+    sh_done = next(i for i, f in enumerate(frames) if abs(f[1] - home[1]) <= 0.5)
+    assert abs(frames[sh_done][0] - tucked[0]) <= 0.5  # shoulder_lift clears before pan sweeps
+    assert abs(frames[sh_done][2] - home[2]) <= 0.5  # elbow folds to goal[2] together with shoulder_lift -> goal[1]
+    assert max(abs(a - b) for a, b in zip(frames[-1][:5], home[:5])) <= 0.1
+
+
+def test_clearable_after_fold_accepts_hw_clean_and_multi_incident_launch(tmp_path, monkeypatch):
+    import omx_incident
+    from core_common.protocol.arm_incident.arm_incidents import clearable_after_fold
+
+    result, *_ = run(Cell(REACH))
+    hw0 = {str(i): 0 for i in range(11, 17)}
+    proof = af.evidence(result, HOME, TORQUE0, "inc-1", 1000.0, hardware_error_after=hw0, caps_restored_after=True)
+    facts_fault = {**FACTS, "fault_records": ["f.json"], "fault_record_kinds": [{"fault": "shoulder_pan: hardware error", "stop_reasons": []}]}
+    assert clearable_after_fold(facts_fault, proof, "inc-1", 990.0)[0] is True
+    assert clearable_after_fold(facts_fault, {**proof, "caps_restored_after": False}, "inc-1", 990.0)[0] is False
+    assert clearable_after_fold(facts_fault, {**proof, "hardware_error_after": {**hw0, "11": 32}}, "inc-1", 990.0)[0] is False
+    assert clearable_after_fold({**facts_fault, "latched": {"11": {"hw_error": 32}}}, proof, "inc-1", 990.0)[0] is False
+
+    monkeypatch.setattr(omx_incident, "_probe_hold", lambda arm, link=None: (True, "held"))
+    omx_incident.refuse_if_held("arm_s", Link(["inc-1", "inc-2"]), allow_incident="inc-1,inc-2")
+    with pytest.raises(SystemExit):
+        omx_incident.refuse_if_held("arm_s", Link(["inc-1", "inc-3"]), allow_incident="inc-1,inc-2")
+
+    monkeypatch.setattr(omx_incident, "INCIDENTS", tmp_path / "incidents")
+    conf, cwd = _conf(tmp_path)
+    calls, cleared = [], []
+
+    def run_fn(command, **kw):
+        calls.append(kw["env"]["ROSY_RECOVERY_INCIDENT"])
+        Path(command[command.index("--out") + 1]).write_text(json.dumps(
+            {"result": "folded", "candidate": "park", "state": HOME, "home": HOME, "corridor": {"clear": True}}))
+        (cwd / "session.json").write_text(json.dumps({"torque_after": TORQUE0, "hardware_faults": {}, "caps_restored": True}))
+        return SimpleNamespace(stdout="", stderr="")
+
+    out = af.launch("arm_s", conf, link=Link(["inc-1", "inc-2"]), run=run_fn, sleep=lambda s: None,
+                    clear=lambda *a, **k: cleared.append((k["only"], k["recovery"])), allow_multi=True)
+    assert out["result"] == "cleared" and calls == ["inc-1,inc-2"]
+    assert [c[0] for c in cleared] == ["inc-1", "inc-2"]
+    assert cleared[0][1]["hardware_error_after"] == hw0 and cleared[0][1]["caps_restored_after"] is True
+
+
+def test_open_cell_binds_operating_profile_onto_fifo_cell(tmp_path, monkeypatch):
+    import cell_auto_setup as setup
+
+    seen = {}
+
+    class _SpyCell:
+        def __init__(self, io, cameras, **kwargs):
+            seen["io"], seen["cameras"], seen["kwargs"] = io, cameras, kwargs
+
+    prof = tmp_path / "prof.json"
+    prof.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1",
+        "device_id": "arm_s", "instance_id": "omx_s",
+        "robot_config_sha256": "d" * 64, "operating_envelope_path": "env.json", "work_dir": ".",
+    }), encoding="utf-8")
+    cfg = {
+        "arm_id": "arm_s", "io": str(tmp_path / "io"), "cameras": {},
+        "work_dir": str(tmp_path), "calibration_path": str(tmp_path / "cal.json"),
+        "operating_profile_path": str(prof),
+    }
+    monkeypatch.setattr(setup, "load_config", lambda _p: dict(cfg))
+    monkeypatch.setattr(setup.cp, "FifoCell", _SpyCell)
+    args = SimpleNamespace(
+        config=tmp_path / "cfg.json", want_object=None, want_colour=None,
+        layers_below=None, source="pinky", task_id=None, handoff_lease_id=None,
+        verify_zones=False, dry_run=True,
+    )
+    bound_cfg, _, _, _ = setup.open_cell(args, commissioning=True)
+    assert bound_cfg["_operating_profile_binding"]["device_id"] == "arm_s"
+    assert seen["kwargs"].get("operating_profile") == bound_cfg["_operating_profile_binding"]
+

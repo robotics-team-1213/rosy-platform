@@ -9,16 +9,12 @@ from .motion_profile import TemporalChunkEnsembler, blend_chunks, flow, receding
 
 # The guard streams at most 10 deg/s; 5 native units/s keeps every joint under 9 deg/s.
 GUARD_UNITS_PER_S = 5.0
-NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
-         "gripper.pos"]
+NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"]
 # Taught carry height: turning low first scraped the jaws on the table on 2026-10-24.
 TRANSIT = {1: -27.0, 2: 18.0, 3: 46.0}
 PARK_SPEED = GUARD_UNITS_PER_S
-FOLDED_ROLL_LIFT = (10.0, -10.0)  # 11-20 arm_a: folded, the wrist camera hit the arm at roll +18..20; lift elbow -10 first
-# shoulder_lift moving negative lifts the arm's weight (rise from a reach). Guard logs 2026-10-26/27: its lag
-# behind the command was median/p90/max 1.8/3.5/4.75 deg at 6-8 deg/s and 1.0/1.8/3.0 deg at 4-6 deg/s; the
-# guard stops at 5 (a rise from x 0.24 m did on 2026-10-27). 2 units/s is 3.6 deg/s: at 3 (5.4 deg/s) a rise
-# from the container reach lagged 1.8 units and set off the strain hold every time, at P 1200 and 1600 alike.
+FOLDED_ROLL_LIFT = (10.0, -10.0)  # wrist camera clearance lift before rotating wrist_roll when folded
+# Rise lag logs (10/26-27): 2 units/s (3.6 deg/s) keeps lag under the 5-unit strain limit across arm loads.
 RISE_SPEED = 2.0
 # Above closed + this threshold jaws are open (empty; box holds 51.6-54.1 vs open_max 56): rise before closing.
 OPEN_JAW_MARGIN = 8.0
@@ -30,10 +26,8 @@ def too_fast(frames: list, fps: int) -> bool:
     return any(abs(a - b) > limit for p, q in zip(frames, frames[1:]) for a, b in zip(p, q))
 
 
-def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None,
-                 speed: float = 0.85) -> list:
-    """Move anywhere -> `goal` without sweeping low: open jaws (> closed + OPEN_JAW_MARGIN) rise before closing at
-    transit; held boxes close first; then turn pan/roll, descend, and set final jaws at `speed * PARK_SPEED`."""
+def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit: dict | None = None, speed: float = 0.85) -> list:
+    """Move anywhere -> `goal` without sweeping low: open jaws rise before closing at transit; held boxes close first."""
     if (start[1] >= -35.0 and goal[1] >= -35.0 and abs(start[0] - goal[0]) <= 15.0
             and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0 and abs(start[4] - goal[4]) <= 45.0):
         return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.25, rise_speed=RISE_SPEED)
@@ -65,14 +59,11 @@ def chain_path(steps: list[list], fps: int, blend_s: float = 0.25) -> list:
     return out
 
 
-def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None,
-              speed: float = 0.85) -> list:
-    """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed);
-    stay folded for near-home or already-folded pan turns (`wait` side -> `home`) instead of unfolding."""
+def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None, speed: float = 0.85) -> list:
+    """Close jaws, rise, turn, then descend into home; stay folded for near-home/folded/tucked starts instead of unfolding."""
     goal = list(home[:5]) + [closed]
     near_home = max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 5.0 and abs(start[5] - closed) <= 5.0
-    folded_pose = (start[1] <= -50.0 and goal[1] <= -50.0 and max(abs(a - b) for a, b in zip(start[1:4], goal[1:4])) <= 10.0
-                   and abs(start[0] - goal[0]) <= 70.0 and abs(start[4] - goal[4]) <= 45.0)
+    folded_pose = (start[1] <= -50.0 and goal[1] <= -50.0 and max(abs(a - b) for a, b in zip(start[1:4], goal[1:4])) <= 10.0 and abs(start[0] - goal[0]) <= 70.0 and abs(start[4] - goal[4]) <= 45.0)
     if near_home or folded_pose:
         waypoints = [list(start)] + ([list(start[:5]) + [closed]] if abs(start[5] - closed) > 5.0 else [])
         if abs(start[4] - goal[4]) > FOLDED_ROLL_LIFT[0]:
@@ -80,6 +71,13 @@ def park_path(start: list, home: list, closed: float, fps: int, transit: dict | 
         waypoints.append(goal)
         rate = (0.5 if abs(start[0] - goal[0]) <= 12.0 else 1.0) * speed * PARK_SPEED
         return flow(waypoints, fps, rate, blend=[False] * len(waypoints), blend_s=0.2, rise_speed=RISE_SPEED)
+    if -50.0 < start[1] <= -15.0 and goal[1] <= -50.0 and start[2] >= 35.0 and goal[2] >= 35.0 and abs(start[0] - goal[0]) <= 45.0 and abs(start[4] - goal[4]) <= 45.0:
+        el_clear, lift_mid = min(start[2], 43.0), min(start[1], -42.0)
+        waypoints = [list(start)] + ([list(start[:5]) + [closed]] if abs(start[5] - closed) > 5.0 else [])
+        if start[2] > el_clear + 0.5: waypoints.append([start[0], start[1], el_clear, start[3], start[4], closed])
+        if start[1] > lift_mid + 0.5: waypoints.append([start[0], lift_mid, el_clear, start[3], start[4], closed])
+        waypoints.extend(([start[0], goal[1], goal[2], start[3], start[4], closed], goal))
+        return flow(waypoints, fps, speed * PARK_SPEED, blend=[False] * len(waypoints), blend_s=0.2, rise_speed=RISE_SPEED)
     return transit_path(start, goal, closed, fps, transit, speed)
 
 
@@ -102,20 +100,16 @@ def load_library(path: Path) -> dict:
     if not isinstance(chunks, dict) or not chunks:
         raise SystemExit("chunk library has no chunks")
     for name, frames in chunks.items():
-        if (not isinstance(frames, list) or not frames
-                or any(not isinstance(f, (list, tuple)) or len(f) != 6
-                       or not all(_finite_in(v, -100.0, 100.0) for v in f) for f in frames)):
+        if not isinstance(frames, list) or not frames or any(not isinstance(f, (list, tuple)) or len(f) != 6 or not all(_finite_in(v, -100.0, 100.0) for v in f) for f in frames):
             raise SystemExit(f"chunk {name}: frames must be six finite values within -100..100")
         if too_fast(frames, fps):
-            raise SystemExit(f"chunk {name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s); "
-                             "regenerate the library with grasp_planner.py or teach_trajectory.py")
+            raise SystemExit(f"chunk {name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s); regenerate the library with grasp_planner.py or teach_trajectory.py")
     if not _finite_in(library.get("gripper_closed"), -100.0, 100.0):
         raise SystemExit("chunk library needs gripper_closed (finite value in -100..100)")
     speed = library.get("transit_speed", 0.85)
     if not _finite_in(speed, 0.1, 0.85):
         raise SystemExit(f"transit_speed {speed!r} must be 0.1..0.85 of the guard speed (blended corners need the rest)")
-    if (transit := library.get("transit")) is not None and (
-            not isinstance(transit, dict) or any(k not in (*NAMES, *"012345") or not _finite_in(v, -100.0, 100.0) for k, v in transit.items())):
+    if (transit := library.get("transit")) is not None and (not isinstance(transit, dict) or any(k not in (*NAMES, *"012345") or not _finite_in(v, -100.0, 100.0) for k, v in transit.items())):
         raise SystemExit("chunk library transit joints must be finite values within -100..100")
     if library.get("jaw_empty_stop") is not None and not _finite_in(library["jaw_empty_stop"], -100.0, 100.0):
         raise SystemExit("chunk library jaw_empty_stop must be finite within -100..100")

@@ -111,7 +111,7 @@ def test_cell_area_pick_cli_dry_run_refusals_and_live_closed_loop(
     cfg["plan"] = {"pick": {}, "place": {}}
 
     class _FakeCell:
-        def __init__(self, io, cams):
+        def __init__(self, io, cams, **_kw):
             self.cmds = []
 
         def frame(self, view: str):
@@ -514,7 +514,7 @@ def test_pr2_cli_guarded_abort_gate_hold_and_apply_site_bias(tmp_path: Path, mon
     cfg["plan"] = {"pick": {}, "place": {}}
 
     class _FakeCell:
-        def __init__(self, io, cams):
+        def __init__(self, io, cams, **_kw):
             self.cmds = []
 
         def frame(self, view: str):
@@ -565,6 +565,49 @@ def test_pr2_cli_guarded_abort_gate_hold_and_apply_site_bias(tmp_path: Path, mon
     out_held = json.loads(capsys.readouterr().out)
     assert out_held["result"].startswith("held:") and "envelope" in out_held
     assert emitted[-1]["mode"] == "recovery" and emitted[-1]["calibration"] == {"site": "floor"}
+
+
+def test_area_pick_cli_binds_operating_profile_when_configured(tmp_path: Path, monkeypatch, capsys) -> None:
+    import cell_robot_profile as prof_mod
+
+    wd, cfg_path = _make_workdir(tmp_path)
+    (wd / "plan.json").write_text(json.dumps({"pick": {}, "place": {}, "home": [0, 0, 0, 0, 0]}), encoding="utf-8")
+    prof_path = wd / "arm-s-profile.json"
+    prof_path.write_text(json.dumps({
+        "schema": "rosy.omx-cell-robot-profile.v1",
+        "device_id": "arm_s",
+        "instance_id": "omx_s",
+        "robot_config_sha256": "d" * 64,
+        "operating_envelope_path": "review.json",
+        "work_dir": ".",
+    }), encoding="utf-8")
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["operating_profile_path"] = str(prof_path)
+    cfg["plan_path"] = str(wd / "plan.json")
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+
+    seen = {}
+
+    class _SpyCell:
+        def __init__(self, io, cams, **kwargs):
+            seen["kwargs"] = kwargs
+
+        def frame(self, view: str):
+            return np.full((32, 32, 3), 120, dtype=np.uint8)
+
+    monkeypatch.setattr(cli.cp, "FifoCell", _SpyCell)
+    monkeypatch.setattr(cli.cell_preflight, "ready", lambda _f, _c: [])
+    monkeypatch.setattr(cli.cell_area_xyz, "plan_library_from_directive",
+                        lambda _d, _p, work_dir=None: ({"chunks": {"home": [[0, 0, 0, 0, 0, 0]]}}, {"pick": {}, "place": {}}, {}))
+    rc = cli.main([
+        "--arm", "arm_s", "--config", str(cfg_path),
+        "--pick-area", "floor", "--pick-x", "-0.05", "--pick-y", "0.14", "--pick-z", "0.021",
+        "--place-area", "floor", "--place-x", "-0.02", "--place-y", "0.15", "--place-z", "0.024",
+        "--dry-run",
+    ])
+    capsys.readouterr()
+    assert rc == 0
+    assert seen["kwargs"].get("operating_profile") == prof_mod.load(prof_path)["binding"]
 
 
 def test_area_pick_cli_binds_catalog_payload_and_refuses_impossible_jaw_angle(tmp_path: Path, monkeypatch, capsys) -> None:
@@ -659,6 +702,3 @@ def test_refine_pick_pose_rejects_implausible_wrist_gap_px(tmp_path: Path, monke
     assert vision_refined is False
     assert last_obs is not None and last_obs["found"] is False and last_obs["why"] == "wrist_sanity_rejected"
     assert wrist_log[0]["why"] == "wrist_sanity_rejected"
-
-
-

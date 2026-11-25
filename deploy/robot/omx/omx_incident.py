@@ -106,9 +106,10 @@ def refuse_if_held(arm: str | None, link=None, allow_incident: str | None = None
     the whole hold; anything else, or Fleet out of reach, refuses as before."""
     is_held, detail = _probe_hold(arm, link)
     if is_held and allow_incident:
+        allowed = [x.strip() for x in str(allow_incident).split(",") if x.strip()]
         try:
             answer = (link or link_for(arm)).hold()
-            if list(answer.incident_ids) == [allow_incident]:
+            if 1 <= len(allowed) <= 3 and len(answer.incident_ids) == len(allowed) and set(answer.incident_ids) == set(allowed):
                 return
         except Exception as exc:  # no answer: the recovery session does not open
             detail = f"{detail}; recovery refused: {type(exc).__name__}"
