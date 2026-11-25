@@ -34,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_params as prm  # noqa: E402
 import cell_preflight  # noqa: E402
+from cell_upkeep_usb_leaf import unconfigured_usb_leaf  # noqa: E402
 from cell_upkeep_checks import (  # noqa: E402
     BAD,
     TCP_STOCK,
@@ -261,6 +262,7 @@ class Io:
         self.device, self.usb_port, self.frames, self.ports = camera_device, usb_port, frames_flow, port_set
         self.units, self.sleep = camera_units, time.sleep
         self.leaf_auth, self.rebind = leaf_authorize, camera_rebind
+        self.unconfigured_leaf = unconfigured_usb_leaf
         for name, fn in seams.items():
             if not hasattr(self, name):
                 raise TypeError(f"unknown seam {name}")
@@ -277,7 +279,9 @@ def usb_recover(role, io):
     try:
         port = io.usb_port(device)
     except OSError as e:
-        return f"cannot resolve the USB port of {role}: {e}"
+        port = io.unconfigured_leaf(role) if isinstance(e, FileNotFoundError) else None
+        if port is None:
+            return f"cannot resolve the USB port of {role}: {e}"
     boards = [b for b in port["boards"] if "OpenRB" in b]
     if boards:
         if port.get("leaf") and not port.get("leaf_boards") and port.get("leaf_authorized") == "1":
