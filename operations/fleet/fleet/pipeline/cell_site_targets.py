@@ -87,13 +87,14 @@ def _map_path(web_common: Path | None = None) -> Path:
     return Path(__file__).resolve().parents[4] / "shared/web/cell-site-map.json"
 
 
-def list_canonical_sites(web_common: Path | None = None) -> dict[str, Any]:
+def list_canonical_sites(web_common: Path | None = None, *, include_zone_layout: bool = False) -> dict[str, Any]:
     idx = _index(str(_map_path(web_common).resolve()))
     doc = idx["doc"]
+    status = doc.get("status", "planned_unverified")
     return {
         "schema": doc["schema"],
         "revision": doc.get("revision", 1),
-        "status": doc.get("status", "planned_unverified"),
+        "status": status,
         "tier_height_mm": doc.get("tier_height_mm"),
         "count": len(idx["sites"]),
         "zones": [
@@ -108,7 +109,8 @@ def list_canonical_sites(web_common: Path | None = None) -> dict[str, Any]:
                 },
                 "slot_cells": int(z["slot_cells"]),
                 "arms": list(z.get("arms") or ()),
-                "status": z.get("status", doc.get("status", "planned_unverified")),
+                "status": z.get("status", status),
+                **(_zone_layout(z) if include_zone_layout else {}),
             }
             for z in doc["zones"]
         ],
@@ -123,6 +125,23 @@ def list_canonical_sites(web_common: Path | None = None) -> dict[str, Any]:
         ],
         "not_places": list(doc.get("not_places") or []),
     }
+
+
+def _zone_layout(zone: dict[str, Any]) -> dict[str, Any]:
+    layout: dict[str, Any] = {"slots": [
+        {
+            "id": slot["id"], "label": slot.get("label", slot["id"]),
+            "row": slot["row"], "slot": slot["slot"], "columns": list(slot["columns"]),
+            "hold": slot.get("hold"), "arms": list(slot["arms"]),
+            "tiers": [{"id": tier["id"], "tier": tier["tier"]} for tier in slot["tiers"]],
+            "status": slot.get("status", "planned_unverified"),
+        }
+        for slot in zone["slots"]
+    ]}
+    boundary = zone.get("hold_boundary") or {}
+    if columns := boundary.get("columns"):
+        layout["hold_boundary"] = {"columns": list(columns)}
+    return layout
 
 
 def _check_tier_value(raw_tier: Any) -> int:
