@@ -48,9 +48,17 @@ def parse_preset(value, host_id):
     return dict(value)
 
 
-def check_dataset(preset, source, revision):
+def check_dataset(preset, source, revision, root):
     if source != 'scripted_teacher' or revision != preset['dataset_revision']:
         raise ValueError('dataset differs from the pinned MuJoCo teacher dataset')
+    try:
+        receipt = read_json(root / 'conversion-receipt.json', max_bytes=32768)
+    except OSError as exc:
+        raise ValueError('the MuJoCo teacher dataset requires its conversion receipt') from exc
+    if (not isinstance(receipt, dict) or receipt.get('schema') != 'rosy.omx.mujoco-teacher-conversion/1'
+            or receipt.get('dataset_origin') != 'mujoco' or receipt.get('dataset_revision') != revision
+            or receipt.get('scene_sha256') != preset['scene_sha256']):
+        raise ValueError('the MuJoCo teacher dataset receipt differs from the configured scene')
 
 
 def check_resources(root, jobs_dir):
@@ -175,6 +183,22 @@ def _empty_cgroup(value, name):
     raise ValueError('World learner cgroup process state is unconfirmed')
 
 
+def _claim_launch(root, decision):
+    """The worker's entry and revocation compete for one durable decision."""
+    import fcntl
+
+    path = root / 'launch-decision.json'
+    fd = os.open(root / 'launch.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        if path.exists():
+            return read_json(path, max_bytes=4096)
+        write_json(path, decision)
+        return decision
+    finally:
+        os.close(fd)
+
+
 def run_worker(root):
     """Retain the host-wide World lease until the owned trainer has stopped."""
     import fcntl
@@ -188,8 +212,16 @@ def run_worker(root):
     lease.parent.mkdir(parents=True, exist_ok=True)
     if lease.parent.is_symlink():
         raise ValueError('World learner lease directory must be owned locally')
-    stopping = threading.Event()
-    signal.signal(signal.SIGUSR1, lambda *_: stopping.set())
+    stopping = False
+
+    def request_stop(*_):
+        nonlocal stopping
+        stopping = True
+
+    signal.signal(signal.SIGUSR1, request_stop)
+    identity = dict(invocation_id=invocation, cgroup=owner['cgroup'])
+    if _claim_launch(root, identity) != identity:
+        return 1
     exit_code, reason = 1, 'launch_error'
     fd = os.open(lease, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
@@ -198,15 +230,15 @@ def run_worker(root):
         except BlockingIOError:
             reason = 'host_busy'
         else:
-            if stopping.is_set():
+            if stopping:
                 reason = 'stopped'
             else:
                 child = subprocess.Popen([
                     sys.executable, '-B', str(Path(__file__).with_name('experiment_train.py')),
                     '--request', str(root / 'request.json'), '--out', str(root / 'output'),
                 ], pass_fds=(fd,), start_new_session=True, stdin=subprocess.DEVNULL)
-                while child.poll() is None and not stopping.wait(0.25):
-                    pass
+                while child.poll() is None and not stopping:
+                    time.sleep(0.25)
                 if child.poll() is None:
                     with suppress(ProcessLookupError):
                         os.killpg(child.pid, signal.SIGTERM)
@@ -217,7 +249,7 @@ def run_worker(root):
                             os.killpg(child.pid, signal.SIGKILL)
                         child.wait()
                 exit_code = child.returncode
-                reason = 'stopped' if stopping.is_set() else 'finished'
+                reason = 'stopped' if stopping else 'finished'
     finally:
         try:
             write_json(root / 'worker-exit.json', dict(invocation_id=invocation,
@@ -292,6 +324,24 @@ def refresh(row, receipt, output):
     try:
         state, empty = unit.observe(receipt)
     except (OSError, ValueError, subprocess.SubprocessError):
+        row['status_uncertain'] = True
+        return
+    if state == 'gone' and empty and not receipt.get('invocation_id'):
+        if time.time() > row['created_at'] + 2 * LAUNCH_TIMEOUT:
+            try:
+                decision = _claim_launch(output.parent, {'revoked': True})
+                if decision == {'revoked': True}:
+                    if row['status'] == 'stopping':
+                        row['status'] = 'cancelled'
+                    else:
+                        row.update(status='failed', error='학습 실행을 시작하지 못했습니다.')
+                    return
+                if (set(decision) == {'invocation_id', 'cgroup'}
+                        and INVOCATION_ID.fullmatch(decision['invocation_id'])
+                        and PurePosixPath(decision['cgroup']).name == unit.name):
+                    receipt.update(decision)
+            except (OSError, TypeError, ValueError):
+                pass
         row['status_uncertain'] = True
         return
     try:

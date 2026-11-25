@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import experiment_world as world
 
 
-def test_preset_pins_reviewed_sim_identity_and_limits():
+def test_preset_pins_reviewed_sim_identity_and_limits(tmp_path):
     preset = dict(dataset_id=str(uuid.uuid4()), dataset_revision='a' * 64,
                   scene_sha256='b' * 64, dataset_origin='mujoco',
                   steps=4, batch_size=2, seed=0)
@@ -25,9 +25,17 @@ def test_preset_pins_reviewed_sim_identity_and_limits():
     with pytest.raises(ValueError):
         world.parse_preset(dict(preset, steps=1001), 'model')
     with pytest.raises(ValueError):
-        world.check_dataset(preset, 'reviewed_demonstration', 'a' * 64)
+        world.check_dataset(preset, 'reviewed_demonstration', 'a' * 64, tmp_path)
     with pytest.raises(ValueError):
-        world.check_dataset(preset, 'scripted_teacher', 'c' * 64)
+        world.check_dataset(preset, 'scripted_teacher', 'c' * 64, tmp_path)
+    with pytest.raises(ValueError, match='conversion receipt'):
+        world.check_dataset(preset, 'scripted_teacher', 'a' * 64, tmp_path)
+    receipt = dict(schema='rosy.omx.mujoco-teacher-conversion/1', dataset_origin='mujoco',
+                   dataset_revision='a' * 64, scene_sha256='b' * 64)
+    world.write_json(tmp_path / 'conversion-receipt.json', receipt)
+    world.check_dataset(preset, 'scripted_teacher', 'a' * 64, tmp_path)
+    with pytest.raises(ValueError, match='configured scene'):
+        world.check_dataset(dict(preset, scene_sha256='d' * 64), 'scripted_teacher', 'a' * 64, tmp_path)
 
 
 def test_stop_has_persistent_intent_and_waits_for_children(tmp_path, monkeypatch):
@@ -102,6 +110,9 @@ def test_center_run_retry_shared_slot_and_stop_restart(tmp_path, monkeypatch):
     revision = load_dataset(dataset_root).revision
     preset = dict(dataset_id=did, dataset_revision=revision, scene_sha256='c' * 64,
                   dataset_origin='mujoco', steps=4, batch_size=2, seed=0)
+    world.write_json(dataset_root / 'conversion-receipt.json', dict(
+        schema='rosy.omx.mujoco-teacher-conversion/1', dataset_origin='mujoco',
+        dataset_revision=revision, scene_sha256=preset['scene_sha256']))
     owner.world_preset = world.parse_preset(preset, 'model')
     owner.methods['act']['available'] = True
     with owner.connect() as db:
@@ -187,11 +198,30 @@ def test_pidfd_stop_rechecks_invocation_and_process_identity(monkeypatch):
     assert sent == [(21, world.signal.SIGUSR1)] and closed == [21, 21]
 
 
-def test_missing_unit_after_indeterminate_launch_stays_owned(tmp_path, monkeypatch):
+def test_indeterminate_launch_revokes_entry_before_releasing_admission(tmp_path, monkeypatch):
     row = dict(id=str(uuid.uuid4()), status='launching', created_at=0, steps=4)
     monkeypatch.setattr(world.Unit, 'observe', lambda *args: ('gone', True))
+    monkeypatch.setattr(world.time, 'time', lambda: 1)
     world.refresh(row, {}, tmp_path / 'output')
     assert row['status'] == 'launching' and row['status_uncertain'] is True
+    monkeypatch.setattr(world.time, 'time', lambda: 60)
+    world.refresh(row, {}, tmp_path / 'output')
+    assert row['status'] == 'failed'
+    unit = world.Unit(row['id'])
+    late = {'invocation_id': 'a' * 32, 'cgroup': f'/app.slice/{unit.name}'}
+    assert world._claim_launch(tmp_path, late) == {'revoked': True}
+
+
+def test_previous_worker_entry_is_reconciled_before_releasing_admission(tmp_path, monkeypatch):
+    row = dict(id=str(uuid.uuid4()), status='launching', created_at=0, steps=4)
+    unit = world.Unit(row['id'])
+    identity = {'invocation_id': 'a' * 32, 'cgroup': f'/app.slice/{unit.name}'}
+    assert world._claim_launch(tmp_path, identity) == identity
+    monkeypatch.setattr(world.Unit, 'observe', lambda *args: ('gone', True))
+    monkeypatch.setattr(world.time, 'time', lambda: 60)
+    receipt = {}
+    world.refresh(row, receipt, tmp_path / 'output')
+    assert row['status'] == 'launching' and receipt == identity
 
 
 def test_worker_refuses_concurrent_host_world_lease(tmp_path, monkeypatch):

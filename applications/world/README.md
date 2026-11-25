@@ -98,7 +98,7 @@ MuJoCo와 Pillow가 설치된 저장소에서 `python applications/world/record_
 
 운영 World의 **학습 실험**은 Fleet에 등록된 모델 PC Learning 주소의 `/learning/world`를 연다. 프로젝트 사용자는 실행 상태를 볼 수 있다. 시작과 중지는 관리 권한이 필요하다. 실행은 Learning Center가 소유하며 모델 PC의 설정된 CPU ACT 작업을 사용한다. 오프라인 ACT는 시뮬레이터에서 수집한 교사 데이터를 학습한다. 화면에는 스텝과 loss, 완료된 정책의 체크섬을 표시한다.
 
-모델 PC의 신뢰된 OMX Center 설정에 `world_experiment`를 등록한다. `dataset_id`, `dataset_revision`, `scene_sha256`, `dataset_origin` (`mujoco`), `steps`, `batch_size`, `seed`를 지정한다. 데이터는 설정된 버전으로 발행된 `scripted_teacher`여야 한다. 사용자 정책에서 팔 구분이 필요하면 `arm_id`도 지정한다. 설정 전에는 새 실행 버튼을 사용할 수 없다.
+전체 소스 체크아웃에서 `python learning/training/omx/export_world_mujoco_teacher.py --cell <등록된 시뮬레이션 셀 JSON> --out <새 데이터 폴더>`로 MuJoCo 교사 데이터를 내보낸다. 생성된 데이터는 Learning의 `experiment_transfer.py`로 발행한다. 모델 PC의 신뢰된 OMX Center 설정에 `world_experiment`를 등록하고 `dataset_id`, `dataset_revision`, `scene_sha256`, `dataset_origin` (`mujoco`), `steps`, `batch_size`, `seed`를 지정한다. 데이터의 발행 버전과 `conversion-receipt.json`의 장면 해시가 설정과 일치해야 한다. 팔 선택이 필요하면 `arm_id`도 지정한다. 설정 전에는 새 실행 버튼을 사용할 수 없다.
 
 MuJoCo로 S3 집기 정렬을 평가하려면 `python tools/sim/world_s3_pickup_train.py --out <새 실험 폴더>`를 실행한다. **학습 실험 → S3 평가 재생**에서 `evaluation.json`과 같은 실행의 `episode-*.json`을 선택한다. World에서 IK와 학습된 보정값을 동일한 평가 조건에 적용한 결과를 비교하고, 에피소드의 화물 자세와 관절 위치를 재생할 수 있다. 파일은 브라우저에서 읽는다. 장면 좌표는 팔 기준 실험용이며 최신 현장 지도에 등록하려면 실측이 필요하다.
 

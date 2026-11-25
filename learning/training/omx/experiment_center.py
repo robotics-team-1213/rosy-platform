@@ -361,7 +361,7 @@ class Center:
             if checked.revision != json.loads(dataset[0])['revision']:
                 raise ValueError('published dataset changed')
             if mode == experiment_world.MODE:
-                experiment_world.check_dataset(self.world_preset, checked.source, checked.revision)
+                experiment_world.check_dataset(self.world_preset, checked.source, checked.revision, dataset_root)
             selected = self.profiles.resolve(body['profile_id'], checked.profile) if 'profile_id' in body else None
             _, scope = select_dataset(checked, body.get('arm_id'), method=body['method'])
             if mode == 'online_experience':
