@@ -3,7 +3,7 @@ import {tripErrorText} from "/console/assets/trip-display.js";
 const PHASE = {preview: "경로 계산 완료 · 출발 전", plan_refused: "경로 계산 거절",
   start_refused: "출발 거절", start_accepted: "Fleet 출발 접수"};
 
-export function receiptText(row) {
+function receiptText(row) {
   const dest = typeof row.to === "string" ? row.to : row.to ? `(${row.to.x}, ${row.to.y})` : "";
   const reason = row.code ? `${tripErrorText(row.code, row.detail || {})} [${row.code}${row.detail?.error ? " / " + row.detail.error : ""}]` : "";
   return [dest, PHASE[row.stage], reason].filter(Boolean).join(" · ");

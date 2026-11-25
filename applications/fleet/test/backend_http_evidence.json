@@ -2249,6 +2249,14 @@
         "test_mode1_harbor_plan_executes_exact_sequence_and_enforces_admit_and_dependency"
       ],
       "source_revision": "3acebe7d257533594ce73c7bd9a6e43d51690e0b"
+    },
+    "GET:/api/fleet/trip-requests": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_trip.py",
+        "test_start_history_keeps_rejection_and_retry_on_same_plan"
+      ],
+      "source_revision": "a7afd28a69595ebdcf3b1155726dbcb73f244f52"
     }
   }
 }
