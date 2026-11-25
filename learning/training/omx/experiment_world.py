@@ -101,6 +101,9 @@ class Unit:
         self.description = f'ROSY World offline ACT {rid}'
 
     def launch(self, python, root):
+        source = Path(__file__).resolve().parents[3]
+        imports = ('learning/curation/perception', 'learning/curation/omx', 'contracts/learning/src', 'tools')
+        pythonpath = os.pathsep.join(str(source / entry) for entry in imports)
         subprocess.run([
             'systemd-run', '--user', '--quiet', '--collect', f'--unit={self.name}',
             f'--description={self.description}', '--property=Type=exec',
@@ -111,6 +114,7 @@ class Unit:
             f'--property=LimitFSIZE={MAX_CHECKPOINT_BYTES}', '--property=NoNewPrivileges=yes',
             '--property=UnsetEnvironment=ROSY_WORLD_ID ROSY_WORLD_URL ROSY_WORLD_MDNS_HOST '
             'ROSY_WORLD_PORT ROSY_WORLD_SITE_MAP_SHA256 ROSY_WORLD_INGEST_TOKEN',
+            f'--setenv=PYTHONPATH={pythonpath}',
             '--setenv=HF_HUB_OFFLINE=1', '--setenv=HF_DATASETS_OFFLINE=1',
             '--setenv=OMP_NUM_THREADS=2', '--setenv=MKL_NUM_THREADS=2',
             '--setenv=OPENBLAS_NUM_THREADS=2', '--setenv=TOKENIZERS_PARALLELISM=false',

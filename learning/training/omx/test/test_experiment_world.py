@@ -1,6 +1,7 @@
 """World run tests do not require a real systemd user manager or trainer."""
 import json
 import hashlib
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -11,6 +12,16 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import experiment_world as world
+
+
+def test_transient_worker_uses_same_source_imports_as_learning(tmp_path, monkeypatch):
+    commands = []
+    monkeypatch.setattr(world.subprocess, 'run', lambda args, **kwargs: commands.append(args))
+    world.Unit(str(uuid.uuid4())).launch('/trusted/python', tmp_path)
+    pythonpath = next(arg.removeprefix('--setenv=PYTHONPATH=') for arg in commands[0]
+                      if arg.startswith('--setenv=PYTHONPATH='))
+    assert all(Path(entry).is_dir() for entry in pythonpath.split(os.pathsep))
+    assert any(Path(entry, 'storage_files.py').is_file() for entry in pythonpath.split(os.pathsep))
 
 
 def test_preset_pins_reviewed_sim_identity_and_limits(tmp_path):
