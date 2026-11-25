@@ -62,7 +62,9 @@ def test_manager_retries_same_run_and_reader_can_only_watch(tmp_path):
             expect(manager.locator('#experiment-error')).to_be_visible()
             manager.reload(wait_until='domcontentloaded')
             expect(start).to_contain_text('다시 확인')
-            start.click()
+            with manager.expect_response(base + PATH + '/start') as retry:
+                start.click()
+            assert retry.value.ok
             expect(manager.locator('#experiment-state')).to_have_text('학습 중')
             expect(manager.locator('#experiment-step')).to_have_text('2 / 5')
             assert submissions[0] == submissions[1]
