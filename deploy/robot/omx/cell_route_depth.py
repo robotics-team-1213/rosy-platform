@@ -2,6 +2,8 @@
 import math
 import time
 
+import numpy as np
+
 import cell_depth_slots
 import cell_route_check
 import cell_zone_verification as zones
@@ -51,6 +53,13 @@ def _receipt(top, side, depth, start, end):
         if not (depth["raw_sha256"] and first <= last and all(
                 first - MAX_RGB_SKEW_S <= stamp <= last + MAX_RGB_SKEW_S for stamp in stamps[2:]) and all(
                 math.isfinite(t) and start <= t <= end and end - t <= zones.MAX_FRAME_AGE_S for t in stamps)):
+            return None
+        image = side.get("image")
+        if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3 or not image.size:
+            return None
+        # A covered lens can deliver fresh RGB frames. Ignore isolated hot pixels and JPEG noise.
+        low, high = np.percentile(image, (1, 99), axis=(0, 1))
+        if not np.isfinite(high - low).all() or (high - low).max() <= 2:
             return None
         return {"depth_sha256": depth["raw_sha256"], "first_stamp": first, "last_stamp": last,
                 "top": zones._stamp(top), "side": zones._stamp(side), "judged_at": end}
@@ -111,7 +120,7 @@ def capture_before(cell, config, src, dst, previous=None):
             return None, error
     paired = _receipt(top, side, receipt, started, time.time())
     if paired is None:
-        return None, "unpaired or stale before depth and camera frames"
+        return None, "unusable side image or unpaired or stale before depth and camera frames"
     src_ref = _read(binding["source"], depth, top, 2)
     dst_ref = _read(binding["destination"], depth, top, 1)
     if not _tier(src_ref, 2):

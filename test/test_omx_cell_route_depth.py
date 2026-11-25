@@ -25,7 +25,12 @@ def instruments(monkeypatch):
         cameras = {"top": True, "side": True}
 
         def frame_receipt(self, camera, **kwargs):
-            return {"image": np.zeros((4, 4, 3)), "source_stamp": time.time(), "camera": camera}
+            image = np.indices((20, 20))[0].astype(np.uint8) * 10
+            image = np.repeat(image[..., None], 3, axis=2)
+            if camera == "side" and state.get("cover"):
+                image[:] = [12, 22, 170]
+                image[0, 0] = 255
+            return {"image": image, "source_stamp": time.time(), "camera": camera}
 
     cfg = {"arm_id": "arm_a", "sites": {SRC: {"place": [0, 0], "layer": 1, "surface_z": 0, "zone_rois": TEMP},
                                         DST: {"place": [1, 1], "layer": 0, "surface_z": 0}},
@@ -98,6 +103,16 @@ def test_changed_source_roi_refuses(instruments):
     assert error is None
     cfg["zone_rois"]["top"]["tmp-a-1"] = [0, 0, 32, 32]
     assert not zones.measure(cell, before, cfg, DST, SRC, DST_ROI)["verified"]
+
+
+def test_fresh_covered_side_refuses_before_and_after(instruments):
+    cell, cfg, state = instruments
+    before, error = route.policy_before(cell, cfg, SRC, DST)
+    assert error is None
+    state["cover"] = True
+    assert not zones.measure(cell, before, cfg, DST, SRC, DST_ROI)["verified"]
+    result, error = route.policy_before(cell, cfg, SRC, DST)
+    assert result is None and "unusable side" in error
 
 
 def test_current_rgb_can_still_be_too_far_from_depth():
