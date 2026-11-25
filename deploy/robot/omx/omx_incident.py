@@ -86,6 +86,9 @@ def _probe_hold(arm: str | None, link=None) -> tuple[bool, str | None]:
             print(f"fleet hold unreachable: {type(exc).__name__}: {str(exc)[:120]}")
     if _effectively_held(answer):
         keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
+        from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+        if answer.reason == HOME_RECOVERY_REASON:
+            return True, answer.reason
         return True, f"{answer.reason} (clear it in the Fleet console)"
     if answer is not None and sent:
         for gone in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json"):
@@ -189,7 +192,8 @@ def decide(f: dict) -> dict:
     off = bool(f["torque_after"]) and all(isinstance(v, int) and not isinstance(v, bool) and v == 0
                                           for v in f["torque_after"].values())
     if off and not f["folded"] and f.get("home") and f.get("last_state") and not f["latched"]:
-        return {"actions": [], "hold": True, "offered": [], "reason": "torque off with arm extended; guarded fold required"}
+        from core_common.protocol.arm_incident.home_recovery import guarded_home_decision
+        return guarded_home_decision(f)
     signs = bool(f["latched"] or f["windup_hits"] or f["flagged"] or not f["safe_end"])
     if not signs and f.get("stops"):  # the recovery handled it; a person still names what stopped it
         return {"actions": [], "hold": False, "offered": [],

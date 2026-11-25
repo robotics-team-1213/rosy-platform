@@ -748,6 +748,15 @@ def test_safe_home_job_admits_incident_held_blocks_fleet_stop_and_machine_token(
     home_res = runner.start("home", {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json", "operating_profile": "prof.json", "person_at_switch": True})
     assert home_res["code"] == 409 and home_res["error_code"] == "ARM_INCIDENT_HELD"
 
+    from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+    original_check = runner._incident_check_fn
+    runner._incident_check_fn = lambda _arm: HOME_RECOVERY_REASON
+    pending = runner.start("home", {"arm": "arm_s", "config": "cell-s.json", "library": "chunks-s.json",
+                                   "operating_profile": "prof.json", "person_at_switch": True})
+    assert pending["code"] == 409 and pending["error_code"] == "HOME_RECOVERY_REQUIRED"
+    popen.assert_not_called()
+    runner._incident_check_fn = original_check
+
     mach_res = runner.start("safe_home", params, principal=guards.Principal(guards.ROLE_MACHINE, "bot"))
     assert mach_res["code"] == 403 and mach_res["error_code"] == "MACHINE_COMMISSIONING_FORBIDDEN"
 

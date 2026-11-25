@@ -29,7 +29,7 @@ from cell_job_guards import (  # noqa: E402
 from cell_job_peer_health import live_hold_attach_err  # noqa: E402
 from record_session_baseline import session_job_env  # noqa: E402
 from cell_job_readiness import (  # noqa: E402
-    CellStateGen, handle_get_route, parse_structured_result, proxy_frame, read_tail_bytes,
+    CellStateGen, handle_get_route, held_job_response, parse_structured_result, proxy_frame, read_tail_bytes,
 )
 from cell_job_spec import AB_ARMS, JOBS, SESSION, S_DRY_RUN_ENV, build_argv, job_arms, moves_arm  # noqa: E402,F401
 
@@ -194,7 +194,7 @@ class Runner:
                 if not job.get("recovery_home"):
                     for a in arms:
                         if inc_reason := self._check_incident(a):
-                            return {"code": 409, "error_code": "ARM_INCIDENT_HELD", "error": f"{a} held: {inc_reason}"}
+                            return held_job_response(a, inc_reason)
                 for a in arms or (None,):
                     fleet_st = self._check_fleet_safety(a)
                     fleet_online = fleet_online or bool(fleet_st.get("online"))
