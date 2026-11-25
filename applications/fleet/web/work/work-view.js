@@ -319,7 +319,6 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       paintKpis(result.rows);
       const previous = rows.find(row => workKey(row) === selected);
       rows = shown ? result.rows.filter(row => shown.includes(row.visible_state)) : result.rows;
-      channelRequestView.setSources(result.rows);
       const changed = rows.find(row => workKey(row) === selected);
       if (previous && changed && previous.updated_at !== changed.updated_at) {
         detailVersion++;

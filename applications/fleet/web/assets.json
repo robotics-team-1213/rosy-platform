@@ -70,6 +70,10 @@
       "path": "cell/cell.js",
       "media_type": "application/javascript"
     },
+    "cell-channel-mission.js": {
+      "path": "cell/cell-channel-mission.js",
+      "media_type": "application/javascript"
+    },
     "cell-observation.js": {
       "path": "cell/cell-observation.js",
       "media_type": "application/javascript"

@@ -1,9 +1,8 @@
 // Fleet binds the current review and existing Task creation in one transaction.
 import { setOff } from "/common/cause-line.js";
 import {enumLabel} from "/common/core_ui_logic.js";
-import {owns, relays} from "/console/assets/unit-scope.js";
+import {owns} from "/console/assets/unit-scope.js";
 import {workStatus} from "/console/assets/work-view.js";
-const approvedElsewhere = () => !owns("arms") || relays();
 const reviewStates = {REQUESTED: "요청 접수", READY: "이동 후보 준비", HOLD: "보류", REJECTED: "거절됨", LINKED: "작업 연결"};
 const deliberationState = {PENDING: "대기", RUNNING: "진행 중", ANSWERED: "응답", HOLD: "보류", UNKNOWN: "확인 불가", SUPERSEDED: "대체됨"};
 export function createChannelRequestView({scope, call, el, robots, canSubmit, canManage, confirm}) {
@@ -21,11 +20,7 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
     const incident = review.incident;
     el("channel-review-incident-link-holder").hidden = !incident;
     if (incident) el("channel-review-incident-link").href = `/console?inbox=1&robot=${encodeURIComponent(incident.robot_id)}&incident=${encodeURIComponent(incident.stuck_id)}`;
-    setOff(el("channel-review-mission"), busy || review.state === "LINKED" || !canManage(), reason, "channel-review-state");
-    setOff(el("channel-review-mission-prepare"), busy || review.state === "LINKED" || !canManage(), reason, "channel-review-state");
-    el("channel-review-mission-admit-holder").hidden = approvedElsewhere() || !(review.state === "LINKED" && review.work_kind === "mission" && review.work_status === "PROPOSED");
-    setOff(el("channel-review-mission-admit"), busy || !canManage(), reason, "channel-review-state");
-    el("channel-review-cell-holder").hidden = !owns("arms") || (review.state === "LINKED" && review.work_kind !== "cell_job");
+    el("channel-review-cell-holder").hidden = !owns("arms") || (review.state === "LINKED" && !["cell_job", "mission"].includes(review.work_kind));
     el("channel-review-cell").href = `/console/cell?channel_request=${encodeURIComponent(receipt.request_id)}`;
     state.textContent = `${reviewStates[review.state] || "검토 상태 확인 필요"}${review.work_status ? " · " + workStatus(review.work_status) : ""} · ${review.reason || "검토 사유를 입력하세요."} · ${reason}`;
     if (modelState) state.textContent += ` · ${modelState}`;
@@ -72,13 +67,6 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
       if (life.current() && current === version) reset();
     }
   }
-  function setSources(rows) {
-    const picker = el("channel-review-mission"), previous = picker.value;
-    picker.replaceChildren(new Option("후보 선택", ""));
-    for (const row of rows.filter(row => row.source === "mission" && row.status === "PROPOSED"))
-      picker.append(new Option(`${row.source_id} · ${row.workcell_id}`, row.source_id));
-    picker.value = previous;
-  }
   function setIncidents(reports) {
     incidentRows = reports.filter(row => row.closed_at == null && row.judgment_revision && row.robot_ids?.length === 1);
     const picker = el("channel-review-incident"), previous = picker.value;
@@ -113,52 +101,6 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
         if ([401, 403].includes(error.status)) reset();
         else state.textContent = "인수 결과 미확인 · 자동 재전송하지 않습니다. 현재 사건 기록을 확인하세요.";
       }});
-  }
-  async function prepareMission() {
-    if (!receipt || !review || busy || review.state === "LINKED" || !canManage()) return;
-    const sourceId = el("channel-review-mission").value, reason = el("channel-review-reason").value.trim();
-    if (!sourceId || !reason) { state.textContent = "내 팔 작업 후보와 검토 사유를 확인하세요."; return; }
-    const current = version, snapshot = review, base = path(), life = scope.capture(); let failure = ""; busy = true; paint();
-    try {
-      const source = await call(`/api/fleet/proposals/${encodeURIComponent(sourceId)}`); life.check();
-      if (current !== version) return;
-      if (!source.mission) throw new Error("Mission candidate unavailable");
-      const result = await call(base + "/prepare", {method: "POST", headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({kind: "mission", source_proposal_id: sourceId,
-          workcell_id: source.mission.workcell_id, instance_id: source.mission.instance_id, reason,
-          expected_hash: snapshot.content_hash, expected_revision: snapshot.revision})});
-      life.check(); if (current === version) review = result;
-    } catch (error) {
-      if (life.current() && current === version) {
-        if ([401, 403].includes(error.status)) reset();
-        else failure = "후보 준비 결과 미확인 · 요청을 다시 선택해 원장을 확인하세요.";
-      }
-    } finally { busy = false; if (current === version && review) { paint(); if (failure) state.textContent = failure; } }
-  }
-  async function admitMission() {
-    if (approvedElsewhere() || !receipt || !review || busy || review.work_kind !== "mission" || review.work_status !== "PROPOSED" || !canManage()) return;
-    const current = version, snapshot = review, base = path(), life = scope.capture();
-    try {
-      const control = await call("/api/fleet/dispatch-control"); life.check();
-      if (!control.dispatch_enabled || current !== version || review !== snapshot) {
-        state.textContent = "사이트 정지 상태와 현재 작업을 확인하세요."; return;
-      }
-      await confirm({message: `팔 작업 ${snapshot.work_id}의 실행을 승인할까요?`,
-        opener: el("channel-review-mission-admit"), kind: "channel-mission",
-        eligible: () => current === version && review === snapshot && !busy && canManage(),
-        request: async owner => {
-          busy = true; paint();
-          try {
-            const result = await call(base + "/admit", {method: "POST", headers: {"Content-Type": "application/json"},
-              body: JSON.stringify({expected_hash: snapshot.content_hash, expected_revision: snapshot.revision,
-                expected_generation: control.generation}), signals: [owner.signal]});
-            owner.check(); if (current === version) review = result;
-          } finally { busy = false; if (current === version && review) paint(); }
-        }, onError: error => {
-          if ([401, 403].includes(error.status)) reset();
-          else state.textContent = "승인 결과 미확인 · 자동 재전송하지 않습니다. 원장을 확인하세요.";
-        }});
-    } catch (error) { if (life.current() && current === version) reset(); }
   }
   async function save(next) {
     if (!receipt || !review || busy || review.state === "LINKED") return;
@@ -212,8 +154,6 @@ export function createChannelRequestView({scope, call, el, robots, canSubmit, ca
   scope.listen(el("channel-review-hold"), "click", () => save("HOLD"));
   scope.listen(el("channel-review-reject"), "click", () => save("REJECTED"));
   scope.listen(el("channel-review-submit"), "click", submit);
-  scope.listen(el("channel-review-mission-prepare"), "click", prepareMission);
-  scope.listen(el("channel-review-mission-admit"), "click", admitMission);
   scope.listen(el("channel-review-incident-claim"), "click", claimIncident);
-  return {select, refresh, reset, setSources, setIncidents};
+  return {select, refresh, reset, setIncidents};
 }

@@ -152,6 +152,7 @@ OWN = {
         "host-health.js",  # D-530: 읽기 전용 PC 상태 판정
     },
     "cell.js": {
+        "cell-channel-mission.js",
         "cell-document-editor.js",
         "cell-observation.js",
         "subnav-screens.js",  # D-926 3: each Cell step is its own screen
