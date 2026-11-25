@@ -4,7 +4,8 @@ import {randomUUID} from "/console/assets/uuid.js";
 import { capabilityReason, junctionTurnRefusalText, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill, robotMapPose } from "./localization-badge.js";
 import { nearestLaneHeading, roadPolylineBetween } from "/console/assets/guide-layer.js";
-import { planPolylines, planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
+import { flattenPlanPoints, planMetrics } from "/console/assets/trip-geometry.js";
+import { planTrip, startTrip, tripPoseReason, tripRefusalText } from "/console/assets/site-map-model.js";
 import { consolePlanSummaryText as planSummaryText, consoleTripStartReason as tripStartReason } from "/console/assets/localization-panel-logic.js";
 import { gridCellOf } from "./map-datum.js";
 import { renderHoverCard } from "./map-hover-card.js";
@@ -12,24 +13,6 @@ import { renderHoverCard } from "./map-hover-card.js";
 function tripDispatchRefusal(error) {
   return junctionTurnRefusalText(error) || tripRefusalText(error);
 }
-
-function flattenPlanPoints(map, plan) {
-  if (!map?.edges || !Array.isArray(plan?.segments)) return null;
-  const out = [];
-  for (const poly of planPolylines(map, plan)) {
-    for (const pt of poly) {
-      const last = out[out.length - 1];
-      if (!last || Math.hypot(pt[0] - last[0], pt[1] - last[1]) >= 1e-6) out.push(pt);
-    }
-  }
-  return out.length >= 2 ? out : null;
-}
-
-const planMetrics = (plan) => ({
-  ...(Array.isArray(plan.places) ? { places: plan.places } : {}),
-  ...(Number.isFinite(plan.length_m) ? { length_m: plan.length_m } : {}),
-  ...(Number.isFinite(plan.eta_s) ? { eta_s: plan.eta_s } : {}),
-});
 
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
   toWorld, refreshGuide, queuedReason, drawMap = () => {}, scheduleDraw = drawMap, onSelectRobot = () => {},
