@@ -5,9 +5,27 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.466
+**Version:** v1.469
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.469 Camera continuation after a failed Nav2 route (Fleet)
+
+For a finite named Nav2 trip with `approved_slam_required: true`, an operator may request `camera_lane_fallback: true`. Fleet attempts camera lane following after CORE reports a terminal Nav2 `FAILED` with the approved SLAM binding still current. The unfinished section must be a straight painted final lane with reviewed camera evidence on the active survey, ending at a pinned ordinary stop outside signal and crosswalk zones.
+
+The change requires a current CORE trip lease, always-enforced line authority, a fresh camera frame, and two fresh zero-velocity samples after acknowledged cancellation. Fleet checks lease expiry again immediately before asking CORE to start the camera controller. It stops both controllers if the mode change is uncertain and reports arrival after turning the camera controller off and rechecking stationary pose. Precision stops and failures of localization itself stay under their existing recovery contracts.
+
+### v1.468 Approved SLAM for named Nav2 trips (Fleet)
+
+`POST /api/fleet/robots/{robot_id}/trip` accepts `approved_slam_required: true` for a named destination with `drive_mode: "nav2"`. Fleet plans and checks progress with the fresh CORE pose transformed by the active approved binding. The plan records `nav2_binding_id`. Start and execution require that same binding and a fresh pose. Planning responds with `TRIP_POSE_UNTRUSTED` and `reason: APPROVED_SLAM_POSE_REQUIRED` when those inputs are unavailable.
+
+Sites with `fleet.trip.map_binding_required: true` apply this behavior to all named Nav2 trips. On other sites the caller opts in per trip. The robot card exposes the option as Nav2 with an approved SLAM pose.
+
+Bound trips require CORE capability `navigation.bound_route`. Fleet refuses unsupported CORE with `NAV2_BOUND_ROUTE_UNSUPPORTED` and submits eligible points to the grid-checked CORE endpoint.
+
+### v1.467 Nav2 route with expected map grid (CORE)
+
+`GET /api/v1/system/capabilities` advertises `navigation.bound_route: true`. `POST /api/v1/navigation/bound-route` accepts the fields of `/navigation/route` and requires `expected_map_grid_id`. CORE checks the grid under its map-grid gate before taking the navigation owner. A mismatch returns 409 `NAVIGATION_MAP_GRID_CHANGED`. A successful reply includes `map_grid_id`. Existing `/navigation/route` clients keep their request and response format.
 
 ### v1.466 Stationary localization candidates retain scan provenance (CORE)
 
@@ -5057,6 +5075,9 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.469 | 2026-11-25 | [Fleet] Camera continuation after a failed Nav2 route |
+| v1.468 | 2026-11-25 | [Fleet] Approved SLAM for named Nav2 trips |
+| v1.467 | 2026-11-25 | [CORE] Nav2 route with expected map grid |
 | v1.466 | 2026-11-25 | [CORE] Retire a stationary candidate set when fresh scans repeatedly disagree |
 | v1.465 | 2026-11-25 | [Fleet] Map binding approval checks the measured frames |
 | v1.464 | 2026-11-25 | [Fleet] Keep the CORE junction readiness reason in lane trip refusals |

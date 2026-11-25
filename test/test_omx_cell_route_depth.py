@@ -20,12 +20,17 @@ TEMP, SHIP = {"floor": [[0, 80, 40, 100]], "floor_depth_mm": [500]}, {"floor": [
 
 
 @pytest.fixture
-def instruments(monkeypatch):
+def frame_inputs(monkeypatch):
     class Cell:
         cameras = {"top": True, "side": True}
 
         def frame_receipt(self, camera, **kwargs):
-            return {"image": np.zeros((4, 4, 3)), "source_stamp": time.time(), "camera": camera}
+            image = np.indices((20, 20))[0].astype(np.uint8) * 10
+            image = np.repeat(image[..., None], 3, axis=2)
+            if camera == "side" and state.get("cover"):
+                image[:] = [12, 22, 170]
+                image[0, 0] = 255
+            return {"image": image, "source_stamp": time.time(), "camera": camera}
 
     cfg = {"arm_id": "arm_a", "sites": {SRC: {"place": [0, 0], "layer": 1, "surface_z": 0, "zone_rois": TEMP},
                                         DST: {"place": [1, 1], "layer": 0, "surface_z": 0}},
@@ -35,9 +40,17 @@ def instruments(monkeypatch):
 
     def depth(config, after):
         state["phase"] += 1
-        return np.ones((4, 4)), {"exposure_wall_estimate_s": time.time(), "raw_sha256": str(state["phase"])}, None
+        return state.get("depth", np.ones((4, 4))), {"exposure_wall_estimate_s": time.time(), "raw_sha256": str(state["phase"])}, None
 
-    def read(depth, colour, roi, floor, expected, *, floor_depth_mm):
+    monkeypatch.setattr(zones, "_depth_after", depth)
+    return Cell(), cfg, state
+
+
+@pytest.fixture
+def instruments(frame_inputs, monkeypatch):
+    cell, cfg, state = frame_inputs
+
+    def read(depth, colour, roi, floor, expected, *, floor_depth_mm, **alignment):
         site = "src" if roi == SRC_ROI else "dst"
         assert roi == (SRC_ROI if site == "src" else DST_ROI)
         support = TEMP if site == "src" else SHIP
@@ -51,10 +64,39 @@ def instruments(monkeypatch):
         return {"verified": True, "pick_slot": {"vacated": True}, "depth_reference": dest,
                 "z_gate": {"verdict": state["gate"]}}
 
-    monkeypatch.setattr(zones, "_depth_after", depth)
+    monkeypatch.setattr(route.cell_depth_slots, "frame_alignment", lambda depth, colour: (np.eye(3), 0.0))
     monkeypatch.setattr(route.cell_depth_slots, "depth_reference", read)
     monkeypatch.setattr(zones, "verify_stack_outcome_z_mm", stack)
-    return Cell(), cfg, state
+    return cell, cfg, state
+
+
+@pytest.mark.parametrize("bad_slot", [None, SRC_ROI, DST_ROI])
+def test_one_global_fit_preserves_each_slot_edge_guard(frame_inputs, monkeypatch, bad_slot):
+    cell, cfg, state = frame_inputs
+    depth = np.full((100, 100), 500, dtype=np.uint16)
+    depth[:40, :40] = 438  # two tiers above the source support
+    depth[:40, 50:90] = depth[60:, 50:90] = 550  # empty destination and its floor patch
+    state["depth"] = depth
+    global_fits, local_rois = [], []
+
+    def align(colour, heights):
+        global_fits.append(heights.shape)
+        return np.eye(3), 0.0
+
+    def local(colour, grid, transform, roi):
+        local_rois.append(roi)
+        return 9.0 if roi == bad_slot else 1.0
+
+    monkeypatch.setattr(route.cell_depth_slots.cell_depth, "align_edges", align)
+    monkeypatch.setattr(route.cell_depth_slots, "local_edge_error", local)
+    before, error = route.policy_before(cell, cfg, SRC, DST)
+    assert global_fits == [depth.shape]
+    assert local_rois == [SRC_ROI, DST_ROI]
+    if bad_slot is None:
+        assert error is None and before["route_depth"]["source"]["tier_ok"]
+        assert before["route_depth"]["destination"]["occupied"] is False
+    else:
+        assert before is None and ("source" if bad_slot == SRC_ROI else "destination") in error
 
 
 @pytest.mark.parametrize("change,passes", [({}, True), ({"src_after": 2}, False), ({"src_after": 0}, False),
@@ -98,6 +140,16 @@ def test_changed_source_roi_refuses(instruments):
     assert error is None
     cfg["zone_rois"]["top"]["tmp-a-1"] = [0, 0, 32, 32]
     assert not zones.measure(cell, before, cfg, DST, SRC, DST_ROI)["verified"]
+
+
+def test_fresh_covered_side_refuses_before_and_after(instruments):
+    cell, cfg, state = instruments
+    before, error = route.policy_before(cell, cfg, SRC, DST)
+    assert error is None
+    state["cover"] = True
+    assert not zones.measure(cell, before, cfg, DST, SRC, DST_ROI)["verified"]
+    result, error = route.policy_before(cell, cfg, SRC, DST)
+    assert result is None and "unusable side" in error
 
 
 def test_current_rgb_can_still_be_too_far_from_depth():

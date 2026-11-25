@@ -99,6 +99,15 @@ def _orientation(sx: np.ndarray, sy: np.ndarray, raised: np.ndarray) -> dict[str
     return out
 
 
+def frame_alignment(depth: np.ndarray, colour: np.ndarray):
+    """Fit the global RGB-to-depth transform once for all ROIs in a frame pair."""
+    if depth is None or getattr(depth, "ndim", 0) != 2 or colour is None:
+        raise ValueError("missing depth or colour frame")
+    raw = depth.astype(np.uint16)
+    heights = cell_depth.height_map(raw, cell_depth.table_plane(raw))
+    return cell_depth.align_edges(colour, heights)
+
+
 def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_roi, floor_rois, tier: int, *,
                     floor_depth_mm=None, floor_tol_mm: float = FLOOR_DEPTH_TOL_MM,
                     to_depth: np.ndarray | None = None, align_edge_px: float | None = None,
@@ -136,8 +145,7 @@ def depth_reference(depth: np.ndarray | None, colour: np.ndarray | None, slot_ro
             out["reasons"].append("no colour frame to place the ROIs")
             return out
         try:
-            heights = cell_depth.height_map(depth.astype(np.uint16), cell_depth.table_plane(depth.astype(np.uint16)))
-            to_depth, align_edge_px = cell_depth.align_edges(colour, heights)
+            to_depth, align_edge_px = frame_alignment(depth, colour)
         except (ValueError, TypeError, IndexError):
             out["reasons"].append("RGB-depth alignment failed (too little valid depth)")
             return out

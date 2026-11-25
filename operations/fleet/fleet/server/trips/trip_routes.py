@@ -98,6 +98,7 @@ class TripRequest(BaseModel):
     start_at: Optional[PlaceRef] = None
     #: D-517 9 M3: follow this robot's open repeat trip in a lane convoy (the same cycle).
     convoy: Optional[TripConvoy] = None
+    camera_lane_fallback: bool = Field(default=False, strict=True)
     #: Optional Nav2 road-following execution mode over site-map edges.
     drive_mode: Optional[Literal["nav2"]] = None
     approved_slam_required: bool = Field(default=False, strict=True)
@@ -106,6 +107,8 @@ class TripRequest(BaseModel):
     def _cycle(self) -> "TripRequest":
         if self.approved_slam_required and (self.drive_mode != "nav2" or not isinstance(self.to, str)):
             raise ValueError("approved_slam_required needs Nav2 and a named destination")
+        if self.camera_lane_fallback and (not self.approved_slam_required or self.repeat):
+            raise ValueError("camera_lane_fallback needs a finite approved SLAM Nav2 trip")
         if self.repeat and (not isinstance(self.to, str) or not self.via):
             raise ValueError("repeat needs a place id in to and at least one via place")
         if self.convoy is not None and not self.repeat:

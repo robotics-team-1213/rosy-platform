@@ -12,16 +12,12 @@ from core_common.protocol.pipeline_recovery_tools import (
     REQUIRED_HOMING_CAMERAS,
 )
 from fleet.server.sitemap import pipeline_auto_events, pipeline_repark
+from .pipeline_home_recovery import bound_home_worker_ready, incident_roots, limit_home_tools
 
 CELL_ARMS = {"cell_s": ("arm_s",), "cell_ab": ("arm_a", "arm_b")}
 ARM_CELL = {"arm_s": "cell_s", "arm_a": "cell_ab", "arm_b": "cell_ab"}
 CAM_CELL = {"arm_s_top": "cell_s", "arm_s_wrist": "cell_s", "top": "cell_ab", "side": "cell_ab",
             "arm_a_wrist": "cell_ab", "arm_b_wrist": "cell_ab"}
-_STAGED_LOCKED = (
-    "EXECUTING_RELEASE_AND_LIFT", "RUNNING_RELEASE_AND_LIFT", "AWAITING_LIFT_VISUAL_VERIFY",
-    "AFTER_LIFT_VISUAL_CLEAR", "DIRECT_PARK_VISUAL_CLEAR", "EXECUTING_GUARDED_SLOW_PARK",
-    "RUNNING_GUARDED_SLOW_PARK", "AWAITING_PARK_VISUAL_VERIFY", "HOLD_VISUAL_BLOCKED", "HOLD_GUARD_TRIPPED",
-)
 _HW_VETO_WORDS = ("latched", "windup", "holding_high", "overload", "hw_error")
 _CAMERA_MAX_AGE_S = 15.0
 _VISUAL_CLEAR_MAX_AGE_S = 60.0
@@ -298,12 +294,19 @@ def collect_unresolved_failures(state, now: float, *, human_detected: bool, acti
     completed_roots = {_root_of(t) for t in tasks if t.get("status") == "COMPLETED"}
 
     out: list[dict] = []
+    for root, arm, cell, incident in incident_roots(ARM_CELL, holds):
+        out.append(_build_failure_entry(
+            state, now, human_detected=human_detected, active=active, dispatch_enabled=dispatch_enabled,
+            root=root, trigger="HOME_RECOVERY_REQUIRED", cell_id=cell, arm_id=arm, robot_id=None, task=None,
+            budgets=budgets_map.get(root) or {}, holds=holds, cells=cells, repark_req=None,
+            pending_home=pending_home, home_hist=home_hist, session=sessions.get(root) or {}, incident_id=incident,
+        ))
     seen_roots: set[str] = set()
     for t in reversed(tasks):
         if t.get("status") != "ABORTED":
             continue
         root = _root_of(t)
-        if root in seen_roots or root in completed_roots:
+        if root.startswith("home-recovery:") or root in seen_roots or root in completed_roots:
             continue
         seen_roots.add(root)
         cell_id = t.get("cell_id") or "cell_s"
@@ -325,7 +328,7 @@ def collect_unresolved_failures(state, now: float, *, human_detected: bool, acti
         ))
 
     for cid, cstate in cells.items():
-        if cstate.get("phase") == "ABORTED" and not any(f["cell_id"] == cid for f in out):
+        if cstate.get("phase") == "ABORTED" and not any(f["cell_id"] == cid and not f.get("incident_id") for f in out):
             root = f"cell:{cid}"
             out.append(_build_failure_entry(
                 state, now, human_detected=human_detected, active=active, dispatch_enabled=dispatch_enabled,
@@ -341,7 +344,7 @@ def collect_unresolved_failures(state, now: float, *, human_detected: bool, acti
             p_root = str(pt.get("fallback_from_task_id") or f"pinky:{pt['task_id']}")
             pinky_by_root[p_root] = pt
     for p_root, pt in pinky_by_root.items():
-        if pt.get("status") in ("FAILED", "REFUSED"):
+        if not p_root.startswith("home-recovery:") and pt.get("status") in ("FAILED", "REFUSED"):
             trig = "PINKY_FAILED" if pt["status"] == "FAILED" else "PINKY_REFUSED"
             out.append(_build_failure_entry(
                 state, now, human_detected=human_detected, active=active, dispatch_enabled=dispatch_enabled,
@@ -359,7 +362,7 @@ def _gate(allowed: bool, reason: str | None = None) -> dict:
 def _build_failure_entry(state, now: float, *, human_detected: bool, active, dispatch_enabled: bool, root: str,
                          trigger: str, cell_id: str | None, arm_id: str | None, robot_id: str | None,
                          task: dict | None, budgets: dict, holds: dict, cells: dict, repark_req: dict | None,
-                         pending_home: dict, home_hist: dict, session: dict) -> dict:
+                         pending_home: dict, home_hist: dict, session: dict, incident_id: str | None = None) -> dict:
     tasks = list((getattr(state, "omx_cell_tasks", None) or {}).values())
     arms = CELL_ARMS.get(cell_id, (arm_id,) if arm_id else ())
     cell_active = bool(cell_id and any(t.get("cell_id") == cell_id and t.get("status") in ("RUNNING", "PAUSED_HUMAN") for t in tasks))
@@ -431,7 +434,8 @@ def _build_failure_entry(state, now: float, *, human_detected: bool, active, dis
             or session.get("visual_clear_at") is not None
             or session.get("last_strategy") in ("release_and_lift", "guarded_slow_park")
         )
-        af_why = (f"HOMING_LOCKED:{homing_stage}" if staged_entered else (None if folded else _cap_why("auto_fold")))
+        af_why = (f"HOMING_LOCKED:{homing_stage}" if staged_entered else
+                  (None if folded and incident_id is None else _cap_why("auto_fold")))
         rl_why = (_cap_why("release_and_lift") or ("ARM_ALREADY_FOLDED" if folded else None)
                   or (f"HOMING_LOCKED:{homing_stage}" if homing_stage in (
                       "HOLD_VISUAL_BLOCKED", "HOLD_GUARD_TRIPPED", "AWAITING_LIFT_VISUAL_VERIFY",
@@ -488,6 +492,9 @@ def _build_failure_entry(state, now: float, *, human_detected: bool, active, dis
             "escalate_human": _gate(True),
         }
 
+    worker_ready = bool(incident_id and bound_home_worker_ready(state, arm_id, now))
+    limit_home_tools(eligible, homing_strategies, incident_id, holds.get(arm_id), arm_id, root,
+                     getattr(state, "pipeline_homing_sessions", None) or {}, worker_ready)
     needs_human = (
         trigger in ("REVIEW_REQUIRED", "REPARK_LIMIT", "REPARK_FAILED", "PINKY_FAILED", "PINKY_REFUSED")
         or homing_stage in ("HOLD_VISUAL_BLOCKED", "HOLD_GUARD_TRIPPED")
@@ -502,9 +509,12 @@ def _build_failure_entry(state, now: float, *, human_detected: bool, active, dis
         "pending_safe_home": in_progress, "homing_stage": homing_stage,
         "camera_sequences": cam_meta["sequences"], "has_fix": has_fix,
     }
+    if incident_id:
+        snap["incident_id"] = incident_id
+        snap["bound_home_worker_ready"] = worker_ready
     return {
         **snap,
-        "reason": (task or {}).get("reason") or ((task or {}).get("receipt") or {}).get("reason"),
+        "reason": holds[arm_id]["reason"] if incident_id else (task or {}).get("reason") or ((task or {}).get("receipt") or {}).get("reason"),
         "state": "HUMAN_REQUIRED" if needs_human else "READY",
         "cameras_fresh": cam_meta["all_fresh"],
         "homing_strategies": homing_strategies,

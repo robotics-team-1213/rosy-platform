@@ -542,13 +542,14 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
             live.view.update(state="stopped", reason="lease_lost")
             live.view["detail"].update(detail)
             async with self._lock_for(live.view["robot_id"]):
-                if not live.segment_is_lane(live.view["segment_index"]):
+                if not live.segment_is_lane(live.view["segment_index"]) or live.view["detail"].get("camera_lane_fallback"):
                     live.view["detail"].update(await self._halt(live))
                 self._save(live)
 
     async def _halt(self, live: LiveTrip) -> dict:
         self.held_stops.pop(live.view["robot_id"], None)  # the halt's own stop is never a held arrival
         i = live.view["segment_index"]
+        camera = live.view["detail"].get("camera_lane_fallback")
         return await self.halts.halt_robot(
-            live.view["robot_id"], live.segment_is_lane(i), live.place(i),
-            handoff_pending=bool(live.view["detail"].get("named_stop_handoff_pending")))
+            live.view["robot_id"], not camera and live.segment_is_lane(i), live.place(i),
+            handoff_pending=bool(camera or live.view["detail"].get("named_stop_handoff_pending")))
