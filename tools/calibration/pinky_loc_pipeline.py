@@ -324,14 +324,19 @@ def _aruco_aligned(state: Mapping[str, Any], captured_at: float, max_age_s: floa
 
 def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec: Optional[str],
                grid_id_override: Optional[str], site_map_id_override: Optional[str],
-               holdout: bool, max_track_age_s: float, aruco_source: Optional[str] = None) -> int:
+               holdout: bool, max_track_age_s: float, aruco_source: Optional[str] = None,
+               surveyed_site: Optional[Sequence[float]] = None) -> int:
     site_map_id = site_map_id_override
     sighting = None
     doc = json.loads(out_path.read_text(encoding="utf-8")) if out_path.exists() else {"samples": []}
     site_version = doc.get("site_map_version")
-    if aruco_source and site_version is None and doc.get("samples"):
+    if surveyed_site is not None and (not holdout or pair_spec is not None or aruco_source or grid_id_override
+                                      or len(surveyed_site) != 2 or any(_finite(v) is None for v in surveyed_site)):
+        raise PipelineError("BAD_PAIR", "surveyed site needs --holdout and measured finite site X Y only")
+    live_frame = bool(aruco_source) or surveyed_site is not None
+    if live_frame and site_version is None and doc.get("samples"):
         raise PipelineError("MAP_BINDING_SITE_UNVERIFIED", "start a new file for samples tied to an active site revision")
-    if aruco_source or site_version is not None:
+    if live_frame or site_version is not None:
         active_id, active_version = _active_site(client)
         if (doc.get("site_map_id") not in (None, active_id) or site_map_id not in (None, active_id)
                 or site_version not in (None, active_version)):
@@ -339,7 +344,7 @@ def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec:
         site_map_id, site_version = active_id, active_version
     if aruco_source and (pair_spec is not None or holdout):
         raise PipelineError("BAD_PAIR", "ArUco is for fit samples only; holdout requires --pair with a floor measurement")
-    if site_version is not None and holdout and pair_spec is None:
+    if site_version is not None and holdout and pair_spec is None and surveyed_site is None:
         raise PipelineError("BAD_PAIR", "holdout requires --pair with a floor measurement")
     if pair_spec is not None:
         robot_pt, site_pt = _parse_manual_pair(pair_spec)
@@ -363,7 +368,12 @@ def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec:
         rx, ry = _finite(pose.get("x")), _finite(pose.get("y"))
         if rx is None or ry is None:
             raise PipelineError("ROBOT_POSE_MISSING", f"{robot_id} pose is missing")
-        if aruco_source:
+        if surveyed_site is not None:
+            if (_finite(vel.get("linear")) is None or _finite(vel.get("angular")) is None
+                    or not _aruco_aligned(st, time.time(), 1.0, after=False)):
+                raise PipelineError("SAMPLE_EVIDENCE_STALE", "survey requires fresh measured pose and velocity")
+            track = {"x": surveyed_site[0], "y": surveyed_site[1]}
+        elif aruco_source:
             track = sighting = _aruco_sample(client, robot_id, aruco_source, site_map_id, max_track_age_s)
             if doc.get("aruco_calibration_revision") not in (None, sighting["calibration_revision"]):
                 raise PipelineError("ARUCO_CALIBRATION_CHANGED", "ArUco calibration changed between samples")
@@ -406,6 +416,8 @@ def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec:
         if sx is None or sy is None:
             raise PipelineError("TRACK_XY_MISSING", f"{robot_id} track coordinates missing")
         robot_pt, site_pt, source = (rx, ry), (sx, sy), "approved_aruco" if sighting else "live_camera"
+        if surveyed_site is not None:
+            source = "manual"
         site_map_id = site_map_id or track.get("map_id")
 
     if doc.get("robot_id") not in (None, robot_id):
@@ -424,6 +436,8 @@ def run_sample(client: FleetClient, *, robot_id: str, out_path: Path, pair_spec:
         "site": [round(site_pt[0], 6), round(site_pt[1], 6)],
         "holdout": bool(holdout), "source": source,
         **({k: sighting[k] for k in ("source_id", "seq", "captured_at")} if sighting else {}),
+        **({"robot_pose_received_at": st["evidence"]["pose"]["received_at"],
+            "velocity_sampled_at": st["evidence"]["velocity"]["sampled_at"]} if surveyed_site is not None else {}),
         "recorded_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
     })
     _write_json_atomic(out_path, doc)
@@ -510,6 +524,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_samp.add_argument("--pair", default=None, help="Manual floor measurement rx,ry=sx,sy")
     p_samp.add_argument("--grid-id", default=None, help="Explicit map_grid_id when using --pair offline")
     p_samp.add_argument("--site-map-id", default=None)
+    p_samp.add_argument("--surveyed-site", type=float, nargs=2, metavar=("X", "Y"),
+                        help="Measured site coordinates of the stationary robot centre; read grid pose from CORE")
     p_samp.add_argument("--holdout", action="store_true")
     p_samp.add_argument("--max-track-age-s", type=float, default=1.0)
     p_samp.add_argument("--aruco-source", help="Use a fresh approved ArUco sighting as a fit sample")
@@ -534,7 +550,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return run_sample(client, robot_id=args.robot, out_path=args.out, pair_spec=args.pair,
                               grid_id_override=args.grid_id, site_map_id_override=args.site_map_id,
                               holdout=args.holdout, max_track_age_s=args.max_track_age_s,
-                              aruco_source=args.aruco_source)
+                              aruco_source=args.aruco_source, surveyed_site=args.surveyed_site)
         if args.cmd == "bind":
             return run_bind(client, robot_id=args.robot, pairs_path=args.pairs, approve=args.approve)
     except PipelineError as exc:
