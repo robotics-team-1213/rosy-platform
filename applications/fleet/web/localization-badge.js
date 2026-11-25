@@ -20,8 +20,9 @@ export function localizationUrgent(loc) {
   return Boolean(loc && loc.needs_human);
 }
 
-function nativeChecking(native) {
-  return native?.state === "CANDIDATES" && native.reason === "checking" && !native.needs_human;
+function nativeChecking(loc, native) {
+  return native?.state === "CANDIDATES" && native.reason === "checking" && !native.needs_human
+    && !loc?.pose_request_needs_human;
 }
 
 function freshCameraPose(guideRow) {
@@ -33,7 +34,7 @@ function freshCameraPose(guideRow) {
 
 export function localizationAttention(loc, native, guideRow) {
   const camera = freshCameraPose(guideRow) ? "카메라에서 로봇 확인 · " : "";
-  if (nativeChecking(native)) return {severity: "warn", text: `: ${camera}CORE 위치 후보 검증 중`};
+  if (nativeChecking(loc, native)) return {severity: "warn", text: `: ${camera}CORE 위치 후보 검증 중`};
   if (localizationUrgent(loc)) return {
     severity: "crit",
     text: `: ${camera}${native?.state === "CANDIDATES"
@@ -100,7 +101,7 @@ export function sitePoseText(guideRow) {
 
 /** Fleet's site map pose first, then CORE's explicit state; UNKNOWN warns and needs_human is critical. */
 export function positionTag(loc, guideRow, native) {
-  if (nativeChecking(native)) return {
+  if (nativeChecking(loc, native)) return {
     text: freshCameraPose(guideRow) ? "카메라 위치 확인 · CORE 검증 중" : "CORE 위치 후보 검증 중",
     cls: "warn", title: "CORE가 위치 후보를 검증 중",
   };

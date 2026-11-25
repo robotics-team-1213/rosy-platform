@@ -53,6 +53,7 @@ test("fresh camera and an automatic CORE check are shown without a manual positi
   const camera = { pose: { state: "LOCALIZED", source: "bridged", anchor_source: "sighting", last_sighting_age_s: .4 } };
   assert.match(positionTag(escalated, camera, pending).text, /카메라.*CORE 검증 중/);
   assert.equal(localizationAttention(escalated, pending, camera).severity, "warn");
+  assert.equal(localizationAttention({ ...escalated, pose_request_needs_human: true }, pending, camera).severity, "crit");
   assert.equal(localizationAttention(escalated, { ...pending, needs_human: true }, camera).severity, "crit");
   assert.match(localizationAttention(escalated, { ...pending, reason: "inject_rejected" }, camera).text, /CORE 후보/);
   assert.doesNotMatch(localizationAttention(escalated, pending, {
