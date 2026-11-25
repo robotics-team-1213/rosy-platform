@@ -37,6 +37,7 @@ from cell_job_validators import (  # noqa: E402,F401  (re-exported)
     _task_site_names,
     _two_arm_task,
     _two_arm_task_sites,
+    validate_dual_routes,
     _workdir_rel_path,
 )
 from cell_area_job_spec import AREA_JOBS  # noqa: E402,F401
@@ -46,7 +47,6 @@ from cell_policy_goals import resolve_goal_site
 SESSION = {"arm_a": "./with-session-arm-a-par.sh", "arm_b": "./with-session-arm-b-par.sh", "arm_s": "./with-session-arm-s-live.sh"}
 AB_ARMS = {"arm_a", "arm_b"}
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
-_BELT_SITES = frozenset({"belt", "not_places:belt"})
 PY = 'exec ~/rosy-omx/current-env/bin/python "$OMX/$0" "$@"'
 ENV = "set -a; . ~/.config/rosy/omx-observation-bridge.env; set +a; . ./tools-env-current.sh; "
 S_DRY_RUN_ENV = 'export TOOLS_ROOT="$1"; shift; . "$TOOLS_ROOT/deploy/robot/omx/session-wrappers/tools-env.sh" && '
@@ -297,14 +297,7 @@ def build_argv(job: dict, params: dict, workdir: Path) -> list[str]:
         host = (urlsplit(checked["endpoint_url"]).hostname or "").lower()
         if host not in _LOOPBACK_HOSTS and "token_file" not in opt_checked:
             raise ValueError("non-loopback endpoint_url requires token_file")
-        src_a, dst_a = _two_arm_task_sites(checked["task_a"])
-        src_b, dst_b = _two_arm_task_sites(checked["task_b"])
-        na = ("belt" if src_a in _BELT_SITES else src_a, "belt" if dst_a in _BELT_SITES else dst_a)
-        nb = ("belt" if src_b in _BELT_SITES else src_b, "belt" if dst_b in _BELT_SITES else dst_b)
-        if na[1] == nb[1] or (na[0] == nb[0] and na[0] != "belt") or na[0] == nb[1] or na[1] == nb[0]:
-            raise ValueError("task_a and task_b overlap on non-belt site")
-        if moves_arm(job, params) and any(_is_amr_bed_site(v) for v in (src_a, dst_a, src_b, dst_b)):
-            raise ValueError("AMR bed motion requires R cell-task -> cell_task_worker -> Gate")
+        validate_dual_routes(checked["task_a"], checked["task_b"], moving=moves_arm(job, params))
     if job["script"] == "cell_policy_drive.py":
         mode = opt_checked.get("mode", "act")
         if opt_checked.get("paced_chunks") and mode != "act":

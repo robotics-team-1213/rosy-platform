@@ -10,6 +10,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from cell_site_target import source_transition_matches
+
 PRESENCE_MAX_AGE_S = 300.0   # Fleet takes a presence of at most 120 s at claim; the run starts right after
 ZONE_BASIS = "predefined_side_and_top_target_zones"
 TOP_ONLY_BASIS = "top_camera_only_target_zone"
@@ -45,4 +47,5 @@ def zone_acceptance(zone: dict | None, handoff: dict[str, Any], dst: str) -> boo
     site_id_ok = (target.get("site_id") == handoff["dst_site_id"]) if handoff.get("dst_site_id") else True
     area_ok = not handoff.get("dst_area") or target.get("area") == handoff["dst_area"]
     bound = target.get("site") == dst and type(htier) is int and target.get("tier") == htier and slot_ok and slot_match and site_id_ok and area_ok
-    return bool(zone and zone.get("verified") is True and (zone.get("basis") == ZONE_BASIS or top_only) and bound)
+    return bool(zone and zone.get("verified") is True and (zone.get("basis") == ZONE_BASIS or top_only) and bound
+                and source_transition_matches(zone, handoff.get("src_site"), dst))

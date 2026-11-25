@@ -24,6 +24,7 @@ import cell_robot_profile
 import cell_two_arm
 from cell_two_arm_guard import ARMS, TwoArmChunkGuard, config_site_key
 from cell_two_arm_policy import run_two_arm_policy
+from cell_two_arm_verification import transfer_refusal
 
 
 def parse_task_arg(raw: str) -> dict[str, Any]:
@@ -176,6 +177,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.dry_run and not (args.commissioning and args.person_at_switch):
         raise SystemExit("live two-arm policy execution requires --commissioning --person-at-switch (D-911)")
 
+    tasks = {"a": parse_task_arg(args.task_a), "b": parse_task_arg(args.task_b)}
+    if refusal := transfer_refusal(tasks, dry_run=args.dry_run):
+        print(json.dumps(refusal))
+        return 1
     supervised = bool(args.commissioning and args.person_at_switch)
     configs: dict[str, dict[str, Any]] = {}
     for arm_lbl, cfg_path in (("a", args.config_a), ("b", args.config_b)):
@@ -187,7 +192,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         configs[arm_lbl] = cell_two_arm.attest(cfg, supervised=supervised)
 
     token = cell_job_api.read_token(args.token_file) if args.token_file is not None else None
-    tasks = {"a": parse_task_arg(args.task_a), "b": parse_task_arg(args.task_b)}
     goals = {"a": parse_goal_arg(args.goal_a), "b": parse_goal_arg(args.goal_b)}
     libs = {
         "a": json.loads(args.library_a.read_text(encoding="utf-8")),

@@ -1501,6 +1501,9 @@ safety_review_paths:
   - deploy/robot/omx/cell_two_arm_guard.py
   - deploy/robot/omx/cell_two_arm_policy.py
   - deploy/robot/omx/cell_two_arm_policy_cli.py
+  - deploy/robot/omx/cell_two_arm_verification.py
+  - deploy/robot/omx/cell_route_check.py
+  - deploy/robot/omx/cell_route_depth.py
   - deploy/robot/omx/cell_stack_guard.py
   - deploy/robot/omx/cell_arm_lease.py
   - deploy/robot/omx/commissioning_stop.py

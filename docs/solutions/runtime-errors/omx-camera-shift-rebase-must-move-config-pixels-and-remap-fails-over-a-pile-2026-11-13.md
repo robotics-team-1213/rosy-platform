@@ -94,6 +94,11 @@ camera setup before using a slot result for admission. This replay used a static
 depth exposure followed its RGB frame by 2.411 s. See `historical-mixed-occupancy.json` and
 `mixed-scene-evidence.md` from the same day's replay.
 
+For a temporary stand's tier 2 to a ship's tier 1, run `calibrate_check` with
+`route: [source, destination]`. The exact source site's `zone_rois.floor` and
+`zone_rois.floor_depth_mm` describe the stand support. The top-level floor patches
+describe the destination support. Each footprint needs its own named top ROI.
+
 ## Next time
 
 - Any USB or cable work on a cell can move its top camera: rebase before the next run (the recovery gate now refuses).
