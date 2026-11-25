@@ -92,7 +92,15 @@ Gazebo 카메라를 함께 보려면 결속 JSON에 `"camera_topic": "/camera/pr
 
 `tools/sim/run_isaac_world_preview.py --stage <호스트에 스테이징한 USD>`를 기존 격리 `remote_sim.py cmd`로 실행한다. 등록된 Isaac Sim SDK와 GPU 소유권을 확인한 뒤 180초 기본 실행을 시작한다. 콘솔에서 받은 실행 ID로 관제 PC에서 `python tools/sim/pull_isaac_world_preview.py --ssh-host <등록된 SSH 호스트> --run-id <sim-실행 ID> --bundle <실행 중인 번들 폴더>`를 실행한다. 필요한 경우 검증 장면의 벨트 동작은 런처에 `--belt-demo`를 지정한다.
 
-MuJoCo와 Pillow가 설치된 저장소에서 `python applications/world/record_mujoco.py --preset v24-20261114-cad194 --out <번들 폴더>/data/mujoco-top.jpg`를 실행한다. **카메라 보기 → MuJoCo OMX 셀 상단**은 기존 CAD194 A/B 설계 배치와 두 팔의 시뮬레이션을 표시한다. 영상이 지연되면 마지막 프레임을 지연 상태와 함께 표시한다. 연결이 돌아오면 새 프레임으로 바꾼다.
+MuJoCo와 Pillow가 설치된 저장소에서 `python applications/world/record_mujoco.py --preset v24-20261114-cad194 --out <번들 폴더>/data/mujoco-top.jpg`를 실행한다. **카메라 보기 → MuJoCo OMX 셀 상단**은 기존 CAD194 A/B 설계 배치와 두 팔의 미리보기 동작을 표시한다. 영상이 지연되면 마지막 프레임을 지연 상태와 함께 표시한다. 연결이 돌아오면 새 프레임으로 바꾼다.
+
+### 학습 실험
+
+운영 World의 **학습 실험**은 Fleet에 등록된 모델 PC Learning 주소의 `/learning/world`를 연다. 프로젝트 사용자는 실행 상태를 볼 수 있다. 시작과 중지는 관리 권한이 필요하다. 실행은 Learning Center가 소유하며 모델 PC의 설정된 CPU ACT 작업을 사용한다. 오프라인 ACT는 시뮬레이터에서 수집한 교사 데이터를 학습한다. 화면에는 스텝과 loss, 완료된 정책의 체크섬을 표시한다.
+
+모델 PC의 신뢰된 OMX Center 설정에 `world_experiment`를 등록한다. `dataset_id`, `dataset_revision`, `scene_sha256`, `dataset_origin` (`mujoco`), `steps`, `batch_size`, `seed`를 지정한다. 데이터는 설정된 버전으로 발행된 `scripted_teacher`여야 한다. 사용자 정책에서 팔 구분이 필요하면 `arm_id`도 지정한다. 설정 전에는 새 실행 버튼을 사용할 수 없다.
+
+MuJoCo로 S3 집기 정렬을 평가하려면 `python tools/sim/world_s3_pickup_train.py --out <새 실험 폴더>`를 실행한다. **학습 실험 → S3 평가 재생**에서 `evaluation.json`과 같은 실행의 `episode-*.json`을 선택한다. World에서 IK와 학습된 보정값을 동일한 평가 조건에 적용한 결과를 비교하고, 에피소드의 화물 자세와 관절 위치를 재생할 수 있다. 파일은 브라우저에서 읽는다. 장면 좌표는 팔 기준 실험용이며 최신 현장 지도에 등록하려면 실측이 필요하다.
 
 ## Isaac 시뮬레이션 상태 보기
 

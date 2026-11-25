@@ -77,17 +77,19 @@ def install_learning_routes(app, web_root, csp):
 
     # The hub entry reuses the model target: configured origins 303 straight to
     # Learning, anything else the 503 notice document.
-    def target(host):
+    def target(host, destination='/learning'):
         def redirect(request: Request):
             if request.url.query:
                 raise HTTPException(status_code=400, detail='Learning entry does not accept query parameters')
             if host not in apps:
                 return document(503, focus=host)
-            return RedirectResponse(apps[host] + '/learning', status_code=303, headers=headers)
+            return RedirectResponse(apps[host] + destination, status_code=303, headers=headers)
         return redirect
 
     app.add_api_route('/console/learning', target('model'), methods=['GET'],
                       include_in_schema=False, name='learning-entry:hub')
+    app.add_api_route('/console/learning/world', target('model', '/learning/world'), methods=['GET'],
+                      include_in_schema=False, name='learning-entry:world')
     for host in ('model', 'ai'):
         app.add_api_route('/console/learning/' + host, target(host), methods=['GET'],
                           include_in_schema=False, name='learning-entry:' + host)

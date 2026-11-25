@@ -1,4 +1,5 @@
 """Persistent host-only OMX learning jobs; never dispatches or activates a policy."""
+from contextlib import contextmanager
 import json
 import hashlib
 import os
@@ -26,6 +27,7 @@ from experiment_studies import Studies
 from experiment_hub import Hub
 from experiment_collect_plans import CollectPlans
 from canonical_pipeline import CanonicalService
+import experiment_world
 
 
 def _worker_log_tail(root, max_chars=240):
@@ -50,13 +52,14 @@ def _worker_log_tail(root, max_chars=240):
 class Center:
     def __init__(self, config):
         if (not isinstance(config, dict) or not {'schema', 'root', 'python'} <= set(config)
-                or set(config) - {'schema', 'root', 'python', 'owner_status', 'host_id', 'canonical'}
+                or set(config) - {'schema', 'root', 'python', 'owner_status', 'host_id', 'canonical', 'world_experiment'}
                 or config['schema'] != 'rosy.omx.center-config/1'
                 or set(config['python']) != {'act', 'hilserl'}):
             raise ValueError('unsupported learning center configuration')
         self.host_id = config.get('host_id')
         if self.host_id is not None and self.host_id not in ('model', 'ai'):
             raise ValueError('trusted learning host must be model or ai')
+        self.world_preset = experiment_world.parse_preset(config.get('world_experiment'), self.host_id)
         self.tasks = None
         self.owner_status = OwnerStatus(config.get('owner_status'))
         self.root = Path(config['root'])
@@ -81,6 +84,7 @@ class Center:
         self.canonical = CanonicalService(
             self.root / 'canonical', config.get('canonical'),
             host_id=self.host_id, default_python=self.python.get('act'),
+            world_admission=self._canonical_admission,
         )
         with self.connect() as db:
             db.execute('CREATE TABLE IF NOT EXISTS datasets (id TEXT PRIMARY KEY, document TEXT NOT NULL)')
@@ -105,6 +109,9 @@ class Center:
                 'execution_mode': 'offline_replay',
                 'reason': None if available else 'Pinned LeRobot 0.4.4 Linux learner environment unavailable'}
         self.studies = Studies(self)
+        with self.connect() as db:
+            if self.world_preset is not None or self._active_world_runs(db):
+                experiment_world.start_supervisor(self)
 
     def connect(self):
         return sqlite3.connect(self.db, timeout=10)
@@ -131,6 +138,9 @@ class Center:
         for rid, document, process in db.execute('SELECT id,document,process FROM runs').fetchall():
             row, receipt = json.loads(document), json.loads(process)
             if row['status'] not in ('launching', 'running', 'stopping'):
+                continue
+            if row.get('execution_mode') == experiment_world.MODE:
+                self._refresh_world_experiment(db, row, receipt)
                 continue
             root = self.root / 'runs' / rid
             self.inbox.materialize(db, row)
@@ -208,6 +218,87 @@ class Center:
     def start(self, body):
         return self._start(body, 'offline_replay')
 
+    def world_experiment(self):
+        with self.lock, self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self.refresh_world_experiments(db)
+            runs = db.execute("SELECT document FROM runs WHERE json_extract(document,'$.execution_mode')=? "
+                              'ORDER BY rowid DESC LIMIT 30', (experiment_world.MODE,))
+            preset = (dict(id=experiment_world.PRESET_ID, label='MuJoCo 교사 데이터', kind='offline_act',
+                           steps=self.world_preset['steps'])
+                      if self.world_preset is not None and self.methods['act']['available'] else None)
+            return dict(preset=preset, runs=[experiment_world.public(json.loads(row[0])) for row in runs])
+
+    def start_world_experiment(self, body):
+        if set(body) != {'preset_id', 'request_id'} or body['preset_id'] != experiment_world.PRESET_ID:
+            raise ValueError('World preset and request identity required')
+        request_id = identifier(body['request_id'])
+        logical_request = json.dumps(dict(body, execution_mode=experiment_world.MODE), sort_keys=True)
+        # Also allow an idempotent retry after a preset is disabled or rotated.
+        with self.lock, self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self.refresh_world_experiments(db)
+            prior = db.execute('SELECT document,request FROM runs WHERE request_id=?', (request_id,)).fetchone()
+            if prior:
+                if prior[1] != logical_request:
+                    raise ValueError('request identity already used with different inputs')
+                return experiment_world.public(json.loads(prior[0]))
+        if self.world_preset is None:
+            raise ValueError('World experiment preset unavailable')
+        settings = {key: self.world_preset[key] for key in ('dataset_id', 'steps', 'batch_size', 'seed', 'arm_id')
+                    if key in self.world_preset}
+        run = self._start(dict(settings, method='act', device='cpu', request_id=request_id),
+                          experiment_world.MODE, logical_request=logical_request)
+        return experiment_world.public(run)
+
+    def stop_world_experiment(self, body):
+        if set(body) != {'id'}:
+            raise ValueError('World run identity required')
+        rid = identifier(body['id'])
+        with self.lock, self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            found = db.execute('SELECT document,process FROM runs WHERE id=?', (rid,)).fetchone()
+            if not found:
+                raise ValueError('unknown World experiment')
+            row, receipt = map(json.loads, found)
+            if row.get('execution_mode') != experiment_world.MODE:
+                raise ValueError('unknown World experiment')
+            if row['status'] in experiment_world.ACTIVE:
+                self._refresh_world_experiment(db, row, receipt)
+            if row['status'] in experiment_world.ACTIVE and row['status'] != 'stopping':
+                row['status'] = 'stopping'
+                db.execute('UPDATE runs SET document=? WHERE id=?', (json.dumps(row), rid))
+                db.commit()
+                db.execute('BEGIN IMMEDIATE')
+                document, process = db.execute('SELECT document,process FROM runs WHERE id=?', (rid,)).fetchone()
+                row, receipt = json.loads(document), json.loads(process)
+                if row['status'] == 'stopping':
+                    self._refresh_world_experiment(db, row, receipt)
+            return experiment_world.public(row)
+
+    @staticmethod
+    def _active_world_runs(db):
+        return db.execute("SELECT document,process FROM runs WHERE json_extract(document,'$.execution_mode')=? "
+                          "AND json_extract(document,'$.status') IN ('launching','running','stopping')",
+                          (experiment_world.MODE,)).fetchall()
+
+    def refresh_world_experiments(self, db):
+        for document, process in self._active_world_runs(db):
+            self._refresh_world_experiment(db, json.loads(document), json.loads(process))
+
+    def _refresh_world_experiment(self, db, row, receipt):
+        experiment_world.refresh(row, receipt, self.root / 'runs' / row['id'] / 'output')
+        db.execute('UPDATE runs SET document=?,process=? WHERE id=?', (json.dumps(row), json.dumps(receipt), row['id']))
+
+    @contextmanager
+    def _canonical_admission(self):
+        # Share the durable Center writer lock with Canonical admission. Acquire
+        # Center before Canonical on both paths so each reservation sees the other.
+        with self.lock, self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            self.refresh_world_experiments(db)
+            yield bool(self._active_world_runs(db))
+
     def start_cuda(self, body):
         from experiment_cuda_train import start_cuda
         return start_cuda(self, body)
@@ -237,10 +328,10 @@ class Center:
             raise ValueError('continuous experience learning requires SAC')
         return self._start(body, 'online_experience')
 
-    def _start(self, body, mode):
+    def _start(self, body, mode, *, logical_request=None):
         check_request(body, self.methods)
         legacy_request = json.dumps(body, sort_keys=True)
-        request = json.dumps(dict(body, execution_mode=mode), sort_keys=True)
+        request = logical_request or json.dumps(dict(body, execution_mode=mode), sort_keys=True)
         with self.lock, self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             self._refresh(db)
@@ -256,10 +347,16 @@ class Center:
                 raise ValueError('learner environment unavailable')
             if any(json.loads(r[0])['status'] in ('launching', 'running', 'stopping') for r in db.execute('SELECT document FROM runs')):
                 raise ValueError('one owned learning job may run at a time')
+            if mode == experiment_world.MODE:
+                if self.canonical.has_active_runs():
+                    raise ValueError('another Canonical Learning job is already running')
+                experiment_world.check_resources(self.root, self.canonical.jobs_dir)
             dataset_root = self.root / 'datasets' / body['dataset_id']
             checked = load_dataset(dataset_root, method=body['method'])
             if checked.revision != json.loads(dataset[0])['revision']:
                 raise ValueError('published dataset changed')
+            if mode == experiment_world.MODE:
+                experiment_world.check_dataset(self.world_preset, checked.source, checked.revision)
             selected = self.profiles.resolve(body['profile_id'], checked.profile) if 'profile_id' in body else None
             _, scope = select_dataset(checked, body.get('arm_id'), method=body['method'])
             if mode == 'online_experience':
@@ -286,12 +383,17 @@ class Center:
             worker_request = {key: body[key] for key in ('method', 'steps', 'batch_size', 'device', 'seed', 'arm_id') if key in body}
             if binding is not None:
                 worker_request['learning_task'] = binding
-            write_json(root / 'request.json', dict(worker_request, dataset_root=str(dataset_root)))
+            worker_metadata = ({'expected_dataset_revision': checked.revision}
+                               if mode == experiment_world.MODE else {})
+            write_json(root / 'request.json', dict(worker_request, dataset_root=str(dataset_root), **worker_metadata))
             row = dict(id=rid, status='launching', created_at=time.time(), dataset_id=body['dataset_id'],
                        dataset_revision=checked.revision, source=checked.source, execution_mode=mode,
                        training_scope=scope, **worker_request)
             if selected:
                 row['selected_profile'] = {'id': selected['id'], 'revision': selected['revision']}
+            if mode == experiment_world.MODE:
+                row['scene_sha256'] = self.world_preset['scene_sha256']
+                return experiment_world.launch(self, db, body['request_id'], request, row)
             return launch(self, db, body['request_id'], request, row, process_stamp)
 
     def start_export(self, body, prepared):
@@ -424,6 +526,8 @@ class Center:
             if not found:
                 raise ValueError('unknown learning run')
             row, receipt = map(json.loads, found)
+            if row.get('execution_mode') == experiment_world.MODE:
+                raise PermissionError('World experiment stop requires its dedicated route')
             if row['status'] in ('running', 'stopping'):
                 if process_stamp(receipt['pid'], self.root / 'runs' / rid / 'request.json') != receipt:
                     raise ValueError('owned worker identity changed')

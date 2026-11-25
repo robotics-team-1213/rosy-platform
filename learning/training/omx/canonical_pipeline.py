@@ -1,6 +1,7 @@
 """Canonical OMX start-pose service: spec serving, SQLite job queue, concurrency/lock orchestration."""
 from __future__ import annotations
 
+from contextlib import nullcontext
 import hmac
 import json
 import math
@@ -91,9 +92,11 @@ def _named_mapping(raw, limit: int, label: str) -> dict:
 class CanonicalService:
     """Host-isolated canonical OMX pipeline manager attached to experiment_center.Center."""
 
-    def __init__(self, root: Path | None, config: dict | None, *, host_id: str | None = None, default_python: str | None = None):
+    def __init__(self, root: Path | None, config: dict | None, *, host_id: str | None = None,
+                 default_python: str | None = None, world_admission=None):
         self.host_id = host_id
         self.lock = threading.RLock()
+        self.world_admission = world_admission or (lambda: nullcontext(False))
         self.children: dict[str, subprocess.Popen] = {}
         self.configured = self.writable = False
         self.spec, self.spec_sha256, self.spec_source = load_canonical_spec(None)
@@ -181,6 +184,15 @@ class CanonicalService:
 
     def connect(self):
         return sqlite3.connect(self.db, timeout=10)
+
+    def has_active_runs(self):
+        if not self.configured:
+            return False
+        with self.lock, self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            self._refresh(db)
+            return db.execute("SELECT 1 FROM runs WHERE json_extract(document,'$.status') "
+                              "IN ('launching','running','stopping') LIMIT 1").fetchone() is not None
 
     def spec_payload(self) -> dict:
         return {"schema": self.spec["schema"], "spec_sha256": self.spec_sha256,
@@ -437,7 +449,7 @@ class CanonicalService:
         if not self.configured:
             raise ValueError("canonical service not configured")
         request_id = identifier(body.get("request_id"))
-        with self.lock, self.connect() as db:
+        with self.world_admission() as active_world, self.lock, self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             self._refresh(db)
             kind, arm_id, public_params, worker_params = self._validate_and_resolve(db, body)
@@ -446,6 +458,8 @@ class CanonicalService:
                 if old[1] != canon_req:
                     raise ValueError("request_id already used with different inputs")
                 return self._public_run(json.loads(old[0]))
+            if active_world:
+                raise BusyConflict("a World Learning job is already running")
 
             py_key = {"align_real": "train", "collect_dart": "sim", "train_stage": "train", "eval_ladder": "sim", "cell_live_check": "cell"}[kind]
             python = self.python.get(py_key) or next(iter(self.python.values()), None)

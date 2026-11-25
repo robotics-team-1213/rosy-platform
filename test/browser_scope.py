@@ -91,6 +91,7 @@ OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for 
                 ("center", "profiles", "profile_drafts", "journey", "review_playback", "arm_scope", "owner_status", "segments", "camera_reference")]
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
+WORLD_EXPERIMENT = ["test/learning/perception/test_world_experiment_browser.py"]
 LADDER = ["test/learning/perception/test_ladder_browser.py"]
 CANONICAL = ["test/learning/perception/test_canonical_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
@@ -109,7 +110,7 @@ STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/lear
 # These HTTP suites also contain opt-in Chromium flows; filename discovery alone misses them.
 STORAGE = ["test/learning/perception/test_storage_" + name + "_http.py" for name in
            ("inventory", "jobs", "setup", "omx")]
-LEARNING = OMX_LEARNING + CAMERA + SIM + LADDER + CANONICAL + PIPELINE + ACCOUNTS + TASKS + STAGES + STORAGE
+LEARNING = OMX_LEARNING + CAMERA + SIM + LADDER + CANONICAL + PIPELINE + ACCOUNTS + TASKS + STAGES + STORAGE + WORLD_EXPERIMENT
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
@@ -173,7 +174,7 @@ SCOPE: dict[str, list[str]] = {
        ("catalog.html", "camera.html")},
     "learning/curation/perception/omx_web.py": OMX_LEARNING,
     "learning/curation/perception/omx_center_web.py": OMX_LEARNING + CANONICAL,
-    "learning/training/omx/": OMX_LEARNING + TASKS + CANONICAL,
+    "learning/training/omx/": OMX_LEARNING + TASKS + CANONICAL + WORLD_EXPERIMENT,
     "learning/training/omx/experiment_catalog.py": STORAGE,
     **{f"learning/curation/perception/{name}": STORAGE for name in
        ("storage_inventory.py", "storage_pool.py", "storage_jobs.py", "storage_files.py", "storage_hub.py",
@@ -189,6 +190,8 @@ SCOPE: dict[str, list[str]] = {
     "contracts/learning/src/rosy/contracts/learning/camera_setup.py": CAMERA,
     **{f"learning/curation/perception/{name}": SIM for name in
        ("sim_web.py", "review_app_web/sim.html", "review_app_web/sim.js")},
+    **{f"learning/curation/perception/{name}": WORLD_EXPERIMENT for name in
+       ("world_experiment_web.py", "review_app_web/world-experiments.html", "review_app_web/world-experiments.js")},
     **{f"learning/curation/perception/{name}": LADDER for name in
        ("ladder_web.py", "review_app_web/ladder.html", "review_app_web/ladder.js", "review_app_web/ladder.css")},
     **{f"learning/curation/perception/{name}": CANONICAL for name in

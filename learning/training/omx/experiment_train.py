@@ -65,7 +65,8 @@ def transform_action(values, normal, *, inverse=False, declared=False):
 
 
 def train(dataset_root: Path, output: Path, *, method='act', steps=40, batch_size=8,
-          device='cpu', seed=42750, progress=None, arm_id=None, learning_task=None):
+          device='cpu', seed=42750, progress=None, arm_id=None, learning_task=None,
+          expected_dataset_revision=None):
     for label, value, low, high in (('steps', steps, 1, 100000),
             ('batch_size', batch_size, 1, 256), ('seed', seed, 0, 2**32 - 1)):
         if type(value) is not int or not low <= value <= high:
@@ -79,6 +80,9 @@ def train(dataset_root: Path, output: Path, *, method='act', steps=40, batch_siz
         raise ValueError('new output directory outside dataset and source checkout required')
     with dataset_lease(dataset_root):
         dataset = load_dataset(dataset_root, method=method)
+        if expected_dataset_revision is not None and (
+                dataset.source != 'scripted_teacher' or dataset.revision != expected_dataset_revision):
+            raise ValueError('worker dataset differs from the pinned MuJoCo teacher dataset')
         if learning_task is not None:
             from experiment_scope import select_dataset
             _, scope = select_dataset(dataset, arm_id, method=method)
@@ -324,7 +328,8 @@ def main(argv=None):
     try:
         request = json.loads(args.request.read_text(encoding='utf-8'))
         if (not isinstance(request, dict)
-                or set(request) - {'arm_id', 'learning_task'} != {'dataset_root', 'method', 'steps', 'batch_size', 'device', 'seed'}):
+                or set(request) - {'arm_id', 'learning_task', 'expected_dataset_revision'}
+                != {'dataset_root', 'method', 'steps', 'batch_size', 'device', 'seed'}):
             raise ValueError('training request fields differ from schema')
         if 'learning_task' in request:
             check_learning_task(request['learning_task'])
