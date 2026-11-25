@@ -43,6 +43,11 @@ test('return strips unrecognized query and fragment data', () => {
   const channel = '/console/cell?channel_request=' + 'a'.repeat(24);
   assert.equal(loginReturn(channel + '&token=secret', origin), channel);
   assert.equal(loginReturn(channel + '&channel_request=duplicate', origin), '/console/cell');
+  const incident = '/console?view=records&show=open&channel_request=' + 'a'.repeat(24);
+  assert.equal(loginReturn(incident + '&token=secret', origin), incident);
+  assert.equal(loginReturn(incident + '#incident-judgment', origin), incident + '#incident-judgment');
+  assert.equal(loginReturn(incident.replace('show=open', 'show=closed'), origin), '/console?view=records&show=closed');
+  assert.equal(loginReturn('/console/site-map#camera-draft-heading', origin), '/console/site-map#camera-draft-heading');
   assert.equal(loginHref({origin, href: origin + '/console?view=work'}),
     '/console/login?return=%2Fconsole%3Fview%3Dwork');
 });

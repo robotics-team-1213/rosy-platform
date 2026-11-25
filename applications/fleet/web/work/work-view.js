@@ -48,17 +48,6 @@ export const autoAdmitScope = (row, policy) => {
   if (!(policy.admits_remaining > 0)) return {member: false, exhausted: true};
   return {member: true, remaining: policy.admits_remaining, revision: policy.scope.scope_revision};
 };
-const POLICY_KINDS = {one_person: "1인 승인"};
-export const policyScopeText = policy => {
-  if (!policy?.scope) return null;
-  const scope = policy.scope;
-  if (!scope.enabled) return `꺼짐${policy.reason ? ` · ${policy.reason}` : " · 사람 전환 대기"}`;
-  return ["켜짐", scope.robots.length ? `로봇 ${scope.robots.join("·")}` : null,
-    `종류 ${(scope.step_approval_kinds.map(kind => POLICY_KINDS[kind] || kind)).join("·") || "없음"}`,
-    `잔여 ${policy.admits_remaining}/${scope.max_admits}회`,
-    scope.valid_until ? `유효 ${scope.valid_until}` : null, `범위 ${scope.scope_revision}`]
-    .filter(Boolean).join(" · ");
-};
 export const autoAdmitDetail = (row, policy) => {
   if (!policy?.scope || !row || !approvable(row)) return null;
   if (!policy.scope.enabled) return "꺼짐 · 사람 승인";
@@ -94,28 +83,11 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   }
   el("work-overview").hidden = !active;
   const opsZone = el("work-ops-zone") || el("work-overview");
-  // D-865 P3 — 승인 범위 readback과 운영자 전환. 범위 내용(로봇·종류·상한)은 사이트 설정이
-  // 정하고 이 화면은 스위치만 보낸다(POST /api/fleet/policy-admission). 해제는 새 자동 승인만
-  // 막고 진행 중 작업은 기존 fence·정지 경로를 따른다. 승인 자체는 서버의 정책 principal이 한다.
-  const policyPanel = Object.assign(document.createElement("details"),
-    {id: "work-policy-admission", className: "work-policy"});
-  policyPanel.append(Object.assign(document.createElement("summary"),
-    {textContent: "자동 승인 범위 (정책 승인)"}));
-  const policyStatus = Object.assign(document.createElement("p"),
-    {id: "work-policy-admission-status", className: "hint",
-      textContent: "자동 승인 범위를 확인하지 못했습니다."});
-  policyStatus.setAttribute("role", "status");
-  const policyToggle = document.createElement("ui-button");
-  policyToggle.setAttribute("kind", "quiet"); policyToggle.setAttribute("type", "button");
-  policyToggle.id = "work-policy-admission-toggle"; policyToggle.hidden = true;
-  const policyBody = Object.assign(document.createElement("div"), {id: "work-policy-admission-body"});
-  policyBody.append(policyStatus, policyToggle); policyPanel.append(policyBody);
-  opsZone.append(policyPanel);
   // D-793 — 학습 정책의 단계·승인 창·확인 요청은 자기 화면에서 다룬다(하단 연동·정책 구역으로 이동).
   if (active && !document.getElementById("work-policy-link")) {
     const policyLink = Object.assign(document.createElement("a"),
       {id: "work-policy-link", className: "ui-action-link", href: "/console/policy",
-        textContent: "학습 정책 승인 — 단계·승인 창·확인 요청"});
+        textContent: "정책에서 자동 승인과 학습 승인 관리"});
     policyLink.dataset.kind = "quiet";
     opsZone.append(policyLink);
   }
@@ -133,45 +105,19 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
       else delete box.dataset.alert;
     }
   }
-  let policy = null, policyBusy = false, policyNotice = "";
-  const policyGate = createPollGate();  // 404(이 Fleet에 기능 없음)면 reset 전까지 같은 404를 다시 두드리지 않는다
-  function paintPolicy() {
-    if (policyGate.absent) { patchHidden(policyPanel, true); return; }
-    patchHidden(policyPanel, false);
-    patchText(policyStatus, policyNotice || policyScopeText(policy)
-      || "자동 승인 범위를 확인하지 못했습니다.");
-    patchHidden(policyToggle, false);
-    patchText(policyToggle, policy?.scope?.enabled ? "자동 승인 끄기" : "자동 승인 켜기");
-    const reason = policyBusy ? "전환 요청 처리 중입니다" : approveReason();
-    setOffBy(policyToggle, reason);
-  }
+  let policy = null;
+  const policyGate = createPollGate();
   async function refreshPolicy(life) {
-    if (policyGate.due()) {
-      try {
-        const read = await call("/api/fleet/policy-admission"); life.check();
-        policyGate.ok(); policy = read.status ?? null; policyNotice = "";
-      } catch (error) {
-        if (!life.current()) return;
-        if (error.status === 404) policyGate.fail(error.status, error.code);
-        else policyNotice = "자동 승인 범위를 확인하지 못했습니다.";
-      }
-    }
-    if (life.current()) paintPolicy();
-  }
-  async function togglePolicy() {
-    if (policyBusy || approveReason()) return;
-    const life = scope.capture(); policyBusy = true; policyNotice = ""; paintPolicy();
+    if (!policyGate.due()) return;
     try {
-      const result = await call("/api/fleet/policy-admission", {method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({enabled: !policy?.scope?.enabled})});
-      life.check(); policy = result.status ?? policy; policyNotice = "";
+      const read = await call("/api/fleet/policy-admission");
+      life.check();
+      policyGate.ok(); policy = read.status ?? null;
     } catch (error) {
-      if (life.current()) policyNotice = error.status === 409
-        ? "범위가 설정되지 않아 전환하지 못했습니다. 사이트 설정을 먼저 확인하세요."
-        : `전환 결과 미확인 · ${error.message || "다시 보내지 않았습니다. readback을 확인하세요."}`;
-    } finally { policyBusy = false; }
-    if (life.current()) { paintPolicy(); paint(); }  // the badge follows the switch immediately
+      if (!life.current()) return;
+      policy = null;
+      policyGate.fail(error.status, error.code);
+    }
   }
   el("work-new").hidden = !fresh;
   if (area) {
@@ -190,7 +136,7 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   function reset(message = "접속 후 작업을 확인할 수 있습니다.", preserveUnits = false) {
     if (!preserveUnits) { units.reset(); arms.reset(); trips.reset(); integrated.reset(); }
     channelRequestView.reset();
-    policyGate.reset(); requestsPaused = false;
+    policy = null; policyGate.reset(); requestsPaused = false;
     rows = []; selected = null; detailVersion++; lastListSig = "";
     showKinds();
     patchText(newStatus, message);
@@ -309,7 +255,8 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
     await refresh();
   }
   async function refresh() {
-    if (!area || inFlight) return;
+    if (!area) return channelRequestView.refresh();
+    if (inFlight) return;
     const life = scope.capture(); inFlight = true;
     try {
       await Promise.all([units.refresh(), arms.refresh(), trips.refresh(), integrated.refresh(), refreshPolicy(life)]);
@@ -375,6 +322,5 @@ export function createWorkView({scope, call, el, channelRequestView, approveReas
   scope.listen(el("work-filter"), "change", paint);
   scope.listen(el("work-refresh"), "click", refresh);
   scope.listen(admit, "click", approve);
-  scope.listen(policyToggle, "click", togglePolicy);
   return {active, refresh, reset};
 }

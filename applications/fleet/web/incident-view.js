@@ -44,7 +44,10 @@ function incidentRow(key, openReports) {
   const place = event => {
     if (!detail.open) return side.remove();
     for (const other of document.querySelectorAll(".incident-row > details[open]")) if (other !== detail) other.open = false;
-    if (seat.firstChild !== side) seat.replaceChildren(side);
+    if (side.parentElement !== seat) {
+      seat.querySelector(":scope > [data-report-key]")?.remove();
+      seat.append(side);
+    }
     // Restoring .open on refresh also queues a toggle; only a reader opening the fold should scroll.
     if (event && userOpening) { userOpening = false; seat.scrollIntoView({block: "nearest"}); }
   };
@@ -128,7 +131,7 @@ async function refreshIncidents() {
     const focusedReport = document.activeElement?.closest('[data-report-key]')?.dataset.reportKey;
     const focusedLabel = document.activeElement?.getAttribute("aria-label");
     list.replaceChildren();
-    el("incident-judgment").replaceChildren();
+    el("incident-judgment").querySelectorAll(":scope > [data-report-key]").forEach(node => node.remove());
     for (const report of incidentReports) {
       const {item, detail, summary, raw, side} = incidentRow(`${report.robot_ids.join("|")}|${report.stuck_id}`, openReports);
       const core = report.evidence.core, fleet = report.evidence.fleet;
@@ -262,7 +265,7 @@ function reset() {
   onReports([]);
   el("incident-list").replaceChildren();
   el("incident-traffic-list").replaceChildren();
-  el("incident-judgment").replaceChildren();
+  el("incident-judgment").querySelectorAll(":scope > [data-report-key]").forEach(node => node.remove());
   setOffBy(el("incident-export"), "관제 접속 후 내보낼 수 있습니다");
   el("incident-status").textContent = "관제 접속 후 사건을 불러옵니다.";
 }

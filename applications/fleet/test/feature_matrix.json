@@ -2376,8 +2376,7 @@
           "expression": "/api/fleet/policy-admission",
           "resolution": "literal-or-template",
           "request_ids": [
-            "GET:/api/fleet/policy-admission",
-            "POST:/api/fleet/policy-admission"
+            "GET:/api/fleet/policy-admission"
           ]
         },
         {
@@ -3580,6 +3579,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/missions/{mission_id}/admit"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/work/channel-request-view.js",
+          "expression": "/api/fleet/channel-requests",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/channel-requests"
           ]
         },
         {

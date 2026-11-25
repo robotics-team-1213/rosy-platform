@@ -108,6 +108,7 @@ def test_the_camera_draft_flows_from_the_vision_proposal_to_a_saved_draft(page_c
     _connect(page)
     page.evaluate("heading => { location.hash = heading }", "#camera-draft-heading")
     expect(page.locator("#camera-draft-heading")).to_be_visible()
+    expect(page.locator('ui-section[aria-labelledby="camera-draft-heading"] a[href="/console/install#calibration"]')).to_be_visible()
     try:
         expect(page.locator("#camera-draft-source option")).to_have_count(2)   # placeholder + camera
     except AssertionError:

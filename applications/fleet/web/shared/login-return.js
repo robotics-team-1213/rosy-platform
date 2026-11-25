@@ -1,4 +1,4 @@
-const ANCHORS = {'/console/site-map': ['#teach-heading'], '/console/install': ['#robots', '#device-profiles', '#cameras', '#calibration', '#robot-enrollment', '#peer-picker', '#camera-link', '#camera-peer-panel', '#usb-camera-panel', '#camera-calibration', '#measured-calibration']};
+const ANCHORS = {'/console/site-map': ['#teach-heading', '#camera-draft-heading'], '/console/install': ['#robots', '#device-profiles', '#cameras', '#calibration', '#robot-enrollment', '#peer-picker', '#camera-link', '#camera-peer-panel', '#usb-camera-panel', '#camera-calibration', '#measured-calibration']};
 const DOCUMENTS = new Set(['/console', '/console/install', '/console/maintenance', '/console/site-map', '/console/cell', '/console/profile', '/console/accounts', '/console/policy', '/console/world']);
 
 // Login can only return to a Fleet document on this origin, never to credentials or another service.
@@ -29,15 +29,16 @@ export function loginReturn(value, origin) {
       if (view === 'work' && transfer.length === 1 && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}$/.test(transfer[0])) query.set('arm_transfer', transfer[0]);
     }
     if (url.pathname === '/console/cell') {
-      const focus = url.searchParams.getAll('focus'), channel = url.searchParams.getAll('channel_request');
+      const focus = url.searchParams.getAll('focus');
       if (focus.length === 1 && /^arm:[A-Za-z0-9._:-]{1,64}$/.test(focus[0])) query.set('focus', focus[0]);
-      if (channel.length === 1 && /^[0-9a-f]{24}$/.test(channel[0])) query.set('channel_request', channel[0]);
     }
+    const channel = url.searchParams.getAll('channel_request'), incident = url.pathname === '/console' && query.get('view') === 'records' && query.get('show') === 'open';
+    if ((url.pathname === '/console/cell' || incident) && channel.length === 1 && /^[0-9a-f]{24}$/.test(channel[0])) query.set('channel_request', channel[0]);
     const robot = url.searchParams.get('robot');
     if (['/console', '/console/site-map'].includes(url.pathname) && /^[a-zA-Z0-9_-]{1,128}$/.test(robot || '')) {
       query.set('robot', robot);
     }
-    const anchor = ANCHORS[url.pathname]?.includes(url.hash) ? url.hash : '';
+    const anchor = ANCHORS[url.pathname]?.includes(url.hash) || (incident && query.has('channel_request') && url.hash === '#incident-judgment') ? url.hash : '';
     return url.pathname + (query.size ? '?' + query : '') + anchor;
   } catch { return '/console'; }
 }

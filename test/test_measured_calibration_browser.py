@@ -97,6 +97,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
         except Exception as exc:
             pytest.fail(f'install mount failed: {errors}; static failures={static_failures}; {exc}')
         page.get_by_role('tab', name='카메라 설치·보정').click()
+        expect(page.locator('#measured-calibration a[href="/console/site-map#camera-draft-heading"]')).to_be_visible()
         page.locator('#vision-source').select_option('ceiling_north')
         page.locator('#measured-bundle').set_input_files({'name': 'bundle.json', 'mimeType': 'application/json',
                                                         'buffer': json.dumps(bundle).encode()})
