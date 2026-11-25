@@ -25,9 +25,9 @@ def _binding(config, src, dst):
     return binding
 
 
-def _read(binding, depth, top, tier):
+def _read(binding, depth, top, tier, **alignment):
     return cell_depth_slots.depth_reference(depth, top["image"], binding["roi"], binding["floor"], tier,
-                                           floor_depth_mm=binding["floor_depth_mm"])
+                                           floor_depth_mm=binding["floor_depth_mm"], **alignment)
 
 
 def _located(ref):
@@ -121,8 +121,12 @@ def capture_before(cell, config, src, dst, previous=None):
     paired = _receipt(top, side, receipt, started, time.time())
     if paired is None:
         return None, "unusable side image or unpaired or stale before depth and camera frames"
-    src_ref = _read(binding["source"], depth, top, 2)
-    dst_ref = _read(binding["destination"], depth, top, 1)
+    try:
+        transform, error_px = cell_depth_slots.frame_alignment(depth, top["image"])
+    except (ValueError, TypeError, IndexError):
+        return None, "source depth did not confirm tier 2"
+    src_ref = _read(binding["source"], depth, top, 2, to_depth=transform, align_edge_px=error_px)
+    dst_ref = _read(binding["destination"], depth, top, 1, to_depth=transform, align_edge_px=error_px)
     if not _tier(src_ref, 2):
         return None, "source depth did not confirm tier 2"
     if not _empty(dst_ref):
