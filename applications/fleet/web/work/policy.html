@@ -79,13 +79,14 @@
     <a class="ui-subnav-item" href="/console?view=work&amp;show=done">끝난 작업</a>
     <a class="ui-subnav-item" href="/console?view=work&amp;show=new">새 작업</a>
     <span class="ui-subnav-head">다른 문서</span>
-    <a class="ui-subnav-item" href="/console/learning" aria-current="page">학습</a>
+    <a class="ui-subnav-item" href="/console/policy" aria-current="page">정책</a>
+    <a class="ui-subnav-item" href="/console/learning">학습</a>
   </nav></div>
   <div class="fleet-workspace">
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <!-- D-926 2 — 경로 줄: 문서 제목과 현재 화면을 본문 머리에도 보인다. -->
-  <div class="ui-pathbar"><h1>학습 정책 승인</h1><strong>학습</strong></div>
+  <div class="ui-pathbar"><h1>학습 정책 승인</h1><strong>정책</strong></div>
 
   <main id="policy-main" class="policy-main fleet-task-page ui-task-page" tabindex="-1">
     <p>새로 학습한 정책은 0단계로 등록되고 실물을 움직이지 않습니다.</p>
@@ -183,6 +184,15 @@
       </details>
     </ui-section>
     </div>
+    <ui-section id="policy-fleet-admission" aria-labelledby="policy-fleet-admission-heading" hidden>
+      <ui-head><h2 class="ui-section-heading" id="policy-fleet-admission-heading">Fleet 작업 자동 승인 범위</h2></ui-head>
+      <p class="hint">학습 정책 승인 창과는 별개로, 사이트 설정에 등록된 1인 승인 작업의 자동 승인 범위를 확인하고 켜거나 끕니다.</p>
+      <p id="policy-fleet-admission-status" class="hint" role="status">자동 승인 범위를 확인하고 있습니다.</p>
+      <ui-actions>
+        <ui-button id="policy-fleet-admission-toggle" kind="quiet" type="button" hidden>자동 승인 켜기</ui-button>
+        <a class="ui-action-link" data-kind="quiet" href="/console?view=work&amp;show=pending">승인 대기 작업 보기</a>
+      </ui-actions>
+    </ui-section>
   </main>
   </div>
   </div>

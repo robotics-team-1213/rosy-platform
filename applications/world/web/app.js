@@ -142,7 +142,7 @@ let archivedMapReadout;
 let archiveMapUnavailable = false;
 const activeMapCanvas = byId("map-active-canvas");
 const activeMap = activeSiteMap({
-  canvas: activeMapCanvas, showMap, mapData, date,
+  canvas: activeMapCanvas, placeSelect: byId("map-active-place"), showMap, mapData, date,
   onUpdate() {
     if (mode !== "active") return;
     showMapSource();
@@ -154,8 +154,9 @@ const activeMapLabel = () => ({
   unavailable: "현장 활성 지도 미수신",
   pending: "현장 활성 지도를 읽는 중…",
 })[activeMap.state];
-syncActiveMapPoll = () => activeMap.watch(mode === "active" &&
+syncActiveMapPoll = () => activeMap.watch(!document.hidden && mode === "active" &&
   byId("tab-map").getAttribute("aria-selected") === "true");
+document.addEventListener("visibilitychange", syncActiveMapPoll);
 
 function showMapSource() {
   const active = mode === "active";
@@ -169,6 +170,7 @@ function showMapSource() {
       vectorAvailable ? "보관 지도" : archiveMapUnavailable ? "보관 차로 그래프를 그릴 수 없습니다" : "보관 지도를 읽는 중…");
   }
   activeMapCanvas.hidden = !active || !activeMap.entries;
+  byId("map-active-place-control").hidden = activeMapCanvas.hidden || !activeMap.hasPlaces;
 }
 
 function updateMapHealth() {

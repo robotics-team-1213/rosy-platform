@@ -5,7 +5,7 @@ Dataset step (D-857 P0): python learning/curation/perception/omx_web.py export-s
 exports the latest saved segment review exactly as native_segments.py does for a downloaded JSON.
 """
 import argparse
-from contextlib import closing
+from contextlib import closing, contextmanager
 import io
 import json
 import sqlite3
@@ -154,11 +154,12 @@ def registered(workspace, identifier):
     return rows[0]
 
 
+@contextmanager
 def review_db(workspace):
-    db = sqlite3.connect(workspace.db)
-    db.execute('CREATE TABLE IF NOT EXISTS omx_segment_reviews '
-               '(id TEXT, version INTEGER, document TEXT, PRIMARY KEY(id,version))')
-    return db
+    with closing(sqlite3.connect(workspace.db)) as db, db:
+        db.execute('CREATE TABLE IF NOT EXISTS omx_segment_reviews '
+                   '(id TEXT, version INTEGER, document TEXT, PRIMARY KEY(id,version))')
+        yield db
 
 
 def latest(workspace, identifier, version=None):

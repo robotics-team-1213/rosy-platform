@@ -140,6 +140,21 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
   if ((location.hash.slice(1) || installTasks[0].id) !== id) history.pushState(null, "", `#${id}`);
 }});
 el("install-chooser").append(taskChooser.element);
+const relatedNav = document.createElement("nav");
+relatedNav.className = "ui-subnav-nav";
+relatedNav.setAttribute("aria-label", "관련 문서");
+const relatedHead = document.createElement("span");
+relatedHead.className = "ui-subnav-head";
+relatedHead.textContent = "다른 문서";
+relatedNav.append(relatedHead);
+for (const [href, label] of [["/console/maintenance", "PC 정비"], ["/console/site-map", "현장 지도"]]) {
+  const link = document.createElement("a");
+  link.className = "ui-subnav-item";
+  link.href = href;
+  link.textContent = label;
+  relatedNav.append(link);
+}
+el("install-chooser").append(relatedNav);
 taskChooser.setReady();
 // 주소의 #작업-id가 첫 화면을 고른다(공유·새로고침 보존). task id ≠ 패널 id라 스크롤 점프도 없다.
 const initialTask = location.hash.slice(1);

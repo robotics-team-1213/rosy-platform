@@ -566,17 +566,22 @@ def test_a_trip_store_failure_never_replaces_the_stop_result(tmp_path, caplog):
 
 
 def test_create_app_wires_the_real_trip_providers(tmp_path):
-    from test_site_map_trip import _app as plain_app
-    from test_trip_caps import _caps, _robot_caps
+    from unittest.mock import AsyncMock
 
-    from fleet.server.console_view import TripCaps
+    from test_site_map_trip import _app as plain_app
+
     from fleet.server.map_pose_service import MapPoseService
     from fleet.server.trip_ports import HttpLaneJunction
 
     client, _tasks, _store, robot = plain_app(tmp_path)
-    _robot_caps(robot, _caps())
+    robot.capabilities = AsyncMock(return_value={"controls": {"items": [{
+        "kind": "base_velocity", "robot_kind": "pinky_pro", "drive_modes": ["lane"],
+        "trip_max_linear": 0.1, "junction_turn": True,
+    }]}})
     runner = client.app.state.trip_runner
-    assert run(runner._caps(robot.robot_id)) == TripCaps("pinky_pro", frozenset({"lane"}), 0.1)
+    caps = run(runner._caps("rosy_60"))
+    robot.capabilities.assert_awaited_once_with()
+    assert caps is not None and caps.modes == {"lane"} and caps.junction_turn is True
     assert isinstance(runner._poses, MapPoseService) and runner._poses is client.app.state.map_pose
     assert isinstance(runner._junction, HttpLaneJunction)
 

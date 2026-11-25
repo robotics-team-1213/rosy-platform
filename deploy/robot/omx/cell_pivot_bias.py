@@ -172,6 +172,25 @@ def validate_bias(region: dict, params=None) -> None:
             raise ValueError("bias refused: droop_z_mm must be finite and within +-15.0 mm")
 
 
+def free_fit_refusal(fit, kept_marks, bias, jaw_problem, params=None) -> str | None:
+    if len(kept_marks) >= 4:
+        k_cx, k_cy, _, k_rms = fit_circle(kept_marks)
+        k_sig = circle_center_sigma_mm(kept_marks, k_cx, k_cy, k_rms)
+        gap_mm = 1000.0 * math.dist(fit["centre_m"], (k_cx, k_cy))
+        if k_sig is not None and gap_mm > max(15.0, 3.0 * math.hypot(k_sig, fit["centre_sigma_mm"])):
+            return f"circle refused: yaw/circle mismatch {round(gap_mm, 1)} mm"
+    if fit["rms_m"] * 1000 > prm.get(params, "pivot.max_rms_mm") or not (
+            prm.get(params, "pivot.radius_lo_mm") <= fit["radius_m"] * 1000 <= prm.get(params, "pivot.radius_hi_mm")):
+        return f"circle refused: radius {bias['radius_mm']} mm, rms {bias['rms_mm']} mm"
+    if jaw_problem:
+        return jaw_problem
+    try:
+        validate_bias(bias, params)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
 def load_bias(path, params=None) -> dict:
     path = Path(path)
     try:

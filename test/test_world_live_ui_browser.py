@@ -148,20 +148,41 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                     expect(page.locator("#map-active-canvas")).to_be_visible()
                     expect(page.locator("#map-readout")).to_contain_text("버전8")
                     expect(page.locator("#map-readout")).to_contain_text("위치2")
+                    received = page.locator('#map-readout dt:text-is("수신 시각 (UTC)") + dd')
+                    expect(received).to_be_visible()
+                    received_v8 = received.inner_text()
+                    place = page.get_by_label("지도 위치")
+                    expect(place.locator("option")).to_have_text(["전체 위치", "S3", "S4"])
+                    place.select_option("S4")
+                    expect(page.locator("#map-active-canvas")).to_have_attribute("aria-label", "Fleet 활성 지도 · S4")
+                    serve._atomic_write_json(cache, {**live_map, "observed_at_ms": live_map["observed_at_ms"] + 1000})
+                    page.clock.fast_forward(10_100)
+                    expect(received).not_to_have_text(received_v8)
+                    expect(place).to_have_value("S4")
                     serve._atomic_write_json(cache, {
                         **live_map, "version": 9, "sha256": "ef" * 32,
+                        "observed_at_ms": live_map["observed_at_ms"] + 2000,
                         "map": {**live_map["map"], "places": live_map["map"]["places"][:1]},
                     })
                     page.clock.fast_forward(10_100)
                     expect(page.locator("#map-readout")).to_contain_text("버전9")
                     expect(page.locator("#map-readout")).to_contain_text("위치1")
-                    page.locator("#map-mode-vector").click()
+                    expect(place.locator("option")).to_have_text(["전체 위치", "S3"])
+                    expect(place).to_have_value("")
+                    page.evaluate("""() => {
+                      Object.defineProperty(document, "hidden", { value: true, configurable: true });
+                      document.dispatchEvent(new Event("visibilitychange"));
+                    }""")
+                    expect(page.locator("#map-active-canvas")).to_be_hidden()
                     cache.unlink()
                     held = []
                     route_pattern = "**/api/worlds/real-site/site-map"
                     page.route(route_pattern, lambda route: held.append(route))
                     with page.expect_request(route_pattern):
-                        page.locator("#map-mode-active").click()
+                        page.evaluate("""() => {
+                          delete document.hidden;
+                          document.dispatchEvent(new Event("visibilitychange"));
+                        }""")
                     expect(page.locator("#map-active-canvas")).to_be_hidden()
                     expect(page.locator("#map-status")).to_have_attribute("state", "pending")
                     held[0].continue_()

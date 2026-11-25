@@ -10,17 +10,23 @@ from __future__ import annotations
 from typing import Optional
 
 import base64
+import hashlib
 import math
+import re
 
+import httpx
 from fastapi import Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.localization.map_binding import BindingError, bound_pose, fit_rigid, propose_from_walls
 from fleet.localization.wall_grid import build as build_wall_grid
+from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_routes import site_map_error
+from fleet.swarm.transport import RobotApiError
 
 Pair = dict  # {"site": [x, y], "robot": [x, y]}; checked by the store
+MAX_MAP_BUNDLE_CELLS = 4096 * 4096
 
 
 class ApproveRequest(BaseModel):
@@ -61,6 +67,32 @@ def _occupied(grid: dict) -> list[tuple[float, float]]:
     return [(ox + c * gx - s * gy, oy + s * gx + c * gy) for gx, gy in cells]  # origin.yaw rotates the grid
 
 
+def _map_bundle(robot_id: str, grid: dict) -> dict:
+    width, height, cells = grid["width"], grid["height"], grid["data"]
+    if (type(width) is not int or type(height) is not int or width <= 0 or height <= 0
+            or width * height > MAX_MAP_BUNDLE_CELLS or not isinstance(cells, list)
+            or len(cells) != width * height):
+        raise ValueError("invalid robot grid dimensions")
+    if any(type(cell) is not int or not -1 <= cell <= 100 for cell in cells):
+        raise ValueError("invalid occupancy cell")
+    resolution = float(grid["resolution"])
+    raw_origin = grid["origin"]
+    origin = [float(raw_origin[key]) for key in ("x", "y", "yaw")]
+    if not math.isfinite(resolution) or resolution <= 0 or not all(map(math.isfinite, origin)):
+        raise ValueError("invalid grid resolution or origin")
+
+    # PGM rows run top to bottom. CORE occupancy rows start at the bottom.
+    pixels = bytes(0 if cell >= 65 else 254 if 0 <= cell <= 19 else 205
+                   for row in range(height - 1, -1, -1)
+                   for cell in cells[row * width:(row + 1) * width])
+    pgm = f"P5\n{width} {height}\n255\n".encode("ascii") + pixels
+    safe_id = re.sub(r"[^A-Za-z0-9._-]", "_", robot_id)
+    return {"robot_id": robot_id, "map_id": grid.get("map_id"), "width": width, "height": height,
+            "sha256": hashlib.sha256(pgm).hexdigest(), "pgm_base64": base64.b64encode(pgm).decode("ascii"),
+            "yaml": {"image": f"robot_{safe_id}.pgm", "mode": "trinary", "resolution": resolution,
+                     "origin": origin, "negate": 0, "occupied_thresh": 0.65, "free_thresh": 0.196}}
+
+
 def install_map_binding_routes(app, *, console, site_maps, read_guard, require_named_operator) -> None:
     bindings = site_maps.map_bindings
 
@@ -70,6 +102,28 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
     async def state_of(robot_id: str) -> dict:
         state, _ = await console._gather_state(robot_id)
         return state
+
+    @app.get("/api/fleet/robots/{robot_id}/map/bundle", dependencies=read_guard, tags=["site-map"])
+    async def robot_map_bundle(robot_id: str) -> dict:
+        client = console.clients().get(robot_id)
+        if client is None:
+            raise site_map_error(404, "UNKNOWN_ROBOT", "robot is not registered")
+        try:
+            grid = await client.map()
+        except RobotApiError as exc:
+            if exc.status == 404:
+                raise site_map_error(404, "NO_MAP", "robot has no occupancy map") from exc
+            if exc.code == "BAD_RESPONSE":
+                raise site_map_error(502, "INVALID_ROBOT_MAP", "robot returned an invalid occupancy grid") from exc
+            raise http_error(exc) from exc
+        except (OSError, httpx.RequestError) as exc:
+            raise http_error(exc) from exc
+        if grid is None or grid == {}:
+            raise site_map_error(404, "NO_MAP", "robot has no occupancy map")
+        try:
+            return _map_bundle(robot_id, grid)
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise site_map_error(502, "INVALID_ROBOT_MAP", "robot returned an invalid occupancy grid") from exc
 
     @app.get("/api/fleet/robots/{robot_id}/map-binding", dependencies=read_guard, tags=["map-binding"])
     async def map_binding_read(robot_id: str, request: Request) -> dict:
