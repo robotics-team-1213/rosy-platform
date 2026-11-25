@@ -156,12 +156,24 @@ def test_projected_cargo_footprint_rejects_small_distractor_and_abstains_on_two_
     frame[265:274, 309:332] = (0, 125, 235)
     frame[212:215, 313:327] = (0, 125, 235)
 
-    def sample():
+    def sample(*, height=0.10, transverse=False):
         jpeg = cv2.imencode(".jpg", frame)[1].tobytes()
+        options = {"transverse": True} if transverse else {}
         return tool.cargo_frame_sample(record, jpeg, 1.0, source="camera", marker=45,
-                                       heading_edge=(0, 1), cargo_height_m=0.10)
+                                       heading_edge=(0, 1), cargo_height_m=height, **options)
 
     assert sample().cargo[1] == pytest.approx(-0.11, abs=0.01)
     frame[210:219, 309:332] = (0, 125, 235)
     with pytest.raises(tool.CueUnavailable, match="multiple orange objects"):
         sample()
+
+    frame[210:219, 309:332] = 240
+    # Slight lateral offset of the cargo biases the centroid ray, but not the transverse edge.
+    frame[265:274, 309:332] = 240
+    frame[265:274, 315:338] = (0, 125, 235)
+    for height in (0.04, 0.14):
+        assert math.degrees(sample(height=height, transverse=True).front_yaw) == pytest.approx(90, abs=1.0)
+
+    frame[265:274, 315:338] = 240
+    frame[265:277, 319:331] = (0, 125, 235)
+    assert sample(transverse=True) is None  # nearby orange square, no front axis
