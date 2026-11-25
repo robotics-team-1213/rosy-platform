@@ -107,11 +107,10 @@ def verify_recovery_pose(
 
 
 class LocAssist:
-    def __init__(self, new_request_id, *, rereport_s=2., state_period_s=.5, retry_s=5.,
-                 moved_m=.05, moved_rad=.17, hold_s=3., min_fit=.85, fit_drop_s=1., max_gap_s=.5,
-                 auto_unique=True):
-        self.machine = LocalizationStateMachine(new_request_id, hold_s=hold_s, min_fit=min_fit,
-                                                fit_drop_s=fit_drop_s, max_gap_s=max_gap_s)
+    def __init__(self, new_request_id, *, rereport_s=2., state_period_s=.5, retry_s=5., moved_m=.05,
+                 moved_rad=.17, hold_s=3., min_fit=.85, fit_drop_s=2.5, max_gap_s=.5, auto_unique=True, drop_fit=.70):
+        self.machine = LocalizationStateMachine(
+            new_request_id, hold_s=hold_s, min_fit=min_fit, fit_drop_s=fit_drop_s, max_gap_s=max_gap_s, drop_fit=drop_fit)
         self.rereport_s, self.state_period_s, self.retry_s = rereport_s, state_period_s, retry_s
         self.moved_m, self.moved_rad = moved_m, moved_rad
         self._auto_unique, self._auto_unique_fails = bool(auto_unique), 0
@@ -177,10 +176,9 @@ class LocAssist:
             self._still_since = float(now_s)
 
     def objects_due(self, now_s):
-        """Whether the node should compute unmapped objects from this scan: LOCALIZED, no
-        check running, and none handed in for a state period (D-395 rev. 4 §5, S1 R1)."""
-        return (self.machine.state is LocState.LOCALIZED and self.machine.check is None
-                and now_s - self._objects_at >= self.state_period_s)
+        """LOCALIZED, no check running, fit healthy, and none handed in for a state period (D-395 rev. 4 §5)."""
+        return (self.machine.state is LocState.LOCALIZED and self.machine.check is None and self.machine._low_since is None
+                and (self.fit is None or self.fit >= self.machine.drop_fit) and now_s - self._objects_at >= self.state_period_s)
 
     def on_objects(self, now_s, scan_s, objects):
         """Base_link (x, y) objects from the full scan stamped `scan_s`; kept only while LOCALIZED."""
@@ -296,7 +294,7 @@ class LocAssist:
         if moved:
             self._empty_streak = 0
             self._auto_unique_fails = 0
-        retry_s = min(30.0, self.retry_s * (2 ** min(max(0, self._empty_streak - 1), 3)))
+        retry_s = min(30.0, self.retry_s * (2 ** min(max(0, self._empty_streak - 1), 4)))
         waited = now_s - self._searched_at >= retry_s
         state = self.machine.state
         if state in (LocState.UNKNOWN, LocState.SUSPECT):
@@ -402,7 +400,7 @@ class LocAssist:
     def _state(self, now_s):
         m = self.machine
         seen = {}
-        if (m.state is LocState.LOCALIZED and self._objects is not None
+        if (m.state is LocState.LOCALIZED and m._low_since is None and self._objects is not None
                 and now_s - self._objects[0] <= OBJECTS_FRESH_S):
             seen = {'unmapped_objects': [{'x': x, 'y': y} for x, y in self._objects[1]],
                     'objects_stamp': self._objects[0]}

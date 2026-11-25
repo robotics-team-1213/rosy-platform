@@ -1011,3 +1011,19 @@ def test_auto_unique_locks_settled_asymmetric_candidate_and_stops_after_reject_c
     busy.search_started(0.0, ODOM)
     busy.on_mission(0.2, {'state': 'running'})
     assert busy.search_finished(0.5, ODOM, [uniq]) == []
+
+
+def test_fit_drop_hysteresis_gates_unmapped_objects_before_suspect():
+    a = core()
+    candidates_ready(a)
+    a.on_decision(2.0, decision('r-1', 2.0))
+    hold(a, 2.1, 5.6, fit=0.95)
+    assert a.objects_due(5.7)
+    a.on_objects(5.7, 5.7, [(0.5, 0.1)])
+    # Transient dip below drop_fit=0.70 stops reporting unmapped objects immediately.
+    a.on_fit(6.0, 0.65)
+    assert not a.objects_due(6.3)
+    assert 'unmapped_objects' not in one(a.tick(6.3), 'state')['status']
+    # Recovering above drop_fit re-enables unmapped object reporting.
+    a.on_fit(6.5, 0.72)
+    assert a.objects_due(6.8)

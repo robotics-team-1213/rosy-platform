@@ -50,11 +50,13 @@ class Step:
 
 
 class LocalizationStateMachine:
-    def __init__(self, new_request_id, hold_s=3., settle_s=.5, min_fit=.85, fit_drop_s=1., max_gap_s=.5):
+    def __init__(self, new_request_id, hold_s=3., settle_s=.5, min_fit=.85, fit_drop_s=1., max_gap_s=.5,
+                 drop_fit=None):
         self._new_id = new_request_id
         # max_gap_s: the longest scan silence the 3 s check tolerates (InjectionCheck).
         self._check_args = dict(hold_s=hold_s, settle_s=settle_s, min_fit=min_fit, max_gap_s=max_gap_s)
         self.min_fit, self.fit_drop_s = float(min_fit), float(fit_drop_s)
+        self.drop_fit = self.min_fit if drop_fit is None else float(drop_fit)
         self.state, self.reason = LocState.UNKNOWN, None
         self.request_id, self.candidates = None, ()
         self.check, self.pose, self.source = None, None, None
@@ -188,7 +190,7 @@ class LocalizationStateMachine:
                 return self._suspect('inject_rejected')
             return Step(self.state)
         if self.state is LocState.LOCALIZED and fit is not None:
-            if fit >= self.min_fit:
+            if fit >= self.drop_fit:
                 self._low_since = None
             elif self._low_since is None:
                 self._low_since = now_s
