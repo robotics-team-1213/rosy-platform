@@ -241,6 +241,10 @@ def test_feel_hook_uses_limits_workspace_min_site_z_live_fk_and_skips_refused_re
     assert picks[0]["z"] == 0.025  # surface_z 0.020 + 0.005
     assert picks[0]["x"] == 0.10 and picks[0]["y"] == pytest.approx(0.160, abs=1e-4)  # yaw 90 -> +y
 
+    # 3. Legacy pick dict without "z" and without site config must not raise KeyError in feel_hook
+    target_no_z = {"pick": {"x": 0.10, "y": 0.15, "yaw_deg": 0.0}, "place": {"x": 0.15, "y": 0.0, "z": 0.02, "yaw_deg": 0.0}}
+    assert cell_feel.feel_hook({"work_dir": str(tmp_path), "params": {"feel.enabled": 1}}, FakeCell(), target_no_z, write_lib) is not None
+
 
 def test_run_auto_passes_blend_flag_matching_choose(tmp_path, monkeypatch):
     import cell_auto_pick as cap_main

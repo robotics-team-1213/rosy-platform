@@ -29,7 +29,7 @@ def feel_hook(config: dict, cell, target: dict, write_library, source: str | Non
     z_step = prm.get(params, "feel.z_step_mm")
     source_site = source or target.get("site") or (target.get("bias_region") or {}).get("site") or target["pick"].get("site")
     site_cfg = (config.get("sites") or {}).get(source_site) if source_site else None
-    fallback_z = float(site_cfg["surface_z"]) + 0.005 if isinstance(site_cfg, dict) and "surface_z" in site_cfg else float(target["pick"]["z"])
+    fallback_z = float(site_cfg["surface_z"]) + 0.005 if isinstance(site_cfg, dict) and "surface_z" in site_cfg else float(target["pick"].get("z", -0.025))
     plan_cfg = config.get("plan") or {}
     ws_min = (plan_cfg.get("limits") or {}).get("workspace_min_m") or plan_cfg.get("workspace_min_m")
     z_min = float((ws_min if ws_min is not None else [0.0, 0.0, fallback_z])[2])
