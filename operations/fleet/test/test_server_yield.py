@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from fakes import FakeRobot, run
 from test_server_bays import ALCOVE, CORRIDOR, HALL, payload
 from fleet.server.console import FleetConsole
@@ -348,6 +350,24 @@ def test_without_a_map_nobody_is_moved_aside_merely_for_being_near_the_route():
 
     assert "queued" not in result
     assert _goals(beside) == []
+
+
+@pytest.mark.parametrize("has_grid", [True, False])
+@pytest.mark.parametrize("neighbor, route, goal, expected", [
+    ((0.0, 0.22), [(0.0, 0.0), (0.6, 0.0)], (0.6, 0.0), []),
+    ((0.0, 0.22), [(0.0, 0.0), (0.0, 0.1), (0.6, 0.0)], (0.6, 0.0), ["rosy_02"]),
+    ((0.0, 0.14), [(0.0, 0.0), (0.6, 0.0)], (0.6, 0.0), ["rosy_02"]),
+    ((0.0, 0.22), [(0.0, 0.0), (0.35, 0.0)], (0.35, 0.0), ["rosy_02"]),
+    ((0.0, 0.22), [(0.0, 0.0), (0.6, 0.0)], (0.4, 0.22), ["rosy_02"]),
+], ids=["parallel-exit", "approach", "too-close-at-start", "near-end", "blocked-commanded-goal"])
+def test_parallel_bay_departure_standing_blockers(has_grid, neighbor, route, goal, expected):
+    from fleet.server.bays import Grid
+
+    grid = payload(HALL) if has_grid else None
+    console = _console(SimRobot("rosy_01", route[0], grid), SimRobot("rosy_02", neighbor, grid))
+    run(console.snapshot())
+
+    assert console._standing_in_the_way("rosy_01", route, Grid.from_payload(grid), goal) == expected
 
 
 def test_a_truncated_plan_does_not_hide_the_robot_sitting_on_the_goal():

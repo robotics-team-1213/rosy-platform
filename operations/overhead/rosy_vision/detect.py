@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import time
 from collections.abc import Iterable
@@ -46,9 +47,9 @@ def _marker_detector(aruco):
 _DETECT_MARKERS = _marker_detector(cv2.aruco)
 
 # D-575: a 40 mm sticker is ~10 px on the ceiling frame and decodes in only part of
-# the frames (D-562: ~61 %). A rejected candidate this small is read once more from
-# a 4x crop around it; the full frame is never enlarged (D-562 rejected that for CPU).
-_REREAD_MAX_PX = 16
+# the frames (D-562: ~61 %). A 4x crop rereads small rejected candidates, including
+# enlarged robot markers that span more than 16 px.
+_REREAD_MAX_PX = 32
 _REREAD_SCALE = 4
 _REREAD_PAD_PX = 6
 _REREAD_BORDER_PX = 20
@@ -321,20 +322,33 @@ def _reread_small(image, rejected, found: dict[int, MarkerQuad]) -> None:
     """D-575: decode small rejected candidates from an enlarged crop; first id wins."""
     height, width = image.shape[:2]
     pad, scale, border = _REREAD_PAD_PX, _REREAD_SCALE, _REREAD_BORDER_PX
-    crops = 0
     deadline = time.monotonic() + _REREAD_BUDGET_S
+    candidates = []
     for candidate in rejected:
-        if crops >= _REREAD_MAX_CROPS or time.monotonic() >= deadline:
-            break
+        if time.monotonic() >= deadline:
+            return
         points = np.asarray(candidate, dtype=float).reshape(4, 2)
         low, high = points.min(axis=0), points.max(axis=0)
-        if (high - low).max() > _REREAD_MAX_PX:
+        span = float((high - low).max())
+        if span > _REREAD_MAX_PX:
+            continue
+        sides = [math.dist(points[k], points[(k + 1) % 4]) for k in range(4)]
+        min_side = min(sides)
+        if min_side <= 0.0:
+            continue
+        aspect = max(sides) / min_side
+        if aspect > 2.5:
             continue
         x0, y0 = (max(0, int(v) - pad) for v in np.floor(low))
         x1, y1 = min(width, int(np.ceil(high[0])) + pad), min(height, int(np.ceil(high[1])) + pad)
         if x1 <= x0 or y1 <= y0:
             continue
-        crops += 1
+        candidates.append((aspect, -span, x0, y0, x1, y1))
+
+    candidates.sort(key=lambda candidate: candidate[:2])
+    for _, _, x0, y0, x1, y1 in candidates[:_REREAD_MAX_CROPS]:
+        if time.monotonic() >= deadline:
+            break
         crop = cv2.resize(image[y0:y1, x0:x1], None, fx=scale, fy=scale,
                           interpolation=cv2.INTER_CUBIC)
         crop = cv2.copyMakeBorder(crop, border, border, border, border, cv2.BORDER_REPLICATE)

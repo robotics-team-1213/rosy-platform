@@ -94,7 +94,7 @@ def camera_from_homography(image_to_map, image_size: Sequence[int],
     n1, n2 = float(np.linalg.norm(b[:, 0])), float(np.linalg.norm(b[:, 1]))
     if n1 < 1e-12 or n2 < 1e-12:
         return None
-    if abs(n1 / n2 - 1.0) > 0.1 or abs(float(b[:, 0] @ b[:, 1]) / (n1 * n2)) > 0.1:
+    if abs(n1 / n2 - 1.0) > 0.1 or abs(float(b[:, 0] @ b[:, 1]) / (n1 * n2)) > 0.2:
         return None
     r1, r2, t = b[:, 0] / norm, b[:, 1] / norm, b[:, 2] / norm
     centre = apply(i2m, [[px_ref, py_ref]])[0]

@@ -84,6 +84,17 @@ def test_a_wrong_lens_is_refused_instead_of_giving_a_wrong_camera():
     assert geometry.camera_from_homography(image_to_map, SIZE, 40.0) is None
 
 
+def test_camera_position_accepts_moderate_calibration_skew():
+    # The first two columns have unit length and cosine -0.13.
+    b1 = (0.8, 0.0, 0.6)
+    b2 = (0.0625, -math.sqrt(1.0 - 0.0625**2 - 0.3**2), -0.3)
+    image_to_map = np.linalg.inv(_k() @ np.column_stack([b1, b2, (0.0, 0.0, 2.5)]))
+
+    camera = geometry.camera_from_homography(image_to_map, SIZE, HFOV)
+    assert camera is not None and np.isfinite(camera).all()
+    assert geometry.camera_from_homography(image_to_map, SIZE, 40.0) is None
+
+
 def test_ray_cast_top_point_is_corrected_to_its_floor_position():
     centre, height = (1.0, 0.5, 2.5), 0.125
     rotation = _rotation(20.0, 30.0, 5.0)
