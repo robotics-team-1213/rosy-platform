@@ -204,7 +204,7 @@ class TripSteps:
                                                            "junction_seq": exc.args[0] if exc.args else None})
             return
         except _GoalRefused as exc:
-            await self._stop(live, "failed", "TRIP_GOAL_REFUSED", {"goal_reason": str(exc) or None})
+            await self._stop(live, "failed", "TRIP_GOAL_REFUSED", exc.detail)
             return
         except RobotApiError as exc:
             lane = live.segment_is_lane(live.view["segment_index"])
@@ -541,7 +541,7 @@ class TripSteps:
         live.last_goal = (x, y)
         await self._after_send(live)
         if reply.get("accepted") is False or reply.get("queued"):
-            raise _GoalRefused(reply.get("reason") or "")
+            raise _GoalRefused(reply.get("reason") or "", reply)
         if attempt_id is not None:
             try:
                 operation = NativeOperation.model_validate(reply.get("operation"))

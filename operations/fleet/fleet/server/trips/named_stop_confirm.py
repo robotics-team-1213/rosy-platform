@@ -10,7 +10,17 @@ from fleet.server.trip_live import LiveTrip
 
 
 class GoalRefused(RuntimeError):
-    """The console did not send the trip's goal (queued behind traffic, yielding, untrusted)."""
+    """A trip goal was refused or canceled by the console's admission checks."""
+
+    def __init__(self, reason: str, reply: dict | None = None):
+        super().__init__(reason)
+        self.detail = {"goal_reason": reason or None}
+        if reply is not None:
+            evidence = {key: reply[key] for key in (
+                "blocked_by", "waiting_on", "dispatch_attempted", "cancel_confirmed",
+            ) if key in reply}
+            if evidence:
+                self.detail["goal_admission"] = evidence
 
 
 def confirm_lane_stop(steps, live: LiveTrip, index: int) -> bool:
