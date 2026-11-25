@@ -90,3 +90,48 @@ def test_retired_development_session_never_contacts_fleet(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "sign in" in captured.err and "ROSY_FLEET_TOKEN" in captured.err
     assert not captured.out
+
+
+def _cargo_rows(distance, *, fixed_prop=False, reverse_cue=False):
+    import ceiling_marker_yaw as tool
+
+    rear = 0.09 if reverse_cue else -0.09
+    return [tool.CueSample(float(i), (x, 0.0, math.pi),
+                           (rear if fixed_prop else x + rear, 0.0))
+            for i in range(8) for x in (distance * i / 7,)]
+
+
+def test_stationary_orange_evidence_is_only_an_unverified_candidate():
+    import ceiling_marker_yaw as tool
+
+    result = tool.estimate_cargo(_cargo_rows(0.0, fixed_prop=True))
+    assert result["association"] == "unverified_stationary"
+    assert result["candidate_offset_deg"] == pytest.approx(180.0)
+    assert result["installation_allowed"] is False
+
+
+def test_short_comotion_supports_candidate_but_stationary_prop_conflicts():
+    import ceiling_marker_yaw as tool
+
+    result = tool.estimate_cargo(_cargo_rows(0.0455), forward_motion=True)
+    assert result["association"] == "co_moves"
+    assert result["forward_cross_check"] is True
+    assert result["installation_allowed"] is False
+    with pytest.raises(EstimateError, match="co-move"):
+        tool.estimate_cargo(_cargo_rows(0.0455, fixed_prop=True))
+    with pytest.raises(EstimateError, match="forward travel"):
+        tool.estimate_cargo(_cargo_rows(0.0455, reverse_cue=True), forward_motion=True)
+
+
+def test_cargo_video_rejects_mismatched_revision_before_reading_frames(monkeypatch, tmp_path):
+    import json
+    import ceiling_marker_yaw as tool
+
+    record = tmp_path / "approved.json"
+    record.write_text(json.dumps({"source_id": "ceiling_north", "map_id": "world",
+                                  "calibration_revision": "new", "approved_by": "operator"}))
+    monkeypatch.setattr(tool, "collect_cargo_video", lambda *args, **kwargs: pytest.fail("opened video"),
+                        raising=False)
+    code = tool.main(["--robot", "rosy_45", "--marker", "45", "--cargo-video", "old.mp4",
+                      "--record", str(record), "--calibration-revision", "old", "--cargo-height-m", "0.10"])
+    assert code == 2
