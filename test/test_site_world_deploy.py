@@ -104,7 +104,8 @@ def _check_services(services, image):
     assert world["entrypoint"] == ["python3", "-B", "/opt/rosy/world/serve.py"]
     assert "--data-dir" in world["command"]
     bridge = services["world-real-bridge"]
-    assert "entrypoint" not in bridge  # use secret_exec.py from the signed image
+    # Compose can render an inherited image entrypoint as null.
+    assert bridge.get("entrypoint") is None
     assert bridge["command"][:4] == ["--", "python3", "-B", "/opt/rosy/world/bridge_real_fleet.py"]
     assert set(bridge["cap_add"]) == {"SETUID", "SETGID"}
     assert json.loads(bridge["environment"]["ROSY_CREDENTIAL_PATHS"]) == {
