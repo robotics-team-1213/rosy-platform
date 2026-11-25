@@ -177,3 +177,34 @@ def test_projected_cargo_footprint_rejects_small_distractor_and_abstains_on_two_
     frame[265:274, 315:338] = 240
     frame[265:277, 319:331] = (0, 125, 235)
     assert sample(transverse=True) is None  # nearby orange square, no front axis
+
+
+def test_cargo_cli_keeps_candidate_when_led_unobserved_but_refuses_invalid_evidence(monkeypatch, tmp_path, capsys):
+    import json
+    import ceiling_marker_led_yaw as led
+    import ceiling_marker_yaw as tool
+
+    record = tmp_path / "approved.json"
+    record.write_text(json.dumps({"source_id": "ceiling_north", "map_id": "world",
+                                  "calibration_revision": "v", "approved_by": "operator"}))
+    challenge = tmp_path / "challenge.json"
+    challenge.write_text("{}")
+    monkeypatch.setattr(tool, "collect_offline", lambda *args, **kwargs: _cargo_rows(0.0))
+
+    def missing(*args, **kwargs):
+        raise led.LedUnobserved("no blink")
+
+    def invalid(*args, **kwargs):
+        raise EstimateError("invalid challenge")
+
+    argv = ["--robot", "rosy_45", "--marker", "45", "--frames", str(tmp_path),
+            "--record", str(record), "--calibration-revision", "v", "--cargo-height-m", "0.10",
+            "--led-challenge", str(challenge)]
+    monkeypatch.setattr(led, "estimate_led", missing)
+    assert tool.main(argv) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["led_unavailable"] == "no blink"
+    assert result["installation_allowed"] is False
+    monkeypatch.setattr(led, "estimate_led", invalid)
+    assert tool.main(argv) == 2
+    assert "invalid challenge" in capsys.readouterr().err

@@ -32,6 +32,7 @@ Set ``--cargo-height-m`` to the measured height of the orange cargo top and
 ``--calibration-revision`` to the approved revision at capture. This mode reads live raw
 frames, ``--frames DIR`` or ``--cargo-video MP4`` and emits a rear-cue candidate only.
 Stationary evidence cannot establish that the orange object is attached to the robot.
+For a D-950 transverse container, ``--transverse-cargo`` uses the normal of its long edge.
 Use ``--forward-motion`` only for a known straight forward segment.
 
 Token: ``ROSY_FLEET_TOKEN`` (viewer or above) from an authenticated session.
@@ -78,6 +79,7 @@ class CueSample:
     captured_at: float
     marker: tuple[float, float, float]
     cargo: tuple[float, float]
+    front_yaw: float | None = None
 
 
 def _wrap(angle: float) -> float:
@@ -130,7 +132,8 @@ def _estimate_travel(samples, current_offset_deg, min_travel_m):
 
 def estimate_cargo(samples: Sequence[CueSample], *, forward_motion: bool = False) -> dict:
     """A candidate from marker-relative orange rear evidence. Never an installation decision."""
-    if any(not all(math.isfinite(v) for v in (row.captured_at, *row.marker, *row.cargo)) for row in samples):
+    if any(not all(math.isfinite(v) for v in (row.captured_at, *row.marker, *row.cargo))
+           or row.front_yaw is not None and not math.isfinite(row.front_yaw) for row in samples):
         raise EstimateError("non-finite rear cue evidence")
     distinct = {row.captured_at: row for row in samples}
     rows = sorted(distinct.values(), key=lambda row: row.captured_at)
@@ -140,7 +143,11 @@ def estimate_cargo(samples: Sequence[CueSample], *, forward_motion: bool = False
     vectors = [(row.marker[0] - row.cargo[0], row.marker[1] - row.cargo[1]) for row in rows]
     if any(not REAR_CUE_DISTANCE_M[0] <= math.hypot(*v) <= REAR_CUE_DISTANCE_M[1] for v in vectors):
         raise EstimateError("rear cue is outside the marker neighbourhood")
-    diffs = [_wrap(row.marker[2] - math.atan2(y, x)) for row, (x, y) in zip(rows, vectors)]
+    transverse = rows[0].front_yaw is not None
+    if any((row.front_yaw is not None) != transverse for row in rows):
+        raise EstimateError("mixed rear cue heading methods")
+    diffs = [_wrap(row.marker[2] - (row.front_yaw if row.front_yaw is not None else math.atan2(y, x)))
+             for row, (x, y) in zip(rows, vectors)]
     delta = math.atan2(sum(math.sin(d) for d in diffs), sum(math.cos(d) for d in diffs))
     spread = max(abs(math.degrees(_wrap(d - delta))) for d in diffs)
 
@@ -165,6 +172,7 @@ def estimate_cargo(samples: Sequence[CueSample], *, forward_motion: bool = False
             "yaw_spread_deg": round(spread, 2), "marker_displacement_m": round(travel, 4),
             "relative_displacement_m": round(residual, 4),
             "association": "co_moves" if associated else "unverified_stationary",
+            "heading_method": "transverse_cargo" if transverse else "cargo_centroid",
             "forward_cross_check": forward_motion and associated, "installation_allowed": False}
 
 
@@ -210,8 +218,27 @@ def frame_sample(record: dict, jpeg: bytes, size: tuple[int, int], captured_at: 
     return None if pose is None else (captured_at, *pose)
 
 
+def _transverse_heading(contour, area, cue, marker) -> float | None:
+    import cv2
+
+    rect = cv2.minAreaRect(contour)
+    short, long = sorted(rect[1])
+    # The visible orange surface should be rectangular and long enough to resolve an axis.
+    if short <= 0 or long / short < 1.6 or area < 0.65 * short * long:
+        return None
+    box = cv2.boxPoints(rect)
+    edge = max((box[(i + 1) % 4] - box[i] for i in range(4)), key=lambda v: math.hypot(*v))
+    normal = math.atan2(edge[1], edge[0]) + math.pi / 2
+    rear_to_marker = math.atan2(marker[1] - cue[1], marker[0] - cue[0])
+    alignment = math.cos(normal - rear_to_marker)
+    if abs(alignment) < 0.5:  # the marker must lie clearly to one side of the transverse axis
+        return None
+    return _wrap(normal if alignment > 0 else normal + math.pi)
+
+
 def cargo_frame_sample(record: dict, jpeg: bytes, captured_at: float, *, source: str, marker: int,
-                       heading_edge: tuple[int, int], cargo_height_m: float) -> CueSample | None:
+                       heading_edge: tuple[int, int], cargo_height_m: float,
+                       transverse: bool = False) -> CueSample | None:
     """Project a single, unambiguous nearby orange component in the same calibrated map."""
     import cv2
     import numpy as np
@@ -254,11 +281,14 @@ def cargo_frame_sample(record: dict, jpeg: bytes, captured_at: float, *, source:
         if not CARGO_TOP_AREA_M2[0] <= area <= CARGO_TOP_AREA_M2[1]:
             continue
         cue = (moments["m10"] / area, moments["m01"] / area)
-        if REAR_CUE_DISTANCE_M[0] <= math.dist(cue, pose[:2]) <= REAR_CUE_DISTANCE_M[1]:
-            cues.append(cue)
+        if not REAR_CUE_DISTANCE_M[0] <= math.dist(cue, pose[:2]) <= REAR_CUE_DISTANCE_M[1]:
+            continue
+        front_yaw = _transverse_heading(cargo, area, cue, pose) if transverse else None
+        if not transverse or front_yaw is not None:
+            cues.append(CueSample(captured_at, pose, cue, front_yaw))
     if len(cues) > 1:
         raise CueUnavailable("multiple orange objects near the marker")
-    return CueSample(captured_at, pose, cues[0]) if cues else None
+    return cues[0] if cues else None
 
 
 def collect_cargo_video(path: str, record: dict, **kwargs) -> list[CueSample]:
@@ -300,7 +330,7 @@ def _approved_record(fleet, token, context, source):
 
 def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, int], seconds: float,
             token: str | None, context, cargo_height_m: float | None = None,
-            revision: str | None = None, record: dict | None = None) -> list:
+            revision: str | None = None, record: dict | None = None, transverse: bool = False) -> list:
     """(captured_at, x, y, raw marker yaw) from the raw frames; needs rosy_vision (Vision container)."""
     record = record if record is not None else _approved_record(fleet, token, context, source)
     if cargo_height_m is not None:
@@ -327,7 +357,8 @@ def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, in
                 raise EstimateError("cargo heading needs raw, unrectified frames")
             age_ms = float(headers.get("X-Frame-Age-Ms", "nan"))
             sample = (cargo_frame_sample(record, jpeg, captured_at, source=source, marker=marker,
-                                         heading_edge=heading_edge, cargo_height_m=cargo_height_m)
+                                         heading_edge=heading_edge, cargo_height_m=cargo_height_m,
+                                         transverse=transverse)
                       if 0 <= age_ms <= 1000 else None)
         if sample is not None:
             samples[captured_at] = sample
@@ -340,7 +371,8 @@ def collect(fleet: str, *, source: str, marker: int, heading_edge: tuple[int, in
 
 
 def collect_offline(frames: str, record: dict, *, source: str, marker: int,
-                    heading_edge: tuple[int, int], cargo_height_m: float | None = None) -> list:
+                    heading_edge: tuple[int, int], cargo_height_m: float | None = None,
+                    transverse: bool = False) -> list:
     """Recorded raw frames (*.jpg, file mtime = capture time) of one straight drive."""
     import cv2
     import numpy as np
@@ -362,7 +394,8 @@ def collect_offline(frames: str, record: dict, *, source: str, marker: int,
                 continue
             seen.add(digest)
             sample = cargo_frame_sample(record, jpeg, captured_at, source=source, marker=marker,
-                                        heading_edge=heading_edge, cargo_height_m=cargo_height_m)
+                                        heading_edge=heading_edge, cargo_height_m=cargo_height_m,
+                                        transverse=transverse)
         if sample is not None:
             samples.append(sample)
     return samples
@@ -385,6 +418,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--record", help="offline: the approved D-457 record as JSON")
     parser.add_argument("--calibration-revision", help="approved revision at candidate frame capture")
     parser.add_argument("--cargo-height-m", type=float, help="measured orange cargo top height; enables candidate mode")
+    parser.add_argument("--transverse-cargo", action="store_true", help="long cargo edge lies across the robot")
     parser.add_argument("--forward-motion", action="store_true", help="recorded segment is known to be straight forward")
     parser.add_argument("--led-challenge", help="Fleet identify receipt for the recorded raw JPEG frames")
     args = parser.parse_args(argv)
@@ -393,6 +427,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     candidate_mode = args.cargo_height_m is not None or args.led_challenge is not None
     if args.cargo_video and args.cargo_height_m is None:
         parser.error("--cargo-video needs --cargo-height-m")
+    if args.transverse_cargo and args.cargo_height_m is None:
+        parser.error("--transverse-cargo needs --cargo-height-m")
     if args.led_challenge and not args.frames:
         parser.error("--led-challenge needs --frames")
     if candidate_mode and not args.calibration_revision:
@@ -449,7 +485,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _candidate(args, fleet, context, edge):
     frame_options = {"source": args.source, "marker": args.marker, "heading_edge": edge}
-    cargo_options = {**frame_options, "cargo_height_m": args.cargo_height_m}
+    cargo_options = {**frame_options, "cargo_height_m": args.cargo_height_m, "transverse": args.transverse_cargo}
     if not (args.frames or args.cargo_video):
         token = os.environ.get("ROSY_FLEET_TOKEN")
         record = _approved_record(fleet, token, context, args.source)
@@ -473,11 +509,16 @@ def _candidate(args, fleet, context, edge):
     if not args.led_challenge:
         return {**cargo, "map_id": record["map_id"]}
 
-    from ceiling_marker_led_yaw import combine, estimate_led
+    from ceiling_marker_led_yaw import LedUnobserved, combine, estimate_led
 
     challenge = json.loads(Path(args.led_challenge).read_text(encoding="utf-8"))
     frames = [(path.stat().st_mtime, path.read_bytes()) for path in sorted(Path(args.frames).glob("*.jpg"))]
-    led = estimate_led(frames, record, challenge=challenge, robot=args.robot, **frame_options)
+    try:
+        led = estimate_led(frames, record, challenge=challenge, robot=args.robot, **frame_options)
+    except LedUnobserved as exc:
+        if cargo is None:
+            raise
+        return {**cargo, "map_id": record["map_id"], "led_unavailable": str(exc)}
     return {**combine(cargo, led), "map_id": record["map_id"]}
 
 
