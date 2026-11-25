@@ -27,7 +27,7 @@ if __package__:
     from .site_update_io import (
         COMPANIONS, ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
-        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
+        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _now,
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
@@ -39,7 +39,7 @@ else:  # pragma: no cover - installed host CLI
     from site_update_io import (
         COMPANIONS, ConfigError, EXIT_CONFIG, EXIT_FAILED, EXIT_LOCKED, EXIT_OK, Http, Paths,
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
-        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
+        _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _now,
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
         hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
@@ -117,35 +117,6 @@ class SiteUpdater(SiteRuntimeIO):
             if len(rows) < 100:
                 break
         return releases
-
-    def select(self, releases: list[dict], current: str, state: dict) -> dict | None:
-        site = [row for row in releases
-                if isinstance(row.get("tag_name"), str) and _TAG.fullmatch(row["tag_name"])
-                and not row.get("draft")]
-        site.sort(key=lambda row: str(row.get("created_at") or ""), reverse=True)
-        for row in site:
-            if row['tag_name'] == f'site-{current[:12]}':
-                continue
-            names = {asset.get("name") for asset in row.get("assets") or []
-                     if isinstance(asset, dict)}
-            if not {"release.json", SIGNATURE, "SHA256SUMS"} <= names:
-                continue  # not signed yet
-            if row["tag_name"] in state["failed"]:
-                continue
-            if not self.is_newer(current, row['tag_name']):
-                continue
-            return row
-        return None
-
-    def is_newer(self, current: str, candidate: str, or_same: bool = False) -> bool:
-        # Later pages omit changed files but retain ancestry metadata.
-        url = f"https://api.github.com/repos/{self.config['repo']}/compare/{current}...{candidate}?per_page=1&page=2"
-        try:
-            comparison = json.loads(self.http.get(url, _LIST_LIMIT))
-            return (comparison['status'] in (('ahead', 'identical') if or_same else ('ahead',))
-                    and comparison['merge_base_commit']['sha'] == current)
-        except (json.JSONDecodeError, KeyError, TypeError):
-            raise Transient('commit comparison is malformed') from None
 
     def _asset_url(self, release: dict, name: str) -> str:
         tag = release["tag_name"]
