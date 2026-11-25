@@ -17,6 +17,134 @@ from pathlib import Path
 import cell_pipeline_io as cio
 
 PLAYED = ("above_pick", "home")  # the remap goes to above_pick and folds; its other chunks never play
+REMAP_CLEAR_MM = 35.0
+REMAP_MIN_RAISED_PX = 20
+
+
+def _target_map_sites(config: dict) -> list[str]:
+    sites = config.get("calibrate", {}).get("map_sites") or ["floor", "pinky", "belt"]
+    configured = config.get("sites") or {}
+    return [s for s in sites if s in configured]
+
+
+def site_obstacle_mm(config: dict, depth, colour) -> dict:
+    """Measure the tallest raised object (p99 mm above table) across the configured remap sites using D435 depth; ValueError
+    without a frame or when the colour/depth alignment is too loose to place the sites."""
+    if depth is None or colour is None:  # capture_top_depth_z16 answers None, it never raises: no frame is not "nothing stands here"
+        raise ValueError("the D435 depth capture returned no frame" if depth is None else "the top camera returned no frame")
+    import numpy as np
+    import cell_depth
+
+    plane = cell_depth.table_plane(depth)
+    if abs(float(plane[0][2])) < 0.99:
+        candidates = [plane, *(cell_depth.table_plane(depth, seed=s) for s in (1, 2, 3))]
+        plane = max(candidates, key=lambda p: abs(float(p[0][2])))
+    heights = cell_depth.height_map(depth, plane)
+    to_depth, edge_px = cell_depth.align_edges(colour, heights)
+    if not math.isfinite(float(edge_px)) or float(edge_px) > 8.0:  # cell_depth_slots' limit for placing regions on the depth
+        raise ValueError(f"colour/depth alignment is loose ({edge_px:.1f} px): the site ROIs cannot be placed on the depth")
+    lo_mm = float(cell_depth.RAISED_MM[0])
+    hi_mm = max(float(cell_depth.RAISED_MM[1]), 220.0)
+    sites_mm: dict[str, float] = {}
+    configured = config.get("sites") or {}
+    for name in _target_map_sites(config):
+        roi = (configured.get(name) or {}).get("auto_roi")
+        if not roi or len(roi) != 4:
+            continue
+        x1, y1, x2, y2 = [float(v) for v in roi]
+        c1 = (to_depth @ [x1, y1, 1.0])[:2]
+        c2 = (to_depth @ [x2, y2, 1.0])[:2]
+        dx1, dx2 = max(0, int(min(c1[0], c2[0]))), min(heights.shape[1], int(math.ceil(max(c1[0], c2[0]))))
+        dy1, dy2 = max(0, int(min(c1[1], c2[1]))), min(heights.shape[0], int(math.ceil(max(c1[1], c2[1]))))
+        if dx2 <= dx1 or dy2 <= dy1:
+            continue
+        patch = heights[dy1:dy2, dx1:dx2]
+        vals = patch[np.isfinite(patch) & (patch >= lo_mm) & (patch <= hi_mm)]
+        if int(vals.size) >= REMAP_MIN_RAISED_PX:
+            sites_mm[name] = round(float(np.percentile(vals, 99)), 1)
+    return {
+        "obstacle_mm": max(sites_mm.values(), default=0.0),
+        "sites_mm": sites_mm,
+        "edge_px": round(float(edge_px), 2),
+        "plane_nz": round(abs(float(plane[0][2])), 4),
+    }
+
+
+def resolve_z_view(
+    config: dict,
+    *,
+    obstacle_mm: float | None = None,
+    clear_mm: float = REMAP_CLEAR_MM,
+) -> tuple[dict, dict]:
+    """Raise coarse.z_view (never lower) to clear `obstacle_mm` by `clear_mm` above the table plane."""
+    base_z = float(config["coarse"]["z_view"])
+    info = {
+        "base_z_view": base_z,
+        "z_view": base_z,
+        "obstacle_mm": obstacle_mm,
+        "clear_mm": float(clear_mm),
+        "raised": False,
+    }
+    if obstacle_mm is None or isinstance(obstacle_mm, bool) or not math.isfinite(float(obstacle_mm)) or float(obstacle_mm) <= 0.0:
+        return config, info
+    obs = float(obstacle_mm)
+    target_sites = set(_target_map_sites(config))
+    configured = config.get("sites") or {}
+    surface_zs = [
+        float(site["surface_z"])
+        for name, site in configured.items()
+        if (not target_sites or name in target_sites)
+        and isinstance(site, dict)
+        and isinstance(site.get("surface_z"), (int, float))
+        and not isinstance(site.get("surface_z"), bool)
+        and math.isfinite(float(site["surface_z"]))
+    ]
+    table_zs = [z for z in surface_zs if -0.025 <= z <= 0.0]
+    table_z = max(table_zs) if table_zs else 0.0
+    req_z = round(table_z + (obs + float(clear_mm)) / 1000.0, 4)
+    eff_z = max(base_z, req_z)
+    raised = eff_z > base_z + 1e-6
+    info.update({
+        "z_view": eff_z,
+        "obstacle_mm": round(obs, 1),
+        "required_z_view": req_z,
+        "table_z_m": round(table_z, 4),
+        "raised": raised,
+    })
+    if not raised:
+        return config, info
+    eff_cfg = {**config, "coarse": {**config["coarse"], "z_view": eff_z}}
+    return eff_cfg, info
+
+
+def plan_only(config: dict, points: list, obstacle_mm: float | None = None) -> dict:
+    """What `--plan-only` prints: every point's IK row, the refusal, the reach note, the plan leverage and the z_view record."""
+    import cell_map_fit
+
+    view, info = resolve_z_view(config, obstacle_mm=obstacle_mm) if obstacle_mm is not None else (config, None)
+    rows = plan(view, points)
+    return {"plan_only": rows, "refused": refusal(rows), "reach": reach_note(view),
+            "leverage": cell_map_fit.plan_leverage(points, view.get("sites") or {}), **({"z_view": info} if info else {})}
+
+
+def remap_view(config: dict, colour, obstacle_mm: float | None = None, depth_capture=None) -> tuple[dict, dict]:
+    """The config a remap moves with, and its z_view record: `obstacle_mm` when given, else what the D435 sees above the map sites.
+
+    A depth frame that could not be taken or aligned is recorded as `depth_error` and leaves the configured z_view;
+    cell_calibrate refuses a remap on it before any move unless `--obstacle-mm` was given."""
+    extra: dict = {}
+    if obstacle_mm is None and depth_capture is not None:
+        import cell_cal_eval
+
+        if cell_cal_eval.top_has_depth(config):
+            try:
+                meta = site_obstacle_mm(config, depth_capture(), colour)  # raises without a frame or with a loose alignment
+                obstacle_mm = meta["obstacle_mm"]
+                extra.update(sites_mm=meta["sites_mm"], edge_px=meta["edge_px"], plane_nz=meta.get("plane_nz"))
+            except (OSError, RuntimeError, ValueError) as exc:
+                extra["depth_error"] = str(exc)
+    view, info = resolve_z_view(config, obstacle_mm=obstacle_mm)
+    return view, {**info, **extra}
 
 
 def scoped(config: dict) -> dict:

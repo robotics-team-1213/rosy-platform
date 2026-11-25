@@ -258,7 +258,9 @@ def main(argv=None):
                     "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
     ap.add_argument("--verify", action="store_true", help="auto: chain post-eval XY visit and depth-verify after calibration steps")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
+    ap.add_argument("--obstacle-mm", type=float, default=None, help="override obstacle height (mm above table) for remap z_view clearance")
     args = ap.parse_args(argv)
+    if args.obstacle_mm is not None and not 0 < args.obstacle_mm < float("inf"): ap.error("--obstacle-mm must be a positive finite number of mm")
     import cv2
     import cell_pipeline as cp
 
@@ -267,13 +269,9 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     points = config.get("calibrate", {}).get("map_points", MAP_POINTS)
     if args.plan_only:
-        import cell_map_fit
-
-        rows = rp.plan(config, points)
-        refused = rp.refusal(rows)
-        lev = cell_map_fit.plan_leverage(points, config.get("sites") or {})
-        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config), "leverage": lev}), flush=True)
-        return 2 if refused else 0
+        out = rp.plan_only(config, points, args.obstacle_mm)  # the IK rows, the refusal, reach, leverage and the z_view record
+        print(json.dumps(out), flush=True)
+        return 2 if out["refused"] else 0
     if args.replay_frames is not None:
         if args.step != "check":
             raise SystemExit("--replay-frames is offline read-only and only allowed with step 'check'")
@@ -287,7 +285,8 @@ def main(argv=None):
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     work = Path(config["work_dir"]).expanduser() / "calibrate"
     work.mkdir(parents=True, exist_ok=True)
-    found = check(config, calibration, targets, cell.frame("top"), config["params"])
+    top_frame = cell.frame("top")
+    found = check(config, calibration, targets, top_frame, config["params"])
     todo = stale(found)
     if args.verify:
         for vstep in ("post-eval", "depth-verify"):
@@ -298,29 +297,31 @@ def main(argv=None):
     print(json.dumps({"check": found, "todo": todo}, default=str), flush=True)
     if args.step == "check" or not todo:
         return 0
-    refused = rp.refusal(rp.plan(config, points)) if "remap" in todo else None  # before any move: one bad point refuses the run
+    remap_config, z_info = (config, None) if "remap" not in todo else rp.remap_view(config, top_frame, args.obstacle_mm, depth_capture)
+    depth_bad = f"obstacle not measured: {z_info['depth_error']}; fix the D435 or pass --obstacle-mm" if z_info and z_info.get("depth_error") else None
+    refused = depth_bad or (rp.refusal(rp.plan(remap_config, points)) if "remap" in todo else None)  # before any move: one bad point refuses the run
     if refused:
-        print(json.dumps({"refused": refused, "todo": todo}), flush=True)
+        print(json.dumps({"refused": refused, "todo": todo, **({"z_view": z_info} if z_info else {})}), flush=True)
         return 2
     if not (args.commissioning and args.person_at_switch):
-        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}), flush=True)
+        print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo, **({"z_view": z_info} if z_info else {})}), flush=True)
         return 2
     done, config_dirty = [], False
     for step in todo:
         if step == "remap":
-            ref_path = Path(config["preflight"]["reference_top"]).expanduser()
+            ref_path = Path(remap_config["preflight"]["reference_top"]).expanduser()
             import cell_hooks, cell_pivot_bias
 
-            stills = cell_hooks.stills(cell, config)
+            stills = cell_hooks.stills(cell, remap_config)
             try:
-                record = remap(cell, config, points, work, at_stop=stills)
+                record = remap(cell, remap_config, points, work, at_stop=stills)
             finally:
                 stills.close()
-            if not map_agrees(record, config["params"]):
+            if not map_agrees(record, remap_config["params"]):
                 done.append({"remap": record["loo_error_mm"], "refused": "marks disagree; map not saved"})
                 break
             current = cell.frame("top")
-            for site in _map_write_sites(config):
+            for site in _map_write_sites(remap_config):
                 calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
             if ref_path.exists():
                 move_regions(
@@ -329,7 +330,7 @@ def main(argv=None):
                     cv2.cvtColor(current, cv2.COLOR_BGR2GRAY),
                 )
                 config_dirty = True
-            save_bound_map_reference(cal_path, ref_path, calibration, config, current)
+            save_bound_map_reference(cal_path, ref_path, calibration, remap_config, current)
             bp = cell_pivot.bias_path(cal_path)
             if bp.exists():
                 bp.with_suffix(".json.bak").write_bytes(bp.read_bytes())
@@ -337,7 +338,7 @@ def main(argv=None):
             bp_tmp.write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}), encoding="utf-8")
             bp_tmp.replace(bp)
             cell_pivot_bias._BIAS_CACHE.clear()
-            done.append({"remap": record["loo_error_mm"]})
+            done.append({"remap": record["loo_error_mm"], **({"z_view": z_info} if z_info else {})})
         elif step == "regions":
             continue
         elif step == "consensus-repair":
