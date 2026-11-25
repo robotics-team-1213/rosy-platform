@@ -82,20 +82,24 @@ class Reader:
         return bytes(data)
 
     def scan(self, seconds):
+        stop_notice = rb"(?m)^Notification:StopOperation\r?\n"
         try:
-            reports = self.exchange(b"inventory .incrssi", seconds, collect=True,
-                                    until=rb"(?m)^Notification:StopOperation\r?$")
+            reports = self.exchange(b"inventory .incrssi", seconds, collect=True, until=stop_notice)
         finally:
-            stop_ack = rb"(?m)^Command:abort\s*,Status:(?:OK|No Radio Operation in Progress)\r?$"
+            stop_ack = rb"(?m)^Command:abort[ \t]*,Status:(?:OK|No Radio Operation in Progress)\r?\n"
             tail = self.exchange(b"abort", 1.8, collect=True, until=stop_ack)
             if not re.search(stop_ack, tail):
                 tail += self.exchange(b"abort", 1.2, collect=True, until=stop_ack)
             if not re.search(stop_ack, tail):
                 raise ConnectionError("could not confirm the RFID inventory stopped")
+        reports = reports.lstrip(b"\r\n")
         if not reports.startswith(b"Command:inventory"):
             raise ConnectionError("RFD40 did not return an inventory header")
-        first_scan, stopped, _ = reports.partition(b"Notification:StopOperation")
-        return first_scan if stopped and b"Notification:StartOperation" in first_scan else b""
+        stopped = re.search(stop_notice, reports)
+        if stopped is None:
+            return b""
+        first_scan = reports[:stopped.start()]
+        return first_scan if re.search(rb"(?m)^Notification:StartOperation\r?\n", first_scan) else b""
 
     def verify_trigger(self):
         start = self.exchange(b"st .n", 4)

@@ -8,6 +8,7 @@ and the reading is stored before it is sent, so a resend is the same reading (Fl
 
   port_event_outbox.py send --arm ARM     resend every unsent reading (also run before each carry)
   port_event_outbox.py rfid --arm ARM     read one EPC from stdin, queue it, and send it
+  port_event_outbox.py rfid --arm ARM --listen     accept successive EPC lines and retry delivery during idle time
 
 On a Linux cell PC, rfd40_cell.py can provide the EPC over Bluetooth SPP. Use its RFID
 Serial Port channel, start the command, then pull and release the RFID trigger.
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Event, Thread
 import sys
 from uuid import uuid4
 
@@ -27,6 +29,8 @@ for extra in (HERE.parents[3] / "contracts/foundation",):
         sys.path.append(str(extra))
 
 from core_common.protocol.port_events import IntakeReading  # noqa: E402
+
+RFID_RESEND_SECONDS = 2
 
 
 def outbox_dir() -> Path:
@@ -78,6 +82,33 @@ def send(link, directory: Path | None = None) -> bool:
     return ok
 
 
+def rfid_reading(line: str) -> IntakeReading:
+    if len(line) > 130:
+        raise ValueError("EPC line is too long")
+    return reading("rfid_intake", {"state": "read", "epc": line.strip()})
+
+
+def listen_rfid(link, lines, directory: Path | None = None) -> bool:
+    """Persist each trigger result while a separate worker retries Fleet delivery."""
+    finished = Event()
+
+    def resend():
+        while not finished.is_set():
+            send(link, directory)
+            finished.wait(RFID_RESEND_SECONDS)
+
+    worker = Thread(target=resend, name="rfid-outbox")
+    worker.start()
+    try:
+        for line in lines:
+            queue(rfid_reading(line), directory)
+    finally:
+        finished.set()
+        worker.join()
+
+    return send(link, directory)
+
+
 def main(argv=None) -> int:
     import argparse
     import os
@@ -87,23 +118,26 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("cmd", choices=["send", "rfid"])
     ap.add_argument("--arm", required=True, help="any arm of this workcell: its token identifies the cell PC")
+    ap.add_argument("--listen", action="store_true", help="rfid only: consume every EPC line")
     args = ap.parse_args(argv)
+    if args.listen and args.cmd != "rfid":
+        ap.error("--listen requires the rfid command")
     link = ArmIncidentLink.from_environment(args.arm, os.environ)
     if link is None:
         print("no observation configuration on this PC")
         return 1
     if args.cmd == "rfid":
-        from pydantic import ValidationError
-
-        epc = sys.stdin.readline(130).strip()
-        if not epc:
-            print("no EPC selected", file=sys.stderr)
-            return 2
         try:
-            item = reading("rfid_intake", {"state": "read", "epc": epc})
-        except ValidationError:
+            if args.listen:
+                lines = iter(lambda: sys.stdin.readline(131), "")
+                return 0 if listen_rfid(link, lines) else 1
+            line = sys.stdin.readline(131)
+            if not line.strip():
+                print("no EPC selected", file=sys.stderr)
+                return 2
+            queue(rfid_reading(line))
+        except ValueError:
             ap.error("expected one hexadecimal EPC from the reader")
-        queue(item)
     return 0 if send(link) else 1
 
 

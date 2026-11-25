@@ -36,6 +36,15 @@ python3 rfd40_cell.py "$RFD40_ADDRESS" --channel "$RFD40_RFID_CHANNEL" --listen 
 
 The reader waits for successive press and release cycles on one connection. After a Bluetooth error the adapter opens a fresh session, verifies the trigger configuration, and arms the next scan. Retry delays grow from one to 30 seconds and reset after a working scan. Standard output carries one EPC per accepted cycle. A disconnect during the cycle requires a new trigger pull. Use Ctrl+C to stop.
 
+When Fleet intake and Cell observation credentials are configured, give the outbox the same continuous mode:
+
+```sh
+python3 rfd40_cell.py "$RFD40_ADDRESS" --channel "$RFD40_RFID_CHANNEL" --listen --beep-on-read |
+  python3 port_event_outbox.py rfid --arm "$ROSY_INTAKE_ARM" --listen
+```
+
+Each accepted scan is queued on disk. Fleet delivery retries while the reader is idle, using the original observation reference. The confirmation beep indicates a local read. Check Harbor for receipt.
+
 ## Verification
 
 - USB immediate inventory reported the same EPC with S1/A and S0/A+B. Both the session and target changed in the comparison.
