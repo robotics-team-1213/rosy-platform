@@ -46,14 +46,17 @@ def test_site_basis_alone_reports_junction_turn():
     assert rig.m.supports_junction_turn is True
 
 
-@pytest.mark.parametrize('missing', ['accepted', 'ir_stale', 'ir_departure', 'scan_stale', 'body'])
-def test_any_missing_site_piece_reports_no_junction_turn(missing):
+@pytest.mark.parametrize(('missing', 'reason'), [
+    ('accepted', 'site_floor_unconfigured'), ('ir_stale', 'ir_stale'),
+    ('ir_departure', 'ir_centre'), ('scan_stale', 'scan_stale'), ('body', 'site_floor_unconfigured'),
+])
+def test_any_missing_site_piece_reports_no_junction_turn(missing, reason):
     config = dict(SITE)
     if missing == 'accepted':
         config['site_floor_map_id'] = None
     if missing == 'body':
         config = {k: v for k, v in config.items() if k not in ('body_front_x_m', 'site_floor_map_id')}
-    rig = Rig(proof=False, **config)
+    rig = site_rig(**config)
     site_step(rig, ir={'ir_stale': 'stale', 'ir_departure': 'centre'}.get(missing, 'clear'))
     if missing == 'scan_stale':
         rig.now += 1.                            # beyond clearance_stale_s; IR still fresh
@@ -61,6 +64,7 @@ def test_any_missing_site_piece_reports_no_junction_turn(missing):
                                       calibration_revision='r'), received_at=rig.now)
     _corner(rig)
     assert rig.m.supports_junction_turn is False
+    assert rig.m.junction_turn_capability() == (False, reason)
 
 
 def test_capability_is_recomputed_when_the_ir_verdict_ages():
