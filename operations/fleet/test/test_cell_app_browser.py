@@ -246,9 +246,21 @@ def test_cell_stage_links_show_one_step_on_entry_and_click(browser_site, heading
     page.locator('.ui-subnav a[href="#recipe-heading"]').click()
     expect(page.locator(f"#{field}")).to_be_hidden()
     expect(page.locator("#recipe-id")).to_be_visible()
-    page.locator(f'.ui-subnav a[href="#{heading}"]').click()
+    expect(page.locator("#recipe-heading")).to_be_focused()
+    step = page.locator(f'.ui-subnav a[href="#{heading}"]')
+    step.press("Enter")
     expect(page.locator(f"#{field}")).to_be_visible()
-    expect(page.locator(f'.ui-subnav a[href="#{heading}"]')).to_have_attribute("aria-current", "step")
+    expect(step).to_have_attribute("aria-current", "step")
+    expect(page.locator(f"#{heading}")).to_be_focused()
+    step.press("Enter")
+    expect(page.locator(f"#{heading}")).to_be_focused()
+
+    page.go_back()
+    expect(page.locator("#recipe-heading")).to_be_visible()
+    expect(page.locator(f"#{field}")).to_be_hidden()
+    page.go_forward()
+    expect(page.locator(f"#{field}")).to_be_visible()
+    expect(step).to_have_attribute("aria-current", "step")
     expect(page.locator('.ui-subnav a[href="/console?view=work&show=new"]')).not_to_have_attribute("aria-current", "page")
 
 
