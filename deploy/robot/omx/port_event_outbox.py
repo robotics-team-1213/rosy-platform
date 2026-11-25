@@ -94,7 +94,10 @@ def listen_rfid(link, lines, directory: Path | None = None) -> bool:
 
     def resend():
         while not finished.is_set():
-            send(link, directory)
+            try:
+                send(link, directory)
+            except OSError as exc:
+                print(f"RFID outbox will retry after a local I/O error: {exc}", file=sys.stderr, flush=True)
             finished.wait(RFID_RESEND_SECONDS)
 
     worker = Thread(target=resend, name="rfid-outbox")
