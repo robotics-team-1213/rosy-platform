@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from contextlib import nullcontext, suppress
-import json
 import time
 import uuid
 from types import SimpleNamespace
 from fastapi import HTTPException, Request
+from fleet.server.learning_entry import calibration_origin_fields
 from fleet.charge_bays import ChargeBays
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boundary_separation
@@ -19,7 +19,7 @@ from fleet.server.pipeline_port_events import (
 from core_common.profile import LEGACY_VEHICLE_SITE
 from .pipeline_cell_task_presets import cell_task_presets
 from .pipeline_governance_store import (
-    admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id, is_named_operator,
+    admit_cell_task_guarded, build_cell_readiness, deterministic_idempotency_id,
     prepare_task_governance, safe_canonical_digest, scoped_idempotency_key, validate_request_key,
 )
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
@@ -409,6 +409,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         return {
             "tasks": tasks,
             "summary": summary,
+            **calibration_origin_fields(),
             **({"authority": gov.snapshot()} if gov is not None else {}),
             "cells": cells_info,
             "presets": list(CELL_TASK_PRESETS.values()),

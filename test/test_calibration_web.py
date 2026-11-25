@@ -83,6 +83,21 @@ def account_screen(store):
     server.server_close()
 
 
+@pytest.mark.parametrize(("query", "destination"), [
+    ("", "/"), ("?arm=arm_a", "/?arm=arm_a"), ("?arm=arm_b", "/?arm=arm_b"), ("?arm=arm_s", "/?arm=arm_s"),
+    ("?arm=https://example.invalid", "/"), ("?arm=arm_s&arm=arm_b", "/"),
+])
+def test_login_preserves_only_a_recognized_arm(account_screen, query, destination):
+    url, account = account_screen
+    received = []
+    def start(target):
+        received.append(target)
+        return "flow", "/"
+    account.start = start
+    assert call(url, "/api/account/login" + query)[0] == 200
+    assert received == [destination]
+
+
 def test_without_account_it_lists_and_shows_but_never_answers(open_screen, store):
     status, body = call(open_screen, web.API)
     rows = json.loads(body)
@@ -99,6 +114,12 @@ def test_page_and_assets_are_served_but_not_arbitrary_files(open_screen):
     assert call(open_screen, "/app.js")[0] == 200
     for path in ("/common/../calibration_web.py", "/common/AGENTS.md", "/../calibration_web.py", "/.git"):
         assert call(open_screen, path)[0] == 404
+
+
+def test_missing_common_manifest_returns_service_unavailable(open_screen, monkeypatch, tmp_path):
+    monkeypatch.setattr(web, "COMMON", tmp_path)
+    status, body = call(open_screen, "/common/tokens.css")
+    assert status == 503 and "자산 목록" in json.loads(body)["error"]
 
 
 def test_host_header_must_be_local(open_screen):

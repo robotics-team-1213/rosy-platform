@@ -11,6 +11,14 @@ def test_monitoring_backend_and_app_share_the_real_browser_contract():
     assert browser_scope.targets(['operations/monitoring/src/rosy/monitoring/service.py']) == expected
 
 
+def test_calibration_screen_sources_select_header_and_job_browser_tests():
+    expected = {"test/test_calibration_header_browser.py", "test/test_calibration_job_controls_browser.py"}
+    for path in ("applications/calibration/web/styles.css", "applications/calibration/calibration_web.py"):
+        assert set(browser_scope.targets([path])) == expected
+    assert expected <= set(browser_scope.targets(["shared/web/components.css"]))
+    assert expected <= set(browser_scope.all_targets())
+
+
 def test_fleet_development_changes_include_independent_browser_flows():
     for path in ('applications/fleet/dev/sample/engine.py', 'applications/fleet/web/runtime.js'):
         found = browser_scope.targets([path])

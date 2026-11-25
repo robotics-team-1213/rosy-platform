@@ -4,6 +4,7 @@ import { initLiveFeeds, isLayoutSha } from "./live-feeds.js";
 import { activeSiteMap } from "./active-site-map.js";
 
 const byId = (id) => document.getElementById(id);
+if (["/world/", "/world/index.html"].includes(location.pathname)) byId("world-experiments-link").hidden = false;
 const status = (id, state, text) => {
   const element = byId(id);
   if (element.getAttribute("state") !== state) element.setAttribute("state", state);

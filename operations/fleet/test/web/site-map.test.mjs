@@ -520,6 +520,23 @@ test('repeatPlaces prefers start places and falls back to stop places, supportin
   assert.deepEqual(repeatTripBody(withStarts, 'A', '', ''), {to: 'A', via: ['B'], repeat: true});
 });
 
+test('site points apply only to the displayed active map identity', async () => {
+  const {sitePointsForActiveMap} = await import('/console/assets/map-editor.js');
+  const active = {map: {map_id: 'warehouse'}, version: 2, sha256: 'sha-two'};
+  const source = {map_id: 'warehouse', version: 2, sha256: 'sha-two'};
+  const sitePoints = {sources: {site_map: source}};
+
+  assert.equal(sitePointsForActiveMap(sitePoints, active, 'active'), sitePoints);
+  for (const mapSource of ['draft', 'profile']) {
+    assert.equal(sitePointsForActiveMap(sitePoints, active, mapSource), null);
+  }
+  for (const mismatch of [{map_id: 'other'}, {version: 1}, {sha256: 'sha-one'}]) {
+    assert.equal(sitePointsForActiveMap({sources: {site_map: {...source, ...mismatch}}}, active, 'active'), null);
+  }
+  assert.equal(sitePointsForActiveMap({}, active, 'active'), null);
+  assert.equal(sitePointsForActiveMap(sitePoints, null, 'active'), null);
+});
+
 test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor and planned stop overlays', async () => {
   const {drawSitePointsOverlay, renderSitePointsSummary} = await import('/console/assets/map-editor.js');
   const makeNode = (tag, ns = '') => {
@@ -568,7 +585,10 @@ test('drawSitePointsOverlay and renderSitePointsSummary render 3-frame, conveyor
   assert.ok(texts.includes('S3_app(예정)'));
   assert.ok(texts.includes('S_OUT(예정)'));
   assert.ok(texts.includes('[수령·출구]'));
-  assert.ok(texts.includes('arm_s 180°·cell_ab -90°'));
+  assert.ok(texts.includes('S 셀 기준점(참고)'));
+  const marker = layer.children.find(c => c.attributes.class === 'sp-cell-ref');
+  assert.match(marker.children[0].textContent, /S 셀/);
+  assert.doesNotMatch(marker.children[0].textContent, /cell_ab/);
 
   renderSitePointsSummary(panelEl, bodyEl, payload);
   assert.equal(panelEl.hidden, false);

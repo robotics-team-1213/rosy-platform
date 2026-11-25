@@ -551,7 +551,8 @@ details[data-more] > summary { cursor: pointer; font-size: var(--text-micro); co
   background: var(--surface-flat);
 }
 .map-overlay-toggles [data-layer-toggle][aria-pressed="false"] {
-  opacity: var(--disabled-opacity);
+  border-style: dashed;
+  color: var(--text-secondary);
 }
 @media (width >= 64rem) and (hover: hover) and (pointer: fine) {
   .fleet-workspace > .ui-pathbar { min-block-size: 0; padding-block: var(--space-1); row-gap: var(--space-1); }

@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/common/component-controls.css">
   <link rel="stylesheet" href="/common/app-shell.css">
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/job-controls.css">
   <script type="module" src="/common/ui.js"></script>
   <script type="module" src="/app.js"></script>
 </head>
@@ -196,6 +197,33 @@
             </header>
             <p id="jobStatusNote" class="cal-muted">작업 상태를 불러오는 중…</p>
             <div id="jobStatusBody" class="cal-job-status-body" hidden>
+              <form id="jobForm" class="answer-form" hidden>
+                <label for="jobArm">보정할 팔</label>
+                <select id="jobArm" class="ui-field" required></select>
+                <label for="jobStep">작업</label>
+                <select id="jobStep" class="ui-field">
+                  <option value="check">사전 점검</option>
+                  <option value="depth-verify">깊이 검증</option>
+                  <option value="remap">필요한 카메라 XY 맵 재측정</option>
+                  <option value="pivot-near">지정 좌표 주변 XY 편차 측정</option>
+                  <option value="surface">면 높이 측정</option>
+                </select>
+                <small id="jobRemapNote" hidden>집게를 관측 높이에서 촬영해 XY 맵을 맞춥니다. 이 작업만으로 면 높이에서의 정밀 XY 측정이 완료되지는 않습니다.</small>
+                <label id="jobSurfaceLabel" hidden>측정할 면
+                  <select id="jobSurface" class="ui-field"></select>
+                </label>
+                <label id="jobTargetsLabel" hidden>측정 좌표 (팔 기준 미터, 한 줄에 site:x,y)
+                  <textarea id="jobTargets" class="ui-field" rows="2" spellcheck="false"></textarea>
+                  <small id="jobSites"></small>
+                </label>
+                <label id="jobSwitchLabel" class="ui-check" hidden><input type="checkbox" class="ui-field" id="jobSwitch"> <span id="jobSwitchText"></span></label>
+                <ui-button id="jobStart" kind="primary" type="submit">보정 작업 시작</ui-button>
+              </form>
+              <p id="jobActionNote" role="status" aria-live="polite"></p>
+              <div id="jobDetail" hidden>
+                <p id="jobProgress" role="status" aria-live="polite"></p>
+                <details><summary>작업 결과 및 로그</summary><pre id="jobOutput"></pre></details>
+              </div>
               <h3 class="cal-subhead">셀별 리스 점유</h3>
               <dl id="jobLeaseDl" class="ui-readout"></dl>
               <h3 class="cal-subhead">최근 작업 3건</h3>

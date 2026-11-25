@@ -6,7 +6,18 @@ const {
   classifyHold,
   classifyFrameBinding,
   classifyDrift,
+  linkedArm,
+  profileForArm,
 } = await import("../web/status-logic.js");
+
+test("arm links select the requested robot and survive profile ordering or missing profiles", () => {
+  const profiles = [{id: "first", arm_id: "arm_s"}, {id: "ab-camera", arm_id: "arm_b"}];
+  assert.equal(profileForArm(profiles, linkedArm("?arm=arm_b"), null).id, "ab-camera");
+  assert.equal(profileForArm(profiles, linkedArm("?arm=arm_a"), "first"), null);
+  assert.equal(profileForArm(profiles, null, "ab-camera").id, "ab-camera");
+  assert.equal(linkedArm("?arm=arm_b&arm=arm_a"), null);
+  assert.equal(linkedArm("?arm=other"), null);
+});
 
 test("classifyHold never reports HOLD CLEAR when hold evidence is missing, null, partial, or errored", () => {
   for (const blank of [undefined, null, {}, { local_held: null, fleet_held: null, incident_ids: [] }]) {

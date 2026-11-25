@@ -25,7 +25,7 @@ def client(monkeypatch, tmp_path, config=None):
 @pytest.mark.parametrize('config', [None, {}])
 def test_unconfigured_documents_explain_preparation(monkeypatch, tmp_path, config):
     http = client(monkeypatch, tmp_path, config)
-    for path in ['/console/learning', '/console/learning/model', '/console/learning/ai']:
+    for path in ['/console/learning', '/console/learning/model', '/console/learning/ai', '/console/learning/world']:
         response = http.get(path, follow_redirects=False)
         assert response.status_code == 503
         assert 'text/html' in response.headers['content-type']
@@ -62,7 +62,10 @@ def test_constant_redirects_do_not_forward_credentials_or_queries(monkeypatch, t
         assert response.headers['location'] == origin + '/learning'
         assert 'set-cookie' not in response.headers
         assert 'fleet-secret' not in response.text and 'fleet-cookie' not in response.text
-    for path in ['/console/learning', '/console/learning/model']:
+    world = http.get('/console/learning/world', follow_redirects=False)
+    assert world.status_code == 303
+    assert world.headers['location'] == 'https://model.example/learning/world'
+    for path in ['/console/learning', '/console/learning/model', '/console/learning/world']:
         for query in ['url=https://evil.example', 'target=ai', 'token=fleet-secret', 'next=//evil.example']:
             response = http.get(path + '?' + query, follow_redirects=False)
             assert response.status_code == 400

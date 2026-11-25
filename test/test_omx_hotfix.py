@@ -4,6 +4,7 @@ subprocess.run is stubbed throughout: no git writes, no network, no remote pytes
 """
 from __future__ import annotations
 
+import json
 import shlex
 import subprocess
 import sys
@@ -208,8 +209,6 @@ def test_deploy_records_the_main_floor_before_switching(fake, tmp_path):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the floor script runs on the Linux cell (fcntl)")
 def test_the_floor_script_changes_only_floor_sha_in_the_updater_state(tmp_path):
-    import json
-
     root = tmp_path / "rosy-omx"
     root.mkdir()
     old = {"current": "a" * 12, "previous": "b" * 12, "current_sha": "a" * 40, "env": "e1", "failed": "c" * 12,
@@ -239,7 +238,19 @@ def test_hotfix_paths_include_policy_site_map_and_gripper_assets():
         "learning/envs/isaac/palletizing_gripper.py",
         "learning/envs/isaac/assets/omx_f_palletizing_description",
     ):
-        assert required in oh.PATHS
+        assert any(Path(required).is_relative_to(entry) for entry in oh.PATHS)
+
+
+def test_hotfix_paths_include_calibration_common_assets():
+    common = Path("shared/web")
+    manifest = common / "shared-assets.json"
+    assets = json.loads((ROOT / manifest).read_text(encoding="utf-8"))["shared_assets"]
+    required = [Path("applications/calibration/web/index.html"), manifest, *(common / name for name in assets)]
+    missing = [
+        path for path in required
+        if not (ROOT / path).is_file() or not any(path.is_relative_to(entry) for entry in oh.PATHS)
+    ]
+    assert not missing, f"Calibration payload is missing files: {missing}"
 
 
 def test_storage_lock_wraps_reuse_unpack_and_switch_but_never_floor(fake, tmp_path):

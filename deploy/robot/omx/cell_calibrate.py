@@ -22,19 +22,10 @@ import cell_calibration as cal, cell_params as prm, cell_pivot, cell_remap_plan 
 from cell_intrinsics_frames import POSE_LOO_SLACK_MM, fitted_map  # noqa: E402,F401
 from cell_map_fit import consensus, enough_agree, predicted, repair_record  # noqa: E402,F401
 from cell_pipeline_io import fold  # noqa: E402
+from cell_remap_plan import MAP_POINTS  # noqa: E402
+from cell_depth import capture_top_depth_z16 as depth_capture  # noqa: E402
 
-MAP_POINTS = [
-    [-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15],
-    [-0.06, 0.15], [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17],
-]  # the 2026-10-28 remap grid
 AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
-
-
-def depth_capture():
-    """A fresh top D435 Z16 frame (None on a failed capture); the depth-verify step's only depth source."""
-    import cell_depth
-
-    return cell_depth.capture_top_depth_z16()
 
 
 def stale(check: dict) -> list:
@@ -238,15 +229,19 @@ def main(argv=None):
     ap.add_argument("step", choices=["check", "auto"])
     ap.add_argument("--route", nargs=2, metavar=("SOURCE", "DEST"), help="check named A/B depth inputs")
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
+    ap.add_argument("--remeasure-surface", metavar="SITE", help="repeat a registered surface measurement, even with a saved height")
+    ap.add_argument("--surface-clear", action="store_true", help="the named fixed support and the arm path are visibly clear")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
     ap.add_argument("--plan-only", action="store_true", help="print each remap point's IK and verdict; opens no port or camera")
     ap.add_argument("--replay-frames", type=Path, help="check: replay a saved remap-frames dir offline; opens no port or camera and writes no calibration")
-    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair", "post-eval", "depth-verify"], help="auto: run only these step kinds (remap, regions, pivot-near, "
-                    "surface, consensus-repair, post-eval, depth-verify); a reviewed plan for one step must not run the others. 2026-11-15: a "
-                    "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
+    ap.add_argument("--only", nargs="+", choices=["remap", "regions", "pivot-near", "surface", "consensus-repair", "post-eval", "depth-verify"],
+                    help="auto: run only the reviewed step kinds")
     ap.add_argument("--verify", action="store_true", help="auto: chain post-eval XY visit and depth-verify after calibration steps")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
+    if args.remeasure_surface is not None and (args.step != "auto" or args.only != ["surface"]
+            or not args.surface_clear or args.plan_only or args.replay_frames or args.targets or args.verify):
+        ap.error("--remeasure-surface requires auto --only surface --surface-clear")
     if args.route and (args.step != "check" or args.plan_only or args.replay_frames):
         ap.error("--route requires a live read-only check")
     import cv2
@@ -257,13 +252,9 @@ def main(argv=None):
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     points = config.get("calibrate", {}).get("map_points", MAP_POINTS)
     if args.plan_only:
-        import cell_map_fit
-
-        rows = rp.plan(config, points)
-        refused = rp.refusal(rows)
-        lev = cell_map_fit.plan_leverage(points, config.get("sites") or {})
-        print(json.dumps({"plan_only": rows, "refused": refused, "reach": rp.reach_note(config), "leverage": lev}), flush=True)
-        return 2 if refused else 0
+        report = rp.plan_report(config, points)
+        print(json.dumps(report), flush=True)
+        return 2 if report["refused"] else 0
     if args.replay_frames is not None:
         if args.step != "check":
             raise SystemExit("--replay-frames is offline read-only and only allowed with step 'check'")
@@ -283,6 +274,13 @@ def main(argv=None):
         from cell_route_calibration import route_calibration_report
         found["route"] = route_calibration_report(config, calibration, found, *args.route)
     todo = stale(found)
+    if args.remeasure_surface is not None:
+        import cell_surface
+        refused = cell_surface.surface_selection_error(config, calibration, found, args.remeasure_surface)
+        if refused:
+            print(json.dumps({"held": refused, "site": args.remeasure_surface}), flush=True)
+            return 2
+        todo = [f"surface {args.remeasure_surface}"]
     if todo == ["review-camera-reference"]:
         print(json.dumps({"check": found, "todo": todo, "held": found["camera_advice"]}), flush=True)
         return 0 if args.step == "check" else 2
@@ -299,7 +297,7 @@ def main(argv=None):
     if refused:
         print(json.dumps({"refused": refused, "todo": todo}), flush=True)
         return 2
-    if not (args.commissioning and args.person_at_switch):
+    if todo != ["depth-verify"] and not (args.commissioning and args.person_at_switch):
         print(json.dumps({"held": "supervised commissioning required (--commissioning --person-at-switch)", "todo": todo}), flush=True)
         return 2
     done, config_dirty = [], False
@@ -363,7 +361,13 @@ def main(argv=None):
         elif step.startswith("surface"):
             import cell_surface
 
-            res = cell_surface.run_surface_step(cell, config, step, work)
+            if args.remeasure_surface is not None:
+                res = cell_surface.remeasure_surface(cell, config, calibration, step, work)
+                if res.get(step) != "touched":
+                    print(json.dumps({"held": res}), flush=True)
+                    return 2
+            else:
+                res = cell_surface.run_surface_step(cell, config, step, work)
             done.append(res)
             if res.get(step) == "touched":
                 config_dirty = True

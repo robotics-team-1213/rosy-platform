@@ -43,7 +43,8 @@ def cell(tmp_path, monkeypatch):
     cal.with_suffix(".bias.json").write_text(json.dumps({"regions": [
         {"site": "belt", "point_m": [0.1, 0.2], "bias_mm": [1, 2], "kind": "visit", "n": 3, "rms_mm": 0.5, "measured": "t"}]}))
     config = cal.parent / "config.json"
-    config.write_text(json.dumps({"calibration_path": str(cal), "sites": {"belt": {"surface_z": 0.01}}}))
+    config.write_text(json.dumps({"arm_id": "arm_b", "calibration_path": str(cal), "sites": {"belt": {"surface_z": 0.01, "place": [.2, .2], "yaw_deg": 0},
+                                 "floor": {"surface_z": 0.02, "place": [0.1, -0.2], "yaw_deg": 15}}}))
     cells = tmp_path / "cells.json"
     cells.write_text(json.dumps({"tools": str(ROOT), "python": "py", "work": str(tmp_path / "work"),
                                  "arms": {"arm_b": {"config": str(config), "session": "wrap.sh", "env": {"X": "1"}}}}))
@@ -146,11 +147,77 @@ def test_job_runs_engine_and_records_result(screen):
     assert argv[0] == "wrap.sh" and argv[1] == "py" and argv[2].endswith("cell_calibrate.py") and "auto" in argv
     assert argv[argv.index("--only") + 1] == "pivot-near" and "--person-at-switch" in argv and "--commissioning" in argv
     assert argv[argv.index("--targets") + 1] == "belt:0.1,0.2"
-    assert env["ROSY_ARM_LEASE_OWNER"] == OWNER and env["X"] == "1"
+    assert env["ROSY_ARM_LEASE_OWNER"] == f"{OWNER}:{job['id']}" and env["X"] == "1"
     one = json.loads(call(url, f"/api/calibration/jobs/{job['id']}", cookie="valid")[1])
     assert one["status"] == "done" and one["result"] == {"ok": True} and "noise" in one["log_tail"]
     assert json.loads(call(url, "/api/calibration/jobs", cookie="valid")[1])["jobs"][0]["id"] == job["id"]
     assert jobs.lease().status().get("arm_b") is None  # released
+
+
+def test_late_same_account_finish_leaves_new_job_lease(cell, monkeypatch):
+    jobs = jobs_mod.Jobs(cell)
+    lease = jobs.lease()
+    completed = []
+    monkeypatch.setattr(jobs_mod.threading.Thread, "start", lambda thread: completed.append(thread))
+    jobs.spawn = lambda argv, cwd, env, log: FakeProc(log)
+    body = {"arm": "arm_b", "step": "check"}
+    assert (first := jobs.start(body, "Kim", "acct-1"))[0] == 202
+    old = first[1]
+    # Worker exited, the terminal record is durable, but its final release is delayed.
+    jobs.write({**old, "status": "done"})
+    monkeypatch.setattr(lease, "_pid_alive", lambda pid: False)
+    assert (second := jobs.start(body, "Kim", "acct-1"))[0] == 202
+    monkeypatch.setattr(lease, "_pid_alive", lambda pid: True)
+    completed[0].run()
+    assert old["lease_owner"] != second[1]["lease_owner"]
+    assert lease.status()["arm_b"]["owner"] == second[1]["lease_owner"]
+    completed[1].run()
+    assert "arm_b" not in lease.status()
+
+
+def test_spawn_failure_cannot_free_a_replacement_by_same_account(cell):
+    jobs = jobs_mod.Jobs(cell)
+    lease = jobs.lease()
+    other = f"{OWNER}:20261117T020001-111111"
+
+    def failed(argv, cwd, env, log):
+        assert lease.release("arm_b", env["ROSY_ARM_LEASE_OWNER"])
+        lease.claim("arm_b", other, "replacement", 600, os.getpid())
+        raise OSError("spawn failed")
+
+    jobs.spawn = failed
+    assert jobs.start({"arm": "arm_b", "step": "check"}, "Kim", "acct-1")[0] == 500
+    assert lease.status()["arm_b"]["owner"] == other
+
+
+@pytest.mark.parametrize("condition", ["dead", "reused_pid", "legacy_dead"])
+def test_restart_projects_worker_with_unknown_outcome_and_allows_new_job(cell, monkeypatch, condition):
+    jobs = jobs_mod.Jobs(cell, spawn=lambda argv, cwd, env, log: FakeProc(log))
+    arm, old_id = "arm_b", "20261117T020000-abcdef"
+    pid = os.getpid() if condition == "reused_pid" else 99999999
+    owner = f"{OWNER}:{old_id}"
+    row = {"id": old_id, "arm": arm, "pid": pid, "status": "running"}
+    if condition != "legacy_dead":
+        row.update(lease_owner=owner, pid_start_ticks=1)
+        jobs.lease().claim(arm, owner, "old run", 600, pid)
+    monkeypatch.setattr(jobs_mod, "process_stamp", lambda pid: 2 if pid == os.getpid() else None)
+    jobs.job_file(old_id).parent.mkdir(parents=True)
+    jobs.write(row)
+    assert jobs.job(old_id)["status"] == jobs.jobs()[0]["status"] == "interrupted"
+    assert "exit_code" not in jobs.job(old_id) and "result" not in jobs.job(old_id)
+    assert jobs.start({"arm": arm, "step": "check"}, "Kim", "acct-1")[0] == 202
+    for t in jobs.threads:
+        t.join(5)
+
+
+def test_map_grade_requires_measured_box_plane_geometry():
+    record = {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]], "measured": "2026-11-26", "loo_error_mm": {"mean": 1, "max": 2},
+              "points": [{"pixel": [i, 5], "arm_m": [0, i]} for i in range(5)]}
+    assert jobs_mod.map_grade("floor", record) == "fine"
+    assert jobs_mod.map_grade("floor", {**record, "z_view": 0.08}) == "coarse"
+    assert jobs_mod.map_grade("floor~coarse", record) == "coarse"
+    assert jobs_mod.map_grade("floor", {"homography": record["homography"]}) == "unknown"
+    assert jobs_mod.map_grade("floor", {**record, "homography": [True]}) == "unknown"
 
 
 def evidence(jobs):
@@ -210,14 +277,54 @@ def test_clear_needs_fresh_clear_assessment_and_measured_conditions(screen):
 def test_surface_step_requires_person_at_switch_and_service_passes_cells(screen):
     url, _, calls, jobs, _ = screen
     assert post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "surface", "person_at_switch": False})[0] == 422
-    status, job = post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "surface", "person_at_switch": True})
-    assert status == 202
-    for t in jobs.threads:
-        t.join(5)
-    argv, _, _ = calls["spawn"][0]
-    assert argv[argv.index("--only") + 1] == "surface" and "--commissioning" in argv and "--person-at-switch" in argv
+    assert post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "surface", "person_at_switch": True})[0] == 422
+    assert calls["spawn"] == []
     unit = (ROOT / "applications/calibration/rosy-calibration-web.service").read_text(encoding="utf-8")
     assert "--cells %h/.config/rosy/calibration/cells.json" in unit
+
+
+def test_repeat_surface_uses_named_registered_target(screen):
+    url, _, calls, jobs, _ = screen
+    body = {"arm": "arm_b", "step": "surface", "site": "floor", "person_at_switch": True, "surface_clear": True}
+    sites = jobs.status()["arms"]["arm_b"]["sites"]
+    assert sites["floor"]["place_xy_m"] == [0.1, -0.2] and sites["floor"]["can_remeasure_surface"]
+    assert not sites["belt"]["can_remeasure_surface"]
+    for invalid in ({"site": "../floor"}, {"site": "belt"}, {"site": []}, {"step": "remap"},
+                    {"targets": ["belt:1,2"]}, {"person_at_switch": False}, {"surface_clear": False}):
+        assert post(url, "/api/calibration/jobs", {**body, **invalid})[0] == 422
+    assert not calls["spawn"]
+    status, job = post(url, "/api/calibration/jobs", body)
+    assert status == 202 and job["site"] == "floor"
+    for t in jobs.threads:
+        t.join(5)
+    argv = calls["spawn"][0][0]
+    assert argv[0] == "wrap.sh" and argv[argv.index("--remeasure-surface") + 1] == "floor" and "--surface-clear" in argv
+    assert argv[argv.index("--only") + 1] == "surface" and "--commissioning" in argv and "--person-at-switch" in argv
+
+
+@pytest.mark.parametrize("geometry", [{"moves": True}, {"on_vehicle": "pinky"}, {"moving_px": [0, 10]},
+                                      {"tier_of": "floor"}, {"tier": 2}, {"layers_below": 1}, {"layer": 1}, {"z_offset_m": .03}])
+def test_mobile_or_elevated_board_is_ineligible_in_form_api_and_engine(screen, geometry):
+    import cell_surface
+
+    url, _, calls, jobs, _ = screen
+    path, config = jobs.arm_config("arm_b")
+    config["sites"]["board"] = {**config["sites"]["floor"], **geometry}
+    path.write_text(json.dumps(config))
+    assert not jobs.status()["arms"]["arm_b"]["sites"]["board"]["can_remeasure_surface"]
+    assert post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": "surface", "site": "board",
+                                               "person_at_switch": True, "surface_clear": True})[0] == 422
+    assert not calls["spawn"]
+    assert cell_surface.surface_selection_error(config, {}, {}, "board") == "registered fixed surface site required"
+
+
+@pytest.mark.parametrize("step", ["check", "depth-verify"])
+def test_read_only_job_never_starts_an_arm_session(screen, step):
+    url, _, calls, jobs, _ = screen
+    assert post(url, "/api/calibration/jobs", {"arm": "arm_b", "step": step})[0] == 202
+    for t in jobs.threads:
+        t.join(5)
+    assert calls["spawn"][0][0][0] == "py"
 
 
 def test_missing_or_malformed_cells_keeps_requests_online_and_status_404(tmp_path):

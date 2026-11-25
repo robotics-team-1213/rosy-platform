@@ -46,6 +46,7 @@ CANVAS_FILES = [
     SRC.parent / "learning/curation/perception/review_app_web/pixels.js",
     SRC.parent / "learning/curation/perception/review_app_web/versions.js",
     SRC.parent / "learning/curation/perception/review_app_web/camera.js",
+    SRC.parent / "learning/curation/perception/review_app_web/world-experiments.js",
     SRC.parent / "applications/calibration/web/grid.js",
     SRC.parent / "applications/world/web/scene.js",
     SRC.parent / "applications/world/web/scene-geometry.js",

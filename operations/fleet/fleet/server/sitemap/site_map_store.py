@@ -377,6 +377,20 @@ class SiteMapStore:
     def plans(self, limit: int = 50) -> list[dict]:
         return self._plan_rows("", (), limit)
 
+    def trip_request_history(self, limit: int = 50) -> list[dict]:
+        """Planning and start receipts in operator time order, including refused requests."""
+        with self._lock:
+            starts = self._db.execute(
+                "SELECT detail, at FROM site_map_events WHERE action = 'trip_start_receipt' "
+                "ORDER BY event_id DESC LIMIT ?", (limit,)).fetchall()
+        receipts = [{**json.loads(detail), "at": at} for detail, at in starts]
+        for row in self.plans(limit):
+            result = row["result"]
+            receipts.append({"at": row["created_at"], "plan_id": row["plan_id"], "robot_id": row["robot_id"],
+                             "to": row["request"].get("to"), "stage": "plan_refused" if result.get("error") else "preview",
+                             "code": result.get("error"), "detail": result.get("detail", {})})
+        return sorted(receipts, key=lambda receipt: receipt["at"], reverse=True)[:limit]
+
     def _plan_rows(self, where: str, args: tuple, limit: int) -> list[dict]:
         with self._lock:
             rows = self._db.execute(

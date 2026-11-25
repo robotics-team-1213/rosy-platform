@@ -30,6 +30,7 @@ from model_code_jobs import (PREFIX, LEGACY_LEARNING_PREFIXES, JOB_ENTRY_POINTS,
 from model_code_layout import (
     LEARNING_CODE_PREFIXES, LEARNING_REQUIRED, CAMERA_PROFILE, CAMERA_MAP_FILES, SPLIT_CODE_PREFIXES,
     SPLIT_REQUIRED, FITNESS_ENTRY, FITNESS_CONTRACT_FILES, CODE_PREFIXES, CHECKOUT_PREFIXES,
+    WORLD_EXPERIMENT_ENTRY, WORLD_EXPERIMENT_FILES,
     LIMIT, FORBIDDEN, IMPORT_PATHS, PATH_SETUP,
 )
 
@@ -251,6 +252,9 @@ def unpack(archive, dest):
     if (dest / FITNESS_ENTRY).is_file():
         if not all((dest / name).is_file() for name in FITNESS_CONTRACT_FILES):
             raise ValueError("missing road-fitness observation dependency")
+    if (dest / WORLD_EXPERIMENT_ENTRY).is_file():
+        if not all((dest / name).is_file() for name in WORLD_EXPERIMENT_FILES):
+            raise ValueError("missing World experiment dependency")
 
 
 def replace_link(root, target):

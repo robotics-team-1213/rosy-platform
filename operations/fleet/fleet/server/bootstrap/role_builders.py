@@ -181,6 +181,8 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         if callable(getattr(localization_service, "set_site_obstacle_pose", None)):
             localization_service.set_site_obstacle_pose(partial(obstacle_site_pose, map_pose))
         localization_service.set_wall_sync(WallMapSync(site_maps, console.clients, time.monotonic))
+        if callable(getattr(localization_service, "set_search_reference_reader", None)):
+            localization_service.set_search_reference_reader(map_pose.state_with_source)
     app.state.map_pose = map_pose
     if tracking is not None:
         tracking.map_pose = map_pose.arbitrated_pose

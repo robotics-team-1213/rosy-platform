@@ -15,11 +15,13 @@ import { patchText } from "/common/control-dom.js";
 import { endedTripText, openTrip, primaryButton, quietButton } from "./queues.js";
 import { ruleJudgeSection } from "./site-rules-judge.js";
 
+import {selectedTripText} from "/console/assets/trip-receipts.js";
 export { endedTripText, openTrip };
 
 /** D-517 10 card line: lap, waits, resolver for an open trip; else why the last trip ended (D-541 7). */
 export function cardTripLine(view, robotId) {
-  return tripWaitText(openTrip(view, robotId)) || trafficCardLine(view.traffic, robotId) || endedTripText(view, robotId);
+  return tripWaitText(openTrip(view, robotId)) || trafficCardLine(view.traffic, robotId)
+    || selectedTripText(view, robotId) || endedTripText(view, robotId);
 }
 
 /** Default ``drive_mode`` for ``운행…``: prefer ``nav2`` when the robot has ``free`` without ``junction_turn``. */

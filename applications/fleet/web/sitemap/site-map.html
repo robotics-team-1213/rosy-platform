@@ -115,7 +115,10 @@
       <!-- 선택 검사 칸 — 지도에서 고른 요소의 속성과 초안 반영·저장·활성화. -->
       <aside class="map-inspector" aria-label="선택 검사">
         <h3 class="ui-section-heading">선택 검사</h3>
-        <ui-text id="selection">선택 없음</ui-text>
+        <label>지도에서 검사할 요소<select id="map-inspector-target" class="ui-field" disabled>
+          <option value="">요소 선택</option>
+        </select></label>
+        <ui-text id="selection" role="status">선택 없음</ui-text>
         <div id="place-form" class="form" hidden>
           <label>주소 이름<input class="ui-field" id="place-name" maxlength="64"></label>
           <label>장소 종류<select class="ui-field" id="place-kind"></select></label>

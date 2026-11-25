@@ -5,6 +5,7 @@ import re
 from urllib.request import Request
 
 from core_common.protocol.arm_incident.home_recovery import HOME_RECOVERY_REASON
+from cell_bound_home_placement import bound_request_due
 
 
 def request_current_homes(base, token, context, open_url, arms, holds, pending):
@@ -15,7 +16,7 @@ def request_current_homes(base, token, context, open_url, arms, holds, pending):
         if (arm not in pending and hold.get("fleet_held") is True and hold.get("fleet_reason") == HOME_RECOVERY_REASON
                 and type(hold.get("unsent_outbox")) is int and hold["unsent_outbox"] == 0
                 and isinstance(ids, list) and len(ids) == 1 and isinstance(ids[0], str)
-                and re.fullmatch(r"[0-9a-f]{32}", ids[0])):
+                and re.fullmatch(r"[0-9a-f]{32}", ids[0]) and bound_request_due(arm, ids[0])):
             roots[f"home-recovery:{arm}:{ids[0]}"] = arm
     if not roots:
         return

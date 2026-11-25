@@ -111,7 +111,8 @@ python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/
 ```
 
 - `GET /api/calibration/status`: 팔별 리스, incident(읽기 전용 `omx_incident.py status`), 설치 리비전, 자리별 지도(점 수·LOO·지문)·면 높이·바이어스.
-- `POST /api/calibration/jobs {arm, step, targets, person_at_switch}`: 단계는 `check`, `depth-verify`, `pivot-near`, `remap`만(그 밖은 422). 팔을 움직이는 `pivot-near`·`remap`은 `person_at_switch: true`가 없으면 422(D-911). 리스를 다른 주인이 쥐면 409. 202와 작업 기록; `GET /api/calibration/jobs`, `.../jobs/<id>`(로그 끝 4000자)로 본다.
+- 현장 PC·휴대폰에서 같은 tailnet HTTPS 주소의 `/?arm=arm_a`, `/?arm=arm_b`, `/?arm=arm_s`를 열면 로그인 후에도 선택한 팔을 유지한다. Fleet에 `ROSY_CALIBRATION_ORIGIN`을 설정하면 셀 화면의 팔 카드에서 바로 열 수 있다. 운영자는 보정 작업을 선택해 시작하고 작업 ID, 진행 상태, 결과를 같은 화면에서 확인한다.
+- `POST /api/calibration/jobs`는 상태 점검(`check`), 깊이 검증(`depth-verify`), 지정 좌표 XY 보정(`pivot-near`), 개략 맵 재측정(`remap`), 표면 높이 측정(`surface`)을 지원한다. 팔을 움직이는 작업에는 `person_at_switch: true`가 필요하다. 지정 고정면 재측정에는 해당 지점과 이동 경로가 비었는지도 확인한다. 다른 작업이 팔을 사용 중이면 409를 반환한다. 시작 시 반환된 ID로 `GET /api/calibration/jobs/<id>`에서 결과와 로그를 읽는다.
 - `POST /api/calibration/assessments {arm, verdict: clear|hold, reasons, evidence[{kind: frame|joints|torque, ref, sha256?}]}`: `<work>/assessments.jsonl`에 쌓는다.
 - `POST /api/calibration/incidents/<arm>/clear`: 10분 안의 최신 판정이 `clear`이고, 다른 주인의 리스와 실행 중인 `record_session`이 없을 때만 `omx_incident.py clear`를 부른다(측정이 먼저, 모델 판정만으로는 해제하지 않는다).
 - 쓰기 경로는 모두 같은 출처 + `calibration.operate` 세션이 필요하다.
