@@ -238,7 +238,8 @@ def test_baseline_option_lowers_caps_a_session_left_raised_without_a_limits_file
     m = module()
     seen = {}
 
-    def configure(port, requested, record):
+    def configure(port, requested, record, *, read):
+        assert read is m.read_motors
         seen.update(requested)
         record({"event": "complete"})
 
@@ -255,6 +256,39 @@ def test_baseline_option_lowers_caps_a_session_left_raised_without_a_limits_file
             if op["field"] in ("pwm_limit_raw", "current_limit_raw")}
     assert caps == ({(i, "pwm_limit_raw", 20) for i in range(11, 17)}
                     | {(i, "current_limit_raw", 50) for i in range(14, 17)})
+
+
+@pytest.mark.parametrize("device,allowed", [("arm-a", False), ("arm-b", True)])
+def test_standalone_writer_checks_pending_after_exclusive_open(tmp_path, monkeypatch, device, allowed):
+    from contextlib import contextmanager
+    import json
+
+    m = module()
+    monkeypatch.setattr(m.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(m, "state_root", lambda: tmp_path / "state")
+    pending = m.state_root() / "arm_a/pending"
+    writes = []
+
+    @contextmanager
+    def acquire(port):
+        pending.mkdir(parents=True)
+        (pending / "device").write_text("/dev/serial/by-id/arm-a")
+        yield object()
+
+    def configure(port, requested, record, *, read):
+        writes.append(requested)
+        record({"event": "complete"})
+
+    monkeypatch.setattr(m, "open_readonly_port", acquire)
+    monkeypatch.setattr(m, "configure_limits", configure)
+    output = tmp_path / "independent"
+    rc = m.main(["--device", "/dev/serial/by-id/" + device, "--baseline", "--output", str(output)])
+    assert bool(writes) is allowed
+    assert (rc == 0) is allowed
+    receipt = json.loads((output / "receipt.json").read_text())
+    assert receipt["configuration_verified"] is allowed
+    if not allowed:
+        assert "interrupted baseline" in receipt["error"]
 
 
 def test_slow_durable_intent_cannot_send_after_deadline(monkeypatch):
