@@ -7,6 +7,7 @@ import math
 import time
 from hashlib import sha256
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -65,6 +66,9 @@ class RouteFakeRobot(FakeRobot):
         self.route_grids.append(kwargs.get("expected_map_grid_id"))
         self.active_cid = correlation_id
         self._state["navigation"] = "NAVIGATING"
+        if self.bound_route_supported and correlation_id:
+            return {"accepted": True, "operation": {"run_id": str(uuid4()), "boot_id": str(uuid4()),
+                    "kind": "navigate", "phase": "RUNNING", "correlation_id": correlation_id}}
         return {"accepted": True}
 
     async def navigation_goal_lease(self, correlation_id, ttl_s) -> dict:
@@ -279,7 +283,7 @@ def test_http_plan_nav2_allows_lane_loop_refuses_motor_and_convoy(tmp_path, bind
         assert bad.status_code == 422
 
 
-@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid"])
+@pytest.mark.parametrize("case", ["accepted", "older_core", "changed_grid", "terminal"])
 def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp_path, case):
     from datetime import datetime, timezone
     from fleet.localization.map_binding import Fit
@@ -322,6 +326,9 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
     runner.map_pose = wrong_camera_pose
     headers = {"Authorization": "Bearer op-tok"}
     body = {"to": "S4", "start_at": "S4", "via": ["S5", "S3"], "drive_mode": "nav2", "approved_slam_required": True}
+    if case == "terminal":
+        body.pop("start_at")
+        body.update(to="S5", via=[])
     with TestClient(app) as client:
         tasks.rearm_dispatch(expected_generation=tasks.dispatch_control()["generation"], actor_id="bob")
         assert not runner.human_hold_fn()
@@ -360,6 +367,30 @@ def test_named_nav2_opt_in_uses_bound_slam_for_plan_start_progress_and_route(tmp
         first = robot.routes[0][0][0]
         assert fit.apply((first["x"], first["y"])) == pytest.approx((.17, -.48), abs=.15)
         assert not read_legacy_pose
+
+        if case == "terminal":
+            op = live.view["detail"]["named_stop_operation"]
+            assert op["correlation_id"] == robot.routes[-1][1]
+            native_x, native_y = fit.inverse((.88, -.48))
+            read_core()
+            probe = {"lookup": "FOUND", "operation": op}
+            runner.navigation_readback = lambda rid, run_id: probe if rid == "rosy_42" and run_id == op["run_id"] else {}
+            client.portal.call(runner.tick)
+            assert runner.view(plan_id)["state"] == "running"
+            terminal = dict(op, phase="TERMINAL", result="SUCCEEDED")
+            owner = {"boot_id": op["boot_id"], "owner_generation": 1, "owner_run_id": None}
+            probe.update(operation=terminal, owner=owner, quiescence={
+                **owner, "requested_run_id": op["run_id"], "quiescent": True, "admitting": False,
+                "pending_submission": False, "actuating_callback": False, "lease_active": False,
+                "transport_generation": 1, "observed_at": datetime.now(timezone.utc).isoformat()})
+            robot._state.update(navigation="ARRIVED", mode="IDLE", line_follow={"mode": "OFF"},
+                                velocity={"linear": 0.0, "angular": 0.0})
+            runner.named_stop_state = lambda _: robot._state
+            read_core()
+            client.portal.call(runner.tick)
+            done = runner.view(plan_id)
+            assert done["state"] == "arrived" and done["detail"]["named_stop_completion"]["operation"] == terminal
+            return
 
         store.map_bindings.revoke("rosy_42", "bob")
         client.portal.call(runner.tick)
