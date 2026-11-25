@@ -128,7 +128,7 @@ def test_camera_start_requires_ack_two_fresh_zero_samples_and_same_binding(monke
         _save=lambda _trip: events.append("saved"), _after_send=after,
         authority=NS(mode=lambda _caps: "core"), lease=NS(required=True),
         traffic=NS(holds=lambda *_: False, _signals={}),
-        config=NS(start_heading_tol_deg=15., period_s=0.),
+        config=NS(start_heading_tol_deg=15., period_s=0., arm_distance_m=.6),
     )
     if outcome == "success":
         assert run(trip_nav2_route._start_camera_finish(runner, trip, 0, .5, (3, site)))

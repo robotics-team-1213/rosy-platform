@@ -233,7 +233,7 @@ async def _camera_stationary(runner, live, after: float) -> bool:
 async def _start_camera_finish(runner, live, index: int, along: float, active) -> bool:
     place = camera_finish_segment(live, index, active, along)
     if (place is None or runner.named_stop_state is None or runner._cancel_goal is None or not runner.lease.required
-            or runner.traffic.holds(live, index)):
+            or runner.traffic.holds(live, index) or live.segments[index]["s_to"] - along > runner.config.arm_distance_m):
         return False
     robot_id, segment = live.view["robot_id"], live.segments[index]
     caps = await runner._caps_checks(robot_id, live.graph, [segment], False, place)
@@ -255,6 +255,10 @@ async def _start_camera_finish(runner, live, index: int, along: float, active) -
     pose = await precision_map_pose(runner, robot_id, scope)
     if pose is None or start_check(live.graph, [segment], pose.x, pose.y, pose.yaw,
                                    runner.config.start_heading_tol_deg)["code"]:
+        raise TripError(409, "TRIP_CAMERA_FALLBACK_POSE_UNTRUSTED")
+    _, fresh_along, _ = live.arc(index).project(pose.x, pose.y)
+    if (camera_finish_segment(live, index, active, fresh_along) is None
+            or segment["s_to"] - fresh_along > runner.config.arm_distance_m):
         raise TripError(409, "TRIP_CAMERA_FALLBACK_POSE_UNTRUSTED")
     pose_stamp = runner._clock() - pose.age_s
 
