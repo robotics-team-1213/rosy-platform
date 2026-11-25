@@ -5,9 +5,26 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.469
+**Version:** v1.470
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.470 Bounded localization candidate search window (CORE)
+
+CORE advertises `localization.search_window: true` while its native candidate
+node can receive window requests. `POST /api/v1/localization/search-window`
+requires `LOCALIZE_ASSIST` and takes `expected_map_grid_id` and `center` with
+finite native-grid base pose coordinates `x`, `y`, `yaw` (wrapped radians).
+A signed-in client's current, independently approved grid alignment is its
+responsibility. A `202 {"accepted":true}` acknowledges CORE accepted the relay. A matching grid and unresolved localization are required.
+Lease checks still apply and busy or mismatched-grid requests return 409.
+
+The robot runs its existing global search first and keeps its results. Only an
+empty global result allows a bounded ±12 cm/±14° search over the supplied
+window. A candidate requires agreement on two distinct recent native scans.
+The server enforces local delivery expiry and cooldown. Existing candidate
+readback and independent decision and post-injection verification still
+apply. A window never triggers automatic pose injection or motion.
 
 ### v1.469 Camera continuation after a failed Nav2 route (Fleet)
 
@@ -5075,6 +5092,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.470 | 2026-11-25 | [CORE] Bounded localization candidate search window |
 | v1.469 | 2026-11-25 | [Fleet] Camera continuation after a failed Nav2 route |
 | v1.468 | 2026-11-25 | [Fleet] Approved SLAM for named Nav2 trips |
 | v1.467 | 2026-11-25 | [CORE] Nav2 route with expected map grid |
