@@ -404,7 +404,11 @@ def test_world_map_parity_prefers_body_hash_and_reports_versions(tmp_path: Path)
     assert not serve.verify_world_parity(canonical, {
         **snapshot, "site_map_body_sha256": "12" * 32, "parity": canonical,
     })["map_match"]
-    assert serve.verify_world_parity(canonical, {**snapshot, "site_map_body_sha256": "invalid", "parity": canonical})["map_match"]
+    unavailable = serve.verify_world_parity(
+        canonical, {**snapshot, "site_map_body_sha256": "invalid", "parity": canonical},
+    )
+    assert not unavailable["map_match"]
+    assert unavailable["reasons"] == ["live_site_map_unavailable"]
 
 
 @pytest.mark.parametrize(("args", "timeout"), [([], 10.0), (["--fleet-timeout", "4.5"], 4.5),
