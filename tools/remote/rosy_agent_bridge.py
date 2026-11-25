@@ -195,6 +195,7 @@ TOOL_SPECS: tuple[dict[str, Any], ...] = (
          "place_area": {"type": "string"}, "place_x": {"type": "number"}, "place_y": {"type": "number"}, "place_z": {"type": "number"},
          "pick_yaw_deg": {"type": "number"}, "place_yaw_deg": {"type": "number"}, "max_attempts": {"type": "integer"},
          "stay_in_hover": {"type": "boolean"}, "no_vision_refine": {"type": "boolean"},
+         "catalog": {"type": "string"}, "object": {"type": "string"},
      }, ["arm", "config", "pick_area", "pick_x", "pick_y", "pick_z", "place_area", "place_x", "place_y", "place_z"])},
 )
 TOOL_MAP = {t["name"]: t for t in TOOL_SPECS}
