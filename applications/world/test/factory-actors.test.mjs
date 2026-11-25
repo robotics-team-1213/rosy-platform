@@ -87,17 +87,20 @@ test("createFactoryLayer renders dynamic Pinky ids and hides absent roster ids",
   try {
     const three = makeThreeMock();
     const scene = new three.Group();
-    const labels = [];
+    const labelsById = new Map();
+    const groupsById = new Map();
     const layer = createFactoryLayer({
       three,
       scene,
       redraw: () => {},
-      addLabel: (_group, id) => {
+      addLabel: (group, id) => {
         const lbl = { visible: true, id };
-        labels.push(lbl);
+        labelsById.set(id, lbl);
+        groupsById.set(id, group);
         return lbl;
       },
     });
+    layer.setFocusLabels("factory_omx");
     layer.apply({
       pinkys: [
         { id: "rosy_42", pose_m: [0.1, 0.2, 0.0], yaw_rad: 0.5, observed: true },
@@ -106,17 +109,24 @@ test("createFactoryLayer renders dynamic Pinky ids and hides absent roster ids",
       arms: {},
     }, 0, true);
 
-    assert.ok(labels.some((l) => l.id === "rosy_99"), "dynamic Pinky rosy_99 actor created");
-    const root = scene.children[0];
-    assert.equal(root.visible, true);
-    const taggedGroups = root.children.filter((c) => c.children.some((g) => g.isMesh));
-    // Default 3 Pinkys (42, 45, 46) + dynamic rosy_99: 45 and 46 are hidden when omitted from state.pinkys.
-    assert.equal(labels.filter((l) => l.id === "rosy_45" || l.id === "rosy_46").length, 2);
-    const visiblePinkyGroups = root.children.filter(
-      (c) => c.visible === true && c.children.length > 0 && c.position && (c.position.x === 0.1 || c.position.x === 0.5),
-    );
-    assert.equal(visiblePinkyGroups.length, 2);
-    assert.ok(taggedGroups.length >= 4);
+    assert.ok(groupsById.has("rosy_99"), "dynamic Pinky rosy_99 actor created");
+    assert.equal(groupsById.get("rosy_42").visible, true);
+    assert.equal(groupsById.get("rosy_99").visible, true);
+    assert.equal(groupsById.get("rosy_45").visible, false, "omitted rosy_45 is hidden");
+    assert.equal(groupsById.get("rosy_46").visible, false, "omitted rosy_46 is hidden");
+    assert.equal(labelsById.get("rosy_99").visible, false, "active OMX focus hides new actor label");
+
+    // Switching back to a legacy single-pinky frame hides dynamic actors and restores legacy defaults.
+    layer.apply({
+      pinky: { id: "rosy_45", pose_m: [0.2, 0.3, 0.0], yaw_rad: 0.0 },
+      pinkys: [],
+      arms: {},
+    }, 0, true);
+    assert.equal(groupsById.get("rosy_99").visible, false, "dynamic rosy_99 hidden on legacy fallback");
+    assert.equal(groupsById.get("rosy_45").visible, true);
+    assert.equal(groupsById.get("rosy_42").visible, true);
+    assert.equal(groupsById.get("rosy_42").position.x, -0.414);
+    assert.equal(groupsById.get("rosy_42").position.y, 0.47);
   } finally {
     globalThis.document = prevDoc;
     globalThis.requestAnimationFrame = prevRaf;
