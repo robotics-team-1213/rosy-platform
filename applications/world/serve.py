@@ -20,10 +20,14 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 from world_state import (  # noqa: E402
+    ACTIVE_SITE_MAP_FILE,
+    ACTIVE_SITE_MAP_FRESH_MS,
+    ACTIVE_SITE_MAP_PATH,
     ADAPTER_LABELS,
     BACKENDS,
     CANONICAL_FLEET_ROBOTS,
     LIVE_FRESH_MS,
+    MAX_ACTIVE_SITE_MAP_BYTES,
     SHA256_RE,
     WORLD_ID_RE,
     _atomic_write_json,
@@ -39,6 +43,7 @@ from world_state import (  # noqa: E402
     _read_json_strict,
     _reject_constant,
     _safe_world_path,
+    active_site_map_snapshot,
     discover_worlds,
     sample_timeline,
     verify_world_parity,
@@ -48,6 +53,7 @@ DEFAULT_PORT = 8140
 MAX_INGEST_BYTES = 262_144
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
 LIVE_PATHS = {
+    ACTIVE_SITE_MAP_PATH,
     "/data/pinky-sim.json", "/data/pinky-camera.jpg", "/data/isaac-live.json",
     "/data/mujoco-top.jpg", "/data/field-live.jpg", "/data/isaac-view.json",
     "/data/factory-live.json",
@@ -140,6 +146,18 @@ class WorldHandler(SimpleHTTPRequestHandler):
 
     def send_head(self):
         parts = urlsplit(self.path)
+        if parts.path == ACTIVE_SITE_MAP_PATH:
+            if self.client_address[0] not in LOOPBACK_HOSTS and not self.server.trusted_map_proxy:
+                return self.json_reply(403, {"error": "active site map requires authenticated proxy access"})
+            site_map = _read_json_strict(self._worlds_dir() / ACTIVE_SITE_MAP_FILE)
+            observed_at = site_map.get("observed_at_ms") if site_map else None
+            now_ms = time.time_ns() // 1_000_000
+            if type(observed_at) is not int or abs(now_ms - observed_at) > ACTIVE_SITE_MAP_FRESH_MS:
+                site_map = None
+            return self.json_reply(200, {"site_map": site_map})
+        if posixpath.basename(posixpath.normpath(unquote(parts.path))).casefold() == ACTIVE_SITE_MAP_FILE:
+            self.send_error(404)
+            return None
         if parts.path == "/api/mdns":
             port = self.server.server_port
             mdns_host = getattr(self.server, "mdns_host", None)
@@ -349,15 +367,10 @@ class WorldHandler(SimpleHTTPRequestHandler):
         with self.json_reply(status, value) as reply:
             self.copyfile(reply, self.wfile)
 
-    def _ingest_world(self, raw_id: str) -> None:
+    def _read_ingest_json(self, max_bytes: int = MAX_INGEST_BYTES) -> dict | None:
         allowed, auth_status, auth_err = self._authorize_ingest()
         if not allowed:
             return self._reply_json(auth_status, {"error": auth_err})
-        if raw_id == "verified-replay":
-            return self._reply_json(400, {"error": "verified-replay cannot be overwritten"})
-        target = _safe_world_path(self._worlds_dir(), raw_id)
-        if target is None:
-            return self._reply_json(400, {"error": "invalid world id"})
         if self.headers.get_content_type() != "application/json":
             return self._reply_json(400, {"error": "expected application/json"})
         try:
@@ -366,14 +379,37 @@ class WorldHandler(SimpleHTTPRequestHandler):
             return self._reply_json(400, {"error": "invalid Content-Length"})
         if size <= 0:
             return self._reply_json(400, {"error": "empty JSON body"})
-        if size > MAX_INGEST_BYTES:
-            return self._reply_json(413, {"error": f"payload exceeds {MAX_INGEST_BYTES} bytes"})
+        if size > max_bytes:
+            return self._reply_json(413, {"error": f"payload exceeds {max_bytes} bytes"})
         try:
             self.connection.settimeout(2)
             body = json.loads(self.rfile.read(size).decode("utf-8"), parse_constant=_reject_constant)
         except (ValueError, UnicodeDecodeError, OSError) as error:
             return self._reply_json(400, {"error": str(error)})
-        if not isinstance(body, dict) or body.get("schema") != "rosy.world.factory-state.v1":
+        if not isinstance(body, dict):
+            return self._reply_json(400, {"error": "expected a JSON object"})
+        return body
+
+    def _ingest_active_site_map(self) -> None:
+        body = self._read_ingest_json(MAX_ACTIVE_SITE_MAP_BYTES)
+        if body is None:
+            return
+        snapshot = active_site_map_snapshot(body, body.get("observed_at_ms"))
+        if snapshot is None:
+            return self._reply_json(400, {"error": "invalid active site map snapshot"})
+        _atomic_write_json(self._worlds_dir() / ACTIVE_SITE_MAP_FILE, snapshot)
+        return self._reply_json(200, {"ok": True})
+
+    def _ingest_world(self, raw_id: str) -> None:
+        body = self._read_ingest_json()
+        if body is None:
+            return
+        if raw_id == "verified-replay":
+            return self._reply_json(400, {"error": "verified-replay cannot be overwritten"})
+        target = _safe_world_path(self._worlds_dir(), raw_id)
+        if target is None:
+            return self._reply_json(400, {"error": "invalid world id"})
+        if body.get("schema") != "rosy.world.factory-state.v1":
             return self._reply_json(400, {"error": "expected rosy.world.factory-state.v1 object"})
         adapter = str(
             body.get("adapter")
@@ -397,6 +433,8 @@ class WorldHandler(SimpleHTTPRequestHandler):
         return self._reply_json(200, {"ok": True, "world_id": raw_id, "adapter": adapter, "parity": parity})
 
     def do_POST(self):
+        if urlsplit(self.path).path == ACTIVE_SITE_MAP_PATH:
+            return self._ingest_active_site_map()
         raw_id = self._parse_world_ingest_id()
         if raw_id is not None:
             return self._ingest_world(raw_id)
@@ -467,6 +505,7 @@ def make_server(
     data_dir: Path | None = None,
     worlds_dir: Path | None = None,
     ingest_token: str | None = None,
+    trusted_map_proxy: bool = False,
     mdns_host: str | None = None,
     fleet_mdns_host: str | None = None,
 ) -> ThreadingHTTPServer:
@@ -479,6 +518,7 @@ def make_server(
     server.worlds_dir = (worlds_dir if worlds_dir is not None else ((bundle or root) / "data" / "worlds")).resolve()
     resolved_token = ingest_token if ingest_token is not None else os.environ.get("ROSY_WORLD_INGEST_TOKEN", "")
     server.ingest_token = resolved_token.strip() or None
+    server.trusted_map_proxy = trusted_map_proxy
     default_mdns = f"{socket.gethostname().split('.')[0].lower()}.local"
     resolved_mdns = (mdns_host if mdns_host is not None else os.environ.get("ROSY_WORLD_MDNS_HOST", "")).strip()
     server.mdns_host = resolved_mdns or default_mdns
@@ -494,6 +534,8 @@ def main():
     parser.add_argument("--data-dir", type=Path, help="read data from this directory instead of <bundle>/data")
     parser.add_argument("--worlds-dir", type=Path, default=None, help="writable directory for live world JSON snapshots")
     parser.add_argument("--ingest-token-env", default="ROSY_WORLD_INGEST_TOKEN", help="env var holding bearer token for remote POST/DELETE /api/worlds/<id>")
+    parser.add_argument("--trusted-map-proxy", action="store_true",
+                        help="serve the active map behind a session-authenticating proxy on a private network")
     parser.add_argument("--mdns-host", default=None, help="advertised .local hostname (or $ROSY_WORLD_MDNS_HOST)")
     parser.add_argument("--fleet-mdns-host", default=None, help="paired Fleet .local hostname (or $ROSY_FLEET_MDNS_HOST)")
     parser.add_argument("--host", default="127.0.0.1")
@@ -519,6 +561,7 @@ def main():
             data_dir=args.data_dir,
             worlds_dir=worlds_dir,
             ingest_token=ingest_token,
+            trusted_map_proxy=args.trusted_map_proxy,
             mdns_host=args.mdns_host,
             fleet_mdns_host=args.fleet_mdns_host,
         ) as server:

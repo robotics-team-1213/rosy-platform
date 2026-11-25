@@ -62,7 +62,10 @@ await import("./app.js");
     data = bundle / "data"
     data.mkdir()
     (data / "r2s-calibration.json").write_text("{}", encoding="utf-8")
-    (data / "site-map.json").write_text(json.dumps({"sha256": "ab" * 32, "version": 7}), encoding="utf-8")
+    (data / "site-map.json").write_text(json.dumps({
+        "sha256": "ab" * 32, "version": 7,
+        "map": {"map_id": "track", "places": [{"id": "S3", "x": 0.69, "y": -0.246}], "edges": []},
+    }), encoding="utf-8")
     (data / "recording.json").write_text(json.dumps({
         "schema": "rosy.world.recording.v1",
         "source": "test",
@@ -129,6 +132,44 @@ def test_direct_real_site_renders_live_then_dims_on_idle(tmp_path: Path) -> None
                     expect(page.locator("#factory-worlds")).to_have_text("연결된 월드가 없습니다")
                     expect(page.locator("#factory-scrubber")).to_be_enabled()
                     page.wait_for_function("!window.factoryCargo.parent.visible")
+                    assert failures == []
+
+                    cache = snapshot.parent / serve.ACTIVE_SITE_MAP_FILE
+                    live_map = {
+                        "version": 8, "sha256": "cd" * 32, "activated_at": frame["observed_at_ms"] / 1000,
+                        "observed_at_ms": frame["observed_at_ms"],
+                        "map": {"map_id": "track", "places": [{"id": "S3", "x": 0.745, "y": -0.207},
+                                                            {"id": "S4", "x": 0.9, "y": -0.2}], "edges": []},
+                    }
+                    serve._atomic_write_json(cache, live_map)
+                    page.locator("#tab-map").click()
+                    page.clock.install()
+                    page.locator("#map-mode-active").click()
+                    expect(page.locator("#map-active-canvas")).to_be_visible()
+                    expect(page.locator("#map-readout")).to_contain_text("버전8")
+                    expect(page.locator("#map-readout")).to_contain_text("위치2")
+                    serve._atomic_write_json(cache, {
+                        **live_map, "version": 9, "sha256": "ef" * 32,
+                        "map": {**live_map["map"], "places": live_map["map"]["places"][:1]},
+                    })
+                    page.clock.fast_forward(10_100)
+                    expect(page.locator("#map-readout")).to_contain_text("버전9")
+                    expect(page.locator("#map-readout")).to_contain_text("위치1")
+                    page.locator("#map-mode-vector").click()
+                    cache.unlink()
+                    held = []
+                    route_pattern = "**/api/worlds/real-site/site-map"
+                    page.route(route_pattern, lambda route: held.append(route))
+                    with page.expect_request(route_pattern):
+                        page.locator("#map-mode-active").click()
+                    expect(page.locator("#map-active-canvas")).to_be_hidden()
+                    expect(page.locator("#map-status")).to_have_attribute("state", "pending")
+                    held[0].continue_()
+                    page.unroute(route_pattern)
+                    expect(page.locator("#map-status")).to_have_text("현장 활성 지도 미수신")
+                    page.locator("#map-mode-vector").click()
+                    expect(page.locator("#map-canvas")).to_be_visible()
+                    expect(page.locator("#map-readout")).to_contain_text("버전7")
                     assert failures == []
                 finally:
                     browser.close()

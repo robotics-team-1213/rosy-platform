@@ -51,7 +51,7 @@ export function createWorldMonitor({
     if (!parityEl) return;
     if (!world) {
       parityEl.setAttribute("state", "ready");
-      parityEl.textContent = "검증 번들 기준 · 맵/URDF 일치";
+      parityEl.textContent = "비교 기준 · 검증 번들";
       return;
     }
     if (world.safety?.estop === true) {
@@ -62,29 +62,28 @@ export function createWorldMonitor({
       parityEl.textContent = `비상정지(E-STOP) 활성 · ${robots}`;
       return;
     }
-    const mapWarning = realMapMismatch(world);
-    if (mapWarning) {
-      parityEl.setAttribute("state", "warning");
-      parityEl.textContent = mapWarning;
-      return;
-    }
     if (world.adapter === "real" && ["waiting", "stalled"].includes(world.status)) {
       parityEl.setAttribute("state", "empty");
-      parityEl.textContent = "실물 현장 미연결 · 맵/URDF/짐칸(J-v3) 기준 대기";
+      parityEl.textContent = "실물 현장 미연결";
       return;
     }
     const p = world.parity;
-    if (p?.ok) {
-      const label = ADAPTER_TITLE[world.adapter] ?? world.adapter;
+    const mapWarning = realMapMismatch(world);
+    if (mapWarning) {
       parityEl.setAttribute("state", "ready");
-      parityEl.textContent = `현장 동일 · 맵/URDF/J-v3 일치 (${label} 환경)`;
+      parityEl.textContent = mapWarning;
+      return;
+    }
+    if (p?.ok) {
+      parityEl.setAttribute("state", "ready");
+      parityEl.textContent = "검증 번들과 지도·로봇 목록·짐칸 정보 일치";
       return;
     }
     const reasons = Array.isArray(p?.reasons) && p.reasons.length
       ? p.reasons.join(", ")
       : "검증 메타 누락";
     parityEl.setAttribute("state", "warning");
-    parityEl.textContent = `동등성 불일치 · ${reasons}`;
+    parityEl.textContent = `검증 번들과 비교 · ${reasons}`;
   }
 
   function renderStrip() {
@@ -106,7 +105,8 @@ export function createWorldMonitor({
       btn.dataset.worldId = w.world_id;
       btn.dataset.adapter = w.adapter;
       btn.dataset.status = w.status;
-      btn.dataset.parity = w.parity?.ok ? "ok" : "mismatch";
+      const mapWarning = realMapMismatch(w);
+      btn.dataset.parity = w.parity?.ok ? "ok" : mapWarning ? "map-difference" : "mismatch";
       btn.dataset.estop = String(Boolean(w.safety?.estop));
       const isSelected = activeWorldId
         ? w.world_id === activeWorldId
@@ -141,12 +141,12 @@ export function createWorldMonitor({
       } else if (w.status === "waiting") {
         line = "CORE/Fleet 실시간 수신 대기";
       } else {
-        line = w.parity?.ok ? "맵·로봇·짐칸 일치" : "동등성 경고";
+        line = w.parity?.ok ? "검증 번들과 일치" : mapWarning || "검증 번들과 비교 필요";
       }
       if (!w.safety?.estop && w.fleet_summary && Number.isFinite(w.fleet_summary.online)) {
         line = `${line} · 온라인 ${w.fleet_summary.online}/${w.fleet_summary.total}대`;
       }
-      const meta = makeNode("span", "world-card-meta", `${line} · ${w.parity?.ok ? "동일" : "불일치"}`);
+      const meta = makeNode("span", "world-card-meta", line);
       btn.append(head, meta);
       btn.addEventListener("click", () => {
         activeWorldId = w.world_id;

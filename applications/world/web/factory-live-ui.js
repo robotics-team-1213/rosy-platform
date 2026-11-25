@@ -63,9 +63,10 @@ export function factoryMetaText(frame, stageName, simName) {
 
 export function realMapMismatch(world) {
   const parity = world?.parity;
-  if (world?.adapter === "real" && parity?.map_match === false
-      && parity.bundle_map_version != null && parity.live_map_version != null) {
-    return `지도 버전 차이 (번들 v${parity.bundle_map_version} / 현장 v${parity.live_map_version})`;
-  }
-  return "";
+  if (world?.adapter !== "real" || parity?.map_match !== false ||
+      parity.reasons?.length !== 1 || parity.reasons[0] !== "site_map_sha256_mismatch") return "";
+  const { bundle_map_version: bundle, live_map_version: live } = parity;
+  if (bundle == null || live == null) return "현장 지도와 검증 번들의 내용이 다릅니다";
+  if (bundle === live) return `지도 내용 차이 (번들·현장 v${live})`;
+  return `지도 버전 차이 (번들 v${bundle} / 현장 v${live})`;
 }

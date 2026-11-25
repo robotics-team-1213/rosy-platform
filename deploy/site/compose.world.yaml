@@ -26,6 +26,7 @@ services:
       - /opt/rosy/world-data/data
       - --worlds-dir
       - /var/lib/rosy-world/worlds
+      - --trusted-map-proxy
       - --host
       - 0.0.0.0
       - --port
